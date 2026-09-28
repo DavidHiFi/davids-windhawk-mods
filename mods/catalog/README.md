@@ -9,6 +9,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [always-on-top](./always-on-top.wh.cpp) | [AhmedAwad7](https://github.com/AhmedAwad7) | 1.2 | yes | MIT |
 | [auto-time-sync-on-startup](./auto-time-sync-on-startup.wh.cpp) | [communism420](https://github.com/communism420) | 1.1 | yes |  |
 | [better-dialogs](./better-dialogs.wh.cpp) | [FireBlade](https://github.com/FireBlade211) | 1.1 | yes |  |
+| [better-volume-mixer](./better-volume-mixer.wh.cpp) | [0Allu](https://github.com/0Allu) | 1.4.5 | yes | MIT |
 | [cef-titlebar-enabler-universal](./cef-titlebar-enabler-universal.wh.cpp) | [Ingan121](https://github.com/Ingan121) | 1.8 | yes |  |
 | [clipboard-history-upgrade](./clipboard-history-upgrade.wh.cpp) | [SwiftExplorer567](https://github.com/SwiftExplorer567) | 1.3.2 | yes |  |
 | [compact-start-menu](./compact-start-menu.wh.cpp) | [Asteski](https://github.com/Asteski) | 1.0.0 | yes |  |
@@ -28,12 +29,13 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [explorer-details-better-file-sizes](./explorer-details-better-file-sizes.wh.cpp) | [m417z](https://github.com/m417z) | 1.5.1 | yes |  |
 | [explorer-double-click-up](./explorer-double-click-up.wh.cpp) | [wrldspawn](https://github.com/wrldspawn) | 1.0.1 | yes |  |
 | [explorer-double-f2-rename-extension](./explorer-double-f2-rename-extension.wh.cpp) | [Marnes](https://github.com/leaumar) | 4 | yes |  |
+| [explorer-hide-focus-border](./explorer-hide-focus-border.wh.cpp) | [Hùng](https://github.com/NoMorePlz) | 1.0.0 | yes | MIT |
 | [explorer-navigation-pane-tweaks](./explorer-navigation-pane-tweaks.wh.cpp) | [Languster](https://github.com/Languster) | 1.1 | yes | MIT |
 | [explorer-treeline-killer](./explorer-treeline-killer.wh.cpp) | [Languster](https://github.com/Languster) | 1.0.1 | yes |  |
 | [explorer-visual-tweaks-dark](./explorer-visual-tweaks-dark.wh.cpp) | [VitalS](https://github.com/VitalSkib) | 1.0.1 | yes |  |
 | [extension-change-no-warning](./extension-change-no-warning.wh.cpp) | [m417z](https://github.com/m417z) | 1.0.1 | yes |  |
 | [f1-blocker](./f1-blocker.wh.cpp) | [d0gkiller87](https://github.com/d0gkiller87) | 0.0.3 | yes | MIT |
-| [file-operation-styler](./file-operation-styler.wh.cpp) | [digART](https://github.com/digart11) | 1.0.0 | yes | GPL-3.0 |
+| [file-operation-styler](./file-operation-styler.wh.cpp) | [digART](https://github.com/digart11) | 1.1.0 | yes | GPL-3.0 |
 | [fix-basic-caption-text](./fix-basic-caption-text.wh.cpp) | [aubymori](https://github.com/aubymori) | 1.1.1 | yes |  |
 | [force-kill-active-window](./force-kill-active-window.wh.cpp) | [vfxturjo](https://github.com/zunaidFarouque) | 1.0 | yes |  |
 | [hide-start-button](./hide-start-button.wh.cpp) | [ptrkhh](https://github.com/ptrkhh) | 1.0 | yes |  |
@@ -44,6 +46,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [move-window-to-monitor](./move-window-to-monitor.wh.cpp) | [TomberWolf](https://github.com/TomberWolf) | 1.1.0 | yes | MIT |
 | [mspaint-dark](./mspaint-dark.wh.cpp) | [ahmed605](https://github.com/ahmed605) | 1.0.1 | yes |  |
 | [notepad-dark-mode](./notepad-dark-mode.wh.cpp) | [m417z](https://github.com/m417z) | 1.0 | yes |  |
+| [parallax-wallpaper](./parallax-wallpaper.wh.cpp) | [HaVeN80](https://github.com/haven80) | 0.9.0 | yes | MIT |
 | [paste-clipboard-content-to-explorer](./paste-clipboard-content-to-explorer.wh.cpp) | [Anixx](https://github.com/Anixx) | 1.7 | yes |  |
 | [photoshop-dark-menus](./photoshop-dark-menus.wh.cpp) | [Saber Naeemi](https://github.com/sabergraphics) | 1.0.0 | yes |  |
 | [pinned-only-on-start-menu](./pinned-only-on-start-menu.wh.cpp) | [Amat3rassu](https://github.com/Amat3rassu) | 1.0.1 | yes |  |

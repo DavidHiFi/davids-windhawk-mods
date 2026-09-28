@@ -34,6 +34,13 @@
     "architecture": "",
     "version": "1.1"
   },
+  "better-volume-mixer": {
+    "disabled": false,
+    "include": "windhawk.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.4.5"
+  },
   "cef-titlebar-enabler-universal": {
     "disabled": false,
     "include": "spotify.exe|cefclient.exe",
@@ -167,6 +174,13 @@
     "architecture": "",
     "version": "4"
   },
+  "explorer-hide-focus-border": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.0"
+  },
   "explorer-navigation-pane-tweaks": {
     "disabled": false,
     "include": "explorer.exe",
@@ -207,7 +221,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "fix-basic-caption-text": {
     "disabled": false,
@@ -265,6 +279,13 @@
     "architecture": "x86-64",
     "version": "1.6.5.1"
   },
+  "local@translucent-flyouts": {
+    "disabled": false,
+    "include": "*",
+    "exclude": "discord*.exe|Voicemeeter*.exe|Matrix*.exe|Stream Deck*.exe|dwm.exe",
+    "architecture": "",
+    "version": "0.6.1"
+  },
   "minimize-to-tray": {
     "disabled": false,
     "include": "windhawk.exe",
@@ -299,6 +320,13 @@
     "exclude": "",
     "architecture": "",
     "version": "1.0.1"
+  },
+  "parallax-wallpaper": {
+    "disabled": false,
+    "include": "windhawk.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "0.9.0"
   },
   "paste-clipboard-content-to-explorer": {
     "disabled": false,

@@ -1,7 +1,8 @@
 # Mods
 
-- `local/` is my work: alt-snap-drag, taskbar-ai-quota-opencode and
-  npp-taskdlg-textcolor. Each folder holds the source it was built from.
+- `local/` is my work: alt-snap-drag, taskbar-ai-quota-opencode,
+  npp-taskdlg-textcolor and translucent-flyouts. Each folder holds the source
+  it was built from.
 - `catalog/` holds copies of the catalog mods in this setup, one flat `.wh.cpp`
   per mod, exactly as they are on my machine. The table in
   [catalog/README.md](catalog/README.md) lists authors, versions and licenses.
@@ -13,6 +14,7 @@
 | [alt-snap-drag](local/alt-snap-drag) | Alt-drag and resize with AltSnap shortcuts; replaces the stock AltDrag mod and the AltSnap app. | 1.2.2 | GPL-3.0 |
 | [taskbar-ai-quota-opencode](local/taskbar-ai-quota-opencode) | Taskbar AI quota bars with an OpenCode Go provider. | 1.6.5.1 | MIT |
 | [npp-taskdlg-textcolor](local/npp-taskdlg-textcolor) | Readable text in Notepad++ dark-mode Save and confirm dialogs. | 1.0.1 | MIT |
+| [translucent-flyouts](local/translucent-flyouts) | The archived TranslucentFlyouts engine reimplemented as one self-contained mod: acrylic/blur/transparent menus, tooltips and dropdown lists, no helper app. | 0.6.1 | LGPL-3.0 |
 
 ## Installing a mod
 
