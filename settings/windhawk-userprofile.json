@@ -1,0 +1,372 @@
+{
+  "app": {
+    "latestVersion": "1.7.3",
+    "version": "1.7.3"
+  },
+  "id": "{D53BE57F-2E0A-47B2-BD73-F3E5B20CAD96}",
+  "mods": {
+    "always-allow-ctrl-shift-enter": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
+    "always-on-top": {
+      "latestVersion": "1.2",
+      "version": "1.2"
+    },
+    "auto-time-sync-on-startup": {
+      "latestVersion": "1.1",
+      "version": "1.1"
+    },
+    "better-dialogs": {
+      "latestVersion": "1.1",
+      "version": "1.1"
+    },
+    "cef-titlebar-enabler-universal": {
+      "latestVersion": "1.8",
+      "version": "1.8"
+    },
+    "clipboard-history-upgrade": {
+      "latestVersion": "1.3.2",
+      "version": "1.3.2"
+    },
+    "compact-start-menu": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
+    "context-menu-preloader": {
+      "latestVersion": "1.0",
+      "version": "1.0"
+    },
+    "control-panel-color-fix": {
+      "latestVersion": "1.0.1",
+      "version": "1.0.1"
+    },
+    "custom-cmd-startup-text": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
+    "custom-corner-radius": {
+      "latestVersion": "1.3",
+      "version": "1.3"
+    },
+    "d3d9-flip-model-upgrade": {
+      "latestVersion": "1.0",
+      "version": "1.0"
+    },
+    "dark-menus": {
+      "latestVersion": "1.4.2",
+      "version": "1.4.2"
+    },
+    "dark-theme-browser-colors-fix": {
+      "latestVersion": "1.0",
+      "version": "1.0"
+    },
+    "disable-feedback-hub-hotkey": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
+    "disable-office-hotkeys": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
+    "disable-voice-access-hotkey": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
+    "edge-doubleclick-resize": {
+      "latestVersion": "1.0",
+      "version": "1.0"
+    },
+    "enhanced-disk-usage": {
+      "latestVersion": "1.1.0",
+      "version": "1.1.0"
+    },
+    "explorer-context-menu-classic": {
+      "latestVersion": "1.0.2",
+      "version": "1.0.2"
+    },
+    "explorer-details-better-file-sizes": {
+      "latestVersion": "1.5.1",
+      "version": "1.5.1"
+    },
+    "explorer-double-click-up": {
+      "latestVersion": "1.0.1",
+      "version": "1.0.1"
+    },
+    "explorer-double-f2-rename-extension": {
+      "latestVersion": "4",
+      "version": "4"
+    },
+    "explorer-navigation-pane-tweaks": {
+      "latestVersion": "1.1",
+      "version": "1.1"
+    },
+    "explorer-treeline-killer": {
+      "latestVersion": "1.0.1",
+      "version": "1.0.1"
+    },
+    "explorer-visual-tweaks-dark": {
+      "latestVersion": "1.0.1",
+      "version": "1.0.1"
+    },
+    "extension-change-no-warning": {
+      "latestVersion": "1.0.1",
+      "version": "1.0.1"
+    },
+    "f1-blocker": {
+      "latestVersion": "0.0.3",
+      "version": "0.0.3"
+    },
+    "file-operation-styler": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
+    "fix-basic-caption-text": {
+      "latestVersion": "1.1.1",
+      "version": "1.1.1"
+    },
+    "force-kill-active-window": {
+      "latestVersion": "1.0",
+      "version": "1.0"
+    },
+    "hide-start-button": {
+      "latestVersion": "1.0",
+      "version": "1.0"
+    },
+    "icon-resource-redirect": {
+      "latestVersion": "1.3",
+      "version": "1.3"
+    },
+    "keyboard-shortcut-actions": {
+      "latestVersion": "1.0.1",
+      "version": "1.0.1"
+    },
+    "lm-mediakey-explorer-fix": {
+      "latestVersion": "1.1",
+      "version": "1.1"
+    },
+    "minimize-to-tray": {
+      "latestVersion": "1.0",
+      "version": "1.0"
+    },
+    "move-window-to-monitor": {
+      "latestVersion": "1.1.0",
+      "version": "1.1.0"
+    },
+    "mspaint-dark": {
+      "latestVersion": "1.0.1",
+      "version": "1.0.1"
+    },
+    "notepad-dark-mode": {
+      "latestVersion": "1.0",
+      "version": "1.0"
+    },
+    "npp-taskdlg-textcolor": {
+      "disabled": false,
+      "version": "1.0.1"
+    },
+    "paste-clipboard-content-to-explorer": {
+      "latestVersion": "1.7",
+      "version": "1.7"
+    },
+    "photoshop-dark-menus": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
+    "pinned-only-on-start-menu": {
+      "latestVersion": "1.0.1",
+      "version": "1.0.1"
+    },
+    "power-action-countdown": {
+      "latestVersion": "1.2",
+      "version": "1.2"
+    },
+    "regedit-fix-copy-key-name": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
+    "remap-copilot-key": {
+      "latestVersion": "2.0",
+      "version": "2.0"
+    },
+    "remove-context-menu-items": {
+      "latestVersion": "1.12.0",
+      "version": "1.12.0"
+    },
+    "remove-ms-store-open-with": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
+    "restore-folder-menubar-25h2": {
+      "latestVersion": "3.0.0",
+      "version": "3.0.0"
+    },
+    "shadowplay-do-not-disable": {
+      "latestVersion": "1.1",
+      "version": "1.1"
+    },
+    "shell-flyout-positions": {
+      "latestVersion": "1.3",
+      "version": "1.3"
+    },
+    "simple-window-switcher": {
+      "latestVersion": "2.1",
+      "version": "2.1"
+    },
+    "slick-window-arrangement": {
+      "latestVersion": "1.0.2",
+      "version": "1.0.2"
+    },
+    "snap-commander": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
+    "start-menu-open-real-file-location": {
+      "latestVersion": "1.1.0",
+      "version": "1.1.0"
+    },
+    "start-menu-size": {
+      "latestVersion": "1.1",
+      "version": "1.1"
+    },
+    "start-search-bing-redirector": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
+    "startup-app-delay-fix": {
+      "latestVersion": "1.4.1",
+      "version": "1.4.1"
+    },
+    "task-manager-tail": {
+      "latestVersion": "1.1",
+      "version": "1.1"
+    },
+    "taskbar-ai-quota": {
+      "latestVersion": "1.6.5",
+      "version": "1.6.5",
+      "disabled": true
+    },
+    "taskbar-button-click": {
+      "latestVersion": "1.0.9",
+      "version": "1.0.9"
+    },
+    "taskbar-clock-customization": {
+      "latestVersion": "1.8",
+      "version": "1.8"
+    },
+    "taskbar-fluent-media-player": {
+      "latestVersion": "1.6.0",
+      "version": "1.6.0"
+    },
+    "taskbar-icon-size": {
+      "latestVersion": "1.3.10",
+      "version": "1.3.10"
+    },
+    "taskbar-notification-icon-spacing": {
+      "latestVersion": "1.3.1",
+      "version": "1.3.1"
+    },
+    "taskbar-restart-explorer": {
+      "latestVersion": "1.0",
+      "version": "1.0"
+    },
+    "taskbar-system-info": {
+      "latestVersion": "1.5.0",
+      "version": "1.5.0"
+    },
+    "taskbar-tray-system-icon-tweaks": {
+      "latestVersion": "1.3",
+      "version": "1.3"
+    },
+    "taskbar-volume-control": {
+      "latestVersion": "1.3.1",
+      "version": "1.3.1"
+    },
+    "timer-resolution-control": {
+      "latestVersion": "1.0",
+      "version": "1.0"
+    },
+    "titlebar-for-everyone": {
+      "latestVersion": "0.4",
+      "version": "0.4"
+    },
+    "toggle-hidden-files": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
+    "translucent-windows": {
+      "latestVersion": "1.8.2",
+      "version": "1.8.2"
+    },
+    "uxtheme-hook": {
+      "latestVersion": "1.4",
+      "version": "1.4"
+    },
+    "win-d-per-monitor": {
+      "latestVersion": "1.5.260416",
+      "version": "1.5.260416"
+    },
+    "win11-accent-border": {
+      "latestVersion": "1.0.5",
+      "version": "1.0.5"
+    },
+    "win11-custom-title-bar-colours": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
+    "win32-ui-modernizer": {
+      "latestVersion": "1.0.2",
+      "version": "1.0.2"
+    },
+    "windows-11-file-explorer-styler": {
+      "version": "1.7",
+      "latestVersion": "1.7"
+    },
+    "windows-11-notification-center-styler": {
+      "latestVersion": "1.7",
+      "version": "1.7"
+    },
+    "windows-11-settings-styler": {
+      "latestVersion": "1.1",
+      "version": "1.1"
+    },
+    "windows-11-start-menu-buttons": {
+      "latestVersion": "2.2",
+      "version": "2.2"
+    },
+    "windows-11-start-menu-styler": {
+      "latestVersion": "1.7",
+      "version": "1.7"
+    },
+    "windows-11-taskbar-styler": {
+      "latestVersion": "1.10",
+      "version": "1.10"
+    },
+    "wobbly-windows": {
+      "version": "0.115",
+      "latestVersion": "0.115"
+    },
+    "taskbar-app-memory": {
+      "version": "0.2.2",
+      "latestVersion": "0.2.2"
+    },
+    "alt-drag": {
+      "version": "1.1",
+      "latestVersion": "1.1",
+      "disabled": true
+    },
+    "taskbar-dock-animation-plus": {
+      "version": "2.0.1",
+      "latestVersion": "2.0.1"
+    },
+    "windows-animations": {
+      "version": "1.3.6",
+      "latestVersion": "1.3.6"
+    },
+    "taskbar-elastic-pill": {
+      "version": "2.0.1",
+      "latestVersion": "2.0.1"
+    }
+  },
+  "os": "10.0.26200"
+}

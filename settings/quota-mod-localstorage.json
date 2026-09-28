@@ -1,0 +1,138 @@
+{
+  "taskbar-ai-quota": {
+    "settings_v1": {
+      "version": 1,
+      "accounts": [
+        {
+          "provider": "openai",
+          "label": "GPT",
+          "fiveHour": true,
+          "weekly": true,
+          "fableWeekly": false,
+          "extraUsage": false,
+          "creditsMax": 0,
+          "hidden": false
+        },
+        {
+          "provider": "anthropic",
+          "label": "5X",
+          "fiveHour": true,
+          "weekly": true,
+          "fableWeekly": true,
+          "extraUsage": false,
+          "creditsMax": 0,
+          "hidden": false
+        }
+      ],
+      "monitorMode": "primary",
+      "monitorNumber": 1,
+      "clickAction": "refresh",
+      "pollMinutes": 10,
+      "barLength": 100,
+      "barThickness": 8,
+      "barLayout": "stacked",
+      "barMode": "used",
+      "showPaceTicks": true,
+      "paceTickStyle": "caret",
+      "paceTickColor": 14606046,
+      "labelPosition": "left",
+      "labelFontSize": 11,
+      "percentFontSize": 9,
+      "accountMargin": 3,
+      "labelGap": 3,
+      "barGap": 2,
+      "rightMargin": 4,
+      "percentTextVisibility": "always",
+      "percentTextAlignment": "adaptive",
+      "showBarLabels": true,
+      "extraBarAmounts": true,
+      "openAiExtraLimits": true,
+      "yellowThreshold": 50,
+      "orangeThreshold": 75,
+      "redThreshold": 90,
+      "notifications": true,
+      "colorblind": false,
+      "staleWarning": true
+    }
+  },
+  "local@taskbar-ai-quota-opencode": {
+    "settings_v1": {
+      "version": 1,
+      "accounts": [
+        {
+          "provider": "opencode",
+          "label": "OC",
+          "fiveHour": true,
+          "weekly": true,
+          "fableWeekly": true,
+          "extraUsage": false,
+          "creditsMax": 0,
+          "opencodeKey": "oc-len:67",
+          "hidden": false
+        },
+        {
+          "provider": "anthropic",
+          "label": "A 5X",
+          "fiveHour": true,
+          "weekly": true,
+          "fableWeekly": true,
+          "extraUsage": false,
+          "creditsMax": 0,
+          "opencodeKey": "",
+          "hidden": false
+        },
+        {
+          "provider": "anthropic",
+          "label": "A Pro",
+          "fiveHour": true,
+          "weekly": true,
+          "fableWeekly": true,
+          "extraUsage": true,
+          "creditsMax": 0,
+          "opencodeKey": "",
+          "hidden": false
+        },
+        {
+          "provider": "openai",
+          "label": "GPT",
+          "fiveHour": true,
+          "weekly": true,
+          "fableWeekly": false,
+          "extraUsage": false,
+          "creditsMax": 0,
+          "opencodeKey": "",
+          "hidden": false
+        }
+      ],
+      "monitorMode": "primary",
+      "monitorNumber": 1,
+      "clickAction": "refresh",
+      "pollMinutes": 10,
+      "barLength": 75,
+      "barThickness": 8,
+      "barLayout": "stacked",
+      "barMode": "used",
+      "showPaceTicks": true,
+      "paceTickStyle": "caret",
+      "paceTickColor": 14606046,
+      "labelPosition": "top",
+      "labelFontSize": 8,
+      "percentFontSize": 8,
+      "accountMargin": 3,
+      "labelGap": 0,
+      "barGap": 2,
+      "rightMargin": 0,
+      "percentTextVisibility": "always",
+      "percentTextAlignment": "adaptive",
+      "showBarLabels": true,
+      "extraBarAmounts": true,
+      "openAiExtraLimits": true,
+      "yellowThreshold": 50,
+      "orangeThreshold": 75,
+      "redThreshold": 90,
+      "notifications": true,
+      "colorblind": false,
+      "staleWarning": true
+    }
+  }
+}

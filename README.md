@@ -1,70 +1,99 @@
 # David's Windhawk mods
 
-Local [Windhawk](https://windhawk.net) mods I use on my machine. They are forks
-of published mods, changed to fit how I work. MIT licensed.
+A complete snapshot of my [Windhawk](https://windhawk.net) setup on Windows 11:
+every mod I run, the exact settings, and the local mods I maintain, packaged so
+the whole setup can be copied onto another machine. Snapshot taken 2026-09-28
+on Windows 11 build 26200 with Windhawk 1.7.3.
 
-## Mods
+![The taskbar tray after the change](media/tray-after.png)
+
+The tray overflow chevron replaced with the three-dot "More" glyph that the
+RosePine taskbar theme uses, with the taskbar-ai-quota-opencode bars next to
+it. Before: [media/tray-before.png](media/tray-before.png).
+
+## Layout
+
+| Path | What it is |
+| --- | --- |
+| `mods/catalog/` | Copies of the [catalog mods](https://windhawk.net/mods) I run, one `.wh.cpp` each, as installed. Authors, versions and licenses in [mods/catalog/README.md](mods/catalog/README.md). |
+| `mods/local/` | My mods, listed below. |
+| `settings/` | Per-mod state and values, app and engine preferences, the quota mods' config, and a snapshot of the installed set. Details in [settings/README.md](settings/README.md). |
+| `mod-storage/` | Files mods wrote. Currently the Taskbar Styler images. |
+| `editor/` | The Windhawk mod editor's settings. |
+| `manifest.json` | Every mod with version, author, license, origin, enabled state, and source path. |
+| `tools/` | Scripts to apply this snapshot to a machine or rebuild it from a live one. |
+| `media/` | Screenshots. |
+
+## Quick start
+
+1. Install [Windhawk](https://windhawk.net) (this snapshot was made on 1.7.3).
+2. Install the catalog mods. Search for each name from
+   [mods/catalog/README.md](mods/catalog/README.md) in Windhawk and install it.
+3. Install the local mods from `mods/local/` by pasting them into the Windhawk
+   mod editor and compiling, or see [mods/README.md](mods/README.md) for the
+   command-line build.
+4. Apply the settings from an elevated shell (repo root as the working
+   directory):
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File tools\Apply-WindhawkSettings.ps1
+   ```
+
+   Add `-IncludeAppSettings` to also import the app and engine `.reg` files,
+   and `-RestartEngine` to restart Windhawk when it finishes. Run with `-Audit`
+   first to see what would change; audit writes nothing.
+5. Copy `mod-storage/` over
+   `C:\ProgramData\Windhawk\Engine\ModsWritable\mod-storage\`, and copy
+   `editor/settings.json` over
+   `C:\ProgramData\Windhawk\UIData\user-data\User\settings.json`.
+
+Mod DLLs are not included. Windhawk compiles mods on your machine, so the
+engine keeps using its own compiled file names.
+
+## Keeping this current
+
+After changing mods or settings, run `tools\Build-Repo.ps1` from the repo root.
+It refreshes the catalog copies, the local mod files, `manifest.json`, the
+catalog table, and the settings exports from the live install. Add
+`-SkipSources` to refresh settings and metadata only.
+
+## My mods
 
 ### alt-snap-drag
 
-Window dragging in the style of [AltDrag](https://windhawk.net/mods/alt-drag),
-plus the [AltSnap](https://github.com/RamonUnch/AltSnap) shortcuts I use. Hold
-Alt and:
+AltDrag window dragging plus the AltSnap gestures I use. Hold Alt and:
 
 | Gesture | Action |
 | --- | --- |
 | left drag | move the window |
-| right drag | resize from the edge or corner nearest where the drag starts |
+| right drag | resize from the edge or corner nearest the start of the drag |
 | F | toggle maximize |
 | M | minimize |
 | Shift+Q | close |
 | middle click | window menu |
 | right click while moving | toggle the maximized state, which stays toggled |
 
-The drag itself comes from [m417z's
-AltDrag](https://github.com/m417z/my-windhawk-mods). AltSnap is by
-[RamonUnch](https://github.com/RamonUnch/AltSnap); the original AltDrag is by
-Stefan Sundin.
+A fork of [m417z's AltDrag](https://windhawk.net/mods/alt-drag) cut down to my
+[AltSnap](https://github.com/RamonUnch/AltSnap) shortcuts. GPL-3.0, like the
+original.
 
 ### taskbar-ai-quota-opencode
 
-Taskbar bars for AI subscription quotas, with an OpenCode Go provider added on
-top of [Cleroth's taskbar-ai-quota](https://github.com/Cleroth).
+Cleroth's [Taskbar AI Quota Bars](https://windhawk.net/mods/taskbar-ai-quota)
+with an OpenCode Go provider added. MIT.
 
-## Building
+### npp-taskdlg-textcolor
 
-A Windhawk mod is one C++ file. Either drop the `.wh.cpp` into
-`C:\ProgramData\Windhawk\ModsSource\` and compile it in the Windhawk editor, or
-build it with the compiler Windhawk ships:
+Notepad++ dark mode paints the Save and confirm dialogs dark but leaves the
+text black. This fixes the text inside `notepad++.exe` only. MIT.
 
-```powershell
-& 'C:\Program Files\Windhawk\Compiler\bin\clang++.exe' `
-  -std=c++23 -O2 -shared -target x86_64-w64-mingw32 -DUNICODE -D_UNICODE `
-  -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -D_WIN32_IE=0x0A00 `
-  -DNTDDI_VERSION=0x0A000008 -D__USE_MINGW_ANSI_STDIO=0 -DWH_MOD `
-  -include windhawk_api.h `
-  -I 'C:\Program Files\Windhawk\Compiler\include' `
-  -Wno-pragma-pack -Wno-pragma-system-header-outside-header `
-  -Wl,--export-all-symbols mod.wh.cpp `
-  'C:\Program Files\Windhawk\Engine\<engine-version>\64\windhawk.lib' `
-  -lcomctl32 -o mod.dll
-```
+## Licensing
 
-Three things that will bite you:
+My work in this repo is MIT, see [LICENSE](LICENSE). The catalog mods under
+`mods/catalog/` are their authors' work and keep their own licenses, listed in
+the catalog table where the source declares one. `alt-snap-drag` is GPL-3.0
+because its upstream is.
 
-- `WH_MOD` only. `-DWH_EDITING` is the editor's syntax mode: every `Wh_*` call
-  becomes a no-op, the DLL imports nothing from `windhawk.dll`, and the mod
-  silently does nothing.
-- The mod id is normally passed as `-DWH_MOD_ID=L"..."`, and Windows PowerShell
-  5.1 mangles the quotes. `alt-snap-drag` defines it in the force-included
-  `altsnap-modid.h` instead.
-- Install as a local mod by copying the DLL into
-  `C:\ProgramData\Windhawk\Engine\Mods\{64,32}` and pointing `LibraryFileName`
-  under `HKLM\SOFTWARE\Windhawk\Engine\Mods\<id>` at it. Give each build a new
-  file name: the engine keeps the previous DLL mapped, so overwriting the same
-  name fails.
-
-## License
-
-MIT, see [LICENSE](LICENSE). Each mod carries its own license header, and the
-forks keep the license of what they came from.
+`settings/` holds configuration values only. The quota mods keep encrypted
+account credentials in their own LocalStorage values, and none of that is
+included here.
