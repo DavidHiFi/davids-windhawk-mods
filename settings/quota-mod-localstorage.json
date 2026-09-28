@@ -61,7 +61,7 @@
       "accounts": [
         {
           "provider": "opencode",
-          "label": "OC",
+          "label": "OpenCode Go",
           "fiveHour": true,
           "weekly": true,
           "fableWeekly": true,
@@ -72,7 +72,7 @@
         },
         {
           "provider": "anthropic",
-          "label": "A 5X",
+          "label": "Claude Max 5X",
           "fiveHour": true,
           "weekly": true,
           "fableWeekly": true,
@@ -83,7 +83,7 @@
         },
         {
           "provider": "anthropic",
-          "label": "A Pro",
+          "label": "Claude Pro",
           "fiveHour": true,
           "weekly": true,
           "fableWeekly": true,
@@ -94,7 +94,7 @@
         },
         {
           "provider": "openai",
-          "label": "GPT",
+          "label": "GPT Pro",
           "fiveHour": true,
           "weekly": true,
           "fableWeekly": false,

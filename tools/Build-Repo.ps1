@@ -28,6 +28,7 @@ $localPaths = [ordered]@{
     'local@alt-snap-drag'             = 'mods\local\alt-snap-drag\alt-snap.wh.cpp'
     'local@taskbar-ai-quota-opencode' = 'mods\local\taskbar-ai-quota-opencode\taskbar-ai-quota-opencode.wh.cpp'
     'npp-taskdlg-textcolor'           = 'mods\local\npp-taskdlg-textcolor\npp-taskdlg-textcolor.wh.cpp'
+    'local@translucent-flyouts'       = 'mods\local\translucent-flyouts\translucent-flyouts.wh.cpp'
 }
 # Values the source headers do not carry.
 $licenseOverride = @{

@@ -87,12 +87,23 @@ with an OpenCode Go provider added. MIT.
 Notepad++ dark mode paints the Save and confirm dialogs dark but leaves the
 text black. This fixes the text inside `notepad++.exe` only. MIT.
 
+### translucent-flyouts
+
+A self-contained port of
+[ALTaleX531's TranslucentFlyouts](https://github.com/ALTaleX531/TranslucentFlyouts)
+(the archived app) to a single Windhawk mod: acrylic, blur or transparent
+backgrounds for Win32 context menus, menu-bar dropdowns, tooltips and dropdown
+lists, with the original settings schema. No helper app, no registry bridge.
+Runs in every process except a protected-chain exclude list. LGPL-3.0 with
+attribution to the original author.
+
 ## Licensing
 
 My work in this repo is MIT, see [LICENSE](LICENSE). The catalog mods under
 `mods/catalog/` are their authors' work and keep their own licenses, listed in
 the catalog table where the source declares one. `alt-snap-drag` is GPL-3.0
-because its upstream is.
+because its upstream is, and `translucent-flyouts` is LGPL-3.0 for the same
+reason.
 
 `settings/` holds configuration values only. The quota mods keep encrypted
 account credentials in their own LocalStorage values, and none of that is

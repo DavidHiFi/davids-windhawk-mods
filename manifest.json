@@ -1,12 +1,12 @@
 {
   "name": "davids-windhawk-mods",
   "description": "David's full Windhawk setup: every mod source, every setting.",
-  "generatedAt": "2026-09-28T09:24:56+08:00",
+  "generatedAt": "2026-09-28T19:06:54+08:00",
   "windhawkVersion": "1.7.3",
   "counts": {
-    "mods": 92,
-    "enabled": 90,
-    "local": 3
+    "mods": 96,
+    "enabled": 94,
+    "local": 4
   },
   "mods": [
     {
@@ -67,6 +67,18 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/better-dialogs",
       "source": "mods/catalog/better-dialogs.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "better-volume-mixer",
+      "name": "Better Volume Mixer",
+      "author": "0Allu",
+      "github": "https://github.com/0Allu",
+      "version": "1.4.5",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/better-volume-mixer",
+      "source": "mods/catalog/better-volume-mixer.wh.cpp",
       "enabled": true
     },
     {
@@ -298,6 +310,18 @@
       "enabled": true
     },
     {
+      "id": "explorer-hide-focus-border",
+      "name": "File Explorer Focus Border Remover",
+      "author": "Hùng",
+      "github": "https://github.com/NoMorePlz",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-hide-focus-border",
+      "source": "mods/catalog/explorer-hide-focus-border.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "explorer-navigation-pane-tweaks",
       "name": "Explorer Navigation Tree Offset",
       "author": "Languster",
@@ -362,7 +386,7 @@
       "name": "File Operation Styler",
       "author": "digART",
       "github": "https://github.com/digart11",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "license": "GPL-3.0",
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/file-operation-styler",
@@ -466,6 +490,18 @@
       "enabled": true
     },
     {
+      "id": "local@translucent-flyouts",
+      "name": "Translucent Flyouts",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "0.6.1",
+      "license": "LGPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/translucent-flyouts/translucent-flyouts.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "minimize-to-tray",
       "name": "Minimize to tray",
       "author": "0Allu",
@@ -523,6 +559,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/npp-taskdlg-textcolor/npp-taskdlg-textcolor.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "parallax-wallpaper",
+      "name": "Parallax Wallpaper",
+      "author": "HaVeN80",
+      "github": "https://github.com/haven80",
+      "version": "0.9.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/parallax-wallpaper",
+      "source": "mods/catalog/parallax-wallpaper.wh.cpp",
       "enabled": true
     },
     {

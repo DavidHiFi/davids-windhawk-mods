@@ -118,8 +118,8 @@
       "version": "0.0.3"
     },
     "file-operation-styler": {
-      "latestVersion": "1.0.0",
-      "version": "1.0.0"
+      "version": "1.1.0",
+      "latestVersion": "1.1.0"
     },
     "fix-basic-caption-text": {
       "latestVersion": "1.1.1",
@@ -366,6 +366,18 @@
     "taskbar-elastic-pill": {
       "version": "2.0.1",
       "latestVersion": "2.0.1"
+    },
+    "parallax-wallpaper": {
+      "version": "0.9.0",
+      "latestVersion": "0.9.0"
+    },
+    "better-volume-mixer": {
+      "version": "1.4.5",
+      "latestVersion": "1.4.5"
+    },
+    "explorer-hide-focus-border": {
+      "version": "1.0.0",
+      "latestVersion": "1.0.0"
     }
   },
   "os": "10.0.26200"
