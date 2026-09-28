@@ -10,7 +10,8 @@
 // @exclude         Matrix*.exe
 // @exclude         Stream Deck*.exe
 // @exclude         dwm.exe
-// @architecture    x86-64 x86
+// @architecture    x86-64
+// @architecture    x86
 // @license         LGPL-3.0
 // @compilerOptions -ld2d1 -ldwrite -ldwmapi -luxtheme -lcomctl32 -lgdi32 -luser32 -lole32 -ladvapi32 -lshlwapi -lversion -lmsimg32 -loleaut32 -luuid -lwindowscodecs
 // ==/WindhawkMod==
