@@ -59,6 +59,14 @@ catalog table, and the settings exports from the live install. Add
 
 ## My mods
 
+### explorer-font-changer-davidhifi
+
+[Explorer Font Changer by DavidHiFi](mods/local/explorer-font-changer-davidhifi)
+changes Windows shell text while preserving icon fonts and emoji. It fixes
+the original mod's selected-font lifetime bug and adds GDI, themed text, and
+DirectWrite layout coverage. FiraCode Nerd Font is the default. The original
+Explorer Font Changer must be disabled while this fork is enabled.
+
 ### alt-snap-drag
 
 AltDrag window dragging plus the AltSnap gestures I use. Hold Alt and:
