@@ -12,6 +12,7 @@
 
 | Mod | What it does | Version | License |
 | --- | --- | --- | --- |
+| [explorer-font-changer-davidhifi](local/explorer-font-changer-davidhifi) | Shell text font replacement with protected icon fonts and DirectWrite layouts. | 1.0.0 | MIT |
 | [alt-snap-drag](local/alt-snap-drag) | Alt-drag and resize with AltSnap shortcuts; replaces the stock AltDrag mod and the AltSnap app. | 1.2.2 | GPL-3.0 |
 | [taskbar-ai-quota-opencode](local/taskbar-ai-quota-opencode) | Taskbar AI quota bars with an OpenCode Go provider. | 1.6.5.1 | MIT |
 | [npp-taskdlg-textcolor](local/npp-taskdlg-textcolor) | Readable text in Notepad++ dark-mode Save and confirm dialogs. | 1.0.1 | MIT |
