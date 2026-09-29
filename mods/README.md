@@ -2,7 +2,7 @@
 
 - `local/` is my work: alt-snap-drag, taskbar-ai-quota-opencode,
   npp-taskdlg-textcolor, translucent-flyouts, better-volume-mixer-plus and
-  center-titlebar-fork (a prototype that is not installed). Each folder holds the source it was built
+  explorer-font-changer-davidhifi and center-titlebar-fork (a prototype that is not installed). Each folder holds the source it was built
   from.
 - `catalog/` holds copies of the catalog mods in this setup, one flat `.wh.cpp`
   per mod, exactly as they are on my machine. The table in

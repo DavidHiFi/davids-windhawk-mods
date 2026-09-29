@@ -12,7 +12,7 @@ shared format can still create an icon layout with its original family.
 
 The default include list covers Explorer, Start, Search, Windows shell hosts,
 and Settings. It does not change every application. Some XAML controls set their
-own fonts after layout creation, and existing cached layouts and HFONT objects
+own fonts after layout creation, and existing cached layouts
 can remain until the control recreates them.
 
 ## Install

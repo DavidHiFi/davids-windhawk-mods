@@ -4,9 +4,9 @@
   "generatedAt": "2026-09-30T04:14:52+08:00",
   "windhawkVersion": "1.7.3",
   "counts": {
-    "mods": 98,
+    "mods": 99,
     "enabled": 94,
-    "local": 6
+    "local": 7
   },
   "mods": [
     {
@@ -319,7 +319,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/explorer-font-changer",
       "source": "mods/catalog/explorer-font-changer.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "explorer-hide-focus-border",
@@ -1184,6 +1184,18 @@
       "upstream": "https://windhawk.net/mods/center-titlebar",
       "source": "mods/local/center-titlebar-fork/center-titlebar-fork.wh.cpp",
       "enabled": false
+    },
+    {
+      "id": "local@explorer-font-changer-davidhifi",
+      "name": "Explorer Font Changer by DavidHiFi",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi/davids-windhawk-mods",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/explorer-font-changer",
+      "source": "mods/local/explorer-font-changer-davidhifi/explorer-font-changer-davidhifi.wh.cpp",
+      "enabled": true
     }
   ]
 }

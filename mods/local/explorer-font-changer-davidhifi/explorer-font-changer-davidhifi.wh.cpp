@@ -137,20 +137,6 @@ public:
     FontScope& operator=(const FontScope&) = delete;
 };
 
-decltype(&CreateFontIndirectW) createFontOriginal;
-HFONT WINAPI createFontHook(const LOGFONTW* requested) {
-    if (!policy::enabled || !requested || policy::protectedFace(requested->lfFaceName, requested->lfCharSet)) return createFontOriginal(requested);
-    // Substitute common UI families at creation so shaped glyph runs and
-    // controls that cache HFONT objects measure and draw with the same face.
-    const auto* face = requested->lfFaceName;
-    if (_wcsicmp(face, L"Segoe UI") && _wcsicmp(face, L"Segoe UI Variable") &&
-        _wcsicmp(face, L"Tahoma") && _wcsicmp(face, L"Microsoft Sans Serif") &&
-        _wcsicmp(face, L"MS Shell Dlg") && _wcsicmp(face, L"MS Shell Dlg 2")) return createFontOriginal(requested);
-    auto font = *requested;
-    wcscpy_s(font.lfFaceName, policy::target.c_str());
-    return createFontOriginal(&font);
-}
-
 decltype(&DrawTextW) drawTextOriginal;
 int WINAPI drawTextHook(HDC dc, LPCWSTR text, int length, LPRECT rect, UINT flags) {
     FontScope font(dc, text, policy::textLength(text, length));
@@ -249,15 +235,19 @@ BOOL Wh_ModInit() {
     if (!loadSettings()) return FALSE;
     bool ok = true;
     #define HOOK(fn, hook, original) ok = Wh_SetFunctionHook(reinterpret_cast<void*>(fn), reinterpret_cast<void*>(hook), reinterpret_cast<void**>(&original)) && ok
-    HOOK(DrawTextW, drawTextHook, drawTextOriginal);
-    HOOK(DrawTextExW, drawTextExHook, drawTextExOriginal);
-    HOOK(TextOutW, textOutHook, textOutOriginal);
-    HOOK(ExtTextOutW, extTextOutHook, extTextOutOriginal);
-    HOOK(GetTextExtentPoint32W, extentHook, extentOriginal);
-    HOOK(GetTextExtentExPointW, extentExHook, extentExOriginal);
-    HOOK(CreateFontIndirectW, createFontHook, createFontOriginal);
-    HOOK(DrawThemeText, themeHook, themeOriginal);
-    HOOK(DrawThemeTextEx, themeExHook, themeExOriginal);
+    auto user = LoadLibraryExW(L"user32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    auto gdi = LoadLibraryExW(L"gdi32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    auto theme = LoadLibraryExW(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!user || !gdi || !theme) return FALSE;
+    // Explicit exports avoid MinGW import thunks inside this mod DLL.
+    HOOK(GetProcAddress(user, "DrawTextW"), drawTextHook, drawTextOriginal);
+    HOOK(GetProcAddress(user, "DrawTextExW"), drawTextExHook, drawTextExOriginal);
+    HOOK(GetProcAddress(gdi, "TextOutW"), textOutHook, textOutOriginal);
+    HOOK(GetProcAddress(gdi, "ExtTextOutW"), extTextOutHook, extTextOutOriginal);
+    HOOK(GetProcAddress(gdi, "GetTextExtentPoint32W"), extentHook, extentOriginal);
+    HOOK(GetProcAddress(gdi, "GetTextExtentExPointW"), extentExHook, extentExOriginal);
+    HOOK(GetProcAddress(theme, "DrawThemeText"), themeHook, themeOriginal);
+    HOOK(GetProcAddress(theme, "DrawThemeTextEx"), themeExHook, themeExOriginal);
     IDWriteFactory* factory = nullptr;
     if (SUCCEEDED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&factory)))) {
         // IDWriteFactory: IUnknown 0..2; the two layout methods are 18 and 19.
