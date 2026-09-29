@@ -389,7 +389,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "3.0.0"
+    "version": "3.1.0"
   },
   "shadowplay-do-not-disable": {
     "disabled": false,
@@ -522,7 +522,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.3.1"
+    "version": "1.4"
   },
   "taskbar-restart-explorer": {
     "disabled": false,

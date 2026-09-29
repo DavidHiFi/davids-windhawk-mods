@@ -5,6 +5,11 @@
   },
   "id": "{D53BE57F-2E0A-47B2-BD73-F3E5B20CAD96}",
   "mods": {
+    "alt-drag": {
+      "disabled": true,
+      "latestVersion": "1.1",
+      "version": "1.1"
+    },
     "always-allow-ctrl-shift-enter": {
       "latestVersion": "1.0.0",
       "version": "1.0.0"
@@ -20,6 +25,10 @@
     "better-dialogs": {
       "latestVersion": "1.1",
       "version": "1.1"
+    },
+    "better-volume-mixer": {
+      "latestVersion": "1.4.5",
+      "version": "1.4.5"
     },
     "cef-titlebar-enabler-universal": {
       "latestVersion": "1.8",
@@ -97,6 +106,10 @@
       "latestVersion": "4",
       "version": "4"
     },
+    "explorer-hide-focus-border": {
+      "latestVersion": "1.0.0",
+      "version": "1.0.0"
+    },
     "explorer-navigation-pane-tweaks": {
       "latestVersion": "1.1",
       "version": "1.1"
@@ -118,8 +131,8 @@
       "version": "0.0.3"
     },
     "file-operation-styler": {
-      "version": "1.1.0",
-      "latestVersion": "1.1.0"
+      "latestVersion": "1.1.0",
+      "version": "1.1.0"
     },
     "fix-basic-caption-text": {
       "latestVersion": "1.1.1",
@@ -165,6 +178,10 @@
       "disabled": false,
       "version": "1.0.1"
     },
+    "parallax-wallpaper": {
+      "latestVersion": "0.9.0",
+      "version": "0.9.0"
+    },
     "paste-clipboard-content-to-explorer": {
       "latestVersion": "1.7",
       "version": "1.7"
@@ -198,8 +215,7 @@
       "version": "1.0.0"
     },
     "restore-folder-menubar-25h2": {
-      "latestVersion": "3.0.0",
-      "version": "3.0.0"
+      "version": "3.1.0"
     },
     "shadowplay-do-not-disable": {
       "latestVersion": "1.1",
@@ -242,9 +258,13 @@
       "version": "1.1"
     },
     "taskbar-ai-quota": {
+      "disabled": true,
       "latestVersion": "1.6.5",
-      "version": "1.6.5",
-      "disabled": true
+      "version": "1.6.5"
+    },
+    "taskbar-app-memory": {
+      "latestVersion": "0.2.2",
+      "version": "0.2.2"
     },
     "taskbar-button-click": {
       "latestVersion": "1.0.9",
@@ -253,6 +273,14 @@
     "taskbar-clock-customization": {
       "latestVersion": "1.8",
       "version": "1.8"
+    },
+    "taskbar-dock-animation-plus": {
+      "latestVersion": "2.0.1",
+      "version": "2.0.1"
+    },
+    "taskbar-elastic-pill": {
+      "latestVersion": "2.0.1",
+      "version": "2.0.1"
     },
     "taskbar-fluent-media-player": {
       "latestVersion": "1.6.0",
@@ -263,8 +291,7 @@
       "version": "1.3.10"
     },
     "taskbar-notification-icon-spacing": {
-      "latestVersion": "1.3.1",
-      "version": "1.3.1"
+      "version": "1.4"
     },
     "taskbar-restart-explorer": {
       "latestVersion": "1.0",
@@ -319,8 +346,8 @@
       "version": "1.0.2"
     },
     "windows-11-file-explorer-styler": {
-      "version": "1.7",
-      "latestVersion": "1.7"
+      "latestVersion": "1.7",
+      "version": "1.7"
     },
     "windows-11-notification-center-styler": {
       "latestVersion": "1.7",
@@ -342,42 +369,13 @@
       "latestVersion": "1.10",
       "version": "1.10"
     },
-    "wobbly-windows": {
-      "version": "0.115",
-      "latestVersion": "0.115"
-    },
-    "taskbar-app-memory": {
-      "version": "0.2.2",
-      "latestVersion": "0.2.2"
-    },
-    "alt-drag": {
-      "version": "1.1",
-      "latestVersion": "1.1",
-      "disabled": true
-    },
-    "taskbar-dock-animation-plus": {
-      "version": "2.0.1",
-      "latestVersion": "2.0.1"
-    },
     "windows-animations": {
-      "version": "1.3.6",
-      "latestVersion": "1.3.6"
+      "latestVersion": "1.3.6",
+      "version": "1.3.6"
     },
-    "taskbar-elastic-pill": {
-      "version": "2.0.1",
-      "latestVersion": "2.0.1"
-    },
-    "parallax-wallpaper": {
-      "version": "0.9.0",
-      "latestVersion": "0.9.0"
-    },
-    "better-volume-mixer": {
-      "version": "1.4.5",
-      "latestVersion": "1.4.5"
-    },
-    "explorer-hide-focus-border": {
-      "version": "1.0.0",
-      "latestVersion": "1.0.0"
+    "wobbly-windows": {
+      "latestVersion": "0.115",
+      "version": "0.115"
     }
   },
   "os": "10.0.26200"

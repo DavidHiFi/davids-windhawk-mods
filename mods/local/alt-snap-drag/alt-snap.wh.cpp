@@ -3,19 +3,22 @@
 // @name            AltSnap Drag
 // @description     AltDrag window movement with configurable AltSnap mouse actions and keyboard shortcuts
 // @version         1.2.2
-// @author          m417z, local fork
-// @github          https://github.com/RamonUnch/AltSnap
+// @author          DavidHiFi
+// @github          https://github.com/DavidHiFi
+// @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
+// @license         GPL-3.0
 // @include         *
 // @compilerOptions -lcomctl32
 // ==/WindhawkMod==
 
-// Source code is published under The GNU General Public License v3.0.
+// A fork of the alt-drag mod by m417z (https://github.com/m417z/my-windhawk-mods),
+// which is based on AltSnap by RamonUnch (https://github.com/RamonUnch/AltSnap)
+// and the original AltDrag by Stefan Sundin. Modified in 2026 by DavidHiFi to
+// add configurable AltSnap mouse actions and keyboard shortcuts.
 //
-// For bug reports and feature requests, please open an issue here:
-// https://github.com/ramensoftware/windhawk-mods/issues
-//
-// For pull requests, development takes place here:
-// https://github.com/m417z/my-windhawk-mods
+// Source code is published under The GNU General Public License v3.0, like the
+// original. For bug reports and feature requests, please open an issue here:
+// https://github.com/DavidHiFi/davids-windhawk-mods/issues
 
 // ==WindhawkModReadme==
 /*

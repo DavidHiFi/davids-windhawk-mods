@@ -1,12 +1,12 @@
 {
   "name": "davids-windhawk-mods",
   "description": "David's full Windhawk setup: every mod source, every setting.",
-  "generatedAt": "2026-09-28T19:16:00+08:00",
+  "generatedAt": "2026-09-30T00:24:19+08:00",
   "windhawkVersion": "1.7.3",
   "counts": {
-    "mods": 96,
+    "mods": 97,
     "enabled": 94,
-    "local": 4
+    "local": 5
   },
   "mods": [
     {
@@ -468,8 +468,8 @@
     {
       "id": "local@alt-snap-drag",
       "name": "AltSnap Drag",
-      "author": "m417z, local fork",
-      "github": "https://github.com/RamonUnch/AltSnap",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
       "version": "1.2.2",
       "license": "GPL-3.0",
       "origin": "local",
@@ -480,8 +480,8 @@
     {
       "id": "local@taskbar-ai-quota-opencode",
       "name": "Taskbar AI Quota Bars - OpenCode Fork",
-      "author": "Cleroth (OpenCode Go fork)",
-      "github": "https://github.com/Cleroth",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
       "version": "1.6.5.1",
       "license": "MIT",
       "origin": "local",
@@ -552,8 +552,8 @@
     {
       "id": "npp-taskdlg-textcolor",
       "name": "Notepad++ Save Dialog Text Color",
-      "author": "local",
-      "github": null,
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
       "version": "1.0.1",
       "license": "MIT",
       "origin": "local",
@@ -674,7 +674,7 @@
       "name": "ExplorerFrame and menubar fixes fork",
       "author": "Anixx",
       "github": "https://github.com/Anixx",
-      "version": "3.0.0",
+      "version": "3.1.0",
       "license": "",
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/restore-folder-menubar-25h2",
@@ -902,7 +902,7 @@
       "name": "Taskbar tray icon spacing and grid",
       "author": "m417z",
       "github": "https://github.com/m417z",
-      "version": "1.3.1",
+      "version": "1.4",
       "license": "",
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/taskbar-notification-icon-spacing",
@@ -1160,6 +1160,18 @@
       "upstream": "https://windhawk.net/mods/wobbly-windows",
       "source": "mods/catalog/wobbly-windows.wh.cpp",
       "enabled": true
+    },
+    {
+      "id": "center-titlebar-fork",
+      "name": "Center Titlebar - Fork",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "3.4",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/center-titlebar",
+      "source": "mods/local/center-titlebar-fork/center-titlebar-fork.wh.cpp",
+      "enabled": false
     }
   ]
 }
