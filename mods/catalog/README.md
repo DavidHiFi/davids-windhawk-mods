@@ -9,7 +9,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [always-on-top](./always-on-top.wh.cpp) | [AhmedAwad7](https://github.com/AhmedAwad7) | 1.2 | yes | MIT |
 | [auto-time-sync-on-startup](./auto-time-sync-on-startup.wh.cpp) | [communism420](https://github.com/communism420) | 1.1 | yes |  |
 | [better-dialogs](./better-dialogs.wh.cpp) | [FireBlade](https://github.com/FireBlade211) | 1.1 | yes |  |
-| [better-volume-mixer](./better-volume-mixer.wh.cpp) | [0Allu](https://github.com/0Allu) | 1.4.5 | yes | MIT |
+| [better-volume-mixer](./better-volume-mixer.wh.cpp) | [0Allu](https://github.com/0Allu) | 1.4.5 | no | MIT |
 | [cef-titlebar-enabler-universal](./cef-titlebar-enabler-universal.wh.cpp) | [Ingan121](https://github.com/Ingan121) | 1.8 | yes |  |
 | [clipboard-history-upgrade](./clipboard-history-upgrade.wh.cpp) | [SwiftExplorer567](https://github.com/SwiftExplorer567) | 1.3.2 | yes |  |
 | [compact-start-menu](./compact-start-menu.wh.cpp) | [Asteski](https://github.com/Asteski) | 1.0.0 | yes |  |
@@ -29,6 +29,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [explorer-details-better-file-sizes](./explorer-details-better-file-sizes.wh.cpp) | [m417z](https://github.com/m417z) | 1.5.1 | yes |  |
 | [explorer-double-click-up](./explorer-double-click-up.wh.cpp) | [wrldspawn](https://github.com/wrldspawn) | 1.0.1 | yes |  |
 | [explorer-double-f2-rename-extension](./explorer-double-f2-rename-extension.wh.cpp) | [Marnes](https://github.com/leaumar) | 4 | yes |  |
+| [explorer-font-changer](./explorer-font-changer.wh.cpp) | [Gabriela Cristei](https://github.com/cristeigabriela) | 0.2 | yes |  |
 | [explorer-hide-focus-border](./explorer-hide-focus-border.wh.cpp) | [Hùng](https://github.com/NoMorePlz) | 1.0.0 | yes | MIT |
 | [explorer-navigation-pane-tweaks](./explorer-navigation-pane-tweaks.wh.cpp) | [Languster](https://github.com/Languster) | 1.1 | yes | MIT |
 | [explorer-treeline-killer](./explorer-treeline-killer.wh.cpp) | [Languster](https://github.com/Languster) | 1.0.1 | yes |  |
@@ -71,7 +72,6 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [taskbar-button-click](./taskbar-button-click.wh.cpp) | [m417z](https://github.com/m417z) | 1.0.9 | yes |  |
 | [taskbar-clock-customization](./taskbar-clock-customization.wh.cpp) | [m417z](https://github.com/m417z) | 1.8 | yes |  |
 | [taskbar-dock-animation-plus](./taskbar-dock-animation-plus.wh.cpp) | [incconutwo](https://github.com/incconutwo) | 2.0.1 | yes |  |
-| [taskbar-elastic-pill](./taskbar-elastic-pill.wh.cpp) | [Lockframe](https://github.com/Lockframe) | 2.0.1 | yes |  |
 | [taskbar-fluent-media-player](./taskbar-fluent-media-player.wh.cpp) | [Salyts](https://github.com/Salyts) | 1.6.0 | yes |  |
 | [taskbar-icon-size](./taskbar-icon-size.wh.cpp) | [m417z](https://github.com/m417z) | 1.3.10 | yes |  |
 | [taskbar-notification-icon-spacing](./taskbar-notification-icon-spacing.wh.cpp) | [m417z](https://github.com/m417z) | 1.4 | yes |  |

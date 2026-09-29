@@ -1,12 +1,12 @@
 {
   "name": "davids-windhawk-mods",
   "description": "David's full Windhawk setup: every mod source, every setting.",
-  "generatedAt": "2026-09-30T00:24:19+08:00",
+  "generatedAt": "2026-09-30T04:14:52+08:00",
   "windhawkVersion": "1.7.3",
   "counts": {
-    "mods": 97,
+    "mods": 98,
     "enabled": 94,
-    "local": 5
+    "local": 6
   },
   "mods": [
     {
@@ -79,7 +79,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/better-volume-mixer",
       "source": "mods/catalog/better-volume-mixer.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "cef-titlebar-enabler-universal",
@@ -310,6 +310,18 @@
       "enabled": true
     },
     {
+      "id": "explorer-font-changer",
+      "name": "Explorer Font Changer",
+      "author": "Gabriela Cristei",
+      "github": "https://github.com/cristeigabriela",
+      "version": "0.2",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-font-changer",
+      "source": "mods/catalog/explorer-font-changer.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "explorer-hide-focus-border",
       "name": "File Explorer Focus Border Remover",
       "author": "Hùng",
@@ -475,6 +487,18 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/alt-drag",
       "source": "mods/local/alt-snap-drag/alt-snap.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@better-volume-mixer-plus",
+      "name": "Better Volume Mixer Plus",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/better-volume-mixer",
+      "source": "mods/local/better-volume-mixer-plus/better-volume-mixer-plus.wh.cpp",
       "enabled": true
     },
     {
@@ -859,18 +883,6 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/taskbar-dock-animation-plus",
       "source": "mods/catalog/taskbar-dock-animation-plus.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "taskbar-elastic-pill",
-      "name": "Taskbar Elastic WinUI Pill",
-      "author": "Lockframe",
-      "github": "https://github.com/Lockframe",
-      "version": "2.0.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-elastic-pill",
-      "source": "mods/catalog/taskbar-elastic-pill.wh.cpp",
       "enabled": true
     },
     {

@@ -180,6 +180,15 @@
     "ContinuousLoop": 1,
     "ReverseCycle": 0
   },
+  "explorer-font-changer": {
+    "font.name": "FiraCode Nerd Font",
+    "font.glow": 0,
+    "font.r": 255,
+    "font.g": 255,
+    "font.b": 255,
+    "font.a": 255,
+    "font.intensity": 4
+  },
   "explorer-hide-focus-border": {},
   "explorer-navigation-pane-tweaks": {
     "TargetIndent": 0,
@@ -330,6 +339,22 @@
     "hotkeyLower": "",
     "hotkeyCenter": "",
     "hotkeySideSnap": ""
+  },
+  "local@better-volume-mixer-plus": {
+    "compactMode": 1,
+    "theme": "system",
+    "backgroundOpacity": 75,
+    "volumeStep": 5,
+    "keyboardControls": 0,
+    "exactVolumeEntry": 1,
+    "animations": 1,
+    "closeWhenFocusIsLost": 1,
+    "maxVisibleApps": "15",
+    "showAllSessions": 0,
+    "customApps[0].app": "",
+    "customApps[0].displayName": "",
+    "customApps[0].defaultVolume": 4294967295,
+    "hiddenApps[0]": ""
   },
   "local@translucent-flyouts": {
     "global.effectType": "modern_acrylic",
@@ -836,29 +861,6 @@
     "ExcludeSystemButtonsMode": 0,
     "LerpSpeed": 60,
     "DisableBounce": 0
-  },
-  "taskbar-elastic-pill": {
-    "Pill.Dimensions": "16, 3",
-    "Pill.Margins": "0, 6",
-    "Pill.PillRadius": "2",
-    "Pill.HideInactiveDots": 1,
-    "Pill.TrackSystemButtons": 1,
-    "Animation.AnimationStyle": "stretch",
-    "Animation.UseSpringPhysics": 0,
-    "Animation.ElasticIntensity": "1.0",
-    "Animation.SpeedMultiplier": "1.0",
-    "Animation.FadeTransition": 0,
-    "Animation.SquishTransition": 0,
-    "Animation.SquishMultiplier": "1.0",
-    "Animation.FadeDurationMultiplier": "1.0",
-    "PointerInteractions.HoverScale": "1.0",
-    "PointerInteractions.PressedScale": "1.0",
-    "PointerInteractions.HoverBgColor": "",
-    "PointerInteractions.PressedBgColor": "",
-    "Colors.BgOpacity": "1.0, 1.0",
-    "Colors.ColorMode": "accent",
-    "Colors.CustomColor": "",
-    "Colors.BgGradientDirection": "horizontal"
   },
   "taskbar-fluent-media-player": {
     "MainSettings.PlayerSetting.position": "taskbar_left_edge",
