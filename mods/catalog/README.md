@@ -55,7 +55,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [remap-copilot-key](./remap-copilot-key.wh.cpp) | [Lukvbp](https://github.com/lukvbp) | 2.0 | yes |  |
 | [remove-context-menu-items](./remove-context-menu-items.wh.cpp) | [Armaninyow](https://github.com/armaninyow) | 1.12.0 | yes | MIT |
 | [remove-ms-store-open-with](./remove-ms-store-open-with.wh.cpp) | [aubymori](https://github.com/aubymori) | 1.0.0 | yes |  |
-| [restore-folder-menubar-25h2](./restore-folder-menubar-25h2.wh.cpp) | [Anixx](https://github.com/Anixx) | 3.0.0 | yes |  |
+| [restore-folder-menubar-25h2](./restore-folder-menubar-25h2.wh.cpp) | [Anixx](https://github.com/Anixx) | 3.1.0 | yes |  |
 | [shadowplay-do-not-disable](./shadowplay-do-not-disable.wh.cpp) | [Temm](https://github.com/leumasme) | 1.1 | yes |  |
 | [shell-flyout-positions](./shell-flyout-positions.wh.cpp) | [m417z](https://github.com/m417z) | 1.3 | yes |  |
 | [simple-window-switcher](./simple-window-switcher.wh.cpp) | [Lone](https://github.com/Louis047) | 2.1 | yes |  |
@@ -74,7 +74,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [taskbar-elastic-pill](./taskbar-elastic-pill.wh.cpp) | [Lockframe](https://github.com/Lockframe) | 2.0.1 | yes |  |
 | [taskbar-fluent-media-player](./taskbar-fluent-media-player.wh.cpp) | [Salyts](https://github.com/Salyts) | 1.6.0 | yes |  |
 | [taskbar-icon-size](./taskbar-icon-size.wh.cpp) | [m417z](https://github.com/m417z) | 1.3.10 | yes |  |
-| [taskbar-notification-icon-spacing](./taskbar-notification-icon-spacing.wh.cpp) | [m417z](https://github.com/m417z) | 1.3.1 | yes |  |
+| [taskbar-notification-icon-spacing](./taskbar-notification-icon-spacing.wh.cpp) | [m417z](https://github.com/m417z) | 1.4 | yes |  |
 | [taskbar-restart-explorer](./taskbar-restart-explorer.wh.cpp) | [Mgrmjp](https://github.com/Mgrmjp) | 1.0 | yes |  |
 | [taskbar-system-info](./taskbar-system-info.wh.cpp) | [Yevhenii Starychenko](https://github.com/starychenko) | 1.5.0 | yes | GPL-3.0 |
 | [taskbar-tray-system-icon-tweaks](./taskbar-tray-system-icon-tweaks.wh.cpp) | [m417z](https://github.com/m417z) | 1.3 | yes |  |

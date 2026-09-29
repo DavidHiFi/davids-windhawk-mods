@@ -73,9 +73,9 @@ AltDrag window dragging plus the AltSnap gestures I use. Hold Alt and:
 | middle click | window menu |
 | right click while moving | toggle the maximized state, which stays toggled |
 
-A fork of [m417z's AltDrag](https://windhawk.net/mods/alt-drag) cut down to my
-[AltSnap](https://github.com/RamonUnch/AltSnap) shortcuts. GPL-3.0, like the
-original.
+A fork of [m417z's AltDrag](https://windhawk.net/mods/alt-drag), extended with
+my [AltSnap](https://github.com/RamonUnch/AltSnap) shortcuts and gestures.
+GPL-3.0, like the original.
 
 ### taskbar-ai-quota-opencode
 
@@ -96,6 +96,16 @@ backgrounds for Win32 context menus, menu-bar dropdowns, tooltips and dropdown
 lists, with the original settings schema. No helper app, no registry bridge.
 Runs in every process except a protected-chain exclude list. LGPL-3.0 with
 attribution to the original author.
+
+### center-titlebar-fork
+
+A prototype fork of
+[rounk-ctrl's Center Titlebar](https://windhawk.net/mods/center-titlebar) that
+reworks title centering for current Windows 11 builds, where DWM renders the
+caption text with DirectWrite instead of the old theme text API. The centering
+happens in `CVisual::UpdateLayout`, so it stays correct across maximize and
+restore. Not installed on this machine and not published upstream yet; the
+source lives here for safekeeping. MIT.
 
 ## Licensing
 

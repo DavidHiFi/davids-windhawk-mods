@@ -3,7 +3,10 @@
 // @name            Notepad++ Save Dialog Text Color
 // @description     Fixes dark-on-dark text in Notepad++ Save/confirm dialogs
 // @version         1.0.1
-// @author          local
+// @author          DavidHiFi
+// @github          https://github.com/DavidHiFi
+// @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
+// @license         MIT
 // @include         notepad++.exe
 // @compilerOptions -luxtheme
 // ==/WindhawkMod==

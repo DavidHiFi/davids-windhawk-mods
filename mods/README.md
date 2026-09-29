@@ -1,8 +1,9 @@
 # Mods
 
 - `local/` is my work: alt-snap-drag, taskbar-ai-quota-opencode,
-  npp-taskdlg-textcolor and translucent-flyouts. Each folder holds the source
-  it was built from.
+  npp-taskdlg-textcolor, translucent-flyouts and center-titlebar-fork (a
+  prototype that is not installed). Each folder holds the source it was built
+  from.
 - `catalog/` holds copies of the catalog mods in this setup, one flat `.wh.cpp`
   per mod, exactly as they are on my machine. The table in
   [catalog/README.md](catalog/README.md) lists authors, versions and licenses.
@@ -15,6 +16,7 @@
 | [taskbar-ai-quota-opencode](local/taskbar-ai-quota-opencode) | Taskbar AI quota bars with an OpenCode Go provider. | 1.6.5.1 | MIT |
 | [npp-taskdlg-textcolor](local/npp-taskdlg-textcolor) | Readable text in Notepad++ dark-mode Save and confirm dialogs. | 1.0.1 | MIT |
 | [translucent-flyouts](local/translucent-flyouts) | The archived TranslucentFlyouts engine reimplemented as one self-contained mod: acrylic/blur/transparent menus, tooltips and dropdown lists, no helper app. | 0.6.1 | LGPL-3.0 |
+| [center-titlebar-fork](local/center-titlebar-fork) | Prototype fork of rounk-ctrl's center-titlebar; reworks title centering for current Windows 11 (DirectWrite). Not installed, not published. | 3.4 | MIT |
 
 ## Installing a mod
 

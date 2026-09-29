@@ -39,6 +39,13 @@ $upstreamOverride = @{
     'local@alt-snap-drag'             = 'https://windhawk.net/mods/alt-drag'
     'local@taskbar-ai-quota-opencode' = 'https://windhawk.net/mods/taskbar-ai-quota'
 }
+# Local mods that are not installed on this machine: id -> source and repo dest.
+$offlineLocal = [ordered]@{
+    'center-titlebar-fork' = @{
+        src  = 'H:\Windhawk Configuration\Windhawk\center-titlebar-fork\center-titlebar-fork.wh.cpp'
+        dest = 'mods\local\center-titlebar-fork\center-titlebar-fork.wh.cpp'
+    }
+}
 
 function Get-ModHeader {
     param([string]$Path)
@@ -61,6 +68,13 @@ if (-not $SkipSources) {
         $dest = if ($localPaths.Contains($id)) { Join-Path $repo $localPaths[$id] } else { Join-Path $repo "mods\catalog\$($f.Name)" }
         New-Item -ItemType Directory -Path (Split-Path $dest -Parent) -Force | Out-Null
         Copy-Item -LiteralPath $f.FullName -Destination $dest -Force
+    }
+    foreach ($id in $offlineLocal.Keys) {
+        $o = $offlineLocal[$id]
+        if (-not (Test-Path -LiteralPath $o.src)) { Write-Warning "offline local source missing: $($o.src)"; continue }
+        $dest = Join-Path $repo $o.dest
+        New-Item -ItemType Directory -Path (Split-Path $dest -Parent) -Force | Out-Null
+        Copy-Item -LiteralPath $o.src -Destination $dest -Force
     }
 }
 
@@ -125,6 +139,24 @@ $manifestMods = foreach ($m in $mods) {
         upstream = $upstream
         source   = $source
         enabled  = -not $m.disabled
+    }
+}
+$manifestMods = @($manifestMods)
+foreach ($id in $offlineLocal.Keys) {
+    $o = $offlineLocal[$id]
+    if (-not (Test-Path -LiteralPath $o.src)) { continue }
+    $h = Get-ModHeader -Path $o.src
+    $manifestMods += [pscustomobject]@{
+        id       = $id
+        name     = $h.name
+        author   = $h.author
+        github   = $h.github
+        version  = $h.version
+        license  = $h.license
+        origin   = 'local'
+        upstream = 'https://windhawk.net/mods/center-titlebar'
+        source   = $o.dest -replace '\\', '/'
+        enabled  = $false
     }
 }
 $manifest = [ordered]@{
