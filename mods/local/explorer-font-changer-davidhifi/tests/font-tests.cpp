@@ -41,7 +41,6 @@ int main() {
     drawTextOriginal = DrawTextW;
     drawTextExOriginal = DrawTextExW;
     extentOriginal = GetTextExtentPoint32W;
-    createFontOriginal = CreateFontIndirectW;
     RECT measured{0,0,2000,2000};
     drawTextHook(dc,L"Explorer",8,&measured,DT_CALCRECT | DT_SINGLELINE);
     SIZE size{};
@@ -66,16 +65,13 @@ int main() {
         check(GetCurrentObject(dc,OBJ_FONT) == original,"None/disabled policy preserves selected font");
     }
     policy::enabled = true;
-    auto created = createFontHook(&lf);
-    LOGFONTW createdLf{};
-    GetObjectW(created,sizeof(createdLf),&createdLf);
-    check(!_wcsicmp(createdLf.lfFaceName,policy::target.c_str()),"UI HFONT creation substitutes family");
-    DeleteObject(created);
-    wcscpy_s(lf.lfFaceName,L"Segoe Fluent Icons");
-    created = createFontHook(&lf);
-    GetObjectW(created,sizeof(createdLf),&createdLf);
-    check(!_wcsicmp(createdLf.lfFaceName,L"Segoe Fluent Icons"),"icon HFONT creation preserves family");
-    DeleteObject(created);
+    {
+        FontScope scope(dc,L"\u4E00",1);
+        check(GetCurrentObject(dc,OBJ_FONT) == original,"missing target glyph keeps original font");
+    }
+    LOGFONTW retained{};
+    GetObjectW(original,sizeof(retained),&retained);
+    check(!_wcsicmp(retained.lfFaceName,L"Segoe UI"),"persistent HFONT unchanged after drawing");
     IDWriteFactory* factory=nullptr;
     HRESULT hr=DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,__uuidof(IDWriteFactory),reinterpret_cast<IUnknown**>(&factory));
     check(SUCCEEDED(hr),"DirectWrite factory available");

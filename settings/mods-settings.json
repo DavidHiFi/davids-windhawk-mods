@@ -1843,5 +1843,8 @@
     "AdvancedMode.Stiffness": 6,
     "AdvancedMode.Drag": 90,
     "AdvancedMode.MoveFactor": 10
+  },
+  "local@explorer-font-changer-davidhifi": {
+    "font.name": "FiraCode Nerd Font"
   }
 }

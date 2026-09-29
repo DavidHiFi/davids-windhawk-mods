@@ -175,7 +175,7 @@
     "version": "4"
   },
   "explorer-font-changer": {
-    "disabled": false,
+    "disabled": true,
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "",
@@ -677,5 +677,12 @@
     "exclude": "",
     "architecture": "amd64",
     "version": "0.115"
+  },
+  "local@explorer-font-changer-davidhifi": {
+    "disabled": false,
+    "include": "explorer.exe|StartMenuExperienceHost.exe|ShellExperienceHost.exe|SearchHost.exe|ShellHost.exe|SystemSettings.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.0.0"
   }
 }
