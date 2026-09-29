@@ -60,6 +60,7 @@ Disabling the mod restores drawing hooks; existing UI caches may need to refresh
 #include <string>
 #include <cwctype>
 #include <algorithm>
+#include <vector>
 
 namespace policy {
 std::wstring target;
@@ -112,6 +113,21 @@ public:
             return;
         }
         dc = hdc;
+        if (length) {
+            std::vector<WORD> glyphs(length);
+            bool missing = GetGlyphIndicesW(dc, text, length, glyphs.data(), GGI_MARK_NONEXISTING_GLYPHS) == GDI_ERROR;
+            for (UINT i = 0; !missing && i < length; ++i) {
+                if (text[i] >= L' ' && glyphs[i] == 0xffff) missing = true;
+            }
+            // GDI font linking varies by family. Preserve the original run
+            // when the replacement lacks a character instead of drawing tofu.
+            if (missing) {
+                SelectObject(dc, previous);
+                DeleteObject(replacement);
+                replacement = nullptr;
+                dc = nullptr;
+            }
+        }
     }
     ~FontScope() {
         if (dc) SelectObject(dc, previous);
