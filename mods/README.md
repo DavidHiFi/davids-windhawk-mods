@@ -1,8 +1,8 @@
 # Mods
 
 - `local/` is my work: alt-snap-drag, taskbar-ai-quota-opencode,
-  npp-taskdlg-textcolor, translucent-flyouts and center-titlebar-fork (a
-  prototype that is not installed). Each folder holds the source it was built
+  npp-taskdlg-textcolor, translucent-flyouts, better-volume-mixer-plus and
+  center-titlebar-fork (a prototype that is not installed). Each folder holds the source it was built
   from.
 - `catalog/` holds copies of the catalog mods in this setup, one flat `.wh.cpp`
   per mod, exactly as they are on my machine. The table in
@@ -16,6 +16,7 @@
 | [taskbar-ai-quota-opencode](local/taskbar-ai-quota-opencode) | Taskbar AI quota bars with an OpenCode Go provider. | 1.6.5.1 | MIT |
 | [npp-taskdlg-textcolor](local/npp-taskdlg-textcolor) | Readable text in Notepad++ dark-mode Save and confirm dialogs. | 1.0.1 | MIT |
 | [translucent-flyouts](local/translucent-flyouts) | The archived TranslucentFlyouts engine reimplemented as one self-contained mod: acrylic/blur/transparent menus, tooltips and dropdown lists, no helper app. | 0.6.1 | LGPL-3.0 |
+| [better-volume-mixer-plus](local/better-volume-mixer-plus) | 0Allu's Better Volume Mixer plus per-app output and input device routing from each app's right-click menu; replaces EarTrumpet. | 1.0.0 | MIT |
 | [center-titlebar-fork](local/center-titlebar-fork) | Prototype fork of rounk-ctrl's center-titlebar; reworks title centering for current Windows 11 (DirectWrite). Not installed, not published. | 3.4 | MIT |
 
 ## Installing a mod

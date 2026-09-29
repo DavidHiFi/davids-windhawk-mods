@@ -97,6 +97,14 @@ lists, with the original settings schema. No helper app, no registry bridge.
 Runs in every process except a protected-chain exclude list. LGPL-3.0 with
 attribution to the original author.
 
+### better-volume-mixer-plus
+
+[0Allu's Better Volume Mixer](https://windhawk.net/mods/better-volume-mixer)
+with per-app device routing added. Right-click an app in the mixer and pick
+**Output device** or **Input device** to move just that app to another device,
+or back to Default. It changes the same per-app setting as EarTrumpet and the
+Windows volume mixer, so it replaces EarTrumpet. MIT, like the original.
+
 ### center-titlebar-fork
 
 A prototype fork of
