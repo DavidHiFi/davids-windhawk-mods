@@ -25,6 +25,8 @@ if (-not (Test-Path -LiteralPath $src)) { throw "ModsSource not found at $src" }
 
 # Where the local (my) mods live in the repo; everything else is a catalog copy.
 $localPaths = [ordered]@{
+    'local@taskbar-weather' = 'mods\local\taskbar-weather\taskbar-weather.wh.cpp'
+    'local@taskbar-system-info-weather' = 'mods\local\taskbar-system-info-weather\taskbar-system-info-weather.wh.cpp'
     'local@alt-snap-drag'             = 'mods\local\alt-snap-drag\alt-snap.wh.cpp'
     'local@taskbar-ai-quota-opencode' = 'mods\local\taskbar-ai-quota-opencode\taskbar-ai-quota-opencode.wh.cpp'
     'npp-taskdlg-textcolor'           = 'mods\local\npp-taskdlg-textcolor\npp-taskdlg-textcolor.wh.cpp'
@@ -107,6 +109,10 @@ foreach ($k in Get-ChildItem "$base\*\Settings") {
     $v = Get-ItemProperty $k.PSPath
     $vals = [ordered]@{}
     foreach ($p in $v.PSObject.Properties | Where-Object { $_.Name -notmatch '^PS' }) { $vals[$p.Name] = $p.Value }
+    # Never publish the weather location from local settings.
+    if ($id -match '^(local@)?taskbar-weather$') {
+        foreach ($name in 'latitude', 'longitude', 'placeName') { $vals[$name] = '' }
+    }
     $settings[$id] = $vals
 }
 $settings | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $repo 'settings\mods-settings.json')

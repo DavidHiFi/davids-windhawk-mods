@@ -1,0 +1,22 @@
+# Independent Taskbar Weather
+
+Native weather for the primary Windows 11 taskbar, with a rounded dark hover card, automatic updates and saved readings. Uses [Open-Meteo](https://open-meteo.com/) weather data over HTTPS. No Windows Widgets, Edge, WebView or API key is required.
+
+## Install
+
+1. Install Windhawk and choose **Create new mod**.
+2. Paste [taskbar-weather.wh.cpp](taskbar-weather.wh.cpp), then compile and enable it.
+3. In Settings, enter your town center's latitude and longitude. Optionally enter a town name for the hover card. Coordinates ship empty and remain in your local settings.
+4. Disable Windows Widgets in Windows taskbar settings if it occupies the same space.
+
+Click the weather to refresh. It normally updates every ten minutes, retries failed requests after one minute, refreshes on resume, and recreates its taskbar child if Windows replaces it. A saved reading remains visible during temporary network failures; readings older than thirty minutes are marked stale. The mod shows a setup prompt until coordinates are entered.
+
+The card shows Celsius temperature, conditions, feels-like temperature, today's high and low, humidity, wind and the reading time. Open-Meteo provides modeled weather for the chosen coordinates; it can differ from a phone app using another provider or observation time. Free endpoint use is subject to [Open-Meteo's terms](https://open-meteo.com/en/terms).
+
+For a neatly adjacent performance monitor, install [Taskbar System Info with Weather](../taskbar-system-info-weather). The monitor follows the weather's visible right edge with a six-DIP gap. Width and left offset are configurable. Primary taskbar only; Windows 11 x64.
+
+## Validation and removal
+
+Built with Windhawk 1.7.3. Tested taskbar child recreation, resume notification refresh, timed refresh, cached readings after a network error and automatic retry. A full reboot and physical sleep cycle have not been tested in this release.
+
+Disable or remove the mod in Windhawk to undo it. No Explorer restart is required. MIT license.

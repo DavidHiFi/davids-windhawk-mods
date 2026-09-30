@@ -57,6 +57,10 @@ It refreshes the catalog copies, the local mod files, `manifest.json`, the
 catalog table, and the settings exports from the live install. Add
 `-SkipSources` to refresh settings and metadata only.
 
+## Taskbar weather
+
+[Independent Taskbar Weather](mods/local/taskbar-weather) adds automatically updated weather and a readable rounded hover card. [Taskbar System Info with Weather](mods/local/taskbar-system-info-weather) follows it with a six-DIP gap. Installation and location setup are documented in each folder; published settings contain no saved town or coordinates.
+
 ## My mods
 
 ### explorer-font-changer-davidhifi
@@ -128,7 +132,7 @@ source lives here for safekeeping. MIT.
 My work in this repo is MIT, see [LICENSE](LICENSE). The catalog mods under
 `mods/catalog/` are their authors' work and keep their own licenses, listed in
 the catalog table where the source declares one. `alt-snap-drag` is GPL-3.0
-because its upstream is, and `translucent-flyouts` is LGPL-3.0 for the same
+because its upstream is, `taskbar-system-info-weather` is GPL-3.0, and `translucent-flyouts` is LGPL-3.0 for the same
 reason.
 
 `settings/` holds configuration values only. The quota mods keep encrypted

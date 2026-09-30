@@ -815,7 +815,7 @@
     "MediaPlayer.NoMediaText": "No media",
     "MediaPlayer.RemoveBrackets": 0,
     "WebContentWeatherLocation": "",
-    "WebContentWeatherFormat": "%c 🌡️%t 🌬️%w",
+    "WebContentWeatherFormat": "%c \ud83c\udf21\ufe0f%t \ud83c\udf2c\ufe0f%w",
     "WebContentWeatherUnits": "autoDetect",
     "WebContentsItems[0].Url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
     "WebContentsItems[0].BlockStart": "<item>",
@@ -1810,8 +1810,8 @@
     "controlStyles[58].styles[0]": "Margin=6,3,6,3",
     "controlStyles[58].styles[1]": "// Background layer inset: makes the taskbar read as one floating pill.",
     "controlStyles[1].styles[6]": "RadiusY=15",
-    "controlStyles[59].target": "Windows.UI.Xaml.Controls.TextBlock#InnerTextBlock[Text=]",
-    "controlStyles[59].styles[0]": "Text="
+    "controlStyles[59].target": "Windows.UI.Xaml.Controls.TextBlock#InnerTextBlock[Text=\ue971]",
+    "controlStyles[59].styles[0]": "Text=\ue712"
   },
   "windows-animations": {
     "minimize_restore.minimize_animation": 1,
@@ -1846,5 +1846,45 @@
   },
   "local@explorer-font-changer-davidhifi": {
     "font.name": "FiraCode Nerd Font"
+  },
+  "local@taskbar-weather": {
+    "latitude": "",
+    "longitude": "",
+    "placeName": "",
+    "updateMinutes": 10,
+    "leftOffset": 16,
+    "width": 220,
+    "fontFamily": "Segoe UI",
+    "fontSize": 12
+  },
+  "local@taskbar-system-info-weather": {
+    "width": 0,
+    "leftOffset": 175,
+    "reserveSpace": 0,
+    "reserveGap": 0,
+    "updateInterval": 1,
+    "historySeconds": 60,
+    "fontSize": 11,
+    "fontFamily": "FiraCode Nerd Font",
+    "textColor": "",
+    "graphColor": "#FF89B4FA",
+    "warningColor": "#FFF38BA8",
+    "criticalColor": "#FFFF6B6B",
+    "textOpacity": 96,
+    "cpuWarningTemp": 75,
+    "cpuCriticalTemp": 85,
+    "gpuWarningTemp": 80,
+    "gpuCriticalTemp": 90,
+    "memoryWarningPercent": 80,
+    "memoryCriticalPercent": 90,
+    "gpuAdapter": "",
+    "temperatureSource": "auto",
+    "windowsThermalZoneFilter": "",
+    "windowsThermalZoneAggregation": "average",
+    "cpuTempSensor": "",
+    "gpuTempSensor": "",
+    "monitor": 1,
+    "adaptiveColors": 1,
+    "gpuMemoryMode": "auto"
   }
 }

@@ -1,12 +1,12 @@
 {
   "name": "davids-windhawk-mods",
   "description": "David's full Windhawk setup: every mod source, every setting.",
-  "generatedAt": "2026-09-30T04:14:52+08:00",
+  "generatedAt": "2026-09-30T20:17:21.558104+08:00",
   "windhawkVersion": "1.7.3",
   "counts": {
-    "mods": 99,
-    "enabled": 94,
-    "local": 7
+    "mods": 101,
+    "enabled": 95,
+    "local": 9
   },
   "mods": [
     {
@@ -324,7 +324,7 @@
     {
       "id": "explorer-hide-focus-border",
       "name": "File Explorer Focus Border Remover",
-      "author": "Hùng",
+      "author": "H\u00f9ng",
       "github": "https://github.com/NoMorePlz",
       "version": "1.0.0",
       "license": "MIT",
@@ -943,7 +943,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/taskbar-system-info",
       "source": "mods/catalog/taskbar-system-info.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "taskbar-tray-system-icon-tweaks",
@@ -1195,6 +1195,30 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/explorer-font-changer",
       "source": "mods/local/explorer-font-changer-davidhifi/explorer-font-changer-davidhifi.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@taskbar-weather",
+      "name": "Independent Taskbar Weather",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.2.1",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/taskbar-weather/taskbar-weather.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@taskbar-system-info-weather",
+      "name": "Taskbar System Info with Weather",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/taskbar-system-info",
+      "source": "mods/local/taskbar-system-info-weather/taskbar-system-info-weather.wh.cpp",
       "enabled": true
     }
   ]
