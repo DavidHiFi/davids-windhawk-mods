@@ -2,7 +2,7 @@
 // @id              explorer-font-changer-davidhifi
 // @name            Explorer Font Changer by DavidHiFi
 // @description     Change shell text fonts while preserving Windows icons and emoji.
-// @version         1.0.0
+// @version         1.0.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -25,7 +25,10 @@ Original: https://github.com/ramensoftware/windhawk-mods/blob/main/mods/explorer
 
 Changes GDI, themed text, and DirectWrite layouts in Explorer and Windows shell
 hosts, Search, Start, and Settings. Symbol,
-icon, emoji, and private-use character runs keep their original fonts.
+icon, emoji, and private-use character runs keep their original fonts. Weights
+named in the face, such as Segoe UI Semibold, carry over to the new font.
+Invisible direction marks, such as the ones in Explorer dates, do not block
+substitution.
 GDI replacements restore the original selected font before deleting their handles.
 Settings changes request a mod reload, so drawing threads never read partially
 updated settings. No font substitution registry entries are written.
@@ -89,6 +92,26 @@ bool protectedText(const wchar_t* text, UINT length) {
 UINT textLength(const wchar_t* text, int length) {
     return !text ? 0 : length < 0 ? static_cast<UINT>(wcslen(text)) : static_cast<UINT>(length);
 }
+// GDI draws these format controls as nothing when a face lacks them, so they
+// must not force a fallback. Explorer wraps every formatted date in U+200E.
+bool invisibleControl(unsigned c) {
+    return c < L' ' || c == 0x061C || (c >= 0x200B && c <= 0x200F) || (c >= 0x202A && c <= 0x202E) ||
+           (c >= 0x2061 && c <= 0x2064) || (c >= 0x206A && c <= 0x206F) || (c >= 0xFE00 && c <= 0xFE0F) ||
+           c == 0xFEFF;
+}
+int nameWeight(const wchar_t* face) {
+    std::wstring name = face ? face : L"";
+    std::transform(name.begin(), name.end(), name.begin(), towlower);
+    // Longer names first, so " semibold" is not read as " bold".
+    const std::pair<const wchar_t*, int> suffixes[] = {
+        {L" extrabold", 800}, {L" ultrabold", 800}, {L" semibold", 600}, {L" demibold", 600},
+        {L" black", 900}, {L" heavy", 900}, {L" bold", 700}, {L" medium", 500}};
+    for (const auto& [suffix, weight] : suffixes) {
+        size_t size = wcslen(suffix);
+        if (name.size() > size && name.compare(name.size() - size, size, suffix) == 0) return weight;
+    }
+    return 0;
+}
 }
 
 // Scope the selected font to one call. Restoring it before DeleteObject is
@@ -102,7 +125,15 @@ public:
         if (!policy::enabled || !hdc || glyphIndices || policy::protectedText(text, length)) return;
         LOGFONTW font{};
         if (GetObjectW(GetCurrentObject(hdc, OBJ_FONT), sizeof(font), &font) != sizeof(font)) return;
-        if (policy::protectedFace(font.lfFaceName, font.lfCharSet) || _wcsicmp(font.lfFaceName, policy::target.c_str()) == 0) return;
+        // '@' faces are vertical CJK layouts; a horizontal face would rotate them.
+        if (font.lfFaceName[0] == L'@' || policy::protectedFace(font.lfFaceName, font.lfCharSet) ||
+            _wcsicmp(font.lfFaceName, policy::target.c_str()) == 0) return;
+        // Face names such as "Segoe UI Black" carry their weight in the name.
+        TEXTMETRICW metrics{};
+        if (GetTextMetricsW(hdc, &metrics) && metrics.tmWeight > font.lfWeight) font.lfWeight = metrics.tmWeight;
+        font.lfWeight = std::max<LONG>(font.lfWeight, policy::nameWeight(font.lfFaceName));
+        // A script charset the target lacks would make the mapper pick another face.
+        font.lfCharSet = DEFAULT_CHARSET;
         wcscpy_s(font.lfFaceName, policy::target.c_str());
         replacement = CreateFontIndirectW(&font);
         if (!replacement) return;
@@ -113,20 +144,24 @@ public:
             return;
         }
         dc = hdc;
-        if (length) {
+        wchar_t realized[LF_FACESIZE]{};
+        // DirectWrite family names are not always GDI face names. Never let
+        // the mapper substitute a third font for a name GDI does not know.
+        bool missing = !GetTextFaceW(dc, LF_FACESIZE, realized) || _wcsicmp(realized, policy::target.c_str()) != 0;
+        if (!missing && length) {
             std::vector<WORD> glyphs(length);
-            bool missing = GetGlyphIndicesW(dc, text, length, glyphs.data(), GGI_MARK_NONEXISTING_GLYPHS) == GDI_ERROR;
+            missing = GetGlyphIndicesW(dc, text, length, glyphs.data(), GGI_MARK_NONEXISTING_GLYPHS) == GDI_ERROR;
             for (UINT i = 0; !missing && i < length; ++i) {
-                if (text[i] >= L' ' && glyphs[i] == 0xffff) missing = true;
+                if (glyphs[i] == 0xffff && !policy::invisibleControl(text[i])) missing = true;
             }
-            // GDI font linking varies by family. Preserve the original run
-            // when the replacement lacks a character instead of drawing tofu.
-            if (missing) {
-                SelectObject(dc, previous);
-                DeleteObject(replacement);
-                replacement = nullptr;
-                dc = nullptr;
-            }
+        }
+        // GDI font linking varies by family. Preserve the original run
+        // when the replacement lacks a character instead of drawing tofu.
+        if (missing) {
+            SelectObject(dc, previous);
+            DeleteObject(replacement);
+            replacement = nullptr;
+            dc = nullptr;
         }
     }
     ~FontScope() {
@@ -190,7 +225,13 @@ void updateLayout(IDWriteTextLayout* layout, const WCHAR* text, UINT length, IDW
     collection->FindFamilyName(policy::target.c_str(), &index, &exists);
     collection->Release();
     // A custom font collection without the target keeps its original family.
-    if (exists) layout->SetFontFamilyName(policy::target.c_str(), DWRITE_TEXT_RANGE{0, length});
+    if (!exists) return;
+    DWRITE_TEXT_RANGE range{0, length};
+    // Legacy GDI names such as "Segoe UI Semibold" carry their weight in the
+    // name, and DirectWrite does not resolve them. Keep that weight.
+    auto weight = static_cast<DWRITE_FONT_WEIGHT>(policy::nameWeight(family.c_str()));
+    if (weight > format->GetFontWeight()) layout->SetFontWeight(weight, range);
+    layout->SetFontFamilyName(policy::target.c_str(), range);
 }
 using LayoutFn = HRESULT (STDMETHODCALLTYPE*)(IDWriteFactory*, const WCHAR*, UINT32, IDWriteTextFormat*, FLOAT, FLOAT, IDWriteTextLayout**);
 LayoutFn layoutOriginal;

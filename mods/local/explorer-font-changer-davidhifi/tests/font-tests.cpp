@@ -69,6 +69,75 @@ int main() {
         FontScope scope(dc,L"\u4E00",1);
         check(GetCurrentObject(dc,OBJ_FONT) == original,"missing target glyph keeps original font");
     }
+    {
+        // Explorer formats dates as U+200E 30/09/U+200E 2026 U+200F U+200E 8:51 AM.
+        FontScope scope(dc,L"‎30/09/‎2026 ‏‎8:51 AM",19);
+        wchar_t face[LF_FACESIZE]{};
+        GetTextFaceW(dc,LF_FACESIZE,face);
+        check(!_wcsicmp(face,policy::target.c_str()),"direction marks in dates do not block substitution");
+    }
+    check(GetCurrentObject(dc,OBJ_FONT) == original,"date run restores original HFONT");
+    {
+        FontScope scope(dc,L"a⁦b",3);
+        check(GetCurrentObject(dc,OBJ_FONT) == original,"visible missing control keeps original font");
+    }
+    {
+        LOGFONTW heavy = lf;
+        heavy.lfWeight = FW_BOLD;
+        HFONT bold = CreateFontIndirectW(&heavy);
+        SelectObject(dc,bold);
+        {
+            FontScope scope(dc,L"Explorer",8);
+            TEXTMETRICW tm{};
+            GetTextMetricsW(dc,&tm);
+            check(tm.tmWeight >= FW_BOLD,"bold weight carried to replacement");
+        }
+        SelectObject(dc,original);
+        DeleteObject(bold);
+    }
+    check(policy::nameWeight(L"Segoe UI Semibold") == 600 && policy::nameWeight(L"Segoe UI Black") == 900 &&
+          policy::nameWeight(L"Segoe UI Bold") == 700 && policy::nameWeight(L"Segoe UI") == 0 &&
+          policy::nameWeight(L"Bold") == 0, "weight read from legacy face names");
+    {
+        LOGFONTW named = lf;
+        wcscpy_s(named.lfFaceName,L"Segoe UI Semibold");
+        HFONT semibold = CreateFontIndirectW(&named);
+        SelectObject(dc,semibold);
+        {
+            FontScope scope(dc,L"Explorer",8);
+            LOGFONTW selected{};
+            GetObjectW(GetCurrentObject(dc,OBJ_FONT),sizeof(selected),&selected);
+            check(!_wcsicmp(selected.lfFaceName,policy::target.c_str()) && selected.lfWeight >= 600,"GDI legacy semibold face keeps its weight");
+        }
+        SelectObject(dc,original);
+        DeleteObject(semibold);
+    }
+    {
+        LOGFONTW vertical = lf;
+        wcscpy_s(vertical.lfFaceName,L"@Yu Gothic UI");
+        HFONT tall = CreateFontIndirectW(&vertical);
+        SelectObject(dc,tall);
+        {
+            FontScope scope(dc,L"Explorer",8);
+            check(GetCurrentObject(dc,OBJ_FONT) == tall,"vertical face keeps original font");
+        }
+        SelectObject(dc,original);
+        DeleteObject(tall);
+    }
+    {
+        auto saved = policy::target;
+        policy::target = L"No Such Font Family";
+        FontScope scope(dc,L"Explorer",8);
+        check(GetCurrentObject(dc,OBJ_FONT) == original,"unknown GDI face never maps to a third font");
+        policy::target = saved;
+    }
+    before = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
+    for (int i=0; i<10000; ++i) {
+        FontScope a(dc,L"‎30/09/2026",11);
+        FontScope b(dc,L"一",1);
+    }
+    after = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
+    check(after == before && GetCurrentObject(dc,OBJ_FONT) == original,"10000 fallback and nested scopes leak no GDI handles");
     LOGFONTW retained{};
     GetObjectW(original,sizeof(retained),&retained);
     check(!_wcsicmp(retained.lfFaceName,L"Segoe UI"),"persistent HFONT unchanged after drawing");
@@ -113,6 +182,22 @@ int main() {
             } else check(false,"GDI-compatible DirectWrite layout");
             format->Release();
         }
+        IDWriteTextFormat* semibold=nullptr;
+        factory->CreateTextFormat(L"Segoe UI Semibold",nullptr,DWRITE_FONT_WEIGHT_NORMAL,DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,16,L"en-us",&semibold);
+        if(semibold) {
+            IDWriteTextLayout* layout=nullptr;
+            layoutHook(factory,L"‎Explorer",9,semibold,500,100,&layout);
+            if(layout) {
+                wchar_t actual[64]{};
+                layout->GetFontFamilyName(0,actual,64);
+                check(!_wcsicmp(actual,policy::target.c_str()),"DirectWrite legacy family substituted");
+                DWRITE_FONT_WEIGHT weight=DWRITE_FONT_WEIGHT_NORMAL;
+                layout->GetFontWeight(0,&weight);
+                check(weight >= DWRITE_FONT_WEIGHT_SEMI_BOLD,"DirectWrite legacy family weight carried");
+                layout->Release();
+            } else check(false,"DirectWrite legacy family layout");
+            semibold->Release();
+        } else check(false,"DirectWrite legacy family format");
         factory->Release();
     }
     SelectObject(dc,stock);
