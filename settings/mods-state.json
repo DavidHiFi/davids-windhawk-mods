@@ -683,6 +683,6 @@
     "include": "explorer.exe|StartMenuExperienceHost.exe|ShellExperienceHost.exe|SearchHost.exe|ShellHost.exe|SystemSettings.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.0.0"
+    "version": "1.0.1"
   }
 }
