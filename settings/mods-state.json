@@ -539,7 +539,7 @@
     "version": "1.0"
   },
   "taskbar-system-info": {
-    "disabled": false,
+    "disabled": true,
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
@@ -684,5 +684,19 @@
     "exclude": "",
     "architecture": "",
     "version": "1.0.1"
+  },
+  "local@taskbar-weather": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.2.1"
+  },
+  "local@taskbar-system-info-weather": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.0"
   }
 }

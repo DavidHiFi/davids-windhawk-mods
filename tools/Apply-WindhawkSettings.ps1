@@ -109,6 +109,10 @@ $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json
 foreach ($mod in $settings.PSObject.Properties) {
     $key = Join-Path $modsKey ($mod.Name + '\Settings')
     foreach ($value in $mod.Value.PSObject.Properties) {
+        # Published weather location fields are blank; preserve each user's town.
+        if ($mod.Name -match '^(local@)?taskbar-weather$' -and
+            $value.Name -in 'latitude', 'longitude', 'placeName' -and
+            [string]::IsNullOrEmpty([string]$value.Value)) { continue }
         $type = if ($value.Value -is [int] -or $value.Value -is [long]) { 'DWord' } else { 'String' }
         Set-RegValue $key $value.Name $value.Value $type
     }

@@ -35,3 +35,7 @@ the registry instead, write the `settings_v1` string under
 `HKLM\SOFTWARE\Windhawk\Engine\ModsWritable\<mod id>\LocalStorage` and restart
 the engine. The `opencodeKey` field is a length reference, not a key; your own
 key is entered through the mod UI.
+
+## Weather location
+
+Weather latitude, longitude and place name are blank in the public snapshot. The export script removes these values, and the apply script skips blank location fields to preserve an existing local town. Configure your own town in the weather mod settings after installation. Cached weather readings are excluded.
