@@ -4,9 +4,9 @@
   "generatedAt": "2026-09-30T20:17:21.558104+08:00",
   "windhawkVersion": "1.7.3",
   "counts": {
-    "mods": 101,
-    "enabled": 95,
-    "local": 9
+    "mods": 102,
+    "enabled": 93,
+    "local": 10
   },
   "mods": [
     {
@@ -487,7 +487,7 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/alt-drag",
       "source": "mods/local/alt-snap-drag/alt-snap.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "local@better-volume-mixer-plus",
@@ -547,7 +547,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/move-window-to-monitor",
       "source": "mods/catalog/move-window-to-monitor.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "mspaint-dark",
@@ -763,7 +763,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/snap-commander",
       "source": "mods/catalog/snap-commander.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "start-menu-open-real-file-location",
@@ -1219,6 +1219,18 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/taskbar-system-info",
       "source": "mods/local/taskbar-system-info-weather/taskbar-system-info-weather.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@david-window-pack",
+      "name": "David's Window Pack",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/david-window-pack/david-window-pack.wh.cpp",
       "enabled": true
     }
   ]

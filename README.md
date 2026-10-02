@@ -63,6 +63,14 @@ catalog table, and the settings exports from the live install. Add
 
 ## My mods
 
+### david-window-pack
+
+[David's Window Pack](mods/local/david-window-pack) combines AltSnap dragging,
+Snap Commander and monitor movement. Its elevated keyboard helper can move
+administrator windows, including Task Scheduler and Windhawk's own UI. The
+combined settings page controls shortcuts, screen gaps and monitor targets.
+GPL-3.0. Disable the three separate mods before enabling the pack.
+
 ### explorer-font-changer-davidhifi
 
 [Explorer Font Changer by DavidHiFi](mods/local/explorer-font-changer-davidhifi)
@@ -132,7 +140,7 @@ source lives here for safekeeping. MIT.
 My work in this repo is MIT, see [LICENSE](LICENSE). The catalog mods under
 `mods/catalog/` are their authors' work and keep their own licenses, listed in
 the catalog table where the source declares one. `alt-snap-drag` is GPL-3.0
-because its upstream is, `taskbar-system-info-weather` is GPL-3.0, and `translucent-flyouts` is LGPL-3.0 for the same
+because its upstream is, `david-window-pack` and `taskbar-system-info-weather` are GPL-3.0, and `translucent-flyouts` is LGPL-3.0 for the same
 reason.
 
 `settings/` holds configuration values only. The quota mods keep encrypted

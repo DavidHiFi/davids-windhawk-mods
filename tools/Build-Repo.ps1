@@ -25,6 +25,7 @@ if (-not (Test-Path -LiteralPath $src)) { throw "ModsSource not found at $src" }
 
 # Where the local (my) mods live in the repo; everything else is a catalog copy.
 $localPaths = [ordered]@{
+    'local@david-window-pack' = 'mods\local\david-window-pack\david-window-pack.wh.cpp'
     'local@taskbar-weather' = 'mods\local\taskbar-weather\taskbar-weather.wh.cpp'
     'local@taskbar-system-info-weather' = 'mods\local\taskbar-system-info-weather\taskbar-system-info-weather.wh.cpp'
     'local@alt-snap-drag'             = 'mods\local\alt-snap-drag\alt-snap.wh.cpp'
@@ -36,6 +37,7 @@ $localPaths = [ordered]@{
 }
 # Values the source headers do not carry.
 $licenseOverride = @{
+    'local@david-window-pack' = 'GPL-3.0'
     'local@alt-snap-drag'   = 'GPL-3.0'
     'npp-taskdlg-textcolor' = 'MIT'
 }
