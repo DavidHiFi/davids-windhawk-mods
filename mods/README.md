@@ -12,6 +12,7 @@
 
 | Mod | What it does | Version | License |
 | --- | --- | --- | --- |
+| [davids-audio-visualizer](local/davids-audio-visualizer) | Mocha taskbar spectrum and media buttons with multiple-output and hardware-loopback capture. | 1.0.0 | MIT |
 | [taskbar-weather](local/taskbar-weather) | Independent automatic weather with a rounded hover card. | 1.2.1 | MIT |
 | [taskbar-system-info-weather](local/taskbar-system-info-weather) | Performance monitor that follows the weather width. | 1.0.0 | GPL-3.0 |
 | [explorer-font-changer-davidhifi](local/explorer-font-changer-davidhifi) | Shell text font replacement with protected icon fonts and DirectWrite layouts. | 1.0.1 | MIT |
