@@ -67,7 +67,8 @@ catalog table, and the settings exports from the live install. Add
 spectrum and media controls beside the taskbar widgets. It captures active
 Windows outputs and optional hardware loopbacks, including interface ASIO mixes
 when the driver exposes them. Native taskbar events keep the strip positioned;
-silence and fullscreen detection do not blank it. The mod has 48 documented
+fullscreen and borderless windows hide it by default, and taskbar clicks pass
+through its bar window. The mod has 49 documented
 settings and a self-contained Windhawk source file.
 
 ## My mods

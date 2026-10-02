@@ -2,7 +2,7 @@
 // @id                  davids-audio-visualizer
 // @name                David's Audio Visualizer
 // @description         Taskbar audio spectrum and media controls with Mocha colors and multi-output capture
-// @version             1.0.0
+// @version             1.0.1
 // @author              DavidHiFi
 // @github              https://github.com/DavidHiFi
 // @homepage            https://github.com/DavidHiFi/davids-windhawk-mods
@@ -27,7 +27,8 @@ older local visualizer before enabling this mod.
 The bars stay on the main taskbar. Set Horizontal offset to place them after
 your system information widgets. Media buttons follow the bars automatically.
 Changing the taskbar position or display layout updates both windows through
-Windows events. Fullscreen detection and silence never blank the strip.
+Windows events. Hide when fullscreen keeps the strip off screen while a
+fullscreen or borderless game covers the taskbar, then brings it back.
 
 ## Settings
 
@@ -267,6 +268,11 @@ loopback support, settings validation, and a focused taskbar settings interface.
     $name: Idle delay
     $description: After this many silent seconds, draw at 5 FPS. The strip remains visible and resumes
       its normal rate when audio returns. 0 disables idle throttling.
+  - hideWhenFullscreen: true
+    $name: Hide when fullscreen
+    $description: Hide the bars and media buttons when a fullscreen or borderless window covers the taskbar
+      monitor, for example a game. The strip returns when you leave the game. The taskbar itself stays
+      clickable at all times.
   $name: Performance
 - diagnostics:
   - enabled: false
@@ -1158,6 +1164,22 @@ bool IsWindowFullscreen(HWND hwnd, HMONITOR targetMonitor = nullptr) {
            windowRect.bottom >= monitorInfo.rcMonitor.bottom;
 }
 
+bool IsTaskbarCoveredBy(HWND hwnd) {
+    HWND taskbar = MainTaskbar();
+    if (!taskbar || !IsWindowVisible(taskbar)) return true;
+    RECT tb{};
+    if (!GetWindowRect(taskbar, &tb)) return true;
+    if (tb.right <= tb.left || tb.bottom <= tb.top) return true;
+    RECT fg{};
+    if (!GetWindowRect(hwnd, &fg)) return false;
+    RECT hit{};
+    if (!IntersectRect(&hit, &fg, &tb)) return false;
+    long long inter = (long long)(hit.right - hit.left) * (long long)(hit.bottom - hit.top);
+    long long area = (long long)(tb.right - tb.left) * (long long)(tb.bottom - tb.top);
+    if (area <= 0) return true;
+    return inter * 100 >= area * 90;
+}
+
 bool IsFullscreenOrGameActive() {
     HMONITOR targetMonitor = TaskbarMonitor();
     if (!targetMonitor) targetMonitor = MonitorFromPoint({0, 0}, MONITOR_DEFAULTTONEAREST);
@@ -1176,6 +1198,12 @@ bool IsFullscreenOrGameActive() {
 
     HMONITOR foregroundMonitor = MonitorFromWindow(hwndForeground, MONITOR_DEFAULTTONEAREST);
     if (foregroundMonitor != targetMonitor) return false;
+
+    // Borderless windowed games rarely report the D3D fullscreen notification
+    // state, but they do cover the taskbar rect itself. Checking the taskbar
+    // rect directly catches those, while the full-monitor check below catches
+    // exclusive fullscreen modes.
+    if (IsTaskbarCoveredBy(hwndForeground)) return true;
 
     QUERY_USER_NOTIFICATION_STATE state;
     if (SUCCEEDED(SHQueryUserNotificationState(&state))) {
@@ -2054,6 +2082,13 @@ void RepositionAndRepaintMediaControls() {
         return;
     }
     if (g_mediaHiddenByCover && g_settings.mediaHideWhenCovered) return;
+    // Never pop the strip over a fullscreen game: a repaint triggered by a
+    // track change or playback flip while hidden would otherwise put it back
+    // on screen over the game it just got out from under.
+    if (g_settings.pauseOnFullscreen && IsFullscreenOrGameActive()) {
+        if (IsWindowVisible(g_mediaWnd)) ShowWindow(g_mediaWnd, SW_HIDE);
+        return;
+    }
 
     float dpiScale = GetMediaControlsDpiScale();
     int size = std::max(1, (int)std::lround(g_settings.mediaIconSize * dpiScale));
@@ -2102,6 +2137,35 @@ void RepositionAndRepaintMediaControls() {
 
 LRESULT CALLBACK MediaWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
+        case WM_NCHITTEST: {
+            // Click-through everywhere except the three buttons. The strip
+            // floats over the taskbar, and a layered window claims clicks for
+            // its whole rect, including the transparent plate and the gaps
+            // between buttons. Without this, enabling media buttons makes the
+            // taskbar underneath unclickable. Only the button squares keep
+            // clicks; everything else falls through to the taskbar.
+            RECT wr{};
+            if (!GetWindowRect(hWnd, &wr)) break;
+            int width = wr.right - wr.left, height = wr.bottom - wr.top;
+            if (width <= 0 || height <= 0) return HTTRANSPARENT;
+            POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            if (!ScreenToClient(hWnd, &pt)) break;
+            int pad = GetMediaPlatePaddingPx();
+            int contentW = std::max(1, width - pad * 2);
+            int contentH = std::max(1, height - pad * 2);
+            bool iconsFit = g_mediaIconLoadedSize > 0 && g_mediaIconLoadedSize <= contentH &&
+                            g_mediaIconLoadedSize * 3 <= contentW;
+            int size = iconsFit ? g_mediaIconLoadedSize : contentH;
+            int spacing = std::max(0, (contentW - size * 3) / 2);
+            int xPrev = pad, xPlay = pad + size + spacing, xNext = pad + 2 * size + 2 * spacing;
+            int iconY = pad + (contentH - size) / 2;
+            bool onButton =
+                (pt.x >= xPrev && pt.x < xPrev + size && pt.y >= iconY && pt.y < iconY + size) ||
+                (pt.x >= xPlay && pt.x < xPlay + size && pt.y >= iconY && pt.y < iconY + size) ||
+                (pt.x >= xNext && pt.x < xNext + size && pt.y >= iconY && pt.y < iconY + size);
+            return onButton ? HTCLIENT : HTTRANSPARENT;
+        }
+
         case WM_LBUTTONUP: {
             int x = GET_X_LPARAM(lParam);
             float dpiScale = GetMediaControlsDpiScale();
@@ -4926,8 +4990,11 @@ void StopRenderThread() {
 
 void PauseForFullscreen() {
     if (g_fullscreenPaused.exchange(true)) return;
-    Wh_Log(L"Pausing visualizer: not visible");
+    Wh_Log(L"Pausing visualizer: fullscreen, hiding strip");
     StopVizCaptureThread();
+    HWND overlayWnd = g_overlayWnd.load(std::memory_order_relaxed);
+    if (overlayWnd) ShowWindow(overlayWnd, SW_HIDE);
+    if (g_mediaWnd) ShowWindow(g_mediaWnd, SW_HIDE);
     if (g_dc && g_swapChain) {
         g_dc->BeginDraw();
         g_dc->Clear(D2D1::ColorF(0, 0, 0, 0));
@@ -4940,8 +5007,15 @@ void ResumeFromFullscreen() {
     if (!g_fullscreenPaused.exchange(false)) return;
     Wh_Log(L"Resuming visualizer: visible again");
     StartVizCaptureThread();
-    if (g_overlayWnd) {
+    HWND overlayWnd = g_overlayWnd.load(std::memory_order_relaxed);
+    if (overlayWnd) {
+        SetWindowPos(overlayWnd, HWND_TOPMOST, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
         RenderVisualizer();
+    }
+    if (g_mediaWnd && g_settings.mediaControlsEnabled &&
+        !(g_mediaHiddenByCover && g_settings.mediaHideWhenCovered)) {
+        RepositionAndRepaintMediaControls();
     }
 }
 
@@ -5130,6 +5204,13 @@ LRESULT CALLBACK MessageWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     FlushSettingsIssues();
                 }
             } else if (wParam == TIMER_ID_MSG_FULLSCREEN_WATCH) {
+                // Fullscreen (or a missing taskbar) hides every piece of this
+                // mod: the bars live on the taskbar, so when a borderless game
+                // covers it they must go too. Computed once per tick and shared
+                // by the media self-heal below and the pause decision after it,
+                // so the heal never fights the hide by re-showing the strip.
+                bool fullscreenHide =
+                    g_settings.pauseOnFullscreen && IsFullscreenOrGameActive();
                 // The media strip is a plain layered window living alongside
                 // whatever else is topmost, and it's the one piece of this mod
                 // that has to survive in that crowd -- another app taking
@@ -5138,8 +5219,15 @@ LRESULT CALLBACK MessageWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 // second-granularity check is cheap and makes it self-healing.
                 if (g_settings.mediaControlsEnabled) {
                     if (!g_mediaWnd) {
-                        Wh_Log(L"[Media] window missing, recreating");
-                        CreateMediaControlWindow();
+                        if (!fullscreenHide) {
+                            Wh_Log(L"[Media] window missing, recreating");
+                            CreateMediaControlWindow();
+                        }
+                    } else if (fullscreenHide) {
+                        if (IsWindowVisible(g_mediaWnd)) {
+                            Wh_Log(L"[Media] fullscreen, hiding strip");
+                            ShowWindow(g_mediaWnd, SW_HIDE);
+                        }
                     } else {
                         if (g_settings.mediaHideWhenCovered) {
                             // Measured against the strip's own rect on the same
@@ -5175,10 +5263,7 @@ LRESULT CALLBACK MessageWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     }
                 }
 
-                bool shouldPause = false;
-
-                if (g_settings.pauseOnFullscreen && IsFullscreenOrGameActive())
-                    shouldPause = true;
+                bool shouldPause = fullscreenHide;
 
                 // Occlusion is evaluated on this same 1s timer rather than per
                 // frame -- EnumWindows is far too heavy to run at frame rate,
@@ -5257,13 +5342,19 @@ void CreateOverlayWindow() {
     RECT rc{};
     GetWindowRect(MainTaskbar(), &rc);
     g_overlayWnd = CreateWindowExW(
-        WS_EX_NOREDIRECTIONBITMAP | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE |
+        WS_EX_NOREDIRECTIONBITMAP | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE |
         WS_EX_TOOLWINDOW | WS_EX_TOPMOST, OVERLAY_WINDOW_CLASS,
         nullptr, WS_POPUP, rc.left, rc.top, rc.right-rc.left, rc.bottom-rc.top,
         MainTaskbar(), nullptr, GetCurrentModuleHandle(), nullptr);
     Wh_Log(L"Taskbar overlay created=%p rect=%ld,%ld,%ld,%ld error=%lu",
            (void*)g_overlayWnd.load(), rc.left, rc.top, rc.right, rc.bottom, GetLastError());
     if (!g_overlayWnd) return;
+    if (!SetLayeredWindowAttributes(g_overlayWnd, 0, 255, LWA_ALPHA)) {
+        Wh_Log(L"Overlay input transparency failed, error=%lu", GetLastError());
+        DestroyWindow(g_overlayWnd);
+        g_overlayWnd = nullptr;
+        return;
+    }
     g_renderTickPending.store(false);
     if (!g_gsmtcStarted) { InitGsmtcListener(); g_gsmtcStarted = true; }
     bool ok = CreateSwapChainResources();
@@ -5319,7 +5410,7 @@ void LoadSettings() {
     g_settings.showSettingsErrors = false;
     g_settings.keyMoveEnabled = false;
     g_settings.dragEnabled = false;
-    g_settings.pauseOnFullscreen = false;
+    g_settings.pauseOnFullscreen = Wh_GetIntSetting(L"performance.hideWhenFullscreen") != 0;
     g_settings.pauseWhenObscured = false;
     g_settings.autoHideEnabled = false;
     g_settings.mediaHideWhenCovered = false;
@@ -5407,8 +5498,8 @@ void LoadSettings() {
     g_settings.pauseWhenSilentSeconds=number(L"performance.pauseWhenSilentSeconds",0,3600);
     g_frameRate.store(g_settings.targetFps); g_idleDelay.store(g_settings.pauseWhenSilentSeconds);
     g_debugLogging.store(Wh_GetIntSetting(L"diagnostics.enabled")!=0);
-    Wh_Log(L"Settings offset=%d vertical=%d bars=%d width=%d gap=%d height=%d media=%d fps=%d fullscreenBlanking=0",
-        g_taskbarOffset,g_taskbarVerticalOffset,g_settings.barCount,g_settings.barWidth,g_settings.barGap,g_settings.barMaxSize,g_settings.mediaControlsEnabled,g_settings.targetFps);
+    Wh_Log(L"Settings offset=%d vertical=%d bars=%d width=%d gap=%d height=%d media=%d fps=%d hideFullscreen=%d",
+        g_taskbarOffset,g_taskbarVerticalOffset,g_settings.barCount,g_settings.barWidth,g_settings.barGap,g_settings.barMaxSize,g_settings.mediaControlsEnabled,g_settings.targetFps,(int)g_settings.pauseOnFullscreen);
     Wh_Log(L"Audio selection defaultOnly=%d hardwareLoopbacks=%d filter=%s gain=%.1f",audio.defaultOnly,audio.hardwareLoopbacks,audio.filter.c_str(),g_settings.inputGainDb);
 }
 

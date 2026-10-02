@@ -1,6 +1,6 @@
 # Settings reference
 
-All 48 settings belong to David's Audio Visualizer. They reload without restarting Explorer, Windhawk, or audio applications.
+All 49 settings belong to David's Audio Visualizer. They reload without restarting Explorer, Windhawk, or audio applications.
 
 Geometry is clamped to fit the main horizontal taskbar. Colors accept `#AARRGGBB`, `#RRGGBB`, `rgba(...)`, or `rgb(...)`. Invalid color and quad values fall back to their documented defaults.
 
@@ -80,6 +80,8 @@ Geometry is clamped to fit the main horizontal taskbar. Colors accept `#AARRGGBB
 | --- | --- | --- |
 | `performance.targetFps` | `30` | 10 to 120 frames per second. Default is 30. |
 | `performance.pauseWhenSilentSeconds` | `10` | After this many silent seconds, draw at 5 FPS. The strip remains visible and resumes its normal rate when audio returns. 0 disables idle throttling. |
+
+| `performance.hideWhenFullscreen` | `true` | Hide bars and media buttons when a fullscreen or borderless foreground window covers the taskbar. Restore them when the taskbar is available. |
 
 ## Diagnostics
 

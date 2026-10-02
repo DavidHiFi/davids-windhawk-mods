@@ -10,6 +10,21 @@ Verified on Windows 11 with Windhawk 1.7.3 on 2026-10-03.
 - A Desktop-only filter opened one render path. A hardware Loopback-only filter opened two capture paths. Default-output mode with hardware loopbacks opened three. Restoring the all-output preset opened nine paths on the test machine.
 - The overlay and media windows belonged to the main taskbar. Foreground and taskbar layout events update their ownership, geometry, and stacking without restarting the shell.
 
+## Fullscreen and input fixes in 1.0.1
+
+The fullscreen option adds a 49th setting, `performance.hideWhenFullscreen`,
+enabled by default. A taskbar-covering foreground test window hid the overlay
+after about three seconds. Closing it restored the overlay.
+
+Before the input fix, all 32 sampled points across the taskbar resolved to the
+visualizer window. After adding layered-window transparency with alpha 255,
+all 32 resolved to Explorer while the spectrum remained visible. The overlay
+uses DirectComposition and keeps its taskbar ownership. Its initialization
+now closes the window if layered transparency cannot be configured.
+
+These input checks did not send actual clicks or exercise enabled media
+buttons. Version 1.0.1 contains the installed fix with updated version metadata.
+
 These checks cover the installed version and those settings on the test machine.
 They do not guarantee capture of exclusive or protected streams on every driver,
 or every hardware routing arrangement. The mod reports unavailable endpoints in

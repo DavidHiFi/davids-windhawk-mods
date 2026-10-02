@@ -1935,6 +1935,7 @@
     "media_controls.plateCornerRadius": 6,
     "performance.targetFps": 30,
     "performance.pauseWhenSilentSeconds": 10,
-    "diagnostics.enabled": 0
+    "diagnostics.enabled": 0,
+    "performance.hideWhenFullscreen": 1
   }
 }
