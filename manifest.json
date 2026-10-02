@@ -4,9 +4,9 @@
   "generatedAt": "2026-09-30T20:17:21.558104+08:00",
   "windhawkVersion": "1.7.3",
   "counts": {
-    "mods": 101,
-    "enabled": 95,
-    "local": 9
+    "mods": 102,
+    "enabled": 96,
+    "local": 10
   },
   "mods": [
     {
@@ -1219,6 +1219,18 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/taskbar-system-info",
       "source": "mods/local/taskbar-system-info-weather/taskbar-system-info-weather.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@davids-audio-visualizer",
+      "name": "David's Audio Visualizer",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "https://github.com/USER-TOURNE/TOURNE-TABLE",
+      "source": "mods/local/davids-audio-visualizer/davids-audio-visualizer.wh.cpp",
       "enabled": true
     }
   ]

@@ -698,5 +698,12 @@
     "exclude": "",
     "architecture": "x86-64",
     "version": "1.0.0"
+  },
+  "local@davids-audio-visualizer": {
+    "disabled": false,
+    "include": "windhawk.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.0.0"
   }
 }
