@@ -14,7 +14,9 @@ older local visualizer before enabling this mod.
 The bars stay on the main taskbar. Set Horizontal offset to place them after
 your system information widgets. Media buttons follow the bars automatically.
 Changing the taskbar position or display layout updates both windows through
-Windows events. Fullscreen detection and silence never blank the strip.
+Windows events. Hide when fullscreen is on by default. It hides the bars and
+media buttons while a fullscreen or borderless window covers the taskbar,
+then restores them when the taskbar is available. Silence uses idle throttling.
 
 ## Settings
 
@@ -24,7 +26,7 @@ Windows events. Fullscreen detection and silence never blank the strip.
   an optional device-name filter, and analysis gain.
 - Background adds a panel and optional border behind the bars.
 - Media buttons support built-in glyphs or local image files.
-- Performance sets the drawing rate and idle throttling delay.
+- Performance sets the drawing rate, idle throttling delay, and Hide when fullscreen.
 - Diagnostics writes a rotating status log without recording audio samples.
 
 Each frequency band uses the strongest captured level across devices. A signal
@@ -61,7 +63,7 @@ Adjust Horizontal offset for your own taskbar layout; the default is 500 pixels.
 ## Verification
 
 The installed Windhawk 1.7.3 parser accepts the metadata, Details text, and all
-48 settings. Both x86 and x64 builds were compiled and matched their installed
+49 settings. Both x86 and x64 builds were compiled and matched their installed
 SHA256 hashes. Live checks cover settings reloads, shape and color modes, FFT
 sizes, frequency scales, EQ and sensitivity, geometry, background, media images,
 capture filters, idle behavior, and diagnostics. Capture opens shared streams
@@ -71,3 +73,21 @@ the idle bars. Hardware loopback availability depends on the interface driver.
 This is a maintained local mod published in DavidHiFi's repository. It is not
 an entry in the upstream Windhawk catalog. The complete MIT notice and upstream
 copyright are preserved in [LICENSE](LICENSE).
+
+
+## Changes in 1.0.1
+
+The bar window now uses layered-window transparency so taskbar clicks reach
+Explorer across processes. If transparency initialization fails, the mod closes
+the overlay instead of leaving a window that blocks input.
+
+Hide when fullscreen now has an exposed setting, enabled by default. It checks
+whether the foreground window covers the taskbar, including borderless games,
+and hides both overlay windows during the pause. The media window limits its
+hit-test handler to the three button squares.
+
+Both architecture builds passed. With the installed fix, all 32 sampled points
+across the main taskbar resolved to Explorer while the bars remained visible.
+The fullscreen fix was observed hiding the overlay about three seconds after a
+taskbar-covering test window took focus and restoring it after the window closed.
+These checks did not send actual taskbar clicks or test enabled media controls.

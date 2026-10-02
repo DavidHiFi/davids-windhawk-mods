@@ -324,7 +324,7 @@
     {
       "id": "explorer-hide-focus-border",
       "name": "File Explorer Focus Border Remover",
-      "author": "H\u00f9ng",
+      "author": "H\u00c3\u00b9ng",
       "github": "https://github.com/NoMorePlz",
       "version": "1.0.0",
       "license": "MIT",
@@ -1238,7 +1238,7 @@
       "name": "David's Audio Visualizer",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "license": "MIT",
       "origin": "local",
       "upstream": "https://github.com/USER-TOURNE/TOURNE-TABLE",
