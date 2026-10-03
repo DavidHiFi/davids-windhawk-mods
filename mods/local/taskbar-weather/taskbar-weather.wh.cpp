@@ -2,14 +2,14 @@
 // @id taskbar-weather
 // @name Independent Taskbar Weather
 // @description Local weather on the taskbar with automatic updates and no Widgets or browser dependency.
-// @version 1.3.2
+// @version 1.4.0
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-weather
 // @license MIT
 // @include explorer.exe
 // @architecture x86-64
-// @compilerOptions -lwinhttp -lgdiplus -lgdi32 -luser32
+// @compilerOptions -lwinhttp -lgdiplus -lgdi32 -luser32 -ld2d1 -ldwrite
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -60,6 +60,9 @@ at the PC.
 #include <windows.h>
 #include <winhttp.h>
 #include <gdiplus.h>
+#include <d2d1.h>
+#include <dwrite.h>
+#include <wrl/client.h>
 #include <string>
 #include <mutex>
 #include <atomic>
@@ -70,6 +73,7 @@ at the PC.
 #include <ctime>
 
 using namespace Gdiplus;
+using Microsoft::WRL::ComPtr;
 namespace {
 constexpr wchar_t kClass[] = L"WindhawkIndependentWeather";
 constexpr wchar_t kCardClass[] = L"WindhawkIndependentWeatherCard";
@@ -81,9 +85,6 @@ constexpr UINT_PTR kLayoutTimer=1, kPreviewTimer=2, kFadeTimer=3;
 constexpr float kCardWidth=320, kShadow=12, kPad=18;
 // Taskbar row layout in logical pixels: glyph slot, gap, trailing room.
 constexpr float kIconLeft=10, kIconGap=8, kTextRightPad=6;
-// GDI+ centres the line box, not the ink. On this machine the label ink sat
-// 2.5 px above the box centre at 12 px, so the bias scales with the font size.
-constexpr float kInkCenterBias=2.5f/12.f;
 // Catppuccin Mocha
 constexpr ARGB kBase=0xFF1E1E2E, kSurface1=0xFF45475A, kOverlay1=0xFF7F849C, kSubtext0=0xFFA6ADC8,
     kText=0xFFCDD6F4, kBlue=0xFF89B4FA, kYellow=0xFFF9E2AF, kPeach=0xFFFAB387;
@@ -93,6 +94,8 @@ std::atomic<HWND> controllerWindow;
 HWND cardWindow;
 HINSTANCE instance;
 ULONG_PTR graphicsToken;
+ComPtr<ID2D1Factory> d2dFactory;
+ComPtr<IDWriteFactory> writeFactory;
 std::mutex dataMutex;
 std::wstring latitude, longitude, place, fontFamily;
 int interval=10, left=16, width=220, fontSize=12;
@@ -241,36 +244,86 @@ float IconInkMid(int code) {
     return code>=51 ? 12.f : 9.5f;   // cloud: 3 to 16, drops reach 21
 }
 float TextX(int code) { return kIconLeft+IconInkWidth(code)+kIconGap; }
+// Row text goes through DirectWrite, like the XAML system info beside it.
+// GDI+ DrawString hints small glyphs coarsely on a transparent layered window.
+struct RowFont { ComPtr<IDWriteTextFormat> format; float ascent=0, capHeight=0, lineSpacing=0; };
+RowFont ResolveRowFont() {
+    RowFont result;
+    if(!writeFactory&&FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,__uuidof(IDWriteFactory),(IUnknown**)writeFactory.GetAddressOf())))return result;
+    ComPtr<IDWriteFontCollection> fonts;if(FAILED(writeFactory->GetSystemFontCollection(&fonts)))return result;
+    // Prefer a real semibold face; older font installs expose it as a separate "SemBd" family.
+    std::wstring family;DWRITE_FONT_WEIGHT weight=DWRITE_FONT_WEIGHT_SEMI_BOLD;ComPtr<IDWriteFont> font;
+    auto find=[&](const std::wstring& name,DWRITE_FONT_WEIGHT want)->bool {
+        UINT32 index;BOOL exists=FALSE;ComPtr<IDWriteFontFamily> f;ComPtr<IDWriteFont> match;
+        if(FAILED(fonts->FindFamilyName(name.c_str(),&index,&exists))||!exists||FAILED(fonts->GetFontFamily(index,&f)))return false;
+        if(FAILED(f->GetFirstMatchingFont(want,DWRITE_FONT_STRETCH_NORMAL,DWRITE_FONT_STYLE_NORMAL,&match)))return false;
+        family=name;weight=want;font=match;return true;
+    };
+    bool semibold=find(fontFamily,DWRITE_FONT_WEIGHT_SEMI_BOLD)&&std::abs((int)font->GetWeight()-600)<=50;
+    if(!semibold&&!find(fontFamily+L" SemBd",DWRITE_FONT_WEIGHT_NORMAL)&&!find(fontFamily,DWRITE_FONT_WEIGHT_SEMI_BOLD))find(L"Segoe UI Variable Text",DWRITE_FONT_WEIGHT_SEMI_BOLD);
+    if(!font||FAILED(writeFactory->CreateTextFormat(family.c_str(),nullptr,weight,DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,(FLOAT)fontSize,L"",&result.format)))return RowFont{};
+    result.format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);result.format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+    ComPtr<IDWriteInlineObject> ellipsis;DWRITE_TRIMMING trimming{DWRITE_TRIMMING_GRANULARITY_CHARACTER,0,0};
+    if(SUCCEEDED(writeFactory->CreateEllipsisTrimmingSign(result.format.Get(),&ellipsis)))result.format->SetTrimming(&trimming,ellipsis.Get());
+    DWRITE_FONT_METRICS m;font->GetMetrics(&m);float unit=(float)fontSize/m.designUnitsPerEm;
+    result.ascent=m.ascent*unit;result.capHeight=m.capHeight*unit;result.lineSpacing=(m.ascent+m.descent+m.lineGap)*unit;
+    return result;
+}
+float TextWidth(const RowFont& font,const std::wstring& s) {
+    ComPtr<IDWriteTextLayout> layout;DWRITE_TEXT_METRICS m;
+    if(!font.format||FAILED(writeFactory->CreateTextLayout(s.c_str(),(UINT32)s.size(),font.format.Get(),10000.f,100.f,&layout))||FAILED(layout->GetMetrics(&m)))return 0;
+    return m.widthIncludingTrailingWhitespace;
+}
+// Draws the temperature and conditions over the GDI+ icon layer already in `dc`.
+void DrawRowText(HDC dc,int w,int h,float scale,const Reading& r) {
+    RowFont font=ResolveRowFont();if(!font.format)return;
+    if(!d2dFactory&&FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,d2dFactory.GetAddressOf())))return;
+    auto props=D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_PREMULTIPLIED),96.f*scale,96.f*scale);
+    ComPtr<ID2D1DCRenderTarget> target;RECT bounds{0,0,w,h};
+    if(FAILED(d2dFactory->CreateDCRenderTarget(&props,&target))||FAILED(target->BindDC(dc,&bounds)))return;
+    // Transparent pixels cannot take ClearType, so use symmetric grayscale smoothing.
+    ComPtr<IDWriteRenderingParams> base,params;
+    if(SUCCEEDED(writeFactory->CreateRenderingParams(&base))&&SUCCEEDED(writeFactory->CreateCustomRenderingParams(base->GetGamma(),base->GetEnhancedContrast(),0.f,DWRITE_PIXEL_GEOMETRY_FLAT,DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,&params)))target->SetTextRenderingParams(params.Get());
+    target->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+    ComPtr<ID2D1SolidColorBrush> brush;
+    float height=h/scale,textX=TextX(r.code),textWidth=w/scale-textX-kTextRightPad;
+    auto snap=[&](float v){return std::round(v*scale)/scale;};
+    auto line=[&](const std::wstring& s,float baseline) {
+        ComPtr<IDWriteTextLayout> layout;if(FAILED(writeFactory->CreateTextLayout(s.c_str(),(UINT32)s.size(),font.format.Get(),textWidth,height,&layout)))return;
+        DWRITE_LINE_METRICS m;UINT32 count=0;float offset=font.ascent;if(SUCCEEDED(layout->GetLineMetrics(&m,1,&count))&&count)offset=m.baseline;
+        target->DrawTextLayout(D2D1::Point2F(textX,baseline-offset),layout.Get(),brush.Get(),D2D1_DRAW_TEXT_OPTIONS_NONE);
+    };
+    target->BeginDraw();
+    if(SUCCEEDED(target->CreateSolidColorBrush(D2D1::ColorF(kText&0xFFFFFF),&brush))) {
+        if(r.valid) {
+            // Centre the ink, from the first line's cap height to the second baseline, on whole pixels.
+            float pitch=std::min(std::ceil(font.lineSpacing*scale)/scale,height/2.f);
+            float first=snap(height/2.f+(font.capHeight-pitch)/2.f);
+            line(Whole(r.temperature)+L"°C",first);
+            line(Condition(r.code),first+pitch);
+        } else {
+            line(Label(r),snap((height+font.capHeight)/2.f));
+        }
+    }
+    target->EndDraw();
+}
 void Paint() {
     if(!weatherWindow)return;
     RECT client;GetClientRect(weatherWindow,&client);int w=client.right,h=client.bottom;if(!w||!h)return;
     HDC dc=GetDC(nullptr),mem=CreateCompatibleDC(dc);BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=w;info.bmiHeader.biHeight=-h;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
     void* bits;HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&bits,nullptr,0);auto old=SelectObject(mem,bitmap);memset(bits,0,w*h*4);
+    Reading r;{std::lock_guard lock(dataMutex);r=reading;}
+    float scale=GetDpiForWindow(weatherWindow)/96.f;
     {
         Bitmap canvas(w,h,w*4,PixelFormat32bppPARGB,(BYTE*)bits);
-        Graphics g(&canvas);g.SetSmoothingMode(SmoothingModeAntiAlias);g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);g.SetTextContrast(8);
-        float scale=GetDpiForWindow(weatherWindow)/96.f;g.ScaleTransform(scale,scale);float height=h/scale;
+        Graphics g(&canvas);g.SetSmoothingMode(SmoothingModeAntiAlias);
+        g.ScaleTransform(scale,scale);float height=h/scale;
         // Inset the highlight so its antialiased edge stays inside the taskbar pill.
         if(hover||preview){GraphicsPath path;RoundedRect(path,2.f,3.f,w/scale-4,height-6,6.f);SolidBrush bg(WithAlpha(kSurface1,150));g.FillPath(&bg,&path);}
-        Reading r;{std::lock_guard lock(dataMutex);r=reading;}
         DrawIcon(g,kIconLeft,height/2-IconInkMid(r.code),1,r.code,r.day);
-        FontFamily semibold((fontFamily+L" SemBd").c_str());FontFamily regular(fontFamily.c_str());const FontFamily* face=semibold.IsAvailable()?&semibold:(regular.IsAvailable()?&regular:FontFamily::GenericSansSerif());Font font(face,(REAL)fontSize,semibold.IsAvailable()?FontStyleRegular:FontStyleBold,UnitPixel);SolidBrush text(Mocha(kText));
-        StringFormat format;format.SetLineAlignment(StringAlignmentCenter);format.SetFormatFlags(StringFormatFlagsNoWrap);format.SetTrimming(StringTrimmingEllipsisCharacter);
-        float textX=TextX(r.code);
-        float textWidth=w/scale-textX-kTextRightPad;
-        if(r.valid) {
-            format.SetAlignment(StringAlignmentCenter);
-            // Keep both lines together and centre their ink beside the icon.
-            // Whole device-pixel origins keep the smoothed glyphs aligned at each DPI.
-            float lineHeight=std::min(std::ceil(font.GetHeight(&g)*scale)/scale,height/2.f);
-            float top=std::round(((height-2*lineHeight)/2.f+fontSize*kInkCenterBias)*scale)/scale;
-            textX=std::round(textX*scale)/scale;
-            g.DrawString((Whole(r.temperature)+L"°C").c_str(),-1,&font,RectF(textX,top,textWidth,lineHeight),&format,&text);
-            g.DrawString(Condition(r.code),-1,&font,RectF(textX,top+lineHeight,textWidth,lineHeight),&format,&text);
-        } else {
-            g.DrawString(Label(r).c_str(),-1,&font,RectF(textX,fontSize*kInkCenterBias,textWidth,height),&format,&text);
-        }
     }
+    GdiFlush();
+    DrawRowText(mem,w,h,scale,r);
     POINT dest{},src{};SIZE size{w,h};BLENDFUNCTION blend{AC_SRC_OVER,0,255,AC_SRC_ALPHA};
     UpdateLayeredWindow(weatherWindow,dc,nullptr,&size,mem,&src,0,&blend,ULW_ALPHA);
     SelectObject(mem,old);DeleteObject(bitmap);DeleteDC(mem);ReleaseDC(nullptr,dc);
@@ -351,11 +404,9 @@ void ShowCard() {
 void HideCard() { if(cardWindow){KillTimer(weatherWindow,kFadeTimer);ShowWindow(cardWindow,SW_HIDE);} }
 int ContentWidth() {
     Reading r;{std::lock_guard lock(dataMutex);r=reading;}
-    Bitmap bitmap(1,1,PixelFormat32bppPARGB);Graphics g(&bitmap);
-    FontFamily semibold((fontFamily+L" SemBd").c_str());FontFamily regular(fontFamily.c_str());const FontFamily* face=semibold.IsAvailable()?&semibold:(regular.IsAvailable()?&regular:FontFamily::GenericSansSerif());Font font(face,(REAL)fontSize,semibold.IsAvailable()?FontStyleRegular:FontStyleBold,UnitPixel);
-    RectF bounds;g.MeasureString((r.valid?Whole(r.temperature)+L"°C":Label(r)).c_str(),-1,&font,PointF(0,0),&bounds);
-    float textWidth=bounds.Width;
-    if(r.valid) {g.MeasureString(Condition(r.code),-1,&font,PointF(0,0),&bounds);textWidth=std::max(textWidth,bounds.Width);}
+    RowFont font=ResolveRowFont();
+    float textWidth=TextWidth(font,r.valid?Whole(r.temperature)+L"°C":Label(r));
+    if(r.valid) textWidth=std::max(textWidth,TextWidth(font,Condition(r.code)));
     return std::clamp((int)std::ceil(textWidth)+(int)TextX(r.code)+(int)kTextRightPad,80,width);
 }
 void Layout(HWND hwnd) {
@@ -449,6 +500,6 @@ BOOL Wh_ModInit() {
 void Wh_ModUninit() {
     SetEvent(stopEvent);if(controllerWindow)PostMessageW(controllerWindow,WM_CLOSE,0,0);
     if(fetchThread){WaitForSingleObject(fetchThread,INFINITE);CloseHandle(fetchThread);}if(uiThread){WaitForSingleObject(uiThread,INFINITE);CloseHandle(uiThread);}
-    CloseHandle(stopEvent);CloseHandle(refreshEvent);GdiplusShutdown(graphicsToken);
+    CloseHandle(stopEvent);CloseHandle(refreshEvent);d2dFactory.Reset();writeFactory.Reset();GdiplusShutdown(graphicsToken);
 }
 BOOL Wh_ModSettingsChanged(BOOL* reload) { *reload=TRUE; return TRUE; }
