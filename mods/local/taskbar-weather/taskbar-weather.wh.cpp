@@ -2,7 +2,7 @@
 // @id taskbar-weather
 // @name Independent Taskbar Weather
 // @description Local weather on the taskbar with automatic updates and no Widgets or browser dependency.
-// @version 1.3.1
+// @version 1.3.2
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-weather
@@ -248,7 +248,7 @@ void Paint() {
     void* bits;HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&bits,nullptr,0);auto old=SelectObject(mem,bitmap);memset(bits,0,w*h*4);
     {
         Bitmap canvas(w,h,w*4,PixelFormat32bppPARGB,(BYTE*)bits);
-        Graphics g(&canvas);g.SetSmoothingMode(SmoothingModeAntiAlias);g.SetTextRenderingHint(TextRenderingHintSingleBitPerPixelGridFit);
+        Graphics g(&canvas);g.SetSmoothingMode(SmoothingModeAntiAlias);g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);g.SetTextContrast(8);
         float scale=GetDpiForWindow(weatherWindow)/96.f;g.ScaleTransform(scale,scale);float height=h/scale;
         // Inset the highlight so its antialiased edge stays inside the taskbar pill.
         if(hover||preview){GraphicsPath path;RoundedRect(path,2.f,3.f,w/scale-4,height-6,6.f);SolidBrush bg(WithAlpha(kSurface1,150));g.FillPath(&bg,&path);}
@@ -261,7 +261,7 @@ void Paint() {
         if(r.valid) {
             format.SetAlignment(StringAlignmentCenter);
             // Keep both lines together and centre their ink beside the icon.
-            // Whole device-pixel origins keep the small bitmap glyphs crisp at each DPI.
+            // Whole device-pixel origins keep the smoothed glyphs aligned at each DPI.
             float lineHeight=std::min(std::ceil(font.GetHeight(&g)*scale)/scale,height/2.f);
             float top=std::round(((height-2*lineHeight)/2.f+fontSize*kInkCenterBias)*scale)/scale;
             textX=std::round(textX*scale)/scale;
