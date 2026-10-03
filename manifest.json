@@ -1,11 +1,11 @@
 {
   "name": "davids-windhawk-mods",
   "description": "David's full Windhawk setup: every mod source, every setting.",
-  "generatedAt": "2026-09-30T20:17:21.558104+08:00",
+  "generatedAt": "2026-10-03T13:35:30+08:00",
   "windhawkVersion": "1.7.3",
   "counts": {
-    "mods": 103,
-    "enabled": 94,
+    "mods": 109,
+    "enabled": 95,
     "local": 11
   },
   "mods": [
@@ -254,7 +254,7 @@
       "name": "Enhanced Disk Usage",
       "author": "bbmaster123",
       "github": "https://github.com/bbmaster123",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "license": "",
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/enhanced-disk-usage",
@@ -308,6 +308,18 @@
       "upstream": "https://windhawk.net/mods/explorer-double-f2-rename-extension",
       "source": "mods/catalog/explorer-double-f2-rename-extension.wh.cpp",
       "enabled": true
+    },
+    {
+      "id": "explorer-folder-bookmarks-bar",
+      "name": "Explorer Folder Bookmarks Bar",
+      "author": "Maxim Fomin",
+      "github": "https://github.com/MaxITService",
+      "version": "0.7.8",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-folder-bookmarks-bar",
+      "source": "mods/catalog/explorer-folder-bookmarks-bar.wh.cpp",
+      "enabled": false
     },
     {
       "id": "explorer-font-changer",
@@ -502,6 +514,42 @@
       "enabled": true
     },
     {
+      "id": "local@david-window-pack",
+      "name": "David's Window Pack",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/david-window-pack/david-window-pack.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@davids-audio-visualizer",
+      "name": "David's Audio Visualizer",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.1",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "https://github.com/USER-TOURNE/TOURNE-TABLE",
+      "source": "mods/local/davids-audio-visualizer/davids-audio-visualizer.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@explorer-font-changer-davidhifi",
+      "name": "Explorer Font Changer by DavidHiFi",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi/davids-windhawk-mods",
+      "version": "1.0.1",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/explorer-font-changer",
+      "source": "mods/local/explorer-font-changer-davidhifi/explorer-font-changer-davidhifi.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "local@taskbar-ai-quota-opencode",
       "name": "Taskbar AI Quota Bars - OpenCode Fork",
       "author": "DavidHiFi",
@@ -511,6 +559,30 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/taskbar-ai-quota",
       "source": "mods/local/taskbar-ai-quota-opencode/taskbar-ai-quota-opencode.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@taskbar-system-info-weather",
+      "name": "Taskbar System Info with Weather",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/taskbar-system-info",
+      "source": "mods/local/taskbar-system-info-weather/taskbar-system-info-weather.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@taskbar-weather",
+      "name": "Independent Taskbar Weather",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.2.1",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/taskbar-weather/taskbar-weather.wh.cpp",
       "enabled": true
     },
     {
@@ -562,6 +634,18 @@
       "enabled": true
     },
     {
+      "id": "net-speed-taskbar",
+      "name": "Taskbar Network Speed Indicator",
+      "author": "Narayan",
+      "github": "https://github.com/NarayanChetri",
+      "version": "1.6",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/net-speed-taskbar",
+      "source": "mods/catalog/net-speed-taskbar.wh.cpp",
+      "enabled": false
+    },
+    {
       "id": "notepad-dark-mode",
       "name": "Dark Mode for Notepad",
       "author": "m417z",
@@ -571,6 +655,18 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/notepad-dark-mode",
       "source": "mods/catalog/notepad-dark-mode.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "notifications-placement",
+      "name": "Customize Windows notifications placement",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.2.4",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/notifications-placement",
+      "source": "mods/catalog/notifications-placement.wh.cpp",
       "enabled": true
     },
     {
@@ -595,18 +691,6 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/parallax-wallpaper",
       "source": "mods/catalog/parallax-wallpaper.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "paste-clipboard-content-to-explorer",
-      "name": "Paste Clipboard Content to Explorer",
-      "author": "Anixx",
-      "github": "https://github.com/Anixx",
-      "version": "1.7",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/paste-clipboard-content-to-explorer",
-      "source": "mods/catalog/paste-clipboard-content-to-explorer.wh.cpp",
       "enabled": true
     },
     {
@@ -866,7 +950,7 @@
       "name": "Taskbar Clock Customization",
       "author": "m417z",
       "github": "https://github.com/m417z",
-      "version": "1.8",
+      "version": "1.8.1",
       "license": "",
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/taskbar-clock-customization",
@@ -895,6 +979,18 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/taskbar-fluent-media-player",
       "source": "mods/catalog/taskbar-fluent-media-player.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "taskbar-icon-separators",
+      "name": "Taskbar Icon Separators",
+      "author": "meteoni",
+      "github": "https://github.com/Meteoni",
+      "version": "1.0.33",
+      "license": "GPL-3.0",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-icon-separators",
+      "source": "mods/catalog/taskbar-icon-separators.wh.cpp",
       "enabled": true
     },
     {
@@ -922,6 +1018,18 @@
       "enabled": true
     },
     {
+      "id": "taskbar-on-top",
+      "name": "Taskbar on top for Windows 11",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.2",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-on-top",
+      "source": "mods/catalog/taskbar-on-top.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "taskbar-restart-explorer",
       "name": "Taskbar Restart Explorer",
       "author": "Mgrmjp",
@@ -944,6 +1052,18 @@
       "upstream": "https://windhawk.net/mods/taskbar-system-info",
       "source": "mods/catalog/taskbar-system-info.wh.cpp",
       "enabled": false
+    },
+    {
+      "id": "taskbar-thumbnail-stats",
+      "name": "Taskbar Thumbnail Stats",
+      "author": "HaVeN80",
+      "github": "https://github.com/haven80",
+      "version": "1.2",
+      "license": "GPL-3.0",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-thumbnail-stats",
+      "source": "mods/catalog/taskbar-thumbnail-stats.wh.cpp",
+      "enabled": true
     },
     {
       "id": "taskbar-tray-system-icon-tweaks",
@@ -986,8 +1106,8 @@
       "name": "Titlebar For Everyone",
       "author": "Ingan121",
       "github": "https://github.com/Ingan121",
-      "version": "0.4",
-      "license": "",
+      "version": "0.5",
+      "license": "MIT",
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/titlebar-for-everyone",
       "source": "mods/catalog/titlebar-for-everyone.wh.cpp",
@@ -1004,6 +1124,18 @@
       "upstream": "https://windhawk.net/mods/toggle-hidden-files",
       "source": "mods/catalog/toggle-hidden-files.wh.cpp",
       "enabled": true
+    },
+    {
+      "id": "tourne-table-desktop-audio-visualizer",
+      "name": "Tourne'Table [Audio Visualizer]",
+      "author": "USER-TOURNE",
+      "github": "https://github.com/USER-TOURNE",
+      "version": "1.3.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/tourne-table-desktop-audio-visualizer",
+      "source": "mods/catalog/tourne-table-desktop-audio-visualizer.wh.cpp",
+      "enabled": false
     },
     {
       "id": "translucent-windows",
@@ -1070,12 +1202,12 @@
       "name": "Win32 UI Modernizer",
       "author": "crazyboyybs",
       "github": "https://github.com/crazyboyybs",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "license": "GPL-3.0",
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/win32-ui-modernizer",
       "source": "mods/catalog/win32-ui-modernizer.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "windows-11-file-explorer-styler",
@@ -1184,66 +1316,6 @@
       "upstream": "https://windhawk.net/mods/center-titlebar",
       "source": "mods/local/center-titlebar-fork/center-titlebar-fork.wh.cpp",
       "enabled": false
-    },
-    {
-      "id": "local@explorer-font-changer-davidhifi",
-      "name": "Explorer Font Changer by DavidHiFi",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi/davids-windhawk-mods",
-      "version": "1.0.1",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "https://windhawk.net/mods/explorer-font-changer",
-      "source": "mods/local/explorer-font-changer-davidhifi/explorer-font-changer-davidhifi.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@taskbar-weather",
-      "name": "Independent Taskbar Weather",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.2.1",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/taskbar-weather/taskbar-weather.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@taskbar-system-info-weather",
-      "name": "Taskbar System Info with Weather",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.0",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "https://windhawk.net/mods/taskbar-system-info",
-      "source": "mods/local/taskbar-system-info-weather/taskbar-system-info-weather.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@david-window-pack",
-      "name": "David's Window Pack",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.0",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/david-window-pack/david-window-pack.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@davids-audio-visualizer",
-      "name": "David's Audio Visualizer",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.1",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "https://github.com/USER-TOURNE/TOURNE-TABLE",
-      "source": "mods/local/davids-audio-visualizer/davids-audio-visualizer.wh.cpp",
-      "enabled": true
     }
   ]
 }
