@@ -4,7 +4,7 @@
 // @name:uk-UA      Системний монітор панелі завдань
 // @description     Compact CPU, GPU, temperatures, stacked network speeds, RAM and VRAM with optional graphs and a custom font.
 // @description:uk-UA Компактний монітор CPU, GPU, RAM і VRAM із 60-секундними графіками для панелі завдань Windows 11.
-// @version         1.2.0
+// @version         1.2.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-system-info-weather
@@ -682,6 +682,8 @@ std::optional<std::list<FrameworkElement::Loaded_revoker>> g_loadedRevokers{
 [[clang::no_destroy]] XamlRectangle g_vramTrack{nullptr};
 [[clang::no_destroy]] XamlRectangle g_vramFill{nullptr};
 double g_widgetWidth = 0;
+double g_ramLayoutCapacityGb = 0;
+double g_vramLayoutCapacityGb = 0;
 [[clang::no_destroy]] Grid g_cpuRow{nullptr};
 [[clang::no_destroy]] Grid g_gpuRow{nullptr};
 [[clang::no_destroy]] Grid g_ramRow{nullptr};
@@ -3904,28 +3906,37 @@ void ApplyWidgetGeometry(const ModSettings& settings) {
     };
     double cpuWidth = computeRowWidth(g_cpuRow, g_cpuLabel, g_cpuUsageText, g_cpuTempText, g_uploadText);
     double gpuWidth = computeRowWidth(g_gpuRow, g_gpuLabel, g_gpuUsageText, g_gpuTempText, g_downloadText);
-    double leftWidth = std::max(cpuWidth, gpuWidth);
+    // Reserve the same compute area for both rows. Live rates and percentages
+    // must not change the position of the memory panel.
+    double leftWidth = measure(L"CPU",true) + measure(L"100%") +
+        measure(L"115°C") + 2*gap +
+        (settings.showNetwork ? gap + measure(L"↑ 1000.0 MB/s") : 0) +
+        (settings.showComputeGraphs ? gap + g_graphWidth : 0);
+    double memoryLabelWidth = measure(L"VRAM",true) + gap;
+    double memoryPercentWidth = measure(L"100%") + gap;
+    auto fullCapacityWidth = [&](double total) {
+        return measure(total > 0 ? FormatCapacity(total,total,true).c_str() : L"99.9/99G");
+    };
+    double memoryCapacityWidth = std::max(fullCapacityWidth(g_ramLayoutCapacityGb),
+                                         fullCapacityWidth(g_vramLayoutCapacityGb));
     auto memoryRowWidth = [&](Grid row, TextBlock label, TextBlock percent,
                               TextBlock capacity, double computeWidth) {
         if (!row) return 0.0;
-        const double widths[] = {measure(label.Text().c_str(), true) + gap,
-                                 valueWidth(percent) + gap, valueWidth(capacity),
+        const double widths[] = {memoryLabelWidth, memoryPercentWidth, memoryCapacityWidth,
                                  settings.showMemoryGraphs ? gap + g_graphWidth : 0};
         double width = 0;
         for (int i = 0; i < 4; ++i) {
             row.ColumnDefinitions().GetAt(i).Width(GridLength{widths[i], GridUnitType::Pixel});
             width += widths[i];
         }
-        // Follow this row's network value, without reserving the other row's
-        // unused text width. Every visible field gets exactly the same gap.
-        row.Margin(Thickness{computeWidth-leftWidth,0,0,0});
+        row.Margin(Thickness{});
         row.Width(width);
         row.HorizontalAlignment(HorizontalAlignment::Left);
         return width;
     };
     double ramWidth = memoryRowWidth(g_ramRow,g_ramLabel,g_ramPercentText,g_ramCapacityText,cpuWidth);
     double vramWidth = memoryRowWidth(g_vramRow,g_vramLabel,g_vramPercentText,g_vramCapacityText,gpuWidth);
-    double contentWidth = std::max(cpuWidth + gap + ramWidth, gpuWidth + gap + vramWidth);
+    double contentWidth = leftWidth + gap + std::max(ramWidth,vramWidth);
     g_widgetWidth = std::max(static_cast<double>(settings.width), contentWidth);
     double rightWidth = contentWidth - leftWidth - gap;
     double graphSpace = settings.showMemoryGraphs ? gap + g_graphWidth : 0;
@@ -4148,6 +4159,8 @@ void UpdateWidgetText(bool force = false) {
 
     SetTextIfChanged(g_uploadText, FormatNetworkSpeed(snapshot.uploadBps, snapshot.networkAvailable, true));
     SetTextIfChanged(g_downloadText, FormatNetworkSpeed(snapshot.downloadBps, snapshot.networkAvailable, false));
+    if (snapshot.ramAvailable) g_ramLayoutCapacityGb = snapshot.ramTotalGb;
+    if (snapshot.vramAvailable) g_vramLayoutCapacityGb = snapshot.vramTotalGb;
     ApplyWidgetGeometry(settings);
     ApplyReservedSpace(settings);
     if (HWND taskbar = g_taskbarWindow.load()) {
