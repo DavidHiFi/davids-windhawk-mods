@@ -4,7 +4,7 @@
 // @name:uk-UA      Системний монітор панелі завдань
 // @description     Compact CPU, GPU, temperatures, stacked network speeds, RAM and VRAM with optional graphs and a custom font.
 // @description:uk-UA Компактний монітор CPU, GPU, RAM і VRAM із 60-секундними графіками для панелі завдань Windows 11.
-// @version         1.2.1
+// @version         1.2.2
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-system-info-weather
@@ -690,6 +690,12 @@ double g_vramLayoutCapacityGb = 0;
 [[clang::no_destroy]] Grid g_vramRow{nullptr};
 [[clang::no_destroy]] TextBlock g_uploadText{nullptr};
 [[clang::no_destroy]] TextBlock g_downloadText{nullptr};
+[[clang::no_destroy]] TextBlock g_uploadArrow{nullptr};
+[[clang::no_destroy]] TextBlock g_downloadArrow{nullptr};
+[[clang::no_destroy]] TextBlock g_uploadUnit{nullptr};
+[[clang::no_destroy]] TextBlock g_downloadUnit{nullptr};
+[[clang::no_destroy]] Grid g_uploadGrid{nullptr};
+[[clang::no_destroy]] Grid g_downloadGrid{nullptr};
 [[clang::no_destroy]] ColumnDefinition g_leftColumn{nullptr};
 [[clang::no_destroy]] ColumnDefinition g_gapColumn{nullptr};
 [[clang::no_destroy]] ColumnDefinition g_rightColumn{nullptr};
@@ -3375,6 +3381,11 @@ std::wstring FormatNetworkSpeed(double bytes, bool available, bool upload) {
     constexpr PCWSTR units[] = {L"B/s", L"KB/s", L"MB/s", L"GB/s", L"TB/s"};
     int unit = 0;
     while (bytes >= 1000 && unit < 4) { bytes /= 1000; ++unit; }
+    // Promote a rounded 1000.0 reading instead of adding a sixth digit.
+    if (unit > 0 && unit < 4 && std::round(bytes * 10) >= 10000) {
+        bytes /= 1000;
+        ++unit;
+    }
     return text + FormatFixed(bytes, unit ? 1 : 0) + L" " + units[unit];
 }
 
@@ -3558,7 +3569,8 @@ void ApplyThemeOpacities(const ModSettings& settings) {
     for (TextBlock value : {g_cpuUsageText, g_cpuTempText, g_gpuUsageText,
                             g_gpuTempText, g_ramPercentText,
                             g_ramCapacityText, g_vramPercentText,
-                            g_vramCapacityText, g_uploadText, g_downloadText}) {
+                            g_vramCapacityText, g_uploadText, g_downloadText,
+                            g_uploadArrow, g_downloadArrow, g_uploadUnit, g_downloadUnit}) {
         if (value) {
             value.Opacity(opacities.value);
         }
@@ -3885,33 +3897,34 @@ void ApplyWidgetGeometry(const ModSettings& settings) {
     };
     double gap = settings.itemGap;
     g_graphWidth = 48;
-    auto valueWidth = [&](TextBlock text) {
-        return text ? measure(text.Text().c_str()) : 0.0;
-    };
-    auto computeRowWidth = [&](Grid row, TextBlock label, TextBlock usage,
-                               TextBlock temperature, TextBlock network) {
-        if (!row) return 0.0;
-        double networkWidth = settings.showNetwork ? gap + valueWidth(network) : 0;
-        const double widths[] = {measure(label.Text().c_str(), true) + gap,
-                                 valueWidth(usage) + gap, valueWidth(temperature), networkWidth};
-        double width = 0;
-        for (int i = 0; i < 4; ++i) {
-            row.ColumnDefinitions().GetAt(i).Width(GridLength{widths[i], GridUnitType::Pixel});
-            width += widths[i];
-        }
-        width += settings.showComputeGraphs ? gap + g_graphWidth : 0;
-        row.Width(width);
-        row.HorizontalAlignment(HorizontalAlignment::Left);
-        return width;
-    };
-    double cpuWidth = computeRowWidth(g_cpuRow, g_cpuLabel, g_cpuUsageText, g_cpuTempText, g_uploadText);
-    double gpuWidth = computeRowWidth(g_gpuRow, g_gpuLabel, g_gpuUsageText, g_gpuTempText, g_downloadText);
-    // Reserve the same compute area for both rows. Live rates and percentages
-    // must not change the position of the memory panel.
-    double leftWidth = measure(L"CPU",true) + measure(L"100%") +
-        measure(L"115°C") + 2*gap +
-        (settings.showNetwork ? gap + measure(L"↑ 1000.0 MB/s") : 0) +
+    double space = std::max(2.0,measure(L" "));
+    double arrowWidth = std::max(measure(L"↑"),measure(L"↓")) + space;
+    double numberWidth = std::max(measure(L"999.9"),measure(L"888.8"));
+    double unitWidth = std::max({measure(L"MB/s"),measure(L"KB/s"),measure(L"GB/s"),measure(L"TB/s")});
+    double networkWidth = arrowWidth + numberWidth + space + unitWidth;
+    double labelWidth = std::max(measure(L"CPU",true),measure(L"GPU",true)) + gap;
+    double usageWidth = measure(L"100%") + gap;
+    double tempWidth = measure(L"115°C");
+    double leftWidth = labelWidth + usageWidth + tempWidth +
+        (settings.showNetwork ? gap + networkWidth : 0) +
         (settings.showComputeGraphs ? gap + g_graphWidth : 0);
+    for (Grid row : {g_cpuRow,g_gpuRow}) {
+        if (!row) continue;
+        const double widths[] = {labelWidth,usageWidth,tempWidth,settings.showNetwork ? gap + networkWidth : 0};
+        for (int i=0;i<4;++i) row.ColumnDefinitions().GetAt(i).Width(GridLength{widths[i],GridUnitType::Pixel});
+        row.Width(leftWidth);
+        row.HorizontalAlignment(HorizontalAlignment::Left);
+    }
+    for (Grid cell : {g_uploadGrid,g_downloadGrid}) {
+        if (!cell) continue;
+        cell.Margin(Thickness{gap,0,0,0});
+        cell.Visibility(settings.showNetwork ? Visibility::Visible : Visibility::Collapsed);
+        const double widths[] = {arrowWidth,numberWidth,space+unitWidth};
+        for (int i=0;i<3;++i) cell.ColumnDefinitions().GetAt(i).Width(GridLength{widths[i],GridUnitType::Pixel});
+    }
+    for (TextBlock unit : {g_uploadUnit,g_downloadUnit}) {
+        if (unit) unit.Margin(Thickness{space,0,0,0});
+    }
     double memoryLabelWidth = measure(L"VRAM",true) + gap;
     double memoryPercentWidth = measure(L"100%") + gap;
     auto fullCapacityWidth = [&](double total) {
@@ -3920,7 +3933,7 @@ void ApplyWidgetGeometry(const ModSettings& settings) {
     double memoryCapacityWidth = std::max(fullCapacityWidth(g_ramLayoutCapacityGb),
                                          fullCapacityWidth(g_vramLayoutCapacityGb));
     auto memoryRowWidth = [&](Grid row, TextBlock label, TextBlock percent,
-                              TextBlock capacity, double computeWidth) {
+                              TextBlock capacity) {
         if (!row) return 0.0;
         const double widths[] = {memoryLabelWidth, memoryPercentWidth, memoryCapacityWidth,
                                  settings.showMemoryGraphs ? gap + g_graphWidth : 0};
@@ -3934,8 +3947,8 @@ void ApplyWidgetGeometry(const ModSettings& settings) {
         row.HorizontalAlignment(HorizontalAlignment::Left);
         return width;
     };
-    double ramWidth = memoryRowWidth(g_ramRow,g_ramLabel,g_ramPercentText,g_ramCapacityText,cpuWidth);
-    double vramWidth = memoryRowWidth(g_vramRow,g_vramLabel,g_vramPercentText,g_vramCapacityText,gpuWidth);
+    double ramWidth = memoryRowWidth(g_ramRow,g_ramLabel,g_ramPercentText,g_ramCapacityText);
+    double vramWidth = memoryRowWidth(g_vramRow,g_vramLabel,g_vramPercentText,g_vramCapacityText);
     double contentWidth = leftWidth + gap + std::max(ramWidth,vramWidth);
     g_widgetWidth = std::max(static_cast<double>(settings.width), contentWidth);
     double rightWidth = contentWidth - leftWidth - gap;
@@ -3943,12 +3956,6 @@ void ApplyWidgetGeometry(const ModSettings& settings) {
     g_memoryBarWidth = std::max(ramWidth,vramWidth) - graphSpace;
     if (g_ramTrack) g_ramTrack.Width(ramWidth-graphSpace);
     if (g_vramTrack) g_vramTrack.Width(vramWidth-graphSpace);
-    for (TextBlock text : {g_uploadText, g_downloadText}) {
-        if (text) {
-            text.Visibility(settings.showNetwork ? Visibility::Visible : Visibility::Collapsed);
-            text.Margin(Thickness{gap,0,0,0});
-        }
-    }
     for (XamlRectangle bar : {g_ramTrack, g_ramFill, g_vramTrack, g_vramFill}) {
         if (bar) bar.Visibility(settings.showMemoryBars ? Visibility::Visible : Visibility::Collapsed);
     }
@@ -4037,7 +4044,8 @@ void ApplyWidgetSettings() {
     for (TextBlock value : {g_cpuUsageText, g_cpuTempText, g_gpuUsageText,
                             g_gpuTempText, g_ramPercentText,
                             g_ramCapacityText, g_vramPercentText,
-                            g_vramCapacityText, g_uploadText, g_downloadText}) {
+                            g_vramCapacityText, g_uploadText, g_downloadText,
+                            g_uploadArrow, g_downloadArrow, g_uploadUnit, g_downloadUnit}) {
         ApplyTextStyle(value, false, settings);
     }
 
@@ -4157,8 +4165,14 @@ void UpdateWidgetText(bool force = false) {
                      FormatCapacity(snapshot.vramUsedGb, snapshot.vramTotalGb,
                                     snapshot.vramAvailable));
 
-    SetTextIfChanged(g_uploadText, FormatNetworkSpeed(snapshot.uploadBps, snapshot.networkAvailable, true));
-    SetTextIfChanged(g_downloadText, FormatNetworkSpeed(snapshot.downloadBps, snapshot.networkAvailable, false));
+    auto setNetwork = [&](TextBlock value,TextBlock unit,double bytes,bool upload) {
+        std::wstring formatted = FormatNetworkSpeed(bytes,snapshot.networkAvailable,upload).substr(2);
+        auto split = formatted.find(L' ');
+        SetTextIfChanged(value,formatted.substr(0,split));
+        SetTextIfChanged(unit,formatted.substr(split+1));
+    };
+    setNetwork(g_uploadText,g_uploadUnit,snapshot.uploadBps,true);
+    setNetwork(g_downloadText,g_downloadUnit,snapshot.downloadBps,false);
     if (snapshot.ramAvailable) g_ramLayoutCapacityGb = snapshot.ramTotalGb;
     if (snapshot.vramAvailable) g_vramLayoutCapacityGb = snapshot.vramTotalGb;
     ApplyWidgetGeometry(settings);
@@ -4388,7 +4402,10 @@ Grid CreateComputeRow(PCWSTR label,
                       TextBlock& usageText,
                       TextBlock& temperatureText,
                       XamlPath& graph,
-                      TextBlock& networkText) {
+                      TextBlock& networkText,
+                      Grid& networkGrid,
+                      TextBlock& arrowText,
+                      TextBlock& unitText) {
     Grid row;
     row.Height(kRowHeight);
     row.IsHitTestVisible(false);
@@ -4425,10 +4442,23 @@ Grid CreateComputeRow(PCWSTR label,
     Grid::SetColumn(labelText, 0);
     Grid::SetColumn(usageText, 1);
     Grid::SetColumn(temperatureText, 2);
-    networkText = CreateCellText((std::wstring(prefix) + L"Network").c_str(), TextAlignment::Left);
-    networkText.Text(label == std::wstring_view(L"CPU") ? L"↑ -- B/s" : L"↓ -- B/s");
-    Grid::SetColumn(networkText, 3);
-    row.Children().Append(networkText);
+    networkGrid = Grid();
+    networkGrid.IsHitTestVisible(false);
+    for (int i=0;i<3;++i) networkGrid.ColumnDefinitions().Append(PixelColumn(0));
+    arrowText = CreateCellText((std::wstring(prefix)+L"NetworkArrow").c_str(),TextAlignment::Left);
+    arrowText.Text(label == std::wstring_view(L"CPU") ? L"↑" : L"↓");
+    networkText = CreateCellText((std::wstring(prefix)+L"NetworkValue").c_str(),TextAlignment::Right);
+    networkText.Text(L"--");
+    unitText = CreateCellText((std::wstring(prefix)+L"NetworkUnit").c_str(),TextAlignment::Right);
+    unitText.Text(L"B/s");
+    Grid::SetColumn(arrowText,0);
+    Grid::SetColumn(networkText,1);
+    Grid::SetColumn(unitText,2);
+    networkGrid.Children().Append(arrowText);
+    networkGrid.Children().Append(networkText);
+    networkGrid.Children().Append(unitText);
+    Grid::SetColumn(networkGrid,3);
+    row.Children().Append(networkGrid);
     Grid::SetColumn(graph, 4);
     row.Children().Append(labelText);
     row.Children().Append(usageText);
@@ -4581,6 +4611,12 @@ bool RemoveWidget() {
     g_vramRow = nullptr;
     g_uploadText = nullptr;
     g_downloadText = nullptr;
+    g_uploadArrow = nullptr;
+    g_downloadArrow = nullptr;
+    g_uploadUnit = nullptr;
+    g_downloadUnit = nullptr;
+    g_uploadGrid = nullptr;
+    g_downloadGrid = nullptr;
     g_leftColumn = nullptr;
     g_gapColumn = nullptr;
     g_rightColumn = nullptr;
@@ -4681,9 +4717,9 @@ bool InjectWidget(FrameworkElement taskbarFrame) {
     leftPanel.RowDefinitions().Append(PixelRow(kRowHeight));
 
     Grid cpuRow = g_cpuRow = CreateComputeRow(L"CPU", L"Cpu", g_cpuLabel,
-                                   g_cpuUsageText, g_cpuTempText, g_cpuGraph, g_uploadText);
+                                   g_cpuUsageText, g_cpuTempText, g_cpuGraph, g_uploadText, g_uploadGrid, g_uploadArrow, g_uploadUnit);
     Grid gpuRow = g_gpuRow = CreateComputeRow(L"GPU", L"Gpu", g_gpuLabel,
-                                   g_gpuUsageText, g_gpuTempText, g_gpuGraph, g_downloadText);
+                                   g_gpuUsageText, g_gpuTempText, g_gpuGraph, g_downloadText, g_downloadGrid, g_downloadArrow, g_downloadUnit);
     Grid::SetRow(cpuRow, 0);
     Grid::SetRow(gpuRow, 2);
     leftPanel.Children().Append(cpuRow);

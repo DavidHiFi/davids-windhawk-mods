@@ -6,7 +6,7 @@ Paste [taskbar-system-info-weather.wh.cpp](taskbar-system-info-weather.wh.cpp) i
 
 With [Independent Taskbar Weather](../taskbar-weather) enabled, this monitor starts six DIP after the weather's visible right edge and follows changes in width. Without weather it uses its configured left offset. Windows 11 x64.
 
-Version 1.2.1 keeps RAM and VRAM in shared, stable columns. Their labels, percentages, gigabyte readings and graphs line up vertically. The compute area reserves a measured width, so changing CPU/GPU and network readings cannot move the memory panel. Upload is after the CPU temperature and download after the GPU temperature. Network readings use the existing metrics worker, so the separate Network Speed Indicator mod is unnecessary.
+Version 1.2.2 keeps CPU/GPU, network and memory readings in shared columns. Network arrows align on the left; numbers and units align on the right in separate columns. The unit column ends exactly one configured gap before RAM/VRAM when CPU/GPU graphs are off. Memory labels, percentages, gigabyte readings and graphs remain vertically aligned and stationary as readings change. Network readings use the existing metrics worker, so the separate Network Speed Indicator mod is unnecessary.
 
 - **Spacing between items** applies one gap to all labels, readings and graphs, including the boundary before RAM/VRAM. The default is 8 logical pixels. The range is 0 to 24.
 - **Show CPU/GPU graphs** controls the first pair of history lines after network speeds. The default is off.
