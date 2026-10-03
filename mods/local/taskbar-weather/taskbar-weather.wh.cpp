@@ -2,7 +2,7 @@
 // @id taskbar-weather
 // @name Independent Taskbar Weather
 // @description Local weather on the taskbar with automatic updates and no Widgets or browser dependency.
-// @version 1.3.0
+// @version 1.3.1
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-weather
@@ -248,9 +248,10 @@ void Paint() {
     void* bits;HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&bits,nullptr,0);auto old=SelectObject(mem,bitmap);memset(bits,0,w*h*4);
     {
         Bitmap canvas(w,h,w*4,PixelFormat32bppPARGB,(BYTE*)bits);
-        Graphics g(&canvas);g.SetSmoothingMode(SmoothingModeAntiAlias);g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
+        Graphics g(&canvas);g.SetSmoothingMode(SmoothingModeAntiAlias);g.SetTextRenderingHint(TextRenderingHintSingleBitPerPixelGridFit);
         float scale=GetDpiForWindow(weatherWindow)/96.f;g.ScaleTransform(scale,scale);float height=h/scale;
-        if(hover||preview){GraphicsPath path;RoundedRect(path,0.5f,0.5f,w/scale-1,height-1,6.f);SolidBrush bg(WithAlpha(kSurface1,150));g.FillPath(&bg,&path);}
+        // Inset the highlight so its antialiased edge stays inside the taskbar pill.
+        if(hover||preview){GraphicsPath path;RoundedRect(path,2.f,3.f,w/scale-4,height-6,6.f);SolidBrush bg(WithAlpha(kSurface1,150));g.FillPath(&bg,&path);}
         Reading r;{std::lock_guard lock(dataMutex);r=reading;}
         DrawIcon(g,kIconLeft,height/2-IconInkMid(r.code),1,r.code,r.day);
         FontFamily semibold((fontFamily+L" SemBd").c_str());FontFamily regular(fontFamily.c_str());const FontFamily* face=semibold.IsAvailable()?&semibold:(regular.IsAvailable()?&regular:FontFamily::GenericSansSerif());Font font(face,(REAL)fontSize,semibold.IsAvailable()?FontStyleRegular:FontStyleBold,UnitPixel);SolidBrush text(Mocha(kText));
@@ -260,8 +261,10 @@ void Paint() {
         if(r.valid) {
             format.SetAlignment(StringAlignmentCenter);
             // Keep both lines together and centre their ink beside the icon.
-            float lineHeight=std::min(font.GetHeight(&g),height/2.f);
-            float top=(height-2*lineHeight)/2.f+fontSize*kInkCenterBias;
+            // Whole device-pixel origins keep the small bitmap glyphs crisp at each DPI.
+            float lineHeight=std::min(std::ceil(font.GetHeight(&g)*scale)/scale,height/2.f);
+            float top=std::round(((height-2*lineHeight)/2.f+fontSize*kInkCenterBias)*scale)/scale;
+            textX=std::round(textX*scale)/scale;
             g.DrawString((Whole(r.temperature)+L"°C").c_str(),-1,&font,RectF(textX,top,textWidth,lineHeight),&format,&text);
             g.DrawString(Condition(r.code),-1,&font,RectF(textX,top+lineHeight,textWidth,lineHeight),&format,&text);
         } else {
@@ -359,7 +362,7 @@ void Layout(HWND hwnd) {
     HWND parent=FindWindowW(L"Shell_TrayWnd",nullptr);if(!parent)return;
     RECT r;GetClientRect(parent,&r);int dpi=GetDpiForWindow(parent);int contentWidth=ContentWidth();int x=MulDiv(left,dpi,96),w=MulDiv(contentWidth,dpi,96),padding=MulDiv(4,dpi,96);
     if(GetParent(hwnd)!=parent)SetParent(hwnd,parent);
-    SetWindowPos(hwnd,HWND_TOP,x,padding,w,std::max(24L,r.bottom-2*padding),SWP_NOACTIVATE|SWP_SHOWWINDOW);
+    SetWindowPos(hwnd,HWND_TOP,x,padding,w,std::max(1L,r.bottom-2*padding),SWP_NOACTIVATE|SWP_SHOWWINDOW);
     SetPropW(parent,kRightProperty,(HANDLE)(INT_PTR)(left+contentWidth));Paint();UpdateStatus();
 }
 LRESULT CALLBACK WindowProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
@@ -449,3 +452,4 @@ void Wh_ModUninit() {
     CloseHandle(stopEvent);CloseHandle(refreshEvent);GdiplusShutdown(graphicsToken);
 }
 BOOL Wh_ModSettingsChanged(BOOL* reload) { *reload=TRUE; return TRUE; }
+
