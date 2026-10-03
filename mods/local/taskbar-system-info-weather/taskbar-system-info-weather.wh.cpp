@@ -4,7 +4,7 @@
 // @name:uk-UA      Системний монітор панелі завдань
 // @description     Compact CPU, GPU, temperatures, stacked network speeds, RAM and VRAM with optional graphs and a custom font.
 // @description:uk-UA Компактний монітор CPU, GPU, RAM і VRAM із 60-секундними графіками для панелі завдань Windows 11.
-// @version         1.2.2
+// @version         1.2.3
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-system-info-weather
@@ -4513,7 +4513,7 @@ Grid CreateMemoryRow(PCWSTR label,
     percentText.Text(L"--%");
 
     std::wstring capacityName = std::wstring(prefix) + L"Capacity";
-    capacityText = CreateCellText(capacityName.c_str(), TextAlignment::Left);
+    capacityText = CreateCellText(capacityName.c_str(), TextAlignment::Right);
     capacityText.Text(L"--/--G");
 
     Grid::SetColumnSpan(track, 3);
