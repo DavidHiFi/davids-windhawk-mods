@@ -2,7 +2,7 @@
 // @id taskbar-weather
 // @name Independent Taskbar Weather
 // @description Local weather on the taskbar with automatic updates and no Widgets or browser dependency.
-// @version 1.2.1
+// @version 1.3.0
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-weather
@@ -28,7 +28,7 @@ Hover for a rounded card with the feels-like temperature, today's high and
 low, humidity, wind and the data time. The card marks readings older than
 thirty minutes as stale. Click the weather to refresh.
 
-The default colors and single-row layout match this machine's Catppuccin Mocha
+The default colors and compact two-line layout match this machine's Catppuccin Mocha
 taskbar. Disable the mod to remove it immediately. No Explorer restart is
 required. Weather is modeled for the selected coordinates, rather than measured
 at the PC.
@@ -52,7 +52,7 @@ at the PC.
   $name: Width
 - fontFamily: Segoe UI
   $name: Font
-- fontSize: 12
+- fontSize: 11
   $name: Font size
 */
 // ==/WindhawkModSettings==
@@ -79,6 +79,11 @@ constexpr wchar_t kRightProperty[]=L"WindhawkTaskbarWeatherRightDip";
 constexpr UINT kDataMessage=WM_APP+1, kPreviewMessage=WM_APP+2;
 constexpr UINT_PTR kLayoutTimer=1, kPreviewTimer=2, kFadeTimer=3;
 constexpr float kCardWidth=320, kShadow=12, kPad=18;
+// Taskbar row layout in logical pixels: glyph slot, gap, trailing room.
+constexpr float kIconLeft=10, kIconGap=8, kTextRightPad=6;
+// GDI+ centres the line box, not the ink. On this machine the label ink sat
+// 2.5 px above the box centre at 12 px, so the bias scales with the font size.
+constexpr float kInkCenterBias=2.5f/12.f;
 // Catppuccin Mocha
 constexpr ARGB kBase=0xFF1E1E2E, kSurface1=0xFF45475A, kOverlay1=0xFF7F849C, kSubtext0=0xFFA6ADC8,
     kText=0xFFCDD6F4, kBlue=0xFF89B4FA, kYellow=0xFFF9E2AF, kPeach=0xFFFAB387;
@@ -227,6 +232,15 @@ void DrawIcon(Graphics& g,float x,float y,float scale,int code,bool day) {
     if(code>=51){Pen drops(Mocha(kBlue),1.5f);g.DrawLine(&drops,9.f,18.f,7.f,21.f);g.DrawLine(&drops,18.f,18.f,16.f,21.f);}
     g.Restore(state);
 }
+// Ink bounds of the glyph inside the 24 by 22 box that DrawIcon fills, so the
+// row can centre the glyph itself instead of the box and keep one gap to the text.
+float IconInkWidth(int code) { return code==0 ? 14.f : 24.f; }
+float IconInkMid(int code) {
+    if(code==0) return 7.f;          // sun or moon: 0 to 14
+    if(code<3) return 8.f;           // sun behind cloud: 0 to 16
+    return code>=51 ? 12.f : 9.5f;   // cloud: 3 to 16, drops reach 21
+}
+float TextX(int code) { return kIconLeft+IconInkWidth(code)+kIconGap; }
 void Paint() {
     if(!weatherWindow)return;
     RECT client;GetClientRect(weatherWindow,&client);int w=client.right,h=client.bottom;if(!w||!h)return;
@@ -238,10 +252,21 @@ void Paint() {
         float scale=GetDpiForWindow(weatherWindow)/96.f;g.ScaleTransform(scale,scale);float height=h/scale;
         if(hover||preview){GraphicsPath path;RoundedRect(path,0.5f,0.5f,w/scale-1,height-1,6.f);SolidBrush bg(WithAlpha(kSurface1,150));g.FillPath(&bg,&path);}
         Reading r;{std::lock_guard lock(dataMutex);r=reading;}
-        DrawIcon(g,10,height/2-10,1,r.code,r.day);
-        FontFamily family(fontFamily.c_str());Font font(family.IsAvailable()?&family:FontFamily::GenericSansSerif(),(REAL)fontSize,FontStyleRegular,UnitPixel);SolidBrush text(Mocha(kText));
+        DrawIcon(g,kIconLeft,height/2-IconInkMid(r.code),1,r.code,r.day);
+        FontFamily semibold((fontFamily+L" SemBd").c_str());FontFamily regular(fontFamily.c_str());const FontFamily* face=semibold.IsAvailable()?&semibold:(regular.IsAvailable()?&regular:FontFamily::GenericSansSerif());Font font(face,(REAL)fontSize,semibold.IsAvailable()?FontStyleRegular:FontStyleBold,UnitPixel);SolidBrush text(Mocha(kText));
         StringFormat format;format.SetLineAlignment(StringAlignmentCenter);format.SetFormatFlags(StringFormatFlagsNoWrap);format.SetTrimming(StringTrimmingEllipsisCharacter);
-        g.DrawString(Label(r).c_str(),-1,&font,RectF(42,0,w/scale-48,height),&format,&text);
+        float textX=TextX(r.code);
+        float textWidth=w/scale-textX-kTextRightPad;
+        if(r.valid) {
+            format.SetAlignment(StringAlignmentCenter);
+            // Keep both lines together and centre their ink beside the icon.
+            float lineHeight=std::min(font.GetHeight(&g),height/2.f);
+            float top=(height-2*lineHeight)/2.f+fontSize*kInkCenterBias;
+            g.DrawString((Whole(r.temperature)+L"°C").c_str(),-1,&font,RectF(textX,top,textWidth,lineHeight),&format,&text);
+            g.DrawString(Condition(r.code),-1,&font,RectF(textX,top+lineHeight,textWidth,lineHeight),&format,&text);
+        } else {
+            g.DrawString(Label(r).c_str(),-1,&font,RectF(textX,fontSize*kInkCenterBias,textWidth,height),&format,&text);
+        }
     }
     POINT dest{},src{};SIZE size{w,h};BLENDFUNCTION blend{AC_SRC_OVER,0,255,AC_SRC_ALPHA};
     UpdateLayeredWindow(weatherWindow,dc,nullptr,&size,mem,&src,0,&blend,ULW_ALPHA);
@@ -324,9 +349,11 @@ void HideCard() { if(cardWindow){KillTimer(weatherWindow,kFadeTimer);ShowWindow(
 int ContentWidth() {
     Reading r;{std::lock_guard lock(dataMutex);r=reading;}
     Bitmap bitmap(1,1,PixelFormat32bppPARGB);Graphics g(&bitmap);
-    FontFamily family(fontFamily.c_str());Font font(family.IsAvailable()?&family:FontFamily::GenericSansSerif(),(REAL)fontSize,FontStyleRegular,UnitPixel);
-    RectF bounds;g.MeasureString(Label(r).c_str(),-1,&font,PointF(0,0),&bounds);
-    return std::clamp((int)std::ceil(bounds.Width)+48,80,width);
+    FontFamily semibold((fontFamily+L" SemBd").c_str());FontFamily regular(fontFamily.c_str());const FontFamily* face=semibold.IsAvailable()?&semibold:(regular.IsAvailable()?&regular:FontFamily::GenericSansSerif());Font font(face,(REAL)fontSize,semibold.IsAvailable()?FontStyleRegular:FontStyleBold,UnitPixel);
+    RectF bounds;g.MeasureString((r.valid?Whole(r.temperature)+L"°C":Label(r)).c_str(),-1,&font,PointF(0,0),&bounds);
+    float textWidth=bounds.Width;
+    if(r.valid) {g.MeasureString(Condition(r.code),-1,&font,PointF(0,0),&bounds);textWidth=std::max(textWidth,bounds.Width);}
+    return std::clamp((int)std::ceil(textWidth)+(int)TextX(r.code)+(int)kTextRightPad,80,width);
 }
 void Layout(HWND hwnd) {
     HWND parent=FindWindowW(L"Shell_TrayWnd",nullptr);if(!parent)return;
