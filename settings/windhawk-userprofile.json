@@ -27,6 +27,7 @@
       "version": "1.1"
     },
     "better-volume-mixer": {
+      "disabled": true,
       "latestVersion": "1.4.5",
       "version": "1.4.5"
     },
@@ -87,8 +88,8 @@
       "version": "1.0"
     },
     "enhanced-disk-usage": {
-      "latestVersion": "1.1.0",
-      "version": "1.1.0"
+      "version": "1.2.0",
+      "latestVersion": "1.2.0"
     },
     "explorer-context-menu-classic": {
       "latestVersion": "1.0.2",
@@ -105,6 +106,16 @@
     "explorer-double-f2-rename-extension": {
       "latestVersion": "4",
       "version": "4"
+    },
+    "explorer-folder-bookmarks-bar": {
+      "latestVersion": "0.7.8",
+      "version": "0.7.8",
+      "disabled": true
+    },
+    "explorer-font-changer": {
+      "disabled": true,
+      "latestVersion": "0.2",
+      "version": "0.2"
     },
     "explorer-hide-focus-border": {
       "latestVersion": "1.0.0",
@@ -164,7 +175,8 @@
     },
     "move-window-to-monitor": {
       "latestVersion": "1.1.0",
-      "version": "1.1.0"
+      "version": "1.1.0",
+      "disabled": true
     },
     "mspaint-dark": {
       "latestVersion": "1.0.1",
@@ -181,10 +193,6 @@
     "parallax-wallpaper": {
       "latestVersion": "0.9.0",
       "version": "0.9.0"
-    },
-    "paste-clipboard-content-to-explorer": {
-      "latestVersion": "1.7",
-      "version": "1.7"
     },
     "photoshop-dark-menus": {
       "latestVersion": "1.0.0",
@@ -215,8 +223,8 @@
       "version": "1.0.0"
     },
     "restore-folder-menubar-25h2": {
-      "version": "3.1.0",
-      "latestVersion": "3.1.0"
+      "latestVersion": "3.1.0",
+      "version": "3.1.0"
     },
     "shadowplay-do-not-disable": {
       "latestVersion": "1.1",
@@ -236,7 +244,8 @@
     },
     "snap-commander": {
       "latestVersion": "1.0.0",
-      "version": "1.0.0"
+      "version": "1.0.0",
+      "disabled": true
     },
     "start-menu-open-real-file-location": {
       "latestVersion": "1.1.0",
@@ -272,8 +281,8 @@
       "version": "1.0.9"
     },
     "taskbar-clock-customization": {
-      "latestVersion": "1.8",
-      "version": "1.8"
+      "version": "1.8.1",
+      "latestVersion": "1.8.1"
     },
     "taskbar-dock-animation-plus": {
       "latestVersion": "2.0.1",
@@ -281,15 +290,16 @@
     },
     "taskbar-fluent-media-player": {
       "latestVersion": "1.6.0",
-      "version": "1.6.0"
+      "version": "1.6.0",
+      "disabled": true
     },
     "taskbar-icon-size": {
       "latestVersion": "1.3.10",
       "version": "1.3.10"
     },
     "taskbar-notification-icon-spacing": {
-      "version": "1.4",
-      "latestVersion": "1.4"
+      "latestVersion": "1.4",
+      "version": "1.4"
     },
     "taskbar-restart-explorer": {
       "latestVersion": "1.0",
@@ -313,8 +323,8 @@
       "version": "1.0"
     },
     "titlebar-for-everyone": {
-      "latestVersion": "0.4",
-      "version": "0.4"
+      "version": "0.5",
+      "latestVersion": "0.5"
     },
     "toggle-hidden-files": {
       "latestVersion": "1.0.0",
@@ -341,8 +351,10 @@
       "version": "1.0.0"
     },
     "win32-ui-modernizer": {
-      "latestVersion": "1.0.2",
-      "version": "1.0.2"
+      "version": "1.0.3",
+      "latestVersion": "1.0.3",
+      "rating": 5,
+      "disabled": true
     },
     "windows-11-file-explorer-styler": {
       "latestVersion": "1.7",
@@ -376,14 +388,31 @@
       "latestVersion": "0.115",
       "version": "0.115"
     },
-    "explorer-font-changer": {
-      "version": "0.2"
+    "taskbar-thumbnail-stats": {
+      "version": "1.2",
+      "latestVersion": "1.2"
     },
-    "local@taskbar-weather": {
-      "version": "1.2.1"
+    "tourne-table-desktop-audio-visualizer": {
+      "version": "1.3.0",
+      "latestVersion": "1.3.0",
+      "disabled": true
     },
-    "local@taskbar-system-info-weather": {
-      "version": "1.0.0"
+    "taskbar-on-top": {
+      "version": "1.2",
+      "latestVersion": "1.2"
+    },
+    "net-speed-taskbar": {
+      "version": "1.6",
+      "disabled": true,
+      "latestVersion": "1.6"
+    },
+    "taskbar-icon-separators": {
+      "version": "1.0.33",
+      "latestVersion": "1.0.33"
+    },
+    "notifications-placement": {
+      "version": "1.2.4",
+      "latestVersion": "1.2.4"
     }
   },
   "os": "10.0.26200"

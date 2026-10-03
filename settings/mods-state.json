@@ -144,7 +144,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.1.0"
+    "version": "1.2.0"
   },
   "explorer-context-menu-classic": {
     "disabled": false,
@@ -173,6 +173,13 @@
     "exclude": "",
     "architecture": "",
     "version": "4"
+  },
+  "explorer-folder-bookmarks-bar": {
+    "disabled": true,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "0.7.8"
   },
   "explorer-font-changer": {
     "disabled": true,
@@ -273,7 +280,7 @@
     "version": "1.1"
   },
   "local@alt-snap-drag": {
-    "disabled": false,
+    "disabled": true,
     "include": "*",
     "exclude": "",
     "architecture": "",
@@ -286,12 +293,47 @@
     "architecture": "",
     "version": "1.0.0"
   },
+  "local@david-window-pack": {
+    "disabled": false,
+    "include": "*|windhawk.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.0.0"
+  },
+  "local@davids-audio-visualizer": {
+    "disabled": false,
+    "include": "windhawk.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.0.1"
+  },
+  "local@explorer-font-changer-davidhifi": {
+    "disabled": false,
+    "include": "explorer.exe|StartMenuExperienceHost.exe|ShellExperienceHost.exe|SearchHost.exe|ShellHost.exe|SystemSettings.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.0.1"
+  },
   "local@taskbar-ai-quota-opencode": {
     "disabled": false,
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
     "version": "1.6.5.1"
+  },
+  "local@taskbar-system-info-weather": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.0.1"
+  },
+  "local@taskbar-weather": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.2.3"
   },
   "local@translucent-flyouts": {
     "disabled": false,
@@ -308,7 +350,7 @@
     "version": "1.0"
   },
   "move-window-to-monitor": {
-    "disabled": false,
+    "disabled": true,
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "",
@@ -321,12 +363,26 @@
     "architecture": "x86-64",
     "version": "1.0.1"
   },
+  "net-speed-taskbar": {
+    "disabled": true,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.6"
+  },
   "notepad-dark-mode": {
     "disabled": false,
     "include": "notepad.exe",
     "exclude": "",
     "architecture": "",
     "version": "1.0"
+  },
+  "notifications-placement": {
+    "disabled": false,
+    "include": "explorer.exe|ShellExperienceHost.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.2.4"
   },
   "npp-taskdlg-textcolor": {
     "disabled": false,
@@ -341,13 +397,6 @@
     "exclude": "",
     "architecture": "",
     "version": "0.9.0"
-  },
-  "paste-clipboard-content-to-explorer": {
-    "disabled": false,
-    "include": "*",
-    "exclude": "",
-    "architecture": "",
-    "version": "1.7"
   },
   "photoshop-dark-menus": {
     "disabled": false,
@@ -434,7 +483,7 @@
     "version": "1.0.2"
   },
   "snap-commander": {
-    "disabled": false,
+    "disabled": true,
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "",
@@ -501,7 +550,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.8"
+    "version": "1.8.1"
   },
   "taskbar-dock-animation-plus": {
     "disabled": false,
@@ -511,11 +560,18 @@
     "version": "2.0.1"
   },
   "taskbar-fluent-media-player": {
-    "disabled": false,
+    "disabled": true,
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "",
     "version": "1.6.0"
+  },
+  "taskbar-icon-separators": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.33"
   },
   "taskbar-icon-size": {
     "disabled": false,
@@ -531,6 +587,13 @@
     "architecture": "x86-64",
     "version": "1.4"
   },
+  "taskbar-on-top": {
+    "disabled": false,
+    "include": "explorer.exe|StartMenuExperienceHost.exe|ShellExperienceHost.exe|ShellHost.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.2"
+  },
   "taskbar-restart-explorer": {
     "disabled": false,
     "include": "explorer.exe",
@@ -544,6 +607,13 @@
     "exclude": "",
     "architecture": "x86-64",
     "version": "1.5.0"
+  },
+  "taskbar-thumbnail-stats": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.2"
   },
   "taskbar-tray-system-icon-tweaks": {
     "disabled": false,
@@ -571,7 +641,7 @@
     "include": "chrome.exe|brave.exe|msedge.exe|opera.exe|yandex.exe|whale.exe|supermium.exe|chromium.exe|devenv.exe|steamwebhelper.exe|PowerToys.*.exe|olk.exe|WebViewHost.exe|winword.exe|excel.exe|powerpnt.exe|msaccess.exe|onenote.exe|outlook.exe|mspub.exe|hwp.exe|Photos.exe|MuseScore*.exe|ms-teams.exe",
     "exclude": "",
     "architecture": "",
-    "version": "0.4"
+    "version": "0.5"
   },
   "toggle-hidden-files": {
     "disabled": false,
@@ -579,6 +649,13 @@
     "exclude": "",
     "architecture": "",
     "version": "1.0.0"
+  },
+  "tourne-table-desktop-audio-visualizer": {
+    "disabled": true,
+    "include": "windhawk.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.3.0"
   },
   "translucent-windows": {
     "disabled": false,
@@ -616,11 +693,11 @@
     "version": "1.0.0"
   },
   "win32-ui-modernizer": {
-    "disabled": false,
+    "disabled": true,
     "include": "*",
-    "exclude": "dwm.exe|mmc.exe|msiexec.exe",
+    "exclude": "dwm.exe|msiexec.exe",
     "architecture": "",
-    "version": "1.0.2"
+    "version": "1.0.3"
   },
   "windows-11-file-explorer-styler": {
     "disabled": false,
@@ -677,33 +754,5 @@
     "exclude": "",
     "architecture": "amd64",
     "version": "0.115"
-  },
-  "local@explorer-font-changer-davidhifi": {
-    "disabled": false,
-    "include": "explorer.exe|StartMenuExperienceHost.exe|ShellExperienceHost.exe|SearchHost.exe|ShellHost.exe|SystemSettings.exe",
-    "exclude": "",
-    "architecture": "",
-    "version": "1.0.1"
-  },
-  "local@taskbar-weather": {
-    "disabled": false,
-    "include": "explorer.exe",
-    "exclude": "",
-    "architecture": "x86-64",
-    "version": "1.2.1"
-  },
-  "local@taskbar-system-info-weather": {
-    "disabled": false,
-    "include": "explorer.exe",
-    "exclude": "",
-    "architecture": "x86-64",
-    "version": "1.0.0"
-  },
-  "local@davids-audio-visualizer": {
-    "disabled": false,
-    "include": "windhawk.exe",
-    "exclude": "",
-    "architecture": "",
-    "version": "1.0.1"
   }
 }

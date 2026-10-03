@@ -2,7 +2,7 @@
 
 A complete snapshot of my [Windhawk](https://windhawk.net) setup on Windows 11:
 every mod I run, the exact settings, and the local mods I maintain, packaged so
-the whole setup can be copied onto another machine. Snapshot taken 2026-09-28
+the whole setup can be copied onto another machine. Snapshot refreshed 2026-10-03
 on Windows 11 build 26200 with Windhawk 1.7.3.
 
 ![The taskbar tray after the change](media/tray-after.png)
@@ -18,6 +18,7 @@ it. Before: [media/tray-before.png](media/tray-before.png).
 | `mods/catalog/` | Copies of the [catalog mods](https://windhawk.net/mods) I run, one `.wh.cpp` each, as installed. Authors, versions and licenses in [mods/catalog/README.md](mods/catalog/README.md). |
 | `mods/local/` | My mods, listed below. |
 | `settings/` | Per-mod state and values, app and engine preferences, the quota mods' config, and a snapshot of the installed set. Details in [settings/README.md](settings/README.md). |
+| `themes/` | Styler themes I made, ready to paste into Textual mode. |
 | `mod-storage/` | Files mods wrote. Currently the Taskbar Styler images. |
 | `editor/` | The Windhawk mod editor's settings. |
 | `manifest.json` | Every mod with version, author, license, origin, enabled state, and source path. |
@@ -60,6 +61,14 @@ catalog table, and the settings exports from the live install. Add
 ## Taskbar weather
 
 [Independent Taskbar Weather](mods/local/taskbar-weather) adds automatically updated weather and a readable rounded hover card. [Taskbar System Info with Weather](mods/local/taskbar-system-info-weather) follows it with a six-DIP gap. Installation and location setup are documented in each folder; published settings contain no saved town or coordinates.
+
+## Start menu theme
+
+[OnlySearch Mocha](themes/start-menu-onlysearch-mocha) cuts the redesigned
+Windows 11 Start menu down to the search box and a power row. It combines the
+OnlySearch and RosePine styler themes and recolors them with Catppuccin Mocha
+and a blue accent. Paste [onlysearch-mocha.yaml](themes/start-menu-onlysearch-mocha/onlysearch-mocha.yaml)
+into the Start Menu Styler's Textual mode.
 
 ## David's Audio Visualizer
 
