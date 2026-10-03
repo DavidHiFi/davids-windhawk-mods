@@ -67,6 +67,8 @@ int main() {
  assert(FormatNetworkSpeed(0,true,true)==L"↑ 0 B/s");
  assert(FormatNetworkSpeed(1234,true,false)==L"↓ 1.2 KB/s");
  assert(FormatNetworkSpeed(1234567,true,true)==L"↑ 1.2 MB/s");
+ assert(FormatNetworkSpeed(999950,true,true)==L"↑ 1.0 MB/s");
+ assert(FormatNetworkSpeed(999950000,true,false)==L"↓ 1.0 GB/s");
  assert(FormatNetworkSpeed(1e9,true,false)==L"↓ 1.0 GB/s");
  assert(FormatNetworkSpeed(1e12,true,false)==L"↓ 1.0 TB/s");
  assert(FormatNetworkSpeed(0,false,true)==L"↑ -- B/s");
