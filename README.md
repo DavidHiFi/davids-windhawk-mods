@@ -62,6 +62,8 @@ catalog table, and the settings exports from the live install. Add
 
 [Independent Taskbar Weather](mods/local/taskbar-weather) adds automatically updated weather and a readable rounded hover card. [Taskbar System Info with Weather](mods/local/taskbar-system-info-weather) follows it with a six-DIP gap. Installation and location setup are documented in each folder; published settings contain no saved town or coordinates.
 
+The system-info fork also combines stacked network upload/download readings with CPU/GPU temperatures, compact spacing, a graph toggle and a custom font setting. Graphs default to off. Network speeds default to on.
+
 ## Start menu theme
 
 [OnlySearch Mocha](themes/start-menu-onlysearch-mocha) cuts the redesigned

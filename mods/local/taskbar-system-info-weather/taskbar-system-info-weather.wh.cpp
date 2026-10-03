@@ -2,18 +2,21 @@
 // @id              taskbar-system-info-weather
 // @name            Taskbar System Info with Weather
 // @name:uk-UA      Системний монітор панелі завдань
-// @description     A quiet two-column CPU, GPU, RAM and VRAM monitor with 60-second history graphs for the Windows 11 taskbar.
+// @description     Compact CPU, GPU, temperatures, stacked network speeds, RAM and VRAM with optional graphs and a custom font.
 // @description:uk-UA Компактний монітор CPU, GPU, RAM і VRAM із 60-секундними графіками для панелі завдань Windows 11.
-// @version         1.0.0
+// @version         1.1.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-system-info-weather
 // @license         GPL-3.0
 // @include         explorer.exe
 // @architecture    x86-64
-// @compilerOptions -lole32 -loleaut32 -lruntimeobject -lpdh -ldxgi -lcomctl32 -DWIN32_LEAN_AND_MEAN
+// @compilerOptions -lole32 -loleaut32 -lruntimeobject -lpdh -ldxgi -lcomctl32 -liphlpapi -DWIN32_LEAN_AND_MEAN
 // ==/WindhawkMod==
 
+// Fork of Taskbar System Info by Yevhenii Starychenko, GPL-3.0.
+// Network readouts inspired by Taskbar Network Speed Indicator by Narayan.
+// This fork collects interface counters in its existing worker, without a helper process.
 // Taskbar XAML discovery and window-thread marshaling are based on techniques
 // from "Multirow taskbar for Windows 11" by Michael Maltsev (m417z):
 // https://github.com/ramensoftware/windhawk-mods/blob/main/mods/taskbar-multirow.wh.cpp
@@ -53,104 +56,33 @@ SOFTWARE.
 /*
 # Taskbar System Info with Weather
 
-Fork of [Taskbar System Info by Yevhenii Starychenko](https://github.com/starychenko/windhawk-taskbar-system-info), licensed GPL-3.0.
-
-This fork follows Independent Taskbar Weather with a six-DIP gap. Without weather it uses the configured left offset. Disable the original Taskbar System Info while using this fork. Other monitoring settings and upstream credits are preserved.
-
-A compact, click-through system monitor for the far-left free area of the
-Windows 11 taskbar. It is designed for a quick administrator glance: current
-values show what is happening now, while two restrained history traces reveal
-whether a CPU or GPU spike is momentary or sustained.
-
-![Taskbar System Info preview](https://raw.githubusercontent.com/starychenko/windhawk-taskbar-system-info/main/assets/taskbar-system-info.png)
-
-The fixed two-column layout keeps every metric in a predictable place:
+DavidHiFi's GPL-3.0 fork of Yevhenii Starychenko's Taskbar System Info.
+CPU and GPU rows have compact, font-measured spacing. Network upload appears
+after the CPU temperature and download after the GPU temperature.
 
 ```text
-CPU  10%  72°C  [60-second graph]    RAM   52%  16.7/32G
-GPU   4%  56°C  [60-second graph]    VRAM   9%   2.1/24G
+CPU 10% 72°C ↑ 1.2 MB/s [optional graph]   RAM  52% 16.7/32G
+GPU  4% 56°C ↓ 8.4 MB/s [optional graph]   VRAM  9%  2.1/24G
 ```
 
-CPU and GPU history uses a fixed 0-100% scale. RAM and VRAM use thin capacity
-bars. Fixed-width fields prevent the layout from shifting as values change.
-Normal values remain monochrome; only warning and critical readings receive
-color. Adaptive colors are enabled by default: normal text follows the native
-taskbar foreground, while graphs and alerts switch between contrast-checked
-light and dark palettes as the taskbar theme changes. Windows high-contrast mode
-uses its system highlight colors. Disable the adaptive option to use the manual
-color settings exactly. Network and disk activity are intentionally not
-collected.
+Save **Show graphs** to turn history traces and memory bars on or off.
+Graphs are off by default and leave no reserved space when hidden.
+**Show network speeds** controls the stacked network readings.
+**Font family** accepts any installed Windows font name. Empty uses
+Segoe UI Variable Text. Saving remeasures the layout with that font.
+**Widget width** at 0 fits the content automatically.
 
-Unlike the performance placeholders in
-[Taskbar Clock Customization](https://github.com/ramensoftware/windhawk-mods/blob/main/mods/taskbar-clock-customization.wh.cpp),
-this mod does not alter the clock. It uses the free far-left taskbar area for a
-stable 2x2 dashboard with rolling graphs, capacity bars and temperature alerts.
+Network rates use byte-counter deltas and actual elapsed time from active
+physical Ethernet and Wi-Fi interfaces. Virtual adapters, tunnels and loopback
+are excluded to avoid duplicate counts. New adapters and reset counters need
+one baseline sample. Missing readings show `-- B/s`; idle rates show `0 B/s`.
+Units are decimal B/s, KB/s, MB/s, GB/s and TB/s.
+The mod reads local counters and makes no network requests.
 
-## Quick start
-
-1. Install and enable the mod. CPU, GPU, RAM and VRAM normally work without any
-   additional software.
-2. Keep **Temperature source** on **Automatic**. If a temperature stays at
-   `--°C`, Windows probably does not expose that sensor; configure HWiNFO as
-   described below.
-3. If the widget overlaps taskbar buttons, enable **Reserve space before the
-   Start button**. If Widgets/weather occupies the same area, increase **Left
-   offset** or disable the conflicting element.
-4. On a multi-monitor system, choose **Taskbar monitor**. Monitor 1 is always
-   the primary display.
-
-The mod is read-only. It does not control clocks, fans or power limits, does not
-collect network/disk activity, and does not send telemetry or make internet
-requests.
-
-## Metrics
-
-- CPU utilization from the Windows Processor Utility counter, matching the
-  frequency-aware value used by Task Manager when available. Windows system
-  time counters remain the compatibility fallback.
-- RAM usage and capacity from Windows memory status.
-- GPU utilization and dedicated or shared GPU-memory usage from Windows PDH
-  counters.
-- GPU-memory capacity and adapter identity from live D3DKMT enumeration, with
-  DXGI as a compatibility fallback. Automatic mode uses shared GPU memory for
-  integrated adapters, including common small dedicated carve-outs, and
-  dedicated VRAM for discrete adapters. The memory type can also be forced.
-- CPU and GPU temperatures from HWiNFO when available.
-- GPU fallback from the Windows display-driver interface (D3DKMT).
-- CPU fallback from Windows ACPI thermal zones exposed through PDH.
-
-Metric collection runs on a worker thread. CPU and GPU performance counters
-use separate queries, so GPU recovery does not reset the CPU thermal-zone
-counter. The UI consumes completed snapshots; new samples and Windows
-theme/display-change notifications trigger updates. A fallback UI timer follows
-the configured update interval.
-
-Graphs use measurement timestamps and a fixed 0-100% scale. A missing sample
-or collection stall leaves a gap instead of erasing earlier history or drawing
-a line through unknown data. The collector uses deadlines rather than adding
-its own collection time to every interval. Its bounded queue retains the latest
-256 samples if the UI is temporarily busy.
-
-A changed adapter LUID rebuilds the GPU query during the normal adapter
-refresh (up to 60 seconds). Three consecutive hard PDH errors can also trigger
-recovery, with a 60-second cooldown. If GPU-memory readings disappear while the
-LUID stays unchanged, an independent memory query checks whether the old query
-is stale. Only a working fresh reading triggers a rebuild; an unavailable or
-parked GPU is not repeatedly reset. Fresh probes run at most once per minute.
-CPU and RAM remain visible while a new GPU query establishes its rate baseline.
-When both engine and memory readings are missing, GPU shows `--%`, not a
-made-up zero. A working memory reading with no engine instances can show idle
-0%. This is recovery from recognized counter failures, not a guarantee that
-every driver fault can be repaired without reloading the mod.
-
-The adapter with the most dedicated VRAM is selected automatically. A partial
-adapter-name filter is available for multi-GPU systems. GPU usage and VRAM are
-matched to the selected live adapter by LUID. Duplicate stale adapters without
-a driver name are ignored when a named adapter with the same capacity exists.
-For an integrated GPU, the displayed capacity is the Windows shared-memory
-limit rather than a physically reserved memory pool, so its percentage has
-different semantics from a discrete GPU's dedicated VRAM. Small and fractional
-capacity totals retain one decimal place.
+With Independent Taskbar Weather enabled, the panel follows its right edge.
+David's Audio Visualizer follows this panel's measured right edge.
+Disable the original System Info and Network Speed Indicator to avoid duplicates.
+CPU, GPU, RAM, VRAM and temperature providers retain the upstream collection.
 
 ## Temperature providers
 
@@ -318,10 +250,10 @@ Released under GPL-3.0.
 
 // ==WindhawkModSettings==
 /*
-- width: 410
+- width: 0
   $name: Widget width
   $name:uk-UA: Ширина блока
-  $description: "Allowed range: 330-800 pixels. A width of 380-450 works well with most display scales."
+  $description: "0 fits the content automatically. A positive value sets a minimum width, up to 800 logical pixels."
   $description:uk-UA: "Діапазон: 330-800 пікселів. Зазвичай добре підходить ширина 380-450."
 
 - leftOffset: 10
@@ -354,6 +286,14 @@ Released under GPL-3.0.
   $description: "Metric refresh interval, from 1 to 10 seconds. One second is recommended for quick monitoring; a longer interval reduces wakeups."
   $description:uk-UA: "Інтервал від 1 до 10 секунд. Для оперативного моніторингу рекомендована 1 секунда; більший інтервал зменшує кількість оновлень."
 
+- showGraphs: false
+  $name: Show graphs
+  $description: "Show CPU/GPU history graphs and RAM/VRAM capacity bars. Turning this off removes their space."
+
+- showNetwork: true
+  $name: Show network speeds
+  $description: "Upload beside CPU temperature, download beside GPU temperature. Uses active physical network adapters, in bytes per second."
+
 - historySeconds: 60
   $name: Graph history
   $name:uk-UA: Історія графіків
@@ -369,7 +309,7 @@ Released under GPL-3.0.
 - fontFamily: "Segoe UI Variable Text"
   $name: Font family
   $name:uk-UA: Шрифт
-  $description: "Installed Windows font-family name. The default is tuned for the compact taskbar layout."
+  $description: "Enter any installed Windows font-family name. Saving applies the font and measures the layout again. Empty uses Segoe UI Variable Text."
   $description:uk-UA: "Назва встановленого у Windows шрифту. Стандартний шрифт підібраний для компактного блока на панелі."
 
 - textColor: ""
@@ -516,6 +456,8 @@ Released under GPL-3.0.
 */
 // ==/WindhawkModSettings==
 
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windhawk_utils.h>
 
 #include <dxgi.h>
@@ -523,6 +465,8 @@ Released under GPL-3.0.
 #include <pdhmsg.h>
 #include <windows.h>
 #include <commctrl.h>
+#include <iphlpapi.h>
+#include <netioapi.h>
 
 #include <algorithm>
 #include <atomic>
@@ -635,7 +579,9 @@ struct ModSettings {
     ThermalZoneAggregation windowsThermalZoneAggregation =
         ThermalZoneAggregation::Average;
     GpuMemoryMode gpuMemoryMode = GpuMemoryMode::Auto;
-    int width = 410;
+    int width = 0;
+    bool showGraphs = false;
+    bool showNetwork = true;
     int leftOffset = 10;
     int monitor = 1;
     bool adaptiveColors = true;
@@ -713,6 +659,13 @@ std::optional<std::list<FrameworkElement::Loaded_revoker>> g_loadedRevokers{
 [[clang::no_destroy]] XamlRectangle g_ramFill{nullptr};
 [[clang::no_destroy]] XamlRectangle g_vramTrack{nullptr};
 [[clang::no_destroy]] XamlRectangle g_vramFill{nullptr};
+double g_widgetWidth = 0;
+[[clang::no_destroy]] Grid g_cpuRow{nullptr};
+[[clang::no_destroy]] Grid g_gpuRow{nullptr};
+[[clang::no_destroy]] Grid g_ramRow{nullptr};
+[[clang::no_destroy]] Grid g_vramRow{nullptr};
+[[clang::no_destroy]] TextBlock g_uploadText{nullptr};
+[[clang::no_destroy]] TextBlock g_downloadText{nullptr};
 [[clang::no_destroy]] ColumnDefinition g_leftColumn{nullptr};
 [[clang::no_destroy]] ColumnDefinition g_gapColumn{nullptr};
 [[clang::no_destroy]] ColumnDefinition g_rightColumn{nullptr};
@@ -776,6 +729,9 @@ HwInfoGadgetRegistryCache g_hwInfoGadgetRegistryCache;
 
 struct MetricsSnapshot {
     SampleTime capturedAt{};
+    double uploadBps = 0.0;
+    double downloadBps = 0.0;
+    bool networkAvailable = false;
     double cpu = 0.0;
     bool cpuAvailable = false;
     double ram = 0.0;
@@ -852,6 +808,8 @@ GpuMemoryMode ParseGpuMemoryMode(const std::wstring& value) {
 
 void LoadSettings() {
     ModSettings settings;
+    settings.showGraphs = Wh_GetIntSetting(L"showGraphs") != 0;
+    settings.showNetwork = Wh_GetIntSetting(L"showNetwork") != 0;
     settings.fontFamily = GetStringSetting(L"fontFamily");
     settings.textColor = GetStringSetting(L"textColor");
     settings.graphColor = GetStringSetting(L"graphColor");
@@ -868,7 +826,7 @@ void LoadSettings() {
         GetStringSetting(L"windowsThermalZoneFilter");
     settings.windowsThermalZoneAggregation = ParseThermalZoneAggregation(
         GetStringSetting(L"windowsThermalZoneAggregation"));
-    settings.width = std::clamp(Wh_GetIntSetting(L"width"), 330, 800);
+    settings.width = std::clamp(Wh_GetIntSetting(L"width"), 0, 800);
     settings.leftOffset = std::clamp(Wh_GetIntSetting(L"leftOffset"), 0, 1000);
     settings.monitor = std::clamp(Wh_GetIntSetting(L"monitor"), 1, 32);
     settings.adaptiveColors = Wh_GetIntSetting(L"adaptiveColors") != 0;
@@ -3121,6 +3079,50 @@ void ReadPdhMetrics(MetricsSnapshot& snapshot, const ModSettings& settings) {
     }
 }
 
+struct NetworkCounters { ULONG64 incoming; ULONG64 outgoing; };
+std::unordered_map<ULONG64, NetworkCounters> g_networkPrevious;
+SampleTime g_networkSampleTime{};
+
+void ReadNetwork(MetricsSnapshot& snapshot, bool enabled) {
+    if (!enabled) {
+        g_networkPrevious.clear();
+        g_networkSampleTime = {};
+        return;
+    }
+    MIB_IF_TABLE2* table = nullptr;
+    if (GetIfTable2(&table) != NO_ERROR) {
+        g_networkPrevious.clear();
+        g_networkSampleTime = {};
+        return;
+    }
+    auto now = std::chrono::steady_clock::now();
+    double seconds = std::chrono::duration<double>(now - g_networkSampleTime).count();
+    std::unordered_map<ULONG64, NetworkCounters> next;
+    for (ULONG i = 0; i < table->NumEntries; ++i) {
+        const auto& row = table->Table[i];
+        // Exclude loopback, tunnels and virtual adapters to avoid counting
+        // the same traffic again through a VPN or virtual switch.
+        if (row.OperStatus != IfOperStatusUp ||
+            !row.InterfaceAndOperStatusFlags.HardwareInterface ||
+            (row.Type != IF_TYPE_ETHERNET_CSMACD && row.Type != IF_TYPE_IEEE80211)) {
+            continue;
+        }
+        auto key = row.InterfaceLuid.Value;
+        next.emplace(key, NetworkCounters{row.InOctets, row.OutOctets});
+        auto previous = g_networkPrevious.find(key);
+        if (previous != g_networkPrevious.end() && seconds > 0 &&
+            row.InOctets >= previous->second.incoming &&
+            row.OutOctets >= previous->second.outgoing) {
+            snapshot.downloadBps += (row.InOctets - previous->second.incoming) / seconds;
+            snapshot.uploadBps += (row.OutOctets - previous->second.outgoing) / seconds;
+            snapshot.networkAvailable = true;
+        }
+    }
+    FreeMibTable(table);
+    g_networkPrevious = std::move(next);
+    g_networkSampleTime = now;
+}
+
 MetricsSnapshot CollectMetrics(const ModSettings& settings) {
     MetricsSnapshot snapshot;
     snapshot.capturedAt = std::chrono::steady_clock::now();
@@ -3128,6 +3130,7 @@ MetricsSnapshot CollectMetrics(const ModSettings& settings) {
         snapshot.cpu = *cpu;
         snapshot.cpuAvailable = true;
     }
+    ReadNetwork(snapshot, settings.showNetwork);
     ReadMemory(snapshot);
     ReadPdhMetrics(snapshot, settings);
     ReadTemperatures(snapshot, settings);
@@ -3337,6 +3340,15 @@ std::wstring FormatFixed(double value, int decimals) {
     return text;
 }
 
+std::wstring FormatNetworkSpeed(double bytes, bool available, bool upload) {
+    std::wstring text = upload ? L"↑ " : L"↓ ";
+    if (!available || !std::isfinite(bytes) || bytes < 0) return text + L"-- B/s";
+    constexpr PCWSTR units[] = {L"B/s", L"KB/s", L"MB/s", L"GB/s", L"TB/s"};
+    int unit = 0;
+    while (bytes >= 1000 && unit < 4) { bytes /= 1000; ++unit; }
+    return text + FormatFixed(bytes, unit ? 1 : 0) + L" " + units[unit];
+}
+
 std::wstring FormatPercent(double value) {
     wchar_t buffer[64];
     swprintf(buffer, std::size(buffer), L"%.0f%%",
@@ -3517,7 +3529,7 @@ void ApplyThemeOpacities(const ModSettings& settings) {
     for (TextBlock value : {g_cpuUsageText, g_cpuTempText, g_gpuUsageText,
                             g_gpuTempText, g_ramPercentText,
                             g_ramCapacityText, g_vramPercentText,
-                            g_vramCapacityText}) {
+                            g_vramCapacityText, g_uploadText, g_downloadText}) {
         if (value) {
             value.Opacity(opacities.value);
         }
@@ -3691,6 +3703,10 @@ void UpdateSparkline(XamlPath graph,
     if (!graph) {
         return;
     }
+    if (!settings.showGraphs) {
+        graph.Visibility(Visibility::Collapsed);
+        return;
+    }
     auto runs = BuildSparklineRuns(history, settings.historySeconds,
                                    settings.updateInterval, g_graphWidth,
                                    kGraphHeight);
@@ -3826,18 +3842,54 @@ void ApplyWidgetGeometry(const ModSettings& settings) {
         return;
     }
 
-    double rightWidth =
-        std::clamp(static_cast<double>(settings.width) * 0.38, 145.0, 170.0);
-    double leftWidth = settings.width - kColumnGap - rightWidth;
-    g_graphWidth = std::max(
-        24.0, leftWidth - kMetricLabelWidth - kMetricUsageWidth -
-                  kMetricTempWidth - kGraphLeftGap);
+    // Measure current values with the selected font, keeping both rows aligned.
+    auto measure = [&](PCWSTR value, bool label = false) {
+        TextBlock probe;
+        probe.FontFamily(Media::FontFamily(settings.fontFamily));
+        probe.FontSize(settings.fontSize);
+        probe.FontWeight(label ? Text::FontWeights::SemiBold() : Text::FontWeights::Normal());
+        probe.Text(value);
+        probe.Measure(Size{10000, 100});
+        return std::ceil(static_cast<double>(probe.DesiredSize().Width));
+    };
+    auto pairWidth = [&](TextBlock a, TextBlock b, double fallback) {
+        return a && b ? std::max(measure(a.Text().c_str()), measure(b.Text().c_str())) : fallback;
+    };
+    double labelWidth = measure(L"CPU", true) + 4;
+    double usageWidth = pairWidth(g_cpuUsageText, g_gpuUsageText, 30) + 4;
+    double tempWidth = pairWidth(g_cpuTempText, g_gpuTempText, 35) + 6;
+    // Keep the network column stable when its unit or number of digits changes.
+    double networkWidth = settings.showNetwork
+        ? std::max(measure(L"↑ 999.9 MB/s"), pairWidth(g_uploadText, g_downloadText, 80)) + 6 : 0;
+    double memoryLabelWidth = measure(L"VRAM", true) + 4;
+    double memoryPercentWidth = measure(L"100%") + 4;
+    double rightWidth = std::max(145.0, memoryLabelWidth + memoryPercentWidth + measure(L"999.9/999G"));
+    double computeWidth = labelWidth + usageWidth + tempWidth + networkWidth;
+    double minimumWidth = computeWidth + kColumnGap + rightWidth + (settings.showGraphs ? 48 : 0);
+    g_widgetWidth = std::max(static_cast<double>(settings.width), minimumWidth);
+    double leftWidth = settings.showGraphs ? g_widgetWidth - kColumnGap - rightWidth : computeWidth;
+    g_graphWidth = settings.showGraphs ? std::max(24.0, leftWidth - computeWidth - kGraphLeftGap) : 0;
     g_memoryBarWidth = rightWidth;
-
-    g_widget.Width(settings.width);
+    for (Grid row : {g_cpuRow, g_gpuRow}) {
+        if (!row) continue;
+        const double widths[] = {labelWidth, usageWidth, tempWidth, networkWidth};
+        for (int i = 0; i < 4; ++i) row.ColumnDefinitions().GetAt(i).Width(GridLength{widths[i], GridUnitType::Pixel});
+    }
+    for (Grid row : {g_ramRow, g_vramRow}) {
+        if (!row) continue;
+        row.ColumnDefinitions().GetAt(0).Width(GridLength{memoryLabelWidth, GridUnitType::Pixel});
+        row.ColumnDefinitions().GetAt(1).Width(GridLength{memoryPercentWidth, GridUnitType::Pixel});
+    }
+    for (TextBlock text : {g_uploadText, g_downloadText}) {
+        if (text) text.Visibility(settings.showNetwork ? Visibility::Visible : Visibility::Collapsed);
+    }
+    for (XamlRectangle bar : {g_ramTrack, g_ramFill, g_vramTrack, g_vramFill}) {
+        if (bar) bar.Visibility(settings.showGraphs ? Visibility::Visible : Visibility::Collapsed);
+    }
+    g_widget.Width(g_widgetWidth);
     g_widget.Height(kWidgetHeight);
     if (g_widgetHost) {
-        g_widgetHost.Width(settings.width);
+        g_widgetHost.Width(g_widgetWidth);
         g_widgetHost.Height(WidgetHeightForTaskbar(
             g_rootGrid ? g_rootGrid.ActualHeight() : 0.0));
         g_widgetHost.Margin(
@@ -3880,7 +3932,7 @@ void ApplyReservedSpace(const ModSettings& settings) {
                L"the new base");
     }
     g_reservedMargin = settings.reserveSpace
-                           ? WeatherAwareLeftOffset(settings) + settings.width +
+                           ? WeatherAwareLeftOffset(settings) + g_widgetWidth +
                                  settings.reserveGap
                            : 0.0;
     margin.Left = baseLeft + g_reservedMargin;
@@ -3921,7 +3973,7 @@ void ApplyWidgetSettings() {
     for (TextBlock value : {g_cpuUsageText, g_cpuTempText, g_gpuUsageText,
                             g_gpuTempText, g_ramPercentText,
                             g_ramCapacityText, g_vramPercentText,
-                            g_vramCapacityText}) {
+                            g_vramCapacityText, g_uploadText, g_downloadText}) {
         ApplyTextStyle(value, false, settings);
     }
 
@@ -3959,6 +4011,8 @@ void UpdateWidgetText(bool force = false) {
     if (g_widgetHost) {
         auto layoutSettings = CurrentSettings();
         double desiredLeft = WeatherAwareLeftOffset(*layoutSettings);
+        HWND taskbar = g_taskbarWindow.load();
+        if (taskbar) SetPropW(taskbar, L"WindhawkTaskbarSystemInfoRightDip", reinterpret_cast<HANDLE>(static_cast<INT_PTR>(std::ceil(desiredLeft + g_widgetWidth))));
         auto margin = g_widgetHost.Margin();
         if (std::abs(margin.Left - desiredLeft) > 0.01) {
             margin.Left = desiredLeft;
@@ -4036,6 +4090,14 @@ void UpdateWidgetText(bool force = false) {
     SetTextIfChanged(g_vramCapacityText,
                      FormatCapacity(snapshot.vramUsedGb, snapshot.vramTotalGb,
                                     snapshot.vramAvailable));
+
+    SetTextIfChanged(g_uploadText, FormatNetworkSpeed(snapshot.uploadBps, snapshot.networkAvailable, true));
+    SetTextIfChanged(g_downloadText, FormatNetworkSpeed(snapshot.downloadBps, snapshot.networkAvailable, false));
+    ApplyWidgetGeometry(settings);
+    ApplyReservedSpace(settings);
+    if (HWND taskbar = g_taskbarWindow.load()) {
+        SetPropW(taskbar, L"WindhawkTaskbarSystemInfoRightDip", reinterpret_cast<HANDLE>(static_cast<INT_PTR>(std::ceil(WeatherAwareLeftOffset(settings) + g_widgetWidth))));
+    }
 
     if (hasNewSample) {
         for (const MetricsSnapshot& newSnapshot : newSnapshots) {
@@ -4250,7 +4312,8 @@ Grid CreateComputeRow(PCWSTR label,
                       TextBlock& labelText,
                       TextBlock& usageText,
                       TextBlock& temperatureText,
-                      XamlPath& graph) {
+                      XamlPath& graph,
+                      TextBlock& networkText) {
     Grid row;
     row.Height(kRowHeight);
     row.IsHitTestVisible(false);
@@ -4258,6 +4321,7 @@ Grid CreateComputeRow(PCWSTR label,
     row.ColumnDefinitions().Append(PixelColumn(kMetricLabelWidth));
     row.ColumnDefinitions().Append(PixelColumn(kMetricUsageWidth));
     row.ColumnDefinitions().Append(PixelColumn(kMetricTempWidth));
+    row.ColumnDefinitions().Append(PixelColumn(0));
     ColumnDefinition graphColumn;
     graphColumn.Width(GridLength{1, GridUnitType::Star});
     row.ColumnDefinitions().Append(graphColumn);
@@ -4267,12 +4331,12 @@ Grid CreateComputeRow(PCWSTR label,
     labelText.Text(label);
 
     std::wstring usageName = std::wstring(prefix) + L"Usage";
-    usageText = CreateCellText(usageName.c_str(), TextAlignment::Right);
+    usageText = CreateCellText(usageName.c_str(), TextAlignment::Left);
     usageText.Text(L"--%");
 
     std::wstring temperatureName = std::wstring(prefix) + L"Temperature";
     temperatureText =
-        CreateCellText(temperatureName.c_str(), TextAlignment::Right);
+        CreateCellText(temperatureName.c_str(), TextAlignment::Left);
     temperatureText.Text(L"--°C");
 
     graph = XamlPath();
@@ -4286,7 +4350,11 @@ Grid CreateComputeRow(PCWSTR label,
     Grid::SetColumn(labelText, 0);
     Grid::SetColumn(usageText, 1);
     Grid::SetColumn(temperatureText, 2);
-    Grid::SetColumn(graph, 3);
+    networkText = CreateCellText((std::wstring(prefix) + L"Network").c_str(), TextAlignment::Left);
+    networkText.Text(label == std::wstring_view(L"CPU") ? L"↑ -- B/s" : L"↓ -- B/s");
+    Grid::SetColumn(networkText, 3);
+    row.Children().Append(networkText);
+    Grid::SetColumn(graph, 4);
     row.Children().Append(labelText);
     row.Children().Append(usageText);
     row.Children().Append(temperatureText);
@@ -4420,6 +4488,12 @@ bool RemoveWidget() {
     g_ramFill = nullptr;
     g_vramTrack = nullptr;
     g_vramFill = nullptr;
+    g_cpuRow = nullptr;
+    g_gpuRow = nullptr;
+    g_ramRow = nullptr;
+    g_vramRow = nullptr;
+    g_uploadText = nullptr;
+    g_downloadText = nullptr;
     g_leftColumn = nullptr;
     g_gapColumn = nullptr;
     g_rightColumn = nullptr;
@@ -4517,10 +4591,10 @@ bool InjectWidget(FrameworkElement taskbarFrame) {
     leftPanel.RowDefinitions().Append(PixelRow(kRowGap));
     leftPanel.RowDefinitions().Append(PixelRow(kRowHeight));
 
-    Grid cpuRow = CreateComputeRow(L"CPU", L"Cpu", g_cpuLabel,
-                                   g_cpuUsageText, g_cpuTempText, g_cpuGraph);
-    Grid gpuRow = CreateComputeRow(L"GPU", L"Gpu", g_gpuLabel,
-                                   g_gpuUsageText, g_gpuTempText, g_gpuGraph);
+    Grid cpuRow = g_cpuRow = CreateComputeRow(L"CPU", L"Cpu", g_cpuLabel,
+                                   g_cpuUsageText, g_cpuTempText, g_cpuGraph, g_uploadText);
+    Grid gpuRow = g_gpuRow = CreateComputeRow(L"GPU", L"Gpu", g_gpuLabel,
+                                   g_gpuUsageText, g_gpuTempText, g_gpuGraph, g_downloadText);
     Grid::SetRow(cpuRow, 0);
     Grid::SetRow(gpuRow, 2);
     leftPanel.Children().Append(cpuRow);
@@ -4532,10 +4606,10 @@ bool InjectWidget(FrameworkElement taskbarFrame) {
     rightPanel.RowDefinitions().Append(PixelRow(kRowGap));
     rightPanel.RowDefinitions().Append(PixelRow(kRowHeight));
 
-    Grid ramRow = CreateMemoryRow(L"RAM", L"Ram", g_ramLabel,
+    Grid ramRow = g_ramRow = CreateMemoryRow(L"RAM", L"Ram", g_ramLabel,
                                   g_ramPercentText, g_ramCapacityText,
                                   g_ramTrack, g_ramFill);
-    Grid vramRow = CreateMemoryRow(L"VRAM", L"Vram", g_vramLabel,
+    Grid vramRow = g_vramRow = CreateMemoryRow(L"VRAM", L"Vram", g_vramLabel,
                                    g_vramPercentText, g_vramCapacityText,
                                    g_vramTrack, g_vramFill);
     Grid::SetRow(ramRow, 0);
@@ -5903,6 +5977,7 @@ void Wh_ModSettingsChanged() {
 }
 
 void Wh_ModBeforeUninit() {
+    if (HWND taskbar = g_taskbarWindow.load()) RemovePropW(taskbar, L"WindhawkTaskbarSystemInfoRightDip");
     Wh_Log(L">");
     g_unloading = true;
     StopPlacementRetryWorker();

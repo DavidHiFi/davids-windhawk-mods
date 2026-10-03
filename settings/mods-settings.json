@@ -519,7 +519,9 @@
     "gpuTempSensor": "",
     "monitor": 1,
     "adaptiveColors": 1,
-    "gpuMemoryMode": "auto"
+    "gpuMemoryMode": "auto",
+    "showGraphs": 0,
+    "showNetwork": 1
   },
   "local@taskbar-weather": {
     "fontSize": 11,
