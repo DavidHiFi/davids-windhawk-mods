@@ -4,7 +4,7 @@
 // @name:uk-UA      Системний монітор панелі завдань
 // @description     Compact CPU, GPU, temperatures, stacked network speeds, RAM and VRAM with optional graphs and a custom font.
 // @description:uk-UA Компактний монітор CPU, GPU, RAM і VRAM із 60-секундними графіками для панелі завдань Windows 11.
-// @version         1.1.0
+// @version         1.2.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-system-info-weather
@@ -65,8 +65,13 @@ CPU 10% 72°C ↑ 1.2 MB/s [optional graph]   RAM  52% 16.7/32G
 GPU  4% 56°C ↓ 8.4 MB/s [optional graph]   VRAM  9%  2.1/24G
 ```
 
-Save **Show graphs** to turn history traces and memory bars on or off.
-Graphs are off by default and leave no reserved space when hidden.
+**Spacing between items** applies one gap to all fields. The default is 8 pixels.
+**Show CPU/GPU graphs** controls the first pair of history lines and defaults to off.
+**Show RAM/VRAM graphs** controls the separate lines after the gigabyte readings
+and defaults to on. **Show RAM/VRAM capacity bars** independently controls the
+original thin filled bars beneath the readings and defaults to on.
+Both pairs use the selected history duration. Memory lines show usage from
+zero to full capacity, equivalent to the used/total gigabytes beside them.
 **Show network speeds** controls the stacked network readings.
 **Font family** accepts any installed Windows font name. Empty uses
 Segoe UI Variable Text. Saving remeasures the layout with that font.
@@ -286,9 +291,21 @@ Released under GPL-3.0.
   $description: "Metric refresh interval, from 1 to 10 seconds. One second is recommended for quick monitoring; a longer interval reduces wakeups."
   $description:uk-UA: "Інтервал від 1 до 10 секунд. Для оперативного моніторингу рекомендована 1 секунда; більший інтервал зменшує кількість оновлень."
 
-- showGraphs: false
-  $name: Show graphs
-  $description: "Show CPU/GPU history graphs and RAM/VRAM capacity bars. Turning this off removes their space."
+- itemGap: 8
+  $name: Spacing between items
+  $description: "One gap for all labels, values, network readings and graphs, from 0 to 24 logical pixels."
+
+- showComputeGraphs: false
+  $name: Show CPU/GPU graphs
+  $description: "Show the two history graphs after the upload/download readings."
+
+- showMemoryGraphs: true
+  $name: Show RAM/VRAM graphs
+  $description: "Show separate history line graphs after the RAM/VRAM gigabyte readings. These do not draw behind the text."
+
+- showMemoryBars: true
+  $name: Show RAM/VRAM capacity bars
+  $description: "Show the original thin filled bars underneath the RAM/VRAM readings. Each fills from empty to full capacity."
 
 - showNetwork: true
   $name: Show network speeds
@@ -580,7 +597,10 @@ struct ModSettings {
         ThermalZoneAggregation::Average;
     GpuMemoryMode gpuMemoryMode = GpuMemoryMode::Auto;
     int width = 0;
-    bool showGraphs = false;
+    int itemGap = 8;
+    bool showComputeGraphs = false;
+    bool showMemoryGraphs = true;
+    bool showMemoryBars = true;
     bool showNetwork = true;
     int leftOffset = 10;
     int monitor = 1;
@@ -655,6 +675,8 @@ std::optional<std::list<FrameworkElement::Loaded_revoker>> g_loadedRevokers{
 [[clang::no_destroy]] TextBlock g_vramCapacityText{nullptr};
 [[clang::no_destroy]] XamlPath g_cpuGraph{nullptr};
 [[clang::no_destroy]] XamlPath g_gpuGraph{nullptr};
+[[clang::no_destroy]] XamlPath g_ramGraph{nullptr};
+[[clang::no_destroy]] XamlPath g_vramGraph{nullptr};
 [[clang::no_destroy]] XamlRectangle g_ramTrack{nullptr};
 [[clang::no_destroy]] XamlRectangle g_ramFill{nullptr};
 [[clang::no_destroy]] XamlRectangle g_vramTrack{nullptr};
@@ -689,6 +711,8 @@ struct HistorySample {
 
 std::deque<HistorySample> g_cpuHistory;
 std::deque<HistorySample> g_gpuHistory;
+std::deque<HistorySample> g_ramHistory;
+std::deque<HistorySample> g_vramHistory;
 int g_historyInterval = 0;
 int g_historyWindow = 0;
 
@@ -808,7 +832,10 @@ GpuMemoryMode ParseGpuMemoryMode(const std::wstring& value) {
 
 void LoadSettings() {
     ModSettings settings;
-    settings.showGraphs = Wh_GetIntSetting(L"showGraphs") != 0;
+    settings.itemGap = std::clamp(Wh_GetIntSetting(L"itemGap"), 0, 24);
+    settings.showComputeGraphs = Wh_GetIntSetting(L"showComputeGraphs") != 0;
+    settings.showMemoryGraphs = Wh_GetIntSetting(L"showMemoryGraphs") != 0;
+    settings.showMemoryBars = Wh_GetIntSetting(L"showMemoryBars") != 0;
     settings.showNetwork = Wh_GetIntSetting(L"showNetwork") != 0;
     settings.fontFamily = GetStringSetting(L"fontFamily");
     settings.textColor = GetStringSetting(L"textColor");
@@ -3481,7 +3508,7 @@ Color ColorFromColorRef(COLORREF value) {
 }
 
 void ApplyCachedBrushesToVisuals() {
-    for (XamlPath graph : {g_cpuGraph, g_gpuGraph}) {
+    for (XamlPath graph : {g_cpuGraph, g_gpuGraph, g_ramGraph, g_vramGraph}) {
         if (graph) {
             graph.Stroke(g_graphBrush);
         }
@@ -3534,7 +3561,7 @@ void ApplyThemeOpacities(const ModSettings& settings) {
             value.Opacity(opacities.value);
         }
     }
-    for (XamlPath graph : {g_cpuGraph, g_gpuGraph}) {
+    for (XamlPath graph : {g_cpuGraph, g_gpuGraph, g_ramGraph, g_vramGraph}) {
         if (graph) {
             graph.Opacity(opacities.graph);
         }
@@ -3699,11 +3726,12 @@ SparklineRuns BuildSparklineRuns(const std::deque<HistorySample>& history,
 
 void UpdateSparkline(XamlPath graph,
                      const std::deque<HistorySample>& history,
-                     const ModSettings& settings) {
+                     const ModSettings& settings,
+                     bool enabled) {
     if (!graph) {
         return;
     }
-    if (!settings.showGraphs) {
+    if (!enabled) {
         graph.Visibility(Visibility::Collapsed);
         return;
     }
@@ -3752,11 +3780,12 @@ void UpdateSparkline(XamlPath graph,
 void UpdateMemoryBar(XamlRectangle fill,
                      double percent,
                      bool available,
-                     AlertLevel alert) {
+                     AlertLevel alert,
+                     double barWidth) {
     if (!fill) {
         return;
     }
-    fill.Width(available ? g_memoryBarWidth *
+    fill.Width(available ? barWidth *
                                std::clamp(percent, 0.0, 100.0) / 100.0
                          : 0.0);
     fill.Fill(AlertBrush(alert));
@@ -3852,39 +3881,65 @@ void ApplyWidgetGeometry(const ModSettings& settings) {
         probe.Measure(Size{10000, 100});
         return std::ceil(static_cast<double>(probe.DesiredSize().Width));
     };
-    auto pairWidth = [&](TextBlock a, TextBlock b, double fallback) {
-        return a && b ? std::max(measure(a.Text().c_str()), measure(b.Text().c_str())) : fallback;
+    double gap = settings.itemGap;
+    g_graphWidth = 48;
+    auto valueWidth = [&](TextBlock text) {
+        return text ? measure(text.Text().c_str()) : 0.0;
     };
-    double labelWidth = measure(L"CPU", true) + 4;
-    double usageWidth = pairWidth(g_cpuUsageText, g_gpuUsageText, 30) + 4;
-    double tempWidth = pairWidth(g_cpuTempText, g_gpuTempText, 35) + 6;
-    // Keep the network column stable when its unit or number of digits changes.
-    double networkWidth = settings.showNetwork
-        ? std::max(measure(L"↑ 999.9 MB/s"), pairWidth(g_uploadText, g_downloadText, 80)) + 6 : 0;
-    double memoryLabelWidth = measure(L"VRAM", true) + 4;
-    double memoryPercentWidth = measure(L"100%") + 4;
-    double rightWidth = std::max(145.0, memoryLabelWidth + memoryPercentWidth + measure(L"999.9/999G"));
-    double computeWidth = labelWidth + usageWidth + tempWidth + networkWidth;
-    double minimumWidth = computeWidth + kColumnGap + rightWidth + (settings.showGraphs ? 48 : 0);
-    g_widgetWidth = std::max(static_cast<double>(settings.width), minimumWidth);
-    double leftWidth = settings.showGraphs ? g_widgetWidth - kColumnGap - rightWidth : computeWidth;
-    g_graphWidth = settings.showGraphs ? std::max(24.0, leftWidth - computeWidth - kGraphLeftGap) : 0;
-    g_memoryBarWidth = rightWidth;
-    for (Grid row : {g_cpuRow, g_gpuRow}) {
-        if (!row) continue;
-        const double widths[] = {labelWidth, usageWidth, tempWidth, networkWidth};
-        for (int i = 0; i < 4; ++i) row.ColumnDefinitions().GetAt(i).Width(GridLength{widths[i], GridUnitType::Pixel});
-    }
-    for (Grid row : {g_ramRow, g_vramRow}) {
-        if (!row) continue;
-        row.ColumnDefinitions().GetAt(0).Width(GridLength{memoryLabelWidth, GridUnitType::Pixel});
-        row.ColumnDefinitions().GetAt(1).Width(GridLength{memoryPercentWidth, GridUnitType::Pixel});
-    }
+    auto computeRowWidth = [&](Grid row, TextBlock label, TextBlock usage,
+                               TextBlock temperature, TextBlock network) {
+        if (!row) return 0.0;
+        double networkWidth = settings.showNetwork ? gap + valueWidth(network) : 0;
+        const double widths[] = {measure(label.Text().c_str(), true) + gap,
+                                 valueWidth(usage) + gap, valueWidth(temperature), networkWidth};
+        double width = 0;
+        for (int i = 0; i < 4; ++i) {
+            row.ColumnDefinitions().GetAt(i).Width(GridLength{widths[i], GridUnitType::Pixel});
+            width += widths[i];
+        }
+        width += settings.showComputeGraphs ? gap + g_graphWidth : 0;
+        row.Width(width);
+        row.HorizontalAlignment(HorizontalAlignment::Left);
+        return width;
+    };
+    double cpuWidth = computeRowWidth(g_cpuRow, g_cpuLabel, g_cpuUsageText, g_cpuTempText, g_uploadText);
+    double gpuWidth = computeRowWidth(g_gpuRow, g_gpuLabel, g_gpuUsageText, g_gpuTempText, g_downloadText);
+    double leftWidth = std::max(cpuWidth, gpuWidth);
+    auto memoryRowWidth = [&](Grid row, TextBlock label, TextBlock percent,
+                              TextBlock capacity, double computeWidth) {
+        if (!row) return 0.0;
+        const double widths[] = {measure(label.Text().c_str(), true) + gap,
+                                 valueWidth(percent) + gap, valueWidth(capacity),
+                                 settings.showMemoryGraphs ? gap + g_graphWidth : 0};
+        double width = 0;
+        for (int i = 0; i < 4; ++i) {
+            row.ColumnDefinitions().GetAt(i).Width(GridLength{widths[i], GridUnitType::Pixel});
+            width += widths[i];
+        }
+        // Follow this row's network value, without reserving the other row's
+        // unused text width. Every visible field gets exactly the same gap.
+        row.Margin(Thickness{computeWidth-leftWidth,0,0,0});
+        row.Width(width);
+        row.HorizontalAlignment(HorizontalAlignment::Left);
+        return width;
+    };
+    double ramWidth = memoryRowWidth(g_ramRow,g_ramLabel,g_ramPercentText,g_ramCapacityText,cpuWidth);
+    double vramWidth = memoryRowWidth(g_vramRow,g_vramLabel,g_vramPercentText,g_vramCapacityText,gpuWidth);
+    double contentWidth = std::max(cpuWidth + gap + ramWidth, gpuWidth + gap + vramWidth);
+    g_widgetWidth = std::max(static_cast<double>(settings.width), contentWidth);
+    double rightWidth = contentWidth - leftWidth - gap;
+    double graphSpace = settings.showMemoryGraphs ? gap + g_graphWidth : 0;
+    g_memoryBarWidth = std::max(ramWidth,vramWidth) - graphSpace;
+    if (g_ramTrack) g_ramTrack.Width(ramWidth-graphSpace);
+    if (g_vramTrack) g_vramTrack.Width(vramWidth-graphSpace);
     for (TextBlock text : {g_uploadText, g_downloadText}) {
-        if (text) text.Visibility(settings.showNetwork ? Visibility::Visible : Visibility::Collapsed);
+        if (text) {
+            text.Visibility(settings.showNetwork ? Visibility::Visible : Visibility::Collapsed);
+            text.Margin(Thickness{gap,0,0,0});
+        }
     }
     for (XamlRectangle bar : {g_ramTrack, g_ramFill, g_vramTrack, g_vramFill}) {
-        if (bar) bar.Visibility(settings.showGraphs ? Visibility::Visible : Visibility::Collapsed);
+        if (bar) bar.Visibility(settings.showMemoryBars ? Visibility::Visible : Visibility::Collapsed);
     }
     g_widget.Width(g_widgetWidth);
     g_widget.Height(kWidgetHeight);
@@ -3899,20 +3954,16 @@ void ApplyWidgetGeometry(const ModSettings& settings) {
         g_leftColumn.Width(GridLength{leftWidth, GridUnitType::Pixel});
     }
     if (g_gapColumn) {
-        g_gapColumn.Width(GridLength{kColumnGap, GridUnitType::Pixel});
+        g_gapColumn.Width(GridLength{static_cast<double>(settings.itemGap), GridUnitType::Pixel});
     }
     if (g_rightColumn) {
         g_rightColumn.Width(GridLength{rightWidth, GridUnitType::Pixel});
     }
-    for (XamlPath graph : {g_cpuGraph, g_gpuGraph}) {
+    for (XamlPath graph : {g_cpuGraph, g_gpuGraph, g_ramGraph, g_vramGraph}) {
         if (graph) {
+            graph.Margin(Thickness{static_cast<double>(settings.itemGap),0,0,0});
             graph.Width(g_graphWidth);
             graph.Height(kGraphHeight);
-        }
-    }
-    for (XamlRectangle track : {g_ramTrack, g_vramTrack}) {
-        if (track) {
-            track.Width(g_memoryBarWidth);
         }
     }
 }
@@ -3957,6 +4008,8 @@ void ApplyWidgetSettings() {
         g_historyWindow != settings.historySeconds) {
         g_cpuHistory.clear();
         g_gpuHistory.clear();
+    g_ramHistory.clear();
+    g_vramHistory.clear();
         g_historyInterval = settings.updateInterval;
         g_historyWindow = settings.historySeconds;
     }
@@ -3977,7 +4030,7 @@ void ApplyWidgetSettings() {
         ApplyTextStyle(value, false, settings);
     }
 
-    for (XamlPath graph : {g_cpuGraph, g_gpuGraph}) {
+    for (XamlPath graph : {g_cpuGraph, g_gpuGraph, g_ramGraph, g_vramGraph}) {
         if (graph) {
             graph.Stroke(g_graphBrush);
             graph.StrokeThickness(1.25);
@@ -3997,8 +4050,10 @@ void ApplyWidgetSettings() {
         }
     }
 
-    UpdateSparkline(g_cpuGraph, g_cpuHistory, settings);
-    UpdateSparkline(g_gpuGraph, g_gpuHistory, settings);
+    UpdateSparkline(g_cpuGraph, g_cpuHistory, settings, settings.showComputeGraphs);
+    UpdateSparkline(g_gpuGraph, g_gpuHistory, settings, settings.showComputeGraphs);
+    UpdateSparkline(g_ramGraph, g_ramHistory, settings, settings.showMemoryGraphs);
+    UpdateSparkline(g_vramGraph, g_vramHistory, settings, settings.showMemoryGraphs);
     ApplyReservedSpace(settings);
 
     UpdateTimerInterval();
@@ -4107,15 +4162,22 @@ void UpdateWidgetText(bool force = false) {
             ApplyHistorySample(g_gpuHistory, newSnapshot.gpuAvailable,
                                newSnapshot.gpu, newSnapshot.capturedAt,
                                settings.historySeconds);
+            ApplyHistorySample(g_ramHistory, newSnapshot.ramAvailable,
+                               newSnapshot.ram, newSnapshot.capturedAt, settings.historySeconds);
+            ApplyHistorySample(g_vramHistory, newSnapshot.vramAvailable,
+                               newSnapshot.vram, newSnapshot.capturedAt, settings.historySeconds);
         }
-        UpdateSparkline(g_cpuGraph, g_cpuHistory, settings);
-        UpdateSparkline(g_gpuGraph, g_gpuHistory, settings);
+        UpdateSparkline(g_cpuGraph, g_cpuHistory, settings, settings.showComputeGraphs);
+        UpdateSparkline(g_gpuGraph, g_gpuHistory, settings, settings.showComputeGraphs);
+    UpdateSparkline(g_ramGraph, g_ramHistory, settings, settings.showMemoryGraphs);
+    UpdateSparkline(g_vramGraph, g_vramHistory, settings, settings.showMemoryGraphs);
         g_lastRenderedMetricsSequence = metricsSequence;
         UpdateTimerInterval();
     }
-    UpdateMemoryBar(g_ramFill, snapshot.ram, snapshot.ramAvailable, g_ramAlert);
+    UpdateMemoryBar(g_ramFill, snapshot.ram, snapshot.ramAvailable, g_ramAlert,
+                    g_ramTrack ? g_ramTrack.Width() : 0);
     UpdateMemoryBar(g_vramFill, snapshot.vram, snapshot.vramAvailable,
-                    g_vramAlert);
+                    g_vramAlert, g_vramTrack ? g_vramTrack.Width() : 0);
 }
 
 void EnsureConfiguredTaskbarPlacement();
@@ -4368,7 +4430,8 @@ Grid CreateMemoryRow(PCWSTR label,
                      TextBlock& percentText,
                      TextBlock& capacityText,
                      XamlRectangle& track,
-                     XamlRectangle& fill) {
+                     XamlRectangle& fill,
+                     XamlPath& graph) {
     Grid row;
     row.Height(kRowHeight);
     row.IsHitTestVisible(false);
@@ -4378,6 +4441,7 @@ Grid CreateMemoryRow(PCWSTR label,
     ColumnDefinition capacityColumn;
     capacityColumn.Width(GridLength{1, GridUnitType::Star});
     row.ColumnDefinitions().Append(capacityColumn);
+    row.ColumnDefinitions().Append(PixelColumn(0));
 
     track = XamlRectangle();
     track.Name((std::wstring(prefix) + L"Track").c_str());
@@ -4402,11 +4466,11 @@ Grid CreateMemoryRow(PCWSTR label,
     labelText.Text(label);
 
     std::wstring percentName = std::wstring(prefix) + L"Percent";
-    percentText = CreateCellText(percentName.c_str(), TextAlignment::Right);
+    percentText = CreateCellText(percentName.c_str(), TextAlignment::Left);
     percentText.Text(L"--%");
 
     std::wstring capacityName = std::wstring(prefix) + L"Capacity";
-    capacityText = CreateCellText(capacityName.c_str(), TextAlignment::Right);
+    capacityText = CreateCellText(capacityName.c_str(), TextAlignment::Left);
     capacityText.Text(L"--/--G");
 
     Grid::SetColumnSpan(track, 3);
@@ -4419,6 +4483,14 @@ Grid CreateMemoryRow(PCWSTR label,
     row.Children().Append(labelText);
     row.Children().Append(percentText);
     row.Children().Append(capacityText);
+    graph = XamlPath();
+    graph.Name((std::wstring(prefix) + L"History").c_str());
+    graph.HorizontalAlignment(HorizontalAlignment::Left);
+    graph.VerticalAlignment(VerticalAlignment::Center);
+    graph.Stretch(Stretch::None);
+    graph.IsHitTestVisible(false);
+    Grid::SetColumn(graph,3);
+    row.Children().Append(graph);
     return row;
 }
 
@@ -4484,6 +4556,8 @@ bool RemoveWidget() {
     g_vramCapacityText = nullptr;
     g_cpuGraph = nullptr;
     g_gpuGraph = nullptr;
+    g_ramGraph = nullptr;
+    g_vramGraph = nullptr;
     g_ramTrack = nullptr;
     g_ramFill = nullptr;
     g_vramTrack = nullptr;
@@ -4509,6 +4583,8 @@ bool RemoveWidget() {
     g_cachedWindowTextColor = CLR_INVALID;
     g_cpuHistory.clear();
     g_gpuHistory.clear();
+    g_ramHistory.clear();
+    g_vramHistory.clear();
     g_lastRenderedMetricsSequence = 0;
     g_cpuTemperatureAlert = AlertLevel::Normal;
     g_gpuTemperatureAlert = AlertLevel::Normal;
@@ -4608,10 +4684,10 @@ bool InjectWidget(FrameworkElement taskbarFrame) {
 
     Grid ramRow = g_ramRow = CreateMemoryRow(L"RAM", L"Ram", g_ramLabel,
                                   g_ramPercentText, g_ramCapacityText,
-                                  g_ramTrack, g_ramFill);
+                                  g_ramTrack, g_ramFill, g_ramGraph);
     Grid vramRow = g_vramRow = CreateMemoryRow(L"VRAM", L"Vram", g_vramLabel,
                                    g_vramPercentText, g_vramCapacityText,
-                                   g_vramTrack, g_vramFill);
+                                   g_vramTrack, g_vramFill, g_vramGraph);
     Grid::SetRow(ramRow, 0);
     Grid::SetRow(vramRow, 2);
     rightPanel.Children().Append(ramRow);
