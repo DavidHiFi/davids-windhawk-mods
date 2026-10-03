@@ -452,4 +452,3 @@ void Wh_ModUninit() {
     CloseHandle(stopEvent);CloseHandle(refreshEvent);GdiplusShutdown(graphicsToken);
 }
 BOOL Wh_ModSettingsChanged(BOOL* reload) { *reload=TRUE; return TRUE; }
-
