@@ -1069,7 +1069,7 @@ void FlushSettingsIssues() {
     if (g_settingsIssues.empty()) return;
 
     std::wstring body =
-        L"Tourne'Table found something worth flagging in your settings.\r\n\r\n"
+        L"Taskbar Audio Visualizer found something worth flagging in your settings.\r\n\r\n"
         L"Anything listed as \"you typed / expected\" couldn't be read at all, so a fallback "
         L"value is being used -- the setting is saved, it just isn't doing anything. Anything "
         L"else is a heads-up about a setting that works exactly as configured but may not do "
@@ -2617,7 +2617,7 @@ void StartVizCaptureThread() {
     g_captureRunning.store(true);
     g_captureThread = new std::thread(VizCaptureThreadProc);
     HANDLE hCaptureThread = g_captureThread->native_handle();
-    SetThreadDescription(hCaptureThread, L"DavidsAudioVisualizer-Capture");
+    SetThreadDescription(hCaptureThread, L"TaskbarAudioVisualizer-Capture");
 }
 
 void StopVizCaptureThread() {
@@ -3716,7 +3716,7 @@ void InitInputHooks() {
     g_inputHookThread = CreateThread(nullptr, 0, InputHookThreadProc, nullptr, 0,
                                      &g_inputHookThreadId);
     if (g_inputHookThread) {
-        SetThreadDescription(g_inputHookThread, L"TourneTable-InputHooks");
+        SetThreadDescription(g_inputHookThread, L"TaskbarAudioVisualizer-InputHooks");
     }
 }
 
@@ -4989,7 +4989,7 @@ void StartRenderThread() {
     g_renderThreadRunning.store(true, std::memory_order_relaxed);
     g_renderThread = new std::thread(RenderThreadProc);
     HANDLE hRenderThread = g_renderThread->native_handle();
-    SetThreadDescription(hRenderThread, L"DavidsAudioVisualizer-Render");
+    SetThreadDescription(hRenderThread, L"TaskbarAudioVisualizer-Render");
 }
 
 void StopRenderThread() {
@@ -5217,7 +5217,7 @@ LRESULT CALLBACK CapturePickerWndProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
 void UpdateCapturePicker() {
     if(!g_messageWnd || !g_drawRectValid.load()) return;
     if(!g_capturePickerWnd) {
-        WNDCLASSW wc{}; wc.lpfnWndProc=CapturePickerWndProc; wc.hInstance=GetCurrentModuleHandle();wc.lpszClassName=L"DavidsAudioVisualizerCapturePicker";
+        WNDCLASSW wc{}; wc.lpfnWndProc=CapturePickerWndProc; wc.hInstance=GetCurrentModuleHandle();wc.lpszClassName=L"TaskbarAudioVisualizerCapturePicker";
         wc.hCursor=LoadCursor(nullptr,IDC_ARROW);
         RegisterClassW(&wc);
         g_capturePickerWnd=CreateWindowExW(WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_TOPMOST,wc.lpszClassName,L"Visualizer capture device",WS_POPUP,0,0,1,1,MainTaskbar(),nullptr,wc.hInstance,nullptr);
