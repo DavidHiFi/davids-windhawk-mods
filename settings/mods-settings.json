@@ -2224,5 +2224,11 @@
     "AdvancedMode.Stiffness": 6,
     "AdvancedMode.Drag": 90,
     "AdvancedMode.MoveFactor": 10
+  },
+  "local@windhawk-styler": {
+    "backgroundColor": "#1e1e2e",
+    "fontFamily": "FiraCode Nerd Font",
+    "opacity": 50,
+    "acrylic": 1
   }
 }

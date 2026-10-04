@@ -775,5 +775,12 @@
     "exclude": "",
     "architecture": "amd64",
     "version": "0.115"
+  },
+  "local@windhawk-styler": {
+    "disabled": false,
+    "include": "windhawk.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.0.0"
   }
 }
