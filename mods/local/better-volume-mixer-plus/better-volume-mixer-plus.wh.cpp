@@ -1,7 +1,7 @@
 // ==WindhawkMod==
-// @id           local@better-volume-mixer-plus
+// @id           better-volume-mixer-plus
 // @name         Better Volume Mixer Plus
-// @description  Per-app volume plus output and input device routing from the system tray
+// @description  A compact tray volume mixer with per-app volume and per-app output and input devices
 // @version      1.0.0
 // @author       DavidHiFi
 // @github       https://github.com/DavidHiFi
@@ -15,63 +15,40 @@
 /*
 # Better Volume Mixer Plus
 
-Fork of [Better Volume Mixer](https://github.com/0Allu/better-volume-mixer) by
-0Allu, maintained by [DavidHiFi](https://github.com/DavidHiFi). Upstream is
-unchanged apart from the additions below; the original MIT licence and credits
-apply.
+A compact volume mixer in the system tray, with per-app volume and per-app
+audio devices. Better Volume Mixer, plus device routing.
 
-A compact volume mixer for Windows 11. Control master volume, individual apps,
-and playback devices directly from the system tray.
-
-## Added in this fork
-
-* **Per-app output and input device routing.** Right-click any app row and pick
-  **Output device** or **Input device** to send just that app to another
-  playback or recording device, or back to the system default. This is the same
-  per-app routing Windows exposes under Settings &gt; System &gt; Sound &gt;
-  Volume mixer, and the same mechanism EarTrumpet uses.
-* Fork metadata credits DavidHiFi and links to
-  [github.com/DavidHiFi](https://github.com/DavidHiFi).
-
-Everything else behaves like upstream.
-
-![Better Volume Mixer demo](https://raw.githubusercontent.com/0Allu/better-volume-mixer/main/assets/volume-mixer-demo.png)
-
-Click the speaker icon in the system tray to open or close the mixer. If it is
-hidden, open the tray overflow menu and drag the icon onto the taskbar.
+![Better Volume Mixer Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/better-volume-mixer-plus.png)
 
 ## Features
 
-* Master and per-app volume controls
-* Quick playback device switching
-* Mute buttons and middle-click mute
-* Muted master-volume indicator in the mixer and tray
-* Middle-click the tray icon to toggle master mute
-* Mouse-wheel volume adjustment
-* Exact volume entry
-* Keyboard controls
-* Pin apps to the top of the mixer
-* Right-click an app to copy its process name or hide it temporarily
-* Open the classic Sound control panel from the tray menu
-* Custom app names and default volumes
-* Hide selected applications
-* Full-name tooltips for shortened app and device names
-* Compact mode
-* Light, dark, and system themes
-* Background transparency, blur, and animations
-* Configurable apps per page
+- **Send any app to a different speaker or microphone.** Right-click an app,
+  then pick **Output device** or **Input device**. Pick **Default** to undo it.
+- **Master and per-app volume** with mute buttons, scroll-wheel control and
+  exact values.
+- **Quick playback device switching** from the top of the mixer.
+- **Pin, rename or hide apps**, and give apps a default volume.
+- **Middle-click to mute**, in the mixer or on the tray icon.
+- **Light, dark and system themes** with blur, transparency and animations.
+- **Compact mode** and full keyboard control.
 
-Temporary hides last until the mod restarts. To undo them sooner, right-click
-the tray icon and choose **Restore temporarily hidden sources**. Hiding a source
-does not mute it.
+## How to use
 
-Most appearance and behavior options can be changed from the mod settings.
+Click the speaker icon in the tray to open or close the mixer. If it is hidden,
+open the tray overflow and drag it onto the taskbar.
 
-## Hide the Windows volume icon
+Per-app devices use the same setting as Windows' own volume mixer, so they
+work like EarTrumpet's and survive restarts.
 
-To avoid having two volume icons, install
+To avoid two volume icons, install
 [Taskbar tray system icon tweaks](https://windhawk.net/mods/taskbar-tray-system-icon-tweaks)
-and enable **Hide volume icon** in its settings.
+and turn on **Hide volume icon**. Disable the original Better Volume Mixer
+before enabling this mod.
+
+## Credits
+
+Based on [Better Volume Mixer](https://windhawk.net/mods/better-volume-mixer)
+by 0Allu. MIT.
 */
 // ==/WindhawkModReadme==
 

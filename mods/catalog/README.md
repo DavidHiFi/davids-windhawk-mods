@@ -4,13 +4,14 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 
 | Mod | Author | Version | Runs | License |
 | --- | --- | --- | --- | --- |
+| [acrylic-color-glows](./acrylic-color-glows.wh.cpp) | [HaVeN80](https://github.com/haven80) | 0.4.2 | yes | GPL-3.0 |
 | [alt-drag](./alt-drag.wh.cpp) | [m417z](https://github.com/m417z) | 1.1 | no |  |
 | [always-allow-ctrl-shift-enter](./always-allow-ctrl-shift-enter.wh.cpp) | [aubymori](https://github.com/aubymori) | 1.0.0 | yes | BSD-3-Clause |
 | [always-on-top](./always-on-top.wh.cpp) | [AhmedAwad7](https://github.com/AhmedAwad7) | 1.2 | yes | MIT |
 | [auto-time-sync-on-startup](./auto-time-sync-on-startup.wh.cpp) | [communism420](https://github.com/communism420) | 1.1 | yes |  |
 | [better-dialogs](./better-dialogs.wh.cpp) | [FireBlade](https://github.com/FireBlade211) | 1.1 | yes |  |
 | [better-volume-mixer](./better-volume-mixer.wh.cpp) | [0Allu](https://github.com/0Allu) | 1.4.5 | no | MIT |
-| [cef-titlebar-enabler-universal](./cef-titlebar-enabler-universal.wh.cpp) | [Ingan121](https://github.com/Ingan121) | 1.8 | yes |  |
+| [cef-titlebar-enabler-universal](./cef-titlebar-enabler-universal.wh.cpp) | [Ingan121](https://github.com/Ingan121) | 1.9 | yes | MIT |
 | [clipboard-history-upgrade](./clipboard-history-upgrade.wh.cpp) | [SwiftExplorer567](https://github.com/SwiftExplorer567) | 1.3.2 | yes |  |
 | [compact-start-menu](./compact-start-menu.wh.cpp) | [Asteski](https://github.com/Asteski) | 1.0.0 | yes |  |
 | [context-menu-preloader](./context-menu-preloader.wh.cpp) | [Lockframe](https://github.com/Lockframe) | 1.0 | yes |  |

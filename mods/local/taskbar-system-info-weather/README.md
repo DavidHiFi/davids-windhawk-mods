@@ -1,27 +1,74 @@
-# Taskbar System Info with Weather
+# Taskbar System Info Plus
 
-GPL-3.0 fork of [Yevhenii Starychenko's Taskbar System Info](https://github.com/starychenko/windhawk-taskbar-system-info). Upstream credits and license notices remain in the source.
+A compact hardware monitor on the taskbar: CPU, GPU, memory, temperatures and
+network speed at a glance. Taskbar System Info, plus network speeds and a
+tighter layout.
 
-Paste [taskbar-system-info-weather.wh.cpp](taskbar-system-info-weather.wh.cpp) into Windhawk's **Create new mod** editor, compile and enable it. Disable the original **Taskbar System Info** to avoid duplicate monitors.
+![Taskbar System Info Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/taskbar-system-info-weather.png)
 
-With [Independent Taskbar Weather](../taskbar-weather) enabled, this monitor starts six DIP after the weather's visible right edge and follows changes in width. Without weather it uses its configured left offset. Windows 11 x64.
+```text
+CPU 10% 72°C ↑ 1.2 MB/s   RAM  52% 16.7/32G
+GPU  4% 56°C ↓ 8.4 MB/s   VRAM  9%  2.1/24G
+```
 
-Version 1.2.3 keeps CPU/GPU, network and memory readings in shared columns. Network arrows align on the left; numbers and units align on the right in separate columns. The unit column ends exactly one configured gap before RAM/VRAM when CPU/GPU graphs are off. Memory labels, percentages and graphs remain vertically aligned and stationary as readings change. RAM and VRAM gigabyte readings align to the right of their shared capacity column, so their totals and G suffixes end at the same position. Network readings use the existing metrics worker, so the separate Network Speed Indicator mod is unnecessary.
+## Features
 
-- **Spacing between items** applies one gap to all labels, readings and graphs, including the boundary before RAM/VRAM. The default is 8 logical pixels. The range is 0 to 24.
-- **Show CPU/GPU graphs** controls the first pair of history lines after network speeds. The default is off.
-- **Show RAM/VRAM graphs** controls the history lines after the gigabyte readings. The default is on. These lines show usage from empty to full capacity over the configured history duration.
-- **Show RAM/VRAM capacity bars** controls the original thin rectangles beneath the memory readings. The default is on. Each bar fills according to current used/total capacity. This switch is independent of both history-line switches.
-- **Show network speeds** turns upload and download readings on or off. The default is on.
-- **Font family** accepts any installed Windows font name. Save to apply it. Empty uses Segoe UI Variable Text. Labels and values remeasure with the font.
-- **Widget width** at 0 fits the measured columns. A positive value sets a minimum width. Memory columns reserve the space needed for 100% and each device's full capacity. Column positions change when the font, gap, graph settings or device capacity changes, rather than following every live reading.
+- **CPU and GPU** load and temperature.
+- **RAM and VRAM** usage with used and total gigabytes, plus capacity bars.
+- **Upload and download speed** from your real network adapters. Virtual
+  adapters and VPN tunnels are skipped so nothing is counted twice.
+- **Optional graphs** of recent history for CPU/GPU and RAM/VRAM.
+- **Warning colors** when temperatures or memory get high.
+- **Any font, any monitor.** Pick an installed font and the taskbar to show it
+  on; the width fits the content automatically.
+- **Light, dark and high-contrast** taskbars are followed automatically.
+- **Plays well with Taskbar Weather.** With it enabled, the panel sits right
+  after the weather.
 
-Network rates use local 64-bit byte counters and actual elapsed time from active physical Ethernet and Wi-Fi adapters. Virtual adapters, tunnels and loopback are excluded to avoid duplicate counts. New adapters and reset counters need one baseline sample. Missing readings show `-- B/s`, while idle rates show `0 B/s`. Units are decimal B/s, KB/s, MB/s, GB/s and TB/s. No network requests are made.
+## Temperatures
 
-Your existing temperature providers, colors, refresh interval and font settings remain available. David's Audio Visualizer follows the panel's measured right edge. The original System Info and separate Network Speed Indicator should stay disabled to avoid duplicate widgets.
+The default **Automatic** source uses the first one that works:
 
-Build and live checks on Windows 11 with Windhawk 1.7.3 covered all four history-graph combinations, the independent capacity-bar switch, gaps of 4, 8 and 12 pixels, changing the font and the network toggle. Explorer stayed running throughout. Counter tests covered elapsed time, idle traffic, counter resets, adapter changes, filtering, failed API calls and unit formatting. Reboot, sleep and other display scales were not tested for this revision.
+1. **HWiNFO Shared Memory** - in HWiNFO, open **Settings** and enable
+   **Shared Memory Support**.
+2. **HWiNFO Gadget** - in HWiNFO's **Sensor Settings > HWiNFO Gadget**, turn on
+   **Report to Gadget** for the CPU and GPU temperatures.
+3. **Windows** - the GPU driver for the GPU temperature, and ACPI thermal zones
+   for the CPU. These need no extra software, but a thermal zone is not always
+   the CPU package sensor.
 
-Run `python tests/test_network.py` on Windows with Windhawk's bundled compiler installed to repeat the counter tests. The test compiles the collector and formatter directly from this mod's source, supplies controlled interface samples, and writes generated files under `tests/output`. `--output-dir` selects another output directory.
+HWiNFO is optional and runs fine in Sensors-only mode. The free edition stops
+Shared Memory after 12 hours; the Gadget option or HWiNFO Pro avoid that. A
+missing reading shows as `--°C` and everything else keeps working.
 
-Disable this fork and re-enable the original monitor to undo it. No Explorer restart is required.
+## Troubleshooting
+
+- **Wrong GPU:** set **GPU adapter filter** to part of the card's name. Use the
+  HWiNFO sensor filters only if the temperature is still wrong.
+- **VRAM shows `--` after a driver update:** give it a minute, then reload the
+  mod if it stays empty.
+- **Integrated GPU memory looks too large:** Automatic shows the Windows shared
+  limit. Set **GPU memory type** to Dedicated for the reserved amount.
+- **The panel overlaps taskbar buttons:** adjust **Left offset**, or turn on
+  **Reserve space before the Start button**.
+
+Disable the original Taskbar System Info and Network Speed Indicator to avoid
+duplicates.
+
+## Credits
+
+Based on [Taskbar System Info](https://windhawk.net/mods/taskbar-system-info)
+by Yevhenii Starychenko. Network readouts are inspired by Taskbar Network Speed
+Indicator by Narayan. Taskbar discovery follows
+[Multirow taskbar](https://windhawk.net/mods/taskbar-multirow) and the GPU
+temperature code follows Taskbar Clock Customization, both by m417z.
+Secondary-taskbar support is adapted from
+[Taskbar Fluent Media Player](https://github.com/Salyts/Taskbar-Fluent-Media-Player)
+by Salyts. GPL-3.0.
+
+## Install
+
+1. Install [Windhawk](https://windhawk.net/).
+2. Choose **Create a new mod**, paste [taskbar-system-info-weather.wh.cpp](taskbar-system-info-weather.wh.cpp) and click **Compile**.
+
+License: GPL-3.0.

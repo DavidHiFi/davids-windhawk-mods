@@ -1,24 +1,39 @@
-# Independent taskbar weather
+# Taskbar Weather
 
-Version 1.4.0 centers the Celsius temperature above the condition beside the weather icon. The taskbar text uses an available semibold font face, with a bold fallback. The widget measures the wider line so the adjacent stats move left automatically. Loading and unavailable messages remain on one line. The taskbar text is drawn with DirectWrite, the same text engine as the taskbar system info, using symmetric grayscale smoothing and whole-pixel baselines. GDI+ text looked thin and jagged at this size. The hover highlight has an inset inside the taskbar, while the forecast card opens outside the taskbar as before.
+The current weather on the left side of the taskbar, with a details card when
+you hover over it. It works on its own, without Windows Widgets.
 
-Native weather for the primary Windows 11 taskbar, with a rounded dark hover card, automatic updates and saved readings. Uses [Open-Meteo](https://open-meteo.com/) weather data over HTTPS. No Windows Widgets, Edge, WebView or API key is required.
+![Taskbar Weather preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/taskbar-weather.png)
+
+## Features
+
+- **Weather icon, temperature and conditions** on the taskbar, updated every
+  ten minutes by default.
+- **Hover card** with the feels-like temperature, today's high and low,
+  humidity and wind.
+- **Click to refresh** at any time.
+- **No Widgets, MSN, Edge or location permission.** Data comes from
+  Open-Meteo, with no account or API key.
+- **Adjustable** position, width, font and size, in Catppuccin Mocha colors.
+
+## Setup
+
+Open the settings and enter your town's **latitude** and **longitude** (in most
+map apps, right-click a place to copy them). Add a **place name** to show it in
+the hover card. The coordinates are saved locally and sent to Open-Meteo with each request.
+Internet access is required; Open-Meteo also receives your IP address.
+
+Temperatures are in Celsius. If a request fails, the last reading stays and
+the mod retries a minute later; readings older than 30 minutes are marked in
+the card. Turn off Windows Widgets to avoid a second weather button.
+
+## Credits
+
+Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). MIT.
 
 ## Install
 
-1. Install Windhawk and choose **Create new mod**.
-2. Paste [taskbar-weather.wh.cpp](taskbar-weather.wh.cpp), then compile and enable it.
-3. In Settings, enter your town center's latitude and longitude. Optionally enter a town name for the hover card. Coordinates ship empty and remain in your local settings.
-4. Disable Windows Widgets in Windows taskbar settings if it occupies the same space.
+1. Install [Windhawk](https://windhawk.net/).
+2. Choose **Create a new mod**, paste [taskbar-weather.wh.cpp](taskbar-weather.wh.cpp) and click **Compile**.
 
-Click the weather to refresh. It normally updates every ten minutes, retries failed requests after one minute, refreshes on resume, and recreates its taskbar child if Windows replaces it. A saved reading remains visible during temporary network failures; readings older than thirty minutes are marked stale. The mod shows a setup prompt until coordinates are entered.
-
-The card shows Celsius temperature, conditions, feels-like temperature, today's high and low, humidity, wind and the reading time. Open-Meteo provides modeled weather for the chosen coordinates; it can differ from a phone app using another provider or observation time. Free endpoint use is subject to [Open-Meteo's terms](https://open-meteo.com/en/terms).
-
-For a neatly adjacent performance monitor, install [Taskbar System Info with Weather](../taskbar-system-info-weather). The monitor follows the weather's visible right edge with a shared configurable gap. Width and left offset are configurable. Primary taskbar only; Windows 11 x64.
-
-## Validation and removal
-
-Built with Windhawk 1.7.3. The 1.4.0 DirectWrite text and hover layout passed an x64 build and live verification at 96 DPI. The stacked Clear reading reduced the widget width by 39 DIP, and the stats and visualizer followed it without restarting Explorer. Tested taskbar child recreation, resume notification refresh, timed refresh, cached readings after a network error and automatic retry. A full reboot and physical sleep cycle have not been tested in this release.
-
-Disable or remove the mod in Windhawk to undo it. No Explorer restart is required. MIT license.
+License: MIT.

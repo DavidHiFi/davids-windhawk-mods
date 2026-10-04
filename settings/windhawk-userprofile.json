@@ -32,8 +32,8 @@
       "version": "1.4.5"
     },
     "cef-titlebar-enabler-universal": {
-      "latestVersion": "1.8",
-      "version": "1.8"
+      "version": "1.9",
+      "latestVersion": "1.9"
     },
     "clipboard-history-upgrade": {
       "latestVersion": "1.3.2",
@@ -88,8 +88,8 @@
       "version": "1.0"
     },
     "enhanced-disk-usage": {
-      "version": "1.2.0",
-      "latestVersion": "1.2.0"
+      "latestVersion": "1.2.0",
+      "version": "1.2.0"
     },
     "explorer-context-menu-classic": {
       "latestVersion": "1.0.2",
@@ -108,9 +108,9 @@
       "version": "4"
     },
     "explorer-folder-bookmarks-bar": {
+      "disabled": true,
       "latestVersion": "0.7.8",
-      "version": "0.7.8",
-      "disabled": true
+      "version": "0.7.8"
     },
     "explorer-font-changer": {
       "disabled": true,
@@ -174,17 +174,26 @@
       "version": "1.0"
     },
     "move-window-to-monitor": {
+      "disabled": true,
       "latestVersion": "1.1.0",
-      "version": "1.1.0",
-      "disabled": true
+      "version": "1.1.0"
     },
     "mspaint-dark": {
       "latestVersion": "1.0.1",
       "version": "1.0.1"
     },
+    "net-speed-taskbar": {
+      "disabled": true,
+      "latestVersion": "1.6",
+      "version": "1.6"
+    },
     "notepad-dark-mode": {
       "latestVersion": "1.0",
       "version": "1.0"
+    },
+    "notifications-placement": {
+      "latestVersion": "1.2.4",
+      "version": "1.2.4"
     },
     "npp-taskdlg-textcolor": {
       "disabled": false,
@@ -243,9 +252,9 @@
       "version": "1.0.2"
     },
     "snap-commander": {
+      "disabled": true,
       "latestVersion": "1.0.0",
-      "version": "1.0.0",
-      "disabled": true
+      "version": "1.0.0"
     },
     "start-menu-open-real-file-location": {
       "latestVersion": "1.1.0",
@@ -281,17 +290,21 @@
       "version": "1.0.9"
     },
     "taskbar-clock-customization": {
-      "version": "1.8.1",
-      "latestVersion": "1.8.1"
+      "latestVersion": "1.8.1",
+      "version": "1.8.1"
     },
     "taskbar-dock-animation-plus": {
       "latestVersion": "2.0.1",
       "version": "2.0.1"
     },
     "taskbar-fluent-media-player": {
+      "disabled": true,
       "latestVersion": "1.6.0",
-      "version": "1.6.0",
-      "disabled": true
+      "version": "1.6.0"
+    },
+    "taskbar-icon-separators": {
+      "latestVersion": "1.0.33",
+      "version": "1.0.33"
     },
     "taskbar-icon-size": {
       "latestVersion": "1.3.10",
@@ -301,14 +314,22 @@
       "latestVersion": "1.4",
       "version": "1.4"
     },
+    "taskbar-on-top": {
+      "latestVersion": "1.2",
+      "version": "1.2"
+    },
     "taskbar-restart-explorer": {
       "latestVersion": "1.0",
       "version": "1.0"
     },
     "taskbar-system-info": {
+      "disabled": true,
       "latestVersion": "1.5.0",
-      "version": "1.5.0",
-      "disabled": true
+      "version": "1.5.0"
+    },
+    "taskbar-thumbnail-stats": {
+      "latestVersion": "1.2",
+      "version": "1.2"
     },
     "taskbar-tray-system-icon-tweaks": {
       "latestVersion": "1.3",
@@ -323,12 +344,17 @@
       "version": "1.0"
     },
     "titlebar-for-everyone": {
-      "version": "0.5",
-      "latestVersion": "0.5"
+      "latestVersion": "0.5",
+      "version": "0.5"
     },
     "toggle-hidden-files": {
       "latestVersion": "1.0.0",
       "version": "1.0.0"
+    },
+    "tourne-table-desktop-audio-visualizer": {
+      "disabled": true,
+      "latestVersion": "1.3.0",
+      "version": "1.3.0"
     },
     "translucent-windows": {
       "latestVersion": "1.8.2",
@@ -351,10 +377,10 @@
       "version": "1.0.0"
     },
     "win32-ui-modernizer": {
-      "version": "1.0.3",
+      "disabled": true,
       "latestVersion": "1.0.3",
       "rating": 5,
-      "disabled": true
+      "version": "1.0.3"
     },
     "windows-11-file-explorer-styler": {
       "latestVersion": "1.7",
@@ -388,31 +414,9 @@
       "latestVersion": "0.115",
       "version": "0.115"
     },
-    "taskbar-thumbnail-stats": {
-      "version": "1.2",
-      "latestVersion": "1.2"
-    },
-    "tourne-table-desktop-audio-visualizer": {
-      "version": "1.3.0",
-      "latestVersion": "1.3.0",
-      "disabled": true
-    },
-    "taskbar-on-top": {
-      "version": "1.2",
-      "latestVersion": "1.2"
-    },
-    "net-speed-taskbar": {
-      "version": "1.6",
-      "disabled": true,
-      "latestVersion": "1.6"
-    },
-    "taskbar-icon-separators": {
-      "version": "1.0.33",
-      "latestVersion": "1.0.33"
-    },
-    "notifications-placement": {
-      "version": "1.2.4",
-      "latestVersion": "1.2.4"
+    "acrylic-color-glows": {
+      "version": "0.4.2",
+      "latestVersion": "0.4.2"
     }
   },
   "os": "10.0.26200"

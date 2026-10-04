@@ -9,12 +9,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $compiler = "$WindhawkRoot\Compiler\bin\clang++.exe"
 $include = "$WindhawkRoot\Compiler\include"
-$source = "$PSScriptRoot\explorer-font-changer-davidhifi.wh.cpp"
+$source = "$PSScriptRoot\shell-font-changer.wh.cpp"
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
-Set-Content "$OutputDirectory\modid.h" '#define WH_MOD_ID L"local@explorer-font-changer-davidhifi"' -Encoding ascii
+Set-Content "$OutputDirectory\modid.h" '#define WH_MOD_ID L"local@shell-font-changer"' -Encoding ascii
 foreach ($arch in @('64','32')) {
     $target = if ($arch -eq '64') {'x86_64-w64-mingw32'} else {'i686-w64-mingw32'}
-    & $compiler '-std=c++23' '-O2' '-shared' '-target' $target '-DUNICODE' '-D_UNICODE' '-DWH_MOD' '-include' "$OutputDirectory\modid.h" '-include' 'windhawk_api.h' '-I' $include '-Wl,--export-all-symbols' $source "$WindhawkRoot\Engine\$EngineVersion\$arch\windhawk.lib" '-lgdi32' '-luxtheme' '-ldwrite' '-o' "$OutputDirectory\local@explorer-font-changer-davidhifi_1.0.1_1_$arch.dll"
+    & $compiler '-std=c++23' '-O2' '-shared' '-target' $target '-DUNICODE' '-D_UNICODE' '-DWH_MOD' '-include' "$OutputDirectory\modid.h" '-include' 'windhawk_api.h' '-I' $include '-Wl,--export-all-symbols' $source "$WindhawkRoot\Engine\$EngineVersion\$arch\windhawk.lib" '-lgdi32' '-luxtheme' '-ldwrite' '-o' "$OutputDirectory\local@shell-font-changer_1.1.0_1_$arch.dll"
     if ($LASTEXITCODE) {throw "Build failed for $arch"}
 }
 if ($Test) {

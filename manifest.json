@@ -1,14 +1,26 @@
 {
   "name": "davids-windhawk-mods",
-  "description": "David's full Windhawk setup: every mod source, every setting.",
-  "generatedAt": "2026-10-03T13:35:30+08:00",
+  "description": "A full Windhawk setup: every mod source and every setting.",
+  "generatedAt": "2026-10-04T21:57:22+08:00",
   "windhawkVersion": "1.7.3",
   "counts": {
-    "mods": 109,
-    "enabled": 95,
+    "mods": 110,
+    "enabled": 96,
     "local": 11
   },
   "mods": [
+    {
+      "id": "acrylic-color-glows",
+      "name": "Acrylic Color Glows",
+      "author": "HaVeN80",
+      "github": "https://github.com/haven80",
+      "version": "0.4.2",
+      "license": "GPL-3.0",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/acrylic-color-glows",
+      "source": "mods/catalog/acrylic-color-glows.wh.cpp",
+      "enabled": true
+    },
     {
       "id": "alt-drag",
       "name": "AltDrag",
@@ -86,8 +98,8 @@
       "name": "CEF/Spotify Tweaks",
       "author": "Ingan121",
       "github": "https://github.com/Ingan121",
-      "version": "1.8",
-      "license": "",
+      "version": "1.9",
+      "license": "MIT",
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/cef-titlebar-enabler-universal",
       "source": "mods/catalog/cef-titlebar-enabler-universal.wh.cpp",
@@ -336,7 +348,7 @@
     {
       "id": "explorer-hide-focus-border",
       "name": "File Explorer Focus Border Remover",
-      "author": "H\u00f9ng",
+      "author": "Hùng",
       "github": "https://github.com/NoMorePlz",
       "version": "1.0.0",
       "license": "MIT",
@@ -491,7 +503,7 @@
     },
     {
       "id": "local@alt-snap-drag",
-      "name": "AltSnap Drag",
+      "name": "AltSnap",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
       "version": "1.2.2",
@@ -514,44 +526,20 @@
       "enabled": true
     },
     {
-      "id": "local@david-window-pack",
-      "name": "David's Window Pack",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.0",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/david-window-pack/david-window-pack.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@davids-audio-visualizer",
-      "name": "David's Audio Visualizer",
+      "id": "local@shell-font-changer",
+      "name": "Shell Font Changer",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
       "version": "1.1.0",
       "license": "MIT",
       "origin": "local",
-      "upstream": "https://github.com/USER-TOURNE/TOURNE-TABLE",
-      "source": "mods/local/davids-audio-visualizer/davids-audio-visualizer.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@explorer-font-changer-davidhifi",
-      "name": "Explorer Font Changer by DavidHiFi",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi/davids-windhawk-mods",
-      "version": "1.0.1",
-      "license": "MIT",
-      "origin": "local",
       "upstream": "https://windhawk.net/mods/explorer-font-changer",
-      "source": "mods/local/explorer-font-changer-davidhifi/explorer-font-changer-davidhifi.wh.cpp",
+      "source": "mods/local/shell-font-changer/shell-font-changer.wh.cpp",
       "enabled": true
     },
     {
       "id": "local@taskbar-ai-quota-opencode",
-      "name": "Taskbar AI Quota Bars - OpenCode Fork",
+      "name": "Taskbar AI Quota Bars Plus",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
       "version": "1.6.5.1",
@@ -562,20 +550,32 @@
       "enabled": true
     },
     {
+      "id": "local@taskbar-audio-visualizer",
+      "name": "Taskbar Audio Visualizer",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.2.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/tourne-table-desktop-audio-visualizer",
+      "source": "mods/local/taskbar-audio-visualizer/taskbar-audio-visualizer.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "local@taskbar-system-info-weather",
-      "name": "Taskbar System Info with Weather",
+      "name": "Taskbar System Info Plus",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
       "version": "1.2.3",
       "license": "GPL-3.0",
       "origin": "local",
-      "upstream": "https://windhawk.net/mods/taskbar-system-info",
+      "upstream": "",
       "source": "mods/local/taskbar-system-info-weather/taskbar-system-info-weather.wh.cpp",
       "enabled": true
     },
     {
       "id": "local@taskbar-weather",
-      "name": "Independent Taskbar Weather",
+      "name": "Taskbar Weather",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
       "version": "1.4.0",
@@ -590,11 +590,23 @@
       "name": "Translucent Flyouts",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "0.6.1",
+      "version": "0.6.6",
       "license": "LGPL-3.0",
       "origin": "local",
       "upstream": "",
       "source": "mods/local/translucent-flyouts/translucent-flyouts.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@window-manager",
+      "name": "Window Manager",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.1.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/window-manager/window-manager.wh.cpp",
       "enabled": true
     },
     {
@@ -671,7 +683,7 @@
     },
     {
       "id": "npp-taskdlg-textcolor",
-      "name": "Notepad++ Save Dialog Text Color",
+      "name": "Notepad++ Dark Dialog Fix",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
       "version": "1.0.1",

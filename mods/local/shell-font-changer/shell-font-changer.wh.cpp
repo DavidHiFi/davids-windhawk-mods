@@ -1,10 +1,10 @@
 // ==WindhawkMod==
-// @id              explorer-font-changer-davidhifi
-// @name            Explorer Font Changer by DavidHiFi
-// @description     Change shell text fonts while preserving Windows icons and emoji.
-// @version         1.0.1
+// @id              shell-font-changer
+// @name            Shell Font Changer
+// @description     Use any font in Explorer, Start, Search and Settings without breaking icons or emoji
+// @version         1.1.0
 // @author          DavidHiFi
-// @github          https://github.com/DavidHiFi/davids-windhawk-mods
+// @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         MIT
 // @include         explorer.exe
@@ -18,32 +18,36 @@
 
 // ==WindhawkModReadme==
 /*
-# Explorer Font Changer by DavidHiFi
+# Shell Font Changer
 
-Fork of Explorer Font Changer 0.2 by Gabriela Cristei.
-Original: https://github.com/ramensoftware/windhawk-mods/blob/main/mods/explorer-font-changer.wh.cpp
+Replace the font used across File Explorer and the Windows shell with any font
+you have installed.
 
-Changes GDI, themed text, and DirectWrite layouts in Explorer and Windows shell
-hosts, Search, Start, and Settings. Symbol,
-icon, emoji, and private-use character runs keep their original fonts. Weights
-named in the face, such as Segoe UI Semibold, carry over to the new font.
-Invisible direction marks, such as the ones in Explorer dates, do not block
-substitution.
-GDI replacements restore the original selected font before deleting their handles.
-Settings changes request a mod reload, so drawing threads never read partially
-updated settings. No font substitution registry entries are written.
+![Shell Font Changer preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/shell-font-changer.png)
 
-Choose an installed family name, such as FiraCode Nerd Font. Empty or None
-disables substitution. Disable the original Explorer Font Changer before
-enabling this fork. Glow is omitted because the original undocumented glow
-path does not preserve DrawTextEx parameters or bounded text buffers.
+## Features
 
-Scope is the Windows shell by default. This does not promise to change text in every
-Windows application. XAML controls that set their own fonts after layout
-creation, Chromium, and applications outside the include list can keep their
-own fonts. Do not add active audio or communications applications to the list.
-Existing cached DirectWrite layouts may retain their fonts until recreated.
-Disabling the mod restores drawing hooks; existing UI caches may need to refresh.
+- **Changes text in File Explorer, Start, Search and Settings.**
+- **Icons and emoji stay intact.** Symbol and icon fonts keep their own
+  glyphs, so buttons never turn into empty boxes.
+- **Keeps font weights.** Semibold and bold text stays semibold and bold.
+- **Covers classic, themed and modern text**, including DirectWrite layouts.
+- **Nothing is written to the registry**, so turning it off is fully clean.
+
+## How to use
+
+Type an installed font family name in the settings, such as
+`FiraCode Nerd Font` or `Inter`. Leave it empty to turn the mod off.
+
+Some apps, such as Chromium browsers, draw text with their own fonts and keep
+them. Windows that were already open may need to be reopened.
+
+Disable the original Explorer Font Changer before enabling this mod.
+
+## Credits
+
+Based on [Explorer Font Changer](https://windhawk.net/mods/explorer-font-changer)
+by Gabriela Cristei. MIT.
 */
 // ==/WindhawkModReadme==
 
