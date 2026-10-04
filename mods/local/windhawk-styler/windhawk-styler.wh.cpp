@@ -1,46 +1,52 @@
 // ==WindhawkMod==
 // @id              windhawk-styler
 // @name            Windhawk Styler
-// @description     Change Windhawk's background color, font, transparency and acrylic blur
-// @version         1.0.0
+// @description     Theme Windhawk itself with your own colors, font, transparency and blur
+// @version         1.1.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         MIT
 // @include         windhawk.exe
-// @compilerOptions -luser32 -lshell32 -ldwmapi
+// @compilerOptions -luser32 -lshell32 -ldwmapi -lbcrypt
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
 /*
 # Windhawk Styler
 
-Give Windhawk a background color and font of your choice, with optional
-transparency and acrylic blur.
+Rice Windhawk like the rest of your desktop: pick its colors and font, and
+give it a see-through, blurred background.
 
 ![Windhawk Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-styler.png)
 
 ## Features
 
-- Choose a background color with a hex color such as `#1e1e2e`.
-- Choose an installed font for the interface. Icons keep their own font.
-- Adjust window opacity between 40 and 100 percent.
-- Turn acrylic blur on or off.
-- Disabling the mod removes its styles and restores the window opacity.
+- **Background.** Any color, with its own opacity. Text, cards and buttons
+  stay solid and sharp.
+- **Acrylic or blur.** Blur sits behind the background only, with rounded
+  window corners.
+- **Element colors.** Separate colors for mod cards and pages, for buttons,
+  inputs and menus, for the accent and for text.
+- **Font.** Any installed font across the interface. Icons keep their own font.
+- **Native title bar.** Swap Windhawk's title bar for the standard Windows
+  one, colored to match.
+- **Clean removal.** Disabling the mod restores every file it changed.
 
-## Setup
+## How to use
 
-Compile and enable the mod, then close and reopen the Windhawk window once.
-Save changes in the mod's Settings tab. Background and font changes refresh
-the main page after saving. The code editor keeps its own font setting.
+Set the options in the Settings tab and save. Windhawk closes and reopens
+its interface to apply background, font and title bar changes.
+
+Colors use `#RRGGBB`. Leave an element color blank to keep Windhawk's own.
 
 ## Notes
 
-Supports Windhawk's bundled VSCodium interface. The mod adds marked styles
-to its interface files, keeping a backup beside each file. A Windhawk update
-may require closing and reopening Windhawk to apply the styles again.
-Transparency affects text as well as the background. Acrylic uses Windows'
-fixed blur strength. Keep opacity high enough to read the text.
+The mod edits a few of Windhawk's interface files and keeps a backup beside
+each. After a Windhawk update, reopen Windhawk to apply the styles again.
+The mod editor's code area keeps its own font setting.
+The native title bar uses a solid background. Windhawk's bundled Electron
+version supports transparent backgrounds only with its custom title bar.
 */
 // ==/WindhawkModReadme==
 
@@ -48,27 +54,50 @@ fixed blur strength. Keep opacity high enough to read the text.
 /*
 - backgroundColor: "#1e1e2e"
   $name: Background color
-  $description: Hex color in #RRGGBB format
+  $description: Main background, in #RRGGBB format
+- backgroundOpacity: 60
+  $name: Background opacity
+  $description: 0 to 100 percent. Only the background turns see-through, never text or cards
+- blur: acrylic
+  $name: Background blur
+  $options:
+  - acrylic: Acrylic
+  - blur: Blur
+  - none: None
+- cardColor: "#181825"
+  $name: Card color
+  $description: Mod cards, mod pages and lists. Blank keeps Windhawk's color
+- cardOpacity: 100
+  $name: Card opacity
+  $description: 0 to 100 percent
+- controlColor: "#313244"
+  $name: Control color
+  $description: Buttons, inputs, menus and dialogs. Blank keeps Windhawk's color
+- accentColor: "#89b4fa"
+  $name: Accent color
+  $description: Selected buttons, switches, tabs and links. Blank keeps Windhawk's color
+- textColor: "#cdd6f4"
+  $name: Text color
+  $description: Blank keeps Windhawk's color
 - fontFamily: "Segoe UI"
-  $name: Font family
-  $description: An installed font name. Leave blank to use Windhawk's font.
-- opacity: 92
-  $name: Window opacity
-  $description: 40 to 100 percent. Transparency also affects text.
-- acrylic: true
-  $name: Acrylic blur
-  $description: Blur behind the window. Windows controls the blur strength.
+  $name: Font
+  $description: An installed font name. Blank keeps Windhawk's font
+- nativeTitleBar: false
+  $name: Native title bar
+  $description: Use the standard Windows title bar with a solid background
 */
 // ==/WindhawkModSettings==
 
 #include <windows.h>
 #include <shellapi.h>
 #include <dwmapi.h>
+#include <bcrypt.h>
+#include <tlhelp32.h>
 #include <string>
 #include <fstream>
 #include <filesystem>
 #include <mutex>
-#include <map>
+#include <set>
 #include <algorithm>
 
 namespace fs = std::filesystem;
@@ -76,192 +105,395 @@ static bool g_tool;
 static HANDLE g_stop, g_thread, g_mutex;
 static fs::path g_root;
 static std::mutex g_guard;
-static int g_opacity = 100;
-static bool g_acrylic;
-static DWORD g_color;
-static std::map<HWND, LONG_PTR> g_windows;
-static std::map<HWND, HWND> g_backdrops;
+static std::set<HWND> g_windows;
 static const std::string kBegin = "/* windhawk-styler begin */";
 static const std::string kEnd = "/* windhawk-styler end */";
 
+struct Style {
+    DWORD background = 0x1e1e2e;
+    int backgroundOpacity = 60, cardOpacity = 100;
+    int blur = 2;  // 0 none, 1 blur, 2 acrylic
+    std::string card, control, accent, text;  // "r,g,b" or empty
+    DWORD textRgb = 0xcdd6f4;
+    bool hasText = false, nativeTitleBar = false;
+    std::wstring font;
+    bool Transparent() const { return !nativeTitleBar && (backgroundOpacity < 100 || blur != 0); }
+};
+static Style g_style;
+
 static std::string Read(const fs::path& p) {
     std::ifstream f(p, std::ios::binary);
-    if (!f) throw std::runtime_error("Cannot read interface file");
+    if (!f) throw std::runtime_error("Cannot read " + p.filename().string());
     return {std::istreambuf_iterator<char>(f), {}};
 }
 static void Write(const fs::path& p, const std::string& s) {
     std::ofstream f(p, std::ios::binary | std::ios::trunc);
-    if (!f || !f.write(s.data(), s.size())) throw std::runtime_error("Cannot write interface file");
+    if (!f || !f.write(s.data(), s.size())) throw std::runtime_error("Cannot write " + p.filename().string());
 }
+static void Backup(const fs::path& p) {
+    fs::path bak = p.wstring() + L".windhawk-styler.bak";
+    if (!fs::exists(bak)) fs::copy_file(p, bak);
+}
+// Removes every marked block, including the HTML comment wrapper used in index.html.
 static std::string Strip(std::string s) {
-    auto a = s.find(kBegin);
-    if (a == std::string::npos) return s;
-    auto b = s.find(kEnd, a);
-    if (b == std::string::npos || s.find(kBegin, a + kBegin.size()) != std::string::npos)
-        throw std::runtime_error("Ambiguous style markers");
-    auto end = b + kEnd.size();
-    if (a >= 4 && s.substr(a - 4, 4) == "<!--" && s.substr(end, 3) == "-->") {
-        a -= 4; end += 3;
+    for (size_t a; (a = s.find(kBegin)) != std::string::npos;) {
+        auto b = s.find(kEnd, a);
+        if (b == std::string::npos) throw std::runtime_error("Unterminated style marker");
+        auto end = b + kEnd.size();
+        if (a >= 4 && s.compare(a - 4, 4, "<!--") == 0 && s.compare(end, 3, "-->") == 0) {
+            a -= 4; end += 3;
+        }
+        s.erase(a, end - a);
     }
-    s.erase(a, end - a);
     return s;
 }
-static void Patch(const fs::path& p, const std::string& block) {
-    auto old = Read(p), clean = Strip(old);
-    if (!fs::exists(p.wstring() + L".windhawk-styler.bak"))
-        fs::copy_file(p, p.wstring() + L".windhawk-styler.bak");
-    auto next = clean + block;
-    if (next != old) Write(p, next);
+static bool Changes(const fs::path& p, const std::string& next) { return Read(p) != next; }
+static void Store(const fs::path& p, const std::string& next) {
+    if (!Changes(p, next)) return;
+    Backup(p); Write(p, next);
 }
-static std::string Utf8(const std::wstring& s) {
-    int n = WideCharToMultiByte(CP_UTF8, 0, s.c_str(), s.size(), nullptr, 0, nullptr, nullptr);
-    std::string r(n, 0);
-    WideCharToMultiByte(CP_UTF8, 0, s.c_str(), s.size(), r.data(), n, nullptr, nullptr);
-    return r;
-}
+
 static std::wstring Setting(PCWSTR name) {
     auto p = Wh_GetStringSetting(name);
     std::wstring s = p ? p : L"";
     Wh_FreeStringSetting(p);
+    s.erase(0, s.find_first_not_of(L" \t"));
+    s.erase(s.find_last_not_of(L" \t") + 1);
     return s;
 }
+static bool Hex(const std::wstring& s, DWORD& rgb) {
+    if (s.size() != 7 || s[0] != L'#' ||
+        !std::all_of(s.begin() + 1, s.end(), [](wchar_t c) { return iswxdigit(c); }))
+        return false;
+    rgb = std::stoul(s.substr(1), nullptr, 16);
+    return true;
+}
+static std::string Rgb(DWORD c) {
+    return std::to_string(c >> 16) + "," + std::to_string((c >> 8) & 255) + "," + std::to_string(c & 255);
+}
+static std::string Color(PCWSTR name, DWORD* out = nullptr) {
+    DWORD c;
+    if (!Hex(Setting(name), c)) return "";
+    if (out) *out = c;
+    return Rgb(c);
+}
+static void LoadStyle() {
+    Style s;
+    Hex(Setting(L"backgroundColor"), s.background);
+    s.backgroundOpacity = std::clamp(Wh_GetIntSetting(L"backgroundOpacity"), 0, 100);
+    s.cardOpacity = std::clamp(Wh_GetIntSetting(L"cardOpacity"), 0, 100);
+    auto blur = Setting(L"blur");
+    s.blur = blur == L"none" ? 0 : blur == L"blur" ? 1 : 2;
+    s.card = Color(L"cardColor");
+    s.control = Color(L"controlColor");
+    s.accent = Color(L"accentColor");
+    s.text = Color(L"textColor", &s.textRgb);
+    s.hasText = !s.text.empty();
+    s.font = Setting(L"fontFamily");
+    s.nativeTitleBar = Wh_GetIntSetting(L"nativeTitleBar") != 0;
+    g_style = s;
+}
+
+static std::string Alpha(int percent) {
+    char b[8]; sprintf_s(b, "%.2f", percent / 100.0); return b;
+}
+// Encodes every font character as a CSS escape so a setting cannot add CSS or HTML.
+static std::string FontCss() {
+    std::string escaped;
+    for (wchar_t c : g_style.font) { char b[20]; sprintf_s(b, "\\%x ", unsigned(c)); escaped += b; }
+    return "\"" + escaped + "\",sans-serif";
+}
+static std::string AppCss() {
+    const auto& s = g_style;
+    auto bg = "rgba(" + Rgb(s.background) + "," + Alpha(s.nativeTitleBar ? 100 : s.backgroundOpacity) + ")";
+    std::string css =
+        "html{background:" + bg + "!important}body{background:transparent!important;"
+        "--app-background-color:" + bg + "!important}";
+    if (!s.font.empty())
+        css += "body,button,input,textarea,select,h1,h2,h3,h4,h5,.ant-typography,.ant-btn,.ant-input,"
+               ".ant-card,.ant-select,.ant-select-dropdown,.ant-tabs,.ant-list,.ant-menu,.ant-dropdown,"
+               ".ant-modal,.ant-tooltip,.ant-popover,.ant-radio-wrapper,.ant-checkbox-wrapper,.ant-alert,"
+               ".ant-message,.ant-notification,.ant-empty,.ant-table,.ant-collapse,.ant-tag,.ant-badge"
+               "{font-family:" + FontCss() + "!important}";
+    if (!s.card.empty()) {
+        auto card = "rgba(" + s.card + "," + Alpha(s.cardOpacity) + ")";
+        css += ".ant-card,.ant-collapse,.ant-table,.ant-list-bordered{background-color:" + card + "!important}"
+               ".ant-card-actions,.ant-collapse-content,.ant-table-thead>tr>th,.ant-table-tbody>tr>td,"
+               ".ant-table-placeholder,[class*=SyntaxHighlighterWrapper] pre,[class*=DiffWrapper] pre"
+               "{background:transparent!important}";
+    }
+    if (!s.control.empty()) {
+        auto inline_ = "rgba(" + s.control + "," + Alpha(std::max(s.cardOpacity, 50)) + ")";
+        auto solid = "rgb(" + s.control + ")";
+        css += ".ant-btn:not(.ant-btn-primary):not(.ant-btn-link):not(.ant-btn-text):not(.ant-btn-background-ghost),"
+               ".ant-input,.ant-input-affix-wrapper,.ant-input-number,.ant-picker,"
+               ".ant-select:not(.ant-select-customize-input) .ant-select-selector,"
+               ".ant-radio-button-wrapper:not(.ant-radio-button-wrapper-checked),"
+               "[class*=CreateNewModButton__CreateButton]{background-color:" + inline_ + "!important}"
+               ".ant-input-affix-wrapper .ant-input,.ant-input-number .ant-input-number-input"
+               "{background:transparent!important}"
+               ".ant-select-dropdown,.ant-dropdown-menu,.ant-modal-content,.ant-modal-header,"
+               ".ant-popover-inner,.ant-popover-arrow-content,.ant-tooltip-inner,.ant-tooltip-arrow-content,"
+               ".ant-message-notice-content,.ant-notification-notice,.ant-dropdown-menu-submenu-popup"
+               "{background-color:" + solid + "!important}"
+               ".ant-tooltip-arrow-content:before{background:" + solid + "!important}";
+    }
+    if (!s.accent.empty()) {
+        auto a = "rgb(" + s.accent + ")";
+        css += ".ant-btn-primary:not(.ant-btn-background-ghost),.ant-switch-checked,.ant-tabs-ink-bar,"
+               ".ant-slider-track,.ant-progress-bg,.ant-spin-dot-item,.ant-badge-count,"
+               ".ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled),"
+               ".ant-checkbox-checked .ant-checkbox-inner,.ant-radio-inner:after"
+               "{background-color:" + a + "!important;border-color:" + a + "!important}"
+               ".ant-btn-primary.ant-btn-background-ghost,.ant-btn:not(.ant-btn-primary):hover,"
+               ".ant-btn:not(.ant-btn-primary):focus,.ant-pagination-item-active,.ant-radio-checked .ant-radio-inner,"
+               ".ant-input:hover,.ant-input:focus,.ant-input-affix-wrapper:hover,.ant-input-affix-wrapper-focused,"
+               ".ant-select:hover .ant-select-selector,.ant-select-focused .ant-select-selector"
+               "{border-color:" + a + "!important}"
+               "a,.ant-btn-link,.ant-btn-primary.ant-btn-background-ghost,.ant-btn:not(.ant-btn-primary):hover,"
+               ".ant-btn:not(.ant-btn-primary):focus,.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn,"
+               ".ant-tabs-tab:hover,.ant-pagination-item-active a,.ant-typography a"
+               "{color:" + a + "!important}"
+               ".ant-btn-primary.ant-btn-background-ghost{background:transparent!important}";
+    }
+    if (s.hasText) {
+        auto t = "rgb(" + s.text + ")", dim = "rgba(" + s.text + ",.68)";
+        css += "body,h1,h2,h3,h4,h5,.ant-typography,.ant-card,.ant-card-head,.ant-card-head-title,"
+               ".ant-card-meta-title,.ant-list-item,.ant-list-item-meta-title,.ant-modal-title,.ant-modal-content,"
+               ".ant-collapse-header,.ant-tabs,.ant-tabs-tab-btn,.ant-select,.ant-select-item,.ant-dropdown-menu-item,"
+               ".ant-input,.ant-input-number-input,.ant-radio-button-wrapper,.ant-radio-wrapper,.ant-checkbox-wrapper,"
+               ".ant-btn:not(.ant-btn-primary):not(.ant-btn-link):not(.ant-btn-background-ghost),.ant-descriptions,"
+               ".ant-form-item-label>label,.ant-empty-description{color:" + t + "}"
+               ".ant-typography-secondary,.ant-card-meta-description,.ant-list-item-meta-description,"
+               "[class*=ModCard] .ant-card-body,.ant-input::placeholder{color:" + dim + "!important}";
+    }
+    return css;
+}
+static std::string WorkbenchCss() {
+    const auto& s = g_style;
+    auto bg = "rgba(" + Rgb(s.background) + "," + Alpha(s.nativeTitleBar ? 100 : s.backgroundOpacity) + ")";
+    std::string css =
+        "html,body,.monaco-workbench,.monaco-workbench .part,.monaco-workbench .part>.content,"
+        ".monaco-workbench .split-view-view,.monaco-workbench .monaco-grid-view,"
+        ".monaco-workbench .editor-group-container,.monaco-workbench .editor-container,"
+        ".monaco-workbench .webview{background:transparent!important}"
+        ".monaco-workbench .part.titlebar,.monaco-workbench .monaco-editor,"
+        ".monaco-workbench .monaco-editor-background,.monaco-workbench .monaco-editor .margin"
+        "{background-color:" + bg + "!important}";
+    if (s.hasText)
+        css += ".monaco-workbench .part.titlebar,.monaco-workbench .part.titlebar .window-icon"
+               "{color:rgb(" + s.text + ")!important}";
+    if (!s.font.empty())
+        css += ".monaco-workbench .part.titlebar .window-title,.monaco-workbench .part.titlebar .menubar"
+               "{font-family:" + FontCss() + "!important}";
+    return kBegin + css + kEnd;
+}
+
+// VSCodium checks its workbench files against product.json and warns when they differ.
+static std::string Md5Base64(const std::string& data) {
+    BCRYPT_ALG_HANDLE alg; UCHAR hash[16]; std::string r;
+    if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_MD5_ALGORITHM, nullptr, 0)) return r;
+    BCryptHash(alg, nullptr, 0, (PUCHAR)data.data(), ULONG(data.size()), hash, 16);
+    BCryptCloseAlgorithmProvider(alg, 0);
+    static const char* b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    for (int i = 0; i < 16; i += 3) {
+        unsigned v = hash[i] << 16 | (i + 1 < 16 ? hash[i + 1] << 8 : 0) | (i + 2 < 16 ? hash[i + 2] : 0);
+        for (int j = 0; j < 4 && i * 8 / 6 + j < 22; ++j) r += b64[(v >> (18 - 6 * j)) & 63];
+    }
+    return r;
+}
+static std::string Checksums(std::string product, const std::string& css) {
+    const std::string key = "\"vs/workbench/workbench.desktop.main.css\": \"";
+    auto a = product.find(key);
+    if (a == std::string::npos) return product;
+    a += key.size();
+    auto b = product.find('"', a);
+    auto sum = Md5Base64(css);
+    if (b != std::string::npos && !sum.empty()) product.replace(a, b - a, sum);
+    return product;
+}
+
+// Makes the main window transparent and stops VSCodium painting its theme color behind the page.
+static std::string MainJs(const std::string& clean) {
+    if (!g_style.Transparent()) return clean;
+    auto word = [](char c) { return isalnum((unsigned char)c) || c == '_' || c == '$'; };
+    std::string out = clean;
+    // The main window is the only one created from an options variable: new X.BrowserWindow(name)
+    size_t at = std::string::npos;
+    for (size_t p = 0; (p = out.find(".BrowserWindow(", p)) != std::string::npos; p += 15) {
+        size_t a = p + 15, b = a;
+        while (b < out.size() && word(out[b])) ++b;
+        if (b > a && b < out.size() && out[b] == ')' && p >= 5 && out.rfind("new ", p) != std::string::npos &&
+            out.rfind("new ", p) + 4 < p && std::all_of(out.begin() + out.rfind("new ", p) + 4, out.begin() + p, word)) {
+            if (at != std::string::npos) throw std::runtime_error("Window options are ambiguous");
+            at = a;
+        }
+    }
+    if (at == std::string::npos) throw std::runtime_error("Window options not found");
+    auto opts = out.substr(at, out.find(')', at) - at);
+    out.insert(at, kBegin + "Object.assign(" + opts + ",{transparent:!0,backgroundColor:\"#00000000\"})&&" + kEnd);
+    auto p = out.find("updateBackgroundColor(");
+    while (p != std::string::npos) {
+        auto brace = out.find(')', p);
+        if (brace != std::string::npos && brace + 1 < out.size() && out[brace + 1] == '{' && brace - p < 40) {
+            out.insert(brace + 2, kBegin + "return;" + kEnd);
+            break;
+        }
+        p = out.find("updateBackgroundColor(", p + 1);
+    }
+    return out;
+}
+static std::string SettingsJson(const std::string& clean) {
+    std::string keys;
+    if (g_style.nativeTitleBar) keys += "\"window.titleBarStyle\":\"native\",\"window.menuBarVisibility\":\"hidden\"";
+    else keys += "\"window.titleBarStyle\":\"custom\",\"window.experimental.windowControlsOverlay.enabled\":false";
+    if (keys.empty()) return clean;
+    auto close = clean.rfind('}');
+    if (close == std::string::npos) throw std::runtime_error("Unexpected settings file");
+    auto last = clean.find_last_not_of(" \t\r\n", close - 1);
+    bool comma = last != std::string::npos && clean[last] != '{' && clean[last] != ',';
+    auto at = last == std::string::npos ? close : last + 1;
+    return clean.substr(0, at) + kBegin + (comma ? "," : "") + keys + kEnd + clean.substr(at);
+}
+
+static bool OurProcess(DWORD pid) {
+    HANDLE p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!p) return false;
+    WCHAR path[MAX_PATH * 4]; DWORD n = ARRAYSIZE(path);
+    bool ours = QueryFullProcessImageNameW(p, 0, path, &n) &&
+        _wcsicmp(path, (g_root / L"UI" / L"VSCodium.exe").c_str()) == 0;
+    CloseHandle(p);
+    return ours;
+}
+static bool MainWindow(HWND h) {
+    WCHAR cls[64];
+    if (!GetClassNameW(h, cls, 64) || wcscmp(cls, L"Chrome_WidgetWin_1") || !IsWindowVisible(h) ||
+        GetWindow(h, GW_OWNER) || !(GetWindowLongPtrW(h, GWL_STYLE) & WS_MINIMIZEBOX))
+        return false;
+    DWORD pid; GetWindowThreadProcessId(h, &pid);
+    return OurProcess(pid);
+}
+static std::set<DWORD> UiProcesses() {
+    std::set<DWORD> r;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    PROCESSENTRY32W e{sizeof(e)};
+    for (BOOL ok = Process32FirstW(snap, &e); ok; ok = Process32NextW(snap, &e))
+        if (!_wcsicmp(e.szExeFile, L"VSCodium.exe") && OurProcess(e.th32ProcessID)) r.insert(e.th32ProcessID);
+    CloseHandle(snap);
+    return r;
+}
+// The interface process can outlive its window, so make sure all of it exits.
+static BOOL CALLBACK CloseWindow(HWND h, LPARAM) {
+    if (MainWindow(h)) PostMessageW(h, WM_CLOSE, 0, 0);
+    return TRUE;
+}
+static void StopUi() {
+    EnumWindows(CloseWindow, 0);
+    for (int i = 0; i < 40 && !UiProcesses().empty(); ++i) Sleep(100);
+    for (DWORD pid : UiProcesses())
+        if (HANDLE p = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, pid)) {
+            TerminateProcess(p, 0); WaitForSingleObject(p, 3000); CloseHandle(p);
+        }
+}
+static void StartUi() {
+    auto exe = g_root / L"windhawk.exe";
+    SHELLEXECUTEINFOW s{sizeof(s)}; s.fMask = SEE_MASK_FLAG_NO_UI;
+    s.lpFile = exe.c_str(); s.nShow = SW_SHOWNORMAL;
+    if (!ShellExecuteExW(&s)) Wh_Log(L"Reopen failed: %u", GetLastError());
+}
+
 static void ApplyFiles(bool remove = false) {
     auto app = g_root / L"UI/resources/app";
     auto html = app / L"extensions/windhawk/webview/index.html";
     auto ext = app / L"extensions/windhawk/dist/extension.js";
-    if (remove) {
-        Patch(html, ""); Patch(ext, "");
-        return;
+    auto workbench = app / L"out/vs/workbench/workbench.desktop.main.css";
+    auto product = app / L"product.json";
+    auto main = app / L"out/vs/code/electron-main/main.js";
+    WCHAR data[MAX_PATH];
+    fs::path settings = GetEnvironmentVariableW(L"ProgramData", data, MAX_PATH) ? fs::path(data) : fs::path(L"C:\\ProgramData");
+    settings /= L"Windhawk/UIData/user-data/User/settings.json";
+
+    auto cleanMain = Strip(Read(main));
+    auto nextMain = remove ? cleanMain : MainJs(cleanMain);
+    std::string nextSettings;
+    bool hasSettings = fs::exists(settings);
+    if (hasSettings) {
+        auto clean = Strip(Read(settings));
+        nextSettings = remove ? clean : SettingsJson(clean);
     }
-    auto color = Setting(L"backgroundColor"), font = Setting(L"fontFamily");
-    if (color.size() != 7 || color[0] != L'#' ||
-        !std::all_of(color.begin() + 1, color.end(), [](wchar_t c) { return iswxdigit(c); }))
-        color = L"#1e1e2e";
-    g_color = std::stoul(color.substr(1), nullptr, 16);
-    g_opacity = std::clamp(Wh_GetIntSetting(L"opacity"), 40, 100);
-    g_acrylic = Wh_GetIntSetting(L"acrylic") != 0;
-    // Encode every font character as a CSS escape so settings cannot add CSS or HTML.
-    std::string escaped;
-    for (wchar_t c : font) { char b[20]; sprintf_s(b, "\\%x ", unsigned(c)); escaped += b; }
-    std::string fontCss = font.empty() ? "" :
-        "body,button,input,textarea,select,.ant-typography,.ant-btn,.ant-input{font-family:\"" + escaped + "\",sans-serif!important;}";
-    auto css = "body{--app-background-color:" + Utf8(color) + "!important;}" + fontCss;
-    // A style element after the HTML remains valid in Chromium and avoids replacing stock tags.
-    Patch(html, "<!--" + kBegin + "--><style>" + css + "</style><!--" + kEnd + "-->");
-    // Refresh the Windhawk page only when this mod changes its HTML. Never interrupt editor mode.
+    // Window-level changes only apply to a freshly started interface.
+    auto cleanCss = Strip(Read(workbench));
+    auto nextCss = remove ? cleanCss : cleanCss + WorkbenchCss();
+    bool restart = Changes(main, nextMain) || Changes(workbench, nextCss) || (hasSettings && Changes(settings, nextSettings));
+    bool running = restart && !UiProcesses().empty();
+    if (running) StopUi();
+    Store(main, nextMain);
+    if (hasSettings) Store(settings, nextSettings);
+
+    Store(workbench, nextCss);
+    Store(product, Checksums(Read(product), nextCss));
+    auto cleanHtml = Strip(Read(html));
+    Store(html, remove ? cleanHtml : cleanHtml + "<!--" + kBegin + "--><style>" + AppCss() + "</style><!--" + kEnd + "-->");
+    // Refresh the page when its styles change and reload the window when the frame styles change.
     const std::string watcher = R"JS(
 ;(()=>{const fs=require('fs'),path=require('path'),v=require('vscode');
-const file=path.join(__dirname,'../webview/index.html');let timer;
-fs.watchFile(file,{interval:750,persistent:false},(a,b)=>{
-if(a.mtimeMs===b.mtimeMs)return;clearTimeout(timer);timer=setTimeout(()=>{
-if(!v.workspace.getConfiguration('windhawk').get('editedModId'))
-v.commands.executeCommand('windhawk.start');},1000);});})();
+const watch=(file,run)=>{let t;fs.watchFile(file,{interval:500,persistent:false},(a,b)=>{
+if(a.mtimeMs===b.mtimeMs)return;clearTimeout(t);t=setTimeout(run,700);});};
+let reloading=false;
+watch(path.join(__dirname,'../../../out/vs/workbench/workbench.desktop.main.css'),()=>{
+reloading=true;v.commands.executeCommand('workbench.action.reloadWindow');});
+watch(path.join(__dirname,'../webview/index.html'),()=>{setTimeout(()=>{
+if(!reloading&&!v.workspace.getConfiguration('windhawk').get('editedModId'))
+v.commands.executeCommand('windhawk.start');},400);});})();
 )JS";
-    Patch(ext, kBegin + watcher + kEnd);
+    auto cleanExt = Strip(Read(ext));
+    Store(ext, remove ? cleanExt : cleanExt + kBegin + watcher + kEnd);
+    if (running) StartUi();
 }
+
 struct Accent { int state, flags; DWORD color; int animation; };
 struct Composition { int attribute; void* data; SIZE_T size; };
 static void Effect(HWND h, bool reset) {
-    auto proc = reinterpret_cast<BOOL(WINAPI*)(HWND, Composition*)>(
+    static auto proc = reinterpret_cast<BOOL(WINAPI*)(HWND, Composition*)>(
         GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute"));
-    DWORD tint = ((g_color & 255) << 16) | (g_color & 0xff00) | (g_color >> 16) | 0xA0000000;
-    Accent accent{!reset && g_acrylic ? 4 : 0, 2, tint, 0};
+    const auto& s = g_style;
+    bool clear = reset || !s.Transparent();
+    DWORD c = s.background;
+    DWORD bgr = (c & 255) << 16 | (c & 0xff00) | c >> 16;
+    // The page paints the color; the tint stays light so the blur keeps its depth.
+    Accent accent{clear || !s.blur ? 0 : s.blur == 2 ? 4 : 3, 2, 0x10000000 | bgr, 0};
     Composition data{19, &accent, sizeof(accent)};
-    auto original = g_windows.at(h);
-    if (reset || g_opacity == 100) {
-        SetLayeredWindowAttributes(h, 0, 255, LWA_ALPHA);
-        SetWindowLongPtrW(h, GWL_EXSTYLE, original);
-    } else {
-        SetWindowLongPtrW(h, GWL_EXSTYLE, original | WS_EX_LAYERED);
-        SetLayeredWindowAttributes(h, 0, BYTE(g_opacity * 255 / 100), LWA_ALPHA);
-    }
     if (proc && !proc(h, &data)) Wh_Log(L"Backdrop update failed: %u", GetLastError());
+    DWORD corner = clear ? 0 : 2;  // DWMWCP_DEFAULT or DWMWCP_ROUND
+    DwmSetWindowAttribute(h, 33, &corner, sizeof(corner));
+    BOOL dark = TRUE;
+    DwmSetWindowAttribute(h, 20, &dark, sizeof(dark));
+    DWORD caption = reset ? 0xFFFFFFFF : bgr, text = reset || !s.hasText ? 0xFFFFFFFF :
+        ((s.textRgb & 255) << 16 | (s.textRgb & 0xff00) | s.textRgb >> 16);
+    DwmSetWindowAttribute(h, 35, &caption, sizeof(caption));  // DWMWA_CAPTION_COLOR
+    DwmSetWindowAttribute(h, 36, &text, sizeof(text));        // DWMWA_TEXT_COLOR
 }
-static BOOL CALLBACK Window(HWND h, LPARAM) {
-    WCHAR cls[64]; GetClassNameW(h, cls, 64);
-    if (wcscmp(cls, L"Chrome_WidgetWin_1") || !IsWindowVisible(h)) return TRUE;
-    DWORD pid; GetWindowThreadProcessId(h, &pid);
-    HANDLE p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-    WCHAR path[32768]; DWORD n = ARRAYSIZE(path);
-    bool ours = p && QueryFullProcessImageNameW(p, 0, path, &n) &&
-        _wcsicmp(path, (g_root / L"UI" / L"VSCodium.exe").c_str()) == 0;
-    if (p) CloseHandle(p);
-    if (ours && !g_windows.contains(h)) {
-        g_windows[h] = GetWindowLongPtrW(h, GWL_EXSTYLE); Effect(h, false);
-    }
+static BOOL CALLBACK Track(HWND h, LPARAM) {
+    if (!g_windows.contains(h) && MainWindow(h)) { g_windows.insert(h); Effect(h, false); }
     return TRUE;
 }
-static LRESULT CALLBACK BackdropProc(HWND h, UINT m, WPARAM w, LPARAM l) {
-    if (m == WM_ERASEBKGND) return 1;
-    if (m == WM_PAINT) { PAINTSTRUCT p; BeginPaint(h, &p); EndPaint(h, &p); return 0; }
-    return DefWindowProcW(h, m, w, l);
-}
-static void Backdrops() {
-    static std::map<HWND, DWORD> colors;
-    for (auto it = g_backdrops.begin(); it != g_backdrops.end();) {
-        if (!g_windows.contains(it->first) || !g_acrylic) {
-            colors.erase(it->second); DestroyWindow(it->second); it = g_backdrops.erase(it);
-        } else ++it;
-    }
-    for (auto& [target, style] : g_windows) {
-        if (!g_acrylic) continue;
-        HWND& backdrop = g_backdrops[target];
-        if (!backdrop) {
-            backdrop = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT,
-                L"WindhawkStylerBackdrop", L"", WS_POPUP | WS_DISABLED,
-                0, 0, 0, 0, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
-            MARGINS margins{-1, -1, -1, -1}; DwmExtendFrameIntoClientArea(backdrop, &margins);
-        }
-        if (!IsWindowVisible(target) || IsIconic(target)) { ShowWindow(backdrop, SW_HIDE); continue; }
-        RECT r; GetWindowRect(target, &r);
-        auto proc = reinterpret_cast<BOOL(WINAPI*)(HWND, Composition*)>(
-            GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute"));
-        DWORD tint = ((g_color & 255) << 16) | (g_color & 0xff00) | (g_color >> 16) | 0x80000000;
-        Accent a{4, 0, tint, 0}; Composition d{19, &a, sizeof(a)};
-        if (!colors.contains(backdrop) || colors[backdrop] != tint) {
-            if (proc) proc(backdrop, &d);
-            colors[backdrop] = tint;
-        }
-        RECT old{}; GetWindowRect(backdrop, &old);
-        if (!EqualRect(&old, &r) || !IsWindowVisible(backdrop) || GetWindow(backdrop, GW_HWNDPREV) != target)
-            SetWindowPos(backdrop, target, r.left, r.top, r.right-r.left, r.bottom-r.top,
-                SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    }
-}
-static void CALLBACK WindowEvent(HWINEVENTHOOK, DWORD event, HWND h, LONG object, LONG child, DWORD, DWORD) {
-    if (event != EVENT_SYSTEM_FOREGROUND && (object != OBJID_WINDOW || child != 0)) return;
+static void CALLBACK Shown(HWINEVENTHOOK, DWORD, HWND h, LONG object, LONG, DWORD, DWORD) {
+    if (object != OBJID_WINDOW) return;
     std::lock_guard lock(g_guard);
-    if (event == EVENT_SYSTEM_FOREGROUND || g_windows.contains(h)) Backdrops();
+    Track(h, 0);
 }
 static DWORD WINAPI Worker(void*) {
-    WNDCLASSW wc{}; wc.lpfnWndProc = BackdropProc; wc.hInstance = GetModuleHandleW(nullptr);
-    wc.lpszClassName = L"WindhawkStylerBackdrop"; RegisterClassW(&wc);
-    auto locationHook = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE,
-        nullptr, WindowEvent, 0, 0, WINEVENT_OUTOFCONTEXT);
-    auto foregroundHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND,
-        nullptr, WindowEvent, 0, 0, WINEVENT_OUTOFCONTEXT);
-    while (MsgWaitForMultipleObjects(1, &g_stop, FALSE, 100, QS_ALLINPUT) != WAIT_OBJECT_0) {
-        MSG msg; while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
-            TranslateMessage(&msg); DispatchMessageW(&msg);
-        }
+    auto hook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, nullptr, Shown, 0, 0, WINEVENT_OUTOFCONTEXT);
+    while (MsgWaitForMultipleObjects(1, &g_stop, FALSE, 1000, QS_ALLINPUT) != WAIT_OBJECT_0) {
+        MSG msg; while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) DispatchMessageW(&msg);
         std::lock_guard lock(g_guard);
-        for (auto it = g_windows.begin(); it != g_windows.end();)
-            if (!IsWindow(it->first)) it = g_windows.erase(it); else ++it;
-        EnumWindows(Window, 0);
-        for (auto& [h, style] : g_windows) {
-            BYTE alpha = 255; DWORD flags = 0; COLORREF key = 0;
-            bool layered = GetLayeredWindowAttributes(h, &key, &alpha, &flags) != FALSE;
-            if (g_opacity < 100 && (!layered || !(flags & LWA_ALPHA) || alpha != BYTE(g_opacity * 255 / 100)))
-                Effect(h, false);
-        }
-        Backdrops();
+        std::erase_if(g_windows, [](HWND h) { return !IsWindow(h); });
+        EnumWindows(Track, 0);
     }
-    if (locationHook) UnhookWinEvent(locationHook);
-    if (foregroundHook) UnhookWinEvent(foregroundHook);
-    for (auto& [h, backdrop] : g_backdrops) DestroyWindow(backdrop);
-    g_backdrops.clear(); UnregisterClassW(wc.lpszClassName, wc.hInstance);
+    if (hook) UnhookWinEvent(hook);
     return 0;
 }
+
 static void WINAPI Entry() { ExitThread(0); }
 BOOL Wh_ModInit() {
     DWORD session; if (!ProcessIdToSessionId(GetCurrentProcessId(), &session) || session == 0) return FALSE;
@@ -280,6 +512,7 @@ BOOL Wh_ModInit() {
     if (!g_tool) return TRUE;
     g_mutex = CreateMutexW(nullptr, FALSE, L"windhawk-tool-mod_" WH_MOD_ID);
     if (!g_mutex || GetLastError() == ERROR_ALREADY_EXISTS) return FALSE;
+    LoadStyle();
     try { ApplyFiles(); } catch (const std::exception& e) { Wh_Log(L"Style setup failed: %S", e.what()); return FALSE; }
     g_stop = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     g_thread = CreateThread(nullptr, 0, Worker, nullptr, 0, nullptr);
@@ -299,13 +532,15 @@ void Wh_ModAfterInit() {
 void Wh_ModSettingsChanged() {
     if (!g_tool) return;
     std::lock_guard lock(g_guard);
+    LoadStyle();
     try { ApplyFiles(); } catch (const std::exception& e) { Wh_Log(L"Style update failed: %S", e.what()); }
-    for (auto& [h, style] : g_windows) if (IsWindow(h)) Effect(h, false);
+    std::erase_if(g_windows, [](HWND h) { return !IsWindow(h); });
+    for (HWND h : g_windows) Effect(h, false);
 }
 void Wh_ModUninit() {
     if (!g_tool) return;
     SetEvent(g_stop); WaitForSingleObject(g_thread, INFINITE);
-    for (auto& [h, style] : g_windows) if (IsWindow(h)) Effect(h, true);
+    for (HWND h : g_windows) if (IsWindow(h)) Effect(h, true);
     try { ApplyFiles(true); } catch (const std::exception& e) { Wh_Log(L"Style cleanup failed: %S", e.what()); }
     CloseHandle(g_thread); CloseHandle(g_stop); CloseHandle(g_mutex);
     ExitProcess(0);

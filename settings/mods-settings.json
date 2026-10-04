@@ -2227,8 +2227,14 @@
   },
   "local@windhawk-styler": {
     "backgroundColor": "#1e1e2e",
+    "backgroundOpacity": 50,
+    "blur": "acrylic",
+    "cardColor": "#181825",
+    "cardOpacity": 100,
+    "controlColor": "#313244",
+    "accentColor": "#89b4fa",
+    "textColor": "#cdd6f4",
     "fontFamily": "FiraCode Nerd Font",
-    "opacity": 50,
-    "acrylic": 1
+    "nativeTitleBar": 0
   }
 }
