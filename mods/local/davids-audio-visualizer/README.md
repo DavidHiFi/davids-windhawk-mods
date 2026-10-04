@@ -33,10 +33,15 @@ Each frequency band uses the strongest captured level across devices. A signal
 routed through several Matrix endpoints does not multiply its displayed level.
 Capture uses shared WASAPI streams. Exclusive or protected outputs can reject
 loopback capture. An interface hardware Loopback input can expose its ASIO mix,
-depending on that interface's routing. Microphone inputs are not opened.
+depending on that interface's routing. Recording inputs are opened only when you explicitly select one from the device menu.
 
 The mod does not change playback devices, routing, volume, or driver settings.
-Its bar window passes clicks through to the taskbar. Media buttons receive clicks.
+Right-click the bars to choose an Input device or Output device as the capture source.
+The selection is saved by endpoint ID and survives restarts. Output devices use
+WASAPI loopback. Input devices use their recording stream. Selecting a source
+does not change Windows defaults or application routing. The menu can restore
+the configured multi-device capture mode. Unavailable sources leave idle bars
+and reconnect when the same endpoint returns. Media buttons receive clicks.
 
 ## Source and credits
 
@@ -91,3 +96,10 @@ across the main taskbar resolved to Explorer while the bars remained visible.
 The fullscreen fix was observed hiding the overlay about three seconds after a
 taskbar-covering test window took focus and restoring it after the window closed.
 These checks did not send actual taskbar clicks or test enabled media controls.
+
+## Changes in 1.1.0
+
+The bars have a rounded Mocha hover highlight and a right-click capture-device
+menu. Input device and Output device list active Windows endpoints. One selected
+endpoint replaces the combined capture, and a checkmark identifies it.
+The visualizer also respects the system-information widget boundary.

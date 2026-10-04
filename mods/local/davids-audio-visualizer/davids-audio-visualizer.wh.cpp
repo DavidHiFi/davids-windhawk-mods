@@ -2,7 +2,7 @@
 // @id                  davids-audio-visualizer
 // @name                David's Audio Visualizer
 // @description         Taskbar audio spectrum and media controls with Mocha colors and multi-output capture
-// @version             1.0.1
+// @version             1.1.0
 // @author              DavidHiFi
 // @github              https://github.com/DavidHiFi
 // @homepage            https://github.com/DavidHiFi/davids-windhawk-mods
@@ -45,10 +45,15 @@ Each frequency band uses the strongest captured level across devices. A signal
 routed through several Matrix endpoints does not multiply its displayed level.
 Capture uses shared WASAPI streams. Exclusive or protected outputs can reject
 loopback capture. An interface hardware Loopback input can expose its ASIO mix,
-depending on that interface's routing. Microphone inputs are not opened.
+depending on that interface's routing. Recording inputs are opened only when you explicitly select one from the device menu.
 
 The mod does not change playback devices, routing, volume, or driver settings.
-Its bar window passes clicks through to the taskbar. Media buttons receive clicks.
+Right-click the bars to choose an Input device or Output device as the capture source.
+The selection is saved by endpoint ID and survives restarts. Output devices use
+WASAPI loopback. Input devices use their recording stream. Selecting a source
+does not change Windows defaults or application routing. The menu can restore
+the configured multi-device capture mode. Unavailable sources leave idle bars
+and reconnect when the same endpoint returns. Media buttons receive clicks.
 
 ## Source and credits
 
@@ -325,7 +330,7 @@ std::mutex g_settingsMutex;
 std::atomic<bool> g_debugLogging{false};
 std::atomic<int> g_frameRate{30}, g_idleDelay{10};
 int g_taskbarOffset = 500, g_taskbarVerticalOffset = 0, g_mediaGap = 18;
-struct AudioOptions { bool hardwareLoopbacks=true, defaultOnly=false; std::wstring filter; };
+struct AudioOptions { bool hardwareLoopbacks=true, defaultOnly=false; std::wstring filter, endpointId; };
 AudioOptions g_audioOptions;
 std::wstring Lowercase(std::wstring value) {
     for (auto& c : value) c = (wchar_t)towlower(c);
@@ -335,7 +340,18 @@ AudioOptions ReadAudioOptions() {
     std::lock_guard<std::mutex> guard(g_settingsMutex);
     return g_audioOptions;
 }
+HWND g_capturePickerWnd = nullptr;
+bool g_captureHover = false;
+void UpdateCapturePicker();
 HWND MainTaskbar() { return FindWindowW(L"Shell_TrayWnd", nullptr); }
+
+float WidgetAwareOffset(float scale) {
+    HWND taskbar = MainTaskbar();
+    auto edge = reinterpret_cast<INT_PTR>(GetPropW(taskbar, L"WindhawkTaskbarSystemInfoRightDip"));
+    if (edge <= 0) return g_taskbarOffset * scale;
+    return edge > 0 ? (edge + 8) * scale : g_taskbarOffset * scale;
+}
+
 HMONITOR TaskbarMonitor() { return MonitorFromWindow(MainTaskbar(), MONITOR_DEFAULTTOPRIMARY); }
 void VizDebugLog(PCWSTR format, ...) {
     if (!g_debugLogging.load(std::memory_order_relaxed)) return;
@@ -2109,7 +2125,7 @@ void RepositionAndRepaintMediaControls() {
     float barsWidth = (g_settings.barCount*g_settings.barWidth + (g_settings.barCount-1)*g_settings.barGap)*dpiScale;
     float inset = std::max(4.f*dpiScale, g_settings.barWidth*dpiScale);
     float panelPad = g_settings.backgroundEnabled ? (g_settings.bgPaddingL+g_settings.bgPaddingR)*dpiScale : 0.f;
-    float blockX = std::clamp(g_taskbarOffset*dpiScale, inset,
+    float blockX = std::clamp(WidgetAwareOffset(dpiScale), inset,
         std::max(inset, float(workWidth)-barsWidth-width-g_mediaGap*dpiScale-panelPad-inset));
     int x = mi.rcWork.left + (int)std::lround(blockX+barsWidth+g_mediaGap*dpiScale);
     int y = mi.rcWork.top + std::clamp((workHeight-height)/2+(int)std::lround(g_taskbarVerticalOffset*dpiScale),0,std::max(0,workHeight-height));
@@ -2445,7 +2461,7 @@ void VizCaptureThreadProc() {
         endpoints.clear();
         options = ReadAudioOptions();
         for (EDataFlow flow : {eRender, eCapture}) {
-        if (flow == eCapture && !options.hardwareLoopbacks) continue;
+        if (flow == eCapture && options.endpointId.empty() && !options.hardwareLoopbacks) continue;
         ComPtr<IMMDeviceCollection> devices;
         if (FAILED(enumerator->EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE, &devices))) continue;
         ComPtr<IMMDevice> defaultDevice;
@@ -2466,9 +2482,16 @@ void VizCaptureThreadProc() {
             }
             // Hardware loopback inputs include the interface's ASIO output.
             // Never open microphone or general recording inputs.
-            if (flow == eCapture && name.find(L"Loopback") == std::wstring::npos) continue;
-            if (!options.filter.empty() && Lowercase(name).find(options.filter) == std::wstring::npos) continue;
-            if (flow == eRender && options.defaultOnly) {
+            if (!options.endpointId.empty()) {
+                LPWSTR id = nullptr;
+                device->GetId(&id);
+                bool matches = id && options.endpointId == id;
+                CoTaskMemFree(id);
+                if (!matches) continue;
+            }
+            if (options.endpointId.empty() && flow == eCapture && name.find(L"Loopback") == std::wstring::npos) continue;
+            if (options.endpointId.empty() && !options.filter.empty() && Lowercase(name).find(options.filter) == std::wstring::npos) continue;
+            if (options.endpointId.empty() && flow == eRender && options.defaultOnly) {
                 LPWSTR id = nullptr;
                 device->GetId(&id);
                 bool matches = id && defaultId && wcscmp(id,defaultId)==0;
@@ -3017,7 +3040,7 @@ bool ComputeVizLayout(VizLayout* out) {
     float controlsWidth = g_settings.mediaControlsEnabled ? (g_mediaGap + 3*g_settings.mediaIconSize + 2*g_settings.mediaIconSpacing + 2*g_settings.mediaPlatePadding)*g_dpiScale : 0.f;
     float inset = std::max(4.f*g_dpiScale, barW);
     float available = float(taskbar.right-taskbar.left) - totalWidth - controlsWidth - padX - inset;
-    float blockX = std::clamp(g_taskbarOffset*g_dpiScale, inset, std::max(inset, available));
+    float blockX = std::clamp(WidgetAwareOffset(g_dpiScale), inset, std::max(inset, available));
     float blockY = ((taskbar.bottom-taskbar.top) - totalHeight)*0.5f + g_taskbarVerticalOffset*g_dpiScale;
     float yInset = g_settings.backgroundEnabled ? std::max(g_settings.bgPaddingT,g_settings.bgPaddingB)*g_dpiScale : 0.f;
     blockY = std::clamp(blockY, yInset, std::max(yInset, float(taskbar.bottom-taskbar.top)-totalHeight-yInset));
@@ -3094,6 +3117,7 @@ bool ComputeVizLayout(VizLayout* out) {
     float insetR = padR + margin + textSide;
     float insetB = padB + margin + textBottom;
 
+    blockX = std::max(blockX, WidgetAwareOffset(g_dpiScale) + padL + textSide);
     float rawOriginX = blockX - insetL;
     float rawOriginY = blockY - insetT;
 
@@ -4250,6 +4274,7 @@ void RenderVisualizer() {
             g_drawRectValid.store(true, std::memory_order_relaxed);
         }
 
+        UpdateCapturePicker();
         if (g_backgroundBrush) {
             float padL = (float)g_settings.bgPaddingL * g_dpiScale;
             float padR = (float)g_settings.bgPaddingR * g_dpiScale;
@@ -4387,6 +4412,14 @@ void RenderVisualizer() {
             cGrad1 = c1;
         }
 
+        if (g_captureHover) {
+            ComPtr<ID2D1SolidColorBrush> hoverBrush;
+            if (SUCCEEDED(g_dc->CreateSolidColorBrush(D2D1::ColorF(0x45475a, 150.f/255.f), &hoverBrush))) {
+                auto box = D2D1::RectF(blockX-3*g_dpiScale, blockY-3*g_dpiScale,
+                    blockX+totalWidth+3*g_dpiScale, blockY+totalHeight+3*g_dpiScale);
+                g_dc->FillRoundedRectangle(D2D1::RoundedRect(box,6*g_dpiScale,6*g_dpiScale),hoverBrush.Get());
+            }
+        }
         if (g_settings.shape == VizShape::Dots) {
             float dotR  = barW * 0.5f;
             float step  = barW + barGap;
@@ -5109,6 +5142,100 @@ LRESULT CALLBACK OverlayWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     return DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 
+
+// This small input window covers only the bars. The full taskbar overlay
+// remains transparent to input outside this rectangle.
+void ShowCaptureDeviceMenu(HWND hwnd) {
+    struct Choice { std::wstring id; };
+    std::vector<Choice> choices;
+    HMENU menu=CreatePopupMenu(), inputs=CreatePopupMenu(), outputs=CreatePopupMenu();
+    auto options=ReadAudioOptions();
+    AppendMenuW(menu,MF_STRING|(options.endpointId.empty()?MF_CHECKED:0),1,L"Use configured multi-device capture");
+    ComPtr<IMMDeviceEnumerator> enumerator;
+    if (SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator),nullptr,CLSCTX_ALL,IID_PPV_ARGS(&enumerator)))) {
+        for (EDataFlow flow : {eCapture,eRender}) {
+            HMENU sub=flow==eCapture?inputs:outputs;
+            ComPtr<IMMDeviceCollection> devices;
+            UINT count=0;
+            if (SUCCEEDED(enumerator->EnumAudioEndpoints(flow,DEVICE_STATE_ACTIVE,&devices))) devices->GetCount(&count);
+            for(UINT i=0;i<count;++i) {
+                ComPtr<IMMDevice> device; LPWSTR id=nullptr;
+                if(FAILED(devices->Item(i,&device))||FAILED(device->GetId(&id))) continue;
+                ComPtr<IPropertyStore> properties; PROPVARIANT value{};
+                PROPERTYKEY key{{0xa45c254e,0xdf1c,0x4efd,{0x80,0x20,0x67,0xd1,0x46,0xa8,0x50,0xe0}},2};
+                std::wstring name=id;
+                if(SUCCEEDED(device->OpenPropertyStore(STGM_READ,&properties)) && SUCCEEDED(properties->GetValue(key,&value))) {
+                    if(value.vt==VT_LPWSTR && value.pwszVal) name=value.pwszVal;
+                }
+                PropVariantClear(&value);
+                std::wstring escaped;
+                for(wchar_t c:name) { escaped+=c; if(c==L'&') escaped+=c; }
+                choices.push_back({id}); CoTaskMemFree(id);
+                AppendMenuW(sub,MF_STRING|(choices.back().id==options.endpointId?MF_CHECKED:0),100+choices.size()-1,escaped.c_str());
+            }
+            if(GetMenuItemCount(sub)==0) AppendMenuW(sub,MF_STRING|MF_GRAYED,0,L"No active devices");
+        }
+    }
+    AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(inputs),L"Input device");
+    AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(outputs),L"Output device");
+    POINT pt{}; GetCursorPos(&pt);
+    SetForegroundWindow(hwnd);
+    UINT command=TrackPopupMenuEx(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,pt.x,pt.y,hwnd,nullptr);
+    PostMessageW(hwnd,WM_NULL,0,0);
+    if(command==1 || (command>=100 && command-100<choices.size())) {
+        std::wstring id=command==1?L"":choices[command-100].id;
+        if(Wh_SetStringValue(L"captureEndpointId",id.c_str())) {
+            { std::lock_guard<std::mutex> guard(g_settingsMutex); g_audioOptions.endpointId=id; }
+            g_deviceChanged.store(true);
+            Wh_Log(L"Capture source selected: %s",id.empty()?L"configured multi-device mode":id.c_str());
+        }
+    }
+    DestroyMenu(menu);
+}
+LRESULT CALLBACK CapturePickerWndProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
+    switch(msg) {
+        case WM_MOUSEACTIVATE:return MA_NOACTIVATE;
+        case WM_MOUSEMOVE:
+            if(!g_captureHover) {
+                g_captureHover=true;
+                TRACKMOUSEEVENT track{sizeof(track),TME_LEAVE,hwnd,0}; TrackMouseEvent(&track);
+                if(g_overlayWnd) PostMessageW(g_overlayWnd,WM_APP_FORCE_REDRAW,0,0);
+            }
+            return 0;
+        case WM_MOUSELEAVE:
+            g_captureHover=false;
+            if(g_overlayWnd) PostMessageW(g_overlayWnd,WM_APP_FORCE_REDRAW,0,0);
+            return 0;
+        case WM_RBUTTONUP:ShowCaptureDeviceMenu(hwnd);return 0;
+        case WM_CONTEXTMENU:ShowCaptureDeviceMenu(hwnd);return 0;
+        case WM_PAINT: { PAINTSTRUCT ps;HDC dc=BeginPaint(hwnd,&ps); FillRect(dc,&ps.rcPaint,(HBRUSH)GetStockObject(BLACK_BRUSH));EndPaint(hwnd,&ps);return 0; }
+    }
+    return DefWindowProcW(hwnd,msg,wp,lp);
+}
+void UpdateCapturePicker() {
+    if(!g_messageWnd || !g_drawRectValid.load()) return;
+    if(!g_capturePickerWnd) {
+        WNDCLASSW wc{}; wc.lpfnWndProc=CapturePickerWndProc; wc.hInstance=GetCurrentModuleHandle();wc.lpszClassName=L"DavidsAudioVisualizerCapturePicker";
+        wc.hCursor=LoadCursor(nullptr,IDC_ARROW);
+        RegisterClassW(&wc);
+        g_capturePickerWnd=CreateWindowExW(WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_TOPMOST,wc.lpszClassName,L"Visualizer capture device",WS_POPUP,0,0,1,1,MainTaskbar(),nullptr,wc.hInstance,nullptr);
+        if(!g_capturePickerWnd) return;
+        if(!SetLayeredWindowAttributes(g_capturePickerWnd,0,1,LWA_ALPHA)) {DestroyWindow(g_capturePickerWnd);g_capturePickerWnd=nullptr;return;}
+    }
+    if(g_unloading || g_fullscreenPaused.load() || !g_overlayWnd || !IsWindowVisible(g_overlayWnd)) {
+        ShowWindow(g_capturePickerWnd,SW_HIDE);g_captureHover=false;return;
+    }
+    VizLayout layout{}; RECT overlay{};
+    if(!ComputeVizLayout(&layout) || !GetWindowRect(g_overlayWnd,&overlay)) return;
+    int pad=(int)(3*g_dpiScale);
+    SetWindowPos(g_capturePickerWnd,HWND_TOPMOST,overlay.left+(int)(layout.originX+layout.blockX)-pad,overlay.top+(int)(layout.originY+layout.blockY)-pad,
+        (int)layout.totalWidth+2*pad,(int)layout.totalHeight+2*pad,
+        SWP_NOACTIVATE|SWP_SHOWWINDOW);
+    RECT bounds{}; POINT cursor{}; GetWindowRect(g_capturePickerWnd,&bounds); GetCursorPos(&cursor);
+    bool hovered=PtInRect(&bounds,cursor)!=FALSE;
+    if(hovered!=g_captureHover) {g_captureHover=hovered;PostMessageW(g_overlayWnd,WM_APP_FORCE_REDRAW,0,0);}
+}
+
 LRESULT CALLBACK MessageWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
         case WM_DISPLAYCHANGE:
@@ -5150,6 +5277,7 @@ LRESULT CALLBACK MessageWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             }
             return 0;
         case WM_TIMER:
+            if(wParam==0xCA71) { UpdateCapturePicker(); return 0; }
             if (g_unloading) return 0;
             if (wParam == TIMER_ID_MSG_DISPLAY_CHANGE) {
                 KillTimer(hWnd, TIMER_ID_MSG_DISPLAY_CHANGE);
@@ -5395,6 +5523,7 @@ void CreateMessageWindow() {
                                   nullptr, hInstance, nullptr);
     if (g_messageWnd) {
         SetTimer(g_messageWnd, TIMER_ID_MSG_FULLSCREEN_WATCH, 1000, nullptr);
+        SetTimer(g_messageWnd,0xCA71,100,nullptr);
         // Settings are loaded before this window exists on the init path, so a
         // font check that already failed has nowhere to arm its retry until now.
         if (g_fontCheckPending) {
@@ -5457,7 +5586,10 @@ void LoadSettings() {
     audio.defaultOnly=text(L"audio.captureMode")==L"default";
     audio.hardwareLoopbacks=Wh_GetIntSetting(L"audio.hardwareLoopbacks")!=0;
     audio.filter=Lowercase(text(L"audio.deviceFilter"));
-    if(audio.defaultOnly!=g_audioOptions.defaultOnly || audio.hardwareLoopbacks!=g_audioOptions.hardwareLoopbacks || audio.filter!=g_audioOptions.filter) g_deviceChanged.store(true);
+    wchar_t selectedEndpoint[4096]{};
+    Wh_GetStringValue(L"captureEndpointId", selectedEndpoint, ARRAYSIZE(selectedEndpoint));
+    audio.endpointId=selectedEndpoint;
+    if(audio.defaultOnly!=g_audioOptions.defaultOnly || audio.hardwareLoopbacks!=g_audioOptions.hardwareLoopbacks || audio.filter!=g_audioOptions.filter || audio.endpointId!=g_audioOptions.endpointId) g_deviceChanged.store(true);
     g_audioOptions=audio;
     g_settings.inputGainDb=(float)number(L"audio.inputGain",-24,24);
     g_settings.backgroundEnabled=Wh_GetIntSetting(L"background.enabled")!=0;
@@ -5576,6 +5708,7 @@ void WhTool_ModUninit() {
     StopRenderThread();
 
     if (g_overlayWnd) SendMessage(g_overlayWnd, WM_APP_CLEANUP, 0, 0);
+    if(g_capturePickerWnd) { SendMessageW(g_capturePickerWnd,WM_CLOSE,0,0);g_capturePickerWnd=nullptr; }
     if (g_messageWnd) SendMessage(g_messageWnd, WM_APP_CLEANUP, 0, 0);
     if (g_mediaWnd) SendMessage(g_mediaWnd, WM_APP_CLEANUP, 0, 0);
 

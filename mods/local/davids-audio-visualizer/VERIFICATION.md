@@ -32,3 +32,12 @@ its optional diagnostics and retains the idle strip when capture is unavailable.
 
 No audio routing, playback volume, drivers, or audio applications changed during
 verification. The mod uses passive shared capture streams.
+
+## Capture picker in 1.1.0
+
+Both x86 and x64 builds pass. The live picker covers only the bars on the
+main taskbar. A screenshot confirms the rounded Mocha hover highlight.
+The menu lists six recording inputs and eight playback outputs on this machine.
+Selecting Desktop Output saves its endpoint ID and captures one stream.
+Selecting Recording Input opens exactly one capture endpoint successfully at
+48 kHz, stereo float32. Existing system-widget positioning is retained.
