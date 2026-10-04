@@ -2,7 +2,7 @@
 // @id              shell-font-changer
 // @name            Shell Font Changer
 // @description     Use any font in Explorer, Start, Search and Settings without breaking icons or emoji
-// @version         1.1.0
+// @version         1.2.2
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -32,6 +32,9 @@ you have installed.
   glyphs, so buttons never turn into empty boxes.
 - **Keeps font weights.** Semibold and bold text stays semibold and bold.
 - **Covers classic, themed and modern text**, including DirectWrite layouts.
+- **Fits text to controls.** Text with enough space keeps its normal size.
+  Text that would overflow shrinks slightly, never below 85% height or 80%
+  width. If that still overflows, the original UI font draws it.
 - **Nothing is written to the registry**, so turning it off is fully clean.
 
 ## How to use
@@ -68,6 +71,8 @@ by Gabriela Cristei. MIT.
 #include <cwctype>
 #include <algorithm>
 #include <vector>
+#include <map>
+#include <cmath>
 
 namespace policy {
 std::wstring target;
@@ -116,6 +121,16 @@ int nameWeight(const wchar_t* face) {
     }
     return 0;
 }
+
+// Round the original height by the fit scale, keeping its sign so a
+// character-cell height stays a character-cell height and a cell of at
+// least one pixel remains.
+LONG fitHeight(LONG height, double scale) {
+    if (!height) return height;
+    LONG scaled = static_cast<LONG>(std::lround(std::fabs(static_cast<double>(height)) * scale));
+    if (scaled < 1) scaled = 1;
+    return height < 0 ? -scaled : scaled;
+}
 }
 
 // Scope the selected font to one call. Restoring it before DeleteObject is
@@ -124,8 +139,20 @@ class FontScope {
     HDC dc = nullptr;
     HFONT replacement = nullptr;
     HGDIOBJ previous = nullptr;
+    LOGFONTW font{};  // target face at the original height
+    double scale = 1.0;
+    LONG naturalWidth = 0;
+    const wchar_t* text = nullptr;
+    UINT length = 0;
+
+    HFONT build() const {
+        LOGFONTW scaled = font;
+        scaled.lfHeight = policy::fitHeight(font.lfHeight, scale);
+        return CreateFontIndirectW(&scaled);
+    }
 public:
-    FontScope(HDC hdc, const wchar_t* text, UINT length, bool glyphIndices = false) {
+    FontScope(HDC hdc, const wchar_t* text, UINT length, bool glyphIndices = false)
+        : text(text), length(length) {
         if (!policy::enabled || !hdc || glyphIndices || policy::protectedText(text, length)) return;
         LOGFONTW font{};
         if (GetObjectW(GetCurrentObject(hdc, OBJ_FONT), sizeof(font), &font) != sizeof(font)) return;
@@ -138,8 +165,12 @@ public:
         font.lfWeight = std::max<LONG>(font.lfWeight, policy::nameWeight(font.lfFaceName));
         // A script charset the target lacks would make the mapper pick another face.
         font.lfCharSet = DEFAULT_CHARSET;
+        scale = 1.0;
+        // A stretched or raster average width belongs to the original face.
+        font.lfWidth = 0;
         wcscpy_s(font.lfFaceName, policy::target.c_str());
-        replacement = CreateFontIndirectW(&font);
+        this->font = font;
+        replacement = build();
         if (!replacement) return;
         previous = SelectObject(hdc, replacement);
         if (!previous || previous == HGDI_ERROR) {
@@ -148,6 +179,7 @@ public:
             return;
         }
         dc = hdc;
+        TEXTMETRICW natural{};if(GetTextMetricsW(dc,&natural)) naturalWidth=natural.tmAveCharWidth;
         wchar_t realized[LF_FACESIZE]{};
         // DirectWrite family names are not always GDI face names. Never let
         // the mapper substitute a third font for a name GDI does not know.
@@ -174,16 +206,133 @@ public:
     }
     FontScope(const FontScope&) = delete;
     FontScope& operator=(const FontScope&) = delete;
+
+    static constexpr double kMinWidth = 0.8;
+    static constexpr double kMinScale = 0.85;
+    bool active() const { return dc != nullptr; }
+    // Give the run back to the original font. Its metrics are what the
+    // control was laid out for, so it fits where the target cannot.
+    void revert() {
+        if (!dc) return;
+        SelectObject(dc, previous);
+        DeleteObject(replacement);
+        replacement = nullptr;
+        dc = nullptr;
+    }
+    double currentScale() const { return scale; }
+    // Rebuild the replacement at a smaller scale. Returns false when the
+    // requested scale is not smaller or the rebuild fails, so the caller
+    // stops shrinking; on failure the previous font stays selected.
+    bool condense(double ratio) {
+        if (!dc || ratio >= 1.0 || ratio <= 0) return false;
+        TEXTMETRICW metrics{};
+        if (!GetTextMetricsW(dc,&metrics)) return false;
+        LONG width = std::max<LONG>(1,static_cast<LONG>(std::floor(metrics.tmAveCharWidth * ratio)));
+        // Narrower than this is unreadable; the caller falls back to the original face.
+        width=std::max<LONG>(width,static_cast<LONG>(std::ceil(naturalWidth * kMinWidth)));
+        if (width >= metrics.tmAveCharWidth) return false;
+        LONG saved = font.lfWidth;
+        font.lfWidth = width;
+        HFONT rebuilt = build();
+        if (!rebuilt) {font.lfWidth=saved;return false;}
+        HGDIOBJ outgoing=SelectObject(dc,rebuilt);
+        if (!outgoing || outgoing==HGDI_ERROR) {DeleteObject(rebuilt);font.lfWidth=saved;return false;}
+        if (outgoing!=previous) DeleteObject(outgoing);
+        replacement=rebuilt;
+        return true;
+    }
+    bool rescale(double next) {
+        if (!dc || !(next < scale) || next < kMinScale) return false;
+        double prior = scale;
+        scale = next;
+        HFONT rebuilt = build();
+        if (!rebuilt) {
+            scale = prior;
+            return false;
+        }
+        HGDIOBJ outgoing = SelectObject(dc, rebuilt);
+        if (!outgoing || outgoing == HGDI_ERROR) {
+            DeleteObject(rebuilt);
+            scale = prior;
+            return false;
+        }
+        // `outgoing` is the previous replacement; the original font is
+        // still owned by `previous` and is restored by the destructor.
+        if (outgoing != previous) DeleteObject(outgoing);
+        replacement = rebuilt;
+        return true;
+    }
 };
 
 decltype(&DrawTextW) drawTextOriginal;
+decltype(&DrawTextExW) drawTextExOriginal;
+decltype(&GetTextExtentPoint32W) extentOriginal;
+
+// Shrink a substituted font, within readable limits, until the block fits
+// the box the application gave it, else hand it back to the original font. Fixed-size boxes are designed around the original font, so this
+// guard is what stops buttons, labels and static text from clipping.
+void fitBox(FontScope& scope, HDC dc, LPCWSTR text, UINT length, const RECT* rect, UINT flags,
+            LPDRAWTEXTPARAMS params, bool probeHeight) {
+    if (!scope.active() || !rect || !length) return;
+    // Measuring calls and ellipsis draws report or truncate rather than clip.
+    if (flags & (DT_CALCRECT | DT_END_ELLIPSIS | DT_PATH_ELLIPSIS | DT_WORD_ELLIPSIS)) return;
+    const int boxWidth = rect->right - rect->left - (params ? params->iLeftMargin + params->iRightMargin : 0);
+    const int boxHeight = rect->bottom - rect->top;
+    if (boxWidth <= 0 || boxHeight <= 0) return;
+    const bool singleLine = (flags & DT_SINGLELINE) != 0;
+    for (int tries = 0; tries < 16 && scope.active(); ++tries) {
+        if (singleLine) {
+            SIZE size{};
+            if (extentOriginal && extentOriginal(dc, text, static_cast<int>(length), &size) && size.cx > boxWidth) {
+                if (scope.condense(static_cast<double>(boxWidth) / size.cx)) continue;
+                scope.revert();
+                break;
+            }
+            TEXTMETRICW metrics{};
+            if (GetTextMetricsW(dc, &metrics)) {
+                const int line = metrics.tmHeight;
+                if (line > boxHeight) {
+                    if (scope.rescale(scope.currentScale() * static_cast<double>(boxHeight) / line * 0.98)) continue;
+                    scope.revert();
+                    break;
+                }
+            }
+            break;
+        }
+        if (!probeHeight || !(drawTextOriginal || (params && drawTextExOriginal))) break;
+        // Wrapped text re-flows inside the width, so only the block height
+        // can still overrun the box. DT_CALCRECT measures without drawing.
+        RECT probe = *rect;
+        const UINT probeFlags = (flags | DT_CALCRECT) & ~DT_MODIFYSTRING;
+        if (params && drawTextExOriginal) {
+            DRAWTEXTPARAMS probeParams = *params;
+            drawTextExOriginal(dc, const_cast<LPWSTR>(text), static_cast<int>(length), &probe, probeFlags, &probeParams);
+        } else {
+            drawTextOriginal(dc, text, static_cast<int>(length), &probe, probeFlags);
+        }
+        const int needed = probe.bottom - probe.top;
+        double ratio = 1.0;
+        if (needed > boxHeight) ratio = std::min(ratio, static_cast<double>(boxHeight) / needed);
+        const int neededWidth = probe.right - probe.left;
+        if (neededWidth > rect->right - rect->left)
+            ratio = std::min(ratio, static_cast<double>(rect->right - rect->left) / neededWidth);
+        if (ratio < 1.0) {
+            if (scope.condense(ratio)) continue;
+            if (scope.rescale(scope.currentScale() * ratio * 0.98)) continue;
+            scope.revert();
+        }
+        break;
+    }
+}
+
 int WINAPI drawTextHook(HDC dc, LPCWSTR text, int length, LPRECT rect, UINT flags) {
     FontScope font(dc, text, policy::textLength(text, length));
+    fitBox(font, dc, text, policy::textLength(text, length), rect, flags, nullptr, true);
     return drawTextOriginal(dc, text, length, rect, flags);
 }
-decltype(&DrawTextExW) drawTextExOriginal;
 int WINAPI drawTextExHook(HDC dc, LPWSTR text, int length, LPRECT rect, UINT flags, LPDRAWTEXTPARAMS params) {
     FontScope font(dc, text, policy::textLength(text, length));
+    fitBox(font, dc, text, policy::textLength(text, length), rect, flags, params, true);
     return drawTextExOriginal(dc, text, length, rect, flags, params);
 }
 decltype(&TextOutW) textOutOriginal;
@@ -197,7 +346,6 @@ BOOL WINAPI extTextOutHook(HDC dc, int x, int y, UINT flags, const RECT* rect, L
     FontScope font(dc, text, length, (flags & ETO_GLYPH_INDEX) != 0 || widths != nullptr);
     return extTextOutOriginal(dc, x, y, flags, rect, text, length, widths);
 }
-decltype(&GetTextExtentPoint32W) extentOriginal;
 BOOL WINAPI extentHook(HDC dc, LPCWSTR text, int length, LPSIZE size) {
     FontScope font(dc, text, length < 0 ? 0 : length);
     return extentOriginal(dc, text, length, size);
@@ -210,11 +358,13 @@ BOOL WINAPI extentExHook(HDC dc, LPCWSTR text, int length, int maxExtent, LPINT 
 decltype(&DrawThemeText) themeOriginal;
 HRESULT WINAPI themeHook(HTHEME theme, HDC dc, int part, int state, LPCWSTR text, int length, DWORD flags, DWORD flags2, const RECT* rect) {
     FontScope font(dc, text, policy::textLength(text, length));
+    fitBox(font, dc, text, policy::textLength(text, length), rect, flags, nullptr, true);
     return themeOriginal(theme, dc, part, state, text, length, flags, flags2, rect);
 }
 decltype(&DrawThemeTextEx) themeExOriginal;
 HRESULT WINAPI themeExHook(HTHEME theme, HDC dc, int part, int state, LPCWSTR text, int length, DWORD flags, LPRECT rect, const DTTOPTS* opts) {
     FontScope font(dc, text, policy::textLength(text, length));
+    fitBox(font, dc, text, policy::textLength(text, length), rect, flags, nullptr, true);
     return themeExOriginal(theme, dc, part, state, text, length, flags, rect, opts);
 }
 
@@ -236,6 +386,22 @@ void updateLayout(IDWriteTextLayout* layout, const WCHAR* text, UINT length, IDW
     auto weight = static_cast<DWRITE_FONT_WEIGHT>(policy::nameWeight(family.c_str()));
     if (weight > format->GetFontWeight()) layout->SetFontWeight(weight, range);
     layout->SetFontFamilyName(policy::target.c_str(), range);
+    float size = format->GetFontSize();
+    // Keep the requested size unless the actual control bounds require a reduction.
+    const float widthLimit = layout->GetMaxWidth();
+    const float heightLimit = layout->GetMaxHeight();
+    for (int attempt = 0; attempt < 16; ++attempt) {
+        DWRITE_TEXT_METRICS metrics{};
+        if (FAILED(layout->GetMetrics(&metrics))) break;
+        float ratio = 1.0f;
+        if (widthLimit > 0 && metrics.widthIncludingTrailingWhitespace > widthLimit)
+            ratio = std::min(ratio, widthLimit / metrics.widthIncludingTrailingWhitespace);
+        if (heightLimit > 0 && metrics.height > heightLimit)
+            ratio = std::min(ratio, heightLimit / metrics.height);
+        if (ratio >= 0.999f) break;
+        size *= ratio * 0.98f;
+        if (FAILED(layout->SetFontSize(size, range))) break;
+    }
 }
 using LayoutFn = HRESULT (STDMETHODCALLTYPE*)(IDWriteFactory*, const WCHAR*, UINT32, IDWriteTextFormat*, FLOAT, FLOAT, IDWriteTextLayout**);
 LayoutFn layoutOriginal;
@@ -305,7 +471,7 @@ BOOL Wh_ModInit() {
         ok = false;
     }
     #undef HOOK
-    Wh_Log(L"DavidHiFi font changer initialized. Font: %s", policy::target.c_str());
+    Wh_Log(L"Shell font changer initialized. Font: %s", policy::target.c_str());
     return ok;
 }
 BOOL Wh_ModSettingsChanged(BOOL* reload) {

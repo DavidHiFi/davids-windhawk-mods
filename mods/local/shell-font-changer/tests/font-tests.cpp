@@ -6,7 +6,17 @@ void check(bool ok, const char* label) {
     std::printf("%s %s\n", ok ? "PASS" : "FAIL", label);
     failures += !ok;
 }
-int main() {
+auto keptOriginal = [](HDC dc) {
+    wchar_t face[LF_FACESIZE]{};
+    GetTextFaceW(dc, LF_FACESIZE, face);
+    return _wcsicmp(face, policy::target.c_str()) != 0;
+};
+// Readable: never below the scale floor, never condensed past the width floor.
+auto readable = [](HDC dc, LONG height) {
+    LOGFONTW f{};
+    GetObjectW(GetCurrentObject(dc, OBJ_FONT), sizeof(f), &f);
+    return std::labs(f.lfHeight) >= std::labs(height) * 0.85 - 1;
+};int main() {
     policy::target = L"FiraCode Nerd Font";
     policy::enabled = true;
     check(policy::protectedFace(L"Segoe Fluent Icons"), "Fluent icons preserved");
@@ -28,6 +38,11 @@ int main() {
         wchar_t face[LF_FACESIZE]{};
         GetTextFaceW(dc, LF_FACESIZE, face);
         check(!_wcsicmp(face, policy::target.c_str()), "GDI selected FiraCode family");
+        LOGFONTW selected{};GetObjectW(GetCurrentObject(dc,OBJ_FONT),sizeof(selected),&selected);
+        check(selected.lfHeight==lf.lfHeight,"unconstrained text keeps normal height");
+        RECT roomy{0,0,1000,100};fitBox(scope,dc,L"Explorer",8,&roomy,DT_SINGLELINE,nullptr,true);
+        GetObjectW(GetCurrentObject(dc,OBJ_FONT),sizeof(selected),&selected);
+        check(selected.lfHeight==lf.lfHeight,"roomy control keeps normal height");
     }
     check(GetCurrentObject(dc, OBJ_FONT) == original, "original HFONT restored");
     {
@@ -51,14 +66,71 @@ int main() {
     RECT rect{0,0,1000,100};
     drawTextExHook(dc,bounded,3,&rect,DT_CALCRECT,&params);
     check(params.uiLengthDrawn == 3, "DrawTextEx bounded buffer and output parameters preserved");
+    for (auto label : {L"Choose File...", L"Restore Default"}) {
+        for (int height : {-12, -16, -24, -32}) {
+            LOGFONTW sample = lf;
+            sample.lfHeight = height;
+            HFONT base = CreateFontIndirectW(&sample);
+            SelectObject(dc, base);
+            {
+                FontScope scope(dc, label, static_cast<UINT>(wcslen(label)));
+                RECT box{0,0,80,20};
+                fitBox(scope,dc,label,static_cast<UINT>(wcslen(label)),&box,DT_SINGLELINE,nullptr,true);
+                RECT measured = box;
+                DrawTextW(dc,label,-1,&measured,DT_SINGLELINE|DT_CALCRECT);
+                check(((measured.right <= 80 && measured.bottom <= 20) || keptOriginal(dc)) && readable(dc,height),"button text fits or keeps original font, readable");
+            }
+            check(GetCurrentObject(dc,OBJ_FONT)==base,"fit restores control font");
+            SelectObject(dc,original);
+            DeleteObject(base);
+        }
+    }
+    {
+        const wchar_t* description = L"You can use this page to limit the amount of disk space each user can use on this volume.";
+        FontScope scope(dc,description,static_cast<UINT>(wcslen(description)));
+        RECT box{0,0,250,30};
+        fitBox(scope,dc,description,static_cast<UINT>(wcslen(description)),&box,DT_WORDBREAK,nullptr,true);
+        RECT measured=box;
+        DrawTextW(dc,description,-1,&measured,DT_WORDBREAK|DT_CALCRECT);
+        check((measured.bottom<=30 && measured.right<=250) || keptOriginal(dc),"wrapped quota description fits or keeps original font");
+    }
+    {
+        FontScope scope(dc,L"Restore Default",15);
+        RECT box{0,0,80,20};DRAWTEXTPARAMS margins{sizeof(margins)};
+        margins.iLeftMargin=10;margins.iRightMargin=10;
+        fitBox(scope,dc,L"Restore Default",15,&box,DT_SINGLELINE,&margins,true);
+        SIZE measured{};GetTextExtentPoint32W(dc,L"Restore Default",15,&measured);
+        check(measured.cx<=60 || keptOriginal(dc),"DrawTextEx margins reserve space");
+    }
+    {
+        FontScope scope(dc,L"Line one\nLine two\nLine three",28);
+        RECT box{0,0,100,25};
+        fitBox(scope,dc,L"Line one\nLine two\nLine three",28,&box,0,nullptr,true);
+        RECT measured=box;DrawTextW(dc,L"Line one\nLine two\nLine three",28,&measured,DT_CALCRECT);
+        check(measured.bottom<=25 || keptOriginal(dc),"explicit multiple lines fit height");
+    }
+    {
+        FontScope scope(dc,L"Object name:",12);
+        RECT box{0,0,50,22};fitBox(scope,dc,L"Object name:",12,&box,0,nullptr,true);
+        LOGFONTW selected{};GetObjectW(GetCurrentObject(dc,OBJ_FONT),sizeof(selected),&selected);
+        RECT measured=box;DrawTextW(dc,L"Object name:",12,&measured,DT_CALCRECT);
+        check(selected.lfHeight==lf.lfHeight,"narrow Object name label retains regular height");
+        check(measured.right<=50 || keptOriginal(dc),"narrow Object name label fits width or keeps original font");
+    }
     auto before = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
     for (int i=0; i<10000; ++i) {
-        RECT r{0,0,1000,100};
-        drawTextHook(dc,L"Explorer",8,&r,DT_CALCRECT);
+        RECT r{0,0,80,20};
+        drawTextHook(dc,L"Restore Default",15,&r,DT_SINGLELINE);
     }
     auto after = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
     std::printf("GDI handles before=%lu after=%lu\n",before,after);
     check(after == before, "10000 calls leak no GDI handles");
+    {
+        RECT box{0,0,80,20};
+        drawTextHook(nullptr,nullptr,0,&box,DT_SINGLELINE);
+        drawTextHook(dc,nullptr,0,&box,DT_SINGLELINE);
+        check(GetCurrentObject(dc,OBJ_FONT)==original,"null drawing paths preserve font");
+    }
     policy::enabled = false;
     {
         FontScope scope(dc,L"abc",3);
@@ -198,6 +270,26 @@ int main() {
             } else check(false,"DirectWrite legacy family layout");
             semibold->Release();
         } else check(false,"DirectWrite legacy family format");
+        IDWriteTextFormat* roomy=nullptr;
+        factory->CreateTextFormat(L"Segoe UI",nullptr,DWRITE_FONT_WEIGHT_NORMAL,DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,16,L"en-us",&roomy);
+        if(roomy) {
+            IDWriteTextLayout* layout=nullptr;layoutHook(factory,L"Explorer",8,roomy,1000,100,&layout);
+            if(layout){float size=0;layout->GetFontSize(0,&size);check(size==16,"DirectWrite roomy control keeps normal size");layout->Release();}
+            roomy->Release();
+        }
+        IDWriteTextFormat* compact=nullptr;
+        factory->CreateTextFormat(L"Segoe UI",nullptr,DWRITE_FONT_WEIGHT_NORMAL,DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,24,L"en-us",&compact);
+        if(compact) {
+            IDWriteTextLayout* layout=nullptr;
+            layoutHook(factory,L"Restore Default",15,compact,80,20,&layout);
+            if(layout) {
+                DWRITE_TEXT_METRICS metrics{};layout->GetMetrics(&metrics);
+                check(metrics.widthIncludingTrailingWhitespace<=80.01f && metrics.height<=20.01f,"DirectWrite fixed box fits");
+                check(compact->GetFontSize()==24,"DirectWrite original size unchanged");
+                layout->Release();
+            } else check(false,"DirectWrite compact layout");
+            compact->Release();
+        }
         factory->Release();
     }
     SelectObject(dc,stock);
