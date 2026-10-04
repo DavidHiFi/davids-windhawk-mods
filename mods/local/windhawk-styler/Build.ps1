@@ -29,7 +29,7 @@ foreach ($target in @(@('64', 'x86_64-w64-mingw32'), @('32', 'i686-w64-mingw32')
         '-DNTDDI_VERSION=0x0A000008', '-D__USE_MINGW_ANSI_STDIO=0',
         '-include', $header, '-include', 'windhawk_api.h', '-I', $include,
         '-Wl,--export-all-symbols', $source, $lib,
-        '-luser32', '-ldwmapi', '-lgdi32', '-lshcore', '-lcomctl32', '-lshell32',
+        '-lbcrypt', '-luser32', '-ldwmapi', '-lgdi32', '-lshcore', '-lcomctl32', '-lshell32',
         '-o', $output
     )
     & $compiler @arguments
