@@ -41,3 +41,10 @@ The menu lists six recording inputs and eight playback outputs on this machine.
 Selecting Desktop Output saves its endpoint ID and captures one stream.
 Selecting Recording Input opens exactly one capture endpoint successfully at
 48 kHz, stereo float32. Existing system-widget positioning is retained.
+
+The selected recording endpoint survives replacement of the visualizer process
+and opens one stream again. Both the root menu and the output submenu have
+WS_EX_TOPMOST, and WindowFromPoint resolves to the menu at each sampled menu
+point. The menu opens outside the taskbar rectangle. A screenshot confirms
+that the root menu and submenu are fully visible beside the taskbar.
+Test selection and diagnostic logging were restored to their original values.
