@@ -1,12 +1,12 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-10-04T22:48:03+08:00",
+  "generatedAt": "2026-10-05T01:37:41.3626075+08:00",
   "windhawkVersion": "1.7.3",
   "counts": {
-    "mods": 112,
-    "enabled": 107,
-    "local": 10
+    "mods": 113,
+    "enabled": 108,
+    "local": 11
   },
   "mods": [
     {
@@ -1352,6 +1352,18 @@
       "upstream": "https://windhawk.net/mods/center-titlebar",
       "source": "mods/local/center-titlebar-fork/center-titlebar-fork.wh.cpp",
       "enabled": false
+    },
+    {
+      "id": "local@windhawk-styler",
+      "name": "Windhawk Styler",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/windhawk-styler/windhawk-styler.wh.cpp",
+      "enabled": true
     }
   ]
 }
