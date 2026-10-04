@@ -88,3 +88,13 @@ Geometry is clamped to fit the main horizontal taskbar. Colors accept `#AARRGGBB
 | Setting | Default | Behavior |
 | --- | --- | --- |
 | `diagnostics.enabled` | `false` | Write endpoint status and level summaries to diagnostic.log in this mod Windhawk storage directory. Logs rotate at 1 MiB. Audio samples are never recorded. |
+
+## Capture device menu
+
+Right-click the bars and choose one active Windows endpoint under Input device
+or Output device. This overrides capture mode, hardware loopbacks, and the
+name filter until you choose Use configured multi-device capture. The mod saves
+the selected endpoint ID in Windhawk local storage as `captureEndpointId`.
+Input selection permits a recording source, including microphones. Output
+selection captures that device's playback mix through WASAPI loopback.
+The menu changes capture only. It leaves playback routing and defaults alone.

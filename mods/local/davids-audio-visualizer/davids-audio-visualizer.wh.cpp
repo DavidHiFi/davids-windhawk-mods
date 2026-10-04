@@ -5145,6 +5145,22 @@ LRESULT CALLBACK OverlayWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 // This small input window covers only the bars. The full taskbar overlay
 // remains transparent to input outside this rectangle.
+// Apply topmost ordering to this thread's native popup menus while the
+// capture picker is open, including both device submenus.
+LRESULT CALLBACK CaptureMenuHook(int code,WPARAM wp,LPARAM lp) {
+    if(code>=0) {
+        auto message=reinterpret_cast<CWPSTRUCT*>(lp);
+        if(message->message==WM_WINDOWPOSCHANGING) {
+            wchar_t cls[32]{}; GetClassNameW(message->hwnd,cls,ARRAYSIZE(cls));
+            if(wcscmp(cls,L"#32768")==0) {
+                auto position=reinterpret_cast<WINDOWPOS*>(message->lParam);
+                position->hwndInsertAfter=HWND_TOPMOST;
+                position->flags &= ~SWP_NOZORDER;
+            }
+        }
+    }
+    return CallNextHookEx(nullptr,code,wp,lp);
+}
 void ShowCaptureDeviceMenu(HWND hwnd) {
     struct Choice { std::wstring id; };
     std::vector<Choice> choices;
@@ -5179,8 +5195,13 @@ void ShowCaptureDeviceMenu(HWND hwnd) {
     AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(inputs),L"Input device");
     AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(outputs),L"Output device");
     POINT pt{}; GetCursorPos(&pt);
+    RECT widget{}; GetWindowRect(hwnd,&widget);
+    if(!PtInRect(&widget,pt)) pt={(widget.left+widget.right)/2,(widget.top+widget.bottom)/2};
+    TPMPARAMS placement{sizeof(placement)}; GetWindowRect(MainTaskbar(),&placement.rcExclude);
     SetForegroundWindow(hwnd);
-    UINT command=TrackPopupMenuEx(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,pt.x,pt.y,hwnd,nullptr);
+    HHOOK menuHook=SetWindowsHookExW(WH_CALLWNDPROC,CaptureMenuHook,nullptr,GetCurrentThreadId());
+    UINT command=TrackPopupMenuEx(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON|TPM_VERTICAL,pt.x,pt.y,hwnd,&placement);
+    if(menuHook) UnhookWindowsHookEx(menuHook);
     PostMessageW(hwnd,WM_NULL,0,0);
     if(command==1 || (command>=100 && command-100<choices.size())) {
         std::wstring id=command==1?L"":choices[command-100].id;
