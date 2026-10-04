@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id              taskbar-system-info-weather
-// @name            Taskbar System Info with Weather
+// @name            Taskbar System Info Plus
 // @name:uk-UA      Системний монітор панелі завдань
-// @description     Compact CPU, GPU, temperatures, stacked network speeds, RAM and VRAM with optional graphs and a custom font.
+// @description     CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar, with optional graphs
 // @description:uk-UA Компактний монітор CPU, GPU, RAM і VRAM із 60-секундними графіками для панелі завдань Windows 11.
 // @version         1.2.3
 // @author          DavidHiFi
@@ -54,202 +54,73 @@ SOFTWARE.
 
 // ==WindhawkModReadme==
 /*
-# Taskbar System Info with Weather
+# Taskbar System Info Plus
 
-DavidHiFi's GPL-3.0 fork of Yevhenii Starychenko's Taskbar System Info.
-CPU and GPU rows have compact, font-measured spacing. Network upload appears
-after the CPU temperature and download after the GPU temperature.
+A compact hardware monitor on the taskbar: CPU, GPU, memory, temperatures and
+network speed at a glance. Taskbar System Info, plus network speeds and a
+tighter layout.
+
+![Taskbar System Info Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/taskbar-system-info-weather.png)
 
 ```text
-CPU 10% 72°C ↑ 1.2 MB/s [optional graph]   RAM  52% 16.7/32G
-GPU  4% 56°C ↓ 8.4 MB/s [optional graph]   VRAM  9%  2.1/24G
+CPU 10% 72°C ↑ 1.2 MB/s   RAM  52% 16.7/32G
+GPU  4% 56°C ↓ 8.4 MB/s   VRAM  9%  2.1/24G
 ```
 
-**Spacing between items** applies one gap to all fields. The default is 8 pixels.
-**Show CPU/GPU graphs** controls the first pair of history lines and defaults to off.
-**Show RAM/VRAM graphs** controls the separate lines after the gigabyte readings
-and defaults to on. **Show RAM/VRAM capacity bars** independently controls the
-original thin filled bars beneath the readings and defaults to on.
-Both pairs use the selected history duration. Memory lines show usage from
-zero to full capacity, equivalent to the used/total gigabytes beside them.
-**Show network speeds** controls the stacked network readings.
-**Font family** accepts any installed Windows font name. Empty uses
-Segoe UI Variable Text. Saving remeasures the layout with that font.
-**Widget width** at 0 fits the content automatically.
+## Features
 
-Network rates use byte-counter deltas and actual elapsed time from active
-physical Ethernet and Wi-Fi interfaces. Virtual adapters, tunnels and loopback
-are excluded to avoid duplicate counts. New adapters and reset counters need
-one baseline sample. Missing readings show `-- B/s`; idle rates show `0 B/s`.
-Units are decimal B/s, KB/s, MB/s, GB/s and TB/s.
-The mod reads local counters and makes no network requests.
+- **CPU and GPU** load and temperature.
+- **RAM and VRAM** usage with used and total gigabytes, plus capacity bars.
+- **Upload and download speed** from your real network adapters. Virtual
+  adapters and VPN tunnels are skipped so nothing is counted twice.
+- **Optional graphs** of recent history for CPU/GPU and RAM/VRAM.
+- **Warning colors** when temperatures or memory get high.
+- **Any font, any monitor.** Pick an installed font and the taskbar to show it
+  on; the width fits the content automatically.
+- **Light, dark and high-contrast** taskbars are followed automatically.
+- **Plays well with Taskbar Weather.** With it enabled, the panel sits right
+  after the weather.
 
-With Independent Taskbar Weather enabled, the panel follows its right edge.
-David's Audio Visualizer follows this panel's measured right edge.
-Disable the original System Info and Network Speed Indicator to avoid duplicates.
-CPU, GPU, RAM, VRAM and temperature providers retain the upstream collection.
+## Temperatures
 
-## Temperature providers
+The default **Automatic** source uses the first one that works:
 
-The **Temperature source** setting provides these modes:
+1. **HWiNFO Shared Memory** - in HWiNFO, open **Settings** and enable
+   **Shared Memory Support**.
+2. **HWiNFO Gadget** - in HWiNFO's **Sensor Settings > HWiNFO Gadget**, turn on
+   **Report to Gadget** for the CPU and GPU temperatures.
+3. **Windows** - the GPU driver for the GPU temperature, and ACPI thermal zones
+   for the CPU. These need no extra software, but a thermal zone is not always
+   the CPU package sensor.
 
-- **Automatic** fills CPU and GPU independently: HWiNFO shared memory first,
-  then HWiNFO Gadget Registry, then Windows D3DKMT for a still-missing GPU
-  reading and Windows thermal zones for a still-missing CPU reading.
-- **HWiNFO automatic** uses only the two HWiNFO interfaces.
-- **HWiNFO Shared Memory** uses only `Global\\HWiNFO_SENS_SM2`.
-- **HWiNFO Gadget Registry** uses only
-  `HKCU\\Software\\HWiNFO64\\VSB`.
-- **Windows native** reads GPU temperature from the selected display driver via
-  D3DKMT and CPU temperature from the same
-  `\\Thermal Zone Information(*)\\Temperature` PDH source as Taskbar Clock
-  Customization. It needs no third-party monitor. ACPI platform zones don't
-  necessarily represent the CPU package sensor; the optional zone filter and
-  average/hottest setting make this fallback explicit and controllable.
-- **Disabled** skips temperature collection while keeping every other metric.
-
-HWiNFO is optional and is not bundled with this mod. Shared-memory integration
-targets HWiNFO 7.0 or newer, which permits full disclosure of the interface.
-Temperature units are classified from HWiNFO's raw unit bytes, independently of
-the Windows ANSI code page.
-The free HWiNFO64 edition disables shared memory after 12 hours of continuous
-use; HWiNFO64 Pro has no such limit. Gadget Registry is a separate HWiNFO
-interface. Configure it under **Sensor Settings > HWiNFO Gadget** by enabling
-**Report to Gadget** for the desired CPU and GPU temperature readings. If the
-selected source is unavailable, temperatures are shown as `--°C`; all other
-  metrics continue to work. The active provider is written to the Windhawk log
-  only when it changes. When Windows adapter identity is available, automatic
-  HWiNFO GPU selection is matched to it. If adapter enumeration has never been
-  available and no adapter filter is set, HWiNFO uses its generic GPU match; on
-  multi-GPU systems, configure the adapter and sensor filters explicitly.
-
-Cached HWiNFO readings are checked against sensor/instance/reading IDs in
-Shared Memory, or exact Sensor/Label pairs in Gadget Registry. Reordered
-records trigger reselection in the same sample. Partial discovery retries
-quickly for a short window, then returns to the normal scan interval (60 seconds
-for Shared Memory, 30 seconds for Registry). Registry discovery enumerates
-actual SensorN entries, including sparse numbering. Invalid shared-memory layouts
-are rejected and logged once until a valid layout returns.
-
-Short provider timeouts are shown as unavailable unless another configured
-provider can supply the reading. Old temperatures are not silently held over
-as if they were current. Registry decimals and displayed numbers are independent
-of Explorer's numeric locale.
-
-## Setting up HWiNFO temperatures
-
-HWiNFO is only needed when Windows cannot expose the desired temperature. Keep
-HWiNFO running; **Sensors-only** mode is sufficient.
-
-### HWiNFO Shared Memory
-
-1. Open HWiNFO **Settings**.
-2. On **General / User Interface**, enable **Shared Memory Support**.
-3. Start or reopen the Sensors window.
-4. Keep this mod on **Automatic**, or select **HWiNFO Shared Memory** to use
-   only that interface.
-
-The free HWiNFO64 edition disables Shared Memory Support after 12 hours of
-continuous operation. This is an HWiNFO limitation, not a mod timer. Re-enable
-or restart it, use Gadget Registry, allow the Windows-native fallback, or use
-HWiNFO64 Pro. The mod does not bypass the limit.
-
-### HWiNFO Gadget Registry
-
-1. Open the HWiNFO Sensors window and **Sensor Settings**.
-2. Open the **HWiNFO Gadget** tab.
-3. Enable **Report to Gadget** for the required CPU and GPU temperature
-   readings.
-4. Run HWiNFO and Explorer/Windhawk as the same Windows user.
-5. Keep this mod on **Automatic**, or select **HWiNFO Gadget Registry**.
-
-If automatic selection chooses the wrong reading, enter a distinctive part of
-the HWiNFO sensor name in the CPU or GPU temperature sensor filter. Leave these
-filters empty unless a mismatch actually occurs.
-
-## Settings guide
-
-- **Widget width** and **Left offset** control the block size and its distance
-  from the far-left taskbar edge.
-- **Taskbar monitor** selects the display. An unavailable display falls back to
-  the primary taskbar and is retried automatically.
-- **Reserve space** prevents left-aligned taskbar buttons from overlapping the
-  widget; **Reserved space gap** adds padding after it.
-- **Update interval** controls collection frequency. One second is recommended.
-  **Graph history** controls how many seconds the CPU/GPU graphs represent.
-- **Adaptive colors** is recommended for automatic light, dark and Windows
-  high-contrast support. Manual text/graph/warning/critical colors are used when
-  it is disabled.
-- Temperature and memory warning/critical values only change alert colors; they
-  do not throttle hardware or close applications.
-- **GPU adapter filter** selects a card by a partial Windows adapter name.
-  Empty selects the adapter with the most dedicated VRAM.
-- **GPU memory type** should normally stay on Automatic. Shared memory is a
-  Windows allocation limit backed by system RAM, while dedicated VRAM is the
-  physical memory of a discrete GPU.
-- **Temperature source** should normally stay on Automatic. The HWiNFO-only,
-  Windows-native and Disabled modes are intended for diagnosis or explicit
-  control.
-- Windows thermal-zone settings only affect the Windows-native CPU fallback.
-  Firmware zones may describe a motherboard, chassis or skin sensor rather than
-  the CPU package.
+HWiNFO is optional and runs fine in Sensors-only mode. The free edition stops
+Shared Memory after 12 hours; the Gadget option or HWiNFO Pro avoid that. A
+missing reading shows as `--°C` and everything else keeps working.
 
 ## Troubleshooting
 
-- **Temperature is `--°C`:** configure HWiNFO Shared Memory or Gadget Registry,
-  verify that HWiNFO is running, and keep Automatic mode enabled.
-- **HWiNFO stopped after about 12 hours:** the free Shared Memory period ended.
-  Re-enable it, use Gadget Registry/Windows-native fallback, or use HWiNFO Pro.
-- **Wrong GPU temperature:** set the GPU adapter filter, then the HWiNFO GPU
-  sensor filter only if necessary.
-- **VRAM is `--` after a driver update:** allow up to one minute for adapter
-  refresh or the independent counter probe, plus a few samples for priming.
-  Inspect the Windhawk log if it stays unavailable; reloading the mod is the
-  fallback when Windows still cannot provide valid readings.
-- **Integrated-GPU memory looks too large:** Automatic mode shows the Windows
-  shared-memory limit. Force Dedicated only to display the reserved carve-out.
-- **A legacy 512 MB discrete GPU is shown as shared:** force Dedicated VRAM.
-  The automatic memory-shape signal cannot always distinguish it from an
-  integrated carve-out.
-- **Widget is missing, misplaced or overlapping:** verify monitor, width and
-  offset; reserve taskbar space or disable another element using the far-left
-  area.
+- **Wrong GPU:** set **GPU adapter filter** to part of the card's name. Use the
+  HWiNFO sensor filters only if the temperature is still wrong.
+- **VRAM shows `--` after a driver update:** give it a minute, then reload the
+  mod if it stays empty.
+- **Integrated GPU memory looks too large:** Automatic shows the Windows shared
+  limit. Set **GPU memory type** to Dedicated for the reserved amount.
+- **The panel overlaps taskbar buttons:** adjust **Left offset**, or turn on
+  **Reserve space before the Start button**.
 
-The Windhawk log records provider changes, adapter selection, counter recovery
-and HWiNFO sensor mismatches without logging every sample.
+Disable the original Taskbar System Info and Network Speed Indicator to avoid
+duplicates.
 
-## Compatibility and placement
+## Credits
 
-- Windows 11 64-bit. The widget can be placed on the primary or a secondary
-  taskbar. x64 is hardware-tested; ARM64 is compilation-tested.
-- Monitor 1 is always the primary display. Other monitors are ordered by their
-  position in the virtual desktop and can differ from the numbers in Windows
-  Display Settings. An unavailable or disconnected selection falls back to the
-  primary taskbar automatically and moves back when the selected display returns.
-- Display-change notifications re-evaluate monitor ordering even when the number
-  of displays and their taskbar windows stay unchanged.
-- On a taskbar shorter than the normal 38-DIP widget, the whole block scales down
-  uniformly to fit. Normal-height taskbars keep the configured size. Very wide
-  fonts can still require a wider widget; text is trimmed instead of overlapping.
-- Centered taskbar icons are recommended.
-- The widget uses the far-left taskbar area. Windows Widgets/weather or another
-  left-side taskbar extension can occupy the same space; adjust the offset or
-  disable the conflicting element if they overlap.
-- Enable **Reserve space before the Start button** if the widget overlaps
-  left-aligned taskbar buttons.
-- The widget is native XAML inside the taskbar and can coexist with Taskbar
-  Styler.
-
-## Credits and license
-
-Taskbar discovery and window-thread marshaling follow techniques from
-[Multirow taskbar for Windows 11](https://github.com/ramensoftware/windhawk-mods/blob/main/mods/taskbar-multirow.wh.cpp)
-by Michael Maltsev (`m417z`). Native GPU temperature collection follows his
-[Taskbar Clock Customization implementation](https://github.com/m417z/my-windhawk-mods/commit/861920df6380f4c13abec5d9226362c4725e8362).
-Secondary-taskbar discovery is adapted from
+Based on [Taskbar System Info](https://windhawk.net/mods/taskbar-system-info)
+by Yevhenii Starychenko. Network readouts are inspired by Taskbar Network Speed
+Indicator by Narayan. Taskbar discovery follows
+[Multirow taskbar](https://windhawk.net/mods/taskbar-multirow) and the GPU
+temperature code follows Taskbar Clock Customization, both by m417z.
+Secondary-taskbar support is adapted from
 [Taskbar Fluent Media Player](https://github.com/Salyts/Taskbar-Fluent-Media-Player)
-by Salyts.
-Released under GPL-3.0.
+by Salyts. GPL-3.0.
 */
 // ==/WindhawkModReadme==
 

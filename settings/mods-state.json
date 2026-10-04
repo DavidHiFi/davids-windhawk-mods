@@ -1,4 +1,11 @@
 {
+  "acrylic-color-glows": {
+    "disabled": false,
+    "include": "windhawk.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "0.4.2"
+  },
   "alt-drag": {
     "disabled": true,
     "include": "*",
@@ -46,7 +53,7 @@
     "include": "spotify.exe|cefclient.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.8"
+    "version": "1.9"
   },
   "clipboard-history-upgrade": {
     "disabled": false,
@@ -293,26 +300,12 @@
     "architecture": "",
     "version": "1.0.0"
   },
-  "local@david-window-pack": {
-    "disabled": false,
-    "include": "*|windhawk.exe",
-    "exclude": "",
-    "architecture": "",
-    "version": "1.0.0"
-  },
-  "local@davids-audio-visualizer": {
-    "disabled": false,
-    "include": "windhawk.exe",
-    "exclude": "",
-    "architecture": "",
-    "version": "1.0.1"
-  },
-  "local@explorer-font-changer-davidhifi": {
+  "local@shell-font-changer": {
     "disabled": false,
     "include": "explorer.exe|StartMenuExperienceHost.exe|ShellExperienceHost.exe|SearchHost.exe|ShellHost.exe|SystemSettings.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.0.1"
+    "version": "1.1.0"
   },
   "local@taskbar-ai-quota-opencode": {
     "disabled": false,
@@ -321,26 +314,40 @@
     "architecture": "x86-64",
     "version": "1.6.5.1"
   },
-  "local@taskbar-system-info-weather": {
+  "local@taskbar-audio-visualizer": {
     "disabled": false,
-    "include": "explorer.exe",
+    "include": "windhawk.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.2.2"
+    "version": "1.2.0"
   },
-  "local@taskbar-weather": {
+  "local@taskbar-system-info-weather": {
     "disabled": false,
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "",
     "version": "1.2.3"
   },
+  "local@taskbar-weather": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.4.0"
+  },
   "local@translucent-flyouts": {
     "disabled": false,
     "include": "*",
-    "exclude": "discord*.exe|Voicemeeter*.exe|Matrix*.exe|Stream Deck*.exe|dwm.exe",
+    "exclude": "discord*.exe|Voicemeeter*.exe|Matrix*.exe|Stream Deck*.exe|dwm.exe|Ableton*.exe",
     "architecture": "",
-    "version": "0.6.1"
+    "version": "0.6.6"
+  },
+  "local@window-manager": {
+    "disabled": false,
+    "include": "*|windhawk.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.1.0"
   },
   "minimize-to-tray": {
     "disabled": false,

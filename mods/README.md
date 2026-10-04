@@ -1,28 +1,26 @@
 # Mods
 
-- `local/` is my work: alt-snap-drag, taskbar-ai-quota-opencode,
-  npp-taskdlg-textcolor, translucent-flyouts, better-volume-mixer-plus and
-  explorer-font-changer-davidhifi and center-titlebar-fork (a prototype that is not installed). Each folder holds the source it was built
-  from.
-- `catalog/` holds copies of the catalog mods in this setup, one flat `.wh.cpp`
-  per mod, exactly as they are on my machine. The table in
-  [catalog/README.md](catalog/README.md) lists authors, versions and licenses.
+- `local/` holds my mods. Each folder has the source, a readme and install
+  steps.
+- `catalog/` holds copies of the catalog mods in this setup, one `.wh.cpp` per
+  mod, as installed. [catalog/README.md](catalog/README.md) lists authors,
+  versions and licenses.
 
 ## Local mods
 
 | Mod | What it does | Version | License |
 | --- | --- | --- | --- |
-| [davids-audio-visualizer](local/davids-audio-visualizer) | Mocha taskbar spectrum and media buttons with multiple-output and hardware-loopback capture. | 1.0.0 | MIT |
-| [david-window-pack](local/david-window-pack) | AltSnap dragging, keyboard snapping and monitor movement, including administrator windows. | 1.0.0 | GPL-3.0 |
-| [taskbar-weather](local/taskbar-weather) | Independent automatic weather with a rounded hover card. | 1.2.1 | MIT |
-| [taskbar-system-info-weather](local/taskbar-system-info-weather) | Performance monitor that follows the weather width. | 1.0.0 | GPL-3.0 |
-| [explorer-font-changer-davidhifi](local/explorer-font-changer-davidhifi) | Shell text font replacement with protected icon fonts and DirectWrite layouts. | 1.0.1 | MIT |
-| [alt-snap-drag](local/alt-snap-drag) | Alt-drag and resize with AltSnap shortcuts; replaces the stock AltDrag mod and the AltSnap app. | 1.2.2 | GPL-3.0 |
-| [taskbar-ai-quota-opencode](local/taskbar-ai-quota-opencode) | Taskbar AI quota bars with an OpenCode Go provider. | 1.6.5.1 | MIT |
-| [npp-taskdlg-textcolor](local/npp-taskdlg-textcolor) | Readable text in Notepad++ dark-mode Save and confirm dialogs. | 1.0.1 | MIT |
-| [translucent-flyouts](local/translucent-flyouts) | The archived TranslucentFlyouts engine reimplemented as one self-contained mod: acrylic/blur/transparent menus, tooltips and dropdown lists, no helper app. | 0.6.1 | LGPL-3.0 |
-| [better-volume-mixer-plus](local/better-volume-mixer-plus) | 0Allu's Better Volume Mixer plus per-app output and input device routing from each app's right-click menu; replaces EarTrumpet. | 1.0.0 | MIT |
-| [center-titlebar-fork](local/center-titlebar-fork) | Prototype fork of rounk-ctrl's center-titlebar; reworks title centering for current Windows 11 (DirectWrite). Not installed, not published. | 3.4 | MIT |
+| [Window Manager](local/window-manager) | Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts. | 1.1.0 | GPL-3.0 |
+| [AltSnap](local/alt-snap-drag) | Alt+drag to move and resize any window, plus AltSnap's window shortcuts. | 1.2.2 | GPL-3.0 |
+| [Taskbar Audio Visualizer](local/taskbar-audio-visualizer) | A live audio spectrum with media controls on the taskbar. | 1.2.0 | MIT |
+| [Taskbar Weather](local/taskbar-weather) | Current weather on the taskbar with a details card on hover. | 1.4.0 | MIT |
+| [Taskbar System Info Plus](local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar. | 1.2.3 | GPL-3.0 |
+| [Taskbar AI Quota Bars Plus](local/taskbar-ai-quota-opencode) | Claude, Codex, Antigravity and OpenCode Go usage limits on the taskbar. | 1.6.5.1 | MIT |
+| [Better Volume Mixer Plus](local/better-volume-mixer-plus) | Tray volume mixer with per-app output and input devices. | 1.0.0 | MIT |
+| [Translucent Flyouts](local/translucent-flyouts) | Acrylic, Mica and blur menus, dropdowns and tooltips in every app. | 0.6.6 | LGPL-3.0 |
+| [Shell Font Changer](local/shell-font-changer) | Any font in Explorer, Start, Search and Settings, with icons intact. | 1.1.0 | MIT |
+| [Notepad++ Dark Dialog Fix](local/npp-taskdlg-textcolor) | Readable text in Notepad++ dark-mode dialogs. | 1.0.1 | MIT |
+| [Center Titlebar Fork](local/center-titlebar-fork) | Unfinished prototype of a Windows 11 title-centering fix. Not installed. | 3.4 | MIT |
 
 ## Installing a mod
 

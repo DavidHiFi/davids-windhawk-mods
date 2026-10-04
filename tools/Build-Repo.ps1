@@ -25,8 +25,8 @@ if (-not (Test-Path -LiteralPath $src)) { throw "ModsSource not found at $src" }
 
 # Where the local (my) mods live in the repo; everything else is a catalog copy.
 $localPaths = [ordered]@{
-    'local@davids-audio-visualizer' = 'mods\local\davids-audio-visualizer\davids-audio-visualizer.wh.cpp'
-    'local@david-window-pack' = 'mods\local\david-window-pack\david-window-pack.wh.cpp'
+    'local@taskbar-audio-visualizer' = 'mods\local\taskbar-audio-visualizer\taskbar-audio-visualizer.wh.cpp'
+    'local@window-manager' = 'mods\local\window-manager\window-manager.wh.cpp'
     'local@taskbar-weather' = 'mods\local\taskbar-weather\taskbar-weather.wh.cpp'
     'local@taskbar-system-info-weather' = 'mods\local\taskbar-system-info-weather\taskbar-system-info-weather.wh.cpp'
     'local@alt-snap-drag'             = 'mods\local\alt-snap-drag\alt-snap.wh.cpp'
@@ -34,20 +34,20 @@ $localPaths = [ordered]@{
     'npp-taskdlg-textcolor'           = 'mods\local\npp-taskdlg-textcolor\npp-taskdlg-textcolor.wh.cpp'
     'local@translucent-flyouts'       = 'mods\local\translucent-flyouts\translucent-flyouts.wh.cpp'
     'local@better-volume-mixer-plus'  = 'mods\local\better-volume-mixer-plus\better-volume-mixer-plus.wh.cpp'
-    'local@explorer-font-changer-davidhifi' = 'mods\local\explorer-font-changer-davidhifi\explorer-font-changer-davidhifi.wh.cpp'
+    'local@shell-font-changer' = 'mods\local\shell-font-changer\shell-font-changer.wh.cpp'
 }
 # Values the source headers do not carry.
 $licenseOverride = @{
-    'local@david-window-pack' = 'GPL-3.0'
+    'local@window-manager' = 'GPL-3.0'
     'local@alt-snap-drag'   = 'GPL-3.0'
     'npp-taskdlg-textcolor' = 'MIT'
 }
 $upstreamOverride = @{
-    'local@davids-audio-visualizer' = 'https://github.com/USER-TOURNE/TOURNE-TABLE'
+    'local@taskbar-audio-visualizer' = 'https://windhawk.net/mods/tourne-table-desktop-audio-visualizer'
     'local@alt-snap-drag'             = 'https://windhawk.net/mods/alt-drag'
     'local@taskbar-ai-quota-opencode' = 'https://windhawk.net/mods/taskbar-ai-quota'
     'local@better-volume-mixer-plus'  = 'https://windhawk.net/mods/better-volume-mixer'
-    'local@explorer-font-changer-davidhifi' = 'https://windhawk.net/mods/explorer-font-changer'
+    'local@shell-font-changer' = 'https://windhawk.net/mods/explorer-font-changer'
 }
 # Local mods that are not installed on this machine: id -> source and repo dest.
 $offlineLocal = [ordered]@{
@@ -175,7 +175,7 @@ foreach ($id in $offlineLocal.Keys) {
 }
 $manifest = [ordered]@{
     name            = 'davids-windhawk-mods'
-    description     = "David's full Windhawk setup: every mod source, every setting."
+    description     = 'A full Windhawk setup: every mod source and every setting.'
     generatedAt     = (Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')
     windhawkVersion = '1.7.3'
     counts          = [ordered]@{

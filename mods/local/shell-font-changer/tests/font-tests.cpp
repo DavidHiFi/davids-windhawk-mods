@@ -1,4 +1,4 @@
-#include "../explorer-font-changer-davidhifi.wh.cpp"
+#include "../shell-font-changer.wh.cpp"
 #include <cstdio>
 
 int failures = 0;

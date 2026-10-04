@@ -1,6 +1,6 @@
 # Settings reference
 
-All 49 settings belong to David's Audio Visualizer. They reload without restarting Explorer, Windhawk, or audio applications.
+This page lists all 49 settings. They reload without restarting Explorer, Windhawk or audio applications.
 
 Geometry is clamped to fit the main horizontal taskbar. Colors accept `#AARRGGBB`, `#RRGGBB`, `rgba(...)`, or `rgb(...)`. Invalid color and quad values fall back to their documented defaults.
 

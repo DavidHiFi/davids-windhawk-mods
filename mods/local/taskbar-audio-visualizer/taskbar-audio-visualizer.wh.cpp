@@ -1,8 +1,8 @@
 // ==WindhawkMod==
-// @id                  davids-audio-visualizer
-// @name                David's Audio Visualizer
-// @description         Taskbar audio spectrum and media controls with Mocha colors and multi-output capture
-// @version             1.1.0
+// @id                  taskbar-audio-visualizer
+// @name                Taskbar Audio Visualizer
+// @description         A live audio spectrum with media controls, right on the taskbar
+// @version             1.2.0
 // @author              DavidHiFi
 // @github              https://github.com/DavidHiFi
 // @homepage            https://github.com/DavidHiFi/davids-windhawk-mods
@@ -13,58 +13,39 @@
 
 // ==WindhawkModReadme==
 /*
-# David's Audio Visualizer
+# Taskbar Audio Visualizer
 
-A taskbar spectrum visualizer with Catppuccin Mocha defaults, media buttons,
-and capture of active Windows audio outputs plus hardware loopback inputs.
+A live audio spectrum and media controls that sit on the taskbar, next to your
+other widgets.
 
-## Installation
+![Taskbar Audio Visualizer preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/taskbar-audio-visualizer.gif)
 
-Requires Windows 11 and Windhawk 1.7.3 or later. Paste this complete source into
-Windhawk's Create a new mod editor and compile it. Disable Tourne'Table or any
-older local visualizer before enabling this mod.
+## Features
 
-The bars stay on the main taskbar. Set Horizontal offset to place them after
-your system information widgets. Media buttons follow the bars automatically.
-Changing the taskbar position or display layout updates both windows through
-Windows events. Hide when fullscreen keeps the strip off screen while a
-fullscreen or borderless game covers the taskbar, then brings it back.
+- **Live spectrum bars** that follow whatever is playing, with smooth falloff
+  and optional peak caps.
+- **Media controls** for previous, play/pause and next, with built-in icons or
+  your own images.
+- **Choose what it listens to.** Right-click the bars to follow every active
+  output, a single output device, or an input such as an audio interface's
+  loopback.
+- **Stays out of the way.** It hides during fullscreen games and videos, and
+  clicks on the taskbar pass straight through.
+- **Customizable** bar shape, size, colors, EQ, response speed and background.
+  Catppuccin Mocha colors by default.
+- **Light on resources.** Drawing slows down when nothing is playing.
 
-## Settings
+## Tips
 
-- Position sets the horizontal and vertical offsets in logical pixels.
-- Appearance controls shapes, geometry, colors, response, EQ, FFT, and peaks.
-- Audio selects all active outputs or the default output, hardware loopbacks,
-  an optional device-name filter, and analysis gain.
-- Background adds a panel and optional border behind the bars.
-- Media buttons support built-in glyphs or local image files.
-- Performance sets the drawing rate and idle throttling delay.
-- Diagnostics writes a rotating status log without recording audio samples.
+- Use **Horizontal offset** to place the bars after other taskbar widgets.
+- Disable other taskbar visualizers, such as Tourne'Table, first.
+- The mod only listens. It never changes playback devices, volume or routing.
 
-Each frequency band uses the strongest captured level across devices. A signal
-routed through several Matrix endpoints does not multiply its displayed level.
-Capture uses shared WASAPI streams. Exclusive or protected outputs can reject
-loopback capture. An interface hardware Loopback input can expose its ASIO mix,
-depending on that interface's routing. Recording inputs are opened only when you explicitly select one from the device menu.
+## Credits
 
-The mod does not change playback devices, routing, volume, or driver settings.
-Right-click the bars to choose an Input device or Output device as the capture source.
-The selection is saved by endpoint ID and survives restarts. Output devices use
-WASAPI loopback. Input devices use their recording stream. Selecting a source
-does not change Windows defaults or application routing. The menu can restore
-the configured multi-device capture mode. Unavailable sources leave idle bars
-and reconnect when the same endpoint returns. Media buttons receive clicks.
-
-## Source and credits
-
-Source, settings reference, license, and verification:
-https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/davids-audio-visualizer
-
-Maintained by DavidHiFi. Derived from USER-TOURNE's Tourne'Table 1.3.0 and
-Salyts' Desktop Audio Visualizer. Their Direct2D renderer and Windows media
-session implementation are retained under the MIT license. This version adds
-taskbar ownership and event handling, multiple-output analysis, hardware
-loopback support, settings validation, and a focused taskbar settings interface.
+Based on [Tourne'Table](https://windhawk.net/mods/tourne-table-desktop-audio-visualizer)
+by USER-TOURNE and [Desktop Audio Visualizer](https://windhawk.net/mods/desktop-audio-visualizer)
+by Salyts. MIT.
 */
 // ==/WindhawkModReadme==
 
@@ -1078,7 +1059,7 @@ void RemoveTaskbarEvents() {
 
 DWORD WINAPI SettingsIssueDialogThread(LPVOID param) {
     std::wstring* text = (std::wstring*)param;
-    MessageBox(nullptr, text->c_str(), L"David's Audio Visualizer - Settings Problems",
+    MessageBox(nullptr, text->c_str(), L"Taskbar Audio Visualizer - Settings Problems",
                MB_OK | MB_ICONWARNING | MB_TOPMOST | MB_SETFOREGROUND);
     delete text;
     return 0;

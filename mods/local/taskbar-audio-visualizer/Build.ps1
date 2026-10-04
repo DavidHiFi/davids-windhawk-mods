@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param([string]$OutputDirectory=$PSScriptRoot)
 $ErrorActionPreference='Stop'
-$id='local@davids-audio-visualizer'
+$id='local@taskbar-audio-visualizer'
 $compiler='C:\Program Files\Windhawk\Compiler\bin\clang++.exe'
 New-Item $OutputDirectory -ItemType Directory -Force | Out-Null
 Set-Content "$OutputDirectory\modid.h" ('#define WH_MOD_ID L"{0}"' -f $id) -Encoding Ascii
@@ -13,11 +13,11 @@ foreach($arch in @('64','32')) {
         '-DWH_MOD','-include',"$OutputDirectory\modid.h",'-include','windhawk_api.h',
         '-I','C:\Program Files\Windhawk\Compiler\include','-Wno-pragma-pack',
         '-Wno-pragma-system-header-outside-header','-Wl,--export-all-symbols',
-        "$PSScriptRoot\davids-audio-visualizer.wh.cpp",
+        "$PSScriptRoot\taskbar-audio-visualizer.wh.cpp",
         "C:\Program Files\Windhawk\Engine\1.7.3_2\$arch\windhawk.lib",'-o',
-        "$OutputDirectory\${id}_1.1.0_1_${arch}.dll")
+        "$OutputDirectory\${id}_1.2.0_1_${arch}.dll")
     $libs='-ldxgi -ld2d1 -ld3d11 -ldcomp -ldwmapi -ldwrite -lgdi32 -lshcore -lshlwapi -lole32 -lshell32 -lksuser -lwindowscodecs -lruntimeobject -lwindowsapp -luuid -luser32 -ladvapi32'.Split(' ')
     & $compiler @argsList @libs
     if($LASTEXITCODE){throw "Build failed for $arch"}
-    Get-FileHash "$OutputDirectory\${id}_1.1.0_1_${arch}.dll"
+    Get-FileHash "$OutputDirectory\${id}_1.2.0_1_${arch}.dll"
 }

@@ -1,7 +1,7 @@
 // ==WindhawkMod==
 // @id taskbar-weather
-// @name Independent Taskbar Weather
-// @description Local weather on the taskbar with automatic updates and no Widgets or browser dependency.
+// @name Taskbar Weather
+// @description Current weather on the taskbar with a details card on hover. No Widgets, browser or API key needed
 // @version 1.4.0
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
@@ -14,24 +14,38 @@
 
 // ==WindhawkModReadme==
 /*
-# Independent taskbar weather
+# Taskbar Weather
 
-Draws a weather icon, Celsius temperature and conditions in the left taskbar.
-Uses Open-Meteo's current weather model over HTTPS. It does not use Windows
-Widgets, MSN, Edge, WebView, Windows location permissions or an API key.
+The current weather on the left side of the taskbar, with a details card when
+you hover over it. It works on its own, without Windows Widgets.
 
-Set the town's latitude and longitude in Settings, and optionally its name.
-Location stays in local mod settings. Updates every ten minutes. A failed
-request keeps the last reading and retries after a minute.
+![Taskbar Weather preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/taskbar-weather.png)
 
-Hover for a rounded card with the feels-like temperature, today's high and
-low, humidity, wind and the data time. The card marks readings older than
-thirty minutes as stale. Click the weather to refresh.
+## Features
 
-The default colors and compact two-line layout match this machine's Catppuccin Mocha
-taskbar. Disable the mod to remove it immediately. No Explorer restart is
-required. Weather is modeled for the selected coordinates, rather than measured
-at the PC.
+- **Weather icon, temperature and conditions** on the taskbar, updated every
+  ten minutes by default.
+- **Hover card** with the feels-like temperature, today's high and low,
+  humidity and wind.
+- **Click to refresh** at any time.
+- **No Widgets, MSN, Edge or location permission.** Data comes from
+  Open-Meteo, with no account or API key.
+- **Adjustable** position, width, font and size, in Catppuccin Mocha colors.
+
+## Setup
+
+Open the settings and enter your town's **latitude** and **longitude** (in most
+map apps, right-click a place to copy them). Add a **place name** to show it in
+the hover card. The coordinates are saved locally and sent to Open-Meteo with each request.
+Internet access is required; Open-Meteo also receives your IP address.
+
+Temperatures are in Celsius. If a request fails, the last reading stays and
+the mod retries a minute later; readings older than 30 minutes are marked in
+the card. Turn off Windows Widgets to avoid a second weather button.
+
+## Credits
+
+Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). MIT.
 */
 // ==/WindhawkModReadme==
 
@@ -503,3 +517,4 @@ void Wh_ModUninit() {
     CloseHandle(stopEvent);CloseHandle(refreshEvent);d2dFactory.Reset();writeFactory.Reset();GdiplusShutdown(graphicsToken);
 }
 BOOL Wh_ModSettingsChanged(BOOL* reload) { *reload=TRUE; return TRUE; }
+
