@@ -2,7 +2,7 @@
 // @id taskbar-weather
 // @name Taskbar Weather
 // @description Current weather on the taskbar with a details card on hover. No Widgets, browser or API key needed
-// @version 1.4.0
+// @version 1.4.2
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-weather
@@ -383,12 +383,18 @@ float Card(Graphics* g,const Reading& r) {
     put(LocationConfigured()?L"Click weather to refresh":L"Set latitude and longitude in Settings",small,muted,kPad,20);y+=22;
     return y+kPad-6;
 }
+// Folder windows can run in their own explorer.exe processes. Only the process that
+// owns the taskbar may attach the widget, or every process stacks another copy on it.
+HWND OwnTaskbar() {
+    HWND taskbar=FindWindowW(L"Shell_TrayWnd",nullptr);DWORD pid=0;
+    return taskbar&&GetWindowThreadProcessId(taskbar,&pid)&&pid==GetCurrentProcessId()?taskbar:nullptr;
+}
 void RenderCard() {
     HWND weather=weatherWindow;if(!cardWindow||!weather)return;
     Reading r;{std::lock_guard lock(dataMutex);r=reading;}
     float scale=GetDpiForWindow(weather)/96.f,height=Card(nullptr,r);
     int w=(int)std::ceil((kCardWidth+2*kShadow)*scale),h=(int)std::ceil((height+2*kShadow)*scale);
-    RECT anchor,bar;GetWindowRect(weather,&anchor);HWND taskbar=FindWindowW(L"Shell_TrayWnd",nullptr);if(!taskbar||!GetWindowRect(taskbar,&bar))bar=anchor;
+    RECT anchor,bar;GetWindowRect(weather,&anchor);HWND taskbar=OwnTaskbar();if(!taskbar||!GetWindowRect(taskbar,&bar))bar=anchor;
     MONITORINFO monitor{sizeof(monitor)};GetMonitorInfoW(MonitorFromWindow(weather,MONITOR_DEFAULTTONEAREST),&monitor);
     int margin=(int)std::lround(kShadow*scale),gap=(int)std::lround(8*scale);
     // Open above a bottom taskbar and below a top one, aligned with the weather's left edge.
@@ -421,10 +427,11 @@ int ContentWidth() {
     RowFont font=ResolveRowFont();
     float textWidth=TextWidth(font,r.valid?Whole(r.temperature)+L"°C":Label(r));
     if(r.valid) textWidth=std::max(textWidth,TextWidth(font,Condition(r.code)));
-    return std::clamp((int)std::ceil(textWidth)+(int)TextX(r.code)+(int)kTextRightPad,80,width);
+    // Round the whole sum up, plus a pixel of slack: truncating TextX left the layout a fraction short and trimmed the condition.
+    return std::clamp((int)std::ceil(textWidth+TextX(r.code)+kTextRightPad)+1,80,std::max(width,240));
 }
 void Layout(HWND hwnd) {
-    HWND parent=FindWindowW(L"Shell_TrayWnd",nullptr);if(!parent)return;
+    HWND parent=OwnTaskbar();if(!parent)return;
     RECT r;GetClientRect(parent,&r);int dpi=GetDpiForWindow(parent);int contentWidth=ContentWidth();int x=MulDiv(left,dpi,96),w=MulDiv(contentWidth,dpi,96),padding=MulDiv(4,dpi,96);
     if(GetParent(hwnd)!=parent)SetParent(hwnd,parent);
     SetWindowPos(hwnd,HWND_TOP,x,padding,w,std::max(1L,r.bottom-2*padding),SWP_NOACTIVATE|SWP_SHOWWINDOW);
@@ -455,7 +462,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
 // Its normal layout timer also covers Explorer creating the taskbar after injection.
 void EnsureWeatherWindow() {
     if(WaitForSingleObject(stopEvent,0)==WAIT_OBJECT_0)return;
-    HWND taskbar=FindWindowW(L"Shell_TrayWnd",nullptr);
+    HWND taskbar=OwnTaskbar();
     RECT bounds{};
     if(!taskbar || !GetClientRect(taskbar,&bounds) || bounds.bottom<24)return;
     if(!IsWindow(weatherWindow)) {
