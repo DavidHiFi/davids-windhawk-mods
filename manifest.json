@@ -1,12 +1,12 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-10-04T21:57:22+08:00",
+  "generatedAt": "2026-10-04T22:48:03+08:00",
   "windhawkVersion": "1.7.3",
   "counts": {
-    "mods": 110,
-    "enabled": 96,
-    "local": 11
+    "mods": 112,
+    "enabled": 107,
+    "local": 10
   },
   "mods": [
     {
@@ -20,18 +20,6 @@
       "upstream": "https://windhawk.net/mods/acrylic-color-glows",
       "source": "mods/catalog/acrylic-color-glows.wh.cpp",
       "enabled": true
-    },
-    {
-      "id": "alt-drag",
-      "name": "AltDrag",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/alt-drag",
-      "source": "mods/catalog/alt-drag.wh.cpp",
-      "enabled": false
     },
     {
       "id": "always-allow-ctrl-shift-enter",
@@ -82,18 +70,6 @@
       "enabled": true
     },
     {
-      "id": "better-volume-mixer",
-      "name": "Better Volume Mixer",
-      "author": "0Allu",
-      "github": "https://github.com/0Allu",
-      "version": "1.4.5",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/better-volume-mixer",
-      "source": "mods/catalog/better-volume-mixer.wh.cpp",
-      "enabled": false
-    },
-    {
       "id": "cef-titlebar-enabler-universal",
       "name": "CEF/Spotify Tweaks",
       "author": "Ingan121",
@@ -115,6 +91,18 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/clipboard-history-upgrade",
       "source": "mods/catalog/clipboard-history-upgrade.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "close-explorer-on-esc",
+      "name": "Close Explorer on Esc",
+      "author": "lieyanbang",
+      "github": "https://github.com/lieyanbang",
+      "version": "1.2",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/close-explorer-on-esc",
+      "source": "mods/catalog/close-explorer-on-esc.wh.cpp",
       "enabled": true
     },
     {
@@ -151,6 +139,18 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/control-panel-color-fix",
       "source": "mods/catalog/control-panel-color-fix.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "copy-queue",
+      "name": "Copy Queue",
+      "author": "Nerdworld",
+      "github": "https://github.com/nerdworldDE",
+      "version": "1.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/copy-queue",
+      "source": "mods/catalog/copy-queue.wh.cpp",
       "enabled": true
     },
     {
@@ -286,6 +286,18 @@
       "enabled": true
     },
     {
+      "id": "explorer-ctrln-newfile",
+      "name": "Explorer Ctrl+N to New File",
+      "author": "lieyanbang",
+      "github": "https://github.com/lieyanbang",
+      "version": "1.1",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-ctrln-newfile",
+      "source": "mods/catalog/explorer-ctrln-newfile.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "explorer-details-better-file-sizes",
       "name": "Better file sizes in Explorer details",
       "author": "m417z",
@@ -322,30 +334,6 @@
       "enabled": true
     },
     {
-      "id": "explorer-folder-bookmarks-bar",
-      "name": "Explorer Folder Bookmarks Bar",
-      "author": "Maxim Fomin",
-      "github": "https://github.com/MaxITService",
-      "version": "0.7.8",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-folder-bookmarks-bar",
-      "source": "mods/catalog/explorer-folder-bookmarks-bar.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "explorer-font-changer",
-      "name": "Explorer Font Changer",
-      "author": "Gabriela Cristei",
-      "github": "https://github.com/cristeigabriela",
-      "version": "0.2",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-font-changer",
-      "source": "mods/catalog/explorer-font-changer.wh.cpp",
-      "enabled": false
-    },
-    {
       "id": "explorer-hide-focus-border",
       "name": "File Explorer Focus Border Remover",
       "author": "Hùng",
@@ -370,6 +358,42 @@
       "enabled": true
     },
     {
+      "id": "explorer-no-min-size",
+      "name": "Explorer No Minimum Window Size",
+      "author": "Anixx",
+      "github": "https://github.com/Anixx",
+      "version": "1.0.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-no-min-size",
+      "source": "mods/catalog/explorer-no-min-size.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "explorer-title-bar-label",
+      "name": "Explorer Title Bar Label",
+      "author": "digART",
+      "github": "https://github.com/digart11",
+      "version": "1.0.0",
+      "license": "GPL-3.0",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-title-bar-label",
+      "source": "mods/catalog/explorer-title-bar-label.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "explorer-treeitem-tweaker",
+      "name": "Explorer TreeItem Tweaker",
+      "author": "Languster",
+      "github": "https://github.com/Languster",
+      "version": "1.1.1",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-treeitem-tweaker",
+      "source": "mods/catalog/explorer-treeitem-tweaker.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "explorer-treeline-killer",
       "name": "Explorer TreeLine Killer",
       "author": "Languster",
@@ -379,18 +403,6 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/explorer-treeline-killer",
       "source": "mods/catalog/explorer-treeline-killer.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "explorer-visual-tweaks-dark",
-      "name": "Explorer Visual Tweaks Dark",
-      "author": "VitalS",
-      "github": "https://github.com/VitalSkib",
-      "version": "1.0.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-visual-tweaks-dark",
-      "source": "mods/catalog/explorer-visual-tweaks-dark.wh.cpp",
       "enabled": true
     },
     {
@@ -418,6 +430,30 @@
       "enabled": true
     },
     {
+      "id": "file-explorer-content-animation",
+      "name": "File Explorer WinUI-Like Content Animation",
+      "author": "crazyboyybs",
+      "github": "https://github.com/crazyboyybs",
+      "version": "1.0.1",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/file-explorer-content-animation",
+      "source": "mods/catalog/file-explorer-content-animation.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "file-explorer-remove-suffixes",
+      "name": "Remove Taskbar Window Suffixes",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.1.1",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/file-explorer-remove-suffixes",
+      "source": "mods/catalog/file-explorer-remove-suffixes.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "file-operation-styler",
       "name": "File Operation Styler",
       "author": "digART",
@@ -442,6 +478,18 @@
       "enabled": true
     },
     {
+      "id": "fix-explorer-white-flash",
+      "name": "Fix white flashes in explorer",
+      "author": "Mgg Sk",
+      "github": "https://github.com/MGGSK",
+      "version": "1.4",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/fix-explorer-white-flash",
+      "source": "mods/catalog/fix-explorer-white-flash.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "force-kill-active-window",
       "name": "Force Kill Active Window",
       "author": "vfxturjo",
@@ -451,6 +499,18 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/force-kill-active-window",
       "source": "mods/catalog/force-kill-active-window.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "harmful-files-autoaccept",
+      "name": "Skip harmful files confirmation",
+      "author": "Arimodu",
+      "github": "https://github.com/Arimodu",
+      "version": "0.3.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/harmful-files-autoaccept",
+      "source": "mods/catalog/harmful-files-autoaccept.wh.cpp",
       "enabled": true
     },
     {
@@ -500,18 +560,6 @@
       "upstream": "https://windhawk.net/mods/lm-mediakey-explorer-fix",
       "source": "mods/catalog/lm-mediakey-explorer-fix.wh.cpp",
       "enabled": true
-    },
-    {
-      "id": "local@alt-snap-drag",
-      "name": "AltSnap",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.2.2",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "https://windhawk.net/mods/alt-drag",
-      "source": "mods/local/alt-snap-drag/alt-snap.wh.cpp",
-      "enabled": false
     },
     {
       "id": "local@better-volume-mixer-plus",
@@ -619,6 +667,18 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/minimize-to-tray",
       "source": "mods/catalog/minimize-to-tray.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "move-quietly",
+      "name": "Move Conflicts Quietly",
+      "author": "Johhannas Reyn",
+      "github": "https://github.com/JohhannasReyn",
+      "version": "1.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/move-quietly",
+      "source": "mods/catalog/move-quietly.wh.cpp",
       "enabled": true
     },
     {
@@ -850,18 +910,6 @@
       "enabled": true
     },
     {
-      "id": "snap-commander",
-      "name": "Snap Commander",
-      "author": "Asteski",
-      "github": "https://github.com/Asteski",
-      "version": "1.0.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/snap-commander",
-      "source": "mods/catalog/snap-commander.wh.cpp",
-      "enabled": false
-    },
-    {
       "id": "start-menu-open-real-file-location",
       "name": "Start Menu Open Real File Location",
       "author": "Alchemy",
@@ -920,18 +968,6 @@
       "upstream": "https://windhawk.net/mods/task-manager-tail",
       "source": "mods/catalog/task-manager-tail.wh.cpp",
       "enabled": true
-    },
-    {
-      "id": "taskbar-ai-quota",
-      "name": "Taskbar AI Quota Bars",
-      "author": "Cleroth",
-      "github": "https://github.com/Cleroth",
-      "version": "1.6.5",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-ai-quota",
-      "source": "mods/catalog/taskbar-ai-quota.wh.cpp",
-      "enabled": false
     },
     {
       "id": "taskbar-app-memory",
@@ -1054,18 +1090,6 @@
       "enabled": true
     },
     {
-      "id": "taskbar-system-info",
-      "name": "Taskbar System Info",
-      "author": "Yevhenii Starychenko",
-      "github": "https://github.com/starychenko",
-      "version": "1.5.0",
-      "license": "GPL-3.0",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-system-info",
-      "source": "mods/catalog/taskbar-system-info.wh.cpp",
-      "enabled": false
-    },
-    {
       "id": "taskbar-thumbnail-stats",
       "name": "Taskbar Thumbnail Stats",
       "author": "HaVeN80",
@@ -1138,18 +1162,6 @@
       "enabled": true
     },
     {
-      "id": "tourne-table-desktop-audio-visualizer",
-      "name": "Tourne'Table [Audio Visualizer]",
-      "author": "USER-TOURNE",
-      "github": "https://github.com/USER-TOURNE",
-      "version": "1.3.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/tourne-table-desktop-audio-visualizer",
-      "source": "mods/catalog/tourne-table-desktop-audio-visualizer.wh.cpp",
-      "enabled": false
-    },
-    {
       "id": "translucent-windows",
       "name": "Translucent Windows",
       "author": "Undisputed00x",
@@ -1171,6 +1183,18 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/uxtheme-hook",
       "source": "mods/catalog/uxtheme-hook.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "vlc-discord-rpc",
+      "name": "VLC Discord Rich Presence",
+      "author": "ciizerr",
+      "github": "https://github.com/ciizerr",
+      "version": "1.2.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/vlc-discord-rpc",
+      "source": "mods/catalog/vlc-discord-rpc.wh.cpp",
       "enabled": true
     },
     {
