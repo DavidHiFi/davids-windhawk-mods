@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         1.1.0
+// @version         1.2.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -29,8 +29,8 @@ give it a see-through, blurred background.
 - **Element colors.** Separate colors for mod cards and pages, for buttons,
   inputs and menus, for the accent and for text.
 - **Font.** Any installed font across the interface. Icons keep their own font.
-- **Native title bar.** Swap Windhawk's title bar for the standard Windows
-  one, colored to match.
+- **Theme window buttons.** Show your Windows theme's round window buttons
+  on the blurred title bar.
 - **Clean removal.** Disabling the mod restores every file it changed.
 
 ## How to use
@@ -45,8 +45,9 @@ Colors use `#RRGGBB`. Leave an element color blank to keep Windhawk's own.
 The mod edits a few of Windhawk's interface files and keeps a backup beside
 each. After a Windhawk update, reopen Windhawk to apply the styles again.
 The mod editor's code area keeps its own font setting.
-The native title bar uses a solid background. Windhawk's bundled Electron
-version supports transparent backgrounds only with its custom title bar.
+The theme buttons mode draws the window buttons into the see-through title
+bar, so the background keeps its blur. Windhawk's bundled Electron cannot
+combine the native DWM title bar itself with a transparent background.
 */
 // ==/WindhawkModReadme==
 
@@ -84,7 +85,7 @@ version supports transparent backgrounds only with its custom title bar.
   $description: An installed font name. Blank keeps Windhawk's font
 - nativeTitleBar: false
   $name: Native title bar
-  $description: Use the standard Windows title bar with a solid background
+  $description: Show your Windows theme's round window buttons on the blurred title bar
 */
 // ==/WindhawkModSettings==
 
@@ -114,10 +115,10 @@ struct Style {
     int backgroundOpacity = 60, cardOpacity = 100;
     int blur = 2;  // 0 none, 1 blur, 2 acrylic
     std::string card, control, accent, text;  // "r,g,b" or empty
-    DWORD textRgb = 0xcdd6f4;
+    DWORD textRgb = 0xcdd6f4, accentRgb = 0x89b4fa;
     bool hasText = false, nativeTitleBar = false;
     std::wstring font;
-    bool Transparent() const { return !nativeTitleBar && (backgroundOpacity < 100 || blur != 0); }
+    bool Transparent() const { return backgroundOpacity < 100 || blur != 0; }
 };
 static Style g_style;
 
@@ -186,7 +187,7 @@ static void LoadStyle() {
     s.blur = blur == L"none" ? 0 : blur == L"blur" ? 1 : 2;
     s.card = Color(L"cardColor");
     s.control = Color(L"controlColor");
-    s.accent = Color(L"accentColor");
+    s.accent = Color(L"accentColor", &s.accentRgb);
     s.text = Color(L"textColor", &s.textRgb);
     s.hasText = !s.text.empty();
     s.font = Setting(L"fontFamily");
@@ -205,7 +206,7 @@ static std::string FontCss() {
 }
 static std::string AppCss() {
     const auto& s = g_style;
-    auto bg = "rgba(" + Rgb(s.background) + "," + Alpha(s.nativeTitleBar ? 100 : s.backgroundOpacity) + ")";
+    auto bg = "rgba(" + Rgb(s.background) + "," + Alpha(s.backgroundOpacity) + ")";
     std::string css =
         "html{background:" + bg + "!important}body{background:transparent!important;"
         "--app-background-color:" + bg + "!important}";
@@ -225,10 +226,11 @@ static std::string AppCss() {
     if (!s.control.empty()) {
         auto inline_ = "rgba(" + s.control + "," + Alpha(std::max(s.cardOpacity, 50)) + ")";
         auto solid = "rgb(" + s.control + ")";
-        css += ".ant-btn:not(.ant-btn-primary):not(.ant-btn-link):not(.ant-btn-text):not(.ant-btn-background-ghost),"
-               ".ant-input,.ant-input-affix-wrapper,.ant-input-number,.ant-picker,"
-               ".ant-select:not(.ant-select-customize-input) .ant-select-selector,"
-               ".ant-radio-button-wrapper:not(.ant-radio-button-wrapper-checked),"
+        css += ".ant-btn:not(.ant-btn-primary):not(.ant-btn-link):not(.ant-btn-text):not(.ant-btn-background-ghost):not(:disabled):not(.ant-btn-disabled),"
+               ".ant-input:not(:disabled),.ant-input-affix-wrapper:not(.ant-input-affix-wrapper-disabled),"
+               ".ant-input-number:not(.ant-input-number-disabled),.ant-picker:not(.ant-picker-disabled),"
+               ".ant-select:not(.ant-select-disabled):not(.ant-select-customize-input) .ant-select-selector,"
+               ".ant-radio-button-wrapper:not(.ant-radio-button-wrapper-checked):not(.ant-radio-button-wrapper-disabled),"
                "[class*=CreateNewModButton__CreateButton]{background-color:" + inline_ + "!important}"
                ".ant-input-affix-wrapper .ant-input,.ant-input-number .ant-input-number-input"
                "{background:transparent!important}"
@@ -240,11 +242,22 @@ static std::string AppCss() {
     }
     if (!s.accent.empty()) {
         auto a = "rgb(" + s.accent + ")";
-        css += ".ant-btn-primary:not(.ant-btn-background-ghost),.ant-switch-checked,.ant-tabs-ink-bar,"
+        // Text on an accent fill must contrast with it, or light accents leave buttons unreadable.
+        int luma = ((s.accentRgb >> 16 & 255) * 299 + (s.accentRgb >> 8 & 255) * 587 + (s.accentRgb & 255) * 114) / 1000;
+        std::string onAccent = luma > 150 ? "rgb(30,30,46)" : "#ffffff";
+        css += ".ant-btn-primary:not(.ant-btn-background-ghost):not(:disabled):not(.ant-btn-disabled),"
+               ".ant-switch-checked,.ant-tabs-ink-bar,"
                ".ant-slider-track,.ant-progress-bg,.ant-spin-dot-item,.ant-badge-count,"
                ".ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled),"
                ".ant-checkbox-checked .ant-checkbox-inner,.ant-radio-inner:after"
                "{background-color:" + a + "!important;border-color:" + a + "!important}"
+               ".ant-btn-primary:not(.ant-btn-background-ghost):not(:disabled):not(.ant-btn-disabled),"
+               ".ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled),.ant-badge-count"
+               "{color:" + onAccent + "!important}"
+               ".ant-checkbox-checked .ant-checkbox-inner:after{border-color:" + onAccent + "!important}"
+               ".ant-btn-primary:disabled,.ant-btn-primary.ant-btn-disabled,.ant-btn-primary[disabled]"
+               "{background-color:rgba(120,122,140,.28)!important;color:rgba(230,232,245,.55)!important;"
+               "border-color:transparent!important}"
                ".ant-btn-primary.ant-btn-background-ghost,.ant-btn:not(.ant-btn-primary):hover,"
                ".ant-btn:not(.ant-btn-primary):focus,.ant-pagination-item-active,.ant-radio-checked .ant-radio-inner,"
                ".ant-input:hover,.ant-input:focus,.ant-input-affix-wrapper:hover,.ant-input-affix-wrapper-focused,"
@@ -254,6 +267,9 @@ static std::string AppCss() {
                ".ant-btn:not(.ant-btn-primary):focus,.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn,"
                ".ant-tabs-tab:hover,.ant-pagination-item-active a,.ant-typography a"
                "{color:" + a + "!important}"
+               ".ant-select-item-option-selected{background-color:rgba(" + s.accent + ",.22)!important}"
+               ".ant-select-item-option-selected.ant-select-item-option-active"
+               "{background-color:rgba(" + s.accent + ",.32)!important}"
                ".ant-btn-primary.ant-btn-background-ghost{background:transparent!important}";
     }
     if (s.hasText) {
@@ -265,13 +281,14 @@ static std::string AppCss() {
                ".ant-btn:not(.ant-btn-primary):not(.ant-btn-link):not(.ant-btn-background-ghost),.ant-descriptions,"
                ".ant-form-item-label>label,.ant-empty-description{color:" + t + "}"
                ".ant-typography-secondary,.ant-card-meta-description,.ant-list-item-meta-description,"
-               "[class*=ModCard] .ant-card-body,.ant-input::placeholder{color:" + dim + "!important}";
+               "[class*=ModCard] .ant-card-body,.ant-input::placeholder{color:" + dim + "!important}"
+               ".ant-select-item-option-selected{color:" + t + "!important}";
     }
     return css;
 }
 static std::string WorkbenchCss() {
     const auto& s = g_style;
-    auto bg = "rgba(" + Rgb(s.background) + "," + Alpha(s.nativeTitleBar ? 100 : s.backgroundOpacity) + ")";
+    auto bg = "rgba(" + Rgb(s.background) + "," + Alpha(s.backgroundOpacity) + ")";
     std::string css =
         "html,body,.monaco-workbench,.monaco-workbench .part,.monaco-workbench .part>.content,"
         ".monaco-workbench .split-view-view,.monaco-workbench .monaco-grid-view,"
@@ -286,6 +303,40 @@ static std::string WorkbenchCss() {
     if (!s.font.empty())
         css += ".monaco-workbench .part.titlebar .window-title,.monaco-workbench .part.titlebar .menubar"
                "{font-family:" + FontCss() + "!important}";
+    if (s.nativeTitleBar)
+        css += ".monaco-workbench .part.titlebar>.window-controls-container>.window-icon"
+               "{background-color:transparent!important;position:relative!important}"
+               ".monaco-workbench .part.titlebar>.window-controls-container>.window-icon:hover"
+               "{background-color:transparent!important}"
+               ".monaco-workbench .part.titlebar>.window-controls-container>.window-icon::after"
+               "{content:\"\"!important;position:absolute!important;left:50%;top:50%;width:16px;height:16px;"
+               "margin:-8px 0 0 -8px;border-radius:50%!important;z-index:0}"
+               ".monaco-workbench .part.titlebar>.window-controls-container>.window-minimize::after"
+               "{background:#f9e2af!important}"
+               ".monaco-workbench .part.titlebar>.window-controls-container>.window-max-restore::after"
+               "{background:#a6e3a1!important}"
+               ".monaco-workbench .part.titlebar>.window-controls-container>.window-close::after"
+               "{background:#f38ba8!important}"
+               ".monaco-workbench .part.titlebar>.window-controls-container>.window-minimize:hover::after"
+               "{background:#c8b17e!important}"
+               ".monaco-workbench .part.titlebar>.window-controls-container>.window-max-restore:hover::after"
+               "{background:#74b16f!important}"
+               ".monaco-workbench .part.titlebar>.window-controls-container>.window-close:hover::after"
+               "{background:#c45c79!important}"
+               ".monaco-workbench .part.titlebar>.window-controls-container>.window-icon::before"
+               "{content:\"\"!important;position:relative;z-index:1;width:16px!important;height:16px!important;"
+               "background-position:center!important;background-repeat:no-repeat!important;"
+               "background-size:16px 16px!important;opacity:0}"
+               ".monaco-workbench .part.titlebar>.window-controls-container>.window-icon:hover::before"
+               "{opacity:1}"
+               ".monaco-workbench .part.titlebar>.window-controls-container>.window-minimize::before"
+               "{background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3' y='7' width='10' height='2' rx='1' fill='%236f5825'/%3E%3C/svg%3E\")}"
+               ".monaco-workbench .part.titlebar>.window-controls-container>.window-max-restore::before"
+               "{background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 4.5 L8.7 8.7' stroke='%23286523' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M12.3 12.3 L6.9 11.0 L11.0 6.9 Z' fill='%23286523'/%3E%3C/svg%3E\")}"
+               ".monaco-workbench .part.titlebar>.window-controls-container>.window-max-restore.codicon-chrome-restore::before"
+               "{background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='5.6' y='7.4' width='5.0' height='5.0' rx='0.7' fill='none' stroke='%23286523' stroke-width='1.6'/%3E%3Cpath d='M7.4 7.4 V4.6 a0.7 0.7 0 0 1 0.7 -0.7 h3.6 a0.7 0.7 0 0 1 0.7 0.7 v3.6 a0.7 0.7 0 0 1 -0.7 0.7 h-2.6' fill='none' stroke='%23286523' stroke-width='1.6'/%3E%3C/svg%3E\")}"
+               ".monaco-workbench .part.titlebar>.window-controls-container>.window-close::before"
+               "{background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.8 4.8 L11.2 11.2 M11.2 4.8 L4.8 11.2' stroke='%23851d3a' stroke-width='2.7' stroke-linecap='round'/%3E%3C/svg%3E\")}";
     return kBegin + css + kEnd;
 }
 
@@ -344,9 +395,7 @@ static std::string MainJs(const std::string& clean) {
     return out;
 }
 static std::string SettingsJson(const std::string& clean) {
-    std::string keys;
-    if (g_style.nativeTitleBar) keys += "\"window.titleBarStyle\":\"native\",\"window.menuBarVisibility\":\"hidden\"";
-    else keys += "\"window.titleBarStyle\":\"custom\",\"window.experimental.windowControlsOverlay.enabled\":false";
+    std::string keys = "\"window.titleBarStyle\":\"custom\",\"window.experimental.windowControlsOverlay.enabled\":false";
     if (keys.empty()) return clean;
     auto close = clean.rfind('}');
     if (close == std::string::npos) throw std::runtime_error("Unexpected settings file");
