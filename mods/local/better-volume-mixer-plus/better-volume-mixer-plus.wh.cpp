@@ -2,7 +2,7 @@
 // @id           better-volume-mixer-plus
 // @name         Better Volume Mixer Plus
 // @description  A compact tray volume mixer with per-app volume and per-app output and input devices
-// @version      1.0.0
+// @version      1.1.0
 // @author       DavidHiFi
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -31,6 +31,7 @@ audio devices. Better Volume Mixer, plus device routing.
 - **Middle-click to mute**, in the mixer or on the tray icon.
 - **Light, dark and system themes** with blur, transparency and animations.
 - **Compact mode** and full keyboard control.
+- **Custom font**, such as a Nerd Font, for all mixer text.
 
 ## How to use
 
@@ -64,6 +65,9 @@ by 0Allu. MIT.
   - system: Follow Windows
   - dark: Dark
   - light: Light
+- fontFamily: ""
+  $name: Font
+  $description: Font family for mixer text, for example FiraCode Nerd Font. Leave empty to use Segoe UI. Falls back to Segoe UI if the font is not installed.
 - backgroundOpacity: 85
   $name: Background opacity
   $description: Background opacity from 0 to 100 percent. Text and controls remain opaque. Blur is applied where supported by Windows.
@@ -244,6 +248,7 @@ struct CustomApp {
 
 struct Settings {
     std::wstring theme = L"system";
+    std::wstring fontFamily;
     bool showAllSessions = false;
     bool compactMode = false;
     bool closeWhenFocusIsLost = true;
@@ -534,6 +539,9 @@ void LoadSettings() {
     if (g_settings.theme != L"dark" && g_settings.theme != L"light") {
         g_settings.theme = L"system";
     }
+    WindhawkUtils::StringSetting fontFamily =
+        WindhawkUtils::StringSetting::make(L"fontFamily");
+    g_settings.fontFamily = fontFamily.get();
 
     g_settings.showAllSessions =
         Wh_GetIntSetting(L"showAllSessions") != 0;
@@ -724,12 +732,13 @@ void DeleteFonts() {
     }
 }
 
-Gdiplus::Font* CreateTypographyFont(PCWSTR preferredFamily, float pixels) {
+Gdiplus::Font* CreateTypographyFont(PCWSTR preferredFamily, float pixels,
+                                    int style = Gdiplus::FontStyleRegular) {
     Gdiplus::FontFamily family(preferredFamily);
     Gdiplus::Font* font = nullptr;
     if (family.GetLastStatus() == Gdiplus::Ok &&
-        family.IsStyleAvailable(Gdiplus::FontStyleRegular)) {
-        font = new Gdiplus::Font(&family, pixels, Gdiplus::FontStyleRegular,
+        family.IsStyleAvailable(style)) {
+        font = new Gdiplus::Font(&family, pixels, style,
                                  Gdiplus::UnitPixel);
         if (font->GetLastStatus() == Gdiplus::Ok) return font;
         delete font;
@@ -748,27 +757,34 @@ void CreateFonts(HWND hWnd) {
         g_dpi = 96;
     }
 
+    PCWSTR custom = g_settings.fontFamily.empty() ? nullptr
+                                                  : g_settings.fontFamily.c_str();
+    PCWSTR textFace = custom ? custom : L"Segoe UI";
     g_titleFont = CreateFontW(
         -MulDiv(15, g_dpi, 72), 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, textFace);
     g_bodyFont = CreateFontW(
         -MulDiv(10, g_dpi, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, textFace);
     g_smallFont = CreateFontW(
         -MulDiv(9, g_dpi, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, textFace);
     g_symbolFont = CreateFontW(
         -MulDiv(13, g_dpi, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
         ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe Fluent Icons");
     if (g_gdiplusToken) {
         float density = g_dpi / 96.0f;
-        g_titleTypography = CreateTypographyFont(L"Segoe UI Semibold", 20.0f * density);
-        g_bodyTypography = CreateTypographyFont(L"Segoe UI Variable Text", 14.0f * density);
-        g_smallTypography = CreateTypographyFont(L"Segoe UI Variable Text", 12.0f * density);
+        g_titleTypography = custom
+            ? CreateTypographyFont(custom, 20.0f * density, Gdiplus::FontStyleBold)
+            : CreateTypographyFont(L"Segoe UI Semibold", 20.0f * density);
+        g_bodyTypography = CreateTypographyFont(
+            custom ? custom : L"Segoe UI Variable Text", 14.0f * density);
+        g_smallTypography = CreateTypographyFont(
+            custom ? custom : L"Segoe UI Variable Text", 12.0f * density);
     }
 }
 
@@ -4464,6 +4480,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
             SelectRow(DRAG_MASTER);
             StopDefaultVolumeNotifications();
             LoadSettings();
+            CreateFonts(hWnd);
             if (IsWindowVisible(hWnd)) {
                 SetTimer(hWnd, TIMER_REFRESH, 1000, nullptr);
             } else {
