@@ -30,5 +30,8 @@ Colors use `#RRGGBB`. Leave an element color blank to keep Windhawk's own.
 The mod edits a few of Windhawk's interface files and keeps a backup beside
 each. After a Windhawk update, reopen Windhawk to apply the styles again.
 The mod editor's code area keeps its own font setting.
-The native title bar uses a solid background. Windhawk's bundled Electron
-version supports transparent backgrounds only with its custom title bar.
+Both title bar modes keep the see-through, blurred background. The native
+title bar draws the standard Windows caption with its own window buttons,
+and maximizing fits the window to the work area so the caption and its
+buttons stay exactly as they are. The window frame technique is adapted
+from Titlebar For Everyone by Ingan121 (MIT).

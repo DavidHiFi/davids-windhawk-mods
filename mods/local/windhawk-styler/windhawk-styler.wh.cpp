@@ -2,13 +2,14 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         1.2.0
+// @version         1.3.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         MIT
 // @include         windhawk.exe
-// @compilerOptions -luser32 -lshell32 -ldwmapi -lbcrypt
+// @include         VSCodium.exe
+// @compilerOptions -luser32 -lshell32 -ldwmapi -lbcrypt -lcomctl32
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -25,12 +26,13 @@ give it a see-through, blurred background.
 - **Background.** Any color, with its own opacity. Text, cards and buttons
   stay solid and sharp.
 - **Acrylic or blur.** Blur sits behind the background only, with rounded
-  window corners.
+  window corners. Used when the native title bar is off.
 - **Element colors.** Separate colors for mod cards and pages, for buttons,
   inputs and menus, for the accent and for text.
 - **Font.** Any installed font across the interface. Icons keep their own font.
-- **Theme window buttons.** Show your Windows theme's round window buttons
-  on the blurred title bar.
+- **Native title bar.** Use the real Windows title bar, with your own
+  Windows theme and its window buttons. The window behaves like any
+  other window, and the background keeps its transparency and blur.
 - **Clean removal.** Disabling the mod restores every file it changed.
 
 ## How to use
@@ -45,9 +47,10 @@ Colors use `#RRGGBB`. Leave an element color blank to keep Windhawk's own.
 The mod edits a few of Windhawk's interface files and keeps a backup beside
 each. After a Windhawk update, reopen Windhawk to apply the styles again.
 The mod editor's code area keeps its own font setting.
-The theme buttons mode draws the window buttons into the see-through title
-bar, so the background keeps its blur. Windhawk's bundled Electron cannot
-combine the native DWM title bar itself with a transparent background.
+The native title bar draws the real Windows caption, and without it the
+window controls come from the interface itself. Both modes keep the
+see-through, blurred background. The window frame technique is adapted
+from Titlebar For Everyone by Ingan121 (MIT).
 */
 // ==/WindhawkModReadme==
 
@@ -85,10 +88,11 @@ combine the native DWM title bar itself with a transparent background.
   $description: An installed font name. Blank keeps Windhawk's font
 - nativeTitleBar: false
   $name: Native title bar
-  $description: Show your Windows theme's round window buttons on the blurred title bar
+  $description: Use the real Windows title bar and its window buttons, drawn by Windows itself
 */
 // ==/WindhawkModSettings==
 
+#include <windhawk_utils.h>
 #include <windows.h>
 #include <shellapi.h>
 #include <dwmapi.h>
@@ -303,40 +307,6 @@ static std::string WorkbenchCss() {
     if (!s.font.empty())
         css += ".monaco-workbench .part.titlebar .window-title,.monaco-workbench .part.titlebar .menubar"
                "{font-family:" + FontCss() + "!important}";
-    if (s.nativeTitleBar)
-        css += ".monaco-workbench .part.titlebar>.window-controls-container>.window-icon"
-               "{background-color:transparent!important;position:relative!important}"
-               ".monaco-workbench .part.titlebar>.window-controls-container>.window-icon:hover"
-               "{background-color:transparent!important}"
-               ".monaco-workbench .part.titlebar>.window-controls-container>.window-icon::after"
-               "{content:\"\"!important;position:absolute!important;left:50%;top:50%;width:16px;height:16px;"
-               "margin:-8px 0 0 -8px;border-radius:50%!important;z-index:0}"
-               ".monaco-workbench .part.titlebar>.window-controls-container>.window-minimize::after"
-               "{background:#f9e2af!important}"
-               ".monaco-workbench .part.titlebar>.window-controls-container>.window-max-restore::after"
-               "{background:#a6e3a1!important}"
-               ".monaco-workbench .part.titlebar>.window-controls-container>.window-close::after"
-               "{background:#f38ba8!important}"
-               ".monaco-workbench .part.titlebar>.window-controls-container>.window-minimize:hover::after"
-               "{background:#c8b17e!important}"
-               ".monaco-workbench .part.titlebar>.window-controls-container>.window-max-restore:hover::after"
-               "{background:#74b16f!important}"
-               ".monaco-workbench .part.titlebar>.window-controls-container>.window-close:hover::after"
-               "{background:#c45c79!important}"
-               ".monaco-workbench .part.titlebar>.window-controls-container>.window-icon::before"
-               "{content:\"\"!important;position:relative;z-index:1;width:16px!important;height:16px!important;"
-               "background-position:center!important;background-repeat:no-repeat!important;"
-               "background-size:16px 16px!important;opacity:0}"
-               ".monaco-workbench .part.titlebar>.window-controls-container>.window-icon:hover::before"
-               "{opacity:1}"
-               ".monaco-workbench .part.titlebar>.window-controls-container>.window-minimize::before"
-               "{background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3' y='7' width='10' height='2' rx='1' fill='%236f5825'/%3E%3C/svg%3E\")}"
-               ".monaco-workbench .part.titlebar>.window-controls-container>.window-max-restore::before"
-               "{background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 4.5 L8.7 8.7' stroke='%23286523' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M12.3 12.3 L6.9 11.0 L11.0 6.9 Z' fill='%23286523'/%3E%3C/svg%3E\")}"
-               ".monaco-workbench .part.titlebar>.window-controls-container>.window-max-restore.codicon-chrome-restore::before"
-               "{background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='5.6' y='7.4' width='5.0' height='5.0' rx='0.7' fill='none' stroke='%23286523' stroke-width='1.6'/%3E%3Cpath d='M7.4 7.4 V4.6 a0.7 0.7 0 0 1 0.7 -0.7 h3.6 a0.7 0.7 0 0 1 0.7 0.7 v3.6 a0.7 0.7 0 0 1 -0.7 0.7 h-2.6' fill='none' stroke='%23286523' stroke-width='1.6'/%3E%3C/svg%3E\")}"
-               ".monaco-workbench .part.titlebar>.window-controls-container>.window-close::before"
-               "{background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.8 4.8 L11.2 11.2 M11.2 4.8 L4.8 11.2' stroke='%23851d3a' stroke-width='2.7' stroke-linecap='round'/%3E%3C/svg%3E\")}";
     return kBegin + css + kEnd;
 }
 
@@ -382,7 +352,9 @@ static std::string MainJs(const std::string& clean) {
     }
     if (at == std::string::npos) throw std::runtime_error("Window options not found");
     auto opts = out.substr(at, out.find(')', at) - at);
-    out.insert(at, kBegin + "Object.assign(" + opts + ",{transparent:!0,backgroundColor:\"#00000000\"})&&" + kEnd);
+    std::string inject = "transparent:!0,backgroundColor:\"#00000000\"";
+    if (g_style.nativeTitleBar) inject += ",frame:!1";
+    out.insert(at, kBegin + "Object.assign(" + opts + ",{" + inject + "})&&" + kEnd);
     auto p = out.find("updateBackgroundColor(");
     while (p != std::string::npos) {
         auto brace = out.find(')', p);
@@ -395,7 +367,9 @@ static std::string MainJs(const std::string& clean) {
     return out;
 }
 static std::string SettingsJson(const std::string& clean) {
-    std::string keys = "\"window.titleBarStyle\":\"custom\",\"window.experimental.windowControlsOverlay.enabled\":false";
+    std::string keys;
+    if (g_style.nativeTitleBar) keys = "\"window.titleBarStyle\":\"native\",\"window.menuBarVisibility\":\"hidden\"";
+    else keys = "\"window.titleBarStyle\":\"custom\",\"window.experimental.windowControlsOverlay.enabled\":false";
     if (keys.empty()) return clean;
     auto close = clean.rfind('}');
     if (close == std::string::npos) throw std::runtime_error("Unexpected settings file");
@@ -533,14 +507,257 @@ static void CALLBACK Shown(HWINEVENTHOOK, DWORD, HWND h, LONG object, LONG, DWOR
 }
 static DWORD WINAPI Worker(void*) {
     auto hook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, nullptr, Shown, 0, 0, WINEVENT_OUTOFCONTEXT);
+    int tick = 0;
     while (MsgWaitForMultipleObjects(1, &g_stop, FALSE, 1000, QS_ALLINPUT) != WAIT_OBJECT_0) {
         MSG msg; while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) DispatchMessageW(&msg);
         std::lock_guard lock(g_guard);
         std::erase_if(g_windows, [](HWND h) { return !IsWindow(h); });
         EnumWindows(Track, 0);
+        // Keep the backdrop in place: the frame can reset it when the window state changes.
+        if (++tick % 5 == 0 && !g_style.nativeTitleBar)
+            for (HWND h : g_windows) Effect(h, false);
     }
     if (hook) UnhookWinEvent(hook);
     return 0;
+}
+
+// The native title bar is the real Windows frame. The interface window is created
+// without a frame so the background stays see-through, then the frame is applied
+// from inside the interface process. Non-client messages are handed to
+// DefWindowProc, so Windows draws its own caption using the current system theme.
+// Technique adapted from Titlebar For Everyone by Ingan121 (MIT).
+static bool g_uiProcess, g_nativeBar, g_hookInstalled;
+static LRESULT CALLBACK CaptionProc(HWND h, UINT msg, WPARAM w, LPARAM l, DWORD_PTR);
+using ShowWindow_t = decltype(&ShowWindow);
+static ShowWindow_t ShowWindow_orig;
+using ShowWindowAsync_t = decltype(&ShowWindowAsync);
+static ShowWindowAsync_t ShowWindowAsync_orig;
+
+static bool CaptionTarget(HWND h);
+
+// The OS maximize state draws the frame without DWM's themed caption on this
+// transparent window, so it falls back to the classic drawing. Instead the
+// window is fitted to the work area like Chromium's own frameless maximize,
+// which keeps the themed caption with its window buttons in place.
+static const UINT WM_STYLER_FIT = WM_APP + 0x51;
+static HWND g_fit;
+static RECT g_fitBack;
+static bool g_fitActive;
+
+static RECT WorkArea(HWND h) {
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST), &mi);
+    return mi.rcWork;
+}
+static void FitApply(HWND h) {
+    RECT w = WorkArea(h);
+    SetWindowPos(h, nullptr, w.left, w.top, w.right - w.left, w.bottom - w.top,
+        SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+}
+static void FitStart(HWND h) {
+    if (g_fitActive && g_fit == h) return;
+    if (!g_fitActive) GetWindowRect(h, &g_fitBack);
+    g_fit = h;
+    g_fitActive = true;
+    FitApply(h);
+}
+static void FitEnd(HWND h) {
+    if (!g_fitActive || g_fit != h) return;
+    g_fitActive = false;
+    if (IsWindow(h))
+        SetWindowPos(h, nullptr, g_fitBack.left, g_fitBack.top,
+            g_fitBack.right - g_fitBack.left, g_fitBack.bottom - g_fitBack.top,
+            SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+}
+// Called after the OS maximized the window by other means: keep the fit instead.
+static void FitFromZoom(HWND h) {
+    if (g_fitActive && g_fit == h) return;
+    WINDOWPLACEMENT wp{sizeof(wp)};
+    if (GetWindowPlacement(h, &wp)) {
+        g_fitBack = wp.rcNormalPosition;
+        // Placement is in workspace coordinates; the workspace origin is the
+        // primary monitor's work area corner.
+        POINT zero{0, 0};
+        MONITORINFO mi{sizeof(mi)};
+        if (GetMonitorInfoW(MonitorFromPoint(zero, MONITOR_DEFAULTTOPRIMARY), &mi)) {
+            g_fitBack.left += mi.rcWork.left;   g_fitBack.right += mi.rcWork.left;
+            g_fitBack.top += mi.rcWork.top;     g_fitBack.bottom += mi.rcWork.top;
+        }
+    } else {
+        GetWindowRect(h, &g_fitBack);
+    }
+    g_fit = h;
+    g_fitActive = true;
+    ShowWindow_orig(h, SW_RESTORE);
+    FitApply(h);
+}
+static bool FitIntercept(HWND h, int cmd) {
+    if (!g_nativeBar || !CaptionTarget(h)) return false;
+    if (cmd == SW_MAXIMIZE) {
+        if (g_fitActive && g_fit == h) FitEnd(h); else FitStart(h);
+        return true;
+    }
+    if (cmd == SW_RESTORE && g_fitActive && g_fit == h) {
+        if (IsIconic(h)) {
+            ShowWindow_orig(h, SW_RESTORE);
+            FitApply(h);
+        } else {
+            FitEnd(h);
+        }
+        return true;
+    }
+    return false;
+}
+
+static bool CaptionTarget(HWND h) {
+    if (!h || !IsWindow(h) || GetAncestor(h, GA_ROOT) != h) return false;
+    if (GetWindowLongPtrW(h, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) return false;
+    WCHAR cls[64];
+    if (!GetClassNameW(h, cls, 64)) return false;
+    return wcsncmp(cls, L"Chrome_WidgetWin_", 17) == 0;
+}
+// Keep DWM drawing its own themed caption. The policy resets on window state
+// changes, and then the unused frame falls back to the classic drawing.
+static void CaptionStyle(HWND h) {
+    DWORD policy = 2;  // DWMNCRP_ENABLED: let DWM draw its own themed caption
+    DwmSetWindowAttribute(h, 2, &policy, sizeof(policy));
+}
+static void CaptionApply(HWND h) {
+    WindhawkUtils::SetWindowSubclassFromAnyThread(h, CaptionProc, 0);
+    CaptionStyle(h);
+    LONG style = GetWindowLongW(h, GWL_STYLE);
+    if ((style & (WS_CAPTION | WS_THICKFRAME)) != (WS_CAPTION | WS_THICKFRAME)) {
+        SetWindowLongW(h, GWL_STYLE, style | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME);
+        SetWindowPos(h, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE |
+            SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+    }
+}
+static void CaptionRemove(HWND h) {
+    WindhawkUtils::RemoveWindowSubclassFromAnyThread(h, CaptionProc);
+    DWORD policy = 0;  // DWMNCRP_USEWINDOWSTYLE
+    DwmSetWindowAttribute(h, 2, &policy, sizeof(policy));
+    LONG style = GetWindowLongW(h, GWL_STYLE);
+    if (style & (WS_CAPTION | WS_THICKFRAME)) {
+        SetWindowLongW(h, GWL_STYLE, style & ~(WS_CAPTION | WS_SYSMENU | WS_THICKFRAME));
+        SetWindowPos(h, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE |
+            SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+    }
+}
+static BOOL CALLBACK CaptionEnum(HWND h, LPARAM apply) {
+    if (CaptionTarget(h)) { if (apply) CaptionApply(h); else CaptionRemove(h); }
+    return TRUE;
+}
+static LRESULT CALLBACK CaptionProc(HWND h, UINT msg, WPARAM w, LPARAM l, DWORD_PTR) {
+    switch (msg) {
+        case WM_NCCALCSIZE:
+            // Chromium's page surface stops a caption short of the client rect, so
+            // extend the client into the bottom frame by the same amount. The page
+            // then covers the window and the unpainted strip at the bottom is gone.
+            if (w) {
+                auto params = reinterpret_cast<NCCALCSIZE_PARAMS*>(l);
+                LONG windowTop = params->rgrc[0].top;
+                LRESULT r = DefWindowProcW(h, msg, w, l);
+                params->rgrc[0].bottom += params->rgrc[0].top - windowTop;
+                return r;
+            }
+            return DefWindowProcW(h, msg, w, l);
+        case WM_NCACTIVATE:
+            return DefWindowProcW(h, msg, w, l);
+        case WM_NCHITTEST: {
+            LRESULT r = DefWindowProcW(h, msg, w, l);
+            // The client extends into the bottom frame, so restore the resize grip
+            // DefWindowProc no longer reports there.
+            if (r == HTCLIENT) {
+                POINT pt{(short)LOWORD(l), (short)HIWORD(l)};
+                RECT wr; GetWindowRect(h, &wr);
+                int frame = GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
+                if (pt.x >= wr.left && pt.x < wr.right && pt.y >= wr.bottom - frame && pt.y < wr.bottom)
+                    return HTBOTTOM;
+            }
+            return r;
+        }
+        case WM_NCLBUTTONDOWN:
+            return DefWindowProcW(h, msg, w, l);
+        case WM_SYSCOMMAND:
+            // Chromium swallows the default window commands, which makes the caption
+            // buttons dead. Run the window actions the buttons send directly.
+            switch (w & 0xFFF0) {
+                case SC_MAXIMIZE: ShowWindow(h, SW_MAXIMIZE); return 0;
+                case SC_RESTORE: ShowWindow(h, SW_RESTORE); return 0;
+                case SC_MINIMIZE: ShowWindow(h, SW_MINIMIZE); return 0;
+            }
+            break;
+        case WM_NCPAINT: {
+            // With DWM on, never paint the classic caption here: the frame belongs
+            // to DWM, and the classic drawing is what shows up as the legacy frame.
+            BOOL dwm = FALSE;
+            DwmIsCompositionEnabled(&dwm);
+            if (dwm) return DefSubclassProc(h, msg, w, l);
+            return DefWindowProcW(h, msg, w, l);
+        }
+        case WM_DWMNCRENDERINGCHANGED: {
+            // State changes reset the NC rendering policy; without this the caption
+            // falls back to the classic drawing when the window is maximized.
+            CaptionStyle(h);
+            RECT rect; GetWindowRect(h, &rect);
+            SetWindowPos(h, nullptr, rect.left, rect.top + 1, 0, 0,
+                SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_NOSIZE);
+            SetWindowPos(h, nullptr, rect.left, rect.top, 0, 0,
+                SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_NOSIZE);
+            break;
+        }
+        case WM_SIZE:
+        case WM_WINDOWPOSCHANGED: {
+            // Chromium re-disables DWM frame rendering while it handles window state
+            // changes, so the policy has to be re-asserted after its handler runs.
+            LRESULT r = DefSubclassProc(h, msg, w, l);
+            CaptionStyle(h);
+            // A real OS maximize hides the themed caption; turn it into the fit.
+            if (IsZoomed(h) && !(g_fitActive && g_fit == h)) PostMessageW(h, WM_STYLER_FIT, 0, 0);
+            return r;
+        }
+        case WM_STYLER_FIT:
+            if (g_nativeBar && IsZoomed(h)) FitFromZoom(h);
+            return 0;
+    }
+    return DefSubclassProc(h, msg, w, l);
+}
+static BOOL WINAPI ShowWindow_hook(HWND h, int cmd) {
+    if (FitIntercept(h, cmd)) return TRUE;
+    BOOL r = ShowWindow_orig(h, cmd);
+    if (g_nativeBar && CaptionTarget(h)) CaptionApply(h);
+    return r;
+}
+static BOOL WINAPI ShowWindowAsync_hook(HWND h, int cmd) {
+    if (FitIntercept(h, cmd)) return TRUE;
+    BOOL r = ShowWindowAsync_orig(h, cmd);
+    if (g_nativeBar && CaptionTarget(h)) CaptionApply(h);
+    return r;
+}
+static void InstallHooks() {
+    WindhawkUtils::SetFunctionHook(ShowWindow, ShowWindow_hook, &ShowWindow_orig);
+    WindhawkUtils::SetFunctionHook(ShowWindowAsync, ShowWindowAsync_hook, &ShowWindowAsync_orig);
+    g_hookInstalled = true;
+}
+static void UiTitlebarInit() {
+    g_uiProcess = true;
+    g_nativeBar = Wh_GetIntSetting(L"nativeTitleBar") != 0;
+    if (!g_nativeBar) return;
+    EnumWindows(CaptionEnum, TRUE);
+    InstallHooks();
+}
+static void UiTitlebarUninit() {
+    if (g_fitActive && IsWindow(g_fit)) { FitEnd(g_fit); }
+    EnumWindows(CaptionEnum, FALSE);
+    g_uiProcess = false;
+}
+static void UiTitlebarSettings() {
+    bool want = Wh_GetIntSetting(L"nativeTitleBar") != 0;
+    if (want == g_nativeBar) return;
+    g_nativeBar = want;
+    if (want && !g_hookInstalled) InstallHooks();
+    if (!want && g_fitActive) FitEnd(g_fit);
+    EnumWindows(CaptionEnum, want ? TRUE : FALSE);
 }
 
 static void WINAPI Entry() { ExitThread(0); }
@@ -548,9 +765,10 @@ BOOL Wh_ModInit() {
     DWORD session; if (!ProcessIdToSessionId(GetCurrentProcessId(), &session) || session == 0) return FALSE;
     int argc; auto argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (!argv) return FALSE;
-    bool excluded = false;
+    bool excluded = false, subprocess = false;
     for (int i = 1; i < argc; ++i) {
         if (!wcscmp(argv[i], L"-service")) excluded = true;
+        if (!wcsncmp(argv[i], L"--type=", 7)) subprocess = true;
         if (!wcscmp(argv[i], L"-tool-mod")) {
             g_tool = i + 1 < argc && !wcscmp(argv[i + 1], WH_MOD_ID);
             if (!g_tool) excluded = true;
@@ -558,6 +776,10 @@ BOOL Wh_ModInit() {
     }
     LocalFree(argv); if (excluded) return FALSE;
     WCHAR exe[MAX_PATH]; GetModuleFileNameW(nullptr, exe, MAX_PATH); g_root = fs::path(exe).parent_path();
+    if (_wcsicmp(fs::path(exe).filename().c_str(), L"VSCodium.exe") == 0) {
+        if (!subprocess) UiTitlebarInit();
+        return TRUE;
+    }
     if (!g_tool) return TRUE;
     g_mutex = CreateMutexW(nullptr, FALSE, L"windhawk-tool-mod_" WH_MOD_ID);
     if (!g_mutex || GetLastError() == ERROR_ALREADY_EXISTS) return FALSE;
@@ -579,6 +801,7 @@ void Wh_ModAfterInit() {
     if (!ShellExecuteExW(&s)) Wh_Log(L"Tool launch failed: %u", GetLastError());
 }
 void Wh_ModSettingsChanged() {
+    if (g_uiProcess) { UiTitlebarSettings(); return; }
     if (!g_tool) return;
     std::lock_guard lock(g_guard);
     LoadStyle();
@@ -587,6 +810,7 @@ void Wh_ModSettingsChanged() {
     for (HWND h : g_windows) Effect(h, false);
 }
 void Wh_ModUninit() {
+    if (g_uiProcess) { UiTitlebarUninit(); return; }
     if (!g_tool) return;
     SetEvent(g_stop); WaitForSingleObject(g_thread, INFINITE);
     for (HWND h : g_windows) if (IsWindow(h)) Effect(h, true);
