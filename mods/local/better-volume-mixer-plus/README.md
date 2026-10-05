@@ -16,6 +16,7 @@ audio devices. Better Volume Mixer, plus device routing.
 - **Middle-click to mute**, in the mixer or on the tray icon.
 - **Light, dark and system themes** with blur, transparency and animations.
 - **Compact mode** and full keyboard control.
+- **Custom font**, such as a Nerd Font, for all mixer text.
 
 ## How to use
 
