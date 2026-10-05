@@ -8,7 +8,7 @@ copy onto another machine.
 
 | | Mod | What it does |
 | --- | --- | --- |
-| <img src="media/previews/windhawk-styler.png" width="220"> | [Windhawk Styler](mods/local/windhawk-styler) | Colors for backgrounds, cards and controls, fonts, background blur and an optional native title bar. |
+| <img src="media/previews/windhawk-styler.png" width="220"> | [Windhawk Styler](mods/local/windhawk-styler) | Colors for backgrounds, cards and controls, fonts, background blur and title bar buttons that match your Windows theme. |
 | <img src="media/previews/window-manager.gif" width="220"> | [Window Manager](mods/local/window-manager) | Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts. |
 | <img src="media/previews/alt-snap-drag.gif" width="220"> | [AltSnap](mods/local/alt-snap-drag) | Alt+drag to move and resize any window, plus AltSnap's window shortcuts. |
 | <img src="media/previews/taskbar-audio-visualizer.gif" width="220"> | [Taskbar Audio Visualizer](mods/local/taskbar-audio-visualizer) | A live audio spectrum with media controls, right on the taskbar. |
