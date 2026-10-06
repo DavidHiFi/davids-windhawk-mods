@@ -35,6 +35,7 @@ $localPaths = [ordered]@{
     'local@translucent-flyouts'       = 'mods\local\translucent-flyouts\translucent-flyouts.wh.cpp'
     'local@better-volume-mixer-plus'  = 'mods\local\better-volume-mixer-plus\better-volume-mixer-plus.wh.cpp'
     'local@shell-font-changer' = 'mods\local\shell-font-changer\shell-font-changer.wh.cpp'
+    'local@windhawk-styler' = 'mods\local\windhawk-styler\windhawk-styler.wh.cpp'
 }
 # Values the source headers do not carry.
 $licenseOverride = @{
