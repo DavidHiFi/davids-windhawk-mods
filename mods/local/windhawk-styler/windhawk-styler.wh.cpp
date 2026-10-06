@@ -26,7 +26,7 @@ give it a see-through, blurred background.
 - **Background.** Any color, with its own opacity. Text, cards and buttons
   stay solid and sharp.
 - **Acrylic or blur.** Blur sits behind the background only, with rounded
-  window corners. Used when the native title bar is off.
+  window corners, with or without the native title bar.
 - **Element colors.** Separate colors for mod cards and pages, for buttons,
   inputs and menus, for the accent and for text.
 - **Font.** Any installed font across the interface. Icons keep their own font.
@@ -487,11 +487,23 @@ static void Effect(HWND h, bool reset) {
     Accent accent{clear || !s.blur ? 0 : s.blur == 2 ? 4 : 3, 2, 0x10000000 | bgr, 0};
     Composition data{19, &accent, sizeof(accent)};
     if (proc && !proc(h, &data)) Wh_Log(L"Backdrop update failed: %u", GetLastError());
+    // The composition accent draws nothing behind Chromium's own composition
+    // surface, so the real backdrop comes from the DWM system backdrop: a
+    // proper acrylic material which shows through the page's transparent
+    // pixels. Kept alongside the accent, which still serves layered windows.
+    int backdrop = clear || !s.blur ? 1 /* DWMSBT_NONE */ : 3 /* DWMSBT_TRANSIENTWINDOW */;
+    DwmSetWindowAttribute(h, 38, &backdrop, sizeof(backdrop));  // DWMWA_SYSTEMBACKDROP_TYPE
     DWORD corner = clear ? 0 : 2;  // DWMWCP_DEFAULT or DWMWCP_ROUND
     DwmSetWindowAttribute(h, 33, &corner, sizeof(corner));
     BOOL dark = TRUE;
     DwmSetWindowAttribute(h, 20, &dark, sizeof(dark));
-    DWORD caption = reset ? 0xFFFFFFFF : bgr, text = reset || !s.hasText ? 0xFFFFFFFF :
+    // With the native title bar the caption strip is drawn by DWM over the
+    // same backdrop the page shows through; asking for no caption color keeps
+    // the strip as see-through as the body. A solid color would sit opaque.
+    DWORD caption = reset                            ? 0xFFFFFFFF
+                    : (s.nativeTitleBar && s.blur)   ? 0xFFFFFFFE /* DWMWA_COLOR_NONE */
+                                                     : bgr,
+            text = reset || !s.hasText ? 0xFFFFFFFF :
         ((s.textRgb & 255) << 16 | (s.textRgb & 0xff00) | s.textRgb >> 16);
     DwmSetWindowAttribute(h, 35, &caption, sizeof(caption));  // DWMWA_CAPTION_COLOR
     DwmSetWindowAttribute(h, 36, &text, sizeof(text));        // DWMWA_TEXT_COLOR
@@ -513,8 +525,10 @@ static DWORD WINAPI Worker(void*) {
         std::lock_guard lock(g_guard);
         std::erase_if(g_windows, [](HWND h) { return !IsWindow(h); });
         EnumWindows(Track, 0);
-        // Keep the backdrop in place: the frame can reset it when the window state changes.
-        if (++tick % 5 == 0 && !g_style.nativeTitleBar)
+        // Keep the backdrop in place: the frame can reset it when the window
+        // state changes. Both title bar modes need this; the system backdrop
+        // and the caption color drop on the same state changes.
+        if (++tick % 5 == 0)
             for (HWND h : g_windows) Effect(h, false);
     }
     if (hook) UnhookWinEvent(hook);
@@ -725,13 +739,21 @@ static LRESULT CALLBACK CaptionProc(HWND h, UINT msg, WPARAM w, LPARAM l, DWORD_
 static BOOL WINAPI ShowWindow_hook(HWND h, int cmd) {
     if (FitIntercept(h, cmd)) return TRUE;
     BOOL r = ShowWindow_orig(h, cmd);
-    if (g_nativeBar && CaptionTarget(h)) CaptionApply(h);
+    if (g_nativeBar && CaptionTarget(h)) {
+        CaptionApply(h);
+        // A state change drops the backdrop and the caption color; put them
+        // back at once rather than waiting for the tool's periodic pass.
+        Effect(h, false);
+    }
     return r;
 }
 static BOOL WINAPI ShowWindowAsync_hook(HWND h, int cmd) {
     if (FitIntercept(h, cmd)) return TRUE;
     BOOL r = ShowWindowAsync_orig(h, cmd);
-    if (g_nativeBar && CaptionTarget(h)) CaptionApply(h);
+    if (g_nativeBar && CaptionTarget(h)) {
+        CaptionApply(h);
+        Effect(h, false);
+    }
     return r;
 }
 static void InstallHooks() {
@@ -742,6 +764,7 @@ static void InstallHooks() {
 static void UiTitlebarInit() {
     g_uiProcess = true;
     g_nativeBar = Wh_GetIntSetting(L"nativeTitleBar") != 0;
+    LoadStyle();  // the hooks below reapply the backdrop with the real style
     if (!g_nativeBar) return;
     EnumWindows(CaptionEnum, TRUE);
     InstallHooks();
@@ -801,7 +824,11 @@ void Wh_ModAfterInit() {
     if (!ShellExecuteExW(&s)) Wh_Log(L"Tool launch failed: %u", GetLastError());
 }
 void Wh_ModSettingsChanged() {
-    if (g_uiProcess) { UiTitlebarSettings(); return; }
+    if (g_uiProcess) {
+        LoadStyle();  // keep the hook-side backdrop reapplication current
+        UiTitlebarSettings();
+        return;
+    }
     if (!g_tool) return;
     std::lock_guard lock(g_guard);
     LoadStyle();

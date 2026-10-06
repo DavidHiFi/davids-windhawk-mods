@@ -15,7 +15,7 @@ give it a see-through, blurred background.
   inputs and menus, for the accent and for text.
 - **Font.** Any installed font across the interface. Icons keep their own font.
 - **Native title bar.** Swap Windhawk's title bar for the standard Windows
-  one, colored to match.
+  one, colored to match, with the same blur behind it in acrylic mode.
 - **Clean removal.** Disabling the mod restores every file it changed.
 
 ## How to use
