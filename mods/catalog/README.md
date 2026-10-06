@@ -4,7 +4,8 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 
 | Mod | Author | Version | Runs | License |
 | --- | --- | --- | --- | --- |
-| [acrylic-color-glows](./acrylic-color-glows.wh.cpp) | [HaVeN80](https://github.com/haven80) | 0.4.2 | yes | GPL-3.0 |
+| [acrylic-color-glows](./acrylic-color-glows.wh.cpp) | [HaVeN80](https://github.com/haven80) | 0.5.0 | yes | GPL-3.0 |
+| [alt-tab-flip-3d](./alt-tab-flip-3d.wh.cpp) | [caliberda](https://github.com/cesarkali) | 1.5.3 | yes | MIT |
 | [always-allow-ctrl-shift-enter](./always-allow-ctrl-shift-enter.wh.cpp) | [aubymori](https://github.com/aubymori) | 1.0.0 | yes | BSD-3-Clause |
 | [always-on-top](./always-on-top.wh.cpp) | [AhmedAwad7](https://github.com/AhmedAwad7) | 1.2 | yes | MIT |
 | [auto-time-sync-on-startup](./auto-time-sync-on-startup.wh.cpp) | [communism420](https://github.com/communism420) | 1.1 | yes |  |
@@ -26,6 +27,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [disable-voice-access-hotkey](./disable-voice-access-hotkey.wh.cpp) | [clemmyn23](https://github.com/clemmyn23) | 1.0.0 | yes |  |
 | [edge-doubleclick-resize](./edge-doubleclick-resize.wh.cpp) | [Hamid](https://github.com/nh4700-ai) | 1.0 | yes | MIT |
 | [enhanced-disk-usage](./enhanced-disk-usage.wh.cpp) | [bbmaster123](https://github.com/bbmaster123) | 1.2.0 | yes |  |
+| [explorer-command-bar](./explorer-command-bar.wh.cpp) | [DanRotaru](https://github.com/DanRotaru) | 1.1.0 | yes | MIT |
 | [explorer-context-menu-classic](./explorer-context-menu-classic.wh.cpp) | [m417z](https://github.com/m417z) | 1.0.2 | yes |  |
 | [explorer-ctrln-newfile](./explorer-ctrln-newfile.wh.cpp) | [lieyanbang](https://github.com/lieyanbang) | 1.1 | yes |  |
 | [explorer-details-better-file-sizes](./explorer-details-better-file-sizes.wh.cpp) | [m417z](https://github.com/m417z) | 1.5.1 | yes |  |
@@ -41,7 +43,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [f1-blocker](./f1-blocker.wh.cpp) | [d0gkiller87](https://github.com/d0gkiller87) | 0.0.3 | yes | MIT |
 | [file-explorer-content-animation](./file-explorer-content-animation.wh.cpp) | [crazyboyybs](https://github.com/crazyboyybs) | 1.0.1 | yes | MIT |
 | [file-explorer-remove-suffixes](./file-explorer-remove-suffixes.wh.cpp) | [m417z](https://github.com/m417z) | 1.1.1 | yes |  |
-| [file-operation-styler](./file-operation-styler.wh.cpp) | [digART](https://github.com/digart11) | 1.1.0 | yes | GPL-3.0 |
+| [file-operation-styler](./file-operation-styler.wh.cpp) | [digART](https://github.com/digart11) | 1.2.0 | yes | GPL-3.0 |
 | [fix-basic-caption-text](./fix-basic-caption-text.wh.cpp) | [aubymori](https://github.com/aubymori) | 1.1.1 | yes |  |
 | [fix-explorer-white-flash](./fix-explorer-white-flash.wh.cpp) | [Mgg Sk](https://github.com/MGGSK) | 1.4 | yes |  |
 | [force-kill-active-window](./force-kill-active-window.wh.cpp) | [vfxturjo](https://github.com/zunaidFarouque) | 1.0 | yes |  |
@@ -52,11 +54,11 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [lm-mediakey-explorer-fix](./lm-mediakey-explorer-fix.wh.cpp) | [Mark Jansen](https://github.com/learn-more) | 1.1 | yes |  |
 | [minimize-to-tray](./minimize-to-tray.wh.cpp) | [0Allu](https://github.com/0Allu) | 1.0 | yes | MIT |
 | [move-quietly](./move-quietly.wh.cpp) | [Johhannas Reyn](https://github.com/JohhannasReyn) | 1.0 | yes | MIT |
-| [move-window-to-monitor](./move-window-to-monitor.wh.cpp) | [TomberWolf](https://github.com/TomberWolf) | 1.1.0 | no | MIT |
 | [mspaint-dark](./mspaint-dark.wh.cpp) | [ahmed605](https://github.com/ahmed605) | 1.0.1 | yes |  |
-| [net-speed-taskbar](./net-speed-taskbar.wh.cpp) | [Narayan](https://github.com/NarayanChetri) | 1.6 | no | MIT |
+| [never-auto-expand-explorer-tree-items](./never-auto-expand-explorer-tree-items.wh.cpp) | [Kitsune](https://github.com/AromaKitsune) | 1.1.1 | yes |  |
 | [notepad-dark-mode](./notepad-dark-mode.wh.cpp) | [m417z](https://github.com/m417z) | 1.0 | yes |  |
 | [notifications-placement](./notifications-placement.wh.cpp) | [m417z](https://github.com/m417z) | 1.2.4 | yes |  |
+| [overhaulded-alt-tab](./overhaulded-alt-tab.wh.cpp) | [IMiloDev](https://github.com/IMiloDev) | 1.2.1 | no |  |
 | [parallax-wallpaper](./parallax-wallpaper.wh.cpp) | [HaVeN80](https://github.com/haven80) | 0.9.0 | yes | MIT |
 | [photoshop-dark-menus](./photoshop-dark-menus.wh.cpp) | [Saber Naeemi](https://github.com/sabergraphics) | 1.0.0 | yes |  |
 | [pinned-only-on-start-menu](./pinned-only-on-start-menu.wh.cpp) | [Amat3rassu](https://github.com/Amat3rassu) | 1.0.1 | yes |  |
@@ -64,12 +66,15 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [regedit-fix-copy-key-name](./regedit-fix-copy-key-name.wh.cpp) | [ItsProfessional](https://github.com/ItsProfessional) | 1.0.0 | yes |  |
 | [remap-copilot-key](./remap-copilot-key.wh.cpp) | [Lukvbp](https://github.com/lukvbp) | 2.0 | yes |  |
 | [remove-context-menu-items](./remove-context-menu-items.wh.cpp) | [Armaninyow](https://github.com/armaninyow) | 1.12.0 | yes | MIT |
+| [remove-fullscreen-popup-chrome](./remove-fullscreen-popup-chrome.wh.cpp) | [lorenzoc01](https://github.com/lorenzoc01) | 1.3 | yes |  |
 | [remove-ms-store-open-with](./remove-ms-store-open-with.wh.cpp) | [aubymori](https://github.com/aubymori) | 1.0.0 | yes |  |
 | [restore-folder-menubar-25h2](./restore-folder-menubar-25h2.wh.cpp) | [Anixx](https://github.com/Anixx) | 3.1.0 | yes |  |
+| [search-menu-inspect-helper](./search-menu-inspect-helper.wh.cpp) | [m417z](https://github.com/m417z) | 1.0 | yes |  |
 | [shadowplay-do-not-disable](./shadowplay-do-not-disable.wh.cpp) | [Temm](https://github.com/leumasme) | 1.1 | yes |  |
 | [shell-flyout-positions](./shell-flyout-positions.wh.cpp) | [m417z](https://github.com/m417z) | 1.3 | yes |  |
 | [simple-window-switcher](./simple-window-switcher.wh.cpp) | [Lone](https://github.com/Louis047) | 2.1 | yes |  |
 | [slick-window-arrangement](./slick-window-arrangement.wh.cpp) | [m417z](https://github.com/m417z) | 1.0.2 | yes |  |
+| [spoof-machine-guid](./spoof-machine-guid.wh.cpp) | [loliri](https://github.com/loliri) | 1.0 | yes | MIT |
 | [start-menu-open-real-file-location](./start-menu-open-real-file-location.wh.cpp) | [Alchemy](https://github.com/alchemyyy) | 1.1.0 | yes | MIT |
 | [start-menu-size](./start-menu-size.wh.cpp) | [m417z](https://github.com/m417z) | 1.1 | yes |  |
 | [start-search-bing-redirector](./start-search-bing-redirector.wh.cpp) | [takattowo](https://github.com/takattowo) | 1.0.0 | yes |  |
@@ -78,7 +83,8 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [taskbar-app-memory](./taskbar-app-memory.wh.cpp) | [buedgik](https://github.com/buedgik) | 0.2.2 | yes | MIT |
 | [taskbar-button-click](./taskbar-button-click.wh.cpp) | [m417z](https://github.com/m417z) | 1.0.9 | yes |  |
 | [taskbar-clock-customization](./taskbar-clock-customization.wh.cpp) | [m417z](https://github.com/m417z) | 1.8.1 | yes |  |
-| [taskbar-dock-animation-plus](./taskbar-dock-animation-plus.wh.cpp) | [incconutwo](https://github.com/incconutwo) | 2.0.1 | yes |  |
+| [taskbar-dock-animation](./taskbar-dock-animation.wh.cpp) | [Ph0en1x-dev](https://github.com/Ph0en1x-dev) | 1.9.2 | yes |  |
+| [taskbar-dock-animation-plus](./taskbar-dock-animation-plus.wh.cpp) | [incconutwo](https://github.com/incconutwo) | 2.0.1 | no |  |
 | [taskbar-fluent-media-player](./taskbar-fluent-media-player.wh.cpp) | [Salyts](https://github.com/Salyts) | 1.6.0 | no |  |
 | [taskbar-icon-separators](./taskbar-icon-separators.wh.cpp) | [meteoni](https://github.com/Meteoni) | 1.0.33 | yes | GPL-3.0 |
 | [taskbar-icon-size](./taskbar-icon-size.wh.cpp) | [m417z](https://github.com/m417z) | 1.3.10 | yes |  |

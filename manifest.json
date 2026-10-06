@@ -1,11 +1,11 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-10-05T01:37:41.3626075+08:00",
+  "generatedAt": "2026-10-07T03:20:37+08:00",
   "windhawkVersion": "1.7.3",
   "counts": {
-    "mods": 113,
-    "enabled": 108,
+    "mods": 119,
+    "enabled": 114,
     "local": 11
   },
   "mods": [
@@ -14,11 +14,23 @@
       "name": "Acrylic Color Glows",
       "author": "HaVeN80",
       "github": "https://github.com/haven80",
-      "version": "0.4.2",
+      "version": "0.5.0",
       "license": "GPL-3.0",
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/acrylic-color-glows",
       "source": "mods/catalog/acrylic-color-glows.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "alt-tab-flip-3d",
+      "name": "Alt+Tab Flip 3D (Vista Style)",
+      "author": "caliberda",
+      "github": "https://github.com/cesarkali",
+      "version": "1.5.3",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/alt-tab-flip-3d",
+      "source": "mods/catalog/alt-tab-flip-3d.wh.cpp",
       "enabled": true
     },
     {
@@ -274,6 +286,18 @@
       "enabled": true
     },
     {
+      "id": "explorer-command-bar",
+      "name": "Explorer Command Bar",
+      "author": "DanRotaru",
+      "github": "https://github.com/DanRotaru",
+      "version": "1.1.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-command-bar",
+      "source": "mods/catalog/explorer-command-bar.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "explorer-context-menu-classic",
       "name": "Classic context menu on Windows 11",
       "author": "m417z",
@@ -458,7 +482,7 @@
       "name": "File Operation Styler",
       "author": "digART",
       "github": "https://github.com/digart11",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "license": "GPL-3.0",
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/file-operation-styler",
@@ -578,7 +602,7 @@
       "name": "Shell Font Changer",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.1.0",
+      "version": "1.2.2",
       "license": "MIT",
       "origin": "local",
       "upstream": "https://windhawk.net/mods/explorer-font-changer",
@@ -638,7 +662,7 @@
       "name": "Translucent Flyouts",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "0.6.6",
+      "version": "0.6.7",
       "license": "LGPL-3.0",
       "origin": "local",
       "upstream": "",
@@ -646,11 +670,23 @@
       "enabled": true
     },
     {
+      "id": "local@windhawk-styler",
+      "name": "Windhawk Styler",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.3.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/windhawk-styler/windhawk-styler.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "local@window-manager",
       "name": "Window Manager",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.1.0",
+      "version": "1.1.3",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
@@ -682,18 +718,6 @@
       "enabled": true
     },
     {
-      "id": "move-window-to-monitor",
-      "name": "Move Window to Monitor",
-      "author": "TomberWolf",
-      "github": "https://github.com/TomberWolf",
-      "version": "1.1.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/move-window-to-monitor",
-      "source": "mods/catalog/move-window-to-monitor.wh.cpp",
-      "enabled": false
-    },
-    {
       "id": "mspaint-dark",
       "name": "Dark Paint",
       "author": "ahmed605",
@@ -706,16 +730,16 @@
       "enabled": true
     },
     {
-      "id": "net-speed-taskbar",
-      "name": "Taskbar Network Speed Indicator",
-      "author": "Narayan",
-      "github": "https://github.com/NarayanChetri",
-      "version": "1.6",
-      "license": "MIT",
+      "id": "never-auto-expand-explorer-tree-items",
+      "name": "Never Auto-Expand Explorer Tree Items",
+      "author": "Kitsune",
+      "github": "https://github.com/AromaKitsune",
+      "version": "1.1.1",
+      "license": "",
       "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/net-speed-taskbar",
-      "source": "mods/catalog/net-speed-taskbar.wh.cpp",
-      "enabled": false
+      "upstream": "https://windhawk.net/mods/never-auto-expand-explorer-tree-items",
+      "source": "mods/catalog/never-auto-expand-explorer-tree-items.wh.cpp",
+      "enabled": true
     },
     {
       "id": "notepad-dark-mode",
@@ -752,6 +776,18 @@
       "upstream": "",
       "source": "mods/local/npp-taskdlg-textcolor/npp-taskdlg-textcolor.wh.cpp",
       "enabled": true
+    },
+    {
+      "id": "overhaulded-alt-tab",
+      "name": "OverhauldedWin Alt+Tab",
+      "author": "IMiloDev",
+      "github": "https://github.com/IMiloDev",
+      "version": "1.2.1",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/overhaulded-alt-tab",
+      "source": "mods/catalog/overhaulded-alt-tab.wh.cpp",
+      "enabled": false
     },
     {
       "id": "parallax-wallpaper",
@@ -838,6 +874,18 @@
       "enabled": true
     },
     {
+      "id": "remove-fullscreen-popup-chrome",
+      "name": "Remove \"Exit Fullscreen\" popup in Chrome",
+      "author": "lorenzoc01",
+      "github": "https://github.com/lorenzoc01",
+      "version": "1.3",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/remove-fullscreen-popup-chrome",
+      "source": "mods/catalog/remove-fullscreen-popup-chrome.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "remove-ms-store-open-with",
       "name": "Open With - Remove Microsoft Store Menu Item",
       "author": "aubymori",
@@ -859,6 +907,18 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/restore-folder-menubar-25h2",
       "source": "mods/catalog/restore-folder-menubar-25h2.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "search-menu-inspect-helper",
+      "name": "Search Menu Inspect Helper",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/search-menu-inspect-helper",
+      "source": "mods/catalog/search-menu-inspect-helper.wh.cpp",
       "enabled": true
     },
     {
@@ -907,6 +967,18 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/slick-window-arrangement",
       "source": "mods/catalog/slick-window-arrangement.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "spoof-machine-guid",
+      "name": "Spoof MachineGuid",
+      "author": "loliri",
+      "github": "https://github.com/loliri",
+      "version": "1.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/spoof-machine-guid",
+      "source": "mods/catalog/spoof-machine-guid.wh.cpp",
       "enabled": true
     },
     {
@@ -1006,6 +1078,18 @@
       "enabled": true
     },
     {
+      "id": "taskbar-dock-animation",
+      "name": "Taskbar Dock Animation",
+      "author": "Ph0en1x-dev",
+      "github": "https://github.com/Ph0en1x-dev",
+      "version": "1.9.2",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-dock-animation",
+      "source": "mods/catalog/taskbar-dock-animation.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "taskbar-dock-animation-plus",
       "name": "Taskbar Dock Animation Plus",
       "author": "incconutwo",
@@ -1015,7 +1099,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/taskbar-dock-animation-plus",
       "source": "mods/catalog/taskbar-dock-animation-plus.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "taskbar-fluent-media-player",
@@ -1352,18 +1436,6 @@
       "upstream": "https://windhawk.net/mods/center-titlebar",
       "source": "mods/local/center-titlebar-fork/center-titlebar-fork.wh.cpp",
       "enabled": false
-    },
-    {
-      "id": "local@windhawk-styler",
-      "name": "Windhawk Styler",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.1.0",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/windhawk-styler/windhawk-styler.wh.cpp",
-      "enabled": true
     }
   ]
 }

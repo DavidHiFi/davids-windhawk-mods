@@ -5,7 +5,7 @@
       "accounts": [
         {
           "provider": "opencode",
-          "label": "OpenCode Go",
+          "label": "OC",
           "fiveHour": true,
           "weekly": true,
           "fableWeekly": true,
@@ -16,7 +16,7 @@
         },
         {
           "provider": "anthropic",
-          "label": "Claude Max 5X",
+          "label": "A 5X",
           "fiveHour": true,
           "weekly": true,
           "fableWeekly": true,
@@ -27,11 +27,11 @@
         },
         {
           "provider": "anthropic",
-          "label": "Claude Pro",
+          "label": "A Pro",
           "fiveHour": true,
           "weekly": true,
-          "fableWeekly": true,
-          "extraUsage": true,
+          "fableWeekly": false,
+          "extraUsage": false,
           "creditsMax": 0,
           "opencodeKey": "",
           "hidden": false
@@ -52,7 +52,7 @@
       "monitorNumber": 1,
       "clickAction": "refresh",
       "pollMinutes": 10,
-      "barLength": 75,
+      "barLength": 50,
       "barThickness": 8,
       "barLayout": "stacked",
       "barMode": "used",
@@ -62,9 +62,9 @@
       "labelPosition": "top",
       "labelFontSize": 8,
       "percentFontSize": 8,
-      "accountMargin": 3,
+      "accountMargin": 2,
       "labelGap": 0,
-      "barGap": 2,
+      "barGap": 1,
       "rightMargin": 0,
       "percentTextVisibility": "always",
       "percentTextAlignment": "adaptive",
