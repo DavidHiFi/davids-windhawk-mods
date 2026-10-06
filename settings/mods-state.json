@@ -4,7 +4,14 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "",
-    "version": "0.4.2"
+    "version": "0.5.0"
+  },
+  "alt-tab-flip-3d": {
+    "disabled": false,
+    "include": "windhawk.exe|explorer.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.5.3"
   },
   "always-allow-ctrl-shift-enter": {
     "disabled": false,
@@ -153,6 +160,13 @@
     "architecture": "",
     "version": "1.2.0"
   },
+  "explorer-command-bar": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.1.0"
+  },
   "explorer-context-menu-classic": {
     "disabled": false,
     "include": "explorer.exe",
@@ -263,7 +277,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.1.0"
+    "version": "1.2.0"
   },
   "fix-basic-caption-text": {
     "disabled": false,
@@ -326,14 +340,14 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "local@shell-font-changer": {
     "disabled": false,
     "include": "explorer.exe|StartMenuExperienceHost.exe|ShellExperienceHost.exe|SearchHost.exe|ShellHost.exe|SystemSettings.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.1.0"
+    "version": "1.2.2"
   },
   "local@taskbar-ai-quota-opencode": {
     "disabled": false,
@@ -361,21 +375,28 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.4.0"
+    "version": "1.4.2"
   },
   "local@translucent-flyouts": {
     "disabled": false,
     "include": "*",
     "exclude": "discord*.exe|Voicemeeter*.exe|Matrix*.exe|Stream Deck*.exe|dwm.exe|Ableton*.exe",
     "architecture": "",
-    "version": "0.6.6"
+    "version": "0.6.7"
+  },
+  "local@windhawk-styler": {
+    "disabled": false,
+    "include": "windhawk.exe|VSCodium.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.3.0"
   },
   "local@window-manager": {
     "disabled": false,
     "include": "*|windhawk.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.1.0"
+    "version": "1.1.3"
   },
   "minimize-to-tray": {
     "disabled": false,
@@ -391,13 +412,6 @@
     "architecture": "x86-64",
     "version": "1.0"
   },
-  "move-window-to-monitor": {
-    "disabled": true,
-    "include": "windhawk.exe",
-    "exclude": "",
-    "architecture": "",
-    "version": "1.1.0"
-  },
   "mspaint-dark": {
     "disabled": false,
     "include": "mspaint.exe",
@@ -405,12 +419,12 @@
     "architecture": "x86-64",
     "version": "1.0.1"
   },
-  "net-speed-taskbar": {
-    "disabled": true,
-    "include": "explorer.exe",
+  "never-auto-expand-explorer-tree-items": {
+    "disabled": false,
+    "include": "*",
     "exclude": "",
-    "architecture": "x86-64",
-    "version": "1.6"
+    "architecture": "",
+    "version": "1.1.1"
   },
   "notepad-dark-mode": {
     "disabled": false,
@@ -432,6 +446,13 @@
     "exclude": "",
     "architecture": "",
     "version": "1.0.1"
+  },
+  "overhaulded-alt-tab": {
+    "disabled": true,
+    "include": "windhawk.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.2.1"
   },
   "parallax-wallpaper": {
     "disabled": false,
@@ -482,6 +503,13 @@
     "architecture": "x86-64",
     "version": "1.12.0"
   },
+  "remove-fullscreen-popup-chrome": {
+    "disabled": false,
+    "include": "chrome.exe|opera.exe|msedge.exe|brave.exe|comet.exe|Maxthon.exe|whale.exe|aloha.exe|thorium.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.3"
+  },
   "remove-ms-store-open-with": {
     "disabled": false,
     "include": "*",
@@ -495,6 +523,13 @@
     "exclude": "",
     "architecture": "x86-64",
     "version": "3.1.0"
+  },
+  "search-menu-inspect-helper": {
+    "disabled": false,
+    "include": "SearchHost.exe|explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0"
   },
   "shadowplay-do-not-disable": {
     "disabled": false,
@@ -523,6 +558,13 @@
     "exclude": "",
     "architecture": "",
     "version": "1.0.2"
+  },
+  "spoof-machine-guid": {
+    "disabled": false,
+    "include": "",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.0"
   },
   "start-menu-open-real-file-location": {
     "disabled": false,
@@ -580,8 +622,15 @@
     "architecture": "x86-64",
     "version": "1.8.1"
   },
-  "taskbar-dock-animation-plus": {
+  "taskbar-dock-animation": {
     "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.9.2"
+  },
+  "taskbar-dock-animation-plus": {
+    "disabled": true,
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
@@ -775,12 +824,5 @@
     "exclude": "",
     "architecture": "amd64",
     "version": "0.115"
-  },
-  "local@windhawk-styler": {
-    "disabled": false,
-    "include": "windhawk.exe",
-    "exclude": "",
-    "architecture": "",
-    "version": "1.1.0"
   }
 }
