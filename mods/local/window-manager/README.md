@@ -15,6 +15,8 @@ with the mouse or the keyboard. Works on administrator windows too.
   on the new screen.
 - **Quick actions:** maximize, minimize, close or open the window menu without
   reaching for the title bar.
+- **Right-click while dragging** toggles the maximized state, and the drag
+  ends there so the window keeps its new size.
 - **Auto-snap rules** place chosen apps in a set position.
 - **Works on elevated windows** such as Task Manager and Task Scheduler.
 
@@ -46,6 +48,8 @@ snapping like the preview, set the four half keys to `left`, `right`, `up` and
   Monitor. Disable those before you enable it.
 - Keyboard shortcuts run in a small elevated Windhawk helper, which is what
   lets them move administrator windows.
+- Actions, including right-click while dragging, also work on Windhawk's own
+  interface, whose process the engine never injects mods into.
 
 ## Credits
 
