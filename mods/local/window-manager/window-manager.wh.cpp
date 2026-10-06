@@ -2,7 +2,7 @@
 // @id              window-manager
 // @name            Window Manager
 // @description     Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts
-// @version         1.1.0
+// @version         1.1.3
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -740,10 +740,44 @@ bool IsRootWindowHooked(HWND hRootWnd) {
            GetProp(hRootWnd, kHookedWindowProp);
 }
 
+// The engine never injects mods into Windhawk's own interface, so its window
+// carries no hooks of ours. The actions only post to the window's thread
+// (ShowWindowAsync) rather than replaying input, so they are safe there, and
+// the interface is the window this mod gets used on the most.
+bool IsWindhawkUiWindow(HWND hWnd) {
+    static std::atomic<DWORD> s_pid{0};
+    static std::atomic<bool> s_isUi{false};
+    DWORD pid = GetWindowThreadProcessId(hWnd, nullptr);
+    if (pid != 0 && pid == s_pid.load(std::memory_order_relaxed)) {
+        return s_isUi.load(std::memory_order_relaxed);
+    }
+
+    bool isUi = false;
+    if (HANDLE hProcess =
+            OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid)) {
+        WCHAR path[MAX_PATH];
+        DWORD size = ARRAYSIZE(path);
+        if (QueryFullProcessImageNameW(hProcess, 0, path, &size)) {
+            for (DWORD i = 0; i < size; ++i) {
+                path[i] = static_cast<WCHAR>(towlower(path[i]));
+            }
+            path[size < MAX_PATH ? size : MAX_PATH - 1] = L'\0';
+            isUi = wcsstr(path, L"\\windhawk\\ui\\") != nullptr;
+        }
+        CloseHandle(hProcess);
+    }
+
+    s_pid.store(pid, std::memory_order_relaxed);
+    s_isUi.store(isUi, std::memory_order_relaxed);
+    return isUi;
+}
+
 bool IsExcludedRootWindow(HWND hRootWnd) {
     // A window of a thread without the mod's hooks, e.g. of a process the mod
-    // isn't loaded in, keeps its input as is.
-    if (!IsRootWindowHooked(hRootWnd)) {
+    // isn't loaded in, keeps its input as is. Windhawk's own interface is the
+    // exception: the engine never injects into it, and its actions are still
+    // wanted there.
+    if (!IsRootWindowHooked(hRootWnd) && !IsWindhawkUiWindow(hRootWnd)) {
         return true;
     }
 
@@ -1060,6 +1094,9 @@ bool IsInMoveLoop() {
            (gti.flags & GUI_INMOVESIZE);
 }
 
+bool BeginSdlDrag(HWND window, UINT command, int button, POINT point);
+bool HandleSdlDragMessage(MSG* msg);
+
 // Posted messages are retrieved before input, so a button release that's
 // already queued is seen by the loop rather than by the program.
 bool PostSizeMoveRequest(HWND hRootWnd, UINT command, int button, POINT pt) {
@@ -1112,6 +1149,15 @@ void OnSizeMoveRequestRemoved(MSG* msg) {
         // held button nothing backs the request.
         Wh_Log(L"Request to %s %08X, button already released",
                NameOfCommand(command), (DWORD)(ULONG_PTR)msg->hwnd);
+        TakeMessage(msg);
+        return;
+    }
+
+    // SDL's event pump can leave DefWindowProc's modal move loop holding
+    // capture after button-up. Never enter that loop for these windows.
+    if (BeginSdlDrag(msg->hwnd, command, button,
+                     POINT{(short)LOWORD(msg->lParam),
+                           (short)HIWORD(msg->lParam)})) {
         TakeMessage(msg);
         return;
     }
@@ -1389,6 +1435,10 @@ void OnMessageRemoved(MSG* msg) {
     }
 
     if (!msg->hwnd) {
+        return;
+    }
+
+    if (HandleSdlDragMessage(msg)) {
         return;
     }
 
@@ -1745,6 +1795,96 @@ void SizeDraggedWindow(HWND hRootWnd,
     SetWindowPos(hRootWnd, nullptr, rc.left, rc.top, rc.right - rc.left,
                  rc.bottom - rc.top,
                  SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+}
+
+thread_local struct {
+    HWND window;
+    UINT command;
+    int button;
+    POINT start;
+    POINT grab;
+    RECT rectangle;
+    bool started;
+} g_sdlDrag;
+
+bool BeginSdlDrag(HWND window, UINT command, int button, POINT point) {
+    WCHAR name[64];
+    if (!GetClassName(window, name, ARRAYSIZE(name)) ||
+        _wcsicmp(name, L"SDL_app") != 0) {
+        return false;
+    }
+    g_sdlDrag = {.window = window, .command = command,
+                 .button = button, .start = point};
+    SetCapture(window);
+    return true;
+}
+
+bool HandleSdlDragMessage(MSG* msg) {
+    if (!g_sdlDrag.window) {
+        return false;
+    }
+    bool down = false;
+    int button = ButtonOfMessage(msg->message, HIWORD(msg->wParam), &down);
+    bool released = button == g_sdlDrag.button && !down;
+    // As in the modal loop: the right button while moving toggles the
+    // maximized state and ends the drag. Its release and the Alt release are
+    // kept from the window.
+    if (down && button == VK_RBUTTON && g_sdlDrag.started &&
+        !IsSizeCommand(g_sdlDrag.command)) {
+        HWND window = g_sdlDrag.window;
+        g_sdlDrag = {};
+        if (GetCapture() == window) {
+            ReleaseCapture();
+        }
+        g_takenPressButton = VK_RBUTTON;
+        g_swallowedPress = true;
+        TakeMessage(msg);
+        if (RunWindowAction(window, WindowAction::Maximize, msg->pt)) {
+            Wh_Log(L"Right button while moving SDL window %08X: toggled "
+                   L"maximize",
+                   (DWORD)(ULONG_PTR)window);
+        }
+        return true;
+    }
+    bool cancelled = msg->message == WM_CANCELMODE ||
+                     (msg->message == WM_KEYDOWN && msg->wParam == VK_ESCAPE) ||
+                     GetCapture() != g_sdlDrag.window;
+    if (released || cancelled || GetAsyncKeyState(g_sdlDrag.button) >= 0) {
+        HWND window = g_sdlDrag.window;
+        g_sdlDrag = {};
+        if (GetCapture() == window) {
+            ReleaseCapture();
+        }
+        if (released) {
+            g_takenPressButton = 0;
+            TakeMessage(msg);
+            return true;
+        }
+        return false;
+    }
+    if (msg->message != WM_MOUSEMOVE && msg->message != WM_NCMOUSEMOVE) {
+        return false;
+    }
+    if (!g_sdlDrag.started && IsPastDragThreshold(g_sdlDrag.start, msg->pt)) {
+        g_sdlDrag.started = true;
+        if (IsSizeCommand(g_sdlDrag.command)) {
+            GetWindowRect(g_sdlDrag.window, &g_sdlDrag.rectangle);
+        } else {
+            g_sdlDrag.grab = CalcDragGrab(g_sdlDrag.window, g_sdlDrag.start);
+        }
+        g_swallowedPress = true;
+    }
+    if (g_sdlDrag.started) {
+        if (IsSizeCommand(g_sdlDrag.command)) {
+            SizeDraggedWindow(g_sdlDrag.window, g_sdlDrag.command,
+                              g_sdlDrag.rectangle, g_sdlDrag.start, msg->pt);
+        } else {
+            MoveDraggedWindow(g_sdlDrag.window, g_sdlDrag.grab, msg->pt);
+        }
+    }
+    SetCursor(LoadCursor(nullptr, CursorOfCommand(g_sdlDrag.command)));
+    TakeMessage(msg);
+    return true;
 }
 
 void DragWindowTo(POINT pt) {
@@ -2123,14 +2263,22 @@ LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
         if (button == g_llButton) {
             ResetLowLevelDragState();
         } else if (button == VK_RBUTTON && g_llRootWnd && g_llDragging &&
-                   !IsSizeCommand(g_llCommand) &&
-                   RunWindowAction(g_llRootWnd, WindowAction::Maximize,
-                                   ToLogicalPoint(ms->pt))) {
+                   !IsSizeCommand(g_llCommand)) {
             // Same as AltSnap: while a window is being moved, the right button
-            // toggles its maximized state. The Alt release of the drag is kept
+            // toggles its maximized state. The drag ends with the toggle, as
+            // the moves which follow it would drag the window off the fitted
+            // state the toggle leaves. The Alt release of the drag is kept
             // from reaching the window, which would open its menu.
-            g_swallowedPress = true;
-            return 1;
+            HWND hRootWnd = g_llRootWnd;
+            if (RunWindowAction(hRootWnd, WindowAction::Maximize,
+                                ToLogicalPoint(ms->pt))) {
+                g_swallowedPress = true;
+                ResetLowLevelDragState();
+                Wh_Log(L"Right button while moving %08X: toggled the "
+                       L"maximized state",
+                       (DWORD)(ULONG_PTR)hRootWnd);
+                return 1;
+            }
         }
 
         if (!g_llRootWnd && OnLowLevelButtonDown(ms, button)) {
