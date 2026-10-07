@@ -5,7 +5,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | Mod | Author | Version | Runs | License |
 | --- | --- | --- | --- | --- |
 | [acrylic-color-glows](./acrylic-color-glows.wh.cpp) | [HaVeN80](https://github.com/haven80) | 0.5.0 | yes | GPL-3.0 |
-| [alt-tab-flip-3d](./alt-tab-flip-3d.wh.cpp) | [caliberda](https://github.com/cesarkali) | 1.5.3 | yes | MIT |
+| [alt-tab-flip-3d](./alt-tab-flip-3d.wh.cpp) | [caliberda](https://github.com/cesarkali) | 1.5.3 | no | MIT |
 | [always-allow-ctrl-shift-enter](./always-allow-ctrl-shift-enter.wh.cpp) | [aubymori](https://github.com/aubymori) | 1.0.0 | yes | BSD-3-Clause |
 | [always-on-top](./always-on-top.wh.cpp) | [AhmedAwad7](https://github.com/AhmedAwad7) | 1.2 | yes | MIT |
 | [auto-time-sync-on-startup](./auto-time-sync-on-startup.wh.cpp) | [communism420](https://github.com/communism420) | 1.1 | yes |  |
@@ -72,7 +72,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [search-menu-inspect-helper](./search-menu-inspect-helper.wh.cpp) | [m417z](https://github.com/m417z) | 1.0 | yes |  |
 | [shadowplay-do-not-disable](./shadowplay-do-not-disable.wh.cpp) | [Temm](https://github.com/leumasme) | 1.1 | yes |  |
 | [shell-flyout-positions](./shell-flyout-positions.wh.cpp) | [m417z](https://github.com/m417z) | 1.3 | yes |  |
-| [simple-window-switcher](./simple-window-switcher.wh.cpp) | [Lone](https://github.com/Louis047) | 2.1 | yes |  |
+| [simple-window-switcher](./simple-window-switcher.wh.cpp) | [Lone](https://github.com/Louis047) | 2.1 | no |  |
 | [slick-window-arrangement](./slick-window-arrangement.wh.cpp) | [m417z](https://github.com/m417z) | 1.0.2 | yes |  |
 | [spoof-machine-guid](./spoof-machine-guid.wh.cpp) | [loliri](https://github.com/loliri) | 1.0 | yes | MIT |
 | [start-menu-open-real-file-location](./start-menu-open-real-file-location.wh.cpp) | [Alchemy](https://github.com/alchemyyy) | 1.1.0 | yes | MIT |

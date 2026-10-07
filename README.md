@@ -9,6 +9,7 @@ copy onto another machine.
 | | Mod | What it does |
 | --- | --- | --- |
 | <img src="media/previews/windhawk-styler.png" width="220"> | [Windhawk Styler](mods/local/windhawk-styler) | Colors for backgrounds, cards and controls, fonts, background blur and title bar buttons that match your Windows theme. |
+| <img src="media/previews/simple-window-switcher-plus.gif" width="220"> | [Simple Window Switcher Plus](mods/local/simple-window-switcher-plus) | Vista Alt+Tab animations and blur, customizable layouts, and elevated app support. |
 | <img src="media/previews/window-manager.gif" width="220"> | [Window Manager](mods/local/window-manager) | Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts. |
 | <img src="media/previews/alt-snap-drag.gif" width="220"> | [AltSnap](mods/local/alt-snap-drag) | Alt+drag to move and resize any window, plus AltSnap's window shortcuts. |
 | <img src="media/previews/taskbar-audio-visualizer.gif" width="220"> | [Taskbar Audio Visualizer](mods/local/taskbar-audio-visualizer) | A live audio spectrum with media controls, right on the taskbar. |
@@ -75,9 +76,9 @@ changing mods or settings, run `tools\Build-Repo.ps1` to refresh the snapshot
 ## License
 
 My work here is MIT, see [LICENSE](LICENSE), except where a mod inherits its
-original's license: Window Manager, AltSnap and Taskbar System Info Plus are
-GPL-3.0, and Translucent Flyouts is LGPL-3.0. Catalog mods keep their authors'
-licenses.
+original's license. Window Manager, AltSnap and Taskbar System Info Plus are
+GPL-3.0. Translucent Flyouts is LGPL-3.0. Simple Window Switcher Plus is GPL-2.0.
+Catalog mods keep their authors' licenses.
 
 `settings/` holds configuration values only. Account credentials, which the
 quota mods keep encrypted in their own storage, are not included.
