@@ -1,6 +1,6 @@
 # Settings reference
 
-This page lists all 49 settings. They reload without restarting Explorer, Windhawk or audio applications.
+This page lists all 50 settings. They reload without restarting Explorer, Windhawk or audio applications.
 
 Geometry is clamped to fit the main horizontal taskbar. Colors accept `#AARRGGBB`, `#RRGGBB`, `rgba(...)`, or `rgb(...)`. Invalid color and quad values fall back to their documented defaults.
 
@@ -80,8 +80,8 @@ Geometry is clamped to fit the main horizontal taskbar. Colors accept `#AARRGGBB
 | --- | --- | --- |
 | `performance.targetFps` | `30` | 10 to 120 frames per second. Default is 30. |
 | `performance.pauseWhenSilentSeconds` | `10` | After this many silent seconds, draw at 5 FPS. The strip remains visible and resumes its normal rate when audio returns. 0 disables idle throttling. |
-
 | `performance.hideWhenFullscreen` | `true` | Hide bars and media buttons when a fullscreen or borderless foreground window covers the taskbar. Restore them when the taskbar is available. |
+| `performance.followTaskbarAutoHide` | `true` | Slide out of view with the taskbar whenever the Windows taskbar auto-hides, and return when it is shown again, like any other taskbar widget. Applies while the Windows "Automatically hide the taskbar" setting is on. |
 
 ## Diagnostics
 
