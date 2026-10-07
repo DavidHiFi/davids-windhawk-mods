@@ -2,14 +2,14 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         1.3.1
+// @version         1.4.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         MIT
 // @include         windhawk.exe
 // @include         VSCodium.exe
-// @compilerOptions -luser32 -lshell32 -ldwmapi -lbcrypt -lcomctl32
+// @compilerOptions -luser32 -lgdi32 -lshell32 -ldwmapi -lbcrypt -lcomctl32
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -32,9 +32,9 @@ give it a see-through, blurred background.
 - **Font.** Any installed font across the interface. Icons keep their own font.
 - **Native title bar.** Use the real Windows title bar, with your own
   Windows theme and its window buttons. The window behaves like any
-  other window, and the background keeps its transparency and blur.
-  The whole window then shows one sheet of acrylic, title strip
-  included, so the strip and the body match.
+  other window, and the background keeps its transparency and blur:
+  the caption strip is veiled to match the body, so the whole window
+  reads as one frosted sheet.
 - **Clean removal.** Disabling the mod restores every file it changed.
 
 ## How to use
@@ -90,7 +90,7 @@ from Titlebar For Everyone by Ingan121 (MIT).
   $description: An installed font name. Blank keeps Windhawk's font
 - nativeTitleBar: false
   $name: Native title bar
-  $description: Use the real Windows title bar and its window buttons, drawn by Windows itself. The window then shows one uniform acrylic sheet from edge to edge.
+  $description: Use the real Windows title bar and its window buttons, drawn by Windows itself. The strip is veiled to match the body, so the whole window shows one frosted sheet.
 */
 // ==/WindhawkModSettings==
 
@@ -103,6 +103,7 @@ from Titlebar For Everyone by Ingan121 (MIT).
 #include <string>
 #include <fstream>
 #include <filesystem>
+#include <map>
 #include <mutex>
 #include <set>
 #include <algorithm>
@@ -210,15 +211,15 @@ static std::string FontCss() {
     for (wchar_t c : g_style.font) { char b[20]; sprintf_s(b, "\\%x ", unsigned(c)); escaped += b; }
     return "\"" + escaped + "\",sans-serif";
 }
-// Page background for the interface and the workbench. With the native title
-// bar the window is one uniform DWM sheet: the page stays clear so the caption
-// strip and the body show the same material. A rgba veil here would paint the
-// body lighter than the strip and show up as a band. Without blur the sheet is
-// the solid background color, matching the solid caption color.
+// Page background for the interface and the workbench. With blur both modes
+// wear the rgba veil: the page paints the body's veil, and the caption strip
+// gets the same veil from the tool's strip popup. Without blur the native
+// window is a solid sheet matching its solid caption color, while the custom
+// frameless window keeps its plain see-through veil over the desktop.
 static std::string PageBg() {
     const auto& s = g_style;
-    if (!s.nativeTitleBar) return "rgba(" + Rgb(s.background) + "," + Alpha(s.backgroundOpacity) + ")";
-    return s.blur ? "transparent" : "rgb(" + Rgb(s.background) + ")";
+    if (s.nativeTitleBar && !s.blur) return "rgb(" + Rgb(s.background) + ")";
+    return "rgba(" + Rgb(s.background) + "," + Alpha(s.backgroundOpacity) + ")";
 }
 static std::string AppCss() {
     const auto& s = g_style;
@@ -510,8 +511,9 @@ static void Effect(HWND h, bool reset) {
     BOOL dark = TRUE;
     DwmSetWindowAttribute(h, 20, &dark, sizeof(dark));
     // With the native title bar the caption strip is drawn by DWM over the
-    // same backdrop the page shows through; asking for no caption color keeps
-    // the strip as see-through as the body. A solid color would sit opaque.
+    // same backdrop the page shows through, so asking for no caption color
+    // keeps the backdrop visible there; the tool's veil popup then tints the
+    // strip to match the body. A solid color would sit opaque.
     DWORD caption = reset                            ? 0xFFFFFFFF
                     : (s.nativeTitleBar && s.blur)   ? 0xFFFFFFFE /* DWMWA_COLOR_NONE */
                                                      : bgr,
@@ -519,6 +521,117 @@ static void Effect(HWND h, bool reset) {
         ((s.textRgb & 255) << 16 | (s.textRgb & 0xff00) | s.textRgb >> 16);
     DwmSetWindowAttribute(h, 35, &caption, sizeof(caption));  // DWMWA_CAPTION_COLOR
     DwmSetWindowAttribute(h, 36, &text, sizeof(text));        // DWMWA_TEXT_COLOR
+}
+
+// The caption strip is non-client area the page can never paint, so with the
+// native title bar it would stay raw while the page veils the body. A
+// click-through layered popup owned by the interface window sits exactly on
+// the strip and supplies the same rgba veil there, so the strip and the body
+// read as one frosted sheet. It follows the window through the location event
+// and the worker tick, hides while minimized, and dies with its window.
+static std::map<HWND, HWND> g_veils;
+static DWORD g_veilBgr;
+static int g_veilAlpha = -1;
+
+static void VeilPaint(HWND v) {
+    DWORD color = g_style.background;
+    DWORD bgr = (color & 255) << 16 | (color & 0xff00) | color >> 16;
+    RECT r;
+    if (!GetClientRect(v, &r)) return;
+    HBRUSH brush = CreateSolidBrush(bgr);
+    HDC dc = GetDC(v);
+    FillRect(dc, &r, brush);
+    ReleaseDC(v, dc);
+    DeleteObject(brush);
+}
+static LRESULT CALLBACK VeilProc(HWND v, UINT m, WPARAM w, LPARAM l) {
+    if (m == WM_ERASEBKGND) { VeilPaint(v); return 1; }
+    if (m == WM_PAINT) { ValidateRect(v, nullptr); return 0; }
+    return DefWindowProcW(v, m, w, l);
+}
+static void VeilDestroy(HWND h) {
+    auto it = g_veils.find(h);
+    if (it == g_veils.end()) return;
+    if (IsWindow(it->second)) DestroyWindow(it->second);
+    g_veils.erase(it);
+}
+static void VeilSync(HWND h) {
+    auto it = g_veils.find(h);
+    if (it == g_veils.end()) return;
+    HWND v = it->second;
+    if (!IsWindow(v)) { g_veils.erase(it); return; }
+    if (IsIconic(h) || !IsWindowVisible(h)) { ShowWindow(v, SW_HIDE); return; }
+    RECT wr;
+    if (!GetWindowRect(h, &wr)) return;
+    POINT origin{0, 0};
+    if (!ClientToScreen(h, &origin)) return;
+    int height = origin.y - wr.top;
+    if (height <= 0) { ShowWindow(v, SW_HIDE); return; }
+    // Seat the veil directly above its owner: insert it after whatever window
+    // currently sits above the owner. Insert-after places the window below the
+    // handle it is given, and the system does not keep an owned window glued
+    // above its owner across z-order changes on its own.
+    HWND after = GetWindow(h, GW_HWNDPREV);
+    if (after == v) after = GetWindow(v, GW_HWNDPREV);
+    SetWindowPos(v, after, wr.left, wr.top, wr.right - wr.left, height,
+        SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW);
+}
+static HWND VeilCreate(HWND h) {
+    static const wchar_t cls[] = L"WindhawkStylerVeil";
+    static bool registered = [] {
+        WNDCLASSW wc{};
+        wc.lpfnWndProc = VeilProc;
+        wc.hInstance = GetModuleHandleW(nullptr);
+        wc.lpszClassName = cls;
+        return RegisterClassW(&wc);
+    }();
+    if (!registered) return nullptr;
+    HWND v = CreateWindowExW(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+        cls, L"", WS_POPUP, 0, 0, 0, 0, h, nullptr, GetModuleHandleW(nullptr), nullptr);
+    if (!v) return nullptr;
+    VeilPaint(v);
+    SetLayeredWindowAttributes(v, 0, BYTE(std::clamp(g_style.backgroundOpacity * 255 / 100, 0, 255)), LWA_ALPHA);
+    return v;
+}
+static void CALLBACK VeilEvent(HWINEVENTHOOK, DWORD event, HWND h, LONG object, LONG, DWORD, DWORD) {
+    if (object != OBJID_WINDOW) return;
+    std::lock_guard lock(g_guard);
+    if (event == EVENT_OBJECT_LOCATIONCHANGE) {
+        if (g_veils.contains(h)) VeilSync(h);
+        return;
+    }
+    // EVENT_SYSTEM_FOREGROUND: an activation reshuffles the z order, so seat
+    // every veil back above its owner.
+    for (auto& [w, v] : g_veils) VeilSync(w);
+}
+// Rebuilds every veil when the color, the opacity or the mode changed, then
+// keeps one aligned over each native strip.
+static void VeilPass() {
+    DWORD color = g_style.background;
+    DWORD bgr = (color & 255) << 16 | (color & 0xff00) | color >> 16;
+    int alpha = g_style.backgroundOpacity * 255 / 100;
+    bool want = g_style.nativeTitleBar && g_style.blur;
+    if (!want || bgr != g_veilBgr || alpha != g_veilAlpha) {
+        for (auto& [h, v] : g_veils) if (IsWindow(v)) DestroyWindow(v);
+        g_veils.clear();
+        g_veilBgr = bgr;
+        g_veilAlpha = alpha;
+    }
+    for (HWND h : g_windows) {
+        if (!want) { VeilDestroy(h); continue; }
+        if (!g_veils.contains(h)) {
+            if (HWND v = VeilCreate(h)) g_veils[h] = v;
+        }
+        VeilSync(h);
+    }
+    for (auto it = g_veils.begin(); it != g_veils.end();) {
+        if (!IsWindow(it->first)) {
+            if (IsWindow(it->second)) DestroyWindow(it->second);
+            it = g_veils.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 static BOOL CALLBACK Track(HWND h, LPARAM) {
     if (!g_windows.contains(h) && MainWindow(h)) { g_windows.insert(h); Effect(h, false); }
@@ -531,6 +644,10 @@ static void CALLBACK Shown(HWINEVENTHOOK, DWORD, HWND h, LONG object, LONG, DWOR
 }
 static DWORD WINAPI Worker(void*) {
     auto hook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, nullptr, Shown, 0, 0, WINEVENT_OUTOFCONTEXT);
+    auto moveHook = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE,
+        nullptr, VeilEvent, 0, 0, WINEVENT_OUTOFCONTEXT);
+    auto fgHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND,
+        nullptr, VeilEvent, 0, 0, WINEVENT_OUTOFCONTEXT);
     int tick = 0;
     while (MsgWaitForMultipleObjects(1, &g_stop, FALSE, 1000, QS_ALLINPUT) != WAIT_OBJECT_0) {
         MSG msg; while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) DispatchMessageW(&msg);
@@ -542,8 +659,13 @@ static DWORD WINAPI Worker(void*) {
         // and the caption color drop on the same state changes.
         if (++tick % 5 == 0)
             for (HWND h : g_windows) Effect(h, false);
+        VeilPass();
     }
+    for (auto& [h, v] : g_veils) if (IsWindow(v)) DestroyWindow(v);
+    g_veils.clear();
     if (hook) UnhookWinEvent(hook);
+    if (moveHook) UnhookWinEvent(moveHook);
+    if (fgHook) UnhookWinEvent(fgHook);
     return 0;
 }
 
