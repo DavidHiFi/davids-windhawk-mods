@@ -1,5 +1,3 @@
-=
-/*
 # Windhawk Styler
 
 Rice Windhawk like the rest of your desktop: pick its colors and font, and
@@ -18,9 +16,9 @@ give it a see-through, blurred background.
 - **Font.** Any installed font across the interface. Icons keep their own font.
 - **Native title bar.** Use the real Windows title bar, with your own
   Windows theme and its window buttons. The window behaves like any
-  other window, and the background keeps its transparency and blur.
-  The whole window then shows one sheet of acrylic, title strip
-  included, so the strip and the body match.
+  other window, and the background keeps its transparency and blur:
+  the caption strip is veiled to match the body, so the whole window
+  reads as one frosted sheet.
 - **Clean removal.** Disabling the mod restores every file it changed.
 
 ## How to use
@@ -39,5 +37,3 @@ The native title bar draws the real Windows caption, and without it the
 window controls come from the interface itself. Both modes keep the
 see-through, blurred background. The window frame technique is adapted
 from Titlebar For Everyone by Ingan121 (MIT).
-*/
-//
