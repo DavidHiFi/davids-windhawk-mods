@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         1.3.0
+// @version         1.3.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -33,6 +33,8 @@ give it a see-through, blurred background.
 - **Native title bar.** Use the real Windows title bar, with your own
   Windows theme and its window buttons. The window behaves like any
   other window, and the background keeps its transparency and blur.
+  The whole window then shows one sheet of acrylic, title strip
+  included, so the strip and the body match.
 - **Clean removal.** Disabling the mod restores every file it changed.
 
 ## How to use
@@ -88,7 +90,7 @@ from Titlebar For Everyone by Ingan121 (MIT).
   $description: An installed font name. Blank keeps Windhawk's font
 - nativeTitleBar: false
   $name: Native title bar
-  $description: Use the real Windows title bar and its window buttons, drawn by Windows itself
+  $description: Use the real Windows title bar and its window buttons, drawn by Windows itself. The window then shows one uniform acrylic sheet from edge to edge.
 */
 // ==/WindhawkModSettings==
 
@@ -208,9 +210,19 @@ static std::string FontCss() {
     for (wchar_t c : g_style.font) { char b[20]; sprintf_s(b, "\\%x ", unsigned(c)); escaped += b; }
     return "\"" + escaped + "\",sans-serif";
 }
+// Page background for the interface and the workbench. With the native title
+// bar the window is one uniform DWM sheet: the page stays clear so the caption
+// strip and the body show the same material. A rgba veil here would paint the
+// body lighter than the strip and show up as a band. Without blur the sheet is
+// the solid background color, matching the solid caption color.
+static std::string PageBg() {
+    const auto& s = g_style;
+    if (!s.nativeTitleBar) return "rgba(" + Rgb(s.background) + "," + Alpha(s.backgroundOpacity) + ")";
+    return s.blur ? "transparent" : "rgb(" + Rgb(s.background) + ")";
+}
 static std::string AppCss() {
     const auto& s = g_style;
-    auto bg = "rgba(" + Rgb(s.background) + "," + Alpha(s.backgroundOpacity) + ")";
+    auto bg = PageBg();
     std::string css =
         "html{background:" + bg + "!important}body{background:transparent!important;"
         "--app-background-color:" + bg + "!important}";
@@ -292,7 +304,7 @@ static std::string AppCss() {
 }
 static std::string WorkbenchCss() {
     const auto& s = g_style;
-    auto bg = "rgba(" + Rgb(s.background) + "," + Alpha(s.backgroundOpacity) + ")";
+    auto bg = PageBg();
     std::string css =
         "html,body,.monaco-workbench,.monaco-workbench .part,.monaco-workbench .part>.content,"
         ".monaco-workbench .split-view-view,.monaco-workbench .monaco-grid-view,"
