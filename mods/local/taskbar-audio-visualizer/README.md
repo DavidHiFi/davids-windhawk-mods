@@ -14,8 +14,10 @@ other widgets.
 - **Choose what it listens to.** Right-click the bars to follow every active
   output, a single output device, or an input such as an audio interface's
   loopback.
-- **Stays out of the way.** It hides during fullscreen games and videos, and
-  clicks on the taskbar pass straight through.
+- **Stays out of the way.** It hides during fullscreen games and videos, and it
+  follows the taskbar's auto-hide: when the taskbar slides off the screen the
+  strip slides with it, and it comes back when the taskbar is shown. Clicks on
+  the taskbar pass straight through.
 - **Customizable** bar shape, size, colors, EQ, response speed and background.
   Catppuccin Mocha colors by default.
 - **Light on resources.** Drawing slows down when nothing is playing.
