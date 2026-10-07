@@ -4,9 +4,9 @@
   "generatedAt": "2026-10-07T03:20:37+08:00",
   "windhawkVersion": "1.7.3",
   "counts": {
-    "mods": 119,
-    "enabled": 114,
-    "local": 11
+    "mods": 120,
+    "enabled": 113,
+    "local": 12
   },
   "mods": [
     {
@@ -31,7 +31,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/alt-tab-flip-3d",
       "source": "mods/catalog/alt-tab-flip-3d.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "always-allow-ctrl-shift-enter",
@@ -610,6 +610,18 @@
       "enabled": true
     },
     {
+      "id": "local@simple-window-switcher-plus",
+      "name": "Simple Window Switcher Plus",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "GPL-2.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/simple-window-switcher-plus/simple-window-switcher-plus.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "local@taskbar-ai-quota-opencode",
       "name": "Taskbar AI Quota Bars Plus",
       "author": "DavidHiFi",
@@ -955,7 +967,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/simple-window-switcher",
       "source": "mods/catalog/simple-window-switcher.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "slick-window-arrangement",
