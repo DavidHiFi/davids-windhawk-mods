@@ -8,7 +8,7 @@ copy onto another machine.
 
 | | Mod | What it does |
 | --- | --- | --- |
-| <img src="media/previews/windhawk-styler.png" width="220"> | [Windhawk Styler](mods/local/windhawk-styler) | Colors for backgrounds, cards and controls, fonts, background blur and title bar buttons that match your Windows theme. |
+| <img src="media/previews/windhawk-styler.png" width="220"> | [Windhawk Styler](mods/local/windhawk-styler) | Colors, fonts, frosted dialogs and a matching title bar for Windhawk 2.0. |
 | <img src="media/previews/simple-window-switcher-plus.gif" width="220"> | [Simple Window Switcher Plus](mods/local/simple-window-switcher-plus) | Vista Alt+Tab animations and blur, customizable layouts, and elevated app support. |
 | <img src="media/previews/window-manager.gif" width="220"> | [Window Manager](mods/local/window-manager) | Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts. |
 | <img src="media/previews/alt-snap-drag.gif" width="220"> | [AltSnap](mods/local/alt-snap-drag) | Alt+drag to move and resize any window, plus AltSnap's window shortcuts. |
@@ -51,7 +51,7 @@ into the Start Menu Styler's Textual mode.
 
 To copy the setup onto another PC:
 
-1. Install [Windhawk](https://windhawk.net) (made with 1.7.3).
+1. Install [Windhawk](https://windhawk.net) (Windhawk Styler requires the 2.0 interface; its legacy edition supports the older interface).
 2. Install the catalog mods listed in
    [mods/catalog/README.md](mods/catalog/README.md) from Windhawk's Explore tab,
    and the mods above from their folders.
@@ -63,8 +63,8 @@ To copy the setup onto another PC:
    powershell -ExecutionPolicy Bypass -File tools\Apply-WindhawkSettings.ps1
    ```
 
-   Add `-IncludeAppSettings` to import the app and engine settings too, and
-   `-RestartEngine` to restart Windhawk afterwards.
+   Add `-IncludeAppSettings` to import the app and engine settings too.
+   Reopen the Windhawk interface after applying Styler settings.
 4. Copy `mod-storage/` to
    `C:\ProgramData\Windhawk\Engine\ModsWritable\mod-storage\`, and
    `editor/settings.json` to
