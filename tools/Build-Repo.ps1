@@ -19,12 +19,14 @@ Full refresh.
 param([switch]$SkipSources)
 
 $ErrorActionPreference = 'Stop'
+$retiredLocalIds = @('local@start-everything')
 $repo = Split-Path $PSScriptRoot -Parent
 $src  = 'C:\ProgramData\Windhawk\ModsSource'
 if (-not (Test-Path -LiteralPath $src)) { throw "ModsSource not found at $src" }
 
 # Where the local (my) mods live in the repo; everything else is a catalog copy.
 $localPaths = [ordered]@{
+    'local@start-everything-plus' = 'mods\local\start-everything-plus\start-everything-plus.wh.cpp'
     'local@taskbar-audio-visualizer' = 'mods\local\taskbar-audio-visualizer\taskbar-audio-visualizer.wh.cpp'
     'local@window-manager' = 'mods\local\window-manager\window-manager.wh.cpp'
     'local@taskbar-weather' = 'mods\local\taskbar-weather\taskbar-weather.wh.cpp'
@@ -44,6 +46,7 @@ $licenseOverride = @{
     'npp-taskdlg-textcolor' = 'MIT'
 }
 $upstreamOverride = @{
+    'local@start-everything-plus' = 'https://windhawk.net/mods/start-everything'
     'local@taskbar-audio-visualizer' = 'https://windhawk.net/mods/tourne-table-desktop-audio-visualizer'
     'local@alt-snap-drag'             = 'https://windhawk.net/mods/alt-drag'
     'local@taskbar-ai-quota-opencode' = 'https://windhawk.net/mods/taskbar-ai-quota'
@@ -76,6 +79,7 @@ function Get-ModHeader {
 if (-not $SkipSources) {
     foreach ($f in Get-ChildItem -LiteralPath $src -File -Filter '*.wh.cpp') {
         $id = $f.Name -replace '\.wh\.cpp$', ''
+        if ($id -in $retiredLocalIds) { continue }
         $dest = if ($localPaths.Contains($id)) { Join-Path $repo $localPaths[$id] } else { Join-Path $repo "mods\catalog\$($f.Name)" }
         New-Item -ItemType Directory -Path (Split-Path $dest -Parent) -Force | Out-Null
         Copy-Item -LiteralPath $f.FullName -Destination $dest -Force
@@ -92,6 +96,7 @@ if (-not $SkipSources) {
 # --- registry state and per-mod settings ---
 $base = 'HKLM:\SOFTWARE\Windhawk\Engine\Mods'
 $mods = foreach ($k in Get-ChildItem $base) {
+    if ($k.PSChildName -in $retiredLocalIds) { continue }
     $p = Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue
     [pscustomobject]@{
         id           = $k.PSChildName
@@ -111,6 +116,7 @@ $state | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $repo 'settings\mods-s
 $settings = [ordered]@{}
 foreach ($k in Get-ChildItem "$base\*\Settings") {
     $id = Split-Path (Split-Path $k.PSPath -Parent) -Leaf
+    if ($id -in $retiredLocalIds) { continue }
     $v = Get-ItemProperty $k.PSPath
     $vals = [ordered]@{}
     foreach ($p in $v.PSObject.Properties | Where-Object { $_.Name -notmatch '^PS' }) { $vals[$p.Name] = $p.Value }

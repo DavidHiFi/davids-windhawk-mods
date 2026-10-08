@@ -112,3 +112,4 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [windows-11-taskbar-styler](./windows-11-taskbar-styler.wh.cpp) | [m417z](https://github.com/m417z) | 1.10 | yes |  |
 | [windows-animations](./windows-animations.wh.cpp) | [ReDrag](https://github.com/redrag2105) | 1.3.6 | yes | MIT |
 | [wobbly-windows](./wobbly-windows.wh.cpp) | [lalimatyus](https://github.com/lalimatyus) | 0.115 | yes | GPL-3.0-only |
+| [start-everything](./start-everything.wh.cpp) | [bardelyne](https://github.com/bardelyne) | 1.0 | no | GPL-3.0 |
