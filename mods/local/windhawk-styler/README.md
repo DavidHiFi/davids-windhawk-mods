@@ -11,13 +11,13 @@ Choose Windhawk's colors, font, transparency and background blur.
 - **Controls.** Choose colors for buttons and inputs, plus an accent for selections and links.
 - **Text and font.** Use an installed font and a text color. Icons keep their own font.
 - **Title bar.** Match the background or choose a solid color. The app icon keeps its normal size, and Windows handles dragging and window buttons.
-- **Removal.** Disable the mod and reopen the interface to return to Windhawk's appearance. The mod changes no application files.
+- **Removal.** Disable the mod to reopen the interface with Windhawk's appearance. The mod changes no application files.
 
 ## How to use
 
 This edition requires Windows 11 and the 64-bit Windhawk 2.0 Tauri interface. It was tested with Windhawk 2.0.0-alpha.6.
 
-Open the mod's Settings tab, choose your appearance and save. Saving briefly closes and reopens the Windhawk interface to apply the settings.
+Open the mod's Settings tab, choose your appearance and save. Saving settings or switching this mod on or off briefly closes and reopens the Windhawk interface.
 
 Colors use `#RRGGBB`. Opacity runs from 0 for transparent to 100 for solid. Leave an optional color or font blank to use Windhawk's choice. The title bar keeps the Windows caption font.
 
