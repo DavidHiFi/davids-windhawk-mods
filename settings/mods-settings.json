@@ -2012,7 +2012,7 @@
     "styleConstants[6]": "highlightRadius = 5",
     "styleConstants[7]": "highlightOffset = 4",
     "styleConstants[8]": "buttonSpacing = 6",
-    "styleConstants[9]": "sysTraySpacing = 6",
+    "styleConstants[9]": "sysTraySpacing = 0",
     "styleConstants[10]": "iconLabelSpacing = 10",
     "styleConstants[11]": "leftRightPadding = 8",
     "styleConstants[12]": "badgeSize = 12",
@@ -2021,7 +2021,7 @@
     "styleConstants[15]": "taskbarSidesRounded = 1",
     "styleConstants[16]": "buttonFill = <SolidColorBrush Color=\"#00000000\"/>",
     "styleConstants[17]": "buttonBorderColor = <SolidColorBrush Color=\"#00000000\"/>",
-    "styleConstants[18]": "taskbarFill = <WindhawkBlur BlurAmount=\"80\" TintColor=\"#1E1E2E\" TintOpacity=\"0.92\" TintLuminosityOpacity=\"0.8\" FallbackColor=\"#EB1E1E2E\"/>",
+    "styleConstants[18]": "taskbarFill = <WindhawkBlur BlurAmount=\"110\" TintColor=\"#1E1E2E\" TintOpacity=\"0.75\" TintLuminosityOpacity=\"0.8\" FallbackColor=\"#BF1E1E2E\"/>",
     "styleConstants[19]": "taskbarStrokeColor = {{__unset}}",
     "styleConstants[20]": "progressColor = <SolidColorBrush Color=\"{ThemeResource AdaptiveAccent}\" Opacity=\"0.35\"/>",
     "styleConstants[21]": "showDesktopIndicatorColor = <SolidColorBrush Color=\"{ThemeResource AdaptiveAccent}\" Opacity=\"0.9\"/>",
@@ -2413,7 +2413,24 @@
     "controlStyles[58].styles[1]": "// Background layer inset: makes the taskbar read as one floating pill.",
     "controlStyles[1].styles[6]": "RadiusY=15",
     "controlStyles[59].target": "Windows.UI.Xaml.Controls.TextBlock#InnerTextBlock[Text=]",
-    "controlStyles[59].styles[0]": "Text="
+    "controlStyles[59].styles[0]": "Text=",
+    "controlStyles[60].target": "//",
+    "controlStyles[60].styles[0]": "//",
+    "controlStyles[61].target": "SystemTray.OmniButton#ControlCenterButton",
+    "controlStyles[61].styles[0]": "Margin=0,0,-10,0",
+    "controlStyles[62].target": "//",
+    "controlStyles[62].styles[0]": "Visibility=Collapsed",
+    "controlStyles[61].styles[1]": "//",
+    "controlStyles[60].styles[1]": "//",
+    "controlStyles[61].styles[2]": "//",
+    "controlStyles[63].target": "//",
+    "controlStyles[60].styles[9]": "//",
+    "controlStyles[64].target": "//",
+    "controlStyles[64].styles[0]": "//",
+    "controlStyles[65].target": "//",
+    "controlStyles[65].styles[0]": "//",
+    "controlStyles[60].styles[2]": "//",
+    "controlStyles[61].styles[9]": "//"
   },
   "windows-animations": {
     "minimize_restore.minimize_animation": 1,
@@ -2561,3 +2578,4 @@
     "customHeader[0].appName": ""
   }
 }
+
