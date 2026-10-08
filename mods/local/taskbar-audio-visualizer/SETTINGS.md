@@ -81,7 +81,8 @@ Geometry is clamped to fit the main horizontal taskbar. Colors accept `#AARRGGBB
 | `performance.targetFps` | `30` | 10 to 120 frames per second. Default is 30. |
 | `performance.pauseWhenSilentSeconds` | `10` | After this many silent seconds, draw at 5 FPS. The strip remains visible and resumes its normal rate when audio returns. 0 disables idle throttling. |
 | `performance.hideWhenFullscreen` | `true` | Hide bars and media buttons when a fullscreen or borderless foreground window covers the taskbar. Restore them when the taskbar is available. |
-| `performance.followTaskbarAutoHide` | `true` | Slide out of view with the taskbar whenever the Windows taskbar auto-hides, and return when it is shown again, like any other taskbar widget. Applies while the Windows "Automatically hide the taskbar" setting is on. |
+| `performance.followTaskbarAutoHide` | `true` | Slide out of view with the taskbar whenever the Windows taskbar auto-hides, and return when it is shown again, like any other taskbar widget. Keyed to the shell's live state read from the work area: while the taskbar behaves as a permanent bar that holds its screen space (for example a wedged auto-hide), the strip stays visible with it. |
+| `performance.pauseWhenObscured` | `true` | Hide the bars while an always-on-top window covers the strip, and bring them back when the space is free again. Ordinary windows sit below the taskbar and can never cover the strip, so only topmost surfaces count. |
 
 ## Diagnostics
 
