@@ -831,5 +831,19 @@
     "exclude": "",
     "architecture": "",
     "version": "1.0.0"
+  },
+  "local@start-everything-plus": {
+    "disabled": false,
+    "include": "StartMenuExperienceHost.exe|SearchHost.exe|explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.4"
+  },
+  "start-everything": {
+    "disabled": true,
+    "include": "StartMenuExperienceHost.exe|SearchHost.exe|explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0"
   }
 }

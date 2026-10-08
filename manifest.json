@@ -1,12 +1,12 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-10-07T03:20:37+08:00",
+  "generatedAt": "2026-10-09T06:16:11+08:00",
   "windhawkVersion": "1.7.3",
   "counts": {
-    "mods": 120,
-    "enabled": 113,
-    "local": 12
+    "mods": 122,
+    "enabled": 114,
+    "local": 13
   },
   "mods": [
     {
@@ -1448,6 +1448,30 @@
       "upstream": "https://windhawk.net/mods/center-titlebar",
       "source": "mods/local/center-titlebar-fork/center-titlebar-fork.wh.cpp",
       "enabled": false
+    },
+    {
+      "id": "start-everything",
+      "name": "Everything & Power Tools in the Start Menu",
+      "author": "bardelyne",
+      "github": "https://github.com/bardelyne",
+      "version": "1.0",
+      "license": "GPL-3.0",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/start-everything",
+      "source": "mods/catalog/start-everything.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "local@start-everything-plus",
+      "name": "Everything & Power Tools in the Start Menu Plus",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.4",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/start-everything",
+      "source": "mods/local/start-everything-plus/start-everything-plus.wh.cpp",
+      "enabled": true
     }
   ]
 }

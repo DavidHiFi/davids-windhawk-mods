@@ -34,6 +34,12 @@ power buttons. Pinned apps, recommendations and the side panel are hidden.
 The search placeholder uses JetBrainsMono Nerd Font (`JetBrainsMono NF`). Without
 it, Windows falls back to the default font.
 
+## With Everything Start menu Plus
+
+Use [onlysearch-mocha-everything-plus.yaml](onlysearch-mocha-everything-plus.yaml) with [Everything & Power Tools in the Start Menu Plus](../../mods/local/start-everything-plus). It leaves room for expanded search results and uses one power glyph per icon slot. The mod keeps the idle menu compact. If Start Menu Size is installed, set its fixed menu height to 0.
+
+The original theme and glyph repair script below remain for the standalone theme.
+
 ## Power row icons
 
 The power row relabels the power button with four Segoe Fluent Icons glyphs:
