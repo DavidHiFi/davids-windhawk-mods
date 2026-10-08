@@ -386,10 +386,10 @@
   },
   "local@windhawk-styler": {
     "disabled": false,
-    "include": "windhawk.exe|VSCodium.exe",
+    "include": "windhawk-ui.exe",
     "exclude": "",
-    "architecture": "",
-    "version": "1.3.0"
+    "architecture": "x86-64",
+    "version": "2.0.33"
   },
   "local@window-manager": {
     "disabled": false,

@@ -10,6 +10,7 @@
 
 | Mod | What it does | Version | License |
 | --- | --- | --- | --- |
+| [Windhawk Styler](local/windhawk-styler) | Colors, fonts, frosted dialogs and a matching title bar for Windhawk 2.0. | 2.0.33 | MIT |
 | [Window Manager](local/window-manager) | Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts. | 1.1.0 | GPL-3.0 |
 | [AltSnap](local/alt-snap-drag) | Alt+drag to move and resize any window, plus AltSnap's window shortcuts. | 1.2.2 | GPL-3.0 |
 | [Taskbar Audio Visualizer](local/taskbar-audio-visualizer) | A live audio spectrum with media controls on the taskbar. | 1.2.0 | MIT |

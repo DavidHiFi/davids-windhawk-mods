@@ -816,17 +816,17 @@
   },
   "local@windhawk-styler": {
     "backgroundColor": "#1e1e2e",
-    "fontFamily": "FiraCode Nerd Font",
-    "opacity": 50,
-    "acrylic": 1,
-    "cardOpacity": 100,
-    "nativeTitleBar": 0,
-    "backgroundOpacity": 50,
-    "controlColor": "#313244",
+    "backgroundOpacity": 75,
+    "blur": "acrylic",
     "cardColor": "#181825",
+    "cardOpacity": 90,
+    "controlColor": "#313244",
     "accentColor": "#89b4fa",
     "textColor": "#cdd6f4",
-    "blur": "acrylic"
+    "fontFamily": "FiraCode Nerd Font",
+    "nativeTitleBar": 1,
+    "titleBarAcrylic": 1,
+    "titleBarColor": "#403a45"
   },
   "local@window-manager": {
     "modifier": "alt",
