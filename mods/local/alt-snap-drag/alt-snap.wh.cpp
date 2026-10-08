@@ -2,7 +2,7 @@
 // @id              alt-snap-drag
 // @name            AltSnap
 // @description     Move and resize any window with Alt+drag, plus AltSnap's window shortcuts
-// @version         1.2.2
+// @version         1.2.3
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -33,7 +33,8 @@ separate app running.
 ## Features
 
 - **Alt+drag to move.** Grab a window anywhere, not just by its title bar.
-- **Alt+right-drag to resize** from the edge or corner nearest the cursor.
+- **Alt+right-drag to resize** from the edge or corner nearest the cursor,
+  including borderless windows such as Ditto and Flow Launcher.
 - **Window shortcuts** to maximize, minimize and close the active window.
 - **Mouse actions** for middle, double and X-button clicks, such as opening
   the window menu or toggling always on top.
@@ -131,6 +132,12 @@ RamonUnch. Both trace back to the original
   $description: >-
     Also drag windows without a title bar, such as popup menus, tooltips
     and flyouts.
+- sizeWindowsWithoutSizingBorder: true
+  $name: Resize windows without a sizing border
+  $description: >-
+    Also resize windows without a sizing border, such as the Ditto
+    quick-paste popup and the Flow Launcher window. A short Alt+right click
+    still runs the action below; dragging with the right button resizes.
 - middleAction: menu
   $name: Alt + middle click
   $description: Action when middle clicking a window while Alt is held. Values are menu, maximize, minimize, close, topmost, lower, center, sideSnap, or none.
@@ -313,6 +320,7 @@ struct {
     TriggerSettings moveTrigger;
     TriggerSettings sizeTrigger;
     std::atomic<bool> dragWindowsWithoutTitleBar;
+    std::atomic<bool> sizeWindowsWithoutSizingBorder;
     std::atomic<WindowAction> middleAction;
     std::atomic<WindowAction> rightClickAction;
     std::atomic<WindowAction> x1Action;
@@ -815,7 +823,12 @@ bool CanSizeRootWindow(HWND hRootWnd) {
     }
 
     LONG style = GetWindowLong(hRootWnd, GWL_STYLE);
-    return (style & WS_THICKFRAME) && !(style & WS_MAXIMIZE);
+    if (style & WS_MAXIMIZE) {
+        return false;
+    }
+
+    return g_settings.sizeWindowsWithoutSizingBorder ||
+           (style & WS_THICKFRAME);
 }
 
 bool CanActOnRootWindow(HWND hWnd) {
@@ -2628,6 +2641,8 @@ void LoadSettings() {
     LoadTriggerSettings(g_settings.sizeTrigger, L"sizeTrigger");
     g_settings.dragWindowsWithoutTitleBar =
         Wh_GetIntSetting(L"dragWindowsWithoutTitleBar");
+    g_settings.sizeWindowsWithoutSizingBorder =
+        Wh_GetIntSetting(L"sizeWindowsWithoutSizingBorder");
     LoadActionSetting(g_settings.middleAction, L"middleAction");
     LoadActionSetting(g_settings.rightClickAction, L"rightClickAction");
     LoadActionSetting(g_settings.x1Action, L"x1Action");
