@@ -2,7 +2,7 @@
 // @id                  taskbar-audio-visualizer
 // @name                Taskbar Audio Visualizer
 // @description         A live audio spectrum with media controls, right on the taskbar
-// @version             1.3.0
+// @version             1.3.1
 // @author              DavidHiFi
 // @github              https://github.com/DavidHiFi
 // @homepage            https://github.com/DavidHiFi/davids-windhawk-mods
@@ -29,10 +29,12 @@ other widgets.
 - **Choose what it listens to.** Right-click the bars to follow every active
   output, a single output device, or an input such as an audio interface's
   loopback.
-- **Stays out of the way.** It hides during fullscreen games and videos, and it
-  follows the taskbar's auto-hide: when the taskbar slides off the screen the
-  strip slides with it, and it comes back when the taskbar is shown. Clicks on
-  the taskbar pass straight through.
+- **Stays out of the way.** It hides during fullscreen games and videos, and
+  while an always-on-top window sits over the strip. It follows the taskbar's
+  auto-hide by the shell's live state: when the taskbar actually slides off
+  the screen the strip slides with it and comes back with it, and while the
+  taskbar sits parked on screen (a wedged auto-hide behaves this way) the
+  strip stays visible with it. Clicks on the taskbar pass straight through.
 - **Customizable** bar shape, size, colors, EQ, response speed and background.
   Catppuccin Mocha colors by default.
 - **Light on resources.** Drawing slows down when nothing is playing.
@@ -264,8 +266,14 @@ by Salyts. MIT.
   - followTaskbarAutoHide: true
     $name: Follow taskbar auto-hide
     $description: Slide out of view with the taskbar whenever the Windows taskbar auto-hides, and come
-      back when it is shown again, like any other taskbar widget. Applies while the Windows
-      "Automatically hide the taskbar" setting is on.
+      back when it is shown again, like any other taskbar widget. Keyed to the shell's live
+      state: while the taskbar behaves as a permanent bar that holds its screen space (for
+      example a wedged auto-hide), the strip stays visible with it.
+  - pauseWhenObscured: true
+    $name: Hide when covered
+    $description: Hide the bars while an always-on-top window covers the strip, and bring them back
+      when the space is free again. Ordinary windows sit below the taskbar and can never cover
+      the strip, so this reacts to topmost surfaces such as pinned players.
   $name: Performance
 - diagnostics:
   - enabled: false
@@ -555,8 +563,8 @@ Settings ReadCaptureSettings() {
     return g_settings;
 }
 
-std::atomic<bool> g_lazyInitialized{false};
 std::atomic<bool> g_initSucceeded{false};
+std::atomic<ULONGLONG> g_lastInitAttempt{0};
 std::atomic<bool> g_unloading{false};
 
 ComPtr<ID3D11Device> g_d3dDevice;
@@ -1236,7 +1244,12 @@ bool IsFullscreenOrGameActive() {
 // each being judged on its own -- two windows covering opposite halves read as
 // 100%, which is what you see on screen. GetRegionData hands back a set of
 // non-overlapping rectangles, so summing their areas double-counts nothing.
-int ComputeRectCoveragePercent(const RECT& targetIn) {
+// topmostOnly: the strip is itself a topmost window parked over the taskbar,
+// so an ordinary window's rect can intersect the strip's rect without covering
+// anything the user sees -- the taskbar is above normal windows and the strip
+// is above the taskbar. When set, only WS_EX_TOPMOST windows count as
+// coverers; fullscreen surfaces are handled by the fullscreen watcher.
+int ComputeRectCoveragePercent(const RECT& targetIn, bool topmostOnly) {
     if (targetIn.right <= targetIn.left || targetIn.bottom <= targetIn.top) return 0;
 
     // Judge only the part that is actually on a screen.
@@ -1267,7 +1280,8 @@ int ComputeRectCoveragePercent(const RECT& targetIn) {
     struct EnumCtx {
         RECT viz;
         HRGN covered;
-    } ctx{target, coveredRgn};
+        bool topmostOnly;
+    } ctx{target, coveredRgn, topmostOnly};
 
     EnumWindows(
         [](HWND hWnd, LPARAM lParam) __stdcall -> BOOL {
@@ -1285,6 +1299,7 @@ int ComputeRectCoveragePercent(const RECT& targetIn) {
 
             LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
             if (exStyle & WS_EX_TOOLWINDOW) return TRUE;
+            if (c->topmostOnly && !(exStyle & WS_EX_TOPMOST)) return TRUE;
             if (exStyle & WS_EX_TRANSPARENT) return TRUE;
             if (exStyle & WS_EX_NOACTIVATE) return TRUE;
 
@@ -1371,7 +1386,7 @@ bool IsVisualizerOccluded() {
     viz.bottom = g_drawRectB.load(std::memory_order_relaxed);
 
     int threshold = std::clamp(g_settings.obscuredThresholdPercent, 5, 100);
-    int covered = ComputeRectCoveragePercent(viz);
+    int covered = ComputeRectCoveragePercent(viz, true);
     bool occluded = covered >= threshold;
 
     // Logged on the transition only -- this runs once a second, and a line per
@@ -1396,7 +1411,7 @@ bool IsMediaStripCovered() {
     if (!GetWindowRect(g_mediaWnd, &strip)) return false;
 
     int threshold = std::clamp(g_settings.mediaCoveredThresholdPercent, 5, 100);
-    return ComputeRectCoveragePercent(strip) >= threshold;
+    return ComputeRectCoveragePercent(strip, true) >= threshold;
 }
 
 void RefreshAccentColorCache() {
@@ -2085,12 +2100,12 @@ bool g_mediaHiddenByCover = false;
 // code that consumes the slide. All writers run on the window (UI) thread,
 // which is why the fields stay plain.
 bool g_followTargetHidden = false;   // decided state: the strip should be off
+bool g_prevWantHidden = false;       // the previous tick's raw model decision
 bool g_followInitialized = false;    // the first evaluation snaps, no animation
 float g_followSlide = 0.f;           // 0 seated on the bar .. 1 fully slid off
 ULONGLONG g_followAnimStart = 0;     // GetTickCount64 when the target flipped
 float g_followAnimFrom = 0.f;        // progress the current animation starts from
 int g_followSlideDX = 0, g_followSlideDY = 0;  // slide vector, refreshed per tick
-int g_followRegCheckCounter = 0;
 bool g_followAutoHideEnabled = false;
 bool g_mediaHiddenByBar = false;
 
@@ -2161,32 +2176,58 @@ void RepositionAndRepaintMediaControls() {
 // ---------------------------------------------------------------------------
 // Taskbar auto-hide follow.
 //
-// The strip is a topmost window parked over the taskbar, so when the taskbar
-// auto-hides it used to keep floating exactly where the bar had been -- the
-// one piece of the mod that did not behave like a taskbar widget. The bar's
-// own hide state cannot be queried on Windows 11: the window keeps its full
-// on-screen rect and stays "visible" while the XAML content is translated
-// off-screen (measured on 25H2, build 26200), and the appbar API answers 0
-// even with auto-hide enabled. So instead of reading a state that nothing
-// exposes, the reveal decision is rebuilt from the same inputs the shell
-// reacts to: the cursor at the bar or at its screen edge, and shell-owned
-// foreground surfaces. Everything in this block runs on the window (UI)
-// thread; RenderVisualizer and UpdateSwapChainForLayout consume the state on
-// the same thread.
-bool IsTaskbarAutoHideEnabled() {
-    HKEY key;
-    if (RegOpenKeyExW(HKEY_CURRENT_USER,
-                      L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StuckRects3",
-                      0, KEY_READ, &key) == ERROR_SUCCESS) {
-        BYTE data[0x40] = {};
-        DWORD size = sizeof(data), type = 0;
-        LSTATUS status = RegQueryValueExW(key, L"Settings", nullptr, &type, data, &size);
-        RegCloseKey(key);
-        if (status == ERROR_SUCCESS && type == REG_BINARY && size >= 13)
-            return (data[12] & 0x01) != 0;
-    }
-    APPBARDATA abd = {sizeof(abd)};
-    return (SHAppBarMessage(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) != 0;
+// The strip is a topmost window parked over the taskbar, so whenever the
+// taskbar leaves the screen the strip must leave with it, and come back with
+// it -- like any other taskbar widget. On Windows 11 the bar's hide is a
+// composition transform on its XAML content: the window keeps its rect, stays
+// "visible", reports no cloak, and the appbar API answers 0 even while the
+// bar is away (all measured on 25H2, build 26200). No API exposes the moment.
+//
+// What the shell does publish is whether the bar currently holds screen
+// space: the monitor's work area. A bar that behaves as a permanent resident
+// pushes the work area in by its own thickness; a bar in auto-hide holds no
+// space. Measured on this machine 2026-10-08: with the "Automatically hide
+// the taskbar" switch on, the work area stayed pushed in by the full bar
+// height while the bar sat parked and visible on screen for minutes at a
+// time, cursor far away and an ordinary window in the foreground -- the
+// StuckRects3 switch and SHAppBarMessage both claimed "auto-hide" the whole
+// time. Keying the reveal model to that switch hid the strip under a bar
+// that was plainly on screen. So the mode is now keyed to the reservation:
+//
+// - Resident bar (work area reserved): the strip never hides by model; it
+//   rides only the fullscreen and occlusion rules.
+// - Auto-hide bar (work area free): the reveal decision is rebuilt from the
+//   same inputs the shell reacts to -- the cursor at the bar or at its
+//   screen edge, and shell-owned foreground surfaces.
+//
+// Everything in this block runs on the window (UI) thread;
+// RenderVisualizer and UpdateSwapChainForLayout consume the state on the
+// same thread.
+bool IsTaskbarReservingScreenSpace() {
+    HWND tray = MainTaskbar();
+    if (!tray) return false;
+
+    MONITORINFO mi{.cbSize = sizeof(mi)};
+    if (!GetMonitorInfo(MonitorFromWindow(tray, MONITOR_DEFAULTTONEAREST), &mi))
+        return false;
+    RECT bar{};
+    if (!GetWindowRect(tray, &bar)) return false;
+
+    int barH = bar.bottom - bar.top, barW = bar.right - bar.left;
+    if (barH <= 0 || barW <= 0) return false;
+
+    // The edge the bar is parked on is the one it shares with the monitor
+    // bounds. Reservation means the work area is pushed in from that edge by
+    // at least half the bar's thickness.
+    if (bar.top <= mi.rcMonitor.top)
+        return mi.rcWork.top - mi.rcMonitor.top >= (barH + 1) / 2;
+    if (bar.bottom >= mi.rcMonitor.bottom)
+        return mi.rcMonitor.bottom - mi.rcWork.bottom >= (barH + 1) / 2;
+    if (bar.left <= mi.rcMonitor.left)
+        return mi.rcWork.left - mi.rcMonitor.left >= (barW + 1) / 2;
+    if (bar.right >= mi.rcMonitor.right)
+        return mi.rcMonitor.right - mi.rcWork.right >= (barW + 1) / 2;
+    return false;
 }
 
 // The shell reveals a hidden auto-hide bar when the cursor touches the bar's
@@ -2282,11 +2323,15 @@ bool IsTaskbarCurrentlyRevealed() {
 void UpdateTaskbarFollow() {
     if (g_unloading.load()) return;
 
-    // The auto-hide switch rarely changes, and flipping it is the user's own
-    // deliberate action; re-reading the registry every tick would spend an
-    // open/query per tick for nothing.
-    if (!g_followInitialized || (++g_followRegCheckCounter & 0x1F) == 0)
-        g_followAutoHideEnabled = IsTaskbarAutoHideEnabled();
+    // Read the shell's live mode every tick: GetMonitorInfo and GetWindowRect
+    // cost far less than the registry open the StuckRects3 read needed, and
+    // this is the value the whole decision hangs on.
+    bool autohideMode = !IsTaskbarReservingScreenSpace();
+    if (autohideMode != g_followAutoHideEnabled) {
+        Wh_Log(L"[Follow] taskbar auto-hide mode %s",
+               autohideMode ? L"active" : L"not in effect, bar holds its space");
+        g_followAutoHideEnabled = autohideMode;
+    }
 
     if (g_fullscreenPaused.load()) {
         // While the fullscreen pause owns the overlay it is simply gone; the
@@ -2297,6 +2342,12 @@ void UpdateTaskbarFollow() {
     bool wantHidden = false;
     if (g_overlayWnd && g_settings.followTaskbarAutoHide && g_followAutoHideEnabled)
         wantHidden = !IsTaskbarCurrentlyRevealed();
+    // Hide only on an agreeing second tick: a single misread (a foreground
+    // event landing a frame before the shell acts on it) must not park the
+    // strip away from a bar that is actually on screen. Reveals stay
+    // immediate -- the visible-bias default this mod already leans on.
+    bool commitHidden = !g_followInitialized ? wantHidden : (wantHidden && g_prevWantHidden);
+    g_prevWantHidden = wantHidden;
 
     // Refresh the slide vector against the live bar geometry every tick, so a
     // taskbar moved between edges while the strip is out slides the right way
@@ -2317,7 +2368,7 @@ void UpdateTaskbarFollow() {
     }
 
     bool overlayVisible = g_overlayWnd && IsWindowVisible(g_overlayWnd);
-    if (wantHidden != g_followTargetHidden || !g_followInitialized) {
+    if (commitHidden != g_followTargetHidden || !g_followInitialized) {
         bool firstDecision = !g_followInitialized;
         // Snap instead of animate when nothing could have been on screen: at
         // startup into a hidden bar, or coming back from the fullscreen pause
@@ -2325,18 +2376,18 @@ void UpdateTaskbarFollow() {
         bool snap = firstDecision || !overlayVisible;
         g_followAnimFrom = g_followSlide;
         if (snap) {
-            g_followSlide = wantHidden ? 1.f : 0.f;
+            g_followSlide = commitHidden ? 1.f : 0.f;
             g_followAnimStart = GetTickCount64() - 10000;
         } else {
             g_followAnimStart = GetTickCount64();
         }
-        g_followTargetHidden = wantHidden;
+        g_followTargetHidden = commitHidden;
         g_followInitialized = true;
         if (!firstDecision)
             Wh_Log(L"[Follow] taskbar auto-hide: strip %s",
-                   wantHidden ? L"slides away with the bar" : L"returns with the bar");
+                   commitHidden ? L"slides away with the bar" : L"returns with the bar");
 
-        if (wantHidden) {
+        if (commitHidden) {
             if (g_mediaWnd && IsWindowVisible(g_mediaWnd)) {
                 g_mediaHiddenByBar = true;
                 ShowWindow(g_mediaWnd, SW_HIDE);
@@ -4480,9 +4531,22 @@ void RenderVisualizer() {
         // Playing label), and near a screen edge those insets push the surface
         // off-screen entirely. Testing that larger box would mean no window
         // could ever fully contain it, and the check would never fire.
+        //
+        // Screen coordinates: the layout is taskbar-local and the overlay is
+        // parked on the taskbar, so the surface's origin on screen is the
+        // overlay window's own top-left plus the layout origin. This used to
+        // add the virtual-screen metrics instead; with the check shipped
+        // hardcoded off it was never exercised, and on a multi-monitor
+        // desktop that corner is a different monitor entirely, so the
+        // occlusion check silently examined empty space.
         {
-            int virtualScreenX = GetSystemMetrics(SM_XVIRTUALSCREEN);
-            int virtualScreenY = GetSystemMetrics(SM_YVIRTUALSCREEN);
+            int originScreenX = GetSystemMetrics(SM_XVIRTUALSCREEN);
+            int originScreenY = GetSystemMetrics(SM_YVIRTUALSCREEN);
+            RECT overlayRect{};
+            if (GetWindowRect(g_overlayWnd.load(std::memory_order_relaxed), &overlayRect)) {
+                originScreenX = overlayRect.left;
+                originScreenY = overlayRect.top;
+            }
             float padL = g_settings.backgroundEnabled ? (float)g_settings.bgPaddingL * g_dpiScale : 0.f;
             float padR = g_settings.backgroundEnabled ? (float)g_settings.bgPaddingR * g_dpiScale : 0.f;
             float padT = g_settings.backgroundEnabled ? (float)g_settings.bgPaddingT * g_dpiScale : 0.f;
@@ -4491,10 +4555,10 @@ void RenderVisualizer() {
             float visT = layout.originY + blockY - padT;
             float visR = layout.originX + blockX + totalWidth + padR;
             float visB = layout.originY + blockY + totalHeight + padB;
-            g_drawRectL.store((LONG)visL + virtualScreenX, std::memory_order_relaxed);
-            g_drawRectT.store((LONG)visT + virtualScreenY, std::memory_order_relaxed);
-            g_drawRectR.store((LONG)visR + virtualScreenX, std::memory_order_relaxed);
-            g_drawRectB.store((LONG)visB + virtualScreenY, std::memory_order_relaxed);
+            g_drawRectL.store((LONG)visL + originScreenX, std::memory_order_relaxed);
+            g_drawRectT.store((LONG)visT + originScreenY, std::memory_order_relaxed);
+            g_drawRectR.store((LONG)visR + originScreenX, std::memory_order_relaxed);
+            g_drawRectB.store((LONG)visB + originScreenY, std::memory_order_relaxed);
             g_drawRectValid.store(true, std::memory_order_relaxed);
         }
 
@@ -5531,7 +5595,26 @@ LRESULT CALLBACK MessageWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             }
             return 0;
         case WM_TIMER:
-            if(wParam==0xCA71) { UpdateTaskbarFollow(); UpdateCapturePicker(); return 0; }
+            if(wParam==0xCA71) {
+                UpdateTaskbarFollow();
+                // Self-heal: a lost overlay window (explorer restart killed
+                // its owner, a wedged earlier unload destroyed it, a
+                // transient init failure) must not leave the strip gone
+                // until the user happens to click the taskbar. Recreate it
+                // here, gated the same way as the fullscreen pause so the
+                // strip is never flashed up just to be hidden again.
+                if (!g_overlayWnd) {
+                    if (g_debugLogging.load(std::memory_order_relaxed))
+                        Wh_Log(L"[Heal] overlay missing: unloading=%d paused=%d fullscreenActive=%d",
+                               (int)g_unloading.load(), (int)g_fullscreenPaused.load(),
+                               (int)IsFullscreenOrGameActive());
+                    if (!g_unloading && !g_fullscreenPaused.load() &&
+                        !(g_settings.pauseOnFullscreen && IsFullscreenOrGameActive()))
+                        CreateOverlayWindow();
+                }
+                UpdateCapturePicker();
+                return 0;
+            }
             if (g_unloading) return 0;
             if (wParam == TIMER_ID_MSG_DISPLAY_CHANGE) {
                 KillTimer(hWnd, TIMER_ID_MSG_DISPLAY_CHANGE);
@@ -5647,6 +5730,24 @@ LRESULT CALLBACK MessageWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
                 bool shouldPause = fullscreenHide;
 
+                // Diagnostic visibility into the occlusion decision: the draw
+                // rect, the measured coverage and the pause state, once a
+                // second while diagnostic logging is on.
+                if (g_debugLogging.load(std::memory_order_relaxed)) {
+                    static unsigned s_watchLogCounter = 0;
+                    if ((++s_watchLogCounter & 0x03) == 0) {
+                        RECT vr{g_drawRectL.load(std::memory_order_relaxed),
+                                g_drawRectT.load(std::memory_order_relaxed),
+                                g_drawRectR.load(std::memory_order_relaxed),
+                                g_drawRectB.load(std::memory_order_relaxed)};
+                        int cov = ComputeRectCoveragePercent(vr, true);
+                        Wh_Log(L"[Viz] watch: drawRect=(%ld,%ld,%ld,%ld) covered=%d%% paused=%d valid=%d",
+                               vr.left, vr.top, vr.right, vr.bottom, cov,
+                               (int)g_fullscreenPaused.load(),
+                               (int)g_drawRectValid.load(std::memory_order_relaxed));
+                    }
+                }
+
                 // Occlusion is evaluated on this same 1s timer rather than per
                 // frame -- EnumWindows is far too heavy to run at frame rate,
                 // and a second of latency on hide/show is imperceptible.
@@ -5697,7 +5798,18 @@ void UnregisterOverlayWindowClass() {
 }
 
 bool EnsureLazyInitialized() {
-    if (g_lazyInitialized.exchange(true)) return g_initSucceeded;
+    if (g_initSucceeded.load(std::memory_order_relaxed)) return true;
+
+    // A one-shot latch would make a single failure permanent: the overlay
+    // could then never be created again in this process, and the strip would
+    // stay gone until the next full mod reload. Retry instead, throttled to
+    // one attempt per 5 s so a persistently broken device (driver reset, GPU
+    // gone) does not spin device creation on every 100 ms tick.
+    ULONGLONG now = GetTickCount64();
+    ULONGLONG last = g_lastInitAttempt.load(std::memory_order_relaxed);
+    if (last && now - last < 5000) return false;
+    if (!g_lastInitAttempt.compare_exchange_strong(last, now,
+            std::memory_order_relaxed)) return false;
 
     if (!InitDirectX()) {
         Wh_Log(L"InitDirectX failed");
@@ -5719,8 +5831,19 @@ bool EnsureLazyInitialized() {
 
 
 void CreateOverlayWindow() {
-    if (g_overlayWnd || !MainTaskbar()) return;
-    if (!EnsureLazyInitialized() || !RegisterOverlayWindowClass()) return;
+    if (g_overlayWnd || !MainTaskbar()) {
+        if (g_debugLogging.load(std::memory_order_relaxed))
+            Wh_Log(L"[Overlay] create skipped: present=%d taskbar=%p overlay=%p",
+                   (int)(bool)g_overlayWnd, (void*)MainTaskbar(),
+                   (void*)g_overlayWnd.load(std::memory_order_relaxed));
+        return;
+    }
+    if (!EnsureLazyInitialized() || !RegisterOverlayWindowClass()) {
+        Wh_Log(L"[Overlay] create skipped: init=%d class=%d",
+               (int)g_initSucceeded.load(std::memory_order_relaxed),
+               (int)g_overlayClassRegistered);
+        return;
+    }
     RECT rc{};
     GetWindowRect(MainTaskbar(), &rc);
     g_overlayWnd = CreateWindowExW(
@@ -5799,7 +5922,7 @@ void LoadSettings() {
     g_settings.dragEnabled = false;
     g_settings.pauseOnFullscreen = Wh_GetIntSetting(L"performance.hideWhenFullscreen") != 0;
     g_settings.followTaskbarAutoHide = Wh_GetIntSetting(L"performance.followTaskbarAutoHide") != 0;
-    g_settings.pauseWhenObscured = false;
+    g_settings.pauseWhenObscured = Wh_GetIntSetting(L"performance.pauseWhenObscured") != 0;
     g_settings.autoHideEnabled = false;
     g_settings.mediaHideWhenCovered = false;
     auto number=[](PCWSTR name,int lo,int hi) { return std::clamp(Wh_GetIntSetting(name),lo,hi); };
@@ -5889,8 +6012,8 @@ void LoadSettings() {
     g_settings.pauseWhenSilentSeconds=number(L"performance.pauseWhenSilentSeconds",0,3600);
     g_frameRate.store(g_settings.targetFps); g_idleDelay.store(g_settings.pauseWhenSilentSeconds);
     g_debugLogging.store(Wh_GetIntSetting(L"diagnostics.enabled")!=0);
-    Wh_Log(L"Settings offset=%d vertical=%d bars=%d width=%d gap=%d height=%d media=%d fps=%d hideFullscreen=%d followAutoHide=%d",
-        g_taskbarOffset,g_taskbarVerticalOffset,g_settings.barCount,g_settings.barWidth,g_settings.barGap,g_settings.barMaxSize,g_settings.mediaControlsEnabled,g_settings.targetFps,(int)g_settings.pauseOnFullscreen,(int)g_settings.followTaskbarAutoHide);
+    Wh_Log(L"Settings offset=%d vertical=%d bars=%d width=%d gap=%d height=%d media=%d fps=%d hideFullscreen=%d followAutoHide=%d obscured=%d",
+        g_taskbarOffset,g_taskbarVerticalOffset,g_settings.barCount,g_settings.barWidth,g_settings.barGap,g_settings.barMaxSize,g_settings.mediaControlsEnabled,g_settings.targetFps,(int)g_settings.pauseOnFullscreen,(int)g_settings.followTaskbarAutoHide,(int)g_settings.pauseWhenObscured);
     Wh_Log(L"Audio selection defaultOnly=%d hardwareLoopbacks=%d filter=%s gain=%.1f",audio.defaultOnly,audio.hardwareLoopbacks,audio.filter.c_str(),g_settings.inputGainDb);
 }
 
@@ -6060,7 +6183,7 @@ void ApplySettingsChanged() {
     else if (g_settings.nowPlayingEnabled)
         FetchAlbumArtColorAsync();
 
-    if (!g_lazyInitialized || !g_initSucceeded) return;
+    if (!g_initSucceeded.load(std::memory_order_relaxed)) return;
 
     if (!g_fullscreenPaused.load()) {
         if (g_settings.pauseOnFullscreen && IsFullscreenOrGameActive()) {

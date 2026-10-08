@@ -14,10 +14,12 @@ other widgets.
 - **Choose what it listens to.** Right-click the bars to follow every active
   output, a single output device, or an input such as an audio interface's
   loopback.
-- **Stays out of the way.** It hides during fullscreen games and videos, and it
-  follows the taskbar's auto-hide: when the taskbar slides off the screen the
-  strip slides with it, and it comes back when the taskbar is shown. Clicks on
-  the taskbar pass straight through.
+- **Stays out of the way.** It hides during fullscreen games and videos, and
+  while an always-on-top window sits over the strip. It follows the taskbar's
+  auto-hide by the shell's live state: when the taskbar actually slides off
+  the screen the strip slides with it and comes back with it, and while the
+  taskbar sits parked on screen (a wedged auto-hide behaves this way) the
+  strip stays visible with it. Clicks on the taskbar pass straight through.
 - **Customizable** bar shape, size, colors, EQ, response speed and background.
   Catppuccin Mocha colors by default.
 - **Light on resources.** Drawing slows down when nothing is playing.

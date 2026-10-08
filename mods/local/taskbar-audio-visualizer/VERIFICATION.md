@@ -48,3 +48,41 @@ WS_EX_TOPMOST, and WindowFromPoint resolves to the menu at each sampled menu
 point. The menu opens outside the taskbar rectangle. A screenshot confirms
 that the root menu and submenu are fully visible beside the taskbar.
 Test selection and diagnostic logging were restored to their original values.
+
+## Taskbar auto-hide follow and hide when covered in 1.3.1
+
+Five new and updated behaviors verified live on 25H2 (build 26200.9457), a
+four-monitor desktop with the taskbar on the primary's top edge and the
+auto-hide switch on:
+
+- Measured first: with the auto-hide switch on, the shell keeps the work area
+  pushed in by the full bar height while the bar sits parked and visible with
+  the cursor on another monitor and an ordinary window in the foreground. No
+  window-state API returns the bar's true on-screen state. The mod therefore
+  keys its follow mode to the work-area reservation itself: a bar that holds
+  its space is resident and the strip stays visible with it; a free work area
+  means the reveal model decides anything. A screenshot shows the strip
+  seated with the resident bar, cursor far away.
+- Hide when covered is enabled by default, and the coverage enumeration now
+  counts only topmost windows: ordinary windows sit below the taskbar and
+  their rects can never cover the strip, while a coverer's own topmost status
+  is enough to prove it is on top. Enabling the check before this change
+  would have hidden the strip whenever any maximized app was open.
+- The occlusion target rect is published from the overlay window's screen
+  origin and measured (442,12,600,38), matching the strip. The previous
+  publisher added the virtual-screen origin, which on a multi-monitor desktop
+  pointed the check at a different monitor.
+- A titled topmost window placed over the strip met the 100 percent covered
+  threshold: the log records the occluded transition, the hide, and the
+  resume within one watcher tick each way. Removing the cover restored the
+  strip.
+- The health of four separate published builds was exercised: the old tool
+  process wedged mid-reload was cleared, a fresh overlay recreates itself
+  within one 100 ms tick if its window is lost, and one failed DirectX
+  initialization no longer makes the instance permanently dead (retries are
+  throttled to one attempt per 5 s).
+
+Both architectures compile with the 1.7.3 engine toolchain. Verification was
+performed with diagnostic logging enabled, then restored to its original off
+state. Settings snapshots in manifest, mods-state and mods-settings were
+refreshed to the 1.3.1 live state (51 typed settings).
