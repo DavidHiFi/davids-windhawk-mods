@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.42
+// @version         2.0.43
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -513,10 +513,6 @@ static std::string BuildInjectJs(const Settings& s) {
     return js;
 }
 
-static std::string BuildCleanupJs() {
-    return "(function(){var st=document.getElementById('wh-styler-style');if(st&&st.parentNode){st.parentNode.removeChild(st);}})()";
-}
-
 static std::uint32_t Bgr(std::uint32_t rgb) {
     return ((rgb & 0xff) << 16) | (rgb & 0x00ff00) | ((rgb >> 16) & 0xff);
 }
@@ -703,7 +699,7 @@ static void CropCaptionChild(HWND child) {
     HWND owner = GetParent(child);
     if (!owner || !IsOurMainUiWindow(owner)) return;
     wchar_t cls[64];
-    GetClassNameW(child, cls, 64);
+    if (!GetClassNameW(child, cls, 64)) return;
     if (wcscmp(cls, L"WRY_WEBVIEW") != 0) return;
     Settings s = SnapshotSettings();
     if (!IntegratedCaption(s)) {
@@ -1052,7 +1048,7 @@ static volatile long g_patchCount = 0;
 // are kept for restore.
 struct CaveRec {
     unsigned char* cave;
-    unsigned char orig[36];
+    unsigned char orig[32];  // one cave slot
 };
 static CaveRec g_caves[16];
 
@@ -1064,6 +1060,7 @@ static void RestorePatches() {
         DWORD oldProtect = 0;
         if (VirtualProtect(site, (SIZE_T)g_patches[i].origLen, PAGE_EXECUTE_READWRITE, &oldProtect)) {
             memcpy(site, g_patches[i].orig, (SIZE_T)g_patches[i].origLen);
+            FlushInstructionCache(GetCurrentProcess(), site, (SIZE_T)g_patches[i].origLen);
             VirtualProtect(site, (SIZE_T)g_patches[i].origLen, oldProtect, &oldProtect);
         }
         g_patches[i].site = nullptr;
@@ -1072,6 +1069,7 @@ static void RestorePatches() {
             DWORD oldProtect = 0;
             if (VirtualProtect(cave, sizeof(g_caves[i].orig), PAGE_EXECUTE_READWRITE, &oldProtect)) {
                 memcpy(cave, g_caves[i].orig, sizeof(g_caves[i].orig));
+                FlushInstructionCache(GetCurrentProcess(), cave, sizeof(g_caves[i].orig));
                 VirtualProtect(cave, sizeof(g_caves[i].orig), oldProtect, &oldProtect);
             }
             g_caves[i].cave = nullptr;
@@ -1114,7 +1112,8 @@ static void PatchPutSites() {
     // the tail padding starts after VirtualSize, 16-aligned
     unsigned char* tailBase = (unsigned char*)(((std::uintptr_t)(codeLO + codeSize) + 15) & ~15);
     unsigned char* tailEnd = (unsigned char*)(((std::uintptr_t)(codeLO + ((codeSize + 0xfff) & ~(std::size_t)0xfff))));
-    if (tailEnd - tailBase < 128) {
+    const SIZE_T caveCapacity = (SIZE_T)(tailEnd - tailBase) / 32;
+    if (caveCapacity == 0) {
         DebugNote("no tail padding", (long)(tailEnd - tailBase));
         return;
     }
@@ -1146,7 +1145,7 @@ static void PatchPutSites() {
         if (!qiNear) continue;
 
         long idx = InterlockedExchangeAdd(&g_patchCount, 0);
-        if (idx >= 16) break;
+        if (idx >= 16 || (SIZE_T)idx >= caveCapacity) break;
         unsigned char* cave = tailBase + (SIZE_T)idx * 32;
 
         // build the stub in the cave (32 bytes reserved each)
@@ -1171,7 +1170,9 @@ static void PatchPutSites() {
         std::int32_t callRel = (std::int32_t)((std::int64_t)stub - ((std::int64_t)p + 5));
         p[0] = 0xE8;
         memcpy(p + 1, &callRel, 4);
-        for (int b = 5; b < origLen; b++) p[b] = 0x90;
+        // The stub returns to p+5. Keep the original test and js after it, so a
+        // failed put still takes the runtime's own error branch.
+        p[5] = 0x90;
         // flush the instruction cache for the patched page
         FlushInstructionCache(GetCurrentProcess(), p, (SIZE_T)origLen);
         VirtualProtect(p, (SIZE_T)origLen, oldProtect, &oldProtect);
@@ -1253,6 +1254,17 @@ static bool JsonStringValue(const std::string& json, const char* key, std::strin
     return true;
 }
 
+// /json lists every debuggable target. Take the socket of the interface's own
+// page, not whichever target happens to be listed first.
+static bool FindPageSocketUrl(const std::string& json, std::string* wsUrl) {
+    size_t page = json.find("tauri.localhost");
+    if (page == std::string::npos) return false;
+    size_t start = json.rfind('{', page);
+    size_t end = json.find('}', page);
+    if (start == std::string::npos || end == std::string::npos) return false;
+    return JsonStringValue(json.substr(start, end - start + 1), "webSocketDebuggerUrl", wsUrl);
+}
+
 static void WsEncodeFrame(const std::string& payload, std::string* frame) {
     unsigned char mask[4];
     for (int i = 0; i < 4; i++) mask[i] = (unsigned char)(rand() & 0xff);
@@ -1276,6 +1288,8 @@ static void WsEncodeFrame(const std::string& payload, std::string* frame) {
 }
 
 static bool WsSendPong(SOCKET sock, const std::string& payload) {
+    // Control frames carry at most 125 bytes (RFC 6455), and this frame has no extended length.
+    if (payload.size() > 125) return false;
     unsigned char mask[4];
     for (int i = 0; i < 4; i++) mask[i] = (unsigned char)(rand() & 0xff);
     std::string masked(payload.size(), '\0');
@@ -1555,7 +1569,7 @@ static DWORD WINAPI StylerWorkerThread(LPVOID) {
             std::string json;
             if (HttpGetJson(kCdpPort, "/json", &json)) {
                 std::string wsUrl;
-                if (JsonStringValue(json, "webSocketDebuggerUrl", &wsUrl)) {
+                if (FindPageSocketUrl(json, &wsUrl)) {
                     std::string js = BuildInjectJs(s);
                     bool pushed = CdpPushTheme(kCdpPort, wsUrl, js);
                     if (pushed) g_pageReady = true;
@@ -1585,9 +1599,10 @@ static BOOL SpawnRelaunchHelper() {
     // cooldown: no relaunch within 4s of the last one
     static volatile long long lastRelaunchTick = 0;
     unsigned long long now = GetTickCount64();
-    long long last = InterlockedExchange64(&lastRelaunchTick, 0);
+    long long last = lastRelaunchTick;
     if (last != 0 && now - (unsigned long long)last < 4000) return FALSE;
-    InterlockedExchange64(&lastRelaunchTick, (long long)now);
+    // Claim the slot in one step: a second caller that read the same old tick loses here.
+    if (InterlockedCompareExchange64(&lastRelaunchTick, (long long)now, last) != last) return FALSE;
 
     wchar_t uiPath[MAX_PATH];
     DWORD pathLength = GetModuleFileNameW(nullptr, uiPath, MAX_PATH);
@@ -1640,9 +1655,13 @@ static BOOL SpawnRelaunchHelper() {
     b64[o] = '\0';
     DebugNote("helper b64 len", (long)o);
 
-    wchar_t cmdLine[10240];
-    _snwprintf(cmdLine, 10240,
+    wchar_t cmdLine[16384];
+    int cmdLength = _snwprintf(cmdLine, 16384,
         L"\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoProfile -ExecutionPolicy Bypass -EncodedCommand %S", b64);
+    if (cmdLength < 0 || cmdLength >= 16384) {
+        LocalFree(b64);
+        return FALSE;
+    }
 
     STARTUPINFOW si = {};
     si.cb = sizeof(si);
@@ -1663,8 +1682,6 @@ static BOOL SpawnRelaunchHelper() {
     LocalFree(b64);
     return ok ? TRUE : FALSE;
 }
-
-static void* g_webview = nullptr;
 
 BOOL Wh_ModInit() {
     Wh_Log(L">");
@@ -1719,34 +1736,17 @@ void Wh_ModUninit() {
     if (g_stopEvent) {
         SetEvent(g_stopEvent);
         if (g_workerThread) {
-            WaitForSingleObject(g_workerThread, 6000);
+            // The worker can sit in a socket read for several seconds. Wait for
+            // it to finish before anything is unhooked or unmapped.
+            if (WaitForSingleObject(g_workerThread, 30000) != WAIT_OBJECT_0) DebugNote("worker still running at unload");
             CloseHandle(g_workerThread);
             g_workerThread = nullptr;
         }
         CloseHandle(g_stopEvent);
         g_stopEvent = nullptr;
     }
-    // Best effort: drop the injected style from the page, restore the window's
-    // stock frame and the runtime's put call sites, so the interface reverts
-    // when the mod goes away.
-    if (g_webview) {
-        void** vtw = *(void***)g_webview;
-        Settings s;
-        {
-            std::lock_guard<std::mutex> lock(g_settingsMutex);
-            s = g_settings;
-        }
-        std::string js = BuildCleanupJs();
-        int wlen = MultiByteToWideChar(CP_UTF8, 0, js.c_str(), -1, nullptr, 0);
-        wchar_t* wjs = (wchar_t*)LocalAlloc(LPTR, (SIZE_T)wlen * 2);
-        if (wjs) {
-            MultiByteToWideChar(CP_UTF8, 0, js.c_str(), -1, wjs, wlen);
-            // slot 29 = ExecuteScript
-            typedef HRESULT (STDMETHODCALLTYPE* ExecScript_t)(void*, wchar_t*, void*);
-            ((ExecScript_t)vtw[29])(g_webview, wjs, nullptr);
-            LocalFree(wjs);
-        }
-    }
+    // The page's injected style goes with the interface process: a disable
+    // relaunches it below, and a recompile re-injects over the same style tag.
     HWND hWnd = nullptr;
     for (;;) {
         hWnd = FindWindowExW(nullptr, hWnd, L"WindhawkTauriMainUI", nullptr);
