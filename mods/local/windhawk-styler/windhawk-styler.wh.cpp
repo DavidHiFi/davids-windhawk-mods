@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.34
+// @version         2.0.35
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -23,7 +23,7 @@ Choose Windhawk's colors, font, transparency and background blur.
 ## Features
 
 - **Background.** Pick a color and opacity, with Acrylic or no background effect.
-- **Cards and dialogs.** Set their color and opacity. Translucent dialogs and pop-up menus blur the content behind them.
+- **Cards and dialogs.** Set their color and opacity. Translucent dialogs and pop-up menus blur the content behind them. Tables, like the installed-mods list view, follow the card color.
 - **Controls.** Choose colors for buttons and inputs, plus an accent for selections and links.
 - **Text and font.** Use an installed font and a text color. Icons keep their own font.
 - **Title bar.** Match the background or choose a solid color. The app icon keeps its normal size, and Windows handles dragging and window buttons.
@@ -342,14 +342,29 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-modal-content,.ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-dropdown-menu{background-color:" + cardColor + " !important;backdrop-filter:blur(24px);}";
         css += ".ant-modal-header,.ant-modal-footer,.ant-drawer-header,.ant-drawer-body,.ant-drawer-footer,.ant-popover-title{background:transparent !important;}";
         css += ".ant-modal-title,.ant-popover-title{color:var(--whui-text-secondary) !important;}";
+        // Installed-mods list view and other tables: the interface paints fixed
+        // dark grays on .ant-table, so re-tint every surface with the card color.
+        css += ".ant-table{background-color:" + cardColor + " !important;border-color:rgba(255,255,255,0.08) !important;}";
+        css += ".ant-table-thead>tr>th{background-color:rgba(255,255,255,0.03) !important;border-color:rgba(255,255,255,0.08) !important;}";
+        css += ".ant-table-tbody>tr>td{border-color:rgba(255,255,255,0.06) !important;}";
+        css += ".ant-table-tbody>tr.ant-table-row:hover>td,.ant-table-tbody>tr>td.ant-table-cell-row-hover{background-color:rgba(255,255,255,0.04) !important;}";
+        css += ".ant-table-tbody>tr.ant-table-expanded-row>td{background-color:rgba(255,255,255,0.02) !important;}";
+        css += ".ant-table.ant-table-bordered>.ant-table-container,.ant-table.ant-table-bordered>.ant-table-content>table{border-color:rgba(255,255,255,0.08) !important;}";
+        css += ".ant-table-cell-scrollbar:not([rowspan]){box-shadow:" + cardColor + " 0 1px 0 1px !important;}";
+        css += ".ant-table-filter-trigger:hover,.ant-table .ant-table-filter-trigger-container-open{background-color:rgba(255,255,255,0.06) !important;}";
         if (s.cardOpacity < 100) {
             css += "[class*=\"SaveSettingsCard\"]{backdrop-filter:blur(16px);}";
+            css += ".ant-table{backdrop-filter:blur(24px);}";
         }
     }
     if (!s.control.empty()) {
         css += ".ant-btn{background-color:" + s.control + " !important;border-color:rgba(255,255,255,0.12) !important;}";
         css += ".ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-input-number{background-color:" + s.control + " !important;}";
         if (cardColor.empty()) css += ".ant-dropdown-menu{background-color:" + s.control + " !important;}";
+    }
+    if (!s.text.empty()) {
+        css += ".ant-table,.ant-table-thead>tr>th{color:" + s.text + " !important;}";
+        css += ".ant-table-column-sorter{color:" + RgbaFromRgb(s.textRgb, 70) + " !important;}";
     }
     if (!s.accent.empty()) {
         css += ".ant-btn-primary{background-color:" + s.accent + " !important;border-color:" + s.accent + " !important;color:#11111b !important;}";
@@ -359,6 +374,13 @@ static std::string BuildCss(const Settings& s) {
         css += "a{color:" + s.accent + " !important;}";
         css += ".ant-radio-checked .ant-radio-inner{border-color:" + s.accent + " !important;}";
         css += ".ant-checkbox-checked .ant-checkbox-inner{background-color:" + s.accent + " !important;border-color:" + s.accent + " !important;}";
+        css += ".ant-table-column-sorter-down.active,.ant-table-column-sorter-up.active,.ant-table-filter-trigger.active{color:" + s.accent + " !important;}";
+        unsigned r = 0, g = 0, b = 0;
+        if (sscanf_s(s.accent.c_str(), "rgb(%u,%u,%u)", &r, &g, &b) == 3) {
+            std::uint32_t rgb = (r << 16) | (g << 8) | b;
+            css += ".ant-table-tbody>tr.ant-table-row-selected>td{background-color:" + RgbaFromRgb(rgb, 15) + " !important;}";
+            css += ".ant-table-tbody>tr.ant-table-row-selected:hover>td{background-color:" + RgbaFromRgb(rgb, 20) + " !important;}";
+        }
     }
     if (s.nativeTitleBar && s.titleBarAcrylic) {
         int caption = GetSystemMetricsForDpi(SM_CYCAPTION, 96) +
