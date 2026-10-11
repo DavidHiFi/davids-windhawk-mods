@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.39
+// @version         2.0.40
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -411,6 +411,9 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-input:hover,.ant-input-affix-wrapper:hover,.ant-select-selector:hover,.ant-input-number:hover,.ant-picker:hover{border-color:" + s.accent + " !important;}";
         css += ".ant-input:focus,.ant-input-focused,.ant-input-affix-wrapper-focused,.ant-input-affix-wrapper:focus-within,.ant-input-number-focused,.ant-select-focused .ant-select-selector,.ant-picker-focused{border-color:" + s.accent + " !important;box-shadow:0 0 0 2px " + focus + " !important;}";
         css += ".ant-btn:focus-visible,.ant-input:focus-visible,.ant-select-selector:focus-visible,.ant-input-number:focus-visible,.ant-picker:focus-visible,.ant-checkbox-input:focus-visible+.ant-checkbox-inner,.ant-radio-input:focus-visible+.ant-radio-inner{outline:2px solid " + s.accent + " !important;outline-offset:2px;}";
+        // The search input sits inside an affix wrapper, which owns the focus
+        // ring. Clear the nested input ring so the search control has one outline.
+        css += ".ant-input-affix-wrapper>.ant-input:focus,.ant-input-affix-wrapper>.ant-input:focus-visible{border-color:transparent !important;box-shadow:none !important;outline:none !important;}";
         css += ".ant-tabs-tab-active .ant-tabs-tab-btn{color:" + s.accent + " !important;}";
         css += ".ant-tabs-ink-bar{background-color:" + s.accent + " !important;}";
         css += ".ant-menu-item-selected{color:" + s.accent + " !important;}";
@@ -449,7 +452,11 @@ static std::string BuildCss(const Settings& s) {
         std::string r = std::to_string(s.cornerRadius) + "px";
         css += ".ant-card,.ant-modal-content,.ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-tooltip-inner,.ant-alert,.ant-notification-notice,.ant-message-notice-content,.ant-table,.ant-collapse{border-radius:" + r + " !important;}";
         css += ".ant-btn,.ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-input-number,.ant-picker,.ant-segmented{border-radius:" + r + " !important;}";
-        css += ".ant-table-thead>tr:first-child>:first-child,.ant-table-thead>tr:first-child>:last-child,.ant-table-tbody>tr:last-child>:first-child,.ant-table-tbody>tr:last-child>:last-child,.ant-collapse-header,.ant-collapse-content{border-radius:0 !important;}";
+        // Match the table's inset header corners so the card-colored surface
+        // cannot show through as a dark notch beside the rounded outer border.
+        css += ".ant-table-thead>tr:first-child>th:first-child{border-top-left-radius:" + r + " !important;background-clip:padding-box !important;}";
+        css += ".ant-table-thead>tr:first-child>th:last-child{border-top-right-radius:" + r + " !important;background-clip:padding-box !important;}";
+        css += ".ant-table-tbody>tr:last-child>:first-child,.ant-table-tbody>tr:last-child>:last-child,.ant-collapse-header,.ant-collapse-content{border-radius:0 !important;}";
         // Clip inner painting to the rounded shape: without this, square
         // row/hover backgrounds poke past the table's rounded corners, and
         // square item hovers poke past rounded drop-down menus.
