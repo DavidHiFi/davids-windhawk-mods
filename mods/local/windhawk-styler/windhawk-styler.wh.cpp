@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.35
+// @version         2.0.36
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -25,6 +25,7 @@ Choose Windhawk's colors, font, transparency and background blur.
 - **Background.** Pick a color and opacity, with Acrylic or no background effect.
 - **Cards and dialogs.** Set their color and opacity. Translucent dialogs and pop-up menus blur the content behind them. Tables, like the installed-mods list view, follow the card color.
 - **Controls.** Choose colors for buttons and inputs, plus an accent for selections and links.
+- **Corners.** Round the corners of cards, tables, buttons and inputs with an adjustable radius, or keep Windhawk's squared look.
 - **Text and font.** Use an installed font and a text color. Icons keep their own font.
 - **Title bar.** Match the background or choose a solid color. The app icon keeps its normal size, and Windows handles dragging and window buttons.
 - **Removal.** Disable the mod to reopen the interface with Windhawk's appearance. The mod changes no application files.
@@ -69,6 +70,12 @@ The original window frame work was adapted from [Titlebar For Everyone](https://
 - cardOpacity: 100
   $name: Card and dialog opacity
   $description: "0 is transparent, 100 is solid. Translucent dialogs and menus blur what is behind them"
+- roundedCorners: true
+  $name: Rounded element corners
+  $description: "Round the corners of cards, tables, buttons, inputs and dialogs. Turn off for the stock squared look"
+- cornerRadius: 8
+  $name: Corner radius
+  $description: "Corner roundness in pixels, used when Rounded element corners is on"
 - controlColor: "#313244"
   $name: Button and input color
   $description: "Buttons, text boxes and drop-down controls. Leave blank for Windhawk's colors"
@@ -140,6 +147,8 @@ struct Settings {
     int blur = 2;                         // 0 none, 1 blur, 2 acrylic
     std::string card;                     // "rgb(r,g,b)" or empty
     int cardOpacity = 100;
+    bool roundedCorners = true;
+    int cornerRadius = 8;                 // px, 0..32
     std::string control;
     std::string accent;
     std::string text;
@@ -213,6 +222,11 @@ static void ReadSettings(Settings* s) {
     s->cardOpacity = Wh_GetIntSetting(L"cardOpacity");
     if (s->cardOpacity < 0) s->cardOpacity = 0;
     if (s->cardOpacity > 100) s->cardOpacity = 100;
+
+    s->roundedCorners = Wh_GetIntSetting(L"roundedCorners") != 0;
+    s->cornerRadius = Wh_GetIntSetting(L"cornerRadius");
+    if (s->cornerRadius < 0) s->cornerRadius = 0;
+    if (s->cornerRadius > 32) s->cornerRadius = 32;
 
     s->control.clear();
     std::uint32_t controlRgb;
@@ -381,6 +395,17 @@ static std::string BuildCss(const Settings& s) {
             css += ".ant-table-tbody>tr.ant-table-row-selected>td{background-color:" + RgbaFromRgb(rgb, 15) + " !important;}";
             css += ".ant-table-tbody>tr.ant-table-row-selected:hover>td{background-color:" + RgbaFromRgb(rgb, 20) + " !important;}";
         }
+    }
+    if (s.roundedCorners && s.cornerRadius > 0) {
+        // Rounded element corners: cards, tables, dialogs and controls share
+        // one adjustable radius. Off (or 0) leaves Windhawk's stock corners.
+        std::string r = std::to_string(s.cornerRadius) + "px";
+        css += ".ant-card,.ant-modal-content,.ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-dropdown-menu,.ant-table{border-radius:" + r + " !important;}";
+        css += ".ant-btn,.ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-input-number{border-radius:" + r + " !important;}";
+        css += ".ant-table-thead>tr:first-child>:first-child{border-start-start-radius:" + r + " !important;}";
+        css += ".ant-table-thead>tr:first-child>:last-child{border-start-end-radius:" + r + " !important;}";
+        css += ".ant-table-tbody>tr:last-child>:first-child{border-end-start-radius:" + r + " !important;}";
+        css += ".ant-table-tbody>tr:last-child>:last-child{border-end-end-radius:" + r + " !important;}";
     }
     if (s.nativeTitleBar && s.titleBarAcrylic) {
         int caption = GetSystemMetricsForDpi(SM_CYCAPTION, 96) +
