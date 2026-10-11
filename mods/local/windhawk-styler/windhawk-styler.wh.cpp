@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.36
+// @version         2.0.39
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -23,7 +23,7 @@ Choose Windhawk's colors, font, transparency and background blur.
 ## Features
 
 - **Background.** Pick a color and opacity, with Acrylic or no background effect.
-- **Cards and dialogs.** Set their color and opacity. Translucent dialogs and pop-up menus blur the content behind them. Tables, like the installed-mods list view, follow the card color.
+- **Cards and dialogs.** Set their color and opacity. Translucent dialogs and pop-up menus blur the content behind them. Tables, like the installed-mods list view, follow the card color, and so do collapsible sections such as Advanced settings.
 - **Controls.** Choose colors for buttons and inputs, plus an accent for selections and links.
 - **Corners.** Round the corners of cards, tables, buttons and inputs with an adjustable radius, or keep Windhawk's squared look.
 - **Text and font.** Use an installed font and a text color. Icons keep their own font.
@@ -151,6 +151,7 @@ struct Settings {
     int cornerRadius = 8;                 // px, 0..32
     std::string control;
     std::string accent;
+    std::uint32_t accentRgb = 0;
     std::string text;
     std::uint32_t textRgb = 0;            // RRGGBB; s.text records whether a color is set
     std::wstring font;
@@ -235,9 +236,13 @@ static void ReadSettings(Settings* s) {
     Wh_FreeStringSetting(control);
 
     s->accent.clear();
+    s->accentRgb = 0;
     std::uint32_t accentRgb;
     PCWSTR accent = Wh_GetStringSetting(L"accentColor");
-    if (HexColorToRgb(accent, &accentRgb)) s->accent = RgbToCss(accentRgb);
+    if (HexColorToRgb(accent, &accentRgb)) {
+        s->accent = RgbToCss(accentRgb);
+        s->accentRgb = accentRgb;
+    }
     Wh_FreeStringSetting(accent);
 
     s->text.clear();
@@ -329,7 +334,17 @@ static std::string BuildCss(const Settings& s) {
         css += "--whui-card-background-color:" + cardColor + " !important;";
         css += "--whui-modal-background-color:" + cardColor + " !important;";
     }
-    if (!s.accent.empty()) css += "--whui-primary:" + s.accent + " !important;";
+    if (!s.accent.empty()) {
+        std::string focus = RgbaFromRgb(s.accentRgb, 20);
+        css += "--whui-primary:" + s.accent + " !important;";
+        css += "--ant-color-primary:" + s.accent + " !important;";
+        css += "--ant-color-primary-hover:" + s.accent + " !important;";
+        css += "--ant-color-primary-active:" + s.accent + " !important;";
+        css += "--ant-color-link:" + s.accent + " !important;";
+        css += "--ant-color-link-hover:" + s.accent + " !important;";
+        css += "--ant-color-link-active:" + s.accent + " !important;";
+        css += "--ant-control-outline:" + focus + " !important;";
+    }
     if (!s.text.empty()) {
         css += "--whui-text-secondary:" + s.text + " !important;";
         css += "--whui-editor-fg:" + s.text + " !important;";
@@ -352,13 +367,17 @@ static std::string BuildCss(const Settings& s) {
     css += "}";
     css += "[data-testid=mod-setting-reset]{margin-inline-start:0!important;}";
     if (!cardColor.empty()) {
-        css += ".ant-card{background-color:" + cardColor + " !important;border-color:rgba(255,255,255,0.08) !important;}";
-        css += ".ant-modal-content,.ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-dropdown-menu{background-color:" + cardColor + " !important;backdrop-filter:blur(24px);}";
+        css += ".ant-card,[class*=\"SaveSettingsCard\"]{background-color:" + cardColor + " !important;border-color:rgba(255,255,255,0.08) !important;}";
+        css += ".ant-modal-content,.ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-tooltip-inner,.ant-notification-notice,.ant-message-notice-content{background-color:" + cardColor + " !important;border:1px solid rgba(255,255,255,0.08) !important;background-clip:padding-box !important;}";
         css += ".ant-modal-header,.ant-modal-footer,.ant-drawer-header,.ant-drawer-body,.ant-drawer-footer,.ant-popover-title{background:transparent !important;}";
         css += ".ant-modal-title,.ant-popover-title{color:var(--whui-text-secondary) !important;}";
         // Installed-mods list view and other tables: the interface paints fixed
         // dark grays on .ant-table, so re-tint every surface with the card color.
-        css += ".ant-table{background-color:" + cardColor + " !important;border-color:rgba(255,255,255,0.08) !important;}";
+        css += ".ant-table{background-color:" + cardColor + " !important;border:1px solid rgba(255,255,255,0.08) !important;}";
+        // The inner container draws its own straight 1px side borders, which
+        // the rounded clip then notches at the corners. Drop them: the single
+        // wrapper border above is the one consistent outline.
+        css += ".ant-table-container{border-width:0 !important;}";
         css += ".ant-table-thead>tr>th{background-color:rgba(255,255,255,0.03) !important;border-color:rgba(255,255,255,0.08) !important;}";
         css += ".ant-table-tbody>tr>td{border-color:rgba(255,255,255,0.06) !important;}";
         css += ".ant-table-tbody>tr.ant-table-row:hover>td,.ant-table-tbody>tr>td.ant-table-cell-row-hover{background-color:rgba(255,255,255,0.04) !important;}";
@@ -366,14 +385,17 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-table.ant-table-bordered>.ant-table-container,.ant-table.ant-table-bordered>.ant-table-content>table{border-color:rgba(255,255,255,0.08) !important;}";
         css += ".ant-table-cell-scrollbar:not([rowspan]){box-shadow:" + cardColor + " 0 1px 0 1px !important;}";
         css += ".ant-table-filter-trigger:hover,.ant-table .ant-table-filter-trigger-container-open{background-color:rgba(255,255,255,0.06) !important;}";
+        css += ".ant-collapse{background-color:transparent !important;border-color:rgba(255,255,255,0.08) !important;}";
+        css += ".ant-collapse>.ant-collapse-item{border-color:rgba(255,255,255,0.08) !important;}";
+        css += ".ant-collapse-header{background-color:" + cardColor + " !important;border-radius:0 !important;}";
+        css += ".ant-collapse-content{background-color:" + cardColor + " !important;border-color:rgba(255,255,255,0.08) !important;border-radius:0 !important;}";
         if (s.cardOpacity < 100) {
-            css += "[class*=\"SaveSettingsCard\"]{backdrop-filter:blur(16px);}";
-            css += ".ant-table{backdrop-filter:blur(24px);}";
+            css += ".ant-card,.ant-table,.ant-collapse,.ant-modal-content,.ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-tooltip-inner,.ant-notification-notice,.ant-message-notice-content,[class*=\"SaveSettingsCard\"]{backdrop-filter:blur(16px) !important;}";
         }
     }
     if (!s.control.empty()) {
         css += ".ant-btn{background-color:" + s.control + " !important;border-color:rgba(255,255,255,0.12) !important;}";
-        css += ".ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-input-number{background-color:" + s.control + " !important;}";
+        css += ".ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-input-number,.ant-picker{background-color:" + s.control + " !important;border-color:rgba(255,255,255,0.12) !important;}";
         if (cardColor.empty()) css += ".ant-dropdown-menu{background-color:" + s.control + " !important;}";
     }
     if (!s.text.empty()) {
@@ -381,38 +403,65 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-table-column-sorter{color:" + RgbaFromRgb(s.textRgb, 70) + " !important;}";
     }
     if (!s.accent.empty()) {
-        css += ".ant-btn-primary{background-color:" + s.accent + " !important;border-color:" + s.accent + " !important;color:#11111b !important;}";
-        css += ".ant-switch-checked{background-color:" + s.accent + " !important;}";
+        std::string focus = RgbaFromRgb(s.accentRgb, 20);
+        std::string hover = RgbaFromRgb(s.accentRgb, 12);
+        std::string selected = RgbaFromRgb(s.accentRgb, 16);
+        css += ".ant-btn-primary,.ant-btn-primary:hover,.ant-btn-primary:focus,.ant-btn-primary:active{background-color:" + s.accent + " !important;border-color:" + s.accent + " !important;color:#11111b !important;}";
+        css += ".ant-switch-checked,.ant-switch-checked:hover{background-color:" + s.accent + " !important;}";
+        css += ".ant-input:hover,.ant-input-affix-wrapper:hover,.ant-select-selector:hover,.ant-input-number:hover,.ant-picker:hover{border-color:" + s.accent + " !important;}";
+        css += ".ant-input:focus,.ant-input-focused,.ant-input-affix-wrapper-focused,.ant-input-affix-wrapper:focus-within,.ant-input-number-focused,.ant-select-focused .ant-select-selector,.ant-picker-focused{border-color:" + s.accent + " !important;box-shadow:0 0 0 2px " + focus + " !important;}";
+        css += ".ant-btn:focus-visible,.ant-input:focus-visible,.ant-select-selector:focus-visible,.ant-input-number:focus-visible,.ant-picker:focus-visible,.ant-checkbox-input:focus-visible+.ant-checkbox-inner,.ant-radio-input:focus-visible+.ant-radio-inner{outline:2px solid " + s.accent + " !important;outline-offset:2px;}";
         css += ".ant-tabs-tab-active .ant-tabs-tab-btn{color:" + s.accent + " !important;}";
+        css += ".ant-tabs-ink-bar{background-color:" + s.accent + " !important;}";
         css += ".ant-menu-item-selected{color:" + s.accent + " !important;}";
+        css += ".ant-menu-item-selected,.ant-dropdown-menu-item-selected,.ant-dropdown-menu-item-active,.ant-select-item-option-active:not(.ant-select-item-option-disabled),.ant-select-item-option-selected:not(.ant-select-item-option-disabled){background-color:" + selected + " !important;}";
         css += "a{color:" + s.accent + " !important;}";
+        css += ".ant-btn-link{color:" + s.accent + " !important;}";
         css += ".ant-radio-checked .ant-radio-inner{border-color:" + s.accent + " !important;}";
+        css += ".ant-radio-checked .ant-radio-inner::after{background-color:" + s.accent + " !important;}";
+        css += ".ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled){color:" + s.accent + " !important;border-color:" + s.accent + " !important;}";
+        css += ".ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled)::before{background-color:" + s.accent + " !important;}";
         css += ".ant-checkbox-checked .ant-checkbox-inner{background-color:" + s.accent + " !important;border-color:" + s.accent + " !important;}";
+        css += ".ant-checkbox-wrapper:hover .ant-checkbox-inner,.ant-checkbox:hover .ant-checkbox-inner{border-color:" + s.accent + " !important;}";
+        css += ".ant-segmented-item-selected,.ant-segmented-item-selected:hover{background-color:" + s.accent + " !important;color:#11111b !important;}";
+        css += ".ant-pagination-item-active{border-color:" + s.accent + " !important;} .ant-pagination-item-active a{color:" + s.accent + " !important;}";
+        css += ".ant-slider-track,.ant-slider:hover .ant-slider-track{background-color:" + s.accent + " !important;}";
+        css += ".ant-slider-handle::after{box-shadow:0 0 0 2px " + s.accent + " !important;}";
+        css += ".ant-picker-cell-selected .ant-picker-cell-inner{background-color:" + s.accent + " !important;color:#11111b !important;}";
+        css += ".ant-alert-info{background-color:" + RgbaFromRgb(s.accentRgb, 8) + " !important;border-color:" + RgbaFromRgb(s.accentRgb, 28) + " !important;}";
+        css += ".ant-alert-info .ant-alert-icon,.ant-alert-info .ant-alert-message{color:" + s.accent + " !important;}";
+        css += ".ant-progress-bg{background-color:" + s.accent + " !important;} .ant-progress-circle-path{stroke:" + s.accent + " !important;}";
+        css += ".ant-rate-star-full .ant-rate-star-second,.ant-rate-star-half .ant-rate-star-first{color:" + s.accent + " !important;}";
         css += ".ant-table-column-sorter-down.active,.ant-table-column-sorter-up.active,.ant-table-filter-trigger.active{color:" + s.accent + " !important;}";
-        unsigned r = 0, g = 0, b = 0;
-        if (sscanf_s(s.accent.c_str(), "rgb(%u,%u,%u)", &r, &g, &b) == 3) {
-            std::uint32_t rgb = (r << 16) | (g << 8) | b;
-            css += ".ant-table-tbody>tr.ant-table-row-selected>td{background-color:" + RgbaFromRgb(rgb, 15) + " !important;}";
-            css += ".ant-table-tbody>tr.ant-table-row-selected:hover>td{background-color:" + RgbaFromRgb(rgb, 20) + " !important;}";
-        }
+        css += ".ant-table-tbody>tr.ant-table-row-selected>td{background-color:" + RgbaFromRgb(s.accentRgb, 15) + " !important;}";
+        css += ".ant-table-tbody>tr.ant-table-row-selected:hover>td{background-color:" + RgbaFromRgb(s.accentRgb, 20) + " !important;}";
+        css += ".wh-cscroll-host::-webkit-scrollbar-thumb:hover{background-color:" + s.accent + " !important;}";
     }
+    std::string scrollbarColor = s.text.empty() ? "rgba(255,255,255,0.35)" : RgbaFromRgb(s.textRgb, 35);
+    std::string scrollbarRadius = s.roundedCorners && s.cornerRadius > 0 ? "999px" : "0px";
+    css += ".wh-cscroll-host{scrollbar-width:thin !important;scrollbar-color:" + scrollbarColor + " transparent !important;}";
+    css += ".wh-cscroll-host::-webkit-scrollbar{width:12px !important;height:12px !important;display:block !important;}";
+    css += ".wh-cscroll-host::-webkit-scrollbar-track{background:transparent !important;}";
+    css += ".wh-cscroll-host::-webkit-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border:3px solid transparent !important;background-clip:content-box !important;border-radius:" + scrollbarRadius + " !important;}";
     if (s.roundedCorners && s.cornerRadius > 0) {
         // Rounded element corners: cards, tables, dialogs and controls share
         // one adjustable radius. Off (or 0) leaves Windhawk's stock corners.
         std::string r = std::to_string(s.cornerRadius) + "px";
-        css += ".ant-card,.ant-modal-content,.ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-dropdown-menu,.ant-table{border-radius:" + r + " !important;}";
-        css += ".ant-btn,.ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-input-number{border-radius:" + r + " !important;}";
-        css += ".ant-table-thead>tr:first-child>:first-child{border-start-start-radius:" + r + " !important;}";
-        css += ".ant-table-thead>tr:first-child>:last-child{border-start-end-radius:" + r + " !important;}";
-        css += ".ant-table-tbody>tr:last-child>:first-child{border-end-start-radius:" + r + " !important;}";
-        css += ".ant-table-tbody>tr:last-child>:last-child{border-end-end-radius:" + r + " !important;}";
+        css += ".ant-card,.ant-modal-content,.ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-tooltip-inner,.ant-alert,.ant-notification-notice,.ant-message-notice-content,.ant-table,.ant-collapse{border-radius:" + r + " !important;}";
+        css += ".ant-btn,.ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-input-number,.ant-picker,.ant-segmented{border-radius:" + r + " !important;}";
+        css += ".ant-table-thead>tr:first-child>:first-child,.ant-table-thead>tr:first-child>:last-child,.ant-table-tbody>tr:last-child>:first-child,.ant-table-tbody>tr:last-child>:last-child,.ant-collapse-header,.ant-collapse-content{border-radius:0 !important;}";
+        // Clip inner painting to the rounded shape: without this, square
+        // row/hover backgrounds poke past the table's rounded corners, and
+        // square item hovers poke past rounded drop-down menus.
+        css += ".ant-table,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-collapse,.ant-modal-content,.ant-drawer-content,.ant-popover-inner{overflow:hidden !important;}";
     }
     if (s.nativeTitleBar && s.titleBarAcrylic) {
         int caption = GetSystemMetricsForDpi(SM_CYCAPTION, 96) +
                       GetSystemMetricsForDpi(SM_CYFRAME, 96) +
                       GetSystemMetricsForDpi(SM_CXPADDEDBORDER, 96);
         std::string height = std::to_string(caption) + "px";
-        css += "#root{margin-top:" + height + ";height:calc(100% - " + height + ") !important;}";
+        css += "#root{position:fixed;inset:" + height + " 0 0 0;height:auto !important;margin:0 !important;overflow:hidden !important;}";
+        css += "#root>[class*=\"Panel__PanelContainer\"],#root>[class*=\"Panel__PanelContainer\"]>[class*=\"Panel__MainArea\"]{height:100% !important;min-height:0 !important;}";
     }
     return css;
 }
