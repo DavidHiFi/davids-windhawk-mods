@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.40
+// @version         2.0.42
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -23,8 +23,8 @@ Choose Windhawk's colors, font, transparency and background blur.
 ## Features
 
 - **Background.** Pick a color and opacity, with Acrylic or no background effect.
-- **Cards and dialogs.** Set their color and opacity. Translucent dialogs and pop-up menus blur the content behind them. Tables, like the installed-mods list view, follow the card color, and so do collapsible sections such as Advanced settings.
-- **Controls.** Choose colors for buttons and inputs, plus an accent for selections and links.
+- **Cards and dialogs.** Set their color and opacity. Translucent dialogs and pop-up menus blur the content behind them. Tables, like the installed-mods list view, follow the card color, and so do collapsible sections such as Advanced settings. Every box has one outline, the same color all the way around its corners.
+- **Controls.** Choose colors for buttons and inputs, plus an accent for selections, hovers, badges and links.
 - **Corners.** Round the corners of cards, tables, buttons and inputs with an adjustable radius, or keep Windhawk's squared look.
 - **Text and font.** Use an installed font and a text color. Icons keep their own font.
 - **Title bar.** Match the background or choose a solid color. The app icon keeps its normal size, and Windows handles dragging and window buttons.
@@ -323,9 +323,25 @@ static std::string JsonEscape(const std::string& in) {
     return out;
 }
 
+// Every box that takes the card color. Rounded corners, the card surface and
+// the blur all apply to this same list.
+static const char kSurfaces[] =
+    ".ant-card,[class*=\"SaveSettingsCard\"],.ant-table,.ant-collapse,.ant-modal-content,"
+    ".ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-picker-dropdown,"
+    ".ant-dropdown-menu,.ant-tooltip-inner,.ant-notification-notice,.ant-message-notice-content";
+
+// The subset that is static inside its own container, so it can take
+// position:relative for its ring. Pop-ups (select, picker) are already
+// absolutely positioned by the interface and keep their own position.
+static const char kRelativeSurfaces[] =
+    ".ant-card,[class*=\"SaveSettingsCard\"],.ant-table,.ant-collapse,.ant-modal-content,"
+    ".ant-drawer-content,.ant-popover-inner,.ant-dropdown-menu,.ant-tooltip-inner,"
+    ".ant-notification-notice,.ant-message-notice-content";
+
 static std::string BuildCss(const Settings& s) {
     // One client surface tints the caption and body over the same acrylic.
     std::string veil = CssVeil(s);
+    const std::string focus = RgbaFromRgb(s.accentRgb, 20);
     std::string css;
     css += ":root{";
     css += "--whui-background-color:" + veil + " !important;";
@@ -335,7 +351,6 @@ static std::string BuildCss(const Settings& s) {
         css += "--whui-modal-background-color:" + cardColor + " !important;";
     }
     if (!s.accent.empty()) {
-        std::string focus = RgbaFromRgb(s.accentRgb, 20);
         css += "--whui-primary:" + s.accent + " !important;";
         css += "--ant-color-primary:" + s.accent + " !important;";
         css += "--ant-color-primary-hover:" + s.accent + " !important;";
@@ -367,13 +382,16 @@ static std::string BuildCss(const Settings& s) {
     css += "}";
     css += "[data-testid=mod-setting-reset]{margin-inline-start:0!important;}";
     if (!cardColor.empty()) {
-        css += ".ant-card,[class*=\"SaveSettingsCard\"]{background-color:" + cardColor + " !important;border-color:rgba(255,255,255,0.08) !important;}";
-        css += ".ant-modal-content,.ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-tooltip-inner,.ant-notification-notice,.ant-message-notice-content{background-color:" + cardColor + " !important;border:1px solid rgba(255,255,255,0.08) !important;background-clip:padding-box !important;}";
+        // Every box shares one surface: the card color, no border of its own,
+        // and one 1px ring painted over its content. Headers and rows paint
+        // translucent tints, so a plain border showed different colors on the
+        // straight edges than around the rounded corners.
+        css += std::string(kSurfaces) + "{background-color:" + cardColor + " !important;border:0 !important;}";
+        css += std::string(kRelativeSurfaces) + "{position:relative;}";
+        css += std::string(":is(") + kSurfaces + ")::after{content:'';position:absolute;inset:0;border:1px solid rgba(255,255,255,0.08);border-radius:inherit;pointer-events:none;z-index:2;}";
         css += ".ant-modal-header,.ant-modal-footer,.ant-drawer-header,.ant-drawer-body,.ant-drawer-footer,.ant-popover-title{background:transparent !important;}";
         css += ".ant-modal-title,.ant-popover-title{color:var(--whui-text-secondary) !important;}";
-        // Installed-mods list view and other tables: the interface paints fixed
-        // dark grays on .ant-table, so re-tint every surface with the card color.
-        css += ".ant-table{background-color:" + cardColor + " !important;border:1px solid rgba(255,255,255,0.08) !important;}";
+        // The interface paints fixed dark grays on tables; the shared surface above re-tints them.
         // The inner container draws its own straight 1px side borders, which
         // the rounded clip then notches at the corners. Drop them: the single
         // wrapper border above is the one consistent outline.
@@ -390,7 +408,7 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-collapse-header{background-color:" + cardColor + " !important;border-radius:0 !important;}";
         css += ".ant-collapse-content{background-color:" + cardColor + " !important;border-color:rgba(255,255,255,0.08) !important;border-radius:0 !important;}";
         if (s.cardOpacity < 100) {
-            css += ".ant-card,.ant-table,.ant-collapse,.ant-modal-content,.ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-tooltip-inner,.ant-notification-notice,.ant-message-notice-content,[class*=\"SaveSettingsCard\"]{backdrop-filter:blur(16px) !important;}";
+            css += std::string(kSurfaces) + "{backdrop-filter:blur(16px) !important;}";
         }
     }
     if (!s.control.empty()) {
@@ -403,8 +421,6 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-table-column-sorter{color:" + RgbaFromRgb(s.textRgb, 70) + " !important;}";
     }
     if (!s.accent.empty()) {
-        std::string focus = RgbaFromRgb(s.accentRgb, 20);
-        std::string hover = RgbaFromRgb(s.accentRgb, 12);
         std::string selected = RgbaFromRgb(s.accentRgb, 16);
         css += ".ant-btn-primary,.ant-btn-primary:hover,.ant-btn-primary:focus,.ant-btn-primary:active{background-color:" + s.accent + " !important;border-color:" + s.accent + " !important;color:#11111b !important;}";
         css += ".ant-switch-checked,.ant-switch-checked:hover{background-color:" + s.accent + " !important;}";
@@ -439,6 +455,16 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-table-tbody>tr.ant-table-row-selected>td{background-color:" + RgbaFromRgb(s.accentRgb, 15) + " !important;}";
         css += ".ant-table-tbody>tr.ant-table-row-selected:hover>td{background-color:" + RgbaFromRgb(s.accentRgb, 20) + " !important;}";
         css += ".wh-cscroll-host::-webkit-scrollbar-thumb:hover{background-color:" + s.accent + " !important;}";
+        // Interface defaults that otherwise keep antd's built-in blue: the
+        // mod-card ribbon, loading spinner, tab and default-button hovers,
+        // the selected drop-down item and selected select option.
+        css += ".ant-ribbon{background-color:" + s.accent + " !important;color:#11111b !important;}";
+        css += ".ant-ribbon-corner{color:" + s.accent + " !important;}";
+        css += ".ant-spin-dot-item{background-color:" + s.accent + " !important;}";
+        css += ".ant-tabs-tab:hover .ant-tabs-tab-btn{color:" + s.accent + " !important;}";
+        css += ".ant-dropdown-menu-item-selected,.ant-dropdown-menu-item-selected>a{color:" + s.accent + " !important;}";
+        css += ".ant-select-item-option-selected:not(.ant-select-item-option-disabled),.ant-select-item-option-state{color:" + s.accent + " !important;}";
+        css += ".ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):hover{color:" + s.accent + " !important;border-color:" + s.accent + " !important;}";
     }
     std::string scrollbarColor = s.text.empty() ? "rgba(255,255,255,0.35)" : RgbaFromRgb(s.textRgb, 35);
     std::string scrollbarRadius = s.roundedCorners && s.cornerRadius > 0 ? "999px" : "0px";
@@ -450,7 +476,7 @@ static std::string BuildCss(const Settings& s) {
         // Rounded element corners: cards, tables, dialogs and controls share
         // one adjustable radius. Off (or 0) leaves Windhawk's stock corners.
         std::string r = std::to_string(s.cornerRadius) + "px";
-        css += ".ant-card,.ant-modal-content,.ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-tooltip-inner,.ant-alert,.ant-notification-notice,.ant-message-notice-content,.ant-table,.ant-collapse{border-radius:" + r + " !important;}";
+        css += std::string(kSurfaces) + ",.ant-alert{border-radius:" + r + " !important;}";
         css += ".ant-btn,.ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-input-number,.ant-picker,.ant-segmented{border-radius:" + r + " !important;}";
         // Match the table's inset header corners so the card-colored surface
         // cannot show through as a dark notch beside the rounded outer border.
