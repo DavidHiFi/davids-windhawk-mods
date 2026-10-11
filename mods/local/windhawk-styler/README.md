@@ -7,8 +7,8 @@ Choose Windhawk's colors, font, transparency and background blur.
 ## Features
 
 - **Background.** Pick a color and opacity, with Acrylic or no background effect.
-- **Cards and dialogs.** Set their color and opacity. Cards, tables, Advanced settings, dialogs and pop-up menus use that surface, with blur when translucent.
-- **Controls.** Choose colors for buttons and inputs, plus a global accent for selections, focus states and links.
+- **Cards and dialogs.** Set their color and opacity. Cards, tables, Advanced settings, dialogs and pop-up menus use that surface, with blur when translucent. Every box has one outline, the same color all the way around its corners.
+- **Controls.** Choose colors for buttons and inputs, plus a global accent for selections, hovers, badges, spinners and links.
 - **Corners.** Round cards, tables, dialogs, pop-up menus, buttons and inputs with an adjustable radius, or keep Windhawk's squared look.
 - **Text and font.** Use an installed font and a text color. Icons keep their own font.
 - **Title bar.** Match the background or choose a solid color. The app icon keeps its normal size, and Windows handles dragging and window buttons.
