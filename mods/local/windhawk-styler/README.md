@@ -7,9 +7,9 @@ Choose Windhawk's colors, font, transparency and background blur.
 ## Features
 
 - **Background.** Pick a color and opacity, with Acrylic or no background effect.
-- **Cards and dialogs.** Set their color and opacity. Translucent dialogs and pop-up menus blur the content behind them. Tables, like the installed-mods list view, follow the card color.
-- **Controls.** Choose colors for buttons and inputs, plus an accent for selections and links.
-- **Corners.** Round the corners of cards, tables, buttons and inputs with an adjustable radius, or keep Windhawk's squared look.
+- **Cards and dialogs.** Set their color and opacity. Cards, tables, Advanced settings, dialogs and pop-up menus use that surface, with blur when translucent.
+- **Controls.** Choose colors for buttons and inputs, plus a global accent for selections, focus states and links.
+- **Corners.** Round cards, tables, dialogs, pop-up menus, buttons and inputs with an adjustable radius, or keep Windhawk's squared look.
 - **Text and font.** Use an installed font and a text color. Icons keep their own font.
 - **Title bar.** Match the background or choose a solid color. The app icon keeps its normal size, and Windows handles dragging and window buttons.
 - **Removal.** Disable the mod to reopen the interface with Windhawk's appearance. The mod changes no application files.
