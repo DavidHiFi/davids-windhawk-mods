@@ -4788,6 +4788,7 @@ void HideOverlayAnimated();
 void HidePreview();
 void HideAllOtherSearchBoxes(wux::DependencyObject const& root, int depth = 15);
 void SyncOverlayBackground();
+wuxc::Border FindMenuAcrylicBorder();
 
 // A font size of the mod's own UI at the text size setting (textScale).
 double Fs(double size) {
@@ -4898,6 +4899,10 @@ inline bool IsLightTheme() {
 double g_adaptiveOriginalHeight = std::numeric_limits<double>::quiet_NaN();
 double g_adaptiveOriginalMinHeight = 0;
 double g_adaptiveLastActual = -1;
+[[clang::no_destroy]] double g_acrylicOriginalHeight = std::numeric_limits<double>::quiet_NaN();
+[[clang::no_destroy]] double g_acrylicOriginalMinHeight = 0.0;
+[[clang::no_destroy]] wux::Thickness g_acrylicOriginalMargin{};
+bool g_acrylicCaptured = false;
 
 void LogSearchFrameSize(bool searching) {
     if (!g_adaptiveFrame) return;
@@ -4964,6 +4969,28 @@ void SetSearchFrameSize(bool searching) {
         g_resultsHost.Opacity(1.0);
         g_resultsHost.IsHitTestVisible(true);
         if (g_resultsTranslate) g_resultsTranslate.Y(0.0);
+        // The stock acrylic outline keeps its own taller geometry and gets
+        // clipped mid-radius at the compact frame's bottom edge. Fit it to
+        // the frame while compact; restore the stock geometry when expanded.
+        try {
+            if (auto border = FindMenuAcrylicBorder()) {
+                if (!g_acrylicCaptured) {
+                    g_acrylicOriginalHeight = border.Height();
+                    g_acrylicOriginalMinHeight = border.MinHeight();
+                    g_acrylicOriginalMargin = border.Margin();
+                    g_acrylicCaptured = true;
+                }
+                if (searching) {
+                    border.Height(g_acrylicOriginalHeight);
+                    border.MinHeight(g_acrylicOriginalMinHeight);
+                    border.Margin(g_acrylicOriginalMargin);
+                } else {
+                    border.MinHeight(0.0);
+                    border.Height(height);
+                    border.Margin(wux::ThicknessHelper::FromUniformLength(0));
+                }
+            }
+        } catch (...) {}
     } catch (...) {
         Wh_Log(L"adaptive: size transition failed %08X",
                static_cast<unsigned>(winrt::to_hresult()));
@@ -4974,6 +5001,16 @@ void RestoreSearchFrameSize() {
     if (g_adaptiveFrame) {
         g_adaptiveFrame.Height(g_adaptiveOriginalHeight);
         g_adaptiveFrame.MinHeight(g_adaptiveOriginalMinHeight);
+    }
+    if (g_acrylicCaptured) {
+        try {
+            if (auto border = FindMenuAcrylicBorder()) {
+                border.Height(g_acrylicOriginalHeight);
+                border.MinHeight(g_acrylicOriginalMinHeight);
+                border.Margin(g_acrylicOriginalMargin);
+            }
+        } catch (...) {}
+        g_acrylicCaptured = false;
     }
     g_adaptiveFrame = nullptr;
     g_adaptiveBody = nullptr;
