@@ -1,7 +1,7 @@
 // ==WindhawkMod==
 // @id              start-everything-plus
 // @name            Everything & Power Tools in the Start Menu Plus
-// @description     Compact Start menu search with Everything, apps, settings and power tools
+// @description     Compact Start menu search with Everything, preview, apps, settings, power tools
 // @version         1.1.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
@@ -27,6 +27,7 @@ Search files, apps and settings from the Start menu with voidtools Everything. T
 ## Features
 
 - **Compact idle menu.** Keep the search box and native power controls visible without an empty results panel.
+- **Seamless idle view.** The compact search box sits directly on the menu's own background with no extra outline.
 - **Results when you need them.** Typing expands the menu. Clearing the query or pressing Escape returns to the compact view.
 - **Everything file search.** Search the existing Everything index alongside apps and Windows settings. Everything 1.5 alpha and named instances are found too.
 - **File preview.** Selecting a file opens a preview card beside the menu with its thumbnail or first lines, its details and its path, which a click copies. Drag results straight into Explorer or other apps.
@@ -4899,10 +4900,23 @@ inline bool IsLightTheme() {
 double g_adaptiveOriginalHeight = std::numeric_limits<double>::quiet_NaN();
 double g_adaptiveOriginalMinHeight = 0;
 double g_adaptiveLastActual = -1;
-[[clang::no_destroy]] double g_acrylicOriginalHeight = std::numeric_limits<double>::quiet_NaN();
-[[clang::no_destroy]] double g_acrylicOriginalMinHeight = 0.0;
-[[clang::no_destroy]] wux::Thickness g_acrylicOriginalMargin{};
-bool g_acrylicCaptured = false;
+// True while the search frame is in the compact idle geometry. While set,
+// the results host carries no copied surface: the search area then rides
+// directly on Start's own acrylic, like the footer below it.
+bool g_searchFrameCompact = false;
+
+// Appends one line to the layout debug log in the engine's writable area.
+void AppendLayoutLog(const char* text, int count) {
+    HANDLE log = CreateFileW(
+        L"C:\\ProgramData\\Windhawk\\Engine\\ModsWritable\\local@start-everything-plus-layout.log",
+        FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+        OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (log != INVALID_HANDLE_VALUE) {
+        DWORD written = 0;
+        WriteFile(log, text, static_cast<DWORD>(count), &written, nullptr);
+        CloseHandle(log);
+    }
+}
 
 void LogSearchFrameSize(bool searching) {
     if (!g_adaptiveFrame) return;
@@ -4911,15 +4925,96 @@ void LogSearchFrameSize(bool searching) {
         "searching=%d height=%.0f min=%.0f max=%.0f actual=%.0f\r\n",
         searching, g_adaptiveFrame.Height(), g_adaptiveFrame.MinHeight(),
         g_adaptiveFrame.MaxHeight(), g_adaptiveFrame.ActualHeight());
-    HANDLE log = CreateFileW(
-        L"C:\\ProgramData\\Windhawk\\Engine\\ModsWritable\\local@start-everything-plus-layout.log",
-        FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-        OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (log != INVALID_HANDLE_VALUE) {
-        DWORD written = 0;
-        WriteFile(log, line, static_cast<DWORD>(count), &written, nullptr);
-        CloseHandle(log);
-    }
+    AppendLayoutLog(line, count);
+}
+
+// One dump per compact transition: which borders live around the frame, how
+// tall they run, and where the stock acrylic sits relative to the frame and
+// the results host. This is how a surviving outline gets traced to its
+// element instead of guessed at.
+void LogCompactSurfaces() {
+    if (!g_adaptiveFrame) return;
+    try {
+        wux::FrameworkElement frame = g_adaptiveFrame;
+        char line[384];
+        int count;
+        auto borderFacts = [&](const char* tag, int depth, wuxc::Border const& b) {
+            auto name = b.Name();
+            auto thickness = b.BorderThickness();
+            auto background = b.Background();
+            count = snprintf(line, sizeof(line),
+                "surface %s d=%d name=%ls class=%ls h=%.0f w=%.0f thick=%.0f/%.0f/%.0f/%.0f bg=%ls\r\n",
+                tag, depth, name.empty() ? L"-" : name.c_str(),
+                winrt::get_class_name(b).c_str(), b.ActualHeight(), b.ActualWidth(),
+                thickness.Left, thickness.Top, thickness.Right, thickness.Bottom,
+                background ? winrt::get_class_name(background).c_str() : L"none");
+            AppendLayoutLog(line, count);
+        };
+        count = snprintf(line, sizeof(line), "surface frame class=%ls actual=%.0f\r\n",
+            winrt::get_class_name(frame).c_str(), frame.ActualHeight());
+        AppendLayoutLog(line, count);
+        std::vector<std::pair<wux::DependencyObject, int>> stack{{frame, 0}};
+        int budget = 24;
+        while (!stack.empty() && budget > 0) {
+            auto [node, depth] = stack.back();
+            stack.pop_back();
+            if (depth > 7) continue;
+            int children = wuxm::VisualTreeHelper::GetChildrenCount(node);
+            for (int i = 0; i < children && budget > 0; ++i) {
+                auto child = wuxm::VisualTreeHelper::GetChild(node, i);
+                if (auto border = child.try_as<wuxc::Border>()) {
+                    borderFacts("tree", depth, border);
+                    --budget;
+                }
+                stack.push_back({child, depth + 1});
+            }
+        }
+        if (g_resultsHost) {
+            auto thickness = g_resultsHost.BorderThickness();
+            auto background = g_resultsHost.Background();
+            count = snprintf(line, sizeof(line), "surface host h=%.0f thick=%.0f/%.0f/%.0f/%.0f bg=%ls\r\n",
+                g_resultsHost.ActualHeight(), thickness.Left, thickness.Top,
+                thickness.Right, thickness.Bottom,
+                background ? winrt::get_class_name(background).c_str() : L"none");
+            AppendLayoutLog(line, count);
+        }
+        if (auto acrylic = FindMenuAcrylicBorder()) {
+            auto thickness = acrylic.BorderThickness();
+            auto name = acrylic.Name();
+            count = snprintf(line, sizeof(line),
+                "surface acrylic name=%ls h=%.0f w=%.0f thick=%.0f/%.0f/%.0f/%.0f\r\n",
+                name.empty() ? L"-" : name.c_str(), acrylic.ActualHeight(),
+                acrylic.ActualWidth(), thickness.Left, thickness.Top,
+                thickness.Right, thickness.Bottom);
+            AppendLayoutLog(line, count);
+            wux::DependencyObject frameDo = frame.try_as<wux::DependencyObject>();
+            wux::DependencyObject hostDo = g_resultsHost
+                ? g_resultsHost.try_as<wux::DependencyObject>()
+                : wux::DependencyObject{nullptr};
+            wux::DependencyObject node = acrylic;
+            for (int up = 1; up <= 16 && node; ++up) {
+                node = wuxm::VisualTreeHelper::GetParent(node);
+                if (!node) break;
+                if (frameDo && node == frameDo) {
+                    count = snprintf(line, sizeof(line),
+                        "surface acrylic ancestor %d = FrameRoot\r\n", up);
+                    AppendLayoutLog(line, count);
+                    break;
+                }
+                if (hostDo && node == hostDo) {
+                    count = snprintf(line, sizeof(line),
+                        "surface acrylic ancestor %d = resultsHost\r\n", up);
+                    AppendLayoutLog(line, count);
+                    continue;
+                }
+                auto named = node.try_as<wux::FrameworkElement>();
+                count = snprintf(line, sizeof(line), "surface acrylic ancestor %d = %ls (%ls)\r\n",
+                    up, named && !named.Name().empty() ? named.Name().c_str() : L"(unnamed)",
+                    winrt::get_class_name(node).c_str());
+                AppendLayoutLog(line, count);
+            }
+        }
+    } catch (...) {}
 }
 
 void SetSearchFrameSize(bool searching) {
@@ -4969,28 +5064,19 @@ void SetSearchFrameSize(bool searching) {
         g_resultsHost.Opacity(1.0);
         g_resultsHost.IsHitTestVisible(true);
         if (g_resultsTranslate) g_resultsTranslate.Y(0.0);
-        // The stock acrylic outline keeps its own taller geometry and gets
-        // clipped mid-radius at the compact frame's bottom edge. Fit it to
-        // the frame while compact; restore the stock geometry when expanded.
-        try {
-            if (auto border = FindMenuAcrylicBorder()) {
-                if (!g_acrylicCaptured) {
-                    g_acrylicOriginalHeight = border.Height();
-                    g_acrylicOriginalMinHeight = border.MinHeight();
-                    g_acrylicOriginalMargin = border.Margin();
-                    g_acrylicCaptured = true;
-                }
-                if (searching) {
-                    border.Height(g_acrylicOriginalHeight);
-                    border.MinHeight(g_acrylicOriginalMinHeight);
-                    border.Margin(g_acrylicOriginalMargin);
-                } else {
-                    border.MinHeight(0.0);
-                    border.Height(height);
-                    border.Margin(wux::ThicknessHelper::FromUniformLength(0));
-                }
-            }
-        } catch (...) {}
+        g_searchFrameCompact = !searching;
+        if (!searching) {
+            // Compact idle: the search area rides on Start's own acrylic, so
+            // nothing of the mod's draws a surface of its own there. The
+            // copied outline rode the menu's border edge to edge and got
+            // clipped mid-radius at the frame bottom; the copied backdrop
+            // tinted the search area differently from the footer below.
+            try {
+                g_resultsHost.Background(nullptr);
+                g_resultsHost.BorderThickness(wux::ThicknessHelper::FromUniformLength(0));
+            } catch (...) {}
+            LogCompactSurfaces();
+        }
     } catch (...) {
         Wh_Log(L"adaptive: size transition failed %08X",
                static_cast<unsigned>(winrt::to_hresult()));
@@ -5002,16 +5088,7 @@ void RestoreSearchFrameSize() {
         g_adaptiveFrame.Height(g_adaptiveOriginalHeight);
         g_adaptiveFrame.MinHeight(g_adaptiveOriginalMinHeight);
     }
-    if (g_acrylicCaptured) {
-        try {
-            if (auto border = FindMenuAcrylicBorder()) {
-                border.Height(g_acrylicOriginalHeight);
-                border.MinHeight(g_acrylicOriginalMinHeight);
-                border.Margin(g_acrylicOriginalMargin);
-            }
-        } catch (...) {}
-        g_acrylicCaptured = false;
-    }
+    g_searchFrameCompact = false;
     g_adaptiveFrame = nullptr;
     g_adaptiveBody = nullptr;
     g_adaptiveLastActual = -1;
@@ -5048,7 +5125,13 @@ void SyncOverlayBackground() {
     } catch (...) {}
     try {
         if (auto border = FindMenuAcrylicBorder()) {
-            if (auto brush = border.Background()) {
+            // While compact the host stays bare: no copied backdrop or
+            // outline, so the search area reads as one surface with the
+            // footer (see SetSearchFrameSize). Reveal copies it back.
+            if (g_searchFrameCompact) {
+                g_resultsHost.Background(nullptr);
+                g_resultsHost.BorderThickness(wux::ThicknessHelper::FromUniformLength(0));
+            } else if (auto brush = border.Background()) {
                 if (g_resultsHost.Background() != brush) {
                     g_resultsHost.Background(brush);
                     Wh_Log(L"SyncOverlayBackground: synchronized background from AcrylicBorder (%ls)",

@@ -9,6 +9,7 @@ Search files, apps and settings from the Start menu with voidtools Everything. T
 ## Features
 
 - **Compact idle menu.** Keep the search box and native power controls visible without an empty results panel.
+- **Seamless idle view.** The compact search box sits directly on the menu's own background with no extra outline.
 - **Results when you need them.** Typing expands the menu. Clearing the query or pressing Escape returns to the compact view.
 - **Everything file search.** Search the existing Everything index alongside apps and Windows settings.
 - **Power tools.** Use the original calculator, unit conversions, network tools and web shortcuts.
