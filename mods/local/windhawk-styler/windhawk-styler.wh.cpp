@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.52
+// @version         2.0.54
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -492,7 +492,9 @@ static std::string BuildCss(const Settings& s) {
     }
     std::string scrollbarColor = s.text.empty() ? "rgba(255,255,255,0.35)" : RgbaFromRgb(s.textRgb, 35);
     std::string scrollbarRadius = s.roundedCorners && s.cornerRadius > 0 ? "999px" : "0px";
-    css += ".wh-cscroll-host{scrollbar-width:thin !important;scrollbar-color:" + scrollbarColor + " transparent !important;}";
+    // scrollbar-width would make Chromium ignore the ::-webkit-scrollbar rules
+    // below, so the custom rounded thumb and the hidden arrows need it unset.
+    css += ".wh-cscroll-host::-webkit-scrollbar-button{display:none !important;}";
     css += ".wh-cscroll-host::-webkit-scrollbar{width:12px !important;height:12px !important;display:block !important;}";
     css += ".wh-cscroll-host::-webkit-scrollbar-track{background:transparent !important;}";
     css += ".wh-cscroll-host::-webkit-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border:3px solid transparent !important;background-clip:content-box !important;border-radius:" + scrollbarRadius + " !important;}";
@@ -518,6 +520,23 @@ static std::string BuildCss(const Settings& s) {
         // Padding on the page container, not margin on the card: the
         // scroller leaves the card's bottom margin out of its scroll range.
         css += "[class*=\"ModDetailsContainer\"]{padding-bottom:12px !important;}";
+        // Freeze the page card so its rounded frame never scrolls: cap it at
+        // the viewport height and scroll inside it instead of the page. The
+        // 163px is the scroller top (131) plus the card offset (20) plus the
+        // bottom clearance (12). Only when the card is the last child, so
+        // pages with content below it keep the normal page scroll.
+        css += "[class*=\"ModDetailsContainer\"]>[class*=\"ModDetailsCard\"]:last-child{max-height:calc(100vh - 163px) !important;overflow-y:auto !important;overflow-x:hidden !important;}";
+        css += "[class*=\"ModDetailsCard\"]::-webkit-scrollbar{width:12px !important;height:12px !important;}";
+        css += "[class*=\"ModDetailsCard\"]::-webkit-scrollbar-track{background:transparent !important;}";
+        css += "[class*=\"ModDetailsCard\"]::-webkit-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border:3px solid transparent !important;background-clip:content-box !important;border-radius:" + scrollbarRadius + " !important;}";
+        // The ring above is a pseudo-element, so inside the scrolling card it
+        // moves with the content and shows its bottom edge mid-box. The frozen
+        // card paints its ring as an inset shadow instead, which stays put.
+        css += "[class*=\"ModDetailsContainer\"]>[class*=\"ModDetailsCard\"]:last-child::after{display:none !important;}";
+        css += "[class*=\"ModDetailsContainer\"]>[class*=\"ModDetailsCard\"]:last-child{box-shadow:inset 0 0 0 1px rgba(255,255,255,0.08) !important;}";
+        // Stock scroll arrows sit on the rounded corners and poke outside them;
+        // the rounded frame already clips the track, so drop the arrows.
+        css += "[class*=\"ModDetailsCard\"]::-webkit-scrollbar-button,.wh-cscroll-host::-webkit-scrollbar-button{display:none !important;}";
         // Joined pills: the mode switch, the version switch and the mod id
         // chip round only their outer ends so each reads as one pill.
         std::string segInner = std::to_string(std::max(0, s.cornerRadius - 2)) + "px";
