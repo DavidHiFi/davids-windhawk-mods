@@ -1,5 +1,14 @@
 # Release verification
 
+## 2.0.48 to 2.0.51 (2026-10-13)
+
+Checked on Windows 11 with Windhawk 2.0.0-alpha.7, in the live interface through its debugging port.
+
+- The save bar floats while the settings scroll. The mod had forced `position: relative` on it (it also matches `.ant-card`), which overrode the interface's own sticky positioning; 2.0.48/2.0.49 exclude it so stock sticky applies. 2.0.51 sticks it 12px below the scroll top so the rounded top corners and outline stay visible (measured 12px offset at 600px scroll).
+- The page container has 12px bottom padding because the scroller leaves the card's bottom margin out of its scroll range (measured: 0px gap before, 12px after at max scroll).
+- The Visual/Textual switch joins into one pill (outer ends 14px, middle square), as does the Installed/Other versions switch (outer ends 16px). The mod id chip is rounded.
+- The save bar, pills and chip were first proven with a temporary page style, then measured again from the installed mod with no probe present.
+
 ## 2.0.47 (2026-10-13)
 
 Checked on Windows 11 with Windhawk 2.0.0-alpha.7, in the live interface through its debugging port.
