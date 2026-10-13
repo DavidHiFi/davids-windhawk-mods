@@ -1,5 +1,14 @@
 # Release verification
 
+## 2.0.53 to 2.0.56 (2026-10-13)
+
+Checked on Windows 11 with Windhawk 2.0.0-alpha.7, in the live interface through its debugging port and window captures.
+
+- The mod card stays in place while its settings scroll. Its body scrolls instead, inset 8px from the right and 16px from the bottom, so the scrollbar never reaches the rounded corners. The header and tabs stay pinned (measured at top and bottom scroll, 2.0.56).
+- The card's outline is an inset shadow on the card, not a pseudo-element, so it no longer scrolls into view mid-box (2.0.53).
+- The scrollbar has no arrow buttons. `scrollbar-width` is no longer set on the scrolling areas, because Chromium ignores the `::-webkit-scrollbar` rules when it is set (2.0.54).
+- Known: at the top scroll position the save bar covers about 12px of the first setting's label. It floats cleanly once the settings scroll.
+
 ## 2.0.48 to 2.0.51 (2026-10-13)
 
 Checked on Windows 11 with Windhawk 2.0.0-alpha.7, in the live interface through its debugging port.
