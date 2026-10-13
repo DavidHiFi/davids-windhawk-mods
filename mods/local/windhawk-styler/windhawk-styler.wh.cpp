@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.55
+// @version         2.0.56
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -520,23 +520,26 @@ static std::string BuildCss(const Settings& s) {
         // Padding on the page container, not margin on the card: the
         // scroller leaves the card's bottom margin out of its scroll range.
         css += "[class*=\"ModDetailsContainer\"]{padding-bottom:12px !important;}";
-        // Freeze the page card so its rounded frame never scrolls: cap it at
-        // the viewport height and scroll inside it instead of the page. The
-        // 163px is the scroller top (131) plus the card offset (20) plus the
-        // bottom clearance (12). Only when the card is the last child, so
-        // pages with content below it keep the normal page scroll.
-        css += "[class*=\"ModDetailsContainer\"]>[class*=\"ModDetailsCard\"]:last-child{max-height:calc(100vh - 163px) !important;overflow-y:auto !important;overflow-x:hidden !important;}";
-        css += "[class*=\"ModDetailsCard\"]::-webkit-scrollbar{width:12px !important;height:12px !important;}";
-        css += "[class*=\"ModDetailsCard\"]::-webkit-scrollbar-track{background:transparent !important;}";
-        css += "[class*=\"ModDetailsCard\"]::-webkit-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border:3px solid transparent !important;background-clip:content-box !important;border-radius:" + scrollbarRadius + " !important;}";
+        // Freeze the page card so its rounded frame never moves. The card keeps
+        // its header and tabs at the top and its body scrolls below them, inset
+        // from the card edges, so the scrollbar stays on the straight sides and
+        // never reaches the rounded corners. The 163px is the scroller top (131)
+        // plus the card offset (20) plus the bottom clearance (12). Only when the
+        // card is the last child, so pages with content below keep the page scroll.
+        const std::string frozenCard = "[class*=\"ModDetailsContainer\"]>[class*=\"ModDetailsCard\"]:last-child";
+        const std::string frozenBody = frozenCard + ">.ant-card-body";
+        css += frozenCard + "{display:flex !important;flex-direction:column !important;max-height:calc(100vh - 163px) !important;overflow:hidden !important;}";
+        css += frozenCard + ">.ant-card-head{flex:none !important;}";
+        css += frozenBody + "{flex:1 1 auto !important;min-height:0 !important;overflow-y:auto !important;overflow-x:hidden !important;margin-inline-end:8px !important;margin-bottom:16px !important;}";
+        css += frozenBody + "::-webkit-scrollbar{width:12px !important;height:12px !important;}";
+        css += frozenBody + "::-webkit-scrollbar-track{background:transparent !important;}";
+        css += frozenBody + "::-webkit-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border:3px solid transparent !important;background-clip:content-box !important;border-radius:" + scrollbarRadius + " !important;}";
+        css += frozenBody + "::-webkit-scrollbar-button{display:none !important;}";
         // The ring above is a pseudo-element, so inside the scrolling card it
         // moves with the content and shows its bottom edge mid-box. The frozen
         // card paints its ring as an inset shadow instead, which stays put.
         css += "[class*=\"ModDetailsContainer\"]>[class*=\"ModDetailsCard\"]:last-child::after{display:none !important;}";
         css += "[class*=\"ModDetailsContainer\"]>[class*=\"ModDetailsCard\"]:last-child{box-shadow:inset 0 0 0 1px rgba(255,255,255,0.08) !important;}";
-        // Stock scroll arrows sit on the rounded corners and poke outside them;
-        // the rounded frame already clips the track, so drop the arrows.
-        css += "[class*=\"ModDetailsCard\"]::-webkit-scrollbar-button,.wh-cscroll-host::-webkit-scrollbar-button{display:none !important;}";
         // Joined pills: the mode switch, the version switch and the mod id
         // chip round only their outer ends so each reads as one pill.
         std::string segInner = std::to_string(std::max(0, s.cornerRadius - 2)) + "px";
@@ -555,9 +558,6 @@ static std::string BuildCss(const Settings& s) {
         // row/hover backgrounds poke past the table's rounded corners, and
         // square item hovers poke past rounded drop-down menus.
         css += ".ant-table,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-collapse,.ant-modal-content,.ant-drawer-content,.ant-popover-inner{overflow:hidden !important;}";
-        // The frozen mod card scrolls inside its rounded frame. Chromium draws
-        // the scrollbar thumb past the corner curve, so clip the card to it.
-        css += "[class*=\"ModDetailsContainer\"]>[class*=\"ModDetailsCard\"]:last-child{clip-path:inset(0 round " + r + ") !important;}";
     }
     if (s.nativeTitleBar && s.titleBarAcrylic) {
         int caption = GetSystemMetricsForDpi(SM_CYCAPTION, 96) +
