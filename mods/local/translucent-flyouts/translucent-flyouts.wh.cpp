@@ -2,7 +2,7 @@
 // @id              translucent-flyouts
 // @name            Translucent Flyouts
 // @description     Acrylic, Mica and blur backgrounds for context menus, dropdowns and tooltips in every app
-// @version         0.6.16
+// @version         0.6.33
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -2946,10 +2946,10 @@ bool HandleMenuDrawThemeBackground(HTHEME hTheme, HDC hdc, int iPartId, int iSta
 
     PatBlt(hdc, clipRect.left, clipRect.top, clipRect.right - clipRect.left,
            clipRect.bottom - clipRect.top, BLACKNESS);
-    if (iPartId == MENU_POPUPBACKGROUND) {
-        // The fill just covered the outline that the border part drew, so draw it again.
-        HandlePopupMenuNonClientBorderColors(hdc, clipRect);
-    }
+    // No border re-draw here. The POPUPBORDERS part paints the real outline over the
+    // full window rect after the background bands, so re-framing every background clip
+    // band only leaves stray lines: a vertical tick at each band's right edge and a
+    // horizontal line at each band boundary (visible around the separator row).
     return true;
 }
 
@@ -3275,8 +3275,49 @@ void InstallHook(HMODULE module, const char* name, void* hook, void** original) 
     }
 }
 
+using FillRectFn = decltype(&FillRect);
+FillRectFn g_fillRectOrig = nullptr;
+
+// The menu's device context: its window for window DCs, otherwise the flyout menu
+// owned by this thread (a buffered paint DC has no window).
+HWND MenuForDc(HDC hdc) {
+    HWND owner = WindowFromDC(hdc);
+    if (owner && Handler::IsMenuWindow(owner)) {
+        return owner;
+    }
+    if (GetObjectType(hdc) == OBJ_MEMDC) {
+        return Handler::FindFlyoutWindowOnCurrentThread(Handler::FlyoutType::Menu);
+    }
+    return nullptr;
+}
+
+COLORREF BrushColour(HBRUSH brush, HDC hdc) {
+    LOGBRUSH lb{};
+    HGDIOBJ current = brush ? static_cast<HGDIOBJ>(brush) : GetCurrentObject(hdc, OBJ_BRUSH);
+    if (!current || GetObjectW(current, sizeof(lb), &lb) == 0) {
+        return 0xFFFFFFFF;
+    }
+    return lb.lbColor;
+}
+
+// Dark-mode menus erase their body with a #202020 brush. GDI writes that colour into
+// alpha-0 pixels and DWM adds it over the accent, so the body comes out lighter than the
+// tint. On a menu surface, fill black instead: black adds nothing and the accent shows.
+constexpr COLORREF kMenuBodyColour = 0x00202020;
+
+int WINAPI FillRectHook(HDC hdc, const RECT* rc, HBRUSH brush) {
+    if (rc) {
+        COLORREF colour = BrushColour(brush, hdc);
+        if (colour == kMenuBodyColour && MenuForDc(hdc)) {
+            return g_fillRectOrig(hdc, rc, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+        }
+    }
+    return g_fillRectOrig(hdc, rc, brush);
+}
+
 void Install() {
     HMODULE uxtheme = GetModuleHandleW(L"uxtheme.dll");
+    HMODULE gdi32 = GetModuleHandleW(L"gdi32.dll");
     HMODULE user32 = GetModuleHandleW(L"user32.dll");
     if (!uxtheme) {
         uxtheme = LoadLibraryW(L"uxtheme.dll");
@@ -3300,6 +3341,8 @@ void Install() {
                 reinterpret_cast<void**>(&g_getThemeMarginsOrig));
     InstallHook(user32, "DrawTextW", reinterpret_cast<void*>(DrawTextWHook),
                 reinterpret_cast<void**>(&g_drawTextWOrig));
+    InstallHook(user32, "FillRect", reinterpret_cast<void*>(FillRectHook),
+                reinterpret_cast<void**>(&g_fillRectOrig));
 }
 
 void Uninstall() {
