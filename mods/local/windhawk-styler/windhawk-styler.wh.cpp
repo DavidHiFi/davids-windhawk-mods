@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.56
+// @version         2.0.57
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -535,6 +535,11 @@ static std::string BuildCss(const Settings& s) {
         css += frozenBody + "::-webkit-scrollbar-track{background:transparent !important;}";
         css += frozenBody + "::-webkit-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border:3px solid transparent !important;background-clip:content-box !important;border-radius:" + scrollbarRadius + " !important;}";
         css += frozenBody + "::-webkit-scrollbar-button{display:none !important;}";
+        // The settings tab starts its first row under the floating save bar.
+        // Drop the body's top padding there so the bar sits 12px below the
+        // tabs, and give the bar room below so the first setting clears it.
+        css += frozenBody + ":has([class*=\"SaveSettingsCard\"]){padding-top:0 !important;}";
+        css += "[class*=\"SaveSettingsCard\"]{margin-bottom:24px !important;}";
         // The ring above is a pseudo-element, so inside the scrolling card it
         // moves with the content and shows its bottom edge mid-box. The frozen
         // card paints its ring as an inset shadow instead, which stays put.
