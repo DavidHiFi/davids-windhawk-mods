@@ -1,9 +1,9 @@
 // ==WindhawkMod==
-// @id              center-titlebar-fork
-// @name            Center Titlebar - Fork
+// @id              center-titlebar-plus
+// @name            Center Titlebar Plus
 // @description     Center align the text in titlebar
 // @version         3.4
-// @author          DavidHiFi
+// @author          DavidHiFi, rounk-ctrl, valinet
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         MIT
@@ -22,7 +22,7 @@
 
 // ==WindhawkModReadme==
 /*
-# Center Titlebar (fork)
+# Center Titlebar Plus
 
 Based on rounk-ctrl's [center-titlebar](https://windhawk.net/mods/center-titlebar), which is a
 port of valinet's [WinCenterTitle](https://github.com/valinet/WinCenterTitle). Rewritten for
@@ -83,6 +83,10 @@ inset DWM asked for, which is where the window icon ends.
   structure offsets used are the parent, size and inset fields that `CVisual` hands to its own
   layout code, and the DirectWrite objects are located by validated scanning rather than fixed
   offsets.
+
+## Credits
+
+Based on [center-titlebar](https://windhawk.net/mods/center-titlebar) by rounk-ctrl, which is a port of [WinCenterTitle](https://github.com/valinet/WinCenterTitle) by valinet. MIT.
 */
 // ==/WindhawkModReadme==
 

@@ -3,7 +3,7 @@
 // @name            Shell Font Changer
 // @description     Use any font in Explorer, Start, Search and Settings without breaking icons or emoji
 // @version         1.2.2
-// @author          DavidHiFi
+// @author          DavidHiFi, Gabriela Cristei
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         MIT

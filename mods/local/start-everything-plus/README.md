@@ -1,4 +1,4 @@
-# Everything & Power Tools in the Start Menu Plus
+# Everything Start Menu Plus
 
 Search files, apps and settings from the Start menu with voidtools Everything. The menu opens as a compact search box with power controls and expands when you type.
 

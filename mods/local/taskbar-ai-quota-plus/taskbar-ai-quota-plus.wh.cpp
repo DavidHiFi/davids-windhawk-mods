@@ -3,7 +3,7 @@
 // @name            Taskbar AI Quota Bars Plus
 // @description     Subscription and free-tier AI usage bars for Anthropic, OpenAI, Antigravity, OpenCode Go and Grok
 // @version         1.8.0.0
-// @author          DavidHiFi
+// @author          DavidHiFi, Cleroth
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         explorer.exe
@@ -68,6 +68,10 @@ mod reads the CLI's cached credential from %USERPROFILE%\.grok\auth.json (or
 
 Changes in this fork are developed in the DavidHiFi repository; upstream issues and
 suggestions go to [the original mod](https://github.com/Cleroth/windhawk-taskbar-ai-quota/issues/new).
+
+## Credits
+
+Based on [Taskbar AI Quota Bars](https://windhawk.net/mods/taskbar-ai-quota) by Cleroth. MIT.
 */
 // ==/WindhawkModReadme==
 

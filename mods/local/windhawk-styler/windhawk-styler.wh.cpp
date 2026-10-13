@@ -3,7 +3,7 @@
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
 // @version         2.0.57
-// @author          DavidHiFi
+// @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         MIT

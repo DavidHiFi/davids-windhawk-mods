@@ -3,7 +3,7 @@
 // @name            Translucent Flyouts
 // @description     Acrylic, Mica and blur backgrounds for context menus, dropdowns and tooltips in every app
 // @version         0.6.33
-// @author          DavidHiFi
+// @author          DavidHiFi, ALTaleX531
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @exclude         discord*.exe

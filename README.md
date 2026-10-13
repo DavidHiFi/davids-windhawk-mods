@@ -15,8 +15,9 @@ copy onto another machine.
 | <img src="media/previews/taskbar-audio-visualizer.gif" width="220"> | [Taskbar Audio Visualizer](mods/local/taskbar-audio-visualizer) | A live audio spectrum with media controls, right on the taskbar. |
 | <img src="media/previews/taskbar-weather.png" width="220"> | [Taskbar Weather](mods/local/taskbar-weather) | Current weather on the taskbar with a details card on hover. No Widgets needed. |
 | <img src="media/previews/taskbar-system-info-weather.png" width="220"> | [Taskbar System Info Plus](mods/local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar. |
-| <img src="media/previews/taskbar-ai-quota-opencode.png" width="220"> | [Taskbar AI Quota Bars Plus](mods/local/taskbar-ai-quota-opencode) | Claude, Codex, Antigravity and OpenCode Go usage limits as taskbar bars. |
-| <img src="media/previews/start-everything-plus.png" width="220"> | [Everything & Power Tools in the Start Menu Plus](mods/local/start-everything-plus) | Compact Start menu search with Everything, preview, apps, settings, power tools. |
+| <img src="media/previews/taskbar-ai-quota-plus.png" width="220"> | [Taskbar AI Quota Bars Plus](mods/local/taskbar-ai-quota-plus) | Claude, Codex, Antigravity and OpenCode Go usage limits as taskbar bars. |
+| <img src="media/previews/explorer-treeitem-tweaker-plus.png" width="220"> | [Explorer TreeItem Tweaker Plus](mods/local/explorer-treeitem-tweaker-plus) | Custom backgrounds, text colors, font and layout for the Explorer navigation pane tree. |
+| <img src="media/previews/start-everything-plus.png" width="220"> | [Everything Start Menu Plus](mods/local/start-everything-plus) | Compact Start menu search with Everything, preview, apps, settings, power tools. |
 | <img src="media/previews/better-volume-mixer-plus.png" width="220"> | [Better Volume Mixer Plus](mods/local/better-volume-mixer-plus) | A tray volume mixer with per-app volume and per-app output and input devices. |
 | <img src="media/previews/translucent-flyouts.png" width="220"> | [Translucent Flyouts](mods/local/translucent-flyouts) | Acrylic, Mica and blur backgrounds for menus, dropdowns and tooltips in every app. |
 | <img src="media/previews/shell-font-changer.png" width="220"> | [Shell Font Changer](mods/local/shell-font-changer) | Any font in Explorer, Start, Search and Settings, without breaking icons or emoji. |
@@ -24,7 +25,7 @@ copy onto another machine.
 
 Each folder has the source, a readme and install steps. To install a mod, open
 Windhawk, choose **Create a new mod**, paste the `.wh.cpp` file and compile it.
-[Center Titlebar Fork](mods/local/center-titlebar-fork) is an unfinished
+[Center Titlebar Plus](mods/local/center-titlebar-fork) is an unfinished
 prototype and is not installed.
 
 ## Themes
@@ -78,7 +79,7 @@ changing mods or settings, run `tools\Build-Repo.ps1` to refresh the snapshot
 
 My work here is MIT, see [LICENSE](LICENSE), except where a mod inherits its
 original's license. Window Manager, AltSnap and Taskbar System Info Plus are
-GPL-3.0. Everything & Power Tools in the Start Menu Plus is GPL-3.0.
+GPL-3.0. Everything Start Menu Plus is GPL-3.0.
 Translucent Flyouts is LGPL-3.0. Simple Window Switcher Plus is GPL-2.0.
 Catalog mods keep their authors' licenses.
 

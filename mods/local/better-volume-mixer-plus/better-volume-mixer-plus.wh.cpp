@@ -3,7 +3,7 @@
 // @name         Better Volume Mixer Plus
 // @description  A compact tray volume mixer with per-app volume and per-app output and input devices
 // @version      1.1.0
-// @author       DavidHiFi
+// @author       DavidHiFi, 0Allu
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
 // @include      windhawk.exe

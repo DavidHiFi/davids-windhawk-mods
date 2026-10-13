@@ -12,7 +12,7 @@ you have installed.
   glyphs, so buttons never turn into empty boxes.
 - **Keeps font weights.** Semibold and bold text stays semibold and bold.
 - **Covers classic, themed and modern text**, including DirectWrite layouts.
-- **Fits text to controls.** Keeps normal text size. Shrinks slightly when a fixed box would clip, and uses the original UI font where Fira Code cannot fit readably.
+- **Fits text to controls.** Text with enough space keeps its normal size. Text that would overflow shrinks slightly, never below 85% height or 80% width. If that still overflows, the original UI font draws it.
 - **Nothing is written to the registry**, so turning it off is fully clean.
 
 ## How to use

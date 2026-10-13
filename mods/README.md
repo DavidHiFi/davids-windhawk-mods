@@ -16,13 +16,14 @@
 | [Taskbar Audio Visualizer](local/taskbar-audio-visualizer) | A live audio spectrum with media controls on the taskbar. | 1.2.0 | MIT |
 | [Taskbar Weather](local/taskbar-weather) | Current weather on the taskbar with a details card on hover. | 1.4.0 | MIT |
 | [Taskbar System Info Plus](local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar. | 1.2.3 | GPL-3.0 |
-| [Taskbar AI Quota Bars Plus](local/taskbar-ai-quota-opencode) | Claude, Codex, Antigravity and OpenCode Go usage limits on the taskbar. | 1.6.5.1 | MIT |
+| [Taskbar AI Quota Bars Plus](local/taskbar-ai-quota-plus) | Claude, Codex, Antigravity and OpenCode Go usage limits on the taskbar. | 1.8.0.0 | MIT |
+| [Explorer TreeItem Tweaker Plus](local/explorer-treeitem-tweaker-plus) | Custom backgrounds, text colors, font and layout for the Explorer navigation pane tree. | 1.1.3 | Not stated |
 | [Better Volume Mixer Plus](local/better-volume-mixer-plus) | Tray volume mixer with per-app output and input devices. | 1.0.0 | MIT |
 | [Translucent Flyouts](local/translucent-flyouts) | Acrylic, Mica and blur menus, dropdowns and tooltips in every app. | 0.6.6 | LGPL-3.0 |
 | [Shell Font Changer](local/shell-font-changer) | Any font in Explorer, Start, Search and Settings, with icons intact. | 1.1.0 | MIT |
-| [Everything & Power Tools in the Start Menu Plus](local/start-everything-plus) | Compact Start menu search with Everything, preview, apps, settings, power tools. | 1.1.0 | GPL-3.0 |
+| [Everything Start Menu Plus](local/start-everything-plus) | Compact Start menu search with Everything, preview, apps, settings, power tools. | 1.1.0 | GPL-3.0 |
 | [Notepad++ Dark Dialog Fix](local/npp-taskdlg-textcolor) | Readable text in Notepad++ dark-mode dialogs. | 1.0.1 | MIT |
-| [Center Titlebar Fork](local/center-titlebar-fork) | Unfinished prototype of a Windows 11 title-centering fix. Not installed. | 3.4 | MIT |
+| [Center Titlebar Plus](local/center-titlebar-fork) | Unfinished prototype of a Windows 11 title-centering fix. Not installed. | 3.4 | MIT |
 
 ## Installing a mod
 

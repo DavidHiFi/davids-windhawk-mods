@@ -5,7 +5,7 @@
   "windhawkVersion": "2.0.0-alpha.6",
   "counts": {
     "mods": 123,
-    "enabled": 114,
+    "enabled": 113,
     "local": 14
   },
   "mods": [
@@ -403,7 +403,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/explorer-title-bar-label",
       "source": "mods/catalog/explorer-title-bar-label.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "explorer-treeitem-tweaker",
@@ -415,7 +415,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/explorer-treeitem-tweaker",
       "source": "mods/catalog/explorer-treeitem-tweaker.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "explorer-treeline-killer",
@@ -588,7 +588,7 @@
     {
       "id": "local@better-volume-mixer-plus",
       "name": "Better Volume Mixer Plus",
-      "author": "DavidHiFi",
+      "author": "DavidHiFi, 0Allu",
       "github": "https://github.com/DavidHiFi",
       "version": "1.1.0",
       "license": "MIT",
@@ -600,7 +600,7 @@
     {
       "id": "local@shell-font-changer",
       "name": "Shell Font Changer",
-      "author": "DavidHiFi",
+      "author": "DavidHiFi, Gabriela Cristei",
       "github": "https://github.com/DavidHiFi",
       "version": "1.2.2",
       "license": "MIT",
@@ -612,7 +612,7 @@
     {
       "id": "local@simple-window-switcher-plus",
       "name": "Simple Window Switcher Plus",
-      "author": "DavidHiFi",
+      "author": "DavidHiFi, Lone, valinet, Asteski, bropines, caliberda",
       "github": "https://github.com/DavidHiFi",
       "version": "1.0.0",
       "license": "GPL-2.0",
@@ -622,21 +622,21 @@
       "enabled": true
     },
     {
-      "id": "local@taskbar-ai-quota-opencode",
+      "id": "local@taskbar-ai-quota-plus",
       "name": "Taskbar AI Quota Bars Plus",
-      "author": "DavidHiFi",
+      "author": "DavidHiFi, Cleroth",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.6.5.1",
+      "version": "1.8.0.0",
       "license": "MIT",
       "origin": "local",
       "upstream": "https://windhawk.net/mods/taskbar-ai-quota",
-      "source": "mods/local/taskbar-ai-quota-opencode/taskbar-ai-quota-opencode.wh.cpp",
-      "enabled": false
+      "source": "mods/local/taskbar-ai-quota-plus/taskbar-ai-quota-plus.wh.cpp",
+      "enabled": true
     },
     {
       "id": "local@taskbar-audio-visualizer",
       "name": "Taskbar Audio Visualizer",
-      "author": "DavidHiFi",
+      "author": "DavidHiFi, Salyts",
       "github": "https://github.com/DavidHiFi",
       "version": "1.3.1",
       "license": "MIT",
@@ -648,7 +648,7 @@
     {
       "id": "local@taskbar-system-info-weather",
       "name": "Taskbar System Info Plus",
-      "author": "DavidHiFi",
+      "author": "DavidHiFi, Yevhenii Starychenko, m417z, Salyts",
       "github": "https://github.com/DavidHiFi",
       "version": "1.2.3",
       "license": "GPL-3.0",
@@ -672,7 +672,7 @@
     {
       "id": "local@translucent-flyouts",
       "name": "Translucent Flyouts",
-      "author": "DavidHiFi",
+      "author": "DavidHiFi, ALTaleX531",
       "github": "https://github.com/DavidHiFi",
       "version": "0.6.33",
       "license": "LGPL-3.0",
@@ -684,7 +684,7 @@
     {
       "id": "local@windhawk-styler",
       "name": "Windhawk Styler",
-      "author": "DavidHiFi",
+      "author": "DavidHiFi, Ingan121",
       "github": "https://github.com/DavidHiFi",
       "version": "2.0.57",
       "license": "MIT",
@@ -696,9 +696,9 @@
     {
       "id": "local@window-manager",
       "name": "Window Manager",
-      "author": "DavidHiFi",
+      "author": "DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.1.3",
+      "version": "1.1.4",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
@@ -1438,9 +1438,9 @@
       "enabled": true
     },
     {
-      "id": "center-titlebar-fork",
-      "name": "Center Titlebar - Fork",
-      "author": "DavidHiFi",
+      "id": "center-titlebar-plus",
+      "name": "Center Titlebar Plus",
+      "author": "DavidHiFi, rounk-ctrl, valinet",
       "github": "https://github.com/DavidHiFi",
       "version": "3.4",
       "license": "MIT",
@@ -1463,8 +1463,8 @@
     },
     {
       "id": "local@start-everything-plus",
-      "name": "Everything & Power Tools in the Start Menu Plus",
-      "author": "DavidHiFi",
+      "name": "Everything Start Menu Plus",
+      "author": "DavidHiFi, bardelyne",
       "github": "https://github.com/DavidHiFi",
       "version": "1.1.0",
       "license": "GPL-3.0",
@@ -1474,15 +1474,15 @@
       "enabled": true
     },
     {
-      "id": "local@taskbar-ai-quota-plus",
-      "name": "Taskbar AI Quota Bars Plus",
-      "author": "DavidHiFi",
+      "id": "local@explorer-treeitem-tweaker-plus",
+      "name": "Explorer TreeItem Tweaker Plus",
+      "author": "DavidHiFi, Languster, crazyboyybs, valinet",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.8.0.0",
-      "license": "MIT",
+      "version": "1.1.3",
+      "license": "",
       "origin": "local",
-      "upstream": "https://windhawk.net/mods/taskbar-ai-quota",
-      "source": "mods/local/taskbar-ai-quota-plus/taskbar-ai-quota-plus.wh.cpp",
+      "upstream": "https://windhawk.net/mods/explorer-treeitem-tweaker",
+      "source": "mods/local/explorer-treeitem-tweaker-plus/explorer-treeitem-tweaker-plus.wh.cpp",
       "enabled": true
     }
   ]

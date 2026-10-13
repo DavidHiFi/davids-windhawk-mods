@@ -3,7 +3,7 @@
 // @name            Window Manager
 // @description     Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts
 // @version         1.1.4
-// @author          DavidHiFi
+// @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         GPL-3.0
@@ -67,7 +67,7 @@ snapping like the preview, set the four half keys to `left`, `right`, `up` and
 ## Credits
 
 Combines [AltDrag](https://windhawk.net/mods/alt-drag) by m417z (inspired by
-[AltSnap](https://github.com/RamonUnch/AltSnap) by RamonUnch),
+[AltSnap](https://github.com/RamonUnch/AltSnap) by Stefan Sundin and RamonUnch),
 [Snap Commander](https://windhawk.net/mods/snap-commander) by Asteski and
 [Move Window to Monitor](https://windhawk.net/mods/move-window-to-monitor) by
 TomberWolf. GPL-3.0, following AltDrag.

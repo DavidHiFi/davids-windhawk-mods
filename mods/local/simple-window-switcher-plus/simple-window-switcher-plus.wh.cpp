@@ -3,8 +3,9 @@
 // @name            Simple Window Switcher Plus
 // @description     Customizable Alt+Tab with Vista animations, background blur and elevated app support
 // @version         1.0.0
-// @author          DavidHiFi
+// @author          DavidHiFi, Lone, valinet, Asteski, bropines, caliberda
 // @github          https://github.com/DavidHiFi
+// @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         windhawk.exe
 // @include         explorer.exe
 // @compilerOptions -ld3d11 -ldxgi -ld2d1 -ldcomp -ldwrite -ldwmapi -lole32 -loleaut32 -luuid -lruntimeobject -lwindowscodecs -lshcore -lshell32 -lgdi32 -luxtheme -lshlwapi -lcomctl32 -lgdiplus -lversion

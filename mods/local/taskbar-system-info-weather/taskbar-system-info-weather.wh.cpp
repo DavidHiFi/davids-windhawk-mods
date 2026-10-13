@@ -5,7 +5,7 @@
 // @description     CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar, with optional graphs
 // @description:uk-UA Компактний монітор CPU, GPU, RAM і VRAM із 60-секундними графіками для панелі завдань Windows 11.
 // @version         1.2.3
-// @author          DavidHiFi
+// @author          DavidHiFi, Yevhenii Starychenko, m417z, Salyts
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-system-info-weather
 // @license         GPL-3.0

@@ -1,9 +1,9 @@
 // ==WindhawkMod==
 // @id              start-everything-plus
-// @name            Everything & Power Tools in the Start Menu Plus
+// @name            Everything Start Menu Plus
 // @description     Compact Start menu search with Everything, preview, apps, settings, power tools
 // @version         1.1.0
-// @author          DavidHiFi
+// @author          DavidHiFi, bardelyne
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         StartMenuExperienceHost.exe
@@ -16,11 +16,11 @@
 
 // ==WindhawkModReadme==
 /*
-# Everything & Power Tools in the Start Menu Plus
+# Everything Start Menu Plus
 
 Search files, apps and settings from the Start menu with voidtools Everything. The menu opens as a compact search box with power controls and expands when you type.
 
-![Everything Start menu Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/start-everything-plus.png)
+![Everything Start Menu Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/start-everything-plus.png)
 
 ![Compact Start menu with power controls](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/start-everything-plus-idle.png)
 
