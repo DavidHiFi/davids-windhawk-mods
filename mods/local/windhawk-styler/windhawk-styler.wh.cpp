@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.43
+// @version         2.0.45
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -359,6 +359,13 @@ static std::string BuildCss(const Settings& s) {
         css += "--ant-color-link-hover:" + s.accent + " !important;";
         css += "--ant-color-link-active:" + s.accent + " !important;";
         css += "--ant-control-outline:" + focus + " !important;";
+        // The interface's own accent tokens: the modified-setting bar, links,
+        // selected rows and moved rows otherwise keep its stock blue.
+        css += "--whui-setting-non-default:" + s.accent + " !important;";
+        css += "--whui-link:" + s.accent + " !important;";
+        css += "--whui-link-hover:" + s.accent + " !important;";
+        css += "--whui-selected-bg:" + RgbaFromRgb(s.accentRgb, 15) + " !important;";
+        css += "--whui-setting-moved-bg:" + RgbaFromRgb(s.accentRgb, 20) + " !important;";
     }
     if (!s.text.empty()) {
         css += "--whui-text-secondary:" + s.text + " !important;";
@@ -381,6 +388,18 @@ static std::string BuildCss(const Settings& s) {
     }
     css += "}";
     css += "[data-testid=mod-setting-reset]{margin-inline-start:0!important;}";
+    // Buttons with an icon center it on both axes; the text font's line
+    // height otherwise drops icons below center. The page buttons get a gap.
+    css += ".ant-btn:has(>svg),.ant-btn-icon-only{display:inline-flex !important;align-items:center !important;justify-content:center !important;}";
+    css += ".ant-btn-icon-only{padding:0 !important;}";
+    css += ".ant-btn>svg{display:block !important;flex:none;}";
+    css += ".ant-btn-icon-only>.anticon{display:block !important;margin:0 !important;}";
+    css += "[class*=\"ModPageButtonsWrapper\"]{gap:6px !important;}";
+    // Number spinners: flat handles with one divider instead of boxed buttons.
+    css += ".ant-input-number-handler-wrap{background-color:rgba(255,255,255,0.06) !important;border:0 !important;}";
+    css += ".ant-input-number-handler{border:0 !important;}";
+    css += ".ant-input-number-handler-up{border-bottom:1px solid rgba(255,255,255,0.08) !important;}";
+    css += ".ant-input-number-handler:hover{background-color:rgba(255,255,255,0.08) !important;}";
     if (!cardColor.empty()) {
         // Every box shares one surface: the card color, no border of its own,
         // and one 1px ring painted over its content. Headers and rows paint
@@ -455,6 +474,7 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-table-tbody>tr.ant-table-row-selected>td{background-color:" + RgbaFromRgb(s.accentRgb, 15) + " !important;}";
         css += ".ant-table-tbody>tr.ant-table-row-selected:hover>td{background-color:" + RgbaFromRgb(s.accentRgb, 20) + " !important;}";
         css += ".wh-cscroll-host::-webkit-scrollbar-thumb:hover{background-color:" + s.accent + " !important;}";
+        css += ".ant-input-number-handler:hover .ant-input-number-handler-up-inner,.ant-input-number-handler:hover .ant-input-number-handler-down-inner{color:" + s.accent + " !important;}";
         // Interface defaults that otherwise keep antd's built-in blue: the
         // mod-card ribbon, loading spinner, tab and default-button hovers,
         // the selected drop-down item and selected select option.
@@ -478,6 +498,14 @@ static std::string BuildCss(const Settings& s) {
         std::string r = std::to_string(s.cornerRadius) + "px";
         css += std::string(kSurfaces) + ",.ant-alert{border-radius:" + r + " !important;}";
         css += ".ant-btn,.ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-input-number,.ant-picker,.ant-segmented{border-radius:" + r + " !important;}";
+        // The spinner handles become a small inset pill inside the rounded
+        // input, so their square box no longer pokes past its corners.
+        std::string inner = std::to_string(std::max(0, s.cornerRadius - 3)) + "px";
+        css += ".ant-input-number-handler-wrap{top:3px !important;bottom:3px !important;right:3px !important;height:auto !important;width:20px !important;border-radius:" + inner + " !important;overflow:hidden !important;}";
+        css += ".ant-input-number-handler{border-radius:0 !important;}";
+        // The sticky save bar is its own rounded card; keep it clear of the
+        // page card's edges instead of running into them.
+        css += "[class*=\"SaveSettingsCard\"]{margin-inline:-12px !important;}";
         // Match the table's inset header corners so the card-colored surface
         // cannot show through as a dark notch beside the rounded outer border.
         css += ".ant-table-thead>tr:first-child>th:first-child{border-top-left-radius:" + r + " !important;background-clip:padding-box !important;}";
@@ -819,6 +847,39 @@ static LRESULT CALLBACK WebViewEdgeProc(HWND hwnd, UINT message, WPARAM wparam,
     return DefSubclassProc(hwnd, message, wparam, lparam);
 }
 
+// The drawn caption never reaches the default system menu, so open it here
+// with the same enabled items Windows shows for a normal title bar.
+static void ShowSystemMenu(HWND hwnd, POINT pt) {
+    HMENU menu = GetSystemMenu(hwnd, FALSE);
+    if (!menu) return;
+    static bool darkMenus = false;
+    if (!darkMenus) {
+        darkMenus = true;
+        if (HMODULE ux = GetModuleHandleW(L"uxtheme.dll")) {
+            using SetPreferredAppMode = int(WINAPI*)(int);
+            using FlushMenuThemes = void(WINAPI*)();
+            auto setMode = (SetPreferredAppMode)GetProcAddress(ux, MAKEINTRESOURCEA(135));
+            auto flush = (FlushMenuThemes)GetProcAddress(ux, MAKEINTRESOURCEA(136));
+            if (setMode) setMode(1);
+            if (flush) flush();
+        }
+    }
+    bool zoomed = IsZoomed(hwnd), iconic = IsIconic(hwnd);
+    auto enable = [menu](UINT id, bool on) {
+        EnableMenuItem(menu, id, MF_BYCOMMAND | (on ? MF_ENABLED : MF_GRAYED));
+    };
+    enable(SC_RESTORE, zoomed || iconic);
+    enable(SC_MOVE, !zoomed && !iconic);
+    enable(SC_SIZE, !zoomed && !iconic);
+    enable(SC_MINIMIZE, !iconic);
+    enable(SC_MAXIMIZE, !zoomed);
+    enable(SC_CLOSE, true);
+    SetForegroundWindow(hwnd);
+    UINT align = GetSystemMetrics(SM_MENUDROPALIGNMENT) ? TPM_RIGHTALIGN : TPM_LEFTALIGN;
+    int command = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | align, pt.x, pt.y, 0, hwnd, nullptr);
+    if (command) PostMessageW(hwnd, WM_SYSCOMMAND, command, 0);
+}
+
 // Keep activation visual only; keyboard focus and WM_ACTIVATE retain their real state.
 static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
                                       LPARAM lparam, DWORD_PTR) {
@@ -844,6 +905,23 @@ static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
         if (y < CaptionHeight(dpi) + (IsZoomed(hwnd) ? edge : 0)) {
             if (x < MulDiv(32, dpi, 96)) return HTSYSMENU;
             return HTCAPTION;
+        }
+    }
+    if (IntegratedCaption(s)) {
+        if (message == WM_NCRBUTTONUP && (wparam == HTCAPTION || wparam == HTSYSMENU)) {
+            ShowSystemMenu(hwnd, POINT{(short)LOWORD(lparam), (short)HIWORD(lparam)});
+            return 0;
+        }
+        bool iconClick = message == WM_NCLBUTTONDOWN && wparam == HTSYSMENU;
+        bool altSpace = message == WM_SYSCOMMAND && (wparam & 0xFFF0) == SC_KEYMENU && lparam == ' ';
+        if (iconClick || altSpace) {
+            RECT wr;
+            GetWindowRect(hwnd, &wr);
+            UINT dpi = GetDpiForWindow(hwnd);
+            int top = IsZoomed(hwnd) ? GetSystemMetricsForDpi(SM_CYFRAME, dpi) +
+                                       GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi) : 0;
+            ShowSystemMenu(hwnd, POINT{wr.left + MulDiv(8, dpi, 96), wr.top + top + CaptionHeight(dpi)});
+            return 0;
         }
     }
     if (message == WM_NCCALCSIZE && wparam) {
