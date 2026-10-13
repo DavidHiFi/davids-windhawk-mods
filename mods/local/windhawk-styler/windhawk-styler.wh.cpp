@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.45
+// @version         2.0.46
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -394,6 +394,8 @@ static std::string BuildCss(const Settings& s) {
     css += ".ant-btn-icon-only{padding:0 !important;}";
     css += ".ant-btn>svg{display:block !important;flex:none;}";
     css += ".ant-btn-icon-only>.anticon{display:block !important;margin:0 !important;}";
+    // The tab overflow trigger is not an .ant-btn, so its icon aligns to the text line instead.
+    css += ".ant-tabs-nav-more>span.anticon{vertical-align:middle !important;}";
     css += "[class*=\"ModPageButtonsWrapper\"]{gap:6px !important;}";
     // Number spinners: flat handles with one divider instead of boxed buttons.
     css += ".ant-input-number-handler-wrap{background-color:rgba(255,255,255,0.06) !important;border:0 !important;}";
