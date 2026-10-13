@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.54
+// @version         2.0.55
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -555,6 +555,9 @@ static std::string BuildCss(const Settings& s) {
         // row/hover backgrounds poke past the table's rounded corners, and
         // square item hovers poke past rounded drop-down menus.
         css += ".ant-table,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-collapse,.ant-modal-content,.ant-drawer-content,.ant-popover-inner{overflow:hidden !important;}";
+        // The frozen mod card scrolls inside its rounded frame. Chromium draws
+        // the scrollbar thumb past the corner curve, so clip the card to it.
+        css += "[class*=\"ModDetailsContainer\"]>[class*=\"ModDetailsCard\"]:last-child{clip-path:inset(0 round " + r + ") !important;}";
     }
     if (s.nativeTitleBar && s.titleBarAcrylic) {
         int caption = GetSystemMetricsForDpi(SM_CYCAPTION, 96) +
