@@ -16,7 +16,7 @@ copy onto another machine.
 | <img src="media/previews/taskbar-weather.png" width="220"> | [Taskbar Weather](mods/local/taskbar-weather) | Current weather on the taskbar with a details card on hover. No Widgets needed. |
 | <img src="media/previews/taskbar-system-info-weather.png" width="220"> | [Taskbar System Info Plus](mods/local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar. |
 | <img src="media/previews/taskbar-ai-quota-opencode.png" width="220"> | [Taskbar AI Quota Bars Plus](mods/local/taskbar-ai-quota-opencode) | Claude, Codex, Antigravity and OpenCode Go usage limits as taskbar bars. |
-| <img src="media/previews/start-everything-plus.png" width="220"> | [Everything & Power Tools in the Start Menu Plus](mods/local/start-everything-plus) | Compact Start menu search that expands for Everything files, apps, settings and power tools. |
+| <img src="media/previews/start-everything-plus.png" width="220"> | [Everything & Power Tools in the Start Menu Plus](mods/local/start-everything-plus) | Compact Start menu search with Everything, preview, apps, settings, power tools. |
 | <img src="media/previews/better-volume-mixer-plus.png" width="220"> | [Better Volume Mixer Plus](mods/local/better-volume-mixer-plus) | A tray volume mixer with per-app volume and per-app output and input devices. |
 | <img src="media/previews/translucent-flyouts.png" width="220"> | [Translucent Flyouts](mods/local/translucent-flyouts) | Acrylic, Mica and blur backgrounds for menus, dropdowns and tooltips in every app. |
 | <img src="media/previews/shell-font-changer.png" width="220"> | [Shell Font Changer](mods/local/shell-font-changer) | Any font in Explorer, Start, Search and Settings, without breaking icons or emoji. |
