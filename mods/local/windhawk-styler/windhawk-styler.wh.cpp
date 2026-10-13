@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.47
+// @version         2.0.52
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -24,7 +24,7 @@ Choose Windhawk's colors, font, transparency and background blur.
 
 - **Background.** Pick a color and opacity, with Acrylic or no background effect.
 - **Cards and dialogs.** Set their color and opacity. Cards, tables, Advanced settings, dialogs and pop-up menus use that surface, with blur when translucent. Every box has one outline, the same color all the way around its corners.
-- **Controls.** Choose colors for buttons and inputs, plus a global accent for selections, hovers, badges, spinners, links and modified settings. Number spinners sit in a rounded pill.
+- **Controls.** Choose colors for buttons and inputs, plus a global accent for selections, hovers, badges, spinners, links and modified settings. Number spinners sit in a rounded pill. The save bar floats while the settings scroll, and mode and version switches join into single pills.
 - **Corners.** Round cards, tables, dialogs, pop-up menus, buttons and inputs with an adjustable radius, or keep Windhawk's squared look.
 - **Text and font.** Use an installed font and a text color. Icons keep their own font and stay centered in their buttons.
 - **Title bar.** Match the background or choose a solid color. Right-click the title bar, click the app icon or press Alt+Space for the Windows window menu. The app icon keeps its normal size, and Windows handles dragging and window buttons.
@@ -332,9 +332,11 @@ static const char kSurfaces[] =
 
 // The subset that is static inside its own container, so it can take
 // position:relative for its ring. Pop-ups (select, picker) are already
-// absolutely positioned by the interface and keep their own position.
+// absolutely positioned by the interface and keep their own position. The
+// save card is left out: the interface positions it sticky so it floats
+// while the settings scroll, and forcing relative would pin it to the page.
 static const char kRelativeSurfaces[] =
-    ".ant-card,[class*=\"SaveSettingsCard\"],.ant-table,.ant-collapse,.ant-modal-content,"
+    ".ant-card:not([class*=\"SaveSettingsCard\"]),.ant-table,.ant-collapse,.ant-modal-content,"
     ".ant-drawer-content,.ant-popover-inner,.ant-dropdown-menu,.ant-tooltip-inner,"
     ".ant-notification-notice,.ant-message-notice-content";
 
@@ -506,8 +508,25 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-input-number-handler-wrap{top:3px !important;bottom:3px !important;right:3px !important;height:auto !important;width:20px !important;border-radius:" + inner + " !important;overflow:hidden !important;}";
         css += ".ant-input-number-handler{border-radius:0 !important;}";
         // The sticky save bar is its own rounded card; keep it clear of the
-        // page card's edges instead of running into them.
-        css += "[class*=\"SaveSettingsCard\"]{margin-inline:-12px !important;}";
+        // page card's edges instead of running into them. Its sticky
+        // positioning comes from the interface, so it keeps floating. It
+        // sticks 12px below the scroll top so its rounded top corners and
+        // outline stay fully visible instead of touching the viewport edge.
+        css += "[class*=\"SaveSettingsCard\"]{margin-inline:-12px !important;top:12px !important;}";
+        // The page card ends flush with the scroll viewport, which slices its
+        // bottom rounded corners; leave room so the curve stays visible.
+        // Padding on the page container, not margin on the card: the
+        // scroller leaves the card's bottom margin out of its scroll range.
+        css += "[class*=\"ModDetailsContainer\"]{padding-bottom:12px !important;}";
+        // Joined pills: the mode switch, the version switch and the mod id
+        // chip round only their outer ends so each reads as one pill.
+        std::string segInner = std::to_string(std::max(0, s.cornerRadius - 2)) + "px";
+        css += ".ant-segmented-item:first-child{border-radius:" + segInner + " 0 0 " + segInner + " !important;}";
+        css += ".ant-segmented-item:last-child{border-radius:0 " + segInner + " " + segInner + " 0 !important;}";
+        css += ".ant-segmented-thumb{border-radius:" + segInner + " !important;}";
+        css += ".ant-radio-group .ant-radio-button-wrapper:first-child{border-radius:" + r + " 0 0 " + r + " !important;}";
+        css += ".ant-radio-group .ant-radio-button-wrapper:last-child{border-radius:0 " + r + " " + r + " 0 !important;}";
+        css += "[class*=\"CardTitleModId\"]{border-radius:" + r + " !important;}";
         // Match the table's inset header corners so the card-colored surface
         // cannot show through as a dark notch beside the rounded outer border.
         css += ".ant-table-thead>tr:first-child>th:first-child{border-top-left-radius:" + r + " !important;background-clip:padding-box !important;}";
