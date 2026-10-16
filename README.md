@@ -75,6 +75,22 @@ Mod DLLs are not included; Windhawk compiles each mod on your machine. After
 changing mods or settings, run `tools\Build-Repo.ps1` to refresh the snapshot
 (`-SkipSources` refreshes settings and metadata only).
 
+## Contributing
+
+Bug reports, feature ideas and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks and what to include.
+
+## Star history
+
+⭐ Thanks for the stars, mod reports and compile fixes.
+
+<a href="https://www.star-history.com/?repos=DavidHiFi%2Fdavids-windhawk-mods&amp;type=date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=DavidHiFi/davids-windhawk-mods&amp;type=date&amp;theme=dark&amp;legend=top-left" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=DavidHiFi/davids-windhawk-mods&amp;type=date" />
+    <img alt="DavidHiFi/davids-windhawk-mods GitHub star history" src="https://api.star-history.com/chart?repos=DavidHiFi/davids-windhawk-mods&amp;type=date" />
+  </picture>
+</a>
+
 ## License
 
 My work here is MIT, see [LICENSE](LICENSE), except where a mod inherits its
