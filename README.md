@@ -152,14 +152,6 @@ Catalog mods in `mods/catalog/` keep their authors' licenses.
 
 </details>
 
----
-
-## Support development
-
-These mods are free and always will be. If one of them makes your PC nicer to use, a coffee keeps them updated.
-
-[![Support DavidHiFi on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/davidhifi)
-
 ## Contributing
 
 Reports of mods that break after a Windows or Windhawk update help the most, along with compile fixes and pull requests.
