@@ -1,6 +1,6 @@
 # Theme Tool Plus
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 Apply and switch custom Windows themes from a hotkey picker. The theme
 signature patch from UXTheme hook is built in, so unsigned themes load
@@ -9,9 +9,6 @@ without patching system files or running a separate theme tool.
 ![Theme Tool Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/theme-tool-plus.png)
 
 ## Features
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 - **Hotkey picker.** Press Ctrl+Alt+Y for a compact theme list; click or
   press Enter to apply. Works even without Explorer running (the picker lives
   in the Windhawk engine process).
@@ -28,8 +25,6 @@ without patching system files or running a separate theme tool.
 
 ## How to use
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 | Key | Action |
 | --- | --- |
 | Ctrl+Alt+Y | Open or close the theme picker |
@@ -42,9 +37,6 @@ The **Action on settings save** selector can also refresh the theme list or
 re-initialize the theme manager.
 
 ## Notes
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 - Pick themes made for your Windows version. The picker lists the same themes
   Windows shows, from `C:\Windows\Resources\Themes`.
 - Before uninstalling the mod, switch to a stock theme; otherwise the next
@@ -52,9 +44,6 @@ re-initialize the theme manager.
 - ARM64 is not supported (Windhawk does not hook ARM64EC).
 
 ## Credits
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 Based on [UXTheme hook](https://windhawk.net/mods/uxtheme-hook) by rounk-ctrl.
 Theme engine research from [SecureUxTheme](https://github.com/namazso/SecureUxTheme)
 and [ThemeToolSharp](https://github.com/namazso/ThemeToolSharp) by namazso,
