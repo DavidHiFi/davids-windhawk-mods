@@ -1,14 +1,12 @@
 # Windhawk Styler
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 Choose Windhawk's colors, font, transparency and background blur.
 
 ![Windhawk Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-styler.png)
 
 ## Features
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 - **Background.** Pick a color and opacity, with Acrylic or no background effect.
 - **Cards and dialogs.** Set their color and opacity. Cards, tables, Advanced settings, dialogs and pop-up menus use that surface, with blur when translucent. Every box has one outline, the same color all the way around its corners.
@@ -20,8 +18,6 @@ Choose Windhawk's colors, font, transparency and background blur.
 
 ## How to use
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 This edition requires Windows 11 and the 64-bit Windhawk 2.0 Tauri interface. It was tested with Windhawk 2.0.0-alpha.6.
 
 Open the mod's Settings tab, choose your appearance and save. Saving settings or switching this mod on or off briefly closes and reopens the Windhawk interface.
@@ -30,14 +26,10 @@ Colors use `#RRGGBB`. Opacity runs from 0 for transparent to 100 for solid. Leav
 
 ## Notes
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 Windows transparency and animation settings can affect the background material. Other mods that style this window can conflict with its appearance.
 
 For the older Windhawk interface, use the [legacy 1.4.0 edition](legacy/). It has a separate source and settings.
 
 ## Credits
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 The original window frame work was adapted from [Titlebar For Everyone](https://windhawk.net/mods/titlebar-for-everyone) by Ingan121, under the MIT license.

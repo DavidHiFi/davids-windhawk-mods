@@ -1,6 +1,6 @@
 # Taskbar Audio Visualizer
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 A live audio spectrum and media controls that sit on the taskbar, next to your
 other widgets.
@@ -8,8 +8,6 @@ other widgets.
 ![Taskbar Audio Visualizer preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/taskbar-audio-visualizer.gif)
 
 ## Features
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 - **Live spectrum bars** that follow whatever is playing, with smooth falloff
   and optional peak caps.
@@ -30,23 +28,17 @@ other widgets.
 
 ## Tips
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 - Use **Horizontal offset** to place the bars after other taskbar widgets.
 - Disable other taskbar visualizers, such as Tourne'Table, first.
 - The mod only listens. It never changes playback devices, volume or routing.
 
 ## Credits
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 Based on [Tourne'Table](https://windhawk.net/mods/tourne-table-desktop-audio-visualizer)
 by USER-TOURNE and [Desktop Audio Visualizer](https://windhawk.net/mods/desktop-audio-visualizer)
 by Salyts. MIT.
 
 ## Install
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 1. Install [Windhawk](https://windhawk.net/).
 2. Choose **Create a new mod**, paste [taskbar-audio-visualizer.wh.cpp](taskbar-audio-visualizer.wh.cpp) and click **Compile**.
