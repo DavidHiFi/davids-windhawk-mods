@@ -6,8 +6,9 @@
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
-`// @license         MIT
-// @donateUrl       https://ko-fi.com/DavidHiFi`n`// @include         notepad++.exe
+// @license         MIT
+// @donateUrl       https://ko-fi.com/DavidHiFi
+// @include         notepad++.exe
 // @compilerOptions -luxtheme
 // ==/WindhawkMod==
 

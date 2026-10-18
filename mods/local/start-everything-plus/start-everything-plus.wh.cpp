@@ -11,8 +11,9 @@
 // @include         explorer.exe
 // @architecture    x86-64
 // @license         GPL-3.0
-`// @compilerOptions -lole32 -loleaut32 -lruntimeobject -luuid -lshell32 -lshlwapi -lcomctl32 -ldwmapi -luser32 -liphlpapi -lgdi32
-// @donateUrl       https://ko-fi.com/DavidHiFi`n`// ==/WindhawkMod==
+// @compilerOptions -lole32 -loleaut32 -lruntimeobject -luuid -lshell32 -lshlwapi -lcomctl32 -ldwmapi -luser32 -liphlpapi -lgdi32
+// @donateUrl       https://ko-fi.com/DavidHiFi
+// ==/WindhawkMod==
 
 // ==WindhawkModReadme==
 /*

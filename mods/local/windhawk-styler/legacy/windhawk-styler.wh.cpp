@@ -6,8 +6,9 @@
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
-`// @license         MIT
-// @donateUrl       https://ko-fi.com/DavidHiFi`n`// @include         windhawk.exe
+// @license         MIT
+// @donateUrl       https://ko-fi.com/DavidHiFi
+// @include         windhawk.exe
 // @include         VSCodium.exe
 // @compilerOptions -luser32 -lgdi32 -lshell32 -ldwmapi -lbcrypt -lcomctl32
 // ==/WindhawkMod==

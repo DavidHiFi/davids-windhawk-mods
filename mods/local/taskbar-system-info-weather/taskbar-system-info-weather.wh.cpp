@@ -8,8 +8,9 @@
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-system-info-weather
-`// @license         GPL-3.0
-// @donateUrl       https://ko-fi.com/DavidHiFi`n`// @include         explorer.exe
+// @license         GPL-3.0
+// @donateUrl       https://ko-fi.com/DavidHiFi
+// @include         explorer.exe
 // @architecture    x86-64
 // @compilerOptions -lole32 -loleaut32 -lruntimeobject -lpdh -ldxgi -lcomctl32 -liphlpapi -DWIN32_LEAN_AND_MEAN
 // ==/WindhawkMod==
