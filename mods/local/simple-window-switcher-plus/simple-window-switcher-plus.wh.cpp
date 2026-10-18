@@ -9,6 +9,7 @@
 // @include         explorer.exe
 // @compilerOptions -ld3d11 -ldxgi -ld2d1 -ldcomp -ldwrite -ldwmapi -lole32 -loleaut32 -luuid -lruntimeobject -lwindowscodecs -lshcore -lshell32 -lgdi32 -luxtheme -lshlwapi -lcomctl32 -lgdiplus -lversion
 // @license         GPL-2.0
+// @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
 // ==WindhawkModReadme==
 /*

@@ -6,8 +6,8 @@
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
-// @license         MIT
-// @include         explorer.exe
+`// @license         MIT
+// @donateUrl       https://ko-fi.com/DavidHiFi`n`// @include         explorer.exe
 // @include         StartMenuExperienceHost.exe
 // @include         ShellExperienceHost.exe
 // @include         SearchHost.exe

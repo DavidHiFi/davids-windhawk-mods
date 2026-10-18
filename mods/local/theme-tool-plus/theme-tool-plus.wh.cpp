@@ -11,8 +11,8 @@
 // @include         systemsettings.exe
 // @include         logonui.exe
 // @include         rundll32.exe
-// @compilerOptions -lole32 -loleaut32 -luser32 -lgdi32 -ldwmapi
-// ==/WindhawkMod==
+`// @compilerOptions -lole32 -loleaut32 -luser32 -lgdi32 -ldwmapi
+// @donateUrl       https://ko-fi.com/DavidHiFi`n`// ==/WindhawkMod==
 
 // ==WindhawkModReadme==
 /*

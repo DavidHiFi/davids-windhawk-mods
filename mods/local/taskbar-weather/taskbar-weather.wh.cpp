@@ -6,8 +6,8 @@
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-weather
-// @license MIT
-// @include explorer.exe
+`// @license MIT
+// @donateUrl       https://ko-fi.com/DavidHiFi`n`// @include explorer.exe
 // @architecture x86-64
 // @compilerOptions -lwinhttp -lgdiplus -lgdi32 -luser32 -ld2d1 -ldwrite
 // ==/WindhawkMod==

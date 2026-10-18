@@ -1,5 +1,7 @@
 # Drag to Delete Plus
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 A floating trash target appears while you drag files, so you can drop them
 straight into the Recycle Bin. Five background finishes, circle or square
 shapes, and full color control, in Catppuccin Mocha with a blue accent out of
@@ -8,6 +10,8 @@ the box.
 ![Drag to Delete Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/drag-to-delete-plus.png)
 
 ## Features
+
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 - **Five background finishes.** Gradient glass, solid, acrylic or mica blur of
   what is behind the target, or no background at all.
@@ -23,6 +27,8 @@ the box.
 
 ## How to use
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Drag any file or folder and the target fades in. Drop the files on it to move
 them to the Recycle Bin, or let go anywhere else to cancel. Disable the
 original Drag to Delete before enabling this mod.
@@ -33,10 +39,14 @@ backdrop.
 
 ## Credits
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Based on [Drag to Delete](https://windhawk.net/mods/drag-to-delete) by
 [iMAboud](https://github.com/iMAboud).
 
 ## Install
+
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 1. Install [Windhawk](https://windhawk.net/).
 2. Choose **Create a new mod**, paste [drag-to-delete-plus.wh.cpp](drag-to-delete-plus.wh.cpp) and click **Compile**.

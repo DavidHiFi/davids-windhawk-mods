@@ -9,8 +9,8 @@
 // @include         explorer.exe
 // @architecture    x86-64
 // @license         MIT
-// @compilerOptions -DWIN32_LEAN_AND_MEAN -lole32 -loleaut32 -lruntimeobject -lwindowsapp -lwinhttp -luser32 -lshell32 -lgdi32 -ladvapi32 -lws2_32 -liphlpapi -lcrypt32 -lbcrypt -lcomctl32 -lcomdlg32
-// ==/WindhawkMod==
+`// @compilerOptions -DWIN32_LEAN_AND_MEAN -lole32 -loleaut32 -lruntimeobject -lwindowsapp -lwinhttp -luser32 -lshell32 -lgdi32 -ladvapi32 -lws2_32 -liphlpapi -lcrypt32 -lbcrypt -lcomctl32 -lcomdlg32
+// @donateUrl       https://ko-fi.com/DavidHiFi`n`// ==/WindhawkMod==
 
 // A fork of Taskbar AI Quota Bars by Cleroth (https://github.com/Cleroth),
 // published under the MIT license. Modified in 2026 by DavidHiFi to add an

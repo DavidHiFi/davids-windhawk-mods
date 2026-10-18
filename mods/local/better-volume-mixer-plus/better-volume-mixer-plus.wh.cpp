@@ -9,6 +9,7 @@
 // @include      windhawk.exe
 // @compilerOptions -lole32 -lshell32 -lgdi32 -luser32 -ldwmapi -ladvapi32 -lmsimg32 -loleaut32 -lgdiplus -lruntimeobject
 // @license      MIT
+// @donateUrl    https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==

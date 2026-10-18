@@ -1,5 +1,7 @@
 # AltSnap
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Move and resize any window by holding Alt, and maximize, minimize or close it
 with AltSnap-style shortcuts. Everything AltSnap does day to day, with no
 separate app running.
@@ -7,6 +9,8 @@ separate app running.
 ![AltSnap preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/alt-snap-drag.gif)
 
 ## Features
+
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 - **Alt+drag to move.** Grab a window anywhere, not just by its title bar.
 - **Alt+right-drag to resize** from the edge or corner nearest the cursor.
@@ -20,6 +24,8 @@ separate app running.
 
 ## Default controls
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 | Hold Alt and... | Action |
 | --- | --- |
 | Left drag | Move the window |
@@ -32,6 +38,8 @@ separate app running.
 
 ## Notes
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 - Disable AltDrag before enabling this mod.
 - To exclude a program, add it to the custom exclusion list in this mod's
   Advanced tab.
@@ -42,12 +50,16 @@ separate app running.
 
 ## Credits
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Based on [AltDrag](https://windhawk.net/mods/alt-drag) by m417z, with
 shortcuts and gestures from [AltSnap](https://github.com/RamonUnch/AltSnap) by
 RamonUnch. Both trace back to the original
 [AltDrag](https://stefansundin.github.io/altdrag/) by Stefan Sundin. GPL-3.0.
 
 ## Install
+
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 1. Install [Windhawk](https://windhawk.net/).
 2. Choose **Create a new mod**, paste [alt-snap.wh.cpp](alt-snap.wh.cpp) and click **Compile**.

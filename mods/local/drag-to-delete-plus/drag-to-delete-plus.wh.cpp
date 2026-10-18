@@ -8,6 +8,7 @@
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         explorer.exe
 // @compilerOptions -lole32 -lgdi32 -lshell32 -lgdiplus
+// @donateUrl    https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -587,13 +588,14 @@ void RenderFrame(HWND hWnd) {
         if (g_settings.material != PlusMaterial::CLEAR) {
             if (g_settings.material == PlusMaterial::GLASS ||
                 g_settings.material == PlusMaterial::ACRYLIC) {
-                LinearGradientBrush glassBrush(
-                    PointF(geo.cx, geo.cy - r),
-                    PointF(geo.cx, geo.cy + r),
-                    g_settings.backgroundTop,
-                    g_settings.backgroundBottom
-                );
-                g.FillPath(&glassBrush, &targetPath);
+                // Dynamic radial gradient (center bright → edge dark) for glass/acrylic
+                PathGradientBrush radialBrush(&targetPath);
+                radialBrush.SetCenterPoint(PointF(geo.cx, geo.cy));
+                radialBrush.SetCenterColor(g_settings.backgroundTop);
+                Color surroundColors[] = { g_settings.backgroundBottom };
+                radialBrush.SetSurroundColors(surroundColors, 1);
+                radialBrush.SetBlendTriangularShape(0.0f, 0.45f, 1.0f);
+                g.FillPath(&radialBrush, &targetPath);
 
                 g.SetClip(&targetPath);
                 BYTE glossAlpha =

@@ -1,11 +1,15 @@
 # Taskbar Weather
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 The current weather on the left side of the taskbar, with a details card when
 you hover over it. It works on its own, without Windows Widgets.
 
 ![Taskbar Weather preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/taskbar-weather.png)
 
 ## Features
+
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 - **Weather icon, temperature and conditions** on the taskbar, updated every
   ten minutes by default.
@@ -18,6 +22,8 @@ you hover over it. It works on its own, without Windows Widgets.
 
 ## Setup
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Open the settings and enter your town's **latitude** and **longitude** (in most
 map apps, right-click a place to copy them). Add a **place name** to show it in
 the hover card. The coordinates are saved locally and sent to Open-Meteo with each request.
@@ -29,9 +35,13 @@ the card. Turn off Windows Widgets to avoid a second weather button.
 
 ## Credits
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). MIT.
 
 ## Install
+
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 1. Install [Windhawk](https://windhawk.net/).
 2. Choose **Create a new mod**, paste [taskbar-weather.wh.cpp](taskbar-weather.wh.cpp) and click **Compile**.

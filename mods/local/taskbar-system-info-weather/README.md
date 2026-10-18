@@ -1,5 +1,7 @@
 # Taskbar System Info Plus
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 A compact hardware monitor on the taskbar: CPU, GPU, memory, temperatures and
 network speed at a glance. Taskbar System Info, plus network speeds and a
 tighter layout.
@@ -12,6 +14,8 @@ GPU  4% 56°C ↓ 8.4 MB/s   VRAM  9%  2.1/24G
 ```
 
 ## Features
+
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 - **CPU and GPU** load and temperature.
 - **RAM and VRAM** usage with used and total gigabytes, plus capacity bars.
@@ -26,6 +30,8 @@ GPU  4% 56°C ↓ 8.4 MB/s   VRAM  9%  2.1/24G
   after the weather.
 
 ## Temperatures
+
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 The default **Automatic** source uses the first one that works:
 
@@ -43,6 +49,8 @@ missing reading shows as `--°C` and everything else keeps working.
 
 ## Troubleshooting
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 - **Wrong GPU:** set **GPU adapter filter** to part of the card's name. Use the
   HWiNFO sensor filters only if the temperature is still wrong.
 - **VRAM shows `--` after a driver update:** give it a minute, then reload the
@@ -57,6 +65,8 @@ duplicates.
 
 ## Credits
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Based on [Taskbar System Info](https://windhawk.net/mods/taskbar-system-info)
 by Yevhenii Starychenko. Network readouts are inspired by Taskbar Network Speed
 Indicator by Narayan. Taskbar discovery follows
@@ -67,6 +77,8 @@ Secondary-taskbar support is adapted from
 by Salyts. GPL-3.0.
 
 ## Install
+
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 1. Install [Windhawk](https://windhawk.net/).
 2. Choose **Create a new mod**, paste [taskbar-system-info-weather.wh.cpp](taskbar-system-info-weather.wh.cpp) and click **Compile**.

@@ -1,11 +1,15 @@
 # Shell Font Changer
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Replace the font used across File Explorer and the Windows shell with any font
 you have installed.
 
 ![Shell Font Changer preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/shell-font-changer.png)
 
 ## Features
+
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 - **Changes text in File Explorer, Start, Search and Settings.**
 - **Icons and emoji stay intact.** Symbol and icon fonts keep their own
@@ -17,6 +21,8 @@ you have installed.
 
 ## How to use
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Type an installed font family name in the settings, such as
 `FiraCode Nerd Font` or `Inter`. Leave it empty to turn the mod off.
 
@@ -27,10 +33,14 @@ Disable the original Explorer Font Changer before enabling this mod.
 
 ## Credits
 
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Based on [Explorer Font Changer](https://windhawk.net/mods/explorer-font-changer)
 by Gabriela Cristei. MIT.
 
 ## Install
+
+[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 1. Install [Windhawk](https://windhawk.net/).
 2. Choose **Create a new mod**, paste [shell-font-changer.wh.cpp](shell-font-changer.wh.cpp) and click **Compile**.
