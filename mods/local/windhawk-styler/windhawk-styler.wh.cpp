@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.57
+// @version         2.0.64
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -767,6 +767,19 @@ static int CaptionHeight(UINT dpi) {
            GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
 }
 
+// Where DWM draws the min/max/close buttons, in client coordinates.
+static bool CaptionButtonRect(HWND hwnd, RECT* out) {
+    RECT bounds, window;
+    POINT origin{};
+    if (FAILED(DwmGetWindowAttribute(hwnd, DWMWA_CAPTION_BUTTON_BOUNDS, &bounds, sizeof(bounds))) ||
+        IsRectEmpty(&bounds) || !GetWindowRect(hwnd, &window) || !ClientToScreen(hwnd, &origin)) {
+        return false;
+    }
+    OffsetRect(&bounds, window.left - origin.x, window.top - origin.y);
+    *out = bounds;
+    return true;
+}
+
 static std::map<HWND, RECT> g_captionChildren;
 static std::mutex g_captionChildrenMutex;
 
@@ -818,12 +831,11 @@ static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
         RGBQUAD* pixels = nullptr;
         int stride = 0;
         if (SUCCEEDED(GetBufferedPaintBits(buffer, &pixels, &stride))) {
-            int alpha = std::clamp(s.backgroundOpacity, 0, 100) * 255 / 100;
-            RGBQUAD tint{BYTE((s.background & 255) * alpha / 255),
-                         BYTE(((s.background >> 8) & 255) * alpha / 255),
-                         BYTE(((s.background >> 16) & 255) * alpha / 255), BYTE(alpha)};
+            // The strip stays clear, like any Windows title bar over a backdrop:
+            // DWM draws the caption buttons under the client, so a tint here
+            // would dim them, and a hole cut for them would show as a box.
             for (int y = 0; y < client.bottom; ++y) {
-                std::fill_n(pixels + y * stride, client.right, tint);
+                std::fill_n(pixels + y * stride, client.right, RGBQUAD{});
             }
         }
         UINT dpi = GetDpiForWindow(hwnd);
@@ -937,7 +949,6 @@ static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
     Settings s = SnapshotSettings();
     if (IntegratedCaption(s) && message == WM_NCHITTEST) {
         LRESULT hit = 0;
-        if (DwmDefWindowProc(hwnd, message, wparam, lparam, &hit)) return hit;
         RECT wr;
         GetWindowRect(hwnd, &wr);
         int x = (short)LOWORD(lparam) - wr.left;
@@ -952,12 +963,49 @@ static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
         }
         if (y < CaptionHeight(dpi) + (IsZoomed(hwnd) ? edge : 0)) {
             if (x < MulDiv(32, dpi, 96)) return HTSYSMENU;
+            // DwmDefWindowProc must see the hit first: it is what drives the
+            // buttons' hover and pressed look, maximized or not.
+            if (DwmDefWindowProc(hwnd, message, wparam, lparam, &hit) &&
+                (hit == HTMINBUTTON || hit == HTMAXBUTTON || hit == HTCLOSE || !IsZoomed(hwnd))) {
+                return hit;
+            }
+            // Maximized fallback when DWM reports only HTCAPTION for a button,
+            // so the click still lands.
+            RECT buttons;
+            POINT pt{(short)LOWORD(lparam), (short)HIWORD(lparam)};
+            if (IsZoomed(hwnd) && CaptionButtonRect(hwnd, &buttons) && ScreenToClient(hwnd, &pt) &&
+                PtInRect(&buttons, pt)) {
+                int button = (buttons.right - buttons.left) / 3;
+                if (pt.x >= buttons.right - button) return HTCLOSE;
+                if (pt.x >= buttons.right - 2 * button) return HTMAXBUTTON;
+                return HTMINBUTTON;
+            }
             return HTCAPTION;
         }
+        if (DwmDefWindowProc(hwnd, message, wparam, lparam, &hit)) return hit;
+        return DefSubclassProc(hwnd, message, wparam, lparam);
     }
     if (IntegratedCaption(s)) {
+        // DWM animates the caption buttons' hover from these; the system
+        // handling still runs afterwards (snap layouts on the max button).
+        if (message == WM_NCMOUSEMOVE || message == WM_NCMOUSEHOVER || message == WM_NCMOUSELEAVE) {
+            LRESULT ignored = 0;
+            DwmDefWindowProc(hwnd, message, wparam, lparam, &ignored);
+        }
         if (message == WM_NCRBUTTONUP && (wparam == HTCAPTION || wparam == HTSYSMENU)) {
             ShowSystemMenu(hwnd, POINT{(short)LOWORD(lparam), (short)HIWORD(lparam)});
+            return 0;
+        }
+        // The drawn caption buttons act on release, as Windows buttons do. The
+        // default tracking loop did not reliably reach minimize, so the press
+        // is swallowed and the matching system command is posted instead.
+        bool captionButton = wparam == HTMINBUTTON || wparam == HTMAXBUTTON || wparam == HTCLOSE;
+        if (captionButton && (message == WM_NCLBUTTONDOWN || message == WM_NCLBUTTONDBLCLK)) return 0;
+        if (captionButton && message == WM_NCLBUTTONUP) {
+            UINT command = wparam == HTCLOSE ? SC_CLOSE :
+                           wparam == HTMINBUTTON ? SC_MINIMIZE :
+                           IsZoomed(hwnd) ? SC_RESTORE : SC_MAXIMIZE;
+            PostMessageW(hwnd, WM_SYSCOMMAND, command, 0);
             return 0;
         }
         bool iconClick = message == WM_NCLBUTTONDOWN && wparam == HTSYSMENU;
@@ -966,9 +1014,7 @@ static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
             RECT wr;
             GetWindowRect(hwnd, &wr);
             UINT dpi = GetDpiForWindow(hwnd);
-            int top = IsZoomed(hwnd) ? GetSystemMetricsForDpi(SM_CYFRAME, dpi) +
-                                       GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi) : 0;
-            ShowSystemMenu(hwnd, POINT{wr.left + MulDiv(8, dpi, 96), wr.top + top + CaptionHeight(dpi)});
+            ShowSystemMenu(hwnd, POINT{wr.left + MulDiv(8, dpi, 96), wr.top + CaptionHeight(dpi)});
             return 0;
         }
     }
@@ -977,9 +1023,9 @@ static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
         DefSubclassProc(hwnd, message, wparam, lparam);
         RECT* client = reinterpret_cast<RECT*>(lparam);
         if (IntegratedCaption(s)) {
-            int inset = IsZoomed(hwnd) ? GetSystemMetricsForDpi(SM_CYFRAME, GetDpiForWindow(hwnd)) +
-                                        GetSystemMetricsForDpi(SM_CXPADDEDBORDER, GetDpiForWindow(hwnd)) : 0;
-            client->top = frameRect.top + inset;
+            // No top inset even when maximized: with one, DwmDefWindowProc
+            // stops recognizing the caption buttons and they lose hover.
+            client->top = frameRect.top;
         }
         if (!IsZoomed(hwnd)) {
             client->left = frameRect.left;
