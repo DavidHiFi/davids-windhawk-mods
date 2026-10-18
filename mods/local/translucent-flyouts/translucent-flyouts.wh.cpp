@@ -14,8 +14,9 @@
 // @architecture    x86-64
 // @architecture    x86
 // @license         LGPL-3.0
-`// @compilerOptions -ld2d1 -ldwrite -ldwmapi -luxtheme -lcomctl32 -lgdi32 -luser32 -lole32 -ladvapi32 -lshlwapi -lversion -lmsimg32 -loleaut32 -luuid -lwindowscodecs
-// @donateUrl       https://ko-fi.com/DavidHiFi`n`// ==/WindhawkMod==
+// @compilerOptions -ld2d1 -ldwrite -ldwmapi -luxtheme -lcomctl32 -lgdi32 -luser32 -lole32 -ladvapi32 -lshlwapi -lversion -lmsimg32 -loleaut32 -luuid -lwindowscodecs
+// @donateUrl       https://ko-fi.com/DavidHiFi
+// ==/WindhawkMod==
 
 // This mod is a port of TranslucentFlyouts (TFMain) by ALTaleX531 to the
 // Windhawk mod platform. Upstream: https://github.com/ALTaleX531/TranslucentFlyouts

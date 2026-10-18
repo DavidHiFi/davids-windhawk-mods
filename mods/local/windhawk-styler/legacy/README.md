@@ -1,5 +1,7 @@
 # Windhawk Styler
 
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Rice Windhawk like the rest of your desktop: pick its colors and font, and
 give it a see-through, blurred background.
 

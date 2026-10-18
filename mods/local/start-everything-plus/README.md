@@ -1,6 +1,6 @@
 # Everything & Power Tools in the Start Menu Plus
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 Search files, apps and settings from the Start menu with voidtools Everything. The menu opens as a compact search box with power controls and expands when you type.
 
@@ -9,8 +9,6 @@ Search files, apps and settings from the Start menu with voidtools Everything. T
 ![Compact Start menu with power controls](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/start-everything-plus-idle.png)
 
 ## Features
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 - **Compact idle menu.** Keep the search box and native power controls visible without an empty results panel.
 - **Seamless idle view.** The compact search box sits directly on the menu's own background with no extra outline.
@@ -22,8 +20,6 @@ Search files, apps and settings from the Start menu with voidtools Everything. T
 
 ## How to use
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 Open Start and type a query. Everything must be running to return file results. Apps and settings remain available when no files match.
 
 Disable the original Everything & Power Tools in the Start Menu mod before enabling this one.
@@ -34,13 +30,9 @@ The preview uses [OnlySearch Mocha's Everything variant](https://github.com/Davi
 
 ## Credits
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 Based on [Everything & Power Tools in the Start Menu](https://windhawk.net/mods/start-everything) by [bardelyne](https://github.com/bardelyne). GPL-3.0.
 
 ## Install
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 1. Install [Windhawk](https://windhawk.net/) and [Everything](https://www.voidtools.com/).
 2. Choose **Create a new mod**, paste [start-everything-plus.wh.cpp](start-everything-plus.wh.cpp), and click **Compile**.

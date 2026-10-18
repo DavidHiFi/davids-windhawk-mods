@@ -1,6 +1,6 @@
 # Translucent Flyouts
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 Give the classic menus, dropdowns and tooltips in every app a modern acrylic,
 Mica or blur background. The TranslucentFlyouts app, rebuilt as one mod with
@@ -9,8 +9,6 @@ no helper program.
 ![Translucent Flyouts preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/translucent-flyouts.png)
 
 ## Features
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 - **Context menus, menu bars, dropdown lists and tooltips** in 64-bit and
   32-bit apps.
@@ -22,8 +20,6 @@ no helper program.
 
 ## Tips
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 - Pair it with [Dark Menus](https://windhawk.net/mods/dark-menus) and turn on
   its TranslucentFlyouts option for dark menus in every app.
 - Programs listed in this mod's exclusions are left untouched. Add any app
@@ -31,14 +27,10 @@ no helper program.
 
 ## Credits
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 A port of [TranslucentFlyouts](https://github.com/ALTaleX531/TranslucentFlyouts)
 by ALTaleX531. The settings follow its configuration schema. LGPL-3.0.
 
 ## Install
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 1. Install [Windhawk](https://windhawk.net/).
 2. Choose **Create a new mod**, paste [translucent-flyouts.wh.cpp](translucent-flyouts.wh.cpp) and click **Compile**.

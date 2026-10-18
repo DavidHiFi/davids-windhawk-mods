@@ -1,6 +1,6 @@
 # Better Volume Mixer Plus
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 A compact volume mixer in the system tray, with per-app volume and per-app
 audio devices. Better Volume Mixer, plus device routing.
@@ -8,8 +8,6 @@ audio devices. Better Volume Mixer, plus device routing.
 ![Better Volume Mixer Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/better-volume-mixer-plus.png)
 
 ## Features
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 - **Send any app to a different speaker or microphone.** Right-click an app,
   then pick **Output device** or **Input device**. Pick **Default** to undo it.
@@ -24,8 +22,6 @@ audio devices. Better Volume Mixer, plus device routing.
 
 ## How to use
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 Click the speaker icon in the tray to open or close the mixer. If it is hidden,
 open the tray overflow and drag it onto the taskbar.
 
@@ -39,14 +35,10 @@ before enabling this mod.
 
 ## Credits
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 Based on [Better Volume Mixer](https://windhawk.net/mods/better-volume-mixer)
 by 0Allu. MIT.
 
 ## Install
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 1. Install [Windhawk](https://windhawk.net/).
 2. Choose **Create a new mod**, paste [better-volume-mixer-plus.wh.cpp](better-volume-mixer-plus.wh.cpp) and click **Compile**.
