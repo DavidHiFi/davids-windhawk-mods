@@ -2,7 +2,7 @@
 // @id              drag-to-delete-plus
 // @name            Drag to Delete Plus
 // @description     Drag files onto a floating trash target with themes, shapes and colors
-// @version         1.0.0
+// @version         1.1.0
 // @author          DavidHiFi, iMAboud
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -25,7 +25,9 @@ accent out of the box.
 ## Features
 
 - **Five background finishes.** Glass, acrylic, mica, solid or clear, with a
-  soft top gloss on the frosted ones.
+  soft top gloss on the frosted ones. The dynamic backdrop blend samples the
+  real pixels behind the target, so its rim melts into the taskbar or desktop
+  with no visible edge on any theme.
 - **Circle or rounded-square target** with adjustable diameter, corner radius,
   border width and drop shadow.
 - **Every color is yours.** Background gradient, border, trash icon, shadow
@@ -53,13 +55,16 @@ iMAboud.
 /*
 - material: glass
   $name: Background finish
-  $description: The look of the target surface. Glass and acrylic add a top gloss; mica is flat; clear draws only the ring and icon.
+  $description: The look of the target surface. Glass and acrylic add a soft top gloss; mica is flat; solid is opaque; clear draws only the ring and icon.
   $options:
   - glass: Glass
   - acrylic: Acrylic
   - mica: Mica
   - solid: Solid
   - clear: Clear
+- dynamicBackdrop: true
+  $name: Dynamic backdrop blend
+  $description: Sample the real pixels behind the target and tune the fill so its rim melts into the taskbar or desktop with no visible edge. Turn off to use the custom background colors below.
 - shape: circle
   $name: Target shape
   $description: A circle, or a rounded square whose corners use the corner radius below.
@@ -145,6 +150,7 @@ enum class PlusPosition { TOP = 0, BOTTOM = 1 };
 
 struct PlusSettings {
     PlusMaterial material = PlusMaterial::GLASS;
+    bool dynamicBackdrop = true;
     PlusShape shape = PlusShape::CIRCLE;
     int cornerRadius = 30;
     int targetDiameter = 68;
@@ -328,6 +334,7 @@ static void LoadSettings() {
     g_settings.borderWidth = ClampInt(g_settings.borderWidth, 1, 8);
 
     g_settings.showShadow = Wh_GetIntSetting(L"showShadow") != 0;
+    g_settings.dynamicBackdrop = Wh_GetIntSetting(L"dynamicBackdrop") != 0;
 
     g_settings.windowOpacity = Wh_GetIntSetting(L"windowOpacity");
     if (g_settings.windowOpacity <= 0) {
@@ -535,6 +542,42 @@ void DrawModernTrashIcon(Graphics& g, float cx, float cy, float scale, Color col
     }
 }
 
+static inline BYTE LiftByte(int value, int amount) {
+    int v = value + amount;
+    if (v < 0) v = 0;
+    if (v > 255) v = 255;
+    return (BYTE)v;
+}
+
+// Reads the real pixels beside the target so the fill can melt into whatever
+// is actually behind it: plain taskbar, acrylic taskbar, desktop, anything.
+// Sample points sit clear of the circle, its shadow and the hint label, and
+// layered-window transparency means they read the true backdrop, not us.
+static COLORREF SampleBackdropColor(HDC hdcScreen, const TargetGeometry& geo) {
+    int rowY = geo.wndTop + (int)geo.cy;
+    int insetX = (int)(18.0f * g_currentDpiScale);
+    POINT samples[] = {
+        { geo.wndLeft + insetX, rowY },
+        { geo.wndLeft + geo.wndWidth - insetX - 1, rowY },
+        { geo.wndLeft - 6, rowY },
+        { geo.wndLeft + geo.wndWidth + 6, rowY },
+    };
+    int red = 0, green = 0, blue = 0, taken = 0;
+    for (const POINT& pt : samples) {
+        COLORREF c = GetPixel(hdcScreen, pt.x, pt.y);
+        if (c == CLR_INVALID) continue;
+        red += GetRValue(c);
+        green += GetGValue(c);
+        blue += GetBValue(c);
+        taken++;
+    }
+    if (!taken) {
+        Color fallback = g_settings.backgroundBottom;
+        return RGB(fallback.GetR(), fallback.GetG(), fallback.GetB());
+    }
+    return RGB(red / taken, green / taken, blue / taken);
+}
+
 void RenderFrame(HWND hWnd) {
     if (g_animState == AnimState::HIDDEN || g_currentScale < 0.05f) return;
 
@@ -570,15 +613,32 @@ void RenderFrame(HWND hWnd) {
         Color border = hovered ? g_settings.hoverBorderColor : g_settings.borderColor;
         Color icon = hovered ? g_settings.hoverIconColor : g_settings.iconColor;
 
+        COLORREF backdrop = SampleBackdropColor(hdcScreen, geo);
+        auto backdropColor = [&backdrop](BYTE alpha) {
+            return Color(alpha, GetRValue(backdrop), GetGValue(backdrop),
+                         GetBValue(backdrop));
+        };
+
         if (g_settings.showShadow) {
+            // Soft radial shadow that fades to fully transparent, instead of a
+            // solid offset fill that ended in a hard dark arc under the target.
+            float drop = 2.5f * dpiScale;
+            float grow = 1.5f * dpiScale;
             GraphicsPath shadowPath;
             if (g_settings.shape == PlusShape::ROUNDED) {
-                MakeTargetPath(shadowPath, geo.cx, geo.cy + 3.0f * dpiScale, r, corner);
+                MakeTargetPath(shadowPath, geo.cx, geo.cy + drop, r + grow,
+                               corner);
             } else {
-                shadowPath.AddEllipse(geo.cx - r, geo.cy - r + 3.0f * dpiScale,
-                                      r * 2, r * 2);
+                shadowPath.AddEllipse(geo.cx - r - grow, geo.cy - r + drop,
+                                      (r + grow) * 2, (r + grow) * 2);
             }
-            SolidBrush shadowBrush(g_settings.shadowColor);
+            Color shadowColor = g_settings.shadowColor;
+            PathGradientBrush shadowBrush(&shadowPath);
+            shadowBrush.SetCenterColor(shadowColor);
+            Color shadowEdge(0, shadowColor.GetR(), shadowColor.GetG(),
+                             shadowColor.GetB());
+            INT shadowCount = 1;
+            shadowBrush.SetSurroundColors(&shadowEdge, &shadowCount);
             g.FillPath(&shadowBrush, &shadowPath);
         }
 
@@ -586,28 +646,80 @@ void RenderFrame(HWND hWnd) {
         MakeTargetPath(targetPath, geo.cx, geo.cy, r, corner);
 
         if (g_settings.material != PlusMaterial::CLEAR) {
-            if (g_settings.material == PlusMaterial::GLASS ||
-                g_settings.material == PlusMaterial::ACRYLIC) {
-                // Dynamic radial gradient (center bright → edge dark) for glass/acrylic
+            bool dynamic = g_settings.dynamicBackdrop;
+            PlusMaterial material = g_settings.material;
+
+            // The rim always lands exactly on the backdrop, so the edge of the
+            // target dissolves into the taskbar or desktop with no visible seam.
+            Color centerColor, edgeColor;
+            BYTE glossAlpha = 0;
+            BYTE veilAlpha = 0;
+            switch (material) {
+            case PlusMaterial::ACRYLIC:
+                centerColor = dynamic ? Color(0xE8, LiftByte(GetRValue(backdrop), 12),
+                                              LiftByte(GetGValue(backdrop), 12),
+                                              LiftByte(GetBValue(backdrop), 12))
+                                      : g_settings.backgroundTop;
+                edgeColor = dynamic ? backdropColor(0xD0) : g_settings.backgroundBottom;
+                glossAlpha = 26;
+                veilAlpha = 6;
+                break;
+            case PlusMaterial::MICA:
+                centerColor = dynamic ? Color(0xDC, LiftByte(GetRValue(backdrop), 6),
+                                              LiftByte(GetGValue(backdrop), 6),
+                                              LiftByte(GetBValue(backdrop), 6))
+                                      : g_settings.backgroundTop;
+                edgeColor = dynamic ? backdropColor(0xE0) : g_settings.backgroundBottom;
+                veilAlpha = 4;
+                break;
+            case PlusMaterial::SOLID:
+                centerColor = dynamic ? backdropColor(255) : g_settings.backgroundTop;
+                edgeColor = centerColor;
+                break;
+            case PlusMaterial::GLASS:
+            default:
+                centerColor = dynamic ? Color(0xF2, LiftByte(GetRValue(backdrop), 22),
+                                              LiftByte(GetGValue(backdrop), 22),
+                                              LiftByte(GetBValue(backdrop), 22))
+                                      : g_settings.backgroundTop;
+                edgeColor = dynamic ? backdropColor(0xC0) : g_settings.backgroundBottom;
+                glossAlpha = 14;
+                break;
+            }
+
+            if (material == PlusMaterial::SOLID) {
+                SolidBrush flatBrush(centerColor);
+                g.FillPath(&flatBrush, &targetPath);
+            } else {
                 PathGradientBrush radialBrush(&targetPath);
                 radialBrush.SetCenterPoint(PointF(geo.cx, geo.cy));
-                radialBrush.SetCenterColor(g_settings.backgroundTop);
-                Color surroundColors[] = { g_settings.backgroundBottom };
-                radialBrush.SetSurroundColors(surroundColors, 1);
-                radialBrush.SetBlendTriangularShape(0.0f, 0.45f, 1.0f);
+                radialBrush.SetCenterColor(centerColor);
+                Color surroundColors[] = { edgeColor };
+                INT count = 1;
+                radialBrush.SetSurroundColors(surroundColors, &count);
+                radialBrush.SetBlendTriangularShape(0.20f, 0.9f);
                 g.FillPath(&radialBrush, &targetPath);
+            }
 
+            if (veilAlpha) {
+                // Even, full-target tint: mica and acrylic are uniform, never a
+                // one-sided band that leaves the bottom darker.
+                SolidBrush veilBrush(Color(veilAlpha, 255, 255, 255));
+                g.FillPath(&veilBrush, &targetPath);
+            }
+
+            if (glossAlpha) {
+                // Gloss now fades to nothing past mid-circle instead of being a
+                // hard ellipse that stops at 80 percent height and left a dark
+                // crescent at the bottom.
                 g.SetClip(&targetPath);
-                BYTE glossAlpha =
-                    (g_settings.material == PlusMaterial::ACRYLIC) ? 30 : 16;
-                SolidBrush glossBrush(Color(glossAlpha, 255, 255, 255));
-                float glossH = r * 0.9f;
-                g.FillEllipse(&glossBrush, geo.cx - r, geo.cy - r,
-                              r * 2, glossH * 2);
+                LinearGradientBrush glossBrush(
+                    PointF(geo.cx, geo.cy - r),
+                    PointF(geo.cx, geo.cy - r + 1.25f * r),
+                    Color(glossAlpha, 255, 255, 255), Color(0, 255, 255, 255));
+                g.FillRectangle(&glossBrush, 0.0f, 0.0f, (REAL)wndWidth,
+                                (REAL)wndHeight);
                 g.ResetClip();
-            } else {
-                SolidBrush flatBrush(g_settings.backgroundTop);
-                g.FillPath(&flatBrush, &targetPath);
             }
         }
 
