@@ -1,6 +1,6 @@
 # Taskbar AI Quota Bars Plus
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 See how much of your AI subscription limits you have used, right on the
 taskbar. Taskbar AI Quota Bars, plus OpenCode Go.
@@ -8,8 +8,6 @@ taskbar. Taskbar AI Quota Bars, plus OpenCode Go.
 ![Taskbar AI Quota Bars Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/taskbar-ai-quota-opencode.png)
 
 ## Features
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 - **Anthropic Claude:** 5-hour, weekly and per-model weekly limits, plus
   extra usage.
@@ -26,8 +24,6 @@ taskbar. Taskbar AI Quota Bars, plus OpenCode Go.
 
 ## Setup
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 Right-click the bars and choose **Settings...** to add accounts.
 
 - **Claude and OpenAI** sign in through your browser.
@@ -39,14 +35,10 @@ Disable the original Taskbar AI Quota Bars before enabling this mod.
 
 ## Credits
 
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
-
 Based on [Taskbar AI Quota Bars](https://windhawk.net/mods/taskbar-ai-quota)
 by Cleroth. MIT.
 
 ## Install
-
-[? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 1. Install [Windhawk](https://windhawk.net/).
 2. Choose **Create a new mod**, paste [taskbar-ai-quota-opencode.wh.cpp](taskbar-ai-quota-opencode.wh.cpp) and click **Compile**.
