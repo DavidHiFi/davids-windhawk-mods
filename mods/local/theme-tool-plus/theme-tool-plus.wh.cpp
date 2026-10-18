@@ -112,7 +112,7 @@ LGPL-2.1.
 - applyOnSettingsChange: false
   $name: Apply on settings save
   $description: Apply the theme selected below whenever the mod's settings are saved.
-- themeName:
+- themeName: ""
   $name: Theme to apply
   $description: Display name of the theme to apply on settings save, exactly as shown in the picker.
 - action: none
