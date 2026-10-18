@@ -13,7 +13,8 @@ no helper program.
 - **Context menus, menu bars, dropdown lists and tooltips** in 64-bit and
   32-bit apps.
 - **Modern Acrylic, Acrylic, Mica, blur, transparent or solid** backgrounds.
-- **Rounded or square corners**, drop shadows and accent-colored borders.
+- **Rounded or square corners**, optional drop shadows and colored borders.
+- **Catppuccin Mocha by default**: a Mocha-tinted acrylic fill with blue outlines.
 - **Separate styles** for menus, dropdowns and tooltips, or one global style.
 - **Light and dark mode colors**, set independently.
 - **Fluent animations** for menus and dropdowns.

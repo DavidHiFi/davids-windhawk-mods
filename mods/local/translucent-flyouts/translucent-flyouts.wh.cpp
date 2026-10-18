@@ -2,7 +2,7 @@
 // @id              translucent-flyouts
 // @name            Translucent Flyouts
 // @description     Acrylic, Mica and blur backgrounds for context menus, dropdowns and tooltips in every app
-// @version         0.6.6
+// @version         0.6.33
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -83,16 +83,16 @@
       - accent_light1: ImmersiveSystemAccentLight1
       - accent_light2: ImmersiveSystemAccentLight2
       - accent_light3: ImmersiveSystemAccentLight3
-  - darkModeBorderColor: "0xFF2B2B2B"
+  - darkModeBorderColor: "0xFF89B4FA"
     $name: Dark Border Color
     $description: Dark mode border color in ARGB hex format 0xAARRGGBB
-  - lightModeBorderColor: "0xFFDDDDDD"
+  - lightModeBorderColor: "0xFF89B4FA"
     $name: Light Border Color
     $description: Light mode border color in ARGB hex format 0xAARRGGBB
-  - darkModeGradientColor: "0x412B2B2B"
+  - darkModeGradientColor: "0xCC1E1E2E"
     $name: Dark Gradient Color
     $description: Dark mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
-  - lightModeGradientColor: "0x9EDDDDDD"
+  - lightModeGradientColor: "0xCC1E1E2E"
     $name: Light Gradient Color
     $description: Light mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
   - enableMiniDump: true
@@ -151,42 +151,42 @@
       - no: No
       - yes: Yes
       - use_global: Use Global Setting
-  - darkModeThemeColorizationType: 1
+  - darkModeThemeColorizationType: start_hover
     $name: Dark Accent Source
     $description: Choose which immersive color slot is used in dark mode when theme colorization is enabled
     $options:
-      - 0: ImmersiveStartBackground
-      - 1: ImmersiveStartHoverBackground
-      - 2: ImmersiveSystemAccent
-      - 3: ImmersiveSystemAccentDark1
-      - 4: ImmersiveSystemAccentDark2
-      - 5: ImmersiveSystemAccentDark3
-      - 6: ImmersiveSystemAccentLight1
-      - 7: ImmersiveSystemAccentLight2
-      - 8: ImmersiveSystemAccentLight3
-  - lightModeThemeColorizationType: 1
+      - start_background: ImmersiveStartBackground
+      - start_hover: ImmersiveStartHoverBackground
+      - system_accent: ImmersiveSystemAccent
+      - accent_dark1: ImmersiveSystemAccentDark1
+      - accent_dark2: ImmersiveSystemAccentDark2
+      - accent_dark3: ImmersiveSystemAccentDark3
+      - accent_light1: ImmersiveSystemAccentLight1
+      - accent_light2: ImmersiveSystemAccentLight2
+      - accent_light3: ImmersiveSystemAccentLight3
+  - lightModeThemeColorizationType: start_hover
     $name: Light Accent Source
     $description: Choose which immersive color slot is used in light mode when theme colorization is enabled
     $options:
-      - 0: ImmersiveStartBackground
-      - 1: ImmersiveStartHoverBackground
-      - 2: ImmersiveSystemAccent
-      - 3: ImmersiveSystemAccentDark1
-      - 4: ImmersiveSystemAccentDark2
-      - 5: ImmersiveSystemAccentDark3
-      - 6: ImmersiveSystemAccentLight1
-      - 7: ImmersiveSystemAccentLight2
-      - 8: ImmersiveSystemAccentLight3
-  - darkModeBorderColor: "0xFF2B2B2B"
+      - start_background: ImmersiveStartBackground
+      - start_hover: ImmersiveStartHoverBackground
+      - system_accent: ImmersiveSystemAccent
+      - accent_dark1: ImmersiveSystemAccentDark1
+      - accent_dark2: ImmersiveSystemAccentDark2
+      - accent_dark3: ImmersiveSystemAccentDark3
+      - accent_light1: ImmersiveSystemAccentLight1
+      - accent_light2: ImmersiveSystemAccentLight2
+      - accent_light3: ImmersiveSystemAccentLight3
+  - darkModeBorderColor: "0xFF89B4FA"
     $name: Dark Border Color
     $description: Dark mode border color in ARGB hex format 0xAARRGGBB
-  - lightModeBorderColor: "0xFFDDDDDD"
+  - lightModeBorderColor: "0xFF89B4FA"
     $name: Light Border Color
     $description: Light mode border color in ARGB hex format 0xAARRGGBB
-  - darkModeGradientColor: "0x412B2B2B"
+  - darkModeGradientColor: "0xCC1E1E2E"
     $name: Dark Gradient Color
     $description: Dark mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
-  - lightModeGradientColor: "0x9EDDDDDD"
+  - lightModeGradientColor: "0xCC1E1E2E"
     $name: Light Gradient Color
     $description: Light mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
   - disabled: use_global
@@ -293,42 +293,42 @@
       - no: No
       - yes: Yes
       - use_global: Use Global Setting
-  - darkModeThemeColorizationType: 1
+  - darkModeThemeColorizationType: start_hover
     $name: Dark Accent Source
     $description: Choose which immersive color slot is used in dark mode when theme colorization is enabled
     $options:
-      - 0: ImmersiveStartBackground
-      - 1: ImmersiveStartHoverBackground
-      - 2: ImmersiveSystemAccent
-      - 3: ImmersiveSystemAccentDark1
-      - 4: ImmersiveSystemAccentDark2
-      - 5: ImmersiveSystemAccentDark3
-      - 6: ImmersiveSystemAccentLight1
-      - 7: ImmersiveSystemAccentLight2
-      - 8: ImmersiveSystemAccentLight3
-  - lightModeThemeColorizationType: 1
+      - start_background: ImmersiveStartBackground
+      - start_hover: ImmersiveStartHoverBackground
+      - system_accent: ImmersiveSystemAccent
+      - accent_dark1: ImmersiveSystemAccentDark1
+      - accent_dark2: ImmersiveSystemAccentDark2
+      - accent_dark3: ImmersiveSystemAccentDark3
+      - accent_light1: ImmersiveSystemAccentLight1
+      - accent_light2: ImmersiveSystemAccentLight2
+      - accent_light3: ImmersiveSystemAccentLight3
+  - lightModeThemeColorizationType: start_hover
     $name: Light Accent Source
     $description: Choose which immersive color slot is used in light mode when theme colorization is enabled
     $options:
-      - 0: ImmersiveStartBackground
-      - 1: ImmersiveStartHoverBackground
-      - 2: ImmersiveSystemAccent
-      - 3: ImmersiveSystemAccentDark1
-      - 4: ImmersiveSystemAccentDark2
-      - 5: ImmersiveSystemAccentDark3
-      - 6: ImmersiveSystemAccentLight1
-      - 7: ImmersiveSystemAccentLight2
-      - 8: ImmersiveSystemAccentLight3
-  - darkModeBorderColor: "0xFF2B2B2B"
+      - start_background: ImmersiveStartBackground
+      - start_hover: ImmersiveStartHoverBackground
+      - system_accent: ImmersiveSystemAccent
+      - accent_dark1: ImmersiveSystemAccentDark1
+      - accent_dark2: ImmersiveSystemAccentDark2
+      - accent_dark3: ImmersiveSystemAccentDark3
+      - accent_light1: ImmersiveSystemAccentLight1
+      - accent_light2: ImmersiveSystemAccentLight2
+      - accent_light3: ImmersiveSystemAccentLight3
+  - darkModeBorderColor: "0xFF89B4FA"
     $name: Dark Border Color
     $description: Dark mode border color in ARGB hex format 0xAARRGGBB
-  - lightModeBorderColor: "0xFFDDDDDD"
+  - lightModeBorderColor: "0xFF89B4FA"
     $name: Light Border Color
     $description: Light mode border color in ARGB hex format 0xAARRGGBB
-  - darkModeGradientColor: "0x412B2B2B"
+  - darkModeGradientColor: "0xCC1E1E2E"
     $name: Dark Gradient Color
     $description: Dark mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
-  - lightModeGradientColor: "0x9EDDDDDD"
+  - lightModeGradientColor: "0xCC1E1E2E"
     $name: Light Gradient Color
     $description: Light mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
   - disabled: use_global
@@ -376,32 +376,32 @@
   - separator_enableThemeColorization: 0
     $name: Separator / Enable Theme Colorization
     $description: Use current theme accent color for borders instead of fixed custom border colors. Use use_global to inherit the Global value
-  - separator_darkThemeColorizationType: 1
+  - separator_darkThemeColorizationType: start_hover
     $name: Separator / Dark Accent Source
     $description: Choose which immersive color slot is used in dark mode for this sub-part
     $options:
-      - 0: ImmersiveStartBackground
-      - 1: ImmersiveStartHoverBackground
-      - 2: ImmersiveSystemAccent
-      - 3: ImmersiveSystemAccentDark1
-      - 4: ImmersiveSystemAccentDark2
-      - 5: ImmersiveSystemAccentDark3
-      - 6: ImmersiveSystemAccentLight1
-      - 7: ImmersiveSystemAccentLight2
-      - 8: ImmersiveSystemAccentLight3
-  - separator_lightThemeColorizationType: 1
+      - start_background: ImmersiveStartBackground
+      - start_hover: ImmersiveStartHoverBackground
+      - system_accent: ImmersiveSystemAccent
+      - accent_dark1: ImmersiveSystemAccentDark1
+      - accent_dark2: ImmersiveSystemAccentDark2
+      - accent_dark3: ImmersiveSystemAccentDark3
+      - accent_light1: ImmersiveSystemAccentLight1
+      - accent_light2: ImmersiveSystemAccentLight2
+      - accent_light3: ImmersiveSystemAccentLight3
+  - separator_lightThemeColorizationType: start_hover
     $name: Separator / Light Accent Source
     $description: Choose which immersive color slot is used in light mode for this sub-part
     $options:
-      - 0: ImmersiveStartBackground
-      - 1: ImmersiveStartHoverBackground
-      - 2: ImmersiveSystemAccent
-      - 3: ImmersiveSystemAccentDark1
-      - 4: ImmersiveSystemAccentDark2
-      - 5: ImmersiveSystemAccentDark3
-      - 6: ImmersiveSystemAccentLight1
-      - 7: ImmersiveSystemAccentLight2
-      - 8: ImmersiveSystemAccentLight3
+      - start_background: ImmersiveStartBackground
+      - start_hover: ImmersiveStartHoverBackground
+      - system_accent: ImmersiveSystemAccent
+      - accent_dark1: ImmersiveSystemAccentDark1
+      - accent_dark2: ImmersiveSystemAccentDark2
+      - accent_dark3: ImmersiveSystemAccentDark3
+      - accent_light1: ImmersiveSystemAccentLight1
+      - accent_light2: ImmersiveSystemAccentLight2
+      - accent_light3: ImmersiveSystemAccentLight3
   - focusing_disabled: 0
     $name: Focusing / Disabled
     $description: Disable all effects for this pop-up type. Use use_global to inherit the Global value where available
@@ -420,32 +420,32 @@
   - focusing_enableThemeColorization: 0
     $name: Focusing / Enable Theme Colorization
     $description: Use current theme accent color for borders instead of fixed custom border colors. Use use_global to inherit the Global value
-  - focusing_darkThemeColorizationType: 1
+  - focusing_darkThemeColorizationType: start_hover
     $name: Focusing / Dark Accent Source
     $description: Choose which immersive color slot is used in dark mode for this sub-part
     $options:
-      - 0: ImmersiveStartBackground
-      - 1: ImmersiveStartHoverBackground
-      - 2: ImmersiveSystemAccent
-      - 3: ImmersiveSystemAccentDark1
-      - 4: ImmersiveSystemAccentDark2
-      - 5: ImmersiveSystemAccentDark3
-      - 6: ImmersiveSystemAccentLight1
-      - 7: ImmersiveSystemAccentLight2
-      - 8: ImmersiveSystemAccentLight3
-  - focusing_lightThemeColorizationType: 1
+      - start_background: ImmersiveStartBackground
+      - start_hover: ImmersiveStartHoverBackground
+      - system_accent: ImmersiveSystemAccent
+      - accent_dark1: ImmersiveSystemAccentDark1
+      - accent_dark2: ImmersiveSystemAccentDark2
+      - accent_dark3: ImmersiveSystemAccentDark3
+      - accent_light1: ImmersiveSystemAccentLight1
+      - accent_light2: ImmersiveSystemAccentLight2
+      - accent_light3: ImmersiveSystemAccentLight3
+  - focusing_lightThemeColorizationType: start_hover
     $name: Focusing / Light Accent Source
     $description: Choose which immersive color slot is used in light mode for this sub-part
     $options:
-      - 0: ImmersiveStartBackground
-      - 1: ImmersiveStartHoverBackground
-      - 2: ImmersiveSystemAccent
-      - 3: ImmersiveSystemAccentDark1
-      - 4: ImmersiveSystemAccentDark2
-      - 5: ImmersiveSystemAccentDark3
-      - 6: ImmersiveSystemAccentLight1
-      - 7: ImmersiveSystemAccentLight2
-      - 8: ImmersiveSystemAccentLight3
+      - start_background: ImmersiveStartBackground
+      - start_hover: ImmersiveStartHoverBackground
+      - system_accent: ImmersiveSystemAccent
+      - accent_dark1: ImmersiveSystemAccentDark1
+      - accent_dark2: ImmersiveSystemAccentDark2
+      - accent_dark3: ImmersiveSystemAccentDark3
+      - accent_light1: ImmersiveSystemAccentLight1
+      - accent_light2: ImmersiveSystemAccentLight2
+      - accent_light3: ImmersiveSystemAccentLight3
   - disabledHot_disabled: 0
     $name: Disabled Hot / Disabled
     $description: Disable all effects for this pop-up type. Use use_global to inherit the Global value where available
@@ -461,32 +461,32 @@
   - disabledHot_enableThemeColorization: 0
     $name: Disabled Hot / Enable Theme Colorization
     $description: Use current theme accent color for borders instead of fixed custom border colors. Use use_global to inherit the Global value
-  - disabledHot_darkThemeColorizationType: 1
+  - disabledHot_darkThemeColorizationType: start_hover
     $name: Disabled Hot / Dark Accent Source
     $description: Choose which immersive color slot is used in dark mode for this sub-part
     $options:
-      - 0: ImmersiveStartBackground
-      - 1: ImmersiveStartHoverBackground
-      - 2: ImmersiveSystemAccent
-      - 3: ImmersiveSystemAccentDark1
-      - 4: ImmersiveSystemAccentDark2
-      - 5: ImmersiveSystemAccentDark3
-      - 6: ImmersiveSystemAccentLight1
-      - 7: ImmersiveSystemAccentLight2
-      - 8: ImmersiveSystemAccentLight3
-  - disabledHot_lightThemeColorizationType: 1
+      - start_background: ImmersiveStartBackground
+      - start_hover: ImmersiveStartHoverBackground
+      - system_accent: ImmersiveSystemAccent
+      - accent_dark1: ImmersiveSystemAccentDark1
+      - accent_dark2: ImmersiveSystemAccentDark2
+      - accent_dark3: ImmersiveSystemAccentDark3
+      - accent_light1: ImmersiveSystemAccentLight1
+      - accent_light2: ImmersiveSystemAccentLight2
+      - accent_light3: ImmersiveSystemAccentLight3
+  - disabledHot_lightThemeColorizationType: start_hover
     $name: Disabled Hot / Light Accent Source
     $description: Choose which immersive color slot is used in light mode for this sub-part
     $options:
-      - 0: ImmersiveStartBackground
-      - 1: ImmersiveStartHoverBackground
-      - 2: ImmersiveSystemAccent
-      - 3: ImmersiveSystemAccentDark1
-      - 4: ImmersiveSystemAccentDark2
-      - 5: ImmersiveSystemAccentDark3
-      - 6: ImmersiveSystemAccentLight1
-      - 7: ImmersiveSystemAccentLight2
-      - 8: ImmersiveSystemAccentLight3
+      - start_background: ImmersiveStartBackground
+      - start_hover: ImmersiveStartHoverBackground
+      - system_accent: ImmersiveSystemAccent
+      - accent_dark1: ImmersiveSystemAccentDark1
+      - accent_dark2: ImmersiveSystemAccentDark2
+      - accent_dark3: ImmersiveSystemAccentDark3
+      - accent_light1: ImmersiveSystemAccentLight1
+      - accent_light2: ImmersiveSystemAccentLight2
+      - accent_light3: ImmersiveSystemAccentLight3
   - hot_disabled: 0
     $name: Hot / Disabled
     $description: Disable all effects for this pop-up type. Use use_global to inherit the Global value where available
@@ -502,32 +502,32 @@
   - hot_enableThemeColorization: 0
     $name: Hot / Enable Theme Colorization
     $description: Use current theme accent color for borders instead of fixed custom border colors. Use use_global to inherit the Global value
-  - hot_darkThemeColorizationType: 1
+  - hot_darkThemeColorizationType: start_hover
     $name: Hot / Dark Accent Source
     $description: Choose which immersive color slot is used in dark mode for this sub-part
     $options:
-      - 0: ImmersiveStartBackground
-      - 1: ImmersiveStartHoverBackground
-      - 2: ImmersiveSystemAccent
-      - 3: ImmersiveSystemAccentDark1
-      - 4: ImmersiveSystemAccentDark2
-      - 5: ImmersiveSystemAccentDark3
-      - 6: ImmersiveSystemAccentLight1
-      - 7: ImmersiveSystemAccentLight2
-      - 8: ImmersiveSystemAccentLight3
-  - hot_lightThemeColorizationType: 1
+      - start_background: ImmersiveStartBackground
+      - start_hover: ImmersiveStartHoverBackground
+      - system_accent: ImmersiveSystemAccent
+      - accent_dark1: ImmersiveSystemAccentDark1
+      - accent_dark2: ImmersiveSystemAccentDark2
+      - accent_dark3: ImmersiveSystemAccentDark3
+      - accent_light1: ImmersiveSystemAccentLight1
+      - accent_light2: ImmersiveSystemAccentLight2
+      - accent_light3: ImmersiveSystemAccentLight3
+  - hot_lightThemeColorizationType: start_hover
     $name: Hot / Light Accent Source
     $description: Choose which immersive color slot is used in light mode for this sub-part
     $options:
-      - 0: ImmersiveStartBackground
-      - 1: ImmersiveStartHoverBackground
-      - 2: ImmersiveSystemAccent
-      - 3: ImmersiveSystemAccentDark1
-      - 4: ImmersiveSystemAccentDark2
-      - 5: ImmersiveSystemAccentDark3
-      - 6: ImmersiveSystemAccentLight1
-      - 7: ImmersiveSystemAccentLight2
-      - 8: ImmersiveSystemAccentLight3
+      - start_background: ImmersiveStartBackground
+      - start_hover: ImmersiveStartHoverBackground
+      - system_accent: ImmersiveSystemAccent
+      - accent_dark1: ImmersiveSystemAccentDark1
+      - accent_dark2: ImmersiveSystemAccentDark2
+      - accent_dark3: ImmersiveSystemAccentDark3
+      - accent_light1: ImmersiveSystemAccentLight1
+      - accent_light2: ImmersiveSystemAccentLight2
+      - accent_light3: ImmersiveSystemAccentLight3
   $name: Menu
 
 - tooltip:
@@ -578,42 +578,42 @@
       - no: No
       - yes: Yes
       - use_global: Use Global Setting
-  - darkModeThemeColorizationType: 1
+  - darkModeThemeColorizationType: start_hover
     $name: Dark Accent Source
     $description: Choose which immersive color slot is used in dark mode when theme colorization is enabled
     $options:
-      - 0: ImmersiveStartBackground
-      - 1: ImmersiveStartHoverBackground
-      - 2: ImmersiveSystemAccent
-      - 3: ImmersiveSystemAccentDark1
-      - 4: ImmersiveSystemAccentDark2
-      - 5: ImmersiveSystemAccentDark3
-      - 6: ImmersiveSystemAccentLight1
-      - 7: ImmersiveSystemAccentLight2
-      - 8: ImmersiveSystemAccentLight3
-  - lightModeThemeColorizationType: 1
+      - start_background: ImmersiveStartBackground
+      - start_hover: ImmersiveStartHoverBackground
+      - system_accent: ImmersiveSystemAccent
+      - accent_dark1: ImmersiveSystemAccentDark1
+      - accent_dark2: ImmersiveSystemAccentDark2
+      - accent_dark3: ImmersiveSystemAccentDark3
+      - accent_light1: ImmersiveSystemAccentLight1
+      - accent_light2: ImmersiveSystemAccentLight2
+      - accent_light3: ImmersiveSystemAccentLight3
+  - lightModeThemeColorizationType: start_hover
     $name: Light Accent Source
     $description: Choose which immersive color slot is used in light mode when theme colorization is enabled
     $options:
-      - 0: ImmersiveStartBackground
-      - 1: ImmersiveStartHoverBackground
-      - 2: ImmersiveSystemAccent
-      - 3: ImmersiveSystemAccentDark1
-      - 4: ImmersiveSystemAccentDark2
-      - 5: ImmersiveSystemAccentDark3
-      - 6: ImmersiveSystemAccentLight1
-      - 7: ImmersiveSystemAccentLight2
-      - 8: ImmersiveSystemAccentLight3
-  - darkModeBorderColor: "0xFF2B2B2B"
+      - start_background: ImmersiveStartBackground
+      - start_hover: ImmersiveStartHoverBackground
+      - system_accent: ImmersiveSystemAccent
+      - accent_dark1: ImmersiveSystemAccentDark1
+      - accent_dark2: ImmersiveSystemAccentDark2
+      - accent_dark3: ImmersiveSystemAccentDark3
+      - accent_light1: ImmersiveSystemAccentLight1
+      - accent_light2: ImmersiveSystemAccentLight2
+      - accent_light3: ImmersiveSystemAccentLight3
+  - darkModeBorderColor: "0xFF89B4FA"
     $name: Dark Border Color
     $description: Dark mode border color in ARGB hex format 0xAARRGGBB
-  - lightModeBorderColor: "0xFFDDDDDD"
+  - lightModeBorderColor: "0xFF89B4FA"
     $name: Light Border Color
     $description: Light mode border color in ARGB hex format 0xAARRGGBB
-  - darkModeGradientColor: "0x412B2B2B"
+  - darkModeGradientColor: "0xCC1E1E2E"
     $name: Dark Gradient Color
     $description: Dark mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
-  - lightModeGradientColor: "0x9EDDDDDD"
+  - lightModeGradientColor: "0xCC1E1E2E"
     $name: Light Gradient Color
     $description: Light mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
   - darkModeColor: "0xFFFFFFFF"
@@ -749,43 +749,6 @@ namespace tf {
 // pieces the engine needs)
 // ===========================================================================
 
-#define TF_RETURN_IF_FAILED(hr)     \
-    do {                            \
-        HRESULT _hr = (hr);         \
-        if (FAILED(_hr)) {          \
-            return _hr;             \
-        }                           \
-    } while (0)
-
-#define TF_RETURN_LAST_ERROR_IF(cond)        \
-    do {                                     \
-        if (cond) {                          \
-            return HRESULT_FROM_WIN32(GetLastError()); \
-        }                                    \
-    } while (0)
-
-#define TF_THROW_IF_FAILED(hr)  \
-    do {                        \
-        HRESULT _hr = (hr);     \
-        if (FAILED(_hr)) {      \
-            throw _hr;          \
-        }                       \
-    } while (0)
-
-#define TF_THROW_HR_IF(hr, cond)   \
-    do {                           \
-        if (cond) {                \
-            throw (hr);            \
-        }                          \
-    } while (0)
-
-#define TF_THROW_LAST_ERROR_IF(cond)             \
-    do {                                         \
-        if (cond) {                              \
-            throw HRESULT_FROM_WIN32(GetLastError()); \
-        }                                        \
-    } while (0)
-
 struct HandleCloser {
     using pointer = HANDLE;
     void operator()(HANDLE h) const {
@@ -827,15 +790,6 @@ class unique_handle {
 };
 
 struct DcCloser {
-    using pointer = HDC;
-    void operator()(HDC dc) const {
-        if (dc) {
-            ReleaseDC(nullptr, dc);
-        }
-    }
-};
-
-struct WindowDcCloser {
     using pointer = HDC;
     void operator()(HDC dc) const {
         if (dc) {
@@ -913,19 +867,6 @@ class SelectObjectGuard {
     HDC m_dc{};
     HGDIOBJ m_old{};
 };
-
-// A tiny C++ exception carrying an HRESULT, so upstream-style throw/catch code
-// keeps compiling.
-class ResultException {
-   public:
-    explicit ResultException(HRESULT hr) : m_hr(hr) {}
-    HRESULT code() const { return m_hr; }
-
-   private:
-    HRESULT m_hr;
-};
-
-[[noreturn]] inline void Throw(HRESULT hr) { throw ResultException(hr); }
 
 inline int RectWidth(const RECT& r) { return r.right - r.left; }
 inline int RectHeight(const RECT& r) { return r.bottom - r.top; }
@@ -1093,19 +1034,6 @@ inline HBRUSH CreateSolidColorBrushWithAlpha(COLORREF color, UCHAR alpha) {
     bits[2] = PremultiplyColor(GetRValue(color), alpha);
     bits[3] = alpha;
     return CreatePatternBrush(bitmap.get());
-}
-
-inline bool IsBadReadPtr(const void* ptr) {
-    MEMORY_BASIC_INFORMATION mbi{};
-    if (!VirtualQuery(ptr, &mbi, sizeof(mbi))) {
-        return true;
-    }
-    constexpr DWORD mask{PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ |
-                         PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY};
-    if (!(mbi.Protect & mask) || (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS))) {
-        return true;
-    }
-    return false;
 }
 
 // Converts a bitmap to a 32bpp premultiplied-alpha DIB (upstream
@@ -1310,17 +1238,25 @@ inline bool IsHighContrast() {
 // ===========================================================================
 
 namespace SystemHelper {
+// CurrentBuildNumber is REG_SZ; read it as text and parse, or the raw bytes get
+// interpreted as a bogus integer (works by accident on digit strings only).
 inline DWORD GetBuildNumber() {
     static const DWORD value = []() -> DWORD {
         HKEY hKey{};
+        wchar_t text[32]{};
+        DWORD size = sizeof(text);
         DWORD build = 0;
-        DWORD size = sizeof(build);
         if (RegOpenKeyExW(HKEY_LOCAL_MACHINE,
                           L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", 0, KEY_QUERY_VALUE,
                           &hKey) == ERROR_SUCCESS) {
             RegQueryValueExW(hKey, L"CurrentBuildNumber", nullptr, nullptr,
-                             reinterpret_cast<LPBYTE>(&build), &size);
+                             reinterpret_cast<LPBYTE>(text), &size);
             RegCloseKey(hKey);
+            wchar_t* end{nullptr};
+            unsigned long parsed = wcstoul(text, &end, 10);
+            if (end != text) {
+                build = static_cast<DWORD>(parsed);
+            }
         }
         return build;
     }();
@@ -1647,10 +1583,10 @@ struct Category {
     int enableThemeColorizationMode{0};
     int darkThemeColorizationType{1};
     int lightThemeColorizationType{1};
-    DWORD darkBorderColor{0xFF2B2B2B};
-    DWORD lightBorderColor{0xFFDDDDDD};
-    DWORD darkGradientColor{0x412B2B2B};
-    DWORD lightGradientColor{0x9EDDDDDD};
+    DWORD darkBorderColor{0xFF89B4FA};
+    DWORD lightBorderColor{0xFF89B4FA};
+    DWORD darkGradientColor{0xCC1E1E2E};
+    DWORD lightGradientColor{0xCC1E1E2E};
 };
 
 struct MenuExtras {
@@ -2029,10 +1965,11 @@ inline void ReadCategory(PCWSTR prefix, Category& category, bool isGlobal) {
         GetBool(make(L"enableThemeColorization"), isGlobal ? 0 : kUseGlobalBool);
     category.darkThemeColorizationType = GetColorizationType(make(L"darkModeThemeColorizationType"), 1);
     category.lightThemeColorizationType = GetColorizationType(make(L"lightModeThemeColorizationType"), 1);
-    category.darkBorderColor = GetColor(make(L"darkModeBorderColor"), 0xFF2B2B2B);
-    category.lightBorderColor = GetColor(make(L"lightModeBorderColor"), 0xFFDDDDDD);
-    category.darkGradientColor = GetColor(make(L"darkModeGradientColor"), 0x412B2B2B);
-    category.lightGradientColor = GetColor(make(L"lightModeGradientColor"), 0x9EDDDDDD);
+    // Catppuccin Mocha: blue border (#89B4FA), base tint (#1E1E2E) at about 60% alpha.
+    category.darkBorderColor = GetColor(make(L"darkModeBorderColor"), 0xFF89B4FA);
+    category.lightBorderColor = GetColor(make(L"lightModeBorderColor"), 0xFF89B4FA);
+    category.darkGradientColor = GetColor(make(L"darkModeGradientColor"), 0xCC1E1E2E);
+    category.lightGradientColor = GetColor(make(L"lightModeGradientColor"), 0xCC1E1E2E);
     category.disabledMode = GetBool(make(L"disabled"), isGlobal ? 0 : kUseGlobalBool);
 }
 
@@ -2499,7 +2436,6 @@ inline void DropEffect(std::wstring_view part, HWND hWnd) {
 
 }  // namespace tf
 
-
 // ===========================================================================
 // Flyout handling: menus, tooltips and dropdown lists.
 //
@@ -2535,6 +2471,11 @@ struct WindowState {
     Api::FlyoutAnimationContext animation{};
     bool noSystemDropShadow{false};
     bool immersiveStyle{true};
+    // Size and radius of the window region last set on a rounded menu; zero
+    // when no region is set.
+    int regionWidth{0};
+    int regionHeight{0};
+    int regionRadius{0};
 };
 
 std::mutex g_windowsLock;
@@ -2736,6 +2677,50 @@ void ApplyWindowEffects(HWND hWnd, WindowState& state) {
     }
 }
 
+// The window region clips the menu to one rounded rect, so the outline and the
+// fill share one arc. 24 reads as clearly rounded on screen.
+constexpr int kMenuRegionRadius = 24;
+
+void ApplyMenuWindowRegion(HWND hWnd, WindowState& state) {
+    const bool rounded =
+        state.border.cornerType == DWM_WINDOW_CORNER_PREFERENCE::DWMWCP_ROUND ||
+        state.border.cornerType == DWM_WINDOW_CORNER_PREFERENCE::DWMWCP_ROUNDSMALL;
+    if (!rounded) {
+        if (state.regionRadius) {
+            SetWindowRgn(hWnd, nullptr, TRUE);
+            state.regionWidth = state.regionHeight = state.regionRadius = 0;
+        }
+        return;
+    }
+    RECT rc{};
+    if (!GetWindowRect(hWnd, &rc)) {
+        return;
+    }
+    const int width = rc.right - rc.left;
+    const int height = rc.bottom - rc.top;
+    if (width <= 0 || height <= 0) {
+        return;
+    }
+    if (state.regionRadius == kMenuRegionRadius && state.regionWidth == width &&
+        state.regionHeight == height) {
+        return;
+    }
+    HRGN region = CreateRoundRectRgn(0, 0, width, height, kMenuRegionRadius * 2,
+                                     kMenuRegionRadius * 2);
+    if (!region) {
+        return;
+    }
+    // Record the size before SetWindowRgn: it repaints the window, and that
+    // paint comes back through here.
+    state.regionWidth = width;
+    state.regionHeight = height;
+    state.regionRadius = kMenuRegionRadius;
+    if (!SetWindowRgn(hWnd, region, TRUE)) {
+        DeleteObject(region);
+        state.regionWidth = state.regionHeight = state.regionRadius = 0;
+    }
+}
+
 // The flyout's first paint triggers the effect application, so the accent
 // policy is in place before DWM composites the frame.
 WindowState* EnsureWindowState(HWND hWnd, FlyoutType type, bool darkMode) {
@@ -2756,7 +2741,39 @@ WindowState* EnsureWindowState(HWND hWnd, FlyoutType type, bool darkMode) {
         Log::Write(L"[fx] applied type=%d hwnd=%p dark=%d effect=%u", (int)type, hWnd,
                    (int)darkMode, state.backdrop.effectType);
     }
+    if (type == FlyoutType::Menu) {
+        ApplyMenuWindowRegion(hWnd, state);
+        // Menus lose DWMWA_BORDER_COLOR after the first effect pass, so set it on every pass.
+        if (SystemHelper::IsWindows11() && !state.border.colorUseDefault) {
+            COLORREF color{Utils::MakeCOLORREF(state.border.color)};
+            if (state.border.colorUseNone) {
+                color = state.border.color;
+            }
+            DwmSetWindowAttribute(hWnd, DWMWA_BORDER_COLOR, &color, sizeof(color));
+        }
+    }
     return &state;
+}
+
+// A buffered paint has no window DC, so ResolveFlyoutWindow can return the wrong
+// menu (for a submenu, the main menu). Bring every other visible menu on this
+// thread up to date as well, so each one gets its own effects and region.
+struct MenuSweep {
+    HWND except;
+    bool darkMode;
+};
+
+BOOL CALLBACK EnsureOtherMenuProc(HWND hWnd, LPARAM lParam) {
+    auto* sweep = reinterpret_cast<MenuSweep*>(lParam);
+    if (hWnd != sweep->except && IsMenuWindow(hWnd)) {
+        EnsureWindowState(hWnd, FlyoutType::Menu, sweep->darkMode);
+    }
+    return TRUE;
+}
+
+void EnsureOtherMenuWindows(HWND except, bool darkMode) {
+    MenuSweep sweep{except, darkMode};
+    EnumThreadWindows(GetCurrentThreadId(), EnsureOtherMenuProc, reinterpret_cast<LPARAM>(&sweep));
 }
 
 }  // namespace Handler
@@ -2799,8 +2816,11 @@ bool HandleCustomRendering(HDC hdc, int partId, int stateId, const RECT& clipRec
 
     DcStateGuard dcState(hdc);
     IntersectClipRect(hdc, clipRect.left, clipRect.top, clipRect.right, clipRect.bottom);
-    PatBlt(hdc, paintRect.left, paintRect.top, paintRect.right - paintRect.left,
-           paintRect.bottom - paintRect.top, BLACKNESS);
+    // The keyboard focus cue is drawn over the hot fill, so it must not clear it.
+    if (partId != MENU_POPUPITEMKBFOCUS) {
+        PatBlt(hdc, paintRect.left, paintRect.top, paintRect.right - paintRect.left,
+               paintRect.bottom - paintRect.top, BLACKNESS);
+    }
 
     auto drawRoundedFill = [&](DWORD color, DWORD radius, bool stroke, DWORD width) {
         RECT rc = paintRect;
@@ -2814,13 +2834,23 @@ bool HandleCustomRendering(HDC hdc, int partId, int stateId, const RECT& clipRec
         if (!brush) {
             return false;
         }
+        if (stroke) {
+            // Outline only, like upstream; width is in thousandths of a pixel.
+            int thickness = std::max(1, (int)(width / 1000));
+            unique_handle<HRGN> region{CreateRoundRectRgn(rc.left, rc.top, rc.right + 1,
+                                                          rc.bottom + 1, (int)radius * 2,
+                                                          (int)radius * 2)};
+            if (!region) {
+                return false;
+            }
+            FrameRgn(hdc, region.get(), brush.get(), thickness, thickness);
+            return true;
+        }
         HGDIOBJ oldBrush = SelectObject(hdc, brush.get());
         HGDIOBJ oldPen = SelectObject(hdc, GetStockObject(NULL_PEN));
         RoundRect(hdc, rc.left, rc.top, rc.right, rc.bottom, (int)radius * 2, (int)radius * 2);
         SelectObject(hdc, oldPen);
         SelectObject(hdc, oldBrush);
-        (void)stroke;
-        (void)width;
         return true;
     };
 
@@ -2917,6 +2947,10 @@ bool HandleMenuDrawThemeBackground(HTHEME hTheme, HDC hdc, int iPartId, int iSta
 
     PatBlt(hdc, clipRect.left, clipRect.top, clipRect.right - clipRect.left,
            clipRect.bottom - clipRect.top, BLACKNESS);
+    // No border re-draw here. The POPUPBORDERS part paints the real outline over the
+    // full window rect after the background bands, so re-framing every background clip
+    // band only leaves stray lines: a vertical tick at each band's right edge and a
+    // horizontal line at each band boundary (visible around the separator row).
     return true;
 }
 
@@ -2998,6 +3032,9 @@ Handler::WindowState* BeginPaint(HTHEME hTheme, HDC hdc, Handler::FlyoutType& ty
     }
 
     typeOut = type;
+    if (type == Handler::FlyoutType::Menu) {
+        Handler::EnsureOtherMenuWindows(hWnd, darkMode);
+    }
     return Handler::EnsureWindowState(hWnd, type, darkMode);
 }
 
@@ -3022,8 +3059,8 @@ HRESULT WINAPI DrawThemeBackgroundHook(HTHEME hTheme, HDC hdc, int iPartId, int 
             if (pClipRect) {
                 IntersectRect(&clipRect, &clipRect, pClipRect);
             }
-            PatBlt(hdc, clipRect.left, clipRect.top, clipRect.right - clipRect.left,
-                   clipRect.bottom - clipRect.top, BLACKNESS);
+            // No full-rect fill here. It painted the dark band around the menu.
+            // Only the 1 px outline is drawn, and the fill comes from the backdrop.
             if (!Rendering::HandlePopupMenuNonClientBorderColors(hdc, clipRect)) {
                 DcStateGuard dcState(hdc);
                 ExcludeClipRect(hdc, clipRect.left + 1, clipRect.top + 1, clipRect.right - 1,
@@ -3239,8 +3276,49 @@ void InstallHook(HMODULE module, const char* name, void* hook, void** original) 
     }
 }
 
+using FillRectFn = decltype(&FillRect);
+FillRectFn g_fillRectOrig = nullptr;
+
+// The menu's device context: its window for window DCs, otherwise the flyout menu
+// owned by this thread (a buffered paint DC has no window).
+HWND MenuForDc(HDC hdc) {
+    HWND owner = WindowFromDC(hdc);
+    if (owner && Handler::IsMenuWindow(owner)) {
+        return owner;
+    }
+    if (GetObjectType(hdc) == OBJ_MEMDC) {
+        return Handler::FindFlyoutWindowOnCurrentThread(Handler::FlyoutType::Menu);
+    }
+    return nullptr;
+}
+
+COLORREF BrushColour(HBRUSH brush, HDC hdc) {
+    LOGBRUSH lb{};
+    HGDIOBJ current = brush ? static_cast<HGDIOBJ>(brush) : GetCurrentObject(hdc, OBJ_BRUSH);
+    if (!current || GetObjectW(current, sizeof(lb), &lb) == 0) {
+        return 0xFFFFFFFF;
+    }
+    return lb.lbColor;
+}
+
+// Dark-mode menus erase their body with a #202020 brush. GDI writes that colour into
+// alpha-0 pixels and DWM adds it over the accent, so the body comes out lighter than the
+// tint. On a menu surface, fill black instead: black adds nothing and the accent shows.
+constexpr COLORREF kMenuBodyColour = 0x00202020;
+
+int WINAPI FillRectHook(HDC hdc, const RECT* rc, HBRUSH brush) {
+    if (rc) {
+        COLORREF colour = BrushColour(brush, hdc);
+        if (colour == kMenuBodyColour && MenuForDc(hdc)) {
+            return g_fillRectOrig(hdc, rc, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+        }
+    }
+    return g_fillRectOrig(hdc, rc, brush);
+}
+
 void Install() {
     HMODULE uxtheme = GetModuleHandleW(L"uxtheme.dll");
+    HMODULE gdi32 = GetModuleHandleW(L"gdi32.dll");
     HMODULE user32 = GetModuleHandleW(L"user32.dll");
     if (!uxtheme) {
         uxtheme = LoadLibraryW(L"uxtheme.dll");
@@ -3264,6 +3342,8 @@ void Install() {
                 reinterpret_cast<void**>(&g_getThemeMarginsOrig));
     InstallHook(user32, "DrawTextW", reinterpret_cast<void*>(DrawTextWHook),
                 reinterpret_cast<void**>(&g_drawTextWOrig));
+    InstallHook(user32, "FillRect", reinterpret_cast<void*>(FillRectHook),
+                reinterpret_cast<void**>(&g_fillRectOrig));
 }
 
 void Uninstall() {
@@ -3302,9 +3382,5 @@ void Wh_ModSettingsChanged() {
 void Wh_ModBeforeUninit() {
     tf::Hooks::Uninstall();
 }
-
-
-
-
 
 

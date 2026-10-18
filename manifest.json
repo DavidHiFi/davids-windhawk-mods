@@ -4,9 +4,9 @@
   "generatedAt": "2026-10-09T06:39:59+08:00",
   "windhawkVersion": "2.0.0-alpha.6",
   "counts": {
-    "mods": 122,
+    "mods": 123,
     "enabled": 114,
-    "local": 13
+    "local": 14
   },
   "mods": [
     {
@@ -631,7 +631,7 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/taskbar-ai-quota",
       "source": "mods/local/taskbar-ai-quota-opencode/taskbar-ai-quota-opencode.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "local@taskbar-audio-visualizer",
@@ -674,7 +674,7 @@
       "name": "Translucent Flyouts",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "0.6.7",
+      "version": "0.6.33",
       "license": "LGPL-3.0",
       "origin": "local",
       "upstream": "",
@@ -686,7 +686,7 @@
       "name": "Windhawk Styler",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.0.34",
+      "version": "2.0.57",
       "license": "MIT",
       "origin": "local",
       "upstream": "",
@@ -1471,6 +1471,18 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/start-everything",
       "source": "mods/local/start-everything-plus/start-everything-plus.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@taskbar-ai-quota-plus",
+      "name": "Taskbar AI Quota Bars Plus",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.8.0.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/taskbar-ai-quota",
+      "source": "mods/local/taskbar-ai-quota-plus/taskbar-ai-quota-plus.wh.cpp",
       "enabled": true
     }
   ]

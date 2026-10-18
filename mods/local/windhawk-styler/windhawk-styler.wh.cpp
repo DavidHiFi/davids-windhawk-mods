@@ -2,12 +2,11 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.43
+// @version         2.0.64
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         MIT
-// @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         windhawk-ui.exe
 // @architecture    x86-64
 // @compilerOptions -DWIN32_LEAN_AND_MEAN -luser32 -lgdi32 -ldwmapi -lws2_32 -ladvapi32 -lcomctl32 -luxtheme
@@ -24,16 +23,16 @@ Choose Windhawk's colors, font, transparency and background blur.
 ## Features
 
 - **Background.** Pick a color and opacity, with Acrylic or no background effect.
-- **Cards and dialogs.** Set their color and opacity. Translucent dialogs and pop-up menus blur the content behind them. Tables, like the installed-mods list view, follow the card color, and so do collapsible sections such as Advanced settings. Every box has one outline, the same color all the way around its corners.
-- **Controls.** Choose colors for buttons and inputs, plus an accent for selections, hovers, badges and links.
-- **Corners.** Round the corners of cards, tables, buttons and inputs with an adjustable radius, or keep Windhawk's squared look.
-- **Text and font.** Use an installed font and a text color. Icons keep their own font.
-- **Title bar.** Match the background or choose a solid color. The app icon keeps its normal size, and Windows handles dragging and window buttons.
+- **Cards and dialogs.** Set their color and opacity. Cards, tables, Advanced settings, dialogs and pop-up menus use that surface, with blur when translucent. Every box has one outline, the same color all the way around its corners.
+- **Controls.** Choose colors for buttons and inputs, plus a global accent for selections, hovers, badges, spinners, links and modified settings. Number spinners sit in a rounded pill. The save bar floats while the settings scroll, and mode and version switches join into single pills.
+- **Corners.** Round cards, tables, dialogs, pop-up menus, buttons and inputs with an adjustable radius, or keep Windhawk's squared look.
+- **Text and font.** Use an installed font and a text color. Icons keep their own font and stay centered in their buttons.
+- **Title bar.** Match the background or choose a solid color. Right-click the title bar, click the app icon or press Alt+Space for the Windows window menu. The app icon keeps its normal size, and Windows handles dragging and window buttons.
 - **Removal.** Disable the mod to reopen the interface with Windhawk's appearance. The mod changes no application files.
 
 ## How to use
 
-This edition requires Windows 11 and the 64-bit Windhawk 2.0 Tauri interface. It was tested with Windhawk 2.0.0-alpha.6.
+This edition requires Windows 11 and the 64-bit Windhawk 2.0 Tauri interface. It was tested with Windhawk 2.0.0-alpha.7.
 
 Open the mod's Settings tab, choose your appearance and save. Saving settings or switching this mod on or off briefly closes and reopens the Windhawk interface.
 
@@ -333,9 +332,11 @@ static const char kSurfaces[] =
 
 // The subset that is static inside its own container, so it can take
 // position:relative for its ring. Pop-ups (select, picker) are already
-// absolutely positioned by the interface and keep their own position.
+// absolutely positioned by the interface and keep their own position. The
+// save card is left out: the interface positions it sticky so it floats
+// while the settings scroll, and forcing relative would pin it to the page.
 static const char kRelativeSurfaces[] =
-    ".ant-card,[class*=\"SaveSettingsCard\"],.ant-table,.ant-collapse,.ant-modal-content,"
+    ".ant-card:not([class*=\"SaveSettingsCard\"]),.ant-table,.ant-collapse,.ant-modal-content,"
     ".ant-drawer-content,.ant-popover-inner,.ant-dropdown-menu,.ant-tooltip-inner,"
     ".ant-notification-notice,.ant-message-notice-content";
 
@@ -360,6 +361,13 @@ static std::string BuildCss(const Settings& s) {
         css += "--ant-color-link-hover:" + s.accent + " !important;";
         css += "--ant-color-link-active:" + s.accent + " !important;";
         css += "--ant-control-outline:" + focus + " !important;";
+        // The interface's own accent tokens: the modified-setting bar, links,
+        // selected rows and moved rows otherwise keep its stock blue.
+        css += "--whui-setting-non-default:" + s.accent + " !important;";
+        css += "--whui-link:" + s.accent + " !important;";
+        css += "--whui-link-hover:" + s.accent + " !important;";
+        css += "--whui-selected-bg:" + RgbaFromRgb(s.accentRgb, 15) + " !important;";
+        css += "--whui-setting-moved-bg:" + RgbaFromRgb(s.accentRgb, 20) + " !important;";
     }
     if (!s.text.empty()) {
         css += "--whui-text-secondary:" + s.text + " !important;";
@@ -382,6 +390,20 @@ static std::string BuildCss(const Settings& s) {
     }
     css += "}";
     css += "[data-testid=mod-setting-reset]{margin-inline-start:0!important;}";
+    // Buttons with an icon center it on both axes; the text font's line
+    // height otherwise drops icons below center. The page buttons get a gap.
+    css += ".ant-btn:has(>svg),.ant-btn-icon-only{display:inline-flex !important;align-items:center !important;justify-content:center !important;}";
+    css += ".ant-btn-icon-only{padding:0 !important;}";
+    css += ".ant-btn>svg{display:block !important;flex:none;}";
+    css += ".ant-btn-icon-only>.anticon{display:block !important;margin:0 !important;}";
+    // The tab overflow trigger is not an .ant-btn, so its icon aligns to the text line instead.
+    css += ".ant-tabs-nav-more>span.anticon{vertical-align:middle !important;}";
+    css += "[class*=\"ModPageButtonsWrapper\"]{gap:6px !important;}";
+    // Number spinners: flat handles with one divider instead of boxed buttons.
+    css += ".ant-input-number-handler-wrap{background-color:rgba(255,255,255,0.06) !important;border:0 !important;}";
+    css += ".ant-input-number-handler{border:0 !important;}";
+    css += ".ant-input-number-handler-up{border-bottom:1px solid rgba(255,255,255,0.08) !important;}";
+    css += ".ant-input-number-handler:hover{background-color:rgba(255,255,255,0.08) !important;}";
     if (!cardColor.empty()) {
         // Every box shares one surface: the card color, no border of its own,
         // and one 1px ring painted over its content. Headers and rows paint
@@ -456,6 +478,7 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-table-tbody>tr.ant-table-row-selected>td{background-color:" + RgbaFromRgb(s.accentRgb, 15) + " !important;}";
         css += ".ant-table-tbody>tr.ant-table-row-selected:hover>td{background-color:" + RgbaFromRgb(s.accentRgb, 20) + " !important;}";
         css += ".wh-cscroll-host::-webkit-scrollbar-thumb:hover{background-color:" + s.accent + " !important;}";
+        css += ".ant-input-number-handler:hover .ant-input-number-handler-up-inner,.ant-input-number-handler:hover .ant-input-number-handler-down-inner{color:" + s.accent + " !important;}";
         // Interface defaults that otherwise keep antd's built-in blue: the
         // mod-card ribbon, loading spinner, tab and default-button hovers,
         // the selected drop-down item and selected select option.
@@ -469,7 +492,9 @@ static std::string BuildCss(const Settings& s) {
     }
     std::string scrollbarColor = s.text.empty() ? "rgba(255,255,255,0.35)" : RgbaFromRgb(s.textRgb, 35);
     std::string scrollbarRadius = s.roundedCorners && s.cornerRadius > 0 ? "999px" : "0px";
-    css += ".wh-cscroll-host{scrollbar-width:thin !important;scrollbar-color:" + scrollbarColor + " transparent !important;}";
+    // scrollbar-width would make Chromium ignore the ::-webkit-scrollbar rules
+    // below, so the custom rounded thumb and the hidden arrows need it unset.
+    css += ".wh-cscroll-host::-webkit-scrollbar-button{display:none !important;}";
     css += ".wh-cscroll-host::-webkit-scrollbar{width:12px !important;height:12px !important;display:block !important;}";
     css += ".wh-cscroll-host::-webkit-scrollbar-track{background:transparent !important;}";
     css += ".wh-cscroll-host::-webkit-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border:3px solid transparent !important;background-clip:content-box !important;border-radius:" + scrollbarRadius + " !important;}";
@@ -479,6 +504,56 @@ static std::string BuildCss(const Settings& s) {
         std::string r = std::to_string(s.cornerRadius) + "px";
         css += std::string(kSurfaces) + ",.ant-alert{border-radius:" + r + " !important;}";
         css += ".ant-btn,.ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-input-number,.ant-picker,.ant-segmented{border-radius:" + r + " !important;}";
+        // The spinner handles become a small inset pill inside the rounded
+        // input, so their square box no longer pokes past its corners.
+        std::string inner = std::to_string(std::max(0, s.cornerRadius - 3)) + "px";
+        css += ".ant-input-number-handler-wrap{top:3px !important;bottom:3px !important;right:3px !important;height:auto !important;width:20px !important;border-radius:" + inner + " !important;overflow:hidden !important;}";
+        css += ".ant-input-number-handler{border-radius:0 !important;}";
+        // The sticky save bar is its own rounded card; keep it clear of the
+        // page card's edges instead of running into them. Its sticky
+        // positioning comes from the interface, so it keeps floating. It
+        // sticks 12px below the scroll top so its rounded top corners and
+        // outline stay fully visible instead of touching the viewport edge.
+        css += "[class*=\"SaveSettingsCard\"]{margin-inline:-12px !important;top:12px !important;}";
+        // The page card ends flush with the scroll viewport, which slices its
+        // bottom rounded corners; leave room so the curve stays visible.
+        // Padding on the page container, not margin on the card: the
+        // scroller leaves the card's bottom margin out of its scroll range.
+        css += "[class*=\"ModDetailsContainer\"]{padding-bottom:12px !important;}";
+        // Freeze the page card so its rounded frame never moves. The card keeps
+        // its header and tabs at the top and its body scrolls below them, inset
+        // from the card edges, so the scrollbar stays on the straight sides and
+        // never reaches the rounded corners. The 163px is the scroller top (131)
+        // plus the card offset (20) plus the bottom clearance (12). Only when the
+        // card is the last child, so pages with content below keep the page scroll.
+        const std::string frozenCard = "[class*=\"ModDetailsContainer\"]>[class*=\"ModDetailsCard\"]:last-child";
+        const std::string frozenBody = frozenCard + ">.ant-card-body";
+        css += frozenCard + "{display:flex !important;flex-direction:column !important;max-height:calc(100vh - 163px) !important;overflow:hidden !important;}";
+        css += frozenCard + ">.ant-card-head{flex:none !important;}";
+        css += frozenBody + "{flex:1 1 auto !important;min-height:0 !important;overflow-y:auto !important;overflow-x:hidden !important;margin-inline-end:8px !important;margin-bottom:16px !important;}";
+        css += frozenBody + "::-webkit-scrollbar{width:12px !important;height:12px !important;}";
+        css += frozenBody + "::-webkit-scrollbar-track{background:transparent !important;}";
+        css += frozenBody + "::-webkit-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border:3px solid transparent !important;background-clip:content-box !important;border-radius:" + scrollbarRadius + " !important;}";
+        css += frozenBody + "::-webkit-scrollbar-button{display:none !important;}";
+        // The settings tab starts its first row under the floating save bar.
+        // Drop the body's top padding there so the bar sits 12px below the
+        // tabs, and give the bar room below so the first setting clears it.
+        css += frozenBody + ":has([class*=\"SaveSettingsCard\"]){padding-top:0 !important;}";
+        css += "[class*=\"SaveSettingsCard\"]{margin-bottom:24px !important;}";
+        // The ring above is a pseudo-element, so inside the scrolling card it
+        // moves with the content and shows its bottom edge mid-box. The frozen
+        // card paints its ring as an inset shadow instead, which stays put.
+        css += "[class*=\"ModDetailsContainer\"]>[class*=\"ModDetailsCard\"]:last-child::after{display:none !important;}";
+        css += "[class*=\"ModDetailsContainer\"]>[class*=\"ModDetailsCard\"]:last-child{box-shadow:inset 0 0 0 1px rgba(255,255,255,0.08) !important;}";
+        // Joined pills: the mode switch, the version switch and the mod id
+        // chip round only their outer ends so each reads as one pill.
+        std::string segInner = std::to_string(std::max(0, s.cornerRadius - 2)) + "px";
+        css += ".ant-segmented-item:first-child{border-radius:" + segInner + " 0 0 " + segInner + " !important;}";
+        css += ".ant-segmented-item:last-child{border-radius:0 " + segInner + " " + segInner + " 0 !important;}";
+        css += ".ant-segmented-thumb{border-radius:" + segInner + " !important;}";
+        css += ".ant-radio-group .ant-radio-button-wrapper:first-child{border-radius:" + r + " 0 0 " + r + " !important;}";
+        css += ".ant-radio-group .ant-radio-button-wrapper:last-child{border-radius:0 " + r + " " + r + " 0 !important;}";
+        css += "[class*=\"CardTitleModId\"]{border-radius:" + r + " !important;}";
         // Match the table's inset header corners so the card-colored surface
         // cannot show through as a dark notch beside the rounded outer border.
         css += ".ant-table-thead>tr:first-child>th:first-child{border-top-left-radius:" + r + " !important;background-clip:padding-box !important;}";
@@ -692,6 +767,19 @@ static int CaptionHeight(UINT dpi) {
            GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
 }
 
+// Where DWM draws the min/max/close buttons, in client coordinates.
+static bool CaptionButtonRect(HWND hwnd, RECT* out) {
+    RECT bounds, window;
+    POINT origin{};
+    if (FAILED(DwmGetWindowAttribute(hwnd, DWMWA_CAPTION_BUTTON_BOUNDS, &bounds, sizeof(bounds))) ||
+        IsRectEmpty(&bounds) || !GetWindowRect(hwnd, &window) || !ClientToScreen(hwnd, &origin)) {
+        return false;
+    }
+    OffsetRect(&bounds, window.left - origin.x, window.top - origin.y);
+    *out = bounds;
+    return true;
+}
+
 static std::map<HWND, RECT> g_captionChildren;
 static std::mutex g_captionChildrenMutex;
 
@@ -743,12 +831,11 @@ static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
         RGBQUAD* pixels = nullptr;
         int stride = 0;
         if (SUCCEEDED(GetBufferedPaintBits(buffer, &pixels, &stride))) {
-            int alpha = std::clamp(s.backgroundOpacity, 0, 100) * 255 / 100;
-            RGBQUAD tint{BYTE((s.background & 255) * alpha / 255),
-                         BYTE(((s.background >> 8) & 255) * alpha / 255),
-                         BYTE(((s.background >> 16) & 255) * alpha / 255), BYTE(alpha)};
+            // The strip stays clear, like any Windows title bar over a backdrop:
+            // DWM draws the caption buttons under the client, so a tint here
+            // would dim them, and a hole cut for them would show as a box.
             for (int y = 0; y < client.bottom; ++y) {
-                std::fill_n(pixels + y * stride, client.right, tint);
+                std::fill_n(pixels + y * stride, client.right, RGBQUAD{});
             }
         }
         UINT dpi = GetDpiForWindow(hwnd);
@@ -820,6 +907,39 @@ static LRESULT CALLBACK WebViewEdgeProc(HWND hwnd, UINT message, WPARAM wparam,
     return DefSubclassProc(hwnd, message, wparam, lparam);
 }
 
+// The drawn caption never reaches the default system menu, so open it here
+// with the same enabled items Windows shows for a normal title bar.
+static void ShowSystemMenu(HWND hwnd, POINT pt) {
+    HMENU menu = GetSystemMenu(hwnd, FALSE);
+    if (!menu) return;
+    static bool darkMenus = false;
+    if (!darkMenus) {
+        darkMenus = true;
+        if (HMODULE ux = GetModuleHandleW(L"uxtheme.dll")) {
+            using SetPreferredAppMode = int(WINAPI*)(int);
+            using FlushMenuThemes = void(WINAPI*)();
+            auto setMode = (SetPreferredAppMode)GetProcAddress(ux, MAKEINTRESOURCEA(135));
+            auto flush = (FlushMenuThemes)GetProcAddress(ux, MAKEINTRESOURCEA(136));
+            if (setMode) setMode(1);
+            if (flush) flush();
+        }
+    }
+    bool zoomed = IsZoomed(hwnd), iconic = IsIconic(hwnd);
+    auto enable = [menu](UINT id, bool on) {
+        EnableMenuItem(menu, id, MF_BYCOMMAND | (on ? MF_ENABLED : MF_GRAYED));
+    };
+    enable(SC_RESTORE, zoomed || iconic);
+    enable(SC_MOVE, !zoomed && !iconic);
+    enable(SC_SIZE, !zoomed && !iconic);
+    enable(SC_MINIMIZE, !iconic);
+    enable(SC_MAXIMIZE, !zoomed);
+    enable(SC_CLOSE, true);
+    SetForegroundWindow(hwnd);
+    UINT align = GetSystemMetrics(SM_MENUDROPALIGNMENT) ? TPM_RIGHTALIGN : TPM_LEFTALIGN;
+    int command = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | align, pt.x, pt.y, 0, hwnd, nullptr);
+    if (command) PostMessageW(hwnd, WM_SYSCOMMAND, command, 0);
+}
+
 // Keep activation visual only; keyboard focus and WM_ACTIVATE retain their real state.
 static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
                                       LPARAM lparam, DWORD_PTR) {
@@ -829,7 +949,6 @@ static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
     Settings s = SnapshotSettings();
     if (IntegratedCaption(s) && message == WM_NCHITTEST) {
         LRESULT hit = 0;
-        if (DwmDefWindowProc(hwnd, message, wparam, lparam, &hit)) return hit;
         RECT wr;
         GetWindowRect(hwnd, &wr);
         int x = (short)LOWORD(lparam) - wr.left;
@@ -844,7 +963,59 @@ static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
         }
         if (y < CaptionHeight(dpi) + (IsZoomed(hwnd) ? edge : 0)) {
             if (x < MulDiv(32, dpi, 96)) return HTSYSMENU;
+            // DwmDefWindowProc must see the hit first: it is what drives the
+            // buttons' hover and pressed look, maximized or not.
+            if (DwmDefWindowProc(hwnd, message, wparam, lparam, &hit) &&
+                (hit == HTMINBUTTON || hit == HTMAXBUTTON || hit == HTCLOSE || !IsZoomed(hwnd))) {
+                return hit;
+            }
+            // Maximized fallback when DWM reports only HTCAPTION for a button,
+            // so the click still lands.
+            RECT buttons;
+            POINT pt{(short)LOWORD(lparam), (short)HIWORD(lparam)};
+            if (IsZoomed(hwnd) && CaptionButtonRect(hwnd, &buttons) && ScreenToClient(hwnd, &pt) &&
+                PtInRect(&buttons, pt)) {
+                int button = (buttons.right - buttons.left) / 3;
+                if (pt.x >= buttons.right - button) return HTCLOSE;
+                if (pt.x >= buttons.right - 2 * button) return HTMAXBUTTON;
+                return HTMINBUTTON;
+            }
             return HTCAPTION;
+        }
+        if (DwmDefWindowProc(hwnd, message, wparam, lparam, &hit)) return hit;
+        return DefSubclassProc(hwnd, message, wparam, lparam);
+    }
+    if (IntegratedCaption(s)) {
+        // DWM animates the caption buttons' hover from these; the system
+        // handling still runs afterwards (snap layouts on the max button).
+        if (message == WM_NCMOUSEMOVE || message == WM_NCMOUSEHOVER || message == WM_NCMOUSELEAVE) {
+            LRESULT ignored = 0;
+            DwmDefWindowProc(hwnd, message, wparam, lparam, &ignored);
+        }
+        if (message == WM_NCRBUTTONUP && (wparam == HTCAPTION || wparam == HTSYSMENU)) {
+            ShowSystemMenu(hwnd, POINT{(short)LOWORD(lparam), (short)HIWORD(lparam)});
+            return 0;
+        }
+        // The drawn caption buttons act on release, as Windows buttons do. The
+        // default tracking loop did not reliably reach minimize, so the press
+        // is swallowed and the matching system command is posted instead.
+        bool captionButton = wparam == HTMINBUTTON || wparam == HTMAXBUTTON || wparam == HTCLOSE;
+        if (captionButton && (message == WM_NCLBUTTONDOWN || message == WM_NCLBUTTONDBLCLK)) return 0;
+        if (captionButton && message == WM_NCLBUTTONUP) {
+            UINT command = wparam == HTCLOSE ? SC_CLOSE :
+                           wparam == HTMINBUTTON ? SC_MINIMIZE :
+                           IsZoomed(hwnd) ? SC_RESTORE : SC_MAXIMIZE;
+            PostMessageW(hwnd, WM_SYSCOMMAND, command, 0);
+            return 0;
+        }
+        bool iconClick = message == WM_NCLBUTTONDOWN && wparam == HTSYSMENU;
+        bool altSpace = message == WM_SYSCOMMAND && (wparam & 0xFFF0) == SC_KEYMENU && lparam == ' ';
+        if (iconClick || altSpace) {
+            RECT wr;
+            GetWindowRect(hwnd, &wr);
+            UINT dpi = GetDpiForWindow(hwnd);
+            ShowSystemMenu(hwnd, POINT{wr.left + MulDiv(8, dpi, 96), wr.top + CaptionHeight(dpi)});
+            return 0;
         }
     }
     if (message == WM_NCCALCSIZE && wparam) {
@@ -852,9 +1023,9 @@ static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
         DefSubclassProc(hwnd, message, wparam, lparam);
         RECT* client = reinterpret_cast<RECT*>(lparam);
         if (IntegratedCaption(s)) {
-            int inset = IsZoomed(hwnd) ? GetSystemMetricsForDpi(SM_CYFRAME, GetDpiForWindow(hwnd)) +
-                                        GetSystemMetricsForDpi(SM_CXPADDEDBORDER, GetDpiForWindow(hwnd)) : 0;
-            client->top = frameRect.top + inset;
+            // No top inset even when maximized: with one, DwmDefWindowProc
+            // stops recognizing the caption buttons and they lose hover.
+            client->top = frameRect.top;
         }
         if (!IsZoomed(hwnd)) {
             client->left = frameRect.left;
