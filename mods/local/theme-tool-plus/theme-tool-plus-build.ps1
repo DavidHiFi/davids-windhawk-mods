@@ -19,7 +19,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Source     = 'H:\Windhawk Configuration\Windhawk\theme-tool-plus\theme-tool-plus.wh.cpp',
+    [string]$Source     = (Join-Path $PSScriptRoot 'theme-tool-plus.wh.cpp'),
     [string]$OutDir     = (Join-Path $env:TEMP 'theme-tool-plus-build'),
     [string]$LogPath    = (Join-Path (Join-Path $env:TEMP 'theme-tool-plus-build') 'build.log'),
     [string]$Compiler   = 'C:\Program Files\Windhawk\Compiler\bin\clang++.exe',

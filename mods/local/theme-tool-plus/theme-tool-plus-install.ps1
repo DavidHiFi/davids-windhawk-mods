@@ -30,7 +30,7 @@ param(
     [switch]$Rollback,
     [switch]$Uninstall,
     [switch]$Audit,
-    [string]$Source    = 'H:\Windhawk Configuration\Windhawk\theme-tool-plus\theme-tool-plus.wh.cpp',
+    [string]$Source    = (Join-Path $PSScriptRoot 'theme-tool-plus.wh.cpp'),
     [string]$BuildDir  = (Join-Path $env:TEMP 'theme-tool-plus-build'),
     [string]$BackupDir = 'H:\Windhawk Configuration\backups\2026-10-16\theme-tool-plus',
     [string]$LogPath   = (Join-Path (Join-Path $env:TEMP 'theme-tool-plus-build') 'install.log')
@@ -94,7 +94,7 @@ trap {
 
 if ($mode -ne 'audit' -and -not (Test-Admin)) {
     $switchName = $mode.Substring(0, 1).ToUpper() + $mode.Substring(1)
-    $argString = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -{1} -BuildDir "{2}" -LogPath "{3}"' -f $PSCommandPath, $switchName, $BuildDir, $LogPath
+    $argString = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -{1} -Source "{2}" -BuildDir "{3}" -LogPath "{4}"' -f $PSCommandPath, $switchName, $Source, $BuildDir, $LogPath
     Write-Host "elevating: $argString"
     $p = Start-Process pwsh -Verb RunAs -ArgumentList $argString -PassThru -Wait -WindowStyle Hidden
     exit $p.ExitCode

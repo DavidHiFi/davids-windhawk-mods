@@ -45,6 +45,9 @@ re-initialize the theme manager.
 
 [? Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
+- The active custom theme, named **Unsaved Theme**, can't be re-applied from the
+  picker or from settings. Applying it rewrites your saved `Custom.theme`, so the
+  mod skips it and logs the skip.
 - Pick themes made for your Windows version. The picker lists the same themes
   Windows shows, from `C:\Windows\Resources\Themes`.
 - Before uninstalling the mod, switch to a stock theme; otherwise the next

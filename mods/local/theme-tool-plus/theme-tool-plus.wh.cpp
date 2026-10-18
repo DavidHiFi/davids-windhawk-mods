@@ -2,7 +2,7 @@
 // @id              theme-tool-plus
 // @name            Theme Tool Plus
 // @description     Apply and switch custom Windows themes from a hotkey picker, no separate theme tool needed
-// @version         1.0.0
+// @version         1.0.1
 // @author          DavidHiFi, rounk-ctrl, namazso
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         explorer.exe
@@ -408,8 +408,26 @@ static HRESULT ReinitManager() {
     return hr;
 }
 
+// The active custom theme is named "Unsaved Theme". Applying it re-saves Custom.theme,
+// so the picker and the settings path both skip it.
+static constexpr wchar_t kUnsavedCustomTheme[] = L"Unsaved Theme";
+
+static bool ThemeIndexIsUnsavedCustom(int index) {
+    IThemeBase* theme = nullptr;
+    if (!g_manager || FAILED(g_manager->GetTheme(index, &theme)) || !theme) return false;
+    BSTR name = nullptr;
+    bool custom = SUCCEEDED(theme->GetDisplayName(&name)) && name && lstrcmpiW(name, kUnsavedCustomTheme) == 0;
+    if (name) SysFreeString(name);
+    theme->Release();
+    return custom;
+}
+
 static void ApplyThemeIndex(int index) {
     if (!g_manager || index < 0) return;
+    if (ThemeIndexIsUnsavedCustom(index)) {
+        Wh_Log(L"Skipped the unsaved custom theme: applying it rewrites Custom.theme");
+        return;
+    }
     HRESULT hr = g_manager->SetCurrentTheme(g_popup ? g_popup : g_msgWnd, index, 1, ApplyFlagsFromSettings(), 0);
     if (FAILED(hr)) {
         Wh_Log(L"SetCurrentTheme failed 0x%08lX", (unsigned long)hr);
@@ -459,6 +477,10 @@ static void PopulateList() {
 
 static void ApplyThemeByName() {
     if (!g_settings.themeName[0]) return;
+    if (lstrcmpiW(g_settings.themeName, kUnsavedCustomTheme) == 0) {
+        Wh_Log(L"Skipped '%s': applying the unsaved custom theme rewrites Custom.theme", g_settings.themeName);
+        return;
+    }
     IThemeManager2Ex* manager = g_manager;
     bool temporary = false;
     if (!manager) {
