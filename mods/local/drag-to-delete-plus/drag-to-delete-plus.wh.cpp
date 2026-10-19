@@ -549,33 +549,52 @@ static inline BYTE LiftByte(int value, int amount) {
     return (BYTE)v;
 }
 
-// Reads the real pixels beside the target so the fill can melt into whatever
-// is actually behind it: plain taskbar, acrylic taskbar, desktop, anything.
-// Sample points sit clear of the circle, its shadow and the hint label, and
+// Reads the real pixels beside the target at three heights (top, middle and
+// bottom of the circle) so the fill can follow a vertical backdrop gradient.
+// Backgrounds here are rarely flat: wallpapers and pages get lighter toward
+// the bottom, so a single-row sample left a dark crescent at the bottom rim.
+// Sample columns sit clear of the circle, its shadow and the hint label, and
 // layered-window transparency means they read the true backdrop, not us.
-static COLORREF SampleBackdropColor(HDC hdcScreen, const TargetGeometry& geo) {
-    int rowY = geo.wndTop + (int)geo.cy;
-    int insetX = (int)(18.0f * g_currentDpiScale);
-    POINT samples[] = {
-        { geo.wndLeft + insetX, rowY },
-        { geo.wndLeft + geo.wndWidth - insetX - 1, rowY },
-        { geo.wndLeft - 6, rowY },
-        { geo.wndLeft + geo.wndWidth + 6, rowY },
-    };
-    int red = 0, green = 0, blue = 0, taken = 0;
-    for (const POINT& pt : samples) {
-        COLORREF c = GetPixel(hdcScreen, pt.x, pt.y);
-        if (c == CLR_INVALID) continue;
-        red += GetRValue(c);
-        green += GetGValue(c);
-        blue += GetBValue(c);
-        taken++;
-    }
-    if (!taken) {
-        Color fallback = g_settings.backgroundBottom;
-        return RGB(fallback.GetR(), fallback.GetG(), fallback.GetB());
-    }
-    return RGB(red / taken, green / taken, blue / taken);
+struct BackdropGradient {
+    COLORREF top = 0, mid = 0, bottom = 0;
+    bool valid = false;
+};
+
+static COLORREF SampleRowAverage(HDC hdcScreen, int y, int xLeft, int xRight,
+                                 COLORREF fallback, bool& got) {
+    COLORREF cL = GetPixel(hdcScreen, xLeft, y);
+    COLORREF cR = GetPixel(hdcScreen, xRight, y);
+    if (cL == CLR_INVALID && cR == CLR_INVALID) { got = false; return fallback; }
+    got = true;
+    if (cL == CLR_INVALID) return cR;
+    if (cR == CLR_INVALID) return cL;
+    return RGB((GetRValue(cL) + GetRValue(cR)) / 2,
+               (GetGValue(cL) + GetGValue(cR)) / 2,
+               (GetBValue(cL) + GetBValue(cR)) / 2);
+}
+
+static BackdropGradient SampleBackdropGradient(HDC hdcScreen,
+                                               const TargetGeometry& geo,
+                                               float dpiScale, float rDrawn) {
+    BackdropGradient bg;
+    int insetX = (int)(18.0f * dpiScale);
+    int xL = geo.wndLeft + insetX;
+    int xR = geo.wndLeft + geo.wndWidth - insetX - 1;
+    int yT = geo.wndTop + (int)(geo.cy - rDrawn);
+    int yM = geo.wndTop + (int)geo.cy;
+    int yB = geo.wndTop + (int)(geo.cy + rDrawn) - 1;
+    Color fallbackColor = g_settings.backgroundBottom;
+    COLORREF fallback = RGB(fallbackColor.GetR(), fallbackColor.GetG(),
+                            fallbackColor.GetB());
+    bool ok = false;
+    bg.mid = SampleRowAverage(hdcScreen, yM, xL, xR, fallback, ok);
+    bg.valid = ok;
+    bg.top = SampleRowAverage(hdcScreen, yT, xL, xR, bg.mid, ok);
+    bg.valid |= ok;
+    bg.bottom = SampleRowAverage(hdcScreen, yB, xL, xR, bg.mid, ok);
+    bg.valid |= ok;
+    if (!bg.valid) { bg.top = bg.mid = bg.bottom = fallback; }
+    return bg;
 }
 
 void RenderFrame(HWND hWnd) {
@@ -613,17 +632,16 @@ void RenderFrame(HWND hWnd) {
         Color border = hovered ? g_settings.hoverBorderColor : g_settings.borderColor;
         Color icon = hovered ? g_settings.hoverIconColor : g_settings.iconColor;
 
-        COLORREF backdrop = SampleBackdropColor(hdcScreen, geo);
-        auto backdropColor = [&backdrop](BYTE alpha) {
-            return Color(alpha, GetRValue(backdrop), GetGValue(backdrop),
-                         GetBValue(backdrop));
+        BackdropGradient bg = SampleBackdropGradient(hdcScreen, geo, dpiScale, r);
+        auto backdropColor = [](COLORREF c, BYTE alpha) {
+            return Color(alpha, GetRValue(c), GetGValue(c), GetBValue(c));
         };
 
         if (g_settings.showShadow) {
-            // Soft radial shadow that fades to fully transparent, instead of a
-            // solid offset fill that ended in a hard dark arc under the target.
-            float drop = 2.5f * dpiScale;
-            float grow = 1.5f * dpiScale;
+            // Very soft radial shadow: fades to fully transparent and stays
+            // subtle, so it never reads as a dark crescent over light backdrops.
+            float drop = 2.0f * dpiScale;
+            float grow = 3.0f * dpiScale;
             GraphicsPath shadowPath;
             if (g_settings.shape == PlusShape::ROUNDED) {
                 MakeTargetPath(shadowPath, geo.cx, geo.cy + drop, r + grow,
@@ -632,11 +650,12 @@ void RenderFrame(HWND hWnd) {
                 shadowPath.AddEllipse(geo.cx - r - grow, geo.cy - r + drop,
                                       (r + grow) * 2, (r + grow) * 2);
             }
-            Color shadowColor = g_settings.shadowColor;
+            Color sc = g_settings.shadowColor;
+            Color scSoft((BYTE)(sc.GetA() * 60 / 100), sc.GetR(), sc.GetG(),
+                         sc.GetB());
             PathGradientBrush shadowBrush(&shadowPath);
-            shadowBrush.SetCenterColor(shadowColor);
-            Color shadowEdge(0, shadowColor.GetR(), shadowColor.GetG(),
-                             shadowColor.GetB());
+            shadowBrush.SetCenterColor(scSoft);
+            Color shadowEdge(0, sc.GetR(), sc.GetG(), sc.GetB());
             INT shadowCount = 1;
             shadowBrush.SetSurroundColors(&shadowEdge, &shadowCount);
             g.FillPath(&shadowBrush, &shadowPath);
@@ -646,80 +665,107 @@ void RenderFrame(HWND hWnd) {
         MakeTargetPath(targetPath, geo.cx, geo.cy, r, corner);
 
         if (g_settings.material != PlusMaterial::CLEAR) {
-            bool dynamic = g_settings.dynamicBackdrop;
-            PlusMaterial material = g_settings.material;
-
-            // The rim always lands exactly on the backdrop, so the edge of the
-            // target dissolves into the taskbar or desktop with no visible seam.
-            Color centerColor, edgeColor;
-            BYTE glossAlpha = 0;
-            BYTE veilAlpha = 0;
-            switch (material) {
-            case PlusMaterial::ACRYLIC:
-                centerColor = dynamic ? Color(0xE8, LiftByte(GetRValue(backdrop), 12),
-                                              LiftByte(GetGValue(backdrop), 12),
-                                              LiftByte(GetBValue(backdrop), 12))
-                                      : g_settings.backgroundTop;
-                edgeColor = dynamic ? backdropColor(0xD0) : g_settings.backgroundBottom;
-                glossAlpha = 26;
-                veilAlpha = 6;
-                break;
-            case PlusMaterial::MICA:
-                centerColor = dynamic ? Color(0xDC, LiftByte(GetRValue(backdrop), 6),
-                                              LiftByte(GetGValue(backdrop), 6),
-                                              LiftByte(GetBValue(backdrop), 6))
-                                      : g_settings.backgroundTop;
-                edgeColor = dynamic ? backdropColor(0xE0) : g_settings.backgroundBottom;
-                veilAlpha = 4;
-                break;
-            case PlusMaterial::SOLID:
-                centerColor = dynamic ? backdropColor(255) : g_settings.backgroundTop;
-                edgeColor = centerColor;
-                break;
-            case PlusMaterial::GLASS:
-            default:
-                centerColor = dynamic ? Color(0xF2, LiftByte(GetRValue(backdrop), 22),
-                                              LiftByte(GetGValue(backdrop), 22),
-                                              LiftByte(GetBValue(backdrop), 22))
-                                      : g_settings.backgroundTop;
-                edgeColor = dynamic ? backdropColor(0xC0) : g_settings.backgroundBottom;
-                glossAlpha = 14;
-                break;
-            }
-
-            if (material == PlusMaterial::SOLID) {
-                SolidBrush flatBrush(centerColor);
-                g.FillPath(&flatBrush, &targetPath);
-            } else {
-                PathGradientBrush radialBrush(&targetPath);
-                radialBrush.SetCenterPoint(PointF(geo.cx, geo.cy));
-                radialBrush.SetCenterColor(centerColor);
-                Color surroundColors[] = { edgeColor };
-                INT count = 1;
-                radialBrush.SetSurroundColors(surroundColors, &count);
-                radialBrush.SetBlendTriangularShape(0.20f, 0.9f);
-                g.FillPath(&radialBrush, &targetPath);
-            }
-
-            if (veilAlpha) {
-                // Even, full-target tint: mica and acrylic are uniform, never a
-                // one-sided band that leaves the bottom darker.
-                SolidBrush veilBrush(Color(veilAlpha, 255, 255, 255));
-                g.FillPath(&veilBrush, &targetPath);
-            }
-
-            if (glossAlpha) {
-                // Gloss now fades to nothing past mid-circle instead of being a
-                // hard ellipse that stops at 80 percent height and left a dark
-                // crescent at the bottom.
-                g.SetClip(&targetPath);
-                LinearGradientBrush glossBrush(
-                    PointF(geo.cx, geo.cy - r),
-                    PointF(geo.cx, geo.cy - r + 1.25f * r),
-                    Color(glossAlpha, 255, 255, 255), Color(0, 255, 255, 255));
-                g.FillRectangle(&glossBrush, 0.0f, 0.0f, (REAL)wndWidth,
-                                (REAL)wndHeight);
+            if (g_settings.dynamicBackdrop) {
+                // Base fill follows the backdrop's own vertical gradient, so
+                // every rim point equals the backdrop at that exact height.
+                // Built as two clipped halves meeting at the middle stop so a
+                // nonlinear backdrop still matches at three heights.
+                LinearGradientBrush topBrush(PointF(geo.cx, geo.cy - r),
+                                             PointF(geo.cx, geo.cy),
+                                             backdropColor(bg.top, 255),
+                                             backdropColor(bg.mid, 255));
+                g.SetClip(RectF(0.0f, 0.0f, (REAL)wndWidth, geo.cy));
+                g.FillPath(&topBrush, &targetPath);
                 g.ResetClip();
+                LinearGradientBrush bottomBrush(PointF(geo.cx, geo.cy),
+                                                PointF(geo.cx, geo.cy + r),
+                                                backdropColor(bg.mid, 255),
+                                                backdropColor(bg.bottom, 255));
+                g.SetClip(RectF(0.0f, geo.cy, (REAL)wndWidth,
+                                (REAL)wndHeight - geo.cy));
+                g.FillPath(&bottomBrush, &targetPath);
+                g.ResetClip();
+
+                int lift = 0;
+                BYTE liftAlpha = 0, glossAlpha = 0, veilAlpha = 0;
+                switch (g_settings.material) {
+                case PlusMaterial::ACRYLIC:
+                    lift = 10; liftAlpha = 0xB0; glossAlpha = 22; veilAlpha = 6;
+                    break;
+                case PlusMaterial::MICA:
+                    lift = 5; liftAlpha = 0xA0; veilAlpha = 4;
+                    break;
+                case PlusMaterial::SOLID:
+                    break;
+                case PlusMaterial::GLASS:
+                default:
+                    lift = 14; liftAlpha = 0xBE; glossAlpha = 12;
+                    break;
+                }
+
+                if (lift > 0 && liftAlpha > 0) {
+                    // Center sheen that fades to nothing at the rim, so the
+                    // rim keeps matching the backdrop exactly.
+                    Color liftColor(liftAlpha, LiftByte(GetRValue(bg.mid), lift),
+                                    LiftByte(GetGValue(bg.mid), lift),
+                                    LiftByte(GetBValue(bg.mid), lift));
+                    PathGradientBrush liftBrush(&targetPath);
+                    liftBrush.SetCenterColor(liftColor);
+                    Color liftEdge(0, liftColor.GetR(), liftColor.GetG(),
+                                   liftColor.GetB());
+                    INT liftCount = 1;
+                    liftBrush.SetSurroundColors(&liftEdge, &liftCount);
+                    liftBrush.SetBlendTriangularShape(0.35f, 1.0f);
+                    g.FillPath(&liftBrush, &targetPath);
+                }
+
+                if (veilAlpha) {
+                    // Frosting that fades to nothing at the rim, so the rim
+                    // keeps matching the backdrop exactly.
+                    PathGradientBrush veilBrush(&targetPath);
+                    veilBrush.SetCenterColor(Color(veilAlpha, 255, 255, 255));
+                    Color veilEdge(0, 255, 255, 255);
+                    INT veilCount = 1;
+                    veilBrush.SetSurroundColors(&veilEdge, &veilCount);
+                    veilBrush.SetBlendTriangularShape(0.5f, 1.0f);
+                    g.FillPath(&veilBrush, &targetPath);
+                }
+
+                if (glossAlpha) {
+                    // Gloss starts below the top rim and fades to nothing past
+                    // mid-circle, so no overlay tint reaches the rim itself.
+                    g.SetClip(&targetPath);
+                    LinearGradientBrush glossBrush(
+                        PointF(geo.cx, geo.cy - r + 0.15f * r),
+                        PointF(geo.cx, geo.cy - r + 1.4f * r),
+                        Color(glossAlpha, 255, 255, 255), Color(0, 255, 255, 255));
+                    g.FillRectangle(&glossBrush, 0.0f, 0.0f, (REAL)wndWidth,
+                                    (REAL)wndHeight);
+                    g.ResetClip();
+                }
+            } else {
+                // Custom colors: honest vertical gradient from the top color
+                // to the bottom color, as the setting names imply.
+                LinearGradientBrush baseBrush(PointF(geo.cx, geo.cy - r),
+                                              PointF(geo.cx, geo.cy + r),
+                                              g_settings.backgroundTop,
+                                              g_settings.backgroundBottom);
+                g.FillPath(&baseBrush, &targetPath);
+                BYTE glossAlpha = (g_settings.material == PlusMaterial::ACRYLIC)
+                                      ? 22
+                                      : (g_settings.material == PlusMaterial::GLASS)
+                                            ? 12
+                                            : 0;
+                if (glossAlpha) {
+                    g.SetClip(&targetPath);
+                    LinearGradientBrush glossBrush(
+                        PointF(geo.cx, geo.cy - r + 0.15f * r),
+                        PointF(geo.cx, geo.cy - r + 1.4f * r),
+                        Color(glossAlpha, 255, 255, 255), Color(0, 255, 255, 255));
+                    g.FillRectangle(&glossBrush, 0.0f, 0.0f, (REAL)wndWidth,
+                                    (REAL)wndHeight);
+                    g.ResetClip();
+                }
             }
         }
 
