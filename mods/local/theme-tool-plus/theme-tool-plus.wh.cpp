@@ -114,7 +114,23 @@ LGPL-2.1.
   $description: Apply the theme selected below whenever the mod's settings are saved.
 - themeName: ""
   $name: Theme to apply
-  $description: Display name of the theme to apply on settings save, exactly as shown in the picker.
+  $description: Installed themes on this computer. Pick one, turn on Apply theme when settings save (or use the picker), then save to apply it. The list refreshes when the mod source is updated.
+  $options:
+  - "": No theme (use picker or actions)
+  - Captured Motion: Captured Motion
+  - catppuccin Latte: catppuccin Latte
+  - catppuccin Latte Win: catppuccin Latte Win
+  - catppuccin Mocha: catppuccin Mocha
+  - catppuccin Mocha Night: catppuccin Mocha Night
+  - catppuccin Mocha Night Win: catppuccin Mocha Night Win
+  - catppuccin Mocha Win: catppuccin Mocha Win
+  - Flow: Flow
+  - Glow: Glow
+  - Main 01: Main 01
+  - Sunrise: Sunrise
+  - Windows (dark): Windows (dark)
+  - Windows (light): Windows (light)
+  - Windows spotlight: Windows spotlight
 - action: none
   $name: Action on settings save
   $description: Extra theme manager action to run when settings are saved.
