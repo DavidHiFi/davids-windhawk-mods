@@ -182,9 +182,8 @@ if ($mode -eq 'install') {
     $null = New-ItemProperty -LiteralPath $ModKey -Name Version -Value $version -PropertyType String -Force
     if ($freshKey) {
         $null = New-Item -Path "$ModKey\Settings" -Force
-        $null = New-ItemProperty -LiteralPath "$ModKey\Settings" -Name hotkey -Value 'Ctrl+Alt+T' -PropertyType String -Force
         $null = New-ItemProperty -LiteralPath "$ModKey\Settings" -Name updateLogonUI -Value 1 -PropertyType DWord -Force
-        Write-Log 'settings: fresh defaults (Ctrl+Alt+T picker, LogonUI sync on)'
+        Write-Log 'settings: fresh defaults (LogonUI sync on)'
     } else {
         Write-Log 'settings: theme-tool-plus key existed; kept its settings'
     }

@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id              theme-tool-plus
 // @name            Theme Tool Plus
-// @description     Apply and switch custom Windows themes from a hotkey picker, no separate theme tool needed
-// @version         1.0.1
+// @description     Apply and switch custom Windows themes from the mod's settings tab, no separate theme tool needed
+// @version         1.1.0
 // @author          DavidHiFi, rounk-ctrl, namazso
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         explorer.exe
@@ -19,20 +19,22 @@
 /*
 # Theme Tool Plus
 
-Apply and switch custom Windows themes from a hotkey picker in Explorer. The
-theme signature patch from UXTheme hook is built in, so unsigned themes load
-without patching system files or running a separate theme tool.
+Apply and switch custom Windows themes from the mod's settings tab. The theme
+signature patch from UXTheme hook is built in, so unsigned themes load without
+patching system files or running a separate theme tool.
 
 ![Theme Tool Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/theme-tool-plus.png)
 
 ## Features
-- **Hotkey picker.** Press Ctrl+Alt+Y for a compact theme list; click or
-  press Enter to apply. Works even without Explorer running (the picker lives
-  in the Windhawk engine process).
+- **Settings-driven.** Pick any installed theme from a dropdown in the mod's
+  settings tab and apply it by saving. Everything lives in one stable place,
+  so there is no hotkey to memorize or lose.
 - **Unsigned theme support.** Custom .msstyles load as-is; no system file is
   touched and Secure Boot stays happy.
-- **Fine-grained apply options.** Ignore background, cursor, desktop icons,
-  colors, sounds or the screensaver when applying.
+- **Every ThemeToolSharp option.** Keep the wallpaper, cursor, desktop icons,
+  colors, sounds or screensaver untouched. Hide the busy cursor while a theme
+  applies, and reach the undocumented apply, theme pack and start-up flags the
+  original theme tool exposed.
 - **Survives restarts.** Logon and lock screen colors are kept in sync so the
   theme survives a reboot.
 - **No extra app.** Everything runs inside the mod; ThemeToolSharp and its
@@ -42,20 +44,21 @@ without patching system files or running a separate theme tool.
 
 ## How to use
 
-| Key | Action |
-| --- | --- |
-| Ctrl+Alt+Y | Open or close the theme picker |
-| Click / Enter | Apply the selected theme |
-| Esc / click elsewhere | Close the picker |
+Open the mod's settings tab.
 
-To drive the mod without the picker, set **Theme to apply** and turn on
-**Apply on settings save**; saving the mod's settings applies that theme.
-The **Action on settings save** selector can also refresh the theme list or
-re-initialize the theme manager.
+1. Pick a theme from **Theme to apply**.
+2. Turn on **Apply theme when settings save**.
+3. Save. The theme applies right away.
+
+The **What happens when settings save** selector can instead refresh the
+theme list after you install a new one, re-initialize the theme manager if
+themes act up, or open the popup picker once. Everything else on the tab
+fine-tunes what an apply keeps or changes.
 
 ## Notes
-- Pick themes made for your Windows version. The picker lists the same themes
-  Windows shows, from `C:\Windows\Resources\Themes`.
+- Pick themes made for your Windows version. The dropdown and the picker both
+  list the same themes Windows shows, from `C:\Windows\Resources\Themes`.
+  New installs show up after you refresh the theme list.
 - Before uninstalling the mod, switch to a stock theme; otherwise the next
   logon re-verifies theme signatures and a custom theme may fail to load.
 - ARM64 is not supported (Windhawk does not hook ARM64EC).
@@ -70,53 +73,11 @@ LGPL-2.1.
 
 // ==WindhawkModSettings==
 /*
-- hotkey: Ctrl+Alt+Y
-  $name: Picker hotkey
-  $description: Shortcut that opens the theme picker in Explorer. Leave empty to disable. Supports Ctrl, Shift, Alt, Win and a letter, digit or F-key.
-- updateLogonUI: true
-  $name: Update LogonUI colors on apply
-  $description: Keeps logon and lock screen colors in sync with the applied theme.
-- preventSettings: false
-  $name: Prevent Settings from launching on theme apply
-  $description: Stops the Settings app from opening every time a theme is applied.
-- ignoreBackground: false
-  $name: Ignore background on apply
-  $description: Do not change the wallpaper when applying a theme.
-- ignoreCursor: false
-  $name: Ignore cursor on apply
-  $description: Do not change the cursor scheme when applying a theme.
-- ignoreDesktopIcons: false
-  $name: Ignore desktop icons on apply
-  $description: Do not change desktop icon positions when applying a theme.
-- ignoreColor: false
-  $name: Ignore color on apply
-  $description: Do not change the accent color when applying a theme.
-- ignoreSound: false
-  $name: Ignore sound on apply
-  $description: Do not change the sound scheme when applying a theme.
-- ignoreScreensaver: false
-  $name: Ignore screensaver on apply
-  $description: Do not change the screensaver when applying a theme.
-- unknownFlag1: false
-  $name: Advanced: apply flag 1
-  $description: Undocumented theme apply flag related to window metrics. Same option as ThemeToolSharp.
-- unknownFlag2: false
-  $name: Advanced: apply flag 2
-  $description: Undocumented theme apply flag. Same option as ThemeToolSharp.
-- initUnknownFlag1: false
-  $name: Advanced: initialization flag 1
-  $description: Undocumented theme manager initialization flag, passed on picker refresh. Same option as ThemeToolSharp.
-- initUnknownFlag2: false
-  $name: Advanced: initialization flag 2
-  $description: Second undocumented theme manager initialization flag, related to immersive colors. Same option as ThemeToolSharp.
-- applyOnSettingsChange: false
-  $name: Apply on settings save
-  $description: Apply the theme selected below whenever the mod's settings are saved.
 - themeName: ""
   $name: Theme to apply
-  $description: Installed themes on this computer. Pick one, turn on Apply theme when settings save (or use the picker), then save to apply it. The list refreshes when the mod source is updated.
+  $description: Installed themes on this computer. Pick one, turn on Apply theme when settings save (or use another action), then save to apply it. The list updates when the mod source is updated.
   $options:
-  - "": No theme (use picker or actions)
+  - "": No theme
   - Captured Motion: Captured Motion
   - catppuccin Latte: catppuccin Latte
   - catppuccin Latte Win: catppuccin Latte Win
@@ -131,13 +92,68 @@ LGPL-2.1.
   - Windows (dark): Windows (dark)
   - Windows (light): Windows (light)
   - Windows spotlight: Windows spotlight
+- applyOnSettingsChange: false
+  $name: Apply theme when settings save
+  $description: Applies the theme picked above the moment you save.
 - action: none
-  $name: Action on settings save
-  $description: Extra theme manager action to run when settings are saved.
+  $name: What happens when settings save
+  $description: An extra step to run after saving. Refresh the theme list after installing a new theme, re-initialize the theme manager if themes act up, or open the theme picker once.
   $options:
-  - none: Do nothing
+  - none: Nothing extra
   - refresh: Refresh the theme list
   - reinitialize: Re-initialize the theme manager
+  - picker: Open the theme picker
+- updateLogonUI: true
+  $name: Keep sign-in screens in sync
+  $description: Matches the colors of the sign-in and lock screens to the applied theme.
+- preventSettings: false
+  $name: Keep the Settings app closed after applying
+  $description: Windows sometimes opens Settings right after a theme apply. Turn this on to stop that.
+- ignoreBackground: false
+  $name: Keep current wallpaper
+  $description: Leaves the wallpaper alone when applying a theme.
+- ignoreCursor: false
+  $name: Keep current cursor
+  $description: Leaves the mouse pointer scheme alone when applying a theme.
+- ignoreDesktopIcons: false
+  $name: Keep current desktop icons
+  $description: Leaves desktop icon positions alone when applying a theme.
+- ignoreColor: false
+  $name: Keep current colors
+  $description: Leaves accent and window colors alone when applying a theme.
+- ignoreSound: false
+  $name: Keep current sounds
+  $description: Leaves the sound scheme alone when applying a theme.
+- ignoreScreensaver: false
+  $name: Keep current screensaver
+  $description: Leaves the screensaver alone when applying a theme.
+- noHourglass: true
+  $name: Hide the busy cursor while applying
+  $description: Skips the hourglass flash Windows shows while a theme applies.
+- unknownFlag1: false
+  $name: Apply flag 1 (advanced)
+  $description: An undocumented option Windows accepts when applying a theme, related to window metrics. The original theme tool exposes it too. Leave off unless you need it.
+- unknownFlag2: false
+  $name: Apply flag 2 (advanced)
+  $description: A second undocumented apply option. The original theme tool exposes it too. Leave off unless you need it.
+- themePackUnknown1: false
+  $name: Theme pack flag 1 (advanced)
+  $description: The first undocumented theme pack option. Upstream notes suggest it suppresses the busy cursor too. Leave off unless you need it.
+- themePackUnknown2: false
+  $name: Theme pack flag 2 (advanced)
+  $description: The second undocumented theme pack option. Upstream notes suggest it also suppresses the busy cursor. Leave off unless you need it.
+- themePackSilent: false
+  $name: Apply packs quietly
+  $description: Hides every dialog a theme pack would show and stops its sounds.
+- themePackRoamed: false
+  $name: Roam theme packs
+  $description: Lets the applied theme pack roam with your account settings.
+- initUnknownFlag1: false
+  $name: Start-up flag 1 (advanced)
+  $description: An undocumented option the theme manager receives when it starts or re-initializes. Leave off unless you need it.
+- initUnknownFlag2: false
+  $name: Start-up flag 2 (advanced)
+  $description: A second undocumented start-up option, related to immersive colors. Leave off unless you need it.
 */
 // ==/WindhawkModSettings==
 
@@ -227,6 +243,16 @@ enum : DWORD {
     ThemeApply_NoHourglass = 1 << 8,
 };
 
+// Bits confirmed from ThemeToolSharp's IThemeManager2.cs. Upstream comments:
+// both Unknown flags seem to suppress the hourglass, Silent hides dialogs and
+// stops sounds, Roamed roams the pack with account settings.
+enum : DWORD {
+    ThemePack_Unknown1 = 1 << 0,
+    ThemePack_Unknown2 = 1 << 1,
+    ThemePack_Silent = 1 << 2,
+    ThemePack_Roamed = 1 << 3,
+};
+
 struct IThemeBase : IUnknown {
     virtual HRESULT STDMETHODCALLTYPE GetDisplayName(BSTR* value) = 0;
     virtual HRESULT STDMETHODCALLTYPE SetDisplayName(BSTR value) = 0;
@@ -276,9 +302,13 @@ struct ModSettings {
     bool initUnknownFlag1;
     bool initUnknownFlag2;
     bool applyOnSettingsChange;
+    bool noHourglass;
+    bool themePackUnknown1;
+    bool themePackUnknown2;
+    bool themePackSilent;
+    bool themePackRoamed;
     wchar_t themeName[256];
-    wchar_t hotkey[64];
-    int action;  // 0 none, 1 refresh, 2 reinitialize
+    int action;  // 0 none, 1 refresh, 2 reinitialize, 3 open picker
 } g_settings;
 
 static void CopyStringSetting(wchar_t* dest, size_t size, PCWSTR valueName) {
@@ -301,13 +331,18 @@ static void LoadSettings() {
     g_settings.initUnknownFlag1 = Wh_GetIntSetting(L"initUnknownFlag1");
     g_settings.initUnknownFlag2 = Wh_GetIntSetting(L"initUnknownFlag2");
     g_settings.applyOnSettingsChange = Wh_GetIntSetting(L"applyOnSettingsChange");
+    g_settings.noHourglass = Wh_GetIntSetting(L"noHourglass");
+    g_settings.themePackUnknown1 = Wh_GetIntSetting(L"themePackUnknown1");
+    g_settings.themePackUnknown2 = Wh_GetIntSetting(L"themePackUnknown2");
+    g_settings.themePackSilent = Wh_GetIntSetting(L"themePackSilent");
+    g_settings.themePackRoamed = Wh_GetIntSetting(L"themePackRoamed");
     CopyStringSetting(g_settings.themeName, ARRAYSIZE(g_settings.themeName), L"themeName");
-    CopyStringSetting(g_settings.hotkey, ARRAYSIZE(g_settings.hotkey), L"hotkey");
     g_settings.action = Wh_GetIntSetting(L"action");
 }
 
 static DWORD ApplyFlagsFromSettings() {
-    DWORD flags = ThemeApply_NoHourglass;
+    DWORD flags = 0;
+    if (g_settings.noHourglass) flags |= ThemeApply_NoHourglass;
     if (g_settings.ignoreBackground) flags |= ThemeApply_IgnoreBackground;
     if (g_settings.ignoreCursor) flags |= ThemeApply_IgnoreCursor;
     if (g_settings.ignoreDesktopIcons) flags |= ThemeApply_IgnoreDesktopIcons;
@@ -316,6 +351,15 @@ static DWORD ApplyFlagsFromSettings() {
     if (g_settings.ignoreScreensaver) flags |= ThemeApply_IgnoreScreensaver;
     if (g_settings.unknownFlag1) flags |= ThemeApply_Unknown1;
     if (g_settings.unknownFlag2) flags |= ThemeApply_Unknown2;
+    return flags;
+}
+
+static DWORD PackFlagsFromSettings() {
+    DWORD flags = 0;
+    if (g_settings.themePackUnknown1) flags |= ThemePack_Unknown1;
+    if (g_settings.themePackUnknown2) flags |= ThemePack_Unknown2;
+    if (g_settings.themePackSilent) flags |= ThemePack_Silent;
+    if (g_settings.themePackRoamed) flags |= ThemePack_Roamed;
     return flags;
 }
 
@@ -357,8 +401,6 @@ static bool g_creating;
 static bool g_everActive;
 static bool g_pendingApplyByName;
 static bool g_pendingAction;
-static UINT g_hotkeyMods;
-static UINT g_hotkeyVk;
 
 // The Windhawk debug log is not reachable headlessly, so diagnostics go to a
 // plain temp file while the mod is new.
@@ -444,7 +486,7 @@ static void ApplyThemeIndex(int index) {
         Wh_Log(L"Skipped the unsaved custom theme: applying it rewrites Custom.theme");
         return;
     }
-    HRESULT hr = g_manager->SetCurrentTheme(g_popup ? g_popup : g_msgWnd, index, 1, ApplyFlagsFromSettings(), 0);
+    HRESULT hr = g_manager->SetCurrentTheme(g_popup ? g_popup : g_msgWnd, index, 1, ApplyFlagsFromSettings(), PackFlagsFromSettings());
     if (FAILED(hr)) {
         Wh_Log(L"SetCurrentTheme failed 0x%08lX", (unsigned long)hr);
         return;
@@ -517,7 +559,7 @@ static void ApplyThemeByName() {
         BSTR name = nullptr;
         if (SUCCEEDED(theme->GetDisplayName(&name)) && name) {
             if (lstrcmpiW(name, g_settings.themeName) == 0) {
-                HRESULT hr = manager->SetCurrentTheme(g_msgWnd, i, 1, ApplyFlagsFromSettings(), 0);
+                HRESULT hr = manager->SetCurrentTheme(g_msgWnd, i, 1, ApplyFlagsFromSettings(), PackFlagsFromSettings());
                 if (SUCCEEDED(hr) && g_settings.updateLogonUI) {
                     manager->UpdateColorSettingsForLogonUI();
                 }
@@ -535,6 +577,8 @@ static void ApplyThemeByName() {
         manager->Release();
     }
 }
+
+static void ShowPicker();  // defined below; the picker-on-save action needs it
 
 static void RunPendingAction() {
     switch (g_settings.action) {
@@ -556,6 +600,9 @@ static void RunPendingAction() {
             }
             break;
         }
+        case 3:  // open the picker
+            ShowPicker();
+            break;
         default:
             break;
     }
@@ -679,9 +726,6 @@ static void ShowPicker() {
 
 static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
-        case WM_HOTKEY:
-            ShowPicker();
-            return 0;
         case WM_APP_APPLY_NAME:
             ApplyThemeByName();
             return 0;
@@ -690,48 +734,6 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             return 0;
     }
     return DefWindowProcW(hwnd, msg, wParam, lParam);
-}
-
-static bool ParseHotkey(const wchar_t* text, UINT* mods, UINT* vk) {
-    if (!text || !*text) return false;
-
-    wchar_t buf[64];
-    lstrcpynW(buf, text, (int)ARRAYSIZE(buf));
-
-    UINT m = 0;
-    wchar_t key[64] = L"";
-    wchar_t* context = nullptr;
-    for (wchar_t* token = wcstok_s(buf, L"+", &context); token; token = wcstok_s(nullptr, L"+", &context)) {
-        if (!lstrcmpiW(token, L"Ctrl") || !lstrcmpiW(token, L"Control")) m |= MOD_CONTROL;
-        else if (!lstrcmpiW(token, L"Shift")) m |= MOD_SHIFT;
-        else if (!lstrcmpiW(token, L"Alt")) m |= MOD_ALT;
-        else if (!lstrcmpiW(token, L"Win") || !lstrcmpiW(token, L"Windows")) m |= MOD_WIN;
-        else lstrcpynW(key, token, (int)ARRAYSIZE(key));
-    }
-    if (!key[0]) return false;
-
-    UINT code = 0;
-    if (!key[1] && iswalpha(key[0])) {
-        code = towupper(key[0]);
-    } else if (!key[1] && iswdigit(key[0])) {
-        code = key[0];
-    } else if ((key[0] == L'F' || key[0] == L'f') && iswdigit(key[1])) {
-        int n = _wtoi(key + 1);
-        if (n >= 1 && n <= 24) code = VK_F1 + n - 1;
-    } else if (!lstrcmpiW(key, L"Space")) {
-        code = VK_SPACE;
-    } else {
-        SHORT scanned = VkKeyScanW(key[0]);
-        if (scanned != -1) code = LOBYTE(scanned);
-    }
-    if (!code) return false;
-    // A bare letter hotkey would swallow that key system-wide; require a
-    // modifier unless an F-key is used.
-    if (!m && !(code >= VK_F1 && code <= VK_F24)) return false;
-
-    *mods = m;
-    *vk = code;
-    return true;
 }
 
 static DWORD WINAPI PickerThreadProc(LPVOID) {
@@ -762,13 +764,6 @@ static DWORD WINAPI PickerThreadProc(LPVOID) {
 
     g_msgWnd = CreateWindowExW(0, kMsgClass, nullptr, 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, hInst, nullptr);
     TtpLog(L"msgwnd=%p gle=%lu", g_msgWnd, GetLastError());
-
-    if (g_hotkeyVk && !RegisterHotKey(g_msgWnd, 1, g_hotkeyMods, g_hotkeyVk)) {
-        TtpLog(L"RegisterHotKey failed gle=%lu", GetLastError());
-        Wh_Log(L"RegisterHotKey failed (error %lu); picker stays available via settings", GetLastError());
-    } else {
-        TtpLog(L"RegisterHotKey ok mods=0x%X vk=0x%X", g_hotkeyMods, g_hotkeyVk);
-    }
 
     if (g_pendingApplyByName) PostMessageW(g_msgWnd, WM_APP_APPLY_NAME, 0, 0);
     if (g_pendingAction) PostMessageW(g_msgWnd, WM_APP_ACTION, 0, 0);
@@ -832,13 +827,8 @@ BOOL Wh_ModInit() {
         g_pendingApplyByName = g_settings.applyOnSettingsChange && g_settings.themeName[0];
         g_pendingAction = g_settings.action != 0;
 
-        if (ParseHotkey(g_settings.hotkey, &g_hotkeyMods, &g_hotkeyVk)) {
-            Wh_Log(L"Picker hotkey: mods=0x%X vk=0x%X", g_hotkeyMods, g_hotkeyVk);
-        } else {
-            g_hotkeyMods = 0;
-            g_hotkeyVk = 0;
-        }
-
+        // The picker opens from the settings tab (the "Open the theme
+        // picker" action); no hotkey is registered anymore.
         g_workerThread = CreateThread(nullptr, 0, PickerThreadProc, nullptr, 0, &g_workerThreadId);
         TtpLog(L"worker thread=%p tid=%lu", g_workerThread, g_workerThreadId);
         if (!g_workerThread) {
