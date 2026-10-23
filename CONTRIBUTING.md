@@ -28,7 +28,7 @@ All changes go through pull requests against `main`.
    powershell -ExecutionPolicy Bypass -File mods\local\<mod>\Build.ps1
    ```
 
-   Shell Font Changer runs its regression tests with `Build.ps1 -Test`.
+   Shell Font Changer Plus runs its regression tests with `Build.ps1 -Test`.
 4. Test the change on your own PC, and keep every setting the mod's readme documents.
 5. Bump `@version` in the mod header, and update the mod's readme if behavior changed.
 6. Keep each pull request to one mod and one change, and say in the description how you tested it.
