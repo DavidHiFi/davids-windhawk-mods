@@ -1,7 +1,7 @@
 // ==WindhawkMod==
 // @id              theme-tool-plus
 // @name            Theme Tool Plus
-// @description     Apply and switch custom Windows themes from the mod's settings tab, no separate theme tool needed
+// @description     Apply and switch custom Windows themes from the settings tab. No separate theme tool needed
 // @version         1.1.0
 // @author          DavidHiFi, rounk-ctrl, namazso
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,26 +21,25 @@
 
 Apply and switch custom Windows themes from the mod's settings tab. The theme
 signature patch from UXTheme hook is built in, so unsigned themes load without
-patching system files or running a separate theme tool.
+changing system files or running a separate theme tool.
 
 ![Theme Tool Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/theme-tool-plus.png)
 
 ## Features
-- **Settings-driven.** Pick any installed theme from a dropdown in the mod's
-  settings tab and apply it by saving. Everything lives in one stable place,
-  so there is no hotkey to memorize or lose.
-- **Unsigned theme support.** Custom .msstyles load as-is; no system file is
-  touched and Secure Boot stays happy.
-- **Every ThemeToolSharp option.** Keep the wallpaper, cursor, desktop icons,
-  colors, sounds or screensaver untouched. Hide the busy cursor while a theme
-  applies, and reach the undocumented apply, theme pack and start-up flags the
-  original theme tool exposed.
-- **Survives restarts.** Logon and lock screen colors are kept in sync so the
+- **Settings-driven.** Pick an installed theme from a dropdown in the settings
+  tab and apply it by saving. Nothing to memorize, and no hotkey needed.
+- **Unsigned theme support.** Custom .msstyles files load as they are. No
+  system file is touched, so Secure Boot is not affected.
+- **ThemeToolSharp options.** Keep your wallpaper, cursor, desktop icons,
+  colors, sounds or screensaver as they are. Hide the busy cursor while a theme
+  applies. The undocumented apply, theme pack and start-up flags from the
+  original theme tool are included.
+- **Survives restarts.** Sign-in and lock screen colors stay in sync, so the
   theme survives a reboot.
-- **No extra app.** Everything runs inside the mod; ThemeToolSharp and its
-  process inclusion entry can go.
-- **Settings blocker.** Optionally stop the Settings app from opening on
-  every theme apply.
+- **No extra app.** Everything runs inside the mod. You can uninstall
+  ThemeToolSharp, along with its process entry in Windhawk.
+- **Settings blocker.** Stops the Settings app from opening after each theme
+  apply, if you turn that on.
 
 ## How to use
 
@@ -50,17 +49,17 @@ Open the mod's settings tab.
 2. Turn on **Apply theme when settings save**.
 3. Save. The theme applies right away.
 
-The **What happens when settings save** selector can instead refresh the
-theme list after you install a new one, re-initialize the theme manager if
-themes act up, or open the popup picker once. Everything else on the tab
-fine-tunes what an apply keeps or changes.
+The **What happens when settings save** option can refresh the theme list
+after you install a new theme, re-initialize the theme manager if themes act
+up, or open the theme picker once. The other settings control what an apply
+keeps or changes.
 
 ## Notes
-- Pick themes made for your Windows version. The dropdown and the picker both
-  list the same themes Windows shows, from `C:\Windows\Resources\Themes`.
-  New installs show up after you refresh the theme list.
-- Before uninstalling the mod, switch to a stock theme; otherwise the next
-  logon re-verifies theme signatures and a custom theme may fail to load.
+- Use themes made for your Windows version. The dropdown and the picker both
+  list the themes in `C:\Windows\Resources\Themes`. New themes appear after you
+  refresh the list.
+- Before you remove the mod, switch back to a stock theme. Otherwise the next
+  sign-in checks theme signatures again, and a custom theme may fail to load.
 - ARM64 is not supported (Windhawk does not hook ARM64EC).
 
 ## Credits
@@ -75,7 +74,7 @@ LGPL-2.1.
 /*
 - themeName: ""
   $name: Theme to apply
-  $description: Installed themes on this computer. Pick one, turn on Apply theme when settings save (or use another action), then save to apply it. The list updates when the mod source is updated.
+  $description: Themes installed on this computer. Pick one, turn on Apply theme when settings save (or choose another action), then save. The list updates when the mod source is updated.
   $options:
   - "": No theme
   - Captured Motion: Captured Motion
@@ -94,7 +93,7 @@ LGPL-2.1.
   - Windows spotlight: Windows spotlight
 - applyOnSettingsChange: false
   $name: Apply theme when settings save
-  $description: Applies the theme picked above the moment you save.
+  $description: Applies the theme picked above as soon as you save.
 - action: none
   $name: What happens when settings save
   $description: An extra step to run after saving. Refresh the theme list after installing a new theme, re-initialize the theme manager if themes act up, or open the theme picker once.
@@ -108,7 +107,7 @@ LGPL-2.1.
   $description: Matches the colors of the sign-in and lock screens to the applied theme.
 - preventSettings: false
   $name: Keep the Settings app closed after applying
-  $description: Windows sometimes opens Settings right after a theme apply. Turn this on to stop that.
+  $description: Windows sometimes opens Settings right after a theme is applied. Turn this on to stop it.
 - ignoreBackground: false
   $name: Keep current wallpaper
   $description: Leaves the wallpaper alone when applying a theme.
@@ -131,17 +130,17 @@ LGPL-2.1.
   $name: Hide the busy cursor while applying
   $description: Skips the hourglass flash Windows shows while a theme applies.
 - unknownFlag1: false
-  $name: Apply flag 1 (advanced)
-  $description: An undocumented option Windows accepts when applying a theme, related to window metrics. The original theme tool exposes it too. Leave off unless you need it.
+  $name: Extra apply option 1 (advanced)
+  $description: An undocumented option Windows accepts when applying a theme. It relates to window metrics, and the original theme tool exposes it too. Leave it off unless you need it.
 - unknownFlag2: false
-  $name: Apply flag 2 (advanced)
-  $description: A second undocumented apply option. The original theme tool exposes it too. Leave off unless you need it.
+  $name: Extra apply option 2 (advanced)
+  $description: A second undocumented apply option. The original theme tool exposes it too. Leave it off unless you need it.
 - themePackUnknown1: false
-  $name: Theme pack flag 1 (advanced)
-  $description: The first undocumented theme pack option. Upstream notes suggest it suppresses the busy cursor too. Leave off unless you need it.
+  $name: Extra theme pack option 1 (advanced)
+  $description: The first undocumented theme pack option. Upstream notes suggest it also hides the busy cursor. Leave it off unless you need it.
 - themePackUnknown2: false
-  $name: Theme pack flag 2 (advanced)
-  $description: The second undocumented theme pack option. Upstream notes suggest it also suppresses the busy cursor. Leave off unless you need it.
+  $name: Extra theme pack option 2 (advanced)
+  $description: The second undocumented theme pack option. Upstream notes suggest it also hides the busy cursor. Leave it off unless you need it.
 - themePackSilent: false
   $name: Apply packs quietly
   $description: Hides every dialog a theme pack would show and stops its sounds.
@@ -149,11 +148,11 @@ LGPL-2.1.
   $name: Roam theme packs
   $description: Lets the applied theme pack roam with your account settings.
 - initUnknownFlag1: false
-  $name: Start-up flag 1 (advanced)
-  $description: An undocumented option the theme manager receives when it starts or re-initializes. Leave off unless you need it.
+  $name: Extra start-up option 1 (advanced)
+  $description: An undocumented option the theme manager gets when it starts or re-initializes. Leave it off unless you need it.
 - initUnknownFlag2: false
-  $name: Start-up flag 2 (advanced)
-  $description: A second undocumented start-up option, related to immersive colors. Leave off unless you need it.
+  $name: Extra start-up option 2 (advanced)
+  $description: A second undocumented start-up option. It relates to immersive colors. Leave it off unless you need it.
 */
 // ==/WindhawkModSettings==
 
