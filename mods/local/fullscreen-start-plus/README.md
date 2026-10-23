@@ -10,8 +10,8 @@ of the macOS Launchpad, with instant search and a blurred background.
 - **Fullscreen.** Fills the monitor the mouse is on, or one monitor you pick.
   It leaves the taskbar, side bars and the Standalone Dock visible, or covers
   the whole screen if you turn that on.
-- **All apps.** The same programs and Store apps as the "All apps" list of
-  Start, in alphabetical order with icon and name.
+- **Your choice of apps.** The "All apps" list of Start, your desktop icons,
+  both together, or only the apps you pinned to Start.
 - **Instant search.** Just type. Case and accents don't matter, and names that
   start with your text come first.
 - **Adjustable blur.** Pick the blur type, strength, opacity and color of the

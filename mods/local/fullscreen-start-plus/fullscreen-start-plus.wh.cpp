@@ -2,7 +2,7 @@
 // @id              fullscreen-start-plus
 // @name            Fullscreen Start Plus
 // @description     A fullscreen grid of all your apps in place of Start, with instant search and adjustable blur
-// @version         1.1.0
+// @version         1.2.0
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,8 +26,8 @@ of the macOS Launchpad, with instant search and a blurred background.
 - **Fullscreen.** Fills the monitor the mouse is on, or one monitor you pick.
   It leaves the taskbar, side bars and the Standalone Dock visible, or covers
   the whole screen if you turn that on.
-- **All apps.** The same programs and Store apps as the "All apps" list of
-  Start, in alphabetical order with icon and name.
+- **Your choice of apps.** The "All apps" list of Start, your desktop icons,
+  both together, or only the apps you pinned to Start.
 - **Instant search.** Just type. Case and accents don't matter, and names that
   start with your text come first.
 - **Adjustable blur.** Pick the blur type, strength, opacity and color of the
@@ -88,6 +88,14 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
 - tintColor: "#000000"
   $name: Background color
   $description: In hexadecimal, like #1E1E2E
+- appSource: allApps
+  $name: Apps to show
+  $description: Pinned apps keep the order they have in Start
+  $options:
+  - allApps: Start menu apps (the All apps list)
+  - desktop: Desktop icons
+  - both: Start menu apps and desktop icons
+  - pinned: Apps pinned to Start
 - gridIconSize: 72
   $name: Icon size (pixels at 100% scaling)
 - gridColumns: 0
@@ -119,6 +127,7 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
 #include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl.h>
+#include <knownfolders.h>
 #include <shellscalingapi.h>
 #include <dwmapi.h>
 // Otherwise the Win32 macro renames ID2D1RenderTarget::DrawText.
@@ -195,6 +204,7 @@ bool EndsWith(const std::wstring& text, const std::wstring& suffix) {
 // Settings
 
 enum class BlurMode { Custom, Acrylic, Blur, None };
+enum class AppSource { AllApps, Desktop, Both, Pinned };
 
 struct Settings {
     BlurMode blurMode = BlurMode::Custom;
@@ -204,6 +214,7 @@ struct Settings {
     int iconSize = 72;
     int columns = 0;
     bool coverScreen = false;
+    AppSource source = AppSource::AllApps;
     int monitor = 0;  // 0: the one with the mouse; 1: main; 2+: the others, left to right.
 };
 
@@ -244,6 +255,11 @@ void LoadSettings() {
     s.iconSize = std::clamp(Wh_GetIntSetting(L"gridIconSize"), 24, 192);
     s.columns = std::clamp(Wh_GetIntSetting(L"gridColumns"), 0, 30);
     s.coverScreen = Wh_GetIntSetting(L"coverScreen") != 0;
+    std::wstring source = GetStringSetting(L"appSource");
+    s.source = source == L"desktop"  ? AppSource::Desktop
+               : source == L"both"   ? AppSource::Both
+               : source == L"pinned" ? AppSource::Pinned
+                                     : AppSource::AllApps;
     s.monitor = std::max(0, _wtoi(GetStringSetting(L"monitor").c_str()));
     g_settings = s;
     g_winKeyEnabled = Wh_GetIntSetting(L"winKey") != 0;
@@ -274,7 +290,7 @@ using AppList = std::vector<std::shared_ptr<App>>;
 [[clang::no_destroy]] AppList g_apps;
 bool g_appsLoaded;
 double g_appsTime;
-int g_appsIconPixels;
+int g_appsKey;  // AppsKey() of the loaded list.
 
 HANDLE g_worker;
 std::atomic<bool> g_workerStop;
@@ -408,15 +424,35 @@ bool NameLess(const std::wstring& a, const std::wstring& b) {
                            nullptr, nullptr, 0) == CSTR_LESS_THAN;
 }
 
-AppList* EnumerateApps(int iconPixels) {
-    auto list = std::make_unique<AppList>();
+void AddApp(IShellItem* item,
+            std::wstring target,
+            int iconPixels,
+            AppList& list) {
+    PWSTR name = nullptr;
+    if (SUCCEEDED(item->GetDisplayName(SIGDN_NORMALDISPLAY, &name)) && *name) {
+        auto app = std::make_shared<App>();
+        app->name = name;
+        // With file extensions shown, shortcuts are named "Brave.lnk".
+        std::wstring lower = ToLower(app->name);
+        if (lower.size() > 4 &&
+            (EndsWith(lower, L".lnk") || EndsWith(lower, L".url"))) {
+            app->name.resize(app->name.size() - 4);
+        }
+        app->target = std::move(target);
+        LoadAppIcon(item, iconPixels, *app);
+        list.push_back(std::move(app));
+    }
+    CoTaskMemFree(name);
+}
+
+void AddStartApps(int iconPixels, AppList& list) {
     ComPtr<IShellItem> folder;
     ComPtr<IEnumShellItems> items;
     if (FAILED(SHCreateItemFromParsingName(L"shell:AppsFolder", nullptr,
                                            IID_PPV_ARGS(&folder))) ||
         FAILED(folder->BindToHandler(nullptr, kBhidEnumItems,
                                      IID_PPV_ARGS(&items)))) {
-        return list.release();
+        return;
     }
     ComPtr<IShellItem> item;
     while (!g_workerStop &&
@@ -426,38 +462,219 @@ AppList* EnumerateApps(int iconPixels) {
             SUCCEEDED(item->GetDisplayName(SIGDN_PARENTRELATIVEPARSING,
                                            &parsing)) &&
             !ShouldSkip(name, parsing)) {
-            auto app = std::make_shared<App>();
-            app->name = name;
-            app->target = std::wstring(kAppsFolder) + parsing;
-            LoadAppIcon(item.Get(), iconPixels, *app);
-            list->push_back(std::move(app));
+            AddApp(item.Get(), std::wstring(kAppsFolder) + parsing, iconPixels,
+                   list);
         }
         CoTaskMemFree(name);
         CoTaskMemFree(parsing);
+    }
+}
+
+// Everything on the desktop: the user's own and the one shared by all users.
+void AddDesktopItems(int iconPixels, AppList& list) {
+    for (const KNOWNFOLDERID* id :
+         {&FOLDERID_Desktop, &FOLDERID_PublicDesktop}) {
+        ComPtr<IShellItem> folder;
+        ComPtr<IEnumShellItems> items;
+        if (FAILED(SHGetKnownFolderItem(*id, KF_FLAG_DEFAULT, nullptr,
+                                        IID_PPV_ARGS(&folder))) ||
+            FAILED(folder->BindToHandler(nullptr, kBhidEnumItems,
+                                         IID_PPV_ARGS(&items)))) {
+            continue;
+        }
+        ComPtr<IShellItem> item;
+        while (!g_workerStop &&
+               items->Next(1, item.ReleaseAndGetAddressOf(), nullptr) == S_OK) {
+            SFGAOF attributes = 0;
+            PWSTR path = nullptr;
+            if (SUCCEEDED(item->GetAttributes(SFGAO_HIDDEN, &attributes)) &&
+                !(attributes & SFGAO_HIDDEN) &&
+                SUCCEEDED(item->GetDisplayName(SIGDN_DESKTOPABSOLUTEPARSING,
+                                               &path))) {
+                AddApp(item.Get(), path, iconPixels, list);
+            }
+            CoTaskMemFree(path);
+        }
+    }
+}
+
+// Reads the JSON string whose opening quote is json[i]; i ends past the
+// closing quote.
+std::wstring ReadJsonString(const std::wstring& json, size_t& i) {
+    std::wstring out;
+    for (i++; i < json.size() && json[i] != L'"'; i++) {
+        if (json[i] != L'\\' || i + 1 >= json.size()) {
+            out += json[i];
+            continue;
+        }
+        WCHAR c = json[++i];
+        switch (c) {
+            case L'n':
+                out += L'\n';
+                break;
+            case L't':
+                out += L'\t';
+                break;
+            case L'r':
+                out += L'\r';
+                break;
+            case L'b':
+                out += L'\b';
+                break;
+            case L'f':
+                out += L'\f';
+                break;
+            case L'u':
+                if (i + 4 < json.size()) {
+                    out += (WCHAR)wcstoul(json.substr(i + 1, 4).c_str(),
+                                          nullptr, 16);
+                    i += 4;
+                }
+                break;
+            default:  // \" \\ \/
+                out += c;
+                break;
+        }
+    }
+    i++;
+    return out;
+}
+
+// Start's pins in their order, as Windows' own Export-StartLayout writes them:
+// {"pinnedList":[{"desktopAppLink":"%APPDATA%\\...\\X.lnk"},
+// {"packagedAppId":"Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"}]}.
+// The file Start keeps them in (start2.bin) is encrypted, so the export is the
+// supported way to read them.
+std::wstring ExportStartLayout() {
+    WCHAR temp[MAX_PATH], system[MAX_PATH];
+    if (!GetTempPathW(MAX_PATH, temp) ||
+        !GetSystemDirectoryW(system, MAX_PATH)) {
+        return {};
+    }
+    std::wstring path = std::wstring(temp) + L"fullscreen-start-plus-pins.json";
+    DeleteFileW(path.c_str());
+    std::wstring command = L"\"" + std::wstring(system) +
+                           L"\\WindowsPowerShell\\v1.0\\powershell.exe\" "
+                           L"-NoProfile -NonInteractive -ExecutionPolicy Bypass "
+                           L"-Command \"Export-StartLayout -Path '" +
+                           path + L"'\"";
+    STARTUPINFOW si{sizeof(si)};
+    PROCESS_INFORMATION pi{};
+    if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE,
+                        CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+        return {};
+    }
+    CloseHandle(pi.hThread);
+    for (int waited = 0;
+         WaitForSingleObject(pi.hProcess, 100) == WAIT_TIMEOUT; waited++) {
+        if (g_workerStop || waited > 300) {
+            TerminateProcess(pi.hProcess, 1);
+            break;
+        }
+    }
+    CloseHandle(pi.hProcess);
+
+    std::string bytes;
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                              nullptr, OPEN_EXISTING, 0, nullptr);
+    if (file != INVALID_HANDLE_VALUE) {
+        DWORD size = GetFileSize(file, nullptr), read = 0;
+        if (size != INVALID_FILE_SIZE && size < (16 << 20)) {
+            bytes.resize(size);
+            if (!ReadFile(file, bytes.data(), size, &read, nullptr)) {
+                read = 0;
+            }
+            bytes.resize(read);
+        }
+        CloseHandle(file);
+        DeleteFileW(path.c_str());
+    }
+    int length = MultiByteToWideChar(CP_UTF8, 0, bytes.data(),
+                                     (int)bytes.size(), nullptr, 0);
+    std::wstring json(length, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, bytes.data(), (int)bytes.size(),
+                        json.data(), length);
+    return json;
+}
+
+void AddStartPins(int iconPixels, AppList& list) {
+    std::wstring json = ExportStartLayout();
+    for (size_t i = json.find(L'"'); i != std::wstring::npos && !g_workerStop;
+         i = json.find(L'"', i)) {
+        std::wstring key = ReadJsonString(json, i);
+        size_t value = json.find_first_not_of(L" \t\r\n", i);
+        if (value == std::wstring::npos || json[value] != L':') {
+            continue;
+        }
+        value = json.find_first_not_of(L" \t\r\n", value + 1);
+        if (value == std::wstring::npos || json[value] != L'"') {
+            continue;
+        }
+        i = value;
+        std::wstring pin = ReadJsonString(json, i);
+        std::wstring target;
+        if (key == L"desktopAppLink") {
+            WCHAR expanded[MAX_PATH * 2];
+            DWORD n = ExpandEnvironmentStringsW(pin.c_str(), expanded,
+                                                ARRAYSIZE(expanded));
+            target = n && n <= ARRAYSIZE(expanded) ? expanded : pin;
+        } else if (key == L"desktopAppId" || key == L"packagedAppId") {
+            target = std::wstring(kAppsFolder) + pin;
+        } else {
+            continue;
+        }
+        ComPtr<IShellItem> item;
+        if (SUCCEEDED(SHCreateItemFromParsingName(target.c_str(), nullptr,
+                                                  IID_PPV_ARGS(&item)))) {
+            AddApp(item.Get(), target, iconPixels, list);
+        }
+    }
+}
+
+AppList* EnumerateApps(int iconPixels, AppSource source) {
+    auto list = std::make_unique<AppList>();
+    if (source == AppSource::Pinned) {
+        AddStartPins(iconPixels, *list);  // Keeps Start's order.
+        return list.release();
+    }
+    if (source != AppSource::Desktop) {
+        AddStartApps(iconPixels, *list);
+    }
+    if (source != AppSource::AllApps) {
+        AddDesktopItems(iconPixels, *list);
     }
 
     std::stable_sort(list->begin(), list->end(),
                      [](const auto& a, const auto& b) {
                          return NameLess(a->name, b->name);
                      });
-    // The same app may show up twice (user and all-users shortcut).
+    // The same app may show up twice (user and all-users shortcut). With both
+    // lists, a desktop shortcut named like a Start app is dropped: the stable
+    // sort keeps the Start app, added first.
+    bool both = source == AppSource::Both;
     list->erase(std::unique(list->begin(), list->end(),
-                            [](const auto& a, const auto& b) {
+                            [both](const auto& a, const auto& b) {
                                 return a->name == b->name &&
-                                       ToLower(a->target) == ToLower(b->target);
+                                       (both || ToLower(a->target) ==
+                                                    ToLower(b->target));
                             }),
                 list->end());
     return list.release();
 }
 
+// What a loaded list depends on: the icon size and the source.
+int AppsKey(int iconPixels, AppSource source) {
+    return iconPixels | ((int)source << 16);
+}
+
 DWORD WINAPI LoadAppsThread(void* param) {
-    int iconPixels = (int)(INT_PTR)param;
+    int key = (int)(INT_PTR)param;
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-    AppList* list = EnumerateApps(iconPixels);
+    AppList* list = EnumerateApps(key & 0xFFFF, (AppSource)(key >> 16));
     CoUninitialize();
     HWND wnd = g_wnd;
     if (g_workerStop || !wnd ||
-        !PostMessageW(wnd, WM_APP_APPS, iconPixels, (LPARAM)list)) {
+        !PostMessageW(wnd, WM_APP_APPS, key, (LPARAM)list)) {
         delete list;
     }
     return 0;
@@ -480,6 +697,10 @@ int IconPixels() {
     return std::min(256, (int)std::ceil(g_settings.iconSize * maxDpi / 96.0));
 }
 
+int AppsKey() {
+    return AppsKey(IconPixels(), g_settings.source);
+}
+
 void StartLoadingApps() {
     if (g_worker) {
         if (WaitForSingleObject(g_worker, 0) == WAIT_TIMEOUT) {
@@ -490,7 +711,7 @@ void StartLoadingApps() {
     }
     g_appsTime = Now();
     g_worker = CreateThread(nullptr, 0, LoadAppsThread,
-                            (void*)(INT_PTR)IconPixels(), 0, nullptr);
+                            (void*)(INT_PTR)AppsKey(), 0, nullptr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1248,7 +1469,10 @@ void DrawGrid() {
         return;
     }
     if (g_visible.empty()) {
-        DrawMessage(g_query.empty() ? L"No apps" : L"No apps found");
+        DrawMessage(!g_query.empty() ? L"No apps found"
+                    : (g_appsKey >> 16) == (int)AppSource::Pinned
+                        ? L"No apps are pinned to Start"
+                        : L"No apps");
         return;
     }
 
@@ -1479,7 +1703,7 @@ void Open() {
     StartFrames();
 
     if (!g_appsLoaded || Now() - g_appsTime > 60 ||
-        g_appsIconPixels != IconPixels()) {
+        g_appsKey != AppsKey()) {
         StartLoadingApps();
     }
 }
@@ -1705,11 +1929,11 @@ HRESULT WINAPI XamlLauncher_ShowStartView_Hook(void* pThis,
 // Windows
 
 
-void OnAppsLoaded(AppList* list, int iconPixels) {
+void OnAppsLoaded(AppList* list, int key) {
     g_apps = std::move(*list);
     delete list;
     g_appsLoaded = true;
-    g_appsIconPixels = iconPixels;
+    g_appsKey = key;
     if (g_shown) {
         UpdateFilter();
         int count = (int)g_visible.size();
@@ -1743,7 +1967,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (g_shown) {
                 HideNow();
             }
-            if (g_appsIconPixels != IconPixels()) {
+            if (g_appsKey != AppsKey()) {
                 StartLoadingApps();
             }
             return 0;
