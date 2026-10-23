@@ -73,7 +73,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 | --- | --- | --- |
 | <img src="media/previews/start-everything-plus.png" width="220" alt="Start menu search results"> | [Everything & Power Tools in the Start Menu Plus](mods/local/start-everything-plus) | Compact Start menu search with Everything, preview, apps, settings and power tools. |
 | <img src="media/previews/translucent-flyouts.png" width="220" alt="Acrylic context menu"> | [Translucent Flyouts](mods/local/translucent-flyouts) | Acrylic, Mica and blur backgrounds for menus, dropdowns and tooltips in every app. |
-| <img src="media/previews/shell-font-changer.png" width="220" alt="Explorer in a custom font"> | [Shell Font Changer](mods/local/shell-font-changer) | Any font in Explorer, Start, Search and Settings, without breaking icons or emoji. |
+| <img src="media/previews/shell-font-changer-plus.png" width="220" alt="Explorer text in Segoe UI and in FiraCode Nerd Font"> | [Shell Font Changer Plus](mods/local/shell-font-changer-plus) | Any installed font in Explorer, Start, Search and Settings, with icons and emoji left intact. |
 | <img src="media/previews/drag-to-delete-plus.png" width="220" alt="Floating trash target"> | [Drag to Delete Plus](mods/local/drag-to-delete-plus) | A floating trash target appears while you drag files, with themes, shapes and colors. |
 | | [Theme Tool Plus](mods/local/theme-tool-plus) | Apply and switch custom Windows themes from a Ctrl+Alt+Y picker, unsigned themes included. |
 
@@ -190,7 +190,7 @@ Most of my mods build on someone else's mod. Each folder's readme credits its so
 | **valinet** ([Simple Window Switcher](https://github.com/valinet/sws)) | The original Simple Window Switcher, and [WinCenterTitle](https://github.com/valinet/WinCenterTitle) behind Center Titlebar Fork. |
 | **caliberda** ([Alt+Tab Flip 3D](https://windhawk.net/mods/alt-tab-flip-3d)) | The Vista rendering in Simple Window Switcher Plus (MIT). |
 | **0Allu** ([Better Volume Mixer](https://windhawk.net/mods/better-volume-mixer)) | The base of Better Volume Mixer Plus. |
-| **Gabriela Cristei** ([Explorer Font Changer](https://windhawk.net/mods/explorer-font-changer)) | The base of Shell Font Changer. |
+| **Gabriela Cristei** ([Explorer Font Changer](https://windhawk.net/mods/explorer-font-changer)) | The base of Shell Font Changer Plus. |
 | **bardelyne** ([Everything & Power Tools in the Start Menu](https://windhawk.net/mods/start-everything)) | The base of the Plus version. |
 | **Cleroth** ([Taskbar AI Quota Bars](https://windhawk.net/mods/taskbar-ai-quota)) | The base of Taskbar AI Quota Bars Plus. |
 | **USER-TOURNE** ([Tourne'Table](https://windhawk.net/mods/tourne-table-desktop-audio-visualizer)) | A base of Taskbar Audio Visualizer. |

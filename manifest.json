@@ -598,15 +598,15 @@
       "enabled": true
     },
     {
-      "id": "local@shell-font-changer",
-      "name": "Shell Font Changer",
+      "id": "local@shell-font-changer-plus",
+      "name": "Shell Font Changer Plus",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.2.2",
+      "version": "1.3.0",
       "license": "MIT",
       "origin": "local",
       "upstream": "https://windhawk.net/mods/explorer-font-changer",
-      "source": "mods/local/shell-font-changer/shell-font-changer.wh.cpp",
+      "source": "mods/local/shell-font-changer-plus/shell-font-changer-plus.wh.cpp",
       "enabled": true
     },
     {
