@@ -1,0 +1,22 @@
+user.userId = 0310122b-e5c6-4d64-8574-345b6e35bdf8
+user.email = rhinoperson221@gmail.com
+user.firstName = DavidHiFi
+user.lastName = 
+user.profileImageAssetId = users/0310122b-e5c6-4d64-8574-345b6e35bdf8/f34n1YAQsNxJCMwh-profile-picture.webp
+user.xUserId = 
+user.userBlockedReason = 
+user.principalType = User
+user.principalId = 0310122b-e5c6-4d64-8574-345b6e35bdf8
+user.teamId = 
+user.teamName = 
+user.teamRole = 
+user.organizationId = 
+user.organizationName = 
+user.organizationRole = 
+user.organizationRbacRoleId = 
+user.organizationType = 
+user.codingDataRetentionOptOut = True
+user.hasGrokCodeAccess = True
+user.canAdministerTeam = 
+user.cursorMerged = False
+--- limit/rate/credit/percent hits:

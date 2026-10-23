@@ -1,0 +1,53 @@
+/* Windhawk settings dialog fix (local, 2026-10-24).
+   1. The process inclusion list and its info box join as one block: square corners at the seam.
+   2. Scrollbars inside the dialog are slim, rounded, have no square arrow buttons, and stay
+      inside the box they belong to. The dialog body keeps a small gutter from the frame edge. */
+
+textarea[data-testid="engine-include"] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+textarea[data-testid="engine-include"] + .ant-alert {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  margin-top: -1px;
+}
+
+.ant-modal textarea::-webkit-scrollbar,
+.ant-modal-body::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+  background: transparent;
+}
+
+.ant-modal textarea::-webkit-scrollbar-track,
+.ant-modal-body::-webkit-scrollbar-track,
+.ant-modal textarea::-webkit-scrollbar-corner,
+.ant-modal-body::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.ant-modal textarea::-webkit-scrollbar-button,
+.ant-modal-body::-webkit-scrollbar-button {
+  display: none;
+}
+
+.ant-modal textarea::-webkit-scrollbar-thumb,
+.ant-modal-body::-webkit-scrollbar-thumb {
+  background-color: #4a4a4a;
+  border: 4px solid transparent;
+  background-clip: content-box;
+  border-radius: 4px;
+}
+
+.ant-modal textarea::-webkit-scrollbar-thumb:hover,
+.ant-modal-body::-webkit-scrollbar-thumb:hover {
+  background-color: #606060;
+  border: 4px solid transparent;
+  background-clip: content-box;
+}
+
+.ant-modal-body {
+  margin-right: 6px;
+}

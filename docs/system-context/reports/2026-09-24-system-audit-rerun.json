@@ -1,0 +1,1011 @@
+{
+  "auditId": "invoke-system-audit",
+  "mode": "read-only",
+  "timestamp": "2026-09-24T12:35:27.6869675+08:00",
+  "host": "DESKTOP-8TUFKT6",
+  "os": {
+    "Product": "Microsoft Windows 11 Pro",
+    "Version": "25H2",
+    "Build": "26200",
+    "InstallDate": "2026-08-25T19:05:10+08:00",
+    "LastBoot": "2026-09-24T10:30:21.5+08:00",
+    "Architecture": "64-bit"
+  },
+  "hardware": {
+    "Manufacturer": "ASUS",
+    "Model": "TUF GAMING B550M-E WIFI",
+    "BiosVersion": "4304",
+    "BiosDate": "2026-08-19T08:00:00+08:00",
+    "Cpu": {
+      "Name": "AMD Ryzen 7 5800X 8-Core Processor             ",
+      "Cores": 8,
+      "LogicalProcessors": 16,
+      "MaxClockSpeedMHz": 4601,
+      "VirtualizationFirmware": true
+    },
+    "MemoryModules": [
+      {
+        "Bank": "BANK 1",
+        "CapacityMB": 16384.0,
+        "SpeedMTs": 3600,
+        "Part": "CMH32GX4M2Z3600C18"
+      },
+      {
+        "Bank": "BANK 3",
+        "CapacityMB": 16384.0,
+        "SpeedMTs": 3600,
+        "Part": "CMH32GX4M2Z3600C18"
+      }
+    ],
+    "Gpu": [
+      {
+        "Name": "NVIDIA GeForce RTX 4070",
+        "Driver": "32.0.16.1692",
+        "DriverDate": "2026-09-04T08:00:00+08:00",
+        "Resolution": "1920x1080",
+        "Refresh": 60
+      }
+    ],
+    "Disks": [
+      {
+        "Id": "2",
+        "Model": "ST1000DM003-1SB102",
+        "Bus": "SATA",
+        "Media": "HDD",
+        "Health": "Healthy",
+        "SizeGB": 931.5
+      },
+      {
+        "Id": "1",
+        "Model": "TOSHIBA MQ01ABD100",
+        "Bus": "SATA",
+        "Media": "HDD",
+        "Health": "Healthy",
+        "SizeGB": 931.5
+      },
+      {
+        "Id": "3",
+        "Model": "CT240BX500SSD1",
+        "Bus": "SATA",
+        "Media": "SSD",
+        "Health": "Healthy",
+        "SizeGB": 223.6
+      },
+      {
+        "Id": "5",
+        "Model": "Samsung SSD 990 PRO 1TB",
+        "Bus": "NVMe",
+        "Media": "SSD",
+        "Health": "Healthy",
+        "SizeGB": 931.5
+      },
+      {
+        "Id": "4",
+        "Model": "Samsung SSD 990 PRO 2TB",
+        "Bus": "NVMe",
+        "Media": "SSD",
+        "Health": "Healthy",
+        "SizeGB": 1863.0
+      },
+      {
+        "Id": "0",
+        "Model": "ST1000VM002-1ET162",
+        "Bus": "SATA",
+        "Media": "HDD",
+        "Health": "Healthy",
+        "SizeGB": 931.5
+      }
+    ]
+  },
+  "volumes": [
+    {
+      "Drive": null,
+      "Label": "",
+      "FileSystem": "NTFS",
+      "Health": "Healthy",
+      "Operational": "OK",
+      "SizeGB": 1.1,
+      "FreeGB": 0.1,
+      "FreePct": 10.5
+    },
+    {
+      "Drive": "C",
+      "Label": "",
+      "FileSystem": "NTFS",
+      "Health": "Warning",
+      "Operational": "Full Repair Needed",
+      "SizeGB": 929.4,
+      "FreeGB": 349.3,
+      "FreePct": 37.6
+    },
+    {
+      "Drive": null,
+      "Label": "",
+      "FileSystem": "NTFS",
+      "Health": "Healthy",
+      "Operational": "OK",
+      "SizeGB": 0.8,
+      "FreeGB": 0.1,
+      "FreePct": 9.0
+    },
+    {
+      "Drive": "E",
+      "Label": "Storage",
+      "FileSystem": "NTFS",
+      "Health": "Healthy",
+      "Operational": "OK",
+      "SizeGB": 223.6,
+      "FreeGB": 182.2,
+      "FreePct": 81.5
+    },
+    {
+      "Drive": "F",
+      "Label": "Games",
+      "FileSystem": "NTFS",
+      "Health": "Healthy",
+      "Operational": "OK",
+      "SizeGB": 1863.0,
+      "FreeGB": 407.2,
+      "FreePct": 21.9
+    },
+    {
+      "Drive": "H",
+      "Label": "Library",
+      "FileSystem": "NTFS",
+      "Health": "Healthy",
+      "Operational": "OK",
+      "SizeGB": 931.5,
+      "FreeGB": 128.5,
+      "FreePct": 13.8
+    },
+    {
+      "Drive": "G",
+      "Label": "Visual & Audio",
+      "FileSystem": "NTFS",
+      "Health": "Healthy",
+      "Operational": "OK",
+      "SizeGB": 931.4,
+      "FreeGB": 498.7,
+      "FreePct": 53.5
+    },
+    {
+      "Drive": "D",
+      "Label": "Backups",
+      "FileSystem": "NTFS",
+      "Health": "Healthy",
+      "Operational": "OK",
+      "SizeGB": 931.5,
+      "FreeGB": 674.0,
+      "FreePct": 72.4
+    }
+  ],
+  "power": {
+    "Scheme": "Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)",
+    "Detail": [
+      "Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)",
+      "  GUID Alias: SCHEME_MIN",
+      "  Subgroup GUID: 54533251-82be-4824-96c1-47b60b740d00  (Processor power management)",
+      "    GUID Alias: SUB_PROCESSOR",
+      "    Power Setting GUID: 893dee8e-2bef-41e0-89c6-b55d0929964c  (Minimum processor state)",
+      "      GUID Alias: PROCTHROTTLEMIN",
+      "      Minimum Possible Setting: 0x00000000",
+      "      Maximum Possible Setting: 0x00000064",
+      "      Possible Settings increment: 0x00000001",
+      "      Possible Settings units: %",
+      "    Current AC Power Setting Index: 0x00000064",
+      "    Current DC Power Setting Index: 0x00000005",
+      "",
+      "    Power Setting GUID: bc5038f7-23e0-4960-96da-33abaf5935ec  (Maximum processor state)",
+      "      GUID Alias: PROCTHROTTLEMAX",
+      "      Minimum Possible Setting: 0x00000000",
+      "      Maximum Possible Setting: 0x00000064",
+      "      Possible Settings increment: 0x00000001",
+      "      Possible Settings units: %",
+      "    Current AC Power Setting Index: 0x00000064",
+      "    Current DC Power Setting Index: 0x00000064",
+      "",
+      "Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)",
+      "  GUID Alias: SCHEME_MIN",
+      "  Subgroup GUID: 501a4d13-42af-4429-9fd1-a8218c268e20  (PCI Express)",
+      "    GUID Alias: SUB_PCIEXPRESS",
+      "    Power Setting GUID: ee12f906-d277-404b-b6da-e5fa1a576df5  (Link State Power Management)",
+      "      GUID Alias: ASPM",
+      "      Possible Setting Index: 000",
+      "      Possible Setting Friendly Name: Off",
+      "      Possible Setting Index: 001",
+      "      Possible Setting Friendly Name: Moderate power savings",
+      "      Possible Setting Index: 002",
+      "      Possible Setting Friendly Name: Maximum power savings",
+      "    Current AC Power Setting Index: 0x00000000",
+      "    Current DC Power Setting Index: 0x00000000",
+      "",
+      "Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)",
+      "  GUID Alias: SCHEME_MIN",
+      "  Subgroup GUID: 2a737441-1930-4402-8d77-b2bebba308a3  (USB settings)",
+      "    Power Setting GUID: 48e6b7a6-50f5-4782-a5d4-53bb8f07e226  (USB selective suspend setting)",
+      "      Possible Setting Index: 000",
+      "      Possible Setting Friendly Name: Disabled",
+      "      Possible Setting Index: 001",
+      "      Possible Setting Friendly Name: Enabled",
+      "    Current AC Power Setting Index: 0x00000000",
+      "    Current DC Power Setting Index: 0x00000000",
+      ""
+    ],
+    "SleepStates": [
+      "The following sleep states are available on this system:",
+      "    Standby (S3)",
+      "",
+      "The following sleep states are not available on this system:",
+      "    Standby (S1)",
+      "\tThe system firmware does not support this standby state.",
+      "",
+      "    Standby (S2)",
+      "\tThe system firmware does not support this standby state.",
+      "",
+      "    Hibernate",
+      "\tHibernation has not been enabled.",
+      "",
+      "    Standby (S0 Low Power Idle)",
+      "\tThe system firmware does not support this standby state.",
+      "",
+      "    Hybrid Sleep",
+      "\tHibernation is not available.",
+      "\tThe hypervisor does not support this standby state.",
+      "",
+      "    Fast Startup",
+      "\tHibernation is not available.",
+      ""
+    ]
+  },
+  "memory": {
+    "TotalVisibleMB": 32680.0,
+    "FreePhysicalMB": 16893.0,
+    "PageFiles": [
+      {
+        "Name": "C:\\pagefile.sys",
+        "AllocMB": 23552,
+        "PeakMB": 2074
+      }
+    ],
+    "ProcessCount": 295,
+    "Prefetcher": {
+      "EnablePrefetcher": 0,
+      "EnableSuperfetch": null
+    }
+  },
+  "startup": {
+    "RunKeys": [],
+    "Approved": [],
+    "CommonStartup": [
+      "Ollama.lnk"
+    ],
+    "NonMicrosoftTasks": [
+      {
+        "Task": "\\Ableton Live 12 Suite",
+        "State": "Running"
+      },
+      {
+        "Task": "\\AltSnap",
+        "State": "Running"
+      },
+      {
+        "Task": "\\BraveSoftwareUpdateTaskUserS-1-5-21-2602432160-4233293278-3745949008-1001Core{F550A6AA-491D-4D6C-9BE6-B63F9AEDBCFB}",
+        "State": "Disabled"
+      },
+      {
+        "Task": "\\BraveSoftwareUpdateTaskUserS-1-5-21-2602432160-4233293278-3745949008-1001UA{A764B1B3-C3B5-4C8E-B6CD-24129FFF3DB6}",
+        "State": "Disabled"
+      },
+      {
+        "Task": "\\CLIProxyAPI",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\CLIProxyAPI-Watchdog",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\CreateExplorerShellUnelevatedTask",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\Discord Stable",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\Ditto",
+        "State": "Running"
+      },
+      {
+        "Task": "\\DSX",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\EarTrumpet",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\Everything",
+        "State": "Running"
+      },
+      {
+        "Task": "\\FanControl",
+        "State": "Running"
+      },
+      {
+        "Task": "\\FlareSolverr",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\FlareSolverr-Watchdog",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\Flow.Launcher Startup",
+        "State": "Running"
+      },
+      {
+        "Task": "\\FreeDictate",
+        "State": "Running"
+      },
+      {
+        "Task": "\\Git Maintenance (daily)",
+        "State": "Disabled"
+      },
+      {
+        "Task": "\\Git Maintenance (hourly)",
+        "State": "Disabled"
+      },
+      {
+        "Task": "\\Git Maintenance (weekly)",
+        "State": "Disabled"
+      },
+      {
+        "Task": "\\HidHide_Updater",
+        "State": "Disabled"
+      },
+      {
+        "Task": "\\HWiNFO",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\Hydra",
+        "State": "Running"
+      },
+      {
+        "Task": "\\Launch Adobe CCXProcess",
+        "State": "Disabled"
+      },
+      {
+        "Task": "\\LGHUB",
+        "State": "Disabled"
+      },
+      {
+        "Task": "\\Listary",
+        "State": "Running"
+      },
+      {
+        "Task": "\\LuaTools",
+        "State": "Running"
+      },
+      {
+        "Task": "\\MSIAfterburner",
+        "State": "Running"
+      },
+      {
+        "Task": "\\Mullvad VPN",
+        "State": "Running"
+      },
+      {
+        "Task": "\\nefarius_VirtualPad_Updater",
+        "State": "Disabled"
+      },
+      {
+        "Task": "\\NVIDIA App SelfUpdate_{B2FE1952-0186-46C3-BAEC-A80AA35AC5B8}",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\Open-Shell",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\OpenRGB",
+        "State": "Running"
+      },
+      {
+        "Task": "\\Reduce Memory",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\RHI Admin Mode",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\RTSS",
+        "State": "Running"
+      },
+      {
+        "Task": "\\ShareX",
+        "State": "Running"
+      },
+      {
+        "Task": "\\Steam",
+        "State": "Running"
+      },
+      {
+        "Task": "\\Stream Deck",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\SystemInformerTaskAdmin",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\TidalVolume-Watchdog",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\Unified Remote",
+        "State": "Running"
+      },
+      {
+        "Task": "\\VB Audio Matrix Coconut Trial Bypass",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\Volume Controller SD Plugin",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\Whispr Flow",
+        "State": "Disabled"
+      },
+      {
+        "Task": "\\WindhawkRunUITask",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\WinLaunch",
+        "State": "Running"
+      },
+      {
+        "Task": "\\Mozilla\\Zen Background Update S-1-5-21-2602432160-4233293278-3745949008-1001 F0DC299D809B9700",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\Mozilla\\Zen Default Browser Agent F0DC299D809B9700",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\PowerToys\\Autorun for localuser",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\SoftLanding\\S-1-5-21-2602432160-4233293278-3745949008-1001\\SoftLandingCreativeManagementTask",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\Users\\localuser\\NVIDIA Shader Compiler",
+        "State": "Ready"
+      },
+      {
+        "Task": "\\WiseCleaner\\WDCSkipUAC",
+        "State": "Disabled"
+      },
+      {
+        "Task": "\\WiseCleaner\\WRCSkipUAC",
+        "State": "Disabled"
+      }
+    ]
+  },
+  "services": {
+    "RunningAutomatic": [
+      "AppX Deployment Service (AppXSVC)",
+      "Background Tasks Infrastructure Service",
+      "Base Filtering Engine",
+      "Bonjour Service",
+      "Capability Access Manager Service",
+      "cbdhsvc_d880f",
+      "Claude",
+      "COM+ Event System",
+      "CoreMessaging",
+      "Cryptographic Services",
+      "Data Usage",
+      "DCOM Server Process Launcher",
+      "DHCP Client",
+      "Diagnostic Policy Service",
+      "Display Policy Service",
+      "DNS Client",
+      "Everything",
+      "FanControl Service",
+      "GameInput Redist Service",
+      "Gaming Services",
+      "Gaming Services",
+      "Group Policy Client",
+      "Inventory and Compatibility Appraisal service",
+      "IP Helper",
+      "Jackett",
+      "LGHUB Updater Service",
+      "ListaryServiceV2",
+      "Local Session Manager",
+      "Logitech LampArray Service",
+      "Microsoft Defender Core Service",
+      "Mullvad VPN Service",
+      "Nefarius VirtualPad Driver Service",
+      "Network Store Interface Service",
+      "NVIDIA Display Container LS",
+      "NVIDIA LocalSystem Container",
+      "PACE License Services",
+      "Power",
+      "PreSonus Hardware Access Service",
+      "Prowlarr",
+      "Remote Procedure Call (RPC)",
+      "RPC Endpoint Mapper",
+      "RustDesk Service",
+      "Security Accounts Manager",
+      "Security Center",
+      "Server",
+      "Shell Hardware Detection",
+      "State Repository Service",
+      "Storage Service",
+      "SysMain",
+      "System Event Notification Service",
+      "System Events Broker",
+      "Task Scheduler",
+      "Text Input Management Service",
+      "Themes",
+      "Universal Audio Helper Service",
+      "Update Orchestrator Service",
+      "User Manager",
+      "User Profile Service",
+      "webthreatdefusersvc_d880f",
+      "Windhawk",
+      "Windows Audio",
+      "Windows Audio Endpoint Builder",
+      "Windows Connection Manager",
+      "Windows Defender Firewall",
+      "Windows Event Log",
+      "Windows Font Cache Service",
+      "Windows Health and Optimized Experiences",
+      "Windows Management Instrumentation",
+      "Windows MIDI Service",
+      "Windows Push Notifications System Service",
+      "WLAN AutoConfig",
+      "Workstation",
+      "WpnUserService_d880f",
+      "WSL Service"
+    ],
+    "Disabled": [
+      "Auto Time Zone Updater",
+      "Connected User Experiences and Telemetry",
+      "Device Management Wireless Application Protocol (WAP) Push message Routing Service",
+      "DialogBlockingService",
+      "Distributed Link Tracking Client",
+      "Geolocation Service",
+      "Microsoft App-V Client",
+      "Microsoft Defender Antivirus Network Inspection Service",
+      "Microsoft Defender Antivirus Service",
+      "Microsoft Keyboard Filter",
+      "Net.Tcp Port Sharing Service",
+      "Offline Files",
+      "OneSyncSvc_d880f",
+      "OpenSSH Authentication Agent",
+      "Print Spooler",
+      "Problem Reports Control Panel Support",
+      "Program Compatibility Assistant Service",
+      "Remote Registry",
+      "Routing and Remote Access",
+      "Shared PC Account Manager",
+      "User Experience Virtualization Service",
+      "Visual Studio Standard Collector Service 150",
+      "Windows AI Components Host",
+      "Windows Error Reporting Service",
+      "Windows Image Acquisition (WIA)",
+      "Windows Insider Service",
+      "Windows Media Player Network Sharing Service"
+    ],
+    "Defender": [
+      {
+        "Name": "MDCoreSvc",
+        "Status": "Running",
+        "StartType": "Automatic"
+      },
+      {
+        "Name": "WdNisSvc",
+        "Status": "Stopped",
+        "StartType": "Disabled"
+      },
+      {
+        "Name": "WinDefend",
+        "Status": "Stopped",
+        "StartType": "Disabled"
+      }
+    ]
+  },
+  "security": {
+    "DefenderPolicy": {
+      "DisableAntiVirus": 1,
+      "DisableAntiSpyware": 1
+    },
+    "DeviceGuard": {
+      "VirtualizationBasedSecurityStatus": 2,
+      "CodeIntegrityPolicyEnforcementStatus": 2
+    },
+    "AvProducts": [
+      {
+        "Name": "Windows Defender",
+        "ProductState": 401664
+      }
+    ]
+  },
+  "visual": {
+    "VisualFXSetting": 3,
+    "MenuShowDelay": "0",
+    "MinAnimate": "0",
+    "TaskbarAnim": 0,
+    "Transparency": 1,
+    "GameDVR": 0,
+    "HwSchMode": 2
+  },
+  "network": {
+    "Adapters": [
+      {
+        "Name": "WiFi",
+        "Description": "Intel(R) Wi-Fi 6 AX200 160MHz",
+        "Status": "Disconnected",
+        "LinkSpeed": "0 bps"
+      },
+      {
+        "Name": "Mullvad",
+        "Description": "Mullvad Tunnel",
+        "Status": "Up",
+        "LinkSpeed": "100 Gbps"
+      },
+      {
+        "Name": "Ethernet",
+        "Description": "Realtek PCIe GbE Family Controller",
+        "Status": "Up",
+        "LinkSpeed": "1 Gbps"
+      }
+    ],
+    "Dns": [
+      {
+        "Interface": "Mullvad",
+        "Servers": [
+          "10.64.0.1"
+        ]
+      },
+      {
+        "Interface": "Ethernet",
+        "Servers": [
+          "1.1.1.1",
+          "1.0.0.1"
+        ]
+      },
+      {
+        "Interface": "Loopback Pseudo-Interface 1",
+        "Servers": []
+      }
+    ]
+  },
+  "topProcesses": [
+    {
+      "Name": "opencode",
+      "Id": 33216,
+      "WorkingSetMB": 2054.0
+    },
+    {
+      "Name": "opencode",
+      "Id": 33280,
+      "WorkingSetMB": 1014.0
+    },
+    {
+      "Name": "Memory Compression",
+      "Id": 2344,
+      "WorkingSetMB": 916.0
+    },
+    {
+      "Name": "Discord",
+      "Id": 22688,
+      "WorkingSetMB": 605.0
+    },
+    {
+      "Name": "opencode",
+      "Id": 6572,
+      "WorkingSetMB": 581.0
+    },
+    {
+      "Name": "Ableton Live 12 Suite",
+      "Id": 5544,
+      "WorkingSetMB": 509.0
+    },
+    {
+      "Name": "T3 Code (Alpha)",
+      "Id": 31564,
+      "WorkingSetMB": 354.0
+    },
+    {
+      "Name": "Everything",
+      "Id": 5884,
+      "WorkingSetMB": 294.0
+    },
+    {
+      "Name": "explorer",
+      "Id": 9632,
+      "WorkingSetMB": 270.0
+    },
+    {
+      "Name": "TIDAL",
+      "Id": 2572,
+      "WorkingSetMB": 263.0
+    },
+    {
+      "Name": "claude",
+      "Id": 32080,
+      "WorkingSetMB": 254.0
+    },
+    {
+      "Name": "T3 Code (Alpha)",
+      "Id": 18664,
+      "WorkingSetMB": 234.0
+    },
+    {
+      "Name": "pwsh",
+      "Id": 9752,
+      "WorkingSetMB": 185.0
+    },
+    {
+      "Name": "TIDAL",
+      "Id": 31736,
+      "WorkingSetMB": 183.0
+    },
+    {
+      "Name": "T3 Code (Alpha)",
+      "Id": 24084,
+      "WorkingSetMB": 162.0
+    }
+  ],
+  "events": {
+    "WindowDays": 7,
+    "SystemTop": [
+      {
+        "Count": 21,
+        "Key": "153, nvlddmkm"
+      },
+      {
+        "Count": 13,
+        "Key": "3, FenderQuantumUSB"
+      },
+      {
+        "Count": 13,
+        "Key": "10010, Microsoft-Windows-DistributedCOM"
+      },
+      {
+        "Count": 9,
+        "Key": "7034, Service Control Manager"
+      },
+      {
+        "Count": 8,
+        "Key": "55, Ntfs"
+      },
+      {
+        "Count": 7,
+        "Key": "20, Microsoft-Windows-WindowsUpdateClient"
+      },
+      {
+        "Count": 5,
+        "Key": "41, Microsoft-Windows-Kernel-Power"
+      },
+      {
+        "Count": 5,
+        "Key": "6008, EventLog"
+      },
+      {
+        "Count": 5,
+        "Key": "10005, Microsoft-Windows-DistributedCOM"
+      },
+      {
+        "Count": 4,
+        "Key": "98, Microsoft-Windows-Ntfs"
+      },
+      {
+        "Count": 4,
+        "Key": "131, Ntfs"
+      },
+      {
+        "Count": 4,
+        "Key": "7000, Service Control Manager"
+      },
+      {
+        "Count": 4,
+        "Key": "7009, Service Control Manager"
+      },
+      {
+        "Count": 2,
+        "Key": "13, nvlddmkm"
+      },
+      {
+        "Count": 1,
+        "Key": "7024, Service Control Manager"
+      }
+    ],
+    "UncleanShutdowns14d": [
+      "2026-09-23T01:25:55.5789340+08:00",
+      "2026-09-22T20:42:21.0061532+08:00",
+      "2026-09-22T09:36:36.4583009+08:00",
+      "2026-09-20T08:06:26.0685363+08:00",
+      "2026-09-17T21:30:16.5617192+08:00",
+      "2026-09-17T08:45:11.6643326+08:00",
+      "2026-09-17T06:44:50.2756751+08:00",
+      "2026-09-16T04:18:32.0933343+08:00",
+      "2026-09-15T20:33:49.6657823+08:00",
+      "2026-09-15T16:41:48.6249353+08:00",
+      "2026-09-15T06:21:50.8989427+08:00",
+      "2026-09-13T03:20:19.5071791+08:00"
+    ],
+    "NtfsRecent": [
+      {
+        "Time": "2026-09-24T11:29:33.3946143+08:00",
+        "Id": 55,
+        "Level": "Error",
+        "Msg": "A corruption was discovered in the file system structure on volume ??.\r"
+      },
+      {
+        "Time": "2026-09-24T11:29:14.2657666+08:00",
+        "Id": 98,
+        "Level": "Error",
+        "Msg": "Volume ?? (\\Device\\HarddiskVolumeShadowCopy4) needs to be taken offline to perform a Full Chkdsk.  Please run \"CHKDSK /F\" locally via the command line, or run \"REPAIR-VOLUME <drive:>\" locally or remotely via PowerShell."
+      },
+      {
+        "Time": "2026-09-24T11:27:55.4830883+08:00",
+        "Id": 55,
+        "Level": "Error",
+        "Msg": "A corruption was discovered in the file system structure on volume C:.\r"
+      },
+      {
+        "Time": "2026-09-24T11:27:53.4061497+08:00",
+        "Id": 131,
+        "Level": "Error",
+        "Msg": "The file system structure on volume C: cannot be corrected.\r"
+      },
+      {
+        "Time": "2026-09-24T10:30:32.7131417+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume \\\\?\\Volume{5ad05937-79f2-410b-bfb4-53e3775318ab} (\\Device\\HarddiskVolume14) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-24T10:30:32.6995981+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume \\\\?\\Volume{319690cb-a280-45f2-aaec-367542a76397} (\\Device\\HarddiskVolume15) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-24T10:30:32.5993143+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume G: (\\Device\\HarddiskVolume6) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-24T10:30:30.5547234+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume H: (\\Device\\HarddiskVolume4) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-24T10:30:29.5166624+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume D: (\\Device\\HarddiskVolume8) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-24T10:30:29.1523953+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume F: (\\Device\\HarddiskVolume2) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-24T10:30:29.0068377+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume E: (\\Device\\HarddiskVolume10) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-24T10:30:23.4260384+08:00",
+        "Id": 98,
+        "Level": "Warning",
+        "Msg": "Volume C: (\\Device\\HarddiskVolume13) requires an Online Scan.  An Online Scan will automatically run as part of the next scheduled maintenance task.  Alternatively you may run \"CHKDSK /SCAN\" locally via the command line, or run \"REPAIR-VOLUME <drive:> -SCAN\" locally or remotely via PowerShell."
+      },
+      {
+        "Time": "2026-09-23T01:25:59.6943078+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume \\\\?\\Volume{5ad05937-79f2-410b-bfb4-53e3775318ab} (\\Device\\HarddiskVolume14) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-23T01:25:59.6794942+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume \\\\?\\Volume{319690cb-a280-45f2-aaec-367542a76397} (\\Device\\HarddiskVolume15) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-23T01:25:59.5771431+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume G: (\\Device\\HarddiskVolume6) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-23T01:25:57.2767461+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume H: (\\Device\\HarddiskVolume4) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-23T01:25:56.2325682+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume D: (\\Device\\HarddiskVolume8) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-23T01:25:55.7733080+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume F: (\\Device\\HarddiskVolume2) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-23T01:25:55.6042457+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume E: (\\Device\\HarddiskVolume10) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-23T01:25:50.0374749+08:00",
+        "Id": 98,
+        "Level": "Warning",
+        "Msg": "Volume C: (\\Device\\HarddiskVolume13) requires an Online Scan.  An Online Scan will automatically run as part of the next scheduled maintenance task.  Alternatively you may run \"CHKDSK /SCAN\" locally via the command line, or run \"REPAIR-VOLUME <drive:> -SCAN\" locally or remotely via PowerShell."
+      },
+      {
+        "Time": "2026-09-22T21:42:53.3885820+08:00",
+        "Id": 55,
+        "Level": "Error",
+        "Msg": "A corruption was discovered in the file system structure on volume C:.\r"
+      },
+      {
+        "Time": "2026-09-22T21:42:51.0339135+08:00",
+        "Id": 131,
+        "Level": "Error",
+        "Msg": "The file system structure on volume C: cannot be corrected.\r"
+      },
+      {
+        "Time": "2026-09-22T20:42:25.4418393+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume \\\\?\\Volume{5ad05937-79f2-410b-bfb4-53e3775318ab} (\\Device\\HarddiskVolume14) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-22T20:42:25.4263889+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume \\\\?\\Volume{319690cb-a280-45f2-aaec-367542a76397} (\\Device\\HarddiskVolume15) is healthy.  No action is needed."
+      },
+      {
+        "Time": "2026-09-22T20:42:25.3232417+08:00",
+        "Id": 98,
+        "Level": "Information",
+        "Msg": "Volume G: (\\Device\\HarddiskVolume6) is healthy.  No action is needed."
+      }
+    ]
+  },
+  "temp": {
+    "UserTempMB": 8862.2,
+    "WindowsTempMB": 0.0,
+    "SoftwareDistributionMB": 661.7
+  },
+  "recommendationsSeed": [
+    "If C: Health is Warning / Full Repair Needed: elevated Repair-Volume C: -Scan (then offline if required).",
+    "If UncleanShutdowns14d is large: follow existing crash plan in CURRENT-STATUS.md; do not invent new DOCP/PBO changes.",
+    "Review startup Approved entries for apps not needed every logon; disable only with owner confirmation.",
+    "Clear temp-only folders after review; never delete live session data.",
+    "Do not disable VBS, protected audio apps, or Defender policy as part of a generic speed pass."
+  ]
+}

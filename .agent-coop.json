@@ -1,0 +1,12 @@
+{
+  "project": "windhawk-configuration",
+  "description": "Windhawk mods, themes, engine and settings work.",
+  "exclusive": {
+    "windhawk-engine": "writing mod settings to HKLM or restarting the Windhawk engine - one thread at a time, always after a registry backup",
+    "backups": "writing into backups/ - two threads writing at once corrupts the rollback trail"
+  },
+  "protected": [
+    "backups/**",
+    "scripts/**"
+  ]
+}

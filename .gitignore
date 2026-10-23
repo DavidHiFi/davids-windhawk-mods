@@ -1,0 +1,16 @@
+# 2026-10-24 first save point: only rules, notes, scripts, docs and handoff briefs are tracked.
+# Everything else (backups, builds, screenshots, repos, packages) stays local.
+*
+!*/
+!/AGENTS.md
+!/CLAUDE.md
+!/CURRENT-STATUS.md
+!/README.md
+!/.agent-coop.json
+!/.gitignore
+!/notes/**
+!/scripts/**
+!/docs/**
+!/t3-handoff/**
+acl-recovery*/
+node_modules/

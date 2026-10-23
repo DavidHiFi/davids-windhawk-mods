@@ -1,0 +1,5 @@
+Add-Type @"
+using System;using System.Runtime.InteropServices;using System.Text;
+public class FontWin {public delegate bool CB(IntPtr h,IntPtr p);[DllImport("user32.dll")]public static extern bool EnumWindows(CB c,IntPtr p);[DllImport("user32.dll")]public static extern bool EnumChildWindows(IntPtr h,CB c,IntPtr p);[DllImport("user32.dll",CharSet=CharSet.Unicode)]public static extern int GetWindowText(IntPtr h,StringBuilder b,int n);[DllImport("user32.dll")]public static extern bool GetWindowRect(IntPtr h,out R r); public struct R{public int l,t,r,b;}public static string Text(IntPtr h){var b=new StringBuilder(512);GetWindowText(h,b,512);return b.ToString();}}
+"@
+[FontWin]::EnumWindows({param($h,$p) if([FontWin]::Text($h) -like '*Local Disk*Properties*'){[FontWin]::EnumChildWindows($h,{param($c,$p2) if([FontWin]::Text($c) -like '*Object name*'){$r=New-Object FontWin+R;[FontWin]::GetWindowRect($c,[ref]$r)|Out-Null; Write-Output ([pscustomobject]@{label='Object name';width=$r.r-$r.l;height=$r.b-$r.t})};return $true},[IntPtr]::Zero)|Out-Null};return $true},[IntPtr]::Zero)|Out-Null

@@ -1,0 +1,65 @@
+auth values: 4
+auth_7a28cbec28e6feaa: accountId='2674e0cd-097a-4599-86e2-ae872613be8d' expiresMs=1792378893913 hasAccess=True hasRefresh=True
+WHAM STATUS: 200
+{
+  "user_id": "user-xreijPtMEsQSFqi0fHJqz4Q9",
+  "account_id": "2674e0cd-097a-4599-86e2-ae872613be8d",
+  "email": "arena.curtsy178@aleeas.com",
+  "plan_type": "free",
+  "rate_limit": {
+    "allowed": false,
+    "limit_reached": true,
+    "primary_window": {
+      "used_percent": 100,
+      "limit_window_seconds": 2592000,
+      "reset_after_seconds": 2084042,
+      "reset_at": 1794173513
+    },
+    "secondary_window": null
+  },
+  "code_review_rate_limit": null,
+  "additional_rate_limits": null,
+  "model_usage": {},
+  "credits": {
+    "has_credits": false,
+    "unlimited": false,
+    "overage_limit_reached": false,
+    "balance": null,
+    "approx_local_messages": null,
+    "approx_cloud_messages": null
+  },
+  "spend_control": {
+    "reached": false,
+    "individual_limit": null
+  },
+  "rate_limit_reached_type": {
+    "type": "rate_limit_reached",
+    "details": "default"
+  },
+  "rate_limit_upsell": {
+    "banner_type": "free_or_go_rate_limit_reached",
+    "title": "You're out of Codex messages",
+    "description": "Your rate limit resets on {time}. Upgrade or use one of your rate limit resets now.",
+    "ctas": [
+      {
+        "action": "open_pricing_dialog",
+        "label": "Upgrade"
+      },
+      {
+        "action": "reset_usage",
+        "label": "Reset usage"
+      }
+    ],
+    "reset_at": 1794173513,
+    "referral": null,
+    "request_url": null
+  },
+  "promo": null,
+  "rate_limit_reset_credits": {
+    "available_count": 1,
+    "applicable_available_count": 1
+  }
+}
+auth_8ec9e8ca9ba92bac: accountId='' expiresMs=1792109216025 hasAccess=True hasRefresh=True
+auth_8ed41aca9bb1d527: accountId='' expiresMs=1791485946022 hasAccess=True hasRefresh=True
+auth_97d7a97e22a96a73: accountId='' expiresMs=0 hasAccess=True hasRefresh=False

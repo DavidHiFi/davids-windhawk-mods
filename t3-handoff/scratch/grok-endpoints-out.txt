@@ -1,0 +1,27 @@
+binary: C:\Users\localuser\.grok\bin\grok.exe (169,345,536 B)
+unique /v1/ paths: 17
+  /v1/...
+  /v1/chat/completions
+  /v1/cursor/session
+  /v1/cursor/sessionacquirexai_grok_cursor_worker
+  /v1/instance/service-accounts/default/identity
+  /v1/instance/service-accounts/default/token
+  /v1/logs
+  /v1/logsOTEL_EXPORTER_OTLP_LOGS_TIMEOUTOTEL_EXPORTER_OTLP_LOGS_H
+  /v1/messages
+  /v1/metrics
+  /v1/metricsOTEL_EXPORTER_OTLP_METRICS_TIMEOUTOTEL_EXPORTER_OTLP_
+  /v1/models
+  /v1/responses
+  /v1/settings
+  /v1/tools
+  /v1/traces
+  /v1/tracesOTEL_EXPORTER_OTLP_TRACES_TIMEOUTOTEL_EXPORTER_OTLP_TR
+limit/usage paths:
+token found: True
+GET /v1/usage -> FAIL (404)
+GET /v1/rate-limits -> FAIL (404)
+GET /v1/limits -> FAIL (404)
+GET /v1/user -> 200: {"userId":"0310122b-e5c6-4d64-8574-345b6e35bdf8","email":"rhinoperson221@gmail.com","firstName":"DavidHiFi","lastName":null,"profileImageAssetId":"users/0310122b-e5c6-4d64-8574-345b6e35bdf8/f34n1YAQsNxJCMwh-profile-picture.webp","xUserId":null,"userBlockedReason":null,"principalType":"User","principalId":"0310122b-e5c6-4d64-8574-345b6e35bdf8","teamId":null,"teamName":null,"teamRole":null,"teamBloc ...
+GET /v1/api-key -> FAIL (404)
+GET /v1/team -> FAIL (404)

@@ -1,0 +1,7 @@
+token found: True
+==== GET https://cli-chat-proxy.grok.com/v1/billing?format=credits ====
+STATUS: 200
+{"config":{"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","start":"2026-10-15T00:00:00+00:00","end":"2026-10-22T00:00:00+00:00"},"onDemandCap":{"val":0},"onDemandUsed":{"val":0},"isUnifiedBillingUser":true,"prepaidBalance":{"val":0},"topUpMethod":"TOP_UP_METHOD_SAVED_PAYMENT_METHOD","billingPeriodStart":"2026-10-15T00:00:00+00:00","billingPeriodEnd":"2026-10-22T00:00:00+00:00"}}
+==== GET https://cli-chat-proxy.grok.com/v1/billing ====
+STATUS: 200
+{"config":{"monthlyLimit":{"val":0},"used":{"val":802},"onDemandCap":{"val":0},"billingPeriodStart":"2026-10-01T00:00:00+00:00","billingPeriodEnd":"2026-11-01T00:00:00+00:00","history":[{"billingCycle":{"year":2026,"month":9},"includedUsed":{"val":0},"onDemandUsed":{"val":0},"totalUsed":{"val":0}},{"billingCycle":{"year":2026,"month":8},"includedUsed":{"val":0},"onDemandUsed":{"val":0},"totalUsed":{"val":0}},{"billingCycle":{"year":2026,"month":7},"includedUsed":{"val":0},"onDemandUsed":{"val":0},"totalUsed":{"val":0}}]}}

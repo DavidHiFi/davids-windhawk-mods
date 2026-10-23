@@ -1,0 +1,135 @@
+{
+  "schema": "syscfg.perf-deep.v1",
+  "date": "2026-09-24",
+  "thread": "syscfg-perf-deep",
+  "mode": "read-only",
+  "baseline_note": "notes/2026-09-24-full-system-audit.md",
+  "finding_note": "notes/2026-09-24-perf-deep-dive.md",
+  "changes_applied": [],
+  "system": {
+    "os": "Windows 11 Pro 26200 (25H2)",
+    "cpu": "AMD Ryzen 7 5800X",
+    "ram_gb": 32,
+    "gpu": "NVIDIA GeForce RTX 4070",
+    "driver": "616.92",
+    "power_scheme": "High performance"
+  },
+  "facts": {
+    "volume_c": {
+      "health": "Warning",
+      "operational": "Full Repair Needed",
+      "ntfs_events_55_131_recent": true,
+      "latest_ntfs_event": "2026-09-24T11:29:33"
+    },
+    "kernel_power_41_since_20260913": 12,
+    "nvlddmkm_4101_last_7d": 0,
+    "prefetch": {
+      "enable_prefetcher": 0,
+      "prefetch_dir_file_count": 0,
+      "sysmain_status": "Running",
+      "sysmain_start": "Automatic"
+    },
+    "memory": {
+      "committed_pct_sample": 72,
+      "committed_mb_sample": 40341,
+      "available_mb_sample": 12686,
+      "pagefile": "C:\\pagefile.sys auto (~24GB)"
+    },
+    "network_eee": true,
+    "green_ethernet": true,
+    "nic_power_saving": true,
+    "advanced_eee": false,
+    "directx": {
+      "swap_effect_upgrade": 1,
+      "vro_optimize": 1,
+      "autohdr": 0,
+      "hags_hwSchMode": 2,
+      "appstatus_4096": [
+        "F:\\SteamLibrary\\steamapps\\common\\Call of Duty Advanced Warfare\\s1x.exe"
+      ]
+    },
+    "rtss": {
+      "force_flip_model": 1,
+      "force_allow_tearing": 1,
+      "hooking": true,
+      "preserve": true
+    },
+    "overlays": {
+      "nvidia_overlay_processes": 5,
+      "nvidia_overlay_ws_mb": 393,
+      "discord_processes": 7,
+      "windhawk_processes": 12,
+      "steamwebhelper": 10
+    },
+    "windhawk": {
+      "engine": "1.7.3",
+      "service": "Running",
+      "installed_mods_hklm_count": 91,
+      "notable_mods": [
+        "timer-resolution-control",
+        "startup-app-delay-fix",
+        "d3d9-flip-model-upgrade",
+        "shadowplay-do-not-disable",
+        "translucent-windows",
+        "windows-11-taskbar-styler"
+      ]
+    },
+    "widgets_allow_news_and_interests": 1,
+    "transparency_enabled": 1,
+    "visual_fx_setting": 3,
+    "game_dvr_enabled": 0,
+    "game_mode": 1,
+    "defender": {
+      "realtime": false,
+      "wd_filter_start": "DISABLED",
+      "disable_antispyware_policy": 1,
+      "intentional": true
+    },
+    "vbs_status": 2,
+    "bluetooth_problem": {
+      "device": "Intel(R) Wireless Bluetooth(R)",
+      "problem_code": 10,
+      "status": "Error"
+    },
+    "idle_sample": {
+      "processor_utility_pct": 58,
+      "dpcs_per_sec": 12033,
+      "interrupts_per_sec": 89639,
+      "context_switches_per_sec": 150709
+    }
+  },
+  "zero_drawback_candidates": [
+    "elevated_chkdsk_scan_C",
+    "clear_appstatus_4096_s1x_exe",
+    "disable_green_ethernet_and_nic_power_saving",
+    "set_disable_paging_executive_1",
+    "reenable_prefetcher",
+    "disable_widgets_if_unused",
+    "windhawk_disable_autoupdate_on_d3d9_flip_mod",
+    "close_idle_heavy_utilities_before_gaming",
+    "disable_nvidia_overlay_if_unused"
+  ],
+  "tradeoff_only": [
+    "defender_reenable",
+    "vbs_change",
+    "dps_inventory_whesvc_disable",
+    "stop_hwinfo_autostart",
+    "disable_bonjour",
+    "disable_wlansvc",
+    "block_all_timer_resolution",
+    "transparency_off_if_look_required"
+  ],
+  "non_actions": [
+    "rtss_force_flip_model",
+    "blanket_service_debloat",
+    "bios_docp_pbo",
+    "nvidia_reinstall"
+  ],
+  "elevation_required": [
+    "fltmc",
+    "Get-MMAgent",
+    "bcdedit_enum",
+    "chkdsk_f",
+    "bitlocker_status"
+  ]
+}

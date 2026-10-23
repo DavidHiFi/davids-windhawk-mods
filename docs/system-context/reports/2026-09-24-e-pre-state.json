@@ -1,0 +1,77 @@
+{
+  "when": "2026-09-24T17:27:52.9830589+08:00",
+  "E:EXCL": {
+    "Bytes": 27589086348.0,
+    "Count": 29906
+  },
+  "top": {
+    "System Volume Information": {
+      "Bytes": 0,
+      "Count": 0
+    },
+    "Cherax": {
+      "Bytes": 10000502,
+      "Count": 2
+    },
+    "NVPI-R": {
+      "Bytes": 3103592,
+      "Count": 11
+    },
+    "Windhawk": {
+      "Bytes": 4195,
+      "Count": 6
+    },
+    "MessageLogger": {
+      "Bytes": 26735703854,
+      "Count": 28273
+    },
+    "$RECYCLE.BIN": {
+      "Bytes": 129,
+      "Count": 1
+    },
+    "Miscallaneous": {
+      "Bytes": 259629874,
+      "Count": 930
+    },
+    "PowerToys": {
+      "Bytes": 0,
+      "Count": 0
+    },
+    "Notepad++": {
+      "Bytes": 1833100,
+      "Count": 36
+    },
+    "FabFilter Presets": {
+      "Bytes": 30179,
+      "Count": 2
+    },
+    "Recovery": {
+      "Bytes": 0,
+      "Count": 0
+    },
+    "SteaMidra": {
+      "Bytes": 7971151,
+      "Count": 78
+    },
+    "UniGet UI": {
+      "Bytes": 1900999,
+      "Count": 29
+    },
+    "Everything Database": {
+      "Bytes": 76518431,
+      "Count": 1
+    },
+    "Cold War Stuffs": {
+      "Bytes": 374054507,
+      "Count": 178
+    },
+    "Sordum Software Suite": {
+      "Bytes": 116242170,
+      "Count": 355
+    },
+    "nvidiaProfileInspector": {
+      "Bytes": 2093794,
+      "Count": 5
+    }
+  }
+}
