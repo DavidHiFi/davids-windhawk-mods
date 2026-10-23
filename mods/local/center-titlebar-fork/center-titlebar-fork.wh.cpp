@@ -2,8 +2,8 @@
 // @id              center-titlebar-fork
 // @name            Center Titlebar - Fork
 // @description     Center align the text in titlebar
-// @version         3.4
-// @author          DavidHiFi
+// @version         3.4.1
+// @author          DavidHiFi, rounk-ctrl
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         MIT
