@@ -1554,7 +1554,7 @@
   "toggle-hidden-files": {
     "toggleProtectedFiles": 1
   },
-  "translucent-windows": {
+  "local@translucent-windows-plus": {
     "RenderingMod.ThemeBackground": 0,
     "RenderingMod.SysColors": 0,
     "RenderingMod.AccentColorControls": 0,

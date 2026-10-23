@@ -682,6 +682,18 @@
       "enabled": true
     },
     {
+      "id": "local@translucent-windows-plus",
+      "name": "Translucent Windows Plus",
+      "author": "DavidHiFi, Undisputed00x, WinExperiments",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.8.3",
+      "license": "",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/translucent-windows",
+      "source": "mods/local/translucent-windows-plus/translucent-windows-plus.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "local@windhawk-styler",
       "name": "Windhawk Styler",
       "author": "DavidHiFi",
@@ -1255,18 +1267,6 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/toggle-hidden-files",
       "source": "mods/catalog/toggle-hidden-files.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "translucent-windows",
-      "name": "Translucent Windows",
-      "author": "Undisputed00x",
-      "github": "https://github.com/Undisputed00x",
-      "version": "1.8.2",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/translucent-windows",
-      "source": "mods/catalog/translucent-windows.wh.cpp",
       "enabled": true
     },
     {

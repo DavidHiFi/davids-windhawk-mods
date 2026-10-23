@@ -1,16 +1,28 @@
 // ==WindhawkMod==
-// @id              translucent-windows
-// @name            Translucent Windows
-// @description     Enables native translucent effects in Windows 11
-// @version         1.8.2
-// @author          Undisputed00x
-// @github          https://github.com/Undisputed00x
+// @id              translucent-windows-plus
+// @name            Translucent Windows Plus
+// @description     Blur, acrylic and mica for app windows, with per-app rules and custom themes
+// @version         1.8.3
+// @author          DavidHiFi, Undisputed00x, WinExperiments
+// @github          https://github.com/DavidHiFi
+// @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
+// @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         *
 // @compilerOptions -ldwmapi -luxtheme -lcomctl32 -lgdi32 -ld2d1 -lmsimg32 -lshcore -lversion -ffp-exception-behavior=maytrap
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
 /*
+
+# Translucent Windows Plus
+
+Blur, acrylic and mica backgrounds for app windows, with per-app rules and custom themes. Modern (UWP and WinUI), Electron, Qt and Chromium apps are mostly out of reach. The FAQ below explains why.
+
+## Features
+- **Four background styles.** Blur, Acrylic, Mica and MicaAlt, picked per app.
+- **Flyout effects.** Menus, dropdowns and tooltips can get the same look.
+- **Custom theme rendering.** Keeps text readable on translucent windows and tints common controls.
+- **Per-app rules.** Turn effects on or off for any program, each with its own style.
 
 ### ⚠️ FAQ section below ⚠️
 ### ❗For any excluded process, if the global "New system colors" setting is enabled, please add the excluded processes to the process rules in the mod settings instead.❗
@@ -36,13 +48,6 @@
 | **Mica (SystemBackdrop)** | **MicaAlt (SystemBackdrop)** |
 |:---:|:---:|
 | ![Mica](https://i.imgur.com/1ciJJck.png) | ![MicaTabbed](https://i.imgur.com/5Dxj5PS.png) |
-
-## Credits 
-The custom theme is a close copy of the Rectify 11 theme created by [WinExperiments](https://github.com/WinExperiments).
-#
-The inspiration for this mod came from the awesome Windows effects customization projects of [Maplespe](https://github.com/Maplespe) and [ALTaleX531](https://github.com/ALTaleX531).
-#
-Thanks also to [m417z](https://github.com/m417z) for his help and input in completing the mod.
 
 ## FAQ
 
@@ -79,6 +84,11 @@ Changing the theme to the default and vice versa fixes the problem. As a last re
 This is caused by default by the AccentBlur API.❕
 
 * ✨The mod works best on the default dark theme.✨
+
+## Credits
+Based on [Translucent Windows](https://windhawk.net/mods/translucent-windows) by [Undisputed00x](https://github.com/Undisputed00x).
+The custom theme is a close copy of the Rectify 11 theme by [WinExperiments](https://github.com/WinExperiments).
+The effects work by [Maplespe](https://github.com/Maplespe) and [ALTaleX531](https://github.com/ALTaleX531) inspired this mod, and [m417z](https://github.com/m417z) helped finish it.
 
 */
 // ==/WindhawkModReadme==
@@ -456,6 +466,71 @@ static decltype(&DefWindowProcW) DefWindowProc_orig = nullptr;
 
 VOID NewWindowShown(HWND);
 VOID HandleEffects(HWND hWnd);
+VOID DisableAccentBlurBehind(HWND hWnd);
+
+// Local fix (2026-10-11): the accent policy is applied once at window creation
+// time, before the window is shown and composited. DWM sometimes fails to build
+// the acrylic material from that pre-show state, and the window keeps a static
+// tint with no blur (upstream: ramensoftware/windhawk-mods#5122 reports the
+// same class of create-time race for CEF windows). One delayed re-apply once
+// the window is actually visible forces DWM to rebuild the backdrop, and
+// re-checking eligibility there also covers windows whose styles were not
+// settled yet when the creation hook ran.
+const UINT_PTR REAPPLY_TIMER_ID_BASE = 0x57480000;
+const UINT REAPPLY_TIMER_INTERVAL = 100; // ms per attempt
+const UINT REAPPLY_MAX_ATTEMPTS = 40;    // give up ~4s after creation
+
+VOID CALLBACK DelayedReapplyTimerProc(HWND hWnd, UINT msg, UINT_PTR idEvent, DWORD dwTime)
+{
+    // One-shot by construction: never let a timer survive this callback.
+    KillTimer(hWnd, idEvent);
+
+    if (g_settings.Unload)
+        return;
+
+    UINT attempt = (UINT)(idEvent - REAPPLY_TIMER_ID_BASE);
+    if (!IsWindow(hWnd) || attempt >= REAPPLY_MAX_ATTEMPTS)
+        return;
+
+    if (!IsWindowVisible(hWnd))
+    {
+        // Not shown yet - try again shortly.
+        SetTimer(hWnd, idEvent + 1, REAPPLY_TIMER_INTERVAL, DelayedReapplyTimerProc);
+        return;
+    }
+
+    // The window is on screen now. Toggling the accent policy off and on in the
+    // same tick happens between two DWM composition frames, so it forces the
+    // backdrop to be rebuilt without a visible flicker. NewWindowShown then
+    // re-checks eligibility and re-applies the configured effects.
+    DisableAccentBlurBehind(hWnd);
+    NewWindowShown(hWnd);
+}
+
+VOID ArmAccentReapplyTimer(HWND hWnd)
+{
+    // Explorer only: the reported bug is in Explorer windows. This mod's rules
+    // also cover Discord and other apps, and their windows must not change.
+    if (!g_InsideExplorerProc)
+        return;
+
+    if (g_settings.BgType == g_settings.Default)
+        return;
+
+    // Console windows of other processes pass through EnumWindowsProc (Clink
+    // workaround); timers may only be set on windows of this process.
+    DWORD dwProcessId = 0;
+    GetWindowThreadProcessId(hWnd, &dwProcessId);
+    if (dwProcessId != GetCurrentProcessId())
+        return;
+
+    // Child windows are never eligible (IsWindowEligible rejects them), and
+    // explorer creates lots of them - don't arm timers for those.
+    if (GetWindowLongPtrW(hWnd, GWL_STYLE) & WS_CHILD)
+        return;
+
+    SetTimer(hWnd, REAPPLY_TIMER_ID_BASE, REAPPLY_TIMER_INTERVAL, DelayedReapplyTimerProc);
+}
 
 std::wstring GetWindowClass(HWND hWnd)
 {
@@ -764,6 +839,20 @@ HRESULT WINAPI HookedDwmSetWindowAttribute(HWND hWnd, DWORD dwAttribute, LPCVOID
         return DwmSetWindowAttribute_orig(hWnd, DWMWA_WINDOW_CORNER_PREFERENCE, &menuCornerRadius, sizeof(menuCornerRadius));
     }
     
+    // Ruled acrylic windows: apps set an opaque caption or border colour
+    // (DWMWA_CAPTION_COLOR = 35, DWMWA_BORDER_COLOR = 34), which hides the
+    // backdrop on the title bar. COLOR_NONE lets the frame show the same
+    // acrylic as the client area. Applies only when the app itself sets the
+    // attribute, so windows that never touch it are unchanged. Previously this
+    // was Terminal-class-gated; any ruled acrylic app with a painted frame
+    // (PowerToys Settings) needs the same treatment.
+    if ((dwAttribute == 35 || dwAttribute == 34)
+        && (g_settings.BgType == g_settings.AcrylicSystemBackdrop || g_settings.BgType == g_settings.AccentBlurBehind))
+    {
+        COLORREF colorNone = DWMWA_COLOR_NONE;
+        return DwmSetWindowAttribute_orig(hWnd, dwAttribute, &colorNone, sizeof(colorNone));
+    }
+
     if ((dwAttribute == DWMWA_SYSTEMBACKDROP_TYPE || dwAttribute == DWMWA_USE_HOSTBACKDROPBRUSH) && g_settings.BgType != g_settings.Default)
     {
         if (g_settings.BgType == g_settings.AccentBlurBehind)
@@ -816,7 +905,10 @@ HWND WINAPI HookedNtUserCreateWindowEx(DWORD dwExStyle,
         dwShowMode, dwUnknown1, dwUnknown2, qwUnknown3);
     
     if(hWnd)
+    {
         NewWindowShown(hWnd);
+        ArmAccentReapplyTimer(hWnd);
+    }
 
     return hWnd;
 }
@@ -5145,10 +5237,29 @@ VOID DwmMakeWindowTransparent(HWND hwnd)
     DeleteObject(bb.hRgnBlur);
 }
 
+VOID DisableAccentBlurBehind(HWND hWnd)
+{
+    DWM_BLURBEHIND dwmBlurBehindData = {};
+    dwmBlurBehindData.fEnable = FALSE;
+    dwmBlurBehindData.dwFlags = DWM_BB_ENABLE;
+    DwmEnableBlurBehindWindow(hWnd, &dwmBlurBehindData);
+
+    ACCENT_POLICY accentPolicy = {};
+    WINCOMPATTRDATA winCompositionAttrib = {};
+    accentPolicy.AccentState = ACCENT_STATE_DISABLED;
+
+    winCompositionAttrib.Attrib = WCA_ACCENT_POLICY;
+    winCompositionAttrib.pvData = &accentPolicy;
+    winCompositionAttrib.cbData = sizeof(accentPolicy);
+
+    if (SetWindowCompositionAttribute)
+        SetWindowCompositionAttribute(hWnd, &winCompositionAttrib);
+}
+
 VOID EnableBlurBehind(HWND hWnd)
 {
-    // Does not interfere with the Windows Terminal, GameBar overlay
-    if(!(IsWindowClass(hWnd, L"CASCADIA_HOSTING_WINDOW_CLASS") || IsWindowClass(hWnd, L"ApplicationFrameWindow")))
+    // Skips UWP frame windows (GameBar overlay). Windows Terminal gets the tinted accent blur too.
+    if(!IsWindowClass(hWnd, L"ApplicationFrameWindow"))
     {
         ACCENT_POLICY accentPolicy = {};
         WINCOMPATTRDATA winCompositionAttrib = {};
@@ -5217,6 +5328,15 @@ static LRESULT WINAPI HookedDefWindowProcW(HWND hWnd, UINT msg, WPARAM wParam, L
             ReleaseSRWLockExclusive(&g_ThemeChangeLock);
         }
     }   
+
+    // Windows Terminal: a DWM system backdrop falls back to a solid colour while
+    // its window is inactive. Report the non-client state as active so the
+    // acrylic stays (same idea as TriggerWindowNCRendering for flyouts).
+    if (msg == WM_NCACTIVATE && wParam == FALSE && g_settings.BgType == g_settings.AcrylicSystemBackdrop
+        && IsWindowClass(hWnd, L"CASCADIA_HOSTING_WINDOW_CLASS"))
+    {
+        wParam = TRUE;
+    }
 
     if (IsWindowClass(hWnd, L"ViewControlClass") && msg == WM_NCPAINT) {
         UINT borderType = DWMWCP_ROUND;
@@ -5476,7 +5596,10 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam)
         else if(g_settings.Unload)
             RestoreWindowCustomizations(hWnd);
         else
+        {
             NewWindowShown(hWnd);
+            ArmAccentReapplyTimer(hWnd);
+        }
     }
     return TRUE;
 }

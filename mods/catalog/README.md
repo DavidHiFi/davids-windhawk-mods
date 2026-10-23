@@ -97,7 +97,6 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [timer-resolution-control](./timer-resolution-control.wh.cpp) | [m417z](https://github.com/m417z) | 1.0 | yes |  |
 | [titlebar-for-everyone](./titlebar-for-everyone.wh.cpp) | [Ingan121](https://github.com/Ingan121) | 0.5 | yes | MIT |
 | [toggle-hidden-files](./toggle-hidden-files.wh.cpp) | [Asteski](https://github.com/Asteski) | 1.0.0 | yes |  |
-| [translucent-windows](./translucent-windows.wh.cpp) | [Undisputed00x](https://github.com/Undisputed00x) | 1.8.2 | yes |  |
 | [uxtheme-hook](./uxtheme-hook.wh.cpp) | [rounk-ctrl](https://github.com/rounk-ctrl) | 1.4 | yes |  |
 | [vlc-discord-rpc](./vlc-discord-rpc.wh.cpp) | [ciizerr](https://github.com/ciizerr) | 1.2.0 | yes | MIT |
 | [win-d-per-monitor](./win-d-per-monitor.wh.cpp) | [easyatm](https://github.com/easyatm) | 1.5.260416 | yes |  |

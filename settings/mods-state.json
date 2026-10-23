@@ -720,12 +720,12 @@
     "architecture": "",
     "version": "1.0.0"
   },
-  "translucent-windows": {
+  "local@translucent-windows-plus": {
     "disabled": false,
     "include": "*",
     "exclude": "",
     "architecture": "",
-    "version": "1.8.2"
+    "version": "1.8.3"
   },
   "uxtheme-hook": {
     "disabled": false,

@@ -201,6 +201,8 @@ Most of my mods build on someone else's mod. Each folder's readme credits its so
 | **rounk-ctrl** ([UXTheme hook](https://windhawk.net/mods/uxtheme-hook)) | The base of Theme Tool Plus, and the center-titlebar mod behind Center Titlebar Fork. |
 | **namazso** ([SecureUxTheme](https://github.com/namazso/SecureUxTheme), [ThemeToolSharp](https://github.com/namazso/ThemeToolSharp)) | The theme engine research in Theme Tool Plus. |
 | **ALTaleX531** ([TranslucentFlyouts](https://github.com/ALTaleX531/TranslucentFlyouts)) | Translucent Flyouts is a port of it and uses its settings layout. |
+| **Undisputed00x** ([Translucent Windows](https://windhawk.net/mods/translucent-windows)) | The base of Translucent Windows Plus. |
+| **WinExperiments** ([Rectify 11](https://github.com/WinExperiments)) | The custom theme in Translucent Windows Plus is a close copy of its theme. |
 | **Ingan121** ([Titlebar For Everyone](https://windhawk.net/mods/titlebar-for-everyone)) | The window frame code in Windhawk Styler (MIT). |
 | **Ramen Software** ([Start menu styling guide](https://github.com/ramensoftware/windows-11-start-menu-styling-guide)) | The OnlySearch and RosePine themes merged into OnlySearch Mocha. |
 | **Catppuccin** ([catppuccin](https://github.com/catppuccin/catppuccin)) | The Mocha palette in OnlySearch Mocha and the mod defaults. |
