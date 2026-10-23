@@ -121,7 +121,8 @@ if (-not (Test-Admin)) {
 
 if ($mode -eq 'install') {
     if (-not (Test-Path -LiteralPath $Source)) { Write-Log "missing source: $Source"; exit 11 }
-    if (-not (Test-Path -LiteralPath $StockKey)) { Write-Log "missing stock key: $StockKey"; exit 11 }
+    $hasStock = Test-Path -LiteralPath $StockKey
+    if (-not $hasStock) { Write-Log "no $StockKeyReg key; nothing to disable" }
     $idMatch = Select-String -LiteralPath $Source -Pattern '^\s*//\s*@id\s+([0-9a-z-]+)\s*$' | Select-Object -First 1
     if (-not $idMatch -or $idMatch.Matches[0].Groups[1].Value -ne 'theme-tool-plus') {
         Write-Log 'invalid source @id; expected theme-tool-plus without local@'
@@ -171,7 +172,7 @@ if ($mode -eq 'install') {
     Write-Log "installed: $Mods32\$libName sha256=$hash32"
 
     # UXTheme hook and Theme Tool Plus hook the same theme symbols; exactly one runs.
-    Set-ModState -Key $StockKey -Disabled 1
+    if ($hasStock) { Set-ModState -Key $StockKey -Disabled 1 }
 
     $freshKey = -not (Test-Path -LiteralPath $ModKey)
     if ($freshKey) { $null = New-Item -Path $ModKey -Force }

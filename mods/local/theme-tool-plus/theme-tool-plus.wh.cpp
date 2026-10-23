@@ -2,7 +2,7 @@
 // @id              theme-tool-plus
 // @name            Theme Tool Plus
 // @description     Apply and switch custom Windows themes from the settings tab. No separate theme tool needed
-// @version         1.1.0
+// @version         1.1.1
 // @author          DavidHiFi, rounk-ctrl, namazso
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         explorer.exe
