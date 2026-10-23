@@ -2,7 +2,7 @@
 // @id              fullscreen-start-plus
 // @name            Fullscreen Start Plus
 // @description     A fullscreen grid of all your apps in place of Start, with instant search and adjustable blur
-// @version         1.0.0
+// @version         1.1.0
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -23,8 +23,9 @@ of the macOS Launchpad, with instant search and a blurred background.
 ![Fullscreen Start Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/fullscreen-start-plus.png)
 
 ## Features
-- **Fullscreen.** Fills the work area of the monitor the mouse is on, without
-  covering the taskbar, side bars or the Dock of the Standalone Dock mod.
+- **Fullscreen.** Fills the monitor the mouse is on, or one monitor you pick.
+  It leaves the taskbar, side bars and the Standalone Dock visible, or covers
+  the whole screen if you turn that on.
 - **All apps.** The same programs and Store apps as the "All apps" list of
   Start, in alphabetical order with icon and name.
 - **Instant search.** Just type. Case and accents don't matter, and names that
@@ -92,6 +93,18 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
 - gridColumns: 0
   $name: Grid columns
   $description: 0 picks based on the screen size
+- coverScreen: false
+  $name: Cover the whole screen
+  $description: Also covers the taskbar, side bars and the Standalone Dock. When off, they stay visible
+- monitor: mouse
+  $name: Monitor
+  $description: Where Start opens. If the picked monitor isn't connected, it opens where the mouse is
+  $options:
+  - mouse: The monitor with the mouse
+  - "1": Main monitor
+  - "2": Monitor 2
+  - "3": Monitor 3
+  - "4": Monitor 4
 - winKey: true
   $name: Open with the Windows key
   $description: Also Ctrl+Esc. When off, they open the original Start
@@ -190,6 +203,8 @@ struct Settings {
     D2D1_COLOR_F tint{0, 0, 0, 1};
     int iconSize = 72;
     int columns = 0;
+    bool coverScreen = false;
+    int monitor = 0;  // 0: the one with the mouse; 1: main; 2+: the others, left to right.
 };
 
 Settings g_settings;
@@ -228,6 +243,8 @@ void LoadSettings() {
     s.tint = ParseColor(GetStringSetting(L"tintColor"), s.tint);
     s.iconSize = std::clamp(Wh_GetIntSetting(L"gridIconSize"), 24, 192);
     s.columns = std::clamp(Wh_GetIntSetting(L"gridColumns"), 0, 30);
+    s.coverScreen = Wh_GetIntSetting(L"coverScreen") != 0;
+    s.monitor = std::max(0, _wtoi(GetStringSetting(L"monitor").c_str()));
     g_settings = s;
     g_winKeyEnabled = Wh_GetIntSetting(L"winKey") != 0;
     g_startButtonEnabled = Wh_GetIntSetting(L"startButton") != 0;
@@ -544,6 +561,9 @@ void UpdateFilter() {
 RECT AvailableArea(HMONITOR monitor) {
     MONITORINFO mi{sizeof(mi)};
     GetMonitorInfoW(monitor, &mi);
+    if (g_settings.coverScreen) {
+        return mi.rcMonitor;
+    }
     struct Search {
         HMONITOR monitor;
         RECT monitorRect;
@@ -584,6 +604,48 @@ RECT AvailableArea(HMONITOR monitor) {
         a = mi.rcWork;
     }
     return a;
+}
+
+// Monitor 1 is the main one, the rest follow from left to right (then top to
+// bottom). A number with no monitor behind it falls back to the mouse.
+HMONITOR ChosenMonitor() {
+    POINT pt;
+    GetCursorPos(&pt);
+    HMONITOR mouse = MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY);
+    if (g_settings.monitor <= 0) {
+        return mouse;
+    }
+    struct Entry {
+        bool primary;
+        RECT rc;
+        HMONITOR monitor;
+    };
+    std::vector<Entry> monitors;
+    EnumDisplayMonitors(
+        nullptr, nullptr,
+        [](HMONITOR monitor, HDC, LPRECT, LPARAM param) -> BOOL {
+            MONITORINFO mi{sizeof(mi)};
+            GetMonitorInfoW(monitor, &mi);
+            ((std::vector<Entry>*)param)
+                ->push_back({(mi.dwFlags & MONITORINFOF_PRIMARY) != 0,
+                             mi.rcMonitor, monitor});
+            return TRUE;
+        },
+        (LPARAM)&monitors);
+    std::stable_sort(monitors.begin(), monitors.end(),
+                     [](const Entry& a, const Entry& b) {
+                         if (a.primary != b.primary) {
+                             return a.primary;
+                         }
+                         if (a.rc.left != b.rc.left) {
+                             return a.rc.left < b.rc.left;
+                         }
+                         return a.rc.top < b.rc.top;
+                     });
+    if (g_settings.monitor > (int)monitors.size()) {
+        return mouse;
+    }
+    return monitors[g_settings.monitor - 1].monitor;
 }
 
 // Puts the Dock windows above Start, which leaves the Dock's strip free.
@@ -1361,7 +1423,9 @@ void PlaceWindows() {
     // put Start behind the windows.
     SetWindowPos(g_wnd, HWND_TOPMOST, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    RaiseDockWindows();
+    if (!g_settings.coverScreen) {
+        RaiseDockWindows();
+    }
     if (UsesDwmBackdrop()) {
         SetWindowPos(g_backdrop, g_wnd, a.left, a.top, a.right - a.left,
                      a.bottom - a.top, SWP_NOACTIVATE | SWP_SHOWWINDOW);
@@ -1379,9 +1443,7 @@ void Open() {
         return;
     }
 
-    POINT pt;
-    GetCursorPos(&pt);
-    HMONITOR monitor = MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY);
+    HMONITOR monitor = ChosenMonitor();
     UINT dpiX = 96, dpiY = 96;
     GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
 

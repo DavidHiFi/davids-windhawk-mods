@@ -7,8 +7,9 @@ of the macOS Launchpad, with instant search and a blurred background.
 
 ## Features
 
-- **Fullscreen.** Fills the work area of the monitor the mouse is on, without
-  covering the taskbar, side bars or the Dock of the Standalone Dock mod.
+- **Fullscreen.** Fills the monitor the mouse is on, or one monitor you pick.
+  It leaves the taskbar, side bars and the Standalone Dock visible, or covers
+  the whole screen if you turn that on.
 - **All apps.** The same programs and Store apps as the "All apps" list of
   Start, in alphabetical order with icon and name.
 - **Instant search.** Just type. Case and accents don't matter, and names that
