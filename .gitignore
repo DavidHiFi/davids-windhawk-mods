@@ -13,3 +13,7 @@
 !/t3-handoff/
 acl-recovery*/
 node_modules/
+__pycache__/
+*.pyd
+*.exe
+*.dist-info/
