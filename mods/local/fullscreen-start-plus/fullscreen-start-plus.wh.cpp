@@ -2036,6 +2036,7 @@ struct SettingsWindow {
     std::vector<SettingField> fields = MakeSettingFields();
     HWND status = nullptr, save = nullptr, close = nullptr;
     HFONT font = nullptr, bold = nullptr;
+    HICON smallIcon = nullptr, bigIcon = nullptr;
     HBRUSH background = nullptr, input = nullptr;
     bool dark = false;
     bool saving = false;
@@ -2239,6 +2240,48 @@ void SaveSettingFields(SettingsWindow& w) {
     }
 }
 
+// The window icon: a 3x3 grid of rounded tiles, like the grid itself, drawn
+// with antialiased edges into a 32-bit icon.
+HICON MakeGridIcon(int size) {
+    BITMAPINFO bi{};
+    bi.bmiHeader = {sizeof(BITMAPINFOHEADER), size, -size, 1, 32, BI_RGB};
+    DWORD* pixels = nullptr;
+    HBITMAP color =
+        CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, (void**)&pixels, nullptr, 0);
+    if (!color) {
+        return nullptr;
+    }
+    const float gap = size / 10.0f, tile = (size - gap * 4) / 3,
+                radius = tile / 4;
+    for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size; x++) {
+            float alpha = 0;
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 3; col++) {
+                    // Signed distance to the rounded tile, sampled at the pixel
+                    // center.
+                    float cx = gap + col * (tile + gap) + tile / 2;
+                    float cy = gap + row * (tile + gap) + tile / 2;
+                    float dx = std::max(std::fabs(x + 0.5f - cx) - tile / 2 + radius, 0.0f);
+                    float dy = std::max(std::fabs(y + 0.5f - cy) - tile / 2 + radius, 0.0f);
+                    float d = std::sqrt(dx * dx + dy * dy) - radius;
+                    alpha = std::max(alpha, std::clamp(0.5f - d, 0.0f, 1.0f));
+                }
+            }
+            BYTE a = (BYTE)std::lround(alpha * 255);
+            // #60A5FA, premultiplied.
+            pixels[y * size + x] = (a << 24) | ((0x60 * a / 255) << 16) |
+                                   ((0xA5 * a / 255) << 8) | (0xFA * a / 255);
+        }
+    }
+    HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
+    ICONINFO info{TRUE, 0, 0, mask, color};
+    HICON icon = CreateIconIndirect(&info);
+    DeleteObject(mask);
+    DeleteObject(color);
+    return icon;
+}
+
 void LayoutSettingsWindow(SettingsWindow& w, UINT dpi) {
     auto px = [dpi](int v) { return MulDiv(v, dpi, 96); };
     if (w.font) {
@@ -2247,12 +2290,23 @@ void LayoutSettingsWindow(SettingsWindow& w, UINT dpi) {
     }
     LOGFONTW lf{};
     lf.lfHeight = -MulDiv(9, dpi, 72);
-    lf.lfQuality = CLEARTYPE_QUALITY;
+    // Grayscale, since ClearType's colored edges show on the blurred sheet.
+    lf.lfQuality = ANTIALIASED_QUALITY;
     wcscpy_s(lf.lfFaceName, L"Segoe UI");
     w.font = CreateFontIndirectW(&lf);
     lf.lfHeight = -MulDiv(11, dpi, 72);
     lf.lfWeight = FW_SEMIBOLD;
     w.bold = CreateFontIndirectW(&lf);
+
+    for (HICON icon : {w.smallIcon, w.bigIcon}) {
+        if (icon) {
+            DestroyIcon(icon);
+        }
+    }
+    w.smallIcon = MakeGridIcon(GetSystemMetricsForDpi(SM_CXSMICON, dpi));
+    w.bigIcon = MakeGridIcon(GetSystemMetricsForDpi(SM_CXICON, dpi));
+    SendMessageW(w.hwnd, WM_SETICON, ICON_SMALL, (LPARAM)w.smallIcon);
+    SendMessageW(w.hwnd, WM_SETICON, ICON_BIG, (LPARAM)w.bigIcon);
 
     const int margin = px(20), labelWidth = px(190), controlWidth = px(290);
     const int controlX = margin + labelWidth + px(10);
@@ -2311,13 +2365,29 @@ void ThemeSettingsWindow(SettingsWindow& w) {
         DeleteObject(w.background);
         DeleteObject(w.input);
     }
-    w.background =
-        CreateSolidBrush(w.dark ? RGB(32, 32, 32) : GetSysColor(COLOR_BTNFACE));
+    // In dark mode the title bar and body are one acrylic sheet, tinted with
+    // the grid's background color: an empty blur region makes DWM use the
+    // window's alpha, and black GDI paint has alpha 0, so the body shows the
+    // blur.
+    w.background = CreateSolidBrush(w.dark ? RGB(0, 0, 0)
+                                           : GetSysColor(COLOR_BTNFACE));
     w.input =
         CreateSolidBrush(w.dark ? RGB(43, 43, 43) : GetSysColor(COLOR_WINDOW));
     BOOL dark = w.dark;
     DwmSetWindowAttribute(w.hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark,
                           sizeof(dark));
+    DWM_BLURBEHIND blur{};
+    blur.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+    blur.fEnable = w.dark;
+    blur.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+    DwmEnableBlurBehindWindow(w.hwnd, &blur);
+    DeleteObject(blur.hRgnBlur);
+    DWORD noBackdrop = 1;  // DWMSBT_NONE, so the accent below is what shows.
+    DwmSetWindowAttribute(w.hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */,
+                          &noBackdrop, sizeof(noBackdrop));
+    COLORREF tint = ParseColorRef(GetStringSetting(L"tintColor"), RGB(30, 30, 46));
+    SetAccent(w.hwnd, w.dark ? ACCENT_ENABLE_ACRYLICBLURBEHIND : ACCENT_DISABLED,
+              w.dark ? 0xAA000000 | tint : 0);
     EnumChildWindows(
         w.hwnd,
         [](HWND child, LPARAM param) -> BOOL {
@@ -2367,8 +2437,11 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             }
             SetBkColor(dc, field ? (w->dark ? RGB(43, 43, 43)
                                             : GetSysColor(COLOR_WINDOW))
-                                 : (w->dark ? RGB(32, 32, 32)
+                                 : (w->dark ? RGB(0, 0, 0)
                                             : GetSysColor(COLOR_BTNFACE)));
+            if (!field) {
+                SetBkMode(dc, TRANSPARENT);
+            }
             return (LRESULT)(field ? w->input : w->background);
         }
         case WM_DRAWITEM: {
@@ -2554,6 +2627,8 @@ DWORD WINAPI SettingsThread(void*) {
     }
     DeleteObject(w.font);
     DeleteObject(w.bold);
+    DestroyIcon(w.smallIcon);
+    DestroyIcon(w.bigIcon);
     DeleteObject(w.background);
     DeleteObject(w.input);
     UnregisterClassW(kSettingsClass, instance);
