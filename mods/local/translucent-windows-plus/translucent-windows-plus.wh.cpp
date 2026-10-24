@@ -2,7 +2,7 @@
 // @id              translucent-windows-plus
 // @name            Translucent Windows Plus
 // @description     Blur, acrylic and mica for app windows, with per-app rules and custom themes
-// @version         1.8.3
+// @version         1.8.4
 // @author          DavidHiFi, Undisputed00x, WinExperiments
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -465,6 +465,7 @@ static decltype(&DrawThemeEdge) DrawThemeEdge_orig = nullptr;
 static decltype(&DefWindowProcW) DefWindowProc_orig = nullptr;
 
 VOID NewWindowShown(HWND);
+BOOL IsWindowEligible(HWND);
 VOID HandleEffects(HWND hWnd);
 VOID DisableAccentBlurBehind(HWND hWnd);
 
@@ -492,7 +493,10 @@ VOID CALLBACK DelayedReapplyTimerProc(HWND hWnd, UINT msg, UINT_PTR idEvent, DWO
     if (!IsWindow(hWnd) || attempt >= REAPPLY_MAX_ATTEMPTS)
         return;
 
-    if (!IsWindowVisible(hWnd))
+    // Not shown yet, or briefly ineligible (cloaked by an open animation, for
+    // example) - try again shortly. Disabling the accent here and then finding
+    // the window ineligible would leave it without a backdrop: solid black.
+    if (!IsWindowVisible(hWnd) || !IsWindowEligible(hWnd))
     {
         // Not shown yet - try again shortly.
         SetTimer(hWnd, idEvent + 1, REAPPLY_TIMER_INTERVAL, DelayedReapplyTimerProc);
