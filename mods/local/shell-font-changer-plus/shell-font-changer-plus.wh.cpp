@@ -3,7 +3,7 @@
 // @name            Shell Font Changer Plus
 // @description     Any installed font in Explorer, Start, Search and Settings, with icons and emoji left intact
 // @version         1.3.0
-// @author          DavidHiFi
+// @author          DavidHiFi, Gabriela Cristei
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         MIT
