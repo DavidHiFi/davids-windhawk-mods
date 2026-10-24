@@ -2,14 +2,15 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.64
-// @author          DavidHiFi
+// @version         2.0.68
+// @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         MIT
 // @include         windhawk-ui.exe
 // @architecture    x86-64
 // @compilerOptions -DWIN32_LEAN_AND_MEAN -luser32 -lgdi32 -ldwmapi -lws2_32 -ladvapi32 -lcomctl32 -luxtheme
+// @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -285,7 +286,10 @@ static std::string RgbaFromRgb(std::uint32_t rgb, int opacityPercent) {
     return buf;
 }
 
+// In Acrylic mode DWM paints the background tint (see ApplyWindowStack), so
+// the clear caption strip and the body show one sheet. The page stays clear.
 static std::string CssVeil(const Settings& s) {
+    if (s.blur == 2) return "transparent";
     return RgbaFromRgb(s.background, s.backgroundOpacity);
 }
 
@@ -323,8 +327,8 @@ static std::string JsonEscape(const std::string& in) {
     return out;
 }
 
-// Every box that takes the card color. Rounded corners, the card surface and
-// the blur all apply to this same list.
+// Every box that takes the card color. Rounded corners and the card surface
+// apply to this list; the blur applies to kFloatingSurfaces only.
 static const char kSurfaces[] =
     ".ant-card,[class*=\"SaveSettingsCard\"],.ant-table,.ant-collapse,.ant-modal-content,"
     ".ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-picker-dropdown,"
@@ -335,13 +339,21 @@ static const char kSurfaces[] =
 // absolutely positioned by the interface and keep their own position. The
 // save card is left out: the interface positions it sticky so it floats
 // while the settings scroll, and forcing relative would pin it to the page.
+// Surfaces that float over other page content and blur it. In-flow cards stay
+// unblurred: CSS blur cannot reach the DWM backdrop behind the page, and a
+// blurred card becomes the backdrop root of everything inside it, so the
+// sticky save bar in the mod page card could only blur the card itself.
+static const char kFloatingSurfaces[] =
+    "[class*=\"SaveSettingsCard\"],.ant-modal-content,.ant-drawer-content,.ant-popover-inner,"
+    ".ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-tooltip-inner,"
+    ".ant-notification-notice,.ant-message-notice-content";
+
 static const char kRelativeSurfaces[] =
     ".ant-card:not([class*=\"SaveSettingsCard\"]),.ant-table,.ant-collapse,.ant-modal-content,"
     ".ant-drawer-content,.ant-popover-inner,.ant-dropdown-menu,.ant-tooltip-inner,"
     ".ant-notification-notice,.ant-message-notice-content";
 
 static std::string BuildCss(const Settings& s) {
-    // One client surface tints the caption and body over the same acrylic.
     std::string veil = CssVeil(s);
     const std::string focus = RgbaFromRgb(s.accentRgb, 20);
     std::string css;
@@ -431,7 +443,13 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-collapse-header{background-color:" + cardColor + " !important;border-radius:0 !important;}";
         css += ".ant-collapse-content{background-color:" + cardColor + " !important;border-color:rgba(255,255,255,0.08) !important;border-radius:0 !important;}";
         if (s.cardOpacity < 100) {
-            css += std::string(kSurfaces) + "{backdrop-filter:blur(16px) !important;}";
+            // The renderer blurs page text only where the backdrop under it is
+            // opaque. In Acrylic mode the page is transparent down to DWM, so
+            // the save bar left the settings text sharp. Floating surfaces keep
+            // at least 92% of the card color so text behind them stays unreadable.
+            Settings floating = s;
+            floating.cardOpacity = s.cardOpacity < 92 ? 92 : s.cardOpacity;
+            css += std::string(kFloatingSurfaces) + "{background-color:" + CssCardColor(floating) + " !important;backdrop-filter:blur(16px) !important;}";
         }
     }
     if (!s.control.empty()) {
@@ -618,13 +636,13 @@ static void ApplyWindowStack(HWND hWnd, const Settings& s) {
     // DWM draws the backdrop and border with the system's current corner radius.
     int intValue = 1;
     DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &intValue, sizeof(intValue));
-    intValue = s.blur == 2 ? 3 : 1;  // DWMSBT_TRANSIENTWINDOW or DWMSBT_NONE
+    intValue = 1;  // DWMSBT_NONE: the accent policy below draws the material
     DwmSetWindowAttribute(hWnd, DWMWA_SYSTEMBACKDROP_TYPE, &intValue, sizeof(intValue));
     MARGINS margins = {-1, -1, -1, -1};
     DwmExtendFrameIntoClientArea(hWnd, &margins);
     if (s.nativeTitleBar) {
         // With the acrylic title bar the caption color stays NONE: the strip
-        // then shows the same system acrylic backdrop as the client, which is
+        // then shows the same acrylic backdrop as the client, which is
         // the only way a DWM-drawn caption can match a blurred body. Without
         // it (legacy mode) the strip gets a solid color, because on this
         // build DWMWA_CAPTION_COLOR ignores alpha (0xAARRGGBB sets do not
@@ -641,30 +659,27 @@ static void ApplyWindowStack(HWND hWnd, const Settings& s) {
     COLORREF border = NativeBorderColor(hWnd);
     DwmSetWindowAttribute(hWnd, DWMWA_BORDER_COLOR, &border, sizeof(border));
 
-    // The accepted Acrylic mode uses DWM. Blur and None use the accent
-    // policy so disabling Acrylic does not silently keep its material.
-    if (!s.titleBarAcrylic || s.blur != 2) {
-        ACCENT_POLICY policy = {};
-        policy.AccentState = s.blur == 2 ? ACCENT_ENABLE_ACRYLICBLURBEHIND :
-                             s.blur == 1 ? ACCENT_ENABLE_BLURBEHIND :
-                                           ACCENT_ENABLE_TRANSPARENTGRADIENT;
+    // An empty blur region composes the client's alpha. The accent policy
+    // then draws the material under the whole window, caption strip
+    // included, so strip and body are one sheet. Acrylic carries the
+    // background tint in the accent color, because a CSS veil covers only the
+    // body. On this build DWMSBT_TRANSIENTWINDOW, and an accent without the
+    // blur region, render a flat fill (measured 2026-10-24).
+    HRGN region = CreateRectRgn(0, 0, -1, -1);
+    if (region) {
+        DWM_BLURBEHIND blur{DWM_BB_ENABLE | DWM_BB_BLURREGION, TRUE, region, FALSE};
+        DwmEnableBlurBehindWindow(hWnd, &blur);
+        DeleteObject(region);
+    }
+    ACCENT_POLICY policy = {};
+    if (s.blur) {
+        policy.AccentState = s.blur == 2 ? ACCENT_ENABLE_ACRYLICBLURBEHIND : ACCENT_ENABLE_BLURBEHIND;
         policy.AccentFlags = 2;
-        policy.GradientColor = s.blur == 2 ? 0x10000000 | Bgr(s.background) : 0;
-        WINCOMPATTRDATA data{WCA_ACCENT_POLICY, &policy, sizeof(policy)};
-        SetWindowCompositionAttribute(hWnd, &data);
+        if (s.blur == 2)
+            policy.GradientColor = ((std::uint32_t)(s.backgroundOpacity * 255 / 100) << 24) | Bgr(s.background);
     }
-    if (s.blur == 0) {
-        ACCENT_POLICY policy = {};
-        WINCOMPATTRDATA data{WCA_ACCENT_POLICY, &policy, sizeof(policy)};
-        SetWindowCompositionAttribute(hWnd, &data);
-        // An empty blur region enables alpha composition without blurring it.
-        HRGN region = CreateRectRgn(0, 0, -1, -1);
-        if (region) {
-            DWM_BLURBEHIND blur{DWM_BB_ENABLE | DWM_BB_BLURREGION, TRUE, region, FALSE};
-            DwmEnableBlurBehindWindow(hWnd, &blur);
-            DeleteObject(region);
-        }
-    }
+    WINCOMPATTRDATA data{WCA_ACCENT_POLICY, &policy, sizeof(policy)};
+    SetWindowCompositionAttribute(hWnd, &data);
 }
 
 static void ClearWindowStack(HWND hWnd) {
@@ -1138,7 +1153,7 @@ static HRESULT WINAPI DwmSetWindowAttribute_hook(HWND hwnd, DWORD attr, LPCVOID 
         // cycle re-applies it up to a second later; the flat/acrylic
         // alternation reads as flicker. Correct the put in the same call.
         if (!IsOurMainUiWindow(hwnd)) return hr;
-        int want = s.blur == 2 ? 3 : 1;  // DWMSBT_TRANSIENTWINDOW or DWMSBT_NONE
+        int want = 1;  // DWMSBT_NONE: the accent policy draws the material
         int pushed = 0;
         if (size == 4 && value) memcpy(&pushed, value, 4);
         if (pushed != want) hr = DwmSetWindowAttribute_orig(hwnd, attr, &want, 4);
