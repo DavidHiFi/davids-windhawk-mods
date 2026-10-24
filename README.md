@@ -72,6 +72,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 | | Mod | What it does |
 | --- | --- | --- |
 | <img src="media/previews/start-everything-plus.png" width="220" alt="Start menu search results"> | [Everything & Power Tools in the Start Menu Plus](mods/local/start-everything-plus) | Compact Start menu search with Everything, preview, apps, settings and power tools. |
+| <img src="media/previews/fullscreen-start-plus.png" width="220" alt="Fullscreen grid of app icons"> | [Fullscreen Start Plus](mods/local/fullscreen-start-plus) | A fullscreen, Launchpad-style grid of all your apps in place of Start, with instant search and blur. |
 | <img src="media/previews/translucent-flyouts.png" width="220" alt="Acrylic context menu"> | [Translucent Flyouts](mods/local/translucent-flyouts) | Acrylic, Mica and blur backgrounds for menus, dropdowns and tooltips in every app. |
 | <img src="media/previews/shell-font-changer-plus.png" width="220" alt="Explorer text in Segoe UI and in FiraCode Nerd Font"> | [Shell Font Changer Plus](mods/local/shell-font-changer-plus) | Any installed font in Explorer, Start, Search and Settings, with icons and emoji left intact. |
 | <img src="media/previews/drag-to-delete-plus.png" width="220" alt="Floating trash target"> | [Drag to Delete Plus](mods/local/drag-to-delete-plus) | A floating trash target appears while you drag files, with themes, shapes and colors. |
@@ -198,6 +199,7 @@ Most of my mods build on someone else's mod. Each folder's readme credits its so
 | **Yevhenii Starychenko** ([Taskbar System Info](https://windhawk.net/mods/taskbar-system-info)) | The base of Taskbar System Info Plus. |
 | **Narayan** ([Taskbar Network Speed Indicator](https://windhawk.net/mods/net-speed-taskbar)) | The idea behind the network readouts in Taskbar System Info Plus. |
 | **iMAboud** ([Drag to Delete](https://windhawk.net/mods/drag-to-delete)) | The base of Drag to Delete Plus. |
+| **Rafael Mendes** ([Fullscreen Start](https://windhawk.net/mods/fullscreen-start)) | The base of Fullscreen Start Plus, and its preview image. |
 | **rounk-ctrl** ([UXTheme hook](https://windhawk.net/mods/uxtheme-hook)) | The base of Theme Tool Plus, and the center-titlebar mod behind Center Titlebar Fork. |
 | **namazso** ([SecureUxTheme](https://github.com/namazso/SecureUxTheme), [ThemeToolSharp](https://github.com/namazso/ThemeToolSharp)) | The theme engine research in Theme Tool Plus. |
 | **ALTaleX531** ([TranslucentFlyouts](https://github.com/ALTaleX531/TranslucentFlyouts)) | Translucent Flyouts is a port of it and uses its settings layout. |
