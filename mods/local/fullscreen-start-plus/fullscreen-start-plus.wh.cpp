@@ -2003,8 +2003,8 @@ bool IsKeyboardShow(int showMethod, int showFlags) {
 //
 // Windows doesn't open Start for the Windows key pressed with Shift, so
 // ShowStartView never sees it. A low-level keyboard hook on its own thread
-// (the window thread can be busy drawing) watches for the Windows key let go
-// while Shift is held, with no other key pressed in between (Shift+Win+S and
+// (the window thread can be busy drawing) watches for a Windows key press
+// with Shift down during it, and no other key pressed in between (Shift+Win+S and
 // the like stay Windows shortcuts). For the grid and the original Start, the
 // window presses Ctrl+Esc once the keys are up, and the ShowStartView hook
 // gives that one the Shift + Windows key action.
@@ -2014,7 +2014,9 @@ HANDLE g_keyThread;
 DWORD g_keyThreadId;
 
 LRESULT CALLBACK KeyboardHook(int code, WPARAM wParam, LPARAM lParam) {
-    static bool winDown, otherKey;
+    // Keyboards that send Shift+Win from one key (macro keys) let go of Shift
+    // a moment before Win, so Shift counts if it was down at any point.
+    static bool winDown, otherKey, withShift;
     if (code == HC_ACTION) {
         DWORD vk = ((KBDLLHOOKSTRUCT*)lParam)->vkCode;
         bool up = wParam == WM_KEYUP || wParam == WM_SYSKEYUP;
@@ -2023,13 +2025,16 @@ LRESULT CALLBACK KeyboardHook(int code, WPARAM wParam, LPARAM lParam) {
             if (!up && !winDown) {
                 winDown = true;
                 otherKey = false;
+                withShift = GetAsyncKeyState(VK_SHIFT) < 0;
             } else if (up && winDown) {
                 winDown = false;
                 HWND wnd = g_wnd;
-                if (!otherKey && GetAsyncKeyState(VK_SHIFT) < 0 && wnd) {
+                if (!otherKey && withShift && wnd) {
                     PostMessageW(wnd, WM_APP_SHIFT_WIN, 0, 0);
                 }
             }
+        } else if (shift && !up && winDown) {
+            withShift = true;
         } else if (!up && !shift && winDown) {
             otherKey = true;
         }
