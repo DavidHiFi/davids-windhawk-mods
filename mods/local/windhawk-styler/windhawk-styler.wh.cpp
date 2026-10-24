@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.71
+// @version         2.0.72
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -486,7 +486,9 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-switch-checked,.ant-switch-checked:hover{background-color:" + s.accent + " !important;}";
         css += ".ant-input:hover,.ant-input-affix-wrapper:hover,.ant-select-selector:hover,.ant-input-number:hover,.ant-picker:hover{border-color:" + s.accent + " !important;}";
         css += ".ant-input:focus,.ant-input-focused,.ant-input-affix-wrapper-focused,.ant-input-affix-wrapper:focus-within,.ant-input-number-focused,.ant-select-focused .ant-select-selector,.ant-picker-focused{border-color:" + s.accent + " !important;box-shadow:0 0 0 2px " + focus + " !important;}";
-        css += ".ant-btn:focus-visible,.ant-input:focus-visible,.ant-select-selector:focus-visible,.ant-input-number:focus-visible,.ant-picker:focus-visible,.ant-checkbox-input:focus-visible+.ant-checkbox-inner,.ant-radio-input:focus-visible+.ant-radio-inner{outline:2px solid " + s.accent + " !important;outline-offset:2px;}";
+        // A -1px offset centres the 2px ring on the 1px control border, so it
+        // hugs the rounded edge with no gap at the top, bottom or arcs.
+        css += ".ant-btn:focus-visible,.ant-input:focus-visible,.ant-select-selector:focus-visible,.ant-input-number:focus-visible,.ant-picker:focus-visible,.ant-checkbox-input:focus-visible+.ant-checkbox-inner,.ant-radio-input:focus-visible+.ant-radio-inner{outline:2px solid " + s.accent + " !important;outline-offset:-1px;}";
         // The search input sits inside an affix wrapper, which owns the focus
         // ring. Clear the nested input ring so the search control has one outline.
         css += ".ant-input-affix-wrapper>.ant-input:focus,.ant-input-affix-wrapper>.ant-input:focus-visible{border-color:transparent !important;box-shadow:none !important;outline:none !important;}";
@@ -525,7 +527,8 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-tabs-tab:hover .ant-tabs-tab-btn{color:" + s.accent + " !important;}";
         css += ".ant-dropdown-menu-item-selected,.ant-dropdown-menu-item-selected>a{color:" + s.accent + " !important;}";
         css += ".ant-select-item-option-selected:not(.ant-select-item-option-disabled),.ant-select-item-option-state{color:" + s.accent + " !important;}";
-        css += ".ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):hover{color:" + s.accent + " !important;border-color:" + s.accent + " !important;}";
+        // Focus and press keep the accent too; antd paints focused buttons its own blue.
+        css += ".ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):hover,.ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):focus,.ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):active{color:" + s.accent + " !important;border-color:" + s.accent + " !important;}";
     }
     std::string scrollbarColor = s.text.empty() ? "rgba(255,255,255,0.35)" : RgbaFromRgb(s.textRgb, 35);
     std::string scrollbarRadius = s.roundedCorners && s.cornerRadius > 0 ? "999px" : "0px";
