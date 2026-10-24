@@ -1,26 +1,26 @@
 // ==WindhawkMod==
 // @id              window-manager
-// @name            Window Manager
+// @name            Window Manager Plus
 // @description     Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts
-// @version         1.1.4
-// @author          DavidHiFi
+// @version         1.2.0
+// @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         GPL-3.0
-// @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         *
 // @include         windhawk.exe
 // @compilerOptions -luser32 -ldwmapi -lgdi32 -lshcore -lcomctl32 -lshell32
+// @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
 /*
-# Window Manager
+# Window Manager Plus
 
 Move, resize and snap windows from anywhere, and send them to another monitor,
 with the mouse or the keyboard. Works on administrator windows too.
 
-![Window Manager preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/window-manager.gif)
+![Window Manager Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/window-manager.gif)
 
 ## Features
 
@@ -30,7 +30,9 @@ with the mouse or the keyboard. Works on administrator windows too.
 - **Snap with the keyboard** to halves, quarters, the center or almost
   maximized, with optional gaps around windows.
 - **Send to another monitor** with a hotkey. Maximized windows stay maximized
-  on the new screen.
+  on the new screen. An optional setting moves the mouse pointer along with
+  the window, so you can keep working on the new monitor without hunting for
+  the cursor.
 - **Quick actions:** maximize, minimize, close or open the window menu without
   reaching for the title bar.
 - **Auto-snap rules** place chosen apps in a set position.
@@ -68,7 +70,7 @@ snapping like the preview, set the four half keys to `left`, `right`, `up` and
 ## Credits
 
 Combines [AltDrag](https://windhawk.net/mods/alt-drag) by m417z (inspired by
-[AltSnap](https://github.com/RamonUnch/AltSnap) by RamonUnch),
+[AltSnap](https://github.com/RamonUnch/AltSnap) by Stefan Sundin and RamonUnch),
 [Snap Commander](https://windhawk.net/mods/snap-commander) by Asteski and
 [Move Window to Monitor](https://windhawk.net/mods/move-window-to-monitor) by
 TomberWolf. GPL-3.0, following AltDrag.
@@ -128,6 +130,16 @@ SOFTWARE.
 #include <unordered_map>
 #include <vector>
 #include <shellscalingapi.h>
+
+// Used by both monitor-move paths: when the "Move the cursor with the window"
+// setting is on, put the pointer in the middle of the window that was just sent
+// to another monitor. A minimized window has no useful position, so it is skipped.
+static void MoveCursorToWindow(HWND hwnd) {
+    if (!Wh_GetIntSetting(L"cursorFollowsWindow") || IsIconic(hwnd)) return;
+    RECT rc;
+    if (GetWindowRect(hwnd, &rc))
+        SetCursorPos((rc.left + rc.right) / 2, (rc.top + rc.bottom) / 2);
+}
 
 //////// drag ////////
 namespace altSnapDrag {
@@ -3441,6 +3453,7 @@ static void MoveToAdjacentDisplay(HWND hWnd, int direction) {
     if (wasZoomed) {
         ShowWindow(hWnd, SW_MAXIMIZE);  // Re-maximize on the new monitor.
     }
+    MoveCursorToWindow(hWnd);
 }
 
 // Grows or shrinks the window about its center by the configured step
@@ -4382,6 +4395,7 @@ static void MoveActiveWindowInDirection(Direction dir) {
 
     if (dstIdx < 0) return;
     MoveWindowToMonitor(hwnd, monitors[curIdx], monitors[dstIdx]);
+    MoveCursorToWindow(hwnd);
 }
 
 // ── hotkey thread ─────────────────────────────────────────────────────────────
@@ -4750,6 +4764,11 @@ void ToolModUninit() {
 - centerOnMove: false
   $name: Center window on target monitor
   $description: If enabled, the window is centered on the target monitor instead of keeping its relative position
+- cursorFollowsWindow: false
+  $name: Move the cursor with the window
+  $description: >-
+    When you send a window to another monitor with the keyboard, the mouse
+    pointer jumps to the middle of that window.
 */
 // ==/WindhawkModSettings==
 
