@@ -2,7 +2,7 @@
 // @id              fullscreen-start-plus
 // @name            Fullscreen Start Plus
 // @description     A fullscreen grid of all your apps in place of Start, with instant search and adjustable blur
-// @version         1.3.0
+// @version         1.4.0
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -28,6 +28,8 @@ of the macOS Launchpad, with instant search and a blurred background.
   the whole screen if you turn that on.
 - **Your choice of apps.** The "All apps" list of Start, your desktop icons,
   both together, or only the apps you pinned to Start.
+- **Scroll or pages.** One list that scrolls, or pages that flip left and
+  right with dots below, like Launchpad.
 - **Instant search.** Just type. Case and accents don't matter, and names that
   start with your text come first.
 - **Adjustable blur.** Pick the blur type, strength, opacity and color of the
@@ -47,7 +49,8 @@ of the macOS Launchpad, with instant search and a blurred background.
 | Ctrl+V | Paste |
 | Arrows, Enter | Pick an app and open it. While searching, the first result is already picked |
 | Esc | Clear the search, or close when the search is empty |
-| Mouse wheel, Page Up, Page Down | Scroll |
+| Mouse wheel, Page Up, Page Down | Scroll, or flip pages |
+| Sideways scroll, page dots | Flip pages |
 
 Clicking outside the icons or switching to another window closes it.
 
@@ -108,6 +111,11 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
 - gridColumns: 0
   $name: Grid columns
   $description: 0 picks based on the screen size
+- gridLayout: scroll
+  $name: Layout
+  $options:
+  - scroll: One list that scrolls up and down
+  - pages: Pages that flip left and right, like Launchpad
 - coverScreen: false
   $name: Cover the whole screen
   $description: Also covers the taskbar, side bars and the Standalone Dock. When off, they stay visible
@@ -241,6 +249,7 @@ struct Settings {
     D2D1_COLOR_F tint{0, 0, 0, 1};
     int iconSize = 72;
     int columns = 0;
+    bool pages = false;
     bool coverScreen = false;
     AppSource source = AppSource::AllApps;
     int monitor = 0;  // 0: the one with the mouse; 1: main; 2+: the others, left to right.
@@ -284,6 +293,7 @@ void LoadSettings() {
     s.tint = ParseColor(GetStringSetting(L"tintColor"), s.tint);
     s.iconSize = std::clamp(Wh_GetIntSetting(L"gridIconSize"), 24, 192);
     s.columns = std::clamp(Wh_GetIntSetting(L"gridColumns"), 0, 30);
+    s.pages = GetStringSetting(L"gridLayout") == L"pages";
     s.coverScreen = Wh_GetIntSetting(L"coverScreen") != 0;
     std::wstring source = GetStringSetting(L"appSource");
     s.source = source == L"desktop"  ? AppSource::Desktop
@@ -1334,16 +1344,20 @@ struct Layout {
     int width = 0, height = 0;
     float scale = 1;
     float icon = 72, labelHeight = 20, cellWidth = 140, cellHeight = 140;
+    float cellSpare = 0;  // Extra row height that fills the screen with pages.
     float cellPad = 6;
     int columns = 1;
     float gridLeft = 0;
     float viewTop = 0, viewBottom = 0;  // Visible range, in whole rows.
     int visibleRows = 1;
     float contentHeight = 0;
+    int perPage = 1, pages = 1;  // With the pages layout.
+    float dotsY = 0;             // Center of the page dots.
     D2D1_RECT_F search{};
 };
 
 Layout g_layout;
+// Pixels: down the list, or, with pages, across the row of pages.
 float g_scroll, g_scrollTarget;
 int g_wheelDelta;  // Wheel accumulated until it completes a row (touchpads).
 
@@ -1384,6 +1398,9 @@ void EnsureFormats(float scale) {
 }
 
 float MaxScroll() {
+    if (g_settings.pages) {
+        return (g_layout.pages - 1) * (float)g_layout.width;
+    }
     return std::max(0.0f, g_layout.contentHeight -
                               (g_layout.viewBottom - g_layout.viewTop));
 }
@@ -1416,13 +1433,28 @@ void ComputeLayout() {
         std::min(available / L.columns, std::max(minCell, L.icon * 2.6f)));
     L.gridLeft = std::round((W - L.cellWidth * L.columns) / 2);
 
-    // Only whole rows are visible; scrolling moves row by row.
+    // Only whole rows are visible; scrolling moves row by row. Pages keep
+    // room below for the dots.
+    float bottomRoom = std::round((g_settings.pages ? 44 : 16) * s);
     L.visibleRows =
-        std::max(1, (int)((H - std::round(16 * s) - L.viewTop) / L.cellHeight));
+        std::max(1, (int)((H - bottomRoom - L.viewTop) / L.cellHeight));
+    L.cellSpare = 0;
+    if (g_settings.pages) {
+        // Pages don't scroll, so the rows spread out to the dots instead of
+        // leaving the part of a row that doesn't fit empty at the bottom.
+        float rowHeight =
+            std::floor((H - bottomRoom - L.viewTop) / L.visibleRows);
+        L.cellSpare = std::max(0.0f, rowHeight - L.cellHeight);
+        L.cellHeight += L.cellSpare;
+    }
     L.viewBottom = L.viewTop + L.visibleRows * L.cellHeight;
+    L.dotsY = std::round((L.viewBottom + H) / 2);
 
-    int rows = ((int)g_visible.size() + L.columns - 1) / L.columns;
+    int count = (int)g_visible.size();
+    int rows = (count + L.columns - 1) / L.columns;
     L.contentHeight = rows * L.cellHeight;
+    L.perPage = L.visibleRows * L.columns;
+    L.pages = std::max(1, (count + L.perPage - 1) / L.perPage);
     g_scrollTarget = std::clamp(g_scrollTarget, 0.0f, MaxScroll());
     g_scroll = std::clamp(g_scroll, 0.0f, MaxScroll());
 }
@@ -1433,12 +1465,21 @@ struct Cell {
 
 Cell CellAt(int index) {
     const Layout& L = g_layout;
-    int row = index / L.columns, col = index % L.columns;
-    float x = L.gridLeft + col * L.cellWidth;
-    float y = L.viewTop + row * L.cellHeight - std::round(g_scroll);
+    float x, y;
+    if (g_settings.pages) {
+        int page = index / L.perPage, slot = index % L.perPage;
+        x = L.gridLeft + (slot % L.columns) * L.cellWidth +
+            page * (float)L.width - std::round(g_scroll);
+        y = L.viewTop + (slot / L.columns) * L.cellHeight;
+    } else {
+        int row = index / L.columns, col = index % L.columns;
+        x = L.gridLeft + col * L.cellWidth;
+        y = L.viewTop + row * L.cellHeight - std::round(g_scroll);
+    }
+    y += std::round(L.cellSpare / 2);  // Centered in a stretched row.
     Cell c;
     c.highlight = D2D1::RectF(x + L.cellPad, y, x + L.cellWidth - L.cellPad,
-                              y + L.cellHeight - L.cellPad * 2);
+                              y + L.cellHeight - L.cellSpare - L.cellPad * 2);
     float iconLeft = std::round(x + (L.cellWidth - L.icon) / 2);
     float iconTop = std::round(y + 10 * L.scale);
     c.icon = D2D1::RectF(iconLeft, iconTop, iconLeft + L.icon, iconTop + L.icon);
@@ -1457,18 +1498,42 @@ bool InRect(const D2D1_RECT_F& r, float x, float y) {
 int ItemAt(int px, int py) {
     const Layout& L = g_layout;
     float x = (float)px, y = (float)py;
+    int page = 0;
+    if (g_settings.pages) {
+        x += std::round(g_scroll);
+        page = (int)std::floor(x / L.width);
+        x -= page * (float)L.width;
+    }
     if (y < L.viewTop || y >= L.viewBottom || x < L.gridLeft ||
-        x >= L.gridLeft + L.cellWidth * L.columns) {
+        x >= L.gridLeft + L.cellWidth * L.columns || page < 0) {
         return -1;
     }
     int col = (int)((x - L.gridLeft) / L.cellWidth);
-    int row = (int)((y - L.viewTop + std::round(g_scroll)) / L.cellHeight);
-    int index = row * L.columns + col;
+    int row = (int)((y - L.viewTop +
+                     (g_settings.pages ? 0 : std::round(g_scroll))) /
+                    L.cellHeight);
+    int index = page * L.perPage + row * L.columns + col;
     if (row < 0 || index < 0 || index >= (int)g_visible.size() ||
         !InRect(CellAt(index).highlight, x, y)) {
         return -1;
     }
     return index;
+}
+
+// The page dot under the point, or -1. The click area is larger than the dot.
+int PageDotAt(int px, int py) {
+    const Layout& L = g_layout;
+    if (!g_settings.pages || L.pages < 2) {
+        return -1;
+    }
+    float step = 20 * L.scale;
+    float left = L.width / 2.0f - L.pages * step / 2;
+    float x = (float)px, y = (float)py;
+    if (std::abs(y - L.dotsY) > 14 * L.scale || x < left ||
+        x >= left + L.pages * step) {
+        return -1;
+    }
+    return (int)((x - left) / step);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1580,11 +1645,18 @@ void DrawGrid() {
     g_target->PushAxisAlignedClip(
         D2D1::RectF(0, L.viewTop, (float)L.width, L.viewBottom),
         D2D1_ANTIALIAS_MODE_ALIASED);
-    int firstRow = std::max(0, (int)(g_scroll / L.cellHeight));
-    int lastRow =
-        (int)((g_scroll + L.viewBottom - L.viewTop) / L.cellHeight) + 1;
-    int first = firstRow * L.columns;
-    int last = std::min((int)g_visible.size(), (lastRow + 1) * L.columns);
+    int first, last;
+    if (g_settings.pages) {  // The one or two pages on screen.
+        int page = std::max(0, (int)(g_scroll / L.width));
+        first = page * L.perPage;
+        last = std::min((int)g_visible.size(), (page + 2) * L.perPage);
+    } else {
+        int firstRow = std::max(0, (int)(g_scroll / L.cellHeight));
+        int lastRow =
+            (int)((g_scroll + L.viewBottom - L.viewTop) / L.cellHeight) + 1;
+        first = firstRow * L.columns;
+        last = std::min((int)g_visible.size(), (lastRow + 1) * L.columns);
+    }
     for (int i = first; i < last; i++) {
         App& app = *g_apps[g_visible[i]];
         Cell c = CellAt(i);
@@ -1614,6 +1686,23 @@ void DrawGrid() {
         }
     }
     g_target->PopAxisAlignedClip();
+
+    if (g_settings.pages) {
+        // One dot per page; the current one is brighter.
+        if (L.pages > 1) {
+            float step = 20 * s, r = 3.5f * s;
+            float left = L.width / 2.0f - L.pages * step / 2 + step / 2;
+            float current = g_scroll / L.width;
+            for (int i = 0; i < L.pages; i++) {
+                float closeness = std::max(0.0f, 1 - std::abs(current - i));
+                g_brush->SetColor(D2D1::ColorF(1, 1, 1, 0.3f + 0.6f * closeness));
+                g_target->FillEllipse(
+                    D2D1::Ellipse(D2D1::Point2F(left + i * step, L.dotsY), r, r),
+                    g_brush.Get());
+            }
+        }
+        return;
+    }
 
     // Subtle scroll bar, only when there's something to scroll.
     float maxScroll = MaxScroll();
@@ -1848,6 +1937,10 @@ void EnsureVisible(int index) {
         return;
     }
     const Layout& L = g_layout;
+    if (g_settings.pages) {
+        g_scrollTarget = (index / L.perPage) * (float)L.width;
+        return;
+    }
     int row = index / L.columns;
     int firstRow = (int)std::lround(g_scrollTarget / L.cellHeight);
     if (row < firstRow) {
@@ -1858,7 +1951,16 @@ void EnsureVisible(int index) {
     g_scrollTarget = std::clamp(g_scrollTarget, 0.0f, MaxScroll());
 }
 
+// With pages, any number of rows flips one page that way.
 void ScrollRows(int rows) {
+    if (g_settings.pages) {
+        float width = (float)g_layout.width;
+        float target =
+            (std::lround(g_scrollTarget / width) + (rows > 0 ? 1 : -1)) * width;
+        g_scrollTarget = std::clamp(target, 0.0f, MaxScroll());
+        StartFrames();
+        return;
+    }
     float cell = g_layout.cellHeight;
     float target = (std::lround(g_scrollTarget / cell) + rows) * cell;
     g_scrollTarget = std::clamp(target, 0.0f, MaxScroll());
@@ -2239,6 +2341,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_LBUTTONDOWN: {
             int x = GET_X_LPARAM(lParam), y = GET_Y_LPARAM(lParam);
+            int dot = PageDotAt(x, y);
+            if (dot >= 0) {
+                g_scrollTarget = dot * (float)g_layout.width;
+                StartFrames();
+                return 0;
+            }
             SetCapture(hwnd);
             g_pressed = ItemAt(x, y);
             g_pressedEmpty = g_pressed < 0 &&
@@ -2268,7 +2376,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         case WM_MOUSEWHEEL:
-            g_wheelDelta += GET_WHEEL_DELTA_WPARAM(wParam);
+        case WM_MOUSEHWHEEL:
+            // Sideways (tilt wheel, touchpad swipe) only flips pages.
+            if (msg == WM_MOUSEHWHEEL && !g_settings.pages) {
+                return 0;
+            }
+            g_wheelDelta += msg == WM_MOUSEWHEEL
+                                ? GET_WHEEL_DELTA_WPARAM(wParam)
+                                : -GET_WHEEL_DELTA_WPARAM(wParam);
             if (std::abs(g_wheelDelta) >= WHEEL_DELTA) {
                 ScrollRows(-g_wheelDelta / WHEEL_DELTA);
                 g_wheelDelta %= WHEEL_DELTA;

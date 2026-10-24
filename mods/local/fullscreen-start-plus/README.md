@@ -12,6 +12,8 @@ of the macOS Launchpad, with instant search and a blurred background.
   the whole screen if you turn that on.
 - **Your choice of apps.** The "All apps" list of Start, your desktop icons,
   both together, or only the apps you pinned to Start.
+- **Scroll or pages.** One list that scrolls, or pages that flip left and
+  right with dots below, like Launchpad.
 - **Instant search.** Just type. Case and accents don't matter, and names that
   start with your text come first.
 - **Adjustable blur.** Pick the blur type, strength, opacity and color of the
@@ -32,7 +34,8 @@ of the macOS Launchpad, with instant search and a blurred background.
 | Ctrl+V | Paste |
 | Arrows, Enter | Pick an app and open it. While searching, the first result is already picked |
 | Esc | Clear the search, or close when the search is empty |
-| Mouse wheel, Page Up, Page Down | Scroll |
+| Mouse wheel, Page Up, Page Down | Scroll, or flip pages |
+| Sideways scroll, page dots | Flip pages |
 
 Clicking outside the icons or switching to another window closes it.
 
