@@ -25,3 +25,7 @@ Predecessor thread: "Restore real blur in Windhawk UI" (settled). Full record: `
 - Post a coop note before restarting the UI (other threads use CDP on 9333).
 - Python with playwright: `work\2026-10-24-windhawk-ui-dialog\.venv\Scripts\python.exe`. Live CDP scripts: `work\2026-10-24-windhawk-blur\live_v67.py` (navigates with location.hash).
 - Deploy scripts: `scripts\2026-10-24-styler-2.0.6x-deploy.ps1 -Install|-Rollback`, run through `H:\System Configuration\scripts\Invoke-Elevated.ps1`.
+
+## Closed 3:55 PM
+
+Styler 2.0.70 pushed to davids-windhawk-mods main (480f953, merged with origin/main, Ko-fi link and VERIFICATION entry added). Installed ModsSource equals the pushed source (hash match). Only item 1 stays open: the on-screen blur check, skipped because the user was active (Discord in front, idle 0 s).
