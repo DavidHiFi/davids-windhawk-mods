@@ -2,7 +2,7 @@
 // @id              fullscreen-start-plus
 // @name            Fullscreen Start Plus
 // @description     A fullscreen grid of all your apps in place of Start, with instant search and adjustable blur
-// @version         1.2.0
+// @version         1.3.0
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -34,6 +34,10 @@ of the macOS Launchpad, with instant search and a blurred background.
   background.
 - **Opens like Start.** The Windows key, Ctrl+Esc and the Start button of the
   taskbar or the Standalone Dock all open it.
+- **Your own Windows key.** The Windows key, Shift + Windows key and the Start
+  button can each open this grid, the original Start, or a program of your
+  choice, such as a launcher. The program starts even when it isn't running,
+  so this replaces the same feature of Open-Shell.
 
 ## Keyboard and mouse
 | Key | Action |
@@ -58,8 +62,11 @@ Clicking outside the icons or switching to another window closes it.
 ## Notes
 - Disable the original Fullscreen Start (Launchpad style) before you enable
   this mod. Both replace Start, so only one should run.
-- Turn off **Open with the Windows key** or **Open with the Start button** to
-  get the normal Start menu back for that action.
+- Set **Windows key**, **Shift + Windows key** or **Start button** to "Open
+  the original Start" to get the normal Start menu for that action. Shift +
+  Windows key opens it by default.
+- If Open-Shell or another Start replacement also takes the Windows key, turn
+  that feature off there, or it gets the key first.
 - The first time the mod loads, Windhawk downloads the symbols of
   `twinui.pcshell.dll`, which can take a minute.
 - Setting changes apply the next time Start opens.
@@ -106,19 +113,36 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
   $description: Also covers the taskbar, side bars and the Standalone Dock. When off, they stay visible
 - monitor: mouse
   $name: Monitor
-  $description: Where Start opens. If the picked monitor isn't connected, it opens where the mouse is
+  $description: Where Start opens. Monitors 2 to 4 are the others, counted from left to right. If the picked monitor isn't connected, it opens where the mouse is
   $options:
   - mouse: The monitor with the mouse
   - "1": Main monitor
   - "2": Monitor 2
   - "3": Monitor 3
   - "4": Monitor 4
-- winKey: true
-  $name: Open with the Windows key
-  $description: Also Ctrl+Esc. When off, they open the original Start
-- startButton: true
-  $name: Open with the Start button
-  $description: Of the taskbar and of the Standalone Dock mod, and the other ways Start opens (not the keyboard). When off, they open the original Start
+- winKeyAction: grid
+  $name: Windows key
+  $description: Also Ctrl+Esc
+  $options:
+  - grid: Open this grid
+  - start: Open the original Start
+  - program: Run the program below
+- shiftWinKeyAction: start
+  $name: Shift + Windows key
+  $options:
+  - grid: Open this grid
+  - start: Open the original Start
+  - program: Run the program below
+- startButtonAction: grid
+  $name: Start button
+  $description: Of the taskbar and of the Standalone Dock mod, and the other ways Start opens that aren't the keyboard
+  $options:
+  - grid: Open this grid
+  - start: Open the original Start
+  - program: Run the program below
+- program: ""
+  $name: Program
+  $description: 'What "Run the program below" starts. A command line such as "C:\Program Files\App\app.exe" --flag, or a shortcut, file, folder or web address'
 */
 // ==/WindhawkModSettings==
 
@@ -164,9 +188,12 @@ constexpr UINT WM_APP_TOGGLE = WM_APP + 1;
 constexpr UINT WM_APP_APPS = WM_APP + 2;  // lParam: new AppList*.
 constexpr UINT WM_APP_RELOAD = WM_APP + 3;
 constexpr UINT WM_APP_QUIT = WM_APP + 4;
+constexpr UINT WM_APP_RUN = WM_APP + 5;
+constexpr UINT WM_APP_SHIFT_WIN = WM_APP + 6;
 
 constexpr UINT_PTR kTimerFrame = 1;
 constexpr UINT_PTR kTimerFirstLoad = 4;
+constexpr UINT_PTR kTimerOriginalStart = 5;
 
 constexpr GUID kBhidEnumItems = {
     0x94f60519,
@@ -205,6 +232,7 @@ bool EndsWith(const std::wstring& text, const std::wstring& suffix) {
 
 enum class BlurMode { Custom, Acrylic, Blur, None };
 enum class AppSource { AllApps, Desktop, Both, Pinned };
+enum class KeyAction { Grid, Start, Program };
 
 struct Settings {
     BlurMode blurMode = BlurMode::Custom;
@@ -216,12 +244,14 @@ struct Settings {
     bool coverScreen = false;
     AppSource source = AppSource::AllApps;
     int monitor = 0;  // 0: the one with the mouse; 1: main; 2+: the others, left to right.
+    std::wstring program;
 };
 
 Settings g_settings;
 // Also read in the ShowStartView hook, on Explorer's threads.
-std::atomic<bool> g_winKeyEnabled{true};
-std::atomic<bool> g_startButtonEnabled{true};
+std::atomic<KeyAction> g_winKeyAction{KeyAction::Grid};
+std::atomic<KeyAction> g_shiftWinKeyAction{KeyAction::Start};
+std::atomic<KeyAction> g_startButtonAction{KeyAction::Grid};
 
 std::wstring GetStringSetting(PCWSTR name) {
     return WindhawkUtils::StringSetting::make(name).get();
@@ -261,21 +291,56 @@ void LoadSettings() {
                : source == L"pinned" ? AppSource::Pinned
                                      : AppSource::AllApps;
     s.monitor = std::max(0, _wtoi(GetStringSetting(L"monitor").c_str()));
+    s.program = GetStringSetting(L"program");
     g_settings = s;
-    g_winKeyEnabled = Wh_GetIntSetting(L"winKey") != 0;
-    g_startButtonEnabled = Wh_GetIntSetting(L"startButton") != 0;
+    auto action = [](PCWSTR name) {
+        std::wstring value = GetStringSetting(name);
+        return value == L"start"     ? KeyAction::Start
+               : value == L"program" ? KeyAction::Program
+                                     : KeyAction::Grid;
+    };
+    g_winKeyAction = action(L"winKeyAction");
+    g_shiftWinKeyAction = action(L"shiftWinKeyAction");
+    g_startButtonAction = action(L"startButtonAction");
+}
+
+// Runs the "program" setting: a command line, or else anything ShellExecute
+// opens (a shortcut, file, folder or web address).
+void RunProgram() {
+    std::wstring command = g_settings.program;
+    command.erase(0, command.find_first_not_of(L" \t"));
+    command.erase(command.find_last_not_of(L" \t") + 1);
+    if (command.empty()) {
+        return;
+    }
+    STARTUPINFOW si{sizeof(si)};
+    PROCESS_INFORMATION pi{};
+    std::wstring line = command;
+    if (CreateProcessW(nullptr, line.data(), nullptr, nullptr, FALSE, 0,
+                       nullptr, nullptr, &si, &pi)) {
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        return;
+    }
+    if (command.size() > 1 && command.front() == L'"' &&
+        command.back() == L'"') {
+        command = command.substr(1, command.size() - 2);
+    }
+    ShellExecuteW(nullptr, nullptr, command.c_str(), nullptr, nullptr,
+                  SW_SHOWNORMAL);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // App list
 //
-// Comes from the virtual folder "shell:AppsFolder", the same one as the
-// "All apps" list of Start: programs with a Start menu shortcut and Store
-// apps. It's read on a separate thread, with the icons, and handed ready to the window.
+// Comes from the virtual folder "shell:AppsFolder" (the "All apps" list of
+// Start), the desktop, or Start's pins, depending on the setting. It's read on
+// a separate thread, with the icons, and handed ready to the window.
 
 struct App {
     std::wstring name;
-    std::wstring target;  // shell:AppsFolder\..., opened with ShellExecute.
+    std::wstring target;  // shell:AppsFolder\... or a path, opened with ShellExecute.
+    bool desktop = false;  // Came from the desktop.
     std::vector<UINT32> pixels;  // Square icon, premultiplied BGRA.
     int iconSize = 0;
     ComPtr<ID2D1Bitmap> bitmap;
@@ -289,6 +354,7 @@ using AppList = std::vector<std::shared_ptr<App>>;
 // destructors would release them on the exiting thread under the loader lock.
 [[clang::no_destroy]] AppList g_apps;
 bool g_appsLoaded;
+bool g_appsFailed;  // The pins couldn't be read.
 double g_appsTime;
 int g_appsKey;  // AppsKey() of the loaded list.
 
@@ -427,7 +493,8 @@ bool NameLess(const std::wstring& a, const std::wstring& b) {
 void AddApp(IShellItem* item,
             std::wstring target,
             int iconPixels,
-            AppList& list) {
+            AppList& list,
+            bool desktop = false) {
     PWSTR name = nullptr;
     if (SUCCEEDED(item->GetDisplayName(SIGDN_NORMALDISPLAY, &name)) && *name) {
         auto app = std::make_shared<App>();
@@ -439,6 +506,7 @@ void AddApp(IShellItem* item,
             app->name.resize(app->name.size() - 4);
         }
         app->target = std::move(target);
+        app->desktop = desktop;
         LoadAppIcon(item, iconPixels, *app);
         list.push_back(std::move(app));
     }
@@ -491,7 +559,7 @@ void AddDesktopItems(int iconPixels, AppList& list) {
                 !(attributes & SFGAO_HIDDEN) &&
                 SUCCEEDED(item->GetDisplayName(SIGDN_DESKTOPABSOLUTEPARSING,
                                                &path))) {
-                AddApp(item.Get(), path, iconPixels, list);
+                AddApp(item.Get(), path, iconPixels, list, true);
             }
             CoTaskMemFree(path);
         }
@@ -553,11 +621,18 @@ std::wstring ExportStartLayout() {
     }
     std::wstring path = std::wstring(temp) + L"fullscreen-start-plus-pins.json";
     DeleteFileW(path.c_str());
+    std::wstring quoted;  // Inside '...' a quote is written twice.
+    for (WCHAR c : path) {
+        quoted += c;
+        if (c == L'\'') {
+            quoted += c;
+        }
+    }
     std::wstring command = L"\"" + std::wstring(system) +
                            L"\\WindowsPowerShell\\v1.0\\powershell.exe\" "
                            L"-NoProfile -NonInteractive -ExecutionPolicy Bypass "
                            L"-Command \"Export-StartLayout -Path '" +
-                           path + L"'\"";
+                           quoted + L"'\"";
     STARTUPINFOW si{sizeof(si)};
     PROCESS_INFORMATION pi{};
     if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE,
@@ -597,8 +672,12 @@ std::wstring ExportStartLayout() {
     return json;
 }
 
-void AddStartPins(int iconPixels, AppList& list) {
+// False when the pins couldn't be read at all.
+bool AddStartPins(int iconPixels, AppList& list) {
     std::wstring json = ExportStartLayout();
+    if (json.find(L"\"pinnedList\"") == std::wstring::npos) {
+        return false;
+    }
     for (size_t i = json.find(L'"'); i != std::wstring::npos && !g_workerStop;
          i = json.find(L'"', i)) {
         std::wstring key = ReadJsonString(json, i);
@@ -607,6 +686,26 @@ void AddStartPins(int iconPixels, AppList& list) {
             continue;
         }
         value = json.find_first_not_of(L" \t\r\n", value + 1);
+        if (value != std::wstring::npos && json[value] == L'{' &&
+            key == L"secondaryTile") {
+            // A pinned website. Its packagedAppId is the browser, which would
+            // show up as a plain browser tile, so the whole object is skipped.
+            int depth = 0;
+            for (i = value; i < json.size();) {
+                if (json[i] == L'"') {
+                    ReadJsonString(json, i);
+                    continue;
+                }
+                if (json[i] == L'{') {
+                    depth++;
+                } else if (json[i] == L'}' && --depth == 0) {
+                    i++;
+                    break;
+                }
+                i++;
+            }
+            continue;
+        }
         if (value == std::wstring::npos || json[value] != L'"') {
             continue;
         }
@@ -629,13 +728,14 @@ void AddStartPins(int iconPixels, AppList& list) {
             AddApp(item.Get(), target, iconPixels, list);
         }
     }
+    return true;
 }
 
 AppList* EnumerateApps(int iconPixels, AppSource source) {
     auto list = std::make_unique<AppList>();
     if (source == AppSource::Pinned) {
-        AddStartPins(iconPixels, *list);  // Keeps Start's order.
-        return list.release();
+        // Keeps Start's order. nullptr: the pins couldn't be read.
+        return AddStartPins(iconPixels, *list) ? list.release() : nullptr;
     }
     if (source != AppSource::Desktop) {
         AddStartApps(iconPixels, *list);
@@ -648,15 +748,15 @@ AppList* EnumerateApps(int iconPixels, AppSource source) {
                      [](const auto& a, const auto& b) {
                          return NameLess(a->name, b->name);
                      });
-    // The same app may show up twice (user and all-users shortcut). With both
-    // lists, a desktop shortcut named like a Start app is dropped: the stable
-    // sort keeps the Start app, added first.
-    bool both = source == AppSource::Both;
+    // The same app may show up twice (user and all-users shortcut). A desktop
+    // shortcut named like a Start app is dropped too: the stable sort keeps
+    // the Start app, added first.
     list->erase(std::unique(list->begin(), list->end(),
-                            [both](const auto& a, const auto& b) {
+                            [](const auto& a, const auto& b) {
                                 return a->name == b->name &&
-                                       (both || ToLower(a->target) ==
-                                                    ToLower(b->target));
+                                       (a->desktop != b->desktop ||
+                                        ToLower(a->target) ==
+                                            ToLower(b->target));
                             }),
                 list->end());
     return list.release();
@@ -1470,6 +1570,7 @@ void DrawGrid() {
     }
     if (g_visible.empty()) {
         DrawMessage(!g_query.empty() ? L"No apps found"
+                    : g_appsFailed ? L"Couldn't read the apps pinned to Start"
                     : (g_appsKey >> 16) == (int)AppSource::Pinned
                         ? L"No apps are pinned to Start"
                         : L"No apps");
@@ -1898,6 +1999,58 @@ bool IsKeyboardShow(int showMethod, int showFlags) {
     return showMethod == kShowMethodKeyboard && (showFlags & kShowFlagKeyboard);
 }
 
+// Shift + Windows key
+//
+// Windows doesn't open Start for the Windows key pressed with Shift, so
+// ShowStartView never sees it. A low-level keyboard hook on its own thread
+// (the window thread can be busy drawing) watches for the Windows key let go
+// while Shift is held, with no other key pressed in between (Shift+Win+S and
+// the like stay Windows shortcuts). For "original Start", the window presses
+// Ctrl+Esc once the keys are up and the ShowStartView hook lets that one
+// through.
+
+std::atomic<ULONGLONG> g_originalStartUntil;
+HANDLE g_keyThread;
+DWORD g_keyThreadId;
+
+LRESULT CALLBACK KeyboardHook(int code, WPARAM wParam, LPARAM lParam) {
+    static bool winDown, otherKey;
+    if (code == HC_ACTION) {
+        DWORD vk = ((KBDLLHOOKSTRUCT*)lParam)->vkCode;
+        bool up = wParam == WM_KEYUP || wParam == WM_SYSKEYUP;
+        bool shift = vk == VK_SHIFT || vk == VK_LSHIFT || vk == VK_RSHIFT;
+        if (vk == VK_LWIN || vk == VK_RWIN) {
+            if (!up && !winDown) {
+                winDown = true;
+                otherKey = false;
+            } else if (up && winDown) {
+                winDown = false;
+                HWND wnd = g_wnd;
+                if (!otherKey && GetAsyncKeyState(VK_SHIFT) < 0 && wnd) {
+                    PostMessageW(wnd, WM_APP_SHIFT_WIN, 0, 0);
+                }
+            }
+        } else if (!up && !shift && winDown) {
+            otherKey = true;
+        }
+    }
+    return CallNextHookEx(nullptr, code, wParam, lParam);
+}
+
+DWORD WINAPI KeyThread(void*) {
+    HHOOK hook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardHook,
+                                   GetModuleHandleW(nullptr), 0);
+    if (!hook) {
+        Wh_Log(L"Keyboard hook failed: %u", GetLastError());
+        return 0;
+    }
+    MSG msg;
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+    }
+    UnhookWindowsHookEx(hook);
+    return 0;
+}
+
 bool OwnsTaskbar() {
     DWORD pid = 0;
     HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
@@ -1913,15 +2066,20 @@ HRESULT WINAPI XamlLauncher_ShowStartView_Hook(void* pThis,
                                                int showMethod,
                                                int showFlags) {
     Wh_Log(L"> method %d, flags %d", showMethod, showFlags);
-    bool enabled = IsKeyboardShow(showMethod, showFlags)
-                       ? g_winKeyEnabled
-                       : g_startButtonEnabled;
+    KeyAction action = GetTickCount64() < g_originalStartUntil
+                           ? KeyAction::Start
+                       : IsKeyboardShow(showMethod, showFlags)
+                           ? g_winKeyAction.load()
+                           : g_startButtonAction.load();
+    g_originalStartUntil = 0;
     HWND wnd = g_wnd;
-    if (!enabled || !wnd) {
+    if (action == KeyAction::Start || !wnd) {
         return XamlLauncher_ShowStartView_Original(pThis, showMethod,
                                                    showFlags);
     }
-    PostMessageW(wnd, WM_APP_TOGGLE, 0, 0);
+    PostMessageW(wnd, action == KeyAction::Program ? WM_APP_RUN
+                                                   : WM_APP_TOGGLE,
+                 0, 0);
     return S_OK;
 }
 
@@ -1930,10 +2088,17 @@ HRESULT WINAPI XamlLauncher_ShowStartView_Hook(void* pThis,
 
 
 void OnAppsLoaded(AppList* list, int key) {
-    g_apps = std::move(*list);
+    g_appsFailed = !list;
+    g_apps = list ? std::move(*list) : AppList{};
     delete list;
     g_appsLoaded = true;
     g_appsKey = key;
+    if (key != AppsKey()) {
+        // The settings changed while this list was read: the reload then
+        // found the worker busy. It has posted and is about to end.
+        WaitForSingleObject(g_worker, 1000);
+        StartLoadingApps();
+    }
     if (g_shown) {
         UpdateFilter();
         int count = (int)g_visible.size();
@@ -1972,6 +2137,38 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
             return 0;
 
+        case WM_APP_RUN:
+            if (g_shown) {
+                HideNow();
+            }
+            RunProgram();
+            return 0;
+
+        case WM_APP_SHIFT_WIN:
+            // Explorer runs this mod in each of its processes; only the
+            // taskbar's one answers the key.
+            if (!OwnsTaskbar()) {
+                return 0;
+            }
+            switch (g_shiftWinKeyAction.load()) {
+                case KeyAction::Grid:
+                    Toggle();
+                    break;
+                case KeyAction::Program:
+                    PostMessageW(hwnd, WM_APP_RUN, 0, 0);
+                    break;
+                case KeyAction::Start:
+                    if (g_shown) {
+                        HideNow();
+                    }
+                    // Opened with Ctrl+Esc once Shift is up (with Shift it's
+                    // Task Manager). SC_TASKLIST to the taskbar does nothing
+                    // here.
+                    SetTimer(hwnd, kTimerOriginalStart, 20, nullptr);
+                    break;
+            }
+            return 0;
+
         case WM_APP_QUIT:
             DestroyWindow(hwnd);
             return 0;
@@ -1980,6 +2177,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             switch (wParam) {
                 case kTimerFrame:
                     OnFrame();
+                    break;
+                case kTimerOriginalStart:
+                    if (GetAsyncKeyState(VK_SHIFT) >= 0 &&
+                        GetAsyncKeyState(VK_LWIN) >= 0 &&
+                        GetAsyncKeyState(VK_RWIN) >= 0) {
+                        KillTimer(hwnd, kTimerOriginalStart);
+                        g_originalStartUntil = GetTickCount64() + 1000;
+                        INPUT keys[4] = {};
+                        WORD vks[4] = {VK_CONTROL, VK_ESCAPE, VK_ESCAPE,
+                                       VK_CONTROL};
+                        for (int i = 0; i < 4; i++) {
+                            keys[i].type = INPUT_KEYBOARD;
+                            keys[i].ki.wVk = vks[i];
+                            keys[i].ki.dwFlags = i < 2 ? 0 : KEYEVENTF_KEYUP;
+                        }
+                        SendInput(4, keys, sizeof(INPUT));
+                    }
                     break;
                 case kTimerFirstLoad:
                     // Only in the process that owns the taskbar: short-lived
@@ -2256,6 +2470,8 @@ BOOL Wh_ModInit() {
         g_readyEvent = nullptr;
         return FALSE;
     }
+    g_keyThread =
+        CreateThread(nullptr, 0, KeyThread, nullptr, 0, &g_keyThreadId);
     return TRUE;
 }
 
@@ -2264,6 +2480,14 @@ void Wh_ModUninit() {
 
     if (!g_thread) {
         return;
+    }
+    if (g_keyThread) {
+        // Repeated: the thread may not have its message queue yet.
+        do {
+            PostThreadMessageW(g_keyThreadId, WM_QUIT, 0, 0);
+        } while (WaitForSingleObject(g_keyThread, 100) == WAIT_TIMEOUT);
+        CloseHandle(g_keyThread);
+        g_keyThread = nullptr;
     }
     WaitForSingleObject(g_readyEvent, INFINITE);
     if (HWND wnd = g_wnd) {

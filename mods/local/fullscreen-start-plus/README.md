@@ -18,6 +18,10 @@ of the macOS Launchpad, with instant search and a blurred background.
   background.
 - **Opens like Start.** The Windows key, Ctrl+Esc and the Start button of the
   taskbar or the Standalone Dock all open it.
+- **Your own Windows key.** The Windows key, Shift + Windows key and the Start
+  button can each open this grid, the original Start, or a program of your
+  choice, such as a launcher. The program starts even when it isn't running,
+  so this replaces the same feature of Open-Shell.
 
 ## Keyboard and mouse
 
@@ -36,8 +40,11 @@ Clicking outside the icons or switching to another window closes it.
 
 - Disable the original Fullscreen Start (Launchpad style) before you enable
   this mod. Both replace Start, so only one should run.
-- Turn off **Open with the Windows key** or **Open with the Start button** to
-  get the normal Start menu back for that action.
+- Set **Windows key**, **Shift + Windows key** or **Start button** to "Open
+  the original Start" to get the normal Start menu for that action. Shift +
+  Windows key opens it by default.
+- If Open-Shell or another Start replacement also takes the Windows key, turn
+  that feature off there, or it gets the key first.
 - The first time the mod loads, Windhawk downloads the symbols of
   `twinui.pcshell.dll`, which can take a minute.
 
