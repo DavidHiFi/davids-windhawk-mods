@@ -2,11 +2,12 @@
 // @id              alt-snap-drag
 // @name            AltSnap
 // @description     Move and resize any window with Alt+drag, plus AltSnap's window shortcuts
-// @version         1.2.3
-// @author          DavidHiFi
+// @version         1.2.4
+// @author          DavidHiFi, m417z, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         GPL-3.0
+// @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         *
 // @compilerOptions -lcomctl32
 // ==/WindhawkMod==

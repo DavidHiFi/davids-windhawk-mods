@@ -1,12 +1,13 @@
 // ==WindhawkMod==
-// @id              shell-font-changer
-// @name            Shell Font Changer
-// @description     Use any font in Explorer, Start, Search and Settings without breaking icons or emoji
-// @version         1.2.2
-// @author          DavidHiFi
+// @id              shell-font-changer-plus
+// @name            Shell Font Changer Plus
+// @description     Any installed font in Explorer, Start, Search and Settings, with icons and emoji left intact
+// @version         1.3.0
+// @author          DavidHiFi, Gabriela Cristei
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         MIT
+// @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         explorer.exe
 // @include         StartMenuExperienceHost.exe
 // @include         ShellExperienceHost.exe
@@ -18,34 +19,41 @@
 
 // ==WindhawkModReadme==
 /*
-# Shell Font Changer
+# Shell Font Changer Plus
 
-Replace the font used across File Explorer and the Windows shell with any font
-you have installed.
+Change the text font in File Explorer, Start, Search and Settings to any font
+you have installed. Icons and emoji keep their own glyphs, so buttons never
+turn into empty boxes.
 
-![Shell Font Changer preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/shell-font-changer.png)
+![Shell Font Changer Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/shell-font-changer-plus.png)
 
 ## Features
 
-- **Changes text in File Explorer, Start, Search and Settings.**
-- **Icons and emoji stay intact.** Symbol and icon fonts keep their own
-  glyphs, so buttons never turn into empty boxes.
-- **Keeps font weights.** Semibold and bold text stays semibold and bold.
-- **Covers classic, themed and modern text**, including DirectWrite layouts.
-- **Fits text to controls.** Text with enough space keeps its normal size.
-  Text that would overflow shrinks slightly, never below 85% height or 80%
-  width. If that still overflows, the original UI font draws it.
-- **Nothing is written to the registry**, so turning it off is fully clean.
+- **Shell-wide text.** File Explorer, Start, Search and Settings all follow the
+  font you pick.
+- **Icons and emoji stay intact.** Symbol and icon fonts keep their own glyphs,
+  so buttons never show empty boxes.
+- **Weight is kept.** Semibold and bold text stays semibold and bold.
+- **Classic, themed and modern text.** GDI text, visual-style themes and
+  DirectWrite layouts are all covered.
+- **Text fits its controls.** Text that would overflow shrinks a little, to no
+  less than 85% of its height or 80% of its width. If it still overflows, the
+  original UI font draws it.
+- **Clean to remove.** The mod writes nothing to the registry, so turning it off
+  leaves nothing behind.
 
 ## How to use
 
-Type an installed font family name in the settings, such as
-`FiraCode Nerd Font` or `Inter`. Leave it empty to turn the mod off.
+Type an installed font family name in the settings, such as `FiraCode Nerd Font`
+or `Inter`. Leave the field empty, or type `None`, to turn the mod off.
 
-Some apps, such as Chromium browsers, draw text with their own fonts and keep
-them. Windows that were already open may need to be reopened.
+If the font is not installed, or its name is 32 characters or longer, the mod
+does not start. The Windhawk log says why.
 
-Disable the original Explorer Font Changer before enabling this mod.
+Some apps, like Chrome and Edge, draw text with their own fonts and keep them.
+Windows that were already open may need to be reopened.
+
+Turn off the original Explorer Font Changer before you turn this one on.
 
 ## Credits
 
@@ -59,7 +67,7 @@ by Gabriela Cristei. MIT.
 - font:
   - name: FiraCode Nerd Font
     $name: Font family
-    $description: Installed font family. Empty or None keeps the original font.
+    $description: An installed font family, such as Inter. Leave empty or type None to keep the original font.
   $name: Text font
 */
 // ==/WindhawkModSettings==

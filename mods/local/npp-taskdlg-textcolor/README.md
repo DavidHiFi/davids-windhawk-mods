@@ -1,5 +1,7 @@
 # Notepad++ Dark Dialog Fix
 
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 In dark mode, Notepad++ paints its Save and confirm dialogs dark but leaves the
 text black, so you can barely read it. This mod makes that text light again.
 

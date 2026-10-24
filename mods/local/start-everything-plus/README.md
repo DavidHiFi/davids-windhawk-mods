@@ -1,5 +1,7 @@
 # Everything & Power Tools in the Start Menu Plus
 
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Search files, apps and settings from the Start menu with voidtools Everything. The menu opens as a compact search box with power controls and expands when you type.
 
 ![Everything Start menu Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/start-everything-plus.png)

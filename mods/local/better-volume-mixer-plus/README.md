@@ -1,5 +1,7 @@
 # Better Volume Mixer Plus
 
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 A compact volume mixer in the system tray, with per-app volume and per-app
 audio devices. Better Volume Mixer, plus device routing.
 

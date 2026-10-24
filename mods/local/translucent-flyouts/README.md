@@ -1,5 +1,7 @@
 # Translucent Flyouts
 
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Give the classic menus, dropdowns and tooltips in every app a modern acrylic,
 Mica or blur background. The TranslucentFlyouts app, rebuilt as one mod with
 no helper program.

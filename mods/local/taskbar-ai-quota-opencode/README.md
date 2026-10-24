@@ -1,5 +1,7 @@
 # Taskbar AI Quota Bars Plus
 
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 See how much of your AI subscription limits you have used, right on the
 taskbar. Taskbar AI Quota Bars, plus OpenCode Go.
 

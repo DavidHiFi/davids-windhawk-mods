@@ -36,7 +36,7 @@ $localPaths = [ordered]@{
     'npp-taskdlg-textcolor'           = 'mods\local\npp-taskdlg-textcolor\npp-taskdlg-textcolor.wh.cpp'
     'local@translucent-flyouts'       = 'mods\local\translucent-flyouts\translucent-flyouts.wh.cpp'
     'local@better-volume-mixer-plus'  = 'mods\local\better-volume-mixer-plus\better-volume-mixer-plus.wh.cpp'
-    'local@shell-font-changer' = 'mods\local\shell-font-changer\shell-font-changer.wh.cpp'
+    'local@shell-font-changer-plus' = 'mods\local\shell-font-changer-plus\shell-font-changer-plus.wh.cpp'
     'local@windhawk-styler' = 'mods\local\windhawk-styler\windhawk-styler.wh.cpp'
 }
 # Values the source headers do not carry.
@@ -51,7 +51,7 @@ $upstreamOverride = @{
     'local@alt-snap-drag'             = 'https://windhawk.net/mods/alt-drag'
     'local@taskbar-ai-quota-opencode' = 'https://windhawk.net/mods/taskbar-ai-quota'
     'local@better-volume-mixer-plus'  = 'https://windhawk.net/mods/better-volume-mixer'
-    'local@shell-font-changer' = 'https://windhawk.net/mods/explorer-font-changer'
+    'local@shell-font-changer-plus' = 'https://windhawk.net/mods/explorer-font-changer'
 }
 # Local mods that are not installed on this machine: id -> source and repo dest.
 $offlineLocal = [ordered]@{

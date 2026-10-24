@@ -1,5 +1,7 @@
 # AltSnap
 
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Move and resize any window by holding Alt, and maximize, minimize or close it
 with AltSnap-style shortcuts. Everything AltSnap does day to day, with no
 separate app running.

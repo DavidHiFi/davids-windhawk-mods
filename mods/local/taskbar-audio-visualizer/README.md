@@ -1,5 +1,7 @@
 # Taskbar Audio Visualizer
 
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 A live audio spectrum and media controls that sit on the taskbar, next to your
 other widgets.
 

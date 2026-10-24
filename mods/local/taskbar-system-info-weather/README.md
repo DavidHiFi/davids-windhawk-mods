@@ -1,5 +1,7 @@
 # Taskbar System Info Plus
 
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 A compact hardware monitor on the taskbar: CPU, GPU, memory, temperatures and
 network speed at a glance. Taskbar System Info, plus network speeds and a
 tighter layout.

@@ -1,5 +1,7 @@
 # Simple Window Switcher Plus
 
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Vista's animated live-window layouts and blurred background, with Simple Window Switcher's configurable layout and shared appearance controls.
 
 ![Preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/simple-window-switcher-plus.gif)

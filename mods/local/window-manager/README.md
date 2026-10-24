@@ -1,5 +1,7 @@
 # Window Manager
 
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 Move, resize and snap windows from anywhere, and send them to another monitor,
 with the mouse or the keyboard. Works on administrator windows too.
 

@@ -1,5 +1,7 @@
 # Taskbar Weather
 
+[☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
+
 The current weather on the left side of the taskbar, with a details card when
 you hover over it. It works on its own, without Windows Widgets.
 

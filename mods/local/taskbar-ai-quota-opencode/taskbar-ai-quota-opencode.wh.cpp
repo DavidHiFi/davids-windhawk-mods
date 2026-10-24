@@ -2,14 +2,15 @@
 // @id              taskbar-ai-quota-opencode
 // @name            Taskbar AI Quota Bars Plus
 // @description     Claude, Codex, Antigravity and OpenCode Go usage limits as bars on the taskbar
-// @version         1.6.5.1
-// @author          DavidHiFi
+// @version         1.6.5.2
+// @author          DavidHiFi, Cleroth
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         explorer.exe
 // @architecture    x86-64
 // @license         MIT
 // @compilerOptions -DWIN32_LEAN_AND_MEAN -lole32 -loleaut32 -lruntimeobject -lwindowsapp -lwinhttp -luser32 -lshell32 -lgdi32 -ladvapi32 -lws2_32 -liphlpapi -lcrypt32 -lbcrypt -lcomctl32 -lcomdlg32
+// @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
 
 // A fork of Taskbar AI Quota Bars by Cleroth (https://github.com/Cleroth),

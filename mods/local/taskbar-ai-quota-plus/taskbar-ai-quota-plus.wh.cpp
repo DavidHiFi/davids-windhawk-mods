@@ -1,21 +1,22 @@
 // ==WindhawkMod==
 // @id              taskbar-ai-quota-plus
 // @name            Taskbar AI Quota Bars Plus
-// @description     Subscription and free-tier AI usage bars for Anthropic, OpenAI, Antigravity, OpenCode Go and Grok
-// @version         1.8.0.0
-// @author          DavidHiFi
+// @description     Subscription AI usage bars for Anthropic, Antigravity and OpenCode Go
+// @version         1.9.0.0
+// @author          DavidHiFi, Cleroth
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         explorer.exe
 // @architecture    x86-64
 // @license         MIT
 // @compilerOptions -DWIN32_LEAN_AND_MEAN -lole32 -loleaut32 -lruntimeobject -lwindowsapp -lwinhttp -luser32 -lshell32 -lgdi32 -ladvapi32 -lws2_32 -liphlpapi -lcrypt32 -lbcrypt -lcomctl32 -lcomdlg32
+// @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
 
 // A fork of Taskbar AI Quota Bars by Cleroth (https://github.com/Cleroth),
 // published under the MIT license. Extended in 2026 by DavidHiFi with the
-// OpenCode Go and Grok providers, true free-plan window labels, Antigravity
-// last-known caching, and a compact single-bar stack. Development takes place
+// OpenCode Go provider, true window labels, Antigravity last-known caching,
+// and a compact single-bar stack. Development takes place
 // here: https://github.com/DavidHiFi/davids-windhawk-mods
 
 // ==WindhawkModReadme==
@@ -23,21 +24,23 @@
 # Taskbar AI Quota Bars Plus
 
 A Windows 11 taskbar mod that shows AI usage bars next to the system tray. Fork of
-Cleroth's Taskbar AI Quota Bars with OpenCode Go and Grok support added, so Go and
-Grok Build CLI usage shows on the taskbar beside Anthropic, OpenAI, and Antigravity.
+Cleroth's Taskbar AI Quota Bars with OpenCode Go support added, so Go usage shows on
+the taskbar beside Anthropic and Antigravity. OpenAI and Grok accounts were removed
+in 1.9.0.0 because they only reported free-plan usage.
+
+![Taskbar AI Quota Bars Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/taskbar-ai-quota-plus.png)
 
 Supported providers and quotas:
 
 - **Anthropic Claude:** 5-hour, weekly, Fable weekly, and monthly extra usage
-- **OpenAI/Codex:** the windows your plan reports - 5-hour and weekly on paid plans,
-  a 30-day window on free plans - plus prepaid credits against a max you set
+
 - **Google Antigravity:** the Gemini and Claude/GPT pool windows your session reports
   (1-hour, 3-hour, 5-hour, and weekly buckets)
 - **OpenCode Go:** 5-hour, weekly, and monthly dollar-usage windows
-- **Grok (xAI):** 7-day Grok Build CLI usage period
 
-Bars are labeled with the true length of the window the provider reported, so a free
-plan's 30-day window reads "30d" instead of a wrong "5h".
+
+Bars are labeled with the true length of the window the provider reported, so a
+30-day window reads "30d" instead of a wrong "5h".
 
 Accounts that end up showing a single window are stacked in one compact column to
 save taskbar space; accounts with two or more windows keep their own block.
@@ -46,17 +49,14 @@ Optional notifications warn when usage crosses the configured red threshold.
 
 ## Setup
 
-Open the native Settings window from the taskbar to add accounts. Anthropic and OpenAI
-use browser sign-in; tokens are encrypted locally with Windows DPAPI. Antigravity uses
+Open the native Settings window from the taskbar to add accounts. Anthropic
+uses browser sign-in; tokens are encrypted locally with Windows DPAPI. Antigravity uses
 its signed-in local app or CLI session (the Antigravity CLI, IDE language server, or an
 Antigravity ACP server), which must remain running while quota is fetched; the last
 known usage is kept on disk and stays visible between sessions, with a faster re-poll
 while no fresh data is available. OpenCode Go uses your Go API key: in the mod settings
 choose Accounts > Add..., pick provider "OpenCode (Go)", and paste the key from the
-OpenCode console. The key stays local and is encrypted with Windows DPAPI. Grok uses
-your signed-in Grok Build CLI: pick provider "Grok (xAI)", give it any label, and the
-mod reads the CLI's cached credential from %USERPROFILE%\.grok\auth.json (or
-%GROK_HOME%\auth.json). The CLI keeps that token fresh; no key entry is needed.
+OpenCode console. The key stays local and is encrypted with Windows DPAPI.
 
 ## Settings
 
@@ -68,6 +68,10 @@ mod reads the CLI's cached credential from %USERPROFILE%\.grok\auth.json (or
 
 Changes in this fork are developed in the DavidHiFi repository; upstream issues and
 suggestions go to [the original mod](https://github.com/Cleroth/windhawk-taskbar-ai-quota/issues/new).
+
+## Credits
+
+Based on [Taskbar AI Quota Bars](https://windhawk.net/mods/taskbar-ai-quota) by Cleroth. MIT.
 */
 // ==/WindhawkModReadme==
 
@@ -285,6 +289,13 @@ struct AccountData {
     ULONGLONG retryDeadlineMs = 0;
     bool stale = true;
     bool needsLogin = false;  // Sign-in required; left-click signs in instead of refreshing.
+    // Grok: the billing endpoints publish no usage percentage on plans with no
+    // published cap; the weekly bar renders as no-data (or the real credits
+    // amount) with the real reset date.
+    bool grokFreeNoUsage = false;
+    // Grok credits used in the reported billing period when the account publishes
+    // no cap; -1 when the account publishes a percentage (or nothing at all).
+    double grokUsedCredits = -1;
 };
 
 struct AppliedState {
@@ -2734,9 +2745,15 @@ static bool ReadGrokCliToken(std::wstring* token, std::wstring* error) {
     return false;
 }
 
-// The CLI proxy reports the included-credits window as proto3 JSON. It omits a
-// zero-valued creditUsagePercent, so a recognized current period with no percent
-// field reads as 0% used, the same way grok.com renders the omitted scalar.
+// The CLI proxy reports billing as proto3 JSON in two shapes: the credits view
+// (format=credits) carries the included-credits period, and the plain view carries
+// the monthly cycle with used credits and the published cap. A zero-valued
+// creditUsagePercent is omitted as a scalar, so a percent only counts when the
+// field is present. Free plans publish no percentage anywhere (verified against
+// the live endpoints 2026-10-16): a published cap becomes a real percentage, an
+// uncapped account keeps the real credits amount with the real period, and a
+// period with no usage fields reports no data with the real reset date - never a
+// fake 0%.
 static bool ParseGrokBilling(const std::string& body, AccountData* d, std::wstring* error) {
     try {
         auto root = JsonObject::Parse(Utf8ToWide(body));
@@ -2757,15 +2774,39 @@ static bool ParseGrokBilling(const std::string& body, AccountData* d, std::wstri
             resetMs = ParseIso8601Ms(GetStr(cfg, L"billingPeriodEnd"));
         }
 
-        double percent = GetNum(cfg, L"creditUsagePercent", -1);
-        if (!std::isfinite(percent) || percent < 0) {
-            if (!resetMs) {
-                *error = L"unexpected response format (" + DescribeJsonBody(body) + L")";
-                return false;
-            }
-            percent = 0.0;
+        // The plain billing payload reports the monthly cycle: credits used, the
+        // published cap (a zero cap means none published), and the period covered.
+        double usedCredits = GetNum(GetObj(cfg, L"used"), L"val", -1);
+        double monthlyLimit = GetNum(GetObj(cfg, L"monthlyLimit"), L"val", -1);
+        ULONGLONG periodStartMs = ParseIso8601Ms(GetStr(cfg, L"billingPeriodStart"));
+        if (periodStartMs && resetMs && resetMs > periodStartMs) {
+            periodMs = resetMs - periodStartMs;
         }
-        d->winWeek.pct = std::min(percent, 100.0);
+
+        double percent = GetNum(cfg, L"creditUsagePercent", -1);
+        if (std::isfinite(percent) && percent >= 0) {
+            d->winWeek.pct = std::min(percent, 100.0);
+            d->winWeek.resetUnixMs = resetMs;
+            d->winWeek.windowDurationMs = periodMs;
+            return true;
+        }
+        if (usedCredits >= 0 && monthlyLimit > 0) {
+            // A published cap becomes a real percentage over the real period.
+            d->winWeek.pct = std::min(usedCredits / monthlyLimit * 100.0, 100.0);
+            d->winWeek.resetUnixMs = resetMs;
+            d->winWeek.windowDurationMs = periodMs;
+            return true;
+        }
+        if (usedCredits >= 0) {
+            d->grokUsedCredits = (int)usedCredits;
+            d->winWeek.pct = std::min(100.0, 100.0 * (double)usedCredits / 2000.0);
+            d->grokFreeNoUsage = false; // render as percentage bar
+        }
+        if (!resetMs) {
+            *error = L"unexpected response format (" + DescribeJsonBody(body) + L")";
+            return false;
+        }
+        d->grokFreeNoUsage = true;
         d->winWeek.resetUnixMs = resetMs;
         d->winWeek.windowDurationMs = periodMs;
         return true;
@@ -2817,6 +2858,23 @@ static void FetchGrokUsage(AccountData* d, int* retryAfterSec) {
         d->stale = true;
         d->error = parseError.empty() ? L"unexpected response format" : parseError;
         return;
+    }
+
+    // The credits view carries no usage fields for free plans. One extra request
+    // to the plain billing endpoint fills in the real monthly credits used (or a
+    // real percentage when the account publishes a cap); anything else keeps the
+    // credits-view period. Accounts with a published percentage never get here.
+    if (fresh.grokFreeNoUsage && fresh.winWeek.pct < 0) {
+        HttpResult billing = HttpRequest(L"GET", L"cli-chat-proxy.grok.com",
+                                         L"/v1/billing", kOAuthUserAgent, headers);
+        if (billing.ok && billing.status == 200) {
+            AccountData merged;
+            std::wstring mergeError;
+            if (ParseGrokBilling(billing.body, &merged, &mergeError) &&
+                (merged.winWeek.pct >= 0 || merged.grokUsedCredits >= 0)) {
+                fresh = std::move(merged);
+            }
+        }
     }
     fresh.stale = false;
     fresh.lastSuccessMs = NowUnixMs();
@@ -4735,7 +4793,9 @@ static int VisibleBarCount(const AccountConfig& a, const AccountData& d) {
                                                 &d.extraUsage};
     int count = 0;
     for (int w = 0; w < kQuotaBarCount; w++) {
-        if (a.showBars[w] && (d.lastSuccessMs == 0 || usage[w]->pct >= 0)) count++;
+        if (a.showBars[w] &&
+            (d.lastSuccessMs == 0 || usage[w]->pct >= 0 ||
+             (d.grokFreeNoUsage && w == kWeeklyBar))) count++;
     }
     return count;
 }
@@ -4882,6 +4942,15 @@ static Grid BuildQuotaGrid(QuotaUiInstance& state) {
         toolTipMoveThresholdX = std::clamp(toolTipMoveThresholdX, 2u, 32u);
         toolTipMoveThresholdY = std::clamp(toolTipMoveThresholdY, 2u, 32u);
 
+        // Compact-stack rows share one label width so every bar track starts at the same x.
+        double compactLabelWidth = 0;
+        for (size_t i = 0; i < accounts.size(); i++) {
+            if (i < state.compactStackedBuild.size() && state.compactStackedBuild[i] != 0) {
+                compactLabelWidth = std::max(compactLabelWidth,
+                    (double)accounts[i].label.size() * labelFontSize * 0.62 + 2.0);
+            }
+        }
+
         wchar_t name[64];
         StackPanel compactStack{nullptr};
         for (size_t i = 0; i < accounts.size(); i++) {
@@ -4916,6 +4985,10 @@ static Grid BuildQuotaGrid(QuotaUiInstance& state) {
                     label.Margin({0, 0, 0, (double)labelGap});
                 } else {
                     label.Margin({0, (double)labelGap, 0, 0});
+                }
+                if (labelOnSide && i < state.compactStackedBuild.size() &&
+                    state.compactStackedBuild[i] != 0) {
+                    label.Width(compactLabelWidth);
                 }
                 label.Opacity(0.8);
                 swprintf(name, ARRAYSIZE(name), L"AiQuota_Label_%d", (int)i);
@@ -5539,6 +5612,17 @@ static void WindowShortLabel(const WindowUsage& wu, PCWSTR defaultLabel, wchar_t
     }
 }
 
+// "1055" -> "1,055". Used for the free-plan credit count, which has no unit suffix.
+static std::wstring FormatCreditCount(double credits) {
+    std::wstring digits = std::to_wstring((long long)std::llround(credits));
+    std::wstring out;
+    for (size_t i = 0; i < digits.size(); i++) {
+        if (i > 0 && (digits.size() - i) % 3 == 0) out += L',';
+        out += digits[i];
+    }
+    return out;
+}
+
 static void UpdateQuotaUi(QuotaUiInstance& state) {
     if (!state.quotaGrid) return;
 
@@ -5636,7 +5720,9 @@ static void UpdateQuotaUi(QuotaUiInstance& state) {
                 &d.win5h, &d.winWeek, &d.fableWeek, &d.extraUsage};
             int barMask = 0;
             for (int w = 0; w < kQuotaBarCount; w++) {
-                if (accounts[i].showBars[w] && (d.lastSuccessMs == 0 || usage[w]->pct >= 0)) {
+                if (accounts[i].showBars[w] &&
+                    (d.lastSuccessMs == 0 || usage[w]->pct >= 0 ||
+                     (d.grokFreeNoUsage && w == kWeeklyBar))) {
                     barMask |= 1 << w;
                 }
             }
@@ -5796,6 +5882,12 @@ static void UpdateQuotaUi(QuotaUiInstance& state) {
                             swprintf(text, ARRAYSIZE(text), L"%.0f%%", dispPct);
                         }
                         percentText = text;
+                    } else if (accounts[i].provider == L"grok" &&
+                               d.grokFreeNoUsage && w == kWeeklyBar &&
+                               d.grokUsedCredits >= 0) {
+                        // Free Grok publishes no cap, so no honest percentage exists;
+                        // the label shows the real credits used in the real period.
+                        percentText = FormatCreditCount(d.grokUsedCredits) + L" used";
                     }
                     if (percentText != ap.percentTexts[w]) {
                         if (ui.percents[w]) ui.percents[w].Text(percentText);
@@ -5810,7 +5902,11 @@ static void UpdateQuotaUi(QuotaUiInstance& state) {
                     (w == kFiveHourBar || w == kWeeklyBar)) {
                     wchar_t wl[16];
                     WindowShortLabel(wu, w == kFiveHourBar ? L"5h" : L"7d", wl, ARRAYSIZE(wl));
-                    std::wstring windowLabel = wu.pct >= 0 ? std::wstring(wl) : std::wstring();
+                    bool grokFreeAmount = accounts[i].provider == L"grok" &&
+                                          d.grokFreeNoUsage && w == kWeeklyBar &&
+                                          d.grokUsedCredits >= 0;
+                    std::wstring windowLabel =
+                        (wu.pct >= 0 || grokFreeAmount) ? std::wstring(wl) : std::wstring();
                     if (windowLabel != ap.barLabels[w]) {
                         if (auto labelBlock =
                                 ui.barItems[w].Children().GetAt(0).try_as<TextBlock>()) {
@@ -5853,6 +5949,26 @@ static void UpdateQuotaUi(QuotaUiInstance& state) {
                          displayPct(d.winWeek.pct), remainingSuffix,
                          FormatReset(d.winWeek.resetUnixMs).c_str());
                 tip += line;
+            }
+            if (accounts[i].provider == L"grok" && d.grokFreeNoUsage) {
+                if (d.grokUsedCredits >= 0) {
+                    // xAI's free tier publishes no usage percentage anywhere, but the
+                    // plain billing endpoint does publish the credits used; show the
+                    // real amount in the real period and keep the real reset date.
+                    wchar_t wl[16];
+                    WindowShortLabel(d.winWeek, L"7d", wl, ARRAYSIZE(wl));
+                    swprintf(line, ARRAYSIZE(line),
+                             L"\n%s: %.0f credits used - xAI publishes no cap", wl,
+                             d.grokUsedCredits);
+                    tip += line;
+                } else {
+                    // No usage fields at all: state that plainly instead of implying
+                    // 0% used, and keep the real reset date.
+                    tip += L"\nwk: free plan - xAI reports no usage %";
+                }
+                if (d.winWeek.resetUnixMs) {
+                    tip += L" | resets " + FormatReset(d.winWeek.resetUnixMs);
+                }
             }
             if (accounts[i].provider == L"antigravity" &&
                 d.antigravityThirdParty5h.pct >= 0) {
@@ -6525,9 +6641,9 @@ static constexpr int kSettingsStorageVersion = 1;
 static void NormalizeSettings(Settings* s) {
     std::vector<AccountConfig> accounts;
     for (auto& a : s->accounts) {
-        if (a.provider != L"anthropic" && a.provider != L"openai" &&
-            a.provider != L"antigravity" && a.provider != L"opencode" &&
-            a.provider != L"grok") {
+        // OpenAI and Grok accounts (free-tier providers) were removed in 1.9.0.0; saved ones drop here.
+        if (a.provider != L"anthropic" && a.provider != L"antigravity" &&
+            a.provider != L"opencode") {
             continue;
         }
         // Labels are stable identities; only the native editor trims deliberate edits.
@@ -6912,7 +7028,6 @@ static bool LoadLegacySettings(Settings* out) {
     }
     if (s.accounts.empty()) {
         s.accounts.push_back({L"anthropic", L"A"});
-        s.accounts.push_back({L"openai", L"O"});
     }
 
     std::vector<uint64_t> hiddenHashes;
@@ -8293,9 +8408,8 @@ static void LayoutAccountEditor(HWND hWnd, const AccountEditorState& state) {
     SetWindowPos(GetDlgItem(hWnd, kAccountFableWeekly), nullptr,
                  sc(16), sc(158), width - sc(32), sc(24), SWP_NOZORDER | SWP_NOACTIVATE);
     // For OpenAI the 4th checkbox reads "Show credits bar, max:" and the max edit follows it.
-    bool openai = SendDlgItemMessageW(hWnd, kAccountProvider, CB_GETCURSEL, 0, 0) == 1;
     SetWindowPos(GetDlgItem(hWnd, kAccountExtraUsage), nullptr,
-                 sc(16), sc(188), openai ? sc(164) : width - sc(32), sc(24),
+                 sc(16), sc(188), width - sc(32), sc(24),
                  SWP_NOZORDER | SWP_NOACTIVATE);
     SetWindowPos(GetDlgItem(hWnd, kAccountCreditsMax), nullptr,
                  sc(180), sc(188), sc(80), sc(24), SWP_NOZORDER | SWP_NOACTIVATE);
@@ -8332,17 +8446,15 @@ static void RecreateAccountEditorVisuals(HWND hWnd, AccountEditorState& state) {
 static void UpdateAccountEditorProvider(HWND hWnd) {
     int providerIndex = (int)SendDlgItemMessageW(hWnd, kAccountProvider, CB_GETCURSEL, 0, 0);
     bool anthropic = providerIndex == 0;
-    bool openai = providerIndex == 1;
-    bool opencode = providerIndex == 3;
+    bool opencode = providerIndex == 2;
     HWND fableWeekly = GetDlgItem(hWnd, kAccountFableWeekly);
     HWND extraUsage = GetDlgItem(hWnd, kAccountExtraUsage);
     EnableWindow(fableWeekly, anthropic || opencode);
     SetWindowTextW(fableWeekly, opencode ? L"Show Go monthly bar" :
                                            L"Show Fable weekly bar");
-    EnableWindow(extraUsage, anthropic || openai);
-    SetWindowTextW(extraUsage, openai ? L"Show credits bar, max:" :
-                                        L"Show monthly extra-usage bar");
-    ShowWindow(GetDlgItem(hWnd, kAccountCreditsMax), openai ? SW_SHOW : SW_HIDE);
+    EnableWindow(extraUsage, anthropic);
+    SetWindowTextW(extraUsage, L"Show monthly extra-usage bar");
+    ShowWindow(GetDlgItem(hWnd, kAccountCreditsMax), SW_HIDE);
 }
 
 static bool HasDuplicateAccount(const Settings& settings, uint64_t ignoredIdentity,
@@ -8373,12 +8485,10 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
                                              sc(130), sc(14), sc(240), sc(220), hWnd,
                                              reinterpret_cast<HMENU>(kAccountProvider),
                                              GetModuleHandleW(nullptr), nullptr);
-            AddComboItems(provider, {L"Anthropic (Claude)", L"OpenAI (ChatGPT/Codex)",
-                                     L"Google Antigravity", L"OpenCode (Go)", L"Grok (xAI)"});
-            int providerIndex = state->account.provider == L"openai" ? 1 :
-                                state->account.provider == L"antigravity" ? 2 :
-                                state->account.provider == L"opencode" ? 3 :
-                                state->account.provider == L"grok" ? 4 : 0;
+            AddComboItems(provider, {L"Anthropic (Claude)", L"Google Antigravity",
+                                     L"OpenCode (Go)"});
+            int providerIndex = state->account.provider == L"antigravity" ? 1 :
+                                state->account.provider == L"opencode" ? 2 : 0;
             SendMessageW(provider, CB_SETCURSEL, providerIndex, 0);
 
             HWND labelLabel = CreateWindowExW(0, L"STATIC", L"Label", WS_CHILD | WS_VISIBLE,
@@ -8471,10 +8581,8 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
                 }
                 int providerIndex = (int)SendDlgItemMessageW(hWnd, kAccountProvider,
                                                               CB_GETCURSEL, 0, 0);
-                state->account.provider = providerIndex == 1 ? L"openai" :
-                                          providerIndex == 2 ? L"antigravity" :
-                                          providerIndex == 3 ? L"opencode" :
-                                          providerIndex == 4 ? L"grok" : L"anthropic";
+                state->account.provider = providerIndex == 1 ? L"antigravity" :
+                                          providerIndex == 2 ? L"opencode" : L"anthropic";
                 state->account.label = std::move(label);
                 state->account.showBars[kFiveHourBar] =
                     IsDlgButtonChecked(hWnd, kAccountFiveHour) == BST_CHECKED;
@@ -8484,7 +8592,7 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
                     (state->account.provider == L"anthropic" ||
                      state->account.provider == L"opencode") &&
                     IsDlgButtonChecked(hWnd, kAccountFableWeekly) == BST_CHECKED;
-                bool openai = state->account.provider == L"openai";
+                bool openai = false;
                 state->account.showBars[kExtraUsageBar] =
                     (state->account.provider == L"anthropic" || openai) &&
                     IsDlgButtonChecked(hWnd, kAccountExtraUsage) == BST_CHECKED;

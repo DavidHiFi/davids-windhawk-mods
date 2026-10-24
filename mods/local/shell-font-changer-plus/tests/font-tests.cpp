@@ -1,4 +1,4 @@
-#include "../shell-font-changer.wh.cpp"
+#include "../shell-font-changer-plus.wh.cpp"
 #include <cstdio>
 
 int failures = 0;
