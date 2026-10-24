@@ -2,6 +2,45 @@
 
 Last updated: 2026-10-24
 
+## 2026-10-24: Dark mode context menus merged into Translucent Flyouts 0.6.66 (installed)
+
+- `dark-menus` 1.4.2 is removed; its menu darkening and a `darkMenus.appMode` setting (default force_dark) are inside
+  `local@translucent-flyouts` 0.6.66. Checked 11:40 AM: registry shows 0.6.66 and `force_dark`, the dark-menus key and
+  source are gone, 231 processes (all Explorer) load `local@translucent-flyouts_0.6.66_1.dll`, screenshot
+  `reports\2026-10-24\translucent-flyouts-menu-20261024-113604.png`.
+- Not yet clean: 13 long-running apps still hold the old DLLs until they restart. Discord, Voicemeeter, Matrix, Stream Deck
+  and dwm are on the flyouts skip list, so they get no dark menus from this mod.
+- Rollback: `scripts\2026-10-24-dark-menus-merge.ps1 -Rollback`. Details: `notes\2026-10-24-dark-menus-merge.md`.
+- Public README or publish copy still says "pair with Dark Menus"; not pushed.
+
+## 2026-10-24: Fullscreen Start Plus 1.4.0 revision 7: its own settings window
+- The grid's "..." menu, Open settings, opens a native settings window inside the mod. It writes the same settings as Windhawk's page via elevated windhawk-cli.
+- Verified 11:40 AM: `local@fullscreen-start-plus_1.4.0_7.dll` loaded in explorer (tasklist); `scripts\2026-10-24-fsp-settings-window-test.ps1` opened the window in front, saved and restored blur strength (registry read). Commit af3563a pushed to PR #19.
+- Details: `notes\2026-10-24-fsp-handoff.md` item 7.
+
+## 2026-10-24: Fullscreen Start Plus 1.4.0 installed (revision 2): macro-key fix and pages
+
+- Macro keys (Wooting "menu" key sending Shift+Win) open the grid again. Cause: the key lets go of Shift
+  before Win, so the hook never saw Shift+Win. Fix pushed to PR 19 as 1ed0580. Verified before 8:50 AM:
+  5 of 5 simulated macro presses opened the grid (`scripts\2026-10-24-fsp-macro-key-test.ps1 -Order macro`).
+- New setting Layout: scroll (old behavior) or pages that flip left and right with dots, set to pages.
+  Rows stretch to fill the screen down to the dots (user asked, 9:00 AM). Pushed to PR 19 as f93959a.
+  Verified 9:05 AM: explorer has `local@fullscreen-start-plus_1.4.0_2.dll` loaded, gridLayout=pages kept,
+  screenshot `reports\2026-10-24-fullscreen-start-plus\2026-10-24-pages-fill.png` shows the rows reaching
+  the dots. Page flip on screen: unverified, check queued for an idle desktop.
+- Open question: in about 3 of 12 key-path test runs the grid closed itself after half a second when another
+  window took focus. Those runs overlapped the user typing, so the cause is unproven.
+
+## 2026-10-24: Fullscreen Start Plus 1.3.0 installed (revision 5); Open-Shell retired
+
+- Keys: Win starts Flow Launcher, Shift+Win and the Start button open the grid. Settled; do not change.
+- Verified 8:36 AM: explorer has `local@fullscreen-start-plus_1.3.0_5.dll` loaded (module list).
+  Shift+Win opened the grid at 8:18 AM (`reports\2026-10-24-fullscreen-start-plus\2026-10-24-shift-win-grid.png`).
+- Open-Shell 4.4.198 uninstalled; `C:\Program Files\Open-Shell` is gone (checked 8:36 AM).
+  Rollback: `H:\System Configuration\scripts\2026-10-24-openshell-retire.ps1 -Rollback`.
+- PR: https://github.com/DavidHiFi/davids-windhawk-mods/pull/19 (open). Repo preview: unverified, new shot pending an idle desktop.
+- Details: `notes\2026-10-24-fullscreen-start-plus.md`, handoff `notes\2026-10-24-fsp-handoff.md`.
+
 ## 2026-10-24: Theme Tool Plus 1.1.1 installed (revision 10)
 
 - Plain-English setting text, readme and the settings-tab preview are pushed as 5f75321. The raw preview
@@ -36,11 +75,11 @@ Last updated: 2026-10-24
   FileVersion 2.0.0-alpha.7, `EnginePath=Engine\2.0.0`, explorer/dwm/StartMenuExperienceHost load
   `Engine\2.0.0\64\windhawk.dll`, mod keys 129 before and after (`receipt.json` in
   `backups\2026-10-24\windhawk-1.7.3-to-2.0.0-alpha.7\`). Windhawk UI toasts: not checked.
-- Freeze-8 hunt closed. The owner reports the culprit was a Wind Talk mod, its developer shipped a fix,
-  and the freeze is fixed. The hunt record names `caption-buttons-customizer`; the two names are not
-  reconciled yet. Record: `H:\System Configuration\notes\2026-10-24-freeze8-hunt.md` (closed header added).
-- Hunt leftovers cleared this session: the `WindhawkHunt8-Sampler` scheduled task is disabled (exported
-  first to `backups\2026-10-24\freeze8-hunt-task-remnant\`, read back as Disabled), the sampler process is
+- Freeze-8 hunt closed. The culprit was the Windhawk mod `caption-buttons-customizer`. Its developer shipped
+  a fix, and the freeze is fixed (owner, 2026-10-24). Not RAM, not hardware. Record:
+  `H:\System Configuration\notes\2026-10-24-freeze8-hunt.md` (closed header added).
+- Hunt leftovers cleared this session: the `WindhawkHunt8-Sampler` scheduled task is deleted (exported
+  first to `backups\2026-10-24\freeze8-hunt-task-remnant\`, absent on readback), the sampler process is
   stopped (its CSV stopped growing), and the freeze-7 gate file is renamed to `hunt-state.closed.json`.
   The translucent guard marker file is absent. The taskbar suspects read Disabled=0: windows-11-taskbar-styler,
   taskbar-on-top, taskbar-icon-size. Only `fullscreen-start` and `local@start-everything-plus` are Disabled=1.

@@ -53,10 +53,11 @@ function Write-Log {
 # (settings-block.inc, the controller schema) replaces the placeholder in
 # 00-foundation.inc, then the code parts are concatenated in name order.
 $srcDir = Join-Path (Split-Path -Parent $Source) 'src'
-$parts = @('00-foundation.inc', '10-settings.inc', '30-engine.inc')
+$parts = @('00-foundation.inc', '10-settings.inc', '20-dark-menus.inc', '30-engine.inc')
 $settingsFile = Join-Path $srcDir 'settings-block.inc'
 if ((Test-Path -LiteralPath $srcDir) -and (Test-Path -LiteralPath $settingsFile)) {
-    $settings = Get-Content -LiteralPath $settingsFile -Raw
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    $settings = [IO.File]::ReadAllText($settingsFile, $utf8)
     $assembled = ''
     foreach ($part in $parts) {
         $path = Join-Path $srcDir $part
@@ -64,13 +65,13 @@ if ((Test-Path -LiteralPath $srcDir) -and (Test-Path -LiteralPath $settingsFile)
             Write-Log "missing part: $path"
             exit 10
         }
-        $content = Get-Content -LiteralPath $path -Raw
+        $content = [IO.File]::ReadAllText($path, $utf8)
         if ($part -eq '00-foundation.inc') {
             $content = $content.Replace('__SETTINGS_BLOCK__', $settings.TrimEnd())
         }
         $assembled += $content + "`r`n"
     }
-    Set-Content -LiteralPath $Source -Value $assembled -Encoding UTF8
+    [IO.File]::WriteAllText($Source, $assembled, $utf8)
     Write-Log "assembled $($parts.Count) parts + settings -> $Source"
 }
 
