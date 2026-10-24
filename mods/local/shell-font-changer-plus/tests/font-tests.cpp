@@ -117,6 +117,50 @@ auto readable = [](HDC dc, LONG height) {
         check(selected.lfHeight==lf.lfHeight,"narrow Object name label retains regular height");
         check(measured.right<=50 || keptOriginal(dc),"narrow Object name label fits width or keeps original font");
     }
+    {
+        // Explorer's Properties checkbox hands DrawText a box wider than the
+        // control itself; the control's client area is what is visible.
+        HWND narrow = CreateWindowExW(0, L"STATIC", L"", WS_POPUP, 0, 0, 200, 20, nullptr, nullptr, nullptr, nullptr);
+        HDC wdc = GetDC(narrow);
+        HGDIOBJ prior = SelectObject(wdc, original);
+        const wchar_t* label = L"&Read-only (Only applies to files in folder)";
+        {
+            FontScope scope(wdc,label,static_cast<UINT>(wcslen(label)));
+            RECT box{16,0,400,20};
+            fitBox(scope,wdc,label,static_cast<UINT>(wcslen(label)),&box,DT_SINGLELINE,nullptr,true);
+            SIZE measured{};GetTextExtentPoint32W(wdc,label,static_cast<int>(wcslen(label)),&measured);
+            check(measured.cx<=184 || keptOriginal(wdc),"text fits the control's visible width, not just the box it was given");
+        }
+        HDC mem = CreateCompatibleDC(wdc);
+        HBITMAP buffer = CreateCompatibleBitmap(wdc, 200, 20);
+        HGDIOBJ oldBitmap = SelectObject(mem, buffer);
+        HGDIOBJ memPrior = SelectObject(mem, original);
+        {
+            FontScope scope(mem,label,static_cast<UINT>(wcslen(label)));
+            RECT box{16,0,400,20};
+            fitBox(scope,mem,label,static_cast<UINT>(wcslen(label)),&box,DT_SINGLELINE,nullptr,true);
+            SIZE measured{};GetTextExtentPoint32W(mem,label,static_cast<int>(wcslen(label)),&measured);
+            check(measured.cx<=184 || keptOriginal(mem),"buffered-paint text fits the bitmap width");
+        }
+        {
+            // The Compatibility tab's button centres its label in a box that
+            // overhangs the bitmap on both sides.
+            const wchar_t* button = L"Change settings for all users";
+            FontScope scope(mem,button,static_cast<UINT>(wcslen(button)));
+            RECT box{-3,0,220,20};
+            fitBox(scope,mem,button,static_cast<UINT>(wcslen(button)),&box,DT_SINGLELINE|DT_CENTER,nullptr,true);
+            SIZE measured{};GetTextExtentPoint32W(mem,button,static_cast<int>(wcslen(button)),&measured);
+            const LONG centre = (box.left + box.right) / 2;
+            check((centre - measured.cx / 2 >= 0 && centre + (measured.cx + 1) / 2 <= 200) || keptOriginal(mem),"centred text stays inside the bitmap on both sides");
+        }
+        SelectObject(mem, memPrior);
+        SelectObject(mem, oldBitmap);
+        DeleteObject(buffer);
+        DeleteDC(mem);
+        SelectObject(wdc, prior);
+        ReleaseDC(narrow, wdc);
+        DestroyWindow(narrow);
+    }
     auto before = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
     for (int i=0; i<10000; ++i) {
         RECT r{0,0,80,20};
