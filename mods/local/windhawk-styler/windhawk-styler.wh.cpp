@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.69
+// @version         2.0.70
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -591,6 +591,10 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-radio-group .ant-radio-button-wrapper:first-child{border-radius:" + r + " 0 0 " + r + " !important;}";
         css += ".ant-radio-group .ant-radio-button-wrapper:last-child{border-radius:0 " + r + " " + r + " 0 !important;}";
         css += "[class*=\"CardTitleModId\"]{border-radius:" + r + " !important;}";
+        // The process inclusion list and its info box below join as one
+        // block: square corners at the seam, borders overlapping by 1px.
+        css += "textarea[data-testid=\"engine-include\"]{border-bottom-left-radius:0 !important;border-bottom-right-radius:0 !important;}";
+        css += "textarea[data-testid=\"engine-include\"]+.ant-alert{border-top-left-radius:0 !important;border-top-right-radius:0 !important;margin-top:-1px !important;}";
         // Match the table's inset header corners so the card-colored surface
         // cannot show through as a dark notch beside the rounded outer border.
         css += ".ant-table-thead>tr:first-child>th:first-child{border-top-left-radius:" + r + " !important;background-clip:padding-box !important;}";
