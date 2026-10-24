@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.72
+// @version         2.0.76
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -345,8 +345,11 @@ static const char kSurfaces[] =
 // sticky save bar in the mod page card could only blur the card itself.
 static const char kFloatingSurfaces[] =
     "[class*=\"SaveSettingsCard\"],.ant-modal-content,.ant-drawer-content,.ant-popover-inner,"
-    ".ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-tooltip-inner,"
-    ".ant-notification-notice,.ant-message-notice-content";
+    ".ant-tooltip-inner,.ant-notification-notice,.ant-message-notice-content";
+
+// Menus that open over the page are solid, not tinted. In Acrylic mode there
+// is no opaque backdrop for CSS blur to read, so the old tint only imitated one.
+static const char kMenuSurfaces[] = ".ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu";
 
 static const char kRelativeSurfaces[] =
     ".ant-card:not([class*=\"SaveSettingsCard\"]),.ant-table,.ant-collapse,.ant-modal-content,"
@@ -450,6 +453,9 @@ static std::string BuildCss(const Settings& s) {
             Settings floating = s;
             floating.cardOpacity = s.cardOpacity < 92 ? 92 : s.cardOpacity;
             css += std::string(kFloatingSurfaces) + "{background-color:" + CssCardColor(floating) + " !important;backdrop-filter:blur(16px) !important;}";
+            Settings menu = s;
+            menu.cardOpacity = 100;
+            css += std::string(kMenuSurfaces) + "{background-color:" + CssCardColor(menu) + " !important;backdrop-filter:none !important;}";
             // The save bar gets a true blur: the settings scroller paints an
             // opaque rounded patch exactly under the bar (12px inset, 56px
             // tall, 16px radius), pinned to the viewport, so the rows that
@@ -496,6 +502,9 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-tabs-ink-bar{background-color:" + s.accent + " !important;}";
         css += ".ant-menu-item-selected{color:" + s.accent + " !important;}";
         css += ".ant-menu-item-selected,.ant-dropdown-menu-item-selected,.ant-dropdown-menu-item-active,.ant-select-item-option-active:not(.ant-select-item-option-disabled),.ant-select-item-option-selected:not(.ant-select-item-option-disabled){background-color:" + selected + " !important;}";
+        // The rows paint their own fill. The 4px top and bottom padding left a
+        // band above a hovered first row, so the list runs to the panel edge.
+        css += ".ant-select-dropdown,.ant-dropdown-menu{padding:0 !important;}";
         css += "a{color:" + s.accent + " !important;}";
         css += ".ant-btn-link{color:" + s.accent + " !important;}";
         css += ".ant-radio-checked .ant-radio-inner{border-color:" + s.accent + " !important;}";
@@ -535,6 +544,10 @@ static std::string BuildCss(const Settings& s) {
     // scrollbar-width would make Chromium ignore the ::-webkit-scrollbar rules
     // below, so the custom rounded thumb and the hidden arrows need it unset.
     css += ".wh-cscroll-host::-webkit-scrollbar-button{display:none !important;}";
+    // Windhawk hides the native bars and draws its own overlay thumb, square and
+    // grey by default. Round it and use the same colour as the drop-down list bar.
+    css += ":root{--wh-cscroll-thumb:" + scrollbarColor + " !important;}";
+    css += ".wh-cscroll-thumb{border-radius:" + scrollbarRadius + " !important;}";
     css += ".wh-cscroll-host::-webkit-scrollbar{width:12px !important;height:12px !important;display:block !important;}";
     css += ".wh-cscroll-host::-webkit-scrollbar-track{background:transparent !important;}";
     css += ".wh-cscroll-host::-webkit-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border:3px solid transparent !important;background-clip:content-box !important;border-radius:" + scrollbarRadius + " !important;}";
@@ -561,16 +574,16 @@ static std::string BuildCss(const Settings& s) {
         // scroller leaves the card's bottom margin out of its scroll range.
         css += "[class*=\"ModDetailsContainer\"]{padding-bottom:12px !important;}";
         // Freeze the page card so its rounded frame never moves. The card keeps
-        // its header and tabs at the top and its body scrolls below them, inset
-        // from the card edges, so the scrollbar stays on the straight sides and
-        // never reaches the rounded corners. The 163px is the scroller top (131)
+        // its header and tabs at the top and its body scrolls below them, clear of
+        // the card's top and bottom, so the scrollbar runs along the straight right
+        // edge and never reaches the rounded corners. The 163px is the scroller top (131)
         // plus the card offset (20) plus the bottom clearance (12). Only when the
         // card is the last child, so pages with content below keep the page scroll.
         const std::string frozenCard = "[class*=\"ModDetailsContainer\"]>[class*=\"ModDetailsCard\"]:last-child";
         const std::string frozenBody = frozenCard + ">.ant-card-body";
         css += frozenCard + "{display:flex !important;flex-direction:column !important;max-height:calc(100vh - 163px) !important;overflow:hidden !important;}";
         css += frozenCard + ">.ant-card-head{flex:none !important;}";
-        css += frozenBody + "{flex:1 1 auto !important;min-height:0 !important;overflow-y:auto !important;overflow-x:hidden !important;margin-inline-end:8px !important;margin-bottom:16px !important;}";
+        css += frozenBody + "{flex:1 1 auto !important;min-height:0 !important;overflow-y:auto !important;overflow-x:hidden !important;margin-bottom:16px !important;}";
         css += frozenBody + "::-webkit-scrollbar{width:12px !important;height:12px !important;}";
         css += frozenBody + "::-webkit-scrollbar-track{background:transparent !important;}";
         css += frozenBody + "::-webkit-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border:3px solid transparent !important;background-clip:content-box !important;border-radius:" + scrollbarRadius + " !important;}";
@@ -607,6 +620,16 @@ static std::string BuildCss(const Settings& s) {
         // row/hover backgrounds poke past the table's rounded corners, and
         // square item hovers poke past rounded drop-down menus.
         css += ".ant-table,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-collapse,.ant-modal-content,.ant-drawer-content,.ant-popover-inner{overflow:hidden !important;}";
+        // The list scrollbar in a drop-down runs the menu's full height along its
+        // edge, so its square ends stuck out past the curve. The clip keeps it
+        // inside the straight edge and rounds its ends without moving antd's thumb.
+        css += ".rc-virtual-list-scrollbar{clip-path:inset(" + r + " 0 " + r + " 0 round 4px) !important;}";
+        css += ".rc-virtual-list-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border-radius:999px !important;}";
+        // Windhawk's own scrollbar overlay claims any scrollable box, drop-down lists
+        // included, and draws a square bar over it that ignores the curve. Hiding the
+        // native bar here makes the scan skip the list, so the rounded bar above is the
+        // only one in a drop-down.
+        css += ".ant-select-dropdown .rc-virtual-list-holder{scrollbar-width:none !important;}";
     }
     if (s.nativeTitleBar && s.titleBarAcrylic) {
         int caption = GetSystemMetricsForDpi(SM_CYCAPTION, 96) +

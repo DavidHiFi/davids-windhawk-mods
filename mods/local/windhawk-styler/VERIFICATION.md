@@ -1,5 +1,15 @@
 # Release verification
 
+## 2.0.73 to 2.0.76 (2026-10-24)
+
+Checked on Windows 11 in the live interface through its debugging port, from the installed mod.
+
+- Select and drop-down menus are solid (`rgb(24, 24, 37)`, `backdrop-filter: none`) and the first option starts at the panel's top edge with no gap (2.0.73).
+- In long drop-down lists, including the accent colour list, the scrollbar stays inside the rounded corners. Three long menus were measured with a corner hit test and an arc check, and no scrollbar point lies outside the curve (2.0.74, 2.0.75).
+- Drop-down lists no longer get Windhawk's own square overlay bar on top of the list bar (2.0.75).
+- On a mod's settings page the scrollbar sits on the card's right edge (0px gap, measured), no longer inset 8px. Every Windhawk overlay thumb has rounded ends in the list-bar colour (2.0.76).
+- Not checked: date-picker drop-downs and right-click menus long enough to scroll, and the blur of the desktop behind the window as seen on screen.
+
 ## 2.0.71 and 2.0.72 (2026-10-24)
 
 Checked on Windows 11 in the live interface through its debugging port, read-only: no clicks, no reloads, forced focus cleared after each read.
