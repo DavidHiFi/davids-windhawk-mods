@@ -1,5 +1,16 @@
 # Release verification
 
+## 2.0.71 and 2.0.72 (2026-10-24)
+
+Checked on Windows 11 in the live interface through its debugging port, read-only: no clicks, no reloads, forced focus cleared after each read.
+
+- The mod loads again in 2.0.71. The header had a second `@donateUrl` line, which stopped the mod from loading. The duplicate is gone.
+- Focus and press on the Explore funnel use the accent instead of antd's blue. Forced focus gives the funnel icon `rgb(140, 182, 250)`.
+- The focus ring uses `outline-offset: -1px`, so the 2px ring sits on the 1px control border with no gap at the top, bottom or arcs. The style block has the -1px rule once and the old `2px` offset zero times (2.0.72).
+- Inputs and the select show a 2px solid ring at -1px offset.
+- Not checked: pickers, checkboxes and radios, because none were on the page.
+- Not fixed: the number input's focus glow still uses antd's blue at about 18% alpha, outside the ring. The funnel reports a 1px computed outline width while the rule says 2px. Not resolved.
+
 ## 2.0.66 to 2.0.70 (2026-10-24)
 
 Checked on Windows 11 in the live interface through its debugging port, from the installed mod with no probe present.
