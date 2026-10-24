@@ -32,3 +32,13 @@ the live key (Disabled=1, LibraryFileName `_2.dll`, Include still `*`).
 Not verified: an actual Install run, because Windhawk is off after freeze 12 and
 the freeze rule forbids installing mods until the owner reopens it.
 
+
+## Whitelist request (5:18 AM)
+
+Owner asked to put the mod on the allow list if the resets were 100% certainly not
+its fault. Not done, and no allow-list entry was added: with no crash dump that
+certainty cannot be given. What the timeline does support: the mod was off for
+the 4:39 AM reset and did not exist for the seven 10/24 resets; it was loaded
+into every app for the 1:49 and 1:53 AM resets, so it stays a possible
+contributor there. A scoped install needs no exception in
+`scripts\Test-WindhawkFreezeGate.ps1`; the `$allowEveryApp` entry is unchanged.
