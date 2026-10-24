@@ -2,7 +2,7 @@
 // @id              settings-styler-plus
 // @name            Settings Styler Plus
 // @description     Themes for the Windows Settings app, plus the normal title bar and a blur that stays when unfocused
-// @version         1.3.0
+// @version         1.3.1
 // @author          DavidHiFi, m417z
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -9779,6 +9779,7 @@ namespace frame_host {
 constexpr WCHAR kNormalWindowProp[] =
     L"Microsoft.Windows.ShellManagedWindowAsNormalWindow";
 constexpr WCHAR kPressedProp[] = L"SettingsStylerPlus_CaptionPressed";
+constexpr UINT_PTR kRelayoutTimer = 0x53535031;
 
 const PROPERTYKEY kAppUserModelId = {
     {0x9F4C2855, 0x9F79, 0x4B39, {0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3}},
@@ -9791,6 +9792,7 @@ struct FrameInfo {
     void* titleBar = nullptr;  // CTitleBar whose window creation is held back
     HICON icons[2] = {};       // small, big
     LONG_PTR style = 0, exStyle = 0;  // before MakeFrameNative
+    DWORD backdrop = 0;                // DWMWA_SYSTEMBACKDROP_TYPE before it
 };
 
 bool g_enabled;
@@ -9806,6 +9808,8 @@ CreateTitleBarWindow_t CreateTitleBarWindow_Original;
 using PaintButton_t =
     long(__cdecl*)(void*, void*, int, int, const RECT*, const RECT*);
 PaintButton_t PaintButton_Original;
+using DwmSetWindowAttribute_t = HRESULT(WINAPI*)(HWND, DWORD, LPCVOID, DWORD);
+DwmSetWindowAttribute_t DwmSetWindowAttribute_Original;
 
 bool IsFrameWindow(HWND hWnd) {
     WCHAR cls[32];
@@ -9922,10 +9926,19 @@ void MakeFrameNative(HWND hWnd, const std::wstring& aumid) {
     SetWindowLongPtr(hWnd, GWL_STYLE, (style & ~WS_POPUP) | WS_OVERLAPPEDWINDOW);
     LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
     SetWindowLongPtr(hWnd, GWL_EXSTYLE, exStyle & ~WS_EX_DLGMODALFRAME);
+    DWORD backdrop = 0;
+    DwmGetWindowAttribute(hWnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop,
+                          sizeof(backdrop));
     AcquireSRWLockExclusive(&g_frameLock);
     g_frames[hWnd].style = style;
     g_frames[hWnd].exStyle = exStyle;
+    g_frames[hWnd].backdrop = backdrop;
     ReleaseSRWLockExclusive(&g_frameLock);
+
+    // An acrylic caption, so the title bar matches the blurred page below it.
+    DWORD acrylic = DWMSBT_TRANSIENTWINDOW;
+    DwmSetWindowAttribute_Original(hWnd, DWMWA_SYSTEMBACKDROP_TYPE, &acrylic,
+                                   sizeof(acrylic));
 
     // The shell lookup pumps messages, and doing it here stops the app from
     // attaching to the frame, so it runs on its own thread.
@@ -9986,6 +9999,9 @@ void RestoreFrame(HWND hWnd) {
     if (info.state == FrameState::Native) {
         RemoveProp(hWnd, kNormalWindowProp);
         RemoveProp(hWnd, kPressedProp);
+        KillTimer(hWnd, kRelayoutTimer);
+        DwmSetWindowAttribute_Original(hWnd, DWMWA_SYSTEMBACKDROP_TYPE,
+                                       &info.backdrop, sizeof(info.backdrop));
         SendMessage(hWnd, WM_SETICON, ICON_SMALL, 0);
         SendMessage(hWnd, WM_SETICON, ICON_BIG, 0);
         SetWindowLongPtr(hWnd, GWL_STYLE, info.style);
@@ -10100,6 +10116,27 @@ LRESULT CALLBACK FrameSubclassProc(HWND hWnd,
                 return 0;
             }
             break;
+
+        // DWM lays out the caption once while maximizing or restoring, with
+        // the old title bar size. caption-buttons-customizer keeps that
+        // layout, which strands the title off-window and moves its button
+        // hit areas away from the buttons. A frame change once the size has
+        // settled lays the caption out again.
+        case WM_SIZE:
+            if (wParam != SIZE_MINIMIZED) {
+                SetTimer(hWnd, kRelayoutTimer, 150, nullptr);
+            }
+            break;
+
+        case WM_TIMER:
+            if (wParam == kRelayoutTimer) {
+                KillTimer(hWnd, kRelayoutTimer);
+                SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
+                             SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                                 SWP_NOACTIVATE | SWP_FRAMECHANGED);
+                return 0;
+            }
+            break;
     }
     return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
@@ -10201,14 +10238,14 @@ HRESULT WINAPI DwmExtendFrameIntoClientArea_Hook(HWND hWnd,
     return DwmExtendFrameIntoClientArea_Original(hWnd, margins);
 }
 
-using DwmSetWindowAttribute_t = HRESULT(WINAPI*)(HWND, DWORD, LPCVOID, DWORD);
-DwmSetWindowAttribute_t DwmSetWindowAttribute_Original;
 HRESULT WINAPI DwmSetWindowAttribute_Hook(HWND hWnd,
                                           DWORD attribute,
                                           LPCVOID value,
                                           DWORD size) {
-    // Other mods paint a solid caption color; keep the caption see-through.
-    if (attribute == DWMWA_CAPTION_COLOR &&
+    // Other mods paint a solid caption color; keep the caption see-through
+    // and acrylic.
+    if ((attribute == DWMWA_CAPTION_COLOR ||
+         attribute == DWMWA_SYSTEMBACKDROP_TYPE) &&
         GetFrameState(hWnd) == FrameState::Native) {
         return S_OK;
     }
