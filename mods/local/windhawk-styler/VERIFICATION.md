@@ -1,5 +1,14 @@
 # Release verification
 
+## 2.0.66 to 2.0.70 (2026-10-24)
+
+Checked on Windows 11 in the live interface through its debugging port, from the installed mod with no probe present.
+
+- The caption strip and the body form one acrylic sheet: strip 27,27,38 and body 28,28,39 (2.0.66).
+- The save bar blurs the settings rows behind it. The settings scroller paints an opaque rounded patch exactly under the bar, because the renderer only blurs text over an opaque backdrop. Measured bar background `rgba(24, 24, 37, 0.4)` with `blur(16px)`; rows behind it unreadable (2.0.69).
+- In the Advanced settings dialog the process inclusion list and its info box join as one block: seam corners 0px, borders overlapping by 1px (2.0.70).
+- Not checked: the blur of the desktop behind the window as seen on screen.
+
 ## 2.0.53 to 2.0.57 (2026-10-13)
 
 Checked on Windows 11 with Windhawk 2.0.0-alpha.7, in the live interface through its debugging port and window captures.
