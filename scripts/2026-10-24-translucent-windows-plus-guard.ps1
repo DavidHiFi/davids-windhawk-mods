@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 Drift guard for the translucent-windows fork under its local@ id (1.8.3, local
 build 1). Checks the mod key, ModsSource and both DLLs every 5 minutes (plus at
@@ -42,10 +42,10 @@ $dev       = Join-Path $ws 'Windhawk\translucent-windows-plus\local@translucent-
 $src       = 'C:\ProgramData\Windhawk\ModsSource\local@translucent-windows-plus.wh.cpp'
 $modKey    = 'HKLM:\SOFTWARE\Windhawk\Engine\Mods\local@translucent-windows-plus'
 $modKeyReg = 'HKLM\SOFTWARE\Windhawk\Engine\Mods\local@translucent-windows-plus'
-$fixDll    = 'local@translucent-windows-plus_1.8.3_1.dll'
-$forkHash  = '3A9212A1168AFEF874DB3AEBFBD6C97B8338282A39B09518650FF95030D7CCAF'
-$dll64Hash = 'BDA532B9732A58B96E22AA5025F00F2B77DB6612B571E92835285627F149A658'
-$dll32Hash = 'F1B002236AECCA8A8BFC20CEFDF0D20C03727C4384CF76C14521A181EAA81A9B'
+$fixDll    = 'local@translucent-windows-plus_1.8.4_874514.dll'
+$forkHash  = '3B6E6E83FC9A3C8D0DB3E756E0D1630F7BD601BD98CFCFAE7F9BE7AAC3C9B996'
+$dll64Hash = 'B838C555433D771979F8BECFD890944A0D28480B61E3C06DF1B64995754FD05B'
+$dll32Hash = 'F7BC09151AB012F04C4D2FE1D9F3F943166314DA759ADDA95F3605E393F5D527'
 $guardDir  = Join-Path $ws 'Windhawk\translucent-windows-plus\guard'
 $rep       = Join-Path $ws 'reports\2026-10-24-translucent-windows-plus-guard'
 $log       = 'C:\ProgramData\Windhawk\ModsWritable\translucent-windows-guard.log'
@@ -110,7 +110,7 @@ try {
             $st = Get-ModState
             $issues = @()
             if ($st.libraryFileName -ne $fixDll)      { $issues += "LibraryFileName=$($st.libraryFileName)" }
-            if ($st.version -ne '1.8.3')              { $issues += "Version=$($st.version)" }
+            if ($st.version -ne '1.8.4')              { $issues += "Version=$($st.version)" }
             if ([int]$st.disabled -ne 0)              { $issues += "Disabled=$($st.disabled)" }
             if ($st.srcSha256 -ne $forkHash)          { $issues += 'ModsSource drifted' }
             if ($st.dll64Sha256 -ne $dll64Hash)       { $issues += 'x64 DLL drifted' }
@@ -137,7 +137,7 @@ try {
             Copy-Item -LiteralPath $dev -Destination $src -Force
             if ((Get-Sha $src) -ne $forkHash) { throw 'ModsSource readback failed after heal.' }
 
-            $pristineReg = Join-Path $guardDir 'local@translucent-windows-plus-1.8.3-1.reg'
+            $pristineReg = Join-Path $guardDir 'local@translucent-windows-plus-1.8.4.reg'
             $imported = $false
             if (Test-Path -LiteralPath $pristineReg) {
                 cmd.exe /d /c "reg.exe import ""$pristineReg"" >nul 2>&1"
@@ -145,7 +145,7 @@ try {
             }
             if (-not $imported) {
                 Set-ItemProperty -LiteralPath $modKey -Name LibraryFileName -Value $fixDll -Type String
-                Set-ItemProperty -LiteralPath $modKey -Name Version -Value '1.8.3' -Type String
+                Set-ItemProperty -LiteralPath $modKey -Name Version -Value '1.8.4' -Type String
                 Set-ItemProperty -LiteralPath $modKey -Name Disabled -Value 0 -Type DWord
             }
             # -UFormat %s in PS 5.1 encodes local time as UTC (8h skew here); use the real UTC epoch.
