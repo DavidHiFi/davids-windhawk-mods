@@ -2,13 +2,13 @@
 // @id              fullscreen-start-plus
 // @name            Fullscreen Start Plus
 // @description     A fullscreen grid of all your apps in place of Start, with instant search and adjustable blur
-// @version         1.4.0
+// @version         1.5.0
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         explorer.exe
 // @architecture    x86-64
-// @compilerOptions -lgdi32 -lshell32 -lshcore -ldwmapi -ld2d1 -ldwrite -lole32 -luuid -lcomdlg32 -luxtheme
+// @compilerOptions -lgdi32 -lshell32 -lshcore -ldwmapi -ld2d1 -ldwrite -lole32 -luuid -lcomdlg32 -luxtheme -lpropsys
 // @license         MIT
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
@@ -40,6 +40,10 @@ of the macOS Launchpad, with instant search and a blurred background.
   button can each open this grid, the original Start, or a program of your
   choice, such as a launcher. The program starts even when it isn't running,
   so this replaces the same feature of Open-Shell.
+- **Your own order.** Drag icons to move them, across pages and in and out
+  of folders. Drop an app on another to make a folder.
+- **Right-click menu.** Open, run as administrator, open the file location
+  or the shortcut location, change the icon, or remove an app from the grid.
 
 ## Keyboard and mouse
 | Key | Action |
@@ -51,7 +55,16 @@ of the macOS Launchpad, with instant search and a blurred background.
 | Esc | Clear the search, or close when the search is empty |
 | Mouse wheel, Page Up, Page Down | Scroll, or flip pages |
 | Sideways scroll, page dots | Flip pages |
-| The ... button, top right | Open this mod's own settings window (it saves to the same settings as Windhawk's page) |
+| The ... button, top right | Open this mod's own settings window (it saves to the same settings as Windhawk's page), bring back removed apps, or sort A to Z |
+| Drag an icon | Move it. Hold it at the screen's edge to flip the page |
+| Drop an app on another | Make a folder. Drop more apps on it to add them |
+| Hold an app over a folder | The folder opens, so you can place it inside |
+| Drag an app out of an open folder | Take it out of the folder |
+| Type in an open folder | Rename it |
+| Right-click an icon | Its menu. Right-click empty space for the ... menu |
+
+Your order, folders, removed apps and icons are kept in Windhawk's storage
+folder for this mod. New apps go at the end.
 
 Clicking outside the icons or switching to another window closes it.
 
@@ -165,6 +178,7 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
 #include <commdlg.h>
 #include <uxtheme.h>
 #include <dwmapi.h>
+#include <propsys.h>
 // Otherwise the Win32 macro renames ID2D1RenderTarget::DrawText.
 #undef DrawText
 #include <d2d1_1.h>
@@ -175,7 +189,9 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -444,13 +460,16 @@ void FinishIcon(std::vector<UINT32> pixels, int width, int height, App& app) {
     }
 }
 
-void LoadAppIcon(IShellItem* item, int size, App& app) {
+// The default flags give the item's icon; without SIIGBF_ICONONLY a picture
+// gives its own image.
+void LoadAppIcon(IShellItem* item,
+                 int size,
+                 App& app,
+                 SIIGBF flags = SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK) {
     ComPtr<IShellItemImageFactory> factory;
     HBITMAP bitmap = nullptr;
     if (FAILED(item->QueryInterface(IID_PPV_ARGS(&factory))) ||
-        FAILED(factory->GetImage(SIZE{size, size},
-                                 SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK,
-                                 &bitmap))) {
+        FAILED(factory->GetImage(SIZE{size, size}, flags, &bitmap))) {
         return;
     }
     BITMAP bm{};
@@ -828,10 +847,302 @@ void StartLoadingApps() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// Arrangement
+//
+// The order of the grid, its folders and the apps removed from it, saved as
+// text in the mod's storage folder: one file per "Apps to show" choice, and
+// one for the replaced icons. Apps are known by their target, and apps that
+// aren't in the file yet go at the end.
+
+struct Folder;
+
+// One icon of the grid: an app or a folder.
+struct Tile {
+    std::shared_ptr<App> app;
+    std::shared_ptr<Folder> folder;
+};
+using Tiles = std::vector<Tile>;
+
+struct Folder {
+    std::wstring name;
+    Tiles apps;
+};
+
+[[clang::no_destroy]] Tiles g_tiles;
+[[clang::no_destroy]] std::set<std::wstring> g_hidden;  // Removed apps' keys.
+[[clang::no_destroy]] std::map<std::wstring, std::wstring> g_customIcons;  // Key: picture.
+
+std::wstring AppKey(const App& app) {
+    return ToLower(app.target);
+}
+
+std::wstring StoragePath(const std::wstring& file) {
+    WCHAR dir[MAX_PATH];
+    if (!Wh_GetModStoragePath(dir, ARRAYSIZE(dir))) {
+        return {};
+    }
+    SHCreateDirectoryExW(nullptr, dir, nullptr);
+    return std::wstring(dir) + L"\\" + file;
+}
+
+std::wstring LayoutFile() {
+    static constexpr PCWSTR names[] = {L"allApps", L"desktop", L"both",
+                                       L"pinned"};
+    return std::wstring(L"layout-") + names[std::clamp(g_appsKey >> 16, 0, 3)] +
+           L".txt";
+}
+
+// Tab-separated fields of each line of a UTF-8 file.
+std::vector<std::vector<std::wstring>> ReadLines(const std::wstring& path) {
+    std::vector<std::vector<std::wstring>> lines;
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                              nullptr, OPEN_EXISTING, 0, nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        return lines;
+    }
+    std::string bytes;
+    DWORD size = GetFileSize(file, nullptr), read = 0;
+    if (size != INVALID_FILE_SIZE && size < (8 << 20)) {
+        bytes.resize(size);
+        if (!ReadFile(file, bytes.data(), size, &read, nullptr)) {
+            read = 0;
+        }
+        bytes.resize(read);
+    }
+    CloseHandle(file);
+    int length = MultiByteToWideChar(CP_UTF8, 0, bytes.data(),
+                                     (int)bytes.size(), nullptr, 0);
+    std::wstring text(length, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, bytes.data(), (int)bytes.size(),
+                        text.data(), length);
+    std::vector<std::wstring> fields(1);
+    for (WCHAR c : text + L"\n") {
+        if (c == L'\n') {
+            if (fields.size() > 1 || !fields[0].empty()) {
+                lines.push_back(std::move(fields));
+            }
+            fields.assign(1, {});
+        } else if (c == L'\t') {
+            fields.emplace_back();
+        } else if (c != L'\r') {
+            fields.back() += c;
+        }
+    }
+    return lines;
+}
+
+// Written whole to a temporary file first, so a crash can't leave half a file.
+void WriteLines(const std::wstring& path,
+                const std::vector<std::wstring>& lines) {
+    if (path.empty()) {
+        return;
+    }
+    std::wstring text;
+    for (const auto& line : lines) {
+        text += line + L"\r\n";
+    }
+    int length = WideCharToMultiByte(CP_UTF8, 0, text.data(), (int)text.size(),
+                                     nullptr, 0, nullptr, nullptr);
+    std::string bytes(length, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, text.data(), (int)text.size(),
+                        bytes.data(), length, nullptr, nullptr);
+    std::wstring temp = path + L".tmp";
+    HANDLE file = CreateFileW(temp.c_str(), GENERIC_WRITE, 0, nullptr,
+                              CREATE_ALWAYS, 0, nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        Wh_Log(L"Can't write %s: %u", temp.c_str(), GetLastError());
+        return;
+    }
+    DWORD written = 0;
+    bool ok = WriteFile(file, bytes.data(), (DWORD)bytes.size(), &written,
+                        nullptr) &&
+              written == bytes.size();
+    CloseHandle(file);
+    if (!ok || !MoveFileExW(temp.c_str(), path.c_str(),
+                            MOVEFILE_REPLACE_EXISTING)) {
+        Wh_Log(L"Can't save %s: %u", path.c_str(), GetLastError());
+        DeleteFileW(temp.c_str());
+    }
+}
+
+// The arrangement as the lines of its file:
+// hidden<TAB>target, app<TAB>target, folder<TAB>name, in<TAB>target (an app
+// of the folder above).
+std::vector<std::wstring> ArrangementLines() {
+    std::vector<std::wstring> lines;
+    for (const auto& key : g_hidden) {
+        lines.push_back(L"hidden\t" + key);
+    }
+    for (const auto& tile : g_tiles) {
+        if (tile.app) {
+            lines.push_back(L"app\t" + tile.app->target);
+            continue;
+        }
+        lines.push_back(L"folder\t" + (tile.folder->name.empty()
+                                            ? std::wstring(L"Folder")
+                                            : tile.folder->name));
+        for (const auto& app : tile.folder->apps) {
+            lines.push_back(L"in\t" + app.app->target);
+        }
+    }
+    return lines;
+}
+
+// Empty folders go, and a folder with one app becomes that app.
+void TidyTiles() {
+    Tiles tidy;
+    for (auto& tile : g_tiles) {
+        if (tile.folder && tile.folder->apps.size() < 2) {
+            if (!tile.folder->apps.empty()) {
+                tidy.push_back(tile.folder->apps[0]);
+            }
+        } else {
+            tidy.push_back(std::move(tile));
+        }
+    }
+    g_tiles.swap(tidy);
+}
+
+void ArrangeTiles(const std::vector<std::wstring>& lines) {
+    std::vector<std::vector<std::wstring>> parsed;
+    for (const auto& line : lines) {
+        std::vector<std::wstring> fields(1);
+        for (WCHAR c : line) {
+            if (c == L'\t') {
+                fields.emplace_back();
+            } else {
+                fields.back() += c;
+            }
+        }
+        parsed.push_back(std::move(fields));
+    }
+    g_hidden.clear();
+    for (const auto& f : parsed) {
+        if (f.size() >= 2 && f[0] == L"hidden") {
+            g_hidden.insert(ToLower(f[1]));
+        }
+    }
+    std::map<std::wstring, std::shared_ptr<App>> byKey;
+    for (const auto& app : g_apps) {
+        byKey.emplace(AppKey(*app), app);
+    }
+    std::set<std::wstring> placed;
+    auto take = [&](const std::wstring& target) -> std::shared_ptr<App> {
+        std::wstring key = ToLower(target);
+        auto it = byKey.find(key);
+        if (it == byKey.end() || g_hidden.count(key) ||
+            !placed.insert(key).second) {
+            return nullptr;
+        }
+        return it->second;
+    };
+    g_tiles.clear();
+    std::shared_ptr<Folder> folder;
+    for (const auto& f : parsed) {
+        if (f.size() < 2) {
+            continue;
+        }
+        if (f[0] == L"folder") {
+            folder = std::make_shared<Folder>();
+            folder->name = f[1];
+            g_tiles.push_back({nullptr, folder});
+        } else if (f[0] == L"in" && folder) {
+            if (auto app = take(f[1])) {
+                folder->apps.push_back({std::move(app), nullptr});
+            }
+        } else if (f[0] == L"app") {
+            folder = nullptr;
+            if (auto app = take(f[1])) {
+                g_tiles.push_back({std::move(app), nullptr});
+            }
+        }
+    }
+    for (const auto& app : g_apps) {
+        if (auto taken = take(app->target)) {
+            g_tiles.push_back({std::move(taken), nullptr});
+        }
+    }
+    TidyTiles();
+}
+
+void SaveTiles() {
+    WriteLines(StoragePath(LayoutFile()), ArrangementLines());
+}
+
+// A picture (or the icon of a file) in place of an app's icon.
+bool LoadIconFile(const std::wstring& path, int size, App& app) {
+    ComPtr<IShellItem> item;
+    if (FAILED(SHCreateItemFromParsingName(path.c_str(), nullptr,
+                                           IID_PPV_ARGS(&item)))) {
+        return false;
+    }
+    App loaded;
+    LoadAppIcon(item.Get(), size, loaded, SIIGBF_BIGGERSIZEOK);
+    if (loaded.pixels.empty()) {
+        return false;
+    }
+    app.pixels = std::move(loaded.pixels);
+    app.iconSize = loaded.iconSize;
+    app.bitmap.Reset();
+    app.generation = 0;  // Remade on the next draw.
+    return true;
+}
+
+// The app's own icon again.
+void ReloadAppIcon(int size, App& app) {
+    ComPtr<IShellItem> item;
+    if (SUCCEEDED(SHCreateItemFromParsingName(app.target.c_str(), nullptr,
+                                              IID_PPV_ARGS(&item)))) {
+        App loaded;
+        LoadAppIcon(item.Get(), size, loaded);
+        app.pixels = std::move(loaded.pixels);
+        app.iconSize = loaded.iconSize;
+        app.bitmap.Reset();
+        app.generation = 0;
+    }
+}
+
+void SaveCustomIcons() {
+    std::vector<std::wstring> lines;
+    for (const auto& [key, path] : g_customIcons) {
+        lines.push_back(L"icon\t" + key + L"\t" + path);
+    }
+    WriteLines(StoragePath(L"icons.txt"), lines);
+}
+
+void ApplyCustomIcons(int size) {
+    g_customIcons.clear();
+    for (const auto& f : ReadLines(StoragePath(L"icons.txt"))) {
+        if (f.size() >= 3 && f[0] == L"icon") {
+            g_customIcons[ToLower(f[1])] = f[2];
+        }
+    }
+    for (const auto& app : g_apps) {
+        auto it = g_customIcons.find(AppKey(*app));
+        if (it != g_customIcons.end()) {
+            LoadIconFile(it->second, size, *app);
+        }
+    }
+}
+
+void LoadTiles() {
+    std::vector<std::wstring> lines;
+    for (const auto& f : ReadLines(StoragePath(LayoutFile()))) {
+        std::wstring line;
+        for (size_t i = 0; i < f.size(); i++) {
+            line += (i ? L"\t" : L"") + f[i];
+        }
+        lines.push_back(std::move(line));
+    }
+    ArrangeTiles(lines);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // Search
 
 std::wstring g_query;
-std::vector<int> g_visible;  // Indices in g_apps that pass the search.
+// The arrangement, or the apps the search finds.
+[[clang::no_destroy]] Tiles g_visible;
 
 // 0: the name starts with the text; 1: a word of the name starts with it;
 // 2: it's in the middle; -1: it isn't there. Ignoring case and accents.
@@ -851,6 +1162,10 @@ int MatchRank(const std::wstring& name, const std::wstring& word) {
 }
 
 void UpdateFilter() {
+    if (g_query.empty()) {
+        g_visible = g_tiles;
+        return;
+    }
     std::vector<std::wstring> words;
     size_t start = 0;
     while (start < g_query.size()) {
@@ -866,6 +1181,9 @@ void UpdateFilter() {
 
     std::vector<std::pair<int, int>> ranked;  // (position, index)
     for (int i = 0; i < (int)g_apps.size(); i++) {
+        if (g_hidden.count(AppKey(*g_apps[i]))) {
+            continue;
+        }
         int rank = 0;
         for (size_t w = 0; w < words.size() && rank >= 0; w++) {
             int r = MatchRank(g_apps[i]->name, words[w]);
@@ -881,7 +1199,7 @@ void UpdateFilter() {
                      });
     g_visible.clear();
     for (const auto& r : ranked) {
-        g_visible.push_back(r.second);
+        g_visible.push_back({g_apps[r.second], nullptr});
     }
 }
 
@@ -1470,6 +1788,22 @@ struct Cell {
     D2D1_RECT_F highlight, icon, label;
 };
 
+// The cell whose top left corner is x, y.
+Cell MakeCell(float x, float y) {
+    const Layout& L = g_layout;
+    Cell c;
+    c.highlight = D2D1::RectF(x + L.cellPad, y, x + L.cellWidth - L.cellPad,
+                              y + L.cellHeight - L.cellSpare - L.cellPad * 2);
+    float iconLeft = std::round(x + (L.cellWidth - L.icon) / 2);
+    float iconTop = std::round(y + 10 * L.scale);
+    c.icon = D2D1::RectF(iconLeft, iconTop, iconLeft + L.icon, iconTop + L.icon);
+    float labelTop = c.icon.bottom + std::round(8 * L.scale);
+    c.label = D2D1::RectF(x + L.cellPad + 4 * L.scale, labelTop,
+                          x + L.cellWidth - L.cellPad - 4 * L.scale,
+                          labelTop + L.labelHeight);
+    return c;
+}
+
 Cell CellAt(int index) {
     const Layout& L = g_layout;
     float x, y;
@@ -1484,25 +1818,16 @@ Cell CellAt(int index) {
         y = L.viewTop + row * L.cellHeight - std::round(g_scroll);
     }
     y += std::round(L.cellSpare / 2);  // Centered in a stretched row.
-    Cell c;
-    c.highlight = D2D1::RectF(x + L.cellPad, y, x + L.cellWidth - L.cellPad,
-                              y + L.cellHeight - L.cellSpare - L.cellPad * 2);
-    float iconLeft = std::round(x + (L.cellWidth - L.icon) / 2);
-    float iconTop = std::round(y + 10 * L.scale);
-    c.icon = D2D1::RectF(iconLeft, iconTop, iconLeft + L.icon, iconTop + L.icon);
-    float labelTop = c.icon.bottom + std::round(8 * L.scale);
-    c.label = D2D1::RectF(x + L.cellPad + 4 * L.scale, labelTop,
-                          x + L.cellWidth - L.cellPad - 4 * L.scale,
-                          labelTop + L.labelHeight);
-    return c;
+    return MakeCell(x, y);
 }
 
 bool InRect(const D2D1_RECT_F& r, float x, float y) {
     return x >= r.left && x < r.right && y >= r.top && y < r.bottom;
 }
 
-// Position in the visible list under the point (window coordinates), or -1.
-int ItemAt(int px, int py) {
+// Position in the grid under the point (window coordinates), counting the
+// places past the last icon, or -1 outside the rows.
+int GridIndexAt(int px, int py) {
     const Layout& L = g_layout;
     float x = (float)px, y = (float)py;
     int page = 0;
@@ -1519,12 +1844,89 @@ int ItemAt(int px, int py) {
     int row = (int)((y - L.viewTop +
                      (g_settings.pages ? 0 : std::round(g_scroll))) /
                     L.cellHeight);
-    int index = page * L.perPage + row * L.columns + col;
-    if (row < 0 || index < 0 || index >= (int)g_visible.size() ||
-        !InRect(CellAt(index).highlight, x, y)) {
+    return row < 0 ? -1 : page * L.perPage + row * L.columns + col;
+}
+
+// An open folder: a panel over the grid with its name and its apps.
+[[clang::no_destroy]] std::shared_ptr<Folder> g_openFolder;
+int g_folderRow;  // First row shown, when not all of them fit.
+
+struct FolderLayout {
+    D2D1_RECT_F panel, title;
+    float left, top, cellHeight;  // Of the icons.
+    int columns, rows, visibleRows;
+};
+
+FolderLayout GetFolderLayout() {
+    const Layout& L = g_layout;
+    float s = L.scale;
+    FolderLayout F{};
+    int count = g_openFolder ? (int)g_openFolder->apps.size() : 0;
+    F.columns = std::min(L.columns, std::max(3, std::min(count, 6)));
+    F.rows = std::max(1, (count + F.columns - 1) / F.columns);
+    F.cellHeight = L.cellHeight - L.cellSpare;
+    float pad = std::round(20 * s), titleHeight = std::round(56 * s);
+    int fit = std::max(1, (int)((L.viewBottom - L.viewTop - titleHeight - pad) /
+                                F.cellHeight));
+    F.visibleRows = std::min(F.rows, fit);
+    float width = F.columns * L.cellWidth + 2 * pad;
+    float height = titleHeight + F.visibleRows * F.cellHeight + pad;
+    float left = std::round((L.width - width) / 2);
+    float top = std::round(
+        std::max(L.viewTop, (L.viewTop + L.viewBottom - height) / 2));
+    F.panel = D2D1::RectF(left, top, left + width, top + height);
+    F.title = D2D1::RectF(left + pad, top + pad / 2, left + width - pad,
+                          top + titleHeight);
+    F.left = left + pad;
+    F.top = top + titleHeight;
+    return F;
+}
+
+Cell FolderCellAt(int index) {
+    FolderLayout F = GetFolderLayout();
+    return MakeCell(F.left + (index % F.columns) * g_layout.cellWidth,
+                    F.top + (index / F.columns - g_folderRow) * F.cellHeight);
+}
+
+int FolderIndexAt(int px, int py) {
+    FolderLayout F = GetFolderLayout();
+    float x = px - F.left, y = py - F.top;
+    if (x < 0 || x >= F.columns * g_layout.cellWidth || y < 0 ||
+        y >= F.visibleRows * F.cellHeight) {
+        return -1;
+    }
+    return ((int)(y / F.cellHeight) + g_folderRow) * F.columns +
+           (int)(x / g_layout.cellWidth);
+}
+
+// What takes the pointer and the keys: the open folder, or the grid.
+const Tiles& Items() {
+    return g_openFolder ? g_openFolder->apps : g_visible;
+}
+
+int Columns() {
+    return g_openFolder ? GetFolderLayout().columns : g_layout.columns;
+}
+
+Cell ItemCell(int index) {
+    return g_openFolder ? FolderCellAt(index) : CellAt(index);
+}
+
+// Position in Items() of the icon under the point, or -1.
+int ItemAt(int x, int y) {
+    int index = g_openFolder ? FolderIndexAt(x, y) : GridIndexAt(x, y);
+    if (index < 0 || index >= (int)Items().size() ||
+        !InRect(ItemCell(index).highlight, (float)x, (float)y)) {
         return -1;
     }
     return index;
+}
+
+// While dragging: the place under the point (the last one when past the
+// end), or -1.
+int SlotAt(int x, int y) {
+    int index = g_openFolder ? FolderIndexAt(x, y) : GridIndexAt(x, y);
+    return index < 0 ? -1 : std::min(index, (int)Items().size() - 1);
 }
 
 // The page dot under the point, or -1. The click area is larger than the dot.
@@ -1556,6 +1958,27 @@ int g_hover = -1, g_selected = -1, g_pressed = -1;
 bool g_pressedEmpty;
 bool g_trackingMouse;
 bool g_menuHover;
+
+// Dragging an icon: it keeps a place in the grid or folder, drawn empty, and
+// moves to the place the pointer rests on.
+struct Drag {
+    bool pending = false;  // Pressed on an icon; a drag once it moves.
+    bool active = false;
+    POINT start{}, at{};
+    D2D1_POINT_2F grab{};  // Pointer minus the icon's corner.
+    Tile tile;
+    int target = -1;  // The icon to drop it into (makes or fills a folder).
+    int slot = -1;    // The place under the pointer.
+    int edge = 0;     // -1 or 1 while resting at an edge: flips or scrolls.
+    bool inPanel = false;  // Has been inside the open folder.
+    double targetTime = 0, slotTime = 0, edgeTime = 0;
+    std::vector<std::wstring> backup;  // The arrangement before, for Esc.
+};
+[[clang::no_destroy]] Drag g_drag;
+bool g_modal;  // A dialog of the grid is open: losing the focus is expected.
+
+void EndDrag(bool drop);
+void DragTick();
 
 float Ease(float t) {
     t = std::clamp(t, 0.0f, 1.0f);
@@ -1649,6 +2072,133 @@ void DrawMessage(PCWSTR text) {
                        g_brush.Get());
 }
 
+bool IsDragged(const Tile& tile) {
+    return g_drag.active && tile.app == g_drag.tile.app &&
+           tile.folder == g_drag.tile.folder;
+}
+
+const std::wstring& TileName(const Tile& tile) {
+    return tile.folder ? tile.folder->name : tile.app->name;
+}
+
+void DrawTileIcon(const Tile& tile, const D2D1_RECT_F& r, float opacity) {
+    float side = r.right - r.left;
+    if (tile.folder) {
+        // A rounded square with the first nine apps.
+        Fill(r, D2D1::ColorF(1, 1, 1, 0.16f * opacity), side * 0.22f);
+        float pad = side * 0.12f, gap = side * 0.04f;
+        float mini = (side - 2 * pad - 2 * gap) / 3;
+        const Tiles& apps = tile.folder->apps;
+        for (int i = 0; i < 9 && i < (int)apps.size(); i++) {
+            float x = r.left + pad + (i % 3) * (mini + gap);
+            float y = r.top + pad + (i / 3) * (mini + gap);
+            if (ID2D1Bitmap* bitmap = GetBitmap(*apps[i].app)) {
+                g_target->DrawBitmap(bitmap,
+                                     D2D1::RectF(x, y, x + mini, y + mini),
+                                     opacity,
+                                     D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+            }
+        }
+        return;
+    }
+    if (ID2D1Bitmap* bitmap = GetBitmap(*tile.app)) {
+        g_target->DrawBitmap(bitmap, r, opacity,
+                             D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+    } else {
+        Fill(r, D2D1::ColorF(1, 1, 1, 0.12f * opacity), 14 * g_layout.scale);
+    }
+}
+
+// live: the icon takes the pointer and keys (not the grid behind a folder).
+void DrawTile(const Tile& tile, const Cell& c, int i, bool live) {
+    if (IsDragged(tile)) {
+        return;  // Its place stays empty; the icon follows the pointer.
+    }
+    float s = g_layout.scale;
+    if (live && (i == g_selected || i == g_hover)) {
+        Fill(c.highlight,
+             D2D1::ColorF(1, 1, 1, i == g_selected ? 0.18f : 0.10f), 12 * s);
+    }
+    if (live && i == g_drag.target) {
+        float grow = 8 * s;
+        Fill(D2D1::RectF(c.icon.left - grow, c.icon.top - grow,
+                         c.icon.right + grow, c.icon.bottom + grow),
+             D2D1::ColorF(1, 1, 1, 0.28f), 18 * s);
+    }
+    DrawTileIcon(tile, c.icon, live && i == g_pressed ? 0.6f : 1.0f);
+    if (g_labelFormat) {
+        // Light shadow so the name reads well over any background.
+        const std::wstring& name = TileName(tile);
+        D2D1_RECT_F shadow = c.label;
+        shadow.top += 1 * s;
+        shadow.bottom += 1 * s;
+        g_brush->SetColor(D2D1::ColorF(0, 0, 0, 0.45f));
+        g_target->DrawText(name.c_str(), (UINT32)name.size(),
+                           g_labelFormat.Get(), shadow, g_brush.Get());
+        g_brush->SetColor(D2D1::ColorF(1, 1, 1, 0.95f));
+        g_target->DrawText(name.c_str(), (UINT32)name.size(),
+                           g_labelFormat.Get(), c.label, g_brush.Get());
+    }
+}
+
+void DrawFolder() {
+    if (!g_openFolder) {
+        return;
+    }
+    const Layout& L = g_layout;
+    float s = L.scale;
+    FolderLayout F = GetFolderLayout();
+    Fill(D2D1::RectF(0, 0, (float)L.width, (float)L.height),
+         D2D1::ColorF(0, 0, 0, 0.3f));
+    Fill(F.panel, D2D1::ColorF(0.13f, 0.13f, 0.15f, 0.88f), 24 * s);
+
+    // The name, with a caret: typing renames it.
+    const std::wstring& name = g_openFolder->name;
+    ComPtr<IDWriteTextLayout> layout;
+    if (g_messageFormat) {
+        g_dwrite->CreateTextLayout(name.c_str(), (UINT32)name.size(),
+                                   g_messageFormat.Get(),
+                                   F.title.right - F.title.left,
+                                   F.title.bottom - F.title.top, &layout);
+    }
+    if (layout) {
+        g_brush->SetColor(D2D1::ColorF(1, 1, 1, 0.95f));
+        g_target->DrawTextLayout(D2D1::Point2F(F.title.left, F.title.top),
+                                 layout.Get(), g_brush.Get());
+        DWRITE_TEXT_METRICS m{};
+        layout->GetMetrics(&m);
+        float x = std::round(F.title.left + m.left +
+                             m.widthIncludingTrailingWhitespace) +
+                  2 * s;
+        float mid = (F.title.top + F.title.bottom) / 2;
+        Fill(D2D1::RectF(x, mid - 10 * s, x + std::max(1.0f, s), mid + 10 * s),
+             D2D1::ColorF(1, 1, 1, 0.6f));
+    }
+
+    const Tiles& apps = g_openFolder->apps;
+    g_target->PushAxisAlignedClip(
+        D2D1::RectF(F.panel.left, F.top, F.panel.right,
+                    F.top + F.visibleRows * F.cellHeight),
+        D2D1_ANTIALIAS_MODE_ALIASED);
+    int first = g_folderRow * F.columns;
+    int last = std::min((int)apps.size(),
+                        (g_folderRow + F.visibleRows) * F.columns);
+    for (int i = first; i < last; i++) {
+        DrawTile(apps[i], FolderCellAt(i), i, true);
+    }
+    g_target->PopAxisAlignedClip();
+}
+
+void DrawDragged() {
+    if (!g_drag.active) {
+        return;
+    }
+    float icon = g_layout.icon, size = std::round(icon * 1.06f);
+    float x = g_drag.at.x - g_drag.grab.x - (size - icon) / 2;
+    float y = g_drag.at.y - g_drag.grab.y - (size - icon) / 2;
+    DrawTileIcon(g_drag.tile, D2D1::RectF(x, y, x + size, y + size), 0.92f);
+}
+
 void DrawGrid() {
     const Layout& L = g_layout;
     float s = L.scale;
@@ -1681,32 +2231,7 @@ void DrawGrid() {
         last = std::min((int)g_visible.size(), (lastRow + 1) * L.columns);
     }
     for (int i = first; i < last; i++) {
-        App& app = *g_apps[g_visible[i]];
-        Cell c = CellAt(i);
-        if (i == g_selected || i == g_hover) {
-            Fill(c.highlight,
-                 D2D1::ColorF(1, 1, 1, i == g_selected ? 0.18f : 0.10f),
-                 12 * s);
-        }
-        float opacity = i == g_pressed ? 0.6f : 1.0f;
-        if (ID2D1Bitmap* bitmap = GetBitmap(app)) {
-            g_target->DrawBitmap(bitmap, c.icon, opacity,
-                                 D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
-        } else {
-            Fill(c.icon, D2D1::ColorF(1, 1, 1, 0.12f * opacity), 14 * s);
-        }
-        if (g_labelFormat) {
-            // Light shadow so the name reads well over any background.
-            D2D1_RECT_F shadow = c.label;
-            shadow.top += 1 * s;
-            shadow.bottom += 1 * s;
-            g_brush->SetColor(D2D1::ColorF(0, 0, 0, 0.45f));
-            g_target->DrawText(app.name.c_str(), (UINT32)app.name.size(),
-                               g_labelFormat.Get(), shadow, g_brush.Get());
-            g_brush->SetColor(D2D1::ColorF(1, 1, 1, 0.95f));
-            g_target->DrawText(app.name.c_str(), (UINT32)app.name.size(),
-                               g_labelFormat.Get(), c.label, g_brush.Get());
-        }
+        DrawTile(g_visible[i], CellAt(i), i, !g_openFolder);
     }
     g_target->PopAxisAlignedClip();
 
@@ -1775,6 +2300,8 @@ void Render() {
     DrawSearchBox();
     DrawMenuButton();
     DrawGrid();
+    DrawFolder();
+    DrawDragged();
     g_target->SetTransform(D2D1::Matrix3x2F::Identity());
 
     if (g_target->EndDraw() == D2DERR_RECREATE_TARGET) {
@@ -1798,6 +2325,11 @@ void StartFrames() {
 }
 
 void HideNow() {
+    EndDrag(false);
+    if (g_openFolder) {
+        SaveTiles();  // Keeps a new folder name.
+        g_openFolder = nullptr;
+    }
     HWND wnd = g_wnd;
     ShowWindow(wnd, SW_HIDE);
     ShowWindow(g_backdrop, SW_HIDE);
@@ -1828,6 +2360,11 @@ void OnFrame() {
             g_scroll = g_scrollTarget;
         }
         animating |= g_scroll != g_scrollTarget;
+    }
+
+    if (g_drag.active) {
+        DragTick();
+        animating = true;
     }
 
     if (g_closing && g_appear <= 0) {
@@ -1896,6 +2433,8 @@ void Open() {
     g_hover = g_selected = g_pressed = -1;
     g_scroll = g_scrollTarget = 0;
     g_wheelDelta = 0;
+    g_openFolder = nullptr;
+    g_folderRow = 0;
     UpdateFilter();
     ComputeLayout();
 
@@ -1928,6 +2467,10 @@ void Close() {
     }
     g_closing = true;
     g_pressed = -1;
+    EndDrag(false);
+    if (g_openFolder) {
+        SaveTiles();  // Keeps a new folder name.
+    }
     if (GetCapture() == g_wnd) {
         ReleaseCapture();
     }
@@ -1942,14 +2485,11 @@ void Toggle() {
     }
 }
 
-void LaunchApp(int index) {
-    if (index < 0 || index >= (int)g_visible.size()) {
-        return;
-    }
-    const App& app = *g_apps[g_visible[index]];
+void LaunchTarget(const std::wstring& target, PCWSTR verb = nullptr) {
     SHELLEXECUTEINFOW sei{sizeof(sei)};
     sei.fMask = SEE_MASK_ASYNCOK;
-    sei.lpFile = app.target.c_str();
+    sei.lpVerb = verb;
+    sei.lpFile = target.c_str();
     sei.nShow = SW_SHOWNORMAL;
     AllowSetForegroundWindow(ASFW_ANY);
     ShellExecuteExW(&sei);
@@ -2665,25 +3205,14 @@ void CloseSettingsWindow() {
     g_settingsThread = nullptr;
 }
 
-// The "..." menu.
-void ShowOptionsMenu(HWND hwnd) {
-    enum { kOpenSettings = 1 };
-    HMENU menu = CreatePopupMenu();
-    AppendMenuW(menu, MF_STRING, kOpenSettings, L"Open settings");
-    const RECT& a = g_layout.area;
-    const D2D1_RECT_F& r = g_layout.menuButton;
-    int command = TrackPopupMenuEx(
-        menu, TPM_RETURNCMD | TPM_RIGHTALIGN | TPM_TOPALIGN | TPM_NONOTIFY,
-        a.left + (int)r.right, a.top + (int)r.bottom + 4, hwnd, nullptr);
-    DestroyMenu(menu);
-    if (command == kOpenSettings) {
-        HideNow();
-        OpenSettingsWindow();
-    }
-}
-
 void EnsureVisible(int index) {
     if (index < 0) {
+        return;
+    }
+    if (g_openFolder) {
+        FolderLayout F = GetFolderLayout();
+        int row = index / F.columns;
+        g_folderRow = std::clamp(g_folderRow, row - F.visibleRows + 1, row);
         return;
     }
     const Layout& L = g_layout;
@@ -2717,6 +3246,681 @@ void ScrollRows(int rows) {
     StartFrames();
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Folders, dragging and the right-click menus
+
+// After the arrangement changed.
+void Refresh() {
+    UpdateFilter();
+    ComputeLayout();
+    Render();
+}
+
+int IndexOf(const Tiles& tiles, const Tile& tile) {
+    for (int i = 0; i < (int)tiles.size(); i++) {
+        if (tiles[i].app == tile.app && tiles[i].folder == tile.folder) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// After a change that may have left the open folder with one app or none.
+void DropGoneFolder() {
+    TidyTiles();
+    if (g_openFolder && IndexOf(g_tiles, {nullptr, g_openFolder}) < 0) {
+        g_openFolder = nullptr;
+    }
+    g_hover = g_selected = g_pressed = -1;
+}
+
+void OpenFolder(std::shared_ptr<Folder> folder) {
+    g_openFolder = std::move(folder);
+    g_folderRow = 0;
+    g_hover = g_selected = g_pressed = -1;
+    Render();
+}
+
+void CloseFolder() {
+    if (!g_openFolder) {
+        return;
+    }
+    g_openFolder = nullptr;
+    g_hover = g_selected = g_pressed = -1;
+    SaveTiles();  // Keeps a new name.
+    Refresh();
+}
+
+void ActivateItem(int index) {
+    const Tiles& items = Items();
+    if (index < 0 || index >= (int)items.size()) {
+        return;
+    }
+    if (items[index].folder) {
+        OpenFolder(items[index].folder);
+    } else {
+        LaunchTarget(items[index].app->target);
+    }
+}
+
+// Where the click doesn't count as one on empty space.
+bool ClickKeepsOpen(int x, int y) {
+    return g_openFolder ? InRect(GetFolderLayout().panel, (float)x, (float)y)
+                        : InRect(g_layout.search, (float)x, (float)y);
+}
+
+// The words both names start with ("Microsoft Edge" and "Microsoft Teams"
+// give "Microsoft"), or "Folder".
+std::wstring FolderName(const std::wstring& a, const std::wstring& b) {
+    size_t same = 0;
+    for (size_t i = 0;; i++) {
+        bool endA = i == a.size() || a[i] == L' ';
+        bool endB = i == b.size() || b[i] == L' ';
+        if (endA && endB) {
+            same = i;
+            if (i == a.size() || i == b.size()) {
+                break;
+            }
+            continue;
+        }
+        if (endA || endB || towlower(a[i]) != towlower(b[i])) {
+            break;
+        }
+    }
+    return same ? a.substr(0, same) : L"Folder";
+}
+
+void StartDrag() {
+    const Tiles& items = Items();
+    int i = g_pressed;
+    g_drag.pending = false;
+    if (i < 0 || i >= (int)items.size() || !g_query.empty()) {
+        return;
+    }
+    Cell c = ItemCell(i);
+    g_drag.active = true;
+    g_drag.tile = items[i];
+    g_drag.at = g_drag.start;
+    g_drag.grab = D2D1::Point2F(g_drag.start.x - c.icon.left,
+                                g_drag.start.y - c.icon.top);
+    g_drag.target = g_drag.slot = -1;
+    g_drag.edge = 0;
+    g_drag.inPanel = g_openFolder != nullptr;
+    g_drag.backup = ArrangementLines();
+    g_hover = g_selected = g_pressed = -1;
+    StartFrames();
+}
+
+void DragMove(int x, int y) {
+    const Layout& L = g_layout;
+    double now = Now();
+    g_drag.at = {x, y};
+    if (g_openFolder) {
+        if (InRect(GetFolderLayout().panel, (float)x, (float)y)) {
+            g_drag.inPanel = true;
+        } else if (g_drag.inPanel) {
+            // Out of the folder, into the grid right after it.
+            Tiles& apps = g_openFolder->apps;
+            int i = IndexOf(apps, g_drag.tile);
+            if (i >= 0) {
+                apps.erase(apps.begin() + i);
+                int f = IndexOf(g_tiles, {nullptr, g_openFolder});
+                g_tiles.insert(g_tiles.begin() + (f + 1), g_drag.tile);
+            }
+            g_openFolder = nullptr;
+            UpdateFilter();
+            ComputeLayout();
+        }
+    }
+
+    // Over the middle of another icon: dropping there makes or fills a folder.
+    // The rest of that icon moves nothing, so reaching the middle doesn't
+    // shuffle the icons first.
+    int target = -1;
+    bool overIcon = false;
+    if (!g_openFolder && g_drag.tile.app) {
+        int i = ItemAt(x, y);
+        if (i >= 0 && !IsDragged(g_visible[i])) {
+            D2D1_RECT_F r = CellAt(i).icon;
+            overIcon = InRect(r, (float)x, (float)y);
+            float in = (r.right - r.left) * 0.2f;
+            if (InRect(D2D1::RectF(r.left + in, r.top + in, r.right - in,
+                                   r.bottom - in),
+                       (float)x, (float)y)) {
+                target = i;
+            }
+        }
+    }
+    if (target != g_drag.target) {
+        g_drag.target = target;
+        g_drag.targetTime = now;
+    }
+    int slot = overIcon ? -1 : SlotAt(x, y);
+    if (slot != g_drag.slot) {
+        g_drag.slot = slot;
+        g_drag.slotTime = now;
+    }
+
+    int edge = 0;
+    if (!g_openFolder) {
+        if (g_settings.pages) {
+            float zone =
+                std::max(36 * L.scale, std::min(L.gridLeft, L.width * 0.06f));
+            edge = x < zone ? -1 : x >= L.width - zone ? 1 : 0;
+        } else {
+            edge = y < L.viewTop ? -1 : y >= L.viewBottom ? 1 : 0;
+        }
+    }
+    if (edge != g_drag.edge) {
+        g_drag.edge = edge;
+        g_drag.edgeTime = now;
+    }
+}
+
+// Each frame of a drag: what happens when the pointer rests somewhere.
+void DragTick() {
+    // The page or rows under a still pointer move while scrolling.
+    DragMove(g_drag.at.x, g_drag.at.y);
+    double now = Now();
+    if (g_drag.edge &&
+        now - g_drag.edgeTime >= (g_settings.pages ? 0.6 : 0.3)) {
+        g_drag.edgeTime = now;
+        ScrollRows(g_drag.edge);
+    }
+
+    int t = g_drag.target;
+    if (t >= 0 && t < (int)g_visible.size() && g_visible[t].folder &&
+        now - g_drag.targetTime >= 0.7) {
+        // Resting on a folder opens it, to place the app inside.
+        std::shared_ptr<Folder> folder = g_visible[t].folder;
+        int i = IndexOf(g_tiles, g_drag.tile);
+        if (i >= 0) {
+            g_tiles.erase(g_tiles.begin() + i);
+        }
+        folder->apps.push_back(g_drag.tile);
+        UpdateFilter();
+        ComputeLayout();
+        OpenFolder(folder);
+        FolderLayout F = GetFolderLayout();
+        g_folderRow = F.rows - F.visibleRows;
+        g_drag.target = g_drag.slot = -1;
+        g_drag.edge = 0;
+        g_drag.inPanel = false;
+        return;
+    }
+
+    if (g_drag.slot >= 0 && now - g_drag.slotTime >= 0.2) {
+        Tiles& tiles = g_openFolder ? g_openFolder->apps : g_tiles;
+        int from = IndexOf(tiles, g_drag.tile);
+        int to = std::min(g_drag.slot, (int)tiles.size() - 1);
+        if (from >= 0 && to != from) {
+            Tile tile = tiles[from];
+            tiles.erase(tiles.begin() + from);
+            tiles.insert(tiles.begin() + to, tile);
+            if (!g_openFolder) {
+                UpdateFilter();
+                ComputeLayout();
+            }
+        }
+    }
+}
+
+// drop: keep the new place (and make or fill a folder); otherwise everything
+// goes back.
+void EndDrag(bool drop) {
+    g_drag.pending = false;
+    if (!g_drag.active) {
+        return;
+    }
+    g_drag.active = false;
+    Tile tile = std::move(g_drag.tile);
+    g_drag.tile = {};
+    int target = g_drag.target;
+    g_drag.target = g_drag.slot = -1;
+    g_drag.edge = 0;
+    if (!drop) {
+        g_openFolder = nullptr;
+        ArrangeTiles(g_drag.backup);
+    } else if (target >= 0 && target < (int)g_tiles.size()) {
+        Tile onto = g_tiles[target];
+        int from = IndexOf(g_tiles, tile);
+        if (onto.folder) {
+            onto.folder->apps.push_back(tile);
+        } else {
+            auto folder = std::make_shared<Folder>();
+            folder->name = FolderName(onto.app->name, tile.app->name);
+            folder->apps = {onto, tile};
+            g_tiles[target] = {nullptr, folder};
+        }
+        if (from >= 0) {
+            g_tiles.erase(g_tiles.begin() + from);
+        }
+    }
+    g_drag.backup.clear();
+    DropGoneFolder();
+    if (drop) {
+        SaveTiles();
+    }
+    Refresh();
+}
+
+// What an app's menu needs.
+struct AppPaths {
+    std::wstring file;      // The program it starts, when that's a file.
+    std::wstring folder;    // A Store app's install folder.
+    std::wstring shortcut;  // Its shortcut in the Start menu or on the desktop.
+};
+
+std::wstring ItemString(IShellItem2* item, PCWSTR property) {
+    PROPERTYKEY key;
+    PWSTR value = nullptr;
+    std::wstring result;
+    if (SUCCEEDED(PSGetPropertyKeyFromName(property, &key)) &&
+        SUCCEEDED(item->GetString(key, &value))) {
+        result = value;
+        CoTaskMemFree(value);
+    }
+    return result;
+}
+
+bool FileExists(const std::wstring& path) {
+    return !path.empty() &&
+           GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
+}
+
+// Start lists the shortcuts in these two folders and their subfolders. The
+// one named like the app, or else the one that starts the same file.
+std::wstring FindStartShortcut(const std::wstring& name,
+                               const std::wstring& file) {
+    std::vector<std::wstring> dirs, links;
+    for (REFKNOWNFOLDERID id : {FOLDERID_Programs, FOLDERID_CommonPrograms}) {
+        PWSTR root = nullptr;
+        if (SUCCEEDED(SHGetKnownFolderPath(id, 0, nullptr, &root))) {
+            dirs.push_back(root);
+        }
+        CoTaskMemFree(root);
+    }
+    while (!dirs.empty() && links.size() < 5000) {
+        std::wstring dir = std::move(dirs.back());
+        dirs.pop_back();
+        WIN32_FIND_DATAW fd;
+        HANDLE find = FindFirstFileW((dir + L"\\*").c_str(), &fd);
+        if (find == INVALID_HANDLE_VALUE) {
+            continue;
+        }
+        do {
+            std::wstring path = dir + L"\\" + fd.cFileName;
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+                if (fd.cFileName[0] != L'.' &&
+                    !(fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+                    dirs.push_back(path);
+                }
+            } else if (EndsWith(ToLower(path), L".lnk")) {
+                links.push_back(path);
+            }
+        } while (FindNextFileW(find, &fd));
+        FindClose(find);
+    }
+
+    std::wstring wanted = L"\\" + ToLower(name) + L".lnk";
+    for (const auto& link : links) {
+        if (EndsWith(ToLower(link), wanted)) {
+            return link;
+        }
+    }
+    ComPtr<IShellLinkW> shellLink;
+    ComPtr<IPersistFile> persist;
+    if (file.empty() ||
+        FAILED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(&shellLink))) ||
+        FAILED(shellLink.As(&persist))) {
+        return {};
+    }
+    std::wstring lowerFile = ToLower(file);
+    for (const auto& link : links) {
+        WCHAR target[MAX_PATH];
+        if (SUCCEEDED(persist->Load(link.c_str(), STGM_READ)) &&
+            shellLink->GetPath(target, ARRAYSIZE(target), nullptr, 0) == S_OK &&
+            ToLower(target) == lowerFile) {
+            return link;
+        }
+    }
+    return {};
+}
+
+AppPaths GetAppPaths(const App& app) {
+    AppPaths paths;
+    std::wstring lower = ToLower(app.target);
+    bool fromAppsFolder = lower.rfind(ToLower(kAppsFolder), 0) == 0;
+    ComPtr<IShellItem2> item;
+    if (SUCCEEDED(SHCreateItemFromParsingName(app.target.c_str(), nullptr,
+                                              IID_PPV_ARGS(&item)))) {
+        paths.file = ItemString(item.Get(), L"System.Link.TargetParsingPath");
+        paths.folder =
+            ItemString(item.Get(), L"System.AppUserModel.PackageInstallPath");
+    }
+    if (!fromAppsFolder) {
+        if (EndsWith(lower, L".lnk")) {
+            paths.shortcut = app.target;
+        } else if (paths.file.empty()) {
+            paths.file = app.target;
+        }
+    }
+    // Control Panel and the like point to "::{...}", not a file.
+    if (paths.file.rfind(L"::", 0) == 0 || !FileExists(paths.file)) {
+        paths.file.clear();
+    }
+    if (paths.shortcut.empty() && fromAppsFolder && paths.folder.empty()) {
+        paths.shortcut = FindStartShortcut(app.name, paths.file);
+    }
+    return paths;
+}
+
+void ShowInFolder(const std::wstring& path) {
+    PIDLIST_ABSOLUTE pidl = nullptr;
+    if (SUCCEEDED(SHParseDisplayName(path.c_str(), nullptr, &pidl, 0,
+                                     nullptr))) {
+        SHOpenFolderAndSelectItems(pidl, 0, nullptr, 0);
+        CoTaskMemFree(pidl);
+    }
+}
+
+bool PickIconFile(HWND hwnd, std::wstring& path) {
+    WCHAR file[MAX_PATH] = L"";
+    OPENFILENAMEW ofn{sizeof(ofn)};
+    ofn.hwndOwner = hwnd;
+    ofn.lpstrFilter =
+        L"Pictures and icons\0*.ico;*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.exe\0"
+        L"All files\0*.*\0";
+    ofn.lpstrFile = file;
+    ofn.nMaxFile = ARRAYSIZE(file);
+    ofn.lpstrTitle = L"Choose a picture for the icon";
+    ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST |
+                OFN_NOCHANGEDIR;
+    g_modal = true;
+    BOOL ok = GetOpenFileNameW(&ofn);
+    g_modal = false;
+    if (g_shown && !g_closing) {
+        ForceForeground(hwnd);
+    }
+    if (ok) {
+        path = file;
+    }
+    return ok;
+}
+
+void RemoveApp(const std::shared_ptr<App>& app) {
+    g_hidden.insert(AppKey(*app));
+    auto drop = [&](Tiles& tiles) {
+        tiles.erase(std::remove_if(tiles.begin(), tiles.end(),
+                                   [&](const Tile& t) { return t.app == app; }),
+                    tiles.end());
+    };
+    drop(g_tiles);
+    for (auto& tile : g_tiles) {
+        if (tile.folder) {
+            drop(tile.folder->apps);
+        }
+    }
+    DropGoneFolder();
+    SaveTiles();
+    Refresh();
+}
+
+void TakeOutOfFolder(const Tile& tile) {
+    if (!g_openFolder) {
+        return;
+    }
+    Tiles& apps = g_openFolder->apps;
+    int i = IndexOf(apps, tile);
+    if (i < 0) {
+        return;
+    }
+    apps.erase(apps.begin() + i);
+    int f = IndexOf(g_tiles, {nullptr, g_openFolder});
+    g_tiles.insert(g_tiles.begin() + (f + 1), tile);
+    DropGoneFolder();
+    SaveTiles();
+    Refresh();
+}
+
+void Ungroup(const std::shared_ptr<Folder>& folder) {
+    int f = IndexOf(g_tiles, {nullptr, folder});
+    if (f < 0) {
+        return;
+    }
+    Tiles apps = folder->apps;
+    g_tiles.erase(g_tiles.begin() + f);
+    g_tiles.insert(g_tiles.begin() + f, apps.begin(), apps.end());
+    DropGoneFolder();
+    SaveTiles();
+    Refresh();
+}
+
+// An "&" in a menu would underline the next letter.
+std::wstring MenuText(const std::wstring& text) {
+    std::wstring out;
+    for (WCHAR c : text) {
+        if (c == L'&') {
+            out += L'&';
+        }
+        out += c;
+    }
+    return out;
+}
+
+void ShowTileMenu(HWND hwnd, int index, POINT pt) {
+    enum {
+        kOpen = 1,
+        kRunAs,
+        kFileLocation,
+        kShortcutLocation,
+        kChangeIcon,
+        kRestoreIcon,
+        kOutOfFolder,
+        kRemove,
+        kProperties,
+        kUngroup,
+    };
+    Tile tile = Items()[index];
+    g_selected = index;
+    Render();
+    HMENU menu = CreatePopupMenu();
+    AppPaths paths;
+    std::wstring key;
+    if (tile.folder) {
+        AppendMenuW(menu, MF_STRING, kOpen, L"Open");
+        AppendMenuW(menu, MF_STRING, kUngroup, L"Take the apps out");
+    } else {
+        paths = GetAppPaths(*tile.app);
+        key = AppKey(*tile.app);
+        AppendMenuW(menu, MF_STRING, kOpen, L"Open");
+        if (paths.folder.empty() && EndsWith(ToLower(paths.file), L".exe")) {
+            AppendMenuW(menu, MF_STRING, kRunAs, L"Run as administrator");
+        }
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        AppendMenuW(menu,
+                    MF_STRING | (paths.file.empty() && paths.folder.empty()
+                                     ? MF_GRAYED
+                                     : 0),
+                    kFileLocation, L"Open file location");
+        AppendMenuW(menu, MF_STRING | (paths.shortcut.empty() ? MF_GRAYED : 0),
+                    kShortcutLocation, L"Open shortcut location");
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        AppendMenuW(menu, MF_STRING, kChangeIcon, L"Change icon…");
+        if (g_customIcons.count(key)) {
+            AppendMenuW(menu, MF_STRING, kRestoreIcon,
+                        L"Restore original icon");
+        }
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        if (g_openFolder) {
+            AppendMenuW(menu, MF_STRING, kOutOfFolder, L"Take out of folder");
+        }
+        AppendMenuW(menu, MF_STRING, kRemove, L"Remove from this grid");
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        AppendMenuW(menu,
+                    MF_STRING | (paths.shortcut.empty() && paths.file.empty()
+                                     ? MF_GRAYED
+                                     : 0),
+                    kProperties, L"Properties");
+    }
+    SetMenuDefaultItem(menu, kOpen, FALSE);
+    g_modal = true;
+    int command = TrackPopupMenuEx(
+        menu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY, pt.x, pt.y, hwnd,
+        nullptr);
+    g_modal = false;
+    DestroyMenu(menu);
+
+    int size = g_appsKey & 0xFFFF;
+    const std::wstring& linkOrFile =
+        paths.shortcut.empty() ? paths.file : paths.shortcut;
+    switch (command) {
+        case kOpen:
+            if (tile.folder) {
+                OpenFolder(tile.folder);
+            } else {
+                LaunchTarget(tile.app->target);
+            }
+            break;
+        case kUngroup:
+            Ungroup(tile.folder);
+            break;
+        case kRunAs:
+            LaunchTarget(linkOrFile, L"runas");
+            break;
+        case kFileLocation:
+            if (paths.file.empty()) {
+                LaunchTarget(paths.folder);
+            } else {
+                Close();
+                ShowInFolder(paths.file);
+            }
+            break;
+        case kShortcutLocation:
+            Close();
+            ShowInFolder(paths.shortcut);
+            break;
+        case kChangeIcon: {
+            std::wstring picture;
+            if (PickIconFile(hwnd, picture)) {
+                if (LoadIconFile(picture, size, *tile.app)) {
+                    g_customIcons[key] = picture;
+                    SaveCustomIcons();
+                } else {
+                    Wh_Log(L"No picture in %s", picture.c_str());
+                }
+            }
+            Render();
+            break;
+        }
+        case kRestoreIcon:
+            g_customIcons.erase(key);
+            SaveCustomIcons();
+            ReloadAppIcon(size, *tile.app);
+            Render();
+            break;
+        case kOutOfFolder:
+            TakeOutOfFolder(tile);
+            break;
+        case kRemove:
+            RemoveApp(tile.app);
+            break;
+        case kProperties:
+            Close();
+            SHObjectProperties(nullptr, SHOP_FILEPATH, linkOrFile.c_str(),
+                               nullptr);
+            break;
+    }
+}
+
+// The menu key: the menu of the selected icon.
+void ShowSelectedMenu() {
+    if (g_drag.active || g_selected < 0 || g_selected >= (int)Items().size()) {
+        return;
+    }
+    Cell c = ItemCell(g_selected);
+    POINT pt{(LONG)c.icon.left, (LONG)c.icon.bottom};
+    ClientToScreen(g_wnd, &pt);
+    ShowTileMenu(g_wnd, g_selected, pt);
+}
+
+// The "..." menu, below the button, or at the pointer after a right-click on
+// empty space.
+void ShowOptionsMenu(HWND hwnd, POINT pt, bool underButton) {
+    enum { kOpenSettings = 1, kRestoreAll, kSort, kRestoreFirst = 100 };
+    // Removed apps that are still installed, A to Z like the list.
+    std::vector<std::shared_ptr<App>> removed;
+    for (const auto& app : g_apps) {
+        if (g_hidden.count(AppKey(*app)) && removed.size() < 500) {
+            removed.push_back(app);
+        }
+    }
+    HMENU menu = CreatePopupMenu();
+    AppendMenuW(menu, MF_STRING, kOpenSettings, L"Open settings");
+    HMENU sub = CreatePopupMenu();
+    for (int i = 0; i < (int)removed.size(); i++) {
+        AppendMenuW(sub, MF_STRING, kRestoreFirst + i,
+                    MenuText(removed[i]->name).c_str());
+    }
+    if (!removed.empty()) {
+        AppendMenuW(sub, MF_SEPARATOR, 0, nullptr);
+        AppendMenuW(sub, MF_STRING, kRestoreAll, L"Bring them all back");
+    }
+    AppendMenuW(menu, MF_POPUP | (removed.empty() ? MF_GRAYED : 0),
+                (UINT_PTR)sub, L"Bring back a removed app");
+    AppendMenuW(menu,
+                MF_STRING | (!g_appsLoaded || g_appsFailed ? MF_GRAYED : 0),
+                kSort, L"Sort A to Z");
+    UINT flags = TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY |
+                 (underButton ? TPM_RIGHTALIGN | TPM_TOPALIGN : 0);
+    g_modal = true;
+    int command = TrackPopupMenuEx(menu, flags, pt.x, pt.y, hwnd, nullptr);
+    g_modal = false;
+    DestroyMenu(menu);
+
+    if (command == kOpenSettings) {
+        HideNow();
+        OpenSettingsWindow();
+    } else if (command == kRestoreAll ||
+               (command >= kRestoreFirst &&
+                command < kRestoreFirst + (int)removed.size())) {
+        if (command == kRestoreAll) {
+            for (const auto& app : removed) {
+                g_hidden.erase(AppKey(*app));
+            }
+        } else {
+            g_hidden.erase(AppKey(*removed[command - kRestoreFirst]));
+        }
+        ArrangeTiles(ArrangementLines());  // They come back at the end.
+        DropGoneFolder();
+        SaveTiles();
+        Refresh();
+    } else if (command == kSort) {
+        g_modal = true;
+        int answer = MessageBoxW(
+            hwnd,
+            L"Put every app back in A to Z order and out of its folder? "
+            L"Removed apps stay removed.",
+            L"Sort A to Z", MB_OKCANCEL | MB_ICONQUESTION);
+        g_modal = false;
+        if (g_shown && !g_closing) {
+            ForceForeground(hwnd);
+        }
+        if (answer == IDOK) {
+            std::vector<std::wstring> lines;
+            for (const auto& key : g_hidden) {
+                lines.push_back(L"hidden\t" + key);
+            }
+            ArrangeTiles(lines);
+            DropGoneFolder();
+            g_scroll = g_scrollTarget = 0;
+            SaveTiles();
+            Refresh();
+        }
+    }
+}
+
 void QueryChanged() {
     UpdateFilter();
     g_hover = -1;
@@ -2743,6 +3947,25 @@ void PasteText() {
 }
 
 void OnChar(WCHAR ch) {
+    if (g_drag.active || g_drag.pending) {
+        return;
+    }
+    if (g_openFolder) {
+        // Typing in an open folder renames it.
+        std::wstring& name = g_openFolder->name;
+        if (ch == 8) {
+            if (!name.empty()) {
+                name.pop_back();
+                if (!name.empty() && IS_HIGH_SURROGATE(name.back())) {
+                    name.pop_back();
+                }
+            }
+        } else if (ch >= 32 && ch != 0x7F && name.size() < 60) {
+            name += ch;
+        }
+        Render();
+        return;
+    }
     switch (ch) {
         case 8:  // Backspace
             if (!g_query.empty()) {
@@ -2775,17 +3998,18 @@ void OnChar(WCHAR ch) {
 }
 
 void MoveSelection(int delta) {
-    if (g_visible.empty()) {
+    const Tiles& items = Items();
+    if (items.empty()) {
         return;
     }
-    int count = (int)g_visible.size();
+    int count = (int)items.size();
     if (g_selected < 0) {
         g_selected = 0;
     } else {
         int next = g_selected + delta;
         if (next >= 0 && next < count) {
             g_selected = next;
-        } else if (delta > 0 && delta == g_layout.columns) {
+        } else if (delta > 0 && delta == Columns()) {
             g_selected = count - 1;  // Down on the last incomplete row.
         }
     }
@@ -2795,9 +4019,17 @@ void MoveSelection(int delta) {
 }
 
 void OnKeyDown(WPARAM key) {
+    if (g_drag.active && key != VK_ESCAPE) {
+        return;
+    }
     switch (key) {
         case VK_ESCAPE:
-            if (!g_query.empty()) {
+            if (g_drag.active) {
+                EndDrag(false);
+                ReleaseCapture();
+            } else if (g_openFolder) {
+                CloseFolder();
+            } else if (!g_query.empty()) {
                 g_query.clear();
                 QueryChanged();
             } else {
@@ -2806,10 +4038,13 @@ void OnKeyDown(WPARAM key) {
             break;
         case VK_RETURN:
             if (g_selected >= 0) {
-                LaunchApp(g_selected);
+                ActivateItem(g_selected);
             } else if (!g_query.empty() && !g_visible.empty()) {
-                LaunchApp(0);
+                ActivateItem(0);
             }
+            break;
+        case VK_APPS:
+            ShowSelectedMenu();
             break;
         case VK_LEFT:
             MoveSelection(-1);
@@ -2818,16 +4053,20 @@ void OnKeyDown(WPARAM key) {
             MoveSelection(1);
             break;
         case VK_UP:
-            MoveSelection(-g_layout.columns);
+            MoveSelection(-Columns());
             break;
         case VK_DOWN:
-            MoveSelection(g_layout.columns);
+            MoveSelection(Columns());
             break;
         case VK_PRIOR:
-            ScrollRows(-g_layout.visibleRows);
+            if (!g_openFolder) {
+                ScrollRows(-g_layout.visibleRows);
+            }
             break;
         case VK_NEXT:
-            ScrollRows(g_layout.visibleRows);
+            if (!g_openFolder) {
+                ScrollRows(g_layout.visibleRows);
+            }
             break;
     }
 }
@@ -2945,11 +4184,24 @@ HRESULT WINAPI XamlLauncher_ShowStartView_Hook(void* pThis,
 
 
 void OnAppsLoaded(AppList* list, int key) {
+    if (g_drag.active || g_modal) {
+        // Not under a dragged icon or an open menu: read again on the next
+        // open.
+        delete list;
+        g_appsTime = 0;
+        return;
+    }
+    if (g_openFolder) {
+        SaveTiles();  // A name being typed.
+        g_openFolder = nullptr;
+    }
     g_appsFailed = !list;
     g_apps = list ? std::move(*list) : AppList{};
     delete list;
     g_appsLoaded = true;
     g_appsKey = key;
+    LoadTiles();
+    ApplyCustomIcons(key & 0xFFFF);
     if (key != AppsKey()) {
         // The settings changed while this list was read: the reload then
         // found the worker busy. It has posted and is about to end.
@@ -3062,7 +4314,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
 
         case WM_ACTIVATE:
-            if (LOWORD(wParam) == WA_INACTIVE && g_shown && !g_closing) {
+            if (LOWORD(wParam) == WA_INACTIVE && g_shown && !g_closing &&
+                !g_modal) {
                 g_lastClosed = Now();
                 Close();
             }
@@ -3074,8 +4327,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 g_trackingMouse = TrackMouseEvent(&tme);
             }
             int x = GET_X_LPARAM(lParam), y = GET_Y_LPARAM(lParam);
+            float slop = 6 * g_layout.scale;
+            if (g_drag.pending && !g_drag.active &&
+                (std::abs(x - g_drag.start.x) > slop ||
+                 std::abs(y - g_drag.start.y) > slop)) {
+                StartDrag();
+            }
+            if (g_drag.active) {
+                DragMove(x, y);
+                return 0;
+            }
             int hover = ItemAt(x, y);
-            bool menuHover = InRect(g_layout.menuButton, (float)x, (float)y);
+            bool menuHover = !g_openFolder &&
+                             InRect(g_layout.menuButton, (float)x, (float)y);
             if (hover != g_hover || menuHover != g_menuHover) {
                 g_hover = hover;
                 g_menuHover = menuHover;
@@ -3095,46 +4359,96 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_LBUTTONDOWN: {
             int x = GET_X_LPARAM(lParam), y = GET_Y_LPARAM(lParam);
-            if (InRect(g_layout.menuButton, (float)x, (float)y)) {
-                ShowOptionsMenu(hwnd);
-                return 0;
-            }
-            int dot = PageDotAt(x, y);
-            if (dot >= 0) {
-                g_scrollTarget = dot * (float)g_layout.width;
-                StartFrames();
-                return 0;
+            if (!g_openFolder) {
+                if (InRect(g_layout.menuButton, (float)x, (float)y)) {
+                    POINT pt{(LONG)g_layout.menuButton.right,
+                             (LONG)g_layout.menuButton.bottom + 4};
+                    ClientToScreen(hwnd, &pt);
+                    ShowOptionsMenu(hwnd, pt, true);
+                    return 0;
+                }
+                int dot = PageDotAt(x, y);
+                if (dot >= 0) {
+                    g_scrollTarget = dot * (float)g_layout.width;
+                    StartFrames();
+                    return 0;
+                }
             }
             SetCapture(hwnd);
             g_pressed = ItemAt(x, y);
-            g_pressedEmpty = g_pressed < 0 &&
-                             !InRect(g_layout.search, (float)x, (float)y);
+            g_pressedEmpty = g_pressed < 0 && !ClickKeepsOpen(x, y);
+            g_drag.pending = g_pressed >= 0 && g_query.empty();
+            g_drag.start = {x, y};
             Render();
             return 0;
         }
 
         case WM_LBUTTONUP: {
             int x = GET_X_LPARAM(lParam), y = GET_Y_LPARAM(lParam);
+            bool dragged = g_drag.active;
+            EndDrag(true);  // Before the capture goes, which would undo it.
             if (GetCapture() == hwnd) {
                 ReleaseCapture();
             }
-            int item = ItemAt(x, y);
             int pressed = g_pressed;
+            bool pressedEmpty = g_pressedEmpty;
             g_pressed = -1;
+            g_pressedEmpty = false;
+            if (dragged) {
+                return 0;
+            }
+            int item = ItemAt(x, y);
             if (pressed >= 0 && item == pressed) {
-                LaunchApp(item);
-            } else if (g_pressedEmpty && item < 0 &&
-                       !InRect(g_layout.search, (float)x, (float)y)) {
-                Close();  // Clicking on empty space closes, like in Launchpad.
+                ActivateItem(item);
+            } else if (pressedEmpty && item < 0 && !ClickKeepsOpen(x, y)) {
+                // Clicking on empty space closes, like in Launchpad.
+                if (g_openFolder) {
+                    CloseFolder();
+                } else {
+                    Close();
+                }
             } else {
                 Render();
             }
-            g_pressedEmpty = false;
+            return 0;
+        }
+
+        case WM_CAPTURECHANGED:
+            EndDrag(false);  // Another window took the mouse.
+            return 0;
+
+        case WM_RBUTTONUP: {
+            if (g_drag.active) {
+                return 0;
+            }
+            int x = GET_X_LPARAM(lParam), y = GET_Y_LPARAM(lParam);
+            POINT pt{x, y};
+            ClientToScreen(hwnd, &pt);
+            int item = ItemAt(x, y);
+            if (item >= 0) {
+                ShowTileMenu(hwnd, item, pt);
+            } else if (!g_openFolder) {
+                ShowOptionsMenu(hwnd, pt, false);
+            }
             return 0;
         }
 
         case WM_MOUSEWHEEL:
         case WM_MOUSEHWHEEL:
+            if (g_openFolder) {
+                if (msg == WM_MOUSEWHEEL) {
+                    g_wheelDelta += GET_WHEEL_DELTA_WPARAM(wParam);
+                    if (std::abs(g_wheelDelta) >= WHEEL_DELTA) {
+                        FolderLayout F = GetFolderLayout();
+                        g_folderRow =
+                            std::clamp(g_folderRow - g_wheelDelta / WHEEL_DELTA,
+                                       0, F.rows - F.visibleRows);
+                        g_wheelDelta %= WHEEL_DELTA;
+                        Render();
+                    }
+                }
+                return 0;
+            }
             // Sideways (tilt wheel, touchpad swipe) only flips pages.
             if (msg == WM_MOUSEHWHEEL && !g_settings.pages) {
                 return 0;
@@ -3278,6 +4592,10 @@ DWORD WINAPI StartThread(void*) {
         g_backdrop = nullptr;
     }
     AppList().swap(g_apps);  // Also frees the memory (no_destroy).
+    Tiles().swap(g_tiles);
+    Tiles().swap(g_visible);
+    g_openFolder = nullptr;
+    g_drag = {};
     g_backdropImage = {};
     FreeSurface(g_surface);
     g_labelFormat.Reset();
