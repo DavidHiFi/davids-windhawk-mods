@@ -193,7 +193,7 @@ constexpr UINT WM_APP_SHIFT_WIN = WM_APP + 6;
 
 constexpr UINT_PTR kTimerFrame = 1;
 constexpr UINT_PTR kTimerFirstLoad = 4;
-constexpr UINT_PTR kTimerOriginalStart = 5;
+constexpr UINT_PTR kTimerShiftWin = 5;
 
 constexpr GUID kBhidEnumItems = {
     0x94f60519,
@@ -2005,11 +2005,11 @@ bool IsKeyboardShow(int showMethod, int showFlags) {
 // ShowStartView never sees it. A low-level keyboard hook on its own thread
 // (the window thread can be busy drawing) watches for the Windows key let go
 // while Shift is held, with no other key pressed in between (Shift+Win+S and
-// the like stay Windows shortcuts). For "original Start", the window presses
-// Ctrl+Esc once the keys are up and the ShowStartView hook lets that one
-// through.
+// the like stay Windows shortcuts). For the grid and the original Start, the
+// window presses Ctrl+Esc once the keys are up, and the ShowStartView hook
+// gives that one the Shift + Windows key action.
 
-std::atomic<ULONGLONG> g_originalStartUntil;
+std::atomic<ULONGLONG> g_shiftWinUntil;
 HANDLE g_keyThread;
 DWORD g_keyThreadId;
 
@@ -2066,12 +2066,12 @@ HRESULT WINAPI XamlLauncher_ShowStartView_Hook(void* pThis,
                                                int showMethod,
                                                int showFlags) {
     Wh_Log(L"> method %d, flags %d", showMethod, showFlags);
-    KeyAction action = GetTickCount64() < g_originalStartUntil
-                           ? KeyAction::Start
+    KeyAction action = GetTickCount64() < g_shiftWinUntil
+                           ? g_shiftWinKeyAction.load()
                        : IsKeyboardShow(showMethod, showFlags)
                            ? g_winKeyAction.load()
                            : g_startButtonAction.load();
-    g_originalStartUntil = 0;
+    g_shiftWinUntil = 0;
     HWND wnd = g_wnd;
     if (action == KeyAction::Start || !wnd) {
         return XamlLauncher_ShowStartView_Original(pThis, showMethod,
@@ -2150,23 +2150,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (!OwnsTaskbar()) {
                 return 0;
             }
-            switch (g_shiftWinKeyAction.load()) {
-                case KeyAction::Grid:
-                    Toggle();
-                    break;
-                case KeyAction::Program:
-                    PostMessageW(hwnd, WM_APP_RUN, 0, 0);
-                    break;
-                case KeyAction::Start:
-                    if (g_shown) {
-                        HideNow();
-                    }
-                    // Opened with Ctrl+Esc once Shift is up (with Shift it's
-                    // Task Manager). SC_TASKLIST to the taskbar does nothing
-                    // here.
-                    SetTimer(hwnd, kTimerOriginalStart, 20, nullptr);
-                    break;
+            if (g_shiftWinKeyAction == KeyAction::Program) {
+                PostMessageW(hwnd, WM_APP_RUN, 0, 0);
+                return 0;
             }
+            if (g_shown && g_shiftWinKeyAction == KeyAction::Start) {
+                HideNow();
+            }
+            // The grid and the original Start open through Ctrl+Esc, once
+            // Shift is up (with Shift it's Task Manager): only a Start that
+            // Windows opens may take the foreground. SC_TASKLIST to the
+            // taskbar does nothing here.
+            SetTimer(hwnd, kTimerShiftWin, 20, nullptr);
             return 0;
 
         case WM_APP_QUIT:
@@ -2178,12 +2173,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 case kTimerFrame:
                     OnFrame();
                     break;
-                case kTimerOriginalStart:
+                case kTimerShiftWin:
                     if (GetAsyncKeyState(VK_SHIFT) >= 0 &&
                         GetAsyncKeyState(VK_LWIN) >= 0 &&
                         GetAsyncKeyState(VK_RWIN) >= 0) {
-                        KillTimer(hwnd, kTimerOriginalStart);
-                        g_originalStartUntil = GetTickCount64() + 1000;
+                        KillTimer(hwnd, kTimerShiftWin);
+                        g_shiftWinUntil = GetTickCount64() + 1000;
                         INPUT keys[4] = {};
                         WORD vks[4] = {VK_CONTROL, VK_ESCAPE, VK_ESCAPE,
                                        VK_CONTROL};
