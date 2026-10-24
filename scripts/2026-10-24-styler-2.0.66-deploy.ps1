@@ -1,0 +1,35 @@
+# Deploy Windhawk Styler 2.0.66 (real acrylic: DWM tints strip and body as one sheet; blur only on floating surfaces)
+# and set the card opacity so the page card shows the blur. Run elevated.
+# -Install deploys .tmp\styler-2.0.66; -Rollback restores the mod key and source saved before the install (2.0.65).
+param([switch]$Install, [switch]$Rollback, [int]$CardOpacity = 40)
+$ErrorActionPreference = 'Stop'
+$Version = '2.0.66'
+$key = 'HKLM\SOFTWARE\Windhawk\Engine\Mods\local@windhawk-styler'
+$ps = 'HKLM:\SOFTWARE\Windhawk\Engine\Mods\local@windhawk-styler'
+$bk = 'H:\Windhawk Configuration\backups\2026-10-24\styler-blur'
+$stage = "H:\Windhawk Configuration\.tmp\styler-$Version"
+$src = 'H:\Windhawk Configuration\work\styler-release\mods\local\windhawk-styler\windhawk-styler.wh.cpp'
+$modsSource = 'C:\ProgramData\Windhawk\ModsSource\local@windhawk-styler.wh.cpp'
+$lib = "local@windhawk-styler_${Version}_1.dll"
+$now = [int][DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+if ($Install) {
+    if (-not (Test-Path "$bk\mod-key-before-2.0.66.reg")) {
+        reg export $key "$bk\mod-key-before-2.0.66.reg" /y | Out-Null
+        Copy-Item $modsSource "$bk\ModsSource-before-2.0.66.wh.cpp" -Force
+    }
+    Copy-Item "$stage\windhawk-styler-64.dll" "C:\ProgramData\Windhawk\Engine\Mods\64\$lib" -Force
+    Copy-Item "$stage\windhawk-styler-32.dll" "C:\ProgramData\Windhawk\Engine\Mods\32\$lib" -Force
+    Copy-Item $src $modsSource -Force
+    Set-ItemProperty "$ps\Settings" cardOpacity $CardOpacity -Type DWord
+    Set-ItemProperty $ps LibraryFileName $lib
+    Set-ItemProperty $ps Version $Version
+    Set-ItemProperty $ps SettingsChangeTime $now -Type DWord
+}
+if ($Rollback) {
+    reg import "$bk\mod-key-before-2.0.66.reg"
+    Copy-Item "$bk\ModsSource-before-2.0.66.wh.cpp" $modsSource -Force
+    Set-ItemProperty $ps SettingsChangeTime $now -Type DWord
+}
+Get-ItemProperty $ps | Select-Object LibraryFileName, Version, SettingsChangeTime | Format-List
+(Get-ItemProperty "$ps\Settings").cardOpacity
+Get-FileHash "C:\ProgramData\Windhawk\Engine\Mods\64\$((Get-ItemProperty $ps).LibraryFileName)" -ErrorAction SilentlyContinue | Select-Object Hash
