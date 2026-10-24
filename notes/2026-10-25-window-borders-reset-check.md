@@ -42,3 +42,11 @@ the 4:39 AM reset and did not exist for the seven 10/24 resets; it was loaded
 into every app for the 1:49 and 1:53 AM resets, so it stays a possible
 contributor there. A scoped install needs no exception in
 `scripts\Test-WindhawkFreezeGate.ps1`; the `$allowEveryApp` entry is unchanged.
+
+## Source review (owner asked for a verdict from the code)
+
+Read every hook and thread in `local@window-borders.wh.cpp`:
+- It only calls `DwmSetWindowAttribute(DWMWA_BORDER_COLOR)` on its own process's windows, after the window's own DefWindowProc returns. No SendMessage, no cross-thread waits (except a 1 s wait at unload), no loop that triggers itself (setting a border color does not send WM_NCACTIVATE), never loads into dwm.exe.
+- No other enabled mod sets the border color on normal windows (old accent-border and translucent-flyouts are off; windhawk-styler only in windhawk-ui.exe).
+- Found one real bug: unload deleted a lock another thread could still be using. That could crash one app when the mod unloads, not freeze the PC. Fixed in source; rev 4 builds clean (not installed).
+Verdict: nothing in the code can hang the system. Install scoped to a short app list after the freeze gate passes.
