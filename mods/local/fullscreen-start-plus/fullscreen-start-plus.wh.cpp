@@ -8,7 +8,7 @@
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         explorer.exe
 // @architecture    x86-64
-// @compilerOptions -lgdi32 -lshell32 -lshcore -ldwmapi -ld2d1 -ldwrite -lole32 -luuid
+// @compilerOptions -lgdi32 -lshell32 -lshcore -ldwmapi -ld2d1 -ldwrite -lole32 -luuid -lcomdlg32 -luxtheme
 // @license         MIT
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
@@ -51,7 +51,7 @@ of the macOS Launchpad, with instant search and a blurred background.
 | Esc | Clear the search, or close when the search is empty |
 | Mouse wheel, Page Up, Page Down | Scroll, or flip pages |
 | Sideways scroll, page dots | Flip pages |
-| The ... button, top right | Open this mod's settings in Windhawk |
+| The ... button, top right | Open this mod's own settings window (it saves to the same settings as Windhawk's page) |
 
 Clicking outside the icons or switching to another window closes it.
 
@@ -162,6 +162,8 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
 #include <shobjidl.h>
 #include <knownfolders.h>
 #include <shellscalingapi.h>
+#include <commdlg.h>
+#include <uxtheme.h>
 #include <dwmapi.h>
 // Otherwise the Win32 macro renames ID2D1RenderTarget::DrawText.
 #undef DrawText
@@ -1954,8 +1956,641 @@ void LaunchApp(int index) {
     Close();
 }
 
-// The "..." menu. Windhawk's mod link opens this mod's page, on the tab that
-// was open last.
+// The settings window, from the "..." menu. It shows the same settings as
+// Windhawk's page for this mod and saves them through windhawk-cli, so the two
+// stay in step. Writing a mod's settings takes admin rights, so the save runs
+// the CLI elevated (silently where UAC prompts are off).
+struct SettingField {
+    enum Kind { Header, Choice, Number, Text, Check, Color };
+    Kind kind;
+    PCWSTR key;
+    PCWSTR label;
+    std::vector<std::pair<PCWSTR, PCWSTR>> options;  // Value, label.
+    int min = 0, max = 0;
+    HWND labelWnd = nullptr;
+    HWND control = nullptr;
+    HWND swatch = nullptr;  // Color only.
+    std::wstring value;     // As loaded, so a save writes only what changed.
+};
+
+std::vector<std::pair<PCWSTR, PCWSTR>> KeyActionOptions() {
+    return {{L"grid", L"Open this grid"},
+            {L"start", L"Open the original Start"},
+            {L"program", L"Run the program below"}};
+}
+
+std::vector<SettingField> MakeSettingFields() {
+    using F = SettingField;
+    return {
+        {F::Header, nullptr, L"Look"},
+        {F::Choice,
+         L"blurMode",
+         L"Blur type",
+         {{L"custom", L"Adjustable"},
+          {L"acrylic", L"Windows acrylic"},
+          {L"blur", L"Windows blur"},
+          {L"none", L"No blur"}}},
+        {F::Number, L"blurAmount", L"Blur strength (0 to 100)", {}, 0, 100},
+        {F::Number, L"backgroundOpacity", L"Color opacity (%)", {}, 0, 100},
+        {F::Color, L"tintColor", L"Background color"},
+        {F::Header, nullptr, L"Grid"},
+        {F::Choice,
+         L"appSource",
+         L"Apps to show",
+         {{L"allApps", L"Start menu apps (All apps)"},
+          {L"desktop", L"Desktop icons"},
+          {L"both", L"Start menu apps and desktop icons"},
+          {L"pinned", L"Apps pinned to Start"}}},
+        {F::Choice,
+         L"gridLayout",
+         L"Layout",
+         {{L"scroll", L"One list that scrolls"},
+          {L"pages", L"Pages that flip left and right"}}},
+        {F::Number, L"gridIconSize", L"Icon size (pixels)", {}, 24, 192},
+        {F::Number, L"gridColumns", L"Columns (0 picks for you)", {}, 0, 30},
+        {F::Check, L"coverScreen", L"Cover the whole screen"},
+        {F::Choice,
+         L"monitor",
+         L"Monitor",
+         {{L"mouse", L"The monitor with the mouse"},
+          {L"1", L"Main monitor"},
+          {L"2", L"Monitor 2"},
+          {L"3", L"Monitor 3"},
+          {L"4", L"Monitor 4"}}},
+        {F::Header, nullptr, L"Keys"},
+        {F::Choice, L"winKeyAction", L"Windows key", KeyActionOptions()},
+        {F::Choice, L"shiftWinKeyAction", L"Shift + Windows key",
+         KeyActionOptions()},
+        {F::Choice, L"startButtonAction", L"Start button", KeyActionOptions()},
+        {F::Text, L"program", L"Program"},
+    };
+}
+
+constexpr WCHAR kSettingsClass[] = L"WindhawkFullscreenStartPlusSettings";
+constexpr UINT WM_APP_SETTINGS_RELOAD = WM_APP + 1;
+constexpr UINT WM_APP_SETTINGS_ACTIVATE = WM_APP + 2;
+enum { kSaveButton = IDOK, kCloseButton = IDCANCEL, kFirstControl = 100 };
+
+struct SettingsWindow {
+    HWND hwnd = nullptr;
+    std::vector<SettingField> fields = MakeSettingFields();
+    HWND status = nullptr, save = nullptr, close = nullptr;
+    HFONT font = nullptr, bold = nullptr;
+    HBRUSH background = nullptr, input = nullptr;
+    bool dark = false;
+    bool saving = false;
+    COLORREF customColors[16] = {};
+};
+
+HANDLE g_settingsThread;
+std::atomic<HWND> g_settingsWnd;
+std::atomic<bool> g_settingsStop;
+
+bool IsDarkMode() {
+    DWORD light = 1, size = sizeof(light);
+    RegGetValueW(HKEY_CURRENT_USER,
+                 L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\"
+                 L"Personalize",
+                 L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &light,
+                 &size);
+    return light == 0;
+}
+
+COLORREF ParseColorRef(const std::wstring& text, COLORREF fallback) {
+    std::wstring hex = !text.empty() && text[0] == L'#' ? text.substr(1) : text;
+    if (hex.size() != 6 || hex.find_first_not_of(L"0123456789abcdefABCDEF") !=
+                               std::wstring::npos) {
+        return fallback;
+    }
+    UINT rgb = wcstoul(hex.c_str(), nullptr, 16);
+    return RGB(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF);
+}
+
+std::wstring WindowString(HWND hwnd) {
+    std::wstring text(GetWindowTextLengthW(hwnd) + 1, L'\0');
+    text.resize(GetWindowTextW(hwnd, text.data(), (int)text.size()));
+    return text;
+}
+
+// Quotes one argument the way CommandLineToArgvW reads it back.
+std::wstring QuoteArg(const std::wstring& arg) {
+    std::wstring out = L"\"";
+    for (size_t i = 0;; i++) {
+        size_t slashes = 0;
+        while (i < arg.size() && arg[i] == L'\\') {
+            i++, slashes++;
+        }
+        if (i == arg.size()) {
+            out.append(slashes * 2, L'\\');
+            break;
+        }
+        out.append(arg[i] == L'"' ? slashes * 2 + 1 : slashes, L'\\');
+        out += arg[i];
+    }
+    return out + L"\"";
+}
+
+// windhawk-cli.exe sits three folders above the engine:
+// <Windhawk>\Engine\<version>\<arch>\windhawk.dll.
+std::wstring WindhawkCliPath() {
+    HMODULE engine = GetModuleHandleW(L"windhawk.dll");
+    WCHAR path[MAX_PATH];
+    if (!engine || !GetModuleFileNameW(engine, path, MAX_PATH)) {
+        return {};
+    }
+    std::wstring dir = path;
+    for (int i = 0; i < 4; i++) {
+        dir.resize(dir.find_last_of(L'\\'));
+    }
+    dir += L"\\windhawk-cli.exe";
+    return GetFileAttributesW(dir.c_str()) == INVALID_FILE_ATTRIBUTES
+               ? std::wstring()
+               : dir;
+}
+
+std::wstring FieldValue(const SettingField& f) {
+    switch (f.kind) {
+        case SettingField::Choice: {
+            int i = (int)SendMessageW(f.control, CB_GETCURSEL, 0, 0);
+            return i >= 0 && i < (int)f.options.size() ? f.options[i].first
+                                                       : f.value;
+        }
+        case SettingField::Number: {
+            std::wstring text = WindowString(f.control);
+            if (text.empty()) {
+                return f.value;
+            }
+            return std::to_wstring(
+                std::clamp(_wtoi(text.c_str()), f.min, f.max));
+        }
+        case SettingField::Check:
+            return SendMessageW(f.control, BM_GETCHECK, 0, 0) == BST_CHECKED
+                       ? L"1"
+                       : L"0";
+        default:
+            return WindowString(f.control);
+    }
+}
+
+void LoadSettingFields(SettingsWindow& w) {
+    for (auto& f : w.fields) {
+        if (f.kind == SettingField::Header) {
+            continue;
+        }
+        f.value = f.kind == SettingField::Number || f.kind == SettingField::Check
+                      ? std::to_wstring(Wh_GetIntSetting(f.key))
+                      : GetStringSetting(f.key);
+        switch (f.kind) {
+            case SettingField::Choice: {
+                int index = 0;
+                for (size_t i = 0; i < f.options.size(); i++) {
+                    if (f.value == f.options[i].first) {
+                        index = (int)i;
+                    }
+                }
+                SendMessageW(f.control, CB_SETCURSEL, index, 0);
+                break;
+            }
+            case SettingField::Check:
+                SendMessageW(f.control, BM_SETCHECK,
+                             f.value != L"0" ? BST_CHECKED : BST_UNCHECKED, 0);
+                break;
+            default:
+                SetWindowTextW(f.control, f.value.c_str());
+        }
+        if (f.swatch) {
+            InvalidateRect(f.swatch, nullptr, TRUE);
+        }
+    }
+}
+
+// Runs windhawk-cli elevated with the changed settings, pumping messages while
+// it works.
+void SaveSettingFields(SettingsWindow& w) {
+    std::wstring params = L"--quiet mod settings set " + QuoteArg(WH_MOD_ID);
+    int changed = 0;
+    for (auto& f : w.fields) {
+        if (f.kind != SettingField::Header) {
+            std::wstring value = FieldValue(f);
+            if (value != f.value) {
+                params += L" " + QuoteArg(std::wstring(f.key) + L"=" + value);
+                changed++;
+            }
+        }
+    }
+    if (!changed) {
+        SetWindowTextW(w.status, L"Nothing changed");
+        return;
+    }
+    std::wstring cli = WindhawkCliPath();
+    if (cli.empty()) {
+        SetWindowTextW(w.status, L"windhawk-cli.exe not found");
+        return;
+    }
+    SHELLEXECUTEINFOW info{sizeof(info)};
+    info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
+    info.hwnd = w.hwnd;
+    info.lpVerb = L"runas";
+    info.lpFile = cli.c_str();
+    info.lpParameters = params.c_str();
+    info.nShow = SW_HIDE;
+    if (!ShellExecuteExW(&info) || !info.hProcess) {
+        SetWindowTextW(w.status, GetLastError() == ERROR_CANCELLED
+                                     ? L"Not saved"
+                                     : L"Couldn't start windhawk-cli");
+        return;
+    }
+    w.saving = true;
+    EnableWindow(w.save, FALSE);
+    SetWindowTextW(w.status, L"Saving...");
+    bool quit = false;
+    while (!quit && !g_settingsStop &&
+           MsgWaitForMultipleObjects(1, &info.hProcess, FALSE, 15000,
+                                     QS_ALLINPUT) == WAIT_OBJECT_0 + 1) {
+        MSG msg;
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) {
+                quit = true;
+                break;
+            }
+            if (!IsDialogMessageW(w.hwnd, &msg)) {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+        }
+    }
+    DWORD code = 1;
+    if (WaitForSingleObject(info.hProcess, 0) == WAIT_OBJECT_0) {
+        GetExitCodeProcess(info.hProcess, &code);
+    }
+    CloseHandle(info.hProcess);
+    w.saving = false;
+    if (quit || !IsWindow(w.hwnd)) {
+        PostQuitMessage(0);
+        return;
+    }
+    EnableWindow(w.save, TRUE);
+    if (code == 0) {
+        LoadSettingFields(w);  // Shows what was stored, numbers clamped.
+        SetWindowTextW(w.status, L"Saved");
+    } else {
+        Wh_Log(L"windhawk-cli exit code %u", code);
+        SetWindowTextW(w.status, L"Windhawk didn't save the settings");
+    }
+}
+
+void LayoutSettingsWindow(SettingsWindow& w, UINT dpi) {
+    auto px = [dpi](int v) { return MulDiv(v, dpi, 96); };
+    if (w.font) {
+        DeleteObject(w.font);
+        DeleteObject(w.bold);
+    }
+    LOGFONTW lf{};
+    lf.lfHeight = -MulDiv(9, dpi, 72);
+    lf.lfQuality = CLEARTYPE_QUALITY;
+    wcscpy_s(lf.lfFaceName, L"Segoe UI");
+    w.font = CreateFontIndirectW(&lf);
+    lf.lfHeight = -MulDiv(11, dpi, 72);
+    lf.lfWeight = FW_SEMIBOLD;
+    w.bold = CreateFontIndirectW(&lf);
+
+    const int margin = px(20), labelWidth = px(190), controlWidth = px(290);
+    const int controlX = margin + labelWidth + px(10);
+    int y = px(8);
+    for (auto& f : w.fields) {
+        if (f.kind == SettingField::Header) {
+            y += px(12);
+            SetWindowPos(f.labelWnd, nullptr, margin, y,
+                         labelWidth + controlWidth, px(24), SWP_NOZORDER);
+            SendMessageW(f.labelWnd, WM_SETFONT, (WPARAM)w.bold, TRUE);
+            y += px(30);
+            continue;
+        }
+        SetWindowPos(f.labelWnd, nullptr, margin, y + px(4), labelWidth,
+                     px(20), SWP_NOZORDER);
+        SendMessageW(f.labelWnd, WM_SETFONT, (WPARAM)w.font, TRUE);
+        int width = f.kind == SettingField::Number  ? px(80)
+                    : f.kind == SettingField::Color ? px(110)
+                    : f.kind == SettingField::Check ? px(24)
+                                                    : controlWidth;
+        int height = f.kind == SettingField::Choice ? px(200) : px(26);
+        SetWindowPos(f.control, nullptr, controlX, y, width, height,
+                     SWP_NOZORDER);
+        SendMessageW(f.control, WM_SETFONT, (WPARAM)w.font, TRUE);
+        if (f.swatch) {
+            SetWindowPos(f.swatch, nullptr, controlX + width + px(8), y,
+                         px(40), px(26), SWP_NOZORDER);
+        }
+        y += px(34);
+    }
+    y += px(12);
+    const int buttonWidth = px(90), buttonHeight = px(30);
+    const int clientWidth = controlX + controlWidth + margin;
+    SetWindowPos(w.close, nullptr, clientWidth - margin - buttonWidth, y,
+                 buttonWidth, buttonHeight, SWP_NOZORDER);
+    SetWindowPos(w.save, nullptr,
+                 clientWidth - margin - buttonWidth * 2 - px(8), y, buttonWidth,
+                 buttonHeight, SWP_NOZORDER);
+    SetWindowPos(w.status, nullptr, margin, y + px(6),
+                 clientWidth - margin * 3 - buttonWidth * 2, px(20),
+                 SWP_NOZORDER);
+    for (HWND h : {w.status, w.save, w.close}) {
+        SendMessageW(h, WM_SETFONT, (WPARAM)w.font, TRUE);
+    }
+
+    RECT r{0, 0, clientWidth, y + buttonHeight + margin};
+    AdjustWindowRectExForDpi(&r, GetWindowLongW(w.hwnd, GWL_STYLE), FALSE,
+                             GetWindowLongW(w.hwnd, GWL_EXSTYLE), dpi);
+    SetWindowPos(w.hwnd, nullptr, 0, 0, r.right - r.left, r.bottom - r.top,
+                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+void ThemeSettingsWindow(SettingsWindow& w) {
+    w.dark = IsDarkMode();
+    if (w.background) {
+        DeleteObject(w.background);
+        DeleteObject(w.input);
+    }
+    w.background =
+        CreateSolidBrush(w.dark ? RGB(32, 32, 32) : GetSysColor(COLOR_BTNFACE));
+    w.input =
+        CreateSolidBrush(w.dark ? RGB(43, 43, 43) : GetSysColor(COLOR_WINDOW));
+    BOOL dark = w.dark;
+    DwmSetWindowAttribute(w.hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark,
+                          sizeof(dark));
+    EnumChildWindows(
+        w.hwnd,
+        [](HWND child, LPARAM param) -> BOOL {
+            WCHAR className[32] = {};
+            GetClassNameW(child, className, ARRAYSIZE(className));
+            PCWSTR theme = param ? L"DarkMode_Explorer" : L"Explorer";
+            if (param && _wcsicmp(className, L"ComboBox") == 0) {
+                theme = L"DarkMode_CFD";
+            }
+            SetWindowTheme(child, theme, nullptr);
+            return TRUE;
+        },
+        w.dark);
+    InvalidateRect(w.hwnd, nullptr, TRUE);
+}
+
+LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam,
+                                 LPARAM lParam) {
+    auto* w = (SettingsWindow*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+    if (msg == WM_NCCREATE) {
+        w = (SettingsWindow*)((CREATESTRUCTW*)lParam)->lpCreateParams;
+        w->hwnd = hwnd;
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)w);
+    }
+    if (!w) {
+        return DefWindowProcW(hwnd, msg, wParam, lParam);
+    }
+    switch (msg) {
+        case WM_ERASEBKGND: {
+            RECT r;
+            GetClientRect(hwnd, &r);
+            FillRect((HDC)wParam, &r, w->background);
+            return 1;
+        }
+        case WM_CTLCOLORSTATIC:
+        case WM_CTLCOLORBTN:
+        case WM_CTLCOLOREDIT:
+        case WM_CTLCOLORLISTBOX: {
+            bool field = msg == WM_CTLCOLOREDIT || msg == WM_CTLCOLORLISTBOX;
+            HDC dc = (HDC)wParam;
+            if ((HWND)lParam == w->status) {
+                SetTextColor(dc, w->dark ? RGB(170, 170, 170)
+                                         : GetSysColor(COLOR_GRAYTEXT));
+            } else {
+                SetTextColor(dc, w->dark ? RGB(255, 255, 255)
+                                         : GetSysColor(COLOR_WINDOWTEXT));
+            }
+            SetBkColor(dc, field ? (w->dark ? RGB(43, 43, 43)
+                                            : GetSysColor(COLOR_WINDOW))
+                                 : (w->dark ? RGB(32, 32, 32)
+                                            : GetSysColor(COLOR_BTNFACE)));
+            return (LRESULT)(field ? w->input : w->background);
+        }
+        case WM_DRAWITEM: {
+            auto* item = (DRAWITEMSTRUCT*)lParam;
+            for (auto& f : w->fields) {
+                if (f.swatch == item->hwndItem) {
+                    HBRUSH brush = CreateSolidBrush(
+                        ParseColorRef(WindowString(f.control), RGB(0, 0, 0)));
+                    FillRect(item->hDC, &item->rcItem, brush);
+                    DeleteObject(brush);
+                    HBRUSH frame = CreateSolidBrush(RGB(128, 128, 128));
+                    FrameRect(item->hDC, &item->rcItem, frame);
+                    DeleteObject(frame);
+                    return TRUE;
+                }
+            }
+            break;
+        }
+        case WM_COMMAND: {
+            int id = LOWORD(wParam);
+            if (id == kSaveButton) {
+                if (!w->saving) {
+                    SaveSettingFields(*w);
+                }
+                return 0;
+            }
+            if (id == kCloseButton) {
+                DestroyWindow(hwnd);
+                return 0;
+            }
+            for (auto& f : w->fields) {
+                if (f.kind != SettingField::Color) {
+                    continue;
+                }
+                if ((HWND)lParam == f.control && HIWORD(wParam) == EN_CHANGE) {
+                    InvalidateRect(f.swatch, nullptr, TRUE);
+                } else if ((HWND)lParam == f.swatch) {
+                    CHOOSECOLORW cc{sizeof(cc)};
+                    cc.hwndOwner = hwnd;
+                    cc.rgbResult =
+                        ParseColorRef(WindowString(f.control), RGB(0, 0, 0));
+                    cc.lpCustColors = w->customColors;
+                    cc.Flags = CC_RGBINIT | CC_FULLOPEN;
+                    if (ChooseColorW(&cc)) {
+                        WCHAR text[8];
+                        swprintf_s(text, L"#%02X%02X%02X",
+                                   GetRValue(cc.rgbResult),
+                                   GetGValue(cc.rgbResult),
+                                   GetBValue(cc.rgbResult));
+                        SetWindowTextW(f.control, text);
+                    }
+                }
+            }
+            break;
+        }
+        case WM_APP_SETTINGS_RELOAD:
+            if (!w->saving) {
+                LoadSettingFields(*w);
+            }
+            return 0;
+        case WM_APP_SETTINGS_ACTIVATE:
+            if (IsIconic(hwnd)) {
+                ShowWindow(hwnd, SW_RESTORE);
+            }
+            ForceForeground(hwnd);
+            return 0;
+        case WM_SETTINGCHANGE:
+            if (lParam && wcscmp((PCWSTR)lParam, L"ImmersiveColorSet") == 0) {
+                ThemeSettingsWindow(*w);
+            }
+            break;
+        case WM_DPICHANGED: {
+            auto* r = (RECT*)lParam;
+            SetWindowPos(hwnd, nullptr, r->left, r->top, r->right - r->left,
+                         r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
+            LayoutSettingsWindow(*w, HIWORD(wParam));
+            return 0;
+        }
+        case WM_CLOSE:
+            DestroyWindow(hwnd);
+            return 0;
+        case WM_DESTROY:
+            g_settingsWnd = nullptr;
+            PostQuitMessage(0);
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+DWORD WINAPI SettingsThread(void*) {
+    SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    HINSTANCE instance = GetModuleHandleW(nullptr);
+    WNDCLASSEXW wc{sizeof(wc)};
+    wc.lpfnWndProc = SettingsWndProc;
+    wc.hInstance = instance;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpszClassName = kSettingsClass;
+    RegisterClassExW(&wc);
+
+    SettingsWindow w;
+    HWND hwnd = CreateWindowExW(
+        0, kSettingsClass, L"Fullscreen Start Plus settings",
+        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, CW_USEDEFAULT,
+        CW_USEDEFAULT, 100, 100, nullptr, nullptr, instance, &w);
+    if (!hwnd) {
+        UnregisterClassW(kSettingsClass, instance);
+        return 0;
+    }
+    auto child = [&](PCWSTR cls, PCWSTR text, DWORD style, int id,
+                     DWORD exStyle = 0) {
+        return CreateWindowExW(exStyle, cls, text, WS_CHILD | WS_VISIBLE | style,
+                               0, 0, 0, 0, hwnd, (HMENU)(INT_PTR)id, instance,
+                               nullptr);
+    };
+    int id = kFirstControl;
+    for (auto& f : w.fields) {
+        f.labelWnd = child(L"STATIC", f.label, SS_LEFT | SS_NOPREFIX, 0);
+        switch (f.kind) {
+            case SettingField::Header:
+                continue;
+            case SettingField::Choice:
+                f.control = child(L"COMBOBOX", L"",
+                                  CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL,
+                                  id++);
+                for (auto& option : f.options) {
+                    SendMessageW(f.control, CB_ADDSTRING, 0,
+                                 (LPARAM)option.second);
+                }
+                break;
+            case SettingField::Check:
+                f.control = child(L"BUTTON", L"", BS_AUTOCHECKBOX | WS_TABSTOP,
+                                  id++);
+                break;
+            case SettingField::Number:
+                f.control =
+                    child(L"EDIT", L"", ES_NUMBER | ES_AUTOHSCROLL | WS_TABSTOP,
+                          id++, WS_EX_CLIENTEDGE);
+                break;
+            default:
+                f.control = child(L"EDIT", L"", ES_AUTOHSCROLL | WS_TABSTOP,
+                                  id++, WS_EX_CLIENTEDGE);
+        }
+        if (f.kind == SettingField::Color) {
+            f.swatch = child(L"BUTTON", L"", BS_OWNERDRAW | WS_TABSTOP, id++);
+        }
+    }
+    w.status = child(L"STATIC", L"", SS_LEFT | SS_NOPREFIX, 0);
+    w.save =
+        child(L"BUTTON", L"Save", BS_DEFPUSHBUTTON | WS_TABSTOP, kSaveButton);
+    w.close =
+        child(L"BUTTON", L"Close", BS_PUSHBUTTON | WS_TABSTOP, kCloseButton);
+
+    // Centered on the monitor the grid was on.
+    POINT cursor;
+    GetCursorPos(&cursor);
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST), &mi);
+    SetWindowPos(hwnd, nullptr, mi.rcWork.left, mi.rcWork.top, 0, 0,
+                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    LayoutSettingsWindow(w, GetDpiForWindow(hwnd));
+    RECT r;
+    GetWindowRect(hwnd, &r);
+    SetWindowPos(hwnd, nullptr,
+                 (mi.rcWork.left + mi.rcWork.right - (r.right - r.left)) / 2,
+                 (mi.rcWork.top + mi.rcWork.bottom - (r.bottom - r.top)) / 2, 0,
+                 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    ThemeSettingsWindow(w);
+    LoadSettingFields(w);
+    g_settingsWnd = hwnd;
+    if (g_settingsStop) {
+        DestroyWindow(hwnd);
+    } else {
+        ShowWindow(hwnd, SW_SHOW);
+        ForceForeground(hwnd);
+    }
+
+    MSG msg;
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        if (!IsDialogMessageW(hwnd, &msg)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
+    DeleteObject(w.font);
+    DeleteObject(w.bold);
+    DeleteObject(w.background);
+    DeleteObject(w.input);
+    UnregisterClassW(kSettingsClass, instance);
+    return 0;
+}
+
+void OpenSettingsWindow() {
+    if (HWND hwnd = g_settingsWnd) {
+        PostMessageW(hwnd, WM_APP_SETTINGS_ACTIVATE, 0, 0);
+        return;
+    }
+    if (g_settingsThread) {
+        if (WaitForSingleObject(g_settingsThread, 0) == WAIT_TIMEOUT) {
+            return;
+        }
+        CloseHandle(g_settingsThread);
+    }
+    g_settingsStop = false;
+    g_settingsThread =
+        CreateThread(nullptr, 0, SettingsThread, nullptr, 0, nullptr);
+}
+
+void CloseSettingsWindow() {
+    if (!g_settingsThread) {
+        return;
+    }
+    g_settingsStop = true;
+    while (WaitForSingleObject(g_settingsThread, 100) == WAIT_TIMEOUT) {
+        if (HWND hwnd = g_settingsWnd) {
+            PostMessageW(hwnd, WM_CLOSE, 0, 0);
+        }
+    }
+    CloseHandle(g_settingsThread);
+    g_settingsThread = nullptr;
+}
+
+// The "..." menu.
 void ShowOptionsMenu(HWND hwnd) {
     enum { kOpenSettings = 1 };
     HMENU menu = CreatePopupMenu();
@@ -1968,9 +2603,7 @@ void ShowOptionsMenu(HWND hwnd) {
     DestroyMenu(menu);
     if (command == kOpenSettings) {
         HideNow();
-        AllowSetForegroundWindow(ASFW_ANY);
-        ShellExecuteW(nullptr, L"open", L"windhawk://mods/" WH_MOD_ID, nullptr,
-                      nullptr, SW_SHOWNORMAL);
+        OpenSettingsWindow();
     }
 }
 
@@ -2643,6 +3276,7 @@ BOOL Wh_ModInit() {
 void Wh_ModUninit() {
     Wh_Log(L">");
 
+    CloseSettingsWindow();
     if (!g_thread) {
         return;
     }
@@ -2670,5 +3304,8 @@ void Wh_ModSettingsChanged() {
 
     if (HWND wnd = g_wnd) {
         PostMessageW(wnd, WM_APP_RELOAD, 0, 0);
+    }
+    if (HWND wnd = g_settingsWnd) {
+        PostMessageW(wnd, WM_APP_SETTINGS_RELOAD, 0, 0);
     }
 }
