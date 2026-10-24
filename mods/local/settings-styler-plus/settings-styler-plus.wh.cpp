@@ -2,14 +2,15 @@
 // @id              settings-styler-plus
 // @name            Settings Styler Plus
 // @description     Themes for the Windows Settings app, plus the normal title bar and a blur that stays when unfocused
-// @version         1.2.0
+// @version         1.3.0
 // @author          DavidHiFi, m417z
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         SystemSettings.exe
+// @include         ApplicationFrameHost.exe
 // @architecture    x86-64
-// @compilerOptions -lcomctl32 -lole32 -loleaut32 -lruntimeobject
+// @compilerOptions -lcomctl32 -ldwmapi -lole32 -loleaut32 -lpropsys -lruntimeobject -lshell32
 // ==/WindhawkMod==
 
 // Source code is published under The GNU General Public License v3.0.
@@ -34,9 +35,10 @@ more switches.
 
 ## What's new in Plus
 
-- **Normal title bar.** Show the regular Windows title bar with its own
-  minimize, maximize and close buttons instead of the one Settings draws
-  itself.
+- **Normal title bar.** Give Settings a real Windows title bar, the same one
+  desktop apps get. The minimize, maximize and close buttons come from your
+  Windows theme, including custom themes, and see-through themes show their
+  blur behind the title bar too. Other Store apps keep their own title bar.
 - **Blur stays when you click away.** See-through themes like Translucent
   Settings11 keep their blur when Settings is in the background, instead of
   turning flat gray.
@@ -112,8 +114,9 @@ changes by [DavidHiFi](https://github.com/DavidHiFi). GPL-3.0 license.
 - nativeTitleBar: false
   $name: Normal title bar
   $description: >-
-    Show the regular Windows title bar instead of the one Settings draws
-    itself. Close and reopen Settings if the change doesn't show right away.
+    Give Settings a real Windows title bar with the caption buttons from your
+    Windows theme. Applies to Settings windows opened after you turn it on;
+    if Settings still shows its old title bar, close it and open it again.
 - keepBlurWhenUnfocused: true
   $name: Keep the blur when Settings isn't focused
   $description: >-
@@ -2617,15 +2620,9 @@ const Theme g_themeOLED_variant_SystemAscent = {{
 
 std::atomic<DWORD> g_targetThreadId = 0;
 
-// Plus settings.
-bool g_nativeTitleBar;
+// Plus settings. The native title bar lives in the frame host process (see
+// frame_host below).
 bool g_keepBlurWhenUnfocused;
-// Set when the mod turned the custom title bar off, so it can be restored.
-bool g_titleBarChanged;
-UINT_PTR g_titleBarTimer;
-int g_titleBarTimerTicks;
-winrt::Windows::Foundation::IReference<winrt::Windows::UI::Color>
-    g_savedButtonBackground, g_savedButtonInactiveBackground;
 
 void ApplyCustomizations(InstanceHandle handle,
                          winrt::Windows::UI::Xaml::FrameworkElement element,
@@ -9371,73 +9368,7 @@ void UninitializeSettingsAndTap() {
 
     UninitializeResourceVariables();
 
-    if (g_titleBarTimer) {
-        KillTimer(nullptr, g_titleBarTimer);
-        g_titleBarTimer = 0;
-    }
-
-    if (g_titleBarChanged) {
-        g_titleBarChanged = false;
-        try {
-            winrt::Windows::ApplicationModel::Core::CoreApplication::
-                GetCurrentView()
-                    .TitleBar()
-                    .ExtendViewIntoTitleBar(true);
-            auto buttons = winrt::Windows::UI::ViewManagement::ApplicationView::
-                               GetForCurrentView()
-                                   .TitleBar();
-            buttons.ButtonBackgroundColor(g_savedButtonBackground);
-            buttons.ButtonInactiveBackgroundColor(
-                g_savedButtonInactiveBackground);
-        } catch (winrt::hresult_error const& ex) {
-            Wh_Log(L"Error %08X: %s", ex.code(), ex.message().c_str());
-        }
-    }
-
     g_targetThreadId = 0;
-}
-
-// The view isn't ready while its core window is being created, and the app
-// extends its title bar during startup. So check from a thread timer for the
-// first few seconds instead of touching the view right away.
-void CALLBACK TitleBarTimerProc(HWND, UINT, UINT_PTR, DWORD) {
-    if (++g_titleBarTimerTicks >= 20) {
-        KillTimer(nullptr, g_titleBarTimer);
-        g_titleBarTimer = 0;
-    }
-
-    try {
-        auto titleBar = winrt::Windows::ApplicationModel::Core::
-                            CoreApplication::GetCurrentView()
-                                .TitleBar();
-        if (titleBar.ExtendViewIntoTitleBar()) {
-            titleBar.ExtendViewIntoTitleBar(false);
-            g_titleBarChanged = true;
-            Wh_Log(L"Switched to the native title bar");
-
-            // The app makes the caption buttons transparent for its own bar,
-            // which shows as a white block on the native one.
-            auto buttons = winrt::Windows::UI::ViewManagement::ApplicationView::
-                               GetForCurrentView()
-                                   .TitleBar();
-            g_savedButtonBackground = buttons.ButtonBackgroundColor();
-            g_savedButtonInactiveBackground =
-                buttons.ButtonInactiveBackgroundColor();
-            buttons.ButtonBackgroundColor(nullptr);
-            buttons.ButtonInactiveBackgroundColor(nullptr);
-        }
-    } catch (winrt::hresult_error const& ex) {
-        Wh_Log(L"Error %08X: %s", ex.code(), ex.message().c_str());
-    }
-}
-
-void ApplyNativeTitleBar() {
-    if (!g_nativeTitleBar || g_titleBarTimer) {
-        return;
-    }
-
-    g_titleBarTimerTicks = 0;
-    g_titleBarTimer = SetTimer(nullptr, 0, 250, TitleBarTimerProc);
 }
 
 void InitializeSettingsAndTap() {
@@ -9447,11 +9378,9 @@ void InitializeSettingsAndTap() {
         return;
     }
 
-    g_nativeTitleBar = Wh_GetIntSetting(L"nativeTitleBar");
     g_keepBlurWhenUnfocused = Wh_GetIntSetting(L"keepBlurWhenUnfocused");
 
     ProcessAllStylesFromSettings();
-    ApplyNativeTitleBar();
 
     HRESULT hr = InjectWindhawkTAP();
     if (FAILED(hr)) {
@@ -9825,8 +9754,550 @@ void StopStatsTimer() {
     }
 }
 
+// ---- Native title bar (runs in ApplicationFrameHost.exe) ----
+//
+// Settings lives in a frame window owned by ApplicationFrameHost. The frame
+// host builds those frames ahead of time, before it knows which app will use
+// them, so every new frame's title bar window is held back. Once the frame's
+// app id is known, a Settings frame becomes a normal captioned window: DWM
+// draws the caption buttons from the system theme and the app's backdrop shows
+// through. Any other app gets its held-back title bar window created as usual.
+
+#include <windhawk_utils.h>
+
+#include <dwmapi.h>
+#include <propsys.h>
+#include <shlobj.h>
+#include <windowsx.h>
+
+#ifndef WM_POPUPSYSTEMMENU
+#define WM_POPUPSYSTEMMENU 0x0313
+#endif
+
+namespace frame_host {
+
+constexpr WCHAR kNormalWindowProp[] =
+    L"Microsoft.Windows.ShellManagedWindowAsNormalWindow";
+constexpr WCHAR kPressedProp[] = L"SettingsStylerPlus_CaptionPressed";
+
+const PROPERTYKEY kAppUserModelId = {
+    {0x9F4C2855, 0x9F79, 0x4B39, {0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3}},
+    5};
+
+enum class FrameState { Pending, Native, Stock };
+
+struct FrameInfo {
+    FrameState state = FrameState::Pending;
+    void* titleBar = nullptr;  // CTitleBar whose window creation is held back
+    HICON icons[2] = {};       // small, big
+    LONG_PTR style = 0, exStyle = 0;  // before MakeFrameNative
+};
+
+bool g_enabled;
+SRWLOCK g_frameLock = SRWLOCK_INIT;
+std::unordered_map<HWND, FrameInfo> g_frames;
+std::unordered_map<void*, HWND> g_titleBarFrame;
+UINT g_frameCheckMsg;
+UINT g_frameRestoreMsg;
+volatile LONG g_iconJobs;
+
+using CreateTitleBarWindow_t = long(__cdecl*)(void* titleBar);
+CreateTitleBarWindow_t CreateTitleBarWindow_Original;
+using PaintButton_t =
+    long(__cdecl*)(void*, void*, int, int, const RECT*, const RECT*);
+PaintButton_t PaintButton_Original;
+
+bool IsFrameWindow(HWND hWnd) {
+    WCHAR cls[32];
+    return GetClassName(hWnd, cls, ARRAYSIZE(cls)) &&
+           _wcsicmp(cls, L"ApplicationFrameWindow") == 0;
+}
+
+FrameState GetFrameState(HWND hWnd) {
+    AcquireSRWLockShared(&g_frameLock);
+    auto it = g_frames.find(hWnd);
+    FrameState s = it != g_frames.end() ? it->second.state : FrameState::Stock;
+    ReleaseSRWLockShared(&g_frameLock);
+    return s;
+}
+
+// The CTitleBar object keeps its frame's window handle; find it by scanning
+// the object for a handle to one of this process's frame windows.
+HWND FrameOfTitleBar(void* titleBar) {
+    ULONG_PTR buf[0x80] = {};
+    SIZE_T got = 0;
+    ReadProcessMemory(GetCurrentProcess(), titleBar, buf, sizeof(buf), &got);
+    for (size_t i = 0; i < got / sizeof(ULONG_PTR); i++) {
+        HWND h = (HWND)buf[i];
+        if (!buf[i] || (buf[i] >> 32) || !IsWindow(h)) {
+            continue;
+        }
+        DWORD pid = 0;
+        GetWindowThreadProcessId(h, &pid);
+        if (pid == GetCurrentProcessId() && IsFrameWindow(h)) {
+            return h;
+        }
+    }
+    return nullptr;
+}
+
+// Returns true when the frame's app id is known.
+bool GetFrameApp(HWND hWnd, std::wstring* aumid) {
+    IPropertyStore* store = nullptr;
+    if (FAILED(SHGetPropertyStoreForWindow(hWnd, IID_PPV_ARGS(&store)))) {
+        return false;
+    }
+    PROPVARIANT pv;
+    PropVariantInit(&pv);
+    bool known = false;
+    if (SUCCEEDED(store->GetValue(kAppUserModelId, &pv)) &&
+        pv.vt == VT_LPWSTR && pv.pwszVal && *pv.pwszVal) {
+        known = true;
+        *aumid = pv.pwszVal;
+    }
+    PropVariantClear(&pv);
+    store->Release();
+    return known;
+}
+
+// Gives a native frame the icon the Start menu shows for its app.
+DWORD WINAPI IconThread(void* param) {
+    auto* job = (std::pair<HWND, std::wstring>*)param;
+    HWND hWnd = job->first;
+    HICON icons[2] = {};
+    HRESULT co = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    PIDLIST_ABSOLUTE pidl = nullptr;
+    if (SUCCEEDED(SHParseDisplayName(
+            (L"shell:AppsFolder\\" + job->second).c_str(), nullptr, &pidl, 0,
+            nullptr))) {
+        for (int i = 0; i < 2; i++) {
+            SHFILEINFO sfi = {};
+            if (SHGetFileInfo((LPCWSTR)pidl, 0, &sfi, sizeof(sfi),
+                              SHGFI_PIDL | SHGFI_ICON |
+                                  (i ? SHGFI_LARGEICON : SHGFI_SMALLICON))) {
+                icons[i] = sfi.hIcon;
+            }
+        }
+        CoTaskMemFree(pidl);
+    }
+    if (SUCCEEDED(co)) {
+        CoUninitialize();
+    }
+    delete job;
+
+    AcquireSRWLockExclusive(&g_frameLock);
+    auto it = g_frames.find(hWnd);
+    bool keep = it != g_frames.end() &&
+                it->second.state == FrameState::Native &&
+                !it->second.icons[0];
+    if (keep) {
+        it->second.icons[0] = icons[0];
+        it->second.icons[1] = icons[1];
+    }
+    ReleaseSRWLockExclusive(&g_frameLock);
+    if (keep) {
+        DWORD_PTR r;
+        for (int i = 0; i < 2; i++) {
+            if (icons[i]) {
+                SendMessageTimeout(hWnd, WM_SETICON, i ? ICON_BIG : ICON_SMALL,
+                                   (LPARAM)icons[i], SMTO_NORMAL, 2000, &r);
+            }
+        }
+    } else {
+        for (HICON i : icons) {
+            if (i) {
+                DestroyIcon(i);
+            }
+        }
+    }
+    InterlockedDecrement(&g_iconJobs);
+    return 0;
+}
+
+void MakeFrameNative(HWND hWnd, const std::wstring& aumid) {
+    // Without this property DWM treats the frame as immersive and hides the
+    // minimize and maximize buttons (CTopLevelWindow::GetCurrentStyle).
+    SetProp(hWnd, kNormalWindowProp, (HANDLE)1);
+    LONG_PTR style = GetWindowLongPtr(hWnd, GWL_STYLE);
+    SetWindowLongPtr(hWnd, GWL_STYLE, (style & ~WS_POPUP) | WS_OVERLAPPEDWINDOW);
+    LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
+    SetWindowLongPtr(hWnd, GWL_EXSTYLE, exStyle & ~WS_EX_DLGMODALFRAME);
+    AcquireSRWLockExclusive(&g_frameLock);
+    g_frames[hWnd].style = style;
+    g_frames[hWnd].exStyle = exStyle;
+    ReleaseSRWLockExclusive(&g_frameLock);
+
+    // The shell lookup pumps messages, and doing it here stops the app from
+    // attaching to the frame, so it runs on its own thread.
+    auto* job = new std::pair<HWND, std::wstring>(hWnd, aumid);
+    InterlockedIncrement(&g_iconJobs);
+    HANDLE thread = CreateThread(nullptr, 0, IconThread, job, 0, nullptr);
+    if (thread) {
+        CloseHandle(thread);
+    } else {
+        InterlockedDecrement(&g_iconJobs);
+        delete job;
+    }
+
+    SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                     SWP_FRAMECHANGED);
+    Wh_Log(L"Native title bar for %p", hWnd);
+}
+
+// Settles a pending frame once its app is known. Runs on the frame's thread.
+void ResolveFrame(HWND hWnd) {
+    if (GetFrameState(hWnd) != FrameState::Pending) {
+        return;
+    }
+    std::wstring aumid;
+    if (!GetFrameApp(hWnd, &aumid)) {
+        return;
+    }
+    bool isSettings =
+        _wcsnicmp(aumid.c_str(), L"windows.immersivecontrolpanel_", 30) == 0;
+
+    void* titleBar = nullptr;
+    AcquireSRWLockExclusive(&g_frameLock);
+    FrameInfo& info = g_frames[hWnd];
+    info.state = isSettings ? FrameState::Native : FrameState::Stock;
+    if (!isSettings) {
+        titleBar = info.titleBar;
+        info.titleBar = nullptr;  // a native frame keeps it for RestoreFrame
+    }
+    ReleaseSRWLockExclusive(&g_frameLock);
+
+    if (isSettings) {
+        MakeFrameNative(hWnd, aumid);
+    } else if (titleBar) {
+        CreateTitleBarWindow_Original(titleBar);
+    }
+}
+
+// Undoes everything for one frame. Runs on the frame's thread; the frame gets
+// the title bar window it would have had without the mod.
+void RestoreFrame(HWND hWnd) {
+    AcquireSRWLockExclusive(&g_frameLock);
+    FrameInfo info = g_frames[hWnd];
+    g_frames[hWnd].state = FrameState::Stock;
+    g_frames[hWnd].titleBar = nullptr;
+    ReleaseSRWLockExclusive(&g_frameLock);
+
+    if (info.state == FrameState::Native) {
+        RemoveProp(hWnd, kNormalWindowProp);
+        RemoveProp(hWnd, kPressedProp);
+        SendMessage(hWnd, WM_SETICON, ICON_SMALL, 0);
+        SendMessage(hWnd, WM_SETICON, ICON_BIG, 0);
+        SetWindowLongPtr(hWnd, GWL_STYLE, info.style);
+        SetWindowLongPtr(hWnd, GWL_EXSTYLE, info.exStyle);
+        SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                         SWP_FRAMECHANGED);
+    }
+    if (info.titleBar) {
+        CreateTitleBarWindow_Original(info.titleBar);
+        // The frame host shows its title bar when the caption is activated,
+        // then the real state is sent again.
+        SendMessage(hWnd, WM_NCACTIVATE, TRUE, 0);
+        if (GetForegroundWindow() != hWnd) {
+            SendMessage(hWnd, WM_NCACTIVATE, FALSE, 0);
+        }
+    }
+}
+
+LRESULT CaptionHitTest(HWND hWnd, LPARAM lParam) {
+    // DWM draws the buttons at its own size, which DefWindowProc doesn't know
+    // about, so hit-test against the rects DWM reports.
+    TITLEBARINFOEX ti = {sizeof(ti)};
+    DefWindowProc(hWnd, WM_GETTITLEBARINFOEX, 0, (LPARAM)&ti);
+    POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+    static const int kIndex[] = {2, 3, 5};
+    static const LRESULT kHit[] = {HTMINBUTTON, HTMAXBUTTON, HTCLOSE};
+    for (int k = 0; k < 3; k++) {
+        if (!(ti.rgstate[kIndex[k]] & STATE_SYSTEM_INVISIBLE) &&
+            PtInRect(&ti.rgrect[kIndex[k]], pt)) {
+            return kHit[k];
+        }
+    }
+    return HTNOWHERE;
+}
+
+LRESULT CALLBACK FrameSubclassProc(HWND hWnd,
+                                   UINT uMsg,
+                                   WPARAM wParam,
+                                   LPARAM lParam,
+                                   DWORD_PTR) {
+    if (uMsg == WM_NCDESTROY || (uMsg == g_frameRestoreMsg && uMsg)) {
+        if (uMsg != WM_NCDESTROY) {
+            RestoreFrame(hWnd);
+        }
+        AcquireSRWLockExclusive(&g_frameLock);
+        auto it = g_frames.find(hWnd);
+        if (it != g_frames.end()) {
+            for (HICON i : it->second.icons) {
+                if (i) {
+                    DestroyIcon(i);
+                }
+            }
+            g_frames.erase(it);
+        }
+        for (auto t = g_titleBarFrame.begin(); t != g_titleBarFrame.end();) {
+            t = t->second == hWnd ? g_titleBarFrame.erase(t) : std::next(t);
+        }
+        ReleaseSRWLockExclusive(&g_frameLock);
+        WindhawkUtils::RemoveWindowSubclassFromAnyThread(hWnd,
+                                                         FrameSubclassProc);
+        return uMsg == WM_NCDESTROY
+                   ? DefSubclassProc(hWnd, uMsg, wParam, lParam)
+                   : 0;
+    }
+
+    FrameState state = GetFrameState(hWnd);
+    if (state == FrameState::Pending) {
+        LRESULT r = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        if (uMsg == g_frameCheckMsg || uMsg == WM_SETTEXT ||
+            uMsg == WM_SHOWWINDOW || uMsg == WM_ACTIVATE ||
+            uMsg == WM_WINDOWPOSCHANGED) {
+            ResolveFrame(hWnd);
+        }
+        return r;
+    }
+    if (state != FrameState::Native) {
+        return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+    }
+
+    switch (uMsg) {
+        // The frame host's own handling of these assumes its custom title bar.
+        case WM_NCRBUTTONDOWN:
+        case WM_NCRBUTTONUP:
+        case WM_NCLBUTTONDBLCLK:
+        case WM_POPUPSYSTEMMENU:
+        case WM_SYSCOMMAND:
+        case WM_NCPAINT:
+        case WM_NCCALCSIZE:
+            return DefWindowProc(hWnd, uMsg, wParam, lParam);
+
+        case WM_NCHITTEST: {
+            LRESULT hit = CaptionHitTest(hWnd, lParam);
+            return hit != HTNOWHERE
+                       ? hit
+                       : DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        }
+
+        case WM_NCLBUTTONDOWN:
+        case WM_NCLBUTTONUP:
+            if (wParam == HTMINBUTTON || wParam == HTMAXBUTTON ||
+                wParam == HTCLOSE) {
+                if (uMsg == WM_NCLBUTTONDOWN) {
+                    SetProp(hWnd, kPressedProp, (HANDLE)wParam);
+                } else if ((WPARAM)RemoveProp(hWnd, kPressedProp) == wParam) {
+                    WPARAM command = wParam == HTCLOSE       ? SC_CLOSE
+                                     : wParam == HTMINBUTTON ? SC_MINIMIZE
+                                     : IsZoomed(hWnd)        ? SC_RESTORE
+                                                             : SC_MAXIMIZE;
+                    PostMessage(hWnd, WM_SYSCOMMAND, command, lParam);
+                }
+                return 0;
+            }
+            break;
+    }
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
+long __cdecl CreateTitleBarWindow_Hook(void* titleBar) {
+    HWND frame = FrameOfTitleBar(titleBar);
+    if (frame) {
+        AcquireSRWLockExclusive(&g_frameLock);
+        auto it = g_frames.find(frame);
+        bool hold =
+            it != g_frames.end() && it->second.state == FrameState::Pending;
+        if (hold) {
+            it->second.titleBar = titleBar;
+            g_titleBarFrame[titleBar] = frame;
+        }
+        ReleaseSRWLockExclusive(&g_frameLock);
+        if (hold) {
+            PostMessage(frame, g_frameCheckMsg, 0, 0);
+            return 0;
+        }
+    }
+    return CreateTitleBarWindow_Original(titleBar);
+}
+
+long __cdecl PaintButton_Hook(void* titleBar,
+                              void* surface,
+                              int control,
+                              int type,
+                              const RECT* a,
+                              const RECT* b) {
+    AcquireSRWLockShared(&g_frameLock);
+    auto it = g_titleBarFrame.find(titleBar);
+    HWND frame = it != g_titleBarFrame.end() ? it->second : nullptr;
+    ReleaseSRWLockShared(&g_frameLock);
+    if (frame && GetFrameState(frame) != FrameState::Stock) {
+        return 0;
+    }
+    return PaintButton_Original(titleBar, surface, control, type, a, b);
+}
+
+using CreateWindowInBandEx_t = HWND(WINAPI*)(DWORD,
+                                             LPCWSTR,
+                                             LPCWSTR,
+                                             DWORD,
+                                             int,
+                                             int,
+                                             int,
+                                             int,
+                                             HWND,
+                                             HMENU,
+                                             HINSTANCE,
+                                             LPVOID,
+                                             DWORD,
+                                             DWORD);
+CreateWindowInBandEx_t CreateWindowInBandEx_Original;
+HWND WINAPI CreateWindowInBandEx_Hook(DWORD exStyle,
+                                      LPCWSTR className,
+                                      LPCWSTR windowName,
+                                      DWORD style,
+                                      int x,
+                                      int y,
+                                      int width,
+                                      int height,
+                                      HWND parent,
+                                      HMENU menu,
+                                      HINSTANCE instance,
+                                      LPVOID param,
+                                      DWORD band,
+                                      DWORD typeFlags) {
+    bool frame = g_enabled && !IS_INTRESOURCE(className) &&
+                 _wcsicmp(className, L"ApplicationFrameWindow") == 0;
+    if (frame) {
+        // A redirection bitmap can only be chosen at creation, and the native
+        // caption needs one, so every frame gets it.
+        exStyle &= ~WS_EX_NOREDIRECTIONBITMAP;
+    }
+    HWND hWnd = CreateWindowInBandEx_Original(
+        exStyle, className, windowName, style, x, y, width, height, parent,
+        menu, instance, param, band, typeFlags);
+    if (hWnd && frame) {
+        AcquireSRWLockExclusive(&g_frameLock);
+        g_frames[hWnd] = FrameInfo{};
+        ReleaseSRWLockExclusive(&g_frameLock);
+        WindhawkUtils::SetWindowSubclassFromAnyThread(hWnd, FrameSubclassProc,
+                                                      0);
+    }
+    return hWnd;
+}
+
+using DwmExtendFrameIntoClientArea_t = HRESULT(WINAPI*)(HWND, const MARGINS*);
+DwmExtendFrameIntoClientArea_t DwmExtendFrameIntoClientArea_Original;
+HRESULT WINAPI DwmExtendFrameIntoClientArea_Hook(HWND hWnd,
+                                                 const MARGINS* margins) {
+    // The frame host extends the frame over its custom title bar, which would
+    // hide the native caption.
+    if (GetFrameState(hWnd) == FrameState::Native) {
+        return 0x80263001;  // DWM_E_COMPOSITIONDISABLED
+    }
+    return DwmExtendFrameIntoClientArea_Original(hWnd, margins);
+}
+
+using DwmSetWindowAttribute_t = HRESULT(WINAPI*)(HWND, DWORD, LPCVOID, DWORD);
+DwmSetWindowAttribute_t DwmSetWindowAttribute_Original;
+HRESULT WINAPI DwmSetWindowAttribute_Hook(HWND hWnd,
+                                          DWORD attribute,
+                                          LPCVOID value,
+                                          DWORD size) {
+    // Other mods paint a solid caption color; keep the caption see-through.
+    if (attribute == DWMWA_CAPTION_COLOR &&
+        GetFrameState(hWnd) == FrameState::Native) {
+        return S_OK;
+    }
+    return DwmSetWindowAttribute_Original(hWnd, attribute, value, size);
+}
+
+void RestoreAllFrames() {
+    for (int i = 0; i < 100 && g_iconJobs; i++) {
+        Sleep(50);
+    }
+    std::vector<HWND> frames;
+    AcquireSRWLockShared(&g_frameLock);
+    for (auto& f : g_frames) {
+        frames.push_back(f.first);
+    }
+    ReleaseSRWLockShared(&g_frameLock);
+    for (HWND hWnd : frames) {
+        DWORD_PTR r;
+        SendMessageTimeout(hWnd, g_frameRestoreMsg, 0, 0, SMTO_NORMAL, 2000,
+                           &r);
+    }
+}
+
+BOOL Init() {
+    g_enabled = Wh_GetIntSetting(L"nativeTitleBar");
+    g_frameCheckMsg = RegisterWindowMessage(L"SettingsStylerPlus_CheckFrame");
+    g_frameRestoreMsg =
+        RegisterWindowMessage(L"SettingsStylerPlus_RestoreFrame");
+
+    WindhawkUtils::SYMBOL_HOOK hooks[] = {
+        {{L"private: long __cdecl CTitleBar::_CreateTitleBarWindow(void)"},
+         (void**)&CreateTitleBarWindow_Original,
+         (void*)CreateTitleBarWindow_Hook},
+        {{L"private: long __cdecl CTitleBar::_PaintButton(struct "
+          L"IDCompositionSurface *,enum CTitleBar::TitleBarControl,enum "
+          L"TITLE_BAR_BITMAP_TYPE,struct tagRECT const &,struct tagRECT const "
+          L"&)"},
+         (void**)&PaintButton_Original,
+         (void*)PaintButton_Hook},
+    };
+    HMODULE frameModule = LoadLibraryEx(L"ApplicationFrame.dll", nullptr,
+                                        LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!frameModule ||
+        !WindhawkUtils::HookSymbols(frameModule, hooks, ARRAYSIZE(hooks))) {
+        Wh_Log(L"Failed to hook ApplicationFrame.dll");
+        return FALSE;
+    }
+
+    HMODULE user32Module =
+        LoadLibraryEx(L"user32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    Wh_SetFunctionHook(
+        (void*)GetProcAddress(user32Module, "CreateWindowInBandEx"),
+        (void*)CreateWindowInBandEx_Hook,
+        (void**)&CreateWindowInBandEx_Original);
+    Wh_SetFunctionHook((void*)DwmExtendFrameIntoClientArea,
+                       (void*)DwmExtendFrameIntoClientArea_Hook,
+                       (void**)&DwmExtendFrameIntoClientArea_Original);
+    Wh_SetFunctionHook((void*)DwmSetWindowAttribute,
+                       (void*)DwmSetWindowAttribute_Hook,
+                       (void**)&DwmSetWindowAttribute_Original);
+    return TRUE;
+}
+
+void SettingsChanged() {
+    bool enabled = Wh_GetIntSetting(L"nativeTitleBar");
+    if (g_enabled && !enabled) {
+        g_enabled = false;
+        RestoreAllFrames();
+    }
+    // Turning it on applies to Settings windows opened from now on.
+    g_enabled = enabled;
+}
+
+}  // namespace frame_host
+
+bool g_isFrameHost;
+
 BOOL Wh_ModInit() {
     Wh_Log(L">");
+
+    WCHAR exePath[MAX_PATH];
+    GetModuleFileName(nullptr, exePath, ARRAYSIZE(exePath));
+    PCWSTR exeName = wcsrchr(exePath, L'\\');
+    g_isFrameHost =
+        _wcsicmp(exeName ? exeName + 1 : exePath, L"ApplicationFrameHost.exe") ==
+        0;
+    if (g_isFrameHost) {
+        return frame_host::Init();
+    }
 
     HMODULE user32Module =
         LoadLibraryEx(L"user32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
@@ -9856,6 +10327,10 @@ BOOL Wh_ModInit() {
 void Wh_ModAfterInit() {
     Wh_Log(L">");
 
+    if (g_isFrameHost) {
+        return;
+    }
+
     HWND hCoreWnd = GetCoreWnd();
     if (hCoreWnd) {
         Wh_Log(L"Initializing - Found core window");
@@ -9864,8 +10339,22 @@ void Wh_ModAfterInit() {
     }
 }
 
+void Wh_ModBeforeUninit() {
+    Wh_Log(L">");
+
+    // While the hooks are still in place, since restoring a frame calls the
+    // original title bar function.
+    if (g_isFrameHost) {
+        frame_host::RestoreAllFrames();
+    }
+}
+
 void Wh_ModUninit() {
     Wh_Log(L">");
+
+    if (g_isFrameHost) {
+        return;
+    }
 
     StopStatsTimer();
 
@@ -9888,6 +10377,11 @@ void Wh_ModUninit() {
 
 void Wh_ModSettingsChanged() {
     Wh_Log(L">");
+
+    if (g_isFrameHost) {
+        frame_host::SettingsChanged();
+        return;
+    }
 
     if (g_visualTreeWatcher) {
         g_visualTreeWatcher->UnadviseVisualTreeChange();
