@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.68
+// @version         2.0.69
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -450,6 +450,25 @@ static std::string BuildCss(const Settings& s) {
             Settings floating = s;
             floating.cardOpacity = s.cardOpacity < 92 ? 92 : s.cardOpacity;
             css += std::string(kFloatingSurfaces) + "{background-color:" + CssCardColor(floating) + " !important;backdrop-filter:blur(16px) !important;}";
+            // The save bar gets a true blur: the settings scroller paints an
+            // opaque rounded patch exactly under the bar (12px inset, 56px
+            // tall, 16px radius), pinned to the viewport, so the rows that
+            // scroll past it have an opaque backdrop and blur. The bar then
+            // keeps the normal card opacity. The geometry comes from the bar
+            // placement rules in the accent block, so it needs an accent.
+            if (!s.accent.empty()) {
+                Settings solid = s;
+                solid.cardOpacity = 100;
+                const std::string c = CssCardColor(solid);
+                const std::string rect = "linear-gradient(" + c + "," + c + ")";
+                const std::string dot = "radial-gradient(circle 16px at 16px 16px," + c + " 15.5px,transparent 16px)";
+                css += ".ant-card-body.wh-cscroll-host:has([class*=\"SaveSettingsCard\"]){background:"
+                       + rect + " left 28px top 12px/calc(100% - 56px) 56px no-repeat,"
+                       + rect + " left 12px top 28px/calc(100% - 24px) 24px no-repeat,"
+                       + dot + " left 12px top 12px/32px 32px no-repeat," + dot + " right 12px top 12px/32px 32px no-repeat,"
+                       + dot + " left 12px top 36px/32px 32px no-repeat," + dot + " right 12px top 36px/32px 32px no-repeat !important;}";
+                css += "[class*=\"SaveSettingsCard\"]{background-color:" + cardColor + " !important;}";
+            }
         }
     }
     if (!s.control.empty()) {
