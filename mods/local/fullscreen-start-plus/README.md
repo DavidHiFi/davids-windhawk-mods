@@ -36,6 +36,7 @@ of the macOS Launchpad, with instant search and a blurred background.
 | Esc | Clear the search, or close when the search is empty |
 | Mouse wheel, Page Up, Page Down | Scroll, or flip pages |
 | Sideways scroll, page dots | Flip pages |
+| The ... button, top right | Open this mod's settings in Windhawk |
 
 Clicking outside the icons or switching to another window closes it.
 

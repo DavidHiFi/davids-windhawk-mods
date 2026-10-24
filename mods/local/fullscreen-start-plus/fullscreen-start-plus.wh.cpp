@@ -51,6 +51,7 @@ of the macOS Launchpad, with instant search and a blurred background.
 | Esc | Clear the search, or close when the search is empty |
 | Mouse wheel, Page Up, Page Down | Scroll, or flip pages |
 | Sideways scroll, page dots | Flip pages |
+| The ... button, top right | Open this mod's settings in Windhawk |
 
 Clicking outside the icons or switching to another window closes it.
 
@@ -1354,6 +1355,7 @@ struct Layout {
     int perPage = 1, pages = 1;  // With the pages layout.
     float dotsY = 0;             // Center of the page dots.
     D2D1_RECT_F search{};
+    D2D1_RECT_F menuButton{};  // The "..." button, top right.
 };
 
 Layout g_layout;
@@ -1421,6 +1423,9 @@ void ComputeLayout() {
     L.cellPad = std::round(6 * s);
     L.cellHeight = std::round(L.icon + L.labelHeight + 46 * s);
     L.viewTop = L.search.bottom + std::round(28 * s);
+    float button = std::round(36 * s), margin = std::round(24 * s);
+    L.menuButton = D2D1::RectF(W - margin - button, searchTop, W - margin,
+                               searchTop + button);
 
     float side = std::max(48 * s, W * 0.07f);
     float available = std::max(L.icon * 2, W - 2 * side);
@@ -1548,10 +1553,26 @@ bool g_frameTimer;
 int g_hover = -1, g_selected = -1, g_pressed = -1;
 bool g_pressedEmpty;
 bool g_trackingMouse;
+bool g_menuHover;
 
 float Ease(float t) {
     t = std::clamp(t, 0.0f, 1.0f);
     return 1 - (1 - t) * (1 - t) * (1 - t);
+}
+
+void DrawMenuButton() {
+    const D2D1_RECT_F& r = g_layout.menuButton;
+    float s = g_layout.scale;
+    if (g_menuHover) {
+        Fill(r, D2D1::ColorF(1, 1, 1, 0.14f), (r.bottom - r.top) / 2);
+    }
+    float cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    g_brush->SetColor(D2D1::ColorF(1, 1, 1, g_menuHover ? 0.95f : 0.75f));
+    for (int i = -1; i <= 1; i++) {
+        g_target->FillEllipse(
+            D2D1::Ellipse(D2D1::Point2F(cx + i * 6 * s, cy), 1.8f * s, 1.8f * s),
+            g_brush.Get());
+    }
 }
 
 void DrawSearchBox() {
@@ -1750,6 +1771,7 @@ void Render() {
     g_target->SetTransform(
         D2D1::Matrix3x2F::Scale(zoom, zoom, D2D1::Point2F(W / 2, H / 2)));
     DrawSearchBox();
+    DrawMenuButton();
     DrawGrid();
     g_target->SetTransform(D2D1::Matrix3x2F::Identity());
 
@@ -1930,6 +1952,26 @@ void LaunchApp(int index) {
     AllowSetForegroundWindow(ASFW_ANY);
     ShellExecuteExW(&sei);
     Close();
+}
+
+// The "..." menu. Windhawk's mod link opens this mod's page, on the tab that
+// was open last.
+void ShowOptionsMenu(HWND hwnd) {
+    enum { kOpenSettings = 1 };
+    HMENU menu = CreatePopupMenu();
+    AppendMenuW(menu, MF_STRING, kOpenSettings, L"Open settings");
+    const RECT& a = g_layout.area;
+    const D2D1_RECT_F& r = g_layout.menuButton;
+    int command = TrackPopupMenuEx(
+        menu, TPM_RETURNCMD | TPM_RIGHTALIGN | TPM_TOPALIGN | TPM_NONOTIFY,
+        a.left + (int)r.right, a.top + (int)r.bottom + 4, hwnd, nullptr);
+    DestroyMenu(menu);
+    if (command == kOpenSettings) {
+        HideNow();
+        AllowSetForegroundWindow(ASFW_ANY);
+        ShellExecuteW(nullptr, L"open", L"windhawk://mods/" WH_MOD_ID, nullptr,
+                      nullptr, SW_SHOWNORMAL);
+    }
 }
 
 void EnsureVisible(int index) {
@@ -2323,9 +2365,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
                 g_trackingMouse = TrackMouseEvent(&tme);
             }
-            int hover = ItemAt(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
-            if (hover != g_hover) {
+            int x = GET_X_LPARAM(lParam), y = GET_Y_LPARAM(lParam);
+            int hover = ItemAt(x, y);
+            bool menuHover = InRect(g_layout.menuButton, (float)x, (float)y);
+            if (hover != g_hover || menuHover != g_menuHover) {
                 g_hover = hover;
+                g_menuHover = menuHover;
                 Render();
             }
             return 0;
@@ -2333,14 +2378,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_MOUSELEAVE:
             g_trackingMouse = false;
-            if (g_hover >= 0) {
+            if (g_hover >= 0 || g_menuHover) {
                 g_hover = -1;
+                g_menuHover = false;
                 Render();
             }
             return 0;
 
         case WM_LBUTTONDOWN: {
             int x = GET_X_LPARAM(lParam), y = GET_Y_LPARAM(lParam);
+            if (InRect(g_layout.menuButton, (float)x, (float)y)) {
+                ShowOptionsMenu(hwnd);
+                return 0;
+            }
             int dot = PageDotAt(x, y);
             if (dot >= 0) {
                 g_scrollTarget = dot * (float)g_layout.width;
