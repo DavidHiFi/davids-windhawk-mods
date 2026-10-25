@@ -602,7 +602,7 @@
       "name": "Shell Font Changer Plus",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.3.0",
+      "version": "1.3.3",
       "license": "MIT",
       "origin": "local",
       "upstream": "https://windhawk.net/mods/explorer-font-changer",
@@ -691,6 +691,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/windhawk-styler/windhawk-styler.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@window-borders",
+      "name": "Window Borders",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/window-borders/window-borders.wh.cpp",
       "enabled": true
     },
     {
