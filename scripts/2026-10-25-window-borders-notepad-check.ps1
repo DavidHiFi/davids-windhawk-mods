@@ -11,6 +11,15 @@ public static class W {
   [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
   [DllImport("user32.dll")] public static extern IntPtr FindWindow(string c, string n);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr p);
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool f);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern bool GetCursorPos(out P p);
+  [StructLayout(LayoutKind.Sequential)] public struct P { public int X, Y; }
+  [DllImport("user32.dll")] public static extern void mouse_event(uint f, int x, int y, uint d, UIntPtr e);
 }
 '@
 [W]::SetProcessDPIAware() | Out-Null
@@ -24,8 +33,19 @@ for ($i = 0; $i -lt 40 -and -not $p; $i++) {
 if (-not $p) { 'NO NOTEPAD WINDOW'; exit 1 }
 $h = $p.MainWindowHandle
 [W]::SetWindowPos($h, [IntPtr]::Zero, 300, 200, 900, 560, 0x40) | Out-Null
-[W]::SetForegroundWindow($h) | Out-Null
-Start-Sleep 2
+# Raise it above any topmost window, then borrow the foreground thread's input queue so focus is allowed.
+[W]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x43) | Out-Null
+$fg = [W]::GetWindowThreadProcessId([W]::GetForegroundWindow(), [IntPtr]::Zero); $me = [W]::GetCurrentThreadId()
+[W]::AttachThreadInput($me, $fg, $true) | Out-Null; [W]::SetForegroundWindow($h) | Out-Null; [W]::AttachThreadInput($me, $fg, $false) | Out-Null
+Start-Sleep 1
+# Foreground lock can still refuse (seen with an elevated regedit in front). Minimizing the
+# foreground window hands activation to the next window, our topmost Notepad++; it is restored at the end.
+$parked = [IntPtr]::Zero
+if ([W]::GetForegroundWindow() -ne $h) { $parked = [W]::GetForegroundWindow(); [W]::ShowWindow($parked, 6) | Out-Null; Start-Sleep 1 }
+# Last resort: one real click on the title bar always activates; the cursor goes back where it was.
+if ([W]::GetForegroundWindow() -ne $h) { $cp = New-Object W+P; [W]::GetCursorPos([ref]$cp) | Out-Null; [W]::SetCursorPos(500, 214) | Out-Null; [W]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero); [W]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero); [W]::SetCursorPos($cp.X, $cp.Y) | Out-Null; Start-Sleep 1 }
+$fw = [W]::GetForegroundWindow()
+"foreground is notepad: $($fw -eq $h)  (foreground app: $((Get-Process | ? MainWindowHandle -eq $fw).Name))"
 $mods = (Get-Process -Id $p.Id).Modules | Where-Object ModuleName -like '*window-borders*' | ForEach-Object ModuleName
 "pid=$($p.Id) loaded=$($mods -join ',')"
 function Shot($name) {
@@ -41,5 +61,8 @@ Shot 'notepad-focused.png'
 Start-Sleep 1
 Shot 'notepad-unfocused.png'
 Stop-Process -Id $p.Id -Force
+if ($parked -ne [IntPtr]::Zero) { [W]::ShowWindow($parked, 9) | Out-Null }
 "closed notepad"
+
+
 
