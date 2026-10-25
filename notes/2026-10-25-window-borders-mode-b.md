@@ -47,3 +47,7 @@ Next: owner picks a short app list, then one install:
 - First install drew a 1 px square ring: the installer never wrote the `overlay.*` settings and a registry install gets no @settings defaults, so width/radius/fade read as 0. Fixed in `Install-window-borders.ps1` (writes and reads back overlay.width/radius/fadeMs).
 - Recheck (`scripts/2026-10-25-window-borders-notepad-check.ps1`): DLL `local@window-borders_1.0.0_5.dll` loaded in the new Notepad++ process; focused capture shows a 2 px #89B4FA rounded ring, unfocused capture shows none. Proof: `reports/2026-10-25-window-borders-live/notepad-{focused,unfocused}.png`.
 - Rollback: `Install-window-borders.ps1 -Action Rollback -Revision 5`. Widening the app list is the owner's call; keep File Explorer off it.
+
+## Gradient on (owner request, 3:00 PM, measured)
+
+- overlay.style set to gradient (installer default changed too): accent blue to Catppuccin Mocha mauve #cba6f7 at 45 degrees. Ring pixels read 8BB4FA top-left, BEA9F8 right middle, CAA6F7 bottom-right. Proof: reports/2026-10-25-window-borders-live/gradient-corners-zoom.png. Backup: backups/2026-10-25/window-borders/mod-key-before-gradient.reg.
