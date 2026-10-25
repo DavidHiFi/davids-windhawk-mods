@@ -17,6 +17,10 @@ Plan (assumptions decided here, from research report section 5.2):
 
 Status: see bottom.
 
+## Freeze audit — completed (10/25)
+
+40-minute kill-switch watch ended clean at 8:33 AM: samples=2314, avg DwmFlush=5.9 ms, worst=226 ms (single spike, recovered), no freeze, service Running. No single mod implicated — a freeze needs translucent-windows widely loaded together with other window or shell mods. translucent-windows stays Disabled=1.
+
 ## Status 8:10 AM (measured)
 
 - Mode B written in `Windhawk\window-borders\local@window-borders.wh.cpp`; rev 5 builds clean for 64- and 32-bit.
@@ -28,3 +32,18 @@ Status: see bottom.
 
 Next: owner picks a short app list, then one install:
 `Install-window-borders.ps1 -Action Install -Revision 5 -Include 'notepad.exe|...'`
+
+## Settings Styler Plus — 2026-10-25 update (option 1, completed)
+
+- Registry: `local@settings-styler-plus` `IncludeExcludeCustomOnly` set to `0` (reverting freeze-cutback `IncludeCustom` override). `Include` list (`SystemSettings.exe|ApplicationFrameHost.exe`) now active for both processes. `dwm.exe` stays in global `Exclude`; caption buttons mod stays out of DWM.
+- Source (work-settings-styler-plus): 1.3.1 already includes both `@include` targets.
+- PR #21 linked (`link_pull_request`); open, 1.3.0 commit 40ca980 (1.3.1 commit e26f91a is local only).
+- Freeze gate (`scripts/Test-WindhawkFreezeGate.ps1`) not re-run this turn; kill-switch scripts (`scripts/2026-10-25-windhawk-watched-start.ps1`, `freeze12-prestart.ps1`) kept intact.
+- Visual verification of Settings window (one window, blurred title bar + caption buttons, no jump) and freeze re-check: still pending per freeze-safety rule and owner's instruction; change is verified by registry readback (`reg query`).
+
+## Live on Notepad++ (2:35 PM, measured)
+
+- Owner said "continue working" after the two-app offer; took option 1, narrowed. Notepad is not installed on this PC, and File Explorer already carries caption-buttons, title-bar colours, file-explorer-styler and window-manager, so the test app is Notepad++ only (`Include=notepad++.exe`). Freeze gate PASS.
+- First install drew a 1 px square ring: the installer never wrote the `overlay.*` settings and a registry install gets no @settings defaults, so width/radius/fade read as 0. Fixed in `Install-window-borders.ps1` (writes and reads back overlay.width/radius/fadeMs).
+- Recheck (`scripts/2026-10-25-window-borders-notepad-check.ps1`): DLL `local@window-borders_1.0.0_5.dll` loaded in the new Notepad++ process; focused capture shows a 2 px #89B4FA rounded ring, unfocused capture shows none. Proof: `reports/2026-10-25-window-borders-live/notepad-{focused,unfocused}.png`.
+- Rollback: `Install-window-borders.ps1 -Action Rollback -Revision 5`. Widening the app list is the owner's call; keep File Explorer off it.
