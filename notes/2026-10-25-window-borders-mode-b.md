@@ -51,3 +51,8 @@ Next: owner picks a short app list, then one install:
 ## Gradient on (owner request, 3:00 PM, measured)
 
 - overlay.style set to gradient (installer default changed too): accent blue to Catppuccin Mocha mauve #cba6f7 at 45 degrees. Ring pixels read 8BB4FA top-left, BEA9F8 right middle, CAA6F7 bottom-right. Proof: reports/2026-10-25-window-borders-live/gradient-corners-zoom.png. Backup: backups/2026-10-25/window-borders/mod-key-before-gradient.reg.
+
+## Gap closed (owner request, 3:10 PM, measured)
+
+- overlay.offset -1 (installer default too). Ring pixels now touch the window on left, right and top (no 545454 desktop pixel between). Proof: reports/2026-10-25-window-borders-live/tight-corners-zoom.png.
+- Same turn: the rainbow bars on screen were two full-screen H:\System Configuration\work\abdm-backdrop.ps1 windows left open by the ABDM blur thread (12:16 PM and 2:43 PM). Closed at owner's request; that thread was told.
