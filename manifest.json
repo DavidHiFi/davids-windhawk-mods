@@ -694,6 +694,18 @@
       "enabled": true
     },
     {
+      "id": "local@window-borders",
+      "name": "Window Borders",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/window-borders/window-borders.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "local@window-manager",
       "name": "Window Manager",
       "author": "DavidHiFi",
