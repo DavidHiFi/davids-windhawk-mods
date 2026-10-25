@@ -71,3 +71,8 @@ Next: owner picks a short app list, then one install:
 ## Audio apps included (owner, 9:34 PM, measured)
 
 - Owner: a border on an audio app's window is harmless; skipping them made no sense. Base exclude in the installer is now `windhawk-ui.exe|dwm.exe` only; the exclude script reran. DLL measured loaded in Ableton Live 12, StreamDeck and UA Connect. Discord stays excluded through the translucent-windows list. AGENTS.md records the exception.
+
+## Published (owner, 2026-10-26, measured)
+
+- Added to DavidHiFi/davids-windhawk-mods as mods/local/window-borders (1.0.0, GPL-3.0) with README, preview, manifest entry and both README tables. Pushed straight to main; the raw source, preview and folder page all return 200. github-repo-standard check.py: 0 FAIL, 0 WARN.
+- Source header updated first (local copy too, backup in backups/2026-10-25/window-borders/): audio @exclude lines removed, defaults now gradient and offset -1 to match the live setup, readme says every app, Guerra24 link fixed. Comment and metadata only; it compiles (Build-window-borders.ps1, temp revision). The running rev 5 DLL has the same code.
