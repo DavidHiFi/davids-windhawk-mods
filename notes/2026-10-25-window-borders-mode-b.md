@@ -67,3 +67,7 @@ Next: owner picks a short app list, then one install:
 - Screen health: DWM watch 3:30 to 3:41 PM, 653 samples, flush avg 4.1 ms, max 8.6 ms, 0 hung windows (`dwm-watch-allapps.csv`).
 - By design: only the focused window gets a ring; maximized windows get none.
 - Rollback: `Install-window-borders.ps1 -Action Rollback -Revision 5`.
+
+## Audio apps included (owner, 9:34 PM, measured)
+
+- Owner: a border on an audio app's window is harmless; skipping them made no sense. Base exclude in the installer is now `windhawk-ui.exe|dwm.exe` only; the exclude script reran. DLL measured loaded in Ableton Live 12, StreamDeck and UA Connect. Discord stays excluded through the translucent-windows list. AGENTS.md records the exception.
