@@ -1,5 +1,13 @@
 # Release verification
 
+## 2.0.77 to 2.0.82 (2026-10-27)
+
+Checked on Windows 11 with Windhawk 2.0.0 alpha 8 in the live interface through its debugging port, from the installed mod.
+
+- Alpha 8 moved to antd 6, which sets its colours on every control and on `body`. The theme now reaches them: drop-downs use the control colour, and the bar beside a changed setting, tabs, switches and checked radio buttons use the accent.
+- The glow under primary buttons (Disable, Fork, Remove) and the focus ring on text boxes use the accent (`rgba(137, 180, 250, 0.31)` measured with the Mocha blue accent).
+- "Other versions" and the Visual/Textual mode switch use the theme text and control colours.
+
 ## 2.0.73 to 2.0.76 (2026-10-24)
 
 Checked on Windows 11 in the live interface through its debugging port, from the installed mod.

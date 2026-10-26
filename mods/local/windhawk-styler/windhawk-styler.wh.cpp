@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.76
+// @version         2.0.82
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -330,9 +330,9 @@ static std::string JsonEscape(const std::string& in) {
 // Every box that takes the card color. Rounded corners and the card surface
 // apply to this list; the blur applies to kFloatingSurfaces only.
 static const char kSurfaces[] =
-    ".ant-card,[class*=\"SaveSettingsCard\"],.ant-table,.ant-collapse,.ant-modal-content,"
-    ".ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-picker-dropdown,"
-    ".ant-dropdown-menu,.ant-tooltip-inner,.ant-notification-notice,.ant-message-notice-content";
+    ".ant-card,[class*=\"SaveSettingsCard\"],.ant-table,.ant-collapse,.ant-modal-content,.ant-modal-container,"
+    ".ant-drawer-content,.ant-drawer-section,.ant-popover-inner,.ant-popover-container,.ant-select-dropdown,.ant-picker-dropdown,"
+    ".ant-dropdown-menu,.ant-tooltip-inner,.ant-tooltip-container,.ant-notification-notice,.ant-message-notice-content";
 
 // The subset that is static inside its own container, so it can take
 // position:relative for its ring. Pop-ups (select, picker) are already
@@ -344,23 +344,26 @@ static const char kSurfaces[] =
 // blurred card becomes the backdrop root of everything inside it, so the
 // sticky save bar in the mod page card could only blur the card itself.
 static const char kFloatingSurfaces[] =
-    "[class*=\"SaveSettingsCard\"],.ant-modal-content,.ant-drawer-content,.ant-popover-inner,"
-    ".ant-tooltip-inner,.ant-notification-notice,.ant-message-notice-content";
+    "[class*=\"SaveSettingsCard\"],.ant-modal-content,.ant-modal-container,.ant-drawer-content,.ant-drawer-section,.ant-popover-inner,.ant-popover-container,"
+    ".ant-tooltip-inner,.ant-tooltip-container,.ant-notification-notice,.ant-message-notice-content";
 
 // Menus that open over the page are solid, not tinted. In Acrylic mode there
 // is no opaque backdrop for CSS blur to read, so the old tint only imitated one.
 static const char kMenuSurfaces[] = ".ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu";
 
 static const char kRelativeSurfaces[] =
-    ".ant-card:not([class*=\"SaveSettingsCard\"]),.ant-table,.ant-collapse,.ant-modal-content,"
-    ".ant-drawer-content,.ant-popover-inner,.ant-dropdown-menu,.ant-tooltip-inner,"
+    ".ant-card:not([class*=\"SaveSettingsCard\"]),.ant-table,.ant-collapse,.ant-modal-content,.ant-modal-container,"
+    ".ant-drawer-content,.ant-drawer-section,.ant-popover-inner,.ant-popover-container,.ant-dropdown-menu,.ant-tooltip-inner,.ant-tooltip-container,"
     ".ant-notification-notice,.ant-message-notice-content";
 
 static std::string BuildCss(const Settings& s) {
     std::string veil = CssVeil(s);
     const std::string focus = RgbaFromRgb(s.accentRgb, 20);
     std::string css;
-    css += ":root{";
+    // Windhawk alpha 8 runs antd 6, which declares its tokens on every
+    // component (the css-var class) and Windhawk's own on body, so values on
+    // :root alone never reach the controls or the modified-setting bar.
+    css += ":root,body,[class*=\"css-var-\"]{";
     css += "--whui-background-color:" + veil + " !important;";
     std::string cardColor = CssCardColor(s);
     if (!cardColor.empty()) {
@@ -387,6 +390,67 @@ static std::string BuildCss(const Settings& s) {
     if (!s.text.empty()) {
         css += "--whui-text-secondary:" + s.text + " !important;";
         css += "--whui-editor-fg:" + s.text + " !important;";
+        css += "--ant-color-text:" + s.text + " !important;";
+        css += "--ant-color-text-heading:" + s.text + " !important;";
+        css += "--ant-radio-button-color:" + s.text + " !important;";
+        css += "--ant-segmented-item-color:" + s.text + " !important;";
+        css += "--ant-segmented-item-hover-color:" + s.text + " !important;";
+    }
+    // antd 6 bakes its stock dark colors into per-component tokens (select,
+    // radio buttons, segmented track, modal), so each one is mapped here.
+    if (!s.control.empty()) {
+        for (const char* token : {"--ant-color-bg-container", "--ant-color-border-bg", "--ant-select-selector-bg",
+                                  "--ant-select-clear-bg", "--ant-input-hover-bg", "--ant-input-active-bg",
+                                  "--ant-button-default-bg", "--ant-button-default-hover-bg", "--ant-button-default-active-bg",
+                                  "--ant-radio-button-bg", "--ant-radio-button-checked-bg", "--ant-segmented-track-bg"}) {
+            css += std::string(token) + ":" + s.control + " !important;";
+        }
+        css += "--ant-color-border:rgba(255,255,255,0.12) !important;";
+        css += "--ant-button-default-border-color:rgba(255,255,255,0.12) !important;";
+        css += "--ant-color-border-secondary:rgba(255,255,255,0.08) !important;";
+    }
+    if (!cardColor.empty()) {
+        Settings solid = s;
+        solid.cardOpacity = 100;
+        const std::string elevated = CssCardColor(solid);
+        css += "--ant-color-bg-elevated:" + elevated + " !important;";
+        css += "--ant-color-bg-spotlight:" + elevated + " !important;";
+        css += "--ant-modal-content-bg:" + elevated + " !important;";
+        css += "--ant-card-actions-bg:" + cardColor + " !important;";
+    }
+    if (!s.accent.empty()) {
+        for (const char* token : {"--ant-color-primary-text", "--ant-color-primary-text-hover", "--ant-color-primary-text-active",
+                                  "--ant-color-info", "--ant-color-info-hover", "--ant-color-info-active",
+                                  "--ant-color-info-text", "--ant-color-info-text-hover", "--ant-color-info-text-active",
+                                  "--ant-select-hover-border-color", "--ant-select-active-border-color",
+                                  "--ant-input-hover-border-color", "--ant-input-active-border-color",
+                                  "--ant-button-default-hover-color", "--ant-button-default-hover-border-color",
+                                  "--ant-button-default-active-color", "--ant-button-default-active-border-color",
+                                  "--ant-button-group-border-color", "--ant-radio-radio-bg-color",
+                                  "--ant-radio-button-solid-checked-bg", "--ant-radio-button-solid-checked-hover-bg",
+                                  "--ant-radio-button-solid-checked-active-bg", "--ant-tabs-ink-bar-color",
+                                  "--ant-tabs-item-selected-color", "--ant-tabs-item-hover-color",
+                                  "--ant-tabs-item-active-color", "--ant-segmented-item-selected-bg"}) {
+            css += std::string(token) + ":" + s.accent + " !important;";
+        }
+        for (const char* token : {"--ant-color-primary-bg", "--ant-color-info-bg", "--ant-control-item-bg-active",
+                                  "--ant-select-option-selected-bg"}) {
+            css += std::string(token) + ":" + RgbaFromRgb(s.accentRgb, 16) + " !important;";
+        }
+        for (const char* token : {"--ant-color-primary-bg-hover", "--ant-color-info-bg-hover", "--ant-control-item-bg-active-hover"}) {
+            css += std::string(token) + ":" + RgbaFromRgb(s.accentRgb, 22) + " !important;";
+        }
+        css += "--ant-color-primary-border:" + RgbaFromRgb(s.accentRgb, 40) + " !important;";
+        css += "--ant-color-info-border:" + RgbaFromRgb(s.accentRgb, 40) + " !important;";
+        css += "--ant-color-primary-border-hover:" + RgbaFromRgb(s.accentRgb, 60) + " !important;";
+        css += "--ant-color-info-border-hover:" + RgbaFromRgb(s.accentRgb, 60) + " !important;";
+        css += "--ant-select-active-outline-color:" + focus + " !important;";
+        // The underglow below primary buttons and the focus ring on inputs.
+        css += "--ant-button-primary-shadow:0 2px 0 " + RgbaFromRgb(s.accentRgb, 31) + " !important;";
+        css += "--ant-button-blue-shadow-color:0 2px 0 " + RgbaFromRgb(s.accentRgb, 31) + " !important;";
+        css += "--ant-input-active-shadow:0 0 0 2px " + RgbaFromRgb(s.accentRgb, 31) + " !important;";
+        css += "--ant-radio-button-solid-checked-color:#11111b !important;";
+        css += "--ant-segmented-item-selected-color:#11111b !important;";
     }
     css += "}";
     css += "html{background-color:transparent !important;}";
@@ -415,10 +479,10 @@ static std::string BuildCss(const Settings& s) {
     css += ".ant-tabs-nav-more>span.anticon{vertical-align:middle !important;}";
     css += "[class*=\"ModPageButtonsWrapper\"]{gap:6px !important;}";
     // Number spinners: flat handles with one divider instead of boxed buttons.
-    css += ".ant-input-number-handler-wrap{background-color:rgba(255,255,255,0.06) !important;border:0 !important;}";
-    css += ".ant-input-number-handler{border:0 !important;}";
-    css += ".ant-input-number-handler-up{border-bottom:1px solid rgba(255,255,255,0.08) !important;}";
-    css += ".ant-input-number-handler:hover{background-color:rgba(255,255,255,0.08) !important;}";
+    css += ".ant-input-number-handler-wrap,.ant-input-number-actions{background-color:rgba(255,255,255,0.06) !important;border:0 !important;}";
+    css += ".ant-input-number-handler,.ant-input-number-action{border:0 !important;}";
+    css += ".ant-input-number-handler-up,.ant-input-number-action-up{border-bottom:1px solid rgba(255,255,255,0.08) !important;}";
+    css += ".ant-input-number-handler:hover,.ant-input-number-action:hover{background-color:rgba(255,255,255,0.08) !important;}";
     if (!cardColor.empty()) {
         // Every box shares one surface: the card color, no border of its own,
         // and one 1px ring painted over its content. Headers and rows paint
@@ -479,7 +543,7 @@ static std::string BuildCss(const Settings& s) {
     }
     if (!s.control.empty()) {
         css += ".ant-btn{background-color:" + s.control + " !important;border-color:rgba(255,255,255,0.12) !important;}";
-        css += ".ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-input-number,.ant-picker{background-color:" + s.control + " !important;border-color:rgba(255,255,255,0.12) !important;}";
+        css += ".ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-select:not(.ant-select-dropdown),.ant-input-number,.ant-picker{background-color:" + s.control + " !important;border-color:rgba(255,255,255,0.12) !important;}";
         if (cardColor.empty()) css += ".ant-dropdown-menu{background-color:" + s.control + " !important;}";
     }
     if (!s.text.empty()) {
@@ -490,8 +554,8 @@ static std::string BuildCss(const Settings& s) {
         std::string selected = RgbaFromRgb(s.accentRgb, 16);
         css += ".ant-btn-primary,.ant-btn-primary:hover,.ant-btn-primary:focus,.ant-btn-primary:active{background-color:" + s.accent + " !important;border-color:" + s.accent + " !important;color:#11111b !important;}";
         css += ".ant-switch-checked,.ant-switch-checked:hover{background-color:" + s.accent + " !important;}";
-        css += ".ant-input:hover,.ant-input-affix-wrapper:hover,.ant-select-selector:hover,.ant-input-number:hover,.ant-picker:hover{border-color:" + s.accent + " !important;}";
-        css += ".ant-input:focus,.ant-input-focused,.ant-input-affix-wrapper-focused,.ant-input-affix-wrapper:focus-within,.ant-input-number-focused,.ant-select-focused .ant-select-selector,.ant-picker-focused{border-color:" + s.accent + " !important;box-shadow:0 0 0 2px " + focus + " !important;}";
+        css += ".ant-input:hover,.ant-input-affix-wrapper:hover,.ant-select-selector:hover,.ant-select:not(.ant-select-dropdown):not(.ant-select-disabled):hover,.ant-input-number:hover,.ant-picker:hover{border-color:" + s.accent + " !important;}";
+        css += ".ant-input:focus,.ant-input-focused,.ant-input-affix-wrapper-focused,.ant-input-affix-wrapper:focus-within,.ant-input-number-focused,.ant-select-focused .ant-select-selector,.ant-select-focused:not(.ant-select-dropdown),.ant-picker-focused{border-color:" + s.accent + " !important;box-shadow:0 0 0 2px " + focus + " !important;}";
         // A -1px offset centres the 2px ring on the 1px control border, so it
         // hugs the rounded edge with no gap at the top, bottom or arcs.
         css += ".ant-btn:focus-visible,.ant-input:focus-visible,.ant-select-selector:focus-visible,.ant-input-number:focus-visible,.ant-picker:focus-visible,.ant-checkbox-input:focus-visible+.ant-checkbox-inner,.ant-radio-input:focus-visible+.ant-radio-inner{outline:2px solid " + s.accent + " !important;outline-offset:-1px;}";
@@ -526,7 +590,7 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-table-tbody>tr.ant-table-row-selected>td{background-color:" + RgbaFromRgb(s.accentRgb, 15) + " !important;}";
         css += ".ant-table-tbody>tr.ant-table-row-selected:hover>td{background-color:" + RgbaFromRgb(s.accentRgb, 20) + " !important;}";
         css += ".wh-cscroll-host::-webkit-scrollbar-thumb:hover{background-color:" + s.accent + " !important;}";
-        css += ".ant-input-number-handler:hover .ant-input-number-handler-up-inner,.ant-input-number-handler:hover .ant-input-number-handler-down-inner{color:" + s.accent + " !important;}";
+        css += ".ant-input-number-handler:hover .ant-input-number-handler-up-inner,.ant-input-number-handler:hover .ant-input-number-handler-down-inner,.ant-input-number-action:hover .ant-input-number-action-up-inner,.ant-input-number-action:hover .ant-input-number-action-down-inner{color:" + s.accent + " !important;}";
         // Interface defaults that otherwise keep antd's built-in blue: the
         // mod-card ribbon, loading spinner, tab and default-button hovers,
         // the selected drop-down item and selected select option.
@@ -556,7 +620,7 @@ static std::string BuildCss(const Settings& s) {
         // one adjustable radius. Off (or 0) leaves Windhawk's stock corners.
         std::string r = std::to_string(s.cornerRadius) + "px";
         css += std::string(kSurfaces) + ",.ant-alert{border-radius:" + r + " !important;}";
-        css += ".ant-btn,.ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-input-number,.ant-picker,.ant-segmented{border-radius:" + r + " !important;}";
+        css += ".ant-btn,.ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-select:not(.ant-select-dropdown),.ant-input-number,.ant-picker,.ant-segmented{border-radius:" + r + " !important;}";
         // The spinner handles become a small inset pill inside the rounded
         // input, so their square box no longer pokes past its corners.
         std::string inner = std::to_string(std::max(0, s.cornerRadius - 3)) + "px";
@@ -619,7 +683,7 @@ static std::string BuildCss(const Settings& s) {
         // Clip inner painting to the rounded shape: without this, square
         // row/hover backgrounds poke past the table's rounded corners, and
         // square item hovers poke past rounded drop-down menus.
-        css += ".ant-table,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-collapse,.ant-modal-content,.ant-drawer-content,.ant-popover-inner{overflow:hidden !important;}";
+        css += ".ant-table,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-collapse,.ant-modal-content,.ant-modal-container,.ant-drawer-content,.ant-drawer-section,.ant-popover-inner,.ant-popover-container{overflow:hidden !important;}";
         // The list scrollbar in a drop-down runs the menu's full height along its
         // edge, so its square ends stuck out past the curve. The clip keeps it
         // inside the straight edge and rounds its ends without moving antd's thumb.
