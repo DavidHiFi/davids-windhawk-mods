@@ -2,8 +2,8 @@
 // @id              shell-font-changer-plus
 // @name            Shell Font Changer Plus
 // @description     Any installed font in Explorer, Start, Search and Settings, with icons and emoji left intact
-// @version         1.3.0
-// @author          DavidHiFi
+// @version         1.3.3
+// @author          DavidHiFi, Gabriela Cristei
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         MIT
@@ -284,6 +284,30 @@ void fitBox(FontScope& scope, HDC dc, LPCWSTR text, UINT length, const RECT* rec
     if (!scope.active() || !rect || !length) return;
     // Measuring calls and ellipsis draws report or truncate rather than clip.
     if (flags & (DT_CALCRECT | DT_END_ELLIPSIS | DT_PATH_ELLIPSIS | DT_WORD_ELLIPSIS)) return;
+    // Some controls (the Properties checkboxes) pass a box wider than the
+    // window they draw in; anything past the window's client edge is clipped.
+    RECT visible = *rect;
+    RECT client{};
+    bool bounded = false;
+    if (HWND window = WindowFromDC(dc); window && GetClientRect(window, &client))
+        bounded = true;
+    // Themed controls draw into a buffered-paint bitmap the size of the
+    // control; its clip box is that size. Skip the 1x1 stock bitmap.
+    else if (GetObjectType(dc) == OBJ_MEMDC && GetClipBox(dc, &client) != ERROR && client.right - client.left > 1)
+        bounded = true;
+    if (bounded) {
+        const LONG left = std::max(visible.left, client.left), right = std::min(visible.right, client.right);
+        if (flags & DT_CENTER) {
+            // Centred text grows from the box's centre, so the nearer edge limits both sides.
+            const LONG centre = (visible.left + visible.right) / 2;
+            const LONG half = std::min(centre - left, right - centre);
+            if (half > 0) { visible.left = centre - half; visible.right = centre + half; }
+        } else if (right > left) {
+            visible.left = left;
+            visible.right = right;
+        }
+    }
+    rect = &visible;
     const int boxWidth = rect->right - rect->left - (params ? params->iLeftMargin + params->iRightMargin : 0);
     const int boxHeight = rect->bottom - rect->top;
     if (boxWidth <= 0 || boxHeight <= 0) return;

@@ -1,11 +1,11 @@
-# Window Manager
+# Window Manager Plus
 
 [☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
 Move, resize and snap windows from anywhere, and send them to another monitor,
 with the mouse or the keyboard. Works on administrator windows too.
 
-![Window Manager preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/window-manager.gif)
+![Window Manager Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/window-manager.gif)
 
 ## Features
 
@@ -14,7 +14,9 @@ with the mouse or the keyboard. Works on administrator windows too.
 - **Snap with the keyboard** to halves, quarters, the center or almost
   maximized, with optional gaps around windows.
 - **Send to another monitor** with a hotkey. Maximized windows stay maximized
-  on the new screen.
+  on the new screen. An optional setting moves the mouse pointer along with
+  the window, so you can keep working on the new monitor without hunting for
+  the cursor.
 - **Quick actions:** maximize, minimize, close or open the window menu without
   reaching for the title bar.
 - **Right-click while dragging** toggles the maximized state, and the drag
@@ -56,7 +58,7 @@ snapping like the preview, set the four half keys to `left`, `right`, `up` and
 ## Credits
 
 Combines [AltDrag](https://windhawk.net/mods/alt-drag) by m417z (inspired by
-[AltSnap](https://github.com/RamonUnch/AltSnap) by RamonUnch),
+[AltSnap](https://github.com/RamonUnch/AltSnap) by Stefan Sundin and RamonUnch),
 [Snap Commander](https://windhawk.net/mods/snap-commander) by Asteski and
 [Move Window to Monitor](https://windhawk.net/mods/move-window-to-monitor) by
 TomberWolf. GPL-3.0, following AltDrag.
