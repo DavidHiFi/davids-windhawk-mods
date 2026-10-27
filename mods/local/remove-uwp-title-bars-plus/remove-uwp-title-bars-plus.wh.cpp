@@ -1,531 +1,665 @@
 // ==WindhawkMod==
 // @id              remove-uwp-title-bars-plus
 // @name            Remove UWP Title Bars Plus
-// @description     Native title bars with icon, title and buttons in UWP apps
-// @version         2.0.4
+// @description     Normal Windows title bars, with icon, title and theme buttons, in every UWP app
+// @version         2.1.0
 // @author          DavidHiFi, Anixx
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         ApplicationFrameHost.exe
 // @architecture    x86-64
-// @compilerOptions -luser32 -lcomctl32 -ldwmapi -lshell32 -lole32 -lgdiplus
+// @compilerOptions -luser32 -lcomctl32 -ldwmapi -lshell32 -lole32
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
 /*
+# Remove UWP Title Bars Plus
 
-Replaces the UWP titlebars with native Win32 titlebars.
+Gives Store apps (Settings, Calculator, Photos and the rest) the same title bar
+desktop apps get. The minimize, maximize and close buttons come from your
+Windows theme, including custom themes, and the app's own icon and name sit on
+the left.
 
-![Screenshot](https://i.imgur.com/w5OqyJJ.png)
+Windows prepares these app windows before it knows which app will use them, so
+the mod waits until the app is known and the window is on screen, then swaps
+the title bar. Shell parts that also live in these windows, such as Start and
+search, keep their own look.
 
+Applies to app windows opened after you turn the mod on. Turning it off puts
+every open window back the way it was.
+
+Based on Remove UWP Title Bars by Anixx.
 */
 // ==/WindhawkModReadme==
 
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include <windhawk_utils.h>
-#include <CommCtrl.h>
+
 #include <dwmapi.h>
-#include <shellapi.h>
 #include <propsys.h>
 #include <shlobj.h>
-#include <gdiplus.h>
-#include <vector>
+#include <windowsx.h>
 
 #ifndef WM_POPUPSYSTEMMENU
 #define WM_POPUPSYSTEMMENU 0x0313
 #endif
 
-// settings-styler-plus sets this property on frames it turned into native
-// captioned windows (its MakeFrameNative) and removes it when restoring. The
-// fork yields those frames to styler's painter instead of bypassing it.
-static const WCHAR g_normalWindowProp[] =
+#ifndef WS_EX_NOREDIRECTIONBITMAP
+#define WS_EX_NOREDIRECTIONBITMAP 0x00200000L
+#endif
+
+namespace frame_host {
+
+constexpr WCHAR kNormalWindowProp[] =
     L"Microsoft.Windows.ShellManagedWindowAsNormalWindow";
+constexpr WCHAR kPressedProp[] = L"RemoveUwpTitleBarsPlus_CaptionPressed";
+constexpr UINT_PTR kRelayoutTimer = 0x53535031;
+constexpr UINT_PTR kResolveTimer = 0x53535032;
+constexpr WCHAR kResolveSinceProp[] = L"RemoveUwpTitleBarsPlus_ResolveSince";
+// A frame is converted once the shell has shown it. Converting it
+// while the shell still holds it cloaked leaves it hidden.
+constexpr DWORD kResolveTimeoutMs = 3000;
+constexpr UINT kResolveTickMs = 100;
 
-static const GUID BHID_SFUIObject_local =
-    {0x3981e225, 0xf559, 0x11d3, {0x8e, 0x3a, 0x00, 0xc0, 0x4f, 0x68, 0x37, 0xd5}};
+const PROPERTYKEY kAppUserModelId = {
+    {0x9F4C2855, 0x9F79, 0x4B39, {0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3}},
+    5};
 
-static const GUID FOLDERID_AppsFolder_local =
-    {0x1e87508d, 0x89c2, 0x42f0, {0x8a, 0x7e, 0x64, 0x5a, 0x0f, 0x50, 0xca, 0x58}};
+enum class FrameState { Pending, Native, Stock };
 
-static const GUID IID_IExtractIconW_local =
-    {0x000214fa, 0x0000, 0x0000, {0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}};
+struct FrameInfo {
+    FrameState state = FrameState::Pending;
+    void* titleBar = nullptr;  // CTitleBar whose window creation is held back
+    HICON icons[2] = {};       // small, big
+    LONG_PTR style = 0, exStyle = 0;  // before MakeFrameNative
+    DWORD backdrop = 0;                // DWMWA_SYSTEMBACKDROP_TYPE before it
+};
 
-static const PROPERTYKEY PKEY_AppUserModel_ID_local =
-    {{0x9F4C2855, 0x9F79, 0x4B39, {0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3}}, 5};
+bool g_enabled;
+SRWLOCK g_frameLock = SRWLOCK_INIT;
+std::unordered_map<HWND, FrameInfo> g_frames;
+std::unordered_map<void*, HWND> g_titleBarFrame;
+UINT g_frameCheckMsg;
+UINT g_frameRestoreMsg;
+volatile LONG g_iconJobs;
 
-INT64 __fastcall CTitleBar_Generic_hook(void *, void *, void *, void *) {return 0;}
+using CreateTitleBarWindow_t = long(__cdecl*)(void* titleBar);
+CreateTitleBarWindow_t CreateTitleBarWindow_Original;
+using PaintButton_t =
+    long(__cdecl*)(void*, void*, int, int, const RECT*, const RECT*);
+PaintButton_t PaintButton_Original;
+using DwmSetWindowAttribute_t = HRESULT(WINAPI*)(HWND, DWORD, LPCVOID, DWORD);
+DwmSetWindowAttribute_t DwmSetWindowAttribute_Original;
 
-static void *g_dummyOrig;
-
-static ULONG_PTR g_gdiplusToken = 0;
-
-static CRITICAL_SECTION g_csSubclassedWindows;
-static std::vector<HWND> g_subclassedWindows;
-
-void RememberSubclassedWindow(HWND hWnd)
-{
-    EnterCriticalSection(&g_csSubclassedWindows);
-    g_subclassedWindows.push_back(hWnd);
-    LeaveCriticalSection(&g_csSubclassedWindows);
+bool IsFrameWindow(HWND hWnd) {
+    WCHAR cls[32];
+    return GetClassName(hWnd, cls, ARRAYSIZE(cls)) &&
+           _wcsicmp(cls, L"ApplicationFrameWindow") == 0;
 }
 
-void ForgetSubclassedWindow(HWND hWnd)
-{
-    EnterCriticalSection(&g_csSubclassedWindows);
-    for (auto it = g_subclassedWindows.begin(); it != g_subclassedWindows.end(); ++it)
-    {
-        if (*it == hWnd)
-        {
-            g_subclassedWindows.erase(it);
-            break;
+FrameState GetFrameState(HWND hWnd) {
+    AcquireSRWLockShared(&g_frameLock);
+    auto it = g_frames.find(hWnd);
+    FrameState s = it != g_frames.end() ? it->second.state : FrameState::Stock;
+    ReleaseSRWLockShared(&g_frameLock);
+    return s;
+}
+
+// The CTitleBar object keeps its frame's window handle; find it by scanning
+// the object for a handle to one of this process's frame windows.
+HWND FrameOfTitleBar(void* titleBar) {
+    ULONG_PTR buf[0x80] = {};
+    SIZE_T got = 0;
+    ReadProcessMemory(GetCurrentProcess(), titleBar, buf, sizeof(buf), &got);
+    for (size_t i = 0; i < got / sizeof(ULONG_PTR); i++) {
+        HWND h = (HWND)buf[i];
+        if (!buf[i] || buf[i] > 0xFFFFFFFF || !IsWindow(h)) {
+            continue;
+        }
+        DWORD pid = 0;
+        GetWindowThreadProcessId(h, &pid);
+        if (pid == GetCurrentProcessId() && IsFrameWindow(h)) {
+            return h;
         }
     }
-    LeaveCriticalSection(&g_csSubclassedWindows);
+    return nullptr;
 }
 
-static CRITICAL_SECTION g_csGdiplus;
-
-void EnsureGdiplus()
-{
-    EnterCriticalSection(&g_csGdiplus);
-    if (g_gdiplusToken == 0)
-    {
-        Gdiplus::GdiplusStartupInput inp;
-        Gdiplus::GdiplusStartup(&g_gdiplusToken, &inp, NULL);
+// Returns true when the frame's app id is known.
+bool GetFrameApp(HWND hWnd, std::wstring* aumid) {
+    IPropertyStore* store = nullptr;
+    if (FAILED(SHGetPropertyStoreForWindow(hWnd, IID_PPV_ARGS(&store)))) {
+        return false;
     }
-    LeaveCriticalSection(&g_csGdiplus);
+    PROPVARIANT pv;
+    PropVariantInit(&pv);
+    bool known = false;
+    if (SUCCEEDED(store->GetValue(kAppUserModelId, &pv)) &&
+        pv.vt == VT_LPWSTR && pv.pwszVal && *pv.pwszVal) {
+        known = true;
+        *aumid = pv.pwszVal;
+    }
+    PropVariantClear(&pv);
+    store->Release();
+    return known;
 }
 
-HICON LoadPngAsIconSized(const WCHAR *szFile, int targetSize)
-{
-    EnsureGdiplus();
-
-    WCHAR dir[MAX_PATH];
-    WCHAR stem[MAX_PATH];
-    wcscpy_s(dir, MAX_PATH, szFile);
-
-    WCHAR *lastSlash = wcsrchr(dir, L'\\');
-    if (!lastSlash) return NULL;
-
-    wcscpy_s(stem, MAX_PATH, lastSlash + 1);
-    *(lastSlash + 1) = L'\0';
-
-    WCHAR *pngPos = wcsstr(stem, L".png");
-    if (pngPos) *pngPos = L'\0';
-
-    const WCHAR *priorities_large[] = {
-        L"targetsize-256",
-        L"targetsize-96",
-        L"targetsize-48",
-        L"scale-400",
-        L"scale-200",
-        L"scale-100",
-        NULL
-    };
-
-    const WCHAR *priorities_small[] = {
-        L"targetsize-16",
-        L"targetsize-24",
-        L"scale-100",
-        NULL
-    };
-
-    const WCHAR **priorities = (targetSize >= 48) ? priorities_large : priorities_small;
-
-    WCHAR bestFile[MAX_PATH] = {0};
-
-    for (int p = 0; priorities[p] != NULL && bestFile[0] == L'\0'; p++)
-    {
-        WCHAR searchMask[MAX_PATH];
-        swprintf_s(searchMask, MAX_PATH, L"%s%s*%s*.png", dir, stem, priorities[p]);
-
-        WIN32_FIND_DATAW fd;
-        HANDLE hFind = FindFirstFileW(searchMask, &fd);
-        if (hFind != INVALID_HANDLE_VALUE)
-        {
-            swprintf_s(bestFile, MAX_PATH, L"%s%s", dir, fd.cFileName);
-            FindClose(hFind);
-        }
-    }
-
-    if (bestFile[0] == L'\0')
-    {
-        WCHAR searchMask[MAX_PATH];
-        swprintf_s(searchMask, MAX_PATH, L"%s%s*.png", dir, stem);
-
-        WIN32_FIND_DATAW fd;
-        HANDLE hFind = FindFirstFileW(searchMask, &fd);
-        if (hFind != INVALID_HANDLE_VALUE)
-        {
-            swprintf_s(bestFile, MAX_PATH, L"%s%s", dir, fd.cFileName);
-            FindClose(hFind);
-        }
-    }
-
-    if (bestFile[0] == L'\0')
-    {
-        Wh_Log(L"No PNG found for: %s", szFile);
-        return NULL;
-    }
-
-    Wh_Log(L"Loading PNG: %s at size %d", bestFile, targetSize);
-
-    Gdiplus::Bitmap *bmp = new Gdiplus::Bitmap(bestFile);
-    if (bmp->GetLastStatus() != Gdiplus::Ok)
-    {
-        delete bmp;
-        return NULL;
-    }
-
-    Gdiplus::Bitmap *scaled = new Gdiplus::Bitmap(targetSize, targetSize, PixelFormat32bppARGB);
-    if (scaled->GetLastStatus() != Gdiplus::Ok)
-    {
-        delete bmp;
-        delete scaled;
-        return NULL;
-    }
-
-    {
-        Gdiplus::Graphics g(scaled);
-        g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
-        g.SetSmoothingMode(Gdiplus::SmoothingModeHighQuality);
-        g.DrawImage(bmp, 0, 0, targetSize, targetSize);
-    }
-    delete bmp;
-
-    HICON hIcon = NULL;
-    scaled->GetHICON(&hIcon);
-    delete scaled;
-
-    return hIcon;
-}
-
-HICON GetIconForWindow(HWND hWnd, int size)
-{
-    HICON hIcon = NULL;
-
-    IPropertyStore *pps = NULL;
-    HRESULT hr = SHGetPropertyStoreForWindow(hWnd, IID_PPV_ARGS(&pps));
-
-    if (SUCCEEDED(hr))
-    {
-        PROPVARIANT pv;
-        PropVariantInit(&pv);
-        hr = pps->GetValue(PKEY_AppUserModel_ID_local, &pv);
-
-        if (SUCCEEDED(hr) && pv.vt == VT_LPWSTR && pv.pwszVal)
-        {
-            IShellItem *psi = NULL;
-            hr = SHCreateItemInKnownFolder(
-                FOLDERID_AppsFolder_local,
-                0,
-                pv.pwszVal,
-                IID_PPV_ARGS(&psi));
-
-            if (SUCCEEDED(hr))
-            {
-                IExtractIconW *pei = NULL;
-                hr = psi->BindToHandler(NULL, BHID_SFUIObject_local,
-                                        IID_IExtractIconW_local, (void **)&pei);
-
-                if (SUCCEEDED(hr))
-                {
-                    WCHAR szFile[MAX_PATH] = {0};
-                    int iIndex = 0;
-                    UINT uFlags = 0;
-                    hr = pei->GetIconLocation(0, szFile, MAX_PATH, &iIndex, &uFlags);
-
-                    if (SUCCEEDED(hr))
-                    {
-                        if (wcsstr(szFile, L".png"))
-                        {
-                            hIcon = LoadPngAsIconSized(szFile, size);
-                        }
-                        else
-                        {
-                            hIcon = (HICON)LoadImageW(
-                                NULL, szFile, IMAGE_ICON,
-                                size, size, LR_LOADFROMFILE);
-
-                            if (!hIcon)
-                            {
-                                HICON hSmall = NULL, hLarge = NULL;
-                                ExtractIconExW(szFile, iIndex, &hLarge, &hSmall, 1);
-
-                                HICON hWanted = (size >= 32) ? hLarge : hSmall;
-                                HICON hOther  = (size >= 32) ? hSmall : hLarge;
-
-                                if (hWanted)
-                                {
-                                    hIcon = hWanted;
-                                    if (hOther) DestroyIcon(hOther);
-                                }
-                                else if (hOther)
-                                {
-                                    hIcon = hOther;
-                                }
-                            }
-                        }
-                    }
-                    pei->Release();
-                }
-
-                if (!hIcon)
-                {
-                    SHFILEINFOW sfi = {0};
-                    UINT sizeFlag = (size >= 32) ? SHGFI_LARGEICON : SHGFI_SMALLICON;
-                    DWORD_PTR ret = SHGetFileInfoW(pv.pwszVal, 0, &sfi, sizeof(sfi),
-                                                   SHGFI_ICON | sizeFlag |
-                                                   SHGFI_USEFILEATTRIBUTES);
-                    if (ret && sfi.hIcon)
-                        hIcon = sfi.hIcon;
-                }
-
-                psi->Release();
+// Gives a native frame the icon the Start menu shows for its app.
+DWORD WINAPI IconThread(void* param) {
+    auto* job = (std::pair<HWND, std::wstring>*)param;
+    HWND hWnd = job->first;
+    HICON icons[2] = {};
+    HRESULT co = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    PIDLIST_ABSOLUTE pidl = nullptr;
+    if (SUCCEEDED(SHParseDisplayName(
+            (L"shell:AppsFolder\\" + job->second).c_str(), nullptr, &pidl, 0,
+            nullptr))) {
+        for (int i = 0; i < 2; i++) {
+            SHFILEINFO sfi = {};
+            if (SHGetFileInfo((LPCWSTR)pidl, 0, &sfi, sizeof(sfi),
+                              SHGFI_PIDL | SHGFI_ICON |
+                                  (i ? SHGFI_LARGEICON : SHGFI_SMALLICON))) {
+                icons[i] = sfi.hIcon;
             }
         }
-        PropVariantClear(&pv);
-        pps->Release();
+        CoTaskMemFree(pidl);
     }
+    if (SUCCEEDED(co)) {
+        CoUninitialize();
+    }
+    delete job;
 
-    return hIcon;
+    AcquireSRWLockExclusive(&g_frameLock);
+    auto it = g_frames.find(hWnd);
+    bool keep = it != g_frames.end() &&
+                it->second.state == FrameState::Native &&
+                !it->second.icons[0];
+    if (keep) {
+        it->second.icons[0] = icons[0];
+        it->second.icons[1] = icons[1];
+    }
+    ReleaseSRWLockExclusive(&g_frameLock);
+    if (keep) {
+        DWORD_PTR r;
+        for (int i = 0; i < 2; i++) {
+            if (icons[i]) {
+                SendMessageTimeout(hWnd, WM_SETICON, i ? ICON_BIG : ICON_SMALL,
+                                   (LPARAM)icons[i], SMTO_NORMAL, 2000, &r);
+            }
+        }
+    } else {
+        for (HICON i : icons) {
+            if (i) {
+                DestroyIcon(i);
+            }
+        }
+    }
+    InterlockedDecrement(&g_iconJobs);
+    return 0;
 }
 
-void SetTitlebarIcon(HWND hWnd)
-{
-    HICON hSmall = GetIconForWindow(hWnd, 16);
-    HICON hBig   = GetIconForWindow(hWnd, 256);
+void MakeFrameNative(HWND hWnd, const std::wstring& aumid) {
+    // Without this property DWM treats the frame as immersive and hides the
+    // minimize and maximize buttons (CTopLevelWindow::GetCurrentStyle).
+    SetProp(hWnd, kNormalWindowProp, (HANDLE)1);
+    LONG_PTR style = GetWindowLongPtr(hWnd, GWL_STYLE);
+    SetWindowLongPtr(hWnd, GWL_STYLE, (style & ~WS_POPUP) | WS_OVERLAPPEDWINDOW);
+    LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
+    SetWindowLongPtr(hWnd, GWL_EXSTYLE, exStyle & ~WS_EX_DLGMODALFRAME);
+    DWORD backdrop = 0;
+    DwmGetWindowAttribute(hWnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop,
+                          sizeof(backdrop));
+    AcquireSRWLockExclusive(&g_frameLock);
+    g_frames[hWnd].style = style;
+    g_frames[hWnd].exStyle = exStyle;
+    g_frames[hWnd].backdrop = backdrop;
+    ReleaseSRWLockExclusive(&g_frameLock);
 
-    if (hSmall)
-    {
-        SendMessageW(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hSmall);
-        SetPropW(hWnd, L"NativeTitlebarIconSmall", (HANDLE)hSmall);
+    // An acrylic caption, so the title bar matches the blurred page below it.
+    DWORD acrylic = DWMSBT_TRANSIENTWINDOW;
+    DwmSetWindowAttribute_Original(hWnd, DWMWA_SYSTEMBACKDROP_TYPE, &acrylic,
+                                   sizeof(acrylic));
+
+    // The shell lookup pumps messages, and doing it here stops the app from
+    // attaching to the frame, so it runs on its own thread.
+    auto* job = new std::pair<HWND, std::wstring>(hWnd, aumid);
+    InterlockedIncrement(&g_iconJobs);
+    HANDLE thread = CreateThread(nullptr, 0, IconThread, job, 0, nullptr);
+    if (thread) {
+        CloseHandle(thread);
+    } else {
+        InterlockedDecrement(&g_iconJobs);
+        delete job;
     }
 
-    if (hBig)
-    {
-        SendMessageW(hWnd, WM_SETICON, ICON_BIG, (LPARAM)hBig);
-        SetPropW(hWnd, L"NativeTitlebarIconBig", (HANDLE)hBig);
+    SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                     SWP_FRAMECHANGED);
+    Wh_Log(L"Native title bar for %p", hWnd);
+}
+
+// True once the shell shows the frame, or once the wait runs out. Until then the
+// frame stays untouched and the timer asks again.
+bool ShownOrTimedOut(HWND hWnd) {
+    DWORD cloaked = 0;
+    DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked));
+    if (!cloaked) {
+        RemoveProp(hWnd, kResolveSinceProp);
+        return true;
+    }
+    DWORD now = GetTickCount();
+    DWORD since = (DWORD)(ULONG_PTR)GetProp(hWnd, kResolveSinceProp);
+    if (!since) {
+        since = now;
+        SetProp(hWnd, kResolveSinceProp, (HANDLE)(ULONG_PTR)since);
+    }
+    if (now - since >= kResolveTimeoutMs) {
+        RemoveProp(hWnd, kResolveSinceProp);
+        return true;
+    }
+    SetTimer(hWnd, kResolveTimer, kResolveTickMs, nullptr);
+    return false;
+}
+
+// Shell parts that live in frames and must keep their own look.
+bool IsShellSurface(const std::wstring& aumid) {
+    static const PCWSTR kPrefixes[] = {
+        L"Microsoft.Windows.StartMenuExperienceHost",
+        L"Microsoft.Windows.ShellExperienceHost",
+        L"MicrosoftWindows.Client.CBS",
+        L"MicrosoftWindows.Client.Core",
+        L"Microsoft.Windows.Search",
+        L"Microsoft.Windows.Cortana",
+        L"MicrosoftWindows.LKG",
+        L"Microsoft.LockApp",
+    };
+    for (PCWSTR p : kPrefixes) {
+        if (_wcsnicmp(aumid.c_str(), p, wcslen(p)) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Settles a pending frame once its app is known. Runs on the frame's thread.
+void ResolveFrame(HWND hWnd) {
+    if (GetFrameState(hWnd) != FrameState::Pending) {
+        return;
+    }
+    std::wstring aumid;
+    if (!GetFrameApp(hWnd, &aumid)) {
+        return;
+    }
+    bool isSettings = !IsShellSurface(aumid);
+    Wh_Log(L"Frame %p app %s: %s", hWnd, aumid.c_str(),
+           isSettings ? L"native" : L"stock");
+    if (isSettings && !ShownOrTimedOut(hWnd)) {
+        return;
     }
 
-    if (hSmall || hBig)
-    {
-        SetPropW(hWnd, L"NativeTitlebarIconSet", (HANDLE)1);
+    void* titleBar = nullptr;
+    AcquireSRWLockExclusive(&g_frameLock);
+    FrameInfo& info = g_frames[hWnd];
+    info.state = isSettings ? FrameState::Native : FrameState::Stock;
+    if (!isSettings) {
+        titleBar = info.titleBar;
+        info.titleBar = nullptr;  // a native frame keeps it for RestoreFrame
+    }
+    ReleaseSRWLockExclusive(&g_frameLock);
+
+    if (isSettings) {
+        MakeFrameNative(hWnd, aumid);
+    } else if (titleBar) {
+        CreateTitleBarWindow_Original(titleBar);
     }
 }
 
-void DestroyTitlebarIcons(HWND hWnd)
-{
-    if (HICON hSmall = (HICON)GetPropW(hWnd, L"NativeTitlebarIconSmall"))
-    {
-        DestroyIcon(hSmall);
-        RemovePropW(hWnd, L"NativeTitlebarIconSmall");
-    }
+// Undoes everything for one frame. Runs on the frame's thread; the frame gets
+// the title bar window it would have had without the mod.
+void RestoreFrame(HWND hWnd) {
+    AcquireSRWLockExclusive(&g_frameLock);
+    FrameInfo info = g_frames[hWnd];
+    g_frames[hWnd].state = FrameState::Stock;
+    g_frames[hWnd].titleBar = nullptr;
+    ReleaseSRWLockExclusive(&g_frameLock);
 
-    if (HICON hBig = (HICON)GetPropW(hWnd, L"NativeTitlebarIconBig"))
-    {
-        DestroyIcon(hBig);
-        RemovePropW(hWnd, L"NativeTitlebarIconBig");
+    if (info.state == FrameState::Native) {
+        RemoveProp(hWnd, kNormalWindowProp);
+        RemoveProp(hWnd, kPressedProp);
+        KillTimer(hWnd, kRelayoutTimer);
+        DwmSetWindowAttribute_Original(hWnd, DWMWA_SYSTEMBACKDROP_TYPE,
+                                       &info.backdrop, sizeof(info.backdrop));
+        SendMessage(hWnd, WM_SETICON, ICON_SMALL, 0);
+        SendMessage(hWnd, WM_SETICON, ICON_BIG, 0);
+        SetWindowLongPtr(hWnd, GWL_STYLE, info.style);
+        SetWindowLongPtr(hWnd, GWL_EXSTYLE, info.exStyle);
+        SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                         SWP_FRAMECHANGED);
     }
-
-    RemovePropW(hWnd, L"NativeTitlebarIconSet");
+    if (info.titleBar) {
+        CreateTitleBarWindow_Original(info.titleBar);
+        // The frame host shows its title bar when the caption is activated,
+        // then the real state is sent again.
+        SendMessage(hWnd, WM_NCACTIVATE, TRUE, 0);
+        if (GetForegroundWindow() != hWnd) {
+            SendMessage(hWnd, WM_NCACTIVATE, FALSE, 0);
+        }
+    }
 }
 
-LRESULT CALLBACK SubclassProc(
-    HWND hWnd,
-    UINT uMsg,
-    WPARAM wParam,
-    LPARAM lParam,
-    DWORD_PTR dwRefData)
-{
-    if (uMsg == WM_NCDESTROY)
-    {
-        DestroyTitlebarIcons(hWnd);
-        ForgetSubclassedWindow(hWnd);
+LRESULT CaptionHitTest(HWND hWnd, LPARAM lParam) {
+    // DWM draws the buttons at its own size, which DefWindowProc doesn't know
+    // about, so hit-test against the rects DWM reports.
+    TITLEBARINFOEX ti = {sizeof(ti)};
+    DefWindowProc(hWnd, WM_GETTITLEBARINFOEX, 0, (LPARAM)&ti);
+    POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+    static const int kIndex[] = {2, 3, 5};
+    static const LRESULT kHit[] = {HTMINBUTTON, HTMAXBUTTON, HTCLOSE};
+    for (int k = 0; k < 3; k++) {
+        if (!(ti.rgstate[kIndex[k]] & STATE_SYSTEM_INVISIBLE) &&
+            PtInRect(&ti.rgrect[kIndex[k]], pt)) {
+            return kHit[k];
+        }
+    }
+    return HTNOWHERE;
+}
+
+LRESULT CALLBACK FrameSubclassProc(HWND hWnd,
+                                   UINT uMsg,
+                                   WPARAM wParam,
+                                   LPARAM lParam,
+                                   DWORD_PTR) {
+    if (uMsg == WM_NCDESTROY || (uMsg == g_frameRestoreMsg && uMsg)) {
+        if (uMsg != WM_NCDESTROY) {
+            RestoreFrame(hWnd);
+        }
+        AcquireSRWLockExclusive(&g_frameLock);
+        auto it = g_frames.find(hWnd);
+        if (it != g_frames.end()) {
+            for (HICON i : it->second.icons) {
+                if (i) {
+                    DestroyIcon(i);
+                }
+            }
+            g_frames.erase(it);
+        }
+        for (auto t = g_titleBarFrame.begin(); t != g_titleBarFrame.end();) {
+            t = t->second == hWnd ? g_titleBarFrame.erase(t) : std::next(t);
+        }
+        ReleaseSRWLockExclusive(&g_frameLock);
+        WindhawkUtils::RemoveWindowSubclassFromAnyThread(hWnd,
+                                                         FrameSubclassProc);
+        return uMsg == WM_NCDESTROY
+                   ? DefSubclassProc(hWnd, uMsg, wParam, lParam)
+                   : 0;
+    }
+
+    FrameState state = GetFrameState(hWnd);
+    if (state == FrameState::Pending) {
+        LRESULT r = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        if (uMsg == WM_TIMER && wParam == kResolveTimer) {
+            KillTimer(hWnd, kResolveTimer);
+            ResolveFrame(hWnd);
+        }
+        if (uMsg == g_frameCheckMsg || uMsg == WM_SETTEXT ||
+            uMsg == WM_SHOWWINDOW || uMsg == WM_ACTIVATE ||
+            uMsg == WM_WINDOWPOSCHANGED) {
+            ResolveFrame(hWnd);
+        }
+        return r;
+    }
+    if (state != FrameState::Native) {
         return DefSubclassProc(hWnd, uMsg, wParam, lParam);
     }
-    if (uMsg == WM_NCRBUTTONDOWN ||
-        uMsg == WM_NCRBUTTONUP ||
-        uMsg == WM_NCLBUTTONDBLCLK ||
-        uMsg == WM_POPUPSYSTEMMENU ||
-        uMsg == WM_SYSCOMMAND ||
-        uMsg == WM_NCPAINT ||
-        uMsg == WM_NCCALCSIZE)
-    {
-        // A frame marked with the normal-window property belongs to
-        // settings-styler-plus's native painter; forward to it instead of
-        // bypassing the subclass chain with DefWindowProcW.
-        if (GetPropW(hWnd, g_normalWindowProp))
-        {
-            return DefSubclassProc(hWnd, uMsg, wParam, lParam);
-        }
-        return DefWindowProcW(hWnd, uMsg, wParam, lParam);
-    }
 
-    if (uMsg == WM_NCACTIVATE || uMsg == WM_ACTIVATE)
-    {
-        if (!GetPropW(hWnd, L"NativeTitlebarIconSet") &&
-            !GetPropW(hWnd, g_normalWindowProp))
-        {
-            SetTitlebarIcon(hWnd);
-        }
-    }
+    switch (uMsg) {
+        // The frame host's own handling of these assumes its custom title bar.
+        case WM_NCRBUTTONDOWN:
+        case WM_NCRBUTTONUP:
+        case WM_NCLBUTTONDBLCLK:
+        case WM_POPUPSYSTEMMENU:
+        case WM_SYSCOMMAND:
+        case WM_NCPAINT:
+        case WM_NCCALCSIZE:
+            return DefWindowProc(hWnd, uMsg, wParam, lParam);
 
+        case WM_NCHITTEST: {
+            LRESULT hit = CaptionHitTest(hWnd, lParam);
+            return hit != HTNOWHERE
+                       ? hit
+                       : DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        }
+
+        case WM_NCLBUTTONDOWN:
+        case WM_NCLBUTTONUP:
+            if (wParam == HTMINBUTTON || wParam == HTMAXBUTTON ||
+                wParam == HTCLOSE) {
+                if (uMsg == WM_NCLBUTTONDOWN) {
+                    SetProp(hWnd, kPressedProp, (HANDLE)wParam);
+                } else if ((WPARAM)RemoveProp(hWnd, kPressedProp) == wParam) {
+                    WPARAM command = wParam == HTCLOSE       ? SC_CLOSE
+                                     : wParam == HTMINBUTTON ? SC_MINIMIZE
+                                     : IsZoomed(hWnd)        ? SC_RESTORE
+                                                             : SC_MAXIMIZE;
+                    PostMessage(hWnd, WM_SYSCOMMAND, command, lParam);
+                }
+                return 0;
+            }
+            break;
+
+        // DWM lays out the caption once while maximizing or restoring, with
+        // the old title bar size. caption-buttons-customizer keeps that
+        // layout, which strands the title off-window and moves its button
+        // hit areas away from the buttons. A frame change once the size has
+        // settled lays the caption out again.
+        case WM_SIZE:
+            if (wParam != SIZE_MINIMIZED) {
+                SetTimer(hWnd, kRelayoutTimer, 150, nullptr);
+            }
+            break;
+
+        case WM_TIMER:
+            if (wParam == kRelayoutTimer) {
+                KillTimer(hWnd, kRelayoutTimer);
+                SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
+                             SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                                 SWP_NOACTIVATE | SWP_FRAMECHANGED);
+                return 0;
+            }
+            break;
+    }
     return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
 
-typedef HWND (*CreateWindowInBandEx_t)(DWORD, LPCWSTR, LPCWSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID, DWORD, DWORD);
-CreateWindowInBandEx_t CreateWindowInBandEx_orig;
-HWND WINAPI CreateWindowInBandEx_hook(
-    DWORD dwExStyle,
-    LPCWSTR lpClassName,
-    LPCWSTR lpWindowName,
-    DWORD dwStyle,
-    int x,
-    int y,
-    int nWidth,
-    int nHeight,
-    HWND hWndParent,
-    HMENU hMenu,
-    HINSTANCE hInstance,
-    LPVOID lpParam,
-    DWORD dwBand,
-    DWORD dwTypeFlags)
-{
-    if (IS_INTRESOURCE(lpClassName) ||
-        _wcsicmp(lpClassName, L"ApplicationFrameWindow") != 0)
-    {
-        return CreateWindowInBandEx_orig(
-            dwExStyle, lpClassName, lpWindowName, dwStyle,
-            x, y, nWidth, nHeight,
-            hWndParent, hMenu, hInstance, lpParam,
-            dwBand, dwTypeFlags);
-    }
-
-    dwExStyle &= ~WS_EX_DLGMODALFRAME;
-    dwExStyle &= ~WS_EX_NOREDIRECTIONBITMAP;
-    dwStyle = WS_OVERLAPPEDWINDOW;
-
-    HWND res = CreateWindowInBandEx_orig(
-        dwExStyle, lpClassName, lpWindowName, dwStyle,
-        x, y, nWidth, nHeight,
-        hWndParent, hMenu, hInstance, lpParam,
-        dwBand, dwTypeFlags);
-
-    if (res != NULL)
-    {
-        WindhawkUtils::SetWindowSubclassFromAnyThread(res, SubclassProc, 0);
-        RememberSubclassedWindow(res);
-        SetTitlebarIcon(res);
-    }
-
-    return res;
-}
-
-typedef HRESULT(WINAPI *DwmExtendFrameIntoClientArea_t)(HWND, const MARGINS *);
-DwmExtendFrameIntoClientArea_t DwmExtendFrameIntoClientArea_orig;
-HRESULT WINAPI DwmExtendFrameIntoClientArea_hook(
-    HWND hWnd,
-    const MARGINS *pMarInset)
-{
-    WCHAR wszClassName[32] = {0};
-    GetClassNameW(hWnd, wszClassName, ARRAYSIZE(wszClassName));
-
-    if (wcscmp(wszClassName, L"ApplicationFrameWindow") == 0)
-    {
-        return 0x80263001; // DWM_E_COMPOSITIONDISABLED
-    }
-
-    return DwmExtendFrameIntoClientArea_orig(hWnd, pMarInset);
-}
-
-BOOL Wh_ModInit()
-{
-    InitializeCriticalSection(&g_csSubclassedWindows);
-    InitializeCriticalSection(&g_csGdiplus);
-
-    Wh_SetFunctionHook(
-        (void *)GetProcAddress(GetModuleHandle(L"user32.dll"), "CreateWindowInBandEx"),
-        (void *)CreateWindowInBandEx_hook,
-        (void **)&CreateWindowInBandEx_orig);
-
-    Wh_SetFunctionHook(
-        (void *)DwmExtendFrameIntoClientArea,
-        (void *)DwmExtendFrameIntoClientArea_hook,
-        (void **)&DwmExtendFrameIntoClientArea_orig);
-
-    WindhawkUtils::SYMBOL_HOOK ApplicationFrame_dll_hooks[] = {
-        { {L"private: long __cdecl CTitleBar::_NotifyViewOfPersistence(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_OnTitleBarHitTestVisualUpdated(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_GetApplicationViewTitleBar(struct _GUID const &,void * *)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_NotifyVisibilityChanged(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_UpdateBackgroundVisualTree(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_UpdateConstraints(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_UpdateHoverPressState(enum CTitleBar::TitleBarControl)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_UpdateColorsFromApplicationViewAsync(bool)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_UpdateHitTestWindow(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_Cloak(int,bool,bool)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_ValidateDCompDevice(long)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_PaintTitle(struct IDCompositionSurface *,struct tagRECT const &)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_ComputeTitleBarRects(struct tagRECT const *)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_PlaceVisuals(struct tagRECT const *,bool)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_UpdateColorsFromApplicationView(bool)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_UpdateMica(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_UpdateBackgroundSurfaces(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_ManuallyPositionElements(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_SetIsVisible(int)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_NotifyReservedMetricsChanged(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_GetFrame(struct IApplicationFrameInternal * *)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_ShowTitleBar(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_GetCoreApplicationViewTitleBar(struct _GUID const &,void * *)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_ShowActionsMenu(struct tagPOINT *,enum TitleBarTelemetry::ACTIONS_MENU_INVOKE)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_InitializePersistence(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_PersistColors(struct Windows::UI::ViewManagement::IApplicationViewTitleBar *)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_UpdateDrawnByAppSetting(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_CommitDCompDevice(void *)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_InitializeDCompVariables(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_AnimateTitleBar(bool)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_UpdateButtonState(enum CTitleBar::TitleBarControl,bool)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_HideActionsMenu(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_GetDCompProvider(struct IDCompProvider * *)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_UpdateBackgroundTransforms(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_VisibleButtonsUpdated(void)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_UpdateButtonStateAndCommit(enum CTitleBar::TitleBarControl,bool)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_ShowSystemMenu(struct tagPOINT *,enum TitleBarTelemetry::SYSTEM_MENU_INVOKE)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_UpdateVisiblityForHideOptions(enum TITLE_BAR_HIDE_OPTIONS)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-        { {L"private: long __cdecl CTitleBar::_UpdateAllButtonStates(enum CTitleBar::DrawButtonFilter,bool)"}, (void **)&g_dummyOrig, (void *)CTitleBar_Generic_hook, true },
-    };
-
-    return WindhawkUtils::HookSymbols(
-        LoadLibraryExW(L"ApplicationFrame.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32),
-        ApplicationFrame_dll_hooks,
-        ARRAYSIZE(ApplicationFrame_dll_hooks));
-}
-
-void Wh_ModUninit()
-{
-    EnterCriticalSection(&g_csSubclassedWindows);
-    std::vector<HWND> windowsCopy = g_subclassedWindows;
-    g_subclassedWindows.clear();
-    LeaveCriticalSection(&g_csSubclassedWindows);
-
-    for (HWND hWnd : windowsCopy)
-    {
-        if (IsWindow(hWnd))
-        {
-            WindhawkUtils::RemoveWindowSubclassFromAnyThread(hWnd, SubclassProc);
-            SendMessageW(hWnd, WM_SETICON, ICON_SMALL, 0);
-            SendMessageW(hWnd, WM_SETICON, ICON_BIG, 0);
-            DestroyTitlebarIcons(hWnd);
+long __cdecl CreateTitleBarWindow_Hook(void* titleBar) {
+    HWND frame = FrameOfTitleBar(titleBar);
+    if (frame) {
+        AcquireSRWLockExclusive(&g_frameLock);
+        auto it = g_frames.find(frame);
+        bool hold =
+            it != g_frames.end() && it->second.state == FrameState::Pending;
+        if (hold) {
+            it->second.titleBar = titleBar;
+            g_titleBarFrame[titleBar] = frame;
+        }
+        ReleaseSRWLockExclusive(&g_frameLock);
+        if (hold) {
+            PostMessage(frame, g_frameCheckMsg, 0, 0);
+            return 0;
         }
     }
+    return CreateTitleBarWindow_Original(titleBar);
+}
 
-    DeleteCriticalSection(&g_csSubclassedWindows);
-    DeleteCriticalSection(&g_csGdiplus);
-
-    if (g_gdiplusToken != 0)
-    {
-        Gdiplus::GdiplusShutdown(g_gdiplusToken);
-        g_gdiplusToken = 0;
+long __cdecl PaintButton_Hook(void* titleBar,
+                              void* surface,
+                              int control,
+                              int type,
+                              const RECT* a,
+                              const RECT* b) {
+    AcquireSRWLockShared(&g_frameLock);
+    auto it = g_titleBarFrame.find(titleBar);
+    HWND frame = it != g_titleBarFrame.end() ? it->second : nullptr;
+    ReleaseSRWLockShared(&g_frameLock);
+    if (frame && GetFrameState(frame) != FrameState::Stock) {
+        return 0;
     }
+    return PaintButton_Original(titleBar, surface, control, type, a, b);
+}
+
+using CreateWindowInBandEx_t = HWND(WINAPI*)(DWORD,
+                                             LPCWSTR,
+                                             LPCWSTR,
+                                             DWORD,
+                                             int,
+                                             int,
+                                             int,
+                                             int,
+                                             HWND,
+                                             HMENU,
+                                             HINSTANCE,
+                                             LPVOID,
+                                             DWORD,
+                                             DWORD);
+CreateWindowInBandEx_t CreateWindowInBandEx_Original;
+HWND WINAPI CreateWindowInBandEx_Hook(DWORD exStyle,
+                                      LPCWSTR className,
+                                      LPCWSTR windowName,
+                                      DWORD style,
+                                      int x,
+                                      int y,
+                                      int width,
+                                      int height,
+                                      HWND parent,
+                                      HMENU menu,
+                                      HINSTANCE instance,
+                                      LPVOID param,
+                                      DWORD band,
+                                      DWORD typeFlags) {
+    bool frame = g_enabled && !IS_INTRESOURCE(className) &&
+                 _wcsicmp(className, L"ApplicationFrameWindow") == 0;
+    if (frame) {
+        // A redirection bitmap can only be chosen at creation, and the native
+        // caption needs one, so every frame gets it.
+        exStyle &= ~WS_EX_NOREDIRECTIONBITMAP;
+    }
+    HWND hWnd = CreateWindowInBandEx_Original(
+        exStyle, className, windowName, style, x, y, width, height, parent,
+        menu, instance, param, band, typeFlags);
+    if (hWnd && frame) {
+        AcquireSRWLockExclusive(&g_frameLock);
+        g_frames[hWnd] = FrameInfo{};
+        ReleaseSRWLockExclusive(&g_frameLock);
+        WindhawkUtils::SetWindowSubclassFromAnyThread(hWnd, FrameSubclassProc,
+                                                      0);
+    }
+    return hWnd;
+}
+
+using DwmExtendFrameIntoClientArea_t = HRESULT(WINAPI*)(HWND, const MARGINS*);
+DwmExtendFrameIntoClientArea_t DwmExtendFrameIntoClientArea_Original;
+HRESULT WINAPI DwmExtendFrameIntoClientArea_Hook(HWND hWnd,
+                                                 const MARGINS* margins) {
+    if (margins) {
+        Wh_Log(L"Extend %p state %d margins %d %d %d %d", hWnd,
+               (int)GetFrameState(hWnd), margins->cxLeftWidth,
+               margins->cxRightWidth, margins->cyTopHeight,
+               margins->cyBottomHeight);
+    }
+    // The frame host extends the frame over its custom title bar, which would
+    // hide the native caption.
+    if (GetFrameState(hWnd) == FrameState::Native) {
+        return 0x80263001;  // DWM_E_COMPOSITIONDISABLED
+    }
+    return DwmExtendFrameIntoClientArea_Original(hWnd, margins);
+}
+
+HRESULT WINAPI DwmSetWindowAttribute_Hook(HWND hWnd,
+                                          DWORD attribute,
+                                          LPCVOID value,
+                                          DWORD size) {
+    // Other mods paint a solid caption color; keep the caption see-through
+    // and acrylic.
+    if ((attribute == DWMWA_CAPTION_COLOR ||
+         attribute == DWMWA_SYSTEMBACKDROP_TYPE) &&
+        GetFrameState(hWnd) == FrameState::Native) {
+        return S_OK;
+    }
+    return DwmSetWindowAttribute_Original(hWnd, attribute, value, size);
+}
+
+void RestoreAllFrames() {
+    for (int i = 0; i < 100 && g_iconJobs; i++) {
+        Sleep(50);
+    }
+    std::vector<HWND> frames;
+    AcquireSRWLockShared(&g_frameLock);
+    for (auto& f : g_frames) {
+        frames.push_back(f.first);
+    }
+    ReleaseSRWLockShared(&g_frameLock);
+    for (HWND hWnd : frames) {
+        DWORD_PTR r;
+        SendMessageTimeout(hWnd, g_frameRestoreMsg, 0, 0, SMTO_NORMAL, 2000,
+                           &r);
+    }
+}
+
+BOOL Init() {
+    g_enabled = true;
+    g_frameCheckMsg = RegisterWindowMessage(L"RemoveUwpTitleBarsPlus_CheckFrame");
+    g_frameRestoreMsg =
+        RegisterWindowMessage(L"RemoveUwpTitleBarsPlus_RestoreFrame");
+
+    WindhawkUtils::SYMBOL_HOOK hooks[] = {
+        {{L"private: long __cdecl CTitleBar::_CreateTitleBarWindow(void)"},
+         (void**)&CreateTitleBarWindow_Original,
+         (void*)CreateTitleBarWindow_Hook},
+        {{L"private: long __cdecl CTitleBar::_PaintButton(struct "
+          L"IDCompositionSurface *,enum CTitleBar::TitleBarControl,enum "
+          L"TITLE_BAR_BITMAP_TYPE,struct tagRECT const &,struct tagRECT const "
+          L"&)"},
+         (void**)&PaintButton_Original,
+         (void*)PaintButton_Hook},
+    };
+    HMODULE frameModule = LoadLibraryEx(L"ApplicationFrame.dll", nullptr,
+                                        LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!frameModule ||
+        !WindhawkUtils::HookSymbols(frameModule, hooks, ARRAYSIZE(hooks))) {
+        Wh_Log(L"Failed to hook ApplicationFrame.dll");
+        return FALSE;
+    }
+
+    HMODULE user32Module =
+        LoadLibraryEx(L"user32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    Wh_SetFunctionHook(
+        (void*)GetProcAddress(user32Module, "CreateWindowInBandEx"),
+        (void*)CreateWindowInBandEx_Hook,
+        (void**)&CreateWindowInBandEx_Original);
+    Wh_SetFunctionHook((void*)DwmExtendFrameIntoClientArea,
+                       (void*)DwmExtendFrameIntoClientArea_Hook,
+                       (void**)&DwmExtendFrameIntoClientArea_Original);
+    Wh_SetFunctionHook((void*)DwmSetWindowAttribute,
+                       (void*)DwmSetWindowAttribute_Hook,
+                       (void**)&DwmSetWindowAttribute_Original);
+    return TRUE;
+}
+
+}  // namespace frame_host
+
+BOOL Wh_ModInit() {
+    Wh_Log(L">");
+    return frame_host::Init();
+}
+
+void Wh_ModBeforeUninit() {
+    Wh_Log(L">");
+    // While the hooks are still in place, since restoring a frame calls the
+    // original title bar function.
+    frame_host::RestoreAllFrames();
 }
