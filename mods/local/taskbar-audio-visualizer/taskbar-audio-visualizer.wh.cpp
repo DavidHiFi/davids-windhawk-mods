@@ -1,15 +1,15 @@
-// ==WindhawkMod==
+﻿// ==WindhawkMod==
 // @id                  taskbar-audio-visualizer
 // @name                Taskbar Audio Visualizer
 // @description         A live audio spectrum with media controls, right on the taskbar
-// @version             1.3.1
-// @author              DavidHiFi
+// @version             1.3.3
+// @author              DavidHiFi, USER-TOURNE, Salyts
 // @github              https://github.com/DavidHiFi
 // @homepage            https://github.com/DavidHiFi/davids-windhawk-mods
 // @license             MIT
-// @donateUrl       https://ko-fi.com/DavidHiFi
-// @include             windhawk.exe
+// @include             explorer.exe
 // @compilerOptions     -ldxgi -ld2d1 -ld3d11 -ldcomp -ldwmapi -ldwrite -lgdi32 -lshcore -lshlwapi -lole32 -lshell32 -lksuser -lwindowscodecs -lruntimeobject -lwindowsapp -luuid -luser32 -ladvapi32
+// @donateUrl           https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -30,12 +30,14 @@ other widgets.
 - **Choose what it listens to.** Right-click the bars to follow every active
   output, a single output device, or an input such as an audio interface's
   loopback.
-- **Stays out of the way.** It hides during fullscreen games and videos, and
-  while an always-on-top window sits over the strip. It follows the taskbar's
-  auto-hide by the shell's live state: when the taskbar actually slides off
-  the screen the strip slides with it and comes back with it, and while the
-  taskbar sits parked on screen (a wedged auto-hide behaves this way) the
-  strip stays visible with it. Clicks on the taskbar pass straight through.
+- **Stays out of the way.** It hides during fullscreen and borderless-windowed
+  games -- including after you alt-tab away while the game keeps covering the
+  taskbar -- and while an always-on-top window sits over the strip. It follows
+  the taskbar's auto-hide by the shell's live state: when the taskbar actually
+  slides off the screen the strip slides with it and comes back with it, and
+  while the taskbar sits parked on screen (a wedged auto-hide behaves this
+  way) the strip stays visible with it. Clicks on the taskbar pass straight
+  through.
 - **Customizable** bar shape, size, colors, EQ, response speed and background.
   Catppuccin Mocha colors by default.
 - **Light on resources.** Drawing slows down when nothing is playing.
@@ -268,7 +270,7 @@ by Salyts. MIT.
     $name: Follow taskbar auto-hide
     $description: Slide out of view with the taskbar whenever the Windows taskbar auto-hides, and come
       back when it is shown again, like any other taskbar widget. Keyed to the shell's live
-      state: while the taskbar behaves as a permanent bar that holds its screen space (for
+      state. While the taskbar behaves as a permanent bar that holds its screen space (for
       example a wedged auto-hide), the strip stays visible with it.
   - pauseWhenObscured: true
     $name: Hide when covered
@@ -1115,8 +1117,8 @@ HWND GetWorkerW() {
     // work fine across process boundaries; this is the same technique
     // standalone desktop-overlay tools use to reach behind the icons without
     // ever injecting into explorer.
-    SendMessage(hProgman, 0x052C, 0xD, 0);
-    SendMessage(hProgman, 0x052C, 0xD, 1);
+    SendMessageTimeout(hProgman, 0x052C, 0xD, 0, 100, SMTO_NORMAL, 0);
+    SendMessageTimeout(hProgman, 0x052C, 0xD, 1, 100, SMTO_NORMAL, 0);
 
     HWND hWorkerW = nullptr;
     EnumWindows(
@@ -1134,7 +1136,7 @@ HWND GetWorkerW() {
         (LPARAM)&hWorkerW);
 
     if (!hWorkerW) {
-        SendMessage(hProgman, 0x052C, 0, 0);
+        SendMessageTimeout(hProgman, 0x052C, 0, 0, 100, SMTO_NORMAL, 0);
         EnumWindows(
             [](HWND hWnd, LPARAM lParam) __stdcall -> BOOL {
                 if (!FindWindowEx(hWnd, nullptr, L"SHELLDLL_DefView", nullptr)) {
@@ -1194,6 +1196,92 @@ bool IsTaskbarCoveredBy(HWND hwnd) {
     return inter * 100 >= area * 90;
 }
 
+// A borderless-windowed game keeps the taskbar slid off for as long as the
+// game window is visible on the bar's monitor -- foreground or not. The
+// foreground-only check in IsFullscreenOrGameActive goes blind in exactly
+// that state: alt-tab to a window on another monitor and it answers "not
+// fullscreen" while the bar stays hidden (measured live 2026-10-08). This
+// asks the wider question instead: is any real application window currently
+// spanning the bar's whole monitor? A maximized ordinary window cannot
+// answer yes -- a resident bar's work area keeps it off the monitor's edge
+// strip -- and the shell's own full-screen cloaks (Windows Input Experience
+// runs 2560x1440 here, permanently, cloaked) are excluded by the same
+// filters the occlusion check uses. Titled or not, topmost or not: a window
+// that spans the monitor is what the shell itself reacts to, and 99% of the
+// monitor's area is far past anything a snapped or maximized window reaches.
+bool IsTaskbarMonitorCoveredByAnyApp() {
+    HMONITOR targetMonitor = TaskbarMonitor();
+    if (!targetMonitor) return false;
+    MONITORINFO mi{.cbSize = sizeof(mi)};
+    if (!GetMonitorInfo(targetMonitor, &mi)) return false;
+    RECT mon = mi.rcMonitor;
+    long long monitorArea = (long long)(mon.right - mon.left) * (mon.bottom - mon.top);
+    if (monitorArea <= 0) return false;
+
+    struct MonCoverCtx {
+        const RECT* mon;
+        long long monitorArea;
+        DWORD ownPid;
+        bool covered;
+    } ctx{&mon, monitorArea, GetCurrentProcessId(), false};
+
+    EnumWindows(
+        [](HWND hWnd, LPARAM lParam) __stdcall -> BOOL {
+            auto* c = reinterpret_cast<MonCoverCtx*>(lParam);
+
+            // The mod's own windows (overlay, media strip, picker) park over
+            // the taskbar, never across the monitor, but when this runs as
+            // the standalone tool process they belong to us all the same.
+            if (GetWindowThreadProcessId(hWnd, nullptr) == c->ownPid) return TRUE;
+
+            if (!IsWindowVisible(hWnd) || IsIconic(hWnd)) return TRUE;
+            if (hWnd != GetAncestor(hWnd, GA_ROOTOWNER)) return TRUE;
+
+            LONG_PTR exStyle = GetWindowLongPtr(hWnd, GWL_EXSTYLE);
+            if (exStyle & (WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE))
+                return TRUE;
+            if (GetWindowLongPtr(hWnd, GWL_STYLE) & WS_CHILD) return TRUE;
+
+            WCHAR cls[64] = {};
+            if (GetClassName(hWnd, cls, ARRAYSIZE(cls))) {
+                if (_wcsicmp(cls, L"Progman") == 0 || _wcsicmp(cls, L"WorkerW") == 0 ||
+                    _wcsicmp(cls, L"Shell_TrayWnd") == 0 ||
+                    _wcsicmp(cls, L"Shell_SecondaryTrayWnd") == 0 ||
+                    _wcsicmp(cls, L"Windows.UI.Core.CoreWindow") == 0 ||
+                    _wcsicmp(cls, L"Windows.UI.Composition.DesktopWindowContentBridge") == 0 ||
+                    _wcsicmp(cls, L"XamlExplorerHostIslandWindow") == 0 ||
+                    _wcsicmp(cls, L"TopLevelWindowForOverflowXamlIsland") == 0 ||
+                    _wcsicmp(cls, L"ForegroundStaging") == 0 ||
+                    _wcsicmp(cls, L"MultitaskingViewFrame") == 0) {
+                    return TRUE;
+                }
+            }
+
+            int cloaked = 0;
+            if (SUCCEEDED(DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, &cloaked,
+                                                sizeof(cloaked))) && cloaked) {
+                return TRUE;
+            }
+
+            RECT wr;
+            if (!GetWindowRect(hWnd, &wr)) return TRUE;
+            if (wr.right <= wr.left || wr.bottom <= wr.top) return TRUE;
+
+            RECT clipped;
+            if (!IntersectRect(&clipped, &wr, c->mon)) return TRUE;
+            long long area = (long long)(clipped.right - clipped.left) *
+                             (clipped.bottom - clipped.top);
+            if (area * 100 >= c->monitorArea * 99) {
+                c->covered = true;
+                return FALSE;
+            }
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(&ctx));
+
+    return ctx.covered;
+}
+
 bool IsFullscreenOrGameActive() {
     HMONITOR targetMonitor = TaskbarMonitor();
     if (!targetMonitor) targetMonitor = MonitorFromPoint({0, 0}, MONITOR_DEFAULTTONEAREST);
@@ -1229,6 +1317,26 @@ bool IsFullscreenOrGameActive() {
         return true;
 
     return false;
+}
+
+// One answer shared by the fullscreen watcher, the overlay self-heal and the
+// media repaint gate, so the three can never disagree about whether the
+// hide-everything state is active. The foreground path is immediate; the
+// wider borderless-cover path needs two agreeing evaluations before it may
+// hide anything on its own -- a window that spans the monitor for a single
+// sample (a fast alt-tab through a launcher, a transient splash) must not
+// park the strip, the same visible-bias the follow model applies. Once the
+// cover holds, it acts exactly like the foreground path.
+bool IsFullscreenPauseConditionActive() {
+    if (!g_settings.pauseOnFullscreen) return false;
+    if (IsFullscreenOrGameActive()) return true;
+
+    static unsigned s_coverStreak = 0;
+    if (!IsTaskbarMonitorCoveredByAnyApp()) {
+        s_coverStreak = 0;
+        return false;
+    }
+    return ++s_coverStreak >= 2;
 }
 
 // Returns true when the region the visualizer occupies is fully covered by some
@@ -2119,8 +2227,9 @@ void RepositionAndRepaintMediaControls() {
     if (g_mediaHiddenByCover && g_settings.mediaHideWhenCovered) return;
     // Never pop the strip over a fullscreen game: a repaint triggered by a
     // track change or playback flip while hidden would otherwise put it back
-    // on screen over the game it just got out from under.
-    if (g_settings.pauseOnFullscreen && IsFullscreenOrGameActive()) {
+    // on screen over the game it just got out from under. The shared
+    // predicate covers the alt-tabbed-away borderless case too.
+    if (IsFullscreenPauseConditionActive()) {
         if (IsWindowVisible(g_mediaWnd)) ShowWindow(g_mediaWnd, SW_HIDE);
         return;
     }
@@ -2341,7 +2450,10 @@ void UpdateTaskbarFollow() {
     }
 
     bool wantHidden = false;
-    if (g_overlayWnd && g_settings.followTaskbarAutoHide && g_followAutoHideEnabled)
+    // A child strip rides the bar's own auto-hide slide: the shell moves the bar
+    // and the strip with it. The reveal model only drives a popup strip.
+    bool stripIsChild = g_overlayWnd && (GetWindowLongPtr(g_overlayWnd, GWL_STYLE) & WS_CHILD);
+    if (g_overlayWnd && !stripIsChild && g_settings.followTaskbarAutoHide && g_followAutoHideEnabled)
         wantHidden = !IsTaskbarCurrentlyRevealed();
     // Hide only on an agreeing second tick: a single misread (a foreground
     // event landing a frame before the shell acts on it) must not park the
@@ -4407,6 +4519,15 @@ bool RectsApproxEqual(const D2D1_RECT_F& a, const D2D1_RECT_F& b) {
 
 void RenderVisualizer() {
     if (g_unloading || !g_dc || !g_swapChain) return;
+    // The bar brushes can be gone while the device context survives (a failed
+    // resource rebuild, often a graphics reset when a game starts). Drawing with a
+    // null brush crashed the whole process. Rebuild them; if that fails too, close
+    // the strip so its WM_DESTROY drops the swap chain and the heal rebuilds it.
+    if ((!g_barBrush || !g_barBrush2) && (!RecreateVisualResources() || !g_barBrush || !g_barBrush2)) {
+        HWND overlayWnd = g_overlayWnd.load(std::memory_order_relaxed);
+        if (overlayWnd) PostMessage(overlayWnd, WM_CLOSE, 0, 0);
+        return;
+    }
 
     // Advance the auto-hide follow animation. The shell's own slide runs about
     // 150 ms with an ease-out; smoothstep over the same time reads the same.
@@ -5334,7 +5455,7 @@ void ResumeFromFullscreen() {
     UpdateTaskbarFollow();
     HWND overlayWnd = g_overlayWnd.load(std::memory_order_relaxed);
     if (overlayWnd) {
-        SetWindowPos(overlayWnd, HWND_TOPMOST, 0, 0, 0, 0,
+        SetWindowPos(overlayWnd, HWND_TOP, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
         RenderVisualizer();
     }
@@ -5347,18 +5468,16 @@ void ResumeFromFullscreen() {
 void HandleDisplayChange() {
     HWND taskbar = MainTaskbar();
     if (!taskbar) return;
-    if (g_overlayWnd) SetWindowLongPtr(g_overlayWnd, GWLP_HWNDPARENT, (LONG_PTR)taskbar);
     if (g_mediaWnd) SetWindowLongPtr(g_mediaWnd, GWLP_HWNDPARENT, (LONG_PTR)taskbar);
     if (g_mediaWnd) RepositionAndRepaintMediaControls();
 
     if (!g_overlayWnd) return;
 
-    HWND hWorkerW = MainTaskbar();
-    if (!hWorkerW) return;
-
-    RECT rc;
-    GetWindowRect(hWorkerW, &rc);
-    SetWindowPos(g_overlayWnd, HWND_TOPMOST, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
+    // The strip is a child of the taskbar: it only needs the bar's current
+    // client size, and its position follows the bar.
+    RECT rc{};
+    GetClientRect(taskbar, &rc);
+    SetWindowPos(g_overlayWnd, HWND_TOP, 0, 0, rc.right - rc.left, rc.bottom - rc.top,
                  SWP_NOACTIVATE);
 
     HMONITOR monitor = TaskbarMonitor();
@@ -5382,6 +5501,7 @@ void HandleDisplayChange() {
 }
 
 void CreateOverlayWindow();
+void DropDeadOverlayWindow();
 void ApplySettingsChanged();
 
 LRESULT CALLBACK OverlayWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -5598,6 +5718,7 @@ LRESULT CALLBACK MessageWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_TIMER:
             if(wParam==0xCA71) {
                 UpdateTaskbarFollow();
+                DropDeadOverlayWindow();
                 // Self-heal: a lost overlay window (explorer restart killed
                 // its owner, a wedged earlier unload destroyed it, a
                 // transient init failure) must not leave the strip gone
@@ -5608,9 +5729,9 @@ LRESULT CALLBACK MessageWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     if (g_debugLogging.load(std::memory_order_relaxed))
                         Wh_Log(L"[Heal] overlay missing: unloading=%d paused=%d fullscreenActive=%d",
                                (int)g_unloading.load(), (int)g_fullscreenPaused.load(),
-                               (int)IsFullscreenOrGameActive());
+                               (int)IsFullscreenPauseConditionActive());
                     if (!g_unloading && !g_fullscreenPaused.load() &&
-                        !(g_settings.pauseOnFullscreen && IsFullscreenOrGameActive()))
+                        !IsFullscreenPauseConditionActive())
                         CreateOverlayWindow();
                 }
                 UpdateCapturePicker();
@@ -5670,13 +5791,16 @@ LRESULT CALLBACK MessageWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     FlushSettingsIssues();
                 }
             } else if (wParam == TIMER_ID_MSG_FULLSCREEN_WATCH) {
-                // Fullscreen (or a missing taskbar) hides every piece of this
-                // mod: the bars live on the taskbar, so when a borderless game
-                // covers it they must go too. Computed once per tick and shared
-                // by the media self-heal below and the pause decision after it,
-                // so the heal never fights the hide by re-showing the strip.
-                bool fullscreenHide =
-                    g_settings.pauseOnFullscreen && IsFullscreenOrGameActive();
+                // Fullscreen (or a missing taskbar, or a borderless game
+                // still covering the monitor after an alt-tab away) hides
+                // every piece of this mod: the bars live on the taskbar, so
+                // when a borderless game covers it they must go too. The
+                // shared predicate includes the wider cover signal, so the
+                // strip leaves and returns with the bar in both directions.
+                // Computed once per tick and shared by the media self-heal
+                // below and the pause decision after it, so the heal never
+                // fights the hide by re-showing the strip.
+                bool fullscreenHide = IsFullscreenPauseConditionActive();
                 // The media strip is a plain layered window living alongside
                 // whatever else is topmost, and it's the one piece of this mod
                 // that has to survive in that crowd -- another app taking
@@ -5727,6 +5851,13 @@ LRESULT CALLBACK MessageWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                             RepositionAndRepaintMediaControls();
                         }
                     }
+                }
+
+                // Windows created on the taskbar later land above the strip among
+                // its child windows. Keep the strip on top of its siblings.
+                if (g_overlayWnd && GetWindow(g_overlayWnd, GW_HWNDPREV)) {
+                    SetWindowPos(g_overlayWnd, HWND_TOP, 0, 0, 0, 0,
+                                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
                 }
 
                 bool shouldPause = fullscreenHide;
@@ -5817,7 +5948,7 @@ bool EnsureLazyInitialized() {
         return false;
     }
 
-    if (!g_settings.pauseOnFullscreen || !IsFullscreenOrGameActive()) {
+    if (!IsFullscreenPauseConditionActive()) {
         StartVizCaptureThread();
     } else {
         Wh_Log(L"Fullscreen active at startup, starting paused");
@@ -5831,7 +5962,20 @@ bool EnsureLazyInitialized() {
 }
 
 
+// The strip is a child of the taskbar. When Explorer dies, the strip dies with it,
+// but its WM_DESTROY does not always reach us, which left a dead handle behind and
+// blocked every rebuild. Forget a handle that no longer names a window.
+void DropDeadOverlayWindow() {
+    HWND overlayWnd = g_overlayWnd.load(std::memory_order_relaxed);
+    if (overlayWnd && !IsWindow(overlayWnd)) {
+        Wh_Log(L"[Heal] overlay handle is dead, rebuilding");
+        ReleaseSwapChainResources();
+        g_overlayWnd = nullptr;
+    }
+}
+
 void CreateOverlayWindow() {
+    DropDeadOverlayWindow();
     if (g_overlayWnd || !MainTaskbar()) {
         if (g_debugLogging.load(std::memory_order_relaxed))
             Wh_Log(L"[Overlay] create skipped: present=%d taskbar=%p overlay=%p",
@@ -5845,12 +5989,16 @@ void CreateOverlayWindow() {
                (int)g_overlayClassRegistered);
         return;
     }
+    // A child of the taskbar, not a topmost popup. The strip then sits in the
+    // taskbar's own z-order: whatever covers the taskbar (a fullscreen game, a
+    // window above the bar) covers the strip too, and the bar's auto-hide
+    // slide carries it along. A topmost popup stayed above those windows.
     RECT rc{};
-    GetWindowRect(MainTaskbar(), &rc);
+    GetClientRect(MainTaskbar(), &rc);
     g_overlayWnd = CreateWindowExW(
         WS_EX_NOREDIRECTIONBITMAP | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE |
-        WS_EX_TOOLWINDOW | WS_EX_TOPMOST, OVERLAY_WINDOW_CLASS,
-        nullptr, WS_POPUP, rc.left, rc.top, rc.right-rc.left, rc.bottom-rc.top,
+        WS_EX_TOOLWINDOW, OVERLAY_WINDOW_CLASS,
+        nullptr, WS_CHILD, 0, 0, rc.right-rc.left, rc.bottom-rc.top,
         MainTaskbar(), nullptr, GetCurrentModuleHandle(), nullptr);
     Wh_Log(L"Taskbar overlay created=%p rect=%ld,%ld,%ld,%ld error=%lu",
            (void*)g_overlayWnd.load(), rc.left, rc.top, rc.right, rc.bottom, GetLastError());
@@ -5871,7 +6019,7 @@ void CreateOverlayWindow() {
         // flashing seated for a frame.
         UpdateTaskbarFollow();
         RenderVisualizer();
-        SetWindowPos(g_overlayWnd, HWND_TOPMOST, 0, 0, 0, 0,
+        SetWindowPos(g_overlayWnd, HWND_TOP, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
 }
@@ -6187,7 +6335,7 @@ void ApplySettingsChanged() {
     if (!g_initSucceeded.load(std::memory_order_relaxed)) return;
 
     if (!g_fullscreenPaused.load()) {
-        if (g_settings.pauseOnFullscreen && IsFullscreenOrGameActive()) {
+        if (IsFullscreenPauseConditionActive()) {
             PauseForFullscreen();
         }
     } else if (!g_settings.pauseOnFullscreen) {
@@ -6290,16 +6438,26 @@ BOOL Wh_ModInit() {
     }
 
     if (isCurrentToolModProcess) {
-        g_toolModProcessMutex =
-            CreateMutex(nullptr, TRUE, L"windhawk-tool-mod_" WH_MOD_ID);
-        if (!g_toolModProcessMutex) {
-            Wh_Log(L"CreateMutex failed");
-            ExitProcess(1);
-        }
-
-        if (GetLastError() == ERROR_ALREADY_EXISTS) {
-            Wh_Log(L"Tool mod already running (%s)", WH_MOD_ID);
-            ExitProcess(1);
+        // Single instance by the mutex name, not by ownership: init runs on a
+        // thread that exits, so ownership was abandoned and every copy got in.
+        // On a reload or an Explorer restart the old process can still be
+        // shutting down, so wait up to 30 seconds for its handle to close.
+        for (int tries = 0;; tries++) {
+            g_toolModProcessMutex =
+                CreateMutex(nullptr, FALSE, L"windhawk-tool-mod_" WH_MOD_ID);
+            if (!g_toolModProcessMutex) {
+                Wh_Log(L"CreateMutex failed");
+                ExitProcess(1);
+            }
+            if (GetLastError() != ERROR_ALREADY_EXISTS) {
+                break;
+            }
+            CloseHandle(g_toolModProcessMutex);
+            if (tries >= 60) {
+                Wh_Log(L"Tool mod already running (%s)", WH_MOD_ID);
+                ExitProcess(1);
+            }
+            Sleep(500);
         }
 
         if (!WhTool_ModInit()) {
@@ -6319,6 +6477,12 @@ BOOL Wh_ModInit() {
     }
 
     if (isToolModProcess) {
+        return FALSE;
+    }
+
+    // Only the taskbar process (plain explorer.exe, no arguments) launches the
+    // tool. Folder windows run as "/factory,..." processes and must not.
+    if (argc > 1) {
         return FALSE;
     }
 
@@ -6403,3 +6567,4 @@ void Wh_ModUninit() {
     WhTool_ModUninit();
     ExitProcess(0);
 }
+

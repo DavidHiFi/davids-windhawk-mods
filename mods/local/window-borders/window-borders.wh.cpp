@@ -66,11 +66,12 @@ by [Guerra24](https://github.com/Guerra24), the border re-apply approach used by
   $description: >-
     Border color of the window you are using. "accent" follows your Windows
     accent color. Use a hex color like #89b4fa for anything else.
-- unfocusedColor: transparent
+- unfocusedColor: "#585b70"
   $name: Unfocused color
   $description: >-
-    Border color of background windows. "transparent" hides the border there.
-    Use a hex color like #45475a for a dim border instead.
+    Border color of background windows. The default is a dull Catppuccin Mocha
+    gray. "accent" follows your Windows accent color, and "transparent" hides
+    the border on background windows.
 - overlay:
   - width: 2
     $name: Width
@@ -89,10 +90,15 @@ by [Guerra24](https://github.com/Guerra24), the border re-apply approach used by
     $name: Fill
     $options:
     - solid: Solid color
-    - gradient: Gradient on the active window
+    - gradient: Gradient from the color to an end color
   - gradientTo: "#cba6f7"
     $name: Gradient end color
-    $description: The active border fades from the focused color to this one.
+    $description: The focused border fades from the focused color to this one.
+  - unfocusedGradientTo: "#585b70"
+    $name: Background gradient end color
+    $description: >-
+      The same as gradient end color, for background windows. Keep it equal to
+      the unfocused color for a plain line.
   - gradientAngle: 45
     $name: Gradient angle
     $description: Direction of the gradient in degrees.
@@ -157,6 +163,7 @@ struct OverlaySettings {
     int radius = 8;
     bool gradient = false;
     COLORREF gradientTo = RGB(0xcb, 0xa6, 0xf7);
+    COLORREF unfocusedGradientTo = RGB(0x58, 0x5b, 0x70);
     int gradientAngle = 45;
     UINT fadeMs = 150;
 };
@@ -308,6 +315,10 @@ static void LoadSettings() {
     ParseColor(s, &to);
     Wh_FreeStringSetting(s);
     g_overlay.gradientTo = to.kind == COLORK_SOLID ? to.rgb : RGB(0xcb, 0xa6, 0xf7);
+    s = Wh_GetStringSetting(L"overlay.unfocusedGradientTo");
+    ParseColor(s, &to);
+    Wh_FreeStringSetting(s);
+    g_overlay.unfocusedGradientTo = to.kind == COLORK_SOLID ? to.rgb : RGB(0x58, 0x5b, 0x70);
     g_overlay.gradientAngle = Wh_GetIntSetting(L"overlay.gradientAngle");
 
     int fadeMs = Wh_GetIntSetting(L"overlay.fadeMs");
@@ -648,7 +659,9 @@ static void StateColors(bool focused, RingColor* c1, RingColor* c2) {
     const BorderColor& bc = focused ? g_focused : g_unfocused;
     if (bc.kind == COLORK_ACCENT || bc.kind == COLORK_SOLID) {
         *c1 = ToRing(bc.kind == COLORK_ACCENT ? g_accentColor : bc.rgb, 1);
-        *c2 = focused && g_overlay.gradient ? ToRing(g_overlay.gradientTo, 1) : *c1;
+        *c2 = g_overlay.gradient
+                  ? ToRing(focused ? g_overlay.gradientTo : g_overlay.unfocusedGradientTo, 1)
+                  : *c1;
         return;
     }
     // Hidden in this state: keep the other state's colors and fade them out.
@@ -666,9 +679,14 @@ static bool GetFrame(HWND target, RECT* rc) {
     return GetWindowRect(target, rc) && rc->right > rc->left;
 }
 
-// Where Windows would not draw a frame, the overlay stays hidden too.
-static bool FrameVisible(HWND target, const RECT& frame, HMONITOR monitor) {
-    if (!IsWindowVisible(target) || IsIconic(target) || IsZoomed(target)) {
+// Where Windows would not draw a frame, the overlay stays hidden too. That
+// includes maximized windows, which get no border at all.
+static bool GetDrawFrame(HWND target, RECT* frame, HMONITOR* monitor) {
+    if (!GetFrame(target, frame)) {
+        return false;
+    }
+    *monitor = MonitorFromRect(frame, MONITOR_DEFAULTTONEAREST);
+    if (!IsWindowVisible(target) || IsIconic(target)) {
         return false;
     }
     BOOL cloaked = FALSE;
@@ -678,9 +696,15 @@ static bool FrameVisible(HWND target, const RECT& frame, HMONITOR monitor) {
         return false;
     }
     MONITORINFO mi = {sizeof(mi)};
-    if (GetMonitorInfoW(monitor, &mi) && frame.left <= mi.rcMonitor.left &&
-        frame.top <= mi.rcMonitor.top && frame.right >= mi.rcMonitor.right &&
-        frame.bottom >= mi.rcMonitor.bottom) {
+    if (!GetMonitorInfoW(*monitor, &mi)) {
+        return true;
+    }
+    if (IsZoomed(target)) {
+        return false;  // maximized: no border
+    }
+    if (frame->left <= mi.rcMonitor.left && frame->top <= mi.rcMonitor.top &&
+        frame->right >= mi.rcMonitor.right &&
+        frame->bottom >= mi.rcMonitor.bottom) {
         return false;  // fullscreen app or game
     }
     return true;
@@ -880,11 +904,7 @@ static void SyncOverlay(HWND target, int focusHint) {
 
     RECT frame;
     HMONITOR monitor = nullptr;
-    bool visible = GetFrame(target, &frame);
-    if (visible) {
-        monitor = MonitorFromRect(&frame, MONITOR_DEFAULTTONEAREST);
-        visible = FrameVisible(target, frame, monitor);
-    }
+    bool visible = GetDrawFrame(target, &frame, &monitor);
     if (!ov) {
         if (!visible) {
             return;

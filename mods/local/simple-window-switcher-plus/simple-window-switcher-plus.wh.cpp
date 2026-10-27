@@ -2,9 +2,10 @@
 // @id              simple-window-switcher-plus
 // @name            Simple Window Switcher Plus
 // @description     Customizable Alt+Tab with Vista animations, background blur and elevated app support
-// @version         1.0.0
-// @author          DavidHiFi
+// @version         1.0.1
+// @author          DavidHiFi, Lone, valinet, Asteski, bropines, caliberda
 // @github          https://github.com/DavidHiFi
+// @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         windhawk.exe
 // @include         explorer.exe
 // @compilerOptions -ld3d11 -ldxgi -ld2d1 -ldcomp -ldwrite -ldwmapi -lole32 -loleaut32 -luuid -lruntimeobject -lwindowscodecs -lshcore -lshell32 -lgdi32 -luxtheme -lshlwapi -lcomctl32 -lgdiplus -lversion
@@ -608,6 +609,9 @@ Based on Simple Window Switcher 2.1 by Lone, with improvements by Asteski and br
     - sortMinimizedWindowsToEnd: true
       $name: Sort Minimized Windows to the End
       $description: Sort minimized windows after all active windows. Disable this to keep minimized windows in their Z-order.
+    - centerCursor: false
+      $name: Center the Mouse Cursor on the Switched-To Window
+      $description: Moves the mouse cursor to the middle of the window you switch to with Alt+Tab.
   $name: Accessibility
 - ExcludedWindows:
     - excludeByTitle: ""
@@ -690,6 +694,28 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #include <memory>
 #include <unordered_map>
 #include <windhawk_utils.h>
+
+// Center cursor option, shared by both renderers: put the pointer in the middle
+// of the window that Alt+Tab just activated.
+static void CenterCursorOnWindow(HWND hwnd) {
+    if (!hwnd || !IsWindow(hwnd)) {
+        return;
+    }
+    RECT rc;
+    if (FAILED(DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &rc,
+                                     sizeof(rc))) &&
+        !GetWindowRect(hwnd, &rc)) {
+        return;
+    }
+    const LONG w = rc.right - rc.left;
+    const LONG h = rc.bottom - rc.top;
+    // Minimized windows sit at -32000; there is nothing sensible to center on.
+    if (w <= 0 || h <= 0 || rc.left <= -30000 || rc.top <= -30000) {
+        return;
+    }
+    SetCursorPos(rc.left + w / 2, rc.top + h / 2);
+}
+
 namespace Simple {
 
 #define SWS_CLASSNAME       L"WindhawkSWSPlus_Switcher"
@@ -788,6 +814,7 @@ struct Settings {
     bool restoreAllWindows;
     bool hideMinimizedWindows;
     bool sortMinimizedWindowsToEnd;
+    bool centerCursor;
     int customCornerRadius;
     WCHAR switcherPosition[32];
     int switcherPositionMargin;
@@ -3983,6 +4010,7 @@ static void HideSwitcher() {
 static void SwitchToSelected() {
     if (g_selectedIndex < 0 || g_selectedIndex >= (int)g_windows.size()) { HideSwitcher(); return; }
     HWND hT = g_windows[g_selectedIndex].hWnd;
+    HWND hTarget = NULL;
     std::vector<HWND> groupWindows;
     if (g_settings.showApplications && g_settings.restoreAllWindows) {
         groupWindows = g_windows[g_selectedIndex].groupWindows;
@@ -3998,9 +4026,11 @@ static void SwitchToSelected() {
         HWND hF = IsWindowVisible(hP) ? hP : hT;
         if (IsIconic(hF)) ShowWindow(hF, SW_RESTORE);
         if (!SetForegroundWindow(hF)) SwitchToThisWindow(hF, TRUE);
+        hTarget = hF;
     }
 
     HideSwitcher();
+    if (g_settings.centerCursor && hTarget) CenterCursorOnWindow(hTarget);
 }
 
 // Helper: check if a window is truncated (not placed in current layout)
@@ -5100,6 +5130,7 @@ static void LoadSettings() {
     g_settings.restoreAllWindows = Wh_GetIntSetting(L"Grouping.restoreAllWindows");
     g_settings.hideMinimizedWindows = Wh_GetIntSetting(L"Accessibility.hideMinimizedWindows");
     g_settings.sortMinimizedWindowsToEnd = Wh_GetIntSetting(L"Accessibility.sortMinimizedWindowsToEnd");
+    g_settings.centerCursor = Wh_GetIntSetting(L"Accessibility.centerCursor") != 0;
     LoadStringSetting(L"Grouping.showTitles", g_settings.showTitles, L"windowTitle");
     if (wcscmp(g_settings.showTitles, L"windowTitle") != 0 &&
         wcscmp(g_settings.showTitles, L"appName") != 0 &&
@@ -5603,6 +5634,7 @@ struct Settings {
     bool shadows;
     bool includeMinimized;
     bool minimizedContent;
+    bool centerCursor;
 };
 
 Settings LoadSettings() {
@@ -5668,6 +5700,7 @@ Settings LoadSettings() {
     s.shadows = Wh_GetIntSetting(L"shadows") != 0;
     s.includeMinimized = Wh_GetIntSetting(L"includeMinimized") != 0 && !Simple::g_settings.hideMinimizedWindows;
     s.minimizedContent = Wh_GetIntSetting(L"minimizedContent") != 0;
+    s.centerCursor = Wh_GetIntSetting(L"Accessibility.centerCursor") != 0;
     return s;
 }
 
@@ -7229,6 +7262,9 @@ void Switcher::OnCommit(int index) {
             ActivateWindow(target);
         }
         EndSession();
+        if (target && m_settings.centerCursor) {
+            CenterCursorOnWindow(target);
+        }
         return;
     }
 
@@ -7632,7 +7668,12 @@ void Switcher::FinishClose() {
         // Give DWM a frame to bring the window up before revealing it.
         DwmFlush();
     }
+    const bool committed = m_commit && target;
     EndSession();
+    // Canceled switches restore the previous window and leave the cursor alone.
+    if (committed && m_settings.centerCursor) {
+        CenterCursorOnWindow(target);
+    }
 }
 
 void Switcher::EndSession() {

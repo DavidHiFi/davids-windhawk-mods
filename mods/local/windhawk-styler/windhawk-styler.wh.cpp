@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.82
+// @version         2.0.83
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -95,6 +95,9 @@ The original window frame work was adapted from [Titlebar For Everyone](https://
 - titleBarAcrylic: true
   $name: Match the title bar to the background
   $description: "Use the same color and transparency as the background. Turn off for a solid title bar"
+- centerTitle: false
+  $name: Center the title
+  $description: "Put the icon and window name in the middle of the title bar, like Caption Buttons Customizer does for other windows"
 - titleBarColor: "#403a45"
   $name: Solid title bar color
   $description: "Used when Match the title bar to the background is off. Enter a color in #RRGGBB format"
@@ -160,6 +163,7 @@ struct Settings {
     std::uint32_t titleBarRgb = 0x403a45;  // RRGGBB
     bool titleBarColorSet = true;
     bool titleBarAcrylic = true;
+    bool centerTitle = false;
 };
 
 static Settings g_settings;
@@ -263,6 +267,7 @@ static void ReadSettings(Settings* s) {
 
     s->nativeTitleBar = Wh_GetIntSetting(L"nativeTitleBar") != 0;
     s->titleBarAcrylic = Wh_GetIntSetting(L"titleBarAcrylic") != 0;
+    s->centerTitle = Wh_GetIntSetting(L"centerTitle") != 0;
 
     s->titleBarColorSet = false;
     std::uint32_t titleBarRgb;
@@ -974,10 +979,22 @@ static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
         HTHEME theme = OpenThemeData(hwnd, L"WINDOW");
         int icon = GetSystemMetricsForDpi(SM_CXSMICON, dpi);
         int inset = MulDiv(12, dpi, 96);
+        int iconX = inset;
+        wchar_t title[512];
+        GetWindowTextW(hwnd, title, 512);
+        RECT text{inset + icon + MulDiv(8, dpi, 96), 0, client.right - MulDiv(160, dpi, 96), client.bottom};
+        if (s.centerTitle) {
+            // Center the text on the window, icon just before it; stay clear of the buttons.
+            SIZE size{};
+            GetTextExtentPoint32W(paintDc, title, lstrlenW(title), &size);
+            int gap = MulDiv(5, dpi, 96);
+            int left = client.right / 2 - size.cx / 2;
+            left = std::min(left, (int)(text.right - size.cx));
+            left = std::max(left, inset + icon + gap);
+            text.left = left;
+            iconX = left - gap - icon;
+        }
         if (theme) {
-            wchar_t title[512];
-            GetWindowTextW(hwnd, title, 512);
-            RECT text{inset + icon + MulDiv(8, dpi, 96), 0, client.right - MulDiv(160, dpi, 96), client.bottom};
             DTTOPTS options{sizeof(options)};
             options.dwFlags = DTT_COMPOSITED | DTT_TEXTCOLOR;
             options.crText = s.text.empty() ? RGB(255,255,255) : Bgr(s.textRgb);
@@ -987,7 +1004,7 @@ static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
         }
         HICON logo = (HICON)SendMessageW(hwnd, WM_GETICON, ICON_SMALL, 0);
         if (!logo) logo = (HICON)GetClassLongPtrW(hwnd, GCLP_HICONSM);
-        if (logo) DrawIconEx(paintDc, inset, (client.bottom-icon)/2, logo, icon, icon, 0, nullptr, DI_NORMAL);
+        if (logo) DrawIconEx(paintDc, iconX, (client.bottom-icon)/2, logo, icon, icon, 0, nullptr, DI_NORMAL);
         if (oldFont) SelectObject(paintDc, oldFont);
         if (font) DeleteObject(font);
         EndBufferedPaint(buffer, TRUE);

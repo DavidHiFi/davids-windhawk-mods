@@ -2081,26 +2081,6 @@ void DrawMenuButton() {
 // pair so characters outside the basic plane stay whole.
 
 void QueryChanged();
-void Render();
-
-// The field the editor works on: the search box, or a folder's name while
-// its folder is open.
-std::wstring& EditText() {
-    return g_openFolder ? g_openFolder->name : g_query;
-}
-
-size_t MaxEditChars() {
-    return g_openFolder ? 60 : 200;
-}
-
-// A rename only redraws; the search also refilters the apps.
-void EditChanged() {
-    if (g_openFolder) {
-        Render();
-    } else {
-        QueryChanged();
-    }
-}
 
 bool SearchSelection(size_t* from, size_t* to) {
     *from = std::min(g_anchor, g_caret);
@@ -2109,20 +2089,19 @@ bool SearchSelection(size_t* from, size_t* to) {
 }
 
 size_t CaretStep(size_t pos, int dir) {
-    const std::wstring& text = EditText();
     if (dir < 0) {
-        pos = std::min(pos, text.size());
-        if (pos >= 2 && IS_HIGH_SURROGATE(text[pos - 1]) &&
-            IS_LOW_SURROGATE(text[pos - 2])) {
+        pos = std::min(pos, g_query.size());
+        if (pos >= 2 && IS_HIGH_SURROGATE(g_query[pos - 1]) &&
+            IS_LOW_SURROGATE(g_query[pos - 2])) {
             return pos - 2;
         }
         return pos ? pos - 1 : 0;
     }
-    if (pos + 1 < text.size() && IS_HIGH_SURROGATE(text[pos]) &&
-        IS_LOW_SURROGATE(text[pos + 1])) {
+    if (pos + 1 < g_query.size() && IS_HIGH_SURROGATE(g_query[pos]) &&
+        IS_LOW_SURROGATE(g_query[pos + 1])) {
         return pos + 2;
     }
-    return std::min(pos + 1, text.size());
+    return std::min(pos + 1, g_query.size());
 }
 
 bool IsWordChar(WCHAR ch) {
@@ -2130,24 +2109,22 @@ bool IsWordChar(WCHAR ch) {
 }
 
 size_t WordStart(size_t pos) {
-    const std::wstring& text = EditText();
-    size_t i = std::min(pos, text.size());
-    while (i > 0 && !IsWordChar(text[i - 1])) {
+    size_t i = std::min(pos, g_query.size());
+    while (i > 0 && !IsWordChar(g_query[i - 1])) {
         i--;
     }
-    while (i > 0 && IsWordChar(text[i - 1])) {
+    while (i > 0 && IsWordChar(g_query[i - 1])) {
         i--;
     }
     return i;
 }
 
 size_t WordEnd(size_t pos) {
-    const std::wstring& text = EditText();
-    size_t n = text.size(), i = std::min(pos, n);
-    while (i < n && !IsWordChar(text[i])) {
+    size_t n = g_query.size(), i = std::min(pos, n);
+    while (i < n && !IsWordChar(g_query[i])) {
         i++;
     }
-    while (i < n && IsWordChar(text[i])) {
+    while (i < n && IsWordChar(g_query[i])) {
         i++;
     }
     return i;
@@ -2178,7 +2155,7 @@ bool DeleteSelection() {
     if (!SearchSelection(&from, &to)) {
         return false;
     }
-    EditText().erase(from, to - from);
+    g_query.erase(from, to - from);
     g_caret = g_anchor = from;
     TouchCaret();
     return true;
@@ -2186,8 +2163,7 @@ bool DeleteSelection() {
 
 void InsertAtCaret(std::wstring text) {
     DeleteSelection();
-    size_t max = MaxEditChars();
-    size_t room = max - std::min(EditText().size(), max);
+    size_t room = 200 - std::min(g_query.size(), (size_t)200);
     if (text.size() > room) {
         text.resize(room);
     }
@@ -2208,8 +2184,7 @@ void CopySelection(bool cut) {
         if (HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE,
                                       (to - from + 1) * sizeof(WCHAR))) {
             if (WCHAR* p = (WCHAR*)GlobalLock(mem)) {
-                memcpy(p, EditText().c_str() + from,
-                       (to - from) * sizeof(WCHAR));
+                memcpy(p, g_query.c_str() + from, (to - from) * sizeof(WCHAR));
                 p[to - from] = 0;
                 GlobalUnlock(mem);
                 if (!SetClipboardData(CF_UNICODETEXT, mem)) {
@@ -2223,7 +2198,7 @@ void CopySelection(bool cut) {
     CloseClipboard();
     if (cut) {
         DeleteSelection();
-        EditChanged();
+        QueryChanged();
     }
 }
 
@@ -4280,41 +4255,57 @@ void PasteText() {
         }
     }
     CloseClipboard();
-    EditChanged();
+    QueryChanged();
 }
 
 void OnChar(WCHAR ch) {
     if (g_drag.active || g_drag.pending) {
         return;
     }
+    if (g_openFolder) {
+        // Typing in an open folder renames it.
+        std::wstring& name = g_openFolder->name;
+        if (ch == 8) {
+            if (!name.empty()) {
+                name.pop_back();
+                if (!name.empty() && IS_HIGH_SURROGATE(name.back())) {
+                    name.pop_back();
+                }
+            }
+        } else if (ch >= 32 && ch != 0x7F && name.size() < 60) {
+            name += ch;
+        }
+        Render();
+        return;
+    }
     switch (ch) {
         case 8: {  // Backspace: the selection, or a code point before the caret.
             if (DeleteSelection()) {
-                EditChanged();
+                QueryChanged();
             } else if (g_caret > 0) {
                 size_t prev = CaretStep(g_caret, -1);
-                EditText().erase(prev, g_caret - prev);
+                g_query.erase(prev, g_caret - prev);
                 g_caret = g_anchor = prev;
-                EditChanged();
+                QueryChanged();
             }
             TouchCaret();
             return;
         }
         case 0x7F: {  // Ctrl+Backspace: the word before the caret.
             if (DeleteSelection()) {
-                EditChanged();
+                QueryChanged();
             } else if (g_caret > 0) {
                 size_t start = WordStart(g_caret);
-                EditText().erase(start, g_caret - start);
+                g_query.erase(start, g_caret - start);
                 g_caret = g_anchor = start;
-                EditChanged();
+                QueryChanged();
             }
             TouchCaret();
             return;
         }
         case 0x01:  // Ctrl+A: select all.
             g_anchor = 0;
-            g_caret = EditText().size();
+            g_caret = g_query.size();
             TouchCaret();
             Render();
             return;
@@ -4328,9 +4319,9 @@ void OnChar(WCHAR ch) {
             PasteText();
             return;
     }
-    if (ch >= 32 && EditText().size() < MaxEditChars()) {
+    if (ch >= 32 && g_query.size() < 200) {
         InsertAtCaret(std::wstring(1, ch));
-        EditChanged();
+        QueryChanged();
     }
 }
 
@@ -4385,7 +4376,7 @@ void OnKeyDown(WPARAM key) {
             ShowSelectedMenu();
             break;
         case VK_LEFT:
-            if (!EditText().empty()) {
+            if (!g_query.empty()) {
                 bool word = GetKeyState(VK_CONTROL) < 0;
                 SetCaret(word ? WordStart(g_caret) : CaretStep(g_caret, -1),
                          GetKeyState(VK_SHIFT) < 0);
@@ -4395,7 +4386,7 @@ void OnKeyDown(WPARAM key) {
             }
             break;
         case VK_RIGHT:
-            if (!EditText().empty()) {
+            if (!g_query.empty()) {
                 bool word = GetKeyState(VK_CONTROL) < 0;
                 SetCaret(word ? WordEnd(g_caret) : CaretStep(g_caret, 1),
                          GetKeyState(VK_SHIFT) < 0);
@@ -4421,19 +4412,19 @@ void OnKeyDown(WPARAM key) {
             }
             break;
         case VK_HOME:
-            if (!EditText().empty()) {
+            if (!g_query.empty()) {
                 SetCaret(0, GetKeyState(VK_SHIFT) < 0);
                 Render();
             }
             break;
         case VK_END:
-            if (!EditText().empty()) {
+            if (!g_query.empty()) {
                 SetCaret(g_query.size(), GetKeyState(VK_SHIFT) < 0);
                 Render();
             }
             break;
         case VK_DELETE:
-            if (!EditText().empty()) {
+            if (!g_query.empty()) {
                 if (DeleteSelection()) {
                     QueryChanged();
                 } else {

@@ -2,7 +2,7 @@
 // @id              window-manager
 // @name            Window Manager Plus
 // @description     Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts
-// @version         1.2.0
+// @version         1.2.2
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -3713,6 +3713,13 @@ static void UnregisterHotkeys() {
 // (Re)registers a thread-global hotkey per bound action, using the action index as the
 // hotkey id. Consuming the whole combo avoids the stray-modifier side effects of a
 // low-level keyboard hook. Must run on the hook thread.
+//
+// Every process that loads this mod registers the combos on its hook thread, so one
+// process owns each combo at a time. A combo is released when its owner's thread
+// exits, and RetryMissingHotkeys takes it back in another process. Close is posted as
+// a message (WM_CLOSE), which UIPI can block from a lower-integrity owner. Maximize,
+// minimize and restore are direct window calls. Drag and resize interception are
+// per-process and unaffected.
 static void RegisterHotkeys() {
     UnregisterHotkeys();
     for (int i = 0; i < ACTION_COUNT; i++) {
@@ -3727,6 +3734,20 @@ static void RegisterHotkeys() {
             Wh_Log(L"'%s' could not be registered (error %lu); the combination may "
                    L"be reserved or already claimed by another app",
                    g_keyNames[i], GetLastError());
+        }
+    }
+}
+
+static UINT_PTR g_hotkeyRetryTimer = 0;
+
+// Takes back each combo this process does not hold, for example after its owner exited.
+static void RetryMissingHotkeys() {
+    for (int i = 0; i < ACTION_COUNT; i++) {
+        if (g_actionKeys[i] == 0 || g_hotkeyRegistered[i]) {
+            continue;
+        }
+        if (RegisterHotKey(nullptr, i, g_actionMods[i] | MOD_NOREPEAT, g_actionKeys[i])) {
+            g_hotkeyRegistered[i] = true;
         }
     }
 }
@@ -3972,6 +3993,7 @@ static DWORD WINAPI HookThreadProc(LPVOID) {
     // is posted to the queue of the thread that called RegisterHotKey. The auto-snap
     // WinEvent hook is installed here too, but only if any rules are configured.
     RegisterHotkeys();
+    g_hotkeyRetryTimer = SetTimer(nullptr, 0, 2000, nullptr);
     UpdateWinEventHook();
 
     SetEvent(g_hookReadyEvent);
@@ -3990,6 +4012,10 @@ static DWORD WINAPI HookThreadProc(LPVOID) {
                 if (idx >= 0 && idx < ACTION_COUNT) {
                     EnqueueWork(GetForegroundWindow(), g_actionByIndex[idx]);
                 }
+                continue;
+            }
+            if (msg.message == WM_TIMER && msg.wParam == g_hotkeyRetryTimer) {
+                RetryMissingHotkeys();
                 continue;
             }
             if (msg.message == WM_APP_SETTINGS_CHANGED) {
@@ -4960,3 +4986,4 @@ void Wh_ModUninit() {
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
     return altSnapDrag::DragDllMain(hinstDLL, fdwReason, lpReserved);
 }
+

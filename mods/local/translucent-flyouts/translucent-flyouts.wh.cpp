@@ -1,9 +1,9 @@
 // ==WindhawkMod==
 // @id              translucent-flyouts
 // @name            Translucent Flyouts
-// @description     Acrylic, Mica and blur backgrounds for context menus, dropdowns and tooltips in every app
-// @version         0.6.33
-// @author          DavidHiFi
+// @description     Acrylic, Mica and blur backgrounds, plus dark mode, for context menus, dropdowns and tooltips in every app
+// @version         0.6.74
+// @author          DavidHiFi, ALTaleX531, Mgg Sk
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @exclude         discord*.exe
@@ -29,7 +29,7 @@
 - global:
   - effectType: modern_acrylic
     $name: Effect Type
-    $description: Choose the background effect used for this pop-up type. Use use_global to inherit the Global value
+    $description: Background effect for menus, dropdowns and tooltips. Each section can override it.
     $options:
       - none: None / Disabled
       - transparent: Fully Transparent
@@ -42,7 +42,7 @@
       - mica_variant: Mica Variant Background Layer
   - cornerType: small_round
     $name: Corner Style
-    $description: Choose the corner shape and roundness for this pop-up type. Use use_global to inherit the Global value
+    $description: Corner shape for menus, dropdowns and tooltips. Each section can override it.
     $options:
       - dont_change: Don't Change
       - sharp: Sharp Corners
@@ -50,16 +50,16 @@
       - small_round: Small Round Corners
   - enableDropShadow: false
     $name: Enable Drop Shadow
-    $description: Enable or disable drop shadow behind this pop-up type. Use use_global to inherit the Global value
+    $description: Shadow behind menus, dropdowns and tooltips. Each section can override it.
   - noBorderColor: false
     $name: Disable Border Color
-    $description: Choose whether to render system borders for this pop-up type. Use use_global to inherit the Global value
+    $description: Whether these pop-ups keep their system borders. Each section can override it.
   - enableThemeColorization: false
     $name: Enable Theme Colorization
-    $description: Use current theme accent color for borders instead of fixed custom border colors. Use use_global to inherit the Global value
+    $description: Tint with the Windows accent color instead of the fixed border colors. Each section can override it.
   - darkModeThemeColorizationType: start_hover
     $name: Dark Accent Source
-    $description: Choose which immersive color slot is used in dark mode when theme colorization is enabled
+    $description: Which Windows accent slot tints the pop-ups in dark mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -72,7 +72,7 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - lightModeThemeColorizationType: start_hover
     $name: Light Accent Source
-    $description: Choose which immersive color slot is used in light mode when theme colorization is enabled
+    $description: Which Windows accent slot tints the pop-ups in light mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -85,28 +85,28 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - darkModeBorderColor: "0xFF89B4FA"
     $name: Dark Border Color
-    $description: Dark mode border color in ARGB hex format 0xAARRGGBB
+    $description: Border color in dark mode, as 0xAARRGGBB.
   - lightModeBorderColor: "0xFF89B4FA"
     $name: Light Border Color
-    $description: Light mode border color in ARGB hex format 0xAARRGGBB
+    $description: Border color in light mode, as 0xAARRGGBB.
   - darkModeGradientColor: "0xCC1E1E2E"
     $name: Dark Gradient Color
-    $description: Dark mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
+    $description: Acrylic tint in dark mode, as 0xAARRGGBB.
   - lightModeGradientColor: "0xCC1E1E2E"
     $name: Light Gradient Color
-    $description: Light mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
+    $description: Acrylic tint in light mode, as 0xAARRGGBB.
   - enableMiniDump: true
     $name: Enable MiniDump
-    $description: Write crash minidump files for troubleshooting when TranslucentFlyouts fails
+    $description: Saves a crash minidump if the mod fails.
   - disabled: false
     $name: Disabled
-    $description: Disable all effects for this pop-up type. Use use_global to inherit the Global value where available
+    $description: Turns off every effect in all sections.
   $name: Global
 
 - dropDown:
   - effectType: use_global
     $name: Effect Type
-    $description: Choose the background effect used for this pop-up type. Use use_global to inherit the Global value
+    $description: Background effect for dropdowns. Pick Use Global Setting to follow the Global section.
     $options:
       - none: None
       - transparent: Fully Transparent
@@ -120,7 +120,7 @@
       - use_global: Use Global Setting
   - cornerType: use_global
     $name: Corner Style
-    $description: Choose the corner shape and roundness for this pop-up type. Use use_global to inherit the Global value
+    $description: Corner shape for dropdowns. Pick Use Global Setting to follow the Global section.
     $options:
       - dont_change: Don't Change
       - sharp: Sharp
@@ -129,31 +129,31 @@
       - use_global: Use Global Setting
   - enableDropShadow: use_global
     $name: Enable Drop Shadow
-    $description: Enable or disable drop shadow behind this pop-up type. Use use_global to inherit the Global value
+    $description: Shadow behind dropdowns. Pick Use Global Setting to follow the Global section.
     $options:
       - no: No
       - yes: Yes
       - use_global: Use Global Setting
   - enableFluentAnimation: false
     $name: Enable Fluent Animation
-    $description: Enable fluent pop-up animations for this category
+    $description: Fluent animation for dropdowns.
   - noBorderColor: use_global
     $name: Disable Border Color
-    $description: Choose whether to render system borders for this pop-up type. Use use_global to inherit the Global value
+    $description: Whether dropdowns keep their system borders. Pick Use Global Setting to follow the Global section.
     $options:
       - no: No
       - yes: Yes
       - use_global: Use Global Setting
   - enableThemeColorization: use_global
     $name: Enable Theme Colorization
-    $description: Use current theme accent color for borders instead of fixed custom border colors. Use use_global to inherit the Global value
+    $description: Tint with the Windows accent color instead of the fixed border colors. Pick Use Global Setting to follow the Global section.
     $options:
       - no: No
       - yes: Yes
       - use_global: Use Global Setting
   - darkModeThemeColorizationType: start_hover
     $name: Dark Accent Source
-    $description: Choose which immersive color slot is used in dark mode when theme colorization is enabled
+    $description: Which Windows accent slot tints the pop-ups in dark mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -166,7 +166,7 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - lightModeThemeColorizationType: start_hover
     $name: Light Accent Source
-    $description: Choose which immersive color slot is used in light mode when theme colorization is enabled
+    $description: Which Windows accent slot tints the pop-ups in light mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -179,35 +179,35 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - darkModeBorderColor: "0xFF89B4FA"
     $name: Dark Border Color
-    $description: Dark mode border color in ARGB hex format 0xAARRGGBB
+    $description: Border color in dark mode, as 0xAARRGGBB.
   - lightModeBorderColor: "0xFF89B4FA"
     $name: Light Border Color
-    $description: Light mode border color in ARGB hex format 0xAARRGGBB
+    $description: Border color in light mode, as 0xAARRGGBB.
   - darkModeGradientColor: "0xCC1E1E2E"
     $name: Dark Gradient Color
-    $description: Dark mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
+    $description: Acrylic tint in dark mode, as 0xAARRGGBB.
   - lightModeGradientColor: "0xCC1E1E2E"
     $name: Light Gradient Color
-    $description: Light mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
+    $description: Acrylic tint in light mode, as 0xAARRGGBB.
   - disabled: use_global
     $name: Disabled
-    $description: Disable all effects for this pop-up type. Use use_global to inherit the Global value where available
+    $description: Turns off every effect for this pop-up type. Pick Use Global Setting to follow the Global section.
     $options:
       - no: No
       - yes: Yes
       - use_global: Use Global Setting
   - animation_fadeOutTime: 350
     $name: Fade Out Time
-    $description: Duration of fade-out animation in milliseconds
+    $description: Fade-out length in milliseconds.
   - animation_popInTime: 250
     $name: Pop In Time
-    $description: Duration of pop-in animation in milliseconds
+    $description: Pop-in length in milliseconds.
   - animation_fadeInTime: 87
     $name: Fade In Time
-    $description: Duration of fade-in animation in milliseconds
+    $description: Fade-in length in milliseconds.
   - animation_popInStyle: slide_down
     $name: Pop In Style
-    $description: Style of the pop-in animation when the element appears
+    $description: How the pop-in animation looks.
     $options:
       - slide_down: Slide Down
       - ripple: Ripple
@@ -215,43 +215,43 @@
       - smooth_zoom: Smooth Zoom
   - animation_startRatio: 50
     $name: Start Ratio
-    $description: Start ratio for pop-in animation. Higher values start closer to final state
+    $description: Where the pop-in starts. Higher values start closer to the finished state.
   - animation_enableImmediateInterupting: false
-    $name: Enable Immediate Interrupting
-    $description: Allow running animations to be interrupted immediately by a new state change
+    $name: Enable Immediate Interruption
+    $description: Lets a new animation cut in over one that is still running.
   $name: DropDown
 
 - menu:
   - noSystemDropShadow: false
     $name: Disable System Drop Shadow
-    $description: Disable system-provided menu shadow
+    $description: Hides the shadow Windows draws behind menus.
   - enableImmersiveStyle: true
     $name: Enable Immersive Style
-    $description: Use modern uniformly styled pop-up menus. Recommended on Windows 11
+    $description: Uses the modern, uniformly styled menus. Best left on for Windows 11.
   - enableCustomRendering: false
     $name: Enable Custom Rendering
-    $description: Fully render pop-up menus using custom rendering. Required for several advanced Menu visual options
+    $description: Draws menus with the mod's own renderer. Needed for several menu options in this section.
   - enableFluentAnimation: false
     $name: Enable Fluent Animation
-    $description: Enable fluent menu animations
+    $description: Fluent animation for menus.
   - enableCompatibilityMode: false
     $name: Enable Compatibility Mode
-    $description: Use compatibility mode for apps that misbehave with normal menu rendering
+    $description: Fallback rendering for apps whose menus break with the normal renderer.
   - noModernAppBackgroundColor: true
     $name: Disable Modern App Background Color
-    $description: Ignore modern app provided background color and use configured TranslucentFlyouts appearance instead
+    $description: Ignores the background color modern apps supply, and uses this mod's appearance instead.
   - colorTreatAsTransparentEnabled: false
-    $name: Color Treat As Transparent(Enable)
-    $description: Treat a specific menu color as transparent during rendering
+    $name: Treat a Color as Transparent
+    $description: Treats one menu color as transparent when rendering.
   - colorTreatAsTransparent: "0x00000000"
-    $name: Color Treat As Transparent(ARGB)
-    $description: ARGB key color treated as transparent in menu rendering, format 0xAARRGGBB
+    $name: Transparent Color
+    $description: The color treated as transparent, as 0xAARRGGBB.
   - colorTreatAsTransparentThreshold: 50
     $name: Color Treat As Transparent Threshold
-    $description: Tolerance for transparent color matching. Higher values match a wider color range
+    $description: How close a color must be to count as transparent. Higher matches more shades.
   - effectType: use_global
     $name: Effect Type
-    $description: Choose the background effect used for this pop-up type. Use use_global to inherit the Global value
+    $description: Background effect for menus. Pick Use Global Setting to follow the Global section.
     $options:
       - none: None
       - transparent: Fully Transparent
@@ -265,7 +265,7 @@
       - use_global: Use Global Setting
   - cornerType: use_global
     $name: Corner Style
-    $description: Choose the corner shape and roundness for this pop-up type. Use use_global to inherit the Global value
+    $description: Corner shape for menus. Pick Use Global Setting to follow the Global section.
     $options:
       - dont_change: Don't Change
       - sharp: Sharp
@@ -274,28 +274,28 @@
       - use_global: Use Global Setting
   - enableDropShadow: use_global
     $name: Enable Drop Shadow
-    $description: Enable or disable drop shadow behind this pop-up type. Use use_global to inherit the Global value
+    $description: Shadow behind menus. Pick Use Global Setting to follow the Global section.
     $options:
       - no: No
       - yes: Yes
       - use_global: Use Global Setting
   - noBorderColor: use_global
     $name: Disable Border Color
-    $description: Choose whether to render system borders for this pop-up type. Use use_global to inherit the Global value
+    $description: Whether menus keep their system borders. Pick Use Global Setting to follow the Global section.
     $options:
       - no: No
       - yes: Yes
       - use_global: Use Global Setting
   - enableThemeColorization: use_global
     $name: Enable Theme Colorization
-    $description: Use current theme accent color for borders instead of fixed custom border colors. Use use_global to inherit the Global value
+    $description: Tint with the Windows accent color instead of the fixed border colors. Pick Use Global Setting to follow the Global section.
     $options:
       - no: No
       - yes: Yes
       - use_global: Use Global Setting
   - darkModeThemeColorizationType: start_hover
     $name: Dark Accent Source
-    $description: Choose which immersive color slot is used in dark mode when theme colorization is enabled
+    $description: Which Windows accent slot tints the pop-ups in dark mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -308,7 +308,7 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - lightModeThemeColorizationType: start_hover
     $name: Light Accent Source
-    $description: Choose which immersive color slot is used in light mode when theme colorization is enabled
+    $description: Which Windows accent slot tints the pop-ups in light mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -321,35 +321,35 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - darkModeBorderColor: "0xFF89B4FA"
     $name: Dark Border Color
-    $description: Dark mode border color in ARGB hex format 0xAARRGGBB
+    $description: Border color in dark mode, as 0xAARRGGBB.
   - lightModeBorderColor: "0xFF89B4FA"
     $name: Light Border Color
-    $description: Light mode border color in ARGB hex format 0xAARRGGBB
+    $description: Border color in light mode, as 0xAARRGGBB.
   - darkModeGradientColor: "0xCC1E1E2E"
     $name: Dark Gradient Color
-    $description: Dark mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
+    $description: Acrylic tint in dark mode, as 0xAARRGGBB.
   - lightModeGradientColor: "0xCC1E1E2E"
     $name: Light Gradient Color
-    $description: Light mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
+    $description: Acrylic tint in light mode, as 0xAARRGGBB.
   - disabled: use_global
     $name: Disabled
-    $description: Disable all effects for this pop-up type. Use use_global to inherit the Global value where available
+    $description: Turns off every effect for this pop-up type. Pick Use Global Setting to follow the Global section.
     $options:
       - no: No
       - yes: Yes
       - use_global: Use Global Setting
   - animation_fadeOutTime: 350
     $name: Fade Out Time
-    $description: Duration of fade-out animation in milliseconds
+    $description: Fade-out length in milliseconds.
   - animation_popInTime: 250
     $name: Pop In Time
-    $description: Duration of pop-in animation in milliseconds
+    $description: Pop-in length in milliseconds.
   - animation_fadeInTime: 87
     $name: Fade In Time
-    $description: Duration of fade-in animation in milliseconds
+    $description: Fade-in length in milliseconds.
   - animation_popInStyle: slide_down
     $name: Pop In Style
-    $description: Style of the pop-in animation when the element appears
+    $description: How the pop-in animation looks.
     $options:
       - slide_down: Slide Down
       - ripple: Ripple
@@ -357,28 +357,28 @@
       - smooth_zoom: Smooth Zoom
   - animation_startRatio: 50
     $name: Start Ratio
-    $description: Start ratio for pop-in animation. Higher values start closer to final state
+    $description: Where the pop-in starts. Higher values start closer to the finished state.
   - animation_enableImmediateInterupting: false
-    $name: Enable Immediate Interrupting
-    $description: Allow running animations to be interrupted immediately by a new state change
+    $name: Enable Immediate Interruption
+    $description: Lets a new animation cut in over one that is still running.
   - separator_disabled: 0
     $name: Separator / Disabled
-    $description: Disable all effects for this pop-up type. Use use_global to inherit the Global value where available
+    $description: Turns off the separator.
   - separator_width: 1000
     $name: Separator / Width
-    $description: Separator line thickness control. 1000 equals full default thickness
+    $description: Separator line thickness. 1000 is the default thickness.
   - separator_darkModeColor: "0x30D9D9D9"
     $name: Separator / Dark Color
-    $description: Dark mode color in ARGB hex format 0xAARRGGBB
+    $description: Separator color in dark mode, as 0xAARRGGBB.
   - separator_lightModeColor: "0x30262626"
     $name: Separator / Light Color
-    $description: Light mode color in ARGB hex format 0xAARRGGBB
+    $description: Separator color in light mode, as 0xAARRGGBB.
   - separator_enableThemeColorization: 0
     $name: Separator / Enable Theme Colorization
-    $description: Use current theme accent color for borders instead of fixed custom border colors. Use use_global to inherit the Global value
+    $description: Tints the separator with the Windows accent instead of the fixed color.
   - separator_darkThemeColorizationType: start_hover
     $name: Separator / Dark Accent Source
-    $description: Choose which immersive color slot is used in dark mode for this sub-part
+    $description: Which Windows accent slot tints the separator in dark mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -391,7 +391,7 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - separator_lightThemeColorizationType: start_hover
     $name: Separator / Light Accent Source
-    $description: Choose which immersive color slot is used in light mode for this sub-part
+    $description: Which Windows accent slot tints the separator in light mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -404,25 +404,25 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - focusing_disabled: 0
     $name: Focusing / Disabled
-    $description: Disable all effects for this pop-up type. Use use_global to inherit the Global value where available
+    $description: Turns off the focus highlight.
   - focusing_cornerRadius: 8
     $name: Focusing / Corner Radius
-    $description: Corner radius for focused item highlight
+    $description: Corner roundness of the focus highlight.
   - focusing_width: 1000
     $name: Focusing / Width
-    $description: Width control for focused item highlight. 1000 equals full item width
+    $description: Width of the focus highlight. 1000 spans the full item.
   - focusing_darkModeColor: "0xFFFFFFFF"
     $name: Focusing / Dark Color
-    $description: Dark mode color in ARGB hex format 0xAARRGGBB
+    $description: Focus highlight color in dark mode, as 0xAARRGGBB.
   - focusing_lightModeColor: "0xFF000000"
     $name: Focusing / Light Color
-    $description: Light mode color in ARGB hex format 0xAARRGGBB
+    $description: Focus highlight color in light mode, as 0xAARRGGBB.
   - focusing_enableThemeColorization: 0
     $name: Focusing / Enable Theme Colorization
-    $description: Use current theme accent color for borders instead of fixed custom border colors. Use use_global to inherit the Global value
+    $description: Tints the focus highlight with the Windows accent instead of the fixed color.
   - focusing_darkThemeColorizationType: start_hover
     $name: Focusing / Dark Accent Source
-    $description: Choose which immersive color slot is used in dark mode for this sub-part
+    $description: Which Windows accent slot tints the focus highlight in dark mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -435,7 +435,7 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - focusing_lightThemeColorizationType: start_hover
     $name: Focusing / Light Accent Source
-    $description: Choose which immersive color slot is used in light mode for this sub-part
+    $description: Which Windows accent slot tints the focus highlight in light mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -448,22 +448,22 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - disabledHot_disabled: 0
     $name: Disabled Hot / Disabled
-    $description: Disable all effects for this pop-up type. Use use_global to inherit the Global value where available
+    $description: Turns off the highlight for hovered disabled items.
   - disabledHot_cornerRadius: 8
     $name: Disabled Hot / Corner Radius
-    $description: Corner radius for disabled hot item highlight
+    $description: Corner roundness of that highlight.
   - disabledHot_darkModeColor: "0x00000000"
     $name: Disabled Hot / Dark Color
-    $description: Dark mode color in ARGB hex format 0xAARRGGBB
+    $description: Highlight color for hovered disabled items in dark mode, as 0xAARRGGBB.
   - disabledHot_lightModeColor: "0x00000000"
     $name: Disabled Hot / Light Color
-    $description: Light mode color in ARGB hex format 0xAARRGGBB
+    $description: Highlight color for hovered disabled items in light mode, as 0xAARRGGBB.
   - disabledHot_enableThemeColorization: 0
     $name: Disabled Hot / Enable Theme Colorization
-    $description: Use current theme accent color for borders instead of fixed custom border colors. Use use_global to inherit the Global value
+    $description: Tints that highlight with the Windows accent instead of the fixed color.
   - disabledHot_darkThemeColorizationType: start_hover
     $name: Disabled Hot / Dark Accent Source
-    $description: Choose which immersive color slot is used in dark mode for this sub-part
+    $description: Which Windows accent slot tints that highlight in dark mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -476,7 +476,7 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - disabledHot_lightThemeColorizationType: start_hover
     $name: Disabled Hot / Light Accent Source
-    $description: Choose which immersive color slot is used in light mode for this sub-part
+    $description: Which Windows accent slot tints that highlight in light mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -489,22 +489,22 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - hot_disabled: 0
     $name: Hot / Disabled
-    $description: Disable all effects for this pop-up type. Use use_global to inherit the Global value where available
+    $description: Turns off the hover highlight.
   - hot_cornerRadius: 8
     $name: Hot / Corner Radius
-    $description: Corner radius for hot or hover item highlight
+    $description: Corner roundness of the hover highlight.
   - hot_darkModeColor: "0x41808080"
     $name: Hot / Dark Color
-    $description: Dark mode color in ARGB hex format 0xAARRGGBB
+    $description: Hover highlight color in dark mode, as 0xAARRGGBB.
   - hot_lightModeColor: "0x30000000"
     $name: Hot / Light Color
-    $description: Light mode color in ARGB hex format 0xAARRGGBB
+    $description: Hover highlight color in light mode, as 0xAARRGGBB.
   - hot_enableThemeColorization: 0
     $name: Hot / Enable Theme Colorization
-    $description: Use current theme accent color for borders instead of fixed custom border colors. Use use_global to inherit the Global value
+    $description: Tints the hover highlight with the Windows accent instead of the fixed color.
   - hot_darkThemeColorizationType: start_hover
     $name: Hot / Dark Accent Source
-    $description: Choose which immersive color slot is used in dark mode for this sub-part
+    $description: Which Windows accent slot tints the hover highlight in dark mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -517,7 +517,7 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - hot_lightThemeColorizationType: start_hover
     $name: Hot / Light Accent Source
-    $description: Choose which immersive color slot is used in light mode for this sub-part
+    $description: Which Windows accent slot tints the hover highlight in light mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -533,10 +533,10 @@
 - tooltip:
   - noSystemDropShadow: false
     $name: Disable System Drop Shadow
-    $description: Disable system-provided tooltip shadow
+    $description: Hides the shadow Windows draws behind tooltips.
   - effectType: use_global
     $name: Effect Type
-    $description: Choose the background effect used for this pop-up type. Use use_global to inherit the Global value
+    $description: Background effect for tooltips. Pick Use Global Setting to follow the Global section.
     $options:
       - none: None
       - transparent: Fully Transparent
@@ -550,7 +550,7 @@
       - use_global: Use Global Setting
   - cornerType: use_global
     $name: Corner Style
-    $description: Choose the corner shape and roundness for this pop-up type. Use use_global to inherit the Global value
+    $description: Corner shape for tooltips. Pick Use Global Setting to follow the Global section.
     $options:
       - dont_change: Don't Change
       - sharp: Sharp
@@ -559,28 +559,28 @@
       - use_global: Use Global Setting
   - enableDropShadow: use_global
     $name: Enable Drop Shadow
-    $description: Enable or disable drop shadow behind this pop-up type. Use use_global to inherit the Global value
+    $description: Shadow behind tooltips. Pick Use Global Setting to follow the Global section.
     $options:
       - no: No
       - yes: Yes
       - use_global: Use Global Setting
   - noBorderColor: use_global
     $name: Disable Border Color
-    $description: Choose whether to render system borders for this pop-up type. Use use_global to inherit the Global value
+    $description: Whether tooltips keep their system borders. Pick Use Global Setting to follow the Global section.
     $options:
       - no: No
       - yes: Yes
       - use_global: Use Global Setting
   - enableThemeColorization: use_global
     $name: Enable Theme Colorization
-    $description: Use current theme accent color for borders instead of fixed custom border colors. Use use_global to inherit the Global value
+    $description: Tint with the Windows accent color instead of the fixed border colors. Pick Use Global Setting to follow the Global section.
     $options:
       - no: No
       - yes: Yes
       - use_global: Use Global Setting
   - darkModeThemeColorizationType: start_hover
     $name: Dark Accent Source
-    $description: Choose which immersive color slot is used in dark mode when theme colorization is enabled
+    $description: Which Windows accent slot tints the pop-ups in dark mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -593,7 +593,7 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - lightModeThemeColorizationType: start_hover
     $name: Light Accent Source
-    $description: Choose which immersive color slot is used in light mode when theme colorization is enabled
+    $description: Which Windows accent slot tints the pop-ups in light mode.
     $options:
       - start_background: ImmersiveStartBackground
       - start_hover: ImmersiveStartHoverBackground
@@ -606,43 +606,43 @@
       - accent_light3: ImmersiveSystemAccentLight3
   - darkModeBorderColor: "0xFF89B4FA"
     $name: Dark Border Color
-    $description: Dark mode border color in ARGB hex format 0xAARRGGBB
+    $description: Border color in dark mode, as 0xAARRGGBB.
   - lightModeBorderColor: "0xFF89B4FA"
     $name: Light Border Color
-    $description: Light mode border color in ARGB hex format 0xAARRGGBB
+    $description: Border color in light mode, as 0xAARRGGBB.
   - darkModeGradientColor: "0xCC1E1E2E"
     $name: Dark Gradient Color
-    $description: Dark mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
+    $description: Acrylic tint in dark mode, as 0xAARRGGBB.
   - lightModeGradientColor: "0xCC1E1E2E"
     $name: Light Gradient Color
-    $description: Light mode gradient or acrylic tint in ARGB hex format 0xAARRGGBB
+    $description: Acrylic tint in light mode, as 0xAARRGGBB.
   - darkModeColor: "0xFFFFFFFF"
     $name: Dark Fill Color
-    $description: Dark mode color in ARGB hex format 0xAARRGGBB
+    $description: Tooltip fill color in dark mode, as 0xAARRGGBB.
   - lightModeColor: "0xFF1A1A1A"
     $name: Light Fill Color
-    $description: Light mode color in ARGB hex format 0xAARRGGBB
+    $description: Tooltip fill color in light mode, as 0xAARRGGBB.
   - marginsType: add_to_existing
     $name: Margins Mode
-    $description: Define how tooltip margins are applied, add to existing or replace existing values
+    $description: Whether the margins below add to the existing ones or replace them.
     $options:
       - add_to_existing: AddToExisting
       - replace_existing: ReplaceExisting
   - marginLeft: 6
     $name: Margin Left
-    $description: Tooltip left margin in pixels
+    $description: Left margin in pixels.
   - marginRight: 6
     $name: Margin Right
-    $description: Tooltip right margin in pixels
+    $description: Right margin in pixels.
   - marginTop: 6
     $name: Margin Top
-    $description: Tooltip top margin in pixels
+    $description: Top margin in pixels.
   - marginBottom: 6
     $name: Margin Bottom
-    $description: Tooltip bottom margin in pixels
+    $description: Bottom margin in pixels.
   - disabled: use_global
     $name: Disabled
-    $description: Disable all effects for this pop-up type. Use use_global to inherit the Global value where available
+    $description: Turns off every effect for this pop-up type. Pick Use Global Setting to follow the Global section.
     $options:
       - no: No
       - yes: Yes
@@ -650,22 +650,33 @@
   $name: Tooltip
 
 
+- darkMenus:
+  - appMode: force_dark
+    $name: Dark Menus
+    $description: When context menus and menu bars should be dark. Pick the Windows setting if you switch between light and dark mode a lot, or use a tool like Auto Dark Mode.
+    $options:
+      - force_dark: Always
+      - allow_dark: Only when Windows is in dark mode
+      - off: Leave menus alone
+  $name: Dark Menus
+
+
 - advancedFunctions:
   - processBlockList: ""
     $name: Process Block List
-    $description: Advanced users only. Comma, semicolon, or newline separated process names to block TranslucentFlyouts loading (for example explorer.exe). This can require restarting Translucent Flyouts or Windows and may cause high CPU usage if misconfigured
+    $description: Advanced users only. Process names (comma, semicolon or newline separated) that TranslucentFlyouts never loads into, for example explorer.exe. Takes effect after a restart. A bad entry can cause high CPU usage.
   - processDisabledList: ""
     $name: Process Disabled List (Global)
-    $description: Advanced users only. Comma, semicolon, or newline separated process names to disable all effects globally (for example app.exe)
+    $description: Advanced users only. Process names (comma, semicolon or newline separated) where every effect stays off, for example app.exe.
   - menuProcessDisabledList: ""
     $name: Process Disabled List (Menu)
-    $description: Advanced users only. Comma, semicolon, or newline separated process names to disable only Menu effects
+    $description: Advanced users only. Process names (comma, semicolon or newline separated) where only menu effects stay off.
   - tooltipProcessDisabledList: ""
     $name: Process Disabled List (Tooltip)
-    $description: Advanced users only. Comma, semicolon, or newline separated process names to disable only Tooltip effects
+    $description: Advanced users only. Process names (comma, semicolon or newline separated) where only tooltip effects stay off.
   - dropDownProcessDisabledList: ""
     $name: Process Disabled List (DropDown)
-    $description: Advanced users only. Comma, semicolon, or newline separated process names to disable only DropDown effects
+    $description: Advanced users only. Process names (comma, semicolon or newline separated) where only dropdown effects stay off.
   $name: Advanced Functions
 */
 // ==/WindhawkModSettings==
@@ -689,11 +700,12 @@ no helper program.
 - **Separate styles** for menus, dropdowns and tooltips, or one global style.
 - **Light and dark mode colors**, set independently.
 - **Fluent animations** for menus and dropdowns.
+- **Dark menus** in every app, always or only when Windows is in dark mode.
 
 ## Tips
 
-- Pair it with [Dark Menus](https://windhawk.net/mods/dark-menus) and turn on
-  its TranslucentFlyouts option for dark menus in every app.
+- Dark menus are built in, so the separate Dark mode context menus mod is not
+  needed. Remove it if it is still installed.
 - Programs listed in this mod's exclusions are left untouched. Add any app
   that should keep its original menus.
 
@@ -701,6 +713,11 @@ no helper program.
 
 A port of [TranslucentFlyouts](https://github.com/ALTaleX531/TranslucentFlyouts)
 by ALTaleX531. The settings follow its configuration schema. LGPL-3.0.
+
+The dark menus part comes from
+[Dark mode context menus](https://github.com/MGGSK/DarkMenus) by Mgg Sk, which
+builds on [win32-darkmode](https://github.com/adzm/win32-darkmode) and
+[Notepad++](https://github.com/notepad-plus-plus/notepad-plus-plus).
 */
 // ==/WindhawkModReadme==
 
@@ -717,6 +734,7 @@ by ALTaleX531. The settings follow its configuration schema. LGPL-3.0.
 #include <shellapi.h>
 #include <shlwapi.h>
 #include <d2d1.h>
+#include <gdiplus.h>
 
 #include <algorithm>
 #include <array>
@@ -884,7 +902,11 @@ constexpr bool kEnabled = true;
 #else
 constexpr bool kEnabled = false;
 #endif
+#ifdef TF_DEBUG_LOG
+constexpr size_t kMaxLines = 60000;
+#else
 constexpr size_t kMaxLines = 4000;
+#endif
 
 inline bool IsTargetProcess() {
     static const bool value = []() {
@@ -894,7 +916,8 @@ inline bool IsTargetProcess() {
         base = base ? base + 1 : path;
         return !_wcsicmp(base, L"explorer.exe") || !_wcsicmp(base, L"FlyoutTestWindow.exe") ||
                !_wcsicmp(base, L"FlyoutTestWindow32.exe") || !_wcsicmp(base, L"notepad++.exe") ||
-               !_wcsicmp(base, L"regedit.exe") || !_wcsicmp(base, L"Ableton Live 12 Suite.exe");
+               !_wcsicmp(base, L"regedit.exe") || !_wcsicmp(base, L"winver.exe") ||
+               !_wcsicmp(base, L"Ableton Live 12 Suite.exe");
     }();
     return value;
 }
@@ -1289,7 +1312,45 @@ __forceinline HRESULT GetThemeClass(HTHEME hTheme, LPCWSTR pszClassIdList, int c
     return actual ? actual(hTheme, pszClassIdList, cchClass) : E_FAIL;
 }
 
+// The accent slots read straight from the user's AccentPalette (Light3..Light1,
+// Accent, Dark1..Dark3 in that order, 4 bytes RGBA each). uxtheme's colour-set
+// cache in a shell that started before the user's accent was applied keeps the
+// stock 0078D4 for the life of the process (the Explorer title-bar sysmenu
+// screenshot, 2026-10-21); the registry palette is always current.
+inline bool GetAccentPaletteColor(std::wstring_view type, DWORD& argb) {
+    static constexpr std::wstring_view kSlots[] = {
+        L"ImmersiveSystemAccentLight3", L"ImmersiveSystemAccentLight2",
+        L"ImmersiveSystemAccentLight1", L"ImmersiveSystemAccent",
+        L"ImmersiveSystemAccentDark1",  L"ImmersiveSystemAccentDark2",
+        L"ImmersiveSystemAccentDark3"};
+    int slot = -1;
+    for (int i = 0; i < (int)std::size(kSlots); ++i) {
+        if (kSlots[i] == type) {
+            slot = i;
+        }
+    }
+    if (slot < 0) {
+        return false;
+    }
+    BYTE palette[32]{};
+    DWORD size = sizeof(palette);
+    if (RegGetValueW(HKEY_CURRENT_USER,
+                     L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Accent",
+                     L"AccentPalette", RRF_RT_REG_BINARY, nullptr, palette,
+                     &size) != ERROR_SUCCESS ||
+        size < sizeof(palette)) {
+        return false;
+    }
+    const BYTE* rgba = palette + slot * 4;
+    argb = Utils::MakeArgb(0xFF, rgba[0], rgba[1], rgba[2]);
+    return true;
+}
+
 inline DWORD GetThemeColorizationColor(std::wstring_view type) {
+    DWORD paletteArgb{0};
+    if (GetAccentPaletteColor(type, paletteArgb)) {
+        return paletteArgb;
+    }
     static const auto GetImmersiveColorFromColorSetEx =
         reinterpret_cast<DWORD(WINAPI*)(DWORD, DWORD, bool, DWORD)>(
             GetProcAddress(GetModuleHandleW(L"UxTheme.dll"), MAKEINTRESOURCEA(95)));
@@ -1557,6 +1618,7 @@ inline void SetWindowBackdrop(HWND hwnd, BOOL dropShadow, DWORD tintColor, DWORD
 }  // namespace EffectHelper
 
 }  // namespace tf
+
 
 // ===========================================================================
 // Configuration: Windhawk settings -> engine values
@@ -2437,6 +2499,431 @@ inline void DropEffect(std::wstring_view part, HWND hWnd) {
 }  // namespace tf
 
 // ===========================================================================
+// Dark menus: dark mode for every Win32 menu and menu bar.
+//
+// Merged in from the "Dark mode context menus" mod by Mgg Sk
+// (https://github.com/MGGSK/DarkMenus, based on win32-darkmode by adzm and
+// Notepad++'s NppDarkMode). It used to be a separate mod that had to be paired with
+// this one; running both cost a second injection into every process.
+// ===========================================================================
+
+namespace tf::DarkMenus {
+
+constexpr COLORREF kMenuColour = 0x2C2C2C;
+constexpr COLORREF kItemForeground = 0xFFFFFF;
+constexpr COLORREF kItemForegroundDisabled = 0xAAAAAA;
+
+HBRUSH g_menuBrush = nullptr;
+HBRUSH g_separatorBrush = nullptr;
+HBRUSH g_hoverBrush = nullptr;
+HBRUSH g_selectedBrush = nullptr;
+HFONT g_iconFont = nullptr;
+HMODULE g_uxtheme = nullptr;
+thread_local HTHEME g_menuBarTheme = nullptr;
+
+enum class AppMode { Default, AllowDark, ForceDark, ForceLight };
+
+using FlushMenuThemesFn = void(WINAPI*)();
+using SetPreferredAppModeFn = AppMode(WINAPI*)(AppMode);
+using ShouldAppsUseDarkModeFn = bool(WINAPI*)();
+
+FlushMenuThemesFn g_flushMenuThemes = nullptr;
+SetPreferredAppModeFn g_setPreferredAppMode = nullptr;
+ShouldAppsUseDarkModeFn g_shouldAppsUseDarkMode = nullptr;
+
+std::atomic<AppMode> g_mode{AppMode::Default};
+
+void* g_hookTargets[5]{};
+int g_hookTargetCount = 0;
+
+// Undocumented menu bar messages and structs (win32-darkmode).
+constexpr UINT WM_UAHDRAWMENU = 0x91;
+constexpr UINT WM_UAHDRAWMENUITEM = 0x92;
+
+union UAHMENUITEMMETRICS {
+    struct {
+        DWORD cx;
+        DWORD cy;
+    } rgsizeBar[2];
+    struct {
+        DWORD cx;
+        DWORD cy;
+    } rgsizePopup[4];
+};
+
+struct UAHMENUPOPUPMETRICS {
+    DWORD rgcx[4];
+    DWORD fUpdateMaxWidths : 2;
+};
+
+struct UAHMENU {
+    HMENU hMenu;
+    HDC hdc;
+    DWORD dwFlags;
+};
+
+struct UAHMENUITEM {
+    int iPosition;
+    UAHMENUITEMMETRICS umim;
+    UAHMENUPOPUPMETRICS umpm;
+};
+
+struct UAHDRAWMENUITEM {
+    DRAWITEMSTRUCT dis;
+    UAHMENU um;
+    UAHMENUITEM umi;
+};
+
+// The 1-pixel line under the menu bar that the theme leaves light.
+void DrawMenuBarBottomLine(HWND hWnd) {
+    MENUBARINFO menuBarInfo{sizeof(menuBarInfo)};
+    if (!GetMenuBarInfo(hWnd, OBJID_MENU, 0, &menuBarInfo)) {
+        return;
+    }
+
+    RECT rcClient;
+    GetClientRect(hWnd, &rcClient);
+    MapWindowPoints(hWnd, nullptr, reinterpret_cast<LPPOINT>(&rcClient), 2);
+
+    RECT rcWindow;
+    GetWindowRect(hWnd, &rcWindow);
+    OffsetRect(&rcClient, -rcWindow.left, -rcWindow.top);
+
+    RECT line = rcClient;
+    line.bottom = line.top;
+    line.top--;
+
+    HDC hdc = GetWindowDC(hWnd);
+    FillRect(hdc, &line, g_separatorBrush);
+    ReleaseDC(hWnd, hdc);
+}
+
+// Paints the menu bar and its items. Returns true when the message was handled.
+bool HandleMenuBarMessage(HWND hWnd, UINT uMsg, LPARAM lParam, LRESULT* result) {
+    switch (uMsg) {
+        case WM_UAHDRAWMENU: {
+            const auto* drawingInfo = reinterpret_cast<UAHMENU*>(lParam);
+
+            MENUBARINFO menuBarInfo{sizeof(menuBarInfo)};
+            if (!GetMenuBarInfo(hWnd, OBJID_MENU, 0, &menuBarInfo)) {
+                return false;
+            }
+            RECT rcWindow;
+            if (!GetWindowRect(hWnd, &rcWindow)) {
+                return false;
+            }
+            RECT rcMenu = menuBarInfo.rcBar;
+            if (!OffsetRect(&rcMenu, -rcWindow.left, -rcWindow.top)) {
+                return false;
+            }
+            FillRect(drawingInfo->hdc, &rcMenu, g_menuBrush);
+            *result = 0;
+            return true;
+        }
+
+        case WM_UAHDRAWMENUITEM: {
+            auto* drawingInfo = reinterpret_cast<UAHDRAWMENUITEM*>(lParam);
+            HBRUSH background = g_menuBrush;
+
+            wchar_t menuString[256]{};
+            MENUITEMINFOW itemInfo{sizeof(itemInfo), MIIM_STRING};
+            itemInfo.dwTypeData = menuString;
+            itemInfo.cch = (sizeof(menuString) / sizeof(wchar_t)) - 1;
+            if (!GetMenuItemInfoW(drawingInfo->um.hMenu, drawingInfo->umi.iPosition, TRUE,
+                                  &itemInfo)) {
+                return false;
+            }
+            menuString[255] = L'\0';
+
+            const UINT state = drawingInfo->dis.itemState;
+            DWORD textFlags = DT_CENTER | DT_SINGLELINE | DT_VCENTER;
+            int textStateId = 0;
+
+            if ((state & ODS_INACTIVE) || (state & ODS_DEFAULT)) {
+                textStateId = MBI_NORMAL;
+            } else if (state & ODS_HOTLIGHT) {
+                textStateId = MBI_HOT;
+            } else if (state & ODS_SELECTED) {
+                textStateId = MBI_PUSHED;
+            } else if ((state & ODS_GRAYED) || (state & ODS_DISABLED)) {
+                textStateId = MBI_DISABLED;
+            }
+            if (GetForegroundWindow() != hWnd) {
+                textStateId = MBI_DISABLED;
+            }
+
+            if (state & ODS_HOTLIGHT) {
+                background = g_hoverBrush;
+            } else if (state & ODS_SELECTED) {
+                background = g_selectedBrush;
+            }
+            if (state & ODS_NOACCEL) {
+                textFlags |= DT_HIDEPREFIX;
+            }
+
+            if (!g_menuBarTheme) {
+                g_menuBarTheme = OpenThemeData(hWnd, L"Menu");
+            }
+
+            const DTTOPTS textOptions{sizeof(textOptions), DTT_TEXTCOLOR,
+                                      textStateId != MBI_DISABLED ? kItemForeground
+                                                                  : kItemForegroundDisabled};
+            FillRect(drawingInfo->um.hdc, &drawingInfo->dis.rcItem, background);
+
+            // An item with no text is an MDI child's system menu or caption button.
+            if (menuString[0] == L'\0') {
+                const int offset = GetMenuItemCount(drawingInfo->um.hMenu) -
+                                   drawingInfo->umi.iPosition;
+                wchar_t glyph;
+                if (drawingInfo->umi.iPosition == 0) {
+                    glyph = 0xE700;  // menu
+                } else if (offset == 3) {
+                    glyph = 0xE921;  // minimize
+                } else if (offset == 2) {
+                    glyph = 0xE923;  // maximize
+                } else if (offset == 1) {
+                    glyph = 0xE8BB;  // close
+                } else {
+                    return false;
+                }
+
+                if (!g_iconFont) {
+                    g_iconFont = CreateFontW(10, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                                             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                                             CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+                                             DEFAULT_PITCH | FF_DONTCARE,
+                                             L"Segoe Fluent Icons");
+                }
+                HFONT oldFont = SelectFont(drawingInfo->um.hdc, g_iconFont);
+                const HRESULT hr = DrawThemeTextEx(
+                    g_menuBarTheme, drawingInfo->um.hdc, MENU_BARITEM, MBI_NORMAL, &glyph, 1,
+                    textFlags, &drawingInfo->dis.rcItem, &textOptions);
+                SelectFont(drawingInfo->um.hdc, oldFont);
+                if (FAILED(hr)) {
+                    return false;
+                }
+                *result = 0;
+                return true;
+            }
+
+            const HRESULT hr = DrawThemeTextEx(
+                g_menuBarTheme, drawingInfo->um.hdc, MENU_BARITEM, MBI_NORMAL, menuString,
+                itemInfo.cch, textFlags, &drawingInfo->dis.rcItem, &textOptions);
+            if (FAILED(hr)) {
+                return false;
+            }
+            *result = 0;
+            return true;
+        }
+
+        case WM_THEMECHANGED:
+        case WM_DESTROY:
+            if (g_menuBarTheme) {
+                CloseThemeData(g_menuBarTheme);
+                g_menuBarTheme = nullptr;
+            }
+            return false;
+
+        default:
+            return false;
+    }
+}
+
+bool IsDarkMenuBarWindow(HWND hWnd) {
+    const AppMode mode = g_mode.load();
+    const bool dark = mode == AppMode::ForceDark ||
+                      (mode == AppMode::AllowDark && g_shouldAppsUseDarkMode &&
+                       g_shouldAppsUseDarkMode());
+    return dark && GetMenu(hWnd);
+}
+
+// Runs the original window procedure and then redraws the line under the menu bar.
+template <typename Proc>
+LRESULT RunMenuBarPass(HWND hWnd, UINT uMsg, LPARAM lParam, Proc&& original) {
+    LRESULT result = 0;
+    if (HandleMenuBarMessage(hWnd, uMsg, lParam, &result)) {
+        return result;
+    }
+    if (uMsg == WM_ACTIVATE || uMsg == WM_NCPAINT) {
+        result = original();
+        DrawMenuBarBottomLine(hWnd);
+        return result;
+    }
+    return original();
+}
+
+decltype(&DefWindowProcW) g_defWindowProcWOrig = nullptr;
+LRESULT CALLBACK DefWindowProcWHook(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    if (!IsDarkMenuBarWindow(hWnd)) {
+        return g_defWindowProcWOrig(hWnd, uMsg, wParam, lParam);
+    }
+    return RunMenuBarPass(hWnd, uMsg, lParam,
+                          [&] { return g_defWindowProcWOrig(hWnd, uMsg, wParam, lParam); });
+}
+
+decltype(&DefWindowProcA) g_defWindowProcAOrig = nullptr;
+LRESULT CALLBACK DefWindowProcAHook(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    if (!IsDarkMenuBarWindow(hWnd)) {
+        return g_defWindowProcAOrig(hWnd, uMsg, wParam, lParam);
+    }
+    return RunMenuBarPass(hWnd, uMsg, lParam,
+                          [&] { return g_defWindowProcAOrig(hWnd, uMsg, wParam, lParam); });
+}
+
+decltype(&DefFrameProcW) g_defFrameProcWOrig = nullptr;
+LRESULT CALLBACK DefFrameProcWHook(HWND hWnd, HWND hMdiClient, UINT uMsg, WPARAM wParam,
+                                   LPARAM lParam) {
+    if (!IsDarkMenuBarWindow(hWnd)) {
+        return g_defFrameProcWOrig(hWnd, hMdiClient, uMsg, wParam, lParam);
+    }
+    return RunMenuBarPass(hWnd, uMsg, lParam, [&] {
+        return g_defFrameProcWOrig(hWnd, hMdiClient, uMsg, wParam, lParam);
+    });
+}
+
+decltype(&DefFrameProcA) g_defFrameProcAOrig = nullptr;
+LRESULT CALLBACK DefFrameProcAHook(HWND hWnd, HWND hMdiClient, UINT uMsg, WPARAM wParam,
+                                   LPARAM lParam) {
+    if (!IsDarkMenuBarWindow(hWnd)) {
+        return g_defFrameProcAOrig(hWnd, hMdiClient, uMsg, wParam, lParam);
+    }
+    return RunMenuBarPass(hWnd, uMsg, lParam, [&] {
+        return g_defFrameProcAOrig(hWnd, hMdiClient, uMsg, wParam, lParam);
+    });
+}
+
+// Custom menu backgrounds break in dark mode (MGGSK/DarkMenus issues 16, 18 and 26),
+// so every background an app sets is swapped. Under the translucent menu effect the
+// brush has to be black, which adds nothing over the acrylic; with the effect off in
+// this process it is the plain dark menu colour.
+decltype(&SetMenuInfo) g_setMenuInfoOrig = nullptr;
+BOOL WINAPI SetMenuInfoHook(HMENU hMenu, LPCMENUINFO info) {
+    alignas(MENUINFO) BYTE buffer[256];
+    if (!info || !(info->fMask & MIM_BACKGROUND) || info->cbSize > sizeof(buffer) ||
+        g_mode.load() == AppMode::Default) {
+        return g_setMenuInfoOrig(hMenu, info);
+    }
+
+    memcpy(buffer, info, info->cbSize);
+    auto* copy = reinterpret_cast<LPMENUINFO>(buffer);
+    copy->hbrBack = Api::IsPartDisabled(L"Menu")
+                        ? g_menuBrush
+                        : static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+    return g_setMenuInfoOrig(hMenu, copy);
+}
+
+AppMode ReadMode() {
+    const std::wstring value = Cfg::ToLower(Cfg::GetString(L"darkMenus.appMode"));
+    if (value == L"allow_dark") {
+        return AppMode::AllowDark;
+    }
+    if (value == L"off") {
+        return AppMode::Default;
+    }
+    return AppMode::ForceDark;
+}
+
+void Apply(AppMode mode) {
+    if (g_flushMenuThemes && g_setPreferredAppMode) {
+        g_flushMenuThemes();
+        g_setPreferredAppMode(mode);
+    }
+    g_mode.store(mode);
+}
+
+void Refresh() {
+    Apply(ReadMode());
+}
+
+void InstallDarkMenuHook(HMODULE module, const char* name, void* hook, void** original) {
+    FARPROC target = module ? GetProcAddress(module, name) : nullptr;
+    if (!target) {
+        Log::Write(L"[dark] %S not found", name);
+        return;
+    }
+    if (WindhawkUtils::SetFunctionHook(reinterpret_cast<void*>(target), hook,
+                                       reinterpret_cast<void**>(original))) {
+        if (g_hookTargetCount < (int)std::size(g_hookTargets)) {
+            g_hookTargets[g_hookTargetCount++] = reinterpret_cast<void*>(target);
+        }
+    } else {
+        Log::Write(L"[dark] hook FAILED %S", name);
+    }
+}
+
+void Install() {
+    g_uxtheme = LoadLibraryExW(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!g_uxtheme) {
+        return;
+    }
+    g_setPreferredAppMode =
+        reinterpret_cast<SetPreferredAppModeFn>(GetProcAddress(g_uxtheme, MAKEINTRESOURCEA(135)));
+    g_flushMenuThemes =
+        reinterpret_cast<FlushMenuThemesFn>(GetProcAddress(g_uxtheme, MAKEINTRESOURCEA(136)));
+    g_shouldAppsUseDarkMode =
+        reinterpret_cast<ShouldAppsUseDarkModeFn>(GetProcAddress(g_uxtheme, MAKEINTRESOURCEA(132)));
+
+    g_menuBrush = CreateSolidBrush(kMenuColour);
+    g_separatorBrush = CreateSolidBrush(0x222222);
+    g_hoverBrush = CreateSolidBrush(0x353535);
+    g_selectedBrush = CreateSolidBrush(0x454545);
+
+    HMODULE user32 = GetModuleHandleW(L"user32.dll");
+    InstallDarkMenuHook(user32, "DefWindowProcW", reinterpret_cast<void*>(DefWindowProcWHook),
+                        reinterpret_cast<void**>(&g_defWindowProcWOrig));
+    InstallDarkMenuHook(user32, "DefWindowProcA", reinterpret_cast<void*>(DefWindowProcAHook),
+                        reinterpret_cast<void**>(&g_defWindowProcAOrig));
+    InstallDarkMenuHook(user32, "DefFrameProcW", reinterpret_cast<void*>(DefFrameProcWHook),
+                        reinterpret_cast<void**>(&g_defFrameProcWOrig));
+    InstallDarkMenuHook(user32, "DefFrameProcA", reinterpret_cast<void*>(DefFrameProcAHook),
+                        reinterpret_cast<void**>(&g_defFrameProcAOrig));
+    InstallDarkMenuHook(user32, "SetMenuInfo", reinterpret_cast<void*>(SetMenuInfoHook),
+                        reinterpret_cast<void**>(&g_setMenuInfoOrig));
+
+    Refresh();
+}
+
+// Puts the system menu theme back and releases what Install created. The caller
+// applies the hook removals.
+void Uninstall() {
+    Apply(AppMode::Default);
+    for (int i = 0; i < g_hookTargetCount; i++) {
+        Wh_RemoveFunctionHook(g_hookTargets[i]);
+    }
+    g_hookTargetCount = 0;
+
+    // Processes that block win32k calls fail the GDI and theme cleanup calls below
+    // (MGGSK/DarkMenus issue 9), so they keep their handles until exit.
+    PROCESS_MITIGATION_SYSTEM_CALL_DISABLE_POLICY policy{};
+    if (GetProcessMitigationPolicy(GetCurrentProcess(), ProcessSystemCallDisablePolicy, &policy,
+                                   sizeof(policy)) &&
+        policy.DisallowWin32kSystemCalls != 0) {
+        return;
+    }
+    for (HBRUSH* brush : {&g_menuBrush, &g_separatorBrush, &g_hoverBrush, &g_selectedBrush}) {
+        if (*brush) {
+            DeleteObject(*brush);
+            *brush = nullptr;
+        }
+    }
+    if (g_iconFont) {
+        DeleteObject(g_iconFont);
+        g_iconFont = nullptr;
+    }
+    if (g_menuBarTheme) {
+        CloseThemeData(g_menuBarTheme);
+        g_menuBarTheme = nullptr;
+    }
+    if (g_uxtheme) {
+        FreeLibrary(g_uxtheme);
+        g_uxtheme = nullptr;
+    }
+}
+
+}  // namespace tf::DarkMenus
+
+
+// ===========================================================================
 // Flyout handling: menus, tooltips and dropdown lists.
 //
 // The engine intercepts uxtheme drawing in the target process (the same
@@ -2461,6 +2948,9 @@ enum class FlyoutType {
 
 struct WindowState {
     FlyoutType type{FlyoutType::Unknown};
+    // The window this state belongs to (the map key, kept on the state so paint-time
+    // helpers can query the window's current geometry).
+    HWND hWnd{nullptr};
     bool darkMode{false};
     bool effectsApplied{false};
     DWORD tick{0};
@@ -2476,6 +2966,14 @@ struct WindowState {
     int regionWidth{0};
     int regionHeight{0};
     int regionRadius{0};
+    // The interior rect the background bands painted, recorded from the first
+    // full-size POPUPBACKGROUND draw. The rim between it and the window edge is
+    // the only area the border pass may clear; everything inside holds content.
+    RECT bandRect{};
+    bool bandRectValid{false};
+    // The border pass framed this square menu on its DC, or left the border to the
+    // native drawing. The watcher overlay must then stay off this menu.
+    bool dcBorderPainted{false};
 };
 
 std::mutex g_windowsLock;
@@ -2513,6 +3011,7 @@ WindowState& GetOrCreateWindowState(HWND hWnd) {
         g_windows.erase(oldest);
     }
     WindowState& state = g_windows[hWnd];
+    state.hWnd = hWnd;
     state.tick = GetTickCount();
     return state;
 }
@@ -2587,6 +3086,58 @@ HWND ResolveFlyoutWindow(HDC hdc, FlyoutType type) {
         return w;
     }
     return FindFlyoutWindowOnCurrentThread(type);
+}
+
+struct MenuSurfaceParam {
+    int width;
+    int height;
+    bool visibleOnly;
+    HWND result;
+};
+
+BOOL CALLBACK MatchMenuSurfaceProc(HWND hWnd, LPARAM lParam) {
+    auto* param = reinterpret_cast<MenuSurfaceParam*>(lParam);
+    if (!IsMenuWindow(hWnd) || (param->visibleOnly && !IsWindowVisible(hWnd))) {
+        return TRUE;
+    }
+    RECT rc{};
+    if (GetWindowRect(hWnd, &rc) && rc.right - rc.left == param->width &&
+        rc.bottom - rc.top == param->height) {
+        param->result = hWnd;
+        return FALSE;
+    }
+    return TRUE;
+}
+
+// A buffered paint DC has no window, and the thread's first menu in z-order is the
+// root menu even while a submenu paints (the 0.6.65 trace credited every submenu
+// paint to the root menu). The buffer is sized to the window it paints, so the menu
+// of that size is the one being drawn. |exact| is false when no size matched.
+HWND ResolveMenuWindow(HDC hdc, bool& exact) {
+    exact = false;
+    HWND w = WindowFromDC(hdc);
+    if (w && IsMenuWindow(w)) {
+        exact = true;
+        return w;
+    }
+    BITMAP surface{};
+    HGDIOBJ bitmap = GetCurrentObject(hdc, OBJ_BITMAP);
+    if (bitmap && GetObjectW(bitmap, sizeof(surface), &surface)) {
+        // A menu is only visible after its first paint, so the hidden pass is needed.
+        for (bool visibleOnly : {true, false}) {
+            MenuSurfaceParam param{surface.bmWidth, surface.bmHeight, visibleOnly, nullptr};
+            EnumThreadWindows(GetCurrentThreadId(), MatchMenuSurfaceProc, reinterpret_cast<LPARAM>(&param));
+#ifdef TF_DEBUG_LOG
+            Log::Write(L"[bp] surface=%ldx%ld visibleOnly=%d match=%p", surface.bmWidth,
+                       surface.bmHeight, (int)visibleOnly, (void*)param.result);
+#endif
+            if (param.result) {
+                exact = true;
+                return param.result;
+            }
+        }
+    }
+    return FindFlyoutWindowOnCurrentThread(FlyoutType::Menu);
 }
 
 FlyoutType TypeForThemeClass(PCWSTR themeClass) {
@@ -2664,6 +3215,16 @@ void RefreshWindowState(HWND hWnd, WindowState& state, bool darkMode) {
 }
 
 void ApplyWindowEffects(HWND hWnd, WindowState& state) {
+    if (!state.border.colorUseDefault && SystemHelper::IsWindows11()) {
+        COLORREF color = Utils::MakeCOLORREF(state.border.color);
+        if (state.border.colorUseNone) {
+            color = state.border.color;
+        }
+        if (state.regionRadius > 0) {
+            color = DWMWA_COLOR_NONE;
+        }
+        [[maybe_unused]] HRESULT hrSet = DwmSetWindowAttribute(hWnd, DWMWA_BORDER_COLOR, &color, sizeof(color));
+    }
     Api::ApplyEffect(hWnd, state.darkMode, state.backdrop, state.border);
     state.effectsApplied = true;
 
@@ -2677,9 +3238,65 @@ void ApplyWindowEffects(HWND hWnd, WindowState& state) {
     }
 }
 
+// Reads one DWORD value from the engine hive. False when it is missing or not a DWORD.
+// The engine writes its keys in the 64-bit view, so a 32-bit process must ask for it
+// (RegGetValueW has no such flag).
+bool ReadEngineDword(const wchar_t* subkey, const wchar_t* name, DWORD& value) {
+    HKEY hKey{};
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, subkey, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &hKey) !=
+        ERROR_SUCCESS) {
+        return false;
+    }
+    DWORD type = 0;
+    DWORD size = sizeof(value);
+    const bool ok = RegQueryValueExW(hKey, name, nullptr, &type, reinterpret_cast<BYTE*>(&value),
+                                     &size) == ERROR_SUCCESS &&
+                    type == REG_DWORD;
+    RegCloseKey(hKey);
+    return ok;
+}
+
+// The custom-corner-radius mod (Include dwm.exe) replaces the radius DWM gives a window
+// before DWM draws the base layer: a value under 6 px becomes its small radius, anything
+// else its radius, and -1 keeps DWM's value. Its settings live in the engine hive, so
+// they are read there. Returns |dwmRadius| when the mod is not installed or is off.
+int CustomCornerRadiusFor(int dwmRadius) {
+    constexpr wchar_t kModKey[] = L"SOFTWARE\\Windhawk\\Engine\\Mods\\custom-corner-radius";
+    constexpr wchar_t kSettingsKey[] =
+        L"SOFTWARE\\Windhawk\\Engine\\Mods\\custom-corner-radius\\Settings";
+    HKEY modKey{};
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, kModKey, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &modKey) !=
+        ERROR_SUCCESS) {
+        return dwmRadius;
+    }
+    RegCloseKey(modKey);
+    DWORD disabled = 0;
+    if (ReadEngineDword(kModKey, L"Disabled", disabled) && disabled) {
+        return dwmRadius;
+    }
+    // The mod's own defaults, for a setting that was never saved.
+    DWORD radius = 12;
+    DWORD smallRadius = 6;
+    ReadEngineDword(kSettingsKey, L"radius", radius);
+    ReadEngineDword(kSettingsKey, L"smallRadius", smallRadius);
+    const int replaced = dwmRadius < 6 ? (int)smallRadius : (int)radius;
+    return replaced < 0 ? dwmRadius : replaced;
+}
+
 // The window region clips the menu to one rounded rect, so the outline and the
-// fill share one arc. 24 reads as clearly rounded on screen.
-constexpr int kMenuRegionRadius = 24;
+// fill share one arc. The radius MUST track the DWM backdrop layer: DWM composites
+// the menu's own base layer as a full-rect round rect whose radius is the window's
+// corner radius (8 dp for DWMWCP_ROUND: 8 px at 100%, 16 px at 200%), and it
+// ignores the window region. A larger region radius left the base layer's navy
+// corners spilling outside the accent ring (the 0.6.58 corner-spill report, and the
+// 0.6.71 fix for the old fixed 16 px that spilled the same way at 100%);
+// matching the radii keeps the base layer's arc under the ring (RenderRingDib). The
+// custom-corner-radius mod replaces DWM's 8 dp menu radius with its own (16 px in the
+// owner's setup), so the region takes the radius the mod gives instead of assuming 8.
+int MenuRegionRadius(HWND hWnd) {
+    const UINT dpi = GetDpiForWindow(hWnd);
+    return CustomCornerRadiusFor(MulDiv(8, dpi ? (int)dpi : 96, 96));
+}
 
 void ApplyMenuWindowRegion(HWND hWnd, WindowState& state) {
     const bool rounded =
@@ -2701,12 +3318,12 @@ void ApplyMenuWindowRegion(HWND hWnd, WindowState& state) {
     if (width <= 0 || height <= 0) {
         return;
     }
-    if (state.regionRadius == kMenuRegionRadius && state.regionWidth == width &&
+    const int radius = MenuRegionRadius(hWnd);
+    if (state.regionRadius == radius && state.regionWidth == width &&
         state.regionHeight == height) {
         return;
     }
-    HRGN region = CreateRoundRectRgn(0, 0, width, height, kMenuRegionRadius * 2,
-                                     kMenuRegionRadius * 2);
+    HRGN region = CreateRoundRectRgn(0, 0, width, height, radius * 2, radius * 2);
     if (!region) {
         return;
     }
@@ -2714,7 +3331,7 @@ void ApplyMenuWindowRegion(HWND hWnd, WindowState& state) {
     // paint comes back through here.
     state.regionWidth = width;
     state.regionHeight = height;
-    state.regionRadius = kMenuRegionRadius;
+    state.regionRadius = radius;
     if (!SetWindowRgn(hWnd, region, TRUE)) {
         DeleteObject(region);
         state.regionWidth = state.regionHeight = state.regionRadius = 0;
@@ -2741,15 +3358,46 @@ WindowState* EnsureWindowState(HWND hWnd, FlyoutType type, bool darkMode) {
         Log::Write(L"[fx] applied type=%d hwnd=%p dark=%d effect=%u", (int)type, hWnd,
                    (int)darkMode, state.backdrop.effectType);
     }
-    if (type == FlyoutType::Menu) {
+    if (type == FlyoutType::Menu || type == FlyoutType::DropDown ||
+        type == FlyoutType::Tooltip) {
         ApplyMenuWindowRegion(hWnd, state);
-        // Menus lose DWMWA_BORDER_COLOR after the first effect pass, so set it on every pass.
+#ifdef TF_DEBUG_LOG
+        Log::Write(L"[win] type=%d hwnd=%p atom=%u corner=%d useDefault=%d useNone=%d region=%dx%d r=%d vis=%d",
+                   (int)type, hWnd, (unsigned)GetClassLongPtrW(hWnd, GCW_ATOM),
+                   (int)state.border.cornerType, (int)state.border.colorUseDefault,
+                   (int)state.border.colorUseNone, state.regionWidth, state.regionHeight,
+                   state.regionRadius, (int)IsWindowVisible(hWnd));
+#endif
+        // Menus lose DWMWA_BORDER_COLOR after the first effect pass, so set it on every
+        // pass. A rounded menu's accent ring is the watcher overlay, so DWM draws no
+        // border there at all: its own line follows a different arc than the region
+        // and read as stray corner pieces on the Explorer title-bar sysmenu.
         if (SystemHelper::IsWindows11() && !state.border.colorUseDefault) {
+            // Decided by the corner setting, not by the region: a menu painted before
+            // it has a size has no region yet, and ApplyBorderEffect has just given
+            // DWM the accent (the corner arcs in the 2026-10-21 screenshot). Menus
+            // only: tooltips and dropdowns have no overlay, DWM's line is their ring.
+            const bool overlayRing =
+                type == FlyoutType::Menu &&
+                (state.border.cornerType == DWM_WINDOW_CORNER_PREFERENCE::DWMWCP_ROUND ||
+                 state.border.cornerType == DWM_WINDOW_CORNER_PREFERENCE::DWMWCP_ROUNDSMALL);
+            // A rounded tooltip or dropdown keeps the colour ApplyBorderEffect gave
+            // DWM (0.6.63 behaviour).
+            const bool keepDwmAccent = !overlayRing && state.regionRadius > 0;
             COLORREF color{Utils::MakeCOLORREF(state.border.color)};
-            if (state.border.colorUseNone) {
-                color = state.border.color;
+            if (state.border.colorUseNone || overlayRing) {
+                color = DWMWA_COLOR_NONE;
             }
-            DwmSetWindowAttribute(hWnd, DWMWA_BORDER_COLOR, &color, sizeof(color));
+            if (!keepDwmAccent) {
+                [[maybe_unused]] HRESULT hrSet =
+                    DwmSetWindowAttribute(hWnd, DWMWA_BORDER_COLOR, &color, sizeof(color));
+#ifdef TF_DEBUG_LOG
+                COLORREF readBack = 0;
+                HRESULT hrGet = DwmGetWindowAttribute(hWnd, DWMWA_BORDER_COLOR, &readBack, sizeof(readBack));
+                Log::Write(L"[dwm] border hwnd=%p want=%08X set=%08X get=%08X getHr=%08X", hWnd,
+                           (unsigned)color, (unsigned)hrSet, (unsigned)readBack, (unsigned)hrGet);
+#endif
+            }
         }
     }
     return &state;
@@ -2786,36 +3434,219 @@ namespace Rendering {
 
 bool HandlePopupMenuNonClientBorderColors(HDC hdc, const RECT& paintRect) {
     Handler::WindowState* state = Handler::g_paintingState;
+#ifdef TF_DEBUG_LOG
+    Log::Write(L"[nc] state=%p regionR=%d regionW=%d regionH=%d useNone=%d useDefault=%d corner=%d rect=%ld,%ld,%ld,%ld",
+               (void*)state, state ? state->regionRadius : -1, state ? state->regionWidth : -1,
+               state ? state->regionHeight : -1, state ? (int)state->border.colorUseNone : -1,
+               state ? (int)state->border.colorUseDefault : -1, state ? (int)state->border.cornerType : -1,
+               paintRect.left, paintRect.top, paintRect.right, paintRect.bottom);
+#endif
     if (!state) {
         return false;
     }
+    // This pass draws directly on the menu's DC. A rounded menu gets no ring here:
+    // its ring is the watcher overlay, the one painter every rounded menu shares.
+    // A DC ring is erased by the menu's own item and background blits (the Explorer
+    // title-bar sysmenu kept only its corner arcs, 2026-10-21) and raced the overlay
+    // whenever both ran (the 0.6.59 sysmenu double border). This pass only clears
+    // the rim so the backdrop shows under the overlay's band.
+    //
+    // A square menu has no overlay (its ring would be rounded), so it keeps the DC
+    // frame, and dcBorderPainted tells the watcher to stay away from it.
+    const bool rounded =
+        state->border.cornerType == DWM_WINDOW_CORNER_PREFERENCE::DWMWCP_ROUND ||
+        state->border.cornerType == DWM_WINDOW_CORNER_PREFERENCE::DWMWCP_ROUNDSMALL;
+    auto frame = [&](HBRUSH brush) {
+        if (!rounded && FrameRect(hdc, &paintRect, brush)) {
+            state->dcBorderPainted = true;
+        }
+    };
 
+    DcStateGuard dcState(hdc);
+    SelectClipRgn(hdc, nullptr);
+    // No background band paints the rim between the window edge and the band's inset, so it
+    // keeps the window's grey background. Clear the rim to alpha 0 so the backdrop shows —
+    // the rim only: this pass draws after the items, and the full-rect clear this used to
+    // do erased every item text glyph (the 0.6.48/0.6.49 regression). The band starts at
+    // inset 2, one pixel inside the [1,2) ring band.
+    RECT band{paintRect.left + 2, paintRect.top + 2, paintRect.right - 2, paintRect.bottom - 2};
+    if (state->bandRectValid) {
+        band = state->bandRect;
+    }
+    unique_handle<HRGN> rim{CreateRectRgn(paintRect.left, paintRect.top, paintRect.right,
+                                          paintRect.bottom)};
+    if (rim) {
+        unique_handle<HRGN> inner{nullptr};
+        if (rounded && state->regionRadius > 2) {
+            // GDI round-rect regions cover to right-2/bottom-2, not right-1: the
+            // rim must still protect the fill columns through the ring inset, so
+            // the round-rect band params widen by 2 (rect regions have no such
+            // exclusion and keep the plain band rect).
+            inner.reset(CreateRoundRectRgn(band.left, band.top, band.right + 2,
+                                           band.bottom + 2,
+                                           (state->regionRadius - 2) * 2,
+                                           (state->regionRadius - 2) * 2));
+        } else {
+            inner.reset(CreateRectRgn(band.left, band.top, band.right, band.bottom));
+        }
+        if (!inner || CombineRgn(rim.get(), rim.get(), inner.get(), RGN_DIFF) == ERROR) {
+            rim.reset();
+        }
+    }
+    if (rim) {
+        SelectClipRgn(hdc, rim.get());
+    }
+#ifdef TF_DEBUG_LOG
+    int nzBefore = 0;
+    for (int x = 35; x < 200; ++x) {
+        if (GetPixel(hdc, x, 10) != 0) {
+            ++nzBefore;
+        }
+    }
+#endif
+    if (rim) {
+        PatBlt(hdc, paintRect.left, paintRect.top, paintRect.right - paintRect.left,
+               paintRect.bottom - paintRect.top, BLACKNESS);
+        SelectClipRgn(hdc, nullptr);
+    }
+#ifdef TF_DEBUG_LOG
+    int nzAfter = 0;
+    for (int x = 35; x < 200; ++x) {
+        if (GetPixel(hdc, x, 10) != 0) {
+            ++nzAfter;
+        }
+    }
+    Log::Write(L"[nc] probe row10 nzBefore=%d nzAfter=%d rim=%d band=%ld,%ld,%ld,%ld", nzBefore,
+               nzAfter, rim.get() ? 1 : 0, band.left, band.top, band.right, band.bottom);
+#endif
     if (!state->border.colorUseNone) {
         if (state->border.colorUseDefault) {
+            // The native POPUPBORDERS drawing takes over below; it owns this
+            // menu's border, so the watcher keeps its overlay away all the same.
+            state->dcBorderPainted = true;
             return false;
         }
         unique_handle<HBRUSH> brush{Utils::CreateSolidColorBrushWithAlpha(
             Utils::MakeCOLORREF(state->border.color),
             Utils::GetAlphaFromARGB(state->border.color))};
         if (brush) {
-            FrameRect(hdc, &paintRect, brush.get());
+            frame(brush.get());
         }
     } else {
-        FrameRect(hdc, &paintRect, GetStockBrush(BLACK_BRUSH));
+        frame(GetStockBrush(BLACK_BRUSH));
     }
     return true;
 }
 
+// Menus painted without a themed background (the desktop context menu is drawn by
+// DirectUI) get their ring from the overlay window (see the UnthemedMenuWatcher
+// section below). Nothing paints on such a menu's own DC any more: every DC stroke
+// was another painter racing the overlay — the GDI region arc and the GDI+ arc
+// differ at the corners, which read as a duplicate border (0.6.55 field report).
+
+// Menu items paint in client coordinates, which start at the window frame's inner
+// edge (3 px in on Windows 11), while the region and ring are window coordinates.
+// Region math done in client space without this offset clipped away the client's
+// top rows (left uncleared, so the theme's lighter fill showed through) and kept
+// the hover fill short of the ring on the left.
+POINT ClientOffset(const Handler::WindowState& state) {
+    RECT window{};
+    POINT client{};
+    if (!state.hWnd || !GetWindowRect(state.hWnd, &window) || !ClientToScreen(state.hWnd, &client)) {
+        return {};
+    }
+    return {client.x - window.left, client.y - window.top};
+}
+
+// Clips the DC to the menu's fill area: inset 2, concentric with the region arc.
+void ClipToMenuInterior(HDC hdc, const Handler::WindowState& state) {
+    if (state.regionRadius <= 0 || state.border.colorUseDefault) {
+        return;
+    }
+    const int diameter = (state.regionRadius - 2) * 2;
+    // GDI round-rect regions cover to right-2/bottom-2; the clear must reach
+    // the column/row next to the ring (inset 3), so the params widen by 1.
+    unique_handle<HRGN> inner{CreateRoundRectRgn(2, 2, state.regionWidth - 1,
+                                                 state.regionHeight - 1, diameter, diameter)};
+    if (inner) {
+        // Clip regions are in device units. A window DC's device space is the client
+        // area; a buffered-paint DC maps client coordinates onto a window-sized
+        // bitmap through its viewport origin, so take the logical-to-device shift too.
+        const POINT offset = ClientOffset(state);
+        POINT device{};
+        LPtoDP(hdc, &device, 1);
+        OffsetRgn(inner.get(), device.x - offset.x, device.y - offset.y);
+        ExtSelectClipRgn(hdc, inner.get(), RGN_AND);
+    }
+}
+
+// The area an item's hot fill covers, and so the area its normal paint clears:
+// the item rect pushed out to the inside of the ring wherever only menu padding
+// lies between them. A fill limited to the item rect left square corners inside
+// the rounded ring, gaps at the sides, and a padding row it never reached; on a
+// one-item menu (a pill) that read as a box floating inside the outline.
+RECT ItemFillRect(const Handler::WindowState& state, const RECT& item) {
+    RECT rc = item;
+    if (state.regionRadius <= 0 || state.regionWidth <= 0 || state.regionHeight <= 0) {
+        return rc;
+    }
+    constexpr int kInset = 2;
+    constexpr int kMaxPadding = 8;
+    const POINT offset = ClientOffset(state);
+    const int left = kInset - offset.x;
+    const int top = kInset - offset.y;
+    const int right = state.regionWidth - kInset - offset.x;
+    const int bottom = state.regionHeight - kInset - offset.y;
+    if (rc.left - left <= kMaxPadding) {
+        rc.left = left;
+    }
+    if (right - rc.right <= kMaxPadding) {
+        rc.right = right;
+    }
+    if (rc.top - top <= kMaxPadding) {
+        rc.top = top;
+    }
+    if (bottom - rc.bottom <= kMaxPadding) {
+        rc.bottom = bottom;
+    }
+    return rc;
+}
+
 bool HandleCustomRendering(HDC hdc, int partId, int stateId, const RECT& clipRect,
-                           const RECT& paintRect) {
+                           const RECT& itemRect) {
     Handler::WindowState* state = Handler::g_paintingState;
     if (!state) {
         return false;
     }
     const Api::MenuCustomRenderingContext& custom = state->customRendering;
+    const bool itemFill = partId == MENU_POPUPITEM || partId == MENU_POPUPITEMFOCUSABLE;
+    const RECT paintRect = itemFill ? ItemFillRect(*state, itemRect) : itemRect;
+#ifdef TF_DEBUG_LOG
+    {
+        RECT box{};
+        int kind = GetClipBox(hdc, &box);
+        POINT org{};
+        GetDCOrgEx(hdc, &org);
+        RECT dcWin{};
+        HWND dcWnd = WindowFromDC(hdc);
+        if (dcWnd) GetWindowRect(dcWnd, &dcWin);
+        Log::Write(L"[item] part=%d state=%d item=%ld,%ld,%ld,%ld fill=%ld,%ld,%ld,%ld clip=%ld,%ld,%ld,%ld "
+                   L"clipbox=%d:%ld,%ld,%ld,%ld org=%ld,%ld dcWnd=%p menu=%p region=%dx%d r=%d",
+                   partId, stateId, itemRect.left, itemRect.top, itemRect.right, itemRect.bottom,
+                   paintRect.left, paintRect.top, paintRect.right, paintRect.bottom, clipRect.left,
+                   clipRect.top, clipRect.right, clipRect.bottom, kind, box.left, box.top, box.right,
+                   box.bottom, org.x, org.y, (void*)dcWnd, (void*)state->hWnd, state->regionWidth,
+                   state->regionHeight, state->regionRadius);
+    }
+#endif
 
     DcStateGuard dcState(hdc);
-    IntersectClipRect(hdc, clipRect.left, clipRect.top, clipRect.right, clipRect.bottom);
+    if (itemFill) {
+        IntersectClipRect(hdc, paintRect.left, paintRect.top, paintRect.right, paintRect.bottom);
+        ClipToMenuInterior(hdc, *state);
+    } else {
+        IntersectClipRect(hdc, clipRect.left, clipRect.top, clipRect.right, clipRect.bottom);
+    }
     // The keyboard focus cue is drawn over the hot fill, so it must not clear it.
     if (partId != MENU_POPUPITEMKBFOCUS) {
         PatBlt(hdc, paintRect.left, paintRect.top, paintRect.right - paintRect.left,
@@ -2846,12 +3677,13 @@ bool HandleCustomRendering(HDC hdc, int partId, int stateId, const RECT& clipRec
             FrameRgn(hdc, region.get(), brush.get(), thickness, thickness);
             return true;
         }
-        HGDIOBJ oldBrush = SelectObject(hdc, brush.get());
-        HGDIOBJ oldPen = SelectObject(hdc, GetStockObject(NULL_PEN));
-        RoundRect(hdc, rc.left, rc.top, rc.right, rc.bottom, (int)radius * 2, (int)radius * 2);
-        SelectObject(hdc, oldPen);
-        SelectObject(hdc, oldBrush);
-        return true;
+        // A region fill covers the whole rect; RoundRect with a null pen stops one
+        // pixel short on the right and bottom.
+        unique_handle<HRGN> region{radius ? CreateRoundRectRgn(rc.left, rc.top, rc.right + 1,
+                                                               rc.bottom + 1, (int)radius * 2,
+                                                               (int)radius * 2)
+                                          : CreateRectRgnIndirect(&rc)};
+        return region && FillRgn(hdc, region.get(), brush.get());
     };
 
     if (partId == MENU_POPUPSEPARATOR) {
@@ -2945,12 +3777,40 @@ bool HandleMenuDrawThemeBackground(HTHEME hTheme, HDC hdc, int iPartId, int iSta
         return false;
     }
 
-    PatBlt(hdc, clipRect.left, clipRect.top, clipRect.right - clipRect.left,
-           clipRect.bottom - clipRect.top, BLACKNESS);
-    // No border re-draw here. The POPUPBORDERS part paints the real outline over the
-    // full window rect after the background bands, so re-framing every background clip
-    // band only leaves stray lines: a vertical tick at each band's right edge and a
-    // horizontal line at each band boundary (visible around the separator row).
+    // Record the interior rect the background bands paint, so the border pass can
+    // clear the rim without touching anything the bands or items drew.
+    if (iPartId == MENU_POPUPBACKGROUND && !state->bandRectValid && state->regionWidth > 0 &&
+        state->regionHeight > 0 && clipRect.left <= 2 && clipRect.top <= 2 &&
+        clipRect.right >= state->regionWidth - 2 &&
+        clipRect.bottom >= state->regionHeight - 2) {
+        state->bandRect = clipRect;
+        state->bandRectValid = true;
+    }
+
+    // The backdrop owns the fill: bands paint black (alpha 0) so the acrylic shows
+    // through. A rounded menu's fill stops inside the overlay's 1 px band (pixel 1), so
+    // the edge it leaves stays the rim the border pass clears. The fill area must stay
+    // concentric with the region arc: inset 2, radius r-2.
+    DcStateGuard fillGuard(hdc);
+    ClipToMenuInterior(hdc, *state);
+    // A normal item clears everything its hot fill covered, or the padding strips
+    // of the last hover stay behind as lighter bands.
+    RECT clear = clipRect;
+    if (iPartId == MENU_POPUPITEM || iPartId == MENU_POPUPITEMFOCUSABLE) {
+        clear = ItemFillRect(*state, *pRect);
+    }
+#ifdef TF_DEBUG_LOG
+    {
+        RECT box{};
+        int kind = GetClipBox(hdc, &box);
+        Log::Write(L"[clear] part=%d state=%d rect=%ld,%ld,%ld,%ld clear=%ld,%ld,%ld,%ld clipbox=%d:%ld,%ld,%ld,%ld region=%dx%d",
+                   iPartId, iStateId, pRect->left, pRect->top, pRect->right, pRect->bottom, clear.left,
+                   clear.top, clear.right, clear.bottom, kind, box.left, box.top, box.right, box.bottom,
+                   state->regionWidth, state->regionHeight);
+    }
+#endif
+    PatBlt(hdc, clear.left, clear.top, clear.right - clear.left, clear.bottom - clear.top,
+           BLACKNESS);
     return true;
 }
 
@@ -2979,6 +3839,11 @@ bool HandleMenuBitmap(HBITMAP& source, unique_handle<HBITMAP>& target) {
 
 namespace Hooks {
 
+// The watcher globals are defined below the paint hooks; these declarations let
+// the border paint reach them without reordering the file.
+extern DWORD g_unthemedMenuThreadId;
+constexpr UINT kWatcherOverlayMessage = WM_APP + 0x0F00;
+
 thread_local Handler::FlyoutType g_paintingType = Handler::FlyoutType::Unknown;
 
 using DrawThemeBackgroundFn = decltype(&DrawThemeBackground);
@@ -2995,7 +3860,7 @@ DrawThemeTextExFn g_drawThemeTextExOrig = nullptr;
 GetThemeMarginsFn g_getThemeMarginsOrig = nullptr;
 DrawTextWFn g_drawTextWOrig = nullptr;
 
-void* g_hookTargets[8]{};
+void* g_hookTargets[12]{};
 int g_hookTargetCount = 0;
 
 // Sets the per-thread paint context for the current call.
@@ -3016,7 +3881,15 @@ Handler::WindowState* BeginPaint(HTHEME hTheme, HDC hdc, Handler::FlyoutType& ty
         return nullptr;
     }
 
-    HWND hWnd = Handler::ResolveFlyoutWindow(hdc, type);
+    bool exactMenu = false;
+    HWND hWnd = type == Handler::FlyoutType::Menu ? Handler::ResolveMenuWindow(hdc, exactMenu)
+                                                  : Handler::ResolveFlyoutWindow(hdc, type);
+#ifdef TF_DEBUG_LOG
+    if (type == Handler::FlyoutType::Menu) {
+        Log::Write(L"[bp] menu resolved=%p exact=%d dcWnd=%p dcObj=%lu", (void*)hWnd, (int)exactMenu,
+                   (void*)WindowFromDC(hdc), (unsigned long)GetObjectType(hdc));
+    }
+#endif
     if (!hWnd) {
         return nullptr;
     }
@@ -3032,7 +3905,7 @@ Handler::WindowState* BeginPaint(HTHEME hTheme, HDC hdc, Handler::FlyoutType& ty
     }
 
     typeOut = type;
-    if (type == Handler::FlyoutType::Menu) {
+    if (type == Handler::FlyoutType::Menu && !exactMenu) {
         Handler::EnsureOtherMenuWindows(hWnd, darkMode);
     }
     return Handler::EnsureWindowState(hWnd, type, darkMode);
@@ -3042,6 +3915,20 @@ HRESULT WINAPI DrawThemeBackgroundHook(HTHEME hTheme, HDC hdc, int iPartId, int 
                                        LPCRECT pRect, LPCRECT pClipRect) {
     Handler::FlyoutType type{};
     Handler::WindowState* state = BeginPaint(hTheme, hdc, type);
+#ifdef TF_DEBUG_LOG
+    {
+        static int diagCount = 0;
+        wchar_t diagClass[MAX_PATH + 1]{};
+        if (diagCount < 20000 && SUCCEEDED(ThemeHelper::GetThemeClass(hTheme, diagClass, MAX_PATH))) {
+            diagCount++;
+            Log::Write(L"[dtb] class=%ls part=%d state=%d type=%d st=%p dcWnd=%p dcObj=%lu rect=%ld,%ld,%ld,%ld",
+                       diagClass, iPartId, iStateId, (int)type, (void*)state, (void*)WindowFromDC(hdc),
+                       (unsigned long)GetObjectType(hdc),
+                       pRect ? pRect->left : -1L, pRect ? pRect->top : -1L,
+                       pRect ? pRect->right : -1L, pRect ? pRect->bottom : -1L);
+        }
+    }
+#endif
     if (!state) {
         return g_drawThemeBackgroundOrig(hTheme, hdc, iPartId, iStateId, pRect, pClipRect);
     }
@@ -3059,13 +3946,28 @@ HRESULT WINAPI DrawThemeBackgroundHook(HTHEME hTheme, HDC hdc, int iPartId, int 
             if (pClipRect) {
                 IntersectRect(&clipRect, &clipRect, pClipRect);
             }
-            // No full-rect fill here. It painted the dark band around the menu.
-            // Only the 1 px outline is drawn, and the fill comes from the backdrop.
-            if (!Rendering::HandlePopupMenuNonClientBorderColors(hdc, clipRect)) {
+            // No fill here: the dark fill belongs to the POPUPBACKGROUND bands. A square
+            // menu's outline is the DC frame from HandlePopupMenuNonClientBorderColors;
+            // a rounded menu's is the watcher overlay.
+#ifdef TF_DEBUG_LOG
+            Log::Write(L"[border] clip=%d,%d,%d,%d color=%08X useDefault=%d useNone=%d",
+                       clipRect.left, clipRect.top, clipRect.right, clipRect.bottom,
+                       (unsigned)state->border.color, (int)state->border.colorUseDefault,
+                       (int)state->border.colorUseNone);
+#endif
+            const bool painted = Rendering::HandlePopupMenuNonClientBorderColors(hdc, clipRect);
+            if (!painted) {
                 DcStateGuard dcState(hdc);
                 ExcludeClipRect(hdc, clipRect.left + 1, clipRect.top + 1, clipRect.right - 1,
                                 clipRect.bottom - 1);
                 g_drawThemeBackgroundOrig(hTheme, hdc, iPartId, iStateId, pRect, pClipRect);
+            } else if (state->hWnd) {
+                // The watcher thread owns the overlay windows, so ask it directly
+                // instead of waiting up to 250 ms for its tick: drop the overlay of
+                // a menu the DC framed (lParam 0), or ring a rounded one now
+                // (lParam 1) so it opens with its border.
+                PostThreadMessageW(g_unthemedMenuThreadId, kWatcherOverlayMessage,
+                                   (WPARAM)state->hWnd, state->dcBorderPainted ? 0 : 1);
             }
             return S_OK;
         }
@@ -3130,6 +4032,10 @@ HRESULT WINAPI DrawThemeTextHook(HTHEME hTheme, HDC hdc, int iPartId, int iState
 
     // Composite the text with alpha so it renders correctly over the translucent
     // background (upstream MyDrawThemeText).
+#ifdef TF_DEBUG_LOG
+    Log::Write(L"[txt] enter hdc=%p part=%d state=%d cch=%d rect=%ld,%ld,%ld,%ld", (void*)hdc,
+               iPartId, iStateId, cchText, pRect->left, pRect->top, pRect->right, pRect->bottom);
+#endif
     auto previous = std::exchange(Handler::g_paintingState, state);
     struct Restore {
         Handler::WindowState* previous;
@@ -3155,6 +4061,10 @@ HRESULT WINAPI DrawThemeTextHook(HTHEME hTheme, HDC hdc, int iPartId, int iState
                             p->dwTextFlags, p->pRect, &options);
         },
         reinterpret_cast<LPARAM>(&params));
+#ifdef TF_DEBUG_LOG
+    Log::Write(L"[txt] menu part=%d state=%d content hr=0x%08X", iPartId, iStateId,
+               (unsigned)hr);
+#endif
     if (FAILED(hr)) {
         return g_drawThemeTextOrig(hTheme, hdc, iPartId, iStateId, pszText, cchText, dwTextFlags,
                                    dwTextFlags2, pRect);
@@ -3255,6 +4165,600 @@ int WINAPI DrawTextWHook(HDC hdc, LPCWSTR lpchText, int cchText, LPRECT lprc, UI
     return g_drawTextWOrig(hdc, lpchText, cchText, lprc, format);
 }
 
+// ---------------------------------------------------- unthemed menus ---
+// Some menus are painted without any uxtheme call (the desktop context menu is
+// drawn by DirectUI), so the draw hooks never fire for them. Anything drawn on
+// such a menu's own DC is erased by its per-item buffered blits (diag24/25), and
+// anything clipped by a window region is cut into dashes by GDI's polygonal arcs
+// (0.6.54). The accent ring therefore lives on its own layered window floating
+// exactly over the menu: the menu's paints cannot reach it, no region of the menu
+// applies to it, and the band is anti-aliased by GDI+ instead of aliased by GDI
+// regions. Themed rounded menus get the same overlay (0.6.64): their DC ring met
+// the same blits. Only square menus, framed on their DC, are skipped.
+
+std::mutex g_unthemedMenusLock;
+std::unordered_map<HWND, SIZE> g_unthemedMenus;
+DWORD g_unthemedMenuThreadId = 0;
+
+struct RingOverlay {
+    HWND window{};
+    SIZE rendered{};
+    DWORD renderedColor{};
+};
+std::mutex g_ringOverlaysLock;
+std::unordered_map<HWND, RingOverlay> g_ringOverlays;  // menu hwnd -> overlay
+
+// A window class outlives the DLL that registered it. Builds up to 0.6.63 never
+// unregistered "TF_RingOverlay", so after a hot update that class still points at
+// the unloaded DLL's window procedure; a fresh name keeps this build off it, and
+// Wh_ModBeforeUninit now unregisters this one.
+const wchar_t kRingOverlayClass[] = L"TF_RingOverlay_0664";
+HANDLE g_unthemedMenuThread = nullptr;
+ULONG_PTR g_gdiplusToken = 0;
+bool g_gdiplusReady = false;
+
+// gdiplus is loaded dynamically: Windhawk's fixed link set has no gdiplus.lib, and
+// the flat API is a handful of C functions.
+using PFN_GdiplusStartup = Gdiplus::Status(WINAPI*)(ULONG_PTR*, Gdiplus::GdiplusStartupInput*, void*);
+using PFN_GdipCreateBitmapFromScan0 = decltype(&Gdiplus::DllExports::GdipCreateBitmapFromScan0);
+using PFN_GdipGetImageGraphicsContext = decltype(&Gdiplus::DllExports::GdipGetImageGraphicsContext);
+using PFN_GdipSetSmoothingMode = decltype(&Gdiplus::DllExports::GdipSetSmoothingMode);
+using PFN_GdipCreatePath = decltype(&Gdiplus::DllExports::GdipCreatePath);
+using PFN_GdipStartPathFigure = decltype(&Gdiplus::DllExports::GdipStartPathFigure);
+using PFN_GdipAddPathArc = decltype(&Gdiplus::DllExports::GdipAddPathArc);
+using PFN_GdipClosePathFigure = decltype(&Gdiplus::DllExports::GdipClosePathFigure);
+using PFN_GdipCreateSolidFill = decltype(&Gdiplus::DllExports::GdipCreateSolidFill);
+using PFN_GdipFillPath = decltype(&Gdiplus::DllExports::GdipFillPath);
+using PFN_GdipDeleteBrush = decltype(&Gdiplus::DllExports::GdipDeleteBrush);
+using PFN_GdipDeletePath = decltype(&Gdiplus::DllExports::GdipDeletePath);
+using PFN_GdipDeleteGraphics = decltype(&Gdiplus::DllExports::GdipDeleteGraphics);
+using PFN_GdipDisposeImage = decltype(&Gdiplus::DllExports::GdipDisposeImage);
+
+struct GdiPlusApi {
+    PFN_GdiplusStartup startup = nullptr;
+    PFN_GdipCreateBitmapFromScan0 createBitmap = nullptr;
+    PFN_GdipGetImageGraphicsContext getGraphics = nullptr;
+    PFN_GdipSetSmoothingMode setSmoothing = nullptr;
+    PFN_GdipCreatePath createPath = nullptr;
+    PFN_GdipStartPathFigure startFigure = nullptr;
+    PFN_GdipAddPathArc addArc = nullptr;
+    PFN_GdipClosePathFigure closeFigure = nullptr;
+    PFN_GdipCreateSolidFill createSolidFill = nullptr;
+    PFN_GdipFillPath fillPath = nullptr;
+    PFN_GdipDeleteBrush deleteBrush = nullptr;
+    PFN_GdipDeletePath deletePath = nullptr;
+    PFN_GdipDeleteGraphics deleteGraphics = nullptr;
+    PFN_GdipDisposeImage disposeImage = nullptr;
+};
+
+GdiPlusApi g_gdiplus{};
+
+bool EnsureGdiPlus() {
+    if (g_gdiplusReady) {
+        return true;
+    }
+    HMODULE mod = LoadLibraryW(L"gdiplus.dll");
+    if (!mod) {
+        return false;
+    }
+    auto proc = [&](const char* name) { return GetProcAddress(mod, name); };
+    g_gdiplus.startup = reinterpret_cast<PFN_GdiplusStartup>(proc("GdiplusStartup"));
+    g_gdiplus.createBitmap = reinterpret_cast<PFN_GdipCreateBitmapFromScan0>(proc("GdipCreateBitmapFromScan0"));
+    g_gdiplus.getGraphics = reinterpret_cast<PFN_GdipGetImageGraphicsContext>(proc("GdipGetImageGraphicsContext"));
+    g_gdiplus.setSmoothing = reinterpret_cast<PFN_GdipSetSmoothingMode>(proc("GdipSetSmoothingMode"));
+    g_gdiplus.createPath = reinterpret_cast<PFN_GdipCreatePath>(proc("GdipCreatePath"));
+    g_gdiplus.startFigure = reinterpret_cast<PFN_GdipStartPathFigure>(proc("GdipStartPathFigure"));
+    g_gdiplus.addArc = reinterpret_cast<PFN_GdipAddPathArc>(proc("GdipAddPathArc"));
+    g_gdiplus.closeFigure = reinterpret_cast<PFN_GdipClosePathFigure>(proc("GdipClosePathFigure"));
+    g_gdiplus.createSolidFill = reinterpret_cast<PFN_GdipCreateSolidFill>(proc("GdipCreateSolidFill"));
+    g_gdiplus.fillPath = reinterpret_cast<PFN_GdipFillPath>(proc("GdipFillPath"));
+    g_gdiplus.deleteBrush = reinterpret_cast<PFN_GdipDeleteBrush>(proc("GdipDeleteBrush"));
+    g_gdiplus.deletePath = reinterpret_cast<PFN_GdipDeletePath>(proc("GdipDeletePath"));
+    g_gdiplus.deleteGraphics = reinterpret_cast<PFN_GdipDeleteGraphics>(proc("GdipDeleteGraphics"));
+    g_gdiplus.disposeImage = reinterpret_cast<PFN_GdipDisposeImage>(proc("GdipDisposeImage"));
+    if (!g_gdiplus.startup || !g_gdiplus.createBitmap || !g_gdiplus.getGraphics ||
+        !g_gdiplus.setSmoothing || !g_gdiplus.createPath || !g_gdiplus.startFigure ||
+        !g_gdiplus.addArc || !g_gdiplus.closeFigure || !g_gdiplus.createSolidFill ||
+        !g_gdiplus.fillPath || !g_gdiplus.deleteBrush || !g_gdiplus.deletePath ||
+        !g_gdiplus.deleteGraphics || !g_gdiplus.disposeImage) {
+        return false;
+    }
+    Gdiplus::GdiplusStartupInput input{};
+    if (g_gdiplus.startup(&g_gdiplusToken, &input, nullptr) != Gdiplus::Ok) {
+        return false;
+    }
+    g_gdiplusReady = true;
+    return true;
+}
+
+// Adds a rounded-rectangle subpath to |path|. Rects are exclusive on right/bottom,
+// matching GDI conventions; the arcs join the four sides.
+void AddRoundRectSubPath(Gdiplus::GpPath* path, float left, float top, float right, float bottom,
+                         float radius) {
+    const float d = radius * 2.0f;
+    g_gdiplus.addArc(path, right - d, top, d, d, 270.0f, 90.0f);
+    g_gdiplus.addArc(path, right - d, bottom - d, d, d, 0.0f, 90.0f);
+    g_gdiplus.addArc(path, left, bottom - d, d, d, 90.0f, 90.0f);
+    g_gdiplus.addArc(path, left, top, d, d, 180.0f, 90.0f);
+    g_gdiplus.closeFigure(path);
+}
+
+// Renders the accent ring into a fresh premultiplied-ARGB DIB sized w×h and returns
+// it, handing the DIB's bits back through |outBits|. The band is the even-odd fill of
+// two nested rounded rects — outer inset -0.5 radius r-2, inner inset 0.5 one pixel
+// smaller — so the flats land exactly on the outermost pixel at full alpha and the
+// corner arcs are smoothed by GDI+ rather than clipped by a region.
+HBITMAP RenderRingDib(int w, int h, int ringRadius, const Api::BorderContext& border,
+                      void** outBits) {
+    *outBits = nullptr;
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = w;
+    bi.bmiHeader.biHeight = -h;  // top-down, matching UpdateLayeredWindow's origin
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP dib = CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!dib || !bits) {
+        if (dib) {
+            DeleteObject(dib);
+        }
+        return nullptr;
+    }
+    memset(bits, 0, (size_t)w * h * 4);
+
+    Gdiplus::GpBitmap* bitmap = nullptr;
+    Gdiplus::GpGraphics* graphics = nullptr;
+    Gdiplus::GpPath* path = nullptr;
+    Gdiplus::GpSolidFill* brush = nullptr;
+    if (g_gdiplus.createBitmap(w, h, w * 4, PixelFormat32bppPARGB, (BYTE*)bits, &bitmap) == Gdiplus::Ok &&
+        g_gdiplus.getGraphics(bitmap, &graphics) == Gdiplus::Ok &&
+        g_gdiplus.setSmoothing(graphics, Gdiplus::SmoothingModeAntiAlias) == Gdiplus::Ok &&
+        g_gdiplus.createPath(Gdiplus::FillModeAlternate, &path) == Gdiplus::Ok) {
+        // GDI+ centres pixel i on integer i, so a band spanning [a,a+1] renders its
+        // full-intensity line exactly on pixel a. The band spans [-0.5,0.5]: the
+        // accent line sits on the outermost pixel of every side. The DWM base layer
+        // fills the whole window rect (pixel w-1/h-1 included) with a radius-r arc
+        // centred (r-0.5, r-0.5), and it ignores the window region; the 0.6.59-0.6.71
+        // band on pixel 1 left that navy showing as a 1 px line past the right and
+        // bottom ring and a crescent past every corner arc (2026-10-26 owner report,
+        // light wallpaper). The outer arc sits 2 px inside the region radius at any radius,
+        // so the band follows the menu's corner curve. On the diagonal its outer edge lands
+        // about 0.6 px outside the base's arc (from the arc centres, not measured), which
+        // covers the base's anti-aliased edge.
+        const float inset = -0.5f;
+        const float rr = std::max((float)ringRadius - 2.0f, 1.0f);
+        // A radius larger than half the shorter side was measurable only on menus
+        // taller/wider than 60 px; small menus need it clamped or the arcs overshoot
+        // the rect and the even-odd fill distorts.
+        const float maxR = (float)std::min(w, h) / 2.0f;
+        const float radius = std::min(rr, std::max(maxR, 1.0f));
+        // Pixel i spans [i-0.5, i+0.5], so the far edges sit at w-1-inset = w-0.5:
+        // the right and bottom lines land on pixel w-1/h-1, mirroring pixel 0.
+        const float right = (float)w - 1.0f - inset;
+        const float bottom = (float)h - 1.0f - inset;
+        AddRoundRectSubPath(path, inset, inset, right, bottom, radius);
+        // The inner subpath must be its own figure: appended arcs otherwise connect to
+        // the outer loop with a line, and the even-odd fill distorts by half a pixel.
+        g_gdiplus.startFigure(path);
+        AddRoundRectSubPath(path, inset + 1.0f, inset + 1.0f, right - 1.0f, bottom - 1.0f,
+                            std::max(radius - 1.0f, 0.5f));
+        // The border colour is stored ARGB; the flat API takes the same layout.
+        if (g_gdiplus.createSolidFill(border.color, &brush) == Gdiplus::Ok) {
+            g_gdiplus.fillPath(graphics, brush, path);
+        }
+    }
+    if (brush) {
+        g_gdiplus.deleteBrush(brush);
+    }
+    if (path) {
+        g_gdiplus.deletePath(path);
+    }
+    if (graphics) {
+        g_gdiplus.deleteGraphics(graphics);
+    }
+    if (bitmap) {
+        g_gdiplus.disposeImage(bitmap);
+    }
+    *outBits = bits;
+    return dib;
+}
+
+LRESULT CALLBACK RingOverlayProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    return DefWindowProcW(hWnd, msg, wParam, lParam);
+}
+
+void RegisterRingOverlayClass() {
+    WNDCLASSW wc{};
+    wc.lpfnWndProc = RingOverlayProc;
+    wc.hInstance = GetModuleHandleW(nullptr);
+    wc.lpszClassName = kRingOverlayClass;
+    RegisterClassW(&wc);  // ERROR_CLASS_ALREADY_EXISTS is fine
+}
+
+// Creates or refreshes the ring overlay for |menu|: same rect, layered per-pixel
+// alpha, click-through, topmost, never activated. The bitmap is re-rendered only
+// when the menu's size or the accent colour changes.
+void UpdateRingOverlay(HWND menu, int w, int h, const Api::BorderContext& border) {
+    if (!EnsureGdiPlus()) {
+        return;
+    }
+    RingOverlay* entry = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(g_ringOverlaysLock);
+        entry = &g_ringOverlays[menu];
+    }
+    if (!entry->window || !IsWindow(entry->window)) {
+        // The overlay is owned by its menu. Windows guarantees an owned window stays
+        // above its owner no matter how often the menu re-asserts its own topmost z
+        // (per-tick insert-above alone lost that race - 0.6.56/0.6.57 field failure),
+        // and the overlay is destroyed with the menu when the menu dies.
+        entry->window = CreateWindowExW(
+            WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_TOPMOST |
+                WS_EX_NOACTIVATE,
+            kRingOverlayClass, L"", WS_POPUP, 0, 0, w, h, menu, nullptr,
+            GetModuleHandleW(nullptr), nullptr);
+        if (!entry->window) {
+            return;
+        }
+        entry->rendered = {0, 0};
+    }
+    if (entry->rendered.cx != w || entry->rendered.cy != h ||
+        entry->renderedColor != border.color) {
+        void* bits = nullptr;
+        HBITMAP dib = RenderRingDib(w, h, Handler::MenuRegionRadius(menu), border, &bits);
+        if (!dib) {
+            return;
+        }
+        HDC screenDc = GetDC(nullptr);
+        HDC memDc = CreateCompatibleDC(screenDc);
+        if (screenDc && memDc) {
+            HGDIOBJ old = SelectObject(memDc, dib);
+            SIZE size{w, h};
+            POINT src{0, 0};
+            BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+            UpdateLayeredWindow(entry->window, screenDc, nullptr, &size, memDc, &src, 0,
+                                &blend, ULW_ALPHA);
+            SelectObject(memDc, old);
+        }
+        if (memDc) {
+            DeleteDC(memDc);
+        }
+        if (screenDc) {
+            ReleaseDC(nullptr, screenDc);
+        }
+        DeleteObject(dib);
+        entry->rendered = {w, h};
+        entry->renderedColor = border.color;
+    }
+    RECT rc{};
+    if (GetWindowRect(menu, &rc)) {
+        // Submenu overlap flicker (0.6.70+): parent overlay kept reasserting
+        // HWND_TOPMOST above the submenu at the overlap region. Place overlay
+        // below any visible submenu that overlaps this menu's right/bottom edge.
+        HWND submenuAbove = nullptr;
+        {
+            // Simple approach: check for overlapping popup windows that might be submenus
+            // This avoids complex EnumWindows setup for now - we'll improve if needed.
+            RECT submenuRect{};
+            for (HWND submenu = GetTopWindow(nullptr); submenu != NULL; submenu = GetNextWindow(submenu, GW_HWNDNEXT)) {
+                if (IsWindowVisible(submenu) && Utils::IsPopupMenu(submenu)) {  // popup menu class 32768
+                    GetWindowRect(submenu, &submenuRect);
+                    if (submenuRect.left < rc.right && submenuRect.right > rc.left &&
+                        submenuRect.top < rc.bottom && submenuRect.bottom > rc.top) {
+                        submenuAbove = submenu;
+                        break;
+                    }
+                }
+            }
+        }
+        if (submenuAbove && IsWindow(submenuAbove)) {
+            // Place overlay below the submenu (submenu is hwndInsertAfter)
+            SetWindowPos(entry->window, submenuAbove, rc.left, rc.top, 0, 0,
+                         SWP_NOACTIVATE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        } else {
+            // No overlapping submenu - keep original behavior
+            SetWindowPos(entry->window, HWND_TOPMOST, rc.left, rc.top, 0, 0,
+                         SWP_NOACTIVATE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        }
+    }
+    // The menu re-asserts its own topmost z on hover and repaint, which can push the
+    // overlay below it. hWndInsertAfter is the window that goes above the positioned
+    // one, so place the menu directly below the overlay. Passing the menu as
+    // hWndInsertAfter put the overlay under the menu, and a submenu then painted over
+    // its own ring (measured with probe-ring-overlays.ps1, 2026-10-24).
+    SetWindowPos(menu, entry->window, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
+void DestroyRingOverlay(HWND menu) {
+    std::lock_guard<std::mutex> lock(g_ringOverlaysLock);
+    auto it = g_ringOverlays.find(menu);
+    if (it == g_ringOverlays.end()) {
+        return;
+    }
+    if (it->second.window && IsWindow(it->second.window)) {
+        DestroyWindow(it->second.window);
+    }
+    g_ringOverlays.erase(it);
+}
+
+bool IsPopupShellMenu(HWND hWnd) {
+    return hWnd && GetClassLongPtrW(hWnd, GCW_ATOM) == 0x8000;  // "#32768" is atom 32768
+}
+
+// |regionOwned|: the theme hooks already gave this menu the same full-rect
+// region at its current size, so the watcher leaves it alone instead of
+// resetting it (and repainting the menu) every tick. |themed|: the border the
+// theme hooks resolved for this menu (their dark-mode test reads the menu
+// theme, which can differ from the app setting), or null for a DirectUI menu.
+void RingUnthemedMenu(HWND hWnd, int w, int h, bool regionOwned,
+                      const Api::BorderContext* themed) {
+    Api::BorderContext border{};
+    bool darkMode = false;
+    if (themed) {
+        border = *themed;
+    } else {
+        darkMode = ThemeHelper::ShouldAppsUseDarkMode() && ThemeHelper::IsDarkModeAllowedForApp();
+        Api::QueryBorderContext(L"Menu", darkMode, border);
+    }
+#ifdef TF_DEBUG_LOG
+    Log::Write(L"[um] ring hwnd=%p size=%dx%d dark=%d useDefault=%d useNone=%d corner=%d color=%08X",
+               hWnd, w, h, (int)darkMode, (int)border.colorUseDefault, (int)border.colorUseNone,
+               (int)border.cornerType, (unsigned)border.color);
+#endif
+    if (border.colorUseDefault || w < 8 || h < 8) {
+        DestroyRingOverlay(hWnd);
+#ifdef TF_DEBUG_LOG
+        Log::Write(L"[um] skip useDefault or tiny");
+#endif
+        return;
+    }
+    const bool rounded = border.cornerType == DWM_WINDOW_CORNER_PREFERENCE::DWMWCP_ROUND ||
+                         border.cornerType == DWM_WINDOW_CORNER_PREFERENCE::DWMWCP_ROUNDSMALL;
+    if (rounded) {
+        // Full-rect region with the same radius the DWM backdrop layer uses (the DWM
+        // menu base layer is a full-rect round rect of the window's corner radius and
+        // ignores the window region - 0.6.58's inset-3 region let its navy corners
+        // spill outside the accent ring). Ring band lives on the overlay at inset
+        // [0.5,1.5); the region arc (radius r centred (r, r)) matches both that band
+        // and the DWM layer's arc. The DWM shadow follows this region.
+        int diameter = Handler::MenuRegionRadius(hWnd) * 2;
+        diameter = std::min({diameter, w, h});
+        if (diameter < 2) {
+            diameter = 2;
+        }
+        if (!regionOwned) {
+            unique_handle<HRGN> region{CreateRoundRectRgn(0, 0, w, h, diameter, diameter)};
+            if (region) {
+                SetWindowRgn(hWnd, region.release(), FALSE);
+            }
+        }
+        // DWM rounds its own backdrop layer from the corner preference; menus default
+        // to DWMWCP_ROUNDSMALL (~4 px), which leaves base-layer navy visible inside the
+        // arc. ROUND pins the layer to the same radius this region uses.
+        DWM_WINDOW_CORNER_PREFERENCE corner = DWM_WINDOW_CORNER_PREFERENCE::DWMWCP_ROUND;
+        DwmSetWindowAttribute(hWnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
+        // The overlay is the ring; DWM's own line follows another arc.
+        COLORREF noBorder = DWMWA_COLOR_NONE;
+        DwmSetWindowAttribute(hWnd, DWMWA_BORDER_COLOR, &noBorder, sizeof(noBorder));
+    }
+    if (border.colorUseNone) {
+        DestroyRingOverlay(hWnd);
+        return;
+    }
+    // The ring is a separate layered window above the menu; nothing paints on the
+    // menu's own DC, so no item blit can erase it and no region can clip it.
+    UpdateRingOverlay(hWnd, w, h, border);
+}
+
+BOOL CALLBACK CollectPopupShellMenu(HWND hWnd, LPARAM lParam) {
+    auto* found = reinterpret_cast<std::vector<HWND>*>(lParam);
+    // GetWindowThreadProcessId returns the THREAD id; the process id arrives through
+    // the out parameter. Comparing the return value to the process id never matches.
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hWnd, &pid);
+    if (IsPopupShellMenu(hWnd) && IsWindowVisible(hWnd) &&
+        pid == GetCurrentProcessId()) {
+        RECT rc{};
+        if (GetWindowRect(hWnd, &rc)) {
+            int w = rc.right - rc.left;
+            int h = rc.bottom - rc.top;
+            if (w > 20 && h > 20) {
+                found->push_back(hWnd);
+            }
+        }
+    }
+    return TRUE;
+}
+
+// Every rounded menu, themed or not, gets its ring from the overlay. Only a menu
+// the theme hooks set up as square, or whose DC pass framed it, owns its border.
+void RingMenu(HWND hWnd) {
+    // Measure and place the overlay in the menu's own DPI mode: an app whose menu
+    // thread runs in another mode than the process default (this thread's) would
+    // otherwise get an overlay at the wrong size and position.
+    DPI_AWARENESS_CONTEXT previousDpi =
+        SetThreadDpiAwarenessContext(GetWindowDpiAwarenessContext(hWnd));
+    struct DpiRestore {
+        DPI_AWARENESS_CONTEXT previous;
+        ~DpiRestore() {
+            if (previous) {
+                SetThreadDpiAwarenessContext(previous);
+            }
+        }
+    } dpiRestore{previousDpi};
+    RECT rc{};
+    if (!IsWindowVisible(hWnd) || !GetWindowRect(hWnd, &rc)) {
+        return;
+    }
+    SIZE size{rc.right - rc.left, rc.bottom - rc.top};
+    if (size.cx <= 20 || size.cy <= 20) {
+        return;
+    }
+    // Copy what the watcher needs under the lock: the paint thread can evict the
+    // entry (64-window cap) at any moment, so no pointer into the map is kept.
+    bool themed = false;
+    bool ownsBorder = false;
+    bool regionOwned = false;
+    Api::BorderContext border{};
+    {
+        std::lock_guard<std::mutex> lock(Handler::g_windowsLock);
+        auto it = Handler::g_windows.find(hWnd);
+        if (it != Handler::g_windows.end()) {
+            const Handler::WindowState& state = it->second;
+            themed = true;
+            border = state.border;
+            ownsBorder = state.dcBorderPainted ||
+                         (state.border.cornerType != DWM_WINDOW_CORNER_PREFERENCE::DWMWCP_ROUND &&
+                          state.border.cornerType != DWM_WINDOW_CORNER_PREFERENCE::DWMWCP_ROUNDSMALL);
+            regionOwned = state.regionRadius == Handler::MenuRegionRadius(hWnd) &&
+                          state.regionWidth == size.cx && state.regionHeight == size.cy;
+        }
+    }
+    if (ownsBorder) {
+        DestroyRingOverlay(hWnd);
+        return;
+    }
+    RingUnthemedMenu(hWnd, size.cx, size.cy, regionOwned, themed ? &border : nullptr);
+    std::lock_guard<std::mutex> lock(g_unthemedMenusLock);
+    g_unthemedMenus[hWnd] = size;
+}
+
+// The 250 ms tick runs only while a menu of this process is open. The show hook
+// arms it, and the first tick that finds no menu stops it, so idle processes
+// (most of the ~340 this mod loads into) never scan. Watcher thread only.
+UINT_PTR g_menuTimer = 0;
+bool g_menuTimerAlwaysOn = false;
+
+void CALLBACK UnthemedMenuTimerProc(HWND, UINT, UINT_PTR, DWORD);
+
+void ArmMenuTimer() {
+    if (!g_menuTimer) {
+        g_menuTimer = SetTimer(nullptr, 0, 250, UnthemedMenuTimerProc);
+    }
+}
+
+void CALLBACK UnthemedMenuTimerProc(HWND, UINT, UINT_PTR, DWORD) {
+    {
+        // A dismissed menu is often hidden, not destroyed; its overlay goes with it.
+        std::lock_guard<std::mutex> lock(g_unthemedMenusLock);
+        for (auto it = g_unthemedMenus.begin(); it != g_unthemedMenus.end();) {
+            if (!IsWindow(it->first) || !IsWindowVisible(it->first)) {
+                DestroyRingOverlay(it->first);
+                it = g_unthemedMenus.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+    std::vector<HWND> found;
+    EnumWindows(CollectPopupShellMenu, reinterpret_cast<LPARAM>(&found));
+#ifdef TF_DEBUG_LOG
+    Log::Write(L"[um] tick found=%u", (unsigned)found.size());
+#endif
+    // Refreshed every tick: the overlay must follow the menu's position and z, and
+    // the update is idempotent. EnumWindows lists the topmost menu first, and each
+    // RingMenu raises its menu to the top, so a forward walk swapped a submenu and
+    // its parent on every tick (250 ms flicker, and the submenu's ring hid under the
+    // parent). Walking bottom-up keeps the stacking the menus already have.
+    for (auto it = found.rbegin(); it != found.rend(); ++it) {
+        RingMenu(*it);
+    }
+    if (found.empty() && g_menuTimer && !g_menuTimerAlwaysOn) {
+        std::lock_guard<std::mutex> lock(g_unthemedMenusLock);
+        if (g_unthemedMenus.empty()) {
+            KillTimer(nullptr, g_menuTimer);
+            g_menuTimer = 0;
+        }
+    }
+}
+
+// A menu's show event comes before its first border paint. Ringing it there, instead of on the
+// next 250 ms tick, closes the window a submenu opened with no ring (70-200 ms per open, measured
+// 2026-10-24). The watcher's own loop does the work, so the ring path stays the same one.
+void CALLBACK MenuShownHookProc(HWINEVENTHOOK, DWORD, HWND hWnd, LONG idObject, LONG idChild,
+                                DWORD, DWORD) {
+    if (idObject != OBJID_WINDOW || idChild != CHILDID_SELF || !IsPopupShellMenu(hWnd)) {
+        return;
+    }
+    PostThreadMessageW(GetCurrentThreadId(), kWatcherOverlayMessage, (WPARAM)hWnd, 1);
+}
+
+DWORD WINAPI UnthemedMenuThread(LPVOID) {
+    // Out of context, so the callback runs in this thread's loop. Filtered to this process.
+    HWINEVENTHOOK showHook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, nullptr,
+                                             MenuShownHookProc, GetCurrentProcessId(), 0,
+                                             WINEVENT_OUTOFCONTEXT);
+    // The first tick picks up a menu already open; without the show hook nothing
+    // would re-arm the tick, so it then runs all the time.
+    g_menuTimerAlwaysOn = !showHook;
+    ArmMenuTimer();
+    if (!g_menuTimer) {
+        return 1;
+    }
+    MSG msg{};
+    // WM_TIMER reaches UnthemedMenuTimerProc only through DispatchMessage; a bare
+    // GetMessage pump swallows it and the ring would never be drawn.
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        if (msg.message == kWatcherOverlayMessage && msg.wParam) {
+            // A menu's border pass ran on another thread: act now instead of at the
+            // next tick. lParam 1 rings a rounded menu as it opens; 0 drops the
+            // overlay of a menu its DC framed.
+            HWND menu = (HWND)msg.wParam;
+            if (msg.lParam) {
+                ArmMenuTimer();
+                RingMenu(menu);
+            } else {
+                DestroyRingOverlay(menu);
+            }
+            continue;
+        }
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+    if (showHook) {
+        UnhookWinEvent(showHook);
+    }
+    // Destroy the overlays this thread created before it exits: the window class
+    // can only be unregistered once no window of it is left.
+    std::vector<HWND> owned;
+    {
+        std::lock_guard<std::mutex> lock(g_ringOverlaysLock);
+        for (const auto& entry : g_ringOverlays) {
+            owned.push_back(entry.first);
+        }
+    }
+    for (HWND menu : owned) {
+        DestroyRingOverlay(menu);
+    }
+    return 0;
+}
+
+void StartUnthemedMenuThread() {
+    RegisterRingOverlayClass();
+    g_unthemedMenuThread = CreateThread(nullptr, 0, UnthemedMenuThread, nullptr, 0,
+                                        &g_unthemedMenuThreadId);
+#ifdef TF_DEBUG_LOG
+    Log::Write(L"[um] watcher thread=%p id=%u", g_unthemedMenuThread,
+               (unsigned)g_unthemedMenuThreadId);
+#endif
+}
+
+// The watcher thread runs code from this DLL and owns the overlay windows, whose
+// window procedure lives here too. Both must be gone before the DLL unloads: the
+// thread's exit destroys its windows, then the class is unregistered.
+void StopUnthemedMenuThread() {
+    if (g_unthemedMenuThread) {
+        PostThreadMessageW(g_unthemedMenuThreadId, WM_QUIT, 0, 0);
+        WaitForSingleObject(g_unthemedMenuThread, 2000);
+        CloseHandle(g_unthemedMenuThread);
+        g_unthemedMenuThread = nullptr;
+    }
+    g_unthemedMenuThreadId = 0;
+    UnregisterClassW(kRingOverlayClass, GetModuleHandleW(nullptr));
+}
+
 // ------------------------------------------------------------- lifecycle ---
 
 void InstallHook(HMODULE module, const char* name, void* hook, void** original) {
@@ -3316,6 +4820,10 @@ int WINAPI FillRectHook(HDC hdc, const RECT* rc, HBRUSH brush) {
     return g_fillRectOrig(hdc, rc, brush);
 }
 
+// Buffered paints were tracked so the ring could be re-stroked after every item
+// blit. The overlay ring (UnthemedMenuWatcher) replaced that: it floats above the
+// menu and no blit can erase it, so the hooks had no job left — and their re-stroke
+// was a second painter under the overlay.
 void Install() {
     HMODULE uxtheme = GetModuleHandleW(L"uxtheme.dll");
     HMODULE gdi32 = GetModuleHandleW(L"gdi32.dll");
@@ -3370,17 +4878,23 @@ BOOL Wh_ModInit() {
     }
     tf::Log::Write(L"[init] process=%s", tf::Utils::GetProcessName().c_str());
     tf::Hooks::Install();
+    tf::DarkMenus::Install();
+    if (!tf::Api::IsPartDisabled(L"Menu")) {
+        tf::Hooks::StartUnthemedMenuThread();
+    }
     return TRUE;
 }
 
 void Wh_ModSettingsChanged() {
     tf::Cfg::Load();
+    tf::DarkMenus::Refresh();
     // Existing flyout windows keep their applied effect until they close; new
     // ones pick up the new settings.
 }
 
 void Wh_ModBeforeUninit() {
+    tf::DarkMenus::Uninstall();
     tf::Hooks::Uninstall();
+    tf::Hooks::StopUnthemedMenuThread();
 }
-
 

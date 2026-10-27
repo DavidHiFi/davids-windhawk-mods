@@ -4,15 +4,15 @@
 // @name:uk-UA      Системний монітор панелі завдань
 // @description     CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar, with optional graphs
 // @description:uk-UA Компактний монітор CPU, GPU, RAM і VRAM із 60-секундними графіками для панелі завдань Windows 11.
-// @version         1.2.3
-// @author          DavidHiFi
+// @version         1.2.4
+// @author          DavidHiFi, Yevhenii Starychenko, m417z, Salyts
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-system-info-weather
 // @license         GPL-3.0
-// @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         explorer.exe
 // @architecture    x86-64
 // @compilerOptions -lole32 -loleaut32 -lruntimeobject -lpdh -ldxgi -lcomctl32 -liphlpapi -DWIN32_LEAN_AND_MEAN
+// @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
 
 // Fork of Taskbar System Info by Yevhenii Starychenko, GPL-3.0.
@@ -4319,6 +4319,7 @@ Grid CreateComputeRow(PCWSTR label,
     for (int i=0;i<3;++i) networkGrid.ColumnDefinitions().Append(PixelColumn(0));
     arrowText = CreateCellText((std::wstring(prefix)+L"NetworkArrow").c_str(),TextAlignment::Left);
     arrowText.Text(label == std::wstring_view(L"CPU") ? L"↑" : L"↓");
+    arrowText.Margin(Thickness{-3,0,0,0});
     networkText = CreateCellText((std::wstring(prefix)+L"NetworkValue").c_str(),TextAlignment::Right);
     networkText.Text(L"--");
     unitText = CreateCellText((std::wstring(prefix)+L"NetworkUnit").c_str(),TextAlignment::Right);

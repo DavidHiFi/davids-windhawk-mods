@@ -5145,9 +5145,17 @@ static Grid BuildQuotaGrid(QuotaUiInstance& state) {
                     barLabel.Opacity(0.8);
                     barLabel.IsHitTestVisible(false);
                     barLabel.TextAlignment(TextAlignment::Right);
+                    barLabel.HorizontalAlignment(HorizontalAlignment::Stretch);
                     barLabel.VerticalAlignment(VerticalAlignment::Center);
-                    barLabel.Margin({0, -1, 3, 0});
-                    barItem.Children().Append(barLabel);
+
+                    Border barLabelBox;
+                    barLabelBox.Width(std::ceil(compactLabelFontSize * 1.4));
+                    barLabelBox.Margin({0, -1, 3, 0});
+                    barLabelBox.Background(SolidColorBrush(
+                        winrt::Windows::UI::Color{0, 0, 0, 0}));
+                    barLabelBox.IsHitTestVisible(false);
+                    barLabelBox.Child(barLabel);
+                    barItem.Children().Append(barLabelBox);
                     Grid::SetColumn(track, 1);
                 } else {
                     barItem.Width(verticalBars ? barThickness : barLength);
@@ -5726,6 +5734,36 @@ static void UpdateQuotaUi(QuotaUiInstance& state) {
                     barMask |= 1 << w;
                 }
             }
+            // Keep every row's label column the same width so a longer window label
+            // ("30d") cannot make one bar sit further right than the others.
+            double sharedBarLabelWidth = std::max(
+                std::ceil(percentFontSize * 1.4) + 3.0,
+                2.0 * percentFontSize * 0.62 + 4.0);
+            if (showBarLabels) {
+                auto labelWidthFor = [&](const std::wstring& label) {
+                    return std::max(std::ceil(percentFontSize * 1.4) + 3.0,
+                                    (double)label.size() * percentFontSize * 0.62 + 4.0);
+                };
+                for (int w = 0; w < kQuotaBarCount; w++) {
+                    if (!(barMask & (1 << w))) continue;
+                    std::wstring label;
+                    if (w == kFiveHourBar || w == kWeeklyBar) {
+                        wchar_t wl[16];
+                        WindowShortLabel(*usage[w], w == kFiveHourBar ? L"5h" : L"7d",
+                                         wl, ARRAYSIZE(wl));
+                        bool grokFreeAmount = accounts[i].provider == L"grok" &&
+                                              d.grokFreeNoUsage && w == kWeeklyBar &&
+                                              d.grokUsedCredits >= 0;
+                        if (usage[w]->pct >= 0 || grokFreeAmount) label = wl;
+                    } else if (w == kFableWeeklyBar) {
+                        label = accounts[i].provider == L"opencode" ? L"mo" : L"Fa";
+                    } else {
+                        label = accounts[i].provider == L"openai" ? L"Cr" : L"Ex";
+                    }
+                    sharedBarLabelWidth =
+                        std::max(sharedBarLabelWidth, labelWidthFor(label));
+                }
+            }
             if (barMask != ap.barMask) {
                 int visibleCount = 0;
                 for (int w = 0; w < kQuotaBarCount; w++) {
@@ -5898,26 +5936,34 @@ static void UpdateQuotaUi(QuotaUiInstance& state) {
                 // The 5h/weekly bar labels follow the window length the provider actually
                 // reported ("5h", "7d", "3h", "30d", ...), so plan-dependent windows read
                 // truthfully instead of wearing the slot's static label.
-                if (showBarLabels && ui.barItems[w] &&
-                    (w == kFiveHourBar || w == kWeeklyBar)) {
-                    wchar_t wl[16];
-                    WindowShortLabel(wu, w == kFiveHourBar ? L"5h" : L"7d", wl, ARRAYSIZE(wl));
-                    bool grokFreeAmount = accounts[i].provider == L"grok" &&
-                                          d.grokFreeNoUsage && w == kWeeklyBar &&
-                                          d.grokUsedCredits >= 0;
-                    std::wstring windowLabel =
-                        (wu.pct >= 0 || grokFreeAmount) ? std::wstring(wl) : std::wstring();
-                    if (windowLabel != ap.barLabels[w]) {
-                        if (auto labelBlock =
-                                ui.barItems[w].Children().GetAt(0).try_as<TextBlock>()) {
-                            if (!windowLabel.empty()) labelBlock.Text(windowLabel);
-                            double labelWidth = std::max(
-                                std::ceil(percentFontSize * 1.4) + 3.0,
-                                (double)windowLabel.size() * percentFontSize * 0.62 + 4.0);
-                            ui.barItems[w].ColumnDefinitions().GetAt(0).Width(
-                                {labelWidth, GridUnitType::Pixel});
+                if (showBarLabels && ui.barItems[w]) {
+                    if (w == kFiveHourBar || w == kWeeklyBar) {
+                        wchar_t wl[16];
+                        WindowShortLabel(wu, w == kFiveHourBar ? L"5h" : L"7d", wl,
+                                         ARRAYSIZE(wl));
+                        bool grokFreeAmount = accounts[i].provider == L"grok" &&
+                                              d.grokFreeNoUsage && w == kWeeklyBar &&
+                                              d.grokUsedCredits >= 0;
+                        std::wstring windowLabel =
+                            (wu.pct >= 0 || grokFreeAmount) ? std::wstring(wl) : std::wstring();
+                        if (windowLabel != ap.barLabels[w]) {
+                            if (auto labelBox =
+                                    ui.barItems[w].Children().GetAt(0).try_as<Border>()) {
+                                if (auto labelBlock = labelBox.Child().try_as<TextBlock>()) {
+                                    if (!windowLabel.empty()) labelBlock.Text(windowLabel);
+                                }
+                            }
+                            ap.barLabels[w] = std::move(windowLabel);
                         }
-                        ap.barLabels[w] = std::move(windowLabel);
+                    }
+                    ui.barItems[w].ColumnDefinitions().GetAt(0).Width(
+                        {sharedBarLabelWidth, GridUnitType::Pixel});
+                    if (auto labelBox =
+                            ui.barItems[w].Children().GetAt(0).try_as<Border>()) {
+                        labelBox.Width(sharedBarLabelWidth - 3.0);
+                        if (auto labelBlock = labelBox.Child().try_as<TextBlock>()) {
+                            labelBlock.TextAlignment(TextAlignment::Right);
+                        }
                     }
                 }
             }
