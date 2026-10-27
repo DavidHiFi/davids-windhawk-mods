@@ -2,7 +2,7 @@
 // @id              fullscreen-start-plus
 // @name            Fullscreen Start Plus
 // @description     A fullscreen grid of all your apps in place of Start, with instant search and adjustable blur
-// @version         1.5.0
+// @version         1.6.1
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -27,11 +27,14 @@ of the macOS Launchpad, with instant search and a blurred background.
   It leaves the taskbar, side bars and the Standalone Dock visible, or covers
   the whole screen if you turn that on.
 - **Your choice of apps.** The "All apps" list of Start, your desktop icons,
-  both together, or only the apps you pinned to Start.
+  both together, or only the apps you pin. With only pinned apps, search still
+  finds every app, and right-click pins or unpins one.
 - **Scroll or pages.** One list that scrolls, or pages that flip left and
   right with dots below, like Launchpad.
 - **Instant search.** Just type. Case and accents don't matter, and names that
-  start with your text come first.
+  start with your text come first. The search box is a real text field, with a
+  blinking caret and click-and-drag selection, and Ctrl+A, copy, cut and paste
+  work as usual.
 - **Adjustable blur.** Pick the blur type, strength, opacity and color of the
   background.
 - **Opens like Start.** The Windows key, Ctrl+Esc and the Start button of the
@@ -43,15 +46,21 @@ of the macOS Launchpad, with instant search and a blurred background.
 - **Your own order.** Drag icons to move them, across pages and in and out
   of folders. Drop an app on another to make a folder.
 - **Right-click menu.** Open, run as administrator, open the file location
-  or the shortcut location, change the icon, or remove an app from the grid.
+  or the shortcut location, change the icon, pin or unpin, or remove an app
+  from the grid.
+- **Works over administrator windows.** Windows keeps keys pressed in an app
+  running as administrator away from Explorer, so Shift + Windows key can't
+  open the grid there. The optional helper in the `helper` folder of this
+  mod's repository runs as administrator and fixes that (see its README).
 
 ## Keyboard and mouse
 | Key | Action |
 | --- | --- |
 | Type | Search |
-| Backspace, Ctrl+Backspace | Delete a letter, or the last word |
-| Ctrl+V | Paste |
-| Arrows, Enter | Pick an app and open it. While searching, the first result is already picked |
+| Backspace, Ctrl+Backspace, Delete | Delete the selection, a letter, or the last word |
+| Ctrl+A, Ctrl+C, Ctrl+X, Ctrl+V | Select all, copy, cut, paste |
+| Left, Right, Home, End | Move the caret in the search; hold Shift to select. With an empty search, Left and Right pick an app |
+| Up, Down, Enter | Pick an app and open it. While searching, the first result is already picked |
 | Esc | Clear the search, or close when the search is empty |
 | Mouse wheel, Page Up, Page Down | Scroll, or flip pages |
 | Sideways scroll, page dots | Flip pages |
@@ -114,12 +123,12 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
   $description: In hexadecimal, like #1E1E2E
 - appSource: allApps
   $name: Apps to show
-  $description: Pinned apps keep the order they have in Start
+  $description: With pinned apps, search still finds every app. Right-click an app to pin or unpin it
   $options:
   - allApps: Start menu apps (the All apps list)
   - desktop: Desktop icons
   - both: Start menu apps and desktop icons
-  - pinned: Apps pinned to Start
+  - pinned: Only the apps you pin
 - gridIconSize: 72
   $name: Icon size (pixels at 100% scaling)
 - gridColumns: 0
@@ -221,6 +230,7 @@ constexpr UINT WM_APP_SHIFT_WIN = WM_APP + 6;
 constexpr UINT_PTR kTimerFrame = 1;
 constexpr UINT_PTR kTimerFirstLoad = 4;
 constexpr UINT_PTR kTimerShiftWin = 5;
+constexpr UINT_PTR kTimerCaret = 6;  // The search caret's blink.
 
 constexpr GUID kBhidEnumItems = {
     0x94f60519,
@@ -383,7 +393,6 @@ using AppList = std::vector<std::shared_ptr<App>>;
 // destructors would release them on the exiting thread under the loader lock.
 [[clang::no_destroy]] AppList g_apps;
 bool g_appsLoaded;
-bool g_appsFailed;  // The pins couldn't be read.
 double g_appsTime;
 int g_appsKey;  // AppsKey() of the loaded list.
 
@@ -763,17 +772,48 @@ bool AddStartPins(int iconPixels, AppList& list) {
     return true;
 }
 
+std::wstring StoragePath(const std::wstring& file);
+void WriteLines(const std::wstring& path,
+                const std::vector<std::wstring>& lines);
+
+// The first time "only the apps you pin" is used, the pins start as Start's
+// own, matched by name to the apps already read. Written even when Start's
+// pins can't be read, so the slow export runs once.
+void SeedPins(int iconPixels, AppList& list) {
+    std::wstring path = StoragePath(L"pins.txt");
+    if (path.empty() ||
+        GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        return;
+    }
+    AppList pins;
+    AddStartPins(iconPixels, pins);
+    std::vector<std::wstring> lines;
+    for (auto& pin : pins) {
+        auto same = std::find_if(list.begin(), list.end(), [&](const auto& a) {
+            return ToLower(a->name) == ToLower(pin->name);
+        });
+        lines.push_back(L"pin\t" +
+                        (same != list.end() ? (*same)->target : pin->target));
+        if (same == list.end()) {
+            list.push_back(std::move(pin));
+        }
+    }
+    if (!g_workerStop) {
+        WriteLines(path, lines);
+    }
+}
+
 AppList* EnumerateApps(int iconPixels, AppSource source) {
     auto list = std::make_unique<AppList>();
-    if (source == AppSource::Pinned) {
-        // Keeps Start's order. nullptr: the pins couldn't be read.
-        return AddStartPins(iconPixels, *list) ? list.release() : nullptr;
-    }
+    // Pinned: every app is read, so the search finds the ones not pinned.
     if (source != AppSource::Desktop) {
         AddStartApps(iconPixels, *list);
     }
     if (source != AppSource::AllApps) {
         AddDesktopItems(iconPixels, *list);
+    }
+    if (source == AppSource::Pinned) {
+        SeedPins(iconPixels, *list);
     }
 
     std::stable_sort(list->begin(), list->end(),
@@ -871,6 +911,17 @@ struct Folder {
 [[clang::no_destroy]] Tiles g_tiles;
 [[clang::no_destroy]] std::set<std::wstring> g_hidden;  // Removed apps' keys.
 [[clang::no_destroy]] std::map<std::wstring, std::wstring> g_customIcons;  // Key: picture.
+// Keys of the pinned apps, kept in pins.txt. Only with "only the apps you pin".
+[[clang::no_destroy]] std::set<std::wstring> g_pins;
+
+bool PinnedOnly() {
+    return (g_appsKey >> 16) == (int)AppSource::Pinned;
+}
+
+// Not on the grid: removed, or not pinned when only pinned apps show.
+bool OffGrid(const std::wstring& key) {
+    return g_hidden.count(key) || (PinnedOnly() && !g_pins.count(key));
+}
 
 std::wstring AppKey(const App& app) {
     return ToLower(app.target);
@@ -1030,8 +1081,7 @@ void ArrangeTiles(const std::vector<std::wstring>& lines) {
     auto take = [&](const std::wstring& target) -> std::shared_ptr<App> {
         std::wstring key = ToLower(target);
         auto it = byKey.find(key);
-        if (it == byKey.end() || g_hidden.count(key) ||
-            !placed.insert(key).second) {
+        if (it == byKey.end() || OffGrid(key) || !placed.insert(key).second) {
             return nullptr;
         }
         return it->second;
@@ -1125,7 +1175,21 @@ void ApplyCustomIcons(int size) {
     }
 }
 
+void SavePins() {
+    std::vector<std::wstring> lines;
+    for (const auto& key : g_pins) {
+        lines.push_back(L"pin\t" + key);
+    }
+    WriteLines(StoragePath(L"pins.txt"), lines);
+}
+
 void LoadTiles() {
+    g_pins.clear();
+    for (const auto& f : ReadLines(StoragePath(L"pins.txt"))) {
+        if (f.size() >= 2 && f[0] == L"pin") {
+            g_pins.insert(ToLower(f[1]));
+        }
+    }
     std::vector<std::wstring> lines;
     for (const auto& f : ReadLines(StoragePath(LayoutFile()))) {
         std::wstring line;
@@ -1141,6 +1205,15 @@ void LoadTiles() {
 // Search
 
 std::wstring g_query;
+// The search field is a small text editor: a caret and a selection anchor as
+// UTF-16 indices into g_query (the selection is the span between them), a
+// tick that times the caret's blink, and the state of a drag-selection.
+size_t g_caret = 0;
+size_t g_anchor = 0;
+UINT64 g_caretTick = 0;
+bool g_searchDrag = false;
+UINT64 g_lastSearchClick = 0;
+int g_lastSearchX = -1000;
 // The arrangement, or the apps the search finds.
 [[clang::no_destroy]] Tiles g_visible;
 
@@ -1190,7 +1263,9 @@ void UpdateFilter() {
             rank = r < 0 ? -1 : (w == 0 ? r : rank);
         }
         if (rank >= 0) {
-            ranked.emplace_back(rank, i);
+            // With only pinned apps, the pinned ones come first.
+            bool off = PinnedOnly() && !g_pins.count(AppKey(*g_apps[i]));
+            ranked.emplace_back(rank + (off ? 3 : 0), i);
         }
     }
     std::stable_sort(ranked.begin(), ranked.end(),
@@ -2000,6 +2075,222 @@ void DrawMenuButton() {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// The search field as a text editor: caret, selection and the usual keys.
+// Positions are UTF-16 indices into g_query; a step crosses a whole surrogate
+// pair so characters outside the basic plane stay whole.
+
+void QueryChanged();
+void Render();
+
+// The field the editor works on: the search box, or a folder's name while
+// its folder is open.
+std::wstring& EditText() {
+    return g_openFolder ? g_openFolder->name : g_query;
+}
+
+size_t MaxEditChars() {
+    return g_openFolder ? 60 : 200;
+}
+
+// A rename only redraws; the search also refilters the apps.
+void EditChanged() {
+    if (g_openFolder) {
+        Render();
+    } else {
+        QueryChanged();
+    }
+}
+
+bool SearchSelection(size_t* from, size_t* to) {
+    *from = std::min(g_anchor, g_caret);
+    *to = std::max(g_anchor, g_caret);
+    return *from != *to;
+}
+
+size_t CaretStep(size_t pos, int dir) {
+    const std::wstring& text = EditText();
+    if (dir < 0) {
+        pos = std::min(pos, text.size());
+        if (pos >= 2 && IS_HIGH_SURROGATE(text[pos - 1]) &&
+            IS_LOW_SURROGATE(text[pos - 2])) {
+            return pos - 2;
+        }
+        return pos ? pos - 1 : 0;
+    }
+    if (pos + 1 < text.size() && IS_HIGH_SURROGATE(text[pos]) &&
+        IS_LOW_SURROGATE(text[pos + 1])) {
+        return pos + 2;
+    }
+    return std::min(pos + 1, text.size());
+}
+
+bool IsWordChar(WCHAR ch) {
+    return iswalnum(ch) || ch == L'_';
+}
+
+size_t WordStart(size_t pos) {
+    const std::wstring& text = EditText();
+    size_t i = std::min(pos, text.size());
+    while (i > 0 && !IsWordChar(text[i - 1])) {
+        i--;
+    }
+    while (i > 0 && IsWordChar(text[i - 1])) {
+        i--;
+    }
+    return i;
+}
+
+size_t WordEnd(size_t pos) {
+    const std::wstring& text = EditText();
+    size_t n = text.size(), i = std::min(pos, n);
+    while (i < n && !IsWordChar(text[i])) {
+        i++;
+    }
+    while (i < n && IsWordChar(text[i])) {
+        i++;
+    }
+    return i;
+}
+
+void TouchCaret() {  // Restarts the blink, like after every keystroke.
+    g_caretTick = GetTickCount64();
+}
+
+bool CaretVisible() {
+    UINT blink = GetCaretBlinkTime();
+    if (!blink || blink > 5000) {
+        blink = 530;  // The Windows default.
+    }
+    return (GetTickCount64() - g_caretTick) / blink % 2 == 0;
+}
+
+void SetCaret(size_t pos, bool extend) {
+    g_caret = std::min(pos, g_query.size());
+    if (!extend) {
+        g_anchor = g_caret;
+    }
+    TouchCaret();
+}
+
+bool DeleteSelection() {
+    size_t from, to;
+    if (!SearchSelection(&from, &to)) {
+        return false;
+    }
+    EditText().erase(from, to - from);
+    g_caret = g_anchor = from;
+    TouchCaret();
+    return true;
+}
+
+void InsertAtCaret(std::wstring text) {
+    DeleteSelection();
+    size_t max = MaxEditChars();
+    size_t room = max - std::min(EditText().size(), max);
+    if (text.size() > room) {
+        text.resize(room);
+    }
+    if (text.empty()) {
+        return;
+    }
+    g_query.insert(g_caret, text);
+    g_caret = g_anchor = g_caret + text.size();
+    TouchCaret();
+}
+
+void CopySelection(bool cut) {
+    size_t from, to;
+    if (!SearchSelection(&from, &to) || !OpenClipboard(g_wnd)) {
+        return;
+    }
+    if (EmptyClipboard()) {
+        if (HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE,
+                                      (to - from + 1) * sizeof(WCHAR))) {
+            if (WCHAR* p = (WCHAR*)GlobalLock(mem)) {
+                memcpy(p, EditText().c_str() + from,
+                       (to - from) * sizeof(WCHAR));
+                p[to - from] = 0;
+                GlobalUnlock(mem);
+                if (!SetClipboardData(CF_UNICODETEXT, mem)) {
+                    GlobalFree(mem);
+                }
+            } else {
+                GlobalFree(mem);
+            }
+        }
+    }
+    CloseClipboard();
+    if (cut) {
+        DeleteSelection();
+        EditChanged();
+    }
+}
+
+// The text layout the search box draws with, and how far the text is slid
+// left so the caret stays in view. A null layout when there is no format.
+ComPtr<IDWriteTextLayout> SearchLayout(float* shift) {
+    *shift = 0;
+    if (!g_searchFormat) {
+        return nullptr;
+    }
+    const D2D1_RECT_F& r = g_layout.search;
+    float s = g_layout.scale;
+    D2D1_RECT_F text = D2D1::RectF(r.left + 34 * s, r.top, r.right - 14 * s,
+                                   r.bottom);
+    ComPtr<IDWriteTextLayout> layout;
+    g_dwrite->CreateTextLayout(g_query.c_str(), (UINT32)g_query.size(),
+                               g_searchFormat.Get(), 10000,
+                               text.bottom - text.top, &layout);
+    if (!layout) {
+        return nullptr;
+    }
+    layout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    DWRITE_TEXT_METRICS metrics{};
+    layout->GetMetrics(&metrics);
+    float room = text.right - text.left - 3 * s;
+    float endShift =
+        std::max(0.0f, metrics.widthIncludingTrailingWhitespace - room);
+    float result = endShift;
+    DWRITE_HIT_TEST_METRICS m{};
+    float x = 0, y = 0;
+    if (SUCCEEDED(layout->HitTestTextPosition(
+            (UINT32)std::min(g_caret, g_query.size()), FALSE, &x, &y, &m))) {
+        float caretX = (float)x;
+        if (caretX - result < 0) {
+            result = std::min(std::max(caretX, 0.0f), endShift);
+        }
+        if (caretX - result > room) {
+            result = std::min(std::max(caretX - room, 0.0f), endShift);
+        }
+    }
+    *shift = result;
+    return layout;
+}
+
+// The caret index under a mouse x, in the search field's text area.
+size_t CaretAtPoint(float x) {
+    float shift = 0;
+    auto layout = SearchLayout(&shift);
+    if (!layout) {
+        return g_query.size();
+    }
+    const D2D1_RECT_F& r = g_layout.search;
+    float s = g_layout.scale;
+    D2D1_RECT_F text = D2D1::RectF(r.left + 34 * s, r.top, r.right - 14 * s,
+                                   r.bottom);
+    BOOL trailing = FALSE, inside = FALSE;
+    DWRITE_HIT_TEST_METRICS m{};
+    float px = std::min(std::max(x - (text.left - shift), 0.0f),
+                        text.right - text.left);
+    if (FAILED(layout->HitTestPoint(px, (text.bottom - text.top) / 2, &trailing,
+                                    &inside, &m))) {
+        return g_query.size();
+    }
+    return std::min((size_t)(m.textPosition + (trailing ? m.length : 0)),
+                    g_query.size());
+}
+
 void DrawSearchBox() {
     const Layout& L = g_layout;
     float s = L.scale;
@@ -2033,30 +2324,48 @@ void DrawSearchBox() {
                            g_brush.Get());
     }
 
-    // The typed text, with its end always visible, and the caret after it.
-    ComPtr<IDWriteTextLayout> layout;
-    g_dwrite->CreateTextLayout(g_query.c_str(), (UINT32)g_query.size(),
-                               g_searchFormat.Get(), 10000,
-                               text.bottom - text.top, &layout);
+    // The typed text, slid so the caret stays in view, with the selection
+    // behind it and a caret that blinks like everywhere else in Windows.
+    float shift = 0;
+    ComPtr<IDWriteTextLayout> layout = SearchLayout(&shift);
     if (!layout) {
         return;
     }
-    layout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-    DWRITE_TEXT_METRICS metrics{};
-    layout->GetMetrics(&metrics);
-    float textWidth = metrics.widthIncludingTrailingWhitespace;
-    float room = text.right - text.left - 3 * s;
-    float shift = std::max(0.0f, textWidth - room);
+    float originX = text.left - shift;
     g_target->PushAxisAlignedClip(text, D2D1_ANTIALIAS_MODE_ALIASED);
+    size_t selFrom, selTo;
+    if (SearchSelection(&selFrom, &selTo)) {
+        DWRITE_HIT_TEST_METRICS rects[8];
+        UINT32 count = 0;
+        if (SUCCEEDED(layout->HitTestTextRange((UINT32)selFrom,
+                                               (UINT32)(selTo - selFrom), 0, 0,
+                                               rects, 8, &count))) {
+            g_brush->SetColor(D2D1::ColorF(1, 1, 1, 0.28f));
+            for (UINT32 i = 0; i < count && i < 8; i++) {
+                g_target->FillRectangle(
+                    D2D1::RectF(originX + rects[i].left,
+                                text.top + rects[i].top,
+                                originX + rects[i].left + rects[i].width,
+                                text.top + rects[i].top + rects[i].height),
+                    g_brush.Get());
+            }
+        }
+    }
     g_brush->SetColor(D2D1::ColorF(1, 1, 1, 0.95f));
-    g_target->DrawTextLayout(D2D1::Point2F(text.left - shift, text.top),
-                             layout.Get(), g_brush.Get());
-    float caretX = std::round(text.left + textWidth - shift) + 1;
-    float caretH = 18 * s;
-    float mid = (text.top + text.bottom) / 2;
-    Fill(D2D1::RectF(caretX, mid - caretH / 2, caretX + std::max(1.0f, s),
-                     mid + caretH / 2),
-         D2D1::ColorF(1, 1, 1, 0.9f));
+    g_target->DrawTextLayout(D2D1::Point2F(originX, text.top), layout.Get(),
+                             g_brush.Get());
+    if (CaretVisible()) {
+        DWRITE_HIT_TEST_METRICS m{};
+        float x = 0, y = 0;
+        layout->HitTestTextPosition(
+            (UINT32)std::min(g_caret, g_query.size()), FALSE, &x, &y, &m);
+        float caretX = std::round(originX + (float)x) + 1;
+        float caretH = 18 * s;
+        float mid = (text.top + text.bottom) / 2;
+        Fill(D2D1::RectF(caretX, mid - caretH / 2, caretX + std::max(1.0f, s),
+                         mid + caretH / 2),
+             D2D1::ColorF(1, 1, 1, 0.9f));
+    }
     g_target->PopAxisAlignedClip();
 }
 
@@ -2208,9 +2517,9 @@ void DrawGrid() {
     }
     if (g_visible.empty()) {
         DrawMessage(!g_query.empty() ? L"No apps found"
-                    : g_appsFailed ? L"Couldn't read the apps pinned to Start"
-                    : (g_appsKey >> 16) == (int)AppSource::Pinned
-                        ? L"No apps are pinned to Start"
+                    : PinnedOnly()
+                        ? L"Nothing pinned yet. Type to find an app, then "
+                          L"right-click it to pin it"
                         : L"No apps");
         return;
     }
@@ -2326,6 +2635,8 @@ void StartFrames() {
 
 void HideNow() {
     EndDrag(false);
+    g_searchDrag = false;
+    KillTimer(g_wnd, kTimerCaret);
     if (g_openFolder) {
         SaveTiles();  // Keeps a new folder name.
         g_openFolder = nullptr;
@@ -2430,6 +2741,9 @@ void Open() {
     EnsureFormats(L.scale);
 
     g_query.clear();
+    g_caret = g_anchor = 0;
+    g_searchDrag = false;
+    TouchCaret();
     g_hover = g_selected = g_pressed = -1;
     g_scroll = g_scrollTarget = 0;
     g_wheelDelta = 0;
@@ -2451,6 +2765,8 @@ void Open() {
     g_appear = 0;
     Render();
     ShowWindow(g_wnd, SW_SHOW);
+    UINT blink = GetCaretBlinkTime();
+    SetTimer(g_wnd, kTimerCaret, blink ? blink : 530, nullptr);
     ForceForeground(g_wnd);
     PlaceWindows();
     StartFrames();
@@ -2540,7 +2856,7 @@ std::vector<SettingField> MakeSettingFields() {
          {{L"allApps", L"Start menu apps (All apps)"},
           {L"desktop", L"Desktop icons"},
           {L"both", L"Start menu apps and desktop icons"},
-          {L"pinned", L"Apps pinned to Start"}}},
+          {L"pinned", L"Only the apps you pin"}}},
         {F::Choice,
          L"gridLayout",
          L"Layout",
@@ -3649,8 +3965,14 @@ bool PickIconFile(HWND hwnd, std::wstring& path) {
     return ok;
 }
 
+// Takes the app off the grid: removed, or unpinned when only pinned apps show.
 void RemoveApp(const std::shared_ptr<App>& app) {
-    g_hidden.insert(AppKey(*app));
+    if (PinnedOnly()) {
+        g_pins.erase(AppKey(*app));
+        SavePins();
+    } else {
+        g_hidden.insert(AppKey(*app));
+    }
     auto drop = [&](Tiles& tiles) {
         tiles.erase(std::remove_if(tiles.begin(), tiles.end(),
                                    [&](const Tile& t) { return t.app == app; }),
@@ -3721,6 +4043,7 @@ void ShowTileMenu(HWND hwnd, int index, POINT pt) {
         kRemove,
         kProperties,
         kUngroup,
+        kPin,
     };
     Tile tile = Items()[index];
     g_selected = index;
@@ -3756,7 +4079,13 @@ void ShowTileMenu(HWND hwnd, int index, POINT pt) {
         if (g_openFolder) {
             AppendMenuW(menu, MF_STRING, kOutOfFolder, L"Take out of folder");
         }
-        AppendMenuW(menu, MF_STRING, kRemove, L"Remove from this grid");
+        if (!PinnedOnly()) {
+            AppendMenuW(menu, MF_STRING, kRemove, L"Remove from this grid");
+        } else if (g_pins.count(key)) {
+            AppendMenuW(menu, MF_STRING, kRemove, L"Unpin from this grid");
+        } else {
+            AppendMenuW(menu, MF_STRING, kPin, L"Pin to this grid");
+        }
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu,
                     MF_STRING | (paths.shortcut.empty() && paths.file.empty()
@@ -3826,6 +4155,14 @@ void ShowTileMenu(HWND hwnd, int index, POINT pt) {
         case kRemove:
             RemoveApp(tile.app);
             break;
+        case kPin:
+            g_pins.insert(key);
+            SavePins();
+            g_hidden.erase(key);
+            g_tiles.push_back(tile);  // At the end of the grid.
+            SaveTiles();
+            Refresh();
+            break;
         case kProperties:
             Close();
             SHObjectProperties(nullptr, SHOP_FILEPATH, linkOrFile.c_str(),
@@ -3870,7 +4207,7 @@ void ShowOptionsMenu(HWND hwnd, POINT pt, bool underButton) {
     AppendMenuW(menu, MF_POPUP | (removed.empty() ? MF_GRAYED : 0),
                 (UINT_PTR)sub, L"Bring back a removed app");
     AppendMenuW(menu,
-                MF_STRING | (!g_appsLoaded || g_appsFailed ? MF_GRAYED : 0),
+                MF_STRING | (!g_appsLoaded ? MF_GRAYED : 0),
                 kSort, L"Sort A to Z");
     UINT flags = TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY |
                  (underButton ? TPM_RIGHTALIGN | TPM_TOPALIGN : 0);
@@ -3939,61 +4276,61 @@ void PasteText() {
             std::wstring line = text;
             GlobalUnlock(data);
             line = line.substr(0, line.find_first_of(L"\r\n"));
-            g_query += line.substr(0, 200);
+            InsertAtCaret(line);
         }
     }
     CloseClipboard();
-    QueryChanged();
+    EditChanged();
 }
 
 void OnChar(WCHAR ch) {
     if (g_drag.active || g_drag.pending) {
         return;
     }
-    if (g_openFolder) {
-        // Typing in an open folder renames it.
-        std::wstring& name = g_openFolder->name;
-        if (ch == 8) {
-            if (!name.empty()) {
-                name.pop_back();
-                if (!name.empty() && IS_HIGH_SURROGATE(name.back())) {
-                    name.pop_back();
-                }
-            }
-        } else if (ch >= 32 && ch != 0x7F && name.size() < 60) {
-            name += ch;
-        }
-        Render();
-        return;
-    }
     switch (ch) {
-        case 8:  // Backspace
-            if (!g_query.empty()) {
-                g_query.pop_back();
-                if (!g_query.empty() && IS_HIGH_SURROGATE(g_query.back())) {
-                    g_query.pop_back();
-                }
-                QueryChanged();
+        case 8: {  // Backspace: the selection, or a code point before the caret.
+            if (DeleteSelection()) {
+                EditChanged();
+            } else if (g_caret > 0) {
+                size_t prev = CaretStep(g_caret, -1);
+                EditText().erase(prev, g_caret - prev);
+                g_caret = g_anchor = prev;
+                EditChanged();
             }
-            return;
-        case 0x7F: {  // Ctrl+Backspace: the last word.
-            size_t end = g_query.find_last_not_of(L' ');
-            if (end == std::wstring::npos) {
-                g_query.clear();
-            } else {
-                size_t space = g_query.find_last_of(L' ', end);
-                g_query.resize(space == std::wstring::npos ? 0 : space + 1);
-            }
-            QueryChanged();
+            TouchCaret();
             return;
         }
+        case 0x7F: {  // Ctrl+Backspace: the word before the caret.
+            if (DeleteSelection()) {
+                EditChanged();
+            } else if (g_caret > 0) {
+                size_t start = WordStart(g_caret);
+                EditText().erase(start, g_caret - start);
+                g_caret = g_anchor = start;
+                EditChanged();
+            }
+            TouchCaret();
+            return;
+        }
+        case 0x01:  // Ctrl+A: select all.
+            g_anchor = 0;
+            g_caret = EditText().size();
+            TouchCaret();
+            Render();
+            return;
+        case 0x03:  // Ctrl+C
+            CopySelection(false);
+            return;
+        case 0x18:  // Ctrl+X
+            CopySelection(true);
+            return;
         case 0x16:  // Ctrl+V
             PasteText();
             return;
     }
-    if (ch >= 32 && g_query.size() < 200) {
-        g_query += ch;
-        QueryChanged();
+    if (ch >= 32 && EditText().size() < MaxEditChars()) {
+        InsertAtCaret(std::wstring(1, ch));
+        EditChanged();
     }
 }
 
@@ -4031,6 +4368,7 @@ void OnKeyDown(WPARAM key) {
                 CloseFolder();
             } else if (!g_query.empty()) {
                 g_query.clear();
+                g_caret = g_anchor = 0;
                 QueryChanged();
             } else {
                 Close();
@@ -4047,10 +4385,24 @@ void OnKeyDown(WPARAM key) {
             ShowSelectedMenu();
             break;
         case VK_LEFT:
-            MoveSelection(-1);
+            if (!EditText().empty()) {
+                bool word = GetKeyState(VK_CONTROL) < 0;
+                SetCaret(word ? WordStart(g_caret) : CaretStep(g_caret, -1),
+                         GetKeyState(VK_SHIFT) < 0);
+                Render();
+            } else {
+                MoveSelection(-1);
+            }
             break;
         case VK_RIGHT:
-            MoveSelection(1);
+            if (!EditText().empty()) {
+                bool word = GetKeyState(VK_CONTROL) < 0;
+                SetCaret(word ? WordEnd(g_caret) : CaretStep(g_caret, 1),
+                         GetKeyState(VK_SHIFT) < 0);
+                Render();
+            } else {
+                MoveSelection(1);
+            }
             break;
         case VK_UP:
             MoveSelection(-Columns());
@@ -4066,6 +4418,32 @@ void OnKeyDown(WPARAM key) {
         case VK_NEXT:
             if (!g_openFolder) {
                 ScrollRows(g_layout.visibleRows);
+            }
+            break;
+        case VK_HOME:
+            if (!EditText().empty()) {
+                SetCaret(0, GetKeyState(VK_SHIFT) < 0);
+                Render();
+            }
+            break;
+        case VK_END:
+            if (!EditText().empty()) {
+                SetCaret(g_query.size(), GetKeyState(VK_SHIFT) < 0);
+                Render();
+            }
+            break;
+        case VK_DELETE:
+            if (!EditText().empty()) {
+                if (DeleteSelection()) {
+                    QueryChanged();
+                } else {
+                    size_t next = CaretStep(g_caret, 1);
+                    if (next != g_caret) {
+                        g_query.erase(g_caret, next - g_caret);
+                        QueryChanged();
+                    }
+                }
+                TouchCaret();
             }
             break;
     }
@@ -4099,6 +4477,14 @@ bool IsKeyboardShow(int showMethod, int showFlags) {
 // the like stay Windows shortcuts). For the grid and the original Start, the
 // window presses Ctrl+Esc once the keys are up, and the ShowStartView hook
 // gives that one the Shift + Windows key action.
+//
+// Windows keeps keys typed in an administrator window from this hook, and
+// drops the Ctrl+Esc it would press there. The optional helper
+// (helper/fsp-keys.cpp) runs as administrator with the same hook. While its
+// window exists, this hook leaves the key to it, and the helper sends
+// WM_APP_SHIFT_WIN with wParam 1, then presses Ctrl+Esc itself if the answer
+// is 1.
+constexpr WCHAR kHelperClass[] = L"FullscreenStartPlusKeys";
 
 std::atomic<ULONGLONG> g_shiftWinUntil;
 HANDLE g_keyThread;
@@ -4120,7 +4506,8 @@ LRESULT CALLBACK KeyboardHook(int code, WPARAM wParam, LPARAM lParam) {
             } else if (up && winDown) {
                 winDown = false;
                 HWND wnd = g_wnd;
-                if (!otherKey && withShift && wnd) {
+                if (!otherKey && withShift && wnd &&
+                    !FindWindowW(kHelperClass, nullptr)) {
                     PostMessageW(wnd, WM_APP_SHIFT_WIN, 0, 0);
                 }
             }
@@ -4195,7 +4582,6 @@ void OnAppsLoaded(AppList* list, int key) {
         SaveTiles();  // A name being typed.
         g_openFolder = nullptr;
     }
-    g_appsFailed = !list;
     g_apps = list ? std::move(*list) : AppList{};
     delete list;
     g_appsLoaded = true;
@@ -4266,6 +4652,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (g_shown && g_shiftWinKeyAction == KeyAction::Start) {
                 HideNow();
             }
+            if (wParam == 1) {
+                // The helper presses Ctrl+Esc once the keys are up.
+                g_shiftWinUntil = GetTickCount64() + 3000;
+                return 1;
+            }
             // The grid and the original Start open through Ctrl+Esc, once
             // Shift is up (with Shift it's Task Manager): only a Start that
             // Windows opens may take the foreground. SC_TASKLIST to the
@@ -4299,6 +4690,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         SendInput(4, keys, sizeof(INPUT));
                     }
                     break;
+                case kTimerCaret:
+                    // The search caret blinks by plain redraws.
+                    if (g_shown) {
+                        Render();
+                    }
+                    break;
                 case kTimerFirstLoad:
                     // Only in the process that owns the taskbar: short-lived
                     // explorer.exe processes (explorer.exe /select,...) get
@@ -4327,6 +4724,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 g_trackingMouse = TrackMouseEvent(&tme);
             }
             int x = GET_X_LPARAM(lParam), y = GET_Y_LPARAM(lParam);
+            if (g_searchDrag) {
+                SetCaret(CaretAtPoint((float)x), true);
+                Render();
+                return 0;
+            }
             float slop = 6 * g_layout.scale;
             if (g_drag.pending && !g_drag.active &&
                 (std::abs(x - g_drag.start.x) > slop ||
@@ -4373,6 +4775,32 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     StartFrames();
                     return 0;
                 }
+                if (InRect(g_layout.search, (float)x, (float)y)) {
+                    // A click in the search field places the caret; holding
+                    // the button and moving selects text. A second click on
+                    // the same spot selects the word under it.
+                    UINT64 tick = GetTickCount64();
+                    bool dbl = tick - g_lastSearchClick <=
+                                   GetDoubleClickTime() &&
+                               std::abs(x - g_lastSearchX) <=
+                                   4 * g_layout.scale;
+                    g_lastSearchClick = tick;
+                    g_lastSearchX = x;
+                    if (dbl) {
+                        size_t pos = CaretAtPoint((float)x);
+                        g_anchor = WordStart(pos);
+                        g_caret = WordEnd(pos);
+                    } else {
+                        SetCaret(CaretAtPoint((float)x), false);
+                    }
+                    g_searchDrag = true;
+                    SetCapture(hwnd);
+                    Render();
+                    return 0;
+                }
+            }
+            if (g_anchor != g_caret) {
+                g_anchor = g_caret;  // A click elsewhere drops the selection.
             }
             SetCapture(hwnd);
             g_pressed = ItemAt(x, y);
@@ -4385,6 +4813,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_LBUTTONUP: {
             int x = GET_X_LPARAM(lParam), y = GET_Y_LPARAM(lParam);
+            g_searchDrag = false;
             bool dragged = g_drag.active;
             EndDrag(true);  // Before the capture goes, which would undo it.
             if (GetCapture() == hwnd) {
@@ -4415,6 +4844,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_CAPTURECHANGED:
             EndDrag(false);  // Another window took the mouse.
+            g_searchDrag = false;
             return 0;
 
         case WM_RBUTTONUP: {
