@@ -16,6 +16,7 @@
 | [AltSnap](local/alt-snap-drag) | Alt+drag to move and resize any window, plus AltSnap's window shortcuts. | 1.2.2 | GPL-3.0 |
 | [Taskbar Audio Visualizer](local/taskbar-audio-visualizer) | A live audio spectrum with media controls on the taskbar. | 1.3.0 | MIT |
 | [Taskbar Weather](local/taskbar-weather) | Current weather on the taskbar with a details card on hover. | 1.4.0 | MIT |
+| [Taskbar Elastic WinUI Pill Plus](local/taskbar-elastic-pill-plus) | An animated pill that slides under the app you use, with an option to mark open apps. | 2.1.0 | MIT |
 | [Taskbar System Info Plus](local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar. | 1.2.3 | GPL-3.0 |
 | [Taskbar AI Quota Bars Plus](local/taskbar-ai-quota-opencode) | Claude, Codex, Antigravity and OpenCode Go usage limits on the taskbar. | 1.6.5.1 | MIT |
 | [Better Volume Mixer Plus](local/better-volume-mixer-plus) | Tray volume mixer with per-app output and input devices. | 1.0.0 | MIT |
