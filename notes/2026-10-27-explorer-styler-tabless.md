@@ -16,3 +16,15 @@ opened This PC window, 3:18 PM). A window open during the hot reload showed doub
 buttons until reopened.
 Script: scripts/2026-10-27-explorer-styler-tabless.ps1 (elevated). Rollback: same script with -Rollback,
 restores backups/2026-10-27/explorer-styler-tabless/settings-before.reg.
+
+## Blur fix (3:25 PM)
+
+Explorer drew a flat dark background with no blur (measured: on-screen capture of a fresh window,
+reports/2026-10-27-explorer-tabless/blur-0-now.png). Two mods were setting the Explorer backdrop: the styler
+(backgroundTranslucentEffect=acrylicblur) and translucent-windows (RuledPrograms explorer.exe, acrylicblur
+8C1E1E2E). Setting the styler effect to "" (theme default, the styler leaves the backdrop alone) brought the
+blur back (2026-10-27-explorer-blur-final.png, on-screen capture). It also removes one of the two mods
+writing the same window part in Explorer, which is on the freeze-risk list.
+The Translucent Explorer11 theme was not merged as styles: its transparent bars are already in OS26, and its
+only other change is its own acrylic backdrop, which would bring back the double-backdrop conflict.
+Rollback: scripts/2026-10-27-explorer-styler-effect.ps1 -Effect acrylicblur (elevated).
