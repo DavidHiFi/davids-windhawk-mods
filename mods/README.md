@@ -23,7 +23,7 @@
 | [Shell Font Changer Plus](local/shell-font-changer-plus) | Any installed font in Explorer, Start, Search and Settings, with icons and emoji left intact. | 1.3.3 | MIT |
 | [Everything & Power Tools in the Start Menu Plus](local/start-everything-plus) | Compact Start menu search with Everything, preview, apps, settings, power tools. | 1.1.0 | GPL-3.0 |
 | [Explorer TreeItem Tweaker Plus](local/explorer-treeitem-tweaker-plus) | Rounded, colored highlights for folders in Explorer's left pane, no restart popup. | 1.1.5 | MIT |
-| [Fullscreen Start Plus](local/fullscreen-start-plus) | A fullscreen grid of all your apps in place of Start, with instant search and blur. | 1.6.0 | MIT |
+| [Fullscreen Start Plus](local/fullscreen-start-plus) | A fullscreen grid of all your apps in place of Start, with instant search and blur. | 1.6.1 | MIT |
 | [Settings Styler Plus](local/settings-styler-plus) | Themes for the Settings app, with the normal title bar and a blur that stays when unfocused. | 1.2.0 | GPL-3.0 |
 | [Notepad++ Dark Dialog Fix](local/npp-taskdlg-textcolor) | Readable text in Notepad++ dark-mode dialogs. | 1.0.1 | MIT |
 | [Center Titlebar Fork](local/center-titlebar-fork) | Unfinished prototype of a Windows 11 title-centering fix. Not installed. | 3.4 | MIT |
