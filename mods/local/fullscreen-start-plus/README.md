@@ -11,7 +11,8 @@ of the macOS Launchpad, with instant search and a blurred background.
   It leaves the taskbar, side bars and the Standalone Dock visible, or covers
   the whole screen if you turn that on.
 - **Your choice of apps.** The "All apps" list of Start, your desktop icons,
-  both together, or only the apps you pinned to Start.
+  both together, or only the apps you pin. With only pinned apps, search still
+  finds every app, and right-click pins or unpins one.
 - **Scroll or pages.** One list that scrolls, or pages that flip left and
   right with dots below, like Launchpad.
 - **Instant search.** Just type. Case and accents don't matter, and names that
@@ -24,6 +25,10 @@ of the macOS Launchpad, with instant search and a blurred background.
   button can each open this grid, the original Start, or a program of your
   choice, such as a launcher. The program starts even when it isn't running,
   so this replaces the same feature of Open-Shell.
+- **Works over administrator windows.** Windows keeps keys pressed in an app
+  running as administrator away from Explorer, so Shift + Windows key can't
+  open the grid there. The optional helper in the [helper](helper) folder runs
+  as administrator and fixes that.
 
 ## Keyboard and mouse
 

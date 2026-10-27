@@ -2,7 +2,7 @@
 // @id              fullscreen-start-plus
 // @name            Fullscreen Start Plus
 // @description     A fullscreen grid of all your apps in place of Start, with instant search and adjustable blur
-// @version         1.5.0
+// @version         1.6.0
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -27,7 +27,8 @@ of the macOS Launchpad, with instant search and a blurred background.
   It leaves the taskbar, side bars and the Standalone Dock visible, or covers
   the whole screen if you turn that on.
 - **Your choice of apps.** The "All apps" list of Start, your desktop icons,
-  both together, or only the apps you pinned to Start.
+  both together, or only the apps you pin. With only pinned apps, search still
+  finds every app, and right-click pins or unpins one.
 - **Scroll or pages.** One list that scrolls, or pages that flip left and
   right with dots below, like Launchpad.
 - **Instant search.** Just type. Case and accents don't matter, and names that
@@ -43,7 +44,12 @@ of the macOS Launchpad, with instant search and a blurred background.
 - **Your own order.** Drag icons to move them, across pages and in and out
   of folders. Drop an app on another to make a folder.
 - **Right-click menu.** Open, run as administrator, open the file location
-  or the shortcut location, change the icon, or remove an app from the grid.
+  or the shortcut location, change the icon, pin or unpin, or remove an app
+  from the grid.
+- **Works over administrator windows.** Windows keeps keys pressed in an app
+  running as administrator away from Explorer, so Shift + Windows key can't
+  open the grid there. The optional helper in the `helper` folder of this
+  mod's repository runs as administrator and fixes that (see its README).
 
 ## Keyboard and mouse
 | Key | Action |
@@ -114,12 +120,12 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
   $description: In hexadecimal, like #1E1E2E
 - appSource: allApps
   $name: Apps to show
-  $description: Pinned apps keep the order they have in Start
+  $description: With pinned apps, search still finds every app. Right-click an app to pin or unpin it
   $options:
   - allApps: Start menu apps (the All apps list)
   - desktop: Desktop icons
   - both: Start menu apps and desktop icons
-  - pinned: Apps pinned to Start
+  - pinned: Only the apps you pin
 - gridIconSize: 72
   $name: Icon size (pixels at 100% scaling)
 - gridColumns: 0
@@ -383,7 +389,6 @@ using AppList = std::vector<std::shared_ptr<App>>;
 // destructors would release them on the exiting thread under the loader lock.
 [[clang::no_destroy]] AppList g_apps;
 bool g_appsLoaded;
-bool g_appsFailed;  // The pins couldn't be read.
 double g_appsTime;
 int g_appsKey;  // AppsKey() of the loaded list.
 
@@ -763,17 +768,48 @@ bool AddStartPins(int iconPixels, AppList& list) {
     return true;
 }
 
+std::wstring StoragePath(const std::wstring& file);
+void WriteLines(const std::wstring& path,
+                const std::vector<std::wstring>& lines);
+
+// The first time "only the apps you pin" is used, the pins start as Start's
+// own, matched by name to the apps already read. Written even when Start's
+// pins can't be read, so the slow export runs once.
+void SeedPins(int iconPixels, AppList& list) {
+    std::wstring path = StoragePath(L"pins.txt");
+    if (path.empty() ||
+        GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        return;
+    }
+    AppList pins;
+    AddStartPins(iconPixels, pins);
+    std::vector<std::wstring> lines;
+    for (auto& pin : pins) {
+        auto same = std::find_if(list.begin(), list.end(), [&](const auto& a) {
+            return ToLower(a->name) == ToLower(pin->name);
+        });
+        lines.push_back(L"pin\t" +
+                        (same != list.end() ? (*same)->target : pin->target));
+        if (same == list.end()) {
+            list.push_back(std::move(pin));
+        }
+    }
+    if (!g_workerStop) {
+        WriteLines(path, lines);
+    }
+}
+
 AppList* EnumerateApps(int iconPixels, AppSource source) {
     auto list = std::make_unique<AppList>();
-    if (source == AppSource::Pinned) {
-        // Keeps Start's order. nullptr: the pins couldn't be read.
-        return AddStartPins(iconPixels, *list) ? list.release() : nullptr;
-    }
+    // Pinned: every app is read, so the search finds the ones not pinned.
     if (source != AppSource::Desktop) {
         AddStartApps(iconPixels, *list);
     }
     if (source != AppSource::AllApps) {
         AddDesktopItems(iconPixels, *list);
+    }
+    if (source == AppSource::Pinned) {
+        SeedPins(iconPixels, *list);
     }
 
     std::stable_sort(list->begin(), list->end(),
@@ -871,6 +907,17 @@ struct Folder {
 [[clang::no_destroy]] Tiles g_tiles;
 [[clang::no_destroy]] std::set<std::wstring> g_hidden;  // Removed apps' keys.
 [[clang::no_destroy]] std::map<std::wstring, std::wstring> g_customIcons;  // Key: picture.
+// Keys of the pinned apps, kept in pins.txt. Only with "only the apps you pin".
+[[clang::no_destroy]] std::set<std::wstring> g_pins;
+
+bool PinnedOnly() {
+    return (g_appsKey >> 16) == (int)AppSource::Pinned;
+}
+
+// Not on the grid: removed, or not pinned when only pinned apps show.
+bool OffGrid(const std::wstring& key) {
+    return g_hidden.count(key) || (PinnedOnly() && !g_pins.count(key));
+}
 
 std::wstring AppKey(const App& app) {
     return ToLower(app.target);
@@ -1030,8 +1077,7 @@ void ArrangeTiles(const std::vector<std::wstring>& lines) {
     auto take = [&](const std::wstring& target) -> std::shared_ptr<App> {
         std::wstring key = ToLower(target);
         auto it = byKey.find(key);
-        if (it == byKey.end() || g_hidden.count(key) ||
-            !placed.insert(key).second) {
+        if (it == byKey.end() || OffGrid(key) || !placed.insert(key).second) {
             return nullptr;
         }
         return it->second;
@@ -1125,7 +1171,21 @@ void ApplyCustomIcons(int size) {
     }
 }
 
+void SavePins() {
+    std::vector<std::wstring> lines;
+    for (const auto& key : g_pins) {
+        lines.push_back(L"pin\t" + key);
+    }
+    WriteLines(StoragePath(L"pins.txt"), lines);
+}
+
 void LoadTiles() {
+    g_pins.clear();
+    for (const auto& f : ReadLines(StoragePath(L"pins.txt"))) {
+        if (f.size() >= 2 && f[0] == L"pin") {
+            g_pins.insert(ToLower(f[1]));
+        }
+    }
     std::vector<std::wstring> lines;
     for (const auto& f : ReadLines(StoragePath(LayoutFile()))) {
         std::wstring line;
@@ -1190,7 +1250,9 @@ void UpdateFilter() {
             rank = r < 0 ? -1 : (w == 0 ? r : rank);
         }
         if (rank >= 0) {
-            ranked.emplace_back(rank, i);
+            // With only pinned apps, the pinned ones come first.
+            bool off = PinnedOnly() && !g_pins.count(AppKey(*g_apps[i]));
+            ranked.emplace_back(rank + (off ? 3 : 0), i);
         }
     }
     std::stable_sort(ranked.begin(), ranked.end(),
@@ -2208,9 +2270,9 @@ void DrawGrid() {
     }
     if (g_visible.empty()) {
         DrawMessage(!g_query.empty() ? L"No apps found"
-                    : g_appsFailed ? L"Couldn't read the apps pinned to Start"
-                    : (g_appsKey >> 16) == (int)AppSource::Pinned
-                        ? L"No apps are pinned to Start"
+                    : PinnedOnly()
+                        ? L"Nothing pinned yet. Type to find an app, then "
+                          L"right-click it to pin it"
                         : L"No apps");
         return;
     }
@@ -2540,7 +2602,7 @@ std::vector<SettingField> MakeSettingFields() {
          {{L"allApps", L"Start menu apps (All apps)"},
           {L"desktop", L"Desktop icons"},
           {L"both", L"Start menu apps and desktop icons"},
-          {L"pinned", L"Apps pinned to Start"}}},
+          {L"pinned", L"Only the apps you pin"}}},
         {F::Choice,
          L"gridLayout",
          L"Layout",
@@ -3649,8 +3711,14 @@ bool PickIconFile(HWND hwnd, std::wstring& path) {
     return ok;
 }
 
+// Takes the app off the grid: removed, or unpinned when only pinned apps show.
 void RemoveApp(const std::shared_ptr<App>& app) {
-    g_hidden.insert(AppKey(*app));
+    if (PinnedOnly()) {
+        g_pins.erase(AppKey(*app));
+        SavePins();
+    } else {
+        g_hidden.insert(AppKey(*app));
+    }
     auto drop = [&](Tiles& tiles) {
         tiles.erase(std::remove_if(tiles.begin(), tiles.end(),
                                    [&](const Tile& t) { return t.app == app; }),
@@ -3721,6 +3789,7 @@ void ShowTileMenu(HWND hwnd, int index, POINT pt) {
         kRemove,
         kProperties,
         kUngroup,
+        kPin,
     };
     Tile tile = Items()[index];
     g_selected = index;
@@ -3756,7 +3825,13 @@ void ShowTileMenu(HWND hwnd, int index, POINT pt) {
         if (g_openFolder) {
             AppendMenuW(menu, MF_STRING, kOutOfFolder, L"Take out of folder");
         }
-        AppendMenuW(menu, MF_STRING, kRemove, L"Remove from this grid");
+        if (!PinnedOnly()) {
+            AppendMenuW(menu, MF_STRING, kRemove, L"Remove from this grid");
+        } else if (g_pins.count(key)) {
+            AppendMenuW(menu, MF_STRING, kRemove, L"Unpin from this grid");
+        } else {
+            AppendMenuW(menu, MF_STRING, kPin, L"Pin to this grid");
+        }
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu,
                     MF_STRING | (paths.shortcut.empty() && paths.file.empty()
@@ -3826,6 +3901,14 @@ void ShowTileMenu(HWND hwnd, int index, POINT pt) {
         case kRemove:
             RemoveApp(tile.app);
             break;
+        case kPin:
+            g_pins.insert(key);
+            SavePins();
+            g_hidden.erase(key);
+            g_tiles.push_back(tile);  // At the end of the grid.
+            SaveTiles();
+            Refresh();
+            break;
         case kProperties:
             Close();
             SHObjectProperties(nullptr, SHOP_FILEPATH, linkOrFile.c_str(),
@@ -3870,7 +3953,7 @@ void ShowOptionsMenu(HWND hwnd, POINT pt, bool underButton) {
     AppendMenuW(menu, MF_POPUP | (removed.empty() ? MF_GRAYED : 0),
                 (UINT_PTR)sub, L"Bring back a removed app");
     AppendMenuW(menu,
-                MF_STRING | (!g_appsLoaded || g_appsFailed ? MF_GRAYED : 0),
+                MF_STRING | (!g_appsLoaded ? MF_GRAYED : 0),
                 kSort, L"Sort A to Z");
     UINT flags = TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY |
                  (underButton ? TPM_RIGHTALIGN | TPM_TOPALIGN : 0);
@@ -4099,6 +4182,14 @@ bool IsKeyboardShow(int showMethod, int showFlags) {
 // the like stay Windows shortcuts). For the grid and the original Start, the
 // window presses Ctrl+Esc once the keys are up, and the ShowStartView hook
 // gives that one the Shift + Windows key action.
+//
+// Windows keeps keys typed in an administrator window from this hook, and
+// drops the Ctrl+Esc it would press there. The optional helper
+// (helper/fsp-keys.cpp) runs as administrator with the same hook. While its
+// window exists, this hook leaves the key to it, and the helper sends
+// WM_APP_SHIFT_WIN with wParam 1, then presses Ctrl+Esc itself if the answer
+// is 1.
+constexpr WCHAR kHelperClass[] = L"FullscreenStartPlusKeys";
 
 std::atomic<ULONGLONG> g_shiftWinUntil;
 HANDLE g_keyThread;
@@ -4120,7 +4211,8 @@ LRESULT CALLBACK KeyboardHook(int code, WPARAM wParam, LPARAM lParam) {
             } else if (up && winDown) {
                 winDown = false;
                 HWND wnd = g_wnd;
-                if (!otherKey && withShift && wnd) {
+                if (!otherKey && withShift && wnd &&
+                    !FindWindowW(kHelperClass, nullptr)) {
                     PostMessageW(wnd, WM_APP_SHIFT_WIN, 0, 0);
                 }
             }
@@ -4195,7 +4287,6 @@ void OnAppsLoaded(AppList* list, int key) {
         SaveTiles();  // A name being typed.
         g_openFolder = nullptr;
     }
-    g_appsFailed = !list;
     g_apps = list ? std::move(*list) : AppList{};
     delete list;
     g_appsLoaded = true;
@@ -4265,6 +4356,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
             if (g_shown && g_shiftWinKeyAction == KeyAction::Start) {
                 HideNow();
+            }
+            if (wParam == 1) {
+                // The helper presses Ctrl+Esc once the keys are up.
+                g_shiftWinUntil = GetTickCount64() + 3000;
+                return 1;
             }
             // The grid and the original Start open through Ctrl+Esc, once
             // Shift is up (with Shift it's Task Manager): only a Start that
