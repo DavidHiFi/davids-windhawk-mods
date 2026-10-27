@@ -1,5 +1,35 @@
 # Release verification
 
+## 2.0.73 to 2.0.76 (2026-10-24)
+
+Checked on Windows 11 in the live interface through its debugging port, from the installed mod.
+
+- Select and drop-down menus are solid (`rgb(24, 24, 37)`, `backdrop-filter: none`) and the first option starts at the panel's top edge with no gap (2.0.73).
+- In long drop-down lists, including the accent colour list, the scrollbar stays inside the rounded corners. Three long menus were measured with a corner hit test and an arc check, and no scrollbar point lies outside the curve (2.0.74, 2.0.75).
+- Drop-down lists no longer get Windhawk's own square overlay bar on top of the list bar (2.0.75).
+- On a mod's settings page the scrollbar sits on the card's right edge (0px gap, measured), no longer inset 8px. Every Windhawk overlay thumb has rounded ends in the list-bar colour (2.0.76).
+- Not checked: date-picker drop-downs and right-click menus long enough to scroll, and the blur of the desktop behind the window as seen on screen.
+
+## 2.0.71 and 2.0.72 (2026-10-24)
+
+Checked on Windows 11 in the live interface through its debugging port, read-only: no clicks, no reloads, forced focus cleared after each read.
+
+- The mod loads again in 2.0.71. The header had a second `@donateUrl` line, which stopped the mod from loading. The duplicate is gone.
+- Focus and press on the Explore funnel use the accent instead of antd's blue. Forced focus gives the funnel icon `rgb(140, 182, 250)`.
+- The focus ring uses `outline-offset: -1px`, so the 2px ring sits on the 1px control border with no gap at the top, bottom or arcs. The style block has the -1px rule once and the old `2px` offset zero times (2.0.72).
+- Inputs and the select show a 2px solid ring at -1px offset.
+- Not checked: pickers, checkboxes and radios, because none were on the page.
+- Not fixed: the number input's focus glow still uses antd's blue at about 18% alpha, outside the ring. The funnel reports a 1px computed outline width while the rule says 2px. Not resolved.
+
+## 2.0.66 to 2.0.70 (2026-10-24)
+
+Checked on Windows 11 in the live interface through its debugging port, from the installed mod with no probe present.
+
+- The caption strip and the body form one acrylic sheet: strip 27,27,38 and body 28,28,39 (2.0.66).
+- The save bar blurs the settings rows behind it. The settings scroller paints an opaque rounded patch exactly under the bar, because the renderer only blurs text over an opaque backdrop. Measured bar background `rgba(24, 24, 37, 0.4)` with `blur(16px)`; rows behind it unreadable (2.0.69).
+- In the Advanced settings dialog the process inclusion list and its info box join as one block: seam corners 0px, borders overlapping by 1px (2.0.70).
+- Not checked: the blur of the desktop behind the window as seen on screen.
+
 ## 2.0.53 to 2.0.57 (2026-10-13)
 
 Checked on Windows 11 with Windhawk 2.0.0-alpha.7, in the live interface through its debugging port and window captures.

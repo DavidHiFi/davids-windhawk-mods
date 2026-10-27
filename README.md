@@ -56,14 +56,15 @@ Each release on the Releases page carries one mod, so the latest release is the 
 | <img src="media/previews/taskbar-audio-visualizer.gif" width="220" alt="Audio spectrum on the taskbar"> | [Taskbar Audio Visualizer](mods/local/taskbar-audio-visualizer) | A live audio spectrum with media controls, right on the taskbar. |
 | <img src="media/previews/taskbar-weather.png" width="220" alt="Weather card over the taskbar"> | [Taskbar Weather](mods/local/taskbar-weather) | Current weather on the taskbar with a details card on hover, no Widgets or API key. |
 | <img src="media/previews/taskbar-system-info-weather.png" width="220" alt="CPU and GPU readouts on the taskbar"> | [Taskbar System Info Plus](mods/local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed, with optional graphs. |
-| <img src="media/previews/taskbar-ai-quota-opencode.png" width="220" alt="Usage bars on the taskbar"> | [Taskbar AI Quota Bars Plus](mods/local/taskbar-ai-quota-opencode) | Claude, Codex, Antigravity and OpenCode Go usage limits as taskbar bars. |
+| <img src="media/previews/taskbar-ai-quota-opencode.png" width="220" alt="Usage bars on the taskbar"> | [Taskbar AI Quota Bars Plus](mods/local/taskbar-ai-quota-opencode) | Claude, Antigravity and OpenCode Go usage limits as taskbar bars. |
 | <img src="media/previews/better-volume-mixer-plus.png" width="220" alt="Tray volume mixer"> | [Better Volume Mixer Plus](mods/local/better-volume-mixer-plus) | A tray volume mixer with per-app volume and per-app output and input devices. |
 
 ### Windows and Alt+Tab
 
 | | Mod | What it does |
 | --- | --- | --- |
-| <img src="media/previews/window-manager.gif" width="220" alt="Windows being dragged and snapped"> | [Window Manager](mods/local/window-manager) | Move, resize, snap and send windows to other monitors with Alt+drag and shortcuts. |
+| <img src="media/previews/window-borders.png" width="220" alt="Notepad++ with a blue to mauve border"> | [Window Borders](mods/local/window-borders) | Smooth, rounded borders on every window, with an accent-to-mauve gradient on the active one. |
+| <img src="media/previews/window-manager.gif" width="220" alt="Windows being dragged and snapped"> | [Window Manager Plus](mods/local/window-manager) | Move, resize, snap and send windows to other monitors with Alt+drag and shortcuts. |
 | <img src="media/previews/alt-snap-drag.gif" width="220" alt="Alt+drag moving a window"> | [AltSnap](mods/local/alt-snap-drag) | Alt+drag to move and resize any window, plus AltSnap's window shortcuts. |
 | <img src="media/previews/simple-window-switcher-plus.gif" width="220" alt="Vista-style Alt+Tab"> | [Simple Window Switcher Plus](mods/local/simple-window-switcher-plus) | Alt+Tab with Vista animations, background blur and elevated app support. |
 

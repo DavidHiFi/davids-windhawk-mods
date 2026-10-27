@@ -2,10 +2,11 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.64
-// @author          DavidHiFi
+// @version         2.0.76
+// @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
+// @donateUrl       https://ko-fi.com/DavidHiFi
 // @license         MIT
 // @include         windhawk-ui.exe
 // @architecture    x86-64
@@ -24,7 +25,7 @@ Choose Windhawk's colors, font, transparency and background blur.
 
 - **Background.** Pick a color and opacity, with Acrylic or no background effect.
 - **Cards and dialogs.** Set their color and opacity. Cards, tables, Advanced settings, dialogs and pop-up menus use that surface, with blur when translucent. Every box has one outline, the same color all the way around its corners.
-- **Controls.** Choose colors for buttons and inputs, plus a global accent for selections, hovers, badges, spinners, links and modified settings. Number spinners sit in a rounded pill. The save bar floats while the settings scroll, and mode and version switches join into single pills.
+- **Controls.** Choose colors for buttons and inputs, plus a global accent for selections, hovers, badges, spinners, links and modified settings. Number spinners sit in a rounded pill. The save bar floats while the settings scroll and blurs the rows behind it, and mode and version switches join into single pills.
 - **Corners.** Round cards, tables, dialogs, pop-up menus, buttons and inputs with an adjustable radius, or keep Windhawk's squared look.
 - **Text and font.** Use an installed font and a text color. Icons keep their own font and stay centered in their buttons.
 - **Title bar.** Match the background or choose a solid color. Right-click the title bar, click the app icon or press Alt+Space for the Windows window menu. The app icon keeps its normal size, and Windows handles dragging and window buttons.
@@ -285,7 +286,10 @@ static std::string RgbaFromRgb(std::uint32_t rgb, int opacityPercent) {
     return buf;
 }
 
+// In Acrylic mode DWM paints the background tint (see ApplyWindowStack), so
+// the clear caption strip and the body show one sheet. The page stays clear.
 static std::string CssVeil(const Settings& s) {
+    if (s.blur == 2) return "transparent";
     return RgbaFromRgb(s.background, s.backgroundOpacity);
 }
 
@@ -323,8 +327,8 @@ static std::string JsonEscape(const std::string& in) {
     return out;
 }
 
-// Every box that takes the card color. Rounded corners, the card surface and
-// the blur all apply to this same list.
+// Every box that takes the card color. Rounded corners and the card surface
+// apply to this list; the blur applies to kFloatingSurfaces only.
 static const char kSurfaces[] =
     ".ant-card,[class*=\"SaveSettingsCard\"],.ant-table,.ant-collapse,.ant-modal-content,"
     ".ant-drawer-content,.ant-popover-inner,.ant-select-dropdown,.ant-picker-dropdown,"
@@ -335,13 +339,24 @@ static const char kSurfaces[] =
 // absolutely positioned by the interface and keep their own position. The
 // save card is left out: the interface positions it sticky so it floats
 // while the settings scroll, and forcing relative would pin it to the page.
+// Surfaces that float over other page content and blur it. In-flow cards stay
+// unblurred: CSS blur cannot reach the DWM backdrop behind the page, and a
+// blurred card becomes the backdrop root of everything inside it, so the
+// sticky save bar in the mod page card could only blur the card itself.
+static const char kFloatingSurfaces[] =
+    "[class*=\"SaveSettingsCard\"],.ant-modal-content,.ant-drawer-content,.ant-popover-inner,"
+    ".ant-tooltip-inner,.ant-notification-notice,.ant-message-notice-content";
+
+// Menus that open over the page are solid, not tinted. In Acrylic mode there
+// is no opaque backdrop for CSS blur to read, so the old tint only imitated one.
+static const char kMenuSurfaces[] = ".ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu";
+
 static const char kRelativeSurfaces[] =
     ".ant-card:not([class*=\"SaveSettingsCard\"]),.ant-table,.ant-collapse,.ant-modal-content,"
     ".ant-drawer-content,.ant-popover-inner,.ant-dropdown-menu,.ant-tooltip-inner,"
     ".ant-notification-notice,.ant-message-notice-content";
 
 static std::string BuildCss(const Settings& s) {
-    // One client surface tints the caption and body over the same acrylic.
     std::string veil = CssVeil(s);
     const std::string focus = RgbaFromRgb(s.accentRgb, 20);
     std::string css;
@@ -431,7 +446,35 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-collapse-header{background-color:" + cardColor + " !important;border-radius:0 !important;}";
         css += ".ant-collapse-content{background-color:" + cardColor + " !important;border-color:rgba(255,255,255,0.08) !important;border-radius:0 !important;}";
         if (s.cardOpacity < 100) {
-            css += std::string(kSurfaces) + "{backdrop-filter:blur(16px) !important;}";
+            // The renderer blurs page text only where the backdrop under it is
+            // opaque. In Acrylic mode the page is transparent down to DWM, so
+            // the save bar left the settings text sharp. Floating surfaces keep
+            // at least 92% of the card color so text behind them stays unreadable.
+            Settings floating = s;
+            floating.cardOpacity = s.cardOpacity < 92 ? 92 : s.cardOpacity;
+            css += std::string(kFloatingSurfaces) + "{background-color:" + CssCardColor(floating) + " !important;backdrop-filter:blur(16px) !important;}";
+            Settings menu = s;
+            menu.cardOpacity = 100;
+            css += std::string(kMenuSurfaces) + "{background-color:" + CssCardColor(menu) + " !important;backdrop-filter:none !important;}";
+            // The save bar gets a true blur: the settings scroller paints an
+            // opaque rounded patch exactly under the bar (12px inset, 56px
+            // tall, 16px radius), pinned to the viewport, so the rows that
+            // scroll past it have an opaque backdrop and blur. The bar then
+            // keeps the normal card opacity. The geometry comes from the bar
+            // placement rules in the accent block, so it needs an accent.
+            if (!s.accent.empty()) {
+                Settings solid = s;
+                solid.cardOpacity = 100;
+                const std::string c = CssCardColor(solid);
+                const std::string rect = "linear-gradient(" + c + "," + c + ")";
+                const std::string dot = "radial-gradient(circle 16px at 16px 16px," + c + " 15.5px,transparent 16px)";
+                css += ".ant-card-body.wh-cscroll-host:has([class*=\"SaveSettingsCard\"]){background:"
+                       + rect + " left 28px top 12px/calc(100% - 56px) 56px no-repeat,"
+                       + rect + " left 12px top 28px/calc(100% - 24px) 24px no-repeat,"
+                       + dot + " left 12px top 12px/32px 32px no-repeat," + dot + " right 12px top 12px/32px 32px no-repeat,"
+                       + dot + " left 12px top 36px/32px 32px no-repeat," + dot + " right 12px top 36px/32px 32px no-repeat !important;}";
+                css += "[class*=\"SaveSettingsCard\"]{background-color:" + cardColor + " !important;}";
+            }
         }
     }
     if (!s.control.empty()) {
@@ -449,7 +492,9 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-switch-checked,.ant-switch-checked:hover{background-color:" + s.accent + " !important;}";
         css += ".ant-input:hover,.ant-input-affix-wrapper:hover,.ant-select-selector:hover,.ant-input-number:hover,.ant-picker:hover{border-color:" + s.accent + " !important;}";
         css += ".ant-input:focus,.ant-input-focused,.ant-input-affix-wrapper-focused,.ant-input-affix-wrapper:focus-within,.ant-input-number-focused,.ant-select-focused .ant-select-selector,.ant-picker-focused{border-color:" + s.accent + " !important;box-shadow:0 0 0 2px " + focus + " !important;}";
-        css += ".ant-btn:focus-visible,.ant-input:focus-visible,.ant-select-selector:focus-visible,.ant-input-number:focus-visible,.ant-picker:focus-visible,.ant-checkbox-input:focus-visible+.ant-checkbox-inner,.ant-radio-input:focus-visible+.ant-radio-inner{outline:2px solid " + s.accent + " !important;outline-offset:2px;}";
+        // A -1px offset centres the 2px ring on the 1px control border, so it
+        // hugs the rounded edge with no gap at the top, bottom or arcs.
+        css += ".ant-btn:focus-visible,.ant-input:focus-visible,.ant-select-selector:focus-visible,.ant-input-number:focus-visible,.ant-picker:focus-visible,.ant-checkbox-input:focus-visible+.ant-checkbox-inner,.ant-radio-input:focus-visible+.ant-radio-inner{outline:2px solid " + s.accent + " !important;outline-offset:-1px;}";
         // The search input sits inside an affix wrapper, which owns the focus
         // ring. Clear the nested input ring so the search control has one outline.
         css += ".ant-input-affix-wrapper>.ant-input:focus,.ant-input-affix-wrapper>.ant-input:focus-visible{border-color:transparent !important;box-shadow:none !important;outline:none !important;}";
@@ -457,6 +502,9 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-tabs-ink-bar{background-color:" + s.accent + " !important;}";
         css += ".ant-menu-item-selected{color:" + s.accent + " !important;}";
         css += ".ant-menu-item-selected,.ant-dropdown-menu-item-selected,.ant-dropdown-menu-item-active,.ant-select-item-option-active:not(.ant-select-item-option-disabled),.ant-select-item-option-selected:not(.ant-select-item-option-disabled){background-color:" + selected + " !important;}";
+        // The rows paint their own fill. The 4px top and bottom padding left a
+        // band above a hovered first row, so the list runs to the panel edge.
+        css += ".ant-select-dropdown,.ant-dropdown-menu{padding:0 !important;}";
         css += "a{color:" + s.accent + " !important;}";
         css += ".ant-btn-link{color:" + s.accent + " !important;}";
         css += ".ant-radio-checked .ant-radio-inner{border-color:" + s.accent + " !important;}";
@@ -488,13 +536,18 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-tabs-tab:hover .ant-tabs-tab-btn{color:" + s.accent + " !important;}";
         css += ".ant-dropdown-menu-item-selected,.ant-dropdown-menu-item-selected>a{color:" + s.accent + " !important;}";
         css += ".ant-select-item-option-selected:not(.ant-select-item-option-disabled),.ant-select-item-option-state{color:" + s.accent + " !important;}";
-        css += ".ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):hover{color:" + s.accent + " !important;border-color:" + s.accent + " !important;}";
+        // Focus and press keep the accent too; antd paints focused buttons its own blue.
+        css += ".ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):hover,.ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):focus,.ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):active{color:" + s.accent + " !important;border-color:" + s.accent + " !important;}";
     }
     std::string scrollbarColor = s.text.empty() ? "rgba(255,255,255,0.35)" : RgbaFromRgb(s.textRgb, 35);
     std::string scrollbarRadius = s.roundedCorners && s.cornerRadius > 0 ? "999px" : "0px";
     // scrollbar-width would make Chromium ignore the ::-webkit-scrollbar rules
     // below, so the custom rounded thumb and the hidden arrows need it unset.
     css += ".wh-cscroll-host::-webkit-scrollbar-button{display:none !important;}";
+    // Windhawk hides the native bars and draws its own overlay thumb, square and
+    // grey by default. Round it and use the same colour as the drop-down list bar.
+    css += ":root{--wh-cscroll-thumb:" + scrollbarColor + " !important;}";
+    css += ".wh-cscroll-thumb{border-radius:" + scrollbarRadius + " !important;}";
     css += ".wh-cscroll-host::-webkit-scrollbar{width:12px !important;height:12px !important;display:block !important;}";
     css += ".wh-cscroll-host::-webkit-scrollbar-track{background:transparent !important;}";
     css += ".wh-cscroll-host::-webkit-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border:3px solid transparent !important;background-clip:content-box !important;border-radius:" + scrollbarRadius + " !important;}";
@@ -521,16 +574,16 @@ static std::string BuildCss(const Settings& s) {
         // scroller leaves the card's bottom margin out of its scroll range.
         css += "[class*=\"ModDetailsContainer\"]{padding-bottom:12px !important;}";
         // Freeze the page card so its rounded frame never moves. The card keeps
-        // its header and tabs at the top and its body scrolls below them, inset
-        // from the card edges, so the scrollbar stays on the straight sides and
-        // never reaches the rounded corners. The 163px is the scroller top (131)
+        // its header and tabs at the top and its body scrolls below them, clear of
+        // the card's top and bottom, so the scrollbar runs along the straight right
+        // edge and never reaches the rounded corners. The 163px is the scroller top (131)
         // plus the card offset (20) plus the bottom clearance (12). Only when the
         // card is the last child, so pages with content below keep the page scroll.
         const std::string frozenCard = "[class*=\"ModDetailsContainer\"]>[class*=\"ModDetailsCard\"]:last-child";
         const std::string frozenBody = frozenCard + ">.ant-card-body";
         css += frozenCard + "{display:flex !important;flex-direction:column !important;max-height:calc(100vh - 163px) !important;overflow:hidden !important;}";
         css += frozenCard + ">.ant-card-head{flex:none !important;}";
-        css += frozenBody + "{flex:1 1 auto !important;min-height:0 !important;overflow-y:auto !important;overflow-x:hidden !important;margin-inline-end:8px !important;margin-bottom:16px !important;}";
+        css += frozenBody + "{flex:1 1 auto !important;min-height:0 !important;overflow-y:auto !important;overflow-x:hidden !important;margin-bottom:16px !important;}";
         css += frozenBody + "::-webkit-scrollbar{width:12px !important;height:12px !important;}";
         css += frozenBody + "::-webkit-scrollbar-track{background:transparent !important;}";
         css += frozenBody + "::-webkit-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border:3px solid transparent !important;background-clip:content-box !important;border-radius:" + scrollbarRadius + " !important;}";
@@ -554,6 +607,10 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-radio-group .ant-radio-button-wrapper:first-child{border-radius:" + r + " 0 0 " + r + " !important;}";
         css += ".ant-radio-group .ant-radio-button-wrapper:last-child{border-radius:0 " + r + " " + r + " 0 !important;}";
         css += "[class*=\"CardTitleModId\"]{border-radius:" + r + " !important;}";
+        // The process inclusion list and its info box below join as one
+        // block: square corners at the seam, borders overlapping by 1px.
+        css += "textarea[data-testid=\"engine-include\"]{border-bottom-left-radius:0 !important;border-bottom-right-radius:0 !important;}";
+        css += "textarea[data-testid=\"engine-include\"]+.ant-alert{border-top-left-radius:0 !important;border-top-right-radius:0 !important;margin-top:-1px !important;}";
         // Match the table's inset header corners so the card-colored surface
         // cannot show through as a dark notch beside the rounded outer border.
         css += ".ant-table-thead>tr:first-child>th:first-child{border-top-left-radius:" + r + " !important;background-clip:padding-box !important;}";
@@ -563,6 +620,16 @@ static std::string BuildCss(const Settings& s) {
         // row/hover backgrounds poke past the table's rounded corners, and
         // square item hovers poke past rounded drop-down menus.
         css += ".ant-table,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-collapse,.ant-modal-content,.ant-drawer-content,.ant-popover-inner{overflow:hidden !important;}";
+        // The list scrollbar in a drop-down runs the menu's full height along its
+        // edge, so its square ends stuck out past the curve. The clip keeps it
+        // inside the straight edge and rounds its ends without moving antd's thumb.
+        css += ".rc-virtual-list-scrollbar{clip-path:inset(" + r + " 0 " + r + " 0 round 4px) !important;}";
+        css += ".rc-virtual-list-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border-radius:999px !important;}";
+        // Windhawk's own scrollbar overlay claims any scrollable box, drop-down lists
+        // included, and draws a square bar over it that ignores the curve. Hiding the
+        // native bar here makes the scan skip the list, so the rounded bar above is the
+        // only one in a drop-down.
+        css += ".ant-select-dropdown .rc-virtual-list-holder{scrollbar-width:none !important;}";
     }
     if (s.nativeTitleBar && s.titleBarAcrylic) {
         int caption = GetSystemMetricsForDpi(SM_CYCAPTION, 96) +
@@ -618,13 +685,13 @@ static void ApplyWindowStack(HWND hWnd, const Settings& s) {
     // DWM draws the backdrop and border with the system's current corner radius.
     int intValue = 1;
     DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &intValue, sizeof(intValue));
-    intValue = s.blur == 2 ? 3 : 1;  // DWMSBT_TRANSIENTWINDOW or DWMSBT_NONE
+    intValue = 1;  // DWMSBT_NONE: the accent policy below draws the material
     DwmSetWindowAttribute(hWnd, DWMWA_SYSTEMBACKDROP_TYPE, &intValue, sizeof(intValue));
     MARGINS margins = {-1, -1, -1, -1};
     DwmExtendFrameIntoClientArea(hWnd, &margins);
     if (s.nativeTitleBar) {
         // With the acrylic title bar the caption color stays NONE: the strip
-        // then shows the same system acrylic backdrop as the client, which is
+        // then shows the same acrylic backdrop as the client, which is
         // the only way a DWM-drawn caption can match a blurred body. Without
         // it (legacy mode) the strip gets a solid color, because on this
         // build DWMWA_CAPTION_COLOR ignores alpha (0xAARRGGBB sets do not
@@ -641,30 +708,27 @@ static void ApplyWindowStack(HWND hWnd, const Settings& s) {
     COLORREF border = NativeBorderColor(hWnd);
     DwmSetWindowAttribute(hWnd, DWMWA_BORDER_COLOR, &border, sizeof(border));
 
-    // The accepted Acrylic mode uses DWM. Blur and None use the accent
-    // policy so disabling Acrylic does not silently keep its material.
-    if (!s.titleBarAcrylic || s.blur != 2) {
-        ACCENT_POLICY policy = {};
-        policy.AccentState = s.blur == 2 ? ACCENT_ENABLE_ACRYLICBLURBEHIND :
-                             s.blur == 1 ? ACCENT_ENABLE_BLURBEHIND :
-                                           ACCENT_ENABLE_TRANSPARENTGRADIENT;
+    // An empty blur region composes the client's alpha. The accent policy
+    // then draws the material under the whole window, caption strip
+    // included, so strip and body are one sheet. Acrylic carries the
+    // background tint in the accent color, because a CSS veil covers only the
+    // body. On this build DWMSBT_TRANSIENTWINDOW, and an accent without the
+    // blur region, render a flat fill (measured 2026-10-24).
+    HRGN region = CreateRectRgn(0, 0, -1, -1);
+    if (region) {
+        DWM_BLURBEHIND blur{DWM_BB_ENABLE | DWM_BB_BLURREGION, TRUE, region, FALSE};
+        DwmEnableBlurBehindWindow(hWnd, &blur);
+        DeleteObject(region);
+    }
+    ACCENT_POLICY policy = {};
+    if (s.blur) {
+        policy.AccentState = s.blur == 2 ? ACCENT_ENABLE_ACRYLICBLURBEHIND : ACCENT_ENABLE_BLURBEHIND;
         policy.AccentFlags = 2;
-        policy.GradientColor = s.blur == 2 ? 0x10000000 | Bgr(s.background) : 0;
-        WINCOMPATTRDATA data{WCA_ACCENT_POLICY, &policy, sizeof(policy)};
-        SetWindowCompositionAttribute(hWnd, &data);
+        if (s.blur == 2)
+            policy.GradientColor = ((std::uint32_t)(s.backgroundOpacity * 255 / 100) << 24) | Bgr(s.background);
     }
-    if (s.blur == 0) {
-        ACCENT_POLICY policy = {};
-        WINCOMPATTRDATA data{WCA_ACCENT_POLICY, &policy, sizeof(policy)};
-        SetWindowCompositionAttribute(hWnd, &data);
-        // An empty blur region enables alpha composition without blurring it.
-        HRGN region = CreateRectRgn(0, 0, -1, -1);
-        if (region) {
-            DWM_BLURBEHIND blur{DWM_BB_ENABLE | DWM_BB_BLURREGION, TRUE, region, FALSE};
-            DwmEnableBlurBehindWindow(hWnd, &blur);
-            DeleteObject(region);
-        }
-    }
+    WINCOMPATTRDATA data{WCA_ACCENT_POLICY, &policy, sizeof(policy)};
+    SetWindowCompositionAttribute(hWnd, &data);
 }
 
 static void ClearWindowStack(HWND hWnd) {
@@ -1138,7 +1202,7 @@ static HRESULT WINAPI DwmSetWindowAttribute_hook(HWND hwnd, DWORD attr, LPCVOID 
         // cycle re-applies it up to a second later; the flat/acrylic
         // alternation reads as flicker. Correct the put in the same call.
         if (!IsOurMainUiWindow(hwnd)) return hr;
-        int want = s.blur == 2 ? 3 : 1;  // DWMSBT_TRANSIENTWINDOW or DWMSBT_NONE
+        int want = 1;  // DWMSBT_NONE: the accent policy draws the material
         int pushed = 0;
         if (size == 4 && value) memcpy(&pushed, value, 4);
         if (pushed != want) hr = DwmSetWindowAttribute_orig(hwnd, attr, &want, 4);

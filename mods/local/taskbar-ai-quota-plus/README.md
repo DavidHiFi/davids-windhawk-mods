@@ -1,14 +1,13 @@
 # Taskbar AI Quota Bars Plus
 
 Usage bars for your AI subscriptions sit on the Windows 11 taskbar, next to the tray.
-Claude, ChatGPT, Grok, OpenCode Go and Antigravity, each showing the window the provider reports.
+Claude, OpenCode Go and Antigravity, each showing the window the provider reports.
 
 ![Taskbar AI Quota Bars Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/taskbar-ai-quota-plus.png)
 
 ## Features
 
-- **Truthful window labels.** Bars read the window the provider reports: 5h, 7d, 3h or 30d.
-  A free ChatGPT plan shows 30d, not a wrong 5h.
+- **Truthful window labels.** Bars read the window the provider reports: 5h, 7d, 3h or 30d, not a guessed 5h.
 - **Compact stacking.** In the Stacked layout, accounts that show a single window share one column.
 - **Remaining or used.** Show what is left or what has been used.
 - **Alerts.** Optional notifications when usage crosses your red threshold.
@@ -18,9 +17,8 @@ Claude, ChatGPT, Grok, OpenCode Go and Antigravity, each showing the window the 
 
 Open the mod's settings from the taskbar and add accounts under Accounts > Add.
 
-- **Anthropic and OpenAI:** sign in through the browser. Tokens are encrypted with Windows DPAPI.
+- **Anthropic:** sign in through the browser. Tokens are encrypted with Windows DPAPI.
 - **OpenCode Go:** choose provider "OpenCode (Go)" and paste your key from the OpenCode console. The key is encrypted with DPAPI.
-- **Grok:** choose "Grok (xAI)". The mod reads the Grok Build CLI's cached sign-in from `%USERPROFILE%\.grok\auth.json`, so no key is needed.
 - **Antigravity:** keep an Antigravity CLI or IDE session running while quota is fetched.
 
 ## Notes
