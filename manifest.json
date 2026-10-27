@@ -1,10 +1,10 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-10-27T20:05:45+08:00",
+  "generatedAt": "2026-10-27T20:08:35+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 148,
+    "mods": 159,
     "enabled": 87,
     "local": 23
   },
@@ -1783,6 +1783,138 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/drag-to-delete-plus/drag-to-delete-plus.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "alt-drag",
+      "name": "AltDrag",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.1",
+      "license": null,
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/alt-drag",
+      "source": "mods/catalog/alt-drag.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "better-volume-mixer",
+      "name": "Better Volume Mixer",
+      "author": "0Allu",
+      "github": "https://github.com/0Allu",
+      "version": "1.4.5",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/better-volume-mixer",
+      "source": "mods/catalog/better-volume-mixer.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "explorer-folder-bookmarks-bar",
+      "name": "Explorer Folder Bookmarks Bar",
+      "author": "Maxim Fomin",
+      "github": "https://github.com/MaxITService",
+      "version": "0.7.8",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-folder-bookmarks-bar",
+      "source": "mods/catalog/explorer-folder-bookmarks-bar.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "explorer-font-changer",
+      "name": "Explorer Font Changer",
+      "author": "Gabriela Cristei",
+      "github": "https://github.com/cristeigabriela",
+      "version": "0.2",
+      "license": null,
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-font-changer",
+      "source": "mods/catalog/explorer-font-changer.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "explorer-visual-tweaks-dark",
+      "name": "Explorer Visual Tweaks Dark",
+      "author": "VitalS",
+      "github": "https://github.com/VitalSkib",
+      "version": "1.0.1",
+      "license": null,
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-visual-tweaks-dark",
+      "source": "mods/catalog/explorer-visual-tweaks-dark.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "move-window-to-monitor",
+      "name": "Move Window to Monitor",
+      "author": "TomberWolf",
+      "github": "https://github.com/TomberWolf",
+      "version": "1.1.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/move-window-to-monitor",
+      "source": "mods/catalog/move-window-to-monitor.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "net-speed-taskbar",
+      "name": "Taskbar Network Speed Indicator",
+      "author": "Narayan",
+      "github": "https://github.com/NarayanChetri",
+      "version": "1.6",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/net-speed-taskbar",
+      "source": "mods/catalog/net-speed-taskbar.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "snap-commander",
+      "name": "Snap Commander",
+      "author": "Asteski",
+      "github": "https://github.com/Asteski",
+      "version": "1.0.0",
+      "license": null,
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/snap-commander",
+      "source": "mods/catalog/snap-commander.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "taskbar-ai-quota",
+      "name": "Taskbar AI Quota Bars",
+      "author": "Cleroth",
+      "github": "https://github.com/Cleroth",
+      "version": "1.6.5",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-ai-quota",
+      "source": "mods/catalog/taskbar-ai-quota.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "taskbar-system-info",
+      "name": "Taskbar System Info",
+      "author": "Yevhenii Starychenko",
+      "github": "https://github.com/starychenko",
+      "version": "1.5.0",
+      "license": "GPL-3.0",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-system-info",
+      "source": "mods/catalog/taskbar-system-info.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "tourne-table-desktop-audio-visualizer",
+      "name": "Tourne'Table [Audio Visualizer]",
+      "author": "USER-TOURNE",
+      "github": "https://github.com/USER-TOURNE",
+      "version": "1.3.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/tourne-table-desktop-audio-visualizer",
+      "source": "mods/catalog/tourne-table-desktop-audio-visualizer.wh.cpp",
       "enabled": false
     }
   ]

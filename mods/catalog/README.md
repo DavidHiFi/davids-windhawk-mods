@@ -5,11 +5,13 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | Mod | Author | Version | Runs | License |
 | --- | --- | --- | --- | --- |
 | [acrylic-color-glows](./acrylic-color-glows.wh.cpp) | [HaVeN80](https://github.com/haven80) | 0.5.0 | no | GPL-3.0 |
+| [alt-drag](./alt-drag.wh.cpp) | [m417z](https://github.com/m417z) | 1.1 | no |  |
 | [alt-tab-flip-3d](./alt-tab-flip-3d.wh.cpp) | [caliberda](https://github.com/cesarkali) | 1.5.3 | no | MIT |
 | [always-allow-ctrl-shift-enter](./always-allow-ctrl-shift-enter.wh.cpp) | [aubymori](https://github.com/aubymori) | 1.0.0 | no | BSD-3-Clause |
 | [always-on-top](./always-on-top.wh.cpp) | [AhmedAwad7](https://github.com/AhmedAwad7) | 1.2 | yes | MIT |
 | [auto-time-sync-on-startup](./auto-time-sync-on-startup.wh.cpp) | [communism420](https://github.com/communism420) | 1.1 | yes |  |
 | [better-dialogs](./better-dialogs.wh.cpp) | [FireBlade](https://github.com/FireBlade211) | 1.1 | no |  |
+| [better-volume-mixer](./better-volume-mixer.wh.cpp) | [0Allu](https://github.com/0Allu) | 1.4.5 | no | MIT |
 | [borderless-fullscreen](./borderless-fullscreen.wh.cpp) | [TomberWolf](https://github.com/TomberWolf) | 1.2.0 | yes |  |
 | [caption-buttons-customizer](./caption-buttons-customizer.wh.cpp) | [grn15RenS](https://github.com/grn15RenS) | 1.1 | yes | MIT |
 | [cef-titlebar-enabler-universal](./cef-titlebar-enabler-universal.wh.cpp) | [Ingan121](https://github.com/Ingan121) | 1.9 | yes | MIT |
@@ -38,6 +40,8 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [explorer-details-better-file-sizes](./explorer-details-better-file-sizes.wh.cpp) | [m417z](https://github.com/m417z) | 1.6 | yes |  |
 | [explorer-double-click-up](./explorer-double-click-up.wh.cpp) | [wrldspawn](https://github.com/wrldspawn) | 1.0.1 | yes |  |
 | [explorer-double-f2-rename-extension](./explorer-double-f2-rename-extension.wh.cpp) | [Marnes](https://github.com/leaumar) | 4 | yes |  |
+| [explorer-folder-bookmarks-bar](./explorer-folder-bookmarks-bar.wh.cpp) | [Maxim Fomin](https://github.com/MaxITService) | 0.7.8 | no | MIT |
+| [explorer-font-changer](./explorer-font-changer.wh.cpp) | [Gabriela Cristei](https://github.com/cristeigabriela) | 0.2 | no |  |
 | [explorer-glyphs-colorizer](./explorer-glyphs-colorizer.wh.cpp) | [crazyboyybs](https://github.com/crazyboyybs) | 1.0 | yes |  |
 | [explorer-hide-focus-border](./explorer-hide-focus-border.wh.cpp) | [Hùng](https://github.com/NoMorePlz) | 1.0.0 | no | MIT |
 | [explorer-navigation-pane-tweaks](./explorer-navigation-pane-tweaks.wh.cpp) | [Languster](https://github.com/Languster) | 1.1 | yes | MIT |
@@ -46,6 +50,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [explorer-title-bar-label](./explorer-title-bar-label.wh.cpp) | [digART](https://github.com/digart11) | 1.0.0 | no | GPL-3.0 |
 | [explorer-treeitem-tweaker](./explorer-treeitem-tweaker.wh.cpp) | [Languster](https://github.com/Languster) | 1.1.1 | no |  |
 | [explorer-treeline-killer](./explorer-treeline-killer.wh.cpp) | [Languster](https://github.com/Languster) | 1.0.1 | yes |  |
+| [explorer-visual-tweaks-dark](./explorer-visual-tweaks-dark.wh.cpp) | [VitalS](https://github.com/VitalSkib) | 1.0.1 | no |  |
 | [extension-change-no-warning](./extension-change-no-warning.wh.cpp) | [m417z](https://github.com/m417z) | 1.0.1 | yes |  |
 | [f1-blocker](./f1-blocker.wh.cpp) | [d0gkiller87](https://github.com/d0gkiller87) | 0.0.3 | yes | MIT |
 | [file-explorer-content-animation](./file-explorer-content-animation.wh.cpp) | [crazyboyybs](https://github.com/crazyboyybs) | 1.0.1 | yes | MIT |
@@ -65,7 +70,9 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [micrographics-taskbar-clock](./micrographics-taskbar-clock.wh.cpp) | [SAM2WOW](https://github.com/SAM2WOW) | 1.0 | yes | MIT |
 | [minimize-to-tray](./minimize-to-tray.wh.cpp) | [0Allu](https://github.com/0Allu) | 1.0 | no | MIT |
 | [move-quietly](./move-quietly.wh.cpp) | [Johhannas Reyn](https://github.com/JohhannasReyn) | 1.0 | no | MIT |
+| [move-window-to-monitor](./move-window-to-monitor.wh.cpp) | [TomberWolf](https://github.com/TomberWolf) | 1.1.0 | no | MIT |
 | [mspaint-dark](./mspaint-dark.wh.cpp) | [ahmed605](https://github.com/ahmed605) | 1.0.1 | no |  |
+| [net-speed-taskbar](./net-speed-taskbar.wh.cpp) | [Narayan](https://github.com/NarayanChetri) | 1.6 | no | MIT |
 | [never-auto-expand-explorer-tree-items](./never-auto-expand-explorer-tree-items.wh.cpp) | [Kitsune](https://github.com/AromaKitsune) | 1.1.1 | yes |  |
 | [notepad-dark-mode](./notepad-dark-mode.wh.cpp) | [m417z](https://github.com/m417z) | 1.0 | no |  |
 | [notifications-placement](./notifications-placement.wh.cpp) | [m417z](https://github.com/m417z) | 1.2.4 | yes |  |
@@ -86,6 +93,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [simple-window-switcher](./simple-window-switcher.wh.cpp) | [Lone](https://github.com/Louis047) | 2.1 | no |  |
 | [slick-window-arrangement](./slick-window-arrangement.wh.cpp) | [m417z](https://github.com/m417z) | 1.0.2 | no |  |
 | [smart-process-priority-ram-optimizer](./smart-process-priority-ram-optimizer.wh.cpp) | [gilnett](https://github.com/gilnett) | 1.0.2 | yes | GPL-3.0 |
+| [snap-commander](./snap-commander.wh.cpp) | [Asteski](https://github.com/Asteski) | 1.0.0 | no |  |
 | [spoof-machine-guid](./spoof-machine-guid.wh.cpp) | [loliri](https://github.com/loliri) | 1.0 | yes | MIT |
 | [start-everything](./start-everything.wh.cpp) | [bardelyne](https://github.com/bardelyne) | 1.0 | no | GPL-3.0 |
 | [start-menu-open-real-file-location](./start-menu-open-real-file-location.wh.cpp) | [Alchemy](https://github.com/alchemyyy) | 1.1.0 | yes | MIT |
@@ -93,6 +101,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [start-search-bing-redirector](./start-search-bing-redirector.wh.cpp) | [takattowo](https://github.com/takattowo) | 1.0.0 | yes |  |
 | [startup-app-delay-fix](./startup-app-delay-fix.wh.cpp) | [meteoni](https://github.com/Meteoni) | 1.4.1 | yes |  |
 | [task-manager-tail](./task-manager-tail.wh.cpp) | [sb4ssman](https://github.com/sb4ssman) | 1.1 | no |  |
+| [taskbar-ai-quota](./taskbar-ai-quota.wh.cpp) | [Cleroth](https://github.com/Cleroth) | 1.6.5 | no | MIT |
 | [taskbar-app-memory](./taskbar-app-memory.wh.cpp) | [buedgik](https://github.com/buedgik) | 0.2.2 | no | MIT |
 | [taskbar-blob-shape](./taskbar-blob-shape.wh.cpp) | [Deen-0x](https://github.com/Deen-0x) | 1.2.0 | yes |  |
 | [taskbar-button-click](./taskbar-button-click.wh.cpp) | [m417z](https://github.com/m417z) | 1.0.9 | yes |  |
@@ -106,6 +115,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [taskbar-notification-icon-spacing](./taskbar-notification-icon-spacing.wh.cpp) | [m417z](https://github.com/m417z) | 1.4 | yes |  |
 | [taskbar-on-top](./taskbar-on-top.wh.cpp) | [m417z](https://github.com/m417z) | 1.3 | yes |  |
 | [taskbar-restart-explorer](./taskbar-restart-explorer.wh.cpp) | [Mgrmjp](https://github.com/Mgrmjp) | 1.0 | yes |  |
+| [taskbar-system-info](./taskbar-system-info.wh.cpp) | [Yevhenii Starychenko](https://github.com/starychenko) | 1.5.0 | no | GPL-3.0 |
 | [taskbar-thumbnail-size](./taskbar-thumbnail-size.wh.cpp) | [m417z](https://github.com/m417z) | 1.2.1 | yes |  |
 | [taskbar-thumbnail-stats](./taskbar-thumbnail-stats.wh.cpp) | [HaVeN80](https://github.com/haven80) | 1.5 | yes | GPL-3.0 |
 | [taskbar-tray-system-icon-tweaks](./taskbar-tray-system-icon-tweaks.wh.cpp) | [m417z](https://github.com/m417z) | 1.3.1 | yes |  |
@@ -113,6 +123,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [timer-resolution-control](./timer-resolution-control.wh.cpp) | [m417z](https://github.com/m417z) | 1.0 | no |  |
 | [titlebar-for-everyone](./titlebar-for-everyone.wh.cpp) | [Ingan121](https://github.com/Ingan121) | 0.5 | yes | MIT |
 | [toggle-hidden-files](./toggle-hidden-files.wh.cpp) | [Asteski](https://github.com/Asteski) | 1.1.0 | yes |  |
+| [tourne-table-desktop-audio-visualizer](./tourne-table-desktop-audio-visualizer.wh.cpp) | [USER-TOURNE](https://github.com/USER-TOURNE) | 1.3.0 | no | MIT |
 | [translucent-windows](./translucent-windows.wh.cpp) | [Undisputed00x](https://github.com/Undisputed00x) | 1.8.2 | yes |  |
 | [uxtheme-hook](./uxtheme-hook.wh.cpp) | [rounk-ctrl](https://github.com/rounk-ctrl) | 1.4 | no |  |
 | [vlc-discord-rpc](./vlc-discord-rpc.wh.cpp) | [ciizerr](https://github.com/ciizerr) | 1.2.0 | no | MIT |

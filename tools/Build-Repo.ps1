@@ -245,6 +245,17 @@ foreach ($f in Get-ChildItem -LiteralPath (Join-Path $repo 'mods\local') -Filter
     }
     $have += $h.id
 }
+# Catalog sources in the repo that are not listed yet: listed as not enabled, the same way as the kept entries.
+foreach ($f in Get-ChildItem -LiteralPath (Join-Path $repo 'mods\catalog') -Filter '*.wh.cpp' -File) {
+    $id = $f.Name -replace '\.wh\.cpp$', ''
+    if ($id -in $have) { continue }
+    $h = Get-ModHeader -Path $f.FullName
+    $manifestMods += [pscustomobject]@{
+        id = $id; name = $h.name; author = $h.author; github = $h.github; version = $h.version; license = $h.license
+        origin = 'catalog'; upstream = "https://windhawk.net/mods/$id"; source = "mods/catalog/$($f.Name)"; enabled = $false
+    }
+    $have += $id
+}
 $manifest = [ordered]@{
     name            = 'davids-windhawk-mods'
     description     = 'A full Windhawk setup: every mod source and every setting.'
