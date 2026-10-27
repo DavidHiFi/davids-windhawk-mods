@@ -25,6 +25,11 @@ if ($Rollback) {
         'Grid#FileExplorerAddressBarGrid' = @('Grid.ColumnSpan=2', 'Margin=-6,0,10,0')
         # Command bar on the left instead of centered
         'CommandBar#FileExplorerCommandBar' = @('HorizontalAlignment=Left')
+        # OS26 draws a second blurred pill inside greyed-out buttons; it renders as a ragged double ring
+        'Microsoft.UI.Xaml.Controls.AppBarButton > Grid@CommonStates' = @('Background@Disabled=Transparent', 'BorderThickness@Disabled=0')
+        'Microsoft.UI.Xaml.Controls.AppBarButton#backButton > Grid@CommonStates' = @('Background@Disabled=Transparent', 'BorderThickness@Disabled=0')
+        'Microsoft.UI.Xaml.Controls.AppBarButton#forwardButton > Grid@CommonStates' = @('Background@Disabled=Transparent', 'BorderThickness@Disabled=0')
+        'Microsoft.UI.Xaml.Controls.AppBarButton#upButton > Grid@CommonStates' = @('Background@Disabled=Transparent', 'BorderThickness@Disabled=0')
         # Details sits right after View: both bars get auto-width columns, the spare space goes last
         'FileExplorerExtensions.CommandBarControl_Wave1 > Grid, Grid#CommandBarControlRootGrid' = @('ColumnDefinitions:=<ColumnDefinitionCollection><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></ColumnDefinitionCollection>')
     }

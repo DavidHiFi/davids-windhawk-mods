@@ -28,3 +28,11 @@ writing the same window part in Explorer, which is on the freeze-risk list.
 The Translucent Explorer11 theme was not merged as styles: its transparent bars are already in OS26, and its
 only other change is its own acrylic backdrop, which would bring back the double-backdrop conflict.
 Rollback: scripts/2026-10-27-explorer-styler-effect.ps1 -Effect acrylicblur (elevated).
+
+## Disabled buttons and sluggishness (2026-10-27, afternoon)
+
+- Disabled command bar buttons (forward, share) showed ragged double rings. The script now sets `Background@Disabled=Transparent` and `BorderThickness@Disabled=0` on the AppBarButton grids. The owner confirmed the look.
+- Explorer was sluggish because `local@taskbar-audio-visualizer` started its `-tool-mod` audio process from every explorer.exe, including each folder window's `/factory` process. Its mutex guard did not work: init runs on a thread that exits, so ownership was abandoned and every copy got in. Measured at 3:45 PM: 22 visualizer processes plus 7 empty factory processes.
+- Fix, build 1.3.3_6 (`work\2026-10-27-visualizer-single`): single instance by mutex name instead of ownership, and only the plain `explorer.exe` (no arguments) launches the tool. Applied at 3:53 PM with `scripts\2026-10-27-taskbar-visualizer-apply6.ps1`; stale processes killed.
+- Verified 3:56 PM: opening a Downloads window left the visualizer at 1 process (before=1 after=1), the strip still draws (`reports\2026-10-27-visualizer-single\2026-10-27-after-fix-screen.png`).
+- Rollback: `scripts\2026-10-27-taskbar-visualizer-apply6.ps1 -Rollback` (elevated) goes back to 1.3.3_5.
