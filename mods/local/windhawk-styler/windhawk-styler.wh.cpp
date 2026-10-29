@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.83
+// @version         2.0.89
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -333,7 +333,7 @@ static std::string JsonEscape(const std::string& in) {
 }
 
 // Every box that takes the card color. Rounded corners and the card surface
-// apply to this list; the blur applies to kFloatingSurfaces only.
+// apply to this list; the blur applies to kFloatingSurfaces and kPopoverSurfaces only.
 static const char kSurfaces[] =
     ".ant-card,[class*=\"SaveSettingsCard\"],.ant-table,.ant-collapse,.ant-modal-content,.ant-modal-container,"
     ".ant-drawer-content,.ant-drawer-section,.ant-popover-inner,.ant-popover-container,.ant-select-dropdown,.ant-picker-dropdown,"
@@ -349,8 +349,14 @@ static const char kSurfaces[] =
 // blurred card becomes the backdrop root of everything inside it, so the
 // sticky save bar in the mod page card could only blur the card itself.
 static const char kFloatingSurfaces[] =
-    "[class*=\"SaveSettingsCard\"],.ant-modal-content,.ant-modal-container,.ant-drawer-content,.ant-drawer-section,.ant-popover-inner,.ant-popover-container,"
+    "[class*=\"SaveSettingsCard\"],.ant-modal-content,.ant-modal-container,.ant-drawer-content,.ant-drawer-section,"
     ".ant-tooltip-inner,.ant-tooltip-container,.ant-notification-notice,.ant-message-notice-content";
+
+// Popovers (the Remove confirm, for one) match the mod cards as they appear
+// on screen: the card tint over the window acrylic reads about 6% lighter
+// than the card color. CSS blur cannot read the acrylic, so they stay solid
+// to keep the page text under them hidden.
+static const char kPopoverSurfaces[] = ".ant-popover-inner,.ant-popover-container";
 
 // Menus that open over the page are solid, not tinted. In Acrylic mode there
 // is no opaque backdrop for CSS blur to read, so the old tint only imitated one.
@@ -522,6 +528,14 @@ static std::string BuildCss(const Settings& s) {
             Settings floating = s;
             floating.cardOpacity = s.cardOpacity < 92 ? 92 : s.cardOpacity;
             css += std::string(kFloatingSurfaces) + "{background-color:" + CssCardColor(floating) + " !important;backdrop-filter:blur(16px) !important;}";
+            css += std::string(kPopoverSurfaces) + "{background-color:color-mix(in srgb," + s.card + " 94%,#ffffff) !important;backdrop-filter:none !important;}";
+            // antd draws the popover shadow as a filter on the outer
+            // .ant-popover. A filter makes that element the backdrop root, so
+            // the blur inside it saw nothing and the page showed through sharp.
+            css += ".ant-popover{filter:none !important;} .ant-popover-container{box-shadow:0 6px 16px rgba(0,0,0,0.32) !important;}";
+            // The popover can paint its box on two nested elements. Two tinted
+            // layers stack to a near-solid box, so whichever one wraps the other goes clear.
+            css += ".ant-popover-container:has(.ant-popover-inner),.ant-popover-inner:has(.ant-popover-container){background-color:transparent !important;backdrop-filter:none !important;}";
             Settings menu = s;
             menu.cardOpacity = 100;
             css += std::string(kMenuSurfaces) + "{background-color:" + CssCardColor(menu) + " !important;backdrop-filter:none !important;}";
@@ -589,7 +603,7 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-picker-cell-selected .ant-picker-cell-inner{background-color:" + s.accent + " !important;color:#11111b !important;}";
         css += ".ant-alert-info{background-color:" + RgbaFromRgb(s.accentRgb, 8) + " !important;border-color:" + RgbaFromRgb(s.accentRgb, 28) + " !important;}";
         css += ".ant-alert-info .ant-alert-icon,.ant-alert-info .ant-alert-message{color:" + s.accent + " !important;}";
-        css += ".ant-progress-bg{background-color:" + s.accent + " !important;} .ant-progress-circle-path{stroke:" + s.accent + " !important;}";
+        css += ".ant-progress-bg,.ant-progress-track:not(.ant-progress-track-success){background-color:" + s.accent + " !important;} .ant-progress-circle-path{stroke:" + s.accent + " !important;}";
         css += ".ant-rate-star-full .ant-rate-star-second,.ant-rate-star-half .ant-rate-star-first{color:" + s.accent + " !important;}";
         css += ".ant-table-column-sorter-down.active,.ant-table-column-sorter-up.active,.ant-table-filter-trigger.active{color:" + s.accent + " !important;}";
         css += ".ant-table-tbody>tr.ant-table-row-selected>td{background-color:" + RgbaFromRgb(s.accentRgb, 15) + " !important;}";
@@ -692,7 +706,9 @@ static std::string BuildCss(const Settings& s) {
         // The list scrollbar in a drop-down runs the menu's full height along its
         // edge, so its square ends stuck out past the curve. The clip keeps it
         // inside the straight edge and rounds its ends without moving antd's thumb.
-        css += ".rc-virtual-list-scrollbar{clip-path:inset(" + r + " 0 " + r + " 0 round 4px) !important;}";
+        // The bar also sits 4px in from the menu's border, so it reads as inside
+        // the menu rather than on its edge.
+        css += ".rc-virtual-list-scrollbar{right:4px !important;clip-path:inset(" + r + " 0 " + r + " 0 round 4px) !important;}";
         css += ".rc-virtual-list-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border-radius:999px !important;}";
         // Windhawk's own scrollbar overlay claims any scrollable box, drop-down lists
         // included, and draws a square bar over it that ignores the curve. Hiding the
