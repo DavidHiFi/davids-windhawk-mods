@@ -40,6 +40,7 @@ $localPaths = [ordered]@{
     'local@better-volume-mixer-plus'  = 'mods\local\better-volume-mixer-plus\better-volume-mixer-plus.wh.cpp'
     'local@shell-font-changer-plus' = 'mods\local\shell-font-changer-plus\shell-font-changer-plus.wh.cpp'
     'local@windhawk-styler' = 'mods\local\windhawk-styler\windhawk-styler.wh.cpp'
+    'local@gpu-accelerated-explorer-view-plus' = 'mods\local\gpu-accelerated-explorer-view-plus\gpu-accelerated-explorer-view-plus.wh.cpp'
 }
 # Values the source headers do not carry.
 $licenseOverride = @{
@@ -54,6 +55,7 @@ $upstreamOverride = @{
     'local@taskbar-ai-quota-opencode' = 'https://windhawk.net/mods/taskbar-ai-quota'
     'local@better-volume-mixer-plus'  = 'https://windhawk.net/mods/better-volume-mixer'
     'local@shell-font-changer-plus' = 'https://windhawk.net/mods/explorer-font-changer'
+    'local@gpu-accelerated-explorer-view-plus' = 'https://windhawk.net/mods/gpu-accelerated-explorer-view'
 }
 # Local mods that are not installed on this machine: id -> source and repo dest.
 $offlineLocal = [ordered]@{

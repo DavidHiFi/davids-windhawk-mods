@@ -4,9 +4,9 @@
   "generatedAt": "2026-10-27T20:08:35+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 159,
-    "enabled": 87,
-    "local": 23
+    "mods": 160,
+    "enabled": 88,
+    "local": 24
   },
   "mods": [
     {
@@ -1304,6 +1304,18 @@
       "upstream": "https://windhawk.net/mods/explorer-treeitem-tweaker",
       "source": "mods/catalog/explorer-treeitem-tweaker.wh.cpp",
       "enabled": false
+    },
+    {
+      "id": "local@gpu-accelerated-explorer-view-plus",
+      "name": "GPU Accelerated Explorer View Plus",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "GPL-2.0",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/gpu-accelerated-explorer-view",
+      "source": "mods/local/gpu-accelerated-explorer-view-plus/gpu-accelerated-explorer-view-plus.wh.cpp",
+      "enabled": true
     },
     {
       "id": "file-explorer-remove-suffixes",

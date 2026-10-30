@@ -77,6 +77,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 | <img src="media/previews/fullscreen-start-plus.png" width="220" alt="Fullscreen grid of app icons"> | [Fullscreen Start Plus](mods/local/fullscreen-start-plus) | A fullscreen, Launchpad-style grid of all your apps in place of Start, with instant search and blur. |
 | <img src="media/previews/translucent-flyouts.png" width="220" alt="Acrylic context menu"> | [Translucent Flyouts](mods/local/translucent-flyouts) | Acrylic, Mica and blur backgrounds for menus, dropdowns and tooltips in every app. |
 | <img src="media/previews/shell-font-changer-plus.png" width="220" alt="Explorer text in Segoe UI and in FiraCode Nerd Font"> | [Shell Font Changer Plus](mods/local/shell-font-changer-plus) | Any installed font in Explorer, Start, Search and Settings, with icons and emoji left intact. |
+| <img src="media/previews/gpu-accelerated-explorer-view-plus.png" width="220" alt="NanaZip submenu: an empty pill on the stock mod, fully populated with Plus"> | [GPU Accelerated Explorer View Plus](mods/local/gpu-accelerated-explorer-view-plus) | GPU-rendered file lists and icon grids, with right-click submenus that open fully populated. |
 | <img src="media/previews/drag-to-delete-plus.png" width="220" alt="Floating trash target"> | [Drag to Delete Plus](mods/local/drag-to-delete-plus) | A floating trash target appears while you drag files, with themes, shapes and colors. |
 | | [Theme Tool Plus](mods/local/theme-tool-plus) | Apply and switch custom Windows themes from a Ctrl+Alt+Y picker, unsigned themes included. |
 
@@ -148,7 +149,7 @@ Add `-SkipSources` to refresh settings and metadata only.
 My own work here is MIT, see [LICENSE](LICENSE), except where a mod inherits its original's license:
 
 - **GPL-3.0:** Window Manager, AltSnap, Taskbar System Info Plus, Everything & Power Tools in the Start Menu Plus.
-- **GPL-2.0:** Simple Window Switcher Plus, Theme Tool Plus.
+- **GPL-2.0:** Simple Window Switcher Plus, Theme Tool Plus, GPU Accelerated Explorer View Plus.
 - **LGPL-3.0:** Translucent Flyouts.
 
 Catalog mods in `mods/catalog/` keep their authors' licenses.
