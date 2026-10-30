@@ -100,9 +100,6 @@ Each release on the Releases page carries one mod, so the latest release is the 
 > [!IMPORTANT]
 > **Disable the original before a "Plus" mod.** Each Plus mod replaces the catalog mod it is based on, so turn the original off before you enable it.
 
-> [!WARNING]
-> **Center Titlebar Fork is unfinished.** [Its folder](mods/local/center-titlebar-fork) holds a prototype that is not installed in this setup.
-
 <details>
 <summary><b>What each folder holds</b></summary>
 
@@ -191,7 +188,7 @@ Most of my mods build on someone else's mod. Each folder's readme credits its so
 | **TomberWolf** ([Move Window to Monitor](https://windhawk.net/mods/move-window-to-monitor)) | Moving windows between monitors in Window Manager. |
 | **Lone** ([Simple Window Switcher](https://windhawk.net/mods/simple-window-switcher)) | Simple Window Switcher 2.1, the base of Simple Window Switcher Plus. |
 | **bropines** ([GitHub](https://github.com/bropines)) | Improvements to Simple Window Switcher. |
-| **valinet** ([Simple Window Switcher](https://github.com/valinet/sws)) | The original Simple Window Switcher, and [WinCenterTitle](https://github.com/valinet/WinCenterTitle) behind Center Titlebar Fork. |
+| **valinet** ([Simple Window Switcher](https://github.com/valinet/sws)) | The original Simple Window Switcher. |
 | **caliberda** ([Alt+Tab Flip 3D](https://windhawk.net/mods/alt-tab-flip-3d)) | The Vista rendering in Simple Window Switcher Plus (MIT). |
 | **0Allu** ([Better Volume Mixer](https://windhawk.net/mods/better-volume-mixer)) | The base of Better Volume Mixer Plus. |
 | **Gabriela Cristei** ([Explorer Font Changer](https://windhawk.net/mods/explorer-font-changer)) | The base of Shell Font Changer Plus. |
@@ -203,7 +200,7 @@ Most of my mods build on someone else's mod. Each folder's readme credits its so
 | **Narayan** ([Taskbar Network Speed Indicator](https://windhawk.net/mods/net-speed-taskbar)) | The idea behind the network readouts in Taskbar System Info Plus. |
 | **iMAboud** ([Drag to Delete](https://windhawk.net/mods/drag-to-delete)) | The base of Drag to Delete Plus. |
 | **Rafael Mendes** ([Fullscreen Start](https://windhawk.net/mods/fullscreen-start)) | The base of Fullscreen Start Plus, and its preview image. |
-| **rounk-ctrl** ([UXTheme hook](https://windhawk.net/mods/uxtheme-hook)) | The base of Theme Tool Plus, and the center-titlebar mod behind Center Titlebar Fork. |
+| **rounk-ctrl** ([UXTheme hook](https://windhawk.net/mods/uxtheme-hook)) | The base of Theme Tool Plus. |
 | **namazso** ([SecureUxTheme](https://github.com/namazso/SecureUxTheme), [ThemeToolSharp](https://github.com/namazso/ThemeToolSharp)) | The theme engine research in Theme Tool Plus. |
 | **ALTaleX531** ([TranslucentFlyouts](https://github.com/ALTaleX531/TranslucentFlyouts)) | Translucent Flyouts is a port of it and uses its settings layout. |
 | **Ingan121** ([Titlebar For Everyone](https://windhawk.net/mods/titlebar-for-everyone)) | The window frame code in Windhawk Styler (MIT). |

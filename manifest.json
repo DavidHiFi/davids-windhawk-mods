@@ -4,9 +4,9 @@
   "generatedAt": "2026-10-27T20:08:35+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 160,
+    "mods": 159,
     "enabled": 88,
-    "local": 24
+    "local": 23
   },
   "mods": [
     {
@@ -1064,18 +1064,6 @@
       "upstream": "https://windhawk.net/mods/windows-animations",
       "source": "mods/catalog/windows-animations.wh.cpp",
       "enabled": true
-    },
-    {
-      "id": "center-titlebar-fork",
-      "name": "Center Titlebar - Fork",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "3.4",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "https://windhawk.net/mods/center-titlebar",
-      "source": "mods/local/center-titlebar-fork/center-titlebar-fork.wh.cpp",
-      "enabled": false
     },
     {
       "id": "acrylic-color-glows",

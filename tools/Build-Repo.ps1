@@ -58,12 +58,7 @@ $upstreamOverride = @{
     'local@gpu-accelerated-explorer-view-plus' = 'https://windhawk.net/mods/gpu-accelerated-explorer-view'
 }
 # Local mods that are not installed on this machine: id -> source and repo dest.
-$offlineLocal = [ordered]@{
-    'center-titlebar-fork' = @{
-        src  = 'H:\Windhawk Configuration\Windhawk\center-titlebar-fork\center-titlebar-fork.wh.cpp'
-        dest = 'mods\local\center-titlebar-fork\center-titlebar-fork.wh.cpp'
-    }
-}
+$offlineLocal = [ordered]@{}
 
 function Test-LocalId {
     param([string]$Id)
