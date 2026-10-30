@@ -19,7 +19,7 @@ Full refresh.
 param([switch]$SkipSources)
 
 $ErrorActionPreference = 'Stop'
-$retiredLocalIds = @('local@start-everything')
+$retiredLocalIds = @('local@start-everything', 'center-titlebar-fork', 'local@center-titlebar-fork')
 # The installed copy lacks this repo copy's build fix (WS_EX_NOREDIRECTIONBITMAP guard), so keep the repo copy.
 $keepRepoSource = @('local@remove-uwp-title-bars-plus')
 $repo = Split-Path $PSScriptRoot -Parent
@@ -57,8 +57,6 @@ $upstreamOverride = @{
     'local@shell-font-changer-plus' = 'https://windhawk.net/mods/explorer-font-changer'
     'local@gpu-accelerated-explorer-view-plus' = 'https://windhawk.net/mods/gpu-accelerated-explorer-view'
 }
-# Local mods that are not installed on this machine: id -> source and repo dest.
-$offlineLocal = [ordered]@{}
 
 function Test-LocalId {
     param([string]$Id)
@@ -95,13 +93,6 @@ if (-not $SkipSources) {
         $dest = if (Test-LocalId $id) { Join-Path $repo (Get-LocalPath $id) } else { Join-Path $repo "mods\catalog\$($f.Name)" }
         New-Item -ItemType Directory -Path (Split-Path $dest -Parent) -Force | Out-Null
         Copy-Item -LiteralPath $f.FullName -Destination $dest -Force
-    }
-    foreach ($id in $offlineLocal.Keys) {
-        $o = $offlineLocal[$id]
-        if (-not (Test-Path -LiteralPath $o.src)) { Write-Warning "offline local source missing: $($o.src)"; continue }
-        $dest = Join-Path $repo $o.dest
-        New-Item -ItemType Directory -Path (Split-Path $dest -Parent) -Force | Out-Null
-        Copy-Item -LiteralPath $o.src -Destination $dest -Force
     }
 }
 
@@ -204,23 +195,6 @@ $manifestMods = foreach ($m in $mods) {
     }
 }
 $manifestMods = @($manifestMods)
-foreach ($id in $offlineLocal.Keys) {
-    $o = $offlineLocal[$id]
-    if (-not (Test-Path -LiteralPath $o.src)) { continue }
-    $h = Get-ModHeader -Path $o.src
-    $manifestMods += [pscustomobject]@{
-        id       = $id
-        name     = $h.name
-        author   = $h.author
-        github   = $h.github
-        version  = $h.version
-        license  = $h.license
-        origin   = 'local'
-        upstream = 'https://windhawk.net/mods/center-titlebar'
-        source   = $o.dest -replace '\\', '/'
-        enabled  = $false
-    }
-}
 # Entries published before that are not installed here stay listed, marked not enabled.
 $have = @($manifestMods.id)
 $prevManifest = Join-Path $repo 'manifest.json'
