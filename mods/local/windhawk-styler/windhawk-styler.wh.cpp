@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.90
+// @version         2.0.91
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -371,6 +371,10 @@ static std::string BuildCss(const Settings& s) {
     std::string veil = CssVeil(s);
     const std::string focus = RgbaFromRgb(s.accentRgb, 20);
     std::string css;
+    // The input starts at x 0 inside its box, so the caret was half clipped and
+    // sat on the first placeholder letter. Give it room and push the placeholder back.
+    css += ".ant-input-affix-wrapper>input.ant-input{padding-left:3px !important;}";
+    css += ".ant-input-affix-wrapper>input.ant-input::placeholder{text-indent:3px;}";
     // Windhawk alpha 8 runs antd 6, which declares its tokens on every
     // component (the css-var class) and Windhawk's own on body, so values on
     // :root alone never reach the controls or the modified-setting bar.
