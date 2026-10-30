@@ -2,7 +2,7 @@
 // @id              window-manager
 // @name            Window Manager Plus
 // @description     Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts
-// @version         1.2.2
+// @version         1.2.3
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -35,6 +35,8 @@ with the mouse or the keyboard. Works on administrator windows too.
   the cursor.
 - **Quick actions:** maximize, minimize, close or open the window menu without
   reaching for the title bar.
+- **Drag File Explorer windows by the title bar.** Pressing the title strip
+  moves the whole window instead of grabbing a tab.
 - **Auto-snap rules** place chosen apps in a set position.
 - **Works on elevated windows** such as Task Manager and Task Scheduler.
 
@@ -291,6 +293,7 @@ struct {
     TriggerSettings moveTrigger;
     TriggerSettings sizeTrigger;
     std::atomic<bool> dragWindowsWithoutTitleBar;
+    std::atomic<bool> explorerTitleStripDrag;
     std::atomic<bool> sizeWindowsWithoutSizingBorder;
     std::atomic<WindowAction> middleAction;
     std::atomic<WindowAction> rightClickAction;
@@ -545,6 +548,34 @@ bool ShouldHoldKeylessHook() {
     GetWindowThreadProcessId(GetForegroundWindow(), &processId);
     return processId == GetCurrentProcessId();
 }
+
+// Whether this process is File Explorer. Cached: the image of a running
+// process never changes.
+bool IsExplorerProcess() {
+    static bool isExplorer = [] {
+        WCHAR path[MAX_PATH];
+        DWORD len = GetModuleFileName(nullptr, path, ARRAYSIZE(path));
+        if (!len || len >= ARRAYSIZE(path)) {
+            return false;
+        }
+        PCWSTR name = wcsrchr(path, L'\\');
+        name = name ? name + 1 : path;
+        return _wcsicmp(name, L"explorer.exe") == 0;
+    }();
+    return isExplorer;
+}
+
+// A press on the title strip only ever reaches a low level hook which is
+// already installed, so in Explorer the hook is held for as long as the
+// feature is on. One hook per Explorer process, resident in the input path.
+bool ShouldHoldExplorerStripHook() {
+    return g_settings.explorerTitleStripDrag && IsExplorerProcess();
+}
+
+// The message hook of each pumping thread installs the persistent hook on its
+// next message, which also puts it back if a settings change or a stray
+// removal took it down.
+std::atomic<bool> g_explorerStripHookWanted;
 
 // The button of a client or non-client button message, or 0 for any other
 // message. An X button is told by the high word of wParam, or of mouseData for
@@ -1010,9 +1041,54 @@ UINT SizeCommandAtPoint(HWND hRootWnd, POINT pt) {
     return SC_SIZE | kEdges[row][col];
 }
 
+// A press inside the File Explorer title strip band, where the styler's
+// full-width tab pill swallows every press as a tab grab. The strip is the
+// top band of the Explorer XAML island child; the caption button scaffolding
+// at the right end stays clickable. The logical point is measured against a
+// physical window rect, the way SizeCommandAtPoint already does; this build
+// targets a 100% scale display.
+bool IsExplorerTitleStripPress(HWND hRootWnd, POINT pt) {
+    WCHAR className[64];
+    if (!GetClassName(hRootWnd, className, ARRAYSIZE(className)) ||
+        _wcsicmp(className, L"CabinetWClass") != 0) {
+        return false;
+    }
+
+    HWND island = FindWindowExW(hRootWnd, nullptr,
+                                L"Microsoft.UI.Content.DesktopChildSiteBridge",
+                                nullptr);
+    if (!island) {
+        return false;
+    }
+
+    RECT rc;
+    if (!GetWindowRect(island, &rc)) {
+        return false;
+    }
+
+    int stripHeight = MulDiv(36, GetDpiForWindow(hRootWnd), 96);
+    if (pt.y < rc.top || pt.y >= rc.top + stripHeight) {
+        return false;
+    }
+
+    // The caption buttons live in their own child window; presses there keep
+    // doing their job.
+    HWND scaffolding = FindWindowExW(
+        hRootWnd, nullptr, L"TITLE_BAR_SCAFFOLDING_WINDOW_CLASS", nullptr);
+    if (scaffolding && GetWindowRect(scaffolding, &rc) && PtInRect(&rc, pt)) {
+        return false;
+    }
+
+    return true;
+}
+
 // The drag a press of the button starts, given the modifier keys held, or 0.
 // When the press fits both triggers, the one with more keys is the closer fit.
 UINT DragCommandForPress(int button, DWORD held, HWND hRootWnd, POINT pt) {
+    if (g_settings.explorerTitleStripDrag && button == VK_LBUTTON && !held &&
+        IsExplorerTitleStripPress(hRootWnd, pt) && CanMoveRootWindow(hRootWnd)) {
+        return SC_MOVE | HTCAPTION;
+    }
     bool move = button == g_settings.moveTrigger.button &&
                 IsTriggerHeld(g_settings.moveTrigger, held) &&
                 CanMoveRootWindow(hRootWnd);
@@ -1407,7 +1483,7 @@ void OnModifierKeyMessageRemoved(MSG* msg, DWORD modifier) {
             // A hold starts with this key. A keyless trigger keeps its own
             // hook, and with it whatever drag is under way.
             g_swallowedPress = false;
-            if (!IsAnyTriggerKeyless()) {
+            if (!IsAnyTriggerKeyless() && !ShouldHoldExplorerStripHook()) {
                 RemoveLowLevelMouseHook();
             }
         }
@@ -1428,6 +1504,13 @@ void OnModifierKeyMessageRemoved(MSG* msg, DWORD modifier) {
 // Runs for every message removed from the queue of the current thread, before
 // the program sees it.
 void OnMessageRemoved(MSG* msg) {
+    // The persistent hook of the title strip drag is installed on the first
+    // pumping thread, and comes back here if a settings change or a stray
+    // removal took it down.
+    if (!g_lowLevelMouseHook && g_explorerStripHookWanted) {
+        InstallLowLevelMouseHookIfNeeded();
+    }
+
     if (msg->message == g_replayPressMessage) {
         ReplayPress((int)msg->wParam, msg->lParam != 0);
         TakeMessage(msg);
@@ -1507,7 +1590,6 @@ void OnMessageRemoved(MSG* msg) {
     if (!button) {
         return;
     }
-
     if (g_delayedPress.timerId) {
         if (button == g_delayedPress.button && !down) {
             Wh_Log(L"Released before the drag delay elapsed");
@@ -2394,7 +2476,7 @@ void RemoveLowLevelMouseHookIfIdle() {
     if (!g_lowLevelMouseHook ||
         GetCurrentThreadId() != g_lowLevelMouseHookThreadId || g_llRootWnd ||
         IsAnyModifierTriggerHeld(HeldModifiers(GetAsyncKeyState)) ||
-        ShouldHoldKeylessHook()) {
+        ShouldHoldKeylessHook() || ShouldHoldExplorerStripHook()) {
         return;
     }
 
@@ -2557,8 +2639,9 @@ void SetThreadHooksIfNeeded() {
     guard.unlock();
 
     // A process which is the foreground one already sees no activation to put
-    // the hook of a keyless trigger up on.
-    if (ShouldHoldKeylessHook()) {
+    // the hook of a keyless trigger up on, and Explorer holds the hook of the
+    // title strip drag from its first pumping thread.
+    if (ShouldHoldKeylessHook() || g_explorerStripHookWanted) {
         InstallLowLevelMouseHookIfNeeded();
     }
 }
@@ -2760,6 +2843,9 @@ void LoadSettings() {
     LoadTriggerSettings(g_settings.sizeTrigger, L"sizeTrigger");
     g_settings.dragWindowsWithoutTitleBar =
         Wh_GetIntSetting(L"dragWindowsWithoutTitleBar");
+    g_settings.explorerTitleStripDrag =
+        Wh_GetIntSetting(L"explorerTitleStripDrag");
+    g_explorerStripHookWanted = ShouldHoldExplorerStripHook();
     g_settings.sizeWindowsWithoutSizingBorder =
         Wh_GetIntSetting(L"sizeWindowsWithoutSizingBorder");
     LoadActionSetting(g_settings.middleAction, L"middleAction");
@@ -4586,6 +4672,12 @@ void ToolModUninit() {
   $description: >-
     Also drag windows without a title bar, such as popup menus, tooltips
     and flyouts.
+- explorerTitleStripDrag: true
+  $name: Drag Explorer windows by the title bar
+  $description: >-
+    Moves the window when you press the title strip of a File Explorer
+    window. The strip is where the single tab would sit, so without this
+    setting a press there grabs the tab instead of moving the window.
 - sizeWindowsWithoutSizingBorder: true
   $name: Resize windows without a sizing border
   $description: >-

@@ -19,6 +19,8 @@ with the mouse or the keyboard. Works on administrator windows too.
   the cursor.
 - **Quick actions:** maximize, minimize, close or open the window menu without
   reaching for the title bar.
+- **Drag File Explorer windows by the title bar.** Pressing the title strip
+  moves the whole window instead of grabbing a tab.
 - **Right-click while dragging** toggles the maximized state, and the drag
   ends there so the window keeps its new size.
 - **Auto-snap rules** place chosen apps in a set position.
