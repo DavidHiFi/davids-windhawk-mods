@@ -17,6 +17,14 @@ GPU  4% 56°C ↓ 8.4 MB/s   VRAM  9%  2.1/24G
 
 - **CPU and GPU** load and temperature.
 - **RAM and VRAM** usage with used and total gigabytes, plus capacity bars.
+- **Stacked layout (new in 1.3.0).** Turn on **Stacked layout** for four
+  compact rows (CPU, GPU, RAM, VRAM), each with a segmented meter that fills
+  smoothly and steps from green to yellow, orange and red. Usage percents turn
+  yellow, orange and red as load climbs.
+- **Watts and clocks (stacked layout, HWiNFO Shared Memory).** CPU and GPU
+  show power draw and clock speed, like `92W 4.4GHz`. RAM shows CPU SoC power
+  (the memory controller, since DDR4 sticks have no power sensor) and VRAM
+  shows the GPU memory rail. Watts change color with load.
 - **Upload and download speed** from your real network adapters. Virtual
   adapters and VPN tunnels are skipped so nothing is counted twice.
 - **Optional graphs** of recent history for CPU/GPU and RAM/VRAM.
