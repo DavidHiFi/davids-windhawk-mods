@@ -672,6 +672,9 @@ struct PowerCell {
 [[clang::no_destroy]] PowerCell g_gpuPowerCell;
 // RAM and VRAM rows: watts, then capacity in the clock run (no clockUnit).
 [[clang::no_destroy]] PowerCell g_ramPowerCell;
+// Stacked layout: colored arrows in front of the DOWN and UP labels.
+[[clang::no_destroy]] Documents::Run g_downloadArrowRun{nullptr};
+[[clang::no_destroy]] Documents::Run g_uploadArrowRun{nullptr};
 [[clang::no_destroy]] PowerCell g_vramPowerCell;
 double g_widgetHeight = kWidgetHeight;
 [[clang::no_destroy]] Grid g_stackedGrid{nullptr};
@@ -4125,7 +4128,7 @@ void ApplyStackedGeometry(const ModSettings& settings) {
                          measure(L"999W 9.9GHz")),
         std::max(gap, 14.0),
         std::max(measure(L"CPU TEMP", true),
-                 settings.showNetwork ? measure(L"DOWN", true) : 0.0) + small,
+                 settings.showNetwork ? measure(L"\u2193 DOWN", true) : 0.0) + small,
         std::max(measure(L"115°C"), settings.showNetwork ? measure(L"999.9") : 0.0),
         settings.showNetwork ? small + unitWidth : 0,
     };
@@ -4140,6 +4143,12 @@ void ApplyStackedGeometry(const ModSettings& settings) {
     }
     if (g_stackDivider) {
         if (g_meterEmptyBrush) g_stackDivider.Fill(g_meterEmptyBrush);
+    }
+    for (auto [run, brush] : {std::pair{g_downloadArrowRun, g_downloadBrush},
+                              std::pair{g_uploadArrowRun, g_uploadBrush}}) {
+        if (!run) continue;
+        if (brush) run.Foreground(brush);
+        else run.ClearValue(Documents::TextElement::ForegroundProperty());
     }
     for (PowerCell* cell : {&g_cpuPowerCell, &g_gpuPowerCell, &g_ramPowerCell,
                             &g_vramPowerCell}) {
@@ -5013,6 +5022,8 @@ bool RemoveWidget() {
     g_stackedGrid = nullptr;
     g_cpuPowerCell = {};
     g_ramPowerCell = {};
+    g_downloadArrowRun = nullptr;
+    g_uploadArrowRun = nullptr;
     g_vramPowerCell = {};
     g_stackDivider = nullptr;
     g_gpuPowerCell = {};
@@ -5119,6 +5130,18 @@ void BuildStackedWidget(Grid widget) {
     g_gpuTempLabel = text(L"GpuTemperatureLabel", L"GPU TEMP", TextAlignment::Left, 1, 5);
     g_downloadLabel = text(L"DownloadLabel", L"DOWN", TextAlignment::Left, 2, 5);
     g_uploadLabel = text(L"UploadLabel", L"UP", TextAlignment::Left, 3, 5);
+    auto arrowLabel = [](TextBlock label, PCWSTR arrow, PCWSTR name) {
+        label.Text(L"");
+        Documents::Run arrowRun;
+        arrowRun.Text(arrow);
+        Documents::Run nameRun;
+        nameRun.Text(name);
+        label.Inlines().Append(arrowRun);
+        label.Inlines().Append(nameRun);
+        return arrowRun;
+    };
+    g_downloadArrowRun = arrowLabel(g_downloadLabel, L"\u2193 ", L"DOWN");
+    g_uploadArrowRun = arrowLabel(g_uploadLabel, L"\u2191 ", L"UP");
     g_cpuTempText = text(L"CpuTemperature", L"--°C", TextAlignment::Right, 0, 6);
     g_gpuTempText = text(L"GpuTemperature", L"--°C", TextAlignment::Right, 1, 6);
     g_downloadText = text(L"DownloadValue", L"--", TextAlignment::Right, 2, 6);
