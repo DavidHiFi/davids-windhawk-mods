@@ -1,115 +1,61 @@
 # Windhawk Configuration workspace
 
-NOTE (2026-10-22): finish deploy/restart/verify before reporting — never say "pending" when one step closes it.
-
-This workspace is the home for all Windhawk work on this machine: installed mods and
-their settings, taskbar and shell themes, local/forked mod development, and the
-Windhawk engine itself. General Windows configuration stays in
-`H:\System Configuration`; this workspace exists so the two do not blur together.
+Home for all Windhawk work on this machine: installed mods and settings, taskbar and shell themes, local or forked mod development, and the engine. General Windows configuration stays in `H:\System Configuration`. Machine-wide rules (freeze rules, coop, replies, proof) are global; do not copy them here.
 
 ## Scope
 
-- Windhawk engine, installed mods, mod settings, and local or forked mod development.
-- `windows-11-taskbar-styler` configs and other appearance/shell mods.
-- `Windhawk\` (mod sources, builds, historical backups) and
-  `davids-windhawk-mods\` (public fork repo: DavidHiFi/davids-windhawk-mods).
-- Records: notes in `notes\`, diagnostics and screenshots in `reports\`, reusable
-  scripts in `scripts\`, backups and receipts in `backups\`, reference docs in `docs\`.
-- Not here: WinLaunch Enhanced, the standalone launcher app, retired by the owner on
-  2026-10-24 (uninstalled, repo private and archived; do not resume it). Its records
-  stay in `H:\System Configuration` (`notes\2026-10-24-winlaunch-retired.md`). The
-  launcher now lives here as the mod Fullscreen Start Plus:
-  `notes\2026-10-24-fullscreen-start-plus.md`.
+- Windhawk engine, installed mods, mod settings, local or forked mod development.
+- `windows-11-taskbar-styler` configs and other appearance or shell mods.
+- `Windhawk\` (mod sources, builds, historical backups) and `davids-windhawk-mods\` (public fork repo DavidHiFi/davids-windhawk-mods).
+- Records: `notes\`, `reports\`, `scripts\`, `backups\`, `docs\`.
+- Not here: WinLaunch Enhanced (retired 2026-10-24, do not resume). Its launcher is now the mod Fullscreen Start Plus.
 
-## Multi-agent reliability rules (owner-mandated 2026-10-16)
-
-All autonomous agent threads follow
-`H:\System Configuration\notes\2026-10-16-agent-reliability-playbook.md`.
-Short form: verify the deliverable on disk before claiming or settling a task
-done; only the thread that verified a completion settles it; coordinate
-concurrent executors through `t3-handoff\` briefs; pace to at most 2 own model
-requests on Halo's Sparks (1 when 5+ of 8 slots are busy); resume failed runs
-with a "continue to completion" nudge instead of restarting; keep handoff
-briefs current — the watchdog relies on them (it runs only when `t3-handoff\watch-check.py` finds a stalled, rate-limited or oversized thread); 12-hour am/pm times in
-prose; no secrets in reports.
-
-## Engine facts (this machine)
+## Engine facts
 
 | Thing | Where |
 | --- | --- |
 | Install | `C:\Program Files\Windhawk\windhawk.exe` |
 | Data | `C:\ProgramData\Windhawk\` (`ModsSource\`, `Engine\Mods\{64,32}\`) |
 | Mod settings | `HKLM\SOFTWARE\Windhawk\Engine\Mods\<mod-id>\Settings` (structured registry values, not YAML) |
-| Settings change marker | `SettingsChangeTime` REG_DWORD (unix seconds) on the mod key |
-| Apply a settings change | write registry elevated and bump `SettingsChangeTime`; the mod hot-reloads on the marker |
-| Engine restart | `windhawk.exe -restart` is banned on this machine: it restarts Explorer too (2026-09-28, `CURRENT-STATUS.md`). Reload per mod instead. A full engine restart happens only when the user asks for that exact action, and only with no T3 Code window live |
-
-The mod UI's "Textual mode" is the canonical editor for taskbar-styler settings; the
-registry holds the parsed structured form. The two are equivalent - a textual-mode
-paste and a registry write end up in the same place.
+| Apply a settings change | write the registry elevated and bump `SettingsChangeTime` (REG_DWORD, unix seconds) on the mod key; the mod hot-reloads on the marker |
+| Engine restart | `windhawk.exe -restart` is banned: it restarts Explorer too. Reload per mod instead. A full engine restart happens only when the user asks for that exact action, and only with no T3 Code window live |
+| Service start | Starting the stopped service restarts Explorer once a few seconds later (Explorer TreeItem Tweaker Plus). Expected, not a crash |
 
 ## Safety
 
-- Back up first: `reg export` the mod key (and copy any files) into
-  `backups\<date>\...` before changing settings, and record the original values.
-- Elevated writes only. This machine elevates silently for admin tasks, so verify
-  every change by reading it back - never by assuming a prompt appeared.
-- The active audio and communications chain is protected: do not inject mods into
-  Discord, Ableton Live, VB-Audio Matrix, or Stream Deck processes, and do not stop
-  or reconfigure them, without an explicit request for that exact action. One
-  standing exception: translucent-flyouts deliberately styles Ableton Live's
-  menus (requested 2026-09-28, live-verified). Ableton stays out of every other
-  mod unless asked.
-- Prefer scoped mod targets (`Include=explorer.exe`) over all-process injection.
-- Do not use debloat scripts, registry cleaners, or blanket tweaks. One change at a
-  time, with a measurable or visible before/after.
+- Back up first: `reg export` the mod key and copy any files into `backups\<date>\...`, and record the original values.
+- Write elevated, then verify by reading the value back.
+- A mod the owner turned off stays off. Never re-enable it, even briefly, without the owner asking for that exact mod.
+- tray-utility-customizer is uninstalled. Never install, suggest or re-enable it.
+- caption-buttons-customizer is cleared. Do not blame or disable it for freezes.
+- translucent-windows is on the owner's full look: acrylicblur on the 30 pre-freeze apps, `IncludeExcludeCustomOnly=1`, global style none. Never give it `*`, add apps, or switch to the light acrylicsystem setup without the owner. Never fork it again.
+- Every blur app must stay in window-borders' Exclude list.
+- Borders come only from the `local@window-borders` 2.0 tool mod, run by Windhawk in its own `windhawk-mod.exe` host. `window-ring.exe` is retired. Never run both. A "Windhawk mod" is always a real mod, never a background exe.
+- translucent-flyouts was removed for good. Never reinstall or reference it.
+- theme-tool-plus does not re-apply the theme on load (`applyOnSettingsChange=0`). settings-styler-plus runs in SystemSettings.exe and ApplicationFrameHost.exe.
+- Start Windhawk with `scripts\2026-10-25-windhawk-watched-start.ps1` (freeze check, start, 20-minute kill switch). `scripts\Test-WindhawkFreezeGate.ps1` is a quick check, not a gate.
+- No watchdog tasks that keep a mod off or police a ban. Remove the mod once and write the rule here.
+- Prefer scoped targets (`Include=explorer.exe`) over all-process injection.
+- No debloat scripts, registry cleaners or blanket tweaks. One change at a time, with a visible before and after.
+- Verify visual changes by screenshot (tray, taskbar), not by assuming the write landed.
 
-## Traps worth remembering (full list in `docs\traps-and-tips.md`)
+## Traps (full list in `docs\traps-and-tips.md`)
 
 - `-DWH_EDITING` builds no-op Wh_* stubs; production mods build with `WH_MOD` only.
-- PowerShell 5.1 strips quotes from `-DWH_MOD_ID=L"..."`; pass the id via a
-  force-included header.
-- The engine keeps loaded DLLs mapped; install a new revision and point
-  `LibraryFileName` at it.
+- PowerShell 5.1 strips quotes from `-DWH_MOD_ID=L"..."`; pass the id via a force-included header.
+- The engine keeps loaded DLLs mapped; install a new revision and point `LibraryFileName` at it.
 - Mods do not initialize in console-subsystem processes (e.g. `powershell.exe`).
-- PUA glyphs (U+E000-U+F8FF) in a BOM-less `.ps1` are misread as ANSI by PS 5.1;
-  build them with `[char]0xE971` instead.
-- `Start-Process -Verb RunAs` quoting traps (an array ArgumentList mangles paths
-  with spaces) are in `H:\System Configuration\agent-tools\AgentRules\machine-gotchas.md`, Elevating.
-- Verify visual changes by screenshot (tray, taskbar), not by assuming the write
-  landed.
+- PUA glyphs in a BOM-less `.ps1` are misread by PS 5.1; build them with `[char]0xE971`.
+- `Start-Process -Verb RunAs` quoting traps: `H:\System Configuration\agent-tools\AgentRules\machine-gotchas.md`.
 
 ## Conventions
 
-- Preview (alpha) engine updates: load the `windhawk-alpha-update` skill and run
-  `scripts\windhawk-alpha-update.ps1` (`-Check`, `-Prepare`, `-Launch`, `-Rollback`). Do not
-  update by hand. The engine restart waits for T3 Code to close, so ask the user to close it.
-- Every mod we write or fork follows `docs\mod-style-guide.md`: no personal
-  names in ids or names, plain Explore-catalog style names, a one-line
-  description, a feature-bullet readme and a preview image or GIF (user,
-  2026-10-04).
-- Mod release checklist (user, 2026-10-24), for every current and future mod we
-  write or fork; check it before any install or publish:
-  1. `@author` starts with `DavidHiFi`, then every original author we built on.
-  2. `@donateUrl https://ko-fi.com/DavidHiFi` is set, so the Donate button shows.
-  3. Name, description, settings and readme pass the `humanizer` skill: plain
-     human words, no tech jargon.
-  4. The readme shows a real, clean preview (PNG or GIF) of the mod working.
-  Details in `docs\mod-style-guide.md`.
-- ISO dates in filenames (`2026-09-28-...`), matching the System Configuration
-  conventions.
-- Every applied change gets: a script with `-Audit` / `-Install` / `-Rollback` when
-  practical, a registry or file backup, a receipt JSON, and a note.
-- Parallel threads: follow the agent-coop rule; singleton resources are declared in
-  `.agent-coop.json` (currently `windhawk-engine`, `backups`, `packages`).
-- Windhawk records, including historical notes, scripts, reports, backups, and
-  development checkouts, belong here. The 2026-10-04 sort moved the remaining
-  Windhawk records from System Configuration; mixed system notes have copies
-  in `docs\system-context\`.
-  The `Windhawk\` and `davids-windhawk-mods\` folders moved here on 2026-09-28;
-  directory junctions in `H:\System Configuration` keep every old absolute path
-  resolving.
+- Preview (alpha) engine updates: load the `windhawk-alpha-update` skill and run `scripts\windhawk-alpha-update.ps1` (`-Check`, `-Prepare`, `-Launch`, `-Rollback`). Never update by hand. The engine restart waits for T3 Code to close, so ask the user to close it.
+- Every mod we write or fork follows `docs\mod-style-guide.md`. Before any install or publish: `@author` starts with `DavidHiFi`; `@donateUrl https://ko-fi.com/DavidHiFi` is set; text passes `humanizer`; the readme shows a real preview.
+- Every applied change gets a script with `-Audit` / `-Install` / `-Rollback` when practical, a backup, a receipt JSON and a note. ISO dates in filenames.
+- Singleton resources for coop are in `.agent-coop.json` (`windhawk-engine`, `backups`, `packages`).
+- Old absolute paths resolve through junctions in `H:\System Configuration`.
 
-## Shared rules
+## Reference
 
-Time format, public GitHub repos, visual-output proof and attachment failures are machine-wide rules. They live once in `H:\System Configuration\agent-tools\AgentRules\global.md` (rendered into every runtime's rules file); do not copy them back here (2026-10-24 audit: four copies had drifted apart).
+Moved detail (reliability playbook, retired launcher, mod state history and evidence, traps, release checklist, record placement): `notes\2026-10-31-agents-reference.md`.
