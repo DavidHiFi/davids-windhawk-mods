@@ -79,6 +79,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 | <img src="media/previews/shell-font-changer-plus.png" width="220" alt="Explorer text in Segoe UI and in FiraCode Nerd Font"> | [Shell Font Changer Plus](mods/local/shell-font-changer-plus) | Any installed font in Explorer, Start, Search and Settings, with icons and emoji left intact. |
 | <img src="media/previews/gpu-accelerated-explorer-view-plus.png" width="220" alt="NanaZip submenu: an empty pill on the stock mod, fully populated with Plus"> | [GPU Accelerated Explorer View Plus](mods/local/gpu-accelerated-explorer-view-plus) | GPU-rendered file lists and icon grids, with right-click submenus that open fully populated. |
 | <img src="media/previews/drag-to-delete-plus.png" width="220" alt="Floating trash target"> | [Drag to Delete Plus](mods/local/drag-to-delete-plus) | A floating trash target appears while you drag files, with themes, shapes and colors. |
+| <img src="media/previews/peek.png" width="220" alt="Peek preview window playing an mp3 with a seek bar"> | [Peek](mods/local/peek) | Select a file in Explorer and press Space to preview it, with media playback for audio and video. |
 | | [Theme Tool Plus](mods/local/theme-tool-plus) | Apply and switch custom Windows themes from a Ctrl+Alt+Y picker, unsigned themes included. |
 
 ### Windhawk and app fixes
