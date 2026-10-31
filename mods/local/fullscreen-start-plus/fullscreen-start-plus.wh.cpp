@@ -2,7 +2,7 @@
 // @id              fullscreen-start-plus
 // @name            Fullscreen Start Plus
 // @description     A fullscreen grid of all your apps in place of Start, with instant search and adjustable blur
-// @version         1.6.1
+// @version         1.6.3
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1536,20 +1536,24 @@ void BoxBlurPass(const UINT32* src,
         auto at = [&](int i) {
             return s[(size_t)std::clamp(i, 0, length - 1) * step];
         };
-        int sum[3] = {};
+        int sum[4] = {};
         for (int i = -radius; i <= radius; i++) {
             UINT32 p = at(i);
-            sum[0] += p & 0xFF;
-            sum[1] += (p >> 8) & 0xFF;
-            sum[2] += (p >> 16) & 0xFF;
+            for (int c = 0; c < 4; c++) {
+                sum[c] += (p >> (8 * c)) & 0xFF;
+            }
         }
         for (int i = 0; i < length; i++) {
-            d[(size_t)i * step] = 0xFF000000 | ((sum[2] / window) << 16) |
-                                  ((sum[1] / window) << 8) | (sum[0] / window);
+            UINT32 v = 0;
+            for (int c = 0; c < 4; c++) {
+                v |= (UINT32)(sum[c] / window) << (8 * c);
+            }
+            d[(size_t)i * step] = v;
             UINT32 in = at(i + radius + 1), out = at(i - radius);
-            sum[0] += (int)(in & 0xFF) - (int)(out & 0xFF);
-            sum[1] += (int)((in >> 8) & 0xFF) - (int)((out >> 8) & 0xFF);
-            sum[2] += (int)((in >> 16) & 0xFF) - (int)((out >> 16) & 0xFF);
+            for (int c = 0; c < 4; c++) {
+                sum[c] += (int)((in >> (8 * c)) & 0xFF) -
+                          (int)((out >> (8 * c)) & 0xFF);
+            }
         }
     }
 }
@@ -1647,6 +1651,121 @@ ID2D1Bitmap* GetBackdropBitmap() {
             &b.bitmap);
     }
     return b.bitmap.Get();
+}
+
+// The open folder's panel is frosted glass: the grid under it, blurred. The
+// blur is taken from the window surface right after the grid is drawn and
+// kept while nothing under the panel moves.
+struct PanelBlur {
+    ComPtr<ID2D1Bitmap> bitmap;
+    D2D1_RECT_F rect{};  // Window pixels it was taken from.
+    int x = 0, y = 0, factor = 1;
+    const void* folder = nullptr;
+    float scroll = 0;
+    UINT generation = 0;
+};
+[[clang::no_destroy]] PanelBlur g_panelBlur;
+
+void CapturePanelBlur(const D2D1_RECT_F& rect, const void* folder,
+                      float scroll, float scale) {
+    g_panelBlur = {};
+    g_panelBlur.rect = rect;
+    g_panelBlur.folder = folder;
+    g_panelBlur.scroll = scroll;
+    g_panelBlur.generation = g_targetGeneration;
+    DIBSECTION ds{};
+    if (!g_surface.bitmap ||
+        GetObject(g_surface.bitmap, sizeof(ds), &ds) != sizeof(ds) ||
+        !ds.dsBm.bmBits) {
+        return;
+    }
+    GdiFlush();
+    int W = ds.dsBm.bmWidth, H = ds.dsBm.bmHeight;
+    int x0 = std::clamp((int)std::floor(rect.left), 0, W);
+    int y0 = std::clamp((int)std::floor(rect.top), 0, H);
+    int x1 = std::clamp((int)std::ceil(rect.right), 0, W);
+    int y1 = std::clamp((int)std::ceil(rect.bottom), 0, H);
+    if (x1 <= x0 || y1 <= y0) {
+        return;
+    }
+    float sigma = 24 * scale;
+    int f = std::clamp((int)(sigma / 3), 1, 16);
+    int sw = (x1 - x0 + f - 1) / f, sh = (y1 - y0 + f - 1) / f;
+    std::vector<UINT32> small((size_t)sw * sh);
+    const UINT32* bits = (const UINT32*)ds.dsBm.bmBits;
+    for (int y = 0; y < sh; y++) {
+        for (int x = 0; x < sw; x++) {
+            int sum[4] = {}, count = 0;
+            for (int yy = y0 + y * f; yy < std::min(y1, y0 + (y + 1) * f);
+                 yy++) {
+                // Top-down surface (negative biHeight).
+                const UINT32* row = bits + (size_t)yy * W;
+                for (int xx = x0 + x * f; xx < std::min(x1, x0 + (x + 1) * f);
+                     xx++) {
+                    for (int c = 0; c < 4; c++) {
+                        sum[c] += (row[xx] >> (8 * c)) & 0xFF;
+                    }
+                    count++;
+                }
+            }
+            UINT32 v = 0;
+            for (int c = 0; c < 4; c++) {
+                v |= (UINT32)(sum[c] / count) << (8 * c);
+            }
+            small[(size_t)y * sw + x] = v;
+        }
+    }
+    float sd = sigma / f;
+    int radius = (int)std::lround((std::sqrt(4 * sd * sd + 1) - 1) / 2);
+    if (radius > 0) {
+        std::vector<UINT32> temp(small.size());
+        for (int pass = 0; pass < 3; pass++) {
+            BoxBlurPass(small.data(), temp.data(), sh, sw, sw, 1, radius);
+            BoxBlurPass(temp.data(), small.data(), sw, sh, 1, sw, radius);
+        }
+    }
+    g_target->CreateBitmap(
+        D2D1::SizeU(sw, sh), small.data(), sw * 4,
+        D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,
+                                                 D2D1_ALPHA_MODE_PREMULTIPLIED),
+                               96, 96),
+        &g_panelBlur.bitmap);
+    g_panelBlur.x = x0;
+    g_panelBlur.y = y0;
+    g_panelBlur.factor = f;
+}
+
+bool PanelBlurFresh(const D2D1_RECT_F& rect, const void* folder,
+                    float scroll) {
+    const PanelBlur& b = g_panelBlur;
+    return b.folder == folder && b.generation == g_targetGeneration &&
+           b.scroll == scroll && std::abs(b.rect.left - rect.left) < 0.5f &&
+           std::abs(b.rect.top - rect.top) < 0.5f &&
+           std::abs(b.rect.right - rect.right) < 0.5f &&
+           std::abs(b.rect.bottom - rect.bottom) < 0.5f;
+}
+
+// Paints the kept blur into rect (window pixels, identity transform).
+void DrawPanelBlur(const D2D1_RECT_F& rect, float radius) {
+    const PanelBlur& b = g_panelBlur;
+    if (!b.bitmap) {
+        return;
+    }
+    ComPtr<ID2D1BitmapBrush> brush;
+    g_target->CreateBitmapBrush(
+        b.bitmap.Get(),
+        D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_CLAMP,
+                                    D2D1_EXTEND_MODE_CLAMP,
+                                    D2D1_BITMAP_INTERPOLATION_MODE_LINEAR),
+        &brush);
+    if (!brush) {
+        return;
+    }
+    brush->SetTransform(D2D1::Matrix3x2F::Scale((float)b.factor,
+                                                (float)b.factor) *
+                        D2D1::Matrix3x2F::Translation((float)b.x, (float)b.y));
+    g_target->FillRoundedRectangle(D2D1::RoundedRect(rect, radius, radius),
+                                   brush.Get());
 }
 
 // Acrylic and Windows blur: a regular window with the DWM effect sits right
@@ -2081,27 +2200,49 @@ void DrawMenuButton() {
 // pair so characters outside the basic plane stay whole.
 
 void QueryChanged();
+void Render();
+
+// The field the editor works on: the search box, or a folder's name while
+// its folder is open.
+std::wstring& EditText() {
+    return g_openFolder ? g_openFolder->name : g_query;
+}
+
+size_t MaxEditChars() {
+    return g_openFolder ? 60 : 200;
+}
+
+// A rename only redraws; the search also refilters the apps.
+void EditChanged() {
+    if (g_openFolder) {
+        Render();
+    } else {
+        QueryChanged();
+    }
+}
 
 bool SearchSelection(size_t* from, size_t* to) {
-    *from = std::min(g_anchor, g_caret);
-    *to = std::max(g_anchor, g_caret);
+    size_t size = EditText().size();
+    *from = std::min(std::min(g_anchor, g_caret), size);
+    *to = std::min(std::max(g_anchor, g_caret), size);
     return *from != *to;
 }
 
 size_t CaretStep(size_t pos, int dir) {
+    const std::wstring& text = EditText();
     if (dir < 0) {
-        pos = std::min(pos, g_query.size());
-        if (pos >= 2 && IS_HIGH_SURROGATE(g_query[pos - 1]) &&
-            IS_LOW_SURROGATE(g_query[pos - 2])) {
+        pos = std::min(pos, text.size());
+        if (pos >= 2 && IS_HIGH_SURROGATE(text[pos - 1]) &&
+            IS_LOW_SURROGATE(text[pos - 2])) {
             return pos - 2;
         }
         return pos ? pos - 1 : 0;
     }
-    if (pos + 1 < g_query.size() && IS_HIGH_SURROGATE(g_query[pos]) &&
-        IS_LOW_SURROGATE(g_query[pos + 1])) {
+    if (pos + 1 < text.size() && IS_HIGH_SURROGATE(text[pos]) &&
+        IS_LOW_SURROGATE(text[pos + 1])) {
         return pos + 2;
     }
-    return std::min(pos + 1, g_query.size());
+    return std::min(pos + 1, text.size());
 }
 
 bool IsWordChar(WCHAR ch) {
@@ -2109,22 +2250,24 @@ bool IsWordChar(WCHAR ch) {
 }
 
 size_t WordStart(size_t pos) {
-    size_t i = std::min(pos, g_query.size());
-    while (i > 0 && !IsWordChar(g_query[i - 1])) {
+    const std::wstring& text = EditText();
+    size_t i = std::min(pos, text.size());
+    while (i > 0 && !IsWordChar(text[i - 1])) {
         i--;
     }
-    while (i > 0 && IsWordChar(g_query[i - 1])) {
+    while (i > 0 && IsWordChar(text[i - 1])) {
         i--;
     }
     return i;
 }
 
 size_t WordEnd(size_t pos) {
-    size_t n = g_query.size(), i = std::min(pos, n);
-    while (i < n && !IsWordChar(g_query[i])) {
+    const std::wstring& text = EditText();
+    size_t n = text.size(), i = std::min(pos, n);
+    while (i < n && !IsWordChar(text[i])) {
         i++;
     }
-    while (i < n && IsWordChar(g_query[i])) {
+    while (i < n && IsWordChar(text[i])) {
         i++;
     }
     return i;
@@ -2132,6 +2275,83 @@ size_t WordEnd(size_t pos) {
 
 void TouchCaret() {  // Restarts the blink, like after every keystroke.
     g_caretTick = GetTickCount64();
+}
+
+// Undo and redo for the field being edited. A snapshot is the whole field,
+// which is small. Consecutive keystrokes of one kind merge into one step;
+// pastes and cuts stay their own step. The folder's history resets each time
+// a folder opens, so one folder's steps never land on another's name.
+struct EditSnapshot {
+    std::wstring text;
+    size_t caret;
+    size_t anchor;
+};
+struct EditHistory {
+    std::vector<EditSnapshot> undo;
+    std::vector<EditSnapshot> redo;
+    int lastOp = 0;  // 0 paste or cut, 1 typing, 2 delete
+    size_t lastEnd = 0;
+    ULONGLONG lastTick = 0;
+};
+EditHistory g_hist[2];
+
+void EditPush(int op) {  // Snapshot the field before a mutation.
+    EditHistory& h = g_hist[g_openFolder != nullptr];
+    ULONGLONG now = GetTickCount64();
+    bool merge = (op == 1 || op == 2) && op == h.lastOp &&
+                 now - h.lastTick < 1000 && g_caret == h.lastEnd &&
+                 !h.undo.empty();
+    if (!merge) {
+        h.undo.push_back({EditText(), g_caret, g_anchor});
+        if (h.undo.size() > 100) {
+            h.undo.erase(h.undo.begin());
+        }
+        h.redo.clear();
+    }
+    h.lastOp = op;
+    h.lastTick = now;
+}
+
+void EditDone() {  // Remember where the mutation left the caret, for merging.
+    g_hist[g_openFolder != nullptr].lastEnd = g_caret;
+}
+
+void UndoEdit() {
+    EditHistory& h = g_hist[g_openFolder != nullptr];
+    if (h.undo.empty()) {
+        return;
+    }
+    h.redo.push_back({EditText(), g_caret, g_anchor});
+    if (h.redo.size() > 100) {
+        h.redo.erase(h.redo.begin());
+    }
+    EditSnapshot s = h.undo.back();
+    h.undo.pop_back();
+    EditText() = s.text;
+    g_caret = std::min(s.caret, EditText().size());
+    g_anchor = std::min(s.anchor, EditText().size());
+    h.lastOp = 0;
+    TouchCaret();
+    EditChanged();
+}
+
+void RedoEdit() {
+    EditHistory& h = g_hist[g_openFolder != nullptr];
+    if (h.redo.empty()) {
+        return;
+    }
+    h.undo.push_back({EditText(), g_caret, g_anchor});
+    if (h.undo.size() > 100) {
+        h.undo.erase(h.undo.begin());
+    }
+    EditSnapshot s = h.redo.back();
+    h.redo.pop_back();
+    EditText() = s.text;
+    g_caret = std::min(s.caret, EditText().size());
+    g_anchor = std::min(s.anchor, EditText().size());
+    h.lastOp = 0;
+    TouchCaret();
+    EditChanged();
 }
 
 bool CaretVisible() {
@@ -2143,11 +2363,12 @@ bool CaretVisible() {
 }
 
 void SetCaret(size_t pos, bool extend) {
-    g_caret = std::min(pos, g_query.size());
+    g_caret = std::min(pos, EditText().size());
     if (!extend) {
         g_anchor = g_caret;
     }
-    TouchCaret();
+    g_hist[g_openFolder != nullptr].lastOp = 0;  // A caret move starts a new
+    TouchCaret();                                // undo step, like anywhere.
 }
 
 bool DeleteSelection() {
@@ -2155,7 +2376,7 @@ bool DeleteSelection() {
     if (!SearchSelection(&from, &to)) {
         return false;
     }
-    g_query.erase(from, to - from);
+    EditText().erase(from, to - from);
     g_caret = g_anchor = from;
     TouchCaret();
     return true;
@@ -2163,14 +2384,16 @@ bool DeleteSelection() {
 
 void InsertAtCaret(std::wstring text) {
     DeleteSelection();
-    size_t room = 200 - std::min(g_query.size(), (size_t)200);
+    size_t max = MaxEditChars();
+    size_t room = max - std::min(EditText().size(), max);
     if (text.size() > room) {
         text.resize(room);
     }
     if (text.empty()) {
         return;
     }
-    g_query.insert(g_caret, text);
+    g_caret = std::min(g_caret, EditText().size());
+    EditText().insert(g_caret, text);
     g_caret = g_anchor = g_caret + text.size();
     TouchCaret();
 }
@@ -2184,7 +2407,8 @@ void CopySelection(bool cut) {
         if (HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE,
                                       (to - from + 1) * sizeof(WCHAR))) {
             if (WCHAR* p = (WCHAR*)GlobalLock(mem)) {
-                memcpy(p, g_query.c_str() + from, (to - from) * sizeof(WCHAR));
+                memcpy(p, EditText().c_str() + from,
+                       (to - from) * sizeof(WCHAR));
                 p[to - from] = 0;
                 GlobalUnlock(mem);
                 if (!SetClipboardData(CF_UNICODETEXT, mem)) {
@@ -2197,73 +2421,137 @@ void CopySelection(bool cut) {
     }
     CloseClipboard();
     if (cut) {
+        EditPush(0);
         DeleteSelection();
-        QueryChanged();
+        EditDone();
+        EditChanged();
     }
 }
 
-// The text layout the search box draws with, and how far the text is slid
-// left so the caret stays in view. A null layout when there is no format.
-ComPtr<IDWriteTextLayout> SearchLayout(float* shift) {
-    *shift = 0;
-    if (!g_searchFormat) {
-        return nullptr;
+// The search field's text box, or the open folder's name.
+D2D1_RECT_F EditBox(bool folder) {
+    if (folder) {
+        return GetFolderLayout().title;
     }
     const D2D1_RECT_F& r = g_layout.search;
     float s = g_layout.scale;
-    D2D1_RECT_F text = D2D1::RectF(r.left + 34 * s, r.top, r.right - 14 * s,
-                                   r.bottom);
+    return D2D1::RectF(r.left + 34 * s, r.top, r.right - 14 * s, r.bottom);
+}
+
+// A text field as drawn: its layout, the box it is clipped to, and where the
+// layout's left edge sits. Text too long for the box slides so the caret
+// stays in view; a folder name that fits stays centered. A null layout when
+// there is no format.
+struct EditView {
     ComPtr<IDWriteTextLayout> layout;
-    g_dwrite->CreateTextLayout(g_query.c_str(), (UINT32)g_query.size(),
-                               g_searchFormat.Get(), 10000,
-                               text.bottom - text.top, &layout);
-    if (!layout) {
-        return nullptr;
+    D2D1_RECT_F box;
+    float originX;
+};
+
+EditView GetEditView(bool folder) {
+    EditView v{};
+    v.box = EditBox(folder);
+    v.originX = v.box.left;
+    IDWriteTextFormat* format =
+        folder ? g_messageFormat.Get() : g_searchFormat.Get();
+    if (!format || (folder && !g_openFolder)) {
+        return v;
     }
-    layout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    const std::wstring& text = folder ? g_openFolder->name : g_query;
+    g_dwrite->CreateTextLayout(text.c_str(), (UINT32)text.size(), format,
+                               10000, v.box.bottom - v.box.top, &v.layout);
+    if (!v.layout) {
+        return v;
+    }
+    v.layout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     DWRITE_TEXT_METRICS metrics{};
-    layout->GetMetrics(&metrics);
-    float room = text.right - text.left - 3 * s;
-    float endShift =
-        std::max(0.0f, metrics.widthIncludingTrailingWhitespace - room);
-    float result = endShift;
+    v.layout->GetMetrics(&metrics);
+    float width = metrics.widthIncludingTrailingWhitespace;
+    float room = v.box.right - v.box.left - 3 * g_layout.scale;
+    if (folder && width <= room) {
+        v.originX =
+            std::round(v.box.left + (v.box.right - v.box.left - width) / 2);
+        return v;
+    }
+    float endShift = std::max(0.0f, width - room);
+    float shift = endShift;
     DWRITE_HIT_TEST_METRICS m{};
     float x = 0, y = 0;
-    if (SUCCEEDED(layout->HitTestTextPosition(
-            (UINT32)std::min(g_caret, g_query.size()), FALSE, &x, &y, &m))) {
-        float caretX = (float)x;
-        if (caretX - result < 0) {
-            result = std::min(std::max(caretX, 0.0f), endShift);
+    bool editing = folder == (g_openFolder != nullptr);
+    if (editing &&
+        SUCCEEDED(v.layout->HitTestTextPosition(
+            (UINT32)std::min(g_caret, text.size()), FALSE, &x, &y, &m))) {
+        if (x - shift < 0) {
+            shift = std::min(std::max(x, 0.0f), endShift);
         }
-        if (caretX - result > room) {
-            result = std::min(std::max(caretX - room, 0.0f), endShift);
+        if (x - shift > room) {
+            shift = std::min(std::max(x - room, 0.0f), endShift);
         }
     }
-    *shift = result;
-    return layout;
+    v.originX = v.box.left - shift;
+    return v;
 }
 
-// The caret index under a mouse x, in the search field's text area.
+// The caret index under a mouse x, in the field being edited.
 size_t CaretAtPoint(float x) {
-    float shift = 0;
-    auto layout = SearchLayout(&shift);
-    if (!layout) {
-        return g_query.size();
+    EditView v = GetEditView(g_openFolder != nullptr);
+    size_t size = EditText().size();
+    if (!v.layout) {
+        return size;
     }
-    const D2D1_RECT_F& r = g_layout.search;
-    float s = g_layout.scale;
-    D2D1_RECT_F text = D2D1::RectF(r.left + 34 * s, r.top, r.right - 14 * s,
-                                   r.bottom);
     BOOL trailing = FALSE, inside = FALSE;
     DWRITE_HIT_TEST_METRICS m{};
-    float px = std::min(std::max(x - (text.left - shift), 0.0f),
-                        text.right - text.left);
-    if (FAILED(layout->HitTestPoint(px, (text.bottom - text.top) / 2, &trailing,
-                                    &inside, &m))) {
-        return g_query.size();
+    float px = std::max(
+        std::min(std::max(x, v.box.left), v.box.right) - v.originX, 0.0f);
+    if (FAILED(v.layout->HitTestPoint(px, (v.box.bottom - v.box.top) / 2,
+                                      &trailing, &inside, &m))) {
+        return size;
     }
-    return std::min((size_t)(m.textPosition + (trailing ? m.length : 0)),
-                    g_query.size());
+    return std::min((size_t)(m.textPosition + (trailing ? m.length : 0)), size);
+}
+
+// The text, with the selection behind it and a caret that blinks like
+// everywhere else in Windows, when this is the field being edited.
+void DrawEditView(const EditView& v, bool editing, float caretHeight) {
+    if (!v.layout) {
+        return;
+    }
+    const D2D1_RECT_F& box = v.box;
+    g_target->PushAxisAlignedClip(box, D2D1_ANTIALIAS_MODE_ALIASED);
+    size_t selFrom, selTo;
+    if (editing && SearchSelection(&selFrom, &selTo)) {
+        DWRITE_HIT_TEST_METRICS rects[8];
+        UINT32 count = 0;
+        if (SUCCEEDED(v.layout->HitTestTextRange((UINT32)selFrom,
+                                                 (UINT32)(selTo - selFrom), 0,
+                                                 0, rects, 8, &count))) {
+            g_brush->SetColor(D2D1::ColorF(1, 1, 1, 0.28f));
+            for (UINT32 i = 0; i < count && i < 8; i++) {
+                g_target->FillRectangle(
+                    D2D1::RectF(v.originX + rects[i].left,
+                                box.top + rects[i].top,
+                                v.originX + rects[i].left + rects[i].width,
+                                box.top + rects[i].top + rects[i].height),
+                    g_brush.Get());
+            }
+        }
+    }
+    g_brush->SetColor(D2D1::ColorF(1, 1, 1, 0.95f));
+    g_target->DrawTextLayout(D2D1::Point2F(v.originX, box.top), v.layout.Get(),
+                             g_brush.Get());
+    if (editing && CaretVisible()) {
+        DWRITE_HIT_TEST_METRICS m{};
+        float x = 0, y = 0;
+        v.layout->HitTestTextPosition(
+            (UINT32)std::min(g_caret, EditText().size()), FALSE, &x, &y, &m);
+        float caretX = std::round(v.originX + (float)x) + 1;
+        float mid = (box.top + box.bottom) / 2;
+        Fill(D2D1::RectF(caretX, mid - caretHeight / 2,
+                         caretX + std::max(1.0f, g_layout.scale),
+                         mid + caretHeight / 2),
+             D2D1::ColorF(1, 1, 1, 0.9f));
+    }
+    g_target->PopAxisAlignedClip();
 }
 
 void DrawSearchBox() {
@@ -2299,49 +2587,7 @@ void DrawSearchBox() {
                            g_brush.Get());
     }
 
-    // The typed text, slid so the caret stays in view, with the selection
-    // behind it and a caret that blinks like everywhere else in Windows.
-    float shift = 0;
-    ComPtr<IDWriteTextLayout> layout = SearchLayout(&shift);
-    if (!layout) {
-        return;
-    }
-    float originX = text.left - shift;
-    g_target->PushAxisAlignedClip(text, D2D1_ANTIALIAS_MODE_ALIASED);
-    size_t selFrom, selTo;
-    if (SearchSelection(&selFrom, &selTo)) {
-        DWRITE_HIT_TEST_METRICS rects[8];
-        UINT32 count = 0;
-        if (SUCCEEDED(layout->HitTestTextRange((UINT32)selFrom,
-                                               (UINT32)(selTo - selFrom), 0, 0,
-                                               rects, 8, &count))) {
-            g_brush->SetColor(D2D1::ColorF(1, 1, 1, 0.28f));
-            for (UINT32 i = 0; i < count && i < 8; i++) {
-                g_target->FillRectangle(
-                    D2D1::RectF(originX + rects[i].left,
-                                text.top + rects[i].top,
-                                originX + rects[i].left + rects[i].width,
-                                text.top + rects[i].top + rects[i].height),
-                    g_brush.Get());
-            }
-        }
-    }
-    g_brush->SetColor(D2D1::ColorF(1, 1, 1, 0.95f));
-    g_target->DrawTextLayout(D2D1::Point2F(originX, text.top), layout.Get(),
-                             g_brush.Get());
-    if (CaretVisible()) {
-        DWRITE_HIT_TEST_METRICS m{};
-        float x = 0, y = 0;
-        layout->HitTestTextPosition(
-            (UINT32)std::min(g_caret, g_query.size()), FALSE, &x, &y, &m);
-        float caretX = std::round(originX + (float)x) + 1;
-        float caretH = 18 * s;
-        float mid = (text.top + text.bottom) / 2;
-        Fill(D2D1::RectF(caretX, mid - caretH / 2, caretX + std::max(1.0f, s),
-                         mid + caretH / 2),
-             D2D1::ColorF(1, 1, 1, 0.9f));
-    }
-    g_target->PopAxisAlignedClip();
+    DrawEditView(GetEditView(false), !g_openFolder, 18 * s);
 }
 
 void DrawMessage(PCWSTR text) {
@@ -2432,32 +2678,17 @@ void DrawFolder() {
     const Layout& L = g_layout;
     float s = L.scale;
     FolderLayout F = GetFolderLayout();
-    Fill(D2D1::RectF(0, 0, (float)L.width, (float)L.height),
-         D2D1::ColorF(0, 0, 0, 0.3f));
-    Fill(F.panel, D2D1::ColorF(0.13f, 0.13f, 0.15f, 0.88f), 24 * s);
+    Fill(F.panel, D2D1::ColorF(0.13f, 0.13f, 0.15f, 0.55f), 24 * s);
+    g_brush->SetColor(D2D1::ColorF(1, 1, 1, 0.08f));
+    g_target->DrawRoundedRectangle(
+        D2D1::RoundedRect(D2D1::RectF(F.panel.left + 0.5f, F.panel.top + 0.5f,
+                                      F.panel.right - 0.5f,
+                                      F.panel.bottom - 0.5f),
+                          24 * s, 24 * s),
+        g_brush.Get(), 1);
 
-    // The name, with a caret: typing renames it.
-    const std::wstring& name = g_openFolder->name;
-    ComPtr<IDWriteTextLayout> layout;
-    if (g_messageFormat) {
-        g_dwrite->CreateTextLayout(name.c_str(), (UINT32)name.size(),
-                                   g_messageFormat.Get(),
-                                   F.title.right - F.title.left,
-                                   F.title.bottom - F.title.top, &layout);
-    }
-    if (layout) {
-        g_brush->SetColor(D2D1::ColorF(1, 1, 1, 0.95f));
-        g_target->DrawTextLayout(D2D1::Point2F(F.title.left, F.title.top),
-                                 layout.Get(), g_brush.Get());
-        DWRITE_TEXT_METRICS m{};
-        layout->GetMetrics(&m);
-        float x = std::round(F.title.left + m.left +
-                             m.widthIncludingTrailingWhitespace) +
-                  2 * s;
-        float mid = (F.title.top + F.title.bottom) / 2;
-        Fill(D2D1::RectF(x, mid - 10 * s, x + std::max(1.0f, s), mid + 10 * s),
-             D2D1::ColorF(1, 1, 1, 0.6f));
-    }
+    // The name is a text field: typing renames it.
+    DrawEditView(GetEditView(true), true, 20 * s);
 
     const Tiles& apps = g_openFolder->apps;
     g_target->PushAxisAlignedClip(
@@ -2584,6 +2815,29 @@ void Render() {
     DrawSearchBox();
     DrawMenuButton();
     DrawGrid();
+    if (g_openFolder) {
+        // Dim the grid, then lay the folder's glass over it: a blur of the
+        // pixels just drawn, read back from the surface when they changed.
+        Fill(D2D1::RectF(0, 0, W, H), D2D1::ColorF(0, 0, 0, 0.3f));
+        D2D1_MATRIX_3X2_F m;
+        g_target->GetTransform(&m);
+        D2D1_RECT_F panel = GetFolderLayout().panel;
+        D2D1_RECT_F dev = D2D1::RectF(
+            panel.left * m._11 + m._31, panel.top * m._22 + m._32,
+            panel.right * m._11 + m._31, panel.bottom * m._22 + m._32);
+        const void* folder = g_openFolder.get();
+        g_target->SetTransform(D2D1::Matrix3x2F::Identity());
+        if (g_drag.active || !PanelBlurFresh(dev, folder, g_scroll)) {
+            if (g_target->EndDraw() == D2DERR_RECREATE_TARGET) {
+                ResetTarget();
+                return;
+            }
+            CapturePanelBlur(dev, folder, g_scroll, L.scale);
+            g_target->BeginDraw();
+        }
+        DrawPanelBlur(dev, 24 * L.scale * m._11);
+        g_target->SetTransform(m);
+    }
     DrawFolder();
     DrawDragged();
     g_target->SetTransform(D2D1::Matrix3x2F::Identity());
@@ -2623,6 +2877,7 @@ void HideNow() {
     g_closing = false;
     g_appear = 0;
     g_backdropImage = {};
+    g_panelBlur = {};
     FreeSurface(g_surface);
     g_trackingMouse = false;
 }
@@ -2717,6 +2972,7 @@ void Open() {
 
     g_query.clear();
     g_caret = g_anchor = 0;
+    g_hist[0] = {};  // A fresh search starts a fresh history.
     g_searchDrag = false;
     TouchCaret();
     g_hover = g_selected = g_pressed = -1;
@@ -3569,6 +3825,9 @@ void OpenFolder(std::shared_ptr<Folder> folder) {
     g_openFolder = std::move(folder);
     g_folderRow = 0;
     g_hover = g_selected = g_pressed = -1;
+    g_searchDrag = false;
+    g_hist[1] = {};  // Fresh history per folder.
+    SetCaret(EditText().size(), false);  // At the end of the name.
     Render();
 }
 
@@ -3578,6 +3837,8 @@ void CloseFolder() {
     }
     g_openFolder = nullptr;
     g_hover = g_selected = g_pressed = -1;
+    g_searchDrag = false;
+    SetCaret(g_query.size(), false);
     SaveTiles();  // Keeps a new name.
     Refresh();
 }
@@ -4251,61 +4512,53 @@ void PasteText() {
             std::wstring line = text;
             GlobalUnlock(data);
             line = line.substr(0, line.find_first_of(L"\r\n"));
+            EditPush(0);
             InsertAtCaret(line);
+            EditDone();
         }
     }
     CloseClipboard();
-    QueryChanged();
+    EditChanged();
 }
 
 void OnChar(WCHAR ch) {
     if (g_drag.active || g_drag.pending) {
         return;
     }
-    if (g_openFolder) {
-        // Typing in an open folder renames it.
-        std::wstring& name = g_openFolder->name;
-        if (ch == 8) {
-            if (!name.empty()) {
-                name.pop_back();
-                if (!name.empty() && IS_HIGH_SURROGATE(name.back())) {
-                    name.pop_back();
-                }
-            }
-        } else if (ch >= 32 && ch != 0x7F && name.size() < 60) {
-            name += ch;
-        }
-        Render();
-        return;
-    }
     switch (ch) {
         case 8: {  // Backspace: the selection, or a code point before the caret.
-            if (DeleteSelection()) {
-                QueryChanged();
-            } else if (g_caret > 0) {
-                size_t prev = CaretStep(g_caret, -1);
-                g_query.erase(prev, g_caret - prev);
-                g_caret = g_anchor = prev;
-                QueryChanged();
+            size_t from, to;
+            if (SearchSelection(&from, &to) || g_caret > 0) {
+                EditPush(2);
+                if (!DeleteSelection()) {
+                    size_t prev = CaretStep(g_caret, -1);
+                    EditText().erase(prev, g_caret - prev);
+                    g_caret = g_anchor = prev;
+                }
+                EditChanged();
+                EditDone();
             }
             TouchCaret();
             return;
         }
         case 0x7F: {  // Ctrl+Backspace: the word before the caret.
-            if (DeleteSelection()) {
-                QueryChanged();
-            } else if (g_caret > 0) {
-                size_t start = WordStart(g_caret);
-                g_query.erase(start, g_caret - start);
-                g_caret = g_anchor = start;
-                QueryChanged();
+            size_t from, to;
+            if (SearchSelection(&from, &to) || g_caret > 0) {
+                EditPush(2);
+                if (!DeleteSelection()) {
+                    size_t start = WordStart(g_caret);
+                    EditText().erase(start, g_caret - start);
+                    g_caret = g_anchor = start;
+                }
+                EditChanged();
+                EditDone();
             }
             TouchCaret();
             return;
         }
         case 0x01:  // Ctrl+A: select all.
             g_anchor = 0;
-            g_caret = g_query.size();
+            g_caret = EditText().size();
             TouchCaret();
             Render();
             return;
@@ -4318,10 +4571,22 @@ void OnChar(WCHAR ch) {
         case 0x16:  // Ctrl+V
             PasteText();
             return;
+        case 0x1A:  // Ctrl+Z: undo; Ctrl+Shift+Z: redo.
+            if (GetKeyState(VK_SHIFT) < 0) {
+                RedoEdit();
+            } else {
+                UndoEdit();
+            }
+            return;
+        case 0x19:  // Ctrl+Y: redo.
+            RedoEdit();
+            return;
     }
-    if (ch >= 32 && g_query.size() < 200) {
+    if (ch >= 32 && EditText().size() < MaxEditChars()) {
+        EditPush(1);
         InsertAtCaret(std::wstring(1, ch));
-        QueryChanged();
+        EditDone();
+        EditChanged();
     }
 }
 
@@ -4358,6 +4623,7 @@ void OnKeyDown(WPARAM key) {
             } else if (g_openFolder) {
                 CloseFolder();
             } else if (!g_query.empty()) {
+                EditPush(0);  // Ctrl+Z brings the cleared search back.
                 g_query.clear();
                 g_caret = g_anchor = 0;
                 QueryChanged();
@@ -4376,7 +4642,7 @@ void OnKeyDown(WPARAM key) {
             ShowSelectedMenu();
             break;
         case VK_LEFT:
-            if (!g_query.empty()) {
+            if (!EditText().empty()) {
                 bool word = GetKeyState(VK_CONTROL) < 0;
                 SetCaret(word ? WordStart(g_caret) : CaretStep(g_caret, -1),
                          GetKeyState(VK_SHIFT) < 0);
@@ -4386,7 +4652,7 @@ void OnKeyDown(WPARAM key) {
             }
             break;
         case VK_RIGHT:
-            if (!g_query.empty()) {
+            if (!EditText().empty()) {
                 bool word = GetKeyState(VK_CONTROL) < 0;
                 SetCaret(word ? WordEnd(g_caret) : CaretStep(g_caret, 1),
                          GetKeyState(VK_SHIFT) < 0);
@@ -4412,26 +4678,33 @@ void OnKeyDown(WPARAM key) {
             }
             break;
         case VK_HOME:
-            if (!g_query.empty()) {
+            if (!EditText().empty()) {
                 SetCaret(0, GetKeyState(VK_SHIFT) < 0);
                 Render();
             }
             break;
         case VK_END:
-            if (!g_query.empty()) {
-                SetCaret(g_query.size(), GetKeyState(VK_SHIFT) < 0);
+            if (!EditText().empty()) {
+                SetCaret(EditText().size(), GetKeyState(VK_SHIFT) < 0);
                 Render();
             }
             break;
         case VK_DELETE:
-            if (!g_query.empty()) {
-                if (DeleteSelection()) {
-                    QueryChanged();
-                } else {
-                    size_t next = CaretStep(g_caret, 1);
-                    if (next != g_caret) {
-                        g_query.erase(g_caret, next - g_caret);
-                        QueryChanged();
+            if (!EditText().empty()) {
+                size_t dfrom, dto;
+                if (SearchSelection(&dfrom, &dto) || g_caret < EditText().size()) {
+                    EditPush(2);
+                    bool changed = DeleteSelection();
+                    if (!changed) {
+                        size_t next = CaretStep(g_caret, 1);
+                        if (next != g_caret) {
+                            EditText().erase(g_caret, next - g_caret);
+                            changed = true;
+                        }
+                    }
+                    if (changed) {
+                        EditChanged();
+                        EditDone();
                     }
                 }
                 TouchCaret();
@@ -4766,29 +5039,30 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     StartFrames();
                     return 0;
                 }
-                if (InRect(g_layout.search, (float)x, (float)y)) {
-                    // A click in the search field places the caret; holding
-                    // the button and moving selects text. A second click on
-                    // the same spot selects the word under it.
-                    UINT64 tick = GetTickCount64();
-                    bool dbl = tick - g_lastSearchClick <=
-                                   GetDoubleClickTime() &&
-                               std::abs(x - g_lastSearchX) <=
-                                   4 * g_layout.scale;
-                    g_lastSearchClick = tick;
-                    g_lastSearchX = x;
-                    if (dbl) {
-                        size_t pos = CaretAtPoint((float)x);
-                        g_anchor = WordStart(pos);
-                        g_caret = WordEnd(pos);
-                    } else {
-                        SetCaret(CaretAtPoint((float)x), false);
-                    }
-                    g_searchDrag = true;
-                    SetCapture(hwnd);
-                    Render();
-                    return 0;
+            }
+            if (InRect(EditBox(g_openFolder != nullptr), (float)x,
+                       (float)y)) {
+                // A click in the search field, or in an open folder's name,
+                // places the caret; holding the button and moving selects
+                // text. A second click on the same spot selects the word.
+                UINT64 tick = GetTickCount64();
+                bool dbl = tick - g_lastSearchClick <=
+                               GetDoubleClickTime() &&
+                           std::abs(x - g_lastSearchX) <=
+                               4 * g_layout.scale;
+                g_lastSearchClick = tick;
+                g_lastSearchX = x;
+                if (dbl) {
+                    size_t pos = CaretAtPoint((float)x);
+                    g_anchor = WordStart(pos);
+                    g_caret = WordEnd(pos);
+                } else {
+                    SetCaret(CaretAtPoint((float)x), false);
                 }
+                g_searchDrag = true;
+                SetCapture(hwnd);
+                Render();
+                return 0;
             }
             if (g_anchor != g_caret) {
                 g_anchor = g_caret;  // A click elsewhere drops the selection.
@@ -5018,6 +5292,7 @@ DWORD WINAPI StartThread(void*) {
     g_openFolder = nullptr;
     g_drag = {};
     g_backdropImage = {};
+    g_panelBlur = {};
     FreeSurface(g_surface);
     g_labelFormat.Reset();
     g_searchFormat.Reset();

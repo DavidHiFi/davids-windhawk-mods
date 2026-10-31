@@ -15,6 +15,10 @@ of the macOS Launchpad, with instant search and a blurred background.
   finds every app, and right-click pins or unpins one.
 - **Scroll or pages.** One list that scrolls, or pages that flip left and
   right with dots below, like Launchpad.
+- **Folders.** Drag one app onto another to make a folder. An open folder
+  shows its apps on a frosted panel that blurs the grid behind it, and the
+  folder's name edits like the search box: click, drag, Ctrl+A, cut, copy and
+  paste all work on it.
 - **Instant search.** Just type. Case and accents don't matter, and names that
   start with your text come first.
 - **Adjustable blur.** Pick the blur type, strength, opacity and color of the
@@ -36,6 +40,7 @@ of the macOS Launchpad, with instant search and a blurred background.
 | --- | --- |
 | Type | Search |
 | Backspace, Ctrl+Backspace | Delete a letter, or the last word |
+| Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z) | Undo, redo. Works on the search box and on an open folder's name; a run of typing or deleting is one step |
 | Ctrl+V | Paste |
 | Arrows, Enter | Pick an app and open it. While searching, the first result is already picked |
 | Esc | Clear the search, or close when the search is empty |
