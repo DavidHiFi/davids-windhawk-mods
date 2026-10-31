@@ -4,7 +4,7 @@
 // @name:uk-UA      Системний монітор панелі завдань
 // @description     CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar, with optional graphs
 // @description:uk-UA Компактний монітор CPU, GPU, RAM і VRAM із 60-секундними графіками для панелі завдань Windows 11.
-// @version         1.2.4
+// @version         1.3.0
 // @author          DavidHiFi, Yevhenii Starychenko, m417z, Salyts
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-system-info-weather
@@ -64,8 +64,8 @@ tighter layout.
 ![Taskbar System Info Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/taskbar-system-info-weather.png)
 
 ```text
-CPU 10% 72°C ↑ 1.2 MB/s   RAM  52% 16.7/32G
-GPU  4% 56°C ↓ 8.4 MB/s   VRAM  9%  2.1/24G
+CPU ■■□□□□□□□□ 10% 72°C ↑ 1.2 MB/s   RAM  ■■■■■□□□□□ 52% 16.7/32G
+GPU □□□□□□□□□□  4% 56°C ↓ 8.4 MB/s   VRAM ■□□□□□□□□□  9%  2.1/24G
 ```
 
 ## Features
@@ -75,6 +75,8 @@ GPU  4% 56°C ↓ 8.4 MB/s   VRAM  9%  2.1/24G
 - **Upload and download speed** from your real network adapters. Virtual
   adapters and VPN tunnels are skipped so nothing is counted twice.
 - **Optional graphs** of recent history for CPU/GPU and RAM/VRAM.
+- **Segmented meters** beside each label that go from green to yellow to red.
+- **Color themes:** all four Catppuccin flavors, or your own colors.
 - **Warning colors** when temperatures or memory get high.
 - **Any font, any monitor.** Pick an installed font and the taskbar to show it
   on; the width fits the content automatically.
@@ -178,6 +180,32 @@ by Salyts. GPL-3.0.
 - showMemoryBars: true
   $name: Show RAM/VRAM capacity bars
   $description: "Show the original thin filled bars underneath the RAM/VRAM readings. Each fills from empty to full capacity."
+
+- showMeters: true
+  $name: Show segmented meters
+  $description: "Show a small segmented bar after each CPU, GPU, RAM and VRAM label. Segments turn from green to yellow to red as the load rises."
+
+- stackedLayout: false
+  $name: Stacked layout
+  $description: "Four compact rows: CPU, GPU, RAM and VRAM meters on the left; CPU and GPU temperature, download and upload on the right. Uses the stacked font size below."
+
+- stackedFontSize: 9
+  $name: Stacked font size
+  $description: "Font size for the stacked layout, from 7 to 11 pixels."
+
+- meterSegments: 10
+  $name: Meter segments
+  $description: "Number of segments in each meter, from 4 to 20."
+
+- colorTheme: system
+  $name: Color theme
+  $description: "Colors labels, values, temperatures, network speeds and meters as a set. System keeps the adaptive or manual colors below. Warning and critical colors still show when a threshold is crossed."
+  $options:
+  - system: System (adaptive or manual colors)
+  - catppuccinMocha: Catppuccin Mocha
+  - catppuccinMacchiato: Catppuccin Macchiato
+  - catppuccinFrappe: Catppuccin Frappé
+  - catppuccinLatte: Catppuccin Latte
 
 - showNetwork: true
   $name: Show network speeds
@@ -386,6 +414,7 @@ by Salyts. GPL-3.0.
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.UI.Text.h>
 #include <winrt/Windows.UI.Xaml.Controls.h>
+#include <winrt/Windows.UI.Xaml.Documents.h>
 #include <winrt/Windows.UI.Xaml.Media.h>
 #include <winrt/Windows.UI.Xaml.Shapes.h>
 #include <winrt/Windows.UI.Xaml.h>
@@ -423,6 +452,31 @@ constexpr wchar_t kDefaultCriticalColor[] = L"#FFFF6B6B";
 constexpr wchar_t kLightGraphColor[] = L"#FF005FB8";
 constexpr wchar_t kLightWarningColor[] = L"#FF8A4B00";
 constexpr wchar_t kLightCriticalColor[] = L"#FFC42B1C";
+constexpr double kMeterSegmentWidth = 6.0;
+constexpr double kMeterSegmentHeight = 8.0;
+constexpr double kMeterSegmentGap = 1.0;
+
+// Colors as 0xRRGGBB, from https://catppuccin.com/palette
+struct ColorTheme {
+    PCWSTR id;
+    uint32_t label, value, download, upload, unit, capacity;
+    uint32_t green, yellow, peach, red, empty;
+};
+constexpr ColorTheme kThemes[] = {
+    {L"system"},
+    //                       lavender  text      green     sapphire  subtext0  subtext1  green     yellow    peach     red       surface1
+    {L"catppuccinMocha",     0xB4BEFE, 0xCDD6F4, 0xA6E3A1, 0x74C7EC, 0xA6ADC8, 0xBAC2DE, 0xA6E3A1, 0xF9E2AF, 0xFAB387, 0xF38BA8, 0x585B70},
+    {L"catppuccinMacchiato", 0xB7BDF8, 0xCAD3F5, 0xA6DA95, 0x7DC4E4, 0xA5ADCB, 0xB8C0E0, 0xA6DA95, 0xEED49F, 0xF5A97F, 0xED8796, 0x494D64},
+    {L"catppuccinFrappe",    0xBABBF1, 0xC6D0F5, 0xA6D189, 0x85C1DC, 0xA5ADCE, 0xB5BFE2, 0xA6D189, 0xE5C890, 0xEF9F76, 0xE78284, 0x51576D},
+    {L"catppuccinLatte",     0x7287FD, 0x4C4F69, 0x40A02B, 0x209FB5, 0x6C6F85, 0x5C5F77, 0x40A02B, 0xDF8E1D, 0xFE640B, 0xD20F39, 0xBCC0CC},
+};
+int ParseColorTheme(const std::wstring& value) {
+    for (int i = 0; i < static_cast<int>(std::size(kThemes)); ++i) {
+        if (value == kThemes[i].id) return i;
+    }
+    return 0;
+}
+
 constexpr uint32_t kHwInfoSignature = 0x53695748;  // "HWiS"
 constexpr uint32_t kHwInfoTemperatureType = 1;
 
@@ -474,6 +528,11 @@ struct ModSettings {
     bool showMemoryGraphs = true;
     bool showMemoryBars = true;
     bool showNetwork = true;
+    bool showMeters = true;
+    bool stackedLayout = false;
+    int stackedFontSize = 9;
+    int meterSegments = 10;
+    int colorTheme = 0;  // index into kThemes; 0 = system colors
     int leftOffset = 10;
     int monitor = 1;
     bool adaptiveColors = true;
@@ -575,6 +634,47 @@ double g_vramLayoutCapacityGb = 0;
 [[clang::no_destroy]] SolidColorBrush g_graphBrush{nullptr};
 [[clang::no_destroy]] SolidColorBrush g_warningBrush{nullptr};
 [[clang::no_destroy]] SolidColorBrush g_criticalBrush{nullptr};
+// Per-role text brushes from the color theme; null falls back to g_textBrush.
+[[clang::no_destroy]] SolidColorBrush g_labelBrush{nullptr};
+[[clang::no_destroy]] SolidColorBrush g_valueBrush{nullptr};
+[[clang::no_destroy]] SolidColorBrush g_downloadBrush{nullptr};
+[[clang::no_destroy]] SolidColorBrush g_uploadBrush{nullptr};
+[[clang::no_destroy]] SolidColorBrush g_warmBrush{nullptr};
+[[clang::no_destroy]] SolidColorBrush g_hotBrush{nullptr};
+[[clang::no_destroy]] SolidColorBrush g_unitBrush{nullptr};
+[[clang::no_destroy]] SolidColorBrush g_capacityBrush{nullptr};
+[[clang::no_destroy]] SolidColorBrush g_meterLowBrush{nullptr};
+[[clang::no_destroy]] SolidColorBrush g_meterMidBrush{nullptr};
+[[clang::no_destroy]] SolidColorBrush g_meterHotBrush{nullptr};
+[[clang::no_destroy]] SolidColorBrush g_meterHighBrush{nullptr};
+[[clang::no_destroy]] SolidColorBrush g_meterEmptyBrush{nullptr};
+[[clang::no_destroy]] StackPanel g_cpuMeter{nullptr};
+[[clang::no_destroy]] StackPanel g_gpuMeter{nullptr};
+[[clang::no_destroy]] StackPanel g_ramMeter{nullptr};
+[[clang::no_destroy]] StackPanel g_vramMeter{nullptr};
+// Right-hand labels, created only in the stacked layout.
+[[clang::no_destroy]] TextBlock g_cpuTempLabel{nullptr};
+[[clang::no_destroy]] TextBlock g_gpuTempLabel{nullptr};
+[[clang::no_destroy]] TextBlock g_downloadLabel{nullptr};
+[[clang::no_destroy]] TextBlock g_uploadLabel{nullptr};
+bool g_widgetStacked = false;
+double g_stackedRowHeight = 11.0;
+// Stacked layout only: "92W 3.9G" next to the CPU and GPU percent.
+struct PowerCell {
+    TextBlock text{nullptr};
+    Documents::Run watts{nullptr};
+    Documents::Run wattsUnit{nullptr};
+    Documents::Run clock{nullptr};
+    Documents::Run clockUnit{nullptr};
+};
+[[clang::no_destroy]] PowerCell g_cpuPowerCell;
+[[clang::no_destroy]] XamlRectangle g_stackDivider{nullptr};
+[[clang::no_destroy]] PowerCell g_gpuPowerCell;
+// RAM and VRAM rows: watts, then capacity in the clock run (no clockUnit).
+[[clang::no_destroy]] PowerCell g_ramPowerCell;
+[[clang::no_destroy]] PowerCell g_vramPowerCell;
+double g_widgetHeight = kWidgetHeight;
+[[clang::no_destroy]] Grid g_stackedGrid{nullptr};
 ElementTheme g_cachedWidgetTheme = ElementTheme::Default;
 bool g_themeBrushesInitialized = false;
 bool g_cachedHighContrast = false;
@@ -652,6 +752,15 @@ struct MetricsSnapshot {
     std::optional<double> gpuTemp;
     TemperatureProvider cpuTempProvider = TemperatureProvider::None;
     TemperatureProvider gpuTempProvider = TemperatureProvider::None;
+    // HWiNFO Shared Memory only: watts and MHz.
+    std::optional<double> cpuPower;
+    std::optional<double> cpuClock;
+    std::optional<double> gpuPower;
+    std::optional<double> gpuClock;
+    // Memory side: CPU SoC power (memory controller and fabric; DDR4 sticks
+    // have no power sensor) and the GPU frame buffer rail.
+    std::optional<double> ramPower;
+    std::optional<double> vramPower;
 };
 
 std::mutex g_metricsMutex;
@@ -717,6 +826,13 @@ void LoadSettings() {
     settings.showMemoryGraphs = Wh_GetIntSetting(L"showMemoryGraphs") != 0;
     settings.showMemoryBars = Wh_GetIntSetting(L"showMemoryBars") != 0;
     settings.showNetwork = Wh_GetIntSetting(L"showNetwork") != 0;
+    settings.showMeters = Wh_GetIntSetting(L"showMeters") != 0;
+    settings.stackedLayout = Wh_GetIntSetting(L"stackedLayout") != 0;
+    settings.stackedFontSize =
+        std::clamp(Wh_GetIntSetting(L"stackedFontSize"), 7, 11);
+    settings.meterSegments =
+        std::clamp(Wh_GetIntSetting(L"meterSegments"), 4, 20);
+    settings.colorTheme = ParseColorTheme(GetStringSetting(L"colorTheme"));
     settings.fontFamily = GetStringSetting(L"fontFamily");
     settings.textColor = GetStringSetting(L"textColor");
     settings.graphColor = GetStringSetting(L"graphColor");
@@ -1258,6 +1374,72 @@ std::optional<double> NormalizeHwInfoTemperature(double value,
     return NormalizeTemperature(value, unitLetter == 'F' ? L"F" : L"C");
 }
 
+// CPU package power, average effective clock, GPU power and GPU clock by
+// exact HWiNFO label. A label match over a few hundred records per sample.
+void ReadHwInfoPowerAndClocks(const uint8_t* bytes,
+                              const HwInfoHeader& header,
+                              MetricsSnapshot& snapshot) {
+    constexpr uint32_t kPowerType = 5;
+    constexpr uint32_t kClockType = 6;
+    int cpuPowerRank = 0;
+    int gpuPowerRank = 0;
+    int gpuClockRank = 0;
+    int vramPowerRank = 0;
+    for (uint32_t i = 0; i < header.readingCount; i++) {
+        HwInfoReadingPrefix reading;
+        std::memcpy(&reading,
+                    bytes + header.readingOffset +
+                        static_cast<size_t>(i) * header.readingStride,
+                    sizeof(reading));
+        if ((reading.readingType != kPowerType &&
+             reading.readingType != kClockType) ||
+            reading.sensorIndex >= header.sensorCount ||
+            !std::isfinite(reading.value) || reading.value < 0) {
+            continue;
+        }
+        char sensorName[sizeof(HwInfoSensorPrefix::originalName)];
+        std::memcpy(sensorName,
+                    bytes + header.sensorOffset +
+                        static_cast<size_t>(reading.sensorIndex) *
+                            header.sensorStride +
+                        offsetof(HwInfoSensorPrefix, originalName),
+                    sizeof(sensorName));
+        sensorName[sizeof(sensorName) - 1] = 0;
+        reading.originalLabel[sizeof(reading.originalLabel) - 1] = 0;
+        std::string_view sensor = sensorName;
+        std::string_view label = reading.originalLabel;
+        bool cpuSensor = sensor.starts_with("CPU");
+        int gpuRank = sensor.starts_with("dGPU") ? 2 : sensor.starts_with("GPU") ? 1 : 0;
+        double value = reading.value;
+        if (reading.readingType == kPowerType) {
+            int rank = !cpuSensor ? 0 : label == "CPU Package Power" ? 2 : label == "CPU PPT" ? 1 : 0;
+            if (rank > cpuPowerRank) {
+                cpuPowerRank = rank;
+                snapshot.cpuPower = value;
+            }
+            if (gpuRank > gpuPowerRank &&
+                (label == "GPU Power" || label == "Total Board Power (TBP)" ||
+                 label == "GPU ASIC Power")) {
+                gpuPowerRank = gpuRank;
+                snapshot.gpuPower = value;
+            }
+            if (cpuSensor && label == "CPU SoC Power (SVI2 TFN)") {
+                snapshot.ramPower = value;
+            }
+            if (gpuRank > vramPowerRank &&
+                (label == "GPU FBVDD Input Power" || label == "GPU Memory Power")) {
+                vramPowerRank = gpuRank;
+                snapshot.vramPower = value;
+            }
+        } else if (cpuSensor && label == "Average Effective Clock") {
+            snapshot.cpuClock = value;
+        } else if (gpuRank > gpuClockRank && label == "GPU Clock") {
+            gpuClockRank = gpuRank;
+            snapshot.gpuClock = value;
+        }
+    }
+}
+
 void ReadHwInfoSharedMemory(MetricsSnapshot& snapshot,
                             const ModSettings& settings,
                             const std::optional<std::wstring>& gpuAdapterName,
@@ -1385,6 +1567,8 @@ void ReadHwInfoSharedMemory(MetricsSnapshot& snapshot,
                 copyCachedReading(
                     g_hwInfoSharedMemoryCache.gpuReadingIndex,
                     g_hwInfoSharedMemoryCache.gpuIdentity, cachedGpuReading);
+
+                ReadHwInfoPowerAndClocks(bytes, header, snapshot);
 
                 if (performFullScan) {
                     cachedCpuReading.reset();
@@ -3419,19 +3603,22 @@ struct ThemeOpacityValues {
 };
 
 constexpr ThemeOpacityValues ResolveThemeOpacities(bool highContrast,
-                                                    int textOpacityPercent) {
+                                                    int textOpacityPercent,
+                                                    bool themed = false) {
     double textOpacity =
         static_cast<double>(textOpacityPercent) / 100.0;
+    // A color theme gives labels their own color, so they skip the dimming.
     return highContrast
                ? ThemeOpacityValues{1.0, 1.0, 1.0, 0.45, 1.0}
-               : ThemeOpacityValues{textOpacity * 0.62, textOpacity, 0.78,
-                                    0.18, 0.76};
+               : ThemeOpacityValues{themed ? textOpacity : textOpacity * 0.62,
+                                    textOpacity, 0.78, 0.18, 0.76};
 }
 
 void ApplyThemeOpacities(const ModSettings& settings) {
     bool highContrast = settings.adaptiveColors && g_cachedHighContrast;
     ThemeOpacityValues opacities =
-        ResolveThemeOpacities(highContrast, settings.textOpacity);
+        ResolveThemeOpacities(highContrast, settings.textOpacity,
+                              settings.colorTheme != 0);
     for (TextBlock label :
          {g_cpuLabel, g_gpuLabel, g_ramLabel, g_vramLabel}) {
         if (label) {
@@ -3508,6 +3695,41 @@ void RefreshThemeBrushes(const ModSettings& settings) {
         g_criticalBrush = BrushFromSetting(
             settings.criticalColor, MakeColor(0xFF, 0xFF, 0x6B, 0x6B));
     }
+
+    auto rgb = [](uint32_t value) {
+        return SolidColorBrush(MakeColor(0xFF, (value >> 16) & 0xFF,
+                                         (value >> 8) & 0xFF, value & 0xFF));
+    };
+    const ColorTheme& palette = kThemes[settings.colorTheme];
+    bool themed = settings.colorTheme != 0 &&
+                  !(settings.adaptiveColors && g_cachedHighContrast);
+    g_labelBrush = themed ? rgb(palette.label) : nullptr;
+    g_valueBrush = themed ? rgb(palette.value) : nullptr;
+    g_downloadBrush = themed ? rgb(palette.download) : nullptr;
+    g_uploadBrush = themed ? rgb(palette.upload) : nullptr;
+    g_unitBrush = themed ? rgb(palette.unit) : nullptr;
+    g_capacityBrush = themed ? rgb(palette.capacity) : nullptr;
+    if (themed) {
+        g_warningBrush = rgb(palette.yellow);
+        g_criticalBrush = rgb(palette.red);
+        g_warmBrush = rgb(palette.yellow);
+        g_hotBrush = rgb(palette.peach);
+        g_meterLowBrush = rgb(palette.green);
+        g_meterMidBrush = rgb(palette.yellow);
+        g_meterHotBrush = rgb(palette.peach);
+        g_meterHighBrush = rgb(palette.red);
+        g_meterEmptyBrush = rgb(palette.empty);
+    } else {
+        Color graph = g_graphBrush.Color();
+        g_warmBrush = nullptr;
+        g_hotBrush = g_warningBrush;
+        g_meterLowBrush = g_graphBrush;
+        g_meterMidBrush = g_warningBrush;
+        g_meterHotBrush = g_warningBrush;
+        g_meterHighBrush = g_criticalBrush;
+        g_meterEmptyBrush =
+            SolidColorBrush(MakeColor(0x48, graph.R, graph.G, graph.B));
+    }
     ApplyCachedBrushesToVisuals();
     ApplyThemeOpacities(settings);
 }
@@ -3522,19 +3744,43 @@ SolidColorBrush AlertBrush(AlertLevel alert) {
     return g_graphBrush;
 }
 
-void SetTextForeground(TextBlock text, AlertLevel alert) {
+// Usage percent text: normal color up to 60%, then the meter's yellow, peach, red.
+SolidColorBrush UsageBrush(double value, bool available) {
+    if (!available || !g_meterLowBrush) return g_valueBrush;
+    return value <= 60.0 ? g_valueBrush
+           : value <= 80.0 ? g_meterMidBrush
+           : value <= 90.0 ? g_meterHotBrush
+                           : g_meterHighBrush;
+}
+
+void SetTextForeground(TextBlock text,
+                       AlertLevel alert,
+                       SolidColorBrush normal = nullptr) {
     if (!text) {
         return;
     }
 
-    SolidColorBrush brush = alert == AlertLevel::Normal
-                                ? g_textBrush
-                                : AlertBrush(alert);
+    SolidColorBrush brush = alert != AlertLevel::Normal ? AlertBrush(alert)
+                            : normal                    ? normal
+                                                        : g_textBrush;
     if (brush) {
         text.Foreground(brush);
     } else {
         text.ClearValue(TextBlock::ForegroundProperty());
     }
+}
+
+// Themed temperatures step green, yellow (within 10 degrees of the warning
+// threshold), peach (warning) and red (critical). Without a theme they keep
+// the text color until a threshold is crossed.
+SolidColorBrush TemperatureBrush(const std::optional<double>& temperature,
+                                 int warningTemp,
+                                 AlertLevel alert) {
+    if (alert == AlertLevel::Critical) return g_criticalBrush;
+    if (alert == AlertLevel::Warning) return g_hotBrush;
+    if (!g_warmBrush) return g_textBrush;
+    return temperature && *temperature >= warningTemp - 10 ? g_warmBrush
+                                                           : g_meterLowBrush;
 }
 
 void SetTextIfChanged(TextBlock text, const std::wstring& value) {
@@ -3677,6 +3923,76 @@ void UpdateMemoryBar(XamlRectangle fill,
     fill.Fill(AlertBrush(alert));
 }
 
+void EnsureMeterSegments(StackPanel meter, int count) {
+    if (!meter) return;
+    auto children = meter.Children();
+    while (children.Size() > static_cast<uint32_t>(count)) {
+        children.RemoveAtEnd();
+    }
+    while (children.Size() < static_cast<uint32_t>(count)) {
+        Grid segment;
+        segment.Width(kMeterSegmentWidth);
+        segment.Height(kMeterSegmentHeight);
+        segment.IsHitTestVisible(false);
+        for (int layer = 0; layer < 2; ++layer) {
+            XamlRectangle part;
+            part.RadiusX(2);
+            part.RadiusY(2);
+            part.IsHitTestVisible(false);
+            if (layer == 1) {
+                // Lit state fades instead of snapping.
+                ScalarTransition fade;
+                fade.Duration(std::chrono::milliseconds(450));
+                part.OpacityTransition(fade);
+                part.Opacity(0);
+            }
+            segment.Children().Append(part);
+        }
+        children.Append(segment);
+    }
+}
+
+// Lit segments take their color from their position, like a level meter:
+// green to 60%, yellow to 80%, peach to 90%, red above.
+void UpdateMeter(StackPanel meter, double percent, bool available) {
+    if (!meter || !g_meterEmptyBrush) return;
+    auto children = meter.Children();
+    int count = static_cast<int>(children.Size());
+    double value = available && std::isfinite(percent)
+                       ? std::clamp(percent, 0.0, 100.0)
+                       : 0.0;
+    // Fractional fill: the boundary segment glows in proportion, so the
+    // meter moves continuously instead of in 10% steps.
+    double level = value / 100.0 * count;
+    if (value > 0.0) level = std::max(level, 0.35);
+    for (int i = 0; i < count; ++i) {
+        auto parts = children.GetAt(i).as<Grid>().Children();
+        auto track = parts.GetAt(0).as<XamlRectangle>();
+        auto cap = parts.GetAt(1).as<XamlRectangle>();
+        double position = static_cast<double>(i + 1) / count;
+        SolidColorBrush brush = position <= 0.6 + 1e-9 ? g_meterLowBrush
+                                : position <= 0.8 + 1e-9 ? g_meterMidBrush
+                                : position <= 0.9 + 1e-9 ? g_meterHotBrush
+                                                         : g_meterHighBrush;
+        if (track.Fill() != g_meterEmptyBrush) track.Fill(g_meterEmptyBrush);
+        if (cap.Fill() != brush) cap.Fill(brush);
+        double opacity = std::clamp(level - i, 0.0, 1.0);
+        opacity = std::round(opacity * 20) / 20;
+        if (std::abs(cap.Opacity() - opacity) > 0.01) cap.Opacity(opacity);
+    }
+}
+
+StackPanel CreateMeter(PCWSTR name) {
+    StackPanel meter;
+    meter.Name(name);
+    meter.Orientation(Orientation::Horizontal);
+    meter.Spacing(kMeterSegmentGap);
+    meter.HorizontalAlignment(HorizontalAlignment::Left);
+    meter.VerticalAlignment(VerticalAlignment::Center);
+    meter.IsHitTestVisible(false);
+    return meter;
+}
+
 template <typename F>
 FrameworkElement FindChildRecursive(FrameworkElement element,
                                     F callback,
@@ -3718,27 +4034,37 @@ FrameworkElement FindDirectChildByName(FrameworkElement parent, PCWSTR name) {
 
 void ApplyTextStyle(TextBlock text,
                     bool label,
-                    const ModSettings& settings) {
+                    const ModSettings& settings,
+                    SolidColorBrush normal = nullptr) {
     if (!text) {
         return;
     }
     text.FontFamily(Media::FontFamily(settings.fontFamily));
-    text.FontSize(settings.fontSize);
-    text.FontWeight(label ? Text::FontWeights::SemiBold()
-                          : Text::FontWeights::Normal());
+    text.FontSize(g_widgetStacked ? settings.stackedFontSize : settings.fontSize);
+    text.FontWeight(label            ? Text::FontWeights::SemiBold()
+                    : g_widgetStacked ? Text::FontWeights::Medium()
+                                      : Text::FontWeights::Normal());
+    if (g_widgetStacked) {
+        text.LineStackingStrategy(LineStackingStrategy::BlockLineHeight);
+        text.LineHeight(g_stackedRowHeight);
+    } else {
+        text.ClearValue(TextBlock::LineHeightProperty());
+        text.ClearValue(TextBlock::LineStackingStrategyProperty());
+    }
     bool highContrast = settings.adaptiveColors && g_cachedHighContrast;
     ThemeOpacityValues opacities =
-        ResolveThemeOpacities(highContrast, settings.textOpacity);
+        ResolveThemeOpacities(highContrast, settings.textOpacity,
+                              settings.colorTheme != 0);
     text.Opacity(label ? opacities.label : opacities.value);
     text.TextWrapping(TextWrapping::NoWrap);
     text.TextTrimming(TextTrimming::CharacterEllipsis);
-    SetTextForeground(text, AlertLevel::Normal);
+    SetTextForeground(text, AlertLevel::Normal, normal);
 }
 
 double WidgetHeightForTaskbar(double availableHeight) {
     return std::isfinite(availableHeight) && availableHeight > 0.0
-               ? std::min(kWidgetHeight, availableHeight)
-               : kWidgetHeight;
+               ? std::min(g_widgetHeight, availableHeight)
+               : g_widgetHeight;
 }
 
 // Local layout integration with Independent Taskbar Weather, DavidHiFi.
@@ -3752,10 +4078,107 @@ double WeatherAwareLeftOffset(const ModSettings& settings) {
                                   : static_cast<double>(settings.leftOffset);
 }
 
+double StackedRowHeight(int fontSize) {
+    // 36px total, centered in the taskbar pill's 38px inner band (y 6..43).
+    return std::min(std::ceil(fontSize * 1.2), 9.0);
+}
+
+// Four rows: label, meter, percent, capacity | temperature and network labels,
+// values and units. Columns are measured with the stacked font.
+void ApplyStackedGeometry(const ModSettings& settings) {
+    if (!g_stackedGrid) return;
+    auto measure = [&](PCWSTR value, bool label = false) {
+        TextBlock probe;
+        probe.FontFamily(Media::FontFamily(settings.fontFamily));
+        probe.FontSize(settings.stackedFontSize);
+        probe.FontWeight(label ? Text::FontWeights::SemiBold() : Text::FontWeights::Normal());
+        probe.Text(value);
+        probe.Measure(Size{10000, 100});
+        return std::ceil(static_cast<double>(probe.DesiredSize().Width));
+    };
+    double rowHeight = g_stackedRowHeight;
+    double gap = settings.itemGap;
+    double small = std::max(3.0, std::round(gap / 2));
+    double segmentHeight = std::max(4.0, rowHeight - 2);
+    double meterWidth = settings.meterSegments * kMeterSegmentWidth +
+                        (settings.meterSegments - 1) * kMeterSegmentGap;
+    for (StackPanel meter : {g_cpuMeter, g_gpuMeter, g_ramMeter, g_vramMeter}) {
+        if (!meter) continue;
+        EnsureMeterSegments(meter, settings.meterSegments);
+        meter.Margin(Thickness{});
+        meter.Visibility(settings.showMeters ? Visibility::Visible : Visibility::Collapsed);
+        for (auto child : meter.Children()) {
+            child.as<FrameworkElement>().Height(segmentHeight);
+        }
+    }
+    auto fullCapacityWidth = [&](double total) {
+        return measure(total > 0 ? FormatCapacity(total, total, true).c_str() : L"99.9/99G");
+    };
+    double unitWidth = std::max({measure(L"MB/s"), measure(L"KB/s"), measure(L"GB/s")});
+    const double widths[] = {
+        std::max({measure(L"CPU", true), measure(L"GPU", true), measure(L"VRAM", true)}) + small,
+        settings.showMeters ? meterWidth + small : 0,
+        measure(L"100%"),
+        small + std::max(measure(L"99W 9") - measure(L"9") +
+                             std::max(fullCapacityWidth(g_ramLayoutCapacityGb),
+                                      fullCapacityWidth(g_vramLayoutCapacityGb)),
+                         measure(L"999W 9.9GHz")),
+        std::max(gap, 14.0),
+        std::max(measure(L"CPU TEMP", true),
+                 settings.showNetwork ? measure(L"DOWN", true) : 0.0) + small,
+        std::max(measure(L"115°C"), settings.showNetwork ? measure(L"999.9") : 0.0),
+        settings.showNetwork ? small + unitWidth : 0,
+    };
+    double width = 0;
+    auto columns = g_stackedGrid.ColumnDefinitions();
+    for (uint32_t i = 0; i < columns.Size() && i < std::size(widths); ++i) {
+        columns.GetAt(i).Width(GridLength{widths[i], GridUnitType::Pixel});
+        width += widths[i];
+    }
+    for (auto row : g_stackedGrid.RowDefinitions()) {
+        row.Height(GridLength{rowHeight, GridUnitType::Pixel});
+    }
+    if (g_stackDivider) {
+        if (g_meterEmptyBrush) g_stackDivider.Fill(g_meterEmptyBrush);
+    }
+    for (PowerCell* cell : {&g_cpuPowerCell, &g_gpuPowerCell, &g_ramPowerCell,
+                            &g_vramPowerCell}) {
+        if (!cell->text) continue;
+        ApplyTextStyle(cell->text, false, settings, g_capacityBrush);
+        auto paint = [](Documents::Run run, SolidColorBrush brush) {
+            if (!run) return;
+            if (brush) run.Foreground(brush);
+            else run.ClearValue(Documents::TextElement::ForegroundProperty());
+        };
+        paint(cell->clock, cell->clockUnit ? g_valueBrush : g_capacityBrush);
+        paint(cell->wattsUnit, g_unitBrush);
+        paint(cell->clockUnit, g_unitBrush);
+    }
+    for (TextBlock text : {g_downloadLabel, g_uploadLabel, g_downloadText,
+                           g_uploadText, g_downloadUnit, g_uploadUnit}) {
+        if (text) text.Visibility(settings.showNetwork ? Visibility::Visible : Visibility::Collapsed);
+    }
+    g_widgetHeight = rowHeight * 4;
+    g_widgetWidth = std::max(static_cast<double>(settings.width), width);
+    g_widget.Width(g_widgetWidth);
+    g_widget.Height(g_widgetHeight);
+    if (g_widgetHost) {
+        g_widgetHost.Width(g_widgetWidth);
+        g_widgetHost.Height(WidgetHeightForTaskbar(
+            g_rootGrid ? g_rootGrid.ActualHeight() : 0.0));
+        g_widgetHost.Margin(Thickness{WeatherAwareLeftOffset(settings), 0, 0, 0});
+    }
+}
+
 void ApplyWidgetGeometry(const ModSettings& settings) {
     if (!g_widget) {
         return;
     }
+    if (g_widgetStacked) {
+        ApplyStackedGeometry(settings);
+        return;
+    }
+    g_widgetHeight = kWidgetHeight;
 
     // Measure current values with the selected font, keeping both rows aligned.
     auto measure = [&](PCWSTR value, bool label = false) {
@@ -3774,7 +4197,21 @@ void ApplyWidgetGeometry(const ModSettings& settings) {
     double numberWidth = std::max(measure(L"999.9"),measure(L"888.8"));
     double unitWidth = std::max({measure(L"MB/s"),measure(L"KB/s"),measure(L"GB/s"),measure(L"TB/s")});
     double networkWidth = arrowWidth + numberWidth + space + unitWidth;
-    double labelWidth = std::max(measure(L"CPU",true),measure(L"GPU",true)) + gap;
+    double meterWidth = settings.meterSegments * kMeterSegmentWidth +
+                        (settings.meterSegments - 1) * kMeterSegmentGap;
+    double meterSpace = settings.showMeters ? meterWidth + gap : 0;
+    double computeTextWidth = std::max(measure(L"CPU",true),measure(L"GPU",true)) + gap;
+    double labelWidth = computeTextWidth + meterSpace;
+    double memoryTextWidth = measure(L"VRAM",true) + gap;
+    for (auto [meter, offset] : {std::pair{g_cpuMeter, computeTextWidth},
+                                 std::pair{g_gpuMeter, computeTextWidth},
+                                 std::pair{g_ramMeter, memoryTextWidth},
+                                 std::pair{g_vramMeter, memoryTextWidth}}) {
+        if (!meter) continue;
+        EnsureMeterSegments(meter, settings.meterSegments);
+        meter.Margin(Thickness{offset, 0, 0, 0});
+        meter.Visibility(settings.showMeters ? Visibility::Visible : Visibility::Collapsed);
+    }
     double usageWidth = measure(L"100%") + gap;
     double tempWidth = measure(L"115°C");
     double leftWidth = labelWidth + usageWidth + tempWidth +
@@ -3797,7 +4234,7 @@ void ApplyWidgetGeometry(const ModSettings& settings) {
     for (TextBlock unit : {g_uploadUnit,g_downloadUnit}) {
         if (unit) unit.Margin(Thickness{space,0,0,0});
     }
-    double memoryLabelWidth = measure(L"VRAM",true) + gap;
+    double memoryLabelWidth = memoryTextWidth + meterSpace;
     double memoryPercentWidth = measure(L"100%") + gap;
     auto fullCapacityWidth = [&](double total) {
         return measure(total > 0 ? FormatCapacity(total,total,true).c_str() : L"99.9/99G");
@@ -3893,6 +4330,7 @@ void ApplyWidgetSettings() {
     }
     auto settingsSnapshot = CurrentSettings();
     const ModSettings& settings = *settingsSnapshot;
+    g_stackedRowHeight = StackedRowHeight(settings.stackedFontSize);
     RefreshThemeBrushes(settings);
     if (g_historyInterval != settings.updateInterval ||
         g_historyWindow != settings.historySeconds) {
@@ -3910,15 +4348,22 @@ void ApplyWidgetSettings() {
     g_widget.IsHitTestVisible(false);
 
     for (TextBlock label :
-         {g_cpuLabel, g_gpuLabel, g_ramLabel, g_vramLabel}) {
-        ApplyTextStyle(label, true, settings);
+         {g_cpuLabel, g_gpuLabel, g_ramLabel, g_vramLabel, g_cpuTempLabel,
+          g_gpuTempLabel, g_downloadLabel, g_uploadLabel}) {
+        ApplyTextStyle(label, true, settings, g_labelBrush);
     }
-    for (TextBlock value : {g_cpuUsageText, g_cpuTempText, g_gpuUsageText,
-                            g_gpuTempText, g_ramPercentText,
-                            g_ramCapacityText, g_vramPercentText,
-                            g_vramCapacityText, g_uploadText, g_downloadText,
-                            g_uploadArrow, g_downloadArrow, g_uploadUnit, g_downloadUnit}) {
-        ApplyTextStyle(value, false, settings);
+    const std::pair<std::vector<TextBlock>, SolidColorBrush> roles[] = {
+        {{g_cpuUsageText, g_gpuUsageText, g_ramPercentText, g_vramPercentText}, g_valueBrush},
+        {{g_cpuTempText, g_gpuTempText}, nullptr},
+        {{g_ramCapacityText, g_vramCapacityText}, g_capacityBrush},
+        {{g_uploadText, g_uploadArrow}, g_uploadBrush},
+        {{g_downloadText, g_downloadArrow}, g_downloadBrush},
+        {{g_uploadUnit, g_downloadUnit}, g_unitBrush},
+    };
+    for (const auto& [texts, brush] : roles) {
+        for (TextBlock value : texts) {
+            ApplyTextStyle(value, false, settings, brush);
+        }
     }
 
     for (XamlPath graph : {g_cpuGraph, g_gpuGraph, g_ramGraph, g_vramGraph}) {
@@ -4007,35 +4452,57 @@ void UpdateWidgetText(bool force = false) {
     SetTextIfChanged(g_cpuUsageText,
                      snapshot.cpuAvailable ? FormatPercent(snapshot.cpu)
                                            : L"--%");
+    SetTextForeground(g_cpuUsageText, AlertLevel::Normal,
+                      UsageBrush(snapshot.cpu, snapshot.cpuAvailable));
     if (g_cpuTempText) {
         SetTextIfChanged(g_cpuTempText, FormatTemperature(snapshot.cpuTemp));
-        SetTextForeground(g_cpuTempText, g_cpuTemperatureAlert);
+        SetTextForeground(g_cpuTempText, AlertLevel::Normal,
+                          TemperatureBrush(snapshot.cpuTemp, settings.cpuWarningTemp,
+                                           g_cpuTemperatureAlert));
     }
     SetTextIfChanged(g_gpuUsageText, snapshot.gpuAvailable
                                          ? FormatPercent(snapshot.gpu)
                                          : L"--%");
+    SetTextForeground(g_gpuUsageText, AlertLevel::Normal,
+                      UsageBrush(snapshot.gpu, snapshot.gpuAvailable));
     if (g_gpuTempText) {
         SetTextIfChanged(g_gpuTempText, FormatTemperature(snapshot.gpuTemp));
-        SetTextForeground(g_gpuTempText, g_gpuTemperatureAlert);
+        SetTextForeground(g_gpuTempText, AlertLevel::Normal,
+                          TemperatureBrush(snapshot.gpuTemp, settings.gpuWarningTemp,
+                                           g_gpuTemperatureAlert));
     }
     if (g_ramPercentText) {
         SetTextIfChanged(g_ramPercentText,
                          snapshot.ramAvailable ? FormatPercent(snapshot.ram)
                                                : L"--%");
-        SetTextForeground(g_ramPercentText, g_ramAlert);
+        SetTextForeground(g_ramPercentText, AlertLevel::Normal,
+                          UsageBrush(snapshot.ram, snapshot.ramAvailable));
     }
-    SetTextIfChanged(g_ramCapacityText,
-                     FormatCapacity(snapshot.ramUsedGb, snapshot.ramTotalGb,
-                                    snapshot.ramAvailable));
+    {
+        std::wstring capacity = FormatCapacity(snapshot.ramUsedGb, snapshot.ramTotalGb,
+                                               snapshot.ramAvailable);
+        if (g_ramPowerCell.clock) {
+            if (g_ramPowerCell.clock.Text() != capacity) g_ramPowerCell.clock.Text(capacity);
+        } else {
+            SetTextIfChanged(g_ramCapacityText, capacity);
+        }
+    }
     if (g_vramPercentText) {
         SetTextIfChanged(g_vramPercentText, snapshot.vramAvailable
                                                 ? FormatPercent(snapshot.vram)
                                                 : L"--%");
-        SetTextForeground(g_vramPercentText, g_vramAlert);
+        SetTextForeground(g_vramPercentText, AlertLevel::Normal,
+                          UsageBrush(snapshot.vram, snapshot.vramAvailable));
     }
-    SetTextIfChanged(g_vramCapacityText,
-                     FormatCapacity(snapshot.vramUsedGb, snapshot.vramTotalGb,
-                                    snapshot.vramAvailable));
+    {
+        std::wstring capacity = FormatCapacity(snapshot.vramUsedGb, snapshot.vramTotalGb,
+                                               snapshot.vramAvailable);
+        if (g_vramPowerCell.clock) {
+            if (g_vramPowerCell.clock.Text() != capacity) g_vramPowerCell.clock.Text(capacity);
+        } else {
+            SetTextIfChanged(g_vramCapacityText, capacity);
+        }
+    }
 
     auto setNetwork = [&](TextBlock value,TextBlock unit,double bytes,bool upload) {
         std::wstring formatted = FormatNetworkSpeed(bytes,snapshot.networkAvailable,upload).substr(2);
@@ -4077,6 +4544,41 @@ void UpdateWidgetText(bool force = false) {
                     g_ramTrack ? g_ramTrack.Width() : 0);
     UpdateMemoryBar(g_vramFill, snapshot.vram, snapshot.vramAvailable,
                     g_vramAlert, g_vramTrack ? g_vramTrack.Width() : 0);
+    auto setPower = [](PowerCell& cell, const std::optional<double>& watts,
+                       const std::optional<double>& mhz) {
+        if (!cell.text) return;
+        wchar_t buffer[16];
+        auto set = [](Documents::Run run, const wchar_t* value) {
+            if (run.Text() != value) run.Text(value);
+        };
+        if (watts) swprintf(buffer, std::size(buffer), L"%.0f", *watts);
+        set(cell.watts, watts ? buffer : L"--");
+        if (!cell.clockUnit) return;
+        if (mhz) swprintf(buffer, std::size(buffer), L"%.1f", *mhz / 1000.0);
+        set(cell.clock, mhz ? buffer : L"-.-");
+    };
+    setPower(g_cpuPowerCell, snapshot.cpuPower, snapshot.cpuClock);
+    setPower(g_gpuPowerCell, snapshot.gpuPower, snapshot.gpuClock);
+    setPower(g_ramPowerCell, snapshot.ramPower, std::nullopt);
+    setPower(g_vramPowerCell, snapshot.vramPower, std::nullopt);
+    auto paintWatts = [](PowerCell& cell, const std::optional<double>& watts,
+                         double warm, double hot, double critical) {
+        if (!cell.watts) return;
+        SolidColorBrush brush = !g_warmBrush || !watts ? g_capacityBrush
+                                : *watts >= critical   ? g_criticalBrush
+                                : *watts >= hot        ? g_hotBrush
+                                : *watts >= warm       ? g_warmBrush
+                                                       : g_meterLowBrush;
+        if (brush) cell.watts.Foreground(brush);
+    };
+    paintWatts(g_cpuPowerCell, snapshot.cpuPower, 70, 100, 125);
+    paintWatts(g_gpuPowerCell, snapshot.gpuPower, 110, 160, 190);
+    paintWatts(g_ramPowerCell, snapshot.ramPower, 20, 25, 30);
+    paintWatts(g_vramPowerCell, snapshot.vramPower, 15, 20, 25);
+    UpdateMeter(g_cpuMeter, snapshot.cpu, snapshot.cpuAvailable);
+    UpdateMeter(g_gpuMeter, snapshot.gpu, snapshot.gpuAvailable);
+    UpdateMeter(g_ramMeter, snapshot.ram, snapshot.ramAvailable);
+    UpdateMeter(g_vramMeter, snapshot.vram, snapshot.vramAvailable);
 }
 
 void EnsureConfiguredTaskbarPlacement();
@@ -4497,6 +4999,29 @@ bool RemoveWidget() {
     g_graphBrush = nullptr;
     g_warningBrush = nullptr;
     g_criticalBrush = nullptr;
+    for (SolidColorBrush* brush :
+         {&g_labelBrush, &g_valueBrush, &g_downloadBrush, &g_uploadBrush,
+          &g_warmBrush, &g_hotBrush, &g_unitBrush, &g_capacityBrush,
+          &g_meterLowBrush, &g_meterMidBrush, &g_meterHotBrush,
+          &g_meterHighBrush, &g_meterEmptyBrush}) {
+        *brush = nullptr;
+    }
+    for (TextBlock* label :
+         {&g_cpuTempLabel, &g_gpuTempLabel, &g_downloadLabel, &g_uploadLabel}) {
+        *label = nullptr;
+    }
+    g_stackedGrid = nullptr;
+    g_cpuPowerCell = {};
+    g_ramPowerCell = {};
+    g_vramPowerCell = {};
+    g_stackDivider = nullptr;
+    g_gpuPowerCell = {};
+    g_widgetStacked = false;
+    g_widgetHeight = kWidgetHeight;
+    g_cpuMeter = nullptr;
+    g_gpuMeter = nullptr;
+    g_ramMeter = nullptr;
+    g_vramMeter = nullptr;
     g_cachedWidgetTheme = ElementTheme::Default;
     g_themeBrushesInitialized = false;
     g_cachedHighContrast = false;
@@ -4514,6 +5039,92 @@ bool RemoveWidget() {
     g_vramAlert = AlertLevel::Normal;
     UpdateTimerInterval();
     return true;
+}
+
+void BuildStackedWidget(Grid widget) {
+    g_stackedGrid = widget;
+    for (int i = 0; i < 4; ++i) widget.RowDefinitions().Append(PixelRow(g_stackedRowHeight));
+    for (int i = 0; i < 8; ++i) widget.ColumnDefinitions().Append(PixelColumn(0));
+    auto place = [&](FrameworkElement element, int row, int column) {
+        if (!element) return;
+        Grid::SetRow(element, row);
+        Grid::SetColumn(element, column);
+        widget.Children().Append(element);
+    };
+    auto text = [&](PCWSTR name, PCWSTR value, TextAlignment alignment, int row, int column) {
+        TextBlock block = CreateCellText(name, alignment);
+        block.Text(value);
+        place(block, row, column);
+        return block;
+    };
+    struct Left { PCWSTR label; PCWSTR prefix; TextBlock* labelText; StackPanel* meter;
+                  TextBlock* percent; TextBlock* capacity; };
+    const Left left[] = {
+        {L"CPU", L"Cpu", &g_cpuLabel, &g_cpuMeter, &g_cpuUsageText, nullptr},
+        {L"GPU", L"Gpu", &g_gpuLabel, &g_gpuMeter, &g_gpuUsageText, nullptr},
+        {L"RAM", L"Ram", &g_ramLabel, &g_ramMeter, &g_ramPercentText, &g_ramCapacityText},
+        {L"VRAM", L"Vram", &g_vramLabel, &g_vramMeter, &g_vramPercentText, &g_vramCapacityText},
+    };
+    for (int row = 0; row < 4; ++row) {
+        const Left& item = left[row];
+        std::wstring prefix = item.prefix;
+        *item.labelText = text((prefix + L"Label").c_str(), item.label, TextAlignment::Left, row, 0);
+        *item.meter = CreateMeter((prefix + L"Meter").c_str());
+        place(*item.meter, row, 1);
+        *item.percent = text((prefix + L"Percent").c_str(), L"--%", TextAlignment::Right, row, 2);
+        if (item.capacity) {
+            PowerCell& cell = row == 2 ? g_ramPowerCell : g_vramPowerCell;
+            cell.text = CreateCellText((prefix + L"Capacity").c_str(), TextAlignment::Right);
+            auto run = [&](PCWSTR value) {
+                Documents::Run part;
+                part.Text(value);
+                cell.text.Inlines().Append(part);
+                return part;
+            };
+            cell.watts = run(L"--");
+            cell.wattsUnit = run(L"W ");
+            cell.clock = run(L"--/--G");
+            place(cell.text, row, 3);
+            *item.capacity = cell.text;
+        }
+    }
+    auto powerCell = [&](PCWSTR name, int row) {
+        PowerCell cell;
+        cell.text = CreateCellText(name, TextAlignment::Right);
+        auto run = [&](PCWSTR value) {
+            Documents::Run part;
+            part.Text(value);
+            cell.text.Inlines().Append(part);
+            return part;
+        };
+        cell.watts = run(L"--");
+        cell.wattsUnit = run(L"W ");
+        cell.clock = run(L"-.-");
+        cell.clockUnit = run(L"GHz");
+        place(cell.text, row, 3);
+        return cell;
+    };
+    XamlRectangle divider;
+    divider.Name(L"StackDivider");
+    divider.Width(1);
+    divider.HorizontalAlignment(HorizontalAlignment::Center);
+    divider.Margin(Thickness{0, 2, 0, 2});
+    divider.IsHitTestVisible(false);
+    Grid::SetRowSpan(divider, 4);
+    place(divider, 0, 4);
+    g_stackDivider = divider;
+    g_cpuPowerCell = powerCell(L"CpuPower", 0);
+    g_gpuPowerCell = powerCell(L"GpuPower", 1);
+    g_cpuTempLabel = text(L"CpuTemperatureLabel", L"CPU TEMP", TextAlignment::Left, 0, 5);
+    g_gpuTempLabel = text(L"GpuTemperatureLabel", L"GPU TEMP", TextAlignment::Left, 1, 5);
+    g_downloadLabel = text(L"DownloadLabel", L"DOWN", TextAlignment::Left, 2, 5);
+    g_uploadLabel = text(L"UploadLabel", L"UP", TextAlignment::Left, 3, 5);
+    g_cpuTempText = text(L"CpuTemperature", L"--°C", TextAlignment::Right, 0, 6);
+    g_gpuTempText = text(L"GpuTemperature", L"--°C", TextAlignment::Right, 1, 6);
+    g_downloadText = text(L"DownloadValue", L"--", TextAlignment::Right, 2, 6);
+    g_uploadText = text(L"UploadValue", L"--", TextAlignment::Right, 3, 6);
+    g_downloadUnit = text(L"DownloadUnit", L"B/s", TextAlignment::Right, 2, 7);
+    g_uploadUnit = text(L"UploadUnit", L"B/s", TextAlignment::Right, 3, 7);
 }
 
 bool InjectWidget(FrameworkElement taskbarFrame) {
@@ -4537,7 +5148,8 @@ bool InjectWidget(FrameworkElement taskbarFrame) {
 
         uint32_t currentWidgetIndex = 0;
         if (g_widgetHost && children.IndexOf(g_widgetHost, currentWidgetIndex) &&
-            currentWidgetIndex == index) {
+            currentWidgetIndex == index &&
+            g_widgetStacked == CurrentSettings()->stackedLayout) {
             ApplyWidgetSettings();
             if (!StartMetricsWorker()) {
                 Wh_Log(L"Metrics worker unavailable");
@@ -4576,6 +5188,12 @@ bool InjectWidget(FrameworkElement taskbarFrame) {
     Grid::SetColumnSpan(host,
                         std::max(1, static_cast<int>(root.ColumnDefinitions().Size())));
 
+    auto injectSettings = CurrentSettings();
+    g_widgetStacked = injectSettings->stackedLayout;
+    g_stackedRowHeight = StackedRowHeight(injectSettings->stackedFontSize);
+    if (g_widgetStacked) {
+        BuildStackedWidget(widget);
+    } else {
     g_leftColumn = ColumnDefinition();
     g_gapColumn = ColumnDefinition();
     g_rightColumn = ColumnDefinition();
@@ -4610,6 +5228,15 @@ bool InjectWidget(FrameworkElement taskbarFrame) {
     Grid vramRow = g_vramRow = CreateMemoryRow(L"VRAM", L"Vram", g_vramLabel,
                                    g_vramPercentText, g_vramCapacityText,
                                    g_vramTrack, g_vramFill, g_vramGraph);
+    g_cpuMeter = CreateMeter(L"CpuMeter");
+    g_gpuMeter = CreateMeter(L"GpuMeter");
+    g_ramMeter = CreateMeter(L"RamMeter");
+    g_vramMeter = CreateMeter(L"VramMeter");
+    for (auto [row, meter] : {std::pair{cpuRow, g_cpuMeter}, std::pair{gpuRow, g_gpuMeter},
+                              std::pair{ramRow, g_ramMeter}, std::pair{vramRow, g_vramMeter}}) {
+        Grid::SetColumn(meter, 0);
+        row.Children().Append(meter);
+    }
     Grid::SetRow(ramRow, 0);
     Grid::SetRow(vramRow, 2);
     rightPanel.Children().Append(ramRow);
@@ -4619,6 +5246,7 @@ bool InjectWidget(FrameworkElement taskbarFrame) {
     Grid::SetColumn(rightPanel, 2);
     widget.Children().Append(leftPanel);
     widget.Children().Append(rightPanel);
+    }
     root.Children().Append(host);
     g_taskbarUiResourcesRegistered = true;
 
