@@ -456,6 +456,10 @@ constexpr double kMeterSegmentWidth = 6.0;
 constexpr double kMeterSegmentHeight = 8.0;
 constexpr double kMeterSegmentGap = 1.0;
 
+// Nerd Font (FontAwesome) thermometer-half icon that leads the stacked CPU
+// TEMP and GPU TEMP labels. Present in every FiraCode Nerd Font weight.
+constexpr PCWSTR kTempIconPrefix = L"\uF2C9 ";
+
 // Colors as 0xRRGGBB, from https://catppuccin.com/palette
 struct ColorTheme {
     PCWSTR id;
@@ -662,6 +666,8 @@ double g_stackedRowHeight = 11.0;
 // Stacked layout only: "92W 3.9G" next to the CPU and GPU percent.
 struct PowerCell {
     TextBlock text{nullptr};
+    // Watts sit in their own fixed-width block so they line up across rows.
+    TextBlock wattsText{nullptr};
     Documents::Run watts{nullptr};
     Documents::Run wattsUnit{nullptr};
     Documents::Run clock{nullptr};
@@ -675,6 +681,10 @@ struct PowerCell {
 // Stacked layout: colored arrows in front of the DOWN and UP labels.
 [[clang::no_destroy]] Documents::Run g_downloadArrowRun{nullptr};
 [[clang::no_destroy]] Documents::Run g_uploadArrowRun{nullptr};
+// Stacked layout: thermometer icons in front of the CPU TEMP and GPU TEMP
+// labels, colored like the temperature values.
+[[clang::no_destroy]] Documents::Run g_cpuTempIconRun{nullptr};
+[[clang::no_destroy]] Documents::Run g_gpuTempIconRun{nullptr};
 [[clang::no_destroy]] PowerCell g_vramPowerCell;
 double g_widgetHeight = kWidgetHeight;
 [[clang::no_destroy]] Grid g_stackedGrid{nullptr};
@@ -3783,7 +3793,7 @@ SolidColorBrush TemperatureBrush(const std::optional<double>& temperature,
     if (alert == AlertLevel::Warning) return g_hotBrush;
     if (!g_warmBrush) return g_textBrush;
     return temperature && *temperature >= warningTemp - 10 ? g_warmBrush
-                                                           : g_meterLowBrush;
+                                                           : g_valueBrush;
 }
 
 void SetTextIfChanged(TextBlock text, const std::wstring& value) {
@@ -4118,16 +4128,17 @@ void ApplyStackedGeometry(const ModSettings& settings) {
         return measure(total > 0 ? FormatCapacity(total, total, true).c_str() : L"99.9/99G");
     };
     double unitWidth = std::max({measure(L"MB/s"), measure(L"KB/s"), measure(L"GB/s")});
+    double wattsWidth = measure(L"999W");
+    double wattsGap = measure(L"9 9") - measure(L"99");
     const double widths[] = {
         std::max({measure(L"CPU", true), measure(L"GPU", true), measure(L"VRAM", true)}) + small,
         settings.showMeters ? meterWidth + small : 0,
         measure(L"100%"),
-        small + std::max(measure(L"99W 9") - measure(L"9") +
-                             std::max(fullCapacityWidth(g_ramLayoutCapacityGb),
-                                      fullCapacityWidth(g_vramLayoutCapacityGb)),
-                         measure(L"999W 9.9GHz")),
+        small + wattsWidth + wattsGap +
+            std::max({fullCapacityWidth(g_ramLayoutCapacityGb),
+                      fullCapacityWidth(g_vramLayoutCapacityGb), measure(L"9.9GHz")}),
         std::max(gap, 14.0),
-        std::max(measure(L"CPU TEMP", true),
+        std::max(measure((std::wstring(kTempIconPrefix) + L"CPU TEMP").c_str(), true),
                  settings.showNetwork ? measure(L"\u2193 DOWN", true) : 0.0) + small,
         std::max(measure(L"115°C"), settings.showNetwork ? measure(L"999.9") : 0.0),
         settings.showNetwork ? small + unitWidth : 0,
@@ -4154,6 +4165,11 @@ void ApplyStackedGeometry(const ModSettings& settings) {
                             &g_vramPowerCell}) {
         if (!cell->text) continue;
         ApplyTextStyle(cell->text, false, settings, g_capacityBrush);
+        if (cell->wattsText) {
+            ApplyTextStyle(cell->wattsText, false, settings, g_capacityBrush);
+            cell->wattsText.Width(wattsWidth);
+            cell->wattsText.Margin(Thickness{small, 0, 0, 0});
+        }
         auto paint = [](Documents::Run run, SolidColorBrush brush) {
             if (!run) return;
             if (brush) run.Foreground(brush);
@@ -4465,9 +4481,14 @@ void UpdateWidgetText(bool force = false) {
                       UsageBrush(snapshot.cpu, snapshot.cpuAvailable));
     if (g_cpuTempText) {
         SetTextIfChanged(g_cpuTempText, FormatTemperature(snapshot.cpuTemp));
-        SetTextForeground(g_cpuTempText, AlertLevel::Normal,
-                          TemperatureBrush(snapshot.cpuTemp, settings.cpuWarningTemp,
-                                           g_cpuTemperatureAlert));
+        SolidColorBrush tempBrush = TemperatureBrush(
+            snapshot.cpuTemp, settings.cpuWarningTemp, g_cpuTemperatureAlert);
+        SetTextForeground(g_cpuTempText, AlertLevel::Normal, tempBrush);
+        if (g_cpuTempIconRun) {
+            if (tempBrush) g_cpuTempIconRun.Foreground(tempBrush);
+            else g_cpuTempIconRun.ClearValue(
+                     Documents::TextElement::ForegroundProperty());
+        }
     }
     SetTextIfChanged(g_gpuUsageText, snapshot.gpuAvailable
                                          ? FormatPercent(snapshot.gpu)
@@ -4476,9 +4497,14 @@ void UpdateWidgetText(bool force = false) {
                       UsageBrush(snapshot.gpu, snapshot.gpuAvailable));
     if (g_gpuTempText) {
         SetTextIfChanged(g_gpuTempText, FormatTemperature(snapshot.gpuTemp));
-        SetTextForeground(g_gpuTempText, AlertLevel::Normal,
-                          TemperatureBrush(snapshot.gpuTemp, settings.gpuWarningTemp,
-                                           g_gpuTemperatureAlert));
+        SolidColorBrush tempBrush = TemperatureBrush(
+            snapshot.gpuTemp, settings.gpuWarningTemp, g_gpuTemperatureAlert);
+        SetTextForeground(g_gpuTempText, AlertLevel::Normal, tempBrush);
+        if (g_gpuTempIconRun) {
+            if (tempBrush) g_gpuTempIconRun.Foreground(tempBrush);
+            else g_gpuTempIconRun.ClearValue(
+                     Documents::TextElement::ForegroundProperty());
+        }
     }
     if (g_ramPercentText) {
         SetTextIfChanged(g_ramPercentText,
@@ -4577,7 +4603,7 @@ void UpdateWidgetText(bool force = false) {
                                 : *watts >= critical   ? g_criticalBrush
                                 : *watts >= hot        ? g_hotBrush
                                 : *watts >= warm       ? g_warmBrush
-                                                       : g_meterLowBrush;
+                                                       : g_valueBrush;
         if (brush) cell.watts.Foreground(brush);
     };
     paintWatts(g_cpuPowerCell, snapshot.cpuPower, 70, 100, 125);
@@ -5024,6 +5050,8 @@ bool RemoveWidget() {
     g_ramPowerCell = {};
     g_downloadArrowRun = nullptr;
     g_uploadArrowRun = nullptr;
+    g_cpuTempIconRun = nullptr;
+    g_gpuTempIconRun = nullptr;
     g_vramPowerCell = {};
     g_stackDivider = nullptr;
     g_gpuPowerCell = {};
@@ -5092,8 +5120,14 @@ void BuildStackedWidget(Grid widget) {
                 cell.text.Inlines().Append(part);
                 return part;
             };
+            cell.wattsText = CreateCellText((prefix + L"Watts").c_str(), TextAlignment::Right);
+            cell.wattsText.HorizontalAlignment(HorizontalAlignment::Left);
             cell.watts = run(L"--");
-            cell.wattsUnit = run(L"W ");
+            cell.wattsUnit = run(L"W");
+            cell.text.Inlines().Clear();
+            cell.wattsText.Inlines().Append(cell.watts);
+            cell.wattsText.Inlines().Append(cell.wattsUnit);
+            place(cell.wattsText, row, 3);
             cell.clock = run(L"--/--G");
             place(cell.text, row, 3);
             *item.capacity = cell.text;
@@ -5108,8 +5142,14 @@ void BuildStackedWidget(Grid widget) {
             cell.text.Inlines().Append(part);
             return part;
         };
+        cell.wattsText = CreateCellText((std::wstring(name) + L"Watts").c_str(), TextAlignment::Right);
+        cell.wattsText.HorizontalAlignment(HorizontalAlignment::Left);
         cell.watts = run(L"--");
-        cell.wattsUnit = run(L"W ");
+        cell.wattsUnit = run(L"W");
+        cell.text.Inlines().Clear();
+        cell.wattsText.Inlines().Append(cell.watts);
+        cell.wattsText.Inlines().Append(cell.wattsUnit);
+        place(cell.wattsText, row, 3);
         cell.clock = run(L"-.-");
         cell.clockUnit = run(L"GHz");
         place(cell.text, row, 3);
@@ -5126,10 +5166,22 @@ void BuildStackedWidget(Grid widget) {
     g_stackDivider = divider;
     g_cpuPowerCell = powerCell(L"CpuPower", 0);
     g_gpuPowerCell = powerCell(L"GpuPower", 1);
+    auto tempLabel = [](TextBlock label, PCWSTR name) {
+        label.Text(L"");
+        Documents::Run iconRun;
+        iconRun.Text(kTempIconPrefix);
+        Documents::Run nameRun;
+        nameRun.Text(name);
+        label.Inlines().Append(iconRun);
+        label.Inlines().Append(nameRun);
+        return iconRun;
+    };
     g_cpuTempLabel = text(L"CpuTemperatureLabel", L"CPU TEMP", TextAlignment::Left, 0, 5);
+    g_cpuTempIconRun = tempLabel(g_cpuTempLabel, L"CPU TEMP");
     g_gpuTempLabel = text(L"GpuTemperatureLabel", L"GPU TEMP", TextAlignment::Left, 1, 5);
-    g_downloadLabel = text(L"DownloadLabel", L"DOWN", TextAlignment::Left, 2, 5);
-    g_uploadLabel = text(L"UploadLabel", L"UP", TextAlignment::Left, 3, 5);
+    g_gpuTempIconRun = tempLabel(g_gpuTempLabel, L"GPU TEMP");
+    g_uploadLabel = text(L"UploadLabel", L"UP", TextAlignment::Left, 2, 5);
+    g_downloadLabel = text(L"DownloadLabel", L"DOWN", TextAlignment::Left, 3, 5);
     auto arrowLabel = [](TextBlock label, PCWSTR arrow, PCWSTR name) {
         label.Text(L"");
         Documents::Run arrowRun;
@@ -5140,14 +5192,14 @@ void BuildStackedWidget(Grid widget) {
         label.Inlines().Append(nameRun);
         return arrowRun;
     };
-    g_downloadArrowRun = arrowLabel(g_downloadLabel, L"\u2193 ", L"DOWN");
     g_uploadArrowRun = arrowLabel(g_uploadLabel, L"\u2191 ", L"UP");
+    g_downloadArrowRun = arrowLabel(g_downloadLabel, L"\u2193 ", L"DOWN");
     g_cpuTempText = text(L"CpuTemperature", L"--°C", TextAlignment::Right, 0, 6);
     g_gpuTempText = text(L"GpuTemperature", L"--°C", TextAlignment::Right, 1, 6);
-    g_downloadText = text(L"DownloadValue", L"--", TextAlignment::Right, 2, 6);
-    g_uploadText = text(L"UploadValue", L"--", TextAlignment::Right, 3, 6);
-    g_downloadUnit = text(L"DownloadUnit", L"B/s", TextAlignment::Right, 2, 7);
-    g_uploadUnit = text(L"UploadUnit", L"B/s", TextAlignment::Right, 3, 7);
+    g_uploadText = text(L"UploadValue", L"--", TextAlignment::Right, 2, 6);
+    g_downloadText = text(L"DownloadValue", L"--", TextAlignment::Right, 3, 6);
+    g_uploadUnit = text(L"UploadUnit", L"B/s", TextAlignment::Right, 2, 7);
+    g_downloadUnit = text(L"DownloadUnit", L"B/s", TextAlignment::Right, 3, 7);
 }
 
 bool InjectWidget(FrameworkElement taskbarFrame) {
