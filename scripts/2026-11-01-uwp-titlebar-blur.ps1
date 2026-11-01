@@ -15,7 +15,7 @@ $old = "$root\backups\2026-11-01\remove-uwp-title-bars-plus\local@remove-uwp-tit
 function Show {
     $p = Get-ItemProperty $key
     $s = Get-ItemProperty "$key\Settings" -ErrorAction SilentlyContinue
-    "version=$($p.Version) lib=$($p.LibraryFileName) disabled=$($p.Disabled) blur=$($s.blur) blurTint=$($s.blurTint)"
+    "version=$($p.Version) lib=$($p.LibraryFileName) disabled=$($p.Disabled) blur=$($s.blur) tint=$($s.tint)"
 }
 
 if ($Audit) { Show; exit 0 }
@@ -34,9 +34,10 @@ if ($LASTEXITCODE -ne 0) { $out; exit 1 }
 New-Item -Path "$key\Settings" -Force | Out-Null
 if ($Install) {
     Set-ItemProperty "$key\Settings" blur 1 -Type DWord
+    Set-ItemProperty "$key\Settings" tint 60 -Type DWord
     Remove-ItemProperty "$key\Settings" blurTint -ErrorAction SilentlyContinue
 } else {
-    Remove-ItemProperty "$key\Settings" blur, blurTint -ErrorAction SilentlyContinue
+    Remove-ItemProperty "$key\Settings" blur, blurTint, tint -ErrorAction SilentlyContinue
 }
 Set-ItemProperty $key SettingsChangeTime ([int][DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) -Type DWord
 $r = Show
