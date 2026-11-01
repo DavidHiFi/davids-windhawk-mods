@@ -2,7 +2,7 @@
 // @id              peek
 // @name            Peek
 // @description     Select a file in File Explorer and press Space to preview it, like PowerToys Peek
-// @version         1.1.0
+// @version         1.2.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -57,6 +57,9 @@ Esc to close it. It works like PowerToys Peek, without PowerToys.
 - Turn off Peek in PowerToys first if it is still installed. Both would react
   to the same key.
 - Animated GIFs show their first frame.
+- Turn on **Blurred glass background** in the settings for a frosted window:
+  the title bar and the space around the preview blur what is behind them,
+  and stay blurred when you click away.
 
 ## Credits
 Works like [Peek](https://learn.microsoft.com/windows/powertoys/peek) from
@@ -92,6 +95,12 @@ PowerToys.
 - backgroundColor: "#1e1e2e"
   $name: Background color
   $description: As #RRGGBB
+- blurBackground: false
+  $name: Blurred glass background
+  $description: Blur whatever is behind the window, title bar included, and tint it with the background color. It stays blurred when the window loses focus
+- blurTint: 40
+  $name: Glass tint (%)
+  $description: How much of the background color covers the blur. Lower shows more of what is behind
 - textColor: "#cdd6f4"
   $name: Text color
   $description: As #RRGGBB
@@ -171,6 +180,8 @@ struct Settings {
     bool onDesktop = true, rememberSize = true, alwaysOnTop = false;
     bool closeOnFocusLoss = false, darkMode = true, wordWrap = true;
     bool upscaleImages = false, usePreviewHandlers = true, playMedia = true, autoPlay = true;
+    bool blur = false;
+    int blurTint = 40;
     int widthPercent = 60, heightPercent = 75;
     COLORREF bg = RGB(0x1e, 0x1e, 0x2e), fg = RGB(0xcd, 0xd6, 0xf4),
              dim = RGB(0xa6, 0xad, 0xc8), accent = RGB(0xcb, 0xa6, 0xf7);
@@ -265,6 +276,8 @@ void LoadSettings() {
     g_set.closeOnFocusLoss = Wh_GetIntSetting(L"closeOnFocusLoss");
     g_set.darkMode = Wh_GetIntSetting(L"darkMode");
     g_set.bg = ParseColor(ReadString(L"backgroundColor"), RGB(0x1e, 0x1e, 0x2e));
+    g_set.blur = Wh_GetIntSetting(L"blurBackground");
+    g_set.blurTint = std::clamp(Wh_GetIntSetting(L"blurTint"), 0, 100);
     g_set.fg = ParseColor(ReadString(L"textColor"), RGB(0xcd, 0xd6, 0xf4));
     g_set.dim = ParseColor(ReadString(L"dimTextColor"), RGB(0xa6, 0xad, 0xc8));
     g_set.textFont = ReadString(L"textFont");
@@ -1190,11 +1203,50 @@ void ShowItem() {
     InvalidateRect(g.wnd, nullptr, TRUE);
 }
 
-void ApplyDarkMode(HWND hwnd) {
+struct AccentPolicy {
+    DWORD state, flags, color, animation;
+};
+struct CompositionData {
+    DWORD attribute;
+    void* data;
+    SIZE_T size;
+};
+
+// Blurred glass: blur-behind with an empty region, the acrylic accent tinted
+// with the background color, and the frame pulled over the whole window. The
+// accent keeps blurring when the window is inactive, unlike the system
+// backdrops, which fall back to a flat color.
+void ApplyMaterial(HWND hwnd) {
     BOOL dark = g_set.darkMode;
     DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
-    COLORREF caption = g_set.bg;
-    DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &caption, sizeof(caption));
+    if (!g_set.blur) {
+        COLORREF caption = g_set.bg;
+        DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &caption, sizeof(caption));
+        return;
+    }
+    using SetWca = BOOL(WINAPI*)(HWND, CompositionData*);
+    static auto setWca =
+        (SetWca)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
+    if (!setWca) return;
+
+    int none = 1 /* DWMSBT_NONE */;
+    DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &none, sizeof(none));
+    HRGN empty = CreateRectRgn(0, 0, -1, -1);
+    DWM_BLURBEHIND bb{DWM_BB_ENABLE | DWM_BB_BLURREGION, TRUE, empty, FALSE};
+    DwmEnableBlurBehindWindow(hwnd, &bb);
+    DeleteObject(empty);
+    BYTE alpha = (BYTE)(g_set.blurTint * 255 / 100);
+    AccentPolicy accent{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 0,
+                        ((DWORD)alpha << 24) | (g_set.bg & 0xFFFFFF), 0};
+    CompositionData data{19 /* WCA_ACCENT_POLICY */, &accent, sizeof(accent)};
+    setWca(hwnd, &data);
+    MARGINS sheet{-1, -1, -1, -1};
+    DwmExtendFrameIntoClientArea(hwnd, &sheet);
+}
+
+// Under the glass sheet, GDI paints with zero alpha; black shows the glass.
+HBRUSH BackBrush() {
+    return g_set.blur ? (HBRUSH)GetStockObject(BLACK_BRUSH) : g.bgBrush;
 }
 
 void CreateTextResources(HWND hwnd) {
@@ -1226,9 +1278,14 @@ void Paint() {
     if (!g.rt) {
         auto props = D2D1::RenderTargetProperties();
         props.dpiX = props.dpiY = 96.0f;  // draw in pixels
+        if (g_set.blur)
+            props.pixelFormat =
+                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED);
         if (FAILED(g.d2d->CreateHwndRenderTarget(props, D2D1::HwndRenderTargetProperties(g.wnd, px),
                                                  &g.rt)))
             return;
+        // ClearType needs an opaque surface to blend against.
+        if (g_set.blur) g.rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
     } else {
         g.rt->Resize(px);
     }
@@ -1237,7 +1294,7 @@ void Paint() {
     float w = (float)rc.right, h = (float)rc.bottom;
     float scale = GetDpiForWindow(g.wnd) / 96.0f;
     g.rt->BeginDraw();
-    g.rt->Clear(ToD2D(g_set.bg));
+    g.rt->Clear(g_set.blur ? D2D1::ColorF(0, 0.0f) : ToD2D(g_set.bg));
 
     if (g.mode == Mode::Image && g.bitmap) {
         D2D1_SIZE_F bs = g.bitmap->GetSize();
@@ -1261,6 +1318,15 @@ void Paint() {
 D2D1_COLOR_F Mix(COLORREF a, COLORREF b, float t) {
     D2D1_COLOR_F x = ToD2D(a), y = ToD2D(b);
     return D2D1::ColorF(x.r + (y.r - x.r) * t, x.g + (y.g - x.g) * t, x.b + (y.b - x.b) * t);
+}
+
+// `c` laid over the background at strength `t`: mixed into the solid color,
+// or see-through over the glass.
+D2D1_COLOR_F Shade(COLORREF c, float t) {
+    if (!g_set.blur) return Mix(g_set.bg, c, t);
+    D2D1_COLOR_F x = ToD2D(c);
+    x.a = t;
+    return x;
 }
 
 D2D1_RECT_F ToRectF(const RECT& r) {
@@ -1297,7 +1363,7 @@ void DrawBar() {
     if (FAILED(g.rt->CreateSolidColorBrush(ToD2D(g_set.fg), &brush))) return;
     PCWSTR icons = L"Segoe Fluent Icons";
 
-    brush->SetColor(Mix(g_set.bg, g_set.fg, 0.06f));
+    brush->SetColor(Shade(g_set.fg, 0.06f));
     g.rt->FillRectangle(ToRectF(b.bar), brush.Get());
 
     D2D1_RECT_F btn = ToRectF(b.button);
@@ -1320,7 +1386,7 @@ void DrawBar() {
     D2D1_RECT_F tr = ToRectF(b.track);
     float cy = (tr.top + tr.bottom) / 2, th = 4 * s;
     if (tr.right > tr.left) {
-        brush->SetColor(Mix(g_set.bg, g_set.dim, 0.3f));
+        brush->SetColor(Shade(g_set.dim, 0.3f));
         g.rt->FillRoundedRectangle(
             D2D1::RoundedRect(D2D1::RectF(tr.left, cy - th / 2, tr.right, cy + th / 2), th / 2, th / 2),
             brush.Get());
@@ -1425,7 +1491,7 @@ LRESULT CALLBACK PreviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
         case WM_CREATE: {
             g.wnd = hwnd;
-            ApplyDarkMode(hwnd);
+            ApplyMaterial(hwnd);
             CreateTextResources(hwnd);
             DWORD style = WS_CHILD | WS_VSCROLL | ES_MULTILINE | ES_READONLY | ES_NOHIDESEL;
             if (!g_set.wordWrap) style |= WS_HSCROLL | ES_AUTOHSCROLL;
@@ -1513,7 +1579,7 @@ LRESULT CALLBACK PreviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_ERASEBKGND: {
             RECT rc;
             GetClientRect(hwnd, &rc);
-            FillRect((HDC)wp, &rc, g.bgBrush);
+            FillRect((HDC)wp, &rc, BackBrush());
             return 1;
         }
         case WM_PAINT:
@@ -1534,8 +1600,8 @@ LRESULT CALLBACK PreviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_CTLCOLORSTATIC:
         case WM_CTLCOLOREDIT:
             SetTextColor((HDC)wp, g_set.fg);
-            SetBkColor((HDC)wp, g_set.bg);
-            return (LRESULT)g.bgBrush;
+            SetBkColor((HDC)wp, g_set.blur ? RGB(0, 0, 0) : g_set.bg);
+            return (LRESULT)BackBrush();
         case WM_ACTIVATE:
             if (LOWORD(wp) == WA_INACTIVE && g_set.closeOnFocusLoss && !lp)
                 PostMessageW(g.msgWnd, WM_APP_KEY, (WPARAM)Key::Close, 0);
