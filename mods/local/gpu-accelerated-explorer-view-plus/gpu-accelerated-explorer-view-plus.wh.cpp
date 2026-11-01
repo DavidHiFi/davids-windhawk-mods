@@ -2,12 +2,12 @@
 // @id              gpu-accelerated-explorer-view-plus
 // @name            GPU Accelerated Explorer View Plus
 // @description     GPU-accelerated Explorer views with smooth scrolling and right-click submenus that populate fully
-// @version         1.0.0
+// @version         1.0.2
 // @author          DavidHiFi, DarkionAvey
 // @include         explorer.exe
 // @architecture    x86-64
 // @compilerOptions -ldcomp -ld3d11 -ldxgi -ld2d1 -ldwrite -lshell32 -lole32 -loleaut32 -luuid -lshlwapi -luser32 -lgdi32 -lwindowscodecs -ldwmapi -luxtheme -lpropsys -lcomctl32 -lruntimeobject
-// @github          https://github.com/DavidHiFi
+// @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @license         GPL-2.0
@@ -346,6 +346,7 @@ constexpr ULONGLONG kTypeSearchTimeoutMs = 1200;
 constexpr UINT_PTR kTimerId = 101;
 constexpr UINT_PTR kTypeSearchTimerId = 105;
 constexpr UINT_PTR kZoomAutoRefitTimerId = 106;
+constexpr UINT_PTR kNativeModeRetryTimerId = 107;
 // Input batching only: expiry never substitutes for gesture/animation/data completion.
 constexpr UINT kZoomAutoRefitDebounceMs = 200;
 constexpr UINT kMsgDispose = WM_APP + 31;
@@ -2455,6 +2456,7 @@ struct ViewState {
     // the first accepted content frame owns it; late Shell setup cannot undo it.
     bool directoryModePinned = false;
     std::optional<FolderViewMode> nativeModeBeforeCommand;
+    unsigned char nativeModeRetryLeft = 0; // Bounded re-probes while the Shell lands a view command.
     HWINEVENTHOOK viewEvents = nullptr; // Shell lifecycle notifications, this UI thread only.
     bool viewSignalPending = false;
     bool viewSignalRequiresScan = false;
@@ -19766,8 +19768,11 @@ bool ApplyViewLayout(ViewState& state, FolderViewMode requested, bool animate = 
 
 // Share one mode observation policy between attachment and presentation.
 // FVM_AUTO/invalid values are initialization states, not native-only layouts.
-bool RefreshNativeViewMode(ViewState& state, bool force = false) {
-    if (state.directoryModePinned || state.optimisticStartedAt) return true;
+bool RefreshNativeViewMode(ViewState& state, bool force = false, bool userCommand = false) {
+    if (state.optimisticStartedAt) return true;
+    // A user view command outranks the per-directory pin: a pinned folder would
+    // otherwise never observe the native mode its own view command requested.
+    if (state.directoryModePinned && !userCommand) return true;
     const ULONGLONG tick = GetTickCount64();
     if (!force && state.lastNativeModeProbe &&
         (IsRecycleBinLocation(state.folderPath) || tick - state.lastNativeModeProbe < 600))
@@ -19814,6 +19819,29 @@ bool ApplyNativePresentation(ViewState& state) {
     }
     state.graphicsStandby=state.graphicsStandbyPending=false;
     RefreshNativeViewMode(state);
+    // A pinned directory skips routine re-probes, but a real view change - the
+    // View flyout, the command-bar view buttons, a context menu - lands in the
+    // shell view without dispatched input this process can observe, so no user
+    // command ever reaches the pin bypass. Reconcile that here under the same
+    // throttle unpinned folders already use: adopt an observed supported mode
+    // only when it differs from the live layout, never while a speculative
+    // navigation is pending, and never for the Recycle Bin, whose provider
+    // reorders keep the known mode.
+    if (state.directoryModePinned && !state.optimisticStartedAt &&
+        !IsRecycleBinLocation(state.folderPath) && TabOwnsActiveView(state)) {
+        const ULONGLONG tick = GetTickCount64();
+        if (!state.lastNativeModeProbe || tick - state.lastNativeModeProbe >= 600) {
+            FolderViewMode observed;
+            state.lastNativeModeProbe = tick;
+            if (ReadNativeViewMode(state,observed) &&
+                IsGpuViewMode(observed.mode,state.thisPcGpu) &&
+                (observed.mode != state.layoutNativeMode ||
+                 (IsIconViewMode(observed.mode,state.thisPcGpu) && observed.iconSize != state.layoutIconSize))) {
+                state.cachedNativeMode = observed.mode;
+                if (IsIconViewMode(observed.mode,state.thisPcGpu)) state.nativeIconSize = observed.iconSize;
+            }
+        }
+    }
     const UINT shellMode = state.cachedNativeMode;
     const bool details = IsGpuViewMode(shellMode,state.thisPcGpu);
     const bool columnsMode = shellMode == FVM_DETAILS;
@@ -19896,6 +19924,8 @@ bool ApplyNativePresentation(ViewState& state) {
 void BeginDirectoryViewMode(ViewState& state, bool nativeReady) {
     state.directoryModePinned=false;
     state.nativeModeBeforeCommand.reset();
+    state.nativeModeRetryLeft = 0;
+    if (state.hwnd) KillTimer(state.hwnd, kNativeModeRetryTimerId);
     state.lastNativeModeProbe=0;
     const auto saved=state.folderCache.folders.find(state.folderPath);
     const bool cached=state.visible && saved!=state.folderCache.folders.end() && IsGpuViewMode(saved->second.viewMode.mode,state.thisPcGpu);
@@ -23346,14 +23376,30 @@ LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                 // Explicit commands bypass the safety cache. Recycle Bin provider
                 // reorders retain the known mode instead of interrogating its
                 // live Shell view again as cold images/properties complete.
+                bool applied = false;
                 if (!g_unloading.load(std::memory_order_relaxed) && s->visible &&
                     s->inScope && !s->optimisticStartedAt && !IsIconic(s->frameHwnd) &&
                     TabOwnsActiveView(*s) &&
                     (requested || ((command || !IsRecycleBinLocation(s->folderPath) || !s->lastNativeModeProbe) &&
-                    RefreshNativeViewMode(*s, true))) &&
+                    RefreshNativeViewMode(*s, true, command))) &&
                     (s->layoutNativeMode != s->cachedNativeMode ||
-                     (IsIconViewMode(s->cachedNativeMode,s->thisPcGpu) && s->layoutIconSize != s->nativeIconSize)))
+                     (IsIconViewMode(s->cachedNativeMode,s->thisPcGpu) && s->layoutIconSize != s->nativeIconSize))) {
                     ApplyNativePresentation(*s);
+                    applied = true;
+                }
+                if (command && !applied && !g_unloading.load(std::memory_order_relaxed) &&
+                    s->visible && s->inScope && !s->optimisticStartedAt && !IsIconic(s->frameHwnd) &&
+                    TabOwnsActiveView(*s)) {
+                    // The Shell can land the actual mode change after this input
+                    // dispatch. A short bounded re-probe observes it; each pass is
+                    // one cheap Shell mode read the pin no longer hides.
+                    if (s->nativeModeRetryLeft) --s->nativeModeRetryLeft;
+                    else s->nativeModeRetryLeft = 3;
+                    if (s->nativeModeRetryLeft) SetTimer(hwnd, kNativeModeRetryTimerId, 150, nullptr);
+                } else if (applied) {
+                    s->nativeModeRetryLeft = 0;
+                    KillTimer(hwnd, kNativeModeRetryTimerId);
+                }
                 if (command && IsWindow(hwnd) && State(hwnd) == s && s->visible && s->inScope &&
                     !s->optimisticStartedAt && !IsIconic(s->frameHwnd) && TabOwnsActiveView(*s)) {
                     s->nativeColumnsDirty = true;
@@ -23632,6 +23678,16 @@ LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             NavigateCurrentShellTab(*s, wParam != 0);
         return 0;
     case WM_TIMER:
+        if (wParam == kNativeModeRetryTimerId) {
+            KillTimer(hwnd, kNativeModeRetryTimerId);
+            if (s && s->nativeModeRetryLeft && s->visible && s->inScope &&
+                !s->optimisticStartedAt && !s->nativeModeSignalQueued &&
+                TabOwnsActiveView(*s) && !IsIconic(s->frameHwnd)) {
+                s->nativeViewCommandPending = true;
+                s->nativeModeSignalQueued = PostMessageW(hwnd, kMsgShellVisibilityChanged, 2, 0) != FALSE;
+            }
+            return 0;
+        }
         if (wParam == kZoomAutoRefitTimerId) {
             KillTimer(hwnd, kZoomAutoRefitTimerId);
             if (s && !g_unloading.load() && s->zoomAutoRefitNotBefore) {
