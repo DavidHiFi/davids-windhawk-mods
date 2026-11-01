@@ -2,7 +2,7 @@
 // @id              simple-window-switcher-plus
 // @name            Simple Window Switcher Plus
 // @description     Customizable Alt+Tab with Vista animations, background blur and elevated app support
-// @version         1.0.1
+// @version         1.0.3
 // @author          DavidHiFi, Lone, valinet, Asteski, bropines, caliberda
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,12 +26,15 @@ Vista's animated live-window layouts and blurred background, with Simple Window 
 - Simple layout preserves the original grouping, badge, corners, dimensions and navigation settings.
 - Shared title font, icon visibility, window exclusions, monitor filtering and minimized-window ordering in Vista mode.
 - Custom or accent selection borders and background tint in Vista mode.
+- Optional rounded corners on Vista window cards and panels, with a set radius.
+- A floating title pill in Vista mode, with acrylic blur, a border and a button that closes the selected window.
 - Dedicated administrator host handles shortcuts while elevated apps have focus.
 - Change layouts in Settings without restarting Explorer.
+- If the switcher host crashes, it starts again on its own, so Alt+Tab keeps working.
 
 ## Settings
 
-Choose the switcher layout first. Animation and background settings control Vista mode. Style, Theme, Appearance, Dimensions, Grouping and Accessibility control Simple mode. Vista also uses the shared font, icon/title visibility, theme border/background colors, exclusions, per-monitor filtering and minimized-window sorting. Badge layouts, grouping and thumbnail corner settings apply to Simple mode.
+Choose the switcher layout first. Animation and background settings control Vista mode. Style, Theme, Appearance, Dimensions, Grouping and Accessibility control Simple mode. Vista also uses the shared font, icon/title visibility, theme border/background colors, exclusions, per-monitor filtering and minimized-window sorting. Badge layouts, grouping and thumbnail corner settings apply to Simple mode. Rounded corners and the title pill apply to Vista mode. Set the pill corner radius to 0 for a capsule shape.
 
 Disable other Alt+Tab replacements before enabling this mod. Administrator hosting requests Windows elevation when needed. It does not replace shortcuts on the secure UAC desktop. Windows that block capture show an icon card.
 
@@ -163,6 +166,55 @@ Based on Simple Window Switcher 2.1 by Lone, with improvements by Asteski and br
   $name:pt-BR: Sombras das janelas
   $description: Soft shadows under the windows in the stack
   $description:pt-BR: Sombras suaves sob as janelas da pilha
+- roundedCorners: true
+  $name: Rounded corners
+  $description: Rounds the window previews, the selection outline and the panels
+- cornerRadius: 16
+  $name: Corner radius
+  $description: In pixels at 100% display scaling (0-64). Used when rounded corners are on
+- TitlePill:
+  - enabled: true
+    $name: Floating title pill
+    $description: Shows the window title in a blurred floating pill. Turn off for plain text
+  - closeButton: true
+    $name: Close button
+    $description: Adds an X to the pill that closes the window. Q, Delete and Ctrl+W do the same
+  - blur: 30
+    $name: Blur strength
+    $description: How much the pill blurs what's behind it (0-100)
+  - tintColor: "1C1C1E"
+    $name: Tint color
+    $description: Hex color, like 1C1C1E
+  - tintOpacity: 45
+    $name: Tint opacity (%)
+    $description: 0 is clear glass, 100 is solid
+  - noise: 3
+    $name: Grain (%)
+    $description: Fine grain over the glass, like Windows acrylic (0-20)
+  - textColor: "FFFFFF"
+    $name: Text color
+    $description: Hex color for the title and the X
+  - borderColor: "FFFFFF"
+    $name: Border color
+    $description: Hex color
+  - borderOpacity: 18
+    $name: Border opacity (%)
+  - borderWidth: 1
+    $name: Border width
+    $description: In pixels at 100% display scaling (0-6)
+  - cornerRadius: 0
+    $name: Pill corner radius
+    $description: In pixels at 100% display scaling. 0 makes fully round ends
+  - paddingX: 16
+    $name: Side padding
+  - paddingY: 9
+    $name: Top and bottom padding
+  - bottomMargin: 64
+    $name: Distance from the bottom of the screen
+  - shadow: true
+    $name: Pill shadow
+  $name: Title pill
+  $description: The window title shown under the Vista layouts
 - includeMinimized: true
   $name: Include minimized windows
   $name:pt-BR: Incluir janelas minimizadas
@@ -5635,7 +5687,31 @@ struct Settings {
     bool includeMinimized;
     bool minimizedContent;
     bool centerCursor;
+    bool roundedCorners;
+    float cornerRadius;  // In pixels at 100% scaling.
+    struct {
+        bool enabled;
+        bool closeButton;
+        float blur;
+        D2D1_COLOR_F tint;  // Alpha is the tint opacity.
+        float noise;
+        D2D1_COLOR_F text;
+        D2D1_COLOR_F border;
+        float borderWidth;
+        float radius;  // 0 is fully round.
+        float paddingX, paddingY;
+        float bottomMargin;
+        bool shadow;
+    } pill;
 };
+
+D2D1_COLOR_F HexSetting(PCWSTR name, COLORREF fallback, float alpha) {
+    COLORREF c = fallback;
+    const auto value = WindhawkUtils::StringSetting::make(name);
+    Simple::ParseHexColor(value, &c);
+    return D2D1::ColorF(GetRValue(c) / 255.0f, GetGValue(c) / 255.0f,
+                        GetBValue(c) / 255.0f, alpha);
+}
 
 Settings LoadSettings() {
     Simple::LoadSettings();
@@ -5701,6 +5777,25 @@ Settings LoadSettings() {
     s.includeMinimized = Wh_GetIntSetting(L"includeMinimized") != 0 && !Simple::g_settings.hideMinimizedWindows;
     s.minimizedContent = Wh_GetIntSetting(L"minimizedContent") != 0;
     s.centerCursor = Wh_GetIntSetting(L"Accessibility.centerCursor") != 0;
+    s.roundedCorners = Wh_GetIntSetting(L"roundedCorners") != 0;
+    s.cornerRadius = (float)std::clamp(Wh_GetIntSetting(L"cornerRadius"), 0, 64);
+
+    auto& p = s.pill;
+    p.enabled = Wh_GetIntSetting(L"TitlePill.enabled") != 0;
+    p.closeButton = Wh_GetIntSetting(L"TitlePill.closeButton") != 0;
+    p.blur = (float)std::clamp(Wh_GetIntSetting(L"TitlePill.blur"), 0, 100);
+    p.tint = HexSetting(L"TitlePill.tintColor", RGB(0x1C, 0x1C, 0x1E),
+                        std::clamp(Wh_GetIntSetting(L"TitlePill.tintOpacity"), 0, 100) / 100.0f);
+    p.noise = std::clamp(Wh_GetIntSetting(L"TitlePill.noise"), 0, 20) / 100.0f;
+    p.text = HexSetting(L"TitlePill.textColor", RGB(255, 255, 255), 1);
+    p.border = HexSetting(L"TitlePill.borderColor", RGB(255, 255, 255),
+                          std::clamp(Wh_GetIntSetting(L"TitlePill.borderOpacity"), 0, 100) / 100.0f);
+    p.borderWidth = (float)std::clamp(Wh_GetIntSetting(L"TitlePill.borderWidth"), 0, 6);
+    p.radius = (float)std::clamp(Wh_GetIntSetting(L"TitlePill.cornerRadius"), 0, 200);
+    p.paddingX = (float)std::clamp(Wh_GetIntSetting(L"TitlePill.paddingX"), 0, 80);
+    p.paddingY = (float)std::clamp(Wh_GetIntSetting(L"TitlePill.paddingY"), 0, 60);
+    p.bottomMargin = (float)std::clamp(Wh_GetIntSetting(L"TitlePill.bottomMargin"), 0, 1000);
+    p.shadow = Wh_GetIntSetting(L"TitlePill.shadow") != 0;
     return s;
 }
 
@@ -6166,7 +6261,9 @@ void StopExplorerPart() {
 
 // Doesn't wait for anything, so explorer's startup isn't delayed.
 void StartExplorerPart() {
-    if (LoadSettings().style == AnimationStyle::Native) {
+    const auto renderer = WindhawkUtils::StringSetting::make(L"renderer");
+    if (wcscmp(renderer, L"simple") != 0 &&
+        LoadSettings().style == AnimationStyle::Native) {
         // Nothing to hand over.
         return;
     }
@@ -6397,7 +6494,25 @@ struct EffectChain {
     com_ptr<ID2D1Effect> color;
     com_ptr<ID2D1Effect> shadow;
     ID2D1Image* input = nullptr;
+    // Rounded corners: the window image goes through an alpha mask (a rounded
+    // rectangle in the image's own pixels) before the 3D transform, so the
+    // corners, the perspective and the shadow all follow the rounded shape.
+    com_ptr<ID2D1Effect> roundMask;
+    com_ptr<ID2D1CommandList> mask;
+    D2D1_SIZE_F maskSize{};
+    float maskRadius = -1;
+    bool masked = false;
+    bool wiredMasked = false;
 };
+
+// Maps a point of the (0,0)-(width,height) rectangle through a
+// RectToQuadMatrix result.
+D2D1_POINT_2F MapThrough(const D2D1_MATRIX_4X4_F& m, float u, float v) {
+    const float x = m._11 * u + m._21 * v + m._41;
+    const float y = m._12 * u + m._22 * v + m._42;
+    const float w = std::max(m._14 * u + m._24 * v + m._44, 1e-4f);
+    return {x / w, y / w};
+}
 
 struct Item {
     HWND hwnd = nullptr;
@@ -6465,6 +6580,7 @@ class Switcher {
     void OnCommit(int index);
     void OnCancel();
     void OnClick(POINT pt);
+    void CloseItem(int index);
 
     void CollectWindows();
     bool CreateProxy(Item& item);
@@ -6493,6 +6609,14 @@ class Switcher {
     void RenderFrame();
     void DrawCard(const DrawEntry& entry, float t);
     void DrawTitle(float t);
+    float CornerRadius() const;
+    float PanelRadius() const;
+    void PrepareCardMasks();
+    float TitleFontSize() const;
+    bool EnsureTitleLayout(int index);
+    void PreparePill(float t, double dt);
+    bool EnsurePillResources();
+    void DrawPill();
     void ComputePanelLayout();
     D2D1_RECT_F SelectionCell(float* opacity) const;
     void DrawPanelBack(float t);
@@ -6595,6 +6719,34 @@ class Switcher {
     D2D1_RECT_F m_caption{};
     float m_labelFontSize = 0;
     com_ptr<IDWriteTextFormat> m_labelFormat;
+
+    // Title pill. The frame is drawn into m_scene first, so the pill can blur
+    // what's behind it.
+    struct Pill {
+        bool visible = false;
+        int index = -1;
+        D2D1_RECT_F rect{};
+        float radius = 0;
+        float opacity = 0;         // Whole pill (open/close).
+        float contentOpacity = 0;  // Icon and title (fade while flipping).
+        float width = 0;           // Animated towards the content width.
+        float hover = 0;           // Close button hover, animated.
+        bool hot = false;          // Cursor over the close button now.
+        D2D1_RECT_F iconRect{};
+        D2D1_RECT_F textClip{};
+        D2D1_POINT_2F textOrigin{};
+        D2D1_RECT_F closeRect{};
+    } m_pill;
+    com_ptr<ID2D1Bitmap1> m_scene;
+    com_ptr<ID2D1Effect> m_pillCrop;
+    com_ptr<ID2D1Effect> m_pillBlur;
+    com_ptr<ID2D1Effect> m_pillSaturation;
+    com_ptr<ID2D1Effect> m_pillShadow;
+    com_ptr<ID2D1Effect> m_noise;
+    com_ptr<ID2D1Effect> m_noiseColor;
+    com_ptr<ID2D1CommandList> m_pillShape;
+    com_ptr<ID2D1LinearGradientBrush> m_gloss;
+    com_ptr<ID2D1StrokeStyle> m_roundCap;
 };
 
 Switcher* g_switcher;
@@ -6816,6 +6968,16 @@ bool Switcher::CreateDeviceResources() {
 
 void Switcher::ReleaseDeviceResources() {
     g_ready = false;
+    m_scene = nullptr;
+    m_pillCrop = nullptr;
+    m_pillBlur = nullptr;
+    m_pillSaturation = nullptr;
+    m_pillShadow = nullptr;
+    m_noise = nullptr;
+    m_noiseColor = nullptr;
+    m_pillShape = nullptr;
+    m_gloss = nullptr;
+    m_roundCap = nullptr;
     m_titleLayout = nullptr;
     m_titleFormat = nullptr;
     m_titleIndex = -1;
@@ -7016,10 +7178,12 @@ LRESULT Switcher::HandleMessage(HWND hwnd,
         case WM_APP_WHEEL:
             m_wheelRemainder += (int)(INT_PTR)wParam;
             while (std::abs(m_wheelRemainder) >= WHEEL_DELTA) {
-                // Wheel up brings the previous window to the front.
+                // Wheel up (scrolling forward) brings the next window to the
+                // front; "Reverse scroll direction" flips it.
                 const int direction = m_wheelRemainder > 0 ? 1 : -1;
                 m_wheelRemainder -= direction * WHEEL_DELTA;
-                OnStep(-direction);
+                OnStep(Simple::g_settings.reverseScrollDirection ? -direction
+                                                                 : direction);
             }
             return 0;
 
@@ -7039,15 +7203,10 @@ LRESULT Switcher::HandleMessage(HWND hwnd,
             }
             return 0;
 
-        case WM_APP_CLOSE_SELECTED: {
-            int selected = SelectedIndex();
-            if(selected >= 0) {
-                HWND target = m_items[selected]->hwnd;
-                OnCancel(); EndSwitching();
-                PostMessageW(target, WM_CLOSE, 0, 0);
-            }
+        case WM_APP_CLOSE_SELECTED:
+            CloseItem(SelectedIndex());
             return 0;
-        }
+
         case WM_APP_SETTINGS:
             m_settings = LoadSettings();
             g_takeOver = m_settings.style != AnimationStyle::Native;
@@ -7155,6 +7314,7 @@ void Switcher::OnStart(WPARAM flags) {
     m_wheelRemainder = 0;
     m_altReleasedAt = 0;
     m_titleIndex = -1;
+    m_pill = {};
     m_commit = false;
     m_selectedOnTopWhenFlat = false;
 
@@ -7288,6 +7448,19 @@ void Switcher::OnClick(POINT pt) {
         return;
     }
     const D2D1_POINT_2F point{(float)pt.x, (float)pt.y};
+    auto inside = [&](const D2D1_RECT_F& r) {
+        return point.x >= r.left && point.x < r.right && point.y >= r.top &&
+               point.y < r.bottom;
+    };
+    if (m_pill.visible && m_pill.opacity > 0.5f) {
+        if (m_settings.pill.closeButton && inside(m_pill.closeRect)) {
+            CloseItem(m_pill.index);
+            return;
+        }
+        if (inside(m_pill.rect)) {
+            return;
+        }
+    }
     if (IsPanelStyle(m_settings.style)) {
         for (size_t i = 0; i < m_cells.size(); i++) {
             const D2D1_RECT_F& cell = m_cells[i];
@@ -7312,6 +7485,40 @@ void Switcher::OnClick(POINT pt) {
             }
         }
     }
+}
+
+// Closes a window from the switcher (the pill's X, or Q, Delete, Ctrl+W) and
+// takes it out of the stack. The switcher stays open on the next window.
+void Switcher::CloseItem(int index) {
+    if ((m_state != State::Open && m_state != State::Pending) || index < 0 ||
+        index >= (int)m_items.size()) {
+        return;
+    }
+    PostMessageW(m_items[index]->hwnd, WM_CLOSE, 0, 0);
+
+    const int selected = SelectedIndex();
+    const long long base = m_target - selected;
+    StopCapture(*m_items[index]);
+    m_drawList.clear();
+    m_items.erase(m_items.begin() + index);
+    m_titleLayout = nullptr;
+    m_titleIndex = -1;
+
+    if (m_items.empty()) {
+        EndSwitching();
+        OnCancel();
+        return;
+    }
+
+    // Indexes now refer to the shorter list. The window after the closed one
+    // slides into its place; if the closed one was last, the first one does.
+    m_scroll -= (double)base;
+    m_target = selected;
+    if (index < selected) {
+        m_target--;
+        m_scroll -= 1;
+    }
+    ComputeLayout();
 }
 
 struct EnumWindowsContext {
@@ -8388,9 +8595,7 @@ void Switcher::DrawPanelBack(float t) {
         return;
     }
 
-    const float radius = m_settings.style == AnimationStyle::Thumbnails
-                             ? 0.0f
-                             : std::round(m_height / 135);
+    const float radius = PanelRadius();
     m_brush->SetColor(D2D1::ColorF(0.11f, 0.11f, 0.12f, 0.82f * t));
     m_ctx->FillRoundedRectangle({m_panel, radius, radius}, m_brush.get());
     m_brush->SetColor(D2D1::ColorF(1, 1, 1, 0.08f * t));
@@ -8468,9 +8673,7 @@ void Switcher::DrawPanelFront(float t) {
         m_brush->SetColor(D2D1::ColorF(0.19f, 0.42f, 0.77f, t * opacity));
         m_ctx->DrawRectangle(cell, m_brush.get(), 2);
     } else {
-        const float radius = style == AnimationStyle::Thumbnails
-                                 ? 0.0f
-                                 : std::round(m_height / 135);
+        const float radius = PanelRadius();
         const float border = std::max(2.0f, std::round(m_height / 360));
         const D2D1_RECT_F rect{cell.left + border / 2, cell.top + border / 2,
                                cell.right - border / 2,
@@ -8555,15 +8758,24 @@ void Switcher::DrawCard(const DrawEntry& entry, float t) {
 
     ID2D1Bitmap1* bitmap =
         item.content ? item.content.get() : item.placeholder.get();
-    if (chain.input != bitmap) {
-        chain.transform->SetInput(0, bitmap);
+    if (!bitmap) {
+        return;
+    }
+    if (chain.input != bitmap || chain.wiredMasked != chain.masked) {
+        if (chain.masked) {
+            chain.roundMask->SetInput(0, bitmap);
+            chain.transform->SetInputEffect(0, chain.roundMask.get());
+        } else {
+            chain.transform->SetInput(0, bitmap);
+        }
         chain.input = bitmap;
+        chain.wiredMasked = chain.masked;
     }
 
     const D2D1_SIZE_F size = bitmap->GetSize();
-    chain.transform->SetValue(
-        kTransform3DPropTransformMatrix,
-        RectToQuadMatrix(size.width, size.height, entry.quad));
+    const D2D1_MATRIX_4X4_F matrix =
+        RectToQuadMatrix(size.width, size.height, entry.quad);
+    chain.transform->SetValue(kTransform3DPropTransformMatrix, matrix);
 
     const float b = entry.pose.brightness;
     const D2D1_MATRIX_5X4_F colorMatrix =
@@ -8593,8 +8805,36 @@ void Switcher::DrawCard(const DrawEntry& entry, float t) {
         com_ptr<ID2D1GeometrySink> sink;
         if (SUCCEEDED(m_d2dFactory->CreatePathGeometry(outline.put())) &&
             SUCCEEDED(outline->Open(sink.put()))) {
-            sink->BeginFigure(entry.quad.p[0], D2D1_FIGURE_BEGIN_HOLLOW);
-            sink->AddLines(&entry.quad.p[1], 3);
+            if (chain.masked) {
+                // The rounded rectangle in the image's pixels, projected like
+                // the image, so it hugs the rounded corners in perspective.
+                const float w = size.width, h = size.height;
+                const float r = chain.maskRadius;
+                const struct {
+                    float cx, cy, start;
+                } corners[] = {{w - r, r, -1.5708f},
+                               {w - r, h - r, 0},
+                               {r, h - r, 1.5708f},
+                               {r, r, 3.14159f}};
+                constexpr int kSegments = 8;
+                bool first = true;
+                for (const auto& c : corners) {
+                    for (int i = 0; i <= kSegments; i++) {
+                        const float a = c.start + 1.5708f * i / kSegments;
+                        const D2D1_POINT_2F pt = MapThrough(
+                            matrix, c.cx + r * std::cos(a), c.cy + r * std::sin(a));
+                        if (first) {
+                            sink->BeginFigure(pt, D2D1_FIGURE_BEGIN_HOLLOW);
+                            first = false;
+                        } else {
+                            sink->AddLine(pt);
+                        }
+                    }
+                }
+            } else {
+                sink->BeginFigure(entry.quad.p[0], D2D1_FIGURE_BEGIN_HOLLOW);
+                sink->AddLines(&entry.quad.p[1], 3);
+            }
             sink->EndFigure(D2D1_FIGURE_END_CLOSED);
             if (SUCCEEDED(sink->Close())) {
                 m_brush->SetColor(SharedColor(true, 0.9f * highlight));
@@ -8605,6 +8845,45 @@ void Switcher::DrawCard(const DrawEntry& entry, float t) {
     }
 }
 
+float Switcher::TitleFontSize() const {
+    return std::round(Simple::g_settings.fontSize * 96.0f / 72.0f * m_dpiScale);
+}
+
+bool Switcher::EnsureTitleLayout(int index) {
+    const float fontSize = TitleFontSize();
+    if (!m_titleFormat) {
+        if (FAILED(m_dwriteFactory->CreateTextFormat(
+                Simple::g_settings.fontFamily, nullptr,
+                (wcsstr(Simple::g_settings.fontStyle,L"bold") || wcsstr(Simple::g_settings.fontStyle,L"Bold")) ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_NORMAL, wcsstr(Simple::g_settings.fontStyle,L"Italic") || wcsstr(Simple::g_settings.fontStyle,L"italic") ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
+                DWRITE_FONT_STRETCH_NORMAL, fontSize, L"",
+                m_titleFormat.put()))) {
+            return false;
+        }
+        m_titleFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        const DWRITE_TRIMMING trimming{DWRITE_TRIMMING_GRANULARITY_CHARACTER,
+                                       0, 0};
+        com_ptr<IDWriteInlineObject> ellipsis;
+        m_dwriteFactory->CreateEllipsisTrimmingSign(m_titleFormat.get(),
+                                                    ellipsis.put());
+        m_titleFormat->SetTrimming(&trimming, ellipsis.get());
+        m_titleLayout = nullptr;
+    }
+
+    if (index != m_titleIndex || !m_titleLayout) {
+        m_titleLayout = nullptr;
+        m_titleIndex = index;
+        const Item& item = *m_items[index];
+        if (FAILED(m_dwriteFactory->CreateTextLayout(
+                item.title.c_str(), (UINT32)item.title.size(),
+                m_titleFormat.get(), m_width * 0.6f, fontSize * 2,
+                m_titleLayout.put()))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Plain title text, used when the pill is turned off.
 void Switcher::DrawTitle(float t) {
     if (!m_settings.showTitle || m_items.empty()) {
         return;
@@ -8621,36 +8900,10 @@ void Switcher::DrawTitle(float t) {
 
     const int index = PositiveMod((long long)nearest, (int)m_items.size());
     const Item& item = *m_items[index];
-
-    const float fontSize = std::round(Simple::g_settings.fontSize * 96.0f / 72.0f * m_dpiScale);
-    if (!m_titleFormat) {
-        if (FAILED(m_dwriteFactory->CreateTextFormat(
-                Simple::g_settings.fontFamily, nullptr,
-                (wcsstr(Simple::g_settings.fontStyle,L"bold") || wcsstr(Simple::g_settings.fontStyle,L"Bold")) ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_NORMAL, wcsstr(Simple::g_settings.fontStyle,L"Italic") || wcsstr(Simple::g_settings.fontStyle,L"italic") ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
-                DWRITE_FONT_STRETCH_NORMAL, fontSize, L"",
-                m_titleFormat.put()))) {
-            return;
-        }
-        m_titleFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
-        const DWRITE_TRIMMING trimming{DWRITE_TRIMMING_GRANULARITY_CHARACTER,
-                                       0, 0};
-        com_ptr<IDWriteInlineObject> ellipsis;
-        m_dwriteFactory->CreateEllipsisTrimmingSign(m_titleFormat.get(),
-                                                    ellipsis.put());
-        m_titleFormat->SetTrimming(&trimming, ellipsis.get());
-        m_titleLayout = nullptr;
+    if (!EnsureTitleLayout(index)) {
+        return;
     }
-
-    if (index != m_titleIndex || !m_titleLayout) {
-        m_titleLayout = nullptr;
-        m_titleIndex = index;
-        if (FAILED(m_dwriteFactory->CreateTextLayout(
-                item.title.c_str(), (UINT32)item.title.size(),
-                m_titleFormat.get(), m_width * 0.6f, fontSize * 2,
-                m_titleLayout.put()))) {
-            return;
-        }
-    }
+    const float fontSize = TitleFontSize();
 
     DWRITE_TEXT_METRICS metrics;
     m_titleLayout->GetMetrics(&metrics);
@@ -8674,6 +8927,372 @@ void Switcher::DrawTitle(float t) {
                           m_brush.get());
     m_brush->SetColor(D2D1::ColorF(1, 1, 1, opacity));
     m_ctx->DrawTextLayout(origin, m_titleLayout.get(), m_brush.get());
+}
+
+// Rounded corners, in physical pixels (0 when turned off).
+float Switcher::CornerRadius() const {
+    return m_settings.roundedCorners
+               ? std::round(m_settings.cornerRadius * m_dpiScale)
+               : 0.0f;
+}
+
+float Switcher::PanelRadius() const {
+    if (m_settings.roundedCorners) {
+        return CornerRadius();
+    }
+    return m_settings.style == AnimationStyle::Thumbnails
+               ? 0.0f
+               : std::round(m_height / 135);
+}
+
+// Builds each card's rounded mask, before drawing starts (recording a command
+// list needs the device context). The radius is in the image's own pixels,
+// chosen so the card shows CornerRadius() on screen at its current size.
+void Switcher::PrepareCardMasks() {
+    const float radius = CornerRadius();
+    auto length = [](D2D1_POINT_2F a, D2D1_POINT_2F b) {
+        return std::hypot(b.x - a.x, b.y - a.y);
+    };
+    for (const DrawEntry& entry : m_drawList) {
+        Item& item = *entry.item;
+        EffectChain& chain = item.chains[entry.chain];
+        chain.masked = false;
+        ID2D1Bitmap1* bitmap =
+            item.content ? item.content.get() : item.placeholder.get();
+        if (radius <= 0 || !bitmap || !EnsureChain(chain)) {
+            continue;
+        }
+        const D2D1_SIZE_F size = bitmap->GetSize();
+        const Quad& q = entry.quad;
+        const float scale = std::max(
+            {(length(q.p[0], q.p[1]) + length(q.p[3], q.p[2])) / (2 * size.width),
+             (length(q.p[0], q.p[3]) + length(q.p[1], q.p[2])) / (2 * size.height),
+             1e-3f});
+        float r = std::min(radius / scale,
+                           std::min(size.width, size.height) / 2);
+        r = std::round(r * 2) / 2;
+        if (r < 0.5f) {
+            continue;
+        }
+        if (!chain.roundMask &&
+            FAILED(m_ctx->CreateEffect(CLSID_D2D1AlphaMask,
+                                       chain.roundMask.put()))) {
+            continue;
+        }
+        const bool sameSize = chain.maskSize.width == size.width &&
+                              chain.maskSize.height == size.height;
+        if (!chain.mask || !sameSize ||
+            std::fabs(chain.maskRadius - r) > 0.75f) {
+            com_ptr<ID2D1CommandList> list;
+            if (FAILED(m_ctx->CreateCommandList(list.put()))) {
+                continue;
+            }
+            m_ctx->SetTarget(list.get());
+            m_ctx->BeginDraw();
+            m_brush->SetColor(D2D1::ColorF(1, 1, 1, 1));
+            m_ctx->FillRoundedRectangle(
+                {{0, 0, size.width, size.height}, r, r}, m_brush.get());
+            const HRESULT hr = m_ctx->EndDraw();
+            m_ctx->SetTarget(nullptr);
+            if (FAILED(hr) || FAILED(list->Close())) {
+                continue;
+            }
+            chain.mask = list;
+            chain.maskSize = size;
+            chain.maskRadius = r;
+            chain.roundMask->SetInput(1, list.get());
+        }
+        chain.masked = true;
+    }
+}
+
+bool Switcher::EnsurePillResources() {
+    if (!m_scene || m_scene->GetPixelSize().width != m_swapWidth ||
+        m_scene->GetPixelSize().height != m_swapHeight) {
+        m_scene = CreateTargetBitmap(m_swapWidth, m_swapHeight);
+        if (!m_scene) {
+            return false;
+        }
+    }
+    if (m_pillCrop) {
+        return true;
+    }
+    if (FAILED(m_ctx->CreateEffect(CLSID_D2D1Crop, m_pillCrop.put())) ||
+        FAILED(m_ctx->CreateEffect(CLSID_D2D1GaussianBlur, m_pillBlur.put())) ||
+        FAILED(m_ctx->CreateEffect(CLSID_D2D1Saturation,
+                                   m_pillSaturation.put())) ||
+        FAILED(m_ctx->CreateEffect(CLSID_D2D1Shadow, m_pillShadow.put())) ||
+        FAILED(m_ctx->CreateEffect(CLSID_D2D1Turbulence, m_noise.put())) ||
+        FAILED(m_ctx->CreateEffect(CLSID_D2D1ColorMatrix,
+                                   m_noiseColor.put()))) {
+        m_pillCrop = m_pillBlur = m_pillSaturation = m_pillShadow = m_noise =
+            m_noiseColor = nullptr;
+        return false;
+    }
+    m_pillCrop->SetValue(D2D1_CROP_PROP_BORDER_MODE, D2D1_BORDER_MODE_HARD);
+    m_pillBlur->SetInputEffect(0, m_pillCrop.get());
+    m_pillBlur->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE,
+                         D2D1_BORDER_MODE_HARD);
+    m_pillBlur->SetValue(D2D1_GAUSSIANBLUR_PROP_OPTIMIZATION,
+                         (UINT32)1 /* BALANCED; missing from MinGW headers */);
+    // Acrylic keeps the colors behind it vivid.
+    m_pillSaturation->SetInputEffect(0, m_pillBlur.get());
+    m_pillSaturation->SetValue(0 /* D2D1_SATURATION_PROP_SATURATION */, 1.35f);
+
+    m_noise->SetValue(D2D1_TURBULENCE_PROP_BASE_FREQUENCY,
+                      D2D1::Vector2F(0.9f, 0.9f));
+    m_noise->SetValue(D2D1_TURBULENCE_PROP_NUM_OCTAVES, 2u);
+    m_noise->SetValue(D2D1_TURBULENCE_PROP_NOISE, D2D1_TURBULENCE_NOISE_TURBULENCE);
+    m_noiseColor->SetInputEffect(0, m_noise.get());
+
+    if (FAILED(m_d2dFactory->CreateStrokeStyle(
+            D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND,
+                                        D2D1_CAP_STYLE_ROUND,
+                                        D2D1_CAP_STYLE_ROUND),
+            nullptr, 0, m_roundCap.put()))) {
+        m_roundCap = nullptr;
+    }
+
+    const D2D1_GRADIENT_STOP stops[] = {{0, D2D1::ColorF(1, 1, 1, 0.09f)},
+                                        {1, D2D1::ColorF(1, 1, 1, 0)}};
+    com_ptr<ID2D1GradientStopCollection> collection;
+    if (SUCCEEDED(m_ctx->CreateGradientStopCollection(stops, 2,
+                                                      collection.put()))) {
+        m_ctx->CreateLinearGradientBrush({}, collection.get(), m_gloss.put());
+    }
+    return true;
+}
+
+// Lays the pill out for this frame, before drawing starts.
+void Switcher::PreparePill(float t, double dt) {
+    m_pill.visible = false;
+    const auto& ps = m_settings.pill;
+    if (!m_settings.showTitle || !ps.enabled || m_items.empty() ||
+        IsPanelStyle(m_settings.style) || t < 0.005f ||
+        !EnsurePillResources()) {
+        return;
+    }
+
+    const double nearest = std::round(m_scroll);
+    const float settle =
+        1 - std::clamp((float)std::fabs(m_scroll - nearest) * 3, 0.0f, 1.0f);
+    const int index = PositiveMod((long long)nearest, (int)m_items.size());
+    if (!EnsureTitleLayout(index)) {
+        return;
+    }
+    const Item& item = *m_items[index];
+    const float s = m_dpiScale;
+    const float fontSize = TitleFontSize();
+
+    DWRITE_TEXT_METRICS metrics;
+    m_titleLayout->GetMetrics(&metrics);
+    const bool icon = item.icon && Simple::g_settings.showIcon;
+    const float iconSize = icon ? std::round(fontSize * 1.45f) : 0;
+    const float gap = icon ? std::round(fontSize * 0.6f) : 0;
+    const float closeSize = ps.closeButton ? std::round(fontSize * 1.6f) : 0;
+    const float closeGap = ps.closeButton ? std::round(fontSize * 0.7f) : 0;
+    const float textWidth = std::ceil(metrics.width);
+    const float contentHeight =
+        std::max({iconSize, std::ceil(metrics.height), closeSize});
+    const float height = std::round(contentHeight + 2 * ps.paddingY * s);
+    const float padX = std::round(ps.paddingX * s);
+    // The X sits in the round end, at the same distance from the top, right
+    // and bottom edges.
+    const float rightPad = ps.closeButton ? (height - closeSize) / 2 : padX;
+    const float target =
+        padX + iconSize + gap + textWidth + closeGap + closeSize + rightPad;
+
+    // Width follows the title smoothly.
+    if (m_pill.width <= 0) {
+        m_pill.width = target;
+    } else {
+        m_pill.width += (target - m_pill.width) *
+                        (float)(1 - std::exp(-dt * 18));
+        if (std::fabs(target - m_pill.width) < 0.5f) {
+            m_pill.width = target;
+        }
+    }
+    const float width = std::round(m_pill.width);
+
+    const float bottom = m_height - std::round(ps.bottomMargin * s);
+    const float left = std::round((m_width - width) / 2);
+    m_pill.rect = {left, bottom - height, left + width, bottom};
+    m_pill.radius = ps.radius > 0 ? std::min(std::round(ps.radius * s), height / 2)
+                                  : height / 2;
+    m_pill.index = index;
+    m_pill.opacity = t;
+    m_pill.contentOpacity = settle;
+
+    const float centerY = bottom - height / 2;
+    const float iconLeft = left + padX;
+    m_pill.iconRect = {iconLeft, std::round(centerY - iconSize / 2),
+                       iconLeft + iconSize,
+                       std::round(centerY - iconSize / 2) + iconSize};
+    const float closeLeft = left + width - rightPad - closeSize;
+    m_pill.closeRect = {closeLeft, std::round(centerY - closeSize / 2),
+                        closeLeft + closeSize,
+                        std::round(centerY - closeSize / 2) + closeSize};
+    const float textLeft = iconLeft + iconSize + gap;
+    m_pill.textOrigin = {textLeft - metrics.left,
+                         std::round(centerY - metrics.height / 2 - metrics.top)};
+    m_pill.textClip = {textLeft, m_pill.rect.top,
+                       ps.closeButton ? closeLeft - closeGap / 2
+                                      : left + width - padX / 2,
+                       m_pill.rect.bottom};
+
+    // Hover over the X.
+    m_pill.hot = false;
+    POINT cursor;
+    if (ps.closeButton && GetCursorPos(&cursor) &&
+        ScreenToClient(m_hwnd, &cursor)) {
+        const float x = (float)cursor.x, y = (float)cursor.y;
+        m_pill.hot = x >= m_pill.closeRect.left && x < m_pill.closeRect.right &&
+                     y >= m_pill.closeRect.top && y < m_pill.closeRect.bottom;
+    }
+    m_pill.hover += ((m_pill.hot ? 1.0f : 0.0f) - m_pill.hover) *
+                    (float)(1 - std::exp(-dt * 24));
+
+    // The shadow's shape.
+    m_pillShape = nullptr;
+    if (ps.shadow) {
+        com_ptr<ID2D1CommandList> list;
+        if (SUCCEEDED(m_ctx->CreateCommandList(list.put()))) {
+            m_ctx->SetTarget(list.get());
+            m_ctx->BeginDraw();
+            m_brush->SetColor(D2D1::ColorF(0, 0, 0, 1));
+            m_ctx->FillRoundedRectangle(
+                {m_pill.rect, m_pill.radius, m_pill.radius}, m_brush.get());
+            const HRESULT hr = m_ctx->EndDraw();
+            m_ctx->SetTarget(nullptr);
+            if (SUCCEEDED(hr) && SUCCEEDED(list->Close())) {
+                m_pillShape = list;
+                m_pillShadow->SetInput(0, list.get());
+            }
+        }
+    }
+    m_pill.visible = true;
+}
+
+D2D1_COLOR_F LerpColor(D2D1_COLOR_F a, D2D1_COLOR_F b, float t) {
+    return {Lerp(a.r, b.r, t), Lerp(a.g, b.g, t), Lerp(a.b, b.b, t),
+            Lerp(a.a, b.a, t)};
+}
+
+// Acrylic pill: the blurred, more saturated scene, a tint, a soft top gloss
+// and fine grain, clipped to the pill, with a hairline border and a shadow.
+void Switcher::DrawPill() {
+    const auto& ps = m_settings.pill;
+    const Pill& p = m_pill;
+    const float s = m_dpiScale;
+    const D2D1_ROUNDED_RECT shape{p.rect, p.radius, p.radius};
+
+    if (m_pillShape) {
+        m_pillShadow->SetValue(D2D1_SHADOW_PROP_BLUR_STANDARD_DEVIATION,
+                               10.0f * s);
+        m_pillShadow->SetValue(D2D1_SHADOW_PROP_COLOR,
+                               D2D1::Vector4F(0, 0, 0, 0.42f * p.opacity));
+        const D2D1_POINT_2F offset{0, std::round(5 * s)};
+        m_ctx->DrawImage(m_pillShadow.get(), &offset);
+    }
+
+    com_ptr<ID2D1RoundedRectangleGeometry> geometry;
+    if (FAILED(m_d2dFactory->CreateRoundedRectangleGeometry(shape,
+                                                            geometry.put()))) {
+        return;
+    }
+    m_ctx->PushLayer(
+        D2D1::LayerParameters1(p.rect, geometry.get(),
+                               D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                               D2D1::IdentityMatrix(), p.opacity, nullptr,
+                               D2D1_LAYER_OPTIONS1_NONE),
+        nullptr);
+
+    if (ps.blur > 0) {
+        const float sigma = ps.blur * s;
+        const float reach = std::ceil(sigma * 3) + 2;
+        const D2D1_VECTOR_4F crop{std::max(p.rect.left - reach, 0.0f),
+                                  std::max(p.rect.top - reach, 0.0f),
+                                  std::min(p.rect.right + reach, m_width),
+                                  std::min(p.rect.bottom + reach, m_height)};
+        m_pillCrop->SetInput(0, m_scene.get());
+        m_pillCrop->SetValue(D2D1_CROP_PROP_RECT, crop);
+        m_pillBlur->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, sigma);
+        m_ctx->DrawImage(m_pillSaturation.get());
+    }
+
+    m_brush->SetColor(ps.tint);
+    m_ctx->FillRectangle(p.rect, m_brush.get());
+
+    if (m_gloss) {
+        m_gloss->SetStartPoint({0, p.rect.top});
+        m_gloss->SetEndPoint({0, p.rect.top + (p.rect.bottom - p.rect.top) * 0.6f});
+        m_ctx->FillRectangle(p.rect, m_gloss.get());
+    }
+
+    if (ps.noise > 0) {
+        // White grain whose alpha follows the noise, at most the set
+        // strength. Fixed to the screen so it doesn't crawl.
+        const float n = ps.noise;
+        m_noise->SetValue(D2D1_TURBULENCE_PROP_SIZE,
+                          D2D1::Vector2F(m_width, m_height));
+        m_noiseColor->SetValue(
+            D2D1_COLORMATRIX_PROP_COLOR_MATRIX,
+            D2D1::Matrix5x4F(0, 0, 0, n,    //
+                             0, 0, 0, 0,    //
+                             0, 0, 0, 0,    //
+                             0, 0, 0, 0,    //
+                             1, 1, 1, 0));
+        const D2D1_POINT_2F at{p.rect.left, p.rect.top};
+        m_ctx->DrawImage(m_noiseColor.get(), &at, &p.rect);
+    }
+
+    const Item& item = *m_items[p.index];
+    if (item.icon && Simple::g_settings.showIcon) {
+        m_ctx->DrawBitmap(item.icon.get(), p.iconRect, p.contentOpacity,
+                          D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC);
+    }
+    if (m_titleLayout) {
+        m_ctx->PushAxisAlignedClip(p.textClip, D2D1_ANTIALIAS_MODE_ALIASED);
+        D2D1_COLOR_F text = ps.text;
+        text.a = p.contentOpacity;
+        m_brush->SetColor(text);
+        m_ctx->DrawTextLayout(p.textOrigin, m_titleLayout.get(), m_brush.get());
+        m_ctx->PopAxisAlignedClip();
+    }
+
+    if (ps.closeButton) {
+        const D2D1_RECT_F& c = p.closeRect;
+        const D2D1_POINT_2F center{(c.left + c.right) / 2, (c.top + c.bottom) / 2};
+        const float r = (c.right - c.left) / 2;
+        D2D1_COLOR_F idle = ps.text;
+        idle.a = 0.12f;
+        m_brush->SetColor(
+            LerpColor(idle, D2D1::ColorF(0.77f, 0.17f, 0.11f, 1), p.hover));
+        m_ctx->FillEllipse({center, r, r}, m_brush.get());
+
+        D2D1_COLOR_F mark = ps.text;
+        mark.a = 0.85f;
+        m_brush->SetColor(LerpColor(mark, D2D1::ColorF(1, 1, 1, 1), p.hover));
+        const float k = std::round(r * 0.42f);
+        const float stroke = std::max(1.5f, 1.5f * s);
+        m_ctx->DrawLine({center.x - k, center.y - k}, {center.x + k, center.y + k},
+                        m_brush.get(), stroke, m_roundCap.get());
+        m_ctx->DrawLine({center.x + k, center.y - k}, {center.x - k, center.y + k},
+                        m_brush.get(), stroke, m_roundCap.get());
+    }
+
+    m_ctx->PopLayer();
+
+    if (ps.borderWidth > 0 && ps.border.a > 0) {
+        const float bw = std::max(1.0f, std::round(ps.borderWidth * s));
+        D2D1_COLOR_F border = ps.border;
+        border.a *= p.opacity;
+        m_brush->SetColor(border);
+        const D2D1_RECT_F inner{p.rect.left + bw / 2, p.rect.top + bw / 2,
+                                p.rect.right - bw / 2, p.rect.bottom - bw / 2};
+        const float r = std::max(p.radius - bw / 2, 0.0f);
+        m_ctx->DrawRoundedRectangle({inner, r, r}, m_brush.get(), bw);
+    }
 }
 
 void Switcher::RenderFrame() {
@@ -8714,8 +9333,11 @@ void Switcher::RenderFrame() {
         PollFrames(*item);
     }
     BuildDrawList(t);
+    PrepareCardMasks();
+    PreparePill(t, dt);
+    const bool pill = m_pill.visible;
 
-    m_ctx->SetTarget(m_targetBitmap.get());
+    m_ctx->SetTarget(pill ? m_scene.get() : m_targetBitmap.get());
     m_ctx->BeginDraw();
     m_ctx->Clear(D2D1::ColorF(0, 0, 0, 0));
 
@@ -8738,11 +9360,19 @@ void Switcher::RenderFrame() {
     }
     if (panel) {
         DrawPanelFront(t);
-    } else {
+    } else if (!pill) {
         DrawTitle(t);
     }
 
     HRESULT hr = m_ctx->EndDraw();
+    if (SUCCEEDED(hr) && pill) {
+        m_ctx->SetTarget(m_targetBitmap.get());
+        m_ctx->BeginDraw();
+        m_ctx->DrawImage(m_scene.get(), D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+                         D2D1_COMPOSITE_MODE_SOURCE_COPY);
+        DrawPill();
+        hr = m_ctx->EndDraw();
+    }
     m_ctx->SetTarget(nullptr);
     if (SUCCEEDED(hr)) {
         hr = m_swapChain->Present(1, 0);
@@ -9113,7 +9743,10 @@ DWORD WINAPI UiThreadProc(LPVOID parameter) {
         g_switcher = nullptr;
     }
 
-    winrt::uninit_apartment();
+    // No winrt::uninit_apartment(): C++/WinRT caches activation factories
+    // process-wide, and tearing the apartment down left them dangling. The
+    // next switcher thread (after a layout change in Settings) then crashed
+    // the host in its first WinRT call, and Alt+Tab fell back to Windows.
     return 0;
 }
 
@@ -9170,6 +9803,18 @@ BOOL VistaToolInit() {
 
     InitModuleGlobals();
 
+    // Keeps the multithreaded apartment, and with it the cached WinRT
+    // factories, alive for the life of the process, however often the UI
+    // thread is stopped and started again.
+    // Looked up at run time: the 32-bit MinGW ole32 import library lacks it.
+    static CO_MTA_USAGE_COOKIE mtaCookie;
+    using IncrementMta = HRESULT(WINAPI*)(CO_MTA_USAGE_COOKIE*);
+    auto incrementMta = (IncrementMta)GetProcAddress(
+        GetModuleHandleW(L"ole32.dll"), "CoIncrementMTAUsage");
+    if (!mtaCookie && (!incrementMta || FAILED(incrementMta(&mtaCookie)))) {
+        Wh_Log(L"CoIncrementMTAUsage failed");
+    }
+
     if (!StartThread(UiThreadProc, &g_uiThread, &g_uiThreadId) ||
         !g_overlayWnd) {
         Wh_Log(L"Failed to start the UI thread");
@@ -9219,35 +9864,16 @@ void WhTool_ModSettingsChanged() {
 
 bool g_isExplorer;
 
-using GetMessageW_t = BOOL(WINAPI*)(LPMSG, HWND, UINT, UINT);
-using PeekMessageW_t = BOOL(WINAPI*)(LPMSG, HWND, UINT, UINT, UINT);
-GetMessageW_t OriginalGetMessageW;
-PeekMessageW_t OriginalPeekMessageW;
-void RelayRetrievedHotkey(MSG* msg) {
-    if(msg && msg->message==WM_HOTKEY && HIWORD(msg->lParam)==VK_TAB) {
-        UINT modifiers=LOWORD(msg->lParam);
-        if((modifiers&MOD_ALT) && !(modifiers&(MOD_CONTROL|MOD_WIN)) && ForwardHotkey((modifiers&MOD_SHIFT)!=0)) msg->message=WM_NULL;
-    }
-}
-BOOL WINAPI PlusGetMessageW(LPMSG msg, HWND window, UINT low, UINT high) {
-    BOOL result=OriginalGetMessageW(msg,window,low,high);
-    if(result>0) RelayRetrievedHotkey(msg);
-    return result;
-}
-BOOL WINAPI PlusPeekMessageW(LPMSG msg, HWND window, UINT low, UINT high, UINT flags) {
-    BOOL result=OriginalPeekMessageW(msg,window,low,high,flags);
-    if(result && (flags&PM_REMOVE)) RelayRetrievedHotkey(msg);
-    return result;
-}
-
 BOOL ExplorerModInit() {
     Wh_Log(L">");
 
     InitModuleGlobals();
-    HMODULE user=GetModuleHandleW(L"user32.dll");
-    void* get=(void*)GetProcAddress(user,"GetMessageW");
-    void* peek=(void*)GetProcAddress(user,"PeekMessageW");
-    return get && peek && Wh_SetFunctionHook(get,(void*)PlusGetMessageW,(void**)&OriginalGetMessageW) && Wh_SetFunctionHook(peek,(void*)PlusPeekMessageW,(void**)&OriginalPeekMessageW);
+    // A WH_GETMESSAGE hook on explorer's hotkey thread. Unlike inline
+    // GetMessageW/PeekMessageW hooks, it's removed cleanly before the module
+    // unloads (see UnhookAltTabThread), so turning the mod off or updating it
+    // can't crash explorer.
+    StartExplorerPart();
+    return TRUE;
 }
 
 void ExplorerModUninit() {
@@ -9259,7 +9885,9 @@ void ExplorerModUninit() {
 void ExplorerModSettingsChanged() {
     Wh_Log(L">");
 
-    // Retrieval hooks stay installed; the renderer advertises readiness.
+    // The style may have changed to or from the native switcher.
+    StopExplorerPart();
+    StartExplorerPart();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -9344,8 +9972,13 @@ BOOL Wh_ModInit() {
         }
 
         if (GetLastError() == ERROR_ALREADY_EXISTS) {
-            Wh_Log(L"Tool mod already running (%s)", WH_MOD_ID);
-            ExitProcess(1);
+            // After a mod update the old host may still be exiting. Wait for
+            // it briefly rather than leaving Alt+Tab without a switcher.
+            const DWORD wait = WaitForSingleObject(g_toolModProcessMutex, 5000);
+            if (wait != WAIT_OBJECT_0 && wait != WAIT_ABANDONED) {
+                Wh_Log(L"Tool mod already running (%s)", WH_MOD_ID);
+                ExitProcess(1);
+            }
         }
 
         if (!WhTool_ModInit()) {
@@ -9372,18 +10005,15 @@ BOOL Wh_ModInit() {
     return TRUE;
 }
 
-void Wh_ModAfterInit() {
-    if (!g_isToolModProcessLauncher) {
-        return;
-    }
-
+// Starts the switcher host and returns its process handle, or null.
+HANDLE LaunchToolProcess() {
     WCHAR currentProcessPath[MAX_PATH];
     switch (GetModuleFileName(nullptr, currentProcessPath,
                               ARRAYSIZE(currentProcessPath))) {
         case 0:
         case ARRAYSIZE(currentProcessPath):
             Wh_Log(L"GetModuleFileName failed");
-            return;
+            return nullptr;
     }
 
     WCHAR
@@ -9404,7 +10034,7 @@ void Wh_ModAfterInit() {
         execute.fMask=SEE_MASK_NOCLOSEPROCESS|SEE_MASK_NOASYNC;
         execute.lpVerb=L"runas"; execute.lpFile=currentProcessPath;
         execute.lpParameters=args.c_str(); execute.nShow=SW_HIDE;
-        if(ShellExecuteExW(&execute)) { if(execute.hProcess) CloseHandle(execute.hProcess); return; }
+        if(ShellExecuteExW(&execute)) return execute.hProcess;
         Wh_Log(L"Administrator host unavailable, using normal host: %u",GetLastError());
     }
 
@@ -9413,7 +10043,7 @@ void Wh_ModAfterInit() {
         kernelModule = GetModuleHandle(L"kernel32.dll");
         if (!kernelModule) {
             Wh_Log(L"No kernelbase.dll/kernel32.dll");
-            return;
+            return nullptr;
         }
     }
 
@@ -9430,7 +10060,7 @@ void Wh_ModAfterInit() {
                                                  "CreateProcessInternalW");
     if (!pCreateProcessInternalW) {
         Wh_Log(L"No CreateProcessInternalW");
-        return;
+        return nullptr;
     }
 
     STARTUPINFO si{
@@ -9442,11 +10072,90 @@ void Wh_ModAfterInit() {
                                  nullptr, nullptr, FALSE, NORMAL_PRIORITY_CLASS,
                                  nullptr, nullptr, &si, &pi, nullptr)) {
         Wh_Log(L"CreateProcess failed");
+        return nullptr;
+    }
+
+    CloseHandle(pi.hThread);
+    return pi.hProcess;
+}
+
+
+// Watches the switcher host from the launcher and starts it again if it
+// crashes, so Alt+Tab never silently falls back to the Windows switcher.
+// A clean exit (0: the mod was turned off or updated; 1: init failed or
+// another host runs) is left alone. Gives up after 5 crashes in 10 minutes.
+HANDLE g_watchStop;
+HANDLE g_watchThread;
+
+DWORD WINAPI WatchdogProc(LPVOID parameter) {
+    HANDLE process = (HANDLE)parameter;
+    int crashes = 0;
+    ULONGLONG windowStart = GetTickCount64();
+    while (process) {
+        const HANDLE handles[] = {g_watchStop, process};
+        if (WaitForMultipleObjects(2, handles, FALSE, INFINITE) !=
+            WAIT_OBJECT_0 + 1) {
+            break;
+        }
+        DWORD code = 0;
+        GetExitCodeProcess(process, &code);
+        CloseHandle(process);
+        process = nullptr;
+        if (code == 0 || code == 1) {
+            Wh_Log(L"Switcher host exited (%u)", code);
+            break;
+        }
+        const ULONGLONG now = GetTickCount64();
+        if (now - windowStart > 10 * 60 * 1000) {
+            windowStart = now;
+            crashes = 0;
+        }
+        if (++crashes > 5) {
+            Wh_Log(L"Switcher host keeps crashing (0x%08X), giving up", code);
+            break;
+        }
+        Wh_Log(L"Switcher host crashed (0x%08X), starting it again", code);
+        if (WaitForSingleObject(g_watchStop, 1000 * crashes) != WAIT_TIMEOUT) {
+            break;
+        }
+        process = LaunchToolProcess();
+    }
+    if (process) {
+        CloseHandle(process);
+    }
+    return 0;
+}
+
+void Wh_ModAfterInit() {
+    if (!g_isToolModProcessLauncher) {
         return;
     }
 
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
+    HANDLE process = LaunchToolProcess();
+    if (!process) {
+        return;
+    }
+    g_watchStop = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (g_watchStop) {
+        g_watchThread =
+            CreateThread(nullptr, 0, WatchdogProc, process, 0, nullptr);
+    }
+    if (!g_watchThread) {
+        CloseHandle(process);
+    }
+}
+
+void StopWatchdog() {
+    if (g_watchThread) {
+        SetEvent(g_watchStop);
+        WaitForSingleObject(g_watchThread, INFINITE);
+        CloseHandle(g_watchThread);
+        g_watchThread = nullptr;
+    }
+    if (g_watchStop) {
+        CloseHandle(g_watchStop);
+        g_watchStop = nullptr;
+    }
 }
 
 void Wh_ModSettingsChanged() {
@@ -9471,6 +10180,7 @@ void Wh_ModUninit() {
     }
 
     if (g_isToolModProcessLauncher) {
+        StopWatchdog();
         return;
     }
 
