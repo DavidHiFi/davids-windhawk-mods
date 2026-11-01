@@ -18,6 +18,11 @@ app to keep open.
   updates when you change it. Any hex color like #89b4fa works too.
 - **Hides when it should.** No border on maximized, minimized or fullscreen
   windows, or on windows on another virtual desktop.
+- **Menus too (optional).** Turn on **Menus** and right-click menus and their
+  submenus get the active window border, so menus match your windows. Set
+  **Menu corner radius** to match your menu corners, or 0 for square menus.
+  This covers classic Win32 menus, the kind most right-click menus use; menus
+  an app draws itself (browsers, Discord) keep their own look.
 - **Never in the way.** Clicks pass through the border and it never takes
   focus.
 - **Clean off switch.** Turning the mod off removes every border and brings
@@ -31,7 +36,7 @@ app to keep open.
    title bar mod, for example), add that app to this mod's exclusion list in
    Windhawk so the two don't fight.
 
-Needs Windows 11 22H2 or newer.
+Needs Windows 11 22H2 or newer and Windhawk 2.0 or newer.
 
 ## Credits
 Based on [Windows 11 Accent Window Border](https://windhawk.net/mods/win11-accent-border)
