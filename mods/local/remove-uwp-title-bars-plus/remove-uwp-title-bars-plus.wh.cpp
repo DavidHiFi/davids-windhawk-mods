@@ -2,14 +2,14 @@
 // @id              remove-uwp-title-bars-plus
 // @name            Remove UWP Title Bars Plus
 // @description     Normal Windows title bars, with icon, title and theme buttons, in every UWP app
-// @version         2.1.0
+// @version         2.2.0
 // @author          DavidHiFi, Anixx
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         ApplicationFrameHost.exe
 // @architecture    x86-64
-// @compilerOptions -luser32 -lcomctl32 -ldwmapi -lshell32 -lole32
+// @compilerOptions -luser32 -lgdi32 -lcomctl32 -ldwmapi -lshell32 -lole32
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -26,6 +26,12 @@ the mod waits until the app is known and the window is on screen, then swaps
 the title bar. Shell parts that also live in these windows, such as Start and
 search, keep their own look.
 
+Turn on **Blur behind the title bar** in the settings to swap the flat title
+bar colour for an acrylic blur of whatever sits behind the window. The blur
+stays when the window loses focus, so the title bar keeps matching a blurred
+app page. The tint setting colours it: lower the first two hex digits for a
+clearer blur, raise them for a darker one.
+
 Applies to app windows opened after you turn the mod on. Turning it off puts
 every open window back the way it was.
 
@@ -33,8 +39,24 @@ Based on Remove UWP Title Bars by Anixx.
 */
 // ==/WindhawkModReadme==
 
+// ==WindhawkModSettings==
+/*
+- blur: false
+  $name: Blur behind the title bar
+  $description: >-
+    Acrylic blur instead of the flat title bar colour. Stays when the window
+    loses focus
+- blurTint: "661E1E2E"
+  $name: Blur tint
+  $description: >-
+    Colour laid over the blur, as AARRGGBB hex. AA is the strength: 00 is
+    clear glass, FF is a solid colour
+*/
+// ==/WindhawkModSettings==
+
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <windhawk_utils.h>
@@ -46,10 +68,6 @@ Based on Remove UWP Title Bars by Anixx.
 
 #ifndef WM_POPUPSYSTEMMENU
 #define WM_POPUPSYSTEMMENU 0x0313
-#endif
-
-#ifndef WS_EX_NOREDIRECTIONBITMAP
-#define WS_EX_NOREDIRECTIONBITMAP 0x00200000L
 #endif
 
 namespace frame_host {
@@ -77,7 +95,30 @@ struct FrameInfo {
     HICON icons[2] = {};       // small, big
     LONG_PTR style = 0, exStyle = 0;  // before MakeFrameNative
     DWORD backdrop = 0;                // DWMWA_SYSTEMBACKDROP_TYPE before it
+    bool blurred = false;              // ApplyMaterial put the blur on
 };
+
+struct ACCENT_POLICY {
+    int state;
+    int flags;
+    DWORD color;  // AABBGGRR
+    int animation;
+};
+struct WINCOMPATTRDATA {
+    DWORD attribute;
+    void* data;
+    SIZE_T size;
+};
+constexpr DWORD kWcaAccentPolicy = 19;
+constexpr int kAccentDisabled = 0;
+constexpr int kAccentAcrylic = 4;
+using SetWindowCompositionAttribute_t = BOOL(WINAPI*)(HWND, WINCOMPATTRDATA*);
+SetWindowCompositionAttribute_t SetWindowCompositionAttribute_;
+
+struct {
+    bool blur;
+    DWORD tint;  // AABBGGRR
+} g_settings;
 
 bool g_enabled;
 SRWLOCK g_frameLock = SRWLOCK_INIT;
@@ -85,6 +126,7 @@ std::unordered_map<HWND, FrameInfo> g_frames;
 std::unordered_map<void*, HWND> g_titleBarFrame;
 UINT g_frameCheckMsg;
 UINT g_frameRestoreMsg;
+UINT g_frameMaterialMsg;
 volatile LONG g_iconJobs;
 
 using CreateTitleBarWindow_t = long(__cdecl*)(void* titleBar);
@@ -94,6 +136,8 @@ using PaintButton_t =
 PaintButton_t PaintButton_Original;
 using DwmSetWindowAttribute_t = HRESULT(WINAPI*)(HWND, DWORD, LPCVOID, DWORD);
 DwmSetWindowAttribute_t DwmSetWindowAttribute_Original;
+using DwmExtendFrameIntoClientArea_t = HRESULT(WINAPI*)(HWND, const MARGINS*);
+DwmExtendFrameIntoClientArea_t DwmExtendFrameIntoClientArea_Original;
 
 bool IsFrameWindow(HWND hWnd) {
     WCHAR cls[32];
@@ -117,7 +161,7 @@ HWND FrameOfTitleBar(void* titleBar) {
     ReadProcessMemory(GetCurrentProcess(), titleBar, buf, sizeof(buf), &got);
     for (size_t i = 0; i < got / sizeof(ULONG_PTR); i++) {
         HWND h = (HWND)buf[i];
-        if (!buf[i] || buf[i] > 0xFFFFFFFF || !IsWindow(h)) {
+        if (!buf[i] || (buf[i] >> 32) || !IsWindow(h)) {
             continue;
         }
         DWORD pid = 0;
@@ -202,6 +246,39 @@ DWORD WINAPI IconThread(void* param) {
     return 0;
 }
 
+// Sets the caption material of a native frame: the acrylic system backdrop,
+// or the blur. The blur is the acrylic accent over a frame extended into the
+// whole window, with legacy blur-behind on; without blur-behind DWM paints the
+// caption flat over the accent. Unlike the system backdrop, the accent keeps
+// drawing while the window is not focused.
+void ApplyMaterial(HWND hWnd, bool blur) {
+    AcquireSRWLockExclusive(&g_frameLock);
+    bool was = std::exchange(g_frames[hWnd].blurred, blur);
+    ReleaseSRWLockExclusive(&g_frameLock);
+    if (blur || was) {
+        MARGINS margins = blur ? MARGINS{-1, -1, -1, -1} : MARGINS{};
+        DwmExtendFrameIntoClientArea_Original(hWnd, &margins);
+        HRGN region = blur ? CreateRectRgn(0, 0, -1, -1) : nullptr;
+        DWM_BLURBEHIND bb = {
+            DWM_BB_ENABLE | DWM_BB_BLURREGION | DWM_BB_TRANSITIONONMAXIMIZED,
+            blur, region, blur};
+        DwmEnableBlurBehindWindow(hWnd, &bb);
+        if (region) {
+            DeleteObject(region);
+        }
+        ACCENT_POLICY accent = {blur ? kAccentAcrylic : kAccentDisabled, 0,
+                                g_settings.tint, 0};
+        WINCOMPATTRDATA data = {kWcaAccentPolicy, &accent, sizeof(accent)};
+        if (SetWindowCompositionAttribute_) {
+            SetWindowCompositionAttribute_(hWnd, &data);
+        }
+    }
+    // The accent and a system backdrop would stack.
+    DWORD backdrop = blur ? DWMSBT_NONE : DWMSBT_TRANSIENTWINDOW;
+    DwmSetWindowAttribute_Original(hWnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop,
+                                   sizeof(backdrop));
+}
+
 void MakeFrameNative(HWND hWnd, const std::wstring& aumid) {
     // Without this property DWM treats the frame as immersive and hides the
     // minimize and maximize buttons (CTopLevelWindow::GetCurrentStyle).
@@ -219,10 +296,7 @@ void MakeFrameNative(HWND hWnd, const std::wstring& aumid) {
     g_frames[hWnd].backdrop = backdrop;
     ReleaseSRWLockExclusive(&g_frameLock);
 
-    // An acrylic caption, so the title bar matches the blurred page below it.
-    DWORD acrylic = DWMSBT_TRANSIENTWINDOW;
-    DwmSetWindowAttribute_Original(hWnd, DWMWA_SYSTEMBACKDROP_TYPE, &acrylic,
-                                   sizeof(acrylic));
+    ApplyMaterial(hWnd, g_settings.blur);
 
     // The shell lookup pumps messages, and doing it here stops the app from
     // attaching to the frame, so it runs on its own thread.
@@ -331,6 +405,9 @@ void RestoreFrame(HWND hWnd) {
         RemoveProp(hWnd, kNormalWindowProp);
         RemoveProp(hWnd, kPressedProp);
         KillTimer(hWnd, kRelayoutTimer);
+        if (info.blurred) {
+            ApplyMaterial(hWnd, false);
+        }
         DwmSetWindowAttribute_Original(hWnd, DWMWA_SYSTEMBACKDROP_TYPE,
                                        &info.backdrop, sizeof(info.backdrop));
         SendMessage(hWnd, WM_SETICON, ICON_SMALL, 0);
@@ -415,6 +492,14 @@ LRESULT CALLBACK FrameSubclassProc(HWND hWnd,
     }
     if (state != FrameState::Native) {
         return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+    }
+
+    if (uMsg == g_frameMaterialMsg && uMsg) {
+        ApplyMaterial(hWnd, g_settings.blur);
+        SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                         SWP_FRAMECHANGED);
+        return 0;
     }
 
     switch (uMsg) {
@@ -561,8 +646,6 @@ HWND WINAPI CreateWindowInBandEx_Hook(DWORD exStyle,
     return hWnd;
 }
 
-using DwmExtendFrameIntoClientArea_t = HRESULT(WINAPI*)(HWND, const MARGINS*);
-DwmExtendFrameIntoClientArea_t DwmExtendFrameIntoClientArea_Original;
 HRESULT WINAPI DwmExtendFrameIntoClientArea_Hook(HWND hWnd,
                                                  const MARGINS* margins) {
     if (margins) {
@@ -593,6 +676,33 @@ HRESULT WINAPI DwmSetWindowAttribute_Hook(HWND hWnd,
     return DwmSetWindowAttribute_Original(hWnd, attribute, value, size);
 }
 
+void LoadSettings() {
+    g_settings.blur = Wh_GetIntSetting(L"blur");
+    PCWSTR tint = Wh_GetStringSetting(L"blurTint");
+    PCWSTR hex = tint + (tint[0] == L'#');
+    DWORD argb = wcslen(hex) == 8 ? wcstoul(hex, nullptr, 16) : 0x661E1E2E;
+    Wh_FreeStringSetting(tint);
+    g_settings.tint = (argb & 0xFF00FF00) | ((argb >> 16) & 0xFF) |
+                      ((argb & 0xFF) << 16);
+}
+
+void SettingsChanged() {
+    LoadSettings();
+    std::vector<HWND> frames;
+    AcquireSRWLockShared(&g_frameLock);
+    for (auto& f : g_frames) {
+        if (f.second.state == FrameState::Native) {
+            frames.push_back(f.first);
+        }
+    }
+    ReleaseSRWLockShared(&g_frameLock);
+    for (HWND hWnd : frames) {
+        DWORD_PTR r;
+        SendMessageTimeout(hWnd, g_frameMaterialMsg, 0, 0, SMTO_NORMAL, 2000,
+                           &r);
+    }
+}
+
 void RestoreAllFrames() {
     for (int i = 0; i < 100 && g_iconJobs; i++) {
         Sleep(50);
@@ -612,6 +722,12 @@ void RestoreAllFrames() {
 
 BOOL Init() {
     g_enabled = true;
+    LoadSettings();
+    SetWindowCompositionAttribute_ =
+        (SetWindowCompositionAttribute_t)GetProcAddress(
+            GetModuleHandle(L"user32.dll"), "SetWindowCompositionAttribute");
+    g_frameMaterialMsg =
+        RegisterWindowMessage(L"RemoveUwpTitleBarsPlus_ApplyMaterial");
     g_frameCheckMsg = RegisterWindowMessage(L"RemoveUwpTitleBarsPlus_CheckFrame");
     g_frameRestoreMsg =
         RegisterWindowMessage(L"RemoveUwpTitleBarsPlus_RestoreFrame");
@@ -655,6 +771,11 @@ BOOL Init() {
 BOOL Wh_ModInit() {
     Wh_Log(L">");
     return frame_host::Init();
+}
+
+void Wh_ModSettingsChanged() {
+    Wh_Log(L">");
+    frame_host::SettingsChanged();
 }
 
 void Wh_ModBeforeUninit() {

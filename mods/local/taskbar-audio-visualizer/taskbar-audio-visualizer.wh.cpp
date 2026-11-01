@@ -5655,7 +5655,12 @@ void UpdateCapturePicker() {
         if(!g_capturePickerWnd) return;
         if(!SetLayeredWindowAttributes(g_capturePickerWnd,0,1,LWA_ALPHA)) {DestroyWindow(g_capturePickerWnd);g_capturePickerWnd=nullptr;return;}
     }
-    if(g_unloading || g_fullscreenPaused.load() || g_followTargetHidden || !g_overlayWnd || !IsWindowVisible(g_overlayWnd)) {
+    // The picker is a topmost popup, so unlike the overlay (a taskbar child) it
+    // stays above a borderless game that covers the bar. There it stole the game's
+    // cursor and its hover woke the hidden taskbar. Hide it whenever a game or
+    // full-screen app covers the bar, whatever hideWhenFullscreen says.
+    if(g_unloading || g_fullscreenPaused.load() || g_followTargetHidden || !g_overlayWnd || !IsWindowVisible(g_overlayWnd) ||
+       IsFullscreenOrGameActive()) {
         ShowWindow(g_capturePickerWnd,SW_HIDE);g_captureHover=false;return;
     }
     VizLayout layout{}; RECT overlay{};

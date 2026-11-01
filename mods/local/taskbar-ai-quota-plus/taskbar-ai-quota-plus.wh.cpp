@@ -9753,6 +9753,98 @@ static LRESULT CALLBACK SettingsWindowProc(HWND hWnd, UINT message,
     return DefWindowProcW(hWnd, message, wParam, lParam);
 }
 
+// Settings window icon, drawn at runtime so the mod ships no resource file: a dark
+// rounded tile with three quota bars, each filled to a different level.
+static float SettingsIconCoverage(float px, float py, float x0, float y0, float x1, float y1,
+                                  float radius) {
+    float hx = (x1 - x0) * 0.5f - radius;
+    float hy = (y1 - y0) * 0.5f - radius;
+    float dx = std::fabs(px - (x0 + x1) * 0.5f) - hx;
+    float dy = std::fabs(py - (y0 + y1) * 0.5f) - hy;
+    float outside = std::sqrt(std::max(dx, 0.f) * std::max(dx, 0.f) +
+                              std::max(dy, 0.f) * std::max(dy, 0.f));
+    float distance = outside + std::min(std::max(dx, dy), 0.f) - radius;
+    return std::clamp(0.5f - distance, 0.f, 1.f);
+}
+
+// Straight-alpha "over" blend. Color channels are 0-255, alpha is 0-1.
+static void SettingsIconPaint(float (&dst)[4], float r, float g, float b, float coverage) {
+    if (coverage <= 0.f) return;
+    float keep = dst[3] * (1.f - coverage);
+    float outAlpha = coverage + keep;
+    dst[0] = (r * coverage + dst[0] * keep) / outAlpha;
+    dst[1] = (g * coverage + dst[1] * keep) / outAlpha;
+    dst[2] = (b * coverage + dst[2] * keep) / outAlpha;
+    dst[3] = outAlpha;
+}
+
+static HICON CreateSettingsWindowIcon(int size) {
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = size;
+    info.bmiHeader.biHeight = -size;  // top-down rows
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HDC screen = GetDC(nullptr);
+    HBITMAP color = CreateDIBSection(screen, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
+    ReleaseDC(nullptr, screen);
+    if (!color) return nullptr;
+
+    // Catppuccin colors: tile #1E1E2E, track #45475A, fills blue, mauve, green.
+    struct Bar {
+        float centerY, fill, r, g, b;
+    };
+    const Bar bars[] = {
+        {0.30f, 0.90f, 137.f, 180.f, 250.f},
+        {0.50f, 0.62f, 203.f, 166.f, 247.f},
+        {0.70f, 0.38f, 166.f, 227.f, 161.f},
+    };
+    const float s = static_cast<float>(size);
+    const float barLeft = 0.18f * s;
+    const float barRight = 0.82f * s;
+    const float barHeight = 0.14f * s;
+    auto* pixels = static_cast<DWORD*>(bits);
+    auto to8 = [](float v) { return static_cast<DWORD>(std::clamp(v + 0.5f, 0.f, 255.f)); };
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            float px = x + 0.5f;
+            float py = y + 0.5f;
+            float c[4] = {0.f, 0.f, 0.f, 0.f};
+            SettingsIconPaint(c, 30.f, 30.f, 46.f,
+                              SettingsIconCoverage(px, py, 0.f, 0.f, s, s, 0.22f * s));
+            for (const Bar& bar : bars) {
+                float top = bar.centerY * s - barHeight * 0.5f;
+                float bottom = top + barHeight;
+                float radius = barHeight * 0.5f;
+                SettingsIconPaint(c, 69.f, 71.f, 90.f,
+                                  SettingsIconCoverage(px, py, barLeft, top, barRight, bottom, radius));
+                float fillRight = barLeft + (barRight - barLeft) * bar.fill;
+                SettingsIconPaint(c, bar.r, bar.g, bar.b,
+                                  SettingsIconCoverage(px, py, barLeft, top, fillRight, bottom, radius));
+            }
+            pixels[y * size + x] = (to8(c[3] * 255.f) << 24) | (to8(c[0]) << 16) |
+                                   (to8(c[1]) << 8) | to8(c[2]);
+        }
+    }
+
+    // The 1-bpp mask rows are word-aligned. An all-zero mask lets the 32-bit alpha decide.
+    const int maskStride = ((size + 15) / 16) * 2;
+    std::vector<BYTE> maskBits(static_cast<size_t>(maskStride) * size, 0);
+    HICON icon = nullptr;
+    if (HBITMAP mask = CreateBitmap(size, size, 1, 1, maskBits.data())) {
+        ICONINFO iconInfo{};
+        iconInfo.fIcon = TRUE;
+        iconInfo.hbmMask = mask;
+        iconInfo.hbmColor = color;
+        icon = CreateIconIndirect(&iconInfo);
+        DeleteObject(mask);
+    }
+    DeleteObject(color);
+    return icon;
+}
+
 static DWORD WINAPI SettingsWindowThreadProc(LPVOID) {
     using SetThreadDpiAwarenessContext_t = DPI_AWARENESS_CONTEXT(WINAPI*)(DPI_AWARENESS_CONTEXT);
     if (HMODULE user32 = GetModuleHandleW(L"user32.dll")) {
@@ -9832,12 +9924,18 @@ static DWORD WINAPI SettingsWindowThreadProc(LPVOID) {
     height = std::min(height, (int)(monitorInfo.rcWork.bottom - monitorInfo.rcWork.top));
     int x = monitorInfo.rcWork.left + (monitorInfo.rcWork.right - monitorInfo.rcWork.left - width) / 2;
     int y = monitorInfo.rcWork.top + (monitorInfo.rcWork.bottom - monitorInfo.rcWork.top - height) / 2;
+    HICON bigIcon = CreateSettingsWindowIcon(ScaleForDpi(32, dpi));
+    HICON smallIcon = CreateSettingsWindowIcon(ScaleForDpi(16, dpi));
     HWND window = CreateWindowExW(WS_EX_APPWINDOW, kSettingsWindowClass,
                                   L"Taskbar AI Quota Bars - Settings",
                                   (WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX) |
                                       WS_CLIPCHILDREN,
                                   x, y, width, height, nullptr, nullptr, instance, &state);
     if (window) {
+        if (bigIcon) SendMessageW(window, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(bigIcon));
+        if (smallIcon) {
+            SendMessageW(window, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(smallIcon));
+        }
         FitSettingsWindowToContent(state);
         LayoutSettingsWindow(state);
         g_settingsWindow.store(window);
@@ -9856,6 +9954,8 @@ static DWORD WINAPI SettingsWindowThreadProc(LPVOID) {
         }
         if (IsWindow(window)) DestroyWindow(window);
     }
+    if (bigIcon) DestroyIcon(bigIcon);
+    if (smallIcon) DestroyIcon(smallIcon);
     SetVisualTestMode(false);
     g_settingsWindow.store(nullptr);
     UnregisterClassW(kAccountEditorClass, instance);

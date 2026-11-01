@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.91
+// @version         2.0.92
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -493,6 +493,10 @@ static std::string BuildCss(const Settings& s) {
     // The tab overflow trigger is not an .ant-btn, so its icon aligns to the text line instead.
     css += ".ant-tabs-nav-more>span.anticon{vertical-align:middle !important;}";
     css += "[class*=\"ModPageButtonsWrapper\"]{gap:6px !important;}";
+    // AntD paints a 1px separator before the ... trigger of the Load compact
+    // group; in the accent color it reads as a stray line through the pill.
+    // Remove it, the two buttons stay joined.
+    css += ".ant-space-compact .ant-btn-compact-last-item::before{display:none !important;}";
     // Number spinners: flat handles with one divider instead of boxed buttons.
     css += ".ant-input-number-handler-wrap,.ant-input-number-actions{background-color:rgba(255,255,255,0.06) !important;border:0 !important;}";
     css += ".ant-input-number-handler,.ant-input-number-action{border:0 !important;}";
@@ -537,6 +541,12 @@ static std::string BuildCss(const Settings& s) {
             // .ant-popover. A filter makes that element the backdrop root, so
             // the blur inside it saw nothing and the page showed through sharp.
             css += ".ant-popover{filter:none !important;} .ant-popover-container{box-shadow:0 6px 16px rgba(0,0,0,0.32) !important;}";
+            // The Mod author pop-up is an antd tooltip and hits the same trap:
+            // the drop-shadow on the outer .ant-tooltip makes it the backdrop
+            // root, so the container's blur saw nothing and the page showed
+            // through sharp. Drop the filter and move the shadow onto the
+            // container.
+            css += ".ant-tooltip{filter:none !important;} .ant-tooltip-container{box-shadow:0 6px 16px rgba(0,0,0,0.32) !important;}";
             // The popover can paint its box on two nested elements. Two tinted
             // layers stack to a near-solid box, so whichever one wraps the other goes clear.
             css += ".ant-popover-container:has(.ant-popover-inner),.ant-popover-inner:has(.ant-popover-container){background-color:transparent !important;backdrop-filter:none !important;}";

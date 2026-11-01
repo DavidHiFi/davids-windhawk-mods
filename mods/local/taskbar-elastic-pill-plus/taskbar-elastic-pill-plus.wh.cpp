@@ -2,7 +2,7 @@
 // @id              taskbar-elastic-pill-plus
 // @name            Taskbar Elastic WinUI Pill Plus
 // @description     An animated sliding pill under taskbar apps, with the option to mark the open apps you're not using
-// @version         2.1.0
+// @version         2.1.1
 // @author          DavidHiFi, Lockframe
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1509,11 +1509,49 @@ void UpdateOpenPill(FrameworkElement const& button, FrameworkElement const& runn
     ElementCompositionPreview::GetElementVisual(pill).Opacity(show ? 1.0f : 0.0f);
 }
 
+// Repaints the still pill whenever an app opens, closes or changes focus.
+// UpdateVisualStates alone can miss a close, which left pills under pinned
+// apps that were no longer running.
+bool UpdateButtonIndicators(FrameworkElement const& button, const Settings& localSettings);
+void AttachRunningStateHandler(winrt::Windows::UI::Xaml::VisualStateGroup const& group, FrameworkElement const& button) {
+    {
+        std::lock_guard<std::mutex> lock(g_attachedGroupsMutex);
+        void* pGroup = winrt::get_abi(group);
+        for (auto it = g_attachedGroups->begin(); it != g_attachedGroups->end(); ) {
+            if (auto g = it->get()) {
+                if (winrt::get_abi(g) == pGroup) return;
+                ++it;
+            } else {
+                it = g_attachedGroups->erase(it);
+            }
+        }
+        g_attachedGroups->push_back(winrt::make_weak(group));
+    }
+    auto weakElem = winrt::make_weak(button);
+    auto token = group.CurrentStateChanged([weakElem](auto const&, auto const&) {
+        auto b = weakElem.get();
+        if (!b) return;
+        b.Dispatcher().RunAsync(winrt::Windows::UI::Core::CoreDispatcherPriority::Low, [weakElem]() {
+            if (g_unloading) return;
+            try {
+                auto b = weakElem.get();
+                if (!b) return;
+                Settings localSettings;
+                { std::lock_guard<std::mutex> lock(g_settingsMutex); localSettings = g_settings; }
+                UpdateButtonIndicators(b, localSettings);
+            } catch (...) {}
+        });
+    });
+    std::lock_guard<std::mutex> lock(g_attachedEventsMutex);
+    g_attachedEvents->push_back({winrt::make_weak(group), token, button.Dispatcher()});
+}
+
 // Updates the native dot and the still pill for one task button. Returns
 // whether the button is the app in focus.
 bool UpdateButtonIndicators(FrameworkElement const& button, const Settings& localSettings) {
     auto iconPanel = FindChildByName(button, L"IconPanel");
     auto group = iconPanel ? GetVisualStateGroup(iconPanel, L"RunningIndicatorStates") : nullptr;
+    if (group) AttachRunningStateHandler(group, button);
     auto currentState = group ? group.CurrentState() : nullptr;
     std::wstring stateName = currentState ? currentState.Name().c_str() : L"";
     bool isActive = (stateName == L"ActiveRunningIndicator");

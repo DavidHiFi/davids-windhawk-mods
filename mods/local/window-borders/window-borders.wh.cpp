@@ -1,553 +1,339 @@
 // ==WindhawkMod==
 // @id              window-borders
 // @name            Window Borders
-// @description     Smooth, rounded window borders with their own colors for active and background windows
-// @version         1.0.0
-// @author          DavidHiFi, Guerra24, glzr-io
+// @description     Smooth, rounded borders around your windows, with one color for the active window and another for the rest
+// @version         2.1.0
+// @author          DavidHiFi, Guerra24, lukeyou05
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
-// @include         *
-// @exclude         windhawk-ui.exe
-// @exclude         dwm.exe
-// @compilerOptions -ldwmapi -luser32 -lgdi32 -lshcore
+// @include         windhawk.exe
+// @compilerOptions -ldwmapi -luser32 -lgdi32 -lshcore -lshell32
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
 /*
-Draws a colored border around your windows, with one color for the window you
-are using and another for background windows.
-
-There are two styles. **Overlay** (the default) draws its own smooth border on
-top of the window frame: you pick the width, the corner radius and the gap, it
-can use a gradient, and it fades when focus moves. **Thin** colors the 1 px line
-Windows 11 already draws and changes nothing else.
+Draws a smooth, rounded border around every normal window. The window you are
+using gets one color and background windows get another, and the color fades
+when focus moves.
 
 ## Features
-- **Follows your accent.** The active border uses your Windows accent color and
-  updates live when you change it. Any hex color like #89b4fa works too.
+- **Follows your accent.** The active border can use your Windows accent color
+  and updates when you change it. Any hex color like #89b4fa works too.
+- **Gradients.** Each border can fade from one color to another at any angle.
 - **Hides when it should.** No border on maximized, minimized or fullscreen
   windows, or on windows parked on another virtual desktop.
+- **Menus too (optional).** Turn on "Menus" and right-click menus and their
+  submenus get the active window border, so menus match your windows.
 - **Never in the way.** Clicks go straight through the border, and it never
   takes focus.
-- **Clean off switch.** Disabling the mod removes every border and restores the
-  Windows default line.
+- **Stays out of your apps.** The mod runs in its own small Windhawk process
+  and loads into no other program, so it works the same in every app and an
+  app that hangs can't take the border down with it.
 
 ## Notes
-- Windows 11 22H2 or newer.
-- Made to replace the Windows border everywhere, so it loads into every app.
-  If another mod already colors the border in an app, add that app to this
-  mod's exclusion list in Windhawk so the two don't fight.
-- Overlay borders move with the window from inside the app, so they keep up
-  with dragging; an app that is frozen will freeze its border too.
-- Some apps draw no frame at all by design, and they get no border.
+- Windows 11 22H2 or newer and Windhawk 2.0 or newer.
+- Menus covers classic Win32 menus, the kind most right-click menus use. Menus
+  drawn by an app itself (browsers, Discord) keep their own look.
+- Menus draw square unless something rounds them; match "Menu corner radius" to
+  what you see, or set it to 0 for square menus.
+- The border is drawn from outside the app, so during a fast drag it can trail
+  the window edge by a frame.
+- Turning the mod off removes every border at once.
 
 ## Credits
-Based on [Windows 11 Accent Window Border](https://windhawk.net/mods/win11-accent-border)
-by [Guerra24](https://github.com/Guerra24), the border re-apply approach used by
-[GlazeWM](https://github.com/glzr-io/glazewm), and the overlay design of
-[tacky-borders](https://github.com/luke-you/tacky-borders) by luke-you and
-[cute-borders](https://github.com/keifufu/cute-borders) by keifufu (both MIT).
+The "special windows" rule that picks which windows get a border comes from
+[Windows 11 Accent Window Border](https://windhawk.net/mods/win11-accent-border)
+by [Guerra24](https://github.com/Guerra24). Drawing borders from a separate
+process with click-through windows is the idea behind
+[Tacky Borders](https://github.com/lukeyou05/tacky-borders) by
+[lukeyou05](https://github.com/lukeyou05). No code was copied from either.
 */
 // ==/WindhawkModReadme==
 
 // ==WindhawkModSettings==
 /*
-- mode: overlay
-  $name: Border style
-  $description: >-
-    Overlay draws its own smooth border with any width, rounded corners,
-    gradients and a fade on focus changes. Thin uses the 1 px line Windows
-    already draws.
-  $options:
-  - overlay: Overlay (thick, rounded, animated)
-  - dwm: Thin Windows border
 - focusedColor: accent
-  $name: Focused color
+  $name: Active window color
   $description: >-
     Border color of the window you are using. "accent" follows your Windows
     accent color. Use a hex color like #89b4fa for anything else.
+- focusedColorTo: "#cba6f7"
+  $name: Active window end color
+  $description: With the gradient on, the active border fades into this color.
 - unfocusedColor: "#585b70"
-  $name: Unfocused color
+  $name: Background window color
+  $description: Border color of every other window, as a hex color.
+- unfocusedColorTo: "#585b70"
+  $name: Background window end color
   $description: >-
-    Border color of background windows. The default is a dull Catppuccin Mocha
-    gray. "accent" follows your Windows accent color, and "transparent" hides
-    the border on background windows.
-- overlay:
-  - width: 2
-    $name: Width
-    $description: Border thickness in pixels at 100% scaling.
-  - offset: -1
-    $name: Gap
-    $description: >-
-      Space between the window edge and the border, in pixels. A negative value
-      lets the border overlap the window edge.
-  - radius: 8
-    $name: Corner radius
-    $description: >-
-      Roundness of the window corners in pixels. 8 matches Windows 11; 0 gives
-      square corners.
-  - style: gradient
-    $name: Fill
-    $options:
-    - solid: Solid color
-    - gradient: Gradient from the color to an end color
-  - gradientTo: "#cba6f7"
-    $name: Gradient end color
-    $description: The focused border fades from the focused color to this one.
-  - unfocusedGradientTo: "#585b70"
-    $name: Background gradient end color
-    $description: >-
-      The same as gradient end color, for background windows. Keep it equal to
-      the unfocused color for a plain line.
-  - gradientAngle: 45
-    $name: Gradient angle
-    $description: Direction of the gradient in degrees.
-  - fadeMs: 150
-    $name: Fade time
-    $description: >-
-      How long the color takes to change when focus moves, in milliseconds. 0
-      switches instantly.
-  $name: Overlay border
-- fixAfterMs: 50
-  $name: Color hold time
+    With the gradient on, background borders fade into this color. Keep it the
+    same as the background window color for a plain line.
+- gradient: true
+  $name: Gradient
+  $description: Fade each border from its color to its end color.
+- gradientAngle: 45
+  $name: Gradient angle
+  $description: Direction of the gradient in degrees.
+- width: 2
+  $name: Width
+  $description: Border thickness in pixels at 100% scaling.
+- gap: -1
+  $name: Gap
   $description: >-
-    How long to wait before applying the color again after a focus change, in
-    milliseconds. This wins against apps that paint their own border color a
-    moment later. Set 0 to turn the re-apply off.
-- specialWindows: false
-  $name: Decorate frameless windows
+    Space between the window edge and the border, in pixels. A negative value
+    lets the border overlap the window edge.
+- radius: 16
+  $name: Corner radius
   $description: >-
-    Also color windows without a normal frame, like some launchers and tools.
-- additionalEvents: false
-  $name: Hook extra activation events
+    Roundness of the border corners in pixels. Match it to your window corners;
+    8 is the Windows 11 default and 0 gives square corners.
+- fadeMs: 150
+  $name: Fade time
   $description: >-
-    Helps with apps that handle activation in their own way. Only turn this on
-    if the border color does not follow focus in one app.
+    How long the color takes to change when focus moves, in milliseconds. 0
+    switches instantly.
+- menus: false
+  $name: Menus
+  $description: >-
+    Also draw the active window border around right-click menus and their
+    submenus.
+- menuRadius: 8
+  $name: Menu corner radius
+  $description: >-
+    Roundness of menu borders in pixels. Match it to your menu corners; 8 is
+    the Windows 11 default.
+- exclude: [""]
+  $name: Skip these apps
+  $description: >-
+    Program file names whose windows get no border, for example notepad.exe.
 */
 // ==/WindhawkModSettings==
 
+// Draws one smooth ring around every normal window. The mod runs as a Windhawk
+// tool mod: it lives in its own windhawk.exe process and injects no code into
+// other apps. WinEvent hooks report window moves, shows, hides and focus
+// changes, and each ring is drawn in its own click-through layered windows.
+
 #include <dwmapi.h>
+#include <shellapi.h>
 #include <shellscalingapi.h>
 #include <windhawk_api.h>
+#include <windows.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdint>
+#include <string>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
-enum ColorKind {
-    COLORK_ACCENT,
-    COLORK_NONE,
-    COLORK_DEFAULT,
-    COLORK_SOLID,
-};
+namespace {
 
-struct BorderColor {
-    ColorKind kind = COLORK_ACCENT;
-    COLORREF rgb = 0;
-};
+constexpr wchar_t kMainClass[] = L"WindowBordersMain";
+constexpr wchar_t kPartClass[] = L"WindowBordersPart";
+constexpr UINT kReloadMsg = WM_APP + 1;
+constexpr UINT_PTR kResyncTimer = 1;
+constexpr UINT_PTR kFadeTimer = 2;
+constexpr UINT kFadeFrameMs = 16;
+constexpr UINT kResyncMs = 500;
 
-static BorderColor g_focused;
-static BorderColor g_unfocused;
-static COLORREF g_accentColor = 0;
-static UINT g_fixAfterMs = 50;
-static bool g_specialWindows = false;
-static bool g_additionalEvents = false;
-
-struct OverlaySettings {
-    int width = 2;
-    int offset = 0;
-    int radius = 8;
-    bool gradient = false;
-    COLORREF gradientTo = RGB(0xcb, 0xa6, 0xf7);
-    COLORREF unfocusedGradientTo = RGB(0x58, 0x5b, 0x70);
-    int gradientAngle = 45;
-    UINT fadeMs = 150;
-};
-
-static std::atomic<bool> g_overlayMode{true};
-static OverlaySettings g_overlay;
-
-static const COLORREF kColorDefault = DWMWA_COLOR_DEFAULT;  // 0xFFFFFFFF
-static const COLORREF kColorNone = DWMWA_COLOR_NONE;        // 0xFFFFFFFE
-
-static bool IsValidWindow(HWND hWnd) {
-    DWORD dwStyle = (DWORD)GetWindowLongPtrW(hWnd, GWL_STYLE);
-    // Better exclude context menus
-    if ((dwStyle & WS_THICKFRAME) == WS_THICKFRAME ||
-        (dwStyle & WS_CAPTION) == WS_CAPTION) {
-        return true;
-    }
-
-    return g_specialWindows && (dwStyle & WS_OVERLAPPED) == WS_OVERLAPPED &&
-           (dwStyle & WS_POPUP) != WS_POPUP;
-}
-
-static bool IsWindowFocused(HWND hWnd) {
-    return GetForegroundWindow() == hWnd;
-}
-
-static void ApplyColorToWindow(HWND hWnd, const BorderColor& color) {
-    if (!IsValidWindow(hWnd)) {
-        return;
-    }
-
-    COLORREF value;
-    if (g_overlayMode) {
-        // The overlay draws the border; keep the thin native line out of the way.
-        value = color.kind == COLORK_DEFAULT ? kColorDefault : kColorNone;
-        DwmSetWindowAttribute(hWnd, DWMWA_BORDER_COLOR, &value, sizeof(value));
-        return;
-    }
-    switch (color.kind) {
-        case COLORK_NONE:
-            value = kColorNone;
-            break;
-        case COLORK_DEFAULT:
-            value = kColorDefault;
-            break;
-        case COLORK_ACCENT:
-            value = g_accentColor;
-            break;
-        default:
-            value = color.rgb;
-            break;
-    }
-
-    DwmSetWindowAttribute(hWnd, DWMWA_BORDER_COLOR, &value, sizeof(value));
-}
-
-static const BorderColor& ColorForWindow(HWND hWnd) {
-    return IsWindowFocused(hWnd) ? g_focused : g_unfocused;
-}
-
-static void LoadAccentColor() {
-    DWORD color = 0;
-    DWORD colorSize = sizeof(color);
-    if (RegGetValueW(HKEY_CURRENT_USER,
-                     L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Accent",
-                     L"AccentColorMenu", RRF_RT_REG_DWORD, nullptr, &color,
-                     &colorSize) == ERROR_SUCCESS) {
-        g_accentColor = (color & 0xFF0000) | (color & 0xFF00) | (color & 0xFF);
-    }
-}
-
-static void ParseColor(PCWSTR s, BorderColor* out) {
-    out->kind = COLORK_ACCENT;
-    if (!s || !*s) {
-        return;
-    }
-
-    if (_wcsicmp(s, L"accent") == 0) {
-        return;
-    }
-    if (_wcsicmp(s, L"transparent") == 0) {
-        out->kind = COLORK_NONE;
-        return;
-    }
-    if (_wcsicmp(s, L"default") == 0) {
-        out->kind = COLORK_DEFAULT;
-        return;
-    }
-
-    if (s[0] == L'#' && wcslen(s) >= 7) {
-        auto hexVal = [](wchar_t c) -> int {
-            if (c >= L'0' && c <= L'9') return c - L'0';
-            if (c >= L'a' && c <= L'f') return c - L'a' + 10;
-            if (c >= L'A' && c <= L'F') return c - L'A' + 10;
-            return -1;
-        };
-
-        int d[6];
-        bool ok = true;
-        for (int i = 0; i < 6; i++) {
-            d[i] = hexVal(s[1 + i]);
-            ok = ok && d[i] >= 0;
-        }
-        if (ok) {
-            out->kind = COLORK_SOLID;
-            out->rgb = RGB((d[0] << 4) | d[1], (d[2] << 4) | d[3],
-                           (d[4] << 4) | d[5]);
-        }
-    }
-}
-
-static void LoadSettings() {
-    PCWSTR s;
-
-    s = Wh_GetStringSetting(L"focusedColor");
-    ParseColor(s, &g_focused);
-    Wh_FreeStringSetting(s);
-
-    s = Wh_GetStringSetting(L"unfocusedColor");
-    ParseColor(s, &g_unfocused);
-    Wh_FreeStringSetting(s);
-
-    int fixAfterMs = Wh_GetIntSetting(L"fixAfterMs");
-    g_fixAfterMs = fixAfterMs > 0 ? (UINT)fixAfterMs : 0;
-
-    g_specialWindows = Wh_GetIntSetting(L"specialWindows") != 0;
-    g_additionalEvents = Wh_GetIntSetting(L"additionalEvents") != 0;
-
-    s = Wh_GetStringSetting(L"mode");
-    g_overlayMode = !s || wcscmp(s, L"dwm") != 0;
-    Wh_FreeStringSetting(s);
-
-    g_overlay.width = Wh_GetIntSetting(L"overlay.width");
-    if (g_overlay.width < 1) g_overlay.width = 1;
-    if (g_overlay.width > 32) g_overlay.width = 32;
-    g_overlay.offset = Wh_GetIntSetting(L"overlay.offset");
-    if (g_overlay.offset < -8) g_overlay.offset = -8;
-    if (g_overlay.offset > 32) g_overlay.offset = 32;
-    g_overlay.radius = Wh_GetIntSetting(L"overlay.radius");
-    if (g_overlay.radius < 0) g_overlay.radius = 0;
-    if (g_overlay.radius > 64) g_overlay.radius = 64;
-
-    s = Wh_GetStringSetting(L"overlay.style");
-    g_overlay.gradient = s && wcscmp(s, L"gradient") == 0;
-    Wh_FreeStringSetting(s);
-
-    BorderColor to;
-    s = Wh_GetStringSetting(L"overlay.gradientTo");
-    ParseColor(s, &to);
-    Wh_FreeStringSetting(s);
-    g_overlay.gradientTo = to.kind == COLORK_SOLID ? to.rgb : RGB(0xcb, 0xa6, 0xf7);
-    s = Wh_GetStringSetting(L"overlay.unfocusedGradientTo");
-    ParseColor(s, &to);
-    Wh_FreeStringSetting(s);
-    g_overlay.unfocusedGradientTo = to.kind == COLORK_SOLID ? to.rgb : RGB(0x58, 0x5b, 0x70);
-    g_overlay.gradientAngle = Wh_GetIntSetting(L"overlay.gradientAngle");
-
-    int fadeMs = Wh_GetIntSetting(L"overlay.fadeMs");
-    g_overlay.fadeMs = fadeMs > 0 ? (UINT)(fadeMs > 2000 ? 2000 : fadeMs) : 0;
-
-    LoadAccentColor();
-}
-
-// ---------------------------------------------------------------------------
-// Worker thread: applies the colors again once, a short while after each
-// focus change, so apps that set their own border color lose the race.
-// ---------------------------------------------------------------------------
-
-static constexpr UINT_PTR kReapplyTimerId = 0x5742;  // 'WB'
-static constexpr UINT WM_APP_SCHEDULE_REAPPLY = WM_APP + 0x5742;
-
-static std::atomic<HWND> g_workerWindow{nullptr};
-static std::atomic<DWORD> g_workerThreadId{0};
-static HANDLE g_workerThread = nullptr;
-static CRITICAL_SECTION g_pendingCs;
-static std::vector<HWND> g_pendingWindows;
-
-static BOOL CALLBACK CollectWindowsCallback(HWND hWnd, LPARAM lParam) {
-    DWORD pid = 0;
-    GetWindowThreadProcessId(hWnd, &pid);
-    if (pid == GetCurrentProcessId() && IsValidWindow(hWnd)) {
-        auto* list = (std::vector<HWND>*)lParam;
-        list->push_back(hWnd);
-    }
-    return TRUE;
-}
-
-static LRESULT CALLBACK WorkerWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
-                                      LPARAM lParam) {
-    switch (uMsg) {
-        case WM_TIMER:
-            if (wParam == kReapplyTimerId) {
-                KillTimer(hWnd, kReapplyTimerId);
-
-                std::vector<HWND> pending;
-                EnterCriticalSection(&g_pendingCs);
-                pending.swap(g_pendingWindows);
-                LeaveCriticalSection(&g_pendingCs);
-
-                for (HWND hWndPending : pending) {
-                    if (IsWindow(hWndPending)) {
-                        ApplyColorToWindow(hWndPending, ColorForWindow(hWndPending));
-                    }
-                }
-            }
-            break;
-
-        case WM_APP_SCHEDULE_REAPPLY:
-            if (g_fixAfterMs) {
-                SetTimer(hWnd, kReapplyTimerId, g_fixAfterMs, nullptr);
-            }
-            return 0;
-
-        default:
-            break;
-    }
-
-    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
-}
-
-static DWORD WINAPI WorkerThreadProc(LPVOID) {
-    WNDCLASSEXW wc = {};
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = WorkerWndProc;
-    wc.hInstance = (HINSTANCE)&__ImageBase;
-    wc.lpszClassName = L"WindhawkLocalWindowBordersWorker";
-    if (!RegisterClassExW(&wc)) {
-        return 0;
-    }
-
-    HWND hWnd = CreateWindowExW(0, wc.lpszClassName, L"Window Borders worker",
-                                0, 0, 0, 0, 0, HWND_MESSAGE, nullptr,
-                                wc.hInstance, nullptr);
-    if (!hWnd) {
-        return 0;
-    }
-
-    g_workerWindow.store(hWnd, std::memory_order_release);
-    g_workerThreadId.store(GetCurrentThreadId(), std::memory_order_release);
-
-    MSG msg;
-    while (GetMessageW(&msg, nullptr, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
-    }
-
-    DestroyWindow(hWnd);
-    UnregisterClassW(wc.lpszClassName, wc.hInstance);
-    return 0;
-}
-
-static void ScheduleReapply() {
-    if (!g_fixAfterMs) {
-        return;
-    }
-
-    HWND hWndWorker = g_workerWindow.load(std::memory_order_acquire);
-    if (!hWndWorker) {
-        return;
-    }
-
-    EnterCriticalSection(&g_pendingCs);
-    g_pendingWindows.clear();
-    EnumWindows(CollectWindowsCallback, (LPARAM)&g_pendingWindows);
-    LeaveCriticalSection(&g_pendingCs);
-
-    PostMessageW(hWndWorker, WM_APP_SCHEDULE_REAPPLY, 0, 0);
-}
-
-// ---------------------------------------------------------------------------
-// Hooks
-// ---------------------------------------------------------------------------
-
-static void SetBorderColorAndSchedule(HWND hWnd, BOOL activate) {
-    if (!IsValidWindow(hWnd)) {
-        return;
-    }
-
-    ApplyColorToWindow(hWnd, activate ? g_focused : g_unfocused);
-    ScheduleReapply();
-}
-
-static void HandleActivateMessage(HWND hWnd, UINT uMsg, WPARAM wParam) {
-    switch (uMsg) {
-        case WM_ACTIVATEAPP:
-            if (g_additionalEvents) {
-                SetBorderColorAndSchedule(hWnd, wParam && GetForegroundWindow() == hWnd);
-            }
-            break;
-        case WM_ACTIVATE:
-        case WM_NCACTIVATE:
-            SetBorderColorAndSchedule(hWnd, (BOOL)wParam);
-            break;
-        case WM_DWMCOLORIZATIONCOLORCHANGED:
-            LoadAccentColor();
-            SetBorderColorAndSchedule(hWnd, IsWindowFocused(hWnd));
-            break;
-        default:
-            break;
-    }
-}
-
-static void OverlayOnMessage(HWND hWnd, UINT uMsg, WPARAM wParam);
-
-using DefWindowProcA_t = decltype(&DefWindowProcA);
-static DefWindowProcA_t DefWindowProcA_orig;
-static LRESULT WINAPI DefWindowProcA_hook(HWND hWnd, UINT uMsg, WPARAM wParam,
-                                          LPARAM lParam) {
-    LRESULT result = DefWindowProcA_orig(hWnd, uMsg, wParam, lParam);
-    HandleActivateMessage(hWnd, uMsg, wParam);
-    OverlayOnMessage(hWnd, uMsg, wParam);
-    return result;
-}
-
-using DefWindowProcW_t = decltype(&DefWindowProcW);
-static DefWindowProcW_t DefWindowProcW_orig;
-static LRESULT WINAPI DefWindowProcW_hook(HWND hWnd, UINT uMsg, WPARAM wParam,
-                                          LPARAM lParam) {
-    LRESULT result = DefWindowProcW_orig(hWnd, uMsg, wParam, lParam);
-    HandleActivateMessage(hWnd, uMsg, wParam);
-    OverlayOnMessage(hWnd, uMsg, wParam);
-    return result;
-}
-
-using DefDlgProcA_t = decltype(&DefDlgProcA);
-static DefDlgProcA_t DefDlgProcA_orig;
-static LRESULT WINAPI DefDlgProcA_hook(HWND hWnd, UINT uMsg, WPARAM wParam,
-                                       LPARAM lParam) {
-    LRESULT result = DefDlgProcA_orig(hWnd, uMsg, wParam, lParam);
-    if (uMsg == WM_NCACTIVATE) {
-        SetBorderColorAndSchedule(hWnd, (BOOL)wParam);
-    }
-    OverlayOnMessage(hWnd, uMsg, wParam);
-    return result;
-}
-
-using DefDlgProcW_t = decltype(&DefDlgProcW);
-static DefDlgProcW_t DefDlgProcW_orig;
-static LRESULT WINAPI DefDlgProcW_hook(HWND hWnd, UINT uMsg, WPARAM wParam,
-                                       LPARAM lParam) {
-    LRESULT result = DefDlgProcW_orig(hWnd, uMsg, wParam, lParam);
-    if (uMsg == WM_NCACTIVATE) {
-        SetBorderColorAndSchedule(hWnd, (BOOL)wParam);
-    }
-    OverlayOnMessage(hWnd, uMsg, wParam);
-    return result;
-}
-
-// ---------------------------------------------------------------------------
-// Overlay mode: four thin click-through layered strips per decorated window
-// (top, bottom, left, right), created on that window's own thread and owned
-// by it, so they follow the window in z-order, minimize with it and are
-// destroyed with it. Strips keep the surfaces small: a full-window layered
-// bitmap would cost DWM tens of megabytes per window.
-// ---------------------------------------------------------------------------
-
-struct RingColor {
+struct Ring {
     float r = 0, g = 0, b = 0, a = 0;
 };
 
-// BEGIN RING RENDERER (also compiled by the offline render test)
-static float Clamp01(float v) {
+struct Config {
+    int width = 2;
+    int gap = -1;
+    int radius = 16;
+    int fadeMs = 150;
+    int gradientAngle = 45;
+    int menuRadius = 8;
+    bool menus = false;
+    bool gradient = true;
+    bool focusedAccent = true;
+    COLORREF focused = RGB(0x89, 0xb4, 0xfa);
+    COLORREF focusedTo = RGB(0xcb, 0xa6, 0xf7);
+    COLORREF unfocused = RGB(0x58, 0x5b, 0x70);
+    COLORREF unfocusedTo = RGB(0x58, 0x5b, 0x70);
+    std::vector<std::wstring> exclude;
+};
+
+// Four strips per window, so a big window never needs one huge bitmap.
+struct Overlay {
+    HWND parts[4] = {};
+    RECT frame = {};
+    UINT dpi = 96;
+    bool focused = false;
+    bool shown = false;
+    bool dirty = true;
+    bool fading = false;
+    bool menu = false;
+    DWORD fadeStart = 0;
+    int fadeMs = 0;
+    Ring cur1, cur2, from1, from2, to1, to2;
+};
+
+enum class Kind { None, Window, Menu };
+
+Config g_cfg;
+HINSTANCE g_instance = (HINSTANCE)&__ImageBase;
+HANDLE g_thread = nullptr;
+HANDLE g_ready = nullptr;
+HWND g_main = nullptr;
+COLORREF g_accent = 0;
+std::unordered_map<HWND, Overlay> g_overlays;
+std::unordered_map<DWORD, bool> g_pidExcluded;
+HANDLE g_pacerWake = nullptr;
+std::atomic<bool> g_fadingAny{false};
+std::atomic<bool> g_fadePending{false};
+std::atomic<bool> g_resyncPending{false};
+
+// ---------------------------------------------------------------------------
+// Pacing
+// ---------------------------------------------------------------------------
+
+// The only clock. Posts a fade frame every kFadeFrameMs while a fade runs and a
+// resync every kResyncMs. SetTimer's synthesized WM_TIMER can starve forever
+// under a WinEvent flood; posted messages always process. The pending flags
+// keep at most one of each tick in the queue.
+DWORD WINAPI PacerThread(LPVOID stop) {
+    HANDLE waits[2] = {(HANDLE)stop, g_pacerWake};
+    DWORD lastResync = GetTickCount();
+    for (;;) {
+        DWORD r = WaitForMultipleObjects(2, waits, FALSE, g_fadingAny ? kFadeFrameMs : kResyncMs);
+        if (r == WAIT_OBJECT_0 || r == WAIT_FAILED) {
+            break;
+        }
+        if (g_fadingAny && !g_fadePending.exchange(true)) {
+            PostMessageW(g_main, WM_TIMER, kFadeTimer, 0);
+        }
+        if (GetTickCount() - lastResync >= kResyncMs) {
+            lastResync = GetTickCount();
+            if (!g_resyncPending.exchange(true)) {
+                PostMessageW(g_main, WM_TIMER, kResyncTimer, 0);
+            }
+        }
+    }
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+int ReadInt(const wchar_t* name, int lo, int hi) {
+    int v = Wh_GetIntSetting(name);
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+
+COLORREF ParseHex(const std::wstring& text, COLORREF fallback) {
+    std::wstring hex = !text.empty() && text[0] == L'#' ? text.substr(1) : text;
+    if (hex.size() != 6) {
+        return fallback;
+    }
+    wchar_t* end = nullptr;
+    unsigned long v = wcstoul(hex.c_str(), &end, 16);
+    if (*end) {
+        return fallback;
+    }
+    return RGB((v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff);
+}
+
+std::wstring ReadString(const wchar_t* name) {
+    PCWSTR value = Wh_GetStringSetting(name);
+    std::wstring text = value;
+    Wh_FreeStringSetting(value);
+    size_t first = text.find_first_not_of(L" ");
+    return first == std::wstring::npos ? L""
+                                       : text.substr(first, text.find_last_not_of(L" ") - first + 1);
+}
+
+void LoadConfig() {
+    g_cfg = Config{};
+    g_cfg.width = ReadInt(L"width", 1, 32);
+    g_cfg.gap = ReadInt(L"gap", -8, 32);
+    g_cfg.radius = ReadInt(L"radius", 0, 64);
+    g_cfg.fadeMs = ReadInt(L"fadeMs", 0, 2000);
+    g_cfg.gradientAngle = ReadInt(L"gradientAngle", 0, 360);
+    g_cfg.gradient = Wh_GetIntSetting(L"gradient") != 0;
+    g_cfg.menus = Wh_GetIntSetting(L"menus") != 0;
+    g_cfg.menuRadius = ReadInt(L"menuRadius", 0, 64);
+
+    std::wstring focused = ReadString(L"focusedColor");
+    g_cfg.focusedAccent = focused.empty() || _wcsicmp(focused.c_str(), L"accent") == 0;
+    g_cfg.focused = ParseHex(focused, g_cfg.focused);
+    g_cfg.focusedTo = ParseHex(ReadString(L"focusedColorTo"), g_cfg.focusedTo);
+    g_cfg.unfocused = ParseHex(ReadString(L"unfocusedColor"), g_cfg.unfocused);
+    g_cfg.unfocusedTo = ParseHex(ReadString(L"unfocusedColorTo"), g_cfg.unfocusedTo);
+
+    for (int i = 0;; i++) {
+        PCWSTR value = Wh_GetStringSetting(L"exclude[%d]", i);
+        bool end = !*value;
+        std::wstring item = value;
+        Wh_FreeStringSetting(value);
+        if (end) {
+            break;
+        }
+        size_t first = item.find_first_not_of(L" ");
+        if (first != std::wstring::npos) {
+            g_cfg.exclude.push_back(item.substr(first, item.find_last_not_of(L" ") - first + 1));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Colors
+// ---------------------------------------------------------------------------
+
+COLORREF AccentRgb() {
+    DWORD argb = 0;
+    BOOL opaque = FALSE;
+    if (FAILED(DwmGetColorizationColor(&argb, &opaque))) {
+        return RGB(0x89, 0xb4, 0xfa);
+    }
+    return RGB((argb >> 16) & 0xff, (argb >> 8) & 0xff, argb & 0xff);
+}
+
+Ring ToRing(COLORREF c) {
+    return {GetRValue(c) / 255.0f, GetGValue(c) / 255.0f, GetBValue(c) / 255.0f, 1.0f};
+}
+
+void StateColors(bool focused, Ring* c1, Ring* c2) {
+    COLORREF rgb = focused ? (g_cfg.focusedAccent ? AccentRgb() : g_cfg.focused) : g_cfg.unfocused;
+    COLORREF to = focused ? g_cfg.focusedTo : g_cfg.unfocusedTo;
+    *c1 = ToRing(rgb);
+    *c2 = g_cfg.gradient ? ToRing(to) : *c1;
+}
+
+// ---------------------------------------------------------------------------
+// Ring renderer
+// ---------------------------------------------------------------------------
+
+// BEGIN RING RENDERER
+float Clamp01(float v) {
     return v < 0 ? 0 : (v > 1 ? 1 : v);
 }
 
-static RingColor LerpColor(const RingColor& x, const RingColor& y, float t) {
-    return {x.r + (y.r - x.r) * t, x.g + (y.g - x.g) * t,
-            x.b + (y.b - x.b) * t, x.a + (y.a - x.a) * t};
+Ring LerpColor(const Ring& x, const Ring& y, float t) {
+    return {x.r + (y.r - x.r) * t, x.g + (y.g - x.g) * t, x.b + (y.b - x.b) * t,
+            x.a + (y.a - x.a) * t};
 }
 
 // Rows/columns from each canvas edge that can hold ring pixels.
-static int RingBand(int pad, float radius, float offset) {
+int RingBand(int pad, float radius, float offset) {
     float inside = (offset < 0 ? -offset : 0) + 1;
     return pad + (int)ceilf(radius > inside ? radius : inside) + 1;
 }
 
-// The canvas is the window frame grown by pad on every side (fw x fh pixels
-// in total). Draws the part of an anti-aliased rounded ring that falls inside
-// the strip at (sx, sy, sw, sh) of that canvas into a zeroed, top-down,
-// premultiplied BGRA buffer of sw x sh pixels. The ring spans
-// [offset, offset + width] outside the frame edge.
-static void RenderRing(uint32_t* px, int sx, int sy, int sw, int sh, int fw, int fh,
-                       int pad, float radius, float offset, float width,
-                       RingColor c1, RingColor c2, float angleDeg) {
+// The canvas is the window frame grown by pad on every side (fw x fh pixels).
+// Draws the part of the ring inside the strip (sx, sy, sw, sh) into a zeroed,
+// top-down, premultiplied BGRA buffer. The ring spans [offset, offset + width]
+// outside the frame edge.
+void RenderRing(uint32_t* px, int sx, int sy, int sw, int sh, int fw, int fh, int pad,
+                float radius, float offset, float width, Ring c1, Ring c2, float angleDeg) {
     float cx = fw / 2.0f, cy = fh / 2.0f;
     float hx = fw / 2.0f - pad, hy = fh / 2.0f - pad;
     if (hx <= 0 || hy <= 0) {
@@ -573,10 +359,8 @@ static void RenderRing(uint32_t* px, int sx, int sy, int sw, int sh, int fw, int
             if (cov <= 0) {
                 continue;
             }
-            RingColor c =
-                solid ? c1
-                      : LerpColor(c1, c2,
-                                  Clamp01((fx * dx + fy * dy) / span * 0.5f + 0.5f));
+            Ring c = solid ? c1
+                           : LerpColor(c1, c2, Clamp01((fx * dx + fy * dy) / span * 0.5f + 0.5f));
             float a = c.a * cov;
             px[y * sw + x] = ((uint32_t)(a * 255 + 0.5f) << 24) |
                              ((uint32_t)(c.r * a * 255 + 0.5f) << 16) |
@@ -587,8 +371,8 @@ static void RenderRing(uint32_t* px, int sx, int sy, int sw, int sh, int fw, int
 }
 
 // Splits the canvas into top, bottom, left and right strips. Returns how many
-// are non-empty (left/right vanish on very short windows).
-static int RingStrips(int fw, int fh, int band, RECT out[4]) {
+// are non-empty (left and right vanish on very short windows).
+int RingStrips(int fw, int fh, int band, RECT out[4]) {
     if (band * 2 >= fh) {
         band = (fh + 1) / 2;
     }
@@ -598,149 +382,108 @@ static int RingStrips(int fw, int fh, int band, RECT out[4]) {
     out[3] = {fw - band, band, fw, fh - band};
     return fh - band * 2 > 0 ? 4 : 2;
 }
+
 // END RING RENDERER
 
-static constexpr UINT_PTR kFadeTimerId = 1;
-static constexpr UINT_PTR kPollTimerId = 2;
-static constexpr UINT kPollMs = 200;
-static constexpr UINT WM_APP_OVERLAY_DESTROY = WM_APP + 0x5743;
-static constexpr UINT WM_APP_OVERLAY_REFRESH = WM_APP + 0x5744;
-static const wchar_t kOverlayClass[] = L"WindhawkLocalWindowBordersOverlay";
-
-struct Overlay {
-    HWND parts[4] = {};  // parts[0] owns the timers
-    HWND target = nullptr;
-    bool focused = false;
-    bool shown = false;
-    RingColor cur1, cur2, from1, from2, to1, to2;
-    DWORD fadeStart = 0;
-    bool fading = false;
-    RECT frame = {};
-    UINT dpi = 0;
-    bool dirty = true;
+struct Shape {
+    int pad = 0, width = 0, offset = 0, fw = 0, fh = 0, count = 0;
+    float radius = 0;
+    RECT strips[4] = {};
 };
 
-static UINT g_syncMsg = 0;
-static CRITICAL_SECTION g_overlayCs;
-static std::unordered_map<HWND, Overlay*> g_overlays;  // target -> overlay
-static bool g_overlayClassRegistered = false;
-// Threads currently running overlay code; unload waits for this to drain.
-static std::atomic<int> g_overlayBusy{0};
-
-struct OverlayBusyScope {
-    OverlayBusyScope() { g_overlayBusy++; }
-    ~OverlayBusyScope() { g_overlayBusy--; }
-};
-
-// Every overlay call works in physical pixels, whatever DPI mode the app's
-// thread runs in: DWM frame bounds are physical, and so are the strips.
-struct PhysicalDpiScope {
-    DPI_AWARENESS_CONTEXT old;
-    PhysicalDpiScope()
-        : old(SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)) {}
-    ~PhysicalDpiScope() {
-        if (old) SetThreadDpiAwarenessContext(old);
-    }
-};
-
-static Overlay* FindOverlay(HWND target) {
-    EnterCriticalSection(&g_overlayCs);
-    auto it = g_overlays.find(target);
-    Overlay* ov = it == g_overlays.end() ? nullptr : it->second;
-    LeaveCriticalSection(&g_overlayCs);
-    return ov;
+Shape ShapeFor(const Overlay& ov) {
+    Shape s;
+    float scale = ov.dpi / 96.0f;
+    s.width = (int)ceilf(g_cfg.width * scale);
+    s.offset = (int)roundf(g_cfg.gap * scale);
+    s.pad = s.width + (s.offset > 0 ? s.offset : 0) + 1;
+    s.radius = (ov.menu ? g_cfg.menuRadius : g_cfg.radius) * scale;
+    s.fw = ov.frame.right - ov.frame.left + s.pad * 2;
+    s.fh = ov.frame.bottom - ov.frame.top + s.pad * 2;
+    s.count = RingStrips(s.fw, s.fh, RingBand(s.pad, s.radius, (float)s.offset), s.strips);
+    return s;
 }
 
-static RingColor ToRing(COLORREF c, float a) {
-    return {GetRValue(c) / 255.0f, GetGValue(c) / 255.0f, GetBValue(c) / 255.0f, a};
-}
+// ---------------------------------------------------------------------------
+// Overlay windows
+// ---------------------------------------------------------------------------
 
-static void StateColors(bool focused, RingColor* c1, RingColor* c2) {
-    const BorderColor& bc = focused ? g_focused : g_unfocused;
-    if (bc.kind == COLORK_ACCENT || bc.kind == COLORK_SOLID) {
-        *c1 = ToRing(bc.kind == COLORK_ACCENT ? g_accentColor : bc.rgb, 1);
-        *c2 = g_overlay.gradient
-                  ? ToRing(focused ? g_overlay.gradientTo : g_overlay.unfocusedGradientTo, 1)
-                  : *c1;
-        return;
+bool CreateParts(HWND target, Overlay& ov) {
+    DWORD ex = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
+    if (GetWindowLongPtrW(target, GWL_EXSTYLE) & WS_EX_TOPMOST) {
+        ex |= WS_EX_TOPMOST;
     }
-    // Hidden in this state: keep the other state's colors and fade them out.
-    const BorderColor& other = focused ? g_unfocused : g_focused;
-    COLORREF rgb = other.kind == COLORK_SOLID ? other.rgb : g_accentColor;
-    *c1 = ToRing(rgb, 0);
-    *c2 = !focused && g_overlay.gradient ? ToRing(g_overlay.gradientTo, 0) : *c1;
-}
-
-static bool GetFrame(HWND target, RECT* rc) {
-    if (SUCCEEDED(DwmGetWindowAttribute(target, DWMWA_EXTENDED_FRAME_BOUNDS, rc,
-                                        sizeof(*rc)))) {
-        return rc->right > rc->left && rc->bottom > rc->top;
-    }
-    return GetWindowRect(target, rc) && rc->right > rc->left;
-}
-
-// Where Windows would not draw a frame, the overlay stays hidden too. That
-// includes maximized windows, which get no border at all.
-static bool GetDrawFrame(HWND target, RECT* frame, HMONITOR* monitor) {
-    if (!GetFrame(target, frame)) {
-        return false;
-    }
-    *monitor = MonitorFromRect(frame, MONITOR_DEFAULTTONEAREST);
-    if (!IsWindowVisible(target) || IsIconic(target)) {
-        return false;
-    }
-    BOOL cloaked = FALSE;
-    if (SUCCEEDED(DwmGetWindowAttribute(target, DWMWA_CLOAKED, &cloaked,
-                                        sizeof(cloaked))) &&
-        cloaked) {
-        return false;
-    }
-    MONITORINFO mi = {sizeof(mi)};
-    if (!GetMonitorInfoW(*monitor, &mi)) {
-        return true;
-    }
-    if (IsZoomed(target)) {
-        return false;  // maximized: no border
-    }
-    if (frame->left <= mi.rcMonitor.left && frame->top <= mi.rcMonitor.top &&
-        frame->right >= mi.rcMonitor.right &&
-        frame->bottom >= mi.rcMonitor.bottom) {
-        return false;  // fullscreen app or game
+    for (int i = 0; i < 4; i++) {
+        ov.parts[i] = CreateWindowExW(ex, kPartClass, L"", WS_POPUP | WS_DISABLED, 0, 0, 0, 0,
+                                      nullptr, nullptr, g_instance, nullptr);
+        if (!ov.parts[i]) {
+            for (int j = 0; j < i; j++) {
+                DestroyWindow(ov.parts[j]);
+            }
+            return false;
+        }
     }
     return true;
 }
 
-static bool IsOverlayTarget(HWND hWnd) {
-    DWORD style = (DWORD)GetWindowLongPtrW(hWnd, GWL_STYLE);
-    return !(style & WS_CHILD) && IsValidWindow(hWnd);
+void DestroyOverlay(HWND target) {
+    auto it = g_overlays.find(target);
+    if (it == g_overlays.end()) {
+        return;
+    }
+    for (HWND part : it->second.parts) {
+        DestroyWindow(part);
+    }
+    g_overlays.erase(it);
 }
 
-static int OverlayPad(UINT dpi, int* width, int* offset) {
-    float scale = dpi / 96.0f;
-    *width = (int)ceilf(g_overlay.width * scale);
-    *offset = (int)roundf(g_overlay.offset * scale);
-    return *width + (*offset > 0 ? *offset : 0) + 1;
+void DestroyAllOverlays() {
+    std::vector<HWND> targets;
+    for (auto& entry : g_overlays) {
+        targets.push_back(entry.first);
+    }
+    for (HWND target : targets) {
+        DestroyOverlay(target);
+    }
 }
 
-static void PaintOverlay(Overlay* ov) {
-    int width, offset;
-    int pad = OverlayPad(ov->dpi, &width, &offset);
-    float radius = g_overlay.radius * ov->dpi / 96.0f;
-    int fw = ov->frame.right - ov->frame.left + pad * 2;
-    int fh = ov->frame.bottom - ov->frame.top + pad * 2;
-    RECT strips[4];
-    int count = RingStrips(fw, fh, RingBand(pad, radius, (float)offset), strips);
+// Keeps the strips directly above their target: the ring sits over the window
+// it belongs to and under anything that covers that window.
+void Restack(Overlay& ov, HWND target) {
+    bool targetTopmost = GetWindowLongPtrW(target, GWL_EXSTYLE) & WS_EX_TOPMOST;
+    // A window can join or leave the topmost band after its ring was made
+    // (pin-on-top tools); the strips follow it so they never sink below it.
+    if (targetTopmost != ((GetWindowLongPtrW(ov.parts[0], GWL_EXSTYLE) & WS_EX_TOPMOST) != 0)) {
+        for (HWND part : ov.parts) {
+            SetWindowPos(part, targetTopmost ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+        }
+    }
+    HWND above = GetWindow(target, GW_HWNDPREV);
+    if (above && !targetTopmost && (GetWindowLongPtrW(above, GWL_EXSTYLE) & WS_EX_TOPMOST)) {
+        above = HWND_TOP;
+    }
+    if (above == ov.parts[3]) {
+        return;
+    }
+    for (HWND part : ov.parts) {
+        SetWindowPos(part, above ? above : HWND_TOP, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+        above = part;
+    }
+}
 
+void PaintStrips(Overlay& ov) {
+    Shape s = ShapeFor(ov);
     HDC dc = CreateCompatibleDC(nullptr);
     for (int i = 0; i < 4; i++) {
-        HWND part = ov->parts[i];
-        if (!part) continue;
-        if (i >= count) {
+        HWND part = ov.parts[i];
+        if (i >= s.count) {
             ShowWindow(part, SW_HIDE);
             continue;
         }
-        const RECT& s = strips[i];
-        int sw = s.right - s.left, sh = s.bottom - s.top;
+        const RECT& strip = s.strips[i];
+        int sw = strip.right - strip.left, sh = strip.bottom - strip.top;
         BITMAPINFO bi = {};
         bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
         bi.bmiHeader.biWidth = sw;
@@ -750,462 +493,496 @@ static void PaintOverlay(Overlay* ov) {
         bi.bmiHeader.biCompression = BI_RGB;
         void* bits = nullptr;
         HBITMAP bmp = CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
-        if (!bmp) continue;
-        RenderRing((uint32_t*)bits, s.left, s.top, sw, sh, fw, fh, pad, radius,
-                   (float)offset, (float)width, ov->cur1, ov->cur2,
-                   (float)g_overlay.gradientAngle);
+        if (!bmp) {
+            continue;
+        }
+        RenderRing((uint32_t*)bits, strip.left, strip.top, sw, sh, s.fw, s.fh, s.pad, s.radius,
+                   (float)s.offset, (float)s.width, ov.cur1, ov.cur2, (float)g_cfg.gradientAngle);
         HGDIOBJ old = SelectObject(dc, bmp);
-        POINT dst = {ov->frame.left - pad + s.left, ov->frame.top - pad + s.top};
+        POINT dst = {ov.frame.left - s.pad + strip.left, ov.frame.top - s.pad + strip.top};
         SIZE size = {sw, sh};
         POINT src = {0, 0};
         BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
         UpdateLayeredWindow(part, nullptr, &dst, &size, dc, &src, 0, &blend, ULW_ALPHA);
         SelectObject(dc, old);
         DeleteObject(bmp);
+        ShowWindow(part, SW_SHOWNOACTIVATE);
     }
     DeleteDC(dc);
-    ov->dirty = false;
+    ov.dirty = false;
+    ov.shown = true;
 }
 
-// Size unchanged: slide the strips without repainting.
-static void MoveOverlay(Overlay* ov) {
-    int width, offset;
-    int pad = OverlayPad(ov->dpi, &width, &offset);
-    float radius = g_overlay.radius * ov->dpi / 96.0f;
-    int fw = ov->frame.right - ov->frame.left + pad * 2;
-    int fh = ov->frame.bottom - ov->frame.top + pad * 2;
-    RECT strips[4];
-    int count = RingStrips(fw, fh, RingBand(pad, radius, (float)offset), strips);
-    for (int i = 0; i < count; i++) {
-        if (!ov->parts[i]) continue;
-        POINT dst = {ov->frame.left - pad + strips[i].left,
-                     ov->frame.top - pad + strips[i].top};
-        UpdateLayeredWindow(ov->parts[i], nullptr, &dst, nullptr, nullptr, nullptr,
-                            0, nullptr, 0);
+// Same size, new position: slide the strips without repainting.
+void MoveStrips(Overlay& ov) {
+    Shape s = ShapeFor(ov);
+    for (int i = 0; i < s.count; i++) {
+        POINT dst = {ov.frame.left - s.pad + s.strips[i].left,
+                     ov.frame.top - s.pad + s.strips[i].top};
+        UpdateLayeredWindow(ov.parts[i], nullptr, &dst, nullptr, nullptr, nullptr, 0, nullptr, 0);
     }
 }
 
-static void ShowOverlay(Overlay* ov, bool show) {
-    if (show == ov->shown) {
+void HideStrips(Overlay& ov) {
+    if (!ov.shown) {
         return;
     }
-    ov->shown = show;
-    for (HWND part : ov->parts) {
-        if (!part) continue;
-        if (!show) {
-            ShowWindow(part, SW_HIDE);
+    for (HWND part : ov.parts) {
+        ShowWindow(part, SW_HIDE);
+    }
+    ov.shown = false;
+}
+
+// Fades from the current colors to the overlay's state colors over ms.
+void StartFade(Overlay& ov, int ms) {
+    StateColors(ov.focused, &ov.to1, &ov.to2);
+    ov.dirty = true;
+    if (ms <= 0) {
+        ov.cur1 = ov.to1;
+        ov.cur2 = ov.to2;
+        ov.fading = false;
+        return;
+    }
+    ov.from1 = ov.cur1;
+    ov.from2 = ov.cur2;
+    ov.fadeStart = GetTickCount();
+    ov.fadeMs = ms;
+    ov.fading = true;
+    g_fadingAny = true;
+    SetEvent(g_pacerWake);
+}
+
+// Moves one fade forward to now. Lands exactly on the target colors.
+void StepFade(Overlay& ov) {
+    float t = Clamp01((float)(GetTickCount() - ov.fadeStart) / ov.fadeMs);
+    float e = 1 - (1 - t) * (1 - t);  // ease out
+    ov.cur1 = t < 1 ? LerpColor(ov.from1, ov.to1, e) : ov.to1;
+    ov.cur2 = t < 1 ? LerpColor(ov.from2, ov.to2, e) : ov.to2;
+    ov.fading = t < 1;
+    ov.dirty = true;
+}
+
+void FadeAll() {
+    bool any = false;
+    for (auto& entry : g_overlays) {
+        Overlay& ov = entry.second;
+        if (!ov.fading) {
             continue;
         }
-        // Directly above the target, never above windows that cover it. When
-        // the window above is a topmost one (the taskbar, say) and the target
-        // is not, the top of the normal band is the same spot.
-        HWND above = GetWindow(ov->target, GW_HWNDPREV);
-        bool targetTopmost = GetWindowLongPtrW(ov->target, GWL_EXSTYLE) & WS_EX_TOPMOST;
-        if (above && !targetTopmost &&
-            (GetWindowLongPtrW(above, GWL_EXSTYLE) & WS_EX_TOPMOST)) {
-            above = HWND_TOP;
+        StepFade(ov);
+        if (ov.shown) {
+            PaintStrips(ov);
         }
-        UINT flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER |
-                     SWP_SHOWWINDOW;
-        if (above == part) {
-            flags |= SWP_NOZORDER;
-        }
-        SetWindowPos(part, above ? above : HWND_TOP, 0, 0, 0, 0, flags);
+        any = any || ov.fading;
     }
+    g_fadingAny = any;
 }
 
-static void StartFade(Overlay* ov) {
-    StateColors(ov->focused, &ov->to1, &ov->to2);
-    ov->dirty = true;
-    if (!g_overlay.fadeMs || !ov->shown) {
-        ov->cur1 = ov->to1;
-        ov->cur2 = ov->to2;
-        ov->fading = false;
-        KillTimer(ov->parts[0], kFadeTimerId);
-        return;
+// ---------------------------------------------------------------------------
+// Which windows get a ring
+// ---------------------------------------------------------------------------
+
+// Our own windows and the excluded programs get no ring. Cached per process.
+bool ProcessExcluded(HWND hwnd) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (!pid || pid == GetCurrentProcessId()) {
+        return true;
     }
-    ov->from1 = ov->cur1;
-    ov->from2 = ov->cur2;
-    ov->fadeStart = GetTickCount();
-    ov->fading = true;
-    SetTimer(ov->parts[0], kFadeTimerId, 16, nullptr);
-}
-
-static void SyncOverlay(HWND target, int focusHint);
-
-static void FadeStep(Overlay* ov) {
-    UINT fadeMs = g_overlay.fadeMs;
-    float t = fadeMs ? Clamp01((GetTickCount() - ov->fadeStart) / (float)fadeMs) : 1;
-    float e = 1 - (1 - t) * (1 - t);  // ease out
-    ov->cur1 = LerpColor(ov->from1, ov->to1, e);
-    ov->cur2 = LerpColor(ov->from2, ov->to2, e);
-    if (t >= 1) {
-        ov->fading = false;
-        KillTimer(ov->parts[0], kFadeTimerId);
+    auto it = g_pidExcluded.find(pid);
+    if (it != g_pidExcluded.end()) {
+        return it->second;
     }
-    ov->dirty = true;
-    SyncOverlay(ov->target, -1);
-}
-
-static void DestroyOverlay(Overlay* ov) {
-    // Each strip's WM_NCDESTROY clears its slot; the last one frees ov.
-    HWND parts[4];
-    memcpy(parts, ov->parts, sizeof(parts));
-    for (HWND part : parts) {
-        if (part) DestroyWindow(part);
+    if (g_pidExcluded.size() > 256) {
+        g_pidExcluded.clear();  // pids of exited processes get reused
     }
-}
-
-static Overlay* CreateOverlay(HWND target, bool focused) {
-    Overlay* ov = new Overlay();
-    ov->target = target;
-    ov->focused = focused;
-    StateColors(focused, &ov->cur1, &ov->cur2);
-    ov->to1 = ov->cur1;
-    ov->to2 = ov->cur2;
-
-    DWORD exStyle = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW |
-                    WS_EX_NOACTIVATE;
-    if (GetWindowLongPtrW(target, GWL_EXSTYLE) & WS_EX_TOPMOST) {
-        exStyle |= WS_EX_TOPMOST;
-    }
-    for (int i = 0; i < 4; i++) {
-        HWND part = CreateWindowExW(exStyle, kOverlayClass, L"", WS_POPUP | WS_DISABLED,
-                                    0, 0, 0, 0, target, nullptr,
-                                    (HINSTANCE)&__ImageBase, ov);
-        if (!part) {
-            if (ov->parts[0]) {
-                DestroyOverlay(ov);  // frees ov
-            } else {
-                delete ov;
+    bool excluded = false;
+    HANDLE proc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (proc) {
+        wchar_t path[MAX_PATH];
+        DWORD len = MAX_PATH;
+        if (QueryFullProcessImageNameW(proc, 0, path, &len)) {
+            const wchar_t* name = wcsrchr(path, L'\\');
+            name = name ? name + 1 : path;
+            for (const std::wstring& ex : g_cfg.exclude) {
+                if (_wcsicmp(name, ex.c_str()) == 0) {
+                    excluded = true;
+                }
             }
-            return nullptr;
         }
-        ov->parts[i] = part;
+        CloseHandle(proc);
     }
-    EnterCriticalSection(&g_overlayCs);
-    g_overlays[target] = ov;
-    LeaveCriticalSection(&g_overlayCs);
-    SetTimer(ov->parts[0], kPollTimerId, kPollMs, nullptr);
-    return ov;
+    g_pidExcluded[pid] = excluded;
+    return excluded;
 }
 
-// Runs on the target's thread. focusHint: 1 focused, 0 not, -1 ask Windows.
-static void SyncOverlay(HWND target, int focusHint) {
-    if (!g_overlayMode || !g_overlayClassRegistered) {
-        return;
+// Window: a caption or sizing frame, or a frameless app window that would show
+// in Alt+Tab (unowned, not a tool window, can take focus). Menu: a classic
+// Win32 menu (#32768), only with the Menus setting on. Tooltips, other popups
+// and the shell's own surfaces get nothing. Pure, so it can be unit tested.
+// BEGIN CLASSIFIER
+Kind ClassifyWindow(DWORD style, DWORD ex, bool owned, const wchar_t* cls, bool menusOn) {
+    if (style & WS_CHILD) {
+        return Kind::None;
     }
-    Overlay* ov = FindOverlay(target);
-    if (!ov && !IsOverlayTarget(target)) {
-        return;
+    if (wcscmp(cls, L"#32768") == 0) {
+        return menusOn ? Kind::Menu : Kind::None;
     }
-    PhysicalDpiScope dpiScope;
-    bool focused = focusHint >= 0 ? focusHint != 0 : GetForegroundWindow() == target;
-
-    RECT frame;
-    HMONITOR monitor = nullptr;
-    bool visible = GetDrawFrame(target, &frame, &monitor);
-    if (!ov) {
-        if (!visible) {
-            return;
-        }
-        RingColor c1, c2;
-        StateColors(focused, &c1, &c2);
-        if (c1.a == 0) {
-            return;  // nothing to draw yet; created on the next focus change
-        }
-        ov = CreateOverlay(target, focused);
-        if (!ov) {
-            return;
-        }
-    } else if (focused != ov->focused) {
-        ov->focused = focused;
-        StartFade(ov);
-    }
-
-    if (!visible) {
-        ShowOverlay(ov, false);
-        return;
-    }
-
-    UINT dpiX = 96, dpiY = 96;
-    if (FAILED(GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY)) || !dpiX) {
-        dpiX = 96;
-    }
-    if (!EqualRect(&frame, &ov->frame) || dpiX != ov->dpi) {
-        bool resized = frame.right - frame.left != ov->frame.right - ov->frame.left ||
-                       frame.bottom - frame.top != ov->frame.bottom - ov->frame.top;
-        if (resized || dpiX != ov->dpi) {
-            ov->dirty = true;
-        }
-        ov->frame = frame;
-        ov->dpi = dpiX;
-        if (!ov->dirty) {
-            MoveOverlay(ov);
+    bool framed = (style & WS_THICKFRAME) == WS_THICKFRAME || (style & WS_CAPTION) == WS_CAPTION;
+    // win11-accent-border's "special windows" rule: any top-level window that is
+    // not a popup (Flow Launcher, WPF and other custom-drawn windows).
+    bool special = !(style & WS_POPUP);
+    if (!framed && !special) {
+        bool appWindow = ex & WS_EX_APPWINDOW;
+        if ((ex & WS_EX_NOACTIVATE) || ((ex & WS_EX_TOOLWINDOW) && !appWindow) ||
+            (owned && !appWindow)) {
+            return Kind::None;
         }
     }
-    if (ov->dirty) {
-        PaintOverlay(ov);
+    if (!framed) {
+        for (const wchar_t* shell : {L"Progman", L"WorkerW", L"Shell_TrayWnd",
+                                     L"Shell_SecondaryTrayWnd"}) {
+            if (wcscmp(cls, shell) == 0) {
+                return Kind::None;
+            }
+        }
     }
-
-    bool drawn = ov->cur1.a > 0 || ov->cur2.a > 0 || ov->fading;
-    if (!drawn && !ov->fading) {
-        // Faded out for good: free the surfaces instead of keeping them hidden.
-        DestroyOverlay(ov);
-        return;
-    }
-    ShowOverlay(ov, drawn);
+    return Kind::Window;
 }
 
-static LRESULT CALLBACK OverlayWndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
-                                       LPARAM lParam) {
-    OverlayBusyScope busy;
-    if (uMsg == WM_NCCREATE) {
-        SetWindowLongPtrW(hWnd, GWLP_USERDATA,
-                          (LONG_PTR)((CREATESTRUCTW*)lParam)->lpCreateParams);
+// END CLASSIFIER
+
+Kind Classify(HWND hwnd) {
+    wchar_t cls[64] = {};
+    GetClassNameW(hwnd, cls, 64);
+    Kind kind = ClassifyWindow((DWORD)GetWindowLongPtrW(hwnd, GWL_STYLE),
+                               (DWORD)GetWindowLongPtrW(hwnd, GWL_EXSTYLE),
+                               GetWindow(hwnd, GW_OWNER) != nullptr, cls, g_cfg.menus);
+    return kind != Kind::None && ProcessExcluded(hwnd) ? Kind::None : kind;
+}
+
+// False when the window is hidden, minimized, cloaked on another desktop,
+// maximized or fullscreen. Those states get no ring. Menus skip the opacity
+// rule (they fade in from nearly clear) and may be as small as 8 px.
+bool GetDrawFrame(HWND target, RECT* frame, bool menu) {
+    if (!IsWindowVisible(target) || IsIconic(target) || IsZoomed(target)) {
+        return false;
     }
-    Overlay* ov = (Overlay*)GetWindowLongPtrW(hWnd, GWLP_USERDATA);
-    switch (uMsg) {
+    BOOL cloaked = FALSE;
+    if (SUCCEEDED(DwmGetWindowAttribute(target, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) &&
+        cloaked) {
+        return false;
+    }
+    // Near-invisible layered windows are helpers, not something you look at
+    // (RHI parks a 2% opacity drag-and-drop target over its logo).
+    BYTE alpha = 255;
+    DWORD layeredFlags = 0;
+    if (!menu && (GetWindowLongPtrW(target, GWL_EXSTYLE) & WS_EX_LAYERED) &&
+        GetLayeredWindowAttributes(target, nullptr, &alpha, &layeredFlags) &&
+        (layeredFlags & LWA_ALPHA) && alpha < 64) {
+        return false;
+    }
+    if (FAILED(DwmGetWindowAttribute(target, DWMWA_EXTENDED_FRAME_BOUNDS, frame,
+                                     sizeof(*frame)))) {
+        return false;
+    }
+    // Tiny helper windows and windows parked off every screen get no ring.
+    // 40 px keeps a bare Flow Launcher search bar (58 px tall) in.
+    int minSize = menu ? 8 : 40;
+    if (frame->right - frame->left < minSize || frame->bottom - frame->top < minSize) {
+        return false;
+    }
+    HMONITOR monitor = MonitorFromRect(frame, MONITOR_DEFAULTTONULL);
+    MONITORINFO mi = {sizeof(mi)};
+    if (!monitor) {
+        return false;
+    }
+    if (GetMonitorInfoW(monitor, &mi) &&
+        frame->left <= mi.rcMonitor.left && frame->top <= mi.rcMonitor.top &&
+        frame->right >= mi.rcMonitor.right && frame->bottom >= mi.rcMonitor.bottom) {
+        return false;
+    }
+    return true;
+}
+
+// Brings one window's ring in line with the window. Runs on the ring thread only.
+void SyncTarget(HWND target) {
+    Kind kind = Classify(target);
+    if (kind == Kind::None) {
+        DestroyOverlay(target);
+        return;
+    }
+    bool menu = kind == Kind::Menu;
+    RECT frame = {};
+    auto it = g_overlays.find(target);
+    if (!GetDrawFrame(target, &frame, menu)) {
+        // A closed menu is gone for good; its next opening fades in fresh.
+        if (menu) {
+            DestroyOverlay(target);
+        } else if (it != g_overlays.end()) {
+            HideStrips(it->second);
+        }
+        return;
+    }
+
+    UINT dpi = 96, dpiY = 96;
+    HMONITOR monitor = MonitorFromRect(&frame, MONITOR_DEFAULTTONEAREST);
+    if (FAILED(GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpi, &dpiY)) || !dpi) {
+        dpi = 96;
+    }
+    // Menus never take focus, so they always wear the active color.
+    bool focused = menu || GetForegroundWindow() == target;
+
+    if (it == g_overlays.end()) {
+        Overlay fresh;
+        if (!CreateParts(target, fresh)) {
+            return;
+        }
+        fresh.menu = menu;
+        fresh.focused = focused;
+        StateColors(focused, &fresh.cur1, &fresh.cur2);
+        fresh.to1 = fresh.cur1;
+        fresh.to2 = fresh.cur2;
+        it = g_overlays.emplace(target, fresh).first;
+        if (menu) {
+            // Fade in alongside the menu's own fade.
+            it->second.cur1.a = it->second.cur2.a = 0;
+            StartFade(it->second, std::min(g_cfg.fadeMs, 120));
+        }
+    }
+    Overlay& ov = it->second;
+    if (focused != ov.focused) {
+        ov.focused = focused;
+        StartFade(ov, g_cfg.fadeMs);
+    }
+    // Advance any running fade here too, so a ring lands on its exact color
+    // even if fade ticks fall behind.
+    if (ov.fading) {
+        StepFade(ov);
+    }
+
+    bool resized = frame.right - frame.left != ov.frame.right - ov.frame.left ||
+                   frame.bottom - frame.top != ov.frame.bottom - ov.frame.top;
+    bool moved = !EqualRect(&frame, &ov.frame);
+    bool rescaled = dpi != ov.dpi;
+    ov.frame = frame;
+    ov.dpi = dpi;
+    if (resized || rescaled || ov.dirty || !ov.shown) {
+        PaintStrips(ov);
+    } else if (moved) {
+        MoveStrips(ov);
+    }
+    Restack(ov, target);
+}
+
+BOOL CALLBACK SyncWindow(HWND hwnd, LPARAM seen) {
+    ((std::vector<HWND>*)seen)->push_back(hwnd);
+    SyncTarget(hwnd);
+    return TRUE;
+}
+
+// Full pass: every top-level window, plus a check that the accent color is
+// current. Called on a timer, on focus changes and at startup.
+void ResyncAll() {
+    COLORREF accent = AccentRgb();
+    if (accent != g_accent) {
+        g_accent = accent;
+        for (auto& entry : g_overlays) {
+            if (entry.second.focused) {
+                StartFade(entry.second, g_cfg.fadeMs);
+            }
+        }
+    }
+    // A ring whose window is no longer top-level (destroyed, or re-parented into
+    // another window) would otherwise float on screen with nothing under it.
+    std::vector<HWND> seen;
+    EnumWindows(SyncWindow, (LPARAM)&seen);
+    std::vector<HWND> gone;
+    for (auto& entry : g_overlays) {
+        if (std::find(seen.begin(), seen.end(), entry.first) == seen.end()) {
+            gone.push_back(entry.first);
+        }
+    }
+    for (HWND target : gone) {
+        DestroyOverlay(target);
+    }
+}
+
+void CALLBACK OnWinEvent(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject, LONG idChild,
+                         DWORD, DWORD) {
+    if (event == EVENT_SYSTEM_FOREGROUND) {
+        ResyncAll();
+        return;
+    }
+    // Menu popup events name the menu window with OBJID_CLIENT.
+    if (hwnd && (event == EVENT_SYSTEM_MENUPOPUPSTART || event == EVENT_SYSTEM_MENUPOPUPEND)) {
+        if (event == EVENT_SYSTEM_MENUPOPUPEND) {
+            DestroyOverlay(hwnd);
+        } else {
+            SyncTarget(hwnd);
+        }
+        return;
+    }
+    if (!hwnd || idObject != OBJID_WINDOW || idChild != CHILDID_SELF) {
+        return;
+    }
+    if (event == EVENT_OBJECT_DESTROY) {
+        DestroyOverlay(hwnd);
+        return;
+    }
+    if (GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_CHILD) {
+        DestroyOverlay(hwnd);
+        return;
+    }
+    SyncTarget(hwnd);
+}
+
+LRESULT CALLBACK PartProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
         case WM_NCHITTEST:
             return HTTRANSPARENT;
         case WM_MOUSEACTIVATE:
             return MA_NOACTIVATE;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
         case WM_TIMER:
-            if (ov && wParam == kFadeTimerId) {
-                FadeStep(ov);
-            } else if (ov && wParam == kPollTimerId) {
-                SyncOverlay(ov->target, -1);
+            if (wp == kResyncTimer) {
+                g_resyncPending = false;
+                ResyncAll();
+            } else if (wp == kFadeTimer) {
+                g_fadePending = false;
+                FadeAll();
             }
             return 0;
-        case WM_APP_OVERLAY_REFRESH:
-            if (ov) {
-                StartFade(ov);
-                SyncOverlay(ov->target, -1);
-            }
+        case kReloadMsg:
+            // New settings: rebuild every ring with the new look and app list.
+            DestroyAllOverlays();
+            g_pidExcluded.clear();
+            LoadConfig();
+            ResyncAll();
             return 0;
-        case WM_APP_OVERLAY_DESTROY:
-            if (ov) DestroyOverlay(ov);
+        case WM_CLOSE:
+            DestroyWindow(hwnd);
             return 0;
-        case WM_NCDESTROY:
-            if (ov) {
-                SetWindowLongPtrW(hWnd, GWLP_USERDATA, 0);
-                bool last = true;
-                for (HWND& part : ov->parts) {
-                    if (part == hWnd) part = nullptr;
-                    if (part) last = false;
-                }
-                if (last) {
-                    EnterCriticalSection(&g_overlayCs);
-                    auto it = g_overlays.find(ov->target);
-                    if (it != g_overlays.end() && it->second == ov) {
-                        g_overlays.erase(it);
-                    }
-                    LeaveCriticalSection(&g_overlayCs);
-                    delete ov;
-                }
-            }
-            break;
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            return 0;
     }
-    return DefWindowProcW_orig(hWnd, uMsg, wParam, lParam);
+    return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-static void OverlayOnMessage(HWND hWnd, UINT uMsg, WPARAM wParam) {
-    if (!g_overlayMode) {
-        return;
+// The ring thread owns every ring window and the WinEvent hooks, which deliver
+// their events through this thread's message loop.
+DWORD WINAPI RingThread(LPVOID) {
+    SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    LoadConfig();
+
+    WNDCLASSEXW mainClass = {sizeof(mainClass)};
+    mainClass.lpfnWndProc = MainProc;
+    mainClass.hInstance = g_instance;
+    mainClass.lpszClassName = kMainClass;
+    RegisterClassExW(&mainClass);
+
+    WNDCLASSEXW partClass = {sizeof(partClass)};
+    partClass.lpfnWndProc = PartProc;
+    partClass.hInstance = g_instance;
+    partClass.lpszClassName = kPartClass;
+    RegisterClassExW(&partClass);
+
+    g_main = CreateWindowExW(0, kMainClass, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr,
+                             g_instance, nullptr);
+    SetEvent(g_ready);
+    if (!g_main) {
+        Wh_Log(L"CreateWindowExW failed: %u", GetLastError());
+        return 1;
     }
-    switch (uMsg) {
-        case WM_NCACTIVATE:
-        case WM_WINDOWPOSCHANGED:
-        case WM_SIZE:
-        case WM_ACTIVATE:
-        case WM_DPICHANGED:
-        case WM_DWMCOLORIZATIONCOLORCHANGED:
-            break;
-        default:
-            if (!g_syncMsg || uMsg != g_syncMsg) {
-                return;
-            }
-            break;
-    }
-    // Child controls send these by the thousand during layout; skip them first.
-    if (GetWindowLongPtrW(hWnd, GWL_STYLE) & WS_CHILD) {
-        return;
-    }
-    OverlayBusyScope busy;
-    if (uMsg == WM_NCACTIVATE) {
-        SyncOverlay(hWnd, wParam ? 1 : 0);
-        return;
-    }
-    if (uMsg == WM_DWMCOLORIZATIONCOLORCHANGED) {
-        if (Overlay* ov = FindOverlay(hWnd)) {
-            StartFade(ov);
+
+    const DWORD events[] = {
+        EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND,
+        EVENT_SYSTEM_MOVESIZEEND, EVENT_OBJECT_CREATE, EVENT_OBJECT_SHOW,
+        EVENT_OBJECT_HIDE, EVENT_OBJECT_DESTROY, EVENT_OBJECT_LOCATIONCHANGE,
+        EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED,
+        EVENT_SYSTEM_MENUPOPUPSTART, EVENT_SYSTEM_MENUPOPUPEND,
+    };
+    std::vector<HWINEVENTHOOK> hooks;
+    for (DWORD event : events) {
+        HWINEVENTHOOK hook = SetWinEventHook(event, event, nullptr, OnWinEvent, 0, 0,
+                                             WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+        if (hook) {
+            hooks.push_back(hook);
         }
     }
-    SyncOverlay(hWnd, -1);
-}
 
-// Strip windows of every overlay; primaryOnly returns one per overlay.
-static std::vector<HWND> OverlayWindows(bool primaryOnly) {
-    std::vector<HWND> list;
-    EnterCriticalSection(&g_overlayCs);
-    for (auto& entry : g_overlays) {
-        for (HWND part : entry.second->parts) {
-            if (part) {
-                list.push_back(part);
-                if (primaryOnly) break;
-            }
-        }
+    HANDLE pacerStop = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    g_pacerWake = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    HANDLE pacer = nullptr;
+    if (pacerStop && g_pacerWake) {
+        pacer = CreateThread(nullptr, 0, PacerThread, pacerStop, 0, nullptr);
     }
-    LeaveCriticalSection(&g_overlayCs);
-    return list;
-}
-
-// Runs on the engine thread, not the overlays' threads, so every call is
-// bounded: a hung app costs at most 200 ms per overlay.
-static void BroadcastToOverlays(UINT msg) {
-    for (HWND hwnd : OverlayWindows(true)) {
-        SendMessageTimeoutW(hwnd, msg, 0, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, 200,
-                            nullptr);
+    if (!pacer) {
+        Wh_Log(L"Pacer thread failed: %u", GetLastError());
     }
-}
+    ResyncAll();
 
-static BOOL CALLBACK PostSyncCallback(HWND hWnd, LPARAM) {
-    DWORD pid = 0;
-    GetWindowThreadProcessId(hWnd, &pid);
-    if (pid == GetCurrentProcessId() && IsOverlayTarget(hWnd)) {
-        PostMessageW(hWnd, g_syncMsg, 0, 0);
-    }
-    return TRUE;
-}
-
-static void DestroyAllOverlays() {
-    BroadcastToOverlays(WM_APP_OVERLAY_DESTROY);
-    // Anything left belongs to a thread that did not answer. Point it at the
-    // system window procedure so it never calls into the unloaded mod, and let
-    // that thread close it whenever it wakes up.
-    auto systemProc = (LONG_PTR)GetProcAddress(GetModuleHandleW(L"user32.dll"),
-                                               "DefWindowProcW");
-    for (HWND hwnd : OverlayWindows(false)) {
-        SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
-        SetWindowLongPtrW(hwnd, GWLP_WNDPROC, systemProc);
-        PostMessageW(hwnd, WM_CLOSE, 0, 0);
-    }
-    EnterCriticalSection(&g_overlayCs);
-    g_overlays.clear();  // the unanswered entries leak on purpose
-    LeaveCriticalSection(&g_overlayCs);
-}
-
-static BOOL CALLBACK ApplyAllCallback(HWND hWnd, LPARAM lParam) {
-    DWORD pid = 0;
-    GetWindowThreadProcessId(hWnd, &pid);
-    if (pid == GetCurrentProcessId()) {
-        SetBorderColorAndSchedule(hWnd, IsWindowFocused(hWnd));
-    }
-    return TRUE;
-}
-
-static BOOL CALLBACK ResetAllCallback(HWND hWnd, LPARAM lParam) {
-    DWORD pid = 0;
-    GetWindowThreadProcessId(hWnd, &pid);
-    if (pid == GetCurrentProcessId() && IsValidWindow(hWnd)) {
-        COLORREF value = kColorDefault;
-        DwmSetWindowAttribute(hWnd, DWMWA_BORDER_COLOR, &value, sizeof(value));
-    }
-    return TRUE;
-}
-
-// ---------------------------------------------------------------------------
-// Mod entry points
-// ---------------------------------------------------------------------------
-
-BOOL Wh_ModInit() {
-    Wh_Log(L"Init");
-
-    InitializeCriticalSectionAndSpinCount(&g_pendingCs, 0x400);
-    InitializeCriticalSectionAndSpinCount(&g_overlayCs, 0x400);
-    g_syncMsg = RegisterWindowMessageW(L"WindhawkLocalWindowBordersSync");
-
-    LoadSettings();
-
-    WNDCLASSEXW wc = {};
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = OverlayWndProc;
-    wc.hInstance = (HINSTANCE)&__ImageBase;
-    wc.lpszClassName = kOverlayClass;
-    g_overlayClassRegistered = RegisterClassExW(&wc) != 0;
-    if (!g_overlayClassRegistered) {
-        Wh_Log(L"Overlay class failed (%u); overlay mode off", GetLastError());
+    MSG msg;
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
     }
 
-    g_workerThread = CreateThread(nullptr, 0, WorkerThreadProc, nullptr, 0,
-                                  nullptr);
-    if (!g_workerThread) {
-        Wh_Log(L"Worker thread failed; re-apply disabled");
+    if (pacerStop) {
+        SetEvent(pacerStop);
     }
-
-    Wh_SetFunctionHook((void*)DefWindowProcW, (void*)DefWindowProcW_hook,
-                       (void**)&DefWindowProcW_orig);
-
-    Wh_SetFunctionHook((void*)DefWindowProcA, (void*)DefWindowProcA_hook,
-                       (void**)&DefWindowProcA_orig);
-
-    Wh_SetFunctionHook((void*)DefDlgProcW, (void*)DefDlgProcW_hook,
-                       (void**)&DefDlgProcW_orig);
-
-    Wh_SetFunctionHook((void*)DefDlgProcA, (void*)DefDlgProcA_hook,
-                       (void**)&DefDlgProcA_orig);
-
-    return TRUE;
-}
-
-void Wh_ModAfterInit() {
-    Wh_Log(L"AfterInit");
-    EnumWindows(ApplyAllCallback, 0);
-    EnumWindows(PostSyncCallback, 0);
-}
-
-void Wh_ModBeforeUninit() {
-    Wh_Log(L"BeforeUninit");
-
-    g_overlayMode = false;
+    if (pacer) {
+        WaitForSingleObject(pacer, 5000);
+        CloseHandle(pacer);
+    }
+    if (pacerStop) {
+        CloseHandle(pacerStop);
+    }
+    if (g_pacerWake) {
+        CloseHandle(g_pacerWake);
+        g_pacerWake = nullptr;
+    }
+    for (HWINEVENTHOOK hook : hooks) {
+        UnhookWinEvent(hook);
+    }
     DestroyAllOverlays();
-    // Let threads already inside overlay code leave it before the DLL goes.
-    for (int i = 0; i < 100 && g_overlayBusy > 0; i++) {
-        Sleep(10);
-    }
-    EnumWindows(ResetAllCallback, 0);
-
-    DWORD tid = g_workerThreadId.load(std::memory_order_acquire);
-    if (tid) {
-        PostThreadMessageW(tid, WM_QUIT, 0, 0);
-    }
-    if (g_workerThread) {
-        WaitForSingleObject(g_workerThread, 1000);
-        CloseHandle(g_workerThread);
-        g_workerThread = nullptr;
-    }
-
-    // g_pendingCs is not deleted: a hooked DefWindowProc on another thread can
-    // still be inside ScheduleReapply during unload.
+    return 0;
 }
 
-void Wh_ModSettingsChanged() {
-    Wh_Log(L"SettingsChanged");
+}  // namespace
 
-    EnumWindows(ResetAllCallback, 0);
-    LoadSettings();
-    if (g_overlayMode) {
-        BroadcastToOverlays(WM_APP_OVERLAY_REFRESH);
-    } else {
-        DestroyAllOverlays();
+bool WhTool_ModInit() {
+    g_ready = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    g_thread = CreateThread(nullptr, 0, RingThread, nullptr, 0, nullptr);
+    if (!g_thread) {
+        Wh_Log(L"CreateThread failed: %u", GetLastError());
+        return false;
     }
-    EnumWindows(ApplyAllCallback, 0);
-    EnumWindows(PostSyncCallback, 0);
+    WaitForSingleObject(g_ready, 5000);
+    return g_main != nullptr;
 }
 
-void Wh_ModUninit() {
-    Wh_Log(L"Uninit");
-    if (g_overlayClassRegistered) {
-        UnregisterClassW(kOverlayClass, (HINSTANCE)&__ImageBase);
+void WhTool_ModSettingsChanged() {
+    if (g_main) {
+        PostMessageW(g_main, kReloadMsg, 0, 0);
     }
 }
+
+void WhTool_ModUninit() {
+    if (g_main) {
+        PostMessageW(g_main, WM_CLOSE, 0, 0);
+    }
+    if (g_thread) {
+        WaitForSingleObject(g_thread, 5000);
+        CloseHandle(g_thread);
+    }
+}
+
+
+#include <windhawk_tool_mod.h>
