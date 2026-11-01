@@ -4,7 +4,7 @@
 #   -Mode Install   back up, copy source + DLL, create the key with merged settings, disable the originals
 #   -Mode Rollback  turn the originals back on and the Plus mod off
 param([ValidateSet('Audit', 'Install', 'Rollback')][string]$Mode = 'Audit',
-      [string]$Lib = 'local@taskbar-fluent-media-player-plus_1.7.1_1.dll')
+      [string]$Lib = 'local@taskbar-fluent-media-player-plus_1.7.2_1.dll')
 $ErrorActionPreference = 'Stop'
 
 $ws     = 'H:\Windhawk Configuration'
