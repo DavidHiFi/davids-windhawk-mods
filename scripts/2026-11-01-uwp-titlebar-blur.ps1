@@ -1,6 +1,6 @@
-# Remove UWP Title Bars Plus 2.2.0: title bar blur option.
+# Remove UWP Title Bars Plus 2.2.x: keep the title bar blur on unfocused windows.
 # -Audit   show the installed version and settings
-# -Install install 2.2.0 and turn the blur on (run elevated)
+# -Install install the work build and turn the blur on (run elevated)
 # -Rollback reinstall 2.1.0 and drop the blur settings (run elevated)
 param([switch]$Audit, [switch]$Install, [switch]$Rollback)
 $ErrorActionPreference = 'Stop'
@@ -34,7 +34,7 @@ if ($LASTEXITCODE -ne 0) { $out; exit 1 }
 New-Item -Path "$key\Settings" -Force | Out-Null
 if ($Install) {
     Set-ItemProperty "$key\Settings" blur 1 -Type DWord
-    Set-ItemProperty "$key\Settings" blurTint '661E1E2E' -Type String
+    Remove-ItemProperty "$key\Settings" blurTint -ErrorAction SilentlyContinue
 } else {
     Remove-ItemProperty "$key\Settings" blur, blurTint -ErrorAction SilentlyContinue
 }

@@ -1,25 +1,23 @@
-# Remove UWP Title Bars Plus 2.2.0: title bar blur option (2026-11-01)
+# Remove UWP Title Bars Plus: title bar blur option (2026-11-01), not working, rolled back
 
-Owner asked for a settings option that turns the flat UWP title bar colour into a blur, plus a preview.
+Owner asked for a settings option that swaps the flat UWP title bar colour for a blur, plus a preview.
 
-## Audit of 2.1.0
-- Every native frame got the acrylic system backdrop (`DWMSBT_TRANSIENTWINDOW`). DWM draws that backdrop flat once the window loses focus, and Settings' own page blur (settings-styler-plus host backdrop brush) ignores focus, so the caption showed as a solid band next to a blurred page. The owner's screenshot: caption a flat 32 grey across the strip.
-- Nothing else wrong found: hooks, restore path and icon thread are sound.
+## Result (measured 2026-11-01, about 10:15 pm)
+No build produced a real blur on ApplicationFrameWindow. The live mod is back on 2.1.0 (registry: Version 2.1.0, lib `local@remove-uwp-title-bars-plus_2.1.0_193157.dll`, blur settings removed). Evidence image: `work\2026-11-01-uwp-titlebar-blur\store-blur-findings.png`.
 
-## Change
-- New settings: `blur` (default off for public users) and `blurTint` (AARRGGBB, default `661E1E2E`).
-- With blur on, each native frame gets the recipe measured on FreeDictate on 10/31: frame extended to -1, legacy blur-behind with an empty region (without it DWM paints the caption flat over the accent), the acrylic accent with the tint, system backdrop set to none. Turning the setting off or the mod off undoes all four. Settings changes apply to open windows live.
-- `-lgdi32` added for the region calls.
-- Source: `work\2026-11-01-uwp-titlebar-blur\remove-uwp-title-bars-plus.wh.cpp`.
+## Where the flat colour comes from
+`win11-custom-title-bar-colours` (Include=*) sets DWMWA_CAPTION_COLOR to #1E1E2E (the same value as AccentColorInactive) on every window, ApplicationFrameWindow included. It sets the colour before this mod makes the frame native, and the 2.1.0 hook only blocks later calls, so the caption stays a solid fill. To make UWP captions plain, add `ApplicationFrameHost.exe` to that mod's Exclude list. Nothing is changed there yet.
 
-## Install (measured 7:05 PM)
-- `scripts\2026-11-01-uwp-titlebar-blur.ps1 -Install` elevated: lib `local@remove-uwp-title-bars-plus_2.2.0_864547.dll`, Disabled 0, blur 1, blurTint 661E1E2E (registry read back).
-- Settings opened once by `work\...\capture-preview.ps1` under the desktop lock: ApplicationFrameHost loaded the 2.2.0 DLL, frame visible (cloak 0, style 0x14CF0000), icon, title and buttons drawn. Caption colour now follows the background, 38 to 51 across the strip, the same focused and unfocused. Captures: `settings-focused.png`, `settings-unfocused.png`, `preview.png`. Settings closed afterwards.
+## What was tried (Store over a 40px black/white stripe board, then solid white and solid black)
+- 2.2.0: acrylic accent (WCA_ACCENT_POLICY 4) plus the -1 frame extension and blur-behind. The caption was clear glass and the stripes stayed sharp. The earlier claim that this blurred was wrong: Settings sits over a smooth wallpaper, which hid the problem. translucent-windows skips this window class for its accent, probably for the same reason.
+- 2.2.1: system acrylic (DWMSBT_TRANSIENTWINDOW) plus the WM_NCACTIVATE(TRUE,-1) keep-active trick. Solid #1E1E2E, identical over white and black.
+- 2.2.2: same as 2.2.1, with the caption colour set to DWMWA_COLOR_NONE. Solid 17 grey, identical over white and black. The acrylic never draws.
+- 2.2.3: see-through frame (-1 extension and blur-behind) plus system acrylic. Pure white over white, pure black over black. No material at all.
 
-## Rollback
-`scripts\2026-11-01-uwp-titlebar-blur.ps1 -Rollback` elevated (reinstalls 2.1.0 from `backups\2026-11-01\remove-uwp-title-bars-plus\`). To keep 2.2.0 without blur, set `blur` to 0 in the mod settings.
+Conclusion (measured): DWM draws neither the accent blur nor the system backdrop on UWP frame windows. The only route left is a composition HostBackdropBrush visual drawn inside ApplicationFrameHost over the caption (the same source the Settings page's AcrylicBrush uses). That is a bigger change, so it was not attempted.
 
-## Open
-- Fork repo copy not updated: `davids-windhawk-mods` is checked out on another thread's branch (`peek-1-2-0-blur`). Copy the work source and `preview.png` into `mods/local/remove-uwp-title-bars-plus/` on main later.
-- Freeze gate: FAIL on windows-animations (`Include=*`), pre-existing since 10/30 and owner-run. Not touched.
-- AGENTS rule "every blur app stays in window-borders' Exclude list": window-borders 2.0 has an empty exclude list today, so that rule is not enforced for any blur app. Not changed here (another thread holds window-borders).
+## Files
+- Last experiment source (2.2.3): `work\2026-11-01-uwp-titlebar-blur\remove-uwp-title-bars-plus.wh.cpp`
+- Tests: `work\...\blur-board-test.ps1 [-Tag x] [-Focus] [-Solid White|Black]`, `probe-accent.ps1` (cross-process accent reads fail with error 87)
+- Script: `scripts\2026-11-01-uwp-titlebar-blur.ps1 -Audit|-Install|-Rollback`
+- Backup of 2.1.0: `backups\2026-11-01\remove-uwp-title-bars-plus\`
