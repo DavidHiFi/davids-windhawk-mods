@@ -2,7 +2,7 @@
 // @id              seamless-tray-drawer
 // @name            Seamless Tray Drawer
 // @description     A themed second drawer for rarely used tray icons, with your own colors, border and material
-// @version         1.0.0
+// @version         1.0.1
 // @author          DavidHiFi, MEI
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1789,7 +1789,10 @@ Media::Brush MakeBackgroundBrush(Settings const& s) {
     Color opaque = s.background;
     opaque.A = 255;
     Media::AcrylicBrush brush;
-    brush.BackgroundSource(Media::AcrylicBackgroundSource::HostBackdrop);
+    // Backdrop samples the desktop behind the window, like the stock flyouts.
+    // HostBackdrop is in-app acrylic: dead on Windows 11, it renders a flat
+    // tint and the sharp content behind the panel shows through.
+    brush.BackgroundSource(Media::AcrylicBackgroundSource::Backdrop);
     brush.TintColor(opaque);
     brush.TintOpacity(strength * (s.background.A / 255.0));
     brush.TintLuminosityOpacity(
