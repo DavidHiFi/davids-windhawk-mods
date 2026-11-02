@@ -59,6 +59,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 | <img src="media/previews/taskbar-system-info-weather.png" width="220" alt="CPU and GPU readouts on the taskbar"> | [Taskbar System Info Plus](mods/local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed, with optional graphs. |
 | <img src="media/previews/taskbar-ai-quota-opencode.png" width="220" alt="Usage bars on the taskbar"> | [Taskbar AI Quota Bars Plus](mods/local/taskbar-ai-quota-opencode) | Claude, Antigravity and OpenCode Go usage limits as taskbar bars. |
 | <img src="media/previews/better-volume-mixer-plus.png" width="220" alt="Tray volume mixer"> | [Better Volume Mixer Plus](mods/local/better-volume-mixer-plus) | A tray volume mixer with per-app volume and per-app output and input devices. |
+| <img src="media/previews/seamless-tray-drawer.png" width="220" alt="Hidden icons panel with a blue to mauve border"> | [Seamless Tray Drawer](mods/local/seamless-tray-drawer) | A second drawer for rarely used tray icons, with your own colors, border and blur. |
 
 ### Windows and Alt+Tab
 
@@ -146,7 +147,7 @@ Add `-SkipSources` to refresh settings and metadata only.
 
 My own work here is MIT, see [LICENSE](LICENSE), except where a mod inherits its original's license:
 
-- **GPL-3.0:** Window Manager, AltSnap, Taskbar System Info Plus, Everything & Power Tools in the Start Menu Plus.
+- **GPL-3.0:** Window Manager, AltSnap, Taskbar System Info Plus, Everything & Power Tools in the Start Menu Plus, Seamless Tray Drawer.
 - **GPL-2.0:** Simple Window Switcher Plus, Theme Tool Plus, GPU Accelerated Explorer View Plus.
 - **LGPL-3.0:** Translucent Flyouts.
 
@@ -200,6 +201,7 @@ Most of my mods build on someone else's mod. Each folder's readme credits its so
 | **Yevhenii Starychenko** ([Taskbar System Info](https://windhawk.net/mods/taskbar-system-info)) | The base of Taskbar System Info Plus. |
 | **Narayan** ([Taskbar Network Speed Indicator](https://windhawk.net/mods/net-speed-taskbar)) | The idea behind the network readouts in Taskbar System Info Plus. |
 | **iMAboud** ([Drag to Delete](https://windhawk.net/mods/drag-to-delete)) | The base of Drag to Delete Plus. |
+| **MEI** ([Nested Tray Drawer](https://windhawk.net/mods/nested-tray-drawer)) | The base of Seamless Tray Drawer. |
 | **Rafael Mendes** ([Fullscreen Start](https://windhawk.net/mods/fullscreen-start)) | The base of Fullscreen Start Plus, and its preview image. |
 | **rounk-ctrl** ([UXTheme hook](https://windhawk.net/mods/uxtheme-hook)) | The base of Theme Tool Plus. |
 | **namazso** ([SecureUxTheme](https://github.com/namazso/SecureUxTheme), [ThemeToolSharp](https://github.com/namazso/ThemeToolSharp)) | The theme engine research in Theme Tool Plus. |
