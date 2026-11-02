@@ -2,14 +2,14 @@
 // @id              remove-uwp-title-bars-plus
 // @name            Remove UWP Title Bars Plus
 // @description     Normal Windows title bars, with icon, title and theme buttons, in every UWP app
-// @version         2.2.0
+// @version         2.3.0
 // @author          DavidHiFi, Anixx
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         ApplicationFrameHost.exe
 // @architecture    x86-64
-// @compilerOptions -luser32 -lgdi32 -lcomctl32 -ldwmapi -lshell32 -lole32
+// @compilerOptions -luser32 -lgdi32 -lcomctl32 -ldwmapi -lshell32 -lole32 -loleaut32 -lruntimeobject
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -26,11 +26,10 @@ the mod waits until the app is known and the window is on screen, then swaps
 the title bar. Shell parts that also live in these windows, such as Start and
 search, keep their own look.
 
-Turn on **Blur behind the title bar** in the settings to swap the flat title
-bar colour for an acrylic blur of whatever sits behind the window. The blur
-stays when the window loses focus, so the title bar keeps matching a blurred
-app page. The tint setting colours it: lower the first two hex digits for a
-clearer blur, raise them for a darker one.
+Turn on **Blur material** to give the title bar the same frosted acrylic the
+Settings app uses, instead of a flat colour. **Tint strength** sets how much of
+the dark tint sits over the blur. The window keeps its active caption look
+while unfocused.
 
 Applies to app windows opened after you turn the mod on. Turning it off puts
 every open window back the way it was.
@@ -41,19 +40,16 @@ Based on Remove UWP Title Bars by Anixx.
 
 // ==WindhawkModSettings==
 /*
-- blur: false
-  $name: Blur behind the title bar
-  $description: >-
-    Acrylic blur instead of the flat title bar colour. Stays when the window
-    loses focus
-- blurTint: "661E1E2E"
-  $name: Blur tint
-  $description: >-
-    Colour laid over the blur, as AARRGGBB hex. AA is the strength: 00 is
-    clear glass, FF is a solid colour
+- blur: true
+  $name: Blur material
+  $description: Frosted acrylic title bars instead of a flat colour
+- tint: 60
+  $name: Tint strength
+  $description: How much dark tint covers the blur, 0 to 100 percent
 */
 // ==/WindhawkModSettings==
 
+#include <algorithm>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -63,12 +59,321 @@ Based on Remove UWP Title Bars by Anixx.
 
 #include <dwmapi.h>
 #include <propsys.h>
+#include <roapi.h>
 #include <shlobj.h>
 #include <windowsx.h>
+
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.System.h>
+#include <winrt/Windows.UI.Composition.Desktop.h>
+#include <winrt/Windows.UI.Composition.h>
 
 #ifndef WM_POPUPSYSTEMMENU
 #define WM_POPUPSYSTEMMENU 0x0313
 #endif
+
+// DWM draws neither the accent blur nor a system backdrop on frame windows, and
+// the frame host already owns both composition targets of the frame
+// (DCOMPOSITION_ERROR_WINDOW_ALREADY_COMPOSED), all measured. So each native
+// frame gets a click-through backdrop window kept directly beneath it, holding
+// a HostBackdropBrush (the source XAML's AcrylicBrush uses) under a tint. The
+// see-through caption shows it; the app content covers the rest.
+namespace material {
+
+namespace composition = winrt::Windows::UI::Composition;
+
+MIDL_INTERFACE("29E691FA-4567-4DCA-B319-D0F207EB6807")
+DesktopInterop : IUnknown {
+    virtual HRESULT STDMETHODCALLTYPE CreateDesktopWindowTarget(HWND, BOOL,
+                                                                void**) = 0;
+    virtual HRESULT STDMETHODCALLTYPE EnsureOnThread(DWORD) = 0;
+};
+
+constexpr UINT kAttach = WM_APP + 1;  // wParam: frame
+constexpr UINT kDetach = WM_APP + 2;  // wParam: frame
+constexpr UINT kTint = WM_APP + 3;    // wParam: tint alpha
+constexpr UINT kStop = WM_APP + 4;
+constexpr UINT kSync = WM_APP + 5;  // wParam: frame
+constexpr WCHAR kClass[] = L"RemoveUwpTitleBarsPlus_Backdrop";
+// The sprite covers the whole backdrop window, which clips it.
+constexpr float kCover = 16384.0f;
+
+struct Target {
+    HWND wnd = nullptr;
+    composition::Desktop::DesktopWindowTarget target{nullptr};
+    composition::CompositionColorBrush shade{nullptr};
+};
+
+HANDLE g_thread, g_ready;
+DWORD g_threadId;
+volatile LONG g_tintAlpha;
+std::unordered_map<HWND, Target>* g_targets;  // worker thread only
+
+winrt::Windows::UI::Color TintColor() {
+    return {(BYTE)g_tintAlpha, 0x1E, 0x1E, 0x2E};  // #1E1E2E
+}
+
+void Close(std::unordered_map<HWND, Target>& targets, HWND hWnd) {
+    auto it = targets.find(hWnd);
+    if (it == targets.end()) {
+        return;
+    }
+    try {
+        it->second.target.Close();
+    } catch (...) {
+    }
+    DestroyWindow(it->second.wnd);
+    targets.erase(it);
+}
+
+// Keeps the backdrop on the frame's bounds, right below it, and hidden while
+// the frame is hidden, minimized or cloaked (another virtual desktop).
+void Sync(const Target& t, HWND frame) {
+    DWORD cloaked = 0;
+    DwmGetWindowAttribute(frame, DWMWA_CLOAKED, &cloaked, sizeof(cloaked));
+    RECT r;
+    if (!IsWindowVisible(frame) || IsIconic(frame) || cloaked ||
+        FAILED(DwmGetWindowAttribute(frame, DWMWA_EXTENDED_FRAME_BOUNDS, &r,
+                                     sizeof(r)))) {
+        if (IsWindowVisible(t.wnd)) {
+            ShowWindow(t.wnd, SW_HIDE);
+        }
+        return;
+    }
+    SetWindowPos(t.wnd, frame, r.left, r.top, r.right - r.left,
+                 r.bottom - r.top,
+                 SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER);
+}
+
+LRESULT CALLBACK BackdropProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+        case WM_NCHITTEST:
+            return HTTRANSPARENT;
+        case WM_MOUSEACTIVATE:
+            return MA_NOACTIVATE;
+    }
+    return DefWindowProc(hWnd, msg, wParam, lParam);
+}
+
+void CALLBACK CloakEvent(HWINEVENTHOOK,
+                         DWORD,
+                         HWND hWnd,
+                         LONG object,
+                         LONG child,
+                         DWORD,
+                         DWORD) {
+    if (object != OBJID_WINDOW || child != CHILDID_SELF || !g_targets) {
+        return;
+    }
+    auto it = g_targets->find(hWnd);
+    if (it != g_targets->end()) {
+        Sync(it->second, hWnd);
+    }
+}
+
+void Attach(composition::Compositor& compositor,
+            std::unordered_map<HWND, Target>& targets,
+            HINSTANCE instance,
+            HWND hWnd) {
+    if (targets.count(hWnd) || !IsWindow(hWnd)) {
+        return;
+    }
+    Target t;
+    try {
+        t.wnd = CreateWindowEx(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE |
+                                   WS_EX_TRANSPARENT |
+                                   WS_EX_NOREDIRECTIONBITMAP,
+                               kClass, L"", WS_POPUP, 0, 0, 0, 0, nullptr,
+                               nullptr, instance, nullptr);
+        if (!t.wnd) {
+            winrt::throw_last_error();
+        }
+        BOOL on = TRUE;
+        DwmSetWindowAttribute(t.wnd, DWMWA_USE_HOSTBACKDROPBRUSH, &on,
+                              sizeof(on));
+        DwmSetWindowAttribute(t.wnd, DWMWA_EXCLUDED_FROM_PEEK, &on, sizeof(on));
+        DWM_WINDOW_CORNER_PREFERENCE corner = DWMWCP_ROUND;
+        DwmSetWindowAttribute(t.wnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner,
+                              sizeof(corner));
+        COLORREF none = DWMWA_COLOR_NONE;
+        DwmSetWindowAttribute(t.wnd, DWMWA_BORDER_COLOR, &none, sizeof(none));
+        winrt::com_ptr<DesktopInterop> interop;
+        winrt::check_hresult(winrt::get_unknown(compositor)->QueryInterface(
+            GUID{0x29E691FA,
+                 0x4567,
+                 0x4DCA,
+                 {0xB3, 0x19, 0xD0, 0xF2, 0x07, 0xEB, 0x68, 0x07}},
+            interop.put_void()));
+        winrt::check_hresult(interop->CreateDesktopWindowTarget(
+            t.wnd, FALSE, winrt::put_abi(t.target)));
+        auto root = compositor.CreateContainerVisual();
+        auto blur = compositor.CreateSpriteVisual();
+        blur.Brush(compositor.CreateHostBackdropBrush());
+        blur.Size({kCover, kCover});
+        auto shade = compositor.CreateSpriteVisual();
+        t.shade = compositor.CreateColorBrush(TintColor());
+        shade.Brush(t.shade);
+        shade.Size({kCover, kCover});
+        root.Children().InsertAtBottom(blur);
+        root.Children().InsertAtTop(shade);
+        t.target.Root(root);
+        Sync(t, hWnd);
+        targets.emplace(hWnd, std::move(t));
+        Wh_Log(L"Material on %p", hWnd);
+    } catch (const winrt::hresult_error& e) {
+        Wh_Log(L"Material failed on %p: %08X", hWnd, (unsigned)e.code());
+        if (t.wnd) {
+            DestroyWindow(t.wnd);
+        }
+    }
+}
+
+DWORD WINAPI Run(void*) {
+    MSG msg;
+    PeekMessage(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+    std::unordered_map<HWND, Target> targets;
+    winrt::Windows::System::DispatcherQueueController queue{nullptr};
+    composition::Compositor compositor{nullptr};
+    HMODULE messaging = nullptr;
+    HRESULT apartment = RoInitialize(RO_INIT_SINGLETHREADED);
+    try {
+        winrt::check_hresult(apartment);
+        struct Options {
+            DWORD size, thread, apartment;
+        } options{sizeof(Options), 2, 2};  // current thread, STA
+        using Create = HRESULT(WINAPI*)(Options, void**);
+        messaging = LoadLibraryEx(L"CoreMessaging.dll", nullptr,
+                                  LOAD_LIBRARY_SEARCH_SYSTEM32);
+        auto create = messaging ? (Create)GetProcAddress(
+                                      messaging,
+                                      "CreateDispatcherQueueController")
+                                : nullptr;
+        if (!create) {
+            throw winrt::hresult_error(HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND));
+        }
+        winrt::check_hresult(create(options, winrt::put_abi(queue)));
+        compositor = composition::Compositor();
+    } catch (const winrt::hresult_error& e) {
+        Wh_Log(L"Compositor unavailable: %08X", (unsigned)e.code());
+    }
+    HINSTANCE instance = nullptr;
+    GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                          GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                      (LPCWSTR)BackdropProc, &instance);
+    WNDCLASS wc = {};
+    wc.lpfnWndProc = BackdropProc;
+    wc.hInstance = instance;
+    wc.lpszClassName = kClass;
+    ATOM atom = RegisterClass(&wc);
+    g_targets = &targets;
+    HWINEVENTHOOK cloakHook = SetWinEventHook(
+        EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED, nullptr, CloakEvent,
+        GetCurrentProcessId(), 0, WINEVENT_OUTOFCONTEXT);
+    SetEvent(g_ready);
+
+    while (GetMessage(&msg, nullptr, 0, 0) > 0 && msg.message != kStop) {
+        if (msg.message == kAttach) {
+            if (compositor && atom) {
+                Attach(compositor, targets, instance, (HWND)msg.wParam);
+            }
+        } else if (msg.message == kDetach) {
+            Close(targets, (HWND)msg.wParam);
+        } else if (msg.message == kSync) {
+            auto it = targets.find((HWND)msg.wParam);
+            if (it != targets.end()) {
+                Sync(it->second, it->first);
+            }
+        } else if (msg.message == kTint) {
+            for (auto& t : targets) {
+                try {
+                    t.second.shade.Color(TintColor());
+                } catch (...) {
+                }
+            }
+        } else {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+    }
+
+    if (cloakHook) {
+        UnhookWinEvent(cloakHook);
+    }
+    while (!targets.empty()) {
+        Close(targets, targets.begin()->first);
+    }
+    g_targets = nullptr;
+    if (atom) {
+        UnregisterClass(kClass, instance);
+    }
+    try {
+        if (compositor) {
+            compositor.Close();
+        }
+    } catch (...) {
+    }
+    compositor = nullptr;
+    if (queue) {
+        try {
+            // Let the queue finish shutting down before the module unloads.
+            auto done = queue.ShutdownQueueAsync();
+            while (done.Status() ==
+                   winrt::Windows::Foundation::AsyncStatus::Started) {
+                if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+                    TranslateMessage(&msg);
+                    DispatchMessage(&msg);
+                } else {
+                    MsgWaitForMultipleObjects(0, nullptr, FALSE, 50,
+                                              QS_ALLINPUT);
+                }
+            }
+        } catch (...) {
+        }
+        queue = nullptr;
+    }
+    if (SUCCEEDED(apartment)) {
+        RoUninitialize();
+    }
+    return 0;
+}
+
+void Post(UINT msg, WPARAM wParam) {
+    if (g_threadId) {
+        PostThreadMessage(g_threadId, msg, wParam, 0);
+    }
+}
+
+void SetTint(int percent) {
+    InterlockedExchange(&g_tintAlpha, percent * 255 / 100);
+    Post(kTint, 0);
+}
+
+bool Start() {
+    g_ready = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+    g_thread = CreateThread(nullptr, 0, Run, nullptr, 0, &g_threadId);
+    if (!g_thread) {
+        g_threadId = 0;
+        return false;
+    }
+    WaitForSingleObject(g_ready, 5000);
+    return true;
+}
+
+void Stop() {
+    if (g_thread) {
+        Post(kStop, 0);
+        WaitForSingleObject(g_thread, 5000);
+        CloseHandle(g_thread);
+        g_thread = nullptr;
+        g_threadId = 0;
+    }
+    if (g_ready) {
+        CloseHandle(g_ready);
+        g_ready = nullptr;
+    }
+}
+
+}  // namespace material
 
 namespace frame_host {
 
@@ -95,29 +400,12 @@ struct FrameInfo {
     HICON icons[2] = {};       // small, big
     LONG_PTR style = 0, exStyle = 0;  // before MakeFrameNative
     DWORD backdrop = 0;                // DWMWA_SYSTEMBACKDROP_TYPE before it
-    bool blurred = false;              // ApplyMaterial put the blur on
+    bool blurred = false;              // kept active by ApplyMaterial
 };
-
-struct ACCENT_POLICY {
-    int state;
-    int flags;
-    DWORD color;  // AABBGGRR
-    int animation;
-};
-struct WINCOMPATTRDATA {
-    DWORD attribute;
-    void* data;
-    SIZE_T size;
-};
-constexpr DWORD kWcaAccentPolicy = 19;
-constexpr int kAccentDisabled = 0;
-constexpr int kAccentAcrylic = 4;
-using SetWindowCompositionAttribute_t = BOOL(WINAPI*)(HWND, WINCOMPATTRDATA*);
-SetWindowCompositionAttribute_t SetWindowCompositionAttribute_;
 
 struct {
     bool blur;
-    DWORD tint;  // AABBGGRR
+    int tint;  // percent
 } g_settings;
 
 bool g_enabled;
@@ -246,37 +534,52 @@ DWORD WINAPI IconThread(void* param) {
     return 0;
 }
 
-// Sets the caption material of a native frame: the acrylic system backdrop,
-// or the blur. The blur is the acrylic accent over a frame extended into the
-// whole window, with legacy blur-behind on; without blur-behind DWM paints the
-// caption flat over the accent. Unlike the system backdrop, the accent keeps
-// drawing while the window is not focused.
+// Puts the acrylic behind a native frame, or takes it away. The frame is made
+// see-through (the -1 extension and blur-behind) so the material visual the
+// worker thread places under the window shows in the caption strip.
 void ApplyMaterial(HWND hWnd, bool blur) {
     AcquireSRWLockExclusive(&g_frameLock);
     bool was = std::exchange(g_frames[hWnd].blurred, blur);
     ReleaseSRWLockExclusive(&g_frameLock);
-    if (blur || was) {
-        MARGINS margins = blur ? MARGINS{-1, -1, -1, -1} : MARGINS{};
-        DwmExtendFrameIntoClientArea_Original(hWnd, &margins);
-        HRGN region = blur ? CreateRectRgn(0, 0, -1, -1) : nullptr;
-        DWM_BLURBEHIND bb = {
-            DWM_BB_ENABLE | DWM_BB_BLURREGION | DWM_BB_TRANSITIONONMAXIMIZED,
-            blur, region, blur};
-        DwmEnableBlurBehindWindow(hWnd, &bb);
-        if (region) {
-            DeleteObject(region);
+    Wh_Log(L"ApplyMaterial %p blur=%d was=%d", hWnd, blur, was);
+
+    if (!blur) {
+        if (was) {
+            material::Post(material::kDetach, (WPARAM)hWnd);
+            MARGINS margins = {};
+            DwmExtendFrameIntoClientArea_Original(hWnd, &margins);
+            DWM_BLURBEHIND bb = {DWM_BB_ENABLE, FALSE, nullptr, FALSE};
+            DwmEnableBlurBehindWindow(hWnd, &bb);
+            BOOL hostBackdrop = FALSE;
+            DwmSetWindowAttribute_Original(hWnd, DWMWA_USE_HOSTBACKDROPBRUSH,
+                                           &hostBackdrop,
+                                           sizeof(hostBackdrop));
+            DefWindowProc(hWnd, WM_NCACTIVATE,
+                          GetForegroundWindow() == hWnd, -1);
         }
-        ACCENT_POLICY accent = {blur ? kAccentAcrylic : kAccentDisabled, 0,
-                                g_settings.tint, 0};
-        WINCOMPATTRDATA data = {kWcaAccentPolicy, &accent, sizeof(accent)};
-        if (SetWindowCompositionAttribute_) {
-            SetWindowCompositionAttribute_(hWnd, &data);
-        }
+        return;
     }
-    // The accent and a system backdrop would stack.
-    DWORD backdrop = blur ? DWMSBT_NONE : DWMSBT_TRANSIENTWINDOW;
-    DwmSetWindowAttribute_Original(hWnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop,
-                                   sizeof(backdrop));
+
+    // Without this DWM gives the window's HostBackdropBrush nothing to draw.
+    BOOL hostBackdrop = TRUE;
+    DwmSetWindowAttribute_Original(hWnd, DWMWA_USE_HOSTBACKDROPBRUSH,
+                                   &hostBackdrop, sizeof(hostBackdrop));
+    MARGINS margins = {-1, -1, -1, -1};
+    DwmExtendFrameIntoClientArea_Original(hWnd, &margins);
+    HRGN region = CreateRectRgn(0, 0, -1, -1);
+    DWM_BLURBEHIND bb = {DWM_BB_ENABLE | DWM_BB_BLURREGION, TRUE, region, FALSE};
+    DwmEnableBlurBehindWindow(hWnd, &bb);
+    if (region) {
+        DeleteObject(region);
+    }
+    // A caption colour set by another mod before the frame went native would
+    // cover the material; later ones are blocked in the DwmSetWindowAttribute
+    // hook.
+    COLORREF caption = DWMWA_COLOR_NONE;
+    DwmSetWindowAttribute_Original(hWnd, DWMWA_CAPTION_COLOR, &caption,
+                                   sizeof(caption));
+    DefWindowProc(hWnd, WM_NCACTIVATE, TRUE, -1);
+    material::Post(material::kAttach, (WPARAM)hWnd);
 }
 
 void MakeFrameNative(HWND hWnd, const std::wstring& aumid) {
@@ -454,6 +757,8 @@ LRESULT CALLBACK FrameSubclassProc(HWND hWnd,
     if (uMsg == WM_NCDESTROY || (uMsg == g_frameRestoreMsg && uMsg)) {
         if (uMsg != WM_NCDESTROY) {
             RestoreFrame(hWnd);
+        } else {
+            material::Post(material::kDetach, (WPARAM)hWnd);
         }
         AcquireSRWLockExclusive(&g_frameLock);
         auto it = g_frames.find(hWnd);
@@ -500,6 +805,17 @@ LRESULT CALLBACK FrameSubclassProc(HWND hWnd,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
                          SWP_FRAMECHANGED);
         return 0;
+    }
+    if (g_settings.blur &&
+        (uMsg == WM_WINDOWPOSCHANGED || uMsg == WM_SHOWWINDOW)) {
+        LRESULT r = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        material::Post(material::kSync, (WPARAM)hWnd);
+        return r;
+    }
+    if (uMsg == WM_NCACTIVATE && !wParam && g_settings.blur) {
+        LRESULT r = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        DefWindowProc(hWnd, WM_NCACTIVATE, TRUE, -1);
+        return r;
     }
 
     switch (uMsg) {
@@ -677,13 +993,9 @@ HRESULT WINAPI DwmSetWindowAttribute_Hook(HWND hWnd,
 }
 
 void LoadSettings() {
-    g_settings.blur = Wh_GetIntSetting(L"blur");
-    PCWSTR tint = Wh_GetStringSetting(L"blurTint");
-    PCWSTR hex = tint + (tint[0] == L'#');
-    DWORD argb = wcslen(hex) == 8 ? wcstoul(hex, nullptr, 16) : 0x661E1E2E;
-    Wh_FreeStringSetting(tint);
-    g_settings.tint = (argb & 0xFF00FF00) | ((argb >> 16) & 0xFF) |
-                      ((argb & 0xFF) << 16);
+    g_settings.blur = Wh_GetIntSetting(L"blur") != 0;
+    g_settings.tint = std::clamp(Wh_GetIntSetting(L"tint"), 0, 100);
+    material::SetTint(g_settings.tint);
 }
 
 void SettingsChanged() {
@@ -722,10 +1034,8 @@ void RestoreAllFrames() {
 
 BOOL Init() {
     g_enabled = true;
+    material::Start();
     LoadSettings();
-    SetWindowCompositionAttribute_ =
-        (SetWindowCompositionAttribute_t)GetProcAddress(
-            GetModuleHandle(L"user32.dll"), "SetWindowCompositionAttribute");
     g_frameMaterialMsg =
         RegisterWindowMessage(L"RemoveUwpTitleBarsPlus_ApplyMaterial");
     g_frameCheckMsg = RegisterWindowMessage(L"RemoveUwpTitleBarsPlus_CheckFrame");
@@ -748,6 +1058,7 @@ BOOL Init() {
     if (!frameModule ||
         !WindhawkUtils::HookSymbols(frameModule, hooks, ARRAYSIZE(hooks))) {
         Wh_Log(L"Failed to hook ApplicationFrame.dll");
+        material::Stop();
         return FALSE;
     }
 
@@ -783,4 +1094,9 @@ void Wh_ModBeforeUninit() {
     // While the hooks are still in place, since restoring a frame calls the
     // original title bar function.
     frame_host::RestoreAllFrames();
+}
+
+void Wh_ModUninit() {
+    Wh_Log(L">");
+    material::Stop();
 }
