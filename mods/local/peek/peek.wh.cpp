@@ -2,7 +2,7 @@
 // @id              peek
 // @name            Peek
 // @description     Select a file in File Explorer and press Space to preview it, like PowerToys Peek
-// @version         1.3.0
+// @version         1.4.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -27,8 +27,10 @@ Esc to close it. It works like PowerToys Peek, without PowerToys.
 - **Text and code** in a dark, monospaced view. You pick which file types
   count as text.
 - **Videos and music** (MP4, MKV, MOV, AVI, WMV, MP3, FLAC, WAV, M4A and
-  anything else Windows can play) start playing right away, with a play
-  button, a seek bar and a volume slider at the bottom. Music shows its cover art.
+  anything else Windows can play) start playing right away, with a filled
+  play button, a seek bar and a volume slider at the bottom, all in the
+  Catppuccin Mocha palette. The empty space around a video shows the same
+  blurred glass as around a picture. Music shows its cover art.
 - **PDFs, Office files and anything else** Windows has a preview handler for:
   the same previews the Explorer preview pane shows.
 - **Everything else**, folders included: a large icon or thumbnail with the
@@ -60,7 +62,8 @@ Esc to close it. It works like PowerToys Peek, without PowerToys.
 - Animated GIFs show their first frame.
 - Turn on **Blurred glass background** in the settings for a frosted window:
   the title bar and the space around the preview blur what is behind them,
-  and stay blurred when you click away.
+  and stay blurred when you click away. The empty borders around a video
+  share that glass; with the setting off they are the plain background color.
 
 ## Credits
 Works like [Peek](https://learn.microsoft.com/windows/powertoys/peek) from
@@ -130,7 +133,10 @@ PowerToys.
   $name: Start playing right away
 - accentColor: "#cba6f7"
   $name: Accent color
-  $description: The play button and the seek bar. As #RRGGBB
+  $description: The right end of the gradient on the play button, the seek bar and the volume slider. As #RRGGBB
+- accentColor2: "#89b4fa"
+  $name: Accent gradient start
+  $description: Buttons and bars shade from this color into the accent, left to right. As #RRGGBB
 - textExtensions: txt log ini inf cfg conf config json jsonc xml yml yaml toml md markdown csv tsv ps1 psm1 psd1 bat cmd sh bash zsh py pyw js mjs cjs ts tsx jsx css scss less html htm c cc cpp cxx h hh hpp hxx cs java kt go rs lua rb php pl swift sql reg gsc csc gitignore gitattributes editorconfig env diff patch srt vtt nfo
   $name: Text file types
   $description: Extensions to show as plain text, separated by spaces. Files with other extensions still show as text when they look like text and nothing else can preview them
@@ -185,7 +191,8 @@ struct Settings {
     int blurTint = 40;
     int widthPercent = 60, heightPercent = 75;
     COLORREF bg = RGB(0x1e, 0x1e, 0x2e), fg = RGB(0xcd, 0xd6, 0xf4),
-             dim = RGB(0xa6, 0xad, 0xc8), accent = RGB(0xcb, 0xa6, 0xf7);
+             dim = RGB(0xa6, 0xad, 0xc8), accent = RGB(0xcb, 0xa6, 0xf7),
+             accent2 = RGB(0x89, 0xb4, 0xfa);
     std::wstring textFont = L"Cascadia Mono";
     int textSize = 11;
     size_t maxTextBytes = 4096 * 1024;
@@ -291,6 +298,7 @@ void LoadSettings() {
     g_set.playMedia = Wh_GetIntSetting(L"playMedia");
     g_set.autoPlay = Wh_GetIntSetting(L"autoPlay");
     g_set.accent = ParseColor(ReadString(L"accentColor"), RGB(0xcb, 0xa6, 0xf7));
+    g_set.accent2 = ParseColor(ReadString(L"accentColor2"), RGB(0x89, 0xb4, 0xfa));
     g_set.textExts.clear();
     std::wstring exts = Lower(ReadString(L"textExtensions")) + L" ";
     std::wstring cur;
@@ -348,6 +356,7 @@ struct State {
     MFP_MEDIAPLAYER_STATE playerState = MFP_MEDIAPLAYER_STATE_EMPTY;
     bool mediaReady = false, mediaHasVideo = false, mediaEnded = false;
     bool muted = false, dragging = false, draggingVol = false;
+    SIZE videoSize{};  // native size of the current video
     float volume = 1.0f;  // kept between files until the mod reloads
     LONGLONG duration = 0, dragPos = 0;  // 100 ns units
 } g;
@@ -898,6 +907,7 @@ void StopMedia() {
     if (g.video) ShowWindow(g.video, SW_HIDE);
     if (g.dragging && GetCapture() == g.wnd) ReleaseCapture();
     g.mediaReady = g.mediaHasVideo = g.mediaEnded = g.dragging = false;
+    g.videoSize = {};
     g.duration = 0;
     g.playerState = MFP_MEDIAPLAYER_STATE_EMPTY;
 }
@@ -932,6 +942,10 @@ void OnPlayerEvent(MFP_EVENT_HEADER* e) {
             ApplyVolume();
             if (g.mediaHasVideo) {
                 g.player->SetBorderColor(g_set.bg);
+                SIZE vs{};
+                if (SUCCEEDED(g.player->GetNativeVideoSize(&vs, nullptr)) && vs.cx > 0 &&
+                    vs.cy > 0)
+                    g.videoSize = vs;
                 LayoutChildren();
                 ShowWindow(g.video, SW_SHOW);
             }
@@ -1363,6 +1377,46 @@ std::wstring FormatDuration(LONGLONG t) {
     return buf;
 }
 
+// Catppuccin Mocha mantle and surface, the chrome colors the desktop bars and
+// docks use.
+constexpr COLORREF kMantle = RGB(0x18, 0x18, 0x25);
+constexpr COLORREF kSurface = RGB(0x31, 0x32, 0x44);
+
+// One left-to-right gradient across the bar, from the gradient start into the
+// accent, the way the desktop media player colors its buttons.
+ComPtr<ID2D1LinearGradientBrush> AccentGradient(const RECT& bar) {
+    D2D1_GRADIENT_STOP stops[2] = {{0.0f, ToD2D(g_set.accent2)}, {1.0f, ToD2D(g_set.accent)}};
+    ComPtr<ID2D1GradientStopCollection> collection;
+    if (FAILED(g.rt->CreateGradientStopCollection(stops, 2, &collection))) return nullptr;
+    ComPtr<ID2D1LinearGradientBrush> brush;
+    D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES line{
+        D2D1::Point2F((float)bar.left, 0), D2D1::Point2F((float)bar.right, 0)};
+    g.rt->CreateLinearGradientBrush(line, collection.Get(), &brush);
+    return brush;
+}
+
+void FillPlayGlyph(float s, const D2D1_RECT_F& r, ID2D1Brush* brush) {
+    float cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    float h = 5.5f * s, w = 9.5f * s, x = cx - w / 2 + 0.5f * s;
+    ComPtr<ID2D1PathGeometry> tri;
+    ComPtr<ID2D1GeometrySink> sink;
+    if (FAILED(g.d2d->CreatePathGeometry(&tri)) || FAILED(tri->Open(&sink))) return;
+    sink->BeginFigure(D2D1::Point2F(x, cy - h), D2D1_FIGURE_BEGIN_FILLED);
+    sink->AddLine(D2D1::Point2F(x, cy + h));
+    sink->AddLine(D2D1::Point2F(x + w, cy));
+    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+    if (SUCCEEDED(sink->Close())) g.rt->FillGeometry(tri.Get(), brush);
+}
+
+void FillPauseGlyph(float s, const D2D1_RECT_F& r, ID2D1Brush* brush) {
+    float cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    float h = 6 * s, w = 3.5f * s, gap = 3.5f * s;
+    g.rt->FillRoundedRectangle(D2D1::RoundedRect(
+        D2D1::RectF(cx - gap / 2 - w, cy - h, cx - gap / 2, cy + h), s / 3, s / 3), brush);
+    g.rt->FillRoundedRectangle(D2D1::RoundedRect(
+        D2D1::RectF(cx + gap / 2, cy - h, cx + gap / 2 + w, cy + h), s / 3, s / 3), brush);
+}
+
 void DrawBar() {
     float s = Scale();
     BarRects b = BarLayout();
@@ -1370,17 +1424,23 @@ void DrawBar() {
     if (FAILED(g.rt->CreateSolidColorBrush(ToD2D(g_set.fg), &brush))) return;
     PCWSTR icons = L"Segoe Fluent Icons";
 
-    brush->SetColor(Shade(g_set.fg, 0.06f));
+    brush->SetColor(Shade(kMantle, 0.45f));
     g.rt->FillRectangle(ToRectF(b.bar), brush.Get());
 
-    D2D1_RECT_F btn = ToRectF(b.button);
-    float r = (btn.right - btn.left) / 2;
-    brush->SetColor(ToD2D(g_set.accent));
-    g.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(btn.left + r, btn.top + r), r, r), brush.Get());
+    ComPtr<ID2D1LinearGradientBrush> grad = AccentGradient(b.bar);
+    ID2D1Brush* accentBrush = grad.Get();
+    if (!accentBrush) {
+        brush->SetColor(ToD2D(g_set.accent));
+        accentBrush = brush.Get();
+    }
+
+    // Filled glyphs with nothing behind them, like the desktop media player
+    // buttons.
     bool playing = g.playerState == MFP_MEDIAPLAYER_STATE_PLAYING;
-    brush->SetColor(ToD2D(g_set.bg));
-    DrawLabel(playing ? L"\xE769" : L"\xE768", btn, icons, 15 * s, DWRITE_TEXT_ALIGNMENT_CENTER,
-              brush.Get());
+    if (playing)
+        FillPauseGlyph(s, ToRectF(b.button), accentBrush);
+    else
+        FillPlayGlyph(s, ToRectF(b.button), accentBrush);
 
     LONGLONG pos = MediaPosition();
     brush->SetColor(ToD2D(g_set.dim));
@@ -1393,17 +1453,17 @@ void DrawBar() {
     D2D1_RECT_F tr = ToRectF(b.track);
     float cy = (tr.top + tr.bottom) / 2, th = 4 * s;
     if (tr.right > tr.left) {
-        brush->SetColor(Shade(g_set.dim, 0.3f));
+        brush->SetColor(Shade(kSurface, 0.75f));
         g.rt->FillRoundedRectangle(
-            D2D1::RoundedRect(D2D1::RectF(tr.left, cy - th / 2, tr.right, cy + th / 2), th / 2, th / 2),
+            D2D1::RoundedRect(D2D1::RectF(tr.left, cy - th / 2, tr.right, cy + th / 2), th / 2,
+                              th / 2),
             brush.Get());
         float frac = g.duration > 0 ? (float)std::clamp((double)pos / g.duration, 0.0, 1.0) : 0.0f;
         float x = tr.left + frac * (tr.right - tr.left);
-        brush->SetColor(ToD2D(g_set.accent));
         g.rt->FillRoundedRectangle(
             D2D1::RoundedRect(D2D1::RectF(tr.left, cy - th / 2, x, cy + th / 2), th / 2, th / 2),
-            brush.Get());
-        g.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, cy), 6 * s, 6 * s), brush.Get());
+            accentBrush);
+        g.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, cy), 6 * s, 6 * s), accentBrush);
     }
 
     D2D1_RECT_F vol = ToRectF(b.volume);
@@ -1414,18 +1474,22 @@ void DrawBar() {
     D2D1_RECT_F vt = ToRectF(b.volTrack);
     float vcy = (vt.top + vt.bottom) / 2, vth = 4 * s;
     if (vt.right > vt.left) {
-        brush->SetColor(Shade(g_set.dim, 0.3f));
+        brush->SetColor(Shade(kSurface, 0.75f));
         g.rt->FillRoundedRectangle(D2D1::RoundedRect(
                                        D2D1::RectF(vt.left, vcy - vth / 2, vt.right, vcy + vth / 2),
                                        vth / 2, vth / 2),
                                    brush.Get());
-        brush->SetColor(ToD2D(g.muted ? g_set.dim : g_set.accent));
         float vx = vt.left + g.volume * (vt.right - vt.left);
-        if (g.volume > 0.0f)
+        if (g.volume > 0.0f) {
+            ID2D1Brush* fill = accentBrush;
+            if (g.muted) {
+                brush->SetColor(ToD2D(g_set.dim));
+                fill = brush.Get();
+            }
             g.rt->FillRoundedRectangle(D2D1::RoundedRect(
-                D2D1::RectF(vt.left, vcy - vth / 2, vx, vcy + vth / 2), vth / 2, vth / 2),
-                brush.Get());
-        g.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(vx, vcy), 5 * s, 5 * s), brush.Get());
+                D2D1::RectF(vt.left, vcy - vth / 2, vx, vcy + vth / 2), vth / 2, vth / 2), fill);
+            g.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(vx, vcy), 5 * s, 5 * s), fill);
+        }
     }
     wchar_t pct[16];
     swprintf(pct, 16, L"%d%%", silent ? 0 : (int)(g.volume * 100 + 0.5f));
@@ -1433,7 +1497,6 @@ void DrawBar() {
     DrawLabel(pct, D2D1::RectF(vt.right + 6 * s, vol.top, vol.right, vol.bottom), L"Segoe UI",
               textSize, DWRITE_TEXT_ALIGNMENT_TRAILING, brush.Get());
 }
-
 // The big icon or cover with the name and details under it, in the top
 // `h` pixels of the window.
 void DrawInfo(float w, float h, float maxIcon, float iconShare, float topShare) {
@@ -1485,7 +1548,19 @@ void LayoutChildren() {
     if (g.mode == Mode::Text) MoveWindow(g.edit, rc.left, rc.top, w, h, TRUE);
     if (g.mode == Mode::Media) {
         RECT m = MediaArea();
-        MoveWindow(g.video, m.left, m.top, m.right - m.left, m.bottom - m.top, TRUE);
+        // Fit the video exactly, so the empty borders around it are the
+        // window's own material: the glass behind the window when the glass
+        // background is on, like the space around a picture.
+        if (g.mediaHasVideo && g.videoSize.cx > 0 && g.videoSize.cy > 0 && m.right > m.left &&
+            m.bottom > m.top) {
+            float fit = std::min((float)(m.right - m.left) / g.videoSize.cx,
+                                 (float)(m.bottom - m.top) / g.videoSize.cy);
+            int w = (int)(g.videoSize.cx * fit), h = (int)(g.videoSize.cy * fit);
+            MoveWindow(g.video, m.left + ((m.right - m.left) - w) / 2,
+                       m.top + ((m.bottom - m.top) - h) / 2, w, h, TRUE);
+        } else {
+            MoveWindow(g.video, m.left, m.top, m.right - m.left, m.bottom - m.top, TRUE);
+        }
     }
     if (g.mode == Mode::Handler && g.handler) {
         MoveWindow(g.host, rc.left, rc.top, w, h, TRUE);
