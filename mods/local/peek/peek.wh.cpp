@@ -2,7 +2,7 @@
 // @id              peek
 // @name            Peek
 // @description     Select a file in File Explorer and press Space to preview it, like PowerToys Peek
-// @version         1.2.0
+// @version         1.3.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -28,7 +28,7 @@ Esc to close it. It works like PowerToys Peek, without PowerToys.
   count as text.
 - **Videos and music** (MP4, MKV, MOV, AVI, WMV, MP3, FLAC, WAV, M4A and
   anything else Windows can play) start playing right away, with a play
-  button, a seek bar and the volume at the bottom. Music shows its cover art.
+  button, a seek bar and a volume slider at the bottom. Music shows its cover art.
 - **PDFs, Office files and anything else** Windows has a preview handler for:
   the same previews the Explorer preview pane shows.
 - **Everything else**, folders included: a large icon or thumbnail with the
@@ -48,7 +48,8 @@ Esc to close it. It works like PowerToys Peek, without PowerToys.
 | Click the video | Play or pause |
 | Ctrl+Left, Ctrl+Right | Back or forward 5 seconds |
 | Up, Down, mouse wheel | Volume |
-| M, click the volume | Mute |
+| Click or drag the volume slider | Set the volume |
+| M or click the speaker | Mute |
 | Click or drag the bar | Jump to that point |
 
 ## Notes
@@ -346,7 +347,7 @@ struct State {
     ComPtr<IMFPMediaPlayer> player;
     MFP_MEDIAPLAYER_STATE playerState = MFP_MEDIAPLAYER_STATE_EMPTY;
     bool mediaReady = false, mediaHasVideo = false, mediaEnded = false;
-    bool muted = false, dragging = false;
+    bool muted = false, dragging = false, draggingVol = false;
     float volume = 1.0f;  // kept between files until the mod reloads
     LONGLONG duration = 0, dragPos = 0;  // 100 ns units
 } g;
@@ -809,7 +810,7 @@ RECT MediaArea() {
 }
 
 struct BarRects {
-    RECT bar, button, current, track, total, volume;
+    RECT bar, button, current, track, total, volume, volBtn, volTrack;
 };
 
 BarRects BarLayout() {
@@ -821,7 +822,13 @@ BarRects BarLayout() {
     int x = rc.left + (int)(14 * s);
     b.button = {x, cy - r, x + 2 * r, cy + r};
     int timeW = (int)(60 * s), gap = (int)(10 * s);
-    b.volume = {rc.right - (int)(84 * s), b.bar.top, rc.right - (int)(8 * s), b.bar.bottom};
+    // Volume zone, right to left: percent text, slider, mute button. The
+    // button keeps its mute click; the slider takes clicks and drags.
+    int volRight = rc.right - (int)(8 * s);
+    b.volume = {volRight - (int)(126 * s), b.bar.top, volRight, b.bar.bottom};
+    b.volBtn = {b.volume.left, b.bar.top, b.volume.left + (int)(24 * s), b.bar.bottom};
+    b.volTrack = {b.volBtn.right + (int)(6 * s), b.bar.top, b.volBtn.right + (int)(62 * s),
+                  b.bar.bottom};
     b.current = {b.button.right + gap, b.bar.top, b.button.right + gap + timeW, b.bar.bottom};
     b.total = {b.volume.left - gap - timeW, b.bar.top, b.volume.left - gap, b.bar.bottom};
     b.track = {b.current.right + gap, b.bar.top, std::max(b.current.right + gap, b.total.left - gap),
@@ -1402,13 +1409,29 @@ void DrawBar() {
     D2D1_RECT_F vol = ToRectF(b.volume);
     bool silent = g.muted || g.volume <= 0.0f;
     brush->SetColor(ToD2D(g_set.fg));
-    DrawLabel(silent ? L"\xE74F" : L"\xE767", D2D1::RectF(vol.left, vol.top, vol.left + 24 * s, vol.bottom),
-              icons, 15 * s, DWRITE_TEXT_ALIGNMENT_CENTER, brush.Get());
+    DrawLabel(silent ? L"\xE74F" : L"\xE767", ToRectF(b.volBtn), icons, 15 * s,
+              DWRITE_TEXT_ALIGNMENT_CENTER, brush.Get());
+    D2D1_RECT_F vt = ToRectF(b.volTrack);
+    float vcy = (vt.top + vt.bottom) / 2, vth = 4 * s;
+    if (vt.right > vt.left) {
+        brush->SetColor(Shade(g_set.dim, 0.3f));
+        g.rt->FillRoundedRectangle(D2D1::RoundedRect(
+                                       D2D1::RectF(vt.left, vcy - vth / 2, vt.right, vcy + vth / 2),
+                                       vth / 2, vth / 2),
+                                   brush.Get());
+        brush->SetColor(ToD2D(g.muted ? g_set.dim : g_set.accent));
+        float vx = vt.left + g.volume * (vt.right - vt.left);
+        if (g.volume > 0.0f)
+            g.rt->FillRoundedRectangle(D2D1::RoundedRect(
+                D2D1::RectF(vt.left, vcy - vth / 2, vx, vcy + vth / 2), vth / 2, vth / 2),
+                brush.Get());
+        g.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(vx, vcy), 5 * s, 5 * s), brush.Get());
+    }
     wchar_t pct[16];
     swprintf(pct, 16, L"%d%%", silent ? 0 : (int)(g.volume * 100 + 0.5f));
     brush->SetColor(ToD2D(g_set.dim));
-    DrawLabel(pct, D2D1::RectF(vol.left + 28 * s, vol.top, vol.right, vol.bottom), L"Segoe UI",
-              textSize, DWRITE_TEXT_ALIGNMENT_LEADING, brush.Get());
+    DrawLabel(pct, D2D1::RectF(vt.right + 6 * s, vol.top, vol.right, vol.bottom), L"Segoe UI",
+              textSize, DWRITE_TEXT_ALIGNMENT_TRAILING, brush.Get());
 }
 
 // The big icon or cover with the name and details under it, in the top
@@ -1545,10 +1568,14 @@ LRESULT CALLBACK PreviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 g.dragging = true;
                 SetCapture(hwnd);
                 SendMessageW(hwnd, WM_MOUSEMOVE, wp, lp);
-            } else if (PtInRect(&b.volume, pt)) {
+            } else if (PtInRect(&b.volBtn, pt)) {
                 g.muted = !g.muted;
                 ApplyVolume();
                 InvalidateRect(hwnd, nullptr, FALSE);
+            } else if (PtInRect(&b.volTrack, pt)) {
+                g.draggingVol = true;
+                SetCapture(hwnd);
+                SendMessageW(hwnd, WM_MOUSEMOVE, wp, lp);
             }
             return 0;
         }
@@ -1558,6 +1585,15 @@ LRESULT CALLBACK PreviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 double frac = t.right > t.left ? (double)(GET_X_LPARAM(lp) - t.left) / (t.right - t.left) : 0;
                 g.dragPos = (LONGLONG)(std::clamp(frac, 0.0, 1.0) * g.duration);
                 InvalidateRect(hwnd, nullptr, FALSE);
+            } else if (g.draggingVol) {
+                RECT t = BarLayout().volTrack;
+                float frac = t.right > t.left
+                                 ? (float)(GET_X_LPARAM(lp) - t.left) / (t.right - t.left)
+                                 : 0.0f;
+                g.volume = std::clamp(frac, 0.0f, 1.0f);
+                if (g.volume > 0.0f) g.muted = false;
+                ApplyVolume();
+                InvalidateRect(hwnd, nullptr, FALSE);
             }
             return 0;
         case WM_LBUTTONUP:
@@ -1565,10 +1601,14 @@ LRESULT CALLBACK PreviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 g.dragging = false;
                 ReleaseCapture();
                 SeekTo(g.dragPos);
+            } else if (g.draggingVol) {
+                g.draggingVol = false;
+                ReleaseCapture();
+                InvalidateRect(hwnd, nullptr, FALSE);
             }
             return 0;
         case WM_CAPTURECHANGED:
-            g.dragging = false;
+            g.dragging = g.draggingVol = false;
             return 0;
         case WM_MOUSEWHEEL:
             if (g.mode == Mode::Media) {
