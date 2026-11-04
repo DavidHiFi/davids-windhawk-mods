@@ -2,7 +2,7 @@
 // @id              gpu-accelerated-explorer-view-plus
 // @name            GPU Accelerated Explorer View Plus
 // @description     GPU-accelerated Explorer views with smooth scrolling and right-click submenus that populate fully
-// @version         1.0.2
+// @version         1.0.10
 // @author          DavidHiFi, DarkionAvey
 // @include         explorer.exe
 // @architecture    x86-64
@@ -126,6 +126,9 @@ GPL-2.0.
     - hoverSelectedOpacity: 100
       $name: Hover over selected item opacity (%)
       $description: Higher = stronger highlight; lower = subtler highlight.
+    - mochaPills: true
+      $name: Mocha pills in all folders
+      $description: Drive-tile style rounded bordered hover (blue) and selection (mauve) pills in every folder, not only This PC.
   $name: Mouse hover
 - Navigation:
     - showNativeViewToggleButton: true
@@ -462,6 +465,10 @@ constexpr ULONGLONG kUiTransitionDurationMs = 180;
 // Independent hover animation duration (milliseconds). Change this constant
 // and recompile to experiment without altering selection/scroll animations.
 constexpr ULONGLONG kHoverAnimationDurationMs = 80;
+// Hovered This PC drive tiles nudge their highlight pill right by this many
+// DIP. Only the hover box moves: icon, text and usage bar stay put, as do
+// hit testing and ghost rows.
+constexpr int kTileHoverShiftDip = 4;
 // Directory animations sample only the current viewport and a small overhang.
 // All path matching happens on the directory worker, never during painting.
 constexpr int kRowTransitionOverscan = 4;
@@ -530,6 +537,9 @@ std::atomic<ViewOption> g_filenameOnly{ViewOption::GridOnly};
 std::atomic<ViewOption> g_middleEllipsis{ViewOption::GridOnly};
 std::atomic<bool> g_listThumbnails{false};
 std::atomic<bool> g_animateHover{true};
+// Drive-tile style pills (blue hover, mauve selection) in every folder, not
+// only This PC. Default matches the owner's ask; off restores accent fills.
+std::atomic<bool> g_mochaPills{true};
 std::atomic<COLORREF> g_selectionRgb{RGB(0, 120, 215)};
 std::atomic<bool> g_dynamicAccent{true};
 std::atomic<int> g_selectionAlpha{60}, g_hoverAlpha{50};
@@ -3308,6 +3318,12 @@ bool IsGpuViewMode(UINT mode, bool thisPc = false) {
 bool DriveTiles(const ViewState& state) {
     return state.thisPcGpu && state.gridView;
 }
+// All drive highlights share fixed bounds, including cached animation endpoints.
+// Content and its hit targets retain their original layout.
+float DriveHighlightDx(const ViewState& state, int index) {
+    if (index < 0 || !DriveTiles(state)) return 0.f;
+    return static_cast<float>(Scale96(kTileHoverShiftDip, ViewDpi(state)));
+}
 bool ViewOptionEnabled(const ViewState& state, const std::atomic<ViewOption>& option) {
     const auto value = option.load(std::memory_order_relaxed);
     return value == ViewOption::AlwaysOn || (value == ViewOption::GridOnly && state.gridView);
@@ -5121,6 +5137,7 @@ void LoadSettings() {
     g_middleEllipsis.store(viewOption(L"Appearance.middleEllipsis"));
     g_listThumbnails.store(Wh_GetIntSetting(L"Appearance.listThumbnails") != 0);
     g_animateHover.store(Wh_GetIntSetting(L"Hover.animateHover") != 0);
+    g_mochaPills.store(Wh_GetIntSetting(L"Hover.mochaPills") != 0);
     g_selectionAlpha.store(std::clamp(Wh_GetIntSetting(L"Selection.selectionOpacity"), 0, 100));
     g_hoverAlpha.store(std::clamp(Wh_GetIntSetting(L"Hover.hoverOpacity"), 0, 100));
     g_bothAlpha.store(std::clamp(Wh_GetIntSetting(L"Hover.hoverSelectedOpacity"), 0, 100));
@@ -9713,7 +9730,7 @@ struct ItemGeometry {
     D2D1_RECT_F cell{}, icon{}, text{}, usage{}, capacity{};
     bool wrapped = false;
 };
-ItemGeometry LayoutItem(ViewState& state, const RowVisual& visual) {
+ItemGeometry LayoutItem(ViewState& state, const RowVisual& visual, float dx = 0.f) {
     const int dpi = ViewDpi(state);
     const float side = IconPixelSize(state);
     const float start = ListStartX(state), end = ListEndX(state);
@@ -9723,6 +9740,10 @@ ItemGeometry LayoutItem(ViewState& state, const RowVisual& visual) {
         const float pad = static_cast<float>(Scale96(6, dpi));
         g.cell.left = start + visual.left + 2.f;
         g.cell.right = start + visual.left + (visual.width > 0.f ? visual.width : state.itemWidth) - 2.f;
+        if (dx != 0.f) {
+            g.cell.left += dx;
+            g.cell.right += dx;
+        }
         const bool tiles = DriveTiles(state);
         const bool compact = tiles || state.cachedNativeMode == FVM_SMALLICON;
         g.wrapped = !compact;
@@ -13947,7 +13968,17 @@ D2D1_RECT_F SelectionRect(ViewState& state, int index, float top, float row,
     if (shape) *shape = {};
     if (state.gridView) {
         const auto geometry = LayoutItem(state, {top, row, 1.f,
-            itemLeft >= 0.f ? itemLeft : DocumentRowLeft(state, index), itemWidth});
+            itemLeft >= 0.f ? itemLeft : DocumentRowLeft(state, index), itemWidth},
+            DriveHighlightDx(state, index));
+        // This PC drive tiles highlight the whole tile, like stock Explorer.
+        if (state.thisPcGpu) {
+            // The shifted highlight must keep its rounded right edge and 1px
+            // border inside the view, or the rightmost drive gets clipped.
+            auto cell = geometry.cell;
+            cell.right = std::min(cell.right,
+                RowBackgroundEndX(state) - static_cast<float>(Scale96(2, ViewDpi(state))));
+            return cell;
+        }
         if (!ViewOptionEnabled(state,g_filenameOnly)) return geometry.cell;
         if (!entry && index >= 0 && index < state.total)
             entry = &ModelEntry(state,index);
@@ -14038,10 +14069,29 @@ D2D1_RECT_F SelectionRect(ViewState& state, int index, float top, float row,
     return rc;
 }
 
+// Catppuccin Mocha, used by the This PC drive tiles and usage bars.
+constexpr unsigned kMochaBlue = 0x89B4FAu, kMochaMauve = 0xCBA6F7u,
+    kMochaPeach = 0xFAB387u, kMochaRed = 0xF38BA8u, kMochaSurface1 = 0x45475Au;
+
 void FillSelectionRect(ViewState& state, const D2D1_RECT_F& rc, float alpha,
-                       const SelectionShape* shape = nullptr, bool outline = false) {
+                       const SelectionShape* shape = nullptr, bool outline = false,
+                       unsigned bubble = 0) {
     if (rc.right <= rc.left + 1.f || rc.bottom <= rc.top || alpha <= 0.f)
         return;
+    if (bubble) {
+        // Soft tinted fill plus a 1px border in the same Mocha colour.
+        const float radius = static_cast<float>(Scale96(8, ViewDpi(state)));
+        D2D1_RECT_F part = D2D1::RectF(rc.left + .5f, rc.top + .5f, rc.right - .5f, rc.bottom - .5f);
+        Fill(state, part.left, part.top, part.right, part.bottom, bubble, alpha * .28f, radius);
+        if (state.rtlLayout) {
+            const float left = part.left;
+            part.left = state.paintWidth - part.right; part.right = state.paintWidth - left;
+        }
+        state.brush->SetColor(Packed(bubble, std::min(1.f, alpha * 1.6f)));
+        StrokeRoundedRect(state, D2D1::RoundedRect(part, radius, radius),
+            state.brush.Get(), static_cast<float>(Scale96(1, ViewDpi(state))));
+        return;
+    }
     const unsigned rgb = ThemeRgb(g_selectionRgb.load(std::memory_order_relaxed));
     const bool shaped = shape && shape->count && shape->bounds.right>shape->bounds.left &&
         shape->bounds.bottom>shape->bounds.top;
@@ -15478,7 +15528,7 @@ void Paint(ViewState& state) {
         // Active rename owns this row's filename background and caret; do
         // not paint the bright GPU selection through the native textbox.
         if (alpha > 0.f && !(state.rename.editor && i == state.rename.index))
-            FillSelectionRect(state, selection, alpha * v.opacity,&shape);
+            FillSelectionRect(state, selection, alpha * v.opacity,&shape,false,(state.thisPcGpu || g_mochaPills.load(std::memory_order_relaxed)) ? kMochaMauve : 0u);
     }
     // Deleted rows exist only as a tiny, bounded painting snapshot, not in
     // Shell state. Their shrinking height and opacity close the old gaps.
@@ -15523,7 +15573,7 @@ void Paint(ViewState& state) {
             header + visualRow * row - state.scrollNow, row,
             xName, nameRight, listEnd,-1.f,0.f,&shape);
         InterpolateSelectionBounds(state, rc, progress);
-        FillSelectionRect(state, rc, SelectionBaseOpacity(state, hover, visualRow, rc.left, rc.right),&shape);
+        FillSelectionRect(state, rc, SelectionBaseOpacity(state, hover, visualRow, rc.left, rc.right),&shape,false,(state.thisPcGpu || g_mochaPills.load(std::memory_order_relaxed)) ? kMochaMauve : 0u);
     }
     // Windows-style focus-only caret for Ctrl+arrow navigation. Reuse the
     // selection geometry and brush; no separate text layout or frame worker.
@@ -15555,7 +15605,7 @@ void Paint(ViewState& state) {
                 opacity = 0.f;
         }
         SelectionShape shape;
-        if (state.gridView && ViewOptionEnabled(state,g_filenameOnly)) {
+        if (state.gridView && (ViewOptionEnabled(state,g_filenameOnly) || state.thisPcGpu)) {
             if (index<0 && state.hoverAnimationActive) index=state.hoverLabelRow;
             if (index>=0 && index<state.total) {
                 const auto v=LayoutRowVisual(state,index,layoutProgress);
@@ -15568,7 +15618,7 @@ void Paint(ViewState& state) {
         hoverRect.right = hover.right;
         RowSourceScope source(state,index,0);
         FillSelectionRect(state, hoverRect,
-            HoverOverlayOpacity(state, hover, visibleItems) * opacity,&shape);
+            HoverOverlayOpacity(state, hover, visibleItems) * opacity,&shape,false,(state.thisPcGpu || g_mochaPills.load(std::memory_order_relaxed)) ? kMochaBlue : 0u);
     }
     // The decorative passes above may cross the edge margins in square mode,
     // but item content (including outgoing row ghosts and group headings) never
@@ -15648,12 +15698,14 @@ void Paint(ViewState& state) {
                     static_cast<double>(e.driveTotal)), 0.f, 1.f);
             const float width = bar.right - bar.left;
             Fill(state, bar.left, bar.top, bar.right, bar.bottom,
-                nameColor, .18f * contentOpacity, radius);
+                kMochaSurface1, .9f * contentOpacity, radius);
+            // Low space like stock Explorer: red at 90% used, orange (peach) from 80%.
+            const unsigned fill = fraction >= .9f ? kMochaRed :
+                fraction >= .8f ? kMochaPeach : kMochaBlue;
             if (fraction > 0.f)
                 Fill(state, bar.left, bar.top,
                     bar.left + width * fraction, bar.bottom,
-                    ThemeRgb(g_selectionRgb.load(std::memory_order_relaxed)),
-                    .82f * contentOpacity, radius);
+                    fill, .95f * contentOpacity, radius);
         }
         if (compositionFrame.active && !compositionFrame.Rows()) compositionFrame.Background();
         state.uiTraceDrawItem=false;
