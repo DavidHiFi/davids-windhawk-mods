@@ -2,7 +2,7 @@
 // @id           better-volume-mixer-plus
 // @name         Better Volume Mixer Plus
 // @description  A compact tray volume mixer with per-app volume and per-app output and input devices
-// @version      1.1.0
+// @version      1.2.1
 // @author       DavidHiFi, 0Allu
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -401,6 +401,7 @@ Gdiplus::Font* g_smallTypography;
 
 struct RowVisual {
     float hover = 0.0f;
+    float selection = 0.0f, muteHover = 0.0f, pinHover = 0.0f, percentHover = 0.0f;
     float volume = 0.0f;
     float peak = 0.0f;
     bool initialized = false;
@@ -410,6 +411,8 @@ bool g_motionEnabled;
 bool g_closeHovered;
 int g_hoverPageButton = -1;
 float g_closeHoverAmount;
+float g_outputHoverAmount, g_outputSelectAmount, g_pageHoverAmounts[2];
+POINT g_hoverPoint{-1, -1};
 float g_frameSeconds = 0.016f;
 ULONGLONG g_lastPaintTime;
 ULONGLONG g_openTime;
@@ -470,6 +473,7 @@ bool g_outputHovered;
 bool g_pendingDefaultOutputChange;
 std::unordered_set<std::wstring> g_temporarilyHiddenSources;
 HWND g_nameTooltip;
+bool g_tooltipAcrylic;
 std::wstring g_nameTooltipText;
 RECT g_nameTooltipRect{};
 bool g_nameTooltipClipped;
@@ -584,6 +588,7 @@ void LoadSettings() {
 enum class AccentState : int {
     Disabled = 0,
     BlurBehind = 3,
+    Acrylic = 4,
 };
 
 struct AccentPolicy {
@@ -703,9 +708,9 @@ void UpdateTheme() {
                    RGB(27, 31, 38), RGB(98, 105, 117), RGB(218, 223, 230),
                    accent, RGB(115, 122, 134), RGB(228, 231, 236), RGB(170, 175, 182)};
     } else {
-        g_theme = {RGB(27, 29, 34), RGB(38, 41, 48), RGB(45, 49, 57),
-                   RGB(242, 244, 248), RGB(159, 168, 183), RGB(65, 72, 84),
-                   accent, RGB(138, 146, 159), RGB(48, 53, 62), RGB(22, 24, 29)};
+        g_theme = {RGB(30, 30, 46), RGB(24, 24, 37), RGB(49, 50, 68),
+                   RGB(205, 214, 244), RGB(166, 173, 200), RGB(69, 71, 90),
+                   RGB(137, 180, 250), RGB(108, 112, 134), RGB(49, 50, 68), RGB(17, 17, 27)};
     }
 }
 
@@ -2535,20 +2540,29 @@ void UpdateNameTooltip(HWND window, POINT point) {
     }
 }
 
-void PaintNameTooltip(HWND window, HDC dc) {
-    RECT client{};
-    GetClientRect(window, &client);
-
-    HBRUSH background = CreateSolidBrush(g_theme.panel);
-    FillRect(dc, &client, background);
-    DeleteObject(background);
-
-    RECT textRect = client;
-    InflateRect(&textRect, -Scale(8), -Scale(3));
-
-    DrawLabel(dc, g_nameTooltipText, textRect, g_bodyFont, g_theme.text,
-              DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+void DrawPopupBorder(HDC dc, const RECT& client, float stroke) {
+    if (!g_gdiplusToken) return;
+    Gdiplus::Graphics graphics(dc);
+    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+    float w = static_cast<float>(client.right), h = static_cast<float>(client.bottom);
+    // Share DWM ROUND's measured 16 DIP center; the inner radius is inset by the stroke.
+    float c = std::min(static_cast<float>(Scale(16)), std::min(w, h) * 0.5f);
+    float r = std::max(0.5f, c - stroke), d = 2.0f * r;
+    Gdiplus::GraphicsPath path(Gdiplus::FillModeAlternate);
+    path.AddRectangle(Gdiplus::RectF(-1, -1, w + 2, h + 2));
+    path.StartFigure();
+    path.AddArc(c-r, c-r, d, d, 180, 90);
+    path.AddArc(w-c-r, c-r, d, d, 270, 90);
+    path.AddArc(w-c-r, h-c-r, d, d, 0, 90);
+    path.AddArc(c-r, h-c-r, d, d, 90, 90);
+    path.CloseFigure();
+    Gdiplus::LinearGradientBrush brush(Gdiplus::RectF(0, 0, w, h),
+        Gdiplus::Color(255, 0x89, 0xB4, 0xFA), Gdiplus::Color(255, 0xCB, 0xA6, 0xF7), 45, TRUE);
+    graphics.FillPath(&brush, &path);
 }
+
+void PaintNameTooltip(HWND window, HDC dc);
 
 SIZE MeasureNameTooltipText() {
     SIZE result{0, 0};
@@ -2597,35 +2611,39 @@ SIZE MeasureNameTooltipText() {
 
 void ApplyNameTooltipWindowStyle() {
     if (!g_nameTooltip) return;
-
     LONG_PTR exStyle = GetWindowLongPtrW(g_nameTooltip, GWL_EXSTYLE);
-
-    if (g_settings.backgroundOpacity < 100) {
-        if (!(exStyle & WS_EX_LAYERED)) {
-            exStyle |= WS_EX_LAYERED;
-            SetWindowLongPtrW(g_nameTooltip, GWL_EXSTYLE, exStyle);
-        }
-
-        int tooltipOpacity = std::max(85, g_settings.backgroundOpacity);
-        BYTE alpha = static_cast<BYTE>(MulDiv(255, tooltipOpacity, 100));
-        SetLayeredWindowAttributes(g_nameTooltip, 0, alpha, LWA_ALPHA);
-    } else if (exStyle & WS_EX_LAYERED) {
-        exStyle &= ~WS_EX_LAYERED;
-        SetWindowLongPtrW(g_nameTooltip, GWL_EXSTYLE, exStyle);
+    if (exStyle & WS_EX_LAYERED)
+        SetWindowLongPtrW(g_nameTooltip, GWL_EXSTYLE, exStyle & ~WS_EX_LAYERED);
+    SetWindowRgn(g_nameTooltip, nullptr, FALSE);
+    DWORD corner = 2;
+    COLORREF none = 0xFFFFFFFE;
+    BOOL enabled = TRUE;
+    DwmSetWindowAttribute(g_nameTooltip, 20, &enabled, sizeof(enabled));
+    DwmSetWindowAttribute(g_nameTooltip, 17, &enabled, sizeof(enabled));
+    DwmSetWindowAttribute(g_nameTooltip, 33, &corner, sizeof(corner));
+    DwmSetWindowAttribute(g_nameTooltip, 34, &none, sizeof(none));
+    MARGINS margins{-1, -1, -1, -1};
+    HRESULT frame = DwmExtendFrameIntoClientArea(g_nameTooltip, &margins);
+    HRGN region = CreateRectRgn(0, 0, -1, -1);
+    if (region) {
+        DWM_BLURBEHIND blur{};
+        blur.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+        blur.fEnable = TRUE;
+        blur.hRgnBlur = region;
+        DwmEnableBlurBehindWindow(g_nameTooltip, &blur);
+        DeleteObject(region);
     }
-
-    RECT bounds{};
-    if (GetWindowRect(g_nameTooltip, &bounds)) {
-        int width = bounds.right - bounds.left;
-        int height = bounds.bottom - bounds.top;
-        int radius = Scale(8);
-
-        HRGN region = CreateRoundRectRgn(
-            0, 0, width + 1, height + 1, radius, radius);
-
-        if (region && !SetWindowRgn(g_nameTooltip, region, TRUE)) {
-            DeleteObject(region);
-        }
+    using SetComposition = BOOL(WINAPI*)(HWND, const WindowCompositionAttributeData*);
+    static auto setComposition = reinterpret_cast<SetComposition>(
+        GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute"));
+    // Native acrylic samples the host backdrop; tint belongs to the material, never the text.
+    AccentPolicy policy{AccentState::Acrylic, 0, 0xED2E1E1E, 0};
+    WindowCompositionAttributeData data{19, &policy, sizeof(policy)};
+    g_tooltipAcrylic = SUCCEEDED(frame) && setComposition && setComposition(g_nameTooltip, &data);
+    if (!g_tooltipAcrylic) {
+        MARGINS opaque{};
+        DwmExtendFrameIntoClientArea(g_nameTooltip, &opaque);
+        Wh_Log(L"Mixer: tooltip acrylic unavailable; using opaque Mocha");
     }
 }
 
@@ -2635,9 +2653,9 @@ void PositionNameTooltip(POINT cursor) {
     SIZE measured = MeasureNameTooltipText();
 
     int width = std::max(
-        Scale(28), static_cast<int>(measured.cx) + Scale(16));
+        Scale(28), static_cast<int>(measured.cx) + Scale(24));
     int height = std::max(
-        Scale(26), static_cast<int>(measured.cy) + Scale(6));
+        Scale(34), static_cast<int>(measured.cy) + Scale(14));
 
     int x = cursor.x + Scale(12);
     int y = cursor.y + Scale(20);
@@ -2770,6 +2788,42 @@ float EaseTowards(float current, float target, float speed) {
     return std::abs(target - next) < 0.001f ? target : next;
 }
 
+float AnimateState(float& value, bool active) {
+    if (g_paintMatte != 1) {
+        float target = active ? 1.0f : 0.0f;
+        g_frameAnimating |= std::abs(value - target) >= 0.001f;
+        value = EaseTowards(value, target, 18.0f);
+    }
+    return value;
+}
+
+void DrawStateSurface(HDC dc, const RECT& rect, COLORREF base, float hover, float selected) {
+    float amount = std::max(hover, selected);
+    COLORREF mantle = g_lightTheme ? g_theme.hover : RGB(24, 24, 37);
+    DrawSurface(dc, rect, Scale(16), MixColor(base, mantle, amount));
+    if (!g_gdiplusToken || amount < 0.001f) return;
+    Gdiplus::Graphics graphics(dc);
+    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+    float stroke = (1.0f + selected) * g_dpi / 96.0f;
+    float inset = stroke * 0.5f;
+    float x = rect.left + inset, y = rect.top + inset;
+    float w = rect.right - rect.left - stroke, h = rect.bottom - rect.top - stroke;
+    float d = std::min({static_cast<float>(Scale(16)) - stroke, w, h});
+    if (d <= 0) return;
+    Gdiplus::GraphicsPath path;
+    path.AddArc(x, y, d, d, 180, 90);
+    path.AddArc(x+w-d, y, d, d, 270, 90);
+    path.AddArc(x+w-d, y+h-d, d, d, 0, 90);
+    path.AddArc(x, y+h-d, d, d, 90, 90);
+    path.CloseFigure();
+    BYTE alpha = static_cast<BYTE>(255 * amount);
+    Gdiplus::LinearGradientBrush brush(Gdiplus::RectF(x, y, w, h),
+        Gdiplus::Color(alpha, 0x89, 0xB4, 0xFA), Gdiplus::Color(alpha, 0xCB, 0xA6, 0xF7), 0, TRUE);
+    Gdiplus::Pen pen(&brush, stroke);
+    graphics.DrawPath(&pen, &path);
+}
+
 void DrawSlider(HDC dc, const RECT& rect, float volume, float peak,
                 bool muted, float hover) {
     std::optional<Gdiplus::Graphics> graphics;
@@ -2854,11 +2908,10 @@ void DrawSlider(HDC dc, const RECT& rect, float volume, float peak,
             insetDiameter, insetDiameter, activeTrack);
 }
 
-void DrawMuteButton(HDC dc, int visibleRow, int clientWidth, bool muted) {
+void DrawMuteButton(HDC dc, int visibleRow, int clientWidth, bool muted, float hover) {
     RECT button = MuteRectForRow(visibleRow, clientWidth);
-    if (muted) {
-        DrawSurface(dc, button, Scale(8), g_theme.hover);
-    }
+    if (muted || hover > 0.001f)
+        DrawStateSurface(dc, button, g_theme.panel, hover, muted ? 1.0f : 0.0f);
     DrawLabel(dc, muted ? L"\uE74F" : L"\uE767", button, g_symbolFont,
               muted ? g_theme.accent : IconColor(),
               DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -2909,13 +2962,14 @@ void DrawAudioRow(HDC dc, int visibleRow, int dataRow, int clientWidth) {
     }
     RECT rowRect = {Scale(12), top, clientWidth - Scale(12), top + RowHeight() - Scale(2)};
     COLORREF base = master ? g_theme.panel : g_theme.background;
-    DrawSurface(dc, rowRect, Scale(16), MixColor(base, g_theme.hover, visual.hover));
-
-    if (g_settings.keyboardControls && g_selectedRow == dataRow) {
-        RECT marker{Scale(14), top + Scale(12), Scale(17),
-                    top + RowHeight() - Scale(14)};
-        DrawRoundedRect(dc, marker, Scale(3), g_theme.accent);
-    }
+    AnimateState(visual.selection, g_selectedRow == dataRow || g_dragRow == dataRow);
+    DrawStateSurface(dc, rowRect, base, visual.hover, visual.selection);
+    RECT muteTarget = MuteRectForRow(visibleRow, clientWidth);
+    RECT pinTarget = PinRectForRow(visibleRow, clientWidth);
+    RECT percentTarget = PercentRectForRow(visibleRow, clientWidth);
+    AnimateState(visual.muteHover, g_hoverRow == dataRow && PtInRect(&muteTarget, g_hoverPoint));
+    AnimateState(visual.pinHover, !master && g_hoverRow == dataRow && PtInRect(&pinTarget, g_hoverPoint));
+    AnimateState(visual.percentHover, g_hoverRow == dataRow && PtInRect(&percentTarget, g_hoverPoint));
 
     RECT iconTile = IconTileRectForRow(visibleRow);
     DrawSurface(dc, iconTile, Scale(10),
@@ -2939,22 +2993,29 @@ void DrawAudioRow(HDC dc, int visibleRow, int dataRow, int clientWidth) {
     swprintf_s(percent, L"%d%%",
                static_cast<int>(volume * 100.0f + 0.5f));
     RECT percentRect = PercentRectForRow(visibleRow, clientWidth);
+    if (visual.percentHover > 0.001f || (g_volumeEntry && g_volumeEntryRow == dataRow))
+        DrawStateSurface(dc, percentRect, base, visual.percentHover,
+            g_volumeEntry && g_volumeEntryRow == dataRow ? 1.0f : 0.0f);
     // While this row's slider is being dragged, the percentage changes on
     // almost every frame, so a cache keyed on the exact string is a
     // guaranteed miss. Falling back to plain GDI text here avoids paying for
     // a full supersampled GDI+ rasterization on every frame of the drag.
     bool draggingThisRow = g_dragRow == dataRow;
-    DrawLabel(dc, percent, percentRect, g_bodyFont,
+    RECT percentTextRect = percentRect;
+    InflateRect(&percentTextRect, -Scale(3), 0);
+    DrawLabel(dc, percent, percentTextRect, g_bodyFont,
               muted ? g_theme.secondaryText : g_theme.text,
               DT_RIGHT | DT_VCENTER | DT_SINGLELINE, /*percentage=*/true,
               /*allowSmooth=*/!draggingThisRow);
 
     DrawSlider(dc, SliderRectForRow(visibleRow, clientWidth), visual.volume,
                visual.peak, muted, visual.hover);
-    DrawMuteButton(dc, visibleRow, clientWidth, muted);
+    DrawMuteButton(dc, visibleRow, clientWidth, muted, visual.muteHover);
     if (!master) {
         RECT pin = PinRectForRow(visibleRow, clientWidth);
         bool pinned = (*g_apps)[dataRow].pinned;
+        if (pinned || visual.pinHover > 0.001f)
+            DrawStateSurface(dc, pin, base, visual.pinHover, pinned ? 1.0f : 0.0f);
         DrawLabel(dc, pinned ? L"\uE840" : L"\uE718", pin, g_symbolFont,
                   pinned ? g_theme.accent : IconColor(),
                   DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -2964,7 +3025,7 @@ void DrawAudioRow(HDC dc, int visibleRow, int dataRow, int clientWidth) {
 void RenderMixerContents(HDC dc, const RECT& client) {
     if (g_paintMatte >= 0) {
         FillSolidRect(dc, client, g_paintMatte ? RGB(255, 255, 255) : RGB(0, 0, 0));
-        DrawSurface(dc, client, Scale(20), g_theme.background);
+        DrawSurface(dc, client, Scale(16), g_theme.background);
     } else {
         FillSolidRect(dc, client, g_theme.background);
     }
@@ -2975,10 +3036,9 @@ void RenderMixerContents(HDC dc, const RECT& client) {
     }
 
     RECT pickerRect = OutputPickerRect(client.right);
-    COLORREF outputPickerColor = g_outputHovered || g_outputMenuOpen
-        ? MixColor(g_theme.hover, RGB(0, 0, 0), 0.12f)
-        : MixColor(g_theme.panel, RGB(0, 0, 0), 0.15f);
-    DrawSurface(dc, pickerRect, Scale(16), outputPickerColor);
+    AnimateState(g_outputHoverAmount, g_outputHovered);
+    AnimateState(g_outputSelectAmount, g_outputMenuOpen);
+    DrawStateSurface(dc, pickerRect, g_theme.panel, g_outputHoverAmount, g_outputSelectAmount);
     RECT deviceIconRect = {pickerRect.left + Scale(8), pickerRect.top,
                            pickerRect.left + Scale(34), pickerRect.bottom};
     DrawLabel(dc, L"\uE7F5", deviceIconRect, g_symbolFont, IconColor(),
@@ -2993,13 +3053,8 @@ void RenderMixerContents(HDC dc, const RECT& client) {
               DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
     RECT closeRect = CloseButtonRect(client.right);
-    if (g_paintMatte != 1) {
-        g_frameAnimating |= std::abs(g_closeHoverAmount -
-                                     (g_closeHovered ? 1.0f : 0.0f)) >= 0.001f;
-        g_closeHoverAmount = EaseTowards(g_closeHoverAmount, g_closeHovered ? 1.0f : 0.0f, 18.0f);
-    }
-    DrawSurface(dc, closeRect, Scale(8),
-                    MixColor(g_theme.background, g_theme.hover, g_closeHoverAmount));
+    AnimateState(g_closeHoverAmount, g_closeHovered);
+    DrawStateSurface(dc, closeRect, g_theme.background, g_closeHoverAmount, 0);
     DrawLabel(dc, L"\uE8BB", closeRect, g_symbolFont, IconColor(),
               DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
@@ -3041,7 +3096,8 @@ void RenderMixerContents(HDC dc, const RECT& client) {
         for (bool next : {false, true}) {
             RECT button = PageButtonRect(next, client);
             bool hovered = g_hoverPageButton == (next ? 1 : 0);
-            DrawRoundedRect(dc, button, Scale(8), hovered ? g_theme.hover : g_theme.panel);
+            float hover = AnimateState(g_pageHoverAmounts[next ? 1 : 0], hovered);
+            DrawStateSurface(dc, button, g_theme.panel, hover, 0);
             DrawLabel(dc, next ? L"Next" : L"Previous", button, g_smallFont,
                       g_theme.text, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         }
@@ -3053,6 +3109,9 @@ void RenderMixerContents(HDC dc, const RECT& client) {
         DrawLabel(dc, text, counter, g_smallFont, g_theme.secondaryText,
                   DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
+
+    DrawPopupBorder(dc, client, std::ceil(3.0f * g_dpi / 96.0f));
+
 }
 
 struct PixelBuffer {
@@ -3116,6 +3175,32 @@ DWORD RecoverPixelAlpha(DWORD black, DWORD white) {
         result |= std::min<DWORD>((black >> shift) & 255UL, alpha) << shift;
     }
     return result;
+}
+
+void PaintNameTooltip(HWND window, HDC dc) {
+    RECT client{};
+    GetClientRect(window, &client);
+    PixelBuffer black, white;
+    if (!black.Ensure(client.right, client.bottom) || !white.Ensure(client.right, client.bottom)) {
+        black.Reset(); white.Reset();
+        FillSolidRect(dc, client, RGB(30, 30, 46));
+        return;
+    }
+    RECT textRect = client;
+    InflateRect(&textRect, -Scale(12), -Scale(7));
+    for (int pass = 0; pass < 2; ++pass) {
+        HDC target = pass ? white.dc : black.dc;
+        FillSolidRect(target, client, g_tooltipAcrylic ?
+            (pass ? RGB(255, 255, 255) : RGB(0, 0, 0)) : RGB(30, 30, 46));
+        DrawLabel(target, g_nameTooltipText, textRect, g_bodyFont, RGB(205, 214, 244),
+            DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        DrawPopupBorder(target, client, std::ceil(3.0f * g_dpi / 96.0f));
+    }
+    GdiFlush();
+    for (size_t i = 0; i < static_cast<size_t>(client.right) * client.bottom; ++i)
+        black.pixels[i] = RecoverPixelAlpha(black.pixels[i], white.pixels[i]);
+    BitBlt(dc, 0, 0, client.right, client.bottom, black.dc, 0, 0, SRCCOPY);
+    black.Reset(); white.Reset();
 }
 
 bool PaintTransparentMixer(HWND window, const RECT& client, ULONGLONG now) {
@@ -3225,11 +3310,20 @@ void PaintMixer(HWND hWnd) {
     EndPaint(hWnd, &paint);
 }
 
+// The backdrop blur fills the whole window rectangle; clip it to the drawn
+// rounded panel so no square corners show outside the border.
+void ApplyMixerRegion(HWND hWnd, int width, int height) {
+    // DWM ROUND does the clipping; an aliased window region would shave the border.
+    (void)width; (void)height;
+    SetWindowRgn(hWnd, nullptr, TRUE);
+}
+
 void ResizeMixer(HWND hWnd) {
     RECT windowRect;
     GetWindowRect(hWnd, &windowRect);
     SetWindowPos(hWnd, nullptr, windowRect.left, windowRect.top, PopupWidth(),
                  PopupHeight(), SWP_NOZORDER | SWP_NOACTIVATE);
+    ApplyMixerRegion(hWnd, PopupWidth(), PopupHeight());
 }
 
 bool GetTrayIconRect(RECT* rect) {
@@ -3264,7 +3358,9 @@ void PositionMixer(HWND hWnd) {
     if (y < info.rcWork.top) {
         y = anchor.bottom + gap;
     }
-    x = ClampInt(x, info.rcWork.left, std::max(info.rcWork.left, info.rcWork.right - width));
+    int edge = Scale(24);  // keep the popup off the screen's right edge
+    x = ClampInt(x, info.rcWork.left + gap,
+                 std::max(info.rcWork.left, info.rcWork.right - edge - width));
     y = ClampInt(y, info.rcWork.top, std::max(info.rcWork.top, info.rcWork.bottom - height));
 
     RECT current = {};
@@ -3273,6 +3369,7 @@ void PositionMixer(HWND hWnd) {
         SetWindowPos(hWnd, HWND_TOPMOST, x, y, width, height,
                      SWP_NOOWNERZORDER | SWP_NOACTIVATE);
     }
+    ApplyMixerRegion(hWnd, width, height);
 }
 
 void ShowMixer(HWND hWnd) {
@@ -4284,6 +4381,9 @@ void ShowOutputPicker(HWND window) {
 }
 
 void HandlePointerMove(HWND hWnd, POINT point) {
+    bool pointChanged = point.x != g_hoverPoint.x || point.y != g_hoverPoint.y;
+    g_hoverPoint = point;
+    if (pointChanged) InvalidateRect(hWnd, nullptr, FALSE);
     UpdateNameTooltip(hWnd, point);
     RECT client;
     GetClientRect(hWnd, &client);
@@ -4352,8 +4452,14 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
 
             RefreshIconSizes(hWnd);
             ApplyTransparencyStyle(hWnd);
-            DWORD corner = 2;  // DWMWCP_ROUND.
+            // The translucent path draws its own rounded surface and border;
+            // DWM rounding would clip the border at the corners.
+            DWORD corner = 2;  // DWMWCP_ROUND: the only clip the blur backdrop obeys
             DwmSetWindowAttribute(hWnd, 33, &corner, sizeof(corner));
+            if (g_settings.backgroundOpacity < 100) {  // square DWM outline would show past the rounded panel
+                COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
+                DwmSetWindowAttribute(hWnd, 34, &none, sizeof(none));
+            }
             if (HasDefaultVolumeRules()) {
                 RefreshAudioSessions(hWnd);
                 StartDefaultVolumeNotifications(hWnd);
@@ -4565,6 +4671,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
             g_outputHovered = false;
             g_mouseTracking = false;
             g_hoverRow = DRAG_NONE;
+            g_hoverPoint = {-1, -1};
             g_closeHovered = false;
             g_hoverPageButton = -1;
             InvalidateRect(hWnd, nullptr, FALSE);
