@@ -88,6 +88,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 
 | | Mod | What it does |
 | --- | --- | --- |
+| <img src="media/previews/seamless-dictate.png" width="220" alt="Seamless Dictate settings in Catppuccin Mocha"> | [Seamless Dictate](mods/local/seamless-dictate) | Hold Ctrl+Win and speak to type in any app, with AI cleanup and mic privacy while you talk. |
 | <img src="media/previews/windhawk-styler.png" width="220" alt="Themed Windhawk window"> | [Windhawk Styler](mods/local/windhawk-styler) | Your own colors, font, transparency and blur for the Windhawk window. |
 | <img src="media/previews/npp-taskdlg-textcolor.png" width="220" alt="Notepad++ dark dialog"> | [Notepad++ Dark Dialog Fix](mods/local/npp-taskdlg-textcolor) | Readable text in Notepad++ Save and confirm dialogs in dark mode. |
 
@@ -193,6 +194,7 @@ Most of my mods build on someone else's mod. Each folder's readme credits its so
 | **bropines** ([GitHub](https://github.com/bropines)) | Improvements to Simple Window Switcher. |
 | **valinet** ([Simple Window Switcher](https://github.com/valinet/sws)) | The original Simple Window Switcher. |
 | **caliberda** ([Alt+Tab Flip 3D](https://windhawk.net/mods/alt-tab-flip-3d)) | The Vista rendering in Simple Window Switcher Plus (MIT). |
+| **caliberda** ([AI Voice Typing](https://windhawk.net/mods/ai-voice-typing)) | The base of Seamless Dictate (MIT). |
 | **0Allu** ([Better Volume Mixer](https://windhawk.net/mods/better-volume-mixer)) | The base of Better Volume Mixer Plus. |
 | **Gabriela Cristei** ([Explorer Font Changer](https://windhawk.net/mods/explorer-font-changer)) | The base of Shell Font Changer Plus. |
 | **bardelyne** ([Everything & Power Tools in the Start Menu](https://windhawk.net/mods/start-everything)) | The base of the Plus version. |
