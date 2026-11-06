@@ -2,7 +2,7 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.103
+// @version         2.0.104
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -469,7 +469,9 @@ static std::string BuildPolishCss(const Settings& s) {
     // (button left 448 == meta title left 448) and at y 274 where all three
     // wrappers end. The app truncates titles with its own EllipsisText
     // component, so the antd-level clipping is redundant. Let halos breathe.
-    css += ".ant-card-meta-title,.ant-card-meta-section,.ant-card-head-title{overflow:visible !important;}";
+    // Scoped to the details card only: unscoped, it let the Explore cards'
+    // process list run past the card edge (owner report 2026-11-07).
+    css += "[class*=\"ModDetailsCard\"] .ant-card-meta-title,[class*=\"ModDetailsCard\"] .ant-card-meta-section,[class*=\"ModDetailsCard\"] .ant-card-head-title{overflow:visible !important;}";
     css += ".ant-table-tbody>tr.ant-table-row:hover>td:first-child{box-shadow:inset 2px 0 0 " + (s.accent.empty() ? std::string("rgba(255,255,255,0.3)") : s.accent) + ";}";
     return css;
 }
