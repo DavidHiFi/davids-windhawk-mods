@@ -1,5 +1,16 @@
 # Release verification
 
+## 2.0.93 (2026-11-02)
+
+Checked in the live interface through the mod's debugging port, read-only: synthetic mouseover, no OS clicks, no focus changes.
+
+- Every floating surface (tooltips, modal, drawer, notification, message boxes) now paints one solid card surface, `color-mix(in srgb, rgb(24, 24, 37) 94%, #ffffff)` with `backdrop-filter: none` - the same material popovers and drop-down menus already used. The icon-button tooltip computes to `color(srgb 0.148 0.148 0.196)` with its shadow on the container.
+- Why: measured on the acrylic page, the blur behind a floating box never hid the text under it. The "Open in browser" tooltip, the mod author pop-up and a plain test div all let the page text through the last percent sharp (owner screenshot 2026-11-02 plus three pinned captures).
+- Verified: with the tooltip pinned over the description text, no glyphs show through its box; the padding strips measure a 35-spread from the corner ring only, no glyph structure (`2026-11-02-styler-popout-after.png`).
+- Correction to the 2.0.92 note: dropping the tooltip's filter was necessary, but the blur itself cannot hide text on this page; the pop-up only ever looked right because of its tint.
+- Not checked: a modal or drawer open on screen. They share the rule verified on the tooltip.
+
+
 ## 2.0.77 to 2.0.82 (2026-10-27)
 
 Checked on Windows 11 with Windhawk 2.0.0 alpha 8 in the live interface through its debugging port, from the installed mod.

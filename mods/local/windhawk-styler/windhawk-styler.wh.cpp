@@ -2,13 +2,14 @@
 // @id              windhawk-styler
 // @name            Windhawk Styler
 // @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.92
+// @version         2.0.103
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @license         MIT
 // @include         windhawk-ui.exe
+// @include         windhawk.exe
 // @architecture    x86-64
 // @compilerOptions -DWIN32_LEAN_AND_MEAN -luser32 -lgdi32 -ldwmapi -lws2_32 -ladvapi32 -lcomctl32 -luxtheme
 // ==/WindhawkMod==
@@ -24,9 +25,10 @@ Choose Windhawk's colors, font, transparency and background blur.
 ## Features
 
 - **Background.** Pick a color and opacity, with Acrylic or no background effect.
-- **Cards and dialogs.** Set their color and opacity. Cards, tables, Advanced settings, dialogs and pop-up menus use that surface, with blur when translucent. Every box has one outline, the same color all the way around its corners.
-- **Controls.** Choose colors for buttons and inputs, plus a global accent for selections, hovers, badges, spinners, links and modified settings. Number spinners sit in a rounded pill. The save bar floats while the settings scroll and blurs the rows behind it, and mode and version switches join into single pills.
+- **Cards and dialogs.** Set their color and opacity. Cards, tables, Advanced settings, dialogs and pop-up menus use that surface; pop-ups that float over the page take a solid card surface so text under them stays hidden. Every box has one outline, the same color all the way around its corners.
+- **Controls.** Choose colors for buttons and inputs, plus a global accent for selections, hovers, badges, spinners, links and modified settings. Number spinners sit in a rounded pill. The save bar floats while the settings scroll, and mode and version switches join into single pills.
 - **Corners.** Round cards, tables, dialogs, pop-up menus, buttons and inputs with an adjustable radius, or keep Windhawk's squared look.
+- **Tray pop-ups.** The Mod tasks in progress and Loaded mods windows from the taskbar icon use the same colors as the rest of the theme.
 - **Text and font.** Use an installed font and a text color. Icons keep their own font and stay centered in their buttons.
 - **Title bar.** Match the background or choose a solid color. Right-click the title bar, click the app icon or press Alt+Space for the Windows window menu. The app icon keeps its normal size, and Windows handles dragging and window buttons.
 - **Removal.** Disable the mod to reopen the interface with Windhawk's appearance. The mod changes no application files.
@@ -70,7 +72,7 @@ The original window frame work was adapted from [Titlebar For Everyone](https://
   $description: "Mod cards, pages, dialogs and pop-up menus. Leave blank for Windhawk's colors"
 - cardOpacity: 100
   $name: Card and dialog opacity
-  $description: "0 is transparent, 100 is solid. Translucent dialogs and menus blur what is behind them"
+  $description: "0 is transparent, 100 is solid. Pop-ups that float over the page stay solid so text under them stays hidden"
 - roundedCorners: true
   $name: Rounded element corners
   $description: "Round the corners of cards, tables, buttons, inputs and dialogs. Turn off for the stock squared look"
@@ -89,6 +91,15 @@ The original window frame work was adapted from [Titlebar For Everyone](https://
 - fontFamily: "Segoe UI"
   $name: Font
   $description: "Use an installed font for the interface. Leave blank for Windhawk's font. The title bar keeps the Windows font"
+- fontWeight: 500
+  $name: Font weight
+  $description: "Weight of normal text. Bold labels stay bolder. The font must include that weight"
+  $options:
+  - 300: Light
+  - 400: Regular
+  - 500: Medium
+  - 600: Semibold
+  - 700: Bold
 - nativeTitleBar: true
   $name: Style the title bar
   $description: "Apply the theme to the title bar and keep the normal Windows buttons"
@@ -121,6 +132,7 @@ The original window frame work was adapted from [Titlebar For Everyone](https://
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
+#include <cwchar>
 
 // The local debugging port for reaching the interface's own WebView; not a
 // user setting, so it stays out of the interface's settings page entirely.
@@ -159,6 +171,7 @@ struct Settings {
     std::string text;
     std::uint32_t textRgb = 0;            // RRGGBB; s.text records whether a color is set
     std::wstring font;
+    int fontWeight = 400;
     bool nativeTitleBar = true;
     std::uint32_t titleBarRgb = 0x403a45;  // RRGGBB
     bool titleBarColorSet = true;
@@ -264,6 +277,8 @@ static void ReadSettings(Settings* s) {
     PCWSTR font = Wh_GetStringSetting(L"fontFamily");
     if (font && *font) s->font = font;
     Wh_FreeStringSetting(font);
+    s->fontWeight = Wh_GetIntSetting(L"fontWeight");
+    if (s->fontWeight < 100 || s->fontWeight > 900) s->fontWeight = 400;
 
     s->nativeTitleBar = Wh_GetIntSetting(L"nativeTitleBar") != 0;
     s->titleBarAcrylic = Wh_GetIntSetting(L"titleBarAcrylic") != 0;
@@ -333,7 +348,8 @@ static std::string JsonEscape(const std::string& in) {
 }
 
 // Every box that takes the card color. Rounded corners and the card surface
-// apply to this list; the blur applies to kFloatingSurfaces and kPopoverSurfaces only.
+// apply to this list; the solid popup material applies to kFloatingSurfaces
+// and kPopoverSurfaces only.
 static const char kSurfaces[] =
     ".ant-card,[class*=\"SaveSettingsCard\"],.ant-table,.ant-collapse,.ant-modal-content,.ant-modal-container,"
     ".ant-drawer-content,.ant-drawer-section,.ant-popover-inner,.ant-popover-container,.ant-select-dropdown,.ant-picker-dropdown,"
@@ -344,10 +360,10 @@ static const char kSurfaces[] =
 // absolutely positioned by the interface and keep their own position. The
 // save card is left out: the interface positions it sticky so it floats
 // while the settings scroll, and forcing relative would pin it to the page.
-// Surfaces that float over other page content and blur it. In-flow cards stay
-// unblurred: CSS blur cannot reach the DWM backdrop behind the page, and a
-// blurred card becomes the backdrop root of everything inside it, so the
-// sticky save bar in the mod page card could only blur the card itself.
+// Surfaces that float over other page content. In-flow cards stay plain:
+// CSS cannot reach the DWM backdrop behind the page, and a filtered card
+// becomes the backdrop root of everything inside it, so the sticky save
+// bar in the mod page card could only ever blur the card itself.
 static const char kFloatingSurfaces[] =
     "[class*=\"SaveSettingsCard\"],.ant-modal-content,.ant-modal-container,.ant-drawer-content,.ant-drawer-section,"
     ".ant-tooltip-inner,.ant-tooltip-container,.ant-notification-notice,.ant-message-notice-content";
@@ -366,6 +382,97 @@ static const char kRelativeSurfaces[] =
     ".ant-card:not([class*=\"SaveSettingsCard\"]),.ant-table,.ant-collapse,.ant-modal-content,.ant-modal-container,"
     ".ant-drawer-content,.ant-drawer-section,.ant-popover-inner,.ant-popover-container,.ant-dropdown-menu,.ant-tooltip-inner,.ant-tooltip-container,"
     ".ant-notification-notice,.ant-message-notice-content";
+
+// Motion and glow layer: one place for every transition and hover halo.
+// Glow uses the accent when set, otherwise a soft white. Reduced-motion
+// users get no transitions.
+// Error and info pop-ups (top right) in Catppuccin Mocha: a solid base
+// (measured 2026-11-06: backdrop-filter never blurs the page in this
+// WebView, text behind showed sharp at 72% and 96%), Mocha text and status colors, and an accent
+// glow on hover. The notice root carries no filter, so the blur reads the
+// page under it.
+static std::string BuildNoticeCss(const Settings& s) {
+    const std::string glow = s.accent.empty() ? "rgba(137,180,250,0.35)" : RgbaFromRgb(s.accentRgb, 35);
+    const std::string ring = s.accent.empty() ? "rgba(137,180,250,0.55)" : RgbaFromRgb(s.accentRgb, 55);
+    const std::string n = ".ant-notification .ant-notification-notice";
+    const std::string m = ".ant-message .ant-message-notice-content";
+    std::string css;
+    css += ".ant-notification,.ant-notification-notice-wrapper,.ant-message,.ant-message-notice{filter:none !important;}";
+    // antd paints its own box on the stack wrapper and clips it: that box
+    // peeked out as a pill between stacked notices and cut the bottom border.
+    css += ".ant-notification-notice-wrapper{background:transparent !important;box-shadow:none !important;border:none !important;overflow:visible !important;}";
+    css += ".ant-notification-notice-wrapper::before,.ant-notification-notice-wrapper::after{display:none !important;}";
+    // The stack places notices by measured height, which runs short with a
+    // wider font, so they overlapped. List them in normal flow instead.
+    // Measured 2026-11-06: notices are absolute at --notification-y, spaced by
+    // a height read before the font loaded (177px apart, 207px tall), so each
+    // covered the bottom of the one above. A flex column spaces them by real height.
+    // Ant Design reserves ::after as a 16px stack spacer; it cannot carry our surface ring.
+    css += ".ant-notification .ant-notification-notice::before,.ant-notification .ant-notification-notice::after{display:none !important;content:none !important;}";
+    // Ant Design's stack mode clips every notice but the newest to its top
+    // half until the stack is hovered (the collapsed deck look), which slices
+    // our full-height cards mid-text with no bottom border. Measured 2026-11-06:
+    // collapsed notices computed clip-path inset(-48px -48px 50%). Keep every
+    // notice unclipped in all stack states; the deck never overlaps here anyway.
+    css += ".ant-notification .ant-notification-notice{clip-path:none !important;}";
+    css += ".ant-notification-list-content{height:auto !important;display:flex !important;flex-direction:column !important;gap:12px !important;}";
+    css += ".ant-notification-list-content>.ant-notification-notice{position:relative !important;transform:none !important;inset:auto !important;opacity:1 !important;pointer-events:auto !important;margin:0 !important;}";
+    css += n + "," + m + "{background:linear-gradient(180deg,rgba(49,50,68,0.55),rgba(30,30,46,0) 60%),#1e1e2e !important;backdrop-filter:blur(28px) saturate(160%) !important;"
+           "border:1px solid rgba(88,91,112,0.55) !important;box-shadow:0 10px 30px rgba(17,17,27,0.55) !important;color:#cdd6f4 !important;"
+           "transition:box-shadow .18s cubic-bezier(0.2,0,0,1),border-color .18s cubic-bezier(0.2,0,0,1) !important;}";
+    css += n + ":hover," + m + ":hover{border-color:" + ring + " !important;box-shadow:0 10px 30px rgba(17,17,27,0.55),0 0 22px " + glow + " !important;}";
+    css += n + " .ant-notification-notice-title," + n + " .ant-notification-notice-message{color:#cdd6f4 !important;}";
+    css += n + " .ant-notification-notice-description{color:#bac2de !important;}";
+    css += n + " .ant-notification-notice-close{color:#a6adc8 !important;border-radius:6px;}";
+    css += n + " .ant-notification-notice-close:hover{color:#f38ba8 !important;background:rgba(243,139,168,0.12) !important;}";
+    css += ".ant-notification-notice-icon-error,.ant-message-error .anticon{color:#f38ba8 !important;}";
+    css += ".ant-notification-notice-icon-success,.ant-message-success .anticon{color:#a6e3a1 !important;}";
+    css += ".ant-notification-notice-icon-warning,.ant-message-warning .anticon{color:#f9e2af !important;}";
+    css += ".ant-notification-notice-icon-info,.ant-message-info .anticon{color:#89b4fa !important;}";
+    css += "@media (prefers-reduced-motion:reduce){" + n + "," + m + "{transition:none !important;}}";
+    return css;
+}
+
+static std::string BuildPolishCss(const Settings& s) {
+    const std::string glow = s.accent.empty() ? "rgba(255,255,255,0.18)" : RgbaFromRgb(s.accentRgb, 34);
+    const std::string glowSoft = s.accent.empty() ? "rgba(255,255,255,0.10)" : RgbaFromRgb(s.accentRgb, 20);
+    const std::string ease = "cubic-bezier(0.2,0,0,1)";
+    std::string css;
+    // Table cells: the sticky Status column paints antd's own dark fill, which
+    // showed as a dark block beside tall rows. Let the row color through.
+    css += ".ant-table-tbody>tr>td.ant-table-cell-fix-right,.ant-table-tbody>tr>td.ant-table-cell-fix-left,"
+           ".ant-table-tbody>tr>td.ant-table-cell-fix-right-first,.ant-table-tbody>tr>td.ant-table-cell-fix-left-last,"
+           ".ant-table-tbody>tr>td[rowspan]{background-color:transparent !important;}";
+    css += ".ant-table-tbody>tr.ant-table-row:hover>td.ant-table-cell-fix-right,.ant-table-tbody>tr.ant-table-row:hover>td.ant-table-cell-fix-left{background-color:rgba(255,255,255,0.04) !important;}";
+    css += "@media (prefers-reduced-motion:no-preference){";
+    css += ".ant-btn,.ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-input-number,.ant-picker,.ant-segmented-item,"
+           ".ant-card,.ant-table-tbody>tr>td,.ant-tabs-tab,.ant-menu-item,.ant-dropdown-menu-item,.ant-select-item,.ant-switch,"
+           ".ant-checkbox-inner,.ant-radio-inner,.ant-radio-button-wrapper,[class*=\"CardTitleModId\"],.ant-ribbon"
+           "{transition:background-color .18s " + ease + ",border-color .18s " + ease + ",box-shadow .22s " + ease + ",color .18s " + ease + ",transform .18s " + ease + " !important;}";
+    css += ".ant-segmented-thumb{transition:transform .26s " + ease + ",width .26s " + ease + " !important;}";
+    css += ".ant-tabs-ink-bar{transition:left .26s " + ease + ",width .26s " + ease + " !important;}";
+    css += ".ant-modal-content,.ant-popover-container,.ant-dropdown-menu,.ant-select-dropdown{animation:whs-pop .18s " + ease + ";}";
+    css += "@keyframes whs-pop{from{opacity:0;transform:translateY(4px) scale(.985);}to{opacity:1;transform:none;}}";
+    css += "}";
+    // Hover halos: buttons, inputs, pills and cards lift into a soft outer glow.
+    css += ".ant-btn:not(:disabled):hover,.ant-input:hover,.ant-input-affix-wrapper:hover,.ant-select:not(.ant-select-disabled):hover .ant-select-selector,"
+           ".ant-input-number:hover,.ant-picker:hover,.ant-segmented:hover,.ant-radio-button-wrapper:hover,[class*=\"CardTitleModId\"]:hover"
+           "{box-shadow:0 0 0 1px " + glowSoft + ",0 0 14px " + glow + " !important;}";
+    css += ".ant-btn:not(:disabled):active{transform:scale(.97);}";
+    css += ".ant-switch:hover,.ant-checkbox-wrapper:hover .ant-checkbox-inner,.ant-radio-wrapper:hover .ant-radio-inner{box-shadow:0 0 10px " + glow + " !important;}";
+    css += ".ant-card:not([class*=\"SaveSettingsCard\"]):not([class*=\"ModDetailsCard\"]):hover{box-shadow:0 0 0 1px " + glowSoft + ",0 4px 22px " + glowSoft + " !important;}";
+    css += ".ant-tabs-tab:hover,.ant-menu-item:hover{text-shadow:0 0 10px " + glow + ";}";
+    css += ".ant-btn-primary:not(:disabled):hover{box-shadow:0 0 18px " + glow + " !important;}";
+    // antd clips card meta and head titles to their boxes, which shears the
+    // hover halos of buttons inside them. Measured 2026-11-06 on the mod
+    // details page: the Disable halo was cut at the meta title's left edge
+    // (button left 448 == meta title left 448) and at y 274 where all three
+    // wrappers end. The app truncates titles with its own EllipsisText
+    // component, so the antd-level clipping is redundant. Let halos breathe.
+    css += ".ant-card-meta-title,.ant-card-meta-section,.ant-card-head-title{overflow:visible !important;}";
+    css += ".ant-table-tbody>tr.ant-table-row:hover>td:first-child{box-shadow:inset 2px 0 0 " + (s.accent.empty() ? std::string("rgba(255,255,255,0.3)") : s.accent) + ";}";
+    return css;
+}
 
 static std::string BuildCss(const Settings& s) {
     std::string veil = CssVeil(s);
@@ -482,7 +589,21 @@ static std::string BuildCss(const Settings& s) {
         }
         css += "font-family:'" + fontCss + "',monospace !important;";
     }
-    css += "}";
+    css += "font-weight:" + std::to_string(s.fontWeight) + " !important;}";
+    if (!s.font.empty()) {
+        std::string fontCss;
+        for (wchar_t c : s.font) fontCss += (c == L'\'' || c == L'\\' || c < 32 || c > 126) ? ' ' : (char)c;
+        // Every text element takes the font, form controls and pop-ups
+        // included (they do not inherit it). The code editor keeps its own
+        // font so its cursor and column math stay right.
+        css += ":root{--ant-font-family:'" + fontCss + "',monospace !important;--ant-font-family-code:'" + fontCss + "',monospace !important;}";
+        css += "body *:not(.monaco-editor):not(.monaco-editor *):not(.anticon):not(svg):not(svg *){font-family:'" + fontCss + "',monospace !important;}";
+    }
+    // Controls hardcode the normal weight; give them the chosen one.
+    css += "button,input,textarea,select,.ant-btn,.ant-input,.ant-select-selector,.ant-select-item-option-content,.ant-menu-item,.ant-tabs-tab-btn,"
+           ".ant-card-meta-description,.ant-checkbox-wrapper,.ant-radio-wrapper,.ant-form-item-label>label,.ant-dropdown-menu-item,.ant-tooltip-inner,"
+           ".ant-notification-notice-description,.ant-message-notice-content,.ant-segmented-item-label,.ant-empty-description,td,li,p"
+           "{font-weight:" + std::to_string(s.fontWeight) + " !important;}";
     css += "[data-testid=mod-setting-reset]{margin-inline-start:0!important;}";
     // Buttons with an icon center it on both axes; the text font's line
     // height otherwise drops icons below center. The page buttons get a gap.
@@ -529,13 +650,12 @@ static std::string BuildCss(const Settings& s) {
         css += ".ant-collapse-header{background-color:" + cardColor + " !important;border-radius:0 !important;}";
         css += ".ant-collapse-content{background-color:" + cardColor + " !important;border-color:rgba(255,255,255,0.08) !important;border-radius:0 !important;}";
         if (s.cardOpacity < 100) {
-            // The renderer blurs page text only where the backdrop under it is
-            // opaque. In Acrylic mode the page is transparent down to DWM, so
-            // the save bar left the settings text sharp. Floating surfaces keep
-            // at least 92% of the card color so text behind them stays unreadable.
-            Settings floating = s;
-            floating.cardOpacity = s.cardOpacity < 92 ? 92 : s.cardOpacity;
-            css += std::string(kFloatingSurfaces) + "{background-color:" + CssCardColor(floating) + " !important;backdrop-filter:blur(16px) !important;}";
+            // Measured 2026-11-02: on the acrylic page a backdrop filter behind a
+            // floating box never hides the text under it. The page shows through
+            // the last percent sharp on the icon tooltips, the mod author pop-up
+            // and a plain test div alike, so every floating surface gets the
+            // popover treatment: one solid card surface, no backdrop filter.
+            css += std::string(kFloatingSurfaces) + "{background-color:color-mix(in srgb," + s.card + " 94%,#ffffff) !important;backdrop-filter:none !important;}";
             css += std::string(kPopoverSurfaces) + "{background-color:color-mix(in srgb," + s.card + " 94%,#ffffff) !important;backdrop-filter:none !important;}";
             // antd draws the popover shadow as a filter on the outer
             // .ant-popover. A filter makes that element the backdrop root, so
@@ -576,8 +696,13 @@ static std::string BuildCss(const Settings& s) {
         // hugs the rounded edge with no gap at the top, bottom or arcs.
         css += ".ant-btn:focus-visible,.ant-input:focus-visible,.ant-select-selector:focus-visible,.ant-input-number:focus-visible,.ant-picker:focus-visible,.ant-checkbox-input:focus-visible+.ant-checkbox-inner,.ant-radio-input:focus-visible+.ant-radio-inner{outline:2px solid " + s.accent + " !important;outline-offset:-1px;}";
         // The search input sits inside an affix wrapper, which owns the focus
-        // ring. Clear the nested input ring so the search control has one outline.
-        css += ".ant-input-affix-wrapper>.ant-input:focus,.ant-input-affix-wrapper>.ant-input:focus-visible{border-color:transparent !important;box-shadow:none !important;outline:none !important;}";
+        // ring, hover border and every other state. The nested input draws
+        // none of it: a second box inside the search field read as a stray
+        // selected rectangle, so it stays chrome-free in every state.
+        css += ".ant-input-affix-wrapper>input.ant-input,.ant-input-affix-wrapper>input.ant-input:hover,"
+               ".ant-input-affix-wrapper>input.ant-input:focus,.ant-input-affix-wrapper>input.ant-input:focus-visible,"
+               ".ant-input-affix-wrapper>input.ant-input:active"
+               "{background:transparent !important;border:none !important;box-shadow:none !important;outline:none !important;}";
         css += ".ant-tabs-tab-active .ant-tabs-tab-btn{color:" + s.accent + " !important;}";
         css += ".ant-tabs-ink-bar{background-color:" + s.accent + " !important;}";
         css += ".ant-menu-item-selected{color:" + s.accent + " !important;}";
@@ -721,6 +846,8 @@ static std::string BuildCss(const Settings& s) {
         css += "#root{position:fixed;inset:" + height + " 0 0 0;height:auto !important;margin:0 !important;overflow:hidden !important;}";
         css += "#root>[class*=\"Panel__PanelContainer\"],#root>[class*=\"Panel__PanelContainer\"]>[class*=\"Panel__MainArea\"]{height:100% !important;min-height:0 !important;}";
     }
+    css += BuildPolishCss(s);
+    css += BuildNoticeCss(s);
     return css;
 }
 
@@ -836,6 +963,153 @@ static void ClearWindowStack(HWND hWnd) {
     data.Size = sizeof(policy);
     data.Data = &policy;
     SetWindowCompositionAttribute(hWnd, &data);
+}
+
+// ---- Native tray pop-ups -------------------------------------------------
+//
+// The taskbar icon and its dialogs ("Mod tasks in progress", "Loaded mods")
+// belong to windhawk.exe, not to the Tauri interface, so the mod loads there
+// too and themes them in place: the frame from the same DWM pass the main
+// window gets, the dialog background from its own erase and the list rows
+// from ListView messages. Everything else - the webview theme, the save
+// watch, the relaunch helper - stays with the interface process only.
+
+static bool g_isUiProcess = false;
+
+struct TrayDialogState {
+    HWND list = nullptr;
+    long long epoch = 0;  // settings generation the colors were pushed with
+};
+static std::map<HWND, TrayDialogState> g_trayDialogs;
+static std::mutex g_trayDialogsMutex;
+static volatile long long g_trayEpoch = 1;
+
+static COLORREF CssColorToColorref(const std::string& css) {
+    unsigned r = 0, g = 0, b = 0;
+    if (sscanf_s(css.c_str(), "rgb(%u,%u,%u)", &r, &g, &b) == 3) return RGB(r, g, b);
+    return 0;
+}
+
+// A pop-up is a transient solid surface: card when set, else the background.
+static COLORREF TraySurfaceColor(const Settings& s) {
+    if (!s.card.empty()) return CssColorToColorref(s.card);
+    return Bgr(s.background);
+}
+
+static COLORREF TrayTextColor(const Settings& s) {
+    return s.text.empty() ? 0 : Bgr(s.textRgb);
+}
+
+static std::mutex g_trayBrushMutex;
+static COLORREF g_trayBrushColor = 0;
+static HBRUSH g_trayBrush = nullptr;
+
+static HBRUSH TrayBrush(COLORREF color) {
+    std::lock_guard<std::mutex> lock(g_trayBrushMutex);
+    if (!g_trayBrush || g_trayBrushColor != color) {
+        if (g_trayBrush) DeleteObject(g_trayBrush);
+        g_trayBrush = CreateSolidBrush(color);
+        g_trayBrushColor = color;
+    }
+    return g_trayBrush;
+}
+
+static void ApplyTrayDialogLook(HWND dialog, HWND list, const Settings& s) {
+    COLORREF surface = TraySurfaceColor(s);
+    // LVM_SETBKCOLOR / LVM_SETTEXTBKCOLOR / LVM_SETTEXTCOLOR: rows take the
+    // theme surface and text, so the list melts into the dialog with no box.
+    SendMessageW(list, 0x1026, 0, (LPARAM)surface);
+    SendMessageW(list, 0x1027, 0, (LPARAM)surface);
+    if (COLORREF text = TrayTextColor(s)) SendMessageW(list, 0x1024, 0, (LPARAM)text);
+    ApplyWindowStack(dialog, s);
+    InvalidateRect(dialog, nullptr, TRUE);
+}
+
+static LRESULT CALLBACK TrayDialogProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam,
+                                       DWORD_PTR refData) {
+    if (message == WM_NCDESTROY) {
+        {
+            std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+            g_trayDialogs.erase(hWnd);
+        }
+        WindhawkUtils::RemoveWindowSubclassFromAnyThread(hWnd, TrayDialogProc);
+        return DefSubclassProc(hWnd, message, wParam, lParam);
+    }
+    if (InterlockedExchangeAdd(&g_themeActive, 0)) {
+        Settings s = SnapshotSettings();
+        switch (message) {
+            case WM_ERASEBKGND: {
+                RECT rect;
+                GetClientRect(hWnd, &rect);
+                FillRect((HDC)wParam, &rect, TrayBrush(TraySurfaceColor(s)));
+                return 1;
+            }
+            case WM_CTLCOLORDLG:
+            case WM_CTLCOLORSTATIC:
+            case WM_CTLCOLORBTN: {
+                HDC dc = (HDC)wParam;
+                COLORREF surface = TraySurfaceColor(s);
+                SetBkColor(dc, surface);
+                if (COLORREF text = TrayTextColor(s)) SetTextColor(dc, text);
+                return (LRESULT)TrayBrush(surface);
+            }
+        }
+    }
+    return DefSubclassProc(hWnd, message, wParam, lParam);
+}
+
+static bool IsTrayTaskDialog(HWND hWnd) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hWnd, &pid);
+    if (pid != GetCurrentProcessId()) return false;
+    wchar_t cls[64];
+    if (!GetClassNameW(hWnd, cls, 64) || wcscmp(cls, L"#32770") != 0) return false;
+    return FindWindowExW(hWnd, nullptr, L"SysListView32", nullptr) != nullptr;
+}
+
+static BOOL CALLBACK TrayDialogEnumProc(HWND hWnd, LPARAM lParam) {
+    if (!IsTrayTaskDialog(hWnd)) return TRUE;
+    bool fresh = false;
+    {
+        std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+        fresh = !g_trayDialogs.contains(hWnd);
+        if (fresh) g_trayDialogs[hWnd] = {FindWindowExW(hWnd, nullptr, L"SysListView32", nullptr), 0};
+    }
+    if (fresh && WindhawkUtils::SetWindowSubclassFromAnyThread(hWnd, TrayDialogProc, 0)) {
+        DebugNote("tray dialog themed");
+    }
+    return TRUE;
+}
+
+static void TrayDialogPass(const Settings& s) {
+    {
+        std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+        for (auto it = g_trayDialogs.begin(); it != g_trayDialogs.end();) {
+            if (!IsWindow(it->first)) it = g_trayDialogs.erase(it);
+            else ++it;
+        }
+    }
+    EnumWindows(TrayDialogEnumProc, 0);
+    long long epoch = InterlockedExchangeAdd64(&g_trayEpoch, 0);
+    // Copy the due dialogs out under the lock, then push the colors with no
+    // lock held: the sends run on the dialog's own thread, which can be in
+    // WM_NCDESTROY waiting for the same mutex.
+    std::map<HWND, HWND> due;
+    {
+        std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+        for (auto& [dialog, state] : g_trayDialogs) {
+            if (IsWindow(dialog) && state.epoch != epoch) due[dialog] = state.list;
+        }
+    }
+    for (auto& [dialog, list] : due) {
+        if (!IsWindow(dialog)) continue;
+        list = FindWindowExW(dialog, nullptr, L"SysListView32", nullptr);
+        if (!list) continue;
+        ApplyTrayDialogLook(dialog, list, s);
+        std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+        auto it = g_trayDialogs.find(dialog);
+        if (it != g_trayDialogs.end()) it->second.epoch = epoch;
+    }
 }
 
 static bool IsOurMainUiWindow(HWND hWnd) {
@@ -1819,6 +2093,20 @@ static DWORD WINAPI StylerWorkerThread(LPVOID) {
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) DispatchMessageW(&msg);
         if (wait == WAIT_OBJECT_0 + 1) continue;  // the events already ran their sync
 
+        // Outside the interface process (engine, tray) the only job is the
+        // native tray dialogs: the webview theme, the save watch and the
+        // relaunch helper all belong to windhawk-ui.exe.
+        if (!g_isUiProcess) {
+            Settings s;
+            ReadSettings(&s);
+            {
+                std::lock_guard<std::mutex> lock(g_settingsMutex);
+                g_settings = s;
+            }
+            TrayDialogPass(s);
+            continue;
+        }
+
         // re-read the registry every cycle: cheap, and it pins the live look
         // to the settings even if a settings-changed event is missed
         Settings s;
@@ -2016,6 +2304,13 @@ static BOOL SpawnRelaunchHelper() {
 BOOL Wh_ModInit() {
     Wh_Log(L">");
 
+    wchar_t image[MAX_PATH];
+    if (GetModuleFileNameW(nullptr, image, MAX_PATH)) {
+        PCWSTR name = wcsrchr(image, L'\\');
+        name = name ? name + 1 : image;
+        g_isUiProcess = _wcsicmp(name, L"windhawk-ui.exe") == 0;
+    }
+
     g_startTick = GetTickCount64();
     ReadSettings(&g_settings);
     // Seed the save watch with the marker as it stands now: a fresh boot (or
@@ -2023,14 +2318,16 @@ BOOL Wh_ModInit() {
     // later bump restarts the interface.
     g_seenChangeTime = ReadModChangeTime();
 
-    // Ask the WebView2 loader for a local debugging port, so the mod can push
-    // the theme tokens and the font into the interface's own page. Must be set
-    // before the webview environment is created, which is why this runs in the
-    // process's earliest startup.
-    {
-        wchar_t args[64];
-        swprintf(args, 64, L"--remote-debugging-port=%u", kCdpPort);
-        SetEnvironmentVariableW(L"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", args);
+    if (g_isUiProcess) {
+        // Ask the WebView2 loader for a local debugging port, so the mod can push
+        // the theme tokens and the font into the interface's own page. Must be set
+        // before the webview environment is created, which is why this runs in the
+        // process's earliest startup.
+        {
+            wchar_t args[64];
+            swprintf(args, 64, L"--remote-debugging-port=%u", kCdpPort);
+            SetEnvironmentVariableW(L"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", args);
+        }
     }
 
     g_stopEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
@@ -2038,11 +2335,13 @@ BOOL Wh_ModInit() {
         g_workerThread = CreateThread(nullptr, 0, StylerWorkerThread, nullptr, 0, nullptr);
     }
 
-    InitFrameWatch();
-    if (!Wh_SetFunctionHook((void*)BitBlt, (void*)BitBlt_hook, (void**)&BitBlt_orig)) {
-        DebugNote("startup splash hook failed");
+    if (g_isUiProcess) {
+        InitFrameWatch();
+        if (!Wh_SetFunctionHook((void*)BitBlt, (void*)BitBlt_hook, (void**)&BitBlt_orig)) {
+            DebugNote("startup splash hook failed");
+        }
+        PatchPutSites();
     }
-    PatchPutSites();
 
     return TRUE;
 }
@@ -2090,6 +2389,10 @@ void Wh_ModUninit() {
     g_captionChildren.clear();
     WindhawkUtils::RemoveAllWindowSubclasses();
     g_mainWindows.clear();
+    {
+        std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+        g_trayDialogs.clear();
+    }
     RestorePatches();
     // Only a real disable reopens the visible interface, not app exit or recompilation.
     if (reopen) SpawnRelaunchHelper();
@@ -2104,6 +2407,12 @@ void Wh_ModSettingsChanged() {
         g_settings = s;
     }
     ApplyToOurWindows(s);
-    // Both save paths feed the same restart request.
-    InterlockedExchange(&g_relaunchRequested, 1);
+    if (g_isUiProcess) {
+        // Both save paths feed the same restart request.
+        InterlockedExchange(&g_relaunchRequested, 1);
+    } else {
+        // The pop-up colors follow a save immediately, no restart needed.
+        InterlockedExchangeAdd64(&g_trayEpoch, 1);
+        TrayDialogPass(s);
+    }
 }
