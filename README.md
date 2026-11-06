@@ -69,6 +69,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 | <img src="media/previews/window-manager.gif" width="220" alt="Windows being dragged and snapped"> | [Window Manager Plus](mods/local/window-manager) | Move, resize, snap and send windows to other monitors with Alt+drag and shortcuts. |
 | <img src="media/previews/alt-snap-drag.gif" width="220" alt="Alt+drag moving a window"> | [AltSnap](mods/local/alt-snap-drag) | Alt+drag to move and resize any window, plus AltSnap's window shortcuts. |
 | <img src="media/previews/simple-window-switcher-plus.gif" width="220" alt="Vista-style Alt+Tab"> | [Simple Window Switcher Plus](mods/local/simple-window-switcher-plus) | Alt+Tab with Vista animations, background blur and elevated app support. |
+| <img src="media/previews/wintips-osd-plus.png" width="220" alt="Caps Lock On and Off cards with a blue to mauve gradient border"> | [WinTips OSD Plus](mods/local/wintips-osd-plus) | The Windows tips OSD rebuilt in Capuchin Mocha: gradient-border cards for lock keys and clipboard copy, cut and paste, with a count badge. |
 
 ### Start menu, Explorer and menus
 
