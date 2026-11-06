@@ -30,6 +30,7 @@ foreach ($target in @(@('64', 'x86_64-w64-mingw32'), @('32', 'i686-w64-mingw32')
         '-include', $header, '-include', 'windhawk_api.h', '-I', $include,
         '-Wl,--export-all-symbols', $source, $lib,
         '-luser32', '-ldwmapi', '-lgdi32', '-lshcore', '-lcomctl32', '-lshell32',
+        '-lshlwapi', '-ladvapi32',
         '-o', $output
     )
     & $compiler @arguments

@@ -1,15 +1,16 @@
+#include <shlwapi.h>
 // ==WindhawkMod==
 // @id              window-manager
 // @name            Window Manager Plus
 // @description     Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts
-// @version         1.2.3
+// @version         1.3.0
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         GPL-3.0
 // @include         *
 // @include         windhawk.exe
-// @compilerOptions -luser32 -ldwmapi -lgdi32 -lshcore -lcomctl32 -lshell32
+// @compilerOptions -luser32 -ldwmapi -lgdi32 -lshcore -lcomctl32 -lshell32 -lshlwapi -ladvapi32
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
 
@@ -145,6 +146,11 @@ static void MoveCursorToWindow(HWND hwnd) {
 
 //////// drag ////////
 namespace altSnapDrag {
+
+void LoadSettings();
+bool g_globalInput = false;
+std::wstring g_globalExclusions;
+
 
 // A fork of the alt-drag mod by m417z (https://github.com/m417z/my-windhawk-mods),
 // which is based on AltSnap by RamonUnch (https://github.com/RamonUnch/AltSnap)
@@ -345,6 +351,7 @@ thread_local struct {
     HWND hWnd;
     POINT startPt;
     bool dragged;
+    bool fromHook;
 } g_loop;
 
 // A press taken from this thread's queue for as long as the drag delay runs.
@@ -383,6 +390,16 @@ thread_local int g_contactButton;
 std::mutex g_lowLevelMouseHookMutex;
 HHOOK g_lowLevelMouseHook;
 DWORD g_lowLevelMouseHookThreadId;
+// The hook is installed on a thread of the mod's own, one per process. A low
+// level hook is called on the thread which installed it, and the thread which
+// retrieves the trigger's keys is the foreground window's: busy painting the
+// window being dragged, it held up every move of the pointer on the way to the
+// system, and the cursor trailed a drag which the system's loop ran smoothly.
+HANDLE g_lowLevelMouseHookThread;
+DWORD g_lowLevelMouseHookOwnThreadId;
+DPI_AWARENESS_CONTEXT g_lowLevelMouseHookDpiContext =
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2;
+constexpr UINT kInstallLowLevelMouseHookMessage = WM_APP + 1;
 // Set when a press was swallowed during the current hold with Alt held.
 std::atomic<bool> g_swallowedPress;
 
@@ -564,18 +581,6 @@ bool IsExplorerProcess() {
     }();
     return isExplorer;
 }
-
-// A press on the title strip only ever reaches a low level hook which is
-// already installed, so in Explorer the hook is held for as long as the
-// feature is on. One hook per Explorer process, resident in the input path.
-bool ShouldHoldExplorerStripHook() {
-    return g_settings.explorerTitleStripDrag && IsExplorerProcess();
-}
-
-// The message hook of each pumping thread installs the persistent hook on its
-// next message, which also puts it back if a settings change or a stray
-// removal took it down.
-std::atomic<bool> g_explorerStripHookWanted;
 
 // The button of a client or non-client button message, or 0 for any other
 // message. An X button is told by the high word of wParam, or of mouseData for
@@ -791,6 +796,9 @@ bool IsRootWindowHooked(HWND hRootWnd) {
 // (ShowWindowAsync) rather than replaying input, so they are safe there, and
 // the interface is the window this mod gets used on the most.
 bool IsWindhawkUiWindow(HWND hWnd) {
+    WCHAR cls[128]{};
+    if (GetClassNameW(hWnd, cls, ARRAYSIZE(cls)) &&
+        wcscmp(cls, L"AIVoiceTypingSettings_local@seamless-dictate") == 0) return true;
     static std::atomic<DWORD> s_pid{0};
     static std::atomic<bool> s_isUi{false};
     DWORD pid = GetWindowThreadProcessId(hWnd, nullptr);
@@ -819,11 +827,29 @@ bool IsWindhawkUiWindow(HWND hWnd) {
 }
 
 bool IsExcludedRootWindow(HWND hRootWnd) {
-    // A window of a thread without the mod's hooks, e.g. of a process the mod
-    // isn't loaded in, keeps its input as is. Windhawk's own interface is the
-    // exception: the engine never injects into it, and its actions are still
-    // wanted there.
-    if (!IsRootWindowHooked(hRootWnd) && !IsWindhawkUiWindow(hRootWnd)) {
+    if (!hRootWnd || !IsWindow(hRootWnd)) return true;
+    if (g_globalInput) {
+        DWORD pid = 0;
+        GetWindowThreadProcessId(hRootWnd, &pid);
+        if (pid == GetCurrentProcessId()) return true;
+        HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        if (!process) return true;
+        WCHAR path[32768];
+        DWORD size = ARRAYSIZE(path);
+        bool queried = QueryFullProcessImageNameW(process, 0, path, &size);
+        CloseHandle(process);
+        if (!queried) return true;
+        PCWSTR name = PathFindFileNameW(path);
+        size_t begin = 0;
+        while (begin < g_globalExclusions.size()) {
+            size_t end = g_globalExclusions.find(L'|', begin);
+            std::wstring pattern = g_globalExclusions.substr(begin, end - begin);
+            if (!pattern.empty() && (PathMatchSpecW(name, pattern.c_str()) ||
+                                     PathMatchSpecW(path, pattern.c_str()))) return true;
+            if (end == std::wstring::npos) break;
+            begin = end + 1;
+        }
+    } else if (!IsRootWindowHooked(hRootWnd) && !IsWindhawkUiWindow(hRootWnd)) {
         return true;
     }
 
@@ -885,12 +911,39 @@ WindowAction ActionFromSetting(PCWSTR value) {
     return WindowAction::None;
 }
 
+void RunWindowMenu(HWND hWnd, HWND owner, POINT pt);
+bool RunWindowActionNow(HWND hWnd, WindowAction action, POINT pt);
+
 bool RunWindowAction(HWND hWnd, WindowAction action, POINT pt) {
     if (action == WindowAction::None || !CanActOnRootWindow(hWnd)) return false;
 
     if (action == WindowAction::Menu) {
+        // The menu loop is modal, so it gets a thread of its own: on the
+        // input thread it would hold up the mouse and drop queued work.
+        struct MenuRequest { HWND hWnd; POINT pt; };
+        auto request = new MenuRequest{hWnd, pt};
+        HANDLE thread = CreateThread(nullptr, 0, [](void* p) WINAPI -> DWORD {
+            std::unique_ptr<MenuRequest> r((MenuRequest*)p);
+            HWND owner = CreateWindowEx(WS_EX_TOOLWINDOW, L"STATIC", L"", WS_POPUP,
+                                        r->pt.x, r->pt.y, 0, 0, nullptr, nullptr,
+                                        nullptr, nullptr);
+            if (!owner) return 0;
+            SetForegroundWindow(owner);
+            RunWindowMenu(r->hWnd, owner, r->pt);
+            DestroyWindow(owner);
+            return 0;
+        }, request, 0, nullptr);
+        if (!thread) { delete request; return false; }
+        CloseHandle(thread);
+        return true;
+    }
+    return RunWindowActionNow(hWnd, action, pt);
+}
+
+void RunWindowMenu(HWND hWnd, HWND owner, POINT pt) {
+    {
         HMENU menu = CreatePopupMenu();
-        if (!menu) return false;
+        if (!menu) return;
         constexpr std::array<std::pair<WindowAction, PCWSTR>, 7> items{{
             {WindowAction::Maximize, L"Maximize / restore"},
             {WindowAction::Minimize, L"Minimize"},
@@ -908,13 +961,15 @@ bool RunWindowAction(HWND hWnd, WindowAction action, POINT pt) {
             AppendMenu(menu, flags, i + 1, items[i].second);
         }
         int selected = TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON,
-                                        pt.x, pt.y, hWnd, nullptr);
+                                        pt.x, pt.y, owner, nullptr);
         DestroyMenu(menu);
-        if (selected > 0 && selected <= (int)items.size())
-            return RunWindowAction(hWnd, items[selected - 1].first, pt);
-        return true;
+        if (selected > 0 && selected <= (int)items.size() &&
+            CanActOnRootWindow(hWnd))
+            RunWindowActionNow(hWnd, items[selected - 1].first, pt);
     }
+}
 
+bool RunWindowActionNow(HWND hWnd, WindowAction action, POINT pt) {
     if (action == WindowAction::Maximize) {
         ShowWindowAsync(hWnd, IsZoomed(hWnd) ? SW_RESTORE : SW_MAXIMIZE);
     } else if (action == WindowAction::Minimize) {
@@ -925,16 +980,21 @@ bool RunWindowAction(HWND hWnd, WindowAction action, POINT pt) {
         HWND order = (GetWindowLongPtr(hWnd, GWL_EXSTYLE) & WS_EX_TOPMOST)
                          ? HWND_NOTOPMOST : HWND_TOPMOST;
         SetWindowPos(hWnd, order, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
     } else if (action == WindowAction::Lower) {
         SetWindowPos(hWnd, HWND_BOTTOM, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
     } else if (action == WindowAction::Center || action == WindowAction::SideSnap) {
         MONITORINFO monitor{.cbSize = sizeof(monitor)};
         RECT rc;
         if (!GetMonitorInfo(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST),
                             &monitor) || !GetWindowRect(hWnd, &rc)) return false;
-        if (IsZoomed(hWnd)) ShowWindowAsync(hWnd, SW_RESTORE);
+        if (IsZoomed(hWnd)) {
+            // The restore lands later, so size by the restored rectangle.
+            WINDOWPLACEMENT wp{sizeof(wp)};
+            if (GetWindowPlacement(hWnd, &wp)) rc = wp.rcNormalPosition;
+            ShowWindowAsync(hWnd, SW_RESTORE);
+        }
         const RECT& work = monitor.rcWork;
         int width = rc.right - rc.left;
         int height = rc.bottom - rc.top;
@@ -942,13 +1002,13 @@ bool RunWindowAction(HWND hWnd, WindowAction action, POINT pt) {
             SetWindowPos(hWnd, nullptr,
                          work.left + ((work.right - work.left) - width) / 2,
                          work.top + ((work.bottom - work.top) - height) / 2,
-                         0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                         0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
         } else {
             int half = (work.right - work.left) / 2;
             bool right = pt.x >= work.left + half;
             SetWindowPos(hWnd, nullptr, right ? work.left + half : work.left,
                          work.top, right ? work.right - work.left - half : half,
-                         work.bottom - work.top, SWP_NOZORDER | SWP_NOACTIVATE);
+                         work.bottom - work.top, SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
         }
     }
     return true;
@@ -972,6 +1032,8 @@ WindowAction MouseActionForMessage(UINT message, int button) {
 }
 
 bool HandleActionMouseMessage(MSG* msg, int button, bool down) {
+    // A press of the same button means its release was never seen here.
+    if (down && button == g_actionButton) g_actionButton = 0;
     if (!down && button == g_actionButton) {
         g_actionButton = 0;
         TakeMessage(msg);
@@ -988,7 +1050,7 @@ bool HandleActionMouseMessage(MSG* msg, int button, bool down) {
     HWND root = GetAncestor(msg->hwnd, GA_ROOT);
     if (!RunWindowAction(root, action, msg->pt)) return false;
     g_actionButton = button;
-    g_swallowedPress = true;
+    g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
     TakeMessage(msg);
     return true;
 }
@@ -1002,8 +1064,13 @@ bool HandleActionKeyMessage(MSG* msg) {
     }
     if (!down || msg->wParam == 0) return false;
     if (g_actionKey == (int)msg->wParam) {
-        TakeMessage(msg);
-        return true;
+        // Only auto-repeats belong to the press that ran the action; a fresh
+        // press means the release went elsewhere.
+        if (msg->lParam & (1 << 30)) {
+            TakeMessage(msg);
+            return true;
+        }
+        g_actionKey = 0;
     }
     DWORD modifiers = HeldModifiers(GetKeyState);
     for (size_t i = 0; i < g_settings.hotkeys.size(); i++) {
@@ -1012,7 +1079,7 @@ bool HandleActionKeyMessage(MSG* msg) {
             HWND root = GetAncestor(msg->hwnd, GA_ROOT);
             if (!root || !RunWindowAction(root, kHotkeyActions[i], msg->pt)) return false;
             g_actionKey = (int)msg->wParam;
-            g_swallowedPress = true;
+            g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
             TakeMessage(msg);
             return true;
         }
@@ -1085,10 +1152,6 @@ bool IsExplorerTitleStripPress(HWND hRootWnd, POINT pt) {
 // The drag a press of the button starts, given the modifier keys held, or 0.
 // When the press fits both triggers, the one with more keys is the closer fit.
 UINT DragCommandForPress(int button, DWORD held, HWND hRootWnd, POINT pt) {
-    if (g_settings.explorerTitleStripDrag && button == VK_LBUTTON && !held &&
-        IsExplorerTitleStripPress(hRootWnd, pt) && CanMoveRootWindow(hRootWnd)) {
-        return SC_MOVE | HTCAPTION;
-    }
     bool move = button == g_settings.moveTrigger.button &&
                 IsTriggerHeld(g_settings.moveTrigger, held) &&
                 CanMoveRootWindow(hRootWnd);
@@ -1180,7 +1243,7 @@ HWND CompositionHostedWindowFromPoint(POINT pt) {
         }
     }
 
-    return nullptr;
+    return g_globalInput && hWnd != GetDesktopWindow() ? hWnd : nullptr;
 }
 
 // Whether the system size/move loop is running on this thread.
@@ -1195,6 +1258,9 @@ bool HandleSdlDragMessage(MSG* msg);
 
 // Posted messages are retrieved before input, so a button release that's
 // already queued is seen by the loop rather than by the program.
+// Marks the button of a request for a press a low level hook took.
+constexpr int kTakenInHookFlag = 0x8000;
+
 bool PostSizeMoveRequest(HWND hRootWnd, UINT command, int button, POINT pt) {
     if (!PostMessage(hRootWnd, g_sizeMoveRequestMessage,
                      MAKEWPARAM(command, button), MAKELPARAM(pt.x, pt.y))) {
@@ -1231,13 +1297,22 @@ bool IsRequestAcceptable(UINT command, int button, HWND hRootWnd) {
 // and it's the left button which counts whichever button is really held.
 void OnSizeMoveRequestRemoved(MSG* msg) {
     UINT command = LOWORD(msg->wParam);
-    int button = HIWORD(msg->wParam);
+    int button = HIWORD(msg->wParam) & ~kTakenInHookFlag;
+    bool takenInHook = HIWORD(msg->wParam) & kTakenInHookFlag;
 
     if (!IsRequestAcceptable(command, button, msg->hwnd)) {
         Wh_Log(L"Dropping the request %04X %02X for %08X", command, button,
                (DWORD)(ULONG_PTR)msg->hwnd);
         TakeMessage(msg);
         return;
+    }
+
+    // A low level hook passes its press on and posts the request ahead of it,
+    // so the request can arrive before the system has recorded the press.
+    if (takenInHook) {
+        for (int i = 0; i < 100 && GetAsyncKeyState(button) >= 0; i++) {
+            Sleep(1);
+        }
     }
 
     if (GetAsyncKeyState(button) >= 0) {
@@ -1258,6 +1333,11 @@ void OnSizeMoveRequestRemoved(MSG* msg) {
         return;
     }
 
+    // A press taken in a low level hook never activated the window.
+    if (GetForegroundWindow() != msg->hwnd) {
+        SetForegroundWindow(msg->hwnd);
+    }
+
     if (GetKeyState(VK_LBUTTON) >= 0) {
         SetSyncKeyState(VK_LBUTTON, true);
     }
@@ -1270,6 +1350,7 @@ void OnSizeMoveRequestRemoved(MSG* msg) {
         .button = button,
         .hWnd = msg->hwnd,
         .startPt = msg->pt,
+        .fromHook = takenInHook,
     };
 
     msg->message = WM_SYSCOMMAND;
@@ -1293,10 +1374,29 @@ void OnLoopMessageRemoved(MSG* msg, bool inLoop) {
     }
 
     if (msg->message == WM_MOUSEMOVE) {
+        // A release the loop never sees, e.g. one a hook further along the
+        // chain swallowed, would leave the window stuck to the cursor.
+        if (GetAsyncKeyState(g_loop.button) >= 0) {
+            Wh_Log(L"Button %02X is up with no release seen, ending the loop",
+                   g_loop.button);
+            msg->message = WM_LBUTTONUP;
+            msg->wParam = 0;
+            if (GetAsyncKeyState(VK_LBUTTON) >= 0 &&
+                GetKeyState(VK_LBUTTON) < 0) {
+                SetSyncKeyState(VK_LBUTTON, false);
+            }
+            g_loop = {};
+            g_takenPressButton = 0;
+            return;
+        }
+
         // The loop retrieves the moves itself, without dispatching them,
         // holds an internal capture for which no WM_SETCURSOR is sent, and
-        // shows the class cursor.
-        SetCursor(LoadCursor(nullptr, CursorOfCommand(g_loop.command)));
+        // shows the class cursor. A title strip drag keeps the arrow, as a
+        // title bar drag does.
+        if (!g_loop.fromHook) {
+            SetCursor(LoadCursor(nullptr, CursorOfCommand(g_loop.command)));
+        }
         return;
     }
 
@@ -1326,7 +1426,7 @@ void OnLoopMessageRemoved(MSG* msg, bool inLoop) {
             msg->wParam = 0;
         }
 
-        g_swallowedPress = true;
+        g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
 
         if (RunWindowAction(hRootWnd, WindowAction::Maximize, pt)) {
             Wh_Log(
@@ -1355,10 +1455,11 @@ void OnLoopMessageRemoved(MSG* msg, bool inLoop) {
         }
     }
 
-    if (!g_loop.dragged) {
+    // A press passed on by a low level hook was never taken.
+    if (!g_loop.dragged && !g_loop.fromHook) {
         if (button == VK_RBUTTON &&
             RunWindowAction(g_loop.hWnd, g_settings.rightClickAction, msg->pt)) {
-            g_swallowedPress = true;
+            g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
         } else {
             Wh_Log(L"Released within the drag threshold, replaying the click");
             ReplayPress(button, true);
@@ -1483,7 +1584,7 @@ void OnModifierKeyMessageRemoved(MSG* msg, DWORD modifier) {
             // A hold starts with this key. A keyless trigger keeps its own
             // hook, and with it whatever drag is under way.
             g_swallowedPress = false;
-            if (!IsAnyTriggerKeyless() && !ShouldHoldExplorerStripHook()) {
+            if (!IsAnyTriggerKeyless()) {
                 RemoveLowLevelMouseHook();
             }
         }
@@ -1495,22 +1596,16 @@ void OnModifierKeyMessageRemoved(MSG* msg, DWORD modifier) {
         RemoveLowLevelMouseHookIfIdle();
     }
 
-    if (!down && msg->wParam == VK_MENU && g_swallowedPress.exchange(false)) {
-        Wh_Log(L"Swallowing the Alt release of a drag");
-        TakeMessage(msg);
+    // The app saw the Alt press, so it must see the release too. Only the
+    // helper masks the menu; here the flag is just cleared.
+    if (!down && msg->wParam == VK_MENU) {
+        g_swallowedPress = false;
     }
 }
 
 // Runs for every message removed from the queue of the current thread, before
 // the program sees it.
 void OnMessageRemoved(MSG* msg) {
-    // The persistent hook of the title strip drag is installed on the first
-    // pumping thread, and comes back here if a settings change or a stray
-    // removal took it down.
-    if (!g_lowLevelMouseHook && g_explorerStripHookWanted) {
-        InstallLowLevelMouseHookIfNeeded();
-    }
-
     if (msg->message == g_replayPressMessage) {
         ReplayPress((int)msg->wParam, msg->lParam != 0);
         TakeMessage(msg);
@@ -1778,6 +1873,198 @@ void SubclassWindowIfNeeded(HWND hWnd) {
     g_lastSubclassedWnd = hWnd;
 }
 
+// The File Explorer title strip, where the styler's full-width tab pill takes
+// every press as a tab grab. Its island never turns pointer input into window
+// messages, so a press there is taken in a low level hook and handed to the
+// system's own move loop: the stock drag, Aero Snap and arrow cursor. A double
+// click toggles the maximized state and a right click opens the system menu,
+// as on any title bar.
+//
+// The hook has a thread of its own. A low level hook is called on the thread
+// which installed it, for every mouse event on the desktop, and an Explorer
+// window thread that's busy painting would hold up the cursor everywhere.
+HANDLE g_stripHookThread;
+DWORD g_stripHookThreadId;
+
+// Touched by the strip hook's thread only.
+struct {
+    HWND hRootWnd;
+    DWORD time;
+    POINT pt;
+} g_stripLastPress;
+HWND g_stripRightPressRootWnd;
+bool g_stripSwallowLeftUp;
+
+constexpr UINT kPopupSystemMenuMessage = 0x0313;  // WM_POPUPSYSTEMMENU
+
+// Starts the system's move loop on the window's thread, the way a title bar
+// press does. The press itself is passed on: the request, being posted, is
+// retrieved ahead of it, and the loop then takes it and the release, which
+// keeps the button state real.
+bool HandOffMoveToSystemLoop(HWND hRootWnd, int button, POINT pt) {
+    if (button != VK_LBUTTON) {
+        return false;
+    }
+
+    DWORD processId = 0;
+    GetWindowThreadProcessId(hRootWnd, &processId);
+    AllowSetForegroundWindow(processId);
+    if (!PostSizeMoveRequest(hRootWnd, SC_MOVE | HTCAPTION,
+                             button | kTakenInHookFlag, pt)) {
+        return false;
+    }
+
+    return true;
+}
+
+bool IsStripDoubleClick(HWND hRootWnd, const MSLLHOOKSTRUCT* ms) {
+    return hRootWnd == g_stripLastPress.hRootWnd &&
+           ms->time - g_stripLastPress.time <= GetDoubleClickTime() &&
+           abs(ms->pt.x - g_stripLastPress.pt.x) <=
+               GetSystemMetrics(SM_CXDOUBLECLK) / 2 &&
+           abs(ms->pt.y - g_stripLastPress.pt.y) <=
+               GetSystemMetrics(SM_CYDOUBLECLK) / 2;
+}
+
+LRESULT CALLBACK StripLowLevelMouseProc(int nCode,
+                                        WPARAM wParam,
+                                        LPARAM lParam) {
+    auto hookScope = HookRefCountScope();
+
+    if (nCode != HC_ACTION || g_uninitializing) {
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+    }
+
+    const MSLLHOOKSTRUCT* ms = (const MSLLHOOKSTRUCT*)lParam;
+    if (ms->dwExtraInfo == kOwnInputExtraInfo ||
+        !g_settings.explorerTitleStripDrag) {
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+    }
+
+    // The double-click press was swallowed, so its release goes too.
+    if (wParam == WM_LBUTTONUP && g_stripSwallowLeftUp) {
+        g_stripSwallowLeftUp = false;
+        return 1;
+    }
+    if (wParam == WM_LBUTTONDOWN) g_stripSwallowLeftUp = false;
+
+    if (wParam == WM_RBUTTONUP && g_stripRightPressRootWnd) {
+        HWND hRootWnd = g_stripRightPressRootWnd;
+        g_stripRightPressRootWnd = nullptr;
+        PostMessage(hRootWnd, kPopupSystemMenuMessage, 0,
+                    MAKELPARAM(ms->pt.x, ms->pt.y));
+        return 1;
+    }
+
+    if ((wParam != WM_LBUTTONDOWN && wParam != WM_RBUTTONDOWN) ||
+        HeldModifiers(GetAsyncKeyState)) {
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+    }
+
+    HWND hWnd = CompositionHostedWindowFromPoint(ms->pt);
+    HWND hRootWnd = hWnd ? GetAncestor(hWnd, GA_ROOT) : nullptr;
+    if (!hRootWnd || !IsExplorerTitleStripPress(hRootWnd, ms->pt)) {
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+    }
+
+    if (wParam == WM_RBUTTONDOWN) {
+        g_stripRightPressRootWnd = hRootWnd;
+        return 1;
+    }
+
+    if (!CanMoveRootWindow(hRootWnd)) {
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+    }
+
+    if (IsStripDoubleClick(hRootWnd, ms)) {
+        g_stripLastPress = {};
+        PostMessage(hRootWnd, WM_SYSCOMMAND,
+                    IsZoomed(hRootWnd) ? SC_RESTORE : SC_MAXIMIZE, 0);
+        g_stripSwallowLeftUp = true;
+        return 1;
+    }
+
+    g_stripLastPress = {hRootWnd, ms->time, ms->pt};
+    HandOffMoveToSystemLoop(hRootWnd, VK_LBUTTON, ms->pt);
+    return CallNextHookEx(nullptr, nCode, wParam, lParam);
+}
+
+// Physical coordinates throughout, as the hook reports them.
+DWORD WINAPI StripHookThreadProc(void*) {
+    SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
+    MSG msg;
+    PeekMessage(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+
+    HHOOK hook = SetWindowsHookEx(WH_MOUSE_LL, StripLowLevelMouseProc,
+                                  GetModuleHandle(nullptr), 0);
+    if (!hook) {
+        Wh_Log(L"SetWindowsHookEx(WH_MOUSE_LL) error for the strip: %u",
+               GetLastError());
+        return 0;
+    }
+
+    while (GetMessage(&msg, nullptr, 0, 0) > 0) {
+        DispatchMessage(&msg);
+    }
+
+    UnhookWindowsHookEx(hook);
+    return 0;
+}
+
+// Started by the first File Explorer window of the process. Explorer runs
+// many processes without one, and each hook in the chain is a stop for every
+// mouse event on the desktop.
+std::mutex g_stripHookThreadMutex;
+std::atomic<bool> g_stripHookThreadStarted;
+
+bool IsFileExplorerWindow(HWND hWnd) {
+    WCHAR className[32];
+    return GetClassName(hWnd, className, ARRAYSIZE(className)) &&
+           _wcsicmp(className, L"CabinetWClass") == 0;
+}
+
+void StartStripHookThreadIfNeeded(HWND hWnd) {
+    if (g_stripHookThreadStarted || !IsExplorerProcess() ||
+        !IsFileExplorerWindow(hWnd)) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> guard(g_stripHookThreadMutex);
+    if (g_stripHookThreadStarted || g_uninitializing) {
+        return;
+    }
+
+    g_stripHookThreadStarted = true;
+    g_stripHookThread = CreateThread(nullptr, 0, StripHookThreadProc, nullptr,
+                                     0, &g_stripHookThreadId);
+    if (!g_stripHookThread) {
+        Wh_Log(L"CreateThread error: %u", GetLastError());
+    }
+}
+
+void StopStripHookThread() {
+    HANDLE thread;
+    {
+        std::lock_guard<std::mutex> guard(g_stripHookThreadMutex);
+        thread = g_stripHookThread;
+        g_stripHookThread = nullptr;
+    }
+
+    if (!thread) {
+        return;
+    }
+
+    // The queue exists once the thread has started.
+    while (WaitForSingleObject(thread, 0) == WAIT_TIMEOUT &&
+           !PostThreadMessage(g_stripHookThreadId, WM_QUIT, 0, 0)) {
+        Sleep(10);
+    }
+
+    WaitForSingleObject(thread, INFINITE);
+    CloseHandle(thread);
+}
+
 LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam) {
     auto hookScope = HookRefCountScope();
 
@@ -1790,8 +2077,13 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam) {
             if (!(cs->style & WS_CHILD) && g_getMessageHook) {
                 MarkHookedWindow(cwp->hwnd);
             }
-        } else if (cwp->message == WM_NCHITTEST &&
-                   (IsAnyTriggerKeyless() ||
+            if (!(cs->style & WS_CHILD)) {
+                StartStripHookThreadIfNeeded(cwp->hwnd);
+            }
+        }
+
+        if (cwp->message == WM_NCHITTEST &&
+            (IsAnyTriggerKeyless() ||
                     IsAnyModifierTriggerHeld(
                         HeldModifiers(GetAsyncKeyState)))) {
             // The thread's synchronized key state is stale if the window
@@ -1845,12 +2137,95 @@ POINT CalcDragGrab(HWND hRootWnd, POINT ptDown) {
     return grab;
 }
 
-// SWP_ASYNCWINDOWPOS posts the request when the window belongs to another
-// thread, which keeps a busy owner from blocking the caller.
+// The global helper places dragged windows from a thread of its own. Posted
+// moves pile up in a busy program's queue and the window trails the pointer;
+// this thread only ever applies the newest position, waiting for each to land,
+// so the window keeps up at whatever rate the program can repaint. A hung
+// program gets a posted move instead, and the input thread never waits.
+namespace mover {
+std::mutex g_lock;
+HWND g_wnd;
+RECT g_rect;
+UINT g_flags;
+bool g_pending;
+bool g_quit;
+HANDLE g_event;
+HANDLE g_thread;
+
+DWORD WINAPI ThreadProc(void*) {
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+    while (WaitForSingleObject(g_event, INFINITE) == WAIT_OBJECT_0) {
+        for (;;) {
+            HWND wnd;
+            RECT rc;
+            UINT flags;
+            {
+                std::lock_guard<std::mutex> guard(g_lock);
+                if (g_quit) return 0;
+                if (!g_pending) break;
+                g_pending = false;
+                wnd = g_wnd;
+                rc = g_rect;
+                flags = g_flags;
+            }
+            if (IsHungAppWindow(wnd)) flags |= SWP_ASYNCWINDOWPOS;
+            else flags &= ~SWP_ASYNCWINDOWPOS;
+            SetWindowPos(wnd, nullptr, rc.left, rc.top, rc.right - rc.left,
+                         rc.bottom - rc.top, flags);
+        }
+    }
+    return 0;
+}
+
+void Queue(HWND wnd, const RECT& rc, UINT flags) {
+    std::lock_guard<std::mutex> guard(g_lock);
+    if (!g_thread) {
+        g_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        if (g_event) g_thread = CreateThread(nullptr, 0, ThreadProc, nullptr, 0, nullptr);
+        if (!g_thread) {
+            SetWindowPos(wnd, nullptr, rc.left, rc.top, rc.right - rc.left,
+                         rc.bottom - rc.top, flags | SWP_ASYNCWINDOWPOS);
+            return;
+        }
+    }
+    g_wnd = wnd;
+    g_rect = rc;
+    g_flags = flags;
+    g_pending = true;
+    SetEvent(g_event);
+}
+
+void Stop() {
+    HANDLE thread;
+    {
+        std::lock_guard<std::mutex> guard(g_lock);
+        g_quit = true;
+        thread = g_thread;
+        g_thread = nullptr;
+    }
+    if (!thread) return;
+    SetEvent(g_event);
+    // A move into a program that hangs right then can hold the thread; it is
+    // left to finish rather than blocking the unload for long.
+    WaitForSingleObject(thread, 3000);
+    CloseHandle(thread);
+}
+}  // namespace mover
+
+void PlaceDraggedWindow(HWND hRootWnd, const RECT& rc, UINT flags) {
+    if (g_globalInput) {
+        mover::Queue(hRootWnd, rc, flags);
+        return;
+    }
+    // SWP_ASYNCWINDOWPOS posts the request when the window belongs to another
+    // thread, which keeps a busy owner from blocking the caller.
+    SetWindowPos(hRootWnd, nullptr, rc.left, rc.top, rc.right - rc.left,
+                 rc.bottom - rc.top, flags | SWP_ASYNCWINDOWPOS);
+}
+
 void MoveDraggedWindow(HWND hRootWnd, POINT grab, POINT pt) {
-    SetWindowPos(
-        hRootWnd, nullptr, pt.x - grab.x, pt.y - grab.y, 0, 0,
-        SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+    RECT rc{pt.x - grab.x, pt.y - grab.y, pt.x - grab.x, pt.y - grab.y};
+    PlaceDraggedWindow(hRootWnd, rc, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 // The edges the command takes hold of follow the pointer from where the drag
@@ -1894,9 +2269,7 @@ void SizeDraggedWindow(HWND hRootWnd,
             break;
     }
 
-    SetWindowPos(hRootWnd, nullptr, rc.left, rc.top, rc.right - rc.left,
-                 rc.bottom - rc.top,
-                 SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+    PlaceDraggedWindow(hRootWnd, rc, SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 thread_local struct {
@@ -1939,7 +2312,7 @@ bool HandleSdlDragMessage(MSG* msg) {
             ReleaseCapture();
         }
         g_takenPressButton = VK_RBUTTON;
-        g_swallowedPress = true;
+        g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
         TakeMessage(msg);
         if (RunWindowAction(window, WindowAction::Maximize, msg->pt)) {
             Wh_Log(L"Right button while moving SDL window %08X: toggled "
@@ -1974,7 +2347,7 @@ bool HandleSdlDragMessage(MSG* msg) {
         } else {
             g_sdlDrag.grab = CalcDragGrab(g_sdlDrag.window, g_sdlDrag.start);
         }
-        g_swallowedPress = true;
+        g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
     }
     if (g_sdlDrag.started) {
         if (IsSizeCommand(g_sdlDrag.command)) {
@@ -2211,7 +2584,7 @@ bool OnLowLevelButtonDown(const MSLLHOOKSTRUCT* ms, int button) {
     g_llDownPt = pt;
     g_llDownTime = ms->time;
     if (GetAsyncKeyState(VK_MENU) < 0) {
-        g_swallowedPress = true;
+        g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
     }
 
     // A timer may be left from a candidate reset on another thread.
@@ -2283,7 +2656,7 @@ void SetUpLowLevelDrag() {
     } else if (processId != GetCurrentProcessId()) {
         // The Alt release goes there now, and a later one here isn't to be
         // taken for it.
-        g_swallowedPress = false;
+        if (!g_globalInput) g_swallowedPress = false;
     }
 
     MaskWinKeyReleaseIfNeeded(g_llCommand);
@@ -2337,6 +2710,24 @@ void PostDragUpdate(POINT pt) {
     }
 }
 
+// A low level hook must return at once or the system drops it, so an action
+// picked in the callback (a menu, or a move a hung program would block) runs
+// from the hook thread's queue instead.
+// The action rides in the message number, which keeps the point whole in
+// lParam on 32-bit builds too.
+// Read by the helper's watchdog to tell a hook the system dropped.
+POINT g_llLastCallbackPt;
+DWORD g_llLastCallbackTick;
+
+constexpr UINT kWindowActionMessage = WM_APP + 100;
+constexpr UINT kWindowActionMessageEnd = kWindowActionMessage + 64;
+bool PostWindowAction(HWND hWnd, WindowAction action, POINT pt) {
+    if (action == WindowAction::None || !CanActOnRootWindow(hWnd)) return false;
+    return PostThreadMessage(GetCurrentThreadId(),
+                             kWindowActionMessage + (UINT)action, (WPARAM)hWnd,
+                             MAKELPARAM((WORD)(short)pt.x, (WORD)(short)pt.y));
+}
+
 // Runs for mouse input before it's routed anywhere, which is the only point at
 // which a press can be taken away from composition hosted content. Moves are
 // never swallowed: that would stop the cursor.
@@ -2348,6 +2739,8 @@ LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     }
 
     const MSLLHOOKSTRUCT* ms = (const MSLLHOOKSTRUCT*)lParam;
+    g_llLastCallbackPt = ms->pt;
+    g_llLastCallbackTick = GetTickCount();
 
     if (ms->dwExtraInfo == kOwnInputExtraInfo) {
         return CallNextHookEx(nullptr, nCode, wParam, lParam);
@@ -2372,9 +2765,9 @@ LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
             // state the toggle leaves. The Alt release of the drag is kept
             // from reaching the window, which would open its menu.
             HWND hRootWnd = g_llRootWnd;
-            if (RunWindowAction(hRootWnd, WindowAction::Maximize,
-                                ToLogicalPoint(ms->pt))) {
-                g_swallowedPress = true;
+            if (PostWindowAction(hRootWnd, WindowAction::Maximize,
+                                 ToLogicalPoint(ms->pt))) {
+                g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
                 ResetLowLevelDragState();
                 Wh_Log(L"Right button while moving %08X: toggled the "
                        L"maximized state",
@@ -2395,9 +2788,9 @@ LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
         ResetLowLevelDragState();
         if (!dragging) {
             if (button == VK_RBUTTON &&
-                RunWindowAction(root, g_settings.rightClickAction,
-                                ToLogicalPoint(ms->pt))) {
-                g_swallowedPress = true;
+                PostWindowAction(root, g_settings.rightClickAction,
+                                 ToLogicalPoint(ms->pt))) {
+                g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
             } else {
                 PostReplayPress(button, true);
             }
@@ -2442,9 +2835,12 @@ void RemoveLowLevelMouseHook() {
     }
 }
 
-void InstallLowLevelMouseHookIfNeeded() {
+// Runs on the hook's own thread.
+void InstallLowLevelMouseHookOnThisThread() {
     // Outside the lock, the loader being out of bounds while it's held.
     HMODULE module = GetModuleHandle(nullptr);
+
+    SetThreadDpiAwarenessContext(g_lowLevelMouseHookDpiContext);
 
     std::lock_guard<std::mutex> guard(g_lowLevelMouseHookMutex);
     if (g_lowLevelMouseHook || g_uninitializing) {
@@ -2465,7 +2861,197 @@ void InstallLowLevelMouseHookIfNeeded() {
     }
 }
 
+// The thread installs the hook as it starts and again whenever asked. Its
+// messages go through the mod's message hook like any thread's, which handles
+// the drag updates, timers and replays posted to it.
+HHOOK g_globalAltHook;
+LRESULT CALLBACK GlobalAltProc(int code, WPARAM message, LPARAM data) {
+    if (code == HC_ACTION) {
+        auto key = reinterpret_cast<KBDLLHOOKSTRUCT*>(data);
+        // Never swallow the Alt release: Windows would then keep Alt held,
+        // which eats typing and makes plain drags act as Alt drags. A dummy
+        // key tap ahead of the real release stops the window menu opening.
+        // Input sent from the callback is processed before the release.
+        bool altKey = key->vkCode == VK_LMENU || key->vkCode == VK_RMENU;
+        bool injected = key->flags & LLKHF_INJECTED;
+        if (altKey && !injected && (message == WM_KEYDOWN || message == WM_SYSKEYDOWN)) {
+            g_swallowedPress = false;
+        } else if (altKey && (message == WM_KEYUP || message == WM_SYSKEYUP) &&
+                   g_swallowedPress.exchange(false)) {
+            INPUT in[2]{};
+            for (auto& i : in) {
+                i.type = INPUT_KEYBOARD;
+                i.ki.wVk = kMenuMaskKey;
+                i.ki.dwExtraInfo = kOwnInputExtraInfo;
+            }
+            in[1].ki.dwFlags = KEYEVENTF_KEYUP;
+            SendInput(2, in, sizeof(INPUT));
+        }
+    }
+    return CallNextHookEx(nullptr, code, message, data);
+}
+
+DWORD WINAPI LowLevelMouseHookThreadProc(void*) {
+    MSG msg;
+    PeekMessage(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+
+    InstallLowLevelMouseHookOnThisThread();
+    std::array<bool, kHotkeyActions.size()> registered{};
+    auto registerActions = [&] {
+        for (size_t i = 0; i < registered.size(); ++i) {
+            if (registered[i] || !g_settings.hotkeys[i].key) continue;
+            DWORD held = g_settings.hotkeys[i].modifiers;
+            UINT mods = ((held & kModifierCtrl) ? MOD_CONTROL : 0) |
+                        ((held & kModifierAlt) ? MOD_ALT : 0) |
+                        ((held & kModifierShift) ? MOD_SHIFT : 0) |
+                        ((held & kModifierWin) ? MOD_WIN : 0);
+            registered[i] = RegisterHotKey(nullptr, 0x6000 + i, mods | MOD_NOREPEAT,
+                                            g_settings.hotkeys[i].key);
+        }
+    };
+    UINT_PTR retry = 0;
+    if (g_globalInput) {
+        g_globalAltHook = SetWindowsHookEx(WH_KEYBOARD_LL, GlobalAltProc, GetModuleHandle(nullptr), 0);
+        registerActions();
+        retry = SetTimer(nullptr, 0, 2000, nullptr);
+    }
+
+    while (GetMessage(&msg, nullptr, 0, 0) > 0) {
+        if (g_globalInput) {
+            if (msg.message == WM_APP + 91 && !msg.hwnd) {
+                ResetLowLevelDragState();
+                for (size_t i = 0; i < registered.size(); ++i) {
+                    if (registered[i]) UnregisterHotKey(nullptr, 0x6000 + i);
+                    registered[i] = false;
+                }
+                LoadSettings();
+                registerActions();
+                continue;
+            }
+            if (msg.message == WM_TIMER && !msg.hwnd && msg.wParam == retry) {
+                registerActions();
+                // The system drops a low level hook that once ran too long,
+                // without telling it. The pointer having moved with no
+                // callback for a while means that happened: hook again.
+                POINT now{};
+                // A drag whose button is no longer down is stale too.
+                bool stale = !g_llRootWnd || GetAsyncKeyState(g_llButton) >= 0;
+                if (stale && GetPhysicalCursorPos(&now) &&
+                    (now.x != g_llLastCallbackPt.x || now.y != g_llLastCallbackPt.y) &&
+                    GetTickCount() - g_llLastCallbackTick > 2000) {
+                    Wh_Log(L"Mouse hook went quiet, reinstalling");
+                    ResetLowLevelDragState();
+                    RemoveLowLevelMouseHook();
+                    InstallLowLevelMouseHookOnThisThread();
+                    if (g_globalAltHook) UnhookWindowsHookEx(g_globalAltHook);
+                    g_globalAltHook = SetWindowsHookEx(WH_KEYBOARD_LL, GlobalAltProc,
+                                                       GetModuleHandle(nullptr), 0);
+                    g_llLastCallbackPt = now;
+                    g_llLastCallbackTick = GetTickCount();
+                }
+                continue;
+            }
+            if (msg.message == WM_HOTKEY && !msg.hwnd &&
+                msg.wParam >= 0x6000 && msg.wParam < 0x6000 + registered.size()) {
+                POINT pt{};
+                GetCursorPos(&pt);
+                RunWindowAction(GetAncestor(GetForegroundWindow(), GA_ROOT),
+                                kHotkeyActions[msg.wParam - 0x6000], pt);
+                continue;
+            }
+            OnMessageRemoved(&msg);
+        }
+        if (!msg.hwnd && msg.message >= kWindowActionMessage &&
+            msg.message < kWindowActionMessageEnd) {
+            POINT pt{(short)LOWORD(msg.lParam), (short)HIWORD(msg.lParam)};
+            RunWindowAction((HWND)msg.wParam,
+                            (WindowAction)(msg.message - kWindowActionMessage), pt);
+            continue;
+        }
+        if (!msg.hwnd && msg.message == kInstallLowLevelMouseHookMessage) {
+            InstallLowLevelMouseHookOnThisThread();
+            continue;
+        }
+
+        DispatchMessage(&msg);
+    }
+
+    {
+        std::lock_guard<std::mutex> guard(g_lowLevelMouseHookMutex);
+        if (g_lowLevelMouseHook &&
+            GetCurrentThreadId() == g_lowLevelMouseHookThreadId) {
+            UnhookWindowsHookEx(g_lowLevelMouseHook);
+            g_lowLevelMouseHook = nullptr;
+        }
+    }
+
+    if (g_globalAltHook) UnhookWindowsHookEx(g_globalAltHook);
+    if (retry) KillTimer(nullptr, retry);
+    for (size_t i = 0; i < registered.size(); ++i)
+        if (registered[i]) UnregisterHotKey(nullptr, 0x6000 + i);
+    ResetLowLevelDragState();
+    return 0;
+}
+
+// Called by whichever thread retrieves the trigger's keys, which takes its DPI
+// awareness to the hook's thread: the hook places windows in its coordinates.
+void InstallLowLevelMouseHookIfNeeded() {
+    if (!g_globalInput) {
+        HANDLE helper = OpenMutex(SYNCHRONIZE, FALSE, L"windhawk-window-manager-global");
+        if (helper) { CloseHandle(helper); return; }
+        // An older helper's mutex was admin-only; denied still means it runs.
+        if (GetLastError() == ERROR_ACCESS_DENIED) return;
+    }
+    DPI_AWARENESS_CONTEXT dpiContext = GetThreadDpiAwarenessContext();
+
+    std::lock_guard<std::mutex> guard(g_lowLevelMouseHookMutex);
+    if (g_lowLevelMouseHook || g_uninitializing) {
+        return;
+    }
+
+    g_lowLevelMouseHookDpiContext = dpiContext;
+
+    if (g_lowLevelMouseHookThread) {
+        // Fails until the thread's queue exists, the thread then installing
+        // the hook as it starts.
+        PostThreadMessage(g_lowLevelMouseHookOwnThreadId,
+                          kInstallLowLevelMouseHookMessage, 0, 0);
+        return;
+    }
+
+    g_lowLevelMouseHookThread =
+        CreateThread(nullptr, 0, LowLevelMouseHookThreadProc, nullptr, 0,
+                     &g_lowLevelMouseHookOwnThreadId);
+    if (!g_lowLevelMouseHookThread) {
+        Wh_Log(L"CreateThread error: %u", GetLastError());
+    }
+}
+
+void StopLowLevelMouseHookThread() {
+    HANDLE thread;
+    DWORD threadId;
+    {
+        std::lock_guard<std::mutex> guard(g_lowLevelMouseHookMutex);
+        thread = g_lowLevelMouseHookThread;
+        threadId = g_lowLevelMouseHookOwnThreadId;
+        g_lowLevelMouseHookThread = nullptr;
+    }
+
+    if (!thread) {
+        return;
+    }
+
+    while (WaitForSingleObject(thread, 0) == WAIT_TIMEOUT &&
+           !PostThreadMessage(threadId, WM_QUIT, 0, 0)) {
+        Sleep(10);
+    }
+
+    WaitForSingleObject(thread, INFINITE);
+    CloseHandle(thread);
+}
+
 void RemoveLowLevelMouseHookIfIdle() {
+    if (g_globalInput) return;
     std::lock_guard<std::mutex> guard(g_lowLevelMouseHookMutex);
 
     // Only the hook's thread can tell whether a press is being held or a drag
@@ -2476,7 +3062,7 @@ void RemoveLowLevelMouseHookIfIdle() {
     if (!g_lowLevelMouseHook ||
         GetCurrentThreadId() != g_lowLevelMouseHookThreadId || g_llRootWnd ||
         IsAnyModifierTriggerHeld(HeldModifiers(GetAsyncKeyState)) ||
-        ShouldHoldKeylessHook() || ShouldHoldExplorerStripHook()) {
+        ShouldHoldKeylessHook()) {
         return;
     }
 
@@ -2639,9 +3225,8 @@ void SetThreadHooksIfNeeded() {
     guard.unlock();
 
     // A process which is the foreground one already sees no activation to put
-    // the hook of a keyless trigger up on, and Explorer holds the hook of the
-    // title strip drag from its first pumping thread.
-    if (ShouldHoldKeylessHook() || g_explorerStripHookWanted) {
+    // the hook of a keyless trigger up on.
+    if (ShouldHoldKeylessHook()) {
         InstallLowLevelMouseHookIfNeeded();
     }
 }
@@ -2845,7 +3430,6 @@ void LoadSettings() {
         Wh_GetIntSetting(L"dragWindowsWithoutTitleBar");
     g_settings.explorerTitleStripDrag =
         Wh_GetIntSetting(L"explorerTitleStripDrag");
-    g_explorerStripHookWanted = ShouldHoldExplorerStripHook();
     g_settings.sizeWindowsWithoutSizingBorder =
         Wh_GetIntSetting(L"sizeWindowsWithoutSizingBorder");
     LoadActionSetting(g_settings.middleAction, L"middleAction");
@@ -2873,6 +3457,14 @@ BOOL ModInit() {
 
     HMODULE win32uModule = GetModuleHandle(L"win32u.dll");
     if (!win32uModule) {
+        // Apps whose exe has no user32 in its import table (Electron 43
+        // bootstrappers such as Tidal 2.47+) reach this point before
+        // anything has mapped win32u, and bailing here would leave them
+        // without the drag hooks for good. Load it instead: it is a
+        // KnownDLL the process maps again on its own when user32 arrives.
+        win32uModule = LoadLibrary(L"win32u.dll");
+    }
+    if (!win32uModule) {
         Wh_Log(L"win32u.dll isn't loaded");
         return FALSE;
     }
@@ -2895,6 +3487,19 @@ BOOL ModInit() {
     // window in this process.
     ChangeWindowMessageFilter(g_sizeMoveRequestMessage, MSGFLT_ADD);
 
+    if (IsExplorerProcess()) {
+        EnumWindows(
+            [](HWND hWnd, LPARAM) WINAPI -> BOOL {
+                DWORD processId = 0;
+                GetWindowThreadProcessId(hWnd, &processId);
+                if (processId == GetCurrentProcessId()) {
+                    StartStripHookThreadIfNeeded(hWnd);
+                }
+                return TRUE;
+            },
+            0);
+    }
+
     return TRUE;
 }
 
@@ -2902,6 +3507,8 @@ void ModUninit() {
     Wh_Log(L">");
 
     g_uninitializing = true;
+
+    StopStripHookThread();
 
     std::unordered_set<HWND> subclassedWindows;
     {
@@ -2936,6 +3543,8 @@ void ModUninit() {
     }
 
     RemoveWinKeyMaskHook();
+
+    StopLowLevelMouseHookThread();
 
     while (g_hookRefCount > 0) {
         Sleep(200);
@@ -3390,6 +3999,7 @@ static Action FindRuleAction(const std::wstring& exeName, bool* outNoResize) {
 }
 
 static bool IsEligibleWindow(HWND hWnd) {
+    if (altSnapDrag::g_globalInput) return altSnapDrag::CanActOnRootWindow(hWnd);
     if (!hWnd || !IsWindow(hWnd)) {
         return false;
     }
@@ -4368,6 +4978,7 @@ static POINT WorkspaceOffset(HWND hwnd, const MonitorInfo& mon) {
 }
 
 static void MoveWindowToMonitor(HWND hwnd, const MonitorInfo& src, const MonitorInfo& dst) {
+    if (!altSnapDrag::CanActOnRootWindow(hwnd)) return;
     // Maximized and minimized windows: move the restored rectangle with
     // SetWindowPlacement so the window keeps its state on the new monitor.
     bool usePlacement = IsZoomed(hwnd) || IsIconic(hwnd);
@@ -4891,191 +5502,110 @@ void ToolModUninit() {
 // ==/WindhawkModSettings==
 
 
-////////////////////////////////////////////////////////////////////////////////
-// Shared dispatcher: one set of engine callbacks for the three modules.
-//
-// Host selection:
-//   windhawk.exe -tool-mod <id>  -> tool process: both hotkey tools run here.
-//   windhawk.exe                 -> launcher: spawns the tool process above. The
-//                              ShellExecuteEx requests an elevated child so
-//                              keyboard controls can move administrator windows.
-//   anything else           -> drag module only (it must run inside every
-//                              process that owns a draggable window).
-//
-// The launcher gate on the executable name keeps a single spawner: without
-// it, Include=* would spawn a tool from every injected process.
+// One elevated tool owns global input. Per-app hooks retain Explorer's title-strip behavior.
+#include <sddl.h>
+#include <windhawk_tool_mod.h>
 
-static bool g_packIsTool;
-static bool g_packIsLauncher;
 static bool g_packDragInited;
+static HANDLE g_globalMutex;
 
-static bool PackIsToolProcess(int argc, LPWSTR* argv) {
-    for (int i = 1; i < argc - 1; i++) {
-        if (wcscmp(argv[i], L"-tool-mod") == 0) {
-            return wcscmp(argv[i + 1], WH_MOD_ID) == 0;
-        }
-    }
-    return false;
-}
-
-static bool PackIsExcludedProcess(int argc, LPWSTR* argv) {
-    for (int i = 1; i < argc; i++) {
-        if (wcscmp(argv[i], L"-service") == 0 ||
-            wcscmp(argv[i], L"-service-start") == 0 ||
-            wcscmp(argv[i], L"-service-stop") == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
-static bool PackIsWindhawkProcess() {
-    WCHAR path[MAX_PATH];
-    DWORD len = GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
-    if (!len || len >= ARRAYSIZE(path)) {
-        return false;
-    }
-    PCWSTR name = path;
-    for (PCWSTR p = path; *p; p++) {
-        if (*p == L'\\' || *p == L'/') name = p + 1;
-    }
-    return _wcsicmp(name, L"windhawk.exe") == 0;
-}
-
-static void WINAPI PackEntryPointHook() {
-    Wh_Log(L">");
-    ExitThread(0);
-}
-
-// Spawns "<this process>" -tool-mod "<id>", exactly like the stock tool-mod
-// pattern, with ShellExecuteEx and the runas verb requesting elevation.
-static void PackSpawnTool() {
-    WCHAR currentProcessPath[MAX_PATH];
-    switch (GetModuleFileName(nullptr, currentProcessPath,
-                              ARRAYSIZE(currentProcessPath))) {
-        case 0:
-        case ARRAYSIZE(currentProcessPath):
-            Wh_Log(L"GetModuleFileName failed");
-            return;
-    }
-
-    WCHAR commandLine[MAX_PATH + 2 +
-                      (sizeof(L" -tool-mod \"" WH_MOD_ID "\"") / sizeof(WCHAR)) - 1];
-    swprintf_s(commandLine, L"\"%s\" -tool-mod \"%s\"", currentProcessPath,
-               WH_MOD_ID);
-
-    SHELLEXECUTEINFOW sei{sizeof(sei)};
-    sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
-    sei.lpVerb = L"runas";
-    sei.lpFile = currentProcessPath;
-    sei.lpParameters = L"-tool-mod \"" WH_MOD_ID L"\"";
-    sei.nShow = SW_HIDE;
-    if (!ShellExecuteExW(&sei)) {
-        Wh_Log(L"Elevated tool launch failed: %u", GetLastError());
-        return;
-    }
-    if (sei.hProcess) CloseHandle(sei.hProcess);
-}
-
-BOOL Wh_ModInit() {
-    DWORD sessionId;
-    if (ProcessIdToSessionId(GetCurrentProcessId(), &sessionId) &&
-        sessionId == 0) {
+BOOL WhTool_ModInit() {
+    using namespace altSnapDrag;
+    HANDLE token;
+    TOKEN_ELEVATION elevation{};
+    DWORD bytes = 0;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return FALSE;
+    bool queried = GetTokenInformation(token, TokenElevation, &elevation, sizeof(elevation), &bytes);
+    CloseHandle(token);
+    if (!queried) return FALSE;
+    if (!elevation.TokenIsElevated) {
+        SHELLEXECUTEINFOW launch{sizeof(launch)};
+        launch.fMask = SEE_MASK_FLAG_NO_UI;
+        launch.lpVerb = L"runas";
+        WCHAR self[MAX_PATH];
+        if (!GetModuleFileNameW(nullptr, self, MAX_PATH)) return FALSE;
+        launch.lpFile = self;
+        launch.lpParameters = L"-windhawk-tool-mod \"" WH_MOD_ID L"\"";
+        launch.nShow = SW_HIDE;
+        ShellExecuteExW(&launch);
         return FALSE;
     }
-
-    int argc;
-    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    if (!argv) {
-        Wh_Log(L"CommandLineToArgvW failed");
+    g_globalInput = true;
+    // Everyone may open it, so the unelevated per-app parts see the helper
+    // and leave the global input to it.
+    SECURITY_ATTRIBUTES sa{sizeof(sa)};
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            L"D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x00100000;;;WD)S:(ML;;NW;;;LW)",
+            SDDL_REVISION_1, &sa.lpSecurityDescriptor, nullptr)) return FALSE;
+    g_globalMutex = CreateMutex(&sa, FALSE, L"windhawk-window-manager-global");
+    DWORD mutexError = GetLastError();
+    LocalFree(sa.lpSecurityDescriptor);
+    if (!g_globalMutex) return FALSE;
+    if (mutexError == ERROR_ALREADY_EXISTS) {
+        CloseHandle(g_globalMutex);
+        g_globalMutex = nullptr;
         return FALSE;
     }
-
-    bool excluded = PackIsExcludedProcess(argc, argv);
-    bool ourTool = PackIsToolProcess(argc, argv);
-    for (int i = 1; i < argc; i++) {
-        if (wcscmp(argv[i], L"-tool-mod") == 0 && !ourTool) excluded = true;
-    }
-    LocalFree(argv);
-
-    if (excluded) {
-        return FALSE;
-    }
-
-    if (ourTool) {
-        g_packIsTool = true;
-
-        HANDLE mutex = CreateMutex(nullptr, TRUE,
-                                   L"windhawk-tool-mod_" WH_MOD_ID);
-        if (!mutex) {
-            Wh_Log(L"CreateMutex failed");
-            ExitProcess(1);
+    LoadSettings();
+    HKEY key;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@window-manager",
+                      0, KEY_QUERY_VALUE, &key) == ERROR_SUCCESS) {
+        for (PCWSTR name : {L"Exclude", L"ExcludeCustom"}) {
+            WCHAR value[32768]{};
+            DWORD bytes = sizeof(value);
+            if (RegQueryValueExW(key, name, nullptr, nullptr, (BYTE*)value, &bytes) == ERROR_SUCCESS) {
+                value[ARRAYSIZE(value) - 1] = 0;
+                g_globalExclusions += L"|";
+                g_globalExclusions += value;
+            }
         }
-        if (GetLastError() == ERROR_ALREADY_EXISTS) {
-            Wh_Log(L"Tool mod already running (%s)", WH_MOD_ID);
-            ExitProcess(1);
-        }
-
-        if (!snapCommander::ToolModInit()) {
-            Wh_Log(L"snapCommander tool init failed");
-            ExitProcess(1);
-        }
-        if (!moveToMonitor::ToolModInit()) {
-            Wh_Log(L"moveToMonitor tool init failed");
-            ExitProcess(1);
-        }
-
-        IMAGE_DOS_HEADER* dosHeader =
-            (IMAGE_DOS_HEADER*)GetModuleHandle(nullptr);
-        IMAGE_NT_HEADERS* ntHeaders =
-            (IMAGE_NT_HEADERS*)((BYTE*)dosHeader + dosHeader->e_lfanew);
-        void* entryPoint =
-            (BYTE*)dosHeader + ntHeaders->OptionalHeader.AddressOfEntryPoint;
-        Wh_SetFunctionHook(entryPoint, (void*)PackEntryPointHook, nullptr);
-        return TRUE;
+        RegCloseKey(key);
     }
+    InstallLowLevelMouseHookIfNeeded();
+    bool ok = g_lowLevelMouseHookThread != nullptr;
+    bool snapOk = ok && snapCommander::ToolModInit();
+    if (snapOk && moveToMonitor::ToolModInit()) return TRUE;
+    // A helper which fails partway leaves nothing running behind it.
+    g_uninitializing = true;
+    StopLowLevelMouseHookThread();
+    if (snapOk) snapCommander::ToolModUninit();
+    CloseHandle(g_globalMutex);
+    g_globalMutex = nullptr;
+    return FALSE;
+}
 
-    if (PackIsWindhawkProcess()) {
-        // Windhawk launcher: starts the elevated keyboard helper and
-        // loads drag support for its own native dialogs.
-        g_packIsLauncher = true;
-        g_packDragInited = altSnapDrag::ModInit();
-        return TRUE;
-    }
+void WhTool_ModSettingsChanged() {
+    PostThreadMessage(altSnapDrag::g_lowLevelMouseHookOwnThreadId, WM_APP + 91, 0, 0);
+    snapCommander::ToolModSettingsChanged();
+    moveToMonitor::ToolModSettingsChanged();
+}
 
+void WhTool_ModUninit() {
+    altSnapDrag::g_uninitializing = true;
+    altSnapDrag::StopLowLevelMouseHookThread();
+    altSnapDrag::mover::Stop();
+    snapCommander::ToolModUninit();
+    moveToMonitor::ToolModUninit();
+    if (g_globalMutex) CloseHandle(g_globalMutex);
+}
+
+BOOL WhToolLauncher_ModInit(BOOL* launch) {
+    WCHAR path[MAX_PATH]{};
+    GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
+    *launch = _wcsicmp(PathFindFileNameW(path), L"windhawk.exe") == 0;
     g_packDragInited = altSnapDrag::ModInit();
-    return g_packDragInited ? TRUE : FALSE;
+    return g_packDragInited;
 }
 
-void Wh_ModAfterInit() {
-    if (g_packIsLauncher) {
-        PackSpawnTool();
-    }
+void WhToolLauncher_ModUninit() {
+    if (g_packDragInited) altSnapDrag::ModUninit();
 }
 
-void Wh_ModSettingsChanged() {
-    if (g_packIsTool) {
-        snapCommander::ToolModSettingsChanged();
-        moveToMonitor::ToolModSettingsChanged();
-        return;
-    }
-    if (g_packDragInited) {
-        altSnapDrag::ModSettingsChanged();
-    }
+void WhToolLauncher_ModSettingsChanged(BOOL* reload) {
+    *reload = TRUE;
+    if (g_packDragInited) altSnapDrag::ModSettingsChanged();
 }
 
-void Wh_ModUninit() {
-    if (g_packIsTool) {
-        snapCommander::ToolModUninit();
-        moveToMonitor::ToolModUninit();
-        ExitProcess(0);
-    }
-    if (g_packDragInited) {
-        altSnapDrag::ModUninit();
-    }
+BOOL WINAPI DllMain(HINSTANCE module, DWORD reason, LPVOID reserved) {
+    return altSnapDrag::DragDllMain(module, reason, reserved);
 }
-
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
-    return altSnapDrag::DragDllMain(hinstDLL, fdwReason, lpReserved);
-}
-

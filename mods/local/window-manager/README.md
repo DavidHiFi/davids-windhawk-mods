@@ -10,7 +10,8 @@ with the mouse or the keyboard. Works on administrator windows too.
 ## Features
 
 - **Alt+drag to move.** Grab a window anywhere, not just by its title bar.
-- **Alt+right-drag to resize** from the nearest edge or corner.
+- **Alt+right-drag to resize** from the nearest edge or corner, including
+  borderless windows such as Ditto and Flow Launcher.
 - **Snap with the keyboard** to halves, quarters, the center or almost
   maximized, with optional gaps around windows.
 - **Send to another monitor** with a hotkey. Maximized windows stay maximized
