@@ -21,7 +21,11 @@ behind it.
   Info" and the player sits right after Taskbar System Info.
 - **Live spectrum bars** with smooth falloff, six shapes, gradients and EQ
   presets. Right-click the bars to choose what they listen to, including a
-  virtual cable or loopback input.
+  virtual cable or loopback input. The menu matches the Catppuccin Mocha
+  taskbar menus.
+- **Flat bars on an input you picked?** Check that the input isn't muted in
+  Windows sound settings. A muted input still sends audio to apps, but as
+  silence, even while its level meter moves.
 - **Stays out of the way.** It hides during fullscreen games and follows
   taskbar auto-hide.
 
