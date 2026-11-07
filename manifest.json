@@ -4,8 +4,8 @@
   "generatedAt": "2026-10-27T20:08:35+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 159,
-    "enabled": 88,
+    "mods": 160,
+    "enabled": 89,
     "local": 23
   },
   "mods": [
@@ -1916,6 +1916,18 @@
       "upstream": "https://windhawk.net/mods/tourne-table-desktop-audio-visualizer",
       "source": "mods/catalog/tourne-table-desktop-audio-visualizer.wh.cpp",
       "enabled": false
+    },
+    {
+      "id": "chromium-cursor-remap",
+      "name": "Chromium Cursor Remap",
+      "author": "mazany",
+      "github": "https://github.com/mazany",
+      "version": "1.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/chromium-cursor-remap",
+      "source": "mods/catalog/chromium-cursor-remap.wh.cpp",
+      "enabled": true
     }
   ]
 }

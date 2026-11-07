@@ -15,6 +15,7 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [borderless-fullscreen](./borderless-fullscreen.wh.cpp) | [TomberWolf](https://github.com/TomberWolf) | 1.2.0 | yes |  |
 | [caption-buttons-customizer](./caption-buttons-customizer.wh.cpp) | [grn15RenS](https://github.com/grn15RenS) | 1.1 | yes | MIT |
 | [cef-titlebar-enabler-universal](./cef-titlebar-enabler-universal.wh.cpp) | [Ingan121](https://github.com/Ingan121) | 1.9 | yes | MIT |
+| [chromium-cursor-remap](./chromium-cursor-remap.wh.cpp) | [mazany](https://github.com/mazany) | 1.0 | yes | MIT |
 | [clipboard-history-upgrade](./clipboard-history-upgrade.wh.cpp) | [SwiftExplorer567](https://github.com/SwiftExplorer567) | 1.3.2 | no |  |
 | [close-explorer-on-esc](./close-explorer-on-esc.wh.cpp) | [lieyanbang](https://github.com/lieyanbang) | 1.2 | no |  |
 | [compact-start-menu](./compact-start-menu.wh.cpp) | [Asteski](https://github.com/Asteski) | 1.0.0 | no |  |

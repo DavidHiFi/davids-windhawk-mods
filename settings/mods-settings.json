@@ -3178,5 +3178,29 @@
     "unitConversions[5].toUnit": "GB",
     "unitConversions[5].formula": "x / 1024",
     "unitConversions[5].category": "Storage"
+  },
+  "chromium-cursor-remap": {
+    "Grab.keepOriginal": 0,
+    "Grab.curFile": "C:\\WINDOWS\\Cursors\\Catppuccin-Mocha-Dark-Cursors\\chromium\\grab.cur",
+    "Grabbing.keepOriginal": 0,
+    "Grabbing.curFile": "C:\\WINDOWS\\Cursors\\Catppuccin-Mocha-Dark-Cursors\\chromium\\grabbing.cur",
+    "ZoomIn.keepOriginal": 0,
+    "ZoomIn.curFile": "C:\\WINDOWS\\Cursors\\Catppuccin-Mocha-Dark-Cursors\\chromium\\zoom-in.cur",
+    "ZoomOut.keepOriginal": 0,
+    "ZoomOut.curFile": "C:\\WINDOWS\\Cursors\\Catppuccin-Mocha-Dark-Cursors\\chromium\\zoom-out.cur",
+    "Cell.keepOriginal": 0,
+    "Cell.curFile": "C:\\WINDOWS\\Cursors\\Catppuccin-Mocha-Dark-Cursors\\chromium\\cell.cur",
+    "VerticalText.keepOriginal": 0,
+    "VerticalText.curFile": "C:\\WINDOWS\\Cursors\\Catppuccin-Mocha-Dark-Cursors\\chromium\\vertical-text.cur",
+    "Alias.keepOriginal": 0,
+    "Alias.curFile": "C:\\WINDOWS\\Cursors\\Catppuccin-Mocha-Dark-Cursors\\chromium\\alias.cur",
+    "Copy.keepOriginal": 0,
+    "Copy.curFile": "C:\\WINDOWS\\Cursors\\Catppuccin-Mocha-Dark-Cursors\\chromium\\copy.cur",
+    "ColResize.keepOriginal": 0,
+    "ColResize.curFile": "C:\\WINDOWS\\Cursors\\Catppuccin-Mocha-Dark-Cursors\\chromium\\col-resize.cur",
+    "RowResize.keepOriginal": 0,
+    "RowResize.curFile": "C:\\WINDOWS\\Cursors\\Catppuccin-Mocha-Dark-Cursors\\chromium\\row-resize.cur",
+    "TestMode.enabled": 0,
+    "TestMode.testCursor": "IDC_WAIT"
   }
 }
