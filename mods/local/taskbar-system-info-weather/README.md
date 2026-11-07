@@ -17,13 +17,17 @@ GPU  4% 56°C ↓ 8.4 MB/s   VRAM  9%  2.1/24G
 
 - **CPU and GPU** load and temperature.
 - **RAM and VRAM** usage with used and total gigabytes, plus capacity bars.
-- **Stacked layout (new in 1.3.0).** Turn on **Stacked layout** for four
-  compact rows (CPU, GPU, RAM, VRAM), each with a segmented meter that fills
-  smoothly and steps from green to yellow, orange and red. Usage percents turn
-  yellow, orange and red as load climbs. CPU TEMP and GPU TEMP wear a
-  thermometer icon that colors with the temperature.
+- **Stacked layout.** Turn on **Stacked layout** for two compact rows that
+  fit inside a 34-pixel dock: CPU and GPU, then RAM and VRAM, then
+  temperatures, then upload and download. Each of CPU, GPU, RAM and VRAM has
+  a segmented meter that fills smoothly and steps from green to yellow,
+  orange and red. Usage percents turn yellow, orange and red as load climbs.
+  The CPU and GPU temperatures wear a thermometer icon that colors with the
+  temperature. Text size comes from **Stacked font size** (10 by default;
+  1.4.18 moved from four tiny rows to two readable ones).
 - **Watts and clocks (stacked layout, HWiNFO Shared Memory).** CPU and GPU
-  show power draw and clock speed, like `92W 4.4GHz`. RAM shows CPU SoC power
+  show power draw and clock speed, like `92 W 4.4 GHz`, with a thin space
+  before each unit. RAM shows CPU SoC power
   (the memory controller, since DDR4 sticks have no power sensor) and VRAM
   shows the GPU memory rail. Watts sit in their own aligned column and keep
   the normal text color until the load climbs.

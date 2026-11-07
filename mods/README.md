@@ -22,7 +22,7 @@
 | [Taskbar Weather](local/taskbar-weather) | Current weather on the taskbar with a details card on hover. | 1.4.0 | MIT |
 | [Taskbar Elastic WinUI Pill Plus](local/taskbar-elastic-pill-plus) | An animated pill that slides under the app you use, with an option to mark open apps. | 2.1.0 | MIT |
 | [Taskbar Collapse to Running Plus](local/taskbar-collapse-to-running-plus) | Hide idle pinned apps and reveal them with a smooth hover transition. | 1.1.5 | MIT |
-| [Taskbar System Info Plus](local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar. | 1.4.17 | GPL-3.0 |
+| [Taskbar System Info Plus](local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar. | 1.4.18 | GPL-3.0 |
 | [Taskbar AI Quota Bars Plus](local/taskbar-ai-quota-opencode) | Claude, Codex, Antigravity and OpenCode Go usage limits on the taskbar. | 1.6.5.1 | MIT |
 | [Seamless Volume Mixer](local/better-volume-mixer-plus) | Tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app devices. | 1.3.0 | MIT |
 | [Translucent Flyouts](local/translucent-flyouts) | Acrylic, Mica and blur menus, dropdowns and tooltips in every app. | 0.6.6 | LGPL-3.0 |
