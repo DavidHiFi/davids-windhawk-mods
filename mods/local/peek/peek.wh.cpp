@@ -2,7 +2,7 @@
 // @id              peek
 // @name            Peek
 // @description     Select a file in File Explorer and press Space to preview it, like PowerToys Peek
-// @version         1.4.0
+// @version         1.5.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -43,13 +43,26 @@ Esc to close it. It works like PowerToys Peek, without PowerToys.
 | Left, Right | Previous or next file. With several files selected it steps through those, otherwise through the whole folder |
 | Enter | Open the file in its normal app and close the preview |
 
+## Zooming pictures and videos
+| Key or mouse | What it does |
+|---|---|
+| Mouse wheel (Ctrl optional) | Zoom in or out around the cursor. A small badge at the bottom shows the zoom, where 100% is the real pixel size |
+| Drag | Move around a zoomed picture or video |
+| Double-click a picture | Zoom to real size, or back to fit |
+| +, - | Zoom in or out around the middle |
+| 0 | Back to fit |
+
+Zooming glides instead of jumping, and pauses for a moment at the fitted
+size on the way through.
+
 ## Keys and mouse for videos and music
 | Key or mouse | What it does |
 |---|---|
 | P, K or the media play key | Play or pause |
 | Click the video | Play or pause |
 | Ctrl+Left, Ctrl+Right | Back or forward 5 seconds |
-| Up, Down, mouse wheel | Volume |
+| Up, Down | Volume |
+| Mouse wheel over the bar, or anywhere for music | Volume |
 | Click or drag the volume slider | Set the volume |
 | M or click the speaker | Mute |
 | Click or drag the bar | Jump to that point |
@@ -146,6 +159,7 @@ PowerToys.
 #include <windhawk_tool_mod.h>
 
 #include <d2d1.h>
+#include <d2d1_1.h>
 #include <dwmapi.h>
 #include <dwrite.h>
 #include <exdisp.h>
@@ -162,6 +176,7 @@ PowerToys.
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
@@ -176,8 +191,12 @@ constexpr UINT WM_APP_SETTINGS = WM_APP + 3;
 
 constexpr UINT_PTR kMediaTimer = 1;
 constexpr UINT_PTR kArtTimer = 2;
+constexpr UINT_PTR kHudTimer = 3;
 
-enum class Key { Close, Prev, Next, Open, PlayPause, SeekBack, SeekFwd, VolUp, VolDown, Mute };
+enum class Key {
+    Close, Prev, Next, Open, PlayPause, SeekBack, SeekFwd, VolUp, VolDown, Mute,
+    ZoomIn, ZoomOut, ZoomFit
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Settings
@@ -359,10 +378,40 @@ struct State {
     SIZE videoSize{};  // native size of the current video
     float volume = 1.0f;  // kept between files until the mod reloads
     LONGLONG duration = 0, dragPos = 0;  // 100 ns units
+
+    // Zoom for pictures and videos: screen pixels per source pixel, and the
+    // offset of the content's center from the center of its area. Until the
+    // first zoom the view follows the fitted size.
+    bool zoomed = false;
+    float zoom = 1.0f, zoomTarget = 1.0f;
+    float panX = 0, panY = 0;
+    float anchorX = 0, anchorY = 0;  // stays put while zooming, from the area center
+    double lastFrame = 0;  // ms
+    bool panPending = false, panning = false;
+    POINT panStart{};
+    float panFromX = 0, panFromY = 0;
+
+    // The zoom badge: a small per-pixel-alpha popup at the bottom of the
+    // preview, drawn into a DIB and pushed with UpdateLayeredWindow.
+    HWND hud = nullptr;
+    ComPtr<ID2D1DCRenderTarget> hudRt;
+    HDC hudDc = nullptr;
+    HBITMAP hudBmp = nullptr, hudOldBmp = nullptr;
+    SIZE hudBmpSize{};
+    POINT hudPos{};
+    SIZE hudSize{};
+    BYTE hudByte = 0;
+    float hudAlpha = 0;
+    double hudShownAt = 0, hudLastTick = 0;
+    std::wstring hudText;
+    ComPtr<IDWriteTextFormat> hudFormat;
+    double fitRestUntil = 0;
+    int fitRestDir = 0;
 } g;
 
 // Read by the keyboard hook thread.
 std::atomic<bool> g_mediaKeys{false};
+std::atomic<bool> g_zoomKeys{false};
 
 HANDLE g_thread = nullptr;
 HANDLE g_ready = nullptr;
@@ -430,6 +479,15 @@ LRESULT CALLBACK KeyboardProc(int code, WPARAM wParam, LPARAM lParam) {
         else if (g_mediaKeys && vk == VK_UP && ModsMatch(0)) key = (int)Key::VolUp;
         else if (g_mediaKeys && vk == VK_DOWN && ModsMatch(0)) key = (int)Key::VolDown;
         else if (g_mediaKeys && vk == 'M' && ModsMatch(0)) key = (int)Key::Mute;
+        else if (g_zoomKeys && (vk == VK_OEM_PLUS || vk == VK_ADD) &&
+                 (ModsMatch(0) || ModsMatch(MOD_SHIFT) || ModsMatch(MOD_CONTROL)))
+            key = (int)Key::ZoomIn;
+        else if (g_zoomKeys && (vk == VK_OEM_MINUS || vk == VK_SUBTRACT) &&
+                 (ModsMatch(0) || ModsMatch(MOD_CONTROL)))
+            key = (int)Key::ZoomOut;
+        else if (g_zoomKeys && (vk == '0' || vk == VK_NUMPAD0) &&
+                 (ModsMatch(0) || ModsMatch(MOD_CONTROL)))
+            key = (int)Key::ZoomFit;
         else if (kb->vkCode == VK_LEFT && ModsMatch(0)) key = (int)Key::Prev;
         else if (kb->vkCode == VK_RIGHT && ModsMatch(0)) key = (int)Key::Next;
         else if (kb->vkCode == VK_RETURN && ModsMatch(0)) key = (int)Key::Open;
@@ -845,6 +903,186 @@ BarRects BarLayout() {
     return b;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Zoom geometry. Pictures fill the whole client area, videos the area above
+// the bar. 100% is one source pixel per screen pixel.
+
+double NowMs() {
+    static LARGE_INTEGER freq = [] {
+        LARGE_INTEGER f;
+        QueryPerformanceFrequency(&f);
+        return f;
+    }();
+    LARGE_INTEGER t;
+    QueryPerformanceCounter(&t);
+    return t.QuadPart * 1000.0 / freq.QuadPart;
+}
+
+RECT ZoomArea() {
+    return g.mode == Mode::Media ? MediaArea() : ContentRect();
+}
+
+bool ContentSize(float* w, float* h) {
+    *w = *h = 0;
+    if (g.mode == Mode::Image) {
+        UINT iw = 0, ih = 0;
+        if (g.bitmap) {
+            D2D1_SIZE_U p = g.bitmap->GetPixelSize();
+            iw = p.width;
+            ih = p.height;
+        } else if (g.image) {
+            g.image->GetSize(&iw, &ih);
+        }
+        *w = (float)iw;
+        *h = (float)ih;
+    } else if (g.mode == Mode::Media && g.mediaHasVideo) {
+        *w = (float)g.videoSize.cx;
+        *h = (float)g.videoSize.cy;
+    }
+    return *w > 0 && *h > 0;
+}
+
+bool CanZoom() {
+    float w, h;
+    RECT a = ZoomArea();
+    return g.wnd && ContentSize(&w, &h) && a.right > a.left && a.bottom > a.top;
+}
+
+float FitScale() {
+    float cw, ch;
+    if (!ContentSize(&cw, &ch)) return 1.0f;
+    RECT a = ZoomArea();
+    float fit = std::min((a.right - a.left) / cw, (a.bottom - a.top) / ch);
+    if (g.mode == Mode::Image && !g_set.upscaleImages) fit = std::min(fit, 1.0f);
+    return std::max(fit, 1e-4f);
+}
+
+float ViewScale() {
+    return g.zoomed ? g.zoom : FitScale();
+}
+
+// Content smaller than its area stays centered; larger content can't be
+// dragged past its edges.
+void ClampPan() {
+    float cw, ch;
+    if (!ContentSize(&cw, &ch)) return;
+    RECT a = ZoomArea();
+    float s = ViewScale();
+    float mx = std::max(0.0f, (cw * s - (a.right - a.left)) / 2);
+    float my = std::max(0.0f, (ch * s - (a.bottom - a.top)) / 2);
+    g.panX = std::clamp(g.panX, -mx, mx);
+    g.panY = std::clamp(g.panY, -my, my);
+}
+
+D2D1_RECT_F ViewRect() {
+    float cw, ch;
+    ContentSize(&cw, &ch);
+    RECT a = ZoomArea();
+    float s = ViewScale(), w = cw * s, h = ch * s;
+    float cx = (a.left + a.right) / 2.0f + (g.zoomed ? g.panX : 0.0f);
+    float cy = (a.top + a.bottom) / 2.0f + (g.zoomed ? g.panY : 0.0f);
+    return D2D1::RectF(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2);
+}
+
+bool CanPan() {
+    if (!g.zoomed || !CanZoom()) return false;
+    D2D1_RECT_F v = ViewRect();
+    RECT a = ZoomArea();
+    return v.right - v.left > a.right - a.left + 0.5f || v.bottom - v.top > a.bottom - a.top + 0.5f;
+}
+
+bool ZoomAnimating() {
+    return g.zoomed && g.zoom != g.zoomTarget;
+}
+
+void ApplyView();
+void ShowZoomHud();
+void HideZoomHud();
+void TickHud();
+
+// Sets where the zoom is heading; the paint loop glides there. `anchor` is a
+// client point that keeps showing the same spot of the content.
+void ZoomTo(float target, POINT anchor) {
+    if (!CanZoom()) return;
+    float fit = FitScale();
+    if (!g.zoomed) {
+        g.zoom = g.zoomTarget = fit;
+        g.panX = g.panY = 0;
+        g.zoomed = true;
+    }
+    float lo = std::max(std::min(fit, 1.0f) / 4, 0.01f);
+    float hi = std::max(fit * 4, 16.0f);
+    float from = g.zoomTarget;
+    target = std::clamp(target, lo, hi);
+    // Rest at the fitted size on the way through it: a fast wheel stops there
+    // for a moment before it carries on in the same direction.
+    double now = NowMs();
+    int dir = target > from ? 1 : -1;
+    bool atFit = fabsf(from / fit - 1.0f) < 0.001f;
+    if (!atFit && ((from < fit && target >= fit * 0.999f) || (from > fit && target <= fit * 1.001f))) {
+        target = fit;
+        g.fitRestUntil = now + 350;
+        g.fitRestDir = dir;
+    } else if (atFit && now < g.fitRestUntil && dir == g.fitRestDir) {
+        target = fit;
+    }
+    if (!ZoomAnimating()) g.lastFrame = now;
+    g.zoomTarget = target;
+    RECT a = ZoomArea();
+    g.anchorX = anchor.x - (a.left + a.right) / 2.0f;
+    g.anchorY = anchor.y - (a.top + a.bottom) / 2.0f;
+    g.panPending = g.panning = false;
+    ApplyView();
+    ShowZoomHud();
+}
+
+POINT ZoomAreaCenter() {
+    RECT a = ZoomArea();
+    return {(a.left + a.right) / 2, (a.top + a.bottom) / 2};
+}
+
+void ZoomStep(float steps, POINT anchor) {
+    float from = g.zoomed ? g.zoomTarget : FitScale();
+    ZoomTo(from * powf(1.25f, steps), anchor);
+}
+
+void ZoomToFit() {
+    if (!g.zoomed) {
+        ShowZoomHud();
+        return;
+    }
+    ZoomTo(FitScale(), ZoomAreaCenter());
+}
+
+// One animation frame: ease the scale toward the target in log space (about
+// 150 ms, no overshoot), keeping the anchor point still.
+void AdvanceZoom() {
+    double now = NowMs();
+    float dt = (float)std::clamp(now - g.lastFrame, 1.0, 50.0);
+    g.lastFrame = now;
+    float lz = logf(g.zoom), lt = logf(g.zoomTarget);
+    float next = g.zoomTarget;
+    if (fabsf(lt - lz) > 0.003f) next = expf(lz + (lt - lz) * (1.0f - expf(-dt / 45.0f)));
+    float r = next / g.zoom;
+    g.panX = g.anchorX + (g.panX - g.anchorX) * r;
+    g.panY = g.anchorY + (g.panY - g.anchorY) * r;
+    g.zoom = next;
+    ClampPan();
+    // Back at the fitted size: follow the window size again.
+    if (g.zoom == g.zoomTarget && fabsf(g.zoom / FitScale() - 1.0f) < 0.001f) {
+        g.zoomed = false;
+        g.panX = g.panY = 0;
+    }
+}
+
+void ResetZoom() {
+    g.zoomed = false;
+    g.zoom = g.zoomTarget = 1.0f;
+    g.panX = g.panY = 0;
+    g.panPending = g.panning = false;
+    g_zoomKeys = false;
+}
+
 LONGLONG MediaPosition() {
     if (g.dragging) return g.dragPos;
     if (!g.player || !g.mediaReady) return 0;
@@ -942,10 +1180,17 @@ void OnPlayerEvent(MFP_EVENT_HEADER* e) {
             ApplyVolume();
             if (g.mediaHasVideo) {
                 g.player->SetBorderColor(g_set.bg);
-                SIZE vs{};
-                if (SUCCEEDED(g.player->GetNativeVideoSize(&vs, nullptr)) && vs.cx > 0 &&
-                    vs.cy > 0)
+                SIZE vs{}, ar{};
+                if (SUCCEEDED(g.player->GetNativeVideoSize(&vs, &ar)) && vs.cx > 0 &&
+                    vs.cy > 0) {
+                    // Display size: the picture aspect covers non-square pixels.
+                    if (ar.cx > 0 && ar.cy > 0) vs.cx = MulDiv(vs.cy, ar.cx, ar.cy);
                     g.videoSize = vs;
+                    // The child window and the source rectangle are sized to
+                    // match, so the player can stretch without letterboxing.
+                    g.player->SetAspectRatioMode(MFVideoARMode_None);
+                    g_zoomKeys = true;
+                }
                 LayoutChildren();
                 ShowWindow(g.video, SW_SHOW);
             }
@@ -1037,9 +1282,52 @@ LRESULT CALLBACK VideoWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_SIZE:
             if (g.player && g.mediaHasVideo) g.player->UpdateVideo();
             return 0;
+        // A click plays or pauses. On a zoomed video a drag moves the view
+        // instead. Screen coordinates, because this window moves with the pan.
         case WM_LBUTTONDOWN:
-            TogglePlay();
+            if (CanPan()) {
+                g.panPending = true;
+                g.panning = false;
+                GetCursorPos(&g.panStart);
+                g.panFromX = g.panX;
+                g.panFromY = g.panY;
+                g.zoomTarget = g.zoom;  // stop any zoom glide
+                SetCapture(hwnd);
+            } else {
+                TogglePlay();
+            }
             return 0;
+        case WM_MOUSEMOVE:
+            if (g.panPending || g.panning) {
+                POINT p;
+                GetCursorPos(&p);
+                int dx = p.x - g.panStart.x, dy = p.y - g.panStart.y;
+                if (!g.panning && abs(dx) + abs(dy) > GetSystemMetrics(SM_CXDRAG)) g.panning = true;
+                if (g.panning) {
+                    g.panX = g.panFromX + dx;
+                    g.panY = g.panFromY + dy;
+                    ClampPan();
+                    ApplyView();
+                }
+            }
+            return 0;
+        case WM_LBUTTONUP:
+            if (g.panPending || g.panning) {
+                bool click = !g.panning;
+                g.panPending = g.panning = false;
+                ReleaseCapture();
+                if (click) TogglePlay();
+            }
+            return 0;
+        case WM_CAPTURECHANGED:
+            g.panPending = g.panning = false;
+            return 0;
+        case WM_SETCURSOR:
+            if (LOWORD(lp) == HTCLIENT) {
+                SetCursor(LoadCursor(nullptr, g.panning ? IDC_SIZEALL : IDC_HAND));
+                return TRUE;
+            }
+            break;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
@@ -1172,6 +1460,8 @@ void ShowItem() {
     g.bitmap.Reset();
     g.infoLines.clear();
     g.mode = Mode::None;
+    ResetZoom();
+    HideZoomHud();
 
     ComPtr<IShellItem> item;
     if (g.index >= g.items.size() ||
@@ -1221,6 +1511,7 @@ void ShowItem() {
     } else {
         SetFocus(g.wnd);
     }
+    if (g.mode == Mode::Image) g_zoomKeys = true;
     InvalidateRect(g.wnd, nullptr, TRUE);
 }
 
@@ -1237,6 +1528,25 @@ struct CompositionData {
 // with the background color, and the frame pulled over the whole window. The
 // accent keeps blurring when the window is inactive, unlike the system
 // backdrops, which fall back to a flat color.
+// `tint` is AABBGGRR.
+void ApplyAccent(HWND hwnd, DWORD tint) {
+    using SetWca = BOOL(WINAPI*)(HWND, CompositionData*);
+    static auto setWca =
+        (SetWca)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
+    if (!setWca) return;
+    int none = 1 /* DWMSBT_NONE */;
+    DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &none, sizeof(none));
+    HRGN empty = CreateRectRgn(0, 0, -1, -1);
+    DWM_BLURBEHIND bb{DWM_BB_ENABLE | DWM_BB_BLURREGION, TRUE, empty, FALSE};
+    DwmEnableBlurBehindWindow(hwnd, &bb);
+    DeleteObject(empty);
+    AccentPolicy accent{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 0, tint, 0};
+    CompositionData data{19 /* WCA_ACCENT_POLICY */, &accent, sizeof(accent)};
+    setWca(hwnd, &data);
+    MARGINS sheet{-1, -1, -1, -1};
+    DwmExtendFrameIntoClientArea(hwnd, &sheet);
+}
+
 void ApplyMaterial(HWND hwnd) {
     BOOL dark = g_set.darkMode;
     DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
@@ -1245,24 +1555,8 @@ void ApplyMaterial(HWND hwnd) {
         DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &caption, sizeof(caption));
         return;
     }
-    using SetWca = BOOL(WINAPI*)(HWND, CompositionData*);
-    static auto setWca =
-        (SetWca)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
-    if (!setWca) return;
-
-    int none = 1 /* DWMSBT_NONE */;
-    DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &none, sizeof(none));
-    HRGN empty = CreateRectRgn(0, 0, -1, -1);
-    DWM_BLURBEHIND bb{DWM_BB_ENABLE | DWM_BB_BLURREGION, TRUE, empty, FALSE};
-    DwmEnableBlurBehindWindow(hwnd, &bb);
-    DeleteObject(empty);
     BYTE alpha = (BYTE)(g_set.blurTint * 255 / 100);
-    AccentPolicy accent{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 0,
-                        ((DWORD)alpha << 24) | (g_set.bg & 0xFFFFFF), 0};
-    CompositionData data{19 /* WCA_ACCENT_POLICY */, &accent, sizeof(accent)};
-    setWca(hwnd, &data);
-    MARGINS sheet{-1, -1, -1, -1};
-    DwmExtendFrameIntoClientArea(hwnd, &sheet);
+    ApplyAccent(hwnd, ((DWORD)alpha << 24) | (g_set.bg & 0xFFFFFF));
 }
 
 // Under the glass sheet, GDI paints with zero alpha; black shows the glass.
@@ -1314,16 +1608,25 @@ void Paint() {
 
     float w = (float)rc.right, h = (float)rc.bottom;
     float scale = GetDpiForWindow(g.wnd) / 96.0f;
+    // Zoom frames ride on paint, so each one waits for the display's refresh.
+    bool animating = ZoomAnimating();
+    if (animating) {
+        AdvanceZoom();
+        if (g.mode == Mode::Media) LayoutChildren();
+    }
     g.rt->BeginDraw();
     g.rt->Clear(g_set.blur ? D2D1::ColorF(0, 0.0f) : ToD2D(g_set.bg));
 
     if (g.mode == Mode::Image && g.bitmap) {
-        D2D1_SIZE_F bs = g.bitmap->GetSize();
-        float fit = std::min(w / bs.width, h / bs.height);
-        if (!g_set.upscaleImages) fit = std::min(fit, 1.0f);
-        float dw = bs.width * fit, dh = bs.height * fit;
-        D2D1_RECT_F dst = D2D1::RectF((w - dw) / 2, (h - dh) / 2, (w + dw) / 2, (h + dh) / 2);
-        g.rt->DrawBitmap(g.bitmap.Get(), dst, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+        D2D1_RECT_F dst = ViewRect();
+        ComPtr<ID2D1DeviceContext> dc;
+        // Downscaled and at rest: the sharper filter. Moving or enlarged:
+        // the cheap smooth one.
+        if (ViewScale() < 1.0f && !ZoomAnimating() && SUCCEEDED(g.rt.As(&dc)))
+            dc->DrawBitmap(g.bitmap.Get(), &dst, 1.0f, D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC,
+                           nullptr, nullptr);
+        else
+            g.rt->DrawBitmap(g.bitmap.Get(), dst, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
     } else if (g.mode == Mode::Info) {
         DrawInfo(w, h, 256.0f * scale, 0.45f, 0.18f);
     } else if (g.mode == Mode::Media) {
@@ -1333,6 +1636,14 @@ void Paint() {
     if (g.rt->EndDraw() == D2DERR_RECREATE_TARGET) {
         g.bitmap.Reset();
         g.rt.Reset();
+    }
+    // Keep going until the glide lands; one more frame after it lands
+    // repaints with the sharp filter.
+    if (animating) {
+        InvalidateRect(g.wnd, nullptr, FALSE);
+        // A pending paint holds back WM_TIMER, so the badge fades from here
+        // while the glide runs.
+        if (g.hud && IsWindowVisible(g.hud)) TickHud();
     }
 }
 
@@ -1546,18 +1857,40 @@ void LayoutChildren() {
     RECT rc = ContentRect();
     int w = rc.right - rc.left, h = rc.bottom - rc.top;
     if (g.mode == Mode::Text) MoveWindow(g.edit, rc.left, rc.top, w, h, TRUE);
+    if (g.zoomed) ClampPan();
     if (g.mode == Mode::Media) {
         RECT m = MediaArea();
         // Fit the video exactly, so the empty borders around it are the
         // window's own material: the glass behind the window when the glass
-        // background is on, like the space around a picture.
-        if (g.mediaHasVideo && g.videoSize.cx > 0 && g.videoSize.cy > 0 && m.right > m.left &&
-            m.bottom > m.top) {
-            float fit = std::min((float)(m.right - m.left) / g.videoSize.cx,
-                                 (float)(m.bottom - m.top) / g.videoSize.cy);
-            int w = (int)(g.videoSize.cx * fit), h = (int)(g.videoSize.cy * fit);
-            MoveWindow(g.video, m.left + ((m.right - m.left) - w) / 2,
-                       m.top + ((m.bottom - m.top) - h) / 2, w, h, TRUE);
+        // background is on, like the space around a picture. Zoomed, the
+        // window covers the visible part of the video and the player shows
+        // the matching slice of the frame.
+        if (g.mediaHasVideo && CanZoom()) {
+            D2D1_RECT_F v = ViewRect();
+            RECT r{std::max((LONG)lroundf(v.left), m.left), std::max((LONG)lroundf(v.top), m.top),
+                   std::min((LONG)lroundf(v.right), m.right),
+                   std::min((LONG)lroundf(v.bottom), m.bottom)};
+            r.right = std::max(r.right, r.left + 1);
+            r.bottom = std::max(r.bottom, r.top + 1);
+            RECT old;
+            GetWindowRect(g.video, &old);
+            MapWindowPoints(nullptr, g.wnd, (POINT*)&old, 2);
+            MoveWindow(g.video, r.left, r.top, r.right - r.left, r.bottom - r.top, TRUE);
+            if (g.player) {
+                float vw = v.right - v.left, vh = v.bottom - v.top;
+                MFVideoNormalizedRect src{0, 0, 1, 1};
+                if (g.zoomed) {
+                    src.left = std::clamp((r.left - v.left) / vw, 0.0f, 1.0f);
+                    src.top = std::clamp((r.top - v.top) / vh, 0.0f, 1.0f);
+                    src.right = std::clamp((r.right - v.left) / vw, src.left, 1.0f);
+                    src.bottom = std::clamp((r.bottom - v.top) / vh, src.top, 1.0f);
+                }
+                g.player->SetVideoSourceRect(&src);
+                // A pure pan keeps the window size, so no WM_SIZE redraws it.
+                if (old.right - old.left == r.right - r.left &&
+                    old.bottom - old.top == r.bottom - r.top)
+                    g.player->UpdateVideo();
+            }
         } else {
             MoveWindow(g.video, m.left, m.top, m.right - m.left, m.bottom - m.top, TRUE);
         }
@@ -1568,6 +1901,262 @@ void LayoutChildren() {
         g.handler->SetRect(&hostRc);
     }
     InvalidateRect(g.wnd, nullptr, FALSE);
+}
+
+void ApplyView() {
+    if (!g.wnd) return;
+    if (g.mode == Mode::Media)
+        LayoutChildren();
+    else
+        InvalidateRect(g.wnd, nullptr, FALSE);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Zoom badge: a small rounded acrylic popup at the bottom middle of the
+// picture, with a magnifier and the zoom in percent. It fades in on every
+// zoom change and fades out after a short rest.
+
+constexpr double kHudFadeIn = 140, kHudFadeOut = 180, kHudHold = 1100;
+
+int HudHeight() {
+    return (int)lroundf(30 * Scale());
+}
+
+void PaintHud();
+
+void PositionHud() {
+    if (!g.hud || !g.wnd) return;
+    float s = Scale();
+    ComPtr<IDWriteTextLayout> layout;
+    float textW = 44 * s;
+    if (g.dwrite && g.hudFormat &&
+        SUCCEEDED(g.dwrite->CreateTextLayout(g.hudText.c_str(), (UINT32)g.hudText.size(),
+                                             g.hudFormat.Get(), 1000, 100, &layout))) {
+        DWRITE_TEXT_METRICS m;
+        if (SUCCEEDED(layout->GetMetrics(&m))) textW = m.widthIncludingTrailingWhitespace;
+    }
+    int h = HudHeight();
+    int w = (int)lroundf(12 * s + 15 * s + 7 * s + textW + 13 * s);
+    RECT a = ZoomArea();
+    POINT p{(a.left + a.right - w) / 2, a.bottom - h - (int)lroundf(14 * s)};
+    ClientToScreen(g.wnd, &p);
+    g.hudPos = p;
+    g.hudSize = {w, h};
+    PaintHud();
+}
+
+void FreeHudBitmap() {
+    g.hudRt.Reset();
+    if (g.hudDc) {
+        if (g.hudOldBmp) SelectObject(g.hudDc, g.hudOldBmp);
+        DeleteDC(g.hudDc);
+    }
+    if (g.hudBmp) DeleteObject(g.hudBmp);
+    g.hudDc = nullptr;
+    g.hudBmp = g.hudOldBmp = nullptr;
+    g.hudBmpSize = {};
+}
+
+// Draws the badge with per-pixel alpha, so the round corners and the ring are
+// anti-aliased against whatever is behind them. A DWM-rounded window clips
+// its corners with a hard edge, which chopped the ring into a jagged octagon.
+void PaintHud() {
+    if (!g.hud || !g.d2d || g.hudSize.cx <= 0 || g.hudSize.cy <= 0) return;
+    int pw = g.hudSize.cx, ph = g.hudSize.cy;
+    if (!g.hudDc || g.hudBmpSize.cx != pw || g.hudBmpSize.cy != ph) {
+        FreeHudBitmap();
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+        bi.bmiHeader.biWidth = pw;
+        bi.bmiHeader.biHeight = -ph;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        void* bits = nullptr;
+        g.hudDc = CreateCompatibleDC(nullptr);
+        g.hudBmp = CreateDIBSection(g.hudDc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+        if (!g.hudDc || !g.hudBmp) {
+            FreeHudBitmap();
+            return;
+        }
+        g.hudOldBmp = (HBITMAP)SelectObject(g.hudDc, g.hudBmp);
+        g.hudBmpSize = {pw, ph};
+    }
+    if (!g.hudRt) {
+        auto props = D2D1::RenderTargetProperties(
+            D2D1_RENDER_TARGET_TYPE_DEFAULT,
+            D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96.0f,
+            96.0f);
+        if (FAILED(g.d2d->CreateDCRenderTarget(&props, &g.hudRt))) return;
+        g.hudRt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+    }
+    RECT rc{0, 0, pw, ph};
+    if (FAILED(g.hudRt->BindDC(g.hudDc, &rc))) return;
+    float s = Scale(), h = (float)ph;
+    ID2D1DCRenderTarget* rt = g.hudRt.Get();
+    rt->BeginDraw();
+    rt->Clear(D2D1::ColorF(0, 0.0f));
+
+    // One rounded shape: the fill's edge lies on the centre line of the blue
+    // ring, so the ring covers it and nothing shows between them.
+    float radius = 8 * s, line = std::max(1.0f, s), half = line / 2;
+    D2D1_ROUNDED_RECT shape = D2D1::RoundedRect(
+        D2D1::RectF(half, half, rc.right - half, h - half), radius - half, radius - half);
+    ComPtr<ID2D1SolidColorBrush> fill, ring;
+    rt->CreateSolidColorBrush(D2D1::ColorF(0x18 / 255.0f, 0x18 / 255.0f, 0x25 / 255.0f, 0.94f), &fill);
+    rt->CreateSolidColorBrush(ToD2D(g_set.accent2), &ring);
+    if (fill) rt->FillRoundedRectangle(shape, fill.Get());
+    if (ring) rt->DrawRoundedRectangle(shape, ring.Get(), line);
+
+    // Magnifier: a ring and a round-capped handle in the accent gradient.
+    float cx = 12 * s + 6.5f * s, cy = h / 2 - 1.5f * s, r = 5.5f * s;
+    ComPtr<ID2D1GradientStopCollection> stops;
+    D2D1_GRADIENT_STOP gs[2] = {{0.0f, ToD2D(g_set.accent)}, {1.0f, ToD2D(g_set.accent2)}};
+    ComPtr<ID2D1Brush> icon;
+    ComPtr<ID2D1LinearGradientBrush> grad;
+    if (SUCCEEDED(rt->CreateGradientStopCollection(gs, 2, &stops)) &&
+        SUCCEEDED(rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(cx - r, cy - r),
+                                                D2D1::Point2F(cx + r * 2, cy + r * 2)),
+            stops.Get(), &grad)))
+        icon = grad;
+    if (!icon) {
+        ComPtr<ID2D1SolidColorBrush> solid;
+        rt->CreateSolidColorBrush(ToD2D(g_set.accent), &solid);
+        icon = solid;
+    }
+    ComPtr<ID2D1StrokeStyle> round;
+    g.d2d->CreateStrokeStyle(D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND,
+                                                         D2D1_CAP_STYLE_ROUND),
+                             nullptr, 0, &round);
+    float stroke = std::max(1.6f * s, 1.5f);
+    if (icon) {
+        rt->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), r, r), icon.Get(), stroke);
+        float d = r * 0.7071f;
+        rt->DrawLine(D2D1::Point2F(cx + d + 0.6f * s, cy + d + 0.6f * s),
+                     D2D1::Point2F(cx + d + 4.2f * s, cy + d + 4.2f * s), icon.Get(),
+                     stroke * 1.25f, round.Get());
+    }
+
+    // The percentage.
+    ComPtr<ID2D1SolidColorBrush> text;
+    rt->CreateSolidColorBrush(ToD2D(g_set.fg), &text);
+    if (text && g.hudFormat) {
+        float x = 12 * s + 15 * s + 7 * s;
+        rt->DrawTextW(g.hudText.c_str(), (UINT32)g.hudText.size(), g.hudFormat.Get(),
+                      D2D1::RectF(x, 0, (float)rc.right, h), text.Get());
+    }
+    if (rt->EndDraw() == D2DERR_RECREATE_TARGET) {
+        g.hudRt.Reset();
+        return;
+    }
+    POINT src{0, 0};
+    SIZE size{pw, ph};
+    BLENDFUNCTION bf{AC_SRC_OVER, 0, g.hudByte, AC_SRC_ALPHA};
+    UpdateLayeredWindow(g.hud, nullptr, &g.hudPos, &size, g.hudDc, &src, 0, &bf, ULW_ALPHA);
+    SetWindowPos(g.hud, HWND_TOP, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+}
+
+// Fades only: the pushed picture stays and just its opacity changes.
+void SetHudOpacity(BYTE b) {
+    g.hudByte = b;
+    BLENDFUNCTION bf{AC_SRC_OVER, 0, b, AC_SRC_ALPHA};
+    UpdateLayeredWindow(g.hud, nullptr, nullptr, nullptr, nullptr, nullptr, 0, &bf, ULW_ALPHA);
+}
+
+void SetHudAlpha(float a) {
+    g.hudAlpha = a;
+    SetHudOpacity((BYTE)lroundf(std::clamp(a, 0.0f, 1.0f) * 255));
+}
+
+void ShowZoomHud() {
+    if (!g.hud || !g.wnd || !IsWindowVisible(g.wnd) || IsIconic(g.wnd)) return;
+    float target = g.zoomed ? g.zoomTarget : FitScale();
+    wchar_t buf[16];
+    swprintf_s(buf, L"%d%%", (int)lroundf(target * 100));
+    bool resized = g.hudText.size() != wcslen(buf);
+    bool changed = g.hudText != buf;
+    g.hudText = buf;
+    if (resized || !IsWindowVisible(g.hud)) PositionHud();
+    else if (changed) PaintHud();
+    if (!IsWindowVisible(g.hud)) {
+        SetHudAlpha(0);
+        ShowWindow(g.hud, SW_SHOWNOACTIVATE);
+    }
+    g.hudShownAt = NowMs();
+    g.hudLastTick = g.hudShownAt;
+    SetTimer(g.wnd, kHudTimer, 15, nullptr);
+}
+
+void HideZoomHud() {
+    if (g.wnd) KillTimer(g.wnd, kHudTimer);
+    if (g.hud) ShowWindow(g.hud, SW_HIDE);
+    g.hudAlpha = 0;
+}
+
+void TickHud() {
+    double now = NowMs();
+    float dt = (float)(now - g.hudLastTick);
+    g.hudLastTick = now;
+    if (ZoomAnimating() || g.panning) g.hudShownAt = now;
+    bool holding = now - g.hudShownAt < kHudHold;
+    // Linear progress, eased when applied.
+    float a = g.hudAlpha;
+    if (holding) {
+        a = std::min(1.0f, a + dt / (float)kHudFadeIn);
+    } else {
+        a = std::max(0.0f, a - dt / (float)kHudFadeOut);
+    }
+    g.hudAlpha = a;
+    float eased = holding ? 1 - (1 - a) * (1 - a) : a * (2 - a);
+    SetHudOpacity((BYTE)lroundf(eased * 255));
+    if (!holding && a <= 0) HideZoomHud();
+}
+
+LRESULT CALLBACK HudWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+        case WM_NCHITTEST:
+            return HTTRANSPARENT;
+        case WM_MOUSEACTIVATE:
+            return MA_NOACTIVATE;
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_PAINT:
+            ValidateRect(hwnd, nullptr);
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+void ApplyAccent(HWND hwnd, DWORD tint);
+
+void CreateHud(HWND owner) {
+    g.hud = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT | WS_EX_LAYERED,
+                            L"WindhawkPeekZoom", L"", WS_POPUP, 0, 0, 1, 1, owner, nullptr,
+                            GetModuleHandleW(nullptr), nullptr);
+    if (!g.hud) return;
+    // The shape, corners and ring are all in the pixels; DWM must not round
+    // or border it.
+    int noRound = 1 /* DWMWCP_DONOTROUND */;
+    DwmSetWindowAttribute(g.hud, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &noRound, sizeof(noRound));
+    COLORREF noBorder = 0xFFFFFFFE /* DWMWA_COLOR_NONE */;
+    DwmSetWindowAttribute(g.hud, 34 /* DWMWA_BORDER_COLOR */, &noBorder, sizeof(noBorder));
+    if (g.dwrite) {
+        g.hudFormat.Reset();
+        float size = 13 * Scale();
+        if (FAILED(g.dwrite->CreateTextFormat(L"FiraCode Nerd Font", nullptr,
+                                              DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL,
+                                              DWRITE_FONT_STRETCH_NORMAL, size, L"",
+                                              &g.hudFormat)))
+            g.dwrite->CreateTextFormat(L"Segoe UI Variable Text", nullptr,
+                                       DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL,
+                                       DWRITE_FONT_STRETCH_NORMAL, size, L"", &g.hudFormat);
+        if (g.hudFormat) {
+            g.hudFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+            g.hudFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        }
+    }
 }
 
 void ClosePreview() {
@@ -1604,11 +2193,14 @@ LRESULT CALLBACK PreviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                                      hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
             g.video = CreateWindowExW(0, L"WindhawkPeekVideo", L"", WS_CHILD | WS_CLIPSIBLINGS, 0, 0,
                                       0, 0, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+            CreateHud(hwnd);
             UpdateIcons(hwnd);
             return 0;
         }
         case WM_TIMER:
-            if (wp == kMediaTimer) {
+            if (wp == kHudTimer) {
+                TickHud();
+            } else if (wp == kMediaTimer) {
                 // A Play() issued from inside the item-set callback is
                 // occasionally ignored by the session (state stays stopped).
                 // Retry from the message loop, the normal calling context.
@@ -1634,8 +2226,28 @@ LRESULT CALLBACK PreviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_LBUTTONDOWN:
         case WM_LBUTTONDBLCLK: {
-            if (g.mode != Mode::Media) break;
             POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            if (g.mode == Mode::Image) {
+                if (msg == WM_LBUTTONDBLCLK && CanZoom()) {
+                    // Real size and back. A picture already shown at real
+                    // size or larger goes to twice its fitted size.
+                    float fit = FitScale();
+                    if (g.zoomed && fabsf(g.zoomTarget / fit - 1.0f) > 0.001f)
+                        ZoomTo(fit, pt);
+                    else
+                        ZoomTo(fit < 0.999f ? 1.0f : fit * 2, pt);
+                } else if (CanPan()) {
+                    g.panning = true;
+                    g.panStart = pt;
+                    g.panFromX = g.panX;
+                    g.panFromY = g.panY;
+                    g.zoomTarget = g.zoom;  // stop any zoom glide
+                    SetCapture(hwnd);
+                    SetCursor(LoadCursor(nullptr, IDC_SIZEALL));
+                }
+                return 0;
+            }
+            if (g.mode != Mode::Media) break;
             BarRects b = BarLayout();
             if (PtInRect(&b.button, pt)) {
                 TogglePlay();
@@ -1655,7 +2267,12 @@ LRESULT CALLBACK PreviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         case WM_MOUSEMOVE:
-            if (g.dragging) {
+            if (g.panning && g.mode == Mode::Image) {
+                g.panX = g.panFromX + (GET_X_LPARAM(lp) - g.panStart.x);
+                g.panY = g.panFromY + (GET_Y_LPARAM(lp) - g.panStart.y);
+                ClampPan();
+                InvalidateRect(hwnd, nullptr, FALSE);
+            } else if (g.dragging) {
                 RECT t = BarLayout().track;
                 double frac = t.right > t.left ? (double)(GET_X_LPARAM(lp) - t.left) / (t.right - t.left) : 0;
                 g.dragPos = (LONGLONG)(std::clamp(frac, 0.0, 1.0) * g.duration);
@@ -1672,7 +2289,10 @@ LRESULT CALLBACK PreviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             return 0;
         case WM_LBUTTONUP:
-            if (g.dragging) {
+            if (g.panning && g.mode == Mode::Image) {
+                g.panning = false;
+                ReleaseCapture();
+            } else if (g.dragging) {
                 g.dragging = false;
                 ReleaseCapture();
                 SeekTo(g.dragPos);
@@ -1684,13 +2304,34 @@ LRESULT CALLBACK PreviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_CAPTURECHANGED:
             g.dragging = g.draggingVol = false;
+            if (g.mode == Mode::Image) g.panning = false;
             return 0;
-        case WM_MOUSEWHEEL:
-            if (g.mode == Mode::Media) {
-                ChangeVolume(GET_WHEEL_DELTA_WPARAM(wp) / (float)WHEEL_DELTA * 0.05f);
+        case WM_SETCURSOR:
+            if (LOWORD(lp) == HTCLIENT && (HWND)wp == hwnd && g.mode == Mode::Image && CanPan()) {
+                SetCursor(LoadCursor(nullptr, g.panning ? IDC_SIZEALL : IDC_HAND));
+                return TRUE;
+            }
+            break;
+        // Zooms around the cursor. Music, and the wheel over the bar, still
+        // set the volume. Touchpads send small deltas; the zoom follows them.
+        case WM_MOUSEWHEEL: {
+            float steps = GET_WHEEL_DELTA_WPARAM(wp) / (float)WHEEL_DELTA;
+            POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            ScreenToClient(hwnd, &pt);
+            if (g.mode == Mode::Media &&
+                (!g.mediaHasVideo || !CanZoom() || pt.y >= MediaArea().bottom)) {
+                ChangeVolume(steps * 0.05f);
+                return 0;
+            }
+            if ((g.mode == Mode::Image || g.mode == Mode::Media) && CanZoom()) {
+                RECT a = ZoomArea();
+                pt.x = std::clamp(pt.x, a.left, a.right);
+                pt.y = std::clamp(pt.y, a.top, a.bottom);
+                ZoomStep(steps, pt);
                 return 0;
             }
             break;
+        }
         case WM_ERASEBKGND: {
             RECT rc;
             GetClientRect(hwnd, &rc);
@@ -1702,6 +2343,11 @@ LRESULT CALLBACK PreviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_SIZE:
             LayoutChildren();
+            if (wp == SIZE_MINIMIZED) HideZoomHud();
+            else if (g.hud && IsWindowVisible(g.hud)) PositionHud();
+            return 0;
+        case WM_MOVE:
+            if (g.hud && IsWindowVisible(g.hud)) PositionHud();
             return 0;
         case WM_DPICHANGED: {
             auto* r = (RECT*)lp;
@@ -1726,6 +2372,16 @@ LRESULT CALLBACK PreviewWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_DESTROY:
             StopMedia();
             UnloadHandler();
+            KillTimer(hwnd, kHudTimer);
+            FreeHudBitmap();
+            g.hudFormat.Reset();
+            g.hudSize = {};
+            g.hudByte = 0;
+            if (g.hud) DestroyWindow(g.hud);
+            g.hud = nullptr;
+            g.hudAlpha = 0;
+            g.hudText.clear();
+            ResetZoom();
             g.rt.Reset();
             g.bitmap.Reset();
             g.image.Reset();
@@ -1821,6 +2477,15 @@ void OnKey(Key key) {
             ApplyVolume();
             InvalidateRect(g.wnd, nullptr, FALSE);
             break;
+        case Key::ZoomIn:
+            ZoomStep(1, ZoomAreaCenter());
+            break;
+        case Key::ZoomOut:
+            ZoomStep(-1, ZoomAreaCenter());
+            break;
+        case Key::ZoomFit:
+            ZoomToFit();
+            break;
     }
 }
 
@@ -1909,6 +2574,7 @@ DWORD WINAPI ThreadProc(void*) {
     pc.lpfnWndProc = PreviewWndProc;
     pc.hInstance = inst;
     pc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    pc.style = CS_DBLCLKS;  // double-click toggles a picture's zoom
     pc.lpszClassName = L"WindhawkPeek";
     RegisterClassW(&pc);
     WNDCLASSW vc{};
@@ -1917,6 +2583,12 @@ DWORD WINAPI ThreadProc(void*) {
     vc.hCursor = LoadCursor(nullptr, IDC_HAND);
     vc.lpszClassName = L"WindhawkPeekVideo";
     RegisterClassW(&vc);
+    WNDCLASSW hc{};
+    hc.lpfnWndProc = HudWndProc;
+    hc.hInstance = inst;
+    hc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    hc.lpszClassName = L"WindhawkPeekZoom";
+    RegisterClassW(&hc);
 
     g.msgWnd = CreateWindowExW(0, mc.lpszClassName, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr,
                                inst, nullptr);
@@ -1945,6 +2617,7 @@ DWORD WINAPI ThreadProc(void*) {
     if (g.iconSmall) DestroyIcon(g.iconSmall);
     if (g.iconBig) DestroyIcon(g.iconBig);
     g.iconSmall = g.iconBig = nullptr;
+    UnregisterClassW(hc.lpszClassName, inst);
     UnregisterClassW(vc.lpszClassName, inst);
     UnregisterClassW(pc.lpszClassName, inst);
     UnregisterClassW(mc.lpszClassName, inst);
