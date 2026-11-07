@@ -17,7 +17,8 @@ per-app compressor, and per-app audio devices.
 - **Send any app to a different speaker or microphone.** Right-click an app,
   then pick **Output device** or **Input device**. Pick **Default** to undo it.
 - **Master and per-app volume** with mute buttons, scroll-wheel control and
-  exact values.
+  exact values: click any number, including the compressor's threshold,
+  ratio, attack and release, and type it in.
 - **Quick playback device switching** from the top of the mixer.
 - **Pin, rename or hide apps**, and give apps a default volume.
 - **Middle-click to mute**, in the mixer or on the tray icon.

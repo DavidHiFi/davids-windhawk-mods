@@ -2,7 +2,7 @@
 // @id           better-volume-mixer-plus
 // @name         Seamless Volume Mixer
 // @description  A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices
-// @version      1.3.0
+// @version      1.3.1
 // @author       DavidHiFi, 0Allu, shubho
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -101,9 +101,9 @@ Boost and compressor from
 - keyboardControls: false
   $name: Keyboard controls
   $description: Up/Down selects a row, Left/Right changes volume by the mouse-wheel step, and M toggles mute. Works while the mixer is focused. Off by default.
-- exactVolumeEntry: false
-  $name: Exact volume entry
-  $description: Click a percentage to enter a whole number, 0 to 1000 for apps or 0 to 100 for master volume. Enter applies it; Escape or clicking elsewhere cancels. Off by default.
+- exactVolumeEntry: true
+  $name: Exact value entry
+  $description: Click a number to type an exact value. Works for volume percentages (0 to 1000 for apps, 0 to 100 for master) and the compressor values (threshold -60 to 0 dB, ratio 1 to 20, attack 1 to 500 ms, release 10 to 2000 ms). Enter applies it; Escape or clicking elsewhere cancels. On by default.
 - animations: true
   $name: Enable animations
   $description: Animate opening, hover effects, and volume changes. The Windows animation preference is also respected.
@@ -932,7 +932,7 @@ struct Settings {
     int maxVisibleApps = 7;
     int volumeStep = 5;
     bool keyboardControls = false;
-    bool exactVolumeEntry = false;
+    bool exactVolumeEntry = true;
     std::vector<CustomApp> customApps;
     std::vector<std::wstring> hiddenApps;
 };
@@ -1168,6 +1168,7 @@ std::wstring g_selectedPinKey;
 HWND g_volumeEntry;
 HWND g_volumeEdit;
 int g_volumeEntryRow = DRAG_NONE;
+int g_volumeEntryParam = -1;  // compressor value being typed, or -1 for volume
 ULONG_PTR g_volumeEntryGeneration;
 constexpr PCWSTR VOLUME_ENTRY_CLASS = L"WindhawkBetterVolumeMixerEntry";
 constexpr PCWSTR NAME_TOOLTIP_CLASS = L"WindhawkBetterVolumeMixerTooltip";
@@ -3170,6 +3171,13 @@ RECT ParamLabelRect(int visibleRow, int clientWidth, int index) {
     return {cell.left, cell.top, cell.right, cell.top + Scale(IsCompact() ? 14 : 16)};
 }
 
+// The value text on the right of a compressor label; clicking it types a value.
+RECT ParamValueRect(int visibleRow, int clientWidth, int index) {
+    RECT label = ParamLabelRect(visibleRow, clientWidth, index);
+    label.left = label.right - Scale(64);
+    return label;
+}
+
 RECT ParamSliderRect(int visibleRow, int clientWidth, int index) {
     RECT cell = ParamCellRect(visibleRow, clientWidth, index);
     int center = cell.top + Scale(IsCompact() ? 20 : 24);
@@ -3257,9 +3265,39 @@ bool ParseVolumePercent(const std::wstring& text, int maximum, int& value) {
     return true;
 }
 
+// Accepts "40", "-40", "-40 dB", "2.5", "2.5:1", "150 ms". A positive threshold
+// is read as negative, since the range is -60..0 dB.
+bool ParseParamValue(const wchar_t* text, int index, float& value) {
+    wchar_t* end = nullptr;
+    float parsed = std::wcstof(text, &end);
+    if (end == text || !std::isfinite(parsed)) return false;
+    for (; *end; ++end) {
+        if (!wcschr(L" \tdDbBmMsS:1", *end)) return false;
+    }
+    if (index == 0 && parsed > 0.0f) parsed = -parsed;
+    const ParamRange& range = kParamRanges[index];
+    if (parsed < range.minimum || parsed > range.maximum) return false;
+    value = parsed;
+    return true;
+}
+
 bool FinishVolumeEntry(HWND owner, bool commit, bool returnFocus) {
     if (!g_volumeEntry) return true;
-    if (commit) {
+    if (commit && g_volumeEntryParam >= 0) {
+        WCHAR text[32]{};
+        GetWindowTextW(g_volumeEdit, text, ARRAYSIZE(text));
+        float value;
+        if (!RowHasBoostUi(g_volumeEntryRow) ||
+            !ParseParamValue(text, g_volumeEntryParam, value)) {
+            MessageBeep(MB_ICONWARNING);
+            SendMessageW(g_volumeEdit, EM_SETSEL, 0, -1);
+            return false;
+        }
+        const std::wstring exe = (*g_apps)[g_volumeEntryRow].exeKey;
+        boost::Params p = BoostFor(exe);
+        SetParamValue(p, g_volumeEntryParam, value);
+        UpdateBoost(exe, p);
+    } else if (commit) {
         WCHAR text[32]{};
         GetWindowTextW(g_volumeEdit, text, ARRAYSIZE(text));
         int percent;
@@ -3275,6 +3313,7 @@ bool FinishVolumeEntry(HWND owner, bool commit, bool returnFocus) {
     g_volumeEntry = nullptr;
     g_volumeEdit = nullptr;
     g_volumeEntryRow = DRAG_NONE;
+    g_volumeEntryParam = -1;
     ++g_volumeEntryGeneration;
     DestroyWindow(entry);
     if (returnFocus && IsWindowVisible(owner)) SetFocus(owner);
@@ -3324,21 +3363,27 @@ LRESULT CALLBACK VolumeEntryProc(HWND window, UINT message, WPARAM wParam,
     return DefWindowProcW(window, message, wParam, lParam);
 }
 
-void BeginVolumeEntry(HWND owner, int row) {
+void BeginVolumeEntry(HWND owner, int row, int param = -1) {
     if (!g_settings.exactVolumeEntry || g_dragRow != DRAG_NONE ||
-        (row == DRAG_MASTER && !g_endpointVolume)) return;
+        (row == DRAG_MASTER && !g_endpointVolume) ||
+        (param >= 0 && !RowHasBoostUi(row))) return;
     FinishVolumeEntry(owner, false, false);
     RECT client{};
     GetClientRect(owner, &client);
-    RECT rect = PercentRectForRow(VisibleRowForDataRow(row), client.right);
+    RECT rect = param >= 0
+        ? ParamValueRect(VisibleRowForDataRow(row), client.right, param)
+        : PercentRectForRow(VisibleRowForDataRow(row), client.right);
+    if (param >= 0) InflateRect(&rect, 0, Scale(4));
     POINT origin{rect.left, rect.top};
     ClientToScreen(owner, &origin);
     HINSTANCE instance = GetModuleHandleW(nullptr);
     g_volumeEntryRow = row;
+    g_volumeEntryParam = param;
     ++g_volumeEntryGeneration;
     g_volumeEntry = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
         VOLUME_ENTRY_CLASS,
-        RowMaxLevel(row) > 1.0f ? L"Volume (0-1000%)" : L"Volume (0-100%)",
+        param >= 0 ? kParamNames[param]
+                   : RowMaxLevel(row) > 1.0f ? L"Volume (0-1000%)" : L"Volume (0-100%)",
         WS_POPUP | WS_BORDER,
         origin.x, origin.y, rect.right - rect.left, rect.bottom - rect.top,
         owner, nullptr, instance, nullptr);
@@ -3348,7 +3393,7 @@ void BeginVolumeEntry(HWND owner, int row) {
     }
     GetClientRect(g_volumeEntry, &client);
     g_volumeEdit = CreateWindowExW(0, L"EDIT", L"",
-        WS_CHILD | WS_VISIBLE | ES_CENTER | ES_NUMBER | ES_AUTOHSCROLL,
+        WS_CHILD | WS_VISIBLE | ES_CENTER | ES_AUTOHSCROLL | (param >= 0 ? 0 : ES_NUMBER),
         0, 0, client.right, client.bottom,
         g_volumeEntry, nullptr, instance, nullptr);
     if (!g_volumeEdit) {
@@ -3357,7 +3402,16 @@ void BeginVolumeEntry(HWND owner, int row) {
     }
     SendMessageW(g_volumeEdit, EM_SETLIMITTEXT, 16, 0);
     SendMessageW(g_volumeEdit, WM_SETFONT, reinterpret_cast<WPARAM>(g_bodyFont), TRUE);
-    std::wstring text = std::to_wstring(static_cast<int>(RowLevel(row) * 100.0f + 0.5f));
+    std::wstring text;
+    if (param >= 0) {
+        float value = ParamValue(BoostFor((*g_apps)[row].exeKey), param);
+        WCHAR buffer[16];
+        if (param == 1) swprintf_s(buffer, L"%.1f", value);
+        else swprintf_s(buffer, L"%d", static_cast<int>(std::lround(value)));
+        text = buffer;
+    } else {
+        text = std::to_wstring(static_cast<int>(RowLevel(row) * 100.0f + 0.5f));
+    }
     SetWindowTextW(g_volumeEdit, text.c_str());
     SendMessageW(g_volumeEdit, EM_SETSEL, 0, -1);
     ShowWindow(g_volumeEntry, SW_SHOW);
@@ -6001,6 +6055,13 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
                     return 0;
                 }
                 if (IsRowExpanded(row)) {
+                    for (int i = 0; g_settings.exactVolumeEntry && i < 4; ++i) {
+                        RECT value = ParamValueRect(visibleRow, client.right, i);
+                        if (PtInRect(&value, point)) {
+                            BeginVolumeEntry(hWnd, row, i);
+                            return 0;
+                        }
+                    }
                     for (int i = 0; i < 4; ++i) {
                         RECT hit = ParamHitRect(visibleRow, client.right, i);
                         if (PtInRect(&hit, point)) {
