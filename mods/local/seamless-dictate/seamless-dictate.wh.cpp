@@ -6,7 +6,7 @@
 // @description     Press a shortcut, speak, and your words are typed where the cursor is, in any app: transcribed and cleaned up by AI in your style (natural, professional, prompt) or translated, with a free key (Groq, Gemini, Mistral and more)
 // @description:pt-BR Aperte um atalho, fale, e suas palavras são digitadas onde está o cursor, em qualquer app: transcritas e limpas por IA no seu estilo (natural, profissional, prompt) ou traduzidas, com uma chave grátis (Groq, Gemini, Mistral e outros)
 // @description:es Pulsa un atajo, habla y tus palabras se escriben donde está el cursor, en cualquier app: transcritas y limpiadas por IA en tu estilo (natural, profesional, prompt) o traducidas, con una clave gratis (Groq, Gemini, Mistral y más)
-// @version         1.0.1
+// @version         1.0.2
 // @author          DavidHiFi, caliberda
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -2265,6 +2265,9 @@ struct Config {
     std::string microphone;
     bool autoPaste = true;
     bool overlayTop = false;
+    // Which screen the bar shows on: "focused" (the window being typed
+    // into), "cursor", "primary", or a display's device name.
+    std::string overlayDisplay = "focused";
     // This session's dictations, in memory only.
     bool historyEnabled = true;
     // A short blip when recording starts and ends.
@@ -2631,6 +2634,7 @@ std::string ConfigToJson(const Config& c) {
                        ",\"microphone\":" + JsonQuote(c.microphone) +
                        ",\"autoPaste\":" + boolean(c.autoPaste) +
                        ",\"overlayTop\":" + boolean(c.overlayTop) +
+                       ",\"overlayDisplay\":" + JsonQuote(c.overlayDisplay) +
                        ",\"historyEnabled\":" + boolean(c.historyEnabled) +
                        ",\"userName\":" + JsonQuote(c.userName) +
                        ",\"onboarded\":" + boolean(c.onboarded) +
@@ -2718,6 +2722,7 @@ Config ConfigFromJson(std::string_view text) {
     boolean("holdMode", &c.holdMode);
     boolean("autoPaste", &c.autoPaste);
     boolean("overlayTop", &c.overlayTop);
+    str("overlayDisplay", &c.overlayDisplay);
     boolean("historyEnabled", &c.historyEnabled);
     str("userName", &c.userName);
     c.onboarded = true;
@@ -10174,34 +10179,84 @@ void Overlay::SetEscapeHotkey(bool on) {
     }
 }
 
-// The monitor of the window being typed into; the one under the mouse when
-// that's the desktop, the taskbar or nothing. Never follows the mouse
-// afterwards.
+// Where the bar shows, from the "Bar screen" setting. Focused: the monitor of
+// the window being typed into (the last app window when the foreground is the
+// desktop, the taskbar or this mod), else the one under the mouse. Chosen once
+// per recording; never follows the mouse afterwards.
+HMONITOR DisplayByDevice(const std::wstring& device) {
+    struct Find {
+        const std::wstring* device;
+        HMONITOR found;
+    } find{&device, nullptr};
+    EnumDisplayMonitors(
+        nullptr, nullptr,
+        [](HMONITOR m, HDC, LPRECT, LPARAM lp) -> BOOL {
+            auto* f = (Find*)lp;
+            MONITORINFOEX info{};
+            info.cbSize = sizeof(info);
+            if (GetMonitorInfo(m, &info) && _wcsicmp(info.szDevice, f->device->c_str()) == 0) {
+                f->found = m;
+                return FALSE;
+            }
+            return TRUE;
+        },
+        (LPARAM)&find);
+    return find.found;
+}
+
 void Overlay::PickMonitor() {
+    const std::string mode = CurrentConfig().overlayDisplay;
     HMONITOR monitor = nullptr;
-    const HWND foreground = GetForegroundWindow();
-    WCHAR className[64] = L"";
-    if (foreground) {
-        GetClassName(foreground, className, ARRAYSIZE(className));
-    }
-    static constexpr PCWSTR kShellClasses[] = {
-        L"Progman", L"WorkerW", L"Shell_TrayWnd", L"Shell_SecondaryTrayWnd"};
-    const bool shell = std::any_of(
-        std::begin(kShellClasses), std::end(kShellClasses),
-        [&](PCWSTR c) { return wcscmp(className, c) == 0; });
-    if (foreground && !shell) {
-        monitor = MonitorFromWindow(foreground, MONITOR_DEFAULTTONULL);
+    PCWSTR how = L"focused window";
+    POINT cursor{};
+    GetCursorPos(&cursor);
+    if (mode == "primary") {
+        monitor = MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY);
+        how = L"main screen";
+    } else if (mode == "cursor") {
+        monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+        how = L"mouse";
+    } else if (mode != "focused" && !mode.empty()) {
+        monitor = DisplayByDevice(Utf8ToWide(mode));
+        how = L"chosen screen";
     }
     if (!monitor) {
-        POINT cursor;
-        GetCursorPos(&cursor);
-        monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+        HWND window = GetForegroundWindow();
+        if (window) {
+            window = GetAncestor(window, GA_ROOT);
+        }
+        if (!IsAppWindow(window)) {
+            // The desktop, the taskbar, a menu or this mod's own window: the
+            // app worked in last, if it's still on screen.
+            const HWND last = g_lastAppWindow;
+            window = IsWindow(last) && IsWindowVisible(last) && !IsIconic(last) ? last : nullptr;
+            // (The desktop itself was clicked: the mouse's screen.)
+            WCHAR className[64] = L"";
+            if (const HWND fg = GetForegroundWindow()) {
+                GetClassName(fg, className, ARRAYSIZE(className));
+            }
+            if (!wcscmp(className, L"Progman") || !wcscmp(className, L"WorkerW")) {
+                window = nullptr;
+            }
+        }
+        if (window) {
+            monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONULL);
+        }
+        if (!monitor) {
+            monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+            how = L"mouse (no app window)";
+        }
     }
-    MONITORINFO info{sizeof(info)};
+    MONITORINFOEX info{};
+    info.cbSize = sizeof(info);
     if (GetMonitorInfo(monitor, &info)) {
         m_monitorPoint = {(info.rcMonitor.left + info.rcMonitor.right) / 2,
                           (info.rcMonitor.top + info.rcMonitor.bottom) / 2};
+        Log(L"Bar screen: %s by %s", info.szDevice, how);
     }
+    // A bar dragged in an earlier recording doesn't pin later ones to that
+    // spot (or that screen).
+    m_dragPositionSet = false;
 }
 
 // Size and position for the chosen monitor's scale.
@@ -11962,7 +12017,13 @@ LRESULT Overlay::Handle(UINT msg, WPARAM wp, LPARAM lp) {
             if (m_dragging) {
                 POINT cursor{};
                 GetCursorPos(&cursor);
-                m_position = {cursor.x - m_dragOffset.x, cursor.y - m_dragOffset.y};
+                const POINT next{cursor.x - m_dragOffset.x, cursor.y - m_dragOffset.y};
+                // (A plain click doesn't move or pin the bar.)
+                if (!m_dragPositionSet && std::abs(next.x - m_position.x) < 4 &&
+                    std::abs(next.y - m_position.y) < 4) {
+                    return 0;
+                }
+                m_position = next;
                 m_dragPosition = m_position;
                 m_dragPositionSet = true;
                 StartFrames();
@@ -12128,6 +12189,65 @@ COLORREF ToColorRefOver(D2D1_COLOR_F c, D2D1_COLOR_F under) {
 // The rail's pages, then the first-run wizard (without the rail).
 enum class Page { Home, Styles, Providers, Speech, Shortcuts, General, About, Wizard };
 
+// The "Bar screen" choices: the setting's value and its label.
+std::vector<std::pair<std::string, std::wstring>> DisplayChoices() {
+    std::vector<std::pair<std::string, std::wstring>> list = {
+        {"focused", T(L"Screen you're working on", L"Tela em que você está")},
+        {"cursor", T(L"Screen under the mouse", L"Tela sob o mouse")},
+        {"primary", T(L"Main screen", L"Tela principal")},
+    };
+    struct Item {
+        std::wstring device;
+        RECT r;
+        bool primary;
+    };
+    std::vector<Item> items;
+    EnumDisplayMonitors(
+        nullptr, nullptr,
+        [](HMONITOR m, HDC, LPRECT, LPARAM lp) -> BOOL {
+            MONITORINFOEX info{};
+            info.cbSize = sizeof(info);
+            if (GetMonitorInfo(m, &info)) {
+                ((std::vector<Item>*)lp)
+                    ->push_back({info.szDevice, info.rcMonitor,
+                                 (info.dwFlags & MONITORINFOF_PRIMARY) != 0});
+            }
+            return TRUE;
+        },
+        (LPARAM)&items);
+    // Left to right, then top to bottom, as they sit on the desk.
+    std::sort(items.begin(), items.end(), [](const Item& a, const Item& b) {
+        return a.r.left != b.r.left ? a.r.left < b.r.left : a.r.top < b.r.top;
+    });
+    RECT main{};
+    for (const Item& i : items) {
+        if (i.primary) main = i.r;
+    }
+    for (const Item& i : items) {
+        std::wstring number = i.device;
+        number.erase(0, number.find_first_of(L"0123456789") == std::wstring::npos
+                            ? number.size()
+                            : number.find_first_of(L"0123456789"));
+        std::wstring where;
+        if (i.primary) {
+            where = T(L"main", L"principal");
+        } else if (i.r.bottom <= main.top) {
+            where = T(L"above", L"acima");
+        } else if (i.r.top >= main.bottom) {
+            where = T(L"below", L"abaixo");
+        } else if (i.r.right <= main.left) {
+            where = T(L"left", L"esquerda");
+        } else {
+            where = T(L"right", L"direita");
+        }
+        list.push_back({WideToUtf8(i.device),
+                        T(L"Display ", L"Tela ") + number + L" · " +
+                            std::to_wstring(i.r.right - i.r.left) + L"×" +
+                            std::to_wstring(i.r.bottom - i.r.top) + L" · " + where});
+    }
+    return list;
+}
+
 enum class W {
     Slider,
     Text,
@@ -12214,6 +12334,7 @@ enum Act {
     ActMode,
     ActTheme,
     ActPosition,
+    ActDisplay,
     ActAutoPaste,
     ActHistoryToggle,
     ActHistoryCopy,
@@ -12633,9 +12754,7 @@ void SettingsWindow::Open(Page page) {
             Animate();
             Rebuild();
         }
-        if (IsIconic(m_hwnd)) {
-            ShowWindow(m_hwnd, SW_RESTORE);
-        }
+        ShowWindow(m_hwnd, IsIconic(m_hwnd) ? SW_RESTORE : SW_SHOW);
         SetForegroundWindow(m_hwnd);
         return;
     }
@@ -14837,6 +14956,28 @@ void SettingsWindow::BuildGeneral(float x, float w, float& y) {
     position.options = {T(L"Bottom", L"Embaixo"), T(L"Top", L"Em cima")};
     position.selected = c.overlayTop ? 1 : 0;
     AddRow(x, w, y, T(L"Bar position", L"Posição do overlay"), L"", position, 200);
+    Widget screen;
+    screen.kind = W::Select;
+    screen.act = ActDisplay;
+    {
+        const auto choices = DisplayChoices();
+        for (size_t i = 0; i < choices.size(); i++) {
+            screen.options.push_back(choices[i].second);
+            if (choices[i].first == c.overlayDisplay) {
+                screen.selected = (int)i;
+            }
+        }
+        if (!screen.selected && c.overlayDisplay != "focused" && !c.overlayDisplay.empty()) {
+            // Chosen before and not connected now: kept; the bar uses the
+            // screen you're working on meanwhile.
+            screen.options.push_back(Utf8ToWide(c.overlayDisplay) +
+                                     T(L" (not connected)", L" (desconectado)"));
+            screen.selected = (int)screen.options.size() - 1;
+        }
+    }
+    AddRow(x, w, y, T(L"Bar screen", L"Tela da barra"),
+           T(L"Which monitor the bar pops up on.", L"Em qual monitor a barra aparece."),
+           screen, 300);
     Widget width;
     width.kind = W::Segment;
     width.act = ActWidth;
@@ -16665,6 +16806,11 @@ void SettingsWindow::Run(const Widget& w, int option) {
             break;
         case ActPosition:
             UpdateConfig([&](Config& c) { c.overlayTop = option == 1; });
+            break;
+        case ActDisplay:
+            if (const auto choices = DisplayChoices(); option >= 0 && option < (int)choices.size()) {
+                UpdateConfig([&](Config& c) { c.overlayDisplay = choices[option].first; });
+            }
             break;
         case ActAutoPaste:
             UpdateConfig([](Config& c) { c.autoPaste = !c.autoPaste; });
@@ -19498,6 +19644,116 @@ constexpr UiText kUiTexts[] = {
       L"Сверху",
       L"ऊपर",
       L"উপরে"}},
+    {{L"Bar screen",
+      L"Pantalla de la barra",
+      L"Tela da barra",
+      L"Écran de la barre",
+      L"Bildschirm der Leiste",
+      L"バーの画面",
+      L"录音条显示屏",
+      L"Экран панели",
+      L"बार की स्क्रीन",
+      L"বারের স্ক্রিন"}},
+    {{L"Which monitor the bar pops up on.",
+      L"En qué monitor aparece la barra.",
+      L"Em qual monitor a barra aparece.",
+      L"Sur quel écran la barre apparaît.",
+      L"Auf welchem Monitor die Leiste erscheint.",
+      L"バーを表示するモニター。",
+      L"录音条在哪个显示器上弹出。",
+      L"На каком мониторе появляется панель.",
+      L"बार किस मॉनिटर पर दिखे।",
+      L"বারটি কোন মনিটরে দেখাবে।"}},
+    {{L"Screen you're working on",
+      L"Pantalla en la que trabajas",
+      L"Tela em que você está",
+      L"Écran sur lequel vous travaillez",
+      L"Bildschirm, auf dem du arbeitest",
+      L"作業中の画面",
+      L"正在使用的屏幕",
+      L"Экран, где вы работаете",
+      L"जिस स्क्रीन पर आप काम कर रहे हैं",
+      L"যে স্ক্রিনে কাজ করছেন"}},
+    {{L"Screen under the mouse",
+      L"Pantalla bajo el ratón",
+      L"Tela sob o mouse",
+      L"Écran sous la souris",
+      L"Bildschirm unter der Maus",
+      L"マウスがある画面",
+      L"鼠标所在的屏幕",
+      L"Экран под мышью",
+      L"माउस वाली स्क्रीन",
+      L"মাউসের নিচের স্ক্রিন"}},
+    {{L"Main screen",
+      L"Pantalla principal",
+      L"Tela principal",
+      L"Écran principal",
+      L"Hauptbildschirm",
+      L"メイン画面",
+      L"主屏幕",
+      L"Основной экран",
+      L"मुख्य स्क्रीन",
+      L"প্রধান স্ক্রিন"}},
+    {{L"Display ",
+      L"Pantalla ",
+      L"Tela ",
+      L"Écran ",
+      L"Bildschirm ",
+      L"ディスプレイ ",
+      L"显示器 ",
+      L"Экран ",
+      L"डिस्प्ले ",
+      L"ডিসপ্লে "}},
+    {{L"main",
+      L"principal",
+      L"principal",
+      L"principal",
+      L"Haupt",
+      L"メイン",
+      L"主",
+      L"основной",
+      L"मुख्य",
+      L"প্রধান"}},
+    {{L"above",
+      L"arriba",
+      L"acima",
+      L"au-dessus",
+      L"oben",
+      L"上",
+      L"上方",
+      L"сверху",
+      L"ऊपर",
+      L"উপরে"}},
+    {{L"below",
+      L"abajo",
+      L"abaixo",
+      L"en dessous",
+      L"unten",
+      L"下",
+      L"下方",
+      L"снизу",
+      L"नीचे",
+      L"নিচে"}},
+    {{L"left",
+      L"izquierda",
+      L"esquerda",
+      L"gauche",
+      L"links",
+      L"左",
+      L"左侧",
+      L"слева",
+      L"बाएँ",
+      L"বাঁয়ে"}},
+    {{L"right",
+      L"derecha",
+      L"direita",
+      L"droite",
+      L"rechts",
+      L"右",
+      L"右侧",
+      L"справа",
+      L"दाएँ",
+      L"ডানে"}},
     {{L"Bar position",
       L"Posición de la barra",
       L"Posição do overlay",
