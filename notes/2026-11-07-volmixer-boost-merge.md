@@ -57,9 +57,10 @@ and the booster has no key, source or DLLs left (receipt in `reports\`).
 - A boost takes effect when the app next starts its audio. Apps that were
   already playing pick it up on the next stream or restart.
 - Boosting past 100% can clip. The compressor is the guard against that.
-- App Volume Booster has no @license line. The public repo copy stays at 1.2.1
-  until that is cleared with the author. The 1.3.0 source lives in
-  `work\2026-11-07-volmixer-1.3.0\`.
+- App Volume Booster has no @license line. The windhawk-mods README says such
+  mods are submitted under MIT, so the merge is MIT with credit to shubho.
+  Published to the public repo as PR #42 (squash-merged into main, 2026-11-07,
+  main shows @version 1.3.0).
 
 ## Files
 
