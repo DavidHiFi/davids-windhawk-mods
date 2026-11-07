@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id              theme-tool-plus
 // @name            Theme Tool Plus
-// @description     Apply and switch custom Windows themes from the settings tab. No separate theme tool needed
-// @version         1.1.1
+// @description     Switch Windows themes from the settings tab. Comes with the Main 01 Catppuccin theme, cursors and sounds
+// @version         1.2.0
 // @author          DavidHiFi, rounk-ctrl, namazso
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         explorer.exe
@@ -11,7 +11,7 @@
 // @include         systemsettings.exe
 // @include         logonui.exe
 // @include         rundll32.exe
-// @compilerOptions -lole32 -loleaut32 -luser32 -lgdi32 -ldwmapi
+// @compilerOptions -lole32 -loleaut32 -luser32 -lgdi32 -ldwmapi -lwininet -lbcrypt -lshlwapi
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
 
@@ -19,50 +19,64 @@
 /*
 # Theme Tool Plus
 
-Apply and switch custom Windows themes from the mod's settings tab. The theme
-signature patch from UXTheme hook is built in, so unsigned themes load without
-changing system files or running a separate theme tool.
+Apply and switch custom Windows themes from the mod's settings tab. It comes
+with a ready-made theme pack: Main 01 (Catppuccin Mocha Night with Catppuccin
+cursors, a full sound scheme and its wallpaper) plus the six Catppuccin
+themes. The theme signature patch from UXTheme hook is built in, so unsigned
+themes load without changing system files or running a separate theme tool.
 
 ![Theme Tool Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/theme-tool-plus.png)
 
 ## Features
-- **Settings-driven.** Pick an installed theme from a dropdown in the settings
-  tab and apply it by saving. Nothing to memorize, and no hotkey needed.
+- **Theme pack included.** On first run the mod downloads the pack (about
+  8 MB) into the Windows themes folder and adds its themes to the list.
+  Windhawk does this with its own admin rights, so there is no prompt. Nothing
+  changes until you pick a theme and save.
+- **Switch from the settings tab.** Pick a theme from a list and save. No
+  hotkey needed.
 - **Unsigned theme support.** Custom .msstyles files load as they are. No
   system file is touched, so Secure Boot is not affected.
-- **ThemeToolSharp options.** Keep your wallpaper, cursor, desktop icons,
-  colors, sounds or screensaver as they are. Hide the busy cursor while a theme
-  applies. The undocumented apply, theme pack and start-up flags from the
-  original theme tool are included.
+- **Keep what you like.** Switch themes but keep your own wallpaper, cursor,
+  desktop icons, colors, sounds or screensaver. The hidden Windows options
+  from ThemeToolSharp are there too, under Advanced.
 - **Survives restarts.** Sign-in and lock screen colors stay in sync, so the
   theme survives a reboot.
 - **No extra app.** Everything runs inside the mod. You can uninstall
   ThemeToolSharp, along with its process entry in Windhawk.
-- **Settings blocker.** Stops the Settings app from opening after each theme
-  apply, if you turn that on.
+- **No Settings pop-up.** Can stop the Settings app from opening after each
+  theme switch.
 
 ## How to use
 
 Open the mod's settings tab.
 
-1. Pick a theme from **Theme to apply**.
-2. Turn on **Apply theme when settings save**.
-3. Save. The theme applies right away.
+1. Under **Theme**, pick the theme you want. Pick **Main 01** for the full
+   look: window style, wallpaper, cursor and sounds.
+2. Turn on **Switch theme when I save**.
+3. Click **Save settings**. The theme switches right away.
 
-The **What happens when settings save** option can refresh the theme list
-after you install a new theme, re-initialize the theme manager if themes act
-up, or open the theme picker once. The other settings control what an apply
-keeps or changes.
+Nothing changes until you do this. To use a theme you added yourself, pick
+**A theme not in this list** and type its name in the box below it.
+
+The "Keep my ..." switches stop a theme from changing your wallpaper, cursor,
+colors, sounds, desktop icons or screensaver. If you add a new theme and it
+doesn't show up, set **Also do this when I save** to **Reload the theme list**
+and save once.
 
 ## Notes
-- Use themes made for your Windows version. The dropdown and the picker both
-  list the themes in `C:\Windows\Resources\Themes`. New themes appear after you
-  refresh the list.
+- Use themes made for your Windows version. Put your own themes in
+  `C:\Windows\Resources\Themes`: Windows only loads a theme's window style
+  from there. The theme picker lists every installed theme.
+- The pack lives in `C:\Windows\Resources\Themes\Theme Tool Plus`. A theme
+  you already have under the same file name is never replaced. Turn off
+  **Download the themes that come with this mod** to skip it.
 - Before you remove the mod, switch back to a stock theme. Otherwise the next
   sign-in checks theme signatures again, and a custom theme may fail to load.
 - ARM64 is not supported (Windhawk does not hook ARM64EC).
 
 ## Credits
+Catppuccin Windows themes and cursors by [niivu](https://www.deviantart.com/niivu),
+based on the [Catppuccin](https://github.com/catppuccin) palette.
 Based on [UXTheme hook](https://windhawk.net/mods/uxtheme-hook) by rounk-ctrl.
 Theme engine research from [SecureUxTheme](https://github.com/namazso/SecureUxTheme)
 and [ThemeToolSharp](https://github.com/namazso/ThemeToolSharp) by namazso,
@@ -73,17 +87,18 @@ LGPL-2.1.
 // ==WindhawkModSettings==
 /*
 - themeName: ""
-  $name: Theme to apply
-  $description: Themes installed on this computer. Pick one, turn on Apply theme when settings save (or choose another action), then save. The list updates when the mod source is updated.
+  $name: Theme
+  $description: The theme to switch to. Main 01 is the one that comes with this mod, with its own wallpaper, cursor and sounds. To switch, pick a theme, turn on "Switch theme when I save" below, then click Save settings.
   $options:
-  - "": No theme
+  - "": Keep my current theme
+  - "*": A theme not in this list (type its name below)
   - Captured Motion: Captured Motion
-  - catppuccin Latte: catppuccin Latte
-  - catppuccin Latte Win: catppuccin Latte Win
-  - catppuccin Mocha: catppuccin Mocha
-  - catppuccin Mocha Night: catppuccin Mocha Night
-  - catppuccin Mocha Night Win: catppuccin Mocha Night Win
-  - catppuccin Mocha Win: catppuccin Mocha Win
+  - catppuccin Latte: Catppuccin Latte
+  - catppuccin Latte Win: Catppuccin Latte Win
+  - catppuccin Mocha: Catppuccin Mocha
+  - catppuccin Mocha Night: Catppuccin Mocha Night
+  - catppuccin Mocha Night Win: Catppuccin Mocha Night Win
+  - catppuccin Mocha Win: Catppuccin Mocha Win
   - Flow: Flow
   - Glow: Glow
   - Main 01: Main 01
@@ -91,68 +106,75 @@ LGPL-2.1.
   - Windows (dark): Windows (dark)
   - Windows (light): Windows (light)
   - Windows spotlight: Windows spotlight
+- otherThemeName: ""
+  $name: Theme name (if it's not in the list)
+  $description: Only used when Theme is set to "A theme not in this list". Type the name exactly as it appears in Windows Settings under Personalization > Themes.
+- installPack: true
+  $name: Download the themes that come with this mod
+  $description: Downloads Main 01 and the Catppuccin themes, with their cursors and sounds (about 8 MB), the first time the mod runs. Your current theme doesn't change. Turn this off if you only want your own themes.
 - applyOnSettingsChange: false
-  $name: Apply theme when settings save
-  $description: Applies the theme picked above as soon as you save.
+  $name: Switch theme when I save
+  $description: When this is on, clicking Save settings switches to the theme picked above.
 - action: none
-  $name: What happens when settings save
-  $description: An extra step to run after saving. Refresh the theme list after installing a new theme, re-initialize the theme manager if themes act up, or open the theme picker once.
+  $name: Also do this when I save
+  $description: An extra step that runs each time you click Save settings. Most people can leave this on Nothing.
   $options:
-  - none: Nothing extra
-  - refresh: Refresh the theme list
-  - reinitialize: Re-initialize the theme manager
-  - picker: Open the theme picker
+  - none: Nothing
+  - refresh: Reload the theme list (after you add a new theme)
+  - reinitialize: Restart the theme engine (if themes stop switching)
+  - picker: Open the theme picker window
+  - reinstallPack: Download this mod's themes again
 - updateLogonUI: true
-  $name: Keep sign-in screens in sync
-  $description: Matches the colors of the sign-in and lock screens to the applied theme.
+  $name: Match the sign-in and lock screens
+  $description: Gives the sign-in and lock screens the same colors as your theme.
 - preventSettings: false
-  $name: Keep the Settings app closed after applying
-  $description: Windows sometimes opens Settings right after a theme is applied. Turn this on to stop it.
+  $name: Don't open Settings after switching
+  $description: Windows sometimes opens the Settings app right after a theme switch. This stops it.
 - ignoreBackground: false
-  $name: Keep current wallpaper
-  $description: Leaves the wallpaper alone when applying a theme.
+  $name: Keep my wallpaper
+  $description: Switching themes won't change your wallpaper.
 - ignoreCursor: false
-  $name: Keep current cursor
-  $description: Leaves the mouse pointer scheme alone when applying a theme.
+  $name: Keep my mouse cursor
+  $description: Switching themes won't change your mouse cursor.
 - ignoreDesktopIcons: false
-  $name: Keep current desktop icons
-  $description: Leaves desktop icon positions alone when applying a theme.
+  $name: Keep my desktop icons
+  $description: Switching themes won't change your desktop icons.
 - ignoreColor: false
-  $name: Keep current colors
-  $description: Leaves accent and window colors alone when applying a theme.
+  $name: Keep my colors
+  $description: Switching themes won't change your accent and window colors.
 - ignoreSound: false
-  $name: Keep current sounds
-  $description: Leaves the sound scheme alone when applying a theme.
+  $name: Keep my sounds
+  $description: Switching themes won't change your Windows sounds.
 - ignoreScreensaver: false
-  $name: Keep current screensaver
-  $description: Leaves the screensaver alone when applying a theme.
+  $name: Keep my screensaver
+  $description: Switching themes won't change your screensaver.
 - noHourglass: true
-  $name: Hide the busy cursor while applying
-  $description: Skips the hourglass flash Windows shows while a theme applies.
+  $name: Hide the loading cursor
+  $description: Hides the spinning cursor Windows shows while a theme switches.
 - unknownFlag1: false
-  $name: Extra apply option 1 (advanced)
-  $description: An undocumented option Windows accepts when applying a theme. It relates to window metrics, and the original theme tool exposes it too. Leave it off unless you need it.
+  $name: "Advanced: hidden switch option 1"
+  $description: A Windows option with no official name. It seems to affect window sizes. Leave it off unless you know you need it.
 - unknownFlag2: false
-  $name: Extra apply option 2 (advanced)
-  $description: A second undocumented apply option. The original theme tool exposes it too. Leave it off unless you need it.
+  $name: "Advanced: hidden switch option 2"
+  $description: Another Windows option with no official name. Leave it off unless you know you need it.
 - themePackUnknown1: false
-  $name: Extra theme pack option 1 (advanced)
-  $description: The first undocumented theme pack option. Upstream notes suggest it also hides the busy cursor. Leave it off unless you need it.
+  $name: "Advanced: hidden theme pack option 1"
+  $description: A Windows option for .themepack files with no official name. It may hide the loading cursor. Leave it off unless you know you need it.
 - themePackUnknown2: false
-  $name: Extra theme pack option 2 (advanced)
-  $description: The second undocumented theme pack option. Upstream notes suggest it also hides the busy cursor. Leave it off unless you need it.
+  $name: "Advanced: hidden theme pack option 2"
+  $description: Another Windows option for .themepack files with no official name. Leave it off unless you know you need it.
 - themePackSilent: false
-  $name: Apply packs quietly
-  $description: Hides every dialog a theme pack would show and stops its sounds.
+  $name: Switch .themepack files silently
+  $description: No pop-ups or sounds when you switch to a .themepack file.
 - themePackRoamed: false
-  $name: Roam theme packs
-  $description: Lets the applied theme pack roam with your account settings.
+  $name: Sync .themepack themes to my account
+  $description: Lets a .themepack theme sync to other PCs signed in with your Microsoft account.
 - initUnknownFlag1: false
-  $name: Extra start-up option 1 (advanced)
-  $description: An undocumented option the theme manager gets when it starts or re-initializes. Leave it off unless you need it.
+  $name: "Advanced: hidden start-up option 1"
+  $description: A Windows option the theme engine gets when it starts. What it does isn't documented. Leave it off unless you know you need it.
 - initUnknownFlag2: false
-  $name: Extra start-up option 2 (advanced)
-  $description: A second undocumented start-up option. It relates to immersive colors. Leave it off unless you need it.
+  $name: "Advanced: hidden start-up option 2"
+  $description: Another start-up option for the theme engine. It seems to affect accent colors. Leave it off unless you know you need it.
 */
 // ==/WindhawkModSettings==
 
@@ -161,6 +183,10 @@ LGPL-2.1.
 #include <initguid.h>
 #include <objidl.h>
 #include <dwmapi.h>
+#include <wininet.h>
+#include <bcrypt.h>
+#include <shlwapi.h>
+#include <climits>
 #include <cstdarg>
 #include <cwchar>
 
@@ -306,8 +332,9 @@ struct ModSettings {
     bool themePackUnknown2;
     bool themePackSilent;
     bool themePackRoamed;
+    bool installPack;
     wchar_t themeName[256];
-    int action;  // 0 none, 1 refresh, 2 reinitialize, 3 open picker
+    int action;  // 0 none, 1 refresh, 2 reinitialize, 3 open picker, 4 download the pack again
 } g_settings;
 
 static void CopyStringSetting(wchar_t* dest, size_t size, PCWSTR valueName) {
@@ -335,8 +362,20 @@ static void LoadSettings() {
     g_settings.themePackUnknown2 = Wh_GetIntSetting(L"themePackUnknown2");
     g_settings.themePackSilent = Wh_GetIntSetting(L"themePackSilent");
     g_settings.themePackRoamed = Wh_GetIntSetting(L"themePackRoamed");
+    g_settings.installPack = Wh_GetIntSetting(L"installPack");
     CopyStringSetting(g_settings.themeName, ARRAYSIZE(g_settings.themeName), L"themeName");
-    g_settings.action = Wh_GetIntSetting(L"action");
+    if (lstrcmpW(g_settings.themeName, L"*") == 0) {
+        CopyStringSetting(g_settings.themeName, ARRAYSIZE(g_settings.themeName), L"otherThemeName");
+        StrTrimW(g_settings.themeName, L" \t");
+    }
+    // The action is a string option; reading it as an int always gave 0.
+    wchar_t action[32];
+    CopyStringSetting(action, ARRAYSIZE(action), L"action");
+    g_settings.action = lstrcmpiW(action, L"refresh") == 0         ? 1
+                        : lstrcmpiW(action, L"reinitialize") == 0  ? 2
+                        : lstrcmpiW(action, L"picker") == 0        ? 3
+                        : lstrcmpiW(action, L"reinstallPack") == 0 ? 4
+                                                                   : 0;
 }
 
 static DWORD ApplyFlagsFromSettings() {
@@ -400,9 +439,231 @@ static bool g_creating;
 static bool g_everActive;
 static bool g_pendingApplyByName;
 static bool g_pendingAction;
+static int g_applyRetries;
+constexpr UINT_PTR kApplyRetryTimer = 1;
 
 // The Windhawk debug log is not reachable headlessly, so diagnostics go to a
 // plain temp file while the mod is new.
+// ---------------------------------------------------------------------------
+// Theme pack (windhawk.exe only)
+// ---------------------------------------------------------------------------
+// Downloads Main 01 and the Catppuccin themes, cursors and sounds into
+// %WINDIR%\Resources\Themes. Windows loads a theme's .msstyles only from
+// there; the same file in a user folder is ignored. Windhawk's own process
+// runs elevated, so it does the install. The zip is downloaded into the
+// admin-only pack folder and checked against kPackSha256 before it is opened.
+
+static const wchar_t kPackUrl[] =
+    L"https://github.com/DavidHiFi/davids-windhawk-mods/releases/download/theme-tool-plus-pack-v1/theme-tool-plus-pack.zip";
+static const char kPackSha256[] = "DED3EFBC60063A227934A4F9D9885404B25CC4F7039FF8FA4D460CE9A2708E1D";
+static const int kPackVersion = 1;
+static const char kThemeMarker[] = "; Installed by Theme Tool Plus";
+
+static HANDLE g_packThread;
+static volatile LONG g_packCancel;
+
+static bool PackPaths(wchar_t* themesDir, wchar_t* packDir) {
+    UINT n = GetWindowsDirectoryW(themesDir, MAX_PATH);
+    if (!n || n >= MAX_PATH - 64) return false;
+    lstrcatW(themesDir, L"\\Resources\\Themes");
+    lstrcpyW(packDir, themesDir);
+    lstrcatW(packDir, L"\\Theme Tool Plus");
+    return true;
+}
+
+static int InstalledPackVersion(PCWSTR packDir) {
+    wchar_t ini[MAX_PATH];
+    lstrcpyW(ini, packDir);
+    lstrcatW(ini, L"\\pack.ini");
+    return (int)GetPrivateProfileIntW(L"Pack", L"Version", 0, ini);
+}
+
+static LONGLONG PackIniAgeSeconds(PCWSTR packDir) {
+    wchar_t ini[MAX_PATH];
+    _snwprintf(ini, MAX_PATH - 1, L"%s\\pack.ini", packDir);
+    ini[MAX_PATH - 1] = L'\0';
+    WIN32_FILE_ATTRIBUTE_DATA data;
+    if (!GetFileAttributesExW(ini, GetFileExInfoStandard, &data)) return LLONG_MAX;
+    FILETIME now;
+    GetSystemTimeAsFileTime(&now);
+    ULARGE_INTEGER a{{now.dwLowDateTime, now.dwHighDateTime}}, b{{data.ftLastWriteTime.dwLowDateTime, data.ftLastWriteTime.dwHighDateTime}};
+    return (LONGLONG)(a.QuadPart - b.QuadPart) / 10000000LL;
+}
+
+static bool DownloadFile(PCWSTR url, PCWSTR dest) {
+    HINTERNET net = InternetOpenW(L"Theme Tool Plus", INTERNET_OPEN_TYPE_PRECONFIG, nullptr, nullptr, 0);
+    if (!net) return false;
+    DWORD timeout = 30000;
+    InternetSetOptionW(net, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeout, sizeof(timeout));
+    bool ok = false;
+    HINTERNET req = InternetOpenUrlW(net, url, nullptr, 0,
+                                     INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_SECURE, 0);
+    if (req) {
+        DWORD status = 0, size = sizeof(status);
+        HttpQueryInfoW(req, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &status, &size, nullptr);
+        HANDLE file = status == 200 ? CreateFileW(dest, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr)
+                                    : INVALID_HANDLE_VALUE;
+        if (file != INVALID_HANDLE_VALUE) {
+            static BYTE buf[64 * 1024];
+            DWORD read = 0;
+            ok = true;
+            while (true) {
+                if (g_packCancel || !InternetReadFile(req, buf, sizeof(buf), &read)) {
+                    ok = false;
+                    break;
+                }
+                if (!read) break;
+                DWORD written = 0;
+                if (!WriteFile(file, buf, read, &written, nullptr) || written != read) {
+                    ok = false;
+                    break;
+                }
+            }
+            CloseHandle(file);
+            if (!ok) DeleteFileW(dest);
+        } else {
+            Wh_Log(L"Theme pack download: HTTP %lu", status);
+        }
+        InternetCloseHandle(req);
+    }
+    InternetCloseHandle(net);
+    return ok;
+}
+
+static bool FileSha256Matches(PCWSTR path, const char* expectedHex) {
+    HANDLE file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return false;
+    BCRYPT_ALG_HANDLE alg = nullptr;
+    BCRYPT_HASH_HANDLE hash = nullptr;
+    bool ok = false;
+    if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0) == 0 &&
+        BCryptCreateHash(alg, &hash, nullptr, 0, nullptr, 0, 0) == 0) {
+        static BYTE buf[64 * 1024];
+        DWORD read = 0;
+        while (ReadFile(file, buf, sizeof(buf), &read, nullptr) && read) {
+            BCryptHashData(hash, buf, read, 0);
+        }
+        BYTE digest[32];
+        if (BCryptFinishHash(hash, digest, sizeof(digest), 0) == 0) {
+            char hex[65];
+            for (int i = 0; i < 32; ++i) wsprintfA(hex + i * 2, "%02X", digest[i]);
+            ok = lstrcmpiA(hex, expectedHex) == 0;
+        }
+    }
+    if (hash) BCryptDestroyHash(hash);
+    if (alg) BCryptCloseAlgorithmProvider(alg, 0);
+    CloseHandle(file);
+    return ok;
+}
+
+// Windows 10 1803 and later ship tar.exe, which reads zip files.
+static bool ExtractZip(PCWSTR zip, PCWSTR destDir) {
+    wchar_t tar[MAX_PATH];
+    GetSystemDirectoryW(tar, MAX_PATH);
+    lstrcatW(tar, L"\\tar.exe");
+    wchar_t cmd[3 * MAX_PATH + 32];
+    _snwprintf(cmd, ARRAYSIZE(cmd) - 1, L"\"%s\" -xf \"%s\" -C \"%s\"", tar, zip, destDir);
+    cmd[ARRAYSIZE(cmd) - 1] = L'\0';
+    STARTUPINFOW si = {sizeof(si)};
+    PROCESS_INFORMATION pi = {};
+    if (!CreateProcessW(tar, cmd, nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+        Wh_Log(L"Theme pack: tar.exe did not start (%lu)", GetLastError());
+        return false;
+    }
+    DWORD exitCode = 1;
+    for (int waited = 0; waited < 480; ++waited) {
+        if (WaitForSingleObject(pi.hProcess, 250) == WAIT_OBJECT_0) {
+            GetExitCodeProcess(pi.hProcess, &exitCode);
+            break;
+        }
+        if (g_packCancel) break;
+    }
+    if (WaitForSingleObject(pi.hProcess, 0) != WAIT_OBJECT_0) TerminateProcess(pi.hProcess, 1);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return exitCode == 0;
+}
+
+static bool FileHasMarker(PCWSTR path) {
+    HANDLE file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return false;
+    char head[64] = {};
+    DWORD read = 0;
+    ReadFile(file, head, sizeof(head) - 1, &read, nullptr);
+    CloseHandle(file);
+    return StrCmpNA(head, kThemeMarker, lstrlenA(kThemeMarker)) == 0;
+}
+
+// Copies the pack's .theme files next to the installed themes. A theme the
+// user already has under the same file name is left alone, unless the pack
+// put it there.
+static int CopyPackThemes(PCWSTR themesDir, PCWSTR packDir) {
+    wchar_t pattern[MAX_PATH];
+    lstrcpyW(pattern, packDir);
+    lstrcatW(pattern, L"\\themes\\*.theme");
+    int copied = 0;
+    WIN32_FIND_DATAW fd;
+    HANDLE find = FindFirstFileW(pattern, &fd);
+    if (find == INVALID_HANDLE_VALUE) return 0;
+    do {
+        wchar_t src[MAX_PATH], dst[MAX_PATH];
+        _snwprintf(src, MAX_PATH - 1, L"%s\\themes\\%s", packDir, fd.cFileName);
+        _snwprintf(dst, MAX_PATH - 1, L"%s\\%s", themesDir, fd.cFileName);
+        src[MAX_PATH - 1] = dst[MAX_PATH - 1] = L'\0';
+        bool exists = GetFileAttributesW(dst) != INVALID_FILE_ATTRIBUTES;
+        if (exists && !FileHasMarker(dst)) continue;
+        if (CopyFileW(src, dst, FALSE) && !exists) ++copied;
+    } while (FindNextFileW(find, &fd));
+    FindClose(find);
+    return copied;
+}
+
+static DWORD WINAPI PackThreadProc(LPVOID param) {
+    bool force = param != nullptr;
+    HANDLE mutex = CreateMutexW(nullptr, FALSE, L"Global\\ThemeToolPlusPackInstall");
+    if (!mutex) return 0;
+    if (WaitForSingleObject(mutex, 0) == WAIT_TIMEOUT) {
+        CloseHandle(mutex);
+        return 0;
+    }
+    wchar_t themesDir[MAX_PATH], packDir[MAX_PATH];
+    if (PackPaths(themesDir, packDir)) {
+        if (force && InstalledPackVersion(packDir) >= kPackVersion && PackIniAgeSeconds(packDir) < 120) {
+            force = false;
+        }
+        if (force || InstalledPackVersion(packDir) < kPackVersion) {
+            wchar_t zip[MAX_PATH];
+            _snwprintf(zip, MAX_PATH - 1, L"%s\\download.zip", packDir);
+            zip[MAX_PATH - 1] = L'\0';
+            CreateDirectoryW(packDir, nullptr);
+            if (GetFileAttributesW(packDir) == INVALID_FILE_ATTRIBUTES) {
+                Wh_Log(L"Theme pack: cannot create %s", packDir);
+            } else if (!DownloadFile(kPackUrl, zip)) {
+                Wh_Log(L"Theme pack: download failed");
+            } else if (!FileSha256Matches(zip, kPackSha256)) {
+                Wh_Log(L"Theme pack: checksum mismatch, not installed");
+            } else if (!ExtractZip(zip, packDir)) {
+                Wh_Log(L"Theme pack: extract failed");
+            } else {
+                Wh_Log(L"Theme pack %d installed in %s", kPackVersion, packDir);
+            }
+            DeleteFileW(zip);
+        }
+        if (!g_packCancel && InstalledPackVersion(packDir) >= kPackVersion) {
+            int copied = CopyPackThemes(themesDir, packDir);
+            if (copied) Wh_Log(L"Theme pack: added %d themes", copied);
+        }
+    }
+    ReleaseMutex(mutex);
+    CloseHandle(mutex);
+    return 0;
+}
+
+static void StartPackInstall(bool force) {
+    if (g_packThread) return;
+    g_packThread = CreateThread(nullptr, 0, PackThreadProc, force ? (LPVOID)1 : nullptr, 0, nullptr);
+}
+
 static void TtpLog(PCWSTR fmt, ...) {
     wchar_t buf[512];
     va_list args;
@@ -571,6 +832,12 @@ static void ApplyThemeByName() {
     }
     if (!applied) {
         Wh_Log(L"Theme '%s' not found in the theme list", g_settings.themeName);
+        // On first install the pack may still be downloading: look again
+        // every 10 seconds for up to 3 minutes.
+        if (g_settings.installPack && g_msgWnd && g_applyRetries < 18) {
+            ++g_applyRetries;
+            SetTimer(g_msgWnd, kApplyRetryTimer, 10000, nullptr);
+        }
     }
     if (temporary) {
         manager->Release();
@@ -601,6 +868,8 @@ static void RunPendingAction() {
         }
         case 3:  // open the picker
             ShowPicker();
+            break;
+        case 4:  // handled at init: the download runs on its own thread
             break;
         default:
             break;
@@ -731,6 +1000,12 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         case WM_APP_ACTION:
             RunPendingAction();
             return 0;
+        case WM_TIMER:
+            if (wParam == kApplyRetryTimer) {
+                KillTimer(hwnd, kApplyRetryTimer);
+                ApplyThemeByName();
+            }
+            return 0;
     }
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
@@ -822,9 +1097,17 @@ BOOL Wh_ModInit() {
         WindhawkUtils::SetFunctionHook(CoCreateInstance, CoCreateInstance_hook, &CoCreateInstance_orig);
     }
 
-    if (ProcessIs(L"explorer.exe") || ProcessIs(L"windhawk.exe")) {
+    if (ProcessIs(L"windhawk.exe") && (g_settings.installPack || g_settings.action == 4)) {
+        StartPackInstall(g_settings.action == 4);
+    }
+
+    // The Windhawk service runs in session 0, which has no desktop to theme.
+    DWORD session = 0;
+    ProcessIdToSessionId(GetCurrentProcessId(), &session);
+    if (session != 0 && (ProcessIs(L"explorer.exe") || ProcessIs(L"windhawk.exe"))) {
         g_pendingApplyByName = g_settings.applyOnSettingsChange && g_settings.themeName[0];
         g_pendingAction = g_settings.action != 0;
+
 
         // The picker opens from the settings tab (the "Open the theme
         // picker" action); no hotkey is registered anymore.
@@ -841,6 +1124,12 @@ BOOL Wh_ModInit() {
 
 void Wh_ModUninit() {
     Wh_Log(L"Uninit");
+    if (g_packThread) {
+        InterlockedExchange(&g_packCancel, 1);
+        WaitForSingleObject(g_packThread, INFINITE);
+        CloseHandle(g_packThread);
+        g_packThread = nullptr;
+    }
     TtpLog(L"Uninit tid=%lu", g_workerThreadId);
     if (g_workerThread) {
         PostThreadMessageW(g_workerThreadId, WM_QUIT, 0, 0);
