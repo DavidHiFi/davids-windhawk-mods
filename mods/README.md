@@ -23,7 +23,7 @@
 | [Taskbar Elastic WinUI Pill Plus](local/taskbar-elastic-pill-plus) | An animated pill that slides under the app you use, with an option to mark open apps. | 2.1.0 | MIT |
 | [Taskbar System Info Plus](local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar. | 1.2.3 | GPL-3.0 |
 | [Taskbar AI Quota Bars Plus](local/taskbar-ai-quota-opencode) | Claude, Codex, Antigravity and OpenCode Go usage limits on the taskbar. | 1.6.5.1 | MIT |
-| [Better Volume Mixer Plus](local/better-volume-mixer-plus) | Tray volume mixer with per-app output and input devices. | 1.0.0 | MIT |
+| [Seamless Volume Mixer](local/better-volume-mixer-plus) | Tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app devices. | 1.3.0 | MIT |
 | [Translucent Flyouts](local/translucent-flyouts) | Acrylic, Mica and blur menus, dropdowns and tooltips in every app. | 0.6.6 | LGPL-3.0 |
 | [Shell Font Changer Plus](local/shell-font-changer-plus) | Any installed font in Explorer, Start, Search and Settings, with icons and emoji left intact. | 1.3.3 | MIT |
 | [Everything & Power Tools in the Start Menu Plus](local/start-everything-plus) | Compact Start menu search with Everything, preview, apps, settings, power tools. | 1.1.0 | GPL-3.0 |

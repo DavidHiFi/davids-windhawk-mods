@@ -60,7 +60,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 | <img src="media/previews/taskbar-system-info-weather.png" width="220" alt="CPU and GPU readouts on the taskbar"> | [Taskbar System Info Plus](mods/local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed, with optional graphs. |
 | <img src="media/previews/taskbar-ai-quota-opencode.png" width="220" alt="Usage bars on the taskbar"> | [Taskbar AI Quota Bars Plus](mods/local/taskbar-ai-quota-opencode) | Claude, Antigravity and OpenCode Go usage limits as taskbar bars. |
 | <img src="media/previews/taskbar-ai-usage-plus.png" width="220" alt="Codex usage flyout over the taskbar"> | [Taskbar AI Usage Plus](mods/local/taskbar-ai-usage-plus) | Claude, Codex, Antigravity and Copilot limits as ring tiles with a Fluent flyout. |
-| <img src="media/previews/better-volume-mixer-plus.png" width="220" alt="Tray volume mixer"> | [Better Volume Mixer Plus](mods/local/better-volume-mixer-plus) | A tray volume mixer with per-app volume and per-app output and input devices. |
+| <img src="media/previews/better-volume-mixer-plus.png" width="220" alt="Tray volume mixer"> | [Seamless Volume Mixer](mods/local/better-volume-mixer-plus) | A tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices. |
 | <img src="media/previews/seamless-tray-drawer.png" width="220" alt="Hidden icons panel with a blue to mauve border"> | [Seamless Tray Drawer](mods/local/seamless-tray-drawer) | A second drawer for rarely used tray icons, with your own colors, border and blur. |
 
 ### Windows and Alt+Tab
@@ -201,7 +201,8 @@ Most of my mods build on someone else's mod. Each folder's readme credits its so
 | **caliberda** ([Alt+Tab Flip 3D](https://windhawk.net/mods/alt-tab-flip-3d)) | The Vista rendering in Simple Window Switcher Plus (MIT). |
 | **caliberda** ([AI Voice Typing](https://windhawk.net/mods/ai-voice-typing)) | The base of Seamless Dictate (MIT). |
 | **crazyboyybs** ([AutoScroll Win32](https://windhawk.net/mods/autoscroll-win32)) | The scrolling engine in Seamless Autoscroll. |
-| **0Allu** ([Better Volume Mixer](https://windhawk.net/mods/better-volume-mixer)) | The base of Better Volume Mixer Plus. |
+| **0Allu** ([Better Volume Mixer](https://windhawk.net/mods/better-volume-mixer)) | The base of Seamless Volume Mixer. |
+| **shubho** ([App Volume Booster](https://windhawk.net/mods/app-volume-booster)) | The per-app boost and compressor in Seamless Volume Mixer. |
 | **Gabriela Cristei** ([Explorer Font Changer](https://windhawk.net/mods/explorer-font-changer)) | The base of Shell Font Changer Plus. |
 | **bardelyne** ([Everything & Power Tools in the Start Menu](https://windhawk.net/mods/start-everything)) | The base of the Plus version. |
 | **Cleroth** ([Taskbar AI Quota Bars](https://windhawk.net/mods/taskbar-ai-quota)) | The base of Taskbar AI Quota Bars Plus. |
