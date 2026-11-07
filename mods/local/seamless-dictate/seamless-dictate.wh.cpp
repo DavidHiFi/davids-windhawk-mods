@@ -6,7 +6,7 @@
 // @description     Press a shortcut, speak, and your words are typed where the cursor is, in any app: transcribed and cleaned up by AI in your style (natural, professional, prompt) or translated, with a free key (Groq, Gemini, Mistral and more)
 // @description:pt-BR Aperte um atalho, fale, e suas palavras são digitadas onde está o cursor, em qualquer app: transcritas e limpas por IA no seu estilo (natural, profissional, prompt) ou traduzidas, com uma chave grátis (Groq, Gemini, Mistral e outros)
 // @description:es Pulsa un atajo, habla y tus palabras se escriben donde está el cursor, en cualquier app: transcritas y limpiadas por IA en tu estilo (natural, profesional, prompt) o traducidas, con una clave gratis (Groq, Gemini, Mistral y más)
-// @version         1.0.0
+// @version         1.0.1
 // @author          DavidHiFi, caliberda
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -352,6 +352,7 @@ los 12 minutos.
 #include <dispatcherqueue.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.System.h>
+#include <winrt/Windows.Graphics.Effects.h>
 #include <winrt/Windows.UI.Composition.Desktop.h>
 #include <winrt/Windows.UI.Composition.h>
 
@@ -9540,6 +9541,74 @@ inline constexpr winrt::guid winrt::impl::guid_v<ICompositorDesktopInteropLocal>
 // shows Windows' blur only with this.
 constexpr DWORD kDwmUseHostBackdropBrush = 17;
 
+// Direct2D's effect interop for a composition effect (from
+// windows.graphics.effects.interop.h, which the toolchain lacks).
+struct IGraphicsEffectD2D1InteropLocal : ::IUnknown {
+    virtual HRESULT __stdcall GetEffectId(GUID* id) = 0;
+    virtual HRESULT __stdcall GetNamedPropertyMapping(LPCWSTR name, UINT* index,
+                                                      int* mapping) = 0;
+    virtual HRESULT __stdcall GetPropertyCount(UINT* count) = 0;
+    virtual HRESULT __stdcall GetProperty(UINT index, void** value) = 0;
+    virtual HRESULT __stdcall GetSource(UINT index, void** source) = 0;
+    virtual HRESULT __stdcall GetSourceCount(UINT* count) = 0;
+};
+template <>
+inline constexpr winrt::guid winrt::impl::guid_v<IGraphicsEffectD2D1InteropLocal>{
+    0x2FC57384, 0xA068, 0x44D7, {0xA3, 0x31, 0x30, 0x98, 0x2F, 0xCF, 0x71, 0x77}};
+
+// A Gaussian blur over a source: blurs the host backdrop further, so what's
+// behind the bar (lines, text) melts into color like Windows' acrylic.
+struct GlassBlurEffect
+    : winrt::implements<GlassBlurEffect, winrt::Windows::Graphics::Effects::IGraphicsEffect,
+                        winrt::Windows::Graphics::Effects::IGraphicsEffectSource,
+                        IGraphicsEffectD2D1InteropLocal> {
+    GlassBlurEffect(float sigma, winrt::Windows::Graphics::Effects::IGraphicsEffectSource source)
+        : m_sigma(sigma), m_source(std::move(source)) {}
+    winrt::hstring Name() { return m_name; }
+    void Name(winrt::hstring const& name) { m_name = name; }
+    HRESULT __stdcall GetEffectId(GUID* id) override {
+        // CLSID_D2D1GaussianBlur
+        *id = {0x1FEB6D69, 0x2FE6, 0x4AC9, {0x8C, 0x58, 0x1D, 0x7F, 0x93, 0xE7, 0xA6, 0xA5}};
+        return S_OK;
+    }
+    HRESULT __stdcall GetNamedPropertyMapping(LPCWSTR, UINT*, int*) override {
+        return E_INVALIDARG;
+    }
+    HRESULT __stdcall GetPropertyCount(UINT* count) override {
+        *count = 3;
+        return S_OK;
+    }
+    HRESULT __stdcall GetProperty(UINT index, void** value) override {
+        using winrt::Windows::Foundation::PropertyValue;
+        winrt::Windows::Foundation::IInspectable v;
+        switch (index) {
+            case 0: v = PropertyValue::CreateSingle(m_sigma); break;
+            case 1: v = PropertyValue::CreateUInt32(1 /* BALANCED */); break;
+            case 2: v = PropertyValue::CreateUInt32(1 /* BORDER_MODE_HARD */); break;
+            default: return E_INVALIDARG;
+        }
+        *value = winrt::detach_abi(v.as<winrt::Windows::Foundation::IPropertyValue>());
+        return S_OK;
+    }
+    HRESULT __stdcall GetSource(UINT index, void** source) override {
+        if (index != 0) {
+            return E_INVALIDARG;
+        }
+        winrt::Windows::Graphics::Effects::IGraphicsEffectSource copy = m_source;
+        *source = winrt::detach_abi(copy);
+        return S_OK;
+    }
+    HRESULT __stdcall GetSourceCount(UINT* count) override {
+        *count = 1;
+        return S_OK;
+    }
+
+   private:
+    winrt::hstring m_name = L"GlassBlur";
+    float m_sigma;
+    winrt::Windows::Graphics::Effects::IGraphicsEffectSource m_source;
+};
+
 LRESULT CALLBACK GlassWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_NCHITTEST) {
         return HTTRANSPARENT;
@@ -9616,7 +9685,16 @@ bool Glass::Ensure() {
     root.RelativeSizeAdjustment({1, 1});
     m_target.Root(root);
     m_visual = m_compositor.CreateSpriteVisual();
-    m_visual.Brush(m_compositor.CreateHostBackdropBrush());
+    try {
+        const auto effect = winrt::make<GlassBlurEffect>(
+            18.0f, Composition::CompositionEffectSourceParameter(L"Backdrop"));
+        const auto brush = m_compositor.CreateEffectFactory(effect).CreateBrush();
+        brush.SetSourceParameter(L"Backdrop", m_compositor.CreateHostBackdropBrush());
+        m_visual.Brush(brush);
+    } catch (winrt::hresult_error const& e) {
+        Log(L"Extra glass blur unavailable: %08X", (unsigned)e.code());
+        m_visual.Brush(m_compositor.CreateHostBackdropBrush());
+    }
     m_shape = m_compositor.CreateRoundedRectangleGeometry();
     m_visual.Clip(m_compositor.CreateGeometricClip(m_shape));
     root.Children().InsertAtTop(m_visual);
@@ -10293,14 +10371,20 @@ bool Overlay::EnsureGlassBrushes() {
                    brush->GetAddressOf()));
     };
     const bool rim = linear({{0.0f, Rgba(0x89B4FA)}, {1.0f, Rgba(0xCBA6F7)}}, &m_rim);
-    const bool sheen = linear({{0.0f, D2D1::ColorF(1, 1, 1, 0.13f)},
-                               {0.46f, D2D1::ColorF(1, 1, 1, 0.03f)},
-                               {0.52f, D2D1::ColorF(1, 1, 1, 0)},
-                               {1.0f, D2D1::ColorF(1, 1, 1, 0)}},
+    // Dark theme: a faint lavender sheen and blue glow (Mocha), not white,
+    // so the light reads as glass without lifting the card's darkness.
+    const D2D1_COLOR_F shine = m_lightTheme ? D2D1::ColorF(1, 1, 1) : Rgba(0xB4BEFE);
+    const D2D1_COLOR_F under = m_lightTheme ? D2D1::ColorF(1, 1, 1) : Rgba(0x89B4FA);
+    const float k = m_lightTheme ? 1.0f : 0.45f;
+    auto a = [](D2D1_COLOR_F c, float alpha) { c.a = alpha; return c; };
+    const bool sheen = linear({{0.0f, a(shine, 0.13f * k)},
+                               {0.46f, a(shine, 0.03f * k)},
+                               {0.52f, a(shine, 0)},
+                               {1.0f, a(shine, 0)}},
                               &m_sheen);
     ComPtr<ID2D1GradientStopCollection> glowStops;
-    const D2D1_GRADIENT_STOP glow[] = {{0.0f, D2D1::ColorF(1, 1, 1, 0.12f)},
-                                       {0.7f, D2D1::ColorF(1, 1, 1, 0)}};
+    const D2D1_GRADIENT_STOP glow[] = {{0.0f, a(under, 0.12f * k)},
+                                       {0.7f, a(under, 0)}};
     const bool glowOk =
         SUCCEEDED(m_target->CreateGradientStopCollection(glow, 2, glowStops.GetAddressOf())) &&
         SUCCEEDED(m_target->CreateRadialGradientBrush(
@@ -11155,10 +11239,20 @@ void Overlay::Render(float appear, ULONGLONG now) {
     const bool error = m_state.phase == Phase::Error && !m_state.hint;
     m_tint = error ? Mix(p.bg, p.danger, 0.08f) : p.bg;
     if (glass) {
-        // Only a tint over the blur; denser on the cards with the most text.
+        // Acrylic: a dense Mocha tint (between base and crust) over the blur,
+        // so the blur shows as color and depth, never as a bright see-through.
         const bool card2 = m_state.phase == Phase::Done || m_state.phase == Phase::Error;
-        m_tint.a = card2 ? (m_glassTranslucent ? 0.42f : 0.50f)
-                         : (m_glassTranslucent ? 0.28f : 0.36f);
+        if (!m_lightTheme) {
+            m_tint = error ? Mix(Mix(p.bg, Rgba(0x11111B), 0.35f), p.danger, 0.08f)
+                           : Mix(p.bg, Rgba(0x11111B), 0.35f);
+        }
+        if (m_lightTheme) {
+            m_tint.a = card2 ? (m_glassTranslucent ? 0.42f : 0.50f)
+                             : (m_glassTranslucent ? 0.28f : 0.36f);
+        } else {
+            m_tint.a = card2 ? (m_glassTranslucent ? 0.80f : 0.90f)
+                             : (m_glassTranslucent ? 0.74f : 0.86f);
+        }
         if (error) {
             m_tint = Mix(m_tint, Rgba(0xFF5A4E, 0.5f), 0.14f);
         }
@@ -11169,7 +11263,7 @@ void Overlay::Render(float appear, ULONGLONG now) {
         size.radius - 0.5f, size.radius - 0.5f);
     m_brush->SetColor(m_tint);
     m_target->FillRoundedRectangle(shape, m_brush.Get());
-    if (lit) {
+    if (lit && m_lightTheme) {
         // A sheen over the top half and light along the bottom.
         m_sheen->SetStartPoint({0, card.top});
         m_sheen->SetEndPoint({0, card.bottom});
