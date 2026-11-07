@@ -8,13 +8,15 @@ transcribes what you said and cleans it up in your style, or translates it.
 
 ![Seamless Dictate preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dictate.png)
 
+![Smooth Mocha dictation pill](../../../media/previews/seamless-dictate-glass.png)
+
 ## Features
 - **Hold to dictate.** Hold Ctrl+Win, talk, let go. The text lands where you
   were typing and stays on the clipboard.
 - **Mic privacy.** While you dictate, other apps (Discord and call apps) hear
   silence from your mic, and their volume drops. Both come back the moment you
   let go. Audio routers like VB-Audio Matrix and Voicemeeter are left alone.
-- **Glass dictation bar.** A frosted Catppuccin Mocha bar shows live text while
+- **Glass dictation bar.** A smooth, dark Catppuccin Mocha bar shows live text while
   you speak. The result card stays for 3 seconds, then fades.
 - **Its own settings window and tray icon,** in Catppuccin Mocha with FiraCode
   Nerd Font.
