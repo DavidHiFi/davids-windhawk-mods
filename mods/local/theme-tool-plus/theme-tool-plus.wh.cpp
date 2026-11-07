@@ -32,37 +32,36 @@ themes load without changing system files or running a separate theme tool.
   8 MB) into the Windows themes folder and adds its themes to the list.
   Windhawk does this with its own admin rights, so there is no prompt. Nothing
   changes until you pick a theme and save.
-- **Settings-driven.** Pick an installed theme from a dropdown in the settings
-  tab and apply it by saving. Nothing to memorize, and no hotkey needed.
+- **Switch from the settings tab.** Pick a theme from a list and save. No
+  hotkey needed.
 - **Unsigned theme support.** Custom .msstyles files load as they are. No
   system file is touched, so Secure Boot is not affected.
-- **ThemeToolSharp options.** Keep your wallpaper, cursor, desktop icons,
-  colors, sounds or screensaver as they are. Hide the busy cursor while a theme
-  applies. The undocumented apply, theme pack and start-up flags from the
-  original theme tool are included.
+- **Keep what you like.** Switch themes but keep your own wallpaper, cursor,
+  desktop icons, colors, sounds or screensaver. The hidden Windows options
+  from ThemeToolSharp are there too, under Advanced.
 - **Survives restarts.** Sign-in and lock screen colors stay in sync, so the
   theme survives a reboot.
 - **No extra app.** Everything runs inside the mod. You can uninstall
   ThemeToolSharp, along with its process entry in Windhawk.
-- **Settings blocker.** Stops the Settings app from opening after each theme
-  apply, if you turn that on.
+- **No Settings pop-up.** Can stop the Settings app from opening after each
+  theme switch.
 
 ## How to use
 
 Open the mod's settings tab.
 
-1. Pick a theme from **Theme to apply**. Pick **Main 01** for the full look:
-   theme, cursors, sounds and wallpaper.
-2. Turn on **Apply theme when settings save**.
-3. Save. The theme applies right away.
+1. Under **Theme**, pick the theme you want. Pick **Main 01** for the full
+   look: window style, wallpaper, cursor and sounds.
+2. Turn on **Switch theme when I save**.
+3. Click **Save settings**. The theme switches right away.
 
-Your current theme stays as it is until you do this. To use a theme you added
-yourself, pick **Another installed theme** and type its name.
+Nothing changes until you do this. To use a theme you added yourself, pick
+**A theme not in this list** and type its name in the box below it.
 
-The **What happens when settings save** option can refresh the theme list
-after you install a new theme, re-initialize the theme manager if themes act
-up, or open the theme picker once. The other settings control what an apply
-keeps or changes.
+The "Keep my ..." switches stop a theme from changing your wallpaper, cursor,
+colors, sounds, desktop icons or screensaver. If you add a new theme and it
+doesn't show up, set **Also do this when I save** to **Reload the theme list**
+and save once.
 
 ## Notes
 - Use themes made for your Windows version. Put your own themes in
@@ -70,7 +69,7 @@ keeps or changes.
   from there. The theme picker lists every installed theme.
 - The pack lives in `C:\Windows\Resources\Themes\Theme Tool Plus`. A theme
   you already have under the same file name is never replaced. Turn off
-  **Download the theme pack** to skip it.
+  **Download the themes that come with this mod** to skip it.
 - Before you remove the mod, switch back to a stock theme. Otherwise the next
   sign-in checks theme signatures again, and a custom theme may fail to load.
 - ARM64 is not supported (Windhawk does not hook ARM64EC).
@@ -88,18 +87,18 @@ LGPL-2.1.
 // ==WindhawkModSettings==
 /*
 - themeName: ""
-  $name: Theme to apply
-  $description: Main 01 is the full look from the theme pack. Leave this on Keep my current theme to change nothing. Turn on Apply theme when settings save, then save.
+  $name: Theme
+  $description: The theme to switch to. Main 01 is the one that comes with this mod, with its own wallpaper, cursor and sounds. To switch, pick a theme, turn on "Switch theme when I save" below, then click Save settings.
   $options:
   - "": Keep my current theme
-  - "*": Another installed theme (type its name below)
+  - "*": A theme not in this list (type its name below)
   - Captured Motion: Captured Motion
-  - catppuccin Latte: catppuccin Latte
-  - catppuccin Latte Win: catppuccin Latte Win
-  - catppuccin Mocha: catppuccin Mocha
-  - catppuccin Mocha Night: catppuccin Mocha Night
-  - catppuccin Mocha Night Win: catppuccin Mocha Night Win
-  - catppuccin Mocha Win: catppuccin Mocha Win
+  - catppuccin Latte: Catppuccin Latte
+  - catppuccin Latte Win: Catppuccin Latte Win
+  - catppuccin Mocha: Catppuccin Mocha
+  - catppuccin Mocha Night: Catppuccin Mocha Night
+  - catppuccin Mocha Night Win: Catppuccin Mocha Night Win
+  - catppuccin Mocha Win: Catppuccin Mocha Win
   - Flow: Flow
   - Glow: Glow
   - Main 01: Main 01
@@ -108,74 +107,74 @@ LGPL-2.1.
   - Windows (light): Windows (light)
   - Windows spotlight: Windows spotlight
 - otherThemeName: ""
-  $name: Another theme's name
-  $description: Used when Theme to apply is set to Another installed theme. Type the name the theme picker shows, for example My Theme.
+  $name: Theme name (if it's not in the list)
+  $description: Only used when Theme is set to "A theme not in this list". Type the name exactly as it appears in Windows Settings under Personalization > Themes.
 - installPack: true
-  $name: Download the theme pack
-  $description: Downloads Main 01 and the Catppuccin themes, cursors and sounds (about 8 MB) once, into the Windows themes folder. Turn off to skip it.
+  $name: Download the themes that come with this mod
+  $description: Downloads Main 01 and the Catppuccin themes, with their cursors and sounds (about 8 MB), the first time the mod runs. Your current theme doesn't change. Turn this off if you only want your own themes.
 - applyOnSettingsChange: false
-  $name: Apply theme when settings save
-  $description: Applies the theme picked above as soon as you save.
+  $name: Switch theme when I save
+  $description: When this is on, clicking Save settings switches to the theme picked above.
 - action: none
-  $name: What happens when settings save
-  $description: An extra step to run after saving. Refresh the theme list after installing a new theme, re-initialize the theme manager if themes act up, or open the theme picker once.
+  $name: Also do this when I save
+  $description: An extra step that runs each time you click Save settings. Most people can leave this on Nothing.
   $options:
-  - none: Nothing extra
-  - refresh: Refresh the theme list
-  - reinitialize: Re-initialize the theme manager
-  - picker: Open the theme picker
-  - reinstallPack: Download the theme pack again
+  - none: Nothing
+  - refresh: Reload the theme list (after you add a new theme)
+  - reinitialize: Restart the theme engine (if themes stop switching)
+  - picker: Open the theme picker window
+  - reinstallPack: Download this mod's themes again
 - updateLogonUI: true
-  $name: Keep sign-in screens in sync
-  $description: Matches the colors of the sign-in and lock screens to the applied theme.
+  $name: Match the sign-in and lock screens
+  $description: Gives the sign-in and lock screens the same colors as your theme.
 - preventSettings: false
-  $name: Keep the Settings app closed after applying
-  $description: Windows sometimes opens Settings right after a theme is applied. Turn this on to stop it.
+  $name: Don't open Settings after switching
+  $description: Windows sometimes opens the Settings app right after a theme switch. This stops it.
 - ignoreBackground: false
-  $name: Keep current wallpaper
-  $description: Leaves the wallpaper alone when applying a theme.
+  $name: Keep my wallpaper
+  $description: Switching themes won't change your wallpaper.
 - ignoreCursor: false
-  $name: Keep current cursor
-  $description: Leaves the mouse pointer scheme alone when applying a theme.
+  $name: Keep my mouse cursor
+  $description: Switching themes won't change your mouse cursor.
 - ignoreDesktopIcons: false
-  $name: Keep current desktop icons
-  $description: Leaves desktop icon positions alone when applying a theme.
+  $name: Keep my desktop icons
+  $description: Switching themes won't change your desktop icons.
 - ignoreColor: false
-  $name: Keep current colors
-  $description: Leaves accent and window colors alone when applying a theme.
+  $name: Keep my colors
+  $description: Switching themes won't change your accent and window colors.
 - ignoreSound: false
-  $name: Keep current sounds
-  $description: Leaves the sound scheme alone when applying a theme.
+  $name: Keep my sounds
+  $description: Switching themes won't change your Windows sounds.
 - ignoreScreensaver: false
-  $name: Keep current screensaver
-  $description: Leaves the screensaver alone when applying a theme.
+  $name: Keep my screensaver
+  $description: Switching themes won't change your screensaver.
 - noHourglass: true
-  $name: Hide the busy cursor while applying
-  $description: Skips the hourglass flash Windows shows while a theme applies.
+  $name: Hide the loading cursor
+  $description: Hides the spinning cursor Windows shows while a theme switches.
 - unknownFlag1: false
-  $name: Extra apply option 1 (advanced)
-  $description: An undocumented option Windows accepts when applying a theme. It relates to window metrics, and the original theme tool exposes it too. Leave it off unless you need it.
+  $name: "Advanced: hidden switch option 1"
+  $description: A Windows option with no official name. It seems to affect window sizes. Leave it off unless you know you need it.
 - unknownFlag2: false
-  $name: Extra apply option 2 (advanced)
-  $description: A second undocumented apply option. The original theme tool exposes it too. Leave it off unless you need it.
+  $name: "Advanced: hidden switch option 2"
+  $description: Another Windows option with no official name. Leave it off unless you know you need it.
 - themePackUnknown1: false
-  $name: Extra theme pack option 1 (advanced)
-  $description: The first undocumented theme pack option. Upstream notes suggest it also hides the busy cursor. Leave it off unless you need it.
+  $name: "Advanced: hidden theme pack option 1"
+  $description: A Windows option for .themepack files with no official name. It may hide the loading cursor. Leave it off unless you know you need it.
 - themePackUnknown2: false
-  $name: Extra theme pack option 2 (advanced)
-  $description: The second undocumented theme pack option. Upstream notes suggest it also hides the busy cursor. Leave it off unless you need it.
+  $name: "Advanced: hidden theme pack option 2"
+  $description: Another Windows option for .themepack files with no official name. Leave it off unless you know you need it.
 - themePackSilent: false
-  $name: Apply packs quietly
-  $description: Hides every dialog a theme pack would show and stops its sounds.
+  $name: Switch .themepack files silently
+  $description: No pop-ups or sounds when you switch to a .themepack file.
 - themePackRoamed: false
-  $name: Roam theme packs
-  $description: Lets the applied theme pack roam with your account settings.
+  $name: Sync .themepack themes to my account
+  $description: Lets a .themepack theme sync to other PCs signed in with your Microsoft account.
 - initUnknownFlag1: false
-  $name: Extra start-up option 1 (advanced)
-  $description: An undocumented option the theme manager gets when it starts or re-initializes. Leave it off unless you need it.
+  $name: "Advanced: hidden start-up option 1"
+  $description: A Windows option the theme engine gets when it starts. What it does isn't documented. Leave it off unless you know you need it.
 - initUnknownFlag2: false
-  $name: Extra start-up option 2 (advanced)
-  $description: A second undocumented start-up option. It relates to immersive colors. Leave it off unless you need it.
+  $name: "Advanced: hidden start-up option 2"
+  $description: Another start-up option for the theme engine. It seems to affect accent colors. Leave it off unless you know you need it.
 */
 // ==/WindhawkModSettings==
 
