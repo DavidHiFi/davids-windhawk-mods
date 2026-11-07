@@ -2,12 +2,12 @@
 // @id           better-volume-mixer-plus
 // @name         Seamless Volume Mixer
 // @description  A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices
-// @version      1.3.1
+// @version      1.4.0
 // @author       DavidHiFi, 0Allu, shubho
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
 // @include      windhawk.exe
-// @compilerOptions -lole32 -lshell32 -lgdi32 -luser32 -ldwmapi -ladvapi32 -lmsimg32 -loleaut32 -lgdiplus -lruntimeobject
+// @compilerOptions -lole32 -lshell32 -lgdi32 -luser32 -ldwmapi -ladvapi32 -lmsimg32 -loleaut32 -lgdiplus -lruntimeobject -ld2d1 -ldwrite -ldcomp -ld3d11 -ldxgi
 // @license      MIT
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
@@ -89,6 +89,12 @@ Boost and compressor from
   - system: Follow Windows
   - dark: Dark
   - light: Light
+- renderer: gpu
+  $name: Renderer
+  $description: How the mixer draws its frames. GPU renders with DirectComposition and repaints only changed content. Legacy uses the classic GDI path. The mixer falls back to Legacy on its own if the GPU path cannot start. GPU is suggested.
+  $options:
+  - gpu: GPU (DirectComposition)
+  - gdi: Legacy (GDI)
 - fontFamily: ""
   $name: Font
   $description: Font family for mixer text, for example FiraCode Nerd Font. Leave empty to use Segoe UI. Falls back to Segoe UI if the font is not installed.
@@ -164,6 +170,10 @@ Boost and compressor from
 #include <audiopolicy.h>
 #include <endpointvolume.h>
 #include <dwmapi.h>
+#include <d2d1.h>
+#include <dcomp.h>
+#include <d3d11.h>
+#include <dxgi.h>
 #include <propsys.h>
 #include <objidl.h>
 #include <gdiplus.h>
@@ -923,6 +933,7 @@ struct CustomApp {
 
 struct Settings {
     std::wstring theme = L"system";
+    std::wstring renderer = L"gpu";
     std::wstring fontFamily;
     bool showAllSessions = false;
     bool compactMode = false;
@@ -1097,6 +1108,40 @@ ULONGLONG g_lastPaintTime;
 ULONGLONG g_openTime;
 int g_paintMatte = -1; // -1: opaque, 0/1: black/white alpha-recovery pass.
 bool g_transparencyFailed;
+
+// --- DirectComposition renderer state (GPU path) ---------------------------
+// The compositor owns the window content: static chrome is drawn once into
+// an IDCompositionSurface with Direct2D, the dynamic scene is uploaded only
+// when its pixels change, and the open fade/slide runs as compositor
+// keyframes. No per-frame UpdateLayeredWindow on this path.
+bool g_gpuArmed = false;        // DComp visual tree active on the popup window.
+bool g_gpuFailed = false;       // DComp init failed this session; GDI only.
+bool g_gpuChromeDirty = true;   // Chrome surface needs a redraw.
+bool g_gpuOpenStarted = false;  // Open fade/slide animation armed.
+int g_gpuWidth = 0, g_gpuHeight = 0;
+ID3D11Device* g_gpuD3dDevice = nullptr;
+ID2D1Factory1* g_gpuD2dFactory = nullptr;
+ID2D1Device* g_gpuD2dDevice = nullptr;
+ID2D1DeviceContext* g_gpuContext = nullptr;
+ID2D1Bitmap* g_gpuContentBitmap = nullptr;
+IDCompositionDevice* g_gpuDevice = nullptr;
+IDCompositionTarget* g_gpuTarget = nullptr;
+IDCompositionVisual* g_gpuRoot = nullptr;
+IDCompositionVisual* g_gpuChromeVisual = nullptr;
+IDCompositionVisual* g_gpuContentVisual = nullptr;
+IDCompositionSurface* g_gpuChromeSurface = nullptr;
+IDCompositionSurface* g_gpuContentSurface = nullptr;
+IDCompositionEffectGroup* g_gpuRootEffect = nullptr;
+IDCompositionAnimation* g_gpuOpenOpacity = nullptr;
+IDCompositionAnimation* g_gpuOpenOffset = nullptr;
+std::vector<DWORD> g_gpuLastFrame;  // Last uploaded premultiplied frame.
+std::vector<DWORD> g_gpuLastBlackPass;  // Last rendered black-matte pass.
+bool g_gpuSurfacesReset = false;  // Content surface recreated: upload next frame.
+
+bool GpuWanted() {
+    return g_settings.renderer == L"gpu" && !g_gpuFailed;
+}
+// ---------------------------------------------------------------------------
 float g_masterPaintVolume;
 bool g_masterPaintMuted;
 bool g_frameAnimating;
@@ -1226,6 +1271,11 @@ void LoadSettings() {
     if (g_settings.theme != L"dark" && g_settings.theme != L"light") {
         g_settings.theme = L"system";
     }
+    WindhawkUtils::StringSetting rendererSetting =
+        WindhawkUtils::StringSetting::make(L"renderer");
+    g_settings.renderer = _wcsicmp(rendererSetting.get(), L"gdi") == 0
+        ? L"gdi" : L"gpu";
+
     WindhawkUtils::StringSetting fontFamily =
         WindhawkUtils::StringSetting::make(L"fontFamily");
     g_settings.fontFamily = fontFamily.get();
@@ -1313,13 +1363,25 @@ void ApplyBackdropBlur(HWND hWnd) {
 
 void ApplyTransparencyStyle(HWND hWnd) {
     LONG_PTR style = GetWindowLongPtrW(hWnd, GWL_EXSTYLE);
-    bool transparent = g_settings.backgroundOpacity < 100 && !g_transparencyFailed;
+    bool gpuWanted = GpuWanted();
+    bool transparent =
+        !gpuWanted && g_settings.backgroundOpacity < 100 && !g_transparencyFailed;
     LONG_PTR next = transparent ? style | WS_EX_LAYERED : style & ~WS_EX_LAYERED;
+    // The compositor path needs no redirection surface; the layered path
+    // must never carry the no-redirection style.
+    next = gpuWanted ? next | WS_EX_NOREDIRECTIONBITMAP
+                     : next & ~WS_EX_NOREDIRECTIONBITMAP;
     if (style != next) {
         SetLastError(0);
         if (!SetWindowLongPtrW(hWnd, GWL_EXSTYLE, next) && GetLastError()) {
-            g_transparencyFailed = true;
-            Wh_Log(L"Mixer: could not enable background transparency");
+            if (transparent) {
+                g_transparencyFailed = true;
+                Wh_Log(L"Mixer: could not enable background transparency");
+            }
+            if (gpuWanted) {
+                g_gpuFailed = true;
+                Wh_Log(L"Mixer: could not drop the redirection surface");
+            }
         }
         SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
@@ -1372,6 +1434,7 @@ void ClearTextCache();
 
 void UpdateTheme() {
     ClearTextCache();
+    g_gpuChromeDirty = true;  // Chrome colors follow the theme.
     bool light = g_settings.theme == L"light" ||
                  (g_settings.theme == L"system" && WindowsUsesLightTheme());
     g_lightTheme = light;
@@ -1441,6 +1504,7 @@ Gdiplus::Font* CreateTypographyFont(PCWSTR preferredFamily, float pixels,
 void CreateFonts(HWND hWnd) {
     DeleteFonts();
     g_dpi = static_cast<int>(GetDpiForWindow(hWnd));
+    g_gpuChromeDirty = true;  // Chrome geometry scales with DPI.
     if (!g_dpi) {
         g_dpi = 96;
     }
@@ -4477,6 +4541,370 @@ DWORD RecoverPixelAlpha(DWORD black, DWORD white) {
     return result;
 }
 
+// --- DirectComposition renderer implementation ------------------------------
+// The popup keeps its window, geometry and palette. The compositor owns the
+// window content: the chrome (rounded background + gradient border ring) is
+// drawn once with Direct2D into an IDCompositionSurface, the dynamic scene is
+// rendered by the unchanged GDI generator through the same black/white matte
+// alpha recovery the layered path used, and is uploaded to its own surface
+// only when its pixels actually change. The open reveal (160 ms ease-out,
+// 8 px slide) becomes IDCompositionAnimation keyframes on the root visual,
+// so the fade runs on the compositor thread with zero repaints. The acrylic
+// backdrop, DwmEnableBlurBehindWindow tooltip and all audio logic are
+// untouched. No 3D transforms are used, so no windowsnumerics matrix code
+// is needed.
+
+void GpuReleaseObjects() {
+    if (g_gpuOpenOpacity) { g_gpuOpenOpacity->Release(); g_gpuOpenOpacity = nullptr; }
+    if (g_gpuOpenOffset) { g_gpuOpenOffset->Release(); g_gpuOpenOffset = nullptr; }
+    if (g_gpuRootEffect) { g_gpuRootEffect->Release(); g_gpuRootEffect = nullptr; }
+    if (g_gpuChromeSurface) { g_gpuChromeSurface->Release(); g_gpuChromeSurface = nullptr; }
+    if (g_gpuContentSurface) { g_gpuContentSurface->Release(); g_gpuContentSurface = nullptr; }
+    if (g_gpuContentBitmap) { g_gpuContentBitmap->Release(); g_gpuContentBitmap = nullptr; }
+    if (g_gpuChromeVisual) { g_gpuChromeVisual->Release(); g_gpuChromeVisual = nullptr; }
+    if (g_gpuContentVisual) { g_gpuContentVisual->Release(); g_gpuContentVisual = nullptr; }
+    if (g_gpuRoot) { g_gpuRoot->Release(); g_gpuRoot = nullptr; }
+    if (g_gpuTarget) { g_gpuTarget->Release(); g_gpuTarget = nullptr; }
+    if (g_gpuDevice) { g_gpuDevice->Release(); g_gpuDevice = nullptr; }
+    if (g_gpuContext) { g_gpuContext->Release(); g_gpuContext = nullptr; }
+    if (g_gpuD2dDevice) { g_gpuD2dDevice->Release(); g_gpuD2dDevice = nullptr; }
+    if (g_gpuD2dFactory) { g_gpuD2dFactory->Release(); g_gpuD2dFactory = nullptr; }
+    if (g_gpuD3dDevice) { g_gpuD3dDevice->Release(); g_gpuD3dDevice = nullptr; }
+    g_gpuLastFrame.clear();
+    g_gpuWidth = 0;
+    g_gpuHeight = 0;
+}
+
+void GpuFailToGdi(HWND hWnd) {
+    if (g_gpuFailed) return;
+    g_gpuFailed = true;
+    g_gpuArmed = false;
+    GpuReleaseObjects();
+    Wh_Log(L"Mixer: DirectComposition renderer failed (error %lu), using GDI",
+           GetLastError());
+    ApplyTransparencyStyle(hWnd);
+    InvalidateRect(hWnd, nullptr, FALSE);
+}
+
+bool InitGpuRenderer(HWND hWnd) {
+    if (g_gpuArmed || g_gpuFailed) return g_gpuArmed;
+    HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+        D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, D3D11_SDK_VERSION,
+        &g_gpuD3dDevice, nullptr, nullptr);
+    IDXGIDevice* dxgiDevice = nullptr;
+    if (SUCCEEDED(hr)) hr = g_gpuD3dDevice->QueryInterface(&dxgiDevice);
+    if (SUCCEEDED(hr)) {
+        // DCompositionCreateDevice2 via dcomp.dll, the GPU explorer pattern.
+        typedef HRESULT(WINAPI* PFN_DCompositionCreateDevice2)(
+            IUnknown*, REFIID, void**);
+        HMODULE dcompModule = LoadLibraryW(L"dcomp.dll");
+        auto createDevice2 = dcompModule
+            ? reinterpret_cast<PFN_DCompositionCreateDevice2>(GetProcAddress(
+                  dcompModule, "DCompositionCreateDevice2"))
+            : nullptr;
+        if (createDevice2) {
+            hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
+                                   __uuidof(ID2D1Factory1),
+                                   reinterpret_cast<void**>(&g_gpuD2dFactory));
+            if (SUCCEEDED(hr)) {
+                hr = g_gpuD2dFactory->CreateDevice(dxgiDevice, &g_gpuD2dDevice);
+            }
+            if (SUCCEEDED(hr)) {
+                hr = g_gpuD2dDevice->CreateDeviceContext(
+                    D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &g_gpuContext);
+            }
+            if (SUCCEEDED(hr)) {
+                hr = createDevice2(g_gpuD2dDevice, __uuidof(IDCompositionDevice),
+                                   reinterpret_cast<void**>(&g_gpuDevice));
+            }
+            if (SUCCEEDED(hr)) {
+                hr = g_gpuDevice->CreateTargetForHwnd(hWnd, TRUE, &g_gpuTarget);
+            }
+            if (SUCCEEDED(hr)) hr = g_gpuDevice->CreateVisual(&g_gpuRoot);
+            if (SUCCEEDED(hr)) hr = g_gpuDevice->CreateVisual(&g_gpuChromeVisual);
+            if (SUCCEEDED(hr)) hr = g_gpuDevice->CreateVisual(&g_gpuContentVisual);
+            if (SUCCEEDED(hr)) hr = g_gpuDevice->CreateEffectGroup(&g_gpuRootEffect);
+            if (SUCCEEDED(hr)) hr = g_gpuRootEffect->SetOpacity(1.0f);
+            if (SUCCEEDED(hr)) hr = g_gpuRoot->SetEffect(g_gpuRootEffect);
+            if (SUCCEEDED(hr)) hr = g_gpuRoot->AddVisual(g_gpuChromeVisual, FALSE, nullptr);
+            if (SUCCEEDED(hr)) {
+                hr = g_gpuRoot->AddVisual(g_gpuContentVisual, FALSE, g_gpuChromeVisual);
+            }
+            if (SUCCEEDED(hr)) hr = g_gpuDevice->CreateAnimation(&g_gpuOpenOpacity);
+            if (SUCCEEDED(hr)) hr = g_gpuDevice->CreateAnimation(&g_gpuOpenOffset);
+        } else {
+            hr = HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
+        }
+    }
+    if (dxgiDevice) dxgiDevice->Release();
+    if (FAILED(hr)) {
+        g_gpuFailed = true;
+        Wh_Log(L"Mixer: DirectComposition init failed (0x%08lX), staying on GDI",
+               static_cast<unsigned long>(hr));
+        GpuReleaseObjects();
+        return false;
+    }
+    g_gpuArmed = true;
+    return true;
+}
+
+bool GpuEnsureSurfaces(int w, int h) {
+    if (g_gpuChromeSurface && g_gpuContentSurface && g_gpuContentBitmap &&
+        g_gpuWidth == w && g_gpuHeight == h) {
+        return true;
+    }
+    if (g_gpuChromeSurface) { g_gpuChromeSurface->Release(); g_gpuChromeSurface = nullptr; }
+    if (g_gpuContentSurface) { g_gpuContentSurface->Release(); g_gpuContentSurface = nullptr; }
+    if (g_gpuContentBitmap) { g_gpuContentBitmap->Release(); g_gpuContentBitmap = nullptr; }
+    HRESULT hr = g_gpuDevice->CreateSurface(
+        static_cast<UINT32>(w), static_cast<UINT32>(h),
+        DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_ALPHA_MODE_PREMULTIPLIED,
+        &g_gpuChromeSurface);
+    if (SUCCEEDED(hr)) {
+        hr = g_gpuDevice->CreateSurface(
+            static_cast<UINT32>(w), static_cast<UINT32>(h),
+            DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_ALPHA_MODE_PREMULTIPLIED,
+            &g_gpuContentSurface);
+    }
+    if (SUCCEEDED(hr)) hr = g_gpuChromeVisual->SetContent(g_gpuChromeSurface);
+    if (SUCCEEDED(hr)) hr = g_gpuContentVisual->SetContent(g_gpuContentSurface);
+    if (SUCCEEDED(hr)) {
+        D2D1_BITMAP_PROPERTIES properties = D2D1::BitmapProperties(
+            D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,
+                              D2D1_ALPHA_MODE_PREMULTIPLIED));
+        hr = g_gpuContext->CreateBitmap(
+            D2D1::SizeU(static_cast<UINT32>(w), static_cast<UINT32>(h)),
+            nullptr, 0, &properties, &g_gpuContentBitmap);
+    }
+    if (SUCCEEDED(hr)) {
+        g_gpuWidth = w;
+        g_gpuHeight = h;
+        g_gpuChromeDirty = true;
+        g_gpuSurfacesReset = true;
+        return true;
+    }
+    return false;
+}
+
+// Static chrome, drawn once: the translucent rounded background and the
+// 3 px blue-to-mauve border ring. Same geometry as DrawSurface plus
+// DrawPopupBorder; the ring shares DWM ROUND's center with the radius
+// reduced by the stroke, per the workspace border convention.
+void GpuDrawChrome(int w, int h) {
+    if (!g_gpuChromeSurface || !g_gpuContext || !g_gpuD2dFactory) return;
+    POINT offset{};
+    ID2D1Image* targetImage = nullptr;
+    if (FAILED(g_gpuChromeSurface->BeginDraw(
+            nullptr, IID_PPV_ARGS(&targetImage), &offset))) {
+        return;
+    }
+    g_gpuContext->SetTarget(targetImage);
+    targetImage->Release();
+    g_gpuContext->BeginDraw();
+    g_gpuContext->Clear();
+
+    float opacity = g_settings.backgroundOpacity / 100.0f;
+    D2D1_COLOR_F background{
+        GetRValue(g_theme.background) / 255.0f,
+        GetGValue(g_theme.background) / 255.0f,
+        GetBValue(g_theme.background) / 255.0f,
+        opacity};
+    ID2D1SolidColorBrush* brush = nullptr;
+    if (SUCCEEDED(g_gpuContext->CreateSolidColorBrush(background, &brush)) && brush) {
+        float radius = static_cast<float>(Scale(16));
+        D2D1_ROUNDED_RECT panel = {
+            {0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h)},
+            radius, radius};
+        g_gpuContext->FillRoundedRectangle(panel, brush);
+        brush->Release();
+    }
+
+    float stroke = std::ceil(3.0f * g_dpi / 96.0f);
+    float c = std::min(static_cast<float>(Scale(16)),
+                       std::min(static_cast<float>(w), static_cast<float>(h)) * 0.5f);
+    float r = std::max(0.5f, c - stroke);
+    float d = 2.0f * r;
+    ID2D1PathGeometry* ring = nullptr;
+    if (SUCCEEDED(g_gpuD2dFactory->CreatePathGeometry(&ring)) && ring) {
+        ID2D1GeometrySink* sink = nullptr;
+        if (SUCCEEDED(ring->Open(&sink)) && sink) {
+            sink->SetFillMode(D2D1_FILL_MODE_ALTERNATE);
+            sink->BeginFigure(D2D1::Point2F(-1.0f, -1.0f), D2D1_FIGURE_BEGIN_FILLED);
+            sink->AddLine(D2D1::Point2F(static_cast<float>(w) + 1.0f, -1.0f));
+            sink->AddLine(D2D1::Point2F(static_cast<float>(w) + 1.0f,
+                                        static_cast<float>(h) + 1.0f));
+            sink->AddLine(D2D1::Point2F(-1.0f, static_cast<float>(h) + 1.0f));
+            sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+            sink->BeginFigure(D2D1::Point2F(c - r, c), D2D1_FIGURE_BEGIN_FILLED);
+            sink->AddArc({D2D1::Point2F(c, c - r), {d, d}, 0.0f,
+                          D2D1_SWEEP_DIRECTION_CLOCKWISE, D2D1_ARC_SIZE_SMALL});
+            sink->AddLine(D2D1::Point2F(static_cast<float>(w) - c, c - r));
+            sink->AddArc({D2D1::Point2F(static_cast<float>(w) - c + r, c),
+                          {d, d}, 0.0f, D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                          D2D1_ARC_SIZE_SMALL});
+            sink->AddLine(D2D1::Point2F(static_cast<float>(w) - c + r,
+                                        static_cast<float>(h) - c));
+            sink->AddArc({D2D1::Point2F(static_cast<float>(w) - c,
+                                        static_cast<float>(h) - c + r),
+                          {d, d}, 0.0f, D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                          D2D1_ARC_SIZE_SMALL});
+            sink->AddLine(D2D1::Point2F(c, static_cast<float>(h) - c + r));
+            sink->AddArc({D2D1::Point2F(c - r, static_cast<float>(h) - c),
+                          {d, d}, 0.0f, D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                          D2D1_ARC_SIZE_SMALL});
+            sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+            sink->Close();
+            sink->Release();
+
+            D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES gradientProperties{};
+            gradientProperties.startPoint = D2D1::Point2F(0.0f, 0.0f);
+            gradientProperties.endPoint =
+                D2D1::Point2F(static_cast<float>(w), static_cast<float>(h));
+            D2D1_GRADIENT_STOP stops[2] = {
+                {0.0f, {0x89 / 255.0f, 0xB4 / 255.0f, 0xFA / 255.0f, 1.0f}},
+                {1.0f, {0xCB / 255.0f, 0xA6 / 255.0f, 0xF7 / 255.0f, 1.0f}}};
+            ID2D1GradientStopCollection* collection = nullptr;
+            if (SUCCEEDED(g_gpuContext->CreateGradientStopCollection(
+                    stops, 2, D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP,
+                    &collection)) && collection) {
+                ID2D1LinearGradientBrush* gradient = nullptr;
+                if (SUCCEEDED(g_gpuContext->CreateLinearGradientBrush(
+                        gradientProperties, collection, &gradient)) && gradient) {
+                    g_gpuContext->FillGeometry(ring, gradient);
+                    gradient->Release();
+                }
+                collection->Release();
+            }
+        }
+        ring->Release();
+    }
+    g_gpuContext->EndDraw();
+    g_gpuChromeSurface->EndDraw();
+    g_gpuDevice->Commit();
+}
+
+bool GpuUploadContent(DWORD* pixels, int w, int h) {
+    POINT offset{};
+    ID2D1Image* targetImage = nullptr;
+    HRESULT hr = g_gpuContentSurface->BeginDraw(
+        nullptr, IID_PPV_ARGS(&targetImage), &offset);
+    if (FAILED(hr)) return false;
+    g_gpuContext->SetTarget(targetImage);
+    targetImage->Release();
+    hr = g_gpuContentBitmap->CopyFromMemory(
+        nullptr, pixels, static_cast<UINT32>(w) * 4);
+    if (SUCCEEDED(hr)) {
+        g_gpuContext->BeginDraw();
+        g_gpuContext->DrawBitmap(
+            g_gpuContentBitmap,
+            D2D1::RectF(0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h)));
+        hr = g_gpuContext->EndDraw();
+    }
+    HRESULT endDraw = g_gpuContentSurface->EndDraw();
+    return SUCCEEDED(hr) && SUCCEEDED(endDraw);
+}
+
+// Renders the scene through the existing double-matte pipeline, then uploads
+// it only when the premultiplied pixels differ from the last committed frame.
+bool UpdateGpuFrame(HWND hWnd, bool force) {
+    if (!g_gpuArmed || !g_gpuDevice) return false;
+    RECT client{};
+    GetClientRect(hWnd, &client);
+    int w = client.right, h = client.bottom;
+    if (w <= 0 || h <= 0) return false;
+    if (!GpuEnsureSurfaces(w, h)) return false;
+    if (g_gpuChromeDirty) {
+        GpuDrawChrome(w, h);
+        g_gpuChromeDirty = false;
+        force = true;
+    }
+    if (!g_blackFrame.Ensure(w, h) || !g_whiteFrame.Ensure(w, h)) return false;
+    g_paintMatte = 0;
+    RenderMixerContents(g_blackFrame.dc, client);
+    GdiFlush();
+    size_t count = static_cast<size_t>(w) * h;
+    // The black matte renders first and is compared against the previous
+    // frame's black matte. The scene renderer is a pure function of the
+    // popup state, AnimateState only advances on the black pass, and every
+    // scene colour is fixed per element with only coverage animating, so an
+    // identical black matte reproduces the identical white pass and
+    // recovered frame. Skip the white matte, the alpha recovery and the
+    // upload entirely: one GDI pass per idle tick instead of two.
+    if (!g_gpuSurfacesReset && g_gpuLastBlackPass.size() == count &&
+        memcmp(g_gpuLastBlackPass.data(), g_blackFrame.pixels,
+               count * sizeof(DWORD)) == 0) {
+        g_paintMatte = -1;
+        return true;  // Scene unchanged: no white pass, no upload, no commit.
+    }
+    g_gpuSurfacesReset = false;
+    g_gpuLastBlackPass.assign(g_blackFrame.pixels, g_blackFrame.pixels + count);
+    g_paintMatte = 1;
+    RenderMixerContents(g_whiteFrame.dc, client);
+    g_paintMatte = -1;
+    GdiFlush();
+    for (size_t i = 0; i < count; ++i) {
+        g_blackFrame.pixels[i] = RecoverPixelAlpha(g_blackFrame.pixels[i],
+                                                   g_whiteFrame.pixels[i]);
+    }
+    if (!force && g_gpuLastFrame.size() == count &&
+        memcmp(g_gpuLastFrame.data(), g_blackFrame.pixels,
+               count * sizeof(DWORD)) == 0) {
+        return true;  // Nothing changed: no upload, no commit, CPU sleeps.
+    }
+    g_gpuLastFrame.assign(g_blackFrame.pixels, g_blackFrame.pixels + count);
+    if (!GpuUploadContent(g_blackFrame.pixels, w, h)) return false;
+    g_gpuDevice->Commit();
+    return true;
+}
+
+// Open reveal as compositor keyframes: 160 ms ease-out cubic on root visual
+// opacity and offset, matching the legacy 160 ms reveal duration.
+void StartGpuOpenAnimation(HWND hWnd) {
+    if (!g_gpuDevice || !g_gpuRoot || !g_gpuOpenOpacity || !g_gpuOpenOffset) return;
+    g_gpuOpenStarted = true;
+    const double seconds = 0.16;
+    float slide = static_cast<float>(Scale(8));
+    float secondsF = static_cast<float>(seconds);
+    HRESULT hr = g_gpuOpenOpacity->Reset();
+    if (SUCCEEDED(hr)) {
+        hr = g_gpuOpenOpacity->AddCubic(0.0, 0.0f, 3.0f / secondsF,
+            -3.0f / (secondsF * secondsF),
+            1.0f / (secondsF * secondsF * secondsF));
+    }
+    if (SUCCEEDED(hr)) hr = g_gpuOpenOpacity->End(seconds, 1.0f);
+    if (SUCCEEDED(hr)) hr = g_gpuOpenOffset->Reset();
+    if (SUCCEEDED(hr)) {
+        hr = g_gpuOpenOffset->AddCubic(0.0, slide,
+            -3.0f * slide / secondsF, 3.0f * slide / (secondsF * secondsF),
+            -slide / (secondsF * secondsF * secondsF));
+    }
+    if (SUCCEEDED(hr)) hr = g_gpuOpenOffset->End(seconds, 0.0f);
+    if (SUCCEEDED(hr)) hr = g_gpuRootEffect->SetOpacity(g_gpuOpenOpacity);
+    if (SUCCEEDED(hr)) hr = g_gpuRoot->SetEffect(g_gpuRootEffect);
+    if (SUCCEEDED(hr)) hr = g_gpuRoot->SetOffsetY(g_gpuOpenOffset);
+    if (SUCCEEDED(hr)) {
+        g_openTime = 0;  // The compositor owns the reveal now.
+        g_gpuDevice->Commit();
+    } else {
+        Wh_Log(L"Mixer: open animation not armed (0x%08lX)",
+               static_cast<unsigned long>(hr));
+    }
+}
+
+void GpuAfterHide() {
+    g_gpuOpenStarted = false;
+    g_gpuLastFrame.clear();
+    if (!g_gpuDevice || !g_gpuRoot) return;
+    if (g_gpuRootEffect) g_gpuRootEffect->SetOpacity(1.0f);
+    g_gpuRoot->SetOffsetY(0.0f);
+    g_gpuDevice->Commit();
+}
+
+void GpuShutdown() {
+    g_gpuArmed = false;
+    GpuReleaseObjects();
+}
+
 void PaintNameTooltip(HWND window, HDC dc) {
     RECT client{};
     GetClientRect(window, &client);
@@ -4553,6 +4981,18 @@ void PaintMixer(HWND hWnd) {
     RECT client;
     GetClientRect(hWnd, &client);
     if (client.right <= 0 || client.bottom <= 0) { EndPaint(hWnd, &paint); return; }
+    if (g_gpuArmed) {
+        EndPaint(hWnd, &paint);
+        if (g_openTime && g_motionEnabled && !g_gpuOpenStarted) {
+            StartGpuOpenAnimation(hWnd);
+        }
+        if (!UpdateGpuFrame(hWnd, false)) {
+            GpuFailToGdi(hWnd);
+            return;
+        }
+        UpdatePaintTimer(hWnd);
+        return;
+    }
     if (g_settings.backgroundOpacity < 100 && !g_transparencyFailed) {
         if (PaintTransparentMixer(hWnd, client, now)) {
             UpdatePaintTimer(hWnd);
@@ -4754,6 +5194,7 @@ void HideMixer(HWND hWnd) {
         ReleaseCapture();
     }
     ShowWindow(hWnd, SW_HIDE);
+    GpuAfterHide();
     g_blackFrame.Reset();
     g_whiteFrame.Reset();
     ClearTextCache();
@@ -5750,6 +6191,15 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
             CreateFonts(hWnd);
             UpdateTheme();
 
+            // Arm the compositor path before the first show so the window is
+            // created without a redirection surface from the start.
+            if (GpuWanted()) InitGpuRenderer(hWnd);
+            Wh_Log(L"Mixer: %s renderer armed",
+                   g_gpuArmed ? L"DirectComposition"
+                              : (g_settings.renderer == L"gpu"
+                                     ? L"GDI (DirectComposition unavailable)"
+                                     : L"GDI (Legacy setting)"));
+
             // Bind the master endpoint before anything queries its mute state.
             // This registers the IAudioEndpointVolumeCallback immediately so
             // the tray icon and middle-click mute stay accurate even while the
@@ -5893,6 +6343,11 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
             SelectRow(DRAG_MASTER);
             StopDefaultVolumeNotifications();
             LoadSettings();
+            // Follow a live renderer switch: arm the compositor path when it
+            // becomes wanted, release it when the owner picks Legacy.
+            if (GpuWanted() && !g_gpuArmed) InitGpuRenderer(hWnd);
+            if (!GpuWanted() && g_gpuArmed) GpuShutdown();
+            g_gpuChromeDirty = true;
             CreateFonts(hWnd);
             if (IsWindowVisible(hWnd)) {
                 SetTimer(hWnd, TIMER_REFRESH, 1000, nullptr);
@@ -6292,6 +6747,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
             }
             g_blackFrame.Reset();
             g_whiteFrame.Reset();
+            GpuReleaseObjects();
             KillTimer(hWnd, TIMER_METERS);
             KillTimer(hWnd, TIMER_REFRESH);
             KillTimer(hWnd, TIMER_DEVICE_REFRESH);
@@ -6390,7 +6846,9 @@ DWORD WINAPI ThreadProc(LPVOID) {
     }
 
     HWND hWnd = CreateWindowExW(
-        WS_EX_TOOLWINDOW | WS_EX_TOPMOST, WINDOW_CLASS_NAME, L"Volume mixer",
+        WS_EX_TOOLWINDOW | WS_EX_TOPMOST |
+            (g_settings.renderer == L"gpu" ? WS_EX_NOREDIRECTIONBITMAP : 0),
+        WINDOW_CLASS_NAME, L"Volume mixer",
         WS_POPUP, 0, 0, 420, 400, nullptr, nullptr, windowClass.hInstance,
         nullptr);
     if (!hWnd) {
