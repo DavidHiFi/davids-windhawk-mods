@@ -5,7 +5,7 @@
 // @name:uk-UA      Системний монітор панелі завдань
 // @description     CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar, with optional graphs
 // @description:uk-UA Компактний монітор CPU, GPU, RAM і VRAM із 60-секундними графіками для панелі завдань Windows 11.
-// @version         1.4.17
+// @version         1.4.18
 // @author          DavidHiFi, Yevhenii Starychenko, m417z, Salyts
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-system-info-weather
@@ -199,11 +199,11 @@ by Salyts. GPL-3.0.
 
 - stackedLayout: false
   $name: Stacked layout
-  $description: "Four compact rows: CPU, GPU, RAM and VRAM meters on the left; CPU and GPU temperature, download and upload on the right. Uses the stacked font size below."
+  $description: "Two compact rows that fit inside the dock: CPU and GPU, then RAM and VRAM, then temperatures, then upload and download. Uses the stacked font size below."
 
-- stackedFontSize: 9
+- stackedFontSize: 10
   $name: Stacked font size
-  $description: "Font size for the stacked layout, from 7 to 11 pixels."
+  $description: "Text size for the stacked layout, from 7 to 11 pixels. Suggested: 10. At 11 the rows still fit a 34-pixel dock."
 
 - meterSegments: 10
   $name: Meter segments
@@ -564,7 +564,7 @@ struct ModSettings {
     bool showNetwork = true;
     bool showMeters = true;
     bool stackedLayout = false;
-    int stackedFontSize = 9;
+    int stackedFontSize = 10;
     int meterSegments = 10;
     int colorTheme = 0;  // index into kThemes; 0 = system colors
     int leftOffset = 10;
@@ -3531,7 +3531,7 @@ std::wstring FormatTemperatureValue(const std::optional<double>& value) {
 std::wstring FormatCapacity(double usedGb, double totalGb, bool available) {
     if (!available || !std::isfinite(usedGb) || !std::isfinite(totalGb) ||
         totalGb <= 0.0) {
-        return L"--/--G";
+        return L"--/--\u2009G";
     }
     double roundedTotalGb = std::round(totalGb);
     int totalDecimals =
@@ -3540,7 +3540,7 @@ std::wstring FormatCapacity(double usedGb, double totalGb, bool available) {
             ? 1
             : 0;
     return FormatFixed(usedGb, 1) + L"/" +
-           FormatFixed(totalGb, totalDecimals) + L"G";
+           FormatFixed(totalGb, totalDecimals) + L"\u2009G";
 }
 
 enum class AlertLevel { Normal, Warning, Critical };
@@ -4113,12 +4113,12 @@ void ApplyTextStyle(TextBlock text,
         return;
     }
     text.FontFamily(Media::FontFamily(settings.fontFamily));
-    text.FontSize(g_widgetStacked ? 7.5 : settings.fontSize);
-    // Stacked text is 7.5 DIP and cannot grow inside the 34-DIP dock, so it
-    // gains weight instead (1.4.12): bold labels, semibold values.
-    text.FontWeight(label            ? (g_widgetStacked ? Text::FontWeights::Bold()
-                                                        : Text::FontWeights::SemiBold())
-                    : g_widgetStacked ? Text::FontWeights::SemiBold()
+    text.FontSize(g_widgetStacked ? settings.stackedFontSize : settings.fontSize);
+    // Two stacked rows leave room for real text size (1.4.18). Heavy weights
+    // at small sizes fill in the counters, so labels are semibold and values
+    // medium.
+    text.FontWeight(label            ? Text::FontWeights::SemiBold()
+                    : g_widgetStacked ? Text::FontWeights::Medium()
                                       : Text::FontWeights::Normal());
     if (g_widgetStacked) {
         text.LineStackingStrategy(LineStackingStrategy::BlockLineHeight);
@@ -4142,7 +4142,7 @@ void ApplyTextStyle(TextBlock text,
 constexpr wchar_t kInfoIslandName[] = L"TaskbarIsland_SystemInfo";
 constexpr wchar_t kAppsIslandName[] = L"TaskbarIsland_Apps";
 constexpr double kIslandHeight = 34.0;
-// Four native rows fit inside the island with three DIPs of inset.
+// Stacked rows fit inside the island with three DIPs of inset.
 constexpr double kIslandContentHeight = 28.0;
 
 double WidgetHeightForTaskbar(double availableHeight) {
@@ -4472,19 +4472,21 @@ double WeatherAwareLeftOffset(const ModSettings& settings) {
 }
 
 double StackedRowHeight(int fontSize) {
-    // Four 7-DIP rows leave clear space inside the 34-DIP island.
-    return 7.0;
+    // Two rows of 1.2x the font: 24 DIP at 10, 26 at 11, inside the 28-DIP
+    // content area of the 34-DIP island.
+    return std::ceil(fontSize * 1.2);
 }
 
-// Four rows: label, meter, percent, capacity | temperature and network labels,
-// values and units. Columns are measured with the stacked font.
+// Two rows. Row 0: CPU | RAM | CPU temperature | upload.
+// Row 1: GPU | VRAM | GPU temperature | download.
+// Columns are measured with the stacked font.
 void ApplyStackedGeometry(const ModSettings& settings) {
     if (!g_stackedGrid) return;
     auto measure = [&](PCWSTR value, bool label = false) {
         TextBlock probe;
         probe.FontFamily(Media::FontFamily(settings.fontFamily));
         probe.FontSize(settings.stackedFontSize);
-        probe.FontWeight(label ? Text::FontWeights::Bold() : Text::FontWeights::SemiBold());
+        probe.FontWeight(label ? Text::FontWeights::SemiBold() : Text::FontWeights::Medium());
         probe.Text(value);
         probe.Measure(Size{10000, 100});
         return std::ceil(static_cast<double>(probe.DesiredSize().Width));
@@ -4510,18 +4512,26 @@ void ApplyStackedGeometry(const ModSettings& settings) {
     double unitWidth = std::max({measure(L"MB/s"), measure(L"KB/s"), measure(L"GB/s")});
     double wattsWidth = measure(L"999W");
     double wattsGap = measure(L"9 9") - measure(L"99");
+    double meterColumn = settings.showMeters ? meterWidth + small : 0;
     const double widths[] = {
-        std::max({measure(L"CPU", true), measure(L"GPU", true), measure(L"VRAM", true)}) + small,
-        settings.showMeters ? meterWidth + small : 0,
+        std::max(measure(L"CPU", true), measure(L"GPU", true)) + small,
+        meterColumn,
+        measure(L"100%"),
+        small + wattsWidth + wattsGap + measure(L"9.9\u2009GHz"),
+        std::max(gap, 10.0),
+        std::max(measure(L"RAM", true), measure(L"VRAM", true)) + small,
+        meterColumn,
         measure(L"100%"),
         small + wattsWidth + wattsGap +
-            std::max({fullCapacityWidth(g_ramLayoutCapacityGb),
-                      fullCapacityWidth(g_vramLayoutCapacityGb), measure(L"9.9GHz")}),
+            std::max(fullCapacityWidth(g_ramLayoutCapacityGb),
+                     fullCapacityWidth(g_vramLayoutCapacityGb)),
         std::max(gap, 14.0),
-        std::max(measure((std::wstring(kTempIconPrefix) + L"CPU TEMP").c_str(), true),
-                 settings.showNetwork ? measure(L"\u2193 NET DOWN", true) : 0.0) + small,
-        std::max(measure(L"115"), settings.showNetwork ? measure(L"999.9") : 0.0),
-        small + std::max(measure(L"°C"), settings.showNetwork ? unitWidth : 0.0),
+        measure((std::wstring(kTempIconPrefix) + L"GPU").c_str(), true) + small,
+        measure(L"115"),
+        small + measure(L"\u00B0C"),
+        settings.showNetwork ? gap + measure(L"\u2193", true) + small : 0.0,
+        settings.showNetwork ? measure(L"999.9") : 0.0,
+        settings.showNetwork ? small + unitWidth : 0.0,
     };
     double width = 0;
     auto columns = g_stackedGrid.ColumnDefinitions();
@@ -4534,6 +4544,13 @@ void ApplyStackedGeometry(const ModSettings& settings) {
     }
     if (g_stackDivider) {
         if (g_meterEmptyBrush) g_stackDivider.Fill(g_meterEmptyBrush);
+    }
+    // Arrows sit at the left of their column so a three-digit speed never
+    // touches them.
+    for (TextBlock label : {g_uploadLabel, g_downloadLabel}) {
+        if (!label) continue;
+        label.TextAlignment(TextAlignment::Left);
+        label.Margin(Thickness{gap, 0, 0, 0});
     }
     for (auto [run, brush] : {std::pair{g_downloadArrowRun, g_downloadBrush},
                               std::pair{g_uploadArrowRun, g_uploadBrush}}) {
@@ -4563,7 +4580,7 @@ void ApplyStackedGeometry(const ModSettings& settings) {
                            g_uploadText, g_downloadUnit, g_uploadUnit}) {
         if (text) text.Visibility(settings.showNetwork ? Visibility::Visible : Visibility::Collapsed);
     }
-    g_widgetHeight = rowHeight * 4;
+    g_widgetHeight = rowHeight * 2;
     g_widgetWidth = std::max(static_cast<double>(settings.width), width);
     g_widget.Width(g_widgetWidth);
     g_widget.Height(g_widgetHeight);
@@ -5507,8 +5524,8 @@ bool RemoveWidget() {
 
 void BuildStackedWidget(Grid widget) {
     g_stackedGrid = widget;
-    for (int i = 0; i < 4; ++i) widget.RowDefinitions().Append(PixelRow(g_stackedRowHeight));
-    for (int i = 0; i < 8; ++i) widget.ColumnDefinitions().Append(PixelColumn(0));
+    for (int i = 0; i < 2; ++i) widget.RowDefinitions().Append(PixelRow(g_stackedRowHeight));
+    for (int i = 0; i < 16; ++i) widget.ColumnDefinitions().Append(PixelColumn(0));
     auto place = [&](FrameworkElement element, int row, int column) {
         if (!element) return;
         Grid::SetRow(element, row);
@@ -5529,15 +5546,17 @@ void BuildStackedWidget(Grid widget) {
         {L"RAM", L"Ram", &g_ramLabel, &g_ramMeter, &g_ramPercentText, &g_ramCapacityText},
         {L"VRAM", L"Vram", &g_vramLabel, &g_vramMeter, &g_vramPercentText, &g_vramCapacityText},
     };
-    for (int row = 0; row < 4; ++row) {
-        const Left& item = left[row];
+    for (int index = 0; index < 4; ++index) {
+        const Left& item = left[index];
         std::wstring prefix = item.prefix;
-        *item.labelText = text((prefix + L"Label").c_str(), item.label, TextAlignment::Left, row, 0);
+        int row = index % 2;
+        int col = index < 2 ? 0 : 5;
+        *item.labelText = text((prefix + L"Label").c_str(), item.label, TextAlignment::Left, row, col);
         *item.meter = CreateMeter((prefix + L"Meter").c_str());
-        place(*item.meter, row, 1);
-        *item.percent = text((prefix + L"Percent").c_str(), L"--%", TextAlignment::Right, row, 2);
+        place(*item.meter, row, col + 1);
+        *item.percent = text((prefix + L"Percent").c_str(), L"--%", TextAlignment::Right, row, col + 2);
         if (item.capacity) {
-            PowerCell& cell = row == 2 ? g_ramPowerCell : g_vramPowerCell;
+            PowerCell& cell = index == 2 ? g_ramPowerCell : g_vramPowerCell;
             cell.text = CreateCellText((prefix + L"Capacity").c_str(), TextAlignment::Right);
             auto run = [&](PCWSTR value) {
                 Documents::Run part;
@@ -5548,13 +5567,13 @@ void BuildStackedWidget(Grid widget) {
             cell.wattsText = CreateCellText((prefix + L"Watts").c_str(), TextAlignment::Right);
             cell.wattsText.HorizontalAlignment(HorizontalAlignment::Left);
             cell.watts = run(L"--");
-            cell.wattsUnit = run(L"W");
+            cell.wattsUnit = run(L"\u2009W");
             cell.text.Inlines().Clear();
             cell.wattsText.Inlines().Append(cell.watts);
             cell.wattsText.Inlines().Append(cell.wattsUnit);
-            place(cell.wattsText, row, 3);
-            cell.clock = run(L"--/--G");
-            place(cell.text, row, 3);
+            place(cell.wattsText, row, col + 3);
+            cell.clock = run(L"--/--\u2009G");
+            place(cell.text, row, col + 3);
             *item.capacity = cell.text;
         }
     }
@@ -5570,13 +5589,13 @@ void BuildStackedWidget(Grid widget) {
         cell.wattsText = CreateCellText((std::wstring(name) + L"Watts").c_str(), TextAlignment::Right);
         cell.wattsText.HorizontalAlignment(HorizontalAlignment::Left);
         cell.watts = run(L"--");
-        cell.wattsUnit = run(L"W");
+        cell.wattsUnit = run(L"\u2009W");
         cell.text.Inlines().Clear();
         cell.wattsText.Inlines().Append(cell.watts);
         cell.wattsText.Inlines().Append(cell.wattsUnit);
         place(cell.wattsText, row, 3);
         cell.clock = run(L"-.-");
-        cell.clockUnit = run(L"GHz");
+        cell.clockUnit = run(L"\u2009GHz");
         place(cell.text, row, 3);
         return cell;
     };
@@ -5586,8 +5605,8 @@ void BuildStackedWidget(Grid widget) {
     divider.HorizontalAlignment(HorizontalAlignment::Center);
     divider.Margin(Thickness{0, 2, 0, 2});
     divider.IsHitTestVisible(false);
-    Grid::SetRowSpan(divider, 4);
-    place(divider, 0, 4);
+    Grid::SetRowSpan(divider, 2);
+    place(divider, 0, 9);
     g_stackDivider = divider;
     // Its first real position lets the island copy take its place.
     divider.SizeChanged([](auto const&, auto const&) {
@@ -5599,19 +5618,18 @@ void BuildStackedWidget(Grid widget) {
         label.Text(L"");
         Documents::Run iconRun;
         iconRun.Text(kTempIconPrefix);
-        iconRun.FontSize(6.5);
         Documents::Run nameRun;
         nameRun.Text(name);
         label.Inlines().Append(iconRun);
         label.Inlines().Append(nameRun);
         return iconRun;
     };
-    g_cpuTempLabel = text(L"CpuTemperatureLabel", L"CPU TEMP", TextAlignment::Left, 0, 5);
-    g_cpuTempIconRun = tempLabel(g_cpuTempLabel, L"CPU TEMP");
-    g_gpuTempLabel = text(L"GpuTemperatureLabel", L"GPU TEMP", TextAlignment::Left, 1, 5);
-    g_gpuTempIconRun = tempLabel(g_gpuTempLabel, L"GPU TEMP");
-    g_uploadLabel = text(L"UploadLabel", L"UP", TextAlignment::Left, 2, 5);
-    g_downloadLabel = text(L"DownloadLabel", L"DOWN", TextAlignment::Left, 3, 5);
+    g_cpuTempLabel = text(L"CpuTemperatureLabel", L"CPU", TextAlignment::Left, 0, 10);
+    g_cpuTempIconRun = tempLabel(g_cpuTempLabel, L"CPU");
+    g_gpuTempLabel = text(L"GpuTemperatureLabel", L"GPU", TextAlignment::Left, 1, 10);
+    g_gpuTempIconRun = tempLabel(g_gpuTempLabel, L"GPU");
+    g_uploadLabel = text(L"UploadLabel", L"UP", TextAlignment::Right, 0, 13);
+    g_downloadLabel = text(L"DownloadLabel", L"DOWN", TextAlignment::Right, 1, 13);
     auto arrowLabel = [](TextBlock label, PCWSTR arrow, PCWSTR name) {
         label.Text(L"");
         Documents::Run arrowRun;
@@ -5622,16 +5640,16 @@ void BuildStackedWidget(Grid widget) {
         label.Inlines().Append(nameRun);
         return arrowRun;
     };
-    g_uploadArrowRun = arrowLabel(g_uploadLabel, L"\u2191 ", L"NET UP");
-    g_downloadArrowRun = arrowLabel(g_downloadLabel, L"\u2193 ", L"NET DOWN");
-    g_cpuTempText = text(L"CpuTemperature", L"--", TextAlignment::Right, 0, 6);
-    g_gpuTempText = text(L"GpuTemperature", L"--", TextAlignment::Right, 1, 6);
-    g_cpuTempUnit = text(L"CpuTemperatureUnit", L"°C", TextAlignment::Right, 0, 7);
-    g_gpuTempUnit = text(L"GpuTemperatureUnit", L"°C", TextAlignment::Right, 1, 7);
-    g_uploadText = text(L"UploadValue", L"--", TextAlignment::Right, 2, 6);
-    g_downloadText = text(L"DownloadValue", L"--", TextAlignment::Right, 3, 6);
-    g_uploadUnit = text(L"UploadUnit", L"B/s", TextAlignment::Right, 2, 7);
-    g_downloadUnit = text(L"DownloadUnit", L"B/s", TextAlignment::Right, 3, 7);
+    g_uploadArrowRun = arrowLabel(g_uploadLabel, L"\u2191", L"");
+    g_downloadArrowRun = arrowLabel(g_downloadLabel, L"\u2193", L"");
+    g_cpuTempText = text(L"CpuTemperature", L"--", TextAlignment::Right, 0, 11);
+    g_gpuTempText = text(L"GpuTemperature", L"--", TextAlignment::Right, 1, 11);
+    g_cpuTempUnit = text(L"CpuTemperatureUnit", L"\u00B0C", TextAlignment::Right, 0, 12);
+    g_gpuTempUnit = text(L"GpuTemperatureUnit", L"\u00B0C", TextAlignment::Right, 1, 12);
+    g_uploadText = text(L"UploadValue", L"--", TextAlignment::Right, 0, 14);
+    g_downloadText = text(L"DownloadValue", L"--", TextAlignment::Right, 1, 14);
+    g_uploadUnit = text(L"UploadUnit", L"B/s", TextAlignment::Right, 0, 15);
+    g_downloadUnit = text(L"DownloadUnit", L"B/s", TextAlignment::Right, 1, 15);
 }
 
 bool InjectWidget(FrameworkElement taskbarFrame) {
