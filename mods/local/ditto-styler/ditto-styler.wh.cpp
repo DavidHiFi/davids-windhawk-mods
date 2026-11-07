@@ -2,7 +2,7 @@
 // @id              ditto-styler
 // @name            Ditto Styler
 // @description     Glass tooltips, a rounded bottom dock and a soft fade for the Ditto clipboard window
-// @version         1.1.10
+// @version         1.1.11
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -473,9 +473,13 @@ static RECT DockRect(HWND parent) {
     return {inset, rc.bottom - Scale(parent, 30), rc.right - inset, rc.bottom - Scale(parent, 4)};
 }
 
+// Buttons are square child windows; closer than this to the dock's end they
+// paint over the rounded end cap and break its outline.
+static const int kButtonInset = 10;
+
 static RECT SearchPill(HWND parent) {
     RECT d = DockRect(parent);
-    int pad = Scale(parent, 3), side = Scale(parent, 4), button = Scale(parent, 20), gap = Scale(parent, 4);
+    int pad = Scale(parent, 3), side = Scale(parent, kButtonInset), button = Scale(parent, 20), gap = Scale(parent, 4);
     return {d.left + side + button + gap, d.top + pad, d.right - side - button - gap, d.bottom - pad};
 }
 
@@ -496,7 +500,7 @@ static void LayoutDock(HWND h) {
     if (busy) return;
     busy = true;
     RECT d = DockRect(h);
-    int pad = Scale(h, 4), button = Scale(h, 20);
+    int pad = Scale(h, kButtonInset), button = Scale(h, 20);
     int mid = (d.top + d.bottom) / 2;
     PlaceControl(h, 517, {d.left+pad, mid-button/2, d.left+pad+button, mid-button/2+button});
     PlaceControl(h, 528, {d.right-pad-button, mid-button/2, d.right-pad, mid-button/2+button});
