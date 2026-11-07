@@ -586,15 +586,15 @@
       "enabled": true
     },
     {
-      "id": "local@windhawk-styler",
-      "name": "Windhawk Styler",
+      "id": "local@windhawk-enhanced-styler",
+      "name": "Windhawk Enhanced Styler",
       "author": "DavidHiFi, Ingan121",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.0.83",
+      "version": "2.1.0",
       "license": "MIT",
       "origin": "local",
       "upstream": "",
-      "source": "mods/local/windhawk-styler/windhawk-styler.wh.cpp",
+      "source": "mods/local/windhawk-enhanced-styler/windhawk-enhanced-styler.wh.cpp",
       "enabled": true
     },
     {

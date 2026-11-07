@@ -39,7 +39,7 @@ $localPaths = [ordered]@{
     'local@translucent-flyouts'       = 'mods\local\translucent-flyouts\translucent-flyouts.wh.cpp'
     'local@better-volume-mixer-plus'  = 'mods\local\better-volume-mixer-plus\better-volume-mixer-plus.wh.cpp'
     'local@shell-font-changer-plus' = 'mods\local\shell-font-changer-plus\shell-font-changer-plus.wh.cpp'
-    'local@windhawk-styler' = 'mods\local\windhawk-styler\windhawk-styler.wh.cpp'
+    'local@windhawk-enhanced-styler' = 'mods\local\windhawk-enhanced-styler\windhawk-enhanced-styler.wh.cpp'
     'local@gpu-accelerated-explorer-view-plus' = 'mods\local\gpu-accelerated-explorer-view-plus\gpu-accelerated-explorer-view-plus.wh.cpp'
 }
 # Values the source headers do not carry.

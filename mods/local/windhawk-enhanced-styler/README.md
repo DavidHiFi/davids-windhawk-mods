@@ -1,13 +1,15 @@
-# Windhawk Styler
+# Windhawk Enhanced Styler
 
 [☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
-Choose Windhawk's colors, font, transparency and background blur.
+Choose Windhawk's colors, gradients, font, transparency and background blur.
 
-![Windhawk Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-styler.png)
+![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
 
 ## Features
 
+- **Header gradient.** The Windhawk logo, its name and section titles such as Installed mods take a two-color gradient, blue to mauve by default. An optional Enhanced badge sits beside the name.
+- **Selected text.** Highlighted text uses the accent color, or a color of its own, instead of the stock blue.
 - **Background.** Pick a color and opacity, with Acrylic or no background effect.
 - **Cards and dialogs.** Set their color and opacity. Cards, tables, Advanced settings, dialogs and pop-up menus use that surface, with blur when translucent. Every box has one outline, the same color all the way around its corners.
 - **Controls.** Choose colors for buttons and inputs, plus a global accent for selections, hovers, badges, spinners, links and modified settings. Number spinners sit in a rounded pill. The save bar floats while the settings scroll and blurs the rows behind it, and mode and version switches join into single pills.
