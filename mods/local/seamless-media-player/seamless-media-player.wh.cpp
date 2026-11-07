@@ -2,7 +2,7 @@
 // @id              seamless-media-player
 // @name            Seamless Media Player
 // @description     A media player with a live audio visualizer beside it, right on the taskbar
-// @version 1.9.6
+// @version 1.9.8
 // @author          DavidHiFi, Salyts, USER-TOURNE, GR0UD, uMk0
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -19,7 +19,7 @@
 A media player and a live audio visualizer in one mod. The player shows what's
 playing with album art and buttons, and the spectrum bars sit right beside it.
 
-![Seamless Media Player preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-media-player.png)
+![Seamless Media Player preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/taskbar-fluent-media-player-plus.png)
 
 ## Features
 
@@ -6251,113 +6251,286 @@ static void SetCaptureEndpoint(const std::wstring& id, HWND picker = nullptr) {
     if (picker) PostMessageW(picker, RegisterWindowMessageW(L"WindhawkFluentPlusCaptureChanged"), 0, 0);
     else Wh_Log(L"Capture device saved; the visualizer reads it when it next loads");
 }
-static void ShowNativeMediaMenu() {
-    if (g_unloading) return;
-    bool canSkipPrevious = true, canSkipNext = true, canShuffle = true, canRepeat = true, canSeek = true;
-    {
-        std::lock_guard<std::mutex> lk(g_mediaMtx);
-        canSkipPrevious = g_media.canSkipPrevious;
-        canSkipNext     = g_media.canSkipNext;
-        canShuffle      = g_media.canShuffle;
-        canRepeat       = g_media.canRepeat;
-        canSeek         = g_media.canSeek;
-    }
-    bool shuffleOn = g_shuffleEnabled.load();
-    RepeatMode repeat = g_repeatMode.load();
-    std::vector<std::function<void()>> actions;
-    HMENU menu = CreatePopupMenu();
-    auto add = [&](HMENU m, const wchar_t* label, bool enabled, bool checked, std::function<void()> fn) {
-        actions.push_back(std::move(fn));
-        AppendMenuW(m, MF_STRING | (enabled ? 0 : MF_GRAYED) | (checked ? MF_CHECKED : 0),
-                    (UINT_PTR)actions.size(), label);
-    };
-    auto media = [](int cmd) -> std::function<void()> {
-        return [cmd] { SendMediaCommandAsync(cmd); DispatchMediaUpdate(); };
-    };
-    for (const auto& item : g_settings.contextMenuItems) {
-        if (item == L"repeat") {
-            if (g_settings.contextMenuRepeatStyle == L"toggle") {
-                add(menu, repeat == RepeatMode::One ? L"Repeat one" : L"Repeat", canRepeat,
-                    repeat != RepeatMode::Off, media(8));
-            } else {
-                HMENU sub = CreatePopupMenu();
-                add(sub, L"Off", canRepeat, repeat == RepeatMode::Off, media(10));
-                add(sub, L"All", canRepeat, repeat == RepeatMode::All, media(11));
-                add(sub, L"One", canRepeat, repeat == RepeatMode::One, media(12));
-                AppendMenuW(menu, MF_POPUP | (canRepeat ? 0 : MF_GRAYED), (UINT_PTR)sub, L"Repeat");
-            }
-        } else if (item == L"shuffle") {
-            if (g_settings.contextMenuShuffleStyle == L"toggle") {
-                add(menu, L"Shuffle", canShuffle, shuffleOn, media(7));
-            } else {
-                HMENU sub = CreatePopupMenu();
-                add(sub, L"Off", canShuffle, !shuffleOn, [] { if (g_shuffleEnabled.load()) { SendMediaCommandAsync(7); DispatchMediaUpdate(); } });
-                add(sub, L"On", canShuffle, shuffleOn, [] { if (!g_shuffleEnabled.load()) { SendMediaCommandAsync(7); DispatchMediaUpdate(); } });
-                AppendMenuW(menu, MF_POPUP | (canShuffle ? 0 : MF_GRAYED), (UINT_PTR)sub, L"Shuffle");
-            }
-        } else if (item == L"forward") {
-            add(menu, L"Forward 5 seconds", canSeek, false, media(6));
-        } else if (item == L"rewind") {
-            add(menu, L"Rewind 5 seconds", canSeek, false, media(5));
-        } else if (item == L"next") {
-            add(menu, L"Next track", canSkipNext, false, media(3));
-        } else if (item == L"prev") {
-            add(menu, L"Previous track", canSkipPrevious, false, media(1));
-        } else if (item == L"switch_sessions") {
-            add(menu, L"Switch session", g_sessionCount.load() > 1, false, media(9));
-        } else if (item == L"open_app") {
-            add(menu, L"Open media app", true, false, [] { ExecuteMediaAction(L"open_app"); });
+// The player menu is a XAML MenuFlyout with the same Mocha look as the taskbar,
+// clock and AI usage menus: acrylic HostBackdrop at 0.9, a 2 px blue-to-mauve
+// border, FiraCode Medium, blue icons and checks, and the dock hover (mantle
+// fill, 1 px blue ring, mauve when pressed, radius 8).
+static Brush MochaMenuBrush(winrt::Windows::UI::Color c) {
+    // A one-colour gradient, because popups dim plain SolidColorBrushes.
+    LinearGradientBrush brush;
+    GradientStop first;
+    first.Color(c);
+    first.Offset(0.0);
+    GradientStop last;
+    last.Color(c);
+    last.Offset(1.0);
+    brush.GradientStops().Append(first);
+    brush.GradientStops().Append(last);
+    return brush;
+}
+static void InsertMochaMenuResource(ResourceDictionary const& res, wchar_t const* key,
+                                    winrt::Windows::Foundation::IInspectable const& value) {
+    auto boxedKey = winrt::box_value(winrt::hstring(key));
+    if (res.HasKey(boxedKey)) res.Remove(boxedKey);
+    res.Insert(boxedKey, value);
+}
+static constexpr winrt::Windows::UI::Color kMochaBase{0xFF, 0x1E, 0x1E, 0x2E};
+static constexpr winrt::Windows::UI::Color kMochaText{0xFF, 0xCD, 0xD6, 0xF4};
+static constexpr winrt::Windows::UI::Color kMochaBlue{0xFF, 0x89, 0xB4, 0xFA};
+static constexpr winrt::Windows::UI::Color kMochaMauve{0xFF, 0xCB, 0xA6, 0xF7};
+static constexpr winrt::Windows::UI::Color kMochaHover{0xBF, 0x18, 0x18, 0x25};
+static constexpr winrt::Windows::UI::Color kMochaSurface1{0xFF, 0x45, 0x47, 0x5A};
+static Style MochaMenuPresenterStyle(winrt::Windows::UI::Xaml::Interop::TypeName const& type) {
+    Brush background = SolidColorBrush(winrt::Windows::UI::Color{0xF5, 0x1E, 0x1E, 0x2E});
+    try {
+        AcrylicBrush acrylic;
+        acrylic.BackgroundSource(AcrylicBackgroundSource::HostBackdrop);
+        acrylic.TintColor(kMochaBase);
+        acrylic.TintOpacity(0.9);
+        acrylic.FallbackColor(kMochaBase);
+        background = acrylic;
+    } catch (...) {}
+    LinearGradientBrush border;
+    border.StartPoint({0.f, 0.5f});
+    border.EndPoint({1.f, 0.5f});
+    GradientStop first;
+    first.Color(kMochaBlue);
+    first.Offset(0.0);
+    GradientStop last;
+    last.Color(kMochaMauve);
+    last.Offset(1.0);
+    border.GradientStops().Append(first);
+    border.GradientStops().Append(last);
+    Style presenter(type);
+    presenter.Setters().Append(Setter(Control::BackgroundProperty(), background));
+    presenter.Setters().Append(Setter(Control::BorderBrushProperty(), border));
+    presenter.Setters().Append(Setter(Control::BorderThicknessProperty(), winrt::box_value(Thickness{2, 2, 2, 2})));
+    return presenter;
+}
+static void ThemeMochaMenuItems(winrt::Windows::Foundation::Collections::IVector<MenuFlyoutItemBase> const& items) {
+    FontFamily font(L"FiraCode Nerd Font, Segoe UI Variable Text, Segoe UI");
+    for (auto const& base : items) {
+        if (auto separator = base.try_as<MenuFlyoutSeparator>()) {
+            separator.Background(MochaMenuBrush(kMochaSurface1));
+            continue;
+        }
+        base.FontFamily(font);
+        base.FontWeight(winrt::Windows::UI::Text::FontWeights::Medium());
+        base.Foreground(MochaMenuBrush(kMochaText));
+        base.BorderThickness({1, 1, 1, 1});
+        base.BorderBrush(SolidColorBrush(winrt::Windows::UI::Color{0x00, 0x89, 0xB4, 0xFA}));
+        base.CornerRadius({8, 8, 8, 8});
+        auto res = base.Resources();
+        for (auto key : {L"MenuFlyoutItemRevealBackgroundPointerOver", L"MenuFlyoutItemBackgroundPointerOver",
+                         L"MenuFlyoutItemRevealBackgroundPressed", L"MenuFlyoutItemBackgroundPressed",
+                         L"MenuFlyoutSubItemRevealBackgroundPointerOver", L"MenuFlyoutSubItemBackgroundPointerOver",
+                         L"MenuFlyoutSubItemRevealBackgroundPressed", L"MenuFlyoutSubItemBackgroundPressed",
+                         L"MenuFlyoutSubItemRevealBackgroundSubMenuOpened", L"MenuFlyoutSubItemBackgroundSubMenuOpened"})
+            InsertMochaMenuResource(res, key, MochaMenuBrush(kMochaHover));
+        for (auto key : {L"MenuFlyoutItemRevealBorderBrushPointerOver", L"MenuFlyoutSubItemRevealBorderBrushPointerOver",
+                         L"MenuFlyoutSubItemRevealBorderBrushSubMenuOpened"})
+            InsertMochaMenuResource(res, key, MochaMenuBrush(kMochaBlue));
+        for (auto key : {L"MenuFlyoutItemRevealBorderBrushPressed", L"MenuFlyoutSubItemRevealBorderBrushPressed"})
+            InsertMochaMenuResource(res, key, MochaMenuBrush(kMochaMauve));
+        for (auto key : {L"MenuFlyoutItemForeground", L"MenuFlyoutItemForegroundPointerOver",
+                         L"MenuFlyoutItemForegroundPressed", L"MenuFlyoutSubItemForeground",
+                         L"MenuFlyoutSubItemForegroundPointerOver", L"MenuFlyoutSubItemForegroundPressed",
+                         L"MenuFlyoutSubItemForegroundSubMenuOpened"})
+            InsertMochaMenuResource(res, key, MochaMenuBrush(kMochaText));
+        for (auto key : {L"ToggleMenuFlyoutItemCheckGlyphForeground", L"ToggleMenuFlyoutItemCheckGlyphForegroundPointerOver",
+                         L"ToggleMenuFlyoutItemCheckGlyphForegroundPressed", L"MenuFlyoutItemCheckGlyphForeground",
+                         L"MenuFlyoutSubItemChevron", L"MenuFlyoutSubItemChevronPointerOver",
+                         L"MenuFlyoutSubItemChevronPressed", L"MenuFlyoutSubItemChevronSubMenuOpened"})
+            InsertMochaMenuResource(res, key, MochaMenuBrush(kMochaBlue));
+        if (auto sub = base.try_as<MenuFlyoutSubItem>()) {
+            // Sub-menus open in their own presenter, picked up from the parent's resources.
+            InsertMochaMenuResource(res, L"DefaultMenuFlyoutPresenterStyle",
+                                    MochaMenuPresenterStyle(winrt::xaml_typename<MenuFlyoutPresenter>()));
+            ThemeMochaMenuItems(sub.Items());
         }
     }
-    {
-        // The visualizer's device choice lives here too: in overlay placement the
-        // bars' own right-click picker never shows, so this is the only way in.
-        wchar_t current[512] = {};
-        Wh_GetStringValue(L"captureEndpointId", current, ARRAYSIZE(current));
-        HMENU viz = CreatePopupMenu();
-        add(viz, L"All devices (default)", true, current[0] == 0, [] { SetCaptureEndpoint(L""); });
-        for (EDataFlow flow : {eCapture, eRender}) {
-            HMENU sub = CreatePopupMenu();
-            ForEachActiveEndpoint(flow, [&](const std::wstring& id, const std::wstring& label) {
-                add(sub, label.c_str(), true, id == current, [id] { SetCaptureEndpoint(id); });
-            });
-            if (GetMenuItemCount(sub) == 0) AppendMenuW(sub, MF_STRING | MF_GRAYED, 0, L"No active devices");
-            AppendMenuW(viz, MF_POPUP, reinterpret_cast<UINT_PTR>(sub), flow == eCapture ? L"Input device" : L"Output device");
-        }
-        if (GetMenuItemCount(menu) > 0) AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(viz), L"Visualizer audio device");
+}
+static FontIcon MakeMochaMenuIcon(const wchar_t* glyph) {
+    FontIcon icon;
+    icon.Glyph(glyph);
+    icon.FontFamily(FontFamily(L"Segoe Fluent Icons, Segoe MDL2 Assets"));
+    icon.Foreground(MochaMenuBrush(kMochaBlue));
+    return icon;
+}
+static std::wstring PlainMenuLabel(const std::wstring& label) {
+    // ForEachActiveEndpoint doubles '&' for Win32 menus; XAML shows text as is.
+    std::wstring out;
+    for (size_t i = 0; i < label.size(); ++i) {
+        out += label[i];
+        if (label[i] == L'&' && i + 1 < label.size() && label[i + 1] == L'&') ++i;
     }
-    if (g_settings.showRestartButton || g_settings.showOpenWindhawk)
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    if (g_settings.showRestartButton) {
-        add(menu, L"Restart player", true, false, [] {
-            StopVizTimer();
-            g_vizCurrentlyVisible = false;
-            RemovePlayerGrid();
-            auto dispatcher = winrt::Windows::UI::Core::CoreWindow::GetForCurrentThread().Dispatcher();
-            dispatcher.RunAsync(winrt::Windows::UI::Core::CoreDispatcherPriority::Normal, [] {
-                try { InjectPlayerGrid(); } catch (...) { Wh_Log(L"Restart player: InjectPlayerGrid failed"); }
-            });
-        });
-    }
-    if (g_settings.showOpenWindhawk) add(menu, L"Open Windhawk", true, false, [] { OpenWindhawk(); });
-    if (GetMenuItemCount(menu) == 0) { DestroyMenu(menu); return; }
-
-    POINT pt{};
-    GetCursorPos(&pt);
-    UINT cmd = TrackNativeMenu(menu, pt);
-    DestroyMenu(menu);
-    try { if (g_playerButtonStateUpdater) g_playerButtonStateUpdater(); } catch (...) {}
-    if (cmd >= 1 && cmd <= actions.size() && !g_unloading) {
-        try { actions[cmd - 1](); } catch (...) { Wh_Log(L"Player menu: action failed"); }
-    }
+    return out;
 }
 static void ShowMediaContextMenu(FrameworkElement const& target) {
     if (!target || g_unloading) return;
-    // Run the menu's modal loop after the pointer handler has returned.
     try {
-        target.Dispatcher().RunAsync(winrt::Windows::UI::Core::CoreDispatcherPriority::Low,
-                                     [] { ShowNativeMediaMenu(); });
+        bool canSkipPrevious = true, canSkipNext = true, canShuffle = true, canRepeat = true, canSeek = true;
+        {
+            std::lock_guard<std::mutex> lk(g_mediaMtx);
+            canSkipPrevious = g_media.canSkipPrevious;
+            canSkipNext     = g_media.canSkipNext;
+            canShuffle      = g_media.canShuffle;
+            canRepeat       = g_media.canRepeat;
+            canSeek         = g_media.canSeek;
+        }
+        bool shuffleOn = g_shuffleEnabled.load();
+        RepeatMode repeat = g_repeatMode.load();
+        MenuFlyout menu;
+        auto bind = [](MenuFlyoutItem const& item, std::function<void()> fn) {
+            item.Click([fn](winrt::Windows::Foundation::IInspectable const&, RoutedEventArgs const&) {
+                if (g_unloading) return;
+                try { fn(); } catch (...) { Wh_Log(L"Player menu: action failed"); }
+            });
+        };
+        auto add = [&](winrt::Windows::Foundation::Collections::IVector<MenuFlyoutItemBase> const& items,
+                       const wchar_t* glyph, const std::wstring& label, bool enabled, std::function<void()> fn) {
+            MenuFlyoutItem item;
+            item.Text(label);
+            item.IsEnabled(enabled);
+            if (glyph) item.Icon(MakeMochaMenuIcon(glyph));
+            bind(item, std::move(fn));
+            items.Append(item);
+        };
+        auto addCheck = [&](winrt::Windows::Foundation::Collections::IVector<MenuFlyoutItemBase> const& items,
+                            const std::wstring& label, bool enabled, bool checked, std::function<void()> fn) {
+            ToggleMenuFlyoutItem item;
+            item.Text(label);
+            item.IsEnabled(enabled);
+            item.IsChecked(checked);
+            bind(item, std::move(fn));
+            items.Append(item);
+        };
+        auto addSub = [&](winrt::Windows::Foundation::Collections::IVector<MenuFlyoutItemBase> const& items,
+                          const wchar_t* glyph, const wchar_t* label, bool enabled) {
+            MenuFlyoutSubItem sub;
+            sub.Text(label);
+            sub.IsEnabled(enabled);
+            if (glyph) sub.Icon(MakeMochaMenuIcon(glyph));
+            items.Append(sub);
+            return sub;
+        };
+        auto media = [](int cmd) -> std::function<void()> {
+            return [cmd] { SendMediaCommandAsync(cmd); DispatchMediaUpdate(); };
+        };
+        auto items = menu.Items();
+        for (const auto& entry : g_settings.contextMenuItems) {
+            if (entry == L"repeat") {
+                if (g_settings.contextMenuRepeatStyle == L"toggle") {
+                    addCheck(items, repeat == RepeatMode::One ? L"Repeat one" : L"Repeat", canRepeat,
+                             repeat != RepeatMode::Off, media(8));
+                } else {
+                    auto sub = addSub(items, L"", L"Repeat", canRepeat).Items();
+                    addCheck(sub, L"Off", canRepeat, repeat == RepeatMode::Off, media(10));
+                    addCheck(sub, L"All", canRepeat, repeat == RepeatMode::All, media(11));
+                    addCheck(sub, L"One", canRepeat, repeat == RepeatMode::One, media(12));
+                }
+            } else if (entry == L"shuffle") {
+                if (g_settings.contextMenuShuffleStyle == L"toggle") {
+                    addCheck(items, L"Shuffle", canShuffle, shuffleOn, media(7));
+                } else {
+                    auto sub = addSub(items, L"", L"Shuffle", canShuffle).Items();
+                    addCheck(sub, L"Off", canShuffle, !shuffleOn, [] { if (g_shuffleEnabled.load()) { SendMediaCommandAsync(7); DispatchMediaUpdate(); } });
+                    addCheck(sub, L"On", canShuffle, shuffleOn, [] { if (!g_shuffleEnabled.load()) { SendMediaCommandAsync(7); DispatchMediaUpdate(); } });
+                }
+            } else if (entry == L"forward") {
+                add(items, L"", L"Forward 5 seconds", canSeek, media(6));
+            } else if (entry == L"rewind") {
+                add(items, L"", L"Rewind 5 seconds", canSeek, media(5));
+            } else if (entry == L"next") {
+                add(items, L"", L"Next track", canSkipNext, media(3));
+            } else if (entry == L"prev") {
+                add(items, L"", L"Previous track", canSkipPrevious, media(1));
+            } else if (entry == L"switch_sessions") {
+                add(items, L"", L"Switch session", g_sessionCount.load() > 1, media(9));
+            } else if (entry == L"open_app") {
+                add(items, L"", L"Open media app", true, [] { ExecuteMediaAction(L"open_app"); });
+            }
+        }
+        {
+            // The visualizer's device choice lives here too: in overlay placement the
+            // bars' own right-click picker never shows, so this is the only way in.
+            wchar_t current[512] = {};
+            Wh_GetStringValue(L"captureEndpointId", current, ARRAYSIZE(current));
+            std::wstring currentId = current;
+            if (items.Size() > 0) items.Append(MenuFlyoutSeparator());
+            auto viz = addSub(items, L"", L"Visualizer audio device", true).Items();
+            // Plain items with a blue check icon on the current device: a toggle item next to
+            // icon items reserves a check column and an icon column, which left a wide gap.
+            add(viz, currentId.empty() ? L"\uE73E" : L"\uE767", L"All devices (default)", true, [] { SetCaptureEndpoint(L""); });
+            for (EDataFlow flow : {eCapture, eRender}) {
+                auto sub = addSub(viz, flow == eCapture ? L"" : L"",
+                                  flow == eCapture ? L"Input device" : L"Output device", true).Items();
+                ForEachActiveEndpoint(flow, [&](const std::wstring& id, const std::wstring& label) {
+                    add(sub, id == currentId ? L"\uE73E" : nullptr, PlainMenuLabel(label), true, [id] { SetCaptureEndpoint(id); });
+                });
+                if (sub.Size() == 0) add(sub, nullptr, L"No active devices", false, [] {});
+            }
+        }
+        if (g_settings.showRestartButton || g_settings.showOpenWindhawk)
+            items.Append(MenuFlyoutSeparator());
+        if (g_settings.showRestartButton) {
+            add(items, L"", L"Restart player", true, [] {
+                StopVizTimer();
+                g_vizCurrentlyVisible = false;
+                RemovePlayerGrid();
+                auto dispatcher = winrt::Windows::UI::Core::CoreWindow::GetForCurrentThread().Dispatcher();
+                dispatcher.RunAsync(winrt::Windows::UI::Core::CoreDispatcherPriority::Normal, [] {
+                    try { InjectPlayerGrid(); } catch (...) { Wh_Log(L"Restart player: InjectPlayerGrid failed"); }
+                });
+            });
+        }
+        if (g_settings.showOpenWindhawk) add(items, L"", L"Open Windhawk", true, [] { OpenWindhawk(); });
+        if (items.Size() == 0) return;
+
+        menu.MenuFlyoutPresenterStyle(MochaMenuPresenterStyle(winrt::xaml_typename<MenuFlyoutPresenter>()));
+        ThemeMochaMenuItems(items);
+        menu.Closed([](winrt::Windows::Foundation::IInspectable const&, winrt::Windows::Foundation::IInspectable const&) {
+            try { if (g_playerButtonStateUpdater) g_playerButtonStateUpdater(); } catch (...) {}
+        });
+
+        // Open next to the pointer, below the bar when the taskbar is docked at the top.
+        bool taskbarTop = false;
+        HWND taskbar = g_taskbarWnd ? g_taskbarWnd : FindWindowW(L"Shell_TrayWnd", nullptr);
+        if (taskbar) {
+            RECT tr{};
+            MONITORINFO mi{sizeof(mi)};
+            if (GetWindowRect(taskbar, &tr) &&
+                GetMonitorInfoW(MonitorFromWindow(taskbar, MONITOR_DEFAULTTONEAREST), &mi))
+                taskbarTop = (tr.top - mi.rcMonitor.top) < (mi.rcMonitor.bottom - tr.bottom);
+        }
+        FrameworkElement showAt = target;
+        float px = (float)target.ActualWidth() * 0.5f;
+        float py = taskbarTop ? (float)target.ActualHeight() : 0.f;
+        try {
+            if (auto root = target.XamlRoot()) {
+                if (auto rootContent = root.Content().try_as<FrameworkElement>()) {
+                    auto pt = target.TransformToVisual(rootContent).TransformPoint({0.f, 0.f});
+                    POINT cursor{};
+                    RECT tr{};
+                    float x = pt.X + px;
+                    if (taskbar && GetCursorPos(&cursor) && GetWindowRect(taskbar, &tr)) {
+                        double scale = root.RasterizationScale();
+                        if (scale <= 0) scale = 1.0;
+                        float cx = (float)((cursor.x - tr.left) / scale);
+                        if (cx >= pt.X && cx <= pt.X + (float)target.ActualWidth()) x = cx;
+                    }
+                    showAt = rootContent;
+                    px = x;
+                    py = pt.Y + py;
+                }
+            }
+        } catch (...) {}
+        Controls::Primitives::FlyoutShowOptions opts;
+        opts.Placement(taskbarTop ? Controls::Primitives::FlyoutPlacementMode::BottomEdgeAlignedLeft
+                                  : Controls::Primitives::FlyoutPlacementMode::TopEdgeAlignedLeft);
+        opts.Position(winrt::Windows::Foundation::Point{px, py});
+        menu.ShouldConstrainToRootBounds(false);
+        menu.ShowAt(showAt, opts);
     } catch (...) {
         Wh_Log(L"ShowMediaContextMenu: exception");
     }
