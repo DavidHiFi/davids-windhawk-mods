@@ -10,6 +10,9 @@
 
 | Mod | What it does | Version | License |
 | --- | --- | --- | --- |
+| [Pointer Afterimage Plus](local/pointer-afterimage-plus) | A real motion blur for the mouse pointer, drawn on the GPU. | 1.2.1 | Unlicense |
+| [File Operation Styler Plus](local/file-operation-styler-plus) | A modern copy, move, delete and recycle window for Explorer, drawn on the GPU. | 1.5.0 | GPL-3.0 |
+| [WinTips OSD Plus](local/wintips-osd-plus) | Pop-up cards for Caps, Num and Scroll Lock, Insert, copy, paste and cut, drawn on the GPU. | 1.4.0 | MIT |
 | [Windhawk Enhanced Styler](local/windhawk-enhanced-styler) | Colors, gradients, fonts, frosted dialogs and a matching title bar for Windhawk 2.0. | 2.1.0 | MIT |
 | [Seamless Dictate](local/seamless-dictate) | Hold Ctrl+Win and speak to type in any app, with AI cleanup and mic privacy. | 1.0.0 | MIT |
 | [Ditto Styler](local/ditto-styler) | Rounded dark glass, glass tooltips and a bottom dock for the Ditto clipboard manager. | 1.1.11 | MIT |
@@ -24,7 +27,7 @@
 | [Taskbar Collapse to Running Plus](local/taskbar-collapse-to-running-plus) | Hide idle pinned apps and reveal them with a smooth hover transition. | 1.1.5 | MIT |
 | [Taskbar System Info Plus](local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar. | 1.4.18 | GPL-3.0 |
 | [Taskbar AI Quota Bars Plus](local/taskbar-ai-quota-opencode) | Claude, Codex, Antigravity and OpenCode Go usage limits on the taskbar. | 1.6.5.1 | MIT |
-| [Seamless Volume Mixer](local/better-volume-mixer-plus) | Tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app devices. | 1.3.0 | MIT |
+| [Seamless Volume Mixer](local/better-volume-mixer-plus) | Tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app devices. | 1.4.0 | MIT |
 | [Translucent Flyouts](local/translucent-flyouts) | Acrylic, Mica and blur menus, dropdowns and tooltips in every app. | 0.6.6 | LGPL-3.0 |
 | [Shell Font Changer Plus](local/shell-font-changer-plus) | Any installed font in Explorer, Start, Search and Settings, with icons and emoji left intact. | 1.3.3 | MIT |
 | [Everything & Power Tools in the Start Menu Plus](local/start-everything-plus) | Compact Start menu search with Everything, preview, apps, settings, power tools. | 1.1.0 | GPL-3.0 |

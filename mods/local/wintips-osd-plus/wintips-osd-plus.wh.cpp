@@ -2,14 +2,14 @@
 // @id              wintips-osd-plus
 // @name            WinTips OSD Plus
 // @description     Pop-up cards for Caps, Num and Scroll Lock, Insert, copy, paste and cut, with a Catppuccin Mocha look
-// @version         1.3.5
+// @version         1.4.0
 // @author          DavidHiFi, DoYouNatureQ
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @license         MIT
 // @include         windhawk.exe
-// @compilerOptions -lgdiplus -lgdi32 -ladvapi32 -lshell32 -lshcore -ldwmapi
+// @compilerOptions -lgdiplus -lgdi32 -ladvapi32 -lshell32 -lshcore -ldwmapi -ld2d1 -ldwrite -ld3d11 -ldcomp
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -26,6 +26,10 @@ Catppuccin Mocha, with a blue and mauve border that slowly shifts colour.
 
 - **Mocha look.** Dark Mocha card, Mocha text and a blue accent. Switch the
   palette to Windows to follow your system theme instead.
+- **Drawn on the GPU.** The card is composited with DirectComposition, and its
+  fade and slide run on the Windows compositor instead of repainting every
+  frame. If the GPU path cannot start, the mod switches back to the classic
+  renderer on its own, and you can pick the renderer in settings.
 - **Morphing border.** The border blends blue into mauve and keeps flowing.
   Pick the colours, the width, the speed, or turn it into a plain line.
 - **Soft glow.** A soft glow on the border line, from off to strong.
@@ -38,6 +42,9 @@ Catppuccin Mocha, with a blue and mauve border that slowly shifts colour.
 ## Notes
 
 - It runs on its own as a Windhawk tool mod and never loads into other programs.
+- The Renderer setting picks GPU (DirectComposition, the default) or the legacy
+  GDI painter. If DirectComposition cannot start, the card falls back to GDI
+  for the session and a log line says which renderer armed.
 - If the standalone WinTips app is already running, this mod stays quiet.
 - Behind an administrator window the blur can come out black, so the card turns
   solid for that tip.
@@ -190,6 +197,16 @@ MIT license.
 - suppressFullscreen: false
   $name: Hide while a fullscreen app is open
   $description: Skips cards during games, fullscreen video and presentations.
+- renderer: gpu
+  $name: Renderer
+  $description: >-
+    GPU composites the card with DirectComposition and animates fades and
+    slides on the compositor (Suggested: GPU). GDI is the legacy per-frame
+    painter, kept for troubleshooting. If the GPU path cannot start, the card
+    falls back to GDI by itself.
+  $options:
+  - gpu: GPU (DirectComposition)
+  - gdi: GDI (legacy)
 */
 // ==/WindhawkModSettings==
 
@@ -217,6 +234,14 @@ using std::min;
 
 #include <objidl.h>
 #include <gdiplus.h>
+
+#include <d2d1_1.h>
+#include <d2d1helper.h>
+#include <dwrite_3.h>
+#include <d3d11.h>
+#include <dxgi.h>
+#include <dcomp.h>
+#include <dcompanimation.h>
 
 using namespace Gdiplus;
 
@@ -296,6 +321,7 @@ struct Settings {
     int borderWidth = 2;      // DIP
     int morphSeconds = 5;     // 0 = still
     int glow = 35;            // 0 to 100
+    int renderer = 0;         // 0 = GPU (DirectComposition), 1 = GDI legacy
     bool pollElevated = true;
     bool suppressFullscreen = false;
 
@@ -415,6 +441,10 @@ void LoadSettings() {
     s.borderWidth = Clamp(Wh_GetIntSetting(L"borderWidth"), 1, 4);
     s.morphSeconds = Clamp(Wh_GetIntSetting(L"morphSeconds"), 0, 30);
     s.glow = Clamp(Wh_GetIntSetting(L"glow"), 0, 100);
+
+    str = Wh_GetStringSetting(L"renderer");
+    s.renderer = (str && EqualsNoCase(str, L"gdi")) ? 1 : 0;
+    Wh_FreeStringSetting(str);
 
     g_settings = s;
 }
@@ -1491,6 +1521,7 @@ struct Backdrop {
     int h = 0;
     int padLeft = 0;  // extra captured pixels around the card, so the blur
     int padTop = 0;   // near the edges averages real screen, not repeats
+    int gen = 0;      // bumped on every successful capture (GPU bitmap cache)
     bool valid = false;
 
     void Invalidate() {
@@ -1619,6 +1650,7 @@ bool CaptureBackdrop(HDC source, int x, int y, int w, int h, int radius) {
     BlurBackdrop(g_backdrop.image, radius);
     g_backdrop.x = x;
     g_backdrop.y = y;
+    g_backdrop.gen++;
     g_backdrop.valid = true;
     return true;
 }
@@ -1724,6 +1756,1108 @@ void PaintCardBackground(Graphics& g, const GraphicsPath& card, float width,
     DrawCardBorder(g, card, width, height, theme);
 }
 
+enum Phase { kPhaseHidden, kPhaseIn, kPhaseHold, kPhaseOut };
+
+// =============================================================================
+// GPU renderer (DirectComposition + Direct2D)
+//
+// The card artwork is drawn with Direct2D into an IDCompositionSurface; show,
+// hide and slide become IDCompositionAnimation keyframes on the visual, so the
+// frames in between cost no CPU at all. Content redraws only when the tip
+// state or the morphing border changes, never per animation frame. The GDI /
+// UpdateLayeredWindow path above stays as the fallback (GpuFailToGdi).
+// =============================================================================
+
+// Defined in the runtime state block below.
+extern HWND g_hwnd;
+extern float g_scale;
+extern int g_cardWidth;
+extern int g_cardHeight;
+extern Theme g_theme;
+extern FrameState g_frame;
+extern Placement g_placement;
+extern int g_animMs;
+extern Phase g_phase;
+
+template <class T>
+void GpuRelease(T*& p) {
+    if (p) {
+        p->Release();
+        p = nullptr;
+    }
+}
+
+D2D1_COLOR_F D2dColor(const Color& c) {
+    return D2D1_COLOR_F{c.GetR() / 255.0f, c.GetG() / 255.0f,
+                        c.GetB() / 255.0f, c.GetA() / 255.0f};
+}
+
+D2D1_COLOR_F D2dColorAlpha(const Color& c, BYTE alpha) {
+    return D2D1_COLOR_F{c.GetR() / 255.0f, c.GetG() / 255.0f,
+                        c.GetB() / 255.0f, alpha / 255.0f};
+}
+
+D2D1_ROUNDED_RECT D2dRoundRect(float x, float y, float w, float h, float r) {
+    if (r * 2.0f > w) {
+        r = w / 2.0f;
+    }
+    if (r * 2.0f > h) {
+        r = h / 2.0f;
+    }
+    D2D1_ROUNDED_RECT rr;
+    rr.rect = D2D1_RECT_F{x, y, x + w, y + h};
+    rr.radiusX = r;
+    rr.radiusY = r;
+    return rr;
+}
+
+struct GpuRenderer {
+    bool inited = false;   // the DComp pipeline was built
+    bool failed = false;   // a runtime error pushed us back to GDI
+    int armed = 0;         // 0 none, 1 show animation running, 2 hide
+    ID2D1Factory1* factory = nullptr;
+    ID3D11Device* d3d = nullptr;
+    ID2D1Device* d2d = nullptr;
+    IDCompositionDevice* device = nullptr;
+    IDCompositionTarget* target = nullptr;
+    IDCompositionVisual* visual = nullptr;
+    IDCompositionEffectGroup* effect = nullptr;  // visual opacity lives here
+    IDCompositionVirtualSurface* surface = nullptr;
+    int surfW = 0;
+    int surfH = 0;
+    ID2D1StrokeStyle* roundStroke = nullptr;
+    ID2D1StrokeStyle* flatStroke = nullptr;
+    ID2D1PathGeometry* lockBody = nullptr;  // 24-unit outer/inner ring
+    ID2D1PathGeometry* shackle = nullptr;   // 24-unit arch
+    ID2D1RoundedRectangleGeometry* cardShape = nullptr;  // glow mask, px space
+    int cardShapeW = 0;
+    int cardShapeH = 0;
+    int backdropGen = -1;
+    ID2D1Bitmap* backdropBitmap = nullptr;
+    IDWriteFactory* write = nullptr;
+    IDWriteTextFormat* textFormat = nullptr;
+    float textFormatEm = 0;
+    int textFormatWeight = -1;
+    float textCapRatio = 0.7f;
+    IDWriteTextFormat* badgeFormat = nullptr;
+    float badgeFormatEm = 0;
+    int badgeFormatWeight = -1;
+    float badgeCapRatio = 0.7f;
+    IDWriteTextFormat* glyphFormat = nullptr;  // Segoe Fluent Icons, unit space
+};
+
+GpuRenderer g_gpu;
+
+// A DirectWrite text layout with the ink metrics the card layout needs.
+// Cached per string so morph-border redraws do not rebuild it.
+struct DText {
+    std::wstring text;
+    float em = 0;
+    int weight = -1;
+    float maxWidth = 0;
+    bool centered = false;
+    IDWriteTextLayout* layout = nullptr;
+    float inkWidth = 0;
+    float inkLSB = 0;
+    float capCenter = 0;  // cap band centre, from the layout top
+};
+
+bool GpuActive() {
+    return g_settings.renderer == 0 && g_gpu.inited && !g_gpu.failed;
+}
+
+void UseLayeredStyle(bool layered) {
+    if (!g_hwnd) {
+        return;
+    }
+    LONG_PTR ex = GetWindowLongPtrW(g_hwnd, GWL_EXSTYLE);
+    LONG_PTR want = layered
+        ? ((ex | WS_EX_LAYERED) & ~WS_EX_NOREDIRECTIONBITMAP)
+        : ((ex | WS_EX_NOREDIRECTIONBITMAP) & ~WS_EX_LAYERED);
+    if (want != ex) {
+        SetWindowLongPtrW(g_hwnd, GWL_EXSTYLE, want);
+    }
+}
+
+void GpuShutdown() {
+    GpuRelease(g_gpu.backdropBitmap);
+    GpuRelease(g_gpu.cardShape);
+    GpuRelease(g_gpu.shackle);
+    GpuRelease(g_gpu.lockBody);
+    GpuRelease(g_gpu.glyphFormat);
+    GpuRelease(g_gpu.badgeFormat);
+    GpuRelease(g_gpu.textFormat);
+    GpuRelease(g_gpu.roundStroke);
+    GpuRelease(g_gpu.flatStroke);
+    GpuRelease(g_gpu.surface);
+    GpuRelease(g_gpu.visual);
+    GpuRelease(g_gpu.effect);
+    GpuRelease(g_gpu.target);
+    GpuRelease(g_gpu.device);
+    GpuRelease(g_gpu.d2d);
+    GpuRelease(g_gpu.write);
+    GpuRelease(g_gpu.d3d);
+    GpuRelease(g_gpu.factory);
+    g_gpu.inited = false;
+    g_gpu.armed = 0;
+    g_gpu.surfW = 0;
+    g_gpu.surfH = 0;
+    g_gpu.backdropGen = -1;
+}
+
+void GpuFailToGdi(const wchar_t* why) {
+    Wh_Log(L"WinTips OSD GPU renderer failed (%s), falling back to GDI", why);
+    GpuShutdown();
+    g_gpu.failed = true;
+    UseLayeredStyle(true);
+}
+
+// Traces a GDI+ AddRoundRect as a closed D2D figure.
+void SinkRoundRect(ID2D1GeometrySink* sink, const D2D1_RECT_F& r, float radius) {
+    float w = r.right - r.left;
+    float h = r.bottom - r.top;
+    if (radius * 2.0f > w) {
+        radius = w / 2.0f;
+    }
+    if (radius * 2.0f > h) {
+        radius = h / 2.0f;
+    }
+    D2D1_POINT_2F tl{r.left + radius, r.top};
+    D2D1_POINT_2F tr{r.right - radius, r.top};
+    D2D1_POINT_2F br{r.right - radius, r.bottom};
+    D2D1_POINT_2F bl{r.left + radius, r.bottom};
+    D2D1_ARC_SEGMENT arc = {{}, {radius, radius}, 0.0f,
+                            D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                            D2D1_ARC_SIZE_SMALL};
+    sink->BeginFigure(tl, D2D1_FIGURE_BEGIN_FILLED);
+    sink->AddLine(tr);
+    arc.point = D2D1_POINT_2F{r.right, r.top + radius};
+    sink->AddArc(arc);
+    sink->AddLine(br);
+    arc.point = D2D1_POINT_2F{r.right - radius, r.bottom};
+    sink->AddArc(arc);
+    sink->AddLine(bl);
+    arc.point = D2D1_POINT_2F{r.left, r.bottom - radius};
+    sink->AddArc(arc);
+    sink->AddLine(D2D1_POINT_2F{r.left, r.top + radius});
+    arc.point = tl;
+    sink->AddArc(arc);
+    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+}
+
+void BuildLockGeometries() {
+    // Body: outer rounded rect minus an inner one, 1.5 units thick.
+    if (SUCCEEDED(g_gpu.factory->CreatePathGeometry(&g_gpu.lockBody))) {
+        ID2D1GeometrySink* sink = nullptr;
+        if (SUCCEEDED(g_gpu.lockBody->Open(&sink)) && sink) {
+            sink->SetFillMode(D2D1_FILL_MODE_ALTERNATE);
+            SinkRoundRect(sink, D2D1_RECT_F{4.0f, 7.0f, 20.0f, 21.0f}, 3.25f);
+            SinkRoundRect(sink, D2D1_RECT_F{5.5f, 8.5f, 18.5f, 19.5f}, 1.75f);
+            sink->Close();
+            sink->Release();
+        }
+    }
+    // Shackle: the same two-cubic arch the GDI+ path strokes.
+    if (SUCCEEDED(g_gpu.factory->CreatePathGeometry(&g_gpu.shackle))) {
+        ID2D1GeometrySink* sink = nullptr;
+        if (SUCCEEDED(g_gpu.shackle->Open(&sink)) && sink) {
+            const float k = 0.5523f * 3.25f;
+            sink->BeginFigure(D2D1_POINT_2F{8.75f, 7.0f},
+                              D2D1_FIGURE_BEGIN_HOLLOW);
+            sink->AddLine(D2D1_POINT_2F{8.75f, 5.0f});
+            D2D1_BEZIER_SEGMENT seg = {{8.75f, 5.0f - k},
+                                       {12.0f - k, 1.75f},
+                                       {12.0f, 1.75f}};
+            sink->AddBezier(seg);
+            seg = D2D1_BEZIER_SEGMENT{{12.0f + k, 1.75f},
+                                      {15.25f, 5.0f - k},
+                                      {15.25f, 5.0f}};
+            sink->AddBezier(seg);
+            sink->AddLine(D2D1_POINT_2F{15.25f, 7.0f});
+            sink->EndFigure(D2D1_FIGURE_END_OPEN);
+            sink->Close();
+            sink->Release();
+        }
+    }
+}
+
+bool MakeTextFormat(IDWriteTextFormat** out, const wchar_t* family, float em,
+                    int weight) {
+    return SUCCEEDED(g_gpu.write->CreateTextFormat(
+        family, nullptr, (DWRITE_FONT_WEIGHT)weight, DWRITE_FONT_STYLE_NORMAL,
+        DWRITE_FONT_STRETCH_NORMAL, em, L"en-US", out));
+}
+
+// Cap height as a fraction of the em, read from the same face DirectWrite's
+// GDI-compatible matching picks for this family and weight. Used to land the
+// cap band on the target line like the GDI+ probe does, without re-probing
+// pixels.
+float CapRatio(const wchar_t* family, int weight, float fallback) {
+    float ratio = fallback;
+    IDWriteFontCollection* coll = nullptr;
+    if (FAILED(g_gpu.write->GetSystemFontCollection(&coll)) || !coll) {
+        return ratio;
+    }
+    BOOL found = FALSE;
+    UINT32 index = 0;
+    if (SUCCEEDED(coll->FindFamilyName(family, &index, &found)) && found) {
+        IDWriteFontFamily* fam = nullptr;
+        if (SUCCEEDED(coll->GetFontFamily(index, &fam)) && fam) {
+            IDWriteFont* font = nullptr;
+            if (SUCCEEDED(fam->GetFirstMatchingFont(
+                    (DWRITE_FONT_WEIGHT)weight, DWRITE_FONT_STRETCH_NORMAL,
+                    DWRITE_FONT_STYLE_NORMAL, &font)) &&
+                font) {
+                IDWriteFontFace* face = nullptr;
+                if (SUCCEEDED(font->CreateFontFace(&face)) && face) {
+                    IDWriteFontFace1* face1 = nullptr;
+                    if (SUCCEEDED(face->QueryInterface(
+                            __uuidof(IDWriteFontFace1), (void**)&face1)) &&
+                        face1) {
+                        DWRITE_FONT_METRICS1 m{};
+                        face1->GetMetrics(&m);
+                        if (m.designUnitsPerEm) {
+                            ratio =
+                                (float)m.capHeight / (float)m.designUnitsPerEm;
+                        }
+                        face1->Release();
+                    }
+                    face->Release();
+                }
+                font->Release();
+            }
+            fam->Release();
+        }
+    }
+    coll->Release();
+    return ratio;
+}
+
+void EnsureLabelFormats(float textEm, float badgeEm) {
+    if (!g_gpu.textFormat || g_gpu.textFormatEm != textEm ||
+        g_gpu.textFormatWeight != g_settings.fontWeight) {
+        GpuRelease(g_gpu.textFormat);
+        MakeTextFormat(&g_gpu.textFormat, g_settings.fontFamily.c_str(),
+                       textEm, g_settings.fontWeight);
+        g_gpu.textFormatEm = textEm;
+        g_gpu.textFormatWeight = g_settings.fontWeight;
+        if (g_gpu.textFormat) {
+            g_gpu.textCapRatio =
+                CapRatio(g_settings.fontFamily.c_str(),
+                         g_settings.fontWeight, g_gpu.textCapRatio);
+        }
+    }
+    if (!g_gpu.badgeFormat || g_gpu.badgeFormatEm != badgeEm ||
+        g_gpu.badgeFormatWeight != g_settings.fontWeight) {
+        GpuRelease(g_gpu.badgeFormat);
+        MakeTextFormat(&g_gpu.badgeFormat, g_settings.fontFamily.c_str(),
+                       badgeEm, g_settings.fontWeight);
+        g_gpu.badgeFormatEm = badgeEm;
+        g_gpu.badgeFormatWeight = g_settings.fontWeight;
+        if (g_gpu.badgeFormat) {
+            g_gpu.badgeCapRatio =
+                CapRatio(g_settings.fontFamily.c_str(),
+                         g_settings.fontWeight, g_gpu.badgeCapRatio);
+        }
+    }
+}
+
+void EnsureGlyphFormat() {
+    if (g_gpu.glyphFormat) {
+        return;
+    }
+    IDWriteFontCollection* coll = nullptr;
+    const wchar_t* family = nullptr;
+    if (SUCCEEDED(g_gpu.write->GetSystemFontCollection(&coll)) && coll) {
+        BOOL found = FALSE;
+        UINT32 index = 0;
+        coll->FindFamilyName(L"Segoe Fluent Icons", &index, &found);
+        if (found) {
+            family = L"Segoe Fluent Icons";
+        } else {
+            coll->FindFamilyName(L"Segoe MDL2 Assets", &index, &found);
+            if (found) {
+                family = L"Segoe MDL2 Assets";
+            }
+        }
+        coll->Release();
+    }
+    if (family) {
+        MakeTextFormat(&g_gpu.glyphFormat, family, 16.0f, 400);
+    }
+}
+
+// (Re)builds a cached layout. `centered` centres the text in the layout box
+// (badge, scissors); otherwise the ink starts at the drawn origin.
+bool EnsureDText(DText& t, const std::wstring& text, float em, int weight,
+                 IDWriteTextFormat* format, float capRatio, float maxWidth,
+                 bool centered) {
+    if (t.layout && t.text == text && t.em == em && t.weight == weight &&
+        t.maxWidth == maxWidth && t.centered == centered) {
+        return true;
+    }
+    GpuRelease(t.layout);
+    t.text = text;
+    t.em = em;
+    t.weight = weight;
+    t.maxWidth = maxWidth;
+    t.centered = centered;
+    if (!format) {
+        return false;
+    }
+    if (FAILED(g_gpu.write->CreateTextLayout(text.c_str(), (UINT32)text.size(),
+                                             format, maxWidth, 256.0f,
+                                             &t.layout))) {
+        return false;
+    }
+    t.layout->SetTextAlignment(centered ? DWRITE_TEXT_ALIGNMENT_CENTER
+                                        : DWRITE_TEXT_ALIGNMENT_LEADING);
+    DWRITE_TEXT_METRICS m{};
+    t.layout->GetMetrics(&m);
+    DWRITE_OVERHANG_METRICS oh{};
+    t.layout->GetOverhangMetrics(&oh);
+    t.inkWidth = std::max(0.0f, m.width - oh.left - oh.right);
+    t.inkLSB = oh.left;
+    DWRITE_LINE_METRICS lm[2]{};
+    UINT32 count = 0;
+    float baseline = 0.0f;
+    if (SUCCEEDED(t.layout->GetLineMetrics(lm, 2, &count)) && count > 0) {
+        baseline = lm[0].baseline;
+    }
+    t.capCenter = baseline - capRatio * em / 2.0f;
+    return true;
+}
+
+bool GpuInit() {
+    if (g_gpu.inited) {
+        return true;
+    }
+    UseLayeredStyle(false);
+    HRESULT hr;
+
+    D3D_FEATURE_LEVEL level{};
+    hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+                           D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0,
+                           D3D11_SDK_VERSION, &g_gpu.d3d, &level, nullptr);
+    if (FAILED(hr)) {
+        hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr,
+                               D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0,
+                               D3D11_SDK_VERSION, &g_gpu.d3d, &level, nullptr);
+    }
+    if (FAILED(hr)) {
+        Wh_Log(L"GpuInit: D3D11CreateDevice failed 0x%08lX", hr);
+        return false;
+    }
+
+    IDXGIDevice* dxgi = nullptr;
+    if (FAILED(g_gpu.d3d->QueryInterface(__uuidof(IDXGIDevice),
+                                         (void**)&dxgi)) ||
+        !dxgi) {
+        Wh_Log(L"GpuInit: no IDXGIDevice");
+        GpuShutdown();
+        return false;
+    }
+
+    D2D1_FACTORY_OPTIONS opts{};
+    hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
+                           __uuidof(ID2D1Factory1), &opts,
+                           (void**)&g_gpu.factory);
+    if (FAILED(hr) || !g_gpu.factory) {
+        Wh_Log(L"GpuInit: D2D1CreateFactory failed 0x%08lX", hr);
+        dxgi->Release();
+        GpuShutdown();
+        return false;
+    }
+
+    hr = g_gpu.factory->CreateDevice(dxgi, &g_gpu.d2d);
+    dxgi->Release();
+    if (FAILED(hr) || !g_gpu.d2d) {
+        Wh_Log(L"GpuInit: D2D device failed 0x%08lX", hr);
+        GpuShutdown();
+        return false;
+    }
+
+    HMODULE dcomp = LoadLibraryW(L"dcomp.dll");
+    using DCompCreateDevice2_t = HRESULT(WINAPI*)(IUnknown*, REFIID, void**);
+    auto createDevice =
+        (DCompCreateDevice2_t)GetProcAddress(dcomp, "DCompositionCreateDevice2");
+    if (!createDevice) {
+        Wh_Log(L"GpuInit: no DCompositionCreateDevice2");
+        GpuShutdown();
+        return false;
+    }
+    hr = createDevice(g_gpu.d2d, __uuidof(IDCompositionDevice),
+                      (void**)&g_gpu.device);
+    if (FAILED(hr) || !g_gpu.device) {
+        Wh_Log(L"GpuInit: DCompositionCreateDevice2 failed 0x%08lX", hr);
+        GpuShutdown();
+        return false;
+    }
+
+    if (FAILED(g_gpu.device->CreateTargetForHwnd(g_hwnd, TRUE,
+                                                 &g_gpu.target)) ||
+        !g_gpu.target) {
+        Wh_Log(L"GpuInit: CreateTargetForHwnd failed 0x%08lX", hr);
+        GpuShutdown();
+        return false;
+    }
+    if (FAILED(g_gpu.device->CreateVisual(&g_gpu.visual)) || !g_gpu.visual ||
+        FAILED(g_gpu.device->CreateVirtualSurface(
+            1, 1, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_ALPHA_MODE_PREMULTIPLIED,
+            &g_gpu.surface)) ||
+        !g_gpu.surface) {
+        Wh_Log(L"GpuInit: visual/surface failed 0x%08lX", hr);
+        GpuShutdown();
+        return false;
+    }
+    g_gpu.visual->SetContent(g_gpu.surface);
+    if (SUCCEEDED(g_gpu.device->CreateEffectGroup(&g_gpu.effect)) &&
+        g_gpu.effect) {
+        g_gpu.visual->SetEffect(g_gpu.effect);
+    }
+    g_gpu.target->SetRoot(g_gpu.visual);
+    g_gpu.device->Commit();
+
+    D2D1_STROKE_STYLE_PROPERTIES roundProps{};
+    roundProps.startCap = D2D1_CAP_STYLE_ROUND;
+    roundProps.endCap = D2D1_CAP_STYLE_ROUND;
+    roundProps.lineJoin = D2D1_LINE_JOIN_ROUND;
+    g_gpu.factory->CreateStrokeStyle(roundProps, nullptr, 0,
+                                     &g_gpu.roundStroke);
+    D2D1_STROKE_STYLE_PROPERTIES flatProps{};
+    flatProps.startCap = D2D1_CAP_STYLE_FLAT;
+    flatProps.endCap = D2D1_CAP_STYLE_FLAT;
+    flatProps.lineJoin = D2D1_LINE_JOIN_MITER;
+    g_gpu.factory->CreateStrokeStyle(flatProps, nullptr, 0,
+                                     &g_gpu.flatStroke);
+
+    BuildLockGeometries();
+
+    hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
+                             (IUnknown**)&g_gpu.write);
+    if (FAILED(hr) || !g_gpu.write) {
+        Wh_Log(L"GpuInit: DWriteCreateFactory failed 0x%08lX", hr);
+        GpuShutdown();
+        return false;
+    }
+
+    g_gpu.inited = true;
+    return true;
+}
+
+// --- drawing (mirrors the GDI+ RenderCard above, pixel for pixel) -----------
+
+void EnsureBackdropBitmap(ID2D1DeviceContext* g) {
+    if (g_gpu.backdropBitmap && g_gpu.backdropGen == g_backdrop.gen) {
+        return;
+    }
+    GpuRelease(g_gpu.backdropBitmap);
+    g_gpu.backdropGen = g_backdrop.gen;
+    if (!g_backdrop.valid || !g_backdrop.image.bits) {
+        return;
+    }
+    D2D1_BITMAP_PROPERTIES props =
+        D2D1::BitmapProperties(D2D1_PIXEL_FORMAT{DXGI_FORMAT_B8G8R8A8_UNORM,
+                                                 D2D1_ALPHA_MODE_IGNORE});
+    g->CreateBitmap(
+        D2D1_SIZE_U{(UINT)g_backdrop.image.width,
+                    (UINT)g_backdrop.image.height},
+        g_backdrop.image.bits, (UINT32)g_backdrop.image.stride, props,
+        &g_gpu.backdropBitmap);
+}
+
+void EnsureCardShape(float width, float height) {
+    int w = (int)std::lround(width);
+    int h = (int)std::lround(height);
+    if (g_gpu.cardShape && g_gpu.cardShapeW == w && g_gpu.cardShapeH == h) {
+        return;
+    }
+    GpuRelease(g_gpu.cardShape);
+    D2D1_ROUNDED_RECT rr =
+        D2dRoundRect(0.0f, 0.0f, width, height,
+                     (float)g_settings.cornerRadius * g_scale);
+    g_gpu.factory->CreateRoundedRectangleGeometry(rr, &g_gpu.cardShape);
+    g_gpu.cardShapeW = w;
+    g_gpu.cardShapeH = h;
+}
+
+void DrawCardBorderD2d(ID2D1DeviceContext* g, float width, float height,
+                       const Theme& theme) {
+    float scale = height / kBaseHeight;
+    int style = theme.highContrast ? 1 : g_settings.borderStyle;
+    if (style == 2) {
+        return;
+    }
+
+    float bw = (float)g_settings.borderWidth * scale;
+    float radius =
+        std::max(0.0f, (float)g_settings.cornerRadius * scale - bw / 2.0f);
+    D2D1_ROUNDED_RECT ring = D2dRoundRect(bw / 2.0f, bw / 2.0f,
+                                          width - bw, height - bw, radius);
+
+    if (style == 1) {
+        Color c = theme.highContrast ? theme.border : theme.accent;
+        ID2D1SolidColorBrush* brush = nullptr;
+        g->CreateSolidColorBrush(D2dColor(c), &brush);
+        if (brush) {
+            g->DrawRoundedRectangle(ring, brush, bw, g_gpu.flatStroke);
+            brush->Release();
+        }
+        return;
+    }
+
+    float phase = MorphPhase();
+
+    if (g_settings.glow > 0) {
+        float wave = 0.5f + 0.5f * std::sin(phase * 6.2831853f);
+        Color glowColor = MixColor(theme.accent, theme.accent2, wave, 255);
+        float a = (float)g_settings.glow / 100.0f * 0.45f;
+        // One soft halo hugging the border line only, clipped to the card so
+        // the inside stays one even tone right up to the edge.
+        EnsureCardShape(width, height);
+        if (g_gpu.cardShape) {
+            D2D1_LAYER_PARAMETERS lp = D2D1::LayerParameters();
+            lp.contentBounds = D2D1_RECT_F{0.0f, 0.0f, width, height};
+            lp.geometricMask = g_gpu.cardShape;
+            lp.maskAntialiasMode = D2D1_ANTIALIAS_MODE_PER_PRIMITIVE;
+            lp.maskTransform = D2D1::Matrix3x2F::Identity();
+            lp.opacity = 1.0f;
+            g->PushLayer(lp, nullptr);
+            ID2D1SolidColorBrush* brush = nullptr;
+            g->CreateSolidColorBrush(
+                D2dColorAlpha(glowColor,
+                              (BYTE)std::lround(255.0f * a)),
+                &brush);
+            if (brush) {
+                g->DrawRoundedRectangle(ring, brush, bw + 2.0f * scale,
+                                        g_gpu.roundStroke);
+                brush->Release();
+            }
+            g->PopLayer();
+        }
+    }
+
+    float vx = width * 1.2f;
+    float vy = height * 0.4f;
+    D2D1_POINT_2F p1{-vx + phase * vx, -vy + phase * vy};
+    D2D1_POINT_2F p2{p1.x + vx, p1.y + vy};
+    D2D1_GRADIENT_STOP stops[3] = {
+        {0.0f, D2dColor(theme.accent)},
+        {0.5f, D2dColor(theme.accent2)},
+        {1.0f, D2dColor(theme.accent)},
+    };
+    ID2D1GradientStopCollection* stopCollection = nullptr;
+    ID2D1LinearGradientBrush* brush = nullptr;
+    if (SUCCEEDED(g->CreateGradientStopCollection(
+            stops, 3, D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_WRAP,
+            &stopCollection)) &&
+        stopCollection) {
+        if (SUCCEEDED(g->CreateLinearGradientBrush(
+                D2D1::LinearGradientBrushProperties(p1, p2), stopCollection,
+                &brush)) &&
+            brush) {
+            g->DrawRoundedRectangle(ring, brush, bw, g_gpu.roundStroke);
+            brush->Release();
+        }
+        stopCollection->Release();
+    }
+}
+
+void DrawLockD2d(ID2D1DeviceContext* g, const D2D1_RECT_F& box,
+                 const Theme& theme, float angle, float bounce) {
+    if (!g_gpu.lockBody || !g_gpu.shackle) {
+        return;
+    }
+    float s = (box.right - box.left) / 24.0f;
+    D2D1::Matrix3x2F base =
+        D2D1::Matrix3x2F::Translation(box.left, box.top) *
+        D2D1::Matrix3x2F::Scale(D2D1_SIZE_F{s, s}, D2D1_POINT_2F{0.0f, 0.0f});
+
+    ID2D1SolidColorBrush* brush = nullptr;
+    g->CreateSolidColorBrush(D2dColor(theme.text), &brush);
+    if (!brush) {
+        return;
+    }
+
+    g->SetTransform(base);
+    g->FillGeometry(g_gpu.lockBody, brush);
+    // Keyhole: a 3-unit circle centred on (12, 14).
+    g->FillEllipse(
+        D2D1::Ellipse(D2D1_POINT_2F{12.0f, 14.0f}, 1.5f, 1.5f), brush);
+
+    D2D1::Matrix3x2F shackle =
+        base * D2D1::Matrix3x2F::Translation(16.0f, 7.0f + bounce) *
+        D2D1::Matrix3x2F::Rotation(angle) *
+        D2D1::Matrix3x2F::Translation(-16.0f, -7.0f);
+    g->SetTransform(shackle);
+    g->DrawGeometry(g_gpu.shackle, brush, 1.5f, g_gpu.flatStroke);
+
+    g->SetTransform(D2D1::Matrix3x2F::Identity());
+    brush->Release();
+}
+
+void DrawCheckD2d(ID2D1DeviceContext* g, const D2D1_RECT_F& box,
+                  const Theme& theme, float progress) {
+    float s = (box.right - box.left) / 24.0f;
+    const D2D1_POINT_2F a{5.0f, 12.5f};
+    const D2D1_POINT_2F b{10.0f, 17.5f};
+    const D2D1_POINT_2F c{19.0f, 7.0f};
+    float len1 = std::sqrt((b.x - a.x) * (b.x - a.x) +
+                           (b.y - a.y) * (b.y - a.y));
+    float len2 = std::sqrt((c.x - b.x) * (c.x - b.x) +
+                           (c.y - b.y) * (c.y - b.y));
+    float total = len1 + len2;
+    float drawn = total * Clamp01(progress);
+    if (drawn <= 0.01f) {
+        return;
+    }
+
+    ID2D1PathGeometry* path = nullptr;
+    if (FAILED(g_gpu.factory->CreatePathGeometry(&path)) || !path) {
+        return;
+    }
+    ID2D1GeometrySink* sink = nullptr;
+    if (FAILED(path->Open(&sink)) || !sink) {
+        path->Release();
+        return;
+    }
+    sink->BeginFigure(a, D2D1_FIGURE_BEGIN_HOLLOW);
+    if (drawn <= len1) {
+        float t = drawn / len1;
+        sink->AddLine(D2D1_POINT_2F{Lerp(a.x, b.x, t), Lerp(a.y, b.y, t)});
+    } else {
+        sink->AddLine(b);
+        float t = (drawn - len1) / len2;
+        sink->AddLine(D2D1_POINT_2F{Lerp(b.x, c.x, t), Lerp(b.y, c.y, t)});
+    }
+    sink->EndFigure(D2D1_FIGURE_END_OPEN);
+    sink->Close();
+    sink->Release();
+
+    D2D1::Matrix3x2F base =
+        D2D1::Matrix3x2F::Translation(box.left, box.top) *
+        D2D1::Matrix3x2F::Scale(D2D1_SIZE_F{s, s}, D2D1_POINT_2F{0.0f, 0.0f});
+    ID2D1SolidColorBrush* brush = nullptr;
+    g->CreateSolidColorBrush(D2dColor(theme.text), &brush);
+    if (brush) {
+        g->SetTransform(base);
+        g->DrawGeometry(path, brush, 2.4f, g_gpu.roundStroke);
+        g->SetTransform(D2D1::Matrix3x2F::Identity());
+        brush->Release();
+    }
+    path->Release();
+}
+
+void DrawScissorsD2d(ID2D1DeviceContext* g, const D2D1_RECT_F& box,
+                     const Theme& theme, float alpha) {
+    EnsureGlyphFormat();
+    if (!g_gpu.glyphFormat) {
+        return;
+    }
+    static DText s_glyph;
+    // The GDI+ path centres the glyph in a 24x18 box at y offset 3, in the
+    // scaled unit space, so the layout gets the same box.
+    if (!EnsureDText(s_glyph, L"\xE8C6", 16.0f, 400, g_gpu.glyphFormat, 0.7f,
+                     24.0f, true)) {
+        return;
+    }
+    s_glyph.layout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+
+    float s = (box.right - box.left) / 24.0f;
+    D2D1::Matrix3x2F base =
+        D2D1::Matrix3x2F::Translation(box.left, box.top) *
+        D2D1::Matrix3x2F::Scale(D2D1_SIZE_F{s, s}, D2D1_POINT_2F{0.0f, 0.0f});
+    ID2D1SolidColorBrush* brush = nullptr;
+    g->CreateSolidColorBrush(
+        D2dColorAlpha(theme.text, (BYTE)(255 * Clamp01(alpha))), &brush);
+    if (brush) {
+        g->SetTransform(base);
+        g->DrawTextLayout(D2D1_POINT_2F{0.0f, 3.0f}, s_glyph.layout, brush,
+                          D2D1_DRAW_TEXT_OPTIONS_NONE);
+        g->SetTransform(D2D1::Matrix3x2F::Identity());
+        brush->Release();
+    }
+}
+
+// Lays out and draws the card into a DComp surface context that already has
+// (0,0) at the window's top-left corner. Mirrors RenderCard exactly.
+void RenderCardD2d(ID2D1DeviceContext* g, const FrameState& f,
+                   const Theme& theme, bool barOnTop) {
+    const float width = (float)g_cardWidth;
+    const float height = (float)g_cardHeight;
+    const float scale = g_scale;
+
+    g->SetDpi(96.0f, 96.0f);
+    g->SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    g->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+    g->SetTransform(D2D1::Matrix3x2F::Identity());
+
+    std::wstring label;
+    FormatTip(f.kind, f.on, label);
+
+    // --- text metrics: GDI advances, so both renderers size the card alike --
+    HDC screenDc = GetDC(nullptr);
+    LOGFONTW textLogFont = MakeUiLogFont(14.0f * scale, g_settings.fontWeight);
+    LOGFONTW badgeLogFont = MakeUiLogFont(12.5f * scale, g_settings.fontWeight);
+    bool clip = IsClipKind(f.kind);
+    float textWidth = MeasureTextWidth(screenDc, textLogFont, label);
+    float badgeWidth = clip ? MeasureTextWidth(screenDc, badgeLogFont,
+                                               CountText(f.count)) +
+                                 14.0f * scale
+                            : 0.0f;
+    ReleaseDC(nullptr, screenDc);
+
+    EnsureLabelFormats(14.0f * scale, 12.5f * scale);
+    static DText s_label;
+    static DText s_badge;
+    bool haveLabel = EnsureDText(s_label, label, 14.0f * scale,
+                                 g_settings.fontWeight, g_gpu.textFormat,
+                                 g_gpu.textCapRatio, 4096.0f, false);
+    float inkWidth = haveLabel && s_label.inkWidth > 0.0f ? s_label.inkWidth
+                                                          : textWidth;
+    float inkLSB = haveLabel ? s_label.inkLSB : 0.0f;
+
+    // --- card ---------------------------------------------------------------
+    D2D1_ROUNDED_RECT cardRect =
+        D2dRoundRect(0.0f, 0.0f, width, height,
+                     (float)g_settings.cornerRadius * scale);
+    bool acrylic = g_settings.material != kMaterialSolid && g_backdrop.valid;
+    if (acrylic) {
+        EnsureBackdropBitmap(g);
+        if (g_gpu.backdropBitmap) {
+            // 1:1 copy from inside the padded capture: no scaling, so no
+            // resampling fringe at the card edge.
+            g->DrawBitmap(
+                g_gpu.backdropBitmap, D2D1_RECT_F{0.0f, 0.0f, width, height},
+                1.0f, D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+                D2D1_RECT_F{(float)g_backdrop.padLeft,
+                            (float)g_backdrop.padTop,
+                            (float)(g_backdrop.padLeft + g_backdrop.w),
+                            (float)(g_backdrop.padTop + g_backdrop.h)});
+        }
+        ID2D1SolidColorBrush* tint = nullptr;
+        g->CreateSolidColorBrush(D2dColor(theme.tint), &tint);
+        if (tint) {
+            g->FillRoundedRectangle(cardRect, tint);
+            tint->Release();
+        }
+    } else {
+        ID2D1SolidColorBrush* surface = nullptr;
+        g->CreateSolidColorBrush(D2dColor(theme.surface), &surface);
+        if (surface) {
+            g->FillRoundedRectangle(cardRect, surface);
+            surface->Release();
+        }
+    }
+
+    // --- icon ---------------------------------------------------------------
+    float gridShift = (!clip && barOnTop) ? 4.0f * scale : 0.0f;
+
+    float iconSize = 22.0f * scale;
+    const float iconInk = 14.0f / 24.0f * iconSize;
+    const float clipGap = 12.0f * scale;
+    const float clipGroupWidth =
+        iconInk + clipGap + inkWidth + clipGap + badgeWidth;
+    const float clipLeft = (width - clipGroupWidth) / 2.0f;
+    D2D1_RECT_F iconBox(
+        clip ? clipLeft - (iconSize - iconInk) / 2.0f : 16.0f * scale,
+        (height - iconSize) / 2.0f - (clip ? 0.0f : 1.0f * scale) + gridShift,
+        0.0f, 0.0f);
+    iconBox.right = iconBox.left + iconSize;
+    iconBox.bottom = iconBox.top + iconSize;
+
+    float poseT = EaseOutQuad(f.statusT);
+    float pose = Lerp(f.prevOn ? 1.0f : 0.0f, f.on ? 1.0f : 0.0f, poseT);
+    if (clip) {
+        if (f.kind == kCut) {
+            DrawScissorsD2d(g, iconBox, theme, EaseOutQuad(f.clipT));
+        } else {
+            DrawCheckD2d(g, iconBox, theme, EaseOutQuad(f.clipT));
+        }
+    } else {
+        float angle = Lerp(25.0f, 0.0f, pose);
+        float t = Clamp01(f.statusT);
+        float bounce = t < 0.1f ? EaseOutCubic(t / 0.1f)
+                                : 1.0f - EaseInOutCubic((t - 0.1f) / 0.9f);
+        DrawLockD2d(g, iconBox, theme, angle, bounce);
+    }
+
+    // --- text ---------------------------------------------------------------
+    if (haveLabel) {
+        float textX;
+        if (clip) {
+            textX = clipLeft + iconInk + clipGap;
+        } else {
+            float contentLeft = 16.0f * scale;
+            float contentRight = width - 12.0f * scale;
+            textX = (contentLeft + contentRight) / 2.0f - inkWidth / 2.0f +
+                    18.0f * scale / 2.0f;
+        }
+        // The cap band centre rides at the target line, exactly where the
+        // GDI+ path lands it (line box centre plus the probed cap bias).
+        float capCenterY =
+            clip ? height / 2.0f : height / 2.0f - 2.0f * scale + gridShift;
+        ID2D1SolidColorBrush* brush = nullptr;
+        g->CreateSolidColorBrush(D2dColor(theme.text), &brush);
+        if (brush) {
+            g->DrawTextLayout(
+                D2D1_POINT_2F{textX - inkLSB, capCenterY - s_label.capCenter},
+                s_label.layout, brush, D2D1_DRAW_TEXT_OPTIONS_NONE);
+            brush->Release();
+        }
+    }
+
+    // --- clipboard badge ----------------------------------------------------
+    if (clip) {
+        float badgeHeight = 18.0f * scale;
+        float badgeX = clipLeft + iconInk + clipGap + inkWidth + clipGap;
+        float badgeY = (height - badgeHeight) / 2.0f;
+        float cx = badgeX + badgeWidth / 2.0f;
+        float cy = badgeY + badgeHeight / 2.0f;
+
+        D2D1::Matrix3x2F badgeTransform =
+            D2D1::Matrix3x2F::Translation(cx, cy) *
+            D2D1::Matrix3x2F::Scale(D2D1_SIZE_F{f.badgeScale, f.badgeScale},
+                                    D2D1_POINT_2F{0.0f, 0.0f}) *
+            D2D1::Matrix3x2F::Translation(-cx, -cy);
+        g->SetTransform(badgeTransform);
+
+        BYTE badgeAlpha = (BYTE)std::lround(255.0f * Clamp01(f.badgeAlpha));
+        ID2D1SolidColorBrush* badgeBrush = nullptr;
+        g->CreateSolidColorBrush(
+            D2dColorAlpha(theme.accent, badgeAlpha), &badgeBrush);
+        if (badgeBrush) {
+            g->FillRoundedRectangle(
+                D2dRoundRect(badgeX, badgeY, badgeWidth, badgeHeight,
+                             9.0f * scale),
+                badgeBrush);
+            badgeBrush->Release();
+        }
+
+        if (EnsureDText(s_badge, CountText(f.count), 12.5f * scale,
+                        g_settings.fontWeight, g_gpu.badgeFormat,
+                        g_gpu.badgeCapRatio, badgeWidth, true)) {
+            ID2D1SolidColorBrush* textBrush = nullptr;
+            g->CreateSolidColorBrush(
+                D2dColorAlpha(theme.onAccent, badgeAlpha), &textBrush);
+            if (textBrush) {
+                // The count's cap band sits at the badge's vertical middle.
+                g->DrawTextLayout(
+                    D2D1_POINT_2F{badgeX,
+                                  badgeY + badgeHeight / 2.0f -
+                                      s_badge.capCenter},
+                    s_badge.layout, textBrush,
+                    D2D1_DRAW_TEXT_OPTIONS_NONE);
+                textBrush->Release();
+            }
+        }
+
+        g->SetTransform(D2D1::Matrix3x2F::Identity());
+    }
+
+    // --- accent bar -----------------------------------------------------------
+    if (!clip) {
+        float indicatorHeight = 3.0f * scale;
+        float indicatorWidth = Lerp(36.0f, 60.0f, pose) * scale;
+        float indicatorY = barOnTop
+                               ? 7.0f * scale
+                               : height - 7.0f * scale - indicatorHeight;
+        float indicatorX = (width - indicatorWidth) / 2.0f;
+        BYTE alpha = (BYTE)std::lround(Lerp(0.2f, 1.0f, pose) * 255.0f);
+        ID2D1SolidColorBrush* brush = nullptr;
+        g->CreateSolidColorBrush(D2dColorAlpha(theme.accent, alpha), &brush);
+        if (brush) {
+            g->FillRoundedRectangle(
+                D2dRoundRect(indicatorX, indicatorY, indicatorWidth,
+                             indicatorHeight, indicatorHeight / 2.0f),
+                brush);
+            brush->Release();
+        }
+    }
+}
+
+// --- compositor plumbing -----------------------------------------------------
+
+bool GpuEnsureSurface(int w, int h) {
+    if (!g_gpu.device || w <= 0 || h <= 0) {
+        return false;
+    }
+    if (g_gpu.surface && g_gpu.surfW == w && g_gpu.surfH == h) {
+        return true;
+    }
+    if (!g_gpu.surface) {
+        if (FAILED(g_gpu.device->CreateVirtualSurface(
+                w, h, DXGI_FORMAT_B8G8R8A8_UNORM,
+                DXGI_ALPHA_MODE_PREMULTIPLIED, &g_gpu.surface)) ||
+            !g_gpu.surface) {
+            return false;
+        }
+        g_gpu.visual->SetContent(g_gpu.surface);
+    } else if (FAILED(g_gpu.surface->Resize(w, h))) {
+        return false;
+    }
+    g_gpu.surfW = w;
+    g_gpu.surfH = h;
+    return true;
+}
+
+// Draws the current card state into the surface and commits. Called only when
+// content actually changed; fades and slides never come through here.
+bool GpuDrawFrame() {
+    if (!GpuActive() || !g_hwnd) {
+        return false;
+    }
+    if (!GpuEnsureSurface(g_cardWidth, g_cardHeight)) {
+        GpuFailToGdi(L"Surface allocation failed");
+        return false;
+    }
+    ID2D1DeviceContext* ctx = nullptr;
+    HRESULT hr = g_gpu.surface->BeginDraw(nullptr, __uuidof(ID2D1DeviceContext),
+                                          (void**)&ctx, nullptr);
+    if (FAILED(hr) || !ctx) {
+        GpuFailToGdi(L"BeginDraw failed");
+        return false;
+    }
+    RenderCardD2d(ctx, g_frame, g_theme,
+                  CardHangsTop(g_monitor, g_placement.x, g_placement.y,
+                               (float)g_cardWidth, (float)g_cardHeight));
+    ctx->Release();
+    hr = g_gpu.surface->EndDraw();
+    if (FAILED(hr)) {
+        GpuFailToGdi(L"EndDraw failed");
+        return false;
+    }
+    if (FAILED(g_gpu.device->Commit())) {
+        GpuFailToGdi(L"Commit failed");
+        return false;
+    }
+    return true;
+}
+
+// IDCompositionAnimation segments are cubic polynomials, so the exact ease
+// curves from the GDI path encode as one segment each.
+void GpuAddEase(IDCompositionAnimation* a, float seconds, float from, float to,
+                bool easeOut) {
+    float T = std::max(seconds, 0.001f);
+    float dv = to - from;
+    if (easeOut) {
+        // v0 + dv * (3u - 3u^2 + u^3), u = t/T  (ease-out cubic)
+        a->AddCubic(0.0, from, 3.0f * dv / T, -3.0f * dv / (T * T),
+                    dv / (T * T * T));
+    } else {
+        // v0 + dv * u^3  (ease-in cubic)
+        a->AddCubic(0.0, from, 0.0f, 0.0f, dv / (T * T * T));
+    }
+    a->End((double)T, to);
+}
+
+void GpuSnapStatic() {
+    if (!g_gpu.device || !g_gpu.visual || !g_gpu.effect) {
+        return;
+    }
+    g_gpu.effect->SetOpacity(1.0f);
+    g_gpu.visual->SetOffsetX(0.0f);
+    g_gpu.visual->SetOffsetY(0.0f);
+    g_gpu.device->Commit();
+}
+
+void GpuStartShow(int animMs) {
+    g_gpu.armed = 1;
+    if (!g_gpu.device || !g_gpu.visual || !g_gpu.effect) {
+        return;
+    }
+    if (animMs <= 0) {
+        GpuSnapStatic();
+        return;
+    }
+    float T = animMs / 1000.0f;
+    IDCompositionAnimation* a = nullptr;
+    if (SUCCEEDED(g_gpu.device->CreateAnimation(&a)) && a) {
+        GpuAddEase(a, T, 0.0f, 1.0f, true);
+        g_gpu.effect->SetOpacity(a);
+        a->Release();
+    }
+    IDCompositionAnimation* b = nullptr;
+    if (SUCCEEDED(g_gpu.device->CreateAnimation(&b)) && b) {
+        GpuAddEase(b, T, (float)g_placement.dx, 0.0f, true);
+        g_gpu.visual->SetOffsetX(b);
+        b->Release();
+    }
+    IDCompositionAnimation* c = nullptr;
+    if (SUCCEEDED(g_gpu.device->CreateAnimation(&c)) && c) {
+        GpuAddEase(c, T, (float)g_placement.dy, 0.0f, true);
+        g_gpu.visual->SetOffsetY(c);
+        c->Release();
+    }
+    g_gpu.device->Commit();
+}
+
+void GpuStartHide(int animMs) {
+    g_gpu.armed = 2;
+    if (!g_gpu.device || !g_gpu.visual || !g_gpu.effect) {
+        return;
+    }
+    if (animMs <= 0) {
+        return;  // HideNow fires the same tick; nothing to animate
+    }
+    float T = animMs / 1000.0f;
+    IDCompositionAnimation* a = nullptr;
+    if (SUCCEEDED(g_gpu.device->CreateAnimation(&a)) && a) {
+        GpuAddEase(a, T, 1.0f, 0.0f, false);
+        g_gpu.effect->SetOpacity(a);
+        a->Release();
+    }
+    IDCompositionAnimation* b = nullptr;
+    if (SUCCEEDED(g_gpu.device->CreateAnimation(&b)) && b) {
+        GpuAddEase(b, T, 0.0f, (float)g_placement.dx, false);
+        g_gpu.visual->SetOffsetX(b);
+        b->Release();
+    }
+    IDCompositionAnimation* c = nullptr;
+    if (SUCCEEDED(g_gpu.device->CreateAnimation(&c)) && c) {
+        GpuAddEase(c, T, 0.0f, (float)g_placement.dy, false);
+        g_gpu.visual->SetOffsetY(c);
+        c->Release();
+    }
+    g_gpu.device->Commit();
+}
+
+// Runs on every animation timer tick while the GPU path is armed. The
+// compositor owns opacity and offset; this only redraws the surface when the
+// content itself moves (state tweens, morphing border).
+void GpuStepAnimation(bool tweenBusy) {
+    if (g_phase == kPhaseHidden) {
+        return;
+    }
+    if (g_phase == kPhaseIn && g_gpu.armed != 1) {
+        GpuStartShow(g_animMs);
+    } else if (g_phase == kPhaseOut && g_gpu.armed != 2) {
+        GpuStartHide(g_animMs);
+    } else if (g_phase == kPhaseHold && g_gpu.armed != 0) {
+        g_gpu.armed = 0;  // the finished animation pins its final value
+    }
+    if (tweenBusy || BorderIsMorphing()) {
+        GpuDrawFrame();
+    }
+}
+
+void GpuApplyRenderer() {
+    if (g_settings.renderer == 0) {
+        if (!g_gpu.inited && g_hwnd) {
+            if (GpuInit()) {
+                Wh_Log(L"WinTips OSD renderer armed: gpu (DirectComposition + Direct2D)");
+            } else {
+                UseLayeredStyle(true);
+                Wh_Log(L"WinTips OSD renderer armed: gdi (legacy; DirectComposition init failed)");
+            }
+        }
+    } else if (g_gpu.inited) {
+        GpuShutdown();
+        UseLayeredStyle(true);
+        Wh_Log(L"WinTips OSD renderer armed: gdi (legacy; selected in settings)");
+    }
+}
+
 // =============================================================================
 // Runtime state
 // =============================================================================
@@ -1744,7 +2878,6 @@ Placement g_placement;
 int g_cardWidth;
 int g_cardHeight;
 
-enum Phase { kPhaseHidden, kPhaseIn, kPhaseHold, kPhaseOut };
 Phase g_phase = kPhaseHidden;
 ULONGLONG g_phaseStart;
 int g_animMs;
@@ -1962,6 +3095,7 @@ void HideNow() {
         KillTimer(g_hwnd, kTimerAnim);
     }
     g_phase = kPhaseHidden;
+    g_gpu.armed = 0;
     g_count = 0;
     g_badgePop = false;
     // The desktop may have changed while the card was up; capture again next
@@ -2001,11 +3135,13 @@ void StepAnimation() {
     }
 
     bool busy = g_phase == kPhaseIn || g_phase == kPhaseOut;
+    bool tweenBusy = false;
 
     if (g_statusMs > 0) {
         float t = (float)(now - g_statusStart) / g_statusMs;
         g_frame.statusT = Clamp01(t);
         busy = busy || t < 1.0f;
+        tweenBusy = tweenBusy || t < 1.0f;
     } else {
         g_frame.statusT = 1.0f;
     }
@@ -2015,6 +3151,7 @@ void StepAnimation() {
             float t = (float)(now - g_clipStart) / g_clipMs;
             g_frame.clipT = Clamp01(t);
             busy = busy || t < 1.0f;
+            tweenBusy = tweenBusy || t < 1.0f;
         } else {
             g_frame.clipT = 1.0f;
         }
@@ -2023,6 +3160,7 @@ void StepAnimation() {
             float t = (float)(now - g_badgeStart) / g_animMs;
             if (t < 1.0f) {
                 busy = true;
+                tweenBusy = true;
                 g_frame.badgeScale =
                     t < 0.3f ? Lerp(1.0f, 1.3f, EaseOutCubic(t / 0.3f))
                              : Lerp(1.3f, 1.0f, EaseInOutCubic((t - 0.3f) / 0.7f));
@@ -2036,12 +3174,17 @@ void StepAnimation() {
             float t = (float)(now - g_badgeStart) / g_statusMs;
             g_frame.badgeAlpha = Clamp01(t);
             busy = busy || t < 1.0f;
+            tweenBusy = tweenBusy || t < 1.0f;
         } else if (!g_badgeFade) {
             g_frame.badgeAlpha = 1.0f;
         }
     }
 
-    Present(dx, dy, (BYTE)std::lround(255.0f * Clamp01(alpha)));
+    if (GpuActive()) {
+        GpuStepAnimation(tweenBusy);
+    } else {
+        Present(dx, dy, (BYTE)std::lround(255.0f * Clamp01(alpha)));
+    }
 
     if (g_phase == kPhaseHold && !busy && !BorderIsMorphing()) {
         KillTimer(g_hwnd, kTimerAnim);
@@ -2095,6 +3238,19 @@ void ShowTip(TipKind kind, bool on) {
     int animMs = g_settings.AnimationMs();
     g_animMs = animMs;
     StartStatusTween(fromOn);
+
+    if (GpuActive() && g_hwnd) {
+        // Draw the first frame before the window shows, size the window for
+        // the compositor (ULW does that per frame on the GDI path), and cancel
+        // a pending fade-out if a new tip arrived while one was running.
+        GpuDrawFrame();
+        SetWindowPos(g_hwnd, nullptr, g_placement.x, g_placement.y,
+                     g_cardWidth, g_cardHeight,
+                     SWP_NOACTIVATE | SWP_NOZORDER);
+        if (wasVisible && g_phase == kPhaseHold) {
+            GpuSnapStatic();
+        }
+    }
 
     if (!wasVisible) {
         g_phase = animMs > 0 ? kPhaseIn : kPhaseHold;
@@ -2233,11 +3389,15 @@ void ApplySettings() {
     LoadSettings();
     DetectLanguage();
     InterlockedExchange(&g_pollEnabled, g_settings.pollElevated ? 1 : 0);
+    GpuApplyRenderer();
     g_theme = CurrentTheme();
     g_backdrop.Invalidate();
     if (g_phase != kPhaseHidden) {
         UpdateGeometry();
         RefreshBackdrop();
+        if (GpuActive()) {
+            GpuDrawFrame();
+        }
         StepAnimation();
     }
 }
@@ -2343,9 +3503,11 @@ DWORD WINAPI UiThreadProc(LPVOID) {
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     RegisterClassExW(&wc);
 
+    // The GPU path owns the window content through DirectComposition, which
+    // cannot coexist with UpdateLayeredWindow, so the layered style is added
+    // only when the GDI path is the one armed.
     g_hwnd = CreateWindowExW(
-        WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE |
-            WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+        WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
         kWindowClass, L"WinTipsOSD", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr,
         GetModuleHandleW(nullptr), nullptr);
 
@@ -2356,6 +3518,18 @@ DWORD WINAPI UiThreadProc(LPVOID) {
     }
 
     AddClipboardFormatListener(g_hwnd);
+
+    if (g_settings.renderer == 0 && GpuInit()) {
+        Wh_Log(L"WinTips OSD renderer armed: gpu (DirectComposition + Direct2D)");
+    } else {
+        UseLayeredStyle(true);
+        if (g_settings.renderer == 0) {
+            Wh_Log(L"WinTips OSD renderer armed: gdi (legacy; DirectComposition init failed)");
+        } else {
+            Wh_Log(L"WinTips OSD renderer armed: gdi (legacy; selected in settings)");
+        }
+        g_gpu.failed = g_settings.renderer == 0;
+    }
 
     if (g_readyEvent) {
         SetEvent(g_readyEvent);
@@ -2369,6 +3543,7 @@ DWORD WINAPI UiThreadProc(LPVOID) {
 
     RemoveClipboardFormatListener(g_hwnd);
     g_surface.Release();
+    GpuShutdown();
     DestroyWindow(g_hwnd);
     g_hwnd = nullptr;
     GdiplusShutdown(g_gdiplusToken);
