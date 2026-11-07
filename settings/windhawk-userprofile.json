@@ -343,6 +343,10 @@
     "taskbar-blob-shape": {
       "version": "1.2.0",
       "latestVersion": "1.2.0"
+    },
+    "chromium-cursor-remap": {
+      "version": "1.0",
+      "latestVersion": "1.0"
     }
   },
   "os": "10.0.26300"

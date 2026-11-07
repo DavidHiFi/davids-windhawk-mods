@@ -98,6 +98,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 ### Themes
 
 - **[OnlySearch Mocha](themes/start-menu-onlysearch-mocha):** the Start menu cut down to the search box and a power row, in Catppuccin Mocha. Paste [onlysearch-mocha.yaml](themes/start-menu-onlysearch-mocha/onlysearch-mocha.yaml) into the Start Menu Styler's Textual mode.
+- **[Chromium Cursors Mocha](themes/chromium-cursors-mocha):** Catppuccin Mocha art for the ten cursors Chrome and Electron draw themselves, for the [Chromium Cursor Remap](https://windhawk.net/mods/chromium-cursor-remap) mod.
 
 ## Notes
 
@@ -117,7 +118,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 | `mods/local/` | My mods, each with its source, a readme and install steps. |
 | `mods/catalog/` | Copies of the [catalog mods](https://windhawk.net/mods) in this setup, as installed. Authors, versions and licenses are in [mods/catalog/README.md](mods/catalog/README.md). |
 | `settings/` | Per-mod settings, app and engine preferences. See [settings/README.md](settings/README.md). |
-| `themes/` | Styler themes, ready to paste into Textual mode. |
+| `themes/` | Styler themes, ready to paste into Textual mode, and cursor art for mods. |
 | `mod-storage/` | Files mods wrote, currently the Taskbar Styler images. |
 | `editor/` | The Windhawk mod editor's settings. |
 | `manifest.json` | Every mod with version, author, license, origin and enabled state. |
@@ -153,7 +154,7 @@ Add `-SkipSources` to refresh settings and metadata only.
 My own work here is MIT, see [LICENSE](LICENSE), except where a mod inherits its original's license:
 
 - **GPL-3.0:** Window Manager, AltSnap, Taskbar System Info Plus, Everything & Power Tools in the Start Menu Plus, Seamless Tray Drawer.
-- **GPL-2.0:** Simple Window Switcher Plus, Theme Tool Plus, GPU Accelerated Explorer View Plus.
+- **GPL-2.0:** Simple Window Switcher Plus, Theme Tool Plus, GPU Accelerated Explorer View Plus, Chromium Cursors Mocha.
 - **LGPL-3.0:** Translucent Flyouts.
 
 Catalog mods in `mods/catalog/` keep their authors' licenses.
@@ -218,6 +219,7 @@ Most of my mods build on someone else's mod. Each folder's readme credits its so
 | **Ingan121** ([Titlebar For Everyone](https://windhawk.net/mods/titlebar-for-everyone)) | The window frame code in Windhawk Enhanced Styler (MIT). |
 | **Ramen Software** ([Start menu styling guide](https://github.com/ramensoftware/windows-11-start-menu-styling-guide)) | The OnlySearch and RosePine themes merged into OnlySearch Mocha. |
 | **Catppuccin** ([catppuccin](https://github.com/catppuccin/catppuccin)) | The Mocha palette in OnlySearch Mocha and the mod defaults. |
+| **Catppuccin** ([cursors](https://github.com/catppuccin/cursors)) | The cursor art in Chromium Cursors Mocha (GPL-2.0). |
 | **Open-Meteo** ([open-meteo.com](https://open-meteo.com/)) | The weather data in Taskbar Weather (CC BY 4.0). |
 | **Catalog mod authors** ([full list](mods/catalog/README.md)) | Every catalog mod in `mods/catalog/`, copied as installed. Each one is its author's work. |
 
