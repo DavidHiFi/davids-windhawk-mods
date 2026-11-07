@@ -6,7 +6,7 @@
   "counts": {
     "mods": 160,
     "enabled": 89,
-    "local": 23
+    "local": 24
   },
   "mods": [
     {
@@ -554,7 +554,7 @@
       "name": "Taskbar System Info Plus",
       "author": "DavidHiFi, Yevhenii Starychenko, m417z, Salyts",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.2.4",
+      "version": "1.4.17",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
@@ -838,15 +838,15 @@
       "enabled": true
     },
     {
-      "id": "taskbar-collapse-to-running",
-      "name": "Taskbar collapse to running apps",
-      "author": "Lars",
+      "id": "local@taskbar-collapse-to-running-plus",
+      "name": "Taskbar Collapse to Running Plus",
+      "author": "DavidHiFi, Lars",
       "github": "https://github.com/LarsGudm",
-      "version": "1.1.0",
+      "version": "1.1.5",
       "license": "MIT",
-      "origin": "catalog",
+      "origin": "local",
       "upstream": "https://windhawk.net/mods/taskbar-collapse-to-running",
-      "source": "mods/catalog/taskbar-collapse-to-running.wh.cpp",
+      "source": "mods/local/taskbar-collapse-to-running-plus/taskbar-collapse-to-running-plus.wh.cpp",
       "enabled": true
     },
     {

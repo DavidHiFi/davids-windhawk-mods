@@ -1,10 +1,11 @@
+#include <winrt/Windows.UI.Input.h>
 // ==WindhawkMod==
 // @id              taskbar-system-info-weather
 // @name            Taskbar System Info Plus
 // @name:uk-UA      Системний монітор панелі завдань
 // @description     CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar, with optional graphs
 // @description:uk-UA Компактний монітор CPU, GPU, RAM і VRAM із 60-секундними графіками для панелі завдань Windows 11.
-// @version         1.3.0
+// @version         1.4.17
 // @author          DavidHiFi, Yevhenii Starychenko, m417z, Salyts
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-system-info-weather
@@ -83,6 +84,9 @@ GPU □□□□□□□□□□  4% 56°C ↓ 8.4 MB/s   VRAM ■□□□□
 - **Light, dark and high-contrast** taskbars are followed automatically.
 - **Plays well with Taskbar Weather.** With it enabled, the panel sits right
   after the weather.
+- **Optional islands.** Rounded shapes behind the panel and behind the app
+  buttons. Taskbar Styler can restyle them as `Border#TaskbarIsland_SystemInfo`
+  and `Border#TaskbarIsland_Apps`.
 
 ## Temperatures
 
@@ -158,6 +162,14 @@ by Salyts. GPL-3.0.
   $name:uk-UA: Проміжок після блока
   $description: "Additional gap after the reserved widget area, from 0 to 100 pixels."
   $description:uk-UA: "Додатковий проміжок після зарезервованої області, від 0 до 100 пікселів."
+
+- islands: false
+  $name: Islands behind the widget and app buttons
+  $description: "Draws one rounded island behind this block and one behind the taskbar app buttons. Taskbar Styler can restyle both by name: Border#TaskbarIsland_SystemInfo and Border#TaskbarIsland_Apps."
+
+- islandPadding: 8
+  $name: Island padding
+  $description: "Space between an island's edge and its content, from 0 to 40 pixels."
 
 - updateInterval: 1
   $name: Update interval
@@ -415,9 +427,27 @@ by Salyts. GPL-3.0.
 #include <winrt/Windows.UI.Text.h>
 #include <winrt/Windows.UI.Xaml.Controls.h>
 #include <winrt/Windows.UI.Xaml.Documents.h>
+#include <winrt/Windows.UI.Xaml.Input.h>
 #include <winrt/Windows.UI.Xaml.Media.h>
 #include <winrt/Windows.UI.Xaml.Shapes.h>
 #include <winrt/Windows.UI.Xaml.h>
+#include <winrt/Windows.UI.Core.h>
+#include <cstdio>
+#include <cstdarg>
+static void DiagLogW(const wchar_t* fmt, ...) {
+    wchar_t buf[1024];
+    va_list a; va_start(a, fmt); _vsnwprintf(buf, 1023, fmt, a); va_end(a); buf[1023] = 0;
+    wchar_t path[MAX_PATH]; DWORD n = GetTempPathW(MAX_PATH, path);
+    if (!n || n > MAX_PATH - 32) return;
+    wcscat_s(path, L"sysinfo-diag.log");
+    FILE* f = _wfopen(path, L"a");
+    if (!f) return;
+    SYSTEMTIME st; GetLocalTime(&st);
+    fwprintf(f, L"%02d:%02d:%02d.%03d %u %ls\n", st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, GetCurrentProcessId(), buf);
+    fclose(f);
+}
+#undef Wh_Log
+#define Wh_Log(message, ...) DiagLogW(L"[%d:%S]: " message, __LINE__, __FUNCTION__, ##__VA_ARGS__)
 
 using namespace winrt;
 using namespace winrt::Windows::Foundation;
@@ -542,6 +572,8 @@ struct ModSettings {
     bool adaptiveColors = true;
     bool reserveSpace = false;
     int reserveGap = 8;
+    bool islands = false;
+    int islandPadding = 8;
     int updateInterval = 1;
     int historySeconds = 60;
     int fontSize = 11;
@@ -579,6 +611,21 @@ HANDLE g_placementRetryWakeEvent = nullptr;
 event_token g_rootSizeChangedToken{};
 [[clang::no_destroy]] Grid g_rootGrid{nullptr};
 [[clang::no_destroy]] FrameworkElement g_taskItemsRepeater{nullptr};
+[[clang::no_destroy]] Border g_infoIsland{nullptr};
+[[clang::no_destroy]] Border g_appsIsland{nullptr};
+event_token g_repeaterLayoutToken{};
+// Follows icon slide animations (Collapse to Running, Taskbar Dock Animation)
+// that move buttons by RenderTransform without a layout pass.
+event_token g_appsFollowRenderingToken{};
+event_token g_rootPointerMovedToken{};
+[[clang::no_destroy]] Border g_infoHover{nullptr};
+event_token g_rootPointerEnteredToken{};
+event_token g_rootPointerExitedToken{};
+[[clang::no_destroy]] FrameworkElement g_pointerRoot{nullptr};
+bool g_appsFollowHooked = false;
+ULONGLONG g_appsFollowUntil = 0;
+bool g_islandsOn = false;
+double g_islandPadding = 8.0;
 double g_reservedMargin = 0.0;
 std::optional<double> g_lastAppliedRepeaterMarginLeft;
 double g_graphWidth = 96.0;
@@ -629,6 +676,9 @@ double g_vramLayoutCapacityGb = 0;
 [[clang::no_destroy]] TextBlock g_downloadArrow{nullptr};
 [[clang::no_destroy]] TextBlock g_uploadUnit{nullptr};
 [[clang::no_destroy]] TextBlock g_downloadUnit{nullptr};
+// Stacked layout only: the °C unit sits in the network unit column so it lines up with KB/s.
+[[clang::no_destroy]] TextBlock g_cpuTempUnit{nullptr};
+[[clang::no_destroy]] TextBlock g_gpuTempUnit{nullptr};
 [[clang::no_destroy]] Grid g_uploadGrid{nullptr};
 [[clang::no_destroy]] Grid g_downloadGrid{nullptr};
 [[clang::no_destroy]] ColumnDefinition g_leftColumn{nullptr};
@@ -675,6 +725,7 @@ struct PowerCell {
 };
 [[clang::no_destroy]] PowerCell g_cpuPowerCell;
 [[clang::no_destroy]] XamlRectangle g_stackDivider{nullptr};
+[[clang::no_destroy]] XamlRectangle g_islandDivider{nullptr};
 [[clang::no_destroy]] PowerCell g_gpuPowerCell;
 // RAM and VRAM rows: watts, then capacity in the clock run (no clockUnit).
 [[clang::no_destroy]] PowerCell g_ramPowerCell;
@@ -868,6 +919,9 @@ void LoadSettings() {
     settings.adaptiveColors = Wh_GetIntSetting(L"adaptiveColors") != 0;
     settings.reserveSpace = Wh_GetIntSetting(L"reserveSpace") != 0;
     settings.reserveGap = std::clamp(Wh_GetIntSetting(L"reserveGap"), 0, 100);
+    settings.islands = Wh_GetIntSetting(L"islands") != 0;
+    settings.islandPadding =
+        std::clamp(Wh_GetIntSetting(L"islandPadding"), 0, 40);
     settings.updateInterval =
         std::clamp(Wh_GetIntSetting(L"updateInterval"), 1, 10);
     settings.historySeconds =
@@ -1431,7 +1485,8 @@ void ReadHwInfoPowerAndClocks(const uint8_t* bytes,
                 snapshot.cpuPower = value;
             }
             if (gpuRank > gpuPowerRank &&
-                (label == "GPU Power" || label == "Total Board Power (TBP)" ||
+                (label == "GPU Power" || label == "GPU Power (Total)" ||
+                 label == "Total Board Power (TBP)" ||
                  label == "GPU ASIC Power")) {
                 gpuPowerRank = gpuRank;
                 snapshot.gpuPower = value;
@@ -3469,6 +3524,10 @@ std::wstring FormatTemperature(const std::optional<double>& value) {
     return value ? FormatFixed(*value, 0) + L"°C" : L"--°C";
 }
 
+std::wstring FormatTemperatureValue(const std::optional<double>& value) {
+    return value ? FormatFixed(*value, 0) : L"--";
+}
+
 std::wstring FormatCapacity(double usedGb, double totalGb, bool available) {
     if (!available || !std::isfinite(usedGb) || !std::isfinite(totalGb) ||
         totalGb <= 0.0) {
@@ -3642,7 +3701,8 @@ void ApplyThemeOpacities(const ModSettings& settings) {
                             g_gpuTempText, g_ramPercentText,
                             g_ramCapacityText, g_vramPercentText,
                             g_vramCapacityText, g_uploadText, g_downloadText,
-                            g_uploadArrow, g_downloadArrow, g_uploadUnit, g_downloadUnit}) {
+                            g_uploadArrow, g_downloadArrow, g_uploadUnit, g_downloadUnit,
+                            g_cpuTempUnit, g_gpuTempUnit}) {
         if (value) {
             value.Opacity(opacities.value);
         }
@@ -4053,9 +4113,12 @@ void ApplyTextStyle(TextBlock text,
         return;
     }
     text.FontFamily(Media::FontFamily(settings.fontFamily));
-    text.FontSize(g_widgetStacked ? settings.stackedFontSize : settings.fontSize);
-    text.FontWeight(label            ? Text::FontWeights::SemiBold()
-                    : g_widgetStacked ? Text::FontWeights::Medium()
+    text.FontSize(g_widgetStacked ? 7.5 : settings.fontSize);
+    // Stacked text is 7.5 DIP and cannot grow inside the 34-DIP dock, so it
+    // gains weight instead (1.4.12): bold labels, semibold values.
+    text.FontWeight(label            ? (g_widgetStacked ? Text::FontWeights::Bold()
+                                                        : Text::FontWeights::SemiBold())
+                    : g_widgetStacked ? Text::FontWeights::SemiBold()
                                       : Text::FontWeights::Normal());
     if (g_widgetStacked) {
         text.LineStackingStrategy(LineStackingStrategy::BlockLineHeight);
@@ -4074,10 +4137,327 @@ void ApplyTextStyle(TextBlock text,
     SetTextForeground(text, AlertLevel::Normal, normal);
 }
 
+// Islands: rounded shapes behind this block and behind the app buttons.
+// The fill and radius here are fallbacks; Taskbar Styler restyles both by name.
+constexpr wchar_t kInfoIslandName[] = L"TaskbarIsland_SystemInfo";
+constexpr wchar_t kAppsIslandName[] = L"TaskbarIsland_Apps";
+constexpr double kIslandHeight = 34.0;
+// Four native rows fit inside the island with three DIPs of inset.
+constexpr double kIslandContentHeight = 28.0;
+
 double WidgetHeightForTaskbar(double availableHeight) {
+    double height = g_islandsOn ? std::min(g_widgetHeight, kIslandContentHeight)
+                                : g_widgetHeight;
     return std::isfinite(availableHeight) && availableHeight > 0.0
-               ? std::min(g_widgetHeight, availableHeight)
-               : g_widgetHeight;
+               ? std::min(height, availableHeight)
+               : height;
+}
+
+Border MakeIsland(PCWSTR name) {
+    Border island;
+    island.Name(name);
+    island.IsHitTestVisible(false);
+    island.HorizontalAlignment(HorizontalAlignment::Left);
+    island.VerticalAlignment(VerticalAlignment::Center);
+    island.Height(kIslandHeight);
+    island.CornerRadius(CornerRadius{10, 10, 10, 10});
+    Media::AcrylicBrush material;
+    material.BackgroundSource(Media::AcrylicBackgroundSource::HostBackdrop);
+    material.TintColor(MakeColor(0xFF, 0x1E, 0x1E, 0x2E));
+    material.TintOpacity(0.85);
+    material.FallbackColor(MakeColor(0xFA, 0x1E, 0x1E, 0x2E));
+    island.Background(material);
+    island.BorderBrush(SolidColorBrush(MakeColor(0xE6, 0x45, 0x47, 0x5A)));
+    island.BorderThickness({2, 2, 2, 2});
+    island.Visibility(Visibility::Collapsed);
+    return island;
+}
+
+void PlaceIsland(Border island, double left, double width) {
+    if (!island) return;
+    if (!g_islandsOn || !(width > 0.0)) {
+        if (island.Visibility() != Visibility::Collapsed)
+            island.Visibility(Visibility::Collapsed);
+        return;
+    }
+    left = std::max(0.0, left);
+    if (std::abs(island.Margin().Left - left) > 0.5)
+        island.Margin(Thickness{left, 0, 0, 0});
+    if (std::abs(island.Width() - width) > 0.5 || std::isnan(island.Width()))
+        island.Width(width);
+    if (island.Visibility() != Visibility::Visible)
+        island.Visibility(Visibility::Visible);
+}
+
+double DisplayedWidgetWidth() {
+    if (!g_widgetStacked || g_widgetHeight <= 0) return g_widgetWidth;
+    return std::ceil(g_widgetWidth * std::min(1.0, 26.0 / g_widgetHeight));
+}
+
+// Right edge other mods follow: the island edge when islands are on.
+double PublishedRightEdge(double left) {
+    return std::ceil(left + DisplayedWidgetWidth() + (g_islandsOn ? g_islandPadding : 0.0));
+}
+
+// The stacked block's divider is clipped by the 28-DIP widget, a pixel short
+// of the island border. With the island on, a copy inside the island's border
+// draws it border to border at the same x and the grid one goes invisible
+// (kept for its position).
+void PlaceIslandDivider(double hostLeft) {
+    if (!g_islandDivider) return;
+    bool show = g_islandsOn && g_widgetStacked && g_stackDivider && g_infoIsland &&
+                g_infoIsland.Visibility() == Visibility::Visible &&
+                g_stackDivider.ActualHeight() > 0;
+    try {
+        if (show) {
+            auto p = g_stackDivider.TransformToVisual(g_widgetHost).TransformPoint({0, 0});
+            double islandLeft = std::max(0.0, hostLeft - g_islandPadding);
+            double x = hostLeft + p.X - islandLeft - g_infoIsland.BorderThickness().Left;
+            if (std::abs(g_islandDivider.Margin().Left - x) > 0.25)
+                g_islandDivider.Margin(Thickness{x, 0, 0, 0});
+            g_islandDivider.Fill(g_stackDivider.Fill());
+        }
+        auto vis = show ? Visibility::Visible : Visibility::Collapsed;
+        if (g_islandDivider.Visibility() != vis) g_islandDivider.Visibility(vis);
+        if (g_stackDivider) g_stackDivider.Opacity(show ? 0.0 : 1.0);
+    } catch (...) {}
+}
+
+void UpdateInfoIsland() {
+    if (!g_widgetHost) return;
+    // A 2 px top margin moves the centered block down 1 px; its ink sits high.
+    auto margin = g_widgetHost.Margin();
+    double top = g_islandsOn ? 2.0 : 0.0;
+    if (margin.Top != top) {
+        margin.Top = top;
+        g_widgetHost.Margin(margin);
+    }
+    PlaceIsland(g_infoIsland, margin.Left - g_islandPadding,
+                DisplayedWidgetWidth() + 2.0 * g_islandPadding);
+    PlaceIslandDivider(margin.Left);
+}
+
+// Spans the visible buttons in the task list, padded on both sides. Returns true
+// when the island moved or resized.
+// apply=false only reports whether the island would move. LayoutUpdated fires
+// inside other mods' dry-run layout passes (a collapse plan flips buttons and
+// puts them back in one dispatcher pass), and an island placed there reaches
+// the screen for a frame with the half-built row. Rendering does the placing.
+// Sum of TranslateTransform X on an element; false when another transform
+// kind is present and only TransformToVisual can say where it is.
+// Horizontal shift of one transform that only translates (any identity part
+// is fine); false when it scales, rotates or skews.
+bool PureShiftX(Media::Transform const& transform, double* x) {
+    auto same = [](double a, double b) { return std::abs(a - b) < 1e-6; };
+    if (auto t = transform.try_as<Media::TranslateTransform>()) {
+        *x += t.X();
+        return true;
+    }
+    if (auto m = transform.try_as<Media::MatrixTransform>()) {
+        auto v = m.Matrix();
+        if (!same(v.M11, 1) || !same(v.M12, 0) || !same(v.M21, 0) || !same(v.M22, 1))
+            return false;
+        *x += v.OffsetX;
+        return true;
+    }
+    if (auto c = transform.try_as<Media::CompositeTransform>()) {
+        if (!same(c.ScaleX(), 1) || !same(c.ScaleY(), 1) || !same(c.Rotation(), 0) ||
+            !same(c.SkewX(), 0) || !same(c.SkewY(), 0))
+            return false;
+        *x += c.TranslateX();
+        return true;
+    }
+    if (auto sc = transform.try_as<Media::ScaleTransform>()) {
+        return same(sc.ScaleX(), 1) && same(sc.ScaleY(), 1);
+    }
+    if (auto r = transform.try_as<Media::RotateTransform>()) {
+        return same(r.Angle(), 0);
+    }
+    if (auto group = transform.try_as<Media::TransformGroup>()) {
+        for (auto const& child : group.Children()) {
+            if (!child || !PureShiftX(child, x)) return false;
+        }
+        return true;
+    }
+    return false;
+}
+
+bool SlideXOf(UIElement const& element, double* x) {
+    *x = 0;
+    auto transform = element.RenderTransform();
+    if (!transform) return true;
+    return PureShiftX(transform, x);
+}
+
+void FollowAppsIsland(ULONGLONG ms);
+
+// A jump out of rest larger than any slide step is a measurement taken while
+// the row is mid-change (layout moved but slide not seated, or the reverse).
+// Recordings showed exactly one such frame at the start of a reveal and at the
+// end of a collapse. Hold it once; the next frame's measurement always wins.
+bool HoldAppsJump(double left, double width) {
+    static ULONGLONG s_lastMoveMs = 0;
+    static bool s_held = false;
+    ULONGLONG now = GetTickCount64();
+    double oldLeft = g_appsIsland.Margin().Left;
+    double oldWidth = g_appsIsland.Width();
+    if (g_appsIsland.Visibility() != Visibility::Visible || std::isnan(oldWidth) ||
+        !(width > 0.0)) {
+        s_held = false;
+        return false;
+    }
+    left = std::max(0.0, left);
+    double step = std::max(std::abs(left - oldLeft),
+                           std::abs(left + width - oldLeft - oldWidth));
+    if (step <= 0.5) return false;
+    bool fromRest = now - s_lastMoveMs > 40;
+    if (!s_held && fromRest && step > 8.0) {
+        s_held = true;
+        return true;
+    }
+    s_held = false;
+    s_lastMoveMs = now;
+    return false;
+}
+
+bool UpdateAppsIsland(bool apply = true) {
+    if (!g_appsIsland) return false;
+    double oldLeft = g_appsIsland.Margin().Left;
+    double oldWidth = g_appsIsland.Width();
+    bool oldVisible = g_appsIsland.Visibility() == Visibility::Visible;
+    bool buttonsChanged = false;
+    auto moved = [&]() {
+        if (buttonsChanged) return true;
+        bool visible = g_appsIsland.Visibility() == Visibility::Visible;
+        if (visible != oldVisible) return true;
+        if (!visible) return false;
+        return std::abs(g_appsIsland.Margin().Left - oldLeft) > 0.5 ||
+               std::isnan(oldWidth) || std::abs(g_appsIsland.Width() - oldWidth) > 0.5;
+    };
+    auto place = [&](double left, double width) {
+        if (apply) {
+            if (g_islandsOn && HoldAppsJump(left, width)) {
+                FollowAppsIsland(100);
+                return true;
+            }
+            PlaceIsland(g_appsIsland, left, width);
+            return moved();
+        }
+        if (buttonsChanged) return true;
+        bool visible = g_islandsOn && width > 0.0;
+        if (visible != oldVisible) return true;
+        if (!visible) return false;
+        return std::abs(std::max(0.0, left) - oldLeft) > 0.5 ||
+               std::isnan(oldWidth) || std::abs(width - oldWidth) > 0.5;
+    };
+    if (!g_islandsOn || !g_taskItemsRepeater || !g_rootGrid) {
+        return place(0, 0);
+    }
+    double rootWidth = g_rootGrid.ActualWidth();
+    double minX = std::numeric_limits<double>::infinity();
+    double maxX = -minX;
+    int count = VisualTreeHelper::GetChildrenCount(g_taskItemsRepeater);
+    int visibleButtons = 0;
+    double repeaterX = g_taskItemsRepeater.TransformToVisual(g_rootGrid)
+                           .TransformPoint(Point{0, 0}).X;
+    for (int i = 0; i < count; i++) {
+        auto child = VisualTreeHelper::GetChild(g_taskItemsRepeater, i)
+                         .try_as<FrameworkElement>();
+        if (child && child.Visibility() == Visibility::Visible) visibleButtons++;
+        if (!child || child.Visibility() != Visibility::Visible ||
+            child.Opacity() < 0.01) {
+            continue;
+        }
+        double width = child.ActualWidth();
+        if (width < 2.0) continue;
+        // Layout offset plus slide, read directly: TransformToVisual lags a
+        // freshly seated slide by a frame.
+        Point origin{};
+        double slide = 0;
+        if (SlideXOf(child, &slide)) {
+            origin.X = static_cast<float>(repeaterX + child.ActualOffset().x + slide);
+        } else {
+            origin = child.TransformToVisual(g_rootGrid).TransformPoint(Point{0, 0});
+        }
+        // ItemsRepeater parks recycled buttons far off screen.
+        if (origin.X < -1.0 || origin.X + width > rootWidth + 1.0) continue;
+        minX = std::min(minX, static_cast<double>(origin.X));
+        maxX = std::max(maxX, origin.X + width);
+    }
+    // A shown or hidden button usually starts a slide before any position moves.
+    static int s_lastVisibleButtons = -1;
+    buttonsChanged = visibleButtons != s_lastVisibleButtons;
+    if (apply) s_lastVisibleButtons = visibleButtons;
+    if (!(maxX > minX)) {
+        return place(0, 0);
+    }
+    return place(std::floor(minX - g_islandPadding),
+                 std::ceil(maxX - minX + 2.0 * g_islandPadding));
+}
+
+void StopAppsIslandFollow() {
+    if (!g_appsFollowHooked) return;
+    g_appsFollowHooked = false;
+    try {
+        Media::CompositionTarget::Rendering(g_appsFollowRenderingToken);
+    } catch (...) {
+    }
+    g_appsFollowRenderingToken = {};
+}
+
+// Re-measures the apps island every frame for a short window. Each frame that
+// moves the island extends the window, so it tracks a slide of any length and
+// stops on its own once the buttons settle. Idle cost is zero.
+// Pending re-subscribe; cancelled on unload so it never runs into a freed DLL.
+winrt::Windows::Foundation::IAsyncAction g_followResubscribe{nullptr};
+
+void HookAppsFollow() {
+    g_appsFollowRenderingToken = Media::CompositionTarget::Rendering(
+        [](auto const&, auto const&) {
+            if (g_unloading || !g_appsIsland) {
+                StopAppsIslandFollow();
+                return;
+            }
+            bool changed = false;
+            try {
+                changed = UpdateAppsIsland();
+            } catch (...) {
+            }
+            ULONGLONG now = GetTickCount64();
+            if (changed) g_appsFollowUntil = std::max(g_appsFollowUntil, now + 250);
+            if (now > g_appsFollowUntil) StopAppsIslandFollow();
+        });
+    g_appsFollowHooked = true;
+}
+
+void FollowAppsIsland(ULONGLONG ms) {
+    if (!g_appsIsland || g_unloading) return;
+    g_appsFollowUntil = std::max(g_appsFollowUntil, GetTickCount64() + ms);
+    if (g_appsFollowHooked) return;
+    HookAppsFollow();
+}
+
+// Moves the follow hook behind any Rendering handler added in the current
+// dispatcher pass (a slide's tick), so the island measures this frame's slide.
+void FollowAppsIslandLast(ULONGLONG ms) {
+    FollowAppsIsland(ms);
+    if (g_followResubscribe || !g_taskItemsRepeater) return;
+    try {
+        g_followResubscribe = g_taskItemsRepeater.Dispatcher().RunAsync(
+            winrt::Windows::UI::Core::CoreDispatcherPriority::Normal, []() {
+                g_followResubscribe = nullptr;
+                if (g_unloading || !g_appsFollowHooked) return;
+                try {
+                    Media::CompositionTarget::Rendering(g_appsFollowRenderingToken);
+                } catch (...) {
+                }
+                g_appsFollowRenderingToken = {};
+                g_appsFollowHooked = false;
+                HookAppsFollow();
+            });
+    } catch (...) {
+        g_followResubscribe = nullptr;
+    }
 }
 
 // Local layout integration with Independent Taskbar Weather, DavidHiFi.
@@ -4092,8 +4472,8 @@ double WeatherAwareLeftOffset(const ModSettings& settings) {
 }
 
 double StackedRowHeight(int fontSize) {
-    // 36px total, centered in the taskbar pill's 38px inner band (y 6..43).
-    return std::min(std::ceil(fontSize * 1.2), 9.0);
+    // Four 7-DIP rows leave clear space inside the 34-DIP island.
+    return 7.0;
 }
 
 // Four rows: label, meter, percent, capacity | temperature and network labels,
@@ -4104,7 +4484,7 @@ void ApplyStackedGeometry(const ModSettings& settings) {
         TextBlock probe;
         probe.FontFamily(Media::FontFamily(settings.fontFamily));
         probe.FontSize(settings.stackedFontSize);
-        probe.FontWeight(label ? Text::FontWeights::SemiBold() : Text::FontWeights::Normal());
+        probe.FontWeight(label ? Text::FontWeights::Bold() : Text::FontWeights::SemiBold());
         probe.Text(value);
         probe.Measure(Size{10000, 100});
         return std::ceil(static_cast<double>(probe.DesiredSize().Width));
@@ -4139,9 +4519,9 @@ void ApplyStackedGeometry(const ModSettings& settings) {
                       fullCapacityWidth(g_vramLayoutCapacityGb), measure(L"9.9GHz")}),
         std::max(gap, 14.0),
         std::max(measure((std::wstring(kTempIconPrefix) + L"CPU TEMP").c_str(), true),
-                 settings.showNetwork ? measure(L"\u2193 DOWN", true) : 0.0) + small,
-        std::max(measure(L"115°C"), settings.showNetwork ? measure(L"999.9") : 0.0),
-        settings.showNetwork ? small + unitWidth : 0,
+                 settings.showNetwork ? measure(L"\u2193 NET DOWN", true) : 0.0) + small,
+        std::max(measure(L"115"), settings.showNetwork ? measure(L"999.9") : 0.0),
+        small + std::max(measure(L"°C"), settings.showNetwork ? unitWidth : 0.0),
     };
     double width = 0;
     auto columns = g_stackedGrid.ColumnDefinitions();
@@ -4188,10 +4568,12 @@ void ApplyStackedGeometry(const ModSettings& settings) {
     g_widget.Width(g_widgetWidth);
     g_widget.Height(g_widgetHeight);
     if (g_widgetHost) {
-        g_widgetHost.Width(g_widgetWidth);
+        g_widgetHost.Width(DisplayedWidgetWidth());
         g_widgetHost.Height(WidgetHeightForTaskbar(
             g_rootGrid ? g_rootGrid.ActualHeight() : 0.0));
         g_widgetHost.Margin(Thickness{WeatherAwareLeftOffset(settings), 0, 0, 0});
+        try { g_widgetHost.UpdateLayout(); } catch (...) {}  // divider x for the island copy
+        UpdateInfoIsland();
     }
 }
 
@@ -4301,6 +4683,7 @@ void ApplyWidgetGeometry(const ModSettings& settings) {
             g_rootGrid ? g_rootGrid.ActualHeight() : 0.0));
         g_widgetHost.Margin(
             Thickness{WeatherAwareLeftOffset(settings), 0, 0, 0});
+        UpdateInfoIsland();
     }
     if (g_leftColumn) {
         g_leftColumn.Width(GridLength{leftWidth, GridUnitType::Pixel});
@@ -4355,6 +4738,8 @@ void ApplyWidgetSettings() {
     }
     auto settingsSnapshot = CurrentSettings();
     const ModSettings& settings = *settingsSnapshot;
+    g_islandsOn = settings.islands;
+    g_islandPadding = settings.islandPadding;
     g_stackedRowHeight = StackedRowHeight(settings.stackedFontSize);
     RefreshThemeBrushes(settings);
     if (g_historyInterval != settings.updateInterval ||
@@ -4383,7 +4768,7 @@ void ApplyWidgetSettings() {
         {{g_ramCapacityText, g_vramCapacityText}, g_capacityBrush},
         {{g_uploadText, g_uploadArrow}, g_uploadBrush},
         {{g_downloadText, g_downloadArrow}, g_downloadBrush},
-        {{g_uploadUnit, g_downloadUnit}, g_unitBrush},
+        {{g_uploadUnit, g_downloadUnit, g_cpuTempUnit, g_gpuTempUnit}, g_unitBrush},
     };
     for (const auto& [texts, brush] : roles) {
         for (TextBlock value : texts) {
@@ -4416,6 +4801,8 @@ void ApplyWidgetSettings() {
     UpdateSparkline(g_ramGraph, g_ramHistory, settings, settings.showMemoryGraphs);
     UpdateSparkline(g_vramGraph, g_vramHistory, settings, settings.showMemoryGraphs);
     ApplyReservedSpace(settings);
+    UpdateInfoIsland();
+    UpdateAppsIsland();
 
     UpdateTimerInterval();
 }
@@ -4428,11 +4815,12 @@ void UpdateWidgetText(bool force = false) {
         auto layoutSettings = CurrentSettings();
         double desiredLeft = WeatherAwareLeftOffset(*layoutSettings);
         HWND taskbar = g_taskbarWindow.load();
-        if (taskbar) SetPropW(taskbar, L"WindhawkTaskbarSystemInfoRightDip", reinterpret_cast<HANDLE>(static_cast<INT_PTR>(std::ceil(desiredLeft + g_widgetWidth))));
+        if (taskbar) SetPropW(taskbar, L"WindhawkTaskbarSystemInfoRightDip", reinterpret_cast<HANDLE>(static_cast<INT_PTR>(PublishedRightEdge(desiredLeft))));
         auto margin = g_widgetHost.Margin();
         if (std::abs(margin.Left - desiredLeft) > 0.01) {
             margin.Left = desiredLeft;
             g_widgetHost.Margin(margin);
+            UpdateInfoIsland();
             ApplyReservedSpace(*layoutSettings);
         }
     }
@@ -4480,7 +4868,7 @@ void UpdateWidgetText(bool force = false) {
     SetTextForeground(g_cpuUsageText, AlertLevel::Normal,
                       UsageBrush(snapshot.cpu, snapshot.cpuAvailable));
     if (g_cpuTempText) {
-        SetTextIfChanged(g_cpuTempText, FormatTemperature(snapshot.cpuTemp));
+        SetTextIfChanged(g_cpuTempText, g_cpuTempUnit ? FormatTemperatureValue(snapshot.cpuTemp) : FormatTemperature(snapshot.cpuTemp));
         SolidColorBrush tempBrush = TemperatureBrush(
             snapshot.cpuTemp, settings.cpuWarningTemp, g_cpuTemperatureAlert);
         SetTextForeground(g_cpuTempText, AlertLevel::Normal, tempBrush);
@@ -4496,7 +4884,7 @@ void UpdateWidgetText(bool force = false) {
     SetTextForeground(g_gpuUsageText, AlertLevel::Normal,
                       UsageBrush(snapshot.gpu, snapshot.gpuAvailable));
     if (g_gpuTempText) {
-        SetTextIfChanged(g_gpuTempText, FormatTemperature(snapshot.gpuTemp));
+        SetTextIfChanged(g_gpuTempText, g_gpuTempUnit ? FormatTemperatureValue(snapshot.gpuTemp) : FormatTemperature(snapshot.gpuTemp));
         SolidColorBrush tempBrush = TemperatureBrush(
             snapshot.gpuTemp, settings.gpuWarningTemp, g_gpuTemperatureAlert);
         SetTextForeground(g_gpuTempText, AlertLevel::Normal, tempBrush);
@@ -4552,7 +4940,7 @@ void UpdateWidgetText(bool force = false) {
     ApplyWidgetGeometry(settings);
     ApplyReservedSpace(settings);
     if (HWND taskbar = g_taskbarWindow.load()) {
-        SetPropW(taskbar, L"WindhawkTaskbarSystemInfoRightDip", reinterpret_cast<HANDLE>(static_cast<INT_PTR>(std::ceil(WeatherAwareLeftOffset(settings) + g_widgetWidth))));
+        SetPropW(taskbar, L"WindhawkTaskbarSystemInfoRightDip", reinterpret_cast<HANDLE>(static_cast<INT_PTR>(PublishedRightEdge(WeatherAwareLeftOffset(settings)))));
     }
 
     if (hasNewSample) {
@@ -4984,13 +5372,48 @@ bool RemoveWidget() {
     g_reservedMargin = 0.0;
     g_lastAppliedRepeaterMarginLeft.reset();
 
-    if (g_rootGrid && g_widgetHost) {
-        uint32_t index = 0;
-        if (g_rootGrid.Children().IndexOf(g_widgetHost, index)) {
-            g_rootGrid.Children().RemoveAt(index);
+    if (g_taskItemsRepeater && g_repeaterLayoutToken.value) {
+        try {
+            g_taskItemsRepeater.LayoutUpdated(g_repeaterLayoutToken);
+        } catch (...) {
+            Wh_Log(L"Removing repeater layout handler failed: %08X",
+                   static_cast<unsigned>(winrt::to_hresult()));
+        }
+    }
+    g_repeaterLayoutToken = {};
+    StopAppsIslandFollow();
+    if (g_rootGrid && g_rootPointerMovedToken.value) {
+        try { g_rootGrid.PointerMoved(g_rootPointerMovedToken); } catch (...) {}
+    }
+    g_rootPointerMovedToken = {};
+    g_infoHover = nullptr;
+    if (g_pointerRoot) {
+        try {
+            if (g_rootPointerEnteredToken.value)
+                g_pointerRoot.PointerEntered(g_rootPointerEnteredToken);
+            if (g_rootPointerExitedToken.value)
+                g_pointerRoot.PointerExited(g_rootPointerExitedToken);
+        } catch (...) {
+        }
+    }
+    g_rootPointerEnteredToken = {};
+    g_rootPointerExitedToken = {};
+    g_pointerRoot = nullptr;
+
+    if (g_rootGrid) {
+        for (UIElement element : {g_widgetHost.try_as<UIElement>(),
+                                  g_infoIsland.try_as<UIElement>(),
+                                  g_appsIsland.try_as<UIElement>()}) {
+            uint32_t index = 0;
+            if (element && g_rootGrid.Children().IndexOf(element, index)) {
+                g_rootGrid.Children().RemoveAt(index);
+            }
         }
     }
 
+    g_infoIsland = nullptr;
+    g_islandDivider = nullptr;
+    g_appsIsland = nullptr;
     g_widget = nullptr;
     g_widgetHost = nullptr;
     g_rootGrid = nullptr;
@@ -5025,6 +5448,8 @@ bool RemoveWidget() {
     g_downloadArrow = nullptr;
     g_uploadUnit = nullptr;
     g_downloadUnit = nullptr;
+    g_cpuTempUnit = nullptr;
+    g_gpuTempUnit = nullptr;
     g_uploadGrid = nullptr;
     g_downloadGrid = nullptr;
     g_leftColumn = nullptr;
@@ -5164,12 +5589,17 @@ void BuildStackedWidget(Grid widget) {
     Grid::SetRowSpan(divider, 4);
     place(divider, 0, 4);
     g_stackDivider = divider;
+    // Its first real position lets the island copy take its place.
+    divider.SizeChanged([](auto const&, auto const&) {
+        if (!g_unloading) UpdateInfoIsland();
+    });
     g_cpuPowerCell = powerCell(L"CpuPower", 0);
     g_gpuPowerCell = powerCell(L"GpuPower", 1);
     auto tempLabel = [](TextBlock label, PCWSTR name) {
         label.Text(L"");
         Documents::Run iconRun;
         iconRun.Text(kTempIconPrefix);
+        iconRun.FontSize(6.5);
         Documents::Run nameRun;
         nameRun.Text(name);
         label.Inlines().Append(iconRun);
@@ -5192,10 +5622,12 @@ void BuildStackedWidget(Grid widget) {
         label.Inlines().Append(nameRun);
         return arrowRun;
     };
-    g_uploadArrowRun = arrowLabel(g_uploadLabel, L"\u2191 ", L"UP");
-    g_downloadArrowRun = arrowLabel(g_downloadLabel, L"\u2193 ", L"DOWN");
-    g_cpuTempText = text(L"CpuTemperature", L"--°C", TextAlignment::Right, 0, 6);
-    g_gpuTempText = text(L"GpuTemperature", L"--°C", TextAlignment::Right, 1, 6);
+    g_uploadArrowRun = arrowLabel(g_uploadLabel, L"\u2191 ", L"NET UP");
+    g_downloadArrowRun = arrowLabel(g_downloadLabel, L"\u2193 ", L"NET DOWN");
+    g_cpuTempText = text(L"CpuTemperature", L"--", TextAlignment::Right, 0, 6);
+    g_gpuTempText = text(L"GpuTemperature", L"--", TextAlignment::Right, 1, 6);
+    g_cpuTempUnit = text(L"CpuTemperatureUnit", L"°C", TextAlignment::Right, 0, 7);
+    g_gpuTempUnit = text(L"GpuTemperatureUnit", L"°C", TextAlignment::Right, 1, 7);
     g_uploadText = text(L"UploadValue", L"--", TextAlignment::Right, 2, 6);
     g_downloadText = text(L"DownloadValue", L"--", TextAlignment::Right, 3, 6);
     g_uploadUnit = text(L"UploadUnit", L"B/s", TextAlignment::Right, 2, 7);
@@ -5216,6 +5648,14 @@ bool InjectWidget(FrameworkElement taskbarFrame) {
     auto children = root.Children();
     for (uint32_t index = 0; index < children.Size();) {
         auto element = children.GetAt(index).try_as<FrameworkElement>();
+        if (element &&
+            (element.Name() == kInfoIslandName ||
+             element.Name() == kAppsIslandName) &&
+            element != g_infoIsland && element != g_appsIsland) {
+            Wh_Log(L"Removing stale taskbar island");
+            children.RemoveAt(index);
+            continue;
+        }
         if (!element || element.Name() != kWidgetName) {
             index++;
             continue;
@@ -5360,6 +5800,90 @@ bool InjectWidget(FrameworkElement taskbarFrame) {
         FindDirectChildByName(root, L"TaskbarFrameRepeater");
     g_reservedMargin = 0.0;
     g_lastAppliedRepeaterMarginLeft.reset();
+
+    // Info island sits right under the block; the apps island goes in just
+    // before the task list so the buttons draw on top of it.
+    g_infoIsland = MakeIsland(kInfoIslandName);
+    Border hover;
+    hover.Name(L"TaskbarIsland_SystemInfoHover");
+    hover.CornerRadius({8, 8, 8, 8});
+    hover.Background(SolidColorBrush(MakeColor(0xBF, 0x18, 0x18, 0x25)));
+    hover.BorderBrush(SolidColorBrush(MakeColor(0xFF, 0x89, 0xB4, 0xFA)));
+    hover.BorderThickness({1, 1, 1, 1});
+    hover.IsHitTestVisible(false);
+    hover.Opacity(0);
+    try { hover.OpacityTransition(ScalarTransition()); } catch (...) {}
+    Grid islandContent;
+    islandContent.IsHitTestVisible(false);
+    islandContent.Children().Append(hover);
+    XamlRectangle islandDivider;
+    islandDivider.Width(1);
+    islandDivider.HorizontalAlignment(HorizontalAlignment::Left);
+    islandDivider.VerticalAlignment(VerticalAlignment::Stretch);
+    islandDivider.IsHitTestVisible(false);
+    islandDivider.Visibility(Visibility::Collapsed);
+    islandContent.Children().Append(islandDivider);
+    g_islandDivider = islandDivider;
+    g_infoIsland.Child(islandContent);
+    g_infoHover = hover;
+    g_rootPointerMovedToken = root.PointerMoved([](auto const& sender, auto const& args) {
+        if (g_unloading || !g_infoIsland || !g_infoHover) return;
+        try {
+            auto p = args.GetCurrentPoint(sender.template as<UIElement>()).Position();
+            auto origin = g_infoIsland.TransformToVisual(sender.template as<UIElement>())
+                              .TransformPoint({0, 0});
+            bool inside = p.X >= origin.X && p.X < origin.X + g_infoIsland.ActualWidth() &&
+                          p.Y >= origin.Y && p.Y < origin.Y + g_infoIsland.ActualHeight();
+            double opacity = inside ? 1.0 : 0.0;
+            if (g_infoHover.Opacity() != opacity) g_infoHover.Opacity(opacity);
+        } catch (...) {}
+    });
+    Canvas::SetZIndex(g_infoIsland, 9999);
+    Grid::SetColumnSpan(g_infoIsland,
+                        std::max(1, static_cast<int>(root.ColumnDefinitions().Size())));
+    uint32_t hostIndex = 0;
+    if (root.Children().IndexOf(host, hostIndex)) {
+        root.Children().InsertAt(hostIndex, g_infoIsland);
+    } else {
+        root.Children().Append(g_infoIsland);
+    }
+    if (g_taskItemsRepeater) {
+        g_appsIsland = MakeIsland(kAppsIslandName);
+        Grid::SetColumnSpan(g_appsIsland,
+                            std::max(1, static_cast<int>(root.ColumnDefinitions().Size())));
+        uint32_t repeaterIndex = 0;
+        if (root.Children().IndexOf(g_taskItemsRepeater, repeaterIndex)) {
+            root.Children().InsertAt(repeaterIndex, g_appsIsland);
+        } else {
+            g_appsIsland = nullptr;
+        }
+    }
+    if (g_appsIsland) {
+        g_repeaterLayoutToken = g_taskItemsRepeater.LayoutUpdated(
+            [](auto const&, auto const&) {
+                if (g_unloading) return;
+                try {
+                    // A layout pass that changes the buttons often starts a
+                    // slide that then runs on RenderTransform alone; keep
+                    // measuring until it settles. Unrelated layout passes (the
+                    // stats text every second) change nothing and cost one scan.
+                    if (UpdateAppsIsland(false)) FollowAppsIslandLast(600);
+                } catch (...) {
+                }
+            });
+        // Hover reveal and collapse start from the pointer entering or leaving
+        // the bar; cover the grace delay plus the slide.
+        g_pointerRoot = root;
+        g_rootPointerEnteredToken = root.PointerEntered([](auto const&, auto const&) {
+            try { FollowAppsIsland(1500); } catch (...) {}
+        });
+        g_rootPointerExitedToken = root.PointerExited([](auto const&, auto const&) {
+            try {
+                FollowAppsIsland(1500);
+                if (g_infoHover) g_infoHover.Opacity(0);
+            } catch (...) {}
+        });
+    }
 
     ApplyWidgetSettings();
     if (!StartMetricsWorker()) {
@@ -6681,6 +7205,9 @@ void Wh_ModBeforeUninit() {
     if (HWND taskbar = g_taskbarWindow.load()) RemovePropW(taskbar, L"WindhawkTaskbarSystemInfoRightDip");
     Wh_Log(L">");
     g_unloading = true;
+    if (auto pending = g_followResubscribe) {
+        try { pending.Cancel(); } catch (...) {}
+    }
     StopPlacementRetryWorker();
     StopMetricsWorker();
 
