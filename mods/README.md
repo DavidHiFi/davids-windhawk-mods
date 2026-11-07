@@ -10,7 +10,7 @@
 
 | Mod | What it does | Version | License |
 | --- | --- | --- | --- |
-| [Windhawk Styler](local/windhawk-styler) | Colors, fonts, frosted dialogs and a matching title bar for Windhawk 2.0. | 2.0.52 | MIT |
+| [Windhawk Enhanced Styler](local/windhawk-enhanced-styler) | Colors, gradients, fonts, frosted dialogs and a matching title bar for Windhawk 2.0. | 2.1.0 | MIT |
 | [Seamless Dictate](local/seamless-dictate) | Hold Ctrl+Win and speak to type in any app, with AI cleanup and mic privacy. | 1.0.0 | MIT |
 | [Seamless Autoscroll](local/seamless-autoscroll) | Hold the middle mouse button and move to scroll, with a frosted glass indicator. | 1.0.0 |  |
 | [Window Borders](local/window-borders) | Smooth, rounded borders on every window, with an accent-to-mauve gradient on the active one. | 1.0.0 | GPL-3.0 |

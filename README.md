@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="media/previews/windhawk-styler.png" alt="Windhawk's Installed mods page themed by Windhawk Styler, listing the mods from this repo" width="560">
+<img src="media/previews/windhawk-enhanced-styler.png" alt="Windhawk's Installed mods page themed by Windhawk Enhanced Styler, listing the mods from this repo" width="560">
 
 # David's Windhawk mods
 
@@ -35,7 +35,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 
 ### The whole setup
 
-1. Install [Windhawk](https://windhawk.net). Windhawk Styler needs the 2.0 interface; its [legacy edition](mods/local/windhawk-styler/legacy) covers the older one.
+1. Install [Windhawk](https://windhawk.net). Windhawk Enhanced Styler needs the 2.0 interface; its [legacy edition](mods/local/windhawk-enhanced-styler/legacy) covers the older one.
 2. Install the catalog mods listed in [mods/catalog/README.md](mods/catalog/README.md) from Windhawk's Explore tab, and my mods from their folders.
 3. From an elevated PowerShell in the repo root, preview and then apply the settings:
 
@@ -91,7 +91,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 | | Mod | What it does |
 | --- | --- | --- |
 | <img src="media/previews/seamless-dictate.png" width="220" alt="Seamless Dictate settings in Catppuccin Mocha"> | [Seamless Dictate](mods/local/seamless-dictate) | Hold Ctrl+Win and speak to type in any app, with AI cleanup and mic privacy while you talk. |
-| <img src="media/previews/windhawk-styler.png" width="220" alt="Themed Windhawk window"> | [Windhawk Styler](mods/local/windhawk-styler) | Your own colors, font, transparency and blur for the Windhawk window. |
+| <img src="media/previews/windhawk-enhanced-styler.png" width="220" alt="Themed Windhawk window"> | [Windhawk Enhanced Styler](mods/local/windhawk-enhanced-styler) | Your own colors, gradients, font, transparency and blur for the Windhawk window. |
 | <img src="media/previews/npp-taskdlg-textcolor.png" width="220" alt="Notepad++ dark dialog"> | [Notepad++ Dark Dialog Fix](mods/local/npp-taskdlg-textcolor) | Readable text in Notepad++ Save and confirm dialogs in dark mode. |
 
 ### Themes
@@ -212,7 +212,7 @@ Most of my mods build on someone else's mod. Each folder's readme credits its so
 | **rounk-ctrl** ([UXTheme hook](https://windhawk.net/mods/uxtheme-hook)) | The base of Theme Tool Plus. |
 | **namazso** ([SecureUxTheme](https://github.com/namazso/SecureUxTheme), [ThemeToolSharp](https://github.com/namazso/ThemeToolSharp)) | The theme engine research in Theme Tool Plus. |
 | **ALTaleX531** ([TranslucentFlyouts](https://github.com/ALTaleX531/TranslucentFlyouts)) | Translucent Flyouts is a port of it and uses its settings layout. |
-| **Ingan121** ([Titlebar For Everyone](https://windhawk.net/mods/titlebar-for-everyone)) | The window frame code in Windhawk Styler (MIT). |
+| **Ingan121** ([Titlebar For Everyone](https://windhawk.net/mods/titlebar-for-everyone)) | The window frame code in Windhawk Enhanced Styler (MIT). |
 | **Ramen Software** ([Start menu styling guide](https://github.com/ramensoftware/windows-11-start-menu-styling-guide)) | The OnlySearch and RosePine themes merged into OnlySearch Mocha. |
 | **Catppuccin** ([catppuccin](https://github.com/catppuccin/catppuccin)) | The Mocha palette in OnlySearch Mocha and the mod defaults. |
 | **Open-Meteo** ([open-meteo.com](https://open-meteo.com/)) | The weather data in Taskbar Weather (CC BY 4.0). |

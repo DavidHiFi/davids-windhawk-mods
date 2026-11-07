@@ -1,8 +1,8 @@
 // ==WindhawkMod==
-// @id              windhawk-styler
-// @name            Windhawk Styler
-// @description     Theme Windhawk itself with your own colors, font, transparency and blur
-// @version         2.0.104
+// @id              windhawk-enhanced-styler
+// @name            Windhawk Enhanced Styler
+// @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
+// @version         2.1.0
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -16,17 +16,19 @@
 
 // ==WindhawkModReadme==
 /*
-# Windhawk Styler
+# Windhawk Enhanced Styler
 
-Choose Windhawk's colors, font, transparency and background blur.
+Choose Windhawk's colors, gradients, font, transparency and background blur.
 
-![Windhawk Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-styler.png)
+![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
 
 ## Features
 
 - **Background.** Pick a color and opacity, with Acrylic or no background effect.
 - **Cards and dialogs.** Set their color and opacity. Cards, tables, Advanced settings, dialogs and pop-up menus use that surface; pop-ups that float over the page take a solid card surface so text under them stays hidden. Every box has one outline, the same color all the way around its corners.
 - **Controls.** Choose colors for buttons and inputs, plus a global accent for selections, hovers, badges, spinners, links and modified settings. Number spinners sit in a rounded pill. The save bar floats while the settings scroll, and mode and version switches join into single pills.
+- **Header gradient.** The Windhawk logo, its name and section titles such as Installed mods take a two-color gradient, blue to mauve by default. An optional Enhanced badge sits beside the name.
+- **Selected text.** Highlighted text uses the accent color, or a color of its own, instead of the stock blue.
 - **Corners.** Round cards, tables, dialogs, pop-up menus, buttons and inputs with an adjustable radius, or keep Windhawk's squared look.
 - **Tray pop-ups.** The Mod tasks in progress and Loaded mods windows from the taskbar icon use the same colors as the rest of the theme.
 - **Text and font.** Use an installed font and a text color. Icons keep their own font and stay centered in their buttons.
@@ -48,6 +50,8 @@ Windows transparency and animation settings can affect the background material. 
 For the older Windhawk interface, use the [legacy 1.4.0 edition](legacy/). It has a separate source and settings.
 
 ## Credits
+
+This mod was called Windhawk Styler before 2.1.0.
 
 The original window frame work was adapted from [Titlebar For Everyone](https://windhawk.net/mods/titlebar-for-everyone) by Ingan121, under the MIT license.
 */
@@ -85,6 +89,27 @@ The original window frame work was adapted from [Titlebar For Everyone](https://
 - accentColor: "#89b4fa"
   $name: Accent color
   $description: "Selected buttons, switches, tabs and links. Leave blank for Windhawk's colors"
+- selectionColor: ""
+  $name: Selected text color
+  $description: "Highlight behind selected text, in #RRGGBB format. Leave blank to use the accent color"
+- selectionOpacity: 40
+  $name: Selected text opacity
+  $description: "0 to 100 (Suggested: 40). Higher values make the highlight stronger"
+- headerGradient: true
+  $name: Gradient titles and icons
+  $description: "Paint the Windhawk logo, its name and section titles such as Installed mods with the gradient below. When off, they keep Windhawk's colors"
+- gradientStart: "#89b4fa"
+  $name: Gradient start color
+  $description: "Left side of the gradient, in #RRGGBB format (Suggested: #89b4fa, Mocha blue)"
+- gradientEnd: "#cba6f7"
+  $name: Gradient end color
+  $description: "Right side of the gradient, in #RRGGBB format (Suggested: #cba6f7, Mocha mauve)"
+- enhancedBadge: true
+  $name: Enhanced badge
+  $description: "Show a small gradient badge beside the Windhawk name in the top left"
+- badgeText: "Enhanced"
+  $name: Badge text
+  $description: "Words shown in the badge, up to 24 characters (Suggested: Enhanced)"
 - textColor: "#cdd6f4"
   $name: Text color
   $description: "Body and title bar text. Leave blank for Windhawk's colors"
@@ -93,13 +118,7 @@ The original window frame work was adapted from [Titlebar For Everyone](https://
   $description: "Use an installed font for the interface. Leave blank for Windhawk's font. The title bar keeps the Windows font"
 - fontWeight: 500
   $name: Font weight
-  $description: "Weight of normal text. Bold labels stay bolder. The font must include that weight"
-  $options:
-  - 300: Light
-  - 400: Regular
-  - 500: Medium
-  - 600: Semibold
-  - 700: Bold
+  $description: "Weight of normal text: 300 Light, 400 Regular, 500 Medium, 600 Semibold, 700 Bold (Suggested: 500). Bold labels stay bolder. The font must include that weight"
 - nativeTitleBar: true
   $name: Style the title bar
   $description: "Apply the theme to the title bar and keep the normal Windows buttons"
@@ -177,6 +196,14 @@ struct Settings {
     bool titleBarColorSet = true;
     bool titleBarAcrylic = true;
     bool centerTitle = false;
+    std::uint32_t selectionRgb = 0x89b4fa;
+    bool selectionColorSet = false;
+    int selectionOpacity = 40;
+    bool headerGradient = true;
+    std::uint32_t gradientStart = 0x89b4fa;
+    std::uint32_t gradientEnd = 0xcba6f7;
+    bool enhancedBadge = true;
+    std::string badgeText = "Enhanced";
 };
 
 static Settings g_settings;
@@ -293,6 +320,37 @@ static void ReadSettings(Settings* s) {
     }
     Wh_FreeStringSetting(titleBar);
 
+    s->selectionColorSet = false;
+    std::uint32_t selectionRgb;
+    PCWSTR selection = Wh_GetStringSetting(L"selectionColor");
+    if (HexColorToRgb(selection, &selectionRgb)) {
+        s->selectionRgb = selectionRgb;
+        s->selectionColorSet = true;
+    }
+    Wh_FreeStringSetting(selection);
+    s->selectionOpacity = Wh_GetIntSetting(L"selectionOpacity");
+    if (s->selectionOpacity < 0) s->selectionOpacity = 0;
+    if (s->selectionOpacity > 100) s->selectionOpacity = 100;
+
+    s->headerGradient = Wh_GetIntSetting(L"headerGradient") != 0;
+    PCWSTR gradStart = Wh_GetStringSetting(L"gradientStart");
+    if (!HexColorToRgb(gradStart, &s->gradientStart)) s->gradientStart = 0x89b4fa;
+    Wh_FreeStringSetting(gradStart);
+    PCWSTR gradEnd = Wh_GetStringSetting(L"gradientEnd");
+    if (!HexColorToRgb(gradEnd, &s->gradientEnd)) s->gradientEnd = 0xcba6f7;
+    Wh_FreeStringSetting(gradEnd);
+
+    s->enhancedBadge = Wh_GetIntSetting(L"enhancedBadge") != 0;
+    // Badge text goes into a CSS string: keep printable ASCII only, drop
+    // quotes and backslashes, cap the length.
+    s->badgeText.clear();
+    PCWSTR badge = Wh_GetStringSetting(L"badgeText");
+    for (PCWSTR p = badge; p && *p && s->badgeText.size() < 24; p++) {
+        if (*p >= 0x20 && *p < 0x7f && *p != L'"' && *p != L'\\' && *p != L'<' && *p != L'>')
+            s->badgeText += (char)*p;
+    }
+    Wh_FreeStringSetting(badge);
+    if (s->badgeText.find_first_not_of(' ') == std::string::npos) s->enhancedBadge = false;
 }
 
 static Settings SnapshotSettings() {
@@ -473,6 +531,54 @@ static std::string BuildPolishCss(const Settings& s) {
     // process list run past the card edge (owner report 2026-11-07).
     css += "[class*=\"ModDetailsCard\"] .ant-card-meta-title,[class*=\"ModDetailsCard\"] .ant-card-meta-section,[class*=\"ModDetailsCard\"] .ant-card-head-title{overflow:visible !important;}";
     css += ".ant-table-tbody>tr.ant-table-row:hover>td:first-child{box-shadow:inset 2px 0 0 " + (s.accent.empty() ? std::string("rgba(255,255,255,0.3)") : s.accent) + ";}";
+    return css;
+}
+
+// Selected text, the gradient header and the Enhanced badge.
+// The page sets no ::selection rule of its own (measured 2026-11-07), so
+// selections drew in Chromium's stock blue. The logo is a white mask on a
+// span, the section icons are Font Awesome SVGs painted with currentColor;
+// the SVG icons take their gradient from #wh-enh-grad, injected by the JS.
+static std::string BuildEnhancedCss(const Settings& s) {
+    std::string css;
+    std::uint32_t selRgb = s.selectionColorSet ? s.selectionRgb : (s.accent.empty() ? 0x89b4fa : s.accentRgb);
+    const std::string sel = RgbaFromRgb(selRgb, s.selectionOpacity);
+    const std::string selDim = RgbaFromRgb(selRgb, s.selectionOpacity / 2);
+    css += "::selection{background-color:" + sel + " !important;}";
+    css += "input::selection,textarea::selection{background-color:" + sel + " !important;}";
+    css += ".monaco-editor{--vscode-editor-selectionBackground:" + sel + " !important;--vscode-editor-inactiveSelectionBackground:" + selDim +
+           " !important;--vscode-editor-selectionHighlightBackground:" + selDim + " !important;}";
+    css += ".monaco-editor .selected-text{background-color:" + sel + " !important;}";
+
+    const std::string a = RgbToCss(s.gradientStart);
+    const std::string b = RgbToCss(s.gradientEnd);
+    const std::string grad = "linear-gradient(90deg," + a + "," + b + ")";
+    const std::string logoBtn = "[class*=\"AppHeader__HeaderLogoButton\"]";
+    const std::string sectionH2 = "[class*=\"SectionHeader\"]>h2";
+    if (s.headerGradient) {
+        const std::string clipText = "background-image:" + grad + " !important;-webkit-background-clip:text !important;background-clip:text !important;"
+                                     "color:transparent !important;-webkit-text-fill-color:transparent !important;";
+        // The button box also holds the logo (and the badge), so the stops
+        // are pulled in to run the whole gradient across the word itself.
+        const std::string titleGrad = s.enhancedBadge ? "linear-gradient(90deg," + a + " 24%," + b + " 74%)"
+                                                      : "linear-gradient(90deg," + a + " 30%," + b + " 100%)";
+        css += logoBtn + "," + logoBtn + ":hover," + logoBtn + ":focus{" + clipText + "background-image:" + titleGrad + " !important;}";
+        css += "[class*=\"AppHeader__LogoMark\"]{background-color:transparent !important;background-image:linear-gradient(135deg," + a + "," + b + ") !important;}";
+        css += sectionH2 + "{width:fit-content !important;" + clipText + "}";
+        css += sectionH2 + ">svg,[class*=\"SectionIcon\"]{color:" + a + " !important;}";
+        css += sectionH2 + ">svg path,[class*=\"SectionIcon\"] path{fill:url(#wh-enh-grad) !important;}";
+        css += logoBtn + "::selection," + sectionH2 + "::selection{-webkit-text-fill-color:" + RgbToCss(s.gradientEnd) + " !important;}";
+    }
+    if (s.enhancedBadge) {
+        // Sized against the 40px title: a pill about a third of its height,
+        // centered on the letters, like the T3 Code Enhanced badge.
+        css += logoBtn + "{white-space:nowrap !important;}";
+        css += logoBtn + "::after{content:\"" + s.badgeText + "\";display:inline-block;margin-left:14px;padding:3px 11px 4px;"
+               "font-size:15px;line-height:1.25;font-weight:700;letter-spacing:0.02em;border-radius:999px;"
+               "background:" + grad + ";-webkit-background-clip:border-box;background-clip:border-box;"
+               "color:#11111b;-webkit-text-fill-color:#11111b;box-shadow:0 0 12px " + RgbaFromRgb(s.gradientEnd, 30) + ";"
+               "vertical-align:middle;position:relative;top:-3px;}";
+    }
     return css;
 }
 
@@ -850,6 +956,7 @@ static std::string BuildCss(const Settings& s) {
     }
     css += BuildPolishCss(s);
     css += BuildNoticeCss(s);
+    css += BuildEnhancedCss(s);
     return css;
 }
 
@@ -862,6 +969,19 @@ static std::string BuildInjectJs(const Settings& s) {
     js += "var st=document.getElementById('wh-styler-style');";
     js += "if(!st){st=document.createElement('style');st.id='wh-styler-style';(document.head||document.documentElement).appendChild(st);}";
     js += "if(st.textContent!==css)st.textContent=css;";
+    {
+        // Hidden SVG with the shared gradient. display:none would stop
+        // Chromium from painting the gradient, so it is sized to zero instead.
+        std::string defs;
+        if (s.headerGradient) {
+            defs = "<defs><linearGradient id='wh-enh-grad' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='" +
+                   RgbToCss(s.gradientStart) + "'/><stop offset='1' stop-color='" + RgbToCss(s.gradientEnd) + "'/></linearGradient></defs>";
+        }
+        js += "var dg=document.getElementById('wh-enh-defs');var dh=\"" + JsonEscape(defs) + "\";";
+        js += "if(!dh){if(dg)dg.remove();}else{if(!dg){dg=document.createElementNS('http://www.w3.org/2000/svg','svg');dg.id='wh-enh-defs';"
+              "dg.setAttribute('aria-hidden','true');dg.setAttribute('style','position:absolute;width:0;height:0;overflow:hidden;pointer-events:none');"
+              "(document.body||document.documentElement).appendChild(dg);}if(dg.getAttribute('data-k')!==dh){dg.innerHTML=dh;dg.setAttribute('data-k',dh);}}";
+    }
     js += "return 'ok len='+css.length;";
     js += "})()";
     return js;
