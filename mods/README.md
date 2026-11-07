@@ -16,6 +16,7 @@
 | [Window Borders](local/window-borders) | Smooth, rounded borders on every window, with an accent-to-mauve gradient on the active one. | 1.0.0 | GPL-3.0 |
 | [Window Manager Plus](local/window-manager) | Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts. | 1.2.3 | GPL-3.0 |
 | [AltSnap](local/alt-snap-drag) | Alt+drag to move and resize any window, plus AltSnap's window shortcuts. | 1.2.2 | GPL-3.0 |
+| [Seamless Media Player](local/seamless-media-player) | A taskbar media player with live spectrum bars beside or behind it. | 1.9.6 | MIT |
 | [Taskbar Audio Visualizer](local/taskbar-audio-visualizer) | A live audio spectrum with media controls on the taskbar. | 1.3.0 | MIT |
 | [Taskbar Weather](local/taskbar-weather) | Current weather on the taskbar with a details card on hover. | 1.4.0 | MIT |
 | [Taskbar Elastic WinUI Pill Plus](local/taskbar-elastic-pill-plus) | An animated pill that slides under the app you use, with an option to mark open apps. | 2.1.0 | MIT |

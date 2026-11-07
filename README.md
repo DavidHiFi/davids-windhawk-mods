@@ -53,6 +53,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 
 | | Mod | What it does |
 | --- | --- | --- |
+| <img src="media/previews/seamless-media-player.png" width="220" alt="Taskbar media player with album art, time, buttons and spectrum bars"> | [Seamless Media Player](mods/local/seamless-media-player) | A taskbar media player with live spectrum bars beside or behind it, a progress bar and the time. |
 | <img src="media/previews/taskbar-audio-visualizer.gif" width="220" alt="Audio spectrum on the taskbar"> | [Taskbar Audio Visualizer](mods/local/taskbar-audio-visualizer) | A live audio spectrum with media controls, right on the taskbar. |
 | <img src="media/previews/taskbar-weather.png" width="220" alt="Weather card over the taskbar"> | [Taskbar Weather](mods/local/taskbar-weather) | Current weather on the taskbar with a details card on hover, no Widgets or API key. |
 | <img src="media/previews/taskbar-elastic-pill-plus.png" width="220" alt="Sliding pill under the taskbar apps"> | [Taskbar Elastic WinUI Pill Plus](mods/local/taskbar-elastic-pill-plus) | An animated pill that slides under the app you switch to, with an option to mark open apps you're not using. |
@@ -204,6 +205,8 @@ Most of my mods build on someone else's mod. Each folder's readme credits its so
 | **Cleroth** ([Taskbar AI Quota Bars](https://windhawk.net/mods/taskbar-ai-quota)) | The base of Taskbar AI Quota Bars Plus. |
 | **USER-TOURNE** ([Tourne'Table](https://windhawk.net/mods/tourne-table-desktop-audio-visualizer)) | A base of Taskbar Audio Visualizer. |
 | **Salyts** ([Desktop Audio Visualizer](https://windhawk.net/mods/desktop-audio-visualizer)) | A base of Taskbar Audio Visualizer, and the second-taskbar support in Taskbar System Info Plus from [Taskbar Fluent Media Player](https://github.com/Salyts/Taskbar-Fluent-Media-Player). |
+| **Salyts** ([Taskbar Fluent Media Player](https://windhawk.net/mods/taskbar-fluent-media-player)) | The base of Seamless Media Player (MIT). |
+| **uMk0** ([Taskbar Media Widget](https://windhawk.net/mods/taskbar-media-widget)) | The behind-widget bars, progress bar and time display in Seamless Media Player (MIT). |
 | **Yevhenii Starychenko** ([Taskbar System Info](https://windhawk.net/mods/taskbar-system-info)) | The base of Taskbar System Info Plus. |
 | **Narayan** ([Taskbar Network Speed Indicator](https://windhawk.net/mods/net-speed-taskbar)) | The idea behind the network readouts in Taskbar System Info Plus. |
 | **iMAboud** ([Drag to Delete](https://windhawk.net/mods/drag-to-delete)) | The base of Drag to Delete Plus. |
