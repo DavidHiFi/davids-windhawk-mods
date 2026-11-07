@@ -83,6 +83,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 | <img src="media/previews/gpu-accelerated-explorer-view-plus.png" width="220" alt="NanaZip submenu: an empty pill on the stock mod, fully populated with Plus"> | [GPU Accelerated Explorer View Plus](mods/local/gpu-accelerated-explorer-view-plus) | GPU-rendered file lists and icon grids, populated submenus, page animations and navigation pane styling. |
 | <img src="media/previews/drag-to-delete-plus.png" width="220" alt="Floating trash target"> | [Drag to Delete Plus](mods/local/drag-to-delete-plus) | A floating trash target appears while you drag files, with themes, shapes and colors. |
 | <img src="media/previews/peek.png" width="220" alt="Peek preview window playing an mp3 with a seek bar"> | [Peek](mods/local/peek) | Select a file in Explorer and press Space to preview it, with media playback for audio and video. |
+| <img src="media/previews/seamless-autoscroll.png" width="220" alt="Frosted glass autoscroll circle with a blue to mauve ring"> | [Seamless Autoscroll](mods/local/seamless-autoscroll) | Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator. |
 | | [Theme Tool Plus](mods/local/theme-tool-plus) | Apply and switch custom Windows themes from a Ctrl+Alt+Y picker, unsigned themes included. |
 
 ### Windhawk and app fixes
@@ -196,6 +197,7 @@ Most of my mods build on someone else's mod. Each folder's readme credits its so
 | **valinet** ([Simple Window Switcher](https://github.com/valinet/sws)) | The original Simple Window Switcher. |
 | **caliberda** ([Alt+Tab Flip 3D](https://windhawk.net/mods/alt-tab-flip-3d)) | The Vista rendering in Simple Window Switcher Plus (MIT). |
 | **caliberda** ([AI Voice Typing](https://windhawk.net/mods/ai-voice-typing)) | The base of Seamless Dictate (MIT). |
+| **crazyboyybs** ([AutoScroll Win32](https://windhawk.net/mods/autoscroll-win32)) | The scrolling engine in Seamless Autoscroll. |
 | **0Allu** ([Better Volume Mixer](https://windhawk.net/mods/better-volume-mixer)) | The base of Better Volume Mixer Plus. |
 | **Gabriela Cristei** ([Explorer Font Changer](https://windhawk.net/mods/explorer-font-changer)) | The base of Shell Font Changer Plus. |
 | **bardelyne** ([Everything & Power Tools in the Start Menu](https://windhawk.net/mods/start-everything)) | The base of the Plus version. |
