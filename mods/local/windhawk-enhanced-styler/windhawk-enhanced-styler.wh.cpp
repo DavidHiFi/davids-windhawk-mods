@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.1.2
+// @version         2.1.5
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1074,7 +1074,54 @@ static std::string BuildCss(const Settings& s) {
  font-size:13px !important;line-height:1.45 !important;box-shadow:0 8px 24px #0008 !important;}
 :root .ant-tooltip :is(.ant-tooltip-container,.ant-tooltip-inner)::after{--whb-a:#89b4fa99;--whb-b:#cba6f799;border-radius:inherit !important;}
 /* First row selected: the header rule would sit on the ring's top edge and double it, so the header drops its rule. */
-:root .ant-table:has(.ant-table-tbody>tr:nth-child(1 of .ant-table-row):is([data-selected],.ant-table-row-selected)) .ant-table-thead>tr{background:linear-gradient(90deg,#89b4fa14,#cba6f714) !important;})WHB";
+:root .ant-table:has(.ant-table-tbody>tr:nth-child(1 of .ant-table-row):is([data-selected],.ant-table-row-selected)) .ant-table-thead>tr{background:linear-gradient(90deg,#89b4fa14,#cba6f714) !important;}
+/* Ribbons sit above the card's decorative ring. */
+:root .ant-ribbon{z-index:3 !important;}
+:root .ant-ribbon-wrapper{overflow:visible !important;}
+/* Move the hit area with the thumb; keep the rounded gradient clear of the edge. */
+:root :is(.wh-cscroll-track,.wh-cscroll-thumb).wh-cscroll-v{translate:-6px 0;}
+:root .wh-cscroll-thumb{background:linear-gradient(180deg,#89b4fa,#cba6f7) !important;border-radius:999px !important;}
+:root .wh-cscroll-thumb.wh-cscroll-h{background:linear-gradient(90deg,#89b4fa,#cba6f7) !important;}
+:root .wh-cscroll-host::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#89b4fa,#cba6f7) content-box !important;}
+:root [class*="SaveSettingsCard"]{
+ background:#181825 !important;background-image:none !important;backdrop-filter:none !important;
+ z-index:3 !important;isolation:isolate;box-shadow:none !important;
+}
+:root [class*="SaveSettingsCard"]:is(:hover,:focus-within)::after{--whb-a:#89b4fa;--whb-b:#cba6f7;}
+:root [class*="SaveSettingsCard"] .ant-segmented{background:#11111b !important;border:2px solid #45475a !important;padding:2px !important;}
+:root [class*="SaveSettingsCard"] :is(.ant-segmented-item-selected,.ant-segmented-thumb){background:#313244 !important;color:#89b4fa !important;box-shadow:none !important;}
+:root [class*="SaveSettingsCard"] .ant-segmented-item:not(.ant-segmented-item-selected){color:#bac2de !important;}
+:root [class*="SaveSettingsCard"] .ant-segmented:hover{border-color:transparent !important;background:linear-gradient(#11111b,#11111b) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
+:root [class*="CreateNewModButton__ButtonContainer"]:has([data-testid="create-new-mod"]){display:none !important;}
+:root #wh-header-create{height:32px !important;position:relative !important;inset:auto !important;margin:0 !important;padding:4px 12px !important;white-space:nowrap;}
+:root #wh-header-create svg{width:14px;height:14px;margin-right:0 !important;}
+/* 2.1.5: mod id tag is a dark chip with a 2px edge, grey at rest, blue to mauve on hover. */
+:root [class*="CardTitleModId"]{background:#181825 !important;color:#a6adc8 !important;border:2px solid #45475a !important;border-radius:999px !important;padding:0 9px !important;line-height:20px !important;transition:border-color .15s,color .15s;}
+:root [class*="CardTitleModId"]:hover{color:#cdd6f4 !important;border-color:transparent !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
+/* Save dock stops short of the panel scrollbar so the thumb never sits on its edge. */
+:root [class*="SaveSettingsCard"]{margin-inline:2px !important;}
+/* Visual / Textual switch: one surface for both halves, a full-height divider, selected half in blue text, hover darkens the whole half. */
+:root [class*="SaveSettingsCard"] .ant-segmented{background:#1e1e2e !important;border:2px solid #45475a !important;padding:0 !important;border-radius:999px !important;overflow:hidden !important;}
+:root [class*="SaveSettingsCard"] .ant-segmented:hover{border-color:transparent !important;background:linear-gradient(#1e1e2e,#1e1e2e) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
+:root [class*="SaveSettingsCard"] .ant-segmented-group{align-items:stretch !important;}
+:root [class*="SaveSettingsCard"] .ant-segmented-thumb{display:none !important;}
+:root [class*="SaveSettingsCard"] .ant-segmented-item{background:transparent !important;border-radius:0 !important;box-shadow:none !important;color:#a6adc8 !important;transition:background-color .15s,color .15s;}
+:root [class*="SaveSettingsCard"] .ant-segmented-item::after{display:none !important;}
+:root [class*="SaveSettingsCard"] .ant-segmented-item+.ant-segmented-item{border-inline-start:2px solid #45475a !important;}
+:root [class*="SaveSettingsCard"] .ant-segmented:hover .ant-segmented-item+.ant-segmented-item{border-inline-start-color:#6c7086 !important;}
+:root [class*="SaveSettingsCard"] .ant-segmented-item-selected{color:#89b4fa !important;font-weight:700 !important;}
+:root [class*="SaveSettingsCard"] .ant-segmented-item:hover{background:#11111b !important;color:#cdd6f4 !important;}
+:root [class*="SaveSettingsCard"] .ant-segmented-item-selected:hover{color:#89b4fa !important;}
+:root [class*="SaveSettingsCard"] .ant-segmented-item-label{min-height:28px !important;line-height:28px !important;padding:0 14px !important;}
+/* Expanded settings (F11): an opaque frosted page, content centred, dock clear of the scrollbar. */
+:root #root:has(form[class*="SettingsForm"] button[aria-label="Collapse"]){visibility:hidden !important;}
+:root form[class*="SettingsForm"]:has(button[aria-label="Collapse"]){visibility:visible !important;background:transparent !important;backdrop-filter:none !important;padding:0 max(28px,calc((100% - 1480px)/2)) 32px !important;}
+:root form[class*="SettingsForm"]:has(button[aria-label="Collapse"]) [class*="SaveSettingsCard"]{margin-inline:0 !important;margin-top:0 !important;top:12px !important;}
+/* Native title tooltips are replaced by this one, same look as the antd tooltips and the right-click menu. */
+:root #wh-tip{position:fixed;z-index:2147483000;pointer-events:none;max-width:420px;padding:6px 11px;border-radius:12px;font-size:13px;line-height:1.45;color:#cdd6f4;white-space:pre-line;
+ border:2px solid transparent;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa99,#cba6f799) border-box;box-shadow:0 8px 24px #0008;opacity:0;transition:opacity .12s;}
+:root #wh-tip.on{opacity:1;}
+)WHB";
     return css;
 }
 
@@ -1152,6 +1199,45 @@ document.addEventListener('keydown',e=>{if(!menu)return;
  else if(e.key==='Tab')close();},true);
 window.addEventListener('blur',close);window.addEventListener('resize',close);document.addEventListener('scroll',close,true);
 })();)WHB";
+    js += R"WHH((()=>{
+ const install=()=>{
+  const original=document.querySelector('[data-testid="create-new-mod"]');
+  const settings=document.querySelector('[data-testid="nav-settings"]');
+  const anchor=settings?.closest('.ant-badge');
+  if(!original||!anchor||document.getElementById('wh-header-create'))return;
+  // Keep React's original node in place so route changes can unmount it safely.
+  const button=original.cloneNode(true);
+  button.id='wh-header-create';button.removeAttribute('data-testid');
+  button.className=document.querySelector('[data-testid="nav-explore"]').className;
+  button.onclick=()=>document.querySelector('[data-testid="create-new-mod"]')?.click();
+  anchor.before(button);
+ };
+ install();
+ if(!window.whHeaderCreateObserver){
+  window.whHeaderCreateObserver=new MutationObserver(install);
+  window.whHeaderCreateObserver.observe(document.getElementById('root'),{childList:true,subtree:true});
+ }
+})();
+)WHH";
+    js += R"WHT((()=>{
+if(window.whTipInstalled)return;window.whTipInstalled=true;
+let tip=null,cur=null,timer=0;
+const hide=()=>{clearTimeout(timer);if(cur&&cur.dataset.whTitle&&!cur.hasAttribute('title'))cur.setAttribute('title',cur.dataset.whTitle);cur=null;if(tip)tip.classList.remove('on');};
+const show=el=>{if(!tip){tip=document.createElement('div');tip.id='wh-tip';document.body.appendChild(tip);}
+ tip.textContent=el.dataset.whTitle;tip.style.left='0px';tip.style.top='0px';
+ const r=el.getBoundingClientRect(),t=tip.getBoundingClientRect();
+ let x=r.left+r.width/2-t.width/2,y=r.bottom+8;
+ if(y+t.height>innerHeight-4)y=r.top-t.height-8;
+ x=Math.max(6,Math.min(x,innerWidth-t.width-6));
+ tip.style.left=x+'px';tip.style.top=y+'px';tip.classList.add('on');};
+document.addEventListener('mouseover',e=>{const el=e.target.closest&&e.target.closest('[title]');
+ if(!el||el===cur)return;hide();const t=el.getAttribute('title');if(!t)return;
+ el.dataset.whTitle=t;el.removeAttribute('title');cur=el;timer=setTimeout(()=>{if(cur===el)show(el);},450);},true);
+document.addEventListener('mouseout',e=>{if(cur&&(!e.relatedTarget||!cur.contains(e.relatedTarget)))hide();},true);
+['mousedown','wheel','keydown'].forEach(n=>document.addEventListener(n,hide,true));
+window.addEventListener('blur',hide);
+})();
+)WHT";
     js += "return 'ok len='+css.length;";
     js += "})()";
     return js;
