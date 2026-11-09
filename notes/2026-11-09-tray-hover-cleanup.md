@@ -1,0 +1,3 @@
+Remove duplicate network outer hover while retaining inner icon hover. Restore dots Margin=-2,0,-2,0 to Margin=0 and segment Padding=6,0,0,0 to Padding=4,0,4,0. Remove broad unnamed NotifyIconView selectors from rules 27 and 52 so overflow uses native sizing and hover states. Original values and full registry export: backups/2026-11-09-tray-hover-cleanup. Rollback: scripts/2026-11-09-tray-hover-cleanup.ps1 -Rollback elevated. Main animation unchanged.
+
+Verified registry readback and live resting taskbar capture. Side and overflow zoom remain disabled. Fresh hover checks for network, dots and Hydra are still pending; do not describe all three bugs as visually verified. No cursor input or restarts.

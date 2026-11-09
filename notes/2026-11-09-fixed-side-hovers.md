@@ -1,0 +1,3 @@
+Owner chose fixed side hover blobs. Old: Tray, AI and media magnification on, overflow zoom on, styler tray/AI hover colours hidden, internet stock blob hidden. New: all side magnification and overflow zoom off; tray and AI hover colours restored; internet stock blob visible. Main apps animation unchanged. Rollback: scripts/2026-11-09-fixed-side-hovers.ps1 -Rollback elevated. Exact old values and registry exports in backups/2026-11-09-fixed-side-hovers.
+
+Verified: independent registry audit matches requested values. Live capture shows one complete fixed internet hover blob with top/bottom edges intact. Main app animation remains 130 percent with original timing. No rebuild, mod toggles or shell restart. Capture: reports/2026-11-06-docks/right-fixed-side-hovers.png.
