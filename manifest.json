@@ -516,7 +516,7 @@
     {
       "id": "explorer-hide-focus-border",
       "name": "File Explorer Focus Border Remover",
-      "author": "Hùng",
+      "author": "HÃ¹ng",
       "github": "https://github.com/NoMorePlz",
       "version": "1.0.0",
       "license": "MIT",
@@ -1046,7 +1046,7 @@
       "name": "Windhawk Enhanced Styler",
       "author": "DavidHiFi, Ingan121",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.1.0",
+      "version": "2.1.1",
       "license": "MIT",
       "origin": "local",
       "upstream": "",

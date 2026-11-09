@@ -1,5 +1,12 @@
 # Release verification
 
+## 2.1.1 (2026-11-09)
+
+- Update dialog: blue-to-mauve resting and hover borders, gradient progress, row hover, and a scoped right-click menu. The completed list no longer has a gray surround.
+- Filters: dark Mocha fill and a continuous outline around both the rounded menu and its triangle. Hover and keyboard focus brighten the border; rows have a blue outline and subtle gradient fill.
+- Verified: x64 build, installed DLL hash, fresh-launch theme injection, and live filter menu resting/hover captures. Arrow and body share one continuous outline. Update dialog styles and context-menu dismissal passed a rendered fixture check in the running interface.
+- Not checked: an actual update run; no updates were available.
+
 ## 2.0.93 (2026-11-02)
 
 Checked in the live interface through the mod's debugging port, read-only: synthetic mouseover, no OS clicks, no focus changes.
