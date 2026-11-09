@@ -13,8 +13,6 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [better-dialogs](./better-dialogs.wh.cpp) | [FireBlade](https://github.com/FireBlade211) | 1.1 | no |  |
 | [better-volume-mixer](./better-volume-mixer.wh.cpp) | [0Allu](https://github.com/0Allu) | 1.4.5 | no | MIT |
 | [borderless-fullscreen](./borderless-fullscreen.wh.cpp) | [TomberWolf](https://github.com/TomberWolf) | 1.2.0 | yes |  |
-| [caption-buttons-customizer](./caption-buttons-customizer.wh.cpp) | [grn15RenS](https://github.com/grn15RenS) | 1.1 | yes | MIT |
-| [cef-titlebar-enabler-universal](./cef-titlebar-enabler-universal.wh.cpp) | [Ingan121](https://github.com/Ingan121) | 1.9 | yes | MIT |
 | [chromium-cursor-remap](./chromium-cursor-remap.wh.cpp) | [mazany](https://github.com/mazany) | 1.0 | yes | MIT |
 | [clipboard-history-upgrade](./clipboard-history-upgrade.wh.cpp) | [SwiftExplorer567](https://github.com/SwiftExplorer567) | 1.3.2 | no |  |
 | [close-explorer-on-esc](./close-explorer-on-esc.wh.cpp) | [lieyanbang](https://github.com/lieyanbang) | 1.2 | no |  |
@@ -57,7 +55,6 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [file-explorer-content-animation](./file-explorer-content-animation.wh.cpp) | [crazyboyybs](https://github.com/crazyboyybs) | 1.0.1 | yes | MIT |
 | [file-explorer-remove-suffixes](./file-explorer-remove-suffixes.wh.cpp) | [m417z](https://github.com/m417z) | 1.1.1 | no |  |
 | [file-operation-styler](./file-operation-styler.wh.cpp) | [digART](https://github.com/digart11) | 1.2.0 | yes | GPL-3.0 |
-| [fix-basic-caption-text](./fix-basic-caption-text.wh.cpp) | [aubymori](https://github.com/aubymori) | 1.1.1 | yes |  |
 | [fix-explorer-white-flash](./fix-explorer-white-flash.wh.cpp) | [Mgg Sk](https://github.com/MGGSK) | 1.4 | no |  |
 | [force-kill-active-window](./force-kill-active-window.wh.cpp) | [vfxturjo](https://github.com/zunaidFarouque) | 1.0 | yes |  |
 | [gpu-accelerated-explorer-view](./gpu-accelerated-explorer-view.wh.cpp) | [DarkionAvey](https://github.com/DarkionAvey) | 0.9.240 | yes | GPL-2.0 |
@@ -122,7 +119,6 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [taskbar-tray-system-icon-tweaks](./taskbar-tray-system-icon-tweaks.wh.cpp) | [m417z](https://github.com/m417z) | 1.3.1 | yes |  |
 | [taskbar-volume-control](./taskbar-volume-control.wh.cpp) | [m417z](https://github.com/m417z) | 1.3.1 | yes |  |
 | [timer-resolution-control](./timer-resolution-control.wh.cpp) | [m417z](https://github.com/m417z) | 1.0 | no |  |
-| [titlebar-for-everyone](./titlebar-for-everyone.wh.cpp) | [Ingan121](https://github.com/Ingan121) | 0.5 | yes | MIT |
 | [toggle-hidden-files](./toggle-hidden-files.wh.cpp) | [Asteski](https://github.com/Asteski) | 1.1.0 | yes |  |
 | [tourne-table-desktop-audio-visualizer](./tourne-table-desktop-audio-visualizer.wh.cpp) | [USER-TOURNE](https://github.com/USER-TOURNE) | 1.3.0 | no | MIT |
 | [translucent-windows](./translucent-windows.wh.cpp) | [Undisputed00x](https://github.com/Undisputed00x) | 1.8.2 | yes |  |
@@ -130,7 +126,6 @@ Copies of the [Windhawk catalog](https://windhawk.net/mods) mods this setup runs
 | [vlc-discord-rpc](./vlc-discord-rpc.wh.cpp) | [ciizerr](https://github.com/ciizerr) | 1.2.0 | no | MIT |
 | [win-d-per-monitor](./win-d-per-monitor.wh.cpp) | [easyatm](https://github.com/easyatm) | 1.5.260416 | yes |  |
 | [win11-accent-border](./win11-accent-border.wh.cpp) | [Guerra24](https://github.com/Guerra24) | 1.0.5 | no |  |
-| [win11-custom-title-bar-colours](./win11-custom-title-bar-colours.wh.cpp) | [Th3Fanbus](https://github.com/Th3Fanbus) | 1.0.0 | yes |  |
 | [win32-ui-modernizer](./win32-ui-modernizer.wh.cpp) | [crazyboyybs](https://github.com/crazyboyybs) | 1.0.3 | no | GPL-3.0 |
 | [window-geometry-memory](./window-geometry-memory.wh.cpp) | [metanoid18](https://github.com/Metanoid18) | 1.2 | yes | MIT |
 | [windows-11-file-explorer-styler](./windows-11-file-explorer-styler.wh.cpp) | [m417z](https://github.com/m417z) | 1.7.2 | yes |  |

@@ -4,8 +4,8 @@
   "generatedAt": "2026-10-27T20:08:35+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 164,
-    "enabled": 92,
+    "mods": 159,
+    "enabled": 87,
     "local": 28
   },
   "mods": [
@@ -127,30 +127,6 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/borderless-fullscreen",
       "source": "mods/catalog/borderless-fullscreen.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "caption-buttons-customizer",
-      "name": "Caption Buttons Customizer",
-      "author": "grn15RenS",
-      "github": "https://github.com/grn15RenS",
-      "version": "1.1",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/caption-buttons-customizer",
-      "source": "mods/catalog/caption-buttons-customizer.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "cef-titlebar-enabler-universal",
-      "name": "CEF/Spotify Tweaks",
-      "author": "Ingan121",
-      "github": "https://github.com/Ingan121",
-      "version": "1.9",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/cef-titlebar-enabler-universal",
-      "source": "mods/catalog/cef-titlebar-enabler-universal.wh.cpp",
       "enabled": true
     },
     {
@@ -670,18 +646,6 @@
       "enabled": true
     },
     {
-      "id": "fix-basic-caption-text",
-      "name": "Fix Basic Caption Text",
-      "author": "aubymori",
-      "github": "https://github.com/aubymori",
-      "version": "1.1.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/fix-basic-caption-text",
-      "source": "mods/catalog/fix-basic-caption-text.wh.cpp",
-      "enabled": true
-    },
-    {
       "id": "fix-explorer-white-flash",
       "name": "Fix white flashes in explorer",
       "author": "Mgg Sk",
@@ -850,18 +814,6 @@
       "enabled": true
     },
     {
-      "id": "local@remove-uwp-title-bars-plus",
-      "name": "Remove UWP Title Bars Plus",
-      "author": "DavidHiFi, Anixx",
-      "github": "https://github.com/DavidHiFi",
-      "version": "2.1.0",
-      "license": "",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/remove-uwp-title-bars-plus/remove-uwp-title-bars-plus.wh.cpp",
-      "enabled": true
-    },
-    {
       "id": "local@seamless-dictate",
       "name": "Seamless Dictate",
       "author": "DavidHiFi, caliberda",
@@ -883,6 +835,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-flyouts/seamless-flyouts.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-title-bars",
+      "name": "Seamless Title Bars",
+      "author": "DavidHiFi, Th3Fanbus, grn15RenS, Ingan121, Anixx, aubymori",
+      "github": "https://github.com/DavidHiFi/davids-windhawk-mods",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-title-bars/seamless-title-bars.wh.cpp",
       "enabled": true
     },
     {
@@ -1750,18 +1714,6 @@
       "enabled": false
     },
     {
-      "id": "titlebar-for-everyone",
-      "name": "Titlebar For Everyone",
-      "author": "Ingan121",
-      "github": "https://github.com/Ingan121",
-      "version": "0.5",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/titlebar-for-everyone",
-      "source": "mods/catalog/titlebar-for-everyone.wh.cpp",
-      "enabled": true
-    },
-    {
       "id": "toggle-hidden-files",
       "name": "Toggle Hidden Files",
       "author": "Asteski",
@@ -1844,18 +1796,6 @@
       "upstream": "https://windhawk.net/mods/win11-accent-border",
       "source": "mods/catalog/win11-accent-border.wh.cpp",
       "enabled": false
-    },
-    {
-      "id": "win11-custom-title-bar-colours",
-      "name": "Windows 11 Custom Title Bar Colours",
-      "author": "Th3Fanbus",
-      "github": "https://github.com/Th3Fanbus",
-      "version": "1.0.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/win11-custom-title-bar-colours",
-      "source": "mods/catalog/win11-custom-title-bar-colours.wh.cpp",
-      "enabled": true
     },
     {
       "id": "win32-ui-modernizer",

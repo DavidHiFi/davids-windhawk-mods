@@ -20,8 +20,7 @@ param([switch]$SkipSources)
 
 $ErrorActionPreference = 'Stop'
 $retiredLocalIds = @('local@start-everything', 'center-titlebar-fork', 'local@center-titlebar-fork')
-# The installed copy lacks this repo copy's build fix (WS_EX_NOREDIRECTIONBITMAP guard), so keep the repo copy.
-$keepRepoSource = @('local@remove-uwp-title-bars-plus')
+$keepRepoSource = @()
 $repo = Split-Path $PSScriptRoot -Parent
 $src  = 'C:\ProgramData\Windhawk\ModsSource'
 if (-not (Test-Path -LiteralPath $src)) { throw "ModsSource not found at $src" }
