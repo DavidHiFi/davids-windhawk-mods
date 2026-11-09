@@ -2,7 +2,7 @@
 // @id              wintips-osd-plus
 // @name            WinTips OSD Plus
 // @description     Pop-up cards for Caps, Num and Scroll Lock, Insert, copy, paste and cut, with a Catppuccin Mocha look
-// @version         1.4.0
+// @version         1.4.1
 // @author          DavidHiFi, DoYouNatureQ
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1400,6 +1400,7 @@ void MeasureCard(float scale, const FrameState& f, int& outWidth,
 namespace {
 
 constexpr UINT_PTR kTimerClip = 5;
+constexpr UINT_PTR kTimerTop = 6;
 constexpr UINT WM_APP_POLL = WM_APP + 4;
 constexpr UINT WM_APP_SETTINGS = WM_APP + 5;
 
@@ -3032,6 +3033,30 @@ void UpdateGeometry() {
 
 // Grabs the pixels behind the card and blurs them. The window has to be hidden
 // while doing it, otherwise the copy would contain the previous card.
+// Other always-on-top windows (settings panels, pinned windows) share the
+// topmost band, and a plain show leaves the card wherever it last sat in that
+// band. Lift it to the front of the band every time it appears, and keep it
+// there while it shows, since some overlays re-raise themselves.
+void ShowCardOnTop() {
+    if (!g_hwnd) {
+        return;
+    }
+    SetWindowPos(g_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    SetTimer(g_hwnd, kTimerTop, 100, nullptr);
+}
+
+void KeepCardOnTop() {
+    if (!g_hwnd || !IsWindowVisible(g_hwnd)) {
+        if (g_hwnd) {
+            KillTimer(g_hwnd, kTimerTop);
+        }
+        return;
+    }
+    SetWindowPos(g_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+}
+
 void RefreshBackdrop() {
     if (!g_hwnd || g_settings.material == kMaterialSolid) {
         g_backdrop.Invalidate();
@@ -3054,7 +3079,7 @@ void RefreshBackdrop() {
     ReleaseDC(nullptr, screen);
 
     if (wasVisible) {
-        ShowWindow(g_hwnd, SW_SHOWNOACTIVATE);
+        ShowCardOnTop();
     }
 }
 
@@ -3093,6 +3118,7 @@ void HideNow() {
     if (g_hwnd) {
         ShowWindow(g_hwnd, SW_HIDE);
         KillTimer(g_hwnd, kTimerAnim);
+        KillTimer(g_hwnd, kTimerTop);
     }
     g_phase = kPhaseHidden;
     g_gpu.armed = 0;
@@ -3244,9 +3270,8 @@ void ShowTip(TipKind kind, bool on) {
         // the compositor (ULW does that per frame on the GDI path), and cancel
         // a pending fade-out if a new tip arrived while one was running.
         GpuDrawFrame();
-        SetWindowPos(g_hwnd, nullptr, g_placement.x, g_placement.y,
-                     g_cardWidth, g_cardHeight,
-                     SWP_NOACTIVATE | SWP_NOZORDER);
+        SetWindowPos(g_hwnd, HWND_TOPMOST, g_placement.x, g_placement.y,
+                     g_cardWidth, g_cardHeight, SWP_NOACTIVATE);
         if (wasVisible && g_phase == kPhaseHold) {
             GpuSnapStatic();
         }
@@ -3260,13 +3285,15 @@ void ShowTip(TipKind kind, bool on) {
             g_frame.clipT = 1.0f;
             g_frame.badgeAlpha = 1.0f;
         }
-        ShowWindow(g_hwnd, SW_SHOWNOACTIVATE);
+        ShowCardOnTop();
     } else if (g_phase == kPhaseOut) {
         // A tip arrived while the card was fading out: keep it on screen
         // instead of letting the pending hide finish.
         g_phase = kPhaseHold;
         g_phaseStart = GetTickCount64();
-        ShowWindow(g_hwnd, SW_SHOWNOACTIVATE);
+        ShowCardOnTop();
+    } else {
+        ShowCardOnTop();
     }
 
     if (g_hwnd) {
@@ -3409,6 +3436,9 @@ void OnTimer(UINT_PTR id) {
             break;
         case kTimerHold:
             BeginHide();
+            break;
+        case kTimerTop:
+            KeepCardOnTop();
             break;
         case kTimerClip:
             if (g_hwnd) {
