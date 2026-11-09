@@ -1,6 +1,10 @@
 # Current status
 
-Last updated: 2026-10-24
+Last updated: 2026-11-09
+
+## 2026-11-09: Seamless Title Bars
+
+- 2026-11-09 9:28 pm: all title bar work is ONE mod, `local@seamless-title-bars` 1.0.0 (Seamless Title Bars). It replaces caption-buttons-customizer, win11-custom-title-bar-colours, local@remove-uwp-title-bars-plus, local@terminal-titlebar-blur, titlebar-for-everyone, cef-titlebar-enabler-universal and fix-basic-caption-text, which were REMOVED at 9:31 pm on the owner's request (backups of keys, sources and DLLs in `backups\2026-11-09\seamless-title-bars\`; restore steps in the note). Where lines below name those mods, read the matching section of the new mod: buttons, colours (`colours.excludedApps` holds the old ExcludeCustom, incl. chrome.exe and FreeDictate.exe), uwp, terminalBar, nativeFrames, spotify, basicFrames. Basic frames is off: its uxtheme symbols are missing on this Windows build, so the old mod never did anything. Source and builder: `work\2026-11-09-seamless-title-bars\` (build output `out\seamless-title-bars.wh.cpp`). Note: `notes\2026-11-09-seamless-title-bars.md`.
 
 ## 2026-10-24: Dark mode context menus merged into Translucent Flyouts 0.6.66 (installed)
 

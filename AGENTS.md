@@ -60,6 +60,7 @@ Home for all Windhawk work on this machine: installed mods and settings, taskbar
 - Tooltips and popups use HostBackdrop acrylic with tint at least 0.85; text behind a tooltip must never be readable.
 - Preview (alpha) engine updates: load the `windhawk-alpha-update` skill and run `scripts\windhawk-alpha-update.ps1` (`-Check`, `-Prepare`, `-Launch`, `-Rollback`). Never update by hand. The engine restart waits for T3 Code to close, so ask the owner to close it.
 - Every mod we write or fork follows `docs\mod-style-guide.md`. Before any install or publish: `@author` starts with `DavidHiFi`; `@donateUrl https://ko-fi.com/DavidHiFi` is set; text passes `humanizer`; the readme shows a real preview; settings blocks follow the StartPad style in that guide.
+- A mod is not done until its preview PNG is pushed to `media/previews/<id>.png` on the public repo's main and the raw readme image URL returns 200; check credits against each original's `@author` first.
 - Every applied change gets a script with `-Audit` / `-Install` / `-Rollback` when practical, a backup, a receipt JSON and a note. ISO dates in filenames.
 - Singleton resources for coop are in `.agent-coop.json` (`windhawk-engine`, `backups`, `packages`). Old absolute paths resolve through junctions in `H:\System Configuration`.
 
