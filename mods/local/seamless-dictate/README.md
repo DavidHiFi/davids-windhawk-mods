@@ -17,6 +17,9 @@ transcribes what you said and cleans it up in your style, or translates it.
   silence from your mic, and their volume drops. Both come back the moment you
   let go. Audio routers like VB-Audio Matrix and Voicemeeter are left alone.
   A shortcut you pick turns it on or off from any app.
+- **Self-corrections.** Say "make it 42, sorry, 24" and you get "24". Set your own
+  correction cue (like "sorry" or "scratch that") under Styles; the AI applies the
+  fix only where you meant one and keeps real apologies.
 - **Glass dictation bar.** A smooth, dark Catppuccin Mocha bar shows live text while
   you speak. The result card stays for 3 seconds, then fades.
 - **Its own settings window and tray icon,** in dark Catppuccin Mocha with
