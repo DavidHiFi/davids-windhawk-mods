@@ -34,6 +34,7 @@
 | [Explorer TreeItem Tweaker Plus](local/explorer-treeitem-tweaker-plus) | Rounded, colored highlights for folders in Explorer's left pane, no restart popup. | 1.1.5 | MIT |
 | [GPU Accelerated Explorer View Plus](local/gpu-accelerated-explorer-view-plus) | GPU-rendered file lists and icon grids, with right-click submenus that open fully populated. | 1.0.0 | GPL-2.0 |
 | [File Explorer Styler Plus](local/windows-11-file-explorer-styler-plus) | Themes for File Explorer, plus a rounded status bar dock with Mocha view buttons. | 1.9.2 | GPL-3.0 |
+| [Notification Center Styler Plus](local/notification-center-styler-plus) | Themes for the notification panel, with gradient hover borders and an options menu that stays in view. | 1.8.4 | GPL-3.0 |
 | [Fullscreen Start Plus](local/fullscreen-start-plus) | A fullscreen grid of all your apps in place of Start, with instant search and blur. | 1.6.3 | MIT |
 | [Settings Styler Plus](local/settings-styler-plus) | Themes for the Settings app, with the normal title bar and a blur that stays when unfocused. | 1.2.0 | GPL-3.0 |
 | [Notepad++ Dark Dialog Fix](local/npp-taskdlg-textcolor) | Readable text in Notepad++ dark-mode dialogs. | 1.0.1 | MIT |

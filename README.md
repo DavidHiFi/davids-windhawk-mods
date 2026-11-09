@@ -62,6 +62,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 | <img src="media/previews/taskbar-ai-usage-plus.png" width="220" alt="Codex usage flyout over the taskbar"> | [Taskbar AI Usage Plus](mods/local/taskbar-ai-usage-plus) | Claude, Codex, Antigravity and Copilot limits as ring tiles with a Fluent flyout. |
 | <img src="media/previews/better-volume-mixer-plus.png" width="220" alt="Tray volume mixer"> | [Seamless Volume Mixer](mods/local/better-volume-mixer-plus) | A tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices. |
 | <img src="media/previews/seamless-tray-drawer.png" width="220" alt="Hidden icons panel with a blue to mauve border"> | [Seamless Tray Drawer](mods/local/seamless-tray-drawer) | A second drawer for rarely used tray icons, with your own colors, border and blur. |
+| <img src="media/previews/notification-center-styler-plus.png" width="220" alt="Notification panel with a group options menu opening to the left"> | [Notification Center Styler Plus](mods/local/notification-center-styler-plus) | Themes for the notification panel, with gradient hover borders and a group options menu that stays fully in view. |
 
 ### Windows and Alt+Tab
 
