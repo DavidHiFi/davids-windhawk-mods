@@ -4,11 +4,71 @@
   "generatedAt": "2026-10-27T20:08:35+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 160,
-    "enabled": 89,
-    "local": 24
+    "mods": 164,
+    "enabled": 92,
+    "local": 28
   },
   "mods": [
+    {
+      "id": "acrylic-color-glows",
+      "name": "Acrylic Color Glows",
+      "author": "HaVeN80",
+      "github": "https://github.com/haven80",
+      "version": "0.5.0",
+      "license": "GPL-3.0",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/acrylic-color-glows",
+      "source": "mods/catalog/acrylic-color-glows.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "alt-drag",
+      "name": "AltDrag",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.1",
+      "license": null,
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/alt-drag",
+      "source": "mods/catalog/alt-drag.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "alt-snap-drag",
+      "name": "AltSnap",
+      "author": "DavidHiFi, m417z, RamonUnch, Stefan Sundin",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.2.4",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/alt-snap-drag/alt-snap.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "alt-tab-flip-3d",
+      "name": "Alt+Tab Flip 3D (Vista Style)",
+      "author": "caliberda",
+      "github": "https://github.com/cesarkali",
+      "version": "1.5.3",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/alt-tab-flip-3d",
+      "source": "mods/catalog/alt-tab-flip-3d.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "always-allow-ctrl-shift-enter",
+      "name": "Always Allow CTRL+SHIFT+ENTER",
+      "author": "aubymori",
+      "github": "https://github.com/aubymori",
+      "version": "1.0.0",
+      "license": "BSD-3-Clause",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/always-allow-ctrl-shift-enter",
+      "source": "mods/catalog/always-allow-ctrl-shift-enter.wh.cpp",
+      "enabled": false
+    },
     {
       "id": "always-on-top",
       "name": "Always On Top Windows",
@@ -32,6 +92,30 @@
       "upstream": "https://windhawk.net/mods/auto-time-sync-on-startup",
       "source": "mods/catalog/auto-time-sync-on-startup.wh.cpp",
       "enabled": true
+    },
+    {
+      "id": "better-dialogs",
+      "name": "Better Dialogs",
+      "author": "FireBlade",
+      "github": "https://github.com/FireBlade211",
+      "version": "1.1",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/better-dialogs",
+      "source": "mods/catalog/better-dialogs.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "better-volume-mixer",
+      "name": "Better Volume Mixer",
+      "author": "0Allu",
+      "github": "https://github.com/0Allu",
+      "version": "1.4.5",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/better-volume-mixer",
+      "source": "mods/catalog/better-volume-mixer.wh.cpp",
+      "enabled": false
     },
     {
       "id": "borderless-fullscreen",
@@ -70,6 +154,66 @@
       "enabled": true
     },
     {
+      "id": "chromium-cursor-remap",
+      "name": "Chromium Cursor Remap",
+      "author": "mazany",
+      "github": "https://github.com/mazany",
+      "version": "1.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/chromium-cursor-remap",
+      "source": "mods/catalog/chromium-cursor-remap.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "clipboard-history-upgrade",
+      "name": "Smart Copy & Paste",
+      "author": "SwiftExplorer567",
+      "github": "https://github.com/SwiftExplorer567",
+      "version": "1.3.2",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/clipboard-history-upgrade",
+      "source": "mods/catalog/clipboard-history-upgrade.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "close-explorer-on-esc",
+      "name": "Close Explorer on Esc",
+      "author": "lieyanbang",
+      "github": "https://github.com/lieyanbang",
+      "version": "1.2",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/close-explorer-on-esc",
+      "source": "mods/catalog/close-explorer-on-esc.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "compact-start-menu",
+      "name": "Compact Start Menu",
+      "author": "Asteski",
+      "github": "https://github.com/Asteski",
+      "version": "1.0.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/compact-start-menu",
+      "source": "mods/catalog/compact-start-menu.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "context-menu-preloader",
+      "name": "Context Menu Preloader",
+      "author": "Lockframe",
+      "github": "https://github.com/Lockframe",
+      "version": "1.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/context-menu-preloader",
+      "source": "mods/catalog/context-menu-preloader.wh.cpp",
+      "enabled": false
+    },
+    {
       "id": "control-panel-color-fix",
       "name": "Control Panel Color Fix",
       "author": "chip33",
@@ -80,6 +224,18 @@
       "upstream": "https://windhawk.net/mods/control-panel-color-fix",
       "source": "mods/catalog/control-panel-color-fix.wh.cpp",
       "enabled": true
+    },
+    {
+      "id": "copy-queue",
+      "name": "Copy Queue",
+      "author": "Nerdworld",
+      "github": "https://github.com/nerdworldDE",
+      "version": "1.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/copy-queue",
+      "source": "mods/catalog/copy-queue.wh.cpp",
+      "enabled": false
     },
     {
       "id": "custom-cmd-startup-text",
@@ -116,6 +272,18 @@
       "upstream": "https://windhawk.net/mods/d3d9-flip-model-upgrade",
       "source": "mods/catalog/d3d9-flip-model-upgrade.wh.cpp",
       "enabled": true
+    },
+    {
+      "id": "dark-menus",
+      "name": "Dark mode context menus",
+      "author": "Mgg Sk",
+      "github": "https://github.com/MGGSK",
+      "version": "1.4.2",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/dark-menus",
+      "source": "mods/catalog/dark-menus.wh.cpp",
+      "enabled": false
     },
     {
       "id": "dark-theme-browser-colors-fix",
@@ -190,6 +358,18 @@
       "enabled": true
     },
     {
+      "id": "drag-to-delete-plus",
+      "name": "Drag to Delete Plus",
+      "author": "DavidHiFi, iMAboud",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.1.0",
+      "license": null,
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/drag-to-delete-plus/drag-to-delete-plus.wh.cpp",
+      "enabled": false
+    },
+    {
       "id": "dxgi-flip-model-upgrade",
       "name": "DXGI Flip Model Upgrade",
       "author": "tria",
@@ -200,6 +380,66 @@
       "upstream": "https://windhawk.net/mods/dxgi-flip-model-upgrade",
       "source": "mods/catalog/dxgi-flip-model-upgrade.wh.cpp",
       "enabled": true
+    },
+    {
+      "id": "edge-doubleclick-resize",
+      "name": "Double-Click Window Edge to Maximize Width",
+      "author": "Hamid",
+      "github": "https://github.com/nh4700-ai",
+      "version": "1.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/edge-doubleclick-resize",
+      "source": "mods/catalog/edge-doubleclick-resize.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "enhanced-disk-usage",
+      "name": "Enhanced Disk Usage",
+      "author": "bbmaster123",
+      "github": "https://github.com/bbmaster123",
+      "version": "1.2.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/enhanced-disk-usage",
+      "source": "mods/catalog/enhanced-disk-usage.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "explorer-command-bar",
+      "name": "Explorer Command Bar",
+      "author": "DanRotaru",
+      "github": "https://github.com/DanRotaru",
+      "version": "1.1.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-command-bar",
+      "source": "mods/catalog/explorer-command-bar.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "explorer-context-menu-classic",
+      "name": "Classic context menu on Windows 11",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.0.2",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-context-menu-classic",
+      "source": "mods/catalog/explorer-context-menu-classic.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "explorer-ctrln-newfile",
+      "name": "Explorer Ctrl+N to New File",
+      "author": "lieyanbang",
+      "github": "https://github.com/lieyanbang",
+      "version": "1.1",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-ctrln-newfile",
+      "source": "mods/catalog/explorer-ctrln-newfile.wh.cpp",
+      "enabled": false
     },
     {
       "id": "explorer-details-better-file-sizes",
@@ -238,6 +478,30 @@
       "enabled": true
     },
     {
+      "id": "explorer-folder-bookmarks-bar",
+      "name": "Explorer Folder Bookmarks Bar",
+      "author": "Maxim Fomin",
+      "github": "https://github.com/MaxITService",
+      "version": "0.7.8",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-folder-bookmarks-bar",
+      "source": "mods/catalog/explorer-folder-bookmarks-bar.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "explorer-font-changer",
+      "name": "Explorer Font Changer",
+      "author": "Gabriela Cristei",
+      "github": "https://github.com/cristeigabriela",
+      "version": "0.2",
+      "license": null,
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-font-changer",
+      "source": "mods/catalog/explorer-font-changer.wh.cpp",
+      "enabled": false
+    },
+    {
       "id": "explorer-glyphs-colorizer",
       "name": "Explorer Glyphs Colorizer",
       "author": "crazyboyybs",
@@ -248,6 +512,18 @@
       "upstream": "https://windhawk.net/mods/explorer-glyphs-colorizer",
       "source": "mods/catalog/explorer-glyphs-colorizer.wh.cpp",
       "enabled": true
+    },
+    {
+      "id": "explorer-hide-focus-border",
+      "name": "File Explorer Focus Border Remover",
+      "author": "Hùng",
+      "github": "https://github.com/NoMorePlz",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-hide-focus-border",
+      "source": "mods/catalog/explorer-hide-focus-border.wh.cpp",
+      "enabled": false
     },
     {
       "id": "explorer-navigation-pane-tweaks",
@@ -262,6 +538,18 @@
       "enabled": true
     },
     {
+      "id": "explorer-no-min-size",
+      "name": "Explorer No Minimum Window Size",
+      "author": "Anixx",
+      "github": "https://github.com/Anixx",
+      "version": "1.0.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-no-min-size",
+      "source": "mods/catalog/explorer-no-min-size.wh.cpp",
+      "enabled": false
+    },
+    {
       "id": "explorer-real-folder-paths",
       "name": "Explorer real folder paths",
       "author": "Nerdworld",
@@ -274,6 +562,30 @@
       "enabled": true
     },
     {
+      "id": "explorer-title-bar-label",
+      "name": "Explorer Title Bar Label",
+      "author": "digART",
+      "github": "https://github.com/digart11",
+      "version": "1.0.0",
+      "license": "GPL-3.0",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-title-bar-label",
+      "source": "mods/catalog/explorer-title-bar-label.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "explorer-treeitem-tweaker",
+      "name": "Explorer TreeItem Tweaker",
+      "author": "Languster",
+      "github": "https://github.com/Languster",
+      "version": "1.1.1",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-treeitem-tweaker",
+      "source": "mods/catalog/explorer-treeitem-tweaker.wh.cpp",
+      "enabled": false
+    },
+    {
       "id": "explorer-treeline-killer",
       "name": "Explorer TreeLine Killer",
       "author": "Languster",
@@ -284,6 +596,18 @@
       "upstream": "https://windhawk.net/mods/explorer-treeline-killer",
       "source": "mods/catalog/explorer-treeline-killer.wh.cpp",
       "enabled": true
+    },
+    {
+      "id": "explorer-visual-tweaks-dark",
+      "name": "Explorer Visual Tweaks Dark",
+      "author": "VitalS",
+      "github": "https://github.com/VitalSkib",
+      "version": "1.0.1",
+      "license": null,
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/explorer-visual-tweaks-dark",
+      "source": "mods/catalog/explorer-visual-tweaks-dark.wh.cpp",
+      "enabled": false
     },
     {
       "id": "extension-change-no-warning",
@@ -322,6 +646,18 @@
       "enabled": true
     },
     {
+      "id": "file-explorer-remove-suffixes",
+      "name": "Remove Taskbar Window Suffixes",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.1.1",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/file-explorer-remove-suffixes",
+      "source": "mods/catalog/file-explorer-remove-suffixes.wh.cpp",
+      "enabled": false
+    },
+    {
       "id": "file-operation-styler",
       "name": "File Operation Styler",
       "author": "digART",
@@ -344,6 +680,18 @@
       "upstream": "https://windhawk.net/mods/fix-basic-caption-text",
       "source": "mods/catalog/fix-basic-caption-text.wh.cpp",
       "enabled": true
+    },
+    {
+      "id": "fix-explorer-white-flash",
+      "name": "Fix white flashes in explorer",
+      "author": "Mgg Sk",
+      "github": "https://github.com/MGGSK",
+      "version": "1.4",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/fix-explorer-white-flash",
+      "source": "mods/catalog/fix-explorer-white-flash.wh.cpp",
+      "enabled": false
     },
     {
       "id": "force-kill-active-window",
@@ -434,7 +782,7 @@
       "name": "Better Volume Mixer Plus",
       "author": "DavidHiFi, 0Allu",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.1.0",
+      "version": "1.4.1",
       "license": "MIT",
       "origin": "local",
       "upstream": "https://windhawk.net/mods/better-volume-mixer",
@@ -466,6 +814,42 @@
       "enabled": true
     },
     {
+      "id": "local@gpu-accelerated-explorer-view-plus",
+      "name": "GPU Accelerated Explorer View Plus",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "GPL-2.0",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/gpu-accelerated-explorer-view",
+      "source": "mods/local/gpu-accelerated-explorer-view-plus/gpu-accelerated-explorer-view-plus.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@magic-pointer-plus",
+      "name": "Magic Pointer Plus",
+      "author": "DavidHiFi, Rono",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.5",
+      "license": "",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/magic-pointer-plus/magic-pointer-plus.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@recycle-bin-tray-plus",
+      "name": "Recycle Bin Tray Plus",
+      "author": "DavidHiFi, Wildstyle23",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.1",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/recycle-bin-tray-plus/recycle-bin-tray-plus.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "local@remove-uwp-title-bars-plus",
       "name": "Remove UWP Title Bars Plus",
       "author": "DavidHiFi, Anixx",
@@ -475,6 +859,30 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/remove-uwp-title-bars-plus/remove-uwp-title-bars-plus.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-dictate",
+      "name": "Seamless Dictate",
+      "author": "DavidHiFi, caliberda",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.4",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-dictate/seamless-dictate.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-flyouts",
+      "name": "Seamless Flyouts",
+      "author": "DavidHiFi, Undisputed00x",
+      "github": "https://github.com/DavidHiFi",
+      "version": "2.0.0",
+      "license": "",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-flyouts/seamless-flyouts.wh.cpp",
       "enabled": true
     },
     {
@@ -514,6 +922,30 @@
       "enabled": true
     },
     {
+      "id": "local@start-everything-plus",
+      "name": "Everything & Power Tools in the Start Menu Plus",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.1.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/start-everything",
+      "source": "mods/local/start-everything-plus/start-everything-plus.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "local@taskbar-ai-quota-opencode",
+      "name": "Taskbar AI Quota Bars Plus",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.6.5.1",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/taskbar-ai-quota",
+      "source": "mods/local/taskbar-ai-quota-opencode/taskbar-ai-quota-opencode.wh.cpp",
+      "enabled": false
+    },
+    {
       "id": "local@taskbar-ai-quota-plus",
       "name": "Taskbar AI Quota Bars Plus",
       "author": "DavidHiFi, Cleroth",
@@ -535,6 +967,18 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/tourne-table-desktop-audio-visualizer",
       "source": "mods/local/taskbar-audio-visualizer/taskbar-audio-visualizer.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@taskbar-collapse-to-running-plus",
+      "name": "Taskbar Collapse to Running Plus",
+      "author": "DavidHiFi, Lars",
+      "github": "https://github.com/LarsGudm",
+      "version": "1.1.5",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/taskbar-collapse-to-running",
+      "source": "mods/local/taskbar-collapse-to-running-plus/taskbar-collapse-to-running-plus.wh.cpp",
       "enabled": true
     },
     {
@@ -560,6 +1004,18 @@
       "upstream": "",
       "source": "mods/local/taskbar-system-info-weather/taskbar-system-info-weather.wh.cpp",
       "enabled": true
+    },
+    {
+      "id": "local@taskbar-weather",
+      "name": "Taskbar Weather",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.4.2",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/taskbar-weather/taskbar-weather.wh.cpp",
+      "enabled": false
     },
     {
       "id": "local@theme-tool-plus",
@@ -614,7 +1070,7 @@
       "name": "Window Manager Plus",
       "author": "DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.2.2",
+      "version": "1.3.1",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
@@ -643,7 +1099,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/magic-pointer",
       "source": "mods/catalog/magic-pointer.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "micrographics-taskbar-clock",
@@ -656,702 +1112,6 @@
       "upstream": "https://windhawk.net/mods/micrographics-taskbar-clock",
       "source": "mods/catalog/micrographics-taskbar-clock.wh.cpp",
       "enabled": true
-    },
-    {
-      "id": "never-auto-expand-explorer-tree-items",
-      "name": "Never Auto-Expand Explorer Tree Items",
-      "author": "Kitsune",
-      "github": "https://github.com/AromaKitsune",
-      "version": "1.1.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/never-auto-expand-explorer-tree-items",
-      "source": "mods/catalog/never-auto-expand-explorer-tree-items.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "notifications-placement",
-      "name": "Customize Windows notifications placement",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.2.4",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/notifications-placement",
-      "source": "mods/catalog/notifications-placement.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "npp-taskdlg-textcolor",
-      "name": "Notepad++ Dark Dialog Fix",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.2",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/npp-taskdlg-textcolor/npp-taskdlg-textcolor.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "remap-copilot-key",
-      "name": "Remap Copilot Key",
-      "author": "Lukvbp",
-      "github": "https://github.com/lukvbp",
-      "version": "2.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/remap-copilot-key",
-      "source": "mods/catalog/remap-copilot-key.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "remove-context-menu-items",
-      "name": "Remove Context Menu Items",
-      "author": "Armaninyow",
-      "github": "https://github.com/armaninyow",
-      "version": "1.12.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/remove-context-menu-items",
-      "source": "mods/catalog/remove-context-menu-items.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "remove-ms-store-open-with",
-      "name": "Open With - Remove Microsoft Store Menu Item",
-      "author": "aubymori",
-      "github": "https://github.com/aubymori",
-      "version": "1.0.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/remove-ms-store-open-with",
-      "source": "mods/catalog/remove-ms-store-open-with.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "restore-folder-menubar-25h2",
-      "name": "ExplorerFrame and menubar fixes fork",
-      "author": "Anixx",
-      "github": "https://github.com/Anixx",
-      "version": "3.1.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/restore-folder-menubar-25h2",
-      "source": "mods/catalog/restore-folder-menubar-25h2.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "shell-flyout-positions",
-      "name": "Shell Flyout Positions",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.3",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/shell-flyout-positions",
-      "source": "mods/catalog/shell-flyout-positions.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "smart-process-priority-ram-optimizer",
-      "name": "Smart Process Priority & RAM Optimizer",
-      "author": "gilnett",
-      "github": "https://github.com/gilnett",
-      "version": "1.0.2",
-      "license": "GPL-3.0",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/smart-process-priority-ram-optimizer",
-      "source": "mods/catalog/smart-process-priority-ram-optimizer.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "spoof-machine-guid",
-      "name": "Spoof MachineGuid",
-      "author": "loliri",
-      "github": "https://github.com/loliri",
-      "version": "1.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/spoof-machine-guid",
-      "source": "mods/catalog/spoof-machine-guid.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "start-menu-open-real-file-location",
-      "name": "Start Menu Open Real File Location",
-      "author": "Alchemy",
-      "github": "https://github.com/alchemyyy",
-      "version": "1.1.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/start-menu-open-real-file-location",
-      "source": "mods/catalog/start-menu-open-real-file-location.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "start-search-bing-redirector",
-      "name": "Start Search Bing Redirector",
-      "author": "takattowo",
-      "github": "https://github.com/takattowo",
-      "version": "1.0.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/start-search-bing-redirector",
-      "source": "mods/catalog/start-search-bing-redirector.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "startup-app-delay-fix",
-      "name": "Startup App Delay Fix",
-      "author": "meteoni",
-      "github": "https://github.com/Meteoni",
-      "version": "1.4.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/startup-app-delay-fix",
-      "source": "mods/catalog/startup-app-delay-fix.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "taskbar-blob-shape",
-      "name": "Taskbar Blob Shape",
-      "author": "Deen-0x",
-      "github": "https://github.com/Deen-0x",
-      "version": "1.2.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-blob-shape",
-      "source": "mods/catalog/taskbar-blob-shape.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "taskbar-button-click",
-      "name": "Middle click to close on the taskbar",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.0.9",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-button-click",
-      "source": "mods/catalog/taskbar-button-click.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@taskbar-collapse-to-running-plus",
-      "name": "Taskbar Collapse to Running Plus",
-      "author": "DavidHiFi, Lars",
-      "github": "https://github.com/LarsGudm",
-      "version": "1.1.5",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "https://windhawk.net/mods/taskbar-collapse-to-running",
-      "source": "mods/local/taskbar-collapse-to-running-plus/taskbar-collapse-to-running-plus.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "taskbar-icon-size",
-      "name": "Taskbar height and icon size",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.3.10",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-icon-size",
-      "source": "mods/catalog/taskbar-icon-size.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "taskbar-notification-icon-spacing",
-      "name": "Taskbar tray icon spacing and grid",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.4",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-notification-icon-spacing",
-      "source": "mods/catalog/taskbar-notification-icon-spacing.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "taskbar-on-top",
-      "name": "Taskbar on top for Windows 11",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.3",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-on-top",
-      "source": "mods/catalog/taskbar-on-top.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "taskbar-restart-explorer",
-      "name": "Taskbar Restart Explorer",
-      "author": "Mgrmjp",
-      "github": "https://github.com/Mgrmjp",
-      "version": "1.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-restart-explorer",
-      "source": "mods/catalog/taskbar-restart-explorer.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "taskbar-thumbnail-size",
-      "name": "Taskbar Thumbnail Size",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.2.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-thumbnail-size",
-      "source": "mods/catalog/taskbar-thumbnail-size.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "taskbar-thumbnail-stats",
-      "name": "Taskbar Thumbnail Stats",
-      "author": "HaVeN80",
-      "github": "https://github.com/haven80",
-      "version": "1.5",
-      "license": "GPL-3.0",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-thumbnail-stats",
-      "source": "mods/catalog/taskbar-thumbnail-stats.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "taskbar-tray-system-icon-tweaks",
-      "name": "Taskbar tray system icon tweaks",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.3.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-tray-system-icon-tweaks",
-      "source": "mods/catalog/taskbar-tray-system-icon-tweaks.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "taskbar-volume-control",
-      "name": "Taskbar Volume Control",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.3.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-volume-control",
-      "source": "mods/catalog/taskbar-volume-control.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "titlebar-for-everyone",
-      "name": "Titlebar For Everyone",
-      "author": "Ingan121",
-      "github": "https://github.com/Ingan121",
-      "version": "0.5",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/titlebar-for-everyone",
-      "source": "mods/catalog/titlebar-for-everyone.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "toggle-hidden-files",
-      "name": "Toggle Hidden Files",
-      "author": "Asteski",
-      "github": "https://github.com/Asteski",
-      "version": "1.1.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/toggle-hidden-files",
-      "source": "mods/catalog/toggle-hidden-files.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "translucent-windows",
-      "name": "Translucent Windows",
-      "author": "Undisputed00x",
-      "github": "https://github.com/Undisputed00x",
-      "version": "1.8.2",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/translucent-windows",
-      "source": "mods/catalog/translucent-windows.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "win-d-per-monitor",
-      "name": "Win+D per monitor(show desktop)",
-      "author": "easyatm",
-      "github": "https://github.com/easyatm",
-      "version": "1.5.260416",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/win-d-per-monitor",
-      "source": "mods/catalog/win-d-per-monitor.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "win11-custom-title-bar-colours",
-      "name": "Windows 11 Custom Title Bar Colours",
-      "author": "Th3Fanbus",
-      "github": "https://github.com/Th3Fanbus",
-      "version": "1.0.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/win11-custom-title-bar-colours",
-      "source": "mods/catalog/win11-custom-title-bar-colours.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "window-geometry-memory",
-      "name": "Where I Left It",
-      "author": "metanoid18",
-      "github": "https://github.com/Metanoid18",
-      "version": "1.2",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/window-geometry-memory",
-      "source": "mods/catalog/window-geometry-memory.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "windows-11-file-explorer-styler",
-      "name": "Windows 11 File Explorer Styler",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.7.2",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/windows-11-file-explorer-styler",
-      "source": "mods/catalog/windows-11-file-explorer-styler.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "windows-11-notification-center-styler",
-      "name": "Windows 11 Notification Center Styler",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.8",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/windows-11-notification-center-styler",
-      "source": "mods/catalog/windows-11-notification-center-styler.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "windows-11-taskbar-styler",
-      "name": "Windows 11 Taskbar Styler",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.10",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/windows-11-taskbar-styler",
-      "source": "mods/catalog/windows-11-taskbar-styler.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "windows-animations",
-      "name": "Windows Animations",
-      "author": "ReDrag",
-      "github": "https://github.com/redrag2105",
-      "version": "1.3.7",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/windows-animations",
-      "source": "mods/catalog/windows-animations.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "acrylic-color-glows",
-      "name": "Acrylic Color Glows",
-      "author": "HaVeN80",
-      "github": "https://github.com/haven80",
-      "version": "0.5.0",
-      "license": "GPL-3.0",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/acrylic-color-glows",
-      "source": "mods/catalog/acrylic-color-glows.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "alt-tab-flip-3d",
-      "name": "Alt+Tab Flip 3D (Vista Style)",
-      "author": "caliberda",
-      "github": "https://github.com/cesarkali",
-      "version": "1.5.3",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/alt-tab-flip-3d",
-      "source": "mods/catalog/alt-tab-flip-3d.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "always-allow-ctrl-shift-enter",
-      "name": "Always Allow CTRL+SHIFT+ENTER",
-      "author": "aubymori",
-      "github": "https://github.com/aubymori",
-      "version": "1.0.0",
-      "license": "BSD-3-Clause",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/always-allow-ctrl-shift-enter",
-      "source": "mods/catalog/always-allow-ctrl-shift-enter.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "better-dialogs",
-      "name": "Better Dialogs",
-      "author": "FireBlade",
-      "github": "https://github.com/FireBlade211",
-      "version": "1.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/better-dialogs",
-      "source": "mods/catalog/better-dialogs.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "clipboard-history-upgrade",
-      "name": "Smart Copy & Paste",
-      "author": "SwiftExplorer567",
-      "github": "https://github.com/SwiftExplorer567",
-      "version": "1.3.2",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/clipboard-history-upgrade",
-      "source": "mods/catalog/clipboard-history-upgrade.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "close-explorer-on-esc",
-      "name": "Close Explorer on Esc",
-      "author": "lieyanbang",
-      "github": "https://github.com/lieyanbang",
-      "version": "1.2",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/close-explorer-on-esc",
-      "source": "mods/catalog/close-explorer-on-esc.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "compact-start-menu",
-      "name": "Compact Start Menu",
-      "author": "Asteski",
-      "github": "https://github.com/Asteski",
-      "version": "1.0.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/compact-start-menu",
-      "source": "mods/catalog/compact-start-menu.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "context-menu-preloader",
-      "name": "Context Menu Preloader",
-      "author": "Lockframe",
-      "github": "https://github.com/Lockframe",
-      "version": "1.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/context-menu-preloader",
-      "source": "mods/catalog/context-menu-preloader.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "copy-queue",
-      "name": "Copy Queue",
-      "author": "Nerdworld",
-      "github": "https://github.com/nerdworldDE",
-      "version": "1.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/copy-queue",
-      "source": "mods/catalog/copy-queue.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "dark-menus",
-      "name": "Dark mode context menus",
-      "author": "Mgg Sk",
-      "github": "https://github.com/MGGSK",
-      "version": "1.4.2",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/dark-menus",
-      "source": "mods/catalog/dark-menus.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "edge-doubleclick-resize",
-      "name": "Double-Click Window Edge to Maximize Width",
-      "author": "Hamid",
-      "github": "https://github.com/nh4700-ai",
-      "version": "1.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/edge-doubleclick-resize",
-      "source": "mods/catalog/edge-doubleclick-resize.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "enhanced-disk-usage",
-      "name": "Enhanced Disk Usage",
-      "author": "bbmaster123",
-      "github": "https://github.com/bbmaster123",
-      "version": "1.2.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/enhanced-disk-usage",
-      "source": "mods/catalog/enhanced-disk-usage.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "explorer-command-bar",
-      "name": "Explorer Command Bar",
-      "author": "DanRotaru",
-      "github": "https://github.com/DanRotaru",
-      "version": "1.1.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-command-bar",
-      "source": "mods/catalog/explorer-command-bar.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "explorer-context-menu-classic",
-      "name": "Classic context menu on Windows 11",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.0.2",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-context-menu-classic",
-      "source": "mods/catalog/explorer-context-menu-classic.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "explorer-ctrln-newfile",
-      "name": "Explorer Ctrl+N to New File",
-      "author": "lieyanbang",
-      "github": "https://github.com/lieyanbang",
-      "version": "1.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-ctrln-newfile",
-      "source": "mods/catalog/explorer-ctrln-newfile.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "explorer-hide-focus-border",
-      "name": "File Explorer Focus Border Remover",
-      "author": "Hùng",
-      "github": "https://github.com/NoMorePlz",
-      "version": "1.0.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-hide-focus-border",
-      "source": "mods/catalog/explorer-hide-focus-border.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "explorer-no-min-size",
-      "name": "Explorer No Minimum Window Size",
-      "author": "Anixx",
-      "github": "https://github.com/Anixx",
-      "version": "1.0.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-no-min-size",
-      "source": "mods/catalog/explorer-no-min-size.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "explorer-title-bar-label",
-      "name": "Explorer Title Bar Label",
-      "author": "digART",
-      "github": "https://github.com/digart11",
-      "version": "1.0.0",
-      "license": "GPL-3.0",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-title-bar-label",
-      "source": "mods/catalog/explorer-title-bar-label.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "explorer-treeitem-tweaker",
-      "name": "Explorer TreeItem Tweaker",
-      "author": "Languster",
-      "github": "https://github.com/Languster",
-      "version": "1.1.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-treeitem-tweaker",
-      "source": "mods/catalog/explorer-treeitem-tweaker.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "local@gpu-accelerated-explorer-view-plus",
-      "name": "GPU Accelerated Explorer View Plus",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.0",
-      "license": "GPL-2.0",
-      "origin": "local",
-      "upstream": "https://windhawk.net/mods/gpu-accelerated-explorer-view",
-      "source": "mods/local/gpu-accelerated-explorer-view-plus/gpu-accelerated-explorer-view-plus.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "file-explorer-remove-suffixes",
-      "name": "Remove Taskbar Window Suffixes",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.1.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/file-explorer-remove-suffixes",
-      "source": "mods/catalog/file-explorer-remove-suffixes.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "fix-explorer-white-flash",
-      "name": "Fix white flashes in explorer",
-      "author": "Mgg Sk",
-      "github": "https://github.com/MGGSK",
-      "version": "1.4",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/fix-explorer-white-flash",
-      "source": "mods/catalog/fix-explorer-white-flash.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "local@taskbar-ai-quota-opencode",
-      "name": "Taskbar AI Quota Bars Plus",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.6.5.1",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "https://windhawk.net/mods/taskbar-ai-quota",
-      "source": "mods/local/taskbar-ai-quota-opencode/taskbar-ai-quota-opencode.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "local@taskbar-weather",
-      "name": "Taskbar Weather",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.4.2",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/taskbar-weather/taskbar-weather.wh.cpp",
-      "enabled": false
     },
     {
       "id": "minimize-to-tray",
@@ -1378,6 +1138,18 @@
       "enabled": false
     },
     {
+      "id": "move-window-to-monitor",
+      "name": "Move Window to Monitor",
+      "author": "TomberWolf",
+      "github": "https://github.com/TomberWolf",
+      "version": "1.1.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/move-window-to-monitor",
+      "source": "mods/catalog/move-window-to-monitor.wh.cpp",
+      "enabled": false
+    },
+    {
       "id": "mspaint-dark",
       "name": "Dark Paint",
       "author": "ahmed605",
@@ -1390,6 +1162,30 @@
       "enabled": false
     },
     {
+      "id": "net-speed-taskbar",
+      "name": "Taskbar Network Speed Indicator",
+      "author": "Narayan",
+      "github": "https://github.com/NarayanChetri",
+      "version": "1.6",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/net-speed-taskbar",
+      "source": "mods/catalog/net-speed-taskbar.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "never-auto-expand-explorer-tree-items",
+      "name": "Never Auto-Expand Explorer Tree Items",
+      "author": "Kitsune",
+      "github": "https://github.com/AromaKitsune",
+      "version": "1.1.1",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/never-auto-expand-explorer-tree-items",
+      "source": "mods/catalog/never-auto-expand-explorer-tree-items.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "notepad-dark-mode",
       "name": "Dark Mode for Notepad",
       "author": "m417z",
@@ -1400,6 +1196,30 @@
       "upstream": "https://windhawk.net/mods/notepad-dark-mode",
       "source": "mods/catalog/notepad-dark-mode.wh.cpp",
       "enabled": false
+    },
+    {
+      "id": "notifications-placement",
+      "name": "Customize Windows notifications placement",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.2.4",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/notifications-placement",
+      "source": "mods/catalog/notifications-placement.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "npp-taskdlg-textcolor",
+      "name": "Notepad++ Dark Dialog Fix",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.2",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/npp-taskdlg-textcolor/npp-taskdlg-textcolor.wh.cpp",
+      "enabled": true
     },
     {
       "id": "overhaulded-alt-tab",
@@ -1474,6 +1294,30 @@
       "enabled": false
     },
     {
+      "id": "remap-copilot-key",
+      "name": "Remap Copilot Key",
+      "author": "Lukvbp",
+      "github": "https://github.com/lukvbp",
+      "version": "2.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/remap-copilot-key",
+      "source": "mods/catalog/remap-copilot-key.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "remove-context-menu-items",
+      "name": "Remove Context Menu Items",
+      "author": "Armaninyow",
+      "github": "https://github.com/armaninyow",
+      "version": "1.12.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/remove-context-menu-items",
+      "source": "mods/catalog/remove-context-menu-items.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "remove-fullscreen-popup-chrome",
       "name": "Remove \"Exit Fullscreen\" popup in Chrome",
       "author": "lorenzoc01",
@@ -1484,6 +1328,30 @@
       "upstream": "https://windhawk.net/mods/remove-fullscreen-popup-chrome",
       "source": "mods/catalog/remove-fullscreen-popup-chrome.wh.cpp",
       "enabled": false
+    },
+    {
+      "id": "remove-ms-store-open-with",
+      "name": "Open With - Remove Microsoft Store Menu Item",
+      "author": "aubymori",
+      "github": "https://github.com/aubymori",
+      "version": "1.0.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/remove-ms-store-open-with",
+      "source": "mods/catalog/remove-ms-store-open-with.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "restore-folder-menubar-25h2",
+      "name": "ExplorerFrame and menubar fixes fork",
+      "author": "Anixx",
+      "github": "https://github.com/Anixx",
+      "version": "3.1.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/restore-folder-menubar-25h2",
+      "source": "mods/catalog/restore-folder-menubar-25h2.wh.cpp",
+      "enabled": true
     },
     {
       "id": "search-menu-inspect-helper",
@@ -1510,6 +1378,18 @@
       "enabled": false
     },
     {
+      "id": "shell-flyout-positions",
+      "name": "Shell Flyout Positions",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.3",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/shell-flyout-positions",
+      "source": "mods/catalog/shell-flyout-positions.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "simple-window-switcher",
       "name": "Simple Window Switcher",
       "author": "Lone",
@@ -1534,6 +1414,66 @@
       "enabled": false
     },
     {
+      "id": "smart-process-priority-ram-optimizer",
+      "name": "Smart Process Priority & RAM Optimizer",
+      "author": "gilnett",
+      "github": "https://github.com/gilnett",
+      "version": "1.0.2",
+      "license": "GPL-3.0",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/smart-process-priority-ram-optimizer",
+      "source": "mods/catalog/smart-process-priority-ram-optimizer.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "snap-commander",
+      "name": "Snap Commander",
+      "author": "Asteski",
+      "github": "https://github.com/Asteski",
+      "version": "1.0.0",
+      "license": null,
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/snap-commander",
+      "source": "mods/catalog/snap-commander.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "spoof-machine-guid",
+      "name": "Spoof MachineGuid",
+      "author": "loliri",
+      "github": "https://github.com/loliri",
+      "version": "1.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/spoof-machine-guid",
+      "source": "mods/catalog/spoof-machine-guid.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "start-everything",
+      "name": "Everything & Power Tools in the Start Menu",
+      "author": "bardelyne",
+      "github": "https://github.com/bardelyne",
+      "version": "1.0",
+      "license": "GPL-3.0",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/start-everything",
+      "source": "mods/catalog/start-everything.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "start-menu-open-real-file-location",
+      "name": "Start Menu Open Real File Location",
+      "author": "Alchemy",
+      "github": "https://github.com/alchemyyy",
+      "version": "1.1.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/start-menu-open-real-file-location",
+      "source": "mods/catalog/start-menu-open-real-file-location.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "start-menu-size",
       "name": "Start Menu Size",
       "author": "m417z",
@@ -1544,6 +1484,30 @@
       "upstream": "https://windhawk.net/mods/start-menu-size",
       "source": "mods/catalog/start-menu-size.wh.cpp",
       "enabled": false
+    },
+    {
+      "id": "start-search-bing-redirector",
+      "name": "Start Search Bing Redirector",
+      "author": "takattowo",
+      "github": "https://github.com/takattowo",
+      "version": "1.0.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/start-search-bing-redirector",
+      "source": "mods/catalog/start-search-bing-redirector.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "startup-app-delay-fix",
+      "name": "Startup App Delay Fix",
+      "author": "meteoni",
+      "github": "https://github.com/Meteoni",
+      "version": "1.4.1",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/startup-app-delay-fix",
+      "source": "mods/catalog/startup-app-delay-fix.wh.cpp",
+      "enabled": true
     },
     {
       "id": "task-manager-tail",
@@ -1558,6 +1522,18 @@
       "enabled": false
     },
     {
+      "id": "taskbar-ai-quota",
+      "name": "Taskbar AI Quota Bars",
+      "author": "Cleroth",
+      "github": "https://github.com/Cleroth",
+      "version": "1.6.5",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-ai-quota",
+      "source": "mods/catalog/taskbar-ai-quota.wh.cpp",
+      "enabled": false
+    },
+    {
       "id": "taskbar-app-memory",
       "name": "Taskbar App Memory",
       "author": "buedgik",
@@ -1568,6 +1544,30 @@
       "upstream": "https://windhawk.net/mods/taskbar-app-memory",
       "source": "mods/catalog/taskbar-app-memory.wh.cpp",
       "enabled": false
+    },
+    {
+      "id": "taskbar-blob-shape",
+      "name": "Taskbar Blob Shape",
+      "author": "Deen-0x",
+      "github": "https://github.com/Deen-0x",
+      "version": "1.2.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-blob-shape",
+      "source": "mods/catalog/taskbar-blob-shape.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "taskbar-button-click",
+      "name": "Middle click to close on the taskbar",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.0.9",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-button-click",
+      "source": "mods/catalog/taskbar-button-click.wh.cpp",
+      "enabled": true
     },
     {
       "id": "taskbar-clock-customization",
@@ -1630,6 +1630,114 @@
       "enabled": false
     },
     {
+      "id": "taskbar-icon-size",
+      "name": "Taskbar height and icon size",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.3.10",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-icon-size",
+      "source": "mods/catalog/taskbar-icon-size.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "taskbar-notification-icon-spacing",
+      "name": "Taskbar tray icon spacing and grid",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.4",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-notification-icon-spacing",
+      "source": "mods/catalog/taskbar-notification-icon-spacing.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "taskbar-on-top",
+      "name": "Taskbar on top for Windows 11",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.3",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-on-top",
+      "source": "mods/catalog/taskbar-on-top.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "taskbar-restart-explorer",
+      "name": "Taskbar Restart Explorer",
+      "author": "Mgrmjp",
+      "github": "https://github.com/Mgrmjp",
+      "version": "1.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-restart-explorer",
+      "source": "mods/catalog/taskbar-restart-explorer.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "taskbar-system-info",
+      "name": "Taskbar System Info",
+      "author": "Yevhenii Starychenko",
+      "github": "https://github.com/starychenko",
+      "version": "1.5.0",
+      "license": "GPL-3.0",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-system-info",
+      "source": "mods/catalog/taskbar-system-info.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "taskbar-thumbnail-size",
+      "name": "Taskbar Thumbnail Size",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.2.1",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-thumbnail-size",
+      "source": "mods/catalog/taskbar-thumbnail-size.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "taskbar-thumbnail-stats",
+      "name": "Taskbar Thumbnail Stats",
+      "author": "HaVeN80",
+      "github": "https://github.com/haven80",
+      "version": "1.5",
+      "license": "GPL-3.0",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-thumbnail-stats",
+      "source": "mods/catalog/taskbar-thumbnail-stats.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "taskbar-tray-system-icon-tweaks",
+      "name": "Taskbar tray system icon tweaks",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.3.1",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-tray-system-icon-tweaks",
+      "source": "mods/catalog/taskbar-tray-system-icon-tweaks.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "taskbar-volume-control",
+      "name": "Taskbar Volume Control",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.3.1",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/taskbar-volume-control",
+      "source": "mods/catalog/taskbar-volume-control.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "timer-resolution-control",
       "name": "Timer Resolution Control",
       "author": "m417z",
@@ -1640,6 +1748,54 @@
       "upstream": "https://windhawk.net/mods/timer-resolution-control",
       "source": "mods/catalog/timer-resolution-control.wh.cpp",
       "enabled": false
+    },
+    {
+      "id": "titlebar-for-everyone",
+      "name": "Titlebar For Everyone",
+      "author": "Ingan121",
+      "github": "https://github.com/Ingan121",
+      "version": "0.5",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/titlebar-for-everyone",
+      "source": "mods/catalog/titlebar-for-everyone.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "toggle-hidden-files",
+      "name": "Toggle Hidden Files",
+      "author": "Asteski",
+      "github": "https://github.com/Asteski",
+      "version": "1.1.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/toggle-hidden-files",
+      "source": "mods/catalog/toggle-hidden-files.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "tourne-table-desktop-audio-visualizer",
+      "name": "Tourne'Table [Audio Visualizer]",
+      "author": "USER-TOURNE",
+      "github": "https://github.com/USER-TOURNE",
+      "version": "1.3.0",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/tourne-table-desktop-audio-visualizer",
+      "source": "mods/catalog/tourne-table-desktop-audio-visualizer.wh.cpp",
+      "enabled": false
+    },
+    {
+      "id": "translucent-windows",
+      "name": "Translucent Windows",
+      "author": "Undisputed00x",
+      "github": "https://github.com/Undisputed00x",
+      "version": "1.8.2",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/translucent-windows",
+      "source": "mods/catalog/translucent-windows.wh.cpp",
+      "enabled": true
     },
     {
       "id": "uxtheme-hook",
@@ -1666,6 +1822,18 @@
       "enabled": false
     },
     {
+      "id": "win-d-per-monitor",
+      "name": "Win+D per monitor(show desktop)",
+      "author": "easyatm",
+      "github": "https://github.com/easyatm",
+      "version": "1.5.260416",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/win-d-per-monitor",
+      "source": "mods/catalog/win-d-per-monitor.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "win11-accent-border",
       "name": "Windows 11 Accent Window Border",
       "author": "Guerra24",
@@ -1678,6 +1846,18 @@
       "enabled": false
     },
     {
+      "id": "win11-custom-title-bar-colours",
+      "name": "Windows 11 Custom Title Bar Colours",
+      "author": "Th3Fanbus",
+      "github": "https://github.com/Th3Fanbus",
+      "version": "1.0.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/win11-custom-title-bar-colours",
+      "source": "mods/catalog/win11-custom-title-bar-colours.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "win32-ui-modernizer",
       "name": "Win32 UI Modernizer",
       "author": "crazyboyybs",
@@ -1688,6 +1868,42 @@
       "upstream": "https://windhawk.net/mods/win32-ui-modernizer",
       "source": "mods/catalog/win32-ui-modernizer.wh.cpp",
       "enabled": false
+    },
+    {
+      "id": "window-geometry-memory",
+      "name": "Where I Left It",
+      "author": "metanoid18",
+      "github": "https://github.com/Metanoid18",
+      "version": "1.2",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/window-geometry-memory",
+      "source": "mods/catalog/window-geometry-memory.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "windows-11-file-explorer-styler",
+      "name": "Windows 11 File Explorer Styler",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.7.2",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/windows-11-file-explorer-styler",
+      "source": "mods/catalog/windows-11-file-explorer-styler.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "windows-11-notification-center-styler",
+      "name": "Windows 11 Notification Center Styler",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.8",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/windows-11-notification-center-styler",
+      "source": "mods/catalog/windows-11-notification-center-styler.wh.cpp",
+      "enabled": true
     },
     {
       "id": "windows-11-settings-styler",
@@ -1726,6 +1942,30 @@
       "enabled": false
     },
     {
+      "id": "windows-11-taskbar-styler",
+      "name": "Windows 11 Taskbar Styler",
+      "author": "m417z",
+      "github": "https://github.com/m417z",
+      "version": "1.10",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/windows-11-taskbar-styler",
+      "source": "mods/catalog/windows-11-taskbar-styler.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "windows-animations",
+      "name": "Windows Animations",
+      "author": "ReDrag",
+      "github": "https://github.com/redrag2105",
+      "version": "1.3.7",
+      "license": "MIT",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/windows-animations",
+      "source": "mods/catalog/windows-animations.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "wobbly-windows",
       "name": "Wobbly Windows",
       "author": "lalimatyus",
@@ -1736,198 +1976,6 @@
       "upstream": "https://windhawk.net/mods/wobbly-windows",
       "source": "mods/catalog/wobbly-windows.wh.cpp",
       "enabled": false
-    },
-    {
-      "id": "start-everything",
-      "name": "Everything & Power Tools in the Start Menu",
-      "author": "bardelyne",
-      "github": "https://github.com/bardelyne",
-      "version": "1.0",
-      "license": "GPL-3.0",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/start-everything",
-      "source": "mods/catalog/start-everything.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "local@start-everything-plus",
-      "name": "Everything & Power Tools in the Start Menu Plus",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.1.0",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "https://windhawk.net/mods/start-everything",
-      "source": "mods/local/start-everything-plus/start-everything-plus.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "alt-snap-drag",
-      "name": "AltSnap",
-      "author": "DavidHiFi, m417z, RamonUnch, Stefan Sundin",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.2.4",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/alt-snap-drag/alt-snap.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "drag-to-delete-plus",
-      "name": "Drag to Delete Plus",
-      "author": "DavidHiFi, iMAboud",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.1.0",
-      "license": null,
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/drag-to-delete-plus/drag-to-delete-plus.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "alt-drag",
-      "name": "AltDrag",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.1",
-      "license": null,
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/alt-drag",
-      "source": "mods/catalog/alt-drag.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "better-volume-mixer",
-      "name": "Better Volume Mixer",
-      "author": "0Allu",
-      "github": "https://github.com/0Allu",
-      "version": "1.4.5",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/better-volume-mixer",
-      "source": "mods/catalog/better-volume-mixer.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "explorer-folder-bookmarks-bar",
-      "name": "Explorer Folder Bookmarks Bar",
-      "author": "Maxim Fomin",
-      "github": "https://github.com/MaxITService",
-      "version": "0.7.8",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-folder-bookmarks-bar",
-      "source": "mods/catalog/explorer-folder-bookmarks-bar.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "explorer-font-changer",
-      "name": "Explorer Font Changer",
-      "author": "Gabriela Cristei",
-      "github": "https://github.com/cristeigabriela",
-      "version": "0.2",
-      "license": null,
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-font-changer",
-      "source": "mods/catalog/explorer-font-changer.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "explorer-visual-tweaks-dark",
-      "name": "Explorer Visual Tweaks Dark",
-      "author": "VitalS",
-      "github": "https://github.com/VitalSkib",
-      "version": "1.0.1",
-      "license": null,
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-visual-tweaks-dark",
-      "source": "mods/catalog/explorer-visual-tweaks-dark.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "move-window-to-monitor",
-      "name": "Move Window to Monitor",
-      "author": "TomberWolf",
-      "github": "https://github.com/TomberWolf",
-      "version": "1.1.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/move-window-to-monitor",
-      "source": "mods/catalog/move-window-to-monitor.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "net-speed-taskbar",
-      "name": "Taskbar Network Speed Indicator",
-      "author": "Narayan",
-      "github": "https://github.com/NarayanChetri",
-      "version": "1.6",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/net-speed-taskbar",
-      "source": "mods/catalog/net-speed-taskbar.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "snap-commander",
-      "name": "Snap Commander",
-      "author": "Asteski",
-      "github": "https://github.com/Asteski",
-      "version": "1.0.0",
-      "license": null,
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/snap-commander",
-      "source": "mods/catalog/snap-commander.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "taskbar-ai-quota",
-      "name": "Taskbar AI Quota Bars",
-      "author": "Cleroth",
-      "github": "https://github.com/Cleroth",
-      "version": "1.6.5",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-ai-quota",
-      "source": "mods/catalog/taskbar-ai-quota.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "taskbar-system-info",
-      "name": "Taskbar System Info",
-      "author": "Yevhenii Starychenko",
-      "github": "https://github.com/starychenko",
-      "version": "1.5.0",
-      "license": "GPL-3.0",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/taskbar-system-info",
-      "source": "mods/catalog/taskbar-system-info.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "tourne-table-desktop-audio-visualizer",
-      "name": "Tourne'Table [Audio Visualizer]",
-      "author": "USER-TOURNE",
-      "github": "https://github.com/USER-TOURNE",
-      "version": "1.3.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/tourne-table-desktop-audio-visualizer",
-      "source": "mods/catalog/tourne-table-desktop-audio-visualizer.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "chromium-cursor-remap",
-      "name": "Chromium Cursor Remap",
-      "author": "mazany",
-      "github": "https://github.com/mazany",
-      "version": "1.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/chromium-cursor-remap",
-      "source": "mods/catalog/chromium-cursor-remap.wh.cpp",
-      "enabled": true
     }
   ]
 }
