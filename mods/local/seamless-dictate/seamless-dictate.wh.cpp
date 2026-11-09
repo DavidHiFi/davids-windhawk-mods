@@ -6,7 +6,7 @@
 // @description     Press a shortcut, speak, and your words are typed where the cursor is, in any app: transcribed and cleaned up by AI in your style (natural, professional, prompt) or translated, with a free key (Groq, Gemini, Mistral and more)
 // @description:pt-BR Aperte um atalho, fale, e suas palavras são digitadas onde está o cursor, em qualquer app: transcritas e limpas por IA no seu estilo (natural, profissional, prompt) ou traduzidas, com uma chave grátis (Groq, Gemini, Mistral e outros)
 // @description:es Pulsa un atajo, habla y tus palabras se escriben donde está el cursor, en cualquier app: transcritas y limpiadas por IA en tu estilo (natural, profesional, prompt) o traducidas, con una clave gratis (Groq, Gemini, Mistral y más)
-// @version         1.0.2
+// @version         1.0.3
 // @author          DavidHiFi, caliberda
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -2258,6 +2258,8 @@ struct Config {
     // Alt+V is Office's Paste Special; it's in the icon's menu).
     std::string commandHotkey = "Ctrl+Alt+K";
     std::string pasteLastHotkey;
+    // Turns micPrivacy on or off from anywhere (off by default).
+    std::string micPrivacyHotkey;
     bool holdMode = false;
     // "auto" or a Whisper language code.
     std::string speechLanguage = "auto";
@@ -2538,6 +2540,7 @@ void NormalizeConfig(Config* c) {
     c->translateHotkey = CleanText(c->translateHotkey, 60);
     c->commandHotkey = CleanText(c->commandHotkey, 60);
     c->pasteLastHotkey = CleanText(c->pasteLastHotkey, 60);
+    c->micPrivacyHotkey = CleanText(c->micPrivacyHotkey, 60);
     if (!ParseAccent(c->accent)) {
         c->accent = Config{}.accent;
     }
@@ -2623,6 +2626,7 @@ std::string ConfigToJson(const Config& c) {
                        ",\"translateHotkey\":" + JsonQuote(c.translateHotkey) +
                        ",\"commandHotkey\":" + JsonQuote(c.commandHotkey) +
                        ",\"pasteLastHotkey\":" + JsonQuote(c.pasteLastHotkey) +
+                       ",\"micPrivacyHotkey\":" + JsonQuote(c.micPrivacyHotkey) +
                        ",\"sounds\":" + boolean(c.sounds) +
                        ",\"accent\":" + JsonQuote(c.accent) +
                        ",\"overlayWidth\":" + JsonQuote(c.overlayWidth) +
@@ -2703,6 +2707,7 @@ Config ConfigFromJson(std::string_view text) {
     str("translateHotkey", &c.translateHotkey);
     str("commandHotkey", &c.commandHotkey);
     str("pasteLastHotkey", &c.pasteLastHotkey);
+    str("micPrivacyHotkey", &c.micPrivacyHotkey);
     str("accent", &c.accent);
     str("overlayWidth", &c.overlayWidth);
     str("overlayGlass", &c.overlayGlass);
@@ -4949,6 +4954,7 @@ struct Settings {
     std::wstring translateHotkey;
     std::wstring commandHotkey;
     std::wstring pasteLastHotkey;
+    std::wstring micPrivacyHotkey;
     bool holdMode = false;
     std::wstring speechLanguage;
     std::wstring microphone;
@@ -4970,6 +4976,7 @@ Settings CurrentSettings() {
     s.translateHotkey = Utf8ToWide(c.translateHotkey);
     s.commandHotkey = Utf8ToWide(c.commandHotkey);
     s.pasteLastHotkey = Utf8ToWide(c.pasteLastHotkey);
+    s.micPrivacyHotkey = Utf8ToWide(c.micPrivacyHotkey);
     s.holdMode = c.holdMode;
     s.speechLanguage = Utf8ToWide(c.speechLanguage);
     s.microphone = Utf8ToWide(c.microphone);
@@ -7765,7 +7772,7 @@ DWORD WINAPI PreviewThreadProc(void* param) {
 // freeze the UI thread, and a quick "stop" must never overtake the "start" it
 // belongs to.
 
-enum class CtlKind { Toggle, Hold, Stop, Escape, CommandStyle, PasteLast, DictateNow, Retry };
+enum class CtlKind { Toggle, Hold, Stop, Escape, CommandStyle, PasteLast, DictateNow, Retry, MicPrivacy };
 
 struct Ctl {
     CtlKind kind;
@@ -8078,6 +8085,25 @@ void RetryFailed(UINT64 id, bool onlyCopy) {
     StartJob(std::move(job));
 }
 
+// The mic privacy shortcut: flips "Keep the microphone private" and says
+// which way it went. A recording already running keeps what it started with.
+void ToggleMicPrivacy() {
+    bool on = false;
+    UpdateConfig([&](Config& c) {
+        c.micPrivacy = !c.micPrivacy;
+        on = c.micPrivacy;
+    });
+    Log(L"Mic privacy %s by shortcut", on ? L"on" : L"off");
+    if (g_session) {
+        return;
+    }
+    ShowError(on ? T(L"Mic privacy on: other apps can't hear you while you dictate.",
+                     L"Privacidade do microfone ligada: outros apps não ouvem você enquanto dita.")
+                 : T(L"Mic privacy off: other apps can hear you while you dictate.",
+                     L"Privacidade do microfone desligada: outros apps ouvem você enquanto dita."),
+              true);
+}
+
 // "Paste again": the last dictation into the app in front now (from the
 // tray: the app the user was in).
 void PasteLast(bool fromMenu) {
@@ -8193,6 +8219,9 @@ DWORD WINAPI ControlThreadProc(void*) {
                 break;
             case CtlKind::PasteLast:
                 PasteLast(ctl.fromMenu);
+                break;
+            case CtlKind::MicPrivacy:
+                ToggleMicPrivacy();
                 break;
             case CtlKind::Retry:
                 RetryFailed(ctl.id, ctl.fromMenu);
@@ -9111,6 +9140,8 @@ constexpr int kHotkeyEscape = 2;
 constexpr int kHotkeyTranslate = 3;
 constexpr int kHotkeyCommand = 4;
 constexpr int kHotkeyPasteLast = 5;
+constexpr int kHotkeyMicPrivacy = 6;
+constexpr int kShortcutCount = 5;
 
 constexpr UINT_PTR kFrameTimer = 1;
 constexpr UINT_PTR kModifierTimer = 17;
@@ -9874,8 +9905,8 @@ class Overlay {
         bool modifierOnly = false;
         bool modifierDown = false;
     };
-    Shortcut m_shortcuts[4] = {{kHotkeyDictate}, {kHotkeyTranslate}, {kHotkeyCommand},
-                               {kHotkeyPasteLast}};
+    Shortcut m_shortcuts[kShortcutCount] = {{kHotkeyDictate}, {kHotkeyTranslate}, {kHotkeyCommand},
+                                            {kHotkeyPasteLast}, {kHotkeyMicPrivacy}};
     bool m_hotkeysSet = false;
     bool m_holdMode = false;
     // The width setting's sizes and text size.
@@ -10109,11 +10140,12 @@ void Overlay::RegisterHotkeys() {
     const Settings s = CurrentSettings();
     m_holdMode = s.holdMode;
     m_top = s.overlayTop;
-    const std::wstring wanted[] = {s.dictateHotkey, s.translateHotkey, s.commandHotkey,
-                                   s.pasteLastHotkey};
+    const std::wstring wanted[kShortcutCount] = {s.dictateHotkey, s.translateHotkey,
+                                                 s.commandHotkey, s.pasteLastHotkey,
+                                                 s.micPrivacyHotkey};
     // (Another option changed: the shortcuts stay as they are.)
     bool same = m_hotkeysSet;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < kShortcutCount; i++) {
         same = same && m_shortcuts[i].text == wanted[i];
     }
     if (same) {
@@ -10147,7 +10179,7 @@ void Overlay::RegisterHotkeys() {
         }
         return true;
     };
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < kShortcutCount; i++) {
         Shortcut& shortcut = m_shortcuts[i];
         shortcut.text = wanted[i];
         bool ok = add(shortcut.id, shortcut.text, &shortcut.vk);
@@ -11953,6 +11985,8 @@ LRESULT Overlay::Handle(UINT msg, WPARAM wp, LPARAM lp) {
                 PostCtl({CtlKind::Escape});
             } else if (wp == kHotkeyPasteLast) {
                 PostCtl({CtlKind::PasteLast});
+            } else if (wp == kHotkeyMicPrivacy) {
+                PostCtl({CtlKind::MicPrivacy});
             } else {
                 for (const Shortcut& shortcut : m_shortcuts) {
                     if ((int)wp != shortcut.id) {
@@ -11985,6 +12019,8 @@ LRESULT Overlay::Handle(UINT msg, WPARAM wp, LPARAM lp) {
                                           shortcut.id == kHotkeyCommand ? Mode::Command : Mode::Dictate;
                         if (shortcut.id == kHotkeyPasteLast) {
                             PostCtl({CtlKind::PasteLast});
+                        } else if (shortcut.id == kHotkeyMicPrivacy) {
+                            PostCtl({CtlKind::MicPrivacy});
                         } else if (m_holdMode) {
                             g_holdVk = VK_CONTROL;
                             g_holdModifiers = MOD_CONTROL | MOD_WIN;
@@ -11992,7 +12028,8 @@ LRESULT Overlay::Handle(UINT msg, WPARAM wp, LPARAM lp) {
                         } else {
                             PostCtl({CtlKind::Toggle, mode});
                         }
-                    } else if (!down && shortcut.modifierDown && m_holdMode) {
+                    } else if (!down && shortcut.modifierDown && m_holdMode &&
+                               shortcut.id != kHotkeyPasteLast && shortcut.id != kHotkeyMicPrivacy) {
                         PostCtl({CtlKind::Stop});
                     }
                     shortcut.modifierDown = down;
@@ -12156,13 +12193,35 @@ struct SettingsPalette {
     D2D1_COLOR_F ok;
 };
 
+// Catppuccin Mocha: dark boxes (crust and below mantle), dull gray edges;
+// blue and mauve only for what's chosen or under the mouse.
 SettingsPalette SettingsDark() {
-    return {Rgba(0x1E1E2E),       Rgba(0x181825),       Rgba(0x313244),
-            Rgba(0xB4BEFE, 0.18f), Rgba(0xCBA6F7, 0.45f), Rgba(0xCDD6F4),
+    return {Rgba(0x1E1E2E),       Rgba(0x141420),       Rgba(0x11111B),
+            Rgba(0x45475A, 0.55f), Rgba(0x585B70, 0.70f), Rgba(0xCDD6F4),
             Rgba(0xBAC2DE),        Rgba(0xA6ADC8),       Rgba(0x89B4FA),
-            Rgba(0x89B4FA),        Rgba(0x11111B),       Rgba(0x89B4FA, 0.15f),
-            Rgba(0xCBA6F7, 0.45f), Rgba(0xF38BA8),       Rgba(0x181825),
-            Rgba(0x313244),        Rgba(0x89B4FA, 0.10f), Rgba(0xF9E2AF)};
+            Rgba(0x89B4FA),        Rgba(0x11111B),       Rgba(0x89B4FA, 0.13f),
+            Rgba(0x89B4FA, 0.55f), Rgba(0xF38BA8),       Rgba(0x11111B),
+            Rgba(0x89B4FA, 0.13f), Rgba(0x313244, 0.55f), Rgba(0xF9E2AF)};
+}
+
+// The hover edge: the accent into Mocha mauve, corner to corner.
+void DrawGlowBorder(ID2D1RenderTarget* target, D2D1_RECT_F r, float radius, D2D1_COLOR_F from,
+                    D2D1_COLOR_F to, float width = 1.2f) {
+    const D2D1_GRADIENT_STOP stops[] = {{0, from}, {1, to}};
+    ComPtr<ID2D1GradientStopCollection> collection;
+    ComPtr<ID2D1LinearGradientBrush> brush;
+    if (FAILED(target->CreateGradientStopCollection(stops, 2, collection.GetAddressOf())) ||
+        FAILED(target->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties({r.left, r.top}, {r.right, r.bottom}),
+            collection.Get(), brush.GetAddressOf()))) {
+        return;
+    }
+    const float inset = width / 2;
+    target->DrawRoundedRectangle(
+        D2D1::RoundedRect(D2D1::RectF(r.left + inset, r.top + inset, r.right - inset,
+                                      r.bottom - inset),
+                          radius, radius),
+        brush.Get(), width);
 }
 
 SettingsPalette SettingsLight() {
@@ -12458,12 +12517,14 @@ std::vector<std::wstring> MicrophoneNames() {
     return names;
 }
 
-// A shortcut setting: 1 dictate, 2 translate, 3 Command, 4 paste again.
+// A shortcut setting: 1 dictate, 2 translate, 3 Command, 4 paste again,
+// 5 mic privacy on/off.
 std::string& HotkeyField(Config& c, int which) {
     switch (which) {
         case 2: return c.translateHotkey;
         case 3: return c.commandHotkey;
         case 4: return c.pasteLastHotkey;
+        case 5: return c.micPrivacyHotkey;
     }
     return c.dictateHotkey;
 }
@@ -12588,6 +12649,9 @@ class SettingsWindow {
     int HitWidget(float x, float y) const;
     int HitNav(float x, float y) const;
     int HitPopup(float x, float y) const;
+    int HitCard(float x, float y) const;
+    // Where the hover edge's gradient ends: Mocha mauve (dark), the accent.
+    D2D1_COLOR_F GlowEnd() const { return m_dark ? Rgba(0xCBA6F7) : m_palette.accentText; }
     void OnClick(float x, float y);
     void Run(const Widget& w, int option = -1);
     void StartTest(const std::string& provider, bool voice, const std::string& key = {});
@@ -12622,6 +12686,9 @@ class SettingsWindow {
     HICON m_icons[2] = {};
     int m_hover = -1;
     int m_hoverNav = -1;
+    // The row card under the mouse, and the cell of a hovered segment.
+    int m_hoverCard = -1;
+    int m_hoverCell = -1;
     bool m_tracking = false;
     float m_scroll = 0;
     float m_scrollTarget = 0;
@@ -12853,8 +12920,11 @@ void SettingsWindow::LoadTheme() {
         m_palette.accent = *accent;
         m_palette.accentText = text;
         m_palette.onAccent = OnAccent(*accent);
-        m_palette.accentSoft = WithAlpha(text, m_dark ? 0.10f : 0.14f);
-        m_palette.accentLine = WithAlpha(text, m_dark ? 0.35f : 0.45f);
+        m_palette.accentSoft = WithAlpha(text, m_dark ? 0.13f : 0.14f);
+        m_palette.accentLine = WithAlpha(text, m_dark ? 0.55f : 0.45f);
+        if (m_dark) {
+            m_palette.railActive = WithAlpha(text, 0.13f);
+        }
     }
     m_palette.ok = IsWarmAccent(ParseAccent(c.accent).value_or(0))
                        ? (m_dark ? Rgba(0x62D98F) : Rgba(0x1C7A43))
@@ -13231,6 +13301,16 @@ void SettingsWindow::Rebuild() {
         }
     }
     m_hover = -1;
+    m_hoverCell = -1;
+    m_hoverCard = -1;
+    {
+        POINT cursor;
+        RECT client;
+        if (GetCursorPos(&cursor) && ScreenToClient(m_hwnd, &cursor) &&
+            GetClientRect(m_hwnd, &client) && PtInRect(&client, cursor)) {
+            m_hoverCard = HitCard(cursor.x / Dpi(), cursor.y / Dpi());
+        }
+    }
     PlaceEdits();
     InvalidateRect(m_hwnd, nullptr, FALSE);
 }
@@ -14823,11 +14903,11 @@ void SettingsWindow::BuildShortcuts(float x, float w, float& y) {
     const Config c = CurrentConfig();
     AddTitle(x, w, y, T(L"Shortcuts", L"Atalhos"),
              T(L"They work in any app.", L"Funcionam em qualquer app."));
-    const std::wstring labels[4] = {T(L"Dictate", L"Ditar"),
-                                    T(L"Dictate and translate", L"Ditar e traduzir"),
-                                    T(L"Command on the selection", L"Comando na seleção"),
-                                    T(L"Paste again", L"Colar de novo")};
-    std::wstring hints[4] = {
+    const std::wstring labels[kShortcutCount] = {
+        T(L"Dictate", L"Ditar"), T(L"Dictate and translate", L"Ditar e traduzir"),
+        T(L"Command on the selection", L"Comando na seleção"), T(L"Paste again", L"Colar de novo"),
+        T(L"Mic privacy on/off", L"Privacidade do microfone")};
+    std::wstring hints[kShortcutCount] = {
         T(L"Transcribes and pastes where the cursor is, in the active style.",
           L"Transcreve e cola onde está o cursor, no estilo ativo."),
         Printf(T(L"You speak, it pastes in %s.", L"Você fala, ele cola em %s."),
@@ -14839,7 +14919,12 @@ void SettingsWindow::BuildShortcuts(float x, float w, float& y) {
         T(L"Pastes the last dictation into the app in focus now. Without a shortcut it stays "
           L"in the notification area icon's menu.",
           L"Cola o último ditado no app em foco agora. Sem atalho, fica só no menu do ícone "
-          L"da área de notificação.")};
+          L"da área de notificação."),
+        c.micPrivacy
+            ? T(L"Turns \u201CKeep the microphone private\u201D on or off from any app. It is on now.",
+                L"Liga ou desliga \u201CManter o microfone privado\u201D de qualquer app. Está ligado agora.")
+            : T(L"Turns \u201CKeep the microphone private\u201D on or off from any app. It is off now.",
+                L"Liga ou desliga \u201CManter o microfone privado\u201D de qualquer app. Está desligado agora.")};
     // The Ctrl+Alt defaults are left off where AltGr types with that key.
     if (c.commandHotkey.empty() && AltGrTypesWith('K')) {
         hints[2] += T(L" Ctrl+Alt+K was left off: Ctrl+Alt is AltGr, and on your keyboard "
@@ -14847,9 +14932,12 @@ void SettingsWindow::BuildShortcuts(float x, float w, float& y) {
                       L" Ctrl+Alt+K ficou desligado: Ctrl+Alt é o AltGr, e no seu teclado "
                       L"AltGr+K digita um caractere. Escolha outro.");
     }
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < kShortcutCount; i++) {
         if (i == 2) {
             AddSection(x, w, y, T(L"Editing and pasting", L"Edição e colagem"));
+        }
+        if (i == 4) {
+            AddSection(x, w, y, T(L"Privacy", L"Privacidade"));
         }
         Widget field;
         field.kind = W::Hotkey;
@@ -15449,6 +15537,11 @@ void SettingsWindow::DrawWidget(const Widget& w, bool hover) {
         }
     };
     const D2D1_COLOR_F none = D2D1::ColorF(0, 0);
+    // Under the mouse: the accent-to-mauve edge over the box.
+    auto glow = [&](D2D1_RECT_F r, float radius) {
+        DrawGlowBorder(m_target.Get(), r, radius, p.accent, GlowEnd());
+    };
+    const D2D1_COLOR_F lifted = Mix(p.surface2, p.text, 0.045f);
     switch (w.kind) {
         case W::Text:
             text(w.text, Format(w.size, w.weight, w.mono), w.r, Tone(w.tone));
@@ -15461,9 +15554,12 @@ void SettingsWindow::DrawWidget(const Widget& w, bool hover) {
             }
             break;
         case W::Card:
-            // (A card that opens: a hint of the hover.)
-            round(w.r, 12, hover && w.act != ActNone ? Mix(p.surface, p.text, 0.03f) : p.surface,
-                  w.on ? p.accentLine : hover && w.act != ActNone ? p.lineStrong : p.line);
+            // Gray edge at rest; the gradient edge under the mouse.
+            round(w.r, 12, hover ? Mix(p.surface, p.text, 0.025f) : p.surface,
+                  w.on ? p.accentLine : hover ? none : p.line);
+            if (hover) {
+                glow(w.r, 12);
+            }
             break;
         case W::Swatch: {
             // An accent preset: a dot, ringed when chosen.
@@ -15576,11 +15672,14 @@ void SettingsWindow::DrawWidget(const Widget& w, bool hover) {
                      D2D1::RectF(w.r.left + 14, w.r.top, w.r.right - 8, w.r.bottom), p.text3);
                 break;
             }
-            D2D1_COLOR_F fill = w.primary ? p.accent : w.ghost ? none : p.surface;
+            D2D1_COLOR_F fill = w.primary ? p.accent : w.ghost ? none : p.surface2;
             if (hover) {
-                fill = w.primary ? Mix(p.accent, Rgba(0xFFFFFF), 0.15f) : p.hover;
+                fill = w.primary ? Mix(p.accent, Rgba(0xFFFFFF), 0.15f) : w.ghost ? p.hover : lifted;
             }
-            round(w.r, 9, fill, w.primary || w.ghost ? none : p.lineStrong);
+            round(w.r, 9, fill, w.primary || w.ghost || hover ? none : p.lineStrong);
+            if (hover && !w.primary) {
+                glow(w.r, 9);
+            }
             const D2D1_COLOR_F color = w.primary ? p.onAccent : p.text;
             float tx = w.r.left + 14;
             if (!w.icon.empty()) {
@@ -15608,7 +15707,12 @@ void SettingsWindow::DrawWidget(const Widget& w, bool hover) {
         case W::Toggle: {
             const float h = w.r.bottom - w.r.top;
             const D2D1_RECT_F track = D2D1::RectF(w.r.right - 40, w.r.top, w.r.right, w.r.top + h);
-            round(track, h / 2, w.on ? p.accent : p.surface2, w.on ? none : p.lineStrong);
+            round(track, h / 2, w.on ? (hover ? Mix(p.accent, Rgba(0xFFFFFF), 0.12f) : p.accent)
+                                     : (hover ? lifted : p.surface2),
+                  w.on || hover ? none : p.lineStrong);
+            if (hover && !w.on) {
+                glow(track, h / 2);
+            }
             const float knob = h - 6;
             // (It slides when switched.)
             const float on = SlideAt(w, w.on ? 1.0f : 0.0f);
@@ -15620,13 +15724,23 @@ void SettingsWindow::DrawWidget(const Widget& w, bool hover) {
             break;
         }
         case W::Segment: {
-            round(w.r, 9, p.surface2, p.line);
+            round(w.r, 9, p.surface2, hover ? none : p.lineStrong);
+            if (hover) {
+                glow(w.r, 9);
+            }
             const float sw = (w.r.right - w.r.left - 6) / std::max<size_t>(1, w.options.size());
+            // The cell under the mouse lights up (not the chosen one).
+            const int hot = hover ? m_hoverCell : -1;
+            if (hot >= 0 && hot != w.selected && hot < (int)w.options.size()) {
+                round(D2D1::RectF(w.r.left + 3 + sw * hot, w.r.top + 3,
+                                  w.r.left + 3 + sw * (hot + 1), w.r.bottom - 3),
+                      7, p.hover, none);
+            }
             // The chosen cell slides from the one chosen before.
             const float at = SlideAt(w, (float)w.selected);
             round(D2D1::RectF(w.r.left + 3 + sw * at, w.r.top + 3, w.r.left + 3 + sw * (at + 1),
                               w.r.bottom - 3),
-                  7, m_dark ? p.surface : Rgba(0xFFFFFF), p.line);
+                  7, m_dark ? p.railActive : Rgba(0xFFFFFF), m_dark ? p.accentLine : p.line);
             for (size_t i = 0; i < w.options.size(); i++) {
                 const D2D1_RECT_F cell = D2D1::RectF(w.r.left + 3 + sw * i, w.r.top + 3,
                                                      w.r.left + 3 + sw * (i + 1), w.r.bottom - 3);
@@ -15635,14 +15749,20 @@ void SettingsWindow::DrawWidget(const Widget& w, bool hover) {
                                                    false);
                 if (format) {
                     format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-                    text(w.options[i], format, cell, (int)i == w.selected ? p.text : p.text2);
+                    text(w.options[i], format, cell,
+                         (int)i == w.selected ? (m_dark ? p.accentText : p.text)
+                         : (int)i == hot      ? p.text
+                                              : p.text2);
                     format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
                 }
             }
             break;
         }
         case W::Select: {
-            round(w.r, 9, hover ? p.hover : p.surface2, p.lineStrong);
+            round(w.r, 9, hover ? lifted : p.surface2, hover ? none : p.lineStrong);
+            if (hover) {
+                glow(w.r, 9);
+            }
             if (w.selected >= 0 && w.selected < (int)w.options.size()) {
                 float tx = w.r.left + 12;
                 if (w.selected < (int)w.flags.size() && !w.flags[w.selected].empty()) {
@@ -15764,8 +15884,11 @@ void SettingsWindow::DrawWidget(const Widget& w, bool hover) {
             break;
         }
         case W::ProviderChip:
-            round(w.r, 10, w.on ? p.accentSoft : hover ? p.hover : p.surface,
-                  w.on ? p.accentLine : p.lineStrong);
+            round(w.r, 10, w.on ? p.accentSoft : hover ? lifted : p.surface2,
+                  w.on ? p.accentLine : hover ? none : p.lineStrong);
+            if (hover && !w.on) {
+                glow(w.r, 10);
+            }
             DrawLogo(w.sarg, D2D1::RectF(w.r.left + 10, w.r.top + 8, w.r.left + 30, w.r.top + 28));
             text(w.text, Format(13, DWRITE_FONT_WEIGHT_MEDIUM, false),
                  D2D1::RectF(w.r.left + 38, w.r.top, w.r.right - 8, w.r.bottom),
@@ -15977,8 +16100,11 @@ void SettingsWindow::DrawWidget(const Widget& w, bool hover) {
             break;
         }
         case W::Hotkey: {
-            round(w.r, 9, w.on ? p.accentSoft : (hover ? p.hover : p.surface2),
-                  w.on ? p.accentLine : p.lineStrong);
+            round(w.r, 9, w.on ? p.accentSoft : (hover ? lifted : p.surface2),
+                  w.on ? p.accentLine : hover ? none : p.lineStrong);
+            if (hover && !w.on) {
+                glow(w.r, 9);
+            }
             text(w.text.empty() ? T(L"Off", L"Desligado") : w.text,
                  Format(13, DWRITE_FONT_WEIGHT_MEDIUM, true),
                  D2D1::RectF(w.r.left + 12, w.r.top, w.r.right - 36, w.r.bottom),
@@ -15997,7 +16123,7 @@ void SettingsWindow::DrawRail() {
     RECT client;
     GetClientRect(m_hwnd, &client);
     const float h = client.bottom / Dpi();
-    m_brush->SetColor(m_glass ? WithAlpha(p.rail, 0.5f) : p.rail);
+    m_brush->SetColor(m_glass ? WithAlpha(p.rail, m_dark ? 0.62f : 0.5f) : p.rail);
     m_target->FillRectangle(D2D1::RectF(0, 0, kRailW, h), m_brush.Get());
     m_brush->SetColor(p.line);
     m_target->FillRectangle(D2D1::RectF(kRailW - 1, 0, kRailW, h), m_brush.Get());
@@ -16043,22 +16169,42 @@ void SettingsWindow::DrawRail() {
         }
         const D2D1_RECT_F row = D2D1::RectF(12, y, kRailW - 12, y + 36);
         const bool active = m_page == item.page;
-        if (active || m_hoverNav == i) {
+        const bool hovered = m_hoverNav == i;
+        if (active || hovered) {
             m_brush->SetColor(active ? p.railActive : p.hover);
             m_target->FillRoundedRectangle(D2D1::RoundedRect(row, 8, 8), m_brush.Get());
         }
+        if (hovered) {
+            DrawGlowBorder(m_target.Get(), row, 8, WithAlpha(p.accent, 0.85f),
+                           WithAlpha(GlowEnd(), 0.85f));
+        } else if (active) {
+            m_brush->SetColor(p.accentLine);
+            m_target->DrawRoundedRectangle(
+                D2D1::RoundedRect(D2D1::RectF(row.left + 0.5f, row.top + 0.5f, row.right - 0.5f,
+                                              row.bottom - 0.5f),
+                                  8, 8),
+                m_brush.Get(), 1);
+        }
         if (active) {
-            m_brush->SetColor(p.accentText);
-            m_target->FillRoundedRectangle(
-                D2D1::RoundedRect(D2D1::RectF(12, y + 9, 15, y + 27), 1.5f, 1.5f), m_brush.Get());
+            const D2D1_RECT_F bar = D2D1::RectF(12, y + 9, 15, y + 27);
+            const D2D1_GRADIENT_STOP stops[] = {{0, p.accent}, {1, GlowEnd()}};
+            ComPtr<ID2D1GradientStopCollection> collection;
+            ComPtr<ID2D1LinearGradientBrush> brush;
+            if (SUCCEEDED(m_target->CreateGradientStopCollection(stops, 2,
+                                                                 collection.GetAddressOf())) &&
+                SUCCEEDED(m_target->CreateLinearGradientBrush(
+                    D2D1::LinearGradientBrushProperties({bar.left, bar.top}, {bar.left, bar.bottom}),
+                    collection.Get(), brush.GetAddressOf()))) {
+                m_target->FillRoundedRectangle(D2D1::RoundedRect(bar, 1.5f, 1.5f), brush.Get());
+            }
         }
         if (IDWriteTextFormat* icon = Format(15, DWRITE_FONT_WEIGHT_NORMAL, false, false, true)) {
-            m_brush->SetColor(active ? p.accentText : p.text2);
+            m_brush->SetColor(active ? p.accentText : hovered ? p.text : p.text2);
             railText(item.icon, icon, D2D1::RectF(24, y, 46, y + 36));
         }
         if (IDWriteTextFormat* format = Format(13.5f, active ? DWRITE_FONT_WEIGHT_SEMI_BOLD
                                                             : DWRITE_FONT_WEIGHT_NORMAL, false)) {
-            m_brush->SetColor(active ? p.text : p.text2);
+            m_brush->SetColor(active || hovered ? p.text : p.text2);
             railText(item.label, format, D2D1::RectF(54, y, kRailW - 16, y + 36));
         }
         y += 38;
@@ -16192,7 +16338,7 @@ void SettingsWindow::Paint() {
     }
     m_target->SetDpi((float)m_dpi, (float)m_dpi);
     m_target->BeginDraw();
-    m_target->Clear(m_glass ? WithAlpha(m_palette.bg, 0.55f) : m_palette.bg);
+    m_target->Clear(m_glass ? WithAlpha(m_palette.bg, m_dark ? 0.74f : 0.55f) : m_palette.bg);
     m_target->SetTransform(D2D1::Matrix3x2F::Identity());
     RECT client;
     GetClientRect(m_hwnd, &client);
@@ -16247,7 +16393,7 @@ void SettingsWindow::Paint() {
             const float lift = pass == 1 ? (1 - EaseOutCubic(detail)) * -6 : 0;
             m_target->SetTransform(
                 D2D1::Matrix3x2F::Translation(RailW() + slideX, -m_scroll + rise(w) + lift));
-            DrawWidget(w, (int)i == m_hover && m_popup < 0);
+            DrawWidget(w, ((int)i == m_hover || (int)i == m_hoverCard) && m_popup < 0);
         }
         if (pass == 1) {
             m_target->PopLayer();
@@ -16342,6 +16488,28 @@ int SettingsWindow::HitWidget(float x, float y) const {
         const bool clickable = w.act != ActNone && w.enabled && (w.fixed || inView);
         const float cy = w.fixed ? y : y + m_scroll;
         if (clickable && cx >= w.r.left && cx < w.r.right && cy >= w.r.top && cy < w.r.bottom) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// The row card under (x, y): only for its hover look, never clicked.
+int SettingsWindow::HitCard(float x, float y) const {
+    if (x < RailW() || m_popup >= 0) {
+        return -1;
+    }
+    const float cx = x - RailW();
+    RECT client;
+    GetClientRect(m_hwnd, &client);
+    if (y < ViewTop() || y >= client.bottom / Dpi() - ViewBottomMargin()) {
+        return -1;
+    }
+    for (int i = (int)m_widgets.size() - 1; i >= 0; i--) {
+        const Widget& w = m_widgets[i];
+        const float cy = w.fixed ? y : y + m_scroll;
+        if (w.kind == W::Card && cx >= w.r.left && cx < w.r.right && cy >= w.r.top &&
+            cy < w.r.bottom) {
             return i;
         }
     }
@@ -17163,17 +17331,28 @@ LRESULT SettingsWindow::Handle(UINT msg, WPARAM wp, LPARAM lp) {
             const int hover = x >= RailW() ? HitWidget(x, y) : -1;
             const int nav = HitNav(x, y);
             const int popup = HitPopup(x, y);
-            if (hover != m_hover || nav != m_hoverNav || popup != m_popupHover) {
+            const int card = HitCard(x, y);
+            int cell = -1;
+            if (hover >= 0 && m_widgets[hover].kind == W::Segment) {
+                const Widget& s = m_widgets[hover];
+                const float sw = (s.r.right - s.r.left - 6) / std::max<size_t>(1, s.options.size());
+                cell = std::clamp((int)((x - RailW() - s.r.left - 3) / sw), 0,
+                                  (int)s.options.size() - 1);
+            }
+            if (hover != m_hover || nav != m_hoverNav || popup != m_popupHover ||
+                card != m_hoverCard || cell != m_hoverCell) {
                 m_hover = hover;
                 m_hoverNav = nav;
                 m_popupHover = popup;
+                m_hoverCard = card;
+                m_hoverCell = cell;
                 InvalidateRect(m_hwnd, nullptr, FALSE);
             }
             return 0;
         }
         case WM_MOUSELEAVE:
             m_tracking = false;
-            m_hover = m_hoverNav = m_popupHover = -1;
+            m_hover = m_hoverNav = m_popupHover = m_hoverCard = m_hoverCell = -1;
             InvalidateRect(m_hwnd, nullptr, FALSE);
             return 0;
         case WM_SETCURSOR:
@@ -17257,7 +17436,7 @@ LRESULT SettingsWindow::Handle(UINT msg, WPARAM wp, LPARAM lp) {
                 // One action per combination (the second one couldn't be
                 // registered).
                 const Config c = CurrentConfig();
-                for (int other = 1; other <= 4; other++) {
+                for (int other = 1; other <= kShortcutCount; other++) {
                     UINT otherMods, otherVk;
                     if (other != m_capture &&
                         ParseHotkey(Utf8ToWide(HotkeyField(c, other)), &otherMods, &otherVk) &&
@@ -17291,7 +17470,7 @@ LRESULT SettingsWindow::Handle(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_SYSKEYUP:
             if (m_capture && m_captureHint == L"Ctrl+Win+") {
                 const Config c = CurrentConfig();
-                for (int other = 1; other <= 4; other++) {
+                for (int other = 1; other <= kShortcutCount; other++) {
                     UINT modifiers, vk;
                     if (other != m_capture &&
                         ParseHotkey(Utf8ToWide(HotkeyField(c, other)), &modifiers, &vk) &&

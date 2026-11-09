@@ -16,10 +16,13 @@ transcribes what you said and cleans it up in your style, or translates it.
 - **Mic privacy.** While you dictate, other apps (Discord and call apps) hear
   silence from your mic, and their volume drops. Both come back the moment you
   let go. Audio routers like VB-Audio Matrix and Voicemeeter are left alone.
+  A shortcut you pick turns it on or off from any app.
 - **Glass dictation bar.** A smooth, dark Catppuccin Mocha bar shows live text while
   you speak. The result card stays for 3 seconds, then fades.
-- **Its own settings window and tray icon,** in Catppuccin Mocha with FiraCode
-  Nerd Font.
+- **Its own settings window and tray icon,** in dark Catppuccin Mocha with
+  FiraCode Nerd Font. Borders stay gray and glow blue to mauve on hover.
+
+![Settings window](../../../media/previews/seamless-dictate-settings.png)
 
 ## Install
 1. In Windhawk, choose **Create a new mod**.
