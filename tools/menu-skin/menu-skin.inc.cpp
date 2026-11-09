@@ -276,7 +276,11 @@ static BOOL PaintMenuPart(HDC hdc, INT part, INT state, LPCRECT pRect, LPCRECT p
     if ((part == 27 || part == MENU_POPUPITEM) && state == 2) {
         if (!g_hoverDC) g_hoverDC = MakeCache(18, 18, FALSE);
         if (!g_hoverDC) return FALSE;
-        NineGrid(hdc, g_hoverDC, pRect, 9, 9, 8, 8);
+        // Keep the same gap above and below as at the sides, so the first and last rows'
+        // rounded hover stays clear of the menu's own rounded corners.
+        RECT rc = *pRect;
+        InflateRect(&rc, 0, -MulDiv(2, Dpi(), USER_DEFAULT_SCREEN_DPI));
+        NineGrid(hdc, g_hoverDC, &rc, 9, 9, 8, 8);
         return TRUE;
     }
     if (part == MENU_POPUPSEPARATOR) {

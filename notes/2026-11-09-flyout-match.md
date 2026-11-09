@@ -211,3 +211,26 @@ Rollback (elevated):
   originals back on; own mods get the backed-up source and a compile).
 - `scripts\2026-11-09-flyouts-ableton.ps1 -Action rollback` (old ExcludeCustom back).
 - Key and source backups: `backups\2026-11-09\menu-skin\`.
+
+## Part 9 - Hover clear of the menu corners (5:36 pm)
+
+Owner: the hover on the last row ran into the menu's rounded bottom corners (Recycle Bin
+tray menu, "Properties").
+
+Cause: the hover filled the whole row. Sides had a 4 px gap, but the first and last rows
+had only 2-3 px above or below, so the rounded hover met the menu's rounded corner.
+
+Change: popup-menu hovers are drawn 2 px (DPI scaled) shorter at the top and the bottom,
+the same gap as at the sides. Row height and layout are unchanged.
+- Seamless Flyouts 2.0.0 -> 2.0.1 (`PaintMenu`, popup rows only, not menu bar items).
+- `SeamlessMenuSkin` block in the tool mods: recycle-bin-tray-plus 1.0.1 -> 1.0.2,
+  magic-pointer-plus 1.0.5 -> 1.0.6, better-volume-mixer-plus 1.4.1 -> 1.4.2,
+  seamless-dictate 1.0.4 -> 1.0.5, window-manager 1.3.1 -> 1.3.2.
+- Staging: `work\2026-11-09-flyout-match\menu-skin\patch-hover-gap.py`.
+
+Verified: receipt `backups\2026-11-09\menu-hover-gap\receipt.txt` (six compiles exit 0,
+all on); Window Manager's elevated helper restarted at 5:38 pm. Captures with the first
+and last rows hovered, and the Notepad++ menu: `reports\2026-11-09-menu-gap-*.png`.
+
+Rollback (elevated): `scripts\2026-11-09-menu-hover-gap.ps1 -Action rollback` (restores
+the first backed-up sources in `backups\2026-11-09\menu-hover-gap\` and compiles).

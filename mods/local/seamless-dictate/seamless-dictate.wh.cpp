@@ -6,7 +6,7 @@
 // @description     Press a shortcut, speak, and your words are typed where the cursor is, in any app: transcribed and cleaned up by AI in your style (natural, professional, prompt) or translated, with a free key (Groq, Gemini, Mistral and more)
 // @description:pt-BR Aperte um atalho, fale, e suas palavras são digitadas onde está o cursor, em qualquer app: transcritas e limpas por IA no seu estilo (natural, profissional, prompt) ou traduzidas, com uma chave grátis (Groq, Gemini, Mistral e outros)
 // @description:es Pulsa un atajo, habla y tus palabras se escriben donde está el cursor, en cualquier app: transcritas y limpiadas por IA en tu estilo (natural, profesional, prompt) o traducidas, con una clave gratis (Groq, Gemini, Mistral y más)
-// @version         1.0.4
+// @version         1.0.5
 // @author          DavidHiFi, caliberda
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -18292,7 +18292,11 @@ static BOOL PaintMenuPart(HDC hdc, INT part, INT state, LPCRECT pRect, LPCRECT p
     if ((part == 27 || part == MENU_POPUPITEM) && state == 2) {
         if (!g_hoverDC) g_hoverDC = MakeCache(18, 18, FALSE);
         if (!g_hoverDC) return FALSE;
-        NineGrid(hdc, g_hoverDC, pRect, 9, 9, 8, 8);
+        // Keep the same gap above and below as at the sides, so the first and last rows'
+        // rounded hover stays clear of the menu's own rounded corners.
+        RECT rc = *pRect;
+        InflateRect(&rc, 0, -MulDiv(2, Dpi(), USER_DEFAULT_SCREEN_DPI));
+        NineGrid(hdc, g_hoverDC, &rc, 9, 9, 8, 8);
         return TRUE;
     }
     if (part == MENU_POPUPSEPARATOR) {

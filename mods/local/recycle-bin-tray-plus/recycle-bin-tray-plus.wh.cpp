@@ -3,7 +3,7 @@
 // @name            Recycle Bin Tray Plus
 // @description     Adds an interactive Recycle Bin icon to the Windows 11 system tray with live state updates, drag-and-drop support, theme-aware rendering, multiple icon styles, and configurable mouse actions.
 // @description:fr-FR Ajoute une icône interactive de la Corbeille à la zone de notification de Windows 11, avec mise à jour en temps réel, glisser-déposer, adaptation au thème, plusieurs styles d'icône et actions de souris configurables.
-// @version         1.0.1
+// @version         1.0.2
 // @author          DavidHiFi, Wildstyle23
 // @github          https://github.com/wildstyle23
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -6034,7 +6034,11 @@ static BOOL PaintMenuPart(HDC hdc, INT part, INT state, LPCRECT pRect, LPCRECT p
     if ((part == 27 || part == MENU_POPUPITEM) && state == 2) {
         if (!g_hoverDC) g_hoverDC = MakeCache(18, 18, FALSE);
         if (!g_hoverDC) return FALSE;
-        NineGrid(hdc, g_hoverDC, pRect, 9, 9, 8, 8);
+        // Keep the same gap above and below as at the sides, so the first and last rows'
+        // rounded hover stays clear of the menu's own rounded corners.
+        RECT rc = *pRect;
+        InflateRect(&rc, 0, -MulDiv(2, Dpi(), USER_DEFAULT_SCREEN_DPI));
+        NineGrid(hdc, g_hoverDC, &rc, 9, 9, 8, 8);
         return TRUE;
     }
     if (part == MENU_POPUPSEPARATOR) {

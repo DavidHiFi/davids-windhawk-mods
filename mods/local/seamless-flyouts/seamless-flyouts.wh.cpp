@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.0.0
+// @version         2.0.1
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -4766,8 +4766,14 @@ BOOL PaintMenu(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
     if (!g_themeCache.menuitem[index])
         if (!g_themeCache.CacheMenuItem(iPartId, iStateId, index))
             return FALSE;
-    if (iPartId != MENU_POPUPSEPARATOR)
-        DrawNineGridStretch(hdc, g_themeCache.menuitem[index], pRect, 9, 9, 8, 8);
+    if (iPartId != MENU_POPUPSEPARATOR) {
+        // Popup rows keep the same gap above and below as at the sides, so the first and
+        // last rows' rounded hover stays clear of the menu's own rounded corners.
+        RECT rc = *pRect;
+        if (index == 1)
+            InflateRect(&rc, 0, -MulDiv(2, g_Dpi, USER_DEFAULT_SCREEN_DPI));
+        DrawNineGridStretch(hdc, g_themeCache.menuitem[index], &rc, 9, 9, 8, 8);
+    }
     else {
         // Run the line edge to edge: the menu's own clip trims it at the frame, so it
         // meets the border instead of stopping at the item inset.
