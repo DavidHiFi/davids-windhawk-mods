@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.1.1
+// @version         2.1.2
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -449,9 +449,7 @@ static const char kRelativeSurfaces[] =
 // WebView, text behind showed sharp at 72% and 96%), Mocha text and status colors, and an accent
 // glow on hover. The notice root carries no filter, so the blur reads the
 // page under it.
-static std::string BuildNoticeCss(const Settings& s) {
-    const std::string glow = s.accent.empty() ? "rgba(137,180,250,0.35)" : RgbaFromRgb(s.accentRgb, 35);
-    const std::string ring = s.accent.empty() ? "rgba(137,180,250,0.55)" : RgbaFromRgb(s.accentRgb, 55);
+static std::string BuildNoticeCss(const Settings&) {
     const std::string n = ".ant-notification .ant-notification-notice";
     const std::string m = ".ant-message .ant-message-notice-content";
     std::string css;
@@ -475,10 +473,13 @@ static std::string BuildNoticeCss(const Settings& s) {
     css += ".ant-notification .ant-notification-notice{clip-path:none !important;}";
     css += ".ant-notification-list-content{height:auto !important;display:flex !important;flex-direction:column !important;gap:12px !important;}";
     css += ".ant-notification-list-content>.ant-notification-notice{position:relative !important;transform:none !important;inset:auto !important;opacity:1 !important;pointer-events:auto !important;margin:0 !important;}";
-    css += n + "," + m + "{background:linear-gradient(180deg,rgba(49,50,68,0.55),rgba(30,30,46,0) 60%),#1e1e2e !important;backdrop-filter:blur(28px) saturate(160%) !important;"
-           "border:1px solid rgba(88,91,112,0.55) !important;box-shadow:0 10px 30px rgba(17,17,27,0.55) !important;color:#cdd6f4 !important;"
-           "transition:box-shadow .18s cubic-bezier(0.2,0,0,1),border-color .18s cubic-bezier(0.2,0,0,1) !important;}";
-    css += n + ":hover," + m + ":hover{border-color:" + ring + " !important;box-shadow:0 10px 30px rgba(17,17,27,0.55),0 0 22px " + glow + " !important;}";
+    // 2.1.2: 2px edge, grey at rest, blue to mauve on hover; the hover glow is gone.
+    css += n + "," + m + "{--whb-a:#45475a;--whb-b:#45475a;border:2px solid transparent !important;"
+           "background:linear-gradient(180deg,rgba(49,50,68,0.55),rgba(30,30,46,0) 60%) padding-box,linear-gradient(#1e1e2e,#1e1e2e) padding-box,"
+           "linear-gradient(125deg,var(--whb-a),var(--whb-b)) border-box !important;backdrop-filter:blur(28px) saturate(160%) !important;"
+           "box-shadow:0 10px 30px rgba(17,17,27,0.55) !important;color:#cdd6f4 !important;"
+           "transition:--whb-a .2s cubic-bezier(0.2,0,0,1),--whb-b .2s cubic-bezier(0.2,0,0,1) !important;}";
+    css += n + ":hover," + m + ":hover{--whb-a:#89b4fa;--whb-b:#cba6f7;}";
     css += n + " .ant-notification-notice-title," + n + " .ant-notification-notice-message{color:#cdd6f4 !important;}";
     css += n + " .ant-notification-notice-description{color:#bac2de !important;}";
     css += n + " .ant-notification-notice-close{color:#a6adc8 !important;border-radius:6px;}";
@@ -491,9 +492,7 @@ static std::string BuildNoticeCss(const Settings& s) {
     return css;
 }
 
-static std::string BuildPolishCss(const Settings& s) {
-    const std::string glow = s.accent.empty() ? "rgba(255,255,255,0.18)" : RgbaFromRgb(s.accentRgb, 34);
-    const std::string glowSoft = s.accent.empty() ? "rgba(255,255,255,0.10)" : RgbaFromRgb(s.accentRgb, 20);
+static std::string BuildPolishCss(const Settings&) {
     const std::string ease = "cubic-bezier(0.2,0,0,1)";
     std::string css;
     // Table cells: the sticky Status column paints antd's own dark fill, which
@@ -512,15 +511,8 @@ static std::string BuildPolishCss(const Settings& s) {
     css += ".ant-modal-content,.ant-popover-container,.ant-dropdown-menu,.ant-select-dropdown{animation:whs-pop .18s " + ease + ";}";
     css += "@keyframes whs-pop{from{opacity:0;transform:translateY(4px) scale(.985);}to{opacity:1;transform:none;}}";
     css += "}";
-    // Hover halos: buttons, inputs, pills and cards lift into a soft outer glow.
-    css += ".ant-btn:not(:disabled):hover,.ant-input:hover,.ant-input-affix-wrapper:hover,.ant-select:not(.ant-select-disabled):hover .ant-select-selector,"
-           ".ant-input-number:hover,.ant-picker:hover,.ant-segmented:hover,.ant-radio-button-wrapper:hover,[class*=\"CardTitleModId\"]:hover"
-           "{box-shadow:0 0 0 1px " + glowSoft + ",0 0 14px " + glow + " !important;}";
+    // Hover glows were replaced by 2px resting and hover borders (2.1.2, BuildButtonBorderCss).
     css += ".ant-btn:not(:disabled):active{transform:scale(.97);}";
-    css += ".ant-switch:hover,.ant-checkbox-wrapper:hover .ant-checkbox-inner,.ant-radio-wrapper:hover .ant-radio-inner{box-shadow:0 0 10px " + glow + " !important;}";
-    css += ".ant-card:not([class*=\"SaveSettingsCard\"]):not([class*=\"ModDetailsCard\"]):hover{box-shadow:0 0 0 1px " + glowSoft + ",0 4px 22px " + glowSoft + " !important;}";
-    css += ".ant-tabs-tab:hover,.ant-menu-item:hover{text-shadow:0 0 10px " + glow + ";}";
-    css += ".ant-btn-primary:not(:disabled):hover{box-shadow:0 0 18px " + glow + " !important;}";
     // antd clips card meta and head titles to their boxes, which shears the
     // hover halos of buttons inside them. Measured 2026-11-06 on the mod
     // details page: the Disable halo was cut at the meta title's left edge
@@ -530,7 +522,6 @@ static std::string BuildPolishCss(const Settings& s) {
     // Scoped to the details card only: unscoped, it let the Explore cards'
     // process list run past the card edge (owner report 2026-11-07).
     css += "[class*=\"ModDetailsCard\"] .ant-card-meta-title,[class*=\"ModDetailsCard\"] .ant-card-meta-section,[class*=\"ModDetailsCard\"] .ant-card-head-title{overflow:visible !important;}";
-    css += ".ant-table-tbody>tr.ant-table-row:hover>td:first-child{box-shadow:inset 2px 0 0 " + (s.accent.empty() ? std::string("rgba(255,255,255,0.3)") : s.accent) + ";}";
     return css;
 }
 
@@ -957,8 +948,133 @@ static std::string BuildCss(const Settings& s) {
     css += BuildPolishCss(s);
     css += BuildNoticeCss(s);
     css += BuildEnhancedCss(s);
-    css += "\n[data-testid=\"mod-updates-modal\"] .ant-modal-content,\n[data-testid=\"mod-updates-modal\"] .ant-modal-container,\n[data-testid=\"mod-updates-modal\"] div:has(>.ant-list) {\n border:2px solid transparent!important;border-radius:14px!important;\n background:linear-gradient(#242435,#242435) padding-box,linear-gradient(125deg,#89b4fa99,#cba6f780) border-box!important;\n transition:box-shadow 150ms ease-out!important;\n}\n[data-testid=\"mod-updates-modal\"] .ant-modal-content:hover,\n[data-testid=\"mod-updates-modal\"] .ant-modal-container:hover,\n[data-testid=\"mod-updates-modal\"] div:has(>.ant-list):hover {\n background:linear-gradient(#242435,#242435) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box!important;\n box-shadow:0 0 12px #89b4fa26!important;\n}\n[data-testid=\"mod-updates-modal\"] .ant-result-extra {background:transparent!important;padding:0!important;box-shadow:none!important;border:0!important;}\n[data-testid=\"mod-updates-modal\"] .ant-progress-bg,\n[data-testid=\"mod-updates-modal\"] .ant-progress-track {background:linear-gradient(100deg,#89b4fa,#b4befe 60%,#cba6f7)!important;}\n[data-testid=\"mod-updates-modal\"] .ant-progress-inner {background:#45475a!important;}\n[data-testid=\"mod-updates-modal\"] .ant-list {background:transparent!important;border-radius:12px!important;overflow:hidden!important;}\n[data-testid=\"mod-updates-modal\"] [data-testid=\"mod-update-outcome\"] {border-bottom-color:#45475a!important;transition:background 150ms ease-out,box-shadow 150ms ease-out!important;}\n[data-testid=\"mod-updates-modal\"] [data-testid=\"mod-update-outcome\"]:hover {background:#89b4fa14!important;box-shadow:inset 3px 0 #89b4fa,inset -3px 0 #cba6f7!important;}\n#wh-update-context {position:fixed;z-index:2147483647;min-width:160px;padding:5px;border:2px solid transparent;border-radius:10px;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box;color:#cdd6f4;box-shadow:0 8px 24px #0008;}\n#wh-update-context button {display:block;width:100%;border:1px solid transparent;border-radius:6px;background:transparent;color:inherit;padding:7px 12px;text-align:left;font:inherit;cursor:pointer;}\n#wh-update-context button:hover,#wh-update-context button:focus-visible {outline:0;border-color:#89b4fa;background:linear-gradient(110deg,#89b4fa26,#cba6f726);}\n#wh-update-context button:disabled {opacity:.4;cursor:default;}\n";
+    css += "\n[data-testid=\"mod-updates-modal\"] .ant-result-extra {background:transparent!important;padding:0!important;box-shadow:none!important;border:0!important;}\n[data-testid=\"mod-updates-modal\"] .ant-progress-bg,\n[data-testid=\"mod-updates-modal\"] .ant-progress-track {background:linear-gradient(100deg,#89b4fa,#b4befe 60%,#cba6f7)!important;}\n[data-testid=\"mod-updates-modal\"] .ant-progress-inner {background:#45475a!important;}\n";
     css += "\n.ant-dropdown:has([data-menu-id$=\"-clear-filters\"]) {\n --wh-filter-edge-blue:#89b4fa80;--wh-filter-edge-mauve:#cba6f770;\n filter:drop-shadow(-1px 0 0 var(--wh-filter-edge-blue)) drop-shadow(0 -1px 0 var(--wh-filter-edge-blue)) drop-shadow(1px 0 0 var(--wh-filter-edge-mauve)) drop-shadow(0 1px 0 var(--wh-filter-edge-mauve)) drop-shadow(0 8px 14px #0006)!important;\n transition:filter 150ms ease-out!important;\n}\n.ant-dropdown:has([data-menu-id$=\"-clear-filters\"]):hover,.ant-dropdown:has([data-menu-id$=\"-clear-filters\"]):focus-within {--wh-filter-edge-blue:#89b4fa;--wh-filter-edge-mauve:#cba6f7;}\n.ant-dropdown:has([data-menu-id$=\"-clear-filters\"])>.ant-dropdown-menu {background:#181825!important;color:#cdd6f4!important;border:0!important;box-shadow:none!important;border-radius:12px!important;padding:5px!important;}\n.ant-dropdown:has([data-menu-id$=\"-clear-filters\"])>.ant-dropdown-menu::after {display:none!important;}\n.ant-dropdown:has([data-menu-id$=\"-clear-filters\"])>.ant-dropdown-arrow::before {background:#181825!important;}\n.ant-dropdown:has([data-menu-id$=\"-clear-filters\"])>.ant-dropdown-arrow::after {display:none!important;}\n.ant-dropdown:has([data-menu-id$=\"-clear-filters\"]) .ant-dropdown-menu-item {color:#cdd6f4!important;border:1px solid transparent!important;border-radius:7px!important;margin:2px 0!important;padding:6px 9px!important;transition:background 150ms ease-out,border-color 150ms ease-out!important;}\n.ant-dropdown:has([data-menu-id$=\"-clear-filters\"]) .ant-dropdown-menu-item:hover,.ant-dropdown:has([data-menu-id$=\"-clear-filters\"]) .ant-dropdown-menu-item-active,.ant-dropdown:has([data-menu-id$=\"-clear-filters\"]) .ant-dropdown-menu-item:focus-visible {background:linear-gradient(110deg,#89b4fa20,#cba6f71a)!important;border-color:#89b4fa!important;color:#cdd6f4!important;outline:none!important;}\n.ant-dropdown:has([data-menu-id$=\"-clear-filters\"]) .ant-dropdown-menu-item-selected {background:#89b4fa18!important;border-color:#89b4fa70!important;color:#89b4fa!important;}\n.ant-dropdown:has([data-menu-id$=\"-clear-filters\"]) .ant-dropdown-menu-item-divider {background:#45475a!important;margin:5px 4px!important;}\n@media(prefers-reduced-motion:reduce){.ant-dropdown:has([data-menu-id$=\"-clear-filters\"]),.ant-dropdown:has([data-menu-id$=\"-clear-filters\"]) .ant-dropdown-menu-item {transition:none!important;}}\n";
+    // 2.1.2: 2px borders everywhere (filter-button thickness), dark Mocha fills, grey at rest,
+    // blue to mauve on hover, no glows. Also list view, selection bar, tooltips, right-click menu.
+    css += R"WHB(@property --whb-a{syntax:'<color>';inherits:false;initial-value:#585b70}
+@property --whb-b{syntax:'<color>';inherits:false;initial-value:#585b70}
+@property --whb-f{syntax:'<color>';inherits:false;initial-value:#181825}
+:root{--whb-ease:cubic-bezier(0.2,0,0,1);}
+/* Buttons, close X, inputs, selects: 2px edge (filter-button thickness), dark Mocha fill, grey at rest, blue to mauve on hover. No glow. */
+:root :is(.ant-btn:not(.ant-btn-link):not(.ant-btn-variant-link),.ant-modal-close,.ant-drawer-close,.ant-input-affix-wrapper,.ant-input:not(.ant-input-affix-wrapper *):not(.ant-input-number *):not(.ant-select *),textarea.ant-input,.ant-select-selector,.ant-select:not(.ant-select-dropdown):not(:has(.ant-select-selector)),.ant-input-number,.ant-picker){
+ --whb-a:#585b70;--whb-b:#585b70;--whb-f:#181825;
+ border:2px solid transparent !important;
+ background:linear-gradient(var(--whb-f),var(--whb-f)) padding-box,linear-gradient(125deg,var(--whb-a),var(--whb-b)) border-box !important;
+ box-shadow:none !important;
+ transition:--whb-a .2s var(--whb-ease),--whb-b .2s var(--whb-ease),--whb-f .2s var(--whb-ease),color .18s var(--whb-ease),transform .18s var(--whb-ease) !important;
+}
+:root :is(.ant-btn:not(.ant-btn-link):not(.ant-btn-variant-link),.ant-modal-close,.ant-drawer-close){color:#cdd6f4 !important;}
+:root :is(.ant-modal-close,.ant-drawer-close){border-radius:999px !important;color:#a6adc8 !important;}
+:root .ant-btn.ant-btn-primary:not(.ant-btn-link){--whb-a:#89b4fa99;--whb-b:#cba6f799;--whb-f:#313244;color:#89b4fa !important;}
+:root .ant-btn.ant-btn-dangerous:not(.ant-btn-link){color:#f38ba8 !important;}
+:root :is(.ant-btn:not(.ant-btn-link):not(.ant-btn-variant-link):not(:disabled),.ant-modal-close,.ant-drawer-close):is(:hover,:focus-visible){
+ --whb-a:#89b4fa;--whb-b:#cba6f7;--whb-f:#1e1e2e;color:#89b4fa !important;box-shadow:none !important;outline:none !important;
+}
+:root .ant-btn.ant-btn-primary:not(.ant-btn-link):not(:disabled):is(:hover,:focus-visible){--whb-f:#313244;}
+:root .ant-btn.ant-btn-dangerous:not(.ant-btn-link):not(:disabled):is(:hover,:focus-visible){color:#f38ba8 !important;}
+:root .ant-btn:not(.ant-btn-link):disabled{--whb-a:#45475a;--whb-b:#45475a;--whb-f:#181825;color:#6c7086 !important;}
+:root :is(.ant-input-affix-wrapper,.ant-input:not(.ant-input-affix-wrapper *):not(.ant-input-number *):not(.ant-select *),.ant-select-selector,.ant-select:not(.ant-select-dropdown):not(:has(.ant-select-selector)),.ant-input-number,.ant-picker):not(.ant-input-affix-wrapper-disabled):not(.ant-select-disabled):not(.ant-input-number-disabled):not(.ant-picker-disabled):not(:disabled):is(:hover,:focus,:focus-within,.ant-input-affix-wrapper-focused,.ant-select-focused,.ant-input-number-focused,.ant-picker-focused){
+ --whb-a:#89b4fa;--whb-b:#cba6f7;--whb-f:#1e1e2e;box-shadow:none !important;outline:none !important;
+}
+:root .ant-select-focused .ant-select-selector{--whb-a:#89b4fa;--whb-b:#cba6f7;--whb-f:#1e1e2e;box-shadow:none !important;}
+
+/* Toggle: dark track, 2px ring, Mocha knob; checked gets the gradient knob. */
+:root .ant-switch{position:relative;background:#181825 !important;box-shadow:none !important;overflow:visible !important;}
+:root .ant-switch.ant-switch-checked{background:#313244 !important;}
+:root .ant-switch::after{content:'' !important;position:absolute;inset:0;padding:2px;border-radius:inherit;pointer-events:none;
+ --whb-a:#585b70;--whb-b:#585b70;background:linear-gradient(125deg,var(--whb-a),var(--whb-b));
+ -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
+ transition:--whb-a .2s var(--whb-ease),--whb-b .2s var(--whb-ease);}
+:root .ant-switch.ant-switch-checked::after{--whb-a:#89b4fa99;--whb-b:#cba6f799;}
+:root .ant-switch:not(.ant-switch-disabled):is(:hover,:focus-visible)::after{--whb-a:#89b4fa;--whb-b:#cba6f7;}
+:root .ant-switch:is(:hover,:focus-visible){box-shadow:none !important;outline:none !important;}
+:root .ant-switch .ant-switch-handle{top:4px !important;width:14px !important;height:14px !important;inset-inline-start:4px !important;}
+:root .ant-switch.ant-switch-checked .ant-switch-handle{inset-inline-start:calc(100% - 18px) !important;}
+:root .ant-switch .ant-switch-handle::before{background:#6c7086 !important;box-shadow:none !important;border-radius:999px !important;}
+:root .ant-switch.ant-switch-checked .ant-switch-handle::before{background:linear-gradient(125deg,#89b4fa,#cba6f7) !important;}
+:root .ant-switch-small .ant-switch-handle{top:3px !important;width:10px !important;height:10px !important;inset-inline-start:3px !important;}
+:root .ant-switch-small.ant-switch-checked .ant-switch-handle{inset-inline-start:calc(100% - 13px) !important;}
+
+/* Cards and every other surface: the ring goes 1px to 2px; in-page cards light up blue to mauve on hover instead of glowing. */
+:root :is(.ant-card,[class*="SaveSettingsCard"],.ant-table,.ant-collapse,.ant-modal-content,.ant-modal-container,.ant-drawer-content,.ant-drawer-section,.ant-popover-inner,.ant-popover-container,.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-tooltip-inner,.ant-tooltip-container,.ant-notification-notice,.ant-message-notice-content)::after{
+ border:0 !important;padding:2px;--whb-a:#45475a;--whb-b:#45475a;background:linear-gradient(125deg,var(--whb-a),var(--whb-b));
+ -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
+ transition:--whb-a .2s var(--whb-ease),--whb-b .2s var(--whb-ease);}
+:root :is(.ant-card:not([class*="ModDetailsCard"]),.ant-collapse,.ant-table):hover::after{--whb-a:#89b4fa;--whb-b:#cba6f7;}
+:root .ant-card:not([class*="SaveSettingsCard"]):hover{box-shadow:none !important;}
+:root [class*="ModDetailsContainer"]>[class*="ModDetailsCard"]:last-child{box-shadow:inset 0 0 0 2px #45475a !important;}
+
+/* Update dialog: no grey surround, the result list gets one clean 2px ring. */
+[data-testid="mod-updates-modal"] :is(.ant-modal-content,.ant-modal-container):hover{box-shadow:none !important;}
+[data-testid="mod-updates-modal"] .ant-result-body{background:transparent !important;padding:0 !important;border:0 !important;box-shadow:none !important;}
+[data-testid="mod-updates-modal"] [class*="OutcomeList"]{
+ --whb-a:#45475a;--whb-b:#45475a;
+ border:2px solid transparent !important;border-radius:14px !important;overflow:hidden !important;
+ background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,var(--whb-a),var(--whb-b)) border-box !important;
+ transition:--whb-a .2s var(--whb-ease),--whb-b .2s var(--whb-ease) !important;}
+[data-testid="mod-updates-modal"] [class*="OutcomeList"]:hover{--whb-a:#89b4fa;--whb-b:#cba6f7;}
+[data-testid="mod-updates-modal"] [data-testid="mod-update-outcome"],[data-testid="mod-updates-modal"] [data-testid="mod-update-outcome"]:hover{box-shadow:none !important;background:transparent !important;}
+[data-testid="mod-updates-modal"] .ant-listy-item{transition:background-color .18s var(--whb-ease) !important;}
+[data-testid="mod-updates-modal"] .ant-listy-item:has([data-testid="mod-update-outcome"]):hover{background-color:#89b4fa12 !important;}
+
+/* Right-click menu (replaces the stock WebView menu). */
+:is(#wh-ctx,#wh-update-context){position:fixed;z-index:2147483647;min-width:200px;padding:5px;border:2px solid transparent;border-radius:12px;
+ background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa99,#cba6f799) border-box;color:#cdd6f4;box-shadow:0 8px 24px #0008;
+ font:13px/1.4 inherit;animation:whs-ctx .14s var(--whb-ease);}
+@keyframes whs-ctx{from{opacity:0;transform:translateY(-3px) scale(.98)}to{opacity:1;transform:none}}
+:is(#wh-ctx,#wh-update-context) button{display:flex;align-items:center;gap:24px;width:100%;margin:1px 0;border:2px solid transparent;border-radius:8px;
+ background:transparent;color:inherit;padding:5px 10px;text-align:left;font:inherit;cursor:pointer;transition:background .15s var(--whb-ease);}
+:is(#wh-ctx,#wh-update-context) button kbd{margin-left:auto;font:inherit;color:#7f849c;}
+:is(#wh-ctx,#wh-update-context) button:not(:disabled):is(:hover,:focus-visible){outline:0;background:linear-gradient(#313244,#313244) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box;}
+:is(#wh-ctx,#wh-update-context) button:disabled{opacity:.4;cursor:default;}
+#wh-ctx hr{border:0;height:2px;background:#313244;margin:4px 6px;}
+@media (prefers-reduced-motion:reduce){:root :is(.ant-btn,.ant-modal-close,.ant-drawer-close,.ant-input-affix-wrapper,.ant-input,.ant-select,.ant-select-selector,.ant-input-number,.ant-picker,#wh-ctx){transition:none !important;animation:none !important;}:root .ant-switch::after{transition:none !important;}}
+
+/* List view: Mocha header band with a blue to mauve rule, tinted hover and selected rows, gradient tick box. */
+:root .ant-table-thead>tr>th{background:transparent !important;color:#bac2de !important;font-weight:700 !important;border-bottom:0 !important;transition:color .18s var(--whb-ease),background-color .18s var(--whb-ease) !important;}
+:root .ant-table-thead>tr{background:linear-gradient(90deg,#89b4fa,#cba6f7) left bottom/100% 2px no-repeat,linear-gradient(90deg,#89b4fa14,#cba6f714) !important;}
+:root .ant-table-thead>tr>th.ant-table-column-has-sorters:hover{background:#89b4fa10 !important;color:#cdd6f4 !important;}
+:root .ant-table-thead>tr>th.ant-table-column-sort{color:#89b4fa !important;}
+:root .ant-table-thead .ant-table-column-sorter{color:#6c7086 !important;}
+:root .ant-table-thead .ant-table-column-sorter-up.active{color:#89b4fa !important;}
+:root .ant-table-thead .ant-table-column-sorter-down.active{color:#cba6f7 !important;}
+:root .ant-table-thead>tr>th:not(:last-child)::before{background:#45475a !important;}
+:root td.ant-table-column-sort{background:transparent !important;}
+:root .ant-table-tbody>tr.ant-table-row>td{background:transparent !important;transition:none !important;}
+:root .ant-table-tbody>tr.ant-table-row{transition:background-color .18s var(--whb-ease);}
+:root .ant-table-tbody>tr.ant-table-row:hover{background:linear-gradient(90deg,#89b4fa12,#cba6f712) !important;}
+:root .ant-table-tbody>tr.ant-table-row:is([data-selected],.ant-table-row-selected){background:linear-gradient(90deg,#89b4fa,#cba6f7) left 2px top/calc(100% - 4px) 2px no-repeat,linear-gradient(90deg,#89b4fa,#cba6f7) left 2px bottom/calc(100% - 4px) 2px no-repeat,linear-gradient(#89b4fa,#89b4fa) left 2px top/2px 100% no-repeat,linear-gradient(#cba6f7,#cba6f7) right 2px top/2px 100% no-repeat,linear-gradient(90deg,#89b4fa1f,#cba6f71f) !important;}
+:root .ant-table-tbody>tr.ant-table-row:is([data-selected],.ant-table-row-selected):hover{background:linear-gradient(90deg,#89b4fa,#cba6f7) left 2px top/calc(100% - 4px) 2px no-repeat,linear-gradient(90deg,#89b4fa,#cba6f7) left 2px bottom/calc(100% - 4px) 2px no-repeat,linear-gradient(#89b4fa,#89b4fa) left 2px top/2px 100% no-repeat,linear-gradient(#cba6f7,#cba6f7) right 2px top/2px 100% no-repeat,linear-gradient(90deg,#89b4fa2e,#cba6f72e) !important;}
+/* Cell dividers would paint over the ring: hide them on selected rows and on the row just above one. */
+:root .ant-table-tbody>tr.ant-table-row:is([data-selected],.ant-table-row-selected)>td,:root .ant-table-tbody>tr.ant-table-row:has(+tr:is([data-selected],.ant-table-row-selected))>td{border-bottom-color:transparent !important;}
+:root .ant-table-tbody>tr.ant-table-row:is([data-selected],.ant-table-row-selected)>td{border-inline-end-color:#89b4fa1f !important;}
+:root .ant-table-tbody>tr.ant-table-row>td:first-child{box-shadow:none !important;}
+/* Tick box (antd v6 draws the box on .ant-checkbox itself) */
+:root .ant-checkbox{--whb-a:#585b70;--whb-b:#585b70;--whb-f:#181825;border:2px solid transparent !important;border-radius:5px !important;
+ background:linear-gradient(var(--whb-f),var(--whb-f)) padding-box,linear-gradient(125deg,var(--whb-a),var(--whb-b)) border-box !important;box-shadow:none !important;
+ transition:--whb-a .2s var(--whb-ease),--whb-b .2s var(--whb-ease),--whb-f .2s var(--whb-ease) !important;}
+:root :is(.ant-checkbox-wrapper:not(.ant-checkbox-wrapper-disabled):hover .ant-checkbox,.ant-checkbox:not(.ant-checkbox-disabled):hover,.ant-checkbox:has(.ant-checkbox-input:focus-visible)){--whb-a:#89b4fa;--whb-b:#cba6f7;--whb-f:#1e1e2e;}
+:root :is(.ant-checkbox.ant-checkbox-checked,.ant-checkbox.ant-checkbox-indeterminate):not(.ant-checkbox-disabled){--whb-a:#89b4fa;--whb-b:#cba6f7;--whb-f:transparent;
+ background:linear-gradient(125deg,#89b4fa,#cba6f7) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
+:root .ant-checkbox-wrapper:not(.ant-checkbox-wrapper-disabled):hover .ant-checkbox.ant-checkbox-checked:not(.ant-checkbox-disabled),:root .ant-checkbox.ant-checkbox-checked:not(.ant-checkbox-disabled):hover{
+ background:linear-gradient(125deg,#b4befe,#cba6f7) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
+:root .ant-checkbox.ant-checkbox-checked::after{border-color:#11111b !important;inset-inline-start:2px !important;top:6px !important;}
+:root .ant-checkbox.ant-checkbox-indeterminate::after{background:#11111b !important;}
+:root .ant-checkbox-disabled{--whb-a:#45475a;--whb-b:#45475a;--whb-f:#181825;opacity:.6;}
+/* "N mods selected" bar: dark Mocha surface, 2px grey edge at rest, blue to mauve when hovered. */
+:root [class*="ModSelectionBar__Bar"]{--whb-a:#45475a;--whb-b:#45475a;border:2px solid transparent !important;border-radius:14px !important;
+ background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,var(--whb-a),var(--whb-b)) border-box !important;box-shadow:0 6px 18px #11111b80 !important;
+ transition:--whb-a .2s var(--whb-ease),--whb-b .2s var(--whb-ease) !important;}
+:root [class*="ModSelectionBar__Bar"]:is(:hover,:focus-within){--whb-a:#89b4fa;--whb-b:#cba6f7;}
+:root [class*="ModSelectionBar__Bar"]>span:first-child{color:#89b4fa !important;font-weight:700 !important;}
+/* Tooltips: same look as the right-click menu (dark Mocha, 2px blue to mauve edge, no arrow). */
+:root .ant-tooltip .ant-tooltip-arrow{display:none !important;}
+:root .ant-tooltip .ant-tooltip-container,:root .ant-tooltip .ant-tooltip-inner{background:#181825 !important;color:#cdd6f4 !important;border-radius:12px !important;padding:7px 11px !important;
+ font-size:13px !important;line-height:1.45 !important;box-shadow:0 8px 24px #0008 !important;}
+:root .ant-tooltip :is(.ant-tooltip-container,.ant-tooltip-inner)::after{--whb-a:#89b4fa99;--whb-b:#cba6f799;border-radius:inherit !important;}
+/* First row selected: the header rule would sit on the ring's top edge and double it, so the header drops its rule. */
+:root .ant-table:has(.ant-table-tbody>tr:nth-child(1 of .ant-table-row):is([data-selected],.ant-table-row-selected)) .ant-table-thead>tr{background:linear-gradient(90deg,#89b4fa14,#cba6f714) !important;})WHB";
     return css;
 }
 
@@ -984,7 +1100,58 @@ static std::string BuildInjectJs(const Settings& s) {
               "dg.setAttribute('aria-hidden','true');dg.setAttribute('style','position:absolute;width:0;height:0;overflow:hidden;pointer-events:none');"
               "(document.body||document.documentElement).appendChild(dg);}if(dg.getAttribute('data-k')!==dh){dg.innerHTML=dh;dg.setAttribute('data-k',dh);}}";
     }
-    js += "(()=>{\nif(window.whUpdateContextInstalled)return;window.whUpdateContextInstalled=true;\nlet menu,selection,origin;\nconst close=()=>{if(menu){menu.remove();menu=null;}};\ndocument.addEventListener('contextmenu',e=>{\n const box=e.target.closest('[data-testid=\"mod-updates-modal\"]');if(!box)return;\n e.preventDefault();close();origin=document.activeElement;selection=window.getSelection().toString();\n menu=document.createElement('div');menu.id='wh-update-context';menu.setAttribute('role','menu');\n const add=(label,action,disabled=false)=>{const b=document.createElement('button');b.textContent=label;b.type='button';b.role='menuitem';b.disabled=disabled;b.onclick=()=>{action();close();if(origin&&origin.isConnected)origin.focus({preventScroll:true});};menu.appendChild(b);};\n const copy=text=>navigator.clipboard.writeText(text).catch(()=>{const a=document.createElement('textarea');a.value=text;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove();});\n add('Copy',()=>copy(selection),!selection);add('Copy update details',()=>copy(box.innerText));\n add('Select all',()=>{const r=document.createRange();r.selectNodeContents(box.querySelector('.ant-modal-body')||box);const s=window.getSelection();s.removeAllRanges();s.addRange(r);});\n document.body.appendChild(menu);menu.style.left=Math.min(e.clientX,innerWidth-menu.offsetWidth-8)+'px';menu.style.top=Math.min(e.clientY,innerHeight-menu.offsetHeight-8)+'px';menu.querySelector('button:not(:disabled)').focus({preventScroll:true});\n},true);\ndocument.addEventListener('pointerdown',e=>{if(menu&&!menu.contains(e.target))close();},true);\ndocument.addEventListener('keydown',e=>{if(!menu)return;if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close();if(origin)origin.focus({preventScroll:true});}else if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();const bs=[...menu.querySelectorAll('button:not(:disabled)')];let i=bs.indexOf(document.activeElement);bs[(i+(e.key==='ArrowDown'?1:bs.length-1))%bs.length].focus();}else if(e.key==='Tab')close();},true);\nwindow.addEventListener('blur',close);window.addEventListener('resize',close);\n})();";
+    js += R"WHB((()=>{
+if(window.whCtxInstalled)return;window.whCtxInstalled=true;
+let menu=null,origin=null;
+const close=()=>{if(menu){menu.remove();menu=null;}};
+const copy=t=>navigator.clipboard.writeText(t).catch(()=>{const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove();});
+window.addEventListener('contextmenu',e=>{
+ if(e.defaultPrevented||e.target.closest('.monaco-editor'))return;
+ e.preventDefault();close();
+ origin=document.activeElement;
+ const sel=window.getSelection().toString();
+ const ed=e.target.closest('input:not([type=checkbox]):not([type=radio]):not([type=range]),textarea,[contenteditable=""],[contenteditable=true]');
+ const link=e.target.closest('a[href]');
+ const upd=e.target.closest('[data-testid="mod-updates-modal"]');
+ menu=document.createElement('div');menu.id='wh-ctx';menu.setAttribute('role','menu');
+ const add=(label,key,action,disabled)=>{const b=document.createElement('button');b.type='button';b.setAttribute('role','menuitem');b.disabled=!!disabled;
+  b.append(label);if(key){const k=document.createElement('kbd');k.textContent=key;b.appendChild(k);}
+  b.onclick=()=>{close();if(origin&&origin.isConnected)origin.focus({preventScroll:true});action();};menu.appendChild(b);};
+ const sep=()=>{if(menu.lastChild&&menu.lastChild.tagName!=='HR')menu.appendChild(document.createElement('hr'));};
+ if(ed){
+  const ro=ed.readOnly||ed.disabled;
+  const hasSel=ed.selectionStart!==undefined&&ed.selectionStart!==null?ed.selectionStart!==ed.selectionEnd:!!sel;
+  ed.focus({preventScroll:true});origin=ed;
+  add('Cut','Ctrl+X',()=>document.execCommand('cut'),ro||!hasSel);
+  add('Copy','Ctrl+C',()=>document.execCommand('copy'),!hasSel);
+  add('Paste','Ctrl+V',()=>navigator.clipboard.readText().then(t=>{ed.focus();document.execCommand('insertText',false,t);}).catch(()=>{}),ro);
+  sep();add('Select all','Ctrl+A',()=>{ed.focus();ed.select?ed.select():document.execCommand('selectAll');});
+ }else{
+  const nav=window.navigation;
+  add('Back','Alt+Left arrow',()=>history.back(),nav?!nav.canGoBack:history.length<2);
+  add('Forward','Alt+Right arrow',()=>history.forward(),nav?!nav.canGoForward:false);
+  add('Reload','F5',()=>location.reload());
+  sep();
+  if(link)add('Copy link','',()=>copy(link.href));
+  add('Copy','Ctrl+C',()=>copy(sel),!sel);
+  if(upd){add('Copy update details','',()=>copy(upd.innerText));
+   add('Select all','Ctrl+A',()=>{const r=document.createRange();r.selectNodeContents(upd.querySelector('.ant-modal-body')||upd);const s=window.getSelection();s.removeAllRanges();s.addRange(r);});}
+ }
+ if(menu.lastChild&&menu.lastChild.tagName==='HR')menu.lastChild.remove();
+ document.body.appendChild(menu);
+ let x=e.clientX,y=e.clientY;
+ if(!x&&!y){const r=e.target.getBoundingClientRect();x=r.left+8;y=r.bottom;}
+ menu.style.left=Math.max(4,Math.min(x,innerWidth-menu.offsetWidth-8))+'px';
+ menu.style.top=Math.max(4,Math.min(y,innerHeight-menu.offsetHeight-8))+'px';
+ if(e.button!==2){const f=menu.querySelector('button:not(:disabled)');if(f)f.focus({preventScroll:true});}
+});
+document.addEventListener('pointerdown',e=>{if(menu&&!menu.contains(e.target))close();},true);
+document.addEventListener('keydown',e=>{if(!menu)return;
+ if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close();if(origin&&origin.isConnected)origin.focus({preventScroll:true});}
+ else if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const bs=[...menu.querySelectorAll('button:not(:disabled)')];if(!bs.length)return;const i=bs.indexOf(document.activeElement);bs[i<0?(e.key==='ArrowDown'?0:bs.length-1):(i+(e.key==='ArrowDown'?1:bs.length-1))%bs.length].focus();}
+ else if(e.key==='Tab')close();},true);
+window.addEventListener('blur',close);window.addEventListener('resize',close);document.addEventListener('scroll',close,true);
+})();)WHB";
     js += "return 'ok len='+css.length;";
     js += "})()";
     return js;
