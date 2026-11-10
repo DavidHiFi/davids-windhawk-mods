@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.1.8
+// @version         2.1.9
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1196,6 +1196,19 @@ body:has(.ant-modal-wrap:not([style*="display: none"]) .ant-modal)>#root{filter:
 :root .ant-input-number .ant-input-number-action:active{background:rgba(203,166,247,.24) !important;}
 :root .ant-input-number .ant-input-number-action-disabled,:root .ant-input-number .ant-input-number-action[aria-disabled="true"]{color:#585b70 !important;background:transparent !important;}
 :root [class*="ModDetailsSettingsView__SettingsListItem-"]::before{background:linear-gradient(180deg,#89b4fa,#cba6f7) !important;}
+/* 2.1.9: every segmented switch (Theme: Dark, Light, System) is one pill dock like the mod tabs: base fill, 2px dividers, grey edge, blue to mauve on hover, chosen item blue on mantle. */
+:root .ant-segmented:not([class*="SaveSettingsCard"] *){background:#1e1e2e !important;border:2px solid #45475a !important;padding:0 !important;border-radius:999px !important;overflow:hidden !important;box-shadow:none !important;transition:border-color .15s;}
+:root .ant-segmented:not([class*="SaveSettingsCard"] *):hover{border-color:transparent !important;background:linear-gradient(#1e1e2e,#1e1e2e) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
+:root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-group{align-items:stretch !important;}
+:root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-thumb{display:none !important;}
+:root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-item{margin:0 !important;background:transparent !important;border-radius:0 !important;box-shadow:none !important;color:#a6adc8 !important;transition:background .15s,color .15s;}
+:root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-item::after{display:none !important;}
+:root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-item+.ant-segmented-item{border-inline-start:2px solid #45475a !important;}
+:root .ant-segmented:not([class*="SaveSettingsCard"] *):hover .ant-segmented-item+.ant-segmented-item{border-inline-start-color:#6c7086 !important;}
+:root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-item:hover{background:linear-gradient(125deg,#89b4fa33,#cba6f733) !important;color:#cdd6f4 !important;}
+:root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-item-selected,:root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-item-selected:hover{background:#181825 !important;color:#89b4fa !important;font-weight:700 !important;}
+:root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-item-selected:hover{background:linear-gradient(125deg,#89b4fa33,#cba6f733) !important;}
+:root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-item-label{min-height:32px !important;line-height:32px !important;padding:0 16px !important;}
 )WHB";
     return css;
 }
