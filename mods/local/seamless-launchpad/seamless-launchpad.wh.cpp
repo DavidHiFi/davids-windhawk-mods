@@ -6,7 +6,7 @@
 // @id              seamless-launchpad
 // @name            Seamless Launchpad
 // @description     A fullscreen GPU rendered grid of all your apps in place of Start, with instant search, adjustable blur, wiggle edit mode and power buttons
-// @version         2.4.0
+// @version         2.4.1
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -4272,6 +4272,35 @@ void Toggle() {
     }
 }
 
+// A packaged app with no Start-menu shortcut: runas on its raw AppsFolder
+// target is a silent no-op, so a temporary .lnk aimed at the target carries
+// the elevation instead — the shell brokers that into an elevated launch
+// (verified: the spawned Terminal answers the elevation token query).
+void LaunchTarget(const std::wstring& target, PCWSTR verb);
+void ElevateViaTempLnk(const std::wstring& target) {
+    PWSTR temp = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &temp))) {
+        return;
+    }
+    std::wstring dir = std::wstring(temp) + L"\\SeamlessLaunchpad";
+    CoTaskMemFree(temp);
+    CreateDirectoryW(dir.c_str(), nullptr);
+    std::wstring lnk = dir + L"\\Run as administrator.lnk";
+
+    IShellLinkW* link = nullptr;
+    if (SUCCEEDED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                                   IID_PPV_ARGS(&link)))) {
+        link->SetPath(target.c_str());
+        IPersistFile* file = nullptr;
+        if (SUCCEEDED(link->QueryInterface(IID_PPV_ARGS(&file)))) {
+            file->Save(lnk.c_str(), TRUE);
+            file->Release();
+        }
+        link->Release();
+        LaunchTarget(lnk, L"runas");
+    }
+}
+
 void LaunchTarget(const std::wstring& target, PCWSTR verb = nullptr) {
     SHELLEXECUTEINFOW sei{sizeof(sei)};
     sei.fMask = SEE_MASK_ASYNCOK;
@@ -7438,6 +7467,12 @@ std::wstring MenuText(const std::wstring& text) {
     return out;
 }
 
+// Store apps and shell-resolved exes live behind an AppsFolder target; their
+// elevation goes through a temporary .lnk, never the raw target.
+bool IsPackagedTarget(const std::wstring& target) {
+    return ToLower(target).rfind(ToLower(kAppsFolder), 0) == 0;
+}
+
 void ShowTileMenu(HWND hwnd, int index, POINT pt) {
     enum {
         kOpen = 1,
@@ -7465,9 +7500,11 @@ void ShowTileMenu(HWND hwnd, int index, POINT pt) {
         paths = GetAppPaths(*tile.app);
         key = AppKey(*tile.app);
         AppendMenuW(menu, MF_STRING, kOpen, L"Open");
-        // Anything with a launchable file can be elevated: a classic .exe, or
-        // any Start-menu shortcut — the shell brokers Store apps through it.
-        if (!paths.shortcut.empty() ||
+        // Anything with a launchable file can be elevated: a classic .exe,
+        // any Start-menu shortcut, or a packaged app through a temporary
+        // .lnk aimed at its AppsFolder target.
+        if (!paths.shortcut.empty() || !paths.folder.empty() ||
+            IsPackagedTarget(tile.app->target) ||
             (!paths.file.empty() && EndsWith(ToLower(paths.file), L".exe"))) {
             AppendMenuW(menu, MF_STRING, kRunAs, L"Run as administrator");
         }
@@ -7526,9 +7563,14 @@ void ShowTileMenu(HWND hwnd, int index, POINT pt) {
             Ungroup(tile.folder);
             break;
         case kRunAs:
-            // linkOrFile prefers the shortcut: runas on a Store app's .lnk is
-            // brokered to an elevated launch, the raw AppsFolder target is not.
-            LaunchTarget(linkOrFile, L"runas");
+            // A Store app's .lnk brokers an elevated launch; the raw
+            // AppsFolder target — with or without a real exe inside it — is
+            // a silent no-op. Packaged apps go through the temporary .lnk.
+            if (IsPackagedTarget(tile.app->target)) {
+                ElevateViaTempLnk(tile.app->target);
+            } else {
+                LaunchTarget(linkOrFile, L"runas");
+            }
             break;
         case kFileLocation:
             if (paths.file.empty()) {
