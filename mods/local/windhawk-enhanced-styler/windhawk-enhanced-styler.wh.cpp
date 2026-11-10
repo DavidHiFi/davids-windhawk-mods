@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.1.7
+// @version         2.1.8
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1092,7 +1092,8 @@ static std::string BuildCss(const Settings& s) {
 :root [class*="SaveSettingsCard"] :is(.ant-segmented-item-selected,.ant-segmented-thumb){background:#313244 !important;color:#89b4fa !important;box-shadow:none !important;}
 :root [class*="SaveSettingsCard"] .ant-segmented-item:not(.ant-segmented-item-selected){color:#bac2de !important;}
 :root [class*="SaveSettingsCard"] .ant-segmented:hover{border-color:transparent !important;background:linear-gradient(#11111b,#11111b) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
-:root [class*="CreateNewModButton__ButtonContainer"]:has([data-testid="create-new-mod"]){display:none !important;}
+:root [class*="CreateNewModButton__ButtonContainer"]:has([data-testid="create-new-mod"]){display:block !important;position:fixed !important;left:var(--wh-create-x,-999px) !important;top:var(--wh-create-y,-999px) !important;width:var(--wh-create-w,1px) !important;height:var(--wh-create-h,1px) !important;margin:0 !important;padding:0 !important;opacity:0 !important;pointer-events:none !important;z-index:-1 !important;}
+:root [class*="CreateNewModButton__ButtonContainer"] [data-testid="create-new-mod"]{width:100% !important;height:100% !important;min-width:0 !important;padding:0 !important;margin:0 !important;}
 :root #wh-header-create{height:32px !important;position:relative !important;inset:auto !important;margin:0 !important;padding:4px 12px !important;white-space:nowrap;}
 :root #wh-header-create svg{width:14px;height:14px;margin-right:0 !important;}
 /* 2.1.5: mod id tag is a dark chip with a 2px edge, grey at rest, blue to mauve on hover. */
@@ -1158,6 +1159,43 @@ body>#root{transition:filter .2s ease;}
 :root :is(.ant-modal-content,.ant-modal-container){backdrop-filter:none !important;background-color:rgba(24,24,37,.86) !important;}
 :root [data-testid="mod-updates-modal"] [class*="OutcomeList"]{background:linear-gradient(#232435,#232435) padding-box,linear-gradient(125deg,var(--whb-a),var(--whb-b)) border-box !important;}
 :root [data-testid="mod-updates-modal"] .ant-progress-inner{background:#11111b !important;}
+/* 2.1.7: mod page header: no grey rule under the tab pill. */
+:root .ant-card-head:has(>.ant-card-head-wrapper .ant-tabs),:root .ant-card-head:has(.ant-card-head-tabs){border-bottom:0 !important;box-shadow:none !important;}
+:root .ant-card-head-tabs>.ant-tabs-nav::before,:root .ant-card-head-tabs .ant-tabs-ink-bar{display:none !important;border:0 !important;}
+/* 2.1.7: version chips: crust fill, 2px grey ring, chosen one blue, blue to mauve on hover. */
+:root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper{background:#11111b !important;color:#a6adc8 !important;border:0 !important;box-shadow:inset 0 0 0 2px #45475a !important;border-radius:999px !important;margin-inline-end:6px !important;transition:box-shadow .15s ease,color .15s ease !important;}
+:root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper::before{display:none !important;}
+:root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper-checked{background:#181825 !important;color:#89b4fa !important;box-shadow:inset 0 0 0 2px #89b4fa !important;}
+:root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper:hover{color:#cdd6f4 !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;border:2px solid transparent !important;box-shadow:none !important;padding-inline:13px !important;}
+/* 2.1.7: open menus (sort, selects) wear the blue to mauve ring the whole time they are open. */
+:root :is(.ant-select-dropdown,.ant-dropdown-menu,.ant-picker-dropdown)::after{--whb-a:#89b4fa !important;--whb-b:#cba6f7 !important;}
+/* 2.1.7: dialogs: stronger glass so nothing behind reads through. */
+body:has(.ant-modal-wrap:not([style*="display: none"]) .ant-modal)>#root{filter:blur(22px) saturate(115%) brightness(.8) !important;}
+:root .ant-modal-mask{background-color:rgba(17,17,27,.5) !important;}
+:root :is(.ant-modal-content,.ant-modal-container){background-color:rgba(24,24,37,.94) !important;}
+:root :is(.ant-modal-content,.ant-modal-container).wh-hot::after{--whb-a:#89b4fa;--whb-b:#cba6f7;}
+/* 2.1.7: progress bars: blue to mauve fill in a crust track with a 2px grey ring. */
+:root :is(.ant-progress-bg,.ant-progress-track:not(.ant-progress-track-success)){background:linear-gradient(100deg,#89b4fa,#b4befe 60%,#cba6f7) !important;}
+:root .ant-progress-inner,:root .ant-progress-rail{background:#11111b !important;box-shadow:inset 0 0 0 2px #45475a !important;padding:2px !important;box-sizing:content-box !important;}
+/* 2.1.7: Create a new mod confirm: glass card, grey ring, blue to mauve on hover. */
+:root .ant-popconfirm :is(.ant-popover-inner,.ant-popover-container){background-color:rgba(24,24,37,.94) !important;backdrop-filter:blur(24px) saturate(120%) !important;border-radius:14px !important;padding:16px 18px !important;}
+:root .ant-popconfirm:hover :is(.ant-popover-inner,.ant-popover-container)::after{--whb-a:#89b4fa;--whb-b:#cba6f7;}
+:root .ant-popconfirm .ant-popover-arrow{display:none !important;}
+:root .ant-popconfirm :is(.ant-popconfirm-title,.ant-popconfirm-description,.ant-checkbox-label,.ant-checkbox-wrapper){color:#cdd6f4 !important;}
+:root .ant-popconfirm .ant-checkbox-inner{background:#11111b !important;border:2px solid #45475a !important;border-radius:5px !important;}
+:root .ant-popconfirm .ant-checkbox-checked .ant-checkbox-inner{background:linear-gradient(125deg,#89b4fa,#cba6f7) !important;border-color:transparent !important;}
+:root .ant-popconfirm .ant-popconfirm-buttons{display:flex !important;gap:8px !important;justify-content:flex-end !important;margin-top:12px !important;}
+/* 2.1.8: Reset to default pills and number arrows: crust fill, 2px grey ring, blue to mauve on hover. Modified-setting bars are blue to mauve. */
+:root [data-testid="mod-setting-reset"].ant-btn{height:24px !important;padding:0 9px !important;border-radius:999px !important;border:2px solid transparent !important;background:linear-gradient(#11111b,#11111b) padding-box,linear-gradient(#45475a,#45475a) border-box !important;color:#89b4fa !important;box-shadow:none !important;transition:background .15s ease,color .15s ease !important;}
+:root [data-testid="mod-setting-reset"].ant-btn:hover,:root [data-testid="mod-setting-reset"].ant-btn:focus-visible{background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;color:#b4befe !important;}
+:root [data-testid="mod-setting-reset"].ant-btn:active{background:linear-gradient(#1e1e2e,#1e1e2e) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
+:root .ant-input-number .ant-input-number-actions{top:3px !important;bottom:3px !important;right:4px !important;height:auto !important;width:20px !important;border-radius:10px !important;overflow:hidden !important;border:2px solid transparent !important;background:linear-gradient(#11111b,#11111b) padding-box,linear-gradient(#45475a,#45475a) border-box !important;box-shadow:none !important;}
+:root .ant-input-number .ant-input-number-actions:hover{background:linear-gradient(#181825,#181825) padding-box,linear-gradient(160deg,#89b4fa,#cba6f7) border-box !important;}
+:root .ant-input-number .ant-input-number-action{border:0 !important;border-radius:0 !important;color:#a6adc8 !important;background:transparent !important;font-size:9px !important;transition:background .12s ease,color .12s ease !important;}
+:root .ant-input-number .ant-input-number-action:hover{color:#cdd6f4 !important;background:rgba(137,180,250,.16) !important;}
+:root .ant-input-number .ant-input-number-action:active{background:rgba(203,166,247,.24) !important;}
+:root .ant-input-number .ant-input-number-action-disabled,:root .ant-input-number .ant-input-number-action[aria-disabled="true"]{color:#585b70 !important;background:transparent !important;}
+:root [class*="ModDetailsSettingsView__SettingsListItem-"]::before{background:linear-gradient(180deg,#89b4fa,#cba6f7) !important;}
 )WHB";
     return css;
 }
@@ -1236,6 +1274,14 @@ document.addEventListener('keydown',e=>{if(!menu)return;
  else if(e.key==='Tab')close();},true);
 window.addEventListener('blur',close);window.addEventListener('resize',close);document.addEventListener('scroll',close,true);
 })();)WHB";
+    js += R"WHH((()=>{if(window.whModalHot)return;window.whModalHot=1;let x=-1,y=-1;
+ const upd=()=>document.querySelectorAll('.ant-modal-content,.ant-modal-container').forEach(c=>{const r=c.getBoundingClientRect();c.classList.toggle('wh-hot',x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom);});
+ addEventListener('pointermove',e=>{x=e.clientX;y=e.clientY;upd();},{passive:true,capture:true});
+ document.addEventListener('pointerleave',()=>{x=y=-1;upd();});
+ // A dialog that opens under a still cursor gets no :hover, so check the last pointer spot when it appears.
+ new MutationObserver(()=>{requestAnimationFrame(upd);setTimeout(upd,250);}).observe(document.body,{childList:true});
+})();
+)WHH";
     js += R"WHH((()=>{
  const install=()=>{
   const original=document.querySelector('[data-testid="create-new-mod"]');
@@ -1246,7 +1292,11 @@ window.addEventListener('blur',close);window.addEventListener('resize',close);do
   const button=original.cloneNode(true);
   button.id='wh-header-create';button.removeAttribute('data-testid');
   button.className=document.querySelector('[data-testid="nav-explore"]').className;
-  button.onclick=()=>document.querySelector('[data-testid="create-new-mod"]')?.click();
+  // Park the hidden stock button under this copy so its confirm opens here, and stop this click
+  // reaching antd's outside-click check, which closed the confirm the moment it opened.
+  button.onclick=e=>{e.preventDefault();e.stopPropagation();const r=button.getBoundingClientRect(),s=document.documentElement.style;
+   s.setProperty('--wh-create-x',r.left+'px');s.setProperty('--wh-create-y',r.top+'px');s.setProperty('--wh-create-w',r.width+'px');s.setProperty('--wh-create-h',r.height+'px');
+   setTimeout(()=>document.querySelector('[data-testid="create-new-mod"]')?.click(),0);};
   anchor.before(button);
  };
  install();
