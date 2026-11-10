@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.1.6
+// @version         2.1.7
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1142,6 +1142,22 @@ static std::string BuildCss(const Settings& s) {
 :root .ant-tabs-top>.ant-tabs-nav .ant-tabs-tab-active{background:#181825 !important;}
 :root .ant-tabs-top>.ant-tabs-nav .ant-tabs-tab-active .ant-tabs-tab-btn{color:#89b4fa !important;font-weight:700 !important;text-shadow:none !important;}
 :root .ant-tabs-top>.ant-tabs-nav .ant-tabs-tab-active:hover{background:linear-gradient(125deg,#89b4fa33,#cba6f733) !important;}
+/* 2.1.7: split buttons (Load + menu dots) keep the same 8px gap as the next button, all on one centre line. */
+:root .ant-space-compact>.ant-btn+.ant-btn{margin-inline-start:8px !important;}
+:root .ant-space-compact>.ant-btn:has(+.ant-btn){margin-inline-end:0 !important;}
+:root .ant-space-compact:has(>.ant-btn+.ant-btn){align-items:center !important;}
+/* Dialogs (Installing, Compiling, update, confirm): grey 2px frame at rest, blue to mauve on hover. */
+:root :is(.ant-modal-content,.ant-modal-container):hover::after{--whb-a:#89b4fa;--whb-b:#cba6f7;}
+:root :is(.ant-modal-content,.ant-modal-container):hover{box-shadow:0 12px 32px #0009 !important;}
+/* Drop-down lists and menus: same grey frame at rest, blue to mauve on hover. */
+:root :is(.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-popover-container,.ant-popover-inner):hover::after{--whb-a:#89b4fa;--whb-b:#cba6f7;}
+/* Dialogs: frosted glass. Backdrop blur cannot read through this see-through window, so the page itself blurs while a dialog is open. Dialog is Mocha mantle, inner list one step lighter. */
+body:has(.ant-modal-wrap:not([style*="display: none"]) .ant-modal)>#root{filter:blur(12px) saturate(120%) !important;}
+body>#root{transition:filter .2s ease;}
+:root .ant-modal-mask{backdrop-filter:none !important;background-color:rgba(17,17,27,.35) !important;}
+:root :is(.ant-modal-content,.ant-modal-container){backdrop-filter:none !important;background-color:rgba(24,24,37,.86) !important;}
+:root [data-testid="mod-updates-modal"] [class*="OutcomeList"]{background:linear-gradient(#232435,#232435) padding-box,linear-gradient(125deg,var(--whb-a),var(--whb-b)) border-box !important;}
+:root [data-testid="mod-updates-modal"] .ant-progress-inner{background:#11111b !important;}
 )WHB";
     return css;
 }
@@ -1252,7 +1268,7 @@ const show=el=>{if(!tip){tip=document.createElement('div');tip.id='wh-tip';docum
  x=Math.max(6,Math.min(x,innerWidth-t.width-6));
  tip.style.left=x+'px';tip.style.top=y+'px';tip.classList.add('on');};
 document.addEventListener('mouseover',e=>{const el=e.target.closest&&e.target.closest('[title]');
- if(!el||el===cur)return;hide();const t=el.getAttribute('title');if(!t)return;
+ if(!el||el===cur)return;hide();const t=el.getAttribute('title');if(!t||el.closest('.ant-select-dropdown,.ant-select-selector,.ant-dropdown')||t.trim()===el.textContent.trim())return;
  el.dataset.whTitle=t;el.removeAttribute('title');cur=el;timer=setTimeout(()=>{if(cur===el)show(el);},450);},true);
 document.addEventListener('mouseout',e=>{if(cur&&(!e.relatedTarget||!cur.contains(e.relatedTarget)))hide();},true);
 ['mousedown','wheel','keydown'].forEach(n=>document.addEventListener(n,hide,true));
