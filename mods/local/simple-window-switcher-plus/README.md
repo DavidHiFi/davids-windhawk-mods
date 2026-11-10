@@ -12,8 +12,9 @@ Vista's animated live-window layouts and blurred background, with Simple Window 
 - Simple layout preserves the original grouping, badge, corners, dimensions and navigation settings.
 - Shared title font, icon visibility, window exclusions, monitor filtering and minimized-window ordering in Vista mode.
 - Custom or accent selection borders and background tint in Vista mode.
+- Catppuccin Mocha gradient edges (blue to mauve) on every Vista card; the selected window lights up fully.
 - Optional rounded corners on Vista window cards and panels, with a set radius.
-- A floating title pill in Vista mode, with acrylic blur, a border and a button that closes the selected window.
+- A floating title pill in Vista mode: dark Mocha glass over real blur, a blue-to-mauve border that brightens on hover, and a button that closes the selected window.
 - Dedicated administrator host handles shortcuts while elevated apps have focus.
 - Ctrl+Alt+Tab sticky mode and Q, Delete or Ctrl+W to close the selected window.
 - Change layouts in Settings without restarting Explorer.

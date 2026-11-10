@@ -2,7 +2,7 @@
 // @id              simple-window-switcher-plus
 // @name            Simple Window Switcher Plus
 // @description     Customizable Alt+Tab with Vista animations, background blur and elevated app support
-// @version         1.0.3
+// @version         1.0.4
 // @author          DavidHiFi, Lone, valinet, Asteski, bropines, caliberda
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -172,6 +172,24 @@ Based on Simple Window Switcher 2.1 by Lone, with improvements by Asteski and br
 - cornerRadius: 16
   $name: Corner radius
   $description: In pixels at 100% display scaling (0-64). Used when rounded corners are on
+- CardBorder:
+  - enabled: true
+    $name: Gradient border on every window
+    $description: A two-color edge around each window preview. The selected one is brightest
+  - startColor: "89B4FA"
+    $name: Start color
+    $description: Hex color at the top-left corner. Suggested 89B4FA (Mocha blue)
+  - endColor: "CBA6F7"
+    $name: End color
+    $description: Hex color at the bottom-right corner. Suggested CBA6F7 (Mocha mauve)
+  - width: 2
+    $name: Border width
+    $description: In pixels at 100% display scaling (1-6). Suggested 2
+  - restingOpacity: 40
+    $name: Other windows (%)
+    $description: How strong the border is on windows that are not selected (0-100). Suggested 40
+  $name: Window borders
+  $description: The gradient edge around each window in the Vista layouts
 - TitlePill:
   - enabled: true
     $name: Floating title pill
@@ -182,24 +200,31 @@ Based on Simple Window Switcher 2.1 by Lone, with improvements by Asteski and br
   - blur: 30
     $name: Blur strength
     $description: How much the pill blurs what's behind it (0-100)
-  - tintColor: "1C1C1E"
-    $name: Tint color
-    $description: Hex color, like 1C1C1E
-  - tintOpacity: 45
-    $name: Tint opacity (%)
-    $description: 0 is clear glass, 100 is solid
-  - noise: 3
+  - tintColor: "11111B"
+    $name: Fill color
+    $description: Hex color. Suggested 11111B (Mocha crust)
+  - tintOpacity: 70
+    $name: Fill opacity (%)
+    $description: 0 is clear glass, 100 is solid (no blur). Suggested 70
+  - noise: 4
     $name: Grain (%)
     $description: Fine grain over the glass, like Windows acrylic (0-20)
-  - textColor: "FFFFFF"
+  - textColor: "CDD6F4"
     $name: Text color
-    $description: Hex color for the title and the X
-  - borderColor: "FFFFFF"
-    $name: Border color
-    $description: Hex color
-  - borderOpacity: 18
+    $description: Hex color for the title and the X. Suggested CDD6F4 (Mocha text)
+  - borderColor: "89B4FA"
+    $name: Border start color
+    $description: Hex color on the left end. Suggested 89B4FA (Mocha blue)
+  - borderColorEnd: "CBA6F7"
+    $name: Border end color
+    $description: Hex color on the right end. Use the start color for a plain border. Suggested CBA6F7 (Mocha mauve)
+  - borderOpacity: 45
     $name: Border opacity (%)
-  - borderWidth: 1
+    $description: At rest (0-100). Suggested 45
+  - hoverBorderOpacity: 100
+    $name: Border opacity on hover (%)
+    $description: While the pointer is over the pill (0-100). Suggested 100
+  - borderWidth: 2
     $name: Border width
     $description: In pixels at 100% display scaling (0-6)
   - cornerRadius: 0
@@ -5691,12 +5716,20 @@ struct Settings {
     float cornerRadius;  // In pixels at 100% scaling.
     struct {
         bool enabled;
+        D2D1_COLOR_F start, end;
+        float width;           // In pixels at 100% scaling.
+        float restingOpacity;  // Windows that aren't selected.
+    } cardBorder;
+    struct {
+        bool enabled;
         bool closeButton;
         float blur;
         D2D1_COLOR_F tint;  // Alpha is the tint opacity.
         float noise;
         D2D1_COLOR_F text;
-        D2D1_COLOR_F border;
+        D2D1_COLOR_F border;     // Alpha is the resting opacity.
+        D2D1_COLOR_F borderEnd;
+        float hoverBorderOpacity;
         float borderWidth;
         float radius;  // 0 is fully round.
         float paddingX, paddingY;
@@ -5780,16 +5813,32 @@ Settings LoadSettings() {
     s.roundedCorners = Wh_GetIntSetting(L"roundedCorners") != 0;
     s.cornerRadius = (float)std::clamp(Wh_GetIntSetting(L"cornerRadius"), 0, 64);
 
+    auto& cb = s.cardBorder;
+    cb.enabled = Wh_GetIntSetting(L"CardBorder.enabled") != 0;
+    cb.start = HexSetting(L"CardBorder.startColor", RGB(0x89, 0xB4, 0xFA), 1);
+    cb.end = HexSetting(L"CardBorder.endColor", RGB(0xCB, 0xA6, 0xF7), 1);
+    cb.width = (float)std::clamp(Wh_GetIntSetting(L"CardBorder.width"), 1, 6);
+    cb.restingOpacity =
+        std::clamp(Wh_GetIntSetting(L"CardBorder.restingOpacity"), 0, 100) / 100.0f;
+
     auto& p = s.pill;
     p.enabled = Wh_GetIntSetting(L"TitlePill.enabled") != 0;
     p.closeButton = Wh_GetIntSetting(L"TitlePill.closeButton") != 0;
     p.blur = (float)std::clamp(Wh_GetIntSetting(L"TitlePill.blur"), 0, 100);
-    p.tint = HexSetting(L"TitlePill.tintColor", RGB(0x1C, 0x1C, 0x1E),
+    p.tint = HexSetting(L"TitlePill.tintColor", RGB(0x11, 0x11, 0x1B),
                         std::clamp(Wh_GetIntSetting(L"TitlePill.tintOpacity"), 0, 100) / 100.0f);
     p.noise = std::clamp(Wh_GetIntSetting(L"TitlePill.noise"), 0, 20) / 100.0f;
-    p.text = HexSetting(L"TitlePill.textColor", RGB(255, 255, 255), 1);
-    p.border = HexSetting(L"TitlePill.borderColor", RGB(255, 255, 255),
+    p.text = HexSetting(L"TitlePill.textColor", RGB(0xCD, 0xD6, 0xF4), 1);
+    p.border = HexSetting(L"TitlePill.borderColor", RGB(0x89, 0xB4, 0xFA),
                           std::clamp(Wh_GetIntSetting(L"TitlePill.borderOpacity"), 0, 100) / 100.0f);
+    {
+        // An empty end color means a plain border in the start color.
+        const auto end = WindhawkUtils::StringSetting::make(L"TitlePill.borderColorEnd");
+        p.borderEnd = ((PCWSTR)end)[0] ?HexSetting(L"TitlePill.borderColorEnd", RGB(0xCB, 0xA6, 0xF7), 1)
+                                 : D2D1::ColorF(p.border.r, p.border.g, p.border.b, 1);
+    }
+    p.hoverBorderOpacity =
+        std::clamp(Wh_GetIntSetting(L"TitlePill.hoverBorderOpacity"), 0, 100) / 100.0f;
     p.borderWidth = (float)std::clamp(Wh_GetIntSetting(L"TitlePill.borderWidth"), 0, 6);
     p.radius = (float)std::clamp(Wh_GetIntSetting(L"TitlePill.cornerRadius"), 0, 200);
     p.paddingX = (float)std::clamp(Wh_GetIntSetting(L"TitlePill.paddingX"), 0, 80);
@@ -6553,6 +6602,7 @@ struct DrawEntry {
     Pose pose;
     float order;  // Larger is farther away, drawn first.
     Quad quad;
+    float focus = 0;  // 1 for the selected window, fading to 0 one slot away.
 };
 
 class Switcher {
@@ -6732,6 +6782,7 @@ class Switcher {
         float width = 0;           // Animated towards the content width.
         float hover = 0;           // Close button hover, animated.
         bool hot = false;          // Cursor over the close button now.
+        float pillHover = 0;       // Cursor over the pill, animated.
         D2D1_RECT_F iconRect{};
         D2D1_RECT_F textClip{};
         D2D1_POINT_2F textOrigin{};
@@ -6746,6 +6797,10 @@ class Switcher {
     com_ptr<ID2D1Effect> m_noiseColor;
     com_ptr<ID2D1CommandList> m_pillShape;
     com_ptr<ID2D1LinearGradientBrush> m_gloss;
+    // Two-color edges: the window cards and the pill.
+    com_ptr<ID2D1LinearGradientBrush> m_cardEdge;
+    com_ptr<ID2D1LinearGradientBrush> m_pillEdge;
+    com_ptr<ID2D1LinearGradientBrush> EdgeBrush(D2D1_COLOR_F a, D2D1_COLOR_F b);
     com_ptr<ID2D1StrokeStyle> m_roundCap;
 };
 
@@ -6977,6 +7032,8 @@ void Switcher::ReleaseDeviceResources() {
     m_noiseColor = nullptr;
     m_pillShape = nullptr;
     m_gloss = nullptr;
+    m_cardEdge = nullptr;
+    m_pillEdge = nullptr;
     m_roundCap = nullptr;
     m_titleLayout = nullptr;
     m_titleFormat = nullptr;
@@ -7213,6 +7270,8 @@ LRESULT Switcher::HandleMessage(HWND hwnd,
             PostThreadMessageW(g_hookThreadId, WM_HOOK_UPDATE, 0, 0);
             m_backgroundKey.clear();
             m_titleFormat = nullptr;
+            m_cardEdge = nullptr;
+            m_pillEdge = nullptr;
             if (!g_takeOver) {
                 Deactivate();
             } else if (!m_d3dDevice) {
@@ -8298,6 +8357,7 @@ void Switcher::BuildDrawList(float t) {
         entry.pose = LerpPose(FlatPose(*item), layout, t);
         entry.order = Lerp(flatOrder, depthOrder, t);
         entry.quad = Project(entry.pose, item->Width(), item->Height());
+        entry.focus = 1 - std::clamp(std::fabs(rel), 0.0f, 1.0f);
         if (entry.pose.opacity > 0.003f) {
             m_drawList.push_back(entry);
         }
@@ -8798,9 +8858,20 @@ void Switcher::DrawCard(const DrawEntry& entry, float t) {
     }
     m_ctx->DrawImage(chain.color.get());
 
-    // Selection outline.
+    // Edge: a gradient border on every card, brightest on the selected one.
+    // Without it, only the selected card gets the plain outline.
+    const auto& cb = m_settings.cardBorder;
     const float highlight = entry.pose.highlight * entry.pose.opacity * t;
-    if (highlight > 0.01f) {
+    const float edge =
+        cb.enabled ? entry.pose.opacity * t *
+                         Lerp(cb.restingOpacity, 1.0f,
+                              std::clamp(std::max(entry.pose.highlight, entry.focus),
+                                         0.0f, 1.0f))
+                   : highlight;
+    if (cb.enabled && !m_cardEdge) {
+        m_cardEdge = EdgeBrush(cb.start, cb.end);
+    }
+    if (edge > 0.01f) {
         com_ptr<ID2D1PathGeometry> outline;
         com_ptr<ID2D1GeometrySink> sink;
         if (SUCCEEDED(m_d2dFactory->CreatePathGeometry(outline.put())) &&
@@ -8837,9 +8908,18 @@ void Switcher::DrawCard(const DrawEntry& entry, float t) {
             }
             sink->EndFigure(D2D1_FIGURE_END_CLOSED);
             if (SUCCEEDED(sink->Close())) {
-                m_brush->SetColor(SharedColor(true, 0.9f * highlight));
-                m_ctx->DrawGeometry(outline.get(), m_brush.get(),
-                                    std::max(2.0f, m_height / 360));
+                if (cb.enabled && m_cardEdge) {
+                    // Top-left to bottom-right of the card as drawn.
+                    m_cardEdge->SetStartPoint(entry.quad.p[0]);
+                    m_cardEdge->SetEndPoint(entry.quad.p[2]);
+                    m_cardEdge->SetOpacity(edge);
+                    m_ctx->DrawGeometry(outline.get(), m_cardEdge.get(),
+                                        std::max(1.0f, std::round(cb.width * m_dpiScale)));
+                } else {
+                    m_brush->SetColor(SharedColor(true, 0.9f * highlight));
+                    m_ctx->DrawGeometry(outline.get(), m_brush.get(),
+                                        std::max(2.0f, m_height / 360));
+                }
             }
         }
     }
@@ -9152,6 +9232,16 @@ void Switcher::PreparePill(float t, double dt) {
     m_pill.hover += ((m_pill.hot ? 1.0f : 0.0f) - m_pill.hover) *
                     (float)(1 - std::exp(-dt * 24));
 
+    // Hover over the whole pill lights its border up.
+    bool overPill = false;
+    if (GetCursorPos(&cursor) && ScreenToClient(m_hwnd, &cursor)) {
+        const float x = (float)cursor.x, y = (float)cursor.y;
+        overPill = x >= m_pill.rect.left && x < m_pill.rect.right &&
+                   y >= m_pill.rect.top && y < m_pill.rect.bottom;
+    }
+    m_pill.pillHover += ((overPill ? 1.0f : 0.0f) - m_pill.pillHover) *
+                        (float)(1 - std::exp(-dt * 14));
+
     // The shadow's shape.
     m_pillShape = nullptr;
     if (ps.shadow) {
@@ -9207,7 +9297,8 @@ void Switcher::DrawPill() {
                                D2D1_LAYER_OPTIONS1_NONE),
         nullptr);
 
-    if (ps.blur > 0) {
+    // A solid fill hides the blur, so skip its cost.
+    if (ps.blur > 0 && ps.tint.a < 0.995f) {
         const float sigma = ps.blur * s;
         const float reach = std::ceil(sigma * 3) + 2;
         const D2D1_VECTOR_4F crop{std::max(p.rect.left - reach, 0.0f),
@@ -9267,12 +9358,15 @@ void Switcher::DrawPill() {
         D2D1_COLOR_F idle = ps.text;
         idle.a = 0.12f;
         m_brush->SetColor(
-            LerpColor(idle, D2D1::ColorF(0.77f, 0.17f, 0.11f, 1), p.hover));
+            LerpColor(idle, D2D1::ColorF(0xF3 / 255.0f, 0x8B / 255.0f, 0xA8 / 255.0f, 1),
+                      p.hover));
         m_ctx->FillEllipse({center, r, r}, m_brush.get());
 
         D2D1_COLOR_F mark = ps.text;
         mark.a = 0.85f;
-        m_brush->SetColor(LerpColor(mark, D2D1::ColorF(1, 1, 1, 1), p.hover));
+        // Crust ink on the pastel red, like the rest of the rice.
+        m_brush->SetColor(LerpColor(
+            mark, D2D1::ColorF(0x11 / 255.0f, 0x11 / 255.0f, 0x1B / 255.0f, 1), p.hover));
         const float k = std::round(r * 0.42f);
         const float stroke = std::max(1.5f, 1.5f * s);
         m_ctx->DrawLine({center.x - k, center.y - k}, {center.x + k, center.y + k},
@@ -9283,16 +9377,43 @@ void Switcher::DrawPill() {
 
     m_ctx->PopLayer();
 
-    if (ps.borderWidth > 0 && ps.border.a > 0) {
+    const float borderOpacity =
+        Lerp(ps.border.a, ps.hoverBorderOpacity, p.pillHover) * p.opacity;
+    if (ps.borderWidth > 0 && borderOpacity > 0.005f) {
         const float bw = std::max(1.0f, std::round(ps.borderWidth * s));
-        D2D1_COLOR_F border = ps.border;
-        border.a *= p.opacity;
-        m_brush->SetColor(border);
         const D2D1_RECT_F inner{p.rect.left + bw / 2, p.rect.top + bw / 2,
                                 p.rect.right - bw / 2, p.rect.bottom - bw / 2};
         const float r = std::max(p.radius - bw / 2, 0.0f);
-        m_ctx->DrawRoundedRectangle({inner, r, r}, m_brush.get(), bw);
+        if (!m_pillEdge) {
+            m_pillEdge = EdgeBrush(D2D1::ColorF(ps.border.r, ps.border.g, ps.border.b, 1),
+                                   ps.borderEnd);
+        }
+        if (m_pillEdge) {
+            // Left end to right end.
+            m_pillEdge->SetStartPoint({p.rect.left, p.rect.top});
+            m_pillEdge->SetEndPoint({p.rect.right, p.rect.bottom});
+            m_pillEdge->SetOpacity(borderOpacity);
+            m_ctx->DrawRoundedRectangle({inner, r, r}, m_pillEdge.get(), bw);
+        } else {
+            D2D1_COLOR_F border = ps.border;
+            border.a = borderOpacity;
+            m_brush->SetColor(border);
+            m_ctx->DrawRoundedRectangle({inner, r, r}, m_brush.get(), bw);
+        }
     }
+}
+
+com_ptr<ID2D1LinearGradientBrush> Switcher::EdgeBrush(D2D1_COLOR_F a,
+                                                      D2D1_COLOR_F b) {
+    a.a = b.a = 1;
+    const D2D1_GRADIENT_STOP stops[] = {{0, a}, {1, b}};
+    com_ptr<ID2D1GradientStopCollection> collection;
+    com_ptr<ID2D1LinearGradientBrush> brush;
+    if (FAILED(m_ctx->CreateGradientStopCollection(stops, 2, collection.put())) ||
+        FAILED(m_ctx->CreateLinearGradientBrush({}, collection.get(), brush.put()))) {
+        return nullptr;
+    }
+    return brush;
 }
 
 void Switcher::RenderFrame() {
@@ -9527,9 +9648,10 @@ com_ptr<ID2D1Bitmap1> Switcher::CreatePlaceholder(const Item& item) {
     const D2D1_ROUNDED_RECT card{{0.5f, 0.5f, width - 0.5f, height - 0.5f},
                                  8,
                                  8};
-    m_brush->SetColor(D2D1::ColorF(0.13f, 0.13f, 0.15f, 0.96f));
+    // Mocha base card with a surface1 hairline.
+    m_brush->SetColor(D2D1::ColorF(0x1E / 255.0f, 0x1E / 255.0f, 0x2E / 255.0f, 0.97f));
     m_ctx->FillRoundedRectangle(card, m_brush.get());
-    m_brush->SetColor(D2D1::ColorF(1, 1, 1, 0.14f));
+    m_brush->SetColor(D2D1::ColorF(0x45 / 255.0f, 0x47 / 255.0f, 0x5A / 255.0f, 1));
     m_ctx->DrawRoundedRectangle(card, m_brush.get(), 1);
 
     if (item.icon) {
