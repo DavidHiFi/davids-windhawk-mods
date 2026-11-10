@@ -2,7 +2,7 @@
 // @id           better-volume-mixer-plus
 // @name         Seamless Volume Mixer
 // @description  A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices
-// @version      1.4.2
+// @version      1.4.4
 // @author       DavidHiFi, 0Allu, shubho
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -5237,16 +5237,35 @@ void AddTrayIcon(HWND hWnd) {
     data.hIcon = g_trayIcon;
     wcscpy_s(data.szTip, L"Better Volume Mixer");
     if (!Shell_NotifyIconW(NIM_ADD, &data)) {
-        // A GUID can remain associated with an earlier Windhawk executable path.
-        // Keep the same identity mode for all later operations on this icon.
-        data.uFlags &= ~NIF_GUID;
-        data.guidItem = {};
-        g_trayUsesGuid = false;
-        if (!Shell_NotifyIconW(NIM_ADD, &data)) {
-            Wh_Log(L"Mixer: tray icon registration failed");
-            return;
+        // A tool host killed without cleanup can leave its GUID identity
+        // registered. The stale entry then makes every later GUID add fail,
+        // so the icon lands in the overflow as a window/ID duplicate while
+        // the dead spot keeps the pin. Clear the zombie and retry the GUID
+        // identity before falling back; Explorer restores the pin by GUID.
+        NOTIFYICONDATAW stale = {};
+        stale.cbSize = sizeof(stale);
+        stale.hWnd = hWnd;
+        stale.uID = TRAY_ICON_ID;
+        stale.uFlags = NIF_GUID;
+        stale.guidItem = MIXER_TRAY_GUID;
+        if (Shell_NotifyIconW(NIM_DELETE, &stale) &&
+            Shell_NotifyIconW(NIM_ADD, &data)) {
+            Wh_Log(L"Mixer: cleared stale tray identity, GUID icon registered");
+        } else {
+            // A GUID can remain associated with an earlier Windhawk executable path.
+            // Keep the same identity mode for all later operations on this icon.
+            stale.uFlags = 0;
+            stale.guidItem = {};
+            Shell_NotifyIconW(NIM_DELETE, &stale);
+            data.uFlags &= ~NIF_GUID;
+            data.guidItem = {};
+            g_trayUsesGuid = false;
+            if (!Shell_NotifyIconW(NIM_ADD, &data)) {
+                Wh_Log(L"Mixer: tray icon registration failed");
+                return;
+            }
+            Wh_Log(L"Mixer: tray icon registered using window/ID fallback");
         }
-        Wh_Log(L"Mixer: tray icon registered using window/ID fallback");
     }
     Wh_Log(L"Mixer: tray icon registered");
 
@@ -5259,12 +5278,18 @@ void AddTrayIcon(HWND hWnd) {
 }
 
 void RemoveTrayIcon(HWND hWnd) {
+    // Delete both identities: whichever mode this session used plus the
+    // other one, so a latched fallback or a stale registration can never
+    // leave a ghost behind on exit.
     NOTIFYICONDATAW data = {};
     data.cbSize = sizeof(data);
     data.hWnd = hWnd;
     data.uID = TRAY_ICON_ID;
-    data.uFlags = g_trayUsesGuid ? NIF_GUID : 0;
-    if (g_trayUsesGuid) data.guidItem = MIXER_TRAY_GUID;
+    data.uFlags = NIF_GUID;
+    data.guidItem = MIXER_TRAY_GUID;
+    Shell_NotifyIconW(NIM_DELETE, &data);
+    data.uFlags = 0;
+    data.guidItem = {};
     Shell_NotifyIconW(NIM_DELETE, &data);
 }
 
@@ -6914,6 +6939,216 @@ DWORD WINAPI ThreadProc(LPVOID) {
 
 
 // ---------------------------------------------------------------------------------------------
+// Menu room: shared by Seamless Flyouts and the tool mods' menu look.
+// - Every popup menu window in this process is caught as it is created, title bar (system)
+//   menus included, which never pass through TrackPopupMenu.
+// - Menus that Windows draws get 2 px more frame on every side, so the hover has the same room
+//   from the border as in Explorer's own desktop menu (4 px at the sides, 6 px top and bottom).
+//   Menus with owner-drawn rows (Explorer) already have it and are left alone.
+// - A menu too tall for its monitor gets shorter rows while it is open, so the last item
+//   shows without scroll arrows. Windows reads row spacing once per process, so the spacing is
+//   reloaded (FlushMenuThemes) when such a menu opens and again when the menu closes.
+// ---------------------------------------------------------------------------------------------
+#include <algorithm>
+#include <atomic>
+#include <mutex>
+#include <vector>
+#include <commctrl.h>
+
+namespace SeamlessMenuRoom {
+
+constexpr UINT_PTR kRoomId = 0x6D55;
+constexpr INT kRowMargin = 8;                  // row top and bottom margin of the menu look
+constexpr INT kMinRowMargin = 2;
+static const WCHAR* const kPadProp = L"SeamlessMenuRoomPad";
+static const WCHAR* const kSizeProp = L"SeamlessMenuRoomSize";
+
+static std::atomic<INT> g_rowMargin{kRowMargin};
+static HWINEVENTHOOK g_createHook = nullptr, g_menuHook = nullptr;
+static VOID (*g_onCreate)(HWND) = nullptr;
+using Flush_t = VOID(WINAPI*)();
+static Flush_t g_flush = nullptr;
+static thread_local HHOOK t_loopHook = nullptr;
+static thread_local INT t_trackDepth = 0;
+static thread_local BOOL t_menuMode = FALSE;
+
+// Row top and bottom margin to report for Menu part 27 / POPUPITEM, property 10000.
+static INT RowMargin() { return g_rowMargin.load(); }
+
+static UINT DpiOf(HWND h)
+{
+    UINT d = h ? GetDpiForWindow(h) : 0;
+    if (!d) d = GetDpiForSystem();
+    return d ? d : USER_DEFAULT_SCREEN_DPI;
+}
+
+static BOOL IsPopupMenuWindow(HWND h)
+{
+    WCHAR cls[16];
+    return h && GetClassNameW(h, cls, ARRAYSIZE(cls)) && wcscmp(cls, L"#32768") == 0;
+}
+
+static BOOL HasOwnerDraw(HMENU m)
+{
+    INT n = GetMenuItemCount(m);
+    for (INT i = 0; i < n; i++) {
+        MENUITEMINFOW mii = {sizeof(mii), MIIM_FTYPE};
+        if (GetMenuItemInfoW(m, i, TRUE, &mii) && (mii.fType & MFT_OWNERDRAW)) return TRUE;
+    }
+    return FALSE;
+}
+
+static LRESULT CALLBACK RoomProc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR, DWORD_PTR)
+{
+    if (msg == WM_WINDOWPOSCHANGING && l) {
+        auto* wp = reinterpret_cast<WINDOWPOS*>(l);
+        // Grow only the size Windows asks for, never a size this proc already produced.
+        if (!(wp->flags & SWP_NOSIZE) && wp->cx > 0 && wp->cy > 0 &&
+            (DWORD)MAKELONG(wp->cx, wp->cy) != (DWORD)(ULONG_PTR)GetPropW(h, kSizeProp)) {
+            HMENU m = (HMENU)SendMessageW(h, MN_GETHMENU, 0, 0);
+            INT pad = (m && !HasOwnerDraw(m)) ? MulDiv(2, DpiOf(h), USER_DEFAULT_SCREEN_DPI) : 0;
+            SetPropW(h, kPadProp, (HANDLE)(INT_PTR)pad);
+            if (pad) {
+                wp->cx += 2 * pad;
+                wp->cy += 2 * pad;
+                if (!(wp->flags & SWP_NOMOVE)) {
+                    RECT r = {wp->x, wp->y, wp->x + wp->cx, wp->y + wp->cy};
+                    MONITORINFO mi = {sizeof(mi)};
+                    if (GetMonitorInfoW(MonitorFromRect(&r, MONITOR_DEFAULTTONEAREST), &mi)) {
+                        if (r.right > mi.rcMonitor.right) wp->x = std::max(mi.rcMonitor.left, wp->x - (r.right - mi.rcMonitor.right));
+                        if (r.bottom > mi.rcMonitor.bottom) wp->y = std::max(mi.rcMonitor.top, wp->y - (r.bottom - mi.rcMonitor.bottom));
+                    }
+                }
+            }
+            SetPropW(h, kSizeProp, (HANDLE)(ULONG_PTR)(DWORD)MAKELONG(wp->cx, wp->cy));
+        }
+    }
+    if (msg == WM_NCDESTROY) {
+        RemovePropW(h, kPadProp);
+        RemovePropW(h, kSizeProp);
+        RemoveWindowSubclass(h, RoomProc, kRoomId);
+        return DefSubclassProc(h, msg, w, l);
+    }
+    LRESULT result = DefSubclassProc(h, msg, w, l);
+    if (msg == WM_NCCALCSIZE && l) {
+        INT pad = (INT)(INT_PTR)GetPropW(h, kPadProp);
+        if (pad > 0) InflateRect(reinterpret_cast<RECT*>(l), -pad, -pad);
+    }
+    return result;
+}
+
+static VOID ResetRows()
+{
+    if (g_rowMargin.exchange(kRowMargin) != kRowMargin && g_flush) g_flush();
+}
+
+// Picks the largest row margin (8 down to 2) at which the whole menu fits its monitor.
+static VOID FitMenu(HMENU m, HWND owner)
+{
+    if (!m || !g_flush || HasOwnerDraw(m)) return;
+    INT rows = 0, seps = 0, n = GetMenuItemCount(m);
+    for (INT i = 0; i < n; i++) {
+        MENUITEMINFOW mii = {sizeof(mii), MIIM_FTYPE};
+        if (!GetMenuItemInfoW(m, i, TRUE, &mii)) continue;
+        (mii.fType & MFT_SEPARATOR) ? seps++ : rows++;
+    }
+    MONITORINFO mi = {sizeof(mi)};
+    if (!rows || !GetMonitorInfoW(MonitorFromWindow(owner, MONITOR_DEFAULTTONEAREST), &mi)) return;
+    UINT dpi = DpiOf(owner);
+    auto px = [dpi](INT v) { return MulDiv(v, dpi, USER_DEFAULT_SCREEN_DPI); };
+    INT avail = mi.rcWork.bottom - mi.rcWork.top - px(8);
+    INT pick = kRowMargin;
+    for (; pick > kMinRowMargin; pick--) {
+        INT cut = px(2 * (kRowMargin - pick));   // rows measure 33 px and separators 21 px at margin 8
+        if (rows * (px(33) - cut) + seps * (px(21) - cut) + px(10) <= avail) break;
+    }
+    if (pick < g_rowMargin.load()) {
+        g_rowMargin = pick;
+        g_flush();
+    }
+}
+
+static LRESULT CALLBACK LoopProc(INT code, WPARAM w, LPARAM l)
+{
+    if (code == HC_ACTION && l) {
+        auto* c = reinterpret_cast<CWPSTRUCT*>(l);
+        if (c->message == WM_INITMENUPOPUP) FitMenu((HMENU)c->wParam, c->hwnd);
+        else if (c->message == WM_EXITMENULOOP) ResetRows();
+    }
+    return CallNextHookEx(nullptr, code, w, l);
+}
+// Every live loop hook, so Uninit can remove the ones other threads still hold.
+static std::mutex g_hooksLock;
+static std::vector<HHOOK> g_hooks;
+static VOID SyncLoopHook()
+{
+    BOOL want = t_trackDepth > 0 || t_menuMode;
+    if (want && !t_loopHook) {
+        t_loopHook = SetWindowsHookExW(WH_CALLWNDPROC, LoopProc, nullptr, GetCurrentThreadId());
+        if (t_loopHook) { std::lock_guard<std::mutex> g(g_hooksLock); g_hooks.push_back(t_loopHook); }
+    } else if (!want && t_loopHook) {
+        {
+            std::lock_guard<std::mutex> g(g_hooksLock);
+            auto it = std::find(g_hooks.begin(), g_hooks.end(), t_loopHook);
+            if (it != g_hooks.end()) { g_hooks.erase(it); UnhookWindowsHookEx(t_loopHook); }
+        }
+        t_loopHook = nullptr;
+        ResetRows();
+    }
+}
+
+// Wrap TrackPopupMenu(Ex) with these (menu-bar menus are covered by the menu events).
+static VOID BeginTrack() { t_trackDepth++; SyncLoopHook(); }
+static VOID EndTrack() { if (t_trackDepth > 0) t_trackDepth--; SyncLoopHook(); }
+
+static VOID CALLBACK OnEvent(HWINEVENTHOOK, DWORD ev, HWND h, LONG obj, LONG child, DWORD, DWORD)
+{
+    if (ev == EVENT_OBJECT_CREATE) {
+        if (obj != OBJID_WINDOW || child != CHILDID_SELF || !IsPopupMenuWindow(h) ||
+            GetWindowThreadProcessId(h, nullptr) != GetCurrentThreadId())
+            return;
+        if (g_onCreate) g_onCreate(h);
+        SetWindowSubclass(h, RoomProc, kRoomId, 0);
+    } else if (ev == EVENT_SYSTEM_MENUSTART) {
+        t_menuMode = TRUE;
+        SyncLoopHook();
+    } else if (ev == EVENT_SYSTEM_MENUEND) {
+        t_menuMode = FALSE;
+        SyncLoopHook();
+    }
+}
+
+// onCreate (optional) runs for each new popup menu window, on its own thread, after creation.
+static VOID Init(VOID (*onCreate)(HWND))
+{
+    g_onCreate = onCreate;
+    HMODULE ux = GetModuleHandleW(L"uxtheme.dll");
+    if (!ux) ux = LoadLibraryExW(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    g_flush = ux ? (Flush_t)GetProcAddress(ux, MAKEINTRESOURCEA(136)) : nullptr;
+    HMODULE self = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       reinterpret_cast<LPCWSTR>(&OnEvent), &self);
+    DWORD pid = GetCurrentProcessId();
+    g_createHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE, self, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+    g_menuHook = SetWinEventHook(EVENT_SYSTEM_MENUSTART, EVENT_SYSTEM_MENUEND, self, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+}
+
+static VOID Uninit()
+{
+    for (HWINEVENTHOOK* hk : {&g_createHook, &g_menuHook})
+        if (*hk) { UnhookWinEvent(*hk); *hk = nullptr; }
+    {
+        std::lock_guard<std::mutex> g(g_hooksLock);
+        for (HHOOK hk : g_hooks) UnhookWindowsHookEx(hk);
+        g_hooks.clear();
+    }
+    ResetRows();
+}
+
+}  // namespace SeamlessMenuRoom
+// ---------------------------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------------------------
 // Seamless menu look for this mod's own menus.
 // Windhawk runs tool mods in their own process, where Seamless Flyouts cannot reach, so the
 // menus this mod shows get the same look here: blurred Catppuccin Mocha body, rounded corners,
@@ -6940,8 +7175,6 @@ using GetThemeClass_t = HRESULT(WINAPI*)(HTHEME, LPWSTR, INT);
 static ID2D1Factory* g_factory = nullptr;
 static HDC g_hoverDC = nullptr, g_sepDC = nullptr;
 static UINT g_edgesMsg = 0;
-static thread_local HHOOK g_cbt = nullptr;
-static thread_local INT g_depth = 0;
 
 static decltype(&DrawThemeBackground) DrawThemeBackground_orig = nullptr;
 static decltype(&DrawThemeBackgroundEx) DrawThemeBackgroundEx_orig = nullptr;
@@ -7153,33 +7386,26 @@ static LRESULT CALLBACK MenuProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
     return result;
 }
 
-static LRESULT CALLBACK CbtProc(INT code, WPARAM wParam, LPARAM lParam)
+// Every popup menu window of this process, title bar menus included (those never pass
+// through TrackPopupMenu, so they used to keep a black, unblurred body).
+static VOID OnMenuCreated(HWND hWnd)
 {
-    if (code == HCBT_CREATEWND && IsMenuWindow((HWND)wParam))
-        SetWindowSubclass((HWND)wParam, MenuProc, kSubclassId, 0);
-    return CallNextHookEx(nullptr, code, wParam, lParam);
-}
-static VOID BeginMenu()
-{
-    if (g_depth++ == 0) g_cbt = SetWindowsHookExW(WH_CBT, CbtProc, nullptr, GetCurrentThreadId());
-}
-static VOID EndMenu()
-{
-    if (--g_depth == 0 && g_cbt) { UnhookWindowsHookEx(g_cbt); g_cbt = nullptr; }
+    SetWindowSubclass(hWnd, MenuProc, kSubclassId, 0);
+    ApplyEffects(hWnd);
 }
 
 static BOOL WINAPI TrackPopupMenu_hook(HMENU m, UINT f, INT x, INT y, INT r, HWND h, const RECT* rc)
 {
-    BeginMenu();
+    SeamlessMenuRoom::BeginTrack();
     BOOL ret = TrackPopupMenu_orig(m, f, x, y, r, h, rc);
-    EndMenu();
+    SeamlessMenuRoom::EndTrack();
     return ret;
 }
 static BOOL WINAPI TrackPopupMenuEx_hook(HMENU m, UINT f, INT x, INT y, HWND h, LPTPMPARAMS p)
 {
-    BeginMenu();
+    SeamlessMenuRoom::BeginTrack();
     BOOL ret = TrackPopupMenuEx_orig(m, f, x, y, h, p);
-    EndMenu();
+    SeamlessMenuRoom::EndTrack();
     return ret;
 }
 
@@ -7244,7 +7470,7 @@ static HRESULT WINAPI GetThemeMargins_hook(HTHEME t, HDC hdc, INT part, INT stat
     if (m && IsMenuTheme(t) && (part == MENU_POPUPITEM || part == 27 || part == 26)) {
         if (prop == TMT_CONTENTMARGINS) *m = {2, 2, 8, 8};
         else if (prop == TMT_SIZINGMARGINS) *m = {10, 10, 10, 10};
-        else if (prop == 10000) *m = {0, 0, 8, 8};
+        else if (prop == 10000) *m = {0, 0, SeamlessMenuRoom::RowMargin(), SeamlessMenuRoom::RowMargin()};
     }
     return hr;
 }
@@ -7297,10 +7523,12 @@ static VOID Init()
     Hook(dwm, "DwmSetWindowAttribute", DwmSetWindowAttribute_hook, &DwmSetWindowAttribute_orig);
     Hook(u32, "TrackPopupMenu", TrackPopupMenu_hook, &TrackPopupMenu_orig);
     Hook(u32, "TrackPopupMenuEx", TrackPopupMenuEx_hook, &TrackPopupMenuEx_orig);
+    SeamlessMenuRoom::Init(OnMenuCreated);
 }
 
 static VOID Uninit()
 {
+    SeamlessMenuRoom::Uninit();
     for (HDC* dc : {&g_hoverDC, &g_sepDC})
         if (*dc) {
             HGDIOBJ bmp = GetCurrentObject(*dc, OBJ_BITMAP);
