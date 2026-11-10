@@ -93,3 +93,29 @@ DLLs: `local@better-volume-mixer-plus_1.4.5_125480.dll`,
 `local@recycle-bin-tray-plus_1.0.4_961128.dll`. Backups:
 `backups\2026-11-10\menu-skin-fix\` (both reg exports + prior sources).
 Repo: commit `6445144` (local only, not pushed).
+
+## Faster draw mode (GPU renderer) fixed, 1.4.7 (9:08 pm)
+
+The GPU renderer showed nothing. Causes, all fixed in the source:
+- the composition root was never set on the target, so nothing was attached to the window;
+- the content visual sat under the chrome visual;
+- drawing ignored the surface's atlas offset;
+- the panel and border were drawn twice (once in content, once in chrome);
+- surfaces were asked for an image instead of a device context. With a device made from a
+  D2D device, BeginDraw must return ID2D1DeviceContext and that context is already drawing.
+  Before this the log read "GpuFailToGdi (error 0)" and the popup stayed invisible.
+
+Verified: log reads "DirectComposition renderer armed" with no failure lines; popup opened
+twice through the tray callback and rendered the full list (work\2026-11-10-volmixer-gpu\gpu-147-a.png).
+No crashes, Explorer unchanged.
+
+- Old: LibraryFileName local@better-volume-mixer-plus_1.4.5_125480.dll, Settings\renderer gdi
+- New: LibraryFileName local@better-volume-mixer-plus_1.4.7_307213.dll, Settings\renderer gpu
+- Rollback: reg import backups\2026-11-10\volmixer-tray-fix\mixer-mod-key-before.reg (or set
+  renderer back to gdi), then scripts\2026-11-10-tool-mod-restart.ps1 -Id local@better-volume-mixer-plus.
+- Known limit: if GPU setup ever fails at runtime the GDI fallback is invisible on this window
+  (the no-redirection style is fixed at creation). Switch renderer to gdi if that happens.
+
+Note: the 8:58 pm mass crash (Explorer and many apps) came from another thread's
+editor-glass script adding a Seamless Flyouts rule for VSCodium, not from this work.
+Its backup: backups\2026-11-10-editor-glass-native\flyouts.reg.
