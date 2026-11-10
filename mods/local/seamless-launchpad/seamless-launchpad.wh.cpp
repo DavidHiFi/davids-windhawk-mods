@@ -1,14 +1,18 @@
+#include <windowsx.h>
+#include <map>
+#include <memory>
+#include <wincodec.h>
 // ==WindhawkMod==
 // @id              seamless-launchpad
 // @name            Seamless Launchpad
 // @description     A fullscreen GPU rendered grid of all your apps in place of Start, with instant search, adjustable blur, wiggle edit mode and power buttons
-// @version         2.2.2
+// @version         2.4.0
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         explorer.exe
 // @architecture    x86-64
-// @compilerOptions -lgdi32 -lshell32 -lshcore -ldwmapi -ld2d1 -ldwrite -ld3d11 -ldxgi -lole32 -luuid -lcomdlg32 -luxtheme -lpropsys -lpowrprof
+// @compilerOptions -lgdi32 -lshell32 -lshcore -ldwmapi -ld2d1 -ldwrite -ld3d11 -ldxgi -lole32 -luuid -lcomdlg32 -luxtheme -lpropsys -lpowrprof -lwindowscodecs -lole32 -limm32 -lcomctl32
 // @license         MIT
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
@@ -249,6 +253,21 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
 - animations: true
   $name: Animations
   $description: Off, everything snaps instantly. Opening, folders, hover fades, tile moves and wiggle all turn off.
+- settingsGlass: true
+  $name: Blurred settings window
+  $description: On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Save, then reopen settings to apply.
+- nativeSettingsTitleBar: false
+  $name: Native Windows title bar
+  $description: Use the Windows title bar and window buttons for this settings window. Save, then reopen settings to apply.
+- settingsTitleButtons: native
+  $name: Title bar buttons
+  $description: Who draws minimize, maximize and close on the window's own title bar. Windows buttons look like every other app's, title bar mods included. Save, then reopen settings to apply.
+  $options:
+  - native: Windows buttons (like other apps)
+  - builtin: Built-in buttons
+- settingsTrayIcon: true
+  $name: Tray icon
+  $description: A Launchpad icon in the system tray. Click it to open these settings, right-click it for a menu.
 */
 // ==/WindhawkModSettings==
 
@@ -374,6 +393,7 @@ struct Settings {
     DockAlign dockAlign = DockAlign::Center;
     bool wiggle = true;           // Edit-mode wiggle while dragging.
     bool animations = true;       // Off: every transition snaps.
+    bool trayIcon = true;         // A tray icon that opens the settings.
     int holdMs = 420;             // Press time before an icon lifts for dragging.
     bool showLabels = true;
     bool normalizeIcons = true;   // Scale small/padded icons up to the grid size, no frame.
@@ -481,6 +501,7 @@ void LoadSettings() {
     s.holdMs = std::clamp(IntSetting(L"holdTime", 420), 150, 1500);
     s.showLabels = IntSetting(L"showLabels", 1) != 0;
     s.normalizeIcons = IntSetting(L"normalizeIcons", 1) != 0;
+    s.trayIcon = IntSetting(L"settingsTrayIcon", 1) != 0;
     g_settings = s;
     auto action = [](PCWSTR name) {
         std::wstring value = GetStringSetting(name);
@@ -2783,8 +2804,32 @@ bool InButton(const D2D1_RECT_F& r, float x, float y) {
                   x, y);
 }
 
+// Mocha blue to mauve across a rect, at an opacity. Falls back to the solid accent.
+ID2D1Brush* HoverBrush(const D2D1_RECT_F& r, float opacity) {
+    if (!g_hoverGradient) {
+        D2D1_GRADIENT_STOP stops[] = {
+            {0, D2D1::ColorF(0x89B4FA)}, {1, D2D1::ColorF(0xCBA6F7)}};
+        ComPtr<ID2D1GradientStopCollection> collection;
+        if (SUCCEEDED(g_target->CreateGradientStopCollection(stops, 2, &collection))) {
+            g_target->CreateLinearGradientBrush(
+                D2D1::LinearGradientBrushProperties(
+                    D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.right, r.top)),
+                collection.Get(), &g_hoverGradient);
+        }
+    }
+    if (!g_hoverGradient) {
+        g_brush->SetColor(Alpha(g_settings.accent, opacity));
+        return g_brush.Get();
+    }
+    g_hoverGradient->SetStartPoint(D2D1::Point2F(r.left, r.top));
+    g_hoverGradient->SetEndPoint(D2D1::Point2F(r.right, r.bottom));
+    g_hoverGradient->SetOpacity(opacity);
+    return g_hoverGradient.Get();
+}
+
 // The clean hover box shared by tiles, search, menu and power buttons: a thin
-// halo of 1px strokes fading outward, a faint accent face and a crisp edge.
+// halo of 1px strokes fading outward, a faint face and a crisp edge, all in
+// the blue to mauve gradient.
 void DrawHoverBox(const D2D1_RECT_F& box, float radius, float alpha,
                   float maxSpread = 1e6f) {
     if (alpha <= 0.001f) {
@@ -2795,40 +2840,18 @@ void DrawHoverBox(const D2D1_RECT_F& box, float radius, float alpha,
     for (int j = spread; j > 0; --j) {
         float d = (float)j;
         float falloff = 1.0f - d / (spread + 1.0f);
-        auto color = g_settings.accent;
-        color.a = alpha * g_settings.glowStrength * 0.055f * falloff * falloff;
-        g_brush->SetColor(color);
+        auto halo = D2D1::RectF(box.left - d, box.top - d, box.right + d, box.bottom + d);
         g_target->DrawRoundedRectangle(
-            D2D1::RoundedRect(D2D1::RectF(box.left - d, box.top - d,
-                                          box.right + d, box.bottom + d),
-                              radius + d, radius + d),
-            g_brush.Get(), s);
+            D2D1::RoundedRect(halo, radius + d, radius + d),
+            HoverBrush(halo, alpha * g_settings.glowStrength * 0.055f * falloff * falloff), s);
     }
-    Fill(box, Alpha(g_settings.accent, alpha * 0.12f), radius);
-    if (!g_hoverGradient) {
-        D2D1_GRADIENT_STOP stops[] = {
-            {0, D2D1::ColorF(0x89B4FA)}, {1, D2D1::ColorF(0xCBA6F7)}};
-        ComPtr<ID2D1GradientStopCollection> collection;
-        if (SUCCEEDED(g_target->CreateGradientStopCollection(stops, 2, &collection))) {
-            g_target->CreateLinearGradientBrush(
-                D2D1::LinearGradientBrushProperties(
-                    D2D1::Point2F(box.left, box.top), D2D1::Point2F(box.right, box.top)),
-                collection.Get(), &g_hoverGradient);
-        }
-    }
-    ID2D1Brush* border = g_brush.Get();
-    g_brush->SetColor(Alpha(g_settings.accent, alpha * 0.75f));
-    if (g_hoverGradient) {
-        g_hoverGradient->SetStartPoint(D2D1::Point2F(box.left, box.top));
-        g_hoverGradient->SetEndPoint(D2D1::Point2F(box.right, box.top));
-        g_hoverGradient->SetOpacity(alpha * 0.85f);
-        border = g_hoverGradient.Get();
-    }
-    g_target->DrawRoundedRectangle(
-        D2D1::RoundedRect(D2D1::RectF(box.left + 0.5f, box.top + 0.5f,
-                                      box.right - 0.5f, box.bottom - 0.5f),
-                          radius - 0.5f, radius - 0.5f),
-        border, s);
+    g_target->FillRoundedRectangle(D2D1::RoundedRect(box, radius, radius),
+                                   HoverBrush(box, alpha * 0.12f));
+    // 1.6 px: a 1 px edge looked jagged on the rounded corners.
+    float w = 1.6f * s, in = w / 2;
+    auto edge = D2D1::RectF(box.left + in, box.top + in, box.right - in, box.bottom - in);
+    g_target->DrawRoundedRectangle(D2D1::RoundedRect(edge, radius - in, radius - in),
+                                   HoverBrush(box, alpha * 0.85f), w);
 }
 
 // A soft accent glow out of a rounded rect: wide overlapping strokes with
@@ -3012,6 +3035,7 @@ DWORD WINAPI PowerThread(void* param) {
                GetLastError());
     }
     FreeLibraryAndExitThread((HMODULE)&__ImageBase, 0);
+    return 0;  // Unreachable live: the API exits the thread. Keeps test hosts returning.
 }
 
 void RunPowerAction(PowerAction action) {
@@ -3622,6 +3646,13 @@ void DrawTileIcon(const Tile& tile, const D2D1_RECT_F& r, float opacity) {
     if (tile.folder) {
         // A rounded square with the first nine apps.
         Fill(r, D2D1::ColorF(0x313244, 0.55f * opacity), side * 0.22f);
+        // A resting edge (Mocha overlay0) so the folder stands off the backdrop.
+        float w = 1.25f * g_layout.scale, in = w / 2;
+        g_brush->SetColor(D2D1::ColorF(0x6C7086, 0.6f * opacity));
+        g_target->DrawRoundedRectangle(
+            D2D1::RoundedRect(D2D1::RectF(r.left + in, r.top + in, r.right - in, r.bottom - in),
+                              side * 0.22f - in, side * 0.22f - in),
+            g_brush.Get(), w);
         float pad = side * 0.12f, gap = side * 0.04f;
         float mini = (side - 2 * pad - 2 * gap) / 3;
         const Tiles& apps = tile.folder->apps;
@@ -3717,25 +3748,7 @@ void DrawTile(const Tile& tile, const Cell& c, int i, bool live) {
             auto box = c.highlight;
             box.bottom = std::max(box.bottom, c.label.bottom + 6 * s);
             float radius = 7 * s;
-            // Thin concentric strokes keep the glow outside the tile face.
-            int spread = std::max(1, (int)(g_settings.glowSize * s));
-            for (int j = spread; j > 0; --j) {
-                float d = (float)j;
-                float falloff = 1.0f - d / (spread + 1.0f);
-                auto halo = D2D1::RectF(box.left-d, box.top-d,
-                                      box.right+d, box.bottom+d);
-                auto color = g_settings.accent;
-                color.a = alpha * g_settings.glowStrength * 0.055f * falloff * falloff;
-                g_brush->SetColor(color);
-                g_target->DrawRoundedRectangle(D2D1::RoundedRect(halo, radius+d, radius+d), g_brush.Get(), s);
-            }
-            auto face = g_settings.accent;
-            face.a = alpha * 0.12f;
-            Fill(box, face, radius);
-            auto edge = g_settings.accent;
-            edge.a = alpha * 0.75f;
-            g_brush->SetColor(edge);
-            g_target->DrawRoundedRectangle(D2D1::RoundedRect(box, radius, radius), g_brush.Get(), s);
+            DrawHoverBox(box, radius, alpha);
         }
     }
     if (live && i == g_drag.target) {
@@ -3814,7 +3827,7 @@ void DrawGrid() {
     const Layout& L = g_layout;
     float s = L.scale;
     if (!g_appsLoaded && g_apps.empty()) {
-        DrawMessage(L"Loading apps…");
+        DrawMessage(L"Loading apps\u2026");
         return;
     }
     if (g_visible.empty()) {
@@ -4274,129 +4287,37 @@ void LaunchTarget(const std::wstring& target, PCWSTR verb = nullptr) {
 // Windhawk's page for this mod and saves them through windhawk-cli, so the two
 // stay in step. Writing a mod's settings takes admin rights, so the save runs
 // the CLI elevated (silently where UAC prompts are off).
-struct SettingField {
-    // SmallCheck: a box with its name beside it, three to a row.
-    enum Kind { Header, Choice, Number, Text, Check, Color, SmallCheck };
-    Kind kind;
-    PCWSTR key;
-    PCWSTR label;
-    std::vector<std::pair<PCWSTR, PCWSTR>> options;  // Value, label.
-    int min = 0, max = 0;
-    HWND labelWnd = nullptr;
-    HWND control = nullptr;
-    HWND swatch = nullptr;  // Color only.
-    std::wstring value;     // As loaded, so a save writes only what changed.
-};
-
-std::vector<std::pair<PCWSTR, PCWSTR>> KeyActionOptions() {
-    return {{L"grid", L"Open this grid"},
-            {L"start", L"Open the original Start"},
-            {L"program", L"Run the program below"}};
-}
-
-std::vector<SettingField> MakeSettingFields() {
-    using F = SettingField;
-    return {
-        {F::Header, nullptr, L"Look"},
-        {F::Choice,
-         L"blurMode",
-         L"Blur type",
-         {{L"custom", L"Adjustable"},
-          {L"acrylic", L"Windows acrylic"},
-          {L"blur", L"Windows blur"},
-          {L"none", L"No blur"}}},
-        {F::Number, L"blurAmount", L"Blur strength (0 to 100)", {}, 0, 100},
-        {F::Number, L"backgroundOpacity", L"Color opacity (%)", {}, 0, 100},
-        {F::Color, L"tintColor", L"Background color"},
-        {F::Color, L"accentColor", L"Accent color"},
-        {F::Number, L"glowStrength", L"Glow strength (0 to 100)", {}, 0, 100},
-        {F::Number, L"glowSize", L"Glow size (4 to 40)", {}, 4, 40},
-        {F::Number, L"chromeOpacity", L"Search bar and dock opacity (%)", {},
-         0, 100},
-        {F::Check, L"showLabels", L"Show app name labels"},
-        {F::Check, L"normalizeIcons", L"Fill small icons"},
-        {F::Header, nullptr, L"Grid"},
-        {F::Choice,
-         L"appSource",
-         L"Apps to show",
-         {{L"allApps", L"Start menu apps (All apps)"},
-          {L"desktop", L"Desktop icons"},
-          {L"both", L"Start menu apps and desktop icons"},
-          {L"pinned", L"Only the apps you pin"}}},
-        {F::Choice,
-         L"gridLayout",
-         L"Layout",
-         {{L"scroll", L"One list that scrolls"},
-          {L"pages", L"Pages that flip left and right"}}},
-        {F::Number, L"gridIconSize", L"Icon size (pixels)", {}, 24, 192},
-        {F::Number, L"gridColumns", L"Columns (0 picks for you)", {}, 0, 30},
-        {F::Check, L"coverScreen", L"Cover the whole screen"},
-        {F::Check, L"wiggle", L"Edit mode wiggle"},
-        {F::Check, L"animations", L"Animations"},
-        {F::Number, L"holdTime", L"Drag hold time (150 to 1500)", {}, 150,
-         1500},
-        {F::Choice,
-         L"monitor",
-         L"Monitor",
-         {{L"mouse", L"The monitor with the mouse"},
-          {L"1", L"Main monitor"},
-          {L"2", L"Monitor 2"},
-          {L"3", L"Monitor 3"},
-          {L"4", L"Monitor 4"}}},
-        {F::Header, nullptr, L"Keys"},
-        {F::Choice, L"winKeyAction", L"Windows key", KeyActionOptions()},
-        {F::Choice, L"shiftWinKeyAction", L"Shift + Windows key",
-         KeyActionOptions()},
-        {F::Choice, L"startButtonAction", L"Start button", KeyActionOptions()},
-        {F::Text, L"program", L"Program"},
-        {F::Header, nullptr, L"Power buttons"},
-        {F::Check, L"powerBar", L"Show the power buttons"},
-        {F::Choice,
-         L"dockAlignment",
-         L"Dock position",
-         {{L"left", L"Left"},
-          {L"center", L"Center"},
-          {L"right", L"Right"}}},
-        {F::SmallCheck, L"powerButtons.lock", L"Lock"},
-        {F::SmallCheck, L"powerButtons.signOut", L"Sign out"},
-        {F::SmallCheck, L"powerButtons.sleep", L"Sleep"},
-        {F::SmallCheck, L"powerButtons.hibernate", L"Hibernate"},
-        {F::SmallCheck, L"powerButtons.restart", L"Restart"},
-        {F::SmallCheck, L"powerButtons.shutDown", L"Shut down"},
-        {F::Check, L"powerNoConfirm", L"No confirmation"},
-    };
-}
 
 constexpr WCHAR kSettingsClass[] = L"WindhawkSeamlessLaunchpadSettings";
-constexpr UINT WM_APP_SETTINGS_RELOAD = WM_APP + 1;
-constexpr UINT WM_APP_SETTINGS_ACTIVATE = WM_APP + 2;
-enum { kSaveButton = IDOK, kCloseButton = IDCANCEL, kFirstControl = 100 };
-
-struct SettingsWindow {
-    HWND hwnd = nullptr;
-    std::vector<SettingField> fields = MakeSettingFields();
-    HWND status = nullptr, save = nullptr, close = nullptr;
-    HFONT font = nullptr, bold = nullptr;
-    HICON smallIcon = nullptr, bigIcon = nullptr;
-    HBRUSH background = nullptr, input = nullptr;
-    bool dark = false;
-    bool saving = false;
-    COLORREF customColors[16] = {};
-};
-
-HANDLE g_settingsThread;
+constexpr UINT WM_APP_SETTINGS_RELOAD = WM_APP + 1, WM_APP_SETTINGS_ACTIVATE = WM_APP + 2;
+HANDLE g_settingsThread = nullptr;
 std::atomic<HWND> g_settingsWnd;
 std::atomic<bool> g_settingsStop;
-
-bool IsDarkMode() {
-    DWORD light = 1, size = sizeof(light);
-    RegGetValueW(HKEY_CURRENT_USER,
-                 L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\"
-                 L"Personalize",
-                 L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &light,
-                 &size);
-    return light == 0;
+void Settings_Close();
+static float SystemCornerRadius(bool) { return 8; }
+static int GetState(PCWSTR key, int fallback) { return Wh_GetIntValue(key, fallback); }
+static void SetState(PCWSTR key, int value) { Wh_SetIntValue(key, value); }
+static std::wstring StateKey(PCWSTR window, PCWSTR field) { return std::wstring(window)+L"_"+field; }
+static void ApplyDarkWindow(HWND hwnd) { BOOL dark=TRUE; DwmSetWindowAttribute(hwnd,20,&dark,sizeof(dark)); }
+namespace mocha {
+constexpr UINT32 base = 0x1E1E2E, mantle = 0x181825, crust = 0x11111B,
+                 surface0 = 0x313244, surface1 = 0x45475A, surface2 = 0x585B70,
+                 overlay0 = 0x6C7086, overlay1 = 0x7F849C, overlay2 = 0x9399B2,
+                 subtext0 = 0xA6ADC8, subtext1 = 0xBAC2DE, text = 0xCDD6F4,
+                 lavender = 0xB4BEFE, blue = 0x89B4FA, sapphire = 0x74C7EC,
+                 sky = 0x89DCEB, teal = 0x94E2D5, green = 0xA6E3A1,
+                 yellow = 0xF9E2AF, peach = 0xFAB387, maroon = 0xEBA0AC,
+                 red = 0xF38BA8, mauve = 0xCBA6F7, pink = 0xF5C2E7,
+                 flamingo = 0xF2CDCD, rosewater = 0xF5E0DC;
+}  // namespace mocha
+inline D2D1_COLOR_F D2DColor(UINT32 rgb, float a = 1.0f) {
+    return D2D1::ColorF(((rgb >> 16) & 0xFF) / 255.0f, ((rgb >> 8) & 0xFF) / 255.0f,
+                        (rgb & 0xFF) / 255.0f, a);
 }
+inline D2D1_COLOR_F D2DColorRef(COLORREF c, float a = 1.0f) {
+    return D2D1::ColorF(GetRValue(c) / 255.0f, GetGValue(c) / 255.0f, GetBValue(c) / 255.0f, a);
+}
+inline COLORREF RefFromRgb(UINT32 rgb) { return RGB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF); }
 
 COLORREF ParseColorRef(const std::wstring& text, COLORREF fallback) {
     std::wstring hex = !text.empty() && text[0] == L'#' ? text.substr(1) : text;
@@ -4408,20 +4329,235 @@ COLORREF ParseColorRef(const std::wstring& text, COLORREF fallback) {
     return RGB(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF);
 }
 
-std::wstring WindowString(HWND hwnd) {
+// ---------------------------------------------------------------------------
+// 50-settings.cpp : the mod's own settings window. A sidebar of pages, grouped
+// cards, toggles, dropdowns, sliders, key boxes and colour chips, all drawn
+// with Direct2D in the style of Seamless Dictate's settings. It shows the same
+// settings as Windhawk's page for this mod and saves them with one elevated
+// windhawk-cli call, so the two stay in step. Windhawk then calls
+// WhTool_ModSettingsChanged by itself.
+//
+// One window, one Direct2D target that fills the whole client rect (the window
+// edge is rounded by DWM, never by us). Text typed into a number, text or colour
+// box goes through one small native EDIT that sits on top of the box while it is
+// edited. Key boxes read WM_KEYDOWN themselves.
+// ---------------------------------------------------------------------------
+
+template <class T>
+class SetCom {
+   public:
+    T* p = nullptr;
+    SetCom() = default;
+    SetCom(const SetCom& o) : p(o.p) {
+        if (p) p->AddRef();
+    }
+    SetCom& operator=(const SetCom& o) {
+        if (o.p) o.p->AddRef();
+        reset();
+        p = o.p;
+        return *this;
+    }
+    ~SetCom() { reset(); }
+    void reset() {
+        if (p) p->Release();
+        p = nullptr;
+    }
+    T** put() {
+        reset();
+        return &p;
+    }
+    T* get() const { return p; }
+    T* operator->() const { return p; }
+    explicit operator bool() const { return p != nullptr; }
+};
+
+struct SetField {
+    enum Kind { Choice, Number, Text, Hotkey, Check, Color };
+    Kind kind;
+    PCWSTR key;
+    PCWSTR label;
+    PCWSTR desc = nullptr;
+    PCWSTR def = L"";                                // The schema default ("Reset to suggested").
+    std::vector<std::pair<PCWSTR, PCWSTR>> options;  // Value, label.
+    int min = 0, max = 0;
+    int page = 0;        // Which sidebar page shows it.
+    PCWSTR group = L"";  // Heading above it on that page.
+    std::wstring value;  // As loaded, so a save writes only what changed.
+    std::wstring cur;    // What the window shows now.
+};
+
+// Names, descriptions and option labels match the ==WindhawkModSettings== block word for word.
+// Generated by test-settings\gen_table.py from src\00-header.cpp.
+static std::vector<SetField> Set_MakeFields() {
+    using K = SetField;
+    return {
+{K::Choice, L"winKeyAction", L"Windows key", L"Also Ctrl+Esc.", L"grid", {{L"grid", L"Open this grid"}, {L"start", L"Open the original Start"}, {L"program", L"Run the program below"}}, 0, 100, 0, L"Open Launchpad"},
+{K::Choice, L"shiftWinKeyAction", L"Shift + Windows key", L"", L"start", {{L"grid", L"Open this grid"}, {L"start", L"Open the original Start"}, {L"program", L"Run the program below"}}, 0, 100, 0, L"Open Launchpad"},
+{K::Choice, L"startButtonAction", L"Start button", L"The taskbar Start button, the Standalone Dock's, and every other way Start opens that is not the keyboard.", L"grid", {{L"grid", L"Open this grid"}, {L"start", L"Open the original Start"}, {L"program", L"Run the program below"}}, 0, 100, 0, L"Open Launchpad"},
+{K::Text, L"program", L"Program", L"What \"Run the program below\" starts. A command line such as \"C:\\Program Files\\App\\app.exe\" --flag, or a shortcut, file, folder or web address", L"", {}, 0, 100, 0, L"Open Launchpad"},
+{K::Choice, L"monitor", L"Monitor", L"Where the grid opens. Monitors 2 to 4 are the other monitors, counted left to right. If the picked monitor is not connected, it opens where the mouse is.", L"mouse", {{L"mouse", L"The monitor with the mouse"}, {L"1", L"Main monitor"}, {L"2", L"Monitor 2"}, {L"3", L"Monitor 3"}, {L"4", L"Monitor 4"}}, 0, 100, 1, L"Grid"},
+{K::Choice, L"appSource", L"Apps to show", L"With pinned apps, search still finds every app. Right-click an app to pin or unpin it.", L"allApps", {{L"allApps", L"Start menu apps (the All apps list)"}, {L"desktop", L"Desktop icons"}, {L"both", L"Start menu apps and desktop icons"}, {L"pinned", L"Only the apps you pin"}}, 0, 100, 1, L"Grid"},
+{K::Choice, L"gridLayout", L"Layout", L"How the grid is arranged.", L"scroll", {{L"scroll", L"One list that scrolls up and down"}, {L"pages", L"Pages that flip left and right, like Launchpad"}}, 0, 100, 1, L"Grid"},
+{K::Number, L"gridColumns", L"Columns", L"0 to 30. 0 picks a number that fits the screen (Suggested: 0).", L"0", {}, 0, 30, 1, L"Grid"},
+{K::Check, L"coverScreen", L"Cover the whole screen", L"On, the grid also covers the taskbar, side bars and the Standalone Dock. Off, they stay visible.", L"0", {}, 0, 100, 1, L"Grid"},
+{K::Number, L"gridIconSize", L"Icon size", L"24 to 192 (Suggested: 72). Pixels at 100% scaling.", L"72", {}, 24, 192, 1, L"Grid"},
+{K::Check, L"showLabels", L"Icon labels", L"On, the app name shows under each icon. Off, icons only.", L"1", {}, 0, 100, 1, L"Grid"},
+{K::Check, L"normalizeIcons", L"Fill small icons", L"Scale small or padded icons to full size.", L"1", {}, 0, 100, 1, L"Grid"},
+{K::Choice, L"blurMode", L"Background blur", L"The kind of blur behind the grid.", L"custom", {{L"custom", L"Adjustable (uses the strength below)"}, {L"acrylic", L"Windows acrylic (DWM)"}, {L"blur", L"Windows blur (DWM)"}, {L"none", L"No blur"}}, 0, 100, 2, L"Appearance"},
+{K::Number, L"blurAmount", L"Blur strength", L"0 to 100 (Suggested: 60). Only for the adjustable blur. The Windows ones have a fixed strength.", L"60", {}, 0, 100, 2, L"Appearance"},
+{K::Number, L"backgroundOpacity", L"Background opacity (%)", L"0 to 100 (Suggested: 30). 0 leaves only the blur, 100 covers everything with the color.", L"30", {}, 0, 100, 2, L"Appearance"},
+{K::Color, L"tintColor", L"Background color", L"In hexadecimal, like #1E1E2E.", L"#000000", {}, 0, 100, 2, L"Appearance"},
+{K::Color, L"accentColor", L"Accent color", L"In hexadecimal, like #89B4FA. Tints the glows and highlights.", L"#89B4FA", {}, 0, 100, 2, L"Appearance"},
+{K::Number, L"glowStrength", L"Glow strength", L"0 to 100 (Suggested: 60). How strongly hovered buttons glow.", L"60", {}, 0, 100, 2, L"Appearance"},
+{K::Number, L"glowSize", L"Glow size", L"4 to 40 (Suggested: 14). How far a glow spreads, in DIP at 100% scaling.", L"14", {}, 4, 40, 2, L"Appearance"},
+{K::Number, L"chromeOpacity", L"Search bar and dock opacity (%)", L"0 to 100 (Suggested: 90). How solid the search bar and the power dock are.", L"90", {}, 0, 100, 2, L"Appearance"},
+{K::Check, L"powerBar", L"Power dock", L"The pill of power buttons at the bottom of the grid.", L"1", {}, 0, 100, 3, L"Power buttons"},
+{K::Choice, L"dockAlignment", L"Dock position", L"Where the power dock sits along the bottom edge.", L"center", {{L"left", L"Left"}, {L"center", L"Center"}, {L"right", L"Right"}}, 0, 100, 3, L"Power buttons"},
+{K::Check, L"powerButtons.lock", L"Lock", L"", L"1", {}, 0, 100, 3, L"Power buttons"},
+{K::Check, L"powerButtons.signOut", L"Sign out", L"", L"1", {}, 0, 100, 3, L"Power buttons"},
+{K::Check, L"powerButtons.sleep", L"Sleep", L"", L"1", {}, 0, 100, 3, L"Power buttons"},
+{K::Check, L"powerButtons.hibernate", L"Hibernate", L"Shows only when hibernation is turned on in Windows.", L"1", {}, 0, 100, 3, L"Power buttons"},
+{K::Check, L"powerButtons.restart", L"Restart", L"", L"1", {}, 0, 100, 3, L"Power buttons"},
+{K::Check, L"powerButtons.shutDown", L"Shut down", L"", L"1", {}, 0, 100, 3, L"Power buttons"},
+{K::Check, L"powerNoConfirm", L"Skip confirmation", L"On, a power button acts on the first click. Off, the first click arms it and a second click on the same button confirms.", L"0", {}, 0, 100, 3, L"Power buttons"},
+{K::Check, L"wiggle", L"Edit mode wiggle", L"While you drag an icon, all icons wiggle like on iOS.", L"1", {}, 0, 100, 1, L"Grid"},
+{K::Number, L"holdTime", L"Drag hold time", L"150 to 1500 (Suggested: 420). Milliseconds to hold an icon before dragging starts.", L"420", {}, 150, 1500, 1, L"Grid"},
+{K::Check, L"animations", L"Animations", L"Off, everything snaps instantly. Opening, folders, hover fades, tile moves and wiggle all turn off.", L"1", {}, 0, 100, 1, L"Grid"},
+{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Save, then reopen settings to apply.", L"1", {}, 0, 100, 2, L"Settings window"},
+{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Save, then reopen settings to apply.", L"0", {}, 0, 100, 2, L"Settings window"},
+{K::Choice, L"settingsTitleButtons", L"Title bar buttons", L"Who draws minimize, maximize and close on the window's own title bar. Windows buttons look like every other app's, title bar mods included. Save, then reopen settings to apply.", L"native", {{L"native", L"Windows buttons (like other apps)"}, {L"builtin", L"Built-in buttons"}}, 0, 100, 2, L"Settings window"},
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"A Launchpad icon in the system tray. Click it to open these settings, right-click it for a menu.", L"1", {}, 0, 100, 2, L"Settings window"}
+    };
+}
+
+struct SetPageInfo {
+    PCWSTR name, intro;
+    WCHAR glyph;
+};
+static const SetPageInfo kSetPages[] = {
+{L"Keys", L"Choose how you open Launchpad and other programs.", 0xE765},
+{L"Grid", L"Apps, icon sizes, pages and motion.", 0xE80A},
+{L"Look", L"Blur, colors, glow, search bar and this window.", 0xE790},
+{L"Power", L"Choose which power actions appear in the dock.", 0xE7E8},
+{L"About", L"Version, credits, support and links.", 0xE946},
+};
+constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
+// About sits apart at the end of the sidebar, as in Seamless Dictate.
+constexpr int kSetAboutPage = kSetPageCount - 1;
+constexpr float kSetAboutGap = 17;
+
+// All sizes are DIPs; the render target does the scaling.
+constexpr float kSetPadX = 40, kSetMaxW = 720, kSetRowMin = 56, kSetRowGap = 8, kSetBoxH = 32, kSetRowPad = 16,
+                kSetDropItem = 32, kSetRailTop = 76, kSetRailItem = 36, kSetRailPitch = 40;
+// The sidebar is a floating dock: dragged between min and max, or collapsed to an icon rail.
+constexpr float kSetDockGap = 10, kSetRailDef = 232, kSetRailMin = 200, kSetRailMax = 380, kSetRailMini = 60,
+                kSetRailSnap = 130, kSetEdgeGrab = 5;
+// The footer is a floating pill dock at the bottom right of the page.
+constexpr float kSetFootBtnH = 36, kSetFootPad = 8, kSetFootH = kSetFootBtnH + 2 * kSetFootPad, kSetFootGap = 14;
+// The glass tint is one layer over the whole window, title bar included, so the two always match.
+constexpr float kSetGlassTint = 0.42f, kSetNativeFade = 56;
+constexpr int kSetChipCount = 10;
+constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
+                                             mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
+constexpr UINT_PTR kSetTimerId = 1;
+constexpr PCWSTR kSetKofiUrl = L"https://ko-fi.com/DavidHiFi";
+constexpr PCWSTR kSetAuthorUrl = L"https://github.com/DavidHiFi";
+constexpr PCWSTR kSetDittoUrl = L"https://windhawk.net/mods/fullscreen-start";
+constexpr PCWSTR kSetRepoUrl = L"https://github.com/DavidHiFi/davids-windhawk-mods";
+constexpr PCWSTR kSetBugUrl =
+    L"https://github.com/DavidHiFi/davids-windhawk-mods/issues/new?title=%5BSeamless%20Launchpad%5D%20";
+constexpr PCWSTR kSetTitle = L"Seamless Launchpad";
+// The self-drawn title bar. Everything below it is laid out as before, in "content" DIPs.
+static float kSetCapH = 40;
+constexpr float kSetCapBtnW = 46, kSetHoverMs = 120;
+
+struct SetItem {
+    enum Type { Group, Row, Banner, About, Link, Support } type = Row;
+    int field = -1;  // Row: index into fields.
+    float y = 0, h = 0;
+    std::wstring text, sub, url;
+};
+
+// What the pointer is over. id picks the hover glow.
+struct SetHit {
+    enum Kind { None, Rail, Row, Control, Slider, Clear, Chip, Footer, Drop, Link, Scroll, Popup, Caption, RailToggle, RailEdge } kind = None;
+    int a = -1, b = -1;
+    int id = -1;
+};
+
+struct SetWindow {
+    HWND hwnd = nullptr, edit = nullptr, owner = nullptr;
+    HFONT editFont = nullptr;
+    HBRUSH editBrush = nullptr;
+    std::vector<SetField> fields = Set_MakeFields();
+    std::vector<SetItem> items;
+    UINT dpi = 96;
+    float cw = 980, ch = 700;  // Content size in DIPs: the client area below the title bar.
+    HICON iconSmall = nullptr, iconBig = nullptr;
+    int capDown = 0;  // Title bar button held down: 1 minimize, 2 maximize, 3 close.
+    bool capTracking = false, active = true;
+    bool nativeTitle = false;  // Windows draws the title bar and its buttons.
+    bool nativeButtons = false;  // Own title bar, but Windows draws minimize, maximize and close.
+    bool glass = false;        // Acrylic behind the window; the page is drawn see-through.
+    ULONGLONG lastTick = 0;
+    int page = 0, recording = -1, editing = -1, focus = -1, openSel = -1;
+    bool kbd = false;  // Show the focus ring (after a Tab).
+    D2D1_RECT_F dropRect{};
+    int dropHover = -1;
+    float scrollY = 0, scrollTarget = 0, contentH = 0, contentX = 0, contentW = 720, pageT = 1;
+    SetHit hover;
+    int dragSlider = -1;
+    bool dragScroll = false, tracking = false, timer = false;
+    float dragOff = 0;
+    // Sidebar dock: railW is the chosen open width, railCur the drawn width (eased toward
+    // kSetRailMini when collapsed). railGlow / footGlow ease the dock borders on hover.
+    float railW = kSetRailDef, railCur = kSetRailDef, railGlow = 0, footGlow = 0;
+    bool railCollapsed = false, dragRail = false;
+    float mouseX = -1, mouseY = -1;
+    std::map<int, float> glow;  // Eased hover amount by hit id.
+    std::map<int, float> knob;  // Eased toggle position by field.
+    std::wstring status;
+    bool statusError = false;
+    bool saving = false, destroyed = false, render = false;
+    HWND footer = nullptr;
+    bool footerInput = false;
+    SetCom<ID2D1HwndRenderTarget> footerRt;
+    SetCom<ID2D1HwndRenderTarget> rt;
+    std::wstring family, iconFamily;
+    SetCom<IDWriteTextFormat> fLabel, fHint, fTitle, fIntro, fSection, fValue, fValueC, fButton, fIcon, fIconS,
+        fIconL, fBig, fSmall, fStatusLine, fCap, fCapGlyph, fRailName;
+    RECT normalRect{};  // Last restored-state rect, remembered on close.
+    COLORREF customColors[16] = {};
+};
+
+static std::shared_ptr<SetWindow> g_setWin;
+static UINT g_setForceDpi;  // Harness renders at a chosen scale.
+static SetCom<ID2D1Factory> g_setD2d;
+static SetCom<IDWriteFactory> g_setDw;
+static SetCom<IWICImagingFactory> g_setWic;
+#ifdef SCM_HARNESS
+static std::wstring g_setFakeKeyStatus;  // Lets the test render the hotkey warning line.
+#endif
+
+static std::wstring Set_WindowText(HWND hwnd) {
     std::wstring text(GetWindowTextLengthW(hwnd) + 1, L'\0');
     text.resize(GetWindowTextW(hwnd, text.data(), (int)text.size()));
     return text;
 }
 
+static std::wstring Set_KeyStatusText() {
+#ifdef SCM_HARNESS
+    if (!g_setFakeKeyStatus.empty()) return g_setFakeKeyStatus;
+#endif
+    return std::wstring();
+}
+
 // Quotes one argument the way CommandLineToArgvW reads it back.
-std::wstring QuoteArg(const std::wstring& arg) {
+static std::wstring Set_QuoteArg(const std::wstring& arg) {
     std::wstring out = L"\"";
     for (size_t i = 0;; i++) {
         size_t slashes = 0;
-        while (i < arg.size() && arg[i] == L'\\') {
-            i++, slashes++;
-        }
+        while (i < arg.size() && arg[i] == L'\\') i++, slashes++;
         if (i == arg.size()) {
             out.append(slashes * 2, L'\\');
             break;
@@ -4432,617 +4568,2334 @@ std::wstring QuoteArg(const std::wstring& arg) {
     return out + L"\"";
 }
 
-// windhawk-cli.exe sits three folders above the engine:
-// <Windhawk>\Engine\<version>\<arch>\windhawk.dll.
-std::wstring WindhawkCliPath() {
-    HMODULE engine = GetModuleHandleW(L"windhawk.dll");
+// windhawk-cli.exe sits three folders above the engine
+// (<Windhawk>\Engine\<version>\<arch>\windhawk.dll), next to windhawk.exe.
+static std::wstring Set_CliPath() {
     WCHAR path[MAX_PATH];
-    if (!engine || !GetModuleFileNameW(engine, path, MAX_PATH)) {
-        return {};
+    if (HMODULE engine = GetModuleHandleW(L"windhawk.dll"); engine && GetModuleFileNameW(engine, path, MAX_PATH)) {
+        std::wstring dir = path;
+        for (int i = 0; i < 4 && dir.find_last_of(L'\\') != std::wstring::npos; i++) dir.resize(dir.find_last_of(L'\\'));
+        dir += L"\\windhawk-cli.exe";
+        if (GetFileAttributesW(dir.c_str()) != INVALID_FILE_ATTRIBUTES) return dir;
     }
-    std::wstring dir = path;
-    for (int i = 0; i < 4; i++) {
+    if (GetModuleFileNameW(nullptr, path, MAX_PATH)) {
+        std::wstring dir = path;
         dir.resize(dir.find_last_of(L'\\'));
+        dir += L"\\windhawk-cli.exe";
+        if (GetFileAttributesW(dir.c_str()) != INVALID_FILE_ATTRIBUTES) return dir;
     }
-    dir += L"\\windhawk-cli.exe";
-    return GetFileAttributesW(dir.c_str()) == INVALID_FILE_ATTRIBUTES
-               ? std::wstring()
-               : dir;
+    return {};
 }
 
-std::wstring FieldValue(const SettingField& f) {
+// ---- Factories and fonts ---------------------------------------------------
+
+static bool Set_EnsureFactories() {
+    if (!g_setD2d) {
+        D2D1_FACTORY_OPTIONS o{};
+        if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory), &o,
+                                     (void**)g_setD2d.put())))
+            return false;
+    }
+    if (!g_setDw && FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
+                                               (IUnknown**)g_setDw.put())))
+        return false;
+    if (!g_setWic && FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+                                             __uuidof(IWICImagingFactory), (void**)g_setWic.put())))
+        return false;
+    return true;
+}
+
+static void Set_ReleaseFactories() {
+    g_setWic.reset();
+    g_setDw.reset();
+    g_setD2d.reset();
+}
+
+static bool Set_FamilyExists(const std::wstring& name) {
+    SetCom<IDWriteFontCollection> sys;
+    if (name.empty() || FAILED(g_setDw->GetSystemFontCollection(sys.put(), FALSE))) return false;
+    UINT32 index = 0;
+    BOOL exists = FALSE;
+    return SUCCEEDED(sys->FindFamilyName(name.c_str(), &index, &exists)) && exists;
+}
+
+// The font setting, or its Nerd Font build ("Fira Code" is installed as
+// "FiraCode Nerd Font"), or Segoe UI.
+static std::wstring Set_ResolveFamily() {
+    if (Set_FamilyExists(std::wstring(L"FiraCode Nerd Font"))) return std::wstring(L"FiraCode Nerd Font");
+    std::wstring joined;
+    for (WCHAR c : std::wstring(L"FiraCode Nerd Font"))
+        if (c != L' ') joined += c;
+    for (const std::wstring& face : {joined + L" Nerd Font", std::wstring(L"FiraCode Nerd Font") + L" Nerd Font", joined})
+        if (Set_FamilyExists(face)) return face;
+    return L"Segoe UI";
+}
+
+static float Set_TextW(IDWriteTextFormat* fmt, const std::wstring& text);
+
+static SetCom<IDWriteTextFormat> Set_Fmt(const std::wstring& family, float size, int weight, bool wrap,
+                                         DWRITE_TEXT_ALIGNMENT align = DWRITE_TEXT_ALIGNMENT_LEADING,
+                                         bool vcenter = false) {
+    SetCom<IDWriteTextFormat> f;
+    if (FAILED(g_setDw->CreateTextFormat(family.c_str(), nullptr, (DWRITE_FONT_WEIGHT)weight, DWRITE_FONT_STYLE_NORMAL,
+                                         DWRITE_FONT_STRETCH_NORMAL, size, L"en-us", f.put())))
+        return f;
+    f->SetWordWrapping(wrap ? DWRITE_WORD_WRAPPING_WRAP : DWRITE_WORD_WRAPPING_NO_WRAP);
+    f->SetTextAlignment(align);
+    f->SetParagraphAlignment(vcenter ? DWRITE_PARAGRAPH_ALIGNMENT_CENTER : DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+    if (!wrap) {
+        SetCom<IDWriteInlineObject> sign;
+        g_setDw->CreateEllipsisTrimmingSign(f.get(), sign.put());
+        DWRITE_TRIMMING t{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+        f->SetTrimming(&t, sign.get());
+    }
+    return f;
+}
+
+// std::wstring(L"FiraCode Nerd Font") at 500; emphasis is one step heavier, never past bold.
+static void Set_MakeFormats(SetWindow& w) {
+    w.family = Set_ResolveFamily();
+    w.iconFamily = Set_FamilyExists(L"Segoe Fluent Icons") ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
+    int base = std::clamp(500, 100, 900);
+    int bold = std::max(base, std::min(700, base + 100));
+    const auto L_ = DWRITE_TEXT_ALIGNMENT_LEADING, C_ = DWRITE_TEXT_ALIGNMENT_CENTER;
+    w.fLabel = Set_Fmt(w.family, 14, base, true);
+    w.fHint = Set_Fmt(w.family, 12.5f, base, true);
+    w.fTitle = Set_Fmt(w.family, 26, bold, false);
+    w.fIntro = Set_Fmt(w.family, 13.5f, base, true);
+    w.fSection = Set_Fmt(w.family, 10.5f, bold, false);
+    w.fValue = Set_Fmt(w.family, 13, base, false, L_, true);
+    w.fValueC = Set_Fmt(w.family, 13, base, false, C_, true);
+    w.fButton = Set_Fmt(w.family, 13.5f, bold, false, C_, true);
+    w.fBig = Set_Fmt(w.family, 20, bold, false);
+    w.fSmall = Set_Fmt(w.family, 12, base, false, L_, true);
+    w.fIcon = Set_Fmt(w.iconFamily, 16, 400, false, C_, true);
+    w.fIconS = Set_Fmt(w.iconFamily, 12, 400, false, C_, true);
+    w.fIconL = Set_Fmt(w.iconFamily, 34, 400, false, C_, true);
+    w.fCap = Set_Fmt(w.family, 13, bold, false, L_, true);
+    w.fCapGlyph = Set_Fmt(w.iconFamily, 10, 400, false, C_, true);
+    w.fStatusLine = Set_Fmt(w.family, 12.5f, base, false, L_, true);
+    // The sidebar name must never clip at the narrowest open width: 18 down to 15.5 (above 85%).
+    const float railW = kSetRailMin - 90 - 10;
+    for (float size = 18; size >= 15.5f; size -= 0.5f) {
+        w.fRailName = Set_Fmt(w.family, size, bold, false, L_, true);
+        if (w.fRailName && Set_TextW(w.fRailName.get(), L"Launchpad") <= railW) break;
+    }
+}
+
+// ---- Values ----------------------------------------------------------------
+
+static std::wstring Set_FieldValue(const SetField& f) {
     switch (f.kind) {
-        case SettingField::Choice: {
-            int i = (int)SendMessageW(f.control, CB_GETCURSEL, 0, 0);
-            return i >= 0 && i < (int)f.options.size() ? f.options[i].first
-                                                       : f.value;
+        case SetField::Number: {
+            if (f.cur.empty()) return f.value;
+            return std::to_wstring(std::clamp(_wtoi(f.cur.c_str()), f.min, f.max));
         }
-        case SettingField::Number: {
-            std::wstring text = WindowString(f.control);
-            if (text.empty()) {
-                return f.value;
-            }
-            return std::to_wstring(
-                std::clamp(_wtoi(text.c_str()), f.min, f.max));
-        }
-        case SettingField::Check:
-        case SettingField::SmallCheck:
-            return SendMessageW(f.control, BM_GETCHECK, 0, 0) == BST_CHECKED
-                       ? L"1"
-                       : L"0";
+        case SetField::Check:
+            return f.cur == L"0" || f.cur.empty() ? L"0" : L"1";
         default:
-            return WindowString(f.control);
+            return f.cur;
     }
 }
 
-void LoadSettingFields(SettingsWindow& w) {
-    for (auto& f : w.fields) {
-        if (f.kind == SettingField::Header) {
-            continue;
+static void Set_PutValue(SetField& f, const std::wstring& value) {
+    switch (f.kind) {
+        case SetField::Choice: {
+            int index = -1;
+            for (size_t i = 0; i < f.options.size(); i++) {
+                if (value == f.options[i].first) index = (int)i;
+            }
+            for (size_t i = 0; index < 0 && i < f.options.size(); i++) {
+                if (wcscmp(f.def, f.options[i].first) == 0) index = (int)i;
+            }
+            f.cur = f.options[std::max(index, 0)].first;
+            break;
         }
-        f.value = f.kind == SettingField::Number ||
-                          f.kind == SettingField::Check ||
-                          f.kind == SettingField::SmallCheck
-                      ? std::to_wstring(Wh_GetIntSetting(f.key))
-                      : GetStringSetting(f.key);
-        switch (f.kind) {
-            case SettingField::Choice: {
-                int index = 0;
-                for (size_t i = 0; i < f.options.size(); i++) {
-                    if (f.value == f.options[i].first) {
-                        index = (int)i;
-                    }
+        case SetField::Check:
+            f.cur = value != L"0" && !value.empty() ? L"1" : L"0";
+            break;
+        default:
+            f.cur = value;
+    }
+}
+
+static void Set_LoadFields(SetWindow& w) {
+    for (auto& f : w.fields) {
+        bool isInt = f.kind == SetField::Number || f.kind == SetField::Check;
+        Set_PutValue(f, isInt ? std::to_wstring(Wh_GetIntSetting(f.key)) : GetStringSetting(f.key));
+        f.value = Set_FieldValue(f);  // What the window shows, so an untouched field never saves.
+    }
+}
+
+static int Set_ChangedCount(const SetWindow& w) {
+    int n = 0;
+    for (auto& f : w.fields)
+        if (Set_FieldValue(f) != f.value) n++;
+    return n;
+}
+
+static bool Set_ParseHex(const std::wstring& text, UINT32& rgb) {
+    if (text.size() != 7 || text[0] != L'#') return false;
+    UINT32 v = 0;
+    for (size_t i = 1; i < 7; i++) {
+        WCHAR c = text[i];
+        int d = c >= L'0' && c <= L'9' ? c - L'0' : c >= L'a' && c <= L'f' ? c - L'a' + 10 : c >= L'A' && c <= L'F' ? c - L'A' + 10 : -1;
+        if (d < 0) return false;
+        v = v * 16 + (UINT32)d;
+    }
+    rgb = v;
+    return true;
+}
+
+static std::wstring Set_HexFromRgb(UINT32 rgb) {
+    WCHAR text[16];
+    swprintf_s(text, L"#%06X", rgb & 0xFFFFFF);
+    return text;
+}
+
+static const wchar_t* Set_ChoiceLabel(const SetField& f) {
+    for (auto& o : f.options)
+        if (f.cur == o.first) return o.second;
+    return f.options.empty() ? L"" : f.options[0].second;
+}
+
+static bool Set_Anim(const SetWindow& w) {
+    BOOL on = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &on, 0);
+    return !w.render && g_settings.animations && on;
+}
+
+static void Set_Invalidate(SetWindow& w) {
+    if (w.hwnd && !w.render) InvalidateRect(w.hwnd, nullptr, FALSE);
+}
+
+static void Set_SetStatus(SetWindow& w, PCWSTR text, bool error = false) {
+    w.status = text;
+    w.statusError = error;
+    Set_Invalidate(w);
+}
+
+// ---- Text measuring ---------------------------------------------------------
+
+static float Set_TextH(IDWriteTextFormat* fmt, const std::wstring& text, float width) {
+    SetCom<IDWriteTextLayout> l;
+    if (!fmt || FAILED(g_setDw->CreateTextLayout(text.c_str(), (UINT32)text.size(), fmt, width, 10000, l.put())))
+        return 18;
+    DWRITE_TEXT_METRICS m{};
+    l->GetMetrics(&m);
+    return m.height;
+}
+
+static float Set_TextW(IDWriteTextFormat* fmt, const std::wstring& text) {
+    SetCom<IDWriteTextLayout> l;
+    if (!fmt || FAILED(g_setDw->CreateTextLayout(text.c_str(), (UINT32)text.size(), fmt, 10000, 100, l.put())))
+        return 0;
+    DWRITE_TEXT_METRICS m{};
+    l->GetMetrics(&m);
+    return m.widthIncludingTrailingWhitespace;
+}
+
+// ---- Layout -----------------------------------------------------------------
+
+// The right-hand control's width, so the label column knows how much room it has.
+static float Set_ControlW(const SetField& f) {
+    switch (f.kind) {
+        case SetField::Check: return 40;
+        case SetField::Choice: return 200;
+        case SetField::Number: return f.max - f.min <= 100 ? 150 + 12 + 64 : 96;
+        case SetField::Text: return 280;
+        case SetField::Hotkey: return 220;
+        case SetField::Color: return 362;
+    }
+    return 100;
+}
+
+// The page scrolls under the floating footer, so the view is the full height; contentH carries
+// a bottom margin (Set_FootClear) so the last row can rise above the footer.
+static float Set_ViewH(const SetWindow& w) { return w.ch; }
+static float Set_FootClear() { return kSetFootH + kSetFootGap + 18; }
+
+static D2D1_RECT_F Set_RailDock(const SetWindow& w) {
+    return {kSetDockGap, kSetDockGap, kSetDockGap + w.railCur, std::max(kSetDockGap + 120, w.ch - kSetDockGap)};
+}
+// Right edge of the sidebar dock: the page starts after it.
+static float Set_RailSpace(const SetWindow& w) { return kSetDockGap + w.railCur; }
+// 0 collapsed to the icon rail, 1 fully open.
+static float Set_RailOpen(const SetWindow& w) {
+    return std::clamp((w.railCur - kSetRailMini) / std::max(1.0f, w.railW - kSetRailMini), 0.0f, 1.0f);
+}
+static D2D1_RECT_F Set_RailToggleRect(const SetWindow& w) {
+    D2D1_RECT_F d = Set_RailDock(w);
+    return {d.left + 12, d.top + 14, d.left + 48, d.top + 50};
+}
+
+// Everything a field's control is made of, in window DIPs for a given row.
+struct SetParts {
+    D2D1_RECT_F box{}, track{}, clear{}, chip[kSetChipCount]{};
+    bool slider = false;
+};
+
+static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
+    SetParts p;
+    float r = row.right - kSetRowPad, mid = (row.top + row.bottom) / 2, h = kSetBoxH / 2;
+    switch (f.kind) {
+        case SetField::Check:
+            p.box = {r - 40, mid - 11, r, mid + 11};
+            break;
+        case SetField::Choice:
+            p.box = {r - 200, mid - h, r, mid + h};
+            break;
+        case SetField::Number:
+            if (f.max - f.min <= 100) {
+                p.slider = true;
+                p.box = {r - 64, mid - h, r, mid + h};
+                p.track = {p.box.left - 12 - 150, mid - 2, p.box.left - 12, mid + 2};
+            } else {
+                p.box = {r - 96, mid - h, r, mid + h};
+            }
+            break;
+        case SetField::Text:
+            p.box = {r - 280, mid - h, r, mid + h};
+            break;
+        case SetField::Hotkey:
+            p.box = {r - 220, mid - h, r, mid + h};
+            p.clear = {p.box.right - 30, p.box.top, p.box.right, p.box.bottom};
+            break;
+        case SetField::Color: {
+            p.box = {r - 96, mid - h, r, mid + h};
+            float x = p.box.left - 12 - (kSetChipCount * 26 - 6);
+            for (int i = 0; i < kSetChipCount; i++) p.chip[i] = {x + i * 26, mid - 10, x + i * 26 + 20, mid + 10};
+            break;
+        }
+    }
+    return p;
+}
+
+static bool Set_In(const D2D1_RECT_F& r, float x, float y) { return x >= r.left && x < r.right && y >= r.top && y < r.bottom; }
+
+static D2D1_RECT_F Set_RowRect(const SetWindow& w, const SetItem& it) {
+    return {w.contentX, it.y, w.contentX + w.contentW, it.y + it.h};  // Content y (not scrolled).
+}
+
+// Lays out the current page's items for the current width.
+static void Set_BuildPage(SetWindow& w) {
+    w.items.clear();
+    const float space = Set_RailSpace(w), avail = w.cw - space;
+    w.contentW = std::clamp(avail - 2 * kSetPadX, 420.0f, kSetMaxW);
+    w.contentX = space + std::max(kSetPadX, (avail - w.contentW) / 2);
+    float introH = Set_TextH(w.fIntro.get(), kSetPages[w.page].intro, w.contentW);
+    float y = 36 + 36 + 4 + introH + 24;
+    if (w.page == 0) {
+        std::wstring status = Set_KeyStatusText();
+        if (!status.empty()) {
+            SetItem it;
+            it.type = SetItem::Banner;
+            it.text = status;
+            it.y = y;
+            it.h = Set_TextH(w.fHint.get(), status, w.contentW - 32) + 28;
+            y += it.h + kSetRowGap + 8;
+            w.items.push_back(it);
+        }
+    }
+    PCWSTR lastGroup = nullptr;
+    for (size_t k = 0; k < w.fields.size(); k++) {
+        const SetField& f = w.fields[k];
+        if (f.page != w.page) continue;
+        if (!lastGroup || wcscmp(lastGroup, f.group) != 0) {
+            SetItem g;
+            g.type = SetItem::Group;
+            g.text = f.group;
+            y += lastGroup ? 14 : 0;
+            g.y = y;
+            g.h = 22;
+            y += g.h + 6;
+            w.items.push_back(g);
+            lastGroup = f.group;
+        }
+        SetItem it;
+        it.type = SetItem::Row;
+        it.field = (int)k;
+        float textW = w.contentW - 2 * kSetRowPad - Set_ControlW(f) - 24;
+        float lh = Set_TextH(w.fLabel.get(), f.label, textW);
+        float dh = f.desc ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
+        it.y = y;
+        it.h = std::max(kSetRowMin, 28 + lh + dh);
+        y += it.h + kSetRowGap;
+        w.items.push_back(it);
+    }
+    if (w.page == kSetAboutPage) {
+        auto add = [&](SetItem::Type t, float h, PCWSTR text, PCWSTR sub, PCWSTR url) {
+            SetItem it;
+            it.type = t;
+            it.y = y;
+            it.h = h;
+            it.text = text;
+            it.sub = sub;
+            it.url = url;
+            y += h + kSetRowGap;
+            w.items.push_back(it);
+        };
+        auto group = [&](PCWSTR text) {
+            SetItem g;
+            g.type = SetItem::Group;
+            g.text = text;
+            g.y = y + 14;
+            g.h = 22;
+            y = g.y + g.h + 6;
+            w.items.push_back(g);
+        };
+        add(SetItem::About, 146, L"", L"", L"");
+        add(SetItem::Support, 84, L"Like it? Help the mod keep going.",
+            L"Free and open source. A tip on Ko-fi keeps it moving.", kSetKofiUrl);
+        group(L"Author");
+        add(SetItem::Link, 56, L"DavidHiFi on GitHub", L"github.com/DavidHiFi", kSetAuthorUrl);
+        add(SetItem::Link, 56, L"Ko-fi", L"ko-fi.com/DavidHiFi", kSetKofiUrl);
+        group(L"Credits");
+        add(SetItem::Link, 56, L"Based on Fullscreen Start by Rafael Mendes", L"The original Windhawk mod", kSetDittoUrl);
+        group(L"Project");
+        add(SetItem::Link, 56, L"Project page on GitHub", L"github.com/DavidHiFi/davids-windhawk-mods", kSetRepoUrl);
+        add(SetItem::Link, 56, L"Report a problem", L"Opens a new issue on GitHub, with the mod's name filled in", kSetBugUrl);
+    }
+    w.contentH = y + Set_FootClear();
+    w.scrollTarget = std::clamp(w.scrollTarget, 0.0f, std::max(0.0f, w.contentH - Set_ViewH(w)));
+    w.scrollY = std::clamp(w.scrollY, 0.0f, std::max(0.0f, w.contentH - Set_ViewH(w)));
+}
+
+static const SetItem* Set_ItemOfField(const SetWindow& w, int field) {
+    for (auto& it : w.items)
+        if (it.type == SetItem::Row && it.field == field) return &it;
+    return nullptr;
+}
+
+// The footer's status line: an explicit message, else the count of unsaved changes.
+static std::wstring Set_FooterStatus(const SetWindow& w, UINT32* color) {
+    std::wstring status = w.status;
+    if (color) *color = w.statusError ? mocha::red : (status == L"Saved" ? mocha::green : mocha::subtext0);
+    int changed = Set_ChangedCount(w);
+    if (status.empty() && changed)
+        status = changed == 1 ? L"1 change not saved" : std::to_wstring(changed) + L" changes not saved";
+    return status;
+}
+
+constexpr float kSetFootW[3] = {172, 96, 100};  // Reset to suggested, Cancel, Save.
+
+static float Set_FooterButtonsW() { return kSetFootW[0] + kSetFootW[1] + kSetFootW[2] + 2 * 8; }
+
+// Width the status text gets inside the footer dock (0 when there is none).
+static float Set_FooterStatusW(const SetWindow& w) {
+    std::wstring s = Set_FooterStatus(w, nullptr);
+    if (s.empty()) return 0;
+    float room = w.contentW - Set_FooterButtonsW() - 2 * kSetFootPad - 30;
+    return std::max(0.0f, std::min(Set_TextW(w.fStatusLine.get(), s) + 2, room));
+}
+
+// The pill that holds the status and the three buttons, sized to fit them, right-aligned to the page.
+static D2D1_RECT_F Set_FooterDock(const SetWindow& w) {
+    float sw = Set_FooterStatusW(w);
+    float width = Set_FooterButtonsW() + 2 * kSetFootPad + (sw > 0 ? sw + 30 : 0);
+    float right = w.contentX + w.contentW, bottom = w.ch - kSetFootGap;
+    return {right - width, bottom - kSetFootH, right, bottom};
+}
+
+static D2D1_RECT_F Set_FooterButton(const SetWindow& w, int which) {  // 0 reset, 1 cancel, 2 save
+    D2D1_RECT_F d = Set_FooterDock(w);
+    float x = d.right - kSetFootPad, top = d.top + kSetFootPad;
+    D2D1_RECT_F out{};
+    for (int i = 2; i >= 0; i--) {
+        out = {x - kSetFootW[i], top, x, top + kSetFootBtnH};
+        if (i == which) return out;
+        x -= kSetFootW[i] + 8;
+    }
+    return out;
+}
+
+static D2D1_RECT_F Set_RailRect(const SetWindow& w, int page) {
+    D2D1_RECT_F d = Set_RailDock(w);
+    float y = d.top + kSetRailTop + kSetRailPitch * page + (page == kSetAboutPage ? kSetAboutGap : 0);
+    return {d.left + 8, y, d.right - 8, y + kSetRailItem};
+}
+
+static D2D1_RECT_F Set_SupportButton(const SetWindow& w, const SetItem& it) {
+    D2D1_RECT_F r = Set_RowRect(w, it);
+    return {r.right - kSetRowPad - 148, (r.top + r.bottom) / 2 - 18, r.right - kSetRowPad, (r.top + r.bottom) / 2 + 18};
+}
+
+static D2D1_RECT_F Set_ScrollThumb(const SetWindow& w) {
+    float view = Set_ViewH(w), range = w.contentH - view;
+    if (range <= 0) return {};
+    float th = std::max(36.0f, view * view / w.contentH);
+    float top = (w.scrollY / range) * (view - th - 8) + 4;
+    return {w.cw - 18, top + 4, w.cw - 12, top + th - 4};
+}
+
+// ---- Painting ---------------------------------------------------------------
+
+static D2D1_COLOR_F Set_A1(float a) { return D2DColorRef(RGB(137,180,250), a); }
+static D2D1_COLOR_F Set_A2(float a) { return D2DColorRef(RGB(203,166,247), a); }
+
+static float Set_Ease(float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    return 1 - (1 - t) * (1 - t) * (1 - t);
+}
+
+struct SetPaint {
+    SetWindow& w;
+    ID2D1RenderTarget* rt;
+    SetCom<ID2D1SolidColorBrush> sb;
+    float fade = 1;
+    SetPaint(SetWindow& win, ID2D1RenderTarget* target) : w(win), rt(target) {
+        rt->CreateSolidColorBrush(D2DColor(0), sb.put());
+    }
+    ID2D1SolidColorBrush* B(UINT32 rgb, float a = 1) {
+        sb->SetColor(D2DColor(rgb, a * fade));
+        return sb.get();
+    }
+    // Blue to mauve, left to right across r.
+    SetCom<ID2D1LinearGradientBrush> G(const D2D1_RECT_F& r, float a = 1) {
+        SetCom<ID2D1LinearGradientBrush> out;
+        D2D1_GRADIENT_STOP stops[2] = {{0, Set_A1(a * fade)}, {1, Set_A2(a * fade)}};
+        SetCom<ID2D1GradientStopCollection> coll;
+        if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())))
+            rt->CreateLinearGradientBrush(
+                D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, (r.top + r.bottom) / 2),
+                                                    D2D1::Point2F(std::max(r.right, r.left + 1), (r.top + r.bottom) / 2)),
+                coll.get(), out.put());
+        return out;
+    }
+    void Fill(const D2D1_RECT_F& r, UINT32 c, float a = 1) { rt->FillRectangle(r, B(c, a)); }
+    void Round(const D2D1_RECT_F& r, float rad, UINT32 c, float a = 1) {
+        rt->FillRoundedRectangle(D2D1::RoundedRect(r, rad, rad), B(c, a));
+    }
+    void Edge(const D2D1_RECT_F& r, float rad, UINT32 c, float a, float width = 1) {
+        if (a <= 0.003f) return;
+        float h = width / 2;
+        rt->DrawRoundedRectangle(D2D1::RoundedRect({r.left + h, r.top + h, r.right - h, r.bottom - h}, rad - h, rad - h), B(c, a), width);
+    }
+    void GradFill(const D2D1_RECT_F& r, float rad, float a) {
+        if (a <= 0.003f) return;
+        if (auto g = G(r, a)) rt->FillRoundedRectangle(D2D1::RoundedRect(r, rad, rad), g.get());
+    }
+    void GradRing(const D2D1_RECT_F& r, float rad, float a, float width = 1.5f) {
+        if (a <= 0.003f) return;
+        D2D1_RECT_F in{r.left + width / 2, r.top + width / 2, r.right - width / 2, r.bottom - width / 2};
+        if (auto g = G(r, a)) rt->DrawRoundedRectangle(D2D1::RoundedRect(in, rad, rad), g.get(), width);
+    }
+    void Text(IDWriteTextFormat* f, const std::wstring& s, const D2D1_RECT_F& r, UINT32 c, float a = 1) {
+        if (!f || s.empty()) return;
+        rt->DrawText(s.c_str(), (UINT32)s.size(), f, r, B(c, a), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    }
+    void Glyph(IDWriteTextFormat* f, WCHAR g, const D2D1_RECT_F& r, UINT32 c, float a = 1) {
+        Text(f, std::wstring(1, g), r, c, a);
+    }
+};
+
+static float Set_GlowOf(const SetWindow& w, int id) {
+    auto it = w.glow.find(id);
+    return it == w.glow.end() ? 0 : it->second;
+}
+
+// Ids that count as "pointer is here": the row (or rail item, button, link) and the control inside it.
+static void Set_HoverIds(const SetHit& h, int ids[2]) {
+    ids[0] = h.id;
+    ids[1] = -1;
+    if (h.kind == SetHit::Control || h.kind == SetHit::Slider || h.kind == SetHit::Clear || h.kind == SetHit::Chip)
+        ids[1] = 6000 + h.a;
+}
+
+static bool Set_Valid(const SetWindow& w, int k) { return k >= 0 && k < (int)w.fields.size(); }
+
+static void Set_DrawBox(SetPaint& p, SetWindow& w, int k, const D2D1_RECT_F& box, bool active) {
+    p.Round(box, 8, mocha::crust);
+    float g = std::max(Set_GlowOf(w, 6000 + k), active ? 1.0f : 0.0f);
+    p.GradRing(box, 8, g);
+}
+
+static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
+    const SetField& f = w.fields[it.field];
+    int k = it.field;
+    D2D1_RECT_F row = Set_RowRect(w, it);
+    p.Round(row, 10, mocha::base);
+    p.Round(row, 10, mocha::surface0, 0.32f);
+    float hov = Set_GlowOf(w, 1000 + k);
+    p.Edge(row, 10, mocha::surface2, 0.55f * (1 - hov));
+    p.GradFill(row, 10, 0.13f * hov);
+    p.GradRing(row, 10, hov, 1.5f);
+    if (w.kbd && w.focus == k) p.GradRing(row, 10, 1.0f, 2.0f);
+
+    float textW = w.contentW - 2 * kSetRowPad - Set_ControlW(f) - 24;
+    float lh = Set_TextH(w.fLabel.get(), f.label, textW);
+    float dh = f.desc ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
+    float top = row.top + (it.h - lh - dh) / 2;
+    p.Text(w.fLabel.get(), f.label, {row.left + kSetRowPad, top, row.left + kSetRowPad + textW, top + lh + 2}, mocha::text);
+    if (f.desc)
+        p.Text(w.fHint.get(), f.desc, {row.left + kSetRowPad, top + lh + 3, row.left + kSetRowPad + textW, top + lh + dh + 3},
+               mocha::subtext0);
+
+    SetParts pt = Set_Parts(f, row);
+    const D2D1_RECT_F& b = pt.box;
+    switch (f.kind) {
+        case SetField::Check: {
+            bool on = f.cur == L"1";
+            float kn = w.knob.count(k) ? w.knob.at(k) : (on ? 1.0f : 0.0f);
+            D2D1_RECT_F tr = pt.box;
+            p.Round(tr, 11, mocha::surface1);
+            p.GradFill(tr, 11, kn);
+            float cx = tr.left + 11 + kn * 18, cy = (tr.top + tr.bottom) / 2;
+            p.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 8, 8), p.B(on ? mocha::crust : mocha::text));
+            break;
+        }
+        case SetField::Choice: {
+            Set_DrawBox(p, w, k, b, w.openSel == k);
+            p.Text(w.fValue.get(), Set_ChoiceLabel(f), {b.left + 12, b.top, b.right - 30, b.bottom}, mocha::text);
+            p.Glyph(w.fIconS.get(), 0xE70D, {b.right - 30, b.top, b.right - 6, b.bottom}, mocha::subtext0);
+            break;
+        }
+        case SetField::Number: {
+            bool ed = w.editing == k;
+            Set_DrawBox(p, w, k, b, ed);
+            if (!ed) p.Text(w.fValueC.get(), Set_FieldValue(f), b, mocha::text);
+            if (pt.slider) {
+                float v = (float)(_wtoi(Set_FieldValue(f).c_str()) - f.min) / (float)std::max(1, f.max - f.min);
+                D2D1_RECT_F tr = pt.track;
+                p.Round(tr, 2, mocha::surface1);
+                D2D1_RECT_F fillR{tr.left, tr.top, tr.left + (tr.right - tr.left) * v, tr.bottom};
+                p.GradFill(fillR, 2, 1);
+                float cx = tr.left + (tr.right - tr.left) * v, cy = (tr.top + tr.bottom) / 2;
+                float kg = std::max(Set_GlowOf(w, 6000 + k), w.dragSlider == k ? 1.0f : 0.0f);
+                p.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 8 + kg, 8 + kg), p.B(mocha::text));
+                p.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 5, 5), p.B(mocha::crust));
+            }
+            break;
+        }
+        case SetField::Text: {
+            bool ed = w.editing == k;
+            Set_DrawBox(p, w, k, b, ed);
+            if (!ed) p.Text(w.fValue.get(), f.cur, {b.left + 12, b.top, b.right - 10, b.bottom}, mocha::text);
+            break;
+        }
+        case SetField::Hotkey: {
+            bool rec = w.recording == k;
+            Set_DrawBox(p, w, k, b, rec);
+            if (rec) {
+                p.Text(w.fValue.get(), L"Press keys...", {b.left + 12, b.top, b.right - 10, b.bottom}, mocha::blue);
+            } else if (f.cur.empty()) {
+                p.Text(w.fValue.get(), L"Not set", {b.left + 12, b.top, b.right - 10, b.bottom}, mocha::overlay0);
+            } else {
+                float tw = std::min(Set_TextW(w.fValue.get(), f.cur) + 16, b.right - b.left - 40);
+                D2D1_RECT_F cap{b.left + 6, (b.top + b.bottom) / 2 - 12, b.left + 6 + tw, (b.top + b.bottom) / 2 + 12};
+                p.Round(cap, 6, mocha::surface0);
+                p.Text(w.fValueC.get(), f.cur, cap, mocha::text);
+                float cg = Set_GlowOf(w, 7000 + k);
+                p.Glyph(w.fIconS.get(), 0xE711, pt.clear, cg > 0.5f ? mocha::red : mocha::overlay1);
+            }
+            break;
+        }
+        case SetField::Color: {
+            bool ed = w.editing == k;
+            Set_DrawBox(p, w, k, b, ed);
+            UINT32 rgb = 0;
+            bool okColor = Set_ParseHex(f.cur, rgb);
+            if (okColor) {
+                p.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(b.left + 17, (b.top + b.bottom) / 2), 6, 6), p.B(rgb));
+            }
+            if (!ed) p.Text(w.fValue.get(), f.cur, {b.left + 30, b.top, b.right - 6, b.bottom}, okColor ? mocha::text : mocha::red);
+            for (int i = 0; i < kSetChipCount; i++) {
+                const D2D1_RECT_F& c = pt.chip[i];
+                bool sel = okColor && (rgb & 0xFFFFFF) == kSetChips[i];
+                p.Round(c, 6, kSetChips[i]);
+                if (sel) {
+                    D2D1_RECT_F ring{c.left - 3, c.top - 3, c.right + 3, c.bottom + 3};
+                    p.GradRing(ring, 8, 1, 2);
                 }
-                SendMessageW(f.control, CB_SETCURSEL, index, 0);
-                break;
             }
-            case SettingField::Check:
-            case SettingField::SmallCheck:
-                SendMessageW(f.control, BM_SETCHECK,
-                             f.value != L"0" ? BST_CHECKED : BST_UNCHECKED, 0);
-                break;
-            default:
-                SetWindowTextW(f.control, f.value.c_str());
-        }
-        if (f.swatch) {
-            InvalidateRect(f.swatch, nullptr, TRUE);
+            break;
         }
     }
 }
 
-// Runs windhawk-cli elevated with the changed settings, pumping messages while
-// it works.
-void SaveSettingFields(SettingsWindow& w) {
-    std::wstring params = L"--quiet mod settings set " + QuoteArg(WH_MOD_ID);
-    int changed = 0;
-    for (auto& f : w.fields) {
-        if (f.kind != SettingField::Header) {
-            std::wstring value = FieldValue(f);
-            if (value != f.value) {
-                params += L" " + QuoteArg(std::wstring(f.key) + L"=" + value);
-                changed++;
-            }
-        }
+static void Set_DrawGroup(SetPaint& p, SetWindow& w, const SetItem& it) {
+    std::wstring up = it.text;
+    CharUpperBuffW(up.data(), (DWORD)up.size());
+    p.Text(w.fSection.get(), up, {w.contentX + 4, it.y, w.contentX + w.contentW, it.y + it.h}, mocha::overlay2);
+}
+
+// The resting card every row uses: base, a light lift and a soft gray edge that hands over to
+// the hover ring.
+static void Set_DrawCard(SetPaint& p, const D2D1_RECT_F& row, float hov) {
+    p.Round(row, 10, mocha::base);
+    p.Round(row, 10, mocha::surface0, 0.32f);
+    p.Edge(row, 10, mocha::surface2, 0.55f * (1 - hov));
+}
+
+static void Set_DrawLinkRow(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
+    D2D1_RECT_F row = Set_RowRect(w, it);
+    float hov = Set_GlowOf(w, 3000 + idx);
+    Set_DrawCard(p, row, hov);
+    p.GradFill(row, 10, 0.13f * hov);
+    p.GradRing(row, 10, hov, 1.5f);
+    p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 9, row.right - 50, row.top + 30}, mocha::text);
+    p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 30, row.right - 50, row.bottom - 4}, mocha::subtext0);
+    p.Glyph(w.fIcon.get(), 0xE8A7, {row.right - 46, row.top, row.right - 12, row.bottom}, mocha::subtext1);
+}
+
+static void Set_DrawSupport(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
+    D2D1_RECT_F row = Set_RowRect(w, it);
+    float card = std::max(Set_GlowOf(w, 3700 + idx), Set_GlowOf(w, 3500 + idx));
+    Set_DrawCard(p, row, card);
+    p.GradFill(row, 10, 0.13f * card);
+    p.GradRing(row, 10, card, 1.5f);
+    p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 14, row.right - 180, row.top + 36}, mocha::text);
+    p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 38, row.right - 180, row.bottom - 6}, mocha::subtext0);
+    D2D1_RECT_F b = Set_SupportButton(w, it);
+    float hov = Set_GlowOf(w, 3500 + idx);
+    p.GradFill(b, 8, 0.85f + 0.15f * hov);
+    p.GradRing(b, 8, hov, 2);
+    p.Text(w.fButton.get(), L"Open Ko-fi", b, mocha::crust);
+}
+
+static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
+    D2D1_RECT_F row = Set_RowRect(w, it);
+    float hov = Set_GlowOf(w, 3800 + idx);
+    Set_DrawCard(p, row, hov);
+    p.GradFill(row, 10, 0.13f * hov);
+    p.GradRing(row, 10, hov, 1.5f);
+    D2D1_RECT_F mark{row.left + 20, row.top + 20, row.left + 92, row.top + 92};
+    p.GradFill(mark, 18, 1);
+    p.Glyph(w.fIconL.get(), 0xE80A, mark, mocha::crust);
+    float x = mark.right + 20;
+    p.Text(w.fBig.get(), L"Seamless Launchpad", {x, row.top + 18, row.right - 16, row.top + 46}, mocha::text);
+#ifdef WH_MOD_VERSION
+    std::wstring ver = std::wstring(L"Version ") + WH_MOD_VERSION + L"  \u00B7  MIT license  \u00B7  A Windhawk mod";
+#else
+    std::wstring ver = L"MIT license  \u00B7  A Windhawk mod";
+#endif
+    p.Text(w.fHint.get(), ver, {x, row.top + 48, row.right - 16, row.top + 68}, mocha::subtext0);
+    p.Text(w.fHint.get(), L"Apps, folders and search in one fullscreen grid, in place of Start.",
+           {x, row.top + 72, row.right - 16, row.top + 110}, mocha::subtext1);
+    p.Text(w.fHint.get(), L"Made by DavidHiFi, based on Fullscreen Start by Rafael Mendes.",
+           {x, row.top + 112, row.right - 16, row.bottom - 8}, mocha::overlay2);
+}
+
+static void Set_DrawBanner(SetPaint& p, SetWindow& w, const SetItem& it) {
+    D2D1_RECT_F r = Set_RowRect(w, it);
+    p.Round(r, 10, mocha::peach, 0.14f);
+    p.Text(w.fHint.get(), it.text, {r.left + 16, r.top + 14, r.right - 16, r.bottom - 8}, mocha::peach);
+}
+
+// A floating dock: soft shadow, mantle fill, a quiet 1px edge at rest and the blue to mauve
+// edge as the pointer comes over it.
+static void Set_DrawDock(SetPaint& p, SetWindow& w, const D2D1_RECT_F& d, float rad, float fill, float glow) {
+    p.Round({d.left, d.top + 3, d.right, d.bottom + 5}, rad + 2, mocha::crust, w.glass ? 0.28f : 0.5f);
+    p.Round(d, rad, mocha::mantle, fill);  // Hover lights only the edge: a wash showed as a blue blob down the left.
+    D2D1_RECT_F in{d.left + 0.5f, d.top + 0.5f, d.right - 0.5f, d.bottom - 0.5f};
+    p.rt->DrawRoundedRectangle(D2D1::RoundedRect(in, rad, rad), p.B(mocha::surface1, 0.75f * (1 - glow)), 1);
+    p.GradRing(d, rad, glow, 1.5f);
+}
+
+// Panel-left mark, as in T3's sidebar button: a window with its left pane shaded while open.
+static void Set_DrawPanelIcon(SetPaint& p, const D2D1_RECT_F& r, float open, UINT32 c) {
+    float cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    D2D1_RECT_F box{cx - 9, cy - 7.5f, cx + 9, cy + 7.5f};
+    p.Round({box.left + 1, box.top + 1, box.left + 6.5f, box.bottom - 1}, 1.5f, c, 0.25f + 0.35f * open);
+    p.rt->DrawRoundedRectangle(D2D1::RoundedRect(box, 3, 3), p.B(c), 1.5f);
+    p.rt->DrawLine({box.left + 6.5f, box.top + 0.75f}, {box.left + 6.5f, box.bottom - 0.75f}, p.B(c), 1.5f);
+}
+
+static void Set_DrawMark(SetPaint& p, IDWriteTextFormat* glyph, const D2D1_RECT_F& r, float a);
+static void Set_DrawRail(SetPaint& p, SetWindow& w) {
+    D2D1_RECT_F d = Set_RailDock(w);
+    const float open = Set_RailOpen(w), textA = std::clamp((open - 0.45f) / 0.55f, 0.0f, 1.0f);
+    // Over the resize edge or while dragging, the dock's own rounded border brightens and
+    // thickens, so the handle follows the corners instead of floating as a separate line.
+    float edge = std::max(Set_GlowOf(w, 41), w.dragRail ? 1.0f : 0.0f);
+    Set_DrawDock(p, w, d, 14, w.glass ? 0.58f : 1.0f, std::max(w.railGlow * 0.85f, edge));
+    if (edge > 0.003f) p.GradRing(d, 13, edge, 2.25f);
+
+    D2D1_RECT_F tb = Set_RailToggleRect(w);
+    float th = Set_GlowOf(w, 42);
+    p.Round(tb, 9, mocha::surface0, 0.45f + 0.25f * th);
+    p.GradFill(tb, 9, 0.16f * th);
+    p.GradRing(tb, 9, 0.9f * th, 1.25f);
+    if (w.kbd && w.focus == -20) p.GradRing(tb, 9, 1, 2);
+    Set_DrawPanelIcon(p, tb, open, th > 0.5f ? mocha::text : mocha::subtext1);
+
+    p.rt->PushAxisAlignedClip(D2D1::RectF(d.left, d.top, d.right - 6, d.bottom), D2D1_ANTIALIAS_MODE_ALIASED);
+    if (textA > 0.003f) {
+        float my = (tb.top + tb.bottom) / 2;
+        Set_DrawMark(p, w.fIcon.get(), {d.left + 56, my - 13, d.left + 82, my + 13}, textA);
     }
-    if (!changed) {
-        SetWindowTextW(w.status, L"Nothing changed");
+    p.Text(w.fRailName.get(), L"Seamless", {d.left + 90, d.top + 9, d.left + w.railW - 10, d.top + 33}, mocha::text, textA);
+    p.Text(w.fRailName.get(), L"Launchpad", {d.left + 90, d.top + 32, d.left + w.railW - 10, d.top + 56}, mocha::text, textA);
+    for (int i = 0; i < kSetPageCount; i++) {
+        D2D1_RECT_F r = Set_RailRect(w, i);
+        if (i == kSetAboutPage) {
+            float ly = std::round(r.top - (kSetAboutGap + kSetRailPitch - kSetRailItem) / 2);
+            p.Fill({r.left + 6, ly, r.right - 6, ly + 1}, mocha::surface1, 0.7f);
+        }
+        float hov = Set_GlowOf(w, 100 + i);
+        bool act = i == w.page;
+        if (act) {
+            p.GradFill(r, 8, 0.22f);
+            p.GradRing(r, 8, 0.5f, 1);
+            D2D1_RECT_F bar{r.left, r.top + 8, r.left + 3, r.bottom - 8};
+            p.GradFill({bar.left, bar.top, bar.left + 3, bar.bottom}, 1.5f, 1);
+        } else {
+            p.Round(r, 8, mocha::surface0, 0.28f);
+            p.Edge(r, 8, mocha::surface2, 0.5f * (1 - hov));
+            p.GradFill(r, 8, 0.10f * hov);
+            p.GradRing(r, 8, 0.8f * hov, 1.25f);
+        }
+        if (w.kbd && w.focus == -10 - i) p.GradRing(r, 8, 1, 2);
+        UINT32 c = act ? mocha::text : mocha::subtext1;
+        // The glyph sits in a fixed 44-wide slot, so it stays centered in the collapsed rail.
+        p.Glyph(w.fIcon.get(), kSetPages[i].glyph, {r.left, r.top, r.left + 44, r.bottom}, act ? mocha::blue : mocha::subtext0);
+        p.Text(w.fLabel.get(), kSetPages[i].name, {r.left + 50, r.top + 8, r.left + w.railW - 24, r.bottom}, c, textA);
+    }
+#ifdef WH_MOD_VERSION
+    p.Text(w.fSmall.get(), std::wstring(L"Version ") + WH_MOD_VERSION,
+           {d.left + 18, d.bottom - 34, d.left + w.railW - 12, d.bottom - 12}, mocha::overlay1, textA);
+#endif
+    p.rt->PopAxisAlignedClip();
+}
+
+static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
+    D2D1_RECT_F d = Set_FooterDock(w);
+    const float rad = kSetFootH / 2, brad = kSetFootBtnH / 2;
+    p.Round(d, rad, mocha::mantle, w.footer ? 0.85f : 1.0f);
+    const D2D1_RECT_F edge{d.left + 2, d.top + 2, d.right - 2, d.bottom - 2};
+    p.rt->DrawRoundedRectangle(D2D1::RoundedRect(edge, rad - 2, rad - 2),
+                              p.B(mocha::overlay0, 0.9f * (1 - w.footGlow)), 2.75f);
+    p.GradRing(d, rad - 1.5f, w.footGlow, 3.0f);
+    UINT32 sc;
+    std::wstring status = Set_FooterStatus(w, &sc);
+    float sw = Set_FooterStatusW(w);
+    if (sw > 0) p.Text(w.fStatusLine.get(), status, {d.left + 18, d.top, d.left + 18 + sw, d.bottom}, sc);
+    static const PCWSTR names[3] = {L"Reset to suggested", L"Cancel", L"Save"};
+    for (int i = 0; i < 3; i++) {
+        D2D1_RECT_F b = Set_FooterButton(w, i);
+        float hov = Set_GlowOf(w, 10 + i);
+        p.Round(b, brad, mocha::base, 0.98f);
+        p.Edge(b, brad, mocha::overlay0, 0.78f * (1 - hov), 1.75f);
+        p.GradRing(b, brad - 1, hov, 2.25f);
+        p.Text(w.fButton.get(), names[i], b, mocha::text, w.saving ? 0.5f : 1.0f);
+        if (w.kbd && w.focus == -1 - i) p.GradRing(b, brad, 1, 2);
+    }
+}
+
+
+constexpr WCHAR kSetFooterClass[] = L"WindhawkSeamlessLaunchpadSettingsFooter";
+static LRESULT CALLBACK Set_FooterProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    auto keep = g_setWin;
+    if (!keep || keep->footer != hwnd) return DefWindowProcW(hwnd, msg, wp, lp);
+    SetWindow& w = *keep;
+    if (msg == WM_MOUSEACTIVATE) return MA_NOACTIVATE;
+    if (msg == WM_ERASEBKGND) return 1;
+    if (msg == WM_PAINT) {
+        PAINTSTRUCT ps; BeginPaint(hwnd, &ps);
+        RECT rc; GetClientRect(hwnd, &rc);
+        if (!w.footerRt) {
+            auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+                (float)w.dpi, (float)w.dpi);
+            g_setD2d->CreateHwndRenderTarget(props, D2D1::HwndRenderTargetProperties(hwnd,
+                D2D1::SizeU(rc.right, rc.bottom)), w.footerRt.put());
+        }
+        if (w.footerRt) {
+            const auto d = Set_FooterDock(w);
+            auto rt = w.footerRt.get(); rt->BeginDraw(); rt->Clear(D2D1::ColorF(0,0));
+            rt->SetTransform(D2D1::Matrix3x2F::Translation(-d.left, -d.top));
+            SetPaint p(w, rt); Set_DrawFooter(p, w);
+            if (rt->EndDraw() == D2DERR_RECREATE_TARGET) w.footerRt.reset();
+        }
+        EndPaint(hwnd, &ps); return 0;
+    }
+    if (msg == WM_MOUSEMOVE || msg == WM_LBUTTONDOWN || msg == WM_LBUTTONUP) {
+        POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+        MapWindowPoints(hwnd, w.hwnd, &pt, 1);
+        if (msg == WM_MOUSEMOVE) { TRACKMOUSEEVENT t{sizeof(t),TME_LEAVE,hwnd,0}; TrackMouseEvent(&t); }
+        w.footerInput = true;
+        SendMessageW(w.hwnd, msg, wp, MAKELPARAM(pt.x,pt.y));
+        w.footerInput = false; return 0;
+    }
+    if (msg == WM_MOUSELEAVE) { SendMessageW(w.hwnd,WM_MOUSELEAVE,0,0); return 0; }
+    return DefWindowProcW(hwnd,msg,wp,lp);
+}
+static void Set_UpdateFooter(SetWindow& w) {
+    if (w.render) return;
+    if (IsIconic(w.hwnd) || !IsWindowVisible(w.hwnd)) {
+        if (w.footer) ShowWindow(w.footer,SW_HIDE);
         return;
     }
-    std::wstring cli = WindhawkCliPath();
+    if (!w.footer) {
+        WNDCLASSEXW wc{sizeof(wc)}; wc.hInstance=(HINSTANCE)&__ImageBase;
+        wc.lpfnWndProc=Set_FooterProc; wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
+        wc.lpszClassName=kSetFooterClass; RegisterClassExW(&wc);
+        w.footer=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,kSetFooterClass,L"Launchpad settings actions",
+            WS_POPUP,0,0,1,1,w.hwnd,nullptr,(HINSTANCE)&__ImageBase,nullptr);
+        if (!w.footer) return;
+        BOOL dark=TRUE; DwmSetWindowAttribute(w.footer,20,&dark,sizeof(dark));
+        DWM_BLURBEHIND bb{}; bb.dwFlags=DWM_BB_ENABLE; bb.fEnable=TRUE;
+        DwmEnableBlurBehindWindow(w.footer,&bb);
+        // Nearly clear tint: Windows paints the accent over the whole window rectangle, which
+        // showed as dark squares past the pill's ends. The pill's own fill carries the tint.
+        SetAccent(w.footer,ACCENT_ENABLE_ACRYLICBLURBEHIND,0x08251818);
+        DWORD none=0xFFFFFFFE; DwmSetWindowAttribute(w.footer,34,&none,sizeof(none));
+        int noRound=1; DwmSetWindowAttribute(w.footer,33,&noRound,sizeof(noRound));
+    }
+    auto d=Set_FooterDock(w); const float scale=w.dpi/96.0f;
+    POINT pt{(LONG)std::floor(d.left*scale),(LONG)std::floor((d.top+kSetCapH)*scale)};
+    ClientToScreen(w.hwnd,&pt);
+    int width=(int)std::ceil((d.right-d.left)*scale), height=(int)std::ceil((d.bottom-d.top)*scale);
+    RECT old; GetWindowRect(w.footer,&old);
+    if(old.right-old.left!=width || old.bottom-old.top!=height) {
+        w.footerRt.reset();
+        int radius=height; SetWindowRgn(w.footer,CreateRoundRectRgn(0,0,width+1,height+1,radius,radius),FALSE);
+        // The blur is clipped to the pill as well, so nothing shows past its round ends.
+        HRGN blur=CreateRoundRectRgn(0,0,width+1,height+1,radius,radius);
+        DWM_BLURBEHIND bb{}; bb.dwFlags=DWM_BB_ENABLE|DWM_BB_BLURREGION; bb.fEnable=TRUE; bb.hRgnBlur=blur;
+        DwmEnableBlurBehindWindow(w.footer,&bb);
+        DeleteObject(blur);
+    }
+    SetWindowPos(w.footer,nullptr,pt.x,pt.y,width,height,SWP_NOACTIVATE|SWP_NOZORDER|SWP_SHOWWINDOW);
+    InvalidateRect(w.footer,nullptr,FALSE);
+}
+
+static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
+    if (w.openSel < 0) return;
+    const SetField& f = w.fields[w.openSel];
+    const D2D1_RECT_F& r = w.dropRect;
+    D2D1_RECT_F shadow{r.left - 1, r.top + 3, r.right + 1, r.bottom + 5};
+    p.Round(shadow, 12, mocha::crust, 0.6f);
+    p.Round(r, 10, mocha::mantle);
+    p.GradRing(r, 10, 0.9f);
+    for (size_t i = 0; i < f.options.size(); i++) {
+        D2D1_RECT_F it{r.left + 4, r.top + 4 + i * kSetDropItem, r.right - 4, r.top + 4 + (i + 1) * kSetDropItem};
+        bool sel = f.cur == f.options[i].first;
+        if ((int)i == w.dropHover) {
+            p.GradFill(it, 6, 0.28f);
+            p.GradRing(it, 6, 0.6f, 1);
+        }
+        p.Text(w.fValue.get(), f.options[i].second, {it.left + 10, it.top, it.right - 28, it.bottom}, sel ? mocha::blue : mocha::text);
+        if (sel) p.Glyph(w.fIconS.get(), 0xE73E, {it.right - 28, it.top, it.right - 6, it.bottom}, mocha::blue);
+    }
+}
+
+// Title bar buttons, in title bar DIPs: 0 minimize, 1 maximize or restore, 2 close.
+static D2D1_RECT_F Set_CapButton(const SetWindow& w, int i) {
+    float right = w.cw - (2 - i) * kSetCapBtnW;
+    return {right - kSetCapBtnW, 0, right, kSetCapH};
+}
+
+// y is in content DIPs, so the title bar is y < 0.
+static int Set_CapButtonAt(const SetWindow& w, float x, float y) {
+    if (w.nativeTitle || w.nativeButtons) return -1;
+    for (int i = 0; i < 3; i++)
+        if (Set_In(Set_CapButton(w, i), x, y + kSetCapH)) return i;
+    return -1;
+}
+
+// Icon and title are centered on the whole width, laid out from the current size on every paint,
+// so a move or snap can never leave them off center.
+static D2D1_RECT_F Set_CapTitleRect(const SetWindow& w) {
+    float tw = std::min(Set_TextW(w.fCap.get(), kSetTitle) + 2, std::max(0.0f, w.cw - 4 * kSetCapBtnW - 40));
+    float x = std::round((w.cw - (16 + 8 + tw)) / 2);
+    return {x, 0, x + 16 + 8 + tw, kSetCapH};
+}
+
+static void Set_DrawMark(SetPaint& p, IDWriteTextFormat* glyph, const D2D1_RECT_F& r, float a) {
+    float s = r.right - r.left;
+    SetCom<ID2D1LinearGradientBrush> g;
+    D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::blue, a * p.fade)}, {1, D2DColor(mocha::mauve, a * p.fade)}};
+    SetCom<ID2D1GradientStopCollection> coll;
+    if (SUCCEEDED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
+        SUCCEEDED(p.rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.right, r.bottom)),
+            coll.get(), g.put())))
+        p.rt->FillRoundedRectangle(D2D1::RoundedRect(r, s * 0.24f, s * 0.24f), g.get());
+    p.Glyph(glyph, 0xE80A, r, mocha::crust);
+}
+
+static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
+    if (!w.glass) p.Fill({0, 0, w.cw, kSetCapH}, mocha::crust);  // Glass: the window tint already covers it.
+    D2D1_RECT_F t = Set_CapTitleRect(w);
+    float mid = kSetCapH / 2;
+    Set_DrawMark(p, w.fCapGlyph.get(), {t.left, mid - 8, t.left + 16, mid + 8}, w.active ? 1.0f : 0.6f);
+    p.Text(w.fCap.get(), kSetTitle, {t.left + 24, 0, t.right, kSetCapH}, w.active ? mocha::text : mocha::overlay1);
+    if (w.nativeButtons) return;  // DWM draws them over this title bar.
+    for (int i = 0; i < 3; i++) {
+        D2D1_RECT_F b = Set_CapButton(w, i);
+        float hov = Set_GlowOf(w, 20 + i);
+        if (w.capDown == i + 1) hov = 1;
+        if (i == 2) p.Fill(b, mocha::red, 0.92f * hov);
+        else p.Fill(b, mocha::surface0, 0.85f * hov);
+        UINT32 c = i == 2 && hov > 0.5f ? mocha::crust : (w.active ? mocha::text : mocha::overlay1);
+        WCHAR glyph = i == 0 ? 0xE921 : i == 1 ? (w.hwnd && IsZoomed(w.hwnd) ? 0xE923 : 0xE922) : 0xE8BB;
+        p.Glyph(w.fCapGlyph.get(), glyph, b, c);
+    }
+}
+
+// Draws the whole window into rt (DIPs). The target's DPI does the scaling.
+// The title bar is drawn first; everything else is in content DIPs, shifted down by kSetCapH.
+static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
+    SetPaint p(w, rt);
+    const auto base = D2D1::Matrix3x2F::Translation(0, kSetCapH);
+    rt->BeginDraw();
+    rt->SetTransform(D2D1::Matrix3x2F::Identity());
+    if (w.glass) {
+        // One tint over the whole window, title bar included, so the page and the title bar are
+        // the same material. With the Windows title bar (drawn by DWM with no tint) the tint fades
+        // in over the top of the page instead, so there is no step at the seam (T3 pass 24 method).
+        rt->Clear(D2D1::ColorF(0, 0));
+        const float total = w.ch + kSetCapH;
+        if (w.nativeTitle) {
+            SetCom<ID2D1LinearGradientBrush> fade;
+            D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::crust, 0)}, {1, D2DColor(mocha::crust, kSetGlassTint)}};
+            SetCom<ID2D1GradientStopCollection> coll;
+            if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
+                SUCCEEDED(rt->CreateLinearGradientBrush(
+                    D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, 0), D2D1::Point2F(0, kSetNativeFade)), coll.get(),
+                    fade.put())))
+                rt->FillRectangle(D2D1::RectF(0, 0, w.cw, kSetNativeFade), fade.get());
+            p.Fill({0, kSetNativeFade, w.cw, total}, mocha::crust, kSetGlassTint);
+        } else {
+            p.Fill({0, 0, w.cw, total}, mocha::crust, kSetGlassTint);
+        }
+    } else {
+        rt->Clear(D2DColor(mocha::crust));
+    }
+    if (!w.nativeTitle) Set_DrawCaption(p, w);
+    rt->SetTransform(base);
+    float viewH = Set_ViewH(w);
+
+    rt->PushAxisAlignedClip(D2D1::RectF(Set_RailSpace(w) + 4, 0, w.cw, viewH), D2D1_ANTIALIAS_MODE_ALIASED);
+    auto place = [&](int index, float& rise) {
+        float t = w.pageT >= 1 ? 1.0f : Set_Ease(w.pageT * 1.7f - std::min(index, 9) * 0.07f);
+        p.fade = t;
+        rise = (1 - t) * 10;
+        rt->SetTransform(D2D1::Matrix3x2F::Translation(0, -w.scrollY + rise) * base);
+    };
+    float rise = 0;
+    place(0, rise);
+    p.Text(w.fTitle.get(), kSetPages[w.page].name, {w.contentX, 36, w.contentX + w.contentW, 72}, mocha::text);
+    place(1, rise);
+    p.Text(w.fIntro.get(), kSetPages[w.page].intro, {w.contentX, 76, w.contentX + w.contentW, 76 + 40}, mocha::subtext0);
+    for (size_t i = 0; i < w.items.size(); i++) {
+        const SetItem& it = w.items[i];
+        if (it.y + it.h < w.scrollY - 20 || it.y > w.scrollY + viewH + 20) continue;
+        place((int)i + 2, rise);
+        switch (it.type) {
+            case SetItem::Group: Set_DrawGroup(p, w, it); break;
+            case SetItem::Row: Set_DrawRow(p, w, it); break;
+            case SetItem::Banner: Set_DrawBanner(p, w, it); break;
+            case SetItem::About: Set_DrawAbout(p, w, it, (int)i); break;
+            case SetItem::Link: Set_DrawLinkRow(p, w, it, (int)i); break;
+            case SetItem::Support: Set_DrawSupport(p, w, it, (int)i); break;
+        }
+    }
+    p.fade = 1;
+    rt->SetTransform(base);
+    rt->PopAxisAlignedClip();
+
+    D2D1_RECT_F th = Set_ScrollThumb(w);
+    if (th.bottom > th.top) p.Round(th, 3, w.dragScroll ? mocha::overlay1 : mocha::surface2, 0.9f);
+
+    if (w.render) Set_DrawFooter(p, w);
+    Set_DrawRail(p, w);
+    Set_DrawPopup(p, w);
+    rt->SetTransform(D2D1::Matrix3x2F::Identity());
+    if (false) p.GradRing({0, 0, w.cw, w.ch + kSetCapH}, SystemCornerRadius(false), 1, 1);
+    HRESULT hr = rt->EndDraw();
+    if (hr == D2DERR_RECREATE_TARGET) w.rt.reset();
+    Set_UpdateFooter(w);
+}
+
+// ---- Hit testing --------------------------------------------------------------
+
+static SetHit Set_Hit(SetWindow& w, float x, float y) {
+    SetHit h;
+    if (y < 0) {
+        int b = Set_CapButtonAt(w, x, y);
+        if (b >= 0) {
+            h.kind = SetHit::Caption;
+            h.a = b;
+            h.id = 20 + b;
+        }
+        return h;
+    }
+    if (w.openSel >= 0) {
+        if (Set_In(w.dropRect, x, y)) {
+            int i = (int)((y - w.dropRect.top - 4) / kSetDropItem);
+            if (i >= 0 && i < (int)w.fields[w.openSel].options.size() && y >= w.dropRect.top + 4) {
+                h.kind = SetHit::Drop;
+                h.a = w.openSel;
+                h.b = i;
+            } else {
+                h.kind = SetHit::Popup;
+            }
+        }
+        return h;
+    }
+    D2D1_RECT_F dock = Set_RailDock(w);
+    if (y >= dock.top + 14 && y < dock.bottom - 14 && fabsf(x - dock.right) <= kSetEdgeGrab) {
+        h.kind = SetHit::RailEdge;
+        h.id = 41;
+        return h;
+    }
+    if (x < dock.right + kSetDockGap) {
+        if (Set_In(Set_RailToggleRect(w), x, y)) {
+            h.kind = SetHit::RailToggle;
+            h.id = 42;
+            return h;
+        }
+        for (int i = 0; i < kSetPageCount; i++) {
+            if (Set_In(Set_RailRect(w, i), x, y)) {
+                h.kind = SetHit::Rail;
+                h.a = i;
+                h.id = 100 + i;
+                return h;
+            }
+        }
+        return h;
+    }
+    D2D1_RECT_F foot = Set_FooterDock(w);
+    if (Set_In(foot, x, y)) {
+        for (int i = 0; i < 3; i++) {
+            if (Set_In(Set_FooterButton(w, i), x, y)) {
+                h.kind = SetHit::Footer;
+                h.a = i;
+                h.id = 10 + i;
+                return h;
+            }
+        }
+        return h;
+    }
+    D2D1_RECT_F th = Set_ScrollThumb(w);
+    if (th.bottom > th.top && x >= w.cw - 16 && y >= th.top && y <= th.bottom) {
+        h.kind = SetHit::Scroll;
+        return h;
+    }
+    float cy = y + w.scrollY;
+    for (size_t i = 0; i < w.items.size(); i++) {
+        const SetItem& it = w.items[i];
+        D2D1_RECT_F row = Set_RowRect(w, it);
+        if (!Set_In(row, x, cy)) continue;
+        if (it.type == SetItem::Link) {
+            h.kind = SetHit::Link;
+            h.a = (int)i;
+            h.id = 3000 + (int)i;
+        } else if (it.type == SetItem::Support) {
+            h.id = 3700 + (int)i;  // The card lights up; only its button clicks.
+            if (Set_In(Set_SupportButton(w, it), x, cy)) {
+                h.kind = SetHit::Link;
+                h.a = (int)i;
+                h.id = 3500 + (int)i;
+            }
+        } else if (it.type == SetItem::About) {
+            h.id = 3800 + (int)i;
+        } else if (it.type == SetItem::Row) {
+            const SetField& f = w.fields[it.field];
+            SetParts pt = Set_Parts(f, row);
+            h.a = it.field;
+            h.id = 1000 + it.field;
+            h.kind = f.kind == SetField::Check ? SetHit::Control : SetHit::Row;
+            if (f.kind == SetField::Hotkey && !f.cur.empty() && w.recording != it.field && Set_In(pt.clear, x, cy)) {
+                h.kind = SetHit::Clear;
+            } else if (f.kind == SetField::Color) {
+                for (int c = 0; c < kSetChipCount; c++) {
+                    if (Set_In(pt.chip[c], x, cy)) {
+                        h.kind = SetHit::Chip;
+                        h.b = c;
+                    }
+                }
+                if (h.kind != SetHit::Chip && Set_In(pt.box, x, cy)) h.kind = SetHit::Control;
+            } else if (pt.slider &&
+                       Set_In({pt.track.left - 8, pt.track.top - 10, pt.track.right + 8, pt.track.bottom + 10}, x, cy)) {
+                h.kind = SetHit::Slider;
+            } else if (Set_In(pt.box, x, cy)) {
+                h.kind = SetHit::Control;
+            }
+        }
+        return h;
+    }
+    return h;
+}
+
+static bool Set_Clickable(const SetHit& h) {
+    return h.kind == SetHit::Rail || h.kind == SetHit::Footer || h.kind == SetHit::Control || h.kind == SetHit::Slider ||
+           h.kind == SetHit::Clear || h.kind == SetHit::Chip || h.kind == SetHit::Drop || h.kind == SetHit::Link ||
+           h.kind == SetHit::Scroll || h.kind == SetHit::RailToggle;
+}
+
+// Sidebar width from a drag: below the snap point it collapses to the icon rail.
+static void Set_RailDragTo(SetWindow& w, float x) {
+    float width = x - kSetDockGap;
+    if (width < kSetRailSnap) {
+        w.railCollapsed = true;
+    } else {
+        w.railCollapsed = false;
+        w.railW = std::clamp(width, kSetRailMin, kSetRailMax);
+        w.railCur = w.railW;
+    }
+    Set_BuildPage(w);
+    Set_Invalidate(w);
+}
+
+static void Set_ToggleRail(SetWindow& w) {
+    w.railCollapsed = !w.railCollapsed;
+    if (!w.railCollapsed && w.railCur < kSetRailMini) w.railCur = kSetRailMini;
+    Set_Invalidate(w);
+}
+
+// ---- Editing, recording, choosing -----------------------------------------------
+
+static std::wstring Set_FormatHotkey(UINT mods, UINT vk) {
+    std::wstring text = std::to_wstring(vk);
+    if (!text.empty()) return text;
+    // Fallback while the capture part is a stub.
+    if (mods & MOD_CONTROL) text += L"Ctrl+";
+    if (mods & MOD_ALT) text += L"Alt+";
+    if (mods & MOD_SHIFT) text += L"Shift+";
+    if (mods & MOD_WIN) text += L"Win+";
+    WCHAR name[64] = {};
+    LONG scan = (LONG)MapVirtualKeyW(vk, MAPVK_VK_TO_VSC) << 16;
+    if (GetKeyNameTextW(scan, name, ARRAYSIZE(name)) > 0) {
+        text += name;
+    } else {
+        text += std::to_wstring(vk);
+    }
+    return text;
+}
+
+static bool Set_IsModifier(UINT vk) {
+    switch (vk) {
+        case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT:
+        case VK_CONTROL: case VK_LCONTROL: case VK_RCONTROL:
+        case VK_MENU: case VK_LMENU: case VK_RMENU:
+        case VK_LWIN: case VK_RWIN:
+            return true;
+    }
+    return false;
+}
+
+static void Set_StopRecording(SetWindow& w) {
+    if (w.recording < 0) return;
+    w.recording = -1;
+    if (w.status.rfind(L"Press the keys", 0) == 0) Set_SetStatus(w, L"");
+    
+    Set_Invalidate(w);
+}
+
+static void Set_StartRecording(SetWindow& w, int k) {
+    Set_StopRecording(w);
+    w.recording = k;
+    // Our own keys would fire instead of reaching the window while it listens.
+    if (!w.render) {
+        SetFocus(w.hwnd);
+    }
+    Set_SetStatus(w, L"Press the keys you want. Esc cancels, Backspace clears.");
+}
+
+static void Set_ClosePopup(SetWindow& w) {
+    if (w.openSel < 0) return;
+    w.openSel = -1;
+    w.dropHover = -1;
+    Set_Invalidate(w);
+}
+
+static void Set_OpenPopup(SetWindow& w, int k) {
+    const SetItem* it = Set_ItemOfField(w, k);
+    if (!it) return;
+    const SetField& f = w.fields[k];
+    SetParts pt = Set_Parts(f, Set_RowRect(w, *it));
+    float boxTop = pt.box.top - w.scrollY, boxBottom = pt.box.bottom - w.scrollY;
+    float h = (float)f.options.size() * kSetDropItem + 8;
+    float top = boxBottom + 4;
+    if (top + h > Set_ViewH(w) + 20 && boxTop - 4 - h > 0) top = boxTop - 4 - h;  // No room below: open upward.
+    w.dropRect = {pt.box.left, top, pt.box.right, top + h};
+    w.openSel = k;
+    w.dropHover = -1;
+    for (size_t i = 0; i < f.options.size(); i++)
+        if (f.cur == f.options[i].first) w.dropHover = (int)i;
+    Set_Invalidate(w);
+}
+
+static void Set_CommitEdit(SetWindow& w, bool apply) {
+    if (w.editing < 0) return;
+    int k = w.editing;
+    w.editing = -1;  // Hiding the box ends its focus; this stops that from coming back here.
+    SetField& f = w.fields[k];
+    std::wstring text = w.edit ? Set_WindowText(w.edit) : L"";
+    if (w.edit) ShowWindow(w.edit, SW_HIDE);
+    if (apply) {
+        switch (f.kind) {
+            case SetField::Number:
+                if (!text.empty()) f.cur = std::to_wstring(std::clamp(_wtoi(text.c_str()), f.min, f.max));
+                break;
+            case SetField::Color: {
+                while (!text.empty() && text.back() == L' ') text.pop_back();
+                while (!text.empty() && text.front() == L' ') text.erase(0, 1);
+                if (!text.empty() && text[0] != L'#') text = L"#" + text;
+                UINT32 rgb;
+                if (Set_ParseHex(text, rgb)) {
+                    f.cur = Set_HexFromRgb(rgb);
+                    Set_SetStatus(w, L"");
+                } else {
+                    Set_SetStatus(w, L"Use a color like #89B4FA.", true);
+                }
+                break;
+            }
+            default:
+                f.cur = text;
+        }
+    }
+    if (!w.render && w.hwnd) SetFocus(w.hwnd);
+    Set_Invalidate(w);
+}
+
+static void Set_PlaceEdit(SetWindow& w) {
+    if (w.editing < 0 || !w.edit) return;
+    const SetItem* it = Set_ItemOfField(w, w.editing);
+    if (!it) return;
+    SetParts pt = Set_Parts(w.fields[w.editing], Set_RowRect(w, *it));
+    float left = pt.box.left + (w.fields[w.editing].kind == SetField::Color ? 30 : 10), right = pt.box.right - 8;
+    float mid = (pt.box.top + pt.box.bottom) / 2 - w.scrollY + kSetCapH;
+    float s = w.dpi / 96.0f;
+    SetWindowPos(w.edit, HWND_TOP, (int)(left * s), (int)((mid - 10) * s), (int)((right - left) * s), (int)(20 * s),
+                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+}
+
+static LRESULT CALLBACK Set_EditProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR) {
+    SetWindow* w = g_setWin.get();
+    if (w && w->edit == hwnd) {
+        switch (msg) {
+            case WM_KEYDOWN:
+                if (wParam == VK_RETURN || wParam == VK_TAB) {
+                    Set_CommitEdit(*w, true);
+                    return 0;
+                }
+                if (wParam == VK_ESCAPE) {
+                    Set_CommitEdit(*w, false);
+                    return 0;
+                }
+                break;
+            case WM_CHAR:
+                if (wParam == VK_RETURN || wParam == VK_ESCAPE || wParam == VK_TAB) return 0;  // No beep.
+                break;
+            case WM_KILLFOCUS:
+                if (w->editing >= 0) Set_CommitEdit(*w, true);
+                break;
+        }
+    }
+    return DefSubclassProc(hwnd, msg, wParam, lParam);
+}
+
+static void Set_BeginEdit(SetWindow& w, int k) {
+    Set_CommitEdit(w, true);
+    Set_StopRecording(w);
+    Set_ClosePopup(w);
+    SetField& f = w.fields[k];
+    if (w.edit) DestroyWindow(w.edit);
+    if (w.editFont) DeleteObject(w.editFont);
+    DWORD style = WS_CHILD | ES_AUTOHSCROLL | (f.kind == SetField::Number ? ES_NUMBER | ES_CENTER : 0);
+    // Over the extended frame GDI text would come out see-through; a layered child keeps it solid.
+    w.edit = CreateWindowExW(w.glass ? WS_EX_LAYERED : 0, L"EDIT", L"", style, 0, 0, 10, 10, w.hwnd, nullptr,
+                             GetModuleHandleW(nullptr), nullptr);
+    if (!w.edit) return;
+    if (w.glass) SetLayeredWindowAttributes(w.edit, 0, 255, LWA_ALPHA);
+    int base = std::clamp(500, 100, 900);
+    w.editFont = CreateFontW(-MulDiv(13, w.dpi, 96), 0, 0, 0, base, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                             CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, w.family.c_str());
+    SendMessageW(w.edit, WM_SETFONT, (WPARAM)w.editFont, TRUE);
+    SendMessageW(w.edit, EM_SETLIMITTEXT, f.kind == SetField::Number ? 6 : f.kind == SetField::Color ? 7 : 260, 0);
+    SetWindowTextW(w.edit, f.kind == SetField::Number ? Set_FieldValue(f).c_str() : f.cur.c_str());
+    SetWindowSubclass(w.edit, Set_EditProc, 1, 0);
+    w.editing = k;
+    Set_PlaceEdit(w);
+    if (!w.render) SetFocus(w.edit);
+    SendMessageW(w.edit, EM_SETSEL, 0, -1);
+    Set_Invalidate(w);
+}
+
+static void Set_Choose(SetWindow& w, int k, int option) {
+    SetField& f = w.fields[k];
+    if (option >= 0 && option < (int)f.options.size()) f.cur = f.options[option].first;
+    Set_ClosePopup(w);
+}
+
+static void Set_SliderTo(SetWindow& w, int k, float x) {
+    const SetItem* it = Set_ItemOfField(w, k);
+    if (!it) return;
+    SetField& f = w.fields[k];
+    SetParts pt = Set_Parts(f, Set_RowRect(w, *it));
+    float t = std::clamp((x - pt.track.left) / (pt.track.right - pt.track.left), 0.0f, 1.0f);
+    f.cur = std::to_wstring(f.min + (int)(t * (f.max - f.min) + 0.5f));
+    Set_Invalidate(w);
+}
+
+static void Set_Save(std::shared_ptr<SetWindow> keep);
+
+static void Set_ResetToSuggested(SetWindow& w) {
+    Set_CommitEdit(w, false);
+    Set_StopRecording(w);
+    Set_ClosePopup(w);
+    for (auto& f : w.fields) Set_PutValue(f, f.def);
+    Set_SetStatus(w, L"Suggested values are filled in. Press Save to keep them.");
+}
+
+static void Set_BuildAndClamp(SetWindow& w) {
+    Set_BuildPage(w);
+    Set_PlaceEdit(w);
+    Set_Invalidate(w);
+}
+
+static void Set_GoPage(SetWindow& w, int page) {
+    page = std::clamp(page, 0, kSetPageCount - 1);
+    Set_CommitEdit(w, true);
+    Set_StopRecording(w);
+    Set_ClosePopup(w);
+    if (page == w.page) return;
+    w.page = page;
+    w.scrollY = w.scrollTarget = 0;
+    w.focus = -1;
+    w.pageT = Set_Anim(w) ? 0.0f : 1.0f;
+    Set_BuildAndClamp(w);
+}
+
+static void Set_OpenLink(PCWSTR url) {
+#ifdef SCM_HARNESS
+    Wh_Log(L"settings: would open %s", url);
+#else
+    ShellExecuteW(nullptr, L"open", url, nullptr, nullptr, SW_SHOWNORMAL);
+#endif
+}
+
+// A click (or Space or Enter) on a field's control.
+static void Set_ActivateField(SetWindow& w, int k, const SetHit* hit) {
+    SetField& f = w.fields[k];
+    if (w.recording >= 0 && w.recording != k) Set_StopRecording(w);
+    switch (f.kind) {
+        case SetField::Check:
+            f.cur = f.cur == L"1" ? L"0" : L"1";
+            Set_Invalidate(w);
+            break;
+        case SetField::Choice:
+            if (w.openSel == k) {
+                Set_ClosePopup(w);
+            } else {
+                Set_CommitEdit(w, true);
+                Set_OpenPopup(w, k);
+            }
+            break;
+        case SetField::Number:
+        case SetField::Text:
+            Set_BeginEdit(w, k);
+            break;
+        case SetField::Color:
+            if (hit && hit->kind == SetHit::Chip) {
+                Set_CommitEdit(w, false);
+                f.cur = Set_HexFromRgb(kSetChips[hit->b]);
+                Set_SetStatus(w, L"");
+            } else {
+                Set_BeginEdit(w, k);
+            }
+            break;
+        case SetField::Hotkey:
+            if (hit && hit->kind == SetHit::Clear) {
+                f.cur.clear();
+                Set_Invalidate(w);
+            } else if (w.recording == k) {
+                Set_StopRecording(w);
+            } else {
+                Set_CommitEdit(w, true);
+                Set_StartRecording(w, k);
+            }
+            break;
+    }
+}
+
+static void Set_FooterAction(SetWindow& w, int which) {
+    if (which == 0) {
+        Set_ResetToSuggested(w);
+    } else if (which == 1) {
+        if (!w.render) DestroyWindow(w.hwnd);  // w is gone after this.
+    } else {
+        Set_CommitEdit(w, true);
+        if (g_setWin && g_setWin->hwnd == w.hwnd) Set_Save(g_setWin);
+    }
+}
+
+// ---- Saving ---------------------------------------------------------------------
+
+static std::wstring Set_ChangedParams(SetWindow& w, int& changed) {
+    std::wstring params = L"--quiet mod settings set " + Set_QuoteArg(WH_MOD_ID);
+    changed = 0;
+    for (auto& f : w.fields) {
+        std::wstring value = Set_FieldValue(f);
+        if (value != f.value) {
+            params += L" " + Set_QuoteArg(std::wstring(f.key) + L"=" + value);
+            changed++;
+        }
+    }
+    return params;
+}
+
+static void Set_Save(std::shared_ptr<SetWindow> keep) {
+    SetWindow& w = *keep;
+    if (w.saving) return;
+    Set_StopRecording(w);
+    int changed = 0;
+    std::wstring params = Set_ChangedParams(w, changed);
+    if (!changed) {
+        Set_SetStatus(w, L"Nothing changed");
+        return;
+    }
+    std::wstring cli = Set_CliPath();
+#ifdef SCM_HARNESS
+    // Tests check the command instead of running it.
+    std::string line = WideToUtf8(Set_QuoteArg(cli.empty() ? L"windhawk-cli.exe" : cli) + L" " + params);
+    HANDLE file = CreateFileW((StoragePath() + L"\\settings-save.txt").c_str(), GENERIC_WRITE, 0, nullptr,
+                              CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    DWORD written = 0;
+    bool ok = file != INVALID_HANDLE_VALUE && WriteFile(file, line.data(), (DWORD)line.size(), &written, nullptr);
+    if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+    if (!ok) {
+        Set_SetStatus(w, L"Couldn't write settings-save.txt", true);
+        return;
+    }
+    for (auto& f : w.fields) f.value = Set_FieldValue(f);
+    Set_SetStatus(w, L"Saved");
+    return;
+#else
     if (cli.empty()) {
-        SetWindowTextW(w.status, L"windhawk-cli.exe not found");
+        Set_SetStatus(w, L"Couldn't find windhawk-cli.exe, so nothing was saved", true);
         return;
     }
     SHELLEXECUTEINFOW info{sizeof(info)};
-    info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
+    info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
     info.hwnd = w.hwnd;
     info.lpVerb = L"runas";
     info.lpFile = cli.c_str();
     info.lpParameters = params.c_str();
     info.nShow = SW_HIDE;
     if (!ShellExecuteExW(&info) || !info.hProcess) {
-        SetWindowTextW(w.status, GetLastError() == ERROR_CANCELLED
-                                     ? L"Not saved"
-                                     : L"Couldn't start windhawk-cli");
+        DWORD error = GetLastError();
+        if (error == ERROR_CANCELLED) {
+            Set_SetStatus(w, L"Not saved. The admin prompt was turned down.", true);
+        } else {
+            WCHAR text[96];
+            swprintf_s(text, L"Couldn't start windhawk-cli (error %lu)", error);
+            Set_SetStatus(w, text, true);
+        }
         return;
     }
     w.saving = true;
-    EnableWindow(w.save, FALSE);
-    SetWindowTextW(w.status, L"Saving...");
-    bool quit = false;
-    while (!quit && !g_settingsStop &&
-           MsgWaitForMultipleObjects(1, &info.hProcess, FALSE, 15000,
-                                     QS_ALLINPUT) == WAIT_OBJECT_0 + 1) {
+    Set_SetStatus(w, L"Saving...");
+    // Keep painting and handling input while windhawk-cli works.
+    bool quit = false, timedOut = false;
+    int quitCode = 0;
+    ULONGLONG deadline = GetTickCount64() + 15000;
+    while (!quit && !w.destroyed) {
+        ULONGLONG now = GetTickCount64();
+        if (now >= deadline) {
+            timedOut = true;
+            break;
+        }
+        DWORD r = MsgWaitForMultipleObjects(1, &info.hProcess, FALSE, (DWORD)(deadline - now), QS_ALLINPUT);
+        if (r == WAIT_OBJECT_0) break;
+        if (r != WAIT_OBJECT_0 + 1) {
+            timedOut = r == WAIT_TIMEOUT;
+            break;
+        }
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) {
                 quit = true;
+                quitCode = (int)msg.wParam;
                 break;
             }
-            if (!IsDialogMessageW(w.hwnd, &msg)) {
-                TranslateMessage(&msg);
-                DispatchMessageW(&msg);
-            }
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
         }
     }
     DWORD code = 1;
-    if (WaitForSingleObject(info.hProcess, 0) == WAIT_OBJECT_0) {
-        GetExitCodeProcess(info.hProcess, &code);
-    }
+    bool finished = WaitForSingleObject(info.hProcess, 0) == WAIT_OBJECT_0;
+    if (finished) GetExitCodeProcess(info.hProcess, &code);
+    if (!finished) TerminateProcess(info.hProcess, ERROR_TIMEOUT);
     CloseHandle(info.hProcess);
     w.saving = false;
-    if (quit || !IsWindow(w.hwnd)) {
-        PostQuitMessage(0);
-        return;
-    }
-    EnableWindow(w.save, TRUE);
-    if (code == 0) {
-        LoadSettingFields(w);  // Shows what was stored, numbers clamped.
-        SetWindowTextW(w.status, L"Saved");
+    if (quit) PostQuitMessage(quitCode);
+    if (w.destroyed || !IsWindow(w.hwnd)) return;
+    if (!finished && timedOut) {
+        Set_SetStatus(w, L"Windhawk didn't answer in 15 seconds. Settings may not be saved.", true);
+    } else if (code == 0) {
+        Set_LoadFields(w);  // Shows what was stored.
+        Set_SetStatus(w, L"Saved");
     } else {
-        Wh_Log(L"windhawk-cli exit code %u", code);
-        SetWindowTextW(w.status, L"Windhawk didn't save the settings");
+        Wh_Log(L"windhawk-cli exit code %lu", code);
+        WCHAR text[96];
+        swprintf_s(text, L"Windhawk didn't save the settings (code %lu)", code);
+        Set_SetStatus(w, text, true);
     }
+#endif
 }
 
-// The window icon: a 3x3 grid of rounded tiles, like the grid itself, drawn
-// with antialiased edges into a 32-bit icon.
-HICON MakeGridIcon(int size) {
-    BITMAPINFO bi{};
-    bi.bmiHeader = {sizeof(BITMAPINFOHEADER), size, -size, 1, 32, BI_RGB};
-    DWORD* pixels = nullptr;
-    HBITMAP color =
-        CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, (void**)&pixels, nullptr, 0);
-    if (!color) {
-        return nullptr;
-    }
-    const float gap = size / 10.0f, tile = (size - gap * 4) / 3,
-                radius = tile / 4;
-    for (int y = 0; y < size; y++) {
-        for (int x = 0; x < size; x++) {
-            float alpha = 0;
-            for (int row = 0; row < 3; row++) {
-                for (int col = 0; col < 3; col++) {
-                    // Signed distance to the rounded tile, sampled at the pixel
-                    // center.
-                    float cx = gap + col * (tile + gap) + tile / 2;
-                    float cy = gap + row * (tile + gap) + tile / 2;
-                    float dx = std::max(std::fabs(x + 0.5f - cx) - tile / 2 + radius, 0.0f);
-                    float dy = std::max(std::fabs(y + 0.5f - cy) - tile / 2 + radius, 0.0f);
-                    float d = std::sqrt(dx * dx + dy * dy) - radius;
-                    alpha = std::max(alpha, std::clamp(0.5f - d, 0.0f, 1.0f));
-                }
+// ---- Animation tick ----------------------------------------------------------------
+
+static bool Set_Tick(SetWindow& w) {
+    bool moved = false, anim = Set_Anim(w);
+    auto step = [&](float& v, float target, float rate) {
+        float d = target - v;
+        if (!anim || fabsf(d) < 0.02f) {
+            if (v != target) {
+                v = target;
+                moved = true;
             }
-            BYTE a = (BYTE)std::lround(alpha * 255);
-            // #60A5FA, premultiplied.
-            pixels[y * size + x] = (a << 24) | ((0x60 * a / 255) << 16) |
-                                   ((0xA5 * a / 255) << 8) | (0xFA * a / 255);
+            return;
+        }
+        v += d * rate;
+        moved = true;
+    };
+    int ids[2];
+    Set_HoverIds(w.hover, ids);
+    for (int id : ids)
+        if (id >= 0 && !w.glow.count(id)) w.glow[id] = 0;
+    for (auto it = w.glow.begin(); it != w.glow.end();) {
+        bool on = it->first == ids[0] || it->first == ids[1];
+        step(it->second, on ? 1.0f : 0.0f, 0.3f);
+        if (!on && it->second == 0) {
+            it = w.glow.erase(it);
+        } else {
+            ++it;
         }
     }
-    HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
-    ICONINFO info{TRUE, 0, 0, mask, color};
-    HICON icon = CreateIconIndirect(&info);
+    for (size_t k = 0; k < w.fields.size(); k++) {
+        if (w.fields[k].kind != SetField::Check) continue;
+        float target = w.fields[k].cur == L"1" ? 1.0f : 0.0f;
+        if (!w.knob.count((int)k)) w.knob[(int)k] = target;
+        step(w.knob[(int)k], target, 0.35f);
+    }
+    if (w.scrollY != w.scrollTarget) {
+        float d = w.scrollTarget - w.scrollY;
+        if (!anim || fabsf(d) < 0.5f) {
+            w.scrollY = w.scrollTarget;
+        } else {
+            w.scrollY += d * 0.25f;
+        }
+        moved = true;
+        Set_PlaceEdit(w);
+    }
+    if (w.pageT < 1) {
+        w.pageT = anim ? std::min(1.0f, w.pageT + 0.07f) : 1.0f;
+        moved = true;
+    }
+    // Sidebar open / collapse, and the dock edges lighting up under the pointer.
+    if (!w.dragRail) {
+        float target = w.railCollapsed ? kSetRailMini : w.railW, d = target - w.railCur;
+        if (d != 0) {
+            w.railCur = (!anim || fabsf(d) < 0.6f) ? target : w.railCur + d * 0.28f;
+            Set_BuildPage(w);
+            Set_PlaceEdit(w);
+            moved = true;
+        }
+    }
+    bool inRail = w.mouseX >= 0 && Set_In(Set_RailDock(w), w.mouseX, w.mouseY);
+    D2D1_RECT_F foot = Set_FooterDock(w);
+    bool inFoot = w.mouseX >= 0 && Set_In(foot, w.mouseX, w.mouseY);
+    step(w.railGlow, inRail ? 1.0f : 0.0f, 0.25f);
+    step(w.footGlow, inFoot ? 1.0f : 0.0f, 0.25f);
+    return moved;
+}
+
+// ---- Keyboard focus ----------------------------------------------------------------
+
+// Focus order: the page's rows, then Reset, Cancel, Save (-1, -2, -3).
+static std::vector<int> Set_FocusOrder(const SetWindow& w) {
+    std::vector<int> order;
+    for (auto& it : w.items)
+        if (it.type == SetItem::Row) order.push_back(it.field);
+    order.push_back(-1);
+    order.push_back(-2);
+    order.push_back(-3);
+    return order;
+}
+
+static void Set_EnsureVisible(SetWindow& w, float top, float bottom) {
+    float view = Set_ViewH(w);
+    float clear = Set_FootClear() - 18;  // Keep focused rows above the floating footer.
+    if (top - 16 < w.scrollTarget) {
+        w.scrollTarget = top - 16;
+    } else if (bottom + 16 + clear > w.scrollTarget + view) {
+        w.scrollTarget = bottom + 16 + clear - view;
+    }
+    w.scrollTarget = std::clamp(w.scrollTarget, 0.0f, std::max(0.0f, w.contentH - view));
+}
+
+static void Set_MoveFocus(SetWindow& w, int dir) {
+    Set_CommitEdit(w, true);
+    Set_ClosePopup(w);
+    std::vector<int> order = Set_FocusOrder(w);
+    int index = -1;
+    for (size_t i = 0; i < order.size(); i++)
+        if (order[i] == w.focus) index = (int)i;
+    index = index < 0 ? (dir > 0 ? 0 : (int)order.size() - 1) : (index + dir + (int)order.size()) % (int)order.size();
+    w.focus = order[index];
+    w.kbd = true;
+    if (w.focus >= 0) {
+        if (const SetItem* it = Set_ItemOfField(w, w.focus)) Set_EnsureVisible(w, it->y, it->y + it->h);
+    }
+    Set_Invalidate(w);
+}
+
+static void Set_Adjust(SetWindow& w, int dir) {
+    if (w.focus < 0) return;
+    SetField& f = w.fields[w.focus];
+    if (f.kind == SetField::Number) {
+        int span = f.max - f.min, step = span <= 100 ? 1 : span <= 3000 ? 10 : 100;
+        f.cur = std::to_wstring(std::clamp(_wtoi(Set_FieldValue(f).c_str()) + dir * step, f.min, f.max));
+    } else if (f.kind == SetField::Choice && !f.options.empty()) {
+        int n = (int)f.options.size(), at = 0;
+        for (int i = 0; i < n; i++)
+            if (f.cur == f.options[i].first) at = i;
+        f.cur = f.options[(at + dir + n) % n].first;
+    } else if (f.kind == SetField::Check) {
+        f.cur = dir > 0 ? L"1" : L"0";
+    }
+    Set_Invalidate(w);
+}
+
+static bool Set_OnKey(SetWindow& w, UINT vk) {
+    if (w.saving) return true;
+    if (w.recording >= 0) {
+        if (Set_IsModifier(vk)) return true;
+        UINT mods = 0;
+        if (GetKeyState(VK_CONTROL) & 0x8000) mods |= MOD_CONTROL;
+        if (GetKeyState(VK_MENU) & 0x8000) mods |= MOD_ALT;
+        if (GetKeyState(VK_SHIFT) & 0x8000) mods |= MOD_SHIFT;
+        if ((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x8000) mods |= MOD_WIN;
+        SetField& f = w.fields[w.recording];
+        if (vk == VK_ESCAPE && !mods) {
+            // Cancel: keep what was there.
+        } else if ((vk == VK_BACK || vk == VK_DELETE) && !mods) {
+            f.cur.clear();
+        } else {
+            f.cur = Set_FormatHotkey(mods, vk);
+        }
+        Set_StopRecording(w);
+        return true;
+    }
+    if (w.openSel >= 0) {
+        const SetField& f = w.fields[w.openSel];
+        int n = (int)f.options.size();
+        if (vk == VK_ESCAPE) Set_ClosePopup(w);
+        else if (vk == VK_UP) w.dropHover = (w.dropHover - 1 + n) % n;
+        else if (vk == VK_DOWN) w.dropHover = (w.dropHover + 1) % n;
+        else if (vk == VK_RETURN || vk == VK_SPACE) Set_Choose(w, w.openSel, w.dropHover);
+        Set_Invalidate(w);
+        return true;
+    }
+    bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0, shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+    if (ctrl && vk == 'B') {  // Same shortcut as T3's sidebar.
+        Set_ToggleRail(w);
+        return true;
+    }
+    float view = Set_ViewH(w), maxScroll = std::max(0.0f, w.contentH - view);
+    switch (vk) {
+        case VK_TAB:
+            if (ctrl) Set_GoPage(w, (w.page + (shift ? kSetPageCount - 1 : 1)) % kSetPageCount);
+            else Set_MoveFocus(w, shift ? -1 : 1);
+            return true;
+        case VK_SPACE:
+        case VK_RETURN:
+            w.kbd = true;
+            if (w.focus >= 0) Set_ActivateField(w, w.focus, nullptr);
+            else if (w.focus <= -1 && w.focus >= -3) Set_FooterAction(w, -1 - w.focus);
+            return true;
+        case VK_LEFT:
+        case VK_RIGHT:
+            w.kbd = true;
+            Set_Adjust(w, vk == VK_RIGHT ? 1 : -1);
+            return true;
+        case VK_UP: w.scrollTarget = std::clamp(w.scrollTarget - 60, 0.0f, maxScroll); break;
+        case VK_DOWN: w.scrollTarget = std::clamp(w.scrollTarget + 60, 0.0f, maxScroll); break;
+        case VK_PRIOR: w.scrollTarget = std::clamp(w.scrollTarget - view * 0.9f, 0.0f, maxScroll); break;
+        case VK_NEXT: w.scrollTarget = std::clamp(w.scrollTarget + view * 0.9f, 0.0f, maxScroll); break;
+        case VK_HOME: w.scrollTarget = 0; break;
+        case VK_END: w.scrollTarget = maxScroll; break;
+        case VK_ESCAPE:
+            if (!w.render) DestroyWindow(w.hwnd);
+            return true;
+        default:
+            if (ctrl && vk >= '1' && vk <= '6') {
+                Set_GoPage(w, (int)(vk - '1'));
+                return true;
+            }
+            return false;
+    }
+    if (!Set_Anim(w)) w.scrollY = w.scrollTarget;
+    Set_PlaceEdit(w);
+    Set_Invalidate(w);
+    return true;
+}
+
+// ---- Window ---------------------------------------------------------------------
+
+static bool Set_EnsureRt(SetWindow& w) {
+    if (w.rt) return true;
+    if (!Set_EnsureFactories()) return false;
+    RECT rc;
+    GetClientRect(w.hwnd, &rc);
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+        D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+        (float)w.dpi, (float)w.dpi);
+    return SUCCEEDED(g_setD2d->CreateHwndRenderTarget(
+        props, D2D1::HwndRenderTargetProperties(w.hwnd, D2D1::SizeU(std::max(1L, rc.right), std::max(1L, rc.bottom))),
+        w.rt.put()));
+}
+
+static void Set_Relayout(SetWindow& w) {
+    RECT rc;
+    GetClientRect(w.hwnd, &rc);
+    w.cw = rc.right * 96.0f / w.dpi;
+    w.ch = std::max(0.0f, rc.bottom * 96.0f / w.dpi - kSetCapH);
+    if (w.rt) w.rt->Resize(D2D1::SizeU(std::max(1L, rc.right), std::max(1L, rc.bottom)));
+    Set_BuildAndClamp(w);
+}
+
+static void Set_RememberRect(SetWindow& w) {
+    if (w.render || IsIconic(w.hwnd) || IsZoomed(w.hwnd)) return;
+    GetWindowRect(w.hwnd, &w.normalRect);
+}
+
+static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    SetWindow* w = g_setWin && g_setWin->hwnd == hwnd ? g_setWin.get() : nullptr;
+    if (!w) return DefWindowProcW(hwnd, msg, wParam, lParam);
+    if (w->nativeButtons || w->nativeTitle) {
+        LRESULT r = 0;
+        if (DwmDefWindowProc(hwnd, msg, wParam, lParam, &r)) return r;  // Hover and clicks on DWM's buttons.
+    }
+    auto dipX = [&](LPARAM l) { return (float)(short)LOWORD(l) * 96.0f / w->dpi; };
+    auto dipY = [&](LPARAM l) { return (float)(short)HIWORD(l) * 96.0f / w->dpi - kSetCapH; };
+    switch (msg) {
+        case WM_APP_SETTINGS_RELOAD: if (!w->saving) Set_LoadFields(*w); return 0;
+        case WM_APP_SETTINGS_ACTIVATE: ShowWindow(hwnd, SW_RESTORE); ForceForeground(hwnd); return 0;
+        case WM_NCCALCSIZE:
+            // No system title bar: keep the side and bottom frames, the client starts at the top edge.
+            if (wParam && !w->render && !w->nativeTitle) {
+                auto* nc = (NCCALCSIZE_PARAMS*)lParam;
+                LONG top = nc->rgrc[0].top;
+                LRESULT r = DefWindowProcW(hwnd, msg, wParam, lParam);
+                nc->rgrc[0].top = top;
+                if (IsZoomed(hwnd))
+                    nc->rgrc[0].top += GetSystemMetricsForDpi(SM_CYSIZEFRAME, w->dpi) +
+                                       GetSystemMetricsForDpi(SM_CXPADDEDBORDER, w->dpi);
+                return r;
+            }
+            break;
+        case WM_NCHITTEST: {
+            if (w->render || w->nativeTitle) break;
+            POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            ScreenToClient(hwnd, &pt);
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            if (pt.x < 0 || pt.y < 0 || pt.x >= rc.right || pt.y >= rc.bottom) break;
+            int frame = GetSystemMetricsForDpi(SM_CYSIZEFRAME, w->dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, w->dpi);
+            if (!IsZoomed(hwnd) && pt.y < frame)
+                return pt.x < frame * 2 ? HTTOPLEFT : pt.x >= rc.right - frame * 2 ? HTTOPRIGHT : HTTOP;
+            float x = pt.x * 96.0f / w->dpi, y = pt.y * 96.0f / w->dpi - kSetCapH;
+            if (y < 0) return Set_CapButtonAt(*w, x, y) >= 0 ? HTCLIENT : HTCAPTION;
+            return HTCLIENT;
+        }
+        case WM_ACTIVATE:
+            w->active = LOWORD(wParam) != WA_INACTIVE;
+            Set_Invalidate(*w);
+            break;
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_PAINT:
+        case WM_PRINTCLIENT: {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            if (!w->render && Set_EnsureRt(*w)) Set_Draw(*w, w->rt.get());
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_CTLCOLOREDIT: {
+            HDC dc = (HDC)wParam;
+            SetTextColor(dc, RefFromRgb(mocha::text));
+            SetBkColor(dc, RefFromRgb(mocha::crust));
+            return (LRESULT)w->editBrush;
+        }
+        case WM_SIZE:
+            if (wParam == SIZE_MINIMIZED && w->footer) ShowWindow(w->footer, SW_HIDE);
+            if (wParam != SIZE_MINIMIZED && !w->render) {
+                Set_Relayout(*w);
+                Set_RememberRect(*w);
+                RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);  // No stale title bar after a snap.
+            }
+            return 0;
+        case WM_MOVE:
+            Set_RememberRect(*w);
+            Set_UpdateFooter(*w);
+            return 0;
+        case WM_GETMINMAXINFO: {
+            auto* mm = (MINMAXINFO*)lParam;
+            RECT r{0, 0, MulDiv(760, w->dpi, 96), MulDiv(520, w->dpi, 96)};
+            AdjustWindowRectExForDpi(&r, GetWindowLongW(hwnd, GWL_STYLE), FALSE, GetWindowLongW(hwnd, GWL_EXSTYLE),
+                                     w->dpi);
+            mm->ptMinTrackSize = {r.right - r.left, r.bottom - r.top};
+            return 0;
+        }
+        case WM_DPICHANGED: {
+            if (g_setForceDpi) return 0;
+            Set_CommitEdit(*w, true);
+            w->dpi = HIWORD(wParam);
+            if (w->rt) w->rt->SetDpi((float)w->dpi, (float)w->dpi);
+            auto* r = (RECT*)lParam;
+            SetWindowPos(hwnd, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top,
+                         SWP_NOZORDER | SWP_NOACTIVATE);
+            Set_Relayout(*w);
+            return 0;
+        }
+        case WM_TIMER:
+            if (wParam == kSetTimerId) {
+                if (Set_Tick(*w)) Set_Invalidate(*w);
+                return 0;
+            }
+            break;
+        case WM_MOUSEMOVE: {
+            if (w->saving) return 0;
+#ifdef LP_TEST_HOVER  // Only the test script's moves (marked 0x8000), never a real cursor passing over.
+            if (!(wParam & 0x8000)) return 0;
+#endif
+            float x = dipX(lParam), y = dipY(lParam);
+#ifndef LP_TEST_HOVER  // The test build feeds pointer moves by message; a leave would undo them.
+            if (!w->tracking && !w->render && !w->footerInput) {
+#else
+            if (false) {
+#endif
+                TRACKMOUSEEVENT t{sizeof(t), TME_LEAVE, hwnd, 0};
+                TrackMouseEvent(&t);
+                w->tracking = true;
+            }
+            w->mouseX = x;
+            w->mouseY = y;
+            if (w->dragRail) {
+                Set_RailDragTo(*w, x - w->dragOff);
+                return 0;
+            }
+            if (w->dragSlider >= 0) {
+                Set_SliderTo(*w, w->dragSlider, x);
+                return 0;
+            }
+            if (w->dragScroll) {
+                D2D1_RECT_F th = Set_ScrollThumb(*w);
+                float view = Set_ViewH(*w), thh = th.bottom - th.top, range = view - thh - 8;
+                float t = range > 0 ? std::clamp((y - w->dragOff - 4) / range, 0.0f, 1.0f) : 0;
+                w->scrollTarget = w->scrollY = t * std::max(0.0f, w->contentH - view);
+                Set_PlaceEdit(*w);
+                Set_Invalidate(*w);
+                return 0;
+            }
+            SetHit h = Set_Hit(*w, x, y);
+            int dh = h.kind == SetHit::Drop ? h.b : -1;
+            if (h.kind != w->hover.kind || h.id != w->hover.id || h.a != w->hover.a || h.b != w->hover.b ||
+                dh != w->dropHover) {
+                w->hover = h;
+                if (w->openSel >= 0) w->dropHover = dh;
+                Set_Invalidate(*w);
+            }
+            return 0;
+        }
+        case WM_MOUSELEAVE: {
+            POINT pointer; GetCursorPos(&pointer);
+            if (w->footer && WindowFromPoint(pointer) == w->footer) return 0;
+            w->tracking = false;
+            w->hover = SetHit();
+            if (!w->dragRail) w->mouseX = w->mouseY = -1;
+            Set_Invalidate(*w);
+            return 0;
+        }
+        case WM_SETCURSOR:
+            if (LOWORD(lParam) == HTCLIENT) {
+                PCWSTR cur = w->dragRail || w->hover.kind == SetHit::RailEdge ? IDC_SIZEWE
+                             : Set_Clickable(w->hover)                         ? IDC_HAND
+                                                                               : IDC_ARROW;
+                SetCursor(LoadCursorW(nullptr, cur));
+                return TRUE;
+            }
+            break;
+        case WM_LBUTTONDOWN: {
+            if (w->saving) return 0;
+            if (!w->render) SetFocus(hwnd);
+            w->kbd = false;
+            float x = dipX(lParam), y = dipY(lParam);
+            SetHit h = Set_Hit(*w, x, y);
+            if (w->openSel >= 0) {  // The popup eats the click, whatever it hits.
+                if (h.kind == SetHit::Drop) Set_Choose(*w, h.a, h.b);
+                else Set_ClosePopup(*w);
+                return 0;
+            }
+            Set_CommitEdit(*w, true);
+            if (w->recording >= 0 && !(h.kind == SetHit::Control && h.a == w->recording)) Set_StopRecording(*w);
+            w->hover = h;
+            switch (h.kind) {
+                case SetHit::Rail:
+                    Set_GoPage(*w, h.a);
+                    break;
+                case SetHit::RailToggle:
+                    Set_ToggleRail(*w);
+                    break;
+                case SetHit::RailEdge:
+                    w->dragRail = true;
+                    w->dragOff = x - Set_RailDock(*w).right;
+                    SetCapture(hwnd);
+                    Set_Invalidate(*w);
+                    break;
+                case SetHit::Footer:
+                    Set_FooterAction(*w, h.a);
+                    return 0;  // The window may be gone.
+                case SetHit::Control:
+                case SetHit::Clear:
+                case SetHit::Chip:
+                    w->focus = h.a;
+                    Set_ActivateField(*w, h.a, &h);
+                    break;
+                case SetHit::Slider:
+                    w->focus = h.a;
+                    w->dragSlider = h.a;
+                    SetCapture(hwnd);
+                    Set_SliderTo(*w, h.a, x);
+                    break;
+                case SetHit::Scroll: {
+                    w->dragScroll = true;
+                    w->dragOff = y - Set_ScrollThumb(*w).top;
+                    SetCapture(hwnd);
+                    Set_Invalidate(*w);
+                    break;
+                }
+                case SetHit::Link:
+                    Set_OpenLink(w->items[h.a].url.c_str());
+                    break;
+                case SetHit::Caption:
+                    w->capDown = h.a + 1;
+                    SetCapture(hwnd);
+                    Set_Invalidate(*w);
+                    break;
+                default:
+                    break;
+            }
+            return 0;
+        }
+        case WM_LBUTTONUP:
+        case WM_CAPTURECHANGED:
+            if (w->capDown) {
+                int b = w->capDown - 1;
+                w->capDown = 0;
+                if (msg == WM_LBUTTONUP) {
+                    if (GetCapture() == hwnd) ReleaseCapture();
+                    SetHit h = Set_Hit(*w, dipX(lParam), dipY(lParam));
+                    if (h.kind == SetHit::Caption && h.a == b) {
+                        if (b == 0) ShowWindow(hwnd, SW_MINIMIZE);
+                        else if (b == 1) ShowWindow(hwnd, IsZoomed(hwnd) ? SW_RESTORE : SW_MAXIMIZE);
+                        else PostMessageW(hwnd, WM_CLOSE, 0, 0);
+                    }
+                }
+                Set_Invalidate(*w);
+                return 0;
+            }
+            if (w->dragSlider >= 0 || w->dragScroll || w->dragRail) {
+                w->dragSlider = -1;
+                w->dragScroll = false;
+                w->dragRail = false;
+                if (msg == WM_LBUTTONUP && GetCapture() == hwnd) ReleaseCapture();
+                Set_Invalidate(*w);
+            }
+            return 0;
+        case WM_MOUSEWHEEL: {
+            Set_CommitEdit(*w, true);
+            Set_ClosePopup(*w);
+            float delta = (float)GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
+            float maxScroll = std::max(0.0f, w->contentH - Set_ViewH(*w));
+            w->scrollTarget = std::clamp(w->scrollTarget - delta * 72, 0.0f, maxScroll);
+            if (!Set_Anim(*w)) w->scrollY = w->scrollTarget;
+            Set_Invalidate(*w);
+            return 0;
+        }
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+            if (Set_OnKey(*w, (UINT)wParam)) return 0;
+            // Without a system menu (glass title bar) Windows no longer turns Alt+F4 into a close.
+            if (msg == WM_SYSKEYDOWN && wParam == VK_F4 && w->recording < 0) {
+                PostMessageW(hwnd, WM_CLOSE, 0, 0);
+                return 0;
+            }
+            break;
+        case WM_CHAR:
+        case WM_SYSCHAR:
+            if (w->recording >= 0) return 0;
+            break;
+        case WM_KILLFOCUS:
+            if (w->recording >= 0 && (HWND)wParam != w->edit) Set_StopRecording(*w);
+            break;
+        case WM_CLOSE:
+            DestroyWindow(hwnd);
+            return 0;
+        case WM_DESTROY: {
+            if (w->footer) { DestroyWindow(w->footer); w->footer=nullptr; w->footerRt.reset(); }
+            Set_StopRecording(*w);
+            if (w->timer) KillTimer(hwnd, kSetTimerId);
+            if (!w->render && w->normalRect.right > w->normalRect.left) {
+                const RECT& r = w->normalRect;
+                SetState(StateKey(L"Settings", L"X").c_str(), r.left);
+                SetState(StateKey(L"Settings", L"Y").c_str(), r.top);
+                SetState(StateKey(L"Settings", L"CX").c_str(), r.right - r.left);
+                SetState(StateKey(L"Settings", L"CY").c_str(), r.bottom - r.top);
+            }
+            if (!w->render) {
+                SetState(StateKey(L"Settings", L"RailW").c_str(), (int)w->railW);
+                SetState(StateKey(L"Settings", L"RailCollapsed").c_str(), w->railCollapsed ? 1 : 0);
+            }
+            return 0;
+        }
+        case WM_NCDESTROY: {
+            if (w->editFont) DeleteObject(w->editFont);
+            if (w->editBrush) DeleteObject(w->editBrush);
+            if (w->iconSmall) DestroyIcon(w->iconSmall);
+            if (w->iconBig) DestroyIcon(w->iconBig);
+            if (w->owner) DestroyWindow(w->owner);
+            w->destroyed = true;
+            w->hwnd = nullptr;
+            w->edit = nullptr;
+            w->rt.reset();
+            g_settingsWnd = nullptr; PostQuitMessage(0);
+            g_setWin.reset();
+            Set_ReleaseFactories();
+            return DefWindowProcW(hwnd, msg, wParam, lParam);
+        }
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+// Blue to mauve rounded square with a clipboard glyph, px pixels square.
+static HICON Set_MakeIcon(const std::wstring& iconFamily, int px) {
+    if (px <= 0 || !Set_EnsureFactories()) return nullptr;
+    SetCom<IWICBitmap> bmp;
+    SetCom<ID2D1RenderTarget> rt;
+    if (FAILED(g_setWic->CreateBitmap(px, px, GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad, bmp.put())))
+        return nullptr;
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+        D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED), 96, 96);
+    if (FAILED(g_setD2d->CreateWicBitmapRenderTarget(bmp.get(), props, rt.put()))) return nullptr;
+    float s = (float)px;
+    SetWindow dummy;
+    SetPaint p(dummy, rt.get());
+    auto glyph = Set_Fmt(iconFamily, s * 0.6f, 400, false, DWRITE_TEXT_ALIGNMENT_CENTER, true);
+    rt->BeginDraw();
+    rt->Clear(D2D1::ColorF(0, 0));
+    Set_DrawMark(p, glyph.get(), {0, 0, s, s}, 1);
+    if (FAILED(rt->EndDraw())) return nullptr;
+    std::vector<BYTE> pix((size_t)px * px * 4);
+    if (FAILED(bmp->CopyPixels(nullptr, px * 4, (UINT)pix.size(), pix.data()))) return nullptr;
+    for (size_t i = 0; i < pix.size(); i += 4) {  // Icons want straight alpha.
+        BYTE a = pix[i + 3];
+        if (a && a < 255)
+            for (int c = 0; c < 3; c++) pix[i + c] = (BYTE)std::min(255, pix[i + c] * 255 / a);
+    }
+    BITMAPV5HEADER bi{};
+    bi.bV5Size = sizeof(bi);
+    bi.bV5Width = px;
+    bi.bV5Height = -px;
+    bi.bV5Planes = 1;
+    bi.bV5BitCount = 32;
+    bi.bV5Compression = BI_BITFIELDS;
+    bi.bV5RedMask = 0x00FF0000;
+    bi.bV5GreenMask = 0x0000FF00;
+    bi.bV5BlueMask = 0x000000FF;
+    bi.bV5AlphaMask = 0xFF000000;
+    void* bits = nullptr;
+    HDC dc = GetDC(nullptr);
+    HBITMAP color = CreateDIBSection(dc, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    ReleaseDC(nullptr, dc);
+    if (!color || !bits) return nullptr;
+    memcpy(bits, pix.data(), pix.size());
+    std::vector<BYTE> maskBits((size_t)((px + 15) / 16) * 2 * px, 0);
+    HBITMAP mask = CreateBitmap(px, px, 1, 1, maskBits.data());
+    ICONINFO ii{TRUE, 0, 0, mask, color};
+    HICON icon = CreateIconIndirect(&ii);
     DeleteObject(mask);
     DeleteObject(color);
     return icon;
 }
 
-void LayoutSettingsWindow(SettingsWindow& w, UINT dpi) {
-    auto px = [dpi](int v) { return MulDiv(v, dpi, 96); };
-    if (w.font) {
-        DeleteObject(w.font);
-        DeleteObject(w.bold);
-    }
-    LOGFONTW lf{};
-    lf.lfHeight = -MulDiv(9, dpi, 72);
-    // Grayscale, since ClearType's colored edges show on the blurred sheet.
-    lf.lfQuality = ANTIALIASED_QUALITY;
-    wcscpy_s(lf.lfFaceName, L"Segoe UI");
-    w.font = CreateFontIndirectW(&lf);
-    lf.lfHeight = -MulDiv(11, dpi, 72);
-    lf.lfWeight = FW_SEMIBOLD;
-    w.bold = CreateFontIndirectW(&lf);
-
-    for (HICON icon : {w.smallIcon, w.bigIcon}) {
-        if (icon) {
-            DestroyIcon(icon);
-        }
-    }
-    w.smallIcon = MakeGridIcon(GetSystemMetricsForDpi(SM_CXSMICON, dpi));
-    w.bigIcon = MakeGridIcon(GetSystemMetricsForDpi(SM_CXICON, dpi));
-    SendMessageW(w.hwnd, WM_SETICON, ICON_SMALL, (LPARAM)w.smallIcon);
-    SendMessageW(w.hwnd, WM_SETICON, ICON_BIG, (LPARAM)w.bigIcon);
-
-    const int margin = px(20), labelWidth = px(190), controlWidth = px(290);
-    const int controlX = margin + labelWidth + px(10);
-    int y = px(8);
-    int column = 0;  // Of the next SmallCheck.
-    for (auto& f : w.fields) {
-        if (f.kind != SettingField::SmallCheck && column > 0) {
-            column = 0;  // Finish a partly filled row.
-            y += px(34);
-        }
-        if (f.kind == SettingField::SmallCheck) {
-            int columnWidth = (labelWidth + px(10) + controlWidth) / 3;
-            int x = margin + column * columnWidth;
-            SetWindowPos(f.control, nullptr, x, y, px(24), px(26),
-                         SWP_NOZORDER);
-            SetWindowPos(f.labelWnd, nullptr, x + px(28), y + px(4),
-                         columnWidth - px(32), px(20), SWP_NOZORDER);
-            SendMessageW(f.labelWnd, WM_SETFONT, (WPARAM)w.font, TRUE);
-            if (++column == 3) {
-                column = 0;
-                y += px(34);
-            }
-            continue;
-        }
-        if (f.kind == SettingField::Header) {
-            y += px(12);
-            SetWindowPos(f.labelWnd, nullptr, margin, y,
-                         labelWidth + controlWidth, px(24), SWP_NOZORDER);
-            SendMessageW(f.labelWnd, WM_SETFONT, (WPARAM)w.bold, TRUE);
-            y += px(30);
-            continue;
-        }
-        SetWindowPos(f.labelWnd, nullptr, margin, y + px(4), labelWidth,
-                     px(20), SWP_NOZORDER);
-        SendMessageW(f.labelWnd, WM_SETFONT, (WPARAM)w.font, TRUE);
-        int width = f.kind == SettingField::Number  ? px(80)
-                    : f.kind == SettingField::Color ? px(110)
-                    : f.kind == SettingField::Check ? px(24)
-                                                    : controlWidth;
-        int height = f.kind == SettingField::Choice ? px(200) : px(26);
-        SetWindowPos(f.control, nullptr, controlX, y, width, height,
-                     SWP_NOZORDER);
-        SendMessageW(f.control, WM_SETFONT, (WPARAM)w.font, TRUE);
-        if (f.swatch) {
-            SetWindowPos(f.swatch, nullptr, controlX + width + px(8), y,
-                         px(40), px(26), SWP_NOZORDER);
-        }
-        y += px(34);
-    }
-    y += px(12);
-    const int buttonWidth = px(90), buttonHeight = px(30);
-    const int clientWidth = controlX + controlWidth + margin;
-    SetWindowPos(w.close, nullptr, clientWidth - margin - buttonWidth, y,
-                 buttonWidth, buttonHeight, SWP_NOZORDER);
-    SetWindowPos(w.save, nullptr,
-                 clientWidth - margin - buttonWidth * 2 - px(8), y, buttonWidth,
-                 buttonHeight, SWP_NOZORDER);
-    SetWindowPos(w.status, nullptr, margin, y + px(6),
-                 clientWidth - margin * 3 - buttonWidth * 2, px(20),
-                 SWP_NOZORDER);
-    for (HWND h : {w.status, w.save, w.close}) {
-        SendMessageW(h, WM_SETFONT, (WPARAM)w.font, TRUE);
-    }
-
-    RECT r{0, 0, clientWidth, y + buttonHeight + margin};
-    AdjustWindowRectExForDpi(&r, GetWindowLongW(w.hwnd, GWL_STYLE), FALSE,
-                             GetWindowLongW(w.hwnd, GWL_EXSTYLE), dpi);
-    SetWindowPos(w.hwnd, nullptr, 0, 0, r.right - r.left, r.bottom - r.top,
-                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-}
-
-void ThemeSettingsWindow(SettingsWindow& w) {
-    w.dark = IsDarkMode();
-    if (w.background) {
-        DeleteObject(w.background);
-        DeleteObject(w.input);
-    }
-    // In dark mode the title bar and body are one acrylic sheet, tinted with
-    // the grid's background color: an empty blur region makes DWM use the
-    // window's alpha, and black GDI paint has alpha 0, so the body shows the
-    // blur.
-    w.background = CreateSolidBrush(w.dark ? RGB(0, 0, 0)
-                                           : GetSysColor(COLOR_BTNFACE));
-    w.input =
-        CreateSolidBrush(w.dark ? RGB(43, 43, 43) : GetSysColor(COLOR_WINDOW));
-    BOOL dark = w.dark;
-    DwmSetWindowAttribute(w.hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark,
-                          sizeof(dark));
-    DWM_BLURBEHIND blur{};
-    blur.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
-    blur.fEnable = w.dark;
-    blur.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
-    DwmEnableBlurBehindWindow(w.hwnd, &blur);
-    DeleteObject(blur.hRgnBlur);
-    DWORD noBackdrop = 1;  // DWMSBT_NONE, so the accent below is what shows.
-    DwmSetWindowAttribute(w.hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */,
-                          &noBackdrop, sizeof(noBackdrop));
-    COLORREF tint = ParseColorRef(GetStringSetting(L"tintColor"), RGB(30, 30, 46));
-    SetAccent(w.hwnd, w.dark ? ACCENT_ENABLE_ACRYLICBLURBEHIND : ACCENT_DISABLED,
-              w.dark ? 0xAA000000 | tint : 0);
-    EnumChildWindows(
-        w.hwnd,
-        [](HWND child, LPARAM param) -> BOOL {
-            WCHAR className[32] = {};
-            GetClassNameW(child, className, ARRAYSIZE(className));
-            PCWSTR theme = param ? L"DarkMode_Explorer" : L"Explorer";
-            if (param && _wcsicmp(className, L"ComboBox") == 0) {
-                theme = L"DarkMode_CFD";
-            }
-            SetWindowTheme(child, theme, nullptr);
-            return TRUE;
-        },
-        w.dark);
-    InvalidateRect(w.hwnd, nullptr, TRUE);
-}
-
-LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam,
-                                 LPARAM lParam) {
-    auto* w = (SettingsWindow*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
-    if (msg == WM_NCCREATE) {
-        w = (SettingsWindow*)((CREATESTRUCTW*)lParam)->lpCreateParams;
-        w->hwnd = hwnd;
-        SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)w);
-    }
-    if (!w) {
-        return DefWindowProcW(hwnd, msg, wParam, lParam);
-    }
-    switch (msg) {
-        case WM_ERASEBKGND: {
-            RECT r;
-            GetClientRect(hwnd, &r);
-            FillRect((HDC)wParam, &r, w->background);
-            return 1;
-        }
-        case WM_CTLCOLORSTATIC:
-        case WM_CTLCOLORBTN:
-        case WM_CTLCOLOREDIT:
-        case WM_CTLCOLORLISTBOX: {
-            bool field = msg == WM_CTLCOLOREDIT || msg == WM_CTLCOLORLISTBOX;
-            HDC dc = (HDC)wParam;
-            if ((HWND)lParam == w->status) {
-                SetTextColor(dc, w->dark ? RGB(170, 170, 170)
-                                         : GetSysColor(COLOR_GRAYTEXT));
-            } else {
-                SetTextColor(dc, w->dark ? RGB(255, 255, 255)
-                                         : GetSysColor(COLOR_WINDOWTEXT));
-            }
-            SetBkColor(dc, field ? (w->dark ? RGB(43, 43, 43)
-                                            : GetSysColor(COLOR_WINDOW))
-                                 : (w->dark ? RGB(0, 0, 0)
-                                            : GetSysColor(COLOR_BTNFACE)));
-            if (!field) {
-                SetBkMode(dc, TRANSPARENT);
-            }
-            return (LRESULT)(field ? w->input : w->background);
-        }
-        case WM_DRAWITEM: {
-            auto* item = (DRAWITEMSTRUCT*)lParam;
-            for (auto& f : w->fields) {
-                if (f.swatch == item->hwndItem) {
-                    HBRUSH brush = CreateSolidBrush(
-                        ParseColorRef(WindowString(f.control), RGB(0, 0, 0)));
-                    FillRect(item->hDC, &item->rcItem, brush);
-                    DeleteObject(brush);
-                    HBRUSH frame = CreateSolidBrush(RGB(128, 128, 128));
-                    FrameRect(item->hDC, &item->rcItem, frame);
-                    DeleteObject(frame);
-                    return TRUE;
-                }
-            }
-            break;
-        }
-        case WM_COMMAND: {
-            int id = LOWORD(wParam);
-            if (id == kSaveButton) {
-                if (!w->saving) {
-                    SaveSettingFields(*w);
-                }
-                return 0;
-            }
-            if (id == kCloseButton) {
-                DestroyWindow(hwnd);
-                return 0;
-            }
-            for (auto& f : w->fields) {
-                if (f.kind == SettingField::SmallCheck &&
-                    (HWND)lParam == f.labelWnd &&
-                    HIWORD(wParam) == STN_CLICKED) {
-                    bool on = SendMessageW(f.control, BM_GETCHECK, 0, 0) ==
-                              BST_CHECKED;
-                    SendMessageW(f.control, BM_SETCHECK,
-                                 on ? BST_UNCHECKED : BST_CHECKED, 0);
-                    return 0;
-                }
-                if (f.kind != SettingField::Color) {
-                    continue;
-                }
-                if ((HWND)lParam == f.control && HIWORD(wParam) == EN_CHANGE) {
-                    InvalidateRect(f.swatch, nullptr, TRUE);
-                } else if ((HWND)lParam == f.swatch) {
-                    CHOOSECOLORW cc{sizeof(cc)};
-                    cc.hwndOwner = hwnd;
-                    cc.rgbResult =
-                        ParseColorRef(WindowString(f.control), RGB(0, 0, 0));
-                    cc.lpCustColors = w->customColors;
-                    cc.Flags = CC_RGBINIT | CC_FULLOPEN;
-                    if (ChooseColorW(&cc)) {
-                        WCHAR text[8];
-                        swprintf_s(text, L"#%02X%02X%02X",
-                                   GetRValue(cc.rgbResult),
-                                   GetGValue(cc.rgbResult),
-                                   GetBValue(cc.rgbResult));
-                        SetWindowTextW(f.control, text);
-                    }
-                }
-            }
-            break;
-        }
-        case WM_APP_SETTINGS_RELOAD:
-            if (!w->saving) {
-                LoadSettingFields(*w);
-            }
-            return 0;
-        case WM_APP_SETTINGS_ACTIVATE:
-            if (IsIconic(hwnd)) {
-                ShowWindow(hwnd, SW_RESTORE);
-            }
-            ForceForeground(hwnd);
-            return 0;
-        case WM_SETTINGCHANGE:
-            if (lParam && wcscmp((PCWSTR)lParam, L"ImmersiveColorSet") == 0) {
-                ThemeSettingsWindow(*w);
-            }
-            break;
-        case WM_DPICHANGED: {
-            auto* r = (RECT*)lParam;
-            SetWindowPos(hwnd, nullptr, r->left, r->top, r->right - r->left,
-                         r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
-            LayoutSettingsWindow(*w, HIWORD(wParam));
-            return 0;
-        }
-        case WM_CLOSE:
-            DestroyWindow(hwnd);
-            return 0;
-        case WM_DESTROY:
-            g_settingsWnd = nullptr;
-            PostQuitMessage(0);
-            return 0;
-    }
-    return DefWindowProcW(hwnd, msg, wParam, lParam);
-}
-
-DWORD WINAPI SettingsThread(void*) {
-    SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    HINSTANCE instance = GetModuleHandleW(nullptr);
+// The class belongs to this DLL and goes away with the settings thread. Registered under
+// Explorer's handle it outlived a mod update, and the next window ran the unloaded code.
+static void Set_RegisterClass() {
+    UnregisterClassW(kSettingsClass, GetModuleHandleW(nullptr));  // left by builds before 2.3.0
     WNDCLASSEXW wc{sizeof(wc)};
-    wc.lpfnWndProc = SettingsWndProc;
-    wc.hInstance = instance;
+    wc.lpfnWndProc = Set_WndProc;
+    wc.hInstance = (HINSTANCE)&__ImageBase;
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wc.lpszClassName = kSettingsClass;
     RegisterClassExW(&wc);
+}
 
-    SettingsWindow w;
-    HWND hwnd = CreateWindowExW(
-        0, kSettingsClass, L"Seamless Launchpad settings",
-        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, CW_USEDEFAULT,
-        CW_USEDEFAULT, 100, 100, nullptr, nullptr, instance, &w);
+// Builds the window, hidden. render: an off-screen copy that is never shown (tests and PNG output).
+static bool Set_Create(bool render) {
+    if (!Set_EnsureFactories()) return false;
+    Set_RegisterClass();
+    auto w = std::make_shared<SetWindow>();
+    w->render = render;
+    w->editBrush = CreateSolidBrush(RefFromRgb(mocha::crust));
+    g_setWin = w;
+    if (render) {
+        // An owned window gets no taskbar button.
+        w->owner = CreateWindowExW(WS_EX_TOOLWINDOW, L"STATIC", L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr,
+                                   GetModuleHandleW(nullptr), nullptr);
+    }
+    const int offX = GetSystemMetrics(SM_XVIRTUALSCREEN) - 6000, offY = GetSystemMetrics(SM_YVIRTUALSCREEN);
+    w->nativeTitle = !render && (Wh_GetIntSetting(L"nativeSettingsTitleBar") != 0 ||
+        GetStringSetting(L"settingsTitleButtons") != L"builtin");
+    w->nativeButtons = !render && !w->nativeTitle && GetStringSetting(L"settingsTitleButtons") != L"builtin";
+    w->glass = !render && Wh_GetIntSetting(L"settingsGlass") != 0;
+    kSetCapH = w->nativeTitle ? 0.0f : 40.0f;
+    const DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
+    HWND hwnd = CreateWindowExW(0, kSettingsClass, L"Seamless Launchpad settings", style,
+                                render ? offX : CW_USEDEFAULT, render ? offY : CW_USEDEFAULT, 800, 600, w->owner,
+                                nullptr, (HINSTANCE)&__ImageBase, nullptr);
     if (!hwnd) {
-        UnregisterClassW(kSettingsClass, instance);
-        return 0;
+        g_setWin.reset();
+        return false;
     }
-    auto child = [&](PCWSTR cls, PCWSTR text, DWORD style, int id,
-                     DWORD exStyle = 0) {
-        return CreateWindowExW(exStyle, cls, text, WS_CHILD | WS_VISIBLE | style,
-                               0, 0, 0, 0, hwnd, (HMENU)(INT_PTR)id, instance,
-                               nullptr);
-    };
-    int id = kFirstControl;
-    for (auto& f : w.fields) {
-        // A SmallCheck's name toggles its box when clicked, like a
-        // checkbox's own text.
-        f.labelWnd = child(L"STATIC", f.label,
-                           SS_LEFT | SS_NOPREFIX |
-                               (f.kind == SettingField::SmallCheck ? SS_NOTIFY
-                                                                   : 0),
-                           0);
-        switch (f.kind) {
-            case SettingField::Header:
-                continue;
-            case SettingField::Choice:
-                f.control = child(L"COMBOBOX", L"",
-                                  CBS_DROPDOWNLIST | WS_TABSTOP | WS_VSCROLL,
-                                  id++);
-                for (auto& option : f.options) {
-                    SendMessageW(f.control, CB_ADDSTRING, 0,
-                                 (LPARAM)option.second);
-                }
-                break;
-            case SettingField::Check:
-            case SettingField::SmallCheck:
-                f.control = child(L"BUTTON", L"", BS_AUTOCHECKBOX | WS_TABSTOP,
-                                  id++);
-                break;
-            case SettingField::Number:
-                f.control =
-                    child(L"EDIT", L"", ES_NUMBER | ES_AUTOHSCROLL | WS_TABSTOP,
-                          id++, WS_EX_CLIENTEDGE);
-                break;
-            default:
-                f.control = child(L"EDIT", L"", ES_AUTOHSCROLL | WS_TABSTOP,
-                                  id++, WS_EX_CLIENTEDGE);
-        }
-        if (f.kind == SettingField::Color) {
-            f.swatch = child(L"BUTTON", L"", BS_OWNERDRAW | WS_TABSTOP, id++);
-        }
+    w->hwnd = hwnd;
+    w->dpi = g_setForceDpi ? g_setForceDpi : GetDpiForWindow(hwnd);
+    ApplyDarkWindow(hwnd);
+    COLORREF caption = RefFromRgb(mocha::crust), captionText = RefFromRgb(mocha::text);
+    DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &caption, sizeof(caption));
+    DwmSetWindowAttribute(hwnd, 36 /* DWMWA_TEXT_COLOR */, &captionText, sizeof(captionText));
+    Set_MakeFormats(*w);
+    Set_LoadFields(*w);
+    if (!render) {
+        w->railW = std::clamp((float)GetState(StateKey(L"Settings", L"RailW").c_str(), (int)kSetRailDef), kSetRailMin, kSetRailMax);
+        w->railCollapsed = GetState(StateKey(L"Settings", L"RailCollapsed").c_str(), 0) != 0;
+        w->railCur = w->railCollapsed ? kSetRailMini : w->railW;
     }
-    w.status = child(L"STATIC", L"", SS_LEFT | SS_NOPREFIX, 0);
-    w.save =
-        child(L"BUTTON", L"Save", BS_DEFPUSHBUTTON | WS_TABSTOP, kSaveButton);
-    w.close =
-        child(L"BUTTON", L"Close", BS_PUSHBUTTON | WS_TABSTOP, kCloseButton);
+    if (!render) {
+        w->iconSmall = Set_MakeIcon(w->iconFamily, GetSystemMetricsForDpi(SM_CXSMICON, w->dpi));
+        w->iconBig = Set_MakeIcon(w->iconFamily, GetSystemMetricsForDpi(SM_CXICON, w->dpi));
+        if (w->iconSmall) SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)w->iconSmall);
+        if (w->iconBig) SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)w->iconBig);
+        if (w->glass) {
+            // Windows acrylic as one sheet over the whole window, the way T3 (Electron
+            // backgroundMaterial "acrylic") does it: the system backdrop with the frame extended
+            // into the full client area, and no caption color, so the title bar and the page are
+            // the same material and turn solid together when the window loses focus.
+            int backdrop = 3;  // DWMSBT_TRANSIENTWINDOW
+            DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+            MARGINS margins{-1, -1, -1, -1};
+            DwmExtendFrameIntoClientArea(hwnd, &margins);
+            COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
+            DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+        } else if (w->nativeButtons) {
+            // Solid window: DWM draws its buttons only where the frame reaches, so extend it
+            // over the title bar strip.
+            MARGINS margins{0, 0, MulDiv((int)kSetCapH, w->dpi, 96), 0};
+            DwmExtendFrameIntoClientArea(hwnd, &margins);
+        }
+        // With the frame extended, DWM draws its own minimize, maximize and close buttons in the
+        // corner. "Windows buttons" keeps them (Set_WndProc passes their hover and clicks to
+        // DwmDefWindowProc); "Built-in buttons" drops the system menu so DWM draws none and the
+        // window draws its own. Minimize, maximize and close still work from the taskbar.
+        if (!w->nativeTitle && !w->nativeButtons)
+            SetWindowLongPtrW(hwnd, GWL_STYLE, GetWindowLongPtrW(hwnd, GWL_STYLE) & ~WS_SYSMENU);
+        // The first WM_NCCALCSIZE ran before w->hwnd was set; drop the system title bar now.
+        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
 
-    // Centered on the monitor the grid was on.
+    auto outer = [&](float cwDip, float chDip, SIZE& size) {
+        RECT r{0, 0, MulDiv((int)cwDip, w->dpi, 96), MulDiv((int)chDip, w->dpi, 96)};
+        AdjustWindowRectExForDpi(&r, style, FALSE, 0, w->dpi);
+        size = {r.right - r.left, r.bottom - r.top};
+    };
+    SIZE size;
+    if (render) {
+        w->cw = 980;
+        w->ch = 700;
+        outer(w->cw, w->ch, size);
+        SetWindowPos(hwnd, nullptr, offX, offY, size.cx, size.cy, SWP_NOZORDER | SWP_NOACTIVATE);
+        Set_BuildPage(*w);
+        return true;
+    }
+    outer(980, 720, size);
     POINT cursor;
     GetCursorPos(&cursor);
     MONITORINFO mi{sizeof(mi)};
     GetMonitorInfoW(MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST), &mi);
-    SetWindowPos(hwnd, nullptr, mi.rcWork.left, mi.rcWork.top, 0, 0,
-                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-    LayoutSettingsWindow(w, GetDpiForWindow(hwnd));
-    RECT r;
-    GetWindowRect(hwnd, &r);
-    SetWindowPos(hwnd, nullptr,
-                 (mi.rcWork.left + mi.rcWork.right - (r.right - r.left)) / 2,
-                 (mi.rcWork.top + mi.rcWork.bottom - (r.bottom - r.top)) / 2, 0,
-                 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-    ThemeSettingsWindow(w);
-    LoadSettingFields(w);
-    g_settingsWnd = hwnd;
-    if (g_settingsStop) {
-        DestroyWindow(hwnd);
-    } else {
-        ShowWindow(hwnd, SW_SHOW);
-        ForceForeground(hwnd);
+    const RECT& work = mi.rcWork;
+    int width = std::min((int)size.cx, (int)(work.right - work.left) * 9 / 10);
+    int height = std::min((int)size.cy, (int)(work.bottom - work.top) * 9 / 10);
+    RECT r{(work.left + work.right - width) / 2, (work.top + work.bottom - height) / 2, 0, 0};
+    r.right = r.left + width;
+    r.bottom = r.top + height;
+    int cx = GetState(StateKey(L"Settings", L"CX").c_str(), 0);
+    int cy = GetState(StateKey(L"Settings", L"CY").c_str(), 0);
+    if (cx > 0 && cy > 0) {
+        RECT saved{GetState(StateKey(L"Settings", L"X").c_str(), 0), GetState(StateKey(L"Settings", L"Y").c_str(), 0),
+                   0, 0};
+        saved.right = saved.left + cx;
+        saved.bottom = saved.top + cy;
+        if (MonitorFromRect(&saved, MONITOR_DEFAULTTONULL)) r = saved;
     }
-
-    MSG msg;
-    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
-        if (!IsDialogMessageW(hwnd, &msg)) {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    }
-    DeleteObject(w.font);
-    DeleteObject(w.bold);
-    DestroyIcon(w.smallIcon);
-    DestroyIcon(w.bigIcon);
-    DeleteObject(w.background);
-    DeleteObject(w.input);
-    UnregisterClassW(kSettingsClass, instance);
-    return 0;
+    SetWindowPos(hwnd, nullptr, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_NOZORDER | SWP_NOACTIVATE);
+    // The monitor it landed on may have a different scale.
+    UINT dpi = GetDpiForWindow(hwnd);
+    if (!g_setForceDpi && dpi != w->dpi) w->dpi = dpi;
+    Set_Relayout(*w);
+    w->pageT = Set_Anim(*w) ? 0.0f : 1.0f;
+    w->timer = SetTimer(hwnd, kSetTimerId, 15, nullptr) != 0;
+    return true;
 }
 
+void Settings_Open() {
+    if (g_setWin && g_setWin->hwnd && !g_setWin->render) {
+        HWND hwnd = g_setWin->hwnd;
+        if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
+        SetForegroundWindow(hwnd);
+        return;
+    }
+    if (g_setWin) Settings_Close();
+    if (!Set_Create(false)) return;
+    HWND hwnd = g_setWin->hwnd;
+    ShowWindow(hwnd, SW_SHOW);
+    SetForegroundWindow(hwnd);
+    SetFocus(hwnd);
+}
+
+void Settings_Close() {
+    if (g_setWin && g_setWin->hwnd) DestroyWindow(g_setWin->hwnd);
+    g_setWin.reset();
+}
+
+bool Settings_IsOpen() { return g_setWin && g_setWin->hwnd && !g_setWin->render; }
+
+
+DWORD WINAPI SettingsThread(void*) {
+ SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+ CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+ Settings_Open();
+ if (g_setWin) g_settingsWnd=g_setWin->hwnd;
+ MSG msg;
+ while (g_settingsWnd && GetMessageW(&msg,nullptr,0,0)>0) { TranslateMessage(&msg); DispatchMessageW(&msg); }
+ Settings_Close(); UnregisterClassW(kSetFooterClass,(HINSTANCE)&__ImageBase); UnregisterClassW(kSettingsClass,(HINSTANCE)&__ImageBase); Set_ReleaseFactories(); CoUninitialize(); return 0;
+}
 void OpenSettingsWindow() {
-    if (HWND hwnd = g_settingsWnd) {
-        PostMessageW(hwnd, WM_APP_SETTINGS_ACTIVATE, 0, 0);
-        return;
-    }
-    if (g_settingsThread) {
-        if (WaitForSingleObject(g_settingsThread, 0) == WAIT_TIMEOUT) {
-            return;
-        }
-        CloseHandle(g_settingsThread);
-    }
-    g_settingsStop = false;
-    g_settingsThread =
-        CreateThread(nullptr, 0, SettingsThread, nullptr, 0, nullptr);
+ if (HWND hwnd=g_settingsWnd) { PostMessageW(hwnd,WM_APP_SETTINGS_ACTIVATE,0,0); return; }
+ if(g_settingsThread) { if(WaitForSingleObject(g_settingsThread,0)==WAIT_TIMEOUT) return; CloseHandle(g_settingsThread); }
+ g_settingsStop=false; g_settingsThread=CreateThread(nullptr,0,SettingsThread,nullptr,0,nullptr);
 }
-
 void CloseSettingsWindow() {
-    if (!g_settingsThread) {
-        return;
-    }
-    g_settingsStop = true;
-    while (WaitForSingleObject(g_settingsThread, 100) == WAIT_TIMEOUT) {
-        if (HWND hwnd = g_settingsWnd) {
-            PostMessageW(hwnd, WM_CLOSE, 0, 0);
-        }
-    }
-    CloseHandle(g_settingsThread);
-    g_settingsThread = nullptr;
+ g_settingsStop=true;
+ if(HWND hwnd=g_settingsWnd) PostMessageW(hwnd,WM_CLOSE,0,0);
+ if(g_settingsThread) { WaitForSingleObject(g_settingsThread,15000); CloseHandle(g_settingsThread); g_settingsThread=nullptr; }
 }
 
 void EnsureVisible(int index) {
@@ -5612,7 +7465,10 @@ void ShowTileMenu(HWND hwnd, int index, POINT pt) {
         paths = GetAppPaths(*tile.app);
         key = AppKey(*tile.app);
         AppendMenuW(menu, MF_STRING, kOpen, L"Open");
-        if (paths.folder.empty() && EndsWith(ToLower(paths.file), L".exe")) {
+        // Anything with a launchable file can be elevated: a classic .exe, or
+        // any Start-menu shortcut — the shell brokers Store apps through it.
+        if (!paths.shortcut.empty() ||
+            (!paths.file.empty() && EndsWith(ToLower(paths.file), L".exe"))) {
             AppendMenuW(menu, MF_STRING, kRunAs, L"Run as administrator");
         }
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
@@ -5624,7 +7480,7 @@ void ShowTileMenu(HWND hwnd, int index, POINT pt) {
         AppendMenuW(menu, MF_STRING | (paths.shortcut.empty() ? MF_GRAYED : 0),
                     kShortcutLocation, L"Open shortcut location");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, kChangeIcon, L"Change icon…");
+        AppendMenuW(menu, MF_STRING, kChangeIcon, L"Change icon\u2026");
         if (g_customIcons.count(key)) {
             AppendMenuW(menu, MF_STRING, kRestoreIcon,
                         L"Restore original icon");
@@ -5670,6 +7526,8 @@ void ShowTileMenu(HWND hwnd, int index, POINT pt) {
             Ungroup(tile.folder);
             break;
         case kRunAs:
+            // linkOrFile prefers the shortcut: runas on a Store app's .lnk is
+            // brokered to an elevated launch, the raw AppsFolder target is not.
             LaunchTarget(linkOrFile, L"runas");
             break;
         case kFileLocation:
@@ -6216,8 +8074,133 @@ void OnAppsLoaded(AppList* list, int key) {
     }
 }
 
+// The tray icon (Look > Tray icon): click opens the settings, right-click shows a menu.
+// It lives on the grid's window and thread, like the rest of Launchpad.
+constexpr UINT WM_APP_TRAY = WM_APP + 21;
+constexpr UINT kTrayId = 1;
+static HICON g_trayIcon;
+static bool g_trayShown;
+static UINT g_taskbarCreated;
+
+// A blue to mauve rounded square with a 3 by 3 grid of dots, drawn per pixel so no
+// resource file is needed.
+static HICON MakeTrayIcon(int size) {
+    BITMAPV5HEADER bi{};
+    bi.bV5Size = sizeof(bi); bi.bV5Width = size; bi.bV5Height = -size; bi.bV5Planes = 1;
+    bi.bV5BitCount = 32; bi.bV5Compression = BI_BITFIELDS;
+    bi.bV5RedMask = 0x00FF0000; bi.bV5GreenMask = 0x0000FF00; bi.bV5BlueMask = 0x000000FF; bi.bV5AlphaMask = 0xFF000000;
+    void* bits = nullptr;
+    HDC dc = GetDC(nullptr);
+    HBITMAP color = CreateDIBSection(dc, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    ReleaseDC(nullptr, dc);
+    if (!color) return nullptr;
+    auto px = (UINT32*)bits;
+    const float n = (float)size, rad = n * 0.26f, ss = 4;
+    auto inRound = [&](float x, float y) {
+        float cx = std::clamp(x, rad, n - rad), cy = std::clamp(y, rad, n - rad);
+        return (x - cx) * (x - cx) + (y - cy) * (y - cy) <= rad * rad;
+    };
+    auto inDot = [&](float x, float y) {
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 3; j++) {
+                float cx = n * (0.3f + 0.2f * i), cy = n * (0.3f + 0.2f * j), r = n * 0.065f;
+                if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r) return true;
+            }
+        return false;
+    };
+    for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++) {
+            float cover = 0, dot = 0;
+            for (int sy = 0; sy < ss; sy++)
+                for (int sx = 0; sx < ss; sx++) {
+                    float fx = x + (sx + 0.5f) / ss, fy = y + (sy + 0.5f) / ss;
+                    if (inRound(fx, fy)) { cover++; if (inDot(fx, fy)) dot++; }
+                }
+            cover /= ss * ss; dot /= ss * ss;
+            float t = std::clamp((x + y) / (2.0f * n), 0.0f, 1.0f);
+            // 0x89B4FA to 0xCBA6F7, with the dots in crust (0x11111B).
+            float r = (0x89 + (0xCB - 0x89) * t), g = (0xB4 + (0xA6 - 0xB4) * t), b = (0xFA + (0xF7 - 0xFA) * t);
+            float k = cover > 0 ? dot / cover : 0;
+            r = r * (1 - k) + 0x11 * k; g = g * (1 - k) + 0x11 * k; b = b * (1 - k) + 0x1B * k;
+            BYTE a = (BYTE)(cover * 255 + 0.5f);
+            px[y * size + x] = ((UINT32)a << 24) | ((UINT32)(r * cover) << 16) | ((UINT32)(g * cover) << 8) | (UINT32)(b * cover);
+        }
+    HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
+    ICONINFO ii{TRUE, 0, 0, mask, color};
+    HICON icon = CreateIconIndirect(&ii);
+    DeleteObject(mask);
+    DeleteObject(color);
+    return icon;
+}
+
+static void UpdateTrayIcon(HWND hwnd) {
+    NOTIFYICONDATAW nid{sizeof(nid)};
+    nid.hWnd = hwnd;
+    nid.uID = kTrayId;
+    if (!g_settings.trayIcon) {
+        if (g_trayShown) Shell_NotifyIconW(NIM_DELETE, &nid);
+        g_trayShown = false;
+        return;
+    }
+    if (!g_trayIcon) g_trayIcon = MakeTrayIcon(GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem()));
+    nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
+    nid.uCallbackMessage = WM_APP_TRAY;
+    nid.hIcon = g_trayIcon;
+    wcscpy_s(nid.szTip, L"Seamless Launchpad");
+    if (g_trayShown && Shell_NotifyIconW(NIM_MODIFY, &nid)) return;
+    g_trayShown = Shell_NotifyIconW(NIM_ADD, &nid) != FALSE;
+    if (g_trayShown) {
+        nid.uVersion = NOTIFYICON_VERSION_4;
+        Shell_NotifyIconW(NIM_SETVERSION, &nid);
+    }
+}
+
+static void RemoveTrayIcon(HWND hwnd) {
+    if (g_trayShown) {
+        NOTIFYICONDATAW nid{sizeof(nid)};
+        nid.hWnd = hwnd;
+        nid.uID = kTrayId;
+        Shell_NotifyIconW(NIM_DELETE, &nid);
+        g_trayShown = false;
+    }
+    if (g_trayIcon) {
+        DestroyIcon(g_trayIcon);
+        g_trayIcon = nullptr;
+    }
+}
+
+static void OnTrayMessage(HWND hwnd, LPARAM lParam) {
+    switch (LOWORD(lParam)) {
+        case NIN_SELECT:
+        case NIN_KEYSELECT:
+            OpenSettingsWindow();
+            break;
+        case WM_CONTEXTMENU: {
+            HMENU menu = CreatePopupMenu();
+            AppendMenuW(menu, MF_STRING, 1, L"Settings");
+            AppendMenuW(menu, MF_STRING, 2, L"Open Launchpad");
+            SetMenuDefaultItem(menu, 1, FALSE);
+            POINT pt;
+            GetCursorPos(&pt);
+            SetForegroundWindow(hwnd);
+            int cmd = TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON, pt.x, pt.y, hwnd, nullptr);
+            DestroyMenu(menu);
+            if (cmd == 1) OpenSettingsWindow();
+            if (cmd == 2) PostMessageW(hwnd, WM_APP_TOGGLE, 0, 0);
+            break;
+        }
+    }
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (g_taskbarCreated && msg == g_taskbarCreated) {
+        g_trayShown = false;  // The new taskbar has no icons yet.
+        UpdateTrayIcon(hwnd);
+        return 0;
+    }
     switch (msg) {
+        case WM_APP + 20: OpenSettingsWindow(); return 0;
+        case WM_APP_TRAY: OnTrayMessage(hwnd, lParam); return 0;
         case WM_APP_TOGGLE:
             // Clicking the taskbar's Start button while this one is open first
             // takes the focus (which closes it) and then asks for Start: that
@@ -6234,6 +8217,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_APP_RELOAD:
             LoadSettings();
+            UpdateTrayIcon(hwnd);
             if (g_shown) {
                 HideNow();
             }
@@ -6275,6 +8259,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
 
         case WM_APP_QUIT:
+            RemoveTrayIcon(hwnd);
             DestroyWindow(hwnd);
             return 0;
 
@@ -6488,15 +8473,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             int x = GET_X_LPARAM(lParam), y = GET_Y_LPARAM(lParam);
             g_searchDrag = false;
             bool dragged = g_drag.active;
+            // ReleaseCapture fires WM_CAPTURECHANGED synchronously, and that
+            // handler clears the press; snapshot it before the capture goes.
+            int powerPressed = g_powerPressed;
             EndDrag(true);  // Before the capture goes, which would undo it.
             if (GetCapture() == hwnd) {
                 ReleaseCapture();
             }
-            if (g_powerPressed >= 0) {
-                int slot = g_powerPressed;
-                g_powerPressed = -1;
-                if (PowerAt(x, y) == slot) {
-                    PowerClick(slot);  // May hide the grid.
+            g_powerPressed = -1;
+            if (powerPressed >= 0) {
+                if (PowerAt(x, y) == powerPressed) {
+                    PowerClick(powerPressed);  // May hide the grid.
                 }
                 Render();
                 return 0;
@@ -6669,6 +8656,9 @@ DWORD WINAPI StartThread(void*) {
     bool ok = g_d2d && g_dwrite && g_backdrop && wnd;
     if (ok) {
         g_wnd = wnd;
+        g_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
+        ChangeWindowMessageFilterEx(wnd, g_taskbarCreated, MSGFLT_ALLOW, nullptr);
+        UpdateTrayIcon(wnd);
         // The app list is read a bit later, so it doesn't weigh on explorer's
         // startup.
         SetTimer(wnd, kTimerFirstLoad, 3000, nullptr);
