@@ -2,7 +2,7 @@
 // @id           better-volume-mixer-plus
 // @name         Seamless Volume Mixer
 // @description  A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices
-// @version      1.4.5
+// @version      1.4.7
 // @author       DavidHiFi, 0Allu, shubho
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -4398,7 +4398,8 @@ void DrawAudioRow(HDC dc, int visibleRow, int dataRow, int clientWidth) {
 void RenderMixerContents(HDC dc, const RECT& client) {
     if (g_paintMatte >= 0) {
         FillSolidRect(dc, client, g_paintMatte ? RGB(255, 255, 255) : RGB(0, 0, 0));
-        DrawSurface(dc, client, Scale(16), g_theme.background);
+        // On the compositor path the chrome layer already holds the panel.
+        if (!g_gpuArmed) DrawSurface(dc, client, Scale(16), g_theme.background);
     } else {
         FillSolidRect(dc, client, g_theme.background);
     }
@@ -4483,7 +4484,7 @@ void RenderMixerContents(HDC dc, const RECT& client) {
                   DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
 
-    DrawPopupBorder(dc, client, std::ceil(3.0f * g_dpi / 96.0f));
+    if (!g_gpuArmed) DrawPopupBorder(dc, client, std::ceil(3.0f * g_dpi / 96.0f));
 
 }
 
@@ -4637,8 +4638,9 @@ bool InitGpuRenderer(HWND hWnd) {
             if (SUCCEEDED(hr)) hr = g_gpuRoot->SetEffect(g_gpuRootEffect);
             if (SUCCEEDED(hr)) hr = g_gpuRoot->AddVisual(g_gpuChromeVisual, FALSE, nullptr);
             if (SUCCEEDED(hr)) {
-                hr = g_gpuRoot->AddVisual(g_gpuContentVisual, FALSE, g_gpuChromeVisual);
+                hr = g_gpuRoot->AddVisual(g_gpuContentVisual, TRUE, g_gpuChromeVisual);
             }
+            if (SUCCEEDED(hr)) hr = g_gpuTarget->SetRoot(g_gpuRoot);
             if (SUCCEEDED(hr)) hr = g_gpuDevice->CreateAnimation(&g_gpuOpenOpacity);
             if (SUCCEEDED(hr)) hr = g_gpuDevice->CreateAnimation(&g_gpuOpenOffset);
         } else {
@@ -4692,6 +4694,7 @@ bool GpuEnsureSurfaces(int w, int h) {
         g_gpuSurfacesReset = true;
         return true;
     }
+    Wh_Log(L"Mixer: surface setup failed (0x%08lX)", static_cast<unsigned long>(hr));
     return false;
 }
 
@@ -4702,15 +4705,17 @@ bool GpuEnsureSurfaces(int w, int h) {
 void GpuDrawChrome(int w, int h) {
     if (!g_gpuChromeSurface || !g_gpuContext || !g_gpuD2dFactory) return;
     POINT offset{};
-    ID2D1Image* targetImage = nullptr;
-    if (FAILED(g_gpuChromeSurface->BeginDraw(
-            nullptr, IID_PPV_ARGS(&targetImage), &offset))) {
+    // A device built from a D2D device hands out a device context that is
+    // already drawing; the surface lives in a shared atlas at 'offset'.
+    ID2D1DeviceContext* dc = nullptr;
+    HRESULT hr = g_gpuChromeSurface->BeginDraw(nullptr, IID_PPV_ARGS(&dc), &offset);
+    if (FAILED(hr) || !dc) {
+        Wh_Log(L"Mixer: chrome BeginDraw failed (0x%08lX)", static_cast<unsigned long>(hr));
         return;
     }
-    g_gpuContext->SetTarget(targetImage);
-    targetImage->Release();
-    g_gpuContext->BeginDraw();
-    g_gpuContext->Clear();
+    dc->SetTransform(D2D1::Matrix3x2F::Translation(
+        static_cast<float>(offset.x), static_cast<float>(offset.y)));
+    dc->Clear();
 
     float opacity = g_settings.backgroundOpacity / 100.0f;
     D2D1_COLOR_F background{
@@ -4719,12 +4724,12 @@ void GpuDrawChrome(int w, int h) {
         GetBValue(g_theme.background) / 255.0f,
         opacity};
     ID2D1SolidColorBrush* brush = nullptr;
-    if (SUCCEEDED(g_gpuContext->CreateSolidColorBrush(background, &brush)) && brush) {
+    if (SUCCEEDED(dc->CreateSolidColorBrush(background, &brush)) && brush) {
         float radius = static_cast<float>(Scale(16));
         D2D1_ROUNDED_RECT panel = {
             {0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h)},
             radius, radius};
-        g_gpuContext->FillRoundedRectangle(panel, brush);
+        dc->FillRoundedRectangle(panel, brush);
         brush->Release();
     }
 
@@ -4773,13 +4778,13 @@ void GpuDrawChrome(int w, int h) {
                 {0.0f, {0x89 / 255.0f, 0xB4 / 255.0f, 0xFA / 255.0f, 1.0f}},
                 {1.0f, {0xCB / 255.0f, 0xA6 / 255.0f, 0xF7 / 255.0f, 1.0f}}};
             ID2D1GradientStopCollection* collection = nullptr;
-            if (SUCCEEDED(g_gpuContext->CreateGradientStopCollection(
+            if (SUCCEEDED(dc->CreateGradientStopCollection(
                     stops, 2, D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP,
                     &collection)) && collection) {
                 ID2D1LinearGradientBrush* gradient = nullptr;
-                if (SUCCEEDED(g_gpuContext->CreateLinearGradientBrush(
+                if (SUCCEEDED(dc->CreateLinearGradientBrush(
                         gradientProperties, collection, &gradient)) && gradient) {
-                    g_gpuContext->FillGeometry(ring, gradient);
+                    dc->FillGeometry(ring, gradient);
                     gradient->Release();
                 }
                 collection->Release();
@@ -4787,30 +4792,41 @@ void GpuDrawChrome(int w, int h) {
         }
         ring->Release();
     }
-    g_gpuContext->EndDraw();
-    g_gpuChromeSurface->EndDraw();
+    dc->Release();
+    hr = g_gpuChromeSurface->EndDraw();
+    if (FAILED(hr)) {
+        Wh_Log(L"Mixer: chrome EndDraw failed (0x%08lX)", static_cast<unsigned long>(hr));
+    }
     g_gpuDevice->Commit();
 }
 
 bool GpuUploadContent(DWORD* pixels, int w, int h) {
-    POINT offset{};
-    ID2D1Image* targetImage = nullptr;
-    HRESULT hr = g_gpuContentSurface->BeginDraw(
-        nullptr, IID_PPV_ARGS(&targetImage), &offset);
-    if (FAILED(hr)) return false;
-    g_gpuContext->SetTarget(targetImage);
-    targetImage->Release();
-    hr = g_gpuContentBitmap->CopyFromMemory(
+    HRESULT hr = g_gpuContentBitmap->CopyFromMemory(
         nullptr, pixels, static_cast<UINT32>(w) * 4);
-    if (SUCCEEDED(hr)) {
-        g_gpuContext->BeginDraw();
-        g_gpuContext->DrawBitmap(
-            g_gpuContentBitmap,
-            D2D1::RectF(0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h)));
-        hr = g_gpuContext->EndDraw();
+    if (FAILED(hr)) {
+        Wh_Log(L"Mixer: content copy failed (0x%08lX)", static_cast<unsigned long>(hr));
+        return false;
     }
-    HRESULT endDraw = g_gpuContentSurface->EndDraw();
-    return SUCCEEDED(hr) && SUCCEEDED(endDraw);
+    POINT offset{};
+    ID2D1DeviceContext* dc = nullptr;
+    hr = g_gpuContentSurface->BeginDraw(nullptr, IID_PPV_ARGS(&dc), &offset);
+    if (FAILED(hr) || !dc) {
+        Wh_Log(L"Mixer: content BeginDraw failed (0x%08lX)", static_cast<unsigned long>(hr));
+        return false;
+    }
+    dc->SetTransform(D2D1::Matrix3x2F::Translation(
+        static_cast<float>(offset.x), static_cast<float>(offset.y)));
+    dc->Clear();
+    dc->DrawBitmap(
+        g_gpuContentBitmap,
+        D2D1::RectF(0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h)));
+    dc->Release();
+    hr = g_gpuContentSurface->EndDraw();
+    if (FAILED(hr)) {
+        Wh_Log(L"Mixer: content EndDraw failed (0x%08lX)", static_cast<unsigned long>(hr));
+        return false;
+    }
+    return true;
 }
 
 // Renders the scene through the existing double-matte pipeline, then uploads
