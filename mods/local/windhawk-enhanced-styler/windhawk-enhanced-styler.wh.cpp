@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.1.5
+// @version         2.1.6
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1121,6 +1121,27 @@ static std::string BuildCss(const Settings& s) {
 :root #wh-tip{position:fixed;z-index:2147483000;pointer-events:none;max-width:420px;padding:6px 11px;border-radius:12px;font-size:13px;line-height:1.45;color:#cdd6f4;white-space:pre-line;
  border:2px solid transparent;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa99,#cba6f799) border-box;box-shadow:0 8px 24px #0008;opacity:0;transition:opacity .12s;}
 :root #wh-tip.on{opacity:1;}
+/* 2.1.6: collapse arrow sits in its own small dark box, left of the title, arrow centred and smaller. */
+:root [data-testid="mod-setting-collapse"]{width:20px !important;height:20px !important;min-width:20px !important;padding:0 !important;margin:0 8px 0 -18px !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;background:#181825 !important;border:2px solid #45475a !important;border-radius:7px !important;color:#a6adc8 !important;box-shadow:none !important;transition:border-color .15s,color .15s;}
+:root [data-testid="mod-setting-collapse"] svg{width:9px !important;height:9px !important;display:block !important;margin:0 !important;transition:transform .2s ease;}
+:root [data-testid="mod-setting-collapse"]:hover,:root [data-testid="mod-setting-collapse"]:focus-visible{color:#cdd6f4 !important;border-color:transparent !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
+/* "5 settings" badge on a collapsed section: dark chip, grey edge, blue to mauve edge on hover. */
+:root [data-testid="mod-setting-summary"]{background:#181825 !important;color:#a6adc8 !important;border:2px solid #45475a !important;border-radius:999px !important;padding:0 10px !important;line-height:20px !important;font-size:12px !important;transition:border-color .15s,color .15s;}
+:root [data-testid="mod-setting-summary"]:hover{color:#cdd6f4 !important;border-color:transparent !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
+/* Mod page tabs: one pill dock like the Visual / Textual switch, 2px dividers, no underline or grey rule. */
+:root .ant-tabs-top>.ant-tabs-nav::before{display:none !important;border:0 !important;}
+:root .ant-tabs-top>.ant-tabs-nav .ant-tabs-ink-bar{display:none !important;}
+:root .ant-tabs-top>.ant-tabs-nav{margin-bottom:20px !important;}
+:root .ant-tabs-top>.ant-tabs-nav .ant-tabs-nav-list{background:#1e1e2e !important;border:2px solid #45475a !important;border-radius:999px !important;overflow:hidden !important;transition:border-color .15s;}
+:root .ant-tabs-top>.ant-tabs-nav .ant-tabs-nav-list:hover{border-color:transparent !important;background:linear-gradient(#1e1e2e,#1e1e2e) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
+:root .ant-tabs-top>.ant-tabs-nav .ant-tabs-tab{margin:0 !important;padding:0 18px !important;height:36px !important;font-size:14px !important;color:#a6adc8 !important;background:transparent !important;transition:background-color .15s,color .15s;}
+:root .ant-tabs-top>.ant-tabs-nav .ant-tabs-tab+.ant-tabs-tab{border-inline-start:2px solid #45475a !important;}
+:root .ant-tabs-top>.ant-tabs-nav .ant-tabs-nav-list:hover .ant-tabs-tab+.ant-tabs-tab{border-inline-start-color:#6c7086 !important;}
+:root .ant-tabs-top>.ant-tabs-nav .ant-tabs-tab .ant-tabs-tab-btn{color:inherit !important;}
+:root .ant-tabs-top>.ant-tabs-nav .ant-tabs-tab:hover{background:linear-gradient(125deg,#89b4fa33,#cba6f733) !important;color:#cdd6f4 !important;}
+:root .ant-tabs-top>.ant-tabs-nav .ant-tabs-tab-active{background:#181825 !important;}
+:root .ant-tabs-top>.ant-tabs-nav .ant-tabs-tab-active .ant-tabs-tab-btn{color:#89b4fa !important;font-weight:700 !important;text-shadow:none !important;}
+:root .ant-tabs-top>.ant-tabs-nav .ant-tabs-tab-active:hover{background:linear-gradient(125deg,#89b4fa33,#cba6f733) !important;}
 )WHB";
     return css;
 }
