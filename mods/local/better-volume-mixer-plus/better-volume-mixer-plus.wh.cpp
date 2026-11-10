@@ -2,7 +2,7 @@
 // @id           better-volume-mixer-plus
 // @name         Seamless Volume Mixer
 // @description  A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices
-// @version      1.4.4
+// @version      1.4.5
 // @author       DavidHiFi, 0Allu, shubho
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -4090,11 +4090,13 @@ float AnimateState(float& value, bool active) {
     return value;
 }
 
-void DrawStateSurface(HDC dc, const RECT& rect, COLORREF base, float hover, float selected) {
+void DrawStateSurface(HDC dc, const RECT& rect, COLORREF base, float hover, float selected,
+                      float resting = 0.0f) {
     float amount = std::max(hover, selected);
     COLORREF mantle = g_lightTheme ? g_theme.hover : RGB(24, 24, 37);
     DrawSurface(dc, rect, Scale(16), MixColor(base, mantle, amount));
-    if (!g_gdiplusToken || amount < 0.001f) return;
+    float border = std::max(amount, resting);
+    if (!g_gdiplusToken || border < 0.001f) return;
     Gdiplus::Graphics graphics(dc);
     graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
     graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
@@ -4110,11 +4112,18 @@ void DrawStateSurface(HDC dc, const RECT& rect, COLORREF base, float hover, floa
     path.AddArc(x+w-d, y+h-d, d, d, 0, 90);
     path.AddArc(x, y+h-d, d, d, 90, 90);
     path.CloseFigure();
+    if (resting > amount) {
+        // Resting grey edge, drawn first; the gradient fades in over it on hover.
+        BYTE restAlpha = static_cast<BYTE>(255 * resting + 0.5f);
+        Gdiplus::SolidBrush restBrush(Gdiplus::Color(restAlpha, 0x58, 0x5B, 0x70));
+        Gdiplus::Pen restPen(&restBrush, stroke);
+        graphics.DrawPath(&restPen, &path);
+    }
     BYTE alpha = static_cast<BYTE>(255 * amount);
     Gdiplus::LinearGradientBrush brush(Gdiplus::RectF(x, y, w, h),
         Gdiplus::Color(alpha, 0x89, 0xB4, 0xFA), Gdiplus::Color(alpha, 0xCB, 0xA6, 0xF7), 0, TRUE);
     Gdiplus::Pen pen(&brush, stroke);
-    graphics.DrawPath(&pen, &path);
+    if (alpha) graphics.DrawPath(&pen, &path);
 }
 
 void DrawSlider(HDC dc, const RECT& rect, float volume, float peak,
@@ -4461,7 +4470,7 @@ void RenderMixerContents(HDC dc, const RECT& client) {
             RECT button = PageButtonRect(next, client);
             bool hovered = g_hoverPageButton == (next ? 1 : 0);
             float hover = AnimateState(g_pageHoverAmounts[next ? 1 : 0], hovered);
-            DrawStateSurface(dc, button, g_theme.panel, hover, 0);
+            DrawStateSurface(dc, button, g_theme.panel, hover, 0, 0.55f);
             DrawLabel(dc, next ? L"Next" : L"Previous", button, g_smallFont,
                       g_theme.text, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         }
@@ -7390,21 +7399,47 @@ static LRESULT CALLBACK MenuProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 // through TrackPopupMenu, so they used to keep a black, unblurred body).
 static VOID OnMenuCreated(HWND hWnd)
 {
+    // The CBT hook and the create-event hook can both reach this window.
+    static const WCHAR* const kSkinProp = L"SeamlessMenuSkinAttached";
+    if (GetPropW(hWnd, kSkinProp)) return;
+    SetPropW(hWnd, kSkinProp, (HANDLE)1);
     SetWindowSubclass(hWnd, MenuProc, kSubclassId, 0);
     ApplyEffects(hWnd);
+}
+
+// Delivered synchronously on this thread during the menu window's creation, before
+// its first paint, so the black body never shows without the acrylic behind it.
+static LRESULT CALLBACK MenuCbtProc(INT code, WPARAM w, LPARAM l)
+{
+    if (code == HCBT_CREATEWND) {
+        HWND created = reinterpret_cast<HWND>(w);
+        WCHAR cls[16];
+        if (GetClassNameW(created, cls, ARRAYSIZE(cls)) &&
+            wcscmp(cls, L"#32768") == 0)
+            OnMenuCreated(created);
+    }
+    return CallNextHookEx(nullptr, code, w, l);
+}
+static HHOOK InstallMenuCbtHook()
+{
+    return SetWindowsHookExW(WH_CBT, MenuCbtProc, nullptr, GetCurrentThreadId());
 }
 
 static BOOL WINAPI TrackPopupMenu_hook(HMENU m, UINT f, INT x, INT y, INT r, HWND h, const RECT* rc)
 {
     SeamlessMenuRoom::BeginTrack();
+    HHOOK cbt = InstallMenuCbtHook();
     BOOL ret = TrackPopupMenu_orig(m, f, x, y, r, h, rc);
+    if (cbt) UnhookWindowsHookEx(cbt);
     SeamlessMenuRoom::EndTrack();
     return ret;
 }
 static BOOL WINAPI TrackPopupMenuEx_hook(HMENU m, UINT f, INT x, INT y, HWND h, LPTPMPARAMS p)
 {
     SeamlessMenuRoom::BeginTrack();
+    HHOOK cbt = InstallMenuCbtHook();
     BOOL ret = TrackPopupMenuEx_orig(m, f, x, y, h, p);
+    if (cbt) UnhookWindowsHookEx(cbt);
     SeamlessMenuRoom::EndTrack();
     return ret;
 }
