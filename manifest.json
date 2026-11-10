@@ -4,9 +4,9 @@
   "generatedAt": "2026-10-27T20:08:35+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 159,
-    "enabled": 87,
-    "local": 28
+    "mods": 160,
+    "enabled": 88,
+    "local": 29
   },
   "mods": [
     {
@@ -811,6 +811,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/recycle-bin-tray-plus/recycle-bin-tray-plus.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-power-action-countdown",
+      "name": "Seamless Power Action Countdown",
+      "author": "DavidHiFi, Nerdworld",
+      "github": "https://github.com/DavidHiFi",
+      "version": "2.0.1",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "https://windhawk.net/mods/power-action-countdown",
+      "source": "mods/local/seamless-power-action-countdown/seamless-power-action-countdown.wh.cpp",
       "enabled": true
     },
     {
