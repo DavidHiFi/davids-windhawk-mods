@@ -2,7 +2,7 @@
 // @id              seamless-color-picker
 // @name            Seamless Color Picker
 // @description     A full color picker on a hotkey, with a screen magnifier, recent colors and one-click copy
-// @version         1.0.0
+// @version         1.1.0
 // @author          DavidHiFi, Jaex, ShareX contributors
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -3771,7 +3771,7 @@ static void DrawPicker(ID2D1RenderTarget* rt, Res& res, bool glass) {
     if (glass) {
         rt->Clear(D2D1::ColorF(0, 0, 0, 0));
         // One tint over the page; it fades in under the native title bar so the two meet without a seam.
-        float t = g_set.tint / 100.0f * 0.62f;
+        float t = g_set.tint / 100.0f * 0.92f;
         D2D1_GRADIENT_STOP st[2] = {{0, D2DColor(m::crust, 0)}, {1, D2DColor(m::crust, t)}};
         ComPtr<ID2D1GradientStopCollection> sc;
         ComPtr<ID2D1LinearGradientBrush> br;
@@ -4174,10 +4174,13 @@ static void SavePickerState() {
     Picker& p = g_pk;
     if (!p.hwnd) return;
     SaveLast(p.cur.Argb());
-    WINDOWPLACEMENT wp{sizeof(wp)};
-    if (GetWindowPlacement(p.hwnd, &wp)) {
-        Wh_SetIntValue(L"WinX", wp.rcNormalPosition.left);
-        Wh_SetIntValue(L"WinY", wp.rcNormalPosition.top);
+    // Store the same coordinates the open path sets with SetWindowPos (outer window,
+    // virtual-desktop space). GetWindowPlacement's rcNormalPosition lives in a different
+    // space and made the window creep up a little every open/close cycle.
+    RECT wr;
+    if (GetWindowRect(p.hwnd, &wr)) {
+        Wh_SetIntValue(L"WinX", wr.left);
+        Wh_SetIntValue(L"WinY", wr.top);
         Wh_SetIntValue(L"WinSaved", 1);
     }
 }
