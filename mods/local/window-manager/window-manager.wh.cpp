@@ -1,36 +1,43 @@
+#include <shlwapi.h>
 // ==WindhawkMod==
 // @id              window-manager
-// @name            Window Manager
+// @name            Window Manager Plus
 // @description     Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts
-// @version         1.1.0
-// @author          DavidHiFi
+// @version         1.3.2
+// @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         GPL-3.0
 // @include         *
 // @include         windhawk.exe
-// @compilerOptions -luser32 -ldwmapi -lgdi32 -lshcore -lcomctl32 -lshell32
+// @compilerOptions -luser32 -ldwmapi -lgdi32 -lshcore -lcomctl32 -lshell32 -lshlwapi -ladvapi32 -ld2d1 -ldwmapi -lcomctl32 -luxtheme -lgdi32
+// @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
 /*
-# Window Manager
+# Window Manager Plus
 
 Move, resize and snap windows from anywhere, and send them to another monitor,
 with the mouse or the keyboard. Works on administrator windows too.
 
-![Window Manager preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/window-manager.gif)
+![Window Manager Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/window-manager.gif)
 
 ## Features
 
 - **Alt+drag to move.** Grab a window anywhere, not just by its title bar.
-- **Alt+right-drag to resize** from the nearest edge or corner.
+- **Alt+right-drag to resize** from the nearest edge or corner, including
+  borderless windows such as Ditto and Flow Launcher.
 - **Snap with the keyboard** to halves, quarters, the center or almost
   maximized, with optional gaps around windows.
 - **Send to another monitor** with a hotkey. Maximized windows stay maximized
-  on the new screen.
+  on the new screen. An optional setting moves the mouse pointer along with
+  the window, so you can keep working on the new monitor without hunting for
+  the cursor.
 - **Quick actions:** maximize, minimize, close or open the window menu without
   reaching for the title bar.
+- **Drag File Explorer windows by the title bar.** Pressing the title strip
+  moves the whole window instead of grabbing a tab.
 - **Auto-snap rules** place chosen apps in a set position.
 - **Works on elevated windows** such as Task Manager and Task Scheduler.
 
@@ -66,7 +73,7 @@ snapping like the preview, set the four half keys to `left`, `right`, `up` and
 ## Credits
 
 Combines [AltDrag](https://windhawk.net/mods/alt-drag) by m417z (inspired by
-[AltSnap](https://github.com/RamonUnch/AltSnap) by RamonUnch),
+[AltSnap](https://github.com/RamonUnch/AltSnap) by Stefan Sundin and RamonUnch),
 [Snap Commander](https://windhawk.net/mods/snap-commander) by Asteski and
 [Move Window to Monitor](https://windhawk.net/mods/move-window-to-monitor) by
 TomberWolf. GPL-3.0, following AltDrag.
@@ -127,8 +134,23 @@ SOFTWARE.
 #include <vector>
 #include <shellscalingapi.h>
 
+// Used by both monitor-move paths: when the "Move the cursor with the window"
+// setting is on, put the pointer in the middle of the window that was just sent
+// to another monitor. A minimized window has no useful position, so it is skipped.
+static void MoveCursorToWindow(HWND hwnd) {
+    if (!Wh_GetIntSetting(L"cursorFollowsWindow") || IsIconic(hwnd)) return;
+    RECT rc;
+    if (GetWindowRect(hwnd, &rc))
+        SetCursorPos((rc.left + rc.right) / 2, (rc.top + rc.bottom) / 2);
+}
+
 //////// drag ////////
 namespace altSnapDrag {
+
+void LoadSettings();
+bool g_globalInput = false;
+std::wstring g_globalExclusions;
+
 
 // A fork of the alt-drag mod by m417z (https://github.com/m417z/my-windhawk-mods),
 // which is based on AltSnap by RamonUnch (https://github.com/RamonUnch/AltSnap)
@@ -277,6 +299,8 @@ struct {
     TriggerSettings moveTrigger;
     TriggerSettings sizeTrigger;
     std::atomic<bool> dragWindowsWithoutTitleBar;
+    std::atomic<bool> explorerTitleStripDrag;
+    std::atomic<bool> sizeWindowsWithoutSizingBorder;
     std::atomic<WindowAction> middleAction;
     std::atomic<WindowAction> rightClickAction;
     std::atomic<WindowAction> x1Action;
@@ -327,6 +351,7 @@ thread_local struct {
     HWND hWnd;
     POINT startPt;
     bool dragged;
+    bool fromHook;
 } g_loop;
 
 // A press taken from this thread's queue for as long as the drag delay runs.
@@ -365,6 +390,16 @@ thread_local int g_contactButton;
 std::mutex g_lowLevelMouseHookMutex;
 HHOOK g_lowLevelMouseHook;
 DWORD g_lowLevelMouseHookThreadId;
+// The hook is installed on a thread of the mod's own, one per process. A low
+// level hook is called on the thread which installed it, and the thread which
+// retrieves the trigger's keys is the foreground window's: busy painting the
+// window being dragged, it held up every move of the pointer on the way to the
+// system, and the cursor trailed a drag which the system's loop ran smoothly.
+HANDLE g_lowLevelMouseHookThread;
+DWORD g_lowLevelMouseHookOwnThreadId;
+DPI_AWARENESS_CONTEXT g_lowLevelMouseHookDpiContext =
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2;
+constexpr UINT kInstallLowLevelMouseHookMessage = WM_APP + 1;
 // Set when a press was swallowed during the current hold with Alt held.
 std::atomic<bool> g_swallowedPress;
 
@@ -529,6 +564,22 @@ bool ShouldHoldKeylessHook() {
     DWORD processId = 0;
     GetWindowThreadProcessId(GetForegroundWindow(), &processId);
     return processId == GetCurrentProcessId();
+}
+
+// Whether this process is File Explorer. Cached: the image of a running
+// process never changes.
+bool IsExplorerProcess() {
+    static bool isExplorer = [] {
+        WCHAR path[MAX_PATH];
+        DWORD len = GetModuleFileName(nullptr, path, ARRAYSIZE(path));
+        if (!len || len >= ARRAYSIZE(path)) {
+            return false;
+        }
+        PCWSTR name = wcsrchr(path, L'\\');
+        name = name ? name + 1 : path;
+        return _wcsicmp(name, L"explorer.exe") == 0;
+    }();
+    return isExplorer;
 }
 
 // The button of a client or non-client button message, or 0 for any other
@@ -740,10 +791,65 @@ bool IsRootWindowHooked(HWND hRootWnd) {
            GetProp(hRootWnd, kHookedWindowProp);
 }
 
+// The engine never injects mods into Windhawk's own interface, so its window
+// carries no hooks of ours. The actions only post to the window's thread
+// (ShowWindowAsync) rather than replaying input, so they are safe there, and
+// the interface is the window this mod gets used on the most.
+bool IsWindhawkUiWindow(HWND hWnd) {
+    WCHAR cls[128]{};
+    if (GetClassNameW(hWnd, cls, ARRAYSIZE(cls)) &&
+        wcscmp(cls, L"AIVoiceTypingSettings_local@seamless-dictate") == 0) return true;
+    static std::atomic<DWORD> s_pid{0};
+    static std::atomic<bool> s_isUi{false};
+    DWORD pid = GetWindowThreadProcessId(hWnd, nullptr);
+    if (pid != 0 && pid == s_pid.load(std::memory_order_relaxed)) {
+        return s_isUi.load(std::memory_order_relaxed);
+    }
+
+    bool isUi = false;
+    if (HANDLE hProcess =
+            OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid)) {
+        WCHAR path[MAX_PATH];
+        DWORD size = ARRAYSIZE(path);
+        if (QueryFullProcessImageNameW(hProcess, 0, path, &size)) {
+            for (DWORD i = 0; i < size; ++i) {
+                path[i] = static_cast<WCHAR>(towlower(path[i]));
+            }
+            path[size < MAX_PATH ? size : MAX_PATH - 1] = L'\0';
+            isUi = wcsstr(path, L"\\windhawk\\ui\\") != nullptr;
+        }
+        CloseHandle(hProcess);
+    }
+
+    s_pid.store(pid, std::memory_order_relaxed);
+    s_isUi.store(isUi, std::memory_order_relaxed);
+    return isUi;
+}
+
 bool IsExcludedRootWindow(HWND hRootWnd) {
-    // A window of a thread without the mod's hooks, e.g. of a process the mod
-    // isn't loaded in, keeps its input as is.
-    if (!IsRootWindowHooked(hRootWnd)) {
+    if (!hRootWnd || !IsWindow(hRootWnd)) return true;
+    if (g_globalInput) {
+        DWORD pid = 0;
+        GetWindowThreadProcessId(hRootWnd, &pid);
+        if (pid == GetCurrentProcessId()) return true;
+        HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        if (!process) return true;
+        WCHAR path[32768];
+        DWORD size = ARRAYSIZE(path);
+        bool queried = QueryFullProcessImageNameW(process, 0, path, &size);
+        CloseHandle(process);
+        if (!queried) return true;
+        PCWSTR name = PathFindFileNameW(path);
+        size_t begin = 0;
+        while (begin < g_globalExclusions.size()) {
+            size_t end = g_globalExclusions.find(L'|', begin);
+            std::wstring pattern = g_globalExclusions.substr(begin, end - begin);
+            if (!pattern.empty() && (PathMatchSpecW(name, pattern.c_str()) ||
+                                     PathMatchSpecW(path, pattern.c_str()))) return true;
+            if (end == std::wstring::npos) break;
+            begin = end + 1;
+        }
+    } else if (!IsRootWindowHooked(hRootWnd) && !IsWindhawkUiWindow(hRootWnd)) {
         return true;
     }
 
@@ -779,7 +885,12 @@ bool CanSizeRootWindow(HWND hRootWnd) {
     }
 
     LONG style = GetWindowLong(hRootWnd, GWL_STYLE);
-    return (style & WS_THICKFRAME) && !(style & WS_MAXIMIZE);
+    if (style & WS_MAXIMIZE) {
+        return false;
+    }
+
+    return g_settings.sizeWindowsWithoutSizingBorder ||
+           (style & WS_THICKFRAME);
 }
 
 bool CanActOnRootWindow(HWND hWnd) {
@@ -800,12 +911,39 @@ WindowAction ActionFromSetting(PCWSTR value) {
     return WindowAction::None;
 }
 
+void RunWindowMenu(HWND hWnd, HWND owner, POINT pt);
+bool RunWindowActionNow(HWND hWnd, WindowAction action, POINT pt);
+
 bool RunWindowAction(HWND hWnd, WindowAction action, POINT pt) {
     if (action == WindowAction::None || !CanActOnRootWindow(hWnd)) return false;
 
     if (action == WindowAction::Menu) {
+        // The menu loop is modal, so it gets a thread of its own: on the
+        // input thread it would hold up the mouse and drop queued work.
+        struct MenuRequest { HWND hWnd; POINT pt; };
+        auto request = new MenuRequest{hWnd, pt};
+        HANDLE thread = CreateThread(nullptr, 0, [](void* p) WINAPI -> DWORD {
+            std::unique_ptr<MenuRequest> r((MenuRequest*)p);
+            HWND owner = CreateWindowEx(WS_EX_TOOLWINDOW, L"STATIC", L"", WS_POPUP,
+                                        r->pt.x, r->pt.y, 0, 0, nullptr, nullptr,
+                                        nullptr, nullptr);
+            if (!owner) return 0;
+            SetForegroundWindow(owner);
+            RunWindowMenu(r->hWnd, owner, r->pt);
+            DestroyWindow(owner);
+            return 0;
+        }, request, 0, nullptr);
+        if (!thread) { delete request; return false; }
+        CloseHandle(thread);
+        return true;
+    }
+    return RunWindowActionNow(hWnd, action, pt);
+}
+
+void RunWindowMenu(HWND hWnd, HWND owner, POINT pt) {
+    {
         HMENU menu = CreatePopupMenu();
-        if (!menu) return false;
+        if (!menu) return;
         constexpr std::array<std::pair<WindowAction, PCWSTR>, 7> items{{
             {WindowAction::Maximize, L"Maximize / restore"},
             {WindowAction::Minimize, L"Minimize"},
@@ -823,13 +961,15 @@ bool RunWindowAction(HWND hWnd, WindowAction action, POINT pt) {
             AppendMenu(menu, flags, i + 1, items[i].second);
         }
         int selected = TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON,
-                                        pt.x, pt.y, hWnd, nullptr);
+                                        pt.x, pt.y, owner, nullptr);
         DestroyMenu(menu);
-        if (selected > 0 && selected <= (int)items.size())
-            return RunWindowAction(hWnd, items[selected - 1].first, pt);
-        return true;
+        if (selected > 0 && selected <= (int)items.size() &&
+            CanActOnRootWindow(hWnd))
+            RunWindowActionNow(hWnd, items[selected - 1].first, pt);
     }
+}
 
+bool RunWindowActionNow(HWND hWnd, WindowAction action, POINT pt) {
     if (action == WindowAction::Maximize) {
         ShowWindowAsync(hWnd, IsZoomed(hWnd) ? SW_RESTORE : SW_MAXIMIZE);
     } else if (action == WindowAction::Minimize) {
@@ -840,16 +980,21 @@ bool RunWindowAction(HWND hWnd, WindowAction action, POINT pt) {
         HWND order = (GetWindowLongPtr(hWnd, GWL_EXSTYLE) & WS_EX_TOPMOST)
                          ? HWND_NOTOPMOST : HWND_TOPMOST;
         SetWindowPos(hWnd, order, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
     } else if (action == WindowAction::Lower) {
         SetWindowPos(hWnd, HWND_BOTTOM, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
     } else if (action == WindowAction::Center || action == WindowAction::SideSnap) {
         MONITORINFO monitor{.cbSize = sizeof(monitor)};
         RECT rc;
         if (!GetMonitorInfo(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST),
                             &monitor) || !GetWindowRect(hWnd, &rc)) return false;
-        if (IsZoomed(hWnd)) ShowWindowAsync(hWnd, SW_RESTORE);
+        if (IsZoomed(hWnd)) {
+            // The restore lands later, so size by the restored rectangle.
+            WINDOWPLACEMENT wp{sizeof(wp)};
+            if (GetWindowPlacement(hWnd, &wp)) rc = wp.rcNormalPosition;
+            ShowWindowAsync(hWnd, SW_RESTORE);
+        }
         const RECT& work = monitor.rcWork;
         int width = rc.right - rc.left;
         int height = rc.bottom - rc.top;
@@ -857,13 +1002,13 @@ bool RunWindowAction(HWND hWnd, WindowAction action, POINT pt) {
             SetWindowPos(hWnd, nullptr,
                          work.left + ((work.right - work.left) - width) / 2,
                          work.top + ((work.bottom - work.top) - height) / 2,
-                         0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                         0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
         } else {
             int half = (work.right - work.left) / 2;
             bool right = pt.x >= work.left + half;
             SetWindowPos(hWnd, nullptr, right ? work.left + half : work.left,
                          work.top, right ? work.right - work.left - half : half,
-                         work.bottom - work.top, SWP_NOZORDER | SWP_NOACTIVATE);
+                         work.bottom - work.top, SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
         }
     }
     return true;
@@ -887,6 +1032,8 @@ WindowAction MouseActionForMessage(UINT message, int button) {
 }
 
 bool HandleActionMouseMessage(MSG* msg, int button, bool down) {
+    // A press of the same button means its release was never seen here.
+    if (down && button == g_actionButton) g_actionButton = 0;
     if (!down && button == g_actionButton) {
         g_actionButton = 0;
         TakeMessage(msg);
@@ -903,7 +1050,7 @@ bool HandleActionMouseMessage(MSG* msg, int button, bool down) {
     HWND root = GetAncestor(msg->hwnd, GA_ROOT);
     if (!RunWindowAction(root, action, msg->pt)) return false;
     g_actionButton = button;
-    g_swallowedPress = true;
+    g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
     TakeMessage(msg);
     return true;
 }
@@ -917,8 +1064,13 @@ bool HandleActionKeyMessage(MSG* msg) {
     }
     if (!down || msg->wParam == 0) return false;
     if (g_actionKey == (int)msg->wParam) {
-        TakeMessage(msg);
-        return true;
+        // Only auto-repeats belong to the press that ran the action; a fresh
+        // press means the release went elsewhere.
+        if (msg->lParam & (1 << 30)) {
+            TakeMessage(msg);
+            return true;
+        }
+        g_actionKey = 0;
     }
     DWORD modifiers = HeldModifiers(GetKeyState);
     for (size_t i = 0; i < g_settings.hotkeys.size(); i++) {
@@ -927,7 +1079,7 @@ bool HandleActionKeyMessage(MSG* msg) {
             HWND root = GetAncestor(msg->hwnd, GA_ROOT);
             if (!root || !RunWindowAction(root, kHotkeyActions[i], msg->pt)) return false;
             g_actionKey = (int)msg->wParam;
-            g_swallowedPress = true;
+            g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
             TakeMessage(msg);
             return true;
         }
@@ -954,6 +1106,47 @@ UINT SizeCommandAtPoint(HWND hRootWnd, POINT pt) {
         {WMSZ_BOTTOMLEFT, WMSZ_BOTTOM, WMSZ_BOTTOMRIGHT},
     };
     return SC_SIZE | kEdges[row][col];
+}
+
+// A press inside the File Explorer title strip band, where the styler's
+// full-width tab pill swallows every press as a tab grab. The strip is the
+// top band of the Explorer XAML island child; the caption button scaffolding
+// at the right end stays clickable. The logical point is measured against a
+// physical window rect, the way SizeCommandAtPoint already does; this build
+// targets a 100% scale display.
+bool IsExplorerTitleStripPress(HWND hRootWnd, POINT pt) {
+    WCHAR className[64];
+    if (!GetClassName(hRootWnd, className, ARRAYSIZE(className)) ||
+        _wcsicmp(className, L"CabinetWClass") != 0) {
+        return false;
+    }
+
+    HWND island = FindWindowExW(hRootWnd, nullptr,
+                                L"Microsoft.UI.Content.DesktopChildSiteBridge",
+                                nullptr);
+    if (!island) {
+        return false;
+    }
+
+    RECT rc;
+    if (!GetWindowRect(island, &rc)) {
+        return false;
+    }
+
+    int stripHeight = MulDiv(36, GetDpiForWindow(hRootWnd), 96);
+    if (pt.y < rc.top || pt.y >= rc.top + stripHeight) {
+        return false;
+    }
+
+    // The caption buttons live in their own child window; presses there keep
+    // doing their job.
+    HWND scaffolding = FindWindowExW(
+        hRootWnd, nullptr, L"TITLE_BAR_SCAFFOLDING_WINDOW_CLASS", nullptr);
+    if (scaffolding && GetWindowRect(scaffolding, &rc) && PtInRect(&rc, pt)) {
+        return false;
+    }
+
+    return true;
 }
 
 // The drag a press of the button starts, given the modifier keys held, or 0.
@@ -1050,7 +1243,7 @@ HWND CompositionHostedWindowFromPoint(POINT pt) {
         }
     }
 
-    return nullptr;
+    return g_globalInput && hWnd != GetDesktopWindow() ? hWnd : nullptr;
 }
 
 // Whether the system size/move loop is running on this thread.
@@ -1060,8 +1253,14 @@ bool IsInMoveLoop() {
            (gti.flags & GUI_INMOVESIZE);
 }
 
+bool BeginSdlDrag(HWND window, UINT command, int button, POINT point);
+bool HandleSdlDragMessage(MSG* msg);
+
 // Posted messages are retrieved before input, so a button release that's
 // already queued is seen by the loop rather than by the program.
+// Marks the button of a request for a press a low level hook took.
+constexpr int kTakenInHookFlag = 0x8000;
+
 bool PostSizeMoveRequest(HWND hRootWnd, UINT command, int button, POINT pt) {
     if (!PostMessage(hRootWnd, g_sizeMoveRequestMessage,
                      MAKEWPARAM(command, button), MAKELPARAM(pt.x, pt.y))) {
@@ -1098,13 +1297,22 @@ bool IsRequestAcceptable(UINT command, int button, HWND hRootWnd) {
 // and it's the left button which counts whichever button is really held.
 void OnSizeMoveRequestRemoved(MSG* msg) {
     UINT command = LOWORD(msg->wParam);
-    int button = HIWORD(msg->wParam);
+    int button = HIWORD(msg->wParam) & ~kTakenInHookFlag;
+    bool takenInHook = HIWORD(msg->wParam) & kTakenInHookFlag;
 
     if (!IsRequestAcceptable(command, button, msg->hwnd)) {
         Wh_Log(L"Dropping the request %04X %02X for %08X", command, button,
                (DWORD)(ULONG_PTR)msg->hwnd);
         TakeMessage(msg);
         return;
+    }
+
+    // A low level hook passes its press on and posts the request ahead of it,
+    // so the request can arrive before the system has recorded the press.
+    if (takenInHook) {
+        for (int i = 0; i < 100 && GetAsyncKeyState(button) >= 0; i++) {
+            Sleep(1);
+        }
     }
 
     if (GetAsyncKeyState(button) >= 0) {
@@ -1114,6 +1322,20 @@ void OnSizeMoveRequestRemoved(MSG* msg) {
                NameOfCommand(command), (DWORD)(ULONG_PTR)msg->hwnd);
         TakeMessage(msg);
         return;
+    }
+
+    // SDL's event pump can leave DefWindowProc's modal move loop holding
+    // capture after button-up. Never enter that loop for these windows.
+    if (BeginSdlDrag(msg->hwnd, command, button,
+                     POINT{(short)LOWORD(msg->lParam),
+                           (short)HIWORD(msg->lParam)})) {
+        TakeMessage(msg);
+        return;
+    }
+
+    // A press taken in a low level hook never activated the window.
+    if (GetForegroundWindow() != msg->hwnd) {
+        SetForegroundWindow(msg->hwnd);
     }
 
     if (GetKeyState(VK_LBUTTON) >= 0) {
@@ -1128,6 +1350,7 @@ void OnSizeMoveRequestRemoved(MSG* msg) {
         .button = button,
         .hWnd = msg->hwnd,
         .startPt = msg->pt,
+        .fromHook = takenInHook,
     };
 
     msg->message = WM_SYSCOMMAND;
@@ -1151,10 +1374,29 @@ void OnLoopMessageRemoved(MSG* msg, bool inLoop) {
     }
 
     if (msg->message == WM_MOUSEMOVE) {
+        // A release the loop never sees, e.g. one a hook further along the
+        // chain swallowed, would leave the window stuck to the cursor.
+        if (GetAsyncKeyState(g_loop.button) >= 0) {
+            Wh_Log(L"Button %02X is up with no release seen, ending the loop",
+                   g_loop.button);
+            msg->message = WM_LBUTTONUP;
+            msg->wParam = 0;
+            if (GetAsyncKeyState(VK_LBUTTON) >= 0 &&
+                GetKeyState(VK_LBUTTON) < 0) {
+                SetSyncKeyState(VK_LBUTTON, false);
+            }
+            g_loop = {};
+            g_takenPressButton = 0;
+            return;
+        }
+
         // The loop retrieves the moves itself, without dispatching them,
         // holds an internal capture for which no WM_SETCURSOR is sent, and
-        // shows the class cursor.
-        SetCursor(LoadCursor(nullptr, CursorOfCommand(g_loop.command)));
+        // shows the class cursor. A title strip drag keeps the arrow, as a
+        // title bar drag does.
+        if (!g_loop.fromHook) {
+            SetCursor(LoadCursor(nullptr, CursorOfCommand(g_loop.command)));
+        }
         return;
     }
 
@@ -1184,7 +1426,7 @@ void OnLoopMessageRemoved(MSG* msg, bool inLoop) {
             msg->wParam = 0;
         }
 
-        g_swallowedPress = true;
+        g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
 
         if (RunWindowAction(hRootWnd, WindowAction::Maximize, pt)) {
             Wh_Log(
@@ -1213,10 +1455,11 @@ void OnLoopMessageRemoved(MSG* msg, bool inLoop) {
         }
     }
 
-    if (!g_loop.dragged) {
+    // A press passed on by a low level hook was never taken.
+    if (!g_loop.dragged && !g_loop.fromHook) {
         if (button == VK_RBUTTON &&
             RunWindowAction(g_loop.hWnd, g_settings.rightClickAction, msg->pt)) {
-            g_swallowedPress = true;
+            g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
         } else {
             Wh_Log(L"Released within the drag threshold, replaying the click");
             ReplayPress(button, true);
@@ -1353,9 +1596,10 @@ void OnModifierKeyMessageRemoved(MSG* msg, DWORD modifier) {
         RemoveLowLevelMouseHookIfIdle();
     }
 
-    if (!down && msg->wParam == VK_MENU && g_swallowedPress.exchange(false)) {
-        Wh_Log(L"Swallowing the Alt release of a drag");
-        TakeMessage(msg);
+    // The app saw the Alt press, so it must see the release too. Only the
+    // helper masks the menu; here the flag is just cleared.
+    if (!down && msg->wParam == VK_MENU) {
+        g_swallowedPress = false;
     }
 }
 
@@ -1389,6 +1633,10 @@ void OnMessageRemoved(MSG* msg) {
     }
 
     if (!msg->hwnd) {
+        return;
+    }
+
+    if (HandleSdlDragMessage(msg)) {
         return;
     }
 
@@ -1437,7 +1685,6 @@ void OnMessageRemoved(MSG* msg) {
     if (!button) {
         return;
     }
-
     if (g_delayedPress.timerId) {
         if (button == g_delayedPress.button && !down) {
             Wh_Log(L"Released before the drag delay elapsed");
@@ -1626,6 +1873,198 @@ void SubclassWindowIfNeeded(HWND hWnd) {
     g_lastSubclassedWnd = hWnd;
 }
 
+// The File Explorer title strip, where the styler's full-width tab pill takes
+// every press as a tab grab. Its island never turns pointer input into window
+// messages, so a press there is taken in a low level hook and handed to the
+// system's own move loop: the stock drag, Aero Snap and arrow cursor. A double
+// click toggles the maximized state and a right click opens the system menu,
+// as on any title bar.
+//
+// The hook has a thread of its own. A low level hook is called on the thread
+// which installed it, for every mouse event on the desktop, and an Explorer
+// window thread that's busy painting would hold up the cursor everywhere.
+HANDLE g_stripHookThread;
+DWORD g_stripHookThreadId;
+
+// Touched by the strip hook's thread only.
+struct {
+    HWND hRootWnd;
+    DWORD time;
+    POINT pt;
+} g_stripLastPress;
+HWND g_stripRightPressRootWnd;
+bool g_stripSwallowLeftUp;
+
+constexpr UINT kPopupSystemMenuMessage = 0x0313;  // WM_POPUPSYSTEMMENU
+
+// Starts the system's move loop on the window's thread, the way a title bar
+// press does. The press itself is passed on: the request, being posted, is
+// retrieved ahead of it, and the loop then takes it and the release, which
+// keeps the button state real.
+bool HandOffMoveToSystemLoop(HWND hRootWnd, int button, POINT pt) {
+    if (button != VK_LBUTTON) {
+        return false;
+    }
+
+    DWORD processId = 0;
+    GetWindowThreadProcessId(hRootWnd, &processId);
+    AllowSetForegroundWindow(processId);
+    if (!PostSizeMoveRequest(hRootWnd, SC_MOVE | HTCAPTION,
+                             button | kTakenInHookFlag, pt)) {
+        return false;
+    }
+
+    return true;
+}
+
+bool IsStripDoubleClick(HWND hRootWnd, const MSLLHOOKSTRUCT* ms) {
+    return hRootWnd == g_stripLastPress.hRootWnd &&
+           ms->time - g_stripLastPress.time <= GetDoubleClickTime() &&
+           abs(ms->pt.x - g_stripLastPress.pt.x) <=
+               GetSystemMetrics(SM_CXDOUBLECLK) / 2 &&
+           abs(ms->pt.y - g_stripLastPress.pt.y) <=
+               GetSystemMetrics(SM_CYDOUBLECLK) / 2;
+}
+
+LRESULT CALLBACK StripLowLevelMouseProc(int nCode,
+                                        WPARAM wParam,
+                                        LPARAM lParam) {
+    auto hookScope = HookRefCountScope();
+
+    if (nCode != HC_ACTION || g_uninitializing) {
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+    }
+
+    const MSLLHOOKSTRUCT* ms = (const MSLLHOOKSTRUCT*)lParam;
+    if (ms->dwExtraInfo == kOwnInputExtraInfo ||
+        !g_settings.explorerTitleStripDrag) {
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+    }
+
+    // The double-click press was swallowed, so its release goes too.
+    if (wParam == WM_LBUTTONUP && g_stripSwallowLeftUp) {
+        g_stripSwallowLeftUp = false;
+        return 1;
+    }
+    if (wParam == WM_LBUTTONDOWN) g_stripSwallowLeftUp = false;
+
+    if (wParam == WM_RBUTTONUP && g_stripRightPressRootWnd) {
+        HWND hRootWnd = g_stripRightPressRootWnd;
+        g_stripRightPressRootWnd = nullptr;
+        PostMessage(hRootWnd, kPopupSystemMenuMessage, 0,
+                    MAKELPARAM(ms->pt.x, ms->pt.y));
+        return 1;
+    }
+
+    if ((wParam != WM_LBUTTONDOWN && wParam != WM_RBUTTONDOWN) ||
+        HeldModifiers(GetAsyncKeyState)) {
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+    }
+
+    HWND hWnd = CompositionHostedWindowFromPoint(ms->pt);
+    HWND hRootWnd = hWnd ? GetAncestor(hWnd, GA_ROOT) : nullptr;
+    if (!hRootWnd || !IsExplorerTitleStripPress(hRootWnd, ms->pt)) {
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+    }
+
+    if (wParam == WM_RBUTTONDOWN) {
+        g_stripRightPressRootWnd = hRootWnd;
+        return 1;
+    }
+
+    if (!CanMoveRootWindow(hRootWnd)) {
+        return CallNextHookEx(nullptr, nCode, wParam, lParam);
+    }
+
+    if (IsStripDoubleClick(hRootWnd, ms)) {
+        g_stripLastPress = {};
+        PostMessage(hRootWnd, WM_SYSCOMMAND,
+                    IsZoomed(hRootWnd) ? SC_RESTORE : SC_MAXIMIZE, 0);
+        g_stripSwallowLeftUp = true;
+        return 1;
+    }
+
+    g_stripLastPress = {hRootWnd, ms->time, ms->pt};
+    HandOffMoveToSystemLoop(hRootWnd, VK_LBUTTON, ms->pt);
+    return CallNextHookEx(nullptr, nCode, wParam, lParam);
+}
+
+// Physical coordinates throughout, as the hook reports them.
+DWORD WINAPI StripHookThreadProc(void*) {
+    SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
+    MSG msg;
+    PeekMessage(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+
+    HHOOK hook = SetWindowsHookEx(WH_MOUSE_LL, StripLowLevelMouseProc,
+                                  GetModuleHandle(nullptr), 0);
+    if (!hook) {
+        Wh_Log(L"SetWindowsHookEx(WH_MOUSE_LL) error for the strip: %u",
+               GetLastError());
+        return 0;
+    }
+
+    while (GetMessage(&msg, nullptr, 0, 0) > 0) {
+        DispatchMessage(&msg);
+    }
+
+    UnhookWindowsHookEx(hook);
+    return 0;
+}
+
+// Started by the first File Explorer window of the process. Explorer runs
+// many processes without one, and each hook in the chain is a stop for every
+// mouse event on the desktop.
+std::mutex g_stripHookThreadMutex;
+std::atomic<bool> g_stripHookThreadStarted;
+
+bool IsFileExplorerWindow(HWND hWnd) {
+    WCHAR className[32];
+    return GetClassName(hWnd, className, ARRAYSIZE(className)) &&
+           _wcsicmp(className, L"CabinetWClass") == 0;
+}
+
+void StartStripHookThreadIfNeeded(HWND hWnd) {
+    if (g_stripHookThreadStarted || !IsExplorerProcess() ||
+        !IsFileExplorerWindow(hWnd)) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> guard(g_stripHookThreadMutex);
+    if (g_stripHookThreadStarted || g_uninitializing) {
+        return;
+    }
+
+    g_stripHookThreadStarted = true;
+    g_stripHookThread = CreateThread(nullptr, 0, StripHookThreadProc, nullptr,
+                                     0, &g_stripHookThreadId);
+    if (!g_stripHookThread) {
+        Wh_Log(L"CreateThread error: %u", GetLastError());
+    }
+}
+
+void StopStripHookThread() {
+    HANDLE thread;
+    {
+        std::lock_guard<std::mutex> guard(g_stripHookThreadMutex);
+        thread = g_stripHookThread;
+        g_stripHookThread = nullptr;
+    }
+
+    if (!thread) {
+        return;
+    }
+
+    // The queue exists once the thread has started.
+    while (WaitForSingleObject(thread, 0) == WAIT_TIMEOUT &&
+           !PostThreadMessage(g_stripHookThreadId, WM_QUIT, 0, 0)) {
+        Sleep(10);
+    }
+
+    WaitForSingleObject(thread, INFINITE);
+    CloseHandle(thread);
+}
+
 LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam) {
     auto hookScope = HookRefCountScope();
 
@@ -1638,8 +2077,13 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam) {
             if (!(cs->style & WS_CHILD) && g_getMessageHook) {
                 MarkHookedWindow(cwp->hwnd);
             }
-        } else if (cwp->message == WM_NCHITTEST &&
-                   (IsAnyTriggerKeyless() ||
+            if (!(cs->style & WS_CHILD)) {
+                StartStripHookThreadIfNeeded(cwp->hwnd);
+            }
+        }
+
+        if (cwp->message == WM_NCHITTEST &&
+            (IsAnyTriggerKeyless() ||
                     IsAnyModifierTriggerHeld(
                         HeldModifiers(GetAsyncKeyState)))) {
             // The thread's synchronized key state is stale if the window
@@ -1693,12 +2137,95 @@ POINT CalcDragGrab(HWND hRootWnd, POINT ptDown) {
     return grab;
 }
 
-// SWP_ASYNCWINDOWPOS posts the request when the window belongs to another
-// thread, which keeps a busy owner from blocking the caller.
+// The global helper places dragged windows from a thread of its own. Posted
+// moves pile up in a busy program's queue and the window trails the pointer;
+// this thread only ever applies the newest position, waiting for each to land,
+// so the window keeps up at whatever rate the program can repaint. A hung
+// program gets a posted move instead, and the input thread never waits.
+namespace mover {
+std::mutex g_lock;
+HWND g_wnd;
+RECT g_rect;
+UINT g_flags;
+bool g_pending;
+bool g_quit;
+HANDLE g_event;
+HANDLE g_thread;
+
+DWORD WINAPI ThreadProc(void*) {
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+    while (WaitForSingleObject(g_event, INFINITE) == WAIT_OBJECT_0) {
+        for (;;) {
+            HWND wnd;
+            RECT rc;
+            UINT flags;
+            {
+                std::lock_guard<std::mutex> guard(g_lock);
+                if (g_quit) return 0;
+                if (!g_pending) break;
+                g_pending = false;
+                wnd = g_wnd;
+                rc = g_rect;
+                flags = g_flags;
+            }
+            if (IsHungAppWindow(wnd)) flags |= SWP_ASYNCWINDOWPOS;
+            else flags &= ~SWP_ASYNCWINDOWPOS;
+            SetWindowPos(wnd, nullptr, rc.left, rc.top, rc.right - rc.left,
+                         rc.bottom - rc.top, flags);
+        }
+    }
+    return 0;
+}
+
+void Queue(HWND wnd, const RECT& rc, UINT flags) {
+    std::lock_guard<std::mutex> guard(g_lock);
+    if (!g_thread) {
+        g_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        if (g_event) g_thread = CreateThread(nullptr, 0, ThreadProc, nullptr, 0, nullptr);
+        if (!g_thread) {
+            SetWindowPos(wnd, nullptr, rc.left, rc.top, rc.right - rc.left,
+                         rc.bottom - rc.top, flags | SWP_ASYNCWINDOWPOS);
+            return;
+        }
+    }
+    g_wnd = wnd;
+    g_rect = rc;
+    g_flags = flags;
+    g_pending = true;
+    SetEvent(g_event);
+}
+
+void Stop() {
+    HANDLE thread;
+    {
+        std::lock_guard<std::mutex> guard(g_lock);
+        g_quit = true;
+        thread = g_thread;
+        g_thread = nullptr;
+    }
+    if (!thread) return;
+    SetEvent(g_event);
+    // A move into a program that hangs right then can hold the thread; it is
+    // left to finish rather than blocking the unload for long.
+    WaitForSingleObject(thread, 3000);
+    CloseHandle(thread);
+}
+}  // namespace mover
+
+void PlaceDraggedWindow(HWND hRootWnd, const RECT& rc, UINT flags) {
+    if (g_globalInput) {
+        mover::Queue(hRootWnd, rc, flags);
+        return;
+    }
+    // SWP_ASYNCWINDOWPOS posts the request when the window belongs to another
+    // thread, which keeps a busy owner from blocking the caller.
+    SetWindowPos(hRootWnd, nullptr, rc.left, rc.top, rc.right - rc.left,
+                 rc.bottom - rc.top, flags | SWP_ASYNCWINDOWPOS);
+}
+
 void MoveDraggedWindow(HWND hRootWnd, POINT grab, POINT pt) {
-    SetWindowPos(
-        hRootWnd, nullptr, pt.x - grab.x, pt.y - grab.y, 0, 0,
-        SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+    RECT rc{pt.x - grab.x, pt.y - grab.y, pt.x - grab.x, pt.y - grab.y};
+    PlaceDraggedWindow(hRootWnd, rc, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 // The edges the command takes hold of follow the pointer from where the drag
@@ -1742,9 +2269,97 @@ void SizeDraggedWindow(HWND hRootWnd,
             break;
     }
 
-    SetWindowPos(hRootWnd, nullptr, rc.left, rc.top, rc.right - rc.left,
-                 rc.bottom - rc.top,
-                 SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+    PlaceDraggedWindow(hRootWnd, rc, SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+thread_local struct {
+    HWND window;
+    UINT command;
+    int button;
+    POINT start;
+    POINT grab;
+    RECT rectangle;
+    bool started;
+} g_sdlDrag;
+
+bool BeginSdlDrag(HWND window, UINT command, int button, POINT point) {
+    WCHAR name[64];
+    if (!GetClassName(window, name, ARRAYSIZE(name)) ||
+        _wcsicmp(name, L"SDL_app") != 0) {
+        return false;
+    }
+    g_sdlDrag = {.window = window, .command = command,
+                 .button = button, .start = point};
+    SetCapture(window);
+    return true;
+}
+
+bool HandleSdlDragMessage(MSG* msg) {
+    if (!g_sdlDrag.window) {
+        return false;
+    }
+    bool down = false;
+    int button = ButtonOfMessage(msg->message, HIWORD(msg->wParam), &down);
+    bool released = button == g_sdlDrag.button && !down;
+    // As in the modal loop: the right button while moving toggles the
+    // maximized state and ends the drag. Its release and the Alt release are
+    // kept from the window.
+    if (down && button == VK_RBUTTON && g_sdlDrag.started &&
+        !IsSizeCommand(g_sdlDrag.command)) {
+        HWND window = g_sdlDrag.window;
+        g_sdlDrag = {};
+        if (GetCapture() == window) {
+            ReleaseCapture();
+        }
+        g_takenPressButton = VK_RBUTTON;
+        g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
+        TakeMessage(msg);
+        if (RunWindowAction(window, WindowAction::Maximize, msg->pt)) {
+            Wh_Log(L"Right button while moving SDL window %08X: toggled "
+                   L"maximize",
+                   (DWORD)(ULONG_PTR)window);
+        }
+        return true;
+    }
+    bool cancelled = msg->message == WM_CANCELMODE ||
+                     (msg->message == WM_KEYDOWN && msg->wParam == VK_ESCAPE) ||
+                     GetCapture() != g_sdlDrag.window;
+    if (released || cancelled || GetAsyncKeyState(g_sdlDrag.button) >= 0) {
+        HWND window = g_sdlDrag.window;
+        g_sdlDrag = {};
+        if (GetCapture() == window) {
+            ReleaseCapture();
+        }
+        if (released) {
+            g_takenPressButton = 0;
+            TakeMessage(msg);
+            return true;
+        }
+        return false;
+    }
+    if (msg->message != WM_MOUSEMOVE && msg->message != WM_NCMOUSEMOVE) {
+        return false;
+    }
+    if (!g_sdlDrag.started && IsPastDragThreshold(g_sdlDrag.start, msg->pt)) {
+        g_sdlDrag.started = true;
+        if (IsSizeCommand(g_sdlDrag.command)) {
+            GetWindowRect(g_sdlDrag.window, &g_sdlDrag.rectangle);
+        } else {
+            g_sdlDrag.grab = CalcDragGrab(g_sdlDrag.window, g_sdlDrag.start);
+        }
+        g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
+    }
+    if (g_sdlDrag.started) {
+        if (IsSizeCommand(g_sdlDrag.command)) {
+            SizeDraggedWindow(g_sdlDrag.window, g_sdlDrag.command,
+                              g_sdlDrag.rectangle, g_sdlDrag.start, msg->pt);
+        } else {
+            MoveDraggedWindow(g_sdlDrag.window, g_sdlDrag.grab, msg->pt);
+        }
+    }
+    SetCursor(LoadCursor(nullptr, CursorOfCommand(g_sdlDrag.command)));
+    TakeMessage(msg);
+    return true;
 }
 
 void DragWindowTo(POINT pt) {
@@ -1969,7 +2584,7 @@ bool OnLowLevelButtonDown(const MSLLHOOKSTRUCT* ms, int button) {
     g_llDownPt = pt;
     g_llDownTime = ms->time;
     if (GetAsyncKeyState(VK_MENU) < 0) {
-        g_swallowedPress = true;
+        g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
     }
 
     // A timer may be left from a candidate reset on another thread.
@@ -2041,7 +2656,7 @@ void SetUpLowLevelDrag() {
     } else if (processId != GetCurrentProcessId()) {
         // The Alt release goes there now, and a later one here isn't to be
         // taken for it.
-        g_swallowedPress = false;
+        if (!g_globalInput) g_swallowedPress = false;
     }
 
     MaskWinKeyReleaseIfNeeded(g_llCommand);
@@ -2095,6 +2710,24 @@ void PostDragUpdate(POINT pt) {
     }
 }
 
+// A low level hook must return at once or the system drops it, so an action
+// picked in the callback (a menu, or a move a hung program would block) runs
+// from the hook thread's queue instead.
+// The action rides in the message number, which keeps the point whole in
+// lParam on 32-bit builds too.
+// Read by the helper's watchdog to tell a hook the system dropped.
+POINT g_llLastCallbackPt;
+DWORD g_llLastCallbackTick;
+
+constexpr UINT kWindowActionMessage = WM_APP + 100;
+constexpr UINT kWindowActionMessageEnd = kWindowActionMessage + 64;
+bool PostWindowAction(HWND hWnd, WindowAction action, POINT pt) {
+    if (action == WindowAction::None || !CanActOnRootWindow(hWnd)) return false;
+    return PostThreadMessage(GetCurrentThreadId(),
+                             kWindowActionMessage + (UINT)action, (WPARAM)hWnd,
+                             MAKELPARAM((WORD)(short)pt.x, (WORD)(short)pt.y));
+}
+
 // Runs for mouse input before it's routed anywhere, which is the only point at
 // which a press can be taken away from composition hosted content. Moves are
 // never swallowed: that would stop the cursor.
@@ -2106,6 +2739,8 @@ LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     }
 
     const MSLLHOOKSTRUCT* ms = (const MSLLHOOKSTRUCT*)lParam;
+    g_llLastCallbackPt = ms->pt;
+    g_llLastCallbackTick = GetTickCount();
 
     if (ms->dwExtraInfo == kOwnInputExtraInfo) {
         return CallNextHookEx(nullptr, nCode, wParam, lParam);
@@ -2123,14 +2758,22 @@ LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
         if (button == g_llButton) {
             ResetLowLevelDragState();
         } else if (button == VK_RBUTTON && g_llRootWnd && g_llDragging &&
-                   !IsSizeCommand(g_llCommand) &&
-                   RunWindowAction(g_llRootWnd, WindowAction::Maximize,
-                                   ToLogicalPoint(ms->pt))) {
+                   !IsSizeCommand(g_llCommand)) {
             // Same as AltSnap: while a window is being moved, the right button
-            // toggles its maximized state. The Alt release of the drag is kept
+            // toggles its maximized state. The drag ends with the toggle, as
+            // the moves which follow it would drag the window off the fitted
+            // state the toggle leaves. The Alt release of the drag is kept
             // from reaching the window, which would open its menu.
-            g_swallowedPress = true;
-            return 1;
+            HWND hRootWnd = g_llRootWnd;
+            if (PostWindowAction(hRootWnd, WindowAction::Maximize,
+                                 ToLogicalPoint(ms->pt))) {
+                g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
+                ResetLowLevelDragState();
+                Wh_Log(L"Right button while moving %08X: toggled the "
+                       L"maximized state",
+                       (DWORD)(ULONG_PTR)hRootWnd);
+                return 1;
+            }
         }
 
         if (!g_llRootWnd && OnLowLevelButtonDown(ms, button)) {
@@ -2145,9 +2788,9 @@ LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
         ResetLowLevelDragState();
         if (!dragging) {
             if (button == VK_RBUTTON &&
-                RunWindowAction(root, g_settings.rightClickAction,
-                                ToLogicalPoint(ms->pt))) {
-                g_swallowedPress = true;
+                PostWindowAction(root, g_settings.rightClickAction,
+                                 ToLogicalPoint(ms->pt))) {
+                g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
             } else {
                 PostReplayPress(button, true);
             }
@@ -2192,9 +2835,12 @@ void RemoveLowLevelMouseHook() {
     }
 }
 
-void InstallLowLevelMouseHookIfNeeded() {
+// Runs on the hook's own thread.
+void InstallLowLevelMouseHookOnThisThread() {
     // Outside the lock, the loader being out of bounds while it's held.
     HMODULE module = GetModuleHandle(nullptr);
+
+    SetThreadDpiAwarenessContext(g_lowLevelMouseHookDpiContext);
 
     std::lock_guard<std::mutex> guard(g_lowLevelMouseHookMutex);
     if (g_lowLevelMouseHook || g_uninitializing) {
@@ -2215,7 +2861,197 @@ void InstallLowLevelMouseHookIfNeeded() {
     }
 }
 
+// The thread installs the hook as it starts and again whenever asked. Its
+// messages go through the mod's message hook like any thread's, which handles
+// the drag updates, timers and replays posted to it.
+HHOOK g_globalAltHook;
+LRESULT CALLBACK GlobalAltProc(int code, WPARAM message, LPARAM data) {
+    if (code == HC_ACTION) {
+        auto key = reinterpret_cast<KBDLLHOOKSTRUCT*>(data);
+        // Never swallow the Alt release: Windows would then keep Alt held,
+        // which eats typing and makes plain drags act as Alt drags. A dummy
+        // key tap ahead of the real release stops the window menu opening.
+        // Input sent from the callback is processed before the release.
+        bool altKey = key->vkCode == VK_LMENU || key->vkCode == VK_RMENU;
+        bool injected = key->flags & LLKHF_INJECTED;
+        if (altKey && !injected && (message == WM_KEYDOWN || message == WM_SYSKEYDOWN)) {
+            g_swallowedPress = false;
+        } else if (altKey && (message == WM_KEYUP || message == WM_SYSKEYUP) &&
+                   g_swallowedPress.exchange(false)) {
+            INPUT in[2]{};
+            for (auto& i : in) {
+                i.type = INPUT_KEYBOARD;
+                i.ki.wVk = kMenuMaskKey;
+                i.ki.dwExtraInfo = kOwnInputExtraInfo;
+            }
+            in[1].ki.dwFlags = KEYEVENTF_KEYUP;
+            SendInput(2, in, sizeof(INPUT));
+        }
+    }
+    return CallNextHookEx(nullptr, code, message, data);
+}
+
+DWORD WINAPI LowLevelMouseHookThreadProc(void*) {
+    MSG msg;
+    PeekMessage(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+
+    InstallLowLevelMouseHookOnThisThread();
+    std::array<bool, kHotkeyActions.size()> registered{};
+    auto registerActions = [&] {
+        for (size_t i = 0; i < registered.size(); ++i) {
+            if (registered[i] || !g_settings.hotkeys[i].key) continue;
+            DWORD held = g_settings.hotkeys[i].modifiers;
+            UINT mods = ((held & kModifierCtrl) ? MOD_CONTROL : 0) |
+                        ((held & kModifierAlt) ? MOD_ALT : 0) |
+                        ((held & kModifierShift) ? MOD_SHIFT : 0) |
+                        ((held & kModifierWin) ? MOD_WIN : 0);
+            registered[i] = RegisterHotKey(nullptr, 0x6000 + i, mods | MOD_NOREPEAT,
+                                            g_settings.hotkeys[i].key);
+        }
+    };
+    UINT_PTR retry = 0;
+    if (g_globalInput) {
+        g_globalAltHook = SetWindowsHookEx(WH_KEYBOARD_LL, GlobalAltProc, GetModuleHandle(nullptr), 0);
+        registerActions();
+        retry = SetTimer(nullptr, 0, 2000, nullptr);
+    }
+
+    while (GetMessage(&msg, nullptr, 0, 0) > 0) {
+        if (g_globalInput) {
+            if (msg.message == WM_APP + 91 && !msg.hwnd) {
+                ResetLowLevelDragState();
+                for (size_t i = 0; i < registered.size(); ++i) {
+                    if (registered[i]) UnregisterHotKey(nullptr, 0x6000 + i);
+                    registered[i] = false;
+                }
+                LoadSettings();
+                registerActions();
+                continue;
+            }
+            if (msg.message == WM_TIMER && !msg.hwnd && msg.wParam == retry) {
+                registerActions();
+                // The system drops a low level hook that once ran too long,
+                // without telling it. The pointer having moved with no
+                // callback for a while means that happened: hook again.
+                POINT now{};
+                // A drag whose button is no longer down is stale too.
+                bool stale = !g_llRootWnd || GetAsyncKeyState(g_llButton) >= 0;
+                if (stale && GetPhysicalCursorPos(&now) &&
+                    (now.x != g_llLastCallbackPt.x || now.y != g_llLastCallbackPt.y) &&
+                    GetTickCount() - g_llLastCallbackTick > 2000) {
+                    Wh_Log(L"Mouse hook went quiet, reinstalling");
+                    ResetLowLevelDragState();
+                    RemoveLowLevelMouseHook();
+                    InstallLowLevelMouseHookOnThisThread();
+                    if (g_globalAltHook) UnhookWindowsHookEx(g_globalAltHook);
+                    g_globalAltHook = SetWindowsHookEx(WH_KEYBOARD_LL, GlobalAltProc,
+                                                       GetModuleHandle(nullptr), 0);
+                    g_llLastCallbackPt = now;
+                    g_llLastCallbackTick = GetTickCount();
+                }
+                continue;
+            }
+            if (msg.message == WM_HOTKEY && !msg.hwnd &&
+                msg.wParam >= 0x6000 && msg.wParam < 0x6000 + registered.size()) {
+                POINT pt{};
+                GetCursorPos(&pt);
+                RunWindowAction(GetAncestor(GetForegroundWindow(), GA_ROOT),
+                                kHotkeyActions[msg.wParam - 0x6000], pt);
+                continue;
+            }
+            OnMessageRemoved(&msg);
+        }
+        if (!msg.hwnd && msg.message >= kWindowActionMessage &&
+            msg.message < kWindowActionMessageEnd) {
+            POINT pt{(short)LOWORD(msg.lParam), (short)HIWORD(msg.lParam)};
+            RunWindowAction((HWND)msg.wParam,
+                            (WindowAction)(msg.message - kWindowActionMessage), pt);
+            continue;
+        }
+        if (!msg.hwnd && msg.message == kInstallLowLevelMouseHookMessage) {
+            InstallLowLevelMouseHookOnThisThread();
+            continue;
+        }
+
+        DispatchMessage(&msg);
+    }
+
+    {
+        std::lock_guard<std::mutex> guard(g_lowLevelMouseHookMutex);
+        if (g_lowLevelMouseHook &&
+            GetCurrentThreadId() == g_lowLevelMouseHookThreadId) {
+            UnhookWindowsHookEx(g_lowLevelMouseHook);
+            g_lowLevelMouseHook = nullptr;
+        }
+    }
+
+    if (g_globalAltHook) UnhookWindowsHookEx(g_globalAltHook);
+    if (retry) KillTimer(nullptr, retry);
+    for (size_t i = 0; i < registered.size(); ++i)
+        if (registered[i]) UnregisterHotKey(nullptr, 0x6000 + i);
+    ResetLowLevelDragState();
+    return 0;
+}
+
+// Called by whichever thread retrieves the trigger's keys, which takes its DPI
+// awareness to the hook's thread: the hook places windows in its coordinates.
+void InstallLowLevelMouseHookIfNeeded() {
+    if (!g_globalInput) {
+        HANDLE helper = OpenMutex(SYNCHRONIZE, FALSE, L"windhawk-window-manager-global");
+        if (helper) { CloseHandle(helper); return; }
+        // An older helper's mutex was admin-only; denied still means it runs.
+        if (GetLastError() == ERROR_ACCESS_DENIED) return;
+    }
+    DPI_AWARENESS_CONTEXT dpiContext = GetThreadDpiAwarenessContext();
+
+    std::lock_guard<std::mutex> guard(g_lowLevelMouseHookMutex);
+    if (g_lowLevelMouseHook || g_uninitializing) {
+        return;
+    }
+
+    g_lowLevelMouseHookDpiContext = dpiContext;
+
+    if (g_lowLevelMouseHookThread) {
+        // Fails until the thread's queue exists, the thread then installing
+        // the hook as it starts.
+        PostThreadMessage(g_lowLevelMouseHookOwnThreadId,
+                          kInstallLowLevelMouseHookMessage, 0, 0);
+        return;
+    }
+
+    g_lowLevelMouseHookThread =
+        CreateThread(nullptr, 0, LowLevelMouseHookThreadProc, nullptr, 0,
+                     &g_lowLevelMouseHookOwnThreadId);
+    if (!g_lowLevelMouseHookThread) {
+        Wh_Log(L"CreateThread error: %u", GetLastError());
+    }
+}
+
+void StopLowLevelMouseHookThread() {
+    HANDLE thread;
+    DWORD threadId;
+    {
+        std::lock_guard<std::mutex> guard(g_lowLevelMouseHookMutex);
+        thread = g_lowLevelMouseHookThread;
+        threadId = g_lowLevelMouseHookOwnThreadId;
+        g_lowLevelMouseHookThread = nullptr;
+    }
+
+    if (!thread) {
+        return;
+    }
+
+    while (WaitForSingleObject(thread, 0) == WAIT_TIMEOUT &&
+           !PostThreadMessage(threadId, WM_QUIT, 0, 0)) {
+        Sleep(10);
+    }
+
+    WaitForSingleObject(thread, INFINITE);
+    CloseHandle(thread);
+}
+
 void RemoveLowLevelMouseHookIfIdle() {
+    if (g_globalInput) return;
     std::lock_guard<std::mutex> guard(g_lowLevelMouseHookMutex);
 
     // Only the hook's thread can tell whether a press is being held or a drag
@@ -2592,6 +3428,10 @@ void LoadSettings() {
     LoadTriggerSettings(g_settings.sizeTrigger, L"sizeTrigger");
     g_settings.dragWindowsWithoutTitleBar =
         Wh_GetIntSetting(L"dragWindowsWithoutTitleBar");
+    g_settings.explorerTitleStripDrag =
+        Wh_GetIntSetting(L"explorerTitleStripDrag");
+    g_settings.sizeWindowsWithoutSizingBorder =
+        Wh_GetIntSetting(L"sizeWindowsWithoutSizingBorder");
     LoadActionSetting(g_settings.middleAction, L"middleAction");
     LoadActionSetting(g_settings.rightClickAction, L"rightClickAction");
     LoadActionSetting(g_settings.x1Action, L"x1Action");
@@ -2617,6 +3457,14 @@ BOOL ModInit() {
 
     HMODULE win32uModule = GetModuleHandle(L"win32u.dll");
     if (!win32uModule) {
+        // Apps whose exe has no user32 in its import table (Electron 43
+        // bootstrappers such as Tidal 2.47+) reach this point before
+        // anything has mapped win32u, and bailing here would leave them
+        // without the drag hooks for good. Load it instead: it is a
+        // KnownDLL the process maps again on its own when user32 arrives.
+        win32uModule = LoadLibrary(L"win32u.dll");
+    }
+    if (!win32uModule) {
         Wh_Log(L"win32u.dll isn't loaded");
         return FALSE;
     }
@@ -2639,6 +3487,19 @@ BOOL ModInit() {
     // window in this process.
     ChangeWindowMessageFilter(g_sizeMoveRequestMessage, MSGFLT_ADD);
 
+    if (IsExplorerProcess()) {
+        EnumWindows(
+            [](HWND hWnd, LPARAM) WINAPI -> BOOL {
+                DWORD processId = 0;
+                GetWindowThreadProcessId(hWnd, &processId);
+                if (processId == GetCurrentProcessId()) {
+                    StartStripHookThreadIfNeeded(hWnd);
+                }
+                return TRUE;
+            },
+            0);
+    }
+
     return TRUE;
 }
 
@@ -2646,6 +3507,8 @@ void ModUninit() {
     Wh_Log(L">");
 
     g_uninitializing = true;
+
+    StopStripHookThread();
 
     std::unordered_set<HWND> subclassedWindows;
     {
@@ -2680,6 +3543,8 @@ void ModUninit() {
     }
 
     RemoveWinKeyMaskHook();
+
+    StopLowLevelMouseHookThread();
 
     while (g_hookRefCount > 0) {
         Sleep(200);
@@ -3134,6 +3999,7 @@ static Action FindRuleAction(const std::wstring& exeName, bool* outNoResize) {
 }
 
 static bool IsEligibleWindow(HWND hWnd) {
+    if (altSnapDrag::g_globalInput) return altSnapDrag::CanActOnRootWindow(hWnd);
     if (!hWnd || !IsWindow(hWnd)) {
         return false;
     }
@@ -3283,6 +4149,7 @@ static void MoveToAdjacentDisplay(HWND hWnd, int direction) {
     if (wasZoomed) {
         ShowWindow(hWnd, SW_MAXIMIZE);  // Re-maximize on the new monitor.
     }
+    MoveCursorToWindow(hWnd);
 }
 
 // Grows or shrinks the window about its center by the configured step
@@ -3542,6 +4409,13 @@ static void UnregisterHotkeys() {
 // (Re)registers a thread-global hotkey per bound action, using the action index as the
 // hotkey id. Consuming the whole combo avoids the stray-modifier side effects of a
 // low-level keyboard hook. Must run on the hook thread.
+//
+// Every process that loads this mod registers the combos on its hook thread, so one
+// process owns each combo at a time. A combo is released when its owner's thread
+// exits, and RetryMissingHotkeys takes it back in another process. Close is posted as
+// a message (WM_CLOSE), which UIPI can block from a lower-integrity owner. Maximize,
+// minimize and restore are direct window calls. Drag and resize interception are
+// per-process and unaffected.
 static void RegisterHotkeys() {
     UnregisterHotkeys();
     for (int i = 0; i < ACTION_COUNT; i++) {
@@ -3556,6 +4430,20 @@ static void RegisterHotkeys() {
             Wh_Log(L"'%s' could not be registered (error %lu); the combination may "
                    L"be reserved or already claimed by another app",
                    g_keyNames[i], GetLastError());
+        }
+    }
+}
+
+static UINT_PTR g_hotkeyRetryTimer = 0;
+
+// Takes back each combo this process does not hold, for example after its owner exited.
+static void RetryMissingHotkeys() {
+    for (int i = 0; i < ACTION_COUNT; i++) {
+        if (g_actionKeys[i] == 0 || g_hotkeyRegistered[i]) {
+            continue;
+        }
+        if (RegisterHotKey(nullptr, i, g_actionMods[i] | MOD_NOREPEAT, g_actionKeys[i])) {
+            g_hotkeyRegistered[i] = true;
         }
     }
 }
@@ -3801,6 +4689,7 @@ static DWORD WINAPI HookThreadProc(LPVOID) {
     // is posted to the queue of the thread that called RegisterHotKey. The auto-snap
     // WinEvent hook is installed here too, but only if any rules are configured.
     RegisterHotkeys();
+    g_hotkeyRetryTimer = SetTimer(nullptr, 0, 2000, nullptr);
     UpdateWinEventHook();
 
     SetEvent(g_hookReadyEvent);
@@ -3819,6 +4708,10 @@ static DWORD WINAPI HookThreadProc(LPVOID) {
                 if (idx >= 0 && idx < ACTION_COUNT) {
                     EnqueueWork(GetForegroundWindow(), g_actionByIndex[idx]);
                 }
+                continue;
+            }
+            if (msg.message == WM_TIMER && msg.wParam == g_hotkeyRetryTimer) {
+                RetryMissingHotkeys();
                 continue;
             }
             if (msg.message == WM_APP_SETTINGS_CHANGED) {
@@ -4085,6 +4978,7 @@ static POINT WorkspaceOffset(HWND hwnd, const MonitorInfo& mon) {
 }
 
 static void MoveWindowToMonitor(HWND hwnd, const MonitorInfo& src, const MonitorInfo& dst) {
+    if (!altSnapDrag::CanActOnRootWindow(hwnd)) return;
     // Maximized and minimized windows: move the restored rectangle with
     // SetWindowPlacement so the window keeps its state on the new monitor.
     bool usePlacement = IsZoomed(hwnd) || IsIconic(hwnd);
@@ -4224,6 +5118,7 @@ static void MoveActiveWindowInDirection(Direction dir) {
 
     if (dstIdx < 0) return;
     MoveWindowToMonitor(hwnd, monitors[curIdx], monitors[dstIdx]);
+    MoveCursorToWindow(hwnd);
 }
 
 // ── hotkey thread ─────────────────────────────────────────────────────────────
@@ -4388,6 +5283,18 @@ void ToolModUninit() {
   $description: >-
     Also drag windows without a title bar, such as popup menus, tooltips
     and flyouts.
+- explorerTitleStripDrag: true
+  $name: Drag Explorer windows by the title bar
+  $description: >-
+    Moves the window when you press the title strip of a File Explorer
+    window. The strip is where the single tab would sit, so without this
+    setting a press there grabs the tab instead of moving the window.
+- sizeWindowsWithoutSizingBorder: true
+  $name: Resize windows without a sizing border
+  $description: >-
+    Also resize windows without a sizing border, such as the Ditto
+    quick-paste popup and the Flow Launcher window. A short Alt+right click
+    still runs the action below; dragging with the right button resizes.
 - middleAction: menu
   $name: Alt + middle click
   $description: Action when middle clicking a window while Alt is held. Values are menu, maximize, minimize, close, topmost, lower, center, sideSnap, or none.
@@ -4586,211 +5493,523 @@ void ToolModUninit() {
 - centerOnMove: false
   $name: Center window on target monitor
   $description: If enabled, the window is centered on the target monitor instead of keeping its relative position
+- cursorFollowsWindow: false
+  $name: Move the cursor with the window
+  $description: >-
+    When you send a window to another monitor with the keyboard, the mouse
+    pointer jumps to the middle of that window.
 */
 // ==/WindhawkModSettings==
 
 
-////////////////////////////////////////////////////////////////////////////////
-// Shared dispatcher: one set of engine callbacks for the three modules.
-//
-// Host selection:
-//   windhawk.exe -tool-mod <id>  -> tool process: both hotkey tools run here.
-//   windhawk.exe                 -> launcher: spawns the tool process above. The
-//                              ShellExecuteEx requests an elevated child so
-//                              keyboard controls can move administrator windows.
-//   anything else           -> drag module only (it must run inside every
-//                              process that owns a draggable window).
-//
-// The launcher gate on the executable name keeps a single spawner: without
-// it, Include=* would spawn a tool from every injected process.
+// One elevated tool owns global input. Per-app hooks retain Explorer's title-strip behavior.
+#include <sddl.h>
+#include <windhawk_tool_mod.h>
 
-static bool g_packIsTool;
-static bool g_packIsLauncher;
 static bool g_packDragInited;
+static HANDLE g_globalMutex;
 
-static bool PackIsToolProcess(int argc, LPWSTR* argv) {
-    for (int i = 1; i < argc - 1; i++) {
-        if (wcscmp(argv[i], L"-tool-mod") == 0) {
-            return wcscmp(argv[i + 1], WH_MOD_ID) == 0;
+
+// ---------------------------------------------------------------------------------------------
+// Seamless menu look for this mod's own menus.
+// Windhawk runs tool mods in their own process, where Seamless Flyouts cannot reach, so the
+// menus this mod shows get the same look here: blurred Catppuccin Mocha body, rounded corners,
+// roomy rows, separators that run to the border, one soft hover with a blue outline, and
+// submenus that open beside their parent with a small gap. Only this process is touched.
+// ---------------------------------------------------------------------------------------------
+#include <d2d1.h>
+#include <dwmapi.h>
+#include <uxtheme.h>
+#include <vssym32.h>
+#include <commctrl.h>
+
+namespace SeamlessMenuSkin {
+
+constexpr COLORREF kMenuTint = 0xA01B1111;        // Seamless Flyouts "MenuBlur" A011111B
+constexpr UINT_PTR kSubclassId = 0x6D54;
+constexpr UINT kAccentAcrylic = 4, kWcaAccentPolicy = 19;
+
+struct AccentPolicy { DWORD state, flags, color, animation; };
+struct CompositionData { DWORD attrib; PVOID data; SIZE_T size; };
+using SetWca_t = BOOL(WINAPI*)(HWND, CompositionData*);
+using GetThemeClass_t = HRESULT(WINAPI*)(HTHEME, LPWSTR, INT);
+
+static ID2D1Factory* g_factory = nullptr;
+static HDC g_hoverDC = nullptr, g_sepDC = nullptr;
+static UINT g_edgesMsg = 0;
+static thread_local HHOOK g_cbt = nullptr;
+static thread_local INT g_depth = 0;
+
+static decltype(&DrawThemeBackground) DrawThemeBackground_orig = nullptr;
+static decltype(&DrawThemeBackgroundEx) DrawThemeBackgroundEx_orig = nullptr;
+static decltype(&GetThemeColor) GetThemeColor_orig = nullptr;
+static decltype(&GetThemeMargins) GetThemeMargins_orig = nullptr;
+static decltype(&GetThemeFont) GetThemeFont_orig = nullptr;
+static decltype(&DwmSetWindowAttribute) DwmSetWindowAttribute_orig = nullptr;
+static decltype(&TrackPopupMenu) TrackPopupMenu_orig = nullptr;
+static decltype(&TrackPopupMenuEx) TrackPopupMenuEx_orig = nullptr;
+
+static UINT Dpi() { UINT d = GetDpiForSystem(); return d ? d : USER_DEFAULT_SCREEN_DPI; }
+
+static BOOL IsMenuWindow(HWND hWnd)
+{
+    WCHAR cls[16];
+    return hWnd && GetClassNameW(hWnd, cls, ARRAYSIZE(cls)) && wcscmp(cls, L"#32768") == 0;
+}
+
+static BOOL IsMenuTheme(HTHEME hTheme)
+{
+    static auto getClass = (GetThemeClass_t)GetProcAddress(GetModuleHandleW(L"uxtheme.dll"), MAKEINTRESOURCEA(74));
+    WCHAR buf[64] = {};
+    return getClass && SUCCEEDED(getClass(hTheme, buf, ARRAYSIZE(buf))) && wcscmp(buf, L"Menu") == 0;
+}
+
+static D2D1_COLOR_F Argb(BYTE a, BYTE r, BYTE g, BYTE b) { return {r / 255.f, g / 255.f, b / 255.f, a / 255.f}; }
+
+// A small premultiplied 32-bit bitmap drawn once with Direct2D and stretched as a nine-grid.
+static HDC MakeCache(INT w, INT h, BOOL separator)
+{
+    if (!g_factory) return nullptr;
+    HDC dc = CreateCompatibleDC(nullptr);
+    if (!dc) return nullptr;
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -h, 1, 32, BI_RGB};
+    VOID* bits = nullptr;
+    HBITMAP bmp = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!bmp) { DeleteDC(dc); return nullptr; }
+    SelectObject(dc, bmp);
+    auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_SOFTWARE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0,
+        D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE, D2D1_FEATURE_LEVEL_DEFAULT);
+    ID2D1DCRenderTarget* rt = nullptr;
+    RECT rc = {0, 0, w, h};
+    if (FAILED(g_factory->CreateDCRenderTarget(&props, &rt)) || FAILED(rt->BindDC(dc, &rc))) {
+        if (rt) rt->Release();
+        DeleteDC(dc); DeleteObject(bmp);
+        return nullptr;
+    }
+    ID2D1SolidColorBrush *a = nullptr, *b = nullptr;
+    rt->BeginDraw();
+    if (separator) {
+        rt->CreateSolidColorBrush(Argb(255, 69, 71, 90), &a);
+        if (a) rt->DrawLine({0, h / 2.f}, {(FLOAT)w, h / 2.f}, a);
+    } else {
+        auto r = D2D1::RoundedRect(D2D1::RectF(0.5f, 0.5f, w - 0.5f, h - 0.5f), 6.f, 6.f);
+        rt->CreateSolidColorBrush(Argb(190, 69, 71, 90), &a);
+        rt->CreateSolidColorBrush(Argb(255, 137, 180, 250), &b);
+        if (a) rt->FillRoundedRectangle(&r, a);
+        if (b) rt->DrawRoundedRectangle(&r, b, 1.f);
+    }
+    HRESULT hr = rt->EndDraw();
+    if (a) a->Release();
+    if (b) b->Release();
+    rt->Release();
+    if (FAILED(hr)) { DeleteDC(dc); DeleteObject(bmp); return nullptr; }
+    return dc;
+}
+
+static VOID Blend(HDC dst, INT x, INT y, INT w, INT h, HDC src, INT sx, INT sy, INT sw, INT sh)
+{
+    if (w <= 0 || h <= 0 || sw <= 0 || sh <= 0) return;
+    BLENDFUNCTION bf = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+    GdiAlphaBlend(dst, x, y, w, h, src, sx, sy, sw, sh, bf);
+}
+
+static VOID NineGrid(HDC hdc, HDC src, const RECT* d, INT l, INT t, INT r, INT b)
+{
+    BITMAP bm = {};
+    GetObject(GetCurrentObject(src, OBJ_BITMAP), sizeof(bm), &bm);
+    INT sw = bm.bmWidth, sh = bm.bmHeight, dw = d->right - d->left, dh = d->bottom - d->top;
+    l = std::min(l, dw); r = std::min(r, dw - l); t = std::min(t, dh); b = std::min(b, dh - t);
+    if (l + r >= sw || t + b >= sh) { Blend(hdc, d->left, d->top, dw, dh, src, 0, 0, sw, sh); return; }
+    INT cw = dw - l - r, ch = dh - t - b, scw = sw - l - r, sch = sh - t - b;
+    Blend(hdc, d->left + l, d->top + t, cw, ch, src, l, t, scw, sch);
+    Blend(hdc, d->left, d->top, l, t, src, 0, 0, l, t);
+    Blend(hdc, d->left + l, d->top, cw, t, src, l, 0, scw, t);
+    Blend(hdc, d->right - r, d->top, r, t, src, sw - r, 0, r, t);
+    Blend(hdc, d->left, d->top + t, l, ch, src, 0, t, l, sch);
+    Blend(hdc, d->right - r, d->top + t, r, ch, src, sw - r, t, r, sch);
+    Blend(hdc, d->left, d->bottom - b, l, b, src, 0, sh - b, l, b);
+    Blend(hdc, d->left + l, d->bottom - b, cw, b, src, l, sh - b, scw, b);
+    Blend(hdc, d->right - r, d->bottom - b, r, b, src, sw - r, sh - b, r, b);
+}
+
+static VOID ApplyEffects(HWND hWnd)
+{
+    static auto setWca = (SetWca_t)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
+    BOOL dark = TRUE;
+    DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+    DWM_BLURBEHIND bb = {DWM_BB_ENABLE | DWM_BB_BLURREGION | DWM_BB_TRANSITIONONMAXIMIZED, TRUE, CreateRectRgn(0, 0, -1, -1), TRUE};
+    DwmEnableBlurBehindWindow(hWnd, &bb);
+    DeleteObject(bb.hRgnBlur);
+    AccentPolicy ap = {kAccentAcrylic, 0, kMenuTint, 0};
+    CompositionData data = {kWcaAccentPolicy, &ap, sizeof(ap)};
+    if (setWca) setWca(hWnd, &data);
+    UINT corner = DWMWCP_ROUND;
+    DwmSetWindowAttribute(hWnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
+}
+
+// Separator lines stop at the client edge; copy each one across the thin menu frame so it
+// meets the border.
+static BOOL IsSeparatorPixel(COLORREF c)
+{
+    return abs(GetRValue(c) - 69) <= 8 && abs(GetGValue(c) - 71) <= 8 && abs(GetBValue(c) - 90) <= 8;
+}
+static VOID PaintSeparatorEdges(HWND hWnd)
+{
+    if (!g_sepDC || !IsWindowVisible(hWnd)) return;
+    HMENU hMenu = (HMENU)SendMessageW(hWnd, MN_GETHMENU, 0, 0);
+    if (!hMenu) return;
+    RECT wr, cr;
+    GetWindowRect(hWnd, &wr);
+    GetClientRect(hWnd, &cr);
+    POINT org = {0, 0};
+    ClientToScreen(hWnd, &org);
+    INT cl = org.x - wr.left, cw = cr.right, winW = wr.right - wr.left;
+    if (cl <= 0 || cw <= 0) return;
+    HDC wdc = GetWindowDC(hWnd);
+    if (!wdc) return;
+    INT count = GetMenuItemCount(hMenu);
+    for (INT i = 0; i < count; i++) {
+        MENUITEMINFOW mii = {sizeof(mii), MIIM_FTYPE};
+        if (!GetMenuItemInfoW(hMenu, i, TRUE, &mii) || !(mii.fType & MFT_SEPARATOR)) continue;
+        RECT ir;
+        if (!GetMenuItemRect(hWnd, hMenu, i, &ir)) continue;
+        for (INT y = ir.top - wr.top; y < ir.bottom - wr.top; y++) {
+            if (!IsSeparatorPixel(GetPixel(wdc, cl, y)) || !IsSeparatorPixel(GetPixel(wdc, cl + cw - 1, y))) continue;
+            RECT left = {0, y - 2, cl, y + 3}, right = {cl + cw, y - 2, winW, y + 3};
+            NineGrid(wdc, g_sepDC, &left, 0, 5, 0, 0);
+            NineGrid(wdc, g_sepDC, &right, 0, 5, 0, 0);
         }
     }
-    return false;
+    ReleaseDC(hWnd, wdc);
 }
 
-static bool PackIsExcludedProcess(int argc, LPWSTR* argv) {
-    for (int i = 1; i < argc; i++) {
-        if (wcscmp(argv[i], L"-service") == 0 ||
-            wcscmp(argv[i], L"-service-start") == 0 ||
-            wcscmp(argv[i], L"-service-stop") == 0) {
-            return true;
+struct ParentSearch { HWND self; RECT r; HWND parent; RECT pr; BOOL right; };
+static BOOL CALLBACK FindParent(HWND hWnd, LPARAM lParam)
+{
+    auto* f = reinterpret_cast<ParentSearch*>(lParam);
+    if (hWnd == f->self || !IsWindowVisible(hWnd) || !IsMenuWindow(hWnd)) return TRUE;
+    RECT p;
+    GetWindowRect(hWnd, &p);
+    if (f->r.top >= p.bottom || f->r.bottom <= p.top) return TRUE;
+    BOOL right = f->r.left > p.left && f->r.left < p.right + 2 && f->r.right > p.right;
+    BOOL left = f->r.right < p.right && f->r.right > p.left - 2 && f->r.left < p.left;
+    if (!right && !left) return TRUE;
+    f->parent = hWnd; f->pr = p; f->right = right;
+    return FALSE;
+}
+// Submenus open over the parent's edge; move them beside it with an 8 px gap.
+static VOID PlaceSubmenu(HWND hWnd, WINDOWPOS* wp)
+{
+    RECT cur;
+    GetWindowRect(hWnd, &cur);
+    INT w = (wp->flags & SWP_NOSIZE) ? cur.right - cur.left : wp->cx;
+    INT h = (wp->flags & SWP_NOSIZE) ? cur.bottom - cur.top : wp->cy;
+    if (w <= 0 || h <= 0) return;
+    ParentSearch f = {hWnd, {wp->x, wp->y, wp->x + w, wp->y + h}, nullptr, {}, FALSE};
+    EnumThreadWindows(GetCurrentThreadId(), FindParent, reinterpret_cast<LPARAM>(&f));
+    if (!f.parent) return;
+    UINT dpi = GetDpiForWindow(hWnd);
+    INT gap = MulDiv(8, dpi ? dpi : Dpi(), USER_DEFAULT_SCREEN_DPI);
+    MONITORINFO mi = {sizeof(mi)};
+    if (!GetMonitorInfoW(MonitorFromRect(&f.pr, MONITOR_DEFAULTTONEAREST), &mi)) return;
+    INT toRight = f.pr.right + gap, toLeft = f.pr.left - gap - w;
+    if (f.right)
+        wp->x = (toRight + w <= mi.rcWork.right) ? toRight : (toLeft >= mi.rcWork.left ? toLeft : wp->x);
+    else
+        wp->x = (toLeft >= mi.rcWork.left) ? toLeft : (toRight + w <= mi.rcWork.right ? toRight : wp->x);
+}
+
+static LRESULT CALLBACK MenuProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR)
+{
+    if (msg == g_edgesMsg && g_edgesMsg) { PaintSeparatorEdges(hWnd); return 0; }
+    if (msg == WM_TIMER && wParam == kSubclassId) {
+        KillTimer(hWnd, kSubclassId);
+        PaintSeparatorEdges(hWnd);
+        return 0;
+    }
+    if (msg == WM_NCDESTROY) {
+        KillTimer(hWnd, kSubclassId);
+        RemoveWindowSubclass(hWnd, MenuProc, kSubclassId);
+        return DefSubclassProc(hWnd, msg, wParam, lParam);
+    }
+    if (msg == WM_WINDOWPOSCHANGING && lParam && !(reinterpret_cast<WINDOWPOS*>(lParam)->flags & SWP_NOMOVE))
+        PlaceSubmenu(hWnd, reinterpret_cast<WINDOWPOS*>(lParam));
+    if (msg == WM_NCPAINT)
+        ApplyEffects(hWnd);
+    LRESULT result = DefSubclassProc(hWnd, msg, wParam, lParam);
+    if (msg == WM_CREATE)
+        ApplyEffects(hWnd);
+    if (msg == WM_NCPAINT || msg == WM_PAINT)
+        PostMessageW(hWnd, g_edgesMsg, 0, 0);
+    if (msg == WM_WINDOWPOSCHANGED && lParam && (reinterpret_cast<WINDOWPOS*>(lParam)->flags & SWP_SHOWWINDOW)) {
+        PostMessageW(hWnd, g_edgesMsg, 0, 0);
+        SetTimer(hWnd, kSubclassId, 150, nullptr);
+    }
+    return result;
+}
+
+static LRESULT CALLBACK CbtProc(INT code, WPARAM wParam, LPARAM lParam)
+{
+    if (code == HCBT_CREATEWND && IsMenuWindow((HWND)wParam))
+        SetWindowSubclass((HWND)wParam, MenuProc, kSubclassId, 0);
+    return CallNextHookEx(nullptr, code, wParam, lParam);
+}
+static VOID BeginMenu()
+{
+    if (g_depth++ == 0) g_cbt = SetWindowsHookExW(WH_CBT, CbtProc, nullptr, GetCurrentThreadId());
+}
+static VOID EndMenu()
+{
+    if (--g_depth == 0 && g_cbt) { UnhookWindowsHookEx(g_cbt); g_cbt = nullptr; }
+}
+
+static BOOL WINAPI TrackPopupMenu_hook(HMENU m, UINT f, INT x, INT y, INT r, HWND h, const RECT* rc)
+{
+    BeginMenu();
+    BOOL ret = TrackPopupMenu_orig(m, f, x, y, r, h, rc);
+    EndMenu();
+    return ret;
+}
+static BOOL WINAPI TrackPopupMenuEx_hook(HMENU m, UINT f, INT x, INT y, HWND h, LPTPMPARAMS p)
+{
+    BeginMenu();
+    BOOL ret = TrackPopupMenuEx_orig(m, f, x, y, h, p);
+    EndMenu();
+    return ret;
+}
+
+// Returns TRUE when the menu part was drawn here.
+static BOOL PaintMenuPart(HDC hdc, INT part, INT state, LPCRECT pRect, LPCRECT pClip)
+{
+    if (part == 26) { part = 27; state = 2; }                   // keyboard focus: same hover
+    if ((part == 27 || part == MENU_POPUPITEM) && state == 2) {
+        if (!g_hoverDC) g_hoverDC = MakeCache(18, 18, FALSE);
+        if (!g_hoverDC) return FALSE;
+        // Keep the same gap above and below as at the sides, so the first and last rows'
+        // rounded hover stays clear of the menu's own rounded corners.
+        RECT rc = *pRect;
+        InflateRect(&rc, 0, -MulDiv(2, Dpi(), USER_DEFAULT_SCREEN_DPI));
+        NineGrid(hdc, g_hoverDC, &rc, 9, 9, 8, 8);
+        return TRUE;
+    }
+    if (part == MENU_POPUPSEPARATOR) {
+        if (!g_sepDC) g_sepDC = MakeCache(1, 5, TRUE);
+        if (!g_sepDC) return FALSE;
+        RECT rc = *pRect;
+        INT reach = MulDiv(64, Dpi(), USER_DEFAULT_SCREEN_DPI);
+        rc.left -= reach; rc.right += reach;
+        NineGrid(hdc, g_sepDC, &rc, 1, 5, 0, 0);
+        return TRUE;
+    }
+    if (part == MENU_POPUPBACKGROUND || part == MENU_POPUPBORDERS || part == MENU_POPUPGUTTER ||
+        part == MENU_POPUPCHECKBACKGROUND || part == 27 || part == MENU_POPUPITEM) {
+        RECT rc = *pRect;
+        if (pClip) IntersectRect(&rc, pRect, pClip);
+        FillRect(hdc, &rc, (HBRUSH)GetStockObject(BLACK_BRUSH));   // clear: the blur shows through
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static HRESULT WINAPI DrawThemeBackground_hook(HTHEME t, HDC hdc, INT part, INT state, LPCRECT r, LPCRECT clip)
+{
+    if (r && IsMenuTheme(t) && PaintMenuPart(hdc, part, state, r, clip)) return S_OK;
+    return DrawThemeBackground_orig(t, hdc, part, state, r, clip);
+}
+static HRESULT WINAPI DrawThemeBackgroundEx_hook(HTHEME t, HDC hdc, INT part, INT state, LPCRECT r, const DTBGOPTS* o)
+{
+    LPCRECT clip = (o && (o->dwFlags & DTBG_CLIPRECT)) ? &o->rcClip : nullptr;
+    if (r && IsMenuTheme(t) && PaintMenuPart(hdc, part, state, r, clip)) return S_OK;
+    return DrawThemeBackgroundEx_orig(t, hdc, part, state, r, o);
+}
+static HRESULT WINAPI GetThemeColor_hook(HTHEME t, INT part, INT state, INT prop, COLORREF* c)
+{
+    HRESULT hr = GetThemeColor_orig(t, part, state, prop, c);
+    if (!c || !IsMenuTheme(t)) return hr;
+    if (prop == TMT_TEXTCOLOR && (part == MENU_POPUPITEM || part == 27) && state != 3 && state != 4) {
+        *c = RGB(205, 214, 244);
+        return S_OK;
+    }
+    if (prop == TMT_FILLCOLOR || prop == TMT_FILLCOLORHINT) { *c = RGB(0, 0, 0); return S_OK; }
+    return hr;
+}
+static HRESULT WINAPI GetThemeMargins_hook(HTHEME t, HDC hdc, INT part, INT state, INT prop, LPRECT prc, MARGINS* m)
+{
+    HRESULT hr = GetThemeMargins_orig(t, hdc, part, state, prop, prc, m);
+    if (m && IsMenuTheme(t) && (part == MENU_POPUPITEM || part == 27 || part == 26)) {
+        if (prop == TMT_CONTENTMARGINS) *m = {2, 2, 8, 8};
+        else if (prop == TMT_SIZINGMARGINS) *m = {10, 10, 10, 10};
+        else if (prop == 10000) *m = {0, 0, 8, 8};
+    }
+    return hr;
+}
+static HRESULT WINAPI GetThemeFont_hook(HTHEME t, HDC hdc, INT part, INT state, INT prop, LOGFONTW* f)
+{
+    HRESULT hr = GetThemeFont_orig(t, hdc, part, state, prop, f);
+    if (SUCCEEDED(hr) && f && prop == TMT_FONT && IsMenuTheme(t) && wcscmp(f->lfFaceName, L"Segoe UI") == 0) {
+        wcscpy_s(f->lfFaceName, LF_FACESIZE, L"FiraCode Nerd Font Med");
+        f->lfHeight = -MulDiv(14, Dpi(), USER_DEFAULT_SCREEN_DPI);
+        f->lfWeight = 500;
+        f->lfQuality = CLEARTYPE_QUALITY;
+        f->lfPitchAndFamily = DEFAULT_PITCH;
+    }
+    return hr;
+}
+static HRESULT WINAPI DwmSetWindowAttribute_hook(HWND h, DWORD attr, LPCVOID v, DWORD cb)
+{
+    if (attr == DWMWA_WINDOW_CORNER_PREFERENCE && IsMenuWindow(h)) {
+        UINT corner = DWMWCP_ROUND;
+        return DwmSetWindowAttribute_orig(h, attr, &corner, sizeof(corner));
+    }
+    return DwmSetWindowAttribute_orig(h, attr, v, cb);
+}
+
+template <typename T>
+static VOID Hook(HMODULE mod, LPCSTR name, T hook, T* orig)
+{
+    if (auto p = mod ? GetProcAddress(mod, name) : nullptr)
+        Wh_SetFunctionHook((void*)p, (void*)hook, (void**)orig);
+}
+
+// Call from the mod's init, before it returns (hooks are applied when init finishes).
+static VOID Init()
+{
+    D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED, __uuidof(ID2D1Factory), nullptr, (void**)&g_factory);
+    g_edgesMsg = RegisterWindowMessageW(L"SeamlessFlyouts_MenuSeparatorEdges");
+    HMODULE ux = LoadLibraryExW(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    HMODULE dwm = LoadLibraryExW(L"dwmapi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    HMODULE u32 = GetModuleHandleW(L"user32.dll");
+    // Dark menus in this process (SetPreferredAppMode ForceDark, then FlushMenuThemes).
+    using SetMode_t = INT(WINAPI*)(INT);
+    using Flush_t = VOID(WINAPI*)();
+    if (auto setMode = ux ? (SetMode_t)GetProcAddress(ux, MAKEINTRESOURCEA(135)) : nullptr) setMode(2);
+    if (auto flush = ux ? (Flush_t)GetProcAddress(ux, MAKEINTRESOURCEA(136)) : nullptr) flush();
+    Hook(ux, "DrawThemeBackground", DrawThemeBackground_hook, &DrawThemeBackground_orig);
+    Hook(ux, "DrawThemeBackgroundEx", DrawThemeBackgroundEx_hook, &DrawThemeBackgroundEx_orig);
+    Hook(ux, "GetThemeColor", GetThemeColor_hook, &GetThemeColor_orig);
+    Hook(ux, "GetThemeMargins", GetThemeMargins_hook, &GetThemeMargins_orig);
+    Hook(ux, "GetThemeFont", GetThemeFont_hook, &GetThemeFont_orig);
+    Hook(dwm, "DwmSetWindowAttribute", DwmSetWindowAttribute_hook, &DwmSetWindowAttribute_orig);
+    Hook(u32, "TrackPopupMenu", TrackPopupMenu_hook, &TrackPopupMenu_orig);
+    Hook(u32, "TrackPopupMenuEx", TrackPopupMenuEx_hook, &TrackPopupMenuEx_orig);
+}
+
+static VOID Uninit()
+{
+    for (HDC* dc : {&g_hoverDC, &g_sepDC})
+        if (*dc) {
+            HGDIOBJ bmp = GetCurrentObject(*dc, OBJ_BITMAP);
+            DeleteDC(*dc);
+            DeleteObject(bmp);
+            *dc = nullptr;
         }
-    }
-    return false;
+    if (g_factory) { g_factory->Release(); g_factory = nullptr; }
 }
 
-static bool PackIsWindhawkProcess() {
-    WCHAR path[MAX_PATH];
-    DWORD len = GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
-    if (!len || len >= ARRAYSIZE(path)) {
-        return false;
-    }
-    PCWSTR name = path;
-    for (PCWSTR p = path; *p; p++) {
-        if (*p == L'\\' || *p == L'/') name = p + 1;
-    }
-    return _wcsicmp(name, L"windhawk.exe") == 0;
-}
+}  // namespace SeamlessMenuSkin
+// ---------------------------------------------------------------------------------------------
 
-static void WINAPI PackEntryPointHook() {
-    Wh_Log(L">");
-    ExitThread(0);
-}
-
-// Spawns "<this process>" -tool-mod "<id>", exactly like the stock tool-mod
-// pattern, with ShellExecuteEx and the runas verb requesting elevation.
-static void PackSpawnTool() {
-    WCHAR currentProcessPath[MAX_PATH];
-    switch (GetModuleFileName(nullptr, currentProcessPath,
-                              ARRAYSIZE(currentProcessPath))) {
-        case 0:
-        case ARRAYSIZE(currentProcessPath):
-            Wh_Log(L"GetModuleFileName failed");
-            return;
-    }
-
-    WCHAR commandLine[MAX_PATH + 2 +
-                      (sizeof(L" -tool-mod \"" WH_MOD_ID "\"") / sizeof(WCHAR)) - 1];
-    swprintf_s(commandLine, L"\"%s\" -tool-mod \"%s\"", currentProcessPath,
-               WH_MOD_ID);
-
-    SHELLEXECUTEINFOW sei{sizeof(sei)};
-    sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
-    sei.lpVerb = L"runas";
-    sei.lpFile = currentProcessPath;
-    sei.lpParameters = L"-tool-mod \"" WH_MOD_ID L"\"";
-    sei.nShow = SW_HIDE;
-    if (!ShellExecuteExW(&sei)) {
-        Wh_Log(L"Elevated tool launch failed: %u", GetLastError());
-        return;
-    }
-    if (sei.hProcess) CloseHandle(sei.hProcess);
-}
-
-// Tool-process callbacks. The engine and the mod validator expect the
-// WhTool_* names from the tool mod template; Wh_ModInit below dispatches
-// into them when running inside the dedicated tool process.
 BOOL WhTool_ModInit() {
-    g_packIsTool = true;
-
-    HANDLE mutex = CreateMutex(nullptr, TRUE,
-                               L"windhawk-tool-mod_" WH_MOD_ID);
-    if (!mutex) {
-        Wh_Log(L"CreateMutex failed");
-        ExitProcess(1);
+    SeamlessMenuSkin::Init();
+    using namespace altSnapDrag;
+    HANDLE token;
+    TOKEN_ELEVATION elevation{};
+    DWORD bytes = 0;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return FALSE;
+    bool queried = GetTokenInformation(token, TokenElevation, &elevation, sizeof(elevation), &bytes);
+    CloseHandle(token);
+    if (!queried) return FALSE;
+    if (!elevation.TokenIsElevated) {
+        SHELLEXECUTEINFOW launch{sizeof(launch)};
+        launch.fMask = SEE_MASK_FLAG_NO_UI;
+        launch.lpVerb = L"runas";
+        WCHAR self[MAX_PATH];
+        if (!GetModuleFileNameW(nullptr, self, MAX_PATH)) return FALSE;
+        launch.lpFile = self;
+        launch.lpParameters = L"-windhawk-tool-mod \"" WH_MOD_ID L"\"";
+        launch.nShow = SW_HIDE;
+        ShellExecuteExW(&launch);
+        return FALSE;
     }
-    if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        Wh_Log(L"Tool mod already running (%s)", WH_MOD_ID);
-        ExitProcess(1);
+    g_globalInput = true;
+    // Everyone may open it, so the unelevated per-app parts see the helper
+    // and leave the global input to it.
+    SECURITY_ATTRIBUTES sa{sizeof(sa)};
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            L"D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x00100000;;;WD)S:(ML;;NW;;;LW)",
+            SDDL_REVISION_1, &sa.lpSecurityDescriptor, nullptr)) return FALSE;
+    g_globalMutex = CreateMutex(&sa, FALSE, L"windhawk-window-manager-global");
+    DWORD mutexError = GetLastError();
+    LocalFree(sa.lpSecurityDescriptor);
+    if (!g_globalMutex) return FALSE;
+    if (mutexError == ERROR_ALREADY_EXISTS) {
+        CloseHandle(g_globalMutex);
+        g_globalMutex = nullptr;
+        return FALSE;
     }
-
-    if (!snapCommander::ToolModInit()) {
-        Wh_Log(L"snapCommander tool init failed");
-        ExitProcess(1);
+    LoadSettings();
+    HKEY key;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@window-manager",
+                      0, KEY_QUERY_VALUE, &key) == ERROR_SUCCESS) {
+        for (PCWSTR name : {L"Exclude", L"ExcludeCustom"}) {
+            WCHAR value[32768]{};
+            DWORD bytes = sizeof(value);
+            if (RegQueryValueExW(key, name, nullptr, nullptr, (BYTE*)value, &bytes) == ERROR_SUCCESS) {
+                value[ARRAYSIZE(value) - 1] = 0;
+                g_globalExclusions += L"|";
+                g_globalExclusions += value;
+            }
+        }
+        RegCloseKey(key);
     }
-    if (!moveToMonitor::ToolModInit()) {
-        Wh_Log(L"moveToMonitor tool init failed");
-        ExitProcess(1);
-    }
-
-    IMAGE_DOS_HEADER* dosHeader =
-        (IMAGE_DOS_HEADER*)GetModuleHandle(nullptr);
-    IMAGE_NT_HEADERS* ntHeaders =
-        (IMAGE_NT_HEADERS*)((BYTE*)dosHeader + dosHeader->e_lfanew);
-    void* entryPoint =
-        (BYTE*)dosHeader + ntHeaders->OptionalHeader.AddressOfEntryPoint;
-    Wh_SetFunctionHook(entryPoint, (void*)PackEntryPointHook, nullptr);
-    return TRUE;
+    InstallLowLevelMouseHookIfNeeded();
+    bool ok = g_lowLevelMouseHookThread != nullptr;
+    bool snapOk = ok && snapCommander::ToolModInit();
+    if (snapOk && moveToMonitor::ToolModInit()) return TRUE;
+    // A helper which fails partway leaves nothing running behind it.
+    g_uninitializing = true;
+    StopLowLevelMouseHookThread();
+    if (snapOk) snapCommander::ToolModUninit();
+    CloseHandle(g_globalMutex);
+    g_globalMutex = nullptr;
+    return FALSE;
 }
 
 void WhTool_ModSettingsChanged() {
+    PostThreadMessage(altSnapDrag::g_lowLevelMouseHookOwnThreadId, WM_APP + 91, 0, 0);
     snapCommander::ToolModSettingsChanged();
     moveToMonitor::ToolModSettingsChanged();
 }
 
 void WhTool_ModUninit() {
+    SeamlessMenuSkin::Uninit();
+    altSnapDrag::g_uninitializing = true;
+    altSnapDrag::StopLowLevelMouseHookThread();
+    altSnapDrag::mover::Stop();
     snapCommander::ToolModUninit();
     moveToMonitor::ToolModUninit();
+    if (g_globalMutex) CloseHandle(g_globalMutex);
 }
 
-BOOL Wh_ModInit() {
-    DWORD sessionId;
-    if (ProcessIdToSessionId(GetCurrentProcessId(), &sessionId) &&
-        sessionId == 0) {
-        return FALSE;
-    }
-
-    int argc;
-    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    if (!argv) {
-        Wh_Log(L"CommandLineToArgvW failed");
-        return FALSE;
-    }
-
-    bool excluded = PackIsExcludedProcess(argc, argv);
-    bool ourTool = PackIsToolProcess(argc, argv);
-    for (int i = 1; i < argc; i++) {
-        if (wcscmp(argv[i], L"-tool-mod") == 0 && !ourTool) excluded = true;
-    }
-    LocalFree(argv);
-
-    if (excluded) {
-        return FALSE;
-    }
-
-    if (ourTool) {
-        BOOL ok = WhTool_ModInit();
-        return ok;
-    }
-
-    if (PackIsWindhawkProcess()) {
-        // Windhawk launcher: starts the elevated keyboard helper and
-        // loads drag support for its own native dialogs.
-        g_packIsLauncher = true;
-        g_packDragInited = altSnapDrag::ModInit();
-        return TRUE;
-    }
-
+BOOL WhToolLauncher_ModInit(BOOL* launch) {
+    WCHAR path[MAX_PATH]{};
+    GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
+    *launch = _wcsicmp(PathFindFileNameW(path), L"windhawk.exe") == 0;
     g_packDragInited = altSnapDrag::ModInit();
-    return g_packDragInited ? TRUE : FALSE;
+    return g_packDragInited;
 }
 
-void Wh_ModAfterInit() {
-    if (g_packIsLauncher) {
-        PackSpawnTool();
-    }
+void WhToolLauncher_ModUninit() {
+    if (g_packDragInited) altSnapDrag::ModUninit();
 }
 
-void Wh_ModSettingsChanged() {
-    if (g_packIsTool) {
-        WhTool_ModSettingsChanged();
-        return;
-    }
-    if (g_packDragInited) {
-        altSnapDrag::ModSettingsChanged();
-    }
+void WhToolLauncher_ModSettingsChanged(BOOL* reload) {
+    *reload = TRUE;
+    if (g_packDragInited) altSnapDrag::ModSettingsChanged();
 }
 
-void Wh_ModUninit() {
-    if (g_packIsTool) {
-        WhTool_ModUninit();
-        ExitProcess(0);
-        return;
-    }
-    if (g_packDragInited) {
-        altSnapDrag::ModUninit();
-    }
-}
-
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
-    return altSnapDrag::DragDllMain(hinstDLL, fdwReason, lpReserved);
+BOOL WINAPI DllMain(HINSTANCE module, DWORD reason, LPVOID reserved) {
+    return altSnapDrag::DragDllMain(module, reason, reserved);
 }

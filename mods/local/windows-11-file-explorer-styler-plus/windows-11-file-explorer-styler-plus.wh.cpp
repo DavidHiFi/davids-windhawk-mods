@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.9.2
+// @version         1.10.5
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -27,7 +27,7 @@
 
 Based on Windows 11 File Explorer Styler by m417z.
 
-![Explorer preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windows-11-file-explorer-styler-plus.png)
+![Explorer preview](file:///H:/Windhawk%20Configuration/2026-11-06-header-hover/thispc-1.1.4.png)
 
 Customize the File Explorer with themes contributed by others or create your
 own.
@@ -8965,11 +8965,53 @@ void HandleVirtualizingRepeater(ElementId elementId, FrameworkElement element) {
 
 void MergeResourceVariables();
 
+void ConfigureDetailsPaneHover(Controls::Grid grid,
+                               ElementCustomizationState& state) {
+    auto border = Markup::XamlReader::Load(
+        LR"(<LinearGradientBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#89B4FA" Offset="0"/><GradientStop Color="#CBA6F7" Offset="1"/></LinearGradientBrush>)").as<Media::Brush>();
+    auto rest = grid.BorderBrush();
+    auto paint = [weak = winrt::make_weak(grid), border, rest](bool hovered) {
+        if (auto target = weak.get()) {
+            bool previous = g_elementPropertyModifying;
+            g_elementPropertyModifying = true;
+            try {
+                target.BorderBrush(hovered ? border : rest);
+            } catch (...) {
+                g_elementPropertyModifying = previous;
+                Wh_Log(L"Details pane hover paint failed");
+                return;
+            }
+            g_elementPropertyModifying = previous;
+        }
+    };
+    state.pathEntered = grid.PointerEntered(winrt::auto_revoke,
+        [paint](auto const&, auto const&) { paint(true); });
+    state.pathExited = grid.PointerExited(winrt::auto_revoke,
+        [paint](auto const&, auto const&) { paint(false); });
+}
+
 void ConfigureAddressBarHover(FrameworkElement element,
                               ElementCustomizationState& state) {
     state.pathEntered.revoke();
     state.pathExited.revoke();
     auto grid = element.try_as<Controls::Grid>();
+    if (grid && grid.Name() == L"DetailsViewControlRootGrid") {
+        ConfigureDetailsPaneHover(grid, state);
+        return;
+    }
+    // Command bar dock (New, Sort, View, Details): gradient edge on hover.
+    if (grid) {
+        bool commandBar = grid.Name() == L"CommandBarControlRootGrid";
+        if (!commandBar) {
+            auto bar = Media::VisualTreeHelper::GetParent(grid);
+            commandBar = bar && winrt::get_class_name(bar) ==
+                L"FileExplorerExtensions.CommandBarControl_Wave1";
+        }
+        if (commandBar) {
+            ConfigureDetailsPaneHover(grid, state);
+            return;
+        }
+    }
     if (!grid || grid.Name() != L"PART_LayoutRoot") return;
     auto parent = Media::VisualTreeHelper::GetParent(grid);
     if (!parent || winrt::get_class_name(parent) !=
@@ -10782,10 +10824,40 @@ void MakeOpaque(HDC hdc, int x, int y, int w, int h) {
 }
 
 void StatusDockAfterFill(HDC hdc, const RECT* rect, HBRUSH hbr);
-
+bool IsStatusDockWnd(HWND hWnd);
 using FillRect_t = decltype(&FillRect);
 FillRect_t FillRect_Original;
+
+// The pane splitters (navigation pane | content | details pane) are thin
+// vertical lines in the folder view's DirectUIHWND, drawn translucent. They are
+// painted solid Catppuccin Mocha surface1, like the toolbar and dock lines.
+bool PaintPaneSplitter(HDC hdc, int x, int y, int w, int h) {
+    HWND hWnd = GetEntireWindowEffectDCWnd(hdc);
+    if (!hWnd || w <= 0) {
+        return false;
+    }
+
+    UINT dpi = GetDpiForWindow(hWnd);
+    int line = std::max(1, (int)(dpi / 96));
+    if (w > line || h < MulDiv(40, dpi, 96) || !IsStatusDockWnd(hWnd)) {
+        return false;
+    }
+
+    RECT rc = {x, y, x + w, y + h};
+    COLORREF previous = SetDCBrushColor(hdc, RGB(0x45, 0x47, 0x5A));
+    FillRect_Original(hdc, &rc, (HBRUSH)GetStockObject(DC_BRUSH));
+    SetDCBrushColor(hdc, previous);
+    MakeOpaque(hdc, x, y, w, h);
+    return true;
+}
+
 int WINAPI FillRect_Hook(HDC hDC, const RECT* lprc, HBRUSH hbr) {
+    if (lprc && PaintPaneSplitter(hDC, lprc->left, lprc->top,
+                                  lprc->right - lprc->left,
+                                  lprc->bottom - lprc->top)) {
+        return TRUE;
+    }
+
     HWND hWnd = GetEntireWindowEffectDCWnd(hDC);
     if (hWnd && IsOpaqueFill(hWnd)) {
         int result = FillRect_Original(hDC, lprc, hbr);
@@ -10861,6 +10933,10 @@ BOOL WINAPI DrawIconEx_Hook(HDC hdc,
 }
 
 BOOL WINAPI PatBlt_Hook(HDC hdc, int x, int y, int w, int h, DWORD rop) {
+    if (rop == PATCOPY && PaintPaneSplitter(hdc, x, y, w, h)) {
+        return TRUE;
+    }
+
     HWND hWnd = rop == PATCOPY ? GetEntireWindowEffectDCWnd(hdc) : nullptr;
     if (!hWnd) {
         return PatBlt_Original(hdc, x, y, w, h, rop);
@@ -11046,12 +11122,15 @@ BOOL WINAPI DeleteDC_Hook(HDC hdc) {
     return DeleteDC_Original(hdc);
 }
 
-// The navigation pane divider is a horizontal line drawn by ExplorerFrame.dll,
-// which is drawn translucent.
+// The navigation pane lines (the horizontal divider and the vertical pane
+// edge) are drawn by ExplorerFrame.dll with GDI, which loses alpha on glass.
+// Both are redrawn as solid Catppuccin Mocha surface1, the window's line color.
 using Polyline_t = decltype(&Polyline);
 Polyline_t Polyline_Original;
 BOOL WINAPI Polyline_Hook(HDC hdc, const POINT* apt, int cpt) {
-    if (cpt != 2 || apt[0].y != apt[1].y || !IsEntireWindowEffectDC(hdc)) {
+    bool horizontal = cpt == 2 && apt[0].y == apt[1].y;
+    bool vertical = cpt == 2 && apt[0].x == apt[1].x;
+    if ((!horizontal && !vertical) || !IsEntireWindowEffectDC(hdc)) {
         return Polyline_Original(hdc, apt, cpt);
     }
 
@@ -11069,10 +11148,17 @@ BOOL WINAPI Polyline_Hook(HDC hdc, const POINT* apt, int cpt) {
 
     // A wide pen is centered on the line, and the last point isn't drawn.
     int width = std::max(pen.lopnWidth.x, 1L);
-    int top = apt[0].y - width / 2;
-    RECT rect = {std::min(apt[0].x, apt[1].x), top,
-                 std::max(apt[0].x, apt[1].x), top + width};
-    if (!FillRectWithAlpha(hdc, &rect, pen.lopnColor, 96)) {
+    RECT rect;
+    if (horizontal) {
+        int top = apt[0].y - width / 2;
+        rect = {std::min(apt[0].x, apt[1].x), top,
+                std::max(apt[0].x, apt[1].x), top + width};
+    } else {
+        int left = apt[0].x - width / 2;
+        rect = {left, std::min(apt[0].y, apt[1].y), left + width,
+                std::max(apt[0].y, apt[1].y)};
+    }
+    if (!FillRectWithAlpha(hdc, &rect, RGB(0x45, 0x47, 0x5A), 255)) {
         return Polyline_Original(hdc, apt, cpt);
     }
 
@@ -11555,15 +11641,61 @@ void AlphaBlendNineGrid(HDC hdc,
     }
 }
 
-// The dock: Catppuccin Mocha base fill and a 1px surface1/surface0 gradient
-// border, like the top bar docks. View button faces sit inside it.
+// The dock: a see-through Catppuccin Mocha base band (the window glass shows
+// through) across the whole view with one
+// 1px surface1 line along its top (blue to mauve while hovered). View button
+// faces sit inside it.
 enum class StatusDockShape {
     Dock,
     Hover,          // mantle face, blue to mauve gradient ring
     Selected,       // surface0 face, blue ring
     SelectedHover,  // surface0 face, blue to mauve gradient ring
-    DockHover,      // the dock with a blue to mauve gradient border
+    DockHover,      // the dock with a blue to mauve gradient top line
 };
+
+void PaintStatusDockBand(ID2D1RenderTarget* renderTarget,
+                         int width,
+                         int height,
+                         float scale,
+                         bool hover) {
+    winrt::com_ptr<ID2D1SolidColorBrush> fill;
+    renderTarget->CreateSolidColorBrush(ThemePartColor(0x99, 0x1E, 0x1E, 0x2E),
+                                        fill.put());
+    if (fill) {
+        renderTarget->FillRectangle(D2D1::RectF(0, 0, width, height),
+                                    fill.get());
+    }
+
+    float line = std::max(1.0f, std::floor(scale));
+    D2D1_RECT_F top = D2D1::RectF(0, 0, width, line);
+    if (!hover) {
+        winrt::com_ptr<ID2D1SolidColorBrush> brush;
+        renderTarget->CreateSolidColorBrush(
+            ThemePartColor(0xFF, 0x45, 0x47, 0x5A), brush.put());
+        if (brush) {
+            renderTarget->FillRectangle(top, brush.get());
+        }
+        return;
+    }
+
+    D2D1_GRADIENT_STOP stops[] = {
+        {0.0f, ThemePartColor(0xFF, 0x89, 0xB4, 0xFA)},
+        {1.0f, ThemePartColor(0xFF, 0xCB, 0xA6, 0xF7)},
+    };
+    winrt::com_ptr<ID2D1GradientStopCollection> stopCollection;
+    renderTarget->CreateGradientStopCollection(stops, ARRAYSIZE(stops),
+                                               stopCollection.put());
+    winrt::com_ptr<ID2D1LinearGradientBrush> brush;
+    if (stopCollection) {
+        renderTarget->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, 0),
+                                                D2D1::Point2F(width, 0)),
+            stopCollection.get(), brush.put());
+    }
+    if (brush) {
+        renderTarget->FillRectangle(top, brush.get());
+    }
+}
 
 HDC CreateStatusDockBitmap(int width,
                            int height,
@@ -11573,8 +11705,12 @@ HDC CreateStatusDockBitmap(int width,
         width, height, [&](ID2D1RenderTarget* renderTarget) {
             bool dock = shape == StatusDockShape::Dock ||
                         shape == StatusDockShape::DockHover;
-            float radius =
-                std::min((dock ? 10.0f : 6.0f) * scale, height / 2.0f);
+            if (dock) {
+                PaintStatusDockBand(renderTarget, width, height, scale,
+                                    shape == StatusDockShape::DockHover);
+                return;
+            }
+            float radius = std::min(6.0f * scale, height / 2.0f);
             D2D1_ROUNDED_RECT rounded = D2D1::RoundedRect(
                 D2D1::RectF(0.5f, 0.5f, width - 0.5f, height - 0.5f), radius,
                 radius);
@@ -11651,12 +11787,8 @@ bool IsDarkFillBrush(HDC hdc, HBRUSH hbr) {
            GetBValue(color) < 0x30;
 }
 
+// The dock fills the whole band, border to border.
 RECT StatusDockPillFromBand(RECT band, UINT dpi) {
-    float scale = dpi / 96.0f;
-    band.left += (int)(2 * scale);
-    band.right -= (int)(2 * scale);
-    band.top += (int)(1 * scale);
-    band.bottom -= (int)(2 * scale);
     return band;
 }
 
@@ -12231,8 +12363,8 @@ bool PaintStatusDockViewButton(HDC hdc, int iStateId, LPCRECT pRect) {
     // As large as the dock allows, so the ring clears the 16px glyph.
     face.left += (int)(1 * scale);
     face.right -= (int)(1 * scale);
-    face.top = pill.top + (int)(1 * scale);
-    face.bottom = pill.bottom - (int)(1 * scale);
+    face.top = pill.top + std::max(2, (int)(2 * scale));
+    face.bottom = pill.bottom - std::max(1, (int)(1 * scale));
     if (face.right <= face.left || face.bottom <= face.top) {
         return true;
     }
@@ -12259,6 +12391,28 @@ bool PaintStatusDockViewButton(HDC hdc, int iStateId, LPCRECT pRect) {
                          selected ? (hover ? StatusDockShape::SelectedHover
                                            : StatusDockShape::Selected)
                                   : StatusDockShape::Hover);
+    return true;
+}
+
+// The separators between status fields ("7 items | 1 item selected"): one
+// surface1 line from just under the dock's top line to its bottom edge.
+bool PaintStatusDockSeparator(HDC hdc, LPCRECT pRect) {
+    StatusDockBuffer* buffer = FindStatusDockBuffer(hdc);
+    if (!buffer || buffer->isToggle || !buffer->hasBand) {
+        return false;
+    }
+
+    UINT dpi = StatusDockDpi(buffer->hWnd);
+    RECT pill = StatusDockPillFromBand(buffer->band, dpi);
+    if (pRect->left < pill.left || pRect->right > pill.right) {
+        return false;
+    }
+
+    int line = std::max(1, (int)(dpi / 96));
+    int x = pRect->left + (pRect->right - pRect->left - line) / 2;
+    RECT rc = {x, pill.top + line, x + line, pill.bottom};
+    SetDCBrushColor(hdc, RGB(0x45, 0x47, 0x5A));
+    FillRect_Original(hdc, &rc, (HBRUSH)GetStockObject(DC_BRUSH));
     return true;
 }
 
@@ -12505,6 +12659,17 @@ bool PaintThemeBackground(HTHEME hTheme,
                                    ARRAYSIZE(themeClass))) &&
         _wcsicmp(themeClass, L"CommandModule") == 0) {
         return PaintStatusDockViewButton(hdc, iStateId, pRect);
+    }
+    if (iPartId == 1 && g_statusDockBufferCountForThread > 0 && pRect &&
+        SUCCEEDED(g_pGetThemeClass(hTheme, themeClass,
+                                   ARRAYSIZE(themeClass))) &&
+        _wcsicmp(themeClass, L"ShellStatusBarSeparator") == 0) {
+        return PaintStatusDockSeparator(hdc, pRect);
+    }
+    if (pRect && PaintPaneSplitter(hdc, pRect->left, pRect->top,
+                                   pRect->right - pRect->left,
+                                   pRect->bottom - pRect->top)) {
+        return true;
     }
 
     if (!IsEntireWindowEffectDC(hdc)) {

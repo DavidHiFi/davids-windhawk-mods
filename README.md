@@ -15,7 +15,7 @@ Taskbar, window and Start menu mods, every catalog mod and setting I use, and sc
 <br><br>
 
 <img src="https://img.shields.io/github/v/release/DavidHiFi/davids-windhawk-mods?style=flat-square&label=version&color=8957E5&labelColor=161B22" alt="Latest version">
-<img src="https://img.shields.io/github/downloads/DavidHiFi/davids-windhawk-mods/total?style=flat-square&label=downloads&color=1F6FEB&labelColor=161B22" alt="Total downloads">
+<img src="https://img.shields.io/github/downloads/DavidHiFi/davids-windhawk-mods/total?style=flat-square&labelColor=161B22" alt="Total downloads">
 <img src="https://img.shields.io/badge/platform-Windows%2011-DB6D28?style=flat-square&labelColor=161B22" alt="Platform: Windows 11">
 
 </div>
@@ -47,59 +47,83 @@ Each release on the Releases page carries one mod, so the latest release is the 
    Add `-IncludeAppSettings` to import the app and engine settings too, then reopen the Windhawk window.
 4. Copy `mod-storage/` to `C:\ProgramData\Windhawk\Engine\ModsWritable\mod-storage\`, and `editor/settings.json` to `C:\ProgramData\Windhawk\UIData\user-data\User\settings.json`.
 
+An AI agent can do all of this on its own: [AGENTS.md](AGENTS.md) is the runbook it should follow.
+
 ## Features
 
 ### Taskbar and tray
 
 | | Mod | What it does |
 | --- | --- | --- |
-| <img src="media/previews/seamless-media-player.png" width="220" alt="Taskbar media player with album art, time, buttons and spectrum bars"> | [Seamless Media Player](mods/local/seamless-media-player) | A taskbar media player with live spectrum bars beside or behind it, a progress bar and the time. |
-| <img src="media/previews/taskbar-audio-visualizer.gif" width="220" alt="Audio spectrum on the taskbar"> | [Taskbar Audio Visualizer](mods/local/taskbar-audio-visualizer) | A live audio spectrum with media controls, right on the taskbar. |
-| <img src="media/previews/taskbar-weather.png" width="220" alt="Weather card over the taskbar"> | [Taskbar Weather](mods/local/taskbar-weather) | Current weather on the taskbar with a details card on hover, no Widgets or API key. |
-| <img src="media/previews/taskbar-elastic-pill-plus.png" width="220" alt="Sliding pill under the taskbar apps"> | [Taskbar Elastic WinUI Pill Plus](mods/local/taskbar-elastic-pill-plus) | An animated pill that slides under the app you switch to, with an option to mark open apps you're not using. |
-| <img src="media/previews/taskbar-system-info-weather.png" width="220" alt="CPU and GPU readouts on the taskbar"> | [Taskbar System Info Plus](mods/local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed, with optional graphs. |
-| <img src="media/previews/taskbar-ai-quota-opencode.png" width="220" alt="Usage bars on the taskbar"> | [Taskbar AI Quota Bars Plus](mods/local/taskbar-ai-quota-opencode) | Claude, Antigravity and OpenCode Go usage limits as taskbar bars. |
-| <img src="media/previews/taskbar-ai-usage-plus.png" width="220" alt="Codex usage flyout over the taskbar"> | [Taskbar AI Usage Plus](mods/local/taskbar-ai-usage-plus) | Claude, Codex, Antigravity and Copilot limits as ring tiles with a Fluent flyout. |
+| <img src="media/previews/seamless-media-player.png" width="220" alt="Taskbar media player with spectrum bars"> | [Seamless Media Player](mods/local/seamless-media-player) | A media player with a live audio visualizer beside it, right on the taskbar. |
+| <img src="media/previews/taskbar-system-info-weather.png" width="220" alt="CPU and GPU readouts on the taskbar"> | [Taskbar System Info Plus](mods/local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar, with optional graphs. |
+| <img src="media/previews/taskbar-ai-usage-plus.png" width="220" alt="Usage rings on the taskbar"> | [Taskbar AI Usage Plus](mods/local/taskbar-ai-usage-plus) | Claude, Codex, Antigravity and Copilot limits as ring tiles, with a Fluent flyout for the details. |
 | <img src="media/previews/better-volume-mixer-plus.png" width="220" alt="Tray volume mixer"> | [Seamless Volume Mixer](mods/local/better-volume-mixer-plus) | A tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices. |
 | <img src="media/previews/seamless-tray-drawer.png" width="220" alt="Hidden icons panel with a blue to mauve border"> | [Seamless Tray Drawer](mods/local/seamless-tray-drawer) | A second drawer for rarely used tray icons, with your own colors, border and blur. |
-| <img src="media/previews/notification-center-styler-plus.png" width="220" alt="Notification panel with a group options menu opening to the left"> | [Notification Center Styler Plus](mods/local/notification-center-styler-plus) | Themes for the notification panel, with gradient hover borders and a group options menu that stays fully in view. |
+| <img src="media/previews/recycle-bin-tray-plus.png" width="220" alt="Recycle Bin icon in the tray"> | [Recycle Bin Tray Plus](mods/local/recycle-bin-tray-plus) | A Recycle Bin icon in the tray, with drag and drop and themed menus. |
+| <img src="media/previews/taskbar-collapse-to-running-plus.png" width="220" alt="Taskbar showing only running apps"> | [Taskbar Collapse to Running Plus](mods/local/taskbar-collapse-to-running-plus) | Hides pinned apps that are not running, and reveals them on hover. |
+| | [Micrographics Taskbar Clock Plus](mods/local/micrographics-taskbar-clock-plus) | A Nothing OS style Micrographics clock for the taskbar, with pill badges and a weather line. |
+| | [Seamless Taskbar Utilities](mods/local/seamless-taskbar-utilities) | Quick system tools in the taskbar right-click menu, with Catppuccin result cards. |
 
-### Windows and Alt+Tab
+### Windows, borders and Alt+Tab
 
 | | Mod | What it does |
 | --- | --- | --- |
-| <img src="media/previews/window-borders.png" width="220" alt="Notepad++ with a blue to mauve border"> | [Window Borders](mods/local/window-borders) | Smooth, rounded borders on every window, with an accent-to-mauve gradient on the active one. |
-| <img src="media/previews/seamless-title-bars.png" width="220" alt="Steam and Helium on native title bars with centred titles"> | [Seamless Title Bars](mods/local/seamless-title-bars) | Title bar colours, movable caption buttons and a proper Windows title bar in Store apps, browsers, Spotify and Terminal, all in one mod. |
-| <img src="media/previews/window-manager.gif" width="220" alt="Windows being dragged and snapped"> | [Window Manager Plus](mods/local/window-manager) | Move, resize, snap and send windows to other monitors with Alt+drag and shortcuts. |
-| <img src="media/previews/alt-snap-drag.gif" width="220" alt="Alt+drag moving a window"> | [AltSnap](mods/local/alt-snap-drag) | Alt+drag to move and resize any window, plus AltSnap's window shortcuts. |
+| | [Seamless Borders](mods/local/seamless-borders) | Colored borders around windows, menus and notification banners. |
+| <img src="media/previews/seamless-title-bars.png" width="220" alt="Steam and Helium on native title bars with centred titles"> | [Seamless Title Bars](mods/local/seamless-title-bars) | One title bar look everywhere: colors, caption buttons and native frames in every kind of app. |
 | <img src="media/previews/simple-window-switcher-plus.gif" width="220" alt="Vista-style Alt+Tab"> | [Simple Window Switcher Plus](mods/local/simple-window-switcher-plus) | Alt+Tab with Vista animations, background blur and elevated app support. |
-| <img src="media/previews/wintips-osd-plus.png" width="220" alt="Caps Lock On and Off cards with a blue to mauve gradient border"> | [WinTips OSD Plus](mods/local/wintips-osd-plus) | The Windows tips OSD rebuilt in Capuchin Mocha: gradient-border cards for lock keys and clipboard copy, cut and paste, with a count badge. |
+| <img src="media/previews/always-on-top-plus.png" width="220" alt="Pinned window with a red to yellow ring"> | [Always On Top Windows Plus](mods/local/always-on-top-plus) | Pin any window on top with a hotkey, marked by a Mocha red to yellow ring. |
+| | [Seamless Window Manager](mods/local/seamless-window-manager) | Move, resize, snap and focus windows with the mouse or keyboard, with app rules and a pause key. |
+| <img src="media/previews/seamless-power-action-countdown.png" width="220" alt="Restart countdown on dark Mocha glass"> | [Seamless Power Action Countdown](mods/local/seamless-power-action-countdown) | A glassy countdown before shutdown, restart, sleep or hibernation that any key or click cancels. |
+| <img src="media/previews/wintips-osd-plus.png" width="220" alt="Caps Lock On and Off cards with a blue to mauve gradient border"> | [WinTips OSD Plus](mods/local/wintips-osd-plus) | The Windows tips OSD rebuilt in Capuchin Mocha: gradient-border cards for lock keys and clipboard actions. |
 
-### Start menu, Explorer and menus
+### Start menu and launchers
 
 | | Mod | What it does |
 | --- | --- | --- |
-| <img src="media/previews/start-everything-plus.png" width="220" alt="Start menu search results"> | [Everything & Power Tools in the Start Menu Plus](mods/local/start-everything-plus) | Compact Start menu search with Everything, preview, apps, settings and power tools. |
-| <img src="media/previews/fullscreen-start-plus.png" width="220" alt="Fullscreen grid of app icons"> | [Fullscreen Start Plus](mods/local/fullscreen-start-plus) | A fullscreen, Launchpad-style grid of all your apps in place of Start, with instant search and blur. |
-| <img src="media/previews/translucent-flyouts.png" width="220" alt="Acrylic context menu"> | [Translucent Flyouts](mods/local/translucent-flyouts) | Acrylic, Mica and blur backgrounds for menus, dropdowns and tooltips in every app. |
-| <img src="media/previews/shell-font-changer-plus.png" width="220" alt="Explorer text in Segoe UI and in FiraCode Nerd Font"> | [Shell Font Changer Plus](mods/local/shell-font-changer-plus) | Any installed font in Explorer, Start, Search and Settings, with icons and emoji left intact. |
-| <img src="media/previews/gpu-accelerated-explorer-view-plus.png" width="220" alt="NanaZip submenu: an empty pill on the stock mod, fully populated with Plus"> | [GPU Accelerated Explorer View Plus](mods/local/gpu-accelerated-explorer-view-plus) | GPU-rendered file lists and icon grids, populated submenus, page animations and navigation pane styling. |
-| <img src="media/previews/windows-11-file-explorer-styler-plus.png" width="220" alt="File Explorer with a dark Catppuccin theme and rounded toolbar buttons"> | [File Explorer Styler Plus](mods/local/windows-11-file-explorer-styler-plus) | Themes for File Explorer, plus a rounded Catppuccin dock for the status bar with Mocha view buttons. |
-| <img src="media/previews/drag-to-delete-plus.png" width="220" alt="Floating trash target"> | [Drag to Delete Plus](mods/local/drag-to-delete-plus) | A floating trash target appears while you drag files, with themes, shapes and colors. |
-| <img src="media/previews/peek.png" width="220" alt="Peek preview window playing an mp3 with a seek bar"> | [Peek](mods/local/peek) | Select a file in Explorer and press Space to preview it, with media playback for audio and video. |
-| <img src="media/previews/seamless-autoscroll.png" width="220" alt="Frosted glass autoscroll circle with a blue to mauve ring"> | [Seamless Autoscroll](mods/local/seamless-autoscroll) | Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator. |
+| <img src="media/previews/seamless-launchpad.png" width="220" alt="Fullscreen Launchpad grid of app icons"> | [Seamless Launchpad](mods/local/seamless-launchpad) | A fullscreen, Launchpad-style grid of all your apps in place of Start, with instant search and blur. |
+| | [Seamless Clipboard Manager](mods/local/seamless-clipboard-manager) | Everything you copy, text and images, in a searchable list you open with Win+V. |
 | | [Theme Tool Plus](mods/local/theme-tool-plus) | Switch Windows themes from the settings tab, custom themes included. Comes with the Main 01 Catppuccin theme, cursors and sounds. |
+
+### Explorer and files
+
+| | Mod | What it does |
+| --- | --- | --- |
+| <img src="media/previews/windows-11-file-explorer-styler-plus.png" width="220" alt="File Explorer with a dark Catppuccin theme and rounded toolbar buttons"> | [File Explorer Styler Plus](mods/local/windows-11-file-explorer-styler-plus) | Themes for File Explorer, plus a rounded Catppuccin dock for the status bar with Mocha view buttons. |
+| <img src="media/previews/gpu-accelerated-explorer-view-plus.png" width="220" alt="NanaZip submenu: an empty pill on the stock mod, fully populated with Plus"> | [GPU Accelerated Explorer View Plus](mods/local/gpu-accelerated-explorer-view-plus) | GPU-rendered file lists and icon grids, populated submenus, page animations and navigation pane styling. |
+| | [Explorer Tags Plus](mods/local/explorer-tags-plus) | Colored tags in Explorer's navigation pane and a Tags submenu on files. |
+| | [File Operation Styler Plus](mods/local/file-operation-styler-plus) | A modern copy, move, delete and recycle window for Explorer, drawn on the GPU. |
+| <img src="media/previews/peek.png" width="220" alt="Peek preview window playing an mp3 with a seek bar"> | [Peek](mods/local/peek) | Select a file in Explorer and press Space to preview it, with media playback for audio and video. |
+| <img src="media/previews/shell-font-changer-plus.png" width="220" alt="Explorer text in Segoe UI and in FiraCode Nerd Font"> | [Shell Font Changer Plus](mods/local/shell-font-changer-plus) | Any installed font in Explorer, Start, Search and Settings, with icons and emoji left intact. |
+| <img src="media/previews/seamless-color-picker.png" width="220" alt="Color picker with a screen magnifier"> | [Seamless Color Picker](mods/local/seamless-color-picker) | A full color picker on a hotkey, with a screen magnifier, recent colors and one-click copy. |
+| | [ZoomIt](mods/local/zoomit) | Zoom into any part of the screen and draw on it with a hotkey, like Sysinternals ZoomIt. |
+
+### Menus, flyouts and apps
+
+| | Mod | What it does |
+| --- | --- | --- |
+| <img src="media/previews/seamless-flyouts.png" width="220" alt="Acrylic context menu"> | [Seamless Flyouts](mods/local/seamless-flyouts) | Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps. |
+| <img src="media/previews/notification-center-styler-plus.png" width="220" alt="Notification panel with a group options menu opening to the left"> | [Notification Center Styler Plus](mods/local/notification-center-styler-plus) | Themes for the notification panel, with gradient hover borders and a group options menu that stays fully in view. |
+| <img src="media/previews/settings-styler-plus.png" width="220" alt="Windows Settings app with a custom theme"> | [Settings Styler Plus](mods/local/settings-styler-plus) | Themes for the Settings app, with the normal title bar and a blur that stays when unfocused. |
+| | [Helium Acrylic](mods/local/helium-acrylic) | Keeps Helium's acrylic surface, Catppuccin colors and system-drawn frame working after browser updates. |
+
+### Input
+
+| | Mod | What it does |
+| --- | --- | --- |
+| <img src="media/previews/seamless-autoscroll.png" width="220" alt="Frosted glass autoscroll circle with a blue to mauve ring"> | [Seamless Autoscroll](mods/local/seamless-autoscroll) | Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator. |
+| | [Seamless Autoclicker](mods/local/seamless-autoclicker) | Hold the forward and left mouse buttons and the left button keeps clicking. |
+| <img src="media/previews/seamless-dictate.png" width="220" alt="Seamless Dictate settings in Catppuccin Mocha"> | [Seamless Dictate](mods/local/seamless-dictate) | Hold a shortcut and speak to type in any app, with AI cleanup and mic privacy while you talk. |
+| | [Magic Pointer Plus](mods/local/magic-pointer-plus) | Shake the pointer, then point at anything and ask an AI about it, with matching menus. |
+| | [Pointer Afterimage Plus](mods/local/pointer-afterimage-plus) | A real motion blur for the mouse pointer, drawn on the GPU. |
+| | [Keyboard Shortcut Actions Plus](mods/local/keyboard-shortcut-actions-plus) | Global shortcuts for apps and Windows actions, with a download offer when an app is missing. |
 
 ### Windhawk and app fixes
 
 | | Mod | What it does |
 | --- | --- | --- |
-| <img src="media/previews/seamless-power-action-countdown.png" width="220" alt="Restart countdown on dark Mocha glass"> | [Seamless Power Action Countdown](mods/local/seamless-power-action-countdown) | A glassy countdown before shutdown, restart, sleep or hibernation that any key or click cancels. |
-| <img src="media/previews/seamless-dictate.png" width="220" alt="Seamless Dictate settings in Catppuccin Mocha"> | [Seamless Dictate](mods/local/seamless-dictate) | Hold Ctrl+Win and speak to type in any app, with AI cleanup and mic privacy while you talk. |
 | <img src="media/previews/windhawk-enhanced-styler.png" width="220" alt="Themed Windhawk window"> | [Windhawk Enhanced Styler](mods/local/windhawk-enhanced-styler) | Your own colors, gradients, font, transparency and blur for the Windhawk window. |
 | <img src="media/previews/npp-taskdlg-textcolor.png" width="220" alt="Notepad++ dark dialog"> | [Notepad++ Dark Dialog Fix](mods/local/npp-taskdlg-textcolor) | Readable text in Notepad++ Save and confirm dialogs in dark mode. |
-| <img src="media/previews/ditto-styler.png" width="220" alt="Ditto in rounded dark glass with a bottom dock"> | [Ditto Styler](mods/local/ditto-styler) | Dark glass for the Ditto clipboard manager: a rounded window, glass tooltips and a bottom dock. |
-| <img src="media/previews/always-on-top-plus.png" width="220" alt="Pinned window with a red to yellow ring"> | [Always On Top Windows Plus](mods/local/always-on-top-plus) | Pin any window on top with Win+Alt+T, marked by a Mocha red to yellow ring. |
 
 ### Themes
 
@@ -128,7 +152,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 | `mod-storage/` | Files mods wrote, currently the Taskbar Styler images. |
 | `editor/` | The Windhawk mod editor's settings. |
 | `manifest.json` | Every mod with version, author, license, origin and enabled state. |
-| `tools/` | Scripts to apply this snapshot or rebuild it from a live install. |
+| `tools/` | Scripts to apply this snapshot, rebuild it from a live install, or from another machine's export. |
 | `media/` | Screenshots and previews. |
 
 `settings/` holds configuration values only. The quota mods keep account credentials encrypted in their own storage, and those are not included.
@@ -148,7 +172,14 @@ After changing mods or settings on a live install, refresh the snapshot from the
 powershell -ExecutionPolicy Bypass -File tools\Build-Repo.ps1
 ```
 
-Add `-SkipSources` to refresh settings and metadata only.
+Add `-SkipSources` to refresh settings and metadata only. The rebuild is a mirror: mods that are no longer installed are removed from the sources, the manifest, the settings and the catalog table.
+
+To refresh from a different machine, dump that machine's state first and rebuild from the export:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\Dump-WindhawkState.ps1 -OutPath H:\tmp\wh-export
+powershell -ExecutionPolicy Bypass -File tools\Build-Repo.ps1 -FromExport H:\tmp\wh-export
+```
 
 </details>
 
@@ -159,9 +190,8 @@ Add `-SkipSources` to refresh settings and metadata only.
 
 My own work here is MIT, see [LICENSE](LICENSE), except where a mod inherits its original's license:
 
-- **GPL-3.0:** Window Manager, AltSnap, Taskbar System Info Plus, Everything & Power Tools in the Start Menu Plus, Seamless Tray Drawer.
+- **GPL-3.0:** Seamless Window Manager, Seamless Borders, Seamless Clipboard Manager, Seamless Tray Drawer, File Operation Styler Plus, Seamless Autoclicker, Recycle Bin Tray Plus, Taskbar System Info Plus.
 - **GPL-2.0:** Simple Window Switcher Plus, Theme Tool Plus, GPU Accelerated Explorer View Plus, Chromium Cursors Mocha.
-- **LGPL-3.0:** Translucent Flyouts.
 
 Catalog mods in `mods/catalog/` keep their authors' licenses.
 
@@ -191,14 +221,14 @@ Thanks to everyone running these mods and reporting what breaks.
 
 - **Author:** Myself, [DavidHiFi](https://github.com/DavidHiFi)
 
-Most of my mods build on someone else's mod. Each folder's readme credits its sources too.
+Most of my mods build on someone else's mod. Each mod's source names its sources too.
 
 | Who | What |
 | --- | --- |
-| **m417z** ([AltDrag](https://windhawk.net/mods/alt-drag)) | The base of AltSnap and Window Manager. Taskbar System Info Plus follows his [Multirow taskbar](https://windhawk.net/mods/taskbar-multirow) and Taskbar Clock Customization code. |
-| **RamonUnch** ([AltSnap](https://github.com/RamonUnch/AltSnap)) | The shortcuts and gestures in AltSnap. |
-| **Stefan Sundin** ([AltDrag](https://stefansundin.github.io/altdrag/)) | The original AltDrag that AltSnap and Window Manager trace back to. |
-| **Asteski** ([Snap Commander](https://windhawk.net/mods/snap-commander)) | Keyboard snapping in Window Manager, and improvements to Simple Window Switcher. |
+| **m417z** ([GitHub](https://github.com/m417z)) | AltDrag, the base of Seamless Window Manager. His [Multirow taskbar](https://windhawk.net/mods/taskbar-multirow) and [Taskbar Clock Customization](https://windhawk.net/mods/taskbar-clock-customization) code lives on in Taskbar System Info Plus. Windows 11 Notification Center Styler, Windows 11 File Explorer Styler, Windows 11 Settings Styler and [Keyboard Shortcut Actions](https://windhawk.net/mods/keyboard-shortcut-actions) are the bases of their Plus versions. |
+| **RamonUnch** ([AltSnap](https://github.com/RamonUnch/AltSnap)) | The shortcuts and gestures in Seamless Window Manager. |
+| **Stefan Sundin** ([AltDrag](https://stefansundin.github.io/altdrag/)) | The original AltDrag that Seamless Window Manager traces back to. |
+| **Asteski** ([Snap Commander](https://windhawk.net/mods/snap-commander)) | Keyboard snapping in Window Manager. |
 | **TomberWolf** ([Move Window to Monitor](https://windhawk.net/mods/move-window-to-monitor)) | Moving windows between monitors in Window Manager. |
 | **Lone** ([Simple Window Switcher](https://windhawk.net/mods/simple-window-switcher)) | Simple Window Switcher 2.1, the base of Simple Window Switcher Plus. |
 | **bropines** ([GitHub](https://github.com/bropines)) | Improvements to Simple Window Switcher. |
@@ -209,20 +239,27 @@ Most of my mods build on someone else's mod. Each folder's readme credits its so
 | **0Allu** ([Better Volume Mixer](https://windhawk.net/mods/better-volume-mixer)) | The base of Seamless Volume Mixer. |
 | **shubho** ([App Volume Booster](https://windhawk.net/mods/app-volume-booster)) | The per-app boost and compressor in Seamless Volume Mixer. |
 | **Gabriela Cristei** ([Explorer Font Changer](https://windhawk.net/mods/explorer-font-changer)) | The base of Shell Font Changer Plus. |
-| **bardelyne** ([Everything & Power Tools in the Start Menu](https://windhawk.net/mods/start-everything)) | The base of the Plus version. |
-| **Cleroth** ([Taskbar AI Quota Bars](https://windhawk.net/mods/taskbar-ai-quota)) | The base of Taskbar AI Quota Bars Plus. |
-| **USER-TOURNE** ([Tourne'Table](https://windhawk.net/mods/tourne-table-desktop-audio-visualizer)) | A base of Taskbar Audio Visualizer. |
-| **Salyts** ([Desktop Audio Visualizer](https://windhawk.net/mods/desktop-audio-visualizer)) | A base of Taskbar Audio Visualizer, and the second-taskbar support in Taskbar System Info Plus from [Taskbar Fluent Media Player](https://github.com/Salyts/Taskbar-Fluent-Media-Player). |
-| **Salyts** ([Taskbar Fluent Media Player](https://windhawk.net/mods/taskbar-fluent-media-player)) | The base of Seamless Media Player (MIT). |
+| **Rafael Mendes** ([Fullscreen Start](https://windhawk.net/mods/fullscreen-start)) | The base of Seamless Launchpad, and its preview image. |
+| **AhmedAwad7** ([Always On Top Windows](https://windhawk.net/mods/always-on-top)) | The base of Always On Top Windows Plus. |
+| **buedgik** ([Explorer Tags](https://github.com/buedgik/explorer-tags)) | The base of Explorer Tags Plus. |
+| **digART** ([File Operation Styler](https://windhawk.net/mods/file-operation-styler)) | The base of File Operation Styler Plus. |
+| **Rono** (Magic Pointer) | The base of Magic Pointer Plus. |
+| **SAM2WOW** ([Micrographics Taskbar Clock](https://windhawk.net/mods/micrographics-taskbar-clock)) | The base of Micrographics Taskbar Clock Plus (MIT). |
+| **Sof2245** ([Taskbar AI Usage](https://windhawk.net/mods/taskbar-ai-usage)) | The base of Taskbar AI Usage Plus. |
+| **Wildstyle23** ([Recycle Bin Tray](https://windhawk.net/mods/recycle-bin-tray)) | The base of Recycle Bin Tray Plus. |
+| **Marco Petrucci** ([Taskbar System Utilities](https://windhawk.net/mods/taskbar-system-utilities)) | The base of Seamless Taskbar Utilities, which adapts the menu hooks from his Taskbar Restart Explorer. |
+| **Scott Brogden and the Ditto contributors** ([Ditto](https://github.com/sabrogden/Ditto)) | The clipboard engine Seamless Clipboard Manager is based on (GPL-3.0). |
+| **ShareX** ([ShareX](https://github.com/ShareX/ShareX)) | The color picker in Seamless Color Picker is based on theirs. |
+| **Mark Russinovich** ([ZoomIt](https://learn.microsoft.com/sysinternals/downloads/zoomit)) | The zoom and draw behavior the ZoomIt mod recreates. |
+| **sidlikesgrapess** (Pointer Afterimage Motion Blur) | The base of Pointer Afterimage Plus. |
+| **Salyts** ([Taskbar Fluent Media Player](https://windhawk.net/mods/taskbar-fluent-media-player)) | The base of Seamless Media Player (MIT), and the second-taskbar support in Taskbar System Info Plus. |
 | **uMk0** ([Taskbar Media Widget](https://windhawk.net/mods/taskbar-media-widget)) | The behind-widget bars, progress bar and time display in Seamless Media Player (MIT). |
 | **Yevhenii Starychenko** ([Taskbar System Info](https://windhawk.net/mods/taskbar-system-info)) | The base of Taskbar System Info Plus. |
 | **Narayan** ([Taskbar Network Speed Indicator](https://windhawk.net/mods/net-speed-taskbar)) | The idea behind the network readouts in Taskbar System Info Plus. |
-| **iMAboud** ([Drag to Delete](https://windhawk.net/mods/drag-to-delete)) | The base of Drag to Delete Plus. |
 | **MEI** ([Nested Tray Drawer](https://windhawk.net/mods/nested-tray-drawer)) | The base of Seamless Tray Drawer. |
-| **Rafael Mendes** ([Fullscreen Start](https://windhawk.net/mods/fullscreen-start)) | The base of Fullscreen Start Plus, and its preview image. |
 | **rounk-ctrl** ([UXTheme hook](https://windhawk.net/mods/uxtheme-hook)) | The base of Theme Tool Plus. |
 | **namazso** ([SecureUxTheme](https://github.com/namazso/SecureUxTheme), [ThemeToolSharp](https://github.com/namazso/ThemeToolSharp)) | The theme engine research in Theme Tool Plus. |
-| **ALTaleX531** ([TranslucentFlyouts](https://github.com/ALTaleX531/TranslucentFlyouts)) | Translucent Flyouts is a port of it and uses its settings layout. |
+| **niivu** ([DeviantArt](https://www.deviantart.com/niivu)) | The Catppuccin Windows themes and cursors that come with Theme Tool Plus. |
 | **Ingan121** ([Titlebar For Everyone](https://windhawk.net/mods/titlebar-for-everyone)) | The window frame code in Windhawk Enhanced Styler (MIT), and the native frames and Spotify parts of Seamless Title Bars, with [CEF/Spotify Tweaks](https://windhawk.net/mods/cef-titlebar-enabler-universal). |
 | **Th3Fanbus** ([Windows 11 Custom Title Bar Colours](https://windhawk.net/mods/win11-custom-title-bar-colours)) | The colours part of Seamless Title Bars. |
 | **grn15RenS** ([Caption Buttons Customizer](https://windhawk.net/mods/caption-buttons-customizer)) | The caption buttons part of Seamless Title Bars (MIT). |
@@ -231,7 +268,6 @@ Most of my mods build on someone else's mod. Each folder's readme credits its so
 | **Ramen Software** ([Start menu styling guide](https://github.com/ramensoftware/windows-11-start-menu-styling-guide)) | The OnlySearch and RosePine themes merged into OnlySearch Mocha. |
 | **Catppuccin** ([catppuccin](https://github.com/catppuccin/catppuccin)) | The Mocha palette in OnlySearch Mocha and the mod defaults. |
 | **Catppuccin** ([cursors](https://github.com/catppuccin/cursors)) | The cursor art in Chromium Cursors Mocha (GPL-2.0). |
-| **Open-Meteo** ([open-meteo.com](https://open-meteo.com/)) | The weather data in Taskbar Weather (CC BY 4.0). |
 | **Catalog mod authors** ([full list](mods/catalog/README.md)) | Every catalog mod in `mods/catalog/`, copied as installed. Each one is its author's work. |
 
 Built on [Windhawk](https://github.com/ramensoftware/windhawk) by m417z, with its bundled [LLVM clang](https://llvm.org/) compiler and [PowerShell](https://github.com/PowerShell/PowerShell) for the snapshot scripts.

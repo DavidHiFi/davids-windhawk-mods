@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.1.9
+// @version         2.1.12
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -510,6 +510,13 @@ static std::string BuildPolishCss(const Settings&) {
     css += ".ant-tabs-ink-bar{transition:left .26s " + ease + ",width .26s " + ease + " !important;}";
     css += ".ant-modal-content,.ant-popover-container,.ant-dropdown-menu,.ant-select-dropdown{animation:whs-pop .18s " + ease + ";}";
     css += "@keyframes whs-pop{from{opacity:0;transform:translateY(4px) scale(.985);}to{opacity:1;transform:none;}}";
+    // 2.1.12: menus that open over the page fade opacity only. The pop's
+    // translateY+scale re-rasterizes the layered padding-box/border-box fill
+    // and the ::after mask ring every frame in WebView2, which read as a
+    // burst of flicker on each open in the settings GUI. Opacity keeps the
+    // layer cached, so the open is smooth; modals and popovers keep the pop.
+    css += ".ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu{animation:whs-fade .15s " + ease + ";}";
+    css += "@keyframes whs-fade{from{opacity:0;}to{opacity:1;}}";
     css += "}";
     // Hover glows were replaced by 2px resting and hover borders (2.1.2, BuildButtonBorderCss).
     css += ".ant-btn:not(:disabled):active{transform:scale(.97);}";
@@ -1162,11 +1169,14 @@ body>#root{transition:filter .2s ease;}
 /* 2.1.7: mod page header: no grey rule under the tab pill. */
 :root .ant-card-head:has(>.ant-card-head-wrapper .ant-tabs),:root .ant-card-head:has(.ant-card-head-tabs){border-bottom:0 !important;box-shadow:none !important;}
 :root .ant-card-head-tabs>.ant-tabs-nav::before,:root .ant-card-head-tabs .ant-tabs-ink-bar{display:none !important;border:0 !important;}
-/* 2.1.7: version chips: crust fill, 2px grey ring, chosen one blue, blue to mauve on hover. */
-:root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper{background:#11111b !important;color:#a6adc8 !important;border:0 !important;box-shadow:inset 0 0 0 2px #45475a !important;border-radius:999px !important;margin-inline-end:6px !important;transition:box-shadow .15s ease,color .15s ease !important;}
+/* 2.1.12: version chips: hover ring via ::after mask, zero layout shift; remove-confirm solid card with page blur behind; menu surfaces fade opacity only (no transform re-raster). */
+/* 2.1.11: version chips: mantle fill, 2px grey ring, chosen one surface0, blue to mauve on hover. */
+:root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper{position:relative !important;background:#181825 !important;color:#a6adc8 !important;border:0 !important;box-shadow:inset 0 0 0 2px #45475a !important;border-radius:999px !important;margin-inline-end:6px !important;transition:box-shadow .15s ease,color .15s ease !important;}
 :root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper::before{display:none !important;}
-:root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper-checked{background:#181825 !important;color:#89b4fa !important;box-shadow:inset 0 0 0 2px #89b4fa !important;}
-:root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper:hover{color:#cdd6f4 !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;border:2px solid transparent !important;box-shadow:none !important;padding-inline:13px !important;}
+:root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper-checked{background:#313244 !important;color:#89b4fa !important;box-shadow:inset 0 0 0 2px #89b4fa !important;}
+:root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper:hover{color:#cdd6f4 !important;background:#181825 !important;box-shadow:none !important;}
+:root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper::after{content:"" !important;position:absolute !important;inset:0 !important;border-radius:inherit !important;padding:2px !important;background:linear-gradient(125deg,#89b4fa,#cba6f7) !important;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0) !important;-webkit-mask-composite:xor !important;mask-composite:exclude !important;opacity:0 !important;transition:opacity .15s ease !important;pointer-events:none !important;display:block !important;box-sizing:border-box !important;}
+:root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper:hover::after{opacity:1 !important;}
 /* 2.1.7: open menus (sort, selects) wear the blue to mauve ring the whole time they are open. */
 :root :is(.ant-select-dropdown,.ant-dropdown-menu,.ant-picker-dropdown)::after{--whb-a:#89b4fa !important;--whb-b:#cba6f7 !important;}
 /* 2.1.7: dialogs: stronger glass so nothing behind reads through. */
@@ -1178,19 +1188,20 @@ body:has(.ant-modal-wrap:not([style*="display: none"]) .ant-modal)>#root{filter:
 :root :is(.ant-progress-bg,.ant-progress-track:not(.ant-progress-track-success)){background:linear-gradient(100deg,#89b4fa,#b4befe 60%,#cba6f7) !important;}
 :root .ant-progress-inner,:root .ant-progress-rail{background:#11111b !important;box-shadow:inset 0 0 0 2px #45475a !important;padding:2px !important;box-sizing:content-box !important;}
 /* 2.1.7: Create a new mod confirm: glass card, grey ring, blue to mauve on hover. */
-:root .ant-popconfirm :is(.ant-popover-inner,.ant-popover-container){background-color:rgba(24,24,37,.94) !important;backdrop-filter:blur(24px) saturate(120%) !important;border-radius:14px !important;padding:16px 18px !important;}
+:root .ant-popconfirm :is(.ant-popover-inner,.ant-popover-container){background-color:rgba(24,24,37,.86) !important;backdrop-filter:none !important;border-radius:14px !important;padding:16px 18px !important;}
+body:has(.ant-popconfirm:not(.ant-popover-hidden))>#root{filter:blur(14px) saturate(115%) brightness(.8) !important;transition:filter .18s ease;}
 :root .ant-popconfirm:hover :is(.ant-popover-inner,.ant-popover-container)::after{--whb-a:#89b4fa;--whb-b:#cba6f7;}
 :root .ant-popconfirm .ant-popover-arrow{display:none !important;}
 :root .ant-popconfirm :is(.ant-popconfirm-title,.ant-popconfirm-description,.ant-checkbox-label,.ant-checkbox-wrapper){color:#cdd6f4 !important;}
 :root .ant-popconfirm .ant-checkbox-inner{background:#11111b !important;border:2px solid #45475a !important;border-radius:5px !important;}
 :root .ant-popconfirm .ant-checkbox-checked .ant-checkbox-inner{background:linear-gradient(125deg,#89b4fa,#cba6f7) !important;border-color:transparent !important;}
 :root .ant-popconfirm .ant-popconfirm-buttons{display:flex !important;gap:8px !important;justify-content:flex-end !important;margin-top:12px !important;}
-/* 2.1.8: Reset to default pills and number arrows: crust fill, 2px grey ring, blue to mauve on hover. Modified-setting bars are blue to mauve. */
-:root [data-testid="mod-setting-reset"].ant-btn{height:24px !important;padding:0 9px !important;border-radius:999px !important;border:2px solid transparent !important;background:linear-gradient(#11111b,#11111b) padding-box,linear-gradient(#45475a,#45475a) border-box !important;color:#89b4fa !important;box-shadow:none !important;transition:background .15s ease,color .15s ease !important;}
-:root [data-testid="mod-setting-reset"].ant-btn:hover,:root [data-testid="mod-setting-reset"].ant-btn:focus-visible{background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;color:#b4befe !important;}
-:root [data-testid="mod-setting-reset"].ant-btn:active{background:linear-gradient(#1e1e2e,#1e1e2e) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
-:root .ant-input-number .ant-input-number-actions{top:3px !important;bottom:3px !important;right:4px !important;height:auto !important;width:20px !important;border-radius:10px !important;overflow:hidden !important;border:2px solid transparent !important;background:linear-gradient(#11111b,#11111b) padding-box,linear-gradient(#45475a,#45475a) border-box !important;box-shadow:none !important;}
-:root .ant-input-number .ant-input-number-actions:hover{background:linear-gradient(#181825,#181825) padding-box,linear-gradient(160deg,#89b4fa,#cba6f7) border-box !important;}
+/* 2.1.11: Reset to default pills and number arrows: mantle fill, 2px grey ring, blue to mauve on hover. Modified-setting bars are blue to mauve. */
+:root [data-testid="mod-setting-reset"].ant-btn{height:24px !important;padding:0 9px !important;border-radius:999px !important;border:2px solid transparent !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(#45475a,#45475a) border-box !important;color:#89b4fa !important;box-shadow:none !important;transition:background .15s ease,color .15s ease !important;}
+:root [data-testid="mod-setting-reset"].ant-btn:hover,:root [data-testid="mod-setting-reset"].ant-btn:focus-visible{background:linear-gradient(#1e1e2e,#1e1e2e) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;color:#b4befe !important;}
+:root [data-testid="mod-setting-reset"].ant-btn:active{background:linear-gradient(#313244,#313244) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
+:root .ant-input-number .ant-input-number-actions{top:3px !important;bottom:3px !important;right:4px !important;height:auto !important;width:20px !important;border-radius:10px !important;overflow:hidden !important;border:2px solid transparent !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(#45475a,#45475a) border-box !important;box-shadow:none !important;}
+:root .ant-input-number .ant-input-number-actions:hover{background:linear-gradient(#1e1e2e,#1e1e2e) padding-box,linear-gradient(160deg,#89b4fa,#cba6f7) border-box !important;}
 :root .ant-input-number .ant-input-number-action{border:0 !important;border-radius:0 !important;color:#a6adc8 !important;background:transparent !important;font-size:9px !important;transition:background .12s ease,color .12s ease !important;}
 :root .ant-input-number .ant-input-number-action:hover{color:#cdd6f4 !important;background:rgba(137,180,250,.16) !important;}
 :root .ant-input-number .ant-input-number-action:active{background:rgba(203,166,247,.24) !important;}
@@ -1209,6 +1220,11 @@ body:has(.ant-modal-wrap:not([style*="display: none"]) .ant-modal)>#root{filter:
 :root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-item-selected,:root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-item-selected:hover{background:#181825 !important;color:#89b4fa !important;font-weight:700 !important;}
 :root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-item-selected:hover{background:linear-gradient(125deg,#89b4fa33,#cba6f733) !important;}
 :root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-item-label{min-height:32px !important;line-height:32px !important;padding:0 16px !important;}
+/* 2.1.10: the open Advanced settings box is one glass card: its body takes the header's Mocha glass instead of antd's flat near-black, with one quiet line under the header. The header Create button matches the other docks: same padding, 18px icon, short label. */
+:root .ant-collapse>.ant-collapse-item>.ant-collapse-panel{background:rgba(24,24,37,0.400) !important;border:0 !important;border-top:1px solid rgba(69,71,90,0.700) !important;border-radius:0 !important;}
+:root #wh-header-create{padding:0 15px !important;}
+:root #wh-header-create svg{width:18px !important;height:18px !important;}
+:root #wh-header-create .ant-btn-icon{display:inline-flex;width:18px;height:18px;align-items:center;justify-content:center;}
 )WHB";
     return css;
 }
@@ -1307,9 +1323,18 @@ window.addEventListener('blur',close);window.addEventListener('resize',close);do
   button.className=document.querySelector('[data-testid="nav-explore"]').className;
   // Park the hidden stock button under this copy so its confirm opens here, and stop this click
   // reaching antd's outside-click check, which closed the confirm the moment it opened.
-  button.onclick=e=>{e.preventDefault();e.stopPropagation();const r=button.getBoundingClientRect(),s=document.documentElement.style;
+  // Short label so this dock matches Home, Explore, Settings and About; the full name stays as the tooltip.
+  const label=[...button.children].find(c=>c.tagName==='SPAN'&&!c.classList.contains('ant-btn-icon')&&c.textContent.trim());
+  if(label)label.textContent='New mod';
+  button.setAttribute('title','Create a new mod');button.setAttribute('aria-label','Create a new mod');
+  let busy=0;
+  button.onclick=async e=>{e.preventDefault();e.stopPropagation();if(busy)return;busy=1;setTimeout(()=>busy=0,1500);
+   const find=()=>document.querySelector('[data-testid="create-new-mod"]');let stock=find();
+   // Settings and About have no stock Create button, so go Home first and wait for it.
+   if(!stock){document.querySelector('[data-testid="nav-home"]')?.click();for(let i=0;i<40&&!(stock=find());i++)await new Promise(r=>setTimeout(r,50));if(!stock)return;}
+   const r=button.getBoundingClientRect(),s=document.documentElement.style;
    s.setProperty('--wh-create-x',r.left+'px');s.setProperty('--wh-create-y',r.top+'px');s.setProperty('--wh-create-w',r.width+'px');s.setProperty('--wh-create-h',r.height+'px');
-   setTimeout(()=>document.querySelector('[data-testid="create-new-mod"]')?.click(),0);};
+   setTimeout(()=>find()?.click(),0);};
   anchor.before(button);
  };
  install();

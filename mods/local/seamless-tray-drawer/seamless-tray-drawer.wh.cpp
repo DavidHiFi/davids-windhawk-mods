@@ -2,7 +2,7 @@
 // @id              seamless-tray-drawer
 // @name            Seamless Tray Drawer
 // @description     A themed second drawer for rarely used tray icons, with your own colors, border and material
-// @version         1.0.1
+// @version         1.0.2
 // @author          DavidHiFi, MEI
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -35,6 +35,9 @@ gradient border.
   taskbar both work. You can also pin it to one side.
 - Open both drawers every time you open the panel, if you like.
 - Give the second drawer and the right-click menu the same look.
+- Icons in both drawers grow when you point at them, with the same easing as
+  Seamless Dock Animation's dock.
+- The footer button gets a soft hover box with a colored edge.
 
 ## How to use
 
@@ -138,10 +141,14 @@ all GPL-3.0. This mod stays GPL-3.0.
     - left: Left
   - color: "#CBA6F7"
     $name: Icon color
-  - hoverColor: "#313244"
+  - hoverColor: "#BF45475A"
     $name: Hover color
-  - pressedColor: "#45475A"
+  - hoverEdge: "#89B4FA"
+    $name: Hover edge color
+  - pressedColor: "#E6585B70"
     $name: Pressed color
+  - pressedEdge: "#CBA6F7"
+    $name: Pressed edge color
   - rotate: true
     $name: Turn the arrow while the drawer is open
   - showCount: true
@@ -166,6 +173,16 @@ all GPL-3.0. This mod stays GPL-3.0.
   $name: Second drawer
 - styleMenu: true
   $name: Theme the right-click menu
+- hoverZoom:
+  - enabled: true
+    $name: Grow icons on hover
+  - size: 130
+    $name: Largest size (%)
+    $description: 100 to 200. Suggested 130, the same as the taskbar dock
+  - reach: 64
+    $name: Reach (px)
+    $description: 20 to 200. How far from the pointer icons still grow. Suggested 64
+  $name: Icon hover zoom
 */
 // ==/WindhawkModSettings==
 
@@ -188,6 +205,7 @@ all GPL-3.0. This mod stays GPL-3.0.
 #include <vector>
 
 #undef GetCurrentTime
+#include <winrt/Windows.Devices.Input.h>
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.UI.Input.h>
@@ -274,8 +292,10 @@ struct Settings {
     std::wstring glyph{L"arrow"};
     std::wstring position{L"right"};
     Color chevronColor{255, 0xCB, 0xA6, 0xF7};
-    Color hoverColor{255, 0x31, 0x32, 0x44};
-    Color pressedColor{255, 0x45, 0x47, 0x5A};
+    Color hoverColor{0xBF, 0x45, 0x47, 0x5A};
+    Color hoverEdge{255, 0x89, 0xB4, 0xFA};
+    Color pressedColor{0xE6, 0x58, 0x5B, 0x70};
+    Color pressedEdge{255, 0xCB, 0xA6, 0xF7};
     bool rotate{true};
     bool showCount{true};
     Placement placement{Placement::Auto};
@@ -283,6 +303,9 @@ struct Settings {
     int innerPadding{6};
     bool matchStyle{true};
     bool styleMenu{true};
+    bool zoom{true};
+    int zoomSize{130};
+    int zoomReach{64};
 };
 
 SRWLOCK g_settingsLock = SRWLOCK_INIT;
@@ -370,6 +393,8 @@ void LoadSettings() {
     next.chevronColor = ColorSetting(L"chevron.color", defaults.chevronColor);
     next.hoverColor = ColorSetting(L"chevron.hoverColor", defaults.hoverColor);
     next.pressedColor = ColorSetting(L"chevron.pressedColor", defaults.pressedColor);
+    next.hoverEdge = ColorSetting(L"chevron.hoverEdge", defaults.hoverEdge);
+    next.pressedEdge = ColorSetting(L"chevron.pressedEdge", defaults.pressedEdge);
     next.rotate = Wh_GetIntSetting(L"chevron.rotate") != 0;
     next.showCount = Wh_GetIntSetting(L"chevron.showCount") != 0;
     auto placement = StringSetting(L"secondDrawer.placement");
@@ -382,6 +407,9 @@ void LoadSettings() {
     next.innerPadding = IntSetting(L"secondDrawer.padding", defaults.innerPadding, 0, 24);
     next.matchStyle = Wh_GetIntSetting(L"secondDrawer.matchStyle") != 0;
     next.styleMenu = Wh_GetIntSetting(L"styleMenu") != 0;
+    next.zoom = Wh_GetIntSetting(L"hoverZoom.enabled") != 0;
+    next.zoomSize = IntSetting(L"hoverZoom.size", defaults.zoomSize, 100, 200);
+    next.zoomReach = IntSetting(L"hoverZoom.reach", defaults.zoomReach, 20, 200);
     AcquireSRWLockExclusive(&g_settingsLock);
     g_settings = std::move(next);
     ReleaseSRWLockExclusive(&g_settingsLock);
@@ -1276,6 +1304,24 @@ struct DrawerState {
     Media::RotateTransform arrowRotation{nullptr};
     Media::Animation::Storyboard arrowStoryboard{nullptr};
     bool autoOpenPending{};
+    // Hover zoom: one area for the panel, one for the second drawer.
+    struct ZoomIcon {
+        winrt::weak_ref<FrameworkElement> view;
+        Media::CompositeTransform transform{nullptr};
+        double cx{}, cy{}, scale{1.0}, shown{1.0};
+    };
+    struct ZoomArea {
+        FrameworkElement host{nullptr};   // takes the pointer events
+        FrameworkElement scope{nullptr};  // holds the icons
+        IInspectable moved{nullptr}, exited{nullptr};
+        std::vector<ZoomIcon> icons;
+        bool inside{};
+        double mx{}, my{}, intensity{};
+        std::chrono::steady_clock::time_point lastScan{};
+    };
+    ZoomArea zoomMain, zoomInner;
+    winrt::event_token zoomRender{};
+    std::chrono::steady_clock::time_point zoomLast{};
 };
 
 // XAML objects must never be released from global destructors at process exit.
@@ -1288,6 +1334,7 @@ struct DrawerState {
 struct ChevronBrushes {
     Media::SolidColorBrush normal{nullptr}, hover{nullptr}, pressed{nullptr};
     Media::SolidColorBrush foreground{nullptr}, border{nullptr};
+    Media::SolidColorBrush borderHover{nullptr}, borderPressed{nullptr};
 };
 [[clang::no_destroy]] ChevronBrushes g_chevronBrushes;
 
@@ -1671,12 +1718,15 @@ bool CleanupStep(PCWSTR operation, F&& action) noexcept {
 }
 // END CLEANUP STEP
 
+void ZoomTeardown(DrawerState& state) noexcept;
+
 void RemoveDrawer() noexcept {
     if (!g_drawer)
         return;
     auto& state = *g_drawer;
     state.closing = true;
     state.changing = true;
+    ZoomTeardown(state);
     // Event removers are noexcept in C++/WinRT. Revoke before operations that
     // can pump XAML events, including Hide(), bindings and visual-tree edits.
     if (state.click.value)
@@ -2017,6 +2067,8 @@ void UpdateDrawerAppearance(DrawerState& state) {
         b.pressed.Color(background);
         b.foreground.Color(foreground);
         b.border.Color(foreground);
+        b.borderHover.Color(foreground);
+        b.borderPressed.Color(foreground);
     } else if (themed) {
         double inner = std::max(0.0, s.cornerRadius - width);
         // The panel background spans the footer row, so a clear footer keeps
@@ -2031,6 +2083,8 @@ void UpdateDrawerAppearance(DrawerState& state) {
         b.pressed.Color(s.pressedColor);
         b.foreground.Color(s.chevronColor);
         b.border.Color(Color{0, 0, 0, 0});
+        b.borderHover.Color(s.hoverEdge);
+        b.borderPressed.Color(s.pressedEdge);
     } else {
         // The original Nested Tray Drawer colors.
         state.footer.Background(brush(dark ? Color{18, 122, 156, 189} : Color{8, 59, 85, 112}));
@@ -2043,6 +2097,8 @@ void UpdateDrawerAppearance(DrawerState& state) {
         b.pressed.Color(dark ? Color{14, 255, 255, 255} : Color{8, 0, 0, 0});
         b.foreground.Color(dark ? Color{255, 255, 255, 255} : Color{228, 0, 0, 0});
         b.border.Color(dark ? Color{20, 255, 255, 255} : Color{16, 0, 0, 0});
+        b.borderHover.Color(b.border.Color());
+        b.borderPressed.Color(b.border.Color());
     }
     state.chevron.Background(b.normal);
     state.chevron.BorderBrush(b.border);
@@ -2114,6 +2170,8 @@ Controls::Border CreateDrawerFooter() {
         b.pressed = Media::SolidColorBrush();
         b.foreground = Media::SolidColorBrush();
         b.border = Media::SolidColorBrush();
+        b.borderHover = Media::SolidColorBrush();
+        b.borderPressed = Media::SolidColorBrush();
     }
     auto resources = button.Resources();
     auto put = [&](PCWSTR key, Media::SolidColorBrush const& value) {
@@ -2126,12 +2184,299 @@ Controls::Border CreateDrawerFooter() {
     put(L"ButtonForegroundPointerOver", b.foreground);
     put(L"ButtonForegroundPressed", b.foreground);
     put(L"ButtonBorderBrush", b.border);
-    put(L"ButtonBorderBrushPointerOver", b.border);
-    put(L"ButtonBorderBrushPressed", b.border);
+    put(L"ButtonBorderBrushPointerOver", b.borderHover);
+    put(L"ButtonBorderBrushPressed", b.borderPressed);
     footer.Child(button);
     return footer;
 }
 // END SEAMLESS LOOK
+
+// BEGIN HOVER ZOOM
+// Same recipe as Seamless Dock Animation's dock: the size follows the pointer
+// distance on a cosine curve, fades in and out over 250 ms, and is eased every
+// frame. The whole icon button grows from its centre, hover box included.
+constexpr double kZoomFocusMs = 250.0;
+constexpr double kZoomLerp = 60.0;
+using ZoomIcon = DrawerState::ZoomIcon;
+using ZoomArea = DrawerState::ZoomArea;
+
+void ZoomCollect(DependencyObject const& node, std::vector<FrameworkElement>& out, int depth) {
+    if (depth > 24)
+        return;
+    int count = Media::VisualTreeHelper::GetChildrenCount(node);
+    for (int i = 0; i < count; ++i) {
+        auto child = Media::VisualTreeHelper::GetChild(node, i);
+        auto element = child.try_as<FrameworkElement>();
+        if (element && winrt::get_class_name(element) == L"SystemTray.NotifyIconView") {
+            out.push_back(element);
+            continue;
+        }
+        ZoomCollect(child, out, depth + 1);
+    }
+}
+
+bool IsIdentity(Media::Transform const& transform) {
+    if (!transform)
+        return true;
+    if (auto m = transform.try_as<Media::MatrixTransform>()) {
+        auto v = m.Matrix();
+        return v.M11 == 1 && v.M12 == 0 && v.M21 == 0 && v.M22 == 1 && v.OffsetX == 0 &&
+               v.OffsetY == 0;
+    }
+    return false;
+}
+
+void ZoomWrite(ZoomIcon& icon, double scale) {
+    icon.transform.ScaleX(scale);
+    icon.transform.ScaleY(scale);
+    icon.shown = scale;
+}
+
+// Puts the icon back exactly as the tray had it.
+void ZoomRelease(ZoomIcon& icon) noexcept {
+    try {
+        if (!icon.transform)
+            return;
+        if (auto view = icon.view.get()) {
+            if (view.RenderTransform() == icon.transform)
+                view.ClearValue(UIElement::RenderTransformProperty());
+        }
+        icon.transform = nullptr;
+    } catch (...) {
+    }
+}
+
+void ZoomRebuild(ZoomArea& area) {
+    std::vector<FrameworkElement> views;
+    ZoomCollect(area.scope, views, 0);
+    std::vector<ZoomIcon> next;
+    for (auto const& view : views) {
+        double w = view.ActualWidth(), h = view.ActualHeight();
+        if (w < 1 || h < 1 || view.Visibility() != Visibility::Visible)
+            continue;
+        ZoomIcon icon;
+        for (auto& old : area.icons) {
+            if (old.transform && old.view.get() == view) {
+                icon = std::move(old);
+                break;
+            }
+        }
+        if (!icon.transform) {
+            // Only take an icon nobody else transforms.
+            if (!IsIdentity(view.RenderTransform()))
+                continue;
+            icon.view = winrt::make_weak(view);
+            icon.transform = Media::CompositeTransform();
+            view.RenderTransform(icon.transform);
+        }
+        try {
+            icon.transform.CenterX(w / 2);
+            icon.transform.CenterY(h / 2);
+            // A centred scale never moves the centre, so this is the resting spot.
+            auto p = view.TransformToVisual(area.host)
+                         .TransformPoint({static_cast<float>(w / 2), static_cast<float>(h / 2)});
+            icon.cx = p.X;
+            icon.cy = p.Y;
+        } catch (...) {
+            ZoomRelease(icon);
+            continue;
+        }
+        next.push_back(std::move(icon));
+    }
+    for (auto& old : area.icons)
+        ZoomRelease(old);
+    area.icons = std::move(next);
+}
+
+void ZoomDrop(ZoomArea& area) noexcept {
+    area.inside = false;
+    area.intensity = 0;
+    for (auto& icon : area.icons)
+        ZoomRelease(icon);
+    area.icons.clear();
+}
+
+// Returns true while the area still needs frames.
+bool ZoomAdvance(ZoomArea& area, Settings const& s, double step, double alpha,
+                 std::chrono::steady_clock::time_point now) {
+    if (!area.host)
+        return false;
+    area.intensity = area.inside ? std::min(1.0, area.intensity + step)
+                                 : std::max(0.0, area.intensity - step);
+    if (area.inside && now - area.lastScan > std::chrono::milliseconds(400)) {
+        ZoomRebuild(area);
+        area.lastScan = now;
+    }
+    double reach = s.zoomReach;
+    double peak = s.zoomSize / 100.0;
+    bool moving = false;
+    for (auto& icon : area.icons) {
+        if (!icon.transform)
+            continue;
+        double target = 1.0;
+        double d = std::hypot(area.mx - icon.cx, area.my - icon.cy);
+        if (area.intensity > 0 && d < reach) {
+            double factor = (std::cos(d / reach * 3.14159265358979) + 1.0) / 2.0;
+            target = 1.0 + (peak - 1.0) * factor * area.intensity;
+        }
+        icon.scale += (target - icon.scale) * alpha;
+        if (std::abs(target - icon.scale) < 0.0005)
+            icon.scale = target;
+        if (std::abs(icon.scale - icon.shown) > 0.0001) {
+            if (!icon.view.get()) {
+                icon.transform = nullptr;
+                continue;
+            }
+            ZoomWrite(icon, icon.scale);
+        }
+        if (icon.scale != 1.0 || target != 1.0)
+            moving = true;
+    }
+    if (!area.inside && area.intensity <= 0 && !moving) {
+        ZoomDrop(area);
+        return false;
+    }
+    return true;
+}
+
+bool CursorInWindow(HWND window) {
+    POINT p;
+    RECT r;
+    return window && IsWindowVisible(window) && GetCursorPos(&p) && GetWindowRect(window, &r) &&
+           PtInRect(&r, p);
+}
+
+void ZoomStop(DrawerState& state) noexcept {
+    if (!state.zoomRender.value)
+        return;
+    try {
+        Media::CompositionTarget::Rendering(state.zoomRender);
+    } catch (...) {
+    }
+    state.zoomRender = {};
+}
+
+void ZoomFrame() {
+    if (!g_drawer)
+        return;
+    auto& state = *g_drawer;
+    auto now = std::chrono::steady_clock::now();
+    double dt = std::clamp(std::chrono::duration<double>(now - state.zoomLast).count(), 0.0, 0.1);
+    state.zoomLast = now;
+    auto s = CurrentSettings();
+    if (!s.theme || !s.zoom || state.nativeDragActive || state.closing) {
+        ZoomDrop(state.zoomMain);
+        ZoomDrop(state.zoomInner);
+        ZoomStop(state);
+        return;
+    }
+    // A fast flick off the panel can skip the exit event.
+    if (state.zoomMain.inside && !CursorInWindow(state.outerWindow))
+        state.zoomMain.inside = false;
+    double step = dt * 1000.0 / kZoomFocusMs;
+    double alpha = std::clamp(1.0 - std::exp(-kZoomLerp * dt), 0.0, 1.0);
+    bool busy = ZoomAdvance(state.zoomMain, s, step, alpha, now);
+    busy = ZoomAdvance(state.zoomInner, s, step, alpha, now) || busy;
+    if (!busy)
+        ZoomStop(state);
+}
+
+void ZoomStart(DrawerState& state) {
+    if (state.zoomRender.value)
+        return;
+    state.zoomLast = std::chrono::steady_clock::now();
+    state.zoomRender = Media::CompositionTarget::Rendering([](auto const&, auto const&) noexcept {
+        UiCallbackScope callbackScope;
+        if (g_unloading || !g_runtimeAvailable)
+            return;
+        try {
+            ZoomFrame();
+        } catch (...) {
+            LogException(L"Hover zoom frame");
+            if (g_drawer) {
+                ZoomDrop(g_drawer->zoomMain);
+                ZoomDrop(g_drawer->zoomInner);
+                ZoomStop(*g_drawer);
+            }
+        }
+    });
+}
+
+void ZoomAttach(ZoomArea& area, FrameworkElement const& host, FrameworkElement const& scope,
+                bool inner) {
+    area.host = host;
+    area.scope = scope;
+    Input::PointerEventHandler moved(
+        [inner](IInspectable const&, Input::PointerRoutedEventArgs const& args) noexcept {
+            UiCallbackScope callbackScope;
+            if (g_unloading || !g_runtimeAvailable || !g_drawer)
+                return;
+            try {
+                auto& state = *g_drawer;
+                auto& a = inner ? state.zoomInner : state.zoomMain;
+                if (!a.host || state.nativeDragActive || state.closing)
+                    return;
+                if (args.Pointer().PointerDeviceType() ==
+                    winrt::Windows::Devices::Input::PointerDeviceType::Touch)
+                    return;
+                auto s = CurrentSettings();
+                if (!s.theme || !s.zoom)
+                    return;
+                auto p = args.GetCurrentPoint(a.host).Position();
+                a.mx = p.X;
+                a.my = p.Y;
+                if (!a.inside) {
+                    a.inside = true;
+                    a.lastScan = {};
+                }
+                ZoomStart(state);
+            } catch (...) {
+                LogException(L"Hover zoom move");
+            }
+        });
+    Input::PointerEventHandler exited(
+        [inner](IInspectable const&, Input::PointerRoutedEventArgs const& args) noexcept {
+            UiCallbackScope callbackScope;
+            if (g_unloading || !g_runtimeAvailable || !g_drawer)
+                return;
+            try {
+                auto& a = inner ? g_drawer->zoomInner : g_drawer->zoomMain;
+                if (!a.host)
+                    return;
+                // A child leaving still bubbles here; only a real exit counts.
+                auto p = args.GetCurrentPoint(a.host).Position();
+                if (p.X > 0 && p.Y > 0 && p.X < a.host.ActualWidth() &&
+                    p.Y < a.host.ActualHeight())
+                    return;
+                a.inside = false;
+            } catch (...) {
+                LogException(L"Hover zoom exit");
+            }
+        });
+    area.moved = winrt::box_value(moved);
+    area.exited = winrt::box_value(exited);
+    host.AddHandler(UIElement::PointerMovedEvent(), area.moved, true);
+    host.AddHandler(UIElement::PointerExitedEvent(), area.exited, true);
+}
+
+void ZoomTeardown(DrawerState& state) noexcept {
+    ZoomStop(state);
+    for (auto* area : {&state.zoomMain, &state.zoomInner}) {
+        try {
+            if (area->host && area->moved)
+                area->host.RemoveHandler(UIElement::PointerMovedEvent(), area->moved);
+            if (area->host && area->exited)
+                area->host.RemoveHandler(UIElement::PointerExitedEvent(), area->exited);
+        } catch (...) {
+        }
+        ZoomDrop(*area);
+        area->host = nullptr;
+        area->scope = nullptr;
+        area->moved = nullptr;
+        area->exited = nullptr;
+    }
+}
+// END HOVER ZOOM
 
 void InstallDrawer(Grid const& root) {
     if (g_unloading || g_identityState != 2 || !root || root.Name() != L"OverflowRootGrid")
@@ -2215,6 +2560,7 @@ void InstallDrawer(Grid const& root) {
     state->inner.ShouldConstrainToRootBounds(false);
     state->innerItems.MinWidth(40);
     state->innerItems.MinHeight(40);
+    state->innerItems.Background(Media::SolidColorBrush(Color{0, 0, 0, 0}));
     state->inner.Content(state->innerItems);
 
     g_drawer = std::move(state);
@@ -2365,6 +2711,7 @@ void InstallDrawer(Grid const& root) {
             return;
         if (g_drawer) {
             g_drawer->open = false;
+            ZoomDrop(g_drawer->zoomInner);
             ResetMenuHold(*g_drawer);
             try {
                 AnimateArrow(*g_drawer);
@@ -2390,6 +2737,10 @@ void InstallDrawer(Grid const& root) {
         if (g_unloading || !g_runtimeAvailable)
             return;
         try {
+            if (g_drawer) {
+                ZoomDrop(g_drawer->zoomMain);
+                ZoomDrop(g_drawer->zoomInner);
+            }
             if (!g_drawer || g_drawer->changing || g_drawer->closing)
                 return;
             if (g_drawer->open)
@@ -2438,6 +2789,8 @@ void InstallDrawer(Grid const& root) {
             }
         }
     });
+    ZoomAttach(current.zoomMain, root, current.nativeItems, false);
+    ZoomAttach(current.zoomInner, current.innerItems, current.innerItems, true);
     QueueCollectionRefresh();
     rollback.committed = true;
     Wh_Log(L"Seamless tray drawer entry point attached");

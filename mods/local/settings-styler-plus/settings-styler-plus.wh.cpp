@@ -2,7 +2,7 @@
 // @id              settings-styler-plus
 // @name            Settings Styler Plus
 // @description     Themes for the Windows Settings app, plus a blur that stays when unfocused
-// @version         1.4.0
+// @version         1.4.1
 // @author          DavidHiFi, m417z
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -786,7 +786,7 @@ const Theme g_themeTranslucent_Settings11 = {{
         L"Grid.ColumnSpan@OpenInlineLeft=1",
         L"Grid.ColumnSpan=>Span"}},
     ThemeTargetStyles{L"SplitView#RootSplitView > Grid > Grid#ContentRoot > Border > Grid#ContentGrid", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#00000000\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>",
+        L"Background:=<SolidColorBrush Color=\"#28000000\"/>",
         L"CornerRadius={{Span > 1 ? 0 : $OutRadius}},0,0,0",
         L"Margin={{Span > 1 ? 0 : 65}},48,0,0",
         L"BorderBrush:=$BgBorder",
@@ -1027,37 +1027,33 @@ const Theme g_themeTranslucent_Settings11 = {{
     ThemeTargetStyles{L"Windows.UI.Xaml.Controls.StackPanel#TopBreakdownBar > Windows.UI.Xaml.Controls.ProgressBar", {
         L"Height=16"}},
     ThemeTargetStyles{L"Microsoft.UI.Xaml.Controls.NavigationView#PermanentNavigationView > Grid#RootGrid > Grid > SplitView#RootSplitView > Grid@DisplayModeStates > Grid#PaneRoot", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>"}},
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
     ThemeTargetStyles{L"Grid#ContentRoot > Border > Grid#ContentGrid > ContentControl#HeaderContent", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>"}},
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
     ThemeTargetStyles{L"Frame#PermanentNavRootFrame", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>"}},
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
     ThemeTargetStyles{L"Border > Frame > ContentPresenter > SystemSettings.View.RootPage > Grid#RootPageGrid", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>"}},
+        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" NoiseOpacity=\"0.03\" NoiseDensity=\"1\"/>"}},
     ThemeTargetStyles{L"SystemSettings.View.RootPage > Grid#RootPageGrid", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>"}},
+        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" NoiseOpacity=\"0.03\" NoiseDensity=\"1\"/>"}},
     ThemeTargetStyles{L"Microsoft.UI.Xaml.Controls.NavigationView#PermanentNavigationView > Grid#RootGrid", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>"}},
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
     ThemeTargetStyles{L"Microsoft.UI.Xaml.Controls.NavigationView#PermanentNavigationView > Grid#RootGrid > Grid", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>"}},
-    ThemeTargetStyles{L"Grid#ContentRoot", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>"}},
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
     ThemeTargetStyles{L"SplitView#RootSplitView > Grid > Grid#ContentRoot", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>"}},
-    ThemeTargetStyles{L"Grid#RootGrid", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>"}},
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
     ThemeTargetStyles{L"Grid#AppTitleBar", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>"}},
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
     ThemeTargetStyles{L"Border#AppTitleBarBackground", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>"}},
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
     ThemeTargetStyles{L"Grid#TitleBar", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>"}},
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
     ThemeTargetStyles{L"Border#TitleBarBackground", {
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>"}},
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
     ThemeTargetStyles{L"TextBox#CommandSearchTextBox", {
         L"CornerRadius=$InRadius",
         L"MinHeight=32",
-        L"Background:=<AcrylicBrush BackgroundSource=\"HostBackdrop\" TintColor=\"#761E1E1E\" FallbackColor=\"#00000000\" TintOpacity=\"0.4\" TintLuminosityOpacity=\"0.4\" Opacity=\"0.4\"/>",
+        L"Background:=<SolidColorBrush Color=\"#0FFFFFFF\"/>",
         L"BorderBrush:=<SolidColorBrush Color=\"#22FFFFFF\"/>",
         L"BorderThickness=1"}},
 }, {

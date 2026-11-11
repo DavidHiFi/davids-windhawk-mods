@@ -6,7 +6,7 @@
 // @id              seamless-launchpad
 // @name            Seamless Launchpad
 // @description     A fullscreen GPU rendered grid of all your apps in place of Start, with instant search, adjustable blur, wiggle edit mode and power buttons
-// @version         2.4.2
+// @version         2.4.3
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -5132,10 +5132,14 @@ static void Set_HoverIds(const SetHit& h, int ids[2]) {
 
 static bool Set_Valid(const SetWindow& w, int k) { return k >= 0 && k < (int)w.fields.size(); }
 
+// Value boxes: a dark fill between mantle and surface0 (crust read as black), a resting
+// overlay0 edge, and the blue to mauve ring on hover or while open.
+constexpr UINT32 kSetBoxFill = 0x232434;
 static void Set_DrawBox(SetPaint& p, SetWindow& w, int k, const D2D1_RECT_F& box, bool active) {
-    p.Round(box, 8, mocha::crust);
+    p.Round(box, 8, kSetBoxFill);
     float g = std::max(Set_GlowOf(w, 6000 + k), active ? 1.0f : 0.0f);
-    p.GradRing(box, 8, g);
+    p.Edge(box, 8, mocha::overlay0, 0.7f * (1 - g), 1.25f);
+    p.GradRing(box, 8, g, 1.75f);
 }
 
 static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
@@ -6431,7 +6435,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         case WM_CTLCOLOREDIT: {
             HDC dc = (HDC)wParam;
             SetTextColor(dc, RefFromRgb(mocha::text));
-            SetBkColor(dc, RefFromRgb(mocha::crust));
+            SetBkColor(dc, RefFromRgb(kSetBoxFill));
             return (LRESULT)w->editBrush;
         }
         case WM_SIZE:
@@ -6750,7 +6754,7 @@ static bool Set_Create(bool render) {
     Set_RegisterClass();
     auto w = std::make_shared<SetWindow>();
     w->render = render;
-    w->editBrush = CreateSolidBrush(RefFromRgb(mocha::crust));
+    w->editBrush = CreateSolidBrush(RefFromRgb(kSetBoxFill));
     g_setWin = w;
     if (render) {
         // An owned window gets no taskbar button.

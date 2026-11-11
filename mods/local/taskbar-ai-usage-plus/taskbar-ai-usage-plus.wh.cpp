@@ -4,7 +4,7 @@
 // @description     Shows your Claude, Codex, Antigravity and GitHub Copilot usage limits as ring tiles on the Windows 11 taskbar, with a Fluent flyout for the details
 // @description:es-ES Muestra los límites de uso de Claude, Codex, Antigravity y GitHub Copilot como mosaicos con anillos en la barra de tareas de Windows 11, con un panel flotante Fluent para los detalles
 // @description:zh-CN 在 Windows 11 任务栏上以圆环磁贴显示 Claude、Codex、Antigravity 和 GitHub Copilot 的用量上限，并通过 Fluent 浮出面板查看详情
-// @version         1.1.3
+// @version         1.1.6
 // @author          DavidHiFi, Sof2245
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -2900,6 +2900,8 @@ struct QuotaUiInstance {
     Style tileStyle{nullptr};
     Style flyoutButtonStyle{nullptr};
     Style accentButtonStyle{nullptr};
+    // Mocha chip look for the flyout footer buttons and header pills (dark theme only).
+    Style mochaChipStyle{nullptr};
     FlyoutUi flyout;
     DispatcherTimer paceTimer{nullptr};
     winrt::event_token paceTimerToken{};
@@ -4445,7 +4447,7 @@ static winrt::Windows::UI::Color UsageColor(double pct, bool stale, int yellowTh
 #ifdef WH_VERSION
 static constexpr PCWSTR kModVersion = WH_VERSION;
 #else
-static constexpr PCWSTR kModVersion = L"1.1.3";
+static constexpr PCWSTR kModVersion = L"1.1.6";
 #endif
 static constexpr PCWSTR kAboutQuotaBarsUrl = L"https://github.com/Cleroth/windhawk-taskbar-ai-quota";
 static constexpr PCWSTR kAboutMediaPlayerUrl = L"https://github.com/Salyts/Taskbar-Fluent-Media-Player";
@@ -10633,6 +10635,88 @@ static Style MakeButtonStyle(UiColor hover, UiColor pressed, UiColor hoverBorder
     }
 }
 
+// Mocha chip: crust fill with a dull surface1 edge at rest; on hover a base fill and a
+// blue-to-mauve edge fade in over 150 ms; pressed sinks to an opaque crust fill under the same
+// edge. Every brush is a gradient because neutral SolidColorBrushes come out dimmed in the
+// flyout popup (see FlyoutSolidBrush).
+static Style MakeMochaChipStyle() {
+    std::wstring xaml = LR"(<Style TargetType="Button"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+<Setter Property="Background" Value="Transparent"/>
+<Setter Property="BorderThickness" Value="1"/>
+<Setter Property="Padding" Value="0"/>
+<Setter Property="HorizontalContentAlignment" Value="Center"/>
+<Setter Property="VerticalContentAlignment" Value="Center"/>
+<Setter Property="UseSystemFocusVisuals" Value="True"/>
+<Setter Property="FocusVisualMargin" Value="-3"/>
+<Setter Property="FocusVisualPrimaryThickness" Value="2"/>
+<Setter Property="FocusVisualSecondaryThickness" Value="0"/>
+<Setter Property="FocusVisualPrimaryBrush"><Setter.Value><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FF89B4FA" Offset="0"/><GradientStop Color="#FFCBA6F7" Offset="1"/></LinearGradientBrush></Setter.Value></Setter>
+<Setter Property="Template">
+<Setter.Value>
+<ControlTemplate TargetType="Button">
+<Grid x:Name="Root" Background="Transparent">
+<VisualStateManager.VisualStateGroups>
+<VisualStateGroup x:Name="CommonStates">
+<VisualStateGroup.Transitions>
+<VisualTransition GeneratedDuration="0:0:0.15"/>
+<VisualTransition To="Pressed" GeneratedDuration="0:0:0.06"/>
+</VisualStateGroup.Transitions>
+<VisualState x:Name="Normal"/>
+<VisualState x:Name="PointerOver">
+<Storyboard>
+<DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity" To="1" Duration="0"/>
+<DoubleAnimation Storyboard.TargetName="HoverEdge" Storyboard.TargetProperty="Opacity" To="1" Duration="0"/>
+<DoubleAnimation Storyboard.TargetName="Content" Storyboard.TargetProperty="Opacity" To="1" Duration="0"/>
+</Storyboard>
+</VisualState>
+<VisualState x:Name="Pressed">
+<Storyboard>
+<DoubleAnimation Storyboard.TargetName="PressFill" Storyboard.TargetProperty="Opacity" To="1" Duration="0"/>
+<DoubleAnimation Storyboard.TargetName="HoverEdge" Storyboard.TargetProperty="Opacity" To="1" Duration="0"/>
+<DoubleAnimation Storyboard.TargetName="Content" Storyboard.TargetProperty="Opacity" To="0.9" Duration="0"/>
+</Storyboard>
+</VisualState>
+<VisualState x:Name="Disabled">
+<VisualState.Setters>
+<Setter Target="Root.Opacity" Value="0.4"/>
+</VisualState.Setters>
+</VisualState>
+</VisualStateGroup>
+</VisualStateManager.VisualStateGroups>
+<Border x:Name="Rest" CornerRadius="{TemplateBinding CornerRadius}" BorderThickness="{TemplateBinding BorderThickness}">
+<Border.Background><LinearGradientBrush><GradientStop Color="#D911111B" Offset="0"/><GradientStop Color="#D911111B" Offset="1"/></LinearGradientBrush></Border.Background>
+<Border.BorderBrush><LinearGradientBrush><GradientStop Color="#FF45475A" Offset="0"/><GradientStop Color="#FF45475A" Offset="1"/></LinearGradientBrush></Border.BorderBrush>
+</Border>
+<Border x:Name="HoverFill" Opacity="0" CornerRadius="{TemplateBinding CornerRadius}">
+<Border.Background><LinearGradientBrush><GradientStop Color="#FF1E1E2E" Offset="0"/><GradientStop Color="#FF1E1E2E" Offset="1"/></LinearGradientBrush></Border.Background>
+</Border>
+<Border x:Name="PressFill" Opacity="0" CornerRadius="{TemplateBinding CornerRadius}">
+<Border.Background><LinearGradientBrush><GradientStop Color="#FF11111B" Offset="0"/><GradientStop Color="#FF11111B" Offset="1"/></LinearGradientBrush></Border.Background>
+</Border>
+<Border x:Name="HoverEdge" Opacity="0" CornerRadius="{TemplateBinding CornerRadius}" BorderThickness="{TemplateBinding BorderThickness}">
+<Border.BorderBrush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FF89B4FA" Offset="0"/><GradientStop Color="#FFCBA6F7" Offset="1"/></LinearGradientBrush></Border.BorderBrush>
+</Border>
+<ContentPresenter x:Name="Content" Opacity="0.78"
+                  Padding="{TemplateBinding Padding}"
+                  Content="{TemplateBinding Content}"
+                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                  HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                  VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"/>
+</Grid>
+</ControlTemplate>
+</Setter.Value>
+</Setter>
+</Style>)";
+    try {
+        return winrt::Windows::UI::Xaml::Markup::XamlReader::Load(winrt::hstring(xaml)).as<Style>();
+    } catch (...) {
+        Wh_Log(L"MakeMochaChipStyle: XamlReader failed");
+        return nullptr;
+    }
+}
+
 // Simple Icons paths (CC0); viewBox 0 0 24 24.
 static PCWSTR ProviderLogoPathData(std::wstring const& provider) {
     if (provider == L"copilot") {
@@ -11679,17 +11763,22 @@ static void CloseAccountFlyout(QuotaUiInstance& state) {
 static Button MakeFlyoutIconButton(QuotaUiInstance& state, wchar_t const* glyph,
                                    wchar_t const* tooltip, UiPalette const& pal) {
     Button button;
-    if (state.flyoutButtonStyle) button.Style(state.flyoutButtonStyle);
+    bool chip = static_cast<bool>(state.mochaChipStyle);
+    if (chip) {
+        button.Style(state.mochaChipStyle);
+    } else if (state.flyoutButtonStyle) {
+        button.Style(state.flyoutButtonStyle);
+    }
     button.Width(32);
     button.Height(32);
-    button.CornerRadius({4, 4, 4, 4});
+    button.CornerRadius(chip ? CornerRadius{8, 8, 8, 8} : CornerRadius{4, 4, 4, 4});
     button.VerticalAlignment(VerticalAlignment::Center);
     TextBlock icon;
     icon.Text(glyph);
     icon.FontSize(16);
     icon.FontFamily(FontFamily(L"Segoe Fluent Icons, Segoe MDL2 Assets"));
     icon.Foreground(FlyoutSolidBrush(pal.text));
-    icon.Opacity(0.85);
+    icon.Opacity(chip ? 1.0 : 0.85);
     icon.HorizontalAlignment(HorizontalAlignment::Center);
     icon.VerticalAlignment(VerticalAlignment::Center);
     button.Content(icon);
@@ -12221,6 +12310,9 @@ static FrameworkElement BuildFlyoutContent(QuotaUiInstance& state, int accountIn
         state.accentButtonStyle = MakeButtonStyle(pal.accentHover, pal.accentPressed,
                                                   UiColor{0, 0, 0, 0});
     }
+    if (!state.mochaChipStyle && !state.lightTheme && !IsHighContrastActive()) {
+        state.mochaChipStyle = MakeMochaChipStyle();
+    }
 
     // Outer margin so the shadow fits.
     Grid outer;
@@ -12327,14 +12419,32 @@ static FrameworkElement BuildFlyoutContent(QuotaUiInstance& state, int accountIn
     pills.Margin({12, 0, 0, 0});
     pills.VerticalAlignment(VerticalAlignment::Center);
     Grid::SetColumn(pills, 2);
+    bool chipPills = !state.lightTheme && static_cast<bool>(state.mochaChipStyle);
     auto makePill = [&]() {
         Border pill;
+        pill.VerticalAlignment(VerticalAlignment::Center);
+        if (chipPills) {
+            Button chip;
+            chip.Style(state.mochaChipStyle);
+            chip.CornerRadius({11, 11, 11, 11});
+            chip.Padding({9, 3, 9, 3});
+            chip.MinHeight(22);
+            chip.IsTabStop(false);
+            pill.Child(chip);
+            return pill;
+        }
         pill.CornerRadius({10, 10, 10, 10});
         pill.Padding({8, 2, 8, 2});
         pill.MinHeight(20);
-        pill.VerticalAlignment(VerticalAlignment::Center);
         pill.Background(SolidColorBrush(pal.pill));
         return pill;
+    };
+    auto setPillContent = [&](Border const& pill, UIElement const& content) {
+        if (chipPills) {
+            pill.Child().as<Button>().Content(content);
+        } else {
+            pill.Child(content);
+        }
     };
 
     Border creditsPill = makePill();
@@ -12348,7 +12458,7 @@ static FrameworkElement BuildFlyoutContent(QuotaUiInstance& state, int accountIn
     credits.FontSize(kCreditsFontSize);
     credits.TextLineBounds(TextLineBounds::Tight);
     credits.OpticalMarginAlignment(OpticalMarginAlignment::TrimSideBearings);
-    credits.Foreground(FlyoutSolidBrush(pal.textSecondary));
+    credits.Foreground(FlyoutSolidBrush(chipPills ? pal.text : pal.textSecondary));
     // Centered by the ink: digits run from the baseline to the cap height (0.7 em in Segoe UI
     // Variable). With VerticalAlignment::Center the box rounding (8.4 in 10) moved the number one
     // pixel down relative to the ticket; the baseline is anchored at the bottom, at half the
@@ -12359,7 +12469,7 @@ static FrameworkElement BuildFlyoutContent(QuotaUiInstance& state, int accountIn
     credits.Margin({0, 0, 0, (kTicketIconHeight - kCreditsFontSize * kDigitHeightEm) / 2});
     credits.Text(m.resetCredits);
     creditsContent.Children().Append(credits);
-    creditsPill.Child(creditsContent);
+    setPillContent(creditsPill, creditsContent);
     creditsPill.Visibility(m.resetCredits.empty() ? Visibility::Collapsed : Visibility::Visible);
     ToolTipService::SetToolTip(creditsPill, winrt::box_value(winrt::hstring(m.resetCreditsTip)));
     winrt::Windows::UI::Xaml::Automation::AutomationProperties::SetName(
@@ -12369,9 +12479,9 @@ static FrameworkElement BuildFlyoutContent(QuotaUiInstance& state, int accountIn
     Border planPill = makePill();
     TextBlock plan;
     plan.FontSize(12);
-    plan.Foreground(FlyoutSolidBrush(pal.textSecondary));
+    plan.Foreground(FlyoutSolidBrush(chipPills ? pal.text : pal.textSecondary));
     plan.Text(m.plan);
-    planPill.Child(plan);
+    setPillContent(planPill, plan);
     planPill.Visibility(m.plan.empty() ? Visibility::Collapsed : Visibility::Visible);
     // The pill already has a background, so the tooltip receives the hover.
     ToolTipService::SetToolTip(planPill, winrt::box_value(winrt::hstring(m.planTip)));
@@ -13024,6 +13134,93 @@ static void ClearQuotaEventState(QuotaUiInstance& state) {
     state.tileStyle = nullptr;
     state.flyoutButtonStyle = nullptr;
     state.accentButtonStyle = nullptr;
+    state.mochaChipStyle = nullptr;
+}
+
+// Mocha look for the tile menus, matching Seamless Taskbar Utilities: acrylic with a
+// blue-to-mauve 2 px border, FiraCode Medium, and the dock hover on every item (mantle
+// fill, 1 px blue ring, mauve when pressed, radius 8). Brushes go through
+// FlyoutSolidBrush to dodge the popup dimming noted above.
+static void InsertMenuResource(ResourceDictionary const& res, wchar_t const* key,
+                               winrt::Windows::Foundation::IInspectable const& value) {
+    auto boxedKey = winrt::box_value(winrt::hstring(key));
+    if (res.HasKey(boxedKey)) res.Remove(boxedKey);
+    res.Insert(boxedKey, value);
+}
+
+static void ThemeTileMenu(MenuFlyout const& menu) {
+    try {
+        constexpr UiColor kBase{0xFF, 0x1E, 0x1E, 0x2E};
+        constexpr UiColor kText{0xFF, 0xCD, 0xD6, 0xF4};
+        constexpr UiColor kBlue{0xFF, 0x89, 0xB4, 0xFA};
+        constexpr UiColor kMauve{0xFF, 0xCB, 0xA6, 0xF7};
+        constexpr UiColor kHover{0xBF, 0x18, 0x18, 0x25};
+        constexpr UiColor kSurface1{0xFF, 0x45, 0x47, 0x5A};
+
+        Brush background = SolidColorBrush(UiColor{0xF5, 0x1E, 0x1E, 0x2E});
+        try {
+            AcrylicBrush acrylic;
+            acrylic.BackgroundSource(AcrylicBackgroundSource::HostBackdrop);
+            acrylic.TintColor(kBase);
+            acrylic.TintOpacity(0.9);
+            acrylic.FallbackColor(kBase);
+            background = acrylic;
+        } catch (...) {
+        }
+        LinearGradientBrush border;
+        border.StartPoint({0.f, 0.5f});
+        border.EndPoint({1.f, 0.5f});
+        GradientStop first;
+        first.Color(kBlue);
+        first.Offset(0.0);
+        GradientStop last;
+        last.Color(kMauve);
+        last.Offset(1.0);
+        border.GradientStops().Append(first);
+        border.GradientStops().Append(last);
+
+        Style presenter(winrt::xaml_typename<MenuFlyoutPresenter>());
+        presenter.Setters().Append(Setter(Control::BackgroundProperty(), background));
+        presenter.Setters().Append(Setter(Control::BorderBrushProperty(), border));
+        presenter.Setters().Append(
+            Setter(Control::BorderThicknessProperty(), winrt::box_value(Thickness{2, 2, 2, 2})));
+        menu.MenuFlyoutPresenterStyle(presenter);
+
+        FontFamily font(UiXamlFontFamily());
+        for (auto const& base : menu.Items()) {
+            if (auto separator = base.try_as<MenuFlyoutSeparator>()) {
+                separator.Background(FlyoutSolidBrush(kSurface1));
+                continue;
+            }
+            base.FontFamily(font);
+            base.FontWeight(winrt::Windows::UI::Text::FontWeights::Medium());
+            base.Foreground(FlyoutSolidBrush(kText));
+            base.BorderThickness({1, 1, 1, 1});
+            base.BorderBrush(SolidColorBrush(UiColor{0x00, 0x89, 0xB4, 0xFA}));
+            base.CornerRadius({8, 8, 8, 8});
+
+            auto res = base.Resources();
+            for (auto key : {L"MenuFlyoutItemRevealBackgroundPointerOver",
+                             L"MenuFlyoutItemBackgroundPointerOver",
+                             L"MenuFlyoutItemRevealBackgroundPressed",
+                             L"MenuFlyoutItemBackgroundPressed"})
+                InsertMenuResource(res, key, FlyoutSolidBrush(kHover));
+            InsertMenuResource(res, L"MenuFlyoutItemRevealBorderBrushPointerOver",
+                               FlyoutSolidBrush(kBlue));
+            InsertMenuResource(res, L"MenuFlyoutItemRevealBorderBrushPressed",
+                               FlyoutSolidBrush(kMauve));
+            for (auto key : {L"MenuFlyoutItemForeground", L"MenuFlyoutItemForegroundPointerOver",
+                             L"MenuFlyoutItemForegroundPressed"})
+                InsertMenuResource(res, key, FlyoutSolidBrush(kText));
+            for (auto key : {L"ToggleMenuFlyoutItemCheckGlyphForeground",
+                             L"ToggleMenuFlyoutItemCheckGlyphForegroundPointerOver",
+                             L"ToggleMenuFlyoutItemCheckGlyphForegroundPressed",
+                             L"MenuFlyoutItemCheckGlyphForeground"})
+                InsertMenuResource(res, key, FlyoutSolidBrush(kBlue));
+        }
+    } catch (...) {
+        Wh_Log(L"Tile menu theming failed");
+    }
 }
 
 // Context menu of a tile (same as the original mod's).
@@ -13105,6 +13302,7 @@ static MenuFlyout BuildTileContextMenu(QuotaUiInstance& state,
         });
     state.menuItemClickHandlers.push_back({settingsItem, settingsToken});
     menu.Items().Append(settingsItem);
+    ThemeTileMenu(menu);
     return menu;
 }
 
@@ -13203,6 +13401,7 @@ static Grid BuildQuotaGrid(QuotaUiInstance& state) {
                 });
             state.menuItemClickHandlers.push_back({settingsItem, settingsToken});
             menu.Items().Append(settingsItem);
+            ThemeTileMenu(menu);
             setupTile.ContextFlyout(menu);
 
             panel.Children().Append(setupTile);

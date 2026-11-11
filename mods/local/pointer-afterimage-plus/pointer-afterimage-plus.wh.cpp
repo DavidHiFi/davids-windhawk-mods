@@ -2,7 +2,7 @@
 // @id              pointer-afterimage-plus
 // @name            Pointer Afterimage Plus
 // @description     A real motion blur for the mouse pointer, made of fading afterimages of your own cursor, drawn on the GPU
-// @version         1.2.1
+// @version         1.2.2
 // @author          DavidHiFi, sidlikesgrapess
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -24,6 +24,11 @@ mouse moves, fading copies of your actual cursor are drawn along its recent
 path, so it looks like a camera motion blur rather than a trail.
 
 ![Demo](https://raw.githubusercontent.com/sidlikesgrapess/CursorMotionBlur/main/assets/demo.gif)
+
+## What is new in 1.2.2
+- **The taskbar no longer blinks over games.** Windows no longer mistakes the
+  trail for a fullscreen app, so the taskbar stays on top when you alt-tab out
+  of a fullscreen game.
 
 ## What is new in 1.2.1
 - **No more trail leftovers.** Pieces of earlier trails no longer linger on
@@ -1218,6 +1223,9 @@ static bool CreateOverlay(bool wantGpu, const WCHAR* reasonIfGdi) {
                    (gpu ? WS_EX_NOREDIRECTIONBITMAP : 0);
         HWND w = CreateWindowExW(ex, OVERLAY_CLASS, L"", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, inst, nullptr);
         if (!w) return false;
+        // The overlay covers the whole screen; without this the taskbar treats each trail as a fullscreen app
+        // and drops below a fullscreen game every time the trail shows.
+        SetPropW(w, L"NonRudeHWND", (HANDLE)TRUE);
         g_wnd = w;
         if (!gpu) break;
         SetLayeredWindowAttributes(w, 0, 255, LWA_ALPHA);   // layered, so clicks pass through to other processes
@@ -1430,7 +1438,10 @@ static DWORD WINAPI BandThread(void*) {
         w = createInBand(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE,
                          BAND_CLASS, L"", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, inst, nullptr, band);
         Wh_Log(L"CreateWindowInBand(%lu): %p (%lu)", band, w, w ? 0 : GetLastError());
-        if (w) break;
+        if (w) {
+            SetPropW(w, L"NonRudeHWND", (HANDLE)TRUE);   // see CreateOverlay
+            break;
+        }
     }
     // The mod's process draws in the window and tells it which process it is; when that process ends, however it
     // ends, the window hides, so a crashed or killed mod never leaves its last frame on screen.

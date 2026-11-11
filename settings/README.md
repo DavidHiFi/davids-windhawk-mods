@@ -9,9 +9,8 @@ file from ProgramData. These are the values every mod is tuned with.
 | `mods-settings.json` | Every value under each mod's `Settings` key. | `HKLM\SOFTWARE\Windhawk\Engine\Mods\<id>\Settings` |
 | `windhawk-app-settings.reg` | Windhawk app preferences (language, tray icon, toolkit, safe mode). | `HKLM\SOFTWARE\Windhawk\Settings` |
 | `windhawk-engine-settings.reg` | Engine preferences (logging, injected processes). | `HKLM\SOFTWARE\Windhawk\Engine\Settings` |
-| `quota-mod-localstorage.json` | The two quota mods' own config (`settings_v1`), credentials stripped. | LocalStorage values, see below |
+| `quota-mod-localstorage.json` | The quota mods' own config (`settings_v1`), credentials stripped. Empty unless a quota mod is installed. | LocalStorage values, see below |
 | `windhawk-userprofile.json` | The installed mod set and versions at snapshot time. | Reference only |
-
 Apply everything with `tools\Apply-WindhawkSettings.ps1` from an elevated shell.
 Add `-Audit` to preview without writing, `-IncludeAppSettings` to import the two
 `.reg` files, and `-RestartEngine` to restart Windhawk when done.
@@ -26,15 +25,16 @@ Add `-Audit` to preview without writing, `-IncludeAppSettings` to import the two
 
 ## The quota mods' config
 
-Both quota mods store their configuration in LocalStorage registry values
+The quota mods store their configuration in LocalStorage registry values
 instead of the usual `Settings` key, so `mods-settings.json` cannot carry it.
-`quota-mod-localstorage.json` holds the same `settings_v1` JSON for both: the
-account list, bar layout, thresholds and colors. The simplest way to reuse it
-is to set the mod up through its own UI using these values. To do it through
-the registry instead, write the `settings_v1` string under
+`quota-mod-localstorage.json` holds that `settings_v1` JSON for each quota mod
+that is installed: the account list, bar layout, thresholds and colors. No
+quota mod is installed right now, so the file is empty. The simplest way to
+reuse it is to set the mod up through its own UI using these values. To do it
+through the registry instead, write the `settings_v1` string under
 `HKLM\SOFTWARE\Windhawk\Engine\ModsWritable\<mod id>\LocalStorage` and restart
-the engine. The `opencodeKey` field is a length reference, not a key; your own
-key is entered through the mod UI.
+the engine. `auth_*` fields are length references, not credentials; your own
+sign-in is entered through the mod UI.
 
 ## Weather location
 

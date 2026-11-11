@@ -15,16 +15,15 @@
 # Always On Top Windows Plus
 
 Pin the window you are working in above everything else with one shortcut, and unpin it
-with the same shortcut. A thick colored ring shows which windows are pinned.
+with the same shortcut. A thin colored border shows which windows are pinned.
 
 ![Always On Top Windows Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/always-on-top-plus.png)
 
 ## Features
 - **Pin and unpin with a shortcut.** The default is Win+Alt+T, and you can change every part of it.
 - **Highlight border.** A colored ring around each pinned window. It follows the window
-  as it moves and resizes and matches the window's rounded corners. By default it fades from
-  Catppuccin Mocha red to yellow; pick your own two colors, one color or your accent color.
-  It sits over thin border lines other mods draw, so pinned windows look clean.
+  as it moves and resizes, uses your Windows accent color or a custom color, and can round
+  its corners to match the window.
 - **See-through windows.** Two extra shortcuts make a pinned window more or less
   transparent, in steps, so you can keep an eye on what is behind it.
 - **Sounds and a small status card.** A short sound and a small card at the bottom of the

@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.0.1
+// @version         2.0.3
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -192,9 +192,221 @@ This is caused by default by the AccentBlur API.❕
 #include <cmath>
 #include <string>
 #include <array>
+#include <mutex>
+#include <unordered_map>
 #include <d2d1.h>
 #include <wrl.h>
 #include <ShellScalingApi.h>
+
+// ---------------------------------------------------------------------------------------------
+// Menu room: shared by Seamless Flyouts and the tool mods' menu look.
+// - Every popup menu window in this process is caught as it is created, title bar (system)
+//   menus included, which never pass through TrackPopupMenu.
+// - Menus that Windows draws get 2 px more frame on every side, so the hover has the same room
+//   from the border as in Explorer's own desktop menu (4 px at the sides, 6 px top and bottom).
+//   Menus with owner-drawn rows (Explorer) already have it and are left alone.
+// - A menu too tall for its monitor gets shorter rows while it is open, so the last item
+//   shows without scroll arrows. Windows reads row spacing once per process, so the spacing is
+//   reloaded (FlushMenuThemes) when such a menu opens and again when the menu closes.
+// ---------------------------------------------------------------------------------------------
+#include <algorithm>
+#include <atomic>
+#include <mutex>
+#include <vector>
+#include <commctrl.h>
+
+namespace SeamlessMenuRoom {
+
+constexpr UINT_PTR kRoomId = 0x6D55;
+constexpr INT kRowMargin = 8;                  // row top and bottom margin of the menu look
+constexpr INT kMinRowMargin = 2;
+static const WCHAR* const kPadProp = L"SeamlessMenuRoomPad";
+static const WCHAR* const kSizeProp = L"SeamlessMenuRoomSize";
+
+static std::atomic<INT> g_rowMargin{kRowMargin};
+static HWINEVENTHOOK g_createHook = nullptr, g_menuHook = nullptr;
+static VOID (*g_onCreate)(HWND) = nullptr;
+using Flush_t = VOID(WINAPI*)();
+static Flush_t g_flush = nullptr;
+static thread_local HHOOK t_loopHook = nullptr;
+static thread_local INT t_trackDepth = 0;
+static thread_local BOOL t_menuMode = FALSE;
+
+// Row top and bottom margin to report for Menu part 27 / POPUPITEM, property 10000.
+static INT RowMargin() { return g_rowMargin.load(); }
+
+static UINT DpiOf(HWND h)
+{
+    UINT d = h ? GetDpiForWindow(h) : 0;
+    if (!d) d = GetDpiForSystem();
+    return d ? d : USER_DEFAULT_SCREEN_DPI;
+}
+
+static BOOL IsPopupMenuWindow(HWND h)
+{
+    WCHAR cls[16];
+    return h && GetClassNameW(h, cls, ARRAYSIZE(cls)) && wcscmp(cls, L"#32768") == 0;
+}
+
+static BOOL HasOwnerDraw(HMENU m)
+{
+    INT n = GetMenuItemCount(m);
+    for (INT i = 0; i < n; i++) {
+        MENUITEMINFOW mii = {sizeof(mii), MIIM_FTYPE};
+        if (GetMenuItemInfoW(m, i, TRUE, &mii) && (mii.fType & MFT_OWNERDRAW)) return TRUE;
+    }
+    return FALSE;
+}
+
+static LRESULT CALLBACK RoomProc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR, DWORD_PTR)
+{
+    if (msg == WM_WINDOWPOSCHANGING && l) {
+        auto* wp = reinterpret_cast<WINDOWPOS*>(l);
+        // Grow only the size Windows asks for, never a size this proc already produced.
+        if (!(wp->flags & SWP_NOSIZE) && wp->cx > 0 && wp->cy > 0 &&
+            (DWORD)MAKELONG(wp->cx, wp->cy) != (DWORD)(ULONG_PTR)GetPropW(h, kSizeProp)) {
+            HMENU m = (HMENU)SendMessageW(h, MN_GETHMENU, 0, 0);
+            INT pad = (m && !HasOwnerDraw(m)) ? MulDiv(2, DpiOf(h), USER_DEFAULT_SCREEN_DPI) : 0;
+            SetPropW(h, kPadProp, (HANDLE)(INT_PTR)pad);
+            if (pad) {
+                wp->cx += 2 * pad;
+                wp->cy += 2 * pad;
+                if (!(wp->flags & SWP_NOMOVE)) {
+                    RECT r = {wp->x, wp->y, wp->x + wp->cx, wp->y + wp->cy};
+                    MONITORINFO mi = {sizeof(mi)};
+                    if (GetMonitorInfoW(MonitorFromRect(&r, MONITOR_DEFAULTTONEAREST), &mi)) {
+                        if (r.right > mi.rcMonitor.right) wp->x = std::max(mi.rcMonitor.left, wp->x - (r.right - mi.rcMonitor.right));
+                        if (r.bottom > mi.rcMonitor.bottom) wp->y = std::max(mi.rcMonitor.top, wp->y - (r.bottom - mi.rcMonitor.bottom));
+                    }
+                }
+            }
+            SetPropW(h, kSizeProp, (HANDLE)(ULONG_PTR)(DWORD)MAKELONG(wp->cx, wp->cy));
+        }
+    }
+    if (msg == WM_NCDESTROY) {
+        RemovePropW(h, kPadProp);
+        RemovePropW(h, kSizeProp);
+        RemoveWindowSubclass(h, RoomProc, kRoomId);
+        return DefSubclassProc(h, msg, w, l);
+    }
+    LRESULT result = DefSubclassProc(h, msg, w, l);
+    if (msg == WM_NCCALCSIZE && l) {
+        INT pad = (INT)(INT_PTR)GetPropW(h, kPadProp);
+        if (pad > 0) InflateRect(reinterpret_cast<RECT*>(l), -pad, -pad);
+    }
+    return result;
+}
+
+static VOID ResetRows()
+{
+    if (g_rowMargin.exchange(kRowMargin) != kRowMargin && g_flush) g_flush();
+}
+
+// Picks the largest row margin (8 down to 2) at which the whole menu fits its monitor.
+static VOID FitMenu(HMENU m, HWND owner)
+{
+    if (!m || !g_flush || HasOwnerDraw(m)) return;
+    INT rows = 0, seps = 0, n = GetMenuItemCount(m);
+    for (INT i = 0; i < n; i++) {
+        MENUITEMINFOW mii = {sizeof(mii), MIIM_FTYPE};
+        if (!GetMenuItemInfoW(m, i, TRUE, &mii)) continue;
+        (mii.fType & MFT_SEPARATOR) ? seps++ : rows++;
+    }
+    MONITORINFO mi = {sizeof(mi)};
+    if (!rows || !GetMonitorInfoW(MonitorFromWindow(owner, MONITOR_DEFAULTTONEAREST), &mi)) return;
+    UINT dpi = DpiOf(owner);
+    auto px = [dpi](INT v) { return MulDiv(v, dpi, USER_DEFAULT_SCREEN_DPI); };
+    INT avail = mi.rcWork.bottom - mi.rcWork.top - px(8);
+    INT pick = kRowMargin;
+    for (; pick > kMinRowMargin; pick--) {
+        INT cut = px(2 * (kRowMargin - pick));   // rows measure 33 px and separators 21 px at margin 8
+        if (rows * (px(33) - cut) + seps * (px(21) - cut) + px(10) <= avail) break;
+    }
+    if (pick < g_rowMargin.load()) {
+        g_rowMargin = pick;
+        g_flush();
+    }
+}
+
+static LRESULT CALLBACK LoopProc(INT code, WPARAM w, LPARAM l)
+{
+    if (code == HC_ACTION && l) {
+        auto* c = reinterpret_cast<CWPSTRUCT*>(l);
+        if (c->message == WM_INITMENUPOPUP) FitMenu((HMENU)c->wParam, c->hwnd);
+        else if (c->message == WM_EXITMENULOOP) ResetRows();
+    }
+    return CallNextHookEx(nullptr, code, w, l);
+}
+// Every live loop hook, so Uninit can remove the ones other threads still hold.
+static std::mutex g_hooksLock;
+static std::vector<HHOOK> g_hooks;
+static VOID SyncLoopHook()
+{
+    BOOL want = t_trackDepth > 0 || t_menuMode;
+    if (want && !t_loopHook) {
+        t_loopHook = SetWindowsHookExW(WH_CALLWNDPROC, LoopProc, nullptr, GetCurrentThreadId());
+        if (t_loopHook) { std::lock_guard<std::mutex> g(g_hooksLock); g_hooks.push_back(t_loopHook); }
+    } else if (!want && t_loopHook) {
+        {
+            std::lock_guard<std::mutex> g(g_hooksLock);
+            auto it = std::find(g_hooks.begin(), g_hooks.end(), t_loopHook);
+            if (it != g_hooks.end()) { g_hooks.erase(it); UnhookWindowsHookEx(t_loopHook); }
+        }
+        t_loopHook = nullptr;
+        ResetRows();
+    }
+}
+
+// Wrap TrackPopupMenu(Ex) with these (menu-bar menus are covered by the menu events).
+static VOID BeginTrack() { t_trackDepth++; SyncLoopHook(); }
+static VOID EndTrack() { if (t_trackDepth > 0) t_trackDepth--; SyncLoopHook(); }
+
+static VOID CALLBACK OnEvent(HWINEVENTHOOK, DWORD ev, HWND h, LONG obj, LONG child, DWORD, DWORD)
+{
+    if (ev == EVENT_OBJECT_CREATE) {
+        if (obj != OBJID_WINDOW || child != CHILDID_SELF || !IsPopupMenuWindow(h) ||
+            GetWindowThreadProcessId(h, nullptr) != GetCurrentThreadId())
+            return;
+        if (g_onCreate) g_onCreate(h);
+        SetWindowSubclass(h, RoomProc, kRoomId, 0);
+    } else if (ev == EVENT_SYSTEM_MENUSTART) {
+        t_menuMode = TRUE;
+        SyncLoopHook();
+    } else if (ev == EVENT_SYSTEM_MENUEND) {
+        t_menuMode = FALSE;
+        SyncLoopHook();
+    }
+}
+
+// onCreate (optional) runs for each new popup menu window, on its own thread, after creation.
+static VOID Init(VOID (*onCreate)(HWND))
+{
+    g_onCreate = onCreate;
+    HMODULE ux = GetModuleHandleW(L"uxtheme.dll");
+    if (!ux) ux = LoadLibraryExW(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    g_flush = ux ? (Flush_t)GetProcAddress(ux, MAKEINTRESOURCEA(136)) : nullptr;
+    HMODULE self = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       reinterpret_cast<LPCWSTR>(&OnEvent), &self);
+    DWORD pid = GetCurrentProcessId();
+    g_createHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE, self, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+    g_menuHook = SetWinEventHook(EVENT_SYSTEM_MENUSTART, EVENT_SYSTEM_MENUEND, self, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+}
+
+static VOID Uninit()
+{
+    for (HWINEVENTHOOK* hk : {&g_createHook, &g_menuHook})
+        if (*hk) { UnhookWinEvent(*hk); *hk = nullptr; }
+    {
+        std::lock_guard<std::mutex> g(g_hooksLock);
+        for (HHOOK hk : g_hooks) UnhookWindowsHookEx(hk);
+        g_hooks.clear();
+    }
+    ResetRows();
+}
+
+}  // namespace SeamlessMenuRoom
+// ---------------------------------------------------------------------------------------------
 
 #define RECTWIDTH(lprc)     ((lprc)->right - (lprc)->left)
 #define RECTHEIGHT(lprc)    ((lprc)->bottom - (lprc)->top)
@@ -906,6 +1118,77 @@ HRESULT WINAPI HookedDwmExtendFrameIntoClientArea(HWND hWnd, const MARGINS* pMar
         [[clang::musttail]]return DwmExtendFrameIntoClientArea_orig(hWnd, pMarInset);
 }
 
+// Apps that call SetThemeAppProperties without STAP_ALLOW_CONTROLS (Steam) get classic
+// menus: etched text, Marlett glyphs, short rows, and none of the theme hooks run. Lift the
+// flag only while a menu loop runs on that thread, so their other controls keep their look.
+static std::mutex g_menuThemeHooksLock;
+static std::unordered_map<DWORD, HHOOK> g_menuThemeHooks;
+static thread_local BOOL g_menuThemeLifted = FALSE;
+static thread_local DWORD g_menuThemeSaved = 0;
+using SetThemeAppProperties_t = decltype(&SetThemeAppProperties);
+static SetThemeAppProperties_t SetThemeAppProperties_Original = nullptr;
+
+static VOID SetThemePropsDirect(DWORD props)
+{
+    (SetThemeAppProperties_Original ? SetThemeAppProperties_Original : SetThemeAppProperties)(props);
+}
+
+static LRESULT CALLBACK MenuThemeCallWndProc(INT code, WPARAM wParam, LPARAM lParam)
+{
+    if (code == HC_ACTION) {
+        const CWPSTRUCT* cwp = (const CWPSTRUCT*)lParam;
+        if (cwp->message == WM_ENTERMENULOOP && !g_menuThemeLifted) {
+            DWORD props = GetThemeAppProperties();
+            if (!(props & STAP_ALLOW_CONTROLS)) {
+                g_menuThemeSaved = props;
+                g_menuThemeLifted = TRUE;
+                SetThemePropsDirect(props | STAP_ALLOW_CONTROLS);
+            }
+        } else if (cwp->message == WM_EXITMENULOOP && g_menuThemeLifted) {
+            g_menuThemeLifted = FALSE;
+            SetThemePropsDirect(g_menuThemeSaved);
+        }
+    }
+    return CallNextHookEx(nullptr, code, wParam, lParam);
+}
+
+static VOID WatchMenuThemeForThread(DWORD threadId)
+{
+    if (g_settings.Unload || (GetThemeAppProperties() & STAP_ALLOW_CONTROLS))
+        return;
+    std::lock_guard<std::mutex> lock(g_menuThemeHooksLock);
+    if (g_menuThemeHooks.count(threadId))
+        return;
+    HHOOK hook = SetWindowsHookExW(WH_CALLWNDPROC, MenuThemeCallWndProc, nullptr, threadId);
+    if (hook)
+        g_menuThemeHooks[threadId] = hook;
+}
+
+static BOOL CALLBACK WatchMenuThemeEnumProc(HWND hWnd, LPARAM)
+{
+    DWORD pid = 0;
+    DWORD tid = GetWindowThreadProcessId(hWnd, &pid);
+    if (pid == GetCurrentProcessId())
+        WatchMenuThemeForThread(tid);
+    return TRUE;
+}
+
+static VOID UnwatchMenuTheme()
+{
+    std::lock_guard<std::mutex> lock(g_menuThemeHooksLock);
+    for (auto& entry : g_menuThemeHooks)
+        UnhookWindowsHookEx(entry.second);
+    g_menuThemeHooks.clear();
+}
+
+// Catch apps that turn themed controls off after their first window already exists.
+static VOID WINAPI SetThemeAppProperties_Hook(DWORD props)
+{
+    SetThemeAppProperties_Original(props);
+    if (!(props & STAP_ALLOW_CONTROLS) && !g_settings.Unload)
+        EnumWindows(WatchMenuThemeEnumProc, 0);
+}
+
 HWND WINAPI HookedNtUserCreateWindowEx(DWORD dwExStyle,
                                        PUNICODE_STRING UnsafeClassName,
                                        LPCWSTR         VersionedClass,
@@ -933,6 +1216,8 @@ HWND WINAPI HookedNtUserCreateWindowEx(DWORD dwExStyle,
     {
         NewWindowShown(hWnd);
         ArmAccentReapplyTimer(hWnd);
+        if (!(dwStyle & WS_CHILD))
+            WatchMenuThemeForThread(GetCurrentThreadId());
     }
 
     return hWnd;
@@ -5367,7 +5652,7 @@ HRESULT WINAPI HookedGetThemeMargins(HTHEME hTheme, HDC hdc, INT iPartId, INT iS
             else if (iPropId == TMT_SIZINGMARGINS)
                 *pMargins = {10, 10, 10, 10};
             else if (iPropId == 10000)
-                *pMargins = {0, 0, 8, 8};
+                *pMargins = {0, 0, SeamlessMenuRoom::RowMargin(), SeamlessMenuRoom::RowMargin()};
         }
         else if (iPartId == MENU_BARITEM) {
             if (iPropId == 10000)
@@ -6693,7 +6978,9 @@ BOOL WINAPI HookedTrackPopupMenuEx(HMENU hMenu, UINT uFlags, INT x, INT y, HWND 
 {
     BOOL added = BeginMenuRows(hWnd);
     BeginMenuCbt();
+    SeamlessMenuRoom::BeginTrack();
     BOOL ret = TrackPopupMenuEx_orig(hMenu, uFlags, x, y, hWnd, lptpm);
+    SeamlessMenuRoom::EndTrack();
     EndMenuCbt();
     EndMenuRows(hWnd, added);
     return ret;
@@ -6702,7 +6989,9 @@ BOOL WINAPI HookedTrackPopupMenu(HMENU hMenu, UINT uFlags, INT x, INT y, INT nRe
 {
     BOOL added = BeginMenuRows(hWnd);
     BeginMenuCbt();
+    SeamlessMenuRoom::BeginTrack();
     BOOL ret = TrackPopupMenu_orig(hMenu, uFlags, x, y, nReserved, hWnd, prcRect);
+    SeamlessMenuRoom::EndTrack();
     EndMenuCbt();
     EndMenuRows(hWnd, added);
     return ret;
@@ -6964,6 +7253,7 @@ BOOL Wh_ModInit(VOID)
         return FALSE;
     
     WindhawkUtils::SetFunctionHook(pNtUserCreateWindowEx, HookedNtUserCreateWindowEx, &NtUserCreateWindowEx_Original);
+    WindhawkUtils::SetFunctionHook(SetThemeAppProperties, SetThemeAppProperties_Hook, &SetThemeAppProperties_Original);
     
     return TRUE;
 }
@@ -6978,14 +7268,19 @@ VOID Wh_ModAfterInit()
     BOOL isInitialThread = *(USHORT*)((BYTE*)NtCurrentTeb() + OFFSET_SAME_TEB_FLAGS) & 0x0400;
     if (!isInitialThread)
         ApplyForExistingWindows();
+    EnumWindows(WatchMenuThemeEnumProc, 0);
+    if (g_settings.FillBg && g_settings.FlyoutsEffects)
+        SeamlessMenuRoom::Init(nullptr);
 }
 
 VOID Wh_ModUninit(VOID) 
 {
+    SeamlessMenuRoom::Uninit();
     if (g_explorerStylerNoBackgroundEffectAtom)
         DeleteAtom(g_explorerStylerNoBackgroundEffectAtom);
      
     g_settings.Unload = TRUE;
+    UnwatchMenuTheme();
     if (g_settings.FillBg && g_d2dFactory)
         g_d2dFactory->Release();
     

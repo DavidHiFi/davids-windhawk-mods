@@ -42,9 +42,8 @@ Tree position, expand arrows and connector lines come from
 
 1. Install [Windhawk](https://windhawk.net/).
 2. Choose **Create a new mod**, paste [gpu-accelerated-explorer-view-plus.wh.cpp](gpu-accelerated-explorer-view-plus.wh.cpp) and click **Compile**.
-3. Disable the original mod before enabling this one. If you run [Explorer TreeItem
-   Tweaker Plus](https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/explorer-treeitem-tweaker-plus),
-   disable it too, along with Explorer Navigation Tree Offset and File Explorer WinUI-Like
-   Content Animation: their features are built in now.
+3. Disable the original mod before enabling this one. Disable Explorer
+   Navigation Tree Offset and File Explorer WinUI-Like Content Animation too:
+   their features are built in now.
 
 License: GPL-2.0.

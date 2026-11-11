@@ -200,13 +200,13 @@ Based on Simple Window Switcher 2.1 by Lone, with improvements by Asteski and br
   - blur: 30
     $name: Blur strength
     $description: How much the pill blurs what's behind it (0-100)
-  - tintColor: "11111B"
+  - tintColor: "1E1E2E"
     $name: Fill color
-    $description: Hex color. Suggested 11111B (Mocha crust)
-  - tintOpacity: 70
+    $description: Hex color. Suggested 1E1E2E (Mocha base)
+  - tintOpacity: 100
     $name: Fill opacity (%)
-    $description: 0 is clear glass, 100 is solid (no blur). Suggested 70
-  - noise: 4
+    $description: 0 is clear glass, 100 is solid. Suggested 100
+  - noise: 3
     $name: Grain (%)
     $description: Fine grain over the glass, like Windows acrylic (0-20)
   - textColor: "CDD6F4"
@@ -5825,7 +5825,7 @@ Settings LoadSettings() {
     p.enabled = Wh_GetIntSetting(L"TitlePill.enabled") != 0;
     p.closeButton = Wh_GetIntSetting(L"TitlePill.closeButton") != 0;
     p.blur = (float)std::clamp(Wh_GetIntSetting(L"TitlePill.blur"), 0, 100);
-    p.tint = HexSetting(L"TitlePill.tintColor", RGB(0x11, 0x11, 0x1B),
+    p.tint = HexSetting(L"TitlePill.tintColor", RGB(0x1E, 0x1E, 0x2E),
                         std::clamp(Wh_GetIntSetting(L"TitlePill.tintOpacity"), 0, 100) / 100.0f);
     p.noise = std::clamp(Wh_GetIntSetting(L"TitlePill.noise"), 0, 20) / 100.0f;
     p.text = HexSetting(L"TitlePill.textColor", RGB(0xCD, 0xD6, 0xF4), 1);

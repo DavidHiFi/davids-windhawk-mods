@@ -2,7 +2,7 @@
 // @id              gpu-accelerated-explorer-view-plus
 // @name            GPU Accelerated Explorer View Plus
 // @description     GPU-accelerated Explorer views with smooth scrolling and right-click submenus that populate fully
-// @version         1.3.2
+// @version         1.4.8
 // @author          DavidHiFi, DarkionAvey, crazyboyybs, Languster, valinet
 // @include         explorer.exe
 // @architecture    x86-64
@@ -293,7 +293,7 @@ Tree position, expand arrows and connector lines come from
           $description: On = use the settings below. Off = Explorer's own tree position, arrows and lines. Changing this reloads the mod.
         - leftShift: 25
           $name: Move the tree left (pixels)
-          $description: -100 to 200 (Suggested: 25). 0 keeps Explorer's position. Positive moves the tree left, negative moves it right.
+          $description: -100 to 200 (suggested 25). 0 keeps Explorer's position. Positive moves the tree left, negative moves it right.
         - removeAllGlyphs: true
           $name: Hide expand arrows
           $description: Hides every expand and collapse arrow in the tree.
@@ -769,6 +769,7 @@ constexpr UINT_PTR kTimerId = 101;
 constexpr UINT_PTR kTypeSearchTimerId = 105;
 constexpr UINT_PTR kZoomAutoRefitTimerId = 106;
 constexpr UINT_PTR kNativeModeRetryTimerId = 107;
+constexpr UINT_PTR kPageAnimPinTimerId = 108;
 // Input batching only: expiry never substitutes for gesture/animation/data completion.
 constexpr UINT kZoomAutoRefitDebounceMs = 200;
 constexpr UINT kMsgDispose = WM_APP + 31;
@@ -12935,8 +12936,9 @@ void ClearModeComposition(ViewState& state, bool restoreRoot = true) {
     TraceUiState(state,L"ui.scene.cleared[layout,native,header,selected]",false);
 }
 
+void PageAnimDetachEffect(ViewState& s);
 void DropTarget(ViewState& state) {
-    state.pageAnimEffect.Reset(); state.pageAnimTranslate.Reset(); state.pageAnimEffectVisual.Reset();
+    PageAnimDetachEffect(state);
     state.pageAnimWaiting=state.pageStaggerActive=false; state.pageAnimEndsAt=0;
     if(state.presenter && !state.presentationOnly) {
         ReleasePresentation(state);
@@ -13287,6 +13289,35 @@ void Fill(ViewState& state, float l, float t, float r, float b,
         state.target->FillRoundedRectangle(D2D1::RoundedRect(
             rect, radius, radius), state.brush.Get());
     else state.target->FillRectangle(rect, state.brush.Get());
+}
+
+// Fill() with a gradient running from the reading start to the end of the rect
+// (mirrored in RTL). Falls back to the solid start colour.
+void FillGradient(ViewState& state, float l, float t, float r, float b,
+                  unsigned from, unsigned to, float a=1.f, float radius=0) {
+    if(!VisibleOpacity(a) || r<=l || b<=t) return;
+    float startX = l, endX = r;
+    if (state.rtlLayout) {
+        const float newLeft = state.paintWidth - r;
+        r = state.paintWidth - l;
+        l = newLeft;
+        startX = r; endX = l;
+    }
+    const auto rect=SnapDrawRect(state.target.Get(),D2D1::RectF(l,t,r,b));
+    if(rect.right<=rect.left || rect.bottom<=rect.top) return;
+    a = std::min(1.f, a);
+    auto* rt = static_cast<ID2D1RenderTarget*>(state.target.Get());
+    D2D1_GRADIENT_STOP stops[2] = {{0.f, Packed(from, a)}, {1.f, Packed(to, a)}};
+    ComPtr<ID2D1GradientStopCollection> coll;
+    ComPtr<ID2D1LinearGradientBrush> grad;
+    ID2D1Brush* brush = state.brush.Get();
+    if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, &coll)) &&
+        SUCCEEDED(rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(
+            D2D1::Point2F(startX, rect.top), D2D1::Point2F(endX, rect.top)), coll.Get(), &grad)))
+        brush = grad.Get();
+    else state.brush->SetColor(Packed(from, a));
+    if (radius > 0.f) rt->FillRoundedRectangle(D2D1::RoundedRect(rect, radius, radius), brush);
+    else rt->FillRectangle(rect, brush);
 }
 
 
@@ -14527,7 +14558,8 @@ D2D1_RECT_F SelectionRect(ViewState& state, int index, float top, float row,
 
 // Catppuccin Mocha, used by the This PC drive tiles and usage bars.
 constexpr unsigned kMochaBlue = 0x89B4FAu, kMochaMauve = 0xCBA6F7u,
-    kMochaPeach = 0xFAB387u, kMochaRed = 0xF38BA8u, kMochaSurface1 = 0x45475Au;
+    kMochaPeach = 0xFAB387u, kMochaRed = 0xF38BA8u, kMochaSurface1 = 0x45475Au,
+    kMochaSurface2 = 0x585B70u, kMochaSurface0 = 0x313244u;
 
 void FillSelectionRect(ViewState& state, const D2D1_RECT_F& rc, float alpha,
                        const SelectionShape* shape = nullptr, bool outline = false,
@@ -15605,6 +15637,7 @@ bool PresentationFrameReady(ViewState& state);
 void PageAnimNoteFolder(ViewState& state);
 void PageAnimBeforePresent(ViewState& state);
 void PageAnimCancel(ViewState& state);
+void PageAnimPin(ViewState& state);
 float PageAnimItemReveal(const ViewState& state, int ordinal, float& scale);
 void Paint(ViewState& state) {
     if(!state.presentationOnly) PageAnimNoteFolder(state);
@@ -16201,14 +16234,32 @@ void Paint(ViewState& state) {
                     static_cast<double>(e.driveTotal)), 0.f, 1.f);
             const float width = bar.right - bar.left;
             Fill(state, bar.left, bar.top, bar.right, bar.bottom,
-                kMochaSurface1, .9f * contentOpacity, radius);
+                kMochaSurface0, .9f * contentOpacity, radius);
             // Low space like stock Explorer: red at 90% used, orange (peach) from 80%.
             const unsigned fill = fraction >= .9f ? kMochaRed :
                 fraction >= .8f ? kMochaPeach : kMochaBlue;
-            if (fraction > 0.f)
+            // Normal use: blue to mauve across the used part.
+            if (fraction > 0.f && fill == kMochaBlue)
+                FillGradient(state, bar.left, bar.top,
+                    bar.left + width * fraction, bar.bottom,
+                    kMochaBlue, kMochaMauve, .95f * contentOpacity, radius);
+            else if (fraction > 0.f)
                 Fill(state, bar.left, bar.top,
                     bar.left + width * fraction, bar.bottom,
                     fill, .95f * contentOpacity, radius);
+            // A 1px surface1 ring just outside the track, so its free end stays
+            // visible on the tile.
+            float l = bar.left, r = bar.right;
+            if (state.rtlLayout) {
+                const float mirroredLeft = state.paintWidth - r;
+                r = state.paintWidth - l;
+                l = mirroredLeft;
+            }
+            const float px = static_cast<float>(std::max(1, Scale96(1, ViewDpi(state))));
+            state.brush->SetColor(Packed(kMochaSurface1, std::min(1.f, contentOpacity)));
+            StrokeRoundedRect(state, D2D1::RoundedRect(
+                D2D1::RectF(l - px, bar.top - px, r + px, bar.bottom + px),
+                radius + px, radius + px), state.brush.Get(), px);
         }
         if (compositionFrame.active && !compositionFrame.Rows()) compositionFrame.Background();
         state.uiTraceDrawItem=false;
@@ -16360,14 +16411,30 @@ void Paint(ViewState& state) {
     state.target->PushAxisAlignedClip(state.rtlLayout ?
         D2D1::RectF(w-listEnd,header,w-listStart,contentBottom) :
         D2D1::RectF(listStart,header,listEnd,contentBottom),D2D1_ANTIALIAS_MODE_ALIASED);
-    for (const auto& heading:headings) if (heading.hot) {
+    for (const auto& heading:headings) {
         RowSourceScope source(state,heading.key,0,true);
         // Same bordered hover box as the column headers: soft Mocha fill plus
-        // a 1px border, inset 4 DIP inside the heading band.
+        // a 1px border, inset 4 DIP inside the heading band. At rest the same
+        // box is a 1px surface1 outline over a faint crust tint.
         const float inset=static_cast<float>(Scale96(4,ViewDpi(state)));
         const auto bounds=D2D1::RectF(listStart+inset,heading.visual.top+inset,
             listEnd-inset,heading.visual.top+heading.visual.height-inset);
-        FillSelectionRect(state,bounds,.45f*heading.visual.opacity,nullptr,false,kMochaBlue);
+        if (heading.hot) {
+            FillSelectionRect(state,bounds,.45f*heading.visual.opacity,nullptr,false,kMochaBlue);
+            continue;
+        }
+        if (bounds.right<=bounds.left+1.f || bounds.bottom<=bounds.top) continue;
+        Fill(state,bounds.left+.5f,bounds.top+.5f,bounds.right-.5f,bounds.bottom-.5f,
+            0x11111Bu,.35f*heading.visual.opacity,static_cast<float>(Scale96(8,ViewDpi(state))));
+        D2D1_RECT_F part=D2D1::RectF(bounds.left+.5f,bounds.top+.5f,bounds.right-.5f,bounds.bottom-.5f);
+        if (state.rtlLayout) {
+            const float left=part.left;
+            part.left=state.paintWidth-part.right; part.right=state.paintWidth-left;
+        }
+        const float radius=static_cast<float>(Scale96(8,ViewDpi(state)));
+        state.brush->SetColor(Packed(kMochaSurface1,std::min(1.f,heading.visual.opacity)));
+        StrokeRoundedRect(state,D2D1::RoundedRect(part,radius,radius),state.brush.Get(),
+            static_cast<float>(Scale96(1,ViewDpi(state))));
     }
     for (const auto& heading:headings) {
         RowSourceScope source(state,heading.key,2,true);
@@ -18827,10 +18894,92 @@ ViewState* State(HWND hwnd);
 
 void FinishRename(ViewState& state, bool commit);
 
+// Rename field look: Mocha surface fill, rounded edge, blue when focused.
+constexpr COLORREF kRenameFill = RGB(0x31, 0x32, 0x44);
+constexpr COLORREF kRenameText = RGB(0xcd, 0xd6, 0xf4);
+constexpr COLORREF kRenameEdge = RGB(0x58, 0x5b, 0x70);
+constexpr COLORREF kRenameFocus = RGB(0x89, 0xb4, 0xfa);
+HBRUSH RenameFillBrush() {
+    static HBRUSH brush = CreateSolidBrush(kRenameFill);
+    return brush;
+}
+int RenameEdgeDpi(HWND hwnd) { const UINT dpi = GetDpiForWindow(hwnd); return dpi ? int(dpi) : 96; }
+int RenameEdgeInset(HWND hwnd) { return MulDiv(2, RenameEdgeDpi(hwnd), 96); }
+int RenameEdgeRadius(HWND hwnd) { return MulDiv(6, RenameEdgeDpi(hwnd), 96); }
+void ShapeRenameEdge(HWND hwnd) {
+    RECT rc{}; GetWindowRect(hwnd, &rc);
+    const int r = RenameEdgeRadius(hwnd);
+    if (HRGN rgn = CreateRoundRectRgn(0, 0, rc.right - rc.left + 1, rc.bottom - rc.top + 1, 2 * r, 2 * r))
+        if (!SetWindowRgn(hwnd, rgn, TRUE)) DeleteObject(rgn);
+    const int pad = MulDiv(4, RenameEdgeDpi(hwnd), 96) + RenameEdgeInset(hwnd);
+    SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(pad, pad));
+}
+bool RenameBufferedPaintReady() {
+    static const bool ready = SUCCEEDED(BufferedPaintInit());
+    return ready;
+}
+// Height of the top-only non-client strip that centres a single-line name.
+int RenameTextTop(HWND hwnd, int height = -1) {
+    const int inset = RenameEdgeInset(hwnd);
+    if (GetWindowLongPtrW(hwnd, GWL_STYLE) & ES_MULTILINE) return 0;
+    RECT win{}; GetWindowRect(hwnd, &win);
+    int line = 0;
+    if (HDC dc = GetDC(hwnd)) {
+        HGDIOBJ old = SelectObject(dc, reinterpret_cast<HFONT>(SendMessageW(hwnd, WM_GETFONT, 0, 0)));
+        TEXTMETRICW tm{};
+        if (GetTextMetricsW(dc, &tm)) line = tm.tmHeight;
+        SelectObject(dc, old);
+        ReleaseDC(hwnd, dc);
+    }
+    const int h = height >= 0 ? height : win.bottom - win.top;
+    if (line <= 0 || h <= line + inset) return 0;
+    return (h - line) / 2;
+}
+void FillRenameShape(HWND hwnd, HDC dc, int dy, bool fill) {
+    RECT win{}; GetWindowRect(hwnd, &win);
+    const int w = win.right - win.left, h = win.bottom - win.top;
+    const int inset = RenameEdgeInset(hwnd), r = RenameEdgeRadius(hwnd);
+    const int pen = std::max(1, inset / 2);
+    HRGN outer = CreateRoundRectRgn(0, -dy, w + 1, h + 1 - dy, 2 * r, 2 * r);
+    HRGN inner = CreateRoundRectRgn(pen, pen - dy, w - pen + 1, h - pen + 1 - dy,
+        std::max(2, 2 * (r - pen)), std::max(2, 2 * (r - pen)));
+    if (outer && inner && fill) FillRgn(dc, inner, RenameFillBrush());
+    if (outer && inner && CombineRgn(outer, outer, inner, RGN_DIFF) != ERROR) {
+        HBRUSH edge = CreateSolidBrush(GetFocus() == hwnd ? kRenameFocus : kRenameEdge);
+        FillRgn(dc, outer, edge);
+        DeleteObject(edge);
+    }
+    if (outer) DeleteObject(outer);
+    if (inner) DeleteObject(inner);
+}
+
+void PaintRenameStrip(HWND hwnd) {
+    const int top = RenameTextTop(hwnd);
+    if (top <= 0) return;
+    HDC target = GetWindowDC(hwnd);
+    if (!target) return;
+    RECT win{}; GetWindowRect(hwnd, &win);
+    RECT strip{0, 0, win.right - win.left, top};
+    IntersectClipRect(target, strip.left, strip.top, strip.right, strip.bottom);
+    HDC dc = target;
+    HPAINTBUFFER buffer = RenameBufferedPaintReady() ?
+        BeginBufferedPaint(target, &strip, BPBF_TOPDOWNDIB, nullptr, &dc) : nullptr;
+    if (!buffer) dc = target;
+    FillRenameShape(hwnd, dc, 0, true);
+    if (buffer) { BufferedPaintSetAlpha(buffer, nullptr, 255); EndBufferedPaint(buffer, TRUE); }
+    ReleaseDC(hwnd, target);
+}
+
 LRESULT CALLBACK RenameParentSubclass(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
                                      UINT_PTR id, DWORD_PTR data) {
     WindowCallbackGuard callback;
     const HWND overlay = reinterpret_cast<HWND>(data);
+    if (msg == WM_CTLCOLOREDIT && reinterpret_cast<HWND>(lp) == reinterpret_cast<HWND>(id)) {
+        const HDC dc = reinterpret_cast<HDC>(wp);
+        SetTextColor(dc, kRenameText);
+        SetBkColor(dc, kRenameFill);
+        return reinterpret_cast<LRESULT>(RenameFillBrush());
+    }
     if (msg == WM_COMMAND && HIWORD(wp) == EN_CHANGE &&
         reinterpret_cast<HWND>(lp) == reinterpret_cast<HWND>(id)) {
         ViewState* state = IsWindow(overlay) ? State(overlay) : nullptr;
@@ -19003,6 +19152,24 @@ LRESULT CALLBACK RenameEditProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         RepositionRenameEdit(*state);
         if (state->rename.editor != hwnd || !IsWindow(hwnd)) return 0;
     }
+    if (msg == WM_PAINT && !wp && RenameBufferedPaintReady()) {
+        PAINTSTRUCT ps{};
+        if (HDC target = BeginPaint(hwnd, &ps)) {
+            HDC dc = nullptr;
+            HPAINTBUFFER buffer = BeginBufferedPaint(target, &ps.rcPaint, BPBF_TOPDOWNDIB, nullptr, &dc);
+            if (buffer) {
+                DefSubclassProc(hwnd, WM_PAINT, reinterpret_cast<WPARAM>(dc), 0);
+                FillRenameShape(hwnd, dc, RenameTextTop(hwnd), false);
+                BufferedPaintSetAlpha(buffer, nullptr, 255);
+                EndBufferedPaint(buffer, TRUE);
+            } else {
+                DefSubclassProc(hwnd, WM_PAINT, reinterpret_cast<WPARAM>(target), 0);
+                FillRenameShape(hwnd, target, RenameTextTop(hwnd), false);
+            }
+            EndPaint(hwnd, &ps);
+        }
+        return 0;
+    }
     if (msg == WM_KEYDOWN && (wp == VK_RETURN || wp == VK_ESCAPE)) {
         if (current && !state->rename.finishing)
             PostMessageW(overlay, kMsgRenameDecision, wp == VK_RETURN ? 1 : 0,
@@ -19010,6 +19177,38 @@ LRESULT CALLBACK RenameEditProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         return 0;
     }
     if (msg == WM_CHAR && (wp == VK_RETURN || wp == VK_ESCAPE)) return 0;
+    if (msg == WM_CHAR || msg == WM_KEYDOWN || msg == WM_LBUTTONDOWN || msg == WM_LBUTTONDBLCLK ||
+        msg == WM_LBUTTONUP || (msg == WM_MOUSEMOVE && (wp & MK_LBUTTON)) || msg == EM_SETSEL ||
+        msg == WM_PASTE || msg == WM_CUT || msg == WM_CLEAR || msg == WM_UNDO || msg == WM_SETTEXT) {
+        const LRESULT result = DefSubclassProc(hwnd, msg, wp, lp);
+        if (IsWindow(hwnd)) RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_NOCHILDREN);
+        return result;
+    }
+    if (msg == WM_NCCALCSIZE) {
+        // Only a top strip is non-client (it centres the text line); the
+        // ring's sides and bottom are drawn in the client paint, which is
+        // the path that reliably lands on the glass frame.
+        RECT* rc = wp ? &reinterpret_cast<NCCALCSIZE_PARAMS*>(lp)->rgrc[0] : reinterpret_cast<RECT*>(lp);
+        const int top = RenameTextTop(hwnd, rc->bottom - rc->top);
+        rc->top = std::min(rc->bottom, rc->top + top);
+        return 0;
+    }
+    if (msg == WM_NCPAINT) { PaintRenameStrip(hwnd); return 0; }
+    if (msg == WM_SETFONT) {
+        const LRESULT result = DefSubclassProc(hwnd, msg, wp, lp);
+        ShapeRenameEdge(hwnd);
+        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        return result;
+    }
+    if (msg == WM_SETFOCUS || msg == WM_KILLFOCUS || msg == WM_ENABLE)
+        RedrawWindow(hwnd, nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_NOCHILDREN);
+    if (msg == WM_WINDOWPOSCHANGED &&
+        !(reinterpret_cast<const WINDOWPOS*>(lp)->flags & SWP_NOSIZE)) {
+        ShapeRenameEdge(hwnd);
+        // A grown box must repaint its whole edge, or the new strip stays dark.
+        RedrawWindow(hwnd, nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW | RDW_NOCHILDREN);
+    }
     if (msg == WM_KILLFOCUS && current && !state->rename.finishing) {
         if (state->rename.creationSticky) {
             // Shell's hidden native editor can transiently steal focus after
@@ -19074,7 +19273,7 @@ void BeginRename(ViewState& state, int index, bool createdItem = false) {
     const std::wstring name = state.entries[static_cast<size_t>(index)].name;
     // Create HIDDEN: never expose an uninitialized EDIT or let the GPU overlay
     // paint above it while the edit is being configured.
-    const DWORD style = WS_CHILD | WS_CLIPSIBLINGS | WS_BORDER |
+    const DWORD style = WS_CHILD | WS_CLIPSIBLINGS |
         (state.gridView && state.cachedNativeMode != FVM_SMALLICON ? ES_MULTILINE | ES_AUTOVSCROLL : ES_AUTOHSCROLL) |
         (state.rtlLayout ? ES_RIGHT : ES_LEFT);
     HWND edit = CreateWindowExW(state.rtlLayout ? WS_EX_RTLREADING : 0,
@@ -19140,8 +19339,11 @@ void BeginRename(ViewState& state, int index, bool createdItem = false) {
     // above it. DWM will composite EDIT text/caret on top of the DComp list.
     SetWindowPos(edit, HWND_TOP, rc.left, rc.top,
         rc.right - rc.left, rc.bottom - rc.top,
-        SWP_SHOWWINDOW | SWP_NOACTIVATE);
+        SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    // The box can open at its final size, so no size change will shape it.
+    ShapeRenameEdge(edit);
     PositionOverlayOverNative(state);
+    RedrawWindow(edit, nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW | RDW_NOCHILDREN);
     SetWindowPos(edit, HWND_TOP, 0, 0, 0, 0,
         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     SetFocus(edit);
@@ -24256,6 +24458,11 @@ LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             NavigateCurrentShellTab(*s, wParam != 0);
         return 0;
     case WM_TIMER:
+        if (wParam == kPageAnimPinTimerId) {
+            KillTimer(hwnd, kPageAnimPinTimerId);
+            if (s && !g_unloading.load()) PageAnimPin(*s);
+            return 0;
+        }
         if (wParam == kNativeModeRetryTimerId) {
             KillTimer(hwnd, kNativeModeRetryTimerId);
             if (s && s->nativeModeRetryLeft && s->visible && s->inScope &&
@@ -30710,7 +30917,13 @@ static bool DetachComposition(Member& member, bool destroying = false) {
     {
         std::lock_guard<std::mutex> lock(compositionMutex);
         auto check = [&](HRESULT hr) { okay = SUCCEEDED(hr) && okay; };
-        if (state->bridge) check(state->bridge->SetTransform(static_cast<IDCompositionTransform*>(nullptr)));
+        if (state->bridge) {
+            // A slide that ends early must not leave content parked at its
+            // start offset: that shows as a header gap with hover a row low.
+            check(state->bridge->SetOffsetX(0.f));
+            check(state->bridge->SetOffsetY(0.f));
+            check(state->bridge->SetTransform(static_cast<IDCompositionTransform*>(nullptr)));
+        }
         if (state->contentInBridge) {
             HRESULT hr = state->bridge->RemoveVisual(state->content.Get());
             check(hr);
@@ -30916,6 +31129,11 @@ static bool ApplyComposition(Member& member, Group& group, double now) {
 }
 static void Restore(Member& member) {
     void* element = member.element;
+    if (member.composition && (!element || member.done || !member.node)) {
+        // A bridge left attached keeps the page at its slide start offset.
+        DetachComposition(member, !element || !member.node);
+        return;
+    }
     if (!element || member.done || !member.node) return;
     HANDLE node = member.node;
     if (member.composition) {
@@ -34081,7 +34299,7 @@ void PageAnimNoteFolder(ViewState& s) {
 bool PageAnimEnsureEffect(ViewState& s) {
     if (!s.composition || !s.visual) return false;
     if (s.pageAnimEffect && s.pageAnimEffectVisual.Get() == s.visual.Get()) return true;
-    s.pageAnimEffect.Reset(); s.pageAnimTranslate.Reset(); s.pageAnimEffectVisual.Reset();
+    PageAnimDetachEffect(s);
     ComPtr<IDCompositionEffectGroup> group;
     ComPtr<IDCompositionTranslateTransform3D> translate;
     if (FAILED(s.composition->CreateEffectGroup(&group)) ||
@@ -34091,14 +34309,38 @@ bool PageAnimEnsureEffect(ViewState& s) {
     s.pageAnimEffect = std::move(group); s.pageAnimTranslate = std::move(translate); s.pageAnimEffectVisual = s.visual;
     return true;
 }
+// Takes the slide effect off whatever visual carries it. A slide whose effect
+// is merely forgotten (pointers reset, visual kept) can stay parked at its
+// start offset: the header gap with hover a row low. The caller commits.
+void PageAnimDetachEffect(ViewState& s) {
+    if (s.pageAnimTranslate) { s.pageAnimTranslate->SetOffsetX(0.f); s.pageAnimTranslate->SetOffsetY(0.f); }
+    if (s.pageAnimEffect) s.pageAnimEffect->SetOpacity(1.f);
+    if (s.pageAnimEffectVisual) s.pageAnimEffectVisual->SetEffect(nullptr);
+    s.pageAnimEffect.Reset(); s.pageAnimTranslate.Reset(); s.pageAnimEffectVisual.Reset();
+}
 // Final values; the caller commits.
 void PageAnimSettle(ViewState& s) {
-    if (s.pageAnimEffect && s.pageAnimEffectVisual.Get() == s.visual.Get()) {
-        s.pageAnimTranslate->SetOffsetX(0.f); s.pageAnimTranslate->SetOffsetY(0.f);
-        s.pageAnimEffect->SetOpacity(1.f);
-    }
+    PageAnimDetachEffect(s);
     s.pageAnimWaiting = s.pageStaggerActive = false;
     s.pageAnimEndsAt = s.pageAnimStartedAt = 0;
+}
+// Timer path: a slide whose end or start frame was never presented must not
+// leave the page pushed down (header gap, hover a row low) or faded out.
+void PageAnimPin(ViewState& s) {
+    const ULONGLONG now = GetTickCount64();
+    if (s.pageAnimEndsAt && now < s.pageAnimEndsAt) {
+        if (s.hwnd) SetTimer(s.hwnd, kPageAnimPinTimerId, UINT(s.pageAnimEndsAt - now) + 120, nullptr);
+        return;
+    }
+    if (s.pageAnimWaiting && now < s.pageAnimNotBefore + 1500) {
+        if (s.hwnd) SetTimer(s.hwnd, kPageAnimPinTimerId, UINT(s.pageAnimNotBefore + 1500 - now) + 120, nullptr);
+        return;
+    }
+    if (!s.pageAnimEndsAt && !s.pageAnimWaiting) return;
+    s.pageAnimShown = s.pageAnimSerial;
+    PageAnimSettle(s);
+    if (s.composition) s.composition->Commit();
+    if (g_perf.load(std::memory_order_relaxed)) Wh_Log(L"[GPU page] PIN end state by timer");
 }
 void PageAnimCancel(ViewState& s) {
     if (!s.pageAnimWaiting && !s.pageAnimEndsAt && !s.pageStaggerActive) return;
@@ -34136,6 +34378,8 @@ bool PageAnimStart(ViewState& s) {
     if (FAILED(hr)) { PageAnimSettle(s); return false; }
     s.pageAnimStartedAt = GetTickCount64();
     s.pageAnimEndsAt = s.pageAnimStartedAt + ULONGLONG(cfg.duration) + 16;
+    // Pin the end state even when no later frame is presented.
+    if (s.hwnd) SetTimer(s.hwnd, kPageAnimPinTimerId, UINT(cfg.duration) + 120, nullptr);
     if (s.pageStaggerActive) {
         s.pageStaggerStart = PageAnimNowMs();
         s.pageStaggerDuration = cfg.duration;
@@ -34157,23 +34401,21 @@ void PageAnimBeforePresent(ViewState& s) {
             s.pageAnimEndsAt = 0;
             // Pin the end state. A curve that stalls (hidden target, lost commit)
             // would leave the page pushed down while input hit-tests the real layout.
-            if (s.pageAnimEffect && s.pageAnimEffectVisual.Get() == s.visual.Get()) {
-                s.pageAnimTranslate->SetOffsetX(0.f); s.pageAnimTranslate->SetOffsetY(0.f);
-                s.pageAnimEffect->SetOpacity(1.f);
-                commit = true;
-            }
+            if (s.pageAnimEffect) { PageAnimDetachEffect(s); commit = true; }
         }
     }
     if (s.pageAnimSerial != s.pageAnimShown) {
         s.pageAnimShown = s.pageAnimSerial;
         const auto cfg = PageAnim::GpuSettings();
+        if (s.pageAnimWaiting || s.pageAnimEndsAt || s.pageStaggerActive) { PageAnimSettle(s); commit = true; }
         const bool usable = g_pageAnimActive && cfg.enabled && (cfg.fade || cfg.motion) && s.visible && s.inScope &&
             now < s.pageAnimNotBefore + 1500 && PageAnimEnsureEffect(s);
-        if (s.pageAnimWaiting || s.pageAnimEndsAt || s.pageStaggerActive) { PageAnimSettle(s); commit = true; }
         if (usable) {
             s.pageAnimTranslate->SetOffsetX(0.f); s.pageAnimTranslate->SetOffsetY(0.f);
             s.pageAnimEffect->SetOpacity(0.f);
             s.pageAnimWaiting = true; s.pageAnimArmedAt = now;
+            if (s.hwnd) SetTimer(s.hwnd, kPageAnimPinTimerId,
+                UINT(std::max<LONGLONG>(0, LONGLONG(s.pageAnimNotBefore) + 1500 - LONGLONG(now))) + 120, nullptr);
             s.pageStaggerActive = cfg.stagger;
             s.pageStaggerStart = 1e300; s.pageStaggerSpan = 0.; s.pageStaggerDuration = cfg.duration;
             commit = true;

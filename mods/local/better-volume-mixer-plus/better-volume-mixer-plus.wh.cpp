@@ -2,7 +2,7 @@
 // @id           better-volume-mixer-plus
 // @name         Seamless Volume Mixer
 // @description  A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices
-// @version      1.4.9
+// @version      1.4.13
 // @author       DavidHiFi, 0Allu, shubho
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -36,8 +36,8 @@ a per-app compressor and per-app audio devices.
 - **Quick playback device switching** from the top of the mixer.
 - **Pin, rename or hide apps**, and give apps a default volume.
 - **Middle-click to mute**, in the mixer or on the tray icon.
-- **Master volume number beside the tray icon**, optional: a second small
-  tray icon showing the level, updated live as the volume changes.
+- **Master volume number in the tray icon**, optional: the level is drawn
+  just left of the speaker glyph and updates live as the volume changes.
 - **Blue to mauve gradient sliders**, matching the mixer's border ring.
 - **Light, dark and system themes** with blur, transparency and animations.
 - **Compact mode** and full keyboard control.
@@ -118,7 +118,7 @@ Boost and compressor from
   $description: Animate opening, hover effects, and volume changes. The Windows animation preference is also respected.
 - trayVolumeNumber: false
   $name: Master volume number on tray icon
-  $description: Show the current master volume level on a second small tray icon next to the mixer's speaker icon. The number updates live as the volume changes. The number icon starts in the hidden icons area once; drag it from there next to the speaker to pin it. Off by default.
+  $description: Show the current master volume level inside the mixer's tray icon, drawn just left of the speaker glyph. The number updates live as the volume changes. Off by default.
 - closeWhenFocusIsLost: true
   $name: Close when focus is lost
   $description: Automatically close the mixer when you click somewhere else.
@@ -1532,7 +1532,7 @@ void CreateFonts(HWND hWnd) {
                                                   : g_settings.fontFamily.c_str();
     PCWSTR textFace = custom ? custom : L"Segoe UI";
     g_titleFont = CreateFontW(
-        -MulDiv(15, g_dpi, 72), 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+        -MulDiv(15, g_dpi, 72), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
         ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, textFace);
     g_bodyFont = CreateFontW(
@@ -4474,7 +4474,7 @@ void RenderMixerContents(HDC dc, const RECT& client) {
     RECT pickerRect = OutputPickerRect(client.right);
     AnimateState(g_outputHoverAmount, g_outputHovered);
     AnimateState(g_outputSelectAmount, g_outputMenuOpen);
-    DrawStateSurface(dc, pickerRect, g_theme.panel, g_outputHoverAmount, g_outputSelectAmount);
+    DrawStateSurface(dc, pickerRect, g_theme.panel, g_outputHoverAmount, g_outputSelectAmount, 0.55f);
     RECT deviceIconRect = {pickerRect.left + Scale(8), pickerRect.top,
                            pickerRect.left + Scale(34), pickerRect.bottom};
     DrawLabel(dc, L"\uE7F5", deviceIconRect, g_symbolFont, IconColor(),
@@ -5319,10 +5319,11 @@ void AddTrayIcon(HWND hWnd) {
     data.hWnd = hWnd;
     data.uID = TRAY_ICON_ID;
     data.guidItem = MIXER_TRAY_GUID;
-    data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_GUID | NIF_SHOWTIP;
+    data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_GUID;
     data.uCallbackMessage = WM_APP_TRAY;
     data.hIcon = g_trayIcon;
-    wcscpy_s(data.szTip, L"Better Volume Mixer");
+    // No tooltip on purpose: the shell's tray tooltip bubble pops over the
+    // mixer popup and does not match the theme. The popup is the identity.
     if (!Shell_NotifyIconW(NIM_ADD, &data)) {
         // A tool host killed without cleanup can leave its GUID identity
         // registered. The stale entry then makes every later GUID add fail,
@@ -5380,8 +5381,6 @@ void RemoveTrayIcon(HWND hWnd) {
     Shell_NotifyIconW(NIM_DELETE, &data);
 }
 
-HICON LoadTrayNumberIcon(int pixels, int percent);
-
 void RemoveTrayNumberIcon(HWND hWnd) {
     // Same double-identity cleanup as the speaker icon.
     NOTIFYICONDATAW data = {};
@@ -5400,92 +5399,17 @@ void RemoveTrayNumberIcon(HWND hWnd) {
     }
 }
 
-void AddTrayNumberIcon(HWND hWnd, HICON icon) {
-    g_trayNumberUsesGuid = true;
-    NOTIFYICONDATAW data = {};
-    data.cbSize = sizeof(data);
-    data.hWnd = hWnd;
-    data.uID = TRAY_NUMBER_ICON_ID;
-    data.guidItem = MIXER_TRAY_NUMBER_GUID;
-    data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_GUID | NIF_SHOWTIP;
-    data.uCallbackMessage = WM_APP_TRAY;
-    data.hIcon = icon;
-    swprintf_s(data.szTip, L"Master volume");
-    if (!Shell_NotifyIconW(NIM_ADD, &data)) {
-        // Same stale-identity recovery as the speaker icon: a tool host killed
-        // without cleanup leaves its GUID registered and blocks every later
-        // GUID add for this identity.
-        NOTIFYICONDATAW stale = {};
-        stale.cbSize = sizeof(stale);
-        stale.hWnd = hWnd;
-        stale.uID = TRAY_NUMBER_ICON_ID;
-        stale.uFlags = NIF_GUID;
-        stale.guidItem = MIXER_TRAY_NUMBER_GUID;
-        if (Shell_NotifyIconW(NIM_DELETE, &stale) &&
-            Shell_NotifyIconW(NIM_ADD, &data)) {
-            Wh_Log(L"Mixer: cleared stale number identity, GUID icon registered");
-        } else {
-            stale.uFlags = 0;
-            stale.guidItem = {};
-            Shell_NotifyIconW(NIM_DELETE, &stale);
-            data.uFlags &= ~NIF_GUID;
-            data.guidItem = {};
-            g_trayNumberUsesGuid = false;
-            if (!Shell_NotifyIconW(NIM_ADD, &data)) {
-                Wh_Log(L"Mixer: number icon registration failed");
-                return;
-            }
-            Wh_Log(L"Mixer: number icon registered using window/ID fallback");
-        }
-    }
-    data.uVersion = NOTIFYICON_VERSION_4;
-    Shell_NotifyIconW(NIM_SETVERSION, &data);
-    if (g_trayNumberIcon) {
-        DestroyIcon(g_trayNumberIcon);
-    }
-    g_trayNumberIcon = icon;
-}
-
 // Adds, updates or removes the number icon so it always matches the setting
 // and the live master volume. Runs on the mixer's UI thread only.
-void SyncTrayNumberIcon(HWND hWnd, bool force) {
-    if (!g_settings.trayVolumeNumber) {
-        if (g_trayNumberIcon) {
-            RemoveTrayNumberIcon(hWnd);
-        }
-        g_trayPaintVolume = -1;
-        return;
+void SyncTrayNumberIcon(HWND hWnd, bool) {
+    // 1.4.10: the number lives inside the one tray icon again, so any
+    // standalone number icon from 1.4.9 is cleaned up on the first pass.
+    static bool cleanedLegacy = false;
+    if (g_trayNumberIcon || !cleanedLegacy) {
+        RemoveTrayNumberIcon(hWnd);
+        cleanedLegacy = true;
     }
-    int percent = ClampInt(static_cast<int>(GetMasterVolume() * 100.0f + 0.5f), 0, 100);
-    if (!force && g_trayNumberIcon && percent == g_trayPaintVolume) {
-        return;
-    }
-    g_trayPaintVolume = percent;
-    HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
-    UINT trayDpi = taskbar ? GetDpiForWindow(taskbar) : 96;
-    if (!trayDpi) trayDpi = 96;
-    int pixels = std::max(16, GetSystemMetricsForDpi(SM_CXSMICON, trayDpi));
-    HICON icon = LoadTrayNumberIcon(pixels, percent);
-    if (!icon) {
-        return;
-    }
-    if (g_trayNumberIcon) {
-        NOTIFYICONDATAW data = {};
-        data.cbSize = sizeof(data);
-        data.hWnd = hWnd;
-        data.uID = TRAY_NUMBER_ICON_ID;
-        if (g_trayNumberUsesGuid) data.guidItem = MIXER_TRAY_NUMBER_GUID;
-        data.uFlags = NIF_ICON | NIF_TIP | (g_trayNumberUsesGuid ? NIF_GUID : 0);
-        swprintf_s(data.szTip, L"Master volume: %d%%", percent);
-        data.hIcon = icon;
-        if (!Shell_NotifyIconW(NIM_MODIFY, &data)) {
-            Wh_Log(L"Mixer: number icon update failed");
-        }
-        DestroyIcon(g_trayNumberIcon);
-        g_trayNumberIcon = icon;
-    } else {
-        AddTrayNumberIcon(hWnd, icon);
-    }
+    g_trayPaintVolume = -1;
 }
 
 bool SpeakerShapeContains(float x, float y, bool includeWaves = true) {
@@ -5608,16 +5532,19 @@ bool TrayVolumeDigitFilled(int digit, int column, int row) {
     return kDigits[digit][row][column] != 0;
 }
 
-// Tray icon variant that shows the master volume number on its own square,
-// so the digits get the whole slot instead of sharing it with the speaker.
-// The digits use the same supersampled rasterization as the speaker shape,
-// so both icons share one edge treatment at every size.
-HICON CreateTrayVolumeIcon(int pixels, COLORREF color, int volume) {
-    pixels = ClampInt(pixels, 16, 256);
+// Tray icon that carries the master volume number and the speaker in one
+// image: digits on the left, speaker on the right, exactly as the setting
+// promises. Digits reuse the 3x5 grid with ink-aware spacing and a gamma
+// lift so thin strokes stay solid at tray sizes; the speaker reuses the
+// popup glyph so both surfaces share one edge treatment.
+HICON CreateTrayCompositeIcon(int width, int height, COLORREF color,
+                              int volume, bool muted) {
+    width = ClampInt(width, 16, 256);
+    height = ClampInt(height, 16, 256);
     BITMAPINFO info{};
     info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    info.bmiHeader.biWidth = pixels;
-    info.bmiHeader.biHeight = -pixels;
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = -height;
     info.bmiHeader.biPlanes = 1;
     info.bmiHeader.biBitCount = 32;
     info.bmiHeader.biCompression = BI_RGB;
@@ -5631,41 +5558,155 @@ HICON CreateTrayVolumeIcon(int pixels, COLORREF color, int volume) {
     WCHAR text[8];
     swprintf_s(text, L"%d", ClampInt(volume, 0, 100));
     size_t count = wcslen(text);
-    const float totalUnits = static_cast<float>(3 * count + (count - 1));
-    float scale = std::min(pixels * 0.92f / totalUnits, pixels * 0.78f / 5.0f);
-    float originX = (pixels - totalUnits * scale) * 0.5f;
-    float originY = (pixels - 5.0f * scale) * 0.5f;
+
+    // Font pass: grid digits went soft once three of them had to share a
+    // 16 px slot, so the number is drawn with real hinted type, shrunk until
+    // it fits. White-on-black coverage becomes the alpha.
+    if (HDC memory = CreateCompatibleDC(nullptr)) {
+        HGDIOBJ oldBitmap = SelectObject(memory, bitmap);
+        std::fill(output, output + width * height, 0u);
+        SetBkMode(memory, TRANSPARENT);
+        SetTextColor(memory, RGB(255, 255, 255));
+        RECT box{0, 0, width, height};
+        bool drawn = false;
+        for (int size = height; size >= height / 2 && !drawn; --size) {
+            HFONT font = CreateFontW(-size, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
+                NONANTIALIASED_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+            if (!font) break;
+            HGDIOBJ oldFont = SelectObject(memory, font);
+            SIZE extent{};
+            GetTextExtentPoint32W(memory, text, static_cast<int>(count), &extent);
+            if (extent.cx <= width || size == height / 2) {
+                DrawTextW(memory, text, static_cast<int>(count), &box,
+                          DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                drawn = true;
+            }
+            SelectObject(memory, oldFont);
+            DeleteObject(font);
+        }
+        GdiFlush();
+        SelectObject(memory, oldBitmap);
+        DeleteDC(memory);
+        if (drawn) {
+            for (int i = 0; i < width * height; ++i) {
+                DWORD alpha = output[i] & 0xFF;
+                output[i] = (alpha << 24) |
+                    ((GetRValue(color) * alpha / 255) << 16) |
+                    ((GetGValue(color) * alpha / 255) << 8) |
+                    (GetBValue(color) * alpha / 255);
+            }
+            std::vector<BYTE> maskBits(((width + 15) / 16) * 2 * height, 0);
+            HBITMAP mask = CreateBitmap(width, height, 1, 1, maskBits.data());
+            HICON icon = nullptr;
+            if (mask) {
+                ICONINFO iconInfo{};
+                iconInfo.fIcon = TRUE;
+                iconInfo.hbmColor = bitmap;
+                iconInfo.hbmMask = mask;
+                icon = CreateIconIndirect(&iconInfo);
+                DeleteObject(mask);
+            }
+            if (icon) {
+                DeleteObject(bitmap);
+                return icon;
+            }
+        }
+    }
+
+    // Ink extents per digit keep a thin "1" from wasting width.
+    int inkFirst[3] = {0, 0, 0};
+    int inkLast[3] = {2, 2, 2};
+    float inkUnits = 0.0f;
+    for (size_t i = 0; i < count; ++i) {
+        int digit = text[i] - L'0';
+        int first = 3, last = -1;
+        for (int row = 0; row < 5; ++row) {
+            for (int column = 0; column < 3; ++column) {
+                if (TrayVolumeDigitFilled(digit, column, row)) {
+                    first = std::min(first, column);
+                    last = std::max(last, column);
+                }
+            }
+        }
+        if (last < first) { first = 0; last = 2; }
+        inkFirst[i] = first;
+        inkLast[i] = last;
+        inkUnits += static_cast<float>(last - first + 1);
+        if (i + 1 < count) inkUnits += 1.0f;
+    }
+
+    // Speaker ink spans about 11.9 x 11 design units around (7.45, 8).
+    // Half scale keeps a balanced digit zone inside the square tray slot;
+    // the shell forces every tray icon into a square, so wide canvases
+    // only end up squeezed.
+    // The speaker beside the digits blurred to a smudge at 16 px, so the number
+    // mode shows digits only; muted falls back to the speaker with its mark.
+    float speakerScale = std::min(height * 0.35f / 11.0f, 1.0f);
+    float speakerWidth = 0.0f;
+    float speakerCenterX = width - 1.0f - speakerWidth * 0.5f;
+    float digitZone = width - 2.0f;
+    float digitScale = std::min(digitZone / inkUnits, height * 0.80f / 5.0f);
+    float digitOriginY = (height - 5.0f * digitScale) * 0.5f;
+    float digitWidth = 0.0f;
+    for (size_t i = 0; i < count; ++i) digitWidth += (inkLast[i] - inkFirst[i] + 1) * digitScale + (i + 1 < count ? digitScale : 0.0f);
+    float cursorX = std::floor((width - digitWidth) * 0.5f);
+    float digitOriginX[3] = {0, 0, 0};
+    for (size_t i = 0; i < count; ++i) {
+        digitOriginX[i] = cursorX;
+        cursorX += (inkLast[i] - inkFirst[i] + 1) * digitScale;
+        if (i + 1 < count) cursorX += digitScale;
+    }
+    float digitRight = digitOriginX[count - 1] +
+        (inkLast[count - 1] - inkFirst[count - 1] + 1) * digitScale;
+
     const int samples = 12;
-    for (int y = 0; y < pixels; ++y) {
-        for (int x = 0; x < pixels; ++x) {
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
             int covered = 0;
             for (int sy = 0; sy < samples; ++sy) {
                 for (int sx = 0; sx < samples; ++sx) {
                     float offsetX = ((sx + 0.5f) / samples - 0.5f) * 1.35f;
                     float offsetY = ((sy + 0.5f) / samples - 0.5f) * 1.35f;
-                    float unitX = (x + 0.5f + offsetX - originX) / scale;
-                    float unitY = (y + 0.5f + offsetY - originY) / scale;
+                    float px = x + 0.5f + offsetX;
+                    float py = y + 0.5f + offsetY;
                     bool inside = false;
-                    if (unitX >= 0.0f && unitX < totalUnits && unitY >= 0.0f && unitY < 5.0f) {
-                        int cell = static_cast<int>(unitX);
-                        int column = cell % 4;
-                        if (column < 3) {
-                            inside = TrayVolumeDigitFilled(text[cell / 4] - L'0', column,
-                                                           static_cast<int>(unitY));
+                    if (px >= digitOriginX[0] && px < digitRight) {
+                        for (size_t i = 0; i < count && !inside; ++i) {
+                            float localX = (px - digitOriginX[i]) / digitScale;
+                            float localY = (py - digitOriginY) / digitScale;
+                            if (localX < 0.0f ||
+                                localX >= inkLast[i] - inkFirst[i] + 1.0f ||
+                                localY < 0.0f || localY >= 5.0f) {
+                                continue;
+                            }
+                            int column = inkFirst[i] + static_cast<int>(localX);
+                            int row = std::min(4, static_cast<int>(localY));
+                            inside = TrayVolumeDigitFilled(text[i] - L'0', column, row);
+                        }
+                    } else {
+                        float shapeX = 7.45f + (px - speakerCenterX) / speakerScale;
+                        float shapeY = 8.0f + (py - height * 0.5f) / speakerScale;
+                        inside = SpeakerShapeContains(shapeX, shapeY, !muted);
+                        if (muted && SpeakerMuteMarkContains(shapeX, shapeY)) {
+                            inside = true;
                         }
                     }
                     covered += inside;
                 }
             }
-            DWORD alpha = (covered * 255 + samples * samples / 2) / (samples * samples);
-            output[y * pixels + x] = (alpha << 24) |
+            float coverage = covered / static_cast<float>(samples * samples);
+            // Gamma lift keeps one-pixel digit strokes from reading dim.
+            DWORD alpha =
+                static_cast<DWORD>(std::pow(coverage, 0.55f) * 255.0f + 0.5f);
+            output[y * width + x] = (alpha << 24) |
                 ((GetRValue(color) * alpha / 255) << 16) |
                 ((GetGValue(color) * alpha / 255) << 8) |
                 (GetBValue(color) * alpha / 255);
         }
     }
-    std::vector<BYTE> maskBits(((pixels + 15) / 16) * 2 * pixels, 0);
-    HBITMAP mask = CreateBitmap(pixels, pixels, 1, 1, maskBits.data());
+    std::vector<BYTE> maskBits(((width + 15) / 16) * 2 * height, 0);
+    HBITMAP mask = CreateBitmap(width, height, 1, 1, maskBits.data());
     HICON icon = nullptr;
     if (mask) {
         ICONINFO iconInfo{};
@@ -5679,17 +5720,6 @@ HICON CreateTrayVolumeIcon(int pixels, COLORREF color, int volume) {
     return icon;
 }
 
-// Colour for the number icon matches the speaker's tray treatment: light on
-// dark shells, dark on light shells.
-HICON LoadTrayNumberIcon(int pixels, int percent) {
-    DWORD light = 0, size = sizeof(light);
-    RegGetValueW(HKEY_CURRENT_USER,
-        L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-        L"SystemUsesLightTheme", RRF_RT_REG_DWORD, nullptr, &light, &size);
-    COLORREF color = light ? RGB(30, 32, 36) : RGB(248, 249, 252);
-    return CreateTrayVolumeIcon(pixels, color, percent);
-}
-
 HICON LoadMixerIcon(int pixels, bool tray = false, bool muted = false) {
     COLORREF color = g_theme.text;
     if (tray) {
@@ -5698,6 +5728,14 @@ HICON LoadMixerIcon(int pixels, bool tray = false, bool muted = false) {
             L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
             L"SystemUsesLightTheme", RRF_RT_REG_DWORD, nullptr, &light, &size);
         color = light ? RGB(30, 32, 36) : RGB(248, 249, 252);
+    }
+    if (tray && g_settings.trayVolumeNumber && !muted) {
+        int percent =
+            ClampInt(static_cast<int>(GetMasterVolume() * 100.0f + 0.5f), 0, 100);
+        if (HICON icon = CreateTrayCompositeIcon(pixels, pixels, color,
+                                                 percent, muted)) {
+            return icon;
+        }
     }
     if (HICON icon = CreateSpeakerIcon(pixels, color, tray ? 1.12f : 1.0f, !tray, muted)) {
         return icon;
@@ -6633,7 +6671,9 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
 
         case WM_APP_MASTER_STATE_CHANGED:
             SyncTrayNumberIcon(hWnd, false);
-            RefreshMasterIcons(hWnd);
+            // Force: with the number setting on, the tray icon carries the
+            // volume, so every master change must re-render it.
+            RefreshMasterIcons(hWnd, true);
             return 0;
 
         case WM_APP_DEFAULT_OUTPUT_CHANGED: {

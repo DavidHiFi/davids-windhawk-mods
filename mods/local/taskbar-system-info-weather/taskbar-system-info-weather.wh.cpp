@@ -5,7 +5,7 @@
 // @name:uk-UA      Системний монітор панелі завдань
 // @description     CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar, with optional graphs
 // @description:uk-UA Компактний монітор CPU, GPU, RAM і VRAM із 60-секундними графіками для панелі завдань Windows 11.
-// @version         1.4.18
+// @version         1.4.29
 // @author          DavidHiFi, Yevhenii Starychenko, m417z, Salyts
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods/tree/main/mods/local/taskbar-system-info-weather
@@ -103,6 +103,19 @@ The default **Automatic** source uses the first one that works:
 HWiNFO is optional and runs fine in Sensors-only mode. The free edition stops
 Shared Memory after 12 hours; the Gadget option or HWiNFO Pro avoid that. A
 missing reading shows as `--°C` and everything else keeps working.
+
+## Watts and clocks
+
+HWiNFO Shared Memory gives the most watt and clock readings. Without it, the
+mod reads what Windows and the GPU driver report on their own:
+
+- **CPU watts and GHz:** the Windows energy meter and processor counters.
+- **RAM watts:** the CPU package minus its cores (memory controller, cache and
+  fabric), so read it as an estimate.
+- **GPU watts and GHz:** the NVIDIA driver (`nvml.dll`), on NVIDIA cards only.
+- **VRAM watts:** HWiNFO when it reports memory power. Otherwise, on NVIDIA
+  cards, an estimate from the memory clock and memory load, since the driver
+  does not measure memory power on most GeForce cards.
 
 ## Troubleshooting
 
@@ -486,9 +499,17 @@ constexpr double kMeterSegmentWidth = 6.0;
 constexpr double kMeterSegmentHeight = 8.0;
 constexpr double kMeterSegmentGap = 1.0;
 
-// Nerd Font (FontAwesome) thermometer-half icon that leads the stacked CPU
+// Nerd Font (Material Design) solid thermometer icon that leads the stacked CPU
 // TEMP and GPU TEMP labels. Present in every FiraCode Nerd Font weight.
-constexpr PCWSTR kTempIconPrefix = L"\uF2C9 ";
+constexpr PCWSTR kTempIconPrefix = L"\U000F050F ";
+// The thermometer glyph is drawn this much larger than the label text.
+constexpr double kTempIconScale = 1.35;
+// The CPU thermometer is drawn this many DIPs higher and the GPU one this many
+// lower, so the two stacked glyphs do not touch.
+constexpr double kTempIconNudge = 1.0;
+// Character spacing (1/1000 em) on the hidden copy of the glyph and its space,
+// so the CPU and GPU text sits closer to the thermometer.
+constexpr int kTempIconTighten = -185;
 
 // Colors as 0xRRGGBB, from https://catppuccin.com/palette
 struct ColorTheme {
@@ -618,6 +639,8 @@ event_token g_repeaterLayoutToken{};
 // that move buttons by RenderTransform without a layout pass.
 event_token g_appsFollowRenderingToken{};
 event_token g_rootPointerMovedToken{};
+[[clang::no_destroy]] winrt::Windows::UI::Xaml::Input::PointerEventHandler g_rootMoveHandler{nullptr};
+[[clang::no_destroy]] winrt::Windows::Foundation::IInspectable g_rootMoveBoxed{nullptr};
 [[clang::no_destroy]] Border g_infoHover{nullptr};
 event_token g_rootPointerEnteredToken{};
 event_token g_rootPointerExitedToken{};
@@ -726,6 +749,8 @@ struct PowerCell {
 [[clang::no_destroy]] PowerCell g_cpuPowerCell;
 [[clang::no_destroy]] XamlRectangle g_stackDivider{nullptr};
 [[clang::no_destroy]] XamlRectangle g_islandDivider{nullptr};
+[[clang::no_destroy]] XamlRectangle g_stackDivider2{nullptr};
+[[clang::no_destroy]] XamlRectangle g_islandDivider2{nullptr};
 [[clang::no_destroy]] PowerCell g_gpuPowerCell;
 // RAM and VRAM rows: watts, then capacity in the clock run (no clockUnit).
 [[clang::no_destroy]] PowerCell g_ramPowerCell;
@@ -736,6 +761,12 @@ struct PowerCell {
 // labels, colored like the temperature values.
 [[clang::no_destroy]] Documents::Run g_cpuTempIconRun{nullptr};
 [[clang::no_destroy]] Documents::Run g_gpuTempIconRun{nullptr};
+// The glyphs sit in their own TextBlocks (so they can be nudged apart); a
+// transparent copy inside each label keeps the label text where it was.
+[[clang::no_destroy]] TextBlock g_cpuTempIcon{nullptr};
+[[clang::no_destroy]] TextBlock g_gpuTempIcon{nullptr};
+[[clang::no_destroy]] Documents::Run g_cpuTempIconSpacer{nullptr};
+[[clang::no_destroy]] Documents::Run g_gpuTempIconSpacer{nullptr};
 [[clang::no_destroy]] PowerCell g_vramPowerCell;
 double g_widgetHeight = kWidgetHeight;
 [[clang::no_destroy]] Grid g_stackedGrid{nullptr};
@@ -825,6 +856,7 @@ struct MetricsSnapshot {
     // have no power sensor) and the GPU frame buffer rail.
     std::optional<double> ramPower;
     std::optional<double> vramPower;
+    bool ramPowerEstimated = false;
 };
 
 std::mutex g_metricsMutex;
@@ -3282,6 +3314,207 @@ void ReadNetwork(MetricsSnapshot& snapshot, bool enabled) {
     g_networkSampleTime = now;
 }
 
+// Windows and NVIDIA driver readings for watts and clocks (1.4.19). They
+// fill only what HWiNFO left empty, so HWiNFO stays the first choice.
+PDH_HQUERY g_nativePdhQuery = nullptr;
+PDH_HCOUNTER g_cpuPerformanceCounter = nullptr;
+PDH_HCOUNTER g_cpuFrequencyCounter = nullptr;
+PDH_HCOUNTER g_energyMeterCounter = nullptr;
+std::chrono::steady_clock::time_point g_nextNativePdhRetry{};
+
+using NvmlInitFn = int(__cdecl*)();
+using NvmlShutdownFn = int(__cdecl*)();
+using NvmlGetCountFn = int(__cdecl*)(unsigned int*);
+using NvmlGetHandleFn = int(__cdecl*)(unsigned int, void**);
+using NvmlGetNameFn = int(__cdecl*)(void*, char*, unsigned int);
+using NvmlGetPowerFn = int(__cdecl*)(void*, unsigned int*);
+using NvmlGetClockFn = int(__cdecl*)(void*, int, unsigned int*);
+struct NvmlUtilization { unsigned int gpu; unsigned int memory; };
+using NvmlGetUtilizationFn = int(__cdecl*)(void*, NvmlUtilization*);
+struct NvmlApi {
+    HMODULE module = nullptr;
+    NvmlShutdownFn shutdown = nullptr;
+    NvmlGetPowerFn power = nullptr;
+    NvmlGetClockFn clock = nullptr;
+    NvmlGetClockFn maxClock = nullptr;
+    NvmlGetUtilizationFn utilization = nullptr;
+    void* device = nullptr;
+};
+NvmlApi g_nvml;
+bool g_nvmlTried = false;
+
+void CloseNativePowerSources() {
+    if (g_nativePdhQuery) {
+        PdhCloseQuery(g_nativePdhQuery);
+        g_nativePdhQuery = nullptr;
+    }
+    g_cpuPerformanceCounter = nullptr;
+    g_cpuFrequencyCounter = nullptr;
+    g_energyMeterCounter = nullptr;
+    g_nextNativePdhRetry = {};
+    if (g_nvml.module) {
+        if (g_nvml.shutdown) g_nvml.shutdown();
+        FreeLibrary(g_nvml.module);
+    }
+    g_nvml = {};
+    g_nvmlTried = false;
+}
+
+bool EnsureNvml(const ModSettings& settings) {
+    if (g_nvml.device) return true;
+    if (g_nvmlTried) return false;
+    g_nvmlTried = true;
+    wchar_t path[MAX_PATH];
+    UINT length = GetSystemDirectoryW(path, MAX_PATH);
+    if (!length || length > MAX_PATH - 12) return false;
+    wcscat_s(path, L"\\nvml.dll");
+    HMODULE module = LoadLibraryExW(path, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!module) return false;
+    auto init = reinterpret_cast<NvmlInitFn>(GetProcAddress(module, "nvmlInit_v2"));
+    auto count = reinterpret_cast<NvmlGetCountFn>(GetProcAddress(module, "nvmlDeviceGetCount_v2"));
+    auto handle = reinterpret_cast<NvmlGetHandleFn>(GetProcAddress(module, "nvmlDeviceGetHandleByIndex_v2"));
+    auto name = reinterpret_cast<NvmlGetNameFn>(GetProcAddress(module, "nvmlDeviceGetName"));
+    NvmlApi api;
+    api.module = module;
+    api.shutdown = reinterpret_cast<NvmlShutdownFn>(GetProcAddress(module, "nvmlShutdown"));
+    api.power = reinterpret_cast<NvmlGetPowerFn>(GetProcAddress(module, "nvmlDeviceGetPowerUsage"));
+    api.clock = reinterpret_cast<NvmlGetClockFn>(GetProcAddress(module, "nvmlDeviceGetClockInfo"));
+    api.maxClock = reinterpret_cast<NvmlGetClockFn>(GetProcAddress(module, "nvmlDeviceGetMaxClockInfo"));
+    api.utilization = reinterpret_cast<NvmlGetUtilizationFn>(GetProcAddress(module, "nvmlDeviceGetUtilizationRates"));
+    if (!init || !count || !handle || !api.shutdown || !api.power || !api.clock ||
+        init() != 0) {
+        FreeLibrary(module);
+        return false;
+    }
+    unsigned int devices = 0;
+    count(&devices);
+    std::wstring filter = settings.gpuAdapter;
+    for (auto& c : filter) c = towlower(c);
+    for (unsigned int i = 0; i < devices; ++i) {
+        void* device = nullptr;
+        if (handle(i, &device) != 0 || !device) continue;
+        if (!api.device) api.device = device;
+        if (filter.empty() || !name) break;
+        char raw[96] = {};
+        if (name(device, raw, sizeof(raw)) != 0) continue;
+        std::wstring wide = FixedAnsiToWide(raw, sizeof(raw));
+        for (auto& c : wide) c = towlower(c);
+        if (wide.find(filter) != std::wstring::npos) {
+            api.device = device;
+            break;
+        }
+    }
+    if (!api.device) {
+        api.shutdown();
+        FreeLibrary(module);
+        return false;
+    }
+    g_nvml = api;
+    Wh_Log(L"NVIDIA driver readings available for GPU watts and clock");
+    return true;
+}
+
+void EnsureNativePdhQuery() {
+    if (g_nativePdhQuery) return;
+    auto now = std::chrono::steady_clock::now();
+    if (now < g_nextNativePdhRetry) return;
+    g_nextNativePdhRetry = now + kPdhCounterRetryInterval;
+    if (PdhOpenQueryW(nullptr, 0, &g_nativePdhQuery) != ERROR_SUCCESS) {
+        g_nativePdhQuery = nullptr;
+        return;
+    }
+    AddPdhCounter(g_nativePdhQuery, g_cpuPerformanceCounter,
+                  L"\\Processor Information(_Total)\\% Processor Performance",
+                  L"CPU performance");
+    AddPdhCounter(g_nativePdhQuery, g_cpuFrequencyCounter,
+                  L"\\Processor Information(_Total)\\Processor Frequency",
+                  L"CPU frequency");
+    AddPdhCounter(g_nativePdhQuery, g_energyMeterCounter,
+                  L"\\Energy Meter(*)\\Power", L"energy meter");
+    if (!g_cpuPerformanceCounter && !g_energyMeterCounter) {
+        PdhCloseQuery(g_nativePdhQuery);
+        g_nativePdhQuery = nullptr;
+        return;
+    }
+    PdhCollectQueryData(g_nativePdhQuery);
+}
+
+void ReadNativePowerAndClocks(MetricsSnapshot& snapshot,
+                              const ModSettings& settings) {
+    bool needCpu = !snapshot.cpuPower || !snapshot.cpuClock || !snapshot.ramPower;
+    if (needCpu) {
+        EnsureNativePdhQuery();
+    }
+    if (needCpu && g_nativePdhQuery &&
+        PdhCollectQueryData(g_nativePdhQuery) == ERROR_SUCCESS) {
+        PDH_FMT_COUNTERVALUE performance{}, frequency{};
+        if (!snapshot.cpuClock && g_cpuPerformanceCounter && g_cpuFrequencyCounter &&
+            PdhGetFormattedCounterValue(g_cpuPerformanceCounter, PDH_FMT_DOUBLE | PDH_FMT_NOCAP100,
+                                        nullptr, &performance) == ERROR_SUCCESS &&
+            PdhGetFormattedCounterValue(g_cpuFrequencyCounter, PDH_FMT_DOUBLE,
+                                        nullptr, &frequency) == ERROR_SUCCESS) {
+            double mhz = frequency.doubleValue * performance.doubleValue / 100.0;
+            if (mhz > 100 && mhz < 10000) snapshot.cpuClock = mhz;
+        }
+        if (g_energyMeterCounter && (!snapshot.cpuPower || !snapshot.ramPower)) {
+            DWORD bytes = 0, items = 0;
+            PdhGetFormattedCounterArrayW(g_energyMeterCounter, PDH_FMT_DOUBLE,
+                                         &bytes, &items, nullptr);
+            std::vector<uint8_t> buffer(bytes);
+            auto values = reinterpret_cast<PDH_FMT_COUNTERVALUE_ITEM_W*>(buffer.data());
+            if (bytes &&
+                PdhGetFormattedCounterArrayW(g_energyMeterCounter, PDH_FMT_DOUBLE,
+                                             &bytes, &items, values) == ERROR_SUCCESS) {
+                double package = 0, cores = 0;
+                bool havePackage = false;
+                for (DWORD i = 0; i < items; ++i) {
+                    if (values[i].FmtValue.CStatus != ERROR_SUCCESS) continue;
+                    // Windows reports RAPL_Package0_PKG and ..._CORE.
+                    std::wstring instance = values[i].szName;
+                    for (auto& c : instance) c = towlower(c);
+                    double watts = values[i].FmtValue.doubleValue / 1000.0;
+                    if (instance.ends_with(L"_pkg")) {
+                        package += watts;
+                        havePackage = true;
+                    } else if (instance.ends_with(L"_core")) {
+                        cores += watts;
+                    }
+                }
+                if (havePackage && package > 0 && package < 1000) {
+                    if (!snapshot.cpuPower) snapshot.cpuPower = package;
+                    if (!snapshot.ramPower && cores > 0 && package > cores) {
+                        snapshot.ramPower = package - cores;
+                        snapshot.ramPowerEstimated = true;
+                    }
+                }
+            }
+        }
+    }
+    if ((!snapshot.gpuPower || !snapshot.gpuClock || !snapshot.vramPower) &&
+        EnsureNvml(settings)) {
+        unsigned int value = 0;
+        // GeForce drivers do not measure memory power (NVML memory scope is
+        // not supported), so estimate it: about 2 W at the idle memory clock,
+        // up to about 18 W at full clock and full memory load.
+        unsigned int memClock = 0, memMax = 0;
+        NvmlUtilization load{};
+        if (!snapshot.vramPower && g_nvml.maxClock && g_nvml.utilization &&
+            g_nvml.clock(g_nvml.device, 2, &memClock) == 0 &&
+            g_nvml.maxClock(g_nvml.device, 2, &memMax) == 0 &&
+            g_nvml.utilization(g_nvml.device, &load) == 0 && memMax > 0) {
+            double ratio = std::clamp(static_cast<double>(memClock) / memMax, 0.0, 1.0);
+            double busy = std::clamp(load.memory / 100.0, 0.0, 1.0);
+            snapshot.vramPower = 2.0 + ratio * (8.0 + 8.0 * busy);
+        }
+        if (!snapshot.gpuPower && g_nvml.power(g_nvml.device, &value) == 0 &&
+            value > 0 && value < 2000000)
+            snapshot.gpuPower = value / 1000.0;
+        if (!snapshot.gpuClock && g_nvml.clock(g_nvml.device, 0, &value) == 0 &&
+            value > 0)
+            snapshot.gpuClock = static_cast<double>(value);
+    }
+}
+
 MetricsSnapshot CollectMetrics(const ModSettings& settings) {
     MetricsSnapshot snapshot;
     snapshot.capturedAt = std::chrono::steady_clock::now();
@@ -3293,6 +3526,7 @@ MetricsSnapshot CollectMetrics(const ModSettings& settings) {
     ReadMemory(snapshot);
     ReadPdhMetrics(snapshot, settings);
     ReadTemperatures(snapshot, settings);
+    ReadNativePowerAndClocks(snapshot, settings);
     return snapshot;
 }
 
@@ -3395,6 +3629,7 @@ void MetricsWorkerProc() {
             settings = CurrentSettings();
             ReadCpuUsage();
             InvalidateGpuAdapterCache();
+            CloseNativePowerSources();
             g_nextCpuPdhCounterRetry = {};
             EnsureCpuPdhQuery(*settings);
             EnsurePdhQuery();
@@ -4153,6 +4388,222 @@ double WidgetHeightForTaskbar(double availableHeight) {
                : height;
 }
 
+
+// Hover edge: the island's own border switches from Mocha grey to the blue-to-mauve gradient.
+static winrt::Windows::UI::Xaml::Media::Brush IslandEdgeBrush(bool hot) {
+    if (!hot) return winrt::Windows::UI::Xaml::Media::SolidColorBrush(
+        winrt::Windows::UI::Color{0xE6, 0x45, 0x47, 0x5A});
+    winrt::Windows::UI::Xaml::Media::LinearGradientBrush b;
+    b.StartPoint({0, 0.5});
+    b.EndPoint({1, 0.5});
+    winrt::Windows::UI::Xaml::Media::GradientStop s1, s2;
+    s1.Color(winrt::Windows::UI::Color{0xFF, 0x89, 0xB4, 0xFA});
+    s1.Offset(0.0);
+    s2.Color(winrt::Windows::UI::Color{0xFF, 0xCB, 0xA6, 0xF7});
+    s2.Offset(1.0);
+    b.GradientStops().Append(s1);
+    b.GradientStops().Append(s2);
+    return b;
+}
+bool g_infoIslandHot = false;
+void SetInfoIslandHover(bool on) {
+    if (!g_infoIsland || g_infoIslandHot == on) return;
+    g_infoIslandHot = on;
+    try { g_infoIsland.BorderBrush(IslandEdgeBrush(on)); } catch (...) {}
+}
+
+// Dock hover edges (1.4.29): the apps island, the AI usage dock and the tray dock take the same
+// blue-to-mauve edge as the stats island while the pointer is over them. The tray dock is five
+// styler-drawn pieces; one gradient runs across all of them.
+struct DockPiece {
+    winrt::weak_ref<FrameworkElement> el;
+};
+[[clang::no_destroy]] std::vector<DockPiece> g_trayPieces;
+[[clang::no_destroy]] winrt::weak_ref<FrameworkElement> g_aiDock;
+// 1.4.29: the AI dock and the tray pieces are outside RootGrid (the tray frame is a sibling
+// of the taskbar frame under the XamlRoot content), so the dock scan and pointer tracking
+// run against the content root instead.
+[[clang::no_destroy]] winrt::weak_ref<FrameworkElement> g_dockContentEl;
+[[clang::no_destroy]] winrt::weak_ref<FrameworkElement> g_dockMoveTarget;
+ULONGLONG g_dockScanAt = 0;
+bool g_appsIslandHot = false, g_aiDockHot = false, g_trayDockHot = false;
+
+static bool PieceEdge(FrameworkElement const& el, Thickness* get, Brush const* set) {
+    if (auto b = el.try_as<Border>()) { if (get) *get = b.BorderThickness(); if (set) b.BorderBrush(*set); return true; }
+    if (auto g = el.try_as<Grid>()) { if (get) *get = g.BorderThickness(); if (set) g.BorderBrush(*set); return true; }
+    if (auto s = el.try_as<StackPanel>()) { if (get) *get = s.BorderThickness(); if (set) s.BorderBrush(*set); return true; }
+    if (auto c = el.try_as<ContentPresenter>()) { if (get) *get = c.BorderThickness(); if (set) c.BorderBrush(*set); return true; }
+    return false;
+}
+
+static bool InTree(FrameworkElement const& el) {
+    return el && VisualTreeHelper::GetParent(el) != nullptr;
+}
+
+static FrameworkElement FindNamed(FrameworkElement const& from, PCWSTR name) {
+    return FindChildRecursive(from, [name](FrameworkElement const& e) { return e.Name() == name; }, 24);
+}
+
+// The XamlRoot content: common ancestor of the taskbar frame and the tray frame. Cached in a
+// weak ref, so a shell rebuild simply re-resolves on the next call.
+static FrameworkElement DockContentRoot(FrameworkElement const& from) {
+    if (auto cached = g_dockContentEl.get()) return cached;
+    try {
+        auto xr = from.XamlRoot();
+        if (!xr) return nullptr;
+        auto content = xr.Content().try_as<FrameworkElement>();
+        if (content) g_dockContentEl = content;
+        return content;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+// Late migration: if the handler had to start on RootGrid, move it to the content root as
+// soon as that becomes resolvable, so tray-area moves are tracked too.
+static void EnsureDockMoveTarget(FrameworkElement const& root) {
+    if (g_dockMoveTarget.get() || !g_rootMoveBoxed) return;
+    try {
+        auto content = DockContentRoot(root);
+        if (!content) return;
+        if (auto old = g_rootGrid) {
+            try { old.RemoveHandler(UIElement::PointerMovedEvent(), g_rootMoveBoxed); } catch (...) {}
+        }
+        content.AddHandler(UIElement::PointerMovedEvent(), g_rootMoveBoxed, true);
+        g_dockMoveTarget = content;
+    } catch (...) {}
+}
+
+// First element at or under `from` whose top edge is 2 px: the piece the styler outlines.
+static FrameworkElement FindEdgedPiece(FrameworkElement const& from) {
+    Thickness t{};
+    if (PieceEdge(from, &t, nullptr) && t.Top >= 1.5) return from;
+    return FindChildRecursive(from, [](FrameworkElement const& e) {
+        Thickness th{};
+        return PieceEdge(e, &th, nullptr) && th.Top >= 1.5;
+    }, 8);
+}
+
+static void ScanDocks(FrameworkElement const& root) {
+    g_trayPieces.clear();
+    g_aiDock = nullptr;
+    g_aiDockHot = false;
+    g_trayDockHot = false;
+    auto scanRoot = DockContentRoot(root);
+    if (!scanRoot) scanRoot = root;
+    if (auto ai = FindNamed(scanRoot, L"AiUsage_Root")) {
+        int n = VisualTreeHelper::GetChildrenCount(ai);
+        for (int i = 0; i < n; i++) {
+            if (auto b = VisualTreeHelper::GetChild(ai, i).try_as<Border>()) { g_aiDock = b.as<FrameworkElement>(); break; }
+        }
+    }
+    auto tray = FindNamed(scanRoot, L"SystemTrayFrameGrid");
+    if (!tray) return;
+    for (PCWSTR name : {L"NotifyIconStack", L"NotificationAreaIcons", L"MainStack",
+                        L"NonActivatableStack", L"ControlCenterButton"}) {
+        auto holder = FindNamed(tray, name);
+        if (!holder) continue;
+        if (auto piece = FindEdgedPiece(holder)) g_trayPieces.push_back({piece});
+    }
+}
+
+static void SetAppsIslandHover(bool on) {
+    if (!g_appsIsland || g_appsIslandHot == on) return;
+    g_appsIslandHot = on;
+    try { g_appsIsland.BorderBrush(IslandEdgeBrush(on)); } catch (...) {}
+}
+
+static void SetAiDockHover(bool on) {
+    if (g_aiDockHot == on) return;
+    g_aiDockHot = on;
+    auto el = g_aiDock.get();
+    if (!el) return;
+    try { Brush b = IslandEdgeBrush(on); PieceEdge(el, nullptr, &b); } catch (...) {}
+}
+
+static bool ElementRect(FrameworkElement const& el, UIElement const& to, double& x, double& y, double& w, double& h) {
+    if (!el || el.Visibility() != Visibility::Visible) return false;
+    w = el.ActualWidth(); h = el.ActualHeight();
+    if (!(w > 0.0) || !(h > 0.0)) return false;
+    auto p = el.TransformToVisual(to).TransformPoint({0, 0});
+    x = p.X; y = p.Y;
+    return true;
+}
+
+static void SetTrayDockHover(bool on, UIElement const& root, double left, double right) {
+    if (g_trayDockHot == on) return;
+    g_trayDockHot = on;
+    for (auto& piece : g_trayPieces) {
+        auto el = piece.el.get();
+        if (!el) continue;
+        try {
+            Brush b{nullptr};
+            double x, y, w, h;
+            if (on && ElementRect(el, root, x, y, w, h)) {
+                LinearGradientBrush g;
+                g.MappingMode(BrushMappingMode::Absolute);
+                g.StartPoint({static_cast<float>(left - x), 0});
+                g.EndPoint({static_cast<float>(right - x), 0});
+                GradientStop s1, s2;
+                s1.Color(winrt::Windows::UI::Color{0xFF, 0x89, 0xB4, 0xFA});
+                s1.Offset(0.0);
+                s2.Color(winrt::Windows::UI::Color{0xFF, 0xCB, 0xA6, 0xF7});
+                s2.Offset(1.0);
+                g.GradientStops().Append(s1);
+                g.GradientStops().Append(s2);
+                b = g;
+            } else {
+                b = IslandEdgeBrush(false);
+            }
+            PieceEdge(el, nullptr, &b);
+        } catch (...) {}
+    }
+}
+
+static void ClearDockHovers() {
+    SetInfoIslandHover(false);
+    SetAppsIslandHover(false);
+    SetAiDockHover(false);
+    SetTrayDockHover(false, nullptr, 0, 0);
+}
+
+static void UpdateDockHovers(FrameworkElement const& root, winrt::Windows::Foundation::Point p) {
+    EnsureDockMoveTarget(root);
+    auto inRect = [&](FrameworkElement const& el, double pad = 0.0) {
+        double x, y, w, h;
+        if (!ElementRect(el, root, x, y, w, h)) return false;
+        return p.X >= x - pad && p.X < x + w + pad && p.Y >= y - pad && p.Y < y + h + pad;
+    };
+    if (g_appsIsland) SetAppsIslandHover(inRect(g_appsIsland));
+
+    ULONGLONG now = GetTickCount64();
+    auto ai = g_aiDock.get();
+    bool stale = (!ai || !InTree(ai)) && now - g_dockScanAt > 3000;
+    for (auto& piece : g_trayPieces) {
+        auto el = piece.el.get();
+        if (!el || !InTree(el)) { stale = stale || now - g_dockScanAt > 3000; break; }
+    }
+    if (g_trayPieces.empty() && now - g_dockScanAt > 3000) stale = true;
+    if (stale) {
+        g_dockScanAt = now;
+        ScanDocks(root);
+        ai = g_aiDock.get();
+    }
+    SetAiDockHover(ai && inRect(ai));
+
+    double left = 1e9, right = -1e9, top = 1e9, bottom = -1e9;
+    for (auto& piece : g_trayPieces) {
+        double x, y, w, h;
+        auto el = piece.el.get();
+        if (el && ElementRect(el, root, x, y, w, h)) {
+            left = std::min(left, x); right = std::max(right, x + w);
+            top = std::min(top, y); bottom = std::max(bottom, y + h);
+        }
+    }
+    bool trayIn = right > left && p.X >= left && p.X < right && p.Y >= top && p.Y < bottom;
+    if (trayIn != g_trayDockHot) SetTrayDockHover(trayIn, root, left, right);
+}
+
 Border MakeIsland(PCWSTR name) {
     Border island;
     island.Name(name);
@@ -4203,24 +4654,30 @@ double PublishedRightEdge(double left) {
 // of the island border. With the island on, a copy inside the island's border
 // draws it border to border at the same x and the grid one goes invisible
 // (kept for its position).
-void PlaceIslandDivider(double hostLeft) {
-    if (!g_islandDivider) return;
-    bool show = g_islandsOn && g_widgetStacked && g_stackDivider && g_infoIsland &&
+void PlaceIslandDividerPair(XamlRectangle const& grid, XamlRectangle const& copy,
+                            double hostLeft) {
+    if (!copy) return;
+    bool show = g_islandsOn && g_widgetStacked && grid && g_infoIsland &&
                 g_infoIsland.Visibility() == Visibility::Visible &&
-                g_stackDivider.ActualHeight() > 0;
+                grid.ActualHeight() > 0;
     try {
         if (show) {
-            auto p = g_stackDivider.TransformToVisual(g_widgetHost).TransformPoint({0, 0});
+            auto p = grid.TransformToVisual(g_widgetHost).TransformPoint({0, 0});
             double islandLeft = std::max(0.0, hostLeft - g_islandPadding);
             double x = hostLeft + p.X - islandLeft - g_infoIsland.BorderThickness().Left;
-            if (std::abs(g_islandDivider.Margin().Left - x) > 0.25)
-                g_islandDivider.Margin(Thickness{x, 0, 0, 0});
-            g_islandDivider.Fill(g_stackDivider.Fill());
+            if (std::abs(copy.Margin().Left - x) > 0.25)
+                copy.Margin(Thickness{x, 0, 0, 0});
+            copy.Fill(grid.Fill());
         }
         auto vis = show ? Visibility::Visible : Visibility::Collapsed;
-        if (g_islandDivider.Visibility() != vis) g_islandDivider.Visibility(vis);
-        if (g_stackDivider) g_stackDivider.Opacity(show ? 0.0 : 1.0);
+        if (copy.Visibility() != vis) copy.Visibility(vis);
+        if (grid) grid.Opacity(show ? 0.0 : 1.0);
     } catch (...) {}
+}
+
+void PlaceIslandDivider(double hostLeft) {
+    PlaceIslandDividerPair(g_stackDivider, g_islandDivider, hostLeft);
+    PlaceIslandDividerPair(g_stackDivider2, g_islandDivider2, hostLeft);
 }
 
 void UpdateInfoIsland() {
@@ -4491,12 +4948,34 @@ void ApplyStackedGeometry(const ModSettings& settings) {
         probe.Measure(Size{10000, 100});
         return std::ceil(static_cast<double>(probe.DesiredSize().Width));
     };
+    // The temperature label as drawn: the larger, tightened hidden glyph, then
+    // the name. Measured whole so the column never clips it to "C...".
+    auto measureTempLabel = [&] {
+        TextBlock probe;
+        probe.FontFamily(Media::FontFamily(settings.fontFamily));
+        probe.FontSize(settings.stackedFontSize);
+        probe.FontWeight(Text::FontWeights::SemiBold());
+        Documents::Run icon;
+        icon.Text(kTempIconPrefix);
+        icon.FontSize(settings.stackedFontSize * kTempIconScale);
+        icon.CharacterSpacing(kTempIconTighten);
+        Documents::Run name;
+        name.Text(L"GPU");
+        probe.Inlines().Append(icon);
+        probe.Inlines().Append(name);
+        probe.Measure(Size{10000, 100});
+        return std::ceil(static_cast<double>(probe.DesiredSize().Width)) + 1;
+    };
     double rowHeight = g_stackedRowHeight;
     double gap = settings.itemGap;
-    double small = std::max(3.0, std::round(gap / 2));
+    double small = std::max(2.0, std::round(gap / 3));
     double segmentHeight = std::max(4.0, rowHeight - 2);
     double meterWidth = settings.meterSegments * kMeterSegmentWidth +
                         (settings.meterSegments - 1) * kMeterSegmentGap;
+    for (Documents::Run icon : {g_cpuTempIconRun, g_gpuTempIconRun,
+                                g_cpuTempIconSpacer, g_gpuTempIconSpacer}) {
+        if (icon) icon.FontSize(settings.stackedFontSize * kTempIconScale);
+    }
     for (StackPanel meter : {g_cpuMeter, g_gpuMeter, g_ramMeter, g_vramMeter}) {
         if (!meter) continue;
         EnsureMeterSegments(meter, settings.meterSegments);
@@ -4519,14 +4998,14 @@ void ApplyStackedGeometry(const ModSettings& settings) {
         measure(L"100%"),
         small + wattsWidth + wattsGap + measure(L"9.9\u2009GHz"),
         std::max(gap, 10.0),
-        std::max(measure(L"RAM", true), measure(L"VRAM", true)) + small,
+        std::max(measure(L"RAM", true), measure(L"VRAM", true)) + small + 2,
         meterColumn,
         measure(L"100%"),
         small + wattsWidth + wattsGap +
             std::max(fullCapacityWidth(g_ramLayoutCapacityGb),
                      fullCapacityWidth(g_vramLayoutCapacityGb)),
-        std::max(gap, 14.0),
-        measure((std::wstring(kTempIconPrefix) + L"GPU").c_str(), true) + small,
+        std::max(gap, 10.0),
+        measureTempLabel() + small,
         measure(L"115"),
         small + measure(L"\u00B0C"),
         settings.showNetwork ? gap + measure(L"\u2193", true) + small : 0.0,
@@ -4542,8 +5021,8 @@ void ApplyStackedGeometry(const ModSettings& settings) {
     for (auto row : g_stackedGrid.RowDefinitions()) {
         row.Height(GridLength{rowHeight, GridUnitType::Pixel});
     }
-    if (g_stackDivider) {
-        if (g_meterEmptyBrush) g_stackDivider.Fill(g_meterEmptyBrush);
+    for (XamlRectangle d : {g_stackDivider, g_stackDivider2}) {
+        if (d && g_meterEmptyBrush) d.Fill(g_meterEmptyBrush);
     }
     // Arrows sit at the left of their column so a three-digit speed never
     // touches them.
@@ -4776,7 +5255,8 @@ void ApplyWidgetSettings() {
 
     for (TextBlock label :
          {g_cpuLabel, g_gpuLabel, g_ramLabel, g_vramLabel, g_cpuTempLabel,
-          g_gpuTempLabel, g_downloadLabel, g_uploadLabel}) {
+          g_gpuTempLabel, g_cpuTempIcon, g_gpuTempIcon, g_downloadLabel,
+          g_uploadLabel}) {
         ApplyTextStyle(label, true, settings, g_labelBrush);
     }
     const std::pair<std::vector<TextBlock>, SolidColorBrush> roles[] = {
@@ -5013,7 +5493,10 @@ void UpdateWidgetText(bool force = false) {
     };
     paintWatts(g_cpuPowerCell, snapshot.cpuPower, 70, 100, 125);
     paintWatts(g_gpuPowerCell, snapshot.gpuPower, 110, 160, 190);
-    paintWatts(g_ramPowerCell, snapshot.ramPower, 20, 25, 30);
+    if (snapshot.ramPowerEstimated)
+        paintWatts(g_ramPowerCell, snapshot.ramPower, 40, 50, 60);
+    else
+        paintWatts(g_ramPowerCell, snapshot.ramPower, 20, 25, 30);
     paintWatts(g_vramPowerCell, snapshot.vramPower, 15, 20, 25);
     UpdateMeter(g_cpuMeter, snapshot.cpu, snapshot.cpuAvailable);
     UpdateMeter(g_gpuMeter, snapshot.gpu, snapshot.gpuAvailable);
@@ -5399,10 +5882,19 @@ bool RemoveWidget() {
     }
     g_repeaterLayoutToken = {};
     StopAppsIslandFollow();
-    if (g_rootGrid && g_rootPointerMovedToken.value) {
-        try { g_rootGrid.PointerMoved(g_rootPointerMovedToken); } catch (...) {}
+    if (auto moveTarget = g_dockMoveTarget.get()) {
+        try { moveTarget.RemoveHandler(UIElement::PointerMovedEvent(), g_rootMoveBoxed); } catch (...) {}
+    } else if (g_rootGrid && g_rootMoveBoxed) {
+        try { g_rootGrid.RemoveHandler(UIElement::PointerMovedEvent(), g_rootMoveBoxed); } catch (...) {}
     }
+    g_dockMoveTarget = nullptr;
+    g_dockContentEl = nullptr;
+    g_rootMoveHandler = nullptr;
+    g_rootMoveBoxed = nullptr;
     g_rootPointerMovedToken = {};
+    try { ClearDockHovers(); } catch (...) {}
+    g_trayPieces.clear();
+    g_aiDock = nullptr;
     g_infoHover = nullptr;
     if (g_pointerRoot) {
         try {
@@ -5430,6 +5922,7 @@ bool RemoveWidget() {
 
     g_infoIsland = nullptr;
     g_islandDivider = nullptr;
+    g_islandDivider2 = nullptr;
     g_appsIsland = nullptr;
     g_widget = nullptr;
     g_widgetHost = nullptr;
@@ -5484,7 +5977,8 @@ bool RemoveWidget() {
         *brush = nullptr;
     }
     for (TextBlock* label :
-         {&g_cpuTempLabel, &g_gpuTempLabel, &g_downloadLabel, &g_uploadLabel}) {
+         {&g_cpuTempLabel, &g_gpuTempLabel, &g_cpuTempIcon, &g_gpuTempIcon,
+          &g_downloadLabel, &g_uploadLabel}) {
         *label = nullptr;
     }
     g_stackedGrid = nullptr;
@@ -5494,8 +5988,11 @@ bool RemoveWidget() {
     g_uploadArrowRun = nullptr;
     g_cpuTempIconRun = nullptr;
     g_gpuTempIconRun = nullptr;
+    g_cpuTempIconSpacer = nullptr;
+    g_gpuTempIconSpacer = nullptr;
     g_vramPowerCell = {};
     g_stackDivider = nullptr;
+    g_stackDivider2 = nullptr;
     g_gpuPowerCell = {};
     g_widgetStacked = false;
     g_widgetHeight = kWidgetHeight;
@@ -5599,35 +6096,54 @@ void BuildStackedWidget(Grid widget) {
         place(cell.text, row, 3);
         return cell;
     };
-    XamlRectangle divider;
-    divider.Name(L"StackDivider");
-    divider.Width(1);
-    divider.HorizontalAlignment(HorizontalAlignment::Center);
-    divider.Margin(Thickness{0, 2, 0, 2});
-    divider.IsHitTestVisible(false);
-    Grid::SetRowSpan(divider, 2);
-    place(divider, 0, 9);
-    g_stackDivider = divider;
-    // Its first real position lets the island copy take its place.
-    divider.SizeChanged([](auto const&, auto const&) {
-        if (!g_unloading) UpdateInfoIsland();
-    });
+    // Lines between CPU/GPU and RAM/VRAM (column 4) and before the temperatures (column 9).
+    auto makeDivider = [&](PCWSTR name, int column) {
+        XamlRectangle divider;
+        divider.Name(name);
+        divider.Width(1);
+        divider.HorizontalAlignment(HorizontalAlignment::Center);
+        divider.Margin(Thickness{0, 2, 0, 2});
+        divider.IsHitTestVisible(false);
+        Grid::SetRowSpan(divider, 2);
+        place(divider, 0, column);
+        // Its first real position lets the island copy take its place.
+        divider.SizeChanged([](auto const&, auto const&) {
+            if (!g_unloading) UpdateInfoIsland();
+        });
+        return divider;
+    };
+    g_stackDivider2 = makeDivider(L"StackDividerMemory", 4);
+    g_stackDivider = makeDivider(L"StackDivider", 9);
     g_cpuPowerCell = powerCell(L"CpuPower", 0);
     g_gpuPowerCell = powerCell(L"GpuPower", 1);
-    auto tempLabel = [](TextBlock label, PCWSTR name) {
+    auto tempLabel = [&](TextBlock label, PCWSTR name, PCWSTR iconName, int row,
+                         double nudge, TextBlock& icon, Documents::Run& spacer) {
         label.Text(L"");
-        Documents::Run iconRun;
-        iconRun.Text(kTempIconPrefix);
+        spacer = Documents::Run();
+        spacer.Text(kTempIconPrefix);
+        spacer.Foreground(SolidColorBrush(MakeColor(0, 0, 0, 0)));
+        spacer.CharacterSpacing(kTempIconTighten);
         Documents::Run nameRun;
         nameRun.Text(name);
-        label.Inlines().Append(iconRun);
+        label.Inlines().Append(spacer);
         label.Inlines().Append(nameRun);
+        // Same cell and style as the label, so the glyph lands exactly on the
+        // spacer before the nudge.
+        icon = text(iconName, L"", TextAlignment::Left, row, 10);
+        Documents::Run iconRun;
+        iconRun.Text(kTempIconPrefix);
+        icon.Inlines().Append(iconRun);
+        TranslateTransform shift;
+        shift.Y(nudge);
+        icon.RenderTransform(shift);
         return iconRun;
     };
     g_cpuTempLabel = text(L"CpuTemperatureLabel", L"CPU", TextAlignment::Left, 0, 10);
-    g_cpuTempIconRun = tempLabel(g_cpuTempLabel, L"CPU");
+    g_cpuTempIconRun = tempLabel(g_cpuTempLabel, L"CPU", L"CpuTemperatureIcon", 0,
+                                 -kTempIconNudge, g_cpuTempIcon, g_cpuTempIconSpacer);
     g_gpuTempLabel = text(L"GpuTemperatureLabel", L"GPU", TextAlignment::Left, 1, 10);
-    g_gpuTempIconRun = tempLabel(g_gpuTempLabel, L"GPU");
+    g_gpuTempIconRun = tempLabel(g_gpuTempLabel, L"GPU", L"GpuTemperatureIcon", 1,
+                                 kTempIconNudge, g_gpuTempIcon, g_gpuTempIconSpacer);
     g_uploadLabel = text(L"UploadLabel", L"UP", TextAlignment::Right, 0, 13);
     g_downloadLabel = text(L"DownloadLabel", L"DOWN", TextAlignment::Right, 1, 13);
     auto arrowLabel = [](TextBlock label, PCWSTR arrow, PCWSTR name) {
@@ -5834,28 +6350,46 @@ bool InjectWidget(FrameworkElement taskbarFrame) {
     Grid islandContent;
     islandContent.IsHitTestVisible(false);
     islandContent.Children().Append(hover);
-    XamlRectangle islandDivider;
-    islandDivider.Width(1);
-    islandDivider.HorizontalAlignment(HorizontalAlignment::Left);
-    islandDivider.VerticalAlignment(VerticalAlignment::Stretch);
-    islandDivider.IsHitTestVisible(false);
-    islandDivider.Visibility(Visibility::Collapsed);
-    islandContent.Children().Append(islandDivider);
-    g_islandDivider = islandDivider;
+    auto makeIslandDivider = [&] {
+        XamlRectangle islandDivider;
+        islandDivider.Width(1);
+        islandDivider.HorizontalAlignment(HorizontalAlignment::Left);
+        islandDivider.VerticalAlignment(VerticalAlignment::Stretch);
+        islandDivider.IsHitTestVisible(false);
+        islandDivider.Visibility(Visibility::Collapsed);
+        islandContent.Children().Append(islandDivider);
+        return islandDivider;
+    };
+    g_islandDivider = makeIslandDivider();
+    g_islandDivider2 = makeIslandDivider();
     g_infoIsland.Child(islandContent);
     g_infoHover = hover;
-    g_rootPointerMovedToken = root.PointerMoved([](auto const& sender, auto const& args) {
+    g_infoIslandHot = false;
+    g_appsIslandHot = g_aiDockHot = g_trayDockHot = false;
+    g_trayPieces.clear();
+    g_aiDock = nullptr;
+    g_dockScanAt = 0;
+    g_rootMoveHandler = winrt::Windows::UI::Xaml::Input::PointerEventHandler(
+        [](winrt::Windows::Foundation::IInspectable const& sender,
+           winrt::Windows::UI::Xaml::Input::PointerRoutedEventArgs const& args) {
         if (g_unloading || !g_infoIsland || !g_infoHover) return;
         try {
-            auto p = args.GetCurrentPoint(sender.template as<UIElement>()).Position();
-            auto origin = g_infoIsland.TransformToVisual(sender.template as<UIElement>())
-                              .TransformPoint({0, 0});
+            auto rootEl = sender.as<FrameworkElement>();
+            auto p = args.GetCurrentPoint(rootEl).Position();
+            auto origin = g_infoIsland.TransformToVisual(rootEl).TransformPoint({0, 0});
             bool inside = p.X >= origin.X && p.X < origin.X + g_infoIsland.ActualWidth() &&
                           p.Y >= origin.Y && p.Y < origin.Y + g_infoIsland.ActualHeight();
-            double opacity = inside ? 1.0 : 0.0;
-            if (g_infoHover.Opacity() != opacity) g_infoHover.Opacity(opacity);
+            SetInfoIslandHover(inside);
+            UpdateDockHovers(rootEl, p);
         } catch (...) {}
     });
+    g_rootMoveBoxed = winrt::box_value(g_rootMoveHandler);
+    // Track on the XamlRoot content when it is resolvable so moves over the tray frame reach
+    // the dock hover logic; otherwise start on RootGrid and migrate later.
+    auto moveTarget = DockContentRoot(root);
+    FrameworkElement handlerTarget = moveTarget ? moveTarget : root;
+    g_dockMoveTarget = handlerTarget;
+    handlerTarget.AddHandler(UIElement::PointerMovedEvent(), g_rootMoveBoxed, true);
     Canvas::SetZIndex(g_infoIsland, 9999);
     Grid::SetColumnSpan(g_infoIsland,
                         std::max(1, static_cast<int>(root.ColumnDefinitions().Size())));
@@ -5898,7 +6432,7 @@ bool InjectWidget(FrameworkElement taskbarFrame) {
         g_rootPointerExitedToken = root.PointerExited([](auto const&, auto const&) {
             try {
                 FollowAppsIsland(1500);
-                if (g_infoHover) g_infoHover.Opacity(0);
+                ClearDockHovers();
             } catch (...) {}
         });
     }
@@ -7091,6 +7625,7 @@ HMODULE WINAPI LoadLibraryExW_Hook(LPCWSTR fileName,
 void CloseMetricSources() {
     ClosePdhQuery();
     CloseCpuPdhQuery();
+    CloseNativePowerSources();
     g_nextCpuPdhCounterRetry = {};
     InvalidateGpuAdapterCache();
     g_hwInfoSharedMemoryCache = {};
