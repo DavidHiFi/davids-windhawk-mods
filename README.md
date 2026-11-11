@@ -99,6 +99,7 @@ Each release on the Releases page carries one mod, so the latest release is the 
 | <img src="media/previews/windhawk-enhanced-styler.png" width="220" alt="Themed Windhawk window"> | [Windhawk Enhanced Styler](mods/local/windhawk-enhanced-styler) | Your own colors, gradients, font, transparency and blur for the Windhawk window. |
 | <img src="media/previews/npp-taskdlg-textcolor.png" width="220" alt="Notepad++ dark dialog"> | [Notepad++ Dark Dialog Fix](mods/local/npp-taskdlg-textcolor) | Readable text in Notepad++ Save and confirm dialogs in dark mode. |
 | <img src="media/previews/ditto-styler.png" width="220" alt="Ditto in rounded dark glass with a bottom dock"> | [Ditto Styler](mods/local/ditto-styler) | Dark glass for the Ditto clipboard manager: a rounded window, glass tooltips and a bottom dock. |
+| <img src="media/previews/always-on-top-plus.png" width="220" alt="Pinned window with a red to yellow ring"> | [Always On Top Windows Plus](mods/local/always-on-top-plus) | Pin any window on top with Win+Alt+T, marked by a Mocha red to yellow ring. |
 
 ### Themes
 
