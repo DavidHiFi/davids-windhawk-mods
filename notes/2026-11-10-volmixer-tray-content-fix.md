@@ -119,3 +119,18 @@ No crashes, Explorer unchanged.
 Note: the 8:58 pm mass crash (Explorer and many apps) came from another thread's
 editor-glass script adding a Seamless Flyouts rule for VSCodium, not from this work.
 Its backup: backups\2026-11-10-editor-glass-native\flyouts.reg.
+
+## Tray volume number made crisp, picker pill edge, 1.4.11 to 1.4.13 (2026-11-11, 12:20 pm)
+
+- 1.4.10 drew digits plus a speaker in the square tray slot; the speaker became a smudge.
+  Number mode now shows the number only, centred; when muted it shows the speaker with its mark.
+- The 3x5 grid digits went soft at three digits ("100"), so the number is drawn with
+  Segoe UI bold, unsmoothed, shrunk until it fits. Verified on the taskbar: crisp white
+  digits (work\2026-11-10-volmixer-gpu\tray-1413.png).
+- Output picker pill at the top now has the same resting grey edge as the page pills and
+  master pill (resting 0.55). Not screen-checked: a scripted open closes at once on focus loss.
+- The other "100" left of ours is the system speaker number from another tray mod, not this one.
+- Old: LibraryFileName local@better-volume-mixer-plus_1.4.10_436997.dll
+- New: LibraryFileName local@better-volume-mixer-plus_1.4.13_514077.dll
+- Rollback: reg import backups\2026-11-10\volmixer-1411\mixer-key-before.reg, then
+  scripts\2026-11-10-tool-mod-restart.ps1 -Id local@better-volume-mixer-plus.
