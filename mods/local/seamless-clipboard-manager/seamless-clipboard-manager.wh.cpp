@@ -2,7 +2,7 @@
 // @id              seamless-clipboard-manager
 // @name            Seamless Clipboard Manager
 // @description     Keeps everything you copy, text and images, in a searchable list you open with Win+V
-// @version         1.3.0
+// @version         1.3.6
 // @author          DavidHiFi, Scott Brogden, Ditto contributors
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -50,6 +50,7 @@ Win+V normally opens the Windows clipboard history. The mod turns that off and t
 | F7 | Put the selected clips in a new group |
 | Backspace | Leave the group and go back to all clips |
 | Esc | Close the list |
+| Ctrl+scroll | Make the clips bigger or smaller |
 | Click the pin | Pin or unpin a clip |
 | Drag a pinned clip | Change the order of pinned clips |
 | Right-click | Special pastes and everything else |
@@ -555,6 +556,9 @@ void List_ApplySettings();         // Fonts, colors, backdrop, row height.
 void List_Destroy();
 void Editor_Open(int64_t id);      // Edit a clip's text.
 void Props_Open(int64_t id);       // Description, quick paste text, never delete, sticky, group.
+// Styled yes/no dialog; onOk runs after it closes on the confirm button.
+void Confirm_Open(const std::wstring& heading, const std::wstring& body, const std::wstring& okText,
+                  std::function<void()> onOk);
 HICON MakeAppIcon(int size);       // The mod's icon (clipboard glyph, blue to mauve). Used by tray and windows.
 // Harness only: render the list with the current DB into a PNG without showing a window.
 bool List_RenderToPng(const std::wstring& path, int widthDip, int heightDip, float dpiScale);
@@ -3145,11 +3149,10 @@ static void Cap_TrayMenu(int x, int y) {
             Settings_Open();
             break;
         case kCapMenuDeleteAll:
-            if (MessageBoxW(g_msgWnd,
-                            L"Delete all clips?\n\nPinned clips, groups and clips set to never delete are kept.",
-                            L"Seamless Clipboard Manager", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) == IDYES) {
-                if (Db_DeleteAllUnpinned()) PostMessageW(g_msgWnd, WM_SCM_CLIP_SAVED, 0, 0);
-            }
+            Confirm_Open(L"Delete all clips?", L"Pinned clips, groups and clips set to never delete are kept.",
+                         L"Delete all", [] {
+                             if (Db_DeleteAllUnpinned()) PostMessageW(g_msgWnd, WM_SCM_CLIP_SAVED, 0, 0);
+                         });
             break;
     }
 }
@@ -3591,7 +3594,7 @@ enum Cmd : UINT {
     cmdNewGroup, cmdSpecialBase = 100, cmdMoveGroupBase = 1000, cmdOpenGroupBase = 20000
 };
 
-enum class Hit { None, Row, Pin, Close, Chevron, Folder, Menu, Search, Scroll, Back, Caption };
+enum class Hit { None, Row, Pin, Close, Chevron, Folder, Menu, Search, Scroll, Back, Caption, ConfirmYes, ConfirmNo };
 enum class DockMode { Search, ConfirmDelete, NewGroup };
 
 // ---------------------------------------------------------------------------
@@ -3622,9 +3625,17 @@ bool EnsureFactories() {
 struct Fonts {
     bool ok = false;
     std::wstring family, iconFamily;
-    Com<IDWriteTextFormat> row, rowWrap, num, ui, uiBold, uiRight, icon, iconMid, iconSmall, wrap;
-    float lineH = 18, numW = 16;
+    Com<IDWriteTextFormat> row, rowWrap, rowBold, num, ui, uiBold, uiRight, icon, iconMid, iconSmall, wrap;
+    float lineH = 18, rowLineH = 18, numW = 16;
 } T;
+
+// Ctrl+scroll zoom for the clips in the list, in percent, kept in the mod's storage.
+constexpr int kZoomMin = 60, kZoomMax = 200, kZoomStep = 10;
+int g_listZoom = 0;
+int ListZoom() {
+    if (!g_listZoom) g_listZoom = std::clamp(GetState(L"ListZoom", 100), kZoomMin, kZoomMax);
+    return g_listZoom;
+}
 
 // The owner's weight for all text; emphasis is one step heavier, never past bold.
 int BaseWeight() { return std::clamp(g_set.fontWeight, 100, 900); }
@@ -3675,14 +3686,16 @@ bool EnsureFonts() {
     T.iconFamily = FamilyExists(L"Segoe Fluent Icons") ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
     float size = g_set.fontSize * 96.0f / 72.0f;
     auto normal = (DWRITE_FONT_WEIGHT)BaseWeight(), bold = (DWRITE_FONT_WEIGHT)BoldWeight();
-    T.row = MakeFormat(T.family, size, normal, false);
-    T.num = MakeFormat(T.family, size * 0.86f, bold, false, DWRITE_TEXT_ALIGNMENT_TRAILING);
+    float rsize = size * ListZoom() / 100.0f;
+    T.row = MakeFormat(T.family, rsize, normal, false);
+    T.rowBold = MakeFormat(T.family, rsize, bold, false);
+    T.num = MakeFormat(T.family, rsize * 0.86f, bold, false, DWRITE_TEXT_ALIGNMENT_TRAILING);
     T.ui = MakeFormat(T.family, size, normal, false);
     T.uiBold = MakeFormat(T.family, size, bold, false);
     T.uiRight = MakeFormat(T.family, size, normal, false, DWRITE_TEXT_ALIGNMENT_TRAILING);
     T.wrap = MakeFormat(T.family, size, normal, true);
     // Clip text wraps onto the row's lines like Ditto; the last line that fits ends in an ellipsis.
-    T.rowWrap = MakeFormat(T.family, size, normal, true);
+    T.rowWrap = MakeFormat(T.family, rsize, normal, true);
     if (T.rowWrap) {
         T.rowWrap->SetWordWrapping(DWRITE_WORD_WRAPPING_EMERGENCY_BREAK);
         Com<IDWriteInlineObject> sign;
@@ -3693,26 +3706,33 @@ bool EnsureFonts() {
     T.icon = MakeFormat(T.iconFamily, 14, DWRITE_FONT_WEIGHT_NORMAL, false, DWRITE_TEXT_ALIGNMENT_CENTER, false);
     T.iconMid = MakeFormat(T.iconFamily, 12, DWRITE_FONT_WEIGHT_NORMAL, false, DWRITE_TEXT_ALIGNMENT_CENTER, false);
     T.iconSmall = MakeFormat(T.iconFamily, 10, DWRITE_FONT_WEIGHT_NORMAL, false, DWRITE_TEXT_ALIGNMENT_CENTER, false);
-    if (!T.row || !T.rowWrap || !T.num || !T.ui || !T.uiBold || !T.uiRight || !T.wrap || !T.icon || !T.iconMid ||
+    if (!T.row || !T.rowWrap || !T.rowBold || !T.num || !T.ui || !T.uiBold || !T.uiRight || !T.wrap || !T.icon || !T.iconMid ||
         !T.iconSmall)
         return false;
-    for (auto* f : {T.icon.get(), T.iconMid.get(), T.iconSmall.get(), T.ui.get(), T.uiBold.get(), T.uiRight.get()})
+    for (auto* f : {T.icon.get(), T.iconMid.get(), T.iconSmall.get(), T.ui.get(), T.uiBold.get(), T.uiRight.get(), T.rowBold.get()})
         f->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
-    // One uniform line height so rows, numbers and the scroll math agree.
-    Com<IDWriteTextLayout> probe;
-    F.dw->CreateTextLayout(L"Agy", 3, T.row.get(), 1000, 1000, probe.put());
-    DWRITE_LINE_METRICS lm{};
-    UINT32 n = 0;
-    float baseline = size * 0.8f;
-    if (probe && SUCCEEDED(probe->GetLineMetrics(&lm, 1, &n)) && n) {
-        T.lineH = std::ceil(lm.height);
-        baseline = lm.baseline;
-    } else {
-        T.lineH = std::ceil(size * 1.35f);
-    }
-    for (auto* f : {T.row.get(), T.rowWrap.get(), T.num.get(), T.wrap.get()})
-        f->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, T.lineH, baseline);
+    // One uniform line height so rows, numbers and the scroll math agree. Clip rows use
+    // their own (zoomed) line height; the rest of the UI keeps the plain one.
+    auto lineOf = [&](IDWriteTextFormat* f, float sz, float& lineH, float& baseline) {
+        Com<IDWriteTextLayout> probe;
+        F.dw->CreateTextLayout(L"Agy", 3, f, 1000, 1000, probe.put());
+        DWRITE_LINE_METRICS lm{};
+        UINT32 n = 0;
+        if (probe && SUCCEEDED(probe->GetLineMetrics(&lm, 1, &n)) && n) {
+            lineH = std::ceil(lm.height);
+            baseline = lm.baseline;
+        } else {
+            lineH = std::ceil(sz * 1.35f);
+            baseline = sz * 0.8f;
+        }
+    };
+    float baseline = 0, rowBaseline = 0;
+    lineOf(T.wrap.get(), size, T.lineH, baseline);
+    lineOf(T.row.get(), rsize, T.rowLineH, rowBaseline);
+    T.wrap->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, T.lineH, baseline);
+    for (auto* f : {T.row.get(), T.rowWrap.get(), T.num.get()})
+        f->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, T.rowLineH, rowBaseline);
     Com<IDWriteTextLayout> numProbe;
     F.dw->CreateTextLayout(L"10", 2, T.num.get(), 1000, 1000, numProbe.put());
     DWRITE_TEXT_METRICS tm{};
@@ -4330,7 +4350,7 @@ Layout MakeLayout(float w, float h) {
     l.search = {l.folder.right + 6, l.dock.top + 5, l.menu.left - 6, l.dock.bottom - 5};
     l.close = {w - kCaptionW + 1, 7, w - 4, 29};
     l.chevron = {w - kCaptionW + 1, 33, w - 4, 55};
-    l.rowH = kRowPadY * 2 + g_set.linesPerRow * T.lineH;
+    l.rowH = kRowPadY * 2 + g_set.linesPerRow * T.rowLineH;
     l.stride = l.rowH + kRowGap;
     l.gutter = g_set.showPositions ? T.numW + 12 : 10;
     l.viewH = std::max(0.0f, l.list.bottom - l.list.top);
@@ -4358,7 +4378,7 @@ D2D1_RECT_F RowRect(const Layout& l, int i) {
 // The pin button sits at the right end of a row's first line.
 D2D1_RECT_F PinRect(const D2D1_RECT_F& row) {
     float half = std::min(kPinW / 2, (row.bottom - row.top) / 2 - 1);
-    float cy = std::min(row.top + kRowPadY + T.lineH / 2, row.bottom - half - 1);
+    float cy = std::min(row.top + kRowPadY + T.rowLineH / 2, row.bottom - half - 1);
     cy = std::max(cy, row.top + half + 1);
     return {row.right - 4 - 2 * half, cy - half, row.right - 4, cy + half};
 }
@@ -4516,7 +4536,7 @@ void PaintRow(Ctx& c, const Layout& l, int i, const ClipRow& r, D2D1_RECT_F rect
     float top = rect.top + kRowPadY;
     if (g_set.showPositions && i < 10) {
         std::wstring num = std::to_wstring(i + 1);
-        c.Text(num, T.num.get(), {rect.left, top, rect.left + l.gutter - 6, top + T.lineH},
+        c.Text(num, T.num.get(), {rect.left, top, rect.left + l.gutter - 6, top + T.rowLineH},
                selected ? mocha::subtext1 : mocha::overlay1);
     }
 
@@ -4538,7 +4558,7 @@ void PaintRow(Ctx& c, const Layout& l, int i, const ClipRow& r, D2D1_RECT_F rect
     // Marks left of the pin button: never delete, has a shortcut.
     float right = pin.left - 2;
     auto mark = [&](wchar_t glyph, UINT32 color) {
-        c.Glyph(glyph, {right - kMarkW, top, right, top + T.lineH}, color, true);
+        c.Glyph(glyph, {right - kMarkW, top, right, top + T.rowLineH}, color, true);
         right -= kMarkW + 2;
     };
     if (r.neverDelete) mark(kGlyphLock, mocha::peach);
@@ -4549,10 +4569,10 @@ void PaintRow(Ctx& c, const Layout& l, int i, const ClipRow& r, D2D1_RECT_F rect
     D2D1_RECT_F textRect{x, top, right - 4, textBottom};
     switch (r.kind) {
         case ClipKind::Group: {
-            c.Glyph(kGlyphFolder, {x - 1, top, x + 17, top + T.lineH}, (UINT32)0, false, 0);
-            c.rt->DrawText(&kGlyphFolder, 1, T.icon.get(), {x - 1, top, x + 17, top + T.lineH},
+            c.Glyph(kGlyphFolder, {x - 1, top, x + 17, top + T.rowLineH}, (UINT32)0, false, 0);
+            c.rt->DrawText(&kGlyphFolder, 1, T.icon.get(), {x - 1, top, x + 17, top + T.rowLineH},
                            c.BRef(g_set.accentColor), D2D1_DRAW_TEXT_OPTIONS_NONE);
-            c.Text(r.text, T.uiBold.get(), {x + 22, top, textRect.right, top + T.lineH}, mocha::text);
+            c.Text(r.text, T.rowBold.get(), {x + 22, top, textRect.right, top + T.rowLineH}, mocha::text);
             break;
         }
         case ClipKind::Image: {
@@ -4578,11 +4598,11 @@ void PaintRow(Ctx& c, const Layout& l, int i, const ClipRow& r, D2D1_RECT_F rect
             }
             std::wstring label = L"Image";
             if (t && t->w) label += L"  " + std::to_wstring(t->w) + L" \u00D7 " + std::to_wstring(t->h);
-            c.Text(label, T.row.get(), {labelX, top, textRect.right, top + T.lineH}, mocha::subtext0);
+            c.Text(label, T.row.get(), {labelX, top, textRect.right, top + T.rowLineH}, mocha::subtext0);
             break;
         }
         case ClipKind::Files: {
-            c.Glyph(kGlyphPage, {x - 1, top, x + 15, top + T.lineH}, mocha::subtext0, true);
+            c.Glyph(kGlyphPage, {x - 1, top, x + 15, top + T.rowLineH}, mocha::subtext0, true);
             c.Text(RowLines(r.text, g_set.linesPerRow, true), T.row.get(), {x + 18, top, textRect.right, textBottom},
                    mocha::text);
             break;
@@ -4591,6 +4611,20 @@ void PaintRow(Ctx& c, const Layout& l, int i, const ClipRow& r, D2D1_RECT_F rect
             c.Text(RowLines(r.text, g_set.linesPerRow, false), T.rowWrap.get(), textRect, mocha::text);
             break;
     }
+}
+
+void DrawLine(Ctx& c, const std::wstring& s, IDWriteTextFormat* f, const D2D1_RECT_F& r, UINT32 color, float a = 1,
+              bool centre = false);
+
+// The Delete and Cancel pills inside the search field while a delete waits for confirmation.
+void ConfirmPills(const Layout& l, D2D1_RECT_F& yes, D2D1_RECT_F& no) {
+    const D2D1_RECT_F& s = l.search;
+    float h = std::min(28.0f, s.bottom - s.top - 8), top = std::round((s.top + s.bottom - h) / 2);
+    float wy = std::round(MeasureText(L"Delete", T.uiBold.get()) + 28);
+    float wn = std::round(MeasureText(L"Cancel", T.uiBold.get()) + 28);
+    float right = s.right - (s.bottom - s.top - h) / 2;
+    no = {right - wn, top, right, top + h};
+    yes = {no.left - 6 - wy, top, no.left - 6, top + h};
 }
 
 void PaintDock(Ctx& c, const Layout& l, bool offscreen) {
@@ -4608,7 +4642,6 @@ void PaintDock(Ctx& c, const Layout& l, bool offscreen) {
     float sr = (s.bottom - s.top) / 2;
     bool confirm = L.mode == DockMode::ConfirmDelete;
     (void)sr;
-    (void)confirm;
     D2D1_RECT_F inner{s.left + 12, s.top, s.right - 12, s.bottom};
 
     std::wstring hint;
@@ -4620,7 +4653,6 @@ void PaintDock(Ctx& c, const Layout& l, bool offscreen) {
         case DockMode::ConfirmDelete:
             value = L.confirmCount == 1 ? L"Delete this clip?" : L"Delete " + std::to_wstring(L.confirmCount) + L" clips?";
             valueColor = mocha::red;
-            hint = L"Enter yes, Esc no";
             break;
         case DockMode::NewGroup:
             value = L.nameText;
@@ -4635,12 +4667,26 @@ void PaintDock(Ctx& c, const Layout& l, bool offscreen) {
             if (!L.search.empty()) hint = std::to_wstring(L.count) + (L.count == 1 ? L" clip" : L" clips");
             break;
     }
+    if (confirm) {
+        // Prompt on the left, ink-centred like the title; the two choices on the right. Enter and
+        // Y still confirm, Esc and N still cancel.
+        D2D1_RECT_F yes, no;
+        ConfirmPills(l, yes, no);
+        float pr = (yes.bottom - yes.top) / 2;
+        bool hy = L.hoverHit == Hit::ConfirmYes, hn = L.hoverHit == Hit::ConfirmNo;
+        c.rt->FillRoundedRectangle({yes, pr, pr}, c.B(mocha::red, hy ? 1.0f : 0.85f));
+        DrawLine(c, L"Delete", T.uiBold.get(), yes, mocha::crust, 1, true);
+        c.rt->FillRoundedRectangle({no, pr, pr}, c.B(mocha::surface0, hn ? 0.9f : 0.6f));
+        c.Glow(no, pr, hn ? 0.14f : 0, hn ? 0.85f : 0.30f);
+        DrawLine(c, L"Cancel", T.uiBold.get(), no, mocha::text, 1, true);
+        DrawLine(c, value, T.ui.get(), {inner.left + 4, s.top, yes.left - 8, s.bottom}, valueColor);
+        return;
+    }
     float hintW = hint.empty() ? 0 : c.TextWidth(hint, T.ui.get()) + 10;
     if (hintW > (inner.right - inner.left) * 0.5f) hintW = 0;
     if (hintW > 0) c.Text(hint, T.ui.get(), {inner.right - hintW + 10, s.top, inner.right, s.bottom}, mocha::overlay1);
     D2D1_RECT_F field{inner.left, inner.top, inner.right - hintW, inner.bottom};
     // Text caret like any edit box: blinks at the system rate while the list has focus.
-    if (caret && L.mode == DockMode::ConfirmDelete) caret = false;
     if (caret && !offscreen) caret = L.focused && L.caretOn;
     float ch = std::min(18.0f, s.bottom - s.top - 6), cy = std::round((s.top + s.bottom - ch) / 2);
     auto caretBar = [&](float x) { c.rt->FillRectangle({x, cy, x + 1.5f, cy + ch}, c.B(mocha::text)); };
@@ -4768,7 +4814,15 @@ HitResult HitTest(const Layout& l, float x, float y) {
     else if (L.q.groupId != -1 && In(l.back, x, y)) h.what = Hit::Back;
     else if (In(l.folder, x, y)) h.what = Hit::Folder;
     else if (In(l.menu, x, y)) h.what = Hit::Menu;
-    else if (In(l.search, x, y)) h.what = Hit::Search;
+    else if (In(l.search, x, y)) {
+        h.what = Hit::Search;
+        if (L.mode == DockMode::ConfirmDelete) {
+            D2D1_RECT_F yes, no;
+            ConfirmPills(l, yes, no);
+            if (In(yes, x, y)) h.what = Hit::ConfirmYes;
+            else if (In(no, x, y)) h.what = Hit::ConfirmNo;
+        }
+    }
     else if (In({l.scroll.left - 2, l.scroll.top, l.scroll.right + 1, l.scroll.bottom}, x, y)) {
         float t, th;
         if (ThumbRect(l, t, th)) h.what = Hit::Scroll;
@@ -6074,8 +6128,12 @@ void OnMouse(UINT msg, WPARAM wp, LPARAM lp) {
             return;
         }
         case WM_LBUTTONDOWN:
-            if (L.mode == DockMode::ConfirmDelete && h.what != Hit::Search) CancelMode();
+            if (L.mode == DockMode::ConfirmDelete && h.what != Hit::Search && h.what != Hit::ConfirmYes &&
+                h.what != Hit::ConfirmNo)
+                CancelMode();
             switch (h.what) {
+                case Hit::ConfirmYes: ConfirmDelete(); break;
+                case Hit::ConfirmNo: CancelMode(); break;
                 case Hit::Pin: {
                     const ClipRow* r = RowAt(h.row);
                     if (r) {
@@ -6350,6 +6408,20 @@ LRESULT CALLBACK ListProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (L.dragPending || L.dragActive) EndDrag();
             return 0;
         case WM_MOUSEWHEEL: {
+            if (GET_KEYSTATE_WPARAM(wp) & MK_CONTROL) {
+                int zoom = std::clamp(ListZoom() + (GET_WHEEL_DELTA_WPARAM(wp) > 0 ? kZoomStep : -kZoomStep),
+                                      kZoomMin, kZoomMax);
+                if (zoom == ListZoom()) return 0;
+                // Keep the clip at the top of the view where it is.
+                float at = L.scrollTarget / std::max(1.0f, CurrentLayout().stride);
+                g_listZoom = zoom;
+                SetState(L"ListZoom", zoom);
+                ResetFonts();
+                L.scrollY = L.scrollTarget = 0;
+                ScrollTo(at * CurrentLayout().stride, false);
+                Invalidate();
+                return 0;
+            }
             Layout l = CurrentLayout();
             float step = std::max(l.stride, 72.0f);
             ScrollTo(L.scrollTarget - GET_WHEEL_DELTA_WPARAM(wp) / 120.0f * step, true);
@@ -6409,8 +6481,7 @@ LRESULT CALLBACK ListProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-LRESULT CALLBACK EditorProc(HWND, UINT, WPARAM, LPARAM);
-LRESULT CALLBACK PropsProc(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK FormProc(HWND, UINT, WPARAM, LPARAM);
 
 bool g_classesRegistered;
 
@@ -6431,11 +6502,11 @@ void RegisterClasses() {
     RegisterClassExW(&wc);
     wc.hbrBackground = CreateSolidBrush(RefFromRgb(mocha::base));
     wc.style = CS_DBLCLKS;  // double-click selects a word in the editor's text box
-    wc.lpfnWndProc = EditorProc;
+    wc.lpfnWndProc = FormProc;
     wc.lpszClassName = kEditorClass;
     RegisterClassExW(&wc);
-    wc.style = 0;
-    wc.lpfnWndProc = PropsProc;
+    wc.style = CS_DBLCLKS;
+    wc.lpfnWndProc = FormProc;
     wc.lpszClassName = kPropsClass;
     RegisterClassExW(&wc);
     g_classesRegistered = true;
@@ -6552,169 +6623,51 @@ void ResetForOpen() {
 }
 
 // ---------------------------------------------------------------------------
-// Helper windows: shared bits (GDI controls, dark colors, owner-drawn buttons)
+// Helper windows (clip editor, properties)
+// Both are drawn in Direct2D on the acrylic, like the list: own title bar, text boxes, buttons,
+// checkboxes and the group picker. Child EDIT and BUTTON controls can't sit on the blur: GDI
+// writes zero alpha, so they showed as flat stock boxes.
 // ---------------------------------------------------------------------------
-HBRUSH g_mantleBrush;
-HBRUSH MantleBrush() {
-    if (!g_mantleBrush) g_mantleBrush = CreateSolidBrush(RefFromRgb(mocha::mantle));
-    return g_mantleBrush;
-}
-
-HFONT MakeHFont(UINT dpi, float pt, int weight, const std::wstring& family) {
-    return CreateFontW(-MulDiv((int)std::lround(pt * 10), (int)dpi, 720), 0, 0, 0, weight, FALSE, FALSE, FALSE,
-                       DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH,
-                       family.c_str());
-}
-
-constexpr LONG_PTR kBtnPrimary = 1, kBtnCheck = 2, kBtnChecked = 4;
-
-LRESULT CALLBACK ButtonHoverProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR) {
-    if (msg == WM_MOUSEMOVE) {
-        if (!GetPropW(hwnd, L"ScmHot")) {
-            SetPropW(hwnd, L"ScmHot", (HANDLE)1);
-            TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd, 0}; TrackMouseEvent(&track);
-            InvalidateRect(hwnd, nullptr, FALSE);
-        }
-    } else if (msg == WM_MOUSELEAVE) {
-        RemovePropW(hwnd, L"ScmHot");
-        InvalidateRect(hwnd, nullptr, FALSE);
-    } else if (msg == WM_NCDESTROY) {
-        RemovePropW(hwnd, L"ScmHot");
-        RemoveWindowSubclass(hwnd, ButtonHoverProc, 2);
+std::wstring ToCrLf(const std::wstring& s) {
+    std::wstring out;
+    for (size_t i = 0; i < s.size(); i++) {
+        if (s[i] == L'\n' && (i == 0 || s[i - 1] != L'\r')) out += L'\r';
+        out += s[i];
     }
-    return DefSubclassProc(hwnd, msg, wp, lp);
+    return out;
 }
 
-HWND MakeButton(HWND parent, int id, PCWSTR text, LONG_PTR kind) {
-    HWND b = CreateWindowExW(0, L"BUTTON", text, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0, 0, 10, 10,
-                             parent, (HMENU)(INT_PTR)id, g_hInstance, nullptr);
-    SetWindowLongPtrW(b, GWLP_USERDATA, kind);
-    SetWindowSubclass(b, ButtonHoverProc, 2, 0);
-    return b;
+std::wstring FromCrLf(const std::wstring& s) {
+    std::wstring out;
+    for (wchar_t ch : s)
+        if (ch != L'\r') out += ch;
+    return out;
 }
 
-bool IsChecked(HWND b) { return (GetWindowLongPtrW(b, GWLP_USERDATA) & kBtnChecked) != 0; }
-void SetChecked(HWND b, bool on) {
-    LONG_PTR v = GetWindowLongPtrW(b, GWLP_USERDATA);
-    SetWindowLongPtrW(b, GWLP_USERDATA, on ? v | kBtnChecked : v & ~kBtnChecked);
-    InvalidateRect(b, nullptr, TRUE);
-}
+constexpr float kCapH = 34, kCapBtnW = 46;
 
-void DrawOwnerButton(const DRAWITEMSTRUCT* d) {
-    LONG_PTR kind = GetWindowLongPtrW(d->hwndItem, GWLP_USERDATA);
-    HDC dc = d->hDC;
-    RECT r = d->rcItem;
-    UINT dpi = GetDpiForWindow(d->hwndItem);
-    auto S = [&](int v) { return MulDiv(v, (int)dpi, 96); };
-    HBRUSH bg = CreateSolidBrush(RefFromRgb(mocha::base));
-    FillRect(dc, &r, bg);
-    DeleteObject(bg);
-    WCHAR text[128];
-    GetWindowTextW(d->hwndItem, text, 128);
-    SetBkMode(dc, TRANSPARENT);
-    bool focus = (d->itemState & ODS_FOCUS) != 0, pressed = (d->itemState & ODS_SELECTED) != 0;
-    if (kind & kBtnCheck) {
-        int box = S(16), cy = (r.top + r.bottom) / 2;
-        RECT b{r.left + S(1), cy - box / 2, r.left + S(1) + box, cy + box / 2};
-        bool on = (kind & kBtnChecked) != 0;
-        HBRUSH fill = CreateSolidBrush(on ? g_set.accentColor : RefFromRgb(mocha::mantle));
-        HPEN pen = CreatePen(PS_SOLID, 1, on ? g_set.accentColor : focus ? g_set.accentColor : RefFromRgb(mocha::surface2));
-        HGDIOBJ ob = SelectObject(dc, fill), op = SelectObject(dc, pen);
-        RoundRect(dc, b.left, b.top, b.right, b.bottom, S(6), S(6));
-        if (on) {
-            HPEN tick = CreatePen(PS_SOLID, std::max(2, S(2)), RefFromRgb(mocha::crust));
-            SelectObject(dc, tick);
-            POINT pts[3] = {{b.left + box / 4, cy}, {b.left + box * 5 / 12, cy + box / 5}, {b.right - box / 4, cy - box / 5}};
-            Polyline(dc, pts, 3);
-            SelectObject(dc, pen);
-            DeleteObject(tick);
-        }
-        SelectObject(dc, ob);
-        SelectObject(dc, op);
-        DeleteObject(fill);
-        DeleteObject(pen);
-        SetTextColor(dc, RefFromRgb(mocha::text));
-        RECT tr{b.right + S(8), r.top, r.right, r.bottom};
-        DrawTextW(dc, text, -1, &tr, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
-        return;
-    }
-    bool primary = (kind & kBtnPrimary) != 0;
-    COLORREF face = primary ? (pressed ? g_set.accentColor2 : g_set.accentColor)
-                            : RefFromRgb(pressed ? mocha::surface1 : mocha::surface0);
-    HBRUSH fill = CreateSolidBrush(face);
-    HPEN pen = CreatePen(PS_SOLID, 1, focus ? g_set.accentColor : face);
-    HGDIOBJ ob = SelectObject(dc, fill), op = SelectObject(dc, pen);
-    RoundRect(dc, r.left, r.top, r.right, r.bottom, S(12), S(12));
-    SelectObject(dc, ob);
-    SelectObject(dc, op);
-    DeleteObject(fill);
-    DeleteObject(pen);
-    Com<ID2D1DCRenderTarget> target;
-    auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
-        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE), (float)dpi, (float)dpi);
-    if (EnsureFactories() && SUCCEEDED(F.d2d->CreateDCRenderTarget(&props, target.put())) &&
-        SUCCEEDED(target->BindDC(dc, &r))) {
-        target->BeginDraw();
-        Ctx c(target.get());
-        float scale = dpi / 96.0f;
-        D2D1_RECT_F box{0, 0, (r.right - r.left) / scale, (r.bottom - r.top) / scale};
-        bool hot = GetPropW(d->hwndItem, L"ScmHot") != nullptr || focus || pressed;
-        target->Clear(D2DColor(mocha::base));
-        target->FillRoundedRectangle({box, 6, 6}, c.B(mocha::surface0));
-        c.Glow(box, 6, primary ? (hot ? 1.0f : 0.85f) : hot ? 0.20f : 0, hot ? 1.0f : 0.25f, 1.5f);
-        target->EndDraw();
-    }
-    SetTextColor(dc, primary ? RefFromRgb(mocha::crust) : RefFromRgb(mocha::text));
-    DrawTextW(dc, text, -1, &r, DT_SINGLELINE | DT_VCENTER | DT_CENTER);
-}
-
-// Shared WM_CTLCOLOR* handling for the helper windows.
-LRESULT CtlColor(UINT msg, WPARAM wp, LPARAM lp, HBRUSH baseBrush) {
-    HDC dc = (HDC)wp;
-    WCHAR cls[16]{};
-    GetClassNameW((HWND)lp, cls, 16);
-    bool field = msg == WM_CTLCOLOREDIT || msg == WM_CTLCOLORLISTBOX || _wcsicmp(cls, L"Edit") == 0;
-    SetTextColor(dc, RefFromRgb(field ? mocha::text : mocha::subtext0));
-    SetBkColor(dc, RefFromRgb(field ? mocha::mantle : mocha::base));
-    return (LRESULT)(field ? MantleBrush() : baseBrush);
-}
-
-LRESULT CALLBACK FieldSubclass(HWND h, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR) {
-    if (msg == WM_KEYDOWN && GetKeyState(VK_CONTROL) < 0) {
-        if (wp == 'S') {
-            PostMessageW(GetAncestor(h, GA_ROOT), WM_COMMAND, IDOK, 0);
-            return 0;
-        }
-        if (wp == 'A') {
-            SendMessageW(h, EM_SETSEL, 0, -1);
-            return 0;
-        }
-    }
-    if (msg == WM_KEYDOWN && wp == VK_ESCAPE) {
-        PostMessageW(GetAncestor(h, GA_ROOT), WM_COMMAND, IDCANCEL, 0);
-        return 0;
-    }
-    if (msg == WM_CHAR && (wp == 1 || wp == 19)) return 0;  // Ctrl+A / Ctrl+S: no beep
-    return DefSubclassProc(h, msg, wp, lp);
-}
-
-HWND MakeField(HWND parent, int id, DWORD style) {
-    HWND e = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | style, 0, 0, 10, 10, parent,
-                             (HMENU)(INT_PTR)id, g_hInstance, nullptr);
-    SetWindowTheme(e, L"DarkMode_Explorer", nullptr);
-    SetWindowSubclass(e, FieldSubclass, 1, 0);
-    return e;
-}
-
-HWND MakeLabel(HWND parent, PCWSTR text) {
-    return CreateWindowExW(0, L"STATIC", text, WS_CHILD | WS_VISIBLE, 0, 0, 10, 10, parent, nullptr, g_hInstance,
-                           nullptr);
-}
-
-void SetFontAll(HWND parent, HFONT font) {
-    for (HWND c = GetWindow(parent, GW_CHILD); c; c = GetWindow(c, GW_HWNDNEXT))
-        SendMessageW(c, WM_SETFONT, (WPARAM)font, TRUE);
-}
+// One Direct2D text box. Several can share a window: hwnd is the owning window.
+struct TextBox {
+    HWND hwnd = nullptr;
+    D2D1_RECT_F box{};  // DIPs, client coordinates
+    float padX = 12, padY = 10;
+    bool multiline = true, readOnly = false, tabs = false;
+    std::wstring placeholder;
+    std::wstring text;  // LF line ends while editing
+    size_t caret = 0, anchor = 0;
+    float wantX = -1;
+    Com<IDWriteTextFormat> fmt;
+    Com<IDWriteTextLayout> layout;
+    bool dirty = true;
+    float scrollY = 0, scrollTarget = 0, contentH = 0, dragOffset = 0;
+    bool focused = false, caretOn = true, selecting = false, dragThumb = false, scrollHot = false;
+    struct Snap {
+        std::wstring text;
+        size_t caret, anchor;
+    };
+    std::vector<Snap> undo, redo;
+    int lastEdit = 0;  // 1 typing, 2 deleting: a run of either is one undo step
+};
 
 // Size and center a helper window on the monitor under the cursor.
 void PlaceHelper(HWND hwnd, PCWSTR stateName, int defW, int defH) {
@@ -6749,105 +6702,69 @@ void SaveHelperSize(HWND hwnd, PCWSTR stateName) {
     SetState(StateKey(stateName, L"CY").c_str(), r.bottom - r.top);
 }
 
-// ---------------------------------------------------------------------------
-// Clip editor
-// ---------------------------------------------------------------------------
-struct EditorState {
-    HWND hwnd = nullptr, save = nullptr, cancel = nullptr;
-    Surface surf;
-    HFONT uiFont = nullptr;
-    int64_t id = 0;
-    // The text box is drawn in Direct2D on the window itself, so the acrylic shows through it the
-    // same way it does under the title bar. A child EDIT can't do that: GDI writes zero alpha.
-    std::wstring text;  // LF line ends while editing
-    bool lfOnly = false;  // the clip used bare LF; it is saved back that way, anything else as CRLF
-    size_t caret = 0, anchor = 0;
-    float wantX = -1;
-    Com<IDWriteTextFormat> fmt;
-    Com<IDWriteTextLayout> layout;
-    bool dirty = true;
-    float scrollY = 0, scrollTarget = 0, contentH = 0, dragOffset = 0;
-    bool focused = false, caretOn = true, selecting = false, dragThumb = false, scrollHot = false, tracking = false;
-    struct Snap {
-        std::wstring text;
-        size_t caret, anchor;
-    };
-    std::vector<Snap> undo, redo;
-    int lastEdit = 0;  // 1 typing, 2 deleting: a run of either is one undo step
-    // Own title bar on the same blur as the body (the system one is a darker solid band).
-    int capHot = -1, capDown = -1;  // 0 minimize, 1 maximize, 2 close
-    bool active = true;
-} E;
-
-constexpr float kEdCapH = 34, kEdCapBtnW = 46;
-
-std::wstring ToCrLf(const std::wstring& s);
-std::wstring FromCrLf(const std::wstring& s);
-
 struct EditorGeometry {
     D2D1_RECT_F box, view, scroll;
 };
 
 // All in DIPs. box: the bordered field; view: where text lays out; scroll: the scrollbar lane.
-EditorGeometry EditorGeo() {
-    RECT rc{};
-    GetClientRect(E.hwnd, &rc);
-    float s = E.surf.Scale(), w = rc.right / s, h = rc.bottom / s;
-    float bottom = std::max(h - 16 - 34 - 16, 16 + 48.0f);
+EditorGeometry EditorGeo(TextBox& tb) {
     EditorGeometry g;
-    g.box = {16, kEdCapH + 8, std::max(w - 16, 16 + 80.0f), std::max(bottom, kEdCapH + 8 + 48)};
-    g.view = {g.box.left + 12, g.box.top + 10, g.box.right - 22, g.box.bottom - 10};
+    g.box = tb.box;
+    // Multi-line boxes keep a lane on the right for the scrollbar.
+    g.view = {g.box.left + tb.padX, g.box.top + tb.padY, g.box.right - (tb.multiline ? 22 : tb.padX),
+              std::max(g.box.top + tb.padY + 1, g.box.bottom - tb.padY)};
     g.scroll = {g.box.right - 15, g.box.top + 6, g.box.right - 5, g.box.bottom - 6};
     return g;
 }
 
-float EdViewH() {
-    auto g = EditorGeo();
+float EdViewH(TextBox& tb) {
+    auto g = EditorGeo(tb);
     return std::max(1.0f, g.view.bottom - g.view.top);
 }
 
-IDWriteTextLayout* EdLayout() {
-    if (!E.dirty && E.layout) return E.layout.get();
-    if (!E.fmt) return nullptr;
-    auto g = EditorGeo();
+IDWriteTextLayout* EdLayout(TextBox& tb) {
+    if (!tb.dirty && tb.layout) return tb.layout.get();
+    if (!tb.fmt) return nullptr;
+    auto g = EditorGeo(tb);
     float w = std::max(1.0f, g.view.right - g.view.left);
-    if (FAILED(F.dw->CreateTextLayout(E.text.c_str(), (UINT32)E.text.size(), E.fmt.get(), w, 1e6f, E.layout.put())))
+    if (FAILED(F.dw->CreateTextLayout(tb.text.c_str(), (UINT32)tb.text.size(), tb.fmt.get(), w, 1e6f,
+                                      tb.layout.put())))
         return nullptr;
     DWRITE_TEXT_METRICS m{};
-    E.layout->GetMetrics(&m);
-    E.contentH = m.height;
-    E.dirty = false;
-    return E.layout.get();
+    tb.layout->GetMetrics(&m);
+    tb.contentH = m.height;
+    tb.dirty = false;
+    return tb.layout.get();
 }
 
 // Text index under a point in layout coordinates.
-size_t EdHit(float x, float y) {
-    auto* lay = EdLayout();
+size_t EdHit(TextBox& tb, float x, float y) {
+    auto* lay = EdLayout(tb);
     if (!lay) return 0;
     BOOL trailing = FALSE, inside = FALSE;
     DWRITE_HIT_TEST_METRICS m{};
     lay->HitTestPoint(x, y, &trailing, &inside, &m);
     size_t i = m.textPosition;
     // Past the end of a line the hit lands on its line break: stay before it, not on the next line.
-    bool lineBreak = i < E.text.size() && E.text[i] == L'\n';
+    bool lineBreak = i < tb.text.size() && tb.text[i] == L'\n';
     if (trailing && !lineBreak) i += m.length;
-    return std::min(i, E.text.size());
+    return std::min(i, tb.text.size());
 }
 
-D2D1_POINT_2F EdPos(size_t i, float* lineH = nullptr) {
-    auto* lay = EdLayout();
+D2D1_POINT_2F EdPos(TextBox& tb, size_t i, float* lineH = nullptr) {
+    auto* lay = EdLayout(tb);
     if (!lay) return {0, 0};
     FLOAT x = 0, y = 0;
     DWRITE_HIT_TEST_METRICS m{};
-    lay->HitTestTextPosition((UINT32)std::min(i, E.text.size()), FALSE, &x, &y, &m);
+    lay->HitTestTextPosition((UINT32)std::min(i, tb.text.size()), FALSE, &x, &y, &m);
     if (lineH) *lineH = m.height > 0 ? m.height : g_set.fontSize * 96.0f / 72.0f * 1.33f;
     return {x, y};
 }
 
-void EdLineBounds(size_t i, size_t& start, size_t& end) {
+void EdLineBounds(TextBox& tb, size_t i, size_t& start, size_t& end) {
     start = 0;
-    end = E.text.size();
-    auto* lay = EdLayout();
+    end = tb.text.size();
+    auto* lay = EdLayout(tb);
     if (!lay) return;
     UINT32 n = 0;
     lay->GetLineMetrics(nullptr, 0, &n);
@@ -6865,15 +6782,15 @@ void EdLineBounds(size_t i, size_t& start, size_t& end) {
     }
 }
 
-size_t EdNext(size_t i) {
-    size_t n = E.text.size();
+size_t EdNext(TextBox& tb, size_t i) {
+    size_t n = tb.text.size();
     if (i >= n) return n;
-    if (IS_HIGH_SURROGATE(E.text[i]) && i + 1 < n && IS_LOW_SURROGATE(E.text[i + 1])) return i + 2;
+    if (IS_HIGH_SURROGATE(tb.text[i]) && i + 1 < n && IS_LOW_SURROGATE(tb.text[i + 1])) return i + 2;
     return i + 1;
 }
-size_t EdPrev(size_t i) {
+size_t EdPrev(TextBox& tb, size_t i) {
     if (i == 0) return 0;
-    if (i >= 2 && IS_LOW_SURROGATE(E.text[i - 1]) && IS_HIGH_SURROGATE(E.text[i - 2])) return i - 2;
+    if (i >= 2 && IS_LOW_SURROGATE(tb.text[i - 1]) && IS_HIGH_SURROGATE(tb.text[i - 2])) return i - 2;
     return i - 1;
 }
 int EdClass(wchar_t ch) {
@@ -6882,111 +6799,113 @@ int EdClass(wchar_t ch) {
     if (iswalnum(ch) || ch == L'_') return 1;
     return 2;
 }
-size_t EdWordRight(size_t i) {
-    size_t n = E.text.size();
+size_t EdWordRight(TextBox& tb, size_t i) {
+    size_t n = tb.text.size();
     if (i >= n) return n;
-    int c = EdClass(E.text[i]);
+    int c = EdClass(tb.text[i]);
     if (c == 3) return i + 1;
-    while (i < n && EdClass(E.text[i]) == c) i++;
-    while (i < n && EdClass(E.text[i]) == 0) i++;
+    while (i < n && EdClass(tb.text[i]) == c) i++;
+    while (i < n && EdClass(tb.text[i]) == 0) i++;
     return i;
 }
-size_t EdWordLeft(size_t i) {
-    while (i > 0 && EdClass(E.text[i - 1]) == 0) i--;
+size_t EdWordLeft(TextBox& tb, size_t i) {
+    while (i > 0 && EdClass(tb.text[i - 1]) == 0) i--;
     if (i == 0) return 0;
-    int c = EdClass(E.text[i - 1]);
+    int c = EdClass(tb.text[i - 1]);
     if (c == 3) return i - 1;
-    while (i > 0 && EdClass(E.text[i - 1]) == c) i--;
+    while (i > 0 && EdClass(tb.text[i - 1]) == c) i--;
     return i;
 }
 
-void EdCaretTimer() {
+void EdCaretTimer(TextBox& tb) {
     UINT blink = GetCaretBlinkTime();
-    E.caretOn = true;
-    if (E.focused && blink && blink != INFINITE) SetTimer(E.hwnd, kTimerCaret, blink, nullptr);
-    else KillTimer(E.hwnd, kTimerCaret);
+    tb.caretOn = true;
+    if (tb.focused && blink && blink != INFINITE) SetTimer(tb.hwnd, kTimerCaret, blink, nullptr);
+    else KillTimer(tb.hwnd, kTimerCaret);
 }
 
-void EdScrollTo(float target, bool instant) {
-    EdLayout();
-    float maxS = std::max(0.0f, E.contentH - EdViewH());
-    E.scrollTarget = std::clamp(target, 0.0f, maxS);
+void EdScrollTo(TextBox& tb, float target, bool instant) {
+    EdLayout(tb);
+    float maxS = std::max(0.0f, tb.contentH - EdViewH(tb));
+    tb.scrollTarget = std::clamp(target, 0.0f, maxS);
     if (instant) {
-        E.scrollY = E.scrollTarget;
-        KillTimer(E.hwnd, kTimerScroll);
-    } else if (std::fabs(E.scrollTarget - E.scrollY) >= 0.5f) {
-        SetTimer(E.hwnd, kTimerScroll, 15, nullptr);
+        tb.scrollY = tb.scrollTarget;
+        KillTimer(tb.hwnd, kTimerScroll);
+    } else if (std::fabs(tb.scrollTarget - tb.scrollY) >= 0.5f) {
+        SetTimer(tb.hwnd, kTimerScroll, 15, nullptr);
     }
-    E.scrollY = std::clamp(E.scrollY, 0.0f, maxS);
-    InvalidateRect(E.hwnd, nullptr, FALSE);
+    tb.scrollY = std::clamp(tb.scrollY, 0.0f, maxS);
+    InvalidateRect(tb.hwnd, nullptr, FALSE);
 }
 
-void EdReveal() {
+void EdReveal(TextBox& tb) {
     float lh = 0;
-    auto p = EdPos(E.caret, &lh);
-    float vh = EdViewH(), t = E.scrollTarget;
+    auto p = EdPos(tb, tb.caret, &lh);
+    float vh = EdViewH(tb), t = tb.scrollTarget;
     if (p.y < t) t = p.y;
     else if (p.y + lh > t + vh) t = p.y + lh - vh;
-    if (t != E.scrollTarget) EdScrollTo(t, false);
+    if (t != tb.scrollTarget) EdScrollTo(tb, t, false);
 }
 
-void EdChanged() {
-    E.dirty = true;
-    E.wantX = -1;
-    EdCaretTimer();
-    EdScrollTo(E.scrollTarget, false);  // the text may have got shorter
-    EdReveal();
-    InvalidateRect(E.hwnd, nullptr, FALSE);
+void EdChanged(TextBox& tb) {
+    tb.dirty = true;
+    tb.wantX = -1;
+    EdCaretTimer(tb);
+    EdScrollTo(tb, tb.scrollTarget, false);  // the text may have got shorter
+    EdReveal(tb);
+    InvalidateRect(tb.hwnd, nullptr, FALSE);
 }
 
-void EdMove(size_t to, bool extend) {
-    E.caret = std::min(to, E.text.size());
-    if (!extend) E.anchor = E.caret;
-    E.wantX = -1;
-    E.lastEdit = 0;
-    EdCaretTimer();
-    EdReveal();
-    InvalidateRect(E.hwnd, nullptr, FALSE);
+void EdMove(TextBox& tb, size_t to, bool extend) {
+    tb.caret = std::min(to, tb.text.size());
+    if (!extend) tb.anchor = tb.caret;
+    tb.wantX = -1;
+    tb.lastEdit = 0;
+    EdCaretTimer(tb);
+    EdReveal(tb);
+    InvalidateRect(tb.hwnd, nullptr, FALSE);
 }
 
-void EdReplace(const std::wstring& s, int kind) {
-    size_t a = std::min(E.caret, E.anchor), b = std::max(E.caret, E.anchor);
+void EdReplace(TextBox& tb, const std::wstring& s, int kind) {
+    if (tb.readOnly) return;
+    size_t a = std::min(tb.caret, tb.anchor), b = std::max(tb.caret, tb.anchor);
     if (a == b && s.empty()) return;
-    if (kind == 0 || kind != E.lastEdit) {
-        E.undo.push_back({E.text, E.caret, E.anchor});
-        if (E.undo.size() > 300) E.undo.erase(E.undo.begin());
+    if (kind == 0 || kind != tb.lastEdit) {
+        tb.undo.push_back({tb.text, tb.caret, tb.anchor});
+        if (tb.undo.size() > 300) tb.undo.erase(tb.undo.begin());
     }
-    E.lastEdit = kind;
-    E.redo.clear();
-    E.text.replace(a, b - a, s);
-    E.caret = E.anchor = a + s.size();
-    EdChanged();
+    tb.lastEdit = kind;
+    tb.redo.clear();
+    tb.text.replace(a, b - a, s);
+    tb.caret = tb.anchor = a + s.size();
+    EdChanged(tb);
 }
 
-void EdUndo(bool redo) {
-    auto& from = redo ? E.redo : E.undo;
-    auto& to = redo ? E.undo : E.redo;
+void EdUndo(TextBox& tb, bool redo) {
+    if (tb.readOnly) return;
+    auto& from = redo ? tb.redo : tb.undo;
+    auto& to = redo ? tb.undo : tb.redo;
     if (from.empty()) return;
-    to.push_back({E.text, E.caret, E.anchor});
-    EditorState::Snap s = std::move(from.back());
+    to.push_back({tb.text, tb.caret, tb.anchor});
+    TextBox::Snap s = std::move(from.back());
     from.pop_back();
-    E.text = std::move(s.text);
-    E.caret = std::min(s.caret, E.text.size());
-    E.anchor = std::min(s.anchor, E.text.size());
-    E.lastEdit = 0;
-    EdChanged();
+    tb.text = std::move(s.text);
+    tb.caret = std::min(s.caret, tb.text.size());
+    tb.anchor = std::min(s.anchor, tb.text.size());
+    tb.lastEdit = 0;
+    EdChanged(tb);
 }
 
-std::wstring EdSelection() {
-    size_t a = std::min(E.caret, E.anchor), b = std::max(E.caret, E.anchor);
-    return E.text.substr(a, b - a);
+std::wstring EdSelection(TextBox& tb) {
+    size_t a = std::min(tb.caret, tb.anchor), b = std::max(tb.caret, tb.anchor);
+    return tb.text.substr(a, b - a);
 }
 
-void EdCopy() {
-    std::wstring s = ToCrLf(EdSelection());
+void EdCopy(TextBox& tb) {
+    std::wstring s = ToCrLf(EdSelection(tb));
     if (s.empty()) return;
     bool open = false;
-    for (int i = 0; i < 5 && !(open = OpenClipboard(E.hwnd)); i++) Sleep(10);
+    for (int i = 0; i < 5 && !(open = OpenClipboard(tb.hwnd)); i++) Sleep(10);
     if (!open) return;
     EmptyClipboard();
     size_t bytes = (s.size() + 1) * sizeof(wchar_t);
@@ -7002,9 +6921,9 @@ void EdCopy() {
     CloseClipboard();
 }
 
-void EdPaste() {
+void EdPaste(TextBox& tb) {
     bool open = false;
-    for (int i = 0; i < 5 && !(open = OpenClipboard(E.hwnd)); i++) Sleep(10);
+    for (int i = 0; i < 5 && !(open = OpenClipboard(tb.hwnd)); i++) Sleep(10);
     if (!open) return;
     std::wstring s;
     if (HANDLE h = GetClipboardData(CF_UNICODETEXT)) {
@@ -7015,228 +6934,400 @@ void EdPaste() {
     }
     CloseClipboard();
     s = FromCrLf(s);
-    if (!s.empty()) EdReplace(s, 0);
+    if (!tb.multiline)
+        for (auto& ch : s)
+            if (ch == L'\n' || ch == L'\t') ch = L' ';
+    if (!s.empty()) EdReplace(tb, s, 0);
 }
 
-void EdSelectAll() {
-    E.anchor = 0;
-    E.caret = E.text.size();
-    E.lastEdit = 0;
-    EdCaretTimer();
-    InvalidateRect(E.hwnd, nullptr, FALSE);
+void EdSelectAll(TextBox& tb) {
+    tb.anchor = 0;
+    tb.caret = tb.text.size();
+    tb.lastEdit = 0;
+    EdCaretTimer(tb);
+    InvalidateRect(tb.hwnd, nullptr, FALSE);
 }
 
 // Up and Down keep the column the caret started in, like any text box.
-void EdVertical(float lines, bool extend) {
+void EdVertical(TextBox& tb, float lines, bool extend) {
     float lh = 0;
-    auto p = EdPos(E.caret, &lh);
-    if (E.wantX < 0) E.wantX = p.x;
-    float x = E.wantX;
+    auto p = EdPos(tb, tb.caret, &lh);
+    if (tb.wantX < 0) tb.wantX = p.x;
+    float x = tb.wantX;
     float y = p.y + lh / 2 + lines * lh;
     size_t to;
     if (y < 0) to = 0;
-    else if (y >= E.contentH) to = E.text.size();
-    else to = EdHit(x, y);
-    EdMove(to, extend);
-    E.wantX = x;
+    else if (y >= tb.contentH) to = tb.text.size();
+    else to = EdHit(tb, x, y);
+    EdMove(tb, to, extend);
+    tb.wantX = x;
 }
 
-void EdDragTo(float x, float y) {
-    auto g = EditorGeo();
-    size_t i = EdHit(x - g.view.left, y - g.view.top + E.scrollY);
-    if (i != E.caret) {
-        E.caret = i;
-        EdCaretTimer();
-        InvalidateRect(E.hwnd, nullptr, FALSE);
+void EdDragTo(TextBox& tb, float x, float y) {
+    auto g = EditorGeo(tb);
+    size_t i = EdHit(tb, x - g.view.left, y - g.view.top + tb.scrollY);
+    if (i != tb.caret) {
+        tb.caret = i;
+        EdCaretTimer(tb);
+        InvalidateRect(tb.hwnd, nullptr, FALSE);
     }
 }
 
-bool EdScrollable() {
-    EdLayout();
-    return E.contentH > EdViewH() + 0.5f;
+bool EdScrollable(TextBox& tb) {
+    EdLayout(tb);
+    return tb.contentH > EdViewH(tb) + 0.5f;
 }
 
-D2D1_RECT_F EdThumb(const EditorGeometry& g) {
-    float vh = EdViewH(), trackH = g.scroll.bottom - g.scroll.top;
-    float thumbH = std::min(trackH, std::max(28.0f, trackH * vh / std::max(vh, E.contentH)));
-    float maxS = std::max(1.0f, E.contentH - vh);
-    float top = g.scroll.top + (trackH - thumbH) * std::clamp(E.scrollY / maxS, 0.0f, 1.0f);
+D2D1_RECT_F EdThumb(TextBox& tb, const EditorGeometry& g) {
+    float vh = EdViewH(tb), trackH = g.scroll.bottom - g.scroll.top;
+    float thumbH = std::min(trackH, std::max(28.0f, trackH * vh / std::max(vh, tb.contentH)));
+    float maxS = std::max(1.0f, tb.contentH - vh);
+    float top = g.scroll.top + (trackH - thumbH) * std::clamp(tb.scrollY / maxS, 0.0f, 1.0f);
     return {g.scroll.left, top, g.scroll.right, top + thumbH};
 }
 
-void EdPlaceIme() {
-    HIMC imc = ImmGetContext(E.hwnd);
+void EdPlaceIme(TextBox& tb) {
+    HIMC imc = ImmGetContext(tb.hwnd);
     if (!imc) return;
-    auto g = EditorGeo();
-    float s = E.surf.Scale(), lh = 0;
-    auto p = EdPos(E.caret, &lh);
+    auto g = EditorGeo(tb);
+    float s = GetDpiForWindow(tb.hwnd) / 96.0f, lh = 0;
+    auto p = EdPos(tb, tb.caret, &lh);
     COMPOSITIONFORM cf{};
     cf.dwStyle = CFS_POINT;
-    cf.ptCurrentPos = {(LONG)((g.view.left + p.x) * s), (LONG)((g.view.top + p.y - E.scrollY) * s)};
+    cf.ptCurrentPos = {(LONG)((g.view.left + p.x) * s), (LONG)((g.view.top + p.y - tb.scrollY) * s)};
     ImmSetCompositionWindow(imc, &cf);
-    ImmReleaseContext(E.hwnd, imc);
+    ImmReleaseContext(tb.hwnd, imc);
 }
 
-void EdContextMenu(POINT screen) {
-    bool sel = E.caret != E.anchor;
+void EdContextMenu(TextBox& tb, POINT screen) {
+    bool sel = tb.caret != tb.anchor;
     std::vector<UiMenuItem> items{
-        MI(1, L"Undo", 0xE7A7, L"Ctrl+Z", !E.undo.empty()),
-        MI(2, L"Redo", 0xE7A6, L"Ctrl+Y", !E.redo.empty()),
+        MI(1, L"Undo", 0xE7A7, L"Ctrl+Z", !tb.readOnly && !tb.undo.empty()),
+        MI(2, L"Redo", 0xE7A6, L"Ctrl+Y", !tb.readOnly && !tb.redo.empty()),
         MSep(),
-        MI(3, L"Cut", 0xE8C6, L"Ctrl+X", sel),
+        MI(3, L"Cut", 0xE8C6, L"Ctrl+X", !tb.readOnly && sel),
         MI(4, L"Copy", kGlyphCopy, L"Ctrl+C", sel),
-        MI(5, L"Paste", kGlyphPaste, L"Ctrl+V", IsClipboardFormatAvailable(CF_UNICODETEXT) != FALSE),
+        MI(5, L"Paste", kGlyphPaste, L"Ctrl+V", !tb.readOnly && IsClipboardFormatAvailable(CF_UNICODETEXT) != FALSE),
         MSep(),
-        MI(6, L"Select all", 0xE8B3, L"Ctrl+A", !E.text.empty()),
+        MI(6, L"Select all", 0xE8B3, L"Ctrl+A", !tb.text.empty()),
     };
-    switch (RunMenu(items, screen, E.hwnd)) {
-        case 1: EdUndo(false); break;
-        case 2: EdUndo(true); break;
-        case 3: EdCopy(); EdReplace(L"", 0); break;
-        case 4: EdCopy(); break;
-        case 5: EdPaste(); break;
-        case 6: EdSelectAll(); break;
+    switch (RunMenu(items, screen, tb.hwnd)) {
+        case 1: EdUndo(tb, false); break;
+        case 2: EdUndo(tb, true); break;
+        case 3: EdCopy(tb); EdReplace(tb, L"", 0); break;
+        case 4: EdCopy(tb); break;
+        case 5: EdPaste(tb); break;
+        case 6: EdSelectAll(tb); break;
     }
-    SetFocus(E.hwnd);
+    SetFocus(tb.hwnd);
 }
 
-bool EdKey(WPARAM vk) {
+bool EdKey(TextBox& tb, WPARAM vk) {
     bool ctrl = GetKeyState(VK_CONTROL) < 0, shift = GetKeyState(VK_SHIFT) < 0;
-    size_t a = std::min(E.caret, E.anchor), b = std::max(E.caret, E.anchor);
+    size_t a = std::min(tb.caret, tb.anchor), b = std::max(tb.caret, tb.anchor);
     bool sel = a != b;
     size_t ls = 0, le = 0;
     switch (vk) {
         case VK_LEFT:
-            if (sel && !shift) EdMove(a, false);
-            else EdMove(ctrl ? EdWordLeft(E.caret) : EdPrev(E.caret), shift);
+            if (sel && !shift) EdMove(tb, a, false);
+            else EdMove(tb, ctrl ? EdWordLeft(tb, tb.caret) : EdPrev(tb, tb.caret), shift);
             return true;
         case VK_RIGHT:
-            if (sel && !shift) EdMove(b, false);
-            else EdMove(ctrl ? EdWordRight(E.caret) : EdNext(E.caret), shift);
+            if (sel && !shift) EdMove(tb, b, false);
+            else EdMove(tb, ctrl ? EdWordRight(tb, tb.caret) : EdNext(tb, tb.caret), shift);
             return true;
         case VK_UP:
-            if (ctrl) EdScrollTo(E.scrollTarget - EdViewH() / 8, false);
-            else EdVertical(-1, shift);
+            if (ctrl) EdScrollTo(tb, tb.scrollTarget - EdViewH(tb) / 8, false);
+            else EdVertical(tb, -1, shift);
             return true;
         case VK_DOWN:
-            if (ctrl) EdScrollTo(E.scrollTarget + EdViewH() / 8, false);
-            else EdVertical(1, shift);
+            if (ctrl) EdScrollTo(tb, tb.scrollTarget + EdViewH(tb) / 8, false);
+            else EdVertical(tb, 1, shift);
             return true;
         case VK_PRIOR:
         case VK_NEXT: {
             float lh = 0;
-            EdPos(E.caret, &lh);
-            float lines = std::max(1.0f, std::floor(EdViewH() / lh) - 1) * (vk == VK_PRIOR ? -1 : 1);
-            EdScrollTo(E.scrollTarget + lines * lh, false);
-            EdVertical(lines, shift);
+            EdPos(tb, tb.caret, &lh);
+            float lines = std::max(1.0f, std::floor(EdViewH(tb) / lh) - 1) * (vk == VK_PRIOR ? -1 : 1);
+            EdScrollTo(tb, tb.scrollTarget + lines * lh, false);
+            EdVertical(tb, lines, shift);
             return true;
         }
         case VK_HOME:
-            EdLineBounds(E.caret, ls, le);
-            EdMove(ctrl ? 0 : ls, shift);
+            EdLineBounds(tb, tb.caret, ls, le);
+            EdMove(tb, ctrl ? 0 : ls, shift);
             return true;
         case VK_END:
-            EdLineBounds(E.caret, ls, le);
-            EdMove(ctrl ? E.text.size() : le, shift);
+            EdLineBounds(tb, tb.caret, ls, le);
+            EdMove(tb, ctrl ? tb.text.size() : le, shift);
             return true;
         case VK_BACK:
-            if (!sel) E.anchor = ctrl ? EdWordLeft(E.caret) : EdPrev(E.caret);
-            EdReplace(L"", 2);
+            if (tb.readOnly) return true;
+            if (!sel) tb.anchor = ctrl ? EdWordLeft(tb, tb.caret) : EdPrev(tb, tb.caret);
+            EdReplace(tb, L"", 2);
             return true;
         case VK_DELETE:
+            if (tb.readOnly) return true;
             if (shift && sel) {
-                EdCopy();
-                EdReplace(L"", 0);
+                EdCopy(tb);
+                EdReplace(tb, L"", 0);
                 return true;
             }
-            if (!sel) E.anchor = ctrl ? EdWordRight(E.caret) : EdNext(E.caret);
-            EdReplace(L"", 2);
+            if (!sel) tb.anchor = ctrl ? EdWordRight(tb, tb.caret) : EdNext(tb, tb.caret);
+            EdReplace(tb, L"", 2);
             return true;
         case VK_INSERT:
-            if (ctrl) EdCopy();
-            else if (shift) EdPaste();
+            if (ctrl) EdCopy(tb);
+            else if (shift) EdPaste(tb);
             return true;
         case VK_ESCAPE:
-            PostMessageW(E.hwnd, WM_COMMAND, IDCANCEL, 0);
+            PostMessageW(tb.hwnd, WM_COMMAND, IDCANCEL, 0);
             return true;
         case VK_RETURN:
-            if (ctrl) {
-                PostMessageW(E.hwnd, WM_COMMAND, IDOK, 0);
+            if (ctrl || !tb.multiline) {
+                PostMessageW(tb.hwnd, WM_COMMAND, IDOK, 0);
                 return true;
             }
             return false;  // WM_CHAR inserts the line break
     }
     if (!ctrl) return false;
     switch (vk) {
-        case 'A': EdSelectAll(); return true;
-        case 'C': EdCopy(); return true;
+        case 'A': EdSelectAll(tb); return true;
+        case 'C': EdCopy(tb); return true;
         case 'X':
-            if (sel) {
-                EdCopy();
-                EdReplace(L"", 0);
+            if (sel && !tb.readOnly) {
+                EdCopy(tb);
+                EdReplace(tb, L"", 0);
             }
             return true;
-        case 'V': EdPaste(); return true;
-        case 'Z': EdUndo(shift); return true;
-        case 'Y': EdUndo(true); return true;
-        case 'S': PostMessageW(E.hwnd, WM_COMMAND, IDOK, 0); return true;
+        case 'V': EdPaste(tb); return true;
+        case 'Z': EdUndo(tb, shift); return true;
+        case 'Y': EdUndo(tb, true); return true;
+        case 'S': PostMessageW(tb.hwnd, WM_COMMAND, IDOK, 0); return true;
     }
     return false;
 }
 
-D2D1_RECT_F EdCapButton(int i) {
-    RECT rc{};
-    GetClientRect(E.hwnd, &rc);
-    float w = rc.right / E.surf.Scale();
-    float x = w - (3 - i) * kEdCapBtnW - 4;
-    return {x, 0, x + kEdCapBtnW, kEdCapH};
+
+void PaintTextBox(Ctx& c, TextBox& tb) {
+    auto g = EditorGeo(tb);
+    // Only a light crust tint: the field stays on the same blur as the title bar and the body,
+    // and the ring separates it.
+    float rad = 8;
+    c.rt->FillRoundedRectangle({g.box, rad, rad}, c.B(mocha::crust, 0.30f));
+    c.Glow(g.box, rad, 0, tb.focused ? 0.85f : 0.35f);
+    auto* lay = EdLayout(tb);
+    if (!lay) return;
+    float ox = g.view.left, oy = g.view.top - tb.scrollY;
+    c.rt->PushAxisAlignedClip({g.box.left + 2, g.box.top + 3, tb.multiline ? g.scroll.left - 1 : g.box.right - 2,
+                               g.box.bottom - 3},
+                              D2D1_ANTIALIAS_MODE_ALIASED);
+    size_t a = std::min(tb.caret, tb.anchor), b = std::max(tb.caret, tb.anchor);
+    if (a != b) {
+        UINT32 n = 0;
+        lay->HitTestTextRange((UINT32)a, (UINT32)(b - a), ox, oy, nullptr, 0, &n);
+        std::vector<DWRITE_HIT_TEST_METRICS> ms(n);
+        if (n && SUCCEEDED(lay->HitTestTextRange((UINT32)a, (UINT32)(b - a), ox, oy, ms.data(), n, &n))) {
+            for (UINT32 k = 0; k < n; k++) {
+                const auto& m = ms[k];
+                float w = std::max(m.width, 4.0f);  // a selected line break still shows a sliver
+                c.rt->FillRectangle({m.left, m.top, m.left + w, m.top + m.height},
+                                    c.BRef(g_set.accentColor, tb.focused ? 0.38f : 0.22f));
+            }
+        }
+    }
+    if (tb.text.empty())
+        c.Text(tb.placeholder, tb.fmt.get(),
+               {ox, oy, g.view.right, oy + 200}, mocha::overlay1);
+    c.rt->DrawTextLayout({ox, oy}, lay, c.B(mocha::text), D2D1_DRAW_TEXT_OPTIONS_NONE);
+    if (tb.focused && tb.caretOn) {
+        float lh = 0;
+        auto p = EdPos(tb, tb.caret, &lh);
+        float x = std::round(ox + p.x);
+        c.rt->FillRectangle({x, oy + p.y, x + 1.5f, oy + p.y + lh}, c.B(mocha::text));
+    }
+    c.rt->PopAxisAlignedClip();
+    // Scrollbar: the list's thin rounded thumb, wider with a track on hover, accent while dragged.
+    if (tb.multiline && EdScrollable(tb)) {
+        bool hot = tb.scrollHot || tb.dragThumb;
+        float wdt = hot ? 6.0f : 4.0f, cx = (g.scroll.left + g.scroll.right) / 2;
+        D2D1_RECT_F track{cx - wdt / 2, g.scroll.top, cx + wdt / 2, g.scroll.bottom};
+        if (hot) c.rt->FillRoundedRectangle({track, wdt / 2, wdt / 2}, c.B(mocha::surface0, 0.9f));
+        auto th = EdThumb(tb, g);
+        D2D1_RECT_F thumb{track.left, th.top, track.right, th.bottom};
+        auto* brush = tb.dragThumb ? c.BRef(g_set.accentColor2) : hot ? c.BRef(g_set.accentColor) : c.B(mocha::overlay1);
+        c.rt->FillRoundedRectangle({thumb, wdt / 2, wdt / 2}, brush);
+    }
 }
 
-int EdCapButtonAt(float x, float y) {
-    if (y < 0 || y >= kEdCapH) return -1;
-    for (int i = 0; i < 3; i++)
-        if (In(EdCapButton(i), x, y)) return i;
+
+Com<IDWriteTextFormat> BoxFormat() {
+    auto f = MakeFormat(T.family, g_set.fontSize * 96.0f / 72.0f, (DWRITE_FONT_WEIGHT)BaseWeight(), true,
+                        DWRITE_TEXT_ALIGNMENT_LEADING, false);
+    if (f) {
+        float tab = MeasureText(L"    ", f.get());
+        if (tab > 0) f->SetIncrementalTabStop(tab);
+    }
+    return f;
+}
+
+float LineHeight(IDWriteTextFormat* f) {
+    Com<IDWriteTextLayout> l;
+    DWRITE_TEXT_METRICS m{};
+    if (f && SUCCEEDED(F.dw->CreateTextLayout(L"Hg", 2, f, 1000, 1000, l.put())) && SUCCEEDED(l->GetMetrics(&m)))
+        return m.height;
+    return 18;
+}
+
+// The line box carries the descender gap, so centring it leaves the letters low. This is the y
+// shift that puts the capital letters' ink in the middle of a layout box of height h.
+float InkShift(IDWriteTextFormat* f, float h) {
+    Com<IDWriteTextLayout> cap;
+    DWRITE_OVERHANG_METRICS o{};
+    if (FAILED(F.dw->CreateTextLayout(L"H", 1, f, 1000, h, cap.put())) || FAILED(cap->GetOverhangMetrics(&o)))
+        return 0;
+    return std::round(h / 2 - (-o.top + h + o.bottom) / 2);
+}
+
+// One line of text, capital ink centred in r. Starts at r.left, or is centred in r.
+void DrawLine(Ctx& c, const std::wstring& s, IDWriteTextFormat* f, const D2D1_RECT_F& r, UINT32 color, float a,
+              bool centre) {
+    float h = r.bottom - r.top, w = r.right - r.left;
+    if (s.empty() || h <= 0 || w <= 0) return;
+    Com<IDWriteTextLayout> lay;
+    if (FAILED(F.dw->CreateTextLayout(s.c_str(), (UINT32)s.size(), f, w, h, lay.put()))) return;
+    lay->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+    float x = r.left;
+    if (centre) {
+        DWRITE_TEXT_METRICS m{};
+        lay->GetMetrics(&m);
+        x = std::round(r.left + (w - m.widthIncludingTrailingWhitespace) / 2);
+    }
+    c.rt->PushAxisAlignedClip(r, D2D1_ANTIALIAS_MODE_ALIASED);
+    c.rt->DrawTextLayout({x, r.top + InkShift(f, h)}, lay.get(), c.B(color, a), D2D1_DRAW_TEXT_OPTIONS_NONE);
+    c.rt->PopAxisAlignedClip();
+}
+
+enum FormButtonKind { kFormPush, kFormPrimary, kFormCheck, kFormDrop, kFormDanger };
+
+struct FormButton {
+    int id = 0;
+    std::wstring text;
+    int kind = kFormPush;
+    bool checked = false;
+    D2D1_RECT_F rect{};
+};
+
+// A self-drawn helper window. Items are the text boxes, then the buttons; order is the Tab order.
+struct Form {
+    HWND hwnd = nullptr;
+    Surface surf;
+    PCWSTR stateName = nullptr;
+    float minW = 360, minH = 260;
+    bool dialog = false;  // fixed size, close button only
+    int capHot = -1, capDown = -1;  // 0 minimize, 1 maximize, 2 close
+    bool active = true, tracking = false, hasFocus = false;
+    std::vector<TextBox*> boxes;
+    std::vector<FormButton> buttons;
+    std::vector<std::pair<std::wstring, D2D1_RECT_F>> labels;
+    std::vector<int> order;
+    int hotBtn = -1, downBtn = -1;
+    int focus = 0;
+    TextBox* captured = nullptr;  // drag-selecting, or dragging its scroll thumb
+    virtual ~Form() = default;
+    virtual void Fonts() = 0;
+    virtual void Layout(float w, float h) = 0;
+    virtual void Command(int id) = 0;
+    virtual void Destroyed() = 0;
+    virtual void PaintExtra(Ctx&, float, float) {}
+    int Count() const { return (int)(boxes.size() + buttons.size()); }
+    TextBox* FocusBox() { return focus >= 0 && focus < (int)boxes.size() ? boxes[(size_t)focus] : nullptr; }
+    float Width() {
+        RECT rc{};
+        GetClientRect(hwnd, &rc);
+        return rc.right / surf.Scale();
+    }
+};
+
+void SyncFocus(Form& f) {
+    TextBox* on = nullptr;
+    for (size_t i = 0; i < f.boxes.size(); i++) {
+        f.boxes[i]->focused = f.hasFocus && f.focus == (int)i;
+        if (f.boxes[i]->focused) on = f.boxes[i];
+    }
+    if (on) EdCaretTimer(*on);
+    else KillTimer(f.hwnd, kTimerCaret);
+    InvalidateRect(f.hwnd, nullptr, FALSE);
+}
+
+void SetFormFocus(Form& f, int item) {
+    if (f.Count() == 0) return;
+    f.focus = std::clamp(item, 0, f.Count() - 1);
+    SyncFocus(f);
+}
+
+void StepFocus(Form& f, int dir) {
+    std::vector<int> order = f.order;
+    if (order.empty())
+        for (int i = 0; i < f.Count(); i++) order.push_back(i);
+    int at = 0;
+    for (size_t i = 0; i < order.size(); i++)
+        if (order[i] == f.focus) at = (int)i;
+    int n = (int)order.size();
+    SetFormFocus(f, order[(size_t)((at + dir + n) % n)]);
+}
+
+D2D1_RECT_F CapButton(float w, int i) {
+    float x = w - (3 - i) * kCapBtnW - 4;
+    return {x, 0, x + kCapBtnW, kCapH};
+}
+
+int CapButtonAt(Form& f, float w, float x, float y) {
+    if (y < 0 || y >= kCapH) return -1;
+    for (int i = f.dialog ? 2 : 0; i < 3; i++)
+        if (In(CapButton(w, i), x, y)) return i;
     return -1;
 }
 
-// Title and the three round window buttons. No band fill: the bar is the body's own blur.
-void PaintEditorCaption(Ctx& c, float w) {
-    float mid = kEdCapH / 2;
+int FormButtonAt(Form& f, float x, float y) {
+    for (size_t i = 0; i < f.buttons.size(); i++)
+        if (In(f.buttons[i].rect, x, y)) return (int)i;
+    return -1;
+}
+
+int FormBoxAt(Form& f, float x, float y) {
+    for (size_t i = 0; i < f.boxes.size(); i++)
+        if (In(f.boxes[i]->box, x, y)) return (int)i;
+    return -1;
+}
+
+// Title and the three round window buttons. No band fill: the bar is the body's own blur. The
+// title is centred on the whole window width every paint, so it stays put through maximize,
+// restore and any resize; it only moves left when it would run into the buttons.
+void PaintCaption(Ctx& c, Form& f, float w) {
+    float mid = kCapH / 2;
     WCHAR title[64]{};
-    GetWindowTextW(E.hwnd, title, 64);
+    GetWindowTextW(f.hwnd, title, 64);
     std::wstring t = title;
-    float total = 16 + 8 + c.TextWidth(t, T.ui.get());
+    float tw = c.TextWidth(t, T.ui.get());
+    float total = 16 + 8 + tw;
     float x = std::round((w - total) / 2);
-    x = std::max(12.0f, std::min(x, w - 3 * kEdCapBtnW - 8 - total));
-    float a = E.active ? 1.0f : 0.6f;
+    x = std::max(12.0f, std::min(x, w - 3 * kCapBtnW - 8 - total));
+    float a = f.active ? 1.0f : 0.6f;
     D2D1_RECT_F mark{x, mid - 8, x + 16, mid + 8};
     auto g = c.Gradient({mark.left, mark.top}, {mark.right, mark.bottom}, D2DColor(mocha::blue, a),
                         D2DColor(mocha::mauve, a));
     if (g) c.rt->FillRoundedRectangle({mark, 4, 4}, g.get());
     c.rt->DrawText(&kGlyphPaste, 1, T.iconSmall.get(), {mark.left, mark.top + 2, mark.right, mark.bottom},
                    c.B(mocha::crust, a), D2D1_DRAW_TEXT_OPTIONS_NONE);
-    Com<IDWriteTextLayout> lay;
-    if (!t.empty() &&
-        SUCCEEDED(F.dw->CreateTextLayout(t.c_str(), (UINT32)t.size(), T.ui.get(), 1000, kEdCapH, lay.put()))) {
-        // T.ui already centres the line box in the bar (paragraph alignment). Line boxes carry the
-        // descender gap, so the letters sat low beside the icon: shift so the capital letters'
-        // ink is centred on the icon's middle instead.
-        float dy = 0;
-        Com<IDWriteTextLayout> cap;
-        DWRITE_OVERHANG_METRICS o{};
-        if (SUCCEEDED(F.dw->CreateTextLayout(L"H", 1, T.ui.get(), 1000, kEdCapH, cap.put())) &&
-            SUCCEEDED(cap->GetOverhangMetrics(&o)))
-            dy = mid - (-o.top + kEdCapH + o.bottom) / 2;
-        c.rt->DrawTextLayout({x + 24, std::round(dy)}, lay.get(),
-                             c.B(E.active ? mocha::text : mocha::overlay1));
-    }
+    DrawLine(c, t, T.ui.get(), {x + 24, 0, x + 24 + tw + 4, kCapH}, f.active ? mocha::text : mocha::overlay1);
     const UINT32 colors[3] = {mocha::yellow, mocha::green, mocha::red};
-    for (int i = 0; i < 3; i++) {
-        D2D1_RECT_F b = EdCapButton(i);
+    for (int i = f.dialog ? 2 : 0; i < 3; i++) {
+        D2D1_RECT_F b = CapButton(w, i);
         float cx = (b.left + b.right) / 2, cy = mid;
-        bool hot = E.capHot == i || E.capDown == i;
+        bool hot = f.capHot == i || f.capDown == i;
         float r = hot ? 7.5f : 7.0f;
-        float ca = E.capDown == i ? 0.8f : (E.active || hot ? 1.0f : 0.45f);
+        float ca = f.capDown == i ? 0.8f : (f.active || hot ? 1.0f : 0.45f);
         c.rt->FillEllipse(D2D1::Ellipse({cx, cy}, r, r), c.B(colors[i], ca));
         if (!hot) continue;
         auto* ink = c.B(mocha::crust, 0.8f);
@@ -7244,7 +7335,7 @@ void PaintEditorCaption(Ctx& c, float w) {
         if (i == 0) {
             c.rt->DrawLine({cx - k, cy}, {cx + k, cy}, ink, sw);
         } else if (i == 1) {
-            if (IsZoomed(E.hwnd)) {
+            if (IsZoomed(f.hwnd)) {
                 c.rt->DrawRectangle({cx - k + 1, cy - k + 1, cx + k - 1, cy + k - 1}, ink, sw);
             } else {
                 c.rt->DrawLine({cx - k, cy}, {cx + k, cy}, ink, sw);
@@ -7258,104 +7349,123 @@ void PaintEditorCaption(Ctx& c, float w) {
     }
 }
 
-void PaintEditorField(Ctx& c) {
-    auto g = EditorGeo();
-    // Only a light crust tint: the field stays on the same blur as the title bar and the body,
-    // and the ring separates it.
-    float rad = 8;
-    c.rt->FillRoundedRectangle({g.box, rad, rad}, c.B(mocha::crust, 0.30f));
-    c.Glow(g.box, rad, 0, E.focused ? 0.85f : 0.35f);
-    auto* lay = EdLayout();
-    if (!lay) return;
-    float ox = g.view.left, oy = g.view.top - E.scrollY;
-    c.rt->PushAxisAlignedClip({g.box.left + 2, g.box.top + 3, g.scroll.left - 1, g.box.bottom - 3},
-                              D2D1_ANTIALIAS_MODE_ALIASED);
-    size_t a = std::min(E.caret, E.anchor), b = std::max(E.caret, E.anchor);
-    if (a != b) {
-        UINT32 n = 0;
-        lay->HitTestTextRange((UINT32)a, (UINT32)(b - a), ox, oy, nullptr, 0, &n);
-        std::vector<DWRITE_HIT_TEST_METRICS> ms(n);
-        if (n && SUCCEEDED(lay->HitTestTextRange((UINT32)a, (UINT32)(b - a), ox, oy, ms.data(), n, &n))) {
-            for (UINT32 k = 0; k < n; k++) {
-                const auto& m = ms[k];
-                float w = std::max(m.width, 4.0f);  // a selected line break still shows a sliver
-                c.rt->FillRectangle({m.left, m.top, m.left + w, m.top + m.height},
-                                    c.BRef(g_set.accentColor, E.focused ? 0.38f : 0.22f));
+void PaintFormButton(Ctx& c, Form& f, int i) {
+    auto& b = f.buttons[(size_t)i];
+    bool hot = f.hotBtn == i && (f.downBtn < 0 || f.downBtn == i);
+    bool down = f.downBtn == i && hot;
+    bool focused = f.hasFocus && f.focus == (int)f.boxes.size() + i;
+    D2D1_RECT_F r = b.rect;
+    switch (b.kind) {
+        case kFormPrimary: {
+            float rad = 6;
+            auto g = c.Accent(r, down ? 0.72f : hot ? 1.0f : 0.86f);
+            if (g) c.rt->FillRoundedRectangle({r, rad, rad}, g.get());
+            if (focused) c.Glow(Inset(r, -3, -3), rad + 3, 0, 0.85f, 1.5f);
+            DrawLine(c, b.text, T.uiBold.get(), r, mocha::crust, 1, true);
+            break;
+        }
+        case kFormPush: {
+            float rad = 6;
+            c.rt->FillRoundedRectangle({r, rad, rad}, c.B(mocha::surface0, down ? 0.85f : 0.55f));
+            c.Glow(r, rad, hot ? 0.16f : 0, hot || focused ? 0.85f : 0.30f, focused ? 1.5f : 1);
+            DrawLine(c, b.text, T.uiBold.get(), r, mocha::text, 1, true);
+            break;
+        }
+        case kFormCheck: {
+            float s = 18, cy = std::round((r.top + r.bottom) / 2);
+            D2D1_RECT_F box{r.left + 2, cy - s / 2, r.left + 2 + s, cy + s / 2};
+            if (b.checked) {
+                auto g = c.Accent(box, down ? 0.75f : 1.0f);
+                if (g) c.rt->FillRoundedRectangle({box, 5, 5}, g.get());
+                c.rt->DrawText(&kGlyphCheck, 1, T.iconSmall.get(), box, c.B(mocha::crust),
+                               D2D1_DRAW_TEXT_OPTIONS_NONE);
+                if (hot || focused) c.Glow(Inset(box, -2, -2), 7, 0, 0.85f);
+            } else {
+                c.rt->FillRoundedRectangle({box, 5, 5}, c.B(mocha::crust, 0.30f));
+                c.Glow(box, 5, hot ? 0.16f : 0, hot || focused ? 0.85f : 0.45f);
             }
+            DrawLine(c, b.text, T.ui.get(), {box.right + 10, r.top, r.right, r.bottom},
+                     hot || focused ? mocha::text : mocha::subtext1);
+            break;
+        }
+        case kFormDanger: {
+            float rad = 6;
+            c.rt->FillRoundedRectangle({r, rad, rad}, c.B(mocha::red, down ? 0.72f : hot ? 1.0f : 0.86f));
+            if (focused) c.Glow(Inset(r, -3, -3), rad + 3, 0, 0.85f, 1.5f);
+            DrawLine(c, b.text, T.uiBold.get(), r, mocha::crust, 1, true);
+            break;
+        }
+        case kFormDrop: {
+            float rad = 8;
+            c.rt->FillRoundedRectangle({r, rad, rad}, c.B(mocha::crust, 0.30f));
+            c.Glow(r, rad, hot ? 0.10f : 0, hot || focused ? 0.85f : 0.35f);
+            DrawLine(c, b.text, T.ui.get(), {r.left + 12, r.top, r.right - 34, r.bottom}, mocha::text);
+            wchar_t chev = 0xE70D;
+            c.rt->DrawText(&chev, 1, T.iconSmall.get(), {r.right - 32, r.top, r.right - 12, r.bottom},
+                           hot ? c.BRef(g_set.accentColor) : c.B(mocha::overlay1), D2D1_DRAW_TEXT_OPTIONS_NONE);
+            break;
         }
     }
-    if (E.text.empty())
-        c.Text(E.id ? L"Empty clip" : L"Type or paste text", E.fmt.get(),
-               {ox, oy, g.view.right, oy + 200}, mocha::overlay1);
-    c.rt->DrawTextLayout({ox, oy}, lay, c.B(mocha::text), D2D1_DRAW_TEXT_OPTIONS_NONE);
-    if (E.focused && E.caretOn) {
-        float lh = 0;
-        auto p = EdPos(E.caret, &lh);
-        float x = std::round(ox + p.x);
-        c.rt->FillRectangle({x, oy + p.y, x + 1.5f, oy + p.y + lh}, c.B(mocha::text));
-    }
-    c.rt->PopAxisAlignedClip();
-    // Scrollbar: the list's thin rounded thumb, wider with a track on hover, accent while dragged.
-    if (EdScrollable()) {
-        bool hot = E.scrollHot || E.dragThumb;
-        float wdt = hot ? 6.0f : 4.0f, cx = (g.scroll.left + g.scroll.right) / 2;
-        D2D1_RECT_F track{cx - wdt / 2, g.scroll.top, cx + wdt / 2, g.scroll.bottom};
-        if (hot) c.rt->FillRoundedRectangle({track, wdt / 2, wdt / 2}, c.B(mocha::surface0, 0.9f));
-        auto th = EdThumb(g);
-        D2D1_RECT_F thumb{track.left, th.top, track.right, th.bottom};
-        auto* brush = E.dragThumb ? c.BRef(g_set.accentColor2) : hot ? c.BRef(g_set.accentColor) : c.B(mocha::overlay1);
-        c.rt->FillRoundedRectangle({thumb, wdt / 2, wdt / 2}, brush);
-    }
 }
 
-void LayoutEditor() {
-    RECT rc;
-    GetClientRect(E.hwnd, &rc);
-    UINT dpi = GetDpiForWindow(E.hwnd);
-    auto S = [&](int v) { return MulDiv(v, (int)dpi, 96); };
-    int bw = S(88), bh = S(34), pad = S(16);
-    int by = rc.bottom - pad - bh;
-    SetWindowPos(E.save, nullptr, rc.right - pad - 2 * bw - S(8), by, bw, bh, SWP_NOZORDER);
-    SetWindowPos(E.cancel, nullptr, rc.right - pad - bw, by, bw, bh, SWP_NOZORDER);
-    E.dirty = true;
+void FormClientDips(Form& f, float& w, float& h) {
+    RECT rc{};
+    GetClientRect(f.hwnd, &rc);
+    float s = f.surf.Scale();
+    w = rc.right / s;
+    h = rc.bottom / s;
 }
 
-void EditorFonts() {
-    UINT dpi = GetDpiForWindow(E.hwnd);
-    if (E.uiFont) DeleteObject(E.uiFont);
-    EnsureFonts();
-    E.uiFont = MakeHFont(dpi, 10, FW_SEMIBOLD, T.family);
-    SetFontAll(E.hwnd, E.uiFont);
-    E.fmt = MakeFormat(T.family, g_set.fontSize * 96.0f / 72.0f, (DWRITE_FONT_WEIGHT)BaseWeight(), true,
-                       DWRITE_TEXT_ALIGNMENT_LEADING, false);
-    if (E.fmt) {
-        float tab = MeasureText(L"    ", E.fmt.get());
-        if (tab > 0) E.fmt->SetIncrementalTabStop(tab);
+void ActivateFormButton(Form& f, int i) {
+    auto& b = f.buttons[(size_t)i];
+    SetFormFocus(f, (int)f.boxes.size() + i);
+    if (b.kind == kFormCheck) {
+        b.checked = !b.checked;
+        InvalidateRect(f.hwnd, nullptr, FALSE);
+        return;
     }
-    E.dirty = true;
+    f.Command(b.id);  // may destroy the window and the form
 }
 
-LRESULT CALLBACK EditorProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+LRESULT CALLBACK FormProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_NCCREATE) {
+        auto* nf = (Form*)((CREATESTRUCTW*)lp)->lpCreateParams;
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)nf);
+        if (nf) {
+            nf->hwnd = nf->surf.hwnd = hwnd;
+            for (auto* tb : nf->boxes) tb->hwnd = hwnd;
+        }
+    }
+    auto* fp = (Form*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+    if (!fp) return DefWindowProcW(hwnd, msg, wp, lp);
+    Form& f = *fp;
     auto dip = [&](LPARAM l, float& x, float& y) {
-        float s = E.surf.Scale();
+        float s = f.surf.Scale();
         x = GET_X_LPARAM(l) / s;
         y = GET_Y_LPARAM(l) / s;
     };
     switch (msg) {
+        case WM_CREATE:
+            f.Fonts();
+            return 0;
         case WM_ERASEBKGND:
             return 1;
         case WM_PAINT: {
-            PAINTSTRUCT ps; BeginPaint(hwnd, &ps);
-            if (E.hwnd && E.surf.Ensure()) {
-                RECT rc; GetClientRect(hwnd, &rc);
-                float scale = E.surf.Scale();
-                auto* rt = E.surf.rt.get();
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            if (f.surf.Ensure()) {
+                float w, h;
+                FormClientDips(f, w, h);
+                auto* rt = f.surf.rt.get();
                 rt->BeginDraw();
                 Ctx c(rt);
-                PaintFrame(c, rc.right / scale, rc.bottom / scale, false);
-                PaintEditorCaption(c, rc.right / scale);
-                PaintEditorField(c);
-                if (rt->EndDraw() == D2DERR_RECREATE_TARGET) E.surf.Discard();
+                PaintFrame(c, w, h, false);
+                PaintCaption(c, f, w);
+                for (auto& [text, r] : f.labels) DrawLine(c, text, T.ui.get(), r, mocha::subtext0);
+                f.PaintExtra(c, w, h);
+                for (auto* tb : f.boxes) PaintTextBox(c, *tb);
+                for (size_t i = 0; i < f.buttons.size(); i++) PaintFormButton(c, f, (int)i);
+                if (rt->EndDraw() == D2DERR_RECREATE_TARGET) f.surf.Discard();
             }
             EndPaint(hwnd, &ps);
             return 0;
@@ -7370,14 +7480,15 @@ LRESULT CALLBACK EditorProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 nc->rgrc[0].top = top;
                 if (IsZoomed(hwnd)) {
                     UINT dpi = GetDpiForWindow(hwnd);
-                    nc->rgrc[0].top += GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) +
-                                       GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+                    nc->rgrc[0].top +=
+                        GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
                 }
                 return r;
             }
             break;
         case WM_NCHITTEST: {
             LRESULT def = DefWindowProcW(hwnd, msg, wp, lp);
+            if (f.dialog && def >= HTLEFT && def <= HTBOTTOMRIGHT) return HTBORDER;
             if (def != HTCLIENT) return def;
             POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             ScreenToClient(hwnd, &pt);
@@ -7385,425 +7496,579 @@ LRESULT CALLBACK EditorProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             RECT rc;
             GetClientRect(hwnd, &rc);
             int frame = GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
-            if (!IsZoomed(hwnd) && pt.y < frame)
+            if (!IsZoomed(hwnd) && !f.dialog && pt.y < frame)
                 return pt.x < frame * 2 ? HTTOPLEFT : pt.x >= rc.right - frame * 2 ? HTTOPRIGHT : HTTOP;
             float s = dpi / 96.0f, x = pt.x / s, y = pt.y / s;
-            if (y < kEdCapH) return EdCapButtonAt(x, y) >= 0 ? HTCLIENT : HTCAPTION;
+            if (y < kCapH) return CapButtonAt(f, rc.right / s, x, y) >= 0 ? HTCLIENT : HTCAPTION;
             return HTCLIENT;
         }
+        case WM_GETMINMAXINFO: {
+            float s = GetDpiForWindow(hwnd) / 96.0f;
+            auto* mm = (MINMAXINFO*)lp;
+            mm->ptMinTrackSize = {(LONG)(f.minW * s), (LONG)(f.minH * s)};
+            if (f.dialog) mm->ptMaxTrackSize = mm->ptMinTrackSize;
+            return 0;
+        }
         case WM_ACTIVATE:
-            E.active = LOWORD(wp) != WA_INACTIVE;
+            f.active = LOWORD(wp) != WA_INACTIVE;
             InvalidateRect(hwnd, nullptr, FALSE);
             break;
-        case WM_GETDLGCODE:
-            return DLGC_WANTALLKEYS | DLGC_WANTCHARS | DLGC_WANTTAB | DLGC_WANTARROWS;
         case WM_SETFOCUS:
-            E.focused = true;
-            EdCaretTimer();
-            InvalidateRect(hwnd, nullptr, FALSE);
+            f.hasFocus = true;
+            SyncFocus(f);
             return 0;
         case WM_KILLFOCUS:
-            E.focused = false;
-            EdCaretTimer();
-            InvalidateRect(hwnd, nullptr, FALSE);
+            f.hasFocus = false;
+            SyncFocus(f);
             return 0;
-        case WM_KEYDOWN:
-            if (E.hwnd && EdKey(wp)) return 0;
+        case WM_SYSKEYDOWN:
+            if (wp == VK_F4 && f.dialog) {
+                f.Command(IDCANCEL);
+                return 0;
+            }
             break;
+        case WM_KEYDOWN: {
+            bool ctrl = GetKeyState(VK_CONTROL) < 0, shift = GetKeyState(VK_SHIFT) < 0;
+            if (wp == VK_ESCAPE) {
+                f.Command(IDCANCEL);
+                return 0;
+            }
+            TextBox* tb = f.FocusBox();
+            if (wp == VK_TAB && !(tb && tb->tabs && !ctrl)) {
+                StepFocus(f, shift ? -1 : 1);
+                return 0;
+            }
+            if (tb) {
+                if (EdKey(*tb, wp)) return 0;
+                break;
+            }
+            int bi = f.focus - (int)f.boxes.size();
+            if (bi < 0 || bi >= (int)f.buttons.size()) break;
+            if (wp == VK_RETURN || wp == VK_SPACE) {
+                ActivateFormButton(f, bi);
+                return 0;
+            }
+            if (wp == VK_LEFT || wp == VK_UP) StepFocus(f, -1);
+            else if (wp == VK_RIGHT || wp == VK_DOWN) StepFocus(f, 1);
+            else if (ctrl && wp == 'S') f.Command(IDOK);
+            return 0;
+        }
         case WM_CHAR: {
-            if (!E.hwnd) break;
+            TextBox* tb = f.FocusBox();
+            if (!tb || tb->readOnly) return 0;
             wchar_t ch = (wchar_t)wp;
-            if (ch == L'\r') EdReplace(L"\n", 0);
-            else if (ch == L'\t') EdReplace(L"\t", 1);
-            else if (ch >= 0x20 && ch != 0x7F) EdReplace(std::wstring(1, ch), ch == L' ' ? 0 : 1);
+            if (ch == L'\r') {
+                if (tb->multiline) EdReplace(*tb, L"\n", 0);
+            } else if (ch == L'\t') {
+                if (tb->tabs) EdReplace(*tb, L"\t", 1);
+            } else if (ch >= 0x20 && ch != 0x7F) {
+                EdReplace(*tb, std::wstring(1, ch), ch == L' ' ? 0 : 1);
+            }
             return 0;
         }
         case WM_IME_STARTCOMPOSITION:
-            EdPlaceIme();
+            if (TextBox* tb = f.FocusBox()) EdPlaceIme(*tb);
             break;
         case WM_SETCURSOR:
-            if ((HWND)wp == hwnd && LOWORD(lp) == HTCLIENT && E.hwnd) {
-                POINT pt; GetCursorPos(&pt); ScreenToClient(hwnd, &pt);
-                float s = E.surf.Scale(), x = pt.x / s, y = pt.y / s;
-                auto g = EditorGeo();
-                bool bar = EdScrollable() && In(g.scroll, x, y);
-                SetCursor(LoadCursorW(nullptr, In(g.box, x, y) && !bar && !E.dragThumb ? IDC_IBEAM : IDC_ARROW));
+            if ((HWND)wp == hwnd && LOWORD(lp) == HTCLIENT) {
+                POINT pt;
+                GetCursorPos(&pt);
+                ScreenToClient(hwnd, &pt);
+                float s = f.surf.Scale(), x = pt.x / s, y = pt.y / s;
+                bool beam = false;
+                int k = FormBoxAt(f, x, y);
+                if (k >= 0 && !f.captured) {
+                    TextBox& tb = *f.boxes[(size_t)k];
+                    auto g = EditorGeo(tb);
+                    beam = !(tb.multiline && EdScrollable(tb) && In(g.scroll, x, y));
+                } else if (f.captured && f.captured->selecting) {
+                    beam = true;
+                }
+                SetCursor(LoadCursorW(nullptr, beam ? IDC_IBEAM : IDC_ARROW));
                 return TRUE;
             }
             break;
         case WM_LBUTTONDOWN:
         case WM_LBUTTONDBLCLK: {
-            if (!E.hwnd) break;
-            float x, y; dip(lp, x, y);
-            int cb = EdCapButtonAt(x, y);
+            float x, y;
+            dip(lp, x, y);
+            float w, h;
+            FormClientDips(f, w, h);
+            int cb = CapButtonAt(f, w, x, y);
             if (cb >= 0) {
-                E.capDown = cb;
+                f.capDown = cb;
                 SetCapture(hwnd);
                 InvalidateRect(hwnd, nullptr, FALSE);
                 return 0;
             }
-            auto g = EditorGeo();
-            if (!In(g.box, x, y)) break;
+            int bi = FormButtonAt(f, x, y);
+            if (bi >= 0) {
+                SetFocus(hwnd);
+                f.downBtn = f.hotBtn = bi;
+                SetFormFocus(f, (int)f.boxes.size() + bi);
+                SetCapture(hwnd);
+                return 0;
+            }
+            int k = FormBoxAt(f, x, y);
+            if (k < 0) break;
             SetFocus(hwnd);
-            if (EdScrollable() && In(g.scroll, x, y)) {
-                auto th = EdThumb(g);
+            SetFormFocus(f, k);
+            TextBox& tb = *f.boxes[(size_t)k];
+            auto g = EditorGeo(tb);
+            if (tb.multiline && EdScrollable(tb) && In(g.scroll, x, y)) {
+                auto th = EdThumb(tb, g);
                 if (y >= th.top && y < th.bottom) {
-                    E.dragThumb = true;
-                    E.dragOffset = y - th.top;
+                    tb.dragThumb = true;
+                    tb.dragOffset = y - th.top;
+                    f.captured = &tb;
                     SetCapture(hwnd);
                 } else {
-                    EdScrollTo(E.scrollTarget + (y < th.top ? -1 : 1) * EdViewH() * 0.9f, false);
+                    EdScrollTo(tb, tb.scrollTarget + (y < th.top ? -1 : 1) * EdViewH(tb) * 0.9f, false);
                 }
                 InvalidateRect(hwnd, nullptr, FALSE);
                 return 0;
             }
-            size_t i = EdHit(x - g.view.left, y - g.view.top + E.scrollY);
+            size_t i = EdHit(tb, x - g.view.left, y - g.view.top + tb.scrollY);
             if (msg == WM_LBUTTONDBLCLK) {
-                size_t n = E.text.size(), s = i, e = i;
-                size_t at = (i < n && E.text[i] != L'\n') ? i : (i > 0 ? i - 1 : 0);
-                if (n && E.text[at] != L'\n') {
-                    int c = EdClass(E.text[at]);
+                size_t n = tb.text.size(), s = i, e = i;
+                size_t at = (i < n && tb.text[i] != L'\n') ? i : (i > 0 ? i - 1 : 0);
+                if (n && tb.text[at] != L'\n') {
+                    int cls = EdClass(tb.text[at]);
                     s = at;
                     e = at + 1;
-                    while (s > 0 && EdClass(E.text[s - 1]) == c) s--;
-                    while (e < n && EdClass(E.text[e]) == c) e++;
+                    while (s > 0 && EdClass(tb.text[s - 1]) == cls) s--;
+                    while (e < n && EdClass(tb.text[e]) == cls) e++;
                 }
-                E.anchor = s;
-                E.caret = e;
-                E.lastEdit = 0;
-                EdCaretTimer();
+                tb.anchor = s;
+                tb.caret = e;
+                tb.lastEdit = 0;
+                EdCaretTimer(tb);
                 InvalidateRect(hwnd, nullptr, FALSE);
                 return 0;
             }
-            EdMove(i, GetKeyState(VK_SHIFT) < 0);
-            E.selecting = true;
+            EdMove(tb, i, GetKeyState(VK_SHIFT) < 0);
+            tb.selecting = true;
+            f.captured = &tb;
             SetCapture(hwnd);
             SetTimer(hwnd, kTimerDrag, 30, nullptr);
             return 0;
         }
         case WM_MOUSEMOVE: {
-            if (!E.hwnd) break;
-            float x, y; dip(lp, x, y);
-            auto g = EditorGeo();
-            if (E.dragThumb) {
-                auto th = EdThumb(g);
-                float travel = std::max(1.0f, (g.scroll.bottom - g.scroll.top) - (th.bottom - th.top));
-                float frac = (y - E.dragOffset - g.scroll.top) / travel;
-                EdScrollTo(frac * std::max(0.0f, E.contentH - EdViewH()), true);
+            float x, y;
+            dip(lp, x, y);
+            if (TextBox* tb = f.captured) {
+                auto g = EditorGeo(*tb);
+                if (tb->dragThumb) {
+                    auto th = EdThumb(*tb, g);
+                    float travel = std::max(1.0f, (g.scroll.bottom - g.scroll.top) - (th.bottom - th.top));
+                    float frac = (y - tb->dragOffset - g.scroll.top) / travel;
+                    EdScrollTo(*tb, frac * std::max(0.0f, tb->contentH - EdViewH(*tb)), true);
+                } else if (tb->selecting) {
+                    EdDragTo(*tb, x, y);
+                }
                 return 0;
             }
-            if (E.selecting) {
-                EdDragTo(x, y);
-                return 0;
+            float w, h;
+            FormClientDips(f, w, h);
+            bool repaint = false;
+            int cap = f.downBtn >= 0 ? -1 : CapButtonAt(f, w, x, y);
+            if (cap != f.capHot) {
+                f.capHot = cap;
+                repaint = true;
             }
-            int cap = EdCapButtonAt(x, y);
-            if (cap != E.capHot) {
-                E.capHot = cap;
-                InvalidateRect(hwnd, nullptr, FALSE);
+            int bi = FormButtonAt(f, x, y);
+            if (bi != f.hotBtn) {
+                f.hotBtn = bi;
+                repaint = true;
             }
-            bool hot = EdScrollable() && In(g.scroll, x, y) && E.capDown < 0;
-            if (hot != E.scrollHot) {
-                E.scrollHot = hot;
-                InvalidateRect(hwnd, nullptr, FALSE);
+            for (auto* tb : f.boxes) {
+                bool hot = f.capDown < 0 && f.downBtn < 0 && tb->multiline && EdScrollable(*tb) &&
+                           In(EditorGeo(*tb).scroll, x, y);
+                if (hot != tb->scrollHot) {
+                    tb->scrollHot = hot;
+                    repaint = true;
+                }
             }
-            if (!E.tracking) {
+            if (repaint) InvalidateRect(hwnd, nullptr, FALSE);
+            if (!f.tracking) {
                 TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
-                E.tracking = TrackMouseEvent(&tme) != FALSE;
+                f.tracking = TrackMouseEvent(&tme) != FALSE;
             }
             return 0;
         }
         case WM_MOUSELEAVE:
-            E.tracking = false;
-            if (E.scrollHot || E.capHot >= 0) {
-                E.scrollHot = false;
-                E.capHot = -1;
-                InvalidateRect(hwnd, nullptr, FALSE);
-            }
+            f.tracking = false;
+            f.capHot = f.hotBtn = -1;
+            for (auto* tb : f.boxes) tb->scrollHot = false;
+            InvalidateRect(hwnd, nullptr, FALSE);
             return 0;
         case WM_LBUTTONUP: {
-            int down = E.capDown;
-            float x, y; dip(lp, x, y);
+            int down = f.capDown, bd = f.downBtn;
+            float x, y;
+            dip(lp, x, y);
+            float w, h;
+            FormClientDips(f, w, h);
             if (GetCapture() == hwnd) ReleaseCapture();
-            if (down >= 0 && EdCapButtonAt(x, y) == down) {
+            if (down >= 0 && CapButtonAt(f, w, x, y) == down) {
                 if (down == 0) ShowWindow(hwnd, SW_MINIMIZE);
                 else if (down == 1) ShowWindow(hwnd, IsZoomed(hwnd) ? SW_RESTORE : SW_MAXIMIZE);
                 else PostMessageW(hwnd, WM_CLOSE, 0, 0);
+                return 0;
             }
+            if (bd >= 0 && FormButtonAt(f, x, y) == bd) ActivateFormButton(f, bd);  // may destroy f
             return 0;
         }
         case WM_CAPTURECHANGED:
-            if (E.capDown >= 0) {
-                E.capDown = -1;
-                InvalidateRect(hwnd, nullptr, FALSE);
-            }
-            if (E.selecting || E.dragThumb) {
-                E.selecting = E.dragThumb = false;
+            f.capDown = f.downBtn = -1;
+            if (TextBox* tb = f.captured) {
+                tb->selecting = tb->dragThumb = false;
+                f.captured = nullptr;
                 KillTimer(hwnd, kTimerDrag);
-                InvalidateRect(hwnd, nullptr, FALSE);
             }
+            InvalidateRect(hwnd, nullptr, FALSE);
             return 0;
         case WM_MOUSEWHEEL: {
-            if (!E.hwnd) break;
+            POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            ScreenToClient(hwnd, &pt);
+            float s = f.surf.Scale();
+            int k = FormBoxAt(f, pt.x / s, pt.y / s);
+            TextBox* tb = k >= 0 ? f.boxes[(size_t)k] : f.FocusBox();
+            if (!tb) return 0;
             UINT lines = 3;
             SystemParametersInfoW(SPI_GETWHEELSCROLLLINES, 0, &lines, 0);
             float lh = 0;
-            EdPos(0, &lh);
-            float step = lines == WHEEL_PAGESCROLL ? EdViewH() : std::max(1u, lines) * lh;
-            EdScrollTo(E.scrollTarget - GET_WHEEL_DELTA_WPARAM(wp) / 120.0f * step, false);
+            EdPos(*tb, 0, &lh);
+            float step = lines == WHEEL_PAGESCROLL ? EdViewH(*tb) : std::max(1u, lines) * lh;
+            EdScrollTo(*tb, tb->scrollTarget - GET_WHEEL_DELTA_WPARAM(wp) / 120.0f * step, false);
             return 0;
         }
         case WM_RBUTTONUP: {
-            if (!E.hwnd) break;
-            float x, y; dip(lp, x, y);
-            auto g = EditorGeo();
-            if (!In(g.box, x, y)) break;
+            float x, y;
+            dip(lp, x, y);
+            int k = FormBoxAt(f, x, y);
+            if (k < 0) break;
             SetFocus(hwnd);
-            size_t i = EdHit(x - g.view.left, y - g.view.top + E.scrollY);
-            size_t a = std::min(E.caret, E.anchor), b = std::max(E.caret, E.anchor);
-            if (i < a || i > b) EdMove(i, false);
+            SetFormFocus(f, k);
+            TextBox& tb = *f.boxes[(size_t)k];
+            auto g = EditorGeo(tb);
+            size_t i = EdHit(tb, x - g.view.left, y - g.view.top + tb.scrollY);
+            size_t a = std::min(tb.caret, tb.anchor), b = std::max(tb.caret, tb.anchor);
+            if (i < a || i > b) EdMove(tb, i, false);
             POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             ClientToScreen(hwnd, &pt);
-            EdContextMenu(pt);
+            EdContextMenu(tb, pt);
             return 0;
         }
         case WM_TIMER:
             if (wp == kTimerScroll) {
-                float d = E.scrollTarget - E.scrollY;
-                if (std::fabs(d) < 0.5f) {
-                    E.scrollY = E.scrollTarget;
-                    KillTimer(hwnd, kTimerScroll);
-                } else {
-                    E.scrollY += d * 0.35f;
+                bool moving = false;
+                for (auto* tb : f.boxes) {
+                    float d = tb->scrollTarget - tb->scrollY;
+                    if (std::fabs(d) < 0.5f) {
+                        tb->scrollY = tb->scrollTarget;
+                    } else {
+                        tb->scrollY += d * 0.35f;
+                        moving = true;
+                    }
                 }
+                if (!moving) KillTimer(hwnd, kTimerScroll);
                 InvalidateRect(hwnd, nullptr, FALSE);
             } else if (wp == kTimerCaret) {
-                E.caretOn = !E.caretOn;
-                InvalidateRect(hwnd, nullptr, FALSE);
-            } else if (wp == kTimerDrag && E.selecting) {
+                if (TextBox* tb = f.FocusBox()) {
+                    tb->caretOn = !tb->caretOn;
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                }
+            } else if (wp == kTimerDrag && f.captured && f.captured->selecting) {
                 // Drag-select past the top or bottom edge scrolls, faster the further out.
-                POINT pt; GetCursorPos(&pt); ScreenToClient(hwnd, &pt);
-                float s = E.surf.Scale(), x = pt.x / s, y = pt.y / s;
-                auto g = EditorGeo();
+                TextBox& tb = *f.captured;
+                POINT pt;
+                GetCursorPos(&pt);
+                ScreenToClient(hwnd, &pt);
+                float s = f.surf.Scale(), x = pt.x / s, y = pt.y / s;
+                auto g = EditorGeo(tb);
                 float d = y < g.view.top ? y - g.view.top : y > g.view.bottom ? y - g.view.bottom : 0;
                 if (d != 0) {
-                    EdScrollTo(E.scrollY + std::clamp(d * 0.5f, -40.0f, 40.0f), true);
-                    EdDragTo(x, y);
+                    EdScrollTo(tb, tb.scrollY + std::clamp(d * 0.5f, -40.0f, 40.0f), true);
+                    EdDragTo(tb, x, y);
                 }
             }
             return 0;
         case WM_COMMAND:
-            if (LOWORD(wp) == IDOK) {
-                std::wstring clean = E.lfOnly ? E.text : ToCrLf(E.text);
-                int64_t saved = 0;
-                if (E.id) {
-                    if (Db_UpdateClipText(E.id, clean)) saved = E.id;
-                } else if (!clean.empty()) {
-                    ClipData data;
-                    ClipFormat f;
-                    f.cf = CF_UNICODETEXT;
-                    f.name = L"CF_UNICODETEXT";
-                    f.data.assign((const char*)clean.c_str(), (clean.size() + 1) * sizeof(wchar_t));
-                    data.formats.push_back(f);
-                    data.description = clean;
-                    saved = Db_SaveClip(data);
-                }
-                if (saved) List_OnClipSaved(saved);
-                DestroyWindow(hwnd);
-                return 0;
+            f.Command(LOWORD(wp));  // may destroy f
+            return 0;
+        case WM_SIZE: {
+            f.surf.Resize();
+            float w, h;
+            FormClientDips(f, w, h);
+            f.Layout(w, h);
+            for (auto* tb : f.boxes) {
+                tb->dirty = true;
+                EdScrollTo(*tb, tb->scrollTarget, true);
             }
-            if (LOWORD(wp) == IDCANCEL) {
-                DestroyWindow(hwnd);
-                return 0;
-            }
-            break;
-        case WM_SIZE:
-            if (!E.hwnd || !E.save) break;
-            E.surf.Resize();
-            LayoutEditor();
-            EdScrollTo(E.scrollTarget, true);
             InvalidateRect(hwnd, nullptr, FALSE);
             return 0;
+        }
         case WM_DPICHANGED: {
             auto* r = (RECT*)lp;
+            f.Fonts();
             SetWindowPos(hwnd, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER);
-            EditorFonts();
-            LayoutEditor();
             return 0;
         }
         case WM_EXITSIZEMOVE:
-            SaveHelperSize(hwnd, L"Editor");
+            if (f.stateName) SaveHelperSize(hwnd, f.stateName);
             return 0;
-        case WM_DRAWITEM:
-            DrawOwnerButton((const DRAWITEMSTRUCT*)lp);
-            return TRUE;
-        case WM_CTLCOLORSTATIC:
-            return CtlColor(msg, wp, lp, (HBRUSH)GetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND));
         case WM_CLOSE:
-            DestroyWindow(hwnd);
+            f.Command(IDCANCEL);
             return 0;
         case WM_DESTROY:
-            E.surf.Discard();
-            if (E.uiFont) DeleteObject(E.uiFont);
-            E = EditorState{};
+            f.surf.Discard();
             return 0;
+        case WM_NCDESTROY:
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+            f.Destroyed();
+            delete fp;
+            break;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
+
+// ---------------------------------------------------------------------------
+// Clip editor
+// ---------------------------------------------------------------------------
+struct EditorForm;
+struct PropsForm;
+EditorForm* g_editor;
+PropsForm* g_props;
+
+struct EditorForm : Form {
+    int64_t id = 0;
+    bool lfOnly = false;  // the clip used bare LF; it is saved back that way, anything else as CRLF
+    TextBox body;
+    EditorForm() {
+        stateName = L"Editor";
+        minW = 360;
+        minH = 240;
+        body.tabs = true;
+        boxes = {&body};
+        buttons = {{IDOK, L"Save", kFormPrimary}, {IDCANCEL, L"Cancel", kFormPush}};
+    }
+    void Fonts() override {
+        body.fmt = BoxFormat();
+        body.dirty = true;
+    }
+    void Layout(float w, float h) override {
+        float pad = 16, bw = 88, bh = 34, by = h - pad - bh;
+        body.box = {pad, kCapH + 8, std::max(w - pad, pad + 80), std::max(by - pad, kCapH + 8 + 48)};
+        buttons[0].rect = {w - pad - 2 * bw - 8, by, w - pad - bw - 8, by + bh};
+        buttons[1].rect = {w - pad - bw, by, w - pad, by + bh};
+    }
+    void Command(int cmd) override {
+        if (cmd == IDOK) {
+            std::wstring clean = lfOnly ? body.text : ToCrLf(body.text);
+            int64_t saved = 0;
+            if (id) {
+                if (Db_UpdateClipText(id, clean)) saved = id;
+            } else if (!clean.empty()) {
+                ClipData data;
+                ClipFormat cf;
+                cf.cf = CF_UNICODETEXT;
+                cf.name = L"CF_UNICODETEXT";
+                cf.data.assign((const char*)clean.c_str(), (clean.size() + 1) * sizeof(wchar_t));
+                data.formats.push_back(cf);
+                data.description = clean;
+                saved = Db_SaveClip(data);
+            }
+            if (saved) List_OnClipSaved(saved);
+            DestroyWindow(hwnd);
+        } else if (cmd == IDCANCEL) {
+            DestroyWindow(hwnd);
+        }
+    }
+    void Destroyed() override {
+        if ((Form*)g_editor == this) g_editor = nullptr;
+    }
+};
 
 // ---------------------------------------------------------------------------
 // Properties window
 // ---------------------------------------------------------------------------
-enum PropId { idDesc = 200, idQuick, idNever, idSticky, idGroup, idInfo };
+enum PropId { idNever = 200, idSticky, idGroup };
 
-struct PropsState {
-    HWND hwnd = nullptr, desc = nullptr, quick = nullptr, never = nullptr, sticky = nullptr, group = nullptr,
-         info = nullptr, ok = nullptr, cancel = nullptr;
-    std::vector<HWND> labels;
-    HFONT font = nullptr, fieldFont = nullptr;
+struct PropsForm : Form {
     ClipRow row;
-    std::vector<int64_t> groupIds;
     bool inGroupList = false;
-} PR;
-
-void LayoutProps() {
-    RECT rc;
-    GetClientRect(PR.hwnd, &rc);
-    UINT dpi = GetDpiForWindow(PR.hwnd);
-    auto S = [&](int v) { return MulDiv(v, (int)dpi, 96); };
-    int pad = S(14), w = rc.right - 2 * pad, y = S(10), lab = S(20), gap = S(8);
-    auto place = [&](HWND h, int height) {
-        SetWindowPos(h, nullptr, pad, y, w, height, SWP_NOZORDER);
-        y += height + gap;
-    };
-    auto label = [&](size_t i) {
-        if (i < PR.labels.size()) SetWindowPos(PR.labels[i], nullptr, pad, y, w, lab, SWP_NOZORDER);
-        y += lab + S(2);
-    };
-    label(0);
-    place(PR.desc, S(58));
-    label(1);
-    place(PR.quick, S(24));
-    SetWindowPos(PR.never, nullptr, pad, y, w / 2, S(24), SWP_NOZORDER);
-    SetWindowPos(PR.sticky, nullptr, pad + w / 2, y, w / 2, S(24), SWP_NOZORDER);
-    y += S(24) + gap;
-    label(2);
-    place(PR.group, S(300));
-    y -= S(300) - S(26);
-    label(3);
-    int bh = S(30);
-    int infoH = std::max<int>(S(40), rc.bottom - pad - bh - gap - y);
-    place(PR.info, infoH);
-    int bw = S(88);
-    SetWindowPos(PR.ok, nullptr, rc.right - pad - 2 * bw - S(8), rc.bottom - pad - bh, bw, bh, SWP_NOZORDER);
-    SetWindowPos(PR.cancel, nullptr, rc.right - pad - bw, rc.bottom - pad - bh, bw, bh, SWP_NOZORDER);
-}
-
-void PropsFonts() {
-    UINT dpi = GetDpiForWindow(PR.hwnd);
-    if (PR.font) DeleteObject(PR.font);
-    if (PR.fieldFont) DeleteObject(PR.fieldFont);
-    EnsureFonts();
-    PR.font = MakeHFont(dpi, 10, FW_NORMAL, T.family);
-    PR.fieldFont = MakeHFont(dpi, (float)g_set.fontSize, FW_NORMAL, T.family);
-    SetFontAll(PR.hwnd, PR.font);
-    for (HWND f : {PR.desc, PR.quick, PR.info}) {
-        SendMessageW(f, WM_SETFONT, (WPARAM)PR.fieldFont, TRUE);
-        int m = MulDiv(6, (int)dpi, 96);
-        SendMessageW(f, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(m, m));
+    std::vector<int64_t> groupIds;
+    std::vector<std::wstring> groupNames;  // indented by depth for the picker
+    int groupSel = 0;
+    TextBox desc, quick, info;
+    PropsForm() {
+        stateName = L"Props";
+        minW = 380;
+        minH = 470;
+        desc.placeholder = L"No description";
+        quick.multiline = false;
+        quick.placeholder = L"None";
+        info.readOnly = true;
+        boxes = {&desc, &quick, &info};
+        buttons = {{idNever, L"Never delete", kFormCheck},
+                   {idSticky, L"Pin to top", kFormCheck},
+                   {idGroup, L"", kFormDrop},
+                   {IDOK, L"OK", kFormPrimary},
+                   {IDCANCEL, L"Cancel", kFormPush}};
+        labels = {{L"Description", {}}, {L"Quick paste text", {}}, {L"Group", {}}, {L"Details", {}}};
+        // Tab follows the screen: description, quick paste, the two checks, group, details, OK, Cancel.
+        order = {0, 1, 3, 4, 5, 2, 6, 7};
     }
-}
-
-std::wstring ToCrLf(const std::wstring& s) {
-    std::wstring out;
-    for (size_t i = 0; i < s.size(); i++) {
-        if (s[i] == L'\n' && (i == 0 || s[i - 1] != L'\r')) out += L'\r';
-        out += s[i];
+    void SetGroup(int i) {
+        groupSel = std::clamp(i, 0, std::max(0, (int)groupNames.size() - 1));
+        std::wstring name = groupSel < (int)groupNames.size() ? groupNames[(size_t)groupSel] : L"No group";
+        size_t lead = name.find_first_not_of(L' ');
+        buttons[2].text = lead == std::wstring::npos ? name : name.substr(lead);
     }
-    return out;
-}
-
-std::wstring FromCrLf(const std::wstring& s) {
-    std::wstring out;
-    for (wchar_t ch : s)
-        if (ch != L'\r') out += ch;
-    return out;
-}
-
-std::wstring FieldText(HWND h) {
-    int n = GetWindowTextLengthW(h);
-    std::wstring s((size_t)n, L'\0');
-    GetWindowTextW(h, s.data(), n + 1);
-    return s;
-}
-
-void ApplyProps() {
-    int64_t id = PR.row.id;
-    std::wstring desc = FromCrLf(FieldText(PR.desc)), quick = FieldText(PR.quick);
-    if (desc != FromCrLf(PR.row.text)) Db_SetDescription(id, desc);
-    if (quick != PR.row.quickPasteText) Db_SetQuickPasteText(id, quick);
-    if (IsChecked(PR.never) != PR.row.neverDelete) Db_SetNeverDelete(id, IsChecked(PR.never));
-    if (IsChecked(PR.sticky) != PR.row.sticky) Db_SetSticky(id, IsChecked(PR.sticky), PR.inGroupList);
-    int sel = (int)SendMessageW(PR.group, CB_GETCURSEL, 0, 0);
-    if (sel >= 0 && sel < (int)PR.groupIds.size() && PR.groupIds[(size_t)sel] != PR.row.parentId)
-        Db_MoveToGroup({id}, PR.groupIds[(size_t)sel]);
-    List_OnClipSaved(id);
-}
-
-LRESULT CALLBACK PropsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
-    switch (msg) {
-        case WM_COMMAND: {
-            int id = LOWORD(wp);
-            if (id == IDOK) {
-                ApplyProps();
-                DestroyWindow(hwnd);
-                return 0;
-            }
-            if (id == IDCANCEL) {
-                DestroyWindow(hwnd);
-                return 0;
-            }
-            if ((id == idNever || id == idSticky) && HIWORD(wp) == BN_CLICKED) {
-                HWND b = (HWND)lp;
-                SetChecked(b, !IsChecked(b));
-                return 0;
-            }
-            break;
+    void Fonts() override {
+        for (auto* tb : boxes) {
+            tb->fmt = BoxFormat();
+            tb->dirty = true;
         }
-        case WM_SIZE:
-            if (PR.ok) LayoutProps();
-            return 0;
-        case WM_DPICHANGED: {
-            auto* r = (RECT*)lp;
-            SetWindowPos(hwnd, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER);
-            PropsFonts();
-            LayoutProps();
-            return 0;
-        }
-        case WM_DRAWITEM:
-            DrawOwnerButton((const DRAWITEMSTRUCT*)lp);
-            return TRUE;
-        case WM_CTLCOLOREDIT:
-        case WM_CTLCOLORSTATIC:
-        case WM_CTLCOLORLISTBOX:
-            return CtlColor(msg, wp, lp, (HBRUSH)GetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND));
-        case WM_CLOSE:
+    }
+    void Layout(float w, float h) override {
+        float pad = 16, y = kCapH + 4, labH = 24, gap = 10, fieldH = 34, w2 = w - 2 * pad;
+        auto label = [&](size_t i) {
+            labels[i].second = {pad + 2, y, w - pad, y + labH};
+            y += labH;
+        };
+        label(0);
+        desc.box = {pad, y, w - pad, y + 66};
+        y += 66 + gap;
+        label(1);
+        quick.box = {pad, y, w - pad, y + fieldH};
+        quick.padY = std::max(4.0f, std::floor((fieldH - LineHeight(quick.fmt.get())) / 2));
+        y += fieldH + gap - 2;
+        buttons[0].rect = {pad, y, pad + w2 / 2, y + 30};
+        buttons[1].rect = {pad + w2 / 2, y, w - pad, y + 30};
+        y += 30 + gap - 2;
+        label(2);
+        buttons[2].rect = {pad, y, w - pad, y + fieldH};
+        y += fieldH + gap;
+        label(3);
+        float bw = 88, bh = 34, by = h - pad - bh;
+        info.box = {pad, y, w - pad, std::max(y + 48, by - 14)};
+        buttons[3].rect = {w - pad - 2 * bw - 8, by, w - pad - bw - 8, by + bh};
+        buttons[4].rect = {w - pad - bw, by, w - pad, by + bh};
+    }
+    void PickGroup() {
+        std::vector<UiMenuItem> items;
+        for (size_t i = 0; i < groupNames.size(); i++)
+            items.push_back(MI((int)i + 1, groupNames[i], 0, {}, true, (int)i == groupSel));
+        const auto& r = buttons[2].rect;
+        float s = surf.Scale();
+        POINT pt{(LONG)(r.left * s), (LONG)((r.bottom + 4) * s)};
+        ClientToScreen(hwnd, &pt);
+        int pick = RunMenu(items, pt, hwnd);
+        if (!IsWindow(hwnd)) return;
+        if (pick > 0) SetGroup(pick - 1);
+        SetFocus(hwnd);
+        InvalidateRect(hwnd, nullptr, FALSE);
+    }
+    void Apply() {
+        int64_t id = row.id;
+        if (desc.text != FromCrLf(row.text)) Db_SetDescription(id, desc.text);
+        if (quick.text != row.quickPasteText) Db_SetQuickPasteText(id, quick.text);
+        bool never = buttons[0].checked, sticky = buttons[1].checked;
+        if (never != row.neverDelete) Db_SetNeverDelete(id, never);
+        if (sticky != row.sticky) Db_SetSticky(id, sticky, inGroupList);
+        if (groupSel >= 0 && groupSel < (int)groupIds.size() && groupIds[(size_t)groupSel] != row.parentId)
+            Db_MoveToGroup({id}, groupIds[(size_t)groupSel]);
+        List_OnClipSaved(id);
+    }
+    void Command(int cmd) override {
+        if (cmd == idGroup) {
+            PickGroup();
+        } else if (cmd == IDOK) {
+            Apply();
             DestroyWindow(hwnd);
-            return 0;
-        case WM_DESTROY:
-            if (PR.font) DeleteObject(PR.font);
-            if (PR.fieldFont) DeleteObject(PR.fieldFont);
-            PR = PropsState{};
-            return 0;
+        } else if (cmd == IDCANCEL) {
+            DestroyWindow(hwnd);
+        }
     }
-    return DefWindowProcW(hwnd, msg, wp, lp);
-}
+    void Destroyed() override {
+        if ((Form*)g_props == this) g_props = nullptr;
+    }
+};
 
-HWND CreateHelperWindow(PCWSTR cls, PCWSTR title) {
-    HWND h = CreateWindowExW(WS_EX_CONTROLPARENT | WS_EX_APPWINDOW, cls, title, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-                             CW_USEDEFAULT, CW_USEDEFAULT, 400, 300, nullptr, nullptr, g_hInstance, nullptr);
-    if (h) ApplyDarkWindow(h);
+HWND CreateHelperWindow(PCWSTR cls, PCWSTR title, Form* f) {
+    // Dialogs have no system menu, so DWM keeps no close button of its own under the glass: it showed
+    // through the blur beside ours as a faint second circle.
+    DWORD style = f->dialog ? WS_OVERLAPPEDWINDOW & ~(WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU)
+                            : WS_OVERLAPPEDWINDOW;
+    HWND h = CreateWindowExW(WS_EX_APPWINDOW, cls, title, style, CW_USEDEFAULT, CW_USEDEFAULT, 400, 300, nullptr,
+                             nullptr, g_hInstance, f);
+    if (h) {
+        ApplyDarkWindow(h);
+        ApplyBackdrop(h);
+    }
     return h;
 }
+
+// Show and activate before the list hides: once none of our windows is in front, Windows
+// refuses the foreground and the window opens behind the app underneath.
+void ShowHelper(HWND h) {
+    ShowWindow(h, SW_SHOW);
+    SetWindowPos(h, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    SetForegroundWindow(h);
+    SetFocus(h);
+    List_Hide();
+}
+
+// ---------------------------------------------------------------------------
+// Confirm dialog (tray "Delete all clips")
+// ---------------------------------------------------------------------------
+struct ConfirmForm;
+ConfirmForm* g_confirm;
+
+struct ConfirmForm : Form {
+    std::wstring heading, body;
+    std::function<void()> onOk;
+    Com<IDWriteTextFormat> bodyFmt, headFmt;
+    D2D1_RECT_F headR{}, bodyR{};
+    ConfirmForm() {
+        dialog = true;
+        minW = 420;
+        minH = 220;
+        buttons = {{IDOK, L"Delete", kFormDanger}, {IDCANCEL, L"Cancel", kFormPush}};
+        focus = 1;  // Enter right away keeps everything
+    }
+    void Fonts() override {
+        float size = g_set.fontSize * 96.0f / 72.0f;
+        bodyFmt = MakeFormat(T.family, size, (DWRITE_FONT_WEIGHT)BaseWeight(), true, DWRITE_TEXT_ALIGNMENT_LEADING, false);
+        headFmt = MakeFormat(T.family, size + 3, (DWRITE_FONT_WEIGHT)BoldWeight(), false, DWRITE_TEXT_ALIGNMENT_LEADING,
+                             false);
+        if (bodyFmt) bodyFmt->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+    }
+    void Layout(float w, float h) override {
+        float pad = 20, bw = 96, bh = 34, by = h - 16 - bh;
+        headR = {pad, kCapH + 6, w - pad, kCapH + 6 + 30};
+        bodyR = {pad, headR.bottom + 6, w - pad, by - 12};
+        buttons[0].rect = {w - 16 - 2 * bw - 8, by, w - 16 - bw - 8, by + bh};
+        buttons[1].rect = {w - 16 - bw, by, w - 16, by + bh};
+    }
+    void PaintExtra(Ctx& c, float, float) override {
+        if (headFmt) DrawLine(c, heading, headFmt.get(), headR, mocha::text);
+        if (bodyFmt && bodyR.bottom > bodyR.top) c.Text(body, bodyFmt.get(), bodyR, mocha::subtext1);
+    }
+    void Command(int cmd) override {
+        if (cmd != IDOK && cmd != IDCANCEL) return;
+        std::function<void()> run;
+        if (cmd == IDOK) run = onOk;
+        DestroyWindow(hwnd);  // deletes this form
+        if (run) run();
+    }
+    void Destroyed() override {
+        if ((Form*)g_confirm == this) g_confirm = nullptr;
+    }
+};
+
+
 
 // ---------------------------------------------------------------------------
 // App icon
@@ -7905,6 +8170,99 @@ bool RenderToPng(const std::wstring& path, float wDip, float hDip, float scale,
 // Contract functions
 // ---------------------------------------------------------------------------
 using namespace scmui;
+
+void Confirm_Open(const std::wstring& heading, const std::wstring& body, const std::wstring& okText,
+                  std::function<void()> onOk) {
+    if (!EnsureFonts()) return;
+    RegisterClasses();
+    if (g_confirm && g_confirm->hwnd) DestroyWindow(g_confirm->hwnd);
+    auto* f = new ConfirmForm();
+    f->heading = heading;
+    f->body = body;
+    f->buttons[0].text = okText;
+    f->onOk = std::move(onOk);
+    g_confirm = f;
+    HWND h = CreateHelperWindow(kPropsClass, L"Seamless Clipboard Manager", f);
+    if (!h) {
+        if (g_confirm == f) {
+            g_confirm = nullptr;
+            delete f;
+        }
+        return;
+    }
+    PlaceHelper(h, nullptr, 420, 220);
+    ShowHelper(h);
+}
+
+void Editor_Open(int64_t id) {
+    if (!EnsureFonts()) return;
+    RegisterClasses();
+    ImportDittoSizes();
+    if (g_editor && g_editor->hwnd) DestroyWindow(g_editor->hwnd);
+    auto* f = new EditorForm();
+    f->id = id;
+    f->body.placeholder = id ? L"Empty clip" : L"Type or paste text";
+    if (id) {
+        std::wstring t = Db_GetClipText(id);
+        f->lfOnly = t.find(L'\n') != std::wstring::npos && t.find(L"\r\n") == std::wstring::npos;
+        f->body.text = FromCrLf(t);
+    }
+    g_editor = f;
+    HWND h = CreateHelperWindow(kEditorClass, id ? L"Edit clip" : L"New clip", f);
+    if (!h) {
+        if (g_editor == f) {
+            g_editor = nullptr;
+            delete f;
+        }
+        return;
+    }
+    PlaceHelper(h, L"Editor", 600, 460);
+    ShowHelper(h);
+}
+
+void Props_Open(int64_t id) {
+    ClipRow row;
+    if (!Db_GetClipRow(id, row) || !EnsureFonts()) return;
+    RegisterClasses();
+    if (g_props && g_props->hwnd) DestroyWindow(g_props->hwnd);
+    auto* f = new PropsForm();
+    f->row = row;
+    f->inGroupList = L.q.groupId != -1;
+    f->desc.text = FromCrLf(row.text);
+    f->quick.text = row.quickPasteText;
+    f->buttons[0].checked = row.neverDelete;
+    f->buttons[1].checked = row.sticky;
+    f->groupIds.push_back(-1);
+    f->groupNames.push_back(L"No group");
+    int current = 0;
+    for (auto& [g, depth] : GroupTree()) {
+        if (g.id == row.id) continue;  // A group can't hold itself.
+        if (g.id == row.parentId) current = (int)f->groupIds.size();
+        f->groupIds.push_back(g.id);
+        f->groupNames.push_back(std::wstring((size_t)depth * 4, L' ') + g.text);
+    }
+    f->SetGroup(current);
+    std::wstring info = L"Added: " + FormatDate(row.date) + L"\nLast pasted: " + FormatDate(row.lastPasteDate);
+    ClipData data;
+    if (Db_GetClipData(id, data) && !data.formats.empty()) {
+        size_t total = 0;
+        for (auto& cf : data.formats) total += cf.data.size();
+        info += L"\nFormats (" + HumanSize(total) + L"):";
+        for (auto& cf : data.formats) info += L"\n    " + cf.name + L"  " + HumanSize(cf.data.size());
+    }
+    f->info.text = info;
+    g_props = f;
+    HWND h = CreateHelperWindow(kPropsClass, row.isGroup ? L"Group properties" : L"Clip properties", f);
+    if (!h) {
+        if (g_props == f) {
+            g_props = nullptr;
+            delete f;
+        }
+        return;
+    }
+    PlaceHelper(h, L"Props", 440, 540);
+    ShowHelper(h);
+}
 
 void List_Show() {
     if (!EnsureListWindow()) return;
@@ -8021,11 +8379,18 @@ void List_ApplySettings() {
         ApplyBackdrop(P.surf.hwnd);
         InvalidateRect(P.surf.hwnd, nullptr, FALSE);
     }
+    for (Form* f : {(Form*)g_editor, (Form*)g_props, (Form*)g_confirm}) {
+        if (!f || !f->hwnd) continue;
+        ApplyBackdrop(f->hwnd);
+        f->Fonts();
+        SendMessageW(f->hwnd, WM_SIZE, 0, 0);
+    }
 }
 
 void List_Destroy() {
-    if (E.hwnd) DestroyWindow(E.hwnd);
-    if (PR.hwnd) DestroyWindow(PR.hwnd);
+    if (g_editor && g_editor->hwnd) DestroyWindow(g_editor->hwnd);
+    if (g_props && g_props->hwnd) DestroyWindow(g_props->hwnd);
+    if (g_confirm && g_confirm->hwnd) DestroyWindow(g_confirm->hwnd);
     if (P.surf.hwnd) DestroyWindow(P.surf.hwnd);
     if (L.surf.hwnd) DestroyWindow(L.surf.hwnd);
     L.pages.clear();
@@ -8035,95 +8400,7 @@ void List_Destroy() {
     P = PreviewState{};
     ResetFonts();
     F = Factories{};
-    if (g_mantleBrush) DeleteObject(g_mantleBrush);
-    g_mantleBrush = nullptr;
     UnregisterClasses();
-}
-
-void Editor_Open(int64_t id) {
-    if (!EnsureFonts()) return;
-    RegisterClasses();
-    ImportDittoSizes();
-    if (E.hwnd) DestroyWindow(E.hwnd);
-    E.hwnd = CreateHelperWindow(kEditorClass, id ? L"Edit clip" : L"New clip");
-    if (!E.hwnd) return;
-    E.id = id;
-    E.surf.hwnd = E.hwnd;
-    ApplyBackdrop(E.hwnd);
-    E.save = MakeButton(E.hwnd, IDOK, L"Save", kBtnPrimary);
-    E.cancel = MakeButton(E.hwnd, IDCANCEL, L"Cancel", 0);
-    if (id) {
-        std::wstring t = Db_GetClipText(id);
-        E.lfOnly = t.find(L'\n') != std::wstring::npos && t.find(L"\r\n") == std::wstring::npos;
-        E.text = FromCrLf(t);
-    }
-    EditorFonts();
-    PlaceHelper(E.hwnd, L"Editor", 600, 460);
-    LayoutEditor();
-    // Show and activate before the list hides: once none of our windows is in front, Windows
-    // refuses the foreground and the editor opened behind the app underneath.
-    ShowWindow(E.hwnd, SW_SHOW);
-    SetWindowPos(E.hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-    SetForegroundWindow(E.hwnd);
-    SetFocus(E.hwnd);
-    List_Hide();
-}
-
-void Props_Open(int64_t id) {
-    ClipRow row;
-    if (!Db_GetClipRow(id, row) || !EnsureFonts()) return;
-    RegisterClasses();
-    if (PR.hwnd) DestroyWindow(PR.hwnd);
-    bool inGroupList = L.q.groupId != -1;
-    List_Hide();
-    PR.hwnd = CreateHelperWindow(kPropsClass, row.isGroup ? L"Group properties" : L"Clip properties");
-    if (!PR.hwnd) return;
-    PR.row = row;
-    PR.inGroupList = inGroupList;
-    for (PCWSTR t : {L"Description", L"Quick paste text", L"Group", L"Details"}) PR.labels.push_back(MakeLabel(PR.hwnd, t));
-    PR.desc = MakeField(PR.hwnd, idDesc, ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL);
-    PR.quick = MakeField(PR.hwnd, idQuick, ES_AUTOHSCROLL);
-    PR.never = MakeButton(PR.hwnd, idNever, L"Never delete", kBtnCheck);
-    PR.sticky = MakeButton(PR.hwnd, idSticky, L"Pin to top", kBtnCheck);
-    PR.group = CreateWindowExW(0, L"COMBOBOX", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
-                               0, 0, 10, 10, PR.hwnd, (HMENU)(INT_PTR)idGroup, g_hInstance, nullptr);
-    SetWindowTheme(PR.group, L"DarkMode_CFD", nullptr);
-    PR.info = MakeField(PR.hwnd, idInfo, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL);
-    PR.ok = MakeButton(PR.hwnd, IDOK, L"OK", kBtnPrimary);
-    PR.cancel = MakeButton(PR.hwnd, IDCANCEL, L"Cancel", 0);
-
-    SetWindowTextW(PR.desc, ToCrLf(row.text).c_str());
-    SetWindowTextW(PR.quick, row.quickPasteText.c_str());
-    SetChecked(PR.never, row.neverDelete);
-    SetChecked(PR.sticky, row.sticky);
-    PR.groupIds.push_back(-1);
-    SendMessageW(PR.group, CB_ADDSTRING, 0, (LPARAM)L"No group");
-    int current = 0;
-    for (auto& [g, depth] : GroupTree()) {
-        if (g.id == row.id) continue;  // A group can't hold itself.
-        std::wstring label = std::wstring(depth * 4, L' ') + g.text;
-        SendMessageW(PR.group, CB_ADDSTRING, 0, (LPARAM)label.c_str());
-        if (g.id == row.parentId) current = (int)PR.groupIds.size();
-        PR.groupIds.push_back(g.id);
-    }
-    SendMessageW(PR.group, CB_SETCURSEL, current, 0);
-
-    std::wstring info = L"Added: " + FormatDate(row.date) + L"\r\nLast pasted: " + FormatDate(row.lastPasteDate);
-    ClipData data;
-    if (Db_GetClipData(id, data) && !data.formats.empty()) {
-        size_t total = 0;
-        for (auto& f : data.formats) total += f.data.size();
-        info += L"\r\nFormats (" + HumanSize(total) + L"):";
-        for (auto& f : data.formats) info += L"\r\n    " + f.name + L"  " + HumanSize(f.data.size());
-    }
-    SetWindowTextW(PR.info, info.c_str());
-
-    PropsFonts();
-    PlaceHelper(PR.hwnd, nullptr, 440, 470);
-    LayoutProps();
-    ShowWindow(PR.hwnd, SW_SHOW);
-    SetForegroundWindow(PR.hwnd);
-    SetFocus(PR.desc);
 }
 
 HICON MakeAppIcon(int size) {
@@ -8718,7 +8995,7 @@ constexpr float kSetDockGap = 10, kSetRailDef = 232, kSetRailMin = 200, kSetRail
 // The footer is a floating pill dock at the bottom right of the page.
 constexpr float kSetFootBtnH = 36, kSetFootPad = 8, kSetFootH = kSetFootBtnH + 2 * kSetFootPad, kSetFootGap = 14;
 // The glass tint is one layer over the whole window, title bar included, so the two always match.
-constexpr float kSetGlassTint = 0.42f, kSetNativeFade = 56;
+constexpr float kSetGlassTint = 0.55f, kSetNativeFade = 56;
 constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
@@ -9740,7 +10017,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
         const float total = w.ch + kSetCapH;
         if (w.nativeTitle) {
             SetCom<ID2D1LinearGradientBrush> fade;
-            D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::crust, 0)}, {1, D2DColor(mocha::crust, kSetGlassTint)}};
+            D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::crust, kSetGlassTint)}, {1, D2DColor(mocha::crust, kSetGlassTint)}};
             SetCom<ID2D1GradientStopCollection> coll;
             if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
                 SUCCEEDED(rt->CreateLinearGradientBrush(
@@ -11029,12 +11306,28 @@ static bool Set_Create(bool render) {
         if (w->iconSmall) SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)w->iconSmall);
         if (w->iconBig) SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)w->iconBig);
         if (w->glass) {
-            // Windows acrylic as one sheet over the whole window, the way T3 (Electron
-            // backgroundMaterial "acrylic") does it: the system backdrop with the frame extended
-            // into the full client area, and no caption color, so the title bar and the page are
-            // the same material and turn solid together when the window loses focus.
-            int backdrop = 3;  // DWMSBT_TRANSIENTWINDOW
+            // Acrylic as one sheet over the whole window, the same material Seamless Flyouts
+            // gives the Launchpad settings window in Explorer: the accent acrylic with an 85%
+            // Mocha base tint, under the page's own crust tint. The system backdrop
+            // (DWMSBT_TRANSIENTWINDOW) went light grey over bright windows and turned to a flat
+            // grey slab when the window lost focus; the accent acrylic stays the same.
+            int backdrop = 1;  // DWMSBT_NONE
             DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+            DWM_BLURBEHIND bb{};
+            bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+            bb.fEnable = TRUE;
+            bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+            DwmEnableBlurBehindWindow(hwnd, &bb);
+            if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+            struct SetAccentPolicy { int state, flags, abgr, animation; };
+            struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
+            using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
+            if (auto setComposition = (SetComposition_t)(void*)GetProcAddress(
+                    GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute")) {
+                SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
+                SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+                setComposition(hwnd, &data);
+            }
             MARGINS margins{-1, -1, -1, -1};
             DwmExtendFrameIntoClientArea(hwnd, &margins);
             COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
