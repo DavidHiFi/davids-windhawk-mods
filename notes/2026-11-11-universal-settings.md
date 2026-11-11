@@ -71,3 +71,24 @@ sources and briefly replaced newer work from other threads: Dictate's menu aim a
 installed sources plus only the three material lines, then installed as Dictate 1.1.4 and
 Clipboard 1.3.4. Threads working on Dictate or Clipboard: build on 1.1.4 / 1.3.4, not your
 own 1.1.3 / 1.3.3 copies, or the dark material is lost.
+
+## Hardened for every mod (2026-11-12, 1:05 am)
+
+The owner asked for every mod, present and future, to use this settings GUI and glass.
+
+- `scripts\settings-material.py`: `check` lists every mod on the settings engine as ok or OFF
+  against the live Launchpad source; `stage <id> <out>` copies in the reference glass block, tint
+  and fade, and bumps the patch version.
+- `scripts\Install-StagedMod.ps1`: installs a staged source only if the live one is unchanged
+  since staging (hash). Backs up the source and registry key to `backups\settings-material\`.
+  Run it through heavy.py with `pwsh` (Windows PowerShell under the gate could not load Get-FileHash).
+- Installed: Color Picker 1.1.2 (was 1.1.1). Media Player 1.10.9 (was 1.10.8). The first try was
+  refused: its settings had an unquoted `(Suggested: 2)` that the newer CLI rejects. Now quoted.
+- Not touched, because other threads own them and were told: Crash Watch and Key Click (both OFF).
+  Taskbar AI Usage Plus has its own non-engine window (follow-up).
+- Hardened in: memory `universal-settings-gui.md`, `docs\settings-gui-standard.md`, global
+  agent rules (`AgentRules\global.md`, backup `.bak-20261112-*`, rendered to every agent).
+- Threads told to build on the new versions: crash popup, key click, color picker, menu pill,
+  Halo Launcher, mixer, black-areas blur, clipboard.
+- Rollback: install `backups\settings-material\<id>-<stamp>.wh.cpp` with windhawk-cli; rules
+  file from its `.bak`.

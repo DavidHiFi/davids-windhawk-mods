@@ -49,7 +49,7 @@ text. The engine code and every look value stay identical.
   (state 4, flags 2, colour 0x012E1E1E, so only the blur shows), full-window blur-behind and
   the frame extended, then crust painted flat at 55% over the whole page, title band included
   (no lighter fade under the title). Never the transient system backdrop, and never the old
-  D82E1E1E acrylic tint: both read as a light grey slab. (Changed 2026-11-12.)
+  D82E1E1E acrylic tint: both read as a light grey slab. (Changed 2026-11-12.) Check every mod with `python scripts\settings-material.py check` before shipping (`stage <id> <out>` copies the reference glass in from the live Launchpad source), build on the installed source in ModsSource, and install with `scripts\Install-StagedMod.ps1`, which refuses if another thread changed the source since staging.
 
 ## Options every mod's settings window has
 
