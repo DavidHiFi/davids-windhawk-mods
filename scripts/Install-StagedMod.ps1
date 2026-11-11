@@ -17,9 +17,17 @@ $stamp = Get-Date -Format 'yyyyMMdd-HHmm'
 Copy-Item $stored "$stored.bak-$stamp" -Force
 Copy-Item $stored "$bk\$Id-$stamp.wh.cpp" -Force
 reg export "HKLM\SOFTWARE\Windhawk\Engine\Mods\$Id" "$bk\$Id-key-$stamp.reg" /y | Out-Null
-$p = Start-Process $cli -ArgumentList 'mod','install','--file',$Staged -PassThru -WindowStyle Hidden `
+$before = (Get-ItemProperty "HKLM:\SOFTWARE\Windhawk\Engine\Mods\$Id" -EA SilentlyContinue).Version
+$want = ([regex]::Match([IO.File]::ReadAllText($Staged), '//\s*@version\s+(\S+)')).Groups[1].Value
+# Start-Process joins the argument list with spaces and does not quote, so a path with a space must be quoted here.
+$p = Start-Process $cli -ArgumentList "mod install --file `"$Staged`"" -PassThru -WindowStyle Hidden `
      -RedirectStandardOutput "$bk\cli.out" -RedirectStandardError "$bk\cli.err"
 try { $p.PriorityClass = 'BelowNormal' } catch {}
 $null = $p.WaitForExit(600000)
 $v = (Get-ItemProperty "HKLM:\SOFTWARE\Windhawk\Engine\Mods\$Id").Version
-"$Id installed, registry v$v, backup $Id-$stamp.wh.cpp"
+if ($v -ne $want) {
+    "$Id NOT installed: registry v$v (was v$before, staged v$want), cli exit $($p.ExitCode)"
+    Get-Content "$bk\cli.err" -Tail 5
+    exit 3
+}
+"$Id installed, registry v$v (was v$before), cli exit $($p.ExitCode), backup $Id-$stamp.wh.cpp"
