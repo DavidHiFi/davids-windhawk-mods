@@ -2,7 +2,7 @@
 // @id              seamless-color-picker
 // @name            Seamless Color Picker
 // @description     A full color picker on a hotkey, with a screen magnifier, recent colors and one-click copy
-// @version         1.1.0
+// @version         1.1.3
 // @author          DavidHiFi, Jaex, ShareX contributors
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -427,7 +427,7 @@ constexpr float kSetDockGap = 10, kSetRailDef = 232, kSetRailMin = 200, kSetRail
 // The footer is a floating pill dock at the bottom right of the page.
 constexpr float kSetFootBtnH = 36, kSetFootPad = 8, kSetFootH = kSetFootBtnH + 2 * kSetFootPad, kSetFootGap = 14;
 // The glass tint is one layer over the whole window, title bar included, so the two always match.
-constexpr float kSetGlassTint = 0.42f, kSetNativeFade = 56;
+constexpr float kSetGlassTint = 0.55f, kSetNativeFade = 56;
 constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
@@ -1436,7 +1436,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
         const float total = w.ch + kSetCapH;
         if (w.nativeTitle) {
             SetCom<ID2D1LinearGradientBrush> fade;
-            D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::crust, 0)}, {1, D2DColor(mocha::crust, kSetGlassTint)}};
+            D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::crust, kSetGlassTint)}, {1, D2DColor(mocha::crust, kSetGlassTint)}};
             SetCom<ID2D1GradientStopCollection> coll;
             if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
                 SUCCEEDED(rt->CreateLinearGradientBrush(
@@ -2668,12 +2668,28 @@ static bool Set_Create(bool render) {
         if (w->iconSmall) SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)w->iconSmall);
         if (w->iconBig) SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)w->iconBig);
         if (w->glass) {
-            // Windows acrylic as one sheet over the whole window, the way T3 (Electron
-            // backgroundMaterial "acrylic") does it: the system backdrop with the frame extended
-            // into the full client area, and no caption color, so the title bar and the page are
-            // the same material and turn solid together when the window loses focus.
-            int backdrop = 3;  // DWMSBT_TRANSIENTWINDOW
+            // Acrylic as one sheet over the whole window, the same material Seamless Flyouts
+            // gives the Launchpad settings window in Explorer: the accent acrylic with an 85%
+            // Mocha base tint, under the page's own crust tint. The system backdrop
+            // (DWMSBT_TRANSIENTWINDOW) went light grey over bright windows and turned to a flat
+            // grey slab when the window lost focus; the accent acrylic stays the same.
+            int backdrop = 1;  // DWMSBT_NONE
             DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+            DWM_BLURBEHIND bb{};
+            bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+            bb.fEnable = TRUE;
+            bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+            DwmEnableBlurBehindWindow(hwnd, &bb);
+            if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+            struct SetAccentPolicy { int state, flags, abgr, animation; };
+            struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
+            using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
+            if (auto setComposition = (SetComposition_t)(void*)GetProcAddress(
+                    GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute")) {
+                SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
+                SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+                setComposition(hwnd, &data);
+            }
             MARGINS margins{-1, -1, -1, -1};
             DwmExtendFrameIntoClientArea(hwnd, &margins);
             COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
@@ -3474,12 +3490,15 @@ struct Picker {
     std::map<int, float> glow;
     bool tracking = false, sampling = false, glassOn = false, hiddenForPick = false;
     int tick = 0;
+    int capPx = 0;  // caption height the client now covers (custom title strip)
     HICON iconSmall = nullptr, iconBig = nullptr;
 };
 Picker g_pk;
 HWND g_msg = nullptr;
 HINSTANCE g_inst = nullptr;
 int g_modeOverride = -1;
+
+static float CapDip() { return g_pk.capPx * 96.0f / g_pk.dpi; }
 
 static int Mode() { return g_modeOverride >= 0 ? g_modeOverride : g_set.sliderMode; }
 
@@ -3770,19 +3789,22 @@ static void DrawPicker(ID2D1RenderTarget* rt, Res& res, bool glass) {
     D2D1_RECT_F all{0, 0, p.w, p.h};
     if (glass) {
         rt->Clear(D2D1::ColorF(0, 0, 0, 0));
-        // One tint over the page; it fades in under the native title bar so the two meet without a seam.
-        float t = g_set.tint / 100.0f * 0.92f;
-        D2D1_GRADIENT_STOP st[2] = {{0, D2DColor(m::crust, 0)}, {1, D2DColor(m::crust, t)}};
-        ComPtr<ID2D1GradientStopCollection> sc;
-        ComPtr<ID2D1LinearGradientBrush> br;
-        rt->CreateGradientStopCollection(st, 2, sc.GetAddressOf());
-        if (sc) rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties({0, 0}, {0, 56}), sc.Get(),
-                                              br.GetAddressOf());
-        if (br) rt->FillRectangle(all, br.Get());
+        // One flat Mocha base tint over the acrylic, top to bottom; no fade, no light band.
+        rt->Clear(D2DColor(m::base, g_set.tint / 100.0f * 0.92f));
     } else {
         rt->Clear(D2DColor(m::base));
     }
     UpdateBitmaps(res);
+    float cap = CapDip();
+    if (cap > 0) {
+        // Title strip: same base as the page, our icon and name; DWM draws min/close on the right.
+        float s = 16, y = (cap - s) / 2;
+        D2D1_RECT_F ic{12, y, 12 + s, y + s};
+        P.GradFill(ic, 4, GetActiveWindow() == p.hwnd ? 1.0f : 0.6f);
+        P.Glyph(g_fIconXS.Get(), 0xEF3C, ic, m::crust);
+        P.Text(g_fSmall.Get(), L"Seamless Color Picker", {36, 0, p.w - 150, cap}, GetActiveWindow() == p.hwnd ? m::text : m::overlay1);
+        rt->SetTransform(D2D1::Matrix3x2F::Translation(0, cap));
+    }
 
     // Color box.
     float boxGlow = std::max(Glow(HotId(K_Box, 0)), p.drag == 1 ? 1.0f : 0.0f);
@@ -3945,6 +3967,7 @@ static void DrawPicker(ID2D1RenderTarget* rt, Res& res, bool glass) {
         if (h.kind == K_Btn) DrawButton(P, h);
     std::wstring hint = p.sampling ? L"Sampling under the mouse" : g_set.livePick ? L"Hold Ctrl to sample" : L"P picks from the screen";
     P.Text(g_fSmall.Get(), hint, p.hint, p.sampling ? g_set.accent : m::overlay1);
+    rt->SetTransform(D2D1::Matrix3x2F::Identity());
 }
 
 // ---- Window icon ----------------------------------------------------------
@@ -4012,17 +4035,43 @@ static void Invalidate() {
 static void ApplyGlass(HWND hwnd, bool glass) {
     BOOL dark = TRUE;
     DwmSetWindowAttribute(hwnd, 20, &dark, sizeof(dark));
+    // The house glass (docs/settings-gui-standard.md): the launcher grid's accent acrylic, no system
+    // backdrop, blur-behind over the whole window; DrawPicker paints the flat Mocha base on top.
+    struct AccentPolicy { int state, flags, abgr, animation; };
+    struct CompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, CompositionData*);
+    auto setComposition = (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
     if (glass) {
-        int backdrop = 3;  // DWMSBT_TRANSIENTWINDOW
+        int backdrop = 1;  // DWMSBT_NONE
         DwmSetWindowAttribute(hwnd, 38, &backdrop, sizeof(backdrop));
         MARGINS mg{-1, -1, -1, -1};
         DwmExtendFrameIntoClientArea(hwnd, &mg);
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+        bb.fEnable = TRUE;
+        bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+        if (setComposition) {
+            AccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
+            CompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(hwnd, &data);
+        }
         COLORREF none = 0xFFFFFFFE;
         DwmSetWindowAttribute(hwnd, 35, &none, sizeof(none));
     } else {
+        if (setComposition) {
+            AccentPolicy policy{0, 0, 0, 0};
+            CompositionData data{19, &policy, sizeof(policy)};
+            setComposition(hwnd, &data);
+        }
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE;
+        bb.fEnable = FALSE;
+        DwmEnableBlurBehindWindow(hwnd, &bb);
         int backdrop = 1;  // DWMSBT_NONE
         DwmSetWindowAttribute(hwnd, 38, &backdrop, sizeof(backdrop));
-        MARGINS mg{0, 0, 0, 0};
+        MARGINS mg{0, 0, g_pk.capPx, 0};
         DwmExtendFrameIntoClientArea(hwnd, &mg);
         COLORREF cap = scpset::RefFromRgb(m::crust);
         DwmSetWindowAttribute(hwnd, 35, &cap, sizeof(cap));
@@ -4034,7 +4083,7 @@ static void ApplyGlass(HWND hwnd, bool glass) {
 static void ResizeToLayout() {
     Picker& p = g_pk;
     if (!p.hwnd) return;
-    RECT r{0, 0, PxOf(p.w), PxOf(p.h)};
+    RECT r{0, 0, PxOf(p.w), PxOf(p.h)};  // outer size as a normal window; the client also covers the caption
     DWORD style = (DWORD)GetWindowLongPtrW(p.hwnd, GWL_STYLE), ex = (DWORD)GetWindowLongPtrW(p.hwnd, GWL_EXSTYLE);
     AdjustWindowRectExForDpi(&r, style, FALSE, ex, p.dpi);
     SetWindowPos(p.hwnd, nullptr, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
@@ -4071,7 +4120,7 @@ static void BeginEdit(int f) {
         if (h.kind != K_Num || h.arg != f) continue;
         p.editing = f;
         bool spins = f != F_HEX;
-        RECT r{PxOf(h.r.left + 5), PxOf(h.r.top + 4), PxOf(h.r.right - (spins ? 18 : 5)), PxOf(h.r.bottom - 4)};
+        RECT r{PxOf(h.r.left + 5), PxOf(h.r.top + 4) + p.capPx, PxOf(h.r.right - (spins ? 18 : 5)), PxOf(h.r.bottom - 4) + p.capPx};
         SetWindowTextW(p.edit, FieldText(f).c_str());
         SetWindowPos(p.edit, HWND_TOP, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_SHOWWINDOW);
         SetFocus(p.edit);
@@ -4301,8 +4350,32 @@ static void Paint() {
 static LRESULT CALLBACK PickerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     Picker& p = g_pk;
     auto dipX = [&](LPARAM l) { return GET_X_LPARAM(l) * 96.0f / p.dpi; };
-    auto dipY = [&](LPARAM l) { return GET_Y_LPARAM(l) * 96.0f / p.dpi; };
+    auto dipY = [&](LPARAM l) { return (GET_Y_LPARAM(l) - p.capPx) * 96.0f / p.dpi; };
+    {
+        LRESULT dr = 0;
+        if (DwmDefWindowProc(hwnd, msg, wp, lp, &dr)) return dr;  // caption buttons hover and click
+    }
     switch (msg) {
+        case WM_NCCALCSIZE:
+            if (wp) {
+                auto* np = (NCCALCSIZE_PARAMS*)lp;
+                LONG top = np->rgrc[0].top;
+                DefWindowProcW(hwnd, msg, wp, lp);
+                p.capPx = np->rgrc[0].top - top;
+                np->rgrc[0].top = top;  // client covers the caption; we paint the strip ourselves
+                return 0;
+            }
+            break;
+        case WM_NCHITTEST: {
+            LRESULT ht = DefWindowProcW(hwnd, msg, wp, lp);
+            if (ht != HTCLIENT) return ht;
+            POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            ScreenToClient(hwnd, &pt);
+            return pt.y < p.capPx ? HTCAPTION : HTCLIENT;
+        }
+        case WM_NCACTIVATE:
+            Invalidate();
+            break;
         case WM_PAINT: {
             PAINTSTRUCT ps;
             BeginPaint(hwnd, &ps);
@@ -4320,6 +4393,7 @@ static LRESULT CALLBACK PickerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             RECT* s = (RECT*)lp;
             SetWindowPos(hwnd, nullptr, s->left, s->top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
             ResizeToLayout();
+            ApplyGlass(hwnd, p.glassOn);
             MakeEditFont();
             EndEdit(true);
             Invalidate();
@@ -4407,7 +4481,7 @@ static LRESULT CALLBACK PickerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_MOUSEWHEEL: {
             POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             ScreenToClient(hwnd, &pt);
-            float x = pt.x * 96.0f / p.dpi, y = pt.y * 96.0f / p.dpi;
+            float x = pt.x * 96.0f / p.dpi, y = (pt.y - p.capPx) * 96.0f / p.dpi;
             int dir = GET_WHEEL_DELTA_WPARAM(wp) > 0 ? 1 : -1, mul = (GET_KEYSTATE_WPARAM(wp) & MK_SHIFT) ? 10 : 1;
             const Hot* h = HitTest(x, y);
             if (!h) return 0;
@@ -4503,6 +4577,7 @@ static void OpenPicker(const Color* start, const POINT* pos = nullptr) {
     if (!hwnd) return;
     p.hwnd = hwnd;
     p.dpi = GetDpiForWindow(hwnd);
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     ApplyGlass(hwnd, p.glassOn);
     p.editBrush = CreateSolidBrush(scpset::RefFromRgb(m::surface0));
     p.edit = CreateWindowExW(WS_EX_LAYERED, L"EDIT", L"", WS_CHILD | ES_CENTER | ES_AUTOHSCROLL, 0, 0, 10, 10, hwnd, nullptr, g_inst, nullptr);
