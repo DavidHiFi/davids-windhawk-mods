@@ -37,3 +37,15 @@ recompiles System Info from `sysinfo-1.4.29.wh.cpp`.
 
 ## Trap
 In PowerShell 5.1 `cli` is the Clear-Item alias; a helper named Cli never ran. Named it Invoke-WhCli.
+
+## Pass 2 (9:38 pm): hover cut off on the right, network hover box
+- Owner saw the hover edge stop at the network icon. The right cap of the dock is the network
+  button frame (styler rule 12), which still had a SolidColorBrush, so 1.4.30 fell back to the
+  brush swap and the styler reverted it. Rule 12 styles[5] is now the same two-stop grey
+  LinearGradientBrush as 13-16. No recompile.
+- Rule 53 network hover box 22x20 -> 26x26 (same as the other tray icons: 28 cell, Margin 1).
+- Script: scripts\2026-11-11-tray-dock-hover-2.ps1 (-Action Rollback imports
+  backups\2026-11-11-tray-hover\styler-pass2.reg).
+- Applied while another thread held the windhawk-engine lock (my lock call was refused but the
+  command was chained). Styler settings only; Explorer PIDs unchanged; coop note posted.
+- Hover not checked live: owner at the PC.
