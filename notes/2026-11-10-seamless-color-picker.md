@@ -60,3 +60,27 @@ recorded the window, closed it. Proof in `work\2026-11-10-color-picker\live\`.
   open/close cycles reopen at the same top-left (`live\drift.py`, verdict STABLE;
   the parked spot came back exactly twice). Still: `live\after-1.1.0-driftfix.png`,
   background RGB(31,31,39) unchanged.
+
+## 1.1.1 to 1.1.3 (2026-11-12): one dark base, house glass
+
+- Owner: no light band at the top, just the dark Mocha base, real blur like usual.
+- 1.1.1: page fill made flat (`DrawPicker`, the crust fade at the top removed). Live check
+  showed the band was really the native title bar: raw acrylic RGB(84,84,84) above a page of
+  RGB(41,41,54).
+- 1.1.2 (settings-GUI thread bd0ca06f, 12:40 am): settings window moved to the standard glass.
+- 1.1.3 (1:04 am), built on 1.1.2:
+  - Client area now covers the caption (WM_NCCALCSIZE keeps the top, DwmDefWindowProc for
+    the caption buttons, HTCAPTION in the strip so drag, right-click and Alt-drag still work).
+    The picker paints its own icon and title in the strip; content, mouse, wheel and the edit
+    box are offset by the caption height.
+  - Picker window uses the same glass as the settings standard: accent acrylic
+    {4, 2, 0x012E1E1E, 0}, backdrop none, full blur-behind, flat Mocha base tint on top.
+  - Settings window pieces copied from 1.1.2; `scripts\settings-material.py check`: ok.
+- Live: every row of the window, title strip included, samples RGB(30,30,47) (Mocha base
+  #1E1E2E). Still: `work\2026-11-10-color-picker\live\after-1.1.3-full.png`.
+- Install: `scripts\Install-StagedMod.ps1` (hash-guarded), backup in
+  `backups\settings-material\local@seamless-color-picker-20261112-0103.wh.cpp`. The host did
+  not restart after install; one disable + enable started it (pid 28772).
+- Rollback: reinstall that backup with the same script, or `-Rollback` to remove the mod.
+- Source backups: `src\core.cpp.bak-20261112-0056`, `src\settings-*.cpp.bak-20261112-*`.
+- Public repo: commit e6b482c (source, preview, manifest 1.1.3); raw URL returns 200.
