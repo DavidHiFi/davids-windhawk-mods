@@ -67,5 +67,24 @@ hover and selected states included.
   AutoClicker's settings open only from its tray menu, which ignores posted keys, so its window
   was not captured; its footer code is now byte for byte Launchpad's.
 
+## Launchpad 2.4.9 catch-up: Key Click, Crash Watch, Dictate (2026-11-12, 7:10 pm)
+
+Owner (Key Click 1.0.4 screenshot): turned on "Native Windows title bar", saved, nothing changed;
+the scrollbar was a flat grey thumb, not the blue to mauve gradient.
+
+- Cause: Launchpad 2.4.9 (bd0ca06f's rollout, 3:28 pm) added Set_ApplyFrame (Save applies the
+  title bar and glass switches to the open window) and Set_ThumbFill (gradient thumbs). Key Click,
+  Crash Watch, Dictate and Find were still on 2.4.8; bd0ca06f left synced copies for their owners.
+- Key Click 1.0.5 live 7:12 pm (`settings-engine.py sync`, clean). Live check: the window opens
+  with the Windows title bar (switch was saved on) and a gradient scrollbar
+  (`work\2026-11-12-tool-menu-look\media\key-click-settings-scroll2.png`).
+- Crash Watch 1.2.5: Set_WndProc hand-merged (its dialog guard first, then the template's
+  dropdown wheel). Dictate 1.2.1: its own scrolling dropdown was an early copy of the template's,
+  so the template side won in Set_DrawPopup, Set_Hit, Set_OnKey, Set_OpenPopup, Set_WndProc; its
+  leftover dropVis keep-in-view lines and the dropVis field were removed. Both rebaselined.
+- Tools: `work\2026-11-12-engine-catchup-2\conflicts.py` (conflict-marked three-way merge per owned
+  function) and `resolve.py <id> <Set_Fn>=template|both`.
+- Find: listary-port is rebuilding it as Seamless Explorer Search; it takes the sync on its build.
+
 ## Proof
 - Key Click: `work\2026-11-11-seamless-key-click\media\key-click-tray-menu.mp4` (and .gif, .png).
