@@ -22,6 +22,8 @@ A clean countdown before Windows shuts down, restarts, sleeps or hibernates.
 Any key, click or scroll cancels it. The overlay matches the Mocha rice: real
 acrylic glass, FiraCode Nerd Font and a smooth blue to mauve gradient.
 
+![Seamless Power Action Countdown preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-power-action-countdown.png)
+
 ## Features
 
 - **Cancellable countdown.** Any keyboard key, mouse button, scroll wheel or

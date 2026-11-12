@@ -27,7 +27,7 @@
 
 Based on Windows 11 File Explorer Styler by m417z.
 
-![Explorer preview](file:///H:/Windhawk%20Configuration/2026-11-06-header-hover/thispc-1.1.4.png)
+![Explorer preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windows-11-file-explorer-styler-plus.png)
 
 Customize the File Explorer with themes contributed by others or create your
 own.

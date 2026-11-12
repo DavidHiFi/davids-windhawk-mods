@@ -19,7 +19,7 @@
 A media player and a live audio visualizer in one mod. The player shows what's
 playing with album art and buttons, and the spectrum bars sit right beside it.
 
-![Seamless Media Player preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/taskbar-fluent-media-player-plus.png)
+![Seamless Media Player preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-media-player.png)
 
 ## Features
 

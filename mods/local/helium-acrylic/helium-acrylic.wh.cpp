@@ -48,6 +48,7 @@ This mod keeps both alive so a plain stock install stays riced.
 ## Credits
 Written by DavidHiFi.
 */
+// ==/WindhawkModReadme==
 
 #include <windows.h>
 #include <atomic>
