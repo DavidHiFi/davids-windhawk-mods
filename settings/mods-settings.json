@@ -505,7 +505,7 @@
     "customization.text.summarySize": 23,
     "customization.text.percentSize": 26
   },
-  "local@gpu-accelerated-explorer-view-plus": {
+  "local@seamless-explorer-view": {
     "Appearance.rowHeight": 32,
     "Appearance.fontSizePercent": 52,
     "Appearance.gridFontSizePercent": 42,

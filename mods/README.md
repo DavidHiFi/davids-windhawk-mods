@@ -34,7 +34,7 @@ is in the repo but disabled on the source machine right now.
 | [Seamless Clipboard Manager](local/seamless-clipboard-manager) | Everything you copy, text and images, in a searchable list you open with Win+V. | 1.3.0 | GPL-3.0 |
 | [Theme Tool Plus](local/theme-tool-plus) | Switch Windows themes from the settings tab, with the Main 01 Catppuccin theme, cursors and sounds. | 1.2.0 | GPL-2.0 |
 | [File Explorer Styler Plus](local/windows-11-file-explorer-styler-plus) | Themes for File Explorer, plus a rounded status bar dock with Mocha view buttons. | 1.10.5 | GPL-3.0 |
-| [GPU Accelerated Explorer View Plus](local/gpu-accelerated-explorer-view-plus) | GPU-rendered file lists and icon grids, with right-click submenus that open fully populated. | 1.4.8 | GPL-2.0 |
+| [Seamless Explorer View](local/seamless-explorer-view) | GPU-rendered file lists and icon grids, with right-click submenus that open fully populated. | 2.0.0 | GPL-2.0 |
 | [Explorer Tags Plus](local/explorer-tags-plus) | Colored tags in Explorer's navigation pane and a Tags submenu on files. | 0.8.2 | MIT |
 | [File Operation Styler Plus](local/file-operation-styler-plus) | A modern copy, move, delete and recycle window for Explorer, drawn on the GPU. | 1.5.0 | GPL-3.0 |
 | [Peek](local/peek) | Select a file in Explorer and press Space to preview it, with media playback for audio and video. | 1.5.0 | MIT |

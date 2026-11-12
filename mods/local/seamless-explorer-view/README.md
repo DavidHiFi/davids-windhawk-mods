@@ -1,9 +1,9 @@
-# GPU Accelerated Explorer View Plus
+# Seamless Explorer View
 
 Hardware rendering for Explorer's file lists and icon grids, with right-click
 submenus that open fully populated instead of an empty box.
 
-![GPU Accelerated Explorer View Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/gpu-accelerated-explorer-view-plus.png)
+![Seamless Explorer View preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-explorer-view.png)
 
 ## Features
 
@@ -41,7 +41,7 @@ Tree position, expand arrows and connector lines come from
 ## Install
 
 1. Install [Windhawk](https://windhawk.net/).
-2. Choose **Create a new mod**, paste [gpu-accelerated-explorer-view-plus.wh.cpp](gpu-accelerated-explorer-view-plus.wh.cpp) and click **Compile**.
+2. Choose **Create a new mod**, paste [seamless-explorer-view.wh.cpp](seamless-explorer-view.wh.cpp) and click **Compile**.
 3. Disable the original mod before enabling this one. Disable Explorer
    Navigation Tree Offset and File Explorer WinUI-Like Content Animation too:
    their features are built in now.

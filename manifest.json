@@ -754,15 +754,15 @@
       "enabled": true
     },
     {
-      "id": "local@gpu-accelerated-explorer-view-plus",
-      "name": "GPU Accelerated Explorer View Plus",
+      "id": "local@seamless-explorer-view",
+      "name": "Seamless Explorer View",
       "author": "DavidHiFi, DarkionAvey, crazyboyybs, Languster, valinet",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.4.8",
+      "version": "2.0.0",
       "license": "GPL-2.0",
       "origin": "local",
       "upstream": "https://windhawk.net/mods/gpu-accelerated-explorer-view",
-      "source": "mods/local/gpu-accelerated-explorer-view-plus/gpu-accelerated-explorer-view-plus.wh.cpp",
+      "source": "mods/local/seamless-explorer-view/seamless-explorer-view.wh.cpp",
       "enabled": true
     },
     {
