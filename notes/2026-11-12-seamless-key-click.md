@@ -45,5 +45,24 @@ Date: 2026-11-12, thread 138571e3. Live since 1:07 am.
 - `vcap.py record` takes a folder, not a file name; its share step fails on odd frame heights (1039).
 - A window that does not change gives the recorder one frame only; use a still for static windows.
 
+## 1.0.2 (8:52 am): tray menu look and the 2.4.7 settings engine
+- Owner: the tray menu hover was a flat grey, not Launchpad's blue to mauve pill; the settings footer
+  dock was see-through.
+- Cause of the menu: tool mods run in their own windhawk-mod.exe, where Seamless Flyouts (which
+  paints Launchpad's menu in explorer) never loads.
+- Fix: `src\menu-look.cpp` is Mixer's shared block (menu room + pill + skin with its CBT hook),
+  copied verbatim. `core.cpp` includes it and calls `SeamlessMenuSkin::Init()` in WhTool_ModInit
+  (hooks apply when init returns, so it has to be there) and `Uninit()` in WhTool_ModUninit.
+  `assemble.py` inlines it.
+- Footer blur and hovers: bd0ca06f's refreshed engine (Launchpad 2.4.7) through gen.py.
+- Offline compile clean (`test\compile-offline.ps1`; only the expected InternalWh_* link errors).
+- Installed by `install-1.0.2.ps1` through Install-StagedMod with the 1.0.1 base hash; registry
+  1.0.2, enabled, helper restarted. settings-material check: ok.
+- Proof recorder: `test\capture-tray-menu.py` opens the menu by its own tray message, walks the
+  hover with MN_SELECTITEM, closes it with a posted Escape. It must wait for the recorder's first
+  frames: the first run opened the menu while ffmpeg was still starting (8 s under load).
+- The same block goes to the other tool mods with `scripts\2026-11-12-tool-menu-look.py`
+  (note `notes\2026-11-12-tool-menu-look.md`).
+
 ## Not done
 - Public repo: the mod is not published, and the readme's preview link is not live yet. Waiting on the owner.
