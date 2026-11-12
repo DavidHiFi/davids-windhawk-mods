@@ -55,3 +55,11 @@ mixer 1.4.20 reinstalled from the work folder.
 - 1.4.25: regular FiraCode at the Mocha text colour (205,214,244; Latte 76,79,105), like the battery percent, instead of bold white. Rule 64 Width 47 -> 50 so "100" keeps a 4 px gap to the speaker.
 - Measured (1x): Fan Control ink to number 11 px, number to speaker 4 px, speaker to network 16 px; rows level.
 - Rollback: scripts\2026-11-12-mixer-tray-blend.ps1 -Action Rollback (Width 52, 1.4.20). Styler backup: work folder styler.reg.bak-*.
+
+## 1.4.26 (placed by its visible pixels)
+
+- The number is now placed by its ink, not its window box: digits rows 21-28, the same as Fan Control's number and the battery percent; 6 px to the speaker, the same as the battery icon to its percent.
+- 11 px font (digits 8 px tall, like the others) instead of 12.
+- Rule 64 Width 50 -> 52, so the gap before the number is 12 px, like the U icon to Fan Control.
+- Measured 1x: U icon > Fan number 12, Fan number > our number 12, number > speaker 6, speaker > network 15.
+- Rollback unchanged: scripts\2026-11-12-mixer-tray-blend.ps1 -Action Rollback.
