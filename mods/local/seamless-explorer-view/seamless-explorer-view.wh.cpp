@@ -1,8 +1,8 @@
 // ==WindhawkMod==
-// @id              gpu-accelerated-explorer-view-plus
-// @name            GPU Accelerated Explorer View Plus
+// @id              seamless-explorer-view
+// @name            Seamless Explorer View
 // @description     GPU-accelerated Explorer views with smooth scrolling and right-click submenus that populate fully
-// @version         1.4.8
+// @version         2.0.0
 // @author          DavidHiFi, DarkionAvey, crazyboyybs, Languster, valinet
 // @include         explorer.exe
 // @architecture    x86-64
@@ -15,14 +15,14 @@
 
 // ==WindhawkModReadme==
 /*
-# GPU Accelerated Explorer View Plus
+# Seamless Explorer View
 
 Explorer's file lists and icon grids get hardware rendering: smooth scrolling,
 hover and selection animations, and faster loading. Submenus in the right-click
 menu, such as NanaZip's archive actions, open fully populated instead of an
 empty box.
 
-![GPU Accelerated Explorer View Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/gpu-accelerated-explorer-view-plus.png)
+![Seamless Explorer View preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-explorer-view.png)
 
 ## Features
 - **GPU rendering.** Details lists and icon grids draw smoothly, thumbnails included.
@@ -34969,7 +34969,7 @@ static DWORD WINAPI RestartPromptThreadProc(LPVOID)
     TASKDIALOGCONFIG config{};
     config.cbSize = sizeof(config);
     config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_POSITION_RELATIVE_TO_WINDOW;
-    config.pszWindowTitle = L"GPU Accelerated Explorer View Plus - Windhawk";
+    config.pszWindowTitle = L"Seamless Explorer View - Windhawk";
     config.pszContent = L"For correct navigation pane colors, it is recommended to restart Explorer.";
     config.cButtons = ARRAYSIZE(buttons);
     config.pButtons = buttons;

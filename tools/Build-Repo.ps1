@@ -66,7 +66,7 @@ $localPaths = [ordered]@{
     'local@better-volume-mixer-plus'  = 'mods\local\better-volume-mixer-plus\better-volume-mixer-plus.wh.cpp'
     'local@shell-font-changer-plus' = 'mods\local\shell-font-changer-plus\shell-font-changer-plus.wh.cpp'
     'local@windhawk-enhanced-styler' = 'mods\local\windhawk-enhanced-styler\windhawk-enhanced-styler.wh.cpp'
-    'local@gpu-accelerated-explorer-view-plus' = 'mods\local\gpu-accelerated-explorer-view-plus\gpu-accelerated-explorer-view-plus.wh.cpp'
+    'local@seamless-explorer-view' = 'mods\local\seamless-explorer-view\seamless-explorer-view.wh.cpp'
 }
 # Values the source headers do not carry.
 $licenseOverride = @{
@@ -81,7 +81,7 @@ $upstreamOverride = @{
     'local@taskbar-ai-quota-opencode' = 'https://windhawk.net/mods/taskbar-ai-quota'
     'local@better-volume-mixer-plus'  = 'https://windhawk.net/mods/better-volume-mixer'
     'local@shell-font-changer-plus' = 'https://windhawk.net/mods/explorer-font-changer'
-    'local@gpu-accelerated-explorer-view-plus' = 'https://windhawk.net/mods/gpu-accelerated-explorer-view'
+    'local@seamless-explorer-view' = 'https://windhawk.net/mods/gpu-accelerated-explorer-view'
 }
 
 function Test-LocalId {
