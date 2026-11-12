@@ -112,7 +112,7 @@ An AI agent can do all of this on its own: [AGENTS.md](AGENTS.md) is the runbook
 | | Mod | What it does |
 | --- | --- | --- |
 | <img src="media/previews/seamless-autoscroll.png" width="220" alt="Frosted glass autoscroll circle with a blue to mauve ring"> | [Seamless Autoscroll](mods/local/seamless-autoscroll) | Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator. |
-| | [Seamless Autoclicker](mods/local/seamless-autoclicker) | Hold the forward and left mouse buttons and the left button keeps clicking. |
+| <img src="media/previews/seamless-autoclicker.png" width="220" alt="Seamless AutoClicker settings in Catppuccin Mocha"> | [Seamless AutoClicker](mods/local/seamless-autoclicker) | Hold a side mouse button and left click keeps clicking, with a right-click lock, a tray switch and its own settings window. |
 | <img src="media/previews/seamless-dictate.png" width="220" alt="Seamless Dictate settings in Catppuccin Mocha"> | [Seamless Dictate](mods/local/seamless-dictate) | Hold a shortcut and speak to type in any app, with AI cleanup and mic privacy while you talk. |
 | | [Magic Pointer Plus](mods/local/magic-pointer-plus) | Shake the pointer, then point at anything and ask an AI about it, with matching menus. |
 | | [Pointer Afterimage Plus](mods/local/pointer-afterimage-plus) | A real motion blur for the mouse pointer, drawn on the GPU. |
@@ -190,7 +190,7 @@ powershell -ExecutionPolicy Bypass -File tools\Build-Repo.ps1 -FromExport H:\tmp
 
 My own work here is MIT, see [LICENSE](LICENSE), except where a mod inherits its original's license:
 
-- **GPL-3.0:** Seamless Window Manager, Seamless Borders, Seamless Clipboard Manager, Seamless Tray Drawer, File Operation Styler Plus, Seamless Autoclicker, Recycle Bin Tray Plus, Taskbar System Info Plus.
+- **GPL-3.0:** Seamless Window Manager, Seamless Borders, Seamless Clipboard Manager, Seamless Tray Drawer, File Operation Styler Plus, Seamless AutoClicker, Recycle Bin Tray Plus, Taskbar System Info Plus.
 - **GPL-2.0:** Simple Window Switcher Plus, Theme Tool Plus, Seamless Explorer View, Chromium Cursors Mocha.
 
 Catalog mods in `mods/catalog/` keep their authors' licenses.

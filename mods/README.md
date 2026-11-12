@@ -46,7 +46,7 @@ is in the repo but disabled on the source machine right now.
 | [Settings Styler Plus](local/settings-styler-plus) | Themes for the Settings app, with the normal title bar and a blur that stays when unfocused. | 1.4.1 | GPL-3.0 |
 | [Helium Acrylic](local/helium-acrylic) | Keeps Helium's acrylic surface, Catppuccin colors and system-drawn frame working after browser updates. | 3.4.0 | MIT |
 | [Seamless Autoscroll](local/seamless-autoscroll) | Hold the middle mouse button and move to scroll, with a frosted glass indicator. | 1.0.0 | MIT |
-| [Seamless Autoclicker](local/seamless-autoclicker) | Hold the forward and left mouse buttons and the left button keeps clicking. | 1.1.0 | GPL-3.0 |
+| [Seamless AutoClicker](local/seamless-autoclicker) | Hold a side mouse button and left click keeps clicking, with a right-click lock, a tray switch and its own settings window. | 1.6.4 | GPL-3.0 |
 | [Seamless Dictate](local/seamless-dictate) | Hold a shortcut and speak to type in any app, with AI cleanup and mic privacy. | 1.1.0 | MIT |
 | [Magic Pointer Plus](local/magic-pointer-plus) | Shake the pointer, then point at anything and ask an AI about it, with matching menus. | 1.0.7 | MIT |
 | [Pointer Afterimage Plus](local/pointer-afterimage-plus) | A real motion blur for the mouse pointer, drawn on the GPU. | 1.2.2 | Unlicense |

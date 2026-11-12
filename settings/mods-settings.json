@@ -1567,7 +1567,13 @@
     "system.fallbackTimerInterval": 300
   },
   "local@seamless-autoclicker": {
-    "clicksPerSecond": 30
+    "activatorButton": "gshift",
+    "toggleWithRightClick": 1,
+    "clickIntervalMs": 33,
+    "toggleHotkey": "",
+    "settingsGlass": 1,
+    "nativeSettingsTitleBar": 0,
+    "settingsTrayIcon": 1
   },
   "local@seamless-autoscroll": {
     "toggleMode": 0,
