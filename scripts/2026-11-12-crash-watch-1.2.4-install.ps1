@@ -1,0 +1,3 @@
+# Installs Seamless Crash Watch 1.2.4 (live 1.2.3 + History right-click menu, red trash button, confirm prompt) via the shared staged installer. Run elevated.
+& 'H:\Windhawk Configuration\scripts\Install-StagedMod.ps1' -Id 'local@seamless-crash-watch' -Staged 'C:\Users\Public\seamless-crash-watch-1.2.4.wh.cpp' -BaseHash '55C863590FC4101501FE6F37B016323147BBA3BC3E17FC912F335E876DC29C00' *> 'H:\Windhawk Configuration\work\2026-11-11-crash-toast\build\install-1.2.4.log'
+& 'H:\Windhawk Configuration\scripts\2026-11-12-crash-watch-restart.ps1' *>> 'H:\Windhawk Configuration\work\2026-11-11-crash-toast\build\install-1.2.4.log'

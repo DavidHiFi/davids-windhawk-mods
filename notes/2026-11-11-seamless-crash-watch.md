@@ -83,6 +83,34 @@ zero transform, which collapses the gradient. Now `D2D1::BrushProperties()`.
 Installed as live 1.2.1 plus that one line (rule: build on the installed source).
 Rollback: the installer's `ModsSource\...bak-*` copy, or the 1.2.0 backup
 `local@seamless-crash-watch-20261112-0953.wh.cpp`.
+
+## 1.2.4 (2026-11-12): History right-click menu, trash button, confirm
+
+- 1.2.3 was 0acdfb96's compact menu rows (margin 6). 1.2.4 builds on it: `sync-menu.py` copies
+  the live menu block into `src\menu-look.cpp`, checked byte-identical after assemble.
+- Row menu (right-click a crash): Diagnose with AI, Copy crash details, Open file location
+  (greyed when the file is gone), Open Event Viewer, Mute or Unmute the program, Remove from
+  history, Clear all history. Right-click empty space: Clear all history only.
+- Red trash glyph right of the open arrow on each row; hover fills it red.
+- New switch "Ask before removing" (`historyConfirm`, on by default, top of the History page):
+  a centred card with Cancel and Remove. Esc cancels, Enter confirms, a click outside cancels.
+- All list changes run on the UI thread (`WM_CW_HISTORY`, wParam seq, lParam action), saved to
+  history.txt and pushed to the open page.
+- Install: `scripts\2026-11-12-crash-watch-1.2.4-install.ps1` (base hash 55c86359...).
+  Rollback: the installer's `local@seamless-crash-watch-20261112-1514.wh.cpp` backup (1.2.3).
+- Live test (`harness\history2-take.py`) crashes two throwaway copies of crash-test.exe so the
+  real history is not touched; history.txt backed up first as `history.txt.bak-20261112-1520`.
+- Live is now 1.2.5: thread keyclick-titlebar-scroll synced the Launchpad 2.4.9 settings engine
+  on top of 1.2.4; every 1.2.4 feature is kept. Build the next version from live 1.2.5 (or
+  `settings-engine.py sync`), not from this work folder's template, which is behind 2.4.9.
+- Results on 1.2.5, two passes, last at 8:45 pm: trash -> card -> Esc keeps the row; trash ->
+  Enter removes it (history 25 -> 24 lines, watch.log "crash-bravo.exe: removed from History");
+  menu Copy crash details puts crash-alpha's details (238 chars) on the clipboard; with the
+  switch off, Remove from history goes at once with no card (24 -> 23, "crash-alpha.exe:
+  removed"); empty-space menu shows only Clear all history and its card cancels with nothing
+  cleared. Final count equals the start, so the real history was untouched.
+- Proof: `media\crash-watch-history-actions.mp4` and `.gif`.
+
 ## Proof
 
 `work\2026-11-11-crash-toast\media\`: live crash (real crash-test.exe, WER off), hover, click
