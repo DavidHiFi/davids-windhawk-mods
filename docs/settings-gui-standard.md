@@ -5,11 +5,30 @@ this one design. It covers the layout, the look, the options and the About page.
 means Seamless Launchpad, Seamless Dictate and Seamless Clipboard Manager. Any new mod with a
 settings window starts from this design. Do not invent a different one.
 
-Reference implementation (copy from this, never rewrite from scratch):
-`davids-windhawk-mods\mods\local\seamless-launchpad\seamless-launchpad.wh.cpp`, version 2.4.3
-or later. The engine is the `Set_*` family: `SetWindow`, `SetPaint`, `Set_MakeFields`,
-`kSetPages`, `Set_Draw*` and `Set_Create`. Each mod keeps its own field table, pages and About
-text. The engine code and every look value stay identical.
+Reference implementation, the template (copy from this, never rewrite from scratch): the
+installed Seamless Launchpad source, `C:\ProgramData\Windhawk\ModsSource\local@seamless-launchpad.wh.cpp`,
+version 2.4.9 or later. The engine is the `Set_*` family: `SetWindow`, `SetPaint`,
+`Set_MakeFields`, `kSetPages`, `Set_Draw*` and `Set_Create`. Each mod keeps its own field table,
+pages and About text. The engine code and every look value stay identical.
+
+## Keeping every mod in sync with the template (since 2026-11-12)
+
+A template edit must reach every mod. `scripts\settings-engine.py` does it, with
+`docs\settings-engine.json` listing what each mod may differ in.
+
+- Change the engine in Launchpad first, then install Launchpad.
+- `python scripts\settings-engine.py check` lists every mod that is behind.
+- `python scripts\settings-engine.py sync <id> --out <dir>` writes the mod brought up to the
+  template (version bumped). It copies every engine function, struct member, constant and the
+  standard row descriptions. For a function the mod changed on purpose ("owned"), it merges the
+  template's edit into the mod's version, like git. Only where both edited the same lines does
+  it say "port by hand"; then port it and run `rebaseline <id> <Set_Fn>`.
+- Compile, then install with `scripts\Install-StagedMod.ps1`. The installer runs the check and
+  refuses (exit 4) a mod whose settings window is behind the template.
+- A new mod: copy the engine from Launchpad, then `settings-engine.py add <id>` (before its
+  first install: `add --staged <file>`).
+- Mods built by a generator folder (`scripts\settings-engine-sync.py`): run its `adopt` after a
+  sync, or the next generator build undoes the sync.
 
 ## Layout
 
@@ -19,6 +38,8 @@ text. The engine code and every look value stay identical.
   to Windows, so title bar mods style it like any other app. Nothing else turns the native
   title bar on, and there is no in-between mode. Maximize, restore and snap work in both.
   (Changed 2026-11-12: the old "Title bar buttons" option forced the native title bar on.)
+- The native title bar and glass switches apply the moment Save is pressed (`Set_ApplyFrame`),
+  and again when settings change from outside. Never "reopen to apply".
 - Left: a sidebar dock with rounded corners. It can be resized by dragging its edge. Hovering
   or dragging that edge lights up the dock's own rounded border, never a floating line. A
   panel button in the header collapses the sidebar to icons. Its width and collapsed state are
@@ -29,6 +50,10 @@ text. The engine code and every look value stay identical.
   a rounded row card with a name, a short description, and its control on the right.
 - Controls: on/off switch, dropdown (popup list with a gradient ring), text box, number slider
   with its value, colour box and key-capture box.
+- Text is never cut off. Dropdown, text and key boxes grow to fit their longest text
+  (`Set_FitBoxes`, up to half the page width), and an open dropdown list is at least as wide as
+  its longest option. A list with more than 9 options scrolls (wheel, arrow keys) and opens
+  with the chosen option in view.
 - Footer: a floating pill dock at the bottom right, drawn inside the settings window. It is
   never a separate window, because a separate window showed square corners on screen. It holds
   the status line (unsaved count or message) and the buttons Reset to suggested, Cancel and
@@ -42,6 +67,9 @@ text. The engine code and every look value stay identical.
   gradient wash plus a gradient ring that fades in over about 120 ms. Every card that reacts
   to the pointer gets it: rows, sidebar items, value boxes, footer buttons, dropdown items,
   and the About header and Ko-fi cards.
+- Every scrollbar thumb, everywhere (the page, dropdown lists, the Launchpad grid, any new
+  list), is a vertical blue #89B4FA to mauve #CBA6F7 gradient: `Set_ThumbFill`. Never a grey
+  thumb.
 - At rest, every card and box has a soft border (surface2 or overlay0), never none.
 - Value boxes are filled #232434, between mantle and surface0, never black crust. They have
   an overlay0 edge at rest and the gradient ring on hover or while open. An editing text box
@@ -52,7 +80,7 @@ text. The engine code and every look value stay identical.
   (state 4, flags 2, colour 0x012E1E1E, so only the blur shows), full-window blur-behind and
   the frame extended, then crust painted flat at 55% over the whole page, title band included
   (no lighter fade under the title). Never the transient system backdrop, and never the old
-  D82E1E1E acrylic tint: both read as a light grey slab. (Changed 2026-11-12.) Check every mod with `python scripts\settings-material.py check` before shipping (`stage <id> <out>` copies the reference glass in from the live Launchpad source), build on the installed source in ModsSource, and install with `scripts\Install-StagedMod.ps1`, which refuses if another thread changed the source since staging.
+  D82E1E1E acrylic tint: both read as a light grey slab. (Changed 2026-11-12.) Check every mod with `python scripts\settings-material.py check` before shipping (a mod that is off gets the template's glass, title bar, fitted boxes and gradient scrollbars with `python scripts\settings-engine.py sync <id> --out <dir>`), build on the installed source in ModsSource, and install with `scripts\Install-StagedMod.ps1`, which refuses if another thread changed the source since staging.
 
 ## Options every mod's settings window has
 

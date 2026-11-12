@@ -1,13 +1,14 @@
 """Keeps every mod's settings window on the standard glass (docs\\settings-gui-standard.md).
 The reference is Seamless Launchpad's live source: its glass block, page tint and title fade.
   python settings-material.py check                 list every mod using the settings engine, ok or off-standard
-  python settings-material.py stage <id> <outfile>  write <id>'s live source with the reference material and a
-                                                    bumped patch version to <outfile> (install it yourself)
+  To bring a mod onto the standard glass: python settings-engine.py sync <id> --out <dir>
 """
 import re, sys, glob, os
 SRC = r"C:\ProgramData\Windhawk\ModsSource"
 REF = os.path.join(SRC, "local@seamless-launchpad.wh.cpp")
-BLOCK = re.compile(r"        if \(w->glass\) \{\n.*?\n        \} else if \(w->nativeButtons\) \{", re.S)
+# Since Launchpad 2.4.9 the glass lives in Set_ApplyFrame (applied on Save too); settings-engine.py
+# sync copies that function, so a mod still on the old inline block is behind the template.
+BLOCK = re.compile(r"    if \(glass\) \{\n.*?\n    \} else if \(wasGlass\) \{", re.S)
 TINT = re.compile(r"constexpr float kSetGlassTint = [0-9.]+f")
 FADE = re.compile(r"D2D1_GRADIENT_STOP stops\[2\] = \{\{0, D2DColor\(mocha::crust, [^)]*\)\}, \{1, D2DColor\(mocha::crust, kSetGlassTint\)\}\};")
 
@@ -16,9 +17,20 @@ def raw(p):
     return open(p, encoding="utf-8", newline="").read()
 
 
+def glass_block(s):
+    # The block ends at Set_ApplyFrame's "else if (wasGlass)"; start from the nearest "if (glass) {"
+    # before it, so a mod's own earlier if (glass) code is never swallowed into the match.
+    end = s.find("\n    } else if (wasGlass) {")
+    if end < 0:
+        return None
+    start = s.rfind("    if (glass) {\n", 0, end)
+    m = BLOCK.match(s, start) if start >= 0 else None
+    return m.group(0) if m else None
+
+
 def parts(s):
-    b, t, f = BLOCK.search(s), TINT.search(s), FADE.search(s)
-    return (b.group(0) if b else None, t.group(0) if t else None, f.group(0) if f else None)
+    t, f = TINT.search(s), FADE.search(s)
+    return (glass_block(s), t.group(0) if t else None, f.group(0) if f else None)
 
 
 ref = parts(raw(REF).replace("\r\n", "\n"))
@@ -32,21 +44,10 @@ if sys.argv[1:2] == ["check"]:
             continue
         got = parts(s)
         bad = [k for k, a, b in zip(("glass", "tint", "fade"), got, ref) if a != b]
-        print(f"{os.path.basename(p)[:-7]:45} {'ok' if not bad else 'OFF: ' + ', '.join(bad)}")
+        hint = " (behind the template: python scripts\\settings-engine.py sync <id> --out <dir>)" \
+            if "glass" in bad and got[0] is None else ""
+        print(f"{os.path.basename(p)[:-7]:45} {'ok' if not bad else 'OFF: ' + ', '.join(bad) + hint}")
 elif sys.argv[1:2] == ["stage"]:
-    mid, out = sys.argv[2], sys.argv[3]
-    s = raw(os.path.join(SRC, mid + ".wh.cpp"))
-    crlf = "\r\n" in s
-    s = s.replace("\r\n", "\n")
-    s, a = BLOCK.subn(lambda m: ref[0], s, 1)
-    s, b = TINT.subn(ref[1], s, 1)
-    s, c = FADE.subn(ref[2], s, 1)
-    m = re.search(r"// @version\s+(\d+)\.(\d+)(?:\.(\d+))?", s)
-    ver = f"{m.group(1)}.{m.group(2)}.{int(m.group(3) or 0) + 1}"
-    s = s[:m.start()] + f"// @version         {ver}" + s[m.end():]
-    if crlf:
-        s = s.replace("\n", "\r\n")
-    open(out, "w", encoding="utf-8", newline="").write(s)
-    print(mid, "glass", a, "tint", b, "fade", c, "->", ver)
+    sys.exit("stage is replaced by: python scripts\\settings-engine.py sync <id> --out <dir>")
 else:
     sys.exit(__doc__)
