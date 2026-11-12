@@ -283,8 +283,6 @@ to Windhawk. MIT license.
 - frameThickness: 4
   $name: Border thickness
   $description: 'Thickness of the border in pixels. 1 to 20 (Suggested: 4).'
-  $min: 1
-  $max: 20
 - frameRoundCorners: true
   $name: Enable rounded corners
   $description: When on, the border rounds its corners to match the pinned window.
@@ -309,8 +307,6 @@ to Windhawk. MIT license.
 - notificationDuration: 5000
   $name: Status card display time
   $description: 'How long the status card stays on screen, in milliseconds. 500 to 10000 (Suggested: 5000).'
-  $min: 500
-  $max: 10000
 - gameModeBlock: true
   $name: Do not activate when Game Mode is on
   $description: Stops the pin shortcut from working while a full-screen game is running.
