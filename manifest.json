@@ -4,9 +4,9 @@
   "generatedAt": "2026-11-11T13:32:57+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 165,
-    "enabled": 157,
-    "local": 40
+    "mods": 166,
+    "enabled": 158,
+    "local": 41
   },
   "mods": [
     {
@@ -991,6 +991,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-power-action-countdown/seamless-power-action-countdown.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-sound-manager",
+      "name": "Seamless Sound Manager",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.1",
+      "license": "CDDL-1.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-sound-manager/seamless-sound-manager.wh.cpp",
       "enabled": true
     },
     {
