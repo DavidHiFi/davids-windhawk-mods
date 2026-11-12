@@ -19,6 +19,8 @@
 
 Keeps what you copy in a list you open with Win+V: text, images, copied files and the formatting of text from web pages and Word. Pick a clip and press Enter to paste it.
 
+![Seamless Clipboard Manager preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-clipboard-manager.png)
+
 ## Features
 
 - Search as you type to find an old clip.

@@ -3,8 +3,9 @@
 // @name            Always On Top Windows Plus
 // @description     Pin any window above all others with a hotkey, with a highlight border, opacity and sounds
 // @version         2.3.0
-// @author          DavidHiFi, AhmedAwad7
-// @github          https://github.com/DavidHiFi/davids-windhawk-mods
+// @author          DavidHiFi
+// @github          https://github.com/DavidHiFi
+// @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         windhawk.exe
 // @compilerOptions -luser32 -lwinmm -lgdi32 -ldwmapi -lshell32 -lole32
@@ -279,13 +280,9 @@ to Windhawk. MIT license.
 - frameOpacity: 100
   $name: Border opacity
   $description: 'How solid the border looks. 0 to 100 (Suggested: 100).'
-  $min: 0
-  $max: 100
 - frameThickness: 4
   $name: Border thickness
   $description: 'Thickness of the border in pixels. 1 to 20 (Suggested: 4).'
-  $min: 1
-  $max: 20
 - frameRoundCorners: true
   $name: Enable rounded corners
   $description: When on, the border rounds its corners to match the pinned window.
@@ -310,8 +307,6 @@ to Windhawk. MIT license.
 - notificationDuration: 5000
   $name: Status card display time
   $description: 'How long the status card stays on screen, in milliseconds. 500 to 10000 (Suggested: 5000).'
-  $min: 500
-  $max: 10000
 - gameModeBlock: true
   $name: Do not activate when Game Mode is on
   $description: Stops the pin shortcut from working while a full-screen game is running.
@@ -2962,7 +2957,7 @@ static DWORD WINAPI MainThread(LPVOID) {
 
 // ----- Tool mod lifecycle -----
 
-static BOOL WhTool_ModInit() {
+BOOL WhTool_ModInit() {
     Wh_Log(L"[aot-plus] initializing as a tool mod");
     InitializeCriticalSection(&g_cs);
     LoadSettings();
@@ -2976,7 +2971,7 @@ static BOOL WhTool_ModInit() {
     return TRUE;
 }
 
-static void WhTool_ModSettingsChanged() {
+void WhTool_ModSettingsChanged() {
     Wh_Log(L"[aot-plus] settings changed");
     LoadSettings();
     if (g_hostWnd) {
@@ -2984,7 +2979,7 @@ static void WhTool_ModSettingsChanged() {
     }
 }
 
-static void WhTool_ModUninit() {
+void WhTool_ModUninit() {
     Wh_Log(L"[aot-plus] unloading");
     if (g_hostWnd) {
         PostMessageW(g_hostWnd, WM_APP_QUIT, 0, 0);
