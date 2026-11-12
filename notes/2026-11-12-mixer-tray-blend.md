@@ -70,3 +70,10 @@ mixer 1.4.20 reinstalled from the work folder.
 - Fix: a new slot is followed only once it holds 400 ms; a "covered" read must also hold 400 ms (fullscreen games and a gone taskbar still hide at once). No SetWindowPos when nothing changed; raised only when the taskbar is above it. A width change ("99" to "100") resizes and moves in one UpdateLayeredWindow call.
 - Verified: 3 min log after install, zero jumps (before: one every 5 s). Gaps unchanged: 12 / 6 / 15 px, digits rows 21-28.
 - Rollback: scripts\2026-11-12-mixer-tray-blend.ps1 -Action Rollback, or reinstall work\better-volume-mixer-plus-1.4.26.wh.cpp.
+
+## 1.4.28 (slot follows the number setting)
+
+- Problem: with "volume number" off, rule 64 still widened the speaker's slot to 52 px, leaving an empty gap.
+- Fix: rules 64/65 match the icon's tooltip "Seamless Volume Mixer". With the number off the tooltip ends in a zero-width space (reads the same), so the rules skip it and the slot is normal width. A settings change that flips the number removes and re-adds the icon so the styler sees the new name. No styler change.
+- Verified live, 1x: off = U icon > Fan number 13, Fan number > speaker 13, speaker > network 15 (no gap). On = number back, 6 px to the speaker. Flipped on and back off; owner's choice (off) restored.
+- Rollback: reinstall work\better-volume-mixer-plus-1.4.27.wh.cpp, or scripts\2026-11-12-mixer-tray-blend.ps1 -Action Rollback.

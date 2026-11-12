@@ -39,7 +39,7 @@ if($Action -eq 'Apply'){
     $stamp=Get-Date -Format 'yyyyMMdd-HHmm'
     & reg.exe export 'HKLM\SOFTWARE\Windhawk\Engine\Mods\windows-11-taskbar-styler' "$work\styler.reg.bak-$stamp" /y | Out-Null
     Set-Width 52; Update-StylerTime; 'rule 64 Width=52'
-    Install-Source "$work\better-volume-mixer-plus-1.4.27.wh.cpp"
+    Install-Source "$work\better-volume-mixer-plus-1.4.28.wh.cpp"
 } else {
     Set-Width 52; Update-StylerTime; 'rule 64 Width=52'
     Install-Source "$work\base-1.4.20.wh.cpp"
