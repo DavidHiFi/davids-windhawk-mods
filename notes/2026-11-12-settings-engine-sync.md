@@ -64,7 +64,9 @@ stills `0-` to `6-`). Settings flipped from outside with `flip-setting.ps1`, as 
 - Both switches ended on 1 (checked in the registry afterwards).
 - Not shown live yet: the gradient scrollbar. The Keys page is too short to scroll, and a second
   take on the Look page (`live-proof-scroll.py`) waited for the desktop lock, held by another
-  thread, and never ran.
+  thread, and never ran. A retry at 5:49 am got the lock but the owner was at the PC (2 s idle), so it
+  opened nothing. Code check instead: all 13 engine mods use `Set_ThumbFill` for every thumb, and none
+  paints a grey thumb.
 
 Manifest: on request from the Dictate and Crosshair threads, `own` was added for Dictate
 Set_DrawLinkRow and Crosshair Set_Parts and Set_DrawRow (backup `docs\settings-engine.json.bak-*`
