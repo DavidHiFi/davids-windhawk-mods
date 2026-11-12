@@ -38,8 +38,8 @@ if($Action -eq 'Apply'){
     if($now -ne (Get-Content "$work\base.sha256" -Raw).Trim()){ 'live source CHANGED since staging, nothing done'; exit 2 }
     $stamp=Get-Date -Format 'yyyyMMdd-HHmm'
     & reg.exe export 'HKLM\SOFTWARE\Windhawk\Engine\Mods\windows-11-taskbar-styler' "$work\styler.reg.bak-$stamp" /y | Out-Null
-    Set-Width 47; Update-StylerTime; 'rule 64 Width=47'
-    Install-Source "$work\better-volume-mixer-plus-1.4.22.wh.cpp"
+    Set-Width 50; Update-StylerTime; 'rule 64 Width=50'
+    Install-Source "$work\better-volume-mixer-plus-1.4.25.wh.cpp"
 } else {
     Set-Width 52; Update-StylerTime; 'rule 64 Width=52'
     Install-Source "$work\base-1.4.20.wh.cpp"

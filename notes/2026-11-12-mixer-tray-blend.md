@@ -47,3 +47,11 @@ re-flowed). A disable and enable brought it back. The script now checks for this
 ## Rollback
 `scripts\2026-11-12-mixer-tray-blend.ps1 -Action Rollback` elevated: rule 64 back to Width=52,
 mixer 1.4.20 reinstalled from the work folder.
+
+## 1.4.23 to 1.4.25 (number hidden, then polished)
+
+- Cause of the hidden number: 1.4.19-1.4.22 hid it whenever anything but the taskbar sat over the slot. ShareX's full-screen "Region capture" overlay (topmost, transparent) counted, so every screenshot showed no number.
+- 1.4.24: hide only when a normal window covers the slot, or a topmost one while Windows reports a full-screen game or presentation. Overlays leave it shown.
+- 1.4.25: regular FiraCode at the Mocha text colour (205,214,244; Latte 76,79,105), like the battery percent, instead of bold white. Rule 64 Width 47 -> 50 so "100" keeps a 4 px gap to the speaker.
+- Measured (1x): Fan Control ink to number 11 px, number to speaker 4 px, speaker to network 16 px; rows level.
+- Rollback: scripts\2026-11-12-mixer-tray-blend.ps1 -Action Rollback (Width 52, 1.4.20). Styler backup: work folder styler.reg.bak-*.
