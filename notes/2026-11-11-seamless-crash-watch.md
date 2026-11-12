@@ -109,7 +109,15 @@ Rollback: the installer's `ModsSource\...bak-*` copy, or the 1.2.0 backup
   switch off, Remove from history goes at once with no card (24 -> 23, "crash-alpha.exe:
   removed"); empty-space menu shows only Clear all history and its card cancels with nothing
   cleared. Final count equals the start, so the real history was untouched.
-- Proof: `media\crash-watch-history-actions.mp4` and `.gif`.
+- 2026-11-13, about 5:15 am: fourth pass with `harness\history3-take.py` while the owner was at
+  the PC. Their windows covered settings, so the film is PrintWindow frames of the settings window
+  (plus the open menu pasted in place); nothing raised or focused. The test rows are found by position
+  in history.txt and checked before every Enter. Remove card, Esc, trash Remove, menu Remove plus card,
+  Clear all card cancelled (43 kept). Test rows left: none.
+- Lesson: monitor films of earlier takes caught other windows over settings (a share sheet left
+  topmost by another thread's test, then the owner's Notepad++). Prefer PrintWindow for a window
+  you drive with posted messages.
+- Proof: `media\crash-watch-history-actions.mp4` and `.gif` (from the PrintWindow pass).
 
 ## Proof
 
