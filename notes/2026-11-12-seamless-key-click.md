@@ -64,5 +64,25 @@ Date: 2026-11-12, thread 138571e3. Live since 1:07 am.
 - The same block goes to the other tool mods with `scripts\2026-11-12-tool-menu-look.py`
   (note `notes\2026-11-12-tool-menu-look.md`).
 
+## 1.1.0 (11-12 night): sound toggles, Look tab, notifier dock
+- Keyboard and mouse sounds each have an on/off toggle; a new Look tab holds the settings-window
+  options plus the notifier dock (place, size, glass, gradient ring, timing).
+
+## 1.1.1 (11-13, 12:41 am): dock corners no longer cut off
+- Owner: the dock's corners clipped the gradient ring (screenshot "Sounds ... Off").
+- Cause, by pixel read: the dock used Windows' own round corner (DWMWCP_ROUND, acrylic accent). On
+  this build that arc is 12 to 16 px and not circular, larger than the 8 px painted ring, so it
+  sliced the ring at all four corners.
+- Fix, copied from Seamless Dictate's Glass class: the dock window is DONOTROUND, no border, per-pixel
+  alpha only (blur-behind with an empty region). A separate click-through glass window under it
+  carries the blur: host backdrop brush, Gaussian blur 18, clipped by a composition rounded rect at
+  the same 12 DIP radius. The ring is drawn concentric (inset half its width, radius minus half).
+  UI thread now CoInitializes (STA) for the dispatcher queue. `-lruntimeobject` added.
+- Old: DWM round corner, acrylic accent, 8 px ring. New: own glass, DONOTROUND, 12 DIP corner.
+- Verified live: registry 1.1.1, helper restarted, capture shows all four arcs whole, background
+  text not readable behind the dock. Proof: `work\2026-11-12-key-click-notifier\media\dock-corners-1.1.1.*`.
+- Rollback: install `ModsSource\local@seamless-key-click.wh.cpp.bak-20261113-0040` (1.1.0) with
+  Install-StagedMod; settings backup `work\...\settings.bak-20261113-0040.reg`.
+
 ## Not done
 - Public repo: the mod is not published, and the readme's preview link is not live yet. Waiting on the owner.
