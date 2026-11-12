@@ -14,8 +14,11 @@ text. The engine code and every look value stay identical.
 ## Layout
 
 - The window is drawn with Direct2D on its own thread. It is never drawn on a mod's hook thread.
-- It uses the native Windows title bar with the app icon and title. Maximize, restore and snap
-  all work.
+- Title bar: by default the window draws its own (mark and title centred, its own minimize,
+  maximize and close). "Native Windows title bar" on hands the whole title bar and its buttons
+  to Windows, so title bar mods style it like any other app. Nothing else turns the native
+  title bar on, and there is no in-between mode. Maximize, restore and snap work in both.
+  (Changed 2026-11-12: the old "Title bar buttons" option forced the native title bar on.)
 - Left: a sidebar dock with rounded corners. It can be resized by dragging its edge. Hovering
   or dragging that edge lights up the dock's own rounded border, never a floating line. A
   panel button in the header collapses the sidebar to icons. Its width and collapsed state are
@@ -60,7 +63,6 @@ equivalent):
 |---|---|---|
 | settingsGlass | Blurred settings window | on |
 | nativeSettingsTitleBar | Native Windows title bar | off |
-| settingsTitleButtons | Title bar buttons (Windows buttons / Built-in buttons) | Windows buttons |
 | settingsTrayIcon | Tray icon (click opens settings, right-click menu) | on |
 
 Add the matching `$name` and `$description` lines to the mod's YAML settings block, and

@@ -92,3 +92,59 @@ The owner asked for every mod, present and future, to use this settings GUI and 
   Halo Launcher, mixer, black-areas blur, clipboard.
 - Rollback: install `backups\settings-material\<id>-<stamp>.wh.cpp` with windhawk-cli; rules
   file from its `.bak`.
+
+## Engine sync and footer real blur (2026-11-12, 8 am)
+
+The owner asked for no small inconsistencies across the settings windows and real blur in the
+footer dock.
+
+- Found with `work\2026-11-11-settings-material\engine-drift.py` (set `DRIFT_SRC` to a folder of
+  staged copies to compare those): Color Picker, Media Player, Crash Watch, Key Click and
+  AutoClicker ran a frozen older Launchpad engine. Missing: Support and About card hover (no hit
+  ids 3700/3800), resting box edge and `kSetBoxFill`, the blurred footer pill and its new
+  buttons, the rail resize edge, the native-buttons and mouse-leave fixes.
+- Footer: Launchpad blurred the rows under the pill but painted mantle at 0.85 over it, so the
+  blur hardly showed. Now 0.58 in glass mode, the same as the rail dock (Launchpad 2.4.7).
+- `scripts\settings-engine-sync.py`: `build` copies a generator to a sandbox, gives it the
+  Launchpad settings section as its template, runs its own gen.py and splices the new block into
+  the installed source (the rest of the mod stays as live). `adopt` refreshes a generator's
+  template (backup beside it).
+- Rebuilt and compiled offline: Key Click 1.0.2, Color Picker 1.1.4, Media Player 1.10.10.
+  Key Click ships from its own thread (same settings block, plus the Mixer tray menu look).
+  Dictate 1.1.5 and Clipboard 1.3.7 only needed the footer line (their engines were current;
+  Dictate keeps its scrolling dropdown). After: only mod-specific functions differ.
+- gen.py fix in Color Picker and Media Player: the new engine reads `settingsTitleButtons` twice.
+- Templates refreshed: Color Picker, Media Player, Key Click (`.bak-20261112-0812`).
+- Left to owners (told): Crash Watch (crash popup thread; its gen.py must skip the old glass
+  patch when the template has it), AutoClicker (autoclicker-160), Halo Launcher.
+- Install: `work\2026-11-12-engine-sync\install.ps1`, hash-guarded, log beside it.
+
+## Native title bar only when asked (2026-11-12, 10 am)
+
+Owner: with "Native Windows title bar" off, the settings windows still showed the Windows title
+bar (title bar mod pill and dots).
+
+- Cause: `nativeTitle = nativeSettingsTitleBar || settingsTitleButtons != "builtin"`, and
+  "Windows buttons" was the default, so every mod forced the native title bar. AutoClicker and
+  Listary had the older hybrid instead (Windows buttons on the built-in title bar, which draws
+  dull buttons with no hover, notes 2026-10-18).
+- Old: two settings (Native Windows title bar, Title bar buttons). New: one switch. Off = the
+  window's own title bar and buttons. On = Windows draws both. `settingsTitleButtons` removed
+  (YAML, row, reads). Spec updated.
+- Installed on live sources: Launchpad 2.4.8, Clipboard 1.3.8, Dictate 1.1.6, Color Picker 1.1.5,
+  Media Player 1.10.11, Key Click 1.0.3, Crash Watch 1.2.1, AutoClicker 1.6.1, Listary 1.1.1,
+  Taskbar AI Usage Plus 1.2.1. Crash Watch and AutoClicker stopped on compile; restarted.
+- Taskbar AI Usage Plus: its own thread reinstalled its 1.2.1 one minute later, so it still has
+  the old logic. Handed over: `python work\2026-11-12-native-title\stage.py local@taskbar-ai-usage-plus`.
+- Color Picker shipped `nativeSettingsTitleBar: true` as its default (every other mod: false),
+  which is why its window had the native title bar. Default now false (1.1.7, generator head too).
+- Stored switch turned off in Launchpad (was 1 since at least 2026-11-11) and Color Picker (was 1
+  from the wrong default). Old 1, new 0. Undo: import
+  `backups\settings-material\<id>-key-<stamp>-native.reg`.
+- Generators: `settingsTitleButtons` dropped from Color Picker and Media Player gen.py; templates
+  re-adopted; a dry rebuild matches live apart from the version line. Key Click's spec.py
+  (line 120) is its thread's to drop.
+- Proof: reports\2026-11-12-native-title-both.png (Launchpad with the switch on: Windows title
+  bar; Clipboard with it off: built-in title bar).
+- Rollback per mod: install `backups\settings-material\<id>-20261112-1xxx.wh.cpp` with
+  Install-StagedMod or windhawk-cli.
