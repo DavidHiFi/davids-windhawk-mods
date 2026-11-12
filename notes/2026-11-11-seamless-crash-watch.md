@@ -3,9 +3,9 @@
 A port of Omarchy's crash notice to a Windhawk tool mod: "Process crashed: <name>" and
 "Click to diagnose with AI" at the top right. Clicking opens Windows Terminal with Claude Code
 (default; Codex, OpenCode, Gemini or a custom command) and a crash report. Catppuccin Mocha,
-grey edge at rest, blue to mauve gradient border and glow on hover, frosted glass.
+grey edge at rest, blue to mauve gradient border on hover (no inner glow since 1.2.0), frosted glass.
 
-- Mod: `local@seamless-crash-watch` 1.1.2, enabled, runs in its own `windhawk-mod.exe`.
+- Mod: `local@seamless-crash-watch` 1.2.2, enabled, runs in its own `windhawk-mod.exe`.
 - Sources: `work\2026-11-11-crash-toast\` (`src\core.cpp`, `gen.py` makes the settings window
   from the Launchpad one, `assemble.py` writes `build\seamless-crash-watch.wh.cpp`).
 - Public: DavidHiFi/davids-windhawk-mods 3badc23 (source, preview, manifest).
@@ -48,6 +48,41 @@ Proof: `live\cut\corners-before-after.png` (owner's corners, then rest and hover
 `media\crash-watch-corners.mp4/.gif`.
 Rollback: the installer's backup in `backups\settings-material\` or `ModsSource\...bak-*`.
 
+## 1.1.3 (2026-11-12): settings engine synced to Launchpad 2.4.7
+
+Asked by bd0ca06f. `gen.py` regenerates from the 2.4.7 template and guards the glass step.
+Drift check against Launchpad: only the mod's own functions differ (fields, formats, anim,
+page build, about, rail name, mark, title). Verified.
+
+## 1.2.0 (2026-11-12): no hover glow, History page
+
+Owner: "get rid of that bright inner frost ... I only want the hover gradient border" and "a
+history tab ... if I don't click the prompt in time I can come to the history tab and click".
+- Glow: the inner glow loop in `DrawNotice` and the `hoverGlow` setting are gone; hover only
+  fades the grey edge into the gradient. Proof: the inside of the notice samples (35,34,50)
+  at rest and on hover; only the edge changes.
+- History: new settings page above About (`spec.py` PAGES[4], `gen.py` block). Last 50 crashes,
+  newest first, saved to `%LOCALAPPDATA%\SeamlessCrashWatch\history.txt` (v1, tab separated,
+  written via .tmp then move), loaded at start. A row is a Link item `crash:<seq>`; the click
+  posts `WM_CW_HISTORY` to the UI thread, which runs `Diagnose()` like a notice click. A new
+  crash refreshes the page live (`WM_APP + 3`). Tray menu still shows the last 10.
+- Verified live 9:59 am: History open, crash-test.exe crashed, its row appeared on its own,
+  posted click on it -> watch.log "crash-test.exe: diagnose from History", Claude Code opened.
+  Film is the settings window only (`harness\history-take.py`, vcap by hwnd).
+- Privacy: a first take recorded the whole screen and caught private browser content; deleted.
+  Harness rule now: film by window, or crop and delete the raw at once
+  (`harness\notice-crop-take.py`).
+
+## 1.2.1 (bd0ca06f) and 1.2.2 (2026-11-12): real hover gradient
+
+1.2.1 is bd0ca06f's engine fix (native title bar follows only its switch; "Title bar buttons"
+setting removed). Mirrored in `spec.py` and `gen.py` so rebuilds keep it.
+1.2.2: the hover edge was one flat lilac (169,172,255 at both ends = the midpoint of blue and
+mauve). Cause: `CreateLinearGradientBrush(..., {}, ...)` passes zero brush properties, i.e. a
+zero transform, which collapses the gradient. Now `D2D1::BrushProperties()`.
+Installed as live 1.2.1 plus that one line (rule: build on the installed source).
+Rollback: the installer's `ModsSource\...bak-*` copy, or the 1.2.0 backup
+`local@seamless-crash-watch-20261112-0953.wh.cpp`.
 ## Proof
 
 `work\2026-11-11-crash-toast\media\`: live crash (real crash-test.exe, WER off), hover, click

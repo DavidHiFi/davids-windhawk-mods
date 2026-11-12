@@ -1,0 +1,3 @@
+# Installs Seamless Crash Watch 1.2.2 (live 1.2.1 + shared menu look + real hover gradient) via the shared staged installer. Run elevated.
+& 'H:\Windhawk Configuration\scripts\Install-StagedMod.ps1' -Id 'local@seamless-crash-watch' -Staged 'C:\Users\Public\seamless-crash-watch-1.2.2.wh.cpp' -BaseHash '3D2392E134E129533E93733BAC6F2FD472DC54447B867BA25A2CDDE8E4F5EEF1' *> 'H:\Windhawk Configuration\work\2026-11-11-crash-toast\build\install-1.2.2.log'
+& 'H:\Windhawk Configuration\scripts\2026-11-12-crash-watch-restart.ps1' *>> 'H:\Windhawk Configuration\work\2026-11-11-crash-toast\build\install-1.2.2.log'
