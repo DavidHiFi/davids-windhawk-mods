@@ -43,5 +43,29 @@ The script now refuses a mod that also runs outside Windhawk's own processes.
 Listary: the block sits inside listary-port's core span (splice.py swaps it), so they copy it into
 their src/core.cpp before the next splice (asked on the coop board).
 
+## Settings engine catch-up: AutoClicker, Listary (2026-11-12, 2:45 pm)
+
+Owner: Key Click's footer dock was see-through; every settings window must match Launchpad,
+hover and selected states included.
+
+- Key Click, Clipboard, Color Picker, Crash Watch, Dictate, Media Player, Sound Manager and
+  Taskbar AI Usage already had Launchpad's footer blur (engine sync, 8 am). AutoClicker and
+  Listary did not: they keep their own frozen copy of an older engine (not generator mods), so
+  their footer, box edges, card hover and rail edge were the old ones. settings-material check
+  said ok for them because it checks only the window glass, not the engine.
+- `scripts\2026-11-12-settings-engine-catchup.py <id>`: copies Launchpad's Set_Valid (box fill
+  and edge), Set_DrawSupport, Set_DrawFooter, Set_Draw (footer blur), Set_Hit (card hover ids),
+  Set_WndProc (mouse-leave and native-title fixes) word for word; Launchpad's rail with the mod's
+  own name; About card hover with the mod's own words; edit brush, layer fields, d2d1effects.
+  After it, engine-drift shows only mod-specific functions (the same set as Key Click).
+- AutoClicker 1.6.3 live 2:44 pm (helper 2912, hash-guarded). Rollback: the 1.6.2 backup in
+  `backups\settings-material\`, installed with Install-StagedMod.
+- Listary: 1.1.4 built and compiled clean, not installed; listary-port holds the source (rename
+  to Seamless Find). Asked on the coop board to run the script on their next build.
+- Live check: Key Click's window scrolled by posted wheel messages; text under the pill blurs to
+  soft smudges, not readable and not flat (`reports\2026-11-12-settings-footer-frost-4x.png`).
+  AutoClicker's settings open only from its tray menu, which ignores posted keys, so its window
+  was not captured; its footer code is now byte for byte Launchpad's.
+
 ## Proof
 - Key Click: `work\2026-11-11-seamless-key-click\media\key-click-tray-menu.mp4` (and .gif, .png).
