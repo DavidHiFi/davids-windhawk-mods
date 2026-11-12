@@ -40,5 +40,11 @@ Tested live (posted keys, ShareX still running so real keys step aside):
   "T3 Code (Nightly) 8.41 pm.png" 1880x1040; clipboard holds the image; toast on the right monitor.
 - Helper idles at 18 MB; after full-screen snips it holds ~65 MB working / ~128 MB private and
   stays there across further snips (heap and D2D caches, not a per-snip leak).
+
+2026-11-13, after the restart: ShareX did not start again, so Snipper holds the real keys.
+The owner took 7 snips with them (12:02 to 12:33 am), including two in one minute that saved
+as "12.18 am.png" and "12.18 am (2).png". Region take (`test\take-region-3`): window highlight
+with name and size, magnifier with pixel grid, colour and position readout, Enter takes the
+window, toast with thumbnail. Settings window opens from the tray on the Keys page.
 Rollback: `windhawk-cli mod uninstall local@seamless-snipper`. Nothing else is touched; ShareX
 stays installed and running until the switch-over after step 3.
