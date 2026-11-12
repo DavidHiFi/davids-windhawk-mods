@@ -1,0 +1,83 @@
+name: Library check
+
+# Runs every mod in mods/local through the same validator and compile test the
+# official Windhawk mod library uses, so a mod is known to be ready before it is
+# submitted there. It reports and never fails.
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: Mod ids to check, separated by spaces. Empty checks all.
+        required: false
+        default: ''
+  push:
+    branches: [main, library-check]
+    paths:
+      - mods/local/**/*.wh.cpp
+      - tools/library-check/**
+      - .github/workflows/library-check.yml
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: '1'
+  ONLY: ${{ github.event.inputs.only }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: ramensoftware/windhawk-mods
+          path: upstream
+          sparse-checkout: |
+            .github
+            scripts
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+      - run: python -m pip install pyyaml
+      - run: python tools/library-check/check.py validate --upstream upstream --only "$ONLY"
+
+  compile:
+    runs-on: windows-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['1.6.1', '1.7.3', '2.0.0-alpha.8']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: ramensoftware/windhawk-mods
+          path: upstream
+          sparse-checkout: |
+            .github
+            scripts
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+      - name: Extract Windhawk
+        run: |
+          if [[ "${{ matrix.version }}" == 1.* ]]; then
+            release_tag="v${{ matrix.version }}"
+            installer_args=''
+          else
+            release_tag="${{ matrix.version }}"
+            installer_args='/DEVTOOLS'
+          fi
+          installer_path="${{ runner.temp }}/windhawk_setup.exe"
+          curl -L "https://github.com/ramensoftware/windhawk/releases/download/$release_tag/windhawk_setup.exe" -o "$installer_path"
+          MSYS_NO_PATHCONV=1 "$installer_path" /S /PORTABLE $installer_args '/D=${{ runner.temp }}\windhawk'
+      - name: Compile every mod
+        run: python tools/library-check/check.py compile --upstream upstream --windhawk '${{ runner.temp }}\windhawk' --label 'compile ${{ matrix.version }}' --only "$ONLY"
