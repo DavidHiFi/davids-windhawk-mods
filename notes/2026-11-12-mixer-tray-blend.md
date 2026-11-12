@@ -63,3 +63,10 @@ mixer 1.4.20 reinstalled from the work folder.
 - Rule 64 Width 50 -> 52, so the gap before the number is 12 px, like the U icon to Fan Control.
 - Measured 1x: U icon > Fan number 12, Fan number > our number 12, number > speaker 6, speaker > network 15.
 - Rollback unchanged: scripts\2026-11-12-mixer-tray-blend.ps1 -Action Rollback.
+
+## 1.4.27 (flicker)
+
+- Cause, from a 4 min event log: every ~5 s the shell reported the speaker's slot elsewhere for ~200 ms during a tray relayout, and the number followed it (jumped 195 px left and back).
+- Fix: a new slot is followed only once it holds 400 ms; a "covered" read must also hold 400 ms (fullscreen games and a gone taskbar still hide at once). No SetWindowPos when nothing changed; raised only when the taskbar is above it. A width change ("99" to "100") resizes and moves in one UpdateLayeredWindow call.
+- Verified: 3 min log after install, zero jumps (before: one every 5 s). Gaps unchanged: 12 / 6 / 15 px, digits rows 21-28.
+- Rollback: scripts\2026-11-12-mixer-tray-blend.ps1 -Action Rollback, or reinstall work\better-volume-mixer-plus-1.4.26.wh.cpp.
