@@ -1,0 +1,2 @@
+# Installs Seamless Crash Watch 1.1.2 (border follows the system corner radius) via the shared staged installer. Run elevated.
+& 'H:\Windhawk Configuration\scripts\Install-StagedMod.ps1' -Id 'local@seamless-crash-watch' -Staged 'C:\Users\Public\seamless-crash-watch-1.1.2.wh.cpp' -BaseHash '61747C14F6B47EF552A0E51334FEAAB9E6C7FC2C02C59F329630888108688EE3' *> 'H:\Windhawk Configuration\work\2026-11-11-crash-toast\build\install-1.1.2.log'

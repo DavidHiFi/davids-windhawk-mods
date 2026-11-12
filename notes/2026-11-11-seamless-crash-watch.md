@@ -5,7 +5,7 @@ A port of Omarchy's crash notice to a Windhawk tool mod: "Process crashed: <name
 (default; Codex, OpenCode, Gemini or a custom command) and a crash report. Catppuccin Mocha,
 grey edge at rest, blue to mauve gradient border and glow on hover, frosted glass.
 
-- Mod: `local@seamless-crash-watch` 1.1.1, enabled, runs in its own `windhawk-mod.exe`.
+- Mod: `local@seamless-crash-watch` 1.1.2, enabled, runs in its own `windhawk-mod.exe`.
 - Sources: `work\2026-11-11-crash-toast\` (`src\core.cpp`, `gen.py` makes the settings window
   from the Launchpad one, `assemble.py` writes `build\seamless-crash-watch.wh.cpp`).
 - Public: DavidHiFi/davids-windhawk-mods 3badc23 (source, preview, manifest).
@@ -31,6 +31,22 @@ Old: accent `{4, 0, 0xD82E1E1E, 0}`, tint 0.42 fading from clear at the top.
 New: accent `{4, 2, 0x012E1E1E, 0}` (the launcher grid's), flat 0.55 tint, no title band.
 `settings-material.py check` now says ok. `gen.py` writes the new values too.
 Backup: `C:\ProgramData\Windhawk\ModsSource\local@seamless-crash-watch.wh.cpp.bak-20261112-0114`.
+
+## 1.1.2 (2026-11-12): border corners cut off
+
+Owner's report: "the borders cut off". Zoomed, the four straight edges were whole (2 px) but
+the corner curves were missing for about 11 px from each corner.
+Cause: the `custom-corner-radius` mod (in dwm.exe) sets every window's corner radius to 16
+here, so Windows clipped the notice at 16 px while the border was drawn at 8 px; the curve
+fell outside the window.
+Old: border radius fixed at 8 (round) or 4 (small).
+New: `RefreshSystemRadius()` reads `HKLM\SOFTWARE\Windhawk\Engine\Mods\custom-corner-radius`
+(skipped when Disabled = 1) `Settings\radius` and `smallRadius`; -1 or missing keeps 8 / 4.
+Read on every new notice and on settings change. Per-corner radius and its excluded-programs
+list are not followed.
+Proof: `live\cut\corners-before-after.png` (owner's corners, then rest and hover at 8x),
+`media\crash-watch-corners.mp4/.gif`.
+Rollback: the installer's backup in `backups\settings-material\` or `ModsSource\...bak-*`.
 
 ## Proof
 
