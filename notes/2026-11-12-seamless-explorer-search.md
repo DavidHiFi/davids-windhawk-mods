@@ -274,3 +274,64 @@ first check, typing nothing. The test now deletes the text before it leaves the 
 The Helium window was left alone: it is the owner's browser and may hold their own tabs now.
 Rollback: install that file with `scripts\Install-StagedMod.ps1` (`-BaseHash` = hash of the
 live source), run elevated.
+
+## 2.0.6 (10:43 pm, 2026-11-13): corners, gradient edge, Explorer's glass
+
+Owner report: the box's border "drops off" and goes skinny at the corners, and its glass is a
+little darker than File Explorer's. Asked for a Mocha blue to mauve gradient border too.
+
+Cause of the corners: the `custom-corner-radius` mod sets DWM's window radius to 16, but the box
+drew its hairline on a radius of 8. DWM clipped the window at 16, cutting through the line at
+every corner. The box now reads that mod's live radius at each show (HKLM
+`SOFTWARE\Windhawk\Engine\Mods\custom-corner-radius`, on when `Disabled` is missing or 0,
+`Settings\radius`, else 8) and draws a 2 px stroke at inset 1 with radius R - 1.
+
+| Item | Old | New |
+| --- | --- | --- |
+| Version | 2.0.5 | 2.0.6 |
+| Library | local@seamless-explorer-search_2.0.5_543757.dll | local@seamless-explorer-search_2.0.6_201985.dll |
+| Process | pid 12124 | pid 23316, started 10:43 pm |
+| Edge | 1 px surface1 hairline, radius 8 | 2 px accent to mauve gradient, 45 degrees, live radius (16) |
+| Glass | acrylic tint 0x012E1E1E plus a painted crust wash | acrylic tint D81E1E2E, no wash (Seamless Flyouts' explorer.exe rule) |
+| Search box opacity setting | 90 | 85 (85 = Explorer's D8) |
+
+Backups: `backups\settings-material\local@seamless-explorer-search-20261113-2046.wh.cpp` (2.0.5
+live source) and the installer's own `-20261113-2243` copy. Work copies: `src\es-head.cpp.bak-20261113-2044`,
+`build2.py.bak-20261113-2044`.
+Rollback: install the 2046 backup with `scripts\Install-StagedMod.ps1` (`-BaseHash` = hash of the
+live source), run elevated; then `windhawk-cli mod settings set local@seamless-explorer-search popupOpacity=90`.
+
+Hardened so it does not come back: memory `dwm-corner-radius-16`, rice skill defects item 5a
+(synced to every runtime), and a conventions line in `AGENTS.md`.
+
+## Live test take 22 (2:17 am, 2026-11-14): 14 of 16 on 2.0.6
+
+Corners, edge and glass all checked out on the capture: the 2 px edge follows DWM's 16 px curve
+at all four corners with no thinning (8x zoom), and the box glass sampled (33, 32, 49) against
+Explorer's body (31 to 35, 30 to 34, 47 to 51). Two steps failed: after Ctrl+Enter selected the
+file, Explorer left the keyboard on its frame (focus CabinetWClass), so "typing again" opened
+nothing and Esc had nothing to hand back. That code was unchanged since 2.0.5: the hide's
+hand-back (600 ms) can finish before the reveal job's SelectItem, which then leaves focus on the frame.
+
+## 2.0.7 (6:41 am, 2026-11-14): hand the keyboard back after show-in-folder
+
+The reveal job now runs the same FocusFileList hand-back once the file is selected.
+
+| Item | Old | New |
+| --- | --- | --- |
+| Version | 2.0.6 | 2.0.7 |
+| Library | local@seamless-explorer-search_2.0.6_201985.dll | local@seamless-explorer-search_2.0.7_169668.dll |
+| Process | pid 23316 | pid 32096, started 6:41 am |
+
+Backups: `backups\settings-material\local@seamless-explorer-search-20261114-0225.wh.cpp` (2.0.6
+live source), installer copy `-20261114-0640`, work copies `src\es-head.cpp.bak-20261114-0222`
+and `build2.py.bak-20261114-0222`. Elevated log `H:\System Configuration\backups\2026-11-14-elevated\log-064054.txt`.
+Rollback: install the 0225 backup with `scripts\Install-StagedMod.ps1` (`-BaseHash` = hash of the
+live source), run elevated, under `coop lock windhawk-engine`.
+
+## Live test take 23 (6:59 am): 16 of 16 on 2.0.7
+
+Every step passed, including typing again and Esc handing the keyboard back after Ctrl+Enter.
+Box glass (33, 32, 49) next to Explorer's body (38, 37, 54). Proof: `work\2026-11-12-listary-port\proof\explorer-search-2.0.7.mp4`,
+`.gif`, `-box.png` and `-corners.png`. The demo folder, staged copy and encode script in
+`C:\Users\Public` were deleted afterwards.
