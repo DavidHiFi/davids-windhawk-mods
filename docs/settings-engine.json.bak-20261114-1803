@@ -1,0 +1,679 @@
+{
+ "mods": {
+  "local@halo-launcher": {
+   "owned": {
+    "Set_ChangedParams": "b6ea0717c7946a22",
+    "Set_DrawMark": "42cb1c6b3f6d61c8",
+    "Set_FormatHotkey": "ebe56fee94d21677",
+    "Set_KeyStatusText": "4cb595326a377fbc",
+    "Set_LoadFields": "c107b8330bdde8d8",
+    "Set_OnKey": "4d4850694f68efb4",
+    "Set_OpenLink": "be175ee8f1fed4d9",
+    "Set_Save": "bf1006b2e084dee5",
+    "Set_StartRecording": "0e99e075c5a94a1a",
+    "Set_StopRecording": "1da2877fdd12fb70",
+    "Set_WndProc": "220cb12785ba9489"
+   },
+   "swaps": {
+    "Set_Anim": [
+     [
+      "g_settings.animations && ",
+      ""
+     ]
+    ],
+    "Set_Create": [
+     [
+      "L\"Seamless Launchpad settings\"",
+      "L\"Halo Launcher settings\""
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Seamless\"",
+      "L\"Halo\""
+     ],
+     [
+      "L\"Launchpad\"",
+      "L\"Launcher\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Launcher\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-autoclicker": {
+   "owned": {
+    "Set_FormatHotkey": "ebe56fee94d21677"
+   },
+   "swaps": {
+    "Set_Anim": [
+     [
+      "g_settings.animations && ",
+      ""
+     ]
+    ],
+    "Set_Create": [
+     [
+      "L\"Seamless Launchpad settings\"",
+      "L\"Seamless AutoClicker settings\""
+     ]
+    ],
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xE8B0"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Launchpad\"",
+      "L\"AutoClicker\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"AutoClicker\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-clipboard-manager": {
+   "owned": {
+    "Set_Anim": "cd78a4ed1866a0fd",
+    "Set_BeginEdit": "ec0da9779387eb95",
+    "Set_ChangedParams": "b6ea0717c7946a22",
+    "Set_Create": "b70dd9eafdbc145a",
+    "Set_FormatHotkey": "ebe56fee94d21677",
+    "Set_KeyStatusText": "4cb595326a377fbc",
+    "Set_LoadFields": "c107b8330bdde8d8",
+    "Set_MakeFormats": "d0e3a73af9e75608",
+    "Set_RegisterClass": "6e3c8cdcb724ff28",
+    "Set_ResolveFamily": "694e43d2558091f8",
+    "Set_StartRecording": "0e99e075c5a94a1a",
+    "Set_StopRecording": "1da2877fdd12fb70",
+    "Set_WndProc": "220cb12785ba9489"
+   },
+   "swaps": {
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xE77F"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Launchpad\"",
+      "L\"Clipboard\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-color-picker": {
+   "owned": {
+    "Set_Anim": "cd78a4ed1866a0fd",
+    "Set_FormatHotkey": "ebe56fee94d21677"
+   },
+   "swaps": {
+    "Set_Create": [
+     [
+      "L\"nativeSettingsTitleBar\"",
+      "L\"SettingsWindow.nativeSettingsTitleBar\""
+     ],
+     [
+      "L\"settingsGlass\"",
+      "L\"SettingsWindow.settingsGlass\""
+     ],
+     [
+      "L\"Seamless Launchpad settings\"",
+      "L\"Seamless Color Picker settings\""
+     ]
+    ],
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xEF3C"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Launchpad\"",
+      "L\"Color Picker\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Color Picker\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-compiz-cube": {
+   "owned": {
+    "Set_ActivateField": "13b47ae307ca0617",
+    "Set_BeginEdit": "ec0da9779387eb95",
+    "Set_CommitEdit": "153673178dd545c3",
+    "Set_ControlW": "dac13c288519f77c",
+    "Set_DrawFooter": "300469f74c4eae99",
+    "Set_LoadFields": "c107b8330bdde8d8",
+    "Set_ParseHex": "a35d08e5c79b32fc",
+    "Set_Parts": "d78df74f4ac7f883"
+   },
+   "swaps": {
+    "Set_Anim": [
+     [
+      "g_settings.animations && ",
+      ""
+     ]
+    ],
+    "Set_ApplyFrame": [
+     [
+      "L\"nativeSettingsTitleBar\"",
+      "L\"SettingsWindow.nativeSettingsTitleBar\""
+     ],
+     [
+      "L\"settingsGlass\"",
+      "L\"SettingsWindow.settingsGlass\""
+     ]
+    ],
+    "Set_Create": [
+     [
+      "L\"Seamless Launchpad settings\"",
+      "L\"Seamless Compiz Cube settings\""
+     ]
+    ],
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xF158"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Launchpad\"",
+      "L\"Compiz Cube\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Compiz Cube\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-crash-watch": {
+   "owned": {
+    "Set_Clickable": "761abb94f0932dfb",
+    "Set_Draw": "222c81146a9cf154",
+    "Set_DrawLinkRow": "de1dfd9d53c197b2",
+    "Set_Hit": "e9f21bb01245fa83",
+    "Set_HoverIds": "ef05fa39cdbc2fbc",
+    "Set_OnKey": "386fb675c4b5a78f",
+    "Set_OpenLink": "be175ee8f1fed4d9",
+    "Set_Tick": "cf196bdc24dc3260",
+    "Set_WndProc": "220cb12785ba9489"
+   },
+   "swaps": {
+    "Set_Anim": [
+     [
+      "g_settings.animations && ",
+      ""
+     ]
+    ],
+    "Set_Create": [
+     [
+      "L\"Seamless Launchpad settings\"",
+      "L\"Seamless Crash Watch settings\""
+     ]
+    ],
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xE99A"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Launchpad\"",
+      "L\"Crash Watch\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Crash Watch\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-crosshair": {
+   "owned": {
+    "Set_DrawRow": "950aedeba58d2696",
+    "Set_FormatHotkey": "ebe56fee94d21677",
+    "Set_Parts": "d78df74f4ac7f883"
+   },
+   "swaps": {
+    "Set_Anim": [
+     [
+      "g_settings.animations && ",
+      ""
+     ]
+    ],
+    "Set_Create": [
+     [
+      "L\"Seamless Launchpad settings\"",
+      "L\"Seamless Game Crosshair settings\""
+     ]
+    ],
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xF272"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Launchpad\"",
+      "L\"Crosshair\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Crosshair\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-dictate": {
+   "owned": {
+    "Set_ChangedParams": "b6ea0717c7946a22",
+    "Set_DrawLinkRow": "de1dfd9d53c197b2",
+    "Set_DrawPopup": "0dd101b5cd9df42b",
+    "Set_Hit": "490dce3720c37e91",
+    "Set_LoadFields": "c107b8330bdde8d8",
+    "Set_OnKey": "4d4850694f68efb4",
+    "Set_OpenLink": "be175ee8f1fed4d9",
+    "Set_OpenPopup": "3b8fe0a6389c132a",
+    "Set_Save": "de0d3c5a97cb03f5",
+    "Set_StartRecording": "0e99e075c5a94a1a",
+    "Set_StopRecording": "1da2877fdd12fb70",
+    "Set_WndProc": "220cb12785ba9489"
+   },
+   "swaps": {
+    "Set_Anim": [
+     [
+      "g_settings.animations && ",
+      ""
+     ]
+    ],
+    "Set_Create": [
+     [
+      "L\"Seamless Launchpad settings\"",
+      "L\"Seamless Dictate settings\""
+     ]
+    ],
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xE720"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Launchpad\"",
+      "L\"Dictate\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Dictate\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-explorer-search": {
+   "owned": {
+    "Set_Create": "fd79a8b77cddf8f6",
+    "Set_Draw": "222c81146a9cf154",
+    "Set_DrawBox": "9f67e72e22b6fa36",
+    "Set_DrawFooter": "300469f74c4eae99",
+    "Set_DrawRail": "7c2114a0a9c49b63",
+    "Set_DrawSupport": "69dfe03216b95af9",
+    "Set_FormatHotkey": "ebe56fee94d21677",
+    "Set_Hit": "e9f21bb01245fa83",
+    "Set_WndProc": "3f45997124d03197"
+   },
+   "swaps": {
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xE721"
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Explorer Search\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-key-click": {
+   "owned": {
+    "Set_FormatHotkey": "ebe56fee94d21677"
+   },
+   "swaps": {
+    "Set_Anim": [
+     [
+      "g_settings.animations && ",
+      ""
+     ]
+    ],
+    "Set_Create": [
+     [
+      "L\"Seamless Launchpad settings\"",
+      "L\"Seamless Key Click settings\""
+     ]
+    ],
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xE765"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Launchpad\"",
+      "L\"Key Click\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Key Click\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-media-player": {
+   "owned": {
+    "Set_ActivateField": "13b47ae307ca0617",
+    "Set_BeginEdit": "ec0da9779387eb95",
+    "Set_CommitEdit": "153673178dd545c3",
+    "Set_ControlW": "dac13c288519f77c",
+    "Set_OpenLink": "be175ee8f1fed4d9",
+    "Set_ParseHex": "a35d08e5c79b32fc",
+    "Set_Parts": "d78df74f4ac7f883"
+   },
+   "swaps": {
+    "Set_Anim": [
+     [
+      "g_settings.animations && ",
+      ""
+     ]
+    ],
+    "Set_Create": [
+     [
+      "L\"nativeSettingsTitleBar\"",
+      "L\"SettingsWindow.nativeSettingsTitleBar\""
+     ],
+     [
+      "L\"settingsGlass\"",
+      "L\"SettingsWindow.settingsGlass\""
+     ],
+     [
+      "L\"Seamless Launchpad settings\"",
+      "L\"Seamless Media Player settings\""
+     ]
+    ],
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xE8D6"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Launchpad\"",
+      "L\"Media Player\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Media Player\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-snipper": {
+   "owned": {
+    "Set_FormatHotkey": "ebe56fee94d21677"
+   },
+   "swaps": {
+    "Set_Anim": [
+     [
+      "g_settings.animations && ",
+      ""
+     ]
+    ],
+    "Set_Create": [
+     [
+      "L\"Seamless Launchpad settings\"",
+      "L\"Seamless Snipper settings\""
+     ]
+    ],
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xF406"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Launchpad\"",
+      "L\"Snipper\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Snipper\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-sound-manager": {
+   "owned": {
+    "Set_Anim": "cd78a4ed1866a0fd",
+    "Set_Clickable": "761abb94f0932dfb",
+    "Set_CommitEdit": "153673178dd545c3",
+    "Set_Create": "b70dd9eafdbc145a",
+    "Set_Draw": "35d900ffa36c566a",
+    "Set_Hit": "490dce3720c37e91",
+    "Set_HoverIds": "ef05fa39cdbc2fbc",
+    "Set_LoadFields": "c107b8330bdde8d8",
+    "Set_ResetToSuggested": "4e623d42e506b41b",
+    "Set_Tick": "cf196bdc24dc3260",
+    "Set_WndProc": "220cb12785ba9489"
+   },
+   "swaps": {
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xE767"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Launchpad\"",
+      "L\"Sound Manager\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Sound Manager\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-taskbar": {
+   "owned": {
+    "Set_ActivateField": "13b47ae307ca0617",
+    "Set_BeginEdit": "ec0da9779387eb95",
+    "Set_CommitEdit": "153673178dd545c3",
+    "Set_ControlW": "dac13c288519f77c",
+    "Set_OpenLink": "be175ee8f1fed4d9",
+    "Set_ParseHex": "a35d08e5c79b32fc",
+    "Set_Parts": "d78df74f4ac7f883"
+   },
+   "swaps": {
+    "Set_Anim": [
+     [
+      "g_settings.animations && ",
+      ""
+     ]
+    ],
+    "Set_ChangedParams": [
+     [
+      "Set_QuoteArg(WH_MOD_ID)",
+      "Set_QuoteArg(::st::kRealModId)"
+     ],
+     [
+      "std::wstring(f.key) + L\"=\"",
+      "std::wstring(kStPrefix) + f.key + L\"=\""
+     ]
+    ],
+    "Set_Create": [
+     [
+      "L\"nativeSettingsTitleBar\"",
+      "L\"SettingsWindow.nativeSettingsTitleBar\""
+     ],
+     [
+      "L\"settingsGlass\"",
+      "L\"SettingsWindow.settingsGlass\""
+     ],
+     [
+      "L\"Seamless Launchpad settings\"",
+      "L\"Seamless Media Player settings\""
+     ]
+    ],
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xE8D6"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Launchpad\"",
+      "L\"Media Player\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Media Player\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-title-bars": {
+   "owned": {
+    "Set_FormatHotkey": "ebe56fee94d21677"
+   },
+   "swaps": {
+    "Set_Anim": [
+     [
+      "g_settings.animations && ",
+      ""
+     ]
+    ],
+    "Set_Create": [
+     [
+      "L\"Seamless Launchpad settings\"",
+      "L\"Seamless Title Bars settings\""
+     ]
+    ],
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xE922"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Launchpad\"",
+      "L\"Title Bars\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Title Bars\""
+     ]
+    ]
+   }
+  },
+  "local@taskbar-ai-usage-plus": {
+   "owned": {
+    "Set_ChangedParams": "b6ea0717c7946a22",
+    "Set_ControlW": "dac13c288519f77c",
+    "Set_Create": "b70dd9eafdbc145a",
+    "Set_DrawFooter": "300469f74c4eae99",
+    "Set_DrawLinkRow": "de1dfd9d53c197b2",
+    "Set_DrawPopup": "0dd101b5cd9df42b",
+    "Set_DrawRow": "950aedeba58d2696",
+    "Set_Hit": "490dce3720c37e91",
+    "Set_LoadFields": "c107b8330bdde8d8",
+    "Set_OnKey": "4d4850694f68efb4",
+    "Set_OpenLink": "be175ee8f1fed4d9",
+    "Set_OpenPopup": "3b8fe0a6389c132a",
+    "Set_Parts": "d78df74f4ac7f883",
+    "Set_Save": "bf1006b2e084dee5",
+    "Set_StartRecording": "0e99e075c5a94a1a",
+    "Set_StopRecording": "1da2877fdd12fb70",
+    "Set_WndProc": "220cb12785ba9489"
+   },
+   "swaps": {
+    "Set_Anim": [
+     [
+      "g_settings.animations && ",
+      ""
+     ]
+    ],
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xEB05"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Seamless\"",
+      "L\"Taskbar\""
+     ],
+     [
+      "L\"Launchpad\"",
+      "L\"AI Usage\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"AI Usage\""
+     ]
+    ]
+   }
+  }
+ }
+}

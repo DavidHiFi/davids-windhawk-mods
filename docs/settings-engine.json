@@ -1,5 +1,50 @@
 {
  "mods": {
+  "local@halo-launcher": {
+   "owned": {
+    "Set_ChangedParams": "b6ea0717c7946a22",
+    "Set_DrawMark": "42cb1c6b3f6d61c8",
+    "Set_FormatHotkey": "ebe56fee94d21677",
+    "Set_KeyStatusText": "4cb595326a377fbc",
+    "Set_LoadFields": "c107b8330bdde8d8",
+    "Set_OnKey": "4d4850694f68efb4",
+    "Set_OpenLink": "be175ee8f1fed4d9",
+    "Set_Save": "bf1006b2e084dee5",
+    "Set_StartRecording": "0e99e075c5a94a1a",
+    "Set_StopRecording": "1da2877fdd12fb70",
+    "Set_WndProc": "220cb12785ba9489"
+   },
+   "swaps": {
+    "Set_Anim": [
+     [
+      "g_settings.animations && ",
+      ""
+     ]
+    ],
+    "Set_Create": [
+     [
+      "L\"Seamless Launchpad settings\"",
+      "L\"Halo Launcher settings\""
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Seamless\"",
+      "L\"Halo\""
+     ],
+     [
+      "L\"Launchpad\"",
+      "L\"Launcher\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Launcher\""
+     ]
+    ]
+   }
+  },
   "local@seamless-autoclicker": {
    "owned": {
     "Set_FormatHotkey": "ebe56fee94d21677"
@@ -104,6 +149,60 @@
      [
       "L\"Launchpad\"",
       "L\"Color Picker\""
+     ]
+    ]
+   }
+  },
+  "local@seamless-compiz-cube": {
+   "owned": {
+    "Set_ActivateField": "13b47ae307ca0617",
+    "Set_BeginEdit": "ec0da9779387eb95",
+    "Set_CommitEdit": "153673178dd545c3",
+    "Set_ControlW": "dac13c288519f77c",
+    "Set_DrawFooter": "300469f74c4eae99",
+    "Set_LoadFields": "c107b8330bdde8d8",
+    "Set_ParseHex": "a35d08e5c79b32fc",
+    "Set_Parts": "d78df74f4ac7f883"
+   },
+   "swaps": {
+    "Set_Anim": [
+     [
+      "g_settings.animations && ",
+      ""
+     ]
+    ],
+    "Set_ApplyFrame": [
+     [
+      "L\"nativeSettingsTitleBar\"",
+      "L\"SettingsWindow.nativeSettingsTitleBar\""
+     ],
+     [
+      "L\"settingsGlass\"",
+      "L\"SettingsWindow.settingsGlass\""
+     ]
+    ],
+    "Set_Create": [
+     [
+      "L\"Seamless Launchpad settings\"",
+      "L\"Seamless Compiz Cube settings\""
+     ]
+    ],
+    "Set_DrawMark": [
+     [
+      "0xE80A",
+      "0xF158"
+     ]
+    ],
+    "Set_DrawRail": [
+     [
+      "L\"Launchpad\"",
+      "L\"Compiz Cube\""
+     ]
+    ],
+    "Set_MakeFormats": [
+     [
+      "L\"Launchpad\"",
+      "L\"Compiz Cube\""
      ]
     ]
    }
@@ -247,9 +346,13 @@
     "Set_DrawBox": "9f67e72e22b6fa36",
     "Set_DrawFooter": "300469f74c4eae99",
     "Set_DrawRail": "7c2114a0a9c49b63",
+    "Set_DrawRow": "950aedeba58d2696",
     "Set_DrawSupport": "69dfe03216b95af9",
     "Set_FormatHotkey": "ebe56fee94d21677",
     "Set_Hit": "e9f21bb01245fa83",
+    "Set_MakeFormats": "d0e3a73af9e75608",
+    "Set_Parts": "d78df74f4ac7f883",
+    "Set_RailDragTo": "4196e54d3324b166",
     "Set_WndProc": "3f45997124d03197"
    },
    "swaps": {
