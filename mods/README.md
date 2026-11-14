@@ -25,7 +25,7 @@ is in the repo but disabled on the source machine right now.
 | [Seamless Borders](local/seamless-borders) | Colored borders around windows, menus and notification banners. | 1.0.4 | GPL-3.0 |
 | [Seamless Title Bars](local/seamless-title-bars) | One title bar look everywhere: colors, caption buttons and native frames in every kind of app. | 1.0.0 | MIT |
 | [Simple Window Switcher Plus](local/simple-window-switcher-plus) | Alt+Tab with Vista animations, background blur and elevated app support. | 1.0.4 | GPL-2.0 |
-| [Always On Top Windows Plus](local/always-on-top-plus) | Pin any window on top with a hotkey, marked by a Mocha red to yellow ring. | 2.3.0 | MIT |
+| [Always On Top Windows Plus](local/always-on-top-plus) | Pin any window on top with a hotkey, marked by a Mocha red to yellow ring. | 2.4.0 | MIT |
 | [Seamless Window Manager](local/seamless-window-manager) | Move, resize, snap and focus windows with the mouse or keyboard, with app rules and a pause key. | 2.4.1 | GPL-3.0 |
 | [Window Manager Plus](local/window-manager) | Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts. | 1.3.2 (disabled) | GPL-3.0 |
 | [Seamless Power Action Countdown](local/seamless-power-action-countdown) | A glassy countdown before shutdown, restart, sleep or hibernation that any key or click cancels. | 1.2 | MIT |
@@ -38,7 +38,7 @@ is in the repo but disabled on the source machine right now.
 | [Explorer Tags Plus](local/explorer-tags-plus) | Colored tags in Explorer's navigation pane and a Tags submenu on files. | 0.8.2 | MIT |
 | [File Operation Styler Plus](local/file-operation-styler-plus) | A modern copy, move, delete and recycle window for Explorer, drawn on the GPU. | 1.5.0 | GPL-3.0 |
 | [Peek](local/peek) | Select a file in Explorer and press Space to preview it, with media playback for audio and video. | 1.5.0 | MIT |
-| [Shell Font Changer Plus](local/shell-font-changer-plus) | Any installed font in Explorer, Start, Search and Settings, with icons and emoji left intact. | 1.3.3 | MIT |
+| [Shell Font Changer Plus](local/shell-font-changer-plus) | Any installed font in File Explorer, with icons and emoji left intact. | 1.3.5 | MIT |
 | [Seamless Color Picker](local/seamless-color-picker) | A full color picker on a hotkey, with a screen magnifier, recent colors and one-click copy. | 1.0.0 | MIT |
 | [ZoomIt](local/zoomit) | Zoom into any part of the screen and draw on it with a hotkey, like Sysinternals ZoomIt. | 1.1.0 | MIT |
 | [Seamless Flyouts](local/seamless-flyouts) | Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps. | 2.0.3 | MIT |
@@ -52,7 +52,7 @@ is in the repo but disabled on the source machine right now.
 | [Pointer Afterimage Plus](local/pointer-afterimage-plus) | A real motion blur for the mouse pointer, drawn on the GPU. | 1.2.2 | Unlicense |
 | [Keyboard Shortcut Actions Plus](local/keyboard-shortcut-actions-plus) | Global shortcuts for apps and Windows actions, with a download offer when an app is missing. | 1.1.2 | MIT |
 | [Windhawk Enhanced Styler](local/windhawk-enhanced-styler) | Colors, gradients, fonts, frosted dialogs and a matching title bar for Windhawk 2.0. | 2.1.12 | MIT |
-| [Notepad++ Dark Dialog Fix](local/npp-taskdlg-textcolor) | Readable text in Notepad++ dark-mode dialogs. | 1.0.2 | MIT |
+| [Notepad++ Dark Dialog Fix](local/npp-taskdlg-textcolor) | Readable text in Notepad++ dark-mode dialogs. | 1.0.3 | MIT |
 
 ## Installing a mod
 

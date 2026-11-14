@@ -2,16 +2,15 @@
 
 [☕ Support on Ko-fi](https://ko-fi.com/DavidHiFi)
 
-Change the text font in File Explorer, Start, Search and Settings to any font
-you have installed. Icons and emoji keep their own glyphs, so buttons never
-turn into empty boxes.
+Change the text font in File Explorer to any font you have installed. Icons
+and emoji keep their own glyphs, so buttons never turn into empty boxes.
 
 ![Shell Font Changer Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/shell-font-changer-plus.png)
 
 ## Features
 
-- **Shell-wide text.** File Explorer, Start, Search and Settings all follow the
-  font you pick.
+- **File Explorer text.** The file list, the navigation pane and the column
+  headers follow the font you pick.
 - **Icons and emoji stay intact.** Symbol and icon fonts keep their own glyphs,
   so buttons never show empty boxes.
 - **Weight is kept.** Semibold and bold text stays semibold and bold.
@@ -26,13 +25,18 @@ turn into empty boxes.
 ## How to use
 
 Type an installed font family name in the settings, such as `FiraCode Nerd Font`
-or `Inter`. Leave the field empty, or type `None`, to turn the mod off.
+or `Inter`. The field starts empty, so nothing changes until you pick a font.
+Leave it empty, or type `None`, to turn the mod off.
 
 If the font is not installed, or its name is 32 characters or longer, the mod
 does not start. The Windhawk log says why.
 
-Some apps, like Chrome and Edge, draw text with their own fonts and keep them.
-Windows that were already open may need to be reopened.
+The Windows 11 command bar and address bar, Start, Search and Settings are
+drawn by XAML or web views and keep their fonts. The
+[Windows 11 File Explorer Styler](https://windhawk.net/mods/windows-11-file-explorer-styler),
+[Start Menu Styler](https://windhawk.net/mods/windows-11-start-menu-styler) and
+[Settings Styler](https://windhawk.net/mods/windows-11-settings-styler) can set
+fonts there. Windows that were already open may need to be reopened.
 
 Turn off the original Explorer Font Changer before you turn this one on.
 

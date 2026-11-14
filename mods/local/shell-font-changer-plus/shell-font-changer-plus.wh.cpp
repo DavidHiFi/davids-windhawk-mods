@@ -1,19 +1,14 @@
 // ==WindhawkMod==
 // @id              shell-font-changer-plus
 // @name            Shell Font Changer Plus
-// @description     Any installed font in Explorer, Start, Search and Settings, with icons and emoji left intact
-// @version         1.3.3
+// @description     Any installed font in File Explorer, with icons and emoji left intact
+// @version         1.3.5
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @license         MIT
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         explorer.exe
-// @include         StartMenuExperienceHost.exe
-// @include         ShellExperienceHost.exe
-// @include         SearchHost.exe
-// @include         ShellHost.exe
-// @include         SystemSettings.exe
 // @compilerOptions -lgdi32 -luxtheme -ldwrite
 // ==/WindhawkMod==
 
@@ -21,16 +16,15 @@
 /*
 # Shell Font Changer Plus
 
-Change the text font in File Explorer, Start, Search and Settings to any font
-you have installed. Icons and emoji keep their own glyphs, so buttons never
-turn into empty boxes.
+Change the text font in File Explorer to any font you have installed. Icons
+and emoji keep their own glyphs, so buttons never turn into empty boxes.
 
 ![Shell Font Changer Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/shell-font-changer-plus.png)
 
 ## Features
 
-- **Shell-wide text.** File Explorer, Start, Search and Settings all follow the
-  font you pick.
+- **File Explorer text.** The file list, the navigation pane and the column
+  headers follow the font you pick.
 - **Icons and emoji stay intact.** Symbol and icon fonts keep their own glyphs,
   so buttons never show empty boxes.
 - **Weight is kept.** Semibold and bold text stays semibold and bold.
@@ -45,13 +39,18 @@ turn into empty boxes.
 ## How to use
 
 Type an installed font family name in the settings, such as `FiraCode Nerd Font`
-or `Inter`. Leave the field empty, or type `None`, to turn the mod off.
+or `Inter`. The field starts empty, so nothing changes until you pick a font.
+Leave it empty, or type `None`, to turn the mod off.
 
 If the font is not installed, or its name is 32 characters or longer, the mod
 does not start. The Windhawk log says why.
 
-Some apps, like Chrome and Edge, draw text with their own fonts and keep them.
-Windows that were already open may need to be reopened.
+The Windows 11 command bar and address bar, Start, Search and Settings are
+drawn by XAML or web views and keep their fonts. The
+[Windows 11 File Explorer Styler](https://windhawk.net/mods/windows-11-file-explorer-styler),
+[Start Menu Styler](https://windhawk.net/mods/windows-11-start-menu-styler) and
+[Settings Styler](https://windhawk.net/mods/windows-11-settings-styler) can set
+fonts there. Windows that were already open may need to be reopened.
 
 Turn off the original Explorer Font Changer before you turn this one on.
 
@@ -65,7 +64,7 @@ by Gabriela Cristei. MIT.
 // ==WindhawkModSettings==
 /*
 - font:
-  - name: FiraCode Nerd Font
+  - name: ""
     $name: Font family
     $description: An installed font family, such as Inter. Leave empty or type None to keep the original font.
   $name: Text font
@@ -79,7 +78,6 @@ by Gabriela Cristei. MIT.
 #include <cwctype>
 #include <algorithm>
 #include <vector>
-#include <map>
 #include <cmath>
 
 namespace policy {
@@ -396,7 +394,10 @@ HRESULT WINAPI themeHook(HTHEME theme, HDC dc, int part, int state, LPCWSTR text
 decltype(&DrawThemeTextEx) themeExOriginal;
 HRESULT WINAPI themeExHook(HTHEME theme, HDC dc, int part, int state, LPCWSTR text, int length, DWORD flags, LPRECT rect, const DTTOPTS* opts) {
     FontScope font(dc, text, policy::textLength(text, length));
-    fitBox(font, dc, text, policy::textLength(text, length), rect, flags, nullptr, true);
+    // A measuring call has no final box yet, so it is not fitted.
+    if (!(opts && (opts->dwFlags & DTT_CALCRECT))) {
+        fitBox(font, dc, text, policy::textLength(text, length), rect, flags, nullptr, true);
+    }
     return themeExOriginal(theme, dc, part, state, text, length, flags, rect, opts);
 }
 
@@ -455,9 +456,16 @@ bool loadSettings() {
     policy::target = name ? name : L"";
     Wh_FreeStringSetting(name);
     policy::enabled = !policy::target.empty() && _wcsicmp(policy::target.c_str(), L"None") != 0;
-    if (!policy::enabled) return true;
-    if (policy::target.size() >= LF_FACESIZE || policy::protectedFace(policy::target.c_str())) {
+    if (!policy::enabled) {
+        Wh_Log(L"No font is set, so the mod stays idle.");
+        return false;
+    }
+    if (policy::target.size() >= LF_FACESIZE) {
         Wh_Log(L"Choose a text font family shorter than 32 characters.");
+        return false;
+    }
+    if (policy::protectedFace(policy::target.c_str())) {
+        Wh_Log(L"Icon and emoji fonts cannot be used as the text font.");
         return false;
     }
     IDWriteFactory* factory = nullptr;
