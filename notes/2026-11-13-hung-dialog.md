@@ -85,3 +85,11 @@ started the same second as each error box, stayed alive with no window, about 15
 - 1.2.5 live: readout setup=63 (all parts found), csrss 1108, margins 0x10c, hwnd 0x28, setters 3. `sys125.png`: light title gone but layout shifted (full-glass margins).
 - 1.2.6 live, mode 3, on a real "explorer.exe - System Error" box (5:01 pm): dark title, our dock with the blue to mauve edge, blurred frame (`real126.png`). Body still black.
 - Not yet proved: a blurred body (mode 7 trial queued until that box is closed and the owner is away).
+
+### Full-glass trial (mode 7), 14 Nov 8:16 pm
+
+- Ran on the installed 1.2.6 with the owner away, desktop lock held. Readout `applied=1799` (dark, backdrop and margins all applied).
+- Result: same break as 1.2.5. The title strip disappears, the content jumps to the top edge and a grey strip shows at the bottom. The body stays black.
+- Mode 3 (dark title, dock, blurred frame) gives the right layout. It is set back as the live value and stays the default.
+- Open: the black body. Csrss paints its client area solid black; extending the frame into it moves the layout instead of turning it to glass. Needs a different approach (for example a dwm-side backdrop under the client area), not more margin tweaks.
+- Captures: `work\2026-11-13-hung-dialog\sys126-m7.png`, `sys126-m7-late.png`, `sys126-m3.png`.
