@@ -289,3 +289,158 @@ with `scripts\Install-StagedMod.ps1`. Part backups: `*.bak-20261113-1802`.
   channel, change across the release 0.24 mean, 6 max (noise level).
 - After the flick: 1.06, 0.59, 0.37 mean change per 0.3 s, where 1.1.4 showed 0.0. Fixed.
 - Clip: `live-1.1.5-180454\glow-drag.mp4` and `glow-drag.gif`.
+
+## 1.1.6: smooth edges, gradient effect (2026-11-13, 8:43 pm)
+- Owner (8:20 pm): "weird shimmering at the top of the border", "2 weird boxes inside of the
+  window", the glow "looks a little bit off like if it jumps", wants clean Mocha blue to mauve
+  gradient.
+- Boxes: the two dark cards were the test window's own paint, not the mod. Test window now
+  paints black only.
+- Edges: the spring grid is drawn through Catmull-Rom curves at 64 drawn cells per side, so
+  a bent edge is a curve, not straight segments.
+- Glow effect set to gradient (blue #89B4FA to mauve #CBA6F7); install defaults use it.
+- Live take `live-1.1.6-204443` showed three faults left: a fold ("fin") at the top-left
+  edge during the drag at 5.7 s, the gradient barely visible (about 7% tint), and a step of
+  about 7 levels of 255 at grab and release.
+
+| Item | Old | New |
+|---|---|---|
+| Seamless Wobbly Windows | 1.1.5 | 1.1.6 |
+| glow.effect (registry) | glows | gradient |
+
+Rollback: reinstall `local@seamless-wobbly-windows-20261113-2043.wh.cpp` (ModsSource backup,
+1.1.5) and restore the registry backup in `backups\2026-11-13\seamless-wobbly-windows\`.
+
+## 1.1.7: no fold, glass match, stronger gradient (2026-11-13, 8:56 pm)
+Causes, from the 1.1.6 take:
+- Fold: only the grid point under the cursor is pinned. Its neighbour on the top edge could
+  trail by more than one grid cell and cross under it. Fix: while held, each point may trail
+  its rest spot by at most half its distance from the held point (and never more than the old
+  limit). The offset field then stretches at most 1:2, so the sheet cannot turn over.
+- Jump: the capture (PrintWindow) draws acrylic glass as a flat stand-in, about 41,39,59,
+  while the live glass is about 34,34,54. Fix: at the grab, while the real window still shows,
+  read 25 small squares of the live glass from the screen, subtract the glow, take the median
+  and paint it over the stand-in in the shader. Kept off if the result is more than 0.1 away
+  from the stand-in (something covering the window).
+- Faint gradient: the stops were 0.75 x opacity. Now 2.5 x opacity, capped at full (about
+  0.8 at the default). Same constant in the glow tool and the wobble copy, so they still match.
+
+| Item | Old | New |
+|---|---|---|
+| Seamless Wobbly Windows | 1.1.6 | 1.1.7 |
+| Gradient stop alpha | 0.75 x opacity | 2.5 x opacity, capped |
+| Held trail limit | 0.35 x short side | also half the distance from the held point |
+| Glass under the copy | capture stand-in | live glass median |
+
+Rollback: reinstall the 1.1.6 source (`work\2026-11-11-wobbly\local@seamless-wobbly-windows.wh.cpp.bak-20261113-2056`)
+with `scripts\Install-StagedMod.ps1`; the install also leaves a dated ModsSource backup.
+Part backups: `ps.h.bak-20261113-2056`; the 1.1.6 spliced source above holds every part.
+
+### 1.1.7 live (9:18 pm): glass read too slow
+- Installed at idle, registry 1.1.7, Explorer pid unchanged (13612).
+- Take `live-1.1.7-211952`: the copy only came up once the drag had stopped (video 6.7 to
+  7.4 s); during the move the real window showed. The copy was about 20 levels brighter
+  than the real window (58,60,89 against 37,39,59). The gradient spread across the copy
+  matched the real window (red rises about 9 to 10 levels from top-left to bottom-right in both).
+- Cause: each screen read waits for a display frame. Measured here: 25 small reads take
+  180 to 250 ms, one read of the whole 960x620 window 8 to 15 ms. While the 25 reads ran,
+  the window moved away from the squares being read, so the "glass" was other windows.
+- Also on screen: a Flow Launcher error ("Failed to register hotkey Ctrl + Alt + F10") sat
+  over the test window the whole take. Not ours; left for the owner.
+
+## 1.1.8: one screen read, taken before the move (2026-11-13, 9:28 pm)
+- The glass is read in one picture of the whole window, 40 ms after the press (the window
+  has shown active by then) or as the move begins, whichever is first, while the drag is
+  still waiting to start. It is dropped if the window moved during the read.
+- Squares now come from that picture on a 7 x 7 grid; the picture is freed once the glow starts.
+
+| Item | Old | New |
+|---|---|---|
+| Seamless Wobbly Windows | 1.1.7 | 1.1.8 |
+| Glass read | 25 screen reads at the grab | 1 read before the move |
+
+Rollback: reinstall the 1.1.7 source (`work\2026-11-11-wobbly\local@seamless-wobbly-windows.wh.cpp.bak-20261113-2128`)
+with `scripts\Install-StagedMod.ps1`, or the 1.1.6 one (`...bak-20261113-2056`).
+
+### 1.1.8 live: copy still about 20 levels brighter
+- The overlay is now up for the whole drag (the read lands before the move).
+- The glass read came out near black once the glow was taken out with the copy's old blend
+  (about 4, 5, 15 of 255), so the safety check (within 0.1 of the stand-in) threw it away and
+  the copy fell back to the brighter stand-in.
+- Cause: the real window adds the glow's light over the glass. The copy darkened the glass
+  under the glow and then added it, which is wrong for the strong 1.1.x gradient.
+
+## 1.1.9: the copy adds the glow like the real window (2026-11-14, 1:42 am)
+- Shader: when the glass was read, glow is added over it (capped at full), not blended over it.
+- Glass read: screen minus glow. The "close to the stand-in" check is replaced by an evenness
+  check: at least half the samples must sit within 8 levels of the median on every channel,
+  else something else covers the window and the stand-in is kept.
+
+| Item | Old | New |
+|---|---|---|
+| Seamless Wobbly Windows | 1.1.8 | 1.1.9 |
+| Copy's glow blend | over the glass | added to the glass |
+| Glass read check | within 0.1 of stand-in | half the samples even |
+
+Rollback: reinstall the 1.1.8 source (`work\2026-11-11-wobbly\local@seamless-wobbly-windows.wh.cpp.bak-20261114-0142`)
+with `scripts\Install-StagedMod.ps1`. Part backup: `ps.h.bak-20261114-0000`.
+
+## 2026-11-14 11:12 am: glow turned off (owner)
+
+Owner said the merged Acrylic Color Glows caused the Helium regression and asked for the old look.
+`glow.enabled` 1 -> 0 in the mod's settings, SettingsChangeTime bumped, applied live by
+`scripts\2026-11-14-wobbly-glow-off.ps1`. The glow tool process keeps running with nothing to paint.
+Backup: `backups\2026-11-14\seamless-wobbly-windows\mod-key-before-glow-off-*.reg`.
+Rollback: set `glow.enabled` back to 1 and bump SettingsChangeTime, or import the .reg.
+
+## 1.2.0: the original Window Wobble springs, back exactly (2026-11-14, afternoon)
+Owner: "fix the wobbly windows, it's not like the original mod at all". Our 1.1.x springs had
+drifted from HeyJeay's: a pin under the pointer, springs graded by distance from it, a cone cap,
+a tight clamp, kicks scaled by frame time, no release flick, a softer 0.25 s landing and a fixed
+480 Hz step. All of that is gone. The sheet is now the original's, line for line:
+- Stiffness graded by row only (title bar stiff, bottom soft by the softness setting).
+- Kick: full velocity on a direction change, 0.4 of it above 80 px/s, every moved frame.
+- Release: one flick at half the travel speed, then SettleFast, done within 0.30 s.
+- One spring step per frame with the frame's own time, as the original. Only a frame longer than
+  1/120 s (a hitch or a 60 Hz screen) is split into equal steps so it cannot blow up.
+- Kept from ours: Windows does the move (we follow its frame), the border ring, Alt-drag, the
+  landing follow while Windows snaps, and a far-out guard (the window's own size) against runaway.
+- Glow is still off by the owner's 11:12 am choice; the install keeps the mod's settings.
+
+| Item | Old | New |
+|---|---|---|
+| Seamless Wobbly Windows | 1.1.9 | 1.2.0 |
+| Spring sheet | pinned at pointer, distance graded, capped | original row graded, no pin |
+| Step | fixed 1/480 s | per frame, as the original |
+| Release | settle only | half-speed flick, then settle |
+| Softness setting name | Far side softness (%) | Body softness (%) |
+
+Rollback: reinstall the 1.1.9 source (`work\2026-11-11-wobbly\local@seamless-wobbly-windows.wh.cpp.bak-20261114-1130`)
+with `scripts\Install-StagedMod.ps1`. Template backup: `mod.template.cpp.bak-20261114-1130`.
+
+## 1.2.0 also re-sets the glass after a drag (2026-11-14, 12:48 pm, thread e1fe78e6)
+Owner: "fix the wobble mod too", after T3's whole window went see-through at about 11:55 am.
+The wobble hides (cloaks) the real window on every drag and showed it again without telling DWM
+to rebuild its glass. An acrylic backdrop or accent blur could come back stale, so the window
+showed what was behind it unblurred. Seamless Window Manager already fixes the same thing.
+- Added `RefreshBackdropAfterUncloak` (a copy of the window manager's): after the uncloak, set
+  the same system backdrop (if acrylic or mica) and the same accent (if one is on) again.
+- Called at the end of `ShowWindowInPlace`, so every landing path gets it.
+- Added into the staged 1.2.0 source, so the already queued 1.2.0 install carries it. Version
+  left at 1.2.0 because the queue checks for that exact number.
+- Offline build: x64 and x86 both OK (`work\2026-11-11-wobbly\build-glass`).
+
+| Item | Old | New |
+|---|---|---|
+| Glass after a drag | left as DWM had it | backdrop and accent set again |
+
+Rollback: the staged source without this is `work\2026-11-11-wobbly\local@seamless-wobbly-windows.wh.cpp.bak-20261114-1130`
+plus the 1.2.0 spring work; simplest is to delete `RefreshBackdropAfterUncloak` and its one call.
+Copy with the fix: `local@seamless-wobbly-windows.wh.cpp.glass-20261114-1248`.
+
+### 1.2.0 also: glass put back after the drag (thread e1fe78e6's finding)
+- After the reveal, the mod tells the window its real active state again (WM_NCACTIVATE plus a
+  frame-changed SetWindowPos, async), the same as Seamless Window Manager's
+  RefreshBackdropAfterUncloak. T3's glass went see-through at about 11:55 am after a drag.
+- First queued try (to 1:20 pm) never ran: another thread held the desktop lock. The queue now
+  lets go of the engine lock and retries every couple of minutes while the owner is away.
