@@ -2,7 +2,7 @@
 // @id              zoomit
 // @name            ZoomIt
 // @description     Zoom, draw and read text bigger under the mouse with a hotkey, like Sysinternals ZoomIt
-// @version         1.2.0
+// @version         1.2.2
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -72,9 +72,10 @@ Hold Ctrl over any text to read it in a big, clear bubble.
 | Hold Ctrl over a picture or empty space | A lens zooms in on that spot |
 | Ctrl plus another key, a click or a scroll | Nothing shows, so shortcuts work as usual |
 | Let go of Ctrl | The bubble fades away |
+| Press Ctrl+3 | The magnifier stays on without holding a key. Press it again to turn it off |
 
-Pick another key, CapsLock as an on and off switch, a hotkey, or always on in
-the settings. The bubble hides itself in full screen games and videos, and in
+Pick another key, CapsLock as an on and off switch, only the hotkey, or always on
+in the settings. The bubble hides itself in full screen games and videos, and in
 any app you list.
 
 ## Notes
@@ -134,7 +135,7 @@ Shamenson. MIT.
   $options:
   - red: Red
   - green: Green
-  - blue: Blue
+  - blue: Blue (Catppuccin Mocha)
   - yellow: Yellow
   - orange: Orange
   - pink: Pink
@@ -181,12 +182,12 @@ Shamenson. MIT.
   - alt: Hold Alt
   - win: Hold Win
   - capslock: CapsLock turns it on and off
-  - hotkey: A hotkey turns it on and off
+  - hotkey: Only the hotkey below
   - always: Always on
   - off: Off
 - hoverHotkey: Ctrl+3
   $name: Hover magnifier hotkey
-  $description: Turns the hover magnifier on and off when the key above is set to a hotkey. Write it like Ctrl+3
+  $description: Turns the hover magnifier on and off, whatever the key above is set to. In Always on it pauses it. Leave empty for no hotkey. Write it like Ctrl+3
 - hoverDelay: 350
   $name: Hold time before it shows (ms)
   $description: 'How long to hold the key before the bubble shows, so quick shortcuts like Ctrl+C don''t flash it. 0 to 2000 (Suggested: 350)'
@@ -500,7 +501,7 @@ struct Shape {
 };
 
 const COLORREF kPalette[] = {RGB(255, 0, 0),   RGB(0, 200, 0),
-                             RGB(0, 90, 255),  RGB(255, 230, 0),
+                             RGB(0x89, 0xB4, 0xFA), RGB(255, 230, 0),
                              RGB(255, 140, 0), RGB(255, 60, 200)};
 
 // Pen color 6: the theme's text color, black or white with dark mode.
@@ -2265,12 +2266,13 @@ struct HoverState {
     void* capBits = nullptr;
     int capW = 0, capH = 0;
 
-    HHOOK keyboardHook = nullptr, mouseHook = nullptr;
+    bool mouseHookOn = false;  // Asked of the hook thread.
     bool timerOn = false, hotkeyOn = false;
 
     bool toggledOn = false;  // CapsLock or the hotkey turned it on.
-    bool capsDown = false;
-    bool cancelled = false;  // A key or click while holding: a shortcut, not a look.
+    bool capsDown = false;   // Hook thread only.
+    // A key or click while holding: a shortcut, not a look. Set on the hook thread.
+    std::atomic<bool> cancelled{false};
     double holdStart = 0;    // 0 while the trigger is up.
     UINT64 holdFirstSeq = 0;
     bool paused = false;
@@ -2318,17 +2320,24 @@ bool IsTriggerVk(DWORD vk) {
     }
 }
 
-bool TriggerHeld() {
+// The hold key itself, ignoring the on/off switch.
+bool HoldKeyDown() {
     switch (g_hs.trigger) {
         case HoverTrigger::Ctrl: return GetAsyncKeyState(VK_CONTROL) < 0;
         case HoverTrigger::Alt: return GetAsyncKeyState(VK_MENU) < 0;
         case HoverTrigger::Shift: return GetAsyncKeyState(VK_SHIFT) < 0;
         case HoverTrigger::Win:
             return GetAsyncKeyState(VK_LWIN) < 0 || GetAsyncKeyState(VK_RWIN) < 0;
-        case HoverTrigger::CapsLock:
-        case HoverTrigger::Hotkey: return gh.toggledOn;
-        case HoverTrigger::Always: return true;
         default: return false;
+    }
+}
+
+// Showing now: the hold key, or the switch (CapsLock or the hotkey).
+bool TriggerHeld() {
+    switch (g_hs.trigger) {
+        case HoverTrigger::Off: return false;
+        case HoverTrigger::Always: return !gh.toggledOn;  // The hotkey pauses it.
+        default: return gh.toggledOn || HoldKeyDown();
     }
 }
 
@@ -2354,8 +2363,9 @@ void HoverStopTimer() {
 }
 
 void HoverBeginHold() {
+    // cancelled is left alone: a Ctrl+C can land before this runs. It clears when
+    // the trigger goes up.
     gh.holdStart = NowMs();
-    gh.cancelled = false;
     gh.pauseCheckedAt = 0;
     gh.lastKindChange = 0;
     gh.lastTextAt = -1e9;
@@ -2372,9 +2382,9 @@ LRESULT CALLBACK HoverMouseProc(int code, WPARAM wParam, LPARAM lParam) {
             case WM_LBUTTONDOWN: case WM_RBUTTONDOWN: case WM_MBUTTONDOWN:
             case WM_XBUTTONDOWN: case WM_MOUSEWHEEL: case WM_MOUSEHWHEEL:
                 // Ctrl+click and Ctrl+scroll are shortcuts, not a look.
-                if (TriggerHeld()) {
+                if (HoldKeyDown()) {
                     gh.cancelled = true;
-                    HoverHideNow();
+                    PostMessageW(g_hoverWnd.load(), WM_HOVER_HIDE, 0, 0);
                 }
                 break;
         }
@@ -2382,28 +2392,17 @@ LRESULT CALLBACK HoverMouseProc(int code, WPARAM wParam, LPARAM lParam) {
     return CallNextHookEx(nullptr, code, wParam, lParam);
 }
 
-// The mouse hook only lives while the trigger key is held, so normal mouse
-// movement never passes through this thread.
-void HoverMouseHook(bool on) {
-    if (on && !gh.mouseHook) {
-        gh.mouseHook = SetWindowsHookExW(WH_MOUSE_LL, HoverMouseProc,
-                                         GetModuleHandleW(nullptr), 0);
-    } else if (!on && gh.mouseHook) {
-        UnhookWindowsHookEx(gh.mouseHook);
-        gh.mouseHook = nullptr;
-    }
-}
+// What the keyboard hook asks of the hover thread (WM_HOVER_WAKE's wParam).
+constexpr WPARAM kWakeHold = 1, kWakeToggle = 2;
 
 LRESULT CALLBACK HoverKeyboardProc(int code, WPARAM wParam, LPARAM lParam) {
     if (code == HC_ACTION) {
         auto* k = (KBDLLHOOKSTRUCT*)lParam;
         bool down = wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN;
         bool injected = (k->flags & LLKHF_INJECTED) != 0;
+        HWND wnd = g_hoverWnd.load();
         if (g_hs.trigger == HoverTrigger::CapsLock && k->vkCode == VK_CAPITAL && !injected) {
-            if (down && !gh.capsDown) {
-                gh.toggledOn = !gh.toggledOn;
-                PostMessageW(gh.wnd, WM_HOVER_WAKE, 0, 0);
-            }
+            if (down && !gh.capsDown) PostMessageW(wnd, WM_HOVER_WAKE, kWakeToggle, 0);
             gh.capsDown = down;
             // CapsLock is the switch now. It isn't a modifier, so eating both
             // its press and release can't leave a key stuck.
@@ -2411,20 +2410,78 @@ LRESULT CALLBACK HoverKeyboardProc(int code, WPARAM wParam, LPARAM lParam) {
         }
         if (IsHoldTrigger() && down) {
             if (IsTriggerVk(k->vkCode)) {
-                if (!gh.holdStart) {
-                    HoverBeginHold();
-                    PostMessageW(gh.wnd, WM_HOVER_WAKE, 0, 0);
-                }
-            } else if (!IsModifierVk(k->vkCode) && TriggerHeld()) {
-                // Ctrl+C, Ctrl+1 and friends. Hidden here, before the key
-                // reaches ZoomIt's own hotkeys and their screen grab.
+                PostMessageW(wnd, WM_HOVER_WAKE, kWakeHold, 0);
+            } else if (!IsModifierVk(k->vkCode) && HoldKeyDown()) {
+                // Ctrl+C, Ctrl+1 and friends. A zoom also hides the bubble
+                // itself before it grabs the screen.
                 gh.cancelled = true;
-                HoverHideNow();
+                PostMessageW(wnd, WM_HOVER_HIDE, 0, 0);
             }
         }
     }
     // Never swallowed: every other key, and every modifier release, goes on.
     return CallNextHookEx(nullptr, code, wParam, lParam);
+}
+
+// The key and mouse hooks live on their own thread that does nothing else.
+// Windows silently drops a low-level hook whose thread is slow to answer even
+// once, and the hover thread draws, grabs the screen and asks the shell; on
+// that thread Hold Ctrl stopped working after a few hours (2026-11-14).
+constexpr UINT kHookKeyboard = WM_APP + 1, kHookMouse = WM_APP + 2;
+DWORD g_hookThreadId;
+HANDLE g_hookThread, g_hookReady;
+
+DWORD WINAPI HoverHookThreadProc(void*) {
+    MSG msg;
+    PeekMessageW(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);  // Make the queue.
+    SetEvent(g_hookReady);
+    HINSTANCE inst = GetModuleHandleW(nullptr);
+    HHOOK keyboard = nullptr, mouse = nullptr;
+    // There is no way to ask whether Windows dropped a hook, so the keyboard
+    // hook is put back every 30 seconds. Costs nothing.
+    UINT_PTR rearm = SetTimer(nullptr, 0, 30000, nullptr);
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        switch (msg.message) {
+            case kHookKeyboard:
+                if (msg.wParam && !keyboard) {
+                    keyboard = SetWindowsHookExW(WH_KEYBOARD_LL, HoverKeyboardProc, inst, 0);
+                    if (!keyboard) Wh_Log(L"Keyboard hook failed (%u)", GetLastError());
+                } else if (!msg.wParam && keyboard) {
+                    UnhookWindowsHookEx(keyboard);
+                    keyboard = nullptr;
+                }
+                break;
+            case kHookMouse:
+                if (msg.wParam && !mouse) {
+                    mouse = SetWindowsHookExW(WH_MOUSE_LL, HoverMouseProc, inst, 0);
+                } else if (!msg.wParam && mouse) {
+                    UnhookWindowsHookEx(mouse);
+                    mouse = nullptr;
+                }
+                break;
+            case WM_TIMER:
+                if (keyboard) {
+                    if (HHOOK fresh =
+                            SetWindowsHookExW(WH_KEYBOARD_LL, HoverKeyboardProc, inst, 0)) {
+                        UnhookWindowsHookEx(keyboard);
+                        keyboard = fresh;
+                    }
+                }
+                break;
+        }
+    }
+    if (rearm) KillTimer(nullptr, rearm);
+    if (mouse) UnhookWindowsHookEx(mouse);
+    if (keyboard) UnhookWindowsHookEx(keyboard);
+    return 0;
+}
+
+// The mouse hook only lives while the trigger key is held, so normal mouse
+// movement never passes through this process.
+void HoverMouseHook(bool on) {
+    if (on == gh.mouseHookOn || !g_hookThreadId) return;
+    gh.mouseHookOn = on;
+    PostThreadMessageW(g_hookThreadId, kHookMouse, on, 0);
 }
 
 float HoverScaleAt(POINT pt) {
@@ -2856,6 +2913,12 @@ void HoverTick() {
         return;
     }
     if (!gh.holdStart) HoverBeginHold();
+    if (gh.toggledOn && IsHoldTrigger() && !HoldKeyDown()) {
+        // Switched on and the hold key is up: a shortcut like Ctrl+3 or
+        // Ctrl+C is over, and clicks are plain clicks again.
+        gh.cancelled = false;
+        HoverMouseHook(false);
+    }
 
     POINT pt;
     if (!GetCursorPos(&pt)) return;
@@ -2948,17 +3011,11 @@ void HoverApplySettings() {
     gh.dirty = true;
     gh.toggledOn = false;
     gh.holdStart = 0;
+    gh.cancelled = false;
     HoverMouseHook(false);
 
     bool wantKeyboardHook = IsHoldTrigger() || g_hs.trigger == HoverTrigger::CapsLock;
-    if (wantKeyboardHook && !gh.keyboardHook) {
-        gh.keyboardHook = SetWindowsHookExW(WH_KEYBOARD_LL, HoverKeyboardProc,
-                                            GetModuleHandleW(nullptr), 0);
-        if (!gh.keyboardHook) Wh_Log(L"Keyboard hook failed (%u)", GetLastError());
-    } else if (!wantKeyboardHook && gh.keyboardHook) {
-        UnhookWindowsHookEx(gh.keyboardHook);
-        gh.keyboardHook = nullptr;
-    }
+    if (g_hookThreadId) PostThreadMessageW(g_hookThreadId, kHookKeyboard, wantKeyboardHook, 0);
     if (g_hs.trigger == HoverTrigger::CapsLock && (GetKeyState(VK_CAPITAL) & 1)) {
         // CapsLock can't be turned off by hand any more, so turn it off now.
         INPUT in[2] = {};
@@ -2972,7 +3029,7 @@ void HoverApplySettings() {
         UnregisterHotKey(gh.wnd, kHotkeyHover);
         gh.hotkeyOn = false;
     }
-    if (g_hs.trigger == HoverTrigger::Hotkey) {
+    if (g_hs.trigger != HoverTrigger::Off && !g_hs.hotkey.empty()) {
         UINT mods, vk;
         if (!ParseHotkey(g_hs.hotkey, &mods, &vk)) {
             Wh_Log(L"Can't read the hover hotkey \"%s\"", g_hs.hotkey.c_str());
@@ -2991,7 +3048,12 @@ void HoverApplySettings() {
 LRESULT CALLBACK HoverWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
         case WM_HOVER_WAKE:
+            if (wParam == kWakeToggle) gh.toggledOn = !gh.toggledOn;
+            // A held key repeats, so this comes often; the hold delay counts
+            // from the first press only.
+            if (wParam == kWakeHold && IsHoldTrigger() && !gh.holdStart) HoverBeginHold();
             HoverStartTimer();
+            // Switched on already: watch clicks again while the key is held.
             if (IsHoldTrigger()) HoverMouseHook(true);
             return 0;
         case WM_HOVER_HIDE:
@@ -3047,6 +3109,15 @@ DWORD WINAPI HoverThreadProc(void*) {
     if (gh.wnd) {
         g_hoverWnd = gh.wnd;
         g_uiaThread = CreateThread(nullptr, 0, HoverUiaThreadProc, nullptr, 0, nullptr);
+        g_hookReady = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        g_hookThread = CreateThread(nullptr, 0, HoverHookThreadProc, nullptr, 0,
+                                    &g_hookThreadId);
+        if (g_hookThread) {
+            WaitForSingleObject(g_hookReady, 2000);
+        } else {
+            g_hookThreadId = 0;
+            Wh_Log(L"Hover magnifier: hook thread failed (%u)", GetLastError());
+        }
         HoverApplySettings();
     }
     SetEvent(g_hoverReady);
@@ -3058,9 +3129,16 @@ DWORD WINAPI HoverThreadProc(void*) {
     }
 
     g_hoverWnd = nullptr;
-    HoverMouseHook(false);
-    if (gh.keyboardHook) UnhookWindowsHookEx(gh.keyboardHook);
-    gh.keyboardHook = nullptr;
+    if (g_hookThread) {
+        PostThreadMessageW(g_hookThreadId, WM_QUIT, 0, 0);
+        WaitForSingleObject(g_hookThread, 2000);
+        CloseHandle(g_hookThread);
+        g_hookThread = nullptr;
+    }
+    g_hookThreadId = 0;
+    if (g_hookReady) CloseHandle(g_hookReady);
+    g_hookReady = nullptr;
+    gh.mouseHookOn = false;
     HoverDropDeviceResources();
     gh.layout.Reset();
     if (gh.memDc) {
