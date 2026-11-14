@@ -49,11 +49,6 @@ def window_main(seconds):
             rc = W.RECT()
             u32.GetClientRect(h, ctypes.byref(rc))
             u32.FillRect(dc, ctypes.byref(rc), g32.GetStockObject(4))  # black: the backdrop shows
-            for i, c in enumerate((0x2E1E1E, 0x443231)):              # Mocha base, surface0 cards
-                br = g32.CreateSolidBrush(c)
-                r = W.RECT(40 + i * 440, 120, 400 + i * 440, 420)
-                u32.FillRect(dc, ctypes.byref(r), br)
-                g32.DeleteObject(br)
             u32.EndPaint(h, ctypes.byref(ps))
             return 0
         if m == 0x0112 and (w & 0xFFF0) == 0xF100:  # SC_KEYMENU: no menu mode after Alt
@@ -202,6 +197,10 @@ def drag(h, start, path, alt=False, step_ms=8):
     return samples
 
 
+class TakeVoid(Exception):
+    pass
+
+
 def driver(out):
     sys.path.insert(0, r"H:\System Configuration\agent-tools\VideoCapture")
     import vcap
@@ -241,8 +240,22 @@ def driver(out):
         time.sleep(0.5)
 
         time.sleep(3.0)    # the glow process finds new windows on its 2 s poll
-        u32.SetForegroundWindow(h)
-        time.sleep(0.6)
+        # An elevated window in front (2026-11-14: Windhawk's own task dialog) eats every
+        # injected click, and the take films a window that never moves. Wait for the front.
+        fg_ok = False
+        for i in range(40):
+            u32.SetForegroundWindow(h)
+            time.sleep(0.5)
+            if u32.GetForegroundWindow() == h:
+                fg_ok = True
+                break
+            if i % 4 == 3:
+                send(key(0x12), key(0x12, up=True))    # a lone Alt lifts the foreground lock
+            time.sleep(0.5)
+        report["foreground_ok"] = fg_ok
+        report["foreground_seen"] = hex(u32.GetForegroundWindow() or 0)
+        if not fg_ok:
+            raise TakeVoid()
         report["rec_t_glow_ready"] = rec.elapsed()
         bd = ctypes.c_int(-1)
         dwm.DwmGetWindowAttribute(W.HWND(h), 38, ctypes.byref(bd), 4)
@@ -288,6 +301,8 @@ def driver(out):
         report["alt_mid"] = drag(h, grab, [(grab[0] - 300, grab[1] - 80), (grab[0] - 100, grab[1] - 200)], alt=True)
         time.sleep(1.6)
         report["alt_after"] = {"rect": rect(h), "cloaked": cloaked(h), "overlay": overlay_visible()}
+    except TakeVoid:
+        pass
     finally:
         stop.set()
         if watcher.is_alive():
@@ -304,9 +319,13 @@ def driver(out):
             win.kill()
     report["explorer_pid_after"] = explorer_pid()
     report["cursor_restored"] = (cur.x, cur.y)
-    if rec:
+    if rec and report.get("foreground_ok"):
         report["share"] = vcap.share(rec.video, os.path.join(out, "share.mp4"))
+    moved = report.get("drag_after", {}).get("rect") not in (None, report.get("before"))
+    report["take_valid"] = bool(report.get("foreground_ok") and moved)
     print(json.dumps(report, indent=1))
+    if not report["take_valid"]:
+        sys.exit(3)
 
 
 if __name__ == "__main__":

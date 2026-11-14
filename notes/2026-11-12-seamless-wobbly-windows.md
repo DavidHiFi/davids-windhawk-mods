@@ -444,3 +444,64 @@ Copy with the fix: `local@seamless-wobbly-windows.wh.cpp.glass-20261114-1248`.
   RefreshBackdropAfterUncloak. T3's glass went see-through at about 11:55 am after a drag.
 - First queued try (to 1:20 pm) never ran: another thread held the desktop lock. The queue now
   lets go of the engine lock and retries every couple of minutes while the owner is away.
+- 3:05 pm: still not installed. The owner never left the PC long enough (queue 1 ran out at
+  1:20 pm, queue 2 runs out about 3:11 pm). A hidden follow-up (`scripts\2026-11-14-wobbly-requeue-long.ps1`,
+  log `work\2026-11-11-wobbly\queued-1.2.0-c.log`) queues it again for 10 hours behind queue 2, so it
+  can go in tonight. It stops on its own if 1.2.0 is already in or the live source changed.
+  Shell check at 3:01 pm: healthy. To cancel: stop the hidden powershell running that script.
+- 3:33 pm: owner said "go", so 1.2.0 was installed at once (no idle wait, no test drag) by
+  thread e1fe78e6 with `2026-11-13-wobbly-install.ps1` under the windhawk-engine lock. The staged
+  source by then held the wobble thread's own version of the glass fix (`RefreshBackdropAfterShow`:
+  WM_NCACTIVATE with the real active state, then SWP_FRAMECHANGED), which replaced mine; installed as is.
+  Compile check OK, shell healthy before and after, no app crashes, Explorer not restarted.
+  Loaded in 8 Explorer and 10 of 14 T3 processes; glow still off. T3 capture after: glass solid.
+  Registry 1.1.9 -> 1.2.0, DLL `local@seamless-wobbly-windows_1.2.0_252089.dll`.
+  Backup: `backups\settings-material\local@seamless-wobbly-windows-20261114-1534.wh.cpp` and
+  `ModsSource\local@seamless-wobbly-windows.wh.cpp.bak-20261114-1534`.
+  Rollback: reinstall that backup with `scripts\Install-StagedMod.ps1`.
+  The wobble thread's queue (started 1:21 pm) still runs its test drag the next time the owner is away.
+
+## 1.2.1 (2026-11-14, 5 pm): steps exactly like the original, glass kept with the glow off
+
+Owner: "Make sure it's just like the original wobbly windows ... optimised, and compatible with all
+the remods." Compared line by line with HeyJeay's `window-wobble.wh.cpp` (mesh 517-704, drag 1540-1795).
+
+- **Stepping.** 1.2.0 ran a fixed 1/120 s step. The landing springs (settleK 12000, settleD 210 plus
+  8 x meshK) are only stable below about 7.8 ms, so the drop could shake; a max-offset clamp hid it.
+  `Mesh::Advance` now does what the original does: a quarter of the stability limit per sub-step,
+  at most 64 sub-steps, frame time capped at 50 ms.
+- **Integrator.** Same as the original: displacement read before the move, rest at under 2.5 px and
+  20 px/s, and a runaway guard (non-finite, over 1e5 px or 1e7 px/s ends it). The `acc` and
+  `maxOff` fields went with the clamp.
+- **Glass with the glow off.** The capture of the live glass was tied to the glow, so with the glow
+  off (owner, 11:12 am) a glass window showed the flat stand-in colour while dragged. `GlassOnly`
+  now fills in the screen-read glass under the key colour with glow strength 0.
+- Kept from ours: Windows does the move, Seamless Borders ring, Alt-drag and the window manager's
+  drags, the landing follow, the smooth grid, partial presents, idling when nothing moves.
+- Corner radius still read live from custom-corner-radius (16, 0 when maximized).
+- Offline build: x64 354816 bytes, x86 356352 bytes, no warnings.
+- Test made strict: it waits up to 40 s for the test window to be in front (an elevated Windhawk
+  task dialog ate the 4:43 pm 1.2.0 take, which never moved) and returns 3 when the window did not
+  move. Backup `scripts\2026-11-13-wobbly-glow-test.py.bak-20261114-1735`.
+- Install queued at 4:57 pm (idle 5 min, engine lock), log `work\2026-11-11-wobbly\queued-1.2.1.log`.
+
+| Item | Old (1.2.0) | New (1.2.1) |
+|---|---|---|
+| Sub-step | fixed 1/120 s | quarter of stability limit, max 64 |
+| Overshoot | clamped to max offset | free, as the original |
+| Glass while dragged, glow off | flat stand-in colour | screen-read glass |
+
+Rollback: reinstall the live 1.2.0 copy `work\2026-11-11-wobbly\live-1.2.0.wh.cpp.bak-20261114-1740`
+with `scripts\Install-StagedMod.ps1`; template `mod.template.cpp.bak-20261114-1652`.
+
+### 1.2.1 live result (installed 6:33 pm, owner away)
+- Registry 1.2.0 -> 1.2.1. Explorer not restarted (same process since 4:40 pm), no app crashes.
+- Filmed take `work\2026-11-11-wobbly\live-1.2.1-183336` is valid: test window in front, rect moved.
+  Clip `wobble-1.2.1.mp4`, GIF `wobble-1.2.1.gif` in that folder.
+- Drag: title bar keeps up, body leans and trails; each drop settles square in a moment, no shake.
+- Glass while dragged: mean colour 29,29,43 vs 29,30,45 at rest (within about one shade).
+- Top corners at 4x: round, ring on the edge, no fold.
+- Explorer's 0xc0000005 "Exception Processing Message" boxes (5:01 pm, 6:01-6:12 pm) are the
+  old Bug B from `notes\2026-11-11-explorer-tree-crash.md`, already firing before this install.
+  One was still on screen during the take; left alone.
+- Shell check after: healthy.
