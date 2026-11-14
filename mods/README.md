@@ -21,7 +21,7 @@ is in the repo but disabled on the source machine right now.
 | [Recycle Bin Tray Plus](local/recycle-bin-tray-plus) | A Recycle Bin icon in the tray, with drag and drop and themed menus. | 1.0.4 | GPL-3.0 |
 | [Taskbar Collapse to Running Plus](local/taskbar-collapse-to-running-plus) | Hides pinned taskbar icons whose app is not running. Hover, rest on, or click the empty taskbar to reveal. | 1.1.5 | MIT |
 | [Micrographics Taskbar Clock Plus](local/micrographics-taskbar-clock-plus) | A Nothing OS style Micrographics clock for the taskbar, with pill badges and a weather line. | 1.2.2 | MIT |
-| [Seamless Taskbar Utilities](local/seamless-taskbar-utilities) | Quick system tools in the taskbar right-click menu, with Catppuccin result cards. | 1.5.0 | MIT |
+| [Seamless Taskbar Utilities](local/seamless-taskbar-utilities) | Quick system tools, an auto-hide switch and icon separators in the taskbar right-click menu, with Catppuccin result cards. | 1.7.1 | GPL-3.0 |
 | [Seamless Borders](local/seamless-borders) | Colored borders around windows, menus and notification banners. | 1.0.4 | GPL-3.0 |
 | [Seamless Title Bars](local/seamless-title-bars) | One title bar look everywhere: colors, caption buttons and native frames in every kind of app. | 1.0.0 | MIT |
 | [Simple Window Switcher Plus](local/simple-window-switcher-plus) | Alt+Tab with Vista animations, background blur and elevated app support. | 1.0.4 | GPL-2.0 |
