@@ -2,7 +2,7 @@
 // @id              seamless-crash-watch
 // @name            Seamless Crash Watch
 // @description     A notice when a program crashes. Click it and an AI agent in a terminal finds out why, like Omarchy
-// @version         1.2.2
+// @version         1.2.5
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -45,7 +45,9 @@ OpenCode, Gemini CLI or your own command work too.
 - Tray icon: click it for settings; right-click it to pause notices, see
   recent crashes, show a test notice, unmute a program or open the reports.
 - History: missed a notice? The settings window's History page lists the
-  last 50 crashes, kept across restarts. Click one to diagnose it.
+  last 50 crashes, kept across restarts. Click one to diagnose it, use the
+  red trash button to remove it, or right-click it to copy the details, open
+  the file's folder or Event Viewer, mute the program or clear the list.
 
 Everything is a setting: position and screen, size, timing, the title and
 second line, font, sizes and weights, every color, glass, corners, border,
@@ -236,13 +238,16 @@ nf-md-robot_dead from Nerd Fonts, as in Omarchy.
   $description: "5 to 500 (Suggested: 50). Each click writes a report the agent reads; older ones are removed."
 - settingsGlass: true
   $name: "Blurred settings window"
-  $description: "On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Save, then reopen settings to apply."
+  $description: "On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save."
 - nativeSettingsTitleBar: false
   $name: "Native Windows title bar"
-  $description: "Use the Windows title bar and window buttons for this settings window. Save, then reopen settings to apply."
+  $description: "Use the Windows title bar and window buttons for this settings window. Applies when you save."
 - settingsTrayIcon: true
   $name: "Tray icon"
   $description: "Click it to open these settings. Right-click it to pause notices, see recent crashes or unmute a program. When off, change settings in Windhawk."
+- historyConfirm: true
+  $name: "Ask before removing"
+  $description: "On, the trash button and \"Remove from history\" ask first. Off, a crash leaves the list at once."
 */
 // ==/WindhawkModSettings==
 
@@ -515,6 +520,14 @@ struct Config {
 };
 
 static Config g_cfg;  // UI thread only; workers get a copy.
+// The muted list as the settings thread sees it (History's "Mute" or "Unmute" item). Saving a
+// setting goes through the Windhawk CLI and lands later, so this copy follows g_cfg instead.
+static std::mutex g_mutedLock;
+static std::vector<std::wstring> g_mutedView;
+static void SyncMutedView() {
+    std::lock_guard<std::mutex> lock(g_mutedLock);
+    g_mutedView = g_cfg.muted;
+}
 
 static std::wstring OneOf(const std::wstring& v, std::initializer_list<PCWSTR> allowed) {
     for (PCWSTR a : allowed)
@@ -571,6 +584,7 @@ static void LoadSettings() {
     c.keepReports = Clamp(Wh_GetIntSetting(L"keepReports"), 5, 500);
     c.tray = Wh_GetIntSetting(L"settingsTrayIcon") != 0;
     g_cfg = std::move(c);
+    SyncMutedView();
 }
 
 // Saving settings: one elevated windhawk-cli call, off the calling thread.
@@ -848,6 +862,53 @@ static PCWSTR CodeMeaning(const std::wstring& code) {
     return L"";
 }
 
+// How an error code is shown: the event log writes "c0000005", exit codes "0xC0000005"; both
+// show as "0xc0000005".
+static std::wstring CodeText(const std::wstring& code) {
+    std::wstring c = Lower(code);
+    if (c.rfind(L"0x", 0) == 0) c = c.substr(2);
+    if (c.empty() || c.find_first_not_of(L"0123456789abcdef") != std::wstring::npos) return code;
+    return L"0x" + c;
+}
+
+// How a faulting module is shown. Windhawk loads each mod as a copy named
+// "<id>_<version>_<number>.dll" ("local@seamless-listary_1.1.1_621741.dll"): that shows as
+// "the Seamless Listary mod". Every other module keeps its file name.
+static std::wstring ModuleText(const std::wstring& module) {
+    std::wstring m = Lower(module);
+    if (m.size() < 5 || m.compare(m.size() - 4, 4, L".dll") != 0) return module;
+    std::wstring stem = m.substr(0, m.size() - 4);
+    size_t b = stem.rfind(L'_');
+    if (b == std::wstring::npos || b == 0) return module;
+    size_t a = stem.rfind(L'_', b - 1);
+    if (a == std::wstring::npos || a == 0) return module;
+    std::wstring ver = stem.substr(a + 1, b - a - 1), num = stem.substr(b + 1), id = stem.substr(0, a);
+    if (num.empty() || num.find_first_not_of(L"0123456789") != std::wstring::npos) return module;
+    if (ver.empty() || ver.find_first_not_of(L"0123456789.") != std::wstring::npos) return module;
+    if (id.rfind(L"local@", 0) == 0) id = id.substr(6);
+    if (id.empty() || id.find_first_not_of(L"abcdefghijklmnopqrstuvwxyz0123456789-") != std::wstring::npos) return module;
+    std::wstring out;
+    bool up = true;
+    for (wchar_t ch : id) {
+        if (ch == L'-') {
+            out += L' ';
+            up = true;
+        } else {
+            out += up ? (wchar_t)towupper(ch) : ch;
+            up = false;
+        }
+    }
+    return L"the " + out + L" mod";
+}
+
+// The notice's and the History row's error line.
+static std::wstring ErrorLine(const Crash& c) {
+    if (c.hang) return L"Stopped responding";
+    std::wstring s = L"Error " + CodeText(c.code);
+    if (!c.module.empty()) s += L" in " + ModuleText(c.module);
+    return s;
+}
+
 // ---------------------------------------------------------------------------
 // Drawing: Direct2D on the UI thread.
 // ---------------------------------------------------------------------------
@@ -1019,7 +1080,7 @@ static std::deque<HistoryEntry> g_recent;
 static std::mutex g_recentLock;
 static UINT64 g_recentSeq;
 constexpr size_t kHistoryMax = 50, kTrayRecent = 10;
-constexpr UINT WM_CW_HISTORY = WM_APP + 14;  // wParam: the entry's seq. Diagnose it.
+constexpr UINT WM_CW_HISTORY = WM_APP + 14;  // wParam: the entry's seq, lParam: a CwHistoryAction.
 static std::wstring g_userSid;
 static bool g_paused;
 static EVT_HANDLE g_sub;
@@ -1084,13 +1145,7 @@ static void MeasureNotice(Notice& n) {
     if (n.crash.hang && c.titleText == L"Process crashed: {name}") n.title = L"Not responding: " + n.crash.name;
     n.body = FillTemplate(c.bodyText, n.crash);
     n.detail.clear();
-    if (c.details) {
-        if (n.crash.hang) n.detail = L"Stopped responding";
-        else {
-            n.detail = L"Error " + n.crash.code;
-            if (!n.crash.module.empty()) n.detail += L" in " + n.crash.module;
-        }
-    }
+    if (c.details) n.detail = ErrorLine(n.crash);
     n.w = (float)c.width;
     float textH = g_titleLineH + (n.body.empty() ? 0 : 3 + g_bodyLineH) + (n.detail.empty() ? 0 : 2 + g_detailLineH);
     float iconH = c.showIcon ? (float)c.iconSize + 4 : 0;
@@ -1314,6 +1369,7 @@ static void SetHover(Notice& n, bool on) {
 
 static void Diagnose(const Crash& c);
 static void MuteProgram(const std::wstring& name);
+static void UnmuteCrash(const Crash& c);
 static void EnableDarkMenus();
 
 static void CopyText(const std::wstring& s) {
@@ -1334,8 +1390,9 @@ static std::wstring Summary(const Crash& c) {
                c.local.wMinute, c.local.wSecond);
     std::wstring s = (c.hang ? L"Not responding: " : L"Process crashed: ") + c.name + L"\r\nPID: " + std::to_wstring(c.pid) +
                      L"\r\nPath: " + c.path + L"\r\nTime: " + t;
-    if (c.fromExit) s += L"\r\nExit code: " + c.code;
-    else if (!c.hang) s += L"\r\nError: " + c.code + L" in " + c.module + L" " + c.moduleVersion + L" at " + c.offset;
+    if (c.fromExit) s += L"\r\nExit code: " + CodeText(c.code);
+    else if (!c.hang) s += L"\r\nError: " + CodeText(c.code) + L" in " + c.module + L" " + c.moduleVersion + L" at " + c.offset;
+    if (PCWSTR what = CodeMeaning(c.code); *what) s += L"\r\nMeaning: " + std::wstring(what);
     return s;
 }
 
@@ -1635,14 +1692,131 @@ static std::vector<CwHistoryRow> CwHistoryRows() {
     std::vector<CwHistoryRow> rows;
     for (auto& e : g_recent) {
         const Crash& c = e.c;
-        std::wstring what = c.hang ? L"Stopped responding" : L"Error " + c.code + (c.module.empty() ? L"" : L" in " + c.module);
-        rows.push_back({e.seq, (c.hang ? L"Not responding: " : L"Crashed: ") + c.name, FormatWhen(c.local) + L"  \u00B7  " + what});
+        rows.push_back({e.seq, (c.hang ? L"Not responding: " : L"Crashed: ") + c.name,
+                        FormatWhen(c.local) + L"  \u00B7  " + ErrorLine(c)});
     }
     return rows;
 }
 
-static void CwHistoryOpen(UINT64 seq) {
-    if (HWND m = g_msgWnd) PostMessageW(m, WM_CW_HISTORY, (WPARAM)seq, 0);
+// What the History page asks of the UI thread. The settings window posts these; only the UI
+// thread changes g_recent or g_cfg.
+enum CwHistoryAction : int {
+    kCwDiagnose = 0,
+    kCwRemove,
+    kCwClear,
+    kCwCopy,
+    kCwLocate,
+    kCwEvents,
+    kCwMute,
+    kCwUnmute,
+};
+
+static void CwHistoryDo(UINT64 seq, int action) {
+    if (HWND m = g_msgWnd) PostMessageW(m, WM_CW_HISTORY, (WPARAM)seq, (LPARAM)action);
+}
+
+static void CwHistoryOpen(UINT64 seq) { CwHistoryDo(seq, kCwDiagnose); }
+
+// The History row's right-click menu, shown on the settings thread. Returns kCwRemove or
+// kCwClear when the window should ask first; every other choice is posted and gives -1.
+// seq 0 (the empty part of the page) offers only "Clear all history".
+static int CwHistoryMenu(HWND owner, UINT64 seq, POINT pt) {
+    bool found = false, hasFile = false, muted = false;
+    std::wstring name;
+    size_t count = 0;
+    {
+        std::lock_guard<std::mutex> lock(g_recentLock);
+        count = g_recent.size();
+        for (auto& e : g_recent)
+            if (e.seq == seq) {
+                found = true;
+                name = e.c.name;
+                hasFile = !e.c.path.empty() && GetFileAttributesW(e.c.path.c_str()) != INVALID_FILE_ATTRIBUTES;
+                std::lock_guard<std::mutex> mlock(g_mutedLock);
+                muted = MatchList(g_mutedView, e.c);
+                break;
+            }
+    }
+    if (!count) return -1;
+    enum { IDM_DIAG = 1, IDM_COPY, IDM_LOCATE, IDM_EVENTS, IDM_MUTE, IDM_REMOVE, IDM_CLEAR };
+    HMENU m = CreatePopupMenu();
+    if (found) {
+        AppendMenuW(m, MF_STRING, IDM_DIAG, L"Diagnose with AI");
+        AppendMenuW(m, MF_STRING, IDM_COPY, L"Copy crash details");
+        AppendMenuW(m, MF_STRING | (hasFile ? 0 : MF_GRAYED), IDM_LOCATE, L"Open file location");
+        AppendMenuW(m, MF_STRING, IDM_EVENTS, L"Open Event Viewer");
+        AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
+        std::wstring mute = (muted ? L"Unmute " : L"Mute ") + name;
+        AppendMenuW(m, MF_STRING, IDM_MUTE, mute.c_str());
+        AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
+        AppendMenuW(m, MF_STRING, IDM_REMOVE, L"Remove from history");
+    }
+    AppendMenuW(m, MF_STRING, IDM_CLEAR, L"Clear all history");
+    UINT cmd = TrackPopupMenuEx(m, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON, pt.x, pt.y, owner, nullptr);
+    PostMessageW(owner, WM_NULL, 0, 0);
+    DestroyMenu(m);
+    switch (cmd) {
+        case IDM_DIAG: CwHistoryDo(seq, kCwDiagnose); break;
+        case IDM_COPY: CwHistoryDo(seq, kCwCopy); break;
+        case IDM_LOCATE: CwHistoryDo(seq, kCwLocate); break;
+        case IDM_EVENTS: CwHistoryDo(seq, kCwEvents); break;
+        case IDM_MUTE: CwHistoryDo(seq, muted ? kCwUnmute : kCwMute); break;
+        case IDM_REMOVE: return kCwRemove;
+        case IDM_CLEAR: return kCwClear;
+    }
+    return -1;
+}
+
+static void ShowInFolder(const std::wstring& path) {
+    HRESULT co = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (PIDLIST_ABSOLUTE pidl = ILCreateFromPathW(path.c_str())) {
+        SHOpenFolderAndSelectItems(pidl, 0, nullptr, 0);
+        ILFree(pidl);
+    }
+    if (SUCCEEDED(co)) CoUninitialize();
+}
+
+// UI thread: carries out what the History page asked.
+static void OnHistoryAction(UINT64 seq, int action) {
+    if (action == kCwClear) {
+        {
+            std::lock_guard<std::mutex> lock(g_recentLock);
+            g_recent.clear();
+        }
+        SaveHistory();
+        Trace(L"History cleared");
+        if (HWND s = cwset::g_settingsWnd) PostMessageW(s, WM_APP + 3, 0, 0);
+        return;
+    }
+    Crash c;
+    bool found = false;
+    {
+        std::lock_guard<std::mutex> lock(g_recentLock);
+        for (auto it = g_recent.begin(); it != g_recent.end(); ++it)
+            if (it->seq == seq) {
+                c = it->c;
+                found = true;
+                if (action == kCwRemove) g_recent.erase(it);
+                break;
+            }
+    }
+    if (!found) return;
+    switch (action) {
+        case kCwDiagnose:
+            Trace(L"%s: diagnose from History", c.name.c_str());
+            Diagnose(c);
+            break;
+        case kCwRemove:
+            SaveHistory();
+            Trace(L"%s: removed from History", c.name.c_str());
+            if (HWND s = cwset::g_settingsWnd) PostMessageW(s, WM_APP + 3, 0, 0);
+            break;
+        case kCwCopy: CopyText(Summary(c)); break;
+        case kCwLocate: ShowInFolder(c.path); break;
+        case kCwEvents: ShellExecuteW(nullptr, L"open", L"eventvwr.msc", L"/c:Application", nullptr, SW_SHOWNORMAL); break;
+        case kCwMute: MuteProgram(c.name); break;
+        case kCwUnmute: UnmuteCrash(c); break;
+    }
 }
 
 static void OnCrash(const Crash& c) {
@@ -2310,12 +2484,23 @@ static void Diagnose(const Crash& c) {
 static void MuteProgram(const std::wstring& name) {
     if (MatchList(g_cfg.muted, Crash{name})) return;
     g_cfg.muted.push_back(name);
+    SyncMutedView();
     SaveSettingAsync(L"mutedPrograms", JoinList(g_cfg.muted));
 }
 
 static void Unmute(size_t i) {
     if (i >= g_cfg.muted.size()) return;
     g_cfg.muted.erase(g_cfg.muted.begin() + i);
+    SyncMutedView();
+    SaveSettingAsync(L"mutedPrograms", JoinList(g_cfg.muted));
+}
+
+// History's "Unmute": every muted entry that matches this crash (a name, a wildcard or a path).
+static void UnmuteCrash(const Crash& c) {
+    size_t before = g_cfg.muted.size();
+    std::erase_if(g_cfg.muted, [&](const std::wstring& m) { return MatchList({m}, c); });
+    if (g_cfg.muted.size() == before) return;
+    SyncMutedView();
     SaveSettingAsync(L"mutedPrograms", JoinList(g_cfg.muted));
 }
 
@@ -2538,15 +2723,7 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (g_notices.empty()) KillTimer(hwnd, kTimerTick);
             }
             return 0;
-        case WM_CW_HISTORY:
-            for (auto& e : g_recent)
-                if (e.seq == (UINT64)wp) {
-                    Crash c = e.c;
-                    Trace(L"%s: diagnose from History", c.name.c_str());
-                    Diagnose(c);
-                    break;
-                }
-            return 0;
+        case WM_CW_HISTORY: OnHistoryAction((UINT64)wp, (int)lp); return 0;
         case WM_CW_TRAY:
             switch (LOWORD(lp)) {
                 case NIN_SELECT:
@@ -2669,7 +2846,7 @@ static HANDLE g_singleInstance;
 namespace SeamlessMenuRoom {
 
 constexpr UINT_PTR kRoomId = 0x6D55;
-constexpr INT kRowMargin = 8;                  // row top and bottom margin of the menu look
+constexpr INT kRowMargin = 6;                  // row top and bottom margin of the menu look
 constexpr INT kMinRowMargin = 2;
 static const WCHAR* const kPadProp = L"SeamlessMenuRoomPad";
 static const WCHAR* const kSizeProp = L"SeamlessMenuRoomSize";
@@ -2890,7 +3067,7 @@ static VOID ResetRows()
     if (g_rowMargin.exchange(kRowMargin) != kRowMargin && g_flush) g_flush();
 }
 
-// Picks the largest row margin (8 down to 2) at which the whole menu fits its monitor.
+// Picks the largest row margin (6 down to 2) at which the whole menu fits its monitor.
 static VOID FitMenu(HMENU m, HWND owner)
 {
     if (!m || !g_flush || HasOwnerDraw(m)) return;
@@ -2907,8 +3084,8 @@ static VOID FitMenu(HMENU m, HWND owner)
     INT avail = mi.rcWork.bottom - mi.rcWork.top - px(8);
     INT pick = kRowMargin;
     for (; pick > kMinRowMargin; pick--) {
-        INT cut = px(2 * (kRowMargin - pick));   // rows measure 33 px and separators 21 px at margin 8
-        if (rows * (px(33) - cut) + seps * (px(21) - cut) + px(10) <= avail) break;
+        INT cut = px(2 * (kRowMargin - pick));   // rows measure 29 px and separators 17 px at margin 6
+        if (rows * (px(29) - cut) + seps * (px(17) - cut) + px(10) <= avail) break;
     }
     if (pick < g_rowMargin.load()) {
         g_rowMargin = pick;
@@ -3662,6 +3839,9 @@ struct SetField {
     PCWSTR group = L"";  // Heading above it on that page.
     std::wstring value;  // As loaded, so a save writes only what changed.
     std::wstring cur;    // What the window shows now.
+    float fitW = 0;      // Box width that fits the text (Set_FitBoxes); 0 until measured.
+    float fitText = -1;  // Measured text width behind fitW.
+    std::wstring fitFor; // The text that was measured.
 };
 
 // Names, descriptions and option labels match the ==WindhawkModSettings== block word for word.
@@ -3713,9 +3893,10 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Choice, L"terminal", L"Terminal", L"Where the agent runs.", L"wt", {{L"wt", L"Windows Terminal"}, {L"console", L"A PowerShell window"}}, 0, 100, 3, L"Terminal"},
 {K::Text, L"workingFolder", L"Start in", L"The folder the agent starts in. Leave it empty for the crash reports folder.", L"", {}, 0, 100, 3, L"Terminal"},
 {K::Number, L"keepReports", L"Crash reports to keep", L"5 to 500 (Suggested: 50). Each click writes a report the agent reads; older ones are removed.", L"50", {}, 5, 500, 3, L"Terminal"},
-{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Save, then reopen settings to apply.", L"1", {}, 0, 100, 2, L"Settings window"},
-{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Save, then reopen settings to apply.", L"0", {}, 0, 100, 2, L"Settings window"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open these settings. Right-click it to pause notices, see recent crashes or unmute a program. When off, change settings in Windhawk.", L"1", {}, 0, 100, 2, L"Settings window"}
+{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 2, L"Settings window"},
+{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 2, L"Settings window"},
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open these settings. Right-click it to pause notices, see recent crashes or unmute a program. When off, change settings in Windhawk.", L"1", {}, 0, 100, 2, L"Settings window"},
+{K::Check, L"historyConfirm", L"Ask before removing", L"On, the trash button and \"Remove from history\" ask first. Off, a crash leaves the list at once.", L"1", {}, 0, 100, 4, L"History"}
     };
 }
 
@@ -3728,13 +3909,14 @@ static const SetPageInfo kSetPages[] = {
 {L"Notice", L"Where the notice shows, how long it stays and how it moves.", 0xE8BD},
 {L"Look", L"Fonts, sizes, colors, the glass and this window.", 0xE790},
 {L"Diagnose", L"The AI agent that opens when you click a notice.", 0xE99A},
-{L"History", L"Every crash it caught, newest first, kept after the notice goes. Click one to diagnose it with AI.", 0xE81C},
+{L"History", L"Every crash it caught, kept after the notice goes. Click one to diagnose it with AI; right-click for more.", 0xE81C},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
 // About sits apart at the end of the sidebar, as in Seamless Dictate.
 constexpr int kSetAboutPage = kSetPageCount - 1;
 constexpr float kSetAboutGap = 17;
+constexpr int kSetDropMax = 9;  // A dropdown with more options than this scrolls.
 constexpr int kSetHistoryPage = kSetAboutPage - 1;
 
 // All sizes are DIPs; the render target does the scaling.
@@ -3771,7 +3953,7 @@ struct SetItem {
 
 // What the pointer is over. id picks the hover glow.
 struct SetHit {
-    enum Kind { None, Rail, Row, Control, Slider, Clear, Chip, Footer, Drop, Link, Scroll, Popup, Caption, RailToggle, RailEdge } kind = None;
+    enum Kind { None, Rail, Row, Control, Slider, Clear, Chip, Footer, Drop, Link, Scroll, Popup, Caption, RailToggle, RailEdge, Ask } kind = None;
     int a = -1, b = -1;
     int id = -1;
 };
@@ -3794,7 +3976,8 @@ struct SetWindow {
     int page = 0, recording = -1, editing = -1, focus = -1, openSel = -1;
     bool kbd = false;  // Show the focus ring (after a Tab).
     D2D1_RECT_F dropRect{};
-    int dropHover = -1;
+    int dropHover = -1, dropTop = 0;  // dropTop: first option shown when the dropdown scrolls.
+    bool frameApplied = false;        // Set_ApplyFrame has run once.
     float scrollY = 0, scrollTarget = 0, contentH = 0, contentX = 0, contentW = 720, pageT = 1;
     SetHit hover;
     int dragSlider = -1;
@@ -3818,6 +4001,11 @@ struct SetWindow {
         fIconL, fBig, fSmall, fStatusLine, fCap, fCapGlyph, fRailName;
     RECT normalRect{};  // Last restored-state rect, remembered on close.
     COLORREF customColors[16] = {};
+    // History's confirm card: 1 remove one crash (askSeq), 2 clear all. askT eases it in and out.
+    int ask = 0;
+    UINT64 askSeq = 0;
+    float askT = 0;
+    std::wstring askTitle, askBody, askYes;
 };
 
 static std::shared_ptr<SetWindow> g_setWin;
@@ -4088,13 +4276,53 @@ static float Set_TextW(IDWriteTextFormat* fmt, const std::wstring& text) {
 // ---- Layout -----------------------------------------------------------------
 
 // The right-hand control's width, so the label column knows how much room it has.
+static bool Set_FitBoxes(SetWindow& w) {
+    if (!w.fValue) return false;
+    bool changed = false;
+    const float cap = std::floor(w.contentW * 0.5f);
+    for (auto& f : w.fields) {
+        float base, pad;
+        std::wstring text;
+        if (f.kind == SetField::Choice) {
+            base = 200, pad = 46;  // 12 before the text, 30 for the arrow, 4 spare.
+            for (const auto& o : f.options) text += std::wstring(o.second) + L'\n';
+        } else if (f.kind == SetField::Hotkey) {
+            base = 220, pad = 60;  // The key cap's own padding and the clear button.
+            text = f.cur;
+        } else if (f.kind == SetField::Text) {
+            base = 280, pad = 26;
+            text = f.cur;
+        } else {
+            continue;
+        }
+        if (f.fitText < 0 || text != f.fitFor) {
+            float m = 0;
+            if (f.kind == SetField::Choice) {
+                for (const auto& o : f.options) m = std::max(m, Set_TextW(w.fValue.get(), o.second));
+            } else {
+                m = Set_TextW(w.fValue.get(), f.cur);
+            }
+            f.fitText = std::ceil(m);
+            f.fitFor = text;
+        }
+        float want = std::min(std::max(base, f.fitText + pad), std::max(base, cap));
+        if (fabsf(want - f.fitW) > 0.5f) {
+            f.fitW = want;
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+static float Set_FitOr(const SetField& f, float base) { return f.fitW > 0 ? f.fitW : base; }
+
 static float Set_ControlW(const SetField& f) {
     switch (f.kind) {
         case SetField::Check: return 40;
-        case SetField::Choice: return 200;
+        case SetField::Choice: return Set_FitOr(f, 200);
         case SetField::Number: return f.max - f.min <= 100 ? 150 + 12 + 64 : 96;
-        case SetField::Text: return 280;
-        case SetField::Hotkey: return 220;
+        case SetField::Text: return Set_FitOr(f, 280);
+        case SetField::Hotkey: return Set_FitOr(f, 220);
         case SetField::Color: return 362;
     }
     return 100;
@@ -4133,7 +4361,7 @@ static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
             p.box = {r - 40, mid - 11, r, mid + 11};
             break;
         case SetField::Choice:
-            p.box = {r - 200, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 200), mid - h, r, mid + h};
             break;
         case SetField::Number:
             if (f.max - f.min <= 100) {
@@ -4145,10 +4373,10 @@ static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
             }
             break;
         case SetField::Text:
-            p.box = {r - 280, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 280), mid - h, r, mid + h};
             break;
         case SetField::Hotkey:
-            p.box = {r - 220, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 220), mid - h, r, mid + h};
             p.clear = {p.box.right - 30, p.box.top, p.box.right, p.box.bottom};
             break;
         case SetField::Color: {
@@ -4165,6 +4393,18 @@ static bool Set_In(const D2D1_RECT_F& r, float x, float y) { return x >= r.left 
 
 static D2D1_RECT_F Set_RowRect(const SetWindow& w, const SetItem& it) {
     return {w.contentX, it.y, w.contentX + w.contentW, it.y + it.h};  // Content y (not scrolled).
+}
+
+// A History row's crash ("crash:<seq>"), or 0 for any other link.
+static UINT64 Set_CrashSeq(const SetItem& it) {
+    return it.type == SetItem::Link && it.url.rfind(L"crash:", 0) == 0 ? _wcstoui64(it.url.c_str() + 6, nullptr, 10) : 0;
+}
+
+// The trash button at the right end of a History row, in content coordinates.
+static D2D1_RECT_F Set_TrashRect(const SetWindow& w, const SetItem& it) {
+    D2D1_RECT_F r = Set_RowRect(w, it);
+    float cy = (r.top + r.bottom) / 2;
+    return {r.right - 48, cy - 17, r.right - 14, cy + 17};
 }
 
 // Lays out the current page's items for the current width.
@@ -4217,7 +4457,8 @@ static void Set_BuildPage(SetWindow& w) {
         std::vector<CwHistoryRow> rows = CwHistoryRows();
         SetItem g;
         g.type = SetItem::Group;
-        g.text = rows.empty() ? L"No crashes yet" : L"Newest first";
+        g.text = rows.empty() ? L"No crashes yet" : L"Crashes, newest first";
+        y += w.items.empty() ? 0 : 14;  // Below the "Ask before removing" switch.
         g.y = y;
         g.h = 22;
         y += g.h + 6;
@@ -4411,6 +4652,7 @@ static void Set_HoverIds(const SetHit& h, int ids[2]) {
     ids[1] = -1;
     if (h.kind == SetHit::Control || h.kind == SetHit::Slider || h.kind == SetHit::Clear || h.kind == SetHit::Chip)
         ids[1] = 6000 + h.a;
+    if (h.kind == SetHit::Link && h.b == 1) ids[1] = 3300 + h.a;  // A History row's trash button.
 }
 
 static bool Set_Valid(const SetWindow& w, int k) { return k >= 0 && k < (int)w.fields.size(); }
@@ -4548,9 +4790,19 @@ static void Set_DrawLinkRow(SetPaint& p, SetWindow& w, const SetItem& it, int id
     Set_DrawCard(p, row, hov);
     p.GradFill(row, 10, 0.13f * hov);
     p.GradRing(row, 10, hov, 1.5f);
-    p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 9, row.right - 50, row.top + 30}, mocha::text);
-    p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 30, row.right - 50, row.bottom - 4}, mocha::subtext0);
-    p.Glyph(w.fIcon.get(), 0xE8A7, {row.right - 46, row.top, row.right - 12, row.bottom}, mocha::subtext1);
+    // History rows end in the open arrow and a red trash button; other links in the arrow alone.
+    const bool crash = Set_CrashSeq(it) != 0;
+    const float textR = row.right - (crash ? 94 : 50), openR = row.right - (crash ? 56 : 12);
+    p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 9, textR, row.top + 30}, mocha::text);
+    p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 30, textR, row.bottom - 4}, mocha::subtext0);
+    p.Glyph(w.fIcon.get(), 0xE8A7, {openR - 34, row.top, openR, row.bottom}, mocha::subtext1);
+    if (crash) {
+        D2D1_RECT_F tr = Set_TrashRect(w, it);
+        float th = Set_GlowOf(w, 3300 + idx);
+        p.Round(tr, 8, mocha::red, 0.14f * th);
+        p.Edge(tr, 8, mocha::red, 0.85f * th, 1.25f);
+        p.Glyph(w.fIcon.get(), 0xE74D, tr, mocha::red, 0.8f + 0.2f * th);
+    }
 }
 
 static void Set_DrawSupport(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
@@ -4700,24 +4952,108 @@ static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
 }
 
 
+static void Set_ThumbFill(SetPaint& p, const D2D1_RECT_F& r, float a) {
+    if (r.bottom <= r.top) return;
+    float rad = (r.right - r.left) / 2;
+    SetCom<ID2D1LinearGradientBrush> g;
+    D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::blue, a * p.fade)}, {1, D2DColor(mocha::mauve, a * p.fade)}};
+    SetCom<ID2D1GradientStopCollection> coll;
+    if (SUCCEEDED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
+        SUCCEEDED(p.rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.left, r.bottom)),
+            coll.get(), g.put())))
+        p.rt->FillRoundedRectangle(D2D1::RoundedRect(r, rad, rad), g.get());
+}
+
+static int Set_DropVisible(const SetWindow& w) {
+    return w.openSel < 0 ? 0 : std::min((int)w.fields[w.openSel].options.size(), kSetDropMax);
+}
+
+static void Set_DropShow(SetWindow& w, int i) {
+    int vis = Set_DropVisible(w), n = w.openSel < 0 ? 0 : (int)w.fields[w.openSel].options.size();
+    if (i < 0 || vis <= 0) return;
+    if (i < w.dropTop) w.dropTop = i;
+    if (i >= w.dropTop + vis) w.dropTop = i - vis + 1;
+    w.dropTop = std::clamp(w.dropTop, 0, std::max(0, n - vis));
+}
+
 static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
     if (w.openSel < 0) return;
     const SetField& f = w.fields[w.openSel];
     const D2D1_RECT_F& r = w.dropRect;
+    const int n = (int)f.options.size(), vis = Set_DropVisible(w);
+    const bool scrolls = n > vis;
     D2D1_RECT_F shadow{r.left - 1, r.top + 3, r.right + 1, r.bottom + 5};
     p.Round(shadow, 12, mocha::crust, 0.6f);
     p.Round(r, 10, mocha::mantle);
     p.GradRing(r, 10, 0.9f);
-    for (size_t i = 0; i < f.options.size(); i++) {
-        D2D1_RECT_F it{r.left + 4, r.top + 4 + i * kSetDropItem, r.right - 4, r.top + 4 + (i + 1) * kSetDropItem};
+    const float right = r.right - (scrolls ? 12 : 4);
+    for (int v = 0; v < vis; v++) {
+        int i = w.dropTop + v;
+        if (i >= n) break;
+        D2D1_RECT_F it{r.left + 4, r.top + 4 + v * kSetDropItem, right, r.top + 4 + (v + 1) * kSetDropItem};
         bool sel = f.cur == f.options[i].first;
-        if ((int)i == w.dropHover) {
+        if (i == w.dropHover) {
             p.GradFill(it, 6, 0.28f);
             p.GradRing(it, 6, 0.6f, 1);
         }
         p.Text(w.fValue.get(), f.options[i].second, {it.left + 10, it.top, it.right - 28, it.bottom}, sel ? mocha::blue : mocha::text);
         if (sel) p.Glyph(w.fIconS.get(), 0xE73E, {it.right - 28, it.top, it.right - 6, it.bottom}, mocha::blue);
     }
+    if (scrolls) {
+        float track = r.bottom - r.top - 12, th = std::max(24.0f, track * vis / n);
+        float top = r.top + 6 + (track - th) * w.dropTop / std::max(1, n - vis);
+        Set_ThumbFill(p, {r.right - 9, top, r.right - 5, top + th}, 0.85f);
+    }
+}
+
+// History's confirm card, centred on the content, and its buttons: 0 Cancel, 1 Remove.
+static D2D1_RECT_F Set_AskCard(const SetWindow& w) {
+    float cx = w.cw / 2, cy = w.ch / 2;
+    return {cx - 220, cy - 92, cx + 220, cy + 92};
+}
+
+static D2D1_RECT_F Set_AskButton(const SetWindow& w, int i) {
+    D2D1_RECT_F c = Set_AskCard(w);
+    D2D1_RECT_F yes{c.right - 20 - 120, c.bottom - 54, c.right - 20, c.bottom - 20};
+    if (i == 1) return yes;
+    return {yes.left - 10 - 96, yes.top, yes.left - 10, yes.bottom};
+}
+
+static void Set_DrawAsk(SetPaint& p, SetWindow& w) {
+    if (w.askT <= 0.003f) return;
+    float e = 1 - (1 - w.askT) * (1 - w.askT);
+    float keep = p.fade;
+    p.fade = e;
+    p.Fill({0, 0, w.cw, w.ch}, mocha::crust, 0.5f);
+    D2D1_RECT_F c = Set_AskCard(w);
+    float rise = (1 - e) * 10;
+    c.top += rise, c.bottom += rise;
+    p.Round({c.left - 1, c.top + 4, c.right + 1, c.bottom + 8}, 16, mocha::crust, 0.55f);
+    p.Round(c, 14, mocha::base);
+    p.Round(c, 14, mocha::surface0, 0.32f);
+    p.GradRing(c, 14, 0.9f, 1.5f);
+    D2D1_RECT_F badge{c.left + 24, c.top + 24, c.left + 64, c.top + 64};
+    p.Round(badge, 20, mocha::red, 0.16f);
+    p.Edge(badge, 20, mocha::red, 0.5f, 1.25f);
+    p.Glyph(w.fIcon.get(), 0xE74D, badge, mocha::red);
+    p.Text(w.fBig.get(), w.askTitle, {c.left + 80, c.top + 26, c.right - 24, c.top + 56}, mocha::text);
+    p.Text(w.fHint.get(), w.askBody, {c.left + 80, c.top + 60, c.right - 24, c.bottom - 60}, mocha::subtext0);
+    for (int i = 0; i < 2; i++) {
+        D2D1_RECT_F b = Set_AskButton(w, i);
+        b.top += rise, b.bottom += rise;
+        float g = Set_GlowOf(w, 3900 + i);
+        if (i == 1) {
+            p.Round(b, 8, mocha::red, 0.8f + 0.2f * g);
+            p.Text(w.fButton.get(), w.askYes, b, mocha::crust);
+        } else {
+            p.Round(b, 8, kSetBoxFill);
+            p.Edge(b, 8, mocha::overlay0, 0.7f * (1 - g), 1.25f);
+            p.GradRing(b, 8, g, 1.75f);
+            p.Text(w.fButton.get(), L"Cancel", b, mocha::text);
+        }
+    }
+    p.fade = keep;
 }
 
 // Title bar buttons, in title bar DIPs: 0 minimize, 1 maximize or restore, 2 close.
@@ -4728,7 +5064,7 @@ static D2D1_RECT_F Set_CapButton(const SetWindow& w, int i) {
 
 // y is in content DIPs, so the title bar is y < 0.
 static int Set_CapButtonAt(const SetWindow& w, float x, float y) {
-    if (w.nativeTitle || w.nativeButtons) return -1;
+    if (w.nativeTitle) return -1;
     for (int i = 0; i < 3; i++)
         if (Set_In(Set_CapButton(w, i), x, y + kSetCapH)) return i;
     return -1;
@@ -4761,7 +5097,6 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
     float mid = kSetCapH / 2;
     Set_DrawMark(p, w.fCapGlyph.get(), {t.left, mid - 8, t.left + 16, mid + 8}, w.active ? 1.0f : 0.6f);
     p.Text(w.fCap.get(), kSetTitle, {t.left + 24, 0, t.right, kSetCapH}, w.active ? mocha::text : mocha::overlay1);
-    if (w.nativeButtons) return;  // DWM draws them over this title bar.
     for (int i = 0; i < 3; i++) {
         D2D1_RECT_F b = Set_CapButton(w, i);
         float hov = Set_GlowOf(w, 20 + i);
@@ -4776,7 +5111,13 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
 
 // Draws the whole window into rt (DIPs). The target's DPI does the scaling.
 // The title bar is drawn first; everything else is in content DIPs, shifted down by kSetCapH.
+static void Set_PlaceEdit(SetWindow& w);
+
 static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
+    if (Set_FitBoxes(w)) {
+        Set_BuildPage(w);
+        Set_PlaceEdit(w);
+    }
     SetPaint p(w, rt);
     const auto base = D2D1::Matrix3x2F::Translation(0, kSetCapH);
     rt->BeginDraw();
@@ -4896,11 +5237,12 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     rt->SetTransform(base);
 
     D2D1_RECT_F th = Set_ScrollThumb(w);
-    if (th.bottom > th.top) p.Round(th, 3, w.dragScroll ? mocha::overlay1 : mocha::surface2, 0.9f);
+    Set_ThumbFill(p, th, w.dragScroll || w.hover.kind == SetHit::Scroll ? 1.0f : 0.7f);
 
     Set_DrawFooter(p, w);
     Set_DrawRail(p, w);
     Set_DrawPopup(p, w);
+    Set_DrawAsk(p, w);
     rt->SetTransform(D2D1::Matrix3x2F::Identity());
     if (false) p.GradRing({0, 0, w.cw, w.ch + kSetCapH}, SystemCornerRadius(false), 1, 1);
     HRESULT hr = rt->EndDraw();
@@ -4920,10 +5262,22 @@ static SetHit Set_Hit(SetWindow& w, float x, float y) {
         }
         return h;
     }
+    if (w.ask) {  // The confirm card takes every click below the title bar.
+        for (int i = 0; i < 2; i++)
+            if (Set_In(Set_AskButton(w, i), x, y)) {
+                h.kind = SetHit::Ask;
+                h.a = i;
+                h.id = 3900 + i;
+                return h;
+            }
+        if (Set_In(Set_AskCard(w), x, y)) h.a = -2;
+        return h;
+    }
     if (w.openSel >= 0) {
         if (Set_In(w.dropRect, x, y)) {
-            int i = (int)((y - w.dropRect.top - 4) / kSetDropItem);
-            if (i >= 0 && i < (int)w.fields[w.openSel].options.size() && y >= w.dropRect.top + 4) {
+            int v = (int)((y - w.dropRect.top - 4) / kSetDropItem), i = w.dropTop + v;
+            if (v >= 0 && v < Set_DropVisible(w) && i < (int)w.fields[w.openSel].options.size() &&
+                y >= w.dropRect.top + 4 && x < w.dropRect.right - (Set_DropVisible(w) < (int)w.fields[w.openSel].options.size() ? 12 : 4)) {
                 h.kind = SetHit::Drop;
                 h.a = w.openSel;
                 h.b = i;
@@ -4981,6 +5335,7 @@ static SetHit Set_Hit(SetWindow& w, float x, float y) {
             h.kind = SetHit::Link;
             h.a = (int)i;
             h.id = 3000 + (int)i;
+            if (Set_CrashSeq(it) && Set_In(Set_TrashRect(w, it), x, cy)) h.b = 1;  // The trash button.
         } else if (it.type == SetItem::Support) {
             h.id = 3700 + (int)i;  // The card lights up; only its button clicks.
             if (Set_In(Set_SupportButton(w, it), x, cy)) {
@@ -5021,7 +5376,7 @@ static SetHit Set_Hit(SetWindow& w, float x, float y) {
 static bool Set_Clickable(const SetHit& h) {
     return h.kind == SetHit::Rail || h.kind == SetHit::Footer || h.kind == SetHit::Control || h.kind == SetHit::Slider ||
            h.kind == SetHit::Clear || h.kind == SetHit::Chip || h.kind == SetHit::Drop || h.kind == SetHit::Link ||
-           h.kind == SetHit::Scroll || h.kind == SetHit::RailToggle;
+           h.kind == SetHit::Scroll || h.kind == SetHit::RailToggle || h.kind == SetHit::Ask;
 }
 
 // Sidebar width from a drag: below the snap point it collapses to the icon rail.
@@ -5097,6 +5452,7 @@ static void Set_ClosePopup(SetWindow& w) {
     if (w.openSel < 0) return;
     w.openSel = -1;
     w.dropHover = -1;
+    w.dropTop = 0;
     Set_Invalidate(w);
 }
 
@@ -5106,14 +5462,22 @@ static void Set_OpenPopup(SetWindow& w, int k) {
     const SetField& f = w.fields[k];
     SetParts pt = Set_Parts(f, Set_RowRect(w, *it));
     float boxTop = pt.box.top - w.scrollY, boxBottom = pt.box.bottom - w.scrollY;
-    float h = (float)f.options.size() * kSetDropItem + 8;
+    const int n = (int)f.options.size(), vis = std::min(n, kSetDropMax);
+    float h = (float)vis * kSetDropItem + 8;
     float top = boxBottom + 4;
     if (top + h > Set_ViewH(w) + 20 && boxTop - 4 - h > 0) top = boxTop - 4 - h;  // No room below: open upward.
-    w.dropRect = {pt.box.left, top, pt.box.right, top + h};
+    // As wide as the longest option (text, check mark, scrollbar), growing leftward from the box.
+    float textW = 0;
+    for (const auto& o : f.options) textW = std::max(textW, Set_TextW(w.fValue.get(), o.second));
+    float width = std::max(pt.box.right - pt.box.left, std::ceil(textW) + 52 + (n > vis ? 8 : 0));
+    float left = std::max(pt.box.right - width, Set_RailSpace(w) + 8);
+    w.dropRect = {left, top, std::max(pt.box.right, left + width), top + h};
     w.openSel = k;
     w.dropHover = -1;
-    for (size_t i = 0; i < f.options.size(); i++)
-        if (f.cur == f.options[i].first) w.dropHover = (int)i;
+    w.dropTop = 0;
+    for (int i = 0; i < n; i++)
+        if (f.cur == f.options[i].first) w.dropHover = i;
+    Set_DropShow(w, w.dropHover);
     Set_Invalidate(w);
 }
 
@@ -5341,6 +5705,8 @@ static std::wstring Set_ChangedParams(SetWindow& w, int& changed) {
     return params;
 }
 
+static void Set_ApplyFrame(SetWindow& w);
+
 static void Set_Save(std::shared_ptr<SetWindow> keep) {
     SetWindow& w = *keep;
     if (w.saving) return;
@@ -5431,6 +5797,7 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
         Set_SetStatus(w, L"Windhawk didn't answer in 15 seconds. Settings may not be saved.", true);
     } else if (code == 0) {
         Set_LoadFields(w);  // Shows what was stored.
+        Set_ApplyFrame(w);  // The title bar and glass switches take effect now, no reopen.
         Set_SetStatus(w, L"Saved");
     } else {
         Wh_Log(L"windhawk-cli exit code %lu", code);
@@ -5470,6 +5837,7 @@ static bool Set_Tick(SetWindow& w) {
             ++it;
         }
     }
+    step(w.askT, w.ask ? 1.0f : 0.0f, 0.35f);
     for (size_t k = 0; k < w.fields.size(); k++) {
         if (w.fields[k].kind != SetField::Check) continue;
         float target = w.fields[k].cur == L"1" ? 1.0f : 0.0f;
@@ -5565,8 +5933,64 @@ static void Set_Adjust(SetWindow& w, int dir) {
     Set_Invalidate(w);
 }
 
+// "Ask before removing", as the window shows it now (an unsaved change counts).
+static bool Set_AskOn(const SetWindow& w) {
+    for (auto& f : w.fields)
+        if (wcscmp(f.key, L"historyConfirm") == 0) return f.cur == L"1";
+    return true;
+}
+
+// The trash button, or "Remove from history" / "Clear all history" in the row menu.
+static void Set_AskRemove(SetWindow& w, UINT64 seq, bool all) {
+    if (!Set_AskOn(w)) {
+        CwHistoryDo(seq, all ? kCwClear : kCwRemove);
+        return;
+    }
+    Set_CommitEdit(w, true);
+    Set_ClosePopup(w);
+    size_t count = 0;
+    const SetItem* row = nullptr;
+    for (auto& it : w.items) {
+        UINT64 s = Set_CrashSeq(it);
+        if (!s) continue;
+        count++;
+        if (s == seq) row = &it;
+    }
+    if (all) {
+        w.askTitle = L"Clear all history?";
+        w.askBody = (count == 1 ? std::wstring(L"The one crash") : L"All " + std::to_wstring(count) + L" crashes") +
+                    L" leave the list for good. Crash reports the agent already read stay.";
+        w.askYes = L"Clear all";
+    } else {
+        if (!row) return;
+        std::wstring when = row->sub.substr(0, row->sub.find(L"  \u00B7  "));
+        w.askTitle = L"Remove this crash?";
+        w.askBody = row->text + L", " + when + L".\nIt leaves the list for good.";
+        w.askYes = L"Remove";
+    }
+    w.ask = all ? 2 : 1;
+    w.askSeq = seq;
+    w.hover = SetHit();
+    if (!Set_Anim(w)) w.askT = 1;
+    Set_Invalidate(w);
+}
+
+static void Set_AskDone(SetWindow& w, bool yes) {
+    if (!w.ask) return;
+    if (yes) CwHistoryDo(w.askSeq, w.ask == 2 ? kCwClear : kCwRemove);
+    w.ask = 0;
+    w.hover = SetHit();
+    if (!Set_Anim(w)) w.askT = 0;
+    Set_Invalidate(w);
+}
+
 static bool Set_OnKey(SetWindow& w, UINT vk) {
     if (w.saving) return true;
+    if (w.ask) {  // Esc cancels, Enter or Space removes; every other key waits.
+        if (vk == VK_ESCAPE) Set_AskDone(w, false);
+        else if (vk == VK_RETURN || vk == VK_SPACE) Set_AskDone(w, true);
+        return true;
+    }
     if (w.recording >= 0) {
         if (Set_IsModifier(vk)) return true;
         UINT mods = 0;
@@ -5589,8 +6013,8 @@ static bool Set_OnKey(SetWindow& w, UINT vk) {
         const SetField& f = w.fields[w.openSel];
         int n = (int)f.options.size();
         if (vk == VK_ESCAPE) Set_ClosePopup(w);
-        else if (vk == VK_UP) w.dropHover = (w.dropHover - 1 + n) % n;
-        else if (vk == VK_DOWN) w.dropHover = (w.dropHover + 1) % n;
+        else if (vk == VK_UP) Set_DropShow(w, w.dropHover = w.dropHover < 0 ? n - 1 : (w.dropHover - 1 + n) % n);
+        else if (vk == VK_DOWN) Set_DropShow(w, w.dropHover = w.dropHover < 0 ? 0 : (w.dropHover + 1) % n);
         else if (vk == VK_RETURN || vk == VK_SPACE) Set_Choose(w, w.openSel, w.dropHover);
         Set_Invalidate(w);
         return true;
@@ -5663,6 +6087,84 @@ static void Set_Relayout(SetWindow& w) {
     Set_BuildAndClamp(w);
 }
 
+static bool Set_FieldOn(const SetWindow& w, PCWSTR key, bool def) {
+    const size_t n = wcslen(key);
+    for (const auto& f : w.fields) {
+        const size_t m = wcslen(f.key);
+        if (m >= n && wcscmp(f.key + m - n, key) == 0 && (m == n || f.key[m - n - 1] == L'.')) return f.value == L"1";
+    }
+    return def;
+}
+
+static void Set_ApplyFrame(SetWindow& w) {
+    if (w.render || !w.hwnd) return;
+    const HWND hwnd = w.hwnd;
+    const bool native = Set_FieldOn(w, L"nativeSettingsTitleBar", false), glass = Set_FieldOn(w, L"settingsGlass", true);
+    const bool first = !w.frameApplied, wasGlass = w.glass;
+    if (!first && native == w.nativeTitle && glass == w.glass) return;
+    w.frameApplied = true;
+    w.nativeTitle = native;
+    w.glass = glass;
+    kSetCapH = native ? 0.0f : 40.0f;
+    struct SetAccentPolicy { int state, flags, abgr, animation; };
+    struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
+    auto setComposition =
+        (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
+    if (glass) {
+        // Acrylic as one sheet over the whole window, the same material Seamless Flyouts
+        // gives the Launchpad settings window in Explorer: the accent acrylic with an 85%
+        // Mocha base tint, under the page's own crust tint. The system backdrop
+        // (DWMSBT_TRANSIENTWINDOW) went light grey over bright windows and turned to a flat
+        // grey slab when the window lost focus; the accent acrylic stays the same.
+        int backdrop = 1;  // DWMSBT_NONE
+        DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+        bb.fEnable = TRUE;
+        bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+        if (setComposition) {
+            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
+            SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(hwnd, &data);
+        }
+        MARGINS margins{-1, -1, -1, -1};
+        DwmExtendFrameIntoClientArea(hwnd, &margins);
+        COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
+        DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+    } else if (wasGlass) {
+        // Glass switched off while open: back to a plain solid window.
+        if (setComposition) {
+            SetAccentPolicy policy{0, 0, 0, 0};
+            SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(hwnd, &data);
+        }
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE;
+        bb.fEnable = FALSE;
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        MARGINS margins{0, 0, 0, 0};
+        DwmExtendFrameIntoClientArea(hwnd, &margins);
+        int backdrop = 0;  // DWMSBT_AUTO
+        DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+        COLORREF caption = RefFromRgb(mocha::crust);
+        DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &caption, sizeof(caption));
+    }
+    // With the frame extended DWM would draw its own minimize, maximize and close buttons over the
+    // built-in title bar; without a system menu it draws none. The Windows title bar keeps it.
+    // Minimize, maximize and close still work from the taskbar either way.
+    LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    SetWindowLongPtrW(hwnd, GWL_STYLE, native ? (style | WS_SYSMENU) : (style & ~WS_SYSMENU));
+    // Set_WndProc's WM_NCCALCSIZE drops or keeps the system title bar to match.
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    if (!first) {
+        Set_Relayout(w);
+        RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_FRAME | RDW_UPDATENOW);
+    }
+}
+
 static void Set_RememberRect(SetWindow& w) {
     if (w.render || IsIconic(w.hwnd) || IsZoomed(w.hwnd)) return;
     GetWindowRect(w.hwnd, &w.normalRect);
@@ -5671,16 +6173,21 @@ static void Set_RememberRect(SetWindow& w) {
 static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     SetWindow* w = g_setWin && g_setWin->hwnd == hwnd ? g_setWin.get() : nullptr;
     if (!w) return DefWindowProcW(hwnd, msg, wParam, lParam);
-    if (w->nativeButtons || w->nativeTitle) {
+    if (w->nativeTitle) {
         LRESULT r = 0;
         if (DwmDefWindowProc(hwnd, msg, wParam, lParam, &r)) return r;  // Hover and clicks on DWM's buttons.
     }
     auto dipX = [&](LPARAM l) { return (float)(short)LOWORD(l) * 96.0f / w->dpi; };
     auto dipY = [&](LPARAM l) { return (float)(short)HIWORD(l) * 96.0f / w->dpi - kSetCapH; };
     switch (msg) {
-        case WM_APP_SETTINGS_RELOAD: if (!w->saving) Set_LoadFields(*w); return 0;
+        case WM_APP_SETTINGS_RELOAD:
+            if (!w->saving) {
+                Set_LoadFields(*w);
+                Set_ApplyFrame(*w);
+            }
+            return 0;
         case WM_APP_SETTINGS_ACTIVATE: ShowWindow(hwnd, SW_RESTORE); ForceForeground(hwnd); return 0;
-        case WM_APP + 3: if (w->page == kSetHistoryPage) Set_BuildAndClamp(*w); return 0;  // A new crash.
+        case WM_APP + 3: if (w->page == kSetHistoryPage) Set_BuildAndClamp(*w); return 0;  // The list changed.
         case WM_NCCALCSIZE:
             // No system title bar: keep the side and bottom frames, the client starts at the top edge.
             if (wParam && !w->render && !w->nativeTitle) {
@@ -5835,6 +6342,11 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 else Set_ClosePopup(*w);
                 return 0;
             }
+            if (w->ask && h.kind != SetHit::Caption) {  // The confirm card eats the click.
+                if (h.kind == SetHit::Ask) Set_AskDone(*w, h.a == 1);
+                else if (h.a != -2) Set_AskDone(*w, false);  // A click off the card cancels.
+                return 0;
+            }
             Set_CommitEdit(*w, true);
             if (w->recording >= 0 && !(h.kind == SetHit::Control && h.a == w->recording)) Set_StopRecording(*w);
             w->hover = h;
@@ -5874,7 +6386,8 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                     break;
                 }
                 case SetHit::Link:
-                    Set_OpenLink(w->items[h.a].url.c_str());
+                    if (h.b == 1 && Set_CrashSeq(w->items[h.a])) Set_AskRemove(*w, Set_CrashSeq(w->items[h.a]), false);
+                    else Set_OpenLink(w->items[h.a].url.c_str());
                     break;
                 case SetHit::Caption:
                     w->capDown = h.a + 1;
@@ -5911,7 +6424,39 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 Set_Invalidate(*w);
             }
             return 0;
+        case WM_RBUTTONUP: {  // History: the crash's menu, or "Clear all history" on the empty page.
+            if (w->saving || w->ask || w->openSel >= 0 || w->page != kSetHistoryPage) break;
+            float x = dipX(lParam), y = dipY(lParam);
+            SetHit h = Set_Hit(*w, x, y);
+            UINT64 seq = 0;
+            if (h.kind == SetHit::Link && h.a >= 0) {
+                seq = Set_CrashSeq(w->items[h.a]);
+                if (!seq) break;
+            } else if (h.kind != SetHit::None || y < 0 || x < Set_RailDock(*w).right + kSetDockGap ||
+                       Set_In(Set_FooterDock(*w), x, y)) {
+                break;
+            }
+            Set_CommitEdit(*w, true);
+            POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            ClientToScreen(hwnd, &pt);
+            int ask = CwHistoryMenu(hwnd, seq, pt);
+            if (g_setWin.get() != w || w->destroyed) return 0;
+            if (ask == kCwRemove) Set_AskRemove(*w, seq, false);
+            else if (ask == kCwClear) Set_AskRemove(*w, 0, true);
+            return 0;
+        }
         case WM_MOUSEWHEEL: {
+            if (w->ask) return 0;
+            if (w->openSel >= 0 && Set_In(w->dropRect, w->mouseX, w->mouseY)) {
+                int n = (int)w->fields[w->openSel].options.size(), vis = Set_DropVisible(*w);
+                int step = GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? -3 : 3;
+                w->dropTop = std::clamp(w->dropTop + step, 0, std::max(0, n - vis));
+                SetHit h = Set_Hit(*w, w->mouseX, w->mouseY);
+                w->hover = h;
+                w->dropHover = h.kind == SetHit::Drop ? h.b : w->dropHover;
+                Set_Invalidate(*w);
+                return 0;
+            }
             Set_CommitEdit(*w, true);
             Set_ClosePopup(*w);
             float delta = (float)GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
@@ -6052,10 +6597,8 @@ static bool Set_Create(bool render) {
                                    GetModuleHandleW(nullptr), nullptr);
     }
     const int offX = GetSystemMetrics(SM_XVIRTUALSCREEN) - 6000, offY = GetSystemMetrics(SM_YVIRTUALSCREEN);
-    // Off: the window draws its own title bar and buttons. On: Windows draws both.
-    w->nativeTitle = !render && Wh_GetIntSetting(L"nativeSettingsTitleBar") != 0;
-    w->glass = !render && Wh_GetIntSetting(L"settingsGlass") != 0;
-    kSetCapH = w->nativeTitle ? 0.0f : 40.0f;
+    // The built-in title bar until Set_ApplyFrame reads the switches.
+    kSetCapH = 40.0f;
     const DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
     HWND hwnd = CreateWindowExW(0, kSettingsClass, L"Seamless Crash Watch settings", style,
                                 render ? offX : CW_USEDEFAULT, render ? offY : CW_USEDEFAULT, 800, 600, w->owner,
@@ -6082,47 +6625,7 @@ static bool Set_Create(bool render) {
         w->iconBig = Set_MakeIcon(w->iconFamily, GetSystemMetricsForDpi(SM_CXICON, w->dpi));
         if (w->iconSmall) SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)w->iconSmall);
         if (w->iconBig) SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)w->iconBig);
-        if (w->glass) {
-            // Acrylic as one sheet over the whole window, the same material Seamless Flyouts
-            // gives the Launchpad settings window in Explorer: the accent acrylic with an 85%
-            // Mocha base tint, under the page's own crust tint. The system backdrop
-            // (DWMSBT_TRANSIENTWINDOW) went light grey over bright windows and turned to a flat
-            // grey slab when the window lost focus; the accent acrylic stays the same.
-            int backdrop = 1;  // DWMSBT_NONE
-            DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
-            DWM_BLURBEHIND bb{};
-            bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
-            bb.fEnable = TRUE;
-            bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
-            DwmEnableBlurBehindWindow(hwnd, &bb);
-            if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
-            struct SetAccentPolicy { int state, flags, abgr, animation; };
-            struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
-            using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
-            if (auto setComposition = (SetComposition_t)(void*)GetProcAddress(
-                    GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute")) {
-                SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
-                SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
-                setComposition(hwnd, &data);
-            }
-            MARGINS margins{-1, -1, -1, -1};
-            DwmExtendFrameIntoClientArea(hwnd, &margins);
-            COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
-            DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
-        } else if (w->nativeButtons) {
-            // Solid window: DWM draws its buttons only where the frame reaches, so extend it
-            // over the title bar strip.
-            MARGINS margins{0, 0, MulDiv((int)kSetCapH, w->dpi, 96), 0};
-            DwmExtendFrameIntoClientArea(hwnd, &margins);
-        }
-        // With the frame extended, DWM draws its own minimize, maximize and close buttons in the
-        // corner. "Windows buttons" keeps them (Set_WndProc passes their hover and clicks to
-        // DwmDefWindowProc); "Built-in buttons" drops the system menu so DWM draws none and the
-        // window draws its own. Minimize, maximize and close still work from the taskbar.
-        if (!w->nativeTitle && !w->nativeButtons)
-            SetWindowLongPtrW(hwnd, GWL_STYLE, GetWindowLongPtrW(hwnd, GWL_STYLE) & ~WS_SYSMENU);
-        // The first WM_NCCALCSIZE ran before w->hwnd was set; drop the system title bar now.
-        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        Set_ApplyFrame(*w);  // Title bar and glass; also drops the system title bar the first WM_NCCALCSIZE kept.
     }
 
     auto outer = [&](float cwDip, float chDip, SIZE& size) {

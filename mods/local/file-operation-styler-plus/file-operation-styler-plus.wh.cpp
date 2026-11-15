@@ -2,7 +2,7 @@
 // @id              file-operation-styler-plus
 // @name            File Operation Styler Plus
 // @description     Portable custom presentation for native Explorer file operations with a skin-safe unified presentation.
-// @version         1.5.0
+// @version         1.6.5
 // @author          DavidHiFi, digART
 // @github          https://github.com/digart11
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -38,6 +38,12 @@ The large progress circle can pause and resume operations, while optional settin
 ### Themes
 
 ![File Operation Styler Themes](https://raw.githubusercontent.com/digart11/File-Operation-Styler/master/images/file-operation-styler-themes-1.2.png)
+
+## What's new in 1.6.3
+
+- Replace and File In Use choices: darker Mocha crust fill and a darker resting
+  edge so they stay dark over the bright glass; hover keeps the blue to mauve edge.
+- 1.6.2 fixes a GDI handle leak in the glass cache and blank cache-hit paints.
 
 ## What's new in 1.5.0
 
@@ -275,6 +281,7 @@ File Operation Styler has been tested on Windows 11 25H2 and 26H2 x64, including
 #include <memory>
 #include <mutex>
 #include <string>
+#include <set>
 #include <vector>
 
 struct COperationDataProvider;
@@ -1883,11 +1890,13 @@ namespace
     DWORD MakeGlassAccentGradientColor()
     {
         // ACCENT_POLICY uses AABBGGRR. COLORREF already stores BBGGRR.
-        // Keep a small tint contribution at every opacity level so choosing
-        // opacity 0 never removes the selected Custom Blur color.
-        constexpr DWORD kCustomBlurBaseTintAlpha = 32;
+        // Same recipe as the Explorer window blur (Seamless Flyouts): acrylic
+        // accent whose tint alpha is the opacity setting (85 = 0xD8).
+        DWORD alpha = static_cast<DWORD>(
+            std::clamp(g_settings.glassStrength, 0, 100) * 255 / 100);
+        alpha = std::max<DWORD>(alpha, 32);
 
-        return (kCustomBlurBaseTintAlpha << 24) |
+        return (alpha << 24) |
                (static_cast<DWORD>(g_settings.glassTint) & 0x00FFFFFF);
     }
 
@@ -1924,10 +1933,9 @@ namespace
             return;
         }
 
-        // ACCENT_ENABLE_BLURBEHIND = 3.
-        // Custom Blur uses the classic blur material; Windows Acrylic
-        // remains on the separate SystemBackdrop path above.
-        constexpr int kCustomAccentEnableBlurBehind = 3;
+        // ACCENT_ENABLE_ACRYLICBLURBEHIND = 4, matching Explorer's blur.
+        // Windows Acrylic remains on the separate SystemBackdrop path above.
+        constexpr int kCustomAccentEnableBlurBehind = 4;
 
         GlassAccentPolicy accentPolicy{};
         accentPolicy.accentState =
@@ -1980,6 +1988,96 @@ namespace
             g_settings.glassStrength,
             reinterpret_cast<void *>(hostWindow));
     }
+    // Progress ring: Mocha blue at the start of the arc, blending smoothly to
+    // Mocha mauve at the leading end. The pen takes a conic texture, so the
+    // arc stays one stroke with round caps and no seams.
+    constexpr COLORREF kRingGradientEnd = RGB(0xCB, 0xA6, 0xF7);
+
+    void DrawGradientProgressArc(Gdiplus::Graphics &graphics,
+                                 Gdiplus::RectF const &ringBounds,
+                                 Gdiplus::REAL sweepDegrees,
+                                 Gdiplus::REAL strokeWidth,
+                                 COLORREF startColor)
+    {
+        if (sweepDegrees <= 0.0f)
+        {
+            return;
+        }
+
+        int pad = static_cast<int>(std::ceil(strokeWidth)) + 2;
+        int left = static_cast<int>(std::floor(ringBounds.X)) - pad;
+        int top = static_cast<int>(std::floor(ringBounds.Y)) - pad;
+        int width = static_cast<int>(std::ceil(ringBounds.Width)) + pad * 2;
+        int height = static_cast<int>(std::ceil(ringBounds.Height)) + pad * 2;
+        if (width <= 0 || height <= 0 || width > 4096 || height > 4096)
+        {
+            return;
+        }
+
+        Gdiplus::Bitmap texture(width, height, PixelFormat32bppARGB);
+        Gdiplus::BitmapData data{};
+        Gdiplus::Rect lockRect(0, 0, width, height);
+        if (texture.LockBits(&lockRect, Gdiplus::ImageLockModeWrite,
+                             PixelFormat32bppARGB, &data) != Gdiplus::Ok)
+        {
+            return;
+        }
+
+        double cx = ringBounds.X + ringBounds.Width / 2.0 - left;
+        double cy = ringBounds.Y + ringBounds.Height / 2.0 - top;
+        double sweep = std::min<double>(sweepDegrees, 360.0);
+        double gap = 360.0 - sweep;
+        int r0 = GetRValue(startColor), g0 = GetGValue(startColor),
+            b0 = GetBValue(startColor);
+        int r1 = GetRValue(kRingGradientEnd), g1 = GetGValue(kRingGradientEnd),
+            b1 = GetBValue(kRingGradientEnd);
+
+        for (int y = 0; y < height; ++y)
+        {
+            auto *row = reinterpret_cast<UINT32 *>(
+                static_cast<BYTE *>(data.Scan0) + y * data.Stride);
+            for (int x = 0; x < width; ++x)
+            {
+                // Clockwise degrees from 12 o'clock.
+                double angle = std::atan2(x + 0.5 - cx, -(y + 0.5 - cy)) *
+                               180.0 / 3.14159265358979323846;
+                if (angle < 0.0)
+                {
+                    angle += 360.0;
+                }
+
+                double t;
+                if (angle <= sweep)
+                {
+                    t = sweep > 0.0 ? angle / sweep : 0.0;
+                }
+                else
+                {
+                    // Round caps reach past the arc ends: give each cap its
+                    // own end colour.
+                    t = (angle - sweep) < gap / 2.0 ? 1.0 : 0.0;
+                }
+
+                int r = static_cast<int>(r0 + (r1 - r0) * t + 0.5);
+                int g = static_cast<int>(g0 + (g1 - g0) * t + 0.5);
+                int b = static_cast<int>(b0 + (b1 - b0) * t + 0.5);
+                row[x] = 0xFF000000u | (static_cast<UINT32>(r) << 16) |
+                         (static_cast<UINT32>(g) << 8) |
+                         static_cast<UINT32>(b);
+            }
+        }
+        texture.UnlockBits(&data);
+
+        Gdiplus::TextureBrush brush(&texture, Gdiplus::WrapModeClamp);
+        brush.TranslateTransform(static_cast<Gdiplus::REAL>(left),
+                                 static_cast<Gdiplus::REAL>(top));
+        Gdiplus::Pen pen(&brush, strokeWidth);
+        pen.SetStartCap(Gdiplus::LineCapRound);
+        pen.SetEndCap(Gdiplus::LineCapRound);
+        graphics.DrawArc(&pen, ringBounds, -90.0f,
+                         static_cast<Gdiplus::REAL>(sweep));
+    }
+
     struct GlassFrameMargins
     {
         int left;
@@ -2993,16 +3091,10 @@ namespace
         if (displayProgress > 0 &&
             g_gpuPass != GpuPass::Chrome)
         {
-            Gdiplus::Pen accentPen(
-                Gdiplus::Color(255, GetRValue(theme.accent),
-                               GetGValue(theme.accent),
-                               GetBValue(theme.accent)),
-                strokeWidth);
-            accentPen.SetStartCap(Gdiplus::LineCapRound);
-            accentPen.SetEndCap(Gdiplus::LineCapRound);
-            graphics.DrawArc(&accentPen, ringBounds, -90.0f,
-                             static_cast<Gdiplus::REAL>(displayProgress) *
-                                 3.6f);
+            DrawGradientProgressArc(
+                graphics, ringBounds,
+                static_cast<Gdiplus::REAL>(displayProgress) * 3.6f,
+                strokeWidth, theme.accent);
         }
 
         wchar_t percentageText[16];
@@ -3670,16 +3762,10 @@ namespace
         if (displayProgress > 0.0 &&
             g_gpuPass != GpuPass::Chrome)
         {
-            Gdiplus::Pen accentPen(
-                Gdiplus::Color(255, GetRValue(theme.accent),
-                               GetGValue(theme.accent),
-                               GetBValue(theme.accent)),
-                strokeWidth);
-            accentPen.SetStartCap(Gdiplus::LineCapRound);
-            accentPen.SetEndCap(Gdiplus::LineCapRound);
-            graphics.DrawArc(&accentPen, ringBounds, -90.0f,
-                             static_cast<Gdiplus::REAL>(displayProgress) *
-                                 3.6f);
+            DrawGradientProgressArc(
+                graphics, ringBounds,
+                static_cast<Gdiplus::REAL>(displayProgress) * 3.6f,
+                strokeWidth, theme.accent);
         }
 
         int displayProgressText = std::clamp(
@@ -9027,9 +9113,26 @@ namespace
         {
             return;
         }
-        if (layer.glassCacheDc &&
-            (layer.glassCacheWidth != width ||
-             layer.glassCacheHeight != height))
+        // Same size: reuse the cache bitmap, which stays selected in its DC.
+        if (layer.glassCacheDc && layer.glassCacheBitmap &&
+            layer.glassCacheWidth == width &&
+            layer.glassCacheHeight == height)
+        {
+            if (BitBlt(layer.glassCacheDc, 0, 0, width, height, deviceContext,
+                       0, 0, SRCCOPY))
+            {
+                layer.glassCacheKey =
+                    (unsigned long long)g_gpuSettingsGeneration;
+            }
+            else
+            {
+                layer.glassCacheKey = 0;
+            }
+            return;
+        }
+        // New size: free both handles before making new ones. The DC goes
+        // first so the bitmap is no longer selected when it is deleted.
+        if (layer.glassCacheDc)
         {
             DeleteDC(layer.glassCacheDc);
             layer.glassCacheDc = nullptr;
@@ -9039,6 +9142,7 @@ namespace
             DeleteObject(layer.glassCacheBitmap);
             layer.glassCacheBitmap = nullptr;
         }
+        layer.glassCacheKey = 0;
         BITMAPINFO info{};
         info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
         info.bmiHeader.biWidth = width;
@@ -9070,7 +9174,8 @@ namespace
             layer.glassCacheBitmap = nullptr;
             return;
         }
-        SelectObject(layer.glassCacheDc, previous);
+        // The bitmap stays selected: the cache paints are blitted from this
+        // DC. GpuDestroyLayerLocked deletes the DC before the bitmap.
         if (!BitBlt(layer.glassCacheDc, 0, 0, width, height, deviceContext,
                     0, 0, SRCCOPY))
         {
@@ -9676,8 +9781,9 @@ namespace
             }
 
             {
-                if (g_settings.glassEffect == L"blur" &&
-                    g_settings.glassStrength > 0)
+                // The acrylic accent tint carries the full opacity now, so
+                // the old extra overlay stays off.
+                if (false)
                 {
                     // AccentBlurBehind already supplies the base tint.
                     // This overlay controls only additional opacity.
@@ -14563,6 +14669,431 @@ namespace
 
 } // namespace
 
+// ---------------------------------------------------------------------------
+// Native pages inside a Glass host (Replace or Skip Files, File In Use):
+// let the blur show through their panels, and draw the choice buttons with
+// a darker Mocha fill, a grey 2px edge, and a blue to mauve edge on hover.
+// Scoped to paints of windows whose root is a Glass OperationStatusWindow.
+namespace
+{
+    thread_local bool g_paintingGlassHost = false;
+
+    decltype(&BeginPaint) BeginPaint_Original = nullptr;
+    decltype(&EndPaint) EndPaint_Original = nullptr;
+    decltype(&DrawThemeBackground) DrawThemeBackground_Original = nullptr;
+    decltype(&DrawThemeBackgroundEx) DrawThemeBackgroundEx_Original = nullptr;
+
+    // Owner diagnostics only: with the engine's LoggingEnabled value on, the
+    // probes below also append to this file, so the draw calls inside a Glass
+    // host can be read without the Windhawk log window. A normal run
+    // (LoggingEnabled 0) writes nothing.
+    constexpr wchar_t kProbeFilePath[] =
+        L"C:\\ProgramData\\Windhawk\\ModsWritable\\"
+        L"local@file-operation-styler-plus\\native-page-probe.txt";
+
+    bool ProbeEnabled()
+    {
+        static bool checked = false;
+        static bool enabled = false;
+        if (!checked)
+        {
+            checked = true;
+            DWORD value = 0;
+            DWORD size = sizeof(value);
+            enabled =
+                RegGetValueW(HKEY_LOCAL_MACHINE,
+                             L"SOFTWARE\\Windhawk\\Engine\\Mods\\"
+                             L"local@file-operation-styler-plus",
+                             L"LoggingEnabled", RRF_RT_REG_DWORD, nullptr,
+                             &value, &size) == ERROR_SUCCESS &&
+                value != 0;
+        }
+        return enabled;
+    }
+
+    void ProbeWrite(PCWSTR line)
+    {
+        HANDLE file = CreateFileW(kProbeFilePath,
+                                  FILE_APPEND_DATA | FILE_WRITE_DATA |
+                                      FILE_READ_DATA,
+                                  FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                                  OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (file == INVALID_HANDLE_VALUE)
+        {
+            static LONG failures = 0;
+            if (InterlockedIncrement(&failures) <= 3)
+            {
+                Wh_Log(L"Native page probe write failed error=%lu",
+                       GetLastError());
+            }
+            return;
+        }
+        DWORD written = 0;
+        WriteFile(file, line, (DWORD)wcslen(line) * sizeof(wchar_t), &written,
+                  nullptr);
+        CloseHandle(file);
+    }
+
+    bool IsOperationStatusRoot(HWND window)
+    {
+        if (!window || !IsGlassTheme())
+        {
+            return false;
+        }
+        HWND root = GetAncestor(window, GA_ROOT);
+        if (!root)
+        {
+            return false;
+        }
+        wchar_t className[64]{};
+        return GetClassNameW(root, className, ARRAYSIZE(className)) &&
+               lstrcmpW(className, L"OperationStatusWindow") == 0;
+    }
+
+    bool IsGlassHostRoot(HWND window)
+    {
+        // Probes and paint scoping key off the host class: the glass property
+        // is applied later in setup, and DUI paints through buffered paint, so
+        // a property gate missed the rows entirely.
+        return IsOperationStatusRoot(window);
+    }
+
+    HDC WINAPI BeginPaint_Hook(HWND window, LPPAINTSTRUCT paint)
+    {
+        HDC dc = BeginPaint_Original(window, paint);
+        g_paintingGlassHost = dc && IsGlassHostRoot(window);
+        return dc;
+    }
+
+    BOOL WINAPI EndPaint_Hook(HWND window, PAINTSTRUCT const *paint)
+    {
+        g_paintingGlassHost = false;
+        return EndPaint_Original(window, paint);
+    }
+
+    bool GetThemeClassName(HTHEME theme, wchar_t *buffer, int size)
+    {
+        using GetThemeClass_t = HRESULT(WINAPI *)(HTHEME, LPWSTR, int);
+        static GetThemeClass_t getThemeClass =
+            reinterpret_cast<GetThemeClass_t>(GetProcAddress(
+                GetModuleHandleW(L"uxtheme.dll"), MAKEINTRESOURCEA(74)));
+        buffer[0] = L'\0';
+        return getThemeClass && SUCCEEDED(getThemeClass(theme, buffer, size));
+    }
+
+    enum class NativePagePart
+    {
+        None,
+        Panel,
+        Choice,
+    };
+
+    NativePagePart ClassifyNativePagePart(PCWSTR themeClass, int part,
+                                          int state, bool *hot)
+    {
+        *hot = false;
+        // "Explorer::ListView" and "ListView" are the same part list.
+        if (PCWSTR scope = wcsstr(themeClass, L"::"))
+        {
+            themeClass = scope + 2;
+        }
+        if (lstrcmpiW(themeClass, L"TaskDialog") == 0)
+        {
+            // Primary, content, secondary, footnote pane and area.
+            if (part == 1 || part == 4 || part == 8 || part == 15 ||
+                part == 16)
+            {
+                return NativePagePart::Panel;
+            }
+            return NativePagePart::None;
+        }
+        if (lstrcmpiW(themeClass, L"ListView") == 0 && part == 1 &&
+            state >= 2 && state <= 6)
+        {
+            // LISS_HOT 2, SELECTED 3, DISABLED 4, SELECTEDNOTFOCUS 5,
+            // HOTSELECTED 6.
+            if (state == 4)
+            {
+                return NativePagePart::None;
+            }
+            *hot = state == 2 || state == 6;
+            return NativePagePart::Choice;
+        }
+        if (lstrcmpiW(themeClass, L"ItemsView") == 0 && part == 4 &&
+            (state == 11 || state == 12))
+        {
+            *hot = true;
+            return NativePagePart::Choice;
+        }
+        return NativePagePart::None;
+    }
+
+    void FillNativePanelClear(HDC dc, LPCRECT rect, LPCRECT clip)
+    {
+        RECT target = *rect;
+        if (clip && !IntersectRect(&target, rect, clip))
+        {
+            return;
+        }
+        FillRect(dc, &target, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+    }
+
+    void AddRoundRectPath(Gdiplus::GraphicsPath &path, Gdiplus::RectF r,
+                          Gdiplus::REAL radius)
+    {
+        Gdiplus::REAL d = radius * 2.0f;
+        path.AddArc(r.X, r.Y, d, d, 180.0f, 90.0f);
+        path.AddArc(r.X + r.Width - d, r.Y, d, d, 270.0f, 90.0f);
+        path.AddArc(r.X + r.Width - d, r.Y + r.Height - d, d, d, 0.0f, 90.0f);
+        path.AddArc(r.X, r.Y + r.Height - d, d, d, 90.0f, 90.0f);
+        path.CloseFigure();
+    }
+
+    // Draws into a premultiplied DIB and AlphaBlends it, so the glass alpha
+    // under the button stays correct.
+    void DrawNativeChoice(HDC dc, LPCRECT rect, LPCRECT clip, bool hot)
+    {
+        int width = rect->right - rect->left;
+        int height = rect->bottom - rect->top;
+        if (width <= 4 || height <= 4 || width > 8192 || height > 2048)
+        {
+            return;
+        }
+
+        BITMAPINFO info{};
+        info.bmiHeader.biSize = sizeof(info.bmiHeader);
+        info.bmiHeader.biWidth = width;
+        info.bmiHeader.biHeight = -height;
+        info.bmiHeader.biPlanes = 1;
+        info.bmiHeader.biBitCount = 32;
+        info.bmiHeader.biCompression = BI_RGB;
+        void *bits = nullptr;
+        HBITMAP dib = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &bits,
+                                       nullptr, 0);
+        if (!dib || !bits)
+        {
+            if (dib)
+            {
+                DeleteObject(dib);
+            }
+            return;
+        }
+
+        {
+            Gdiplus::Bitmap canvas(width, height, width * 4,
+                                   PixelFormat32bppPARGB,
+                                   static_cast<BYTE *>(bits));
+            Gdiplus::Graphics g(&canvas);
+            g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+            g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+            g.Clear(Gdiplus::Color(0, 0, 0, 0));
+
+            int dpi = GetDeviceCaps(dc, LOGPIXELSX);
+            if (dpi <= 0)
+            {
+                dpi = 96;
+            }
+            Gdiplus::REAL scale = dpi / 96.0f;
+            Gdiplus::REAL edge = 2.0f * scale;
+            Gdiplus::REAL radius = std::min(6.0f * scale, height / 2.0f - 1);
+
+            Gdiplus::RectF box(edge / 2.0f, edge / 2.0f, width - edge,
+                               height - edge);
+            Gdiplus::GraphicsPath path;
+            AddRoundRectPath(path, box, radius);
+
+            // Owner pass 2: the glass behind is bright, so the choices read
+            // light. Crust fill and a surface0 edge keep them dark at rest;
+            // hover adds the blue to mauve edge.
+            Gdiplus::SolidBrush fill(Gdiplus::Color(hot ? 225 : 205,
+                                                    0x11, 0x11, 0x1B));
+            g.FillPath(&fill, &path);
+
+            if (hot)
+            {
+                Gdiplus::LinearGradientBrush gradient(
+                    Gdiplus::PointF(0.0f, 0.0f),
+                    Gdiplus::PointF(static_cast<Gdiplus::REAL>(width), 0.0f),
+                    Gdiplus::Color(255, 0x89, 0xB4, 0xFA),
+                    Gdiplus::Color(255, 0xCB, 0xA6, 0xF7));
+                Gdiplus::Pen pen(&gradient, edge);
+                g.DrawPath(&pen, &path);
+            }
+            else
+            {
+                Gdiplus::Pen pen(Gdiplus::Color(255, 0x31, 0x32, 0x44), edge);
+                g.DrawPath(&pen, &path);
+            }
+        }
+
+        HDC memoryDc = CreateCompatibleDC(dc);
+        if (memoryDc)
+        {
+            HGDIOBJ previous = SelectObject(memoryDc, dib);
+            int saved = SaveDC(dc);
+            if (clip)
+            {
+                IntersectClipRect(dc, clip->left, clip->top, clip->right,
+                                  clip->bottom);
+            }
+            BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+            GdiAlphaBlend(dc, rect->left, rect->top, width, height, memoryDc,
+                          0, 0, width, height, blend);
+            RestoreDC(dc, saved);
+            SelectObject(memoryDc, previous);
+            DeleteDC(memoryDc);
+        }
+        DeleteObject(dib);
+    }
+
+    decltype(&FillRect) FillRect_Original = nullptr;
+
+    int WINAPI FillRect_Hook(HDC dc, LPCRECT rect, HBRUSH brush)
+    {
+        // Choice-row sized fills inside a Glass host, so a non-themed
+        // selection fill shows up beside the themed ones in the probe.
+        if (g_paintingGlassHost && ProbeEnabled() && rect &&
+            rect->right - rect->left >= 200 &&
+            rect->bottom - rect->top >= 20 && rect->bottom - rect->top <= 60)
+        {
+            static std::mutex fillMutex;
+            static std::set<std::wstring> seenFill;
+            LOGBRUSH lb{};
+            wchar_t brushInfo[72] = L"?";
+            if (GetObjectW(brush, sizeof(lb), &lb))
+            {
+                swprintf_s(brushInfo, ARRAYSIZE(brushInfo),
+                           L"style=%lu color=%06lX", lb.lbStyle, lb.lbColor);
+            }
+            wchar_t key[128];
+            swprintf_s(key, ARRAYSIZE(key), L"%s %d,%d %dx%d", brushInfo,
+                       rect->left, rect->top, rect->right - rect->left,
+                       rect->bottom - rect->top);
+            bool fresh = false;
+            {
+                std::lock_guard<std::mutex> lock(fillMutex);
+                fresh = seenFill.size() < 80 && seenFill.insert(key).second;
+            }
+            if (fresh)
+            {
+                wchar_t line[160];
+                swprintf_s(line, ARRAYSIZE(line), L"fill %s\r\n", key);
+                ProbeWrite(line);
+            }
+        }
+        return FillRect_Original(dc, rect, brush);
+    }
+
+    bool PaintNativePagePart(HTHEME theme, HDC dc, int part, int state,
+                             LPCRECT rect, LPCRECT clip)
+    {
+        if (!g_paintingGlassHost || !rect || g_unloading.load())
+        {
+            return false;
+        }
+
+        wchar_t themeClass[64];
+        if (!GetThemeClassName(theme, themeClass, ARRAYSIZE(themeClass)))
+        {
+            return false;
+        }
+
+        {
+            // One line per distinct class/part/state, so the log names
+            // exactly what the native page paints.
+            static std::mutex seenMutex;
+            static std::set<std::wstring> seen;
+            wchar_t key[96];
+            swprintf_s(key, L"%s/%d/%d", themeClass, part, state);
+            bool fresh = false;
+            {
+                std::lock_guard<std::mutex> lock(seenMutex);
+                fresh = seen.size() < 200 && seen.insert(key).second;
+            }
+            if (fresh)
+            {
+                Wh_Log(L"Native page dtb class=%s part=%d state=%d rect=%d,%d %dx%d",
+                       themeClass, part, state, rect->left, rect->top,
+                       rect->right - rect->left, rect->bottom - rect->top);
+                if (ProbeEnabled())
+                {
+                    wchar_t probe[160];
+                    swprintf_s(probe, ARRAYSIZE(probe),
+                               L"dtb %s part=%d state=%d rect=%d,%d %dx%d\r\n",
+                               themeClass, part, state, rect->left, rect->top,
+                               rect->right - rect->left,
+                               rect->bottom - rect->top);
+                    ProbeWrite(probe);
+                }
+            }
+        }
+
+        bool hot = false;
+        switch (ClassifyNativePagePart(themeClass, part, state, &hot))
+        {
+        case NativePagePart::Panel:
+            FillNativePanelClear(dc, rect, clip);
+            return true;
+        case NativePagePart::Choice:
+            DrawNativeChoice(dc, rect, clip, hot);
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    HRESULT WINAPI DrawThemeBackground_Hook(HTHEME theme, HDC dc, int part,
+                                            int state, LPCRECT rect,
+                                            LPCRECT clip)
+    {
+        if (PaintNativePagePart(theme, dc, part, state, rect, clip))
+        {
+            return S_OK;
+        }
+        return DrawThemeBackground_Original(theme, dc, part, state, rect,
+                                            clip);
+    }
+
+    HRESULT WINAPI DrawThemeBackgroundEx_Hook(HTHEME theme, HDC dc, int part,
+                                              int state, LPCRECT rect,
+                                              DTBGOPTS const *options)
+    {
+        LPCRECT clip = (options && (options->dwFlags & DTBG_CLIPRECT))
+                           ? &options->rcClip
+                           : nullptr;
+        if (PaintNativePagePart(theme, dc, part, state, rect, clip))
+        {
+            return S_OK;
+        }
+        return DrawThemeBackgroundEx_Original(theme, dc, part, state, rect,
+                                              options);
+    }
+
+    void InstallNativePageHooks()
+    {
+        if (!IsGlassTheme())
+        {
+            return;
+        }
+        WindhawkUtils::SetFunctionHook(BeginPaint, BeginPaint_Hook,
+                                       &BeginPaint_Original);
+        WindhawkUtils::SetFunctionHook(EndPaint, EndPaint_Hook,
+                                       &EndPaint_Original);
+        WindhawkUtils::SetFunctionHook(DrawThemeBackground,
+                                       DrawThemeBackground_Hook,
+                                       &DrawThemeBackground_Original);
+        WindhawkUtils::SetFunctionHook(DrawThemeBackgroundEx,
+                                       DrawThemeBackgroundEx_Hook,
+                                       &DrawThemeBackgroundEx_Original);
+        WindhawkUtils::SetFunctionHook(FillRect, FillRect_Hook,
+                                       &FillRect_Original);
+        if (ProbeEnabled())
+        {
+            ProbeWrite(L"--- native page hooks installed ---\r\n");
+        }
+    }
+} // namespace
+
 BOOL Wh_ModInit()
 {
     g_unloading.store(false, std::memory_order_release);
@@ -14602,6 +15133,8 @@ BOOL Wh_ModInit()
         ShutdownCommonControlsSubclassApi();
         return FALSE;
     }
+
+    InstallNativePageHooks();
 
     Wh_Log(L"File Operation Styler " WH_MOD_VERSION L" initialization complete");
     return TRUE;

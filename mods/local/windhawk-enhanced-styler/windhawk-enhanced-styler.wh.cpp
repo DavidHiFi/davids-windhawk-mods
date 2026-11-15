@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.1.12
+// @version         2.2.6
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -11,7 +11,7 @@
 // @include         windhawk-ui.exe
 // @include         windhawk.exe
 // @architecture    x86-64
-// @compilerOptions -DWIN32_LEAN_AND_MEAN -luser32 -lgdi32 -ldwmapi -lws2_32 -ladvapi32 -lcomctl32 -luxtheme
+// @compilerOptions -DWIN32_LEAN_AND_MEAN -luser32 -lgdi32 -ldwmapi -lws2_32 -ladvapi32 -lcomctl32 -luxtheme -liphlpapi
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -21,6 +21,20 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.6
+
+- A long mod description on a mod's page wraps onto more lines instead of being cut off at the edge.
+
+## What's new in 2.2.5
+
+- The Windhawk window's title gets the same rounded dock as every other title bar when Seamless Title Bars is on: its fill, edge, glass shine, blue to mauve hover edge, title font and right-click menu, read from that mod's settings so the two always match.
+
+## What's new in 2.2.4
+
+- The collapse chevron on a setting row sits inside the row again and no longer covers the colored state bar beside it.
+- Drop-down lists open instant and solid: no flicker while opening and nothing on the page reads through the popup sheet.
+- The floating save dock keeps a 12px gap from the window edges in the normal and the expanded settings view.
 
 ## Features
 
@@ -141,6 +155,8 @@ The original window frame work was adapted from [Titlebar For Everyone](https://
 #include <dwmapi.h>
 #include <uxtheme.h>
 #include <vssym32.h>
+#include <iphlpapi.h>
+#include <tlhelp32.h>
 #include <string>
 #include <set>
 #include <map>
@@ -215,7 +231,10 @@ static volatile long g_relaunchRequested = 0;
 static volatile long g_relaunchDone = 0;        // at most one self-relaunch per process
 static volatile long long g_seenChangeTime = -1;  // engine save marker, last seen
 static unsigned long long g_startTick;
-static bool g_pageReady;
+static volatile bool g_pageReady;
+static volatile long g_frameReady = 0;  // the visible main window has its frame
+static int g_cdpPort = kCdpPort;         // the port actually handed to the webview
+static HANDLE g_cdpThread;
 
 static void DebugNote(const char* what, long detail = 0) {
     Wh_Log(L"%S (%ld)", what, detail);
@@ -508,15 +527,20 @@ static std::string BuildPolishCss(const Settings&) {
            "{transition:background-color .18s " + ease + ",border-color .18s " + ease + ",box-shadow .22s " + ease + ",color .18s " + ease + ",transform .18s " + ease + " !important;}";
     css += ".ant-segmented-thumb{transition:transform .26s " + ease + ",width .26s " + ease + " !important;}";
     css += ".ant-tabs-ink-bar{transition:left .26s " + ease + ",width .26s " + ease + " !important;}";
-    css += ".ant-modal-content,.ant-popover-container,.ant-dropdown-menu,.ant-select-dropdown{animation:whs-pop .18s " + ease + ";}";
+    css += ".ant-modal-content,.ant-popover-container{animation:whs-pop .18s " + ease + ";}";
     css += "@keyframes whs-pop{from{opacity:0;transform:translateY(4px) scale(.985);}to{opacity:1;transform:none;}}";
-    // 2.1.12: menus that open over the page fade opacity only. The pop's
-    // translateY+scale re-rasterizes the layered padding-box/border-box fill
-    // and the ::after mask ring every frame in WebView2, which read as a
-    // burst of flicker on each open in the settings GUI. Opacity keeps the
-    // layer cached, so the open is smooth; modals and popovers keep the pop.
-    css += ".ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu{animation:whs-fade .15s " + ease + ";}";
-    css += "@keyframes whs-fade{from{opacity:0;}to{opacity:1;}}";
+    // 2.2.4: menus that open over the page open instant and solid. antd's own
+    // motion selectors (.ant-slide-up-enter-active..., 4 classes) outrank any
+    // animation shorthand on the surface, so the 2.1.12 fade never ran: the
+    // open was antd's antSlideUpIn, whose transform re-rasterized the layered
+    // padding-box/border-box fill every frame in WebView2 and whose opacity
+    // ramp left the page readable through the sheet. When antd then dropped
+    // its motion classes the shorthand took over and restarted whs-fade from
+    // opacity 0, the dip after each open. Ending the animation 1 ms after it
+    // starts finishes before the first paint and still fires the animationend
+    // rc-motion waits for, so the wrapper unmounts cleanly on close. Fill
+    // stays the solid card sheet; the 2.1.7 open ring below is untouched.
+    css += ":root :is(.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown,.ant-dropdown-menu){animation-duration:.001s !important;animation-delay:0s !important;}";
     css += "}";
     // Hover glows were replaced by 2px resting and hover borders (2.1.2, BuildButtonBorderCss).
     css += ".ant-btn:not(:disabled):active{transform:scale(.97);}";
@@ -529,6 +553,11 @@ static std::string BuildPolishCss(const Settings&) {
     // Scoped to the details card only: unscoped, it let the Explore cards'
     // process list run past the card edge (owner report 2026-11-07).
     css += "[class*=\"ModDetailsCard\"] .ant-card-meta-title,[class*=\"ModDetailsCard\"] .ant-card-meta-section,[class*=\"ModDetailsCard\"] .ant-card-head-title{overflow:visible !important;}";
+    // With the clip above lifted, a long one-line description ran past the
+    // details card and was cut mid-word with no ellipsis (owner report
+    // 2026-11-14, Adaptive Windows page). Wrap it onto more lines instead.
+    css += "[class*=\"ModDetailsCard\"] .ant-card-meta-title{white-space:normal !important;}";
+    css += "[class*=\"CardTitleDescription\"]{white-space:normal !important;overflow:visible !important;text-overflow:clip !important;overflow-wrap:anywhere;}";
     return css;
 }
 
@@ -1106,8 +1135,8 @@ static std::string BuildCss(const Settings& s) {
 /* 2.1.5: mod id tag is a dark chip with a 2px edge, grey at rest, blue to mauve on hover. */
 :root [class*="CardTitleModId"]{background:#181825 !important;color:#a6adc8 !important;border:2px solid #45475a !important;border-radius:999px !important;padding:0 9px !important;line-height:20px !important;transition:border-color .15s,color .15s;}
 :root [class*="CardTitleModId"]:hover{color:#cdd6f4 !important;border-color:transparent !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
-/* Save dock stops short of the panel scrollbar so the thumb never sits on its edge. */
-:root [class*="SaveSettingsCard"]{margin-inline:2px !important;}
+/* Save dock: 12px gap from the window edges, still clear of the panel scrollbar. */
+:root [class*="SaveSettingsCard"]{margin-inline:12px !important;}
 /* Visual / Textual switch: one surface for both halves, a full-height divider, selected half in blue text, hover darkens the whole half. */
 :root [class*="SaveSettingsCard"] .ant-segmented{background:#1e1e2e !important;border:2px solid #45475a !important;padding:0 !important;border-radius:999px !important;overflow:hidden !important;}
 :root [class*="SaveSettingsCard"] .ant-segmented:hover{border-color:transparent !important;background:linear-gradient(#1e1e2e,#1e1e2e) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
@@ -1124,13 +1153,16 @@ static std::string BuildCss(const Settings& s) {
 /* Expanded settings (F11): an opaque frosted page, content centred, dock clear of the scrollbar. */
 :root #root:has(form[class*="SettingsForm"] button[aria-label="Collapse"]){visibility:hidden !important;}
 :root form[class*="SettingsForm"]:has(button[aria-label="Collapse"]){visibility:visible !important;background:transparent !important;backdrop-filter:none !important;padding:0 max(28px,calc((100% - 1480px)/2)) 32px !important;}
-:root form[class*="SettingsForm"]:has(button[aria-label="Collapse"]) [class*="SaveSettingsCard"]{margin-inline:0 !important;margin-top:0 !important;top:12px !important;}
+:root form[class*="SettingsForm"]:has(button[aria-label="Collapse"]) [class*="SaveSettingsCard"]{margin-inline:12px !important;margin-top:0 !important;top:12px !important;}
 /* Native title tooltips are replaced by this one, same look as the antd tooltips and the right-click menu. */
 :root #wh-tip{position:fixed;z-index:2147483000;pointer-events:none;max-width:420px;padding:6px 11px;border-radius:12px;font-size:13px;line-height:1.45;color:#cdd6f4;white-space:pre-line;
  border:2px solid transparent;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa99,#cba6f799) border-box;box-shadow:0 8px 24px #0008;opacity:0;transition:opacity .12s;}
 :root #wh-tip.on{opacity:1;}
-/* 2.1.6: collapse arrow sits in its own small dark box, left of the title, arrow centred and smaller. */
-:root [data-testid="mod-setting-collapse"]{width:20px !important;height:20px !important;min-width:20px !important;padding:0 !important;margin:0 8px 0 -18px !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;background:#181825 !important;border:2px solid #45475a !important;border-radius:7px !important;color:#a6adc8 !important;box-shadow:none !important;transition:border-color .15s,color .15s;}
+/* 2.2.4: collapse arrow keeps its small dark box inside the row. The unsaved
+   state bar paints at -18px, 3px wide (ModDetailsSettingsView__SettingsListItem
+   ::before, measured in the app bundle and on screen); the old margin -18px
+   hung this box exactly over it. Grey 2px edge, blue to mauve on hover. */
+:root [data-testid="mod-setting-collapse"]{width:20px !important;height:20px !important;min-width:20px !important;padding:0 !important;margin:0 8px 0 0 !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;background:#181825 !important;border:2px solid #45475a !important;border-radius:7px !important;color:#a6adc8 !important;box-shadow:none !important;transition:border-color .15s,color .15s;}
 :root [data-testid="mod-setting-collapse"] svg{width:9px !important;height:9px !important;display:block !important;margin:0 !important;transition:transform .2s ease;}
 :root [data-testid="mod-setting-collapse"]:hover,:root [data-testid="mod-setting-collapse"]:focus-visible{color:#cdd6f4 !important;border-color:transparent !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
 /* "5 settings" badge on a collapsed section: dark chip, grey edge, blue to mauve edge on hover. */
@@ -1169,7 +1201,7 @@ body>#root{transition:filter .2s ease;}
 /* 2.1.7: mod page header: no grey rule under the tab pill. */
 :root .ant-card-head:has(>.ant-card-head-wrapper .ant-tabs),:root .ant-card-head:has(.ant-card-head-tabs){border-bottom:0 !important;box-shadow:none !important;}
 :root .ant-card-head-tabs>.ant-tabs-nav::before,:root .ant-card-head-tabs .ant-tabs-ink-bar{display:none !important;border:0 !important;}
-/* 2.1.12: version chips: hover ring via ::after mask, zero layout shift; remove-confirm solid card with page blur behind; menu surfaces fade opacity only (no transform re-raster). */
+/* 2.1.12: version chips: hover ring via ::after mask, zero layout shift; remove-confirm solid card with page blur behind. */
 /* 2.1.11: version chips: mantle fill, 2px grey ring, chosen one surface0, blue to mauve on hover. */
 :root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper{position:relative !important;background:#181825 !important;color:#a6adc8 !important;border:0 !important;box-shadow:inset 0 0 0 2px #45475a !important;border-radius:999px !important;margin-inline-end:6px !important;transition:box-shadow .15s ease,color .15s ease !important;}
 :root [class*="ModVersionRadioGroup"] .ant-radio-button-wrapper::before{display:none !important;}
@@ -1232,12 +1264,23 @@ body:has(.ant-popconfirm:not(.ant-popover-hidden))>#root{filter:blur(14px) satur
 static std::string BuildInjectJs(const Settings& s) {
     std::string css = BuildCss(s);
     std::string js;
+    // This runs when the page's document is created, before Windhawk's own
+    // scripts and before the first paint, so the stylesheet goes in at once.
+    // The page helpers need the body and the app root, so they wait for the
+    // parser to finish.
     js += "(function(){";
-    js += "if(location.hostname!=='tauri.localhost'||!document.querySelector('[data-testid=nav-home]')||!document.querySelector('[data-testid=nav-explore]'))return 'loading';";
+    js += "if(location.hostname!=='tauri.localhost')return 'skip';";
     js += "var css=\"" + JsonEscape(css) + "\";";
     js += "var st=document.getElementById('wh-styler-style');";
-    js += "if(!st){st=document.createElement('style');st.id='wh-styler-style';(document.head||document.documentElement).appendChild(st);}";
+    js += "if(!st){st=document.createElement('style');st.id='wh-styler-style';}";
     js += "if(st.textContent!==css)st.textContent=css;";
+    // Keep the sheet last in <head>, as the old after-load push did, so it wins
+    // ties with Windhawk's own CSS file that the parser adds after it.
+    js += "var place=function(){var h=document.head;if(h){if(h.lastElementChild!==st)h.appendChild(st);return true;}"
+          "if(document.documentElement&&!st.parentNode)document.documentElement.appendChild(st);return false;};";
+    js += "if(!place()&&!window.whStyleWatch){window.whStyleWatch=new MutationObserver(function(){if(document.head){place();window.whStyleWatch.disconnect();}});"
+          "window.whStyleWatch.observe(document,{childList:true,subtree:true});}";
+    js += "var rest=function(){place();if(!document.body||!document.getElementById('root'))return;";
     {
         // Hidden SVG with the shared gradient. display:none would stop
         // Chromium from painting the gradient, so it is sized to zero instead.
@@ -1363,6 +1406,8 @@ document.addEventListener('mouseout',e=>{if(cur&&(!e.relatedTarget||!cur.contain
 window.addEventListener('blur',hide);
 })();
 )WHT";
+    js += "};";
+    js += "if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',rest,{once:true});else rest();";
     js += "return 'ok len='+css.length;";
     js += "})()";
     return js;
@@ -1673,6 +1718,7 @@ static BOOL CALLBACK ApplyEnumProc(HWND hWnd, LPARAM lParam) {
     if (!s->nativeTitleBar || s->titleBarAcrylic || ReadCaptionColor(hWnd) != wantCaption) {
         ApplyWindowStack(hWnd, *s);
     }
+    InterlockedExchange(&g_frameReady, 1);
     return TRUE;
 }
 
@@ -1743,6 +1789,303 @@ static void CropCaptionChild(HWND child) {
     InvalidateRect(owner, nullptr, FALSE);
 }
 
+// ---- Title dock: the same dock Seamless Title Bars draws around every native title. ----
+// This window paints its own caption (DWM never draws its title), so the dock is drawn here
+// from that mod's own dock and title font settings, and the two always match.
+struct TitleDockLook {
+    bool on = false, hover = true, shine = true, live = false;
+    int padX = 8, padY = 4, radius = 8, edge = 2, fillA = 45;
+    std::uint32_t fill = 0x313244, edgeC = 0x45475A, h1 = 0x89B4FA, h2 = 0xCBA6F7;
+    wchar_t family[64] = L"";
+    int weight = 0;
+};
+
+static TitleDockLook g_dockLook;
+static ULONGLONG g_dockLookTick;
+static HWND g_dockHwnd;
+static RECT g_dockRect;          // client coordinates of the last drawn dock, empty if none
+static float g_dockHoverP;       // 0 rest .. 1 full gradient edge
+static int g_dockHoverWant;
+static const UINT_PTR kDockTimer = 0x5EA7D0C;
+
+static const TitleDockLook& DockLook() {
+    ULONGLONG now = GetTickCount64();
+    if (g_dockLookTick && now - g_dockLookTick < 1000) return g_dockLook;
+    g_dockLookTick = now;
+    TitleDockLook d;
+    const wchar_t* modKey = L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@seamless-title-bars";
+    const wchar_t* setKey = L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@seamless-title-bars\\Settings";
+    DWORD v = 0, size = sizeof(v);
+    bool installed = RegGetValueW(HKEY_LOCAL_MACHINE, modKey, L"Version", RRF_RT_REG_SZ, nullptr, nullptr,
+                                  nullptr) == ERROR_SUCCESS;
+    bool disabled = RegGetValueW(HKEY_LOCAL_MACHINE, modKey, L"Disabled", RRF_RT_REG_DWORD, nullptr, &v,
+                                 &size) == ERROR_SUCCESS && v;
+    auto num = [&](const wchar_t* name, int def, int lo, int hi) {
+        DWORD x = 0, sz = sizeof(x);
+        if (RegGetValueW(HKEY_LOCAL_MACHINE, setKey, name, RRF_RT_REG_DWORD, nullptr, &x, &sz) != ERROR_SUCCESS)
+            return def;
+        int i = (int)x;
+        return i < lo ? lo : (i > hi ? hi : i);
+    };
+    auto str = [&](const wchar_t* name, wchar_t* out, DWORD cch, const wchar_t* def) {
+        DWORD sz = cch * sizeof(wchar_t);
+        if (RegGetValueW(HKEY_LOCAL_MACHINE, setKey, name, RRF_RT_REG_SZ, nullptr, out, &sz) != ERROR_SUCCESS)
+            wcsncpy_s(out, cch, def, _TRUNCATE);
+    };
+    auto col = [&](const wchar_t* name, std::uint32_t def) {
+        wchar_t b[32];
+        str(name, b, 32, L"");
+        std::uint32_t rgb;
+        return HexColorToRgb(b, &rgb) ? rgb : def;
+    };
+    d.live = installed && !disabled;
+    d.on = d.live && num(L"titleDock.enabled", 1, 0, 1);
+    d.hover = num(L"titleDock.hover", 1, 0, 1) != 0;
+    d.shine = num(L"titleDock.glassShine", 1, 0, 1) != 0;
+    d.padX = num(L"titleDock.paddingX", 8, 0, 30);
+    d.padY = num(L"titleDock.paddingY", 4, 0, 12);
+    d.radius = num(L"titleDock.radius", 8, 0, 20);
+    d.edge = num(L"titleDock.edgeWidth", 2, 1, 4);
+    d.fillA = num(L"titleDock.fillOpacity", 45, 0, 100);
+    d.fill = col(L"titleDock.fillColor", d.fill);
+    d.edgeC = col(L"titleDock.edgeColor", d.edgeC);
+    d.h1 = col(L"titleDock.hoverStart", d.h1);
+    d.h2 = col(L"titleDock.hoverEnd", d.h2);
+    if (d.live) {
+        wchar_t fam[64], w[16];
+        str(L"titleFont.family", fam, 64, L"FiraCode Nerd Font");
+        const wchar_t* a = fam;
+        while (*a == L' ') a++;
+        wcsncpy_s(d.family, a, _TRUNCATE);
+        size_t n = wcslen(d.family);
+        while (n && d.family[n - 1] == L' ') d.family[--n] = 0;
+        str(L"titleFont.weight", w, 16, L"500");
+        int wt = _wtoi(w);
+        d.weight = (wt >= 100 && wt <= 950) ? wt : 0;
+    }
+    g_dockLook = d;
+    return g_dockLook;
+}
+
+static int CALLBACK DockFontFound(const LOGFONTW*, const TEXTMETRICW*, DWORD, LPARAM found) {
+    *(bool*)found = true;
+    return 0;
+}
+
+static bool DockFontExists(HDC dc, const wchar_t* face) {
+    LOGFONTW lf{};
+    lf.lfCharSet = DEFAULT_CHARSET;
+    wcsncpy_s(lf.lfFaceName, face, _TRUNCATE);
+    bool found = false;
+    EnumFontFamiliesExW(dc, &lf, DockFontFound, (LPARAM)&found, 0);
+    return found;
+}
+
+// The title font Seamless Title Bars uses. GDI lists FiraCode's weights as their own
+// families ("FiraCode Nerd Font Med"), so a matching style family is preferred.
+static HFONT DockTitleFont(HDC dc, const LOGFONTW& base, const TitleDockLook& d) {
+    LOGFONTW lf = base;
+    if (!d.live || !d.family[0]) return CreateFontIndirectW(&lf);
+    static const wchar_t* light[] = {L" Light", nullptr};
+    static const wchar_t* medium[] = {L" Med", L" Medium", nullptr};
+    static const wchar_t* semi[] = {L" SemBd", L" SemiBold", L" Semibold", nullptr};
+    const wchar_t** tries = d.weight == 300 ? light : d.weight == 500 ? medium : d.weight == 600 ? semi : nullptr;
+    for (int i = 0; tries && tries[i]; ++i) {
+        wchar_t face[LF_FACESIZE];
+        if (_snwprintf_s(face, _TRUNCATE, L"%s%s", d.family, tries[i]) < 0) continue;
+        if (DockFontExists(dc, face)) {
+            wcsncpy_s(lf.lfFaceName, face, _TRUNCATE);
+            lf.lfWeight = FW_NORMAL;
+            return CreateFontIndirectW(&lf);
+        }
+    }
+    if (!DockFontExists(dc, d.family)) return CreateFontIndirectW(&lf);
+    wcsncpy_s(lf.lfFaceName, d.family, _TRUNCATE);
+    if (d.weight) lf.lfWeight = d.weight;
+    return CreateFontIndirectW(&lf);
+}
+
+static float DockSdf(float px, float py, float l, float t, float r, float b, float rad) {
+    float qx = std::fabs(px - (l + r) / 2) - ((r - l) / 2 - rad);
+    float qy = std::fabs(py - (t + b) / 2) - ((b - t) / 2 - rad);
+    float ox = std::max(qx, 0.0f), oy = std::max(qy, 0.0f);
+    return std::sqrt(ox * ox + oy * oy) + std::min(std::max(qx, qy), 0.0f) - rad;
+}
+
+// Source-over of a straight colour onto premultiplied BGRA.
+static void DockBlend(RGBQUAD& d, std::uint32_t rgb, float a) {
+    if (a <= 0.0f) return;
+    if (a > 1.0f) a = 1.0f;
+    float ia = 1.0f - a;
+    d.rgbRed = (BYTE)std::lround(((rgb >> 16) & 0xFF) * a + d.rgbRed * ia);
+    d.rgbGreen = (BYTE)std::lround(((rgb >> 8) & 0xFF) * a + d.rgbGreen * ia);
+    d.rgbBlue = (BYTE)std::lround((rgb & 0xFF) * a + d.rgbBlue * ia);
+    d.rgbReserved = (BYTE)std::lround(255.0f * a + d.rgbReserved * ia);
+}
+
+static std::uint32_t DockMix(std::uint32_t a, std::uint32_t b, float t) {
+    auto ch = [&](int s) {
+        float x = ((a >> s) & 0xFF) + (((int)((b >> s) & 0xFF) - (int)((a >> s) & 0xFF)) * t);
+        return (std::uint32_t)std::lround(x) << s;
+    };
+    return ch(16) | ch(8) | ch(0);
+}
+
+// Fill, top shine and edge (grey at rest, blue to mauve on hover), antialiased per pixel.
+static void DrawDockPixels(RGBQUAD* px, int stride, int w, int h, const RECT& rc, const TitleDockLook& d,
+                           float hoverP, UINT dpi) {
+    float s = dpi / 96.0f;
+    float l = (float)rc.left, t = (float)rc.top, r = (float)rc.right, b = (float)rc.bottom;
+    float ew = std::max(1.0f, std::round(d.edge * s));
+    float rad = std::min(d.radius * s, std::min(r - l, b - t) / 2.0f);
+    float hoverA = d.hover ? 1.0f - (1.0f - hoverP) * (1.0f - hoverP) : 0.0f;   // ease-out
+    float W = r - l, H = b - t, diag = W * W + H * H;
+    float mid = (t + b) / 2;
+    for (int y = std::max(0, (int)t - 1); y < std::min(h, (int)b + 1); ++y) {
+        RGBQUAD* row = px + y * stride;
+        for (int x = std::max(0, (int)l - 1); x < std::min(w, (int)r + 1); ++x) {
+            float cx = x + 0.5f, cy = y + 0.5f;
+            float sd = DockSdf(cx, cy, l, t, r, b, rad);
+            float outer = std::clamp(0.5f - sd, 0.0f, 1.0f);
+            if (outer <= 0.0f) continue;
+            float inner = std::clamp(0.5f - (sd + ew), 0.0f, 1.0f);
+            DockBlend(row[x], d.fill, outer * d.fillA / 100.0f);
+            if (d.shine && cy < mid && mid > t)
+                DockBlend(row[x], 0xFFFFFF, inner * 0.07f * (1.0f - (cy - t) / (mid - t)));
+            float ec = outer - inner;
+            if (ec > 0.0f) {
+                if (hoverA < 0.999f) DockBlend(row[x], d.edgeC, ec * 0.9f * (1.0f - hoverA));
+                if (hoverA > 0.003f) {
+                    float g = diag > 0 ? std::clamp(((cx - l) * W + (cy - t) * H) / diag, 0.0f, 1.0f) : 0.0f;
+                    DockBlend(row[x], DockMix(d.h1, d.h2, g), ec * hoverA);
+                }
+            }
+        }
+    }
+}
+
+// Seamless Title Bars' tool opens its dock menu on a right-click inside the dock its DWM
+// part last reported. Reporting this dock the same way gives this window the same menu.
+struct DockHotBlock {
+    volatile LONG seq;
+    volatile LONG fontSeq;
+    ULONGLONG hwnd;
+    LONG dockL, dockR, band, pad;
+    ULONGLONG tick;
+};
+static HANDLE g_dockHotMap;
+static DockHotBlock* g_dockHot;
+static ULONGLONG g_dockHotTry;
+
+static void DockReportHot(HWND hwnd) {
+    if (!g_dockHot) {
+        ULONGLONG now = GetTickCount64();
+        if (g_dockHotTry && now - g_dockHotTry < 2000) return;
+        g_dockHotTry = now;
+        HANDLE m = OpenFileMappingW(FILE_MAP_READ | FILE_MAP_WRITE, FALSE, L"Local\\SeamlessTitleBarsHotDock");
+        if (!m) return;
+        void* v = MapViewOfFile(m, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, sizeof(DockHotBlock));
+        if (!v) {
+            CloseHandle(m);
+            return;
+        }
+        g_dockHotMap = m;
+        g_dockHot = (DockHotBlock*)v;
+    }
+    // Client and window origins are the same here (the caption is folded into the client).
+    RECT wr;
+    POINT origin{};
+    if (!GetWindowRect(hwnd, &wr) || !ClientToScreen(hwnd, &origin)) return;
+    LONG dx = origin.x - wr.left, dy = origin.y - wr.top;
+    DockHotBlock* b = g_dockHot;
+    InterlockedIncrement(&b->seq);
+    b->hwnd = (ULONGLONG)(ULONG_PTR)hwnd;
+    b->dockL = g_dockRect.left + dx;
+    b->dockR = g_dockRect.right + dx;
+    b->band = g_dockRect.bottom + dy;
+    b->tick = GetTickCount64();
+    InterlockedIncrement(&b->seq);
+}
+
+static void DockCloseHot() {
+    if (g_dockHot) UnmapViewOfFile(g_dockHot);
+    if (g_dockHotMap) CloseHandle(g_dockHotMap);
+    g_dockHot = nullptr;
+    g_dockHotMap = nullptr;
+}
+
+// Caption strip of the window, client coordinates.
+static RECT DockCaptionRect(HWND hwnd) {
+    RECT rc{};
+    GetClientRect(hwnd, &rc);
+    rc.bottom = CaptionHeight(GetDpiForWindow(hwnd));
+    return rc;
+}
+
+static bool CursorOnDock(HWND hwnd) {
+    POINT pt, client;
+    if (IsRectEmpty(&g_dockRect) || hwnd != g_dockHwnd || !GetCursorPos(&pt)) return false;
+    HWND under = WindowFromPoint(pt);
+    if (!under || GetAncestor(under, GA_ROOT) != hwnd) return false;
+    client = pt;
+    return ScreenToClient(hwnd, &client) && PtInRect(&g_dockRect, client);
+}
+
+static void DockHoverTo(HWND hwnd, int want) {
+    if (!DockLook().hover) want = 0;
+    if (want == g_dockHoverWant && (want ? g_dockHoverP >= 1.0f : g_dockHoverP <= 0.0f)) return;
+    g_dockHoverWant = want;
+    SetTimer(hwnd, kDockTimer, 15, nullptr);
+}
+
+// 150 ms ease each way. While hovered the pointer is checked on each tick, so leaving is
+// seen even when the next hit lands on the page below the caption.
+static void DockTimerTick(HWND hwnd) {
+    if (g_dockHoverWant && !CursorOnDock(hwnd)) g_dockHoverWant = 0;
+    float p = std::clamp(g_dockHoverP + (g_dockHoverWant ? 0.1f : -0.1f), 0.0f, 1.0f);
+    if (p != g_dockHoverP) {
+        g_dockHoverP = p;
+        RECT cap = DockCaptionRect(hwnd);
+        InvalidateRect(hwnd, &cap, FALSE);
+        return;
+    }
+    if (g_dockHoverWant) SetTimer(hwnd, kDockTimer, 100, nullptr);   // settled on: slow watch
+    else KillTimer(hwnd, kDockTimer);
+}
+
+static void DockMouseMove(HWND hwnd, LPARAM lparam) {
+    POINT pt{(short)LOWORD(lparam), (short)HIWORD(lparam)};
+    bool on = hwnd == g_dockHwnd && !IsRectEmpty(&g_dockRect) && ScreenToClient(hwnd, &pt) &&
+              PtInRect(&g_dockRect, pt);
+    if (on) DockReportHot(hwnd);
+    DockHoverTo(hwnd, on ? 1 : 0);
+}
+
+// Dock rectangle around the icon and the title text, centred in the caption strip.
+static void PaintDock(HWND hwnd, HDC paintDc, RGBQUAD* pixels, int stride, const RECT& client, int iconX, int icon,
+                      const RECT& text, const wchar_t* title, UINT dpi) {
+    const TitleDockLook& d = DockLook();
+    g_dockHwnd = hwnd;
+    SetRectEmpty(&g_dockRect);
+    if (!d.on || !pixels) return;
+    SIZE size{};
+    TEXTMETRICW tm{};
+    GetTextExtentPoint32W(paintDc, title, lstrlenW(title), &size);
+    GetTextMetricsW(paintDc, &tm);
+    int textEnd = std::min((int)text.left + (int)size.cx, (int)text.right);
+    if (!title[0]) textEnd = iconX + icon;
+    int padX = MulDiv(d.padX, dpi, 96), padY = MulDiv(d.padY, dpi, 96);
+    int content = std::max(icon, (int)tm.tmHeight);
+    int margin = std::max(1, MulDiv(2, dpi, 96));
+    int height = std::min(content + 2 * padY, (int)client.bottom - 2 * margin);
+    RECT rc{iconX - padX, (client.bottom - height) / 2, textEnd + padX, 0};
+    rc.bottom = rc.top + height;
+    rc.left = std::max(rc.left, (LONG)margin);
+    if (rc.right <= rc.left || height <= 0) return;
+    g_dockRect = rc;
+    DrawDockPixels(pixels, stride, client.right, client.bottom, rc, d, g_dockHoverP, dpi);
+}
+
 static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
     RECT client;
     GetClientRect(hwnd, &client);
@@ -1753,7 +2096,8 @@ static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
     if (buffer) {
         RGBQUAD* pixels = nullptr;
         int stride = 0;
-        if (SUCCEEDED(GetBufferedPaintBits(buffer, &pixels, &stride))) {
+        bool bitsOk = SUCCEEDED(GetBufferedPaintBits(buffer, &pixels, &stride));
+        if (bitsOk) {
             // The strip stays clear, like any Windows title bar over a backdrop:
             // DWM draws the caption buttons under the client, so a tint here
             // would dim them, and a hole cut for them would show as a box.
@@ -1764,7 +2108,7 @@ static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
         UINT dpi = GetDpiForWindow(hwnd);
         NONCLIENTMETRICSW metrics{sizeof(metrics)};
         SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0, dpi);
-        HFONT font = CreateFontIndirectW(&metrics.lfCaptionFont);
+        HFONT font = DockTitleFont(paintDc, metrics.lfCaptionFont, DockLook());
         HGDIOBJ oldFont = font ? SelectObject(paintDc, font) : nullptr;
         HTHEME theme = OpenThemeData(hwnd, L"WINDOW");
         int icon = GetSystemMetricsForDpi(SM_CXSMICON, dpi);
@@ -1784,6 +2128,7 @@ static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
             text.left = left;
             iconX = left - gap - icon;
         }
+        PaintDock(hwnd, paintDc, bitsOk ? pixels : nullptr, stride, client, iconX, icon, text, title, dpi);
         if (theme) {
             DTTOPTS options{sizeof(options)};
             options.dwFlags = DTT_COMPOSITED | DTT_TEXTCOLOR;
@@ -1878,6 +2223,11 @@ static void ShowSystemMenu(HWND hwnd, POINT pt) {
 // Keep activation visual only; keyboard focus and WM_ACTIVATE retain their real state.
 static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
                                       LPARAM lparam, DWORD_PTR) {
+    if (message == WM_TIMER && wparam == kDockTimer) {
+        if (InterlockedExchangeAdd(&g_themeActive, 0)) DockTimerTick(hwnd);
+        else KillTimer(hwnd, kDockTimer);
+        return 0;
+    }
     if (!InterlockedExchangeAdd(&g_themeActive, 0)) {
         return DefSubclassProc(hwnd, message, wparam, lparam);
     }
@@ -1927,6 +2277,8 @@ static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
             LRESULT ignored = 0;
             DwmDefWindowProc(hwnd, message, wparam, lparam, &ignored);
         }
+        if (message == WM_NCMOUSEMOVE) DockMouseMove(hwnd, lparam);
+        if (message == WM_NCMOUSELEAVE && !CursorOnDock(hwnd)) DockHoverTo(hwnd, 0);
         if (message == WM_NCRBUTTONUP && (wparam == HTCAPTION || wparam == HTSYSMENU)) {
             ShowSystemMenu(hwnd, POINT{(short)LOWORD(lparam), (short)HIWORD(lparam)});
             return 0;
@@ -1998,6 +2350,9 @@ static void PrepareMainWindow(HWND hwnd) {
         POINT origin{};
         bool preserveClient = !IsZoomed(hwnd) && GetWindowRect(hwnd, &frame) &&
                               GetClientRect(hwnd, &client) && ClientToScreen(hwnd, &origin);
+        // Material first, so the window never shows the stock frame even if
+        // it is shown before the next pass.
+        ApplyWindowStack(hwnd, SnapshotSettings());
         if (!WindhawkUtils::SetWindowSubclassFromAnyThread(hwnd, MainWindowProc, 0)) return;
         g_mainWindows.insert(hwnd);
         // Preserve the saved client size when folding the old frame into it.
@@ -2185,6 +2540,90 @@ static void RestorePatches() {
     InterlockedExchange(&g_patchCount, 0);
 }
 
+// The first background put on a controller comes after the controller is
+// made and before the shell navigates it, so the theme script is registered
+// there, in-process: it then runs on document creation for the very first
+// page, with no wait on the debugging port.
+static const GUID kIidController = {0x4d00c0d1, 0x9434, 0x4eb6, {0x80, 0x78, 0x86, 0x97, 0xa5, 0x60, 0x33, 0x4f}};
+static const GUID kIidAddScriptDone = {0xb99369f3, 0x9b11, 0x47b5, {0xbc, 0x6f, 0x8e, 0x78, 0x95, 0xfc, 0xea, 0x17}};
+static const GUID kIidAgile = {0x94ea2b94, 0xe9cc, 0x49e0, {0xc0, 0xff, 0xee, 0x64, 0xca, 0x8f, 0x5b, 0x90}};
+
+struct AddScriptDone;
+struct AddScriptDoneVtbl {
+    HRESULT(STDMETHODCALLTYPE* QueryInterface)(AddScriptDone*, REFIID, void**);
+    ULONG(STDMETHODCALLTYPE* AddRef)(AddScriptDone*);
+    ULONG(STDMETHODCALLTYPE* Release)(AddScriptDone*);
+    HRESULT(STDMETHODCALLTYPE* Invoke)(AddScriptDone*, HRESULT, LPCWSTR);
+};
+struct AddScriptDone {
+    const AddScriptDoneVtbl* vtbl;
+};
+static HRESULT STDMETHODCALLTYPE AddScriptDone_QueryInterface(AddScriptDone* self, REFIID iid, void** out) {
+    if (!out) return E_POINTER;
+    static const GUID kIidUnknown = {0x00000000, 0x0000, 0x0000, {0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}};
+    if (IsEqualGUID(iid, kIidUnknown) ||IsEqualGUID(iid, kIidAddScriptDone) || IsEqualGUID(iid, kIidAgile)) {
+        *out = self;
+        return S_OK;
+    }
+    *out = nullptr;
+    return E_NOINTERFACE;
+}
+static ULONG STDMETHODCALLTYPE AddScriptDone_AddRef(AddScriptDone*) { return 1; }
+static ULONG STDMETHODCALLTYPE AddScriptDone_Release(AddScriptDone*) { return 1; }
+static HRESULT STDMETHODCALLTYPE AddScriptDone_Invoke(AddScriptDone*, HRESULT hr, LPCWSTR) {
+    DebugNote("early script registered, hr", (long)hr);
+    return S_OK;
+}
+static const AddScriptDoneVtbl g_addScriptDoneVtbl = {AddScriptDone_QueryInterface, AddScriptDone_AddRef,
+                                                      AddScriptDone_Release, AddScriptDone_Invoke};
+static AddScriptDone g_addScriptDone = {&g_addScriptDoneVtbl};
+
+static void* g_scriptedWebviews[8];
+static int g_scriptedCount = 0;
+
+typedef HRESULT(STDMETHODCALLTYPE* ComQi_t)(void*, REFIID, void**);
+typedef ULONG(STDMETHODCALLTYPE* ComRelease_t)(void*);
+typedef HRESULT(STDMETHODCALLTYPE* GetCoreWebView_t)(void*, void**);
+typedef HRESULT(STDMETHODCALLTYPE* AddScript_t)(void*, LPCWSTR, AddScriptDone*);
+typedef HRESULT(STDMETHODCALLTYPE* PutBackground_t)(void*, DWORD);
+
+static void AddEarlyScript(void* object) {
+    // Only a real webview controller: QueryInterface is slot 0 on any COM object.
+    void* controller = nullptr;
+    if (FAILED(((ComQi_t)(*(void***)object)[0])(object, kIidController, &controller)) || !controller) {
+        DebugNote("early script: not a controller");
+        return;
+    }
+    void* core = nullptr;
+    // ICoreWebView2Controller::get_CoreWebView2, slot 25
+    HRESULT hr = ((GetCoreWebView_t)(*(void***)controller)[25])(controller, &core);
+    ((ComRelease_t)(*(void***)controller)[2])(controller);
+    if (FAILED(hr) || !core) return;
+    bool seen = false;
+    for (int i = 0; i < g_scriptedCount; i++) seen = seen || g_scriptedWebviews[i] == core;
+    if (!seen && g_scriptedCount < 8) {
+        g_scriptedWebviews[g_scriptedCount++] = core;
+        std::string js = "window.whEarlyAt=performance.now();" + BuildInjectJs(SnapshotSettings());
+        int n = MultiByteToWideChar(CP_UTF8, 0, js.c_str(), (int)js.size(), nullptr, 0);
+        std::wstring wjs((size_t)n, L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, js.c_str(), (int)js.size(), &wjs[0], n);
+        // ICoreWebView2::AddScriptToExecuteOnDocumentCreated, slot 27
+        hr = ((AddScript_t)(*(void***)core)[27])(core, wjs.c_str(), &g_addScriptDone);
+        DebugNote("early script added, ms", (long)(GetTickCount64() - g_startTick));
+        if (FAILED(hr)) DebugNote("early script failed, hr", (long)hr);
+    }
+    ((ComRelease_t)(*(void***)core)[2])(core);
+}
+
+// Reached by a tail jump from the call-site stub, so the stack is exactly the
+// original call's. Runs on the interface thread, as the original put does.
+static HRESULT STDMETHODCALLTYPE PutBackground_hook(void* self, DWORD color) {
+    if (InterlockedExchangeAdd(&g_themeActive, 0)) AddEarlyScript(self);
+    // COREWEBVIEW2_COLOR is {A, R, G, B} by value: alpha is the low byte.
+    color &= ~(DWORD)0xFF;
+    return ((PutBackground_t)(*(void***)self)[27])(self, color);
+}
+
 static void PatchPutSites() {
     HMODULE mainModule = GetModuleHandleW(nullptr);
     IMAGE_DOS_HEADER* dos = (IMAGE_DOS_HEADER*)mainModule;
@@ -2207,14 +2646,13 @@ static void PatchPutSites() {
 
     // stub per site, written into the .text section's tail page padding (the
     // mapped region between VirtualSize and the section's page end: zero
-    // padding, executable, unused). The stub masks the alpha byte of the
-    // by-value color argument (EDX, whose low byte is COREWEBVIEW2_COLOR.A)
-    // and TAIL-JUMPS to the original target: the stack state the callee sees
-    // is then byte-for-byte the original direct call's, which keeps the
-    // callee's stack alignment intact (an extra call frame shifts rsp by 8
-    // and the runtime's movaps stores fault on it).
-    //   mov dl, 0                  B2 00
-    //   jmp qword ptr [rax+0xD8]   FF A0 D8 00 00 00
+    // padding, executable, unused). The stub TAIL-JUMPS to PutBackground_hook,
+    // which clears the alpha and calls the real put: the stack state the hook
+    // sees is then byte-for-byte the original direct call's, which keeps
+    // stack alignment intact (an extra call frame shifts rsp by 8 and the
+    // runtime's movaps stores fault on it).
+    //   mov rax, PutBackground_hook   48 B8 imm64
+    //   jmp rax                       FF E0
     const unsigned char pattern[8] = {0xFF, 0x90, 0xD8, 0x00, 0x00, 0x00, 0x85, 0xC0};
     // the tail padding starts after VirtualSize, 16-aligned
     unsigned char* tailBase = (unsigned char*)(((std::uintptr_t)(codeLO + codeSize) + 15) & ~15);
@@ -2262,9 +2700,10 @@ static void PatchPutSites() {
             continue;
         }
         unsigned char* stub = cave;
-        stub[0] = 0xB2; stub[1] = 0x00;                      // mov dl, 0
-        stub[2] = 0xFF; stub[3] = 0xA0;                      // jmp qword ptr [rax+0xD8]
-        memcpy(stub + 4, &pattern[2], 4);                    // D8 00 00 00
+        std::uint64_t hookAddress = (std::uint64_t)(void*)PutBackground_hook;
+        stub[0] = 0x48; stub[1] = 0xB8;                      // mov rax, imm64
+        memcpy(stub + 2, &hookAddress, 8);
+        stub[10] = 0xFF; stub[11] = 0xE0;                    // jmp rax
         FlushInstructionCache(GetCurrentProcess(), cave, 32);
         VirtualProtect(cave, 32, tmp, &tmp);
 
@@ -2314,19 +2753,46 @@ static bool SendAll(SOCKET sock, const void* buffer, int size) {
     return true;
 }
 
-static bool HttpGetJson(int port, const char* path, std::string* out) {
+// Connects to the local debugging port without blocking. A refused loopback
+// connect retries for about two seconds on Windows, which alone would hold
+// the theme back that long while the webview is still starting, so a short
+// timeout is used and the caller simply polls again.
+static SOCKET ConnectLoopback(int port, int timeoutMs) {
     SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sock == INVALID_SOCKET) return false;
+    if (sock == INVALID_SOCKET) return INVALID_SOCKET;
+    u_long nonBlocking = 1;
+    ioctlsocket(sock, FIONBIO, &nonBlocking);
     sockaddr_in addr = {};
     addr.sin_family = AF_INET;
     addr.sin_port = htons((u_short)port);
     addr.sin_addr.s_addr = htonl(0x7f000001);  // 127.0.0.1
     if (connect(sock, (sockaddr*)&addr, sizeof(addr)) != 0) {
-        closesocket(sock);
-        return false;
+        if (WSAGetLastError() != WSAEWOULDBLOCK) {
+            closesocket(sock);
+            return INVALID_SOCKET;
+        }
+        fd_set writable, failed;
+        FD_ZERO(&writable);
+        FD_ZERO(&failed);
+        FD_SET(sock, &writable);
+        FD_SET(sock, &failed);
+        timeval tv{timeoutMs / 1000, (timeoutMs % 1000) * 1000};
+        if (select(0, nullptr, &writable, &failed, &tv) != 1 || !FD_ISSET(sock, &writable)) {
+            closesocket(sock);
+            return INVALID_SOCKET;
+        }
     }
+    nonBlocking = 0;
+    ioctlsocket(sock, FIONBIO, &nonBlocking);
     DWORD timeout = 3000;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof(timeout));
+    return sock;
+}
+
+static bool HttpGet(int port, const char* path, std::string* out) {
+    SOCKET sock = ConnectLoopback(port, 60);
+    if (sock == INVALID_SOCKET) return false;
     std::string request = std::string("GET ") + path + " HTTP/1.1\r\nHost: 127.0.0.1:" + std::to_string(port) + "\r\nConnection: close\r\n\r\n";
     if (!SendAll(sock, request.c_str(), (int)request.size())) {
         closesocket(sock);
@@ -2338,14 +2804,13 @@ static bool HttpGetJson(int port, const char* path, std::string* out) {
         int n = recv(sock, chunk, sizeof(chunk), 0);
         if (n <= 0) break;
         out->append(chunk, n);
-        if (out->size() > (1 << 22)) break;
+        if (out->size() > (1 << 20)) break;
     }
     closesocket(sock);
     size_t bodyAt = out->find("\r\n\r\n");
     if (bodyAt == std::string::npos) return false;
     *out = out->substr(bodyAt + 4);
-    return out->find("tauri.localhost") != std::string::npos &&
-           out->find("webSocketDebuggerUrl") != std::string::npos;
+    return true;
 }
 
 static bool JsonStringValue(const std::string& json, const char* key, std::string* value) {
@@ -2359,17 +2824,6 @@ static bool JsonStringValue(const std::string& json, const char* key, std::strin
     if (quoteEnd == std::string::npos) return false;
     *value = json.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
     return true;
-}
-
-// /json lists every debuggable target. Take the socket of the interface's own
-// page, not whichever target happens to be listed first.
-static bool FindPageSocketUrl(const std::string& json, std::string* wsUrl) {
-    size_t page = json.find("tauri.localhost");
-    if (page == std::string::npos) return false;
-    size_t start = json.rfind('{', page);
-    size_t end = json.find('}', page);
-    if (start == std::string::npos || end == std::string::npos) return false;
-    return JsonStringValue(json.substr(start, end - start + 1), "webSocketDebuggerUrl", wsUrl);
 }
 
 static void WsEncodeFrame(const std::string& payload, std::string* frame) {
@@ -2463,19 +2917,8 @@ static bool WsConnect(int port, const std::string& wsUrl, SOCKET* out) {
     std::string path = wsUrl.substr(prefix.size());
     if (path.empty() || path[0] != '/') return false;
 
-    SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    SOCKET sock = ConnectLoopback(port, 1000);
     if (sock == INVALID_SOCKET) return false;
-    sockaddr_in addr = {};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons((u_short)port);
-    addr.sin_addr.s_addr = htonl(0x7f000001);
-    if (connect(sock, (sockaddr*)&addr, sizeof(addr)) != 0) {
-        closesocket(sock);
-        return false;
-    }
-    DWORD timeout = 4000;
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
-    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof(timeout));
 
     unsigned char rawKey[16];
     for (int i = 0; i < 16; i++) rawKey[i] = (unsigned char)(rand() & 0xff);
@@ -2514,29 +2957,196 @@ static bool WsConnect(int port, const std::string& wsUrl, SOCKET* out) {
     return true;
 }
 
-// Push the theme CSS; the surface alpha is handled by the patched put sites.
-static bool CdpPushTheme(int port, const std::string& wsUrl, const std::string& jsExpression) {
-    SOCKET sock;
-    if (!WsConnect(port, wsUrl, &sock)) return false;
-    std::string req = "{\"id\":10,\"method\":\"Runtime.evaluate\",\"params\":{\"expression\":\"" + JsonEscape(jsExpression) + "\",\"returnByValue\":true}}";
-    std::string f1;
-    WsEncodeFrame(req, &f1);
-    bool ok = false;
-    if (SendAll(sock, f1.c_str(), (int)f1.size())) {
+// The theme rides on one debugger session that stays open for the life of the
+// interface. It attaches to the webview's page as soon as the page exists,
+// with the page held until the stylesheet is registered, and Chromium then
+// runs the stylesheet script in every document of that page before any of
+// Windhawk's own scripts and before the first paint, reloads included. The
+// registration lasts only while the session is open, so it is never closed
+// while the interface runs.
+static bool StopRequested() {
+    return !g_stopEvent || WaitForSingleObject(g_stopEvent, 0) == WAIT_OBJECT_0;
+}
+
+static bool WsSendText(SOCKET sock, const std::string& payload) {
+    std::string frame;
+    WsEncodeFrame(payload, &frame);
+    return SendAll(sock, frame.c_str(), (int)frame.size());
+}
+
+static bool WaitReadable(SOCKET sock, int timeoutMs) {
+    fd_set readable;
+    FD_ZERO(&readable);
+    FD_SET(sock, &readable);
+    timeval tv{timeoutMs / 1000, (timeoutMs % 1000) * 1000};
+    return select(0, &readable, nullptr, nullptr, &tv) == 1;
+}
+
+static long MsSinceStart() {
+    return (long)(GetTickCount64() - g_startTick);
+}
+
+static void RunBrowserSession(SOCKET sock, const std::string& js) {
+    static const char kProbe[] =
+        "(()=>{const s=document.getElementById('wh-styler-style');"
+        "return s&&s.isConnected&&document.querySelector('[data-testid=nav-home]')?'ok':'wait'})()";
+    const std::string source = JsonEscape(js);
+    int nextId = 1;
+    auto send = [&](const std::string& session, const std::string& rest) {
+        std::string msg = "{";
+        if (!session.empty()) msg += "\"sessionId\":\"" + session + "\",";
+        msg += "\"id\":" + std::to_string(nextId++) + "," + rest + "}";
+        return WsSendText(sock, msg);
+    };
+    // Every target created from now on waits for us; pages that already exist
+    // are attached as they run.
+    if (!send("", "\"method\":\"Target.setAutoAttach\",\"params\":{\"autoAttach\":true,"
+                  "\"waitForDebuggerOnStart\":true,\"flatten\":true}")) {
+        return;
+    }
+    std::string pageSession;
+    int probeId = 0;
+    unsigned long long nextProbe = 0;
+    while (!StopRequested()) {
+        if (!g_pageReady && !pageSession.empty() && GetTickCount64() >= nextProbe) {
+            probeId = nextId;
+            if (!send(pageSession, "\"method\":\"Runtime.evaluate\",\"params\":{\"expression\":\"" +
+                                       JsonEscape(kProbe) + "\",\"returnByValue\":true}")) {
+                return;
+            }
+            nextProbe = GetTickCount64() + 100;
+        }
+        if (!WaitReadable(sock, 50)) continue;
         std::string msg;
-        int opcode;
-        for (int i = 0; i < 20; i++) {
-            if (!WsReadMessage(sock, &msg, &opcode)) break;
-            if (opcode != 0x1) continue;
-            if (msg.find("\"id\":10") != std::string::npos) {
-                ok = msg.find("\"error\"") == std::string::npos && msg.find("\"value\":\"ok") != std::string::npos;
-                break;
+        int opcode = 0;
+        if (!WsReadMessage(sock, &msg, &opcode)) return;
+        if (opcode != 0x1) continue;
+        if (msg.find("\"method\":\"Target.attachedToTarget\"") != std::string::npos) {
+            std::string session, type;
+            if (!JsonStringValue(msg, "\"sessionId\"", &session)) continue;
+            JsonStringValue(msg, "\"type\"", &type);
+            if (type == "page") {
+                // runImmediately also covers a document that is already up
+                // (the mod loading into a running interface).
+                send(session, "\"method\":\"Page.addScriptToEvaluateOnNewDocument\",\"params\":{\"source\":\"" +
+                                  source + "\",\"runImmediately\":true}");
+                pageSession = session;
+                nextProbe = 0;
+                DebugNote("page attached, ms", MsSinceStart());
+            }
+            // Always release the target, page or not, or it would stay frozen.
+            send(session, "\"method\":\"Runtime.runIfWaitingForDebugger\"");
+        } else if (msg.find("\"method\":\"Target.detachedFromTarget\"") != std::string::npos) {
+            std::string session;
+            if (JsonStringValue(msg, "\"sessionId\"", &session) && session == pageSession) pageSession.clear();
+        } else if (probeId && msg.find("{\"id\":" + std::to_string(probeId) + ",") == 0) {
+            if (msg.find("\"value\":\"ok\"") != std::string::npos && !g_pageReady) {
+                g_pageReady = true;
+                DebugNote("page styled and drawn, ms", MsSinceStart());
             }
         }
     }
-    shutdown(sock, SD_BOTH);
-    closesocket(sock);
-    return ok;
+}
+
+// The process listening on a local port, or 0.
+static DWORD PortOwnerPid(int port) {
+    ULONG size = 0;
+    GetExtendedTcpTable(nullptr, &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0);
+    std::vector<char> buffer(size + 4096);
+    size = (ULONG)buffer.size();
+    if (GetExtendedTcpTable(buffer.data(), &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0) != NO_ERROR) {
+        return 0;
+    }
+    auto* table = (MIB_TCPTABLE_OWNER_PID*)buffer.data();
+    for (DWORD i = 0; i < table->dwNumEntries; i++) {
+        if (ntohs((u_short)table->table[i].dwLocalPort) == port) return table->table[i].dwOwningPid;
+    }
+    return 0;
+}
+
+static bool IsChildOfThisProcess(DWORD pid) {
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return false;
+    PROCESSENTRY32W entry = {sizeof(entry)};
+    bool child = false;
+    for (BOOL more = Process32FirstW(snapshot, &entry); more; more = Process32NextW(snapshot, &entry)) {
+        if (entry.th32ProcessID == pid) {
+            child = entry.th32ParentProcessID == GetCurrentProcessId();
+            break;
+        }
+    }
+    CloseHandle(snapshot);
+    return child;
+}
+
+static DWORD WINAPI CdpSessionThread(LPVOID) {
+    WSADATA wsa;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return 1;
+    // The look is fixed for the life of this process: a save reopens the
+    // interface, and the new process builds its own script.
+    const std::string js = BuildInjectJs(SnapshotSettings());
+    DWORD checkedOwner = 0;
+    bool ownerIsChild = false;
+    while (!StopRequested()) {
+        // Windhawk runs more than one interface process (a broker, a tray
+        // companion), and the mod loads in each. Only the process whose child
+        // is the webview's browser holds the session: several sessions each
+        // holding new pages would leave the page waiting on the slowest one.
+        DWORD owner = PortOwnerPid(g_cdpPort);
+        if (owner != checkedOwner) {
+            checkedOwner = owner;
+            ownerIsChild = owner && IsChildOfThisProcess(owner);
+        }
+        std::string body, wsUrl;
+        // Only the webview's own browser: its version string names Edge.
+        if (ownerIsChild && HttpGet(g_cdpPort, "/json/version", &body) && body.find("Edg/") != std::string::npos &&
+            JsonStringValue(body, "\"webSocketDebuggerUrl\"", &wsUrl) &&
+            wsUrl.find("/devtools/browser/") != std::string::npos) {
+            SOCKET sock;
+            if (WsConnect(g_cdpPort, wsUrl, &sock)) {
+                DebugNote("debugger session open, ms", MsSinceStart());
+                RunBrowserSession(sock, js);
+                shutdown(sock, SD_BOTH);
+                closesocket(sock);
+                DebugNote("debugger session closed, ms", MsSinceStart());
+            }
+        }
+        // Poll tightly while the webview is starting, then gently.
+        DWORD pause = GetTickCount64() - g_startTick < 30000 ? 10 : 1000;
+        if (!g_stopEvent || WaitForSingleObject(g_stopEvent, pause) == WAIT_OBJECT_0) break;
+    }
+    WSACleanup();
+    return 0;
+}
+
+// The webview takes this port only if it is free. Another app holding it
+// (a music player was started with 9333 on 2026-11-12) would leave the
+// interface unstyled, so a free one is picked instead.
+static int PickCdpPort() {
+    WSADATA wsa;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return kCdpPort;
+    // A fixed short list first, so the port stays the same from one launch to
+    // the next, then any free port.
+    static const int kCandidates[] = {kCdpPort, 9341, 9342, 9343, 9344, 0};
+    int chosen = 0;
+    for (int candidate : kCandidates) {
+        if (chosen) break;
+        SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        if (s == INVALID_SOCKET) break;
+        BOOL exclusive = TRUE;
+        setsockopt(s, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char*)&exclusive, sizeof(exclusive));
+        sockaddr_in addr = {};
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons((u_short)candidate);
+        addr.sin_addr.s_addr = htonl(0x7f000001);
+        if (bind(s, (sockaddr*)&addr, sizeof(addr)) == 0) {
+            int len = sizeof(addr);
+            if (getsockname(s, (sockaddr*)&addr, &len) == 0) chosen = ntohs(addr.sin_port);
+        }
+        closesocket(s);
+    }
+    WSACleanup();
+    return chosen ? chosen : kCdpPort;
 }
 
 // A settings save writes the values and bumps the engine's SettingsChangeTime
@@ -2568,7 +3178,8 @@ static DWORD WINAPI StylerWorkerThread(LPVOID) {
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return 1;
     srand(GetTickCount() ^ GetCurrentProcessId());
-    int failLogged = 0;
+    unsigned long long lastFullCycle = 0;
+    long long settingsMarker = g_seenChangeTime;  // Wh_ModInit read the settings at this marker
 
     // Late attach: the webview may already exist when the mod loads (mod
     // enabled while the interface is open). One self-relaunch fixes that by
@@ -2590,7 +3201,15 @@ static DWORD WINAPI StylerWorkerThread(LPVOID) {
     }
 
     for (;;) {
-        DWORD wait = MsgWaitForMultipleObjectsEx(1, &g_stopEvent, 1000, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+        // The interface window frame (title bar, blur, borders) is set by this
+        // loop. Poll quickly while the window is still coming up, so the stock
+        // frame never shows, then settle to once a second.
+        DWORD tick = 1000;
+        if (g_isUiProcess && !InterlockedExchangeAdd(&g_frameReady, 0) &&
+            GetTickCount64() - g_startTick < 20000) {
+            tick = 15;
+        }
+        DWORD wait = MsgWaitForMultipleObjectsEx(1, &g_stopEvent, tick, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
         if (wait == WAIT_OBJECT_0) break;
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) DispatchMessageW(&msg);
@@ -2599,32 +3218,38 @@ static DWORD WINAPI StylerWorkerThread(LPVOID) {
         // Outside the interface process (engine, tray) the only job is the
         // native tray dialogs: the webview theme, the save watch and the
         // relaunch helper all belong to windhawk-ui.exe.
+        // Settings are re-read only when the save marker moves: a full read is
+        // about forty registry reads, each logged by the engine, in every
+        // process the mod runs in.
+        long long changeTime = ReadModChangeTime();
+        if (changeTime != settingsMarker) {
+            settingsMarker = changeTime;
+            Settings fresh;
+            ReadSettings(&fresh);
+            std::lock_guard<std::mutex> lock(g_settingsMutex);
+            g_settings = fresh;
+        }
+
         if (!g_isUiProcess) {
-            Settings s;
-            ReadSettings(&s);
-            {
-                std::lock_guard<std::mutex> lock(g_settingsMutex);
-                g_settings = s;
-            }
-            TrayDialogPass(s);
+            TrayDialogPass(SnapshotSettings());
             continue;
         }
 
-        // re-read the registry every cycle: cheap, and it pins the live look
-        // to the settings even if a settings-changed event is missed
-        Settings s;
-        ReadSettings(&s);
-        {
-            std::lock_guard<std::mutex> lock(g_settingsMutex);
-            g_settings = s;
+        // Fast startup ticks only dress the window; the full cycle below runs
+        // once a second as before.
+        if (tick != 1000 && GetTickCount64() - lastFullCycle < 1000) {
+            MainWindowPass();
+            ApplyToOurWindows(SnapshotSettings());
+            continue;
         }
-        ApplyToOurWindows(s);
-        MainWindowPass();
+        lastFullCycle = GetTickCount64();
 
-        // Save watch: one registry read per cycle. A save bumps the engine's
+        MainWindowPass();
+        ApplyToOurWindows(SnapshotSettings());
+
+        // Save watch, on the marker read above. A save bumps the engine's
         // marker; both this path and the settings-changed event feed the same
         // request flag below, so a missed event cannot swallow the restart.
-        long long changeTime = ReadModChangeTime();
         if (g_seenChangeTime == -1 || changeTime < 0) {
             if (changeTime >= 0) g_seenChangeTime = changeTime;  // record, no trigger
         } else if (changeTime != g_seenChangeTime) {
@@ -2686,26 +3311,8 @@ static DWORD WINAPI StylerWorkerThread(LPVOID) {
             }
         }
 
-        {
-            std::string json;
-            if (HttpGetJson(kCdpPort, "/json", &json)) {
-                std::string wsUrl;
-                if (FindPageSocketUrl(json, &wsUrl)) {
-                    std::string js = BuildInjectJs(s);
-                    bool pushed = CdpPushTheme(kCdpPort, wsUrl, js);
-                    if (pushed) g_pageReady = true;
-                    if (!pushed && failLogged < 3) {
-                        failLogged++;
-                        DebugNote("push failed");
-                    }
-                }
-            } else if (failLogged < 1) {
-                failLogged++;
-                DebugNote("http get failed");
-            }
-        }
-
-        MainWindowPass();
+        // The page theme comes from the debugger session thread, which hands
+        // the stylesheet to every new document before it paints.
     }
 
 
@@ -2747,7 +3354,6 @@ static BOOL SpawnRelaunchHelper() {
         L"Get-Process windhawk-ui -ErrorAction SilentlyContinue | Stop-Process -Force\n"
         L"$dl=(Get-Date).AddSeconds(12)\n"
         L"while((($bpArr | Measure-Object).Count -gt 0) -and (((Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Where-Object { $bpArr -contains $_.Id }) | Measure-Object).Count -gt 0) -and ((Get-Date) -lt $dl)){Start-Sleep -Milliseconds 250}\n"
-        L"$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS='--remote-debugging-port=9333'\n"
         L"try{& '%s'}catch{}\n"
         L"Start-Sleep -Seconds 2\n"
         L"$dl2=(Get-Date).AddSeconds(6)\n"
@@ -2827,8 +3433,10 @@ BOOL Wh_ModInit() {
         // before the webview environment is created, which is why this runs in the
         // process's earliest startup.
         {
+            g_cdpPort = PickCdpPort();
+            if (g_cdpPort != kCdpPort) DebugNote("port 9333 busy, debugging port", g_cdpPort);
             wchar_t args[64];
-            swprintf(args, 64, L"--remote-debugging-port=%u", kCdpPort);
+            swprintf(args, 64, L"--remote-debugging-port=%u", g_cdpPort);
             SetEnvironmentVariableW(L"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", args);
         }
     }
@@ -2836,6 +3444,7 @@ BOOL Wh_ModInit() {
     g_stopEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
     if (g_stopEvent) {
         g_workerThread = CreateThread(nullptr, 0, StylerWorkerThread, nullptr, 0, nullptr);
+        if (g_isUiProcess) g_cdpThread = CreateThread(nullptr, 0, CdpSessionThread, nullptr, 0, nullptr);
     }
 
     if (g_isUiProcess) {
@@ -2874,6 +3483,11 @@ void Wh_ModUninit() {
             CloseHandle(g_workerThread);
             g_workerThread = nullptr;
         }
+        if (g_cdpThread) {
+            if (WaitForSingleObject(g_cdpThread, 30000) != WAIT_OBJECT_0) DebugNote("session thread still running at unload");
+            CloseHandle(g_cdpThread);
+            g_cdpThread = nullptr;
+        }
         CloseHandle(g_stopEvent);
         g_stopEvent = nullptr;
     }
@@ -2891,6 +3505,8 @@ void Wh_ModUninit() {
     }
     g_captionChildren.clear();
     WindhawkUtils::RemoveAllWindowSubclasses();
+    if (g_dockHwnd) KillTimer(g_dockHwnd, kDockTimer);
+    DockCloseHot();
     g_mainWindows.clear();
     {
         std::lock_guard<std::mutex> lock(g_trayDialogsMutex);

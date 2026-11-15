@@ -2,7 +2,7 @@
 // @id              seamless-explorer-view
 // @name            Seamless Explorer View
 // @description     GPU-accelerated Explorer views with smooth scrolling and right-click submenus that populate fully
-// @version         2.0.0
+// @version         2.0.4
 // @author          DavidHiFi, DarkionAvey, crazyboyybs, Languster, valinet
 // @include         explorer.exe
 // @architecture    x86-64
@@ -156,7 +156,7 @@ Tree position, expand arrows and connector lines come from
       $description: Higher = stronger highlight; lower = subtler highlight.
     - mochaPills: true
       $name: Mocha pills in all folders
-      $description: Drive-tile style rounded bordered hover (blue) and selection (mauve) pills in every folder, not only This PC.
+      $description: The sidebar pill look (dark fill, soft edge, blue to mauve edge on hover) in every folder, not only This PC.
   $name: Mouse hover
 - Navigation:
     - showNativeViewToggleButton: true
@@ -14563,43 +14563,47 @@ constexpr unsigned kMochaBlue = 0x89B4FAu, kMochaMauve = 0xCBA6F7u,
 
 void FillSelectionRect(ViewState& state, const D2D1_RECT_F& rc, float alpha,
                        const SelectionShape* shape = nullptr, bool outline = false,
-                       unsigned bubble = 0) {
+                       unsigned bubble = 0, float bubbleRadius = 0.f) {
     if (rc.right <= rc.left + 1.f || rc.bottom <= rc.top || alpha <= 0.f)
         return;
     if (bubble) {
-        // Soft tinted fill plus a 1px border in the same Mocha colour.
-        const float radius = static_cast<float>(Scale96(8, ViewDpi(state)));
-        D2D1_RECT_F part = D2D1::RectF(rc.left + .5f, rc.top + .5f, rc.right - .5f, rc.bottom - .5f);
-        Fill(state, part.left, part.top, part.right, part.bottom, bubble, alpha * .28f, radius);
+        // The sidebar pill recipe (folder tree and Tags), so every pill in the window
+        // reads the same: a dark Mocha fill at 75/255 and a 2px edge at 100/255.
+        // Hover: mantle fill, blue to mauve edge. Selection: crust fill, surface2 edge.
+        const bool hover = bubble == kMochaBlue;
+        const float s = std::min(1.f, alpha * 2.2f); // resting callers pass .45 to .6
+        D2D1_RECT_F part = rc;
+        const float radius = bubbleRadius > 0.f ? bubbleRadius :
+            SelectionRadius(state, part.right - part.left, part.bottom - part.top);
+        Fill(state, part.left, part.top, part.right, part.bottom,
+             hover ? 0x181825u : 0x11111Bu, s * (75.f / 255.f), radius);
         if (state.rtlLayout) {
             const float left = part.left;
             part.left = state.paintWidth - part.right; part.right = state.paintWidth - left;
         }
-        const float strokeAlpha = std::min(1.f, alpha * 1.6f);
-        if (bubble == kMochaBlue) {
-            // Blue -> mauve diagonal border, matching the Explorer button hover.
-            D2D1_GRADIENT_STOP stops[2] = {{0.f, Packed(kMochaBlue, strokeAlpha)},
-                                           {1.f, Packed(kMochaMauve, strokeAlpha)}};
+        const float edgeAlpha = s * (100.f / 255.f);
+        const float width = 2.f;
+        D2D1_ROUNDED_RECT rr = D2D1::RoundedRect(SnapDrawRect(state.target.Get(), part), radius, radius);
+        rr.rect.left += width * .5f; rr.rect.top += width * .5f;
+        rr.rect.right -= width * .5f; rr.rect.bottom -= width * .5f;
+        rr.radiusX = rr.radiusY = std::max(0.f, radius - width * .5f);
+        if (rr.rect.right <= rr.rect.left || rr.rect.bottom <= rr.rect.top) return;
+        auto* rt = static_cast<ID2D1RenderTarget*>(state.target.Get());
+        if (hover) {
+            D2D1_GRADIENT_STOP stops[2] = {{0.f, Packed(kMochaBlue, edgeAlpha)},
+                                           {1.f, Packed(kMochaMauve, edgeAlpha)}};
             Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> coll;
             Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> grad;
-            auto* rt = static_cast<ID2D1RenderTarget*>(state.target.Get());
             if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, &coll)) &&
                 SUCCEEDED(rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(
                     D2D1::Point2F(part.left, part.top), D2D1::Point2F(part.right, part.bottom)),
                     coll.Get(), &grad))) {
-                D2D1_ROUNDED_RECT rr = D2D1::RoundedRect(part, radius, radius);
-                rr.rect = SnapDrawRect(state.target.Get(), rr.rect);
-                const float width = std::max(1.f, roundf(static_cast<float>(Scale96(1, ViewDpi(state)))));
-                const float inset = width * .5f;
-                rr.rect.left += inset; rr.rect.top += inset; rr.rect.right -= inset; rr.rect.bottom -= inset;
-                if (rr.rect.right > rr.rect.left && rr.rect.bottom > rr.rect.top)
-                    rt->DrawRoundedRectangle(rr, grad.Get(), width);
+                rt->DrawRoundedRectangle(rr, grad.Get(), width);
                 return;
             }
         }
-        state.brush->SetColor(Packed(bubble, strokeAlpha));
-        StrokeRoundedRect(state, D2D1::RoundedRect(part, radius, radius),
-            state.brush.Get(), static_cast<float>(Scale96(1, ViewDpi(state))));
+        state.brush->SetColor(Packed(hover ? kMochaBlue : kMochaSurface2, edgeAlpha));
+        rt->DrawRoundedRectangle(rr, state.brush.Get(), width);
         return;
     }
     const unsigned rgb = ThemeRgb(g_selectionRgb.load(std::memory_order_relaxed));
@@ -14903,6 +14907,18 @@ void PaintGroupHeading(ViewState& state, const std::wstring& title,
     }
     Text(state, title, ListStartX(state) + leading + Scale96(18, dpi), top,
         listEnd - Scale96(8, dpi), top + height, headerColor, false, .9f * opacity);
+}
+
+// A heading's dock hugs its chevron and title: 4 DIP from the list edge, the
+// same 12 DIP of room after the text as before the chevron. Paint, hover and
+// click all use this edge, so the band beside a short title stays empty.
+float GroupHeadingDockRight(ViewState& state, const std::wstring& title, float listEnd) {
+    const int dpi = ViewDpi(state);
+    const float textLeft = ListStartX(state) + static_cast<float>(Scale96(14 + 18, dpi));
+    // One pixel for DirectWrite overhang, like the filename fit.
+    const float right = textLeft + ceilf(ColumnTextWidth(state, title, false) + 1.f) +
+        static_cast<float>(Scale96(12, dpi));
+    return std::min(listEnd - static_cast<float>(Scale96(4, dpi)), right);
 }
 
 bool MatchesTypeSearchPrefix(const std::wstring& name,
@@ -16418,23 +16434,29 @@ void Paint(ViewState& state) {
         // box is a 1px surface1 outline over a faint crust tint.
         const float inset=static_cast<float>(Scale96(4,ViewDpi(state)));
         const auto bounds=D2D1::RectF(listStart+inset,heading.visual.top+inset,
-            listEnd-inset,heading.visual.top+heading.visual.height-inset);
+            GroupHeadingDockRight(state,*heading.title,listEnd),
+            heading.visual.top+heading.visual.height-inset);
+        const float radius=std::max(0.f,std::min(static_cast<float>(Scale96(10,ViewDpi(state))),
+            (bounds.bottom-bounds.top-1.f)*.5f));
         if (heading.hot) {
-            FillSelectionRect(state,bounds,.45f*heading.visual.opacity,nullptr,false,kMochaBlue);
+            FillSelectionRect(state,bounds,.45f*heading.visual.opacity,nullptr,false,kMochaBlue,radius);
             continue;
         }
         if (bounds.right<=bounds.left+1.f || bounds.bottom<=bounds.top) continue;
-        Fill(state,bounds.left+.5f,bounds.top+.5f,bounds.right-.5f,bounds.bottom-.5f,
-            0x11111Bu,.35f*heading.visual.opacity,static_cast<float>(Scale96(8,ViewDpi(state))));
-        D2D1_RECT_F part=D2D1::RectF(bounds.left+.5f,bounds.top+.5f,bounds.right-.5f,bounds.bottom-.5f);
+        // Resting heading pill uses the sidebar recipe: crust fill at 75/255 and
+        // a 2px surface2 edge at 100/255, drawn inside the bounds.
+        Fill(state,bounds.left,bounds.top,bounds.right,bounds.bottom,
+            0x11111Bu,(75.f/255.f)*heading.visual.opacity,radius);
+        const float edgeW=static_cast<float>(std::max(1,Scale96(2,ViewDpi(state))));
+        D2D1_RECT_F part=D2D1::RectF(bounds.left+edgeW*.5f,bounds.top+edgeW*.5f,
+            bounds.right-edgeW*.5f,bounds.bottom-edgeW*.5f);
         if (state.rtlLayout) {
             const float left=part.left;
             part.left=state.paintWidth-part.right; part.right=state.paintWidth-left;
         }
-        const float radius=static_cast<float>(Scale96(8,ViewDpi(state)));
-        state.brush->SetColor(Packed(kMochaSurface1,std::min(1.f,heading.visual.opacity)));
-        StrokeRoundedRect(state,D2D1::RoundedRect(part,radius,radius),state.brush.Get(),
-            static_cast<float>(Scale96(1,ViewDpi(state))));
+        const float edgeR=std::max(0.f,radius-edgeW*.5f);
+        state.brush->SetColor(Packed(kMochaSurface2,std::min(1.f,heading.visual.opacity)*(100.f/255.f)));
+        StrokeRoundedRect(state,D2D1::RoundedRect(part,edgeR,edgeR),state.brush.Get(),edgeW);
     }
     for (const auto& heading:headings) {
         RowSourceScope source(state,heading.key,2,true);
@@ -21737,6 +21759,8 @@ int GroupHeaderAtPoint(ViewState& state, int x, int y) {
     if (group < 0) return -1;
     const auto visual = LayoutGroupHeader(state, static_cast<size_t>(group),
         CurrentRowProgress(state));
+    if (static_cast<float>(LogicalX(state, x)) >= GroupHeadingDockRight(state,
+            state.sections[static_cast<size_t>(group)].title, ListEndX(state))) return -1;
     return y >= visual.top && y < visual.top + visual.height && visual.opacity > .01f ? group : -1;
 }
 void PressGroupHeader(ViewState& state, int group) {
@@ -36111,7 +36135,8 @@ static bool IsRectDrawable(const RECT& rc)
 // Rounded fill and a two-pixel border kept inside the item bounds.
 // (bottom edge one pixel short, border stroked inside the outline).
 // Returns false when Direct2D could not paint, so the caller keeps the native look.
-static bool DrawStateBackground(HDC hdc, const RECT& rc, const StateStyle& style)
+// gradient: hover edges run blue to mauve, like Tags, menus and every other hover pill.
+static bool DrawStateBackground(HDC hdc, const RECT& rc, const StateStyle& style, bool gradient = false)
 {
     RECT rcDraw = rc;
     if (rcDraw.bottom > rcDraw.top)
@@ -36140,9 +36165,30 @@ static bool DrawStateBackground(HDC hdc, const RECT& rc, const StateStyle& style
             const float stroke = std::min(2.f, std::min(W, H) / 2.f);
             const float inset = stroke / 2.f;
             const float inner = std::max(radius - inset, 0.f);
-            brush->SetColor(Rgba(style.borderOpacity, style.borderR, style.borderG, style.borderB));
-            target->DrawRoundedRectangle(
-                D2D1::RoundedRect(D2D1::RectF(inset, inset, W - inset, H - inset), inner, inner), brush, stroke);
+            const D2D1_ROUNDED_RECT edge =
+                D2D1::RoundedRect(D2D1::RectF(inset, inset, W - inset, H - inset), inner, inner);
+            ComPtr<ID2D1GradientStopCollection> stops;
+            ComPtr<ID2D1LinearGradientBrush> lg;
+            if (gradient)
+            {
+                const float a = ClampByte(style.borderOpacity) / 255.f;
+                const D2D1_GRADIENT_STOP gs[2] = {
+                    {0.f, D2D1::ColorF(0x89 / 255.f, 0xB4 / 255.f, 0xFA / 255.f, a)},
+                    {1.f, D2D1::ColorF(0xCB / 255.f, 0xA6 / 255.f, 0xF7 / 255.f, a)}};
+                if (SUCCEEDED(target->CreateGradientStopCollection(gs, 2, &stops)))
+                    target->CreateLinearGradientBrush(
+                        D2D1::LinearGradientBrushProperties(D2D1::Point2F(0.f, 0.f), D2D1::Point2F(W, H)),
+                        stops.Get(), &lg);
+            }
+            if (lg)
+            {
+                target->DrawRoundedRectangle(edge, lg.Get(), stroke);
+            }
+            else
+            {
+                brush->SetColor(Rgba(style.borderOpacity, style.borderR, style.borderG, style.borderB));
+                target->DrawRoundedRectangle(edge, brush, stroke);
+            }
         }
         return true;
     });
@@ -36170,7 +36216,8 @@ static HRESULT HandleTreeDraw(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
     if (!IsRectDrawable(rc))
         return E_FAIL;
 
-    return DrawStateBackground(hdc, rc, *style) ? S_OK : E_FAIL;
+    const bool hover = iStateId == 2 || iStateId == 6;
+    return DrawStateBackground(hdc, rc, *style, hover) ? S_OK : E_FAIL;
 }
 
 static HRESULT WINAPI HookedDrawThemeBackground(HTHEME hTheme, HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect, LPCRECT pClipRect)

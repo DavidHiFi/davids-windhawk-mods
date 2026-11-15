@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.5
+// @version         1.10.6
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -27,7 +27,7 @@
 
 Based on Windows 11 File Explorer Styler by m417z.
 
-![Explorer preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windows-11-file-explorer-styler-plus.png)
+![Explorer preview](file:///H:/Windhawk%20Configuration/2026-11-06-header-hover/thispc-1.1.4.png)
 
 Customize the File Explorer with themes contributed by others or create your
 own.
@@ -8968,7 +8968,7 @@ void MergeResourceVariables();
 void ConfigureDetailsPaneHover(Controls::Grid grid,
                                ElementCustomizationState& state) {
     auto border = Markup::XamlReader::Load(
-        LR"(<LinearGradientBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#89B4FA" Offset="0"/><GradientStop Color="#CBA6F7" Offset="1"/></LinearGradientBrush>)").as<Media::Brush>();
+        LR"(<LinearGradientBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#6489B4FA" Offset="0"/><GradientStop Color="#64CBA6F7" Offset="1"/></LinearGradientBrush>)").as<Media::Brush>();
     auto rest = grid.BorderBrush();
     auto paint = [weak = winrt::make_weak(grid), border, rest](bool hovered) {
         if (auto target = weak.get()) {
@@ -9018,11 +9018,11 @@ void ConfigureAddressBarHover(FrameworkElement element,
                        L"FileExplorerExtensions.AddressBarControl") return;
 
     auto normal = Markup::XamlReader::Load(
-        LR"(<SolidColorBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Color="#FF313244"/>)").as<Media::Brush>();
+        LR"(<SolidColorBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Color="#4B11111B"/>)").as<Media::Brush>();
     auto hot = Markup::XamlReader::Load(
-        LR"(<SolidColorBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Color="#FF45475A"/>)").as<Media::Brush>();
+        LR"(<SolidColorBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Color="#4B181825"/>)").as<Media::Brush>();
     auto border = Markup::XamlReader::Load(
-        LR"(<LinearGradientBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#89B4FA" Offset="0"/><GradientStop Color="#CBA6F7" Offset="1"/></LinearGradientBrush>)").as<Media::Brush>();
+        LR"(<LinearGradientBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#6489B4FA" Offset="0"/><GradientStop Color="#64CBA6F7" Offset="1"/></LinearGradientBrush>)").as<Media::Brush>();
     auto rest = grid.BorderBrush();
     auto paint = [weak = winrt::make_weak(grid), normal, hot, border, rest](bool hovered) {
         if (auto target = weak.get()) {

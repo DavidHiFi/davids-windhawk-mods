@@ -2,7 +2,7 @@
 // @id              seamless-clipboard-manager
 // @name            Seamless Clipboard Manager
 // @description     Keeps everything you copy, text and images, in a searchable list you open with Win+V
-// @version         1.3.6
+// @version         1.3.10
 // @author          DavidHiFi, Scott Brogden, Ditto contributors
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -18,8 +18,6 @@
 # Seamless Clipboard Manager
 
 Keeps what you copy in a list you open with Win+V: text, images, copied files and the formatting of text from web pages and Word. Pick a clip and press Enter to paste it.
-
-![Seamless Clipboard Manager preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-clipboard-manager.png)
 
 ## Features
 
@@ -47,7 +45,7 @@ Win+V normally opens the Windows clipboard history. The mod turns that off and t
 | Delete | Delete the selected clips |
 | Ctrl+E | Edit the clip's text |
 | Alt+Enter | Clip properties: description, pin, never delete, group |
-| F3 | Show the whole clip |
+| Space | Show the whole clip (when the search box is empty) |
 | Ctrl+G | Show your groups |
 | F7 | Put the selected clips in a new group |
 | Backspace | Leave the group and go back to all clips |
@@ -123,6 +121,12 @@ Based on [Ditto](https://github.com/sabrogden/Ditto) by Scott Brogden and the Di
   $name: Keep the list on top
 - confirmDelete: true
   $name: Ask before deleting
+- previewer: builtin
+  $name: Previewer
+  $description: "What Space shows. Peek needs the Peek mod turned on; without it, the built-in preview opens."
+  $options:
+  - builtin: Built-in preview
+  - peek: Peek
 - fontName: FiraCode Nerd Font
   $name: Font
   $description: "Any installed font (Suggested: FiraCode Nerd Font)."
@@ -157,16 +161,10 @@ Based on [Ditto](https://github.com/sabrogden/Ditto) by Scott Brogden and the Di
   $description: Leave off when another mod, like Seamless Borders, already draws borders around windows. Menus always get their border.
 - settingsGlass: true
   $name: Blurred settings window
-  $description: On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Save, then reopen settings to apply.
+  $description: On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.
 - nativeSettingsTitleBar: false
   $name: Native Windows title bar
-  $description: Use the Windows title bar and window buttons for this settings window. Save, then reopen settings to apply.
-- settingsTitleButtons: native
-  $name: Title bar buttons
-  $description: Who draws minimize, maximize and close on the window's own title bar. Windows buttons look like every other app's, title bar mods included. Save, then reopen settings to apply.
-  $options:
-  - native: Windows buttons (like other apps)
-  - builtin: Built-in buttons
+  $description: Use the Windows title bar and window buttons for this settings window. Applies when you save.
 - animations: true
   $name: Animations
   $description: The list slides and fades in and out, and hover glows fade. Also off when Windows animation effects are off.
@@ -341,6 +339,7 @@ struct Settings {
     bool closeOnFocusLoss;          // "closeOnFocusLoss" default true
     bool alwaysOnTop;               // "alwaysOnTop"   default true
     bool confirmDelete;             // "confirmDelete" default true
+    std::wstring previewer;         // "previewer" "builtin" | "peek" ; default "builtin"
     // Look
     std::wstring fontName;          // "fontName"  default "FiraCode Nerd Font"
     int fontSize;                   // "fontSize"  7..24 (points), default 10
@@ -3575,7 +3574,8 @@ class Com {
 constexpr float kPad = 8, kCaptionW = 26, kDockH = 34, kHeaderH = 30, kRowPadY = 5, kRowGap = 2,
                 kScrollW = 10, kBorderW = 1.5f, kWinRadius = 8, kMarkW = 16, kPinW = 22, kDragStart = 4;
 constexpr int kPageSize = 60, kMaxPages = 40, kThumbCacheSize = 48, kThumbDecodeMax = 320;
-constexpr UINT_PTR kTimerScroll = 1, kTimerSearch = 2, kTimerHover = 3, kTimerDrag = 4, kTimerAnim = 5, kTimerCaret = 8, kTimerDockHover = 9;
+constexpr UINT_PTR kTimerScroll = 1, kTimerSearch = 2, kTimerHover = 3, kTimerDrag = 4, kTimerAnim = 5, kTimerCaret = 8, kTimerDockHover = 9,
+                    kTimerPeek = 10;
 constexpr UINT kSearchDelayMs = 120, kHoverEaseMs = 120;
 
 // Icon font code points (Segoe Fluent Icons / Segoe MDL2 Assets).
@@ -4324,6 +4324,9 @@ struct ListState {
     int dragFrom = -1, dragInsert = -1, dragSticky = 0;
     int64_t dragId = 0;
     float dragStartY = 0, dragY = 0, dragGrab = 0;
+    // A clip is showing in the Peek mod: the list stays while Peek has the focus.
+    bool peekActive = false;
+    ULONGLONG peekSince = 0;
 } L;
 
 struct Layout {
@@ -4970,6 +4973,134 @@ void ShowPreview() {
 void TogglePreview() {
     if (PreviewVisible()) HidePreview();
     else ShowPreview();
+}
+
+// The Peek mod (local@peek, 1.5.1 and later) opens files sent to its message window with WM_COPYDATA
+// "PEEK": wParam = our window, data = UTF-16 paths each ending in NUL. Same file again closes it.
+constexpr ULONG_PTR kPeekOpenPaths = 0x4B454550;
+bool SavePng(IWICBitmapSource* src, const std::wstring& path);
+
+bool IsPeekWindow(HWND w) {
+    wchar_t cls[32] = {};
+    return w && GetClassNameW(w, cls, 32) && wcscmp(cls, L"WindhawkPeek") == 0;
+}
+
+bool PeekWindowUp() {
+    HWND w = FindWindowW(L"WindhawkPeek", nullptr);
+    return w && IsWindowVisible(w);
+}
+
+// %TEMP%\SeamlessClipboard\Peek, emptied of earlier clips except `keep` (a file Peek still shows stays locked).
+std::wstring PeekTempDir(const std::wstring& keep) {
+    wchar_t tmp[MAX_PATH];
+    DWORD n = GetTempPathW(MAX_PATH, tmp);
+    if (!n || n >= MAX_PATH) return {};
+    std::wstring dir = std::wstring(tmp) + L"SeamlessClipboard";
+    CreateDirectoryW(dir.c_str(), nullptr);
+    dir += L"\\Peek";
+    CreateDirectoryW(dir.c_str(), nullptr);
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW((dir + L"\\Clip *").c_str(), &fd);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && _wcsicmp(fd.cFileName, keep.c_str()) != 0)
+                DeleteFileW((dir + L"\\" + fd.cFileName).c_str());
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    return dir;
+}
+
+bool WriteUtf8File(const std::wstring& path, const std::wstring& text) {
+    std::string s = "\xEF\xBB\xBF";
+    int n = WideCharToMultiByte(CP_UTF8, 0, text.data(), (int)text.size(), nullptr, 0, nullptr, nullptr);
+    size_t at = s.size();
+    s.resize(at + n);
+    if (n) WideCharToMultiByte(CP_UTF8, 0, text.data(), (int)text.size(), s.data() + at, n, nullptr, nullptr);
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return false;
+    DWORD wrote = 0;
+    bool ok = WriteFile(f, s.data(), (DWORD)s.size(), &wrote, nullptr) && wrote == s.size();
+    CloseHandle(f);
+    return ok;
+}
+
+// Shows the caret's clip in Peek. False when Peek is not chosen, not running, too old, or the clip
+// has nothing Peek can open: the caller falls back to the built-in preview.
+bool PeekClip() {
+    if (g_set.previewer != L"peek" || !L.surf.hwnd) return false;
+    HWND peek = FindWindowExW(HWND_MESSAGE, nullptr, L"WindhawkPeekMsg", nullptr);
+    const ClipRow* r = RowAt(L.caret);
+    if (!peek || !r || r->isGroup) return false;
+    std::vector<std::wstring> paths;
+    if (r->kind == ClipKind::Files) {
+        std::wstring all = DataText(*r);
+        for (size_t i = 0; i <= all.size();) {
+            size_t j = all.find(L'\n', i);
+            if (j == std::wstring::npos) j = all.size();
+            std::wstring p = all.substr(i, j - i);
+            if (!p.empty() && p.back() == L'\r') p.pop_back();
+            if (!p.empty() && GetFileAttributesW(p.c_str()) != INVALID_FILE_ATTRIBUTES) paths.push_back(p);
+            i = j + 1;
+        }
+    } else {
+        bool image = r->kind == ClipKind::Image;
+        std::wstring name = L"Clip " + std::to_wstring(r->id) + (image ? L".png" : L".txt");
+        std::wstring dir = PeekTempDir(name);
+        if (dir.empty()) return false;
+        std::wstring path = dir + L"\\" + name;
+        if (image) {
+            UINT w = 0, h = 0;
+            Com<IWICBitmap> img = LoadClipImage(r->id, 16384, w, h);
+            if (!img || !SavePng(img.get(), path)) return false;
+        } else if (!WriteUtf8File(path, DataText(*r))) {
+            return false;
+        }
+        paths.push_back(path);
+    }
+    if (paths.empty()) return false;
+    std::wstring blob;
+    for (auto& p : paths) {
+        blob += p;
+        blob.push_back(L'\0');
+    }
+    COPYDATASTRUCT cds{kPeekOpenPaths, (DWORD)(blob.size() * sizeof(wchar_t)), blob.data()};
+    DWORD pid = 0;
+    GetWindowThreadProcessId(peek, &pid);
+    if (pid) AllowSetForegroundWindow(pid);
+    // Set before sending: Peek takes the focus as soon as it opens, and the list must not close then.
+    bool wasActive = L.peekActive;
+    ULONGLONG wasSince = L.peekSince;
+    L.peekActive = true;
+    L.peekSince = GetTickCount64();
+    DWORD_PTR res = 0;
+    if (!SendMessageTimeoutW(peek, WM_COPYDATA, (WPARAM)L.surf.hwnd, (LPARAM)&cds, SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                             2000, &res) || !res) {
+        L.peekActive = wasActive;
+        L.peekSince = wasSince;
+        return false;  // Peek 1.5.0 and older answer FALSE: no open-files support.
+    }
+    if (PreviewVisible()) HidePreview();
+    SetTimer(L.surf.hwnd, kTimerPeek, 400, nullptr);
+    return true;
+}
+
+// Space, F3, the menu item and the chevron.
+void PreviewCommand() {
+    if (!PeekClip()) TogglePreview();
+}
+
+// While Peek shows a clip: close the list like a normal focus loss once the focus is on neither.
+void PeekTick() {
+    bool fresh = GetTickCount64() - L.peekSince < 2000;
+    if (fresh) return;
+    if (!PeekWindowUp()) {
+        L.peekActive = false;
+        KillTimer(L.surf.hwnd, kTimerPeek);
+    }
+    HWND fg = GetForegroundWindow();
+    bool ours = fg && GetWindowThreadProcessId(fg, nullptr) == GetCurrentThreadId();
+    if (!ours && !IsPeekWindow(fg) && g_set.closeOnFocusLoss && !L.menuOpen && List_IsVisible()) List_Hide();
 }
 
 void UpdatePreview() {
@@ -5804,7 +5935,7 @@ std::vector<UiMenuItem> ContextMenuItems() {
     m.push_back(MSep());
     m.push_back(MI(cmdEdit, L"Edit", kGlyphEdit, L"Ctrl+E", have && !group));
     m.push_back(MI(cmdProps, L"Properties", kGlyphInfo, L"Alt+Enter", have));
-    m.push_back(MI(cmdPreview, L"Preview", kGlyphView, L"F3", have, PreviewVisible()));
+    m.push_back(MI(cmdPreview, L"Preview", kGlyphView, L"Space", have, PreviewVisible()));
     m.push_back(MSep());
     m.push_back(MI(cmdSticky, L"Pin to top", kGlyphPin, {}, have, sticky));
     m.push_back(MI(cmdNeverDelete, L"Never delete", kGlyphLock, {}, have, neverDelete));
@@ -5856,7 +5987,7 @@ void RunCommand(UINT cmd) {
         case cmdCopy: CopySelection(); break;
         case cmdEdit: if (id) Editor_Open(id); break;
         case cmdProps: if (id) Props_Open(id); break;
-        case cmdPreview: TogglePreview(); break;
+        case cmdPreview: PreviewCommand(); break;
         case cmdSticky: {
             const ClipRow* r = RowAt(L.caret);
             if (r) DataSetSticky(r->id, !r->sticky, L.q.groupId != -1);
@@ -5950,7 +6081,12 @@ bool OnKeyDown(WPARAM vk) {
                 SearchChanged();
             } else GoUp();
             return true;
-        case VK_F3: TogglePreview(); return true;
+        case VK_F3: PreviewCommand(); return true;
+        case VK_SPACE:
+            // An empty search box: Space shows the clip. While typing a search it is a space (OnChar).
+            if (!L.search.empty() || ctrl || alt) return false;
+            PreviewCommand();
+            return true;
         case VK_F5: Reload(); return true;
         case VK_F7: StartNewGroup(!ctrl); return true;
         case VK_APPS: ShowContextMenu(CaretMenuPoint()); return true;
@@ -5987,6 +6123,7 @@ void OnChar(wchar_t ch) {
         Invalidate();
         return;
     }
+    if (L.search.empty() && ch == L' ') return;  // Space previewed in OnKeyDown.
     // Ditto: with an empty search, the number keys paste that position.
     if (L.search.empty() && ch >= L'0' && ch <= L'9') {
         PastePosition(ch == L'0' ? 9 : ch - L'1');
@@ -6174,7 +6311,7 @@ void OnMouse(UINT msg, WPARAM wp, LPARAM lp) {
                     break;
                 }
                 case Hit::Close: List_Hide(); break;
-                case Hit::Chevron: TogglePreview(); break;
+                case Hit::Chevron: PreviewCommand(); break;
                 case Hit::Back: GoUp(); break;
                 case Hit::Folder: ShowGroupsMenu(MenuPointFor(l.folder, false)); break;
                 case Hit::Menu: ShowContextMenu(MenuPointFor(l.menu, false)); break;
@@ -6374,7 +6511,7 @@ LRESULT CALLBACK ListProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (LOWORD(wp) == WA_INACTIVE && g_set.closeOnFocusLoss && !L.menuOpen && A.dir >= 0) {
                 HWND other = (HWND)lp;
                 bool ours = other && GetWindowThreadProcessId(other, nullptr) == GetCurrentThreadId();
-                if (!ours) List_Hide();
+                if (!ours && !L.peekActive && !IsPeekWindow(other)) List_Hide();  // Peek: PeekTick decides.
             }
             return 0;
         case WM_KEYDOWN:
@@ -6432,6 +6569,8 @@ LRESULT CALLBACK ListProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_TIMER:
             if (wp == kTimerSearch) {
                 CommitSearch();
+            } else if (wp == kTimerPeek) {
+                PeekTick();
             } else if (wp == kTimerCaret) {
                 L.caretOn = !L.caretOn;
                 Invalidate();
@@ -8309,6 +8448,8 @@ void List_Hide() {
     if (A.dir < 0) return;  // Already closing.
     KillTimer(L.surf.hwnd, kTimerSearch);
     KillTimer(L.surf.hwnd, kTimerScroll);
+    KillTimer(L.surf.hwnd, kTimerPeek);
+    L.peekActive = false;
     if (L.mode != DockMode::Search) CancelMode();
     HidePreview();
     if (L.dragPending || L.dragActive) EndDrag();
@@ -8665,6 +8806,30 @@ int Harness_TestUi() {
           L"preview image");
     DeleteFileW((dir + L"\\x.png").c_str());
 
+    // Space: with an empty search it shows and hides the preview; while searching it types a space.
+    {
+        ResetForOpen();
+        SetCaret(2, false);
+        HidePreview();
+        std::wstring savedPreviewer = g_set.previewer;
+        g_set.previewer = L"builtin";
+        check(OnKeyDown(VK_SPACE) && PreviewVisible(), L"Space opens the preview");
+        OnChar(L' ');
+        check(L.search.empty(), L"Space does not type into an empty search");
+        check(OnKeyDown(VK_SPACE) && !PreviewVisible(), L"Space again closes the preview");
+        L.search = L"sel";
+        check(!OnKeyDown(VK_SPACE), L"Space while searching is left to typing");
+        OnChar(L' ');
+        check(L.search == L"sel ", L"Space while searching types a space");
+        L.search.clear();
+        CommitSearch();
+        g_set.previewer = L"peek";
+        if (!FindWindowExW(HWND_MESSAGE, nullptr, L"WindhawkPeekMsg", nullptr))
+            check(OnKeyDown(VK_SPACE) && PreviewVisible(), L"Peek chosen but not running: built-in preview opens");
+        HidePreview();
+        g_set.previewer = savedPreviewer;
+    }
+
     // Pins: clicking the pin toggles sticky without selecting or pasting.
     {
         ResetForOpen();
@@ -8916,6 +9081,9 @@ struct SetField {
     PCWSTR group = L"";  // Heading above it on that page.
     std::wstring value;  // As loaded, so a save writes only what changed.
     std::wstring cur;    // What the window shows now.
+    float fitW = 0;      // Box width that fits the text (Set_FitBoxes); 0 until measured.
+    float fitText = -1;  // Measured text width behind fitW.
+    std::wstring fitFor; // The text that was measured.
 };
 
 // Names, descriptions and option labels match the ==WindhawkModSettings== block word for word.
@@ -8938,6 +9106,7 @@ static std::vector<SetField> Set_MakeFields() {
         {K::Check, L"closeOnFocusLoss", L"Close when you click away", nullptr, L"1", {}, 0, 0, 1, L"Behavior"},
         {K::Check, L"alwaysOnTop", L"Keep the list on top", nullptr, L"1", {}, 0, 0, 1, L"Behavior"},
         {K::Check, L"confirmDelete", L"Ask before deleting", nullptr, L"1", {}, 0, 0, 1, L"Behavior"},
+        {K::Choice, L"previewer", L"Previewer", L"What Space shows. Peek needs the Peek mod turned on; without it, the built-in preview opens.", L"builtin", {{L"builtin", L"Built-in preview"}, {L"peek", L"Peek"}}, 0, 0, 1, L"Behavior"},
         {K::Text, L"fontName", L"Font", L"Any installed font (Suggested: FiraCode Nerd Font).", L"FiraCode Nerd Font", {}, 0, 0, 2, L"Text"},
         {K::Choice, L"fontWeight", L"Font weight", nullptr, L"medium", {{L"light", L"Light"}, {L"normal", L"Regular"}, {L"medium", L"Medium"}, {L"semibold", L"Semibold"}, {L"bold", L"Bold"}}, 0, 0, 2, L"Text"},
         {K::Number, L"fontSize", L"Font size", L"7 to 24 points (Suggested: 10).", L"10", {}, 7, 24, 2, L"Text"},
@@ -8949,9 +9118,8 @@ static std::vector<SetField> Set_MakeFields() {
         {K::Check, L"animations", L"Animations", L"The list slides and fades in and out, and hover glows fade. Also off when Windows animation effects are off.", L"1", {}, 0, 0, 2, L"Edges and motion"},
         {K::Check, L"gradientBorder", L"Gradient border", L"When off, the border uses only the accent color.", L"1", {}, 0, 0, 2, L"Edges and motion"},
         {K::Number, L"cornerRadius", L"Corner roundness", L"0 to 24 (Suggested: 8). Rounds the selection and the search bar.", L"8", {}, 0, 24, 2, L"Edges and motion"},
-        {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Save, then reopen settings to apply.", L"1", {}, 0, 100, 2, L"Settings window"},
-        {K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Save, then reopen settings to apply.", L"0", {}, 0, 100, 2, L"Settings window"},
-        {K::Choice, L"settingsTitleButtons", L"Title bar buttons", L"Who draws minimize, maximize and close on the window's own title bar. Windows buttons look like every other app's, title bar mods included. Save, then reopen settings to apply.", L"native", {{L"native", L"Windows buttons (like other apps)"}, {L"builtin", L"Built-in buttons"}}, 0, 100, 2, L"Settings window"},
+        {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 2, L"Settings window"},
+        {K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 2, L"Settings window"},
         {K::Check, L"settingsTrayIcon", L"Tray icon", L"A Clipboard Manager icon in the system tray. Click it to open the clip list, right-click it for a menu with Settings.", L"1", {}, 0, 100, 2, L"Settings window"},
         {K::Number, L"maxClips", L"Clips to keep", L"0 to 100000 (Suggested: 500). Past this count the oldest clips are deleted. Pinned clips, clips in groups and clips set to never delete stay. 0 keeps everything.", L"500", {}, 0, 100000, 3, L"Keep"},
         {K::Number, L"expireDays", L"Delete clips older than (days)", L"0 to 3650 (Suggested: 0). 0 keeps clips however old they are.", L"0", {}, 0, 3650, 3, L"Keep"},
@@ -8987,6 +9155,7 @@ constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
 // About sits apart at the end of the sidebar, as in Seamless Dictate.
 constexpr int kSetAboutPage = kSetPageCount - 1;
 constexpr float kSetAboutGap = 17;
+constexpr int kSetDropMax = 9;  // A dropdown with more options than this scrolls.
 
 // All sizes are DIPs; the render target does the scaling.
 constexpr float kSetPadX = 40, kSetMaxW = 720, kSetRowMin = 56, kSetRowGap = 8, kSetBoxH = 32, kSetRowPad = 16,
@@ -9045,7 +9214,8 @@ struct SetWindow {
     int page = 0, recording = -1, editing = -1, focus = -1, openSel = -1;
     bool kbd = false;  // Show the focus ring (after a Tab).
     D2D1_RECT_F dropRect{};
-    int dropHover = -1;
+    int dropHover = -1, dropTop = 0;  // dropTop: first option shown when the dropdown scrolls.
+    bool frameApplied = false;        // Set_ApplyFrame has run once.
     float scrollY = 0, scrollTarget = 0, contentH = 0, contentX = 0, contentW = 720, pageT = 1;
     SetHit hover;
     int dragSlider = -1;
@@ -9341,13 +9511,53 @@ static float Set_TextW(IDWriteTextFormat* fmt, const std::wstring& text) {
 // ---- Layout -----------------------------------------------------------------
 
 // The right-hand control's width, so the label column knows how much room it has.
+static bool Set_FitBoxes(SetWindow& w) {
+    if (!w.fValue) return false;
+    bool changed = false;
+    const float cap = std::floor(w.contentW * 0.5f);
+    for (auto& f : w.fields) {
+        float base, pad;
+        std::wstring text;
+        if (f.kind == SetField::Choice) {
+            base = 200, pad = 46;  // 12 before the text, 30 for the arrow, 4 spare.
+            for (const auto& o : f.options) text += std::wstring(o.second) + L'\n';
+        } else if (f.kind == SetField::Hotkey) {
+            base = 220, pad = 60;  // The key cap's own padding and the clear button.
+            text = f.cur;
+        } else if (f.kind == SetField::Text) {
+            base = 280, pad = 26;
+            text = f.cur;
+        } else {
+            continue;
+        }
+        if (f.fitText < 0 || text != f.fitFor) {
+            float m = 0;
+            if (f.kind == SetField::Choice) {
+                for (const auto& o : f.options) m = std::max(m, Set_TextW(w.fValue.get(), o.second));
+            } else {
+                m = Set_TextW(w.fValue.get(), f.cur);
+            }
+            f.fitText = std::ceil(m);
+            f.fitFor = text;
+        }
+        float want = std::min(std::max(base, f.fitText + pad), std::max(base, cap));
+        if (fabsf(want - f.fitW) > 0.5f) {
+            f.fitW = want;
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+static float Set_FitOr(const SetField& f, float base) { return f.fitW > 0 ? f.fitW : base; }
+
 static float Set_ControlW(const SetField& f) {
     switch (f.kind) {
         case SetField::Check: return 40;
-        case SetField::Choice: return 200;
+        case SetField::Choice: return Set_FitOr(f, 200);
         case SetField::Number: return f.max - f.min <= 100 ? 150 + 12 + 64 : 96;
-        case SetField::Text: return 280;
-        case SetField::Hotkey: return 220;
+        case SetField::Text: return Set_FitOr(f, 280);
+        case SetField::Hotkey: return Set_FitOr(f, 220);
         case SetField::Color: return 362;
     }
     return 100;
@@ -9386,7 +9596,7 @@ static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
             p.box = {r - 40, mid - 11, r, mid + 11};
             break;
         case SetField::Choice:
-            p.box = {r - 200, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 200), mid - h, r, mid + h};
             break;
         case SetField::Number:
             if (f.max - f.min <= 100) {
@@ -9398,10 +9608,10 @@ static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
             }
             break;
         case SetField::Text:
-            p.box = {r - 280, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 280), mid - h, r, mid + h};
             break;
         case SetField::Hotkey:
-            p.box = {r - 220, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 220), mid - h, r, mid + h};
             p.clear = {p.box.right - 30, p.box.top, p.box.right, p.box.bottom};
             break;
         case SetField::Color: {
@@ -9908,7 +10118,9 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
 static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
     D2D1_RECT_F d = Set_FooterDock(w);
     const float rad = kSetFootH / 2, brad = kSetFootBtnH / 2;
-    p.Round(d, rad, mocha::mantle, w.render ? 1.0f : 0.85f);
+    // The same see-through mantle as the rail dock, so the blurred rows under the pill read as
+    // real glass instead of a near-solid bar.
+    p.Round(d, rad, mocha::mantle, w.render ? 1.0f : (w.glass ? 0.58f : 0.85f));
     const D2D1_RECT_F edge{d.left + 2, d.top + 2, d.right - 2, d.bottom - 2};
     p.rt->DrawRoundedRectangle(D2D1::RoundedRect(edge, rad - 2, rad - 2),
                               p.B(mocha::overlay0, 0.9f * (1 - w.footGlow)), 2.75f);
@@ -9930,23 +10142,58 @@ static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
 }
 
 
+static void Set_ThumbFill(SetPaint& p, const D2D1_RECT_F& r, float a) {
+    if (r.bottom <= r.top) return;
+    float rad = (r.right - r.left) / 2;
+    SetCom<ID2D1LinearGradientBrush> g;
+    D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::blue, a * p.fade)}, {1, D2DColor(mocha::mauve, a * p.fade)}};
+    SetCom<ID2D1GradientStopCollection> coll;
+    if (SUCCEEDED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
+        SUCCEEDED(p.rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.left, r.bottom)),
+            coll.get(), g.put())))
+        p.rt->FillRoundedRectangle(D2D1::RoundedRect(r, rad, rad), g.get());
+}
+
+static int Set_DropVisible(const SetWindow& w) {
+    return w.openSel < 0 ? 0 : std::min((int)w.fields[w.openSel].options.size(), kSetDropMax);
+}
+
+static void Set_DropShow(SetWindow& w, int i) {
+    int vis = Set_DropVisible(w), n = w.openSel < 0 ? 0 : (int)w.fields[w.openSel].options.size();
+    if (i < 0 || vis <= 0) return;
+    if (i < w.dropTop) w.dropTop = i;
+    if (i >= w.dropTop + vis) w.dropTop = i - vis + 1;
+    w.dropTop = std::clamp(w.dropTop, 0, std::max(0, n - vis));
+}
+
 static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
     if (w.openSel < 0) return;
     const SetField& f = w.fields[w.openSel];
     const D2D1_RECT_F& r = w.dropRect;
+    const int n = (int)f.options.size(), vis = Set_DropVisible(w);
+    const bool scrolls = n > vis;
     D2D1_RECT_F shadow{r.left - 1, r.top + 3, r.right + 1, r.bottom + 5};
     p.Round(shadow, 12, mocha::crust, 0.6f);
     p.Round(r, 10, mocha::mantle);
     p.GradRing(r, 10, 0.9f);
-    for (size_t i = 0; i < f.options.size(); i++) {
-        D2D1_RECT_F it{r.left + 4, r.top + 4 + i * kSetDropItem, r.right - 4, r.top + 4 + (i + 1) * kSetDropItem};
+    const float right = r.right - (scrolls ? 12 : 4);
+    for (int v = 0; v < vis; v++) {
+        int i = w.dropTop + v;
+        if (i >= n) break;
+        D2D1_RECT_F it{r.left + 4, r.top + 4 + v * kSetDropItem, right, r.top + 4 + (v + 1) * kSetDropItem};
         bool sel = f.cur == f.options[i].first;
-        if ((int)i == w.dropHover) {
+        if (i == w.dropHover) {
             p.GradFill(it, 6, 0.28f);
             p.GradRing(it, 6, 0.6f, 1);
         }
         p.Text(w.fValue.get(), f.options[i].second, {it.left + 10, it.top, it.right - 28, it.bottom}, sel ? mocha::blue : mocha::text);
         if (sel) p.Glyph(w.fIconS.get(), 0xE73E, {it.right - 28, it.top, it.right - 6, it.bottom}, mocha::blue);
+    }
+    if (scrolls) {
+        float track = r.bottom - r.top - 12, th = std::max(24.0f, track * vis / n);
+        float top = r.top + 6 + (track - th) * w.dropTop / std::max(1, n - vis);
+        Set_ThumbFill(p, {r.right - 9, top, r.right - 5, top + th}, 0.85f);
     }
 }
 
@@ -9958,7 +10205,7 @@ static D2D1_RECT_F Set_CapButton(const SetWindow& w, int i) {
 
 // y is in content DIPs, so the title bar is y < 0.
 static int Set_CapButtonAt(const SetWindow& w, float x, float y) {
-    if (w.nativeTitle || w.nativeButtons) return -1;
+    if (w.nativeTitle) return -1;
     for (int i = 0; i < 3; i++)
         if (Set_In(Set_CapButton(w, i), x, y + kSetCapH)) return i;
     return -1;
@@ -9991,7 +10238,6 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
     float mid = kSetCapH / 2;
     Set_DrawMark(p, w.fCapGlyph.get(), {t.left, mid - 8, t.left + 16, mid + 8}, w.active ? 1.0f : 0.6f);
     p.Text(w.fCap.get(), kSetTitle, {t.left + 24, 0, t.right, kSetCapH}, w.active ? mocha::text : mocha::overlay1);
-    if (w.nativeButtons) return;  // DWM draws them over this title bar.
     for (int i = 0; i < 3; i++) {
         D2D1_RECT_F b = Set_CapButton(w, i);
         float hov = Set_GlowOf(w, 20 + i);
@@ -10006,7 +10252,13 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
 
 // Draws the whole window into rt (DIPs). The target's DPI does the scaling.
 // The title bar is drawn first; everything else is in content DIPs, shifted down by kSetCapH.
+static void Set_PlaceEdit(SetWindow& w);
+
 static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
+    if (Set_FitBoxes(w)) {
+        Set_BuildPage(w);
+        Set_PlaceEdit(w);
+    }
     SetPaint p(w, rt);
     const auto base = D2D1::Matrix3x2F::Translation(0, kSetCapH);
     rt->BeginDraw();
@@ -10126,7 +10378,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     rt->SetTransform(base);
 
     D2D1_RECT_F th = Set_ScrollThumb(w);
-    if (th.bottom > th.top) p.Round(th, 3, w.dragScroll ? mocha::overlay1 : mocha::surface2, 0.9f);
+    Set_ThumbFill(p, th, w.dragScroll || w.hover.kind == SetHit::Scroll ? 1.0f : 0.7f);
 
     Set_DrawFooter(p, w);
     Set_DrawRail(p, w);
@@ -10152,8 +10404,9 @@ static SetHit Set_Hit(SetWindow& w, float x, float y) {
     }
     if (w.openSel >= 0) {
         if (Set_In(w.dropRect, x, y)) {
-            int i = (int)((y - w.dropRect.top - 4) / kSetDropItem);
-            if (i >= 0 && i < (int)w.fields[w.openSel].options.size() && y >= w.dropRect.top + 4) {
+            int v = (int)((y - w.dropRect.top - 4) / kSetDropItem), i = w.dropTop + v;
+            if (v >= 0 && v < Set_DropVisible(w) && i < (int)w.fields[w.openSel].options.size() &&
+                y >= w.dropRect.top + 4 && x < w.dropRect.right - (Set_DropVisible(w) < (int)w.fields[w.openSel].options.size() ? 12 : 4)) {
                 h.kind = SetHit::Drop;
                 h.a = w.openSel;
                 h.b = i;
@@ -10328,6 +10581,7 @@ static void Set_ClosePopup(SetWindow& w) {
     if (w.openSel < 0) return;
     w.openSel = -1;
     w.dropHover = -1;
+    w.dropTop = 0;
     Set_Invalidate(w);
 }
 
@@ -10337,14 +10591,22 @@ static void Set_OpenPopup(SetWindow& w, int k) {
     const SetField& f = w.fields[k];
     SetParts pt = Set_Parts(f, Set_RowRect(w, *it));
     float boxTop = pt.box.top - w.scrollY, boxBottom = pt.box.bottom - w.scrollY;
-    float h = (float)f.options.size() * kSetDropItem + 8;
+    const int n = (int)f.options.size(), vis = std::min(n, kSetDropMax);
+    float h = (float)vis * kSetDropItem + 8;
     float top = boxBottom + 4;
     if (top + h > Set_ViewH(w) + 20 && boxTop - 4 - h > 0) top = boxTop - 4 - h;  // No room below: open upward.
-    w.dropRect = {pt.box.left, top, pt.box.right, top + h};
+    // As wide as the longest option (text, check mark, scrollbar), growing leftward from the box.
+    float textW = 0;
+    for (const auto& o : f.options) textW = std::max(textW, Set_TextW(w.fValue.get(), o.second));
+    float width = std::max(pt.box.right - pt.box.left, std::ceil(textW) + 52 + (n > vis ? 8 : 0));
+    float left = std::max(pt.box.right - width, Set_RailSpace(w) + 8);
+    w.dropRect = {left, top, std::max(pt.box.right, left + width), top + h};
     w.openSel = k;
     w.dropHover = -1;
-    for (size_t i = 0; i < f.options.size(); i++)
-        if (f.cur == f.options[i].first) w.dropHover = (int)i;
+    w.dropTop = 0;
+    for (int i = 0; i < n; i++)
+        if (f.cur == f.options[i].first) w.dropHover = i;
+    Set_DropShow(w, w.dropHover);
     Set_Invalidate(w);
 }
 
@@ -10569,6 +10831,8 @@ static std::wstring Set_ChangedParams(SetWindow& w, int& changed) {
     return params;
 }
 
+static void Set_ApplyFrame(SetWindow& w);
+
 static void Set_Save(std::shared_ptr<SetWindow> keep) {
     SetWindow& w = *keep;
     if (w.saving) return;
@@ -10659,6 +10923,7 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
         Set_SetStatus(w, L"Windhawk didn't answer in 15 seconds. Settings may not be saved.", true);
     } else if (code == 0) {
         Set_LoadFields(w);  // Shows what was stored.
+        Set_ApplyFrame(w);  // The title bar and glass switches take effect now, no reopen.
         Set_SetStatus(w, L"Saved");
     } else {
         Wh_Log(L"windhawk-cli exit code %lu", code);
@@ -10817,8 +11082,8 @@ static bool Set_OnKey(SetWindow& w, UINT vk) {
         const SetField& f = w.fields[w.openSel];
         int n = (int)f.options.size();
         if (vk == VK_ESCAPE) Set_ClosePopup(w);
-        else if (vk == VK_UP) w.dropHover = (w.dropHover - 1 + n) % n;
-        else if (vk == VK_DOWN) w.dropHover = (w.dropHover + 1) % n;
+        else if (vk == VK_UP) Set_DropShow(w, w.dropHover = w.dropHover < 0 ? n - 1 : (w.dropHover - 1 + n) % n);
+        else if (vk == VK_DOWN) Set_DropShow(w, w.dropHover = w.dropHover < 0 ? 0 : (w.dropHover + 1) % n);
         else if (vk == VK_RETURN || vk == VK_SPACE) Set_Choose(w, w.openSel, w.dropHover);
         Set_Invalidate(w);
         return true;
@@ -10891,6 +11156,84 @@ static void Set_Relayout(SetWindow& w) {
     Set_BuildAndClamp(w);
 }
 
+static bool Set_FieldOn(const SetWindow& w, PCWSTR key, bool def) {
+    const size_t n = wcslen(key);
+    for (const auto& f : w.fields) {
+        const size_t m = wcslen(f.key);
+        if (m >= n && wcscmp(f.key + m - n, key) == 0 && (m == n || f.key[m - n - 1] == L'.')) return f.value == L"1";
+    }
+    return def;
+}
+
+static void Set_ApplyFrame(SetWindow& w) {
+    if (w.render || !w.hwnd) return;
+    const HWND hwnd = w.hwnd;
+    const bool native = Set_FieldOn(w, L"nativeSettingsTitleBar", false), glass = Set_FieldOn(w, L"settingsGlass", true);
+    const bool first = !w.frameApplied, wasGlass = w.glass;
+    if (!first && native == w.nativeTitle && glass == w.glass) return;
+    w.frameApplied = true;
+    w.nativeTitle = native;
+    w.glass = glass;
+    kSetCapH = native ? 0.0f : 40.0f;
+    struct SetAccentPolicy { int state, flags, abgr, animation; };
+    struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
+    auto setComposition =
+        (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
+    if (glass) {
+        // Acrylic as one sheet over the whole window, the same material Seamless Flyouts
+        // gives the Launchpad settings window in Explorer: the accent acrylic with an 85%
+        // Mocha base tint, under the page's own crust tint. The system backdrop
+        // (DWMSBT_TRANSIENTWINDOW) went light grey over bright windows and turned to a flat
+        // grey slab when the window lost focus; the accent acrylic stays the same.
+        int backdrop = 1;  // DWMSBT_NONE
+        DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+        bb.fEnable = TRUE;
+        bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+        if (setComposition) {
+            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
+            SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(hwnd, &data);
+        }
+        MARGINS margins{-1, -1, -1, -1};
+        DwmExtendFrameIntoClientArea(hwnd, &margins);
+        COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
+        DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+    } else if (wasGlass) {
+        // Glass switched off while open: back to a plain solid window.
+        if (setComposition) {
+            SetAccentPolicy policy{0, 0, 0, 0};
+            SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(hwnd, &data);
+        }
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE;
+        bb.fEnable = FALSE;
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        MARGINS margins{0, 0, 0, 0};
+        DwmExtendFrameIntoClientArea(hwnd, &margins);
+        int backdrop = 0;  // DWMSBT_AUTO
+        DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+        COLORREF caption = RefFromRgb(mocha::crust);
+        DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &caption, sizeof(caption));
+    }
+    // With the frame extended DWM would draw its own minimize, maximize and close buttons over the
+    // built-in title bar; without a system menu it draws none. The Windows title bar keeps it.
+    // Minimize, maximize and close still work from the taskbar either way.
+    LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    SetWindowLongPtrW(hwnd, GWL_STYLE, native ? (style | WS_SYSMENU) : (style & ~WS_SYSMENU));
+    // Set_WndProc's WM_NCCALCSIZE drops or keeps the system title bar to match.
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    if (!first) {
+        Set_Relayout(w);
+        RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_FRAME | RDW_UPDATENOW);
+    }
+}
+
 static void Set_RememberRect(SetWindow& w) {
     if (w.render || IsIconic(w.hwnd) || IsZoomed(w.hwnd)) return;
     GetWindowRect(w.hwnd, &w.normalRect);
@@ -10899,7 +11242,7 @@ static void Set_RememberRect(SetWindow& w) {
 static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     SetWindow* w = g_setWin && g_setWin->hwnd == hwnd ? g_setWin.get() : nullptr;
     if (!w) return DefWindowProcW(hwnd, msg, wParam, lParam);
-    if (w->nativeButtons || w->nativeTitle) {
+    if (w->nativeTitle) {
         LRESULT r = 0;
         if (DwmDefWindowProc(hwnd, msg, wParam, lParam, &r)) return r;  // Hover and clicks on DWM's buttons.
     }
@@ -11137,6 +11480,16 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             }
             return 0;
         case WM_MOUSEWHEEL: {
+            if (w->openSel >= 0 && Set_In(w->dropRect, w->mouseX, w->mouseY)) {
+                int n = (int)w->fields[w->openSel].options.size(), vis = Set_DropVisible(*w);
+                int step = GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? -3 : 3;
+                w->dropTop = std::clamp(w->dropTop + step, 0, std::max(0, n - vis));
+                SetHit h = Set_Hit(*w, w->mouseX, w->mouseY);
+                w->hover = h;
+                w->dropHover = h.kind == SetHit::Drop ? h.b : w->dropHover;
+                Set_Invalidate(*w);
+                return 0;
+            }
             Set_CommitEdit(*w, true);
             Set_ClosePopup(*w);
             float delta = (float)GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
@@ -11276,11 +11629,8 @@ static bool Set_Create(bool render) {
                                    g_hInstance, nullptr);
     }
     const int offX = GetSystemMetrics(SM_XVIRTUALSCREEN) - 6000, offY = GetSystemMetrics(SM_YVIRTUALSCREEN);
-    w->nativeTitle = !render && (Wh_GetIntSetting(L"nativeSettingsTitleBar") != 0 ||
-        GetStringSetting(L"settingsTitleButtons") != L"builtin");
-    w->nativeButtons = !render && !w->nativeTitle && GetStringSetting(L"settingsTitleButtons") != L"builtin";
-    w->glass = !render && Wh_GetIntSetting(L"settingsGlass") != 0;
-    kSetCapH = w->nativeTitle ? 0.0f : 40.0f;
+    // The built-in title bar until Set_ApplyFrame reads the switches.
+    kSetCapH = 40.0f;
     const DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
     HWND hwnd = CreateWindowExW(0, kSettingsClass, L"Seamless Clipboard Manager settings", style,
                                 render ? offX : CW_USEDEFAULT, render ? offY : CW_USEDEFAULT, 800, 600, w->owner,
@@ -11307,47 +11657,7 @@ static bool Set_Create(bool render) {
         w->iconBig = Set_MakeIcon(w->iconFamily, GetSystemMetricsForDpi(SM_CXICON, w->dpi));
         if (w->iconSmall) SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)w->iconSmall);
         if (w->iconBig) SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)w->iconBig);
-        if (w->glass) {
-            // Acrylic as one sheet over the whole window, the same material Seamless Flyouts
-            // gives the Launchpad settings window in Explorer: the accent acrylic with an 85%
-            // Mocha base tint, under the page's own crust tint. The system backdrop
-            // (DWMSBT_TRANSIENTWINDOW) went light grey over bright windows and turned to a flat
-            // grey slab when the window lost focus; the accent acrylic stays the same.
-            int backdrop = 1;  // DWMSBT_NONE
-            DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
-            DWM_BLURBEHIND bb{};
-            bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
-            bb.fEnable = TRUE;
-            bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
-            DwmEnableBlurBehindWindow(hwnd, &bb);
-            if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
-            struct SetAccentPolicy { int state, flags, abgr, animation; };
-            struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
-            using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
-            if (auto setComposition = (SetComposition_t)(void*)GetProcAddress(
-                    GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute")) {
-                SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
-                SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
-                setComposition(hwnd, &data);
-            }
-            MARGINS margins{-1, -1, -1, -1};
-            DwmExtendFrameIntoClientArea(hwnd, &margins);
-            COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
-            DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
-        } else if (w->nativeButtons) {
-            // Solid window: DWM draws its buttons only where the frame reaches, so extend it
-            // over the title bar strip.
-            MARGINS margins{0, 0, MulDiv((int)kSetCapH, w->dpi, 96), 0};
-            DwmExtendFrameIntoClientArea(hwnd, &margins);
-        }
-        // With the frame extended, DWM draws its own minimize, maximize and close buttons in the
-        // corner. "Windows buttons" keeps them (Set_WndProc passes their hover and clicks to
-        // DwmDefWindowProc); "Built-in buttons" drops the system menu so DWM draws none and the
-        // window draws its own. Minimize, maximize and close still work from the taskbar.
-        if (!w->nativeTitle && !w->nativeButtons)
-            SetWindowLongPtrW(hwnd, GWL_STYLE, GetWindowLongPtrW(hwnd, GWL_STYLE) & ~WS_SYSMENU);
-        // The first WM_NCCALCSIZE ran before w->hwnd was set; drop the system title bar now.
-        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        Set_ApplyFrame(*w);  // Title bar and glass; also drops the system title bar the first WM_NCCALCSIZE kept.
     }
 
     auto outer = [&](float cwDip, float chDip, SIZE& size) {
@@ -11663,6 +11973,7 @@ void LoadSettings() {
     s.closeOnFocusLoss = Wh_GetIntSetting(L"closeOnFocusLoss") != 0;
     s.alwaysOnTop = Wh_GetIntSetting(L"alwaysOnTop") != 0;
     s.confirmDelete = Wh_GetIntSetting(L"confirmDelete") != 0;
+    s.previewer = Choice(L"previewer", {L"builtin", L"peek"});
     s.fontName = GetStringSetting(L"fontName");
     if (s.fontName.empty()) s.fontName = L"FiraCode Nerd Font";
     s.fontSize = Clamped(L"fontSize", 7, 24, 10);

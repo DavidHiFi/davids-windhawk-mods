@@ -2,7 +2,7 @@
 // @id           better-volume-mixer-plus
 // @name         Seamless Volume Mixer
 // @description  A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices
-// @version      1.4.13
+// @version      1.4.29
 // @author       DavidHiFi, 0Allu, shubho
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -36,8 +36,9 @@ a per-app compressor and per-app audio devices.
 - **Quick playback device switching** from the top of the mixer.
 - **Pin, rename or hide apps**, and give apps a default volume.
 - **Middle-click to mute**, in the mixer or on the tray icon.
-- **Master volume number in the tray icon**, optional: the level is drawn
-  just left of the speaker glyph and updates live as the volume changes.
+- **Master volume number beside the tray icon**, optional: the level is
+  drawn in FiraCode Nerd Font Med right next to the speaker glyph and
+  updates live as the volume changes.
 - **Blue to mauve gradient sliders**, matching the mixer's border ring.
 - **Light, dark and system themes** with blur, transparency and animations.
 - **Compact mode** and full keyboard control.
@@ -118,7 +119,7 @@ Boost and compressor from
   $description: Animate opening, hover effects, and volume changes. The Windows animation preference is also respected.
 - trayVolumeNumber: false
   $name: Master volume number on tray icon
-  $description: Show the current master volume level inside the mixer's tray icon, drawn just left of the speaker glyph. The number updates live as the volume changes. Off by default.
+  $description: Show the current master volume level in FiraCode Nerd Font Med right beside the mixer's tray icon, on the taskbar surface. The number updates live as the volume changes. Off by default.
 - closeWhenFocusIsLost: true
   $name: Close when focus is lost
   $description: Automatically close the mixer when you click somewhere else.
@@ -901,6 +902,7 @@ constexpr UINT WM_APP_DEFAULT_OUTPUT_CHANGED = WM_APP + 7;
 constexpr UINT_PTR TIMER_METERS = 1;
 constexpr UINT_PTR TIMER_REFRESH = 2;
 constexpr UINT_PTR TIMER_CHECK_FOCUS = 3;
+constexpr UINT_PTR TIMER_TRAY_SYNC = 7;  // own id: sharing 4 with the name tooltip froze the number
 constexpr UINT_PTR TIMER_NAME_TOOLTIP = 4;
 constexpr UINT_PTR TIMER_DEVICE_REFRESH = 5;
 constexpr UINT_PTR TIMER_BOOST_SAVE = 6;
@@ -5311,6 +5313,14 @@ TrayAction GetTrayAction(UINT event, bool version4) {
     return TrayAction::None;
 }
 
+// Styler rules 64/65 widen the speaker's slot for the volume number by matching
+// this exact name. With the number off, a zero-width space at the end (the tooltip
+// reads the same) keeps the rules off the icon, so the slot is normal width.
+const wchar_t* TrayTip() {
+    return g_settings.trayVolumeNumber ? L"Seamless Volume Mixer"
+                                       : L"Seamless Volume Mixer\u200B";
+}
+
 void AddTrayIcon(HWND hWnd) {
     g_trayVersion4 = false;
     g_trayUsesGuid = true;
@@ -5319,11 +5329,14 @@ void AddTrayIcon(HWND hWnd) {
     data.hWnd = hWnd;
     data.uID = TRAY_ICON_ID;
     data.guidItem = MIXER_TRAY_GUID;
-    data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_GUID;
+    data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_GUID | NIF_TIP | NIF_SHOWTIP;
     data.uCallbackMessage = WM_APP_TRAY;
     data.hIcon = g_trayIcon;
-    // No tooltip on purpose: the shell's tray tooltip bubble pops over the
-    // mixer popup and does not match the theme. The popup is the identity.
+    // The tip names the icon (styler rules 64/65 match it to make room for the
+    // volume number) and shows as a normal tray tooltip. Without NIF_SHOWTIP a
+    // version 4 icon still got the taskbar's tooltip, only empty: a bare
+    // little bubble under the speaker on every hover.
+    wcscpy_s(data.szTip, TrayTip());
     if (!Shell_NotifyIconW(NIM_ADD, &data)) {
         // A tool host killed without cleanup can leave its GUID identity
         // registered. The stale entry then makes every later GUID add fail,
@@ -5399,17 +5412,317 @@ void RemoveTrayNumberIcon(HWND hWnd) {
     }
 }
 
-// Adds, updates or removes the number icon so it always matches the setting
-// and the live master volume. Runs on the mixer's UI thread only.
-void SyncTrayNumberIcon(HWND hWnd, bool) {
-    // 1.4.10: the number lives inside the one tray icon again, so any
-    // standalone number icon from 1.4.9 is cleaned up on the first pass.
+// The volume number beside the tray icon is drawn as real FiraCode Nerd Font
+// Med text on a click-through layered window, so it reads at taskbar text
+// size instead of shrinking into the 16 px icon. One tray item carries the
+// speaker; the number sits glued to its left edge.
+HWND g_trayNumberOverlay = nullptr;
+int g_trayOverlayWidth = 0;
+int g_trayOverlayHeight = 0;
+
+LRESULT CALLBACK TrayNumberOverlayProc(HWND hWnd, UINT message, WPARAM wParam,
+                                       LPARAM lParam) {
+    return DefWindowProcW(hWnd, message, wParam, lParam);
+}
+
+void CreateTrayNumberOverlay(HWND owner) {
+    WNDCLASSW wc = {};
+    wc.lpfnWndProc = TrayNumberOverlayProc;
+    wc.hInstance = GetModuleHandleW(nullptr);
+    wc.lpszClassName = L"WindhawkMixerTrayNumber";
+    RegisterClassW(&wc);
+    g_trayNumberOverlay = CreateWindowExW(
+        WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_NOACTIVATE |
+            WS_EX_TOOLWINDOW,
+        wc.lpszClassName, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr,
+        wc.hInstance, nullptr);
+    if (g_trayNumberOverlay) {
+        ShowWindow(g_trayNumberOverlay, SW_SHOWNOACTIVATE);
+    }
+}
+
+int g_trayInkLeft = 0, g_trayInkRight = 0, g_trayInkTop = 0, g_trayInkBottom = 0;
+
+// The last slot the number was placed against. The shell briefly reports the
+// speaker somewhere else while the tray relays out (every ~5 s here, for
+// ~200 ms), and following that made the number jump away and back.
+RECT g_trayPlacedSlot = {};
+bool g_trayHavePlacedSlot = false;
+RECT g_trayPendingSlot = {};
+ULONGLONG g_trayPendingSince = 0;
+ULONGLONG g_trayCoveredSince = 0;
+constexpr ULONGLONG TRAY_SETTLE_MS = 400;
+
+// Where the number's window goes for a slot, placed by its ink: a 6 px gap to
+// the speaker's ink (the battery icon to its percent), digits centred on the
+// speaker like Fan Control's number. Styler rule 64 widens the speaker's slot
+// and right-aligns its glyph; a normal-width slot (rule missing) puts the
+// number just left of the slot.
+POINT TrayNumberPlacement(const RECT& slot) {
+    bool wide = (slot.right - slot.left) >= Scale(40);
+    int speakerInk = slot.right - Scale(21);
+    int x = wide ? speakerInk - Scale(6) - 1 - g_trayInkRight
+                 : slot.left - Scale(2) - 1 - g_trayInkRight;
+    // A wide value ("100") keeps its ink inside the slot's hover box.
+    if (wide) x = std::max(x, (int)slot.left + Scale(2) - g_trayInkLeft);
+    int inkHeight = g_trayInkBottom - g_trayInkTop + 1;
+    int y = (slot.top + slot.bottom) / 2 - inkHeight / 2 - g_trayInkTop;
+    return {x, y};
+}
+
+void PaintTrayNumberOverlay() {
+    if (!g_trayNumberOverlay) return;
+    int percent =
+        ClampInt(static_cast<int>(GetMasterVolume() * 100.0f + 0.5f), 0, 100);
+    WCHAR text[8];
+    swprintf_s(text, L"%d", percent);
+    g_trayPaintVolume = percent;
+
+    DWORD light = 0, size = sizeof(light);
+    RegGetValueW(HKEY_CURRENT_USER,
+        L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        L"SystemUsesLightTheme", RRF_RT_REG_DWORD, nullptr, &light, &size);
+    COLORREF color = light ? RGB(76, 79, 105) : RGB(205, 214, 244);  // Mocha/Latte text, like the battery %
+
+    int em = Scale(11);  // digits 8 px tall, the same as Fan Control's and the battery's
+    HDC screen = GetDC(nullptr);
+    HFONT font = CreateFontW(-em, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
+        ANTIALIASED_QUALITY, DEFAULT_PITCH, L"FiraCode Nerd Font");
+    HDC memory = CreateCompatibleDC(screen);
+    if (!font || !memory) {
+        if (font) DeleteObject(font);
+        if (memory) DeleteDC(memory);
+        ReleaseDC(nullptr, screen);
+        return;
+    }
+    HGDIOBJ oldFont = SelectObject(memory, font);
+    SIZE extent = {};
+    GetTextExtentPoint32W(memory, text, static_cast<int>(wcslen(text)), &extent);
+    g_trayOverlayWidth = extent.cx + Scale(3);
+    g_trayOverlayHeight = em + Scale(5);
+
+    BITMAPINFO info = {};
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = g_trayOverlayWidth;
+    info.bmiHeader.biHeight = -g_trayOverlayHeight;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP bitmap = CreateDIBSection(screen, &info, DIB_RGB_COLORS, &bits,
+                                      nullptr, 0);
+    if (!bitmap) {
+        SelectObject(memory, oldFont);
+        DeleteObject(font);
+        DeleteDC(memory);
+        ReleaseDC(nullptr, screen);
+        return;
+    }
+    HGDIOBJ oldBitmap = SelectObject(memory, bitmap);
+    std::fill(static_cast<DWORD*>(bits),
+              static_cast<DWORD*>(bits) + g_trayOverlayWidth * g_trayOverlayHeight,
+              0u);
+    SetBkMode(memory, TRANSPARENT);
+    SetTextColor(memory, RGB(255, 255, 255));
+    RECT box{0, 0, g_trayOverlayWidth, g_trayOverlayHeight};
+    DrawTextW(memory, text, static_cast<int>(wcslen(text)), &box,
+              DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    GdiFlush();
+
+    // Ink bounds, so the number is placed by its visible pixels, not its box.
+    {
+        auto* px = static_cast<DWORD*>(bits);
+        int l = g_trayOverlayWidth, r = -1, t = g_trayOverlayHeight, b = -1;
+        for (int yy = 0; yy < g_trayOverlayHeight; ++yy)
+            for (int xx = 0; xx < g_trayOverlayWidth; ++xx)
+                if ((px[yy * g_trayOverlayWidth + xx] & 0xFF) > 60) {
+                    l = std::min(l, xx); r = std::max(r, xx);
+                    t = std::min(t, yy); b = std::max(b, yy);
+                }
+        if (r >= 0) { g_trayInkLeft = l; g_trayInkRight = r; g_trayInkTop = t; g_trayInkBottom = b; }
+    }
+
+    // White coverage becomes the alpha; the ink takes the tray colour,
+    // premultiplied for UpdateLayeredWindow.
+    auto* pixels = static_cast<DWORD*>(bits);
+    for (int i = 0; i < g_trayOverlayWidth * g_trayOverlayHeight; ++i) {
+        DWORD alpha = pixels[i] & 0xFF;
+        pixels[i] = (alpha << 24) |
+            ((GetRValue(color) * alpha / 255) << 16) |
+            ((GetGValue(color) * alpha / 255) << 8) |
+            (GetBValue(color) * alpha / 255);
+    }
+
+    // The bitmap is still selected into `memory`, and a bitmap can live in
+    // one DC at a time: a second DC got the empty default bitmap and the
+    // number was pushed fully transparent. Present straight from `memory`.
+    BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+    POINT origin = {0, 0};
+    SIZE window = {g_trayOverlayWidth, g_trayOverlayHeight};
+    // New size and new place in one step: a width change ("99" to "100")
+    // with a separate move after it drew one frame shifted.
+    POINT place = {};
+    POINT* destination = nullptr;
+    if (g_trayHavePlacedSlot) {
+        place = TrayNumberPlacement(g_trayPlacedSlot);
+        destination = &place;
+    }
+    if (!UpdateLayeredWindow(g_trayNumberOverlay, screen, destination, &window,
+                             memory, &origin, 0, &blend, ULW_ALPHA)) {
+        Wh_Log(L"Mixer: tray number present failed (%lu)", GetLastError());
+    }
+    SelectObject(memory, oldBitmap);
+    DeleteObject(bitmap);
+    SelectObject(memory, oldFont);
+    DeleteObject(font);
+    DeleteDC(memory);
+    ReleaseDC(nullptr, screen);
+}
+
+// The number is a topmost window of its own, so on its own it floats over a
+// borderless or fullscreen game that covers the taskbar. Show it only while
+// the taskbar itself is what is on screen at the speaker's slot (the number
+// window is click-through, so WindowFromPoint looks past it).
+// What is on screen at the speaker's slot:
+//  Clear   - the taskbar itself: show, raised above it.
+//  Overlay - an always-on-top window over it (screen-capture overlays like
+//            ShareX's region picker, the taskbar's own popups, a launcher):
+//            stay shown but keep the current z-order, so the overlay draws
+//            over the number where it covers it and a screenshot still has it.
+//  Covered - a normal window over the taskbar (a borderless or fullscreen
+//            game, which demotes the taskbar): hide.
+enum class TraySlotState { Clear, Overlay, Covered };
+
+TraySlotState GetTraySlotState(const RECT& slot) {
+    HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+    if (!tray || !IsWindowVisible(tray)) return TraySlotState::Covered;
+    POINT probe = {slot.right - Scale(14), (slot.top + slot.bottom) / 2};
+    HWND hit = WindowFromPoint(probe);
+    HWND root = hit ? GetAncestor(hit, GA_ROOT) : nullptr;
+    if (!root || root == tray) return TraySlotState::Clear;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(root, &pid);
+    if (pid == GetCurrentProcessId()) return TraySlotState::Overlay;
+    if (GetWindowLongPtrW(root, GWL_EXSTYLE) & WS_EX_TOPMOST) {
+        // A topmost game still counts as covering: the shell flags a
+        // fullscreen app (one monitor exactly), which a capture overlay
+        // spanning every monitor is not.
+        QUERY_USER_NOTIFICATION_STATE quns = QUNS_ACCEPTS_NOTIFICATIONS;
+        if (SUCCEEDED(SHQueryUserNotificationState(&quns)) &&
+            (quns == QUNS_BUSY || quns == QUNS_RUNNING_D3D_FULL_SCREEN ||
+             quns == QUNS_PRESENTATION_MODE))
+            return TraySlotState::Covered;
+        return TraySlotState::Overlay;
+    }
+    return TraySlotState::Covered;
+}
+
+void PositionTrayNumberOverlay();
+
+HWINEVENTHOOK g_trayForegroundHook = nullptr;
+
+void CALLBACK TrayForegroundProc(HWINEVENTHOOK, DWORD, HWND, LONG, LONG,
+                                 DWORD, DWORD) {
+    PositionTrayNumberOverlay();
+}
+
+void PositionTrayNumberOverlay() {
+    if (!g_trayNumberOverlay) return;
+    ULONGLONG now = GetTickCount64();
+    HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+    RECT slot = {};
+    TraySlotState state = TraySlotState::Covered;
+    if (GetTrayIconRect(&slot) && slot.right > slot.left &&
+        g_trayOverlayWidth > 0) {
+        state = GetTraySlotState(slot);
+    }
+    if (state == TraySlotState::Covered) {
+        // Hide at once for a fullscreen game or a gone taskbar; any other
+        // "covered" read must last a moment, so a passing blip never blinks it.
+        QUERY_USER_NOTIFICATION_STATE quns = QUNS_ACCEPTS_NOTIFICATIONS;
+        bool fullscreen = SUCCEEDED(SHQueryUserNotificationState(&quns)) &&
+            (quns == QUNS_BUSY || quns == QUNS_RUNNING_D3D_FULL_SCREEN ||
+             quns == QUNS_PRESENTATION_MODE);
+        if (!g_trayCoveredSince) g_trayCoveredSince = now;
+        if (fullscreen || !tray || !IsWindowVisible(tray) ||
+            now - g_trayCoveredSince >= TRAY_SETTLE_MS) {
+            if (IsWindowVisible(g_trayNumberOverlay))
+                ShowWindow(g_trayNumberOverlay, SW_HIDE);
+        }
+        return;
+    }
+    g_trayCoveredSince = 0;
+
+    // Follow a new slot only once it has held for a moment.
+    if (g_trayHavePlacedSlot && !EqualRect(&slot, &g_trayPlacedSlot)) {
+        if (!EqualRect(&slot, &g_trayPendingSlot)) {
+            g_trayPendingSlot = slot;
+            g_trayPendingSince = now;
+            slot = g_trayPlacedSlot;
+        } else if (now - g_trayPendingSince < TRAY_SETTLE_MS) {
+            slot = g_trayPlacedSlot;
+        }
+    } else {
+        // Back at the placed slot: the blip is over, so forget it, or the
+        // next blip to the same spot would count as long settled.
+        g_trayPendingSlot = {};
+    }
+    g_trayPlacedSlot = slot;
+    g_trayHavePlacedSlot = true;
+
+    POINT place = TrayNumberPlacement(slot);
+    // Raise only when the taskbar has come up over the number (a click on
+    // the taskbar does that); re-raising every tick churned the z-order.
+    bool underTaskbar = false;
+    if (state == TraySlotState::Clear && tray) {
+        for (HWND above = GetWindow(g_trayNumberOverlay, GW_HWNDPREV); above;
+             above = GetWindow(above, GW_HWNDPREV)) {
+            if (above == tray) { underTaskbar = true; break; }
+        }
+    }
+    RECT current = {};
+    GetWindowRect(g_trayNumberOverlay, &current);
+    bool visible = IsWindowVisible(g_trayNumberOverlay) != FALSE;
+    if (visible && !underTaskbar && current.left == place.x &&
+        current.top == place.y &&
+        current.right - current.left == g_trayOverlayWidth &&
+        current.bottom - current.top == g_trayOverlayHeight) {
+        return;
+    }
+    UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW;
+    if (!underTaskbar) flags |= SWP_NOZORDER;
+    SetWindowPos(g_trayNumberOverlay, HWND_TOPMOST, place.x, place.y,
+                 g_trayOverlayWidth, g_trayOverlayHeight, flags);
+}
+
+// Adds, updates or removes the number so it always matches the setting and
+// the live master volume. Runs on the mixer's UI thread only.
+void SyncTrayNumberIcon(HWND hWnd, bool force) {
+    // Any standalone number icon from 1.4.9 is cleaned up on the first pass.
     static bool cleanedLegacy = false;
     if (g_trayNumberIcon || !cleanedLegacy) {
         RemoveTrayNumberIcon(hWnd);
         cleanedLegacy = true;
     }
-    g_trayPaintVolume = -1;
+    if (!g_settings.trayVolumeNumber) {
+        if (g_trayNumberOverlay) {
+            DestroyWindow(g_trayNumberOverlay);
+            g_trayNumberOverlay = nullptr;
+        }
+        g_trayPaintVolume = -1;
+        return;
+    }
+    if (!g_trayNumberOverlay) {
+        CreateTrayNumberOverlay(hWnd);
+    }
+    if (!g_trayNumberOverlay) return;
+    int percent =
+        ClampInt(static_cast<int>(GetMasterVolume() * 100.0f + 0.5f), 0, 100);
+    if (force || percent != g_trayPaintVolume) {
+        PaintTrayNumberOverlay();
+    }
+    PositionTrayNumberOverlay();
 }
 
 bool SpeakerShapeContains(float x, float y, bool includeWaves = true) {
@@ -5515,211 +5828,6 @@ HICON CreateSpeakerIcon(int pixels, COLORREF color, float shapeScale = 1.0f,
     return icon;
 }
 
-// 3x5 pixel digits for the tray volume number, index [digit][row][column].
-bool TrayVolumeDigitFilled(int digit, int column, int row) {
-    static const BYTE kDigits[10][5][3] = {
-        {{1,1,1},{1,0,1},{1,0,1},{1,0,1},{1,1,1}},  // 0
-        {{0,1,0},{1,1,0},{0,1,0},{0,1,0},{1,1,1}},  // 1
-        {{1,1,1},{0,0,1},{1,1,1},{1,0,0},{1,1,1}},  // 2
-        {{1,1,1},{0,0,1},{1,1,1},{0,0,1},{1,1,1}},  // 3
-        {{1,0,1},{1,0,1},{1,1,1},{0,0,1},{0,0,1}},  // 4
-        {{1,1,1},{1,0,0},{1,1,1},{0,0,1},{1,1,1}},  // 5
-        {{1,1,1},{1,0,0},{1,1,1},{1,0,1},{1,1,1}},  // 6
-        {{1,1,1},{0,0,1},{0,1,0},{0,1,0},{0,1,0}},  // 7
-        {{1,1,1},{1,0,1},{1,1,1},{1,0,1},{1,1,1}},  // 8
-        {{1,1,1},{1,0,1},{1,1,1},{0,0,1},{1,1,1}},  // 9
-    };
-    return kDigits[digit][row][column] != 0;
-}
-
-// Tray icon that carries the master volume number and the speaker in one
-// image: digits on the left, speaker on the right, exactly as the setting
-// promises. Digits reuse the 3x5 grid with ink-aware spacing and a gamma
-// lift so thin strokes stay solid at tray sizes; the speaker reuses the
-// popup glyph so both surfaces share one edge treatment.
-HICON CreateTrayCompositeIcon(int width, int height, COLORREF color,
-                              int volume, bool muted) {
-    width = ClampInt(width, 16, 256);
-    height = ClampInt(height, 16, 256);
-    BITMAPINFO info{};
-    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    info.bmiHeader.biWidth = width;
-    info.bmiHeader.biHeight = -height;
-    info.bmiHeader.biPlanes = 1;
-    info.bmiHeader.biBitCount = 32;
-    info.bmiHeader.biCompression = BI_RGB;
-    void* bits = nullptr;
-    HBITMAP bitmap = CreateDIBSection(nullptr, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
-    if (!bitmap || !bits) {
-        if (bitmap) DeleteObject(bitmap);
-        return nullptr;
-    }
-    auto output = static_cast<DWORD*>(bits);
-    WCHAR text[8];
-    swprintf_s(text, L"%d", ClampInt(volume, 0, 100));
-    size_t count = wcslen(text);
-
-    // Font pass: grid digits went soft once three of them had to share a
-    // 16 px slot, so the number is drawn with real hinted type, shrunk until
-    // it fits. White-on-black coverage becomes the alpha.
-    if (HDC memory = CreateCompatibleDC(nullptr)) {
-        HGDIOBJ oldBitmap = SelectObject(memory, bitmap);
-        std::fill(output, output + width * height, 0u);
-        SetBkMode(memory, TRANSPARENT);
-        SetTextColor(memory, RGB(255, 255, 255));
-        RECT box{0, 0, width, height};
-        bool drawn = false;
-        for (int size = height; size >= height / 2 && !drawn; --size) {
-            HFONT font = CreateFontW(-size, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-                DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
-                NONANTIALIASED_QUALITY, DEFAULT_PITCH, L"Segoe UI");
-            if (!font) break;
-            HGDIOBJ oldFont = SelectObject(memory, font);
-            SIZE extent{};
-            GetTextExtentPoint32W(memory, text, static_cast<int>(count), &extent);
-            if (extent.cx <= width || size == height / 2) {
-                DrawTextW(memory, text, static_cast<int>(count), &box,
-                          DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-                drawn = true;
-            }
-            SelectObject(memory, oldFont);
-            DeleteObject(font);
-        }
-        GdiFlush();
-        SelectObject(memory, oldBitmap);
-        DeleteDC(memory);
-        if (drawn) {
-            for (int i = 0; i < width * height; ++i) {
-                DWORD alpha = output[i] & 0xFF;
-                output[i] = (alpha << 24) |
-                    ((GetRValue(color) * alpha / 255) << 16) |
-                    ((GetGValue(color) * alpha / 255) << 8) |
-                    (GetBValue(color) * alpha / 255);
-            }
-            std::vector<BYTE> maskBits(((width + 15) / 16) * 2 * height, 0);
-            HBITMAP mask = CreateBitmap(width, height, 1, 1, maskBits.data());
-            HICON icon = nullptr;
-            if (mask) {
-                ICONINFO iconInfo{};
-                iconInfo.fIcon = TRUE;
-                iconInfo.hbmColor = bitmap;
-                iconInfo.hbmMask = mask;
-                icon = CreateIconIndirect(&iconInfo);
-                DeleteObject(mask);
-            }
-            if (icon) {
-                DeleteObject(bitmap);
-                return icon;
-            }
-        }
-    }
-
-    // Ink extents per digit keep a thin "1" from wasting width.
-    int inkFirst[3] = {0, 0, 0};
-    int inkLast[3] = {2, 2, 2};
-    float inkUnits = 0.0f;
-    for (size_t i = 0; i < count; ++i) {
-        int digit = text[i] - L'0';
-        int first = 3, last = -1;
-        for (int row = 0; row < 5; ++row) {
-            for (int column = 0; column < 3; ++column) {
-                if (TrayVolumeDigitFilled(digit, column, row)) {
-                    first = std::min(first, column);
-                    last = std::max(last, column);
-                }
-            }
-        }
-        if (last < first) { first = 0; last = 2; }
-        inkFirst[i] = first;
-        inkLast[i] = last;
-        inkUnits += static_cast<float>(last - first + 1);
-        if (i + 1 < count) inkUnits += 1.0f;
-    }
-
-    // Speaker ink spans about 11.9 x 11 design units around (7.45, 8).
-    // Half scale keeps a balanced digit zone inside the square tray slot;
-    // the shell forces every tray icon into a square, so wide canvases
-    // only end up squeezed.
-    // The speaker beside the digits blurred to a smudge at 16 px, so the number
-    // mode shows digits only; muted falls back to the speaker with its mark.
-    float speakerScale = std::min(height * 0.35f / 11.0f, 1.0f);
-    float speakerWidth = 0.0f;
-    float speakerCenterX = width - 1.0f - speakerWidth * 0.5f;
-    float digitZone = width - 2.0f;
-    float digitScale = std::min(digitZone / inkUnits, height * 0.80f / 5.0f);
-    float digitOriginY = (height - 5.0f * digitScale) * 0.5f;
-    float digitWidth = 0.0f;
-    for (size_t i = 0; i < count; ++i) digitWidth += (inkLast[i] - inkFirst[i] + 1) * digitScale + (i + 1 < count ? digitScale : 0.0f);
-    float cursorX = std::floor((width - digitWidth) * 0.5f);
-    float digitOriginX[3] = {0, 0, 0};
-    for (size_t i = 0; i < count; ++i) {
-        digitOriginX[i] = cursorX;
-        cursorX += (inkLast[i] - inkFirst[i] + 1) * digitScale;
-        if (i + 1 < count) cursorX += digitScale;
-    }
-    float digitRight = digitOriginX[count - 1] +
-        (inkLast[count - 1] - inkFirst[count - 1] + 1) * digitScale;
-
-    const int samples = 12;
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            int covered = 0;
-            for (int sy = 0; sy < samples; ++sy) {
-                for (int sx = 0; sx < samples; ++sx) {
-                    float offsetX = ((sx + 0.5f) / samples - 0.5f) * 1.35f;
-                    float offsetY = ((sy + 0.5f) / samples - 0.5f) * 1.35f;
-                    float px = x + 0.5f + offsetX;
-                    float py = y + 0.5f + offsetY;
-                    bool inside = false;
-                    if (px >= digitOriginX[0] && px < digitRight) {
-                        for (size_t i = 0; i < count && !inside; ++i) {
-                            float localX = (px - digitOriginX[i]) / digitScale;
-                            float localY = (py - digitOriginY) / digitScale;
-                            if (localX < 0.0f ||
-                                localX >= inkLast[i] - inkFirst[i] + 1.0f ||
-                                localY < 0.0f || localY >= 5.0f) {
-                                continue;
-                            }
-                            int column = inkFirst[i] + static_cast<int>(localX);
-                            int row = std::min(4, static_cast<int>(localY));
-                            inside = TrayVolumeDigitFilled(text[i] - L'0', column, row);
-                        }
-                    } else {
-                        float shapeX = 7.45f + (px - speakerCenterX) / speakerScale;
-                        float shapeY = 8.0f + (py - height * 0.5f) / speakerScale;
-                        inside = SpeakerShapeContains(shapeX, shapeY, !muted);
-                        if (muted && SpeakerMuteMarkContains(shapeX, shapeY)) {
-                            inside = true;
-                        }
-                    }
-                    covered += inside;
-                }
-            }
-            float coverage = covered / static_cast<float>(samples * samples);
-            // Gamma lift keeps one-pixel digit strokes from reading dim.
-            DWORD alpha =
-                static_cast<DWORD>(std::pow(coverage, 0.55f) * 255.0f + 0.5f);
-            output[y * width + x] = (alpha << 24) |
-                ((GetRValue(color) * alpha / 255) << 16) |
-                ((GetGValue(color) * alpha / 255) << 8) |
-                (GetBValue(color) * alpha / 255);
-        }
-    }
-    std::vector<BYTE> maskBits(((width + 15) / 16) * 2 * height, 0);
-    HBITMAP mask = CreateBitmap(width, height, 1, 1, maskBits.data());
-    HICON icon = nullptr;
-    if (mask) {
-        ICONINFO iconInfo{};
-        iconInfo.fIcon = TRUE;
-        iconInfo.hbmColor = bitmap;
-        iconInfo.hbmMask = mask;
-        icon = CreateIconIndirect(&iconInfo);
-        DeleteObject(mask);
-    }
-    DeleteObject(bitmap);
-    return icon;
-}
-
 HICON LoadMixerIcon(int pixels, bool tray = false, bool muted = false) {
     COLORREF color = g_theme.text;
     if (tray) {
@@ -5728,14 +5836,6 @@ HICON LoadMixerIcon(int pixels, bool tray = false, bool muted = false) {
             L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
             L"SystemUsesLightTheme", RRF_RT_REG_DWORD, nullptr, &light, &size);
         color = light ? RGB(30, 32, 36) : RGB(248, 249, 252);
-    }
-    if (tray && g_settings.trayVolumeNumber && !muted) {
-        int percent =
-            ClampInt(static_cast<int>(GetMasterVolume() * 100.0f + 0.5f), 0, 100);
-        if (HICON icon = CreateTrayCompositeIcon(pixels, pixels, color,
-                                                 percent, muted)) {
-            return icon;
-        }
     }
     if (HICON icon = CreateSpeakerIcon(pixels, color, tray ? 1.12f : 1.0f, !tray, muted)) {
         return icon;
@@ -5769,7 +5869,10 @@ void RefreshIconSizes(HWND hWnd) {
             data.hWnd = hWnd;
             data.uID = TRAY_ICON_ID;
             if (g_trayUsesGuid) data.guidItem = MIXER_TRAY_GUID;
-            data.uFlags = NIF_ICON | (g_trayUsesGuid ? NIF_GUID : 0);
+            // Every modify repeats the tip and NIF_SHOWTIP: a modify without
+            // them drops the standard tooltip and the empty bubble comes back.
+            data.uFlags = NIF_ICON | NIF_TIP | NIF_SHOWTIP | (g_trayUsesGuid ? NIF_GUID : 0);
+            wcscpy_s(data.szTip, TrayTip());
             data.hIcon = tray;
             if (!Shell_NotifyIconW(NIM_MODIFY, &data)) {
                 Wh_Log(L"Mixer: tray DPI icon update failed");
@@ -5814,7 +5917,10 @@ void RefreshMasterIcons(HWND hWnd, bool force) {
             data.hWnd = hWnd;
             data.uID = TRAY_ICON_ID;
             if (g_trayUsesGuid) data.guidItem = MIXER_TRAY_GUID;
-            data.uFlags = NIF_ICON | (g_trayUsesGuid ? NIF_GUID : 0);
+            // Every modify repeats the tip and NIF_SHOWTIP: a modify without
+            // them drops the standard tooltip and the empty bubble comes back.
+            data.uFlags = NIF_ICON | NIF_TIP | NIF_SHOWTIP | (g_trayUsesGuid ? NIF_GUID : 0);
+            wcscpy_s(data.szTip, TrayTip());
             data.hIcon = tray;
             Shell_NotifyIconW(NIM_MODIFY, &data);
         }
@@ -6537,9 +6643,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
         AddTrayIcon(hWnd);
         SyncTrayNumberIcon(hWnd, true);
         return 0;
-    }
-
-    switch (message) {
+    }    switch (message) {
         case WM_CREATE: {
             Gdiplus::GdiplusStartupInput startup;
             if (Gdiplus::GdiplusStartup(&g_gdiplusToken, &startup, nullptr) != Gdiplus::Ok) {
@@ -6568,6 +6672,15 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
             // Added here, before the speaker icon in AddTrayIcon, so a fresh
             // registration sits to the speaker's left.
             SyncTrayNumberIcon(hWnd, true);
+            // Keeps the number glued to the tray slot when other tray
+            // icons come and go and the slot moves.
+            SetTimer(hWnd, TIMER_TRAY_SYNC, 500, nullptr);
+            // A game taking the foreground hides the number at once instead
+            // of on the next tick. Out of context: runs on this thread.
+            g_trayForegroundHook = SetWinEventHook(
+                EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr,
+                TrayForegroundProc, 0, 0,
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
             ApplyTransparencyStyle(hWnd);
             // The translucent path draws its own rounded surface and border;
             // DWM rounding would clip the border at the corners.
@@ -6671,9 +6784,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
 
         case WM_APP_MASTER_STATE_CHANGED:
             SyncTrayNumberIcon(hWnd, false);
-            // Force: with the number setting on, the tray icon carries the
-            // volume, so every master change must re-render it.
-            RefreshMasterIcons(hWnd, true);
+            RefreshMasterIcons(hWnd);
             return 0;
 
         case WM_APP_DEFAULT_OUTPUT_CHANGED: {
@@ -6706,7 +6817,16 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
             CancelNameTooltip(hWnd);
             SelectRow(DRAG_MASTER);
             StopDefaultVolumeNotifications();
-            LoadSettings();
+            {
+                bool hadNumber = g_settings.trayVolumeNumber;
+                LoadSettings();
+                // The slot's width follows the number: re-add the icon under its
+                // new name so the styler matches (or skips) a fresh element.
+                if (hadNumber != g_settings.trayVolumeNumber) {
+                    RemoveTrayIcon(hWnd);
+                    AddTrayIcon(hWnd);
+                }
+            }
             SyncTrayNumberIcon(hWnd, true);
             RefreshMasterIcons(hWnd, true);
             // Follow a live renderer switch: arm the compositor path when it
@@ -6759,6 +6879,10 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
             }
             if (wParam == TIMER_METERS && IsWindowVisible(hWnd)) {
                 InvalidateRect(hWnd, nullptr, FALSE);
+                return 0;
+            }
+            if (wParam == TIMER_TRAY_SYNC) {
+                SyncTrayNumberIcon(hWnd, false);
                 return 0;
             }
             if (wParam == TIMER_DEVICE_REFRESH) {
@@ -7124,6 +7248,15 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
             g_showRequestPending = false;
             RemoveTrayIcon(hWnd);
             RemoveTrayNumberIcon(hWnd);
+            KillTimer(hWnd, TIMER_TRAY_SYNC);
+            if (g_trayForegroundHook) {
+                UnhookWinEvent(g_trayForegroundHook);
+                g_trayForegroundHook = nullptr;
+            }
+            if (g_trayNumberOverlay) {
+                DestroyWindow(g_trayNumberOverlay);
+                g_trayNumberOverlay = nullptr;
+            }
             ReleaseAudioData();
             g_activatedSessions.clear();
             g_liveSessions.clear();
@@ -7294,6 +7427,9 @@ DWORD WINAPI ThreadProc(LPVOID) {
 // - Menus that Windows draws get 2 px more frame on every side, so the hover has the same room
 //   from the border as in Explorer's own desktop menu (4 px at the sides, 6 px top and bottom).
 //   Menus with owner-drawn rows (Explorer) already have it and are left alone.
+// - A submenu opens touching its parent, and while the pointer heads for an open submenu the
+//   parent ignores it, so rows crossed on the way don't swap the submenu (released after a
+//   short rest, so stopping on a row still opens that row).
 // - A menu too tall for its monitor gets shorter rows while it is open, so the last item
 //   shows without scroll arrows. Windows reads row spacing once per process, so the spacing is
 //   reloaded (FlushMenuThemes) when such a menu opens and again when the menu closes.
@@ -7311,6 +7447,8 @@ constexpr INT kRowMargin = 8;                  // row top and bottom margin of t
 constexpr INT kMinRowMargin = 2;
 static const WCHAR* const kPadProp = L"SeamlessMenuRoomPad";
 static const WCHAR* const kSizeProp = L"SeamlessMenuRoomSize";
+static const WCHAR* const kSeqProp = L"SeamlessMenuRoomSeq";   // creation order of menu windows
+constexpr UINT kAimHoldMs = 250;               // how long the pointer may rest before a held move counts
 
 static std::atomic<INT> g_rowMargin{kRowMargin};
 static HWINEVENTHOOK g_createHook = nullptr, g_menuHook = nullptr;
@@ -7320,6 +7458,13 @@ static Flush_t g_flush = nullptr;
 static thread_local HHOOK t_loopHook = nullptr;
 static thread_local INT t_trackDepth = 0;
 static thread_local BOOL t_menuMode = FALSE;
+static std::atomic<ULONG> g_seq{0};
+static thread_local HHOOK t_aimHook = nullptr;
+static thread_local POINT t_apex = {LONG_MIN, LONG_MIN};
+static thread_local MSG t_held = {};
+static thread_local UINT_PTR t_aimTimer = 0;
+static thread_local DWORD t_holdStart = 0;
+constexpr DWORD kAimMaxMs = 700;               // a hold never lasts longer than this
 
 // Row top and bottom margin to report for Menu part 27 / POPUPITEM, property 10000.
 static INT RowMargin() { return g_rowMargin.load(); }
@@ -7347,6 +7492,132 @@ static BOOL HasOwnerDraw(HMENU m)
     return FALSE;
 }
 
+// The nearest visible menu window of this thread made before (parent) or after (child) h.
+struct RelativeFind { HWND self; ULONG_PTR seq; BOOL child; HWND best; ULONG_PTR bestSeq; };
+static BOOL CALLBACK FindRelative(HWND h, LPARAM l)
+{
+    auto* f = reinterpret_cast<RelativeFind*>(l);
+    if (h == f->self || !IsWindowVisible(h) || !IsPopupMenuWindow(h)) return TRUE;
+    ULONG_PTR s = (ULONG_PTR)GetPropW(h, kSeqProp);
+    if (!s) return TRUE;
+    BOOL better = f->child ? (s > f->seq && (!f->best || s < f->bestSeq))
+                           : (s < f->seq && (!f->best || s > f->bestSeq));
+    if (better) { f->best = h; f->bestSeq = s; }
+    return TRUE;
+}
+static HWND RelativeMenu(HWND h, BOOL child)
+{
+    RelativeFind f = {h, (ULONG_PTR)GetPropW(h, kSeqProp), child, nullptr, 0};
+    if (!f.seq) return nullptr;
+    EnumThreadWindows(GetCurrentThreadId(), FindRelative, reinterpret_cast<LPARAM>(&f));
+    return f.best;
+}
+
+// Pull a submenu in so it touches its parent (never pushes it further away or off screen).
+static VOID SnapToParent(HWND h, WINDOWPOS* wp)
+{
+    HWND parent = RelativeMenu(h, FALSE);
+    RECT pr;
+    if (!parent || !GetWindowRect(parent, &pr)) return;
+    INT cx = wp->cx;
+    if ((wp->flags & SWP_NOSIZE) || cx <= 0) {
+        RECT r;
+        if (!GetWindowRect(h, &r)) return;
+        cx = r.right - r.left;
+    }
+    LONG mid = (pr.left + pr.right) / 2;
+    if (wp->x >= mid) {
+        if (pr.right < wp->x) wp->x = pr.right;
+    } else if (wp->x + cx <= mid) {
+        if (pr.left - cx > wp->x) wp->x = pr.left - cx;
+    }
+}
+
+static BOOL InTriangle(POINT p, POINT a, POINT b, POINT c)
+{
+    auto side = [](POINT o, POINT u, POINT v) {
+        return (LONGLONG)(u.x - o.x) * (v.y - o.y) - (LONGLONG)(u.y - o.y) * (v.x - o.x);
+    };
+    LONGLONG d1 = side(p, a, b), d2 = side(p, b, c), d3 = side(p, c, a);
+    BOOL neg = d1 < 0 || d2 < 0 || d3 < 0, pos = d1 > 0 || d2 > 0 || d3 > 0;
+    return !(neg && pos);
+}
+
+static VOID DropHeld()
+{
+    if (t_aimTimer) KillTimer(nullptr, t_aimTimer);
+    t_aimTimer = 0;
+    t_held = {};
+}
+
+// The pointer rested: let the last held move through, from where it stopped. The timer has no
+// callback (a pending one could outlive the mod's unload); AimProc sees its WM_TIMER.
+static VOID AimRelease()
+{
+    MSG m = t_held;
+    DropHeld();
+    if (m.hwnd && IsWindow(m.hwnd)) {
+        t_apex = m.pt;
+        PostMessageW(m.hwnd, m.message, m.wParam, m.lParam);
+    }
+}
+
+// TRUE: hold this move, the pointer is on its way to the open submenu.
+static BOOL HoldForSubmenu(const MSG* m)
+{
+    POINT p = m->pt;
+    HWND under = WindowFromPoint(p);
+    HWND sub = nullptr;
+    if (under && IsPopupMenuWindow(under) && GetWindowThreadProcessId(under, nullptr) == GetCurrentThreadId())
+        sub = RelativeMenu(under, TRUE);
+    RECT sr, pr;
+    if (!sub || !GetWindowRect(sub, &sr) || !GetWindowRect(under, &pr) || t_apex.x == LONG_MIN ||
+        (p.x == t_apex.x && p.y == t_apex.y)) {
+        DropHeld();
+        t_apex = p;
+        return FALSE;
+    }
+    LONG edge = sr.left >= (pr.left + pr.right) / 2 ? sr.left : sr.right;
+    INT slack = MulDiv(6, DpiOf(under), USER_DEFAULT_SCREEN_DPI);
+    POINT b = {edge, sr.top - slack}, c = {edge, sr.bottom + slack};
+    if (!InTriangle(p, t_apex, b, c)) {
+        DropHeld();
+        t_apex = p;
+        return FALSE;
+    }
+    if (!t_held.hwnd) t_holdStart = GetTickCount();
+    else if (GetTickCount() - t_holdStart > kAimMaxMs) {
+        DropHeld();
+        t_apex = p;
+        return FALSE;
+    }
+    t_held = *m;
+    if (t_aimTimer) KillTimer(nullptr, t_aimTimer);
+    t_aimTimer = SetTimer(nullptr, 0, kAimHoldMs, nullptr);
+    if (!t_aimTimer) { t_held = {}; t_apex = p; return FALSE; }
+    return TRUE;
+}
+
+static LRESULT CALLBACK AimProc(INT code, WPARAM w, LPARAM l)
+{
+    if (code == MSGF_MENU && l) {
+        auto* m = reinterpret_cast<MSG*>(l);
+        if (m->message == WM_TIMER && !m->hwnd && t_aimTimer && m->wParam == t_aimTimer) {
+            AimRelease();
+            return TRUE;
+        }
+        if (m->message == WM_MOUSEMOVE || m->message == WM_NCMOUSEMOVE) {
+            if (HoldForSubmenu(m)) return TRUE;
+        } else if ((m->message >= WM_LBUTTONDOWN && m->message <= WM_MBUTTONDBLCLK) ||
+                   (m->message >= WM_NCLBUTTONDOWN && m->message <= WM_NCMBUTTONDBLCLK) ||
+                   m->message == WM_KEYDOWN) {
+            DropHeld();
+            t_apex = {LONG_MIN, LONG_MIN};
+        }
+    }
+    return CallNextHookEx(nullptr, code, w, l);
+}
+
 static LRESULT CALLBACK RoomProc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR, DWORD_PTR)
 {
     if (msg == WM_WINDOWPOSCHANGING && l) {
@@ -7371,10 +7642,12 @@ static LRESULT CALLBACK RoomProc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR,
             }
             SetPropW(h, kSizeProp, (HANDLE)(ULONG_PTR)(DWORD)MAKELONG(wp->cx, wp->cy));
         }
+        if (!(wp->flags & SWP_NOMOVE)) SnapToParent(h, wp);
     }
     if (msg == WM_NCDESTROY) {
         RemovePropW(h, kPadProp);
         RemovePropW(h, kSizeProp);
+        RemovePropW(h, kSeqProp);
         RemoveWindowSubclass(h, RoomProc, kRoomId);
         return DefSubclassProc(h, msg, w, l);
     }
@@ -7444,6 +7717,19 @@ static VOID SyncLoopHook()
         t_loopHook = nullptr;
         ResetRows();
     }
+    if (want && !t_aimHook) {
+        t_apex = {LONG_MIN, LONG_MIN};
+        t_aimHook = SetWindowsHookExW(WH_MSGFILTER, AimProc, nullptr, GetCurrentThreadId());
+        if (t_aimHook) { std::lock_guard<std::mutex> g(g_hooksLock); g_hooks.push_back(t_aimHook); }
+    } else if (!want && t_aimHook) {
+        {
+            std::lock_guard<std::mutex> g(g_hooksLock);
+            auto it = std::find(g_hooks.begin(), g_hooks.end(), t_aimHook);
+            if (it != g_hooks.end()) { g_hooks.erase(it); UnhookWindowsHookEx(t_aimHook); }
+        }
+        t_aimHook = nullptr;
+        DropHeld();
+    }
 }
 
 // Wrap TrackPopupMenu(Ex) with these (menu-bar menus are covered by the menu events).
@@ -7456,6 +7742,7 @@ static VOID CALLBACK OnEvent(HWINEVENTHOOK, DWORD ev, HWND h, LONG obj, LONG chi
         if (obj != OBJID_WINDOW || child != CHILDID_SELF || !IsPopupMenuWindow(h) ||
             GetWindowThreadProcessId(h, nullptr) != GetCurrentThreadId())
             return;
+        SetPropW(h, kSeqProp, (HANDLE)(ULONG_PTR)++g_seq);
         if (g_onCreate) g_onCreate(h);
         SetWindowSubclass(h, RoomProc, kRoomId, 0);
     } else if (ev == EVENT_SYSTEM_MENUSTART) {
@@ -7501,7 +7788,7 @@ static VOID Uninit()
 // Seamless menu look for this mod's own menus.
 // Windhawk runs tool mods in their own process, where Seamless Flyouts cannot reach, so the
 // menus this mod shows get the same look here: blurred Catppuccin Mocha body, rounded corners,
-// roomy rows, separators that run to the border, one soft hover with a blue outline, and
+// roomy rows, separators that run to the border, the blue to mauve hover pill, and
 // submenus that open beside their parent with a small gap. Only this process is touched.
 // ---------------------------------------------------------------------------------------------
 #include <d2d1.h>
@@ -7509,6 +7796,70 @@ static VOID Uninit()
 #include <uxtheme.h>
 #include <vssym32.h>
 #include <commctrl.h>
+
+// ---------------------------------------------------------------------------------------------
+// Menu pill: the one hover look for every menu row, the same pill Seamless Clipboard Manager
+// draws: a soft blue to mauve fill (16 %) and a 1 px blue to mauve ring (80 %), radius 8.
+// Drawn at the row's real size each time, because a stretched nine-grid can't hold a gradient.
+// ---------------------------------------------------------------------------------------------
+namespace SeamlessMenuPill {
+
+static BOOL Draw(ID2D1Factory* factory, HDC hdc, const RECT& r, UINT dpi)
+{
+    INT w = r.right - r.left, h = r.bottom - r.top;
+    if (!factory || !hdc || w <= 2 || h <= 2) return FALSE;
+    HDC dc = CreateCompatibleDC(hdc);
+    if (!dc) return FALSE;
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -h, 1, 32, BI_RGB};
+    VOID* bits = nullptr;
+    HBITMAP bmp = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!bmp) { DeleteDC(dc); return FALSE; }
+    HGDIOBJ old = SelectObject(dc, bmp);
+    auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_SOFTWARE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0,
+        D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE, D2D1_FEATURE_LEVEL_DEFAULT);
+    ID2D1DCRenderTarget* rt = nullptr;
+    RECT rc = {0, 0, w, h};
+    BOOL ok = FALSE;
+    if (SUCCEEDED(factory->CreateDCRenderTarget(&props, &rt)) && SUCCEEDED(rt->BindDC(dc, &rc))) {
+        FLOAT s = (dpi ? dpi : USER_DEFAULT_SCREEN_DPI) / (FLOAT)USER_DEFAULT_SCREEN_DPI;
+        FLOAT ringW = s < 1.5f ? 1.f : 2.f;
+        FLOAT rad = std::min(8.f * s, std::min((FLOAT)w, (FLOAT)h) / 2.f);
+        D2D1_ROUNDED_RECT rr = {{ringW / 2, ringW / 2, w - ringW / 2, h - ringW / 2}, rad, rad};
+        auto gradient = [&](FLOAT a) {
+            ID2D1LinearGradientBrush* brush = nullptr;
+            ID2D1GradientStopCollection* stops = nullptr;
+            D2D1_GRADIENT_STOP st[2] = {{0.f, {137 / 255.f, 180 / 255.f, 250 / 255.f, a}},
+                                        {1.f, {203 / 255.f, 166 / 255.f, 247 / 255.f, a}}};
+            if (SUCCEEDED(rt->CreateGradientStopCollection(st, 2, &stops)))
+                rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties({0, 0}, {(FLOAT)w, (FLOAT)h}),
+                                              stops, &brush);
+            if (stops) stops->Release();
+            return brush;
+        };
+        rt->BeginDraw();
+        rt->Clear({0, 0, 0, 0});
+        ID2D1LinearGradientBrush* fill = gradient(0.16f);
+        ID2D1LinearGradientBrush* ring = gradient(0.8f);
+        if (fill) rt->FillRoundedRectangle(&rr, fill);
+        if (ring) rt->DrawRoundedRectangle(&rr, ring, ringW);
+        ok = SUCCEEDED(rt->EndDraw()) && fill && ring;
+        if (fill) fill->Release();
+        if (ring) ring->Release();
+    }
+    if (rt) rt->Release();
+    if (ok) {
+        BLENDFUNCTION bf = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        ok = GdiAlphaBlend(hdc, r.left, r.top, w, h, dc, 0, 0, w, h, bf);
+    }
+    SelectObject(dc, old);
+    DeleteObject(bmp);
+    DeleteDC(dc);
+    return ok;
+}
+
+}  // namespace SeamlessMenuPill
 
 namespace SeamlessMenuSkin {
 
@@ -7789,14 +8140,11 @@ static BOOL PaintMenuPart(HDC hdc, INT part, INT state, LPCRECT pRect, LPCRECT p
 {
     if (part == 26) { part = 27; state = 2; }                   // keyboard focus: same hover
     if ((part == 27 || part == MENU_POPUPITEM) && state == 2) {
-        if (!g_hoverDC) g_hoverDC = MakeCache(18, 18, FALSE);
-        if (!g_hoverDC) return FALSE;
         // Keep the same gap above and below as at the sides, so the first and last rows'
         // rounded hover stays clear of the menu's own rounded corners.
         RECT rc = *pRect;
         InflateRect(&rc, 0, -MulDiv(2, Dpi(), USER_DEFAULT_SCREEN_DPI));
-        NineGrid(hdc, g_hoverDC, &rc, 9, 9, 8, 8);
-        return TRUE;
+        return SeamlessMenuPill::Draw(g_factory, hdc, rc, Dpi());
     }
     if (part == MENU_POPUPSEPARATOR) {
         if (!g_sepDC) g_sepDC = MakeCache(1, 5, TRUE);

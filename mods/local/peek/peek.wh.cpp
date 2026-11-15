@@ -2,7 +2,7 @@
 // @id              peek
 // @name            Peek
 // @description     Select a file in File Explorer and press Space to preview it, like PowerToys Peek
-// @version         1.5.0
+// @version         1.5.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -73,6 +73,8 @@ size on the way through.
 - Turn off Peek in PowerToys first if it is still installed. Both would react
   to the same key.
 - Animated GIFs show their first frame.
+- Other mods can open a file here too: Seamless Clipboard Manager can show
+  a clip in Peek when you pick Peek as its previewer.
 - Turn on **Blurred glass background** in the settings for a frosted window:
   the title bar and the space around the preview blur what is behind them,
   and stay blurred when you click away. The empty borders around a video
@@ -188,6 +190,9 @@ namespace {
 constexpr UINT WM_APP_PEEK = WM_APP + 1;
 constexpr UINT WM_APP_KEY = WM_APP + 2;
 constexpr UINT WM_APP_SETTINGS = WM_APP + 3;
+constexpr UINT WM_APP_OPEN = WM_APP + 5;
+// Another mod sends WM_COPYDATA with this dwData, wParam = its window, data = UTF-16 paths, each ending in NUL.
+constexpr ULONG_PTR kOpenPathsMagic = 0x4B454550;  // "PEEK"
 
 constexpr UINT_PTR kMediaTimer = 1;
 constexpr UINT_PTR kArtTimer = 2;
@@ -2505,10 +2510,51 @@ void OnPeek(HWND top) {
     OpenPreview(top);
 }
 
+std::vector<std::wstring> g_openPaths;
+HWND g_openSource = nullptr;
+
+// The same file sent again from the same window closes the preview, like Space in Explorer.
+void OnOpenPaths() {
+    std::vector<Pidl> items;
+    for (auto& p : g_openPaths)
+        if (ITEMIDLIST* pidl = ILCreateFromPathW(p.c_str())) items.emplace_back(pidl);
+    g_openPaths.clear();
+    if (items.empty()) return;
+    if (g.wnd && g.source == g_openSource && g.index < g.items.size() &&
+        ILIsEqual(g.items[g.index].get(), items[0].get())) {
+        ClosePreview();
+        return;
+    }
+    g.items = std::move(items);
+    g.index = 0;
+    OpenPreview(g_openSource);
+    if (g.wnd && g_openSource && (GetWindowLongPtrW(g_openSource, GWL_EXSTYLE) & WS_EX_TOPMOST))
+        SetWindowPos(g.wnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
 LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
         case WM_APP_PEEK:
             OnPeek((HWND)wp);
+            return 0;
+        case WM_COPYDATA: {
+            auto* cds = (const COPYDATASTRUCT*)lp;
+            if (!cds || cds->dwData != kOpenPathsMagic || !cds->lpData || cds->cbData < sizeof(wchar_t)) return FALSE;
+            const wchar_t* s = (const wchar_t*)cds->lpData;
+            size_t n = cds->cbData / sizeof(wchar_t);
+            g_openPaths.clear();
+            for (size_t i = 0; i < n;) {
+                size_t j = i;
+                while (j < n && s[j]) j++;
+                if (j > i) g_openPaths.emplace_back(s + i, j - i);
+                i = j + 1;
+            }
+            g_openSource = IsWindow((HWND)wp) ? (HWND)wp : nullptr;
+            PostMessageW(hwnd, WM_APP_OPEN, 0, 0);  // Answer the sender first; opening can take a moment.
+            return TRUE;
+        }
+        case WM_APP_OPEN:
+            OnOpenPaths();
             return 0;
         case WM_APP_KEY:
             OnKey((Key)wp);
@@ -2592,6 +2638,7 @@ DWORD WINAPI ThreadProc(void*) {
 
     g.msgWnd = CreateWindowExW(0, mc.lpszClassName, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr,
                                inst, nullptr);
+    if (g.msgWnd) ChangeWindowMessageFilterEx(g.msgWnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr);
     g.hookThread = CreateThread(nullptr, 0, HookThreadProc, nullptr, 0, &g.hookThreadId);
     if (!g.hookThread) Wh_Log(L"Hook thread failed: %u", GetLastError());
     SetEvent(g_ready);
