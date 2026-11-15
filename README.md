@@ -63,7 +63,7 @@ An AI agent can do all of this on its own: [AGENTS.md](AGENTS.md) is the runbook
 | <img src="media/previews/recycle-bin-tray-plus.png" width="220" alt="Recycle Bin icon in the tray"> | [Recycle Bin Tray Plus](mods/local/recycle-bin-tray-plus) | A Recycle Bin icon in the tray, with drag and drop and themed menus. |
 | <img src="media/previews/taskbar-collapse-to-running-plus.png" width="220" alt="Taskbar showing only running apps"> | [Taskbar Collapse to Running Plus](mods/local/taskbar-collapse-to-running-plus) | Hides pinned apps that are not running, and reveals them on hover. |
 | | [Micrographics Taskbar Clock Plus](mods/local/micrographics-taskbar-clock-plus) | A Nothing OS style Micrographics clock for the taskbar, with pill badges and a weather line. |
-| | [Seamless Taskbar Utilities](mods/local/seamless-taskbar-utilities) | Quick system tools in the taskbar right-click menu, with Catppuccin result cards. |
+| | [Seamless Taskbar Utilities](mods/local/seamless-taskbar-utilities) | Quick system tools, an auto-hide switch and icon separators in the taskbar right-click menu, with Catppuccin result cards. |
 
 ### Windows, borders and Alt+Tab
 
@@ -248,6 +248,8 @@ Most of my mods build on someone else's mod. Each mod's source names its sources
 | **Sof2245** ([Taskbar AI Usage](https://windhawk.net/mods/taskbar-ai-usage)) | The base of Taskbar AI Usage Plus. |
 | **Wildstyle23** ([Recycle Bin Tray](https://windhawk.net/mods/recycle-bin-tray)) | The base of Recycle Bin Tray Plus. |
 | **Marco Petrucci** ([Taskbar System Utilities](https://windhawk.net/mods/taskbar-system-utilities)) | The base of Seamless Taskbar Utilities, which adapts the menu hooks from his Taskbar Restart Explorer. |
+| **meteoni** ([Taskbar Icon Separators](https://windhawk.net/mods/taskbar-icon-separators)) | The icon separators in Seamless Taskbar Utilities (GPL-3.0), with custom icon support by phntsm. |
+| **oyrslyng** ([Taskbar Auto-Hide in Context](https://windhawk.net/mods/taskbar-autohide-in-context)) | The idea for the auto-hide switch in Seamless Taskbar Utilities. |
 | **Scott Brogden and the Ditto contributors** ([Ditto](https://github.com/sabrogden/Ditto)) | The clipboard engine Seamless Clipboard Manager is based on (GPL-3.0). |
 | **ShareX** ([ShareX](https://github.com/ShareX/ShareX)) | The color picker in Seamless Color Picker is based on theirs. |
 | **Mark Russinovich** ([ZoomIt](https://learn.microsoft.com/sysinternals/downloads/zoomit)) | The zoom and draw behavior the ZoomIt mod recreates. |
