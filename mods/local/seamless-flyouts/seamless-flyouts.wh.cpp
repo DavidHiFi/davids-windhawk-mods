@@ -2,13 +2,13 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.0.3
+// @version         2.0.15
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         *
-// @compilerOptions -ldwmapi -luxtheme -lcomctl32 -lgdi32 -ld2d1 -lmsimg32 -lshcore -lversion -ffp-exception-behavior=maytrap
+// @compilerOptions -ldwmapi -luxtheme -lcomctl32 -lgdi32 -ld2d1 -lmsimg32 -lshcore -lversion -ladvapi32 -ffp-exception-behavior=maytrap
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -205,6 +205,9 @@ This is caused by default by the AccentBlur API.❕
 // - Menus that Windows draws get 2 px more frame on every side, so the hover has the same room
 //   from the border as in Explorer's own desktop menu (4 px at the sides, 6 px top and bottom).
 //   Menus with owner-drawn rows (Explorer) already have it and are left alone.
+// - A submenu opens touching its parent, and while the pointer heads for an open submenu the
+//   parent ignores it, so rows crossed on the way don't swap the submenu (released after a
+//   short rest, so stopping on a row still opens that row).
 // - A menu too tall for its monitor gets shorter rows while it is open, so the last item
 //   shows without scroll arrows. Windows reads row spacing once per process, so the spacing is
 //   reloaded (FlushMenuThemes) when such a menu opens and again when the menu closes.
@@ -218,10 +221,12 @@ This is caused by default by the AccentBlur API.❕
 namespace SeamlessMenuRoom {
 
 constexpr UINT_PTR kRoomId = 0x6D55;
-constexpr INT kRowMargin = 8;                  // row top and bottom margin of the menu look
+constexpr INT kRowMargin = 6;                  // row top and bottom margin of the menu look
 constexpr INT kMinRowMargin = 2;
 static const WCHAR* const kPadProp = L"SeamlessMenuRoomPad";
 static const WCHAR* const kSizeProp = L"SeamlessMenuRoomSize";
+static const WCHAR* const kSeqProp = L"SeamlessMenuRoomSeq";   // creation order of menu windows
+constexpr UINT kAimHoldMs = 250;               // how long the pointer may rest before a held move counts
 
 static std::atomic<INT> g_rowMargin{kRowMargin};
 static HWINEVENTHOOK g_createHook = nullptr, g_menuHook = nullptr;
@@ -231,6 +236,13 @@ static Flush_t g_flush = nullptr;
 static thread_local HHOOK t_loopHook = nullptr;
 static thread_local INT t_trackDepth = 0;
 static thread_local BOOL t_menuMode = FALSE;
+static std::atomic<ULONG> g_seq{0};
+static thread_local HHOOK t_aimHook = nullptr;
+static thread_local POINT t_apex = {LONG_MIN, LONG_MIN};
+static thread_local MSG t_held = {};
+static thread_local UINT_PTR t_aimTimer = 0;
+static thread_local DWORD t_holdStart = 0;
+constexpr DWORD kAimMaxMs = 700;               // a hold never lasts longer than this
 
 // Row top and bottom margin to report for Menu part 27 / POPUPITEM, property 10000.
 static INT RowMargin() { return g_rowMargin.load(); }
@@ -258,6 +270,132 @@ static BOOL HasOwnerDraw(HMENU m)
     return FALSE;
 }
 
+// The nearest visible menu window of this thread made before (parent) or after (child) h.
+struct RelativeFind { HWND self; ULONG_PTR seq; BOOL child; HWND best; ULONG_PTR bestSeq; };
+static BOOL CALLBACK FindRelative(HWND h, LPARAM l)
+{
+    auto* f = reinterpret_cast<RelativeFind*>(l);
+    if (h == f->self || !IsWindowVisible(h) || !IsPopupMenuWindow(h)) return TRUE;
+    ULONG_PTR s = (ULONG_PTR)GetPropW(h, kSeqProp);
+    if (!s) return TRUE;
+    BOOL better = f->child ? (s > f->seq && (!f->best || s < f->bestSeq))
+                           : (s < f->seq && (!f->best || s > f->bestSeq));
+    if (better) { f->best = h; f->bestSeq = s; }
+    return TRUE;
+}
+static HWND RelativeMenu(HWND h, BOOL child)
+{
+    RelativeFind f = {h, (ULONG_PTR)GetPropW(h, kSeqProp), child, nullptr, 0};
+    if (!f.seq) return nullptr;
+    EnumThreadWindows(GetCurrentThreadId(), FindRelative, reinterpret_cast<LPARAM>(&f));
+    return f.best;
+}
+
+// Pull a submenu in so it touches its parent (never pushes it further away or off screen).
+static VOID SnapToParent(HWND h, WINDOWPOS* wp)
+{
+    HWND parent = RelativeMenu(h, FALSE);
+    RECT pr;
+    if (!parent || !GetWindowRect(parent, &pr)) return;
+    INT cx = wp->cx;
+    if ((wp->flags & SWP_NOSIZE) || cx <= 0) {
+        RECT r;
+        if (!GetWindowRect(h, &r)) return;
+        cx = r.right - r.left;
+    }
+    LONG mid = (pr.left + pr.right) / 2;
+    if (wp->x >= mid) {
+        if (pr.right < wp->x) wp->x = pr.right;
+    } else if (wp->x + cx <= mid) {
+        if (pr.left - cx > wp->x) wp->x = pr.left - cx;
+    }
+}
+
+static BOOL InTriangle(POINT p, POINT a, POINT b, POINT c)
+{
+    auto side = [](POINT o, POINT u, POINT v) {
+        return (LONGLONG)(u.x - o.x) * (v.y - o.y) - (LONGLONG)(u.y - o.y) * (v.x - o.x);
+    };
+    LONGLONG d1 = side(p, a, b), d2 = side(p, b, c), d3 = side(p, c, a);
+    BOOL neg = d1 < 0 || d2 < 0 || d3 < 0, pos = d1 > 0 || d2 > 0 || d3 > 0;
+    return !(neg && pos);
+}
+
+static VOID DropHeld()
+{
+    if (t_aimTimer) KillTimer(nullptr, t_aimTimer);
+    t_aimTimer = 0;
+    t_held = {};
+}
+
+// The pointer rested: let the last held move through, from where it stopped. The timer has no
+// callback (a pending one could outlive the mod's unload); AimProc sees its WM_TIMER.
+static VOID AimRelease()
+{
+    MSG m = t_held;
+    DropHeld();
+    if (m.hwnd && IsWindow(m.hwnd)) {
+        t_apex = m.pt;
+        PostMessageW(m.hwnd, m.message, m.wParam, m.lParam);
+    }
+}
+
+// TRUE: hold this move, the pointer is on its way to the open submenu.
+static BOOL HoldForSubmenu(const MSG* m)
+{
+    POINT p = m->pt;
+    HWND under = WindowFromPoint(p);
+    HWND sub = nullptr;
+    if (under && IsPopupMenuWindow(under) && GetWindowThreadProcessId(under, nullptr) == GetCurrentThreadId())
+        sub = RelativeMenu(under, TRUE);
+    RECT sr, pr;
+    if (!sub || !GetWindowRect(sub, &sr) || !GetWindowRect(under, &pr) || t_apex.x == LONG_MIN ||
+        (p.x == t_apex.x && p.y == t_apex.y)) {
+        DropHeld();
+        t_apex = p;
+        return FALSE;
+    }
+    LONG edge = sr.left >= (pr.left + pr.right) / 2 ? sr.left : sr.right;
+    INT slack = MulDiv(6, DpiOf(under), USER_DEFAULT_SCREEN_DPI);
+    POINT b = {edge, sr.top - slack}, c = {edge, sr.bottom + slack};
+    if (!InTriangle(p, t_apex, b, c)) {
+        DropHeld();
+        t_apex = p;
+        return FALSE;
+    }
+    if (!t_held.hwnd) t_holdStart = GetTickCount();
+    else if (GetTickCount() - t_holdStart > kAimMaxMs) {
+        DropHeld();
+        t_apex = p;
+        return FALSE;
+    }
+    t_held = *m;
+    if (t_aimTimer) KillTimer(nullptr, t_aimTimer);
+    t_aimTimer = SetTimer(nullptr, 0, kAimHoldMs, nullptr);
+    if (!t_aimTimer) { t_held = {}; t_apex = p; return FALSE; }
+    return TRUE;
+}
+
+static LRESULT CALLBACK AimProc(INT code, WPARAM w, LPARAM l)
+{
+    if (code == MSGF_MENU && l) {
+        auto* m = reinterpret_cast<MSG*>(l);
+        if (m->message == WM_TIMER && !m->hwnd && t_aimTimer && m->wParam == t_aimTimer) {
+            AimRelease();
+            return TRUE;
+        }
+        if (m->message == WM_MOUSEMOVE || m->message == WM_NCMOUSEMOVE) {
+            if (HoldForSubmenu(m)) return TRUE;
+        } else if ((m->message >= WM_LBUTTONDOWN && m->message <= WM_MBUTTONDBLCLK) ||
+                   (m->message >= WM_NCLBUTTONDOWN && m->message <= WM_NCMBUTTONDBLCLK) ||
+                   m->message == WM_KEYDOWN) {
+            DropHeld();
+            t_apex = {LONG_MIN, LONG_MIN};
+        }
+    }
+    return CallNextHookEx(nullptr, code, w, l);
+}
+
 static LRESULT CALLBACK RoomProc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR, DWORD_PTR)
 {
     if (msg == WM_WINDOWPOSCHANGING && l) {
@@ -282,10 +420,12 @@ static LRESULT CALLBACK RoomProc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR,
             }
             SetPropW(h, kSizeProp, (HANDLE)(ULONG_PTR)(DWORD)MAKELONG(wp->cx, wp->cy));
         }
+        if (!(wp->flags & SWP_NOMOVE)) SnapToParent(h, wp);
     }
     if (msg == WM_NCDESTROY) {
         RemovePropW(h, kPadProp);
         RemovePropW(h, kSizeProp);
+        RemovePropW(h, kSeqProp);
         RemoveWindowSubclass(h, RoomProc, kRoomId);
         return DefSubclassProc(h, msg, w, l);
     }
@@ -302,7 +442,7 @@ static VOID ResetRows()
     if (g_rowMargin.exchange(kRowMargin) != kRowMargin && g_flush) g_flush();
 }
 
-// Picks the largest row margin (8 down to 2) at which the whole menu fits its monitor.
+// Picks the largest row margin (6 down to 2) at which the whole menu fits its monitor.
 static VOID FitMenu(HMENU m, HWND owner)
 {
     if (!m || !g_flush || HasOwnerDraw(m)) return;
@@ -319,8 +459,8 @@ static VOID FitMenu(HMENU m, HWND owner)
     INT avail = mi.rcWork.bottom - mi.rcWork.top - px(8);
     INT pick = kRowMargin;
     for (; pick > kMinRowMargin; pick--) {
-        INT cut = px(2 * (kRowMargin - pick));   // rows measure 33 px and separators 21 px at margin 8
-        if (rows * (px(33) - cut) + seps * (px(21) - cut) + px(10) <= avail) break;
+        INT cut = px(2 * (kRowMargin - pick));   // rows measure 29 px and separators 17 px at margin 6
+        if (rows * (px(29) - cut) + seps * (px(17) - cut) + px(10) <= avail) break;
     }
     if (pick < g_rowMargin.load()) {
         g_rowMargin = pick;
@@ -355,6 +495,19 @@ static VOID SyncLoopHook()
         t_loopHook = nullptr;
         ResetRows();
     }
+    if (want && !t_aimHook) {
+        t_apex = {LONG_MIN, LONG_MIN};
+        t_aimHook = SetWindowsHookExW(WH_MSGFILTER, AimProc, nullptr, GetCurrentThreadId());
+        if (t_aimHook) { std::lock_guard<std::mutex> g(g_hooksLock); g_hooks.push_back(t_aimHook); }
+    } else if (!want && t_aimHook) {
+        {
+            std::lock_guard<std::mutex> g(g_hooksLock);
+            auto it = std::find(g_hooks.begin(), g_hooks.end(), t_aimHook);
+            if (it != g_hooks.end()) { g_hooks.erase(it); UnhookWindowsHookEx(t_aimHook); }
+        }
+        t_aimHook = nullptr;
+        DropHeld();
+    }
 }
 
 // Wrap TrackPopupMenu(Ex) with these (menu-bar menus are covered by the menu events).
@@ -367,6 +520,7 @@ static VOID CALLBACK OnEvent(HWINEVENTHOOK, DWORD ev, HWND h, LONG obj, LONG chi
         if (obj != OBJID_WINDOW || child != CHILDID_SELF || !IsPopupMenuWindow(h) ||
             GetWindowThreadProcessId(h, nullptr) != GetCurrentThreadId())
             return;
+        SetPropW(h, kSeqProp, (HANDLE)(ULONG_PTR)++g_seq);
         if (g_onCreate) g_onCreate(h);
         SetWindowSubclass(h, RoomProc, kRoomId, 0);
     } else if (ev == EVENT_SYSTEM_MENUSTART) {
@@ -407,6 +561,69 @@ static VOID Uninit()
 
 }  // namespace SeamlessMenuRoom
 // ---------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------
+// Menu pill: the one hover look for every menu row, the same pill Seamless Clipboard Manager
+// draws: a soft blue to mauve fill (16 %) and a 1 px blue to mauve ring (80 %), radius 8.
+// Drawn at the row's real size each time, because a stretched nine-grid can't hold a gradient.
+// ---------------------------------------------------------------------------------------------
+namespace SeamlessMenuPill {
+
+static BOOL Draw(ID2D1Factory* factory, HDC hdc, const RECT& r, UINT dpi)
+{
+    INT w = r.right - r.left, h = r.bottom - r.top;
+    if (!factory || !hdc || w <= 2 || h <= 2) return FALSE;
+    HDC dc = CreateCompatibleDC(hdc);
+    if (!dc) return FALSE;
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -h, 1, 32, BI_RGB};
+    VOID* bits = nullptr;
+    HBITMAP bmp = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!bmp) { DeleteDC(dc); return FALSE; }
+    HGDIOBJ old = SelectObject(dc, bmp);
+    auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_SOFTWARE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0,
+        D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE, D2D1_FEATURE_LEVEL_DEFAULT);
+    ID2D1DCRenderTarget* rt = nullptr;
+    RECT rc = {0, 0, w, h};
+    BOOL ok = FALSE;
+    if (SUCCEEDED(factory->CreateDCRenderTarget(&props, &rt)) && SUCCEEDED(rt->BindDC(dc, &rc))) {
+        FLOAT s = (dpi ? dpi : USER_DEFAULT_SCREEN_DPI) / (FLOAT)USER_DEFAULT_SCREEN_DPI;
+        FLOAT ringW = s < 1.5f ? 1.f : 2.f;
+        FLOAT rad = std::min(8.f * s, std::min((FLOAT)w, (FLOAT)h) / 2.f);
+        D2D1_ROUNDED_RECT rr = {{ringW / 2, ringW / 2, w - ringW / 2, h - ringW / 2}, rad, rad};
+        auto gradient = [&](FLOAT a) {
+            ID2D1LinearGradientBrush* brush = nullptr;
+            ID2D1GradientStopCollection* stops = nullptr;
+            D2D1_GRADIENT_STOP st[2] = {{0.f, {137 / 255.f, 180 / 255.f, 250 / 255.f, a}},
+                                        {1.f, {203 / 255.f, 166 / 255.f, 247 / 255.f, a}}};
+            if (SUCCEEDED(rt->CreateGradientStopCollection(st, 2, &stops)))
+                rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties({0, 0}, {(FLOAT)w, (FLOAT)h}),
+                                              stops, &brush);
+            if (stops) stops->Release();
+            return brush;
+        };
+        rt->BeginDraw();
+        rt->Clear({0, 0, 0, 0});
+        ID2D1LinearGradientBrush* fill = gradient(0.16f);
+        ID2D1LinearGradientBrush* ring = gradient(0.8f);
+        if (fill) rt->FillRoundedRectangle(&rr, fill);
+        if (ring) rt->DrawRoundedRectangle(&rr, ring, ringW);
+        ok = SUCCEEDED(rt->EndDraw()) && fill && ring;
+        if (fill) fill->Release();
+        if (ring) ring->Release();
+    }
+    if (rt) rt->Release();
+    if (ok) {
+        BLENDFUNCTION bf = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        ok = GdiAlphaBlend(hdc, r.left, r.top, w, h, dc, 0, 0, w, h, bf);
+    }
+    SelectObject(dc, old);
+    DeleteObject(bmp);
+    DeleteDC(dc);
+    return ok;
+}
+
+}  // namespace SeamlessMenuPill
 
 #define RECTWIDTH(lprc)     ((lprc)->right - (lprc)->left)
 #define RECTHEIGHT(lprc)    ((lprc)->bottom - (lprc)->top)
@@ -5055,8 +5272,10 @@ BOOL PaintMenu(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
         // Popup rows keep the same gap above and below as at the sides, so the first and
         // last rows' rounded hover stays clear of the menu's own rounded corners.
         RECT rc = *pRect;
-        if (index == 1)
+        if (index == 1) {
             InflateRect(&rc, 0, -MulDiv(2, g_Dpi, USER_DEFAULT_SCREEN_DPI));
+            if (SeamlessMenuPill::Draw(g_d2dFactory, hdc, rc, g_Dpi)) return TRUE;
+        }
         DrawNineGridStretch(hdc, g_themeCache.menuitem[index], &rc, 9, 9, 8, 8);
     }
     else {
@@ -5808,6 +6027,50 @@ static LRESULT WINAPI HookedDefWindowProcW(HWND hWnd, UINT msg, WPARAM wParam, L
     return DefWindowProc_orig(hWnd, msg, wParam, lParam);
 }
 
+#ifndef _WIN64
+// Seamless Title Bars' colours.activeColor ("#RRGGBB"), read once; #1E1E2E when unset.
+static COLORREF TitleBarsCaptionColour()
+{
+    static COLORREF cached = CLR_INVALID;
+    if (cached != CLR_INVALID)
+        return cached;
+    COLORREF c = RGB(0x1E, 0x1E, 0x2E);
+    WCHAR v[16] = {};
+    DWORD cb = sizeof(v);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE,
+            L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@seamless-title-bars\\Settings",
+            L"colours.activeColor", RRF_RT_REG_SZ, nullptr, v, &cb) == ERROR_SUCCESS &&
+        v[0] == L'#' && wcslen(v) == 7) {
+        UINT x = wcstoul(v + 1, nullptr, 16);
+        c = RGB((x >> 16) & 0xFF, (x >> 8) & 0xFF, x & 0xFF);
+    }
+    cached = c;
+    return c;
+}
+#endif
+
+static BOOL IsDelphiProcess();
+
+const UINT_PTR DELPHI_CAPTION_TIMER_ID = 0x57490000;
+
+// Ticks every 800 ms. Once the window is on screen, sends the notice on the 1st, 3rd and 6th
+// visible tick (DWM must have composed the window first), then stops.
+static VOID CALLBACK DelphiCaptionTimerProc(HWND hWnd, UINT, UINT_PTR id, DWORD)
+{
+    if (!IsWindow(hWnd)) {
+        KillTimer(hWnd, id);
+        return;
+    }
+    if (!IsWindowVisible(hWnd))
+        return;
+    UINT_PTR n = (UINT_PTR)GetPropW(hWnd, L"SFDelphiCap") + 1;
+    SetPropW(hWnd, L"SFDelphiCap", (HANDLE)n);
+    if (n == 1 || n == 3 || n == 6)
+        SendMessageW(hWnd, WM_DWMCOMPOSITIONCHANGED, 0, 0);
+    if (n >= 6)
+        KillTimer(hWnd, id);
+}
+
 VOID HandleEffects(HWND hWnd)
 {
     BOOL isFlyoutWindow = isWindowFlyout(hWnd);
@@ -5829,6 +6092,26 @@ VOID HandleEffects(HWND hWnd)
     if (!isFlyoutWindow && g_settings.BgType != g_settings.Default) {
         MARGINS margins = {-1, -1, -1, -1};
         DwmExtendFrameIntoClientArea(hWnd, &margins);
+        if ((GetWindowLongPtrW(hWnd, GWL_STYLE) & WS_CAPTION) == WS_CAPTION) {
+#ifndef _WIN64
+            // Seamless Title Bars only runs in 64-bit programs, so 32-bit windows (Inno Setup
+            // wizards) keep the theme's flat crust caption. Use the caption colour it gives
+            // 64-bit windows, so the title bar matches the blurred body.
+            COLORREF caption = TitleBarsCaptionColour();
+            DwmSetWindowAttribute(hWnd, DWMWA_CAPTION_COLOR, &caption, sizeof(caption));
+#endif
+            // Delphi windows (Inno Setup wizards) keep a solid caption over the blur until
+            // DWM re-reads the frame. A composition-changed notice makes it see-through, so
+            // the title bar shows the same blur as the body. Sent early it doesn't stick, so
+            // it goes out shortly after the last effects pass, once the window is on screen.
+            static int delphi = -1;
+            if (delphi < 0)
+                delphi = IsDelphiProcess() ? 1 : 0;
+            if (delphi && !GetPropW(hWnd, L"SFDelphiCap")) {
+                UINT_PTR ok = SetTimer(hWnd, DELPHI_CAPTION_TIMER_ID, 800, DelphiCaptionTimerProc);
+                SetPropW(hWnd, L"SFDelphiArm", (HANDLE)(UINT_PTR)(ok ? 1 : 2));
+            }
+        }
     }
     
     if (isFlyoutWindow) {
@@ -6943,8 +7226,8 @@ VOID Comdlg32Hooks()
 }
 
 // Owner-drawn menus (Explorer's desktop and file menus) measure their own rows at
-// 25 px. While a popup menu runs, a subclass on its owner adds 8 px to each row so
-// they match the 33 px rows of the riced taskbar menus. Separators stay as they are.
+// 25 px. While a popup menu runs, a subclass on its owner adds 4 px to each row so
+// they match the 29 px rows of the riced taskbar menus. Separators stay as they are.
 constexpr UINT_PTR MENU_ROWS_SUBCLASS_ID = 0x6D52;
 static thread_local INT g_menuRowsDepth = 0;
 static LRESULT CALLBACK MenuRowsSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR)
@@ -6956,7 +7239,7 @@ static LRESULT CALLBACK MenuRowsSubclassProc(HWND hWnd, UINT msg, WPARAM wParam,
             UINT dpi = GetDpiForWindow(hWnd);
             if (!dpi) dpi = g_Dpi;
             if (mis->itemHeight >= (UINT)MulDiv(16, dpi, 96) && mis->itemHeight <= (UINT)MulDiv(28, dpi, 96))
-                mis->itemHeight += MulDiv(8, dpi, 96);
+                mis->itemHeight += MulDiv(4, dpi, 96);
         }
     }
     return result;
@@ -7035,6 +7318,210 @@ VOID CustomRenderingHooks()
     WindhawkUtils::SetFunctionHook(GetThemeFont, HookedGetThemeFont, &GetThemeFont_orig);
 }
 
+// ---- Delphi (VCL) apps on blur: Inno Setup wizards, installers and other Delphi programs ----
+// Delphi paints every control through BeginBufferedPaint(BPBF_COMPOSITED) and then makes the
+// whole buffer opaque with BufferedPaintSetAlpha(255), so its black (themed) panels cover the
+// blur. For calls made by the app's own exe, black that nobody gave an alpha stays see-through.
+// Light picture backgrounds (installer wizard art) are cut out the same way.
+static decltype(&BufferedPaintSetAlpha) BufferedPaintSetAlpha_orig = nullptr;
+static decltype(&BitBlt) BitBlt_orig = nullptr;
+static decltype(&StretchBlt) StretchBlt_orig = nullptr;
+static ULONG_PTR g_mainModBase = 0, g_mainModEnd = 0;
+
+static BOOL CalledFromMainModule(void* ret)
+{
+    ULONG_PTR a = (ULONG_PTR)ret;
+    return a >= g_mainModBase && a < g_mainModEnd;
+}
+
+static BOOL IsDelphiProcess()
+{
+    HMODULE exe = GetModuleHandleW(nullptr);
+    return exe && (FindResourceW(exe, L"DVCLAL", RT_RCDATA) || FindResourceW(exe, L"PACKAGEINFO", RT_RCDATA));
+}
+
+HRESULT WINAPI HookedBufferedPaintSetAlpha(HPAINTBUFFER hpb, const RECT* prc, BYTE alpha)
+{
+    if (alpha != 255 || !CalledFromMainModule(__builtin_return_address(0)))
+        return BufferedPaintSetAlpha_orig(hpb, prc, alpha);
+
+    RGBQUAD* bits = nullptr; INT cxRow = 0; RECT rcTarget{};
+    if (FAILED(GetBufferedPaintBits(hpb, &bits, &cxRow)) || !bits || FAILED(GetBufferedPaintTargetRect(hpb, &rcTarget)))
+        return BufferedPaintSetAlpha_orig(hpb, prc, alpha);
+
+    RECT rc = rcTarget;
+    if (prc && !IntersectRect(&rc, prc, &rcTarget))
+        return S_OK;
+    const INT x0 = rc.left - rcTarget.left, x1 = rc.right - rcTarget.left;
+    const INT y0 = rc.top - rcTarget.top, y1 = rc.bottom - rcTarget.top;
+    if (x1 > cxRow) return BufferedPaintSetAlpha_orig(hpb, prc, alpha);
+
+    for (INT y = y0; y < y1; y++) {
+        DWORD* row = reinterpret_cast<DWORD*>(bits + (size_t)y * cxRow);
+        for (INT x = x0; x < x1; x++) {
+            DWORD p = row[x];
+            if (p & 0xFF000000) continue;            // already has alpha (our own text, D2D parts)
+            row[x] = (p & 0x00FFFFFF) ? (p | 0xFF000000) : 0;  // GDI colour -> opaque, black -> blur
+        }
+    }
+    return S_OK;
+}
+
+// Light wizard art: cut the light background touching the picture edge out to black (which
+// then shows the blur). The artwork itself is kept.
+struct DarkArtEntry { HBITMAP src; void* bits; INT w, h; DWORD sig; HBITMAP dark; };
+static std::vector<DarkArtEntry> g_darkArt;
+static std::mutex g_darkArtLock;
+
+static HBITMAP GetDarkArt(HDC hdcSrc)
+{
+    HBITMAP hbm = (HBITMAP)GetCurrentObject(hdcSrc, OBJ_BITMAP);
+    DIBSECTION ds{};
+    if (!hbm || GetObjectW(hbm, sizeof(ds), &ds) != sizeof(ds) || !ds.dsBm.bmBits)
+        return nullptr;                                   // DIB sections only (Delphi TBitmap)
+    const INT w = ds.dsBm.bmWidth, h = abs(ds.dsBmih.biHeight);
+    INT bpp = ds.dsBm.bmBitsPixel;
+    if (w < 24 || h < 24 || (INT64)w * h > 2000000)
+        return nullptr;
+    GdiFlush();
+    const BYTE* base = (const BYTE*)ds.dsBm.bmBits;
+    BOOL bottomUp = ds.dsBmih.biHeight > 0;
+    std::vector<DWORD> conv;
+    if (bpp != 24 && bpp != 32) {
+        // Palette art (Inno Setup wizard images are 8 bpp): read it as 32 bpp, top-down.
+        BITMAPINFO cbi{}; cbi.bmiHeader.biSize = sizeof(cbi.bmiHeader);
+        cbi.bmiHeader.biWidth = w; cbi.bmiHeader.biHeight = -h; cbi.bmiHeader.biPlanes = 1;
+        cbi.bmiHeader.biBitCount = 32; cbi.bmiHeader.biCompression = BI_RGB;
+        void* cbits = nullptr;
+        HBITMAP tmp = CreateDIBSection(nullptr, &cbi, DIB_RGB_COLORS, &cbits, nullptr, 0);
+        HDC mem = tmp ? CreateCompatibleDC(hdcSrc) : nullptr;
+        BOOL ok = FALSE;
+        if (mem) {
+            HGDIOBJ old = SelectObject(mem, tmp);
+            ok = BitBlt_orig(mem, 0, 0, w, h, hdcSrc, 0, 0, SRCCOPY);
+            GdiFlush();
+            if (ok) conv.assign((DWORD*)cbits, (DWORD*)cbits + (size_t)w * h);
+            SelectObject(mem, old); DeleteDC(mem);
+        }
+        if (tmp) DeleteObject(tmp);
+        if (!ok) return nullptr;
+        base = (const BYTE*)conv.data(); bpp = 32; bottomUp = FALSE;
+    }
+    const INT stride = ((w * bpp + 31) / 32) * 4;
+    auto At = [&](INT x, INT y) -> DWORD {
+        const BYTE* p = base + (size_t)(bottomUp ? h - 1 - y : y) * stride + (size_t)x * (bpp / 8);
+        return p[0] | (p[1] << 8) | (p[2] << 16);       // 0x00RRGGBB
+    };
+    DWORD sig = At(0, 0) ^ (At(w - 1, h - 1) << 1) ^ (At(w / 2, h / 2) << 2) ^ (At(w / 3, h / 4) << 3);
+    {
+        std::lock_guard<std::mutex> lk(g_darkArtLock);
+        for (auto& e : g_darkArt)
+            if (e.src == hbm && e.bits == ds.dsBm.bmBits && e.w == w && e.h == h && e.sig == sig)
+                return e.dark;
+    }
+
+    const DWORD bg = At(0, 0);
+    auto Ch = [](DWORD c, INT s) { return (INT)((c >> s) & 0xFF); };
+    auto Near = [&](DWORD c, INT tol) {
+        return abs(Ch(c, 0) - Ch(bg, 0)) <= tol && abs(Ch(c, 8) - Ch(bg, 8)) <= tol && abs(Ch(c, 16) - Ch(bg, 16)) <= tol;
+    };
+    HBITMAP dark = nullptr;
+    BOOL light = Ch(bg, 0) >= 0xD0 && Ch(bg, 8) >= 0xD0 && Ch(bg, 16) >= 0xD0;
+    INT cornersMatch = Near(At(w - 1, 0), 12) + Near(At(0, h - 1), 12) + Near(At(w - 1, h - 1), 12);
+    if (light && cornersMatch >= 2) {
+        std::vector<BYTE> mark((size_t)w * h, 0);
+        std::vector<INT> stack;
+        auto Push = [&](INT x, INT y) {
+            size_t i = (size_t)y * w + x;
+            if (!mark[i] && Near(At(x, y), 34)) { mark[i] = 1; stack.push_back((INT)i); }
+        };
+        for (INT x = 0; x < w; x++) { Push(x, 0); Push(x, h - 1); }
+        for (INT y = 0; y < h; y++) { Push(0, y); Push(w - 1, y); }
+        size_t filled = 0;
+        while (!stack.empty()) {
+            INT i = stack.back(); stack.pop_back(); filled++;
+            INT x = i % w, y = i / w;
+            if (x > 0) Push(x - 1, y);
+            if (x < w - 1) Push(x + 1, y);
+            if (y > 0) Push(x, y - 1);
+            if (y < h - 1) Push(x, y + 1);
+        }
+        if (filled * 100 >= (size_t)w * h * 15) {
+            // Light "paper" inside the art (box faces, disc face) goes too, so it reads as dark line art.
+            for (INT y = 0; y < h; y++)
+                for (INT x = 0; x < w; x++)
+                    if (Near(At(x, y), 24)) mark[(size_t)y * w + x] = 1;
+            BITMAPINFO bi{}; bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+            bi.bmiHeader.biWidth = w; bi.bmiHeader.biHeight = -h; bi.bmiHeader.biPlanes = 1;
+            bi.bmiHeader.biBitCount = 32; bi.bmiHeader.biCompression = BI_RGB;
+            void* out = nullptr;
+            dark = CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, &out, nullptr, 0);
+            if (dark && out) {
+                DWORD* o = (DWORD*)out;
+                for (INT y = 0; y < h; y++)
+                    for (INT x = 0; x < w; x++) {
+                        size_t i = (size_t)y * w + x;
+                        o[i] = mark[i] ? 0 : (At(x, y) | 0xFF000000);
+                    }
+            }
+        }
+    }
+    std::lock_guard<std::mutex> lk(g_darkArtLock);
+    if (g_darkArt.size() >= 32) {
+        if (g_darkArt.front().dark) DeleteObject(g_darkArt.front().dark);
+        g_darkArt.erase(g_darkArt.begin());
+    }
+    g_darkArt.push_back({hbm, ds.dsBm.bmBits, w, h, sig, dark});
+    return dark;
+}
+
+BOOL WINAPI HookedBitBlt(HDC hdc, INT x, INT y, INT cx, INT cy, HDC hdcSrc, INT x1, INT y1, DWORD rop)
+{
+    if (rop == SRCCOPY && hdcSrc && CalledFromMainModule(__builtin_return_address(0))) {
+        if (HBITMAP dark = GetDarkArt(hdcSrc)) {
+            HDC mem = CreateCompatibleDC(hdcSrc);
+            if (mem) {
+                HGDIOBJ old = SelectObject(mem, dark);
+                BOOL r = BitBlt_orig(hdc, x, y, cx, cy, mem, x1, y1, rop);
+                SelectObject(mem, old); DeleteDC(mem);
+                return r;
+            }
+        }
+    }
+    return BitBlt_orig(hdc, x, y, cx, cy, hdcSrc, x1, y1, rop);
+}
+
+BOOL WINAPI HookedStretchBlt(HDC hdc, INT x, INT y, INT cx, INT cy, HDC hdcSrc, INT x1, INT y1, INT cx1, INT cy1, DWORD rop)
+{
+    if (rop == SRCCOPY && hdcSrc && CalledFromMainModule(__builtin_return_address(0))) {
+        if (HBITMAP dark = GetDarkArt(hdcSrc)) {
+            HDC mem = CreateCompatibleDC(hdcSrc);
+            if (mem) {
+                HGDIOBJ old = SelectObject(mem, dark);
+                BOOL r = StretchBlt_orig(hdc, x, y, cx, cy, mem, x1, y1, cx1, cy1, rop);
+                SelectObject(mem, old); DeleteDC(mem);
+                return r;
+            }
+        }
+    }
+    return StretchBlt_orig(hdc, x, y, cx, cy, hdcSrc, x1, y1, cx1, cy1, rop);
+}
+
+VOID DelphiGlassHooks()
+{
+    if (!IsDelphiProcess())
+        return;
+    HMODULE exe = GetModuleHandleW(nullptr);
+    auto dos = (PIMAGE_DOS_HEADER)exe;
+    auto nt = (PIMAGE_NT_HEADERS)((BYTE*)exe + dos->e_lfanew);
+    g_mainModBase = (ULONG_PTR)exe;
+    g_mainModEnd = g_mainModBase + nt->OptionalHeader.SizeOfImage;
+    Wh_Log(L"Delphi app: buffered paint keeps black see-through");
+    WindhawkUtils::SetFunctionHook(BufferedPaintSetAlpha, HookedBufferedPaintSetAlpha, &BufferedPaintSetAlpha_orig);
+    WindhawkUtils::SetFunctionHook(BitBlt, HookedBitBlt, &BitBlt_orig);
+    WindhawkUtils::SetFunctionHook(StretchBlt, HookedStretchBlt, &StretchBlt_orig);
+}
+
 VOID ApplyHooks()
 {
     if(g_settings.FillBg)
@@ -7042,7 +7529,9 @@ VOID ApplyHooks()
     if (g_settings.BgType != g_settings.Default) {
         DwmSetWindowAttributeHook();
         DwmExpandFrameIntoClientAreaHook();
-    }        
+    }
+    if (g_settings.FillBg && g_settings.BgType != g_settings.Default)
+        DelphiGlassHooks();
 }
 
 // Normalizes a path: flips slashes, trims trailing slashes, lowercases.

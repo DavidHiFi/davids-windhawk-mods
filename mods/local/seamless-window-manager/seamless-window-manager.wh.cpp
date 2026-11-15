@@ -3,7 +3,7 @@
 // @id              seamless-window-manager
 // @name            Seamless Window Manager
 // @description     Move, resize, snap and focus windows with the mouse or keyboard, with app rules, gaps and a pause key
-// @version         2.4.1
+// @version         2.5.6
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -42,12 +42,20 @@ when a game needs Alt. Works on administrator windows too.
   Move them around with Alt+Shift+arrow keys, grow them with
   Ctrl+Alt+Shift+arrow keys, and float one with Alt+T. The half and quarter
   keys rearrange the tiles around the window. Dragging a tiled window onto
-  another swaps them, and dragging an edge resizes its neighbours too.
+  another swaps them, and dragging an edge resizes its neighbours too. A tile
+  never shrinks below the app's own smallest size, so nothing spills onto the
+  next monitor.
 - **Fill and borderless.** Alt+F fills the screen but keeps the gaps around
   the window. Ctrl+Shift+F takes the title bar and borders off and covers the
   whole monitor, taskbar included. Press either again to go back.
+- **Hide the title bar** with Ctrl+Win+Alt+T. The window keeps its size and
+  place; press again to bring the title bar back.
+- **Stacked windows.** When windows sit on top of each other, such as two
+  filled with Alt+F, Alt+PageDown brings up the one behind and Alt+PageUp
+  goes back the other way.
 - **Focus by direction.** Alt+arrow keys switch to the nearest window on that
-  side, on any monitor, and the mouse pointer jumps with you.
+  side, on any monitor, and the mouse pointer jumps with you. The window you
+  land on zooms in softly, every time (turn it off under Look).
 - **Focus follows the mouse**, if you want it, and the pointer can jump to
   the window you switch to with the keyboard.
 - **App rules** place, pin, fade or skip chosen apps. Match by app name,
@@ -209,6 +217,8 @@ inline std::atomic<int> g_resizeStepPct{2};
 // Glide length for snaps and tiles; 0 is off. g_animOff > 0 skips it on a thread.
 inline std::atomic<int> g_animMs{180};
 inline thread_local int g_animOff = 0;
+// Focus animation length; 0 is off.
+inline std::atomic<int> g_focusAnimMs{200};
 // Ctrl+Alt drag: how close an edge must come to cling, and the gap kept.
 inline std::atomic<int> g_magnetPx{20};
 inline std::atomic<int> g_magnetGap{20};
@@ -415,6 +425,11 @@ const TriggerSettings& TriggerOfCommand(UINT command) {
 
 UINT g_sizeMoveRequestMessage =
     RegisterWindowMessage(L"Windhawk_SizeMoveRequest_" WH_MOD_ID);
+// Tells Seamless Wobbly Windows that a held-key move of this window started
+// (wParam 1) or ended (wParam 0). The press and release are swallowed here, so
+// the window's process can't see the button on its own.
+UINT g_wobbleDragMessage =
+    RegisterWindowMessage(L"SeamlessWobblyWindows_ExternalDrag");
 UINT g_unsubclassRegisteredMessage =
     RegisterWindowMessage(L"Windhawk_Unsubclass_" WH_MOD_ID);
 UINT g_replayPressMessage =
@@ -425,6 +440,10 @@ UINT g_dragUpdateMessage =
 // often ignores a pin from another process that isn't in the foreground.
 UINT g_pinRequestMessage =
     RegisterWindowMessage(L"Windhawk_PinRequest_" WH_MOD_ID);
+// The helper asks an app's own copy of the mod to play the focus animation on
+// its window (wParam: length in ms).
+UINT g_focusPulseMessage =
+    RegisterWindowMessage(L"Windhawk_FocusPulse_" WH_MOD_ID);
 
 thread_local bool g_threadHooksAttempted;
 thread_local HHOOK g_getMessageHook;
@@ -1719,9 +1738,176 @@ void OnModifierKeyMessageRemoved(MSG* msg, DWORD modifier) {
     }
 }
 
+//////// focus animation ////////
+// When a focus key lands on a window, the helper posts g_focusPulseMessage to
+// it. This app's own copy of the mod hides the real window for a moment and
+// shows a live picture of it zooming in from 94% while it fades in, the same
+// look as the Alt+Tab animation. Only the app's own process may hide (cloak)
+// its windows, which is why this runs here and not in the helper.
+
+constexpr PCWSTR kFocusPulseProp = L"SeamlessWM.FocusPulseV1";
+// Windows Animations' own Alt+Tab zoom: if it took this window, stand down.
+constexpr PCWSTR kSwitchAnimationProp = L"windows-animations.SwitchAnimationActiveV1";
+
+std::mutex g_focusPulseMutex;
+std::vector<HANDLE> g_focusPulseThreads;
+std::atomic<bool> g_focusPulseStop{false};
+
+// An activation change that lands while the window is cloaked can leave Mica
+// in its darker inactive look (Explorer's header and command bar). Telling the
+// window its real active state again makes DWM redraw the backdrop to match.
+// The old fix set the same backdrop and accent values again; DWM ignores that.
+void RefreshBackdropAfterUncloak(HWND hWnd) {
+    BOOL active = GetForegroundWindow() == hWnd;
+    DWORD_PTR result = 0;
+    SendMessageTimeoutW(hWnd, WM_NCACTIVATE, active, 0, SMTO_ABORTIFHUNG | SMTO_NORMAL, 100,
+                        &result);
+    SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED |
+                     SWP_ASYNCWINDOWPOS);
+}
+
+struct FocusPulseJob {
+    HWND hWnd;
+    int ms;
+};
+
+DWORD WINAPI FocusPulseThread(LPVOID param) {
+    std::unique_ptr<FocusPulseJob> job((FocusPulseJob*)param);
+    HWND hWnd = job->hWnd;
+    // This thread pumps messages for its picture window; it needs none of the
+    // mod's drag hooks.
+    g_threadHooksAttempted = true;
+    SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    BOOL cloak = FALSE;
+    auto finish = [&](HWND ghost, HTHUMBNAIL thumb) {
+        if (cloak && IsWindow(hWnd)) {
+            BOOL off = FALSE;
+            DwmSetWindowAttribute(hWnd, DWMWA_CLOAK, &off, sizeof(off));
+            RefreshBackdropAfterUncloak(hWnd);
+            DwmFlush();
+        }
+        if (thumb) DwmUnregisterThumbnail(thumb);
+        if (ghost) DestroyWindow(ghost);
+        if (IsWindow(hWnd)) RemovePropW(hWnd, kFocusPulseProp);
+        return 0;
+    };
+
+    // Give Windows Animations its moment: on Explorer with Alt held it runs
+    // its own zoom, and two at once would look doubled.
+    Sleep(20);
+    // Let the activation finish first (up to 80 ms more), so Mica switches to
+    // its active look while the window can still be seen.
+    for (int i = 0; i < 8 && GetForegroundWindow() != hWnd && !g_focusPulseStop; i++) {
+        Sleep(10);
+    }
+    BOOL cloaked = FALSE;
+    if (g_focusPulseStop || !IsWindow(hWnd) || !IsWindowVisible(hWnd) || IsIconic(hWnd) ||
+        GetPropW(hWnd, kSwitchAnimationProp) ||
+        (SUCCEEDED(DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) &&
+         cloaked)) {
+        return finish(nullptr, nullptr);
+    }
+    RECT win{}, ext{};
+    if (!GetWindowRect(hWnd, &win) ||
+        FAILED(DwmGetWindowAttribute(hWnd, DWMWA_EXTENDED_FRAME_BOUNDS, &ext, sizeof(ext)))) {
+        return finish(nullptr, nullptr);
+    }
+    int W = ext.right - ext.left, H = ext.bottom - ext.top;
+    if (W < 8 || H < 8) return finish(nullptr, nullptr);
+    HWND ghost = CreateWindowExW(
+        WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT,
+        L"STATIC", nullptr, WS_POPUP, ext.left, ext.top, W, H, nullptr, nullptr, nullptr,
+        nullptr);
+    if (!ghost) return finish(nullptr, nullptr);
+    HTHUMBNAIL thumb = nullptr;
+    if (FAILED(DwmRegisterThumbnail(ghost, hWnd, &thumb))) return finish(ghost, nullptr);
+    // Only the visible frame, not the invisible resize border around it.
+    RECT source{ext.left - win.left, ext.top - win.top, ext.left - win.left + W,
+                ext.top - win.top + H};
+    auto frame = [&](float scale, BYTE opacity) {
+        DWM_THUMBNAIL_PROPERTIES p{};
+        p.dwFlags = DWM_TNP_VISIBLE | DWM_TNP_OPACITY | DWM_TNP_RECTDESTINATION |
+                    DWM_TNP_RECTSOURCE | DWM_TNP_SOURCECLIENTAREAONLY;
+        p.fVisible = TRUE;
+        p.fSourceClientAreaOnly = FALSE;
+        p.opacity = opacity;
+        p.rcSource = source;
+        int w = (int)(W * scale + 0.5f), h = (int)(H * scale + 0.5f);
+        p.rcDestination = {(W - w) / 2, (H - h) / 2, (W - w) / 2 + w, (H - h) / 2 + h};
+        DwmUpdateThumbnailProperties(thumb, &p);
+    };
+    frame(0.94f, 0);
+    ShowWindow(ghost, SW_SHOWNOACTIVATE);
+    // The picture sits just above the window, below anything pinned on top.
+    SetWindowPos(ghost, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    cloak = TRUE;
+    SetPropW(hWnd, kFocusPulseProp, (HANDLE)1);
+    DwmSetWindowAttribute(hWnd, DWMWA_CLOAK, &cloak, sizeof(cloak));
+    DwmFlush();
+
+    LARGE_INTEGER freq, start, now;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&start);
+    for (;;) {
+        MSG m;
+        while (PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) DispatchMessageW(&m);
+        QueryPerformanceCounter(&now);
+        double t = (now.QuadPart - start.QuadPart) * 1000.0 / freq.QuadPart / job->ms;
+        bool last = t >= 1.0 || g_focusPulseStop || !IsWindow(hWnd);
+        float p = last ? 1.0f : (float)t;
+        float ease = 1.0f - (1.0f - p) * (1.0f - p) * (1.0f - p);
+        frame(0.94f + 0.06f * ease, (BYTE)(255.0f * ease));
+        if (last) break;
+        DwmFlush();
+    }
+    return finish(ghost, thumb);
+}
+
+void StartFocusPulse(HWND hWnd, int ms) {
+    if (!hWnd || GetAncestor(hWnd, GA_ROOT) != hWnd || GetPropW(hWnd, kFocusPulseProp) ||
+        g_focusPulseStop) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(g_focusPulseMutex);
+    // Forget the ones that finished.
+    std::erase_if(g_focusPulseThreads, [](HANDLE h) {
+        if (WaitForSingleObject(h, 0) != WAIT_OBJECT_0) return false;
+        CloseHandle(h);
+        return true;
+    });
+    if (g_focusPulseThreads.size() >= 4) return;
+    auto* job = new FocusPulseJob{hWnd, std::clamp(ms, 60, 600)};
+    HANDLE thread = CreateThread(nullptr, 0, FocusPulseThread, job, 0, nullptr);
+    if (thread) {
+        g_focusPulseThreads.push_back(thread);
+    } else {
+        delete job;
+    }
+}
+
+// Before the mod unloads, the pictures finish and the windows come back.
+void StopFocusPulses() {
+    g_focusPulseStop = true;
+    std::lock_guard<std::mutex> lock(g_focusPulseMutex);
+    for (HANDLE h : g_focusPulseThreads) {
+        WaitForSingleObject(h, 2000);
+        CloseHandle(h);
+    }
+    g_focusPulseThreads.clear();
+}
+
 // Runs for every message removed from the queue of the current thread, before
 // the program sees it.
 void OnMessageRemoved(MSG* msg) {
+    if (msg->message == g_focusPulseMessage) {
+        HWND hWnd = msg->hwnd;
+        int ms = (int)msg->wParam;
+        TakeMessage(msg);
+        StartFocusPulse(hWnd, ms);
+        return;
+    }
+
     if (msg->message == g_replayPressMessage) {
         ReplayPress((int)msg->wParam, msg->lParam != 0);
         TakeMessage(msg);
@@ -2662,7 +2848,14 @@ void KillLowLevelDelayTimer() {
     }
 }
 
+void PostWobbleDragEnd() {
+    if (g_llRootWnd && g_llDragSetUp && !IsSizeCommand(g_llCommand)) {
+        PostMessage(g_llRootWnd, g_wobbleDragMessage, 0, 0);
+    }
+}
+
 void ResetLowLevelDragState() {
+    PostWobbleDragEnd();
     g_llRootWnd = nullptr;
     g_llButton = 0;
     g_llDragging = false;
@@ -2899,6 +3092,10 @@ void SetUpLowLevelDrag() {
     if (!g_llDragOverlayWnd) {
         g_llDragOverlayWnd =
             CreateDragOverlay(g_llDragStartPt, CursorOfCommand(g_llCommand));
+    }
+
+    if (!IsSizeCommand(g_llCommand)) {
+        PostMessage(g_llRootWnd, g_wobbleDragMessage, 1, 0);
     }
 }
 
@@ -3557,6 +3754,7 @@ BOOL WINAPI DragDllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) 
                 if (g_lowLevelMouseHook &&
                     GetCurrentThreadId() == g_lowLevelMouseHookThreadId) {
                     g_lowLevelMouseHook = nullptr;
+                    PostWobbleDragEnd();
                     g_llRootWnd = nullptr;
                     g_llButton = 0;
                     g_llDragging = false;
@@ -3748,6 +3946,7 @@ BOOL ModInit() {
     // window in this process.
     ChangeWindowMessageFilter(g_sizeMoveRequestMessage, MSGFLT_ADD);
     ChangeWindowMessageFilter(g_pinRequestMessage, MSGFLT_ADD);
+    ChangeWindowMessageFilter(g_focusPulseMessage, MSGFLT_ADD);
 
     if (IsExplorerProcess()) {
         EnumWindows(
@@ -3795,6 +3994,8 @@ void ModUninit() {
 
     ChangeWindowMessageFilter(g_sizeMoveRequestMessage, MSGFLT_REMOVE);
     ChangeWindowMessageFilter(g_pinRequestMessage, MSGFLT_REMOVE);
+    ChangeWindowMessageFilter(g_focusPulseMessage, MSGFLT_REMOVE);
+    StopFocusPulses();
 
     {
         std::lock_guard<std::mutex> guard(g_lowLevelMouseHookMutex);
@@ -6147,6 +6348,12 @@ void ToolModUninit() {
     the window covers the whole monitor, taskbar included. Press again to give
     the window its frame and size back. If another app already uses the
     shortcut, it starts working once that app lets go of it.
+- hotkeyHideTitleBar: Ctrl+Win+Alt+T
+  $name: Hide the title bar
+  $description: >-
+    Like GlazeWM's hide title bar: the active window loses its title bar but
+    keeps its size, place and resize edges. Press again to bring the title bar
+    back. Apps that draw their own title bar may not change.
 - hotkeyMonitor1: Alt+1
   $name: Focus monitor 1
   $description: >-
@@ -6521,6 +6728,14 @@ void ToolModUninit() {
       $description: >-
         How long windows take to glide into place when they tile, float, fill,
         snap or go borderless. 0 turns it off. 0 to 400 (Suggested: 180).
+    - focusAnimation: zoom
+      $name: Focus animation
+      $description: >-
+        The window you jump to with the focus keys (Alt+arrows, Alt+1 to 4,
+        Alt+Page Up or Down) zooms in softly, every time, like Alt+Tab does.
+      $options:
+        - zoom: Zoom in
+        - "off": "Off"
     - inactiveOpacity: 100
       $name: Background window opacity (%)
       $description: >-
@@ -6615,10 +6830,374 @@ static HANDLE g_globalMutex;
 
 
 // ---------------------------------------------------------------------------------------------
+// Menu room: shared by Seamless Flyouts and the tool mods' menu look.
+// - Every popup menu window in this process is caught as it is created, title bar (system)
+//   menus included, which never pass through TrackPopupMenu.
+// - Menus that Windows draws get 2 px more frame on every side, so the hover has the same room
+//   from the border as in Explorer's own desktop menu (4 px at the sides, 6 px top and bottom).
+//   Menus with owner-drawn rows (Explorer) already have it and are left alone.
+// - A submenu opens touching its parent, and while the pointer heads for an open submenu the
+//   parent ignores it, so rows crossed on the way don't swap the submenu (released after a
+//   short rest, so stopping on a row still opens that row).
+// - A menu too tall for its monitor gets shorter rows while it is open, so the last item
+//   shows without scroll arrows. Windows reads row spacing once per process, so the spacing is
+//   reloaded (FlushMenuThemes) when such a menu opens and again when the menu closes.
+// ---------------------------------------------------------------------------------------------
+#include <algorithm>
+#include <atomic>
+#include <mutex>
+#include <vector>
+#include <commctrl.h>
+
+namespace SeamlessMenuRoom {
+
+constexpr UINT_PTR kRoomId = 0x6D55;
+constexpr INT kRowMargin = 6;                  // row top and bottom margin of the menu look
+constexpr INT kMinRowMargin = 2;
+static const WCHAR* const kPadProp = L"SeamlessMenuRoomPad";
+static const WCHAR* const kSizeProp = L"SeamlessMenuRoomSize";
+static const WCHAR* const kSeqProp = L"SeamlessMenuRoomSeq";   // creation order of menu windows
+constexpr UINT kAimHoldMs = 250;               // how long the pointer may rest before a held move counts
+
+static std::atomic<INT> g_rowMargin{kRowMargin};
+static HWINEVENTHOOK g_createHook = nullptr, g_menuHook = nullptr;
+static VOID (*g_onCreate)(HWND) = nullptr;
+using Flush_t = VOID(WINAPI*)();
+static Flush_t g_flush = nullptr;
+static thread_local HHOOK t_loopHook = nullptr;
+static thread_local INT t_trackDepth = 0;
+static thread_local BOOL t_menuMode = FALSE;
+static std::atomic<ULONG> g_seq{0};
+static thread_local HHOOK t_aimHook = nullptr;
+static thread_local POINT t_apex = {LONG_MIN, LONG_MIN};
+static thread_local MSG t_held = {};
+static thread_local UINT_PTR t_aimTimer = 0;
+static thread_local DWORD t_holdStart = 0;
+constexpr DWORD kAimMaxMs = 700;               // a hold never lasts longer than this
+
+// Row top and bottom margin to report for Menu part 27 / POPUPITEM, property 10000.
+static INT RowMargin() { return g_rowMargin.load(); }
+
+static UINT DpiOf(HWND h)
+{
+    UINT d = h ? GetDpiForWindow(h) : 0;
+    if (!d) d = GetDpiForSystem();
+    return d ? d : USER_DEFAULT_SCREEN_DPI;
+}
+
+static BOOL IsPopupMenuWindow(HWND h)
+{
+    WCHAR cls[16];
+    return h && GetClassNameW(h, cls, ARRAYSIZE(cls)) && wcscmp(cls, L"#32768") == 0;
+}
+
+static BOOL HasOwnerDraw(HMENU m)
+{
+    INT n = GetMenuItemCount(m);
+    for (INT i = 0; i < n; i++) {
+        MENUITEMINFOW mii = {sizeof(mii), MIIM_FTYPE};
+        if (GetMenuItemInfoW(m, i, TRUE, &mii) && (mii.fType & MFT_OWNERDRAW)) return TRUE;
+    }
+    return FALSE;
+}
+
+// The nearest visible menu window of this thread made before (parent) or after (child) h.
+struct RelativeFind { HWND self; ULONG_PTR seq; BOOL child; HWND best; ULONG_PTR bestSeq; };
+static BOOL CALLBACK FindRelative(HWND h, LPARAM l)
+{
+    auto* f = reinterpret_cast<RelativeFind*>(l);
+    if (h == f->self || !IsWindowVisible(h) || !IsPopupMenuWindow(h)) return TRUE;
+    ULONG_PTR s = (ULONG_PTR)GetPropW(h, kSeqProp);
+    if (!s) return TRUE;
+    BOOL better = f->child ? (s > f->seq && (!f->best || s < f->bestSeq))
+                           : (s < f->seq && (!f->best || s > f->bestSeq));
+    if (better) { f->best = h; f->bestSeq = s; }
+    return TRUE;
+}
+static HWND RelativeMenu(HWND h, BOOL child)
+{
+    RelativeFind f = {h, (ULONG_PTR)GetPropW(h, kSeqProp), child, nullptr, 0};
+    if (!f.seq) return nullptr;
+    EnumThreadWindows(GetCurrentThreadId(), FindRelative, reinterpret_cast<LPARAM>(&f));
+    return f.best;
+}
+
+// Pull a submenu in so it touches its parent (never pushes it further away or off screen).
+static VOID SnapToParent(HWND h, WINDOWPOS* wp)
+{
+    HWND parent = RelativeMenu(h, FALSE);
+    RECT pr;
+    if (!parent || !GetWindowRect(parent, &pr)) return;
+    INT cx = wp->cx;
+    if ((wp->flags & SWP_NOSIZE) || cx <= 0) {
+        RECT r;
+        if (!GetWindowRect(h, &r)) return;
+        cx = r.right - r.left;
+    }
+    LONG mid = (pr.left + pr.right) / 2;
+    if (wp->x >= mid) {
+        if (pr.right < wp->x) wp->x = pr.right;
+    } else if (wp->x + cx <= mid) {
+        if (pr.left - cx > wp->x) wp->x = pr.left - cx;
+    }
+}
+
+static BOOL InTriangle(POINT p, POINT a, POINT b, POINT c)
+{
+    auto side = [](POINT o, POINT u, POINT v) {
+        return (LONGLONG)(u.x - o.x) * (v.y - o.y) - (LONGLONG)(u.y - o.y) * (v.x - o.x);
+    };
+    LONGLONG d1 = side(p, a, b), d2 = side(p, b, c), d3 = side(p, c, a);
+    BOOL neg = d1 < 0 || d2 < 0 || d3 < 0, pos = d1 > 0 || d2 > 0 || d3 > 0;
+    return !(neg && pos);
+}
+
+static VOID DropHeld()
+{
+    if (t_aimTimer) KillTimer(nullptr, t_aimTimer);
+    t_aimTimer = 0;
+    t_held = {};
+}
+
+// The pointer rested: let the last held move through, from where it stopped. The timer has no
+// callback (a pending one could outlive the mod's unload); AimProc sees its WM_TIMER.
+static VOID AimRelease()
+{
+    MSG m = t_held;
+    DropHeld();
+    if (m.hwnd && IsWindow(m.hwnd)) {
+        t_apex = m.pt;
+        PostMessageW(m.hwnd, m.message, m.wParam, m.lParam);
+    }
+}
+
+// TRUE: hold this move, the pointer is on its way to the open submenu.
+static BOOL HoldForSubmenu(const MSG* m)
+{
+    POINT p = m->pt;
+    HWND under = WindowFromPoint(p);
+    HWND sub = nullptr;
+    if (under && IsPopupMenuWindow(under) && GetWindowThreadProcessId(under, nullptr) == GetCurrentThreadId())
+        sub = RelativeMenu(under, TRUE);
+    RECT sr, pr;
+    if (!sub || !GetWindowRect(sub, &sr) || !GetWindowRect(under, &pr) || t_apex.x == LONG_MIN ||
+        (p.x == t_apex.x && p.y == t_apex.y)) {
+        DropHeld();
+        t_apex = p;
+        return FALSE;
+    }
+    LONG edge = sr.left >= (pr.left + pr.right) / 2 ? sr.left : sr.right;
+    INT slack = MulDiv(6, DpiOf(under), USER_DEFAULT_SCREEN_DPI);
+    POINT b = {edge, sr.top - slack}, c = {edge, sr.bottom + slack};
+    if (!InTriangle(p, t_apex, b, c)) {
+        DropHeld();
+        t_apex = p;
+        return FALSE;
+    }
+    if (!t_held.hwnd) t_holdStart = GetTickCount();
+    else if (GetTickCount() - t_holdStart > kAimMaxMs) {
+        DropHeld();
+        t_apex = p;
+        return FALSE;
+    }
+    t_held = *m;
+    if (t_aimTimer) KillTimer(nullptr, t_aimTimer);
+    t_aimTimer = SetTimer(nullptr, 0, kAimHoldMs, nullptr);
+    if (!t_aimTimer) { t_held = {}; t_apex = p; return FALSE; }
+    return TRUE;
+}
+
+static LRESULT CALLBACK AimProc(INT code, WPARAM w, LPARAM l)
+{
+    if (code == MSGF_MENU && l) {
+        auto* m = reinterpret_cast<MSG*>(l);
+        if (m->message == WM_TIMER && !m->hwnd && t_aimTimer && m->wParam == t_aimTimer) {
+            AimRelease();
+            return TRUE;
+        }
+        if (m->message == WM_MOUSEMOVE || m->message == WM_NCMOUSEMOVE) {
+            if (HoldForSubmenu(m)) return TRUE;
+        } else if ((m->message >= WM_LBUTTONDOWN && m->message <= WM_MBUTTONDBLCLK) ||
+                   (m->message >= WM_NCLBUTTONDOWN && m->message <= WM_NCMBUTTONDBLCLK) ||
+                   m->message == WM_KEYDOWN) {
+            DropHeld();
+            t_apex = {LONG_MIN, LONG_MIN};
+        }
+    }
+    return CallNextHookEx(nullptr, code, w, l);
+}
+
+static LRESULT CALLBACK RoomProc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR, DWORD_PTR)
+{
+    if (msg == WM_WINDOWPOSCHANGING && l) {
+        auto* wp = reinterpret_cast<WINDOWPOS*>(l);
+        // Grow only the size Windows asks for, never a size this proc already produced.
+        if (!(wp->flags & SWP_NOSIZE) && wp->cx > 0 && wp->cy > 0 &&
+            (DWORD)MAKELONG(wp->cx, wp->cy) != (DWORD)(ULONG_PTR)GetPropW(h, kSizeProp)) {
+            HMENU m = (HMENU)SendMessageW(h, MN_GETHMENU, 0, 0);
+            INT pad = (m && !HasOwnerDraw(m)) ? MulDiv(2, DpiOf(h), USER_DEFAULT_SCREEN_DPI) : 0;
+            SetPropW(h, kPadProp, (HANDLE)(INT_PTR)pad);
+            if (pad) {
+                wp->cx += 2 * pad;
+                wp->cy += 2 * pad;
+                if (!(wp->flags & SWP_NOMOVE)) {
+                    RECT r = {wp->x, wp->y, wp->x + wp->cx, wp->y + wp->cy};
+                    MONITORINFO mi = {sizeof(mi)};
+                    if (GetMonitorInfoW(MonitorFromRect(&r, MONITOR_DEFAULTTONEAREST), &mi)) {
+                        if (r.right > mi.rcMonitor.right) wp->x = std::max(mi.rcMonitor.left, wp->x - (r.right - mi.rcMonitor.right));
+                        if (r.bottom > mi.rcMonitor.bottom) wp->y = std::max(mi.rcMonitor.top, wp->y - (r.bottom - mi.rcMonitor.bottom));
+                    }
+                }
+            }
+            SetPropW(h, kSizeProp, (HANDLE)(ULONG_PTR)(DWORD)MAKELONG(wp->cx, wp->cy));
+        }
+        if (!(wp->flags & SWP_NOMOVE)) SnapToParent(h, wp);
+    }
+    if (msg == WM_NCDESTROY) {
+        RemovePropW(h, kPadProp);
+        RemovePropW(h, kSizeProp);
+        RemovePropW(h, kSeqProp);
+        RemoveWindowSubclass(h, RoomProc, kRoomId);
+        return DefSubclassProc(h, msg, w, l);
+    }
+    LRESULT result = DefSubclassProc(h, msg, w, l);
+    if (msg == WM_NCCALCSIZE && l) {
+        INT pad = (INT)(INT_PTR)GetPropW(h, kPadProp);
+        if (pad > 0) InflateRect(reinterpret_cast<RECT*>(l), -pad, -pad);
+    }
+    return result;
+}
+
+static VOID ResetRows()
+{
+    if (g_rowMargin.exchange(kRowMargin) != kRowMargin && g_flush) g_flush();
+}
+
+// Picks the largest row margin (6 down to 2) at which the whole menu fits its monitor.
+static VOID FitMenu(HMENU m, HWND owner)
+{
+    if (!m || !g_flush || HasOwnerDraw(m)) return;
+    INT rows = 0, seps = 0, n = GetMenuItemCount(m);
+    for (INT i = 0; i < n; i++) {
+        MENUITEMINFOW mii = {sizeof(mii), MIIM_FTYPE};
+        if (!GetMenuItemInfoW(m, i, TRUE, &mii)) continue;
+        (mii.fType & MFT_SEPARATOR) ? seps++ : rows++;
+    }
+    MONITORINFO mi = {sizeof(mi)};
+    if (!rows || !GetMonitorInfoW(MonitorFromWindow(owner, MONITOR_DEFAULTTONEAREST), &mi)) return;
+    UINT dpi = DpiOf(owner);
+    auto px = [dpi](INT v) { return MulDiv(v, dpi, USER_DEFAULT_SCREEN_DPI); };
+    INT avail = mi.rcWork.bottom - mi.rcWork.top - px(8);
+    INT pick = kRowMargin;
+    for (; pick > kMinRowMargin; pick--) {
+        INT cut = px(2 * (kRowMargin - pick));   // rows measure 29 px and separators 17 px at margin 6
+        if (rows * (px(29) - cut) + seps * (px(17) - cut) + px(10) <= avail) break;
+    }
+    if (pick < g_rowMargin.load()) {
+        g_rowMargin = pick;
+        g_flush();
+    }
+}
+
+static LRESULT CALLBACK LoopProc(INT code, WPARAM w, LPARAM l)
+{
+    if (code == HC_ACTION && l) {
+        auto* c = reinterpret_cast<CWPSTRUCT*>(l);
+        if (c->message == WM_INITMENUPOPUP) FitMenu((HMENU)c->wParam, c->hwnd);
+        else if (c->message == WM_EXITMENULOOP) ResetRows();
+    }
+    return CallNextHookEx(nullptr, code, w, l);
+}
+// Every live loop hook, so Uninit can remove the ones other threads still hold.
+static std::mutex g_hooksLock;
+static std::vector<HHOOK> g_hooks;
+static VOID SyncLoopHook()
+{
+    BOOL want = t_trackDepth > 0 || t_menuMode;
+    if (want && !t_loopHook) {
+        t_loopHook = SetWindowsHookExW(WH_CALLWNDPROC, LoopProc, nullptr, GetCurrentThreadId());
+        if (t_loopHook) { std::lock_guard<std::mutex> g(g_hooksLock); g_hooks.push_back(t_loopHook); }
+    } else if (!want && t_loopHook) {
+        {
+            std::lock_guard<std::mutex> g(g_hooksLock);
+            auto it = std::find(g_hooks.begin(), g_hooks.end(), t_loopHook);
+            if (it != g_hooks.end()) { g_hooks.erase(it); UnhookWindowsHookEx(t_loopHook); }
+        }
+        t_loopHook = nullptr;
+        ResetRows();
+    }
+    if (want && !t_aimHook) {
+        t_apex = {LONG_MIN, LONG_MIN};
+        t_aimHook = SetWindowsHookExW(WH_MSGFILTER, AimProc, nullptr, GetCurrentThreadId());
+        if (t_aimHook) { std::lock_guard<std::mutex> g(g_hooksLock); g_hooks.push_back(t_aimHook); }
+    } else if (!want && t_aimHook) {
+        {
+            std::lock_guard<std::mutex> g(g_hooksLock);
+            auto it = std::find(g_hooks.begin(), g_hooks.end(), t_aimHook);
+            if (it != g_hooks.end()) { g_hooks.erase(it); UnhookWindowsHookEx(t_aimHook); }
+        }
+        t_aimHook = nullptr;
+        DropHeld();
+    }
+}
+
+// Wrap TrackPopupMenu(Ex) with these (menu-bar menus are covered by the menu events).
+static VOID BeginTrack() { t_trackDepth++; SyncLoopHook(); }
+static VOID EndTrack() { if (t_trackDepth > 0) t_trackDepth--; SyncLoopHook(); }
+
+static VOID CALLBACK OnEvent(HWINEVENTHOOK, DWORD ev, HWND h, LONG obj, LONG child, DWORD, DWORD)
+{
+    if (ev == EVENT_OBJECT_CREATE) {
+        if (obj != OBJID_WINDOW || child != CHILDID_SELF || !IsPopupMenuWindow(h) ||
+            GetWindowThreadProcessId(h, nullptr) != GetCurrentThreadId())
+            return;
+        SetPropW(h, kSeqProp, (HANDLE)(ULONG_PTR)++g_seq);
+        if (g_onCreate) g_onCreate(h);
+        SetWindowSubclass(h, RoomProc, kRoomId, 0);
+    } else if (ev == EVENT_SYSTEM_MENUSTART) {
+        t_menuMode = TRUE;
+        SyncLoopHook();
+    } else if (ev == EVENT_SYSTEM_MENUEND) {
+        t_menuMode = FALSE;
+        SyncLoopHook();
+    }
+}
+
+// onCreate (optional) runs for each new popup menu window, on its own thread, after creation.
+static VOID Init(VOID (*onCreate)(HWND))
+{
+    g_onCreate = onCreate;
+    HMODULE ux = GetModuleHandleW(L"uxtheme.dll");
+    if (!ux) ux = LoadLibraryExW(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    g_flush = ux ? (Flush_t)GetProcAddress(ux, MAKEINTRESOURCEA(136)) : nullptr;
+    HMODULE self = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       reinterpret_cast<LPCWSTR>(&OnEvent), &self);
+    DWORD pid = GetCurrentProcessId();
+    g_createHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE, self, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+    g_menuHook = SetWinEventHook(EVENT_SYSTEM_MENUSTART, EVENT_SYSTEM_MENUEND, self, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+}
+
+static VOID Uninit()
+{
+    for (HWINEVENTHOOK* hk : {&g_createHook, &g_menuHook})
+        if (*hk) { UnhookWinEvent(*hk); *hk = nullptr; }
+    {
+        std::lock_guard<std::mutex> g(g_hooksLock);
+        for (HHOOK hk : g_hooks) UnhookWindowsHookEx(hk);
+        g_hooks.clear();
+    }
+    ResetRows();
+}
+
+}  // namespace SeamlessMenuRoom
+// ---------------------------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------------------------
 // Seamless menu look for this mod's own menus.
 // Windhawk runs tool mods in their own process, where Seamless Flyouts cannot reach, so the
 // menus this mod shows get the same look here: blurred Catppuccin Mocha body, rounded corners,
-// roomy rows, separators that run to the border, one soft hover with a blue outline, and
+// roomy rows, separators that run to the border, the blue to mauve hover pill, and
 // submenus that open beside their parent with a small gap. Only this process is touched.
 // ---------------------------------------------------------------------------------------------
 #include <d2d1.h>
@@ -6626,6 +7205,70 @@ static HANDLE g_globalMutex;
 #include <uxtheme.h>
 #include <vssym32.h>
 #include <commctrl.h>
+
+// ---------------------------------------------------------------------------------------------
+// Menu pill: the one hover look for every menu row, the same pill Seamless Clipboard Manager
+// draws: a soft blue to mauve fill (16 %) and a 1 px blue to mauve ring (80 %), radius 8.
+// Drawn at the row's real size each time, because a stretched nine-grid can't hold a gradient.
+// ---------------------------------------------------------------------------------------------
+namespace SeamlessMenuPill {
+
+static BOOL Draw(ID2D1Factory* factory, HDC hdc, const RECT& r, UINT dpi)
+{
+    INT w = r.right - r.left, h = r.bottom - r.top;
+    if (!factory || !hdc || w <= 2 || h <= 2) return FALSE;
+    HDC dc = CreateCompatibleDC(hdc);
+    if (!dc) return FALSE;
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -h, 1, 32, BI_RGB};
+    VOID* bits = nullptr;
+    HBITMAP bmp = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!bmp) { DeleteDC(dc); return FALSE; }
+    HGDIOBJ old = SelectObject(dc, bmp);
+    auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_SOFTWARE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0,
+        D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE, D2D1_FEATURE_LEVEL_DEFAULT);
+    ID2D1DCRenderTarget* rt = nullptr;
+    RECT rc = {0, 0, w, h};
+    BOOL ok = FALSE;
+    if (SUCCEEDED(factory->CreateDCRenderTarget(&props, &rt)) && SUCCEEDED(rt->BindDC(dc, &rc))) {
+        FLOAT s = (dpi ? dpi : USER_DEFAULT_SCREEN_DPI) / (FLOAT)USER_DEFAULT_SCREEN_DPI;
+        FLOAT ringW = s < 1.5f ? 1.f : 2.f;
+        FLOAT rad = std::min(8.f * s, std::min((FLOAT)w, (FLOAT)h) / 2.f);
+        D2D1_ROUNDED_RECT rr = {{ringW / 2, ringW / 2, w - ringW / 2, h - ringW / 2}, rad, rad};
+        auto gradient = [&](FLOAT a) {
+            ID2D1LinearGradientBrush* brush = nullptr;
+            ID2D1GradientStopCollection* stops = nullptr;
+            D2D1_GRADIENT_STOP st[2] = {{0.f, {137 / 255.f, 180 / 255.f, 250 / 255.f, a}},
+                                        {1.f, {203 / 255.f, 166 / 255.f, 247 / 255.f, a}}};
+            if (SUCCEEDED(rt->CreateGradientStopCollection(st, 2, &stops)))
+                rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties({0, 0}, {(FLOAT)w, (FLOAT)h}),
+                                              stops, &brush);
+            if (stops) stops->Release();
+            return brush;
+        };
+        rt->BeginDraw();
+        rt->Clear({0, 0, 0, 0});
+        ID2D1LinearGradientBrush* fill = gradient(0.16f);
+        ID2D1LinearGradientBrush* ring = gradient(0.8f);
+        if (fill) rt->FillRoundedRectangle(&rr, fill);
+        if (ring) rt->DrawRoundedRectangle(&rr, ring, ringW);
+        ok = SUCCEEDED(rt->EndDraw()) && fill && ring;
+        if (fill) fill->Release();
+        if (ring) ring->Release();
+    }
+    if (rt) rt->Release();
+    if (ok) {
+        BLENDFUNCTION bf = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        ok = GdiAlphaBlend(hdc, r.left, r.top, w, h, dc, 0, 0, w, h, bf);
+    }
+    SelectObject(dc, old);
+    DeleteObject(bmp);
+    DeleteDC(dc);
+    return ok;
+}
+
+}  // namespace SeamlessMenuPill
 
 namespace SeamlessMenuSkin {
 
@@ -6641,8 +7284,6 @@ using GetThemeClass_t = HRESULT(WINAPI*)(HTHEME, LPWSTR, INT);
 static ID2D1Factory* g_factory = nullptr;
 static HDC g_hoverDC = nullptr, g_sepDC = nullptr;
 static UINT g_edgesMsg = 0;
-static thread_local HHOOK g_cbt = nullptr;
-static thread_local INT g_depth = 0;
 
 static decltype(&DrawThemeBackground) DrawThemeBackground_orig = nullptr;
 static decltype(&DrawThemeBackgroundEx) DrawThemeBackgroundEx_orig = nullptr;
@@ -6854,33 +7495,52 @@ static LRESULT CALLBACK MenuProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
     return result;
 }
 
-static LRESULT CALLBACK CbtProc(INT code, WPARAM wParam, LPARAM lParam)
+// Every popup menu window of this process, title bar menus included (those never pass
+// through TrackPopupMenu, so they used to keep a black, unblurred body).
+static VOID OnMenuCreated(HWND hWnd)
 {
-    if (code == HCBT_CREATEWND && IsMenuWindow((HWND)wParam))
-        SetWindowSubclass((HWND)wParam, MenuProc, kSubclassId, 0);
-    return CallNextHookEx(nullptr, code, wParam, lParam);
+    // The CBT hook and the create-event hook can both reach this window.
+    static const WCHAR* const kSkinProp = L"SeamlessMenuSkinAttached";
+    if (GetPropW(hWnd, kSkinProp)) return;
+    SetPropW(hWnd, kSkinProp, (HANDLE)1);
+    SetWindowSubclass(hWnd, MenuProc, kSubclassId, 0);
+    ApplyEffects(hWnd);
 }
-static VOID BeginMenu()
+
+// Delivered synchronously on this thread during the menu window's creation, before
+// its first paint, so the black body never shows without the acrylic behind it.
+static LRESULT CALLBACK MenuCbtProc(INT code, WPARAM w, LPARAM l)
 {
-    if (g_depth++ == 0) g_cbt = SetWindowsHookExW(WH_CBT, CbtProc, nullptr, GetCurrentThreadId());
+    if (code == HCBT_CREATEWND) {
+        HWND created = reinterpret_cast<HWND>(w);
+        WCHAR cls[16];
+        if (GetClassNameW(created, cls, ARRAYSIZE(cls)) &&
+            wcscmp(cls, L"#32768") == 0)
+            OnMenuCreated(created);
+    }
+    return CallNextHookEx(nullptr, code, w, l);
 }
-static VOID EndMenu()
+static HHOOK InstallMenuCbtHook()
 {
-    if (--g_depth == 0 && g_cbt) { UnhookWindowsHookEx(g_cbt); g_cbt = nullptr; }
+    return SetWindowsHookExW(WH_CBT, MenuCbtProc, nullptr, GetCurrentThreadId());
 }
 
 static BOOL WINAPI TrackPopupMenu_hook(HMENU m, UINT f, INT x, INT y, INT r, HWND h, const RECT* rc)
 {
-    BeginMenu();
+    SeamlessMenuRoom::BeginTrack();
+    HHOOK cbt = InstallMenuCbtHook();
     BOOL ret = TrackPopupMenu_orig(m, f, x, y, r, h, rc);
-    EndMenu();
+    if (cbt) UnhookWindowsHookEx(cbt);
+    SeamlessMenuRoom::EndTrack();
     return ret;
 }
 static BOOL WINAPI TrackPopupMenuEx_hook(HMENU m, UINT f, INT x, INT y, HWND h, LPTPMPARAMS p)
 {
-    BeginMenu();
+    SeamlessMenuRoom::BeginTrack();
+    HHOOK cbt = InstallMenuCbtHook();
     BOOL ret = TrackPopupMenuEx_orig(m, f, x, y, h, p);
-    EndMenu();
+    if (cbt) UnhookWindowsHookEx(cbt);
+    SeamlessMenuRoom::EndTrack();
     return ret;
 }
 
@@ -6889,14 +7549,11 @@ static BOOL PaintMenuPart(HDC hdc, INT part, INT state, LPCRECT pRect, LPCRECT p
 {
     if (part == 26) { part = 27; state = 2; }                   // keyboard focus: same hover
     if ((part == 27 || part == MENU_POPUPITEM) && state == 2) {
-        if (!g_hoverDC) g_hoverDC = MakeCache(18, 18, FALSE);
-        if (!g_hoverDC) return FALSE;
         // Keep the same gap above and below as at the sides, so the first and last rows'
         // rounded hover stays clear of the menu's own rounded corners.
         RECT rc = *pRect;
         InflateRect(&rc, 0, -MulDiv(2, Dpi(), USER_DEFAULT_SCREEN_DPI));
-        NineGrid(hdc, g_hoverDC, &rc, 9, 9, 8, 8);
-        return TRUE;
+        return SeamlessMenuPill::Draw(g_factory, hdc, rc, Dpi());
     }
     if (part == MENU_POPUPSEPARATOR) {
         if (!g_sepDC) g_sepDC = MakeCache(1, 5, TRUE);
@@ -6945,7 +7602,7 @@ static HRESULT WINAPI GetThemeMargins_hook(HTHEME t, HDC hdc, INT part, INT stat
     if (m && IsMenuTheme(t) && (part == MENU_POPUPITEM || part == 27 || part == 26)) {
         if (prop == TMT_CONTENTMARGINS) *m = {2, 2, 8, 8};
         else if (prop == TMT_SIZINGMARGINS) *m = {10, 10, 10, 10};
-        else if (prop == 10000) *m = {0, 0, 8, 8};
+        else if (prop == 10000) *m = {0, 0, SeamlessMenuRoom::RowMargin(), SeamlessMenuRoom::RowMargin()};
     }
     return hr;
 }
@@ -6998,10 +7655,12 @@ static VOID Init()
     Hook(dwm, "DwmSetWindowAttribute", DwmSetWindowAttribute_hook, &DwmSetWindowAttribute_orig);
     Hook(u32, "TrackPopupMenu", TrackPopupMenu_hook, &TrackPopupMenu_orig);
     Hook(u32, "TrackPopupMenuEx", TrackPopupMenuEx_hook, &TrackPopupMenuEx_orig);
+    SeamlessMenuRoom::Init(OnMenuCreated);
 }
 
 static VOID Uninit()
 {
+    SeamlessMenuRoom::Uninit();
     for (HDC* dc : {&g_hoverDC, &g_sepDC})
         if (*dc) {
             HGDIOBJ bmp = GetCurrentObject(*dc, OBJ_BITMAP);
@@ -7057,6 +7716,7 @@ constexpr PCWSTR kModeKeyNames[] = {
     L"hotkeyDesktop5",  L"hotkeyDesktop6",   L"hotkeyDesktop7",        L"hotkeyDesktop8",
     L"hotkeyDesktop9",
     L"hotkeyMRUUp",     L"hotkeyMRUDown",    L"hotkeyRestoreMinimized",
+    L"hotkeyHideTitleBar",
 };
 constexpr int kFirstMonitorKey = 18;
 constexpr int kFirstSendMonitorKey = 22;
@@ -7203,6 +7863,7 @@ void LoadSettings() {
     s.tileExisting = Wh_GetIntSetting(L"tiling.existing") != 0;
     s.innerGap = std::clamp(Wh_GetIntSetting(L"tiling.innerGap"), 0, 100);
     g_animMs = std::clamp(Wh_GetIntSetting(L"effects.animation"), 0, 400);
+    g_focusAnimMs = text(L"effects.focusAnimation") == L"off" ? 0 : 200;
     g_magnetPx = std::clamp(Wh_GetIntSetting(L"moveTrigger.magnet"), 0, 60);
     g_magnetGap = s.innerGap;
     int tileStep = Wh_GetIntSetting(L"tiling.resizeStep");
@@ -7974,7 +8635,7 @@ constexpr UINT kTilingReloadMessage = WM_APP + 321;
 constexpr UINT kTilingEventMessage = WM_APP + 322;
 enum TilingCommand : WPARAM {
     kTileMove, kTileGrow, kTileToggle, kTileFlip, kTileRegion, kTileFill, kTileBorderless,
-    kTileSendMonitor, kTileCycleFocus, kTileRestoreMinimized
+    kTileSendMonitor, kTileCycleFocus, kTileRestoreMinimized, kTileHideTitle
 };
 
 HANDLE g_tilingThread;
@@ -8044,6 +8705,7 @@ struct Node {
     int inset[4]{};        // Edges pulled in by the grow keys, per Direction.
     bool fill = false;     // Fills the screen inside the gaps (Alt+F).
     bool hidden = false;   // Maximized: out of the layout until restored.
+    int minW = 0, minH = 0;  // The smallest size the app agreed to, once it refused one.
 };
 
 // One tree per monitor and virtual desktop. Kept until the thread stops, so
@@ -8086,6 +8748,7 @@ struct Borderless {
 };
 std::unordered_map<HWND, Borderless> g_borderless;
 std::unordered_map<HWND, RECT> g_fillRestore;  // Floating windows filled with Alt+F.
+std::unordered_map<HWND, LONG_PTR> g_noTitle;  // Title bar hidden; the style to give back.
 
 std::vector<Event> g_events;
 IVirtualDesktopManager* g_desktops;
@@ -8129,6 +8792,9 @@ void Normalize(Node* split) {
 void SwapLooks(Node* a, Node* b) {
     std::swap(a->fill, b->fill);
     std::swap(a->inset, b->inset);
+    // The smallest size belongs to the app, so it moves with the window.
+    std::swap(a->minW, b->minW);
+    std::swap(a->minH, b->minH);
 }
 
 void CollectLeaves(Node* node, std::vector<Node*>* out) {
@@ -8197,9 +8863,29 @@ int InnerGap(HMONITOR monitor) {
 
 //////// the tree ////////
 
+// Asks the app for its smallest size before its first placement, so the
+// layout makes room for it the first time instead of after it refuses a tile.
+// Only sizes the app sets itself count: the struct starts zeroed.
+void QueryMinSize(Node* leaf) {
+    MINMAXINFO mmi{};
+    DWORD_PTR result = 0;
+    if (!SendMessageTimeoutW(leaf->hWnd, WM_GETMINMAXINFO, 0, (LPARAM)&mmi,
+                             SMTO_ABORTIFHUNG | SMTO_NORMAL, 50, &result)) {
+        return;
+    }
+    RECT win{}, frame{};
+    if (!GetWindowRect(leaf->hWnd, &win) || !GetFrame(leaf->hWnd, &frame)) return;
+    // The app answers in window size; tiles are in visible frame size.
+    int w = mmi.ptMinTrackSize.x - (Width(win) - Width(frame));
+    int h = mmi.ptMinTrackSize.y - (Height(win) - Height(frame));
+    if (w > 150 && w < 4000) leaf->minW = std::max(leaf->minW, w);
+    if (h > 150 && h < 4000) leaf->minH = std::max(leaf->minH, h);
+}
+
 Node* InsertLeaf(Workspace* ws, Node* split, size_t index, HWND hWnd) {
     auto leaf = std::make_unique<Node>();
     leaf->hWnd = hWnd;
+    QueryMinSize(leaf.get());
     leaf->parent = split;
     size_t count = split->children.size();
     double share = 1.0 / (count + 1);
@@ -8367,6 +9053,28 @@ bool CanPlace(HWND hWnd) {
            !effects::IsFullscreen(hWnd);
 }
 
+// Counts the times an app refused to get as small as its tile.
+int g_minLearned = 0;
+
+// An app that won't go smaller than its minimum size keeps its top-left corner
+// and grows past the target, out over the next monitor. Slide it back inside
+// the gapped work area of the monitor it belongs on.
+void KeepInside(HWND hWnd, const RECT& target, RECT* frame) {
+    HMONITOR monitor = MonitorFromRect(&target, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi{sizeof(mi)};
+    if (!GetMonitorInfoW(monitor, &mi)) return;
+    RECT work = snapCommander::GappedWorkArea(monitor, mi.rcWork);
+    int dx = 0, dy = 0;
+    if (frame->right > work.right) dx = work.right - frame->right;
+    if (frame->left + dx < work.left) dx = work.left - frame->left;
+    if (frame->bottom > work.bottom) dy = work.bottom - frame->bottom;
+    if (frame->top + dy < work.top) dy = work.top - frame->top;
+    if (!dx && !dy) return;
+    snapCommander::ApplyVisibleRect(hWnd, frame->left + dx, frame->top + dy, Width(*frame),
+                                    Height(*frame));
+    GetFrame(hWnd, frame);
+}
+
 void PlaceLeaf(Node* leaf) {
     leaf->placedFor = leaf->target;
     HWND hWnd = leaf->hWnd;
@@ -8384,6 +9092,17 @@ void PlaceLeaf(Node* leaf) {
         GetFrame(hWnd, &frame);
         leaf->placedTick = GetTickCount64();
     }
+    // Bigger than asked: that is the app's minimum. Remember it so the
+    // layout gives this tile at least that much from now on.
+    if (Width(frame) > Width(t) + 2 && Width(frame) > leaf->minW) {
+        leaf->minW = Width(frame);
+        g_minLearned++;
+    }
+    if (Height(frame) > Height(t) + 2 && Height(frame) > leaf->minH) {
+        leaf->minH = Height(frame);
+        g_minLearned++;
+    }
+    KeepInside(hWnd, t, &frame);
     leaf->placed = frame;
 }
 
@@ -8397,12 +9116,75 @@ void PlaceLeaves(const std::vector<Node*>& leaves) {
     for (Node* leaf : leaves) PlaceLeaf(leaf);
 }
 
+// The smallest this part of the tree can be along one axis: 150 px a window,
+// or the app's own minimum once it refused to go smaller.
+int MinAlong(Workspace* ws, Node* node, bool vertical) {
+    if (node->hWnd) return std::max(150, vertical ? node->minH : node->minW);
+    int total = 0;
+    for (auto& child : node->children) {
+        int m = MinAlong(ws, child.get(), vertical);
+        total = node->vertical == vertical ? total + m : std::max(total, m);
+    }
+    if (node->vertical == vertical && node->children.size() > 1) {
+        total += InnerGap(ws->monitor) * (int)(node->children.size() - 1);
+    }
+    return total;
+}
+
+// Gives every tile at least its smallest size, taken from the siblings that
+// have room to spare. Returns true if any share changed.
+bool RespectMins(Workspace* ws, Node* split) {
+    if (split->hWnd) return false;
+    bool changed = false;
+    size_t n = split->children.size();
+    double avail = (split->vertical ? Height(split->target) : Width(split->target)) -
+                   (double)InnerGap(ws->monitor) * (n > 0 ? n - 1 : 0);
+    if (n > 1 && avail >= 1) {
+        std::vector<double> mins(n);
+        double sum = 0;
+        for (size_t i = 0; i < n; i++) {
+            mins[i] = MinAlong(ws, split->children[i].get(), split->vertical) / avail;
+            sum += mins[i];
+        }
+        for (size_t i = 0; sum <= 1.0 && i < n; i++) {
+            Node* child = split->children[i].get();
+            if (child->weight >= mins[i]) continue;
+            double spare = 0;
+            for (size_t j = 0; j < n; j++) {
+                if (j != i) spare += std::max(0.0, split->children[j]->weight - mins[j]);
+            }
+            if (spare <= 0) break;
+            double take = std::min(mins[i] - child->weight, spare);
+            for (size_t j = 0; j < n; j++) {
+                if (j == i) continue;
+                Node* other = split->children[j].get();
+                other->weight -= take * std::max(0.0, other->weight - mins[j]) / spare;
+            }
+            child->weight += take;
+            changed = true;
+        }
+    }
+    for (auto& child : split->children) changed |= RespectMins(ws, child.get());
+    return changed;
+}
+
 void Layout(std::initializer_list<Workspace*> list) {
     std::vector<Node*> leaves;
     for (Workspace* ws : list) {
         if (ws && ComputeLayout(ws)) CollectLeaves(ws->root.get(), &leaves);
     }
+    int learned = g_minLearned;
     PlaceLeaves(leaves);
+    if (g_minLearned == learned) return;
+    // An app refused its tile. Make room for it now, once, so nothing is
+    // left overlapping or hanging off the screen.
+    leaves.clear();
+    for (Workspace* ws : list) {
+        if (ws && RespectMins(ws, ws->root.get()) && ComputeLayout(ws)) {
+            CollectLeaves(ws->root.get(), &leaves);
+        }
+    }
+    if (!leaves.empty()) PlaceLeaves(leaves);
 }
 
 void Layout(Workspace* ws) {
@@ -8741,9 +9523,10 @@ bool AdjustEdge(Workspace* ws, Node* leaf, int dir, int px) {
         double avail = (vertical ? Height(split->target) : Width(split->target)) -
                        (double)InnerGap(ws->monitor) * (split->children.size() - 1);
         if (avail < 1) return true;
-        double minShare = std::min(0.45, 150.0 / avail);
-        double low = minShare - node->weight;
-        double high = sibling->weight - minShare;
+        // Neither side may go below its smallest size (an app's own minimum
+        // counts), or that app overflows its tile onto the next monitor.
+        double low = MinAlong(ws, node, vertical) / avail - node->weight;
+        double high = sibling->weight - MinAlong(ws, sibling, vertical) / avail;
         if (low <= high) {
             double delta = std::max(low, std::min(high, px / avail));
             node->weight += delta;
@@ -8780,7 +9563,8 @@ void GrowCommand(int dir) {
             // Nothing beside it that way (one row, or alone on the screen):
             // the far edge comes in, like a floating window at the screen edge.
             int size = vertical ? Height(node->slot) : Width(node->slot);
-            int room = std::max(0, size - 150 - node->inset[dir]);
+            int least = std::max(150, vertical ? node->minH : node->minW);
+            int room = std::max(0, size - least - node->inset[dir]);
             node->inset[kOpposite[dir]] = std::min(room, node->inset[kOpposite[dir]] + px);
         }
         Layout(ws);
@@ -8810,6 +9594,9 @@ void GrowCommand(int dir) {
             break;
     }
     snapCommander::ApplyVisibleRect(hWnd, f.left, f.top, Width(f), Height(f));
+    // An app at its minimum size grows past the edge instead: pull it back.
+    RECT now{};
+    if (GetFrame(hWnd, &now)) KeepInside(hWnd, work, &now);
 }
 
 void ToggleCommand() {
@@ -9025,6 +9812,42 @@ void RestoreBorders(HWND hWnd, const Borderless& b, bool glide = false, bool ret
     if (b.zoomed) ShowWindow(hWnd, SW_MAXIMIZE);
 }
 
+// Gives a window a new style and lets it redraw its frame, keeping its size and
+// place.
+void SetTitleStyle(HWND hWnd, LONG_PTR style) {
+    if (!IsWindow(hWnd)) return;
+    SetWindowLongPtrW(hWnd, GWL_STYLE, style);
+    SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
+                 SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                     SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+}
+
+// Ctrl+Win+Alt+T: hide the active window's title bar and keep its resize edges,
+// size and place (GlazeWM's hide title bar). Press again to bring it back.
+void HideTitleCommand() {
+    HWND hWnd = ActiveRoot();
+    if (!hWnd || g_borderless.count(hWnd)) return;
+    auto saved = g_noTitle.find(hWnd);
+    if (saved != g_noTitle.end()) {
+        LONG_PTR style = saved->second;
+        g_noTitle.erase(saved);
+        SetTitleStyle(hWnd, style);
+    } else {
+        if (!altSnapDrag::CanActOnRootWindow(hWnd)) return;
+        LONG_PTR style = GetWindowLongPtrW(hWnd, GWL_STYLE);
+        if ((style & WS_CAPTION) != WS_CAPTION) return;  // No title bar to hide.
+        g_noTitle[hWnd] = style;
+        // A fixed-size window keeps a thin edge, so it still shows where it
+        // ends; a resizable one keeps its resize border.
+        LONG_PTR edge = (style & WS_THICKFRAME) ? 0 : WS_BORDER;
+        SetTitleStyle(hWnd, (style & ~WS_CAPTION) | edge);
+    }
+    // A tiled window goes back into its tile with the new frame.
+    auto leaf = g_leaves.find(hWnd);
+    if (leaf != g_leaves.end()) Layout(leaf->second.ws);
+    TLog(L"Tiling: %p title bar %ls", hWnd, g_noTitle.count(hWnd) ? L"hidden" : L"back");
+}
+
 // Ctrl+Shift+F: no title bar or borders, stretched over the whole monitor,
 // taskbar included (ShareX's "make active window borderless"). Press again to
 // give the window its frame, size and tile back.
@@ -9232,6 +10055,7 @@ void RunCommand(TilingCommand command, int arg) {
         case kTileSendMonitor: SendMonitorCommand(arg); break;
         case kTileCycleFocus: CycleFocusCommand(arg); break;
         case kTileRestoreMinimized: RestoreMinimizedCommand(); break;
+        case kTileHideTitle: HideTitleCommand(); break;
     }
 }
 
@@ -9271,6 +10095,7 @@ void HandleEvent(const Event& e) {
             g_cloakCheck.erase(hWnd);
             g_borderless.erase(hWnd);
             g_fillRestore.erase(hWnd);
+            g_noTitle.erase(hWnd);
             [[fallthrough]];
         case EVENT_OBJECT_HIDE:
         case EVENT_SYSTEM_MINIMIZESTART:
@@ -9640,6 +10465,8 @@ DWORD WINAPI ThreadProc(LPVOID ready) {
     g_floated.clear();
     for (auto& entry : g_borderless) RestoreBorders(entry.first, entry.second);
     g_borderless.clear();
+    for (auto& entry : g_noTitle) SetTitleStyle(entry.first, entry.second);
+    g_noTitle.clear();
     g_fillRestore.clear();
     SetTimerState(&g_enforceTimer, false, 0);
     SetTimerState(&g_pendingTimer, false, 0);
@@ -9731,8 +10558,16 @@ BOOL CALLBACK FocusSearchProc(HWND hWnd, LPARAM param) {
 
 // Focus a window and take the pointer along, like GlazeWM.
 void FocusWindow(HWND hWnd) {
+    HWND root = GetAncestor(hWnd, GA_ROOT);
+    // A minimized window already plays the restore animation.
+    bool moved = root && !IsIconic(root) && GetAncestor(GetForegroundWindow(), GA_ROOT) != root;
     if (IsIconic(hWnd)) {
         ShowWindow(hWnd, SW_RESTORE);
+    }
+    // The app's own copy of the mod plays the zoom (see FocusPulseThread).
+    // Posted first: the app reads it once it has redrawn as the active window.
+    if (moved && g_focusAnimMs > 0 && !effects::IsFullscreen(root)) {
+        PostMessageW(root, altSnapDrag::g_focusPulseMessage, g_focusAnimMs, 0);
     }
     if (!SetForegroundWindow(hWnd)) {
         // A zero-distance mouse input counts as user input and unlocks it.
@@ -10133,11 +10968,15 @@ bool OnLowLevelThreadMessage(const MSG& msg) {
         } else if (id < kFirstDesktopKey) {
             PostTilingCommand(kTileSendMonitor, id - kFirstSendMonitorKey);
         } else if (id == 35) {
-            PostTilingCommand(kTileCycleFocus, 1);
-        } else if (id == 36) {
+            // Bring back the window sent behind: the back of the stack comes up.
             PostTilingCommand(kTileCycleFocus, -1);
+        } else if (id == 36) {
+            // Show the window behind: the next one comes up, this one goes back.
+            PostTilingCommand(kTileCycleFocus, 1);
         } else if (id == 37) {
             PostTilingCommand(kTileRestoreMinimized, 0);
+        } else if (id == 38) {
+            PostTilingCommand(kTileHideTitle, 0);
         } else {
             StartDesktopSwitch(id - kFirstDesktopKey);
         }
@@ -10185,6 +11024,33 @@ void Stop() {
 }  // namespace swm
 // ---------------------------------------------------------------------------------------------
 
+// After the elevated relaunch, Windhawk can load this mod a moment late when
+// the PC is busy. windhawk-mod.exe then shows a false "Running the tool mod
+// failed" box although the mod loads and works. Close that box, only in this
+// process, during the first 15 seconds.
+static BOOL CALLBACK CloseFalseFailureBox(HWND hwnd, LPARAM) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != GetCurrentProcessId()) return TRUE;
+    WCHAR cls[16]{};
+    WCHAR title[32]{};
+    GetClassNameW(hwnd, cls, ARRAYSIZE(cls));
+    GetWindowTextW(hwnd, title, ARRAYSIZE(title));
+    if (wcscmp(cls, L"#32770") == 0 && wcscmp(title, L"Windhawk") == 0) {
+        PostMessageW(hwnd, WM_CLOSE, 0, 0);
+        Wh_Log(L"Closed false tool-mod failure box");
+    }
+    return TRUE;
+}
+
+static DWORD WINAPI FalseFailureBoxThreadProc(LPVOID) {
+    for (int i = 0; i < 60; i++) {
+        EnumWindows(CloseFalseFailureBox, 0);
+        Sleep(250);
+    }
+    return 0;
+}
+
 BOOL WhTool_ModInit() {
     SeamlessMenuSkin::Init();
     using namespace altSnapDrag;
@@ -10204,8 +11070,13 @@ BOOL WhTool_ModInit() {
         launch.lpFile = self;
         launch.lpParameters = L"-windhawk-tool-mod \"" WH_MOD_ID L"\"";
         launch.nShow = SW_HIDE;
-        ShellExecuteExW(&launch);
+        // Returning FALSE exits with code 1, which Windhawk reports as a
+        // failed tool mod. The admin copy takes over, so leave cleanly.
+        if (ShellExecuteExW(&launch)) ExitProcess(0);
         return FALSE;
+    }
+    if (HANDLE boxThread = CreateThread(nullptr, 0, FalseFailureBoxThreadProc, nullptr, 0, nullptr)) {
+        CloseHandle(boxThread);
     }
     g_globalInput = true;
     // Everyone may open it, so the unelevated per-app parts see the helper

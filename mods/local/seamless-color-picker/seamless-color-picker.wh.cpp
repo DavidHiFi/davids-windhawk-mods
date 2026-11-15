@@ -2,7 +2,7 @@
 // @id              seamless-color-picker
 // @name            Seamless Color Picker
 // @description     A full color picker on a hotkey, with a screen magnifier, recent colors and one-click copy
-// @version         1.1.3
+// @version         1.1.13
 // @author          DavidHiFi, Jaex, ShareX contributors
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -116,6 +116,9 @@ Jaex and the ShareX contributors (GPL-3.0). Written again in C++ for Windhawk.
   - rememberPosition: true
     $name: Remember where it was
     $description: Open where you left it. Off, it opens beside the mouse.
+  - nativeTitleBar: true
+    $name: Native Windows title bar
+    $description: Use the Windows title bar and window buttons for the picker, like other apps. Off, the picker draws its own.
   $name: Picker
 - Screen:
   - magnifierShape: circle
@@ -198,16 +201,10 @@ Jaex and the ShareX contributors (GPL-3.0). Written again in C++ for Windhawk.
 - SettingsWindow:
   - settingsGlass: true
     $name: Blurred settings window
-    $description: On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Save, then reopen settings to apply.
-  - nativeSettingsTitleBar: true
+    $description: On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.
+  - nativeSettingsTitleBar: false
     $name: Native Windows title bar
-    $description: Use the Windows title bar and window buttons for this settings window. Save, then reopen settings to apply.
-  - settingsTitleButtons: native
-    $name: Title bar buttons
-    $description: Who draws minimize, maximize and close on the window's own title bar. Save, then reopen settings to apply.
-    $options:
-    - native: Windows buttons (like other apps)
-    - builtin: Built-in buttons
+    $description: Use the Windows title bar and window buttons for this settings window. Applies when you save.
   $name: Settings window
 */
 // ==/WindhawkModSettings==
@@ -358,6 +355,9 @@ struct SetField {
     PCWSTR group = L"";  // Heading above it on that page.
     std::wstring value;  // As loaded, so a save writes only what changed.
     std::wstring cur;    // What the window shows now.
+    float fitW = 0;      // Box width that fits the text (Set_FitBoxes); 0 until measured.
+    float fitText = -1;  // Measured text width behind fitW.
+    std::wstring fitFor; // The text that was measured.
 };
 
 // Names, descriptions and option labels match the ==WindhawkModSettings== block word for word.
@@ -376,6 +376,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"Picker.livePick", L"Hold Ctrl to sample", L"While the picker is in front, holding Ctrl follows the color under the mouse.", L"1", {}, 0, 100, 1, L"Picker"},
 {K::Check, L"Picker.alwaysOnTop", L"Always on top", L"Keep the picker above other windows.", L"1", {}, 0, 100, 1, L"Picker"},
 {K::Check, L"Picker.rememberPosition", L"Remember where it was", L"Open where you left it. Off, it opens beside the mouse.", L"1", {}, 0, 100, 1, L"Picker"},
+{K::Check, L"Picker.nativeTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for the picker, like other apps. Off, the picker draws its own.", L"1", {}, 0, 100, 1, L"Picker"},
 {K::Choice, L"Screen.magnifierShape", L"Magnifier shape", L"The shape of the zoomed view.", L"circle", {{L"circle", L"Circle"}, {L"square", L"Rounded square"}}, 0, 100, 2, L"Screen picker"},
 {K::Number, L"Screen.magnifierPixels", L"Pixels across", L"How many screen pixels the magnifier shows across. 7 to 31 (Suggested: 15). Even numbers go up by one.", L"15", {}, 7, 31, 2, L"Screen picker"},
 {K::Number, L"Screen.magnifierZoom", L"Zoom", L"How big each pixel is drawn. 4 to 24 (Suggested: 10). The mouse wheel changes it while picking.", L"10", {}, 4, 24, 2, L"Screen picker"},
@@ -395,9 +396,8 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"Look.glow", L"Hover glow", L"A soft blue to mauve glow around the box you point at.", L"1", {}, 0, 100, 4, L"Look"},
 {K::Check, L"Look.animations", L"Animations", L"Short fades on hover. Off, changes are instant.", L"1", {}, 0, 100, 4, L"Look"},
 {K::Text, L"Look.font", L"Font", L"Any installed font. Falls back to Segoe UI.", L"FiraCode Nerd Font", {}, 0, 100, 4, L"Look"},
-{K::Check, L"SettingsWindow.settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Save, then reopen settings to apply.", L"1", {}, 0, 100, 4, L"Settings window"},
-{K::Check, L"SettingsWindow.nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Save, then reopen settings to apply.", L"1", {}, 0, 100, 4, L"Settings window"},
-{K::Choice, L"SettingsWindow.settingsTitleButtons", L"Title bar buttons", L"Who draws minimize, maximize and close on the window's own title bar. Save, then reopen settings to apply.", L"native", {{L"native", L"Windows buttons (like other apps)"}, {L"builtin", L"Built-in buttons"}}, 0, 100, 4, L"Settings window"}
+{K::Check, L"SettingsWindow.settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 4, L"Settings window"},
+{K::Check, L"SettingsWindow.nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 4, L"Settings window"},
     };
 }
 
@@ -417,6 +417,7 @@ constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
 // About sits apart at the end of the sidebar, as in Seamless Dictate.
 constexpr int kSetAboutPage = kSetPageCount - 1;
 constexpr float kSetAboutGap = 17;
+constexpr int kSetDropMax = 9;  // A dropdown with more options than this scrolls.
 
 // All sizes are DIPs; the render target does the scaling.
 constexpr float kSetPadX = 40, kSetMaxW = 720, kSetRowMin = 56, kSetRowGap = 8, kSetBoxH = 32, kSetRowPad = 16,
@@ -475,7 +476,8 @@ struct SetWindow {
     int page = 0, recording = -1, editing = -1, focus = -1, openSel = -1;
     bool kbd = false;  // Show the focus ring (after a Tab).
     D2D1_RECT_F dropRect{};
-    int dropHover = -1;
+    int dropHover = -1, dropTop = 0;  // dropTop: first option shown when the dropdown scrolls.
+    bool frameApplied = false;        // Set_ApplyFrame has run once.
     float scrollY = 0, scrollTarget = 0, contentH = 0, contentX = 0, contentW = 720, pageT = 1;
     SetHit hover;
     int dragSlider = -1;
@@ -492,6 +494,8 @@ struct SetWindow {
     bool statusError = false;
     bool saving = false, destroyed = false, render = false;
     SetCom<ID2D1HwndRenderTarget> rt;
+    SetCom<ID2D1BitmapRenderTarget> layer;  // The page, drawn off screen so the footer can blur it.
+    D2D1_SIZE_F layerSize{};
     std::wstring family, iconFamily;
     SetCom<IDWriteTextFormat> fLabel, fHint, fTitle, fIntro, fSection, fValue, fValueC, fButton, fIcon, fIconS,
         fIconL, fBig, fSmall, fStatusLine, fCap, fCapGlyph, fRailName;
@@ -767,13 +771,53 @@ static float Set_TextW(IDWriteTextFormat* fmt, const std::wstring& text) {
 // ---- Layout -----------------------------------------------------------------
 
 // The right-hand control's width, so the label column knows how much room it has.
+static bool Set_FitBoxes(SetWindow& w) {
+    if (!w.fValue) return false;
+    bool changed = false;
+    const float cap = std::floor(w.contentW * 0.5f);
+    for (auto& f : w.fields) {
+        float base, pad;
+        std::wstring text;
+        if (f.kind == SetField::Choice) {
+            base = 200, pad = 46;  // 12 before the text, 30 for the arrow, 4 spare.
+            for (const auto& o : f.options) text += std::wstring(o.second) + L'\n';
+        } else if (f.kind == SetField::Hotkey) {
+            base = 220, pad = 60;  // The key cap's own padding and the clear button.
+            text = f.cur;
+        } else if (f.kind == SetField::Text) {
+            base = 280, pad = 26;
+            text = f.cur;
+        } else {
+            continue;
+        }
+        if (f.fitText < 0 || text != f.fitFor) {
+            float m = 0;
+            if (f.kind == SetField::Choice) {
+                for (const auto& o : f.options) m = std::max(m, Set_TextW(w.fValue.get(), o.second));
+            } else {
+                m = Set_TextW(w.fValue.get(), f.cur);
+            }
+            f.fitText = std::ceil(m);
+            f.fitFor = text;
+        }
+        float want = std::min(std::max(base, f.fitText + pad), std::max(base, cap));
+        if (fabsf(want - f.fitW) > 0.5f) {
+            f.fitW = want;
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+static float Set_FitOr(const SetField& f, float base) { return f.fitW > 0 ? f.fitW : base; }
+
 static float Set_ControlW(const SetField& f) {
     switch (f.kind) {
         case SetField::Check: return 40;
-        case SetField::Choice: return 200;
+        case SetField::Choice: return Set_FitOr(f, 200);
         case SetField::Number: return f.max - f.min <= 100 ? 150 + 12 + 64 : 96;
-        case SetField::Text: return 280;
-        case SetField::Hotkey: return 220;
+        case SetField::Text: return Set_FitOr(f, 280);
+        case SetField::Hotkey: return Set_FitOr(f, 220);
         case SetField::Color: return 362;
     }
     return 100;
@@ -812,7 +856,7 @@ static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
             p.box = {r - 40, mid - 11, r, mid + 11};
             break;
         case SetField::Choice:
-            p.box = {r - 200, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 200), mid - h, r, mid + h};
             break;
         case SetField::Number:
             if (f.max - f.min <= 100) {
@@ -824,10 +868,10 @@ static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
             }
             break;
         case SetField::Text:
-            p.box = {r - 280, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 280), mid - h, r, mid + h};
             break;
         case SetField::Hotkey:
-            p.box = {r - 220, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 220), mid - h, r, mid + h};
             p.clear = {p.box.right - 30, p.box.top, p.box.right, p.box.bottom};
             break;
         case SetField::Color: {
@@ -1073,10 +1117,14 @@ static void Set_HoverIds(const SetHit& h, int ids[2]) {
 
 static bool Set_Valid(const SetWindow& w, int k) { return k >= 0 && k < (int)w.fields.size(); }
 
+// Value boxes: a dark fill between mantle and surface0 (crust read as black), a resting
+// overlay0 edge, and the blue to mauve ring on hover or while open.
+constexpr UINT32 kSetBoxFill = 0x232434;
 static void Set_DrawBox(SetPaint& p, SetWindow& w, int k, const D2D1_RECT_F& box, bool active) {
-    p.Round(box, 8, mocha::crust);
+    p.Round(box, 8, kSetBoxFill);
     float g = std::max(Set_GlowOf(w, 6000 + k), active ? 1.0f : 0.0f);
-    p.GradRing(box, 8, g);
+    p.Edge(box, 8, mocha::overlay0, 0.7f * (1 - g), 1.25f);
+    p.GradRing(box, 8, g, 1.75f);
 }
 
 static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
@@ -1209,7 +1257,10 @@ static void Set_DrawLinkRow(SetPaint& p, SetWindow& w, const SetItem& it, int id
 
 static void Set_DrawSupport(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
     D2D1_RECT_F row = Set_RowRect(w, it);
-    Set_DrawCard(p, row, 0);
+    float card = std::max(Set_GlowOf(w, 3700 + idx), Set_GlowOf(w, 3500 + idx));
+    Set_DrawCard(p, row, card);
+    p.GradFill(row, 10, 0.13f * card);
+    p.GradRing(row, 10, card, 1.5f);
     p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 14, row.right - 180, row.top + 36}, mocha::text);
     p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 38, row.right - 180, row.bottom - 6}, mocha::subtext0);
     D2D1_RECT_F b = Set_SupportButton(w, it);
@@ -1219,9 +1270,12 @@ static void Set_DrawSupport(SetPaint& p, SetWindow& w, const SetItem& it, int id
     p.Text(w.fButton.get(), L"Open Ko-fi", b, mocha::crust);
 }
 
-static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it) {
+static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
     D2D1_RECT_F row = Set_RowRect(w, it);
-    Set_DrawCard(p, row, 0);
+    float hov = Set_GlowOf(w, 3800 + idx);
+    Set_DrawCard(p, row, hov);
+    p.GradFill(row, 10, 0.13f * hov);
+    p.GradRing(row, 10, hov, 1.5f);
     D2D1_RECT_F mark{row.left + 20, row.top + 20, row.left + 92, row.top + 92};
     p.GradFill(mark, 18, 1);
     p.Glyph(w.fIconL.get(), 0xEF3C, mark, mocha::crust);
@@ -1268,11 +1322,11 @@ static void Set_DrawMark(SetPaint& p, IDWriteTextFormat* glyph, const D2D1_RECT_
 static void Set_DrawRail(SetPaint& p, SetWindow& w) {
     D2D1_RECT_F d = Set_RailDock(w);
     const float open = Set_RailOpen(w), textA = std::clamp((open - 0.45f) / 0.55f, 0.0f, 1.0f);
-    Set_DrawDock(p, w, d, 14, w.glass ? 0.58f : 1.0f, std::max(w.railGlow, w.dragRail ? 1.0f : 0.0f) * 0.85f);
-
-    // Drag handle: a thin gradient line on the dock's right edge while it is grabbed or pointed at.
+    // Over the resize edge or while dragging, the dock's own rounded border brightens and
+    // thickens, so the handle follows the corners instead of floating as a separate line.
     float edge = std::max(Set_GlowOf(w, 41), w.dragRail ? 1.0f : 0.0f);
-    if (edge > 0.003f) p.GradFill({d.right - 1.5f, d.top + 18, d.right + 1.5f, d.bottom - 18}, 1.5f, edge);
+    Set_DrawDock(p, w, d, 14, w.glass ? 0.58f : 1.0f, std::max(w.railGlow * 0.85f, edge));
+    if (edge > 0.003f) p.GradRing(d, 13, edge, 2.25f);
 
     D2D1_RECT_F tb = Set_RailToggleRect(w);
     float th = Set_GlowOf(w, 42);
@@ -1324,7 +1378,13 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
 static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
     D2D1_RECT_F d = Set_FooterDock(w);
     const float rad = kSetFootH / 2, brad = kSetFootBtnH / 2;
-    Set_DrawDock(p, w, d, rad, w.glass ? 0.9f : 1.0f, w.footGlow);
+    // The same see-through mantle as the rail dock, so the blurred rows under the pill read as
+    // real glass instead of a near-solid bar.
+    p.Round(d, rad, mocha::mantle, w.render ? 1.0f : (w.glass ? 0.58f : 0.85f));
+    const D2D1_RECT_F edge{d.left + 2, d.top + 2, d.right - 2, d.bottom - 2};
+    p.rt->DrawRoundedRectangle(D2D1::RoundedRect(edge, rad - 2, rad - 2),
+                              p.B(mocha::overlay0, 0.9f * (1 - w.footGlow)), 2.75f);
+    p.GradRing(d, rad - 1.5f, w.footGlow, 3.0f);
     UINT32 sc;
     std::wstring status = Set_FooterStatus(w, &sc);
     float sw = Set_FooterStatusW(w);
@@ -1333,37 +1393,67 @@ static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
     for (int i = 0; i < 3; i++) {
         D2D1_RECT_F b = Set_FooterButton(w, i);
         float hov = Set_GlowOf(w, 10 + i);
-        if (i == 2) {
-            p.GradFill(b, brad, 0.88f + 0.12f * hov);
-            p.GradRing(b, brad, hov, 2);
-            p.Text(w.fButton.get(), names[i], b, mocha::crust, w.saving ? 0.5f : 1.0f);
-        } else {
-            p.Round(b, brad, mocha::surface0, 0.6f);
-            p.GradFill(b, brad, 0.12f * hov);
-            p.GradRing(b, brad, 0.85f * hov);
-            p.Text(w.fButton.get(), names[i], b, mocha::text);
-        }
+        p.Round(b, brad, mocha::base, 0.98f);
+        p.Edge(b, brad, mocha::overlay0, 0.78f * (1 - hov), 1.75f);
+        p.GradRing(b, brad - 1, hov, 2.25f);
+        p.Text(w.fButton.get(), names[i], b, mocha::text, w.saving ? 0.5f : 1.0f);
         if (w.kbd && w.focus == -1 - i) p.GradRing(b, brad, 1, 2);
     }
+}
+
+
+static void Set_ThumbFill(SetPaint& p, const D2D1_RECT_F& r, float a) {
+    if (r.bottom <= r.top) return;
+    float rad = (r.right - r.left) / 2;
+    SetCom<ID2D1LinearGradientBrush> g;
+    D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::blue, a * p.fade)}, {1, D2DColor(mocha::mauve, a * p.fade)}};
+    SetCom<ID2D1GradientStopCollection> coll;
+    if (SUCCEEDED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
+        SUCCEEDED(p.rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.left, r.bottom)),
+            coll.get(), g.put())))
+        p.rt->FillRoundedRectangle(D2D1::RoundedRect(r, rad, rad), g.get());
+}
+
+static int Set_DropVisible(const SetWindow& w) {
+    return w.openSel < 0 ? 0 : std::min((int)w.fields[w.openSel].options.size(), kSetDropMax);
+}
+
+static void Set_DropShow(SetWindow& w, int i) {
+    int vis = Set_DropVisible(w), n = w.openSel < 0 ? 0 : (int)w.fields[w.openSel].options.size();
+    if (i < 0 || vis <= 0) return;
+    if (i < w.dropTop) w.dropTop = i;
+    if (i >= w.dropTop + vis) w.dropTop = i - vis + 1;
+    w.dropTop = std::clamp(w.dropTop, 0, std::max(0, n - vis));
 }
 
 static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
     if (w.openSel < 0) return;
     const SetField& f = w.fields[w.openSel];
     const D2D1_RECT_F& r = w.dropRect;
+    const int n = (int)f.options.size(), vis = Set_DropVisible(w);
+    const bool scrolls = n > vis;
     D2D1_RECT_F shadow{r.left - 1, r.top + 3, r.right + 1, r.bottom + 5};
     p.Round(shadow, 12, mocha::crust, 0.6f);
     p.Round(r, 10, mocha::mantle);
     p.GradRing(r, 10, 0.9f);
-    for (size_t i = 0; i < f.options.size(); i++) {
-        D2D1_RECT_F it{r.left + 4, r.top + 4 + i * kSetDropItem, r.right - 4, r.top + 4 + (i + 1) * kSetDropItem};
+    const float right = r.right - (scrolls ? 12 : 4);
+    for (int v = 0; v < vis; v++) {
+        int i = w.dropTop + v;
+        if (i >= n) break;
+        D2D1_RECT_F it{r.left + 4, r.top + 4 + v * kSetDropItem, right, r.top + 4 + (v + 1) * kSetDropItem};
         bool sel = f.cur == f.options[i].first;
-        if ((int)i == w.dropHover) {
+        if (i == w.dropHover) {
             p.GradFill(it, 6, 0.28f);
             p.GradRing(it, 6, 0.6f, 1);
         }
         p.Text(w.fValue.get(), f.options[i].second, {it.left + 10, it.top, it.right - 28, it.bottom}, sel ? mocha::blue : mocha::text);
         if (sel) p.Glyph(w.fIconS.get(), 0xE73E, {it.right - 28, it.top, it.right - 6, it.bottom}, mocha::blue);
+    }
+    if (scrolls) {
+        float track = r.bottom - r.top - 12, th = std::max(24.0f, track * vis / n);
+        float top = r.top + 6 + (track - th) * w.dropTop / std::max(1, n - vis);
+        Set_ThumbFill(p, {r.right - 9, top, r.right - 5, top + th}, 0.85f);
     }
 }
 
@@ -1375,7 +1465,7 @@ static D2D1_RECT_F Set_CapButton(const SetWindow& w, int i) {
 
 // y is in content DIPs, so the title bar is y < 0.
 static int Set_CapButtonAt(const SetWindow& w, float x, float y) {
-    if (w.nativeTitle || w.nativeButtons) return -1;
+    if (w.nativeTitle) return -1;
     for (int i = 0; i < 3; i++)
         if (Set_In(Set_CapButton(w, i), x, y + kSetCapH)) return i;
     return -1;
@@ -1408,7 +1498,6 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
     float mid = kSetCapH / 2;
     Set_DrawMark(p, w.fCapGlyph.get(), {t.left, mid - 8, t.left + 16, mid + 8}, w.active ? 1.0f : 0.6f);
     p.Text(w.fCap.get(), kSetTitle, {t.left + 24, 0, t.right, kSetCapH}, w.active ? mocha::text : mocha::overlay1);
-    if (w.nativeButtons) return;  // DWM draws them over this title bar.
     for (int i = 0; i < 3; i++) {
         D2D1_RECT_F b = Set_CapButton(w, i);
         float hov = Set_GlowOf(w, 20 + i);
@@ -1423,7 +1512,13 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
 
 // Draws the whole window into rt (DIPs). The target's DPI does the scaling.
 // The title bar is drawn first; everything else is in content DIPs, shifted down by kSetCapH.
+static void Set_PlaceEdit(SetWindow& w);
+
 static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
+    if (Set_FitBoxes(w)) {
+        Set_BuildPage(w);
+        Set_PlaceEdit(w);
+    }
     SetPaint p(w, rt);
     const auto base = D2D1::Matrix3x2F::Translation(0, kSetCapH);
     rt->BeginDraw();
@@ -1454,37 +1549,96 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     rt->SetTransform(base);
     float viewH = Set_ViewH(w);
 
-    rt->PushAxisAlignedClip(D2D1::RectF(Set_RailSpace(w) + 4, 0, w.cw, viewH), D2D1_ANTIALIAS_MODE_ALIASED);
-    auto place = [&](int index, float& rise) {
-        float t = w.pageT >= 1 ? 1.0f : Set_Ease(w.pageT * 1.7f - std::min(index, 9) * 0.07f);
-        p.fade = t;
-        rise = (1 - t) * 10;
-        rt->SetTransform(D2D1::Matrix3x2F::Translation(0, -w.scrollY + rise) * base);
+    auto drawPage = [&](SetPaint& cp) {
+        ID2D1RenderTarget* crt = cp.rt;
+        crt->PushAxisAlignedClip(D2D1::RectF(Set_RailSpace(w) + 4, 0, w.cw, viewH), D2D1_ANTIALIAS_MODE_ALIASED);
+        auto place = [&](int index, float& rise) {
+            float t = w.pageT >= 1 ? 1.0f : Set_Ease(w.pageT * 1.7f - std::min(index, 9) * 0.07f);
+            cp.fade = t;
+            rise = (1 - t) * 10;
+            crt->SetTransform(D2D1::Matrix3x2F::Translation(0, -w.scrollY + rise) * base);
+        };
+        float rise = 0;
+        place(0, rise);
+        cp.Text(w.fTitle.get(), kSetPages[w.page].name, {w.contentX, 36, w.contentX + w.contentW, 72}, mocha::text);
+        place(1, rise);
+        cp.Text(w.fIntro.get(), kSetPages[w.page].intro, {w.contentX, 76, w.contentX + w.contentW, 76 + 40}, mocha::subtext0);
+        for (size_t i = 0; i < w.items.size(); i++) {
+            const SetItem& it = w.items[i];
+            if (it.y + it.h < w.scrollY - 20 || it.y > w.scrollY + viewH + 20) continue;
+            place((int)i + 2, rise);
+            switch (it.type) {
+                case SetItem::Group: Set_DrawGroup(cp, w, it); break;
+                case SetItem::Row: Set_DrawRow(cp, w, it); break;
+                case SetItem::Banner: Set_DrawBanner(cp, w, it); break;
+                case SetItem::About: Set_DrawAbout(cp, w, it, (int)i); break;
+                case SetItem::Link: Set_DrawLinkRow(cp, w, it, (int)i); break;
+                case SetItem::Support: Set_DrawSupport(cp, w, it, (int)i); break;
+            }
+        }
+        cp.fade = 1;
+        crt->SetTransform(base);
+        crt->PopAxisAlignedClip();
     };
-    float rise = 0;
-    place(0, rise);
-    p.Text(w.fTitle.get(), kSetPages[w.page].name, {w.contentX, 36, w.contentX + w.contentW, 72}, mocha::text);
-    place(1, rise);
-    p.Text(w.fIntro.get(), kSetPages[w.page].intro, {w.contentX, 76, w.contentX + w.contentW, 76 + 40}, mocha::subtext0);
-    for (size_t i = 0; i < w.items.size(); i++) {
-        const SetItem& it = w.items[i];
-        if (it.y + it.h < w.scrollY - 20 || it.y > w.scrollY + viewH + 20) continue;
-        place((int)i + 2, rise);
-        switch (it.type) {
-            case SetItem::Group: Set_DrawGroup(p, w, it); break;
-            case SetItem::Row: Set_DrawRow(p, w, it); break;
-            case SetItem::Banner: Set_DrawBanner(p, w, it); break;
-            case SetItem::About: Set_DrawAbout(p, w, it); break;
-            case SetItem::Link: Set_DrawLinkRow(p, w, it, (int)i); break;
-            case SetItem::Support: Set_DrawSupport(p, w, it, (int)i); break;
+
+    // The footer dock floats over the page with a real blur of the rows under it, clipped to the
+    // pill, all in this window. (An owned popup with its own backdrop showed square corners:
+    // DWM paints an accent backdrop over the full window rectangle and ignores the region.)
+    const D2D1_SIZE_F full = D2D1::SizeF(w.cw, w.ch + kSetCapH);
+    bool blurred = false;
+    if (!w.render) {
+        if (w.layer && (w.layerSize.width != full.width || w.layerSize.height != full.height)) w.layer.reset();
+        if (!w.layer && SUCCEEDED(rt->CreateCompatibleRenderTarget(full, w.layer.put()))) w.layerSize = full;
+        SetCom<ID2D1Bitmap> page;
+        SetCom<ID2D1DeviceContext> dc;
+        SetCom<ID2D1Effect> blur;
+        SetCom<ID2D1RoundedRectangleGeometry> pill;
+        SetCom<ID2D1RectangleGeometry> all;
+        SetCom<ID2D1PathGeometry> rest;
+        D2D1_RECT_F d = Set_FooterDock(w);
+        d.top += kSetCapH, d.bottom += kSetCapH;
+        const float rad = kSetFootH / 2;
+        if (w.layer && SUCCEEDED(rt->QueryInterface(__uuidof(ID2D1DeviceContext), (void**)dc.put())) &&
+            SUCCEEDED(dc->CreateEffect(CLSID_D2D1GaussianBlur, blur.put())) &&
+            SUCCEEDED(g_setD2d->CreateRoundedRectangleGeometry(D2D1::RoundedRect(d, rad, rad), pill.put())) &&
+            SUCCEEDED(g_setD2d->CreateRectangleGeometry(D2D1::RectF(0, 0, full.width, full.height), all.put())) &&
+            SUCCEEDED(g_setD2d->CreatePathGeometry(rest.put()))) {
+            SetCom<ID2D1GeometrySink> sink;
+            bool ok = SUCCEEDED(rest->Open(sink.put())) &&
+                      SUCCEEDED(all->CombineWithGeometry(pill.get(), D2D1_COMBINE_MODE_EXCLUDE, nullptr, sink.get())) &&
+                      SUCCEEDED(sink->Close());
+            ID2D1BitmapRenderTarget* lt = w.layer.get();
+            if (ok) {
+                SetPaint lp(w, lt);
+                lt->BeginDraw();
+                lt->SetTransform(D2D1::Matrix3x2F::Identity());
+                lt->Clear(D2D1::ColorF(0, 0));
+                lt->SetTransform(base);
+                drawPage(lp);
+                ok = SUCCEEDED(lt->EndDraw()) && SUCCEEDED(lt->GetBitmap(page.put()));
+            }
+            if (!ok) w.layer.reset();
+            if (ok) {
+                rt->SetTransform(D2D1::Matrix3x2F::Identity());
+                rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), rest.get()), nullptr);
+                rt->DrawBitmap(page.get());
+                rt->PopLayer();
+                blur->SetInput(0, page.get());
+                blur->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, 9.0f);
+                blur->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE, D2D1_BORDER_MODE_HARD);
+                rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), pill.get()), nullptr);
+                D2D1_RECT_F src{d.left - 1, d.top - 1, d.right + 1, d.bottom + 1};
+                dc->DrawImage(blur.get(), D2D1::Point2F(src.left, src.top), src);
+                rt->PopLayer();
+                blurred = true;
+            }
         }
     }
-    p.fade = 1;
+    if (!blurred) drawPage(p);
     rt->SetTransform(base);
-    rt->PopAxisAlignedClip();
 
     D2D1_RECT_F th = Set_ScrollThumb(w);
-    if (th.bottom > th.top) p.Round(th, 3, w.dragScroll ? mocha::overlay1 : mocha::surface2, 0.9f);
+    Set_ThumbFill(p, th, w.dragScroll || w.hover.kind == SetHit::Scroll ? 1.0f : 0.7f);
 
     Set_DrawFooter(p, w);
     Set_DrawRail(p, w);
@@ -1492,7 +1646,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     rt->SetTransform(D2D1::Matrix3x2F::Identity());
     if (false) p.GradRing({0, 0, w.cw, w.ch + kSetCapH}, SystemCornerRadius(false), 1, 1);
     HRESULT hr = rt->EndDraw();
-    if (hr == D2DERR_RECREATE_TARGET) w.rt.reset();
+    if (hr == D2DERR_RECREATE_TARGET) w.rt.reset(), w.layer.reset();
 }
 
 // ---- Hit testing --------------------------------------------------------------
@@ -1510,8 +1664,9 @@ static SetHit Set_Hit(SetWindow& w, float x, float y) {
     }
     if (w.openSel >= 0) {
         if (Set_In(w.dropRect, x, y)) {
-            int i = (int)((y - w.dropRect.top - 4) / kSetDropItem);
-            if (i >= 0 && i < (int)w.fields[w.openSel].options.size() && y >= w.dropRect.top + 4) {
+            int v = (int)((y - w.dropRect.top - 4) / kSetDropItem), i = w.dropTop + v;
+            if (v >= 0 && v < Set_DropVisible(w) && i < (int)w.fields[w.openSel].options.size() &&
+                y >= w.dropRect.top + 4 && x < w.dropRect.right - (Set_DropVisible(w) < (int)w.fields[w.openSel].options.size() ? 12 : 4)) {
                 h.kind = SetHit::Drop;
                 h.a = w.openSel;
                 h.b = i;
@@ -1570,11 +1725,14 @@ static SetHit Set_Hit(SetWindow& w, float x, float y) {
             h.a = (int)i;
             h.id = 3000 + (int)i;
         } else if (it.type == SetItem::Support) {
+            h.id = 3700 + (int)i;  // The card lights up; only its button clicks.
             if (Set_In(Set_SupportButton(w, it), x, cy)) {
                 h.kind = SetHit::Link;
                 h.a = (int)i;
                 h.id = 3500 + (int)i;
             }
+        } else if (it.type == SetItem::About) {
+            h.id = 3800 + (int)i;
         } else if (it.type == SetItem::Row) {
             const SetField& f = w.fields[it.field];
             SetParts pt = Set_Parts(f, row);
@@ -1689,6 +1847,7 @@ static void Set_ClosePopup(SetWindow& w) {
     if (w.openSel < 0) return;
     w.openSel = -1;
     w.dropHover = -1;
+    w.dropTop = 0;
     Set_Invalidate(w);
 }
 
@@ -1698,14 +1857,22 @@ static void Set_OpenPopup(SetWindow& w, int k) {
     const SetField& f = w.fields[k];
     SetParts pt = Set_Parts(f, Set_RowRect(w, *it));
     float boxTop = pt.box.top - w.scrollY, boxBottom = pt.box.bottom - w.scrollY;
-    float h = (float)f.options.size() * kSetDropItem + 8;
+    const int n = (int)f.options.size(), vis = std::min(n, kSetDropMax);
+    float h = (float)vis * kSetDropItem + 8;
     float top = boxBottom + 4;
     if (top + h > Set_ViewH(w) + 20 && boxTop - 4 - h > 0) top = boxTop - 4 - h;  // No room below: open upward.
-    w.dropRect = {pt.box.left, top, pt.box.right, top + h};
+    // As wide as the longest option (text, check mark, scrollbar), growing leftward from the box.
+    float textW = 0;
+    for (const auto& o : f.options) textW = std::max(textW, Set_TextW(w.fValue.get(), o.second));
+    float width = std::max(pt.box.right - pt.box.left, std::ceil(textW) + 52 + (n > vis ? 8 : 0));
+    float left = std::max(pt.box.right - width, Set_RailSpace(w) + 8);
+    w.dropRect = {left, top, std::max(pt.box.right, left + width), top + h};
     w.openSel = k;
     w.dropHover = -1;
-    for (size_t i = 0; i < f.options.size(); i++)
-        if (f.cur == f.options[i].first) w.dropHover = (int)i;
+    w.dropTop = 0;
+    for (int i = 0; i < n; i++)
+        if (f.cur == f.options[i].first) w.dropHover = i;
+    Set_DropShow(w, w.dropHover);
     Set_Invalidate(w);
 }
 
@@ -1929,6 +2096,8 @@ static std::wstring Set_ChangedParams(SetWindow& w, int& changed) {
     return params;
 }
 
+static void Set_ApplyFrame(SetWindow& w);
+
 static void Set_Save(std::shared_ptr<SetWindow> keep) {
     SetWindow& w = *keep;
     if (w.saving) return;
@@ -2019,6 +2188,7 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
         Set_SetStatus(w, L"Windhawk didn't answer in 15 seconds. Settings may not be saved.", true);
     } else if (code == 0) {
         Set_LoadFields(w);  // Shows what was stored.
+        Set_ApplyFrame(w);  // The title bar and glass switches take effect now, no reopen.
         Set_SetStatus(w, L"Saved");
     } else {
         Wh_Log(L"windhawk-cli exit code %lu", code);
@@ -2177,8 +2347,8 @@ static bool Set_OnKey(SetWindow& w, UINT vk) {
         const SetField& f = w.fields[w.openSel];
         int n = (int)f.options.size();
         if (vk == VK_ESCAPE) Set_ClosePopup(w);
-        else if (vk == VK_UP) w.dropHover = (w.dropHover - 1 + n) % n;
-        else if (vk == VK_DOWN) w.dropHover = (w.dropHover + 1) % n;
+        else if (vk == VK_UP) Set_DropShow(w, w.dropHover = w.dropHover < 0 ? n - 1 : (w.dropHover - 1 + n) % n);
+        else if (vk == VK_DOWN) Set_DropShow(w, w.dropHover = w.dropHover < 0 ? 0 : (w.dropHover + 1) % n);
         else if (vk == VK_RETURN || vk == VK_SPACE) Set_Choose(w, w.openSel, w.dropHover);
         Set_Invalidate(w);
         return true;
@@ -2251,6 +2421,84 @@ static void Set_Relayout(SetWindow& w) {
     Set_BuildAndClamp(w);
 }
 
+static bool Set_FieldOn(const SetWindow& w, PCWSTR key, bool def) {
+    const size_t n = wcslen(key);
+    for (const auto& f : w.fields) {
+        const size_t m = wcslen(f.key);
+        if (m >= n && wcscmp(f.key + m - n, key) == 0 && (m == n || f.key[m - n - 1] == L'.')) return f.value == L"1";
+    }
+    return def;
+}
+
+static void Set_ApplyFrame(SetWindow& w) {
+    if (w.render || !w.hwnd) return;
+    const HWND hwnd = w.hwnd;
+    const bool native = Set_FieldOn(w, L"nativeSettingsTitleBar", false), glass = Set_FieldOn(w, L"settingsGlass", true);
+    const bool first = !w.frameApplied, wasGlass = w.glass;
+    if (!first && native == w.nativeTitle && glass == w.glass) return;
+    w.frameApplied = true;
+    w.nativeTitle = native;
+    w.glass = glass;
+    kSetCapH = native ? 0.0f : 40.0f;
+    struct SetAccentPolicy { int state, flags, abgr, animation; };
+    struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
+    auto setComposition =
+        (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
+    if (glass) {
+        // Acrylic as one sheet over the whole window, the same material Seamless Flyouts
+        // gives the Launchpad settings window in Explorer: the accent acrylic with an 85%
+        // Mocha base tint, under the page's own crust tint. The system backdrop
+        // (DWMSBT_TRANSIENTWINDOW) went light grey over bright windows and turned to a flat
+        // grey slab when the window lost focus; the accent acrylic stays the same.
+        int backdrop = 1;  // DWMSBT_NONE
+        DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+        bb.fEnable = TRUE;
+        bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+        if (setComposition) {
+            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
+            SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(hwnd, &data);
+        }
+        MARGINS margins{-1, -1, -1, -1};
+        DwmExtendFrameIntoClientArea(hwnd, &margins);
+        COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
+        DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+    } else if (wasGlass) {
+        // Glass switched off while open: back to a plain solid window.
+        if (setComposition) {
+            SetAccentPolicy policy{0, 0, 0, 0};
+            SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(hwnd, &data);
+        }
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE;
+        bb.fEnable = FALSE;
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        MARGINS margins{0, 0, 0, 0};
+        DwmExtendFrameIntoClientArea(hwnd, &margins);
+        int backdrop = 0;  // DWMSBT_AUTO
+        DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+        COLORREF caption = RefFromRgb(mocha::crust);
+        DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &caption, sizeof(caption));
+    }
+    // With the frame extended DWM would draw its own minimize, maximize and close buttons over the
+    // built-in title bar; without a system menu it draws none. The Windows title bar keeps it.
+    // Minimize, maximize and close still work from the taskbar either way.
+    LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    SetWindowLongPtrW(hwnd, GWL_STYLE, native ? (style | WS_SYSMENU) : (style & ~WS_SYSMENU));
+    // Set_WndProc's WM_NCCALCSIZE drops or keeps the system title bar to match.
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    if (!first) {
+        Set_Relayout(w);
+        RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_FRAME | RDW_UPDATENOW);
+    }
+}
+
 static void Set_RememberRect(SetWindow& w) {
     if (w.render || IsIconic(w.hwnd) || IsZoomed(w.hwnd)) return;
     GetWindowRect(w.hwnd, &w.normalRect);
@@ -2259,14 +2507,19 @@ static void Set_RememberRect(SetWindow& w) {
 static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     SetWindow* w = g_setWin && g_setWin->hwnd == hwnd ? g_setWin.get() : nullptr;
     if (!w) return DefWindowProcW(hwnd, msg, wParam, lParam);
-    if (w->nativeButtons) {
+    if (w->nativeTitle) {
         LRESULT r = 0;
         if (DwmDefWindowProc(hwnd, msg, wParam, lParam, &r)) return r;  // Hover and clicks on DWM's buttons.
     }
     auto dipX = [&](LPARAM l) { return (float)(short)LOWORD(l) * 96.0f / w->dpi; };
     auto dipY = [&](LPARAM l) { return (float)(short)HIWORD(l) * 96.0f / w->dpi - kSetCapH; };
     switch (msg) {
-        case WM_APP_SETTINGS_RELOAD: if (!w->saving) Set_LoadFields(*w); return 0;
+        case WM_APP_SETTINGS_RELOAD:
+            if (!w->saving) {
+                Set_LoadFields(*w);
+                Set_ApplyFrame(*w);
+            }
+            return 0;
         case WM_APP_SETTINGS_ACTIVATE: ShowWindow(hwnd, SW_RESTORE); ForceForeground(hwnd); return 0;
         case WM_NCCALCSIZE:
             // No system title bar: keep the side and bottom frames, the client starts at the top edge.
@@ -2312,7 +2565,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         case WM_CTLCOLOREDIT: {
             HDC dc = (HDC)wParam;
             SetTextColor(dc, RefFromRgb(mocha::text));
-            SetBkColor(dc, RefFromRgb(mocha::crust));
+            SetBkColor(dc, RefFromRgb(kSetBoxFill));
             return (LRESULT)w->editBrush;
         }
         case WM_SIZE:
@@ -2394,12 +2647,14 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             }
             return 0;
         }
-        case WM_MOUSELEAVE:
+        case WM_MOUSELEAVE: {
+            POINT pointer; GetCursorPos(&pointer);
             w->tracking = false;
             w->hover = SetHit();
             if (!w->dragRail) w->mouseX = w->mouseY = -1;
             Set_Invalidate(*w);
             return 0;
+        }
         case WM_SETCURSOR:
             if (LOWORD(lParam) == HTCLIENT) {
                 PCWSTR cur = w->dragRail || w->hover.kind == SetHit::RailEdge ? IDC_SIZEWE
@@ -2497,6 +2752,16 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             }
             return 0;
         case WM_MOUSEWHEEL: {
+            if (w->openSel >= 0 && Set_In(w->dropRect, w->mouseX, w->mouseY)) {
+                int n = (int)w->fields[w->openSel].options.size(), vis = Set_DropVisible(*w);
+                int step = GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? -3 : 3;
+                w->dropTop = std::clamp(w->dropTop + step, 0, std::max(0, n - vis));
+                SetHit h = Set_Hit(*w, w->mouseX, w->mouseY);
+                w->hover = h;
+                w->dropHover = h.kind == SetHit::Drop ? h.b : w->dropHover;
+                Set_Invalidate(*w);
+                return 0;
+            }
             Set_CommitEdit(*w, true);
             Set_ClosePopup(*w);
             float delta = (float)GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
@@ -2629,7 +2894,7 @@ static bool Set_Create(bool render) {
     Set_RegisterClass();
     auto w = std::make_shared<SetWindow>();
     w->render = render;
-    w->editBrush = CreateSolidBrush(RefFromRgb(mocha::crust));
+    w->editBrush = CreateSolidBrush(RefFromRgb(kSetBoxFill));
     g_setWin = w;
     if (render) {
         // An owned window gets no taskbar button.
@@ -2637,10 +2902,8 @@ static bool Set_Create(bool render) {
                                    GetModuleHandleW(nullptr), nullptr);
     }
     const int offX = GetSystemMetrics(SM_XVIRTUALSCREEN) - 6000, offY = GetSystemMetrics(SM_YVIRTUALSCREEN);
-    w->nativeTitle = !render && Wh_GetIntSetting(L"SettingsWindow.nativeSettingsTitleBar") != 0;
-    w->nativeButtons = !render && !w->nativeTitle && GetStringSetting(L"SettingsWindow.settingsTitleButtons") != L"builtin";
-    w->glass = !render && Wh_GetIntSetting(L"SettingsWindow.settingsGlass") != 0;
-    kSetCapH = w->nativeTitle ? 0.0f : 40.0f;
+    // The built-in title bar until Set_ApplyFrame reads the switches.
+    kSetCapH = 40.0f;
     const DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
     HWND hwnd = CreateWindowExW(0, kSettingsClass, L"Seamless Color Picker settings", style,
                                 render ? offX : CW_USEDEFAULT, render ? offY : CW_USEDEFAULT, 800, 600, w->owner,
@@ -2667,47 +2930,7 @@ static bool Set_Create(bool render) {
         w->iconBig = Set_MakeIcon(w->iconFamily, GetSystemMetricsForDpi(SM_CXICON, w->dpi));
         if (w->iconSmall) SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)w->iconSmall);
         if (w->iconBig) SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)w->iconBig);
-        if (w->glass) {
-            // Acrylic as one sheet over the whole window, the same material Seamless Flyouts
-            // gives the Launchpad settings window in Explorer: the accent acrylic with an 85%
-            // Mocha base tint, under the page's own crust tint. The system backdrop
-            // (DWMSBT_TRANSIENTWINDOW) went light grey over bright windows and turned to a flat
-            // grey slab when the window lost focus; the accent acrylic stays the same.
-            int backdrop = 1;  // DWMSBT_NONE
-            DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
-            DWM_BLURBEHIND bb{};
-            bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
-            bb.fEnable = TRUE;
-            bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
-            DwmEnableBlurBehindWindow(hwnd, &bb);
-            if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
-            struct SetAccentPolicy { int state, flags, abgr, animation; };
-            struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
-            using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
-            if (auto setComposition = (SetComposition_t)(void*)GetProcAddress(
-                    GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute")) {
-                SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
-                SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
-                setComposition(hwnd, &data);
-            }
-            MARGINS margins{-1, -1, -1, -1};
-            DwmExtendFrameIntoClientArea(hwnd, &margins);
-            COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
-            DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
-        } else if (w->nativeButtons) {
-            // Solid window: DWM draws its buttons only where the frame reaches, so extend it
-            // over the title bar strip.
-            MARGINS margins{0, 0, MulDiv((int)kSetCapH, w->dpi, 96), 0};
-            DwmExtendFrameIntoClientArea(hwnd, &margins);
-        }
-        // With the frame extended, DWM draws its own minimize, maximize and close buttons in the
-        // corner. "Windows buttons" keeps them (Set_WndProc passes their hover and clicks to
-        // DwmDefWindowProc); "Built-in buttons" drops the system menu so DWM draws none and the
-        // window draws its own. Minimize, maximize and close still work from the taskbar.
-        if (!w->nativeTitle && !w->nativeButtons)
-            SetWindowLongPtrW(hwnd, GWL_STYLE, GetWindowLongPtrW(hwnd, GWL_STYLE) & ~WS_SYSMENU);
-        // The first WM_NCCALCSIZE ran before w->hwnd was set; drop the system title bar now.
-        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        Set_ApplyFrame(*w);  // Title bar and glass; also drops the system title bar the first WM_NCCALCSIZE kept.
     }
 
     auto outer = [&](float cwDip, float chDip, SIZE& size) {
@@ -2823,7 +3046,7 @@ struct Settings {
     int startColor = 0;    // last, clipboard, custom
     UINT32 customStart = m::blue;
     int sliderMode = 0, recentCount = 16;
-    bool showPalette = true, livePick = true, onTop = true, rememberPos = true;
+    bool showPalette = true, livePick = true, onTop = true, rememberPos = true, nativeTitle = false;
     bool magCircle = true;
     int magPixels = 15, magZoom = 10;
     bool grid = true, crosshair = true, info = true;
@@ -2901,6 +3124,7 @@ static void LoadSettings() {
     s.livePick = Wh_GetIntSetting(L"Picker.livePick") != 0;
     s.onTop = Wh_GetIntSetting(L"Picker.alwaysOnTop") != 0;
     s.rememberPos = Wh_GetIntSetting(L"Picker.rememberPosition") != 0;
+    s.nativeTitle = Wh_GetIntSetting(L"Picker.nativeTitleBar") != 0;
     s.magCircle = Str(L"Screen.magnifierShape") != L"square";
     s.magPixels = std::clamp(Wh_GetIntSetting(L"Screen.magnifierPixels"), 7, 31) | 1;
     s.magZoom = std::clamp(Wh_GetIntSetting(L"Screen.magnifierZoom"), 4, 24);
@@ -3197,7 +3421,7 @@ static bool ParseColorText(const std::wstring& text, Color& out, bool* hadAlpha 
 ComPtr<ID2D1Factory> g_d2d;
 ComPtr<IDWriteFactory> g_dw;
 ComPtr<IWICImagingFactory> g_wic;
-ComPtr<IDWriteTextFormat> g_fLabel, g_fValue, g_fBig, g_fSmall, g_fBtn, g_fIcon, g_fIconS, g_fIconXS, g_fTitle;
+ComPtr<IDWriteTextFormat> g_fLabel, g_fValue, g_fBig, g_fSmall, g_fBtn, g_fIcon, g_fIconS, g_fIconXS, g_fIconCap, g_fTitle;
 std::wstring g_family, g_iconFamily;
 
 static bool EnsureFactories() {
@@ -3240,6 +3464,7 @@ static void MakeFormats() {
     g_fIcon = MakeFormat(g_iconFamily, 15, DWRITE_FONT_WEIGHT_NORMAL);
     g_fIconS = MakeFormat(g_iconFamily, 12, DWRITE_FONT_WEIGHT_NORMAL);
     g_fIconXS = MakeFormat(g_iconFamily, 8, DWRITE_FONT_WEIGHT_NORMAL);
+    g_fIconCap = MakeFormat(g_iconFamily, 10, DWRITE_FONT_WEIGHT_NORMAL);
 }
 
 // Device resources tied to one render target.
@@ -3490,7 +3715,14 @@ struct Picker {
     std::map<int, float> glow;
     bool tracking = false, sampling = false, glassOn = false, hiddenForPick = false;
     int tick = 0;
+    ULONGLONG ctrlSince = 0;  // when Ctrl went down; live sampling waits a moment
+    bool ctrlChord = false;   // another key joined this Ctrl hold, so no sampling until Ctrl is up
+    bool ctrlBase[256]{};     // keys that were already down when Ctrl went down
     int capPx = 0;  // caption height the client now covers (custom title strip)
+    int offX = 0, offY = 0;  // content offset in pixels; centres the layout while maximized
+    float zoom = 1;          // content scale; above 1 while maximized so the layout fills the screen
+    bool nativeTitle = false;  // Windows draws the title bar and its buttons (Picker.nativeTitleBar)
+    bool userSized = false;    // set once the window is shown; later layout changes never shrink it
     HICON iconSmall = nullptr, iconBig = nullptr;
 };
 Picker g_pk;
@@ -3499,6 +3731,26 @@ HINSTANCE g_inst = nullptr;
 int g_modeOverride = -1;
 
 static float CapDip() { return g_pk.capPx * 96.0f / g_pk.dpi; }
+
+// Title bar buttons in client DIPs: 0 minimize, 1 maximize or restore, 2 close.
+constexpr int kCapId = 60 * 64;  // hover/press ids kCapId + i, apart from every HotId
+constexpr float kCapBtnW = 46;
+static D2D1_RECT_F CapBtnRect(int i) {
+    RECT rc{};
+    GetClientRect(g_pk.hwnd, &rc);
+    float right = rc.right * 96.0f / g_pk.dpi - (2 - i) * kCapBtnW;
+    return {right - kCapBtnW, 0, right, CapDip()};
+}
+static int CapBtnAt(int px, int py) {  // client pixels
+    if (py < 0 || py >= g_pk.capPx) return -1;
+    float x = px * 96.0f / g_pk.dpi;
+    for (int i = 0; i < 3; i++) {
+        D2D1_RECT_F r = CapBtnRect(i);
+        if (x >= r.left && x < r.right) return i;
+    }
+    return -1;
+}
+
 
 static int Mode() { return g_modeOverride >= 0 ? g_modeOverride : g_set.sliderMode; }
 
@@ -3789,22 +4041,51 @@ static void DrawPicker(ID2D1RenderTarget* rt, Res& res, bool glass) {
     D2D1_RECT_F all{0, 0, p.w, p.h};
     if (glass) {
         rt->Clear(D2D1::ColorF(0, 0, 0, 0));
-        // One flat Mocha base tint over the acrylic, top to bottom; no fade, no light band.
-        rt->Clear(D2DColor(m::base, g_set.tint / 100.0f * 0.92f));
+        // The house glass paint (docs/settings-gui-standard.md): crust flat at 55% over the blur,
+        // the whole page, like the settings window. Glass tint 85 is that exact value; higher is
+        // darker, lower shows more blur.
+        rt->Clear(D2DColor(m::crust, std::clamp(scpset::kSetGlassTint * g_set.tint / 85.0f, 0.35f, 1.0f)));
     } else {
         rt->Clear(D2DColor(m::base));
     }
     UpdateBitmaps(res);
     float cap = CapDip();
+    float ox = p.offX * 96.0f / p.dpi, oy = p.offY * 96.0f / p.dpi;
     if (cap > 0) {
-        // Title strip: same base as the page, our icon and name; DWM draws min/close on the right.
+        // Title strip: same base as the page, our icon and name, and our own caption buttons.
         float s = 16, y = (cap - s) / 2;
-        D2D1_RECT_F ic{12, y, 12 + s, y + s};
+        // Icon and name centred on the whole window width, like the title pill on other apps.
+        const std::wstring title = L"Seamless Color Picker";
+        float tw = 140;
+        ComPtr<IDWriteTextLayout> lay;
+        if (g_fSmall && SUCCEEDED(g_dw->CreateTextLayout(title.c_str(), (UINT32)title.size(), g_fSmall.Get(), 1000, 40, lay.GetAddressOf()))) {
+            DWRITE_TEXT_METRICS mt;
+            lay->GetMetrics(&mt);
+            tw = mt.widthIncludingTrailingWhitespace;
+        }
+        RECT crc;
+        GetClientRect(p.hwnd, &crc);
+        float W = crc.right * 96.0f / p.dpi, total = s + 8 + tw;
+        float tx = std::clamp((W - total) / 2, 12.0f, std::max(12.0f, CapBtnRect(0).left - 8 - total));
+        D2D1_RECT_F ic{tx, y, tx + s, y + s};
         P.GradFill(ic, 4, GetActiveWindow() == p.hwnd ? 1.0f : 0.6f);
         P.Glyph(g_fIconXS.Get(), 0xEF3C, ic, m::crust);
-        P.Text(g_fSmall.Get(), L"Seamless Color Picker", {36, 0, p.w - 150, cap}, GetActiveWindow() == p.hwnd ? m::text : m::overlay1);
-        rt->SetTransform(D2D1::Matrix3x2F::Translation(0, cap));
+        P.Text(g_fSmall.Get(), title, {tx + s + 8, 0, CapBtnRect(0).left - 8, cap}, GetActiveWindow() == p.hwnd ? m::text : m::overlay1);
+        // Minimize, maximize or restore, close: drawn here like the settings window's built-in
+        // buttons. DWM's own buttons sat under the glass layer and always looked dimmed.
+        bool active = GetActiveWindow() == p.hwnd;
+        for (int i = 0; i < 3; i++) {
+            D2D1_RECT_F b = CapBtnRect(i);
+            float hov = Glow(kCapId + i);
+            if (p.press == kCapId + i) hov = 1;
+            if (i == 2) P.Fill(b, m::red, 0.92f * hov, 0);
+            else P.Fill(b, m::surface0, 0.85f * hov, 0);
+            UINT32 c = i == 2 && hov > 0.5f ? m::crust : (active || hov > 0 ? m::text : m::overlay1);
+            UINT g = i == 0 ? 0xE921 : i == 1 ? (IsZoomed(p.hwnd) ? 0xE923 : 0xE922) : 0xE8BB;
+            P.Glyph(g_fIconCap.Get(), g, b, c);
+        }
     }
+    rt->SetTransform(D2D1::Matrix3x2F::Scale(p.zoom, p.zoom) * D2D1::Matrix3x2F::Translation(ox, cap + oy));
 
     // Color box.
     float boxGlow = std::max(Glow(HotId(K_Box, 0)), p.drag == 1 ? 1.0f : 0.0f);
@@ -4080,19 +4361,53 @@ static void ApplyGlass(HWND hwnd, bool glass) {
     DwmSetWindowAttribute(hwnd, 36, &text, sizeof(text));
 }
 
+static void MakeEditFont();
+
+// Whenever the client is bigger than the layout (maximized, resized by hand, snapped or stretched
+// by a window manager), the whole layout scales up evenly to fill it (the colour box, fields and
+// buttons all grow together) and is centred on the axis with room left over.
+static void UpdateCaptionGeometry() {
+    Picker& p = g_pk;
+    if (!p.hwnd) return;
+    float oldZoom = p.zoom;
+    p.offX = p.offY = 0;
+    p.zoom = 1;
+    if (!IsIconic(p.hwnd)) {
+        RECT rc;
+        GetClientRect(p.hwnd, &rc);
+        float cw = (float)rc.right, ch = (float)(rc.bottom - p.capPx);
+        float lw = (float)PxOf(p.w), lh = (float)PxOf(p.h);
+        if (lw > 0 && lh > 0) p.zoom = std::clamp(std::min(cw / lw, ch / lh), 1.0f, 4.0f);
+        p.offX = std::max(0, (int)std::lround((cw - lw * p.zoom) / 2));
+        p.offY = std::max(0, (int)std::lround((ch - lh * p.zoom) / 2));
+    }
+    if (p.zoom != oldZoom) MakeEditFont();
+}
+
 static void ResizeToLayout() {
     Picker& p = g_pk;
     if (!p.hwnd) return;
+    if (IsZoomed(p.hwnd)) {  // keep the maximized size; just re-centre
+        UpdateCaptionGeometry();
+        return;
+    }
     RECT r{0, 0, PxOf(p.w), PxOf(p.h)};  // outer size as a normal window; the client also covers the caption
     DWORD style = (DWORD)GetWindowLongPtrW(p.hwnd, GWL_STYLE), ex = (DWORD)GetWindowLongPtrW(p.hwnd, GWL_EXSTYLE);
     AdjustWindowRectExForDpi(&r, style, FALSE, ex, p.dpi);
-    SetWindowPos(p.hwnd, nullptr, 0, 0, r.right - r.left, r.bottom - r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    int w = r.right - r.left, h = r.bottom - r.top;
+    RECT cur{};
+    if (p.userSized && GetWindowRect(p.hwnd, &cur)) {  // a window stretched bigger keeps its size and scales
+        w = std::max(w, (int)(cur.right - cur.left));
+        h = std::max(h, (int)(cur.bottom - cur.top));
+    }
+    SetWindowPos(p.hwnd, nullptr, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    UpdateCaptionGeometry();
 }
 
 static void MakeEditFont() {
     Picker& p = g_pk;
     if (p.editFont) DeleteObject(p.editFont);
-    p.editFont = CreateFontW(-MulDiv(13, p.dpi, 72) * 72 / 96, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0,
+    p.editFont = CreateFontW(-(int)std::lround(MulDiv(13, p.dpi, 72) * 72 / 96 * p.zoom), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0,
                              CLEARTYPE_QUALITY, 0, g_family.c_str());
     if (p.edit) SendMessageW(p.edit, WM_SETFONT, (WPARAM)p.editFont, TRUE);
 }
@@ -4120,7 +4435,10 @@ static void BeginEdit(int f) {
         if (h.kind != K_Num || h.arg != f) continue;
         p.editing = f;
         bool spins = f != F_HEX;
-        RECT r{PxOf(h.r.left + 5), PxOf(h.r.top + 4) + p.capPx, PxOf(h.r.right - (spins ? 18 : 5)), PxOf(h.r.bottom - 4) + p.capPx};
+        int dx = p.offX, dy = p.capPx + p.offY;
+        float z = p.zoom;
+        RECT r{PxOf((h.r.left + 5) * z) + dx, PxOf((h.r.top + 4) * z) + dy, PxOf((h.r.right - (spins ? 18 : 5)) * z) + dx,
+               PxOf((h.r.bottom - 4) * z) + dy};
         SetWindowTextW(p.edit, FieldText(f).c_str());
         SetWindowPos(p.edit, HWND_TOP, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_SHOWWINDOW);
         SetFocus(p.edit);
@@ -4227,7 +4545,7 @@ static void SavePickerState() {
     // virtual-desktop space). GetWindowPlacement's rcNormalPosition lives in a different
     // space and made the window creep up a little every open/close cycle.
     RECT wr;
-    if (GetWindowRect(p.hwnd, &wr)) {
+    if (!IsZoomed(p.hwnd) && !IsIconic(p.hwnd) && GetWindowRect(p.hwnd, &wr)) {
         Wh_SetIntValue(L"WinX", wr.left);
         Wh_SetIntValue(L"WinY", wr.top);
         Wh_SetIntValue(L"WinSaved", 1);
@@ -4300,14 +4618,36 @@ static void Tick() {
         if (v == 0 && target == 0) p.glow.erase(id);
     }
     // Hold Ctrl to follow the color under the mouse, while the picker is in front.
+    // Ctrl alone, held for a moment: a Ctrl+C or Ctrl+V chord never samples, so copying or
+    // pasting no longer swaps the colour for a near shade of whatever sits under the pointer.
+    // Once another key joins, this Ctrl hold stops sampling until Ctrl is let go.
     bool wasSampling = p.sampling;
     p.sampling = false;
-    if (g_set.livePick && p.editing < 0 && GetForegroundWindow() == p.hwnd && (GetAsyncKeyState(VK_CONTROL) & 0x8000) &&
-        !(GetAsyncKeyState(VK_LBUTTON) & 0x8000)) {
+    bool ctrlDown = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+    if (!ctrlDown) {
+        p.ctrlSince = 0;
+        p.ctrlChord = false;
+    } else {
+        // Keys already down when Ctrl went down (a stuck key, a held modifier) don't count;
+        // only a key pressed during this Ctrl hold makes it a chord.
+        bool first = !p.ctrlSince;
+        if (first) p.ctrlSince = GetTickCount64();
+        for (int vk = 0x08; vk <= 0xFE && !p.ctrlChord; vk++) {
+            if (vk == VK_CONTROL || vk == VK_LCONTROL || vk == VK_RCONTROL) continue;
+            bool down = (GetAsyncKeyState(vk) & 0x8000) != 0;
+            if (first) p.ctrlBase[vk] = down;
+            else if (down && !p.ctrlBase[vk]) p.ctrlChord = true;
+        }
+    }
+    if (g_set.livePick && p.editing < 0 && GetForegroundWindow() == p.hwnd && ctrlDown && !p.ctrlChord &&
+        GetTickCount64() - p.ctrlSince >= 300 && !(GetAsyncKeyState(VK_LBUTTON) & 0x8000)) {
         POINT pt;
         RECT wr;
         GetCursorPos(&pt);
-        GetWindowRect(p.hwnd, &wr);
+        // The visible frame plus a margin, so the picker's own edge and shadow are never sampled.
+        if (FAILED(DwmGetWindowAttribute(p.hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &wr, sizeof(wr)))) GetWindowRect(p.hwnd, &wr);
+        int pad = MulDiv(16, p.dpi, 96);
+        InflateRect(&wr, pad, pad);
         if (!PtInRect(&wr, pt)) {
             p.sampling = true;
             if (++p.tick % 2 == 0) {
@@ -4349,29 +4689,47 @@ static void Paint() {
 
 static LRESULT CALLBACK PickerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     Picker& p = g_pk;
-    auto dipX = [&](LPARAM l) { return GET_X_LPARAM(l) * 96.0f / p.dpi; };
-    auto dipY = [&](LPARAM l) { return (GET_Y_LPARAM(l) - p.capPx) * 96.0f / p.dpi; };
-    {
-        LRESULT dr = 0;
-        if (DwmDefWindowProc(hwnd, msg, wp, lp, &dr)) return dr;  // caption buttons hover and click
+    auto dipX = [&](LPARAM l) { return (GET_X_LPARAM(l) - p.offX) * 96.0f / p.dpi / p.zoom; };
+    auto dipY = [&](LPARAM l) { return (GET_Y_LPARAM(l) - p.capPx - p.offY) * 96.0f / p.dpi / p.zoom; };
+    if (p.nativeTitle) {
+        LRESULT r = 0;
+        if (DwmDefWindowProc(hwnd, msg, wp, lp, &r)) return r;  // hover and clicks on DWM's buttons
     }
     switch (msg) {
         case WM_NCCALCSIZE:
+            if (p.nativeTitle) {  // Windows' own title bar: the client starts below it
+                p.capPx = 0;
+                break;
+            }
             if (wp) {
                 auto* np = (NCCALCSIZE_PARAMS*)lp;
                 LONG top = np->rgrc[0].top;
                 DefWindowProcW(hwnd, msg, wp, lp);
-                p.capPx = np->rgrc[0].top - top;
+                LONG defTop = np->rgrc[0].top;
                 np->rgrc[0].top = top;  // client covers the caption; we paint the strip ourselves
+                if (IsZoomed(hwnd)) {  // maximized frames hang past the screen edge; keep the strip on screen
+                    MONITORINFO mi{sizeof(mi)};
+                    if (GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &mi) && mi.rcWork.top > top &&
+                        mi.rcWork.top < defTop)
+                        np->rgrc[0].top = mi.rcWork.top;
+                }
+                p.capPx = defTop - np->rgrc[0].top;
                 return 0;
             }
             break;
         case WM_NCHITTEST: {
             LRESULT ht = DefWindowProcW(hwnd, msg, wp, lp);
-            if (ht != HTCLIENT) return ht;
+            if (ht != HTCLIENT || p.nativeTitle) return ht;
             POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             ScreenToClient(hwnd, &pt);
-            return pt.y < p.capPx ? HTCAPTION : HTCLIENT;
+            if (!IsZoomed(hwnd)) {  // the client covers the top frame, so give its resize edge back
+                int fr = GetSystemMetricsForDpi(SM_CYSIZEFRAME, p.dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, p.dpi);
+                RECT rc;
+                GetClientRect(hwnd, &rc);
+                if (pt.y < fr) return pt.x < fr * 2 ? HTTOPLEFT : pt.x >= rc.right - fr * 2 ? HTTOPRIGHT : HTTOP;
+            }
+            if (pt.y >= p.capPx) return HTCLIENT;
+            return CapBtnAt(pt.x, pt.y) >= 0 ? HTCLIENT : HTCAPTION;
         }
         case WM_NCACTIVATE:
             Invalidate();
@@ -4386,8 +4744,19 @@ static LRESULT CALLBACK PickerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_ERASEBKGND: return 1;
         case WM_SIZE:
             if (p.rt) p.rt->Resize(D2D1::SizeU(LOWORD(lp), HIWORD(lp)));
+            EndEdit(true);
+            UpdateCaptionGeometry();
             Invalidate();
             return 0;
+        case WM_GETMINMAXINFO: {  // never smaller than the layout; bigger scales it up
+            if (!p.hwnd || p.w <= 0) break;
+            RECT r{0, 0, PxOf(p.w), PxOf(p.h)};
+            AdjustWindowRectExForDpi(&r, (DWORD)GetWindowLongPtrW(hwnd, GWL_STYLE), FALSE,
+                                     (DWORD)GetWindowLongPtrW(hwnd, GWL_EXSTYLE), p.dpi);
+            auto* mm = (MINMAXINFO*)lp;
+            mm->ptMinTrackSize = {r.right - r.left, r.bottom - r.top};
+            return 0;
+        }
         case WM_DPICHANGED: {
             p.dpi = HIWORD(wp);
             RECT* s = (RECT*)lp;
@@ -4415,8 +4784,9 @@ static LRESULT CALLBACK PickerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 DragTo(x, y);
                 return 0;
             }
-            const Hot* h = HitTest(x, y);
-            int id = h ? HotId(h->kind, h->arg) : -1;
+            int cb = CapBtnAt(GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
+            const Hot* h = cb >= 0 || GET_Y_LPARAM(lp) < p.capPx ? nullptr : HitTest(x, y);
+            int id = cb >= 0 ? kCapId + cb : h ? HotId(h->kind, h->arg) : -1;
             if (id != p.hover) {
                 p.hover = id;
                 Invalidate();
@@ -4432,6 +4802,10 @@ static LRESULT CALLBACK PickerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_SETCURSOR:
             if (LOWORD(lp) == HTCLIENT) {
+                if (p.hover >= kCapId) {
+                    SetCursor(LoadCursorW(nullptr, IDC_ARROW));
+                    return TRUE;
+                }
                 bool hand = p.hover >= 0 && p.hover / 64 != K_Box && p.hover / 64 != K_Slider && p.hover / 64 != K_Num;
                 bool cross = p.hover / 64 == K_Box && p.hover >= 0;
                 bool ibeam = p.hover >= 0 && p.hover / 64 == K_Num;
@@ -4443,6 +4817,12 @@ static LRESULT CALLBACK PickerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             float x = dipX(lp), y = dipY(lp);
             if (p.editing >= 0) EndEdit(true);
             SetFocus(hwnd);
+            if (int cb = CapBtnAt(GET_X_LPARAM(lp), GET_Y_LPARAM(lp)); cb >= 0) {
+                p.press = kCapId + cb;
+                SetCapture(hwnd);
+                Invalidate();
+                return 0;
+            }
             const Hot* h = HitTest(x, y);
             if (!h) return 0;
             if (h->kind == K_Box || h->kind == K_Slider) {
@@ -4467,6 +4847,16 @@ static LRESULT CALLBACK PickerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             int pressed = p.press;
             p.press = -1;
+            if (pressed >= kCapId) {
+                int cb = CapBtnAt(GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
+                Invalidate();
+                if (cb != pressed - kCapId) return 0;
+                p.hover = -1;
+                if (cb == 0) ShowWindow(hwnd, SW_MINIMIZE);
+                else if (cb == 1) ShowWindow(hwnd, IsZoomed(hwnd) ? SW_RESTORE : SW_MAXIMIZE);
+                else PostMessageW(hwnd, WM_CLOSE, 0, 0);
+                return 0;
+            }
             const Hot* h = HitTest(dipX(lp), dipY(lp));
             if (h && pressed == HotId(h->kind, h->arg)) {
                 Hot copy = *h;
@@ -4481,7 +4871,7 @@ static LRESULT CALLBACK PickerProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_MOUSEWHEEL: {
             POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             ScreenToClient(hwnd, &pt);
-            float x = pt.x * 96.0f / p.dpi, y = (pt.y - p.capPx) * 96.0f / p.dpi;
+            float x = (pt.x - p.offX) * 96.0f / p.dpi / p.zoom, y = (pt.y - p.capPx - p.offY) * 96.0f / p.dpi / p.zoom;
             int dir = GET_WHEEL_DELTA_WPARAM(wp) > 0 ? 1 : -1, mul = (GET_KEYSTATE_WPARAM(wp) & MK_SHIFT) ? 10 : 1;
             const Hot* h = HitTest(x, y);
             if (!h) return 0;
@@ -4571,7 +4961,13 @@ static void OpenPicker(const Color* start, const POINT* pos = nullptr) {
     p.glassOn = g_set.glass;
     Layout();
     DWORD ex = g_set.onTop ? WS_EX_TOPMOST : 0;
-    DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN;
+    // Built-in title bar: no WS_SYSMENU, so DWM draws no buttons of its own and the title strip
+    // draws them (see DrawPicker). Native title bar: the system menu stays and Windows draws all of it.
+    p.nativeTitle = g_set.nativeTitle;
+    p.zoom = 1;
+    p.userSized = false;
+    DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_CLIPCHILDREN |
+                  (p.nativeTitle ? WS_SYSMENU : 0);
     HWND hwnd = CreateWindowExW(ex, kPickerClass, L"Seamless Color Picker", style, CW_USEDEFAULT, CW_USEDEFAULT, 200, 200,
                                 nullptr, nullptr, g_inst, nullptr);
     if (!hwnd) return;
@@ -4620,6 +5016,7 @@ static void OpenPicker(const Color* start, const POINT* pos = nullptr) {
         SetWindowPos(hwnd, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
     ShowWindow(hwnd, SW_SHOW);
+    p.userSized = true;
     SetForegroundWindow(hwnd);
     SetFocus(hwnd);
     SetTimer(hwnd, kTimerAnim, 16, nullptr);
@@ -5094,6 +5491,13 @@ static void ApplySettingsLive() {
     Picker& p = g_pk;
     if (p.hwnd) {
         SetWindowPos(p.hwnd, g_set.onTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        if (p.nativeTitle != g_set.nativeTitle) {  // swap title bars in place
+            EndEdit(true);
+            p.nativeTitle = g_set.nativeTitle;
+            LONG_PTR st = GetWindowLongPtrW(p.hwnd, GWL_STYLE);
+            SetWindowLongPtrW(p.hwnd, GWL_STYLE, p.nativeTitle ? st | WS_SYSMENU : st & ~WS_SYSMENU);
+            SetWindowPos(p.hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
         p.glassOn = g_set.glass;
         ApplyGlass(p.hwnd, p.glassOn);
         MakeEditFont();
@@ -5193,7 +5597,7 @@ static DWORD WINAPI ThreadProc(void*) {
     }
     UnregisterClasses();
     g_fLabel.Reset(), g_fValue.Reset(), g_fBig.Reset(), g_fSmall.Reset(), g_fBtn.Reset(), g_fIcon.Reset(), g_fIconS.Reset(),
-        g_fIconXS.Reset(), g_fTitle.Reset();
+        g_fIconXS.Reset(), g_fIconCap.Reset(), g_fTitle.Reset();
     g_wic.Reset(), g_dw.Reset(), g_d2d.Reset();
     CoUninitialize();
     return 0;

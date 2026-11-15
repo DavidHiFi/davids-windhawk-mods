@@ -6,7 +6,7 @@
 // @id              seamless-launchpad
 // @name            Seamless Launchpad
 // @description     A fullscreen GPU rendered grid of all your apps in place of Start, with instant search, adjustable blur, wiggle edit mode and power buttons
-// @version         2.4.3
+// @version         2.4.9
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -255,16 +255,10 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
   $description: Off, everything snaps instantly. Opening, folders, hover fades, tile moves and wiggle all turn off.
 - settingsGlass: true
   $name: Blurred settings window
-  $description: On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Save, then reopen settings to apply.
+  $description: On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.
 - nativeSettingsTitleBar: false
   $name: Native Windows title bar
-  $description: Use the Windows title bar and window buttons for this settings window. Save, then reopen settings to apply.
-- settingsTitleButtons: native
-  $name: Title bar buttons
-  $description: Who draws minimize, maximize and close on the window's own title bar. Windows buttons look like every other app's, title bar mods included. Save, then reopen settings to apply.
-  $options:
-  - native: Windows buttons (like other apps)
-  - builtin: Built-in buttons
+  $description: Use the Windows title bar and window buttons for this settings window. Applies when you save.
 - settingsTrayIcon: true
   $name: Tray icon
   $description: A Launchpad icon in the system tray. Click it to open these settings, right-click it for a menu.
@@ -3883,8 +3877,16 @@ void DrawGrid() {
         float thumb = std::max(40 * s, track * track / L.contentHeight);
         float top = L.viewTop + (track - thumb) * (g_scroll / maxScroll);
         float right = (float)L.width - 10 * s;
-        Fill(D2D1::RectF(right - 4 * s, top, right, top + thumb),
-             D2D1::ColorF(0x45475A, 0.8f), 2 * s);
+        // Blue to mauve, top to bottom, like every scrollbar in the Seamless mods.
+        D2D1_RECT_F bar = D2D1::RectF(right - 4 * s, top, right, top + thumb);
+        D2D1_GRADIENT_STOP stops[2] = {{0, D2D1::ColorF(0x89B4FA, 0.85f)}, {1, D2D1::ColorF(0xCBA6F7, 0.85f)}};
+        ComPtr<ID2D1GradientStopCollection> coll;
+        ComPtr<ID2D1LinearGradientBrush> grad;
+        if (SUCCEEDED(g_target->CreateGradientStopCollection(stops, 2, &coll)) &&
+            SUCCEEDED(g_target->CreateLinearGradientBrush(
+                D2D1::LinearGradientBrushProperties(D2D1::Point2F(bar.left, bar.top), D2D1::Point2F(bar.left, bar.bottom)),
+                coll.Get(), &grad)))
+            g_target->FillRoundedRectangle(D2D1::RoundedRect(bar, 2 * s, 2 * s), grad.Get());
     }
 }
 
@@ -4413,6 +4415,9 @@ struct SetField {
     PCWSTR group = L"";  // Heading above it on that page.
     std::wstring value;  // As loaded, so a save writes only what changed.
     std::wstring cur;    // What the window shows now.
+    float fitW = 0;      // Box width that fits the text (Set_FitBoxes); 0 until measured.
+    float fitText = -1;  // Measured text width behind fitW.
+    std::wstring fitFor; // The text that was measured.
 };
 
 // Names, descriptions and option labels match the ==WindhawkModSettings== block word for word.
@@ -4452,9 +4457,8 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"wiggle", L"Edit mode wiggle", L"While you drag an icon, all icons wiggle like on iOS.", L"1", {}, 0, 100, 1, L"Grid"},
 {K::Number, L"holdTime", L"Drag hold time", L"150 to 1500 (Suggested: 420). Milliseconds to hold an icon before dragging starts.", L"420", {}, 150, 1500, 1, L"Grid"},
 {K::Check, L"animations", L"Animations", L"Off, everything snaps instantly. Opening, folders, hover fades, tile moves and wiggle all turn off.", L"1", {}, 0, 100, 1, L"Grid"},
-{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Save, then reopen settings to apply.", L"1", {}, 0, 100, 2, L"Settings window"},
-{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Save, then reopen settings to apply.", L"0", {}, 0, 100, 2, L"Settings window"},
-{K::Choice, L"settingsTitleButtons", L"Title bar buttons", L"Who draws minimize, maximize and close on the window's own title bar. Windows buttons look like every other app's, title bar mods included. Save, then reopen settings to apply.", L"native", {{L"native", L"Windows buttons (like other apps)"}, {L"builtin", L"Built-in buttons"}}, 0, 100, 2, L"Settings window"},
+{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 2, L"Settings window"},
+{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 2, L"Settings window"},
 {K::Check, L"settingsTrayIcon", L"Tray icon", L"A Launchpad icon in the system tray. Click it to open these settings, right-click it for a menu.", L"1", {}, 0, 100, 2, L"Settings window"}
     };
 }
@@ -4478,13 +4482,14 @@ constexpr float kSetAboutGap = 17;
 // All sizes are DIPs; the render target does the scaling.
 constexpr float kSetPadX = 40, kSetMaxW = 720, kSetRowMin = 56, kSetRowGap = 8, kSetBoxH = 32, kSetRowPad = 16,
                 kSetDropItem = 32, kSetRailTop = 76, kSetRailItem = 36, kSetRailPitch = 40;
+constexpr int kSetDropMax = 9;  // A dropdown with more options than this scrolls.
 // The sidebar is a floating dock: dragged between min and max, or collapsed to an icon rail.
 constexpr float kSetDockGap = 10, kSetRailDef = 232, kSetRailMin = 200, kSetRailMax = 380, kSetRailMini = 60,
                 kSetRailSnap = 130, kSetEdgeGrab = 5;
 // The footer is a floating pill dock at the bottom right of the page.
 constexpr float kSetFootBtnH = 36, kSetFootPad = 8, kSetFootH = kSetFootBtnH + 2 * kSetFootPad, kSetFootGap = 14;
 // The glass tint is one layer over the whole window, title bar included, so the two always match.
-constexpr float kSetGlassTint = 0.42f, kSetNativeFade = 56;
+constexpr float kSetGlassTint = 0.55f, kSetNativeFade = 56;
 constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
@@ -4526,13 +4531,13 @@ struct SetWindow {
     int capDown = 0;  // Title bar button held down: 1 minimize, 2 maximize, 3 close.
     bool capTracking = false, active = true;
     bool nativeTitle = false;  // Windows draws the title bar and its buttons.
-    bool nativeButtons = false;  // Own title bar, but Windows draws minimize, maximize and close.
     bool glass = false;        // Acrylic behind the window; the page is drawn see-through.
     ULONGLONG lastTick = 0;
     int page = 0, recording = -1, editing = -1, focus = -1, openSel = -1;
     bool kbd = false;  // Show the focus ring (after a Tab).
     D2D1_RECT_F dropRect{};
-    int dropHover = -1;
+    int dropHover = -1, dropTop = 0;  // dropTop: first option shown when the dropdown scrolls.
+    bool frameApplied = false;        // Set_ApplyFrame has run once.
     float scrollY = 0, scrollTarget = 0, contentH = 0, contentX = 0, contentW = 720, pageT = 1;
     SetHit hover;
     int dragSlider = -1;
@@ -4823,16 +4828,60 @@ static float Set_TextW(IDWriteTextFormat* fmt, const std::wstring& text) {
     return m.widthIncludingTrailingWhitespace;
 }
 
+// Boxes grow to fit their text, so no option, hotkey or value is ever cut off: a choice box fits
+// its longest option, a hotkey or text box its value. A box never takes more than half the row;
+// past that the dropdown list still shows every option in full. Text is measured only when it
+// changes. Returns true when a width changed, so the page is laid out again.
+static bool Set_FitBoxes(SetWindow& w) {
+    if (!w.fValue) return false;
+    bool changed = false;
+    const float cap = std::floor(w.contentW * 0.5f);
+    for (auto& f : w.fields) {
+        float base, pad;
+        std::wstring text;
+        if (f.kind == SetField::Choice) {
+            base = 200, pad = 46;  // 12 before the text, 30 for the arrow, 4 spare.
+            for (const auto& o : f.options) text += std::wstring(o.second) + L'\n';
+        } else if (f.kind == SetField::Hotkey) {
+            base = 220, pad = 60;  // The key cap's own padding and the clear button.
+            text = f.cur;
+        } else if (f.kind == SetField::Text) {
+            base = 280, pad = 26;
+            text = f.cur;
+        } else {
+            continue;
+        }
+        if (f.fitText < 0 || text != f.fitFor) {
+            float m = 0;
+            if (f.kind == SetField::Choice) {
+                for (const auto& o : f.options) m = std::max(m, Set_TextW(w.fValue.get(), o.second));
+            } else {
+                m = Set_TextW(w.fValue.get(), f.cur);
+            }
+            f.fitText = std::ceil(m);
+            f.fitFor = text;
+        }
+        float want = std::min(std::max(base, f.fitText + pad), std::max(base, cap));
+        if (fabsf(want - f.fitW) > 0.5f) {
+            f.fitW = want;
+            changed = true;
+        }
+    }
+    return changed;
+}
+
 // ---- Layout -----------------------------------------------------------------
 
 // The right-hand control's width, so the label column knows how much room it has.
+static float Set_FitOr(const SetField& f, float base) { return f.fitW > 0 ? f.fitW : base; }
+
 static float Set_ControlW(const SetField& f) {
     switch (f.kind) {
         case SetField::Check: return 40;
-        case SetField::Choice: return 200;
+        case SetField::Choice: return Set_FitOr(f, 200);
         case SetField::Number: return f.max - f.min <= 100 ? 150 + 12 + 64 : 96;
-        case SetField::Text: return 280;
-        case SetField::Hotkey: return 220;
+        case SetField::Text: return Set_FitOr(f, 280);
+        case SetField::Hotkey: return Set_FitOr(f, 220);
         case SetField::Color: return 362;
     }
     return 100;
@@ -4871,7 +4920,7 @@ static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
             p.box = {r - 40, mid - 11, r, mid + 11};
             break;
         case SetField::Choice:
-            p.box = {r - 200, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 200), mid - h, r, mid + h};
             break;
         case SetField::Number:
             if (f.max - f.min <= 100) {
@@ -4883,10 +4932,10 @@ static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
             }
             break;
         case SetField::Text:
-            p.box = {r - 280, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 280), mid - h, r, mid + h};
             break;
         case SetField::Hotkey:
-            p.box = {r - 220, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 220), mid - h, r, mid + h};
             p.clear = {p.box.right - 30, p.box.top, p.box.right, p.box.bottom};
             break;
         case SetField::Color: {
@@ -5393,7 +5442,9 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
 static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
     D2D1_RECT_F d = Set_FooterDock(w);
     const float rad = kSetFootH / 2, brad = kSetFootBtnH / 2;
-    p.Round(d, rad, mocha::mantle, w.render ? 1.0f : 0.85f);
+    // The same see-through mantle as the rail dock, so the blurred rows under the pill read as
+    // real glass instead of a near-solid bar.
+    p.Round(d, rad, mocha::mantle, w.render ? 1.0f : (w.glass ? 0.58f : 0.85f));
     const D2D1_RECT_F edge{d.left + 2, d.top + 2, d.right - 2, d.bottom - 2};
     p.rt->DrawRoundedRectangle(D2D1::RoundedRect(edge, rad - 2, rad - 2),
                               p.B(mocha::overlay0, 0.9f * (1 - w.footGlow)), 2.75f);
@@ -5415,23 +5466,61 @@ static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
 }
 
 
+// Every scrollbar thumb in every mod: a top to bottom blue to mauve gradient, brighter while
+// hovered or dragged. Never a flat grey thumb.
+static void Set_ThumbFill(SetPaint& p, const D2D1_RECT_F& r, float a) {
+    if (r.bottom <= r.top) return;
+    float rad = (r.right - r.left) / 2;
+    SetCom<ID2D1LinearGradientBrush> g;
+    D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::blue, a * p.fade)}, {1, D2DColor(mocha::mauve, a * p.fade)}};
+    SetCom<ID2D1GradientStopCollection> coll;
+    if (SUCCEEDED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
+        SUCCEEDED(p.rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.left, r.bottom)),
+            coll.get(), g.put())))
+        p.rt->FillRoundedRectangle(D2D1::RoundedRect(r, rad, rad), g.get());
+}
+
+static int Set_DropVisible(const SetWindow& w) {
+    return w.openSel < 0 ? 0 : std::min((int)w.fields[w.openSel].options.size(), kSetDropMax);
+}
+
+// Keeps option i inside the visible part of a scrolling dropdown.
+static void Set_DropShow(SetWindow& w, int i) {
+    int vis = Set_DropVisible(w), n = w.openSel < 0 ? 0 : (int)w.fields[w.openSel].options.size();
+    if (i < 0 || vis <= 0) return;
+    if (i < w.dropTop) w.dropTop = i;
+    if (i >= w.dropTop + vis) w.dropTop = i - vis + 1;
+    w.dropTop = std::clamp(w.dropTop, 0, std::max(0, n - vis));
+}
+
 static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
     if (w.openSel < 0) return;
     const SetField& f = w.fields[w.openSel];
     const D2D1_RECT_F& r = w.dropRect;
+    const int n = (int)f.options.size(), vis = Set_DropVisible(w);
+    const bool scrolls = n > vis;
     D2D1_RECT_F shadow{r.left - 1, r.top + 3, r.right + 1, r.bottom + 5};
     p.Round(shadow, 12, mocha::crust, 0.6f);
     p.Round(r, 10, mocha::mantle);
     p.GradRing(r, 10, 0.9f);
-    for (size_t i = 0; i < f.options.size(); i++) {
-        D2D1_RECT_F it{r.left + 4, r.top + 4 + i * kSetDropItem, r.right - 4, r.top + 4 + (i + 1) * kSetDropItem};
+    const float right = r.right - (scrolls ? 12 : 4);
+    for (int v = 0; v < vis; v++) {
+        int i = w.dropTop + v;
+        if (i >= n) break;
+        D2D1_RECT_F it{r.left + 4, r.top + 4 + v * kSetDropItem, right, r.top + 4 + (v + 1) * kSetDropItem};
         bool sel = f.cur == f.options[i].first;
-        if ((int)i == w.dropHover) {
+        if (i == w.dropHover) {
             p.GradFill(it, 6, 0.28f);
             p.GradRing(it, 6, 0.6f, 1);
         }
         p.Text(w.fValue.get(), f.options[i].second, {it.left + 10, it.top, it.right - 28, it.bottom}, sel ? mocha::blue : mocha::text);
         if (sel) p.Glyph(w.fIconS.get(), 0xE73E, {it.right - 28, it.top, it.right - 6, it.bottom}, mocha::blue);
+    }
+    if (scrolls) {
+        float track = r.bottom - r.top - 12, th = std::max(24.0f, track * vis / n);
+        float top = r.top + 6 + (track - th) * w.dropTop / std::max(1, n - vis);
+        Set_ThumbFill(p, {r.right - 9, top, r.right - 5, top + th}, 0.85f);
     }
 }
 
@@ -5443,7 +5532,7 @@ static D2D1_RECT_F Set_CapButton(const SetWindow& w, int i) {
 
 // y is in content DIPs, so the title bar is y < 0.
 static int Set_CapButtonAt(const SetWindow& w, float x, float y) {
-    if (w.nativeTitle || w.nativeButtons) return -1;
+    if (w.nativeTitle) return -1;
     for (int i = 0; i < 3; i++)
         if (Set_In(Set_CapButton(w, i), x, y + kSetCapH)) return i;
     return -1;
@@ -5476,7 +5565,6 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
     float mid = kSetCapH / 2;
     Set_DrawMark(p, w.fCapGlyph.get(), {t.left, mid - 8, t.left + 16, mid + 8}, w.active ? 1.0f : 0.6f);
     p.Text(w.fCap.get(), kSetTitle, {t.left + 24, 0, t.right, kSetCapH}, w.active ? mocha::text : mocha::overlay1);
-    if (w.nativeButtons) return;  // DWM draws them over this title bar.
     for (int i = 0; i < 3; i++) {
         D2D1_RECT_F b = Set_CapButton(w, i);
         float hov = Set_GlowOf(w, 20 + i);
@@ -5491,7 +5579,13 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
 
 // Draws the whole window into rt (DIPs). The target's DPI does the scaling.
 // The title bar is drawn first; everything else is in content DIPs, shifted down by kSetCapH.
+static void Set_PlaceEdit(SetWindow& w);
+
 static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
+    if (Set_FitBoxes(w)) {
+        Set_BuildPage(w);
+        Set_PlaceEdit(w);
+    }
     SetPaint p(w, rt);
     const auto base = D2D1::Matrix3x2F::Translation(0, kSetCapH);
     rt->BeginDraw();
@@ -5504,7 +5598,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
         const float total = w.ch + kSetCapH;
         if (w.nativeTitle) {
             SetCom<ID2D1LinearGradientBrush> fade;
-            D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::crust, 0)}, {1, D2DColor(mocha::crust, kSetGlassTint)}};
+            D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::crust, kSetGlassTint)}, {1, D2DColor(mocha::crust, kSetGlassTint)}};
             SetCom<ID2D1GradientStopCollection> coll;
             if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
                 SUCCEEDED(rt->CreateLinearGradientBrush(
@@ -5611,7 +5705,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     rt->SetTransform(base);
 
     D2D1_RECT_F th = Set_ScrollThumb(w);
-    if (th.bottom > th.top) p.Round(th, 3, w.dragScroll ? mocha::overlay1 : mocha::surface2, 0.9f);
+    Set_ThumbFill(p, th, w.dragScroll || w.hover.kind == SetHit::Scroll ? 1.0f : 0.7f);
 
     Set_DrawFooter(p, w);
     Set_DrawRail(p, w);
@@ -5637,8 +5731,9 @@ static SetHit Set_Hit(SetWindow& w, float x, float y) {
     }
     if (w.openSel >= 0) {
         if (Set_In(w.dropRect, x, y)) {
-            int i = (int)((y - w.dropRect.top - 4) / kSetDropItem);
-            if (i >= 0 && i < (int)w.fields[w.openSel].options.size() && y >= w.dropRect.top + 4) {
+            int v = (int)((y - w.dropRect.top - 4) / kSetDropItem), i = w.dropTop + v;
+            if (v >= 0 && v < Set_DropVisible(w) && i < (int)w.fields[w.openSel].options.size() &&
+                y >= w.dropRect.top + 4 && x < w.dropRect.right - (Set_DropVisible(w) < (int)w.fields[w.openSel].options.size() ? 12 : 4)) {
                 h.kind = SetHit::Drop;
                 h.a = w.openSel;
                 h.b = i;
@@ -5812,6 +5907,7 @@ static void Set_ClosePopup(SetWindow& w) {
     if (w.openSel < 0) return;
     w.openSel = -1;
     w.dropHover = -1;
+    w.dropTop = 0;
     Set_Invalidate(w);
 }
 
@@ -5821,14 +5917,22 @@ static void Set_OpenPopup(SetWindow& w, int k) {
     const SetField& f = w.fields[k];
     SetParts pt = Set_Parts(f, Set_RowRect(w, *it));
     float boxTop = pt.box.top - w.scrollY, boxBottom = pt.box.bottom - w.scrollY;
-    float h = (float)f.options.size() * kSetDropItem + 8;
+    const int n = (int)f.options.size(), vis = std::min(n, kSetDropMax);
+    float h = (float)vis * kSetDropItem + 8;
     float top = boxBottom + 4;
     if (top + h > Set_ViewH(w) + 20 && boxTop - 4 - h > 0) top = boxTop - 4 - h;  // No room below: open upward.
-    w.dropRect = {pt.box.left, top, pt.box.right, top + h};
+    // As wide as the longest option (text, check mark, scrollbar), growing leftward from the box.
+    float textW = 0;
+    for (const auto& o : f.options) textW = std::max(textW, Set_TextW(w.fValue.get(), o.second));
+    float width = std::max(pt.box.right - pt.box.left, std::ceil(textW) + 52 + (n > vis ? 8 : 0));
+    float left = std::max(pt.box.right - width, Set_RailSpace(w) + 8);
+    w.dropRect = {left, top, std::max(pt.box.right, left + width), top + h};
     w.openSel = k;
     w.dropHover = -1;
-    for (size_t i = 0; i < f.options.size(); i++)
-        if (f.cur == f.options[i].first) w.dropHover = (int)i;
+    w.dropTop = 0;
+    for (int i = 0; i < n; i++)
+        if (f.cur == f.options[i].first) w.dropHover = i;
+    Set_DropShow(w, w.dropHover);
     Set_Invalidate(w);
 }
 
@@ -6052,6 +6156,8 @@ static std::wstring Set_ChangedParams(SetWindow& w, int& changed) {
     return params;
 }
 
+static void Set_ApplyFrame(SetWindow& w);
+
 static void Set_Save(std::shared_ptr<SetWindow> keep) {
     SetWindow& w = *keep;
     if (w.saving) return;
@@ -6142,6 +6248,7 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
         Set_SetStatus(w, L"Windhawk didn't answer in 15 seconds. Settings may not be saved.", true);
     } else if (code == 0) {
         Set_LoadFields(w);  // Shows what was stored.
+        Set_ApplyFrame(w);  // The title bar and glass switches take effect now, no reopen.
         Set_SetStatus(w, L"Saved");
     } else {
         Wh_Log(L"windhawk-cli exit code %lu", code);
@@ -6300,8 +6407,8 @@ static bool Set_OnKey(SetWindow& w, UINT vk) {
         const SetField& f = w.fields[w.openSel];
         int n = (int)f.options.size();
         if (vk == VK_ESCAPE) Set_ClosePopup(w);
-        else if (vk == VK_UP) w.dropHover = (w.dropHover - 1 + n) % n;
-        else if (vk == VK_DOWN) w.dropHover = (w.dropHover + 1) % n;
+        else if (vk == VK_UP) Set_DropShow(w, w.dropHover = w.dropHover < 0 ? n - 1 : (w.dropHover - 1 + n) % n);
+        else if (vk == VK_DOWN) Set_DropShow(w, w.dropHover = w.dropHover < 0 ? 0 : (w.dropHover + 1) % n);
         else if (vk == VK_RETURN || vk == VK_SPACE) Set_Choose(w, w.openSel, w.dropHover);
         Set_Invalidate(w);
         return true;
@@ -6374,6 +6481,87 @@ static void Set_Relayout(SetWindow& w) {
     Set_BuildAndClamp(w);
 }
 
+// A switch's stored value, found by the end of its key so a "SettingsWindow." prefix still matches.
+static bool Set_FieldOn(const SetWindow& w, PCWSTR key, bool def) {
+    const size_t n = wcslen(key);
+    for (const auto& f : w.fields) {
+        const size_t m = wcslen(f.key);
+        if (m >= n && wcscmp(f.key + m - n, key) == 0 && (m == n || f.key[m - n - 1] == L'.')) return f.value == L"1";
+    }
+    return def;
+}
+
+// "Native Windows title bar" and "Blurred settings window", applied to the live window: on first
+// open and again whenever a save or a reload changes them, so neither needs a reopen.
+static void Set_ApplyFrame(SetWindow& w) {
+    if (w.render || !w.hwnd) return;
+    const HWND hwnd = w.hwnd;
+    const bool native = Set_FieldOn(w, L"nativeSettingsTitleBar", false), glass = Set_FieldOn(w, L"settingsGlass", true);
+    const bool first = !w.frameApplied, wasGlass = w.glass;
+    if (!first && native == w.nativeTitle && glass == w.glass) return;
+    w.frameApplied = true;
+    w.nativeTitle = native;
+    w.glass = glass;
+    kSetCapH = native ? 0.0f : 40.0f;
+    struct SetAccentPolicy { int state, flags, abgr, animation; };
+    struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
+    auto setComposition =
+        (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
+    if (glass) {
+        // Acrylic as one sheet over the whole window, the same material Seamless Flyouts
+        // gives the Launchpad settings window in Explorer: the accent acrylic with an 85%
+        // Mocha base tint, under the page's own crust tint. The system backdrop
+        // (DWMSBT_TRANSIENTWINDOW) went light grey over bright windows and turned to a flat
+        // grey slab when the window lost focus; the accent acrylic stays the same.
+        int backdrop = 1;  // DWMSBT_NONE
+        DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+        bb.fEnable = TRUE;
+        bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+        if (setComposition) {
+            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
+            SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(hwnd, &data);
+        }
+        MARGINS margins{-1, -1, -1, -1};
+        DwmExtendFrameIntoClientArea(hwnd, &margins);
+        COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
+        DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+    } else if (wasGlass) {
+        // Glass switched off while open: back to a plain solid window.
+        if (setComposition) {
+            SetAccentPolicy policy{0, 0, 0, 0};
+            SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(hwnd, &data);
+        }
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE;
+        bb.fEnable = FALSE;
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        MARGINS margins{0, 0, 0, 0};
+        DwmExtendFrameIntoClientArea(hwnd, &margins);
+        int backdrop = 0;  // DWMSBT_AUTO
+        DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+        COLORREF caption = RefFromRgb(mocha::crust);
+        DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &caption, sizeof(caption));
+    }
+    // With the frame extended DWM would draw its own minimize, maximize and close buttons over the
+    // built-in title bar; without a system menu it draws none. The Windows title bar keeps it.
+    // Minimize, maximize and close still work from the taskbar either way.
+    LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    SetWindowLongPtrW(hwnd, GWL_STYLE, native ? (style | WS_SYSMENU) : (style & ~WS_SYSMENU));
+    // Set_WndProc's WM_NCCALCSIZE drops or keeps the system title bar to match.
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    if (!first) {
+        Set_Relayout(w);
+        RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_FRAME | RDW_UPDATENOW);
+    }
+}
+
 static void Set_RememberRect(SetWindow& w) {
     if (w.render || IsIconic(w.hwnd) || IsZoomed(w.hwnd)) return;
     GetWindowRect(w.hwnd, &w.normalRect);
@@ -6382,14 +6570,19 @@ static void Set_RememberRect(SetWindow& w) {
 static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     SetWindow* w = g_setWin && g_setWin->hwnd == hwnd ? g_setWin.get() : nullptr;
     if (!w) return DefWindowProcW(hwnd, msg, wParam, lParam);
-    if (w->nativeButtons || w->nativeTitle) {
+    if (w->nativeTitle) {
         LRESULT r = 0;
         if (DwmDefWindowProc(hwnd, msg, wParam, lParam, &r)) return r;  // Hover and clicks on DWM's buttons.
     }
     auto dipX = [&](LPARAM l) { return (float)(short)LOWORD(l) * 96.0f / w->dpi; };
     auto dipY = [&](LPARAM l) { return (float)(short)HIWORD(l) * 96.0f / w->dpi - kSetCapH; };
     switch (msg) {
-        case WM_APP_SETTINGS_RELOAD: if (!w->saving) Set_LoadFields(*w); return 0;
+        case WM_APP_SETTINGS_RELOAD:
+            if (!w->saving) {
+                Set_LoadFields(*w);
+                Set_ApplyFrame(*w);
+            }
+            return 0;
         case WM_APP_SETTINGS_ACTIVATE: ShowWindow(hwnd, SW_RESTORE); ForceForeground(hwnd); return 0;
         case WM_NCCALCSIZE:
             // No system title bar: keep the side and bottom frames, the client starts at the top edge.
@@ -6622,6 +6815,16 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             }
             return 0;
         case WM_MOUSEWHEEL: {
+            if (w->openSel >= 0 && Set_In(w->dropRect, w->mouseX, w->mouseY)) {
+                int n = (int)w->fields[w->openSel].options.size(), vis = Set_DropVisible(*w);
+                int step = GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? -3 : 3;
+                w->dropTop = std::clamp(w->dropTop + step, 0, std::max(0, n - vis));
+                SetHit h = Set_Hit(*w, w->mouseX, w->mouseY);
+                w->hover = h;
+                w->dropHover = h.kind == SetHit::Drop ? h.b : w->dropHover;
+                Set_Invalidate(*w);
+                return 0;
+            }
             Set_CommitEdit(*w, true);
             Set_ClosePopup(*w);
             float delta = (float)GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
@@ -6762,11 +6965,8 @@ static bool Set_Create(bool render) {
                                    GetModuleHandleW(nullptr), nullptr);
     }
     const int offX = GetSystemMetrics(SM_XVIRTUALSCREEN) - 6000, offY = GetSystemMetrics(SM_YVIRTUALSCREEN);
-    w->nativeTitle = !render && (Wh_GetIntSetting(L"nativeSettingsTitleBar") != 0 ||
-        GetStringSetting(L"settingsTitleButtons") != L"builtin");
-    w->nativeButtons = !render && !w->nativeTitle && GetStringSetting(L"settingsTitleButtons") != L"builtin";
-    w->glass = !render && Wh_GetIntSetting(L"settingsGlass") != 0;
-    kSetCapH = w->nativeTitle ? 0.0f : 40.0f;
+    // The built-in title bar until Set_ApplyFrame reads the switches.
+    kSetCapH = 40.0f;
     const DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
     HWND hwnd = CreateWindowExW(0, kSettingsClass, L"Seamless Launchpad settings", style,
                                 render ? offX : CW_USEDEFAULT, render ? offY : CW_USEDEFAULT, 800, 600, w->owner,
@@ -6793,31 +6993,7 @@ static bool Set_Create(bool render) {
         w->iconBig = Set_MakeIcon(w->iconFamily, GetSystemMetricsForDpi(SM_CXICON, w->dpi));
         if (w->iconSmall) SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)w->iconSmall);
         if (w->iconBig) SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)w->iconBig);
-        if (w->glass) {
-            // Windows acrylic as one sheet over the whole window, the way T3 (Electron
-            // backgroundMaterial "acrylic") does it: the system backdrop with the frame extended
-            // into the full client area, and no caption color, so the title bar and the page are
-            // the same material and turn solid together when the window loses focus.
-            int backdrop = 3;  // DWMSBT_TRANSIENTWINDOW
-            DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
-            MARGINS margins{-1, -1, -1, -1};
-            DwmExtendFrameIntoClientArea(hwnd, &margins);
-            COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
-            DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
-        } else if (w->nativeButtons) {
-            // Solid window: DWM draws its buttons only where the frame reaches, so extend it
-            // over the title bar strip.
-            MARGINS margins{0, 0, MulDiv((int)kSetCapH, w->dpi, 96), 0};
-            DwmExtendFrameIntoClientArea(hwnd, &margins);
-        }
-        // With the frame extended, DWM draws its own minimize, maximize and close buttons in the
-        // corner. "Windows buttons" keeps them (Set_WndProc passes their hover and clicks to
-        // DwmDefWindowProc); "Built-in buttons" drops the system menu so DWM draws none and the
-        // window draws its own. Minimize, maximize and close still work from the taskbar.
-        if (!w->nativeTitle && !w->nativeButtons)
-            SetWindowLongPtrW(hwnd, GWL_STYLE, GetWindowLongPtrW(hwnd, GWL_STYLE) & ~WS_SYSMENU);
-        // The first WM_NCCALCSIZE ran before w->hwnd was set; drop the system title bar now.
-        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        Set_ApplyFrame(*w);  // Title bar and glass; also drops the system title bar the first WM_NCCALCSIZE kept.
     }
 
     auto outer = [&](float cwDip, float chDip, SIZE& size) {

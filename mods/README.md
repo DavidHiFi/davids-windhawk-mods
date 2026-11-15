@@ -16,43 +16,52 @@ is in the repo but disabled on the source machine right now.
 | [Seamless Media Player](local/seamless-media-player) | A media player with a live audio visualizer beside it, right on the taskbar. | 1.10.4 | MIT |
 | [Taskbar System Info Plus](local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar, with optional graphs. | 1.4.29 | GPL-3.0 |
 | [Taskbar AI Usage Plus](local/taskbar-ai-usage-plus) | Claude, Codex, Antigravity and Copilot limits as ring tiles with a Fluent flyout. | 1.1.6 | MIT |
-| [Seamless Volume Mixer](local/better-volume-mixer-plus) | Tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app devices. | 1.4.3 | MIT |
+| [Seamless Volume Mixer](local/better-volume-mixer-plus) | Tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app devices. | 1.4.29 | MIT |
 | [Seamless Tray Drawer](local/seamless-tray-drawer) | A themed second drawer for rarely used tray icons, with your own colors, border and material. | 1.0.2 | GPL-3.0 |
-| [Recycle Bin Tray Plus](local/recycle-bin-tray-plus) | A Recycle Bin icon in the tray, with drag and drop and themed menus. | 1.0.4 | GPL-3.0 |
+| [Recycle Bin Tray Plus](local/recycle-bin-tray-plus) | A Recycle Bin icon in the tray, with drag and drop and themed menus. | 1.0.6 | GPL-3.0 |
 | [Taskbar Collapse to Running Plus](local/taskbar-collapse-to-running-plus) | Hides pinned taskbar icons whose app is not running. Hover, rest on, or click the empty taskbar to reveal. | 1.1.5 | MIT |
 | [Micrographics Taskbar Clock Plus](local/micrographics-taskbar-clock-plus) | A Nothing OS style Micrographics clock for the taskbar, with pill badges and a weather line. | 1.2.2 | MIT |
 | [Seamless Taskbar Utilities](local/seamless-taskbar-utilities) | Quick system tools, an auto-hide switch and icon separators in the taskbar right-click menu, with Catppuccin result cards. | 1.7.1 | GPL-3.0 |
 | [Seamless Borders](local/seamless-borders) | Colored borders around windows, menus and notification banners. | 1.0.4 | GPL-3.0 |
-| [Seamless Title Bars](local/seamless-title-bars) | One title bar look everywhere: colors, caption buttons and native frames in every kind of app. | 1.0.0 | MIT |
+| [Seamless Title Bars](local/seamless-title-bars) | One title bar look everywhere: colors, caption buttons and native frames in every kind of app. | 1.2.6 | MIT |
 | [Simple Window Switcher Plus](local/simple-window-switcher-plus) | Alt+Tab with Vista animations, background blur and elevated app support. | 1.0.4 | GPL-2.0 |
 | [Always On Top Windows Plus](local/always-on-top-plus) | Pin any window on top with a hotkey, marked by a Mocha red to yellow ring. | 2.4.0 | MIT |
-| [Seamless Window Manager](local/seamless-window-manager) | Move, resize, snap and focus windows with the mouse or keyboard, with app rules and a pause key. | 2.4.1 | GPL-3.0 |
+| [Seamless Window Manager](local/seamless-window-manager) | Move, resize, snap and focus windows with the mouse or keyboard, with app rules and a pause key. | 2.5.6 | GPL-3.0 |
 | [Window Manager Plus](local/window-manager) | Move, resize, snap and send windows to other monitors with Alt+drag and keyboard shortcuts. | 1.3.2 (disabled) | GPL-3.0 |
-| [Seamless Power Action Countdown](local/seamless-power-action-countdown) | A glassy countdown before shutdown, restart, sleep or hibernation that any key or click cancels. | 1.2 | MIT |
+| [Seamless Power Action Countdown](local/seamless-power-action-countdown) | A glassy countdown before shutdown, restart, sleep or hibernation that any key or click cancels. | 2.0.1 | MIT |
 | [WinTips OSD Plus](local/wintips-osd-plus) | Pop-up cards for Caps, Num and Scroll Lock, Insert, copy, paste and cut, drawn on the GPU. | 1.4.1 | MIT |
-| [Seamless Launchpad](local/seamless-launchpad) | A fullscreen GPU rendered grid of all your apps in place of Start, with instant search, blur and power buttons. | 2.2.2 | MIT |
-| [Seamless Clipboard Manager](local/seamless-clipboard-manager) | Everything you copy, text and images, in a searchable list you open with Win+V. | 1.3.0 | GPL-3.0 |
+| [Seamless Launchpad](local/seamless-launchpad) | A fullscreen GPU rendered grid of all your apps in place of Start, with instant search, blur and power buttons. | 2.4.9 | MIT |
+| [Seamless Clipboard Manager](local/seamless-clipboard-manager) | Everything you copy, text and images, in a searchable list you open with Win+V. | 1.3.10 | GPL-3.0 |
 | [Theme Tool Plus](local/theme-tool-plus) | Switch Windows themes from the settings tab, with the Main 01 Catppuccin theme, cursors and sounds. | 1.2.0 | GPL-2.0 |
-| [File Explorer Styler Plus](local/windows-11-file-explorer-styler-plus) | Themes for File Explorer, plus a rounded status bar dock with Mocha view buttons. | 1.10.5 | GPL-3.0 |
-| [Seamless Explorer View](local/seamless-explorer-view) | GPU-rendered file lists and icon grids, with right-click submenus that open fully populated. | 2.0.0 | GPL-2.0 |
+| [File Explorer Styler Plus](local/windows-11-file-explorer-styler-plus) | Themes for File Explorer, plus a rounded status bar dock with Mocha view buttons. | 1.10.6 | GPL-3.0 |
+| [Seamless Explorer View](local/seamless-explorer-view) | GPU-rendered file lists and icon grids, with right-click submenus that open fully populated. | 2.0.4 | GPL-2.0 |
 | [Explorer Tags Plus](local/explorer-tags-plus) | Colored tags in Explorer's navigation pane and a Tags submenu on files. | 0.8.2 | MIT |
-| [File Operation Styler Plus](local/file-operation-styler-plus) | A modern copy, move, delete and recycle window for Explorer, drawn on the GPU. | 1.5.0 | GPL-3.0 |
-| [Peek](local/peek) | Select a file in Explorer and press Space to preview it, with media playback for audio and video. | 1.5.0 | MIT |
+| [File Operation Styler Plus](local/file-operation-styler-plus) | A modern copy, move, delete and recycle window for Explorer, drawn on the GPU. | 1.6.5 | GPL-3.0 |
+| [Peek](local/peek) | Select a file in Explorer and press Space to preview it, with media playback for audio and video. | 1.5.1 | MIT |
 | [Shell Font Changer Plus](local/shell-font-changer-plus) | Any installed font in File Explorer, with icons and emoji left intact. | 1.3.5 | MIT |
-| [Seamless Color Picker](local/seamless-color-picker) | A full color picker on a hotkey, with a screen magnifier, recent colors and one-click copy. | 1.0.0 | MIT |
-| [ZoomIt](local/zoomit) | Zoom into any part of the screen and draw on it with a hotkey, like Sysinternals ZoomIt. | 1.1.0 | MIT |
-| [Seamless Flyouts](local/seamless-flyouts) | Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps. | 2.0.3 | MIT |
+| [Seamless Color Picker](local/seamless-color-picker) | A full color picker on a hotkey, with a screen magnifier, recent colors and one-click copy. | 1.1.13 | MIT |
+| [ZoomIt](local/zoomit) | Zoom into any part of the screen and draw on it with a hotkey, like Sysinternals ZoomIt. | 1.2.2 | MIT |
+| [Seamless Flyouts](local/seamless-flyouts) | Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps. | 2.0.15 | MIT |
 | [Notification Center Styler Plus](local/notification-center-styler-plus) | Themes for the notification panel, with gradient hover borders and an options menu that stays in view. | 1.8.4 | GPL-3.0 |
 | [Settings Styler Plus](local/settings-styler-plus) | Themes for the Settings app, with the normal title bar and a blur that stays when unfocused. | 1.4.1 | GPL-3.0 |
 | [Helium Acrylic](local/helium-acrylic) | Keeps Helium's acrylic surface, Catppuccin colors and system-drawn frame working after browser updates. | 3.4.0 | MIT |
 | [Seamless Autoscroll](local/seamless-autoscroll) | Hold the middle mouse button and move to scroll, with a frosted glass indicator. | 1.0.0 | MIT |
-| [Seamless AutoClicker](local/seamless-autoclicker) | Hold a side mouse button and left click keeps clicking, with a right-click lock, a tray switch and its own settings window. | 1.6.4 | GPL-3.0 |
-| [Seamless Dictate](local/seamless-dictate) | Hold a shortcut and speak to type in any app, with AI cleanup and mic privacy. | 1.1.0 | MIT |
+| [Seamless AutoClicker](local/seamless-autoclicker) | Hold a side mouse button and left click keeps clicking, with a right-click lock, a tray switch and its own settings window. | 1.6.5 | GPL-3.0 |
+| [Seamless Dictate](local/seamless-dictate) | Hold a shortcut and speak to type in any app, with AI cleanup and mic privacy. | 1.3.5 | MIT |
 | [Magic Pointer Plus](local/magic-pointer-plus) | Shake the pointer, then point at anything and ask an AI about it, with matching menus. | 1.0.7 | MIT |
 | [Pointer Afterimage Plus](local/pointer-afterimage-plus) | A real motion blur for the mouse pointer, drawn on the GPU. | 1.2.2 | Unlicense |
 | [Keyboard Shortcut Actions Plus](local/keyboard-shortcut-actions-plus) | Global shortcuts for apps and Windows actions, with a download offer when an app is missing. | 1.1.2 | MIT |
-| [Windhawk Enhanced Styler](local/windhawk-enhanced-styler) | Colors, gradients, fonts, frosted dialogs and a matching title bar for Windhawk 2.0. | 2.1.12 | MIT |
+| [Windhawk Enhanced Styler](local/windhawk-enhanced-styler) | Colors, gradients, fonts, frosted dialogs and a matching title bar for Windhawk 2.0. | 2.2.6 | MIT |
 | [Notepad++ Dark Dialog Fix](local/npp-taskdlg-textcolor) | Readable text in Notepad++ dark-mode dialogs. | 1.0.3 | MIT |
+| [Explorer Tree Guard](local/explorer-tree-guard) | Stops File Explorer windows crashing when the folder tree gets a request from a thread that already gave up. | 1.0.0 |  |
+| [Halo Launcher](local/halo-launcher) | Press a key, type a few letters, press Enter: apps, files, sums, web searches and every plugin. | 0.4.3 | MIT |
+| [Seamless Game Crosshair](local/seamless-crosshair) | A crosshair over any game: presets or your own design, any color and size, shortcuts and a tray icon. | 1.1.2 | MIT |
+| [Seamless Explorer Search](local/seamless-explorer-search) | Start typing in any File Explorer window to search it, and every drive, with Everything. | 2.0.9 | MIT |
+| [Seamless Key Click](local/seamless-key-click) | Mechanical keyboard and mouse sounds as you type and click, with every Keyboard Sounds pack, shortcuts and a tray icon. | 1.1.1 | GPL-3.0 |
+| [Seamless Share](local/seamless-share) | Restyles the Windows 11 share window and its menus: blurred glass, your font, soft gradient hover edges, all adjustable. | 1.0.0 |  |
+| [Seamless Snipper](local/seamless-snipper) | Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it. | 0.2.1 | GPL-3.0 |
+| [Seamless Taskbar Badge Counter](local/seamless-taskbar-badge-counter) | See how many windows each taskbar app has open, on a Catppuccin Mocha badge with a gradient edge. | 1.0.3 | GPL-3.0 |
+| [UWP Assets Redirect Plus](local/uwp-assets-redirect-plus) | Swap the icons of Store and system apps, with a built-in Catppuccin icon theme. | 1.2 | GPL-3.0 |
 
 ## Installing a mod
 

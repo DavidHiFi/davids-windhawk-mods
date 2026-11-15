@@ -64,6 +64,7 @@ An AI agent can do all of this on its own: [AGENTS.md](AGENTS.md) is the runbook
 | <img src="media/previews/taskbar-collapse-to-running-plus.png" width="220" alt="Taskbar showing only running apps"> | [Taskbar Collapse to Running Plus](mods/local/taskbar-collapse-to-running-plus) | Hides pinned apps that are not running, and reveals them on hover. |
 | | [Micrographics Taskbar Clock Plus](mods/local/micrographics-taskbar-clock-plus) | A Nothing OS style Micrographics clock for the taskbar, with pill badges and a weather line. |
 | | [Seamless Taskbar Utilities](mods/local/seamless-taskbar-utilities) | Quick system tools, an auto-hide switch and icon separators in the taskbar right-click menu, with Catppuccin result cards. |
+| <img src="media/previews/seamless-taskbar-badge-counter.png" width="220" alt="Window count badges on taskbar icons"> | [Seamless Taskbar Badge Counter](mods/local/seamless-taskbar-badge-counter) | See how many windows each taskbar app has open, on a Catppuccin Mocha badge with a gradient edge. |
 
 ### Windows, borders and Alt+Tab
 
@@ -84,6 +85,8 @@ An AI agent can do all of this on its own: [AGENTS.md](AGENTS.md) is the runbook
 | <img src="media/previews/seamless-launchpad.png" width="220" alt="Fullscreen Launchpad grid of app icons"> | [Seamless Launchpad](mods/local/seamless-launchpad) | A fullscreen, Launchpad-style grid of all your apps in place of Start, with instant search and blur. |
 | | [Seamless Clipboard Manager](mods/local/seamless-clipboard-manager) | Everything you copy, text and images, in a searchable list you open with Win+V. |
 | | [Theme Tool Plus](mods/local/theme-tool-plus) | Switch Windows themes from the settings tab, custom themes included. Comes with the Main 01 Catppuccin theme, cursors and sounds. |
+| | [Halo Launcher](mods/local/halo-launcher) | Press a key, type a few letters, press Enter: apps, files, sums, web searches and every plugin. |
+| | [UWP Assets Redirect Plus](mods/local/uwp-assets-redirect-plus) | Swap the icons of Store and system apps, with a built-in Catppuccin icon theme. |
 
 ### Explorer and files
 
@@ -97,6 +100,8 @@ An AI agent can do all of this on its own: [AGENTS.md](AGENTS.md) is the runbook
 | <img src="media/previews/shell-font-changer-plus.png" width="220" alt="Explorer text in Segoe UI and in FiraCode Nerd Font"> | [Shell Font Changer Plus](mods/local/shell-font-changer-plus) | Any installed font in File Explorer, with icons and emoji left intact. |
 | <img src="media/previews/seamless-color-picker.png" width="220" alt="Color picker with a screen magnifier"> | [Seamless Color Picker](mods/local/seamless-color-picker) | A full color picker on a hotkey, with a screen magnifier, recent colors and one-click copy. |
 | | [ZoomIt](mods/local/zoomit) | Zoom into any part of the screen and draw on it with a hotkey, like Sysinternals ZoomIt. Hold Ctrl to read small text in a big bubble. |
+| | [Seamless Explorer Search](mods/local/seamless-explorer-search) | Start typing in any File Explorer window to search it, and every drive, with Everything. |
+| <img src="media/previews/seamless-snipper.png" width="220" alt="Seamless Snipper shortcut settings"> | [Seamless Snipper](mods/local/seamless-snipper) | Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it. |
 
 ### Menus, flyouts and apps
 
@@ -106,6 +111,8 @@ An AI agent can do all of this on its own: [AGENTS.md](AGENTS.md) is the runbook
 | <img src="media/previews/notification-center-styler-plus.png" width="220" alt="Notification panel with a group options menu opening to the left"> | [Notification Center Styler Plus](mods/local/notification-center-styler-plus) | Themes for the notification panel, with gradient hover borders and a group options menu that stays fully in view. |
 | <img src="media/previews/settings-styler-plus.png" width="220" alt="Windows Settings app with a custom theme"> | [Settings Styler Plus](mods/local/settings-styler-plus) | Themes for the Settings app, with the normal title bar and a blur that stays when unfocused. |
 | | [Helium Acrylic](mods/local/helium-acrylic) | Keeps Helium's acrylic surface, Catppuccin colors and system-drawn frame working after browser updates. |
+| <img src="media/previews/seamless-crosshair.png" width="220" alt="Seamless Game Crosshair settings"> | [Seamless Game Crosshair](mods/local/seamless-crosshair) | A crosshair over any game: presets or your own design, any color and size, shortcuts and a tray icon. |
+| <img src="media/previews/seamless-share.png" width="220" alt="Share window on dark glass with a blue to mauve border"> | [Seamless Share](mods/local/seamless-share) | Restyles the Windows 11 share window and its menus: blurred glass, your font, soft gradient hover edges, all adjustable. |
 
 ### Input
 
@@ -117,6 +124,7 @@ An AI agent can do all of this on its own: [AGENTS.md](AGENTS.md) is the runbook
 | | [Magic Pointer Plus](mods/local/magic-pointer-plus) | Shake the pointer, then point at anything and ask an AI about it, with matching menus. |
 | | [Pointer Afterimage Plus](mods/local/pointer-afterimage-plus) | A real motion blur for the mouse pointer, drawn on the GPU. |
 | | [Keyboard Shortcut Actions Plus](mods/local/keyboard-shortcut-actions-plus) | Global shortcuts for apps and Windows actions, with a download offer when an app is missing. |
+| <img src="media/previews/seamless-key-click.png" width="220" alt="Seamless Key Click sound settings"> | [Seamless Key Click](mods/local/seamless-key-click) | Mechanical keyboard and mouse sounds as you type and click, with every Keyboard Sounds pack, shortcuts and a tray icon. |
 
 ### Windhawk and app fixes
 
@@ -124,6 +132,7 @@ An AI agent can do all of this on its own: [AGENTS.md](AGENTS.md) is the runbook
 | --- | --- | --- |
 | <img src="media/previews/windhawk-enhanced-styler.png" width="220" alt="Themed Windhawk window"> | [Windhawk Enhanced Styler](mods/local/windhawk-enhanced-styler) | Your own colors, gradients, font, transparency and blur for the Windhawk window. |
 | <img src="media/previews/npp-taskdlg-textcolor.png" width="220" alt="Notepad++ dark dialog"> | [Notepad++ Dark Dialog Fix](mods/local/npp-taskdlg-textcolor) | Readable text in Notepad++ Save and confirm dialogs in dark mode. |
+| | [Explorer Tree Guard](mods/local/explorer-tree-guard) | Stops File Explorer windows crashing when the folder tree gets a request from a thread that already gave up. |
 
 ### Themes
 
@@ -271,6 +280,16 @@ Most of my mods build on someone else's mod. Each mod's source names its sources
 | **Ramen Software** ([Start menu styling guide](https://github.com/ramensoftware/windows-11-start-menu-styling-guide)) | The OnlySearch and RosePine themes merged into OnlySearch Mocha. |
 | **Catppuccin** ([catppuccin](https://github.com/catppuccin/catppuccin)) | The Mocha palette in OnlySearch Mocha and the mod defaults. |
 | **Catppuccin** ([cursors](https://github.com/catppuccin/cursors)) | The cursor art in Chromium Cursors Mocha (GPL-2.0). |
+| **David Ravelo** ([Spotlight Launcher](https://windhawk.net/mods/spotlight-launcher)) | The window Halo Launcher started from (MIT). |
+| **Flow Launcher contributors** ([Flow Launcher](https://github.com/Flow-Launcher/Flow.Launcher), [Wox](https://github.com/Wox-launcher/Wox)) | The plugin code Halo Launcher's search runs on (MIT). |
+| **Tu2525** ([OpenCrosshair](https://github.com/Tu2525/OpenCrosshair)) and **Lacy Morrow** ([CrossOver](https://github.com/lacymorrow/crossover)) | The ideas behind Seamless Game Crosshair. No code is used. |
+| **voidtools** ([Everything](https://www.voidtools.com)) | The search engine Seamless Explorer Search runs on. Listary inspired the idea. |
+| **Anixx** ([Key Click](https://windhawk.net/mods/key-click)) | The base of Seamless Key Click, whose tick is kept as the Classic pack. |
+| **Nathan Fiscaletti** ([Keyboard Sounds](https://github.com/nathan-fiscaletti/keyboardsounds)) | The sound packs and profile format in Seamless Key Click (GPL-3.0). |
+| **m417z** ([Notification Center Styler](https://windhawk.net/mods/windows-11-notification-center-styler)) | The base of Seamless Share. |
+| **Jaex and the ShareX contributors** ([ShareX](https://github.com/ShareX/ShareX)) | The base of Seamless Snipper, written again in C++ (GPL-3.0). |
+| **digART** ([Taskbar Count Badges](https://windhawk.net/mods/taskbar-count-badges)) | The base of Seamless Taskbar Badge Counter (GPL-3.0). |
+| **ferrys** ([UWP Assets Redirect](https://windhawk.net/mods/uwp-assets-redirect)) | The base of UWP Assets Redirect Plus. |
 | **Catalog mod authors** ([full list](mods/catalog/README.md)) | Every catalog mod in `mods/catalog/`, copied as installed. Each one is its author's work. |
 
 Built on [Windhawk](https://github.com/ramensoftware/windhawk) by m417z, with its bundled [LLVM clang](https://llvm.org/) compiler and [PowerShell](https://github.com/PowerShell/PowerShell) for the snapshot scripts.

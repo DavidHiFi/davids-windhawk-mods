@@ -3,10 +3,10 @@
 // @name            Seamless Dictate
 // @name:pt-BR      Seamless Dictate
 // @name:es         Seamless Dictate
-// @description     Press a shortcut, speak, and your words are typed where the cursor is, in any app: transcribed and cleaned up by AI in your style (natural, professional, prompt) or translated, with a free key (Groq, Gemini, Mistral and more)
-// @description:pt-BR Aperte um atalho, fale, e suas palavras são digitadas onde está o cursor, em qualquer app: transcritas e limpas por IA no seu estilo (natural, profissional, prompt) ou traduzidas, com uma chave grátis (Groq, Gemini, Mistral e outros)
-// @description:es Pulsa un atajo, habla y tus palabras se escriben donde está el cursor, en cualquier app: transcritas y limpiadas por IA en tu estilo (natural, profesional, prompt) o traducidas, con una clave gratis (Groq, Gemini, Mistral y más)
-// @version         1.1.0
+// @description     Press a shortcut, speak, and your words are typed where the cursor is, in any app: transcribed and cleaned up by AI in your style (natural, professional, prompt) or translated, with a free key (Groq, Gemini, Mistral and more). It also polishes text you typed and reads selected text aloud
+// @description:pt-BR Aperte um atalho, fale, e suas palavras são digitadas onde está o cursor, em qualquer app: transcritas e limpas por IA no seu estilo (natural, profissional, prompt) ou traduzidas, com uma chave grátis (Groq, Gemini, Mistral e outros). Também pole o texto que você digitou e lê em voz alta o texto selecionado
+// @description:es Pulsa un atajo, habla y tus palabras se escriben donde está el cursor, en cualquier app: transcritas y limpiadas por IA en tu estilo (natural, profesional, prompt) o traducidas, con una clave gratis (Groq, Gemini, Mistral y más). También pule el texto que escribiste y lee en voz alta el texto seleccionado
+// @version         1.3.5
 // @author          DavidHiFi, caliberda
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -57,6 +57,16 @@ your own key: **Groq** is recommended (very fast, and its key is free).
 - **Command.** Select text in any app, press Ctrl+Alt+K and say what to do
   with it ("more formal", "translate to Spanish", "summarize as bullets"). The
   result replaces the selection.
+- **Polish.** Select text you typed, in any app, and press Ctrl+Alt+P. The AI
+  fixes it in your Polish style and puts it back in place: **Fix only**
+  (spelling, grammar, punctuation), **Tidy** (paragraphs and lists where they
+  help), **Bullets**, **Shorter**, or any other style. Choose "Ask each time"
+  to get the list instead. The result card's chips redo it in another style.
+- **Read aloud.** Select text and press Ctrl+Alt+R to hear it. Windows' own
+  voices work offline; Gemini and OpenAI voices sound more natural and use
+  your saved keys. Press it again, or Esc, to stop.
+- **Floating button** (off by default). Select text in any app and a small
+  Polish and Read aloud button shows above it. It never takes the focus.
 - **About 100 languages** to speak in, detected by itself or chosen. The
   settings and the bar are in English, Spanish, Portuguese, French, German,
   Japanese, Chinese, Russian, Hindi and Bengali.
@@ -80,6 +90,8 @@ your own key: **Groq** is recommended (very fast, and its key is free).
 | **Ctrl+Shift+Space** | Dictate (press again to stop; in hold mode, hold it while you speak) |
 | **Ctrl+Shift+Y** | Dictate and translate |
 | **Ctrl+Alt+K** | Command on the selected text (while you speak, the card also offers the styles, to apply one without speaking) |
+| **Ctrl+Alt+P** | Polish the selected text you typed |
+| **Ctrl+Alt+R** | Read the selected text aloud (again to stop) |
 | **Esc** | Cancel while recording (while it's being processed, the bar's ✕ cancels) |
 
 Every shortcut can be changed in the settings. "Paste again" (the last
@@ -91,7 +103,11 @@ Paste Special.
 
 **1.1.0:** the settings now open in the same window as the other Seamless mods, with a
 rail of pages, a Mocha look, and an About page. Lists (your styles, dictionary, app styles,
-history, keys, setup) still open in the older window from links on its pages.
+history) still open in the older window from links on its pages.
+
+**1.3.0:** providers (keys, models, the order they are tried in, tests) and the first-run
+setup are pages of the settings window; the older window no longer has them. Mic privacy
+now warns when an app records from the same microphone as Dictate, which it cannot mute.
 
 Click the mod's icon in the notification area to open them (right-click it
 for a quick menu): this session's history (with "Redo" in another style or
@@ -108,7 +124,9 @@ be turned off.
   preview, which can be turned off) and when you stop. The transcript then
   goes to the text provider for the style or the translation, along with the
   name of the app you're typing into (so the text fits it) and the words in
-  your dictionary. With Command, the selected text goes too. Each provider's
+  your dictionary. With Command and Polish, the selected text goes too. Read
+  aloud with Windows' voices stays on your PC; with Gemini or OpenAI voices
+  the selected text goes to that provider. Each provider's
   own privacy policy applies (on Gemini's free tier, Google may use what's
   sent to improve its products).
 - If Groq answers that the chosen model no longer exists, the mod asks Groq
@@ -132,10 +150,14 @@ be turned off.
 - Windows doesn't let a normal app type into apps running as administrator:
   there, the text is only copied (paste it with Ctrl+V), and Command can't
   read the selection.
-- Command doesn't work in terminals (Ctrl+C stops the program there).
+- Command, Polish and Read aloud don't work in terminals (Ctrl+C stops the
+  program there).
+- The floating button only sees selections that apps report to Windows'
+  accessibility (most editors, browsers and Office do; rich text boxes, as in
+  WordPad, are watched through their caret).
 - Ctrl+Alt is AltGr on many keyboards: where AltGr+K types a character (for
   example Hungarian or Czech), Command starts without a shortcut; choose one
-  in the settings.
+  in the settings. The same goes for Polish (P) and Read aloud (R).
 - The glass look needs Windows' transparency effects (with them off, or with
   the energy saver on, the bar stays solid).
 - Cloud providers only (no local models), over https, so it needs an internet
@@ -188,6 +210,16 @@ e a chave é grátis).
 - **Comando.** Selecione um texto em qualquer app, aperte Ctrl+Alt+K e diga o
   que fazer ("mais formal", "traduz pro inglês", "resume em tópicos"). O
   resultado substitui a seleção.
+- **Polir.** Selecione um texto que você digitou, em qualquer app, e aperte
+  Ctrl+Alt+P. A IA corrige no seu estilo de polimento e devolve no lugar:
+  **Só corrigir** (ortografia, gramática, pontuação), **Organizar**
+  (parágrafos e listas onde ajudam), **Tópicos**, **Mais curto** ou qualquer
+  outro estilo. Escolha "Perguntar sempre" para ver a lista.
+- **Ler em voz alta.** Selecione um texto e aperte Ctrl+Alt+R para ouvir. As
+  vozes do Windows funcionam offline; as do Gemini e da OpenAI soam mais
+  naturais e usam suas chaves salvas. Aperte de novo, ou Esc, para parar.
+- **Botão flutuante** (desligado por padrão). Selecione um texto em qualquer
+  app e um botão pequeno de Polir e Ler em voz alta aparece acima dele.
 - **Cerca de 100 idiomas** para falar, detectados sozinhos ou escolhidos. As
   configurações e a barra estão em português, inglês, espanhol, francês,
   alemão, japonês, chinês, russo, hindi e bengali.
@@ -212,6 +244,8 @@ e a chave é grátis).
 | **Ctrl+Shift+Espaço** | Ditar (aperte de novo para parar; no modo segurar, segure enquanto fala) |
 | **Ctrl+Shift+Y** | Ditar e traduzir |
 | **Ctrl+Alt+K** | Comando no texto selecionado (enquanto você fala, o card também oferece os estilos, para aplicar um sem falar) |
+| **Ctrl+Alt+P** | Polir o texto selecionado que você digitou |
+| **Ctrl+Alt+R** | Ler em voz alta o texto selecionado (de novo para parar) |
 | **Esc** | Cancela durante a gravação (enquanto processa, o ✕ da barra cancela) |
 
 Todos os atalhos podem ser trocados nas configurações. "Colar de novo" (o
@@ -236,7 +270,9 @@ para desligar.
   prévia ao vivo, que dá para desligar) e quando você para. A transcrição
   então vai ao provedor de texto para o estilo ou a tradução, junto com o
   nome do app em que você está digitando (para o texto combinar com ele) e
-  as palavras do seu dicionário. No Comando, o texto selecionado vai junto.
+  as palavras do seu dicionário. No Comando e no Polir, o texto selecionado
+  vai junto. Ler em voz alta com as vozes do Windows fica no seu PC; com as
+  vozes do Gemini ou da OpenAI, o texto selecionado vai para esse provedor.
   Vale a política de privacidade de cada provedor (no plano grátis do
   Gemini, o Google pode usar o que é enviado para melhorar os produtos dele).
 - Se a Groq responder que o modelo escolhido não existe mais, o mod pede à
@@ -260,7 +296,8 @@ para desligar.
 - O Windows não deixa um app comum digitar em apps abertos como
   administrador: neles, o texto só é copiado (cole com Ctrl+V), e o Comando
   não consegue ler a seleção.
-- O Comando não funciona em terminais (lá o Ctrl+C interrompe o programa).
+- Comando, Polir e Ler em voz alta não funcionam em terminais (lá o Ctrl+C
+  interrompe o programa).
 - Ctrl+Alt é o AltGr em muitos teclados: onde AltGr+K digita um caractere
   (por exemplo húngaro ou tcheco), o Comando começa sem atalho; escolha um
   nas configurações.
@@ -305,6 +342,12 @@ es gratis).
   rehacer el texto en otro estilo o idioma.
 - **Comando** (Ctrl+Alt+K): selecciona un texto, di qué hacer y el resultado
   reemplaza la selección.
+- **Pulir** (Ctrl+Alt+P): selecciona un texto que escribiste y la IA lo
+  corrige en tu estilo de pulido (Solo corregir, Ordenar, Viñetas, Más corto)
+  y lo deja en su lugar.
+- **Leer en voz alta** (Ctrl+Alt+R): con las voces de Windows, sin conexión,
+  o con las de Gemini y OpenAI. Púlsalo otra vez, o Esc, para parar.
+- **Botón flotante** (apagado por defecto) sobre el texto seleccionado.
 - **Unos 100 idiomas** para hablar; la configuración y la barra están en
   español, inglés, portugués, francés, alemán, japonés, chino, ruso, hindi y
   bengalí.
@@ -322,14 +365,15 @@ nuevo" y "Dictar ahora" están en el menú del icono del área de notificación.
 Privacidad: el audio va solo al proveedor de voz que configuraste, solo con
 una clave guardada (mientras hablas, para la vista previa en vivo, y al
 parar); el texto va al proveedor de texto, con el nombre de la app en la que
-escribes y las palabras de tu diccionario, y con el Comando también va el
-texto seleccionado. Si Groq responde que el modelo elegido ya no existe, el
+escribes y las palabras de tu diccionario, y con el Comando y Pulir también
+va el texto seleccionado. Leer en voz alta con las voces de Windows no sale
+de tu PC; con Gemini u OpenAI el texto seleccionado va a ese proveedor. Si Groq responde que el modelo elegido ya no existe, el
 mod pide su lista de modelos y prueba hasta 4 con una prueba corta. Rige la
 política de privacidad de cada proveedor. No se
 guarda nada en disco: si una transcripción falla, la grabación queda solo en
 memoria (las 3 últimas). Las claves se guardan cifradas para tu cuenta de
 Windows. Limitaciones: no escribe en apps abiertas como administrador (el
-texto queda copiado), el Comando no funciona en terminales, solo usa
+texto queda copiado), el Comando, Pulir y Leer en voz alta no funcionan en terminales, solo usa
 proveedores en la nube y necesita internet, y una grabación se detiene sola a
 los 12 minutos.
 */
@@ -346,16 +390,10 @@ los 12 minutos.
   $description:es: Haz clic en él para abrir la configuración (atajos, estilos, proveedores, historial). Desactivado, la configuración no se abre hasta volver a activarlo
 - settingsGlass: true
   $name: Blurred settings window
-  $description: On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Save, then reopen settings to apply.
+  $description: On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.
 - nativeSettingsTitleBar: false
   $name: Native Windows title bar
-  $description: Use the Windows title bar and window buttons for this settings window. Save, then reopen settings to apply.
-- settingsTitleButtons: native
-  $name: Title bar buttons
-  $description: Who draws minimize, maximize and close on the window's own title bar. Windows buttons look like every other app's, title bar mods included. Save, then reopen settings to apply.
-  $options:
-  - native: Windows buttons (like other apps)
-  - builtin: Built-in buttons
+  $description: Use the Windows title bar and window buttons for this settings window. Applies when you save.
 - settingsTrayIcon: true
   $name: Tray icon
   $description: A Dictate icon in the system tray. Click it to open the settings window, right-click it for a menu. Turned off, the settings can only be opened from Windhawk.
@@ -376,11 +414,15 @@ los 12 minutos.
 #include <sddl.h>
 #include <shellapi.h>
 #include <shellscalingapi.h>
+#include <uiautomation.h>
 #include <windowsx.h>
 #include <winhttp.h>
 #include <wrl/client.h>
 #include <dispatcherqueue.h>
 #include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Foundation.Collections.h>
+#include <winrt/Windows.Media.SpeechSynthesis.h>
+#include <winrt/Windows.Storage.Streams.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.Graphics.Effects.h>
 #include <winrt/Windows.UI.Composition.Desktop.h>
@@ -1256,6 +1298,19 @@ constexpr char kPromptPrompt[] =
 - Junte informações repetidas em um único ponto. Não acrescente nada que não foi dito.
 - Lembre: você só reescreve o pedido; NÃO o execute nem o responda.)P";
 
+// Polish's styles (for typed text, but they serve dictation too).
+constexpr char kPromptFix[] =
+    R"P(ESTILO SÓ CORRIGIR: corrija apenas ortografia, acentuação, gramática, concordância, maiúsculas e pontuação. Não mude palavras que já estão certas, não troque o tom, não reorganize, não resuma e não acrescente nada. Mantenha as quebras de linha, listas e a formatação que já existem. Se o texto já estiver correto, devolva-o igual.)P";
+
+constexpr char kPromptTidy[] =
+    R"P(ESTILO ORGANIZAR: corrija ortografia, gramática e pontuação e deixe o texto fácil de ler. Divida em parágrafos curtos por assunto; transforme enumerações e sequências de passos em listas (- para itens, 1. 2. 3. para passos). Mantenha as palavras, o tom e todo o conteúdo da pessoa; não resuma e não acrescente nada.)P";
+
+constexpr char kPromptBullets[] =
+    R"P(ESTILO TÓPICOS: reescreva o texto como uma lista de tópicos curtos e claros, um por ideia, cada um começando com "- ". Use subtópicos (indentados com dois espaços) quando uma ideia tiver detalhes. Corrija a escrita. Mantenha TODA a informação (nomes, números, prazos, negações e condições); não acrescente nada. Sem título e sem frase de abertura.)P";
+
+constexpr char kPromptShorter[] =
+    R"P(ESTILO MAIS CURTO: deixe o texto mais curto e direto, com cerca de metade do tamanho, mantendo o tom da pessoa. Corte repetições, rodeios e frases de enchimento; junte frases quando der. Corrija a escrita. NUNCA perca informação importante: objetivo, pedidos, nomes, números, prazos, negações e condições.)P";
+
 constexpr Style kStyles[] = {
     {"natural", L"Natural", L"Natural",
      L"Cleans up your speech and keeps your way of talking.",
@@ -1269,6 +1324,22 @@ constexpr Style kStyles[] = {
      L"Trims your speech to send to an AI: fewer tokens, same context.",
      L"Enxuga a fala para mandar a uma IA: menos tokens, mesmo contexto.",
      StyleKind::Llm, kPromptPrompt},
+    {"fix", L"Fix only", L"Só corrigir",
+     L"Fixes spelling, grammar and punctuation. Nothing else changes.",
+     L"Corrige ortografia, gramática e pontuação. O resto fica igual.",
+     StyleKind::Llm, kPromptFix},
+    {"tidy", L"Tidy", L"Organizar",
+     L"Fixes it and adds paragraphs and lists, in your words.",
+     L"Corrige e organiza em parágrafos e listas, com suas palavras.",
+     StyleKind::Llm, kPromptTidy},
+    {"bullets", L"Bullets", L"Tópicos",
+     L"Turns the text into short bullet points.",
+     L"Transforma o texto em tópicos curtos.",
+     StyleKind::Llm, kPromptBullets},
+    {"shorter", L"Shorter", L"Mais curto",
+     L"About half as long, same meaning and tone.",
+     L"Cerca de metade do tamanho, mesmo sentido e tom.",
+     StyleKind::Llm, kPromptShorter},
     {"raw", L"Raw", L"Cru",
      L"Only the words: no punctuation, no line breaks, no AI.",
      L"Só as palavras: sem pontuação, sem quebras de linha, sem IA.",
@@ -2346,6 +2417,19 @@ struct Config {
     std::string pasteLastHotkey;
     // Turns micPrivacy on or off from anywhere (off by default).
     std::string micPrivacyHotkey;
+    // Polish: the selected typed text, cleaned up in polishStyle ("" = ask
+    // with the style card). Read aloud: the selection, spoken.
+    std::string polishHotkey = "Ctrl+Alt+P";
+    std::string polishStyle = "fix";
+    std::string readAloudHotkey = "Ctrl+Alt+R";
+    // "windows" (offline voices), "gemini" or "openai" (the saved keys).
+    std::string ttsEngine = "windows";
+    // The voice's name ("" = the engine's default).
+    std::string ttsVoice;
+    // 50 to 200 (% of normal).
+    int ttsSpeed = 100;
+    // A small Polish / Read button above selected text (off by default).
+    bool floatingButton = false;
     bool holdMode = false;
     // "auto" or a Whisper language code.
     std::string speechLanguage = "auto";
@@ -2628,6 +2712,16 @@ void NormalizeConfig(Config* c) {
     c->pasteLastHotkey = CleanText(c->pasteLastHotkey, 60);
     c->correctionCue = CleanText(c->correctionCue, 50);
     c->micPrivacyHotkey = CleanText(c->micPrivacyHotkey, 60);
+    c->polishHotkey = CleanText(c->polishHotkey, 60);
+    c->readAloudHotkey = CleanText(c->readAloudHotkey, 60);
+    if (!c->polishStyle.empty() && !StyleExists(*c, c->polishStyle)) {
+        c->polishStyle = "fix";
+    }
+    if (c->ttsEngine != "gemini" && c->ttsEngine != "openai") {
+        c->ttsEngine = "windows";
+    }
+    c->ttsVoice = CleanText(c->ttsVoice, 80);
+    c->ttsSpeed = std::clamp(c->ttsSpeed, 50, 200);
     if (!ParseAccent(c->accent)) {
         c->accent = Config{}.accent;
     }
@@ -2715,6 +2809,13 @@ std::string ConfigToJson(const Config& c) {
                        ",\"commandHotkey\":" + JsonQuote(c.commandHotkey) +
                        ",\"pasteLastHotkey\":" + JsonQuote(c.pasteLastHotkey) +
                        ",\"micPrivacyHotkey\":" + JsonQuote(c.micPrivacyHotkey) +
+                       ",\"polishHotkey\":" + JsonQuote(c.polishHotkey) +
+                       ",\"polishStyle\":" + JsonQuote(c.polishStyle) +
+                       ",\"readAloudHotkey\":" + JsonQuote(c.readAloudHotkey) +
+                       ",\"ttsEngine\":" + JsonQuote(c.ttsEngine) +
+                       ",\"ttsVoice\":" + JsonQuote(c.ttsVoice) +
+                       ",\"ttsSpeed\":" + std::to_string(c.ttsSpeed) +
+                       ",\"floatingButton\":" + boolean(c.floatingButton) +
                        ",\"sounds\":" + boolean(c.sounds) +
                        ",\"accent\":" + JsonQuote(c.accent) +
                        ",\"overlayWidth\":" + JsonQuote(c.overlayWidth) +
@@ -2796,6 +2897,15 @@ Config ConfigFromJson(std::string_view text) {
     str("commandHotkey", &c.commandHotkey);
     str("pasteLastHotkey", &c.pasteLastHotkey);
     str("micPrivacyHotkey", &c.micPrivacyHotkey);
+    str("polishHotkey", &c.polishHotkey);
+    str("polishStyle", &c.polishStyle);
+    str("readAloudHotkey", &c.readAloudHotkey);
+    str("ttsEngine", &c.ttsEngine);
+    str("ttsVoice", &c.ttsVoice);
+    if (const Json* v = json.Get("ttsSpeed"); v && v->type == Json::Type::Number) {
+        c.ttsSpeed = (int)v->number;
+    }
+    boolean("floatingButton", &c.floatingButton);
     str("accent", &c.accent);
     str("overlayWidth", &c.overlayWidth);
     str("overlayGlass", &c.overlayGlass);
@@ -4647,6 +4757,12 @@ void LoadConfig() {
         Log(L"AltGr types with K: no default Command shortcut");
         config.commandHotkey.clear();
     }
+    if ((!ParseJson(stored, &json) || !json.Get("polishHotkey")) && AltGrTypesWith('P')) {
+        config.polishHotkey.clear();
+    }
+    if ((!ParseJson(stored, &json) || !json.Get("readAloudHotkey")) && AltGrTypesWith('R')) {
+        config.readAloudHotkey.clear();
+    }
     AcquireSRWLockExclusive(&g_configLock);
     g_config = std::move(config);
     ReleaseSRWLockExclusive(&g_configLock);
@@ -4998,6 +5114,12 @@ Refined Refine(const std::wstring& raw,
                                   : std::string(style.prompt),
                               target, config.dictionary, WideToUtf8(appName), spoken,
                               config.correctionCue);
+        if (written) {
+            system +=
+                "\n\nATENÇÃO: este texto foi DIGITADO, não falado (a tag continua <transcricao>). "
+                "Não trate palavras como hesitações de fala. Mantenha links, código, emojis e "
+                "a formatação útil (listas, parágrafos), salvo quando o estilo pedir outra.";
+        }
     } else if (!target.empty()) {
         system = TranslationPrompt(target);
     }
@@ -5046,6 +5168,8 @@ struct Settings {
     std::wstring commandHotkey;
     std::wstring pasteLastHotkey;
     std::wstring micPrivacyHotkey;
+    std::wstring polishHotkey;
+    std::wstring readAloudHotkey;
     bool holdMode = false;
     std::wstring speechLanguage;
     std::wstring microphone;
@@ -5068,6 +5192,8 @@ Settings CurrentSettings() {
     s.commandHotkey = Utf8ToWide(c.commandHotkey);
     s.pasteLastHotkey = Utf8ToWide(c.pasteLastHotkey);
     s.micPrivacyHotkey = Utf8ToWide(c.micPrivacyHotkey);
+    s.polishHotkey = Utf8ToWide(c.polishHotkey);
+    s.readAloudHotkey = Utf8ToWide(c.readAloudHotkey);
     s.holdMode = c.holdMode;
     s.speechLanguage = Utf8ToWide(c.speechLanguage);
     s.microphone = Utf8ToWide(c.microphone);
@@ -5092,6 +5218,44 @@ bool IsAudioRouter(DWORD pid) {
     const wchar_t* routers[] = {L"voicemeeter", L"vbaudiomatrix", L"vbcable", L"nvidia broadcast", L"sonar", L"wavelink", L"krisp", L"equalizerapo", L"audiorelay"};
     for (auto router : routers) if (path.find(router) != std::wstring::npos) return true;
     return false;
+}
+
+// Other apps recording from this same microphone right now ("Teams, Discord"). Privacy can't
+// mute them: their session is on Dictate's own microphone, so muting it would silence Dictate.
+std::wstring AppsSharingMic(IMMDevice* device) {
+    ComPtr<IAudioSessionManager2> manager;
+    ComPtr<IAudioSessionEnumerator> sessions;
+    int n = 0;
+    if (!device ||
+        FAILED(device->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, nullptr,
+                                (void**)manager.GetAddressOf())) ||
+        FAILED(manager->GetSessionEnumerator(sessions.GetAddressOf())) || FAILED(sessions->GetCount(&n)))
+        return L"";
+    std::vector<std::wstring> names;
+    for (int j = 0; j < n; ++j) {
+        ComPtr<IAudioSessionControl> ctl;
+        ComPtr<IAudioSessionControl2> ctl2;
+        AudioSessionState active = AudioSessionStateInactive;
+        DWORD pid = 0;
+        if (FAILED(sessions->GetSession(j, ctl.GetAddressOf())) || FAILED(ctl.As(&ctl2)) ||
+            FAILED(ctl->GetState(&active)) || active != AudioSessionStateActive ||
+            FAILED(ctl2->GetProcessId(&pid)) || !pid || pid == GetCurrentProcessId() || IsAudioRouter(pid))
+            continue;
+        HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        if (!process) continue;
+        WCHAR path[MAX_PATH * 4];
+        DWORD len = ARRAYSIZE(path);
+        const bool found = QueryFullProcessImageNameW(process, 0, path, &len) != FALSE;
+        CloseHandle(process);
+        if (!found) continue;
+        std::wstring name(path, len);
+        name = name.substr(name.find_last_of(L"\\/") + 1);
+        if (name.size() > 4 && Lower(name.substr(name.size() - 4)) == L".exe") name.resize(name.size() - 4);
+        if (!name.empty() && std::find(names.begin(), names.end(), name) == names.end()) names.push_back(name);
+    }
+    std::wstring list;
+    for (const std::wstring& name : names) list += (list.empty() ? L"" : L", ") + name;
+    return list;
 }
 
 class OutputIsolation {
@@ -5352,6 +5516,9 @@ struct CaptureState {
     // Set before readyEvent when the microphone couldn't be opened.
     std::wstring error;
     bool usedFallback = false;
+    // Privacy on, but these apps record from Dictate's own microphone, so they still heard you
+    // (guarded by lock).
+    std::wstring privacyGap;
     // The device failed mid-recording (unplugged, driver reset).
     std::atomic<bool> failed{false};
 
@@ -5546,6 +5713,18 @@ void Capture(CaptureState& state) {
         state.error = L"Mic privacy could not mute other apps' microphones.";
         client->Stop(); CloseHandle(audioEvent); SetEvent(state.readyEvent); return;
     }
+    // Apps on this same microphone can't be muted (that would mute Dictate too): note them.
+    auto notePrivacyGap = [&] {
+        if (!state.micPrivacy) return;
+        const std::wstring apps = AppsSharingMic(device.Get());
+        if (apps.empty()) return;
+        AcquireSRWLockExclusive(&state.lock);
+        const bool changed = state.privacyGap != apps;
+        if (changed) state.privacyGap = apps;
+        ReleaseSRWLockExclusive(&state.lock);
+        if (changed) Log(L"Mic privacy: %s records from the same microphone and can't be muted", apps.c_str());
+    };
+    notePrivacyGap();
     OutputIsolation isolation;
     if (state.outputLevel >= 0 && !isolation.Start(state.outputLevel)) {
         state.error = L"Could not lower other apps. Check their volume settings.";
@@ -5596,6 +5775,7 @@ void Capture(CaptureState& state) {
                 ShowError(L"Recording stopped: audio privacy could not be maintained.", false);
                 break;
             }
+            notePrivacyGap();
         }
         UINT32 packet = 0;
         while (WaitForSingleObject(state.stopEvent, 0) == WAIT_TIMEOUT && !shortcutReleased() &&
@@ -5723,6 +5903,12 @@ class Recorder {
 
     std::shared_ptr<CaptureState> State() const { return m_state; }
     bool UsedFallback() const { return m_state->usedFallback; }
+    std::wstring PrivacyGap() const {
+        AcquireSRWLockShared(&m_state->lock);
+        std::wstring apps = m_state->privacyGap;
+        ReleaseSRWLockShared(&m_state->lock);
+        return apps;
+    }
     bool Failed() const { return m_state->failed; }
 
    private:
@@ -6619,6 +6805,8 @@ struct OverlayState {
     // A Command (listening and processing): what's selected (or that it's
     // being read), and the styles that apply to it without speaking.
     bool command = false;
+    // Read aloud: the selection is being spoken (the bar's cancel stops it).
+    bool speaking = false;
     std::wstring selection;
     bool commandChips = false;
     std::string target;
@@ -7212,6 +7400,11 @@ void ProcessPaste(Job& job) {
 
 // The settings' "Test text" / "Test voice": a tiny real request with the
 // saved key.
+namespace dictset {
+extern std::atomic<HWND> g_settingsWnd;
+void OpenSettingsWindowAt(int page);
+}
+
 void ProcessKeyTest(Job& job) {
     const ULONGLONG started = GetTickCount64();
     const ULONGLONG deadline = started + 20000;
@@ -7250,6 +7443,9 @@ void ProcessKeyTest(Job& job) {
                        : ProviderName(provider) + L": " + error.message;
     ReleaseSRWLockExclusive(&g_keyTestLock);
     if (HWND settings = g_settingsWnd) {
+        PostMessage(settings, WM_APP_TEST, 0, 0);
+    }
+    if (HWND settings = dictset::g_settingsWnd) {
         PostMessage(settings, WM_APP_TEST, 0, 0);
     }
 }
@@ -7863,7 +8059,8 @@ DWORD WINAPI PreviewThreadProc(void* param) {
 // freeze the UI thread, and a quick "stop" must never overtake the "start" it
 // belongs to.
 
-enum class CtlKind { Toggle, Hold, Stop, Escape, CommandStyle, PasteLast, DictateNow, Retry, MicPrivacy };
+enum class CtlKind { Toggle, Hold, Stop, Escape, CommandStyle, PasteLast, DictateNow, Retry, MicPrivacy,
+                     Polish, ReadAloud, PolishPick, StopSpeaking };
 
 struct Ctl {
     CtlKind kind;
@@ -8083,6 +8280,12 @@ void StopRecording() {
               L"O microfone escolhido não foi encontrado: gravado com o "
               L"padrão."));
     }
+    if (const std::wstring apps = g_session->recorder->PrivacyGap(); !apps.empty()) {
+        job->warnings.push_back(
+            T(L"Mic privacy couldn't mute ", L"A privacidade do microfone não silenciou ") + apps +
+            T(L": it records from the same microphone as Dictate. Pick another microphone under Speech.",
+              L": ele grava do mesmo microfone que o Dictate. Escolha outro microfone em Transcrição."));
+    }
     if (g_session->recorder->Failed()) {
         job->warnings.push_back(
             T(L"The microphone failed while recording: the audio may be "
@@ -8230,6 +8433,9 @@ void PasteLast(bool fromMenu) {
     }
 }
 
+bool StopSpeaking();
+void HidePill();
+
 // Esc: cancels the recording, or the processing on screen, or closes the
 // bar.
 void Escape() {
@@ -8237,6 +8443,9 @@ void Escape() {
         CancelRecording();
         return;
     }
+    // (Also what's being read aloud, and the floating style list.)
+    StopSpeaking();
+    HidePill();
     AcquireSRWLockExclusive(&g_overlayLock);
     UINT64 canceledGen = 0;
     if (g_overlayState.phase == Phase::Transcribing ||
@@ -8251,6 +8460,1310 @@ void Escape() {
     if (canceledGen) {
         CancelJob(canceledGen);
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Polish (the selected typed text, cleaned up in a style) and Read aloud (the
+// selection, spoken: Windows' own voices offline, or Gemini's or OpenAI's
+// with the saved keys). The floating button offers both above selected text.
+
+// The window the floating button was shown for (its clicks act there).
+std::atomic<HWND> g_pillTarget;
+void ShowPill(HWND target, bool pick);
+void HidePill();
+
+std::wstring NoPolishSelectionText() {
+    return T(L"Select some text first, then press the shortcut again.",
+             L"Selecione um texto primeiro e aperte o atalho de novo.");
+}
+
+std::wstring NoPolishTerminalText() {
+    return T(L"This doesn't work in terminals (Ctrl+C stops the program there).",
+             L"Isso não funciona em terminais (lá o Ctrl+C interrompe o programa).");
+}
+
+// The selection, rewritten in a style ("" = the Polish style; none set: the
+// floating style list). The result replaces the selection, and its card's
+// chips redo it in another style.
+void PolishPick(HWND target);
+
+void Polish(std::string styleId, HWND target, bool fromPill) {
+    if (g_session) {
+        return;
+    }
+    Config config = CurrentConfig();
+    if (styleId.empty()) {
+        styleId = config.polishStyle;
+    }
+    if (styleId.empty() || !StyleExists(config, styleId)) {
+        PolishPick(target);
+        return;
+    }
+    if (UsableProviders(config, false).empty()) {
+        OpenKeyWindow();
+        return;
+    }
+    if (!target || !IsWindow(target)) {
+        return;
+    }
+    if (IsConsoleWindow(target)) {
+        ShowError(NoPolishTerminalText(), true);
+        return;
+    }
+    if (fromPill) {
+        FocusWindow(target);
+    }
+    const SelectionCopy copy = CopySelection(target);
+    if (!copy.ok || copy.text.empty()) {
+        ShowError(copy.ok ? NoPolishSelectionText() : copy.error, true);
+        return;
+    }
+    auto job = std::make_shared<Job>();
+    job->kind = JobKind::CommandStyle;
+    job->mode = Mode::Command;
+    job->target = target;
+    job->settings = CurrentSettings();
+    job->styleId = styleId;
+    job->selection.text = copy.text;
+    if (const std::optional<AppContext> app = WindowApp(target)) {
+        job->appName = app->name;
+        job->appId = app->id;
+    }
+    job->deadline = GetTickCount64() + kProcessDeadlineMs;
+    Log(L"Polish: %u characters in %S", (unsigned)copy.text.size(), styleId.c_str());
+    AcquireSRWLockExclusive(&g_overlayLock);
+    job->gen = ++g_dictation;
+    OverlayState state;
+    state.phase = Phase::Refining;
+    state.command = true;
+    state.provider = FirstProviderName(config, false);
+    PublishLocked(std::move(state));
+    ReleaseSRWLockExclusive(&g_overlayLock);
+    job->config = std::move(config);
+    StartJob(std::move(job));
+}
+
+void PolishPick(HWND target) {
+    if (g_session || !target || !IsWindow(target)) {
+        return;
+    }
+    if (IsConsoleWindow(target)) {
+        ShowError(NoPolishTerminalText(), true);
+        return;
+    }
+    ShowPill(target, true);
+}
+
+// Read aloud: 16-bit PCM from an engine, played with waveOut.
+struct Pcm {
+    DWORD rate = 0;
+    WORD channels = 1;
+    std::vector<BYTE> data;
+};
+
+std::string Base64Decode(std::string_view text) {
+    auto value = [](char c) -> int {
+        if (c >= 'A' && c <= 'Z') return c - 'A';
+        if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+        if (c >= '0' && c <= '9') return c - '0' + 52;
+        if (c == '+' || c == '-') return 62;
+        if (c == '/' || c == '_') return 63;
+        return -1;
+    };
+    std::string out;
+    out.reserve(text.size() * 3 / 4);
+    unsigned bits = 0;
+    int count = 0;
+    for (char c : text) {
+        const int v = value(c);
+        if (v < 0) {
+            continue;
+        }
+        bits = (bits << 6) | (unsigned)v;
+        count += 6;
+        if (count >= 8) {
+            count -= 8;
+            out.push_back((char)((bits >> count) & 0xFF));
+        }
+    }
+    return out;
+}
+
+// A WAV file's 16-bit PCM (what Windows' voices give).
+bool PcmFromWav(const BYTE* bytes, size_t size, Pcm* pcm) {
+    if (size < 12 || memcmp(bytes, "RIFF", 4) || memcmp(bytes + 8, "WAVE", 4)) {
+        return false;
+    }
+    bool format = false;
+    for (size_t at = 12; at + 8 <= size;) {
+        const DWORD length = *(const DWORD*)(bytes + at + 4);
+        const BYTE* body = bytes + at + 8;
+        const size_t available = std::min<size_t>(length, size - at - 8);
+        if (!memcmp(bytes + at, "fmt ", 4) && available >= 16) {
+            const WORD tag = *(const WORD*)body;
+            const WORD bitsPerSample = *(const WORD*)(body + 14);
+            if ((tag != WAVE_FORMAT_PCM && tag != 0xFFFE) || bitsPerSample != 16) {
+                return false;
+            }
+            pcm->channels = *(const WORD*)(body + 2);
+            pcm->rate = *(const DWORD*)(body + 4);
+            format = true;
+        } else if (!memcmp(bytes + at, "data", 4) && format) {
+            pcm->data.assign(body, body + available);
+            return pcm->rate && pcm->channels;
+        }
+        at += 8 + length + (length & 1);
+    }
+    return false;
+}
+
+constexpr const char* kGeminiVoices[] = {"Kore", "Puck", "Charon", "Aoede",
+                                         "Fenrir", "Leda", "Orus", "Zephyr"};
+constexpr const char* kOpenAiVoices[] = {"alloy", "ash", "coral", "echo", "fable",
+                                         "nova", "onyx", "sage", "shimmer"};
+
+template <size_t N>
+bool InVoiceList(const char* const (&list)[N], std::string_view voice) {
+    return std::any_of(std::begin(list), std::end(list),
+                       [&](const char* v) { return voice == v; });
+}
+
+// Windows' installed voices (their display names).
+std::vector<std::wstring> WindowsVoices() {
+    std::vector<std::wstring> names;
+    try {
+        using winrt::Windows::Media::SpeechSynthesis::SpeechSynthesizer;
+        for (const auto& voice : SpeechSynthesizer::AllVoices()) {
+            names.push_back(std::wstring(voice.DisplayName()));
+        }
+    } catch (...) {
+        Log(L"Windows voices: couldn't list them");
+    }
+    return names;
+}
+
+bool SynthesizeWindows(const std::wstring& text, const Config& config, Pcm* pcm,
+                       std::wstring* error) {
+    try {
+        using namespace winrt::Windows::Media::SpeechSynthesis;
+        using winrt::Windows::Storage::Streams::DataReader;
+        SpeechSynthesizer synth;
+        if (!config.ttsVoice.empty()) {
+            const std::wstring wanted = Utf8ToWide(config.ttsVoice);
+            for (const auto& voice : SpeechSynthesizer::AllVoices()) {
+                if (_wcsicmp(voice.DisplayName().c_str(), wanted.c_str()) == 0) {
+                    synth.Voice(voice);
+                    break;
+                }
+            }
+        }
+        synth.Options().SpeakingRate(config.ttsSpeed / 100.0);
+        const SpeechSynthesisStream stream =
+            synth.SynthesizeTextToStreamAsync(winrt::hstring(text)).get();
+        const uint32_t size = (uint32_t)stream.Size();
+        DataReader reader(stream.GetInputStreamAt(0));
+        reader.LoadAsync(size).get();
+        std::vector<BYTE> bytes(size);
+        reader.ReadBytes(bytes);
+        if (!PcmFromWav(bytes.data(), bytes.size(), pcm)) {
+            *error = T(L"Windows' voice gave audio it can't play.",
+                       L"A voz do Windows deu um áudio que não toca.");
+            return false;
+        }
+        return true;
+    } catch (const winrt::hresult_error& e) {
+        Log(L"Windows voice failed: 0x%08X %s", (unsigned)e.code(), e.message().c_str());
+    } catch (...) {
+        Log(L"Windows voice failed");
+    }
+    *error = T(L"Windows' voices aren't available. Add one in Settings > Time and language > "
+               L"Speech, or choose a cloud voice.",
+               L"As vozes do Windows não estão disponíveis. Adicione uma em Configurações > "
+               L"Hora e idioma > Fala, ou escolha uma voz na nuvem.");
+    return false;
+}
+
+// Gemini's speech model: the default, or one its list offers when that one
+// is gone (found once per session).
+std::mutex g_geminiTtsLock;
+std::string g_geminiTtsModel = "gemini-2.5-flash-preview-tts";
+
+std::string FindGeminiTtsModel(const std::string& key, HttpCancel* cancel) {
+    const HttpResult r =
+        HttpsRequest(L"GET", L"https://generativelanguage.googleapis.com/v1beta/models?pageSize=200",
+                     L"x-goog-api-key: " + Utf8ToWide(key) + L"\r\n", "", 15000, cancel);
+    Json json;
+    if (!r.done || r.status != 200 || !ParseJson(r.body, &json)) {
+        return {};
+    }
+    std::string best;
+    if (const Json* models = json.Get("models")) {
+        for (const Json& m : models->items) {
+            const Json* name = m.Get("name");
+            if (!name || !name->String()) {
+                continue;
+            }
+            std::string id = *name->String();
+            if (id.starts_with("models/")) {
+                id = id.substr(7);
+            }
+            if (id.find("tts") == std::string::npos) {
+                continue;
+            }
+            // Flash first (faster, bigger free limits), newest last in the list.
+            if (best.empty() || (id.find("flash") != std::string::npos) ||
+                best.find("flash") == std::string::npos) {
+                best = id;
+            }
+        }
+    }
+    return best;
+}
+
+bool SynthesizeCloud(const std::wstring& text, const Config& config, Pcm* pcm,
+                     std::wstring* error, HttpCancel* cancel) {
+    const bool gemini = config.ttsEngine == "gemini";
+    const std::vector<std::string> keys = SplitKeys(LoadApiKey(gemini ? "gemini" : "openai"));
+    if (keys.empty()) {
+        *error = gemini ? T(L"Read aloud with Gemini needs a Gemini key (Settings > Providers).",
+                            L"Ler em voz alta com o Gemini precisa de uma chave do Gemini "
+                            L"(Configurações > Provedores).")
+                        : T(L"Read aloud with OpenAI needs an OpenAI key (Settings > Providers).",
+                            L"Ler em voz alta com a OpenAI precisa de uma chave da OpenAI "
+                            L"(Configurações > Provedores).");
+        return false;
+    }
+    const std::string text8 = WideToUtf8(text);
+    ProviderError last;
+    for (const std::string& key : keys) {
+        for (int attempt = 0; attempt < 2; attempt++) {
+            HttpResult r;
+            if (gemini) {
+                const std::string voice =
+                    InVoiceList(kGeminiVoices, config.ttsVoice) ? config.ttsVoice : "Kore";
+                std::string model;
+                {
+                    std::lock_guard guard(g_geminiTtsLock);
+                    model = g_geminiTtsModel;
+                }
+                const std::string body =
+                    "{\"contents\":[{\"parts\":[{\"text\":" + JsonQuote(text8) +
+                    "}]}],\"generationConfig\":{\"responseModalities\":[\"AUDIO\"],"
+                    "\"speechConfig\":{\"voiceConfig\":{\"prebuiltVoiceConfig\":{\"voiceName\":" +
+                    JsonQuote(voice) + "}}}}}";
+                r = HttpsRequest(L"POST",
+                                 L"https://generativelanguage.googleapis.com/v1beta/models/" +
+                                     Utf8ToWide(model) + L":generateContent",
+                                 L"Content-Type: application/json\r\nx-goog-api-key: " +
+                                     Utf8ToWide(key) + L"\r\n",
+                                 body, 90000, cancel);
+                if (r.done && r.status == 404 && attempt == 0) {
+                    const std::string found = FindGeminiTtsModel(key, cancel);
+                    if (!found.empty() && found != model) {
+                        Log(L"Gemini speech model %S is gone: using %S", model.c_str(),
+                            found.c_str());
+                        std::lock_guard guard(g_geminiTtsLock);
+                        g_geminiTtsModel = found;
+                        continue;
+                    }
+                }
+                if (r.done && r.status == 200) {
+                    Json json;
+                    const Json* parts = nullptr;
+                    if (ParseJson(r.body, &json)) {
+                        const Json* candidates = json.Get("candidates");
+                        const Json* first = candidates ? candidates->At(0) : nullptr;
+                        const Json* content = first ? first->Get("content") : nullptr;
+                        parts = content ? content->Get("parts") : nullptr;
+                    }
+                    for (size_t i = 0; parts && i < parts->items.size(); i++) {
+                        const Json* inline_ = parts->items[i].Get("inlineData");
+                        const Json* data = inline_ ? inline_->Get("data") : nullptr;
+                        if (!data || !data->String()) {
+                            continue;
+                        }
+                        const std::string audio = Base64Decode(*data->String());
+                        pcm->rate = 24000;
+                        if (const Json* mime = inline_->Get("mimeType"); mime && mime->String()) {
+                            const size_t at = mime->String()->find("rate=");
+                            if (at != std::string::npos) {
+                                pcm->rate = (DWORD)std::max(8000, atoi(mime->String()->c_str() + at + 5));
+                            }
+                        }
+                        pcm->channels = 1;
+                        pcm->data.assign(audio.begin(), audio.end());
+                        return !pcm->data.empty();
+                    }
+                    *error = T(L"Gemini answered without audio.", L"O Gemini respondeu sem áudio.");
+                    return false;
+                }
+            } else {
+                const std::string voice =
+                    InVoiceList(kOpenAiVoices, config.ttsVoice) ? config.ttsVoice : "alloy";
+                char speed[16];
+                snprintf(speed, sizeof(speed), "%.2f", config.ttsSpeed / 100.0);
+                const std::string body = "{\"model\":\"gpt-4o-mini-tts\",\"input\":" +
+                                         JsonQuote(text8) + ",\"voice\":" + JsonQuote(voice) +
+                                         ",\"response_format\":\"pcm\",\"speed\":" + speed + "}";
+                r = HttpsRequest(L"POST", ProviderBase("openai", "") + L"/audio/speech",
+                                 L"Content-Type: application/json\r\n" + AuthHeader(key), body,
+                                 90000, cancel);
+                if (r.done && r.status == 200) {
+                    pcm->rate = 24000;
+                    pcm->channels = 1;
+                    pcm->data.assign(r.body.begin(), r.body.end());
+                    return !pcm->data.empty();
+                }
+            }
+            if (!r.done) {
+                last = NetError(r.error);
+            } else {
+                last = FriendlyError((int)r.status, r.body, r.retryAfter);
+                Log(L"Read aloud: %s answered %u", gemini ? L"Gemini" : L"OpenAI",
+                    (unsigned)r.status);
+            }
+            break;
+        }
+        if (!last.keyProblem) {
+            break;
+        }
+    }
+    *error = last.message.empty() ? T(L"The voice didn't answer.", L"A voz não respondeu.")
+                                  : last.message;
+    return false;
+}
+
+// Pieces to speak one after another (the first is spoken while the next is
+// made), cut at sentence ends.
+std::vector<std::wstring> SpeechChunks(const std::wstring& text, size_t maxChars) {
+    std::vector<std::wstring> chunks;
+    std::wstring rest = Trim(text);
+    while (!rest.empty()) {
+        if (rest.size() <= maxChars) {
+            chunks.push_back(rest);
+            break;
+        }
+        size_t cut = std::wstring::npos;
+        for (size_t i = maxChars; i > maxChars / 3; i--) {
+            const wchar_t c = rest[i - 1];
+            if (c == L'\n' || ((c == L'.' || c == L'!' || c == L'?' || c == L';') &&
+                               (i >= rest.size() || IsSpace(rest[i])))) {
+                cut = i;
+                break;
+            }
+        }
+        if (cut == std::wstring::npos) {
+            cut = rest.rfind(L' ', maxChars);
+            if (cut == std::wstring::npos || cut < maxChars / 3) {
+                cut = maxChars;
+            }
+        }
+        const std::wstring piece = Trim(std::wstring_view(rest).substr(0, cut));
+        if (!piece.empty()) {
+            chunks.push_back(piece);
+        }
+        rest = Trim(std::wstring_view(rest).substr(cut));
+    }
+    return chunks;
+}
+
+// waveOut with queued buffers: each piece plays as soon as the one before
+// it ends.
+class SpeechPlayer {
+   public:
+    ~SpeechPlayer() { Close(true); }
+
+    bool Queue(Pcm pcm, std::wstring* error) {
+        if (m_out && (pcm.rate != m_rate || pcm.channels != m_channels)) {
+            WaitDone(nullptr);
+            Close(false);
+        }
+        if (!m_out) {
+            WAVEFORMATEX format{};
+            format.wFormatTag = WAVE_FORMAT_PCM;
+            format.nChannels = pcm.channels;
+            format.nSamplesPerSec = pcm.rate;
+            format.wBitsPerSample = 16;
+            format.nBlockAlign = (WORD)(pcm.channels * 2);
+            format.nAvgBytesPerSec = pcm.rate * format.nBlockAlign;
+            if (waveOutOpen(&m_out, WAVE_MAPPER, &format, 0, 0, CALLBACK_NULL) !=
+                MMSYSERR_NOERROR) {
+                m_out = nullptr;
+                *error = T(L"No speakers to play the voice on.",
+                           L"Nenhum alto-falante para tocar a voz.");
+                return false;
+            }
+            m_rate = pcm.rate;
+            m_channels = pcm.channels;
+        }
+        pcm.data.resize(pcm.data.size() & ~(size_t)(m_channels * 2 - 1));
+        auto buffer = std::make_unique<Buffer>();
+        buffer->data = std::move(pcm.data);
+        buffer->header.lpData = (LPSTR)buffer->data.data();
+        buffer->header.dwBufferLength = (DWORD)buffer->data.size();
+        if (waveOutPrepareHeader(m_out, &buffer->header, sizeof(WAVEHDR)) != MMSYSERR_NOERROR ||
+            waveOutWrite(m_out, &buffer->header, sizeof(WAVEHDR)) != MMSYSERR_NOERROR) {
+            *error = T(L"The voice couldn't be played.", L"A voz não pôde ser tocada.");
+            return false;
+        }
+        m_buffers.push_back(std::move(buffer));
+        return true;
+    }
+
+    // Until everything queued has played (false: `stop` was set first).
+    bool WaitDone(HANDLE stop) {
+        for (;;) {
+            if (std::all_of(m_buffers.begin(), m_buffers.end(), [](const auto& b) {
+                    return (b->header.dwFlags & WHDR_DONE) != 0;
+                })) {
+                return true;
+            }
+            if (stop) {
+                if (WaitForSingleObject(stop, 40) == WAIT_OBJECT_0) {
+                    return false;
+                }
+            } else {
+                Sleep(40);
+            }
+        }
+    }
+
+    void Close(bool now) {
+        if (!m_out) {
+            return;
+        }
+        if (now) {
+            waveOutReset(m_out);
+        }
+        for (auto& b : m_buffers) {
+            waveOutUnprepareHeader(m_out, &b->header, sizeof(WAVEHDR));
+        }
+        m_buffers.clear();
+        waveOutClose(m_out);
+        m_out = nullptr;
+    }
+
+   private:
+    struct Buffer {
+        WAVEHDR header{};
+        std::vector<BYTE> data;
+    };
+    HWAVEOUT m_out = nullptr;
+    DWORD m_rate = 0;
+    WORD m_channels = 0;
+    std::vector<std::unique_ptr<Buffer>> m_buffers;
+};
+
+struct SpeechJob {
+    std::wstring text;
+    Config config;
+    UINT64 gen = 0;
+    HANDLE stop = nullptr;
+    HttpCancel cancel;
+};
+
+std::mutex g_speechLock;
+HANDLE g_speechThread;
+std::shared_ptr<SpeechJob> g_speechJob;
+std::atomic<bool> g_speaking;
+
+DWORD WINAPI SpeechThreadProc(void* param) {
+    std::shared_ptr<SpeechJob> job = *(std::shared_ptr<SpeechJob>*)param;
+    delete (std::shared_ptr<SpeechJob>*)param;
+    const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    const bool windows = job->config.ttsEngine == "windows";
+    // (Gemini's audio comes as base64 in JSON: its pieces stay well under the
+    // 4 MB answer limit.)
+    const std::vector<std::wstring> chunks = SpeechChunks(job->text, windows ? 1200 : 600);
+    std::wstring error;
+    bool stopped = false;
+    {
+        SpeechPlayer player;
+        for (const std::wstring& chunk : chunks) {
+            if (WaitForSingleObject(job->stop, 0) == WAIT_OBJECT_0) {
+                stopped = true;
+                break;
+            }
+            Pcm pcm;
+            const bool ok = windows ? SynthesizeWindows(chunk, job->config, &pcm, &error)
+                                    : SynthesizeCloud(chunk, job->config, &pcm, &error,
+                                                      &job->cancel);
+            if (!ok || !player.Queue(std::move(pcm), &error)) {
+                break;
+            }
+        }
+        if (!stopped && error.empty()) {
+            stopped = !player.WaitDone(job->stop);
+        } else if (!stopped) {
+            // What already played is fine; an error ends it.
+            stopped = WaitForSingleObject(job->stop, 0) == WAIT_OBJECT_0;
+        }
+        player.Close(true);
+    }
+    Log(L"Read aloud %s", stopped ? L"stopped" : error.empty() ? L"finished" : L"failed");
+    g_speaking = false;
+    if (!stopped && !error.empty()) {
+        AcquireSRWLockExclusive(&g_overlayLock);
+        if (OwnsOverlayLocked(job->gen)) {
+            OverlayState state;
+            state.phase = Phase::Error;
+            state.message = error;
+            PublishLocked(std::move(state));
+        }
+        ReleaseSRWLockExclusive(&g_overlayLock);
+    } else {
+        AcquireSRWLockExclusive(&g_overlayLock);
+        if (OwnsOverlayLocked(job->gen) && g_overlayState.speaking) {
+            g_releasedUpTo = job->gen;
+            PublishLocked(OverlayState{});
+        }
+        ReleaseSRWLockExclusive(&g_overlayLock);
+    }
+    if (SUCCEEDED(com)) {
+        CoUninitialize();
+    }
+    return 0;
+}
+
+// Stops what is being read (true if something was).
+bool StopSpeaking() {
+    HANDLE thread = nullptr;
+    std::shared_ptr<SpeechJob> job;
+    {
+        std::lock_guard guard(g_speechLock);
+        thread = std::exchange(g_speechThread, nullptr);
+        job = std::move(g_speechJob);
+    }
+    if (!thread) {
+        return false;
+    }
+    const bool was = g_speaking.exchange(false);
+    SetEvent(job->stop);
+    CancelHttp(&job->cancel);
+    if (WaitForSingleObject(thread, 10000) != WAIT_OBJECT_0) {
+        Log(L"The read aloud thread didn't stop in time");
+    }
+    CloseHandle(thread);
+    CloseHandle(job->stop);
+    return was;
+}
+
+void ReadAloud(HWND target) {
+    if (g_session) {
+        return;
+    }
+    // The shortcut again: stop.
+    if (StopSpeaking()) {
+        AcquireSRWLockExclusive(&g_overlayLock);
+        if (g_overlayState.speaking) {
+            g_releasedUpTo = g_dictation;
+            PublishLocked(OverlayState{});
+        }
+        ReleaseSRWLockExclusive(&g_overlayLock);
+        return;
+    }
+    if (!target || !IsWindow(target)) {
+        return;
+    }
+    if (IsConsoleWindow(target)) {
+        ShowError(NoPolishTerminalText(), true);
+        return;
+    }
+    const SelectionCopy copy = CopySelection(target);
+    if (!copy.ok || !HasWords(copy.text)) {
+        ShowError(copy.ok ? NoPolishSelectionText() : copy.error, true);
+        return;
+    }
+    auto job = std::make_shared<SpeechJob>();
+    job->text = copy.text;
+    job->config = CurrentConfig();
+    job->stop = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+    if (!job->stop) {
+        return;
+    }
+    const std::string& engine = job->config.ttsEngine;
+    Log(L"Read aloud: %u characters with %S", (unsigned)copy.text.size(), engine.c_str());
+    AcquireSRWLockExclusive(&g_overlayLock);
+    job->gen = ++g_dictation;
+    OverlayState state;
+    state.phase = Phase::Refining;
+    state.speaking = true;
+    state.provider = engine == "gemini" ? L"Gemini" : engine == "openai" ? L"OpenAI"
+                                                                          : L"Windows";
+    PublishLocked(std::move(state));
+    ReleaseSRWLockExclusive(&g_overlayLock);
+    g_speaking = true;
+    auto* param = new std::shared_ptr<SpeechJob>(job);
+    HANDLE thread = CreateThread(nullptr, 0, SpeechThreadProc, param, 0, nullptr);
+    if (!thread) {
+        delete param;
+        g_speaking = false;
+        CloseHandle(job->stop);
+        HideOverlay();
+        return;
+    }
+    std::lock_guard guard(g_speechLock);
+    g_speechThread = thread;
+    g_speechJob = std::move(job);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// The floating button: a small pill above selected text (opt-in), or the
+// Polish style list when the Polish shortcut has no style set. It never takes
+// the focus, so the selection stays where it is.
+
+extern HMODULE g_module;
+const WCHAR kPillClass[] = L"SeamlessDictatePill_" WH_MOD_ID;
+constexpr UINT WM_APP_PILL_SHOW = WM_APP + 71;
+constexpr UINT WM_APP_PILL_HIDE = WM_APP + 72;
+constexpr UINT_PTR kPillCheckTimer = 1;
+constexpr UINT_PTR kPillHideTimer = 2;
+constexpr UINT_PTR kPillConfigTimer = 3;
+
+HANDLE g_pillThread;
+DWORD g_pillThreadId;
+std::atomic<HWND> g_pillWnd;
+
+struct PillItem {
+    std::wstring label;
+    // "polish" (the Polish style), "pick" (the list), "read", or a style id.
+    std::string action;
+    D2D1_RECT_F rect{};
+};
+
+struct PillState {
+    HWND hwnd = nullptr;
+    HWINEVENTHOOK selectionHook = nullptr;
+    HWINEVENTHOOK focusHook = nullptr;
+    // Rich edit boxes never send a selection change. While one has the focus,
+    // its caret moves (that thread only) stand in for it.
+    HWINEVENTHOOK editFocusHook = nullptr;
+    HWINEVENTHOOK caretHook = nullptr;
+    DWORD caretThread = 0;
+    HWND caretEdit = nullptr;
+    bool byCaret = false;
+    // The last selection change (checked once it settles).
+    HWND changed = nullptr;
+    int checks = 0;
+    std::wstring shownFor;
+    // Where the selection is on screen (empty when unknown).
+    RECT anchor{};
+    bool pick = false;
+    std::vector<PillItem> items;
+    int hover = -1;
+    bool tracking = false;
+    UINT dpi = 96;
+    Microsoft::WRL::ComPtr<ID2D1Factory> factory;
+    Microsoft::WRL::ComPtr<IDWriteFactory> dwrite;
+    Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> target;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> font;
+    Microsoft::WRL::ComPtr<IUIAutomation> uia;
+};
+PillState* g_pill;
+
+// The selected text in the focused control, through UI Automation (a
+// short read, capped; "" when there is none or it can't be read). Also
+// fills *bounds with the selection's screen box, or the caret's.
+void SelectionBounds(IUIAutomationTextRange* range, RECT* bounds) {
+    *bounds = {};
+    SAFEARRAY* rects = nullptr;
+    if (range && SUCCEEDED(range->GetBoundingRectangles(&rects)) && rects) {
+        LONG lo = 0, hi = -1;
+        double* v = nullptr;
+        if (SUCCEEDED(SafeArrayGetLBound(rects, 1, &lo)) &&
+            SUCCEEDED(SafeArrayGetUBound(rects, 1, &hi)) &&
+            SUCCEEDED(SafeArrayAccessData(rects, (void**)&v))) {
+            // (left, top, width, height) per line.
+            for (LONG i = 0; i + 3 <= hi - lo; i += 4) {
+                const RECT line{(LONG)v[i], (LONG)v[i + 1], (LONG)(v[i] + v[i + 2]),
+                                (LONG)(v[i + 1] + v[i + 3])};
+                if (line.right > line.left && line.bottom > line.top) {
+                    UnionRect(bounds, IsRectEmpty(bounds) ? &line : bounds, &line);
+                }
+            }
+            SafeArrayUnaccessData(rects);
+        }
+        SafeArrayDestroy(rects);
+    }
+    if (!IsRectEmpty(bounds)) {
+        return;
+    }
+    GUITHREADINFO gui{sizeof(gui)};
+    if (GetGUIThreadInfo(0, &gui) && gui.hwndCaret && !IsRectEmpty(&gui.rcCaret)) {
+        *bounds = gui.rcCaret;
+        MapWindowPoints(gui.hwndCaret, nullptr, (POINT*)bounds, 2);
+    }
+}
+
+std::wstring FocusedSelection(PillState& pill, RECT* bounds = nullptr) {
+    if (bounds) {
+        *bounds = {};
+    }
+    if (!pill.uia) {
+        Microsoft::WRL::ComPtr<IUIAutomation2> uia2;
+        if (SUCCEEDED(CoCreateInstance(__uuidof(CUIAutomation8), nullptr, CLSCTX_INPROC_SERVER,
+                                       __uuidof(IUIAutomation2),
+                                       (void**)uia2.GetAddressOf()))) {
+            // An app that hangs must never hold this thread for long.
+            uia2->put_ConnectionTimeout(700);
+            uia2->put_TransactionTimeout(700);
+            pill.uia = uia2;
+        } else if (FAILED(CoCreateInstance(__uuidof(CUIAutomation), nullptr,
+                                           CLSCTX_INPROC_SERVER, __uuidof(IUIAutomation),
+                                           (void**)pill.uia.GetAddressOf()))) {
+            return {};
+        }
+    }
+    Microsoft::WRL::ComPtr<IUIAutomationElement> focused;
+    if (FAILED(pill.uia->GetFocusedElement(focused.GetAddressOf())) || !focused) {
+        return {};
+    }
+    Microsoft::WRL::ComPtr<IUIAutomationTextPattern> pattern;
+    if (FAILED(focused->GetCurrentPatternAs(UIA_TextPatternId, __uuidof(IUIAutomationTextPattern),
+                                            (void**)pattern.GetAddressOf())) ||
+        !pattern) {
+        return {};
+    }
+    Microsoft::WRL::ComPtr<IUIAutomationTextRangeArray> ranges;
+    int count = 0;
+    if (FAILED(pattern->GetSelection(ranges.GetAddressOf())) || !ranges ||
+        FAILED(ranges->get_Length(&count)) || count < 1) {
+        return {};
+    }
+    Microsoft::WRL::ComPtr<IUIAutomationTextRange> range;
+    BSTR text = nullptr;
+    if (FAILED(ranges->GetElement(0, range.GetAddressOf())) || !range ||
+        FAILED(range->GetText(400, &text)) || !text) {
+        return {};
+    }
+    std::wstring result(text, SysStringLen(text));
+    SysFreeString(text);
+    if (bounds) {
+        SelectionBounds(range.Get(), bounds);
+    }
+    return result;
+}
+
+float PillScale(const PillState& pill) {
+    return pill.dpi / 96.0f;
+}
+
+void PillLayout(PillState& pill, float* width, float* height) {
+    pill.items.clear();
+    const Config c = CurrentConfig();
+    if (pill.pick) {
+        for (const StyleView& style : AllStyles(c)) {
+            if (style.kind == StyleKind::Llm) {
+                pill.items.push_back({style.name, style.id});
+            }
+        }
+        pill.items.push_back({T(L"Read aloud", L"Ler em voz alta"), "read"});
+    } else {
+        std::wstring polish = T(L"Polish", L"Polir");
+        if (!c.polishStyle.empty() && StyleExists(c, c.polishStyle)) {
+            polish += L" · " + ResolveStyle(c, c.polishStyle).name;
+        }
+        pill.items.push_back({polish, c.polishStyle.empty() ? "pick" : "polish"});
+        pill.items.push_back({L"▾", "pick"});
+        pill.items.push_back({T(L"Read aloud", L"Ler em voz alta"), "read"});
+    }
+    auto measure = [&](const std::wstring& text) {
+        Microsoft::WRL::ComPtr<IDWriteTextLayout> layout;
+        DWRITE_TEXT_METRICS m{};
+        if (pill.font && SUCCEEDED(pill.dwrite->CreateTextLayout(text.c_str(), (UINT32)text.size(),
+                                                                  pill.font.Get(), 1000, 100,
+                                                                  layout.GetAddressOf()))) {
+            layout->GetMetrics(&m);
+        }
+        return m.widthIncludingTrailingWhitespace;
+    };
+    constexpr float kPad = 4, kRow = 30, kGap = 2;
+    if (pill.pick) {
+        float w = 140;
+        for (const PillItem& item : pill.items) {
+            w = std::max(w, measure(item.label) + 28);
+        }
+        float y = kPad;
+        for (PillItem& item : pill.items) {
+            item.rect = D2D1::RectF(kPad, y, kPad + w, y + kRow);
+            y += kRow + kGap;
+        }
+        *width = w + kPad * 2;
+        *height = y - kGap + kPad;
+    } else {
+        float x = kPad;
+        for (PillItem& item : pill.items) {
+            const float w = measure(item.label) + (item.action == "pick" ? 16 : 24);
+            item.rect = D2D1::RectF(x, kPad, x + w, kPad + kRow);
+            x += w + kGap;
+        }
+        *width = x - kGap + kPad;
+        *height = kRow + kPad * 2;
+    }
+}
+
+void PillPaint(PillState& pill) {
+    if (!pill.target) {
+        RECT rc;
+        GetClientRect(pill.hwnd, &rc);
+        D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties();
+        props.dpiX = props.dpiY = (float)pill.dpi;
+        if (FAILED(pill.factory->CreateHwndRenderTarget(
+                props, D2D1::HwndRenderTargetProperties(pill.hwnd, D2D1::SizeU(rc.right, rc.bottom)),
+                pill.target.GetAddressOf()))) {
+            return;
+        }
+    }
+    auto color = [](UINT rgb, float a = 1) {
+        return D2D1::ColorF(((rgb >> 16) & 0xFF) / 255.0f, ((rgb >> 8) & 0xFF) / 255.0f,
+                            (rgb & 0xFF) / 255.0f, a);
+    };
+    pill.target->BeginDraw();
+    pill.target->Clear(color(0x1E1E2E));
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> text, sub, divider;
+    pill.target->CreateSolidColorBrush(color(0xCDD6F4), text.GetAddressOf());
+    pill.target->CreateSolidColorBrush(color(0xA6ADC8), sub.GetAddressOf());
+    pill.target->CreateSolidColorBrush(color(0x45475A), divider.GetAddressOf());
+    for (size_t i = 0; i < pill.items.size(); i++) {
+        const PillItem& item = pill.items[i];
+        if ((int)i == pill.hover) {
+            // The hover: a blue to mauve frame, no fill wash.
+            D2D1_GRADIENT_STOP stops[] = {{0, color(0x89B4FA)}, {1, color(0xCBA6F7)}};
+            Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> collection;
+            Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> gradient;
+            if (SUCCEEDED(pill.target->CreateGradientStopCollection(stops, 2,
+                                                                    collection.GetAddressOf())) &&
+                SUCCEEDED(pill.target->CreateLinearGradientBrush(
+                    D2D1::LinearGradientBrushProperties(
+                        D2D1::Point2F(item.rect.left, item.rect.top),
+                        D2D1::Point2F(item.rect.right, item.rect.bottom)),
+                    collection.Get(), gradient.GetAddressOf()))) {
+                const D2D1_ROUNDED_RECT inset = D2D1::RoundedRect(
+                    D2D1::RectF(item.rect.left + 0.75f, item.rect.top + 0.75f,
+                                item.rect.right - 0.75f, item.rect.bottom - 0.75f),
+                    6.25f, 6.25f);
+                pill.target->DrawRoundedRectangle(inset, gradient.Get(), 1.5f);
+            }
+        } else if (!pill.pick && i > 0) {
+            pill.target->DrawLine(D2D1::Point2F(item.rect.left - 1, item.rect.top + 8),
+                                  D2D1::Point2F(item.rect.left - 1, item.rect.bottom - 8),
+                                  divider.Get(), 1);
+        }
+        if (pill.font) {
+            pill.font->SetTextAlignment(pill.pick ? DWRITE_TEXT_ALIGNMENT_LEADING
+                                                  : DWRITE_TEXT_ALIGNMENT_CENTER);
+            const D2D1_RECT_F r = pill.pick ? D2D1::RectF(item.rect.left + 12, item.rect.top,
+                                                          item.rect.right - 8, item.rect.bottom)
+                                            : item.rect;
+            pill.target->DrawText(item.label.c_str(), (UINT32)item.label.size(), pill.font.Get(),
+                                  r, item.action == "pick" && !pill.pick ? sub.Get() : text.Get());
+        }
+    }
+    if (pill.target->EndDraw() == D2DERR_RECREATE_TARGET) {
+        pill.target.Reset();
+    }
+}
+
+void PillHide(PillState& pill) {
+    KillTimer(pill.hwnd, kPillHideTimer);
+    if (IsWindowVisible(pill.hwnd)) {
+        ShowWindow(pill.hwnd, SW_HIDE);
+    }
+    pill.hover = -1;
+}
+
+// Above the mouse, or above the selection when the mouse is far from it (a
+// keyboard selection, the mouse parked on another screen); kept on the screen.
+void PillShow(PillState& pill, HWND target, bool pick) {
+    g_pillTarget = target;
+    pill.pick = pick;
+    pill.hover = -1;
+    POINT cursor{};
+    GetCursorPos(&cursor);
+    bool atSelection = false;
+    if (!IsRectEmpty(&pill.anchor)) {
+        RECT zone = pill.anchor;
+        InflateRect(&zone, 160, 120);
+        if (!PtInRect(&zone, cursor)) {
+            atSelection = true;
+            cursor = {pill.anchor.left, pill.anchor.top};
+        }
+    }
+    HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+    UINT dpiX = 96, dpiY = 96;
+    GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+    if (dpiX != pill.dpi) {
+        pill.dpi = dpiX;
+        pill.target.Reset();
+    }
+    float w = 0, h = 0;
+    PillLayout(pill, &w, &h);
+    const float scale = PillScale(pill);
+    const int pw = (int)std::ceil(w * scale), ph = (int)std::ceil(h * scale);
+    MONITORINFO info{sizeof(info)};
+    GetMonitorInfo(monitor, &info);
+    const RECT& work = info.rcWork;
+    int x = cursor.x - pw / 2;
+    int y = cursor.y - ph - (int)(18 * scale);
+    if (atSelection) {
+        // Lined up with the selection's start, just above its first line (or
+        // just under its last one, clear of the text, when there's no room).
+        x = pill.anchor.left;
+        y = pill.anchor.top - ph - (int)(6 * scale);
+        if (y < work.top) {
+            y = pill.anchor.bottom + (int)(6 * scale);
+        }
+    } else if (pick) {
+        // The list opens under the mouse when there's no room above.
+        y = cursor.y - ph - (int)(12 * scale);
+        if (y < work.top) {
+            y = cursor.y + (int)(20 * scale);
+        }
+    } else if (y < work.top) {
+        y = cursor.y + (int)(24 * scale);
+    }
+    x = std::clamp(x, (int)work.left + 4, (int)std::max(work.left + 4, work.right - pw - 4));
+    y = std::clamp(y, (int)work.top + 4, (int)std::max(work.top + 4, work.bottom - ph - 4));
+    SetWindowPos(pill.hwnd, HWND_TOPMOST, x, y, pw, ph, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    if (pill.target) {
+        pill.target->Resize(D2D1::SizeU(pw, ph));
+    }
+    InvalidateRect(pill.hwnd, nullptr, FALSE);
+    SetTimer(pill.hwnd, kPillHideTimer, pick ? 12000 : 6000, nullptr);
+}
+
+void PillHooks(PillState& pill, bool on);
+
+bool IsRichEdit(HWND hwnd) {
+    WCHAR cls[80]{};
+    if (!hwnd || !GetClassNameW(hwnd, cls, ARRAYSIZE(cls))) {
+        return false;
+    }
+    CharLowerW(cls);
+    return wcsstr(cls, L"richedit") != nullptr;
+}
+
+void CALLBACK PillWinEvent(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG object, LONG, DWORD, DWORD);
+
+// Watches the caret of the focused box when it's a rich edit box (only that
+// app's thread, so the hook stays quiet), and nothing otherwise.
+void PillWatchCaret(PillState& pill, HWND focus) {
+    DWORD pid = 0;
+    const DWORD thread = IsRichEdit(focus) ? GetWindowThreadProcessId(focus, &pid) : 0;
+    if (thread && thread == pill.caretThread && pill.caretHook) {
+        pill.caretEdit = focus;
+        return;
+    }
+    if (pill.caretHook) {
+        UnhookWinEvent(std::exchange(pill.caretHook, nullptr));
+    }
+    pill.caretThread = 0;
+    pill.caretEdit = nullptr;
+    if (thread && pid != GetCurrentProcessId()) {
+        pill.caretHook = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE,
+                                         nullptr, PillWinEvent, pid, thread,
+                                         WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+        if (pill.caretHook) {
+            pill.caretThread = thread;
+            pill.caretEdit = focus;
+        }
+    }
+}
+
+void CALLBACK PillWinEvent(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG object, LONG, DWORD, DWORD) {
+    PillState* pill = g_pill;
+    if (!pill) {
+        return;
+    }
+    if (event == EVENT_SYSTEM_FOREGROUND) {
+        if (hwnd != pill->hwnd) {
+            PillHide(*pill);
+        }
+        return;
+    }
+    if (event == EVENT_OBJECT_FOCUS) {
+        PillWatchCaret(*pill, hwnd);
+        return;
+    }
+    if (event == EVENT_OBJECT_LOCATIONCHANGE) {
+        if (object != OBJID_CARET) {
+            return;
+        }
+        pill->byCaret = true;
+    } else {
+        pill->byCaret = false;
+    }
+    // A selection change (or a rich edit caret move): checked once it
+    // settles (a drag sends many).
+    pill->changed = hwnd;
+    pill->checks = 0;
+    SetTimer(pill->hwnd, kPillCheckTimer, 350, nullptr);
+}
+
+void PillHooks(PillState& pill, bool on) {
+    if (on && !pill.selectionHook) {
+        pill.selectionHook = SetWinEventHook(
+            EVENT_OBJECT_TEXTSELECTIONCHANGED, EVENT_OBJECT_TEXTSELECTIONCHANGED, nullptr,
+            PillWinEvent, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+        pill.editFocusHook = SetWinEventHook(EVENT_OBJECT_FOCUS, EVENT_OBJECT_FOCUS, nullptr,
+                                             PillWinEvent, 0, 0,
+                                             WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+        GUITHREADINFO gui{sizeof(gui)};
+        if (GetGUIThreadInfo(0, &gui)) {
+            PillWatchCaret(pill, gui.hwndFocus);
+        }
+        Log(L"Floating button on");
+    } else if (!on && pill.selectionHook) {
+        UnhookWinEvent(std::exchange(pill.selectionHook, nullptr));
+        if (pill.editFocusHook) {
+            UnhookWinEvent(std::exchange(pill.editFocusHook, nullptr));
+        }
+        PillWatchCaret(pill, nullptr);
+        PillHide(pill);
+        Log(L"Floating button off");
+    }
+}
+
+void PillCheckSelection(PillState& pill) {
+    // Still dragging or holding Shift: later.
+    if ((KeyDown(VK_LBUTTON) || KeyDown(VK_SHIFT)) && pill.checks++ < 40) {
+        SetTimer(pill.hwnd, kPillCheckTimer, 250, nullptr);
+        return;
+    }
+    KillTimer(pill.hwnd, kPillCheckTimer);
+    if (g_speaking) {
+        return;
+    }
+    const HWND foreground = GetForegroundWindow();
+    if (!foreground || IsConsoleWindow(foreground)) {
+        PillHide(pill);
+        return;
+    }
+    if (pill.byCaret) {
+        // A caret move is mostly typing: a cheap look at the box first, and
+        // the slower UI Automation read only when something is selected. (No
+        // pointers in this message, so it's safe across apps; both halves read
+        // 0xFFFF past 64K characters, so that case goes on to the full read.)
+        DWORD_PTR sel = 0;
+        if (!pill.caretEdit ||
+            !SendMessageTimeoutW(pill.caretEdit, EM_GETSEL, 0, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                                 150, &sel) ||
+            (LOWORD(sel) == HIWORD(sel) && LOWORD(sel) != 0xFFFF)) {
+            pill.shownFor.clear();
+            if (!pill.pick) {
+                PillHide(pill);
+            }
+            return;
+        }
+    }
+    RECT bounds{};
+    const std::wstring selected = Trim(FocusedSelection(pill, &bounds));
+    if (selected.size() < 2 || !HasWords(selected)) {
+        pill.shownFor.clear();
+        if (!pill.pick) {
+            PillHide(pill);
+        }
+        return;
+    }
+    // The same selection again (a repaint, a click on it): once is enough.
+    if (selected == pill.shownFor) {
+        return;
+    }
+    pill.shownFor = selected;
+    pill.anchor = bounds;
+    PillShow(pill, foreground, false);
+}
+
+void PillClick(PillState& pill, int index) {
+    if (index < 0 || index >= (int)pill.items.size()) {
+        return;
+    }
+    const std::string action = pill.items[index].action;
+    const HWND target = g_pillTarget;
+    if (action == "pick") {
+        PillShow(pill, target, true);
+        return;
+    }
+    PillHide(pill);
+    if (action == "read") {
+        Ctl ctl{CtlKind::ReadAloud};
+        ctl.fromMenu = true;
+        PostCtl(std::move(ctl));
+    } else {
+        Ctl ctl{CtlKind::Polish};
+        ctl.style = action == "polish" ? "" : action;
+        ctl.fromMenu = true;
+        PostCtl(std::move(ctl));
+    }
+}
+
+LRESULT CALLBACK PillWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    PillState* pill = g_pill;
+    if (!pill) {
+        return DefWindowProc(hwnd, msg, wp, lp);
+    }
+    switch (msg) {
+        case WM_MOUSEACTIVATE:
+            return MA_NOACTIVATE;
+        case WM_NCHITTEST:
+            return HTCLIENT;
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            PillPaint(*pill);
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_MOUSEMOVE: {
+            const float scale = PillScale(*pill);
+            const D2D1_POINT_2F p = D2D1::Point2F(GET_X_LPARAM(lp) / scale,
+                                                  GET_Y_LPARAM(lp) / scale);
+            int hover = -1;
+            for (size_t i = 0; i < pill->items.size(); i++) {
+                const D2D1_RECT_F& r = pill->items[i].rect;
+                if (p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom) {
+                    hover = (int)i;
+                }
+            }
+            if (!pill->tracking) {
+                TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd, 0};
+                pill->tracking = TrackMouseEvent(&track);
+            }
+            // (Kept while the mouse is on it.)
+            KillTimer(hwnd, kPillHideTimer);
+            if (hover != pill->hover) {
+                pill->hover = hover;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        }
+        case WM_MOUSELEAVE:
+            pill->tracking = false;
+            pill->hover = -1;
+            InvalidateRect(hwnd, nullptr, FALSE);
+            SetTimer(hwnd, kPillHideTimer, pill->pick ? 5000 : 2500, nullptr);
+            return 0;
+        case WM_LBUTTONUP:
+            PillClick(*pill, pill->hover);
+            return 0;
+        case WM_RBUTTONUP:
+            PillHide(*pill);
+            return 0;
+        case WM_TIMER:
+            if (wp == kPillCheckTimer) {
+                PillCheckSelection(*pill);
+            } else if (wp == kPillHideTimer) {
+                PillHide(*pill);
+            } else if (wp == kPillConfigTimer) {
+                PillHooks(*pill, CurrentConfig().floatingButton);
+            }
+            return 0;
+        case WM_APP_PILL_SHOW:
+            // (From a shortcut: the style list goes by the selection too.)
+            FocusedSelection(*pill, &pill->anchor);
+            PillShow(*pill, (HWND)wp, lp != 0);
+            return 0;
+        case WM_APP_PILL_HIDE:
+            PillHide(*pill);
+            return 0;
+    }
+    return DefWindowProc(hwnd, msg, wp, lp);
+}
+
+DWORD WINAPI PillThreadProc(void*) {
+    const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    PillState pill;
+    D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, pill.factory.GetAddressOf());
+    DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
+                        (IUnknown**)pill.dwrite.GetAddressOf());
+    if (pill.dwrite) {
+        const std::wstring family = Utf8ToWide(CurrentConfig().fontFamily);
+        pill.dwrite->CreateTextFormat(family.empty() ? L"Segoe UI" : family.c_str(), nullptr,
+                                      DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_FONT_STYLE_NORMAL,
+                                      DWRITE_FONT_STRETCH_NORMAL, 12.5f, L"",
+                                      pill.font.GetAddressOf());
+        if (pill.font) {
+            pill.font->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+            pill.font->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        }
+    }
+    WNDCLASSEX wc{sizeof(wc)};
+    wc.lpfnWndProc = PillWndProc;
+    wc.hInstance = g_module;
+    wc.hCursor = LoadCursor(nullptr, IDC_HAND);
+    wc.lpszClassName = kPillClass;
+    RegisterClassEx(&wc);
+    pill.hwnd = CreateWindowEx(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, kPillClass,
+                               L"Seamless Dictate", WS_POPUP, 0, 0, 10, 10, nullptr, nullptr,
+                               g_module, nullptr);
+    if (pill.hwnd) {
+        // Windows 11's rounded corners and a quiet edge.
+        const DWORD corner = 2;  // DWMWCP_ROUND
+        DwmSetWindowAttribute(pill.hwnd, 33, &corner, sizeof(corner));
+        const COLORREF border = RGB(0x45, 0x47, 0x5A);
+        DwmSetWindowAttribute(pill.hwnd, 34, &border, sizeof(border));
+        const BOOL dark = TRUE;
+        DwmSetWindowAttribute(pill.hwnd, 20, &dark, sizeof(dark));
+        g_pill = &pill;
+        g_pillWnd = pill.hwnd;
+        // (Another app in front closes the button and the style list.)
+        pill.focusHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr,
+                                         PillWinEvent, 0, 0,
+                                         WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+        PillHooks(pill, CurrentConfig().floatingButton);
+        SetTimer(pill.hwnd, kPillConfigTimer, 2000, nullptr);
+        MSG msg;
+        while (GetMessage(&msg, nullptr, 0, 0) > 0) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        PillHooks(pill, false);
+        if (pill.focusHook) {
+            UnhookWinEvent(std::exchange(pill.focusHook, nullptr));
+        }
+        g_pillWnd = nullptr;
+        g_pill = nullptr;
+        DestroyWindow(pill.hwnd);
+    }
+    UnregisterClass(kPillClass, g_module);
+    pill.target.Reset();
+    pill.uia.Reset();
+    if (SUCCEEDED(com)) {
+        CoUninitialize();
+    }
+    return 0;
+}
+
+void ShowPill(HWND target, bool pick) {
+    if (HWND hwnd = g_pillWnd) {
+        PostMessage(hwnd, WM_APP_PILL_SHOW, (WPARAM)target, pick);
+    }
+}
+
+void HidePill() {
+    if (HWND hwnd = g_pillWnd) {
+        PostMessage(hwnd, WM_APP_PILL_HIDE, 0, 0);
+    }
+}
+
+void StartPill() {
+    if (!g_pillThread) {
+        g_pillThread = CreateThread(nullptr, 0, PillThreadProc, nullptr, 0, &g_pillThreadId);
+    }
+}
+
+void StopPill() {
+    if (!g_pillThread) {
+        return;
+    }
+    PostThreadMessage(g_pillThreadId, WM_QUIT, 0, 0);
+    if (WaitForSingleObject(g_pillThread, 5000) != WAIT_OBJECT_0) {
+        Log(L"The floating button thread didn't stop in time");
+    }
+    CloseHandle(g_pillThread);
+    g_pillThread = nullptr;
 }
 
 DWORD WINAPI ControlThreadProc(void*) {
@@ -8316,6 +9829,19 @@ DWORD WINAPI ControlThreadProc(void*) {
                 break;
             case CtlKind::Retry:
                 RetryFailed(ctl.id, ctl.fromMenu);
+                break;
+            case CtlKind::Polish:
+                Polish(ctl.style, ctl.fromMenu ? g_pillTarget.load() : GetForegroundWindow(),
+                       ctl.fromMenu);
+                break;
+            case CtlKind::PolishPick:
+                PolishPick(ctl.fromMenu ? g_pillTarget.load() : GetForegroundWindow());
+                break;
+            case CtlKind::ReadAloud:
+                ReadAloud(ctl.fromMenu ? g_pillTarget.load() : GetForegroundWindow());
+                break;
+            case CtlKind::StopSpeaking:
+                StopSpeaking();
                 break;
         }
     }
@@ -9233,6 +10759,10 @@ constexpr int kHotkeyCommand = 4;
 constexpr int kHotkeyPasteLast = 5;
 constexpr int kHotkeyMicPrivacy = 6;
 constexpr int kShortcutCount = 5;
+// Polish and Read aloud: outside kShortcutCount (the old settings window's
+// table), in Overlay::m_extra.
+constexpr int kHotkeyPolish = 7;
+constexpr int kHotkeyReadAloud = 8;
 
 constexpr UINT_PTR kFrameTimer = 1;
 constexpr UINT_PTR kModifierTimer = 17;
@@ -9998,6 +11528,7 @@ class Overlay {
     };
     Shortcut m_shortcuts[kShortcutCount] = {{kHotkeyDictate}, {kHotkeyTranslate}, {kHotkeyCommand},
                                             {kHotkeyPasteLast}, {kHotkeyMicPrivacy}};
+    Shortcut m_extra[2] = {{kHotkeyPolish}, {kHotkeyReadAloud}};
     bool m_hotkeysSet = false;
     bool m_holdMode = false;
     // The width setting's sizes and text size.
@@ -10219,6 +11750,12 @@ void Overlay::UnregisterHotkeys() {
             shortcut.registered = false;
         }
     }
+    for (Shortcut& shortcut : m_extra) {
+        if (shortcut.registered) {
+            UnregisterHotKey(m_hwnd, shortcut.id);
+            shortcut.registered = false;
+        }
+    }
     KillTimer(m_hwnd, kModifierTimer);
     for (Shortcut& shortcut : m_shortcuts) {
         shortcut.modifierOnly = false;
@@ -10238,6 +11775,10 @@ void Overlay::RegisterHotkeys() {
     bool same = m_hotkeysSet;
     for (int i = 0; i < kShortcutCount; i++) {
         same = same && m_shortcuts[i].text == wanted[i];
+    }
+    const std::wstring wantedExtra[2] = {s.polishHotkey, s.readAloudHotkey};
+    for (int i = 0; i < 2; i++) {
+        same = same && m_extra[i].text == wantedExtra[i];
     }
     if (same) {
         return;
@@ -10280,6 +11821,12 @@ void Overlay::RegisterHotkeys() {
             shortcut.modifierOnly = false;
             problems += L"Could not start Ctrl+Win shortcut.";
         }
+    }
+    // (Ctrl+Win alone is the dictation keys' only: not offered here.)
+    for (int i = 0; i < 2; i++) {
+        Shortcut& shortcut = m_extra[i];
+        shortcut.text = wantedExtra[i];
+        shortcut.registered = add(shortcut.id, shortcut.text, &shortcut.vk) && shortcut.vk;
     }
     if (!problems.empty()) {
         ShowError(problems + T(L" Choose another one in the settings (Shortcuts).",
@@ -10986,6 +12533,8 @@ void Overlay::Layout() {
             swprintf_s(label,
                        m_state.phase == Phase::Transcribing ? T(L"Transcribing with %s…",
                                                                 L"Transcrevendo com %s…")
+                       : m_state.speaking ? T(L"Reading aloud with %s…",
+                                              L"Lendo em voz alta com %s…")
                        : m_state.command ? T(L"Applying with %s…", L"Aplicando com %s…")
                                          : T(L"Rewriting with %s…", L"Reescrevendo com %s…"),
                        m_state.provider.empty() ? L"IA" : m_state.provider.c_str());
@@ -12078,6 +13627,10 @@ LRESULT Overlay::Handle(UINT msg, WPARAM wp, LPARAM lp) {
                 PostCtl({CtlKind::PasteLast});
             } else if (wp == kHotkeyMicPrivacy) {
                 PostCtl({CtlKind::MicPrivacy});
+            } else if (wp == kHotkeyPolish) {
+                PostCtl({CtlKind::Polish});
+            } else if (wp == kHotkeyReadAloud) {
+                PostCtl({CtlKind::ReadAloud});
             } else {
                 for (const Shortcut& shortcut : m_shortcuts) {
                     if ((int)wp != shortcut.id) {
@@ -12882,10 +14435,20 @@ class SettingsWindow {
 SettingsWindow* g_settingsUi;
 
 void SettingsWindow::Open(Page page) {
-    // Until the wizard is done (or closed), it's what opens. It starts over
-    // from the look, on the path the keys saved suggest.
-    if (!CurrentConfig().onboarded) {
-        page = Page::Wizard;
+    // This window keeps only the Home and Styles lists. Providers, speech, shortcuts, the look,
+    // About and the first-run setup are pages of the settings window.
+    if (page != Page::Home && page != Page::Styles) {
+        int target = 3;
+        switch (page) {
+            case Page::Speech: target = 1; break;
+            case Page::Shortcuts: target = 2; break;
+            case Page::General: target = 4; break;
+            case Page::Wizard: target = 5; break;
+            case Page::About: target = 6; break;
+            default: break;
+        }
+        dictset::OpenSettingsWindowAt(target);
+        return;
     }
     if (page == Page::Wizard && (m_page != Page::Wizard || !m_hwnd)) {
         const Config c = CurrentConfig();
@@ -16258,11 +17821,6 @@ void SettingsWindow::DrawRail() {
     const Item items[] = {
         {Page::Home, L"", T(L"Home", L"Início"), T(L"USE", L"USAR")},
         {Page::Styles, L"", T(L"Styles", L"Estilos"), L""},
-        {Page::Providers, L"", T(L"Providers", L"Provedores"), T(L"SET UP", L"CONFIGURAR")},
-        {Page::Speech, L"", T(L"Speech", L"Transcrição"), L""},
-        {Page::Shortcuts, L"", T(L"Shortcuts", L"Atalhos"), L""},
-        {Page::General, L"", T(L"General", L"Geral"), L""},
-        {Page::About, L"", T(L"About", L"Sobre"), L"-"},
     };
     float y = 78;
     for (int i = 0; i < (int)std::size(items); i++) {
@@ -16329,7 +17887,7 @@ int SettingsWindow::HitNav(float x, float y) const {
     const bool groups[] = {true, false, true, false, false, false, true};
     const bool labels[] = {true, false, true, false, false, false, false};
     float top = 78;
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 2; i++) {  // Home and Styles: the rest lives in the settings window.
         if (groups[i]) {
             top += 12;
             if (labels[i]) {
@@ -17774,6 +19332,7 @@ constexpr UINT WM_APP_SETTINGS_RELOAD = WM_APP + 1, WM_APP_SETTINGS_ACTIVATE = W
 HANDLE g_settingsThread = nullptr;
 std::atomic<HWND> g_settingsWnd;
 std::atomic<bool> g_settingsStop;
+std::atomic<int> g_setOpenPage{-1};  // The page the window opens on (OpenSettingsWindowAt).
 void Settings_Close();
 static std::wstring GetStringSetting(PCWSTR name) {
     PCWSTR p = Wh_GetStringSetting(name);
@@ -17878,6 +19437,9 @@ struct SetField {
     PCWSTR group = L"";  // Heading above it on that page.
     std::wstring value;  // As loaded, so a save writes only what changed.
     std::wstring cur;    // What the window shows now.
+    float fitW = 0;      // Box width that fits the text (Set_FitBoxes); 0 until measured.
+    float fitText = -1;  // Measured text width behind fitW.
+    std::wstring fitFor; // The text that was measured.
 };
 
 // Names, descriptions and option labels match the ==WindhawkModSettings== block word for word.
@@ -17892,18 +19454,25 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Text, L"correctionCue", L"Correction cue", L"The word or phrase you say to fix yourself, like \"sorry\" or \"scratch that\". Empty: the AI uses its general rule. Up to 50 characters.", L"", {}, 0, 100, 0, L"Clean-up"},
 {K::Check, L"appStylesEnabled", L"Use a style per app", L"Dictating into one of your listed apps uses its style instead of the active one.", L"1", {}, 0, 100, 0, L"Clean-up"},
 {K::Check, L"livePreview", L"Live text while speaking", L"Shows what you say in the bar as you speak, through the first voice provider. It uses its free limits faster.", L"1", {}, 0, 100, 0, L"After you speak"},
+{K::Choice, L"polishStyle", L"Polish style", L"What the Polish shortcut and the floating button do to selected text you typed. Ask each time shows the list.", L"fix", {}, 0, 100, 0, L"Polish typed text"},
+{K::Check, L"floatingButton", L"Floating button over selected text", L"Select text in any app and a small Polish and Read aloud button shows above it. It never takes the focus.", L"0", {}, 0, 100, 0, L"Polish typed text"},
 {K::Check, L"autoPaste", L"Paste automatically", L"The text goes straight to where the cursor is. Off, it only goes to the clipboard.", L"1", {}, 0, 100, 0, L"After you speak"},
 {K::Check, L"historyEnabled", L"Keep a history", L"This session's dictations, only in memory. Nothing is saved to disk.", L"1", {}, 0, 100, 0, L"After you speak"},
 {K::Check, L"sounds", L"Start and stop sounds", L"A short click when recording starts and ends.", L"1", {}, 0, 100, 0, L"After you speak"},
 {K::Choice, L"speechLanguage", L"Language you speak", L"Setting it improves accuracy. Use automatic if you switch languages.", L"auto", {}, 0, 100, 1, L"Voice"},
 {K::Choice, L"microphone", L"Microphone", L"Which microphone to listen to.", L"", {}, 0, 100, 1, L"Voice"},
-{K::Check, L"micPrivacy", L"Keep the microphone private", L"Blocks other apps on the selected microphone and active call devices. Audio routers are left alone.", L"0", {}, 0, 100, 1, L"Privacy"},
+{K::Check, L"micPrivacy", L"Keep the microphone private", L"While you dictate, other apps hear silence. An app on Dictate's own microphone can't be muted without muting Dictate, so pick a microphone your call apps don't use. Audio routers are left alone.", L"0", {}, 0, 100, 1, L"Privacy"},
 {K::Number, L"outputIsolation", L"Other apps' volume", L"0 to 100 (Suggested: 100). Volume of other apps while you dictate. 0 mutes them; 100 leaves them alone. Your old volume returns when you stop.", L"100", {}, 0, 100, 1, L"Privacy"},
+{K::Choice, L"ttsEngine", L"Voice engine", L"Windows' own voices work offline and cost nothing. Gemini and OpenAI sound more natural and use your saved keys.", L"windows", {{L"windows", L"Windows voices (offline)"}, {L"gemini", L"Gemini"}, {L"openai", L"OpenAI"}}, 0, 100, 1, L"Read aloud"},
+{K::Choice, L"ttsVoice", L"Voice", L"A voice from the engine above. One from another engine uses that engine's default.", L"", {}, 0, 100, 1, L"Read aloud"},
+{K::Number, L"ttsSpeed", L"Speed", L"50 to 200 (Suggested: 100). How fast the voice reads. Gemini keeps its own pace.", L"100", {}, 50, 200, 1, L"Read aloud"},
 {K::Hotkey, L"dictateHotkey", L"Dictate", L"Transcribes and pastes where the cursor is, in the active style.", L"Ctrl+Shift+Space", {}, 0, 100, 2, L"Dictating"},
 {K::Hotkey, L"translateHotkey", L"Dictate and translate", L"You speak, it pastes in your target language.", L"Ctrl+Shift+Y", {}, 0, 100, 2, L"Dictating"},
 {K::Choice, L"holdMode", L"Mode", L"How the dictate keys work. Esc while recording cancels without pasting anything.", L"0", {{L"0", L"Press once to start, again to stop"}, {L"1", L"Hold while speaking (push-to-talk)"}}, 0, 100, 2, L"Dictating"},
 {K::Hotkey, L"commandHotkey", L"Command on the selection", L"Select text in any app, press it and say what to do: \"more formal\", \"translate to Spanish\", \"summarize as bullets\".", L"Ctrl+Alt+K", {}, 0, 100, 2, L"Editing and pasting"},
 {K::Hotkey, L"pasteLastHotkey", L"Paste again", L"Pastes the last dictation into the app in focus now. Without a shortcut it stays in the tray icon's menu.", L"", {}, 0, 100, 2, L"Editing and pasting"},
+{K::Hotkey, L"polishHotkey", L"Polish the selection", L"Select text you typed in any app and press it: the AI fixes it in the Polish style and puts it back.", L"Ctrl+Alt+P", {}, 0, 100, 2, L"Polish and read aloud"},
+{K::Hotkey, L"readAloudHotkey", L"Read the selection aloud", L"Reads the selected text aloud. Press it again, or Esc, to stop.", L"Ctrl+Alt+R", {}, 0, 100, 2, L"Polish and read aloud"},
 {K::Hotkey, L"micPrivacyHotkey", L"Mic privacy on/off", L"Turns \"Keep the microphone private\" on or off from any app.", L"", {}, 0, 100, 2, L"Privacy"},
 {K::Choice, L"uiLanguage", L"Language", L"Of these settings and the bar. Automatic follows Windows.", L"auto", {}, 0, 100, 4, L"Appearance"},
 {K::Choice, L"fontFamily", L"Font", L"Used in the bar and the older editor windows.", L"FiraCode Nerd Font", {}, 0, 100, 4, L"Appearance"},
@@ -17915,10 +19484,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Choice, L"overlayWidth", L"Result width", L"Compact also makes the text a bit smaller.", L"normal", {{L"compact", L"Compact"}, {L"normal", L"Normal"}, {L"wide", L"Wide"}}, 0, 100, 4, L"Recording bar"},
 {K::Choice, L"overlayGlass", L"Bar look", L"Glass is see-through and blurred, with a bright edge. Translucent uses Windows' own blur and needs its transparency effects on.", L"glass", {{L"solid", L"Solid"}, {L"glass", L"Glass"}, {L"translucent", L"Translucent"}}, 0, 100, 4, L"Recording bar"},
 {K::Check, L"glassLight", L"Light and shadow like macOS 27", L"The glass gets a sheen, a beveled edge, light along its bottom and a soft shadow.", L"0", {}, 0, 100, 4, L"Recording bar"},
-{K::Check, L"windowGlass", L"Glass in the older editor windows", L"The style, provider and history windows get Windows 11's acrylic behind them too.", L"1", {}, 0, 100, 4, L"Recording bar"},
-{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Save, then reopen settings to apply.", L"1", {}, 0, 100, 4, L"Settings window"},
-{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Save, then reopen settings to apply.", L"0", {}, 0, 100, 4, L"Settings window"},
-{K::Choice, L"settingsTitleButtons", L"Title bar buttons", L"Who draws minimize, maximize and close on the window's own title bar. Windows buttons look like every other app's, title bar mods included. Save, then reopen settings to apply.", L"native", {{L"native", L"Windows buttons (like other apps)"}, {L"builtin", L"Built-in buttons"}}, 0, 100, 4, L"Settings window"},
+{K::Check, L"windowGlass", L"Glass in the older editor windows", L"The style and history windows get Windows 11's acrylic behind them too.", L"1", {}, 0, 100, 4, L"Recording bar"},
+{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 4, L"Settings window"},
+{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 4, L"Settings window"},
 {K::Check, L"settingsTrayIcon", L"Tray icon", L"A Dictate icon in the system tray. Click it to open these settings, right-click it for a menu. Turned off, the settings can only be opened from Windhawk.", L"1", {}, 0, 100, 4, L"Settings window"}
     };
 }
@@ -17927,12 +19495,11 @@ struct SetListLink {
     int page;
     PCWSTR group, text, sub, url;
 };
-// Lists, keys and the setup are edited in Dictate's older window; these rows open it.
+// The lists are edited in Dictate's older window; these rows open it. Providers and the setup
+// are pages of this window (Dict_BuildPage).
 static const SetListLink kSetListLinks[] = {
     {0, L"Lists, edited in the older window", L"Custom styles, dictionary and app styles", L"Opens the editor for your own styles, spellings and per-app styles", L"dictate:page:1"},
     {0, L"Lists, edited in the older window", L"History and redo", L"Opens this session's dictations, to copy or redo one", L"dictate:page:0"},
-    {3, L"Keys and models", L"API keys, models and order", L"Opens the provider editor: keys, text and voice models, and the fallback order", L"dictate:page:2"},
-    {3, L"Keys and models", L"Redo initial setup", L"Opens the setup wizard again with what you already have. Your keys and settings stay", L"dictate:page:7"},
 };
 
 struct SetPageInfo {
@@ -17943,14 +19510,16 @@ static const SetPageInfo kSetPages[] = {
 {L"Dictation", L"How your words are written: style, translation, clean-up and what happens after.", 0xE70F},
 {L"Speech", L"Where your voice becomes text: language, microphone and privacy.", 0xE720},
 {L"Shortcuts", L"Keys that work in any app.", 0xE765},
-{L"Providers", L"The cloud services that transcribe and rewrite.", 0xE753},
+{L"Providers", L"The cloud services that transcribe and rewrite: keys, models and the order they are tried in.", 0xE753},
 {L"Look", L"Language, colors, the recording bar, and this window.", 0xE790},
+{L"Setup", L"The first steps in one place: connect a provider, say who you are, pick your shortcut, test it.", 0xE7C1},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
 // About sits apart at the end of the sidebar, as in Seamless Dictate.
 constexpr int kSetAboutPage = kSetPageCount - 1;
 constexpr float kSetAboutGap = 17;
+constexpr int kSetDropMax = 9;  // A dropdown with more options than this scrolls.
 
 // All sizes are DIPs; the render target does the scaling.
 constexpr float kSetPadX = 40, kSetMaxW = 720, kSetRowMin = 56, kSetRowGap = 8, kSetBoxH = 32, kSetRowPad = 16,
@@ -17961,7 +19530,7 @@ constexpr float kSetDockGap = 10, kSetRailDef = 232, kSetRailMin = 200, kSetRail
 // The footer is a floating pill dock at the bottom right of the page.
 constexpr float kSetFootBtnH = 36, kSetFootPad = 8, kSetFootH = kSetFootBtnH + 2 * kSetFootPad, kSetFootGap = 14;
 // The glass tint is one layer over the whole window, title bar included, so the two always match.
-constexpr float kSetGlassTint = 0.42f, kSetNativeFade = 56;
+constexpr float kSetGlassTint = 0.55f, kSetNativeFade = 56;
 constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
@@ -18002,6 +19571,11 @@ static bool Dict_FormatHotkey(const struct SetWindow& w, int field, UINT mods, U
 static void Dict_RecordingStarted();
 static void Dict_RecordingStopped();
 static void Dict_OpenLegacy(PCWSTR url);
+constexpr UINT WM_APP_DICT_REFRESH = WM_APP + 20;  // After a click or a key: rebuild the provider pages if needed.
+static void Dict_BuildPage(struct SetWindow& w, float& y);
+static WCHAR Dict_LinkGlyph(const std::wstring& url);
+static void Dict_TestDone(struct SetWindow& w);
+static void Dict_Refresh(struct SetWindow& w);
 
 struct SetWindow {
     HWND hwnd = nullptr, edit = nullptr, owner = nullptr;
@@ -18021,7 +19595,8 @@ struct SetWindow {
     int page = 0, recording = -1, editing = -1, focus = -1, openSel = -1;
     bool kbd = false;  // Show the focus ring (after a Tab).
     D2D1_RECT_F dropRect{};
-    int dropHover = -1, dropTop = 0, dropVis = 0;  // dropTop: first visible option.
+    int dropHover = -1, dropTop = 0;  // dropTop: first visible option.
+    bool frameApplied = false;        // Set_ApplyFrame has run once.
     float scrollY = 0, scrollTarget = 0, contentH = 0, contentX = 0, contentW = 720, pageT = 1;
     SetHit hover;
     int dragSlider = -1;
@@ -18315,13 +19890,53 @@ static float Set_TextW(IDWriteTextFormat* fmt, const std::wstring& text) {
 // ---- Layout -----------------------------------------------------------------
 
 // The right-hand control's width, so the label column knows how much room it has.
+static bool Set_FitBoxes(SetWindow& w) {
+    if (!w.fValue) return false;
+    bool changed = false;
+    const float cap = std::floor(w.contentW * 0.5f);
+    for (auto& f : w.fields) {
+        float base, pad;
+        std::wstring text;
+        if (f.kind == SetField::Choice) {
+            base = 200, pad = 46;  // 12 before the text, 30 for the arrow, 4 spare.
+            for (const auto& o : f.options) text += std::wstring(o.second) + L'\n';
+        } else if (f.kind == SetField::Hotkey) {
+            base = 220, pad = 60;  // The key cap's own padding and the clear button.
+            text = f.cur;
+        } else if (f.kind == SetField::Text) {
+            base = 280, pad = 26;
+            text = f.cur;
+        } else {
+            continue;
+        }
+        if (f.fitText < 0 || text != f.fitFor) {
+            float m = 0;
+            if (f.kind == SetField::Choice) {
+                for (const auto& o : f.options) m = std::max(m, Set_TextW(w.fValue.get(), o.second));
+            } else {
+                m = Set_TextW(w.fValue.get(), f.cur);
+            }
+            f.fitText = std::ceil(m);
+            f.fitFor = text;
+        }
+        float want = std::min(std::max(base, f.fitText + pad), std::max(base, cap));
+        if (fabsf(want - f.fitW) > 0.5f) {
+            f.fitW = want;
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+static float Set_FitOr(const SetField& f, float base) { return f.fitW > 0 ? f.fitW : base; }
+
 static float Set_ControlW(const SetField& f) {
     switch (f.kind) {
         case SetField::Check: return 40;
-        case SetField::Choice: return 200;
+        case SetField::Choice: return Set_FitOr(f, 200);
         case SetField::Number: return f.max - f.min <= 100 ? 150 + 12 + 64 : 96;
-        case SetField::Text: return 280;
-        case SetField::Hotkey: return 220;
+        case SetField::Text: return Set_FitOr(f, 280);
+        case SetField::Hotkey: return Set_FitOr(f, 220);
         case SetField::Color: return 362;
     }
     return 100;
@@ -18360,7 +19975,7 @@ static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
             p.box = {r - 40, mid - 11, r, mid + 11};
             break;
         case SetField::Choice:
-            p.box = {r - 200, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 200), mid - h, r, mid + h};
             break;
         case SetField::Number:
             if (f.max - f.min <= 100) {
@@ -18372,10 +19987,10 @@ static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
             }
             break;
         case SetField::Text:
-            p.box = {r - 280, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 280), mid - h, r, mid + h};
             break;
         case SetField::Hotkey:
-            p.box = {r - 220, mid - h, r, mid + h};
+            p.box = {r - Set_FitOr(f, 220), mid - h, r, mid + h};
             p.clear = {p.box.right - 30, p.box.top, p.box.right, p.box.bottom};
             break;
         case SetField::Color: {
@@ -18414,6 +20029,7 @@ static void Set_BuildPage(SetWindow& w) {
             w.items.push_back(it);
         }
     }
+    Dict_BuildPage(w, y);  // Providers and Setup: built by Dictate, not from the field table.
     PCWSTR lastGroup = nullptr;
     for (size_t k = 0; k < w.fields.size(); k++) {
         const SetField& f = w.fields[k];
@@ -18781,7 +20397,8 @@ static void Set_DrawLinkRow(SetPaint& p, SetWindow& w, const SetItem& it, int id
     p.GradRing(row, 10, hov, 1.5f);
     p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 9, row.right - 50, row.top + 30}, mocha::text);
     p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 30, row.right - 50, row.bottom - 4}, mocha::subtext0);
-    p.Glyph(w.fIcon.get(), 0xE8A7, {row.right - 46, row.top, row.right - 12, row.bottom}, mocha::subtext1);
+    if (WCHAR glyph = Dict_LinkGlyph(it.url))
+        p.Glyph(w.fIcon.get(), glyph, {row.right - 46, row.top, row.right - 12, row.bottom}, mocha::subtext1);
 }
 
 static void Set_DrawSupport(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
@@ -18907,7 +20524,9 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
 static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
     D2D1_RECT_F d = Set_FooterDock(w);
     const float rad = kSetFootH / 2, brad = kSetFootBtnH / 2;
-    p.Round(d, rad, mocha::mantle, w.render ? 1.0f : 0.85f);
+    // The same see-through mantle as the rail dock, so the blurred rows under the pill read as
+    // real glass instead of a near-solid bar.
+    p.Round(d, rad, mocha::mantle, w.render ? 1.0f : (w.glass ? 0.58f : 0.85f));
     const D2D1_RECT_F edge{d.left + 2, d.top + 2, d.right - 2, d.bottom - 2};
     p.rt->DrawRoundedRectangle(D2D1::RoundedRect(edge, rad - 2, rad - 2),
                               p.B(mocha::overlay0, 0.9f * (1 - w.footGlow)), 2.75f);
@@ -18929,30 +20548,58 @@ static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
 }
 
 
+static void Set_ThumbFill(SetPaint& p, const D2D1_RECT_F& r, float a) {
+    if (r.bottom <= r.top) return;
+    float rad = (r.right - r.left) / 2;
+    SetCom<ID2D1LinearGradientBrush> g;
+    D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::blue, a * p.fade)}, {1, D2DColor(mocha::mauve, a * p.fade)}};
+    SetCom<ID2D1GradientStopCollection> coll;
+    if (SUCCEEDED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
+        SUCCEEDED(p.rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.left, r.bottom)),
+            coll.get(), g.put())))
+        p.rt->FillRoundedRectangle(D2D1::RoundedRect(r, rad, rad), g.get());
+}
+
+static int Set_DropVisible(const SetWindow& w) {
+    return w.openSel < 0 ? 0 : std::min((int)w.fields[w.openSel].options.size(), kSetDropMax);
+}
+
+static void Set_DropShow(SetWindow& w, int i) {
+    int vis = Set_DropVisible(w), n = w.openSel < 0 ? 0 : (int)w.fields[w.openSel].options.size();
+    if (i < 0 || vis <= 0) return;
+    if (i < w.dropTop) w.dropTop = i;
+    if (i >= w.dropTop + vis) w.dropTop = i - vis + 1;
+    w.dropTop = std::clamp(w.dropTop, 0, std::max(0, n - vis));
+}
+
 static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
     if (w.openSel < 0) return;
     const SetField& f = w.fields[w.openSel];
     const D2D1_RECT_F& r = w.dropRect;
+    const int n = (int)f.options.size(), vis = Set_DropVisible(w);
+    const bool scrolls = n > vis;
     D2D1_RECT_F shadow{r.left - 1, r.top + 3, r.right + 1, r.bottom + 5};
     p.Round(shadow, 12, mocha::crust, 0.6f);
     p.Round(r, 10, mocha::mantle);
     p.GradRing(r, 10, 0.9f);
-    for (size_t i = (size_t)w.dropTop; i < f.options.size() && (int)i < w.dropTop + w.dropVis; i++) {
-        float rowAt = (float)((int)i - w.dropTop);
-        D2D1_RECT_F it{r.left + 4, r.top + 4 + rowAt * kSetDropItem, r.right - 4, r.top + 4 + (rowAt + 1) * kSetDropItem};
+    const float right = r.right - (scrolls ? 12 : 4);
+    for (int v = 0; v < vis; v++) {
+        int i = w.dropTop + v;
+        if (i >= n) break;
+        D2D1_RECT_F it{r.left + 4, r.top + 4 + v * kSetDropItem, right, r.top + 4 + (v + 1) * kSetDropItem};
         bool sel = f.cur == f.options[i].first;
-        if ((int)i == w.dropHover) {
+        if (i == w.dropHover) {
             p.GradFill(it, 6, 0.28f);
             p.GradRing(it, 6, 0.6f, 1);
         }
         p.Text(w.fValue.get(), f.options[i].second, {it.left + 10, it.top, it.right - 28, it.bottom}, sel ? mocha::blue : mocha::text);
         if (sel) p.Glyph(w.fIconS.get(), 0xE73E, {it.right - 28, it.top, it.right - 6, it.bottom}, mocha::blue);
     }
-    int total = (int)f.options.size();
-    if (total > w.dropVis && w.dropVis > 0) {
-        float track = w.dropVis * kSetDropItem, thumb = std::max(24.0f, track * w.dropVis / total);
-        float at = r.top + 4 + (track - thumb) * w.dropTop / (float)(total - w.dropVis);
-        p.Round({r.right - 6, at, r.right - 3, at + thumb}, 1.5f, mocha::surface2);
+    if (scrolls) {
+        float track = r.bottom - r.top - 12, th = std::max(24.0f, track * vis / n);
+        float top = r.top + 6 + (track - th) * w.dropTop / std::max(1, n - vis);
+        Set_ThumbFill(p, {r.right - 9, top, r.right - 5, top + th}, 0.85f);
     }
 }
 
@@ -18964,7 +20611,7 @@ static D2D1_RECT_F Set_CapButton(const SetWindow& w, int i) {
 
 // y is in content DIPs, so the title bar is y < 0.
 static int Set_CapButtonAt(const SetWindow& w, float x, float y) {
-    if (w.nativeTitle || w.nativeButtons) return -1;
+    if (w.nativeTitle) return -1;
     for (int i = 0; i < 3; i++)
         if (Set_In(Set_CapButton(w, i), x, y + kSetCapH)) return i;
     return -1;
@@ -18997,7 +20644,6 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
     float mid = kSetCapH / 2;
     Set_DrawMark(p, w.fCapGlyph.get(), {t.left, mid - 8, t.left + 16, mid + 8}, w.active ? 1.0f : 0.6f);
     p.Text(w.fCap.get(), kSetTitle, {t.left + 24, 0, t.right, kSetCapH}, w.active ? mocha::text : mocha::overlay1);
-    if (w.nativeButtons) return;  // DWM draws them over this title bar.
     for (int i = 0; i < 3; i++) {
         D2D1_RECT_F b = Set_CapButton(w, i);
         float hov = Set_GlowOf(w, 20 + i);
@@ -19012,7 +20658,13 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
 
 // Draws the whole window into rt (DIPs). The target's DPI does the scaling.
 // The title bar is drawn first; everything else is in content DIPs, shifted down by kSetCapH.
+static void Set_PlaceEdit(SetWindow& w);
+
 static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
+    if (Set_FitBoxes(w)) {
+        Set_BuildPage(w);
+        Set_PlaceEdit(w);
+    }
     SetPaint p(w, rt);
     const auto base = D2D1::Matrix3x2F::Translation(0, kSetCapH);
     rt->BeginDraw();
@@ -19025,7 +20677,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
         const float total = w.ch + kSetCapH;
         if (w.nativeTitle) {
             SetCom<ID2D1LinearGradientBrush> fade;
-            D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::crust, 0)}, {1, D2DColor(mocha::crust, kSetGlassTint)}};
+            D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::crust, kSetGlassTint)}, {1, D2DColor(mocha::crust, kSetGlassTint)}};
             SetCom<ID2D1GradientStopCollection> coll;
             if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
                 SUCCEEDED(rt->CreateLinearGradientBrush(
@@ -19132,7 +20784,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     rt->SetTransform(base);
 
     D2D1_RECT_F th = Set_ScrollThumb(w);
-    if (th.bottom > th.top) p.Round(th, 3, w.dragScroll ? mocha::overlay1 : mocha::surface2, 0.9f);
+    Set_ThumbFill(p, th, w.dragScroll || w.hover.kind == SetHit::Scroll ? 1.0f : 0.7f);
 
     Set_DrawFooter(p, w);
     Set_DrawRail(p, w);
@@ -19158,9 +20810,9 @@ static SetHit Set_Hit(SetWindow& w, float x, float y) {
     }
     if (w.openSel >= 0) {
         if (Set_In(w.dropRect, x, y)) {
-            int i = w.dropTop + (int)((y - w.dropRect.top - 4) / kSetDropItem);
-            if (i >= 0 && i < (int)w.fields[w.openSel].options.size() && i < w.dropTop + w.dropVis &&
-                y >= w.dropRect.top + 4) {
+            int v = (int)((y - w.dropRect.top - 4) / kSetDropItem), i = w.dropTop + v;
+            if (v >= 0 && v < Set_DropVisible(w) && i < (int)w.fields[w.openSel].options.size() &&
+                y >= w.dropRect.top + 4 && x < w.dropRect.right - (Set_DropVisible(w) < (int)w.fields[w.openSel].options.size() ? 12 : 4)) {
                 h.kind = SetHit::Drop;
                 h.a = w.openSel;
                 h.b = i;
@@ -19336,6 +20988,7 @@ static void Set_ClosePopup(SetWindow& w) {
     if (w.openSel < 0) return;
     w.openSel = -1;
     w.dropHover = -1;
+    w.dropTop = 0;
     Set_Invalidate(w);
 }
 
@@ -19345,18 +20998,22 @@ static void Set_OpenPopup(SetWindow& w, int k) {
     const SetField& f = w.fields[k];
     SetParts pt = Set_Parts(f, Set_RowRect(w, *it));
     float boxTop = pt.box.top - w.scrollY, boxBottom = pt.box.bottom - w.scrollY;
-    int count = (int)f.options.size();
-    w.dropVis = std::min(count, 9);
-    w.dropTop = 0;
-    float h = (float)w.dropVis * kSetDropItem + 8;
+    const int n = (int)f.options.size(), vis = std::min(n, kSetDropMax);
+    float h = (float)vis * kSetDropItem + 8;
     float top = boxBottom + 4;
     if (top + h > Set_ViewH(w) + 20 && boxTop - 4 - h > 0) top = boxTop - 4 - h;  // No room below: open upward.
-    w.dropRect = {pt.box.left, top, pt.box.right, top + h};
+    // As wide as the longest option (text, check mark, scrollbar), growing leftward from the box.
+    float textW = 0;
+    for (const auto& o : f.options) textW = std::max(textW, Set_TextW(w.fValue.get(), o.second));
+    float width = std::max(pt.box.right - pt.box.left, std::ceil(textW) + 52 + (n > vis ? 8 : 0));
+    float left = std::max(pt.box.right - width, Set_RailSpace(w) + 8);
+    w.dropRect = {left, top, std::max(pt.box.right, left + width), top + h};
     w.openSel = k;
     w.dropHover = -1;
-    for (size_t i = 0; i < f.options.size(); i++)
-        if (f.cur == f.options[i].first) w.dropHover = (int)i;
-    if (w.dropHover >= 0) w.dropTop = std::clamp(w.dropHover - w.dropVis / 2, 0, std::max(0, count - w.dropVis));
+    w.dropTop = 0;
+    for (int i = 0; i < n; i++)
+        if (f.cur == f.options[i].first) w.dropHover = i;
+    Set_DropShow(w, w.dropHover);
     Set_Invalidate(w);
 }
 
@@ -19587,6 +21244,8 @@ static std::wstring Set_ChangedParams(SetWindow& w, int& changed) {
     return params;
 }
 
+static void Set_ApplyFrame(SetWindow& w);
+
 static void Set_Save(std::shared_ptr<SetWindow> keep) {
     SetWindow& w = *keep;
     if (w.saving) return;
@@ -19678,6 +21337,7 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
         Set_SetStatus(w, L"Windhawk didn't answer in 15 seconds. Settings may not be saved.", true);
     } else if (code == 0) {
         Set_LoadFields(w);  // Shows what was stored.
+        Set_ApplyFrame(w);  // The title bar and glass switches take effect now, no reopen.
         Set_SetStatus(w, L"Saved");
     } else {
         Wh_Log(L"windhawk-cli exit code %lu", code);
@@ -19842,13 +21502,9 @@ static bool Set_OnKey(SetWindow& w, UINT vk) {
         const SetField& f = w.fields[w.openSel];
         int n = (int)f.options.size();
         if (vk == VK_ESCAPE) Set_ClosePopup(w);
-        else if (vk == VK_UP) w.dropHover = w.dropHover < 0 ? n - 1 : (w.dropHover - 1 + n) % n;
-        else if (vk == VK_DOWN) w.dropHover = w.dropHover < 0 ? 0 : (w.dropHover + 1) % n;
+        else if (vk == VK_UP) Set_DropShow(w, w.dropHover = w.dropHover < 0 ? n - 1 : (w.dropHover - 1 + n) % n);
+        else if (vk == VK_DOWN) Set_DropShow(w, w.dropHover = w.dropHover < 0 ? 0 : (w.dropHover + 1) % n);
         else if (vk == VK_RETURN || vk == VK_SPACE) Set_Choose(w, w.openSel, w.dropHover);
-        if (w.openSel >= 0 && w.dropHover >= 0) {
-            if (w.dropHover < w.dropTop) w.dropTop = w.dropHover;
-            else if (w.dropHover >= w.dropTop + w.dropVis) w.dropTop = w.dropHover - w.dropVis + 1;
-        }
         Set_Invalidate(w);
         return true;
     }
@@ -19920,6 +21576,84 @@ static void Set_Relayout(SetWindow& w) {
     Set_BuildAndClamp(w);
 }
 
+static bool Set_FieldOn(const SetWindow& w, PCWSTR key, bool def) {
+    const size_t n = wcslen(key);
+    for (const auto& f : w.fields) {
+        const size_t m = wcslen(f.key);
+        if (m >= n && wcscmp(f.key + m - n, key) == 0 && (m == n || f.key[m - n - 1] == L'.')) return f.value == L"1";
+    }
+    return def;
+}
+
+static void Set_ApplyFrame(SetWindow& w) {
+    if (w.render || !w.hwnd) return;
+    const HWND hwnd = w.hwnd;
+    const bool native = Set_FieldOn(w, L"nativeSettingsTitleBar", false), glass = Set_FieldOn(w, L"settingsGlass", true);
+    const bool first = !w.frameApplied, wasGlass = w.glass;
+    if (!first && native == w.nativeTitle && glass == w.glass) return;
+    w.frameApplied = true;
+    w.nativeTitle = native;
+    w.glass = glass;
+    kSetCapH = native ? 0.0f : 40.0f;
+    struct SetAccentPolicy { int state, flags, abgr, animation; };
+    struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
+    auto setComposition =
+        (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
+    if (glass) {
+        // Acrylic as one sheet over the whole window, the same material Seamless Flyouts
+        // gives the Launchpad settings window in Explorer: the accent acrylic with an 85%
+        // Mocha base tint, under the page's own crust tint. The system backdrop
+        // (DWMSBT_TRANSIENTWINDOW) went light grey over bright windows and turned to a flat
+        // grey slab when the window lost focus; the accent acrylic stays the same.
+        int backdrop = 1;  // DWMSBT_NONE
+        DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+        bb.fEnable = TRUE;
+        bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+        if (setComposition) {
+            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
+            SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(hwnd, &data);
+        }
+        MARGINS margins{-1, -1, -1, -1};
+        DwmExtendFrameIntoClientArea(hwnd, &margins);
+        COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
+        DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+    } else if (wasGlass) {
+        // Glass switched off while open: back to a plain solid window.
+        if (setComposition) {
+            SetAccentPolicy policy{0, 0, 0, 0};
+            SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(hwnd, &data);
+        }
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE;
+        bb.fEnable = FALSE;
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        MARGINS margins{0, 0, 0, 0};
+        DwmExtendFrameIntoClientArea(hwnd, &margins);
+        int backdrop = 0;  // DWMSBT_AUTO
+        DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+        COLORREF caption = RefFromRgb(mocha::crust);
+        DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &caption, sizeof(caption));
+    }
+    // With the frame extended DWM would draw its own minimize, maximize and close buttons over the
+    // built-in title bar; without a system menu it draws none. The Windows title bar keeps it.
+    // Minimize, maximize and close still work from the taskbar either way.
+    LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    SetWindowLongPtrW(hwnd, GWL_STYLE, native ? (style | WS_SYSMENU) : (style & ~WS_SYSMENU));
+    // Set_WndProc's WM_NCCALCSIZE drops or keeps the system title bar to match.
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    if (!first) {
+        Set_Relayout(w);
+        RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_FRAME | RDW_UPDATENOW);
+    }
+}
+
 static void Set_RememberRect(SetWindow& w) {
     if (w.render || IsIconic(w.hwnd) || IsZoomed(w.hwnd)) return;
     GetWindowRect(w.hwnd, &w.normalRect);
@@ -19928,15 +21662,27 @@ static void Set_RememberRect(SetWindow& w) {
 static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     SetWindow* w = g_setWin && g_setWin->hwnd == hwnd ? g_setWin.get() : nullptr;
     if (!w) return DefWindowProcW(hwnd, msg, wParam, lParam);
-    if (w->nativeButtons || w->nativeTitle) {
+    if (w->nativeTitle) {
         LRESULT r = 0;
         if (DwmDefWindowProc(hwnd, msg, wParam, lParam, &r)) return r;  // Hover and clicks on DWM's buttons.
     }
     auto dipX = [&](LPARAM l) { return (float)(short)LOWORD(l) * 96.0f / w->dpi; };
     auto dipY = [&](LPARAM l) { return (float)(short)HIWORD(l) * 96.0f / w->dpi - kSetCapH; };
+    if (msg == WM_LBUTTONUP || msg == WM_KEYUP) PostMessageW(hwnd, WM_APP_DICT_REFRESH, 0, 0);
     switch (msg) {
-        case WM_APP_SETTINGS_RELOAD: if (!w->saving) Set_LoadFields(*w); return 0;
-        case WM_APP_SETTINGS_ACTIVATE: ShowWindow(hwnd, SW_RESTORE); ForceForeground(hwnd); return 0;
+        case WM_APP_SETTINGS_RELOAD:
+            if (!w->saving) {
+                Set_LoadFields(*w);
+                Set_ApplyFrame(*w);
+            }
+            return 0;
+        case WM_APP_SETTINGS_ACTIVATE:
+            ShowWindow(hwnd, SW_RESTORE);
+            ForceForeground(hwnd);
+            if (wParam) Set_GoPage(*w, (int)wParam - 1);  // Opened on a page (the old window's links).
+            return 0;
+        case ::WM_APP_TEST: Dict_TestDone(*w); return 0;
+        case WM_APP_DICT_REFRESH: Dict_Refresh(*w); return 0;
         case WM_NCCALCSIZE:
             // No system title bar: keep the side and bottom frames, the client starts at the top edge.
             if (wParam && !w->render && !w->nativeTitle) {
@@ -20168,10 +21914,13 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             }
             return 0;
         case WM_MOUSEWHEEL: {
-            if (w->openSel >= 0 && (int)w->fields[w->openSel].options.size() > w->dropVis) {
-                int total = (int)w->fields[w->openSel].options.size();
-                int notches = GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
-                w->dropTop = std::clamp(w->dropTop - notches * 3, 0, total - w->dropVis);
+            if (w->openSel >= 0 && Set_In(w->dropRect, w->mouseX, w->mouseY)) {
+                int n = (int)w->fields[w->openSel].options.size(), vis = Set_DropVisible(*w);
+                int step = GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? -3 : 3;
+                w->dropTop = std::clamp(w->dropTop + step, 0, std::max(0, n - vis));
+                SetHit h = Set_Hit(*w, w->mouseX, w->mouseY);
+                w->hover = h;
+                w->dropHover = h.kind == SetHit::Drop ? h.b : w->dropHover;
                 Set_Invalidate(*w);
                 return 0;
             }
@@ -20315,11 +22064,8 @@ static bool Set_Create(bool render) {
                                    GetModuleHandleW(nullptr), nullptr);
     }
     const int offX = GetSystemMetrics(SM_XVIRTUALSCREEN) - 6000, offY = GetSystemMetrics(SM_YVIRTUALSCREEN);
-    w->nativeTitle = !render && (Wh_GetIntSetting(L"nativeSettingsTitleBar") != 0 ||
-        GetStringSetting(L"settingsTitleButtons") != L"builtin");
-    w->nativeButtons = !render && !w->nativeTitle && GetStringSetting(L"settingsTitleButtons") != L"builtin";
-    w->glass = !render && Wh_GetIntSetting(L"settingsGlass") != 0;
-    kSetCapH = w->nativeTitle ? 0.0f : 40.0f;
+    // The built-in title bar until Set_ApplyFrame reads the switches.
+    kSetCapH = 40.0f;
     const DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
     HWND hwnd = CreateWindowExW(0, kSettingsClass, L"Seamless Dictate settings", style,
                                 render ? offX : CW_USEDEFAULT, render ? offY : CW_USEDEFAULT, 800, 600, w->owner,
@@ -20346,31 +22092,7 @@ static bool Set_Create(bool render) {
         w->iconBig = Set_MakeIcon(w->iconFamily, GetSystemMetricsForDpi(SM_CXICON, w->dpi));
         if (w->iconSmall) SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)w->iconSmall);
         if (w->iconBig) SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)w->iconBig);
-        if (w->glass) {
-            // Windows acrylic as one sheet over the whole window, the way T3 (Electron
-            // backgroundMaterial "acrylic") does it: the system backdrop with the frame extended
-            // into the full client area, and no caption color, so the title bar and the page are
-            // the same material and turn solid together when the window loses focus.
-            int backdrop = 3;  // DWMSBT_TRANSIENTWINDOW
-            DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
-            MARGINS margins{-1, -1, -1, -1};
-            DwmExtendFrameIntoClientArea(hwnd, &margins);
-            COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
-            DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
-        } else if (w->nativeButtons) {
-            // Solid window: DWM draws its buttons only where the frame reaches, so extend it
-            // over the title bar strip.
-            MARGINS margins{0, 0, MulDiv((int)kSetCapH, w->dpi, 96), 0};
-            DwmExtendFrameIntoClientArea(hwnd, &margins);
-        }
-        // With the frame extended, DWM draws its own minimize, maximize and close buttons in the
-        // corner. "Windows buttons" keeps them (Set_WndProc passes their hover and clicks to
-        // DwmDefWindowProc); "Built-in buttons" drops the system menu so DWM draws none and the
-        // window draws its own. Minimize, maximize and close still work from the taskbar.
-        if (!w->nativeTitle && !w->nativeButtons)
-            SetWindowLongPtrW(hwnd, GWL_STYLE, GetWindowLongPtrW(hwnd, GWL_STYLE) & ~WS_SYSMENU);
-        // The first WM_NCCALCSIZE ran before w->hwnd was set; drop the system title bar now.
-        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        Set_ApplyFrame(*w);  // Title bar and glass; also drops the system title bar the first WM_NCCALCSIZE kept.
     }
 
     auto outer = [&](float cwDip, float chDip, SIZE& size) {
@@ -20425,9 +22147,111 @@ static bool Set_Create(bool render) {
 
 static std::deque<std::wstring> g_dictText;  // Option texts the field table points at.
 
+// ---- Providers and setup ----------------------------------------------------------------------
+// Hidden fields (page -1) hold the provider settings, so Save, "Reset to suggested" and the count
+// of unsaved changes treat them like every other setting. The Providers and Setup pages show them
+// (Dict_BuildPage).
+//   keys:<id>   the saved keys, masked, comma separated. Removing one removes that key on Save.
+//   key:<id>    "Add a key": what is pasted there is added and tested on Save, then cleared.
+//   model:<id>, stt:<id>, base:custom   the text and voice models, the custom server's address.
+//   order:llm, order:stt   the fallback orders, provider ids comma separated.
+constexpr int kDictProvidersPage = 3, kDictSetupPage = 5;
+static std::string g_dictProv;                        // Providers page: the one open ("" = the list).
+static std::map<std::string, std::wstring> g_dictTests;  // "text:groq": the last test's result.
+static std::map<std::string, bool> g_dictTestOk;
+static std::string g_dictTestKey;                     // The test running now.
+static std::wstring g_dictSig;                        // What the provider pages were built from.
+
+static PCWSTR Dict_Str(const std::wstring& s) {
+    g_dictText.push_back(s);
+    return g_dictText.back().c_str();
+}
+
+static std::vector<std::wstring> Dict_SplitList(const std::wstring& text) {
+    std::vector<std::wstring> out;
+    size_t start = 0;
+    while (start <= text.size()) {
+        const size_t comma = std::min(text.find(L',', start), text.size());
+        std::wstring part = ::Trim(std::wstring_view(text).substr(start, comma - start));
+        if (!part.empty()) out.push_back(std::move(part));
+        start = comma + 1;
+    }
+    return out;
+}
+
+static std::wstring Dict_JoinList(const std::vector<std::wstring>& list, PCWSTR sep = L", ") {
+    std::wstring out;
+    for (const std::wstring& s : list) out += (out.empty() ? L"" : sep) + s;
+    return out;
+}
+
+static std::wstring Dict_JoinIds(const std::vector<std::string>& ids) {
+    std::vector<std::wstring> list;
+    for (const std::string& id : ids) list.push_back(::Utf8ToWide(id));
+    return Dict_JoinList(list, L",");
+}
+
+// A provider's saved keys (the decrypted copy is wiped).
+static std::vector<std::string> Dict_Keys(std::string_view provider) {
+    std::string all = ::LoadApiKey(provider);
+    std::vector<std::string> keys = ::SplitKeys(all);
+    SecureZeroMemory(all.data(), all.size());
+    return keys;
+}
+
+static void Dict_Wipe(std::vector<std::string>& keys) {
+    for (std::string& key : keys) SecureZeroMemory(key.data(), key.size());
+    keys.clear();
+}
+
+static std::wstring Dict_MaskList(std::string_view provider) {
+    std::vector<std::string> keys = Dict_Keys(provider);
+    std::vector<std::wstring> masks;
+    for (const std::string& key : keys) masks.push_back(::MaskKey(key));
+    Dict_Wipe(keys);
+    return Dict_JoinList(masks);
+}
+
+// The provider's fields at the end of the table, hidden from the generic pages.
+static void Dict_AddProviderFields(std::vector<SetField>& fields) {
+    const ::Config defaults;
+    auto add = [&](const std::wstring& key, PCWSTR label, const std::wstring& desc, const std::wstring& def) {
+        SetField f{SetField::Text, Dict_Str(key), label};
+        f.desc = desc.empty() ? nullptr : Dict_Str(desc);
+        f.def = Dict_Str(def);
+        f.page = -1;
+        fields.push_back(std::move(f));
+    };
+    for (const ::ProviderSpec& s : ::kProviders) {
+        const std::string id = s.id;
+        const std::wstring wid = ::Utf8ToWide(id);
+        const bool custom = id == "custom";
+        add(L"keys:" + wid, L"Saved keys", L"", Dict_MaskList(id));
+        add(L"key:" + wid, L"Add a key",
+            custom ? L"Only if the server asks for one. Press Save to store it, encrypted."
+                   : L"Paste it here (several: separate them with commas). Press Save: it is stored encrypted and "
+                     L"tested.",
+            L"");
+        if (custom) {
+            add(L"base:custom", L"Base URL", L"The server's API address. It starts with https:// and usually ends with /v1.", L"");
+            add(L"model:custom", L"Text model", L"The exact model name the server uses.", L"");
+            continue;
+        }
+        add(L"model:" + wid, L"Text model",
+            L"Rewrites, translates and runs commands. Suggested: " + ::Utf8ToWide(s.model) + L".", ::Utf8ToWide(s.model));
+        if (s.sttModel[0])
+            add(L"stt:" + wid, L"Voice model",
+                L"Turns your voice into text. Suggested: " + ::Utf8ToWide(s.sttModel) + L".", ::Utf8ToWide(s.sttModel));
+    }
+    add(L"order:llm", L"Text order", L"", Dict_JoinIds(defaults.llmOrder));
+    add(L"order:stt", L"Voice order", L"", Dict_JoinIds(defaults.sttOrder));
+}
+
+static bool Dict_IsKeyField(const std::wstring& k) { return k.starts_with(L"key:") || k.starts_with(L"keys:"); }
+
 static bool Dict_IsYaml(PCWSTR key) {
     return wcscmp(key, L"settingsGlass") == 0 || wcscmp(key, L"nativeSettingsTitleBar") == 0 ||
-           wcscmp(key, L"settingsTitleButtons") == 0 || wcscmp(key, L"settingsTrayIcon") == 0;
+           wcscmp(key, L"settingsTrayIcon") == 0;
 }
 
 static bool Dict_Read(const ::Config& c, const std::wstring& k, std::wstring& out) {
@@ -20437,13 +22261,27 @@ static bool Dict_Read(const ::Config& c, const std::wstring& k, std::wstring& ou
     DICT_STR(fontFamily) DICT_STR(correctionCue) DICT_STR(dictateHotkey) DICT_STR(translateHotkey)
     DICT_STR(commandHotkey) DICT_STR(pasteLastHotkey) DICT_STR(micPrivacyHotkey) DICT_STR(speechLanguage)
     DICT_STR(microphone) DICT_STR(overlayDisplay) DICT_STR(accent) DICT_STR(overlayWidth) DICT_STR(overlayGlass)
-    DICT_STR(userName)
+    DICT_STR(userName) DICT_STR(polishHotkey) DICT_STR(polishStyle) DICT_STR(readAloudHotkey)
+    DICT_STR(ttsEngine) DICT_STR(ttsVoice)
     DICT_BOOL(removeFillers) DICT_BOOL(livePreview) DICT_BOOL(micPrivacy) DICT_BOOL(appStylesEnabled)
     DICT_BOOL(autoPaste) DICT_BOOL(historyEnabled) DICT_BOOL(sounds) DICT_BOOL(glassLight) DICT_BOOL(windowGlass)
+    DICT_BOOL(floatingButton)
+    if (k == L"ttsSpeed") { out = std::to_wstring(c.ttsSpeed); return true; }
     if (k == L"overlayTop") { out = c.overlayTop ? L"1" : L"0"; return true; }
     if (k == L"holdMode") { out = c.holdMode ? L"1" : L"0"; return true; }
     if (k == L"outputIsolation") {
         out = c.outputIsolation == "off" ? L"100" : std::to_wstring(std::clamp(atoi(c.outputIsolation.c_str()), 0, 100));
+        return true;
+    }
+    if (k.starts_with(L"model:") || k.starts_with(L"stt:") || k.starts_with(L"base:")) {
+        const size_t colon = k.find(L':');
+        const std::wstring what = k.substr(0, colon);
+        const ::Config::ProviderModels m = ::ModelsOf(c, ::WideToUtf8(k.substr(colon + 1)));
+        out = ::Utf8ToWide(what == L"model" ? m.model : what == L"stt" ? m.sttModel : m.baseUrl);
+        return true;
+    }
+    if (k == L"order:llm" || k == L"order:stt") {
+        out = Dict_JoinIds(k == L"order:llm" ? c.llmOrder : c.sttOrder);
         return true;
     }
 #undef DICT_STR
@@ -20459,9 +22297,12 @@ static void Dict_Write(::Config& c, const std::wstring& k, const std::wstring& v
     DICT_STR(style) DICT_STR(promptStrength) DICT_STR(translateTo) DICT_STR(uiLanguage) DICT_STR(fontFamily)
     DICT_STR(dictateHotkey) DICT_STR(translateHotkey) DICT_STR(commandHotkey) DICT_STR(pasteLastHotkey)
     DICT_STR(micPrivacyHotkey) DICT_STR(speechLanguage) DICT_STR(microphone) DICT_STR(overlayDisplay)
-    DICT_STR(overlayWidth) DICT_STR(overlayGlass) DICT_STR(userName)
+    DICT_STR(overlayWidth) DICT_STR(overlayGlass) DICT_STR(userName) DICT_STR(polishHotkey)
+    DICT_STR(polishStyle) DICT_STR(readAloudHotkey) DICT_STR(ttsEngine) DICT_STR(ttsVoice)
     DICT_BOOL(removeFillers) DICT_BOOL(livePreview) DICT_BOOL(micPrivacy) DICT_BOOL(appStylesEnabled)
     DICT_BOOL(autoPaste) DICT_BOOL(historyEnabled) DICT_BOOL(sounds) DICT_BOOL(glassLight) DICT_BOOL(windowGlass)
+    DICT_BOOL(floatingButton)
+    if (k == L"ttsSpeed") { c.ttsSpeed = std::clamp(_wtoi(v.c_str()), 50, 200); return; }
     if (k == L"overlayTop") { c.overlayTop = v == L"1"; return; }
     if (k == L"holdMode") { c.holdMode = v == L"1"; return; }
     if (k == L"theme") {
@@ -20483,6 +22324,45 @@ static void Dict_Write(::Config& c, const std::wstring& k, const std::wstring& v
     if (k == L"outputIsolation") {
         const int n = std::clamp(_wtoi(v.c_str()), 0, 100);
         c.outputIsolation = n >= 100 ? "off" : std::to_string(n);
+        return;
+    }
+    if (k.starts_with(L"model:") || k.starts_with(L"stt:") || k.starts_with(L"base:")) {
+        const size_t colon = k.find(L':');
+        const std::wstring what = k.substr(0, colon);
+        const std::string id = ::WideToUtf8(k.substr(colon + 1));
+        std::string value = ::WideToUtf8(::Trim(v));
+        if (id == "groq") {
+            // Groq's are the original two settings; empty means the suggested one.
+            const ::Config defaults;
+            if (what == L"model") c.chatModel = value.empty() ? defaults.chatModel : value;
+            if (what == L"stt") c.sttModel = value.empty() ? defaults.sttModel : value;
+            return;
+        }
+        // The suggested model is stored as "", so a newer suggestion reaches it.
+        if (const ::ProviderSpec* spec = ::FindProvider(id)) {
+            if (what == L"model" && value == spec->model) value.clear();
+            if (what == L"stt" && value == spec->sttModel) value.clear();
+        }
+        auto it = std::find_if(c.providers.begin(), c.providers.end(), [&](const auto& p) { return p.first == id; });
+        if (it == c.providers.end()) {
+            c.providers.push_back({id, {}});
+            it = c.providers.end() - 1;
+        }
+        (what == L"model" ? it->second.model : what == L"stt" ? it->second.sttModel : it->second.baseUrl) = value;
+        return;
+    }
+    if (k == L"order:llm" || k == L"order:stt") {
+        std::vector<std::string>& order = k == L"order:llm" ? c.llmOrder : c.sttOrder;
+        std::vector<std::string> next;
+        for (const std::wstring& wid : Dict_SplitList(v)) {
+            const std::string id = ::WideToUtf8(wid);
+            if (std::find(order.begin(), order.end(), id) != order.end() &&
+                std::find(next.begin(), next.end(), id) == next.end())
+                next.push_back(id);
+        }
+        for (const std::string& id : order)  // Never lose one.
+            if (std::find(next.begin(), next.end(), id) == next.end()) next.push_back(id);
+        order = std::move(next);
         return;
     }
 #undef DICT_STR
@@ -20509,6 +22389,17 @@ static void Dict_FillOptions(std::vector<SetField>& fields) {
         const std::wstring k = f.key;
         if (k == L"style") {
             for (const ::StyleView& s : ::AllStyles(c)) Dict_AddOption(f, ::Utf8ToWide(s.id), s.name);
+        } else if (k == L"polishStyle") {
+            Dict_AddOption(f, L"", L"Ask each time");
+            for (const ::StyleView& s : ::AllStyles(c))
+                if (s.kind == ::StyleKind::Llm) Dict_AddOption(f, ::Utf8ToWide(s.id), s.name);
+        } else if (k == L"ttsVoice") {
+            Dict_AddOption(f, L"", L"The engine's default");
+            for (const std::wstring& name : ::WindowsVoices()) Dict_AddOption(f, name, L"Windows: " + name);
+            for (const char* v : ::kGeminiVoices) Dict_AddOption(f, ::Utf8ToWide(v), L"Gemini: " + ::Utf8ToWide(v));
+            for (const char* v : ::kOpenAiVoices) Dict_AddOption(f, ::Utf8ToWide(v), L"OpenAI: " + ::Utf8ToWide(v));
+            const std::wstring saved = ::Utf8ToWide(c.ttsVoice);
+            if (!saved.empty() && !Dict_HasOption(f, saved)) Dict_AddOption(f, saved, saved + L" (not installed)");
         } else if (k == L"translateTo") {
             for (const std::string& code : ::LanguageList(true)) Dict_AddOption(f, ::Utf8ToWide(code), ::LanguageListName(code));
         } else if (k == L"speechLanguage") {
@@ -20538,11 +22429,24 @@ static void Dict_FillOptions(std::vector<SetField>& fields) {
 static std::vector<SetField> Dict_Fields() {
     std::vector<SetField> fields = Set_MakeFields();
     Dict_FillOptions(fields);
+    Dict_AddProviderFields(fields);
     return fields;
 }
 
 static bool Dict_Load(SetField& f) {
     const std::wstring k = f.key;
+    if (k.starts_with(L"keys:")) {
+        // What is saved now is also the suggestion: "Reset to suggested" never removes a key.
+        const std::wstring masks = Dict_MaskList(::WideToUtf8(k.substr(5)));
+        f.def = Dict_Str(masks);
+        Set_PutValue(f, masks);
+        return true;
+    }
+    if (k.starts_with(L"key:")) {
+        SecureZeroMemory(f.cur.data(), f.cur.size() * sizeof(WCHAR));
+        Set_PutValue(f, L"");
+        return true;
+    }
     if (k == L"settingsTrayIcon") {
         // One switch for two settings: the tray icon shows only when both say so.
         const bool on = Wh_GetIntSetting(L"settingsTrayIcon") != 0 && Wh_GetIntSetting(L"showTrayIcon") != 0;
@@ -20556,21 +22460,100 @@ static bool Dict_Load(SetField& f) {
     return true;
 }
 
+static int Dict_Field(const SetWindow& w, const std::wstring& key) {
+    for (size_t i = 0; i < w.fields.size(); i++)
+        if (key == w.fields[i].key) return (int)i;
+    return -1;
+}
+
+static std::wstring Dict_Cur(const SetWindow& w, const std::wstring& key) {
+    const int k = Dict_Field(w, key);
+    return k < 0 ? std::wstring() : w.fields[k].cur;
+}
+
+static void Dict_StartTest(SetWindow& w, const std::string& id, bool voice, std::string key);
+
+// The saved keys the window still lists (removed ones dropped), in its order.
+static std::vector<std::string> Dict_KeptKeys(const SetWindow& w, const std::string& id) {
+    std::vector<std::string> saved = Dict_Keys(id), kept;
+    std::vector<bool> used(saved.size());
+    for (const std::wstring& mask : Dict_SplitList(Dict_Cur(w, L"keys:" + ::Utf8ToWide(id)))) {
+        for (size_t i = 0; i < saved.size(); i++) {
+            if (!used[i] && ::MaskKey(saved[i]) == mask) {
+                used[i] = true;
+                kept.push_back(saved[i]);
+                break;
+            }
+        }
+    }
+    Dict_Wipe(saved);
+    return kept;
+}
+
+// Keys removed in the window and keys pasted into "Add a key" are stored. The first new one is
+// tested at once. Returns how many providers changed.
+static int Dict_ApplyKeys(SetWindow& w) {
+    int changed = 0;
+    std::string testId, testKey;
+    for (const ::ProviderSpec& s : ::kProviders) {
+        const std::string id = s.id;
+        const std::wstring wid = ::Utf8ToWide(id);
+        const int kk = Dict_Field(w, L"keys:" + wid), ka = Dict_Field(w, L"key:" + wid);
+        if (kk < 0 || ka < 0) continue;
+        SetField& add = w.fields[ka];
+        const bool removed = Set_FieldValue(w.fields[kk]) != w.fields[kk].value;
+        std::string pasted = ::CleanPastedKey(add.cur);
+        SecureZeroMemory(add.cur.data(), add.cur.size() * sizeof(WCHAR));
+        add.cur.clear();
+        if (!removed && pasted.empty()) continue;
+        std::vector<std::string> list = Dict_KeptKeys(w, id);
+        std::vector<std::string> fresh = ::SplitKeys(pasted);
+        for (std::string& key : fresh) {
+            // (Room for a few dozen: the stored value has a size limit.)
+            if (std::find(list.begin(), list.end(), key) != list.end() || ::JoinKeys(list).size() + key.size() >= 3000)
+                continue;
+            if (testKey.empty()) testId = id, testKey = key;
+            list.push_back(key);
+        }
+        std::string joined = ::JoinKeys(list);
+        ::SaveApiKey(joined, id);
+        SecureZeroMemory(joined.data(), joined.size());
+        SecureZeroMemory(pasted.data(), pasted.size());
+        Dict_Wipe(list);
+        Dict_Wipe(fresh);
+        changed++;
+    }
+    if (changed && !::CurrentConfig().onboarded) {
+        bool any = false;
+        for (const char* id : ::kProviderIds) any = any || !::LoadApiKey(id).empty();
+        if (any) ::UpdateConfig([](::Config& c) { c.onboarded = true; });
+    }
+    if (!testKey.empty()) {
+        Dict_StartTest(w, testId, false, testKey);
+        SecureZeroMemory(testKey.data(), testKey.size());
+    }
+    return changed;
+}
+
 // Saves the configuration fields that changed. Returns how many.
 static int Dict_ApplyConfig(SetWindow& w) {
     std::vector<std::pair<std::wstring, std::wstring>> changes;
     bool language = false;
     for (auto& f : w.fields) {
-        if (Dict_IsYaml(f.key)) continue;
+        if (Dict_IsYaml(f.key) || Dict_IsKeyField(f.key)) continue;
         std::wstring value = Set_FieldValue(f);
         if (value == f.value) continue;
         changes.push_back({f.key, value});
         if (wcscmp(f.key, L"uiLanguage") == 0) language = true;
     }
-    if (changes.empty()) return 0;
-    ::UpdateConfig([&](::Config& c) {
-        for (auto& [k, v] : changes) Dict_Write(c, k, v);
-    });
+    // Models first: the test of a new key uses them.
+    if (!changes.empty()) {
+        ::UpdateConfig([&](::Config& c) {
+            for (auto& [k, v] : changes) Dict_Write(c, k, v);
+        });
+    }
+    const int keys = Dict_ApplyKeys(w);
+    if (changes.empty() && !keys) return 0;
     if (language) ::ApplyUiLanguage(::CurrentConfig().uiLanguage);
     // Show what was stored: the configuration may have tidied a value.
     for (auto& f : w.fields) {
@@ -20578,7 +22561,8 @@ static int Dict_ApplyConfig(SetWindow& w) {
         Dict_Load(f);
         f.value = Set_FieldValue(f);
     }
-    return (int)changes.size();
+    Set_BuildAndClamp(w);  // The provider pages list what was stored.
+    return (int)changes.size() + keys;
 }
 
 // A captured key press as "Ctrl+Alt+Shift+Win+Key", or why it can't be used.
@@ -20622,10 +22606,338 @@ static void Dict_RecordingStopped() {
     if (HWND overlay = ::g_overlayWnd) PostMessageW(overlay, ::WM_APP_RELOAD, 0, 0);
 }
 
-// "dictate:page:N" opens Dictate's older editor window on page N.
+// Ready for text (or voice): a key, or for the OpenAI-compatible one an https address and a model.
+// What the window shows counts, saved or not.
+static bool Dict_Ready(const SetWindow& w, const std::string& id, bool speech) {
+    const ::ProviderSpec* s = ::FindProvider(id);
+    if (!s) return false;
+    const std::wstring wid = ::Utf8ToWide(id);
+    if (id == "custom")
+        return !speech && Dict_Cur(w, L"base:custom").starts_with(L"https://") &&
+               !::Trim(Dict_Cur(w, L"model:custom")).empty();
+    if (speech && !s->sttModel[0]) return false;
+    return !Dict_SplitList(Dict_Cur(w, L"keys:" + wid)).empty() || !::Trim(Dict_Cur(w, L"key:" + wid)).empty();
+}
+
+static bool Dict_AnyReady(const SetWindow& w) {
+    for (const char* id : ::kProviderIds)
+        if (Dict_Ready(w, id, false)) return true;
+    return false;
+}
+
+static std::wstring Dict_Blurb(const std::string& id) {
+    if (id == "groq") return L"Free and fast. Recommended.";
+    if (id == "gemini") return L"Free tier. Also transcribes.";
+    if (id == "openrouter") return L"Free models. Text only.";
+    if (id == "mistral") return L"Free tier, no card needed.";
+    if (id == "openai") return L"Paid.";
+    return L"Any server with an OpenAI-style API. Text only.";
+}
+
+static std::wstring Dict_Summary(const SetWindow& w, const ::ProviderSpec& s) {
+    const std::string id = s.id;
+    const std::wstring wid = ::Utf8ToWide(id);
+    const bool typed = !::Trim(Dict_Cur(w, L"key:" + wid)).empty();
+    if (id == "custom") {
+        if (!Dict_Ready(w, id, false)) return L"Not set up. " + Dict_Blurb(id);
+        return L"Set up · " + ::Trim(Dict_Cur(w, L"model:custom")) + (typed ? L" · key not saved yet" : L"");
+    }
+    const size_t n = Dict_SplitList(Dict_Cur(w, L"keys:" + wid)).size();
+    if (!n) return typed ? L"Key not saved yet. Press Save." : L"No key yet. " + Dict_Blurb(id);
+    std::wstring text = n == 1 ? L"1 key" : std::to_wstring(n) + L" keys";
+    text += s.sttModel[0] ? L" · text and voice" : L" · text";
+    if (typed) text += L" · new key not saved yet";
+    return text;
+}
+
+static std::wstring Dict_TestSub(const std::string& key, PCWSTR idle) {
+    auto it = g_dictTests.find(key);
+    return it == g_dictTests.end() ? std::wstring(idle) : it->second;
+}
+
+// What the provider pages show depends on these; when they change the page is built again.
+static std::wstring Dict_Signature(const SetWindow& w) {
+    std::wstring sig = ::Utf8ToWide(g_dictProv) + L"|" + std::to_wstring(w.page);
+    for (const SetField& f : w.fields)
+        if (f.page < 0) sig += L"|" + std::to_wstring(f.cur.size()) + L":" + (wcsncmp(f.key, L"key:", 4) ? f.cur : L"");
+    return sig;
+}
+
+static void Dict_BuildPage(SetWindow& w, float& y) {
+    if (w.page != kDictProvidersPage) g_dictProv.clear();
+    g_dictSig = Dict_Signature(w);
+    if (w.page != kDictProvidersPage && w.page != kDictSetupPage) return;
+    bool first = true;
+    auto group = [&](const std::wstring& text) {
+        SetItem g;
+        g.type = SetItem::Group;
+        g.text = text;
+        y += first ? 0 : 14;
+        first = false;
+        g.y = y;
+        g.h = 22;
+        y += g.h + 6;
+        w.items.push_back(g);
+    };
+    auto banner = [&](const std::wstring& text) {
+        SetItem it;
+        it.type = SetItem::Banner;
+        it.text = text;
+        it.y = y;
+        it.h = Set_TextH(w.fHint.get(), text, w.contentW - 32) + 28;
+        y += it.h + kSetRowGap + 8;
+        w.items.push_back(it);
+    };
+    auto link = [&](const std::wstring& text, const std::wstring& sub, const std::wstring& url) {
+        SetItem it;
+        it.type = SetItem::Link;
+        it.text = text;
+        it.sub = sub;
+        it.url = url;
+        it.y = y;
+        it.h = std::max(56.0f, 30 + Set_TextH(w.fHint.get(), sub, w.contentW - kSetRowPad - 50) + 10);
+        y += it.h + kSetRowGap;
+        first = false;  // A group after a link ("All providers") keeps its gap.
+        w.items.push_back(it);
+    };
+    auto row = [&](const std::wstring& key) {
+        const int k = Dict_Field(w, key);
+        if (k < 0) return;
+        const SetField& f = w.fields[k];
+        SetItem it;
+        it.type = SetItem::Row;
+        it.field = k;
+        float textW = w.contentW - 2 * kSetRowPad - Set_ControlW(f) - 24;
+        float lh = Set_TextH(w.fLabel.get(), f.label, textW);
+        float dh = f.desc ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
+        it.y = y;
+        it.h = std::max(kSetRowMin, 28 + lh + dh);
+        y += it.h + kSetRowGap;
+        first = false;
+        w.items.push_back(it);
+    };
+    auto keyLink = [&](const ::ProviderSpec& s) {
+        if (!s.keyUrl[0]) return;
+        const ::ProviderTexts t = ::TextsOf(s.id);
+        std::wstring sub = t.description;
+        for (size_t i = 0; i < t.steps.size(); i++) sub += L"\n" + std::to_wstring(i + 1) + L". " + t.steps[i];
+        link(std::wstring(L"Get a key from ") + s.name, sub, ::Utf8ToWide(s.keyUrl));
+    };
+
+    if (w.page == kDictSetupPage) {
+        const ::ProviderSpec& groq = *::FindProvider("groq");
+        if (!Dict_AnyReady(w))
+            banner(L"Welcome. Connect a provider and Dictate is ready: press your shortcut in any app, speak, and "
+                   L"the text is typed where the cursor is.");
+        group(L"1. Connect Groq (free)");
+        const size_t saved = Dict_SplitList(Dict_Cur(w, L"keys:groq")).size();
+        if (saved)
+            link(L"Groq is connected", (saved == 1 ? L"1 key saved." : std::to_wstring(saved) + L" keys saved.") +
+                                           std::wstring(L" See or remove them on the Providers page."),
+                 L"dictate:page:prov:groq");
+        row(L"key:groq");
+        keyLink(groq);
+        link(L"Use another provider", L"Google Gemini, OpenRouter, Mistral, OpenAI or your own server",
+             L"dictate:page:goto:3");
+        group(L"2. About you");
+        row(L"userName");
+        row(L"uiLanguage");
+        row(L"speechLanguage");
+        group(L"3. Your shortcut");
+        row(L"dictateHotkey");
+        row(L"holdMode");
+        group(L"4. Try it");
+        std::string testId = "groq";
+        const std::vector<std::wstring> order = Dict_SplitList(Dict_Cur(w, L"order:llm"));
+        for (auto it = order.rbegin(); it != order.rend(); ++it)
+            if (Dict_Ready(w, ::WideToUtf8(*it), false)) testId = ::WideToUtf8(*it);
+        link(L"Test the connection",
+             Dict_TestSub("text:" + testId, (L"Sends a tiny request to " + ::ProviderName(testId) +
+                                             L" with your key. Then press your shortcut in any text box and speak.")
+                                                .c_str()),
+             L"dictate:page:test:text:" + ::Utf8ToWide(testId));
+        return;
+    }
+
+    const ::ProviderSpec* s = g_dictProv.empty() ? nullptr : ::FindProvider(g_dictProv);
+    if (!s) {
+        g_dictProv.clear();
+        if (!Dict_AnyReady(w))
+            banner(L"No provider is connected, so dictation can't work yet. Groq is free and fast: open it below "
+                   L"and paste a key.");
+        group(L"Providers");
+        for (const ::ProviderSpec& p : ::kProviders)
+            link(::ProviderName(p.id), Dict_Summary(w, p), L"dictate:page:prov:" + ::Utf8ToWide(p.id));
+        for (int list = 0; list < 2; list++) {
+            const bool speech = list == 1;
+            group(speech ? L"Voice: tried in this order" : L"Text: tried in this order");
+            const std::vector<std::wstring> order = Dict_SplitList(Dict_Cur(w, speech ? L"order:stt" : L"order:llm"));
+            for (size_t i = 0; i < order.size(); i++) {
+                const std::string id = ::WideToUtf8(order[i]);
+                const bool ready = Dict_Ready(w, id, speech);
+                std::wstring sub = ready ? (i ? L"Ready. Used when the ones above fail." : L"Ready. Tried first.")
+                                         : L"Not connected, so it is skipped.";
+                if (i) sub += L" Click to move it up.";
+                link(std::to_wstring(i + 1) + L".  " + ::ProviderName(id), sub,
+                     i ? std::wstring(speech ? L"dictate:page:up:stt:" : L"dictate:page:up:llm:") + order[i]
+                       : std::wstring(L"dictate:page:first"));
+            }
+        }
+        return;
+    }
+
+    const std::string id = s->id;
+    const std::wstring wid = ::Utf8ToWide(id);
+    link(L"All providers", L"Back to the list and the order they are tried in", L"dictate:page:back");
+    group(::ProviderName(id));
+    const std::vector<std::wstring> masks = Dict_SplitList(Dict_Cur(w, L"keys:" + wid));
+    for (size_t i = 0; i < masks.size(); i++)
+        link(L"Key " + std::to_wstring(i + 1) + L"   " + masks[i],
+             (i ? L"Takes over when the ones above are refused or out of quota." : L"Used first.") +
+                 std::wstring(L" Click to remove it; Save makes it final."),
+             L"dictate:page:rm:" + wid + L":" + std::to_wstring(i));
+    if (id == "custom") row(L"base:custom");
+    row(L"key:" + wid);
+    keyLink(*s);
+    const ::ProviderTexts t = ::TextsOf(id);
+    if (!t.note.empty()) banner(t.note);
+    if (id == "custom") {
+        std::wstring how = t.description;
+        for (size_t i = 0; i < t.steps.size(); i++) how += L"\n" + std::to_wstring(i + 1) + L". " + t.steps[i];
+        link(L"How to set it up", how, L"dictate:page:none");
+    }
+    group(L"Models");
+    row(L"model:" + wid);
+    row(L"stt:" + wid);
+    group(L"Check");
+    link(L"Test text", Dict_TestSub("text:" + id, L"Sends a tiny request with the first key and the text model."),
+         L"dictate:page:test:text:" + wid);
+    if (s->sttModel[0])
+        link(L"Test voice", Dict_TestSub("voice:" + id, L"Sends a second of quiet audio to the voice model."),
+             L"dictate:page:test:voice:" + wid);
+}
+
+static WCHAR Dict_LinkGlyph(const std::wstring& url) {
+    if (!url.starts_with(L"dictate:page:")) return 0xE8A7;  // Opens in the browser.
+    const std::wstring rest = url.substr(13);
+    if (rest.starts_with(L"up:")) return 0xE74A;
+    if (rest.starts_with(L"prov:") || rest.starts_with(L"goto:")) return 0xE76C;
+    if (rest == L"back") return 0xE72B;
+    if (rest.starts_with(L"test:")) return 0xE768;
+    if (rest.starts_with(L"rm:")) return 0xE74D;
+    if (rest == L"first" || rest == L"none") return 0;
+    return 0xE8A7;
+}
+
+// "Test text" / "Test voice": a tiny real request, with a key typed but not saved yet, else the
+// first saved one, and the models as the window shows them.
+static void Dict_StartTest(SetWindow& w, const std::string& id, bool voice, std::string key) {
+    AcquireSRWLockExclusive(&::g_keyTestLock);
+    if (::g_keyTestRunning) {
+        ReleaseSRWLockExclusive(&::g_keyTestLock);
+        Set_SetStatus(w, L"A test is still running. Try again in a moment.");
+        return;
+    }
+    ::g_keyTestRunning = true;
+    ::g_keyTestText.clear();
+    ::g_keyTestProvider = id;
+    ReleaseSRWLockExclusive(&::g_keyTestLock);
+    if (key.empty()) {
+        std::string typed = ::CleanPastedKey(Dict_Cur(w, L"key:" + ::Utf8ToWide(id)));
+        std::vector<std::string> list = ::SplitKeys(typed);
+        if (list.empty()) list = Dict_KeptKeys(w, id);
+        if (!list.empty()) key = list.front();
+        SecureZeroMemory(typed.data(), typed.size());
+        Dict_Wipe(list);
+    }
+    g_dictTestKey = (voice ? "voice:" : "text:") + id;
+    g_dictTests[g_dictTestKey] = L"Testing…";
+    auto job = std::make_shared<::Job>();
+    job->kind = ::JobKind::KeyTest;
+    job->chip = voice ? "voice" : "text";
+    job->translateTo = id;
+    job->key = key;
+    SecureZeroMemory(key.data(), key.size());
+    ::Config cfg = ::CurrentConfig();
+    for (const SetField& f : w.fields) {
+        const std::wstring k = f.key;
+        if (k.starts_with(L"model:") || k.starts_with(L"stt:") || k.starts_with(L"base:")) Dict_Write(cfg, k, f.cur);
+    }
+    job->config = cfg;
+    ::StartJob(std::move(job));
+    Set_SetStatus(w, (L"Testing " + ::ProviderName(id) + L"…").c_str());
+    Set_BuildAndClamp(w);
+}
+
+// The test finished (WM_APP_TEST): its result goes under its button and in the footer.
+static void Dict_TestDone(SetWindow& w) {
+    AcquireSRWLockShared(&::g_keyTestLock);
+    const bool running = ::g_keyTestRunning, ok = ::g_keyTestOk;
+    const std::wstring text = ::g_keyTestText;
+    ReleaseSRWLockShared(&::g_keyTestLock);
+    if (running || g_dictTestKey.empty()) return;
+    g_dictTests[g_dictTestKey] = text;
+    g_dictTestOk[g_dictTestKey] = ok;
+    g_dictTestKey.clear();
+    Set_SetStatus(w, text.c_str(), !ok);
+    Set_BuildAndClamp(w);
+}
+
+// After a click or a key: if a provider field changed (a reset, a typed key), build the page again.
+static void Dict_Refresh(SetWindow& w) {
+    if ((w.page == kDictProvidersPage || w.page == kDictSetupPage) && Dict_Signature(w) != g_dictSig)
+        Set_BuildAndClamp(w);
+}
+
+// "dictate:page:N" opens Dictate's older editor window on page N (the lists). The other
+// "dictate:page:" links act in this window: prov:<id>, back, goto:<page>, up:<llm|stt>:<id>,
+// rm:<id>:<n>, test:<text|voice>:<id>.
 static void Dict_OpenLegacy(PCWSTR url) {
-    const int page = _wtoi(url + wcslen(L"dictate:page:"));
-    if (HWND overlay = ::g_overlayWnd) PostMessageW(overlay, ::WM_APP_LEGACY_PAGE, (WPARAM)page, 0);
+    const std::wstring rest = url + wcslen(L"dictate:page:");
+    if (!rest.empty() && iswdigit(rest[0])) {
+        if (HWND overlay = ::g_overlayWnd) PostMessageW(overlay, ::WM_APP_LEGACY_PAGE, (WPARAM)_wtoi(rest.c_str()), 0);
+        return;
+    }
+    if (!g_setWin) return;
+    SetWindow& w = *g_setWin;
+    Set_CommitEdit(w, true);
+    auto after = [&](const std::wstring& prefix) { return ::WideToUtf8(rest.substr(prefix.size())); };
+    if (rest.starts_with(L"prov:") || rest == L"back") {
+        if (w.page != kDictProvidersPage) Set_GoPage(w, kDictProvidersPage);
+        g_dictProv = rest == L"back" ? "" : after(L"prov:");
+        w.scrollY = w.scrollTarget = 0;
+        w.focus = -1;
+        Set_BuildAndClamp(w);
+    } else if (rest.starts_with(L"goto:")) {
+        Set_GoPage(w, _wtoi(rest.c_str() + 5));
+    } else if (rest.starts_with(L"up:")) {
+        const bool speech = rest.starts_with(L"up:stt:");
+        const int k = Dict_Field(w, speech ? L"order:stt" : L"order:llm");
+        if (k < 0) return;
+        std::vector<std::wstring> order = Dict_SplitList(w.fields[k].cur);
+        const std::wstring id = rest.substr(7);
+        auto it = std::find(order.begin(), order.end(), id);
+        if (it == order.end() || it == order.begin()) return;
+        std::iter_swap(it, it - 1);
+        w.fields[k].cur = Dict_JoinList(order, L",");
+        Set_SetStatus(w, L"");
+        Set_BuildAndClamp(w);
+    } else if (rest.starts_with(L"rm:")) {
+        const size_t colon = rest.find(L':', 3);
+        if (colon == std::wstring::npos) return;
+        const int k = Dict_Field(w, L"keys:" + rest.substr(3, colon - 3));
+        if (k < 0) return;
+        std::vector<std::wstring> masks = Dict_SplitList(w.fields[k].cur);
+        const size_t index = (size_t)_wtoi(rest.c_str() + colon + 1);
+        if (index >= masks.size()) return;
+        masks.erase(masks.begin() + index);
+        w.fields[k].cur = Dict_JoinList(masks);
+        Set_SetStatus(w, L"Key removed from the list. Press Save to make it final, or Cancel.");
+        Set_BuildAndClamp(w);
+    } else if (rest.starts_with(L"test:")) {
+        const bool voice = rest.starts_with(L"test:voice:");
+        Dict_StartTest(w, after(voice ? L"test:voice:" : L"test:text:"), voice, {});
+    }
 }
 
 void Settings_Open() {
@@ -20637,6 +22949,7 @@ void Settings_Open() {
     }
     if (g_setWin) Settings_Close();
     if (!Set_Create(false)) return;
+    if (int page = g_setOpenPage.exchange(-1); page >= 0) Set_GoPage(*g_setWin, page);
     HWND hwnd = g_setWin->hwnd;
     ShowWindow(hwnd, SW_SHOW);
     SetForegroundWindow(hwnd);
@@ -20659,12 +22972,19 @@ DWORD WINAPI SettingsThread(void*) {
  MSG msg;
  while (g_settingsWnd && GetMessageW(&msg,nullptr,0,0)>0) { TranslateMessage(&msg); DispatchMessageW(&msg); }
  Settings_Close(); UnregisterClassW(kSettingsClass,(HINSTANCE)&__ImageBase); Set_ReleaseFactories();
- g_dictText.clear(); Dict_RecordingStopped(); CoUninitialize(); return 0;
+ g_dictText.clear(); g_dictProv.clear(); g_dictTests.clear(); g_dictTestOk.clear(); g_dictTestKey.clear();
+ Dict_RecordingStopped(); CoUninitialize(); return 0;
 }
 void OpenSettingsWindow() {
  if (HWND hwnd=g_settingsWnd) { PostMessageW(hwnd,WM_APP_SETTINGS_ACTIVATE,0,0); return; }
  if(g_settingsThread) { if(WaitForSingleObject(g_settingsThread,0)==WAIT_TIMEOUT) return; CloseHandle(g_settingsThread); }
  g_settingsStop=false; g_settingsThread=CreateThread(nullptr,0,SettingsThread,nullptr,0,nullptr);
+}
+// The settings window on one page (Providers, Setup...): opened there, or switched to it.
+void OpenSettingsWindowAt(int page) {
+ if (HWND hwnd=g_settingsWnd) { PostMessageW(hwnd,WM_APP_SETTINGS_ACTIVATE,(WPARAM)(page+1),0); return; }
+ g_setOpenPage=page;
+ OpenSettingsWindow();
 }
 void CloseSettingsWindow() {
  g_settingsStop=true;
@@ -20673,11 +22993,7 @@ void CloseSettingsWindow() {
 }
 }  // namespace dictset
 
-void OpenKeyWindowNow() {
-    if (g_settingsUi) {
-        g_settingsUi->Open(Page::Providers);
-    }
-}
+void OpenKeyWindowNow() { dictset::OpenSettingsWindowAt(3); }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Notification area icon (UI thread): a menu for the choices of the moment
@@ -20957,9 +23273,10 @@ DWORD WINAPI UiThreadProc(void*) {
         }
     };
     syncTray();
-    // The first run: the wizard (once; closing it counts).
+    // The first run: the settings window on its Setup page (once; closing it counts).
     if (!CurrentConfig().onboarded) {
-        settings.Open(Page::Wizard);
+        UpdateConfig([](Config& c) { c.onboarded = true; });
+        dictset::OpenSettingsWindowAt(5);
     }
     // The app the user works in, for the tray's actions (an event: called
     // only when the foreground window changes).
@@ -20980,7 +23297,7 @@ DWORD WINAPI UiThreadProc(void*) {
             continue;
         }
         if (msg.hwnd == overlay.Hwnd() && msg.message == WM_APP_KEY_WINDOW) {
-            settings.Open(Page::Providers);
+            dictset::OpenSettingsWindowAt(3);
             continue;
         }
         TranslateMessage(&msg);
@@ -21059,6 +23376,9 @@ bool RegisterClasses() {
 // - Menus that Windows draws get 2 px more frame on every side, so the hover has the same room
 //   from the border as in Explorer's own desktop menu (4 px at the sides, 6 px top and bottom).
 //   Menus with owner-drawn rows (Explorer) already have it and are left alone.
+// - A submenu opens touching its parent, and while the pointer heads for an open submenu the
+//   parent ignores it, so rows crossed on the way don't swap the submenu (released after a
+//   short rest, so stopping on a row still opens that row).
 // - A menu too tall for its monitor gets shorter rows while it is open, so the last item
 //   shows without scroll arrows. Windows reads row spacing once per process, so the spacing is
 //   reloaded (FlushMenuThemes) when such a menu opens and again when the menu closes.
@@ -21072,10 +23392,12 @@ bool RegisterClasses() {
 namespace SeamlessMenuRoom {
 
 constexpr UINT_PTR kRoomId = 0x6D55;
-constexpr INT kRowMargin = 8;                  // row top and bottom margin of the menu look
+constexpr INT kRowMargin = 6;                  // row top and bottom margin of the menu look
 constexpr INT kMinRowMargin = 2;
 static const WCHAR* const kPadProp = L"SeamlessMenuRoomPad";
 static const WCHAR* const kSizeProp = L"SeamlessMenuRoomSize";
+static const WCHAR* const kSeqProp = L"SeamlessMenuRoomSeq";   // creation order of menu windows
+constexpr UINT kAimHoldMs = 250;               // how long the pointer may rest before a held move counts
 
 static std::atomic<INT> g_rowMargin{kRowMargin};
 static HWINEVENTHOOK g_createHook = nullptr, g_menuHook = nullptr;
@@ -21085,6 +23407,13 @@ static Flush_t g_flush = nullptr;
 static thread_local HHOOK t_loopHook = nullptr;
 static thread_local INT t_trackDepth = 0;
 static thread_local BOOL t_menuMode = FALSE;
+static std::atomic<ULONG> g_seq{0};
+static thread_local HHOOK t_aimHook = nullptr;
+static thread_local POINT t_apex = {LONG_MIN, LONG_MIN};
+static thread_local MSG t_held = {};
+static thread_local UINT_PTR t_aimTimer = 0;
+static thread_local DWORD t_holdStart = 0;
+constexpr DWORD kAimMaxMs = 700;               // a hold never lasts longer than this
 
 // Row top and bottom margin to report for Menu part 27 / POPUPITEM, property 10000.
 static INT RowMargin() { return g_rowMargin.load(); }
@@ -21112,6 +23441,132 @@ static BOOL HasOwnerDraw(HMENU m)
     return FALSE;
 }
 
+// The nearest visible menu window of this thread made before (parent) or after (child) h.
+struct RelativeFind { HWND self; ULONG_PTR seq; BOOL child; HWND best; ULONG_PTR bestSeq; };
+static BOOL CALLBACK FindRelative(HWND h, LPARAM l)
+{
+    auto* f = reinterpret_cast<RelativeFind*>(l);
+    if (h == f->self || !IsWindowVisible(h) || !IsPopupMenuWindow(h)) return TRUE;
+    ULONG_PTR s = (ULONG_PTR)GetPropW(h, kSeqProp);
+    if (!s) return TRUE;
+    BOOL better = f->child ? (s > f->seq && (!f->best || s < f->bestSeq))
+                           : (s < f->seq && (!f->best || s > f->bestSeq));
+    if (better) { f->best = h; f->bestSeq = s; }
+    return TRUE;
+}
+static HWND RelativeMenu(HWND h, BOOL child)
+{
+    RelativeFind f = {h, (ULONG_PTR)GetPropW(h, kSeqProp), child, nullptr, 0};
+    if (!f.seq) return nullptr;
+    EnumThreadWindows(GetCurrentThreadId(), FindRelative, reinterpret_cast<LPARAM>(&f));
+    return f.best;
+}
+
+// Pull a submenu in so it touches its parent (never pushes it further away or off screen).
+static VOID SnapToParent(HWND h, WINDOWPOS* wp)
+{
+    HWND parent = RelativeMenu(h, FALSE);
+    RECT pr;
+    if (!parent || !GetWindowRect(parent, &pr)) return;
+    INT cx = wp->cx;
+    if ((wp->flags & SWP_NOSIZE) || cx <= 0) {
+        RECT r;
+        if (!GetWindowRect(h, &r)) return;
+        cx = r.right - r.left;
+    }
+    LONG mid = (pr.left + pr.right) / 2;
+    if (wp->x >= mid) {
+        if (pr.right < wp->x) wp->x = pr.right;
+    } else if (wp->x + cx <= mid) {
+        if (pr.left - cx > wp->x) wp->x = pr.left - cx;
+    }
+}
+
+static BOOL InTriangle(POINT p, POINT a, POINT b, POINT c)
+{
+    auto side = [](POINT o, POINT u, POINT v) {
+        return (LONGLONG)(u.x - o.x) * (v.y - o.y) - (LONGLONG)(u.y - o.y) * (v.x - o.x);
+    };
+    LONGLONG d1 = side(p, a, b), d2 = side(p, b, c), d3 = side(p, c, a);
+    BOOL neg = d1 < 0 || d2 < 0 || d3 < 0, pos = d1 > 0 || d2 > 0 || d3 > 0;
+    return !(neg && pos);
+}
+
+static VOID DropHeld()
+{
+    if (t_aimTimer) KillTimer(nullptr, t_aimTimer);
+    t_aimTimer = 0;
+    t_held = {};
+}
+
+// The pointer rested: let the last held move through, from where it stopped. The timer has no
+// callback (a pending one could outlive the mod's unload); AimProc sees its WM_TIMER.
+static VOID AimRelease()
+{
+    MSG m = t_held;
+    DropHeld();
+    if (m.hwnd && IsWindow(m.hwnd)) {
+        t_apex = m.pt;
+        PostMessageW(m.hwnd, m.message, m.wParam, m.lParam);
+    }
+}
+
+// TRUE: hold this move, the pointer is on its way to the open submenu.
+static BOOL HoldForSubmenu(const MSG* m)
+{
+    POINT p = m->pt;
+    HWND under = WindowFromPoint(p);
+    HWND sub = nullptr;
+    if (under && IsPopupMenuWindow(under) && GetWindowThreadProcessId(under, nullptr) == GetCurrentThreadId())
+        sub = RelativeMenu(under, TRUE);
+    RECT sr, pr;
+    if (!sub || !GetWindowRect(sub, &sr) || !GetWindowRect(under, &pr) || t_apex.x == LONG_MIN ||
+        (p.x == t_apex.x && p.y == t_apex.y)) {
+        DropHeld();
+        t_apex = p;
+        return FALSE;
+    }
+    LONG edge = sr.left >= (pr.left + pr.right) / 2 ? sr.left : sr.right;
+    INT slack = MulDiv(6, DpiOf(under), USER_DEFAULT_SCREEN_DPI);
+    POINT b = {edge, sr.top - slack}, c = {edge, sr.bottom + slack};
+    if (!InTriangle(p, t_apex, b, c)) {
+        DropHeld();
+        t_apex = p;
+        return FALSE;
+    }
+    if (!t_held.hwnd) t_holdStart = GetTickCount();
+    else if (GetTickCount() - t_holdStart > kAimMaxMs) {
+        DropHeld();
+        t_apex = p;
+        return FALSE;
+    }
+    t_held = *m;
+    if (t_aimTimer) KillTimer(nullptr, t_aimTimer);
+    t_aimTimer = SetTimer(nullptr, 0, kAimHoldMs, nullptr);
+    if (!t_aimTimer) { t_held = {}; t_apex = p; return FALSE; }
+    return TRUE;
+}
+
+static LRESULT CALLBACK AimProc(INT code, WPARAM w, LPARAM l)
+{
+    if (code == MSGF_MENU && l) {
+        auto* m = reinterpret_cast<MSG*>(l);
+        if (m->message == WM_TIMER && !m->hwnd && t_aimTimer && m->wParam == t_aimTimer) {
+            AimRelease();
+            return TRUE;
+        }
+        if (m->message == WM_MOUSEMOVE || m->message == WM_NCMOUSEMOVE) {
+            if (HoldForSubmenu(m)) return TRUE;
+        } else if ((m->message >= WM_LBUTTONDOWN && m->message <= WM_MBUTTONDBLCLK) ||
+                   (m->message >= WM_NCLBUTTONDOWN && m->message <= WM_NCMBUTTONDBLCLK) ||
+                   m->message == WM_KEYDOWN) {
+            DropHeld();
+            t_apex = {LONG_MIN, LONG_MIN};
+        }
+    }
+    return CallNextHookEx(nullptr, code, w, l);
+}
+
 static LRESULT CALLBACK RoomProc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR, DWORD_PTR)
 {
     if (msg == WM_WINDOWPOSCHANGING && l) {
@@ -21136,10 +23591,12 @@ static LRESULT CALLBACK RoomProc(HWND h, UINT msg, WPARAM w, LPARAM l, UINT_PTR,
             }
             SetPropW(h, kSizeProp, (HANDLE)(ULONG_PTR)(DWORD)MAKELONG(wp->cx, wp->cy));
         }
+        if (!(wp->flags & SWP_NOMOVE)) SnapToParent(h, wp);
     }
     if (msg == WM_NCDESTROY) {
         RemovePropW(h, kPadProp);
         RemovePropW(h, kSizeProp);
+        RemovePropW(h, kSeqProp);
         RemoveWindowSubclass(h, RoomProc, kRoomId);
         return DefSubclassProc(h, msg, w, l);
     }
@@ -21156,7 +23613,7 @@ static VOID ResetRows()
     if (g_rowMargin.exchange(kRowMargin) != kRowMargin && g_flush) g_flush();
 }
 
-// Picks the largest row margin (8 down to 2) at which the whole menu fits its monitor.
+// Picks the largest row margin (6 down to 2) at which the whole menu fits its monitor.
 static VOID FitMenu(HMENU m, HWND owner)
 {
     if (!m || !g_flush || HasOwnerDraw(m)) return;
@@ -21173,8 +23630,8 @@ static VOID FitMenu(HMENU m, HWND owner)
     INT avail = mi.rcWork.bottom - mi.rcWork.top - px(8);
     INT pick = kRowMargin;
     for (; pick > kMinRowMargin; pick--) {
-        INT cut = px(2 * (kRowMargin - pick));   // rows measure 33 px and separators 21 px at margin 8
-        if (rows * (px(33) - cut) + seps * (px(21) - cut) + px(10) <= avail) break;
+        INT cut = px(2 * (kRowMargin - pick));   // rows measure 29 px and separators 17 px at margin 6
+        if (rows * (px(29) - cut) + seps * (px(17) - cut) + px(10) <= avail) break;
     }
     if (pick < g_rowMargin.load()) {
         g_rowMargin = pick;
@@ -21209,6 +23666,19 @@ static VOID SyncLoopHook()
         t_loopHook = nullptr;
         ResetRows();
     }
+    if (want && !t_aimHook) {
+        t_apex = {LONG_MIN, LONG_MIN};
+        t_aimHook = SetWindowsHookExW(WH_MSGFILTER, AimProc, nullptr, GetCurrentThreadId());
+        if (t_aimHook) { std::lock_guard<std::mutex> g(g_hooksLock); g_hooks.push_back(t_aimHook); }
+    } else if (!want && t_aimHook) {
+        {
+            std::lock_guard<std::mutex> g(g_hooksLock);
+            auto it = std::find(g_hooks.begin(), g_hooks.end(), t_aimHook);
+            if (it != g_hooks.end()) { g_hooks.erase(it); UnhookWindowsHookEx(t_aimHook); }
+        }
+        t_aimHook = nullptr;
+        DropHeld();
+    }
 }
 
 // Wrap TrackPopupMenu(Ex) with these (menu-bar menus are covered by the menu events).
@@ -21221,6 +23691,7 @@ static VOID CALLBACK OnEvent(HWINEVENTHOOK, DWORD ev, HWND h, LONG obj, LONG chi
         if (obj != OBJID_WINDOW || child != CHILDID_SELF || !IsPopupMenuWindow(h) ||
             GetWindowThreadProcessId(h, nullptr) != GetCurrentThreadId())
             return;
+        SetPropW(h, kSeqProp, (HANDLE)(ULONG_PTR)++g_seq);
         if (g_onCreate) g_onCreate(h);
         SetWindowSubclass(h, RoomProc, kRoomId, 0);
     } else if (ev == EVENT_SYSTEM_MENUSTART) {
@@ -21266,7 +23737,7 @@ static VOID Uninit()
 // Seamless menu look for this mod's own menus.
 // Windhawk runs tool mods in their own process, where Seamless Flyouts cannot reach, so the
 // menus this mod shows get the same look here: blurred Catppuccin Mocha body, rounded corners,
-// roomy rows, separators that run to the border, one soft hover with a blue outline, and
+// roomy rows, separators that run to the border, the blue to mauve hover pill, and
 // submenus that open beside their parent with a small gap. Only this process is touched.
 // ---------------------------------------------------------------------------------------------
 #include <d2d1.h>
@@ -21274,6 +23745,70 @@ static VOID Uninit()
 #include <uxtheme.h>
 #include <vssym32.h>
 #include <commctrl.h>
+
+// ---------------------------------------------------------------------------------------------
+// Menu pill: the one hover look for every menu row, the same pill Seamless Clipboard Manager
+// draws: a soft blue to mauve fill (16 %) and a 1 px blue to mauve ring (80 %), radius 8.
+// Drawn at the row's real size each time, because a stretched nine-grid can't hold a gradient.
+// ---------------------------------------------------------------------------------------------
+namespace SeamlessMenuPill {
+
+static BOOL Draw(ID2D1Factory* factory, HDC hdc, const RECT& r, UINT dpi)
+{
+    INT w = r.right - r.left, h = r.bottom - r.top;
+    if (!factory || !hdc || w <= 2 || h <= 2) return FALSE;
+    HDC dc = CreateCompatibleDC(hdc);
+    if (!dc) return FALSE;
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -h, 1, 32, BI_RGB};
+    VOID* bits = nullptr;
+    HBITMAP bmp = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!bmp) { DeleteDC(dc); return FALSE; }
+    HGDIOBJ old = SelectObject(dc, bmp);
+    auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_SOFTWARE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0,
+        D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE, D2D1_FEATURE_LEVEL_DEFAULT);
+    ID2D1DCRenderTarget* rt = nullptr;
+    RECT rc = {0, 0, w, h};
+    BOOL ok = FALSE;
+    if (SUCCEEDED(factory->CreateDCRenderTarget(&props, &rt)) && SUCCEEDED(rt->BindDC(dc, &rc))) {
+        FLOAT s = (dpi ? dpi : USER_DEFAULT_SCREEN_DPI) / (FLOAT)USER_DEFAULT_SCREEN_DPI;
+        FLOAT ringW = s < 1.5f ? 1.f : 2.f;
+        FLOAT rad = std::min(8.f * s, std::min((FLOAT)w, (FLOAT)h) / 2.f);
+        D2D1_ROUNDED_RECT rr = {{ringW / 2, ringW / 2, w - ringW / 2, h - ringW / 2}, rad, rad};
+        auto gradient = [&](FLOAT a) {
+            ID2D1LinearGradientBrush* brush = nullptr;
+            ID2D1GradientStopCollection* stops = nullptr;
+            D2D1_GRADIENT_STOP st[2] = {{0.f, {137 / 255.f, 180 / 255.f, 250 / 255.f, a}},
+                                        {1.f, {203 / 255.f, 166 / 255.f, 247 / 255.f, a}}};
+            if (SUCCEEDED(rt->CreateGradientStopCollection(st, 2, &stops)))
+                rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties({0, 0}, {(FLOAT)w, (FLOAT)h}),
+                                              stops, &brush);
+            if (stops) stops->Release();
+            return brush;
+        };
+        rt->BeginDraw();
+        rt->Clear({0, 0, 0, 0});
+        ID2D1LinearGradientBrush* fill = gradient(0.16f);
+        ID2D1LinearGradientBrush* ring = gradient(0.8f);
+        if (fill) rt->FillRoundedRectangle(&rr, fill);
+        if (ring) rt->DrawRoundedRectangle(&rr, ring, ringW);
+        ok = SUCCEEDED(rt->EndDraw()) && fill && ring;
+        if (fill) fill->Release();
+        if (ring) ring->Release();
+    }
+    if (rt) rt->Release();
+    if (ok) {
+        BLENDFUNCTION bf = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        ok = GdiAlphaBlend(hdc, r.left, r.top, w, h, dc, 0, 0, w, h, bf);
+    }
+    SelectObject(dc, old);
+    DeleteObject(bmp);
+    DeleteDC(dc);
+    return ok;
+}
+
+}  // namespace SeamlessMenuPill
 
 namespace SeamlessMenuSkin {
 
@@ -21504,21 +24039,47 @@ static LRESULT CALLBACK MenuProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPar
 // through TrackPopupMenu, so they used to keep a black, unblurred body).
 static VOID OnMenuCreated(HWND hWnd)
 {
+    // The CBT hook and the create-event hook can both reach this window.
+    static const WCHAR* const kSkinProp = L"SeamlessMenuSkinAttached";
+    if (GetPropW(hWnd, kSkinProp)) return;
+    SetPropW(hWnd, kSkinProp, (HANDLE)1);
     SetWindowSubclass(hWnd, MenuProc, kSubclassId, 0);
     ApplyEffects(hWnd);
+}
+
+// Delivered synchronously on this thread during the menu window's creation, before
+// its first paint, so the black body never shows without the acrylic behind it.
+static LRESULT CALLBACK MenuCbtProc(INT code, WPARAM w, LPARAM l)
+{
+    if (code == HCBT_CREATEWND) {
+        HWND created = reinterpret_cast<HWND>(w);
+        WCHAR cls[16];
+        if (GetClassNameW(created, cls, ARRAYSIZE(cls)) &&
+            wcscmp(cls, L"#32768") == 0)
+            OnMenuCreated(created);
+    }
+    return CallNextHookEx(nullptr, code, w, l);
+}
+static HHOOK InstallMenuCbtHook()
+{
+    return SetWindowsHookExW(WH_CBT, MenuCbtProc, nullptr, GetCurrentThreadId());
 }
 
 static BOOL WINAPI TrackPopupMenu_hook(HMENU m, UINT f, INT x, INT y, INT r, HWND h, const RECT* rc)
 {
     SeamlessMenuRoom::BeginTrack();
+    HHOOK cbt = InstallMenuCbtHook();
     BOOL ret = TrackPopupMenu_orig(m, f, x, y, r, h, rc);
+    if (cbt) UnhookWindowsHookEx(cbt);
     SeamlessMenuRoom::EndTrack();
     return ret;
 }
 static BOOL WINAPI TrackPopupMenuEx_hook(HMENU m, UINT f, INT x, INT y, HWND h, LPTPMPARAMS p)
 {
     SeamlessMenuRoom::BeginTrack();
+    HHOOK cbt = InstallMenuCbtHook();
     BOOL ret = TrackPopupMenuEx_orig(m, f, x, y, h, p);
+    if (cbt) UnhookWindowsHookEx(cbt);
     SeamlessMenuRoom::EndTrack();
     return ret;
 }
@@ -21528,14 +24089,11 @@ static BOOL PaintMenuPart(HDC hdc, INT part, INT state, LPCRECT pRect, LPCRECT p
 {
     if (part == 26) { part = 27; state = 2; }                   // keyboard focus: same hover
     if ((part == 27 || part == MENU_POPUPITEM) && state == 2) {
-        if (!g_hoverDC) g_hoverDC = MakeCache(18, 18, FALSE);
-        if (!g_hoverDC) return FALSE;
         // Keep the same gap above and below as at the sides, so the first and last rows'
         // rounded hover stays clear of the menu's own rounded corners.
         RECT rc = *pRect;
         InflateRect(&rc, 0, -MulDiv(2, Dpi(), USER_DEFAULT_SCREEN_DPI));
-        NineGrid(hdc, g_hoverDC, &rc, 9, 9, 8, 8);
-        return TRUE;
+        return SeamlessMenuPill::Draw(g_factory, hdc, rc, Dpi());
     }
     if (part == MENU_POPUPSEPARATOR) {
         if (!g_sepDC) g_sepDC = MakeCache(1, 5, TRUE);
@@ -21676,6 +24234,7 @@ BOOL WhTool_ModInit() {
     }
     g_ctlThread = CreateThread(nullptr, 0, ControlThreadProc, nullptr, 0, nullptr);
     g_uiThread = CreateThread(nullptr, 0, UiThreadProc, nullptr, 0, nullptr);
+    StartPill();
     if (!g_ctlThread || !g_uiThread) {
         // (The process exits: nothing to stop.)
         Log(L"CreateThread failed");
@@ -21714,6 +24273,8 @@ void WhTool_ModUninit() {
         std::lock_guard guard(g_jobsLock);
     }
     StopJobs();
+    StopSpeaking();
+    StopPill();
     if (g_uiThread) {
         if (HWND hwnd = g_overlayWnd) {
             PostMessage(hwnd, WM_APP_QUIT, 0, 0);
