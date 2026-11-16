@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.6
+// @version         2.2.7
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -29,6 +29,7 @@ Choose Windhawk's colors, gradients, font, transparency and background blur.
 ## What's new in 2.2.5
 
 - The Windhawk window's title gets the same rounded dock as every other title bar when Seamless Title Bars is on: its fill, edge, glass shine, blue to mauve hover edge, title font and right-click menu, read from that mod's settings so the two always match.
+- The same uptime Seamless Title Bars adds after every other window's title is added after this one's: how long the Windhawk window has been open, in that mod's units, style, separator and colour. It hides when that mod or its uptime is off.
 
 ## What's new in 2.2.4
 
@@ -1798,6 +1799,12 @@ struct TitleDockLook {
     std::uint32_t fill = 0x313244, edgeC = 0x45475A, h1 = 0x89B4FA, h2 = 0xCBA6F7;
     wchar_t family[64] = L"";
     int weight = 0;
+    // Uptime after the title, as Seamless Title Bars writes it.
+    bool upOn = false, upClock = false;
+    bool upUnit[4] = {true, true, true, true};
+    wchar_t upSep[8] = L"\x2022";
+    std::uint32_t upColor = 0xA6ADC8;
+    bool upColorSet = true;
 };
 
 static TitleDockLook g_dockLook;
@@ -1807,6 +1814,8 @@ static RECT g_dockRect;          // client coordinates of the last drawn dock, e
 static float g_dockHoverP;       // 0 rest .. 1 full gradient edge
 static int g_dockHoverWant;
 static const UINT_PTR kDockTimer = 0x5EA7D0C;
+static const UINT_PTR kUptimeTimer = 0x5EA7D0D;
+static HWND g_uptimeHwnd;
 
 static const TitleDockLook& DockLook() {
     ULONGLONG now = GetTickCount64();
@@ -1862,6 +1871,24 @@ static const TitleDockLook& DockLook() {
         str(L"titleFont.weight", w, 16, L"500");
         int wt = _wtoi(w);
         d.weight = (wt >= 100 && wt <= 950) ? wt : 0;
+
+        wchar_t hide[16], style[16];
+        str(L"title.hideMode", hide, 16, L"off");
+        bool titleHidden = !wcscmp(hide, L"title") || !wcscmp(hide, L"both");
+        d.upOn = num(L"uptime.enabled", 1, 0, 1) && !titleHidden;
+        const wchar_t* units[4] = {L"uptime.showDays", L"uptime.showHours", L"uptime.showMinutes",
+                                   L"uptime.showSeconds"};
+        for (int i = 0; i < 4; ++i) d.upUnit[i] = num(units[i], 1, 0, 1) != 0;
+        if (!d.upUnit[0] && !d.upUnit[1] && !d.upUnit[2] && !d.upUnit[3]) d.upUnit[2] = true;
+        str(L"uptime.style", style, 16, L"compact");
+        d.upClock = !wcscmp(style, L"clock");
+        str(L"uptime.separator", d.upSep, 8, L"\x2022");   // a missing value is the mod's default dot
+        // A missing value is the mod's default colour; an empty or unreadable one is the title's.
+        wchar_t upc[32];
+        str(L"uptime.color", upc, 32, L"#A6ADC8");
+        std::uint32_t rgb;
+        d.upColorSet = HexColorToRgb(upc, &rgb);
+        if (d.upColorSet) d.upColor = rgb;
     }
     g_dockLook = d;
     return g_dockLook;
@@ -2061,6 +2088,83 @@ static void DockMouseMove(HWND hwnd, LPARAM lparam) {
     DockHoverTo(hwnd, on ? 1 : 0);
 }
 
+// "2d 03h 05m 12s" or "2d 3:05:12", exactly as Seamless Title Bars writes it. A unit
+// that is off rolls into the next smaller one.
+static void FormatUptime(const TitleDockLook& d, ULONGLONG secs, wchar_t* out, size_t cap) {
+    static const ULONGLONG kUnit[4] = {86400, 3600, 60, 1};
+    static const wchar_t kName[4] = {L'd', L'h', L'm', L's'};
+    bool on[4] = {d.upUnit[0], d.upUnit[1], d.upUnit[2], d.upUnit[3]};
+    int smallest = 3;
+    while (smallest > 0 && !on[smallest]) smallest--;
+    if (!on[smallest]) {
+        on[2] = true;
+        smallest = 2;
+    }
+    ULONGLONG val[4] = {}, rem = secs;
+    for (int i = 0; i < 4; ++i) {
+        if (on[i]) {
+            val[i] = rem / kUnit[i];
+            rem %= kUnit[i];
+        }
+    }
+    int first = smallest;
+    for (int i = 0; i <= smallest; ++i) {
+        if (on[i] && val[i]) {
+            first = i;
+            break;
+        }
+    }
+    size_t n = 0;
+    out[0] = 0;
+    if (!d.upClock) {
+        for (int i = first; i <= smallest && n < cap; ++i) {
+            if (!on[i]) continue;
+            n += swprintf_s(out + n, cap - n, i == first ? L"%s%llu%lc" : L"%s%02llu%lc", n ? L" " : L"",
+                            val[i], kName[i]);
+        }
+        return;
+    }
+    int i = first;
+    if (i == 0) {
+        n += swprintf_s(out, cap, L"%llud", val[0]);
+        i = 1;
+    }
+    int clockUnits = 0, lastUnit = -1;
+    for (; i <= smallest && n < cap; ++i) {
+        if (!on[i]) continue;
+        n += swprintf_s(out + n, cap - n, clockUnits ? L":%02llu" : (n ? L" %llu" : L"%llu"), val[i]);
+        clockUnits++;
+        lastUnit = i;
+    }
+    if (clockUnits == 1 && n < cap) swprintf_s(out + n, cap - n, L"%lc", kName[lastUnit]);
+}
+
+// " 1h 05m 12s" (or " \x2022 1h 05m 12s" with a separator) after the title. Each opening of
+// the Windhawk window is its own process, so the window is as old as this process.
+static void UptimeSuffix(const TitleDockLook& d, wchar_t* out, size_t cap) {
+    out[0] = 0;
+    if (!d.upOn) return;
+    FILETIME created, exited, kernel, user, now;
+    if (!GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user)) return;
+    GetSystemTimeAsFileTime(&now);
+    ULONGLONG c = ((ULONGLONG)created.dwHighDateTime << 32) | created.dwLowDateTime;
+    ULONGLONG t = ((ULONGLONG)now.dwHighDateTime << 32) | now.dwLowDateTime;
+    wchar_t span[64];
+    FormatUptime(d, t > c ? (t - c) / 10000000ULL : 0, span, 64);
+    if (d.upSep[0]) swprintf_s(out, cap, L" %s %s", d.upSep, span);
+    else swprintf_s(out, cap, L" %s", span);
+}
+
+// Repaint the caption just after each new second, so the seconds step evenly.
+static void UptimeArm(HWND hwnd) {
+    FILETIME now;
+    GetSystemTimeAsFileTime(&now);
+    ULONGLONG t = ((ULONGLONG)now.dwHighDateTime << 32) | now.dwLowDateTime;
+    UINT wait = 1000 - (UINT)((t / 10000ULL) % 1000ULL) + 20;
+    g_uptimeHwnd = hwnd;
+    SetTimer(hwnd, kUptimeTimer, wait, nullptr);
+}
+
 // Dock rectangle around the icon and the title text, centred in the caption strip.
 static void PaintDock(HWND hwnd, HDC paintDc, RGBQUAD* pixels, int stride, const RECT& client, int iconX, int icon,
                       const RECT& text, const wchar_t* title, UINT dpi) {
@@ -2116,11 +2220,17 @@ static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
         int iconX = inset;
         wchar_t title[512];
         GetWindowTextW(hwnd, title, 512);
+        const TitleDockLook& look = DockLook();
+        wchar_t suffix[96];
+        UptimeSuffix(look, suffix, 96);
+        wchar_t full[608];
+        swprintf_s(full, 608, L"%s%s", title, suffix);
+        if (suffix[0] && g_uptimeHwnd != hwnd) UptimeArm(hwnd);
         RECT text{inset + icon + MulDiv(8, dpi, 96), 0, client.right - MulDiv(160, dpi, 96), client.bottom};
         if (s.centerTitle) {
             // Center the text on the window, icon just before it; stay clear of the buttons.
             SIZE size{};
-            GetTextExtentPoint32W(paintDc, title, lstrlenW(title), &size);
+            GetTextExtentPoint32W(paintDc, full, lstrlenW(full), &size);
             int gap = MulDiv(5, dpi, 96);
             int left = client.right / 2 - size.cx / 2;
             left = std::min(left, (int)(text.right - size.cx));
@@ -2128,13 +2238,28 @@ static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
             text.left = left;
             iconX = left - gap - icon;
         }
-        PaintDock(hwnd, paintDc, bitsOk ? pixels : nullptr, stride, client, iconX, icon, text, title, dpi);
+        PaintDock(hwnd, paintDc, bitsOk ? pixels : nullptr, stride, client, iconX, icon, text, full, dpi);
         if (theme) {
             DTTOPTS options{sizeof(options)};
             options.dwFlags = DTT_COMPOSITED | DTT_TEXTCOLOR;
             options.crText = s.text.empty() ? RGB(255,255,255) : Bgr(s.textRgb);
+            SIZE titleSize{}, suffixSize{};
+            GetTextExtentPoint32W(paintDc, title, lstrlenW(title), &titleSize);
+            if (suffix[0]) GetTextExtentPoint32W(paintDc, suffix, lstrlenW(suffix), &suffixSize);
+            RECT titleRect = text;
+            if (suffix[0]) {
+                titleRect.right = std::max(titleRect.left, titleRect.right - suffixSize.cx);
+                titleRect.right = std::min(titleRect.right, (LONG)(titleRect.left + titleSize.cx));
+            }
             DrawThemeTextEx(theme, paintDc, WP_CAPTION, CS_ACTIVE, title, -1,
-                            DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX, &text, &options);
+                            DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX, &titleRect, &options);
+            if (suffix[0]) {
+                RECT upRect = text;
+                upRect.left = titleRect.right;
+                if (look.upColorSet) options.crText = Bgr(look.upColor);
+                DrawThemeTextEx(theme, paintDc, WP_CAPTION, CS_ACTIVE, suffix, -1,
+                                DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX, &upRect, &options);
+            }
             CloseThemeData(theme);
         }
         HICON logo = (HICON)SendMessageW(hwnd, WM_GETICON, ICON_SMALL, 0);
@@ -2226,6 +2351,21 @@ static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
     if (message == WM_TIMER && wparam == kDockTimer) {
         if (InterlockedExchangeAdd(&g_themeActive, 0)) DockTimerTick(hwnd);
         else KillTimer(hwnd, kDockTimer);
+        return 0;
+    }
+    if (message == WM_TIMER && wparam == kUptimeTimer) {
+        // Stops when the theme, the drawn caption or the uptime is off; a later paint re-arms it.
+        if (InterlockedExchangeAdd(&g_themeActive, 0) && IntegratedCaption(SnapshotSettings()) &&
+            DockLook().upOn) {
+            RECT cap = DockCaptionRect(hwnd);
+            InvalidateRect(hwnd, &cap, FALSE);
+            UptimeArm(hwnd);
+        } else {
+            KillTimer(hwnd, kUptimeTimer);
+            if (g_uptimeHwnd == hwnd) g_uptimeHwnd = nullptr;
+            RECT cap = DockCaptionRect(hwnd);
+            InvalidateRect(hwnd, &cap, FALSE);
+        }
         return 0;
     }
     if (!InterlockedExchangeAdd(&g_themeActive, 0)) {
@@ -3506,6 +3646,8 @@ void Wh_ModUninit() {
     g_captionChildren.clear();
     WindhawkUtils::RemoveAllWindowSubclasses();
     if (g_dockHwnd) KillTimer(g_dockHwnd, kDockTimer);
+    if (g_uptimeHwnd) KillTimer(g_uptimeHwnd, kUptimeTimer);
+    g_uptimeHwnd = nullptr;
     DockCloseHot();
     g_mainWindows.clear();
     {

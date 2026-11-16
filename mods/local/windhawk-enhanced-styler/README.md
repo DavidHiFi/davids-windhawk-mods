@@ -16,6 +16,7 @@ Choose Windhawk's colors, gradients, font, transparency and background blur.
 - **Corners.** Round cards, tables, dialogs, pop-up menus, buttons and inputs with an adjustable radius, or keep Windhawk's squared look.
 - **Text and font.** Use an installed font and a text color. Icons keep their own font and stay centered in their buttons.
 - **Title bar.** Match the background or choose a solid color. Right-click the title bar, click the app icon or press Alt+Space for the Windows window menu. The app icon keeps its normal size, and Windows handles dragging and window buttons.
+- **Uptime after the title.** With Seamless Title Bars on, the Windhawk window's title shows how long it has been open, in that mod's units, style and colour.
 - **Removal.** Disable the mod to reopen the interface with Windhawk's appearance. The mod changes no application files.
 
 ## How to use
