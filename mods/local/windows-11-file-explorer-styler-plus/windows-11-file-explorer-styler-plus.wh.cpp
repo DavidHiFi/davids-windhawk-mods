@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.6
+// @version         1.10.7
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -34,6 +34,14 @@ own.
 
 Also check out the **Windows 11 Taskbar Styler**, **Windows 11 Start Menu
 Styler** and **Windows 11 Notification Center Styler** mods.
+
+## Uptime after the title
+
+File Explorer draws its own title, so the uptime that Seamless Title Bars
+adds after every other window's title is added here too: how long the
+window has been open, after the folder name. It uses Seamless Title Bars'
+own uptime settings (which units, compact or clock, separator, colour) and
+hides when that mod or its uptime is off.
 
 ## Status bar dock
 
@@ -445,6 +453,12 @@ Windows](https://windhawk.net/mods/translucent-windows) mod.
     Draws the status bar at the bottom of the window (item count, selection
     size, view buttons) on a rounded Catppuccin Mocha dock, with hover and
     current view rings on the view buttons.
+- titleUptime: true
+  $name: Uptime after the title
+  $description: >-
+    Shows how long the window has been open after the folder name, the same
+    way Seamless Title Bars shows it on every other window. Look and units
+    follow that mod's uptime settings.
 - xamlDiagnosticsHandling: alert
   $name: XAML diagnostics consumer handling
   $description: >-
@@ -1745,6 +1759,7 @@ struct {
     BackgroundTranslucentEffectRegion backgroundTranslucentEffectRegion;
     int explorerFrameContainerHeight;
     bool statusBarDock;
+    bool titleUptime;
     XamlDiagnosticsHandling xamlDiagnosticsHandling;
 } g_settings;
 
@@ -1771,6 +1786,8 @@ void ApplyCustomizations(ElementId elementId,
                          winrt::Microsoft::UI::Xaml::FrameworkElement element,
                          PCWSTR fallbackClassName);
 void CleanupCustomizations(ElementId elementId);
+void TitleUptimeTrack(PCWSTR type,
+                      winrt::Microsoft::UI::Xaml::FrameworkElement const& element);
 void QueueDiagnosticsRelease(InstanceHandle handle);
 void FlushDiagnosticsReleasesIfQuiet();
 
@@ -2022,6 +2039,7 @@ HRESULT VisualTreeWatcher::OnVisualTreeChange(ParentChildRelation relation, Visu
                 {
                     ApplyCustomizations(elementId, frameworkElement, element.Type);
                 }
+                TitleUptimeTrack(element.Type, frameworkElement);
             }
             else
             {
@@ -2335,6 +2353,7 @@ using namespace std::string_view_literals;
 #include <winrt/Microsoft.UI.Dispatching.h>
 #include <winrt/Microsoft.UI.Text.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
+#include <winrt/Microsoft.UI.Xaml.Documents.h>
 #include <winrt/Microsoft.UI.Xaml.Input.h>
 #include <winrt/Microsoft.UI.Xaml.Hosting.h>
 #include <winrt/Microsoft.UI.Xaml.Markup.h>
@@ -10252,7 +10271,586 @@ void UninitializeResourceVariables() {
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Uptime after the title.
+//
+// Seamless Title Bars adds how long each window has been open after its title,
+// but File Explorer draws its own title (the tab header), so that text never
+// shows there. This adds the same text as a dimmer run after the folder name.
+// It reads that mod's own uptime settings, so both look the same, and it hides
+// whenever that mod is off or its uptime is off.
+
+namespace TitleUptime {
+
+constexpr WCHAR kTitleBarsKey[] =
+    L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@seamless-title-bars";
+constexpr WCHAR kTitleBarsSettingsKey[] =
+    L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@seamless-title-bars\\Settings";
+constexpr WCHAR kTitleBarsStorageKey[] =
+    L"SOFTWARE\\Windhawk\\Engine\\ModsWritable\\local@seamless-title-bars\\"
+    L"LocalStorage";
+
+struct Look {
+    bool on = false;
+    bool unit[4] = {true, true, true, true};
+    bool clock = false;
+    WCHAR sep[8] = {};
+    winrt::Windows::UI::Color color{255, 0xA6, 0xAD, 0xC8};
+    bool colorSet = true;
+};
+
+// Same layout as Seamless Title Bars' saved window times.
+struct BornRecord {
+    unsigned long long hwnd;
+    unsigned long long t;
+    unsigned pid;
+    unsigned pad;
+};
+
+SRWLOCK g_lookLock = SRWLOCK_INIT;
+Look g_look;
+bool g_lookRead;
+DWORD g_lookStamp[3];
+ULONGLONG g_lookCheckTick;
+
+SRWLOCK g_bornLock = SRWLOCK_INIT;
+std::unordered_map<HWND, ULONGLONG> g_born;
+ULONGLONG g_initTick;
+ULONGLONG g_initFt;
+
+struct Item {
+    winrt::weak_ref<muxc::TabViewItem> tab;
+    winrt::weak_ref<muxc::TextBlock> text;
+    winrt::Microsoft::UI::Xaml::Documents::Run run{nullptr};
+    winrt::Windows::UI::Color brushColor{};
+    bool brushSet = false;
+    HWND hwnd = nullptr;
+};
+
+thread_local std::vector<Item> t_items;
+thread_local winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer t_timer{
+    nullptr};
+thread_local winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer::
+    Tick_revoker t_tickRevoker;
+
+ULONGLONG NowFt() {
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    return ((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+}
+
+bool ReadDword(PCWSTR subKey, PCWSTR name, DWORD* value) {
+    DWORD size = sizeof(*value);
+    return RegGetValueW(HKEY_LOCAL_MACHINE, subKey, name, RRF_RT_REG_DWORD,
+                        nullptr, value, &size) == ERROR_SUCCESS;
+}
+
+bool ReadString(PCWSTR subKey, PCWSTR name, WCHAR* out, DWORD cch) {
+    DWORD size = cch * sizeof(WCHAR);
+    out[0] = L'\0';
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, subKey, name, RRF_RT_REG_SZ, nullptr,
+                     out, &size) != ERROR_SUCCESS) {
+        out[0] = L'\0';
+        return false;
+    }
+    return true;
+}
+
+bool ParseColor(PCWSTR s, winrt::Windows::UI::Color* color) {
+    while (*s == L' ') {
+        s++;
+    }
+    if (*s == L'#') {
+        s++;
+    }
+    size_t len = wcslen(s);
+    while (len && s[len - 1] == L' ') {
+        len--;
+    }
+    if (len != 6 && len != 3) {
+        return false;
+    }
+    unsigned v[6] = {};
+    for (size_t i = 0; i < len; i++) {
+        WCHAR c = s[i];
+        if (c >= L'0' && c <= L'9') {
+            v[i] = c - L'0';
+        } else if (c >= L'a' && c <= L'f') {
+            v[i] = c - L'a' + 10;
+        } else if (c >= L'A' && c <= L'F') {
+            v[i] = c - L'A' + 10;
+        } else {
+            return false;
+        }
+    }
+    if (len == 3) {
+        *color = {255, (uint8_t)(v[0] * 17), (uint8_t)(v[1] * 17),
+                  (uint8_t)(v[2] * 17)};
+    } else {
+        *color = {255, (uint8_t)(v[0] * 16 + v[1]), (uint8_t)(v[2] * 16 + v[3]),
+                  (uint8_t)(v[4] * 16 + v[5])};
+    }
+    return true;
+}
+
+// The look as Seamless Title Bars has it set. The whole set is read again only
+// when that mod's settings change time or its on/off state moves.
+Look CurrentLook() {
+    ULONGLONG tick = GetTickCount64();
+
+    AcquireSRWLockShared(&g_lookLock);
+    bool fresh = g_lookRead && tick - g_lookCheckTick < 2000;
+    Look look = g_look;
+    ReleaseSRWLockShared(&g_lookLock);
+    if (fresh) {
+        return look;
+    }
+
+    DWORD stamp[3] = {};
+    DWORD value;
+    HKEY key;
+    stamp[0] = RegOpenKeyExW(HKEY_LOCAL_MACHINE, kTitleBarsKey, 0,
+                             KEY_QUERY_VALUE, &key) == ERROR_SUCCESS;
+    if (stamp[0]) {
+        RegCloseKey(key);
+    }
+    // A missing Disabled value means the mod is on.
+    stamp[1] = ReadDword(kTitleBarsKey, L"Disabled", &value) ? value : 0;
+    stamp[2] =
+        ReadDword(kTitleBarsKey, L"SettingsChangeTime", &value) ? value : 0;
+
+    AcquireSRWLockExclusive(&g_lookLock);
+    if (g_lookRead && memcmp(stamp, g_lookStamp, sizeof(stamp)) == 0) {
+        g_lookCheckTick = tick;
+        look = g_look;
+        ReleaseSRWLockExclusive(&g_lookLock);
+        return look;
+    }
+    ReleaseSRWLockExclusive(&g_lookLock);
+
+    Look fresher;
+    WCHAR text[64];
+    bool enabled = !ReadDword(kTitleBarsSettingsKey, L"uptime.enabled", &value) ||
+                   value != 0;
+    ReadString(kTitleBarsSettingsKey, L"title.hideMode", text, ARRAYSIZE(text));
+    bool titleHidden =
+        wcscmp(text, L"title") == 0 || wcscmp(text, L"both") == 0;
+    fresher.on = stamp[0] && !stamp[1] && enabled && !titleHidden;
+
+    PCWSTR unitNames[4] = {L"uptime.showDays", L"uptime.showHours",
+                           L"uptime.showMinutes", L"uptime.showSeconds"};
+    for (int i = 0; i < 4; i++) {
+        fresher.unit[i] =
+            !ReadDword(kTitleBarsSettingsKey, unitNames[i], &value) ||
+            value != 0;
+    }
+    if (!fresher.unit[0] && !fresher.unit[1] && !fresher.unit[2] &&
+        !fresher.unit[3]) {
+        fresher.unit[2] = true;
+    }
+
+    ReadString(kTitleBarsSettingsKey, L"uptime.style", text, ARRAYSIZE(text));
+    fresher.clock = wcscmp(text, L"clock") == 0;
+
+    // A missing separator value means the mod's default, a dot.
+    if (!ReadString(kTitleBarsSettingsKey, L"uptime.separator", text,
+                    ARRAYSIZE(text))) {
+        wcscpy_s(text, L"\x2022");
+    }
+    wcsncpy_s(fresher.sep, text, _TRUNCATE);
+
+    // A missing value is the mod's default colour; an empty or unreadable one
+    // means the title's own colour.
+    if (ReadString(kTitleBarsSettingsKey, L"uptime.color", text,
+                   ARRAYSIZE(text))) {
+        fresher.colorSet = ParseColor(text, &fresher.color);
+    }
+
+    AcquireSRWLockExclusive(&g_lookLock);
+    g_look = fresher;
+    memcpy(g_lookStamp, stamp, sizeof(stamp));
+    g_lookRead = true;
+    g_lookCheckTick = tick;
+    ReleaseSRWLockExclusive(&g_lookLock);
+
+    Wh_Log(L"Title uptime look: on=%d clock=%d", fresher.on, fresher.clock);
+    return fresher;
+}
+
+// "2d 03h 05m 12s" or "2d 3:05:12", as Seamless Title Bars writes it. A unit
+// that is off rolls into the next smaller one.
+void FormatUptime(const Look& look, ULONGLONG secs, WCHAR* out, size_t cap) {
+    static const ULONGLONG kUnit[4] = {86400, 3600, 60, 1};
+    static const WCHAR kName[4] = {L'd', L'h', L'm', L's'};
+    bool on[4] = {look.unit[0], look.unit[1], look.unit[2], look.unit[3]};
+    int smallest = 3;
+    while (smallest > 0 && !on[smallest]) {
+        smallest--;
+    }
+    if (!on[smallest]) {
+        on[2] = true;
+        smallest = 2;
+    }
+    ULONGLONG val[4] = {};
+    ULONGLONG rem = secs;
+    for (int i = 0; i < 4; i++) {
+        if (on[i]) {
+            val[i] = rem / kUnit[i];
+            rem %= kUnit[i];
+        }
+    }
+    int first = smallest;
+    for (int i = 0; i <= smallest; i++) {
+        if (on[i] && val[i]) {
+            first = i;
+            break;
+        }
+    }
+    size_t n = 0;
+    out[0] = L'\0';
+    if (!look.clock) {
+        for (int i = first; i <= smallest && n < cap; i++) {
+            if (!on[i]) {
+                continue;
+            }
+            n += swprintf_s(out + n, cap - n,
+                            (i == first) ? L"%s%llu%lc" : L"%s%02llu%lc",
+                            n ? L" " : L"", val[i], kName[i]);
+        }
+        return;
+    }
+    int i = first;
+    if (i == 0) {
+        n += swprintf_s(out, cap, L"%llud", val[0]);
+        i = 1;
+    }
+    int clockUnits = 0, lastUnit = -1;
+    for (; i <= smallest && n < cap; i++) {
+        if (!on[i]) {
+            continue;
+        }
+        n += swprintf_s(out + n, cap - n,
+                        clockUnits ? L":%02llu" : (n ? L" %llu" : L"%llu"),
+                        val[i]);
+        clockUnits++;
+        lastUnit = i;
+    }
+    // A single clock number needs its letter, or "5" would not say minutes or
+    // seconds.
+    if (clockUnits == 1 && n < cap) {
+        swprintf_s(out + n, cap - n, L"%lc", kName[lastUnit]);
+    }
+}
+
+// When the window was first seen. A window that was already open when the mod
+// loaded counts from the load, as Seamless Title Bars counts Explorer's.
+ULONGLONG BornFor(HWND hwnd) {
+    AcquireSRWLockExclusive(&g_bornLock);
+    auto it = g_born.find(hwnd);
+    ULONGLONG t;
+    if (it != g_born.end()) {
+        t = it->second;
+    } else {
+        t = GetTickCount64() - g_initTick < 5000 ? g_initFt : NowFt();
+        g_born[hwnd] = t;
+    }
+    ReleaseSRWLockExclusive(&g_bornLock);
+    return t;
+}
+
+void LoadRecords(HKEY root, PCWSTR subKey, PCWSTR name, bool own) {
+    std::vector<BornRecord> recs(1024);
+    size_t got;
+    if (own) {
+        got = Wh_GetBinaryValue(name, recs.data(),
+                                recs.size() * sizeof(BornRecord));
+    } else {
+        DWORD size = (DWORD)(recs.size() * sizeof(BornRecord));
+        if (RegGetValueW(root, subKey, name, RRF_RT_REG_BINARY, nullptr,
+                         recs.data(), &size) != ERROR_SUCCESS) {
+            return;
+        }
+        got = size;
+    }
+    DWORD self = GetCurrentProcessId();
+    for (size_t i = 0; i < got / sizeof(BornRecord); i++) {
+        HWND h = (HWND)(ULONG_PTR)recs[i].hwnd;
+        DWORD pid = 0;
+        if (recs[i].pid == self && IsWindow(h) &&
+            GetWindowThreadProcessId(h, &pid) && pid == self) {
+            g_born.try_emplace(h, recs[i].t);
+        }
+    }
+}
+
+void Init() {
+    g_initTick = GetTickCount64();
+    g_initFt = NowFt();
+    AcquireSRWLockExclusive(&g_bornLock);
+    // This mod's own times from its last unload first, then the ones Seamless
+    // Title Bars saved for Explorer's windows.
+    LoadRecords(nullptr, nullptr, L"titleBornTimes", true);
+    LoadRecords(HKEY_LOCAL_MACHINE, kTitleBarsStorageKey, L"windowBornTimes",
+                false);
+    ReleaseSRWLockExclusive(&g_bornLock);
+}
+
+void SaveBornTimes() {
+    std::vector<BornRecord> recs;
+    DWORD self = GetCurrentProcessId();
+    AcquireSRWLockShared(&g_bornLock);
+    for (auto& [h, t] : g_born) {
+        if (recs.size() >= 1024) {
+            break;
+        }
+        if (IsWindow(h)) {
+            recs.push_back({(unsigned long long)(ULONG_PTR)h, t, self, 0});
+        }
+    }
+    ReleaseSRWLockShared(&g_bornLock);
+    Wh_SetBinaryValue(L"titleBornTimes", recs.data(),
+                      recs.size() * sizeof(BornRecord));
+}
+
+HWND FindThreadExplorerWindow() {
+    HWND found = nullptr;
+    EnumThreadWindows(
+        GetCurrentThreadId(),
+        [](HWND hWnd, LPARAM lParam) -> BOOL {
+            WCHAR cls[32];
+            if (GetClassNameW(hWnd, cls, ARRAYSIZE(cls)) &&
+                wcscmp(cls, L"CabinetWClass") == 0) {
+                *(HWND*)lParam = hWnd;
+                return FALSE;
+            }
+            return TRUE;
+        },
+        (LPARAM)&found);
+    return found;
+}
+
+FrameworkElement FindNamedChild(DependencyObject const& parent,
+                                std::wstring_view name,
+                                int depth) {
+    int count = Media::VisualTreeHelper::GetChildrenCount(parent);
+    for (int i = 0; i < count; i++) {
+        auto child = Media::VisualTreeHelper::GetChild(parent, i);
+        auto fe = child.try_as<FrameworkElement>();
+        if (fe && fe.Name() == name) {
+            return fe;
+        }
+        if (depth > 0) {
+            if (auto found = FindNamedChild(child, name, depth - 1)) {
+                return found;
+            }
+        }
+    }
+    return nullptr;
+}
+
+muxc::TextBlock FindFirstText(DependencyObject const& parent, int depth) {
+    int count = Media::VisualTreeHelper::GetChildrenCount(parent);
+    for (int i = 0; i < count; i++) {
+        auto child = Media::VisualTreeHelper::GetChild(parent, i);
+        if (auto tb = child.try_as<muxc::TextBlock>()) {
+            if (tb.Visibility() == Visibility::Visible && !tb.Text().empty()) {
+                return tb;
+            }
+        }
+        if (depth > 0) {
+            if (auto found = FindFirstText(child, depth - 1)) {
+                return found;
+            }
+        }
+    }
+    return nullptr;
+}
+
+// The tab's own text: TabViewItem > Grid#LayoutRoot > Grid#TabContainer >
+// ContentPresenter#ContentPresenter > ... > TextBlock.
+muxc::TextBlock FindHeaderText(muxc::TabViewItem const& tab) {
+    auto container = FindNamedChild(tab, L"TabContainer", 3);
+    if (!container) {
+        return nullptr;
+    }
+    auto presenter = FindNamedChild(container, L"ContentPresenter", 0);
+    if (!presenter) {
+        return nullptr;
+    }
+    return FindFirstText(presenter, 4);
+}
+
+void RemoveRun(Item& item) {
+    if (!item.run) {
+        return;
+    }
+    if (auto tb = item.text.get()) {
+        try {
+            auto inlines = tb.Inlines();
+            uint32_t index;
+            if (inlines.IndexOf(item.run, index)) {
+                inlines.RemoveAt(index);
+            }
+        } catch (...) {
+            Wh_Log(L"Error %08X", winrt::to_hresult());
+        }
+    }
+}
+
+void UpdateItem(Item& item, const Look& look, ULONGLONG now) {
+    auto tab = item.tab.get();
+    auto tb = item.text.get();
+    if (tb && !Media::VisualTreeHelper::GetParent(tb)) {
+        tb = nullptr;
+    }
+    if (!tb) {
+        tb = FindHeaderText(tab);
+        if (!tb) {
+            return;
+        }
+        item.text = winrt::make_weak(tb);
+    }
+
+    if (!look.on) {
+        RemoveRun(item);
+        return;
+    }
+
+    if (!item.run) {
+        item.run = winrt::Microsoft::UI::Xaml::Documents::Run();
+    }
+    if (!look.colorSet) {
+        // An empty colour means the title's own colour, as in Seamless Title
+        // Bars: the run then inherits the text's brush.
+        if (item.brushSet) {
+            item.run.ClearValue(winrt::Microsoft::UI::Xaml::Documents::
+                                    TextElement::ForegroundProperty());
+            item.brushSet = false;
+        }
+    } else if (!item.brushSet || memcmp(&item.brushColor, &look.color,
+                                        sizeof(look.color)) != 0) {
+        item.run.Foreground(Media::SolidColorBrush(look.color));
+        item.brushColor = look.color;
+        item.brushSet = true;
+    }
+
+    ULONGLONG born = BornFor(item.hwnd);
+    ULONGLONG secs = now > born ? (now - born) / 10000000ull : 0;
+    WCHAR time[48];
+    FormatUptime(look, secs, time, ARRAYSIZE(time));
+    WCHAR suffix[64];
+    if (look.sep[0]) {
+        swprintf_s(suffix, L" %s %s", look.sep, time);
+    } else {
+        swprintf_s(suffix, L" %s", time);
+    }
+    if (item.run.Text() != suffix) {
+        item.run.Text(suffix);
+    }
+
+    // Explorer setting the folder name again replaces the text's runs, so the
+    // run is put back after it.
+    auto inlines = tb.Inlines();
+    uint32_t index;
+    if (!inlines.IndexOf(item.run, index)) {
+        inlines.Append(item.run);
+    }
+}
+
+void Tick() {
+    Look look = CurrentLook();
+    ULONGLONG now = NowFt();
+    for (size_t i = 0; i < t_items.size();) {
+        auto& item = t_items[i];
+        if (!item.tab.get() || !IsWindow(item.hwnd)) {
+            t_items.erase(t_items.begin() + i);
+            continue;
+        }
+        try {
+            UpdateItem(item, look, now);
+        } catch (...) {
+            Wh_Log(L"Error %08X", winrt::to_hresult());
+        }
+        i++;
+    }
+
+    if (t_items.empty() && t_timer) {
+        t_timer.Stop();
+    }
+}
+
+void EnsureTimer() {
+    if (!t_timer) {
+        auto dispatcherQueue = winrt::Microsoft::UI::Dispatching::
+            DispatcherQueue::GetForCurrentThread();
+        if (!dispatcherQueue) {
+            Wh_Log(L"No dispatcher queue, no title uptime");
+            return;
+        }
+        t_timer = dispatcherQueue.CreateTimer();
+        t_timer.IsRepeating(true);
+        t_timer.Interval(std::chrono::milliseconds{1000});
+        t_tickRevoker = t_timer.Tick(
+            winrt::auto_revoke,
+            [](winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer const&,
+               winrt::Windows::Foundation::IInspectable const&) { Tick(); });
+    }
+    if (!t_timer.IsRunning()) {
+        t_timer.Start();
+    }
+}
+
+}  // namespace TitleUptime
+
+void TitleUptimeTrack(PCWSTR type, FrameworkElement const& element) {
+    if (!g_settings.titleUptime || !type || !wcsstr(type, L"TabViewItem")) {
+        return;
+    }
+    try {
+        auto tab = element.try_as<muxc::TabViewItem>();
+        if (!tab) {
+            return;
+        }
+        for (auto& item : TitleUptime::t_items) {
+            if (item.tab.get() == tab) {
+                return;
+            }
+        }
+        HWND hwnd = TitleUptime::FindThreadExplorerWindow();
+        if (!hwnd) {
+            return;
+        }
+        // Fixes the window's start the first time it is seen.
+        TitleUptime::BornFor(hwnd);
+        TitleUptime::Item item;
+        item.tab = winrt::make_weak(tab);
+        item.hwnd = hwnd;
+        TitleUptime::t_items.push_back(std::move(item));
+        TitleUptime::EnsureTimer();
+    } catch (...) {
+        Wh_Log(L"Error %08X", winrt::to_hresult());
+    }
+}
+
+void TitleUptimeStopForCurrentThread() {
+    if (TitleUptime::t_timer) {
+        try {
+            TitleUptime::t_timer.Stop();
+        } catch (...) {
+            Wh_Log(L"Error %08X", winrt::to_hresult());
+        }
+    }
+    TitleUptime::t_tickRevoker.revoke();
+    TitleUptime::t_timer = nullptr;
+    for (auto& item : TitleUptime::t_items) {
+        TitleUptime::RemoveRun(item);
+    }
+    TitleUptime::t_items.clear();
+}
+
 void UninitializeForCurrentThread() {
+    TitleUptimeStopForCurrentThread();
+
     // Clear tracked images for this thread (revokers will automatically
     // unregister).
     if (auto& timer = g_trackedImagesForThread.retryTimer) {
@@ -13463,6 +14061,8 @@ void LoadSettings() {
 
     g_settings.statusBarDock = Wh_GetIntSetting(L"statusBarDock");
 
+    g_settings.titleUptime = Wh_GetIntSetting(L"titleUptime");
+
     PCWSTR xamlDiagnosticsHandling =
         Wh_GetStringSetting(L"xamlDiagnosticsHandling");
     g_settings.xamlDiagnosticsHandling = XamlDiagnosticsHandling::kAlert;
@@ -13488,6 +14088,8 @@ BOOL Wh_ModInit() {
 
     LoadSettings();
     LoadThemeSettings();
+
+    TitleUptime::Init();
 
     WindhawkUtils::SetFunctionHook(CreateWindowExW, CreateWindowExW_Hook,
                                    &CreateWindowExW_Original);
@@ -13680,6 +14282,8 @@ void Wh_ModUninit() {
 
     ClearThemePartCache();
     DeleteAlphaBrush();
+
+    TitleUptime::SaveBornTimes();
 }
 
 void Wh_ModSettingsChanged() {

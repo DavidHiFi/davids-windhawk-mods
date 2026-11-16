@@ -15,6 +15,9 @@ by m417z. This version adds a styled status bar at the bottom of the window.
 - **Mocha view buttons.** The two view buttons get a blue ring on the current
   view and a gradient ring on hover. Their icons are redrawn in Mocha colours
   instead of Explorer's light grey tiles.
+- **Uptime after the title.** Each tab title shows how long its window has
+  been open, the same way Seamless Title Bars shows it on other windows, with
+  its units, style and colour. Turn off **Uptime after the title** to hide it.
 - **GPU switch button.** If you use GPU Accelerated Explorer View Plus, its
   view switch button gets the same dock face and hover.
 
