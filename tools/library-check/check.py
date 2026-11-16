@@ -5,7 +5,7 @@ mod library (ramensoftware/windhawk-mods): its validator and its compile test.
   check.py compile  --upstream <windhawk-mods checkout> --windhawk <portable dir>
 
 Prints one RESULT line of JSON per mod and writes a table to the job summary.
-It reports; it never fails the job.
+The job fails when any checked mod has problems.
 """
 import argparse
 import json
@@ -132,7 +132,9 @@ def main():
 
     label = args.label or args.mode
     rows = [f'### {label}', '', '| Mod | Result | First problem |', '| --- | --- | --- |']
+    failed = False
     for result in results:
+        failed = failed or not result['ok']
         print('RESULT ' + json.dumps({'check': label, **result}), flush=True)
         first = ''
         if result['problems']:
@@ -142,7 +144,8 @@ def main():
     if summary:
         with open(summary, 'a', encoding='utf-8') as handle:
             handle.write('\n'.join(rows) + '\n\n')
+    return 1 if failed else 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

@@ -2,7 +2,7 @@ name: Library check
 
 # Runs every mod in mods/local through the same validator and compile test the
 # official Windhawk mod library uses, so a mod is known to be ready before it is
-# submitted there. It reports and never fails.
+# submitted there. Problems fail the job and stay in the summary.
 
 on:
   workflow_dispatch:
