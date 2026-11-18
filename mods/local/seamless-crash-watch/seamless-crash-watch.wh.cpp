@@ -2,7 +2,7 @@
 // @id              seamless-crash-watch
 // @name            Seamless Crash Watch
 // @description     A notice when a program crashes. Click it and an AI agent in a terminal finds out why, like Omarchy
-// @version         1.2.5
+// @version         1.2.6
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -3933,6 +3933,8 @@ constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
 constexpr UINT_PTR kSetTimerId = 1;
+constexpr float kSetAutoDead = 10, kSetAutoR = 18, kSetAutoGain = 0.14f, kSetAutoMax = 56;
+constexpr PCWSTR kSetAutoProp = L"SeamlessOwnAutoscroll";  // Seamless Autoscroll skips this window.
 constexpr PCWSTR kSetKofiUrl = L"https://ko-fi.com/DavidHiFi";
 constexpr PCWSTR kSetAuthorUrl = L"https://github.com/DavidHiFi";
 constexpr PCWSTR kSetDittoUrl = L"https://github.com/basecamp/omarchy";
@@ -3983,6 +3985,8 @@ struct SetWindow {
     int dragSlider = -1;
     bool dragScroll = false, tracking = false, timer = false;
     float dragOff = 0;
+    bool autoScroll = false, autoMoved = false;
+    float autoX = 0, autoY = 0, autoA = 0, autoDir = 0;
     // Sidebar dock: railW is the chosen open width, railCur the drawn width (eased toward
     // kSetRailMini when collapsed). railGlow / footGlow ease the dock borders on hover.
     float railW = kSetRailDef, railCur = kSetRailDef, railGlow = 0, footGlow = 0;
@@ -5113,6 +5117,29 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
 // The title bar is drawn first; everything else is in content DIPs, shifted down by kSetCapH.
 static void Set_PlaceEdit(SetWindow& w);
 
+static void Set_DrawAutoScroll(SetPaint& p, SetWindow& w, bool frosted) {
+    if (w.autoA <= 0.003f) return;
+    const float a = w.autoA, s = 0.8f + 0.2f * a, r = kSetAutoR * s, cx = w.autoX, cy = w.autoY;
+    const D2D1_RECT_F disc{cx - r, cy - r, cx + r, cy + r};
+    p.Round(disc, r, mocha::mantle, (frosted ? 0.86f : 1.0f) * a);  // Opaque when nothing blurs under it.
+    p.GradRing(disc, r - 1, a, 2);
+    auto arrow = [&](float dir, bool lit) {
+        SetCom<ID2D1PathGeometry> g;
+        SetCom<ID2D1GeometrySink> k;
+        if (FAILED(g_setD2d->CreatePathGeometry(g.put())) || FAILED(g->Open(k.put()))) return;
+        const float tip = cy + dir * r * 0.62f, foot = cy + dir * r * 0.30f, half = r * 0.22f;
+        k->BeginFigure(D2D1::Point2F(cx, tip), D2D1_FIGURE_BEGIN_FILLED);
+        k->AddLine(D2D1::Point2F(cx + half, foot));
+        k->AddLine(D2D1::Point2F(cx - half, foot));
+        k->EndFigure(D2D1_FIGURE_END_CLOSED);
+        if (SUCCEEDED(k->Close())) p.rt->FillGeometry(g.get(), p.B(lit ? mocha::blue : mocha::overlay1, a));
+    };
+    arrow(-1, w.autoDir < 0);
+    arrow(1, w.autoDir > 0);
+    const float d = 2.5f * s;
+    p.Round({cx - d, cy - d, cx + d, cy + d}, d, mocha::mauve, a);
+}
+
 static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     if (Set_FitBoxes(w)) {
         Set_BuildPage(w);
@@ -5229,6 +5256,16 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
                 D2D1_RECT_F src{d.left - 1, d.top - 1, d.right + 1, d.bottom + 1};
                 dc->DrawImage(blur.get(), D2D1::Point2F(src.left, src.top), src);
                 rt->PopLayer();
+                if (w.autoA > 0.003f) {  // The autoscroll disc frosts the rows under it the same way.
+                    const float r = kSetAutoR * (0.8f + 0.2f * w.autoA), cx = w.autoX, cy = w.autoY + kSetCapH;
+                    SetCom<ID2D1EllipseGeometry> disc;
+                    if (SUCCEEDED(g_setD2d->CreateEllipseGeometry(D2D1::Ellipse(D2D1::Point2F(cx, cy), r, r), disc.put()))) {
+                        rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), disc.get()), nullptr);
+                        D2D1_RECT_F ds{cx - r - 1, cy - r - 1, cx + r + 1, cy + r + 1};
+                        dc->DrawImage(blur.get(), D2D1::Point2F(ds.left, ds.top), ds);
+                        rt->PopLayer();
+                    }
+                }
                 blurred = true;
             }
         }
@@ -5242,6 +5279,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     Set_DrawFooter(p, w);
     Set_DrawRail(p, w);
     Set_DrawPopup(p, w);
+    Set_DrawAutoScroll(p, w, blurred);
     Set_DrawAsk(p, w);
     rt->SetTransform(D2D1::Matrix3x2F::Identity());
     if (false) p.GradRing({0, 0, w.cw, w.ch + kSetCapH}, SystemCornerRadius(false), 1, 1);
@@ -5810,6 +5848,48 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
 
 // ---- Animation tick ----------------------------------------------------------------
 
+static bool Set_AutoScrollStart(SetWindow& w, float x, float y) {
+    if (w.render || w.contentH - Set_ViewH(w) <= 0) return false;  // Nothing to scroll.
+    Set_CommitEdit(w, true);
+    Set_ClosePopup(w);
+    w.autoScroll = true;
+    w.autoMoved = false;
+    w.autoX = x, w.autoY = y, w.autoDir = 0;
+    w.hover = SetHit();
+    SetCapture(w.hwnd);
+    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+    Set_Invalidate(w);
+    return true;
+}
+
+static void Set_AutoScrollStop(SetWindow& w) {
+    if (!w.autoScroll) return;
+    w.autoScroll = false;  // Before ReleaseCapture: its WM_CAPTURECHANGED comes straight back here.
+    w.autoDir = 0;
+    if (GetCapture() == w.hwnd) ReleaseCapture();
+    Set_Invalidate(w);
+}
+
+static void Set_AutoScrollMove(SetWindow& w, bool held) {
+    if (held && fabsf(w.mouseY - w.autoY) > kSetAutoDead) w.autoMoved = true;
+    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+}
+
+static bool Set_AutoScrollStep(SetWindow& w) {
+    if (!w.autoScroll) return false;
+    const float dy = w.mouseY - w.autoY, dist = fabsf(dy) - kSetAutoDead;
+    const float dir = dist > 0 ? (dy > 0 ? 1.0f : -1.0f) : 0.0f;
+    bool changed = dir != w.autoDir;
+    w.autoDir = dir;
+    if (dist <= 0) return changed;
+    const float maxScroll = std::max(0.0f, w.contentH - Set_ViewH(w));
+    const float next = std::clamp(w.scrollY + dir * std::min(kSetAutoMax, dist * kSetAutoGain), 0.0f, maxScroll);
+    if (next == w.scrollY) return changed;
+    w.scrollY = w.scrollTarget = next;
+    Set_PlaceEdit(w);
+    return true;
+}
+
 static bool Set_Tick(SetWindow& w) {
     bool moved = false, anim = Set_Anim(w);
     auto step = [&](float& v, float target, float rate) {
@@ -5844,6 +5924,8 @@ static bool Set_Tick(SetWindow& w) {
         if (!w.knob.count((int)k)) w.knob[(int)k] = target;
         step(w.knob[(int)k], target, 0.35f);
     }
+    if (Set_AutoScrollStep(w)) moved = true;
+    step(w.autoA, w.autoScroll ? 1.0f : 0.0f, 0.3f);
     if (w.scrollY != w.scrollTarget) {
         float d = w.scrollTarget - w.scrollY;
         if (!anim || fabsf(d) < 0.5f) {
@@ -6217,6 +6299,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_ACTIVATE:
             w->active = LOWORD(wParam) != WA_INACTIVE;
+            if (!w->active) Set_AutoScrollStop(*w);
             Set_Invalidate(*w);
             break;
         case WM_ERASEBKGND:
@@ -6287,6 +6370,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             }
             w->mouseX = x;
             w->mouseY = y;
+            if (w->autoScroll) {
+                Set_AutoScrollMove(*w, (wParam & MK_MBUTTON) != 0);
+                return 0;
+            }
             if (w->dragRail) {
                 Set_RailDragTo(*w, x - w->dragOff);
                 return 0;
@@ -6318,7 +6405,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             POINT pointer; GetCursorPos(&pointer);
             w->tracking = false;
             w->hover = SetHit();
-            if (!w->dragRail) w->mouseX = w->mouseY = -1;
+            if (!w->dragRail && !w->autoScroll) w->mouseX = w->mouseY = -1;
             Set_Invalidate(*w);
             return 0;
         }
@@ -6332,6 +6419,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             }
             break;
         case WM_LBUTTONDOWN: {
+            if (w->autoScroll) {  // A click ends autoscroll and does nothing else.
+                Set_AutoScrollStop(*w);
+                return 0;
+            }
             if (w->saving) return 0;
             if (!w->render) SetFocus(hwnd);
             w->kbd = false;
@@ -6401,6 +6492,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_LBUTTONUP:
         case WM_CAPTURECHANGED:
+            if (msg == WM_CAPTURECHANGED && w->autoScroll && (HWND)lParam != hwnd) Set_AutoScrollStop(*w);
             if (w->capDown) {
                 int b = w->capDown - 1;
                 w->capDown = 0;
@@ -6445,7 +6537,23 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             else if (ask == kCwClear) Set_AskRemove(*w, 0, true);
             return 0;
         }
+        case WM_MBUTTONDOWN:
+            if (w->saving || w->ask) return 0;
+            if (w->autoScroll) Set_AutoScrollStop(*w);  // Toggle mode: the next middle click ends it.
+            else Set_AutoScrollStart(*w, dipX(lParam), dipY(lParam));
+            return 0;
+        case WM_MBUTTONUP:
+            if (w->autoScroll && w->autoMoved) Set_AutoScrollStop(*w);  // Held and dragged: stop on release.
+            return 0;
+        case WM_RBUTTONDOWN:
+        case WM_XBUTTONDOWN:
+            if (w->autoScroll) {
+                Set_AutoScrollStop(*w);
+                return msg == WM_XBUTTONDOWN ? TRUE : 0;
+            }
+            break;
         case WM_MOUSEWHEEL: {
+            Set_AutoScrollStop(*w);
             if (w->ask) return 0;
             if (w->openSel >= 0 && Set_In(w->dropRect, w->mouseX, w->mouseY)) {
                 int n = (int)w->fields[w->openSel].options.size(), vis = Set_DropVisible(*w);
@@ -6468,6 +6576,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
+            if (w->autoScroll) {  // Any key ends autoscroll; Escape does nothing else.
+                Set_AutoScrollStop(*w);
+                if (wParam == VK_ESCAPE) return 0;
+            }
             if (Set_OnKey(*w, (UINT)wParam)) return 0;
             // Without a system menu (glass title bar) Windows no longer turns Alt+F4 into a close.
             if (msg == WM_SYSKEYDOWN && wParam == VK_F4 && w->recording < 0) {
@@ -6486,6 +6598,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             DestroyWindow(hwnd);
             return 0;
         case WM_DESTROY: {
+            RemovePropW(hwnd, kSetAutoProp);
             Set_StopRecording(*w);
             if (w->timer) KillTimer(hwnd, kSetTimerId);
             if (!w->render && w->normalRect.right > w->normalRect.left) {
@@ -6608,6 +6721,7 @@ static bool Set_Create(bool render) {
         return false;
     }
     w->hwnd = hwnd;
+    SetPropW(hwnd, kSetAutoProp, (HANDLE)1);  // Seamless Autoscroll leaves this window to Set_AutoScroll*.
     w->dpi = g_setForceDpi ? g_setForceDpi : GetDpiForWindow(hwnd);
     ApplyDarkWindow(hwnd);
     COLORREF caption = RefFromRgb(mocha::crust), captionText = RefFromRgb(mocha::text);

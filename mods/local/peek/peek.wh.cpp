@@ -2,11 +2,12 @@
 // @id              peek
 // @name            Peek
 // @description     Select a file in File Explorer and press Space to preview it, like PowerToys Peek
-// @version         1.5.1
+// @version         1.5.2
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
+// @license         MIT
 // @include         windhawk-mod.exe
 // @compilerOptions -ld2d1 -ldwrite -lwindowscodecs -lole32 -loleaut32 -luuid -lgdi32 -luser32 -lshell32 -lshlwapi -ldwmapi -luxtheme -lmfplat -lmfplay
 // ==/WindhawkMod==
@@ -90,68 +91,74 @@ PowerToys.
 // ==WindhawkModSettings==
 /*
 - hotkey: Space
-  $name: Preview key
-  $description: The key that opens and closes the preview, for example Space or Ctrl+Space
+  $name: Preview shortcut
+  $description: 'The shortcut that opens and closes the preview, for example Space or Ctrl+Space (Suggested: Space)'
 - onDesktop: true
   $name: Work on the desktop
-  $description: Also preview files selected on the desktop
+  $description: 'Turn on to also preview files selected on the desktop (Suggested: on)'
 - widthPercent: 60
   $name: Window width (%)
-  $description: How wide the preview opens, as a share of the screen
+  $description: 'How wide the preview opens, as a share of the screen. 20 to 100 (Suggested: 60)'
 - heightPercent: 75
   $name: Window height (%)
-  $description: How tall the preview opens, as a share of the screen
+  $description: 'How tall the preview opens, as a share of the screen. 20 to 100 (Suggested: 75)'
 - rememberSize: true
   $name: Remember size and position
-  $description: Open where you last moved or resized the preview, until the next sign-in
+  $description: 'Turn on to open where you last moved or resized the preview, until the next sign-in (Suggested: on)'
 - alwaysOnTop: false
   $name: Always on top
+  $description: 'Turn on to keep the preview above other windows (Suggested: off)'
 - closeOnFocusLoss: false
   $name: Close when you click away
+  $description: 'Turn on to close the preview when you click another window (Suggested: off)'
 - darkMode: true
   $name: Dark window
-  $description: Dark title bar and scroll bars
+  $description: 'Turn on for a dark title bar and scroll bars (Suggested: on)'
 - backgroundColor: "#1e1e2e"
   $name: Background color
-  $description: As #RRGGBB
+  $description: 'Color as #RRGGBB (Suggested: #1e1e2e)'
 - blurBackground: false
   $name: Blurred glass background
-  $description: Blur whatever is behind the window, title bar included, and tint it with the background color. It stays blurred when the window loses focus
+  $description: 'Turn on to blur whatever is behind the window, title bar included, and tint it with the background color. It stays blurred when the window loses focus (Suggested: off)'
 - blurTint: 40
   $name: Glass tint (%)
-  $description: How much of the background color covers the blur. Lower shows more of what is behind
+  $description: 'How much of the background color covers the blur. Lower shows more of what is behind. 0 to 100 (Suggested: 40)'
 - textColor: "#cdd6f4"
   $name: Text color
-  $description: As #RRGGBB
+  $description: 'Color as #RRGGBB (Suggested: #cdd6f4)'
 - dimTextColor: "#a6adc8"
   $name: Secondary text color
-  $description: Used for file details. As #RRGGBB
-- textFont: Cascadia Mono
+  $description: 'Used for file details. Color as #RRGGBB (Suggested: #a6adc8)'
+- textFont: FiraCode Nerd Font
   $name: Text and code font
+  $description: 'Font for text and code files (Suggested: FiraCode Nerd Font)'
 - textSize: 11
   $name: Text and code size (pt)
+  $description: 'Font size for text and code files. 6 to 72 (Suggested: 11)'
 - wordWrap: true
   $name: Wrap long lines
+  $description: 'Turn on to wrap long lines instead of scrolling sideways (Suggested: on)'
 - maxTextSizeKB: 4096
   $name: Largest text shown (KB)
-  $description: Bigger files show their first part only
+  $description: 'Bigger files show their first part only. 4 to 262144 (Suggested: 4096)'
 - upscaleImages: false
   $name: Enlarge small pictures
-  $description: Stretch pictures smaller than the window to fill it
+  $description: 'Turn on to stretch pictures smaller than the window to fill it (Suggested: off)'
 - usePreviewHandlers: true
   $name: Use Windows preview handlers
-  $description: Show PDFs, Office files and more the way the Explorer preview pane does
+  $description: 'Turn on to show PDFs, Office files and more the way the Explorer preview pane does (Suggested: on)'
 - playMedia: true
   $name: Play videos and music
-  $description: Play them inside the preview. Turn off to show only the cover or a frame
+  $description: 'Turn on to play videos and music inside the preview. Turn off to show only the cover or a frame (Suggested: on)'
 - autoPlay: true
   $name: Start playing right away
+  $description: 'Turn on to start playing as soon as the preview opens (Suggested: on)'
 - accentColor: "#cba6f7"
   $name: Accent color
-  $description: The right end of the gradient on the play button, the seek bar and the volume slider. As #RRGGBB
+  $description: 'The right end of the gradient on the play button, the seek bar and the volume slider. Color as #RRGGBB (Suggested: #cba6f7)'
 - accentColor2: "#89b4fa"
   $name: Accent gradient start
-  $description: Buttons and bars shade from this color into the accent, left to right. As #RRGGBB
+  $description: 'Buttons and bars shade from this color into the accent, left to right. Color as #RRGGBB (Suggested: #89b4fa)'
 - textExtensions: txt log ini inf cfg conf config json jsonc xml yml yaml toml md markdown csv tsv ps1 psm1 psd1 bat cmd sh bash zsh py pyw js mjs cjs ts tsx jsx css scss less html htm c cc cpp cxx h hh hpp hxx cs java kt go rs lua rb php pl swift sql reg gsc csc gitignore gitattributes editorconfig env diff patch srt vtt nfo
   $name: Text file types
   $description: Extensions to show as plain text, separated by spaces. Files with other extensions still show as text when they look like text and nothing else can preview them

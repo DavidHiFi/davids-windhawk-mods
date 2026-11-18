@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every plugin
-// @version         0.4.3
+// @version         0.5.1
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -105,6 +105,7 @@ Every key in that list can be changed on the Keys page of the settings.
 
 #include <algorithm>
 #include <atomic>
+#include <climits>
 #include <cmath>
 #include <cstdarg>
 #include <cstdint>
@@ -126,6 +127,7 @@ using Microsoft::WRL::ComPtr;
 // The settings window (namespace haloset, at the end of the file) runs on its own thread. It reads
 // the search engine's settings and plugins from this bridge and saves them with a line to it.
 namespace haloset {
+int ShowTrayMenu(HWND owner, const POINT* at);
 void OpenSettingsWindow();
 void CloseSettingsWindow();
 extern std::atomic<HWND> g_settingsWnd;
@@ -149,7 +151,7 @@ void HaloRecording(bool on);
 namespace {
 
 constexpr UINT WM_APP_LINES = WM_APP + 1;     // lParam: std::vector<std::string>*
-constexpr UINT WM_APP_PIPEDOWN = WM_APP + 2;
+constexpr UINT WM_APP_ENGINEDONE = WM_APP + 2;  // the engine said bye or its thread ended
 constexpr UINT WM_APP_SETTINGS = WM_APP + 3;
 constexpr UINT WM_APP_TRAY = WM_APP + 5;      // the tray icon's callback
 constexpr UINT WM_APP_RECORD = WM_APP + 6;    // wParam 1: a key box in the settings listens
@@ -161,7 +163,6 @@ constexpr UINT_PTR kTimerHide = 3;
 constexpr UINT kHideDelay = 100;
 constexpr wchar_t kMsgClass[] = L"HaloLauncherMsg";
 constexpr wchar_t kWndClass[] = L"HaloLauncher";
-constexpr wchar_t kPipePath[] = L"\\\\.\\pipe\\HaloLauncher.Engine";
 
 HANDLE g_thread = nullptr;
 HANDLE g_ready = nullptr;
@@ -386,6 +387,7 @@ struct State {
     bool engineReady = false;
     bool pendingShow = false;
     bool pendingKey = false;        // a keyword hotkey pressed while the engine was away
+    bool keyShow = false;           // the next show comes from a shortcut: its words are not selected
     std::wstring pendingKeyword;
     DWORD pendingTick = 0;
     std::map<std::wstring, std::wstring> set, setPending;
@@ -427,6 +429,7 @@ struct State {
     ComPtr<IWICImagingFactory> wic;
     ComPtr<ID2D1DCRenderTarget> rt;
     ComPtr<ID2D1SolidColorBrush> brush;
+    ComPtr<ID2D1Layer> fadeLayer;
     ComPtr<IDWriteTextFormat> fQuery, fTitle, fSub, fClock, fHint, fPrevTitle, fPrevSub;
     ComPtr<IDWriteTextLayout> queryLayout;
     std::map<std::wstring, ComPtr<ID2D1Bitmap>> bitmaps;
@@ -451,43 +454,84 @@ bool SetBool(const wchar_t* key, bool def) {
     return EqualsNoCase(it->second, L"True") || it->second == L"1";
 }
 
-// ---------------------------------------------------------------- pipe
+// ---------------------------------------------------------------- the engine, inside this process
+//
+// The engine (Flow Launcher's own code plus Halo.Engine.dll) runs on its own thread here,
+// started through hostfxr, the same loader Flow's exe uses. Lines go both ways through two
+// function pointers: the mod fills toMod, the engine fills toEngine when it starts.
+// The .NET runtime cannot be started twice in one process, so "restart the engine" means:
+// this process ends with kExitRestart and the launcher in windhawk.exe starts a fresh one.
 
-struct PipeState {
-    SRWLOCK lock = SRWLOCK_INIT;
-    HANDLE handle = INVALID_HANDLE_VALUE;
-    HANDLE quit = nullptr;
-    HANDLE thread = nullptr;
-    HANDLE writeEvent = nullptr;
-    HANDLE engineProcess = nullptr;
-    DWORD lastEngineStart = 0;
+constexpr int kExitRestart = 75;      // the launcher starts the process again at once
+constexpr int kExitEngineDied = 76;   // the launcher starts it again, with a pause, a few times at most
+constexpr int kEngineRunning = INT_MIN;
+
+struct EngineAbi {
+    void(__cdecl* toMod)(const char*, int);
+    void(__cdecl* toEngine)(const char*, int);
 };
-[[clang::no_destroy]] PipeState g_pipe;
-// Set when the owner runs Flow's "Exit": the engine stays away until the launcher is asked for.
-std::atomic<bool> g_parked{false};
+
+struct EngineHost {
+    EngineAbi abi{};
+    SRWLOCK callLock = SRWLOCK_INIT;  // shared while calling into the engine, exclusive to cut the link
+    std::mutex inLock;
+    std::string pending;
+    HANDLE thread = nullptr;
+    HANDLE bye = nullptr;  // set when the engine says its last word
+    std::atomic<bool> closing{false};
+    std::atomic<int> exitCode{0};
+    std::atomic<int> result{kEngineRunning};
+    DWORD startTick = 0;
+};
+[[clang::no_destroy]] EngineHost g_engine;
+std::atomic<bool> g_unloading{false};  // Windhawk is unloading the mod: no restart
+
+void CutEngineLink() {
+    AcquireSRWLockExclusive(&g_engine.callLock);
+    __atomic_store_n(&g_engine.abi.toEngine, nullptr, __ATOMIC_RELEASE);
+    ReleaseSRWLockExclusive(&g_engine.callLock);
+}
+
+// Called by the engine, on any of its threads.
+void __cdecl EngineToMod(const char* data, int length) {
+    auto lines = std::make_unique<std::vector<std::string>>();
+    bool bye = false;
+    {
+        std::lock_guard<std::mutex> guard(g_engine.inLock);
+        g_engine.pending.append(data, length);
+        size_t start = 0, nl;
+        while ((nl = g_engine.pending.find('\n', start)) != std::string::npos) {
+            std::string line = g_engine.pending.substr(start, nl - start);
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (line == "restart") g_engine.exitCode = kExitRestart;
+            else if (line == "bye") bye = true;
+            lines->push_back(std::move(line));
+            start = nl + 1;
+        }
+        g_engine.pending.erase(0, start);
+    }
+    if (!lines->empty() && g.msgWnd) {
+        auto* raw = lines.release();
+        if (!PostMessageW(g.msgWnd, WM_APP_LINES, 0, (LPARAM)raw)) delete raw;
+    }
+    if (bye) {
+        // After "bye" the engine is shutting its runtime down, so nothing may call into it.
+        // Its thread may never end (a plugin can leave a thread running), so "bye" is the end.
+        CutEngineLink();
+        SetEvent(g_engine.bye);
+        if (g.msgWnd) PostMessageW(g.msgWnd, WM_APP_ENGINEDONE, 0, 0);
+    }
+}
 
 bool PipeSendRaw(const std::string& line) {
-    AcquireSRWLockExclusive(&g_pipe.lock);
-    bool ok = false;
-    if (g_pipe.handle != INVALID_HANDLE_VALUE) {
-        OVERLAPPED ov{};
-        ov.hEvent = g_pipe.writeEvent;
-        ResetEvent(ov.hEvent);
-        DWORD done = 0;
+    AcquireSRWLockShared(&g_engine.callLock);
+    auto fn = __atomic_load_n(&g_engine.abi.toEngine, __ATOMIC_ACQUIRE);
+    if (fn) {
         std::string data = line + "\n";
-        if (WriteFile(g_pipe.handle, data.data(), (DWORD)data.size(), &done, &ov)) {
-            ok = true;
-        } else if (GetLastError() == ERROR_IO_PENDING) {
-            if (WaitForSingleObject(ov.hEvent, 2000) == WAIT_OBJECT_0) {
-                ok = GetOverlappedResult(g_pipe.handle, &ov, &done, FALSE) != 0;
-            } else {
-                CancelIoEx(g_pipe.handle, &ov);
-                GetOverlappedResult(g_pipe.handle, &ov, &done, TRUE);
-            }
-        }
+        fn(data.data(), (int)data.size());
     }
-    ReleaseSRWLockExclusive(&g_pipe.lock);
-    return ok;
+    ReleaseSRWLockShared(&g_engine.callLock);
+    return fn != nullptr;
 }
 
 bool Send(std::initializer_list<std::wstring> fields) {
@@ -511,100 +555,99 @@ std::wstring EngineDir() {
     return dir + L"\\HaloLauncher\\engine";
 }
 
-void StartEngine() {
-    DWORD now = GetTickCount();
-    if (g_pipe.engineProcess) {
-        if (WaitForSingleObject(g_pipe.engineProcess, 0) == WAIT_TIMEOUT) return;  // still starting
-        CloseHandle(g_pipe.engineProcess);
-        g_pipe.engineProcess = nullptr;
-    }
-    if (g_pipe.lastEngineStart && now - g_pipe.lastEngineStart < 20000) return;
-    g_pipe.lastEngineStart = now ? now : 1;
+using HostfxrInit = int(__cdecl*)(int, const wchar_t**, const void*, void**);
+using HostfxrRun = int(__cdecl*)(void*);
+using HostfxrClose = int(__cdecl*)(void*);
+using HostfxrErrorWriter = void(__cdecl*)(const wchar_t*);
+using HostfxrSetErrorWriter = HostfxrErrorWriter(__cdecl*)(HostfxrErrorWriter);
+struct HostfxrParams {
+    size_t size;
+    const wchar_t* hostPath;
+    const wchar_t* dotnetRoot;
+};
+
+void __cdecl HostfxrError(const wchar_t* message) { Wh_Log(L"engine loader: %s", message); }
+
+DWORD WINAPI EngineThreadProc(void*) {
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     std::wstring dir = EngineDir();
-    std::wstring exe = dir + L"\\HaloEngine.exe";
-    if (GetFileAttributesW(exe.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        Wh_Log(L"Engine not found: %s", exe.c_str());
-        return;
-    }
-    std::wstring cmd = L"\"" + exe + L"\" --parent " + std::to_wstring(GetCurrentProcessId());
-    STARTUPINFOW si{};
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;
-    PROCESS_INFORMATION pi{};
-    if (CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr,
-                       dir.c_str(), &si, &pi)) {
-        CloseHandle(pi.hThread);
-        g_pipe.engineProcess = pi.hProcess;
-        Wh_Log(L"Engine started, pid %u", pi.dwProcessId);
+    std::wstring app = dir + L"\\Halo.Engine.dll";
+    int rc = -1;
+    HMODULE fx = nullptr;
+    if (GetFileAttributesW(app.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        Wh_Log(L"Engine not found: %s", app.c_str());
+        Trace(L"engine not found: %s", app.c_str());
     } else {
-        Wh_Log(L"Engine start failed: %u", GetLastError());
+        fx = LoadLibraryExW((dir + L"\\hostfxr.dll").c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
     }
+    if (fx) {
+        auto setWriter = (HostfxrSetErrorWriter)GetProcAddress(fx, "hostfxr_set_error_writer");
+        auto init = (HostfxrInit)GetProcAddress(fx, "hostfxr_initialize_for_dotnet_command_line");
+        auto run = (HostfxrRun)GetProcAddress(fx, "hostfxr_run_app");
+        auto close = (HostfxrClose)GetProcAddress(fx, "hostfxr_close");
+        if (setWriter) setWriter(HostfxrError);
+        if (init && run && close) {
+            std::wstring host = dir + L"\\Halo.Engine.exe";  // never run: names the app's folder for the loader
+            wchar_t addr[32];
+            swprintf(addr, 32, L"%llx", (unsigned long long)(uintptr_t)&g_engine.abi);
+            const wchar_t* argv[] = {app.c_str(), L"--bridge", addr};
+            HostfxrParams params{sizeof(params), host.c_str(), dir.c_str()};
+            void* ctx = nullptr;
+            rc = init(3, argv, &params, &ctx);
+            if (rc >= 0 && ctx) {
+                Wh_Log(L"Engine loaded in %u ms", GetTickCount() - g_engine.startTick);
+                Trace(L"Engine loaded in %u ms", GetTickCount() - g_engine.startTick);
+                rc = run(ctx);
+                close(ctx);
+            } else {
+                Wh_Log(L"Engine loader refused: 0x%08X", (unsigned)rc);
+                Trace(L"engine loader refused: 0x%08X", (unsigned)rc);
+                if (ctx) close(ctx);
+            }
+        } else {
+            Wh_Log(L"hostfxr.dll is missing its entry points");
+        }
+    } else if (GetFileAttributesW(app.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        Wh_Log(L"hostfxr.dll load failed: %u", GetLastError());
+    }
+    CutEngineLink();
+    g_engine.result = rc;
+    Wh_Log(L"Engine ended: %d", rc);
+    Trace(L"engine exit %d", rc);
+    if (g.msgWnd) PostMessageW(g.msgWnd, WM_APP_ENGINEDONE, 0, 0);
+    CoUninitialize();
+    return 0;
 }
 
-DWORD WINAPI PipeThreadProc(void*) {
-    HANDLE readEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-    std::vector<char> buf(65536);
-    while (WaitForSingleObject(g_pipe.quit, 0) == WAIT_TIMEOUT) {
-        HANDLE h = CreateFileW(kPipePath, GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
-                               FILE_FLAG_OVERLAPPED, nullptr);
-        if (h == INVALID_HANDLE_VALUE) {
-            if (GetLastError() != ERROR_PIPE_BUSY && !g_parked) StartEngine();
-            if (WaitForSingleObject(g_pipe.quit, 400) != WAIT_TIMEOUT) break;
-            continue;
-        }
-        AcquireSRWLockExclusive(&g_pipe.lock);
-        g_pipe.handle = h;
-        ReleaseSRWLockExclusive(&g_pipe.lock);
-        PipeSendRaw("hello");
+void StartEngine() {
+    if (g_engine.thread) return;
+    g_engine.bye = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    g_engine.abi.toMod = EngineToMod;
+    g_engine.startTick = GetTickCount();
+    // WPF's dispatcher and the plugins expect a main-thread sized stack.
+    g_engine.thread = CreateThread(nullptr, 8u << 20, EngineThreadProc, nullptr, STACK_SIZE_PARAM_IS_A_RESERVATION,
+                                   nullptr);
+    if (!g_engine.thread) Wh_Log(L"Engine thread failed: %u", GetLastError());
+}
 
-        std::string pending;
-        bool alive = true;
-        while (alive) {
-            OVERLAPPED ov{};
-            ov.hEvent = readEvent;
-            ResetEvent(readEvent);
-            DWORD got = 0;
-            if (!ReadFile(h, buf.data(), (DWORD)buf.size(), &got, &ov)) {
-                if (GetLastError() != ERROR_IO_PENDING) break;
-                HANDLE waits[2] = {readEvent, g_pipe.quit};
-                DWORD w = WaitForMultipleObjects(2, waits, FALSE, INFINITE);
-                if (w != WAIT_OBJECT_0) {
-                    CancelIoEx(h, &ov);
-                    GetOverlappedResult(h, &ov, &got, TRUE);
-                    alive = false;
-                    break;
-                }
-                if (!GetOverlappedResult(h, &ov, &got, FALSE)) break;
-            }
-            if (!got) break;
-            pending.append(buf.data(), got);
-            auto lines = std::make_unique<std::vector<std::string>>();
-            size_t start = 0, nl;
-            while ((nl = pending.find('\n', start)) != std::string::npos) {
-                std::string line = pending.substr(start, nl - start);
-                if (!line.empty() && line.back() == '\r') line.pop_back();
-                // Both are the engine's last words, so they are acted on here, before it is gone.
-                if (line == "park") g_parked = true;
-                else if (line == "restart") g_pipe.lastEngineStart = 0;  // no wait before the fresh one
-                lines->push_back(std::move(line));
-                start = nl + 1;
-            }
-            pending.erase(0, start);
-            if (!lines->empty() && g.msgWnd) {
-                auto* raw = lines.release();
-                if (!PostMessageW(g.msgWnd, WM_APP_LINES, 0, (LPARAM)raw)) delete raw;
-            }
-        }
-        AcquireSRWLockExclusive(&g_pipe.lock);
-        g_pipe.handle = INVALID_HANDLE_VALUE;
-        ReleaseSRWLockExclusive(&g_pipe.lock);
-        CloseHandle(h);
-        if (g.msgWnd) PostMessageW(g.msgWnd, WM_APP_PIPEDOWN, 0, 0);
-        if (WaitForSingleObject(g_pipe.quit, 500) != WAIT_TIMEOUT) break;
-    }
-    CloseHandle(readEvent);
-    return 0;
+// Asks the engine to save and leave, then waits a bounded time. Returns once it is gone or
+// the time is up; the process exit after this stops whatever is left.
+void StopEngine() {
+    g_engine.closing = true;
+    if (!g_engine.thread) return;
+    DWORD t = GetTickCount();
+    if (PipeSendRaw("exit") && WaitForSingleObject(g_engine.bye, 7000) != WAIT_OBJECT_0)
+        Wh_Log(L"Engine did not say bye in 7 s");
+    CutEngineLink();
+    if (WaitForSingleObject(g_engine.thread, 3000) != WAIT_OBJECT_0) Wh_Log(L"Engine thread still running, leaving it");
+    Wh_Log(L"Engine stopped in %u ms", GetTickCount() - t);
+    Trace(L"engine stopped in %u ms", GetTickCount() - t);
+}
+
+// Ends this process so the launcher starts a fresh one: the only way to restart .NET.
+void RestartProcess(int code) {
+    if (!g_engine.exitCode) g_engine.exitCode = code;
+    if (g.msgWnd) PostMessageW(g.msgWnd, WM_CLOSE, 0, 0);
 }
 
 // ---------------------------------------------------------------- colours and fonts
@@ -755,6 +798,7 @@ bool EnsureSurface(Surface& s, int width, int height) {
 void ResetTarget() {
     g.bitmaps.clear();
     g.brush.Reset();
+    g.fadeLayer.Reset();
     g.rt.Reset();
 }
 
@@ -1215,6 +1259,13 @@ void Render() {
     g.rt->FillRectangle(D2D1::RectF(0, kEdge, kEdge, outerH - kEdge), g.brush.Get());
     g.rt->FillRectangle(D2D1::RectF(outerW - kEdge, kEdge, outerW, outerH - kEdge), g.brush.Get());
     g.rt->SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    // The glass is whole from the first frame; only what sits on it fades in. Fading the tint
+    // too showed the bare blur and a flat brown slab for the first frames of every open.
+    bool fadeOn = fade < 1 && (g.fadeLayer || SUCCEEDED(g.rt->CreateLayer(&g.fadeLayer)));
+    if (fadeOn)
+        g.rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                              D2D1::IdentityMatrix(), fade),
+                        g.fadeLayer.Get());
     // Everything below is laid out inside the edge.
     g.rt->SetTransform(D2D1::Matrix3x2F::Translation(kEdge, kEdge) * D2D1::Matrix3x2F::Scale(L.s, L.s));
 
@@ -1386,12 +1437,13 @@ void Render() {
         }
     }
 
+    if (fadeOn) g.rt->PopLayer();
     g.rt->SetTransform(D2D1::Matrix3x2F::Identity());
     if (g.rt->EndDraw() == D2DERR_RECREATE_TARGET) {
         ResetTarget();
         return;
     }
-    Present(fade);
+    Present(1);
     bool needFrames = g.animating || g.busy;
     if (needFrames) SetTimer(g.wnd, kTimerFrame, 12, nullptr);
     else KillTimer(g.wnd, kTimerFrame);
@@ -1450,9 +1502,16 @@ void ShowLauncher(bool selectAll) {
         g.quietNext = false;
         ApplyBackdrop();
         Render();  // sizes the window before it appears
+        // Shown cloaked, drawn, then uncloaked once Windows has composed it: the first frame
+        // people see already has the blur and the new contents, never the last open's picture.
+        BOOL cloak = TRUE;
+        DwmSetWindowAttribute(g.wnd, 13 /* DWMWA_CLOAK */, &cloak, sizeof(cloak));
         SetWindowPos(g.wnd, HWND_TOPMOST, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
         Render();
+        DwmFlush();
+        cloak = FALSE;
+        DwmSetWindowAttribute(g.wnd, 13, &cloak, sizeof(cloak));
     }
     if (!g.quiet) {
         ForceForeground(g.wnd);
@@ -1506,8 +1565,8 @@ void HideLauncher() {
 
 void RequestToggle() {
     Trace(L"toggle asked (engine ready %d, visible %d)", g.engineReady, g.visible);
+    g.keyShow = false;
     if (!g.engineReady) {
-        g_parked = false;
         g.pendingShow = true;
         g.pendingKey = false;
         g.pendingTick = GetTickCount();
@@ -1687,11 +1746,11 @@ void FireKey(size_t slot) {
         return;
     }
     Trace(L"key for '%s' (engine ready %d)", k.keyword.c_str(), g.engineReady);
+    g.keyShow = true;
     if (g.engineReady) {
         Send({L"hotkey", k.keyword});
         return;
     }
-    g_parked = false;
     g.pendingShow = false;
     g.pendingKey = true;
     g.pendingKeyword = k.keyword;
@@ -1847,10 +1906,20 @@ void OnLine(const std::string& raw) {
             g.scrollX = 0;
             TextChanged(false);
         }
+    } else if (op == L"caret") {
+        // A shortcut's words: caret after them, nothing selected.
+        g.caret = g.anchor = (int)g.text.size();
+        g.caretOn = true;
+        Render();
     } else if (op == L"vis") {
         Trace(L"engine vis %s (text '%s', %d results)", field(1).c_str(), g.text.c_str(), (int)g.res.items.size());
-        if (field(1) == L"1") ShowLauncher(field(2) == L"1");
-        else HideLauncher();
+        if (field(1) == L"1") {
+            // A shortcut's words are never selected, not even for the first frame.
+            ShowLauncher(field(2) == L"1" && !g.keyShow);
+            g.keyShow = false;
+        } else {
+            HideLauncher();
+        }
     } else if (op == L"busy") {
         bool on = field(1) == L"1";
         if (on && !g.busy) g.busySince = GetTickCount();
@@ -2346,26 +2415,15 @@ void UpdateTray(bool add) {
 
 void ShowTrayMenu(POINT pt) {
     enum { kOpen = 1, kSettings, kRestart };
-    HMENU menu = CreatePopupMenu();
-    AppendMenuW(menu, MF_STRING, kOpen, L"Open Halo Launcher");
-    AppendMenuW(menu, MF_STRING, kSettings, L"Settings");
-    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING, kRestart, L"Restart its search engine");
-    SetMenuDefaultItem(menu, kSettings, FALSE);
-    SetForegroundWindow(g.msgWnd);
-    UINT align = GetSystemMetrics(SM_MENUDROPALIGNMENT) ? TPM_RIGHTALIGN : TPM_LEFTALIGN;
-    UINT cmd = TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | align, pt.x, pt.y,
-                                g.msgWnd, nullptr);
-    PostMessageW(g.msgWnd, WM_NULL, 0, 0);
-    DestroyMenu(menu);
+    int cmd = haloset::ShowTrayMenu(g.msgWnd, &pt);
     if (cmd == kOpen) {
         if (!g.visible) RequestToggle();
     } else if (cmd == kSettings) {
         OpenHaloSettings();
     } else if (cmd == kRestart) {
-        // The engine answers "restart" and quits; the pipe thread starts a fresh one at once.
-        g_parked = false;
-        if (!Send({L"restartengine"})) g_pipe.lastEngineStart = 0;
+        // The engine saves, answers "restart" and says bye; this process then ends with
+        // kExitRestart and Windhawk's launcher starts a fresh one.
+        if (!Send({L"restartengine"})) RestartProcess(kExitRestart);
     }
 }
 
@@ -2386,7 +2444,11 @@ LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             for (auto& l : *lines) OnLine(l);
             return 0;
         }
-        case WM_APP_PIPEDOWN:
+        case WM_APP_ENGINEDONE:
+            if (!g_engine.closing.exchange(true)) {
+                // Not asked to close: the engine left on its own (restart asked, or it failed).
+                RestartProcess(g_engine.exitCode ? (int)g_engine.exitCode : kExitEngineDied);
+            }
             g.engineReady = false;
             g.inSet = g.inRes = false;
             {
@@ -2434,6 +2496,56 @@ LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+// Windhawk starts a tool process once and does not start it again when it ends, and .NET
+// cannot start twice in one process. So a restart starts the next copy here, marked with
+// "-halo-after <pid>": that copy waits for this one to be gone before Windhawk's tool code
+// checks that only one copy runs. "-halo-tries" counts failed starts so a broken engine
+// does not loop.
+int RelaunchTries() {
+    const wchar_t* t = wcsstr(GetCommandLineW(), L" -halo-tries ");
+    return t ? _wtoi(t + 13) : 0;
+}
+
+void RelaunchSelf(int code) {
+    int tries = code == kExitRestart ? 0 : RelaunchTries() + 1;
+    if (tries > 3) {
+        Wh_Log(L"Engine failed %d times in a row, not starting again", tries - 1);
+        return;
+    }
+    WCHAR exe[MAX_PATH];
+    DWORD n = GetModuleFileNameW(nullptr, exe, ARRAYSIZE(exe));
+    if (!n || n == ARRAYSIZE(exe)) return;
+    wchar_t tail[96];
+    swprintf(tail, 96, L" -halo-after %u -halo-tries %d", GetCurrentProcessId(), tries);
+    std::wstring cmd = std::wstring(L"\"") + exe + L"\" -windhawk-tool-mod \"" WH_MOD_ID L"\"" + tail;
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_FORCEOFFFEEDBACK;
+    PROCESS_INFORMATION pi{};
+    if (CreateProcessW(exe, cmd.data(), nullptr, nullptr, FALSE, NORMAL_PRIORITY_CLASS, nullptr, nullptr, &si, &pi)) {
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        Wh_Log(L"Started the next copy (pid %u, tries %d)", pi.dwProcessId, tries);
+    } else {
+        Wh_Log(L"Could not start the next copy: %u", GetLastError());
+    }
+}
+
+// Runs when the mod loads, before Windhawk's one-copy check: a restarted copy waits here
+// (at most 20 s) for the copy that started it to end.
+struct WaitForOldCopy {
+    WaitForOldCopy() {
+        const wchar_t* a = wcsstr(GetCommandLineW(), L" -halo-after ");
+        if (!a) return;
+        DWORD pid = (DWORD)_wtoi(a + 13);
+        if (HANDLE h = pid ? OpenProcess(SYNCHRONIZE, FALSE, pid) : nullptr) {
+            WaitForSingleObject(h, 20000);
+            CloseHandle(h);
+        }
+    }
+};
+WaitForOldCopy g_waitForOldCopy;
+
 DWORD WINAPI ThreadProc(void*) {
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
@@ -2443,6 +2555,9 @@ DWORD WINAPI ThreadProc(void*) {
 
     HINSTANCE inst = GetModuleHandleW(nullptr);
     LoadSettings();
+    // Halo's own app identity. This helper process runs only this mod, so its windows and the
+    // engine's notifications are named Halo Launcher instead of after Windhawk's helper.
+    SetCurrentProcessExplicitAppUserModelID(L"DavidHiFi.HaloLauncher");
     g_toggleMsg = RegisterWindowMessageW(L"HaloLauncher.Toggle");
     g_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
     EnableDarkMenus();
@@ -2475,9 +2590,7 @@ DWORD WINAPI ThreadProc(void*) {
     RegisterKeys();
     UpdateTray(true);
 
-    g_pipe.quit = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-    g_pipe.writeEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-    g_pipe.thread = CreateThread(nullptr, 0, PipeThreadProc, nullptr, 0, nullptr);
+    StartEngine();
     SetEvent(g_ready);
 
     MSG msg;
@@ -2492,18 +2605,7 @@ DWORD WINAPI ThreadProc(void*) {
     g_trayIcon = nullptr;
     UnregisterKeys();
     StopHook();
-    PipeSendRaw("exit");
-    SetEvent(g_pipe.quit);
-    if (g_pipe.thread) {
-        WaitForSingleObject(g_pipe.thread, 3000);
-        CloseHandle(g_pipe.thread);
-    }
-    if (g_pipe.engineProcess) {
-        WaitForSingleObject(g_pipe.engineProcess, 3000);
-        CloseHandle(g_pipe.engineProcess);
-    }
-    CloseHandle(g_pipe.quit);
-    CloseHandle(g_pipe.writeEvent);
+    StopEngine();
     // Lines still queued for the window are freed here.
     while (PeekMessageW(&msg, nullptr, WM_APP_LINES, WM_APP_LINES, PM_REMOVE))
         delete (std::vector<std::string>*)msg.lParam;
@@ -2519,6 +2621,14 @@ DWORD WINAPI ThreadProc(void*) {
     UnregisterClassW(kWndClass, inst);
     UnregisterClassW(kMsgClass, inst);
     CoUninitialize();
+    // The engine ended without Windhawk unloading the mod (a restart, or it failed): end the
+    // whole process so the launcher in windhawk.exe starts a clean one.
+    int code = g_engine.exitCode;
+    if (code && !g_unloading) {
+        Wh_Log(L"Ending the process with %d so it starts fresh", code);
+        RelaunchSelf(code);
+        ExitProcess(code);
+    }
     return 0;
 }
 
@@ -3478,6 +3588,7 @@ void WhTool_ModSettingsChanged() {
 
 void WhTool_ModUninit() {
     Wh_Log(L">");
+    g_unloading = true;
     haloset::CloseSettingsWindow();
     if (g.msgWnd) PostMessageW(g.msgWnd, WM_CLOSE, 0, 0);
     if (g_thread) {
@@ -3604,6 +3715,47 @@ class SetCom {
     T* get() const { return p; }
     T* operator->() const { return p; }
     explicit operator bool() const { return p != nullptr; }
+};
+
+// One row of a tray menu (Set_TrayMenu). Every mod's tray menu is a list of these.
+struct SetMenuItem {
+    int id = 0;                    // What Set_TrayMenu returns when this row is picked.
+    std::wstring glyph;            // FiraCode Nerd Font glyph for the leading column.
+    std::wstring label;
+    std::wstring hint;             // Grey text on the right, such as a hotkey.
+    bool checked = false;          // Accent check mark on the right.
+    bool separator = false;
+    bool disabled = false;
+    std::vector<SetMenuItem> sub;  // A submenu, drawn by the same renderer.
+};
+
+// One open level of a tray menu: its own popup window and Direct2D target.
+struct SetMenuLevel {
+    const std::vector<SetMenuItem>* items = nullptr;
+    HWND hwnd = nullptr;
+    SetCom<ID2D1HwndRenderTarget> rt;
+    float scale = 1, wDip = 0, hDip = 0, itemH = 30, hintW = 0;
+    std::vector<float> top, height;  // Per row, DIPs inside the window.
+    int hover = -1;                  // Highlighted row.
+    int open = -1;                   // Row whose submenu is the next level.
+};
+
+// A running tray menu. It owns its factories, so it runs on whatever thread owns the tray icon.
+struct SetMenuSession {
+    SetCom<ID2D1Factory> d2d;
+    SetCom<IDWriteFactory> dw;
+    SetCom<IDWriteTextFormat> fText, fHint, fGlyph, fGlyphS;
+    std::vector<std::unique_ptr<SetMenuLevel>> levels;
+    HINSTANCE inst = nullptr;
+    std::wstring cls;
+    float radius = 8;
+    int result = 0;
+    bool done = false;
+    bool pressed = false;  // A button went down inside the menu; only then does a release pick a row.
+    bool wasActive = false;
+    float alpha = 1;
+    ULONGLONG fadeStart = 0;
+    int pendingLevel = -1, pendingItem = -1;  // Hover timer: open (item >= 0) or close a submenu after a delay.
 };
 
 struct SetField {
@@ -3740,6 +3892,9 @@ constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
 constexpr UINT_PTR kSetTimerId = 1;
+// Middle-click autoscroll: no movement inside kSetAutoDead, then speed grows with distance.
+constexpr float kSetAutoDead = 10, kSetAutoR = 18, kSetAutoGain = 0.14f, kSetAutoMax = 56;
+constexpr PCWSTR kSetAutoProp = L"SeamlessOwnAutoscroll";  // Seamless Autoscroll skips this window.
 constexpr PCWSTR kSetKofiUrl = L"https://ko-fi.com/DavidHiFi";
 constexpr PCWSTR kSetAuthorUrl = L"https://github.com/DavidHiFi";
 constexpr PCWSTR kSetDittoUrl = L"https://github.com/Flow-Launcher/Flow.Launcher";
@@ -3751,12 +3906,19 @@ constexpr PCWSTR kSetTitle = L"Halo Launcher";
 // The self-drawn title bar. Everything below it is laid out as before, in "content" DIPs.
 static float kSetCapH = 40;
 constexpr float kSetCapBtnW = 46, kSetHoverMs = 120;
+constexpr float kSetMenuPad = 6, kSetMenuIconW = 22, kSetMenuSepH = 9, kSetMenuOverlap = 3, kSetMenuMinW = 190, kSetMenuMaxW = 640, kSetMenuBorderW = 2;
+constexpr UINT kSetMenuSubDelayMs = 200, kSetMenuFadeMs = 90, kSetMenuTimerSub = 0x5E71, kSetMenuTimerFade = 0x5E72, kSetMenuTimerPoll = 0x5E73;
 
 struct SetItem {
-    enum Type { Group, Row, Banner, About, Link, Support } type = Row;
+    enum Type { Group, Row, Banner, About, Link, Support, PlugCard, PlugBtn, Seg } type = Row;
     int field = -1;  // Row: index into fields.
     float y = 0, h = 0;
     std::wstring text, sub, url;
+    float x = 0, w = 0;   // Halo: an item in a column of the plugin grid (w 0: the full content width).
+    float head = 0;       // Halo: a plugin card's clickable top (it folds the card).
+    int aux = -1;         // Halo: a card's "turned on" field; a Seg's view (0 grid, 1 list).
+    int card = -1;        // Halo: the card a body item belongs to (a Row with a card is drawn bare).
+    std::wstring note;    // Halo: a card's version and author line.
 };
 
 // What the pointer is over. id picks the hover glow.
@@ -3790,6 +3952,9 @@ struct SetWindow {
     int dragSlider = -1;
     bool dragScroll = false, tracking = false, timer = false;
     float dragOff = 0;
+    // Middle-click autoscroll: the anchor in content DIPs; autoA eases the indicator in and out.
+    bool autoScroll = false, autoMoved = false;
+    float autoX = 0, autoY = 0, autoA = 0, autoDir = 0;
     // Sidebar dock: railW is the chosen open width, railCur the drawn width (eased toward
     // kSetRailMini when collapsed). railGlow / footGlow ease the dock borders on hover.
     float railW = kSetRailDef, railCur = kSetRailDef, railGlow = 0, footGlow = 0;
@@ -3932,6 +4097,579 @@ static SetCom<IDWriteTextFormat> Set_Fmt(const std::wstring& family, float size,
 }
 
 // std::wstring(L"FiraCode Nerd Font") at 500; emphasis is one step heavier, never past bold.
+static float Set_MenuCornerRadius() {
+    float radius = 8.0f;
+    HKEY key;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Windhawk\\Engine\\Mods\\custom-corner-radius", 0,
+                      KEY_READ | KEY_WOW64_64KEY, &key) == ERROR_SUCCESS) {
+        DWORD disabled = 0, size = sizeof(disabled);
+        bool off = RegQueryValueExW(key, L"Disabled", nullptr, nullptr, (BYTE*)&disabled, &size) == ERROR_SUCCESS && disabled;
+        DWORD value = 0;
+        size = sizeof(value);
+        if (!off && RegGetValueW(key, L"Settings", L"radius", RRF_RT_REG_DWORD, nullptr, &value, &size) == ERROR_SUCCESS &&
+            value > 0 && value <= 64)
+            radius = (float)value;
+        RegCloseKey(key);
+    }
+    return radius;
+}
+
+static SetMenuItem Set_MenuRow(int id, PCWSTR glyph, PCWSTR label, bool checked = false, bool disabled = false,
+                               PCWSTR hint = L"") {
+    SetMenuItem m;
+    m.id = id;
+    m.glyph = glyph ? glyph : L"";
+    m.label = label ? label : L"";
+    m.hint = hint ? hint : L"";
+    m.checked = checked;
+    m.disabled = disabled;
+    return m;
+}
+
+static SetMenuItem Set_MenuSub(PCWSTR glyph, PCWSTR label, std::vector<SetMenuItem> sub, bool disabled = false) {
+    SetMenuItem m = Set_MenuRow(0, glyph, label, false, disabled);
+    m.sub = std::move(sub);
+    return m;
+}
+
+static SetMenuItem Set_MenuSep() {
+    SetMenuItem m;
+    m.separator = true;
+    return m;
+}
+
+static SetMenuSession*& Set_MenuCur() {
+    static SetMenuSession* session = nullptr;
+    return session;
+}
+
+static bool Set_MenuSelectable(const SetMenuItem& m) { return !m.separator && !m.disabled; }
+
+static float Set_MenuTextW(SetMenuSession& s, IDWriteTextFormat* f, const std::wstring& text) {
+    SetCom<IDWriteTextLayout> layout;
+    DWRITE_TEXT_METRICS m{};
+    if (text.empty() || !f || FAILED(s.dw->CreateTextLayout(text.c_str(), (UINT32)text.size(), f, 10000, 1000, layout.put())) ||
+        FAILED(layout->GetMetrics(&m)))
+        return 0;
+    return m.widthIncludingTrailingWhitespace;
+}
+
+static bool Set_MenuFormats(SetMenuSession& s) {
+    if (!s.d2d && FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory), nullptr,
+                                           (void**)s.d2d.put())))
+        return false;
+    if (!s.dw && FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)s.dw.put())))
+        return false;
+    std::wstring family = L"Segoe UI";
+    SetCom<IDWriteFontCollection> sys;
+    if (SUCCEEDED(s.dw->GetSystemFontCollection(sys.put(), FALSE))) {
+        for (PCWSTR face : {L"FiraCode Nerd Font", L"FiraCodeNerdFont", L"FiraCode Nerd Font Mono"}) {
+            UINT32 index = 0;
+            BOOL exists = FALSE;
+            if (SUCCEEDED(sys->FindFamilyName(face, &index, &exists)) && exists) {
+                family = face;
+                break;
+            }
+        }
+    }
+    auto make = [&](float size, DWRITE_TEXT_ALIGNMENT align, SetCom<IDWriteTextFormat>& out) {
+        if (FAILED(s.dw->CreateTextFormat(family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+                                          DWRITE_FONT_STRETCH_NORMAL, size, L"en-us", out.put())))
+            return false;
+        out->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        out->SetTextAlignment(align);
+        out->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        // Only a label wider than the widest menu (kSetMenuMaxW) is ever shortened, with an ellipsis.
+        DWRITE_TRIMMING trim{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+        SetCom<IDWriteInlineObject> sign;
+        if (SUCCEEDED(s.dw->CreateEllipsisTrimmingSign(out.get(), sign.put()))) out->SetTrimming(&trim, sign.get());
+        return true;
+    };
+    return make(13.5f, DWRITE_TEXT_ALIGNMENT_LEADING, s.fText) && make(12.5f, DWRITE_TEXT_ALIGNMENT_TRAILING, s.fHint) &&
+           make(15, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyph) && make(12, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyphS);
+}
+
+static void Set_MenuLayout(SetMenuSession& s, SetMenuLevel& lv) {
+    const auto& items = *lv.items;
+    lv.itemH = 30;
+    lv.top.assign(items.size(), 0);
+    lv.height.assign(items.size(), 0);
+    float textW = 0, hintW = 0, y = kSetMenuPad;
+    for (size_t i = 0; i < items.size(); i++) {
+        lv.top[i] = y;
+        lv.height[i] = items[i].separator ? kSetMenuSepH : lv.itemH;
+        y += lv.height[i];
+        if (items[i].separator) continue;
+        textW = std::max(textW, Set_MenuTextW(s, s.fText.get(), items[i].label));
+        hintW = std::max(hintW, Set_MenuTextW(s, s.fHint.get(), items[i].hint));
+    }
+    lv.hintW = std::ceil(hintW);
+    float w = kSetMenuPad * 2 + 8 + kSetMenuIconW + 10 + std::ceil(textW) + 2 + (hintW > 0 ? 24 + lv.hintW : 0) + 10 + 20 + 8;
+    lv.wDip = std::ceil(std::clamp(w, kSetMenuMinW, kSetMenuMaxW));
+    lv.hDip = std::ceil(y + kSetMenuPad);
+}
+
+static int Set_MenuItemAt(const SetMenuLevel& lv, float x, float y) {
+    if (x < kSetMenuPad || x >= lv.wDip - kSetMenuPad) return -1;
+    for (size_t i = 0; i < lv.top.size(); i++)
+        if (y >= lv.top[i] && y < lv.top[i] + lv.height[i]) return (*lv.items)[i].separator ? -1 : (int)i;
+    return -1;
+}
+
+static int Set_MenuNext(const SetMenuLevel& lv, int from, int dir) {
+    int n = (int)lv.items->size();
+    if (!n) return -1;
+    int i = from < 0 ? (dir > 0 ? -1 : n) : from;
+    for (int k = 0; k < n; k++) {
+        i = ((i + dir) % n + n) % n;
+        if (Set_MenuSelectable((*lv.items)[(size_t)i])) return i;
+    }
+    return -1;
+}
+
+static void Set_MenuPaint(SetMenuSession& s, SetMenuLevel& lv) {
+    ID2D1RenderTarget* rt = lv.rt.get();
+    SetCom<ID2D1SolidColorBrush> brush;
+    if (FAILED(rt->CreateSolidColorBrush(D2DColor(mocha::text), brush.put()))) return;
+    auto solid = [&](UINT32 rgb, float a) {
+        brush->SetColor(D2DColor(rgb, a));
+        return brush.get();
+    };
+    auto gradient = [&](D2D1_POINT_2F a, D2D1_POINT_2F b, D2D1_COLOR_F c1, D2D1_COLOR_F c2) {
+        SetCom<ID2D1LinearGradientBrush> g;
+        D2D1_GRADIENT_STOP stops[2] = {{0, c1}, {1, c2}};
+        SetCom<ID2D1GradientStopCollection> coll;
+        if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())))
+            rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(a, b), coll.get(), g.put());
+        return g;
+    };
+    // Blue to mauve at 45 degrees across a rect, like Seamless Borders.
+    auto accent = [&](const D2D1_RECT_F& r, float a) {
+        float d = ((r.right - r.left) + (r.bottom - r.top)) / 2;
+        return gradient({r.left, r.top}, {r.left + d, r.top + d}, D2DColor(mocha::blue, a), D2DColor(mocha::mauve, a));
+    };
+    const float w = lv.wDip, h = lv.hDip;
+    rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+    SetCom<ID2D1Layer> layer;
+    bool faded = s.alpha < 0.999f && SUCCEEDED(rt->CreateLayer(nullptr, layer.put()));
+    if (faded)
+        rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                            D2D1::IdentityMatrix(), std::max(0.0f, s.alpha)),
+                      layer.get());
+    // Dark Mocha over the acrylic blur; DWM rounds the window.
+    auto tint = gradient({0, 0}, {0, h}, D2DColor(mocha::base, 0.80f), D2DColor(mocha::base, 0.84f));
+    if (tint) rt->FillRectangle({0, 0, w, h}, tint.get());
+    const auto& items = *lv.items;
+    const float slotRight = w - kSetMenuPad - 8, slotLeft = slotRight - 20;
+    for (size_t i = 0; i < items.size(); i++) {
+        const SetMenuItem& m = items[i];
+        D2D1_RECT_F r{kSetMenuPad, lv.top[i], w - kSetMenuPad, lv.top[i] + lv.height[i]};
+        if (m.separator) {
+            float y = std::floor((r.top + r.bottom) / 2);
+            rt->FillRectangle({r.left + 8, y, r.right - 8, y + 1}, solid(mocha::surface1, 0.8f));
+            continue;
+        }
+        bool hot = ((int)i == lv.hover || (int)i == lv.open) && !m.disabled;
+        if (hot) {
+            // The hover look of every card: a faint blue to mauve wash and a 1 px gradient ring.
+            float rad = 8, ringW = 1;
+            D2D1_ROUNDED_RECT rr{{r.left + ringW / 2, r.top + ringW / 2, r.right - ringW / 2, r.bottom - ringW / 2}, rad, rad};
+            auto fill = gradient({r.left, r.top}, {r.right, r.bottom}, D2DColor(mocha::blue, 0.16f), D2DColor(mocha::mauve, 0.16f));
+            if (fill) rt->FillRoundedRectangle(rr, fill.get());
+            auto ring = accent(r, 0.8f);
+            if (ring) rt->DrawRoundedRectangle(rr, ring.get(), ringW);
+        }
+        UINT32 col = m.disabled ? mocha::overlay0 : mocha::text;
+        if (!m.glyph.empty())
+            rt->DrawText(m.glyph.c_str(), (UINT32)m.glyph.size(), s.fGlyph.get(),
+                         {r.left + 8, r.top, r.left + 8 + kSetMenuIconW, r.bottom}, solid(col, 1));
+        float textX = r.left + 8 + kSetMenuIconW + 10;
+        float hintRight = slotLeft - 10, hintLeft = hintRight - lv.hintW;
+        float textRight = lv.hintW > 0 ? hintLeft - 12 : slotLeft - 4;
+        if (!m.label.empty())
+            rt->DrawText(m.label.c_str(), (UINT32)m.label.size(), s.fText.get(), {textX, r.top, textRight, r.bottom},
+                         solid(col, 1));
+        if (!m.hint.empty())
+            rt->DrawText(m.hint.c_str(), (UINT32)m.hint.size(), s.fHint.get(), {hintLeft, r.top, hintRight, r.bottom},
+                         solid(m.disabled ? mocha::overlay0 : mocha::subtext0, 1));
+        if (!m.sub.empty()) {
+            rt->DrawText(L"", 1, s.fGlyphS.get(), {slotLeft, r.top, slotRight, r.bottom}, solid(col, 1));  // chevron_right
+        } else if (m.checked) {
+            rt->DrawText(L"", 1, s.fGlyph.get(), {slotLeft, r.top, slotRight, r.bottom},  // check
+                         solid(m.disabled ? mocha::overlay0 : mocha::blue, 1));
+        }
+    }
+    // The edge on DWM's real corner curve: 2 px, blue to mauve, inset half the stroke.
+    const float bw = kSetMenuBorderW;
+    D2D1_RECT_F edge{bw / 2, bw / 2, w - bw / 2, h - bw / 2};
+    auto border = accent({0, 0, w, h}, 1);
+    float r2 = std::max(0.0f, s.radius - bw / 2);
+    if (border) rt->DrawRoundedRectangle({edge, r2, r2}, border.get(), bw);
+    if (faded) rt->PopLayer();
+}
+
+static int Set_MenuIndexOf(HWND hwnd) {
+    if (SetMenuSession* s = Set_MenuCur())
+        for (size_t i = 0; i < s->levels.size(); i++)
+            if (s->levels[i]->hwnd == hwnd) return (int)i;
+    return -1;
+}
+
+static void Set_MenuInvalidate() {
+    if (SetMenuSession* s = Set_MenuCur())
+        for (auto& lv : s->levels)
+            if (lv->hwnd) InvalidateRect(lv->hwnd, nullptr, FALSE);
+}
+
+static void Set_MenuCloseFrom(size_t n) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s) return;
+    while (s->levels.size() > n) {
+        HWND h = s->levels.back()->hwnd;
+        s->levels.back()->rt.reset();
+        s->levels.pop_back();
+        if (h) DestroyWindow(h);
+    }
+    if (n > 0 && !s->levels.empty()) s->levels.back()->open = -1;
+    Set_MenuInvalidate();
+}
+
+static void Set_MenuFinish(int id) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || s->done) return;
+    s->result = id;
+    s->done = true;
+}
+
+static void Set_MenuBackdrop(HWND hwnd) {
+    BOOL dark = TRUE;
+    DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+    int corner = 2;  // DWMWCP_ROUND
+    DwmSetWindowAttribute(hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &corner, sizeof(corner));
+    COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE: the menu draws its own edge.
+    DwmSetWindowAttribute(hwnd, 34 /* DWMWA_BORDER_COLOR */, &none, sizeof(none));
+    DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+    int backdrop = 1;  // DWMSBT_NONE
+    DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+    DWM_BLURBEHIND bb{};
+    bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+    bb.fEnable = TRUE;
+    bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+    DwmEnableBlurBehindWindow(hwnd, &bb);
+    if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+    struct SetAccentPolicy { int state, flags, abgr, animation; };
+    struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
+    if (auto setComposition =
+            (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute")) {
+        SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};
+        SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+        setComposition(hwnd, &data);
+    }
+}
+
+static RECT Set_MenuWorkArea(POINT pt) {
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST), &mi);
+    return mi.rcWork;
+}
+
+static bool Set_MenuCreateWindow(SetMenuSession& s, SetMenuLevel& lv, POINT at, const RECT* parent, int rowTopPx) {
+    DWORD ex = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | (parent ? WS_EX_NOACTIVATE : 0);
+    HWND hwnd = CreateWindowExW(ex, s.cls.c_str(), L"", WS_POPUP, at.x, at.y, 1, 1, nullptr, nullptr, s.inst, nullptr);
+    if (!hwnd) return false;
+    lv.hwnd = hwnd;
+    lv.scale = GetDpiForWindow(hwnd) / 96.0f;
+    if (lv.scale <= 0) lv.scale = 1;
+    Set_MenuLayout(s, lv);
+    int w = (int)std::ceil(lv.wDip * lv.scale), h = (int)std::ceil(lv.hDip * lv.scale);
+    RECT wa = Set_MenuWorkArea(parent ? POINT{parent->right, parent->top + rowTopPx} : at);
+    int x = at.x, y = at.y;
+    if (parent) {
+        int overlap = (int)kSetMenuOverlap;
+        x = parent->right - overlap;
+        if (x + w > wa.right) x = parent->left - w + overlap;
+        y = parent->top + rowTopPx - (int)(kSetMenuPad * lv.scale);
+        if (y + h > wa.bottom) y = wa.bottom - h;
+    } else {
+        if (x + w > wa.right) x = at.x - w;
+        if (y + h > wa.bottom) y = at.y - h;
+    }
+    x = std::clamp<int>(x, wa.left, std::max<int>(wa.left, wa.right - w));
+    y = std::clamp<int>(y, wa.top, std::max<int>(wa.top, wa.bottom - h));
+    Set_MenuBackdrop(hwnd);
+    SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+        D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+        96 * lv.scale, 96 * lv.scale);
+    s.d2d->CreateHwndRenderTarget(props, D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU((UINT32)w, (UINT32)h)),
+                                  lv.rt.put());
+    return (bool)lv.rt;
+}
+
+static void Set_MenuOpenSub(size_t level, int item, bool keyboard) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || level >= s->levels.size()) return;
+    SetMenuLevel& parent = *s->levels[level];
+    const SetMenuItem& m = (*parent.items)[(size_t)item];
+    if (m.sub.empty() || m.disabled) return;
+    Set_MenuCloseFrom(level + 1);
+    auto lv = std::make_unique<SetMenuLevel>();
+    lv->items = &m.sub;
+    RECT pr{};
+    GetWindowRect(parent.hwnd, &pr);
+    SetMenuLevel* raw = lv.get();
+    s->levels.push_back(std::move(lv));
+    parent.open = item;
+    if (!Set_MenuCreateWindow(*s, *raw, POINT{pr.right, pr.top}, &pr, (int)(parent.top[(size_t)item] * parent.scale))) {
+        Set_MenuCloseFrom(level + 1);
+        return;
+    }
+    if (keyboard) raw->hover = Set_MenuNext(*raw, -1, +1);
+    ShowWindow(raw->hwnd, SW_SHOWNOACTIVATE);
+    Set_MenuInvalidate();
+}
+
+static void Set_MenuActivate(size_t level, int item, bool keyboard) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || level >= s->levels.size()) return;
+    const SetMenuItem& m = (*s->levels[level]->items)[(size_t)item];
+    if (!Set_MenuSelectable(m)) return;
+    if (!m.sub.empty()) Set_MenuOpenSub(level, item, keyboard);
+    else Set_MenuFinish(m.id);
+}
+
+static void Set_MenuHoverChanged(size_t level, int item) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s) return;
+    SetMenuLevel& lv = *s->levels[level];
+    HWND root = s->levels[0]->hwnd;
+    KillTimer(root, kSetMenuTimerSub);
+    s->pendingItem = -1;
+    bool wantsSub = item >= 0 && Set_MenuSelectable((*lv.items)[(size_t)item]) && !(*lv.items)[(size_t)item].sub.empty();
+    if (wantsSub && lv.open != item) {
+        s->pendingLevel = (int)level;
+        s->pendingItem = item;
+        SetTimer(root, kSetMenuTimerSub, kSetMenuSubDelayMs, nullptr);
+    } else if (!wantsSub && lv.open != -1 && s->levels.size() > level + 1) {
+        s->pendingLevel = (int)level;
+        s->pendingItem = -1;
+        SetTimer(root, kSetMenuTimerSub, kSetMenuSubDelayMs, nullptr);
+    }
+}
+
+static void Set_MenuKey(WPARAM vk) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || s->levels.empty()) return;
+    size_t li = s->levels.size() - 1;
+    SetMenuLevel& cur = *s->levels[li];
+    const auto& items = *cur.items;
+    switch (vk) {
+        case VK_DOWN: cur.hover = Set_MenuNext(cur, cur.hover, +1); break;
+        case VK_UP: cur.hover = Set_MenuNext(cur, cur.hover, -1); break;
+        case VK_HOME: cur.hover = Set_MenuNext(cur, -1, +1); break;
+        case VK_END: cur.hover = Set_MenuNext(cur, (int)items.size(), -1); break;
+        case VK_RIGHT:
+            if (cur.hover >= 0 && !items[(size_t)cur.hover].sub.empty()) Set_MenuActivate(li, cur.hover, true);
+            break;
+        case VK_LEFT:
+            if (li > 0) Set_MenuCloseFrom(li);
+            break;
+        case VK_RETURN:
+        case VK_SPACE:
+            if (cur.hover >= 0) Set_MenuActivate(li, cur.hover, true);
+            break;
+        case VK_ESCAPE:
+        case VK_MENU:
+            if (li > 0 && vk == VK_ESCAPE) Set_MenuCloseFrom(li);
+            else Set_MenuFinish(0);
+            break;
+        default: return;
+    }
+    Set_MenuInvalidate();
+}
+
+static LRESULT CALLBACK Set_MenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    SetMenuSession* s = Set_MenuCur();
+    int li = Set_MenuIndexOf(hwnd);
+    if (!s || li < 0) return DefWindowProcW(hwnd, msg, wParam, lParam);
+    SetMenuLevel& lv = *s->levels[(size_t)li];
+    switch (msg) {
+        case WM_ERASEBKGND: return 1;
+        case WM_MOUSEACTIVATE: return li == 0 ? MA_ACTIVATE : MA_NOACTIVATE;
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            if (lv.rt) {
+                lv.rt->BeginDraw();
+                Set_MenuPaint(*s, lv);
+                if (lv.rt->EndDraw() == D2DERR_RECREATE_TARGET) {
+                    RECT rc;
+                    GetClientRect(hwnd, &rc);
+                    lv.rt.reset();
+                    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+                        D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96 * lv.scale,
+                        96 * lv.scale);
+                    s->d2d->CreateHwndRenderTarget(
+                        props, D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU((UINT32)rc.right, (UINT32)rc.bottom)),
+                        lv.rt.put());
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                }
+            }
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_MOUSEMOVE: {
+            if (s->pendingLevel > li) {  // The pointer reached a deeper level: keep it open.
+                KillTimer(s->levels[0]->hwnd, kSetMenuTimerSub);
+                s->pendingItem = s->pendingLevel = -1;
+            }
+            TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
+            TrackMouseEvent(&tme);
+            int i = Set_MenuItemAt(lv, (short)LOWORD(lParam) / lv.scale, (short)HIWORD(lParam) / lv.scale);
+            if (i >= 0 && !Set_MenuSelectable((*lv.items)[(size_t)i])) i = -1;
+            if (i != lv.hover) {
+                lv.hover = i;
+                Set_MenuHoverChanged((size_t)li, i);
+                Set_MenuInvalidate();
+            }
+            return 0;
+        }
+        case WM_MOUSELEAVE:
+            if (lv.hover != -1 && lv.open != lv.hover) {
+                lv.hover = -1;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP: {
+            if (!s->pressed) return 0;  // The release of the click that opened the menu.
+            int i = Set_MenuItemAt(lv, (short)LOWORD(lParam) / lv.scale, (short)HIWORD(lParam) / lv.scale);
+            if (i >= 0) Set_MenuActivate((size_t)li, i, false);
+            return 0;
+        }
+        case WM_ACTIVATE:
+            if (li == 0 && LOWORD(wParam) != WA_INACTIVE) s->wasActive = true;
+            if (li == 0 && LOWORD(wParam) == WA_INACTIVE && Set_MenuIndexOf((HWND)lParam) < 0) Set_MenuFinish(0);
+            return 0;
+        case WM_TIMER:
+            if (wParam == kSetMenuTimerSub) {
+                KillTimer(hwnd, kSetMenuTimerSub);
+                int pl = s->pendingLevel, pi = s->pendingItem;
+                s->pendingLevel = s->pendingItem = -1;
+                if (pl >= 0 && (size_t)pl < s->levels.size()) {
+                    if (pi >= 0) Set_MenuOpenSub((size_t)pl, pi, false);
+                    else Set_MenuCloseFrom((size_t)pl + 1);
+                }
+            } else if (wParam == kSetMenuTimerFade) {
+                float t = std::min(1.0f, (GetTickCount64() - s->fadeStart) / (float)kSetMenuFadeMs);
+                s->alpha = 1 - (1 - t) * (1 - t);
+                if (t >= 1) KillTimer(hwnd, kSetMenuTimerFade);
+                Set_MenuInvalidate();
+            } else if (wParam == kSetMenuTimerPoll) {
+                // Click-away when Windows kept the menu out of the foreground: a press outside every level.
+                if (GetForegroundWindow() != s->levels[0]->hwnd &&
+                    ((GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON) | GetAsyncKeyState(VK_MBUTTON)) & 0x8000)) {
+                    POINT pt;
+                    GetCursorPos(&pt);
+                    if (Set_MenuIndexOf(WindowFromPoint(pt)) < 0) Set_MenuFinish(0);
+                }
+            }
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+static int Set_TrayMenu(HWND owner, const std::vector<SetMenuItem>& items, const POINT* at = nullptr) {
+    if (Set_MenuCur()) {  // A second right-click while open closes the first menu.
+        Set_MenuFinish(0);
+        return 0;
+    }
+    if (items.empty()) return 0;
+    POINT pt{};
+    if (at) pt = *at;
+    else GetCursorPos(&pt);
+    SetMenuSession session;
+    if (!Set_MenuFormats(session)) return 0;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       (LPCWSTR)(void*)&Set_MenuProc, &session.inst);
+    // One class per mod, even when several mods share a process.
+    session.cls = L"SeamlessTrayMenu_" + std::to_wstring((unsigned long long)(uintptr_t)(void*)&Set_MenuProc);
+    PCWSTR cls = session.cls.c_str();
+    WNDCLASSEXW wc{sizeof(wc)};
+    wc.hInstance = session.inst;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpfnWndProc = Set_MenuProc;
+    wc.lpszClassName = cls;
+    RegisterClassExW(&wc);
+    session.radius = Set_MenuCornerRadius();
+    Set_MenuCur() = &session;
+    session.levels.push_back(std::make_unique<SetMenuLevel>());
+    SetMenuLevel* root = session.levels[0].get();
+    root->items = &items;
+    if (!Set_MenuCreateWindow(session, *root, pt, nullptr, 0)) {
+        Set_MenuCloseFrom(0);
+        Set_MenuCur() = nullptr;
+        UnregisterClassW(cls, session.inst);
+        return 0;
+    }
+    BOOL animations = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animations, 0);
+    session.alpha = animations ? 0.0f : 1.0f;
+    session.fadeStart = GetTickCount64();
+    if (owner && IsWindow(owner)) SetForegroundWindow(owner);  // Windows' tray rule; lets the menu take the foreground.
+    ShowWindow(root->hwnd, SW_SHOW);
+    if (!SetForegroundWindow(root->hwnd)) {
+        DWORD fg = GetWindowThreadProcessId(GetForegroundWindow(), nullptr), me = GetCurrentThreadId();
+        if (fg && fg != me && AttachThreadInput(me, fg, TRUE)) {
+            SetForegroundWindow(root->hwnd);
+            AttachThreadInput(me, fg, FALSE);
+        }
+    }
+    SetFocus(root->hwnd);
+    if (animations) SetTimer(root->hwnd, kSetMenuTimerFade, 15, nullptr);
+    SetTimer(root->hwnd, kSetMenuTimerPoll, 50, nullptr);
+    MSG m;
+    while (!session.done) {
+        BOOL got = GetMessageW(&m, nullptr, 0, 0);
+        if (got <= 0) {
+            if (got == 0) PostQuitMessage((int)m.wParam);
+            break;
+        }
+        switch (m.message) {
+            case WM_KEYDOWN:
+            case WM_SYSKEYDOWN:
+                Set_MenuKey(m.wParam);
+                continue;
+            case WM_KEYUP:
+            case WM_SYSKEYUP:
+            case WM_CHAR:
+            case WM_SYSCHAR:
+                continue;
+            case WM_LBUTTONDOWN:
+            case WM_RBUTTONDOWN:
+            case WM_MBUTTONDOWN:
+            case WM_NCLBUTTONDOWN:
+            case WM_NCRBUTTONDOWN:
+                if (Set_MenuIndexOf(m.hwnd) < 0) {  // A click on another window of this thread closes the menu.
+                    Set_MenuFinish(0);
+                    continue;
+                }
+                session.pressed = true;
+                break;
+        }
+        TranslateMessage(&m);
+        DispatchMessageW(&m);
+    }
+    int result = session.result;
+    Set_MenuCloseFrom(0);
+    Set_MenuCur() = nullptr;
+    UnregisterClassW(cls, session.inst);
+    if (owner && IsWindow(owner)) PostMessageW(owner, WM_NULL, 0, 0);
+    return result;
+}
+
 static void Set_MakeFormats(SetWindow& w) {
     w.family = Set_ResolveFamily();
     w.iconFamily = Set_FamilyExists(L"Segoe Fluent Icons") ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
@@ -4266,6 +5004,10 @@ static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
             }
             break;
         case SetField::Text:
+            if (wcsncmp(f.key, L"plugin:", 7) == 0) {  // Halo: a plugin's words fill its card.
+                p.box = {row.left + kSetRowPad, mid - h, r, mid + h};
+                break;
+            }
             p.box = {r - Set_FitOr(f, 280), mid - h, r, mid + h};
             break;
         case SetField::Hotkey:
@@ -4285,13 +5027,14 @@ static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
 static bool Set_In(const D2D1_RECT_F& r, float x, float y) { return x >= r.left && x < r.right && y >= r.top && y < r.bottom; }
 
 static D2D1_RECT_F Set_RowRect(const SetWindow& w, const SetItem& it) {
+    if (it.w > 0) return {it.x, it.y, it.x + it.w, it.y + it.h};  // Halo: a column of the plugin grid.
     return {w.contentX, it.y, w.contentX + w.contentW, it.y + it.h};  // Content y (not scrolled).
 }
 
 // Lays out the current page's items for the current width.
 // Halo's About card and link rows grow with their text (the window can be as narrow as 900).
 constexpr PCWSTR kHaloAboutDesc = L"Press a key, type a few letters, press Enter. Apps, files, sums and every plugin.";
-constexpr PCWSTR kHaloAboutMade = L"Made by DavidHiFi. Its search runs on Flow Launcher's plugins.";
+constexpr PCWSTR kHaloAboutMade = L"Made by DavidHiFi. A fast launcher with its own look, built for Windows 11.";
 static std::wstring Halo_AboutVer() {
 #ifdef WH_MOD_VERSION
     return std::wstring(L"Version ") + WH_MOD_VERSION + L"  \u00B7  MIT license  \u00B7  A Windhawk mod";
@@ -4315,10 +5058,149 @@ static float Halo_AboutLayout(SetWindow& w, float* ys) {
 static float Halo_LinkH(SetWindow& w, const std::wstring& sub) {
     return std::max(56.0f, std::ceil(30 + Set_TextH(w.fHint.get(), sub, w.contentW - kSetRowPad - 50) + 10));
 }
+// ---- Halo: the Plugins page cards ----------------------------------------------
+constexpr float kHaloGridMaxW = 1040;  // The grid may use more of a wide window than the rows do.
+constexpr float kHaloCardMinW = 300, kHaloCardGap = 12, kHaloCardPad = 16, kHaloSegW = 84, kHaloSegH = 30;
+static int g_haloView = -1;  // 0 grid, 1 list; read once from the mod's stored state.
+[[clang::no_destroy]] static std::set<std::wstring> g_haloOpen;  // Plugin ids whose card is open.
+static int Halo_View() {
+    if (g_haloView < 0) g_haloView = GetState(StateKey(L"Settings", L"PluginView").c_str(), 0) == 1 ? 1 : 0;
+    return g_haloView;
+}
+static float Halo_LineH(IDWriteTextFormat* f) { return Set_TextH(f, L"Ag", 1000); }
+static D2D1_RECT_F Halo_CardSwitch(const SetWindow& w, const SetItem& it) {
+    D2D1_RECT_F r = Set_RowRect(w, it);
+    float mid = r.top + kHaloCardPad + 10;
+    return {r.right - kHaloCardPad - 40, mid - 11, r.right - kHaloCardPad, mid + 11};
+}
+static float Halo_DescW(const SetItem& it) { return it.w - 38 - kHaloCardPad; }
+// Where an open card's body lines start, from the card's top.
+struct HaloBody { float note, rule, cap, box, hint, btn, end; };
+static HaloBody Halo_Body(float head, float line, bool button) {
+    HaloBody b;
+    b.note = head;
+    b.rule = b.note + line + 12;
+    b.cap = b.rule + 13;
+    b.box = b.cap + line + 4;
+    b.hint = b.box + 40 + 2;
+    b.btn = b.hint + line + 12;
+    b.end = (button ? b.btn + 34 : b.hint + line) + kHaloCardPad;
+    return b;
+}
+// "12 plugins, 9 on", read from the switches as they are now.
+static std::wstring Halo_CountText(const SetWindow& w) {
+    int on = 0, total = 0;
+    for (const auto& f : w.fields)
+        if (f.kind == SetField::Check && wcsncmp(f.key, L"plugin:", 7) == 0) total++, on += f.cur == L"1";
+    if (!total) return L"No plugins yet";
+    return std::to_wstring(total) + (total == 1 ? L" plugin, " : L" plugins, ") + std::to_wstring(on) + L" on";
+}
+// Lays the cards out from y; returns the y under them.
+static float Halo_BuildPlugins(SetWindow& w, float y) {
+    const auto& plugins = ::halobridge::Plugins();
+    const bool grid = Halo_View() == 0;
+    const float nameH = Halo_LineH(w.fLabel.get()), line = Halo_LineH(w.fHint.get());
+    // The toolbar: how many there are, then the grid and list switch on the right.
+    SetItem g;
+    g.type = SetItem::Group;
+    g.text = Halo_CountText(w);
+    g.url = L"halo:count";
+    g.y = y + 6;
+    g.h = 22;
+    w.items.push_back(g);
+    for (int v = 0; v < 2; v++) {
+        SetItem s;
+        s.type = SetItem::Seg;
+        s.aux = v;
+        s.text = v ? L"List" : L"Grid";
+        s.url = v ? L"halo:view:list" : L"halo:view:grid";
+        s.w = kHaloSegW;
+        s.x = w.contentX + w.contentW - (2 - v) * kHaloSegW - (1 - v) * 6;
+        s.y = y;
+        s.h = kHaloSegH;
+        w.items.push_back(s);
+    }
+    y += kHaloSegH + 14;
+    int cols = grid ? std::clamp((int)((w.contentW + kHaloCardGap) / (kHaloCardMinW + kHaloCardGap)), 1, 3) : 1;
+    float colW = (w.contentW - (cols - 1) * kHaloCardGap) / cols;
+    std::vector<float> colY(cols, y);
+    int n = 0;
+    for (size_t k = 0; k < w.fields.size(); k++) {
+        const SetField& f = w.fields[k];
+        if (f.kind != SetField::Check || wcsncmp(f.key, L"plugin:", 7) != 0) continue;
+        std::wstring key = f.key, id = key.substr(7, key.size() - 10);
+        const HaloBridgePlugin* pl = nullptr;
+        for (const auto& p : plugins)
+            if (p.id == id) pl = &p;
+        int c = n++ % cols;  // Round robin: opening a card moves only the cards under it.
+        SetItem card;
+        card.type = SetItem::PlugCard;
+        card.aux = (int)k;
+        card.text = f.group;
+        card.sub = pl ? pl->desc : L"";
+        if (card.sub.empty()) card.sub = L"No description.";
+        if (pl && (!pl->version.empty() || !pl->author.empty()))
+            card.note = (pl->version.empty() ? L"" : L"Version " + pl->version) +
+                        (pl->version.empty() || pl->author.empty() ? L"" : L"  \u00B7  ") +
+                        (pl->author.empty() ? L"" : L"by " + pl->author);
+        card.url = L"halo:fold:" + id;
+        card.x = w.contentX + c * (colW + kHaloCardGap);
+        card.w = colW;
+        card.y = colY[c];
+        bool open = g_haloOpen.count(id) > 0;
+        float top = kHaloCardPad + nameH + 4;
+        if (!open) {
+            card.h = card.head = top + 2 * line + 14;  // Every closed card the same height, so rows line up.
+            w.items.push_back(card);
+        } else {
+            card.head = top + Set_TextH(w.fHint.get(), card.sub, Halo_DescW(card)) + 8;
+            bool button = pl && pl->hasSettings;
+            HaloBody b = Halo_Body(card.head, line, button);
+            card.h = b.end;
+            int ci = (int)w.items.size();
+            w.items.push_back(card);
+            if (k + 1 < w.fields.size()) {
+                SetItem words;
+                words.type = SetItem::Row;
+                words.field = (int)k + 1;  // The "words that call it" field follows its switch.
+                words.card = ci;
+                words.x = card.x;
+                words.w = card.w;
+                words.y = card.y + b.box;
+                words.h = 40;
+                w.items.push_back(words);
+            }
+            if (button) {
+                SetItem btn;
+                btn.type = SetItem::PlugBtn;
+                btn.card = ci;
+                btn.text = L"Open its settings";
+                btn.url = L"halo:plugset:" + id;
+                btn.x = card.x + kHaloCardPad;
+                btn.w = std::min(card.w - 2 * kHaloCardPad, Set_TextW(w.fValue.get(), btn.text) + 56);
+                btn.y = card.y + b.btn;
+                btn.h = 34;
+                w.items.push_back(btn);
+            }
+        }
+        colY[c] += card.h + kHaloCardGap;
+    }
+    float bottom = y;
+    for (float v : colY) bottom = std::max(bottom, v);
+    return bottom;
+}
+static void Set_CommitEdit(SetWindow& w, bool apply);
+// After a fold or a view change: the page is laid out again where it is.
+static void Halo_Relayout() {
+    if (!g_setWin) return;
+    Set_CommitEdit(*g_setWin, true);
+    Set_BuildAndClamp(*g_setWin);
+}
 static void Set_BuildPage(SetWindow& w) {
     w.items.clear();
     const float space = Set_RailSpace(w), avail = w.cw - space;
-    w.contentW = std::clamp(avail - 2 * kSetPadX, 420.0f, kSetMaxW);
+    const float maxW = w.page == kHaloPluginsPage && Halo_View() == 0 ? kHaloGridMaxW : kSetMaxW;
+    w.contentW = std::clamp(avail - 2 * kSetPadX, 420.0f, maxW);
     w.contentX = space + std::max(kSetPadX, (avail - w.contentW) / 2);
     float introH = Set_TextH(w.fIntro.get(), kSetPages[w.page].intro, w.contentW);
     float y = 36 + 36 + 4 + introH + 24;
@@ -4338,6 +5220,7 @@ static void Set_BuildPage(SetWindow& w) {
     for (size_t k = 0; k < w.fields.size(); k++) {
         const SetField& f = w.fields[k];
         if (f.page != w.page) continue;
+        if (wcsncmp(f.key, L"plugin:", 7) == 0) continue;  // Cards, laid out below.
         if (!lastGroup || wcscmp(lastGroup, f.group) != 0) {
             SetItem g;
             g.type = SetItem::Group;
@@ -4359,26 +5242,8 @@ static void Set_BuildPage(SetWindow& w) {
         it.h = std::max(kSetRowMin, 28 + lh + dh);
         y += it.h + kSetRowGap;
         w.items.push_back(it);
-        // A plugin with its own settings window gets a link under its rows.
-        if (f.page == kHaloPluginsPage && wcsncmp(f.key, L"plugin:", 7) == 0) {
-            std::wstring key = f.key;
-            if (key.size() > 3 && key.compare(key.size() - 3, 3, L":kw") == 0) {
-                std::wstring id = key.substr(7, key.size() - 10);
-                for (const auto& p : ::halobridge::Plugins()) {
-                    if (p.id != id || !p.hasSettings) continue;
-                    SetItem link;
-                    link.type = SetItem::Link;
-                    link.y = y;
-                    link.text = L"Its own settings";
-                    link.sub = L"Opens the plugin's own settings window.";
-                    link.h = Halo_LinkH(w, link.sub);
-                    link.url = L"halo:plugset:" + id;
-                    y += link.h + kSetRowGap;
-                    w.items.push_back(link);
-                }
-            }
-        }
     }
+    if (w.page == kHaloPluginsPage) y = Halo_BuildPlugins(w, y);
     if (w.page == kSetAboutPage) {
         auto add = [&](SetItem::Type t, float h, PCWSTR text, PCWSTR sub, PCWSTR url) {
             SetItem it;
@@ -4407,8 +5272,8 @@ static void Set_BuildPage(SetWindow& w) {
         add(SetItem::Link, 56, L"DavidHiFi on GitHub", L"github.com/DavidHiFi", kSetAuthorUrl);
         add(SetItem::Link, 56, L"Ko-fi", L"ko-fi.com/DavidHiFi", kSetKofiUrl);
         group(L"Credits");
-        add(SetItem::Link, 56, L"Built on Flow Launcher", L"Its plugins and search, MIT licence", kSetDittoUrl);
-        add(SetItem::Link, 56, L"Which grew out of Wox", L"The launcher Flow started from", kSetWoxUrl);
+        add(SetItem::Link, 56, L"Plugin code from Flow Launcher", L"Used under the MIT licence", kSetDittoUrl);
+        add(SetItem::Link, 56, L"And from Wox", L"Where that code began, MIT licence", kSetWoxUrl);
         group(L"Project");
         add(SetItem::Link, 56, L"Project page on GitHub", L"github.com/DavidHiFi/davids-windhawk-mods", kSetRepoUrl);
         add(SetItem::Link, 56, L"Report a problem", L"Opens a new issue on GitHub, with the mod's name filled in", kSetBugUrl);
@@ -4956,6 +5821,137 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
 // The title bar is drawn first; everything else is in content DIPs, shifted down by kSetCapH.
 static void Set_PlaceEdit(SetWindow& w);
 
+// The autoscroll anchor, in Seamless Autoscroll's look: a frosted Mocha disc with the 2px blue to
+// mauve ring, an arrow that lights blue the way the page moves, and a mauve centre dot.
+static void Set_DrawAutoScroll(SetPaint& p, SetWindow& w, bool frosted) {
+    if (w.autoA <= 0.003f) return;
+    const float a = w.autoA, s = 0.8f + 0.2f * a, r = kSetAutoR * s, cx = w.autoX, cy = w.autoY;
+    const D2D1_RECT_F disc{cx - r, cy - r, cx + r, cy + r};
+    p.Round(disc, r, mocha::mantle, (frosted ? 0.86f : 1.0f) * a);  // Opaque when nothing blurs under it.
+    p.GradRing(disc, r - 1, a, 2);
+    auto arrow = [&](float dir, bool lit) {
+        SetCom<ID2D1PathGeometry> g;
+        SetCom<ID2D1GeometrySink> k;
+        if (FAILED(g_setD2d->CreatePathGeometry(g.put())) || FAILED(g->Open(k.put()))) return;
+        const float tip = cy + dir * r * 0.62f, foot = cy + dir * r * 0.30f, half = r * 0.22f;
+        k->BeginFigure(D2D1::Point2F(cx, tip), D2D1_FIGURE_BEGIN_FILLED);
+        k->AddLine(D2D1::Point2F(cx + half, foot));
+        k->AddLine(D2D1::Point2F(cx - half, foot));
+        k->EndFigure(D2D1_FIGURE_END_CLOSED);
+        if (SUCCEEDED(k->Close())) p.rt->FillGeometry(g.get(), p.B(lit ? mocha::blue : mocha::overlay1, a));
+    };
+    arrow(-1, w.autoDir < 0);
+    arrow(1, w.autoDir > 0);
+    const float d = 2.5f * s;
+    p.Round({cx - d, cy - d, cx + d, cy + d}, d, mocha::mauve, a);
+}
+
+// ---- Halo: painting the Plugins page cards ---------------------------------------
+// Text that wraps but stops at maxH, with "..." where it is cut.
+static void Halo_TextClamp(SetPaint& p, IDWriteTextFormat* f, const std::wstring& s, const D2D1_RECT_F& r, UINT32 c) {
+    SetCom<IDWriteTextLayout> l;
+    if (!f || s.empty() ||
+        FAILED(g_setDw->CreateTextLayout(s.c_str(), (UINT32)s.size(), f, r.right - r.left, r.bottom - r.top, l.put())))
+        return;
+    SetCom<IDWriteInlineObject> sign;
+    g_setDw->CreateEllipsisTrimmingSign(l.get(), sign.put());
+    DWRITE_TRIMMING t{DWRITE_TRIMMING_GRANULARITY_WORD, 0, 0};
+    l->SetTrimming(&t, sign.get());
+    p.rt->PushAxisAlignedClip(r, D2D1_ANTIALIAS_MODE_ALIASED);
+    p.rt->DrawTextLayout(D2D1::Point2F(r.left, r.top), l.get(), p.B(c));
+    p.rt->PopAxisAlignedClip();
+}
+
+static float Halo_CardGlow(const SetWindow& w, int idx) {
+    float g = Set_GlowOf(w, 3000 + idx);
+    for (size_t i = idx + 1; i < w.items.size() && w.items[i].card == idx; i++) {
+        const SetItem& b = w.items[i];
+        g = std::max(g, b.type == SetItem::Row ? std::max(Set_GlowOf(w, 1000 + b.field), Set_GlowOf(w, 6000 + b.field))
+                                               : Set_GlowOf(w, 3000 + (int)i));
+    }
+    return g;
+}
+
+static void Halo_DrawPlugCard(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
+    D2D1_RECT_F r = Set_RowRect(w, it);
+    float hov = Halo_CardGlow(w, idx);
+    Set_DrawCard(p, r, hov);
+    p.GradFill(r, 10, 0.13f * hov);
+    p.GradRing(r, 10, hov, 1.5f);
+    const SetField* f = it.aux >= 0 && it.aux < (int)w.fields.size() ? &w.fields[it.aux] : nullptr;
+    bool on = f && f->cur == L"1", open = it.h > it.head + 1;
+    const float nameH = Halo_LineH(w.fLabel.get()), line = Halo_LineH(w.fHint.get());
+    float top = r.top + kHaloCardPad;
+    p.Glyph(w.fIconS.get(), open ? 0xE70D : 0xE76C, {r.left + 10, top, r.left + 34, top + nameH},
+            hov > 0.5f ? mocha::text : mocha::overlay2);
+    D2D1_RECT_F sw = Halo_CardSwitch(w, it);
+    p.Text(w.fLabel.get(), it.text, {r.left + 38, top, sw.left - 12, top + nameH + 2}, on ? mocha::text : mocha::overlay1);
+    D2D1_RECT_F desc{r.left + 38, top + nameH + 4, r.left + 38 + Halo_DescW(it), r.top + it.head - (open ? 8 : 14) + 1};
+    Halo_TextClamp(p, w.fHint.get(), it.sub, desc, on ? mocha::subtext0 : mocha::overlay0);
+    // The switch, drawn as the template draws a Check, so it animates the same.
+    if (f) {
+        float kn = w.knob.count(it.aux) ? w.knob.at(it.aux) : (on ? 1.0f : 0.0f);
+        p.Round(sw, 11, mocha::surface1);
+        p.GradFill(sw, 11, kn);
+        float cx = sw.left + 11 + kn * 18, cy = (sw.top + sw.bottom) / 2;
+        p.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 8, 8), p.B(on ? mocha::crust : mocha::text));
+        if (w.kbd && w.focus == it.aux) p.GradRing({sw.left - 3, sw.top - 3, sw.right + 3, sw.bottom + 3}, 14, 1, 2);
+    }
+    if (!open) return;
+    bool button = idx + 1 < (int)w.items.size() &&
+                  std::any_of(w.items.begin() + idx + 1, w.items.end(),
+                              [&](const SetItem& b) { return b.card == idx && b.type == SetItem::PlugBtn; });
+    HaloBody b = Halo_Body(it.head, line, button);
+    float l = r.left + kHaloCardPad, rr = r.right - kHaloCardPad;
+    p.Text(w.fHint.get(), it.note.empty() ? std::wstring(L"No version given") : it.note,
+           {r.left + 38, r.top + b.note, rr, r.top + b.note + line + 2}, mocha::overlay1);
+    p.Fill({l, r.top + b.rule, rr, r.top + b.rule + 1}, mocha::surface1, 0.7f);
+    p.Text(w.fHint.get(), L"Words that call it", {l, r.top + b.cap, rr, r.top + b.cap + line + 2}, mocha::subtext1);
+    p.Text(w.fHint.get(), L"Several words work. * means every search.", {l, r.top + b.hint, rr, r.top + b.hint + line + 2},
+           mocha::overlay1);
+}
+
+// The words box of an open card: the template's Text box, with no row card around it.
+static void Halo_DrawWordsBox(SetPaint& p, SetWindow& w, const SetItem& it) {
+    const SetField& f = w.fields[it.field];
+    int k = it.field;
+    SetParts pt = Set_Parts(f, Set_RowRect(w, it));
+    const D2D1_RECT_F& b = pt.box;
+    bool ed = w.editing == k;
+    Set_DrawBox(p, w, k, b, ed || (w.kbd && w.focus == k));
+    if (!ed)
+        p.Text(w.fValue.get(), f.cur.empty() ? std::wstring(L"None, so it never shows") : f.cur,
+               {b.left + 12, b.top, b.right - 10, b.bottom}, f.cur.empty() ? mocha::overlay0 : mocha::text);
+}
+
+static void Halo_DrawPlugBtn(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
+    D2D1_RECT_F r = Set_RowRect(w, it);
+    float hov = Set_GlowOf(w, 3000 + idx);
+    p.Round(r, 8, kSetBoxFill);
+    p.Edge(r, 8, mocha::overlay0, 0.7f * (1 - hov), 1.25f);
+    p.GradFill(r, 8, 0.13f * hov);
+    p.GradRing(r, 8, hov, 1.75f);
+    p.Glyph(w.fIconS.get(), 0xE713, {r.left + 10, r.top, r.left + 34, r.bottom}, mocha::subtext1);
+    p.Text(w.fValue.get(), it.text, {r.left + 38, r.top, r.right - 10, r.bottom}, mocha::text);
+}
+
+static void Halo_DrawSeg(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
+    D2D1_RECT_F r = Set_RowRect(w, it);
+    bool sel = it.aux == Halo_View();
+    float hov = Set_GlowOf(w, 3000 + idx);
+    if (sel) {
+        p.GradFill(r, 8, 0.9f + 0.1f * hov);
+    } else {
+        p.Round(r, 8, kSetBoxFill);
+        p.Edge(r, 8, mocha::overlay0, 0.7f * (1 - hov), 1.25f);
+        p.GradFill(r, 8, 0.13f * hov);
+    }
+    p.GradRing(r, 8, hov, 1.75f);
+    UINT32 c = sel ? mocha::crust : mocha::subtext1;
+    p.Glyph(w.fIconS.get(), it.aux ? 0xE8FD : 0xF0E2, {r.left + 8, r.top, r.left + 32, r.bottom}, c);
+    p.Text(w.fValue.get(), it.text, {r.left + 34, r.top, r.right - 8, r.bottom}, sel ? mocha::crust : mocha::text);
+}
+
 static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     if (Set_FitBoxes(w)) {
         Set_BuildPage(w);
@@ -5008,10 +6004,24 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
         for (size_t i = 0; i < w.items.size(); i++) {
             const SetItem& it = w.items[i];
             if (it.y + it.h < w.scrollY - 20 || it.y > w.scrollY + viewH + 20) continue;
-            place((int)i + 2, rise);
+            place((it.card >= 0 ? it.card : (int)i) + 2, rise);  // A card's body rises with its card.
             switch (it.type) {
-                case SetItem::Group: Set_DrawGroup(cp, w, it); break;
-                case SetItem::Row: Set_DrawRow(cp, w, it); break;
+                case SetItem::Group:
+                    if (it.url == L"halo:count") {
+                        SetItem live = it;
+                        live.text = Halo_CountText(w);
+                        Set_DrawGroup(cp, w, live);
+                    } else {
+                        Set_DrawGroup(cp, w, it);
+                    }
+                    break;
+                case SetItem::Row:
+                    if (it.card >= 0) Halo_DrawWordsBox(cp, w, it);
+                    else Set_DrawRow(cp, w, it);
+                    break;
+                case SetItem::PlugCard: Halo_DrawPlugCard(cp, w, it, (int)i); break;
+                case SetItem::PlugBtn: Halo_DrawPlugBtn(cp, w, it, (int)i); break;
+                case SetItem::Seg: Halo_DrawSeg(cp, w, it, (int)i); break;
                 case SetItem::Banner: Set_DrawBanner(cp, w, it); break;
                 case SetItem::About: Set_DrawAbout(cp, w, it, (int)i); break;
                 case SetItem::Link: Set_DrawLinkRow(cp, w, it, (int)i); break;
@@ -5072,6 +6082,16 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
                 D2D1_RECT_F src{d.left - 1, d.top - 1, d.right + 1, d.bottom + 1};
                 dc->DrawImage(blur.get(), D2D1::Point2F(src.left, src.top), src);
                 rt->PopLayer();
+                if (w.autoA > 0.003f) {  // The autoscroll disc frosts the rows under it the same way.
+                    const float r = kSetAutoR * (0.8f + 0.2f * w.autoA), cx = w.autoX, cy = w.autoY + kSetCapH;
+                    SetCom<ID2D1EllipseGeometry> disc;
+                    if (SUCCEEDED(g_setD2d->CreateEllipseGeometry(D2D1::Ellipse(D2D1::Point2F(cx, cy), r, r), disc.put()))) {
+                        rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), disc.get()), nullptr);
+                        D2D1_RECT_F ds{cx - r - 1, cy - r - 1, cx + r + 1, cy + r + 1};
+                        dc->DrawImage(blur.get(), D2D1::Point2F(ds.left, ds.top), ds);
+                        rt->PopLayer();
+                    }
+                }
                 blurred = true;
             }
         }
@@ -5085,6 +6105,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     Set_DrawFooter(p, w);
     Set_DrawRail(p, w);
     Set_DrawPopup(p, w);
+    Set_DrawAutoScroll(p, w, blurred);
     rt->SetTransform(D2D1::Matrix3x2F::Identity());
     if (false) p.GradRing({0, 0, w.cw, w.ch + kSetCapH}, SystemCornerRadius(false), 1, 1);
     HRESULT hr = rt->EndDraw();
@@ -5158,11 +6179,20 @@ static SetHit Set_Hit(SetWindow& w, float x, float y) {
         return h;
     }
     float cy = y + w.scrollY;
-    for (size_t i = 0; i < w.items.size(); i++) {
+    for (size_t i = w.items.size(); i-- > 0;) {  // Last first: a card's body sits on top of its card.
         const SetItem& it = w.items[i];
         D2D1_RECT_F row = Set_RowRect(w, it);
         if (!Set_In(row, x, cy)) continue;
-        if (it.type == SetItem::Link) {
+        if (it.type == SetItem::PlugCard) {
+            h.id = 3000 + (int)i;  // The whole card lights; its top folds it, its switch turns it on or off.
+            if (it.aux >= 0 && Set_In(Halo_CardSwitch(w, it), x, cy)) {
+                h.kind = SetHit::Control;
+                h.a = it.aux;
+            } else if (cy < it.y + it.head) {
+                h.kind = SetHit::Link;
+                h.a = (int)i;
+            }
+        } else if (it.type == SetItem::Link || it.type == SetItem::PlugBtn || it.type == SetItem::Seg) {
             h.kind = SetHit::Link;
             h.a = (int)i;
             h.id = 3000 + (int)i;
@@ -5441,13 +6471,26 @@ static void Set_GoPage(SetWindow& w, int page) {
 }
 
 static void Set_OpenLink(PCWSTR url) {
-    if (wcsncmp(url, L"halo:plugset:", 13) == 0) {
+    std::wstring u = url;  // url can point into an item, and the page is laid out again below.
+    if (u.rfind(L"halo:plugset:", 0) == 0) {
         // The engine opens the plugin's own settings window; let it come to the front.
         AllowSetForegroundWindow(ASFW_ANY);
-        ::halobridge::SendLine({L"plugsettings", url + 13});
+        ::halobridge::SendLine({L"plugsettings", u.substr(13)});
         return;
     }
-    ShellExecuteW(nullptr, L"open", url, nullptr, nullptr, SW_SHOWNORMAL);
+    if (u.rfind(L"halo:fold:", 0) == 0) {
+        std::wstring id = u.substr(10);
+        if (!g_haloOpen.erase(id)) g_haloOpen.insert(id);
+        Halo_Relayout();
+        return;
+    }
+    if (u.rfind(L"halo:view:", 0) == 0) {
+        g_haloView = u.substr(10) == L"list" ? 1 : 0;
+        SetState(StateKey(L"Settings", L"PluginView").c_str(), g_haloView);
+        Halo_Relayout();
+        return;
+    }
+    ShellExecuteW(nullptr, L"open", u.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
 // A click (or Space or Enter) on a field's control.
@@ -5638,6 +6681,8 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
     if (!finished && timedOut) {
         Set_SetStatus(w, L"Windhawk didn't answer", true);
     } else if (code == 0) {
+        for (auto& f : w.fields)
+            if (!wcschr(f.key, L':')) f.value = Set_FieldValue(f);  // Stored now, so a reload reads them.
         Set_LoadFields(w);  // Shows what was stored.
         Set_ApplyFrame(w);  // The title bar and glass switches take effect now, no reopen.
         Set_SetStatus(w, L"Saved");
@@ -5648,6 +6693,55 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
         Set_SetStatus(w, text, true);
     }
 #endif
+}
+
+// ---- Middle-click autoscroll (every settings window, 2026-11-16) ----------------------
+// Press the middle button and move: the page scrolls, faster the farther the pointer is from
+// where it started. Press and release without moving: it keeps going until the next click, a
+// key or the wheel. Press, move and release: it stops on release. Browser behaviour.
+
+static bool Set_AutoScrollStart(SetWindow& w, float x, float y) {
+    if (w.render || w.contentH - Set_ViewH(w) <= 0) return false;  // Nothing to scroll.
+    Set_CommitEdit(w, true);
+    Set_ClosePopup(w);
+    w.autoScroll = true;
+    w.autoMoved = false;
+    w.autoX = x, w.autoY = y, w.autoDir = 0;
+    w.hover = SetHit();
+    SetCapture(w.hwnd);
+    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+    Set_Invalidate(w);
+    return true;
+}
+
+static void Set_AutoScrollStop(SetWindow& w) {
+    if (!w.autoScroll) return;
+    w.autoScroll = false;  // Before ReleaseCapture: its WM_CAPTURECHANGED comes straight back here.
+    w.autoDir = 0;
+    if (GetCapture() == w.hwnd) ReleaseCapture();
+    Set_Invalidate(w);
+}
+
+// The pointer moved while autoscrolling: keep the scroll cursor, and note a drag with the button held.
+static void Set_AutoScrollMove(SetWindow& w, bool held) {
+    if (held && fabsf(w.mouseY - w.autoY) > kSetAutoDead) w.autoMoved = true;
+    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+}
+
+// One timer tick of autoscroll. True when something on screen changed.
+static bool Set_AutoScrollStep(SetWindow& w) {
+    if (!w.autoScroll) return false;
+    const float dy = w.mouseY - w.autoY, dist = fabsf(dy) - kSetAutoDead;
+    const float dir = dist > 0 ? (dy > 0 ? 1.0f : -1.0f) : 0.0f;
+    bool changed = dir != w.autoDir;
+    w.autoDir = dir;
+    if (dist <= 0) return changed;
+    const float maxScroll = std::max(0.0f, w.contentH - Set_ViewH(w));
+    const float next = std::clamp(w.scrollY + dir * std::min(kSetAutoMax, dist * kSetAutoGain), 0.0f, maxScroll);
+    if (next == w.scrollY) return changed;
+    w.scrollY = w.scrollTarget = next;
+    Set_PlaceEdit(w);
+    return true;
 }
 
 // ---- Animation tick ----------------------------------------------------------------
@@ -5685,6 +6779,8 @@ static bool Set_Tick(SetWindow& w) {
         if (!w.knob.count((int)k)) w.knob[(int)k] = target;
         step(w.knob[(int)k], target, 0.35f);
     }
+    if (Set_AutoScrollStep(w)) moved = true;
+    step(w.autoA, w.autoScroll ? 1.0f : 0.0f, 0.3f);
     if (w.scrollY != w.scrollTarget) {
         float d = w.scrollTarget - w.scrollY;
         if (!anim || fabsf(d) < 0.5f) {
@@ -5724,6 +6820,7 @@ static std::vector<int> Set_FocusOrder(const SetWindow& w) {
     std::vector<int> order;
     for (auto& it : w.items)
         if (it.type == SetItem::Row) order.push_back(it.field);
+        else if (it.type == SetItem::PlugCard) order.push_back(it.aux);  // Halo: Tab reaches a card's switch.
     order.push_back(-1);
     order.push_back(-2);
     order.push_back(-3);
@@ -6018,6 +7115,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_ACTIVATE:
             w->active = LOWORD(wParam) != WA_INACTIVE;
+            if (!w->active) Set_AutoScrollStop(*w);
             Set_Invalidate(*w);
             break;
         case WM_ERASEBKGND:
@@ -6088,6 +7186,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             }
             w->mouseX = x;
             w->mouseY = y;
+            if (w->autoScroll) {
+                Set_AutoScrollMove(*w, (wParam & MK_MBUTTON) != 0);
+                return 0;
+            }
             if (w->dragRail) {
                 Set_RailDragTo(*w, x - w->dragOff);
                 return 0;
@@ -6119,7 +7221,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             POINT pointer; GetCursorPos(&pointer);
             w->tracking = false;
             w->hover = SetHit();
-            if (!w->dragRail) w->mouseX = w->mouseY = -1;
+            if (!w->dragRail && !w->autoScroll) w->mouseX = w->mouseY = -1;
             Set_Invalidate(*w);
             return 0;
         }
@@ -6134,6 +7236,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             break;
         case WM_LBUTTONDOWN: {
             if (w->saving) return 0;
+            if (w->autoScroll) {  // A click ends autoscroll and does nothing else.
+                Set_AutoScrollStop(*w);
+                return 0;
+            }
             if (!w->render) SetFocus(hwnd);
             w->kbd = false;
             float x = dipX(lParam), y = dipY(lParam);
@@ -6196,6 +7302,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_LBUTTONUP:
         case WM_CAPTURECHANGED:
+            if (msg == WM_CAPTURECHANGED && w->autoScroll && (HWND)lParam != hwnd) Set_AutoScrollStop(*w);
             if (w->capDown) {
                 int b = w->capDown - 1;
                 w->capDown = 0;
@@ -6219,7 +7326,23 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 Set_Invalidate(*w);
             }
             return 0;
+        case WM_MBUTTONDOWN:
+            if (w->saving) return 0;
+            if (w->autoScroll) Set_AutoScrollStop(*w);  // Toggle mode: the next middle click ends it.
+            else Set_AutoScrollStart(*w, dipX(lParam), dipY(lParam));
+            return 0;
+        case WM_MBUTTONUP:
+            if (w->autoScroll && w->autoMoved) Set_AutoScrollStop(*w);  // Held and dragged: stop on release.
+            return 0;
+        case WM_RBUTTONDOWN:
+        case WM_XBUTTONDOWN:
+            if (w->autoScroll) {
+                Set_AutoScrollStop(*w);
+                return msg == WM_XBUTTONDOWN ? TRUE : 0;
+            }
+            break;
         case WM_MOUSEWHEEL: {
+            Set_AutoScrollStop(*w);
             if (w->openSel >= 0 && Set_In(w->dropRect, w->mouseX, w->mouseY)) {
                 int n = (int)w->fields[w->openSel].options.size(), vis = Set_DropVisible(*w);
                 int step = GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? -3 : 3;
@@ -6241,6 +7364,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
+            if (w->autoScroll) {  // Any key ends autoscroll; Escape does nothing else.
+                Set_AutoScrollStop(*w);
+                if (wParam == VK_ESCAPE) return 0;
+            }
             if (Set_OnKey(*w, (UINT)wParam)) return 0;
             // Without a system menu (glass title bar) Windows no longer turns Alt+F4 into a close.
             if (msg == WM_SYSKEYDOWN && wParam == VK_F4 && w->recording < 0) {
@@ -6268,6 +7395,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             return 0;
         case WM_DESTROY: {
             Set_StopRecording(*w);
+            RemovePropW(hwnd, kSetAutoProp);
             if (w->timer) KillTimer(hwnd, kSetTimerId);
             if (!w->render && w->normalRect.right > w->normalRect.left) {
                 const RECT& r = w->normalRect;
@@ -6389,6 +7517,7 @@ static bool Set_Create(bool render) {
         return false;
     }
     w->hwnd = hwnd;
+    SetPropW(hwnd, kSetAutoProp, (HANDLE)1);  // Seamless Autoscroll leaves this window to Set_AutoScroll*.
     w->dpi = g_setForceDpi ? g_setForceDpi : GetDpiForWindow(hwnd);
     ApplyDarkWindow(hwnd);
     COLORREF caption = RefFromRgb(mocha::crust), captionText = RefFromRgb(mocha::text);
@@ -6494,5 +7623,13 @@ void CloseSettingsWindow() {
  g_settingsStop=true;
  if(HWND hwnd=g_settingsWnd) PostMessageW(hwnd,WM_CLOSE,0,0);
  if(g_settingsThread) { WaitForSingleObject(g_settingsThread,15000); CloseHandle(g_settingsThread); g_settingsThread=nullptr; }
+}
+
+// The tray menu: the engine's own menu (Set_TrayMenu). Ids match the tray code's enum.
+int ShowTrayMenu(HWND owner, const POINT* at) {
+    return Set_TrayMenu(owner, {Set_MenuRow(1, L"", L"Open Halo Launcher"),
+                                Set_MenuRow(2, L"", L"Settings"),
+                                Set_MenuSep(),
+                                Set_MenuRow(3, L"", L"Restart its search engine")}, at);
 }
 }  // namespace haloset

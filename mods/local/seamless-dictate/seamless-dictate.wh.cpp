@@ -6,7 +6,7 @@
 // @description     Press a shortcut, speak, and your words are typed where the cursor is, in any app: transcribed and cleaned up by AI in your style (natural, professional, prompt) or translated, with a free key (Groq, Gemini, Mistral and more). It also polishes text you typed and reads selected text aloud
 // @description:pt-BR Aperte um atalho, fale, e suas palavras são digitadas onde está o cursor, em qualquer app: transcritas e limpas por IA no seu estilo (natural, profissional, prompt) ou traduzidas, com uma chave grátis (Groq, Gemini, Mistral e outros). Também pole o texto que você digitou e lê em voz alta o texto selecionado
 // @description:es Pulsa un atajo, habla y tus palabras se escriben donde está el cursor, en cualquier app: transcritas y limpiadas por IA en tu estilo (natural, profesional, prompt) o traducidas, con una clave gratis (Groq, Gemini, Mistral y más). También pule el texto que escribiste y lee en voz alta el texto seleccionado
-// @version         1.3.5
+// @version         1.3.6
 // @author          DavidHiFi, caliberda
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -11109,58 +11109,73 @@ void DrawMark(ID2D1RenderTarget* target,
 
 // FlowVoice's icon (its simplified art at small sizes), drawn with Direct2D:
 // the tray's, and the settings window's.
-HICON MakeMarkIcon(int size) {
-    BITMAPINFO bmi{};
-    bmi.bmiHeader.biSize = sizeof(bmi.bmiHeader);
-    bmi.bmiHeader.biWidth = size;
-    bmi.bmiHeader.biHeight = -size;
-    bmi.bmiHeader.biPlanes = 1;
-    bmi.bmiHeader.biBitCount = 32;
-    bmi.bmiHeader.biCompression = BI_RGB;
+// A rounded square in the blue to mauve gradient with the microphone glyph, the same tray badge
+// the other Seamless mods wear. Drawn with GDI so the tray never shares the settings window's
+// Direct2D factories.
+HICON MakeWindowIcon(int size) {
+    if (size < 16) size = 16;
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = size;
+    bi.bmiHeader.biHeight = -size;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
     void* bits = nullptr;
-    HBITMAP color = CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
-    HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
-    HDC dc = CreateCompatibleDC(nullptr);
-    if (!color || !mask || !dc) {
+    void* glyphBits = nullptr;
+    HDC screen = GetDC(nullptr);
+    HBITMAP color = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    HBITMAP glyph = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &glyphBits, nullptr, 0);
+    ReleaseDC(nullptr, screen);
+    if (!color || !glyph) {
         if (color) DeleteObject(color);
-        if (mask) DeleteObject(mask);
-        if (dc) DeleteDC(dc);
+        if (glyph) DeleteObject(glyph);
         return nullptr;
     }
-    const HGDIOBJ old = SelectObject(dc, color);
-    bool drawn = false;
-    ComPtr<ID2D1Factory> factory;
-    ComPtr<ID2D1DCRenderTarget> target;
-    const D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
-        D2D1_RENDER_TARGET_TYPE_DEFAULT,
-        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96, 96);
-    const RECT rect{0, 0, size, size};
-    if (SUCCEEDED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, factory.GetAddressOf())) &&
-        SUCCEEDED(factory->CreateDCRenderTarget(&props, target.GetAddressOf())) &&
-        SUCCEEDED(target->BindDC(dc, &rect))) {
-        target->BeginDraw();
-        target->Clear(D2D1::ColorF(0, 0));
-        const bool small = size <= 28;
-        DrawMark(target.Get(), {0, 0}, (float)size, small, Rgba(small ? 0xD7FF3F : 0xEBFF8F),
-                 Rgba(small ? 0xD7FF3F : 0xB9E01F));
-        drawn = SUCCEEDED(target->EndDraw());
-    }
+    HDC dc = CreateCompatibleDC(nullptr);
+    HGDIOBJ old = SelectObject(dc, glyph);
+    memset(glyphBits, 0, (size_t)size * size * 4);
+    HFONT font = CreateFontW(-(int)(size * 0.66f), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0,
+                             ANTIALIASED_QUALITY, 0, L"Segoe Fluent Icons");
+    HGDIOBJ oldFont = SelectObject(dc, font);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(255, 255, 255));
+    RECT r{0, 0, size, size};
+    WCHAR g[2] = {(WCHAR)0xE720, 0};  // Microphone.
+    DrawTextW(dc, g, 1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    GdiFlush();
+    SelectObject(dc, oldFont);
+    DeleteObject(font);
     SelectObject(dc, old);
     DeleteDC(dc);
-    // Icons take straight (not premultiplied) alpha.
-    auto* pixels = (BYTE*)bits;
-    for (int i = 0; i < size * size; i++) {
-        BYTE* px = pixels + i * 4;
-        if (px[3] && px[3] < 255) {
-            for (int c = 0; c < 3; c++) {
-                px[c] = (BYTE)std::min(255, px[c] * 255 / px[3]);
+
+    const float c0[3] = {0x89 / 255.f, 0xB4 / 255.f, 0xFA / 255.f};
+    const float c1[3] = {0xCB / 255.f, 0xA6 / 255.f, 0xF7 / 255.f};
+    const float ink[3] = {0x11 / 255.f, 0x11 / 255.f, 0x1B / 255.f};
+    float radius = size * 0.26f, half = size / 2.0f;
+    uint32_t* px = (uint32_t*)bits;
+    const uint32_t* gp = (const uint32_t*)glyphBits;
+    for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++) {
+            float qx = std::fabs(x + 0.5f - half) - (half - radius), qy = std::fabs(y + 0.5f - half) - (half - radius);
+            float ox = std::max(qx, 0.0f), oy = std::max(qy, 0.0f);
+            float d = std::sqrt(ox * ox + oy * oy) + std::min(std::max(qx, qy), 0.0f) - radius;
+            float a = std::clamp(0.5f - d, 0.0f, 1.0f);
+            float t = std::clamp((x + y) / (2.0f * (size - 1)), 0.0f, 1.0f);
+            float cov = ((gp[y * size + x] >> 8) & 0xFF) / 255.0f;
+            float rgb[3];
+            for (int i = 0; i < 3; i++) {
+                float base = c0[i] + (c1[i] - c0[i]) * t;
+                rgb[i] = (base + (ink[i] - base) * cov) * a;
             }
+            px[y * size + x] = ((uint32_t)(a * 255 + 0.5f) << 24) | ((uint32_t)(rgb[0] * 255 + 0.5f) << 16) |
+                               ((uint32_t)(rgb[1] * 255 + 0.5f) << 8) | (uint32_t)(rgb[2] * 255 + 0.5f);
         }
-    }
+    HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
     ICONINFO info{TRUE, 0, 0, mask, color};
-    HICON icon = drawn ? CreateIconIndirect(&info) : nullptr;
-    DeleteObject(color);
+    HICON icon = CreateIconIndirect(&info);
     DeleteObject(mask);
+    DeleteObject(color);
+    DeleteObject(glyph);
     return icon;
 }
 
@@ -14432,7 +14447,7 @@ class SettingsWindow {
 };
 
 // The UI thread's settings window.
-SettingsWindow* g_settingsUi;
+SettingsWindow* g_settingsUi;  // (Legacy window, no longer created; kept for its WndProc.)
 
 void SettingsWindow::Open(Page page) {
     // This window keeps only the Home and Styles lists. Providers, speech, shortcuts, the look,
@@ -14527,8 +14542,8 @@ void SettingsWindow::Open(Page page) {
     g_settingsWnd = m_hwnd;
     m_dpi = GetDpiForWindow(m_hwnd);
     // FlowVoice's mark in the title bar and on the taskbar.
-    m_icons[0] = MakeMarkIcon(GetSystemMetricsForDpi(SM_CXSMICON, m_dpi));
-    m_icons[1] = MakeMarkIcon(GetSystemMetricsForDpi(SM_CXICON, m_dpi));
+    m_icons[0] = MakeWindowIcon(GetSystemMetricsForDpi(SM_CXSMICON, m_dpi));
+    m_icons[1] = MakeWindowIcon(GetSystemMetricsForDpi(SM_CXICON, m_dpi));
     SendMessage(m_hwnd, WM_SETICON, ICON_SMALL, (LPARAM)m_icons[0]);
     SendMessage(m_hwnd, WM_SETICON, ICON_BIG, (LPARAM)m_icons[1]);
     LoadTheme();
@@ -19424,6 +19439,47 @@ class SetCom {
     explicit operator bool() const { return p != nullptr; }
 };
 
+// One row of a tray menu (Set_TrayMenu). Every mod's tray menu is a list of these.
+struct SetMenuItem {
+    int id = 0;                    // What Set_TrayMenu returns when this row is picked.
+    std::wstring glyph;            // FiraCode Nerd Font glyph for the leading column.
+    std::wstring label;
+    std::wstring hint;             // Grey text on the right, such as a hotkey.
+    bool checked = false;          // Accent check mark on the right.
+    bool separator = false;
+    bool disabled = false;
+    std::vector<SetMenuItem> sub;  // A submenu, drawn by the same renderer.
+};
+
+// One open level of a tray menu: its own popup window and Direct2D target.
+struct SetMenuLevel {
+    const std::vector<SetMenuItem>* items = nullptr;
+    HWND hwnd = nullptr;
+    SetCom<ID2D1HwndRenderTarget> rt;
+    float scale = 1, wDip = 0, hDip = 0, itemH = 30, hintW = 0;
+    std::vector<float> top, height;  // Per row, DIPs inside the window.
+    int hover = -1;                  // Highlighted row.
+    int open = -1;                   // Row whose submenu is the next level.
+};
+
+// A running tray menu. It owns its factories, so it runs on whatever thread owns the tray icon.
+struct SetMenuSession {
+    SetCom<ID2D1Factory> d2d;
+    SetCom<IDWriteFactory> dw;
+    SetCom<IDWriteTextFormat> fText, fHint, fGlyph, fGlyphS;
+    std::vector<std::unique_ptr<SetMenuLevel>> levels;
+    HINSTANCE inst = nullptr;
+    std::wstring cls;
+    float radius = 8;
+    int result = 0;
+    bool done = false;
+    bool pressed = false;  // A button went down inside the menu; only then does a release pick a row.
+    bool wasActive = false;
+    float alpha = 1;
+    ULONGLONG fadeStart = 0;
+    int pendingLevel = -1, pendingItem = -1;  // Hover timer: open (item >= 0) or close a submenu after a delay.
+};
+
 struct SetField {
     enum Kind { Choice, Number, Text, Hotkey, Check, Color };
     Kind kind;
@@ -19487,7 +19543,12 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"windowGlass", L"Glass in the older editor windows", L"The style and history windows get Windows 11's acrylic behind them too.", L"1", {}, 0, 100, 4, L"Recording bar"},
 {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 4, L"Settings window"},
 {K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 4, L"Settings window"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"A Dictate icon in the system tray. Click it to open these settings, right-click it for a menu. Turned off, the settings can only be opened from Windhawk.", L"1", {}, 0, 100, 4, L"Settings window"}
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"A Dictate icon in the system tray. Click it to open these settings, right-click it for a menu. Turned off, the settings can only be opened from Windhawk.", L"1", {}, 0, 100, 4, L"Settings window"},
+{K::Text, L"dict.styleName", L"Style name", L"", L"", {}, 0, 100, -1, L"Edit style"},
+{K::Text, L"dict.styleDesc", L"Description (optional)", L"", L"", {}, 0, 100, -1, L"Edit style"},
+{K::Text, L"dict.stylePrompt", L"Instruction for the AI", L"", L"", {}, 0, 100, -1, L"Edit style"},
+{K::Text, L"dict.newTerm", L"Add a dictionary term", L"", L"", {}, 0, 100, -1, L"Dictionary"},
+{K::Text, L"dict.ruleApp", L"App name (for example outlook or slack)", L"", L"", {}, 0, 100, -1, L"Add a rule"}
     };
 }
 
@@ -19495,11 +19556,11 @@ struct SetListLink {
     int page;
     PCWSTR group, text, sub, url;
 };
-// The lists are edited in Dictate's older window; these rows open it. Providers and the setup
-// are pages of this window (Dict_BuildPage).
+// The lists and the history are pages of this window now (Dict_BuildPage). Providers and the
+// setup are pages of this window too.
 static const SetListLink kSetListLinks[] = {
-    {0, L"Lists, edited in the older window", L"Custom styles, dictionary and app styles", L"Opens the editor for your own styles, spellings and per-app styles", L"dictate:page:1"},
-    {0, L"Lists, edited in the older window", L"History and redo", L"Opens this session's dictations, to copy or redo one", L"dictate:page:0"},
+    {0, L"Lists and history", L"Custom styles, dictionary and app styles", L"Your own styles, spellings and per-app rules, on the Lists page", L"dictate:page:goto:6"},
+    {0, L"Lists and history", L"History and redo", L"This session's dictations, to copy or redo one, on the History page", L"dictate:page:goto:7"},
 };
 
 struct SetPageInfo {
@@ -19513,6 +19574,8 @@ static const SetPageInfo kSetPages[] = {
 {L"Providers", L"The cloud services that transcribe and rewrite: keys, models and the order they are tried in.", 0xE753},
 {L"Look", L"Language, colors, the recording bar, and this window.", 0xE790},
 {L"Setup", L"The first steps in one place: connect a provider, say who you are, pick your shortcut, test it.", 0xE7C1},
+{L"Lists", L"Your own styles, dictionary words and per-app rules.", 0xE8A5},
+{L"History", L"This session's dictations: read one again, copy it or redo it.", 0xE81C},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
@@ -19535,6 +19598,8 @@ constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
 constexpr UINT_PTR kSetTimerId = 1;
+constexpr float kSetAutoDead = 10, kSetAutoR = 18, kSetAutoGain = 0.14f, kSetAutoMax = 56;
+constexpr PCWSTR kSetAutoProp = L"SeamlessOwnAutoscroll";  // Seamless Autoscroll skips this window.
 constexpr PCWSTR kSetKofiUrl = L"https://ko-fi.com/DavidHiFi";
 constexpr PCWSTR kSetAuthorUrl = L"https://github.com/DavidHiFi";
 constexpr PCWSTR kSetDittoUrl = L"https://windhawk.net/mods/ai-voice-typing";
@@ -19546,6 +19611,8 @@ constexpr PCWSTR kSetTitle = L"Seamless Dictate";
 // The self-drawn title bar. Everything below it is laid out as before, in "content" DIPs.
 static float kSetCapH = 40;
 constexpr float kSetCapBtnW = 46, kSetHoverMs = 120;
+constexpr float kSetMenuPad = 6, kSetMenuIconW = 22, kSetMenuSepH = 9, kSetMenuOverlap = 3, kSetMenuMinW = 190, kSetMenuMaxW = 640, kSetMenuBorderW = 2;
+constexpr UINT kSetMenuSubDelayMs = 200, kSetMenuFadeMs = 90, kSetMenuTimerSub = 0x5E71, kSetMenuTimerFade = 0x5E72, kSetMenuTimerPoll = 0x5E73;
 
 struct SetItem {
     enum Type { Group, Row, Banner, About, Link, Support } type = Row;
@@ -19570,7 +19637,7 @@ static int Dict_ApplyConfig(struct SetWindow& w);
 static bool Dict_FormatHotkey(const struct SetWindow& w, int field, UINT mods, UINT vk, std::wstring& text, std::wstring& why);
 static void Dict_RecordingStarted();
 static void Dict_RecordingStopped();
-static void Dict_OpenLegacy(PCWSTR url);
+static void Dict_PageAction(PCWSTR url);
 constexpr UINT WM_APP_DICT_REFRESH = WM_APP + 20;  // After a click or a key: rebuild the provider pages if needed.
 static void Dict_BuildPage(struct SetWindow& w, float& y);
 static WCHAR Dict_LinkGlyph(const std::wstring& url);
@@ -19602,6 +19669,8 @@ struct SetWindow {
     int dragSlider = -1;
     bool dragScroll = false, tracking = false, timer = false;
     float dragOff = 0;
+    bool autoScroll = false, autoMoved = false;
+    float autoX = 0, autoY = 0, autoA = 0, autoDir = 0;
     // Sidebar dock: railW is the chosen open width, railCur the drawn width (eased toward
     // kSetRailMini when collapsed). railGlow / footGlow ease the dock borders on hover.
     float railW = kSetRailDef, railCur = kSetRailDef, railGlow = 0, footGlow = 0;
@@ -19745,6 +19814,579 @@ static SetCom<IDWriteTextFormat> Set_Fmt(const std::wstring& family, float size,
 }
 
 // std::wstring(L"FiraCode Nerd Font") at 500; emphasis is one step heavier, never past bold.
+static float Set_MenuCornerRadius() {
+    float radius = 8.0f;
+    HKEY key;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Windhawk\\Engine\\Mods\\custom-corner-radius", 0,
+                      KEY_READ | KEY_WOW64_64KEY, &key) == ERROR_SUCCESS) {
+        DWORD disabled = 0, size = sizeof(disabled);
+        bool off = RegQueryValueExW(key, L"Disabled", nullptr, nullptr, (BYTE*)&disabled, &size) == ERROR_SUCCESS && disabled;
+        DWORD value = 0;
+        size = sizeof(value);
+        if (!off && RegGetValueW(key, L"Settings", L"radius", RRF_RT_REG_DWORD, nullptr, &value, &size) == ERROR_SUCCESS &&
+            value > 0 && value <= 64)
+            radius = (float)value;
+        RegCloseKey(key);
+    }
+    return radius;
+}
+
+static SetMenuItem Set_MenuRow(int id, PCWSTR glyph, PCWSTR label, bool checked = false, bool disabled = false,
+                               PCWSTR hint = L"") {
+    SetMenuItem m;
+    m.id = id;
+    m.glyph = glyph ? glyph : L"";
+    m.label = label ? label : L"";
+    m.hint = hint ? hint : L"";
+    m.checked = checked;
+    m.disabled = disabled;
+    return m;
+}
+
+static SetMenuItem Set_MenuSub(PCWSTR glyph, PCWSTR label, std::vector<SetMenuItem> sub, bool disabled = false) {
+    SetMenuItem m = Set_MenuRow(0, glyph, label, false, disabled);
+    m.sub = std::move(sub);
+    return m;
+}
+
+static SetMenuItem Set_MenuSep() {
+    SetMenuItem m;
+    m.separator = true;
+    return m;
+}
+
+static SetMenuSession*& Set_MenuCur() {
+    static thread_local SetMenuSession* session = nullptr;  // One menu per thread; History menus run on the settings thread.
+    return session;
+}
+
+static bool Set_MenuSelectable(const SetMenuItem& m) { return !m.separator && !m.disabled; }
+
+static float Set_MenuTextW(SetMenuSession& s, IDWriteTextFormat* f, const std::wstring& text) {
+    SetCom<IDWriteTextLayout> layout;
+    DWRITE_TEXT_METRICS m{};
+    if (text.empty() || !f || FAILED(s.dw->CreateTextLayout(text.c_str(), (UINT32)text.size(), f, 10000, 1000, layout.put())) ||
+        FAILED(layout->GetMetrics(&m)))
+        return 0;
+    return m.widthIncludingTrailingWhitespace;
+}
+
+static bool Set_MenuFormats(SetMenuSession& s) {
+    if (!s.d2d && FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory), nullptr,
+                                           (void**)s.d2d.put())))
+        return false;
+    if (!s.dw && FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)s.dw.put())))
+        return false;
+    std::wstring family = L"Segoe UI";
+    SetCom<IDWriteFontCollection> sys;
+    if (SUCCEEDED(s.dw->GetSystemFontCollection(sys.put(), FALSE))) {
+        for (PCWSTR face : {L"FiraCode Nerd Font", L"FiraCodeNerdFont", L"FiraCode Nerd Font Mono"}) {
+            UINT32 index = 0;
+            BOOL exists = FALSE;
+            if (SUCCEEDED(sys->FindFamilyName(face, &index, &exists)) && exists) {
+                family = face;
+                break;
+            }
+        }
+    }
+    auto make = [&](float size, DWRITE_TEXT_ALIGNMENT align, SetCom<IDWriteTextFormat>& out) {
+        if (FAILED(s.dw->CreateTextFormat(family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+                                          DWRITE_FONT_STRETCH_NORMAL, size, L"en-us", out.put())))
+            return false;
+        out->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        out->SetTextAlignment(align);
+        out->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        // Only a label wider than the widest menu (kSetMenuMaxW) is ever shortened, with an ellipsis.
+        DWRITE_TRIMMING trim{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+        SetCom<IDWriteInlineObject> sign;
+        if (SUCCEEDED(s.dw->CreateEllipsisTrimmingSign(out.get(), sign.put()))) out->SetTrimming(&trim, sign.get());
+        return true;
+    };
+    return make(13.5f, DWRITE_TEXT_ALIGNMENT_LEADING, s.fText) && make(12.5f, DWRITE_TEXT_ALIGNMENT_TRAILING, s.fHint) &&
+           make(15, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyph) && make(12, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyphS);
+}
+
+static void Set_MenuLayout(SetMenuSession& s, SetMenuLevel& lv) {
+    const auto& items = *lv.items;
+    lv.itemH = 30;
+    lv.top.assign(items.size(), 0);
+    lv.height.assign(items.size(), 0);
+    float textW = 0, hintW = 0, y = kSetMenuPad;
+    for (size_t i = 0; i < items.size(); i++) {
+        lv.top[i] = y;
+        lv.height[i] = items[i].separator ? kSetMenuSepH : lv.itemH;
+        y += lv.height[i];
+        if (items[i].separator) continue;
+        textW = std::max(textW, Set_MenuTextW(s, s.fText.get(), items[i].label));
+        hintW = std::max(hintW, Set_MenuTextW(s, s.fHint.get(), items[i].hint));
+    }
+    lv.hintW = std::ceil(hintW);
+    float w = kSetMenuPad * 2 + 8 + kSetMenuIconW + 10 + std::ceil(textW) + 2 + (hintW > 0 ? 24 + lv.hintW : 0) + 10 + 20 + 8;
+    lv.wDip = std::ceil(std::clamp(w, kSetMenuMinW, kSetMenuMaxW));
+    lv.hDip = std::ceil(y + kSetMenuPad);
+}
+
+static int Set_MenuItemAt(const SetMenuLevel& lv, float x, float y) {
+    if (x < kSetMenuPad || x >= lv.wDip - kSetMenuPad) return -1;
+    for (size_t i = 0; i < lv.top.size(); i++)
+        if (y >= lv.top[i] && y < lv.top[i] + lv.height[i]) return (*lv.items)[i].separator ? -1 : (int)i;
+    return -1;
+}
+
+static int Set_MenuNext(const SetMenuLevel& lv, int from, int dir) {
+    int n = (int)lv.items->size();
+    if (!n) return -1;
+    int i = from < 0 ? (dir > 0 ? -1 : n) : from;
+    for (int k = 0; k < n; k++) {
+        i = ((i + dir) % n + n) % n;
+        if (Set_MenuSelectable((*lv.items)[(size_t)i])) return i;
+    }
+    return -1;
+}
+
+static void Set_MenuPaint(SetMenuSession& s, SetMenuLevel& lv) {
+    ID2D1RenderTarget* rt = lv.rt.get();
+    SetCom<ID2D1SolidColorBrush> brush;
+    if (FAILED(rt->CreateSolidColorBrush(D2DColor(mocha::text), brush.put()))) return;
+    auto solid = [&](UINT32 rgb, float a) {
+        brush->SetColor(D2DColor(rgb, a));
+        return brush.get();
+    };
+    auto gradient = [&](D2D1_POINT_2F a, D2D1_POINT_2F b, D2D1_COLOR_F c1, D2D1_COLOR_F c2) {
+        SetCom<ID2D1LinearGradientBrush> g;
+        D2D1_GRADIENT_STOP stops[2] = {{0, c1}, {1, c2}};
+        SetCom<ID2D1GradientStopCollection> coll;
+        if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())))
+            rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(a, b), coll.get(), g.put());
+        return g;
+    };
+    // Blue to mauve at 45 degrees across a rect, like Seamless Borders.
+    auto accent = [&](const D2D1_RECT_F& r, float a) {
+        float d = ((r.right - r.left) + (r.bottom - r.top)) / 2;
+        return gradient({r.left, r.top}, {r.left + d, r.top + d}, D2DColor(mocha::blue, a), D2DColor(mocha::mauve, a));
+    };
+    const float w = lv.wDip, h = lv.hDip;
+    rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+    SetCom<ID2D1Layer> layer;
+    bool faded = s.alpha < 0.999f && SUCCEEDED(rt->CreateLayer(nullptr, layer.put()));
+    if (faded)
+        rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                            D2D1::IdentityMatrix(), std::max(0.0f, s.alpha)),
+                      layer.get());
+    // Dark Mocha over the acrylic blur; DWM rounds the window.
+    auto tint = gradient({0, 0}, {0, h}, D2DColor(mocha::base, 0.80f), D2DColor(mocha::base, 0.84f));
+    if (tint) rt->FillRectangle({0, 0, w, h}, tint.get());
+    const auto& items = *lv.items;
+    const float slotRight = w - kSetMenuPad - 8, slotLeft = slotRight - 20;
+    for (size_t i = 0; i < items.size(); i++) {
+        const SetMenuItem& m = items[i];
+        D2D1_RECT_F r{kSetMenuPad, lv.top[i], w - kSetMenuPad, lv.top[i] + lv.height[i]};
+        if (m.separator) {
+            float y = std::floor((r.top + r.bottom) / 2);
+            rt->FillRectangle({r.left + 8, y, r.right - 8, y + 1}, solid(mocha::surface1, 0.8f));
+            continue;
+        }
+        bool hot = ((int)i == lv.hover || (int)i == lv.open) && !m.disabled;
+        if (hot) {
+            // The hover look of every card: a faint blue to mauve wash and a 1 px gradient ring.
+            float rad = 8, ringW = 1;
+            D2D1_ROUNDED_RECT rr{{r.left + ringW / 2, r.top + ringW / 2, r.right - ringW / 2, r.bottom - ringW / 2}, rad, rad};
+            auto fill = gradient({r.left, r.top}, {r.right, r.bottom}, D2DColor(mocha::blue, 0.16f), D2DColor(mocha::mauve, 0.16f));
+            if (fill) rt->FillRoundedRectangle(rr, fill.get());
+            auto ring = accent(r, 0.8f);
+            if (ring) rt->DrawRoundedRectangle(rr, ring.get(), ringW);
+        }
+        UINT32 col = m.disabled ? mocha::overlay0 : mocha::text;
+        if (!m.glyph.empty())
+            rt->DrawText(m.glyph.c_str(), (UINT32)m.glyph.size(), s.fGlyph.get(),
+                         {r.left + 8, r.top, r.left + 8 + kSetMenuIconW, r.bottom}, solid(col, 1));
+        float textX = r.left + 8 + kSetMenuIconW + 10;
+        float hintRight = slotLeft - 10, hintLeft = hintRight - lv.hintW;
+        float textRight = lv.hintW > 0 ? hintLeft - 12 : slotLeft - 4;
+        if (!m.label.empty())
+            rt->DrawText(m.label.c_str(), (UINT32)m.label.size(), s.fText.get(), {textX, r.top, textRight, r.bottom},
+                         solid(col, 1));
+        if (!m.hint.empty())
+            rt->DrawText(m.hint.c_str(), (UINT32)m.hint.size(), s.fHint.get(), {hintLeft, r.top, hintRight, r.bottom},
+                         solid(m.disabled ? mocha::overlay0 : mocha::subtext0, 1));
+        if (!m.sub.empty()) {
+            rt->DrawText(L"", 1, s.fGlyphS.get(), {slotLeft, r.top, slotRight, r.bottom}, solid(col, 1));  // chevron_right
+        } else if (m.checked) {
+            rt->DrawText(L"", 1, s.fGlyph.get(), {slotLeft, r.top, slotRight, r.bottom},  // check
+                         solid(m.disabled ? mocha::overlay0 : mocha::blue, 1));
+        }
+    }
+    // The edge on DWM's real corner curve: 2 px, blue to mauve, inset half the stroke.
+    const float bw = kSetMenuBorderW;
+    D2D1_RECT_F edge{bw / 2, bw / 2, w - bw / 2, h - bw / 2};
+    auto border = accent({0, 0, w, h}, 1);
+    float r2 = std::max(0.0f, s.radius - bw / 2);
+    if (border) rt->DrawRoundedRectangle({edge, r2, r2}, border.get(), bw);
+    if (faded) rt->PopLayer();
+}
+
+static int Set_MenuIndexOf(HWND hwnd) {
+    if (SetMenuSession* s = Set_MenuCur())
+        for (size_t i = 0; i < s->levels.size(); i++)
+            if (s->levels[i]->hwnd == hwnd) return (int)i;
+    return -1;
+}
+
+static void Set_MenuInvalidate() {
+    if (SetMenuSession* s = Set_MenuCur())
+        for (auto& lv : s->levels)
+            if (lv->hwnd) InvalidateRect(lv->hwnd, nullptr, FALSE);
+}
+
+static void Set_MenuCloseFrom(size_t n) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s) return;
+    while (s->levels.size() > n) {
+        HWND h = s->levels.back()->hwnd;
+        s->levels.back()->rt.reset();
+        s->levels.pop_back();
+        if (h) DestroyWindow(h);
+    }
+    if (n > 0 && !s->levels.empty()) s->levels.back()->open = -1;
+    Set_MenuInvalidate();
+}
+
+static void Set_MenuFinish(int id) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || s->done) return;
+    s->result = id;
+    s->done = true;
+}
+
+static void Set_MenuBackdrop(HWND hwnd) {
+    BOOL dark = TRUE;
+    DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+    int corner = 2;  // DWMWCP_ROUND
+    DwmSetWindowAttribute(hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &corner, sizeof(corner));
+    COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE: the menu draws its own edge.
+    DwmSetWindowAttribute(hwnd, 34 /* DWMWA_BORDER_COLOR */, &none, sizeof(none));
+    DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+    int backdrop = 1;  // DWMSBT_NONE
+    DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+    DWM_BLURBEHIND bb{};
+    bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+    bb.fEnable = TRUE;
+    bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+    DwmEnableBlurBehindWindow(hwnd, &bb);
+    if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+    struct SetAccentPolicy { int state, flags, abgr, animation; };
+    struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
+    if (auto setComposition =
+            (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute")) {
+        SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};
+        SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+        setComposition(hwnd, &data);
+    }
+}
+
+static RECT Set_MenuWorkArea(POINT pt) {
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST), &mi);
+    return mi.rcWork;
+}
+
+static bool Set_MenuCreateWindow(SetMenuSession& s, SetMenuLevel& lv, POINT at, const RECT* parent, int rowTopPx) {
+    DWORD ex = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | (parent ? WS_EX_NOACTIVATE : 0);
+    HWND hwnd = CreateWindowExW(ex, s.cls.c_str(), L"", WS_POPUP, at.x, at.y, 1, 1, nullptr, nullptr, s.inst, nullptr);
+    if (!hwnd) return false;
+    lv.hwnd = hwnd;
+    lv.scale = GetDpiForWindow(hwnd) / 96.0f;
+    if (lv.scale <= 0) lv.scale = 1;
+    Set_MenuLayout(s, lv);
+    int w = (int)std::ceil(lv.wDip * lv.scale), h = (int)std::ceil(lv.hDip * lv.scale);
+    RECT wa = Set_MenuWorkArea(parent ? POINT{parent->right, parent->top + rowTopPx} : at);
+    int x = at.x, y = at.y;
+    if (parent) {
+        int overlap = (int)kSetMenuOverlap;
+        x = parent->right - overlap;
+        if (x + w > wa.right) x = parent->left - w + overlap;
+        y = parent->top + rowTopPx - (int)(kSetMenuPad * lv.scale);
+        if (y + h > wa.bottom) y = wa.bottom - h;
+    } else {
+        if (x + w > wa.right) x = at.x - w;
+        if (y + h > wa.bottom) y = at.y - h;
+    }
+    x = std::clamp<int>(x, wa.left, std::max<int>(wa.left, wa.right - w));
+    y = std::clamp<int>(y, wa.top, std::max<int>(wa.top, wa.bottom - h));
+    Set_MenuBackdrop(hwnd);
+    SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+        D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+        96 * lv.scale, 96 * lv.scale);
+    s.d2d->CreateHwndRenderTarget(props, D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU((UINT32)w, (UINT32)h)),
+                                  lv.rt.put());
+    return (bool)lv.rt;
+}
+
+static void Set_MenuOpenSub(size_t level, int item, bool keyboard) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || level >= s->levels.size()) return;
+    SetMenuLevel& parent = *s->levels[level];
+    const SetMenuItem& m = (*parent.items)[(size_t)item];
+    if (m.sub.empty() || m.disabled) return;
+    Set_MenuCloseFrom(level + 1);
+    auto lv = std::make_unique<SetMenuLevel>();
+    lv->items = &m.sub;
+    RECT pr{};
+    GetWindowRect(parent.hwnd, &pr);
+    SetMenuLevel* raw = lv.get();
+    s->levels.push_back(std::move(lv));
+    parent.open = item;
+    if (!Set_MenuCreateWindow(*s, *raw, POINT{pr.right, pr.top}, &pr, (int)(parent.top[(size_t)item] * parent.scale))) {
+        Set_MenuCloseFrom(level + 1);
+        return;
+    }
+    if (keyboard) raw->hover = Set_MenuNext(*raw, -1, +1);
+    ShowWindow(raw->hwnd, SW_SHOWNOACTIVATE);
+    Set_MenuInvalidate();
+}
+
+static void Set_MenuActivate(size_t level, int item, bool keyboard) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || level >= s->levels.size()) return;
+    const SetMenuItem& m = (*s->levels[level]->items)[(size_t)item];
+    if (!Set_MenuSelectable(m)) return;
+    if (!m.sub.empty()) Set_MenuOpenSub(level, item, keyboard);
+    else Set_MenuFinish(m.id);
+}
+
+static void Set_MenuHoverChanged(size_t level, int item) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s) return;
+    SetMenuLevel& lv = *s->levels[level];
+    HWND root = s->levels[0]->hwnd;
+    KillTimer(root, kSetMenuTimerSub);
+    s->pendingItem = -1;
+    bool wantsSub = item >= 0 && Set_MenuSelectable((*lv.items)[(size_t)item]) && !(*lv.items)[(size_t)item].sub.empty();
+    if (wantsSub && lv.open != item) {
+        s->pendingLevel = (int)level;
+        s->pendingItem = item;
+        SetTimer(root, kSetMenuTimerSub, kSetMenuSubDelayMs, nullptr);
+    } else if (!wantsSub && lv.open != -1 && s->levels.size() > level + 1) {
+        s->pendingLevel = (int)level;
+        s->pendingItem = -1;
+        SetTimer(root, kSetMenuTimerSub, kSetMenuSubDelayMs, nullptr);
+    }
+}
+
+static void Set_MenuKey(WPARAM vk) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || s->levels.empty()) return;
+    size_t li = s->levels.size() - 1;
+    SetMenuLevel& cur = *s->levels[li];
+    const auto& items = *cur.items;
+    switch (vk) {
+        case VK_DOWN: cur.hover = Set_MenuNext(cur, cur.hover, +1); break;
+        case VK_UP: cur.hover = Set_MenuNext(cur, cur.hover, -1); break;
+        case VK_HOME: cur.hover = Set_MenuNext(cur, -1, +1); break;
+        case VK_END: cur.hover = Set_MenuNext(cur, (int)items.size(), -1); break;
+        case VK_RIGHT:
+            if (cur.hover >= 0 && !items[(size_t)cur.hover].sub.empty()) Set_MenuActivate(li, cur.hover, true);
+            break;
+        case VK_LEFT:
+            if (li > 0) Set_MenuCloseFrom(li);
+            break;
+        case VK_RETURN:
+        case VK_SPACE:
+            if (cur.hover >= 0) Set_MenuActivate(li, cur.hover, true);
+            break;
+        case VK_ESCAPE:
+        case VK_MENU:
+            if (li > 0 && vk == VK_ESCAPE) Set_MenuCloseFrom(li);
+            else Set_MenuFinish(0);
+            break;
+        default: return;
+    }
+    Set_MenuInvalidate();
+}
+
+static LRESULT CALLBACK Set_MenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    SetMenuSession* s = Set_MenuCur();
+    int li = Set_MenuIndexOf(hwnd);
+    if (!s || li < 0) return DefWindowProcW(hwnd, msg, wParam, lParam);
+    SetMenuLevel& lv = *s->levels[(size_t)li];
+    switch (msg) {
+        case WM_ERASEBKGND: return 1;
+        case WM_MOUSEACTIVATE: return li == 0 ? MA_ACTIVATE : MA_NOACTIVATE;
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            if (lv.rt) {
+                lv.rt->BeginDraw();
+                Set_MenuPaint(*s, lv);
+                if (lv.rt->EndDraw() == D2DERR_RECREATE_TARGET) {
+                    RECT rc;
+                    GetClientRect(hwnd, &rc);
+                    lv.rt.reset();
+                    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+                        D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96 * lv.scale,
+                        96 * lv.scale);
+                    s->d2d->CreateHwndRenderTarget(
+                        props, D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU((UINT32)rc.right, (UINT32)rc.bottom)),
+                        lv.rt.put());
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                }
+            }
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_MOUSEMOVE: {
+            if (s->pendingLevel > li) {  // The pointer reached a deeper level: keep it open.
+                KillTimer(s->levels[0]->hwnd, kSetMenuTimerSub);
+                s->pendingItem = s->pendingLevel = -1;
+            }
+            TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
+            TrackMouseEvent(&tme);
+            int i = Set_MenuItemAt(lv, (short)LOWORD(lParam) / lv.scale, (short)HIWORD(lParam) / lv.scale);
+            if (i >= 0 && !Set_MenuSelectable((*lv.items)[(size_t)i])) i = -1;
+            if (i != lv.hover) {
+                lv.hover = i;
+                Set_MenuHoverChanged((size_t)li, i);
+                Set_MenuInvalidate();
+            }
+            return 0;
+        }
+        case WM_MOUSELEAVE:
+            if (lv.hover != -1 && lv.open != lv.hover) {
+                lv.hover = -1;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP: {
+            if (!s->pressed) return 0;  // The release of the click that opened the menu.
+            int i = Set_MenuItemAt(lv, (short)LOWORD(lParam) / lv.scale, (short)HIWORD(lParam) / lv.scale);
+            if (i >= 0) Set_MenuActivate((size_t)li, i, false);
+            return 0;
+        }
+        case WM_ACTIVATE:
+            if (li == 0 && LOWORD(wParam) != WA_INACTIVE) s->wasActive = true;
+            if (li == 0 && LOWORD(wParam) == WA_INACTIVE && Set_MenuIndexOf((HWND)lParam) < 0) Set_MenuFinish(0);
+            return 0;
+        case WM_TIMER:
+            if (wParam == kSetMenuTimerSub) {
+                KillTimer(hwnd, kSetMenuTimerSub);
+                int pl = s->pendingLevel, pi = s->pendingItem;
+                s->pendingLevel = s->pendingItem = -1;
+                if (pl >= 0 && (size_t)pl < s->levels.size()) {
+                    if (pi >= 0) Set_MenuOpenSub((size_t)pl, pi, false);
+                    else Set_MenuCloseFrom((size_t)pl + 1);
+                }
+            } else if (wParam == kSetMenuTimerFade) {
+                float t = std::min(1.0f, (GetTickCount64() - s->fadeStart) / (float)kSetMenuFadeMs);
+                s->alpha = 1 - (1 - t) * (1 - t);
+                if (t >= 1) KillTimer(hwnd, kSetMenuTimerFade);
+                Set_MenuInvalidate();
+            } else if (wParam == kSetMenuTimerPoll) {
+                // Click-away when Windows kept the menu out of the foreground: a press outside every level.
+                if (GetForegroundWindow() != s->levels[0]->hwnd &&
+                    ((GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON) | GetAsyncKeyState(VK_MBUTTON)) & 0x8000)) {
+                    POINT pt;
+                    GetCursorPos(&pt);
+                    if (Set_MenuIndexOf(WindowFromPoint(pt)) < 0) Set_MenuFinish(0);
+                }
+            }
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+static int Set_TrayMenu(HWND owner, const std::vector<SetMenuItem>& items, const POINT* at = nullptr) {
+    if (Set_MenuCur()) {  // A second right-click while open closes the first menu.
+        Set_MenuFinish(0);
+        return 0;
+    }
+    if (items.empty()) return 0;
+    POINT pt{};
+    if (at) pt = *at;
+    else GetCursorPos(&pt);
+    SetMenuSession session;
+    if (!Set_MenuFormats(session)) return 0;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       (LPCWSTR)(void*)&Set_MenuProc, &session.inst);
+    // One class per mod, even when several mods share a process.
+    session.cls = L"SeamlessTrayMenu_" + std::to_wstring((unsigned long long)(uintptr_t)(void*)&Set_MenuProc);
+    PCWSTR cls = session.cls.c_str();
+    WNDCLASSEXW wc{sizeof(wc)};
+    wc.hInstance = session.inst;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpfnWndProc = Set_MenuProc;
+    wc.lpszClassName = cls;
+    RegisterClassExW(&wc);
+    session.radius = Set_MenuCornerRadius();
+    Set_MenuCur() = &session;
+    session.levels.push_back(std::make_unique<SetMenuLevel>());
+    SetMenuLevel* root = session.levels[0].get();
+    root->items = &items;
+    if (!Set_MenuCreateWindow(session, *root, pt, nullptr, 0)) {
+        Set_MenuCloseFrom(0);
+        Set_MenuCur() = nullptr;
+        UnregisterClassW(cls, session.inst);
+        return 0;
+    }
+    BOOL animations = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animations, 0);
+    session.alpha = animations ? 0.0f : 1.0f;
+    session.fadeStart = GetTickCount64();
+    if (owner && IsWindow(owner)) SetForegroundWindow(owner);  // Windows' tray rule; lets the menu take the foreground.
+    ShowWindow(root->hwnd, SW_SHOW);
+    if (!SetForegroundWindow(root->hwnd)) {
+        DWORD fg = GetWindowThreadProcessId(GetForegroundWindow(), nullptr), me = GetCurrentThreadId();
+        if (fg && fg != me && AttachThreadInput(me, fg, TRUE)) {
+            SetForegroundWindow(root->hwnd);
+            AttachThreadInput(me, fg, FALSE);
+        }
+    }
+    SetFocus(root->hwnd);
+    if (animations) SetTimer(root->hwnd, kSetMenuTimerFade, 15, nullptr);
+    SetTimer(root->hwnd, kSetMenuTimerPoll, 50, nullptr);
+    MSG m;
+    while (!session.done) {
+        BOOL got = GetMessageW(&m, nullptr, 0, 0);
+        if (got <= 0) {
+            if (got == 0) PostQuitMessage((int)m.wParam);
+            break;
+        }
+        switch (m.message) {
+            case WM_KEYDOWN:
+            case WM_SYSKEYDOWN:
+                Set_MenuKey(m.wParam);
+                continue;
+            case WM_KEYUP:
+            case WM_SYSKEYUP:
+            case WM_CHAR:
+            case WM_SYSCHAR:
+                continue;
+            case WM_LBUTTONDOWN:
+            case WM_RBUTTONDOWN:
+            case WM_MBUTTONDOWN:
+            case WM_NCLBUTTONDOWN:
+            case WM_NCRBUTTONDOWN:
+                if (Set_MenuIndexOf(m.hwnd) < 0) {  // A click on another window of this thread closes the menu.
+                    Set_MenuFinish(0);
+                    continue;
+                }
+                session.pressed = true;
+                break;
+        }
+        TranslateMessage(&m);
+        DispatchMessageW(&m);
+    }
+    int result = session.result;
+    Set_MenuCloseFrom(0);
+    Set_MenuCur() = nullptr;
+    UnregisterClassW(cls, session.inst);
+    if (owner && IsWindow(owner)) PostMessageW(owner, WM_NULL, 0, 0);
+    return result;
+}
+
 static void Set_MakeFormats(SetWindow& w) {
     w.family = Set_ResolveFamily();
     w.iconFamily = Set_FamilyExists(L"Segoe Fluent Icons") ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
@@ -20660,6 +21302,29 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
 // The title bar is drawn first; everything else is in content DIPs, shifted down by kSetCapH.
 static void Set_PlaceEdit(SetWindow& w);
 
+static void Set_DrawAutoScroll(SetPaint& p, SetWindow& w, bool frosted) {
+    if (w.autoA <= 0.003f) return;
+    const float a = w.autoA, s = 0.8f + 0.2f * a, r = kSetAutoR * s, cx = w.autoX, cy = w.autoY;
+    const D2D1_RECT_F disc{cx - r, cy - r, cx + r, cy + r};
+    p.Round(disc, r, mocha::mantle, (frosted ? 0.86f : 1.0f) * a);  // Opaque when nothing blurs under it.
+    p.GradRing(disc, r - 1, a, 2);
+    auto arrow = [&](float dir, bool lit) {
+        SetCom<ID2D1PathGeometry> g;
+        SetCom<ID2D1GeometrySink> k;
+        if (FAILED(g_setD2d->CreatePathGeometry(g.put())) || FAILED(g->Open(k.put()))) return;
+        const float tip = cy + dir * r * 0.62f, foot = cy + dir * r * 0.30f, half = r * 0.22f;
+        k->BeginFigure(D2D1::Point2F(cx, tip), D2D1_FIGURE_BEGIN_FILLED);
+        k->AddLine(D2D1::Point2F(cx + half, foot));
+        k->AddLine(D2D1::Point2F(cx - half, foot));
+        k->EndFigure(D2D1_FIGURE_END_CLOSED);
+        if (SUCCEEDED(k->Close())) p.rt->FillGeometry(g.get(), p.B(lit ? mocha::blue : mocha::overlay1, a));
+    };
+    arrow(-1, w.autoDir < 0);
+    arrow(1, w.autoDir > 0);
+    const float d = 2.5f * s;
+    p.Round({cx - d, cy - d, cx + d, cy + d}, d, mocha::mauve, a);
+}
+
 static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     if (Set_FitBoxes(w)) {
         Set_BuildPage(w);
@@ -20776,6 +21441,16 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
                 D2D1_RECT_F src{d.left - 1, d.top - 1, d.right + 1, d.bottom + 1};
                 dc->DrawImage(blur.get(), D2D1::Point2F(src.left, src.top), src);
                 rt->PopLayer();
+                if (w.autoA > 0.003f) {  // The autoscroll disc frosts the rows under it the same way.
+                    const float r = kSetAutoR * (0.8f + 0.2f * w.autoA), cx = w.autoX, cy = w.autoY + kSetCapH;
+                    SetCom<ID2D1EllipseGeometry> disc;
+                    if (SUCCEEDED(g_setD2d->CreateEllipseGeometry(D2D1::Ellipse(D2D1::Point2F(cx, cy), r, r), disc.put()))) {
+                        rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), disc.get()), nullptr);
+                        D2D1_RECT_F ds{cx - r - 1, cy - r - 1, cx + r + 1, cy + r + 1};
+                        dc->DrawImage(blur.get(), D2D1::Point2F(ds.left, ds.top), ds);
+                        rt->PopLayer();
+                    }
+                }
                 blurred = true;
             }
         }
@@ -20789,6 +21464,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     Set_DrawFooter(p, w);
     Set_DrawRail(p, w);
     Set_DrawPopup(p, w);
+    Set_DrawAutoScroll(p, w, blurred);
     rt->SetTransform(D2D1::Matrix3x2F::Identity());
     if (false) p.GradRing({0, 0, w.cw, w.ch + kSetCapH}, SystemCornerRadius(false), 1, 1);
     HRESULT hr = rt->EndDraw();
@@ -21164,7 +21840,7 @@ static void Set_OpenLink(PCWSTR url) {
     Wh_Log(L"settings: would open %s", url);
 #else
     if (wcsncmp(url, L"dictate:page:", 13) == 0) {
-        Dict_OpenLegacy(url);
+        Dict_PageAction(url);
         return;
     }
     ShellExecuteW(nullptr, L"open", url, nullptr, nullptr, SW_SHOWNORMAL);
@@ -21350,6 +22026,48 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
 
 // ---- Animation tick ----------------------------------------------------------------
 
+static bool Set_AutoScrollStart(SetWindow& w, float x, float y) {
+    if (w.render || w.contentH - Set_ViewH(w) <= 0) return false;  // Nothing to scroll.
+    Set_CommitEdit(w, true);
+    Set_ClosePopup(w);
+    w.autoScroll = true;
+    w.autoMoved = false;
+    w.autoX = x, w.autoY = y, w.autoDir = 0;
+    w.hover = SetHit();
+    SetCapture(w.hwnd);
+    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+    Set_Invalidate(w);
+    return true;
+}
+
+static void Set_AutoScrollStop(SetWindow& w) {
+    if (!w.autoScroll) return;
+    w.autoScroll = false;  // Before ReleaseCapture: its WM_CAPTURECHANGED comes straight back here.
+    w.autoDir = 0;
+    if (GetCapture() == w.hwnd) ReleaseCapture();
+    Set_Invalidate(w);
+}
+
+static void Set_AutoScrollMove(SetWindow& w, bool held) {
+    if (held && fabsf(w.mouseY - w.autoY) > kSetAutoDead) w.autoMoved = true;
+    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+}
+
+static bool Set_AutoScrollStep(SetWindow& w) {
+    if (!w.autoScroll) return false;
+    const float dy = w.mouseY - w.autoY, dist = fabsf(dy) - kSetAutoDead;
+    const float dir = dist > 0 ? (dy > 0 ? 1.0f : -1.0f) : 0.0f;
+    bool changed = dir != w.autoDir;
+    w.autoDir = dir;
+    if (dist <= 0) return changed;
+    const float maxScroll = std::max(0.0f, w.contentH - Set_ViewH(w));
+    const float next = std::clamp(w.scrollY + dir * std::min(kSetAutoMax, dist * kSetAutoGain), 0.0f, maxScroll);
+    if (next == w.scrollY) return changed;
+    w.scrollY = w.scrollTarget = next;
+    Set_PlaceEdit(w);
+    return true;
+}
+
 static bool Set_Tick(SetWindow& w) {
     bool moved = false, anim = Set_Anim(w);
     auto step = [&](float& v, float target, float rate) {
@@ -21383,6 +22101,8 @@ static bool Set_Tick(SetWindow& w) {
         if (!w.knob.count((int)k)) w.knob[(int)k] = target;
         step(w.knob[(int)k], target, 0.35f);
     }
+    if (Set_AutoScrollStep(w)) moved = true;
+    step(w.autoA, w.autoScroll ? 1.0f : 0.0f, 0.3f);
     if (w.scrollY != w.scrollTarget) {
         float d = w.scrollTarget - w.scrollY;
         if (!anim || fabsf(d) < 0.5f) {
@@ -21712,6 +22432,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_ACTIVATE:
             w->active = LOWORD(wParam) != WA_INACTIVE;
+            if (!w->active) Set_AutoScrollStop(*w);
             Set_Invalidate(*w);
             break;
         case WM_ERASEBKGND:
@@ -21782,6 +22503,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             }
             w->mouseX = x;
             w->mouseY = y;
+            if (w->autoScroll) {
+                Set_AutoScrollMove(*w, (wParam & MK_MBUTTON) != 0);
+                return 0;
+            }
             if (w->dragRail) {
                 Set_RailDragTo(*w, x - w->dragOff);
                 return 0;
@@ -21813,7 +22538,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             POINT pointer; GetCursorPos(&pointer);
             w->tracking = false;
             w->hover = SetHit();
-            if (!w->dragRail) w->mouseX = w->mouseY = -1;
+            if (!w->dragRail && !w->autoScroll) w->mouseX = w->mouseY = -1;
             Set_Invalidate(*w);
             return 0;
         }
@@ -21828,6 +22553,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             break;
         case WM_LBUTTONDOWN: {
             if (w->saving) return 0;
+            if (w->autoScroll) {  // A click ends autoscroll and does nothing else.
+                Set_AutoScrollStop(*w);
+                return 0;
+            }
             if (!w->render) SetFocus(hwnd);
             w->kbd = false;
             float x = dipX(lParam), y = dipY(lParam);
@@ -21890,6 +22619,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_LBUTTONUP:
         case WM_CAPTURECHANGED:
+            if (msg == WM_CAPTURECHANGED && w->autoScroll && (HWND)lParam != hwnd) Set_AutoScrollStop(*w);
             if (w->capDown) {
                 int b = w->capDown - 1;
                 w->capDown = 0;
@@ -21913,7 +22643,23 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 Set_Invalidate(*w);
             }
             return 0;
+        case WM_MBUTTONDOWN:
+            if (w->saving) return 0;
+            if (w->autoScroll) Set_AutoScrollStop(*w);  // Toggle mode: the next middle click ends it.
+            else Set_AutoScrollStart(*w, dipX(lParam), dipY(lParam));
+            return 0;
+        case WM_MBUTTONUP:
+            if (w->autoScroll && w->autoMoved) Set_AutoScrollStop(*w);  // Held and dragged: stop on release.
+            return 0;
+        case WM_RBUTTONDOWN:
+        case WM_XBUTTONDOWN:
+            if (w->autoScroll) {
+                Set_AutoScrollStop(*w);
+                return msg == WM_XBUTTONDOWN ? TRUE : 0;
+            }
+            break;
         case WM_MOUSEWHEEL: {
+            Set_AutoScrollStop(*w);
             if (w->openSel >= 0 && Set_In(w->dropRect, w->mouseX, w->mouseY)) {
                 int n = (int)w->fields[w->openSel].options.size(), vis = Set_DropVisible(*w);
                 int step = GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? -3 : 3;
@@ -21935,6 +22681,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
+            if (w->autoScroll) {  // Any key ends autoscroll; Escape does nothing else.
+                Set_AutoScrollStop(*w);
+                if (wParam == VK_ESCAPE) return 0;
+            }
             if (Set_OnKey(*w, (UINT)wParam)) return 0;
             // Without a system menu (glass title bar) Windows no longer turns Alt+F4 into a close.
             if (msg == WM_SYSKEYDOWN && wParam == VK_F4 && w->recording < 0) {
@@ -21954,6 +22704,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             return 0;
         case WM_DESTROY: {
             Set_StopRecording(*w);
+            RemovePropW(hwnd, kSetAutoProp);
             if (w->timer) KillTimer(hwnd, kSetTimerId);
             if (!w->render && w->normalRect.right > w->normalRect.left) {
                 const RECT& r = w->normalRect;
@@ -22075,6 +22826,7 @@ static bool Set_Create(bool render) {
         return false;
     }
     w->hwnd = hwnd;
+    SetPropW(hwnd, kSetAutoProp, (HANDLE)1);  // Seamless Autoscroll leaves this window to Set_AutoScroll*.
     w->dpi = g_setForceDpi ? g_setForceDpi : GetDpiForWindow(hwnd);
     ApplyDarkWindow(hwnd);
     COLORREF caption = RefFromRgb(mocha::crust), captionText = RefFromRgb(mocha::text);
@@ -22155,8 +22907,11 @@ static std::deque<std::wstring> g_dictText;  // Option texts the field table poi
 //   key:<id>    "Add a key": what is pasted there is added and tested on Save, then cleared.
 //   model:<id>, stt:<id>, base:custom   the text and voice models, the custom server's address.
 //   order:llm, order:stt   the fallback orders, provider ids comma separated.
-constexpr int kDictProvidersPage = 3, kDictSetupPage = 5;
+constexpr int kDictProvidersPage = 3, kDictSetupPage = 5, kDictListsPage = 6, kDictHistoryPage = 7;
 static std::string g_dictProv;                        // Providers page: the one open ("" = the list).
+static std::wstring g_dictStyleEdit;                  // Lists page: the style being edited ("" = the list, "new" = a new one).
+static long long g_dictHistId = -1;                   // History page: the dictation opened (-1 = the list).
+static int g_dictRuleStyle = 0;                       // Lists page: the style the next per-app rule gets.
 static std::map<std::string, std::wstring> g_dictTests;  // "text:groq": the last test's result.
 static std::map<std::string, bool> g_dictTestOk;
 static std::string g_dictTestKey;                     // The test running now.
@@ -22663,9 +23418,277 @@ static std::wstring Dict_Signature(const SetWindow& w) {
     return sig;
 }
 
+// Clears one of the scratch fields the Lists page edits into (they are never saved as settings).
+static void Dict_ResetField(SetWindow& w, PCWSTR key) {
+    if (int k = Dict_Field(w, key); k >= 0) {
+        w.fields[k].cur.clear();
+        w.fields[k].value.clear();
+    }
+}
+
+// The Lists page: the old editor window's custom styles, dictionary and per-app
+// rules, moved into this window. The edit boxes are scratch fields (page -1, so
+// the engine's field loop never draws them and Save never stores them); the
+// links act at once.
+static void Dict_BuildListsPage(SetWindow& w, float& y) {
+    const ::Config c = ::CurrentConfig();
+    bool first = true;
+    auto group = [&](const std::wstring& text) {
+        SetItem g;
+        g.type = SetItem::Group;
+        g.text = text;
+        y += first ? 0 : 14;
+        first = false;
+        g.y = y;
+        g.h = 22;
+        y += g.h + 6;
+        w.items.push_back(g);
+    };
+    auto banner = [&](const std::wstring& text) {
+        SetItem it;
+        it.type = SetItem::Banner;
+        it.text = text;
+        it.y = y;
+        it.h = Set_TextH(w.fHint.get(), text, w.contentW - 32) + 28;
+        y += it.h + kSetRowGap + 8;
+        w.items.push_back(it);
+    };
+    auto link = [&](const std::wstring& text, const std::wstring& sub, const std::wstring& url) {
+        SetItem it;
+        it.type = SetItem::Link;
+        it.text = text;
+        it.sub = sub;
+        it.url = url;
+        it.y = y;
+        it.h = std::max(56.0f, 30 + Set_TextH(w.fHint.get(), sub, w.contentW - kSetRowPad - 50) + 10);
+        y += it.h + kSetRowGap;
+        first = false;
+        w.items.push_back(it);
+    };
+    auto row = [&](const std::wstring& key) {
+        const int k = Dict_Field(w, key);
+        if (k < 0) return;
+        const SetField& f = w.fields[k];
+        SetItem it;
+        it.type = SetItem::Row;
+        it.field = k;
+        float textW = w.contentW - 2 * kSetRowPad - Set_ControlW(f) - 24;
+        float lh = Set_TextH(w.fLabel.get(), f.label, textW);
+        float dh = f.desc ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
+        it.y = y;
+        it.h = std::max(kSetRowMin, 28 + lh + dh);
+        y += it.h + kSetRowGap;
+        first = false;
+        w.items.push_back(it);
+    };
+
+    group(L"Custom styles");
+    if (g_dictStyleEdit.empty()) {
+        for (const ::StyleView& s : ::AllStyles(c)) {
+            if (s.builtin) continue;
+            const std::wstring sub =
+                s.description.empty() ? std::wstring(L"Tap to edit it or take it out") : s.description;
+            link(L"Edit " + s.name, sub, L"dictate:page:style:edit:" + ::Utf8ToWide(s.id));
+        }
+        if (c.customStyles.size() < kCustomStylesMax) {
+            link(L"New style", L"Adds your own way to rewrite the text", L"dictate:page:style:new");
+        } else {
+            banner(L"That is the most custom styles the mod keeps. Take one out to add another.");
+        }
+    } else {
+        row(L"dict.styleName");
+        row(L"dict.styleDesc");
+        row(L"dict.stylePrompt");
+        link(L"Save the style", L"", L"dictate:page:style:save");
+        if (g_dictStyleEdit != L"new") {
+            link(L"Delete this style", L"", L"dictate:page:style:delete:" + g_dictStyleEdit);
+        }
+        link(L"Cancel", L"Back to the style list", L"dictate:page:style:cancel");
+    }
+
+    group(L"Dictionary");
+    banner(L"Names, brands and technical terms written your way (used only by the AI).");
+    for (size_t i = 0; i < c.dictionary.size(); i++) {
+        link(L"Remove " + ::Utf8ToWide(c.dictionary[i]), L"Tap to take this word out",
+             L"dictate:page:dict:rm:" + std::to_wstring(i));
+    }
+    row(L"dict.newTerm");
+    link(L"Add the term", L"", L"dictate:page:dict:add");
+
+    group(L"Styles per app");
+    link(c.appStylesEnabled ? L"Use a style per app: on" : L"Use a style per app: off",
+         L"Dictating into one of these apps uses its style instead of the active one. Tap to switch.",
+         L"dictate:page:rule:toggle");
+    const std::vector<::StyleView> styles = ::AllStyles(c);
+    auto styleName = [&](const std::string& id) {
+        for (const ::StyleView& s : styles) {
+            if (s.id == id) return s.name;
+        }
+        return std::wstring(L"?");
+    };
+    for (size_t i = 0; i < c.appStyles.size(); i++) {
+        link(::FriendlyAppName(::Utf8ToWide(c.appStyles[i].app)) + L" \u00B7 " +
+                 styleName(c.appStyles[i].style),
+             L"Tap to switch the style it uses", L"dictate:page:rule:cycle:" + std::to_wstring(i));
+    }
+    for (size_t i = 0; i < c.appStyles.size(); i++) {
+        link(L"Remove the rule for " + ::FriendlyAppName(::Utf8ToWide(c.appStyles[i].app)), L"",
+             L"dictate:page:rule:rm:" + std::to_wstring(i));
+    }
+    if (c.appStylesEnabled) {
+        row(L"dict.ruleApp");
+        link(L"Add the rule (it uses the active style)", L"", L"dictate:page:rule:add");
+        // The apps dictated into lately, one tap away.
+        std::vector<std::wstring> recent;
+        for (const ::HistoryItem& item : ::HistorySnapshot()) {
+            const std::wstring id = item.appId;
+            if (!id.empty() && std::find(recent.begin(), recent.end(), id) == recent.end() &&
+                std::none_of(c.appStyles.begin(), c.appStyles.end(),
+                             [&](const ::AppRule& r) { return ::Utf8ToWide(r.app) == id; })) {
+                recent.push_back(id);
+            }
+        }
+        for (size_t i = 0; i < recent.size() && i < 8; i++) {
+            link(L"+ " + ::FriendlyAppName(recent[i]), L"Adds a rule for this app with the active style",
+                 L"dictate:page:rule:add:" + recent[i]);
+        }
+    }
+}
+
+// The History page: this session's dictations, the old window's Home list moved
+// in here. Tap one to open it, then copy it, redo it or delete it.
+static void Dict_BuildHistoryPage(SetWindow& w, float& y) {
+    const ::Config c = ::CurrentConfig();
+    const std::vector<::HistoryItem> history = ::HistorySnapshot();
+    bool first = true;
+    auto group = [&](const std::wstring& text) {
+        SetItem g;
+        g.type = SetItem::Group;
+        g.text = text;
+        y += first ? 0 : 14;
+        first = false;
+        g.y = y;
+        g.h = 22;
+        y += g.h + 6;
+        w.items.push_back(g);
+    };
+    auto banner = [&](const std::wstring& text) {
+        SetItem it;
+        it.type = SetItem::Banner;
+        it.text = text;
+        it.y = y;
+        it.h = Set_TextH(w.fHint.get(), text, w.contentW - 32) + 28;
+        y += it.h + kSetRowGap + 8;
+        w.items.push_back(it);
+    };
+    auto link = [&](const std::wstring& text, const std::wstring& sub, const std::wstring& url) {
+        SetItem it;
+        it.type = SetItem::Link;
+        it.text = text;
+        it.sub = sub;
+        it.url = url;
+        it.y = y;
+        it.h = std::max(56.0f, 30 + Set_TextH(w.fHint.get(), sub, w.contentW - kSetRowPad - 50) + 10);
+        y += it.h + kSetRowGap;
+        first = false;
+        w.items.push_back(it);
+    };
+
+    if (!c.historyEnabled) {
+        group(L"History");
+        banner(L"The history is off. Turn it on with \"Keep a history\" on the Dictation page.");
+        return;
+    }
+    ::SYSTEMTIME now;
+    ::GetLocalTime(&now);
+    int today = 0;
+    unsigned words = 0;
+    float spoken = 0;
+    for (const ::HistoryItem& item : history) {
+        if (!item.failed && item.time.wYear == now.wYear && item.time.wMonth == now.wMonth &&
+            item.time.wDay == now.wDay) {
+            today++;
+            words += item.words;
+            spoken += item.seconds;
+        }
+    }
+    const int saved = std::max(0, (int)std::lround(words / 40.0f - spoken / 60.0f));
+    group(L"Today");
+    banner(L"Today: " + std::to_wstring(today) + (today == 1 ? L" dictation, " : L" dictations, ") +
+           std::to_wstring(words) + L" words, about " + std::to_wstring(saved) +
+           L" min of typing saved.");
+
+    if (g_dictHistId >= 0) {
+        const ::HistoryItem* open = nullptr;
+        for (const ::HistoryItem& item : history) {
+            if ((long long)item.id == g_dictHistId) {
+                open = &item;
+                break;
+            }
+        }
+        if (open) {
+            const ::HistoryItem& item = *open;
+            group(L"The dictation");
+            banner(item.text.empty() ? item.error : item.text);
+            if (!item.failed) {
+                link(L"Copy the text", L"Puts it on the clipboard",
+                     L"dictate:page:hist:copy:" + std::to_wstring(item.id));
+                link(L"Redo it", L"Runs the original recording through the same style and language again",
+                     L"dictate:page:hist:redo:" + std::to_wstring(item.id) + L":" +
+                         ::Utf8ToWide(item.styleId));
+            } else if (::FailedState(item.id)) {
+                link(L"Try again", L"", L"dictate:page:hist:retry:" + std::to_wstring(item.id));
+            }
+            link(L"Delete it", L"", L"dictate:page:hist:delete:" + std::to_wstring(item.id));
+            group(L"Redo in another style");
+            for (const ::StyleView& s : ::AllStyles(c)) {
+                link(L"Redo in " + s.name, s.description,
+                     L"dictate:page:hist:redo:" + std::to_wstring(item.id) + L":" + ::Utf8ToWide(s.id));
+            }
+            link(L"Back to the history", L"", L"dictate:page:hist:back");
+            return;
+        }
+        g_dictHistId = -1;
+    }
+    group(L"This session");
+    link(L"Clear the history", L"Forgets every dictation from this session",
+         L"dictate:page:hist:clear");
+    if (history.empty()) {
+        banner(L"Nothing yet. Dictate and it shows up here.");
+        return;
+    }
+    for (auto it = history.rbegin(); it != history.rend(); ++it) {
+        const ::HistoryItem& item = *it;
+        std::wstring meta = ::RelativeTime(item.time) + L"  \u00B7  ";
+        if (item.command) {
+            meta += ::T(L"Command", L"Comando");
+        } else if (!item.target.empty()) {
+            meta += ::LanguageName(item.target);
+        } else {
+            meta += ::StyleLabel(c, item.styleId);
+        }
+        if (!item.appName.empty()) {
+            meta += L"  \u00B7  " + item.appName;
+        }
+        std::wstring snippet = item.failed ? (std::wstring(L"Failed: ") + item.error) : item.text;
+        if (snippet.size() > 240) {
+            snippet = snippet.substr(0, 240) + L"\u2026";
+        }
+        link(meta, snippet, L"dictate:page:hist:open:" + std::to_wstring(item.id));
+    }
+}
+
 static void Dict_BuildPage(SetWindow& w, float& y) {
     if (w.page != kDictProvidersPage) g_dictProv.clear();
     g_dictSig = Dict_Signature(w);
+    if (w.page == kDictListsPage) {
+        Dict_BuildListsPage(w, y);
+        return;
+    }
+    if (w.page == kDictHistoryPage) {
+        Dict_BuildHistoryPage(w, y);
+        return;
+    }
     if (w.page != kDictProvidersPage && w.page != kDictSetupPage) return;
     bool first = true;
     auto group = [&](const std::wstring& text) {
@@ -22889,19 +23912,44 @@ static void Dict_Refresh(SetWindow& w) {
         Set_BuildAndClamp(w);
 }
 
-// "dictate:page:N" opens Dictate's older editor window on page N (the lists). The other
-// "dictate:page:" links act in this window: prov:<id>, back, goto:<page>, up:<llm|stt>:<id>,
-// rm:<id>:<n>, test:<text|voice>:<id>.
-static void Dict_OpenLegacy(PCWSTR url) {
-    const std::wstring rest = url + wcslen(L"dictate:page:");
-    if (!rest.empty() && iswdigit(rest[0])) {
-        if (HWND overlay = ::g_overlayWnd) PostMessageW(overlay, ::WM_APP_LEGACY_PAGE, (WPARAM)_wtoi(rest.c_str()), 0);
+// The redo of one dictation: the same background job the history card starts.
+static void Dict_StartRedo(UINT64 id, const std::string& styleId, const std::string& target) {
+    AcquireSRWLockExclusive(&g_redoLock);
+    if (g_redoRunning) {
+        ReleaseSRWLockExclusive(&g_redoLock);
         return;
     }
+    g_redoId = id;
+    g_redoRunning = true;
+    g_redoText.clear();
+    ReleaseSRWLockExclusive(&g_redoLock);
+    auto job = std::make_shared<Job>();
+    job->kind = JobKind::RedoHistory;
+    job->gen = id;
+    job->chip = styleId;
+    job->translateTo = target;
+    job->settings = CurrentSettings();
+    job->config = CurrentConfig();
+    StartJob(std::move(job));
+}
+
+// Every "dictate:page:" link acts in this window: the pages themselves (Lists, History,
+// prov:<id>, goto:<page>, back, up:<llm|stt>:<id>, rm:<id>:<n>, test:<text|voice>:<id>) and the
+// actions on the two new pages (style:, dict:, rule:, hist:).
+static void Dict_PageAction(PCWSTR url) {
+    const std::wstring rest = url + wcslen(L"dictate:page:");
     if (!g_setWin) return;
     SetWindow& w = *g_setWin;
     Set_CommitEdit(w, true);
     auto after = [&](const std::wstring& prefix) { return ::WideToUtf8(rest.substr(prefix.size())); };
+    auto fieldText = [&](PCWSTR key) -> std::wstring {
+        const int k = Dict_Field(w, key);
+        return k < 0 ? std::wstring() : w.fields[k].cur;
+    };
+    auto putField = [&](PCWSTR key, const std::string& value) {
+        const int k = Dict_Field(w, key);
+        if (k >= 0) w.fields[k].cur = ::Utf8ToWide(value);
+    };
     if (rest.starts_with(L"prov:") || rest == L"back") {
         if (w.page != kDictProvidersPage) Set_GoPage(w, kDictProvidersPage);
         g_dictProv = rest == L"back" ? "" : after(L"prov:");
@@ -22937,6 +23985,163 @@ static void Dict_OpenLegacy(PCWSTR url) {
     } else if (rest.starts_with(L"test:")) {
         const bool voice = rest.starts_with(L"test:voice:");
         Dict_StartTest(w, after(voice ? L"test:voice:" : L"test:text:"), voice, {});
+    } else if (rest == L"none") {
+        // A link that only explains something (no action behind it).
+    } else if (rest.starts_with(L"style:")) {
+        const std::wstring rest2 = rest.substr(6);
+        if (rest2 == L"new") {
+            g_dictStyleEdit = L"new";
+            Dict_ResetField(w, L"dict.styleName");
+            Dict_ResetField(w, L"dict.styleDesc");
+            Dict_ResetField(w, L"dict.stylePrompt");
+            Set_BuildAndClamp(w);
+        } else if (rest2.starts_with(L"edit:")) {
+            g_dictStyleEdit = rest2.substr(5);
+            const std::string id = ::WideToUtf8(g_dictStyleEdit);
+            for (const ::CustomStyle& s : ::CurrentConfig().customStyles) {
+                if (s.id == id) {
+                    putField(L"dict.styleName", s.name);
+                    putField(L"dict.styleDesc", s.description);
+                    putField(L"dict.stylePrompt", s.prompt);
+                }
+            }
+            Set_BuildAndClamp(w);
+        } else if (rest2 == L"save") {
+            std::wstring prompt = fieldText(L"dict.stylePrompt");
+            for (size_t at; (at = prompt.find(L"\r\n")) != std::wstring::npos;) {
+                prompt.replace(at, 2, L"\n");
+            }
+            const std::string name = ::WideToUtf8(::Trim(fieldText(L"dict.styleName")));
+            const std::string description = ::WideToUtf8(::Trim(fieldText(L"dict.styleDesc")));
+            if (name.empty() || ::Trim(prompt).empty()) {
+                Set_SetStatus(w, L"The style needs a name and an instruction for the AI.");
+                Set_BuildAndClamp(w);
+                return;
+            }
+            const std::string editing = ::WideToUtf8(g_dictStyleEdit);
+            ::UpdateConfig([&](::Config& c) {
+                for (::CustomStyle& s : c.customStyles) {
+                    if (s.id == editing) {
+                        s.name = name;
+                        s.description = description;
+                        s.prompt = ::WideToUtf8(prompt);
+                        return;
+                    }
+                }
+                c.customStyles.push_back({::NewCustomStyleId(c), name, description, ::WideToUtf8(prompt)});
+            });
+            g_dictStyleEdit.clear();
+            Set_BuildAndClamp(w);
+        } else if (rest2 == L"cancel") {
+            g_dictStyleEdit.clear();
+            Set_BuildAndClamp(w);
+        } else if (rest2.starts_with(L"delete:")) {
+            const std::string id = ::WideToUtf8(rest2.substr(7));
+            ::UpdateConfig([&](::Config& c) {
+                std::erase_if(c.customStyles, [&](const ::CustomStyle& s) { return s.id == id; });
+            });
+            g_dictStyleEdit.clear();
+            Set_BuildAndClamp(w);
+        }
+    } else if (rest.starts_with(L"dict:")) {
+        const std::wstring rest2 = rest.substr(5);
+        if (rest2 == L"add") {
+            const std::string term = ::WideToUtf8(::Trim(fieldText(L"dict.newTerm")));
+            if (term.empty()) return;
+            ::UpdateConfig([&](::Config& c) { c.dictionary.push_back(term); });
+            Dict_ResetField(w, L"dict.newTerm");
+            Set_BuildAndClamp(w);
+        } else if (rest2.starts_with(L"rm:")) {
+            const size_t index = (size_t)_wtoi(rest2.c_str() + 3);
+            ::UpdateConfig([&](::Config& c) {
+                if (index < c.dictionary.size()) c.dictionary.erase(c.dictionary.begin() + index);
+            });
+            Set_BuildAndClamp(w);
+        }
+    } else if (rest.starts_with(L"rule:")) {
+        const std::wstring rest2 = rest.substr(5);
+        if (rest2 == L"toggle") {
+            ::UpdateConfig([](::Config& c) { c.appStylesEnabled = !c.appStylesEnabled; });
+            Set_BuildAndClamp(w);
+        } else if (rest2 == L"add" || rest2.starts_with(L"add:")) {
+            const std::wstring rawApp = rest2 == L"add" ? ::Trim(fieldText(L"dict.ruleApp"))
+                                                        : rest2.substr(4);
+            const std::string app = ::WideToUtf8(::NormalizeAppId(rawApp));
+            const std::vector<::StyleView> styles = ::AllStyles(::CurrentConfig());
+            if (app.empty() || styles.empty()) {
+                if (rest2 == L"add") Set_SetStatus(w, L"Type the app's name first, for example outlook.");
+                Set_BuildAndClamp(w);
+                return;
+            }
+            const std::string style = styles[std::min<size_t>(g_dictRuleStyle, styles.size() - 1)].id;
+            ::UpdateConfig([&](::Config& c) {
+                std::erase_if(c.appStyles, [&](const ::AppRule& r) { return r.app == app; });
+                c.appStyles.push_back({app, style});
+            });
+            if (rest2 == L"add") Dict_ResetField(w, L"dict.ruleApp");
+            Set_BuildAndClamp(w);
+        } else if (rest2.starts_with(L"cycle:")) {
+            const size_t index = (size_t)_wtoi(rest2.c_str() + 6);
+            const std::vector<::StyleView> styles = ::AllStyles(::CurrentConfig());
+            ::UpdateConfig([&](::Config& c) {
+                if (index >= c.appStyles.size() || styles.empty()) return;
+                ::AppRule& rule = c.appStyles[index];
+                for (size_t s = 0; s < styles.size(); s++) {
+                    if (styles[s].id == rule.style) {
+                        rule.style = styles[(s + 1) % styles.size()].id;
+                        break;
+                    }
+                }
+            });
+            Set_BuildAndClamp(w);
+        } else if (rest2.starts_with(L"rm:")) {
+            const size_t index = (size_t)_wtoi(rest2.c_str() + 3);
+            ::UpdateConfig([&](::Config& c) {
+                if (index < c.appStyles.size()) c.appStyles.erase(c.appStyles.begin() + index);
+            });
+            Set_BuildAndClamp(w);
+        }
+    } else if (rest.starts_with(L"hist:")) {
+        const std::wstring rest2 = rest.substr(5);
+        if (rest2.starts_with(L"open:")) {
+            g_dictHistId = wcstoll(rest2.c_str() + 5, nullptr, 10);
+            Set_BuildAndClamp(w);
+        } else if (rest2 == L"back") {
+            g_dictHistId = -1;
+            Set_BuildAndClamp(w);
+        } else if (rest2 == L"clear") {
+            ::ClearHistory();
+            g_dictHistId = -1;
+            Set_BuildAndClamp(w);
+        } else if (rest2.starts_with(L"copy:")) {
+            const long long id = wcstoll(rest2.c_str() + 5, nullptr, 10);
+            for (const ::HistoryItem& item : ::HistorySnapshot()) {
+                if ((long long)item.id == id && ::SetClipboardText(item.text, false)) {
+                    break;
+                }
+            }
+        } else if (rest2.starts_with(L"delete:")) {
+            const long long id = wcstoll(rest2.c_str() + 7, nullptr, 10);
+            ::DeleteHistory((UINT64)id);
+            if (g_dictHistId == id) g_dictHistId = -1;
+            Set_BuildAndClamp(w);
+        } else if (rest2.starts_with(L"retry:")) {
+            ::Ctl ctl{::CtlKind::Retry};
+            ctl.id = wcstoull(rest2.c_str() + 6, nullptr, 10);
+            ctl.fromMenu = true;
+            ::PostCtl(std::move(ctl));
+        } else if (rest2.starts_with(L"redo:")) {
+            const size_t colon = rest2.find(L':', 5);
+            if (colon == std::wstring::npos) return;
+            const UINT64 id = wcstoull(rest2.substr(5, colon - 5).c_str(), nullptr, 10);
+            const std::string style = ::WideToUtf8(rest2.substr(colon + 1));
+            for (const ::HistoryItem& item : ::HistorySnapshot()) {
+                if ((long long)item.id == (long long)id) {
+                    Dict_StartRedo(id, style, item.target);
+                    break;
+                }
+            }
+        }
     }
 }
 
@@ -22973,6 +24178,7 @@ DWORD WINAPI SettingsThread(void*) {
  while (g_settingsWnd && GetMessageW(&msg,nullptr,0,0)>0) { TranslateMessage(&msg); DispatchMessageW(&msg); }
  Settings_Close(); UnregisterClassW(kSettingsClass,(HINSTANCE)&__ImageBase); Set_ReleaseFactories();
  g_dictText.clear(); g_dictProv.clear(); g_dictTests.clear(); g_dictTestOk.clear(); g_dictTestKey.clear();
+ g_dictStyleEdit.clear(); g_dictHistId = -1; g_dictRuleStyle = 0;
  Dict_RecordingStopped(); CoUninitialize(); return 0;
 }
 void OpenSettingsWindow() {
@@ -23063,7 +24269,7 @@ void TrayIcon::Add() {
     if (m_icon) {
         DestroyIcon(m_icon);
     }
-    m_icon = MakeMarkIcon(GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForWindow(m_hwnd)));
+    m_icon = MakeWindowIcon(GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForWindow(m_hwnd)));
     NOTIFYICONDATA data{sizeof(data)};
     data.hWnd = m_hwnd;
     data.uID = TrayIconId();
@@ -23094,88 +24300,81 @@ void TrayIcon::Destroy() {
     }
 }
 
+// The tray menu runs on the engine's renderer, the same menu every mod's tray uses.
 void TrayIcon::ShowMenu() {
     const Config c = CurrentConfig();
-    auto check = [](bool on) { return on ? MF_CHECKED : MF_UNCHECKED; };
-    HMENU styles = CreatePopupMenu();
+    bool recording = false;
+    {
+        AcquireSRWLockShared(&g_overlayLock);
+        recording = g_recording;
+        ReleaseSRWLockShared(&g_overlayLock);
+    }
+    std::vector<dictset::SetMenuItem> styles;
     const std::vector<StyleView> all = AllStyles(c);
     for (UINT i = 0; i < all.size(); i++) {
-        AppendMenu(styles, MF_STRING, kCmdStyle + i, all[i].name.c_str());
-        if (c.style == all[i].id) {
-            CheckMenuRadioItem(styles, kCmdStyle, kCmdStyle + (UINT)all.size() - 1,
-                               kCmdStyle + i, MF_BYCOMMAND);
-        }
+        styles.push_back(dictset::Set_MenuRow(kCmdStyle + (int)i, nullptr, all[i].name.c_str(),
+                                              c.style == all[i].id));
     }
-    HMENU strengths = CreatePopupMenu();
     const PCWSTR strengthNames[] = {T(L"Light", L"Fraca"), T(L"Medium", L"Média"),
                                     T(L"Strong", L"Forte")};
+    std::vector<dictset::SetMenuItem> strengths;
     for (UINT i = 0; i < std::size(kStrengths); i++) {
-        AppendMenu(strengths, MF_STRING, kCmdStrength + i, strengthNames[i]);
-        if (c.promptStrength == kStrengths[i]) {
-            CheckMenuRadioItem(strengths, kCmdStrength, kCmdStrength + 2,
-                               kCmdStrength + i, MF_BYCOMMAND);
-        }
+        strengths.push_back(dictset::Set_MenuRow(kCmdStrength + (int)i, nullptr, strengthNames[i],
+                                                 c.promptStrength == kStrengths[i]));
     }
-    HMENU languages = CreatePopupMenu();
+    std::vector<dictset::SetMenuItem> languages;
     const std::vector<std::string> targets = LanguageList(true);
     for (UINT i = 0; i < targets.size(); i++) {
-        // (Two columns: 34 rows would run off a small screen.)
-        AppendMenu(languages, MF_STRING | (i == (targets.size() + 1) / 2 ? MF_MENUBARBREAK : 0),
-                   kCmdTranslate + i, LanguageName(targets[i]).c_str());
-        if (c.translateTo == targets[i]) {
-            CheckMenuRadioItem(languages, kCmdTranslate,
-                               kCmdTranslate + (UINT)targets.size() - 1,
-                               kCmdTranslate + i, MF_BYCOMMAND);
-        }
+        std::wstring name = LanguageName(targets[i]);
+        languages.push_back(dictset::Set_MenuRow(kCmdTranslate + (int)i, nullptr, name.c_str(),
+                                                 c.translateTo == targets[i]));
     }
-    HMENU themes = CreatePopupMenu();
     const PCWSTR themeNames[] = {T(L"System", L"Sistema"), T(L"Light", L"Claro"),
                                  T(L"Dark", L"Escuro")};
+    std::vector<dictset::SetMenuItem> themes;
     for (UINT i = 0; i < std::size(kThemes); i++) {
-        AppendMenu(themes, MF_STRING, kCmdTheme + i, themeNames[i]);
-        if (c.theme == kThemes[i]) {
-            CheckMenuRadioItem(themes, kCmdTheme, kCmdTheme + 2, kCmdTheme + i,
-                               MF_BYCOMMAND);
-        }
+        themes.push_back(dictset::Set_MenuRow(kCmdTheme + (int)i, nullptr, themeNames[i],
+                                              c.theme == kThemes[i]));
     }
-    AcquireSRWLockShared(&g_overlayLock);
-    const bool recording = g_recording;
-    ReleaseSRWLockShared(&g_overlayLock);
-    HMENU menu = CreatePopupMenu();
-    AppendMenu(menu, MF_STRING, kCmdSettings, T(L"Settings\u2026", L"Configurações\u2026"));
-    SetMenuDefaultItem(menu, kCmdSettings, FALSE);
-    AppendMenu(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenu(menu, MF_STRING, kCmdDictate,
-               recording ? T(L"Stop and paste", L"Parar e colar")
-                         : T(L"Dictate now", L"Ditar agora"));
-    AppendMenu(menu, MF_STRING | (recording ? MF_GRAYED : 0), kCmdPasteLast,
-               T(L"Paste last dictation", L"Colar último ditado"));
-    AppendMenu(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenu(menu, MF_POPUP, (UINT_PTR)styles, T(L"Style", L"Estilo"));
-    AppendMenu(menu, MF_POPUP, (UINT_PTR)strengths,
-               T(L"Prompt intensity", L"Intensidade do Prompt"));
-    AppendMenu(menu, MF_POPUP, (UINT_PTR)languages,
-               T(L"Translate to", L"Traduzir para"));
-    AppendMenu(menu, MF_POPUP, (UINT_PTR)themes, T(L"Theme", L"Tema"));
-    AppendMenu(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenu(menu, MF_STRING | check(c.livePreview), kCmdPreview,
-               T(L"Live preview while speaking", L"Prévia ao vivo enquanto fala"));
-    AppendMenu(menu, MF_STRING | check(c.removeFillers), kCmdFillers,
-               T(L"Remove fillers (uh, um)", L"Remover muletas (hã, né, tipo)"));
-    AppendMenu(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenu(menu, MF_STRING, kCmdKey, T(L"Providers…", L"Provedores…"));
-    AppendMenu(menu, MF_STRING, kCmdReport, T(L"Report a problem…", L"Reportar um problema…"));
+    std::vector<dictset::SetMenuItem> items;
+    items.push_back(dictset::Set_MenuRow(kCmdSettings, nullptr,
+                                         T(L"Settings\u2026", L"Configurações\u2026")));
+    items.push_back(dictset::Set_MenuRow(kCmdDictate, nullptr,
+                                         recording ? T(L"Stop and paste", L"Parar e colar")
+                                                   : T(L"Dictate now", L"Ditar agora")));
+    items.push_back(dictset::Set_MenuRow(kCmdPasteLast, nullptr,
+                                         T(L"Paste last dictation", L"Colar último ditado"), false,
+                                         recording));
+    dictset::SetMenuItem sep;
+    sep.separator = true;
+    items.push_back(sep);
+    items.push_back(dictset::Set_MenuSub(nullptr, T(L"Style", L"Estilo"), std::move(styles)));
+    items.push_back(dictset::Set_MenuSub(nullptr, T(L"Prompt intensity", L"Intensidade do Prompt"),
+                                         std::move(strengths)));
+    items.push_back(dictset::Set_MenuSub(nullptr, T(L"Translate to", L"Traduzir para"),
+                                         std::move(languages)));
+    items.push_back(dictset::Set_MenuSub(nullptr, T(L"Theme", L"Tema"), std::move(themes)));
+    items.push_back(sep);
+    items.push_back(dictset::Set_MenuRow(kCmdPreview, nullptr,
+                                         T(L"Live preview while speaking",
+                                           L"Prévia ao vivo enquanto fala"),
+                                         c.livePreview));
+    items.push_back(dictset::Set_MenuRow(kCmdFillers, nullptr,
+                                         T(L"Remove fillers (uh, um)",
+                                           L"Remover muletas (hã, né, tipo)"),
+                                         c.removeFillers));
+    items.push_back(sep);
+    items.push_back(dictset::Set_MenuRow(kCmdKey, nullptr,
+                                         T(L"Providers\u2026", L"Provedores\u2026")));
+    items.push_back(dictset::Set_MenuRow(kCmdReport, nullptr,
+                                         T(L"Report a problem\u2026", L"Reportar um problema\u2026")));
     POINT cursor;
     GetCursorPos(&cursor);
     // The menu closes when clicked outside only if its window is in front.
     SetForegroundWindow(m_hwnd);
-    const UINT command = (UINT)TrackPopupMenu(
-        menu,
-        TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY, cursor.x, cursor.y, 0, m_hwnd, nullptr);
-    PostMessage(m_hwnd, WM_NULL, 0, 0);
-    DestroyMenu(menu);
-    if (command) {
-        Run(command);
+    const int command = dictset::Set_TrayMenu(m_hwnd, items, &cursor);
+    if (command > 0) {
+        Run((UINT)command);
     }
 }
 
@@ -23259,8 +24458,6 @@ DWORD WINAPI UiThreadProc(void*) {
         // WhTool_ModUninit may have looked for g_overlayWnd before it was set.
         PostMessage(overlay.Hwnd(), WM_APP_QUIT, 0, 0);
     }
-    SettingsWindow settings;
-    g_settingsUi = &settings;
     TrayIcon tray;
     bool trayShown = false;
     auto syncTray = [&] {
@@ -23292,10 +24489,6 @@ DWORD WINAPI UiThreadProc(void*) {
         if (msg.hwnd == overlay.Hwnd() && msg.message == WM_APP_RELOAD) {
             syncTray();
         }
-        if (msg.hwnd == overlay.Hwnd() && msg.message == WM_APP_LEGACY_PAGE) {
-            settings.Open((Page)msg.wParam);
-            continue;
-        }
         if (msg.hwnd == overlay.Hwnd() && msg.message == WM_APP_KEY_WINDOW) {
             dictset::OpenSettingsWindowAt(3);
             continue;
@@ -23305,7 +24498,6 @@ DWORD WINAPI UiThreadProc(void*) {
     }
     // After the loop, always: a menu or a window drag open when the mod
     // stops delivers WM_APP_QUIT straight to the overlay, past this loop.
-    settings.Close();
     if (trayShown) {
         tray.Destroy();
         trayShown = false;
@@ -23314,8 +24506,7 @@ DWORD WINAPI UiThreadProc(void*) {
         UnhookWinEvent(foregroundHook);
     }
     overlay.Destroy();
-    settings.Release();
-    g_settingsUi = nullptr;
+
     if (SUCCEEDED(com)) {
         CoUninitialize();
     }
@@ -24246,7 +25437,7 @@ BOOL WhTool_ModInit() {
 void WhTool_ModSettingsChanged() {
     LoadSettings();
     if (HWND settings = dictset::g_settingsWnd) {
-        PostMessage(settings, dictset::WM_APP_SETTINGS_RELOAD, 0, 0);
+        PostMessageW(settings, dictset::WM_APP_SETTINGS_RELOAD, 0, 0);
     }
     if (HWND hwnd = g_overlayWnd) {
         PostMessage(hwnd, WM_APP_RELOAD, 0, 0);

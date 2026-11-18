@@ -2,13 +2,13 @@
 // @id              seamless-crosshair
 // @name            Seamless Game Crosshair
 // @description     A crosshair over any game: presets or your own design, any color and size, shortcuts and a tray icon
-// @version         1.1.2
+// @version         1.2.3
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         windhawk.exe
 // @architecture    x86-64
-// @compilerOptions -lgdi32 -luser32 -lshell32 -lshlwapi -lole32 -loleaut32 -luuid -ld2d1 -ldwrite -lwindowscodecs -ldwmapi -lcomctl32 -luxtheme -lcomdlg32 -limm32 -ladvapi32
+// @compilerOptions -lgdi32 -luser32 -lshell32 -lshlwapi -lole32 -loleaut32 -luuid -ld2d1 -ldwrite -lwindowscodecs -ldwmapi -lcomctl32 -luxtheme -lcomdlg32 -limm32 -ladvapi32 -lruntimeobject
 // @license         MIT
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
@@ -43,6 +43,9 @@ clicks pass straight through.
   game gets it back every time. Other games keep the normal one.
 - A tray icon: click it for settings, right-click it to pick a style, color or
   size.
+- A small pop-up says "Crosshair enabled" or "Crosshair disabled" when you switch it,
+  with blurred glass. Pick where it shows, how long, how big, or turn it off.
+- The crosshair fades in and out instead of popping, at the speed you pick.
 - Can stay out of screenshots, recordings and streams.
 
 ## Ready-made crosshairs
@@ -289,6 +292,94 @@ is its own code.
 - settingsTrayIcon: true
   $name: "Tray icon"
   $description: "Click it to open these settings. Right-click it to show or hide the crosshair, or pick a style, color or size. When off, change settings in Windhawk."
+- popupOn: true
+  $name: "On and off pop-up"
+  $description: "A small dock says \"Crosshair enabled\" or \"Crosshair disabled\" each time you switch it."
+- popupWhen: "both"
+  $name: "Show it for"
+  $options:
+  - both: "The shortcut and the tray menu"
+  - shortcut: "Only the shortcut"
+  - tray: "Only the tray menu"
+- popupDetail: "style"
+  $name: "Second line"
+  $description: "The smaller line under \"Crosshair enabled\"."
+  $options:
+  - style: "The crosshair style"
+  - shortcut: "The shortcut that switches it"
+  - none: "Nothing"
+- popupIcon: true
+  $name: "Crosshair icon"
+  $description: "The crosshair mark on the left of the pop-up."
+- popupDuration: 1500
+  $name: "How long it stays (milliseconds)"
+  $description: "500 to 10000 (Suggested: 1500). 1000 is one second."
+- popupInFullscreen: true
+  $name: "Show over fullscreen games"
+  $description: "Off, the pop-up stays away while a game or video fills the screen."
+- popupPosition: "bottom"
+  $name: "Where"
+  $options:
+  - top: "Top middle"
+  - topLeft: "Top left"
+  - topRight: "Top right"
+  - center: "Middle of the screen"
+  - bottom: "Bottom middle"
+  - bottomLeft: "Bottom left"
+  - bottomRight: "Bottom right"
+  - belowCrosshair: "Just below the crosshair"
+  - aboveCrosshair: "Just above the crosshair"
+- popupScreen: "crosshair"
+  $name: "Screen"
+  $options:
+  - crosshair: "The screen the crosshair is on"
+  - primary: "The main screen"
+  - pointer: "The screen with the mouse pointer"
+  - focused: "The screen of the window in front"
+- popupMargin: 48
+  $name: "Distance from the edge"
+  $description: "0 to 600 (Suggested: 48). Pixels from the screen edge, or from the crosshair when it sits next to it."
+- popupOffsetX: 0
+  $name: "Move right"
+  $description: "-2000 to 2000 (Suggested: 0). Pixels. Less than 0 moves it left."
+- popupOffsetY: 0
+  $name: "Move down"
+  $description: "-2000 to 2000 (Suggested: 0). Pixels. Less than 0 moves it up."
+- popupSize: "normal"
+  $name: "Size"
+  $options:
+  - compact: "Compact"
+  - normal: "Normal"
+  - large: "Large"
+- popupGlass: true
+  $name: "Blurred glass"
+  $description: "On, the pop-up blurs what is behind it. Off, it is solid. The blur needs Windows transparency effects on."
+- popupStrength: 85
+  $name: "Background strength (%)"
+  $description: "80 to 100 (Suggested: 85). How much of the dark background covers the blur."
+- popupAnimate: true
+  $name: "Slide and fade"
+  $description: "On, the pop-up slides and fades in and out. Off, it appears and goes at once."
+- fadeOn: true
+  $name: "Fade the crosshair"
+  $description: "On, the crosshair fades in and out when you show or hide it, instead of popping."
+- fadeInTime: 150
+  $name: "Fade in time (milliseconds)"
+  $description: "0 to 2000 (Suggested: 150)."
+- fadeOutTime: 150
+  $name: "Fade out time (milliseconds)"
+  $description: "0 to 2000 (Suggested: 150)."
+- fadeCurve: "smooth"
+  $name: "Fade style"
+  $options:
+  - smooth: "Smooth: starts and ends gently"
+  - linear: "Even all the way"
+- fadeWhen: "toggle"
+  $name: "Fade when"
+  $description: "Aiming fades too with the second choice, so leave it on the first for the fastest aim."
+  $options:
+  - toggle: "You show or hide it"
+  - all: "It shows or hides for any reason"
 */
 // ==/WindhawkModSettings==
 
@@ -306,6 +397,12 @@ is its own code.
 #include <dwrite.h>
 #include <wincodec.h>
 #include <imm.h>
+#include <dispatcherqueue.h>
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.System.h>
+#include <winrt/Windows.Graphics.Effects.h>
+#include <winrt/Windows.UI.Composition.h>
+#include <winrt/Windows.UI.Composition.Desktop.h>
 
 #include <algorithm>
 #include <atomic>
@@ -543,6 +640,14 @@ struct Config {
     bool excludeCapture = false, trayIcon = true;
     std::wstring hotkeys[HK_COUNT];
     std::vector<COLORREF> colorCycle;
+    // The on and off pop-up.
+    bool popupOn = true, popupIcon = true, popupInFullscreen = true, popupGlass = true, popupAnimate = true;
+    std::wstring popupWhen = L"both", popupDetail = L"style", popupPosition = L"bottom", popupScreen = L"crosshair",
+                 popupSize = L"normal";
+    int popupDuration = 1500, popupMargin = 48, popupOffsetX = 0, popupOffsetY = 0, popupStrength = 85;
+    // The crosshair's own fade.
+    bool fadeOn = true, fadeAll = false, fadeLinear = false;
+    int fadeIn = 150, fadeOut = 150;
 };
 
 static Config g_cfg;
@@ -662,6 +767,28 @@ static void LoadSettings() {
     }
     if (c.colorCycle.empty()) c.colorCycle = {RGB(0, 255, 0), RGB(0, 255, 255), RGB(255, 255, 0), RGB(255, 0, 255)};
     c.trayIcon = SettingBool(L"settingsTrayIcon");
+    c.popupOn = SettingBool(L"popupOn");
+    c.popupWhen = OneOf(SettingStr(L"popupWhen"), {L"both", L"shortcut", L"tray"});
+    c.popupDetail = OneOf(SettingStr(L"popupDetail"), {L"style", L"shortcut", L"none"});
+    c.popupIcon = SettingBool(L"popupIcon");
+    c.popupDuration = Clamp(SettingInt(L"popupDuration"), 500, 10000);
+    c.popupInFullscreen = SettingBool(L"popupInFullscreen");
+    c.popupPosition = OneOf(SettingStr(L"popupPosition"), {L"bottom", L"top", L"topLeft", L"topRight", L"center",
+                                                           L"bottomLeft", L"bottomRight", L"belowCrosshair",
+                                                           L"aboveCrosshair"});
+    c.popupScreen = OneOf(SettingStr(L"popupScreen"), {L"crosshair", L"primary", L"pointer", L"focused"});
+    c.popupMargin = Clamp(SettingInt(L"popupMargin"), 0, 600);
+    c.popupOffsetX = Clamp(SettingInt(L"popupOffsetX"), -2000, 2000);
+    c.popupOffsetY = Clamp(SettingInt(L"popupOffsetY"), -2000, 2000);
+    c.popupSize = OneOf(SettingStr(L"popupSize"), {L"normal", L"compact", L"large"});
+    c.popupGlass = SettingBool(L"popupGlass");
+    c.popupStrength = Clamp(SettingInt(L"popupStrength"), 80, 100);
+    c.popupAnimate = SettingBool(L"popupAnimate");
+    c.fadeOn = SettingBool(L"fadeOn");
+    c.fadeIn = Clamp(SettingInt(L"fadeInTime"), 0, 2000);
+    c.fadeOut = Clamp(SettingInt(L"fadeOutTime"), 0, 2000);
+    c.fadeLinear = SettingStr(L"fadeCurve") == L"linear";
+    c.fadeAll = SettingStr(L"fadeWhen") == L"all";
     g_cfg = c;
 }
 
@@ -1139,7 +1266,7 @@ enum : UINT {
 
 constexpr UINT kTrayId = 1;
 constexpr UINT_PTR kTimerTrack = 1, kTimerAim = 2, kTimerTopmost = 3, kTimerSave = 4, kTimerBlink = 5,
-                   kTimerFullscreen = 6;
+                   kTimerFullscreen = 6, kTimerFade = 7;
 
 static HWND g_msgWnd, g_overlay;
 static DWORD g_uiTid;
@@ -1157,6 +1284,12 @@ static bool g_haveTarget;
 static POINT g_winPos{INT_MIN, INT_MIN};
 static SIZE g_winSize{};
 static bool g_visible;
+// The crosshair's fade: how far in it is (0 gone, 1 full), and which way it is going.
+static float g_fadeP = 1;
+static int g_fadeDir;
+static ULONGLONG g_fadeLast;
+static bool g_fadeNext;  // The next show or hide comes from the shortcut or the tray.
+static bool g_fadeSkip;  // The next show is the end of a blink: no fade.
 
 static std::atomic<bool> g_shown{true};  // The show or hide shortcut, kept across restarts.
 static bool g_appOk = true;              // The app in front passes the "Show" rules.
@@ -1263,6 +1396,19 @@ static void RenderBitmap() {
     g_bitmap = DrawDesign(c, d, k);
 }
 
+static BYTE FadeAlpha() {
+    float p = std::clamp(g_fadeP, 0.0f, 1.0f);
+    if (!g_cfg.fadeLinear) p = p * p * (3 - 2 * p);  // Starts and ends gently.
+    return (BYTE)std::lround(p * 255);
+}
+
+// Only the opacity changes: the drawn crosshair stays as it is.
+static void PushAlpha() {
+    if (!g_overlay) return;
+    BLENDFUNCTION bf{AC_SRC_OVER, 0, FadeAlpha(), AC_SRC_ALPHA};
+    UpdateLayeredWindow(g_overlay, nullptr, nullptr, nullptr, nullptr, nullptr, 0, &bf, ULW_ALPHA);
+}
+
 static void PushBitmap() {
     if (!g_overlay || g_bitmap.w <= 0) return;
     POINT pos{g_target.x - g_bitmap.ax, g_target.y - g_bitmap.ay};
@@ -1281,7 +1427,7 @@ static void PushBitmap() {
         HDC mem = CreateCompatibleDC(screen);
         HGDIOBJ old = SelectObject(mem, dib);
         POINT src{0, 0};
-        BLENDFUNCTION bf{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        BLENDFUNCTION bf{AC_SRC_OVER, 0, FadeAlpha(), AC_SRC_ALPHA};
         if (!UpdateLayeredWindow(g_overlay, screen, &pos, &size, mem, &src, 0, &bf, ULW_ALPHA))
             Wh_Log(L"UpdateLayeredWindow failed (error %lu)", GetLastError());
         SelectObject(mem, old);
@@ -1416,16 +1562,57 @@ static void UpdateVisibility() {
     const Config& c = g_cfg;
     bool aimOk = c.aimButton == L"none" || (c.aimAction == L"hide" ? !g_aiming : g_aiming);
     bool want = SettingsOpen() || (g_shown && g_appOk && aimOk);
+    const bool fade = !g_fadeSkip && c.fadeOn && (c.fadeAll || g_fadeNext);
+    g_fadeNext = g_fadeSkip = false;
     if (want == g_visible) return;
     g_visible = want;
+    const bool onScreen = IsWindowVisible(g_overlay) != FALSE;
     if (want) {
+        if (fade && c.fadeIn > 0) {
+            if (!onScreen) g_fadeP = 0;  // A hide halfway through turns round from where it is.
+            g_fadeDir = 1;
+        } else {
+            g_fadeP = 1;
+            g_fadeDir = 0;
+        }
+        PushAlpha();
         ShowWindow(g_overlay, SW_SHOWNOACTIVATE);
         KeepOnTop();
         SetTimer(g_msgWnd, kTimerTopmost, 2000, nullptr);
     } else {
-        ShowWindow(g_overlay, SW_HIDE);
+        if (fade && c.fadeOut > 0 && onScreen) {
+            g_fadeDir = -1;
+        } else {
+            g_fadeDir = 0;
+            g_fadeP = 0;
+            ShowWindow(g_overlay, SW_HIDE);
+        }
         KillTimer(g_msgWnd, kTimerTopmost);
     }
+    if (g_fadeDir) {
+        g_fadeLast = GetTickCount64();
+        SetTimer(g_msgWnd, kTimerFade, 15, nullptr);
+    } else {
+        KillTimer(g_msgWnd, kTimerFade);
+    }
+}
+
+static void FadeTick() {
+    const ULONGLONG now = GetTickCount64();
+    const float dt = (float)(now - g_fadeLast);
+    g_fadeLast = now;
+    const int ms = g_fadeDir > 0 ? g_cfg.fadeIn : g_cfg.fadeOut;
+    g_fadeP += g_fadeDir * (ms > 0 ? dt / ms : 1.0f);
+    if (g_fadeP >= 1) {
+        g_fadeP = 1;
+        g_fadeDir = 0;
+    } else if (g_fadeP <= 0) {
+        g_fadeP = 0;
+        g_fadeDir = 0;
+        ShowWindow(g_overlay, SW_HIDE);
+    }
+    PushAlpha();
+    if (!g_fadeDir) KillTimer(g_msgWnd, kTimerFade);
 }
 
 static UINT AimVk(UINT& mods) {
@@ -1674,10 +1861,14 @@ static void RegisterHotkeys() {
     }
 }
 
+static void SetDockAffinity(DWORD a);  // The pop-up; defined with it below.
+static void DestroyDock();
+
 static void ApplyConfig() {
     RegisterHotkeys();
-    if (g_overlay)
-        SetWindowDisplayAffinity(g_overlay, g_cfg.excludeCapture ? 0x11 /* WDA_EXCLUDEFROMCAPTURE */ : WDA_NONE);
+    const DWORD affinity = g_cfg.excludeCapture ? 0x11 /* WDA_EXCLUDEFROMCAPTURE */ : WDA_NONE;
+    if (g_overlay) SetWindowDisplayAffinity(g_overlay, affinity);
+    SetDockAffinity(affinity);
     UpdateTimers();
     Refresh(true);
     UpdateTray(false);
@@ -1705,12 +1896,723 @@ static void Change(std::initializer_list<std::pair<PCWSTR, std::wstring>> kv) {
     ApplyConfig();
 }
 
-static void SetShown(bool on) {
+// ---------------------------------------------------------------------------
+// The on and off pop-up: a small Mocha dock with Windows' own blur under it, the same look as
+// Key Click's and Dictate's. It is a layered, click-through window that never takes focus, so it
+// can sit over a game without catching a single click. It is drawn once per show; the slide and
+// fade only move it and change its opacity.
+// ---------------------------------------------------------------------------
+
+struct SgcCompositorDesktopInterop : ::IUnknown {
+    virtual HRESULT __stdcall CreateDesktopWindowTarget(HWND window, BOOL isTopmost, void** target) = 0;
+    virtual HRESULT __stdcall EnsureOnThread(DWORD threadId) = 0;
+};
+template <>
+inline constexpr winrt::guid winrt::impl::guid_v<SgcCompositorDesktopInterop>{
+    0x29E691FA, 0x4567, 0x4DCA, {0xB3, 0x19, 0xD0, 0xF2, 0x07, 0xEB, 0x68, 0x07}};
+
+struct SgcEffectD2D1Interop : ::IUnknown {
+    virtual HRESULT __stdcall GetEffectId(GUID* id) = 0;
+    virtual HRESULT __stdcall GetNamedPropertyMapping(LPCWSTR name, UINT* index, int* mapping) = 0;
+    virtual HRESULT __stdcall GetPropertyCount(UINT* count) = 0;
+    virtual HRESULT __stdcall GetProperty(UINT index, void** value) = 0;
+    virtual HRESULT __stdcall GetSource(UINT index, void** source) = 0;
+    virtual HRESULT __stdcall GetSourceCount(UINT* count) = 0;
+};
+template <>
+inline constexpr winrt::guid winrt::impl::guid_v<SgcEffectD2D1Interop>{
+    0x2FC57384, 0xA068, 0x44D7, {0xA3, 0x31, 0x30, 0x98, 0x2F, 0xCF, 0x71, 0x77}};
+
+// A Gaussian blur over the host backdrop, so text behind the pop-up melts into colour.
+struct SgcGlassBlur : winrt::implements<SgcGlassBlur, winrt::Windows::Graphics::Effects::IGraphicsEffect,
+                                        winrt::Windows::Graphics::Effects::IGraphicsEffectSource,
+                                        SgcEffectD2D1Interop> {
+    SgcGlassBlur(float sigma, winrt::Windows::Graphics::Effects::IGraphicsEffectSource source)
+        : m_sigma(sigma), m_source(std::move(source)) {}
+    winrt::hstring Name() { return m_name; }
+    void Name(winrt::hstring const& name) { m_name = name; }
+    HRESULT __stdcall GetEffectId(GUID* id) override {
+        *id = {0x1FEB6D69, 0x2FE6, 0x4AC9, {0x8C, 0x58, 0x1D, 0x7F, 0x93, 0xE7, 0xA6, 0xA5}};  // Gaussian blur
+        return S_OK;
+    }
+    HRESULT __stdcall GetNamedPropertyMapping(LPCWSTR, UINT*, int*) override { return E_INVALIDARG; }
+    HRESULT __stdcall GetPropertyCount(UINT* count) override {
+        *count = 3;
+        return S_OK;
+    }
+    HRESULT __stdcall GetProperty(UINT index, void** value) override {
+        using winrt::Windows::Foundation::PropertyValue;
+        winrt::Windows::Foundation::IInspectable v;
+        switch (index) {
+            case 0: v = PropertyValue::CreateSingle(m_sigma); break;
+            case 1: v = PropertyValue::CreateUInt32(1 /* BALANCED */); break;
+            case 2: v = PropertyValue::CreateUInt32(1 /* BORDER_MODE_HARD */); break;
+            default: return E_INVALIDARG;
+        }
+        *value = winrt::detach_abi(v.as<winrt::Windows::Foundation::IPropertyValue>());
+        return S_OK;
+    }
+    HRESULT __stdcall GetSource(UINT index, void** source) override {
+        if (index != 0) return E_INVALIDARG;
+        winrt::Windows::Graphics::Effects::IGraphicsEffectSource copy = m_source;
+        *source = winrt::detach_abi(copy);
+        return S_OK;
+    }
+    HRESULT __stdcall GetSourceCount(UINT* count) override {
+        *count = 1;
+        return S_OK;
+    }
+
+   private:
+    winrt::hstring m_name = L"GlassBlur";
+    float m_sigma;
+    winrt::Windows::Graphics::Effects::IGraphicsEffectSource m_source;
+};
+
+namespace sgcdock {
+
+constexpr WCHAR kGlassClass[] = L"SeamlessCrosshairGlass", kClass[] = L"SeamlessCrosshairPopup";
+
+static bool GlassAvailable() {
+    DWORD transparency = 1, size = sizeof(transparency);
+    RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                 L"EnableTransparency", RRF_RT_REG_DWORD, nullptr, &transparency, &size);
+    SYSTEM_POWER_STATUS power{};
+    const bool saver = GetSystemPowerStatus(&power) && power.SystemStatusFlag == 1;
+    return transparency != 0 && !saver;
+}
+
+static LRESULT CALLBACK GlassWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_NCHITTEST) return HTTRANSPARENT;
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+class Glass {
+   public:
+    // The blur under the pop-up (pixels), with rounded corners of `radius` pixels.
+    // False: Windows can't show it, and the pop-up paints itself solid.
+    bool Show(HWND owner, int x, int y, int w, int h, float radius, float opacity) {
+        if (m_failed) return false;
+        try {
+            if (!Ensure()) {
+                m_failed = true;
+                return false;
+            }
+            if (!m_visible || x != m_x || y != m_y || w != m_w || h != m_h || GetWindow(owner, GW_HWNDNEXT) != m_hwnd) {
+                SetWindowPos(m_hwnd, owner, x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                m_x = x, m_y = y, m_w = w, m_h = h;
+            }
+            const winrt::Windows::Foundation::Numerics::float2 extent{(float)w, (float)h};
+            m_visual.Size(extent);
+            m_shape.Size(extent);
+            const float r = std::clamp(radius, 0.0f, std::min(extent.x, extent.y) / 2);
+            m_shape.CornerRadius({r, r});
+            m_visual.Opacity(std::clamp(opacity, 0.0f, 1.0f));
+            m_visible = true;
+            return true;
+        } catch (winrt::hresult_error const& e) {
+            Wh_Log(L"Pop-up glass unavailable: %08X", (unsigned)e.code());
+            m_failed = true;
+            Hide();
+            return false;
+        }
+    }
+    void Hide() {
+        if (m_hwnd && m_visible) ShowWindow(m_hwnd, SW_HIDE);
+        m_visible = false;
+    }
+    void Affinity(DWORD a) {
+        m_affinity = a;
+        if (m_hwnd) SetWindowDisplayAffinity(m_hwnd, a);
+    }
+    // On the UI thread, before it ends.
+    void Destroy() {
+        m_visual = nullptr;
+        m_shape = nullptr;
+        m_target = nullptr;
+        if (m_hwnd) DestroyWindow(m_hwnd);
+        m_hwnd = nullptr;
+        m_visible = false;
+        m_compositor = nullptr;
+        if (m_queue) {
+            auto queue = std::move(m_queue);
+            try {
+                const auto shutdown = queue.ShutdownQueueAsync();
+                for (int i = 0; i < 100 && shutdown.Status() == winrt::Windows::Foundation::AsyncStatus::Started; i++) {
+                    MsgWaitForMultipleObjects(0, nullptr, FALSE, 10, QS_ALLINPUT);
+                    MSG msg;
+                    while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) DispatchMessageW(&msg);
+                }
+            } catch (winrt::hresult_error const& e) {
+                Wh_Log(L"Ending the pop-up glass queue failed: %08X", (unsigned)e.code());
+            }
+        }
+        if (m_registered) UnregisterClassW(kGlassClass, (HINSTANCE)windhawk_tool_mod::GetCurrentModuleHandle());
+        m_registered = false;
+        m_failed = false;
+    }
+
+   private:
+    bool Ensure() {
+        namespace Composition = winrt::Windows::UI::Composition;
+        if (m_visual) return true;
+        if (!m_queue) {
+            using CreateController_t = HRESULT(WINAPI*)(DispatcherQueueOptions, void**);
+            static const HMODULE messaging = LoadLibraryExW(L"CoreMessaging.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            const auto create =
+                messaging ? (CreateController_t)(void*)GetProcAddress(messaging, "CreateDispatcherQueueController")
+                          : nullptr;
+            if (!create) return false;
+            const DispatcherQueueOptions options{sizeof(options), DQTYPE_THREAD_CURRENT, DQTAT_COM_STA};
+            winrt::check_hresult(create(options, winrt::put_abi(m_queue)));
+        }
+        if (!m_compositor) m_compositor = Composition::Compositor();
+        const HINSTANCE inst = (HINSTANCE)windhawk_tool_mod::GetCurrentModuleHandle();
+        if (!m_registered) {
+            WNDCLASSW wc{};
+            wc.lpfnWndProc = GlassWndProc;
+            wc.hInstance = inst;
+            wc.lpszClassName = kGlassClass;
+            m_registered = RegisterClassW(&wc) != 0;
+        }
+        m_hwnd = CreateWindowExW(WS_EX_NOREDIRECTIONBITMAP | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST |
+                                     WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                                 kGlassClass, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, inst, nullptr);
+        if (!m_hwnd) return false;
+        SetLayeredWindowAttributes(m_hwnd, 0, 255, LWA_ALPHA);
+        SetWindowDisplayAffinity(m_hwnd, m_affinity);
+        const BOOL hostBackdrop = TRUE;  // DWMWA_USE_HOSTBACKDROPBRUSH: a desktop app's window shows the blur only with this.
+        winrt::check_hresult(DwmSetWindowAttribute(m_hwnd, 17, &hostBackdrop, sizeof(hostBackdrop)));
+        auto interop = m_compositor.as<SgcCompositorDesktopInterop>();
+        winrt::check_hresult(interop->CreateDesktopWindowTarget(m_hwnd, TRUE, winrt::put_abi(m_target)));
+        const Composition::ContainerVisual root = m_compositor.CreateContainerVisual();
+        root.RelativeSizeAdjustment({1, 1});
+        m_target.Root(root);
+        m_visual = m_compositor.CreateSpriteVisual();
+        try {
+            const auto effect =
+                winrt::make<SgcGlassBlur>(18.0f, Composition::CompositionEffectSourceParameter(L"Backdrop"));
+            const auto brush = m_compositor.CreateEffectFactory(effect).CreateBrush();
+            brush.SetSourceParameter(L"Backdrop", m_compositor.CreateHostBackdropBrush());
+            m_visual.Brush(brush);
+        } catch (winrt::hresult_error const& e) {
+            Wh_Log(L"Extra pop-up blur unavailable: %08X", (unsigned)e.code());
+            m_visual.Brush(m_compositor.CreateHostBackdropBrush());
+        }
+        m_shape = m_compositor.CreateRoundedRectangleGeometry();
+        m_visual.Clip(m_compositor.CreateGeometricClip(m_shape));
+        root.Children().InsertAtTop(m_visual);
+        return true;
+    }
+
+    HWND m_hwnd = nullptr;
+    DWORD m_affinity = WDA_NONE;
+    bool m_failed = false, m_visible = false, m_registered = false;
+    int m_x = 0, m_y = 0, m_w = 0, m_h = 0;
+    winrt::Windows::System::DispatcherQueueController m_queue{nullptr};
+    winrt::Windows::UI::Composition::Compositor m_compositor{nullptr};
+    winrt::Windows::UI::Composition::Desktop::DesktopWindowTarget m_target{nullptr};
+    winrt::Windows::UI::Composition::SpriteVisual m_visual{nullptr};
+    winrt::Windows::UI::Composition::CompositionRoundedRectangleGeometry m_shape{nullptr};
+};
+
+template <class T>
+struct Com {
+    T* p = nullptr;
+    Com() = default;
+    Com(const Com&) = delete;
+    Com& operator=(const Com&) = delete;
+    ~Com() { reset(); }
+    void reset() {
+        if (p) p->Release();
+        p = nullptr;
+    }
+    T** put() {
+        reset();
+        return &p;
+    }
+    T* get() const { return p; }
+    T* operator->() const { return p; }
+    explicit operator bool() const { return p != nullptr; }
+};
+
+namespace col {
+constexpr UINT32 crust = 0x11111B, base = 0x1E1E2E, surface1 = 0x45475A, overlay0 = 0x6C7086, overlay1 = 0x7F849C,
+                 subtext0 = 0xA6ADC8, subtext1 = 0xBAC2DE, text = 0xCDD6F4, blue = 0x89B4FA, mauve = 0xCBA6F7;
+}
+
+constexpr UINT_PTR kAnimTimer = 1, kHideTimer = 2;
+constexpr float kH = 60, kMinW = 250, kMaxW = 480, kSlide = 12;
+constexpr DWORD kInMs = 170, kOutMs = 140;
+
+enum class Phase { Hidden, In, Shown, Out };
+
+struct Dock {
+    HWND hwnd = nullptr;
+    Com<ID2D1Factory> d2d;
+    Com<IDWriteFactory> dw;
+    Com<ID2D1DCRenderTarget> rt;
+    Com<IDWriteTextFormat> fTitle, fDetail, fPill;
+    HDC mem = nullptr;
+    HBITMAP dib = nullptr;
+    HGDIOBJ oldBmp = nullptr;
+    int dibW = 0, dibH = 0;
+    std::wstring title, detail;
+    bool on = true, icon = true, animate = true;
+    float tint = 0.85f, wDip = kMinW, scale = 1, ringRad = 16, edge = 2, fade = 1;
+    int x = 0, y = 0, slideY = 0, pw = 0, ph = 0, duration = 1500;
+    Phase phase = Phase::Hidden;
+    DWORD phaseStart = 0;
+    bool glass = true, glassOn = false;
+    DWORD affinity = WDA_NONE;
+};
+static Dock g;
+static Glass s_glass;
+
+static UINT MonitorDpi(HMONITOR m) {
+    using Fn = HRESULT(WINAPI*)(HMONITOR, int, UINT*, UINT*);
+    static Fn fn = (Fn)(void*)GetProcAddress(LoadLibraryExW(L"shcore.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32),
+                                             "GetDpiForMonitor");
+    UINT x = 0, y = 0;
+    if (fn && SUCCEEDED(fn(m, 0 /* MDT_EFFECTIVE_DPI */, &x, &y)) && x) return x;
+    UINT d = GetDpiForSystem();
+    return d ? d : 96;
+}
+
+// The corner every window on this PC has (the corner radius mod's value), so the pop-up matches.
+static float LiveRadius() {
+    DWORD r = 0, size = sizeof(r);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Windhawk\\Engine\\Mods\\custom-corner-radius\\Settings", L"radius",
+                     RRF_RT_REG_DWORD, nullptr, &r, &size) == ERROR_SUCCESS &&
+        r >= 2 && r <= 40)
+        return (float)r;
+    return 8;
+}
+
+static float Ease(float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    return 1 - (1 - t) * (1 - t) * (1 - t);
+}
+
+static D2D1_COLOR_F Color(UINT32 rgb, float a) {
+    return D2D1::ColorF(((rgb >> 16) & 0xFF) / 255.0f, ((rgb >> 8) & 0xFF) / 255.0f, (rgb & 0xFF) / 255.0f, a);
+}
+
+static bool FamilyExists(const wchar_t* name) {
+    Com<IDWriteFontCollection> sys;
+    if (FAILED(g.dw->GetSystemFontCollection(sys.put(), FALSE))) return false;
+    UINT32 index = 0;
+    BOOL exists = FALSE;
+    return SUCCEEDED(sys->FindFamilyName(name, &index, &exists)) && exists;
+}
+
+static void MakeFormat(Com<IDWriteTextFormat>& f, const wchar_t* family, float size, int weight, bool center) {
+    if (FAILED(g.dw->CreateTextFormat(family, nullptr, (DWRITE_FONT_WEIGHT)weight, DWRITE_FONT_STYLE_NORMAL,
+                                      DWRITE_FONT_STRETCH_NORMAL, size, L"en-us", f.put())))
+        return;
+    f->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+    f->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    f->SetTextAlignment(center ? DWRITE_TEXT_ALIGNMENT_CENTER : DWRITE_TEXT_ALIGNMENT_LEADING);
+    Com<IDWriteInlineObject> sign;
+    g.dw->CreateEllipsisTrimmingSign(f.get(), sign.put());
+    DWRITE_TRIMMING t{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+    f->SetTrimming(&t, sign.get());
+}
+
+static bool EnsureFactories() {
+    if (!g.d2d && FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory), nullptr,
+                                           (void**)g.d2d.put())))
+        return false;
+    if (!g.dw && FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
+                                            (IUnknown**)g.dw.put())))
+        return false;
+    if (!g.fTitle) {
+        // FiraCode Nerd Font, as everywhere else; Segoe UI only when it is missing.
+        const wchar_t* family = L"Segoe UI";
+        for (const wchar_t* f : {L"FiraCode Nerd Font", L"FiraCode Nerd Font Med", L"Fira Code"})
+            if (FamilyExists(f)) {
+                family = f;
+                break;
+            }
+        MakeFormat(g.fTitle, family, 14.5f, 600, false);
+        MakeFormat(g.fDetail, family, 12.5f, 500, false);
+        MakeFormat(g.fPill, family, 12, 700, true);
+    }
+    return g.fTitle && g.fDetail && g.fPill;
+}
+
+static float TextW(IDWriteTextFormat* f, const std::wstring& s) {
+    if (!f || s.empty()) return 0;
+    Com<IDWriteTextLayout> layout;
+    if (FAILED(g.dw->CreateTextLayout(s.c_str(), (UINT32)s.size(), f, 4000, 100, layout.put()))) return 0;
+    DWRITE_TEXT_METRICS m{};
+    layout->GetMetrics(&m);
+    return m.widthIncludingTrailingWhitespace;
+}
+
+static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+
+static bool EnsureWindow() {
+    if (g.hwnd) return true;
+    WNDCLASSW wc{};
+    wc.lpfnWndProc = WndProc;
+    wc.hInstance = (HINSTANCE)windhawk_tool_mod::GetCurrentModuleHandle();
+    wc.lpszClassName = kClass;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    RegisterClassW(&wc);
+    g.hwnd = CreateWindowExW(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                             kClass, L"Seamless Game Crosshair", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, wc.hInstance,
+                             nullptr);
+    if (g.hwnd) SetWindowDisplayAffinity(g.hwnd, g.affinity);
+    return g.hwnd != nullptr;
+}
+
+static bool EnsureSurface() {
+    if (!g.mem) g.mem = CreateCompatibleDC(nullptr);
+    if (!g.mem) return false;
+    if (g.dib && (g.dibW != g.pw || g.dibH != g.ph)) {
+        SelectObject(g.mem, g.oldBmp);
+        DeleteObject(g.dib);
+        g.dib = nullptr;
+    }
+    if (!g.dib) {
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+        bi.bmiHeader.biWidth = g.pw;
+        bi.bmiHeader.biHeight = -g.ph;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        void* bits = nullptr;
+        g.dib = CreateDIBSection(g.mem, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+        if (!g.dib) return false;
+        g.oldBmp = SelectObject(g.mem, g.dib);
+        g.dibW = g.pw, g.dibH = g.ph;
+    }
+    if (!g.rt) {
+        D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+            D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+        if (FAILED(g.d2d->CreateDCRenderTarget(&props, g.rt.put()))) return false;
+        g.rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);  // ClearType needs an opaque surface.
+    }
+    RECT rc{0, 0, g.pw, g.ph};
+    return SUCCEEDED(g.rt->BindDC(g.mem, &rc));
+}
+
+// Draws the pop-up once into its bitmap, at full strength: the fade is the window's opacity.
+static bool Render() {
+    if (!EnsureSurface()) return false;
+    ID2D1DCRenderTarget* rt = g.rt.get();
+    rt->SetDpi(96.0f * g.scale, 96.0f * g.scale);
+    Com<ID2D1SolidColorBrush> sb;
+    rt->BeginDraw();
+    rt->SetTransform(D2D1::Matrix3x2F::Identity());
+    rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+    if (FAILED(rt->CreateSolidColorBrush(Color(0, 0), sb.put()))) {
+        rt->EndDraw();
+        return false;
+    }
+    auto solid = [&](UINT32 c, float alpha) {
+        sb->SetColor(Color(c, alpha));
+        return sb.get();
+    };
+    auto grad = [&](const D2D1_RECT_F& r, float alpha, Com<ID2D1LinearGradientBrush>& out) {
+        D2D1_GRADIENT_STOP stops[2] = {{0, Color(col::blue, alpha)}, {1, Color(col::mauve, alpha)}};
+        Com<ID2D1GradientStopCollection> stopColl;
+        if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, stopColl.put())))
+            rt->CreateLinearGradientBrush(
+                D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, (r.top + r.bottom) / 2),
+                                                    D2D1::Point2F(std::max(r.right, r.left + 1), (r.top + r.bottom) / 2)),
+                stopColl.get(), out.put());
+        return out.get() != nullptr;
+    };
+    auto gradFill = [&](const D2D1_RECT_F& r, float rad, float alpha) {
+        Com<ID2D1LinearGradientBrush> b;
+        if (grad(r, alpha, b)) rt->FillRoundedRectangle(D2D1::RoundedRect(r, rad, rad), b.get());
+    };
+    auto gradRing = [&](const D2D1_RECT_F& r, float rad, float alpha, float width) {
+        Com<ID2D1LinearGradientBrush> b;
+        // Inset by half the width with the radius cut to match: the ring follows the shape's curve.
+        D2D1_RECT_F in{r.left + width / 2, r.top + width / 2, r.right - width / 2, r.bottom - width / 2};
+        const float inRad = std::max(0.0f, rad - width / 2);
+        if (grad(r, alpha, b)) rt->DrawRoundedRectangle(D2D1::RoundedRect(in, inRad, inRad), b.get(), width);
+    };
+    auto text = [&](IDWriteTextFormat* f, const std::wstring& s, const D2D1_RECT_F& r, UINT32 c, float alpha) {
+        if (!s.empty()) rt->DrawText(s.c_str(), (UINT32)s.size(), f, r, solid(c, alpha), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    };
+
+    const float W = g.wDip, H = kH;
+    const D2D1_RECT_F all{0, 0, W, H};
+    // The Mocha fill over the blur (all of it when solid), then the one gradient edge.
+    rt->FillRoundedRectangle(D2D1::RoundedRect(all, g.ringRad, g.ringRad), solid(col::base, g.glassOn ? g.tint : 1.0f));
+    gradFill(all, g.ringRad, 0.05f);
+    gradRing(all, g.ringRad, 0.95f, g.edge);
+
+    const bool off = !g.on;
+    float tx = 18;
+    if (g.icon) {
+        // A small crosshair in a well: blue to mauve when on, grey when off.
+        const D2D1_RECT_F well{14, H / 2 - 18, 50, H / 2 + 18};
+        gradFill(well, 10, off ? 0.08f : 0.2f);
+        gradRing(well, 10, off ? 0.45f : 0.85f, 1.25f);
+        Com<ID2D1LinearGradientBrush> mark;
+        ID2D1Brush* brush = solid(col::overlay1, 1);
+        if (!off && grad(well, 1, mark)) brush = mark.get();
+        const float cx = 32, cy = H / 2, gap = 3.5f, len = 6.5f, th = 2.25f;
+        rt->FillRectangle({cx + gap, cy - th / 2, cx + gap + len, cy + th / 2}, brush);
+        rt->FillRectangle({cx - gap - len, cy - th / 2, cx - gap, cy + th / 2}, brush);
+        rt->FillRectangle({cx - th / 2, cy + gap, cx + th / 2, cy + gap + len}, brush);
+        rt->FillRectangle({cx - th / 2, cy - gap - len, cx + th / 2, cy - gap}, brush);
+        rt->FillEllipse(D2D1::Ellipse({cx, cy}, 1.6f, 1.6f), brush);
+        tx = 62;
+    }
+
+    // The pill on the right: On or Off.
+    const std::wstring pill = off ? L"Off" : L"On";
+    const float pwid = TextW(g.fPill.get(), pill) + 24;
+    const D2D1_RECT_F p{W - 16 - pwid, H / 2 - 12, W - 16, H / 2 + 12};
+    if (off) {
+        rt->FillRoundedRectangle(D2D1::RoundedRect(p, 12, 12), solid(col::surface1, 0.85f));
+        D2D1_RECT_F in{p.left + 0.5f, p.top + 0.5f, p.right - 0.5f, p.bottom - 0.5f};
+        rt->DrawRoundedRectangle(D2D1::RoundedRect(in, 11.5f, 11.5f), solid(col::overlay0, 0.6f), 1);
+        text(g.fPill.get(), pill, p, col::subtext1, 1);
+    } else {
+        gradFill(p, 12, 1);
+        text(g.fPill.get(), pill, p, col::crust, 1);
+    }
+    const float right = p.left - 12;
+
+    // Title, then the detail line.
+    const bool second = !g.detail.empty();
+    text(g.fTitle.get(), g.title, second ? D2D1_RECT_F{tx, 9, right, 31} : D2D1_RECT_F{tx, 0, right, H}, col::text, 1);
+    if (second) text(g.fDetail.get(), g.detail, {tx, 31, right, 51}, col::subtext0, 1);
+    if (rt->EndDraw() == D2DERR_RECREATE_TARGET) {
+        g.rt.reset();
+        return false;
+    }
+    return true;
+}
+
+// Puts the drawn pop-up on screen, `off` of the way along its slide, at the current fade.
+static void Place(float off) {
+    const int x = g.x, y = g.y + (int)lroundf(g.slideY * off);
+    HDC screen = GetDC(nullptr);
+    POINT pos{x, y}, src{0, 0};
+    SIZE size{g.pw, g.ph};
+    BLENDFUNCTION bf{AC_SRC_OVER, 0, (BYTE)lroundf(std::clamp(g.fade, 0.0f, 1.0f) * 255), AC_SRC_ALPHA};
+    UpdateLayeredWindow(g.hwnd, screen, &pos, &size, g.mem, &src, 0, &bf, ULW_ALPHA);
+    ReleaseDC(nullptr, screen);
+    if (g.glassOn) g.glassOn = s_glass.Show(g.hwnd, x, y, g.pw, g.ph, g.ringRad * g.scale, g.fade);
+}
+
+static void Hide() {
+    if (!g.hwnd) return;
+    KillTimer(g.hwnd, kAnimTimer);
+    KillTimer(g.hwnd, kHideTimer);
+    ShowWindow(g.hwnd, SW_HIDE);
+    s_glass.Hide();
+    g.phase = Phase::Hidden;
+}
+
+static void StartOut() {
+    if (g.phase == Phase::Hidden || g.phase == Phase::Out) return;
+    KillTimer(g.hwnd, kHideTimer);
+    if (!g.animate) return Hide();
+    g.phase = Phase::Out;
+    g.phaseStart = GetTickCount();
+    SetTimer(g.hwnd, kAnimTimer, 15, nullptr);
+}
+
+static void Tick() {
+    float t = (GetTickCount() - g.phaseStart) / (float)(g.phase == Phase::In ? kInMs : kOutMs);
+    if (g.phase == Phase::In) {
+        g.fade = std::max(g.fade, Ease(t * 1.4f));
+        Place(1 - Ease(t));
+        if (t >= 1) {
+            g.phase = Phase::Shown;
+            KillTimer(g.hwnd, kAnimTimer);
+        }
+    } else if (g.phase == Phase::Out) {
+        if (t >= 1) return Hide();
+        g.fade = 1 - Ease(t);
+        Place(Ease(t));
+    } else {
+        KillTimer(g.hwnd, kAnimTimer);
+    }
+}
+
+static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+        case WM_NCHITTEST: return HTTRANSPARENT;
+        case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
+        case WM_TIMER:
+            if (wp == kAnimTimer) Tick();
+            else if (wp == kHideTimer) StartOut();
+            return 0;
+        case WM_DPICHANGED: return 0;  // Show sizes it for its monitor.
+        case WM_DISPLAYCHANGE: Hide(); return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+static HMONITOR TargetMonitor(const Config& c) {
+    if (c.popupScreen == L"primary") return MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY);
+    if (c.popupScreen == L"crosshair" && g_targetMon) return g_targetMon;
+    if (c.popupScreen == L"focused") {
+        HWND fg = GetForegroundWindow();
+        DWORD pid = 0;
+        if (fg) GetWindowThreadProcessId(fg, &pid);
+        // The tray menu makes this process the foreground; then the pointer's screen is the one.
+        if (fg && pid != GetCurrentProcessId()) return MonitorFromWindow(fg, MONITOR_DEFAULTTOPRIMARY);
+    }
+    POINT pt{};
+    GetCursorPos(&pt);
+    return MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY);
+}
+
+static std::wstring ShortStyle(const Config& c) {
+    std::wstring s = StyleLabel(c.style);
+    size_t cut = s.find(L" (");
+    return cut == std::wstring::npos ? s : s.substr(0, cut);
+}
+
+static void Show(bool on) {
+    const Config& c = g_cfg;
+    if (!c.popupInFullscreen) {
+        QUERY_USER_NOTIFICATION_STATE st{};
+        if (SUCCEEDED(SHQueryUserNotificationState(&st)) &&
+            (st == QUNS_RUNNING_D3D_FULL_SCREEN || st == QUNS_PRESENTATION_MODE || st == QUNS_BUSY))
+            return;
+    }
+    if (!EnsureWindow() || !EnsureFactories()) return;
+    g.on = on;
+    g.icon = c.popupIcon;
+    g.animate = c.popupAnimate;
+    g.duration = c.popupDuration;
+    g.title = on ? L"Crosshair enabled" : L"Crosshair disabled";
+    g.detail.clear();
+    const std::wstring& key = c.hotkeys[HK_TOGGLE];
+    if (c.popupDetail == L"shortcut" && !key.empty()) g.detail = key + (on ? L" hides it" : L" shows it");
+    else if (c.popupDetail != L"none") g.detail = ShortStyle(c);
+
+    // Width fits the words, within limits.
+    const float textW = std::max(TextW(g.fTitle.get(), g.title), TextW(g.fDetail.get(), g.detail));
+    const float pillW = TextW(g.fPill.get(), on ? L"On" : L"Off") + 24 + 12;
+    g.wDip = std::clamp((g.icon ? 62 : 18) + textW + pillW + 18, kMinW, kMaxW);
+
+    HMONITOR mon = TargetMonitor(c);
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(mon, &mi);
+    const RECT wa = mi.rcWork, full = mi.rcMonitor;
+    const UINT dpi = MonitorDpi(mon);
+    const float size = c.popupSize == L"compact" ? 0.88f : c.popupSize == L"large" ? 1.2f : 1.0f;
+    g.scale = dpi / 96.0f * size;
+    // The corner and the edge match every other window: the live radius and 2 px, whatever the size.
+    g.ringRad = LiveRadius() / size;
+    g.edge = 2.0f / size;
+    g.tint = c.popupStrength / 100.0f;
+    g.glass = c.popupGlass && GlassAvailable();
+    g.pw = (int)lroundf(g.wDip * g.scale);
+    g.ph = (int)lroundf(kH * g.scale);
+    const float k = dpi / 96.0f;
+    const int margin = (int)lroundf(c.popupMargin * k), slide = c.popupAnimate ? (int)lroundf(kSlide * k) : 0;
+    const std::wstring& pos = c.popupPosition;
+    int x, y;
+    if (pos == L"belowCrosshair" || pos == L"aboveCrosshair") {
+        const bool below = pos == L"belowCrosshair";
+        x = g_target.x - g.pw / 2;
+        y = below ? g_target.y + margin : g_target.y - margin - g.ph;
+        g.slideY = below ? -slide : slide;  // It grows out of the crosshair.
+    } else {
+        const bool left = pos == L"topLeft" || pos == L"bottomLeft", right = pos == L"topRight" || pos == L"bottomRight";
+        const bool top = pos.rfind(L"top", 0) == 0, middle = pos == L"center";
+        x = left ? wa.left + margin : right ? wa.right - margin - g.pw : (wa.left + wa.right - g.pw) / 2;
+        y = top ? wa.top + margin : middle ? (wa.top + wa.bottom - g.ph) / 2 : wa.bottom - margin - g.ph;
+        g.slideY = top ? -slide : slide;
+    }
+    x += (int)lroundf(c.popupOffsetX * k);
+    y += (int)lroundf(c.popupOffsetY * k);
+    // Never off the screen, whatever the offsets say.
+    g.x = std::clamp(x, (int)full.left, std::max((int)full.left, (int)full.right - g.pw));
+    g.y = std::clamp(y, (int)full.top, std::max((int)full.top, (int)full.bottom - g.ph));
+
+    // The glass decides the fill, so it goes in place (still invisible) before the drawing.
+    const bool coming = g.phase == Phase::Hidden || g.phase == Phase::Out;
+    if (coming) g.fade = g.phase == Phase::Hidden ? 0.0f : g.fade;
+    if (!g.animate) g.fade = 1;
+    g.glassOn = g.glass && s_glass.Show(g.hwnd, g.x, g.y, g.pw, g.ph, g.ringRad * g.scale, 0);
+    if (!g.glass) s_glass.Hide();
+    if (!Render() && !Render()) {  // A lost drawing surface is made again once.
+        Hide();
+        return;
+    }
+    KillTimer(g.hwnd, kHideTimer);
+    ShowWindow(g.hwnd, SW_SHOWNOACTIVATE);
+    SetWindowPos(g.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    if (g.animate && coming) {
+        g.phase = Phase::In;
+        g.phaseStart = GetTickCount();
+        Place(1);
+        SetTimer(g.hwnd, kAnimTimer, 15, nullptr);
+    } else {
+        KillTimer(g.hwnd, kAnimTimer);
+        g.phase = Phase::Shown;
+        g.fade = 1;
+        Place(0);
+    }
+    SetTimer(g.hwnd, kHideTimer, (UINT)g.duration, nullptr);
+}
+
+static void SetAffinity(DWORD a) {
+    g.affinity = a;
+    if (g.hwnd) SetWindowDisplayAffinity(g.hwnd, a);
+    s_glass.Affinity(a);
+}
+
+// On the UI thread, before it ends.
+static void Destroy() {
+    if (g.hwnd) {
+        KillTimer(g.hwnd, kAnimTimer);
+        KillTimer(g.hwnd, kHideTimer);
+        DestroyWindow(g.hwnd);
+        g.hwnd = nullptr;
+    }
+    s_glass.Destroy();
+    g.rt.reset();
+    g.fTitle.reset();
+    g.fDetail.reset();
+    g.fPill.reset();
+    g.dw.reset();
+    g.d2d.reset();
+    if (g.mem) {
+        if (g.dib) SelectObject(g.mem, g.oldBmp);
+        DeleteDC(g.mem);
+        g.mem = nullptr;
+    }
+    if (g.dib) DeleteObject(g.dib);
+    g.dib = nullptr;
+    g.dibW = g.dibH = 0;
+    g.phase = Phase::Hidden;
+    UnregisterClassW(kClass, (HINSTANCE)windhawk_tool_mod::GetCurrentModuleHandle());
+}
+
+}  // namespace sgcdock
+
+static void SetDockAffinity(DWORD a) { sgcdock::SetAffinity(a); }
+static void DestroyDock() { sgcdock::Destroy(); }
+
+enum class ShowSource { Other, Shortcut, Tray };
+
+static void SetShown(bool on, ShowSource from = ShowSource::Other) {
     g_shown = on;
     Wh_SetIntValue(L"shown", on ? 1 : 0);
+    g_fadeNext = true;  // Showing or hiding on purpose is what the crosshair's fade is for.
     UpdateTimers();
     UpdateVisibility();
     UpdateTray(false);
+    const Config& c = g_cfg;
+    bool ask = (from == ShowSource::Shortcut && c.popupWhen != L"tray") ||
+               (from == ShowSource::Tray && c.popupWhen != L"shortcut");
+    if (c.popupOn && ask) sgcdock::Show(on);
 }
 
 static void StepStyle(int dir) {
@@ -1745,6 +2647,9 @@ static void Nudge(int dx, int dy) {
 // A short blink, so a shortcut that changes nothing on screen still shows it worked.
 static void Blink() {
     if (!g_visible) return;
+    KillTimer(g_msgWnd, kTimerFade);
+    g_fadeDir = 0;
+    g_fadeP = 0;
     ShowWindow(g_overlay, SW_HIDE);
     g_visible = false;
     SetTimer(g_msgWnd, kTimerBlink, 200, nullptr);
@@ -1783,55 +2688,11 @@ enum : UINT {
 };
 static const int kSizes[] = {50, 75, 100, 125, 150, 200, 300, 400};
 
-static std::wstring MenuLabel(PCWSTR text, int hk) {
-    std::wstring s = text;
-    if (hk >= 0 && !g_cfg.hotkeys[hk].empty()) s += L"\t" + g_cfg.hotkeys[hk];
-    return s;
-}
-
-static void ShowTrayMenu(POINT pt) {
-    Config c = g_cfg;
-    HMENU menu = CreatePopupMenu(), styles = CreatePopupMenu(), colors = CreatePopupMenu(), sizes = CreatePopupMenu();
-    AppendMenuW(menu, MF_STRING | (g_shown ? MF_CHECKED : 0), IDM_SHOW, MenuLabel(L"Show crosshair", HK_TOGGLE).c_str());
-    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    for (int i = 0; i < (int)ARRAYSIZE(kStyles); i++) {
-        bool image = !wcscmp(kStyles[i].key, L"image");
-        AppendMenuW(styles, MF_STRING | (c.style == kStyles[i].key ? MF_CHECKED : 0) | (image && c.imagePath.empty() ? MF_GRAYED : 0),
-                    IDM_STYLE + i, image ? L"An image file" : kStyles[i].label);
-    }
-    for (size_t i = 0; i < c.colorCycle.size() && i < 100; i++)
-        AppendMenuW(colors, MF_STRING | (c.colorCycle[i] == c.color ? MF_CHECKED : 0), IDM_COLOR + i, HexOf(c.colorCycle[i]).c_str());
-    for (int i = 0; i < (int)ARRAYSIZE(kSizes); i++)
-        AppendMenuW(sizes, MF_STRING | (c.scale == kSizes[i] ? MF_CHECKED : 0), IDM_SIZE + i,
-                    (std::to_wstring(kSizes[i]) + L"%").c_str());
-    AppendMenuW(menu, MF_POPUP, (UINT_PTR)styles, L"Style");
-    AppendMenuW(menu, MF_POPUP, (UINT_PTR)colors, L"Color");
-    AppendMenuW(menu, MF_POPUP, (UINT_PTR)sizes, L"Size");
-    AppendMenuW(menu, MF_STRING | (c.offsetX || c.offsetY ? 0 : MF_GRAYED), IDM_CENTER,
-                MenuLabel(L"Back to the center", HK_CENTER).c_str());
-    if (!g_lastApp.empty())
-        AppendMenuW(menu, MF_STRING | (g_lookExe == g_lastApp ? MF_CHECKED : 0), IDM_LOOK,
-                    MenuLabel((L"Keep this look for " + g_lastApp).c_str(), HK_LOOK).c_str());
-    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING, IDM_SETTINGS, MenuLabel(L"Settings", HK_SETTINGS).c_str());
-    SetForegroundWindow(g_msgWnd);
-    UINT cmd = TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON |
-                                          (GetSystemMetrics(SM_MENUDROPALIGNMENT) ? TPM_RIGHTALIGN : TPM_LEFTALIGN),
-                                pt.x, pt.y, g_msgWnd, nullptr);
-    PostMessageW(g_msgWnd, WM_NULL, 0, 0);
-    DestroyMenu(menu);
-    if (cmd == IDM_SHOW) SetShown(!g_shown);
-    else if (cmd == IDM_CENTER) Change({{L"offsetX", L"0"}, {L"offsetY", L"0"}});
-    else if (cmd == IDM_SETTINGS) OpenSettings();
-    else if (cmd == IDM_LOOK) ToggleLook();
-    else if (cmd >= IDM_STYLE && cmd < IDM_STYLE + ARRAYSIZE(kStyles)) Change({{L"style", kStyles[cmd - IDM_STYLE].key}});
-    else if (cmd >= IDM_COLOR && cmd < IDM_COLOR + c.colorCycle.size()) Change({{L"color", HexOf(c.colorCycle[cmd - IDM_COLOR])}});
-    else if (cmd >= IDM_SIZE && cmd < IDM_SIZE + ARRAYSIZE(kSizes)) SetScale(kSizes[cmd - IDM_SIZE]);
-}
+static void ShowTrayMenu(POINT pt);  // Defined with the settings engine below; runs on its menu renderer.
 
 static void OnHotkey(int which) {
     switch (which) {
-        case HK_TOGGLE: SetShown(!g_shown); break;
+        case HK_TOGGLE: SetShown(!g_shown, ShowSource::Shortcut); break;
         case HK_NEXT: StepStyle(1); break;
         case HK_PREV: StepStyle(-1); break;
         case HK_COLOR: NextColor(); break;
@@ -1862,7 +2723,10 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             else if (wp == kTimerTopmost) KeepOnTop();
             else if (wp == kTimerBlink) {
                 KillTimer(hwnd, kTimerBlink);
+                g_fadeSkip = true;
                 UpdateVisibility();
+            } else if (wp == kTimerFade) {
+                FadeTick();
             } else if (wp == kTimerFullscreen) {
                 KillTimer(hwnd, kTimerFullscreen);
                 CheckTrueFullscreen();
@@ -1954,7 +2818,8 @@ static DWORD WINAPI UiThread(LPVOID) {
     if (g_fgHook) UnhookWinEvent(g_fgHook);
     g_fgHook = nullptr;
     if (g_msgWnd) {
-        for (UINT_PTR t : {kTimerTrack, kTimerAim, kTimerTopmost, kTimerBlink, kTimerFullscreen}) KillTimer(g_msgWnd, t);
+        for (UINT_PTR t : {kTimerTrack, kTimerAim, kTimerTopmost, kTimerBlink, kTimerFullscreen, kTimerFade})
+            KillTimer(g_msgWnd, t);
         if (KillTimer(g_msgWnd, kTimerSave)) SavePendingAsync();  // A change still waiting to be saved.
         for (int i = 0; i < HK_COUNT; i++)
             if (g_hotkeyOn[i]) UnregisterHotKey(g_msgWnd, i + 1);
@@ -1968,6 +2833,7 @@ static DWORD WINAPI UiThread(LPVOID) {
     }
     if (g_trayIcon) DestroyIcon(g_trayIcon);
     g_trayIcon = nullptr;
+    DestroyDock();
     if (g_overlay) DestroyWindow(g_overlay);
     if (g_msgWnd) DestroyWindow(g_msgWnd);
     g_overlay = g_msgWnd = nullptr;
@@ -2978,6 +3844,47 @@ class SetCom {
     explicit operator bool() const { return p != nullptr; }
 };
 
+// One row of a tray menu (Set_TrayMenu). Every mod's tray menu is a list of these.
+struct SetMenuItem {
+    int id = 0;                    // What Set_TrayMenu returns when this row is picked.
+    std::wstring glyph;            // FiraCode Nerd Font glyph for the leading column.
+    std::wstring label;
+    std::wstring hint;             // Grey text on the right, such as a hotkey.
+    bool checked = false;          // Accent check mark on the right.
+    bool separator = false;
+    bool disabled = false;
+    std::vector<SetMenuItem> sub;  // A submenu, drawn by the same renderer.
+};
+
+// One open level of a tray menu: its own popup window and Direct2D target.
+struct SetMenuLevel {
+    const std::vector<SetMenuItem>* items = nullptr;
+    HWND hwnd = nullptr;
+    SetCom<ID2D1HwndRenderTarget> rt;
+    float scale = 1, wDip = 0, hDip = 0, itemH = 30, hintW = 0;
+    std::vector<float> top, height;  // Per row, DIPs inside the window.
+    int hover = -1;                  // Highlighted row.
+    int open = -1;                   // Row whose submenu is the next level.
+};
+
+// A running tray menu. It owns its factories, so it runs on whatever thread owns the tray icon.
+struct SetMenuSession {
+    SetCom<ID2D1Factory> d2d;
+    SetCom<IDWriteFactory> dw;
+    SetCom<IDWriteTextFormat> fText, fHint, fGlyph, fGlyphS;
+    std::vector<std::unique_ptr<SetMenuLevel>> levels;
+    HINSTANCE inst = nullptr;
+    std::wstring cls;
+    float radius = 8;
+    int result = 0;
+    bool done = false;
+    bool pressed = false;  // A button went down inside the menu; only then does a release pick a row.
+    bool wasActive = false;
+    float alpha = 1;
+    ULONGLONG fadeStart = 0;
+    int pendingLevel = -1, pendingItem = -1;  // Hover timer: open (item >= 0) or close a submenu after a delay.
+};
+
 struct SetField {
     enum Kind { Choice, Number, Text, Hotkey, Check, Color };
     Kind kind;
@@ -3063,7 +3970,27 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Text, L"colorCycle", L"Colors for \"Next color\"", L"Hexadecimal colors split with \";\". They also fill the tray menu's Color list.", L"#00FF00; #00FFFF; #FFFF00; #FF00FF; #FFFFFF; #FF0000", {}, 0, 100, 4, L"Shortcuts"},
 {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 4, L"Settings window"},
 {K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 4, L"Settings window"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open these settings. Right-click it to show or hide the crosshair, or pick a style, color or size. When off, change settings in Windhawk.", L"1", {}, 0, 100, 4, L"Settings window"}
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open these settings. Right-click it to show or hide the crosshair, or pick a style, color or size. When off, change settings in Windhawk.", L"1", {}, 0, 100, 4, L"Settings window"},
+{K::Check, L"popupOn", L"On and off pop-up", L"A small dock says \"Crosshair enabled\" or \"Crosshair disabled\" each time you switch it.", L"1", {}, 0, 100, 5, L"Pop-up"},
+{K::Choice, L"popupWhen", L"Show it for", L"", L"both", {{L"both", L"The shortcut and the tray menu"}, {L"shortcut", L"Only the shortcut"}, {L"tray", L"Only the tray menu"}}, 0, 100, 5, L"Pop-up"},
+{K::Choice, L"popupDetail", L"Second line", L"The smaller line under \"Crosshair enabled\".", L"style", {{L"style", L"The crosshair style"}, {L"shortcut", L"The shortcut that switches it"}, {L"none", L"Nothing"}}, 0, 100, 5, L"Pop-up"},
+{K::Check, L"popupIcon", L"Crosshair icon", L"The crosshair mark on the left of the pop-up.", L"1", {}, 0, 100, 5, L"Pop-up"},
+{K::Number, L"popupDuration", L"How long it stays (milliseconds)", L"500 to 10000 (Suggested: 1500). 1000 is one second.", L"1500", {}, 500, 10000, 5, L"Pop-up"},
+{K::Check, L"popupInFullscreen", L"Show over fullscreen games", L"Off, the pop-up stays away while a game or video fills the screen.", L"1", {}, 0, 100, 5, L"Pop-up"},
+{K::Choice, L"popupPosition", L"Where", L"", L"bottom", {{L"top", L"Top middle"}, {L"topLeft", L"Top left"}, {L"topRight", L"Top right"}, {L"center", L"Middle of the screen"}, {L"bottom", L"Bottom middle"}, {L"bottomLeft", L"Bottom left"}, {L"bottomRight", L"Bottom right"}, {L"belowCrosshair", L"Just below the crosshair"}, {L"aboveCrosshair", L"Just above the crosshair"}}, 0, 100, 5, L"Place"},
+{K::Choice, L"popupScreen", L"Screen", L"", L"crosshair", {{L"crosshair", L"The screen the crosshair is on"}, {L"primary", L"The main screen"}, {L"pointer", L"The screen with the mouse pointer"}, {L"focused", L"The screen of the window in front"}}, 0, 100, 5, L"Place"},
+{K::Number, L"popupMargin", L"Distance from the edge", L"0 to 600 (Suggested: 48). Pixels from the screen edge, or from the crosshair when it sits next to it.", L"48", {}, 0, 600, 5, L"Place"},
+{K::Number, L"popupOffsetX", L"Move right", L"-2000 to 2000 (Suggested: 0). Pixels. Less than 0 moves it left.", L"0", {}, -2000, 2000, 5, L"Place"},
+{K::Number, L"popupOffsetY", L"Move down", L"-2000 to 2000 (Suggested: 0). Pixels. Less than 0 moves it up.", L"0", {}, -2000, 2000, 5, L"Place"},
+{K::Choice, L"popupSize", L"Size", L"", L"normal", {{L"compact", L"Compact"}, {L"normal", L"Normal"}, {L"large", L"Large"}}, 0, 100, 5, L"Look"},
+{K::Check, L"popupGlass", L"Blurred glass", L"On, the pop-up blurs what is behind it. Off, it is solid. The blur needs Windows transparency effects on.", L"1", {}, 0, 100, 5, L"Look"},
+{K::Number, L"popupStrength", L"Background strength (%)", L"80 to 100 (Suggested: 85). How much of the dark background covers the blur.", L"85", {}, 80, 100, 5, L"Look"},
+{K::Check, L"popupAnimate", L"Slide and fade", L"On, the pop-up slides and fades in and out. Off, it appears and goes at once.", L"1", {}, 0, 100, 5, L"Look"},
+{K::Check, L"fadeOn", L"Fade the crosshair", L"On, the crosshair fades in and out when you show or hide it, instead of popping.", L"1", {}, 0, 100, 5, L"Crosshair fade"},
+{K::Number, L"fadeInTime", L"Fade in time (milliseconds)", L"0 to 2000 (Suggested: 150).", L"150", {}, 0, 2000, 5, L"Crosshair fade"},
+{K::Number, L"fadeOutTime", L"Fade out time (milliseconds)", L"0 to 2000 (Suggested: 150).", L"150", {}, 0, 2000, 5, L"Crosshair fade"},
+{K::Choice, L"fadeCurve", L"Fade style", L"", L"smooth", {{L"smooth", L"Smooth: starts and ends gently"}, {L"linear", L"Even all the way"}}, 0, 100, 5, L"Crosshair fade"},
+{K::Choice, L"fadeWhen", L"Fade when", L"Aiming fades too with the second choice, so leave it on the first for the fastest aim.", L"toggle", {{L"toggle", L"You show or hide it"}, {L"all", L"It shows or hides for any reason"}}, 0, 100, 5, L"Crosshair fade"}
     };
 }
 
@@ -3077,6 +4004,7 @@ static const SetPageInfo kSetPages[] = {
 {L"Position", L"Where the crosshair sits on the screen.", 0xE81D},
 {L"When to show", L"When the crosshair shows, and when it gets out of the way.", 0xE7B3},
 {L"Keys and tray", L"Shortcuts, the tray icon and this window.", 0xE765},
+{L"Pop-up and fade", L"The pop-up that says the crosshair is on or off, and how the crosshair fades.", 0xE7E7},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
@@ -3099,6 +4027,8 @@ constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
 constexpr UINT_PTR kSetTimerId = 1;
+constexpr float kSetAutoDead = 10, kSetAutoR = 18, kSetAutoGain = 0.14f, kSetAutoMax = 56;
+constexpr PCWSTR kSetAutoProp = L"SeamlessOwnAutoscroll";  // Seamless Autoscroll skips this window.
 constexpr PCWSTR kSetKofiUrl = L"https://ko-fi.com/DavidHiFi";
 constexpr PCWSTR kSetAuthorUrl = L"https://github.com/DavidHiFi";
 constexpr PCWSTR kSetDittoUrl = L"https://github.com/Tu2525/OpenCrosshair";
@@ -3110,6 +4040,8 @@ constexpr PCWSTR kSetTitle = L"Seamless Game Crosshair";
 // The self-drawn title bar. Everything below it is laid out as before, in "content" DIPs.
 static float kSetCapH = 40;
 constexpr float kSetCapBtnW = 46, kSetHoverMs = 120;
+constexpr float kSetMenuPad = 6, kSetMenuIconW = 22, kSetMenuSepH = 9, kSetMenuOverlap = 3, kSetMenuMinW = 190, kSetMenuMaxW = 640, kSetMenuBorderW = 2;
+constexpr UINT kSetMenuSubDelayMs = 200, kSetMenuFadeMs = 90, kSetMenuTimerSub = 0x5E71, kSetMenuTimerFade = 0x5E72, kSetMenuTimerPoll = 0x5E73;
 
 struct SetItem {
     enum Type { Group, Row, Banner, About, Link, Support } type = Row;
@@ -3149,6 +4081,8 @@ struct SetWindow {
     int dragSlider = -1;
     bool dragScroll = false, tracking = false, timer = false;
     float dragOff = 0;
+    bool autoScroll = false, autoMoved = false;
+    float autoX = 0, autoY = 0, autoA = 0, autoDir = 0;
     // Sidebar dock: railW is the chosen open width, railCur the drawn width (eased toward
     // kSetRailMini when collapsed). railGlow / footGlow ease the dock borders on hover.
     float railW = kSetRailDef, railCur = kSetRailDef, railGlow = 0, footGlow = 0;
@@ -3292,6 +4226,635 @@ static SetCom<IDWriteTextFormat> Set_Fmt(const std::wstring& family, float size,
 }
 
 // std::wstring(L"FiraCode Nerd Font") at 500; emphasis is one step heavier, never past bold.
+static float Set_MenuCornerRadius() {
+    float radius = 8.0f;
+    HKEY key;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Windhawk\\Engine\\Mods\\custom-corner-radius", 0,
+                      KEY_READ | KEY_WOW64_64KEY, &key) == ERROR_SUCCESS) {
+        DWORD disabled = 0, size = sizeof(disabled);
+        bool off = RegQueryValueExW(key, L"Disabled", nullptr, nullptr, (BYTE*)&disabled, &size) == ERROR_SUCCESS && disabled;
+        DWORD value = 0;
+        size = sizeof(value);
+        if (!off && RegGetValueW(key, L"Settings", L"radius", RRF_RT_REG_DWORD, nullptr, &value, &size) == ERROR_SUCCESS &&
+            value > 0 && value <= 64)
+            radius = (float)value;
+        RegCloseKey(key);
+    }
+    return radius;
+}
+
+static SetMenuItem Set_MenuRow(int id, PCWSTR glyph, PCWSTR label, bool checked = false, bool disabled = false,
+                               PCWSTR hint = L"") {
+    SetMenuItem m;
+    m.id = id;
+    m.glyph = glyph ? glyph : L"";
+    m.label = label ? label : L"";
+    m.hint = hint ? hint : L"";
+    m.checked = checked;
+    m.disabled = disabled;
+    return m;
+}
+
+static SetMenuItem Set_MenuSub(PCWSTR glyph, PCWSTR label, std::vector<SetMenuItem> sub, bool disabled = false) {
+    SetMenuItem m = Set_MenuRow(0, glyph, label, false, disabled);
+    m.sub = std::move(sub);
+    return m;
+}
+
+static SetMenuItem Set_MenuSep() {
+    SetMenuItem m;
+    m.separator = true;
+    return m;
+}
+
+static SetMenuSession*& Set_MenuCur() {
+    static thread_local SetMenuSession* session = nullptr;  // One menu per thread; History menus run on the settings thread.
+    return session;
+}
+
+static bool Set_MenuSelectable(const SetMenuItem& m) { return !m.separator && !m.disabled; }
+
+static float Set_MenuTextW(SetMenuSession& s, IDWriteTextFormat* f, const std::wstring& text) {
+    SetCom<IDWriteTextLayout> layout;
+    DWRITE_TEXT_METRICS m{};
+    if (text.empty() || !f || FAILED(s.dw->CreateTextLayout(text.c_str(), (UINT32)text.size(), f, 10000, 1000, layout.put())) ||
+        FAILED(layout->GetMetrics(&m)))
+        return 0;
+    return m.widthIncludingTrailingWhitespace;
+}
+
+static bool Set_MenuFormats(SetMenuSession& s) {
+    if (!s.d2d && FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory), nullptr,
+                                           (void**)s.d2d.put())))
+        return false;
+    if (!s.dw && FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)s.dw.put())))
+        return false;
+    std::wstring family = L"Segoe UI";
+    SetCom<IDWriteFontCollection> sys;
+    if (SUCCEEDED(s.dw->GetSystemFontCollection(sys.put(), FALSE))) {
+        for (PCWSTR face : {L"FiraCode Nerd Font", L"FiraCodeNerdFont", L"FiraCode Nerd Font Mono"}) {
+            UINT32 index = 0;
+            BOOL exists = FALSE;
+            if (SUCCEEDED(sys->FindFamilyName(face, &index, &exists)) && exists) {
+                family = face;
+                break;
+            }
+        }
+    }
+    auto make = [&](float size, DWRITE_TEXT_ALIGNMENT align, SetCom<IDWriteTextFormat>& out) {
+        if (FAILED(s.dw->CreateTextFormat(family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+                                          DWRITE_FONT_STRETCH_NORMAL, size, L"en-us", out.put())))
+            return false;
+        out->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        out->SetTextAlignment(align);
+        out->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        // Only a label wider than the widest menu (kSetMenuMaxW) is ever shortened, with an ellipsis.
+        DWRITE_TRIMMING trim{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+        SetCom<IDWriteInlineObject> sign;
+        if (SUCCEEDED(s.dw->CreateEllipsisTrimmingSign(out.get(), sign.put()))) out->SetTrimming(&trim, sign.get());
+        return true;
+    };
+    return make(13.5f, DWRITE_TEXT_ALIGNMENT_LEADING, s.fText) && make(12.5f, DWRITE_TEXT_ALIGNMENT_TRAILING, s.fHint) &&
+           make(15, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyph) && make(12, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyphS);
+}
+
+static void Set_MenuLayout(SetMenuSession& s, SetMenuLevel& lv) {
+    const auto& items = *lv.items;
+    lv.itemH = 30;
+    lv.top.assign(items.size(), 0);
+    lv.height.assign(items.size(), 0);
+    float textW = 0, hintW = 0, y = kSetMenuPad;
+    for (size_t i = 0; i < items.size(); i++) {
+        lv.top[i] = y;
+        lv.height[i] = items[i].separator ? kSetMenuSepH : lv.itemH;
+        y += lv.height[i];
+        if (items[i].separator) continue;
+        textW = std::max(textW, Set_MenuTextW(s, s.fText.get(), items[i].label));
+        hintW = std::max(hintW, Set_MenuTextW(s, s.fHint.get(), items[i].hint));
+    }
+    lv.hintW = std::ceil(hintW);
+    float w = kSetMenuPad * 2 + 8 + kSetMenuIconW + 10 + std::ceil(textW) + 2 + (hintW > 0 ? 24 + lv.hintW : 0) + 10 + 20 + 8;
+    lv.wDip = std::ceil(std::clamp(w, kSetMenuMinW, kSetMenuMaxW));
+    lv.hDip = std::ceil(y + kSetMenuPad);
+}
+
+static int Set_MenuItemAt(const SetMenuLevel& lv, float x, float y) {
+    if (x < kSetMenuPad || x >= lv.wDip - kSetMenuPad) return -1;
+    for (size_t i = 0; i < lv.top.size(); i++)
+        if (y >= lv.top[i] && y < lv.top[i] + lv.height[i]) return (*lv.items)[i].separator ? -1 : (int)i;
+    return -1;
+}
+
+static int Set_MenuNext(const SetMenuLevel& lv, int from, int dir) {
+    int n = (int)lv.items->size();
+    if (!n) return -1;
+    int i = from < 0 ? (dir > 0 ? -1 : n) : from;
+    for (int k = 0; k < n; k++) {
+        i = ((i + dir) % n + n) % n;
+        if (Set_MenuSelectable((*lv.items)[(size_t)i])) return i;
+    }
+    return -1;
+}
+
+static void Set_MenuPaint(SetMenuSession& s, SetMenuLevel& lv) {
+    ID2D1RenderTarget* rt = lv.rt.get();
+    SetCom<ID2D1SolidColorBrush> brush;
+    if (FAILED(rt->CreateSolidColorBrush(D2DColor(mocha::text), brush.put()))) return;
+    auto solid = [&](UINT32 rgb, float a) {
+        brush->SetColor(D2DColor(rgb, a));
+        return brush.get();
+    };
+    auto gradient = [&](D2D1_POINT_2F a, D2D1_POINT_2F b, D2D1_COLOR_F c1, D2D1_COLOR_F c2) {
+        SetCom<ID2D1LinearGradientBrush> g;
+        D2D1_GRADIENT_STOP stops[2] = {{0, c1}, {1, c2}};
+        SetCom<ID2D1GradientStopCollection> coll;
+        if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())))
+            rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(a, b), coll.get(), g.put());
+        return g;
+    };
+    // Blue to mauve at 45 degrees across a rect, like Seamless Borders.
+    auto accent = [&](const D2D1_RECT_F& r, float a) {
+        float d = ((r.right - r.left) + (r.bottom - r.top)) / 2;
+        return gradient({r.left, r.top}, {r.left + d, r.top + d}, D2DColor(mocha::blue, a), D2DColor(mocha::mauve, a));
+    };
+    const float w = lv.wDip, h = lv.hDip;
+    rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+    SetCom<ID2D1Layer> layer;
+    bool faded = s.alpha < 0.999f && SUCCEEDED(rt->CreateLayer(nullptr, layer.put()));
+    if (faded)
+        rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                            D2D1::IdentityMatrix(), std::max(0.0f, s.alpha)),
+                      layer.get());
+    // Dark Mocha over the acrylic blur; DWM rounds the window.
+    auto tint = gradient({0, 0}, {0, h}, D2DColor(mocha::base, 0.80f), D2DColor(mocha::base, 0.84f));
+    if (tint) rt->FillRectangle({0, 0, w, h}, tint.get());
+    const auto& items = *lv.items;
+    const float slotRight = w - kSetMenuPad - 8, slotLeft = slotRight - 20;
+    for (size_t i = 0; i < items.size(); i++) {
+        const SetMenuItem& m = items[i];
+        D2D1_RECT_F r{kSetMenuPad, lv.top[i], w - kSetMenuPad, lv.top[i] + lv.height[i]};
+        if (m.separator) {
+            float y = std::floor((r.top + r.bottom) / 2);
+            rt->FillRectangle({r.left + 8, y, r.right - 8, y + 1}, solid(mocha::surface1, 0.8f));
+            continue;
+        }
+        bool hot = ((int)i == lv.hover || (int)i == lv.open) && !m.disabled;
+        if (hot) {
+            // The hover look of every card: a faint blue to mauve wash and a 1 px gradient ring.
+            float rad = 8, ringW = 1;
+            D2D1_ROUNDED_RECT rr{{r.left + ringW / 2, r.top + ringW / 2, r.right - ringW / 2, r.bottom - ringW / 2}, rad, rad};
+            auto fill = gradient({r.left, r.top}, {r.right, r.bottom}, D2DColor(mocha::blue, 0.16f), D2DColor(mocha::mauve, 0.16f));
+            if (fill) rt->FillRoundedRectangle(rr, fill.get());
+            auto ring = accent(r, 0.8f);
+            if (ring) rt->DrawRoundedRectangle(rr, ring.get(), ringW);
+        }
+        UINT32 col = m.disabled ? mocha::overlay0 : mocha::text;
+        if (!m.glyph.empty())
+            rt->DrawText(m.glyph.c_str(), (UINT32)m.glyph.size(), s.fGlyph.get(),
+                         {r.left + 8, r.top, r.left + 8 + kSetMenuIconW, r.bottom}, solid(col, 1));
+        float textX = r.left + 8 + kSetMenuIconW + 10;
+        float hintRight = slotLeft - 10, hintLeft = hintRight - lv.hintW;
+        float textRight = lv.hintW > 0 ? hintLeft - 12 : slotLeft - 4;
+        if (!m.label.empty())
+            rt->DrawText(m.label.c_str(), (UINT32)m.label.size(), s.fText.get(), {textX, r.top, textRight, r.bottom},
+                         solid(col, 1));
+        if (!m.hint.empty())
+            rt->DrawText(m.hint.c_str(), (UINT32)m.hint.size(), s.fHint.get(), {hintLeft, r.top, hintRight, r.bottom},
+                         solid(m.disabled ? mocha::overlay0 : mocha::subtext0, 1));
+        if (!m.sub.empty()) {
+            rt->DrawText(L"", 1, s.fGlyphS.get(), {slotLeft, r.top, slotRight, r.bottom}, solid(col, 1));  // chevron_right
+        } else if (m.checked) {
+            rt->DrawText(L"", 1, s.fGlyph.get(), {slotLeft, r.top, slotRight, r.bottom},  // check
+                         solid(m.disabled ? mocha::overlay0 : mocha::blue, 1));
+        }
+    }
+    // The edge on DWM's real corner curve: 2 px, blue to mauve, inset half the stroke.
+    const float bw = kSetMenuBorderW;
+    D2D1_RECT_F edge{bw / 2, bw / 2, w - bw / 2, h - bw / 2};
+    auto border = accent({0, 0, w, h}, 1);
+    float r2 = std::max(0.0f, s.radius - bw / 2);
+    if (border) rt->DrawRoundedRectangle({edge, r2, r2}, border.get(), bw);
+    if (faded) rt->PopLayer();
+}
+
+static int Set_MenuIndexOf(HWND hwnd) {
+    if (SetMenuSession* s = Set_MenuCur())
+        for (size_t i = 0; i < s->levels.size(); i++)
+            if (s->levels[i]->hwnd == hwnd) return (int)i;
+    return -1;
+}
+
+static void Set_MenuInvalidate() {
+    if (SetMenuSession* s = Set_MenuCur())
+        for (auto& lv : s->levels)
+            if (lv->hwnd) InvalidateRect(lv->hwnd, nullptr, FALSE);
+}
+
+static void Set_MenuCloseFrom(size_t n) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s) return;
+    while (s->levels.size() > n) {
+        HWND h = s->levels.back()->hwnd;
+        s->levels.back()->rt.reset();
+        s->levels.pop_back();
+        if (h) DestroyWindow(h);
+    }
+    if (n > 0 && !s->levels.empty()) s->levels.back()->open = -1;
+    Set_MenuInvalidate();
+}
+
+static void Set_MenuFinish(int id) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || s->done) return;
+    s->result = id;
+    s->done = true;
+}
+
+static void Set_MenuBackdrop(HWND hwnd) {
+    BOOL dark = TRUE;
+    DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+    int corner = 2;  // DWMWCP_ROUND
+    DwmSetWindowAttribute(hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &corner, sizeof(corner));
+    COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE: the menu draws its own edge.
+    DwmSetWindowAttribute(hwnd, 34 /* DWMWA_BORDER_COLOR */, &none, sizeof(none));
+    DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+    int backdrop = 1;  // DWMSBT_NONE
+    DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+    DWM_BLURBEHIND bb{};
+    bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+    bb.fEnable = TRUE;
+    bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+    DwmEnableBlurBehindWindow(hwnd, &bb);
+    if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+    struct SetAccentPolicy { int state, flags, abgr, animation; };
+    struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
+    if (auto setComposition =
+            (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute")) {
+        SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};
+        SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+        setComposition(hwnd, &data);
+    }
+}
+
+static RECT Set_MenuWorkArea(POINT pt) {
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST), &mi);
+    return mi.rcWork;
+}
+
+static bool Set_MenuCreateWindow(SetMenuSession& s, SetMenuLevel& lv, POINT at, const RECT* parent, int rowTopPx) {
+    DWORD ex = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | (parent ? WS_EX_NOACTIVATE : 0);
+    HWND hwnd = CreateWindowExW(ex, s.cls.c_str(), L"", WS_POPUP, at.x, at.y, 1, 1, nullptr, nullptr, s.inst, nullptr);
+    if (!hwnd) return false;
+    lv.hwnd = hwnd;
+    lv.scale = GetDpiForWindow(hwnd) / 96.0f;
+    if (lv.scale <= 0) lv.scale = 1;
+    Set_MenuLayout(s, lv);
+    int w = (int)std::ceil(lv.wDip * lv.scale), h = (int)std::ceil(lv.hDip * lv.scale);
+    RECT wa = Set_MenuWorkArea(parent ? POINT{parent->right, parent->top + rowTopPx} : at);
+    int x = at.x, y = at.y;
+    if (parent) {
+        int overlap = (int)kSetMenuOverlap;
+        x = parent->right - overlap;
+        if (x + w > wa.right) x = parent->left - w + overlap;
+        y = parent->top + rowTopPx - (int)(kSetMenuPad * lv.scale);
+        if (y + h > wa.bottom) y = wa.bottom - h;
+    } else {
+        if (x + w > wa.right) x = at.x - w;
+        if (y + h > wa.bottom) y = at.y - h;
+    }
+    x = std::clamp<int>(x, wa.left, std::max<int>(wa.left, wa.right - w));
+    y = std::clamp<int>(y, wa.top, std::max<int>(wa.top, wa.bottom - h));
+    Set_MenuBackdrop(hwnd);
+    SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+        D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+        96 * lv.scale, 96 * lv.scale);
+    s.d2d->CreateHwndRenderTarget(props, D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU((UINT32)w, (UINT32)h)),
+                                  lv.rt.put());
+    return (bool)lv.rt;
+}
+
+static void Set_MenuOpenSub(size_t level, int item, bool keyboard) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || level >= s->levels.size()) return;
+    SetMenuLevel& parent = *s->levels[level];
+    const SetMenuItem& m = (*parent.items)[(size_t)item];
+    if (m.sub.empty() || m.disabled) return;
+    Set_MenuCloseFrom(level + 1);
+    auto lv = std::make_unique<SetMenuLevel>();
+    lv->items = &m.sub;
+    RECT pr{};
+    GetWindowRect(parent.hwnd, &pr);
+    SetMenuLevel* raw = lv.get();
+    s->levels.push_back(std::move(lv));
+    parent.open = item;
+    if (!Set_MenuCreateWindow(*s, *raw, POINT{pr.right, pr.top}, &pr, (int)(parent.top[(size_t)item] * parent.scale))) {
+        Set_MenuCloseFrom(level + 1);
+        return;
+    }
+    if (keyboard) raw->hover = Set_MenuNext(*raw, -1, +1);
+    ShowWindow(raw->hwnd, SW_SHOWNOACTIVATE);
+    Set_MenuInvalidate();
+}
+
+static void Set_MenuActivate(size_t level, int item, bool keyboard) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || level >= s->levels.size()) return;
+    const SetMenuItem& m = (*s->levels[level]->items)[(size_t)item];
+    if (!Set_MenuSelectable(m)) return;
+    if (!m.sub.empty()) Set_MenuOpenSub(level, item, keyboard);
+    else Set_MenuFinish(m.id);
+}
+
+static void Set_MenuHoverChanged(size_t level, int item) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s) return;
+    SetMenuLevel& lv = *s->levels[level];
+    HWND root = s->levels[0]->hwnd;
+    KillTimer(root, kSetMenuTimerSub);
+    s->pendingItem = -1;
+    bool wantsSub = item >= 0 && Set_MenuSelectable((*lv.items)[(size_t)item]) && !(*lv.items)[(size_t)item].sub.empty();
+    if (wantsSub && lv.open != item) {
+        s->pendingLevel = (int)level;
+        s->pendingItem = item;
+        SetTimer(root, kSetMenuTimerSub, kSetMenuSubDelayMs, nullptr);
+    } else if (!wantsSub && lv.open != -1 && s->levels.size() > level + 1) {
+        s->pendingLevel = (int)level;
+        s->pendingItem = -1;
+        SetTimer(root, kSetMenuTimerSub, kSetMenuSubDelayMs, nullptr);
+    }
+}
+
+static void Set_MenuKey(WPARAM vk) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || s->levels.empty()) return;
+    size_t li = s->levels.size() - 1;
+    SetMenuLevel& cur = *s->levels[li];
+    const auto& items = *cur.items;
+    switch (vk) {
+        case VK_DOWN: cur.hover = Set_MenuNext(cur, cur.hover, +1); break;
+        case VK_UP: cur.hover = Set_MenuNext(cur, cur.hover, -1); break;
+        case VK_HOME: cur.hover = Set_MenuNext(cur, -1, +1); break;
+        case VK_END: cur.hover = Set_MenuNext(cur, (int)items.size(), -1); break;
+        case VK_RIGHT:
+            if (cur.hover >= 0 && !items[(size_t)cur.hover].sub.empty()) Set_MenuActivate(li, cur.hover, true);
+            break;
+        case VK_LEFT:
+            if (li > 0) Set_MenuCloseFrom(li);
+            break;
+        case VK_RETURN:
+        case VK_SPACE:
+            if (cur.hover >= 0) Set_MenuActivate(li, cur.hover, true);
+            break;
+        case VK_ESCAPE:
+        case VK_MENU:
+            if (li > 0 && vk == VK_ESCAPE) Set_MenuCloseFrom(li);
+            else Set_MenuFinish(0);
+            break;
+        default: return;
+    }
+    Set_MenuInvalidate();
+}
+
+static LRESULT CALLBACK Set_MenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    SetMenuSession* s = Set_MenuCur();
+    int li = Set_MenuIndexOf(hwnd);
+    if (!s || li < 0) return DefWindowProcW(hwnd, msg, wParam, lParam);
+    SetMenuLevel& lv = *s->levels[(size_t)li];
+    switch (msg) {
+        case WM_ERASEBKGND: return 1;
+        case WM_MOUSEACTIVATE: return li == 0 ? MA_ACTIVATE : MA_NOACTIVATE;
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            if (lv.rt) {
+                lv.rt->BeginDraw();
+                Set_MenuPaint(*s, lv);
+                if (lv.rt->EndDraw() == D2DERR_RECREATE_TARGET) {
+                    RECT rc;
+                    GetClientRect(hwnd, &rc);
+                    lv.rt.reset();
+                    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+                        D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96 * lv.scale,
+                        96 * lv.scale);
+                    s->d2d->CreateHwndRenderTarget(
+                        props, D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU((UINT32)rc.right, (UINT32)rc.bottom)),
+                        lv.rt.put());
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                }
+            }
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_MOUSEMOVE: {
+            if (s->pendingLevel > li) {  // The pointer reached a deeper level: keep it open.
+                KillTimer(s->levels[0]->hwnd, kSetMenuTimerSub);
+                s->pendingItem = s->pendingLevel = -1;
+            }
+            TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
+            TrackMouseEvent(&tme);
+            int i = Set_MenuItemAt(lv, (short)LOWORD(lParam) / lv.scale, (short)HIWORD(lParam) / lv.scale);
+            if (i >= 0 && !Set_MenuSelectable((*lv.items)[(size_t)i])) i = -1;
+            if (i != lv.hover) {
+                lv.hover = i;
+                Set_MenuHoverChanged((size_t)li, i);
+                Set_MenuInvalidate();
+            }
+            return 0;
+        }
+        case WM_MOUSELEAVE:
+            if (lv.hover != -1 && lv.open != lv.hover) {
+                lv.hover = -1;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP: {
+            if (!s->pressed) return 0;  // The release of the click that opened the menu.
+            int i = Set_MenuItemAt(lv, (short)LOWORD(lParam) / lv.scale, (short)HIWORD(lParam) / lv.scale);
+            if (i >= 0) Set_MenuActivate((size_t)li, i, false);
+            return 0;
+        }
+        case WM_ACTIVATE:
+            if (li == 0 && LOWORD(wParam) != WA_INACTIVE) s->wasActive = true;
+            if (li == 0 && LOWORD(wParam) == WA_INACTIVE && Set_MenuIndexOf((HWND)lParam) < 0) Set_MenuFinish(0);
+            return 0;
+        case WM_TIMER:
+            if (wParam == kSetMenuTimerSub) {
+                KillTimer(hwnd, kSetMenuTimerSub);
+                int pl = s->pendingLevel, pi = s->pendingItem;
+                s->pendingLevel = s->pendingItem = -1;
+                if (pl >= 0 && (size_t)pl < s->levels.size()) {
+                    if (pi >= 0) Set_MenuOpenSub((size_t)pl, pi, false);
+                    else Set_MenuCloseFrom((size_t)pl + 1);
+                }
+            } else if (wParam == kSetMenuTimerFade) {
+                float t = std::min(1.0f, (GetTickCount64() - s->fadeStart) / (float)kSetMenuFadeMs);
+                s->alpha = 1 - (1 - t) * (1 - t);
+                if (t >= 1) KillTimer(hwnd, kSetMenuTimerFade);
+                Set_MenuInvalidate();
+            } else if (wParam == kSetMenuTimerPoll) {
+                // Click-away when Windows kept the menu out of the foreground: a press outside every level.
+                if (GetForegroundWindow() != s->levels[0]->hwnd &&
+                    ((GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON) | GetAsyncKeyState(VK_MBUTTON)) & 0x8000)) {
+                    POINT pt;
+                    GetCursorPos(&pt);
+                    if (Set_MenuIndexOf(WindowFromPoint(pt)) < 0) Set_MenuFinish(0);
+                }
+            }
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+static int Set_TrayMenu(HWND owner, const std::vector<SetMenuItem>& items, const POINT* at = nullptr) {
+    if (Set_MenuCur()) {  // A second right-click while open closes the first menu.
+        Set_MenuFinish(0);
+        return 0;
+    }
+    if (items.empty()) return 0;
+    POINT pt{};
+    if (at) pt = *at;
+    else GetCursorPos(&pt);
+    SetMenuSession session;
+    if (!Set_MenuFormats(session)) return 0;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       (LPCWSTR)(void*)&Set_MenuProc, &session.inst);
+    // One class per mod, even when several mods share a process.
+    session.cls = L"SeamlessTrayMenu_" + std::to_wstring((unsigned long long)(uintptr_t)(void*)&Set_MenuProc);
+    PCWSTR cls = session.cls.c_str();
+    WNDCLASSEXW wc{sizeof(wc)};
+    wc.hInstance = session.inst;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpfnWndProc = Set_MenuProc;
+    wc.lpszClassName = cls;
+    RegisterClassExW(&wc);
+    session.radius = Set_MenuCornerRadius();
+    Set_MenuCur() = &session;
+    session.levels.push_back(std::make_unique<SetMenuLevel>());
+    SetMenuLevel* root = session.levels[0].get();
+    root->items = &items;
+    if (!Set_MenuCreateWindow(session, *root, pt, nullptr, 0)) {
+        Set_MenuCloseFrom(0);
+        Set_MenuCur() = nullptr;
+        UnregisterClassW(cls, session.inst);
+        return 0;
+    }
+    BOOL animations = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animations, 0);
+    session.alpha = animations ? 0.0f : 1.0f;
+    session.fadeStart = GetTickCount64();
+    if (owner && IsWindow(owner)) SetForegroundWindow(owner);  // Windows' tray rule; lets the menu take the foreground.
+    ShowWindow(root->hwnd, SW_SHOW);
+    if (!SetForegroundWindow(root->hwnd)) {
+        DWORD fg = GetWindowThreadProcessId(GetForegroundWindow(), nullptr), me = GetCurrentThreadId();
+        if (fg && fg != me && AttachThreadInput(me, fg, TRUE)) {
+            SetForegroundWindow(root->hwnd);
+            AttachThreadInput(me, fg, FALSE);
+        }
+    }
+    SetFocus(root->hwnd);
+    if (animations) SetTimer(root->hwnd, kSetMenuTimerFade, 15, nullptr);
+    SetTimer(root->hwnd, kSetMenuTimerPoll, 50, nullptr);
+    MSG m;
+    while (!session.done) {
+        BOOL got = GetMessageW(&m, nullptr, 0, 0);
+        if (got <= 0) {
+            if (got == 0) PostQuitMessage((int)m.wParam);
+            break;
+        }
+        switch (m.message) {
+            case WM_KEYDOWN:
+            case WM_SYSKEYDOWN:
+                Set_MenuKey(m.wParam);
+                continue;
+            case WM_KEYUP:
+            case WM_SYSKEYUP:
+            case WM_CHAR:
+            case WM_SYSCHAR:
+                continue;
+            case WM_LBUTTONDOWN:
+            case WM_RBUTTONDOWN:
+            case WM_MBUTTONDOWN:
+            case WM_NCLBUTTONDOWN:
+            case WM_NCRBUTTONDOWN:
+                if (Set_MenuIndexOf(m.hwnd) < 0) {  // A click on another window of this thread closes the menu.
+                    Set_MenuFinish(0);
+                    continue;
+                }
+                session.pressed = true;
+                break;
+        }
+        TranslateMessage(&m);
+        DispatchMessageW(&m);
+    }
+    int result = session.result;
+    Set_MenuCloseFrom(0);
+    Set_MenuCur() = nullptr;
+    UnregisterClassW(cls, session.inst);
+    if (owner && IsWindow(owner)) PostMessageW(owner, WM_NULL, 0, 0);
+    return result;
+}
+
+// ---- Tray menu -------------------------------------------------------------
+
+}  // namespace sgcset
+
+static std::wstring HotkeyHint(int hk) {
+    if (hk >= 0 && !g_cfg.hotkeys[hk].empty()) return g_cfg.hotkeys[hk];
+    return L"";
+}
+
+// The tray menu runs on the engine's renderer, the same menu every mod's tray uses.
+static void ShowTrayMenu(POINT pt) {
+    Config c = g_cfg;
+    std::vector<sgcset::SetMenuItem> styles, colors, sizes;
+    for (int i = 0; i < (int)ARRAYSIZE(kStyles); i++) {
+        bool image = !wcscmp(kStyles[i].key, L"image");
+        styles.push_back(sgcset::Set_MenuRow(IDM_STYLE + i, nullptr,
+                                             image ? L"An image file" : kStyles[i].label,
+                                             c.style == kStyles[i].key, image && c.imagePath.empty()));
+    }
+    for (size_t i = 0; i < c.colorCycle.size() && i < 100; i++)
+        colors.push_back(sgcset::Set_MenuRow(IDM_COLOR + (int)i, nullptr, HexOf(c.colorCycle[i]).c_str(),
+                                             c.colorCycle[i] == c.color));
+    for (int i = 0; i < (int)ARRAYSIZE(kSizes); i++)
+        sizes.push_back(sgcset::Set_MenuRow(IDM_SIZE + i, nullptr,
+                                            (std::to_wstring(kSizes[i]) + L"%").c_str(), c.scale == kSizes[i]));
+    std::vector<sgcset::SetMenuItem> items;
+    items.push_back(sgcset::Set_MenuRow(IDM_SHOW, nullptr, L"Show crosshair", g_shown, false, HotkeyHint(HK_TOGGLE).c_str()));
+    items.push_back(sgcset::Set_MenuRow(IDM_CENTER, nullptr, L"Back to the center", false,
+                                        !(c.offsetX || c.offsetY), HotkeyHint(HK_CENTER).c_str()));
+    if (!g_lastApp.empty()) {
+        std::wstring look = L"Keep this look for " + g_lastApp;
+        items.push_back(sgcset::Set_MenuRow(IDM_LOOK, nullptr, look.c_str(), g_lookExe == g_lastApp, false,
+                                            HotkeyHint(HK_LOOK).c_str()));
+    }
+    items.push_back(sgcset::Set_MenuSub(nullptr, L"Style", std::move(styles)));
+    items.push_back(sgcset::Set_MenuSub(nullptr, L"Color", std::move(colors)));
+    items.push_back(sgcset::Set_MenuSub(nullptr, L"Size", std::move(sizes)));
+    sgcset::SetMenuItem sep;
+    sep.separator = true;
+    items.push_back(std::move(sep));
+    items.push_back(sgcset::Set_MenuRow(IDM_SETTINGS, nullptr, L"Settings", false, false, HotkeyHint(HK_SETTINGS).c_str()));
+    int cmd = sgcset::Set_TrayMenu(g_msgWnd, items, &pt);
+    if (cmd == IDM_SHOW) SetShown(!g_shown, ShowSource::Tray);
+    else if (cmd == IDM_CENTER) Change({{L"offsetX", L"0"}, {L"offsetY", L"0"}});
+    else if (cmd == IDM_SETTINGS) OpenSettings();
+    else if (cmd == IDM_LOOK) ToggleLook();
+    else if (cmd >= IDM_STYLE && cmd < IDM_STYLE + (int)ARRAYSIZE(kStyles))
+        Change({{L"style", kStyles[cmd - IDM_STYLE].key}});
+    else if (cmd >= IDM_COLOR && cmd < IDM_COLOR + (int)c.colorCycle.size())
+        Change({{L"color", HexOf(c.colorCycle[cmd - IDM_COLOR])}});
+    else if (cmd >= IDM_SIZE && cmd < IDM_SIZE + (int)ARRAYSIZE(kSizes))
+        SetScale(kSizes[cmd - IDM_SIZE]);
+}
+
+namespace sgcset {
+
 static void Set_MakeFormats(SetWindow& w) {
     w.family = Set_ResolveFamily();
     w.iconFamily = Set_FamilyExists(L"Segoe Fluent Icons") ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
@@ -4199,6 +5762,29 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
 // The title bar is drawn first; everything else is in content DIPs, shifted down by kSetCapH.
 static void Set_PlaceEdit(SetWindow& w);
 
+static void Set_DrawAutoScroll(SetPaint& p, SetWindow& w, bool frosted) {
+    if (w.autoA <= 0.003f) return;
+    const float a = w.autoA, s = 0.8f + 0.2f * a, r = kSetAutoR * s, cx = w.autoX, cy = w.autoY;
+    const D2D1_RECT_F disc{cx - r, cy - r, cx + r, cy + r};
+    p.Round(disc, r, mocha::mantle, (frosted ? 0.86f : 1.0f) * a);  // Opaque when nothing blurs under it.
+    p.GradRing(disc, r - 1, a, 2);
+    auto arrow = [&](float dir, bool lit) {
+        SetCom<ID2D1PathGeometry> g;
+        SetCom<ID2D1GeometrySink> k;
+        if (FAILED(g_setD2d->CreatePathGeometry(g.put())) || FAILED(g->Open(k.put()))) return;
+        const float tip = cy + dir * r * 0.62f, foot = cy + dir * r * 0.30f, half = r * 0.22f;
+        k->BeginFigure(D2D1::Point2F(cx, tip), D2D1_FIGURE_BEGIN_FILLED);
+        k->AddLine(D2D1::Point2F(cx + half, foot));
+        k->AddLine(D2D1::Point2F(cx - half, foot));
+        k->EndFigure(D2D1_FIGURE_END_CLOSED);
+        if (SUCCEEDED(k->Close())) p.rt->FillGeometry(g.get(), p.B(lit ? mocha::blue : mocha::overlay1, a));
+    };
+    arrow(-1, w.autoDir < 0);
+    arrow(1, w.autoDir > 0);
+    const float d = 2.5f * s;
+    p.Round({cx - d, cy - d, cx + d, cy + d}, d, mocha::mauve, a);
+}
+
 static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     if (Set_FitBoxes(w)) {
         Set_BuildPage(w);
@@ -4315,6 +5901,16 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
                 D2D1_RECT_F src{d.left - 1, d.top - 1, d.right + 1, d.bottom + 1};
                 dc->DrawImage(blur.get(), D2D1::Point2F(src.left, src.top), src);
                 rt->PopLayer();
+                if (w.autoA > 0.003f) {  // The autoscroll disc frosts the rows under it the same way.
+                    const float r = kSetAutoR * (0.8f + 0.2f * w.autoA), cx = w.autoX, cy = w.autoY + kSetCapH;
+                    SetCom<ID2D1EllipseGeometry> disc;
+                    if (SUCCEEDED(g_setD2d->CreateEllipseGeometry(D2D1::Ellipse(D2D1::Point2F(cx, cy), r, r), disc.put()))) {
+                        rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), disc.get()), nullptr);
+                        D2D1_RECT_F ds{cx - r - 1, cy - r - 1, cx + r + 1, cy + r + 1};
+                        dc->DrawImage(blur.get(), D2D1::Point2F(ds.left, ds.top), ds);
+                        rt->PopLayer();
+                    }
+                }
                 blurred = true;
             }
         }
@@ -4328,6 +5924,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     Set_DrawFooter(p, w);
     Set_DrawRail(p, w);
     Set_DrawPopup(p, w);
+    Set_DrawAutoScroll(p, w, blurred);
     rt->SetTransform(D2D1::Matrix3x2F::Identity());
     if (false) p.GradRing({0, 0, w.cw, w.ch + kSetCapH}, SystemCornerRadius(false), 1, 1);
     HRESULT hr = rt->EndDraw();
@@ -4863,6 +6460,48 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
 
 // ---- Animation tick ----------------------------------------------------------------
 
+static bool Set_AutoScrollStart(SetWindow& w, float x, float y) {
+    if (w.render || w.contentH - Set_ViewH(w) <= 0) return false;  // Nothing to scroll.
+    Set_CommitEdit(w, true);
+    Set_ClosePopup(w);
+    w.autoScroll = true;
+    w.autoMoved = false;
+    w.autoX = x, w.autoY = y, w.autoDir = 0;
+    w.hover = SetHit();
+    SetCapture(w.hwnd);
+    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+    Set_Invalidate(w);
+    return true;
+}
+
+static void Set_AutoScrollStop(SetWindow& w) {
+    if (!w.autoScroll) return;
+    w.autoScroll = false;  // Before ReleaseCapture: its WM_CAPTURECHANGED comes straight back here.
+    w.autoDir = 0;
+    if (GetCapture() == w.hwnd) ReleaseCapture();
+    Set_Invalidate(w);
+}
+
+static void Set_AutoScrollMove(SetWindow& w, bool held) {
+    if (held && fabsf(w.mouseY - w.autoY) > kSetAutoDead) w.autoMoved = true;
+    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+}
+
+static bool Set_AutoScrollStep(SetWindow& w) {
+    if (!w.autoScroll) return false;
+    const float dy = w.mouseY - w.autoY, dist = fabsf(dy) - kSetAutoDead;
+    const float dir = dist > 0 ? (dy > 0 ? 1.0f : -1.0f) : 0.0f;
+    bool changed = dir != w.autoDir;
+    w.autoDir = dir;
+    if (dist <= 0) return changed;
+    const float maxScroll = std::max(0.0f, w.contentH - Set_ViewH(w));
+    const float next = std::clamp(w.scrollY + dir * std::min(kSetAutoMax, dist * kSetAutoGain), 0.0f, maxScroll);
+    if (next == w.scrollY) return changed;
+    w.scrollY = w.scrollTarget = next;
+    Set_PlaceEdit(w);
+    return true;
+}
+
 static bool Set_Tick(SetWindow& w) {
     bool moved = false, anim = Set_Anim(w);
     auto step = [&](float& v, float target, float rate) {
@@ -4896,6 +6535,8 @@ static bool Set_Tick(SetWindow& w) {
         if (!w.knob.count((int)k)) w.knob[(int)k] = target;
         step(w.knob[(int)k], target, 0.35f);
     }
+    if (Set_AutoScrollStep(w)) moved = true;
+    step(w.autoA, w.autoScroll ? 1.0f : 0.0f, 0.3f);
     if (w.scrollY != w.scrollTarget) {
         float d = w.scrollTarget - w.scrollY;
         if (!anim || fabsf(d) < 0.5f) {
@@ -5215,6 +6856,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_ACTIVATE:
             w->active = LOWORD(wParam) != WA_INACTIVE;
+            if (!w->active) Set_AutoScrollStop(*w);
             Set_Invalidate(*w);
             break;
         case WM_ERASEBKGND:
@@ -5285,6 +6927,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             }
             w->mouseX = x;
             w->mouseY = y;
+            if (w->autoScroll) {
+                Set_AutoScrollMove(*w, (wParam & MK_MBUTTON) != 0);
+                return 0;
+            }
             if (w->dragRail) {
                 Set_RailDragTo(*w, x - w->dragOff);
                 return 0;
@@ -5316,7 +6962,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             POINT pointer; GetCursorPos(&pointer);
             w->tracking = false;
             w->hover = SetHit();
-            if (!w->dragRail) w->mouseX = w->mouseY = -1;
+            if (!w->dragRail && !w->autoScroll) w->mouseX = w->mouseY = -1;
             Set_Invalidate(*w);
             return 0;
         }
@@ -5331,6 +6977,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             break;
         case WM_LBUTTONDOWN: {
             if (w->saving) return 0;
+            if (w->autoScroll) {  // A click ends autoscroll and does nothing else.
+                Set_AutoScrollStop(*w);
+                return 0;
+            }
             if (!w->render) SetFocus(hwnd);
             w->kbd = false;
             float x = dipX(lParam), y = dipY(lParam);
@@ -5393,6 +7043,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_LBUTTONUP:
         case WM_CAPTURECHANGED:
+            if (msg == WM_CAPTURECHANGED && w->autoScroll && (HWND)lParam != hwnd) Set_AutoScrollStop(*w);
             if (w->capDown) {
                 int b = w->capDown - 1;
                 w->capDown = 0;
@@ -5416,7 +7067,23 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 Set_Invalidate(*w);
             }
             return 0;
+        case WM_MBUTTONDOWN:
+            if (w->saving) return 0;
+            if (w->autoScroll) Set_AutoScrollStop(*w);  // Toggle mode: the next middle click ends it.
+            else Set_AutoScrollStart(*w, dipX(lParam), dipY(lParam));
+            return 0;
+        case WM_MBUTTONUP:
+            if (w->autoScroll && w->autoMoved) Set_AutoScrollStop(*w);  // Held and dragged: stop on release.
+            return 0;
+        case WM_RBUTTONDOWN:
+        case WM_XBUTTONDOWN:
+            if (w->autoScroll) {
+                Set_AutoScrollStop(*w);
+                return msg == WM_XBUTTONDOWN ? TRUE : 0;
+            }
+            break;
         case WM_MOUSEWHEEL: {
+            Set_AutoScrollStop(*w);
             if (w->openSel >= 0 && Set_In(w->dropRect, w->mouseX, w->mouseY)) {
                 int n = (int)w->fields[w->openSel].options.size(), vis = Set_DropVisible(*w);
                 int step = GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? -3 : 3;
@@ -5438,6 +7105,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
+            if (w->autoScroll) {  // Any key ends autoscroll; Escape does nothing else.
+                Set_AutoScrollStop(*w);
+                if (wParam == VK_ESCAPE) return 0;
+            }
             if (Set_OnKey(*w, (UINT)wParam)) return 0;
             // Without a system menu (glass title bar) Windows no longer turns Alt+F4 into a close.
             if (msg == WM_SYSKEYDOWN && wParam == VK_F4 && w->recording < 0) {
@@ -5457,6 +7128,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             return 0;
         case WM_DESTROY: {
             Set_StopRecording(*w);
+            RemovePropW(hwnd, kSetAutoProp);
             if (w->timer) KillTimer(hwnd, kSetTimerId);
             if (!w->render && w->normalRect.right > w->normalRect.left) {
                 const RECT& r = w->normalRect;
@@ -5578,6 +7250,7 @@ static bool Set_Create(bool render) {
         return false;
     }
     w->hwnd = hwnd;
+    SetPropW(hwnd, kSetAutoProp, (HANDLE)1);  // Seamless Autoscroll leaves this window to Set_AutoScroll*.
     w->dpi = g_setForceDpi ? g_setForceDpi : GetDpiForWindow(hwnd);
     ApplyDarkWindow(hwnd);
     COLORREF caption = RefFromRgb(mocha::crust), captionText = RefFromRgb(mocha::text);

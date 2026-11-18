@@ -65,6 +65,8 @@ An AI agent can do all of this on its own: [AGENTS.md](AGENTS.md) is the runbook
 | | [Micrographics Taskbar Clock Plus](mods/local/micrographics-taskbar-clock-plus) | A Nothing OS style Micrographics clock for the taskbar, with pill badges and a weather line. |
 | | [Seamless Taskbar Utilities](mods/local/seamless-taskbar-utilities) | Quick system tools, an auto-hide switch and icon separators in the taskbar right-click menu, with Catppuccin result cards. |
 | <img src="media/previews/seamless-taskbar-badge-counter.png" width="220" alt="Window count badges on taskbar icons"> | [Seamless Taskbar Badge Counter](mods/local/seamless-taskbar-badge-counter) | See how many windows each taskbar app has open, on a Catppuccin Mocha badge with a gradient edge. |
+| <img src="media/previews/seamless-crash-watch.png" width="220" alt="Crash notice on dark glass"> | [Seamless Crash Watch](mods/local/seamless-crash-watch) | A notice when a program crashes. Click it and an AI agent in a terminal finds out why. |
+| <img src="media/previews/seamless-sound-manager.png" width="220" alt="Sound scheme settings window"> | [Seamless Sound Manager](mods/local/seamless-sound-manager) | Change every Windows sound with a scheme: 161 presets, startup and logon sounds. |
 
 ### Windows, borders and Alt+Tab
 

@@ -2,13 +2,19 @@
 // @id              seamless-autoscroll
 // @name            Seamless Autoscroll
 // @description     Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator
-// @version         1.0.0
+// @version         1.1.0
 // @author          DavidHiFi, crazyboyybs
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         explorer.exe
-// @compilerOptions -DWIN32_LEAN_AND_MEAN -luser32 -ladvapi32 -lole32 -loleaut32 -ldwmapi -lruntimeobject
+// @include         chrome.exe
+// @include         msedge.exe
+// @include         brave.exe
+// @include         vivaldi.exe
+// @include         chromium.exe
+// @include         opera.exe
+// @compilerOptions -DWIN32_LEAN_AND_MEAN -luser32 -ladvapi32 -lole32 -loleaut32 -ldwmapi -lruntimeobject -lgdi32
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -49,10 +55,19 @@ you started and lights up the way you are scrolling.
 A quick middle click with no scrolling still reaches the app, so opening a
 folder in a new tab keeps working.
 
+## In your browser
+
+Chrome, Edge, Brave, Vivaldi, Opera and Chromium forks such as Helium have their
+own middle-click scrolling with a plain white circle. In those browsers the mod
+leaves the scrolling to the browser and swaps the white circle for the same
+frosted glass one, so links still open in a new tab on a middle click. Turn off
+**Show the indicator** to get the browser's own circle back.
+
 ## Notes
 
 - Turn off **AutoScroll Win32** if you have it. Both together scroll twice.
 - To use it in other apps, add them under **Advanced > Include processes**.
+  A Chromium browser you add gets the browser mode above.
 - The blur follows the Windows transparency effects setting. With it off, the
   circle shows a plain tinted background.
 
@@ -239,6 +254,13 @@ static std::atomic<bool> g_indUpdatePending{false};
 // Refresh interval of the target window's monitor, cached per gesture.
 static std::atomic<DWORD> g_frameMs{16};
 
+// Browser mode (2026-11-17): inside a Chromium browser the browser scrolls by
+// itself and shows its own white pan cursor. The mod only swaps that cursor for
+// the frosted indicator, so links and the browser's own scrolling stay native.
+static bool              g_chromium = false;
+static std::atomic<bool> g_mirror{false};
+static std::atomic<HWND> g_dpiHwnd{nullptr};
+
 // ===========================================================================
 // Scroll thread
 // ===========================================================================
@@ -357,6 +379,14 @@ static void StopAutoscroll() {
 // Message handler shared by the PeekMessage and DispatchMessage hooks.
 // Returns true when the message is consumed and must be suppressed.
 // ===========================================================================
+// Seamless settings windows run their own middle-click autoscroll (shared settings engine,
+// 2026-11-16) and mark their top-level window with this property. Leave those to them, so a
+// middle click never draws two circles.
+static bool WindowOwnsAutoscroll(HWND hwnd) {
+    HWND root = hwnd ? GetAncestor(hwnd, GA_ROOT) : nullptr;
+    return root && GetPropW(root, L"SeamlessOwnAutoscroll");
+}
+
 static bool HandleMsg(const MSG* pMsg) {
     if (!pMsg || pMsg->message == WM_NULL) return false;
 
@@ -368,6 +398,7 @@ static bool HandleMsg(const MSG* pMsg) {
     // swallows every DOWN: passing it lets Explorer SetCapture and eat the
     // UP in an inner loop before our hook sees it.
     case WM_MBUTTONDOWN: {
+        if (!isActive && WindowOwnsAutoscroll(pMsg->hwnd)) return false;
         POINT pt = { GET_X_LPARAM(pMsg->lParam),
                      GET_Y_LPARAM(pMsg->lParam) };
         ClientToScreen(pMsg->hwnd, &pt);
@@ -387,6 +418,7 @@ static bool HandleMsg(const MSG* pMsg) {
     case WM_MBUTTONUP: {
         if (g_suppressNextMBUp.exchange(false, std::memory_order_relaxed))
             return true;
+        if (!isActive && WindowOwnsAutoscroll(pMsg->hwnd)) return false;
 
         bool toggleMode = g_toggleMode.load(std::memory_order_relaxed);
 
@@ -479,6 +511,109 @@ LRESULT WINAPI DispatchMessageA_Hook(const MSG* pMsg) {
 }
 
 // ===========================================================================
+// Browser mode: SetCursor hook (Chromium browser process only)
+// ===========================================================================
+// Chromium draws its middle-click scrolling as one of eleven pan cursors from
+// its own resources. Loaded at 32x32 they are the only Chromium cursors with the
+// hotspot dead in the middle (16,16); grab, zoom, resize and the rest sit off
+// center, and web pages' own cursors have no resource behind them.
+using SetCursor_t = HCURSOR(WINAPI*)(HCURSOR);
+static SetCursor_t g_origSetCursor = nullptr;
+static wchar_t     g_exeDir[MAX_PATH] = L"";
+static SRWLOCK     g_panLock = SRWLOCK_INIT;
+struct PanEntry { HCURSOR h; bool pan; };
+static PanEntry    g_panCache[48] = {};
+static int         g_panNext = 0;
+
+static bool ClassifyPanCursor(HCURSOR h) {
+    ICONINFOEXW info = {sizeof(info)};
+    if (!GetIconInfoExW(h, &info)) return false;
+    if (info.hbmColor) DeleteObject(info.hbmColor);
+    if (info.hbmMask) DeleteObject(info.hbmMask);
+    if (!info.szModName[0] || !(info.wResID || info.szResName[0])) return false;
+    HMODULE mod = GetModuleHandleW(info.szModName);
+    if (!mod) return false;
+    wchar_t path[MAX_PATH];
+    DWORD n = GetModuleFileNameW(mod, path, MAX_PATH);
+    size_t dirLen = wcslen(g_exeDir);
+    if (!n || !dirLen || _wcsnicmp(path, g_exeDir, dirLen) != 0) return false;
+    HCURSOR copy = (HCURSOR)LoadImageW(
+        mod, info.wResID ? MAKEINTRESOURCEW(info.wResID) : info.szResName,
+        IMAGE_CURSOR, 32, 32, 0);
+    if (!copy) return false;
+    ICONINFO ii = {};
+    bool pan = false;
+    if (GetIconInfo(copy, &ii)) {
+        BITMAP bm = {};
+        HBITMAP hbm = ii.hbmColor ? ii.hbmColor : ii.hbmMask;
+        int w = 0;
+        if (hbm && GetObject(hbm, sizeof(bm), &bm)) w = bm.bmWidth;
+        pan = (w == 32 && ii.xHotspot == 16 && ii.yHotspot == 16);
+        if (ii.hbmColor) DeleteObject(ii.hbmColor);
+        if (ii.hbmMask) DeleteObject(ii.hbmMask);
+    }
+    DestroyCursor(copy);
+    return pan;
+}
+
+static bool IsPanCursor(HCURSOR h) {
+    AcquireSRWLockShared(&g_panLock);
+    for (const auto& e : g_panCache) {
+        if (e.h == h) {
+            bool pan = e.pan;
+            ReleaseSRWLockShared(&g_panLock);
+            return pan;
+        }
+    }
+    ReleaseSRWLockShared(&g_panLock);
+    bool pan = ClassifyPanCursor(h);
+    AcquireSRWLockExclusive(&g_panLock);
+    g_panCache[g_panNext] = {h, pan};
+    g_panNext = (g_panNext + 1) % (int)(sizeof(g_panCache) / sizeof(g_panCache[0]));
+    ReleaseSRWLockExclusive(&g_panLock);
+    return pan;
+}
+
+HCURSOR WINAPI SetCursor_Hook(HCURSOR h) {
+    HWND ind = g_indicatorHwnd.load(std::memory_order_acquire);
+    if (h && ind && IsPanCursor(h)) {
+        if (!g_mirror.exchange(true, std::memory_order_acq_rel)) {
+            POINT pt{};
+            GetCursorPos(&pt);
+            g_originX.store(pt.x, std::memory_order_relaxed);
+            g_originY.store(pt.y, std::memory_order_relaxed);
+            g_dpiHwnd.store(GetForegroundWindow(), std::memory_order_relaxed);
+            PostMessageW(ind, WM_IND_SHOW, 0, 0);
+        } else if (!g_indUpdatePending.exchange(true, std::memory_order_relaxed)) {
+            PostMessageW(ind, WM_IND_UPDATE, 0, 0);
+        }
+        // The circle marks the start; the pointer stays the normal arrow, the
+        // same as in File Explorer.
+        return g_origSetCursor(LoadCursorW(nullptr, IDC_ARROW));
+    }
+    if (g_mirror.exchange(false, std::memory_order_acq_rel) && ind)
+        PostMessageW(ind, WM_IND_HIDE, 0, 0);
+    return g_origSetCursor(h);
+}
+
+// The main browser process of a Chromium browser: its executable exports these
+// two functions (Chrome, Edge, Brave, Vivaldi, Opera, Helium), and the child
+// processes (renderer, GPU, utility) carry --type= on their command line.
+static bool IsChromiumBrowserProcess() {
+    HMODULE exe = GetModuleHandleW(nullptr);
+    if (!GetProcAddress(exe, "GetHandleVerifier") ||
+        !GetProcAddress(exe, "IsSandboxedProcess")) return false;
+    return wcsstr(GetCommandLineW(), L"--type=") == nullptr;
+}
+
+static bool IsExplorerProcess() {
+    wchar_t path[MAX_PATH];
+    if (!GetModuleFileNameW(nullptr, path, MAX_PATH)) return false;
+    const wchar_t* name = wcsrchr(path, L'\\');
+    return _wcsicmp(name ? name + 1 : path, L"explorer.exe") == 0;
+}
+
+// ===========================================================================
 // Indicator: a click-through window whose content is a Windows.UI.Composition
 // tree, so the GPU draws and animates it. The glass is DWM's host backdrop
 // with an extra Gaussian blur, clipped to a circle.
@@ -492,6 +627,7 @@ static const int DIR_DOWN  = 2;
 static const int DIR_LEFT  = 4;
 static const int DIR_RIGHT = 8;
 static const UINT_PTR kHideTimer = 1;
+static const UINT_PTR kMirrorTimer = 2;
 
 static int GetActiveDirs() {
     POINT cursor{};
@@ -499,6 +635,7 @@ static int GetActiveDirs() {
     int dy  = cursor.y - g_originY.load(std::memory_order_relaxed);
     int dx  = cursor.x - g_originX.load(std::memory_order_relaxed);
     int dz  = g_deadzonePx.load(std::memory_order_relaxed);
+    if (g_chromium) dz = std::max(dz, 15);  // Chromium's own dead zone
     int dir = 0;
     if (dy < -dz) dir |= DIR_UP;
     if (dy >  dz) dir |= DIR_DOWN;
@@ -834,6 +971,7 @@ void Indicator::Show() {
     if (!m_root) return;
     try {
         HWND target = g_targetHwnd.load(std::memory_order_relaxed);
+        if (!target) target = g_dpiHwnd.load(std::memory_order_relaxed);
         UINT dpi = target ? GetDpiForWindow(target) : GetDpiForSystem();
         if (dpi == 0) dpi = 96;
         if (dpi != m_dpi) Build(dpi);
@@ -856,6 +994,7 @@ void Indicator::Show() {
         FadeTo(m_root, 1.0f, fromHidden ? 0.0f : -1.0f);
         ScaleTo(m_root, 1.0f, fromHidden ? g_look.popScale : -1.0f);
         m_visible = true;
+        if (g_mirror.load(std::memory_order_relaxed)) SetTimer(m_hwnd, kMirrorTimer, 250, nullptr);
     } catch (winrt::hresult_error const& e) {
         Wh_Log(L"indicator: show failed (%08X)", (unsigned)e.code());
     }
@@ -950,6 +1089,21 @@ static LRESULT CALLBACK IndicatorWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM 
         return 0;
     case WM_TIMER:
         if (wp == kHideTimer && ind) ind->OnHideTimer();
+        if (wp == kMirrorTimer) {
+            // Browser mode: the browser ends its scrolling by setting another
+            // cursor, which the SetCursor hook sees. This catches the rest:
+            // the browser lost the foreground, so nothing is scrolling.
+            DWORD pid = 0;
+            HWND fg = GetForegroundWindow();
+            if (fg) GetWindowThreadProcessId(fg, &pid);
+            if (!g_mirror.load(std::memory_order_relaxed)) {
+                KillTimer(hwnd, kMirrorTimer);
+            } else if (pid != GetCurrentProcessId()) {
+                g_mirror.store(false, std::memory_order_relaxed);
+                KillTimer(hwnd, kMirrorTimer);
+                if (ind) ind->Hide();
+            }
+        }
         return 0;
     case WM_CLOSE:
         DestroyWindow(hwnd);
@@ -1120,7 +1274,22 @@ static void StartIndicator() {
 }
 
 BOOL Wh_ModInit() {
+    if (!IsExplorerProcess()) {
+        // Browser child processes (renderer, GPU) and any non-Chromium app
+        // added by hand: browser mode only runs in the main browser process.
+        if (!IsChromiumBrowserProcess()) return FALSE;
+        g_chromium = true;
+    }
     LoadSettings();
+
+    if (g_chromium) {
+        DWORD n = GetModuleFileNameW(nullptr, g_exeDir, MAX_PATH);
+        wchar_t* slash = n ? wcsrchr(g_exeDir, L'\\') : nullptr;
+        if (!slash) return FALSE;
+        slash[1] = 0;
+        return HookFn((void*)SetCursor, (void*)SetCursor_Hook,
+                      (void**)&g_origSetCursor, L"SetCursor", true) ? TRUE : FALSE;
+    }
 
     HookFn((void*)PeekMessageW, (void*)PeekMessageW_Hook,
            (void**)&g_origPeekMessageW, L"PeekMessageW");
@@ -1137,6 +1306,10 @@ BOOL Wh_ModInit() {
 }
 
 void Wh_ModAfterInit() {
+    if (g_chromium) {
+        if (g_showIndicator.load(std::memory_order_relaxed)) StartIndicator();
+        return;
+    }
     g_scrollEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     if (!g_scrollEvent) {
         Wh_Log(L"CreateEventW failed (%lu), scroll thread not started", GetLastError());
@@ -1150,6 +1323,7 @@ void Wh_ModAfterInit() {
 
 void Wh_ModSettingsChanged() {
     StopAutoscroll();
+    g_mirror.store(false, std::memory_order_relaxed);
     // The indicator thread reads g_look, so stop it before reloading and
     // start a fresh one with the new look.
     StopIndicator();
@@ -1160,6 +1334,7 @@ void Wh_ModSettingsChanged() {
 
 void Wh_ModBeforeUninit() {
     StopAutoscroll();
+    g_mirror.store(false, std::memory_order_relaxed);
     HWND ind = g_indicatorHwnd.load(std::memory_order_acquire);
     if (ind) PostMessageW(ind, WM_CLOSE, 0, 0);
 }

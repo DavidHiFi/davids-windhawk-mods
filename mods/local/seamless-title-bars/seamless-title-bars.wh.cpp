@@ -2,7 +2,7 @@
 // @id              seamless-title-bars
 // @name            Seamless Title Bars
 // @description     One title bar look everywhere: colours, caption buttons, a glass title dock and native frames in every kind of app
-// @version         1.2.6
+// @version         1.3.7
 // @author          DavidHiFi, Th3Fanbus, grn15RenS, Ingan121, Anixx, aubymori
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -34,8 +34,10 @@ switch, so you only turn on what you want.
   and hiding the icon or the title.
 - **Title dock.** A rounded glass box around the window icon and title, a
   light Catppuccin Mocha tint with a soft shine over the blurred title bar. The
-  grey edge turns into a blue to mauve gradient on hover. Right-click it for a
-  window menu.
+  grey edge turns into a blue to mauve gradient on hover and the fill brightens
+  with it. Right-click it for a menu with the app name, copy title, copy all
+  (title and uptime) and the usual window commands. Middle-click it to close
+  the window.
 - **Title font.** Any installed font and weight for title text (FiraCode
   Nerd Font Medium by default).
 - **Settings window and tray icon.** Click the tray icon for a settings
@@ -43,6 +45,8 @@ switch, so you only turn on what you want.
 - **Window uptime.** After the title, a dot and how long that window has been
   open, counted per window. Pick days, hours, minutes and seconds.
 - **Button exclusions.** Apps and window classes that keep the normal layout.
+- **Per-app settings.** Rules that turn the dock or the uptime off for one
+  app, or pin its title alignment left, center or right.
 - **File Explorer tabs.** Keeps the tab bar from covering moved buttons.
 - **Store apps.** A normal Windows title bar in Settings, Calculator, Photos
   and other Store apps, with an optional blur.
@@ -270,9 +274,15 @@ This mod merges and keeps every option of:
   - hoverEnd: "#CBA6F7"
     $name: Hover gradient end
     $description: "Hex colour, bottom right. Suggested: #CBA6F7 (Mocha mauve)."
+  - middleClickClose: true
+    $name: Middle-click closes the window
+    $description: Middle-click the dock to close the window.
+  - hoverFill: true
+    $name: Fill brightens on hover
+    $description: On = the dock's fill brightens while the pointer is over it.
   - rightClickMenu: true
     $name: Right-click menu
-    $description: "Right-click the dock for a menu: restore, minimize, maximize, always on top, copy title, the window menu, these settings and close."
+    $description: "Right-click the dock for a menu: the app name, restore, minimize, maximize, always on top, copy title, copy all (title and uptime), the window menu, these settings and close."
   $name: Title dock
   $description: A dock around the icon and title of every standard title bar.
 - uptime:
@@ -313,6 +323,13 @@ This mod merges and keeps every option of:
     $description: "Window class names separated by commas. CabinetWClass is File Explorer; remove it to move File Explorer's buttons too."
   $name: Button exclusions
   $description: Apps and windows that keep the normal button layout.
+- perApp:
+  - enabled: false
+    $name: Turn on per-app settings
+    $description: "Rules below override the dock, title alignment and uptime for matching apps."
+  - list: ""
+    $name: Rules
+    $description: "Each rule: app.exe dock=off align=left uptime=off. Separate rules with a semicolon. The first matching rule wins; * matches any app; skip a part to keep the general setting."
 - explorerTabs:
   - enabled: true
     $name: Clickable buttons in File Explorer
@@ -515,6 +532,7 @@ struct Block {
     ULONGLONG hwnd;          // window whose dock the pointer is on, or 0
     LONG dockL, dockR, band, pad;   // dock in window coordinates (x from the window's left edge, y 0..band)
     ULONGLONG tick;          // GetTickCount64 of the last write
+    wchar_t suf[48];         // the hot window's uptime suffix (" \u2022 1h 05m 12s"), empty when none
 };
 static HANDLE g_map;
 static Block* volatile g_blk;
@@ -549,7 +567,7 @@ static void Close() {
     g_map = nullptr;
 }
 
-static void Write(HWND h, LONG l, LONG r, LONG band) {
+static void Write(HWND h, LONG l, LONG r, LONG band, PCWSTR suf = nullptr) {
     Block* b = g_blk;
     if (!b) return;
     InterlockedIncrement(&b->seq);
@@ -557,14 +575,32 @@ static void Write(HWND h, LONG l, LONG r, LONG band) {
     b->dockL = l;
     b->dockR = r;
     b->band = band;
+    if (suf) wcsncpy_s(b->suf, suf, _TRUNCATE);
+    else b->suf[0] = 0;
     b->tick = GetTickCount64();
     InterlockedIncrement(&b->seq);
+}
+
+// Refresh only the suffix of the hot window (uptime tick while the pointer rests on the dock).
+static void WriteSuffix(HWND h, PCWSTR suf) {
+    Block* b = g_blk;
+    if (!b || (HWND)(ULONG_PTR)b->hwnd != h) return;
+    InterlockedIncrement(&b->seq);
+    b->suf[0] = 0;
+    if (suf) wcsncpy_s(b->suf, suf, _TRUNCATE);
+    InterlockedIncrement(&b->seq);
+}
+
+static HWND HotHwnd() {
+    Block* b = g_blk;
+    return b ? (HWND)(ULONG_PTR)b->hwnd : nullptr;
 }
 
 struct Snap {
     HWND hwnd;
     LONG l, r, band;
     ULONGLONG tick;
+    wchar_t suf[48];
 };
 
 static bool Read(Snap& s) {
@@ -582,6 +618,7 @@ static bool Read(Snap& s) {
         s.r = b->dockR;
         s.band = b->band;
         s.tick = b->tick;
+        wcsncpy_s(s.suf, b->suf, _TRUNCATE);
         MemoryBarrier();
         if (b->seq == a) return true;
     }
@@ -647,7 +684,7 @@ static struct {
     bool iconClickable;
     int dialogAlign;
     // Title dock
-    bool dockOn, dockHover, dockShine, dockMenu;
+    bool dockOn, dockHover, dockHoverFill, dockShine, dockMenu;
     int dockPadX, dockPadY, dockRadius, dockEdge, dockFillA;
     DWORD dockFill, dockEdgeC, dockHov1, dockHov2;   // 0xRRGGBB
     // Window uptime
@@ -688,10 +725,13 @@ static int TightenPx(int dpi, int midW) {
 }
 
 // True when the layout depends on the measured width of the title text
-// (centered/right title, or the icon placed to the right of the title).
+// (centered/right title, the icon placed to the right of the title, or a
+// per-app rule pinning an alignment). PappAnyAlign is defined further down.
+static bool PappAnyAlign();
 static bool TitleWidthMatters() {
     return g_settings.titleAlign != 0 || g_settings.dialogAlign >= 2 ||
-           (g_settings.iconPosition == 0 && g_settings.iconSide == 1);
+           (g_settings.iconPosition == 0 && g_settings.iconSide == 1) ||
+           PappAnyAlign();
 }
 
 // Keys of the dropdown settings, in the same order as the numbers used in the code
@@ -713,6 +753,7 @@ static int GetChoice(const wchar_t* setting, const wchar_t* const* keys, int n) 
 }
 
 static void LoadExclusions();
+static void LoadPerApp();
 
 // Reads a "#RRGGBB" setting. Empty or invalid -> def; *set says whether a colour was given.
 static DWORD ReadRgbSetting(const wchar_t* name, DWORD def, bool* set) {
@@ -779,6 +820,7 @@ static void LoadSettings() {
     g_settings.dockHover = Wh_GetIntSetting(L"titleDock.hover") != 0;
     g_settings.dockShine = Wh_GetIntSetting(L"titleDock.glassShine") != 0;
     g_settings.dockMenu = Wh_GetIntSetting(L"titleDock.rightClickMenu") != 0;
+    g_settings.dockHoverFill = Wh_GetIntSetting(L"titleDock.hoverFill") != 0;
     g_settings.dockPadX = Clamp(Wh_GetIntSetting(L"titleDock.paddingX"), 0, 30);
     g_settings.dockPadY = Clamp(Wh_GetIntSetting(L"titleDock.paddingY"), 0, 12);
     g_settings.dockRadius = Clamp(Wh_GetIntSetting(L"titleDock.radius"), 0, 20);
@@ -810,6 +852,7 @@ static void LoadSettings() {
     g_settings.upColorSet = colorSet;
 
     LoadExclusions();
+    LoadPerApp();
 }
 
 // ---------------- logging ----------------
@@ -975,6 +1018,148 @@ static bool GetExeNameForPid(DWORD pid, wchar_t* out, size_t cap) {
     CloseHandle(snap);
     return found;
 }
+
+// ---------------- per-app overrides ----------------
+// Rules from perApp.list, separated by ; or new lines:
+// "notepad.exe dock=off align=left uptime=off". The first matching rule wins;
+// "*" matches every app. dock=on keeps the general setting (the master switch
+// still decides); align is 0 left, 1 center, 2 right; -1 = keep the general setting.
+struct PerAppRule { wchar_t exe[128]; int dock, align, uptime; };
+static SRWLOCK g_paLock = SRWLOCK_INIT;
+static PerAppRule g_paRules[32];
+static int g_paRulesN = 0;
+static bool g_paOn = true;
+static std::wstring g_paListRaw;          // raw list text, hashed by LayoutSignature
+static volatile LONG g_paAnyUpOn = 0;     // a rule forces uptime on: the uptime timer must run
+static volatile LONG g_paAnyAlign = 0;    // a rule pins an alignment: title width matters
+
+// Per-HWND resolve cache, same shape as the exclusion cache
+struct PaCache { HWND hwnd; DWORD pid; int dock, align, uptime; bool done; };
+static PaCache g_paCache[128];
+static int g_paCacheNext = 0;
+
+static void LoadPerApp() {
+    PCWSTR raw = Wh_GetStringSetting(L"perApp.list");
+    bool on = Wh_GetIntSetting(L"perApp.enabled") != 0;
+    AcquireSRWLockExclusive(&g_paLock);
+    g_paOn = on;
+    g_paRulesN = 0;
+    g_paListRaw = raw ? raw : L"";
+    g_paAnyUpOn = 0;
+    g_paAnyAlign = 0;
+    memset(g_paCache, 0, sizeof(g_paCache));
+    g_paCacheNext = 0;
+    if (raw) {
+        const wchar_t* p = raw;
+        while (*p && g_paRulesN < 32) {
+            while (*p == L'\n' || *p == L'\r' || *p == L';' || *p == L' ' || *p == L'\t') p++;
+            if (!*p) break;
+            const wchar_t* eol = p;
+            while (*eol && *eol != L'\n' && *eol != L'\r' && *eol != L';') eol++;
+            const wchar_t* en = eol;
+            while (en > p && (en[-1] == L' ' || en[-1] == L'\t')) en--;
+            if (en > p) {
+                PerAppRule& r = g_paRules[g_paRulesN];
+                int n = (int)(en - p);
+                if (n > 120) n = 120;
+                memcpy(r.exe, p, (size_t)n * sizeof(wchar_t));
+                r.exe[n] = 0;
+                r.dock = r.align = r.uptime = -1;
+                { wchar_t* sp = wcspbrk(r.exe, L" \t"); if (sp) *sp = 0; }  // r.exe keeps only the app token
+                bool wildcard = wcscmp(r.exe, L"*") == 0;
+                if (!wildcard) {
+                    wchar_t* b = wcsrchr(r.exe, L'\\');
+                    if (b) memmove(r.exe, b + 1, (wcslen(b + 1) + 1) * sizeof(wchar_t));
+                    if (!wcschr(r.exe, L'.')) wcscat_s(r.exe, L".exe");
+                }
+                const wchar_t* q = p;
+                while (q < en && *q != L' ' && *q != L'\t') q++;
+                while (q < en) {
+                    while (q < en && (*q == L' ' || *q == L'\t')) q++;
+                    const wchar_t* ks = q;
+                    while (q < en && *q != L' ' && *q != L'\t') q++;
+                    size_t klen = (size_t)(q - ks);
+                    auto part = [&](PCWSTR key) -> PCWSTR {
+                        size_t kl = wcslen(key);
+                        if (klen > kl + 1 && _wcsnicmp(ks, key, kl) == 0 && ks[kl] == L'=') return ks + kl + 1;
+                        return nullptr;
+                    };
+                    if (const wchar_t* v = part(L"dock")) {
+                        size_t vl = klen - 5;
+                        r.dock = (vl == 2 && _wcsnicmp(v, L"on", 2) == 0) ? 1
+                               : (vl == 3 && _wcsnicmp(v, L"off", 3) == 0) ? 0 : -1;
+                    } else if (const wchar_t* v = part(L"align")) {
+                        size_t vl = klen - 6;
+                        r.align = (vl == 4 && _wcsnicmp(v, L"left", 4) == 0) ? 0
+                                : (vl == 6 && _wcsnicmp(v, L"center", 6) == 0) ? 1
+                                : (vl == 5 && _wcsnicmp(v, L"right", 5) == 0) ? 2 : -1;
+                    } else if (const wchar_t* v = part(L"uptime")) {
+                        size_t vl = klen - 7;
+                        r.uptime = (vl == 2 && _wcsnicmp(v, L"on", 2) == 0) ? 1
+                                 : (vl == 3 && _wcsnicmp(v, L"off", 3) == 0) ? 0 : -1;
+                    }
+                }
+                if (r.align >= 0) g_paAnyAlign = 1;
+                if (r.uptime == 1) g_paAnyUpOn = 1;
+                g_paRulesN++;
+            }
+            p = eol;
+        }
+    }
+    Wh_FreeStringSetting(raw);
+    ReleaseSRWLockExclusive(&g_paLock);
+    DebugLog(L"[PerApp] on=%d rules=%d align=%d upOn=%d", on ? 1 : 0, g_paRulesN,
+             (int)g_paAnyAlign, (int)g_paAnyUpOn);
+}
+
+// Overrides for a window's app: dock off, pinned alignment, uptime on/off.
+// Cached per hwnd (pid checked too, so a reused handle is not misjudged).
+static void ResolvePerApp(HWND hwnd, int& dock, int& align, int& uptime) {
+    dock = align = uptime = -1;
+    if (!hwnd) return;
+    AcquireSRWLockShared(&g_paLock);
+    bool on = g_paOn;
+    int n = g_paRulesN;
+    ReleaseSRWLockShared(&g_paLock);
+    if (!on || !n) return;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    AcquireSRWLockShared(&g_paLock);
+    for (int i = 0; i < 128; i++) {
+        if (g_paCache[i].done && g_paCache[i].hwnd == hwnd && g_paCache[i].pid == pid) {
+            dock = g_paCache[i].dock;
+            align = g_paCache[i].align;
+            uptime = g_paCache[i].uptime;
+            ReleaseSRWLockShared(&g_paLock);
+            return;
+        }
+    }
+    ReleaseSRWLockShared(&g_paLock);
+
+    wchar_t exe[128] = L"";
+    if (pid) GetExeNameForPid(pid, exe, 128);
+    AcquireSRWLockShared(&g_paLock);
+    int d = -1, a = -1, u = -1;
+    for (int i = 0; i < g_paRulesN; i++) {
+        const PerAppRule& r = g_paRules[i];
+        bool match = r.exe[0] == L'*' && r.exe[1] == 0;
+        if (!match) match = exe[0] && _wcsicmp(r.exe, exe) == 0;
+        if (match) {
+            d = r.dock; a = r.align; u = r.uptime;
+            break;
+        }
+    }
+    ReleaseSRWLockShared(&g_paLock);
+
+    AcquireSRWLockExclusive(&g_paLock);
+    g_paCache[g_paCacheNext] = {hwnd, pid, d, a, u, true};
+    g_paCacheNext = (g_paCacheNext + 1) % 128;
+    ReleaseSRWLockExclusive(&g_paLock);
+    dock = d; align = a; uptime = u;
+}
+
+static bool PappAnyAlign() { return g_paAnyAlign != 0; }
+static bool PappAnyUpOn() { return g_paAnyUpOn != 0; }
 
 static void LoadExclusions() {
     PCWSTR a = Wh_GetStringSetting(L"exclusions.excludedApps");
@@ -1158,7 +1343,10 @@ static void UptimeSuffixLocked(HWND hwnd, wchar_t* out, size_t cap) {
     else swprintf(out, cap, L" %s", t);
 }
 
-static bool UptimeApplies(bool closeOnly) {
+static bool UptimeApplies(bool closeOnly, int upOvr = -1) {
+    // upOvr: per-app rule for this window. -1 keep the general setting, 0 off, 1 on.
+    if (upOvr == 0) return false;
+    if (upOvr == 1) return !g_settings.hideTitle && !g_unloading && (!closeOnly || g_settings.upDialogs);
     return g_settings.upOn && !g_settings.hideTitle && !g_unloading &&
            (!closeOnly || g_settings.upDialogs);
 }
@@ -1514,6 +1702,7 @@ struct TitleInfo {
     int shownLen, sufStart, sufLen;
     bool wantRelayout;
     bool tooLong;        // title too long for a suffix: the timer leaves it alone
+    int ovrUp = -1;      // per-app uptime rule: -1 inherit, 0 off, 1 on
 };
 static std::unordered_map<void*, TitleInfo> g_titles;   // CTopLevelWindow* -> info
 static std::unordered_map<void*, void*> g_textToWin;    // CDWriteText* (and its clones) -> CTopLevelWindow*
@@ -1835,6 +2024,11 @@ static void StoreTitleInfo(void* text, bool dock, bool rightFromVisual, int E, i
     ti.E = E; ti.R = R; ti.textMax = textMax;
     ti.visL = visL; ti.visW = visW;
     ti.dpi = dpi; ti.band = band;
+    {   // per-app rules for this window (cached resolve): dock off and uptime override
+        int pd, pal;
+        ResolvePerApp(t_seq.hwnd, pd, pal, ti.ovrUp);
+        if (pd == 0) ti.dock = false;   // the pill brush reads ti.dock, so kill it here
+    }
     if (text) g_textToWin[text] = win;
     HWND hwLog = ti.hwnd;
     bool coLog = ti.closeOnly;
@@ -1859,13 +2053,18 @@ static bool RepositionTitle(VisEntry* title) {
     int aR = t_seq.winW - t_seq.rightMargin - g_settings.rightEdgeGap;
     int gap = g_settings.iconTitleGap;
 
+    // Per-app overrides for this window's app (first matching rule in perApp.list).
+    int paDock = -1, paAlign = -1, paUp = -1;
+    if (t_seq.hwnd) ResolvePerApp(t_seq.hwnd, paDock, paAlign, paUp);
+
     // Very narrow window: no room next to the buttons -> hide icon and title
     bool noRoom = (aR - aL) < 24;
     bool showIcon = origHasIcon && !g_settings.hideIcon && !noRoom;
     bool showTitle = !g_settings.hideTitle && !noRoom;
 
-    // Title dock: keep its padding inside the free area.
+    // Title dock: keep its padding inside the free area. A per-app rule can turn it off.
     bool dock = g_settings.dockOn && g_textHooksOk && !g_dockBroken && showTitle && !g_unloading;
+    if (dock && paDock == 0) dock = false;
     int padX = dock ? MulDiv(g_settings.dockPadX, dpi, 96) : 0;
     if (dock && (aR - aL) - 2 * padX < 48) { dock = false; padX = 0; }
     aL += padX;
@@ -1885,14 +2084,14 @@ static bool RepositionTitle(VisEntry* title) {
     if (availText < 0) availText = 0;
     if (showTitle && availText < 12) showTitle = false;  // too small to show anything useful
 
-    int align = EffTitleAlign();
+    int align = paAlign >= 0 ? paAlign : EffTitleAlign();   // per-app alignment wins
     int side = iconInGroup ? g_settings.iconSide : 0;
     int textW = availText;
     bool measured = false;
 
     // Uptime text after the title: measured with the title.
     wchar_t suffix[64] = L"";
-    if (showTitle && t_seq.hwnd && UptimeApplies(t_seq.closeOnly)) {
+    if (showTitle && t_seq.hwnd && UptimeApplies(t_seq.closeOnly, paUp)) {
         AcquireSRWLockExclusive(&g_titleLock);
         UptimeSuffixLocked(t_seq.hwnd, suffix, 64);
         ReleaseSRWLockExclusive(&g_titleLock);
@@ -2318,6 +2517,7 @@ struct DockCtx {
     float hoverA;
     UINT32 sufStart, sufLen;
     int dockL, dockR;   // window x of the drawn dock
+    HWND hwnd;          // window the text belongs to, for the per-frame per-app check
 };
 static thread_local DockCtx t_dock;
 
@@ -2356,7 +2556,7 @@ static long TextSetText_Hook(void* text, const wchar_t* s) {
         size_t n = wcslen(s);
         ti.emptyTitle = (n == 0);
         ti.tooLong = (n >= 320);
-        if (n > 0 && n < 320 && ti.hwnd && UptimeApplies(ti.closeOnly)) {
+        if (n > 0 && n < 320 && ti.hwnd && UptimeApplies(ti.closeOnly, ti.ovrUp)) {
             wchar_t suf[64];
             UptimeSuffixLocked(ti.hwnd, suf, 64);
             swprintf(buf, 400, L"%s%s", s, suf);
@@ -2431,6 +2631,7 @@ static long CreateTextBrush_Hook(void* text, void** out) {
             c.textMax = (float)ti.textMax;
             c.visW = (float)ti.visW;
             c.visL = ti.visL;
+            c.hwnd = ti.hwnd;
             c.padY = roundf(g_settings.dockPadY * s);
             c.edge = roundf(g_settings.dockEdge * s);
             if (c.edge < 1) c.edge = 1;
@@ -2572,6 +2773,14 @@ static void DrawDock(ID2D1RenderTarget* rt, D2D1_POINT_2F o) {
         SUCCEEDED(rt->CreateSolidColorBrush(Rgb(g_settings.dockFill, g_settings.dockFillA / 100.0f), &fill))) {
         rt->FillRoundedRectangle(rr, fill);
         fill->Release();
+        if (g_settings.dockHoverFill && c.hoverA > 0.003f) {
+            // Hover lift: the fill brightens towards the hover colour while the pointer is on the dock.
+            ID2D1SolidColorBrush* lift = nullptr;
+            if (SUCCEEDED(rt->CreateSolidColorBrush(Rgb(g_settings.dockHov1, c.hoverA * 0.12f), &lift))) {
+                rt->FillRoundedRectangle(rr, lift);
+                lift->Release();
+            }
+        }
     }
     if (g_settings.dockShine) {
         // Glass shine: white fading out over the top half, as on the taskbar docks.
@@ -2619,6 +2828,11 @@ static void STDMETHODCALLTYPE DrawTextLayout_Hook(ID2D1RenderTarget* rt, D2D1_PO
         return;
     }
     t_dock.drew = true;
+    if (t_dock.dock && t_dock.gotOverhang && t_dock.hwnd) {   // per-app dock=off, re-checked per frame
+        int qd2 = -1, qa2 = -1, qu2 = -1;
+        ResolvePerApp(t_dock.hwnd, qd2, qa2, qu2);
+        if (qd2 == 0) t_dock.dock = false;
+    }
     if (t_dock.dock && t_dock.gotOverhang) DrawDock(rt, o);
     ID2D1SolidColorBrush* sb = nullptr;
     DWRITE_TEXT_RANGE range = {t_dock.sufStart, t_dock.sufLen};
@@ -2729,8 +2943,10 @@ static ULONGLONG g_hoverLast = 0;
 static int g_tickCount = 0;
 
 static void UptimeTick() {
-    if (g_unloading || g_crossThread || !g_settings.upOn || !OnTitleUpdated_Orig) return;
+    if (g_unloading || g_crossThread || (!g_settings.upOn && !PappAnyUpOn()) || !OnTitleUpdated_Orig) return;
     std::vector<void*> todo;
+    HWND hotUpd = nullptr;
+    wchar_t hotSuf[48] = L"";
     AcquireSRWLockExclusive(&g_titleLock);
     if (++g_tickCount % 60 == 0) {
         for (auto p = g_born.begin(); p != g_born.end();) {
@@ -2738,13 +2954,18 @@ static void UptimeTick() {
         }
     }
     for (auto& [win, ti] : g_titles) {
-        if (!ti.text || !ti.hwnd || ti.emptyTitle || ti.tooLong || !UptimeApplies(ti.closeOnly)) continue;
+        if (!ti.text || !ti.hwnd || ti.emptyTitle || ti.tooLong || !UptimeApplies(ti.closeOnly, ti.ovrUp)) continue;
         if (!IsWindowVisible(ti.hwnd) || IsIconic(ti.hwnd)) continue;
         wchar_t suf[64];
         UptimeSuffixLocked(ti.hwnd, suf, 64);
         if (wcscmp(suf, ti.shown) != 0) todo.push_back(win);
+        if (!hotUpd && ti.hwnd == stbshared::HotHwnd()) {
+            hotUpd = ti.hwnd;
+            wcsncpy_s(hotSuf, suf, _TRUNCATE);
+        }
     }
     ReleaseSRWLockExclusive(&g_titleLock);
+    if (hotUpd) stbshared::WriteSuffix(hotUpd, hotSuf);   // pointer resting on the dock: keep its menu copy fresh
     for (void* win : todo) OnTitleUpdated_Orig(win);   // same as a real title change
     if (g_tickCount <= 3) Wh_Log(L"[Uptime] tick %d: %zu title(s) updated", g_tickCount, todo.size());
     if (g_settings.debugLog && (g_tickCount <= 40 || g_tickCount % 60 == 0)) {
@@ -2766,6 +2987,7 @@ static void HoverTick() {
     std::vector<void*> dirty;
     HWND hotWnd = nullptr;
     int hotL = 0, hotR = 0, hotBand = 0;
+    wchar_t hotSuf[48] = L"";
     AcquireSRWLockExclusive(&g_titleLock);
     for (auto& [win, ti] : g_titles) {
         bool in = false;
@@ -2777,7 +2999,10 @@ static void HoverTick() {
             }
             if (!in) ti.hoverIn = false;
         }
-        if (in) { hotWnd = ti.hwnd; hotL = ti.dockL; hotR = ti.dockR; hotBand = ti.band; }
+        if (in) {
+            hotWnd = ti.hwnd; hotL = ti.dockL; hotR = ti.dockR; hotBand = ti.band;
+            wcsncpy_s(hotSuf, ti.shown, _TRUNCATE);
+        }
         float target = (in && g_settings.dockHover) ? 1.0f : 0.0f;
         if (ti.hoverP != target) {
             ti.hoverP += (target > ti.hoverP) ? step : -step;
@@ -2789,8 +3014,8 @@ static void HoverTick() {
     }
     ReleaseSRWLockExclusive(&g_titleLock);
     static bool s_hotShared = false;
-    if (hotWnd) { stbshared::Write(hotWnd, hotL, hotR, hotBand); s_hotShared = true; }
-    else if (s_hotShared) { stbshared::Write(nullptr, 0, 0, 0); s_hotShared = false; }
+    if (hotWnd) { stbshared::Write(hotWnd, hotL, hotR, hotBand, hotSuf); s_hotShared = true; }
+    else if (s_hotShared) { stbshared::Write(nullptr, 0, 0, 0, L""); s_hotShared = false; }
     if (!g_crossThread)
         for (void* t : dirty) SetDirtyFlags_Func(t, 0x1000);   // redraw the title surface
     HWND mw = g_msgWnd;
@@ -5049,6 +5274,12 @@ static unsigned long long LayoutSignature() {
         h = Fnv(h, 0);
     }
     ReleaseSRWLockShared(&g_exclLock);
+
+    // Per-app rules change where the icon and title go (dock, alignment, uptime).
+    AcquireSRWLockShared(&g_paLock);
+    h = Fnv(h, g_paOn ? 1ull : 0ull);
+    for (const wchar_t* p = g_paListRaw.c_str(); *p; p++) h = Fnv(h, (unsigned long long)(unsigned short)*p);
+    ReleaseSRWLockShared(&g_paLock);
     return h;
 }
 
@@ -10528,6 +10759,7 @@ using SetBackdrop_t = long(WINAPI*)(void* list, void* window, int type);
 using SetDark_t = long(WINAPI*)(void* list, void* window, bool dark);
 using Margins_t = long(WINAPI*)(void* list, void* window);
 using OnMargins_t = void(WINAPI*)(void* list, void* data);
+using BlurBehind_t = long(WINAPI*)(void* list, void* window, const DWM_BLURBEHIND* bb);
 
 ShowHide_t ShowHide_Orig;
 Synced_t Synced;
@@ -10535,6 +10767,7 @@ SetBackdrop_t SetBackdrop_Orig;
 SetDark_t SetDark_Orig;
 Margins_t Margins_Orig;
 OnMargins_t OnMargins;
+BlurBehind_t BlurBehind;
 void* IsGhost;
 CRITICAL_SECTION* g_cs;
 size_t g_hwndOff = SIZE_MAX;
@@ -10639,32 +10872,30 @@ bool IsCsrssBox(void* list, void* window, bool note) {
     return pid == g_csrss || pid == g_csrssSnap;
 }
 
-// Steps for csrss boxes, from the mod's storage: 1 dark title, 2 system backdrop,
-// 4 full-glass margins.
-int Mode() { return Wh_GetIntValue(L"sysbox.mode", 3); }
+// Steps, from the mod's storage: 1 dark title on csrss boxes, 2 system backdrop on them,
+// 4 see-through body on them, 8 dark title on every captioned window.
+int Mode() { return Wh_GetIntValue(L"sysbox.mode", 15); }
+
+// Any captioned top-level window, including apps no mod can load into. Same rule as
+// IsCsrssBox: only calls that never send a message.
+bool WantsDarkTitle(void* list, void* window, int mode) {
+    if (!g_ready || !window || !(mode & 8)) return false;
+    HWND h = WindowOf(list, window, nullptr);
+    if (!h || GetAncestor(h, GA_ROOT) != h) return false;
+    return (GetWindowLongPtrW(h, GWL_STYLE) & WS_CAPTION) == WS_CAPTION;
+}
 
 LPARAM Apply(void* list, void* window) {
     LPARAM r = 0;
     int mode = Mode();
     if ((mode & 1) && SUCCEEDED(SetDark_Orig(list, window, true))) r |= 1;
     if ((mode & 2) && SUCCEEDED(SetBackdrop_Orig(list, window, 3))) r |= 2;   // DWMSBT_TRANSIENTWINDOW
-    if (!(mode & 4)) return r | (mode << 8);
-    // The box paints its body black; over a sheet of glass black shows the backdrop.
-    EnterCriticalSection(g_cs);
-    void* data = nullptr;
-    Synced(list, window, true, &data);
-    if (data) {
-        auto m = (MARGINS*)((BYTE*)data + g_marginsOff);
-        if (m->cxLeftWidth != -1 || m->cxRightWidth != -1 || m->cyTopHeight != -1 ||
-            m->cyBottomHeight != -1) {
-            *m = MARGINS{-1, -1, -1, -1};
-            OnMargins(list, data);
-            r |= 4;
-        } else {
-            r |= 8;
-        }
+    // The box paints its body black. DWM's blur-behind marks the client area see-through,
+    // so black shows the backdrop and the layout stays as it is.
+    if ((mode & 4) && BlurBehind) {
+        DWM_BLURBEHIND bb{DWM_BB_ENABLE, TRUE, nullptr, FALSE};
+        if (SUCCEEDED(BlurBehind(list, window, &bb))) r |= 4;
     }
-    LeaveCriticalSection(g_cs);
     return r | (mode << 8);
 }
 
@@ -10673,12 +10904,17 @@ long WINAPI ShowHide_Hook(void* list, void* window) {
     if (!g_ready) return hr;
     long n = ++g_calls;
     if ((n & 63) == 1) Note(kCalls, n);
-    if (IsCsrssBox(list, window, true)) Note(kApplied, Apply(list, window));
+    if (IsCsrssBox(list, window, true)) {
+        Note(kApplied, Apply(list, window));
+    } else if (WantsDarkTitle(list, window, Mode())) {
+        SetDark_Orig(list, window, true);
+    }
     return hr;
 }
 
 long WINAPI SetDark_Hook(void* list, void* window, bool dark) {
-    if (!dark && IsCsrssBox(list, window, false) && (Mode() & 1)) {
+    int mode = dark ? 0 : Mode();
+    if (!dark && ((IsCsrssBox(list, window, false) && (mode & 1)) || WantsDarkTitle(list, window, mode))) {
         dark = true;
         Note(kSetters, ++g_setters);
     }
@@ -10741,6 +10977,8 @@ void Setup() {
              &pMargins, nullptr, false},
             {{LR"(private: void __cdecl CWindowList::OnClientMarginsChange(class CWindowData *))"},
              (void**)&OnMargins, nullptr, false},
+            {{LR"(public: virtual long __cdecl CWindowList::BlurBehindChange(struct IDwmWindow *,struct _DWM_BLURBEHIND const *))"},
+             (void**)&BlurBehind, nullptr, true},
             {{LR"(public: bool __cdecl CWindowData::IsGhostWindow(struct HWND__ * *)const )"},
              (void**)&IsGhost, nullptr, false},
         };
@@ -10779,6 +11017,7 @@ void Setup() {
     Wh_SetIntValue(L"sysbox.foreignN", 0);
     Wh_SetIntValue(L"sysbox.applied", -1);
     Wh_SetIntValue(L"sysbox.setters", 0);
+    Wh_SetIntValue(L"sysbox.blurBehind", BlurBehind ? 1 : 0);
 }
 
 void Stop() { g_ready = false; }
@@ -10795,7 +11034,9 @@ void Style(HWND h) {
     // The box paints its body black; over the extended frame black shows the backdrop.
     MARGINS m{-1, -1, -1, -1};
     DwmExtendFrameIntoClientArea(h, &m);
-    int backdrop = 3;  // DWMSBT_TRANSIENTWINDOW: system acrylic, a blur of what is behind
+    // 3 transient acrylic, 2 Mica, 4 Mica Alt; LocalStorage hungdlg.backdrop, read per box.
+    int backdrop = Wh_GetIntValue(L"hungdlg.backdrop", 3);
+    if (backdrop < 1 || backdrop > 4) backdrop = 3;
     HRESULT hr = DwmSetWindowAttribute(h, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
     SetWindowPos(h, nullptr, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED |
@@ -11964,6 +12205,47 @@ class SetCom {
     explicit operator bool() const { return p != nullptr; }
 };
 
+// One row of a tray menu (Set_TrayMenu). Every mod's tray menu is a list of these.
+struct SetMenuItem {
+    int id = 0;                    // What Set_TrayMenu returns when this row is picked.
+    std::wstring glyph;            // FiraCode Nerd Font glyph for the leading column.
+    std::wstring label;
+    std::wstring hint;             // Grey text on the right, such as a hotkey.
+    bool checked = false;          // Accent check mark on the right.
+    bool separator = false;
+    bool disabled = false;
+    std::vector<SetMenuItem> sub;  // A submenu, drawn by the same renderer.
+};
+
+// One open level of a tray menu: its own popup window and Direct2D target.
+struct SetMenuLevel {
+    const std::vector<SetMenuItem>* items = nullptr;
+    HWND hwnd = nullptr;
+    SetCom<ID2D1HwndRenderTarget> rt;
+    float scale = 1, wDip = 0, hDip = 0, itemH = 30, hintW = 0;
+    std::vector<float> top, height;  // Per row, DIPs inside the window.
+    int hover = -1;                  // Highlighted row.
+    int open = -1;                   // Row whose submenu is the next level.
+};
+
+// A running tray menu. It owns its factories, so it runs on whatever thread owns the tray icon.
+struct SetMenuSession {
+    SetCom<ID2D1Factory> d2d;
+    SetCom<IDWriteFactory> dw;
+    SetCom<IDWriteTextFormat> fText, fHint, fGlyph, fGlyphS;
+    std::vector<std::unique_ptr<SetMenuLevel>> levels;
+    HINSTANCE inst = nullptr;
+    std::wstring cls;
+    float radius = 8;
+    int result = 0;
+    bool done = false;
+    bool pressed = false;  // A button went down inside the menu; only then does a release pick a row.
+    bool wasActive = false;
+    float alpha = 1;
+    ULONGLONG fadeStart = 0;
+    int pendingLevel = -1, pendingItem = -1;  // Hover timer: open (item >= 0) or close a submenu after a delay.
+};
+
 struct SetField {
     enum Kind { Choice, Number, Text, Hotkey, Check, Color };
     Kind kind;
@@ -12011,7 +12293,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"titleDock.hover", L"Gradient edge on hover", L"The edge fades into a gradient while the pointer is over the dock.", L"1", {}, 0, 100, 0, L"Title dock"},
 {K::Color, L"titleDock.hoverStart", L"Hover gradient start", L"Hex colour, top left. Suggested: #89B4FA (Mocha blue).", L"#89B4FA", {}, 0, 100, 0, L"Title dock"},
 {K::Color, L"titleDock.hoverEnd", L"Hover gradient end", L"Hex colour, bottom right. Suggested: #CBA6F7 (Mocha mauve).", L"#CBA6F7", {}, 0, 100, 0, L"Title dock"},
-{K::Check, L"titleDock.rightClickMenu", L"Right-click menu", L"Right-click the dock for a menu: restore, minimize, maximize, always on top, copy title, the window menu, these settings and close.", L"1", {}, 0, 100, 0, L"Title dock"},
+{K::Check, L"titleDock.middleClickClose", L"Middle-click closes the window", L"Middle-click the dock to close the window.", L"1", {}, 0, 100, 0, L"Title dock"},
+{K::Check, L"titleDock.hoverFill", L"Fill brightens on hover", L"On = the dock's fill brightens while the pointer is over it.", L"1", {}, 0, 100, 0, L"Title dock"},
+{K::Check, L"titleDock.rightClickMenu", L"Right-click menu", L"Right-click the dock for a menu: the app name, restore, minimize, maximize, always on top, copy title, copy all (title and uptime), the window menu, these settings and close.", L"1", {}, 0, 100, 0, L"Title dock"},
 {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 0, L"Settings window"},
 {K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 0, L"Settings window"},
 {K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open these settings. Right-click it to turn the dock, uptime or buttons on or off. When off, change settings in Windhawk.", L"1", {}, 0, 100, 0, L"Settings window"},
@@ -12045,6 +12329,8 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Text, L"buttonStyle.restoreIcon", L"Restore image", L"Optional full path to an image, used while the window is maximized.", L"", {}, 0, 100, 2, L"Button style"},
 {K::Text, L"buttonStyle.closeIcon", L"Close image", L"Optional full path to an image. Overrides the folder for this button.", L"", {}, 0, 100, 2, L"Button style"},
 {K::Check, L"buttonStyle.restartDwmOnUnload", L"Restart dwm.exe when the mod unloads", L"Off (suggested): painted buttons stay until dwm.exe restarts. On: dwm.exe restarts when the mod unloads; the screen flickers once and apps stay open.", L"0", {}, 0, 100, 2, L"Button style"},
+{K::Check, L"perApp.enabled", L"Turn on per-app settings", L"Rules below override the dock, title alignment and uptime for matching apps.", L"0", {}, 0, 100, 3, L"Per app"},
+{K::Text, L"perApp.list", L"Rules", L"Each rule: app.exe dock=off align=left uptime=off. Separate rules with a semicolon. The first matching rule wins; * matches any app; skip a part to keep the general setting.", L"", {}, 0, 100, 3, L"Per app"},
 {K::Text, L"exclusions.excludedApps", L"Apps that keep normal buttons", L"Process names separated by commas. Every window of these apps keeps the Windows button layout.", L"", {}, 0, 100, 3, L"Button exclusions"},
 {K::Text, L"exclusions.excludedClasses", L"Window classes that keep normal buttons", L"Window class names separated by commas. CabinetWClass is File Explorer; remove it to move File Explorer's buttons too.", L"CabinetWClass", {}, 0, 100, 3, L"Button exclusions"},
 {K::Check, L"explorerTabs.enabled", L"Clickable buttons in File Explorer", L"On = moved buttons can be clicked in File Explorer. Needs buttons on the left and CabinetWClass not excluded.", L"1", {}, 0, 100, 3, L"File Explorer tabs"},
@@ -12090,7 +12376,7 @@ static const SetPageInfo kSetPages[] = {
 {L"Look", L"Icon and title, title font, the dock and this window.", 0xE790},
 {L"Uptime", L"How long each window has been open, after its title.", 0xE916},
 {L"Colours and buttons", L"Title bar colours and the caption buttons.", 0xE771},
-{L"Apps", L"Store apps, native frames, File Explorer, Spotify and Terminal.", 0xE71D},
+{L"Apps", L"Per-app settings, store apps, native frames, File Explorer, Spotify and Terminal.", 0xE71D},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
@@ -12113,6 +12399,8 @@ constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
 constexpr UINT_PTR kSetTimerId = 1;
+constexpr float kSetAutoDead = 10, kSetAutoR = 18, kSetAutoGain = 0.14f, kSetAutoMax = 56;
+constexpr PCWSTR kSetAutoProp = L"SeamlessOwnAutoscroll";  // Seamless Autoscroll skips this window.
 constexpr PCWSTR kSetKofiUrl = L"https://ko-fi.com/DavidHiFi";
 constexpr PCWSTR kSetAuthorUrl = L"https://github.com/DavidHiFi";
 constexpr PCWSTR kSetDittoUrl = L"https://github.com/DavidHiFi/davids-windhawk-mods";
@@ -12123,6 +12411,8 @@ constexpr PCWSTR kSetTitle = L"Seamless Title Bars";
 // The self-drawn title bar. Everything below it is laid out as before, in "content" DIPs.
 static float kSetCapH = 40;
 constexpr float kSetCapBtnW = 46, kSetHoverMs = 120;
+constexpr float kSetMenuPad = 6, kSetMenuIconW = 22, kSetMenuSepH = 9, kSetMenuOverlap = 3, kSetMenuMinW = 190, kSetMenuMaxW = 640, kSetMenuBorderW = 2;
+constexpr UINT kSetMenuSubDelayMs = 200, kSetMenuFadeMs = 90, kSetMenuTimerSub = 0x5E71, kSetMenuTimerFade = 0x5E72, kSetMenuTimerPoll = 0x5E73;
 
 struct SetItem {
     enum Type { Group, Row, Banner, About, Link, Support } type = Row;
@@ -12162,6 +12452,8 @@ struct SetWindow {
     int dragSlider = -1;
     bool dragScroll = false, tracking = false, timer = false;
     float dragOff = 0;
+    bool autoScroll = false, autoMoved = false;
+    float autoX = 0, autoY = 0, autoA = 0, autoDir = 0;
     // Sidebar dock: railW is the chosen open width, railCur the drawn width (eased toward
     // kSetRailMini when collapsed). railGlow / footGlow ease the dock borders on hover.
     float railW = kSetRailDef, railCur = kSetRailDef, railGlow = 0, footGlow = 0;
@@ -12305,6 +12597,579 @@ static SetCom<IDWriteTextFormat> Set_Fmt(const std::wstring& family, float size,
 }
 
 // std::wstring(L"FiraCode Nerd Font") at 500; emphasis is one step heavier, never past bold.
+static float Set_MenuCornerRadius() {
+    float radius = 8.0f;
+    HKEY key;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Windhawk\\Engine\\Mods\\custom-corner-radius", 0,
+                      KEY_READ | KEY_WOW64_64KEY, &key) == ERROR_SUCCESS) {
+        DWORD disabled = 0, size = sizeof(disabled);
+        bool off = RegQueryValueExW(key, L"Disabled", nullptr, nullptr, (BYTE*)&disabled, &size) == ERROR_SUCCESS && disabled;
+        DWORD value = 0;
+        size = sizeof(value);
+        if (!off && RegGetValueW(key, L"Settings", L"radius", RRF_RT_REG_DWORD, nullptr, &value, &size) == ERROR_SUCCESS &&
+            value > 0 && value <= 64)
+            radius = (float)value;
+        RegCloseKey(key);
+    }
+    return radius;
+}
+
+static SetMenuItem Set_MenuRow(int id, PCWSTR glyph, PCWSTR label, bool checked = false, bool disabled = false,
+                               PCWSTR hint = L"") {
+    SetMenuItem m;
+    m.id = id;
+    m.glyph = glyph ? glyph : L"";
+    m.label = label ? label : L"";
+    m.hint = hint ? hint : L"";
+    m.checked = checked;
+    m.disabled = disabled;
+    return m;
+}
+
+static SetMenuItem Set_MenuSub(PCWSTR glyph, PCWSTR label, std::vector<SetMenuItem> sub, bool disabled = false) {
+    SetMenuItem m = Set_MenuRow(0, glyph, label, false, disabled);
+    m.sub = std::move(sub);
+    return m;
+}
+
+static SetMenuItem Set_MenuSep() {
+    SetMenuItem m;
+    m.separator = true;
+    return m;
+}
+
+static SetMenuSession*& Set_MenuCur() {
+    static thread_local SetMenuSession* session = nullptr;  // One menu per thread; History menus run on the settings thread.
+    return session;
+}
+
+static bool Set_MenuSelectable(const SetMenuItem& m) { return !m.separator && !m.disabled; }
+
+static float Set_MenuTextW(SetMenuSession& s, IDWriteTextFormat* f, const std::wstring& text) {
+    SetCom<IDWriteTextLayout> layout;
+    DWRITE_TEXT_METRICS m{};
+    if (text.empty() || !f || FAILED(s.dw->CreateTextLayout(text.c_str(), (UINT32)text.size(), f, 10000, 1000, layout.put())) ||
+        FAILED(layout->GetMetrics(&m)))
+        return 0;
+    return m.widthIncludingTrailingWhitespace;
+}
+
+static bool Set_MenuFormats(SetMenuSession& s) {
+    if (!s.d2d && FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory), nullptr,
+                                           (void**)s.d2d.put())))
+        return false;
+    if (!s.dw && FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)s.dw.put())))
+        return false;
+    std::wstring family = L"Segoe UI";
+    SetCom<IDWriteFontCollection> sys;
+    if (SUCCEEDED(s.dw->GetSystemFontCollection(sys.put(), FALSE))) {
+        for (PCWSTR face : {L"FiraCode Nerd Font", L"FiraCodeNerdFont", L"FiraCode Nerd Font Mono"}) {
+            UINT32 index = 0;
+            BOOL exists = FALSE;
+            if (SUCCEEDED(sys->FindFamilyName(face, &index, &exists)) && exists) {
+                family = face;
+                break;
+            }
+        }
+    }
+    auto make = [&](float size, DWRITE_TEXT_ALIGNMENT align, SetCom<IDWriteTextFormat>& out) {
+        if (FAILED(s.dw->CreateTextFormat(family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+                                          DWRITE_FONT_STRETCH_NORMAL, size, L"en-us", out.put())))
+            return false;
+        out->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        out->SetTextAlignment(align);
+        out->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        // Only a label wider than the widest menu (kSetMenuMaxW) is ever shortened, with an ellipsis.
+        DWRITE_TRIMMING trim{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+        SetCom<IDWriteInlineObject> sign;
+        if (SUCCEEDED(s.dw->CreateEllipsisTrimmingSign(out.get(), sign.put()))) out->SetTrimming(&trim, sign.get());
+        return true;
+    };
+    return make(13.5f, DWRITE_TEXT_ALIGNMENT_LEADING, s.fText) && make(12.5f, DWRITE_TEXT_ALIGNMENT_TRAILING, s.fHint) &&
+           make(15, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyph) && make(12, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyphS);
+}
+
+static void Set_MenuLayout(SetMenuSession& s, SetMenuLevel& lv) {
+    const auto& items = *lv.items;
+    lv.itemH = 30;
+    lv.top.assign(items.size(), 0);
+    lv.height.assign(items.size(), 0);
+    float textW = 0, hintW = 0, y = kSetMenuPad;
+    for (size_t i = 0; i < items.size(); i++) {
+        lv.top[i] = y;
+        lv.height[i] = items[i].separator ? kSetMenuSepH : lv.itemH;
+        y += lv.height[i];
+        if (items[i].separator) continue;
+        textW = std::max(textW, Set_MenuTextW(s, s.fText.get(), items[i].label));
+        hintW = std::max(hintW, Set_MenuTextW(s, s.fHint.get(), items[i].hint));
+    }
+    lv.hintW = std::ceil(hintW);
+    float w = kSetMenuPad * 2 + 8 + kSetMenuIconW + 10 + std::ceil(textW) + 2 + (hintW > 0 ? 24 + lv.hintW : 0) + 10 + 20 + 8;
+    lv.wDip = std::ceil(std::clamp(w, kSetMenuMinW, kSetMenuMaxW));
+    lv.hDip = std::ceil(y + kSetMenuPad);
+}
+
+static int Set_MenuItemAt(const SetMenuLevel& lv, float x, float y) {
+    if (x < kSetMenuPad || x >= lv.wDip - kSetMenuPad) return -1;
+    for (size_t i = 0; i < lv.top.size(); i++)
+        if (y >= lv.top[i] && y < lv.top[i] + lv.height[i]) return (*lv.items)[i].separator ? -1 : (int)i;
+    return -1;
+}
+
+static int Set_MenuNext(const SetMenuLevel& lv, int from, int dir) {
+    int n = (int)lv.items->size();
+    if (!n) return -1;
+    int i = from < 0 ? (dir > 0 ? -1 : n) : from;
+    for (int k = 0; k < n; k++) {
+        i = ((i + dir) % n + n) % n;
+        if (Set_MenuSelectable((*lv.items)[(size_t)i])) return i;
+    }
+    return -1;
+}
+
+static void Set_MenuPaint(SetMenuSession& s, SetMenuLevel& lv) {
+    ID2D1RenderTarget* rt = lv.rt.get();
+    SetCom<ID2D1SolidColorBrush> brush;
+    if (FAILED(rt->CreateSolidColorBrush(D2DColor(mocha::text), brush.put()))) return;
+    auto solid = [&](UINT32 rgb, float a) {
+        brush->SetColor(D2DColor(rgb, a));
+        return brush.get();
+    };
+    auto gradient = [&](D2D1_POINT_2F a, D2D1_POINT_2F b, D2D1_COLOR_F c1, D2D1_COLOR_F c2) {
+        SetCom<ID2D1LinearGradientBrush> g;
+        D2D1_GRADIENT_STOP stops[2] = {{0, c1}, {1, c2}};
+        SetCom<ID2D1GradientStopCollection> coll;
+        if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())))
+            rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(a, b), coll.get(), g.put());
+        return g;
+    };
+    // Blue to mauve at 45 degrees across a rect, like Seamless Borders.
+    auto accent = [&](const D2D1_RECT_F& r, float a) {
+        float d = ((r.right - r.left) + (r.bottom - r.top)) / 2;
+        return gradient({r.left, r.top}, {r.left + d, r.top + d}, D2DColor(mocha::blue, a), D2DColor(mocha::mauve, a));
+    };
+    const float w = lv.wDip, h = lv.hDip;
+    rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+    SetCom<ID2D1Layer> layer;
+    bool faded = s.alpha < 0.999f && SUCCEEDED(rt->CreateLayer(nullptr, layer.put()));
+    if (faded)
+        rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                            D2D1::IdentityMatrix(), std::max(0.0f, s.alpha)),
+                      layer.get());
+    // Dark Mocha over the acrylic blur; DWM rounds the window.
+    auto tint = gradient({0, 0}, {0, h}, D2DColor(mocha::base, 0.80f), D2DColor(mocha::base, 0.84f));
+    if (tint) rt->FillRectangle({0, 0, w, h}, tint.get());
+    const auto& items = *lv.items;
+    const float slotRight = w - kSetMenuPad - 8, slotLeft = slotRight - 20;
+    for (size_t i = 0; i < items.size(); i++) {
+        const SetMenuItem& m = items[i];
+        D2D1_RECT_F r{kSetMenuPad, lv.top[i], w - kSetMenuPad, lv.top[i] + lv.height[i]};
+        if (m.separator) {
+            float y = std::floor((r.top + r.bottom) / 2);
+            rt->FillRectangle({r.left + 8, y, r.right - 8, y + 1}, solid(mocha::surface1, 0.8f));
+            continue;
+        }
+        bool hot = ((int)i == lv.hover || (int)i == lv.open) && !m.disabled;
+        if (hot) {
+            // The hover look of every card: a faint blue to mauve wash and a 1 px gradient ring.
+            float rad = 8, ringW = 1;
+            D2D1_ROUNDED_RECT rr{{r.left + ringW / 2, r.top + ringW / 2, r.right - ringW / 2, r.bottom - ringW / 2}, rad, rad};
+            auto fill = gradient({r.left, r.top}, {r.right, r.bottom}, D2DColor(mocha::blue, 0.16f), D2DColor(mocha::mauve, 0.16f));
+            if (fill) rt->FillRoundedRectangle(rr, fill.get());
+            auto ring = accent(r, 0.8f);
+            if (ring) rt->DrawRoundedRectangle(rr, ring.get(), ringW);
+        }
+        UINT32 col = m.disabled ? mocha::overlay0 : mocha::text;
+        if (!m.glyph.empty())
+            rt->DrawText(m.glyph.c_str(), (UINT32)m.glyph.size(), s.fGlyph.get(),
+                         {r.left + 8, r.top, r.left + 8 + kSetMenuIconW, r.bottom}, solid(col, 1));
+        float textX = r.left + 8 + kSetMenuIconW + 10;
+        float hintRight = slotLeft - 10, hintLeft = hintRight - lv.hintW;
+        float textRight = lv.hintW > 0 ? hintLeft - 12 : slotLeft - 4;
+        if (!m.label.empty())
+            rt->DrawText(m.label.c_str(), (UINT32)m.label.size(), s.fText.get(), {textX, r.top, textRight, r.bottom},
+                         solid(col, 1));
+        if (!m.hint.empty())
+            rt->DrawText(m.hint.c_str(), (UINT32)m.hint.size(), s.fHint.get(), {hintLeft, r.top, hintRight, r.bottom},
+                         solid(m.disabled ? mocha::overlay0 : mocha::subtext0, 1));
+        if (!m.sub.empty()) {
+            rt->DrawText(L"", 1, s.fGlyphS.get(), {slotLeft, r.top, slotRight, r.bottom}, solid(col, 1));  // chevron_right
+        } else if (m.checked) {
+            rt->DrawText(L"", 1, s.fGlyph.get(), {slotLeft, r.top, slotRight, r.bottom},  // check
+                         solid(m.disabled ? mocha::overlay0 : mocha::blue, 1));
+        }
+    }
+    // The edge on DWM's real corner curve: 2 px, blue to mauve, inset half the stroke.
+    const float bw = kSetMenuBorderW;
+    D2D1_RECT_F edge{bw / 2, bw / 2, w - bw / 2, h - bw / 2};
+    auto border = accent({0, 0, w, h}, 1);
+    float r2 = std::max(0.0f, s.radius - bw / 2);
+    if (border) rt->DrawRoundedRectangle({edge, r2, r2}, border.get(), bw);
+    if (faded) rt->PopLayer();
+}
+
+static int Set_MenuIndexOf(HWND hwnd) {
+    if (SetMenuSession* s = Set_MenuCur())
+        for (size_t i = 0; i < s->levels.size(); i++)
+            if (s->levels[i]->hwnd == hwnd) return (int)i;
+    return -1;
+}
+
+static void Set_MenuInvalidate() {
+    if (SetMenuSession* s = Set_MenuCur())
+        for (auto& lv : s->levels)
+            if (lv->hwnd) InvalidateRect(lv->hwnd, nullptr, FALSE);
+}
+
+static void Set_MenuCloseFrom(size_t n) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s) return;
+    while (s->levels.size() > n) {
+        HWND h = s->levels.back()->hwnd;
+        s->levels.back()->rt.reset();
+        s->levels.pop_back();
+        if (h) DestroyWindow(h);
+    }
+    if (n > 0 && !s->levels.empty()) s->levels.back()->open = -1;
+    Set_MenuInvalidate();
+}
+
+static void Set_MenuFinish(int id) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || s->done) return;
+    s->result = id;
+    s->done = true;
+}
+
+static void Set_MenuBackdrop(HWND hwnd) {
+    BOOL dark = TRUE;
+    DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+    int corner = 2;  // DWMWCP_ROUND
+    DwmSetWindowAttribute(hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &corner, sizeof(corner));
+    COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE: the menu draws its own edge.
+    DwmSetWindowAttribute(hwnd, 34 /* DWMWA_BORDER_COLOR */, &none, sizeof(none));
+    DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+    int backdrop = 1;  // DWMSBT_NONE
+    DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+    DWM_BLURBEHIND bb{};
+    bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+    bb.fEnable = TRUE;
+    bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+    DwmEnableBlurBehindWindow(hwnd, &bb);
+    if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+    struct SetAccentPolicy { int state, flags, abgr, animation; };
+    struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
+    if (auto setComposition =
+            (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute")) {
+        SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};
+        SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+        setComposition(hwnd, &data);
+    }
+}
+
+static RECT Set_MenuWorkArea(POINT pt) {
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST), &mi);
+    return mi.rcWork;
+}
+
+static bool Set_MenuCreateWindow(SetMenuSession& s, SetMenuLevel& lv, POINT at, const RECT* parent, int rowTopPx) {
+    DWORD ex = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | (parent ? WS_EX_NOACTIVATE : 0);
+    HWND hwnd = CreateWindowExW(ex, s.cls.c_str(), L"", WS_POPUP, at.x, at.y, 1, 1, nullptr, nullptr, s.inst, nullptr);
+    if (!hwnd) return false;
+    lv.hwnd = hwnd;
+    lv.scale = GetDpiForWindow(hwnd) / 96.0f;
+    if (lv.scale <= 0) lv.scale = 1;
+    Set_MenuLayout(s, lv);
+    int w = (int)std::ceil(lv.wDip * lv.scale), h = (int)std::ceil(lv.hDip * lv.scale);
+    RECT wa = Set_MenuWorkArea(parent ? POINT{parent->right, parent->top + rowTopPx} : at);
+    int x = at.x, y = at.y;
+    if (parent) {
+        int overlap = (int)kSetMenuOverlap;
+        x = parent->right - overlap;
+        if (x + w > wa.right) x = parent->left - w + overlap;
+        y = parent->top + rowTopPx - (int)(kSetMenuPad * lv.scale);
+        if (y + h > wa.bottom) y = wa.bottom - h;
+    } else {
+        if (x + w > wa.right) x = at.x - w;
+        if (y + h > wa.bottom) y = at.y - h;
+    }
+    x = std::clamp<int>(x, wa.left, std::max<int>(wa.left, wa.right - w));
+    y = std::clamp<int>(y, wa.top, std::max<int>(wa.top, wa.bottom - h));
+    Set_MenuBackdrop(hwnd);
+    SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+        D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+        96 * lv.scale, 96 * lv.scale);
+    s.d2d->CreateHwndRenderTarget(props, D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU((UINT32)w, (UINT32)h)),
+                                  lv.rt.put());
+    return (bool)lv.rt;
+}
+
+static void Set_MenuOpenSub(size_t level, int item, bool keyboard) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || level >= s->levels.size()) return;
+    SetMenuLevel& parent = *s->levels[level];
+    const SetMenuItem& m = (*parent.items)[(size_t)item];
+    if (m.sub.empty() || m.disabled) return;
+    Set_MenuCloseFrom(level + 1);
+    auto lv = std::make_unique<SetMenuLevel>();
+    lv->items = &m.sub;
+    RECT pr{};
+    GetWindowRect(parent.hwnd, &pr);
+    SetMenuLevel* raw = lv.get();
+    s->levels.push_back(std::move(lv));
+    parent.open = item;
+    if (!Set_MenuCreateWindow(*s, *raw, POINT{pr.right, pr.top}, &pr, (int)(parent.top[(size_t)item] * parent.scale))) {
+        Set_MenuCloseFrom(level + 1);
+        return;
+    }
+    if (keyboard) raw->hover = Set_MenuNext(*raw, -1, +1);
+    ShowWindow(raw->hwnd, SW_SHOWNOACTIVATE);
+    Set_MenuInvalidate();
+}
+
+static void Set_MenuActivate(size_t level, int item, bool keyboard) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || level >= s->levels.size()) return;
+    const SetMenuItem& m = (*s->levels[level]->items)[(size_t)item];
+    if (!Set_MenuSelectable(m)) return;
+    if (!m.sub.empty()) Set_MenuOpenSub(level, item, keyboard);
+    else Set_MenuFinish(m.id);
+}
+
+static void Set_MenuHoverChanged(size_t level, int item) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s) return;
+    SetMenuLevel& lv = *s->levels[level];
+    HWND root = s->levels[0]->hwnd;
+    KillTimer(root, kSetMenuTimerSub);
+    s->pendingItem = -1;
+    bool wantsSub = item >= 0 && Set_MenuSelectable((*lv.items)[(size_t)item]) && !(*lv.items)[(size_t)item].sub.empty();
+    if (wantsSub && lv.open != item) {
+        s->pendingLevel = (int)level;
+        s->pendingItem = item;
+        SetTimer(root, kSetMenuTimerSub, kSetMenuSubDelayMs, nullptr);
+    } else if (!wantsSub && lv.open != -1 && s->levels.size() > level + 1) {
+        s->pendingLevel = (int)level;
+        s->pendingItem = -1;
+        SetTimer(root, kSetMenuTimerSub, kSetMenuSubDelayMs, nullptr);
+    }
+}
+
+static void Set_MenuKey(WPARAM vk) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || s->levels.empty()) return;
+    size_t li = s->levels.size() - 1;
+    SetMenuLevel& cur = *s->levels[li];
+    const auto& items = *cur.items;
+    switch (vk) {
+        case VK_DOWN: cur.hover = Set_MenuNext(cur, cur.hover, +1); break;
+        case VK_UP: cur.hover = Set_MenuNext(cur, cur.hover, -1); break;
+        case VK_HOME: cur.hover = Set_MenuNext(cur, -1, +1); break;
+        case VK_END: cur.hover = Set_MenuNext(cur, (int)items.size(), -1); break;
+        case VK_RIGHT:
+            if (cur.hover >= 0 && !items[(size_t)cur.hover].sub.empty()) Set_MenuActivate(li, cur.hover, true);
+            break;
+        case VK_LEFT:
+            if (li > 0) Set_MenuCloseFrom(li);
+            break;
+        case VK_RETURN:
+        case VK_SPACE:
+            if (cur.hover >= 0) Set_MenuActivate(li, cur.hover, true);
+            break;
+        case VK_ESCAPE:
+        case VK_MENU:
+            if (li > 0 && vk == VK_ESCAPE) Set_MenuCloseFrom(li);
+            else Set_MenuFinish(0);
+            break;
+        default: return;
+    }
+    Set_MenuInvalidate();
+}
+
+static LRESULT CALLBACK Set_MenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    SetMenuSession* s = Set_MenuCur();
+    int li = Set_MenuIndexOf(hwnd);
+    if (!s || li < 0) return DefWindowProcW(hwnd, msg, wParam, lParam);
+    SetMenuLevel& lv = *s->levels[(size_t)li];
+    switch (msg) {
+        case WM_ERASEBKGND: return 1;
+        case WM_MOUSEACTIVATE: return li == 0 ? MA_ACTIVATE : MA_NOACTIVATE;
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            if (lv.rt) {
+                lv.rt->BeginDraw();
+                Set_MenuPaint(*s, lv);
+                if (lv.rt->EndDraw() == D2DERR_RECREATE_TARGET) {
+                    RECT rc;
+                    GetClientRect(hwnd, &rc);
+                    lv.rt.reset();
+                    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+                        D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96 * lv.scale,
+                        96 * lv.scale);
+                    s->d2d->CreateHwndRenderTarget(
+                        props, D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU((UINT32)rc.right, (UINT32)rc.bottom)),
+                        lv.rt.put());
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                }
+            }
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_MOUSEMOVE: {
+            if (s->pendingLevel > li) {  // The pointer reached a deeper level: keep it open.
+                KillTimer(s->levels[0]->hwnd, kSetMenuTimerSub);
+                s->pendingItem = s->pendingLevel = -1;
+            }
+            TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
+            TrackMouseEvent(&tme);
+            int i = Set_MenuItemAt(lv, (short)LOWORD(lParam) / lv.scale, (short)HIWORD(lParam) / lv.scale);
+            if (i >= 0 && !Set_MenuSelectable((*lv.items)[(size_t)i])) i = -1;
+            if (i != lv.hover) {
+                lv.hover = i;
+                Set_MenuHoverChanged((size_t)li, i);
+                Set_MenuInvalidate();
+            }
+            return 0;
+        }
+        case WM_MOUSELEAVE:
+            if (lv.hover != -1 && lv.open != lv.hover) {
+                lv.hover = -1;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP: {
+            if (!s->pressed) return 0;  // The release of the click that opened the menu.
+            int i = Set_MenuItemAt(lv, (short)LOWORD(lParam) / lv.scale, (short)HIWORD(lParam) / lv.scale);
+            if (i >= 0) Set_MenuActivate((size_t)li, i, false);
+            return 0;
+        }
+        case WM_ACTIVATE:
+            if (li == 0 && LOWORD(wParam) != WA_INACTIVE) s->wasActive = true;
+            if (li == 0 && LOWORD(wParam) == WA_INACTIVE && Set_MenuIndexOf((HWND)lParam) < 0) Set_MenuFinish(0);
+            return 0;
+        case WM_TIMER:
+            if (wParam == kSetMenuTimerSub) {
+                KillTimer(hwnd, kSetMenuTimerSub);
+                int pl = s->pendingLevel, pi = s->pendingItem;
+                s->pendingLevel = s->pendingItem = -1;
+                if (pl >= 0 && (size_t)pl < s->levels.size()) {
+                    if (pi >= 0) Set_MenuOpenSub((size_t)pl, pi, false);
+                    else Set_MenuCloseFrom((size_t)pl + 1);
+                }
+            } else if (wParam == kSetMenuTimerFade) {
+                float t = std::min(1.0f, (GetTickCount64() - s->fadeStart) / (float)kSetMenuFadeMs);
+                s->alpha = 1 - (1 - t) * (1 - t);
+                if (t >= 1) KillTimer(hwnd, kSetMenuTimerFade);
+                Set_MenuInvalidate();
+            } else if (wParam == kSetMenuTimerPoll) {
+                // Click-away when Windows kept the menu out of the foreground: a press outside every level.
+                if (GetForegroundWindow() != s->levels[0]->hwnd &&
+                    ((GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON) | GetAsyncKeyState(VK_MBUTTON)) & 0x8000)) {
+                    POINT pt;
+                    GetCursorPos(&pt);
+                    if (Set_MenuIndexOf(WindowFromPoint(pt)) < 0) Set_MenuFinish(0);
+                }
+            }
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+static int Set_TrayMenu(HWND owner, const std::vector<SetMenuItem>& items, const POINT* at = nullptr) {
+    if (Set_MenuCur()) {  // A second right-click while open closes the first menu.
+        Set_MenuFinish(0);
+        return 0;
+    }
+    if (items.empty()) return 0;
+    POINT pt{};
+    if (at) pt = *at;
+    else GetCursorPos(&pt);
+    SetMenuSession session;
+    if (!Set_MenuFormats(session)) return 0;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       (LPCWSTR)(void*)&Set_MenuProc, &session.inst);
+    // One class per mod, even when several mods share a process.
+    session.cls = L"SeamlessTrayMenu_" + std::to_wstring((unsigned long long)(uintptr_t)(void*)&Set_MenuProc);
+    PCWSTR cls = session.cls.c_str();
+    WNDCLASSEXW wc{sizeof(wc)};
+    wc.hInstance = session.inst;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpfnWndProc = Set_MenuProc;
+    wc.lpszClassName = cls;
+    RegisterClassExW(&wc);
+    session.radius = Set_MenuCornerRadius();
+    Set_MenuCur() = &session;
+    session.levels.push_back(std::make_unique<SetMenuLevel>());
+    SetMenuLevel* root = session.levels[0].get();
+    root->items = &items;
+    if (!Set_MenuCreateWindow(session, *root, pt, nullptr, 0)) {
+        Set_MenuCloseFrom(0);
+        Set_MenuCur() = nullptr;
+        UnregisterClassW(cls, session.inst);
+        return 0;
+    }
+    BOOL animations = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animations, 0);
+    session.alpha = animations ? 0.0f : 1.0f;
+    session.fadeStart = GetTickCount64();
+    if (owner && IsWindow(owner)) SetForegroundWindow(owner);  // Windows' tray rule; lets the menu take the foreground.
+    ShowWindow(root->hwnd, SW_SHOW);
+    if (!SetForegroundWindow(root->hwnd)) {
+        DWORD fg = GetWindowThreadProcessId(GetForegroundWindow(), nullptr), me = GetCurrentThreadId();
+        if (fg && fg != me && AttachThreadInput(me, fg, TRUE)) {
+            SetForegroundWindow(root->hwnd);
+            AttachThreadInput(me, fg, FALSE);
+        }
+    }
+    SetFocus(root->hwnd);
+    if (animations) SetTimer(root->hwnd, kSetMenuTimerFade, 15, nullptr);
+    SetTimer(root->hwnd, kSetMenuTimerPoll, 50, nullptr);
+    MSG m;
+    while (!session.done) {
+        BOOL got = GetMessageW(&m, nullptr, 0, 0);
+        if (got <= 0) {
+            if (got == 0) PostQuitMessage((int)m.wParam);
+            break;
+        }
+        switch (m.message) {
+            case WM_KEYDOWN:
+            case WM_SYSKEYDOWN:
+                Set_MenuKey(m.wParam);
+                continue;
+            case WM_KEYUP:
+            case WM_SYSKEYUP:
+            case WM_CHAR:
+            case WM_SYSCHAR:
+                continue;
+            case WM_LBUTTONDOWN:
+            case WM_RBUTTONDOWN:
+            case WM_MBUTTONDOWN:
+            case WM_NCLBUTTONDOWN:
+            case WM_NCRBUTTONDOWN:
+                if (Set_MenuIndexOf(m.hwnd) < 0) {  // A click on another window of this thread closes the menu.
+                    Set_MenuFinish(0);
+                    continue;
+                }
+                session.pressed = true;
+                break;
+        }
+        TranslateMessage(&m);
+        DispatchMessageW(&m);
+    }
+    int result = session.result;
+    Set_MenuCloseFrom(0);
+    Set_MenuCur() = nullptr;
+    UnregisterClassW(cls, session.inst);
+    if (owner && IsWindow(owner)) PostMessageW(owner, WM_NULL, 0, 0);
+    return result;
+}
+
 static void Set_MakeFormats(SetWindow& w) {
     w.family = Set_ResolveFamily();
     w.iconFamily = Set_FamilyExists(L"Segoe Fluent Icons") ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
@@ -13200,6 +14065,29 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
 // The title bar is drawn first; everything else is in content DIPs, shifted down by kSetCapH.
 static void Set_PlaceEdit(SetWindow& w);
 
+static void Set_DrawAutoScroll(SetPaint& p, SetWindow& w, bool frosted) {
+    if (w.autoA <= 0.003f) return;
+    const float a = w.autoA, s = 0.8f + 0.2f * a, r = kSetAutoR * s, cx = w.autoX, cy = w.autoY;
+    const D2D1_RECT_F disc{cx - r, cy - r, cx + r, cy + r};
+    p.Round(disc, r, mocha::mantle, (frosted ? 0.86f : 1.0f) * a);  // Opaque when nothing blurs under it.
+    p.GradRing(disc, r - 1, a, 2);
+    auto arrow = [&](float dir, bool lit) {
+        SetCom<ID2D1PathGeometry> g;
+        SetCom<ID2D1GeometrySink> k;
+        if (FAILED(g_setD2d->CreatePathGeometry(g.put())) || FAILED(g->Open(k.put()))) return;
+        const float tip = cy + dir * r * 0.62f, foot = cy + dir * r * 0.30f, half = r * 0.22f;
+        k->BeginFigure(D2D1::Point2F(cx, tip), D2D1_FIGURE_BEGIN_FILLED);
+        k->AddLine(D2D1::Point2F(cx + half, foot));
+        k->AddLine(D2D1::Point2F(cx - half, foot));
+        k->EndFigure(D2D1_FIGURE_END_CLOSED);
+        if (SUCCEEDED(k->Close())) p.rt->FillGeometry(g.get(), p.B(lit ? mocha::blue : mocha::overlay1, a));
+    };
+    arrow(-1, w.autoDir < 0);
+    arrow(1, w.autoDir > 0);
+    const float d = 2.5f * s;
+    p.Round({cx - d, cy - d, cx + d, cy + d}, d, mocha::mauve, a);
+}
+
 static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     if (Set_FitBoxes(w)) {
         Set_BuildPage(w);
@@ -13316,6 +14204,16 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
                 D2D1_RECT_F src{d.left - 1, d.top - 1, d.right + 1, d.bottom + 1};
                 dc->DrawImage(blur.get(), D2D1::Point2F(src.left, src.top), src);
                 rt->PopLayer();
+                if (w.autoA > 0.003f) {  // The autoscroll disc frosts the rows under it the same way.
+                    const float r = kSetAutoR * (0.8f + 0.2f * w.autoA), cx = w.autoX, cy = w.autoY + kSetCapH;
+                    SetCom<ID2D1EllipseGeometry> disc;
+                    if (SUCCEEDED(g_setD2d->CreateEllipseGeometry(D2D1::Ellipse(D2D1::Point2F(cx, cy), r, r), disc.put()))) {
+                        rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), disc.get()), nullptr);
+                        D2D1_RECT_F ds{cx - r - 1, cy - r - 1, cx + r + 1, cy + r + 1};
+                        dc->DrawImage(blur.get(), D2D1::Point2F(ds.left, ds.top), ds);
+                        rt->PopLayer();
+                    }
+                }
                 blurred = true;
             }
         }
@@ -13329,6 +14227,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     Set_DrawFooter(p, w);
     Set_DrawRail(p, w);
     Set_DrawPopup(p, w);
+    Set_DrawAutoScroll(p, w, blurred);
     rt->SetTransform(D2D1::Matrix3x2F::Identity());
     if (false) p.GradRing({0, 0, w.cw, w.ch + kSetCapH}, SystemCornerRadius(false), 1, 1);
     HRESULT hr = rt->EndDraw();
@@ -13864,6 +14763,48 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
 
 // ---- Animation tick ----------------------------------------------------------------
 
+static bool Set_AutoScrollStart(SetWindow& w, float x, float y) {
+    if (w.render || w.contentH - Set_ViewH(w) <= 0) return false;  // Nothing to scroll.
+    Set_CommitEdit(w, true);
+    Set_ClosePopup(w);
+    w.autoScroll = true;
+    w.autoMoved = false;
+    w.autoX = x, w.autoY = y, w.autoDir = 0;
+    w.hover = SetHit();
+    SetCapture(w.hwnd);
+    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+    Set_Invalidate(w);
+    return true;
+}
+
+static void Set_AutoScrollStop(SetWindow& w) {
+    if (!w.autoScroll) return;
+    w.autoScroll = false;  // Before ReleaseCapture: its WM_CAPTURECHANGED comes straight back here.
+    w.autoDir = 0;
+    if (GetCapture() == w.hwnd) ReleaseCapture();
+    Set_Invalidate(w);
+}
+
+static void Set_AutoScrollMove(SetWindow& w, bool held) {
+    if (held && fabsf(w.mouseY - w.autoY) > kSetAutoDead) w.autoMoved = true;
+    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+}
+
+static bool Set_AutoScrollStep(SetWindow& w) {
+    if (!w.autoScroll) return false;
+    const float dy = w.mouseY - w.autoY, dist = fabsf(dy) - kSetAutoDead;
+    const float dir = dist > 0 ? (dy > 0 ? 1.0f : -1.0f) : 0.0f;
+    bool changed = dir != w.autoDir;
+    w.autoDir = dir;
+    if (dist <= 0) return changed;
+    const float maxScroll = std::max(0.0f, w.contentH - Set_ViewH(w));
+    const float next = std::clamp(w.scrollY + dir * std::min(kSetAutoMax, dist * kSetAutoGain), 0.0f, maxScroll);
+    if (next == w.scrollY) return changed;
+    w.scrollY = w.scrollTarget = next;
+    Set_PlaceEdit(w);
+    return true;
+}
+
 static bool Set_Tick(SetWindow& w) {
     bool moved = false, anim = Set_Anim(w);
     auto step = [&](float& v, float target, float rate) {
@@ -13897,6 +14838,8 @@ static bool Set_Tick(SetWindow& w) {
         if (!w.knob.count((int)k)) w.knob[(int)k] = target;
         step(w.knob[(int)k], target, 0.35f);
     }
+    if (Set_AutoScrollStep(w)) moved = true;
+    step(w.autoA, w.autoScroll ? 1.0f : 0.0f, 0.3f);
     if (w.scrollY != w.scrollTarget) {
         float d = w.scrollTarget - w.scrollY;
         if (!anim || fabsf(d) < 0.5f) {
@@ -14216,6 +15159,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_ACTIVATE:
             w->active = LOWORD(wParam) != WA_INACTIVE;
+            if (!w->active) Set_AutoScrollStop(*w);
             Set_Invalidate(*w);
             break;
         case WM_ERASEBKGND:
@@ -14286,6 +15230,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             }
             w->mouseX = x;
             w->mouseY = y;
+            if (w->autoScroll) {
+                Set_AutoScrollMove(*w, (wParam & MK_MBUTTON) != 0);
+                return 0;
+            }
             if (w->dragRail) {
                 Set_RailDragTo(*w, x - w->dragOff);
                 return 0;
@@ -14317,7 +15265,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             POINT pointer; GetCursorPos(&pointer);
             w->tracking = false;
             w->hover = SetHit();
-            if (!w->dragRail) w->mouseX = w->mouseY = -1;
+            if (!w->dragRail && !w->autoScroll) w->mouseX = w->mouseY = -1;
             Set_Invalidate(*w);
             return 0;
         }
@@ -14332,6 +15280,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             break;
         case WM_LBUTTONDOWN: {
             if (w->saving) return 0;
+            if (w->autoScroll) {  // A click ends autoscroll and does nothing else.
+                Set_AutoScrollStop(*w);
+                return 0;
+            }
             if (!w->render) SetFocus(hwnd);
             w->kbd = false;
             float x = dipX(lParam), y = dipY(lParam);
@@ -14394,6 +15346,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_LBUTTONUP:
         case WM_CAPTURECHANGED:
+            if (msg == WM_CAPTURECHANGED && w->autoScroll && (HWND)lParam != hwnd) Set_AutoScrollStop(*w);
             if (w->capDown) {
                 int b = w->capDown - 1;
                 w->capDown = 0;
@@ -14417,7 +15370,23 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 Set_Invalidate(*w);
             }
             return 0;
+        case WM_MBUTTONDOWN:
+            if (w->saving) return 0;
+            if (w->autoScroll) Set_AutoScrollStop(*w);  // Toggle mode: the next middle click ends it.
+            else Set_AutoScrollStart(*w, dipX(lParam), dipY(lParam));
+            return 0;
+        case WM_MBUTTONUP:
+            if (w->autoScroll && w->autoMoved) Set_AutoScrollStop(*w);  // Held and dragged: stop on release.
+            return 0;
+        case WM_RBUTTONDOWN:
+        case WM_XBUTTONDOWN:
+            if (w->autoScroll) {
+                Set_AutoScrollStop(*w);
+                return msg == WM_XBUTTONDOWN ? TRUE : 0;
+            }
+            break;
         case WM_MOUSEWHEEL: {
+            Set_AutoScrollStop(*w);
             if (w->openSel >= 0 && Set_In(w->dropRect, w->mouseX, w->mouseY)) {
                 int n = (int)w->fields[w->openSel].options.size(), vis = Set_DropVisible(*w);
                 int step = GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? -3 : 3;
@@ -14439,6 +15408,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
+            if (w->autoScroll) {  // Any key ends autoscroll; Escape does nothing else.
+                Set_AutoScrollStop(*w);
+                if (wParam == VK_ESCAPE) return 0;
+            }
             if (Set_OnKey(*w, (UINT)wParam)) return 0;
             // Without a system menu (glass title bar) Windows no longer turns Alt+F4 into a close.
             if (msg == WM_SYSKEYDOWN && wParam == VK_F4 && w->recording < 0) {
@@ -14458,6 +15431,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             return 0;
         case WM_DESTROY: {
             Set_StopRecording(*w);
+            RemovePropW(hwnd, kSetAutoProp);
             if (w->timer) KillTimer(hwnd, kSetTimerId);
             if (!w->render && w->normalRect.right > w->normalRect.left) {
                 const RECT& r = w->normalRect;
@@ -14579,6 +15553,7 @@ static bool Set_Create(bool render) {
         return false;
     }
     w->hwnd = hwnd;
+    SetPropW(hwnd, kSetAutoProp, (HANDLE)1);  // Seamless Autoscroll leaves this window to Set_AutoScroll*.
     w->dpi = g_setForceDpi ? g_setForceDpi : GetDpiForWindow(hwnd);
     ApplyDarkWindow(hwnd);
     COLORREF caption = RefFromRgb(mocha::crust), captionText = RefFromRgb(mocha::text);
@@ -14691,17 +15666,86 @@ void CloseSettingsWindow() {
 //  Tool process (windhawk.exe): tray icon, the dock's right-click menu, and
 //  the title font file that dwm.exe can read.
 // ==========================================================================
+// ==========================================================================
+//  Dark titles and see-through system boxes, from the tool process
+// ==========================================================================
+// dwm.exe cannot change these for another process's window in a way that shows, but any
+// normal process can ask DWM for them. Calls here never wait on the target window's thread.
+namespace darkall {
+DWORD g_csrss = 0;
+HWINEVENTHOOK g_hook = nullptr;
+
+int Mode() { return Wh_GetIntValue(L"sysbox.mode", 15); }
+
+bool IsCsrssBox(HWND h, DWORD pid) {
+    if (!g_csrss || pid != g_csrss) return false;
+    wchar_t cls[16] = L"";
+    return GetClassNameW(h, cls, 16) && wcscmp(cls, L"#32770") == 0;
+}
+
+void Apply(HWND h, int mode) {
+    if (!h || GetAncestor(h, GA_ROOT) != h || !IsWindowVisible(h)) return;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(h, &pid);
+    if (!pid || pid == GetCurrentProcessId()) return;
+    if (IsCsrssBox(h, pid)) {
+        BOOL dark = TRUE;
+        if (mode & 1) DwmSetWindowAttribute(h, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+        if (mode & 4) {
+            // The box paints its body black; with blur-behind black shows the backdrop.
+            DWM_BLURBEHIND bb{DWM_BB_ENABLE, TRUE, nullptr, FALSE};
+            DwmEnableBlurBehindWindow(h, &bb);
+            RedrawWindow(h, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+        }
+        return;
+    }
+    if (!(mode & 8)) return;
+    if ((GetWindowLongPtrW(h, GWL_STYLE) & WS_CAPTION) != WS_CAPTION) return;
+    BOOL dark = TRUE;
+    DwmSetWindowAttribute(h, 20, &dark, sizeof(dark));
+}
+
+BOOL CALLBACK Sweep(HWND h, LPARAM mode) {
+    Apply(h, (int)mode);
+    return TRUE;
+}
+
+void CALLBACK OnShow(HWINEVENTHOOK, DWORD, HWND h, LONG obj, LONG child, DWORD, DWORD) {
+    if (obj != OBJID_WINDOW || child != CHILDID_SELF || !h) return;
+    if (GetAncestor(h, GA_ROOT) != h) return;
+    Apply(h, Mode());
+}
+
+void Start() {
+    if (g_hook) return;
+    auto csrPid = (HANDLE(NTAPI*)())GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "CsrGetProcessId");
+    g_csrss = csrPid ? (DWORD)(ULONG_PTR)csrPid() : 0;
+    g_hook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, nullptr, OnShow, 0, 0,
+                             WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+    EnumWindows(Sweep, Mode());
+    Wh_Log(L"[DarkAll] hook %p, csrss %lu", g_hook, g_csrss);
+}
+
+void Stop() {
+    if (g_hook) UnhookWinEvent(g_hook);
+    g_hook = nullptr;
+}
+}  // namespace darkall
+
 namespace stbtool {
 
 constexpr UINT WM_STB_TRAY = WM_APP + 10;
 constexpr UINT WM_STB_SETTINGS = WM_APP + 11;
 constexpr UINT WM_STB_DOCKMENU = WM_APP + 12;   // wParam = window, lParam = screen point
 constexpr UINT WM_STB_TESTMENU = WM_APP + 13;   // same, closes itself after 6 s (for checks)
+constexpr UINT WM_STB_DOCKCLOSE = WM_APP + 14;  // wParam = window: close it (middle-click on the dock)
+constexpr UINT WM_STB_TESTCLOSE = WM_APP + 15;  // wParam = window: close it (for checks)
+constexpr UINT WM_STB_TESTCOPY = WM_APP + 16;   // wParam = window: copy title + uptime (for checks)
 constexpr UINT kTrayId = 1;
 constexpr UINT_PTR kTimerEndMenu = 3;
 
 struct ToolSettings {
-    bool tray = true, dock = true, dockMenu = true, buttons = true, uptime = true;
+    bool tray = true, dock = true, dockMenu = true, midClose = true, buttons = true, uptime = true;
 };
 static ToolSettings g_ts;
 static HWND g_wnd;
@@ -14715,6 +15759,8 @@ static volatile LONG g_menuOpen;
 static bool g_swallowUp;
 static POINT g_downPt;
 static HWND g_downWnd;
+static bool g_midDown;
+static HWND g_midWnd;
 static std::atomic<int> g_saveThreads{0};
 static HANDLE g_singleInstance;
 
@@ -14723,6 +15769,7 @@ static void LoadToolSettings() {
     s.tray = Wh_GetIntSetting(L"settingsTrayIcon") != 0;
     s.dock = Wh_GetIntSetting(L"titleDock.enabled") != 0;
     s.dockMenu = Wh_GetIntSetting(L"titleDock.rightClickMenu") != 0;
+    s.midClose = Wh_GetIntSetting(L"titleDock.middleClickClose") != 0;
     s.buttons = Wh_GetIntSetting(L"buttons.enabled") != 0;
     s.uptime = Wh_GetIntSetting(L"uptime.enabled") != 0;
     g_ts = s;
@@ -14888,20 +15935,16 @@ static void UpdateTray(bool add) {
 enum : UINT { IDM_DOCK = 100, IDM_UPTIME, IDM_BUTTONS, IDM_SETTINGS };
 
 static void ShowTrayMenu(POINT pt) {
-    HMENU menu = CreatePopupMenu();
-    AppendMenuW(menu, MF_STRING | (g_ts.dock ? MF_CHECKED : 0), IDM_DOCK, L"Title dock");
-    AppendMenuW(menu, MF_STRING | (g_ts.uptime ? MF_CHECKED : 0), IDM_UPTIME, L"Window uptime");
-    AppendMenuW(menu, MF_STRING | (g_ts.buttons ? MF_CHECKED : 0), IDM_BUTTONS, L"Caption buttons");
-    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING, IDM_SETTINGS, L"Settings");
+    // The engine's own menu (Set_TrayMenu), rows in the order they always had.
+    std::vector<stbset::SetMenuItem> rows;
+    rows.push_back(stbset::Set_MenuRow(IDM_DOCK, L"\uE922", L"Title dock", g_ts.dock));
+    rows.push_back(stbset::Set_MenuRow(IDM_UPTIME, L"\uE916", L"Window uptime", g_ts.uptime));
+    rows.push_back(stbset::Set_MenuRow(IDM_BUTTONS, L"\uE771", L"Caption buttons", g_ts.buttons));
+    rows.push_back(stbset::Set_MenuSep());
+    rows.push_back(stbset::Set_MenuRow(IDM_SETTINGS, L"\uEB51", L"Settings"));
     InterlockedExchange(&g_menuOpen, 1);
-    SetForegroundWindow(g_wnd);
-    UINT cmd = TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON |
-                                          (GetSystemMetrics(SM_MENUDROPALIGNMENT) ? TPM_RIGHTALIGN : TPM_LEFTALIGN),
-                                pt.x, pt.y, g_wnd, nullptr);
-    PostMessageW(g_wnd, WM_NULL, 0, 0);
+    UINT cmd = (UINT)stbset::Set_TrayMenu(g_wnd, rows, &pt);
     InterlockedExchange(&g_menuOpen, 0);
-    DestroyMenu(menu);
     if (cmd == IDM_DOCK) {
         g_ts.dock = !g_ts.dock;
         SaveSettingsAsync({{L"titleDock.enabled", g_ts.dock ? L"1" : L"0"}});
@@ -14919,8 +15962,7 @@ static void ShowTrayMenu(POINT pt) {
 // ---- The dock's right-click menu ----
 // dwm.exe writes which dock the pointer is on; a right click there opens this menu
 // instead of the plain window menu (which stays one click away in it).
-static HWND HitDock(POINT pt) {
-    if (!g_ts.dock || !g_ts.dockMenu || g_menuOpen) return nullptr;
+static HWND HitDockPt(POINT pt) {
     stbshared::Snap s;
     if (!stbshared::Read(s) || !s.hwnd) return nullptr;
     if (GetTickCount64() - s.tick > 1500) return nullptr;
@@ -14933,6 +15975,16 @@ static HWND HitDock(POINT pt) {
     HWND under = WindowFromPoint(pt);
     if (!under || GetAncestor(under, GA_ROOT) != s.hwnd) return nullptr;
     return s.hwnd;
+}
+
+static HWND HitDock(POINT pt) {
+    if (!g_ts.dock || !g_ts.dockMenu || g_menuOpen) return nullptr;
+    return HitDockPt(pt);
+}
+
+static HWND HitDockMid(POINT pt) {
+    if (!g_ts.dock || !g_ts.midClose || g_menuOpen) return nullptr;
+    return HitDockPt(pt);
 }
 
 static LRESULT CALLBACK MouseHook(int code, WPARAM wp, LPARAM lp) {
@@ -14950,6 +16002,17 @@ static LRESULT CALLBACK MouseHook(int code, WPARAM wp, LPARAM lp) {
                 g_swallowUp = false;
                 PostMessageW(g_wnd, WM_STB_DOCKMENU, (WPARAM)g_downWnd, MAKELPARAM(g_downPt.x, g_downPt.y));
                 return 1;
+            } else if (wp == WM_MBUTTONDOWN) {
+                // Middle-click on the dock closes the window (on the release, like the right click).
+                if (HWND h = HitDockMid(m->pt)) {
+                    g_midDown = true;
+                    g_midWnd = h;
+                    return 1;
+                }
+            } else if (wp == WM_MBUTTONUP && g_midDown) {
+                g_midDown = false;
+                PostMessageW(g_wnd, WM_STB_DOCKCLOSE, (WPARAM)g_midWnd, 0);
+                return 1;
             }
         }
     }
@@ -14957,7 +16020,7 @@ static LRESULT CALLBACK MouseHook(int code, WPARAM wp, LPARAM lp) {
 }
 
 static void UpdateMouseHook() {
-    bool want = g_ts.dock && g_ts.dockMenu;
+    bool want = g_ts.dock && (g_ts.dockMenu || g_ts.midClose);
     if (want && !g_mouseHook) {
         g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, MouseHook, (HINSTANCE)&__ImageBase, 0);
         if (!g_mouseHook) Wh_Log(L"[Menu] mouse hook failed (%lu)", GetLastError());
@@ -14965,11 +16028,13 @@ static void UpdateMouseHook() {
         UnhookWindowsHookEx(g_mouseHook);
         g_mouseHook = nullptr;
         g_swallowUp = false;
+        g_midDown = false;
     }
 }
 
 enum : UINT {
-    IDM_RESTORE = 200, IDM_MINIMIZE, IDM_MAXIMIZE, IDM_TOPMOST, IDM_COPYTITLE, IDM_SYSMENU, IDM_TBSETTINGS, IDM_CLOSE,
+    IDM_RESTORE = 200, IDM_MINIMIZE, IDM_MAXIMIZE, IDM_TOPMOST, IDM_COPYTITLE, IDM_COPYALL, IDM_SYSMENU,
+    IDM_TBSETTINGS, IDM_CLOSE,
 };
 
 static void CopyText(const std::wstring& text) {
@@ -14988,6 +16053,18 @@ static void CopyText(const std::wstring& text) {
     CloseClipboard();
 }
 
+// Copy all: the title plus the uptime suffix DWM shows on this window's dock.
+static void CopyAllText(HWND target) {
+    if (!target || !IsWindow(target)) return;
+    wchar_t title[512] = {};
+    GetWindowTextW(target, title, 512);
+    std::wstring text = title;
+    stbshared::Snap s;
+    if (stbshared::Read(s) && s.hwnd == target && s.suf[0]) text += s.suf;
+    CopyText(text);
+    SetForegroundWindow(target);
+}
+
 static void ShowDockMenu(HWND target, POINT pt, bool test) {
     if (!target || !IsWindow(target)) return;
     LONG style = GetWindowLongW(target, GWL_STYLE), ex = GetWindowLongW(target, GWL_EXSTYLE);
@@ -14997,13 +16074,34 @@ static void ShowDockMenu(HWND target, POINT pt, bool test) {
     wchar_t title[512] = {};
     GetWindowTextW(target, title, 512);
 
+    // Header: the app's name (exe basename); fall back to the window class.
+    wchar_t header[128] = L"";
+    {
+        DWORD pid = 0;
+        GetWindowThreadProcessId(target, &pid);
+        wchar_t exe[128] = L"";
+        if (pid && caption::GetExeNameForPid(pid, exe, 128)) {
+            const wchar_t* base = wcsrchr(exe, L'\\');
+            wcsncpy_s(header, base ? base + 1 : exe, _TRUNCATE);
+        }
+        if (!header[0]) GetClassNameW(target, header, 128);
+    }
+    bool canCopyAll = title[0] != 0;
+    {
+        stbshared::Snap s;
+        if (stbshared::Read(s) && s.hwnd == target && s.suf[0]) canCopyAll = true;
+    }
+
     HMENU menu = CreatePopupMenu();
+    AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, header[0] ? header : L"Window");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING | ((iconic || zoomed) ? 0 : MF_GRAYED), IDM_RESTORE, L"Restore");
     AppendMenuW(menu, MF_STRING | (canMin ? 0 : MF_GRAYED), IDM_MINIMIZE, L"Minimize");
     AppendMenuW(menu, MF_STRING | (canMax ? 0 : MF_GRAYED), IDM_MAXIMIZE, L"Maximize");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING | (topmost ? MF_CHECKED : 0), IDM_TOPMOST, L"Always on top");
     AppendMenuW(menu, MF_STRING | (title[0] ? 0 : MF_GRAYED), IDM_COPYTITLE, L"Copy title");
+    AppendMenuW(menu, MF_STRING | (canCopyAll ? 0 : MF_GRAYED), IDM_COPYALL, L"Copy all");
     AppendMenuW(menu, MF_STRING, IDM_SYSMENU, L"Window menu");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING, IDM_TBSETTINGS, L"Title bar settings");
@@ -15021,7 +16119,7 @@ static void ShowDockMenu(HWND target, POINT pt, bool test) {
     InterlockedExchange(&g_menuOpen, 0);
     DestroyMenu(menu);
     if (!IsWindow(target)) return;
-    if (cmd != IDM_TBSETTINGS && cmd != IDM_COPYTITLE) SetForegroundWindow(target);
+    if (cmd != IDM_TBSETTINGS && cmd != IDM_COPYTITLE && cmd != IDM_COPYALL) SetForegroundWindow(target);
     switch (cmd) {
         case IDM_RESTORE: PostMessageW(target, WM_SYSCOMMAND, SC_RESTORE, 0); break;
         case IDM_MINIMIZE: PostMessageW(target, WM_SYSCOMMAND, SC_MINIMIZE, 0); break;
@@ -15033,6 +16131,9 @@ static void ShowDockMenu(HWND target, POINT pt, bool test) {
         case IDM_COPYTITLE:
             CopyText(title);
             SetForegroundWindow(target);
+            break;
+        case IDM_COPYALL:
+            CopyAllText(target);
             break;
         case IDM_SYSMENU: PostMessageW(target, 0x0313 /* WM_SYSMENU */, 0, MAKELPARAM(pt.x, pt.y)); break;
         case IDM_TBSETTINGS: stbset::OpenSettingsWindow(); break;
@@ -15204,6 +16305,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_STB_TESTMENU:
             ShowDockMenu((HWND)wp, POINT{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}, msg == WM_STB_TESTMENU);
             return 0;
+        case WM_STB_DOCKCLOSE:
+        case WM_STB_TESTCLOSE:
+            if (IsWindow((HWND)wp)) PostMessageW((HWND)wp, WM_SYSCOMMAND, SC_CLOSE, 0);
+            return 0;
+        case WM_STB_TESTCOPY:
+            CopyAllText((HWND)wp);
+            return 0;
         case WM_TIMER:
             if (wp == kTimerEndMenu) {
                 KillTimer(hwnd, kTimerEndMenu);
@@ -15230,8 +16338,12 @@ static DWORD WINAPI UiThread(LPVOID) {
         g_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
         ChangeWindowMessageFilterEx(g_wnd, g_taskbarCreated, MSGFLT_ALLOW, nullptr);
         ChangeWindowMessageFilterEx(g_wnd, WM_STB_TESTMENU, MSGFLT_ALLOW, nullptr);
+        ChangeWindowMessageFilterEx(g_wnd, WM_STB_DOCKCLOSE, MSGFLT_ALLOW, nullptr);
+        ChangeWindowMessageFilterEx(g_wnd, WM_STB_TESTCLOSE, MSGFLT_ALLOW, nullptr);
+        ChangeWindowMessageFilterEx(g_wnd, WM_STB_TESTCOPY, MSGFLT_ALLOW, nullptr);
         UpdateTray(true);
         UpdateMouseHook();
+        darkall::Start();
     }
     SetEvent(g_ready);
     if (!g_wnd) return 1;
@@ -15240,8 +16352,11 @@ static DWORD WINAPI UiThread(LPVOID) {
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
+    darkall::Stop();
     if (g_mouseHook) UnhookWindowsHookEx(g_mouseHook);
     g_mouseHook = nullptr;
+    g_midDown = false;
+    g_swallowUp = false;
     if (g_trayAdded) {
         NOTIFYICONDATAW nid{sizeof(nid)};
         nid.hWnd = g_wnd;

@@ -7,6 +7,11 @@ up the way you are scrolling.
 ![Seamless Autoscroll preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-autoscroll.png)
 
 ## Features
+- **The same circle in your browser.** Chrome, Edge, Brave, Vivaldi, Opera and
+  Chromium forks such as Helium keep their own middle-click scrolling, and the
+  plain white circle is swapped for the frosted one. A middle click on a link
+  still opens it in a new tab. Turn off **Show the indicator** to get the
+  browser's own circle back.
 - **Browser-style scrolling.** The farther you move from the starting point,
   the faster it scrolls, up, down and sideways.
 - **Frosted glass indicator.** Real blur drawn by the graphics card, with a

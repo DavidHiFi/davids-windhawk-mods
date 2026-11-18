@@ -1,11 +1,13 @@
 // ==WindhawkMod==
 // @id              seamless-share
 // @name            Seamless Share
-// @description     Restyles the Windows 11 share window and its menus: blurred glass, your font, soft gradient hover edges, all adjustable
-// @version         1.0.0
+// @description     Restyles the Windows 11 share window: blurred glass, your font, soft gradient hover edges
+// @version         1.0.1
 // @author          DavidHiFi, m417z
 // @github          https://github.com/DavidHiFi
+// @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
+// @license         MIT
 // @include         ShellExperienceHost.exe
 // @architecture    x86-64
 // @compilerOptions -lcomctl32 -lole32 -loleaut32 -lruntimeobject -lshlwapi
@@ -30,7 +32,7 @@ Nerd Font in Medium weight, 2 px grey edges at rest and a blue to mauve
 gradient edge on hover. Icons keep their own icon font, so no glyph turns into a
 box.
 
-Everything on the settings page is optional. Change the font, weight, colours,
+Everything on the settings page is optional. Change the font, weight, colors,
 blur, corner sizes and edge width there. The window restyles the next time it
 opens.
 
@@ -57,75 +59,75 @@ m417z, which is based on code from the
   - font: FiraCode Nerd Font
     $name: Font
     $description: >-
-      Any installed font. Segoe UI is used for letters this font lacks.
-      Suggested: FiraCode Nerd Font
+      Any installed font. Segoe UI is used for letters this font lacks
+      (Suggested: FiraCode Nerd Font)
   - weight: Medium
     $name: Font weight
     $options:
     - Normal: Normal (400)
-    - Medium: Medium (500, suggested)
+    - Medium: Medium (500, Suggested)
     - SemiBold: SemiBold (600)
     - Bold: Bold (700)
   $name: Text
 - colors:
   - accentStart: "#89B4FA"
-    $name: Accent colour, start
-    $description: Hover edges, focus rings and links. Suggested #89B4FA (blue)
+    $name: Accent color, start
+    $description: 'Hover edges, focus rings and links. Color as #RRGGBB (Suggested: #89B4FA, blue)'
   - accentEnd: "#CBA6F7"
-    $name: Accent colour, end
-    $description: End of the hover gradient and the pressed colour. Suggested #CBA6F7 (mauve)
+    $name: Accent color, end
+    $description: 'End of the hover gradient and the pressed color. Color as #RRGGBB (Suggested: #CBA6F7, mauve)'
   - text: "#CDD6F4"
-    $name: Text colour
-    $description: "Suggested #CDD6F4"
+    $name: Text color
+    $description: 'Main text. Color as #RRGGBB (Suggested: #CDD6F4)'
   - subtext: "#A6ADC8"
-    $name: Secondary text colour
-    $description: "Labels and hints. Suggested #A6ADC8"
+    $name: Secondary text color
+    $description: 'Labels and hints. Color as #RRGGBB (Suggested: #A6ADC8)'
   - surface: "#313244"
-    $name: Card colour
-    $description: "Link card, buttons and tiles. Suggested #313244"
+    $name: Card color
+    $description: 'Link card, buttons and tiles. Color as #RRGGBB (Suggested: #313244)'
   - edge: "#45475A"
-    $name: Resting edge colour
-    $description: "Edges of cards and buttons when not hovered. Suggested #45475A"
-  $name: Colours
+    $name: Resting edge color
+    $description: 'Edges of cards and buttons when not hovered. Color as #RRGGBB (Suggested: #45475A)'
+  $name: Colors
 - glass:
   - tint: "#1E1E2E"
     $name: Window tint
-    $description: "Colour laid over the blur. Suggested #1E1E2E"
+    $description: 'Color laid over the blur. Color as #RRGGBB (Suggested: #1E1E2E)'
   - tintOpacity: 55
     $name: Window tint strength (%)
-    $description: "0 to 100. Higher is darker and less see-through. Suggested 55"
+    $description: 'Higher is darker and less see-through. 0 to 100 (Suggested: 55)'
   - blur: 32
     $name: Blur amount
-    $description: "0 to 60. Suggested 32"
+    $description: 'How strongly the window blurs what is behind it. 0 to 60 (Suggested: 32)'
   - popupTintOpacity: 88
     $name: Menu and tooltip tint strength (%)
-    $description: "0 to 100. Menus stay readable above 85. Suggested 88"
+    $description: 'Menus stay readable above 85. 0 to 100 (Suggested: 88)'
   $name: Glass
 - shape:
   - radius: 12
     $name: Window corners
-    $description: "0 to 20 px. Suggested 12"
+    $description: '0 to 20 px (Suggested: 12)'
   - cardRadius: 12
     $name: Card corners
-    $description: "0 to 20 px. Suggested 12"
+    $description: '0 to 20 px (Suggested: 12)'
   - buttonRadius: 8
     $name: Button corners
-    $description: "0 to 16 px. Suggested 8"
+    $description: '0 to 16 px (Suggested: 8)'
   - edgeWidth: 2
     $name: Edge width
-    $description: "0 to 3 px. Suggested 2"
+    $description: '0 to 3 px (Suggested: 2)'
   $name: Shape
 - hover: gradient
   $name: Hover look
   $options:
-  - gradient: Blue to mauve gradient edge (suggested)
+  - gradient: Blue to mauve gradient edge (Suggested)
   - solid: Solid accent edge
   - fill: Soft fill, no edge
 - debugDump: false
   $name: Record layout (for fixing the mod)
   $description: >-
-    Writes the share window's control tree to a text file in the mod's storage
-    folder. Leave off.
+    Turn on to write the share window's control tree to a text file in the mod's
+    storage folder, for fixing the mod (Suggested: off)
 - styleConstants: [""]
   $name: Style constants
   $description: >-

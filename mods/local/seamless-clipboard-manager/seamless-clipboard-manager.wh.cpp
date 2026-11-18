@@ -2,7 +2,7 @@
 // @id              seamless-clipboard-manager
 // @name            Seamless Clipboard Manager
 // @description     Keeps everything you copy, text and images, in a searchable list you open with Win+V
-// @version         1.3.10
+// @version         1.3.12
 // @author          DavidHiFi, Scott Brogden, Ditto contributors
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -27,6 +27,11 @@ Keeps what you copy in a list you open with Win+V: text, images, copied files an
 - Edit a clip's text before you paste it.
 - Paste one of the first ten clips with a number key, with or without opening the list.
 - Select several clips and paste them together.
+- Press Tab to show only text, links, images or copied files. Shift+Tab goes back.
+- Each clip shows the app it came from and how long ago you copied it.
+- Right-click a link to open it, a copied file to open it or show it in its folder, or an image to save it to Pictures.
+- Clips that are color codes show the colors.
+- Can put back what was on the clipboard after a paste from the list.
 
 ## Coming from Ditto
 
@@ -46,6 +51,7 @@ Win+V normally opens the Windows clipboard history. The mod turns that off and t
 | Ctrl+E | Edit the clip's text |
 | Alt+Enter | Clip properties: description, pin, never delete, group |
 | Space | Show the whole clip (when the search box is empty) |
+| Tab | Show only text, links, images or files (Shift+Tab goes back) |
 | Ctrl+G | Show your groups |
 | F7 | Put the selected clips in a new group |
 | Backspace | Leave the group and go back to all clips |
@@ -115,6 +121,9 @@ Based on [Ditto](https://github.com/sabrogden/Ditto) by Scott Brogden and the Di
   $name: Number the first ten clips
 - showThumbnails: true
   $name: Show image previews
+- showClipDetails: true
+  $name: Show the app and time on each clip
+  $description: 'Small text at the right of each clip. Clips copied before this update show only the time.'
 - closeOnFocusLoss: true
   $name: Close when you click away
 - alwaysOnTop: true
@@ -217,6 +226,9 @@ Based on [Ditto](https://github.com/sabrogden/Ditto) by Scott Brogden and the Di
   - space: A space
   - comma: A comma and a space
   - none: Nothing
+- restoreClipboard: false
+  $name: Put the clipboard back after pasting
+  $description: After a clip from the list is pasted, what was on the clipboard before goes back.
 - searchMode: contains
   $name: Search finds
   $options:
@@ -226,6 +238,8 @@ Based on [Ditto](https://github.com/sabrogden/Ditto) by Scott Brogden and the Di
 - searchFullText: true
   $name: Search the whole clip
   $description: When off, search looks only at the start of each clip, which is faster with very large clips.
+- highlightMatches: true
+  $name: Highlight what you searched for
 - trayIcon: true
   $name: Show the tray icon
   $description: Its menu opens these settings. When off, change settings in Windhawk.
@@ -340,6 +354,8 @@ struct Settings {
     bool alwaysOnTop;               // "alwaysOnTop"   default true
     bool confirmDelete;             // "confirmDelete" default true
     std::wstring previewer;         // "previewer" "builtin" | "peek" ; default "builtin"
+    bool showClipDetails;           // "showClipDetails" default true: app and age at the top right of each clip
+    bool highlightMatches;          // "highlightMatches" default true: search words drawn in the accent color
     // Look
     std::wstring fontName;          // "fontName"  default "FiraCode Nerd Font"
     int fontSize;                   // "fontSize"  7..24 (points), default 10
@@ -368,6 +384,7 @@ struct Settings {
     std::wstring pasteKeys;         // "pasteKeys" "ctrlV" | "shiftInsert" ; default "ctrlV"
     int pasteDelay;                 // "pasteDelay" 0..2000 ms, default 50 : wait after focusing the target
     std::wstring multiSeparator;    // "multiSeparator" "newline" | "space" | "none" | "comma" ; default "newline"
+    bool restoreClipboard;          // "restoreClipboard" default false: put the clipboard back after a paste from the list
     // Search
     std::wstring searchMode;        // "searchMode" "contains" | "allWords" | "startsWith" ; default "contains"
     bool searchFullText;            // "searchFullText" default true (search the whole text, not just the first line)
@@ -450,6 +467,8 @@ struct ClipRow {
     bool sticky = false;           // stickyClipOrder (or stickyClipGroupOrder in a group) != kNotSticky
     bool hasShortcut = false;      // lShortCut != 0 || globalShortCut != 0
     ClipKind kind = ClipKind::Text;  // From the formats present (Image if CF_DIB/PNG and no text, Files if CF_HDROP, Group).
+    std::wstring sourceApp;        // exe the clip was copied from ("chrome.exe"), our own ScmSource table; "" if unknown
+    int64_t lastCopy = 0;          // unix seconds of the last copy (ScmSource.lastCopy, else lDate)
 };
 
 struct ClipFormat {
@@ -474,7 +493,9 @@ UINT FormatIdFromName(const std::wstring& name);  // reverse, registering unknow
 struct ClipQuery {
     int64_t groupId = -1;          // -1 = the main list (Ditto's main list rules); else clips inside this group
     std::wstring search;           // empty = no filter; matching follows g_set.searchMode / searchFullText
+    int filter = 0;                // ClipFilter: 0 all, 1 text, 2 links, 3 images, 4 files
 };
+enum ClipFilter { kFilterAll = 0, kFilterText, kFilterLinks, kFilterImages, kFilterFiles, kFilterCount };
 
 bool Db_Open();                    // Opens <StoragePath()>\clips.db; on first run imports Ditto's database (see spec).
 void Db_Close();
@@ -584,6 +605,10 @@ int Ui_ShowMenu(const std::vector<UiMenuItem>& items, POINT screenPt, HWND owner
 void Settings_Open();              // Opens or focuses it.
 void Settings_Close();
 bool Settings_IsOpen();
+void Settings_Reload();            // Settings changed outside the window: show them, apply the frame.
+// The tray menu, drawn by the shared engine menu. Returns one of these ids, or 0.
+enum : UINT { kCapMenuShow = 1, kCapMenuPause, kCapMenuSettings, kCapMenuDeleteAll };
+int Settings_TrayMenu(HWND owner, POINT pt, bool paused);
 // Harness only: render the settings window to a PNG (PrintWindow of an off-screen window).
 bool Settings_RenderToPng(const std::wstring& path);
 
@@ -880,6 +905,12 @@ static bool EnsureSchema(sqlite3* db) {
     if (!Exec(db, "UPDATE Main SET stickyClipOrder = -(2147483647) WHERE stickyClipOrder IS NULL OR stickyClipOrder = 0;"
                   "UPDATE Main SET stickyClipGroupOrder = -(2147483647) WHERE stickyClipGroupOrder IS NULL OR stickyClipGroupOrder = 0;"))
         return false;
+    // Our own table: which app each clip came from. Ditto never reads it; the trigger keeps it tidy
+    // when either program deletes a clip.
+    if (!Exec(db, "CREATE TABLE IF NOT EXISTS ScmSource(clipID INTEGER PRIMARY KEY, app TEXT, lastCopy INTEGER);"
+                  "CREATE TRIGGER IF NOT EXISTS ScmSource_Delete AFTER DELETE ON Main BEGIN "
+                  "DELETE FROM ScmSource WHERE clipID = old.lID; END;"))
+        return false;
     return Exec(db, kTriggersAndIndexes);
 }
 
@@ -1042,13 +1073,33 @@ static struct {
     int64_t group = 0;
     std::wstring search, mode;
     bool fullText = false;
+    int filter = 0;
     std::vector<int64_t> ids;
 } g_hits;
+
+#define DBX_HAS(list) "EXISTS(SELECT 1 FROM Data d WHERE d.lParentID = Main.lID AND d.strClipBoardFormat IN (" list ") COLLATE NOCASE)"
+#define DBX_HAS_TEXT DBX_HAS("'CF_UNICODETEXT','CF_TEXT','CF_OEMTEXT'")
+#define DBX_HAS_FILES DBX_HAS("'CF_HDROP'")
+#define DBX_HAS_IMAGE DBX_HAS("'CF_DIB','PNG','CF_DIBV5','CF_BITMAP'")
+#define DBX_LEAD "ltrim(CAST(Main.mText AS TEXT), ' ' || char(9, 10, 13))"
+
+// " AND ..." for the type filter (Tab in the list), "" for all. Same rules as ReadRow's kind.
+static const char* FilterSql(int filter) {
+    switch (filter) {
+        case kFilterText: return " AND Main.bIsGroup = 0 AND " DBX_HAS_TEXT " AND NOT " DBX_HAS_FILES;
+        case kFilterLinks:
+            return " AND Main.bIsGroup = 0 AND " DBX_HAS_TEXT " AND NOT " DBX_HAS_FILES " AND (" DBX_LEAD
+                   " LIKE 'http://%' OR " DBX_LEAD " LIKE 'https://%' OR " DBX_LEAD " LIKE 'www.%')";
+        case kFilterImages: return " AND Main.bIsGroup = 0 AND " DBX_HAS_IMAGE " AND NOT " DBX_HAS_TEXT " AND NOT " DBX_HAS_FILES;
+        case kFilterFiles: return " AND Main.bIsGroup = 0 AND " DBX_HAS_FILES;
+        default: return "";
+    }
+}
 
 // Ditto's search replaces the main-list filter; in a group it is ANDed with the group (QPasteWnd.cpp FillList).
 static const std::vector<int64_t>& SearchIds(const ClipQuery& q) {
     if (g_hits.gen == g_gen && g_hits.group == q.groupId && g_hits.search == q.search && g_hits.mode == g_set.searchMode &&
-        g_hits.fullText == g_set.searchFullText)
+        g_hits.fullText == g_set.searchFullText && g_hits.filter == q.filter)
         return g_hits.ids;
     SetPattern(q.search);
     g_hits.ids.clear();
@@ -1057,6 +1108,7 @@ static const std::vector<int64_t>& SearchIds(const ClipQuery& q) {
     g_hits.search = q.search;
     g_hits.mode = g_set.searchMode;
     g_hits.fullText = g_set.searchFullText;
+    g_hits.filter = q.filter;
     if (g_pat.whole.empty()) return g_hits.ids;
     std::string sql = "SELECT Main.lID FROM Main WHERE (scm_match(Main.mText, ";
     sql += g_set.searchFullText ? "0" : "500";
@@ -1065,6 +1117,7 @@ static const std::vector<int64_t>& SearchIds(const ClipQuery& q) {
         sql += " OR EXISTS(SELECT 1 FROM Data WHERE Data.lParentID = Main.lID AND "
                "Data.strClipBoardFormat = 'CF_UNICODETEXT' COLLATE NOCASE AND scm_match(Data.ooData, 0))";
     sql += ")";
+    sql += FilterSql(q.filter);
     sql += q.groupId > 0 ? " AND Main.lParentID = ?1 ORDER BY Main.stickyClipGroupOrder DESC, Main.bIsGroup ASC, Main.clipGroupOrder DESC"
                          : " ORDER BY Main.stickyClipOrder DESC, Main.bIsGroup ASC, Main.clipOrder DESC";
     Stmt s(sql);
@@ -1081,7 +1134,8 @@ static const std::vector<int64_t>& SearchIds(const ClipQuery& q) {
     "stickyClipOrder, stickyClipGroupOrder, lShortCut, globalShortCut, "                                                \
     "EXISTS(SELECT 1 FROM Data d WHERE d.lParentID = Main.lID AND d.strClipBoardFormat = 'CF_HDROP' COLLATE NOCASE), "  \
     "EXISTS(SELECT 1 FROM Data d WHERE d.lParentID = Main.lID AND d.strClipBoardFormat IN ('CF_DIB','PNG','CF_DIBV5','CF_BITMAP') COLLATE NOCASE), " \
-    "EXISTS(SELECT 1 FROM Data d WHERE d.lParentID = Main.lID AND d.strClipBoardFormat IN ('CF_UNICODETEXT','CF_TEXT','CF_OEMTEXT') COLLATE NOCASE) " \
+    "EXISTS(SELECT 1 FROM Data d WHERE d.lParentID = Main.lID AND d.strClipBoardFormat IN ('CF_UNICODETEXT','CF_TEXT','CF_OEMTEXT') COLLATE NOCASE), " \
+    "(SELECT app FROM ScmSource WHERE ScmSource.clipID = Main.lID), "     "(SELECT lastCopy FROM ScmSource WHERE ScmSource.clipID = Main.lID) " \
     "FROM Main "
 
 static const char kMainOrder[] = " ORDER BY Main.stickyClipOrder DESC, Main.bIsGroup ASC, Main.clipOrder DESC";
@@ -1103,6 +1157,8 @@ static ClipRow ReadRow(const Stmt& s, bool groupView) {
              : s.I64(13) && !s.I64(14) ? ClipKind::Image
              : s.I64(14) ? ClipKind::Text
                          : ClipKind::Other;
+    if (!s.IsNull(15)) r.sourceApp = s.W(15);
+    r.lastCopy = s.IsNull(16) ? r.date : s.I64(16);
     return r;
 }
 
@@ -1295,8 +1351,11 @@ std::wstring Db_LastError() { return g_err; }
 int Db_CountClips(const ClipQuery& q) {
     if (!g_db) return 0;
     if (!q.search.empty()) return (int)SearchIds(q).size();
-    Stmt s(q.groupId > 0 ? "SELECT COUNT(Main.lID) FROM Main WHERE Main.lParentID = ?" : "SELECT COUNT(Main.lID) FROM Main WHERE Main.bIsGroup = 0");
-    s.Int(1, q.groupId);
+    std::string sql = q.groupId > 0 ? "SELECT COUNT(Main.lID) FROM Main WHERE Main.lParentID = ?1"
+                                    : "SELECT COUNT(Main.lID) FROM Main WHERE Main.bIsGroup = 0";
+    sql += FilterSql(q.filter);
+    Stmt s(sql);
+    if (q.groupId > 0) s.Int(1, q.groupId);
     return s.Row() ? (int)s.I64(0) : 0;
 }
 
@@ -1310,10 +1369,11 @@ std::vector<ClipRow> Db_QueryClips(const ClipQuery& q, int offset, int limit) {
             if (ClipRow r; RowById(ids[i], r, group)) out.push_back(std::move(r));
         return out;
     }
-    Stmt s(group ? DBX_ROW_COLS "WHERE Main.lParentID = ?3 ORDER BY Main.stickyClipGroupOrder DESC, Main.bIsGroup ASC, "
-                                "Main.clipGroupOrder DESC LIMIT ?1 OFFSET ?2"
-                 : DBX_ROW_COLS "WHERE Main.bIsGroup = 0 ORDER BY Main.stickyClipOrder DESC, Main.bIsGroup ASC, "
-                                "Main.clipOrder DESC LIMIT ?1 OFFSET ?2");
+    std::string sql = group ? DBX_ROW_COLS "WHERE Main.lParentID = ?3" : DBX_ROW_COLS "WHERE Main.bIsGroup = 0";
+    sql += FilterSql(q.filter);
+    sql += group ? " ORDER BY Main.stickyClipGroupOrder DESC, Main.bIsGroup ASC, Main.clipGroupOrder DESC LIMIT ?1 OFFSET ?2"
+                 : " ORDER BY Main.stickyClipOrder DESC, Main.bIsGroup ASC, Main.clipOrder DESC LIMIT ?1 OFFSET ?2";
+    Stmt s(sql);
     s.Int(1, limit).Int(2, offset);
     if (group) s.Int(3, q.groupId);
     while (s.Row()) out.push_back(ReadRow(s, group));
@@ -1377,6 +1437,13 @@ std::wstring Db_GetClipText(int64_t id) {
     return Db_GetClipRow(id, r) ? r.text : std::wstring();
 }
 
+// Best effort: a clip without a known app just shows no app name. lastCopy is when it was last copied,
+// so a repeat copy that moved an old clip to the top shows its new age.
+static void SaveSource(int64_t id, const std::wstring& app) {
+    Stmt s("INSERT OR REPLACE INTO ScmSource(clipID, app, lastCopy) VALUES(?1, NULLIF(?2, ''), ?3)");
+    s.Int(1, id).Str(2, app).Int(3, UnixNow()).Run();
+}
+
 int64_t Db_SaveClip(const ClipData& clip) {
     if (!g_db || clip.formats.empty()) return 0;
     int32_t crc = ClipCrc(clip.formats);
@@ -1387,7 +1454,9 @@ int64_t Db_SaveClip(const ClipData& clip) {
         if (dup.Int(1, crc).Row()) {
             int64_t id = dup.I64(0);
             Stmt up("UPDATE Main SET clipOrder = ? WHERE lID = ?");
-            return up.Dbl(1, NewOrder(-1)).Int(2, id).Run() && t.Commit() ? id : 0;
+            if (!up.Dbl(1, NewOrder(-1)).Int(2, id).Run()) return 0;
+            SaveSource(id, clip.sourceApp);
+            return t.Commit() ? id : 0;
         }
     }
     int64_t now = UnixNow();
@@ -1396,7 +1465,9 @@ int64_t Db_SaveClip(const ClipData& clip) {
              "GlobalMoveToGroupShortCut) VALUES (?1, ?2, 0, 0, ?3, 0, -1, '', ?4, 0, 0, ?1, -(2147483647), -(2147483647), 0, 0)");
     if (!ins.Int(1, now).Str(2, Desc(clip.description)).Int(3, crc).Dbl(4, NewOrder(-1)).Run()) return 0;
     int64_t id = api.last_insert_rowid(g_db);
-    return InsertFormats(id, clip.formats) && t.Commit() ? id : 0;
+    if (!InsertFormats(id, clip.formats)) return 0;
+    SaveSource(id, clip.sourceApp);
+    return t.Commit() ? id : 0;
 }
 
 bool Db_MoveToTop(int64_t id) {  // ProcessPaste.cpp:200
@@ -2567,7 +2638,28 @@ bool Clipboard_PutClip(int64_t id, SpecialPaste mode) { return Cap_PutClips({id}
 // Paste step machine on kTimerPasteStep (10 ms ticks, never blocks)
 // Ditto ExternalWindowTracker::SendPaste: activate, wait for it, delay, send keys.
 // ---------------------------------------------------------------------------
-enum class Cap_Stage { Idle, WaitFocus, Delay, WaitKeys };
+enum class Cap_Stage { Idle, WaitFocus, Delay, WaitKeys, Restore };
+constexpr DWORD kCapRestoreAfterMs = 700;  // apps read the clipboard after Ctrl+V arrives; slow ones need a moment
+static std::vector<ClipFormat> g_capRestore;  // what was on the clipboard before the paste ("restoreClipboard")
+
+// Keeps what is on the clipboard now, so it can go back after the paste. Private copies (password
+// managers) are never kept: putting them back would drop the marks that keep them out of histories.
+static void Cap_SnapshotForRestore() {
+    g_capRestore.clear();
+    if (!Cap_OpenClipboardQuick()) return;
+    std::vector<Cap_Format> in = Cap_ReadOpenClipboard((uint64_t)g_set.maxClipMB * 1024 * 1024);
+    CloseClipboard();
+    if (Cap_Find(in, kCapIgnoreViewer) || Cap_Find(in, kCapExcludeMonitor)) return;
+    if (const Cap_Format* f = Cap_Find(in, kCapCanInclude)) {
+        DWORD value = 1;
+        if (f->data.size() >= sizeof(DWORD)) memcpy(&value, f->data.data(), sizeof(DWORD));
+        if (value == 0) return;
+    }
+    for (auto& f : in) {
+        if (f.name == kOwnClipFormat || f.name == kCapCanInclude || f.data.empty() || f.data.size() != f.size) continue;
+        g_capRestore.push_back(ClipFormat{f.cf, f.name, std::move(f.data)});
+    }
+}
 static struct {
     Cap_Stage stage = Cap_Stage::Idle;
     HWND target = nullptr;
@@ -2629,6 +2721,15 @@ static void Cap_PasteStep() {
         case Cap_Stage::WaitKeys:
             if (!Cap_ModifiersDown() || now - g_capPaste.since > 2000) {
                 Cap_SendPasteKeys();
+                if (g_capRestore.empty()) g_capPaste.stage = Cap_Stage::Idle;
+                else next(Cap_Stage::Restore);
+            }
+            break;
+        case Cap_Stage::Restore:
+            if (now - g_capPaste.since >= kCapRestoreAfterMs) {
+                // Written with our own mark, so the restore is not saved again as a new clip.
+                if (!Cap_WriteFormats(g_capRestore)) Wh_Log(L"Could not put the old clipboard back");
+                g_capRestore.clear();
                 g_capPaste.stage = Cap_Stage::Idle;
             }
             break;
@@ -2648,7 +2749,16 @@ static void Cap_StartPaste(HWND target) {
 }
 
 bool Paste_Request(const PasteRequest& req) {
-    if (req.ids.empty() || !Cap_PutClips(req.ids, req.mode)) return false;
+    if (req.ids.empty()) return false;
+    // A second paste while the first is still running keeps the first snapshot (the real old clipboard).
+    if (g_capPaste.stage == Cap_Stage::Idle) {
+        g_capRestore.clear();
+        if (req.sendPaste && g_set.restoreClipboard) Cap_SnapshotForRestore();
+    }
+    if (!Cap_PutClips(req.ids, req.mode)) {
+        if (g_capPaste.stage == Cap_Stage::Idle) g_capRestore.clear();
+        return false;
+    }
     if (req.moveToTop) {
         for (int64_t id : req.ids) Db_MoveToTop(id);
         PostMessageW(g_msgWnd, WM_SCM_CLIP_SAVED, 0, 0);
@@ -3056,7 +3166,6 @@ void Capture_OnTimer(UINT_PTR id) {
 // ---------------------------------------------------------------------------
 static bool g_capTrayAdded;
 static HICON g_capTrayIcon;
-enum : UINT { kCapMenuShow = 1, kCapMenuPause, kCapMenuSettings, kCapMenuDeleteAll };
 
 static NOTIFYICONDATAW Cap_TrayData() {
     NOTIFYICONDATAW nid{sizeof(nid)};
@@ -3118,25 +3227,7 @@ void Tray_OnTaskbarCreated() {
 }
 
 static void Cap_TrayMenu(int x, int y) {
-    auto item = [](int id, PCWSTR text, wchar_t glyph, bool checked = false) {
-        UiMenuItem m;
-        m.id = id;
-        m.text = text;
-        m.glyph = glyph;
-        m.checked = checked;
-        return m;
-    };
-    UiMenuItem sep;
-    sep.separator = true;
-    std::vector<UiMenuItem> items = {
-        item(kCapMenuShow, L"Show clips", 0xE8FD),
-        item(kCapMenuPause, L"Pause saving copies", 0xE769, g_capturePaused),
-        item(kCapMenuSettings, L"Settings", 0xE713),
-        sep,
-        item(kCapMenuDeleteAll, L"Delete all clips...", 0xE74D),
-    };
-    UINT cmd = (UINT)Ui_ShowMenu(items, POINT{x, y}, g_msgWnd);
-    PostMessageW(g_msgWnd, WM_NULL, 0, 0);
+    UINT cmd = (UINT)Settings_TrayMenu(g_msgWnd, POINT{x, y}, g_capturePaused);
     switch (cmd) {
         case kCapMenuShow:
             List_Show();
@@ -3586,17 +3677,17 @@ constexpr wchar_t kGlyphClose = 0xE711, kGlyphChevronR = 0xE76C, kGlyphChevronL 
                   kGlyphEdit = 0xE70F, kGlyphInfo = 0xE946, kGlyphView = 0xE890, kGlyphMoveTo = 0xE8DE,
                   kGlyphDelete = 0xE74D, kGlyphAdd = 0xE710, kGlyphPause = 0xE769, kGlyphSettings = 0xE713,
                   kGlyphCheck = 0xE73E, kGlyphFolderOpen = 0xE838, kGlyphNewFolder = 0xE8F4,
-                  kGlyphList = 0xE8FD;
+                  kGlyphList = 0xE8FD, kGlyphLink = 0xE71B, kGlyphOpenFile = 0xE8E5, kGlyphSave = 0xE74E;
 
 constexpr WCHAR kScmMenuClass[] = L"SeamlessClipboardManagerMenu";
 
 enum Cmd : UINT {
     cmdPaste = 1, cmdPlain, cmdCopy, cmdEdit, cmdProps, cmdPreview, cmdSticky, cmdNeverDelete,
     cmdDelete, cmdSettings, cmdPause, cmdNewClip, cmdMoveNewGroup, cmdMoveOut, cmdOpenMain,
-    cmdNewGroup, cmdSpecialBase = 100, cmdMoveGroupBase = 1000, cmdOpenGroupBase = 20000
+    cmdNewGroup, cmdOpenLink, cmdOpenFile, cmdShowInFolder, cmdSaveImage, cmdSpecialBase = 100, cmdMoveGroupBase = 1000, cmdOpenGroupBase = 20000
 };
 
-enum class Hit { None, Row, Pin, Close, Chevron, Folder, Menu, Search, Scroll, Back, Caption, ConfirmYes, ConfirmNo };
+enum class Hit { None, Row, Pin, Close, Chevron, Folder, Menu, Search, Scroll, Back, Caption, ConfirmYes, ConfirmNo, Filter };
 enum class DockMode { Search, ConfirmDelete, NewGroup };
 
 // ---------------------------------------------------------------------------
@@ -3627,7 +3718,7 @@ bool EnsureFactories() {
 struct Fonts {
     bool ok = false;
     std::wstring family, iconFamily;
-    Com<IDWriteTextFormat> row, rowWrap, rowBold, num, ui, uiBold, uiRight, icon, iconMid, iconSmall, wrap;
+    Com<IDWriteTextFormat> row, rowWrap, rowBold, num, detail, ui, uiBold, uiRight, icon, iconMid, iconSmall, wrap;
     float lineH = 18, rowLineH = 18, numW = 16;
 } T;
 
@@ -3692,6 +3783,7 @@ bool EnsureFonts() {
     T.row = MakeFormat(T.family, rsize, normal, false);
     T.rowBold = MakeFormat(T.family, rsize, bold, false);
     T.num = MakeFormat(T.family, rsize * 0.86f, bold, false, DWRITE_TEXT_ALIGNMENT_TRAILING);
+    T.detail = MakeFormat(T.family, rsize * 0.86f, normal, false, DWRITE_TEXT_ALIGNMENT_TRAILING);
     T.ui = MakeFormat(T.family, size, normal, false);
     T.uiBold = MakeFormat(T.family, size, bold, false);
     T.uiRight = MakeFormat(T.family, size, normal, false, DWRITE_TEXT_ALIGNMENT_TRAILING);
@@ -3708,7 +3800,7 @@ bool EnsureFonts() {
     T.icon = MakeFormat(T.iconFamily, 14, DWRITE_FONT_WEIGHT_NORMAL, false, DWRITE_TEXT_ALIGNMENT_CENTER, false);
     T.iconMid = MakeFormat(T.iconFamily, 12, DWRITE_FONT_WEIGHT_NORMAL, false, DWRITE_TEXT_ALIGNMENT_CENTER, false);
     T.iconSmall = MakeFormat(T.iconFamily, 10, DWRITE_FONT_WEIGHT_NORMAL, false, DWRITE_TEXT_ALIGNMENT_CENTER, false);
-    if (!T.row || !T.rowWrap || !T.rowBold || !T.num || !T.ui || !T.uiBold || !T.uiRight || !T.wrap || !T.icon || !T.iconMid ||
+    if (!T.row || !T.rowWrap || !T.rowBold || !T.num || !T.detail || !T.ui || !T.uiBold || !T.uiRight || !T.wrap || !T.icon || !T.iconMid ||
         !T.iconSmall)
         return false;
     for (auto* f : {T.icon.get(), T.iconMid.get(), T.iconSmall.get(), T.ui.get(), T.uiBold.get(), T.uiRight.get(), T.rowBold.get()})
@@ -3748,6 +3840,113 @@ void ResetFonts() { T = Fonts{}; }
 // ---------------------------------------------------------------------------
 // Data source (the db part; the harness falls back to a sample list)
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Clip kinds for the filter and the smart actions
+// ---------------------------------------------------------------------------
+std::wstring TrimWs(const std::wstring& s) {
+    size_t a = s.find_first_not_of(L" \t\r\n"), b = s.find_last_not_of(L" \t\r\n");
+    return a == std::wstring::npos ? L"" : s.substr(a, b - a + 1);
+}
+
+// One web address and nothing else: http://, https:// or www.
+bool IsLinkText(const std::wstring& raw) {
+    std::wstring t = TrimWs(raw);
+    if (t.size() < 5 || t.size() > 4096) return false;
+    for (wchar_t ch : t)
+        if (iswspace(ch)) return false;
+    return StrCmpNIW(t.c_str(), L"http://", 7) == 0 || StrCmpNIW(t.c_str(), L"https://", 8) == 0 ||
+           StrCmpNIW(t.c_str(), L"www.", 4) == 0;
+}
+
+// The same rules as the database filter (20-db.cpp FilterSql).
+bool RowMatchesFilter(const ClipRow& r, int filter) {
+    if (filter == kFilterAll) return true;
+    if (r.isGroup) return false;
+    switch (filter) {
+        case kFilterText: return r.kind == ClipKind::Text;
+        case kFilterLinks: {
+            if (r.kind != ClipKind::Text) return false;
+            std::wstring t = TrimWs(r.text);
+            return StrCmpNIW(t.c_str(), L"http://", 7) == 0 || StrCmpNIW(t.c_str(), L"https://", 8) == 0 ||
+                   StrCmpNIW(t.c_str(), L"www.", 4) == 0;
+        }
+        case kFilterImages: return r.kind == ClipKind::Image;
+        case kFilterFiles: return r.kind == ClipKind::Files;
+        default: return true;
+    }
+}
+
+const wchar_t* FilterName(int f) {
+    static const wchar_t* const names[kFilterCount] = {L"All", L"Text", L"Links", L"Images", L"Files"};
+    return f >= 0 && f < kFilterCount ? names[f] : L"All";
+}
+
+// "chrome.exe" -> "Chrome", with the names people know for the common ones.
+std::wstring AppLabel(const std::wstring& exe) {
+    if (exe.empty()) return L"";
+    std::wstring base = exe;
+    size_t slash = base.find_last_of(L"\\/");
+    if (slash != std::wstring::npos) base = base.substr(slash + 1);
+    if (base.size() > 4 && StrCmpIW(base.c_str() + base.size() - 4, L".exe") == 0) base.resize(base.size() - 4);
+    static const struct { const wchar_t* exe; const wchar_t* name; } known[] = {
+        {L"msedge", L"Edge"}, {L"windowsterminal", L"Terminal"}, {L"wt", L"Terminal"}, {L"code", L"VS Code"},
+        {L"winword", L"Word"}, {L"excel", L"Excel"}, {L"powerpnt", L"PowerPoint"}, {L"olk", L"Outlook"},
+        {L"outlook", L"Outlook"}, {L"ms-teams", L"Teams"}, {L"explorer", L"Explorer"}, {L"notepad", L"Notepad"},
+        {L"firefox", L"Firefox"}, {L"chrome", L"Chrome"}, {L"discord", L"Discord"}, {L"t3code", L"T3"},
+        {L"windhawk", L"Windhawk"}, {L"applicationframehost", L"App"}, {L"snippingtool", L"Snipping Tool"},
+    };
+    for (auto& k : known)
+        if (StrCmpIW(base.c_str(), k.exe) == 0) return k.name;
+    if (base.empty()) return L"";
+    base[0] = (wchar_t)towupper(base[0]);
+    if (base.size() > 12) base = base.substr(0, 11) + L"\u2026";
+    return base;
+}
+
+// How long ago, short: now, 5m, 3h, 2d, then the date.
+std::wstring ShortAge(int64_t unix) {
+    if (unix <= 0) return L"";
+    int64_t d = UnixNow() - unix;
+    if (d < 60) return L"now";
+    if (d < 3600) return std::to_wstring(d / 60) + L"m";
+    if (d < 86400) return std::to_wstring(d / 3600) + L"h";
+    if (d < 7 * 86400) return std::to_wstring(d / 86400) + L"d";
+    ULARGE_INTEGER t;
+    t.QuadPart = (ULONGLONG)unix * 10000000ULL + 116444736000000000ULL;
+    FILETIME ft{t.LowPart, t.HighPart};
+    SYSTEMTIME utc, st;
+    FileTimeToSystemTime(&ft, &utc);
+    SystemTimeToTzSpecificLocalTime(nullptr, &utc, &st);
+    WCHAR date[32]{};
+    GetDateFormatW(LOCALE_USER_DEFAULT, 0, &st, d < 300 * 86400 ? L"MMM d" : L"MMM yyyy", date, 32);
+    return date;
+}
+
+// A clip that is only colour codes (#RGB, #RRGGBB, #RRGGBBAA; up to four): their colours, else empty.
+std::vector<D2D1_COLOR_F> HexSwatches(const std::wstring& raw) {
+    std::vector<D2D1_COLOR_F> out;
+    std::wstring t = TrimWs(raw);
+    if (t.empty() || t.size() > 64) return out;
+    size_t i = 0;
+    while (i < t.size()) {
+        while (i < t.size() && (iswspace(t[i]) || t[i] == L',' || t[i] == L';')) i++;
+        if (i >= t.size()) break;
+        if (t[i] != L'#') return {};
+        size_t j = i + 1;
+        while (j < t.size() && iswxdigit(t[j])) j++;
+        size_t n = j - i - 1;
+        if ((n != 3 && n != 6 && n != 8) || out.size() >= 4) return {};
+        if (j < t.size() && !(iswspace(t[j]) || t[j] == L',' || t[j] == L';')) return {};
+        std::wstring hex = t.substr(i + 1, n);
+        if (n == 3) hex = {hex[0], hex[0], hex[1], hex[1], hex[2], hex[2]};
+        unsigned long v = wcstoul(hex.substr(0, 6).c_str(), nullptr, 16);
+        float a = n == 8 ? wcstoul(hex.substr(6, 2).c_str(), nullptr, 16) / 255.0f : 1.0f;
+        out.push_back(D2D1::ColorF(((v >> 16) & 255) / 255.0f, ((v >> 8) & 255) / 255.0f, (v & 255) / 255.0f, a));
+        i = j;
+    }
+    return out;
+}
+
 #ifdef SCM_HARNESS
 bool SampleMode() {
     static int mode = -1;
@@ -3766,6 +3965,9 @@ std::vector<ClipRow>& Samples() {
         r.parentId = parent;
         r.isGroup = kind == ClipKind::Group;
         r.date = UnixNow() - id * 600;
+        r.lastCopy = r.date;
+        static const wchar_t* const apps[] = {L"msedge.exe", L"WindowsTerminal.exe", L"Code.exe", L"Discord.exe"};
+        if (kind != ClipKind::Group) r.sourceApp = apps[id % 4];
         rows.push_back(r);
         return rows.back();
     };
@@ -3796,6 +3998,7 @@ std::vector<ClipRow>& Samples() {
 
 bool SampleMatch(const ClipRow& r, const ClipQuery& q) {
     if (q.groupId == -1 ? r.parentId != -1 : r.parentId != q.groupId) return false;
+    if (!RowMatchesFilter(r, q.filter)) return false;
     if (q.search.empty()) return true;
     return StrStrIW(r.text.c_str(), q.search.c_str()) != nullptr;
 }
@@ -4060,6 +4263,31 @@ struct Ctx {
                                           layout.put())))
             return;
         rt->DrawTextLayout({r.left, r.top}, layout.get(), B(color, a), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    }
+    // Text with the search matches marked: a soft accent fill behind each match.
+    void TextMarked(const std::wstring& s, IDWriteTextFormat* f, const D2D1_RECT_F& r, UINT32 color,
+                    const std::vector<std::pair<UINT32, UINT32>>& ranges) {
+        if (ranges.empty()) return Text(s, f, r, color);
+        if (s.empty() || r.right <= r.left) return;
+        Com<IDWriteTextLayout> layout;
+        if (FAILED(F.dw->CreateTextLayout(s.c_str(), (UINT32)s.size(), f, r.right - r.left, r.bottom - r.top,
+                                          layout.put())))
+            return;
+        rt->PushAxisAlignedClip(r, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+        for (auto& [start, len] : ranges) {
+            UINT32 count = 0;
+            layout->HitTestTextRange(start, len, r.left, r.top, nullptr, 0, &count);
+            if (!count) continue;
+            std::vector<DWRITE_HIT_TEST_METRICS> m(count);
+            if (FAILED(layout->HitTestTextRange(start, len, r.left, r.top, m.data(), count, &count))) continue;
+            for (UINT32 k = 0; k < count; k++) {
+                if (m[k].width <= 0 || m[k].top + m[k].height > r.bottom + 0.5f) continue;
+                D2D1_RECT_F box{m[k].left - 1, m[k].top + 1, m[k].left + m[k].width + 1, m[k].top + m[k].height - 1};
+                rt->FillRoundedRectangle({box, 3, 3}, BRef(g_set.accentColor, 0.32f));
+            }
+        }
+        rt->PopAxisAlignedClip();
+        rt->DrawTextLayout({r.left, r.top}, layout.get(), B(color), D2D1_DRAW_TEXT_OPTIONS_CLIP);
     }
     float TextWidth(const std::wstring& s, IDWriteTextFormat* f) {
         Com<IDWriteTextLayout> layout;
@@ -4331,7 +4559,7 @@ struct ListState {
 
 struct Layout {
     float w = 0, h = 0;
-    D2D1_RECT_F list{}, header{}, back{}, dock{}, folder{}, search{}, menu{}, close{}, chevron{}, scroll{};
+    D2D1_RECT_F list{}, header{}, back{}, dock{}, folder{}, search{}, filter{}, menu{}, close{}, chevron{}, scroll{};
     float rowH = 0, stride = 0, gutter = 0, viewH = 0, rowRight = 0;
 };
 
@@ -4353,6 +4581,10 @@ Layout MakeLayout(float w, float h) {
     l.folder = {l.dock.left + 9, cy - 12, l.dock.left + 33, cy + 12};
     l.menu = {l.dock.right - 33, cy - 12, l.dock.right - 9, cy + 12};
     l.search = {l.folder.right + 6, l.dock.top + 5, l.menu.left - 6, l.dock.bottom - 5};
+    // Fixed width (the widest name) so the search text never jumps when the filter changes.
+    float chipW = T.ui ? std::round(MeasureText(L"Images", T.ui.get()) + 22) : 64;
+    if (l.search.right - l.search.left < chipW * 3) chipW = 0;
+    l.filter = {l.search.left + 3, l.search.top + 3, l.search.left + 3 + chipW, l.search.bottom - 3};
     l.close = {w - kCaptionW + 1, 7, w - 4, 29};
     l.chevron = {w - kCaptionW + 1, 33, w - 4, 55};
     l.rowH = kRowPadY * 2 + g_set.linesPerRow * T.rowLineH;
@@ -4521,6 +4753,35 @@ bool ThumbRect(const Layout& l, float& top, float& height) {
     return true;
 }
 
+// Where the search words sit in the text a row shows (case-insensitive).
+std::vector<std::pair<UINT32, UINT32>> SearchRanges(const std::wstring& shown) {
+    std::vector<std::pair<UINT32, UINT32>> out;
+    if (!g_set.highlightMatches || L.q.search.empty() || shown.empty()) return out;
+    std::vector<std::wstring> terms;
+    std::wstring q = TrimWs(L.q.search);
+    if (g_set.searchMode == L"allWords") {
+        size_t i = 0;
+        while (i < q.size()) {
+            while (i < q.size() && iswspace(q[i])) i++;
+            size_t j = i;
+            while (j < q.size() && !iswspace(q[j])) j++;
+            if (j > i) terms.push_back(q.substr(i, j - i));
+            i = j;
+        }
+    } else if (!q.empty()) {
+        terms.push_back(q);
+    }
+    std::wstring low = shown;
+    CharLowerBuffW(low.data(), (DWORD)low.size());
+    for (auto& t : terms) {
+        std::wstring lt = t;
+        CharLowerBuffW(lt.data(), (DWORD)lt.size());
+        for (size_t pos = low.find(lt); pos != std::wstring::npos && out.size() < 64; pos = low.find(lt, pos + lt.size()))
+            out.push_back({(UINT32)pos, (UINT32)lt.size()});
+    }
+    return out;
+}
+
 void PaintRow(Ctx& c, const Layout& l, int i, const ClipRow& r, D2D1_RECT_F rect, bool lifted = false) {
     bool selected = IsSel(i) && !lifted, hovered = i == L.hover && !L.dragActive && !lifted;
     float rad = (float)g_set.cornerRadius;
@@ -4570,6 +4831,17 @@ void PaintRow(Ctx& c, const Layout& l, int i, const ClipRow& r, D2D1_RECT_F rect
     if (r.hasShortcut) mark(kGlyphKey, mocha::subtext0);
 
     float x = rect.left + l.gutter;
+    // The app it came from and how long ago, small at the right of the first line.
+    if (g_set.showClipDetails && !r.isGroup) {
+        std::wstring app = AppLabel(r.sourceApp), age = ShortAge(r.lastCopy ? r.lastCopy : r.date);
+        std::wstring det = app.empty() ? age : age.empty() ? app : app + L" \u00B7 " + age;
+        float dw = det.empty() ? 0 : std::ceil(c.TextWidth(det, T.detail.get())) + 2;
+        if (dw > 0 && (right - 10 - dw) - x > (rect.right - x) * 0.45f) {
+            c.Text(det, T.detail.get(), {right - 4 - dw, top, right - 4, top + T.rowLineH},
+                   selected ? mocha::subtext0 : mocha::overlay1);
+            right -= dw + 10;
+        }
+    }
     float textBottom = rect.bottom - kRowPadY;
     D2D1_RECT_F textRect{x, top, right - 4, textBottom};
     switch (r.kind) {
@@ -4608,13 +4880,31 @@ void PaintRow(Ctx& c, const Layout& l, int i, const ClipRow& r, D2D1_RECT_F rect
         }
         case ClipKind::Files: {
             c.Glyph(kGlyphPage, {x - 1, top, x + 15, top + T.rowLineH}, mocha::subtext0, true);
-            c.Text(RowLines(r.text, g_set.linesPerRow, true), T.row.get(), {x + 18, top, textRect.right, textBottom},
-                   mocha::text);
+            std::wstring shown = RowLines(r.text, g_set.linesPerRow, true);
+            c.TextMarked(shown, T.row.get(), {x + 18, top, textRect.right, textBottom}, mocha::text, SearchRanges(shown));
             break;
         }
-        default:
-            c.Text(RowLines(r.text, g_set.linesPerRow, false), T.rowWrap.get(), textRect, mocha::text);
+        default: {
+            // A clip of colour codes gets a swatch for each colour before the text.
+            float tx = x;
+            if (r.kind == ClipKind::Text) {
+                auto sw = HexSwatches(r.text);
+                float sz = std::round(std::min(T.rowLineH - 4, 16.0f));
+                for (auto& col : sw) {
+                    D2D1_RECT_F b{tx, top + (T.rowLineH - sz) / 2, tx + sz, top + (T.rowLineH + sz) / 2};
+                    c.rt->FillRoundedRectangle({b, 4, 4}, c.B(mocha::crust));  // under see-through colours
+                    c.brush->SetColor(col);
+                    c.rt->FillRoundedRectangle({b, 4, 4}, c.brush.get());
+                    c.rt->DrawRoundedRectangle({Inset(b, 0.5f, 0.5f), 3.5f, 3.5f}, c.B(mocha::overlay0, 0.8f), 1);
+                    tx += sz + 4;
+                }
+                if (!sw.empty()) tx += 4;
+            }
+            std::wstring shown = RowLines(r.text, g_set.linesPerRow, false);
+            c.TextMarked(shown, T.rowWrap.get(), {tx, textRect.top, textRect.right, textRect.bottom}, mocha::text,
+                         SearchRanges(shown));
             break;
+        }
     }
 }
 
@@ -4648,6 +4938,18 @@ void PaintDock(Ctx& c, const Layout& l, bool offscreen) {
     bool confirm = L.mode == DockMode::ConfirmDelete;
     (void)sr;
     D2D1_RECT_F inner{s.left + 12, s.top, s.right - 12, s.bottom};
+    // The filter chip: All is quiet, any other kind glows so a filtered list is never a surprise.
+    if (L.mode == DockMode::Search && l.filter.right > l.filter.left) {
+        const D2D1_RECT_F& f = l.filter;
+        float fr = (f.bottom - f.top) / 2;
+        bool on = L.q.filter != kFilterAll, hot = L.hoverHit == Hit::Filter;
+        if (on) c.Glow(f, fr, 0.20f, 0.95f);
+        else c.rt->FillRoundedRectangle({f, fr, fr}, c.B(mocha::surface0, 0.55f));
+        if (hot) c.Glow(f, fr, 0.12f * L.hoverT, 0.85f * L.hoverT);
+        DrawLine(c, FilterName(L.q.filter), on ? T.uiBold.get() : T.ui.get(), f, on || hot ? mocha::text : mocha::subtext0,
+                 1, true);
+        inner.left = f.right + 8;
+    }
 
     std::wstring hint;
     std::wstring value;
@@ -4667,9 +4969,10 @@ void PaintDock(Ctx& c, const Layout& l, bool offscreen) {
             break;
         default:
             value = L.search;
-            placeholder = L"Search";
+            placeholder = L.q.filter == kFilterAll ? L"Search  \u00B7  Tab to filter" : L"Search";
             caret = true;
-            if (!L.search.empty()) hint = std::to_wstring(L.count) + (L.count == 1 ? L" clip" : L" clips");
+            if (!L.search.empty() || L.q.filter != kFilterAll)
+                hint = std::to_wstring(L.count) + (L.count == 1 ? L" clip" : L" clips");
             break;
     }
     if (confirm) {
@@ -4743,9 +5046,14 @@ void PaintList(ID2D1RenderTarget* rt, float w, float h, bool offscreen) {
     // Rows.
     c.rt->PushAxisAlignedClip(l.list, D2D1_ANTIALIAS_MODE_ALIASED);
     if (L.count == 0) {
-        std::wstring msg = !L.q.search.empty() ? L"Nothing matches \"" + L.q.search + L"\""
-                           : L.q.groupId != -1 ? L"This group is empty"
-                                               : L"Nothing copied yet";
+        static const wchar_t* const kNoneOf[kFilterCount] = {L"", L"No text clips", L"No links", L"No images",
+                                                             L"No copied files"};
+        std::wstring kind = L.q.filter != kFilterAll ? std::wstring(L" in ") + FilterName(L.q.filter) : L"";
+        for (auto& ch : kind) ch = (wchar_t)towlower(ch);
+        std::wstring msg = !L.q.search.empty()   ? L"Nothing matches \"" + L.q.search + L"\"" + kind
+                           : L.q.filter != kFilterAll ? std::wstring(kNoneOf[L.q.filter]) + L"\nTab shows the rest"
+                           : L.q.groupId != -1       ? L"This group is empty"
+                                                     : L"Nothing copied yet";
         Com<IDWriteTextFormat> center = MakeFormat(T.family, g_set.fontSize * 96.0f / 72.0f,
                                                    (DWRITE_FONT_WEIGHT)BaseWeight(), false, DWRITE_TEXT_ALIGNMENT_CENTER);
         if (center) {
@@ -4819,6 +5127,7 @@ HitResult HitTest(const Layout& l, float x, float y) {
     else if (L.q.groupId != -1 && In(l.back, x, y)) h.what = Hit::Back;
     else if (In(l.folder, x, y)) h.what = Hit::Folder;
     else if (In(l.menu, x, y)) h.what = Hit::Menu;
+    else if (L.mode == DockMode::Search && l.filter.right > l.filter.left && In(l.filter, x, y)) h.what = Hit::Filter;
     else if (In(l.search, x, y)) {
         h.what = Hit::Search;
         if (L.mode == DockMode::ConfirmDelete) {
@@ -5916,6 +6225,107 @@ std::vector<UiMenuItem> GroupsMenuItems() {
 
 void ShowGroupsMenu(POINT pt) { RunCommand(TrackMenu(GroupsMenuItems(), pt)); }
 
+// Tab, Shift+Tab and the chip: All, Text, Links, Images, Files.
+void CycleFilter(int dir) {
+    L.q.filter = (L.q.filter + dir + kFilterCount) % kFilterCount;
+    L.caret = 0;
+    L.scrollY = L.scrollTarget = 0;
+    Reload();
+    UpdatePreview();
+    Invalidate();
+}
+
+// Files a clip points at: the copied files, or text that is one existing path. Missing ones skipped.
+std::vector<std::wstring> ClipPaths(const ClipRow& r) {
+    std::vector<std::wstring> out;
+    if (r.isGroup) return out;
+    if (r.kind == ClipKind::Files) {
+        std::wstring all = DataText(r);
+        for (size_t i = 0; i <= all.size() && out.size() < 64;) {
+            size_t j = all.find(L'\n', i);
+            if (j == std::wstring::npos) j = all.size();
+            std::wstring p = TrimWs(all.substr(i, j - i));
+            if (!p.empty() && GetFileAttributesW(p.c_str()) != INVALID_FILE_ATTRIBUTES) out.push_back(p);
+            i = j + 1;
+        }
+    } else if (r.kind == ClipKind::Text && r.text.size() < 1024 && r.text.find(L'\n') == std::wstring::npos) {
+        std::wstring p = TrimWs(r.text);
+        if (p.size() >= 2 && p.front() == L'"' && p.back() == L'"') p = p.substr(1, p.size() - 2);
+        WCHAR full[MAX_PATH * 2]{};
+        if (p.find(L'%') != std::wstring::npos && ExpandEnvironmentStringsW(p.c_str(), full, MAX_PATH * 2)) p = full;
+        bool rooted = p.size() >= 3 && ((iswalpha(p[0]) && p[1] == L':' && (p[2] == L'\\' || p[2] == L'/')) ||
+                                        (p[0] == L'\\' && p[1] == L'\\'));
+        if (rooted && GetFileAttributesW(p.c_str()) != INVALID_FILE_ATTRIBUTES) out.push_back(p);
+    }
+    return out;
+}
+
+// Opens File Explorer on the folder of the first file with the files in that folder selected.
+void ShowInFolder(const std::vector<std::wstring>& paths) {
+    if (paths.empty()) return;
+    std::wstring dir = paths[0];
+    size_t slash = dir.find_last_of(L"\\/");
+    if (slash == std::wstring::npos) return;
+    dir.resize(slash == 2 ? 3 : slash);  // "C:\" keeps its slash
+    PIDLIST_ABSOLUTE folder = nullptr;
+    if (FAILED(SHParseDisplayName(dir.c_str(), nullptr, &folder, 0, nullptr)) || !folder) return;
+    std::vector<PIDLIST_ABSOLUTE> items;
+    for (auto& p : paths) {
+        size_t s2 = p.find_last_of(L"\\/");
+        if (s2 == std::wstring::npos || StrCmpNIW(p.c_str(), dir.c_str(), (int)dir.size()) != 0 ||
+            p.find_first_of(L"\\/", dir.size() + 1) != std::wstring::npos)
+            continue;
+        PIDLIST_ABSOLUTE it = nullptr;
+        if (SUCCEEDED(SHParseDisplayName(p.c_str(), nullptr, &it, 0, nullptr)) && it) items.push_back(it);
+    }
+    if (items.empty()) {
+        PIDLIST_ABSOLUTE it = nullptr;
+        if (SUCCEEDED(SHParseDisplayName(paths[0].c_str(), nullptr, &it, 0, nullptr)) && it) items.push_back(it);
+    }
+    SHOpenFolderAndSelectItems(folder, (UINT)items.size(), (PCUITEMID_CHILD_ARRAY)items.data(), 0);
+    for (auto it : items) ILFree(it);
+    ILFree(folder);
+}
+
+bool SavePng(IWICBitmapSource* src, const std::wstring& path);
+bool WriteBytesFile(const std::wstring& path, const std::string& s) {
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return false;
+    DWORD wrote = 0;
+    bool ok = WriteFile(f, s.data(), (DWORD)s.size(), &wrote, nullptr) && wrote == s.size();
+    CloseHandle(f);
+    if (!ok) DeleteFileW(path.c_str());
+    return ok;
+}
+
+// Saves an image clip as a PNG in Pictures\Clipboard and shows it there. The stored PNG is written
+// as it is when the clip has one, so nothing is re-encoded.
+bool SaveClipImage(const ClipRow& r) {
+    PWSTR pics = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_Pictures, 0, nullptr, &pics)) || !pics) return false;
+    std::wstring dir = std::wstring(pics) + L"\\Clipboard";
+    CoTaskMemFree(pics);
+    CreateDirectoryW(dir.c_str(), nullptr);
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    WCHAR name[96];
+    swprintf_s(name, L"\\Clip %04d-%02d-%02d %02d%02d%02d.png", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute,
+               st.wSecond);
+    std::wstring path = dir + name;
+    for (int n = 2; GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES && n < 100; n++)
+        path = dir + std::wstring(name).substr(0, wcslen(name) - 4) + L" (" + std::to_wstring(n) + L").png";
+    std::string png;
+    bool ok = Db_GetFormat(r.id, L"PNG", png) && png.size() > 8 && memcmp(png.data(), "\x89PNG", 4) == 0 &&
+              WriteBytesFile(path, png);
+    if (!ok) {
+        UINT w = 0, h = 0;
+        Com<IWICBitmap> img = LoadClipImage(r.id, 16384, w, h);
+        ok = img && SavePng(img.get(), path);
+    }
+    if (ok) ShowInFolder({path});
+    return ok;
+}
+
 std::vector<UiMenuItem> ContextMenuItems() {
     const ClipRow* r = RowAt(L.caret);
     bool have = r != nullptr;
@@ -5936,6 +6346,15 @@ std::vector<UiMenuItem> ContextMenuItems() {
     m.push_back(MI(cmdEdit, L"Edit", kGlyphEdit, L"Ctrl+E", have && !group));
     m.push_back(MI(cmdProps, L"Properties", kGlyphInfo, L"Alt+Enter", have));
     m.push_back(MI(cmdPreview, L"Preview", kGlyphView, L"Space", have, PreviewVisible()));
+    // Smart actions, only when they fit the clip.
+    if (have && !group) {
+        if (r->kind == ClipKind::Text && IsLinkText(r->text)) m.push_back(MI(cmdOpenLink, L"Open link", kGlyphLink));
+        if (!ClipPaths(*r).empty()) {
+            m.push_back(MI(cmdOpenFile, L"Open", kGlyphOpenFile));
+            m.push_back(MI(cmdShowInFolder, L"Show in folder", kGlyphFolderOpen));
+        }
+        if (r->kind == ClipKind::Image) m.push_back(MI(cmdSaveImage, L"Save image to Pictures", kGlyphSave));
+    }
     m.push_back(MSep());
     m.push_back(MI(cmdSticky, L"Pin to top", kGlyphPin, {}, have, sticky));
     m.push_back(MI(cmdNeverDelete, L"Never delete", kGlyphLock, {}, have, neverDelete));
@@ -6013,6 +6432,42 @@ void RunCommand(UINT cmd) {
             PostMessageW(g_msgWnd, WM_SCM_OPEN_SETTINGS, 0, 0);
             break;
         case cmdOpenMain: OpenGroup(-1, L""); break;
+        case cmdOpenLink: {
+            const ClipRow* r = RowAt(L.caret);
+            if (!r || !IsLinkText(r->text)) break;
+            std::wstring url = TrimWs(r->text);
+            if (StrCmpNIW(url.c_str(), L"www.", 4) == 0) url = L"https://" + url;
+            List_Hide();
+            ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            break;
+        }
+        case cmdOpenFile: {
+            const ClipRow* r = RowAt(L.caret);
+            if (!r) break;
+            auto paths = ClipPaths(*r);
+            if (paths.empty()) break;
+            List_Hide();
+            for (size_t k = 0; k < paths.size() && k < 10; k++)
+                ShellExecuteW(nullptr, nullptr, paths[k].c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            break;
+        }
+        case cmdShowInFolder: {
+            const ClipRow* r = RowAt(L.caret);
+            if (!r) break;
+            auto paths = ClipPaths(*r);
+            if (paths.empty()) break;
+            List_Hide();
+            ShowInFolder(paths);
+            break;
+        }
+        case cmdSaveImage: {
+            const ClipRow* r = RowAt(L.caret);
+            if (!r || r->kind != ClipKind::Image) break;
+            ClipRow copy = *r;
+            List_Hide();
+            if (!SaveClipImage(copy)) MessageBeep(MB_ICONWARNING);
+            break;
+        }
         case cmdNewGroup: StartNewGroup(false); break;
         default: break;
     }
@@ -6086,6 +6541,10 @@ bool OnKeyDown(WPARAM vk) {
             // An empty search box: Space shows the clip. While typing a search it is a space (OnChar).
             if (!L.search.empty() || ctrl || alt) return false;
             PreviewCommand();
+            return true;
+        case VK_TAB:
+            if (ctrl || alt) return false;
+            CycleFilter(shift ? -1 : +1);
             return true;
         case VK_F5: Reload(); return true;
         case VK_F7: StartNewGroup(!ctrl); return true;
@@ -6315,6 +6774,7 @@ void OnMouse(UINT msg, WPARAM wp, LPARAM lp) {
                 case Hit::Back: GoUp(); break;
                 case Hit::Folder: ShowGroupsMenu(MenuPointFor(l.folder, false)); break;
                 case Hit::Menu: ShowContextMenu(MenuPointFor(l.menu, false)); break;
+                case Hit::Filter: CycleFilter(Down(VK_SHIFT) ? -1 : +1); break;
                 default: break;
             }
             return;
@@ -6752,6 +7212,7 @@ void ResetForOpen() {
     L.groupName.clear();
     L.search.clear();
     L.q.search.clear();
+    L.q.filter = kFilterAll;
     L.mode = DockMode::Search;
     L.nameText.clear();
     L.pendingMove.clear();
@@ -9068,6 +9529,47 @@ class SetCom {
     explicit operator bool() const { return p != nullptr; }
 };
 
+// One row of a tray menu (Set_TrayMenu). Every mod's tray menu is a list of these.
+struct SetMenuItem {
+    int id = 0;                    // What Set_TrayMenu returns when this row is picked.
+    std::wstring glyph;            // FiraCode Nerd Font glyph for the leading column.
+    std::wstring label;
+    std::wstring hint;             // Grey text on the right, such as a hotkey.
+    bool checked = false;          // Accent check mark on the right.
+    bool separator = false;
+    bool disabled = false;
+    std::vector<SetMenuItem> sub;  // A submenu, drawn by the same renderer.
+};
+
+// One open level of a tray menu: its own popup window and Direct2D target.
+struct SetMenuLevel {
+    const std::vector<SetMenuItem>* items = nullptr;
+    HWND hwnd = nullptr;
+    SetCom<ID2D1HwndRenderTarget> rt;
+    float scale = 1, wDip = 0, hDip = 0, itemH = 30, hintW = 0;
+    std::vector<float> top, height;  // Per row, DIPs inside the window.
+    int hover = -1;                  // Highlighted row.
+    int open = -1;                   // Row whose submenu is the next level.
+};
+
+// A running tray menu. It owns its factories, so it runs on whatever thread owns the tray icon.
+struct SetMenuSession {
+    SetCom<ID2D1Factory> d2d;
+    SetCom<IDWriteFactory> dw;
+    SetCom<IDWriteTextFormat> fText, fHint, fGlyph, fGlyphS;
+    std::vector<std::unique_ptr<SetMenuLevel>> levels;
+    HINSTANCE inst = nullptr;
+    std::wstring cls;
+    float radius = 8;
+    int result = 0;
+    bool done = false;
+    bool pressed = false;  // A button went down inside the menu; only then does a release pick a row.
+    bool wasActive = false;
+    float alpha = 1;
+    ULONGLONG fadeStart = 0;
+    int pendingLevel = -1, pendingItem = -1;  // Hover timer: open (item >= 0) or close a submenu after a delay.
+};
+
 struct SetField {
     enum Kind { Choice, Number, Text, Hotkey, Check, Color };
     Kind kind;
@@ -9103,6 +9605,7 @@ static std::vector<SetField> Set_MakeFields() {
         {K::Number, L"linesPerRow", L"Lines per clip", L"1 to 10 (Suggested: 5). How many lines of text each clip shows.", L"5", {}, 1, 10, 1, L"Rows"},
         {K::Check, L"showPositions", L"Number the first ten clips", nullptr, L"1", {}, 0, 0, 1, L"Rows"},
         {K::Check, L"showThumbnails", L"Show image previews", nullptr, L"1", {}, 0, 0, 1, L"Rows"},
+        {K::Check, L"showClipDetails", L"Show the app and time on each clip", L"Small text at the right of each clip. Clips copied before this update show only the time.", L"1", {}, 0, 0, 1, L"Rows"},
         {K::Check, L"closeOnFocusLoss", L"Close when you click away", nullptr, L"1", {}, 0, 0, 1, L"Behavior"},
         {K::Check, L"alwaysOnTop", L"Keep the list on top", nullptr, L"1", {}, 0, 0, 1, L"Behavior"},
         {K::Check, L"confirmDelete", L"Ask before deleting", nullptr, L"1", {}, 0, 0, 1, L"Behavior"},
@@ -9134,8 +9637,10 @@ static std::vector<SetField> Set_MakeFields() {
         {K::Choice, L"pasteKeys", L"Paste with", nullptr, L"ctrlV", {{L"ctrlV", L"Ctrl+V"}, {L"shiftInsert", L"Shift+Insert"}}, 0, 0, 4, L"Paste"},
         {K::Number, L"pasteDelay", L"Paste delay (ms)", L"0 to 2000 (Suggested: 50). Wait this long after switching back to the app before pasting. Raise it if a paste lands in the wrong place.", L"50", {}, 0, 2000, 4, L"Paste"},
         {K::Choice, L"multiSeparator", L"Between several pasted clips", nullptr, L"newline", {{L"newline", L"A new line"}, {L"space", L"A space"}, {L"comma", L"A comma and a space"}, {L"none", L"Nothing"}}, 0, 0, 4, L"Paste"},
+        {K::Check, L"restoreClipboard", L"Put the clipboard back after pasting", L"After a clip from the list is pasted, what was on the clipboard before goes back.", L"0", {}, 0, 0, 4, L"Paste"},
         {K::Choice, L"searchMode", L"Search finds", nullptr, L"contains", {{L"contains", L"Clips that contain the text"}, {L"allWords", L"Clips with all the words, in any order"}, {L"startsWith", L"Clips that start with the text"}}, 0, 0, 4, L"Search"},
         {K::Check, L"searchFullText", L"Search the whole clip", L"When off, search looks only at the start of each clip, which is faster with very large clips.", L"1", {}, 0, 0, 4, L"Search"},
+        {K::Check, L"highlightMatches", L"Highlight what you searched for", nullptr, L"1", {}, 0, 0, 4, L"Search"},
     };
 }
 
@@ -9167,10 +9672,13 @@ constexpr float kSetDockGap = 10, kSetRailDef = 232, kSetRailMin = 200, kSetRail
 constexpr float kSetFootBtnH = 36, kSetFootPad = 8, kSetFootH = kSetFootBtnH + 2 * kSetFootPad, kSetFootGap = 14;
 // The glass tint is one layer over the whole window, title bar included, so the two always match.
 constexpr float kSetGlassTint = 0.55f, kSetNativeFade = 56;
+constexpr UINT WM_APP_SETTINGS_RELOAD = WM_APP + 1;  // Settings changed outside: reload the fields.
 constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
 constexpr UINT_PTR kSetTimerId = 1;
+constexpr float kSetAutoDead = 10, kSetAutoR = 18, kSetAutoGain = 0.14f, kSetAutoMax = 56;
+constexpr PCWSTR kSetAutoProp = L"SeamlessOwnAutoscroll";  // Seamless Autoscroll skips this window.
 constexpr PCWSTR kSetKofiUrl = L"https://ko-fi.com/DavidHiFi";
 constexpr PCWSTR kSetAuthorUrl = L"https://github.com/DavidHiFi";
 constexpr PCWSTR kSetDittoUrl = L"https://github.com/sabrogden/Ditto";
@@ -9181,6 +9689,8 @@ constexpr PCWSTR kSetTitle = L"Seamless Clipboard Manager";
 // The self-drawn title bar. Everything below it is laid out as before, in "content" DIPs.
 static float kSetCapH = 40;
 constexpr float kSetCapBtnW = 46, kSetHoverMs = 120;
+constexpr float kSetMenuPad = 6, kSetMenuIconW = 22, kSetMenuSepH = 9, kSetMenuOverlap = 3, kSetMenuMinW = 190, kSetMenuMaxW = 640, kSetMenuBorderW = 2;
+constexpr UINT kSetMenuSubDelayMs = 200, kSetMenuFadeMs = 90, kSetMenuTimerSub = 0x5E71, kSetMenuTimerFade = 0x5E72, kSetMenuTimerPoll = 0x5E73;
 
 struct SetItem {
     enum Type { Group, Row, Banner, About, Link, Support } type = Row;
@@ -9221,6 +9731,8 @@ struct SetWindow {
     int dragSlider = -1;
     bool dragScroll = false, tracking = false, timer = false;
     float dragOff = 0;
+    bool autoScroll = false, autoMoved = false;
+    float autoX = 0, autoY = 0, autoA = 0, autoDir = 0;
     // Sidebar dock: railW is the chosen open width, railCur the drawn width (eased toward
     // kSetRailMini when collapsed). railGlow / footGlow ease the dock borders on hover.
     float railW = kSetRailDef, railCur = kSetRailDef, railGlow = 0, footGlow = 0;
@@ -9364,6 +9876,579 @@ static SetCom<IDWriteTextFormat> Set_Fmt(const std::wstring& family, float size,
 }
 
 // g_set.fontName at g_set.fontWeight; emphasis is one step heavier, never past bold.
+static float Set_MenuCornerRadius() {
+    float radius = 8.0f;
+    HKEY key;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Windhawk\\Engine\\Mods\\custom-corner-radius", 0,
+                      KEY_READ | KEY_WOW64_64KEY, &key) == ERROR_SUCCESS) {
+        DWORD disabled = 0, size = sizeof(disabled);
+        bool off = RegQueryValueExW(key, L"Disabled", nullptr, nullptr, (BYTE*)&disabled, &size) == ERROR_SUCCESS && disabled;
+        DWORD value = 0;
+        size = sizeof(value);
+        if (!off && RegGetValueW(key, L"Settings", L"radius", RRF_RT_REG_DWORD, nullptr, &value, &size) == ERROR_SUCCESS &&
+            value > 0 && value <= 64)
+            radius = (float)value;
+        RegCloseKey(key);
+    }
+    return radius;
+}
+
+static SetMenuItem Set_MenuRow(int id, PCWSTR glyph, PCWSTR label, bool checked = false, bool disabled = false,
+                               PCWSTR hint = L"") {
+    SetMenuItem m;
+    m.id = id;
+    m.glyph = glyph ? glyph : L"";
+    m.label = label ? label : L"";
+    m.hint = hint ? hint : L"";
+    m.checked = checked;
+    m.disabled = disabled;
+    return m;
+}
+
+static SetMenuItem Set_MenuSub(PCWSTR glyph, PCWSTR label, std::vector<SetMenuItem> sub, bool disabled = false) {
+    SetMenuItem m = Set_MenuRow(0, glyph, label, false, disabled);
+    m.sub = std::move(sub);
+    return m;
+}
+
+static SetMenuItem Set_MenuSep() {
+    SetMenuItem m;
+    m.separator = true;
+    return m;
+}
+
+static SetMenuSession*& Set_MenuCur() {
+    static thread_local SetMenuSession* session = nullptr;  // One menu per thread; History menus run on the settings thread.
+    return session;
+}
+
+static bool Set_MenuSelectable(const SetMenuItem& m) { return !m.separator && !m.disabled; }
+
+static float Set_MenuTextW(SetMenuSession& s, IDWriteTextFormat* f, const std::wstring& text) {
+    SetCom<IDWriteTextLayout> layout;
+    DWRITE_TEXT_METRICS m{};
+    if (text.empty() || !f || FAILED(s.dw->CreateTextLayout(text.c_str(), (UINT32)text.size(), f, 10000, 1000, layout.put())) ||
+        FAILED(layout->GetMetrics(&m)))
+        return 0;
+    return m.widthIncludingTrailingWhitespace;
+}
+
+static bool Set_MenuFormats(SetMenuSession& s) {
+    if (!s.d2d && FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory), nullptr,
+                                           (void**)s.d2d.put())))
+        return false;
+    if (!s.dw && FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)s.dw.put())))
+        return false;
+    std::wstring family = L"Segoe UI";
+    SetCom<IDWriteFontCollection> sys;
+    if (SUCCEEDED(s.dw->GetSystemFontCollection(sys.put(), FALSE))) {
+        for (PCWSTR face : {L"FiraCode Nerd Font", L"FiraCodeNerdFont", L"FiraCode Nerd Font Mono"}) {
+            UINT32 index = 0;
+            BOOL exists = FALSE;
+            if (SUCCEEDED(sys->FindFamilyName(face, &index, &exists)) && exists) {
+                family = face;
+                break;
+            }
+        }
+    }
+    auto make = [&](float size, DWRITE_TEXT_ALIGNMENT align, SetCom<IDWriteTextFormat>& out) {
+        if (FAILED(s.dw->CreateTextFormat(family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+                                          DWRITE_FONT_STRETCH_NORMAL, size, L"en-us", out.put())))
+            return false;
+        out->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        out->SetTextAlignment(align);
+        out->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        // Only a label wider than the widest menu (kSetMenuMaxW) is ever shortened, with an ellipsis.
+        DWRITE_TRIMMING trim{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+        SetCom<IDWriteInlineObject> sign;
+        if (SUCCEEDED(s.dw->CreateEllipsisTrimmingSign(out.get(), sign.put()))) out->SetTrimming(&trim, sign.get());
+        return true;
+    };
+    return make(13.5f, DWRITE_TEXT_ALIGNMENT_LEADING, s.fText) && make(12.5f, DWRITE_TEXT_ALIGNMENT_TRAILING, s.fHint) &&
+           make(15, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyph) && make(12, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyphS);
+}
+
+static void Set_MenuLayout(SetMenuSession& s, SetMenuLevel& lv) {
+    const auto& items = *lv.items;
+    lv.itemH = 30;
+    lv.top.assign(items.size(), 0);
+    lv.height.assign(items.size(), 0);
+    float textW = 0, hintW = 0, y = kSetMenuPad;
+    for (size_t i = 0; i < items.size(); i++) {
+        lv.top[i] = y;
+        lv.height[i] = items[i].separator ? kSetMenuSepH : lv.itemH;
+        y += lv.height[i];
+        if (items[i].separator) continue;
+        textW = std::max(textW, Set_MenuTextW(s, s.fText.get(), items[i].label));
+        hintW = std::max(hintW, Set_MenuTextW(s, s.fHint.get(), items[i].hint));
+    }
+    lv.hintW = std::ceil(hintW);
+    float w = kSetMenuPad * 2 + 8 + kSetMenuIconW + 10 + std::ceil(textW) + 2 + (hintW > 0 ? 24 + lv.hintW : 0) + 10 + 20 + 8;
+    lv.wDip = std::ceil(std::clamp(w, kSetMenuMinW, kSetMenuMaxW));
+    lv.hDip = std::ceil(y + kSetMenuPad);
+}
+
+static int Set_MenuItemAt(const SetMenuLevel& lv, float x, float y) {
+    if (x < kSetMenuPad || x >= lv.wDip - kSetMenuPad) return -1;
+    for (size_t i = 0; i < lv.top.size(); i++)
+        if (y >= lv.top[i] && y < lv.top[i] + lv.height[i]) return (*lv.items)[i].separator ? -1 : (int)i;
+    return -1;
+}
+
+static int Set_MenuNext(const SetMenuLevel& lv, int from, int dir) {
+    int n = (int)lv.items->size();
+    if (!n) return -1;
+    int i = from < 0 ? (dir > 0 ? -1 : n) : from;
+    for (int k = 0; k < n; k++) {
+        i = ((i + dir) % n + n) % n;
+        if (Set_MenuSelectable((*lv.items)[(size_t)i])) return i;
+    }
+    return -1;
+}
+
+static void Set_MenuPaint(SetMenuSession& s, SetMenuLevel& lv) {
+    ID2D1RenderTarget* rt = lv.rt.get();
+    SetCom<ID2D1SolidColorBrush> brush;
+    if (FAILED(rt->CreateSolidColorBrush(D2DColor(mocha::text), brush.put()))) return;
+    auto solid = [&](UINT32 rgb, float a) {
+        brush->SetColor(D2DColor(rgb, a));
+        return brush.get();
+    };
+    auto gradient = [&](D2D1_POINT_2F a, D2D1_POINT_2F b, D2D1_COLOR_F c1, D2D1_COLOR_F c2) {
+        SetCom<ID2D1LinearGradientBrush> g;
+        D2D1_GRADIENT_STOP stops[2] = {{0, c1}, {1, c2}};
+        SetCom<ID2D1GradientStopCollection> coll;
+        if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())))
+            rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(a, b), coll.get(), g.put());
+        return g;
+    };
+    // Blue to mauve at 45 degrees across a rect, like Seamless Borders.
+    auto accent = [&](const D2D1_RECT_F& r, float a) {
+        float d = ((r.right - r.left) + (r.bottom - r.top)) / 2;
+        return gradient({r.left, r.top}, {r.left + d, r.top + d}, D2DColor(mocha::blue, a), D2DColor(mocha::mauve, a));
+    };
+    const float w = lv.wDip, h = lv.hDip;
+    rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+    SetCom<ID2D1Layer> layer;
+    bool faded = s.alpha < 0.999f && SUCCEEDED(rt->CreateLayer(nullptr, layer.put()));
+    if (faded)
+        rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                            D2D1::IdentityMatrix(), std::max(0.0f, s.alpha)),
+                      layer.get());
+    // Dark Mocha over the acrylic blur; DWM rounds the window.
+    auto tint = gradient({0, 0}, {0, h}, D2DColor(mocha::base, 0.80f), D2DColor(mocha::base, 0.84f));
+    if (tint) rt->FillRectangle({0, 0, w, h}, tint.get());
+    const auto& items = *lv.items;
+    const float slotRight = w - kSetMenuPad - 8, slotLeft = slotRight - 20;
+    for (size_t i = 0; i < items.size(); i++) {
+        const SetMenuItem& m = items[i];
+        D2D1_RECT_F r{kSetMenuPad, lv.top[i], w - kSetMenuPad, lv.top[i] + lv.height[i]};
+        if (m.separator) {
+            float y = std::floor((r.top + r.bottom) / 2);
+            rt->FillRectangle({r.left + 8, y, r.right - 8, y + 1}, solid(mocha::surface1, 0.8f));
+            continue;
+        }
+        bool hot = ((int)i == lv.hover || (int)i == lv.open) && !m.disabled;
+        if (hot) {
+            // The hover look of every card: a faint blue to mauve wash and a 1 px gradient ring.
+            float rad = 8, ringW = 1;
+            D2D1_ROUNDED_RECT rr{{r.left + ringW / 2, r.top + ringW / 2, r.right - ringW / 2, r.bottom - ringW / 2}, rad, rad};
+            auto fill = gradient({r.left, r.top}, {r.right, r.bottom}, D2DColor(mocha::blue, 0.16f), D2DColor(mocha::mauve, 0.16f));
+            if (fill) rt->FillRoundedRectangle(rr, fill.get());
+            auto ring = accent(r, 0.8f);
+            if (ring) rt->DrawRoundedRectangle(rr, ring.get(), ringW);
+        }
+        UINT32 col = m.disabled ? mocha::overlay0 : mocha::text;
+        if (!m.glyph.empty())
+            rt->DrawText(m.glyph.c_str(), (UINT32)m.glyph.size(), s.fGlyph.get(),
+                         {r.left + 8, r.top, r.left + 8 + kSetMenuIconW, r.bottom}, solid(col, 1));
+        float textX = r.left + 8 + kSetMenuIconW + 10;
+        float hintRight = slotLeft - 10, hintLeft = hintRight - lv.hintW;
+        float textRight = lv.hintW > 0 ? hintLeft - 12 : slotLeft - 4;
+        if (!m.label.empty())
+            rt->DrawText(m.label.c_str(), (UINT32)m.label.size(), s.fText.get(), {textX, r.top, textRight, r.bottom},
+                         solid(col, 1));
+        if (!m.hint.empty())
+            rt->DrawText(m.hint.c_str(), (UINT32)m.hint.size(), s.fHint.get(), {hintLeft, r.top, hintRight, r.bottom},
+                         solid(m.disabled ? mocha::overlay0 : mocha::subtext0, 1));
+        if (!m.sub.empty()) {
+            rt->DrawText(L"", 1, s.fGlyphS.get(), {slotLeft, r.top, slotRight, r.bottom}, solid(col, 1));  // chevron_right
+        } else if (m.checked) {
+            rt->DrawText(L"", 1, s.fGlyph.get(), {slotLeft, r.top, slotRight, r.bottom},  // check
+                         solid(m.disabled ? mocha::overlay0 : mocha::blue, 1));
+        }
+    }
+    // The edge on DWM's real corner curve: 2 px, blue to mauve, inset half the stroke.
+    const float bw = kSetMenuBorderW;
+    D2D1_RECT_F edge{bw / 2, bw / 2, w - bw / 2, h - bw / 2};
+    auto border = accent({0, 0, w, h}, 1);
+    float r2 = std::max(0.0f, s.radius - bw / 2);
+    if (border) rt->DrawRoundedRectangle({edge, r2, r2}, border.get(), bw);
+    if (faded) rt->PopLayer();
+}
+
+static int Set_MenuIndexOf(HWND hwnd) {
+    if (SetMenuSession* s = Set_MenuCur())
+        for (size_t i = 0; i < s->levels.size(); i++)
+            if (s->levels[i]->hwnd == hwnd) return (int)i;
+    return -1;
+}
+
+static void Set_MenuInvalidate() {
+    if (SetMenuSession* s = Set_MenuCur())
+        for (auto& lv : s->levels)
+            if (lv->hwnd) InvalidateRect(lv->hwnd, nullptr, FALSE);
+}
+
+static void Set_MenuCloseFrom(size_t n) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s) return;
+    while (s->levels.size() > n) {
+        HWND h = s->levels.back()->hwnd;
+        s->levels.back()->rt.reset();
+        s->levels.pop_back();
+        if (h) DestroyWindow(h);
+    }
+    if (n > 0 && !s->levels.empty()) s->levels.back()->open = -1;
+    Set_MenuInvalidate();
+}
+
+static void Set_MenuFinish(int id) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || s->done) return;
+    s->result = id;
+    s->done = true;
+}
+
+static void Set_MenuBackdrop(HWND hwnd) {
+    BOOL dark = TRUE;
+    DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+    int corner = 2;  // DWMWCP_ROUND
+    DwmSetWindowAttribute(hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &corner, sizeof(corner));
+    COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE: the menu draws its own edge.
+    DwmSetWindowAttribute(hwnd, 34 /* DWMWA_BORDER_COLOR */, &none, sizeof(none));
+    DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+    int backdrop = 1;  // DWMSBT_NONE
+    DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+    DWM_BLURBEHIND bb{};
+    bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+    bb.fEnable = TRUE;
+    bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+    DwmEnableBlurBehindWindow(hwnd, &bb);
+    if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+    struct SetAccentPolicy { int state, flags, abgr, animation; };
+    struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
+    if (auto setComposition =
+            (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute")) {
+        SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};
+        SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+        setComposition(hwnd, &data);
+    }
+}
+
+static RECT Set_MenuWorkArea(POINT pt) {
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST), &mi);
+    return mi.rcWork;
+}
+
+static bool Set_MenuCreateWindow(SetMenuSession& s, SetMenuLevel& lv, POINT at, const RECT* parent, int rowTopPx) {
+    DWORD ex = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | (parent ? WS_EX_NOACTIVATE : 0);
+    HWND hwnd = CreateWindowExW(ex, s.cls.c_str(), L"", WS_POPUP, at.x, at.y, 1, 1, nullptr, nullptr, s.inst, nullptr);
+    if (!hwnd) return false;
+    lv.hwnd = hwnd;
+    lv.scale = GetDpiForWindow(hwnd) / 96.0f;
+    if (lv.scale <= 0) lv.scale = 1;
+    Set_MenuLayout(s, lv);
+    int w = (int)std::ceil(lv.wDip * lv.scale), h = (int)std::ceil(lv.hDip * lv.scale);
+    RECT wa = Set_MenuWorkArea(parent ? POINT{parent->right, parent->top + rowTopPx} : at);
+    int x = at.x, y = at.y;
+    if (parent) {
+        int overlap = (int)kSetMenuOverlap;
+        x = parent->right - overlap;
+        if (x + w > wa.right) x = parent->left - w + overlap;
+        y = parent->top + rowTopPx - (int)(kSetMenuPad * lv.scale);
+        if (y + h > wa.bottom) y = wa.bottom - h;
+    } else {
+        if (x + w > wa.right) x = at.x - w;
+        if (y + h > wa.bottom) y = at.y - h;
+    }
+    x = std::clamp<int>(x, wa.left, std::max<int>(wa.left, wa.right - w));
+    y = std::clamp<int>(y, wa.top, std::max<int>(wa.top, wa.bottom - h));
+    Set_MenuBackdrop(hwnd);
+    SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+        D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+        96 * lv.scale, 96 * lv.scale);
+    s.d2d->CreateHwndRenderTarget(props, D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU((UINT32)w, (UINT32)h)),
+                                  lv.rt.put());
+    return (bool)lv.rt;
+}
+
+static void Set_MenuOpenSub(size_t level, int item, bool keyboard) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || level >= s->levels.size()) return;
+    SetMenuLevel& parent = *s->levels[level];
+    const SetMenuItem& m = (*parent.items)[(size_t)item];
+    if (m.sub.empty() || m.disabled) return;
+    Set_MenuCloseFrom(level + 1);
+    auto lv = std::make_unique<SetMenuLevel>();
+    lv->items = &m.sub;
+    RECT pr{};
+    GetWindowRect(parent.hwnd, &pr);
+    SetMenuLevel* raw = lv.get();
+    s->levels.push_back(std::move(lv));
+    parent.open = item;
+    if (!Set_MenuCreateWindow(*s, *raw, POINT{pr.right, pr.top}, &pr, (int)(parent.top[(size_t)item] * parent.scale))) {
+        Set_MenuCloseFrom(level + 1);
+        return;
+    }
+    if (keyboard) raw->hover = Set_MenuNext(*raw, -1, +1);
+    ShowWindow(raw->hwnd, SW_SHOWNOACTIVATE);
+    Set_MenuInvalidate();
+}
+
+static void Set_MenuActivate(size_t level, int item, bool keyboard) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || level >= s->levels.size()) return;
+    const SetMenuItem& m = (*s->levels[level]->items)[(size_t)item];
+    if (!Set_MenuSelectable(m)) return;
+    if (!m.sub.empty()) Set_MenuOpenSub(level, item, keyboard);
+    else Set_MenuFinish(m.id);
+}
+
+static void Set_MenuHoverChanged(size_t level, int item) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s) return;
+    SetMenuLevel& lv = *s->levels[level];
+    HWND root = s->levels[0]->hwnd;
+    KillTimer(root, kSetMenuTimerSub);
+    s->pendingItem = -1;
+    bool wantsSub = item >= 0 && Set_MenuSelectable((*lv.items)[(size_t)item]) && !(*lv.items)[(size_t)item].sub.empty();
+    if (wantsSub && lv.open != item) {
+        s->pendingLevel = (int)level;
+        s->pendingItem = item;
+        SetTimer(root, kSetMenuTimerSub, kSetMenuSubDelayMs, nullptr);
+    } else if (!wantsSub && lv.open != -1 && s->levels.size() > level + 1) {
+        s->pendingLevel = (int)level;
+        s->pendingItem = -1;
+        SetTimer(root, kSetMenuTimerSub, kSetMenuSubDelayMs, nullptr);
+    }
+}
+
+static void Set_MenuKey(WPARAM vk) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || s->levels.empty()) return;
+    size_t li = s->levels.size() - 1;
+    SetMenuLevel& cur = *s->levels[li];
+    const auto& items = *cur.items;
+    switch (vk) {
+        case VK_DOWN: cur.hover = Set_MenuNext(cur, cur.hover, +1); break;
+        case VK_UP: cur.hover = Set_MenuNext(cur, cur.hover, -1); break;
+        case VK_HOME: cur.hover = Set_MenuNext(cur, -1, +1); break;
+        case VK_END: cur.hover = Set_MenuNext(cur, (int)items.size(), -1); break;
+        case VK_RIGHT:
+            if (cur.hover >= 0 && !items[(size_t)cur.hover].sub.empty()) Set_MenuActivate(li, cur.hover, true);
+            break;
+        case VK_LEFT:
+            if (li > 0) Set_MenuCloseFrom(li);
+            break;
+        case VK_RETURN:
+        case VK_SPACE:
+            if (cur.hover >= 0) Set_MenuActivate(li, cur.hover, true);
+            break;
+        case VK_ESCAPE:
+        case VK_MENU:
+            if (li > 0 && vk == VK_ESCAPE) Set_MenuCloseFrom(li);
+            else Set_MenuFinish(0);
+            break;
+        default: return;
+    }
+    Set_MenuInvalidate();
+}
+
+static LRESULT CALLBACK Set_MenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    SetMenuSession* s = Set_MenuCur();
+    int li = Set_MenuIndexOf(hwnd);
+    if (!s || li < 0) return DefWindowProcW(hwnd, msg, wParam, lParam);
+    SetMenuLevel& lv = *s->levels[(size_t)li];
+    switch (msg) {
+        case WM_ERASEBKGND: return 1;
+        case WM_MOUSEACTIVATE: return li == 0 ? MA_ACTIVATE : MA_NOACTIVATE;
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            if (lv.rt) {
+                lv.rt->BeginDraw();
+                Set_MenuPaint(*s, lv);
+                if (lv.rt->EndDraw() == D2DERR_RECREATE_TARGET) {
+                    RECT rc;
+                    GetClientRect(hwnd, &rc);
+                    lv.rt.reset();
+                    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+                        D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96 * lv.scale,
+                        96 * lv.scale);
+                    s->d2d->CreateHwndRenderTarget(
+                        props, D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU((UINT32)rc.right, (UINT32)rc.bottom)),
+                        lv.rt.put());
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                }
+            }
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_MOUSEMOVE: {
+            if (s->pendingLevel > li) {  // The pointer reached a deeper level: keep it open.
+                KillTimer(s->levels[0]->hwnd, kSetMenuTimerSub);
+                s->pendingItem = s->pendingLevel = -1;
+            }
+            TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
+            TrackMouseEvent(&tme);
+            int i = Set_MenuItemAt(lv, (short)LOWORD(lParam) / lv.scale, (short)HIWORD(lParam) / lv.scale);
+            if (i >= 0 && !Set_MenuSelectable((*lv.items)[(size_t)i])) i = -1;
+            if (i != lv.hover) {
+                lv.hover = i;
+                Set_MenuHoverChanged((size_t)li, i);
+                Set_MenuInvalidate();
+            }
+            return 0;
+        }
+        case WM_MOUSELEAVE:
+            if (lv.hover != -1 && lv.open != lv.hover) {
+                lv.hover = -1;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP: {
+            if (!s->pressed) return 0;  // The release of the click that opened the menu.
+            int i = Set_MenuItemAt(lv, (short)LOWORD(lParam) / lv.scale, (short)HIWORD(lParam) / lv.scale);
+            if (i >= 0) Set_MenuActivate((size_t)li, i, false);
+            return 0;
+        }
+        case WM_ACTIVATE:
+            if (li == 0 && LOWORD(wParam) != WA_INACTIVE) s->wasActive = true;
+            if (li == 0 && LOWORD(wParam) == WA_INACTIVE && Set_MenuIndexOf((HWND)lParam) < 0) Set_MenuFinish(0);
+            return 0;
+        case WM_TIMER:
+            if (wParam == kSetMenuTimerSub) {
+                KillTimer(hwnd, kSetMenuTimerSub);
+                int pl = s->pendingLevel, pi = s->pendingItem;
+                s->pendingLevel = s->pendingItem = -1;
+                if (pl >= 0 && (size_t)pl < s->levels.size()) {
+                    if (pi >= 0) Set_MenuOpenSub((size_t)pl, pi, false);
+                    else Set_MenuCloseFrom((size_t)pl + 1);
+                }
+            } else if (wParam == kSetMenuTimerFade) {
+                float t = std::min(1.0f, (GetTickCount64() - s->fadeStart) / (float)kSetMenuFadeMs);
+                s->alpha = 1 - (1 - t) * (1 - t);
+                if (t >= 1) KillTimer(hwnd, kSetMenuTimerFade);
+                Set_MenuInvalidate();
+            } else if (wParam == kSetMenuTimerPoll) {
+                // Click-away when Windows kept the menu out of the foreground: a press outside every level.
+                if (GetForegroundWindow() != s->levels[0]->hwnd &&
+                    ((GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON) | GetAsyncKeyState(VK_MBUTTON)) & 0x8000)) {
+                    POINT pt;
+                    GetCursorPos(&pt);
+                    if (Set_MenuIndexOf(WindowFromPoint(pt)) < 0) Set_MenuFinish(0);
+                }
+            }
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+static int Set_TrayMenu(HWND owner, const std::vector<SetMenuItem>& items, const POINT* at = nullptr) {
+    if (Set_MenuCur()) {  // A second right-click while open closes the first menu.
+        Set_MenuFinish(0);
+        return 0;
+    }
+    if (items.empty()) return 0;
+    POINT pt{};
+    if (at) pt = *at;
+    else GetCursorPos(&pt);
+    SetMenuSession session;
+    if (!Set_MenuFormats(session)) return 0;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       (LPCWSTR)(void*)&Set_MenuProc, &session.inst);
+    // One class per mod, even when several mods share a process.
+    session.cls = L"SeamlessTrayMenu_" + std::to_wstring((unsigned long long)(uintptr_t)(void*)&Set_MenuProc);
+    PCWSTR cls = session.cls.c_str();
+    WNDCLASSEXW wc{sizeof(wc)};
+    wc.hInstance = session.inst;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpfnWndProc = Set_MenuProc;
+    wc.lpszClassName = cls;
+    RegisterClassExW(&wc);
+    session.radius = Set_MenuCornerRadius();
+    Set_MenuCur() = &session;
+    session.levels.push_back(std::make_unique<SetMenuLevel>());
+    SetMenuLevel* root = session.levels[0].get();
+    root->items = &items;
+    if (!Set_MenuCreateWindow(session, *root, pt, nullptr, 0)) {
+        Set_MenuCloseFrom(0);
+        Set_MenuCur() = nullptr;
+        UnregisterClassW(cls, session.inst);
+        return 0;
+    }
+    BOOL animations = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animations, 0);
+    session.alpha = animations ? 0.0f : 1.0f;
+    session.fadeStart = GetTickCount64();
+    if (owner && IsWindow(owner)) SetForegroundWindow(owner);  // Windows' tray rule; lets the menu take the foreground.
+    ShowWindow(root->hwnd, SW_SHOW);
+    if (!SetForegroundWindow(root->hwnd)) {
+        DWORD fg = GetWindowThreadProcessId(GetForegroundWindow(), nullptr), me = GetCurrentThreadId();
+        if (fg && fg != me && AttachThreadInput(me, fg, TRUE)) {
+            SetForegroundWindow(root->hwnd);
+            AttachThreadInput(me, fg, FALSE);
+        }
+    }
+    SetFocus(root->hwnd);
+    if (animations) SetTimer(root->hwnd, kSetMenuTimerFade, 15, nullptr);
+    SetTimer(root->hwnd, kSetMenuTimerPoll, 50, nullptr);
+    MSG m;
+    while (!session.done) {
+        BOOL got = GetMessageW(&m, nullptr, 0, 0);
+        if (got <= 0) {
+            if (got == 0) PostQuitMessage((int)m.wParam);
+            break;
+        }
+        switch (m.message) {
+            case WM_KEYDOWN:
+            case WM_SYSKEYDOWN:
+                Set_MenuKey(m.wParam);
+                continue;
+            case WM_KEYUP:
+            case WM_SYSKEYUP:
+            case WM_CHAR:
+            case WM_SYSCHAR:
+                continue;
+            case WM_LBUTTONDOWN:
+            case WM_RBUTTONDOWN:
+            case WM_MBUTTONDOWN:
+            case WM_NCLBUTTONDOWN:
+            case WM_NCRBUTTONDOWN:
+                if (Set_MenuIndexOf(m.hwnd) < 0) {  // A click on another window of this thread closes the menu.
+                    Set_MenuFinish(0);
+                    continue;
+                }
+                session.pressed = true;
+                break;
+        }
+        TranslateMessage(&m);
+        DispatchMessageW(&m);
+    }
+    int result = session.result;
+    Set_MenuCloseFrom(0);
+    Set_MenuCur() = nullptr;
+    UnregisterClassW(cls, session.inst);
+    if (owner && IsWindow(owner)) PostMessageW(owner, WM_NULL, 0, 0);
+    return result;
+}
+
 static void Set_MakeFormats(SetWindow& w) {
     w.family = Set_ResolveFamily();
     w.iconFamily = Set_FamilyExists(L"Segoe Fluent Icons") ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
@@ -10254,6 +11339,29 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
 // The title bar is drawn first; everything else is in content DIPs, shifted down by kSetCapH.
 static void Set_PlaceEdit(SetWindow& w);
 
+static void Set_DrawAutoScroll(SetPaint& p, SetWindow& w, bool frosted) {
+    if (w.autoA <= 0.003f) return;
+    const float a = w.autoA, s = 0.8f + 0.2f * a, r = kSetAutoR * s, cx = w.autoX, cy = w.autoY;
+    const D2D1_RECT_F disc{cx - r, cy - r, cx + r, cy + r};
+    p.Round(disc, r, mocha::mantle, (frosted ? 0.86f : 1.0f) * a);  // Opaque when nothing blurs under it.
+    p.GradRing(disc, r - 1, a, 2);
+    auto arrow = [&](float dir, bool lit) {
+        SetCom<ID2D1PathGeometry> g;
+        SetCom<ID2D1GeometrySink> k;
+        if (FAILED(g_setD2d->CreatePathGeometry(g.put())) || FAILED(g->Open(k.put()))) return;
+        const float tip = cy + dir * r * 0.62f, foot = cy + dir * r * 0.30f, half = r * 0.22f;
+        k->BeginFigure(D2D1::Point2F(cx, tip), D2D1_FIGURE_BEGIN_FILLED);
+        k->AddLine(D2D1::Point2F(cx + half, foot));
+        k->AddLine(D2D1::Point2F(cx - half, foot));
+        k->EndFigure(D2D1_FIGURE_END_CLOSED);
+        if (SUCCEEDED(k->Close())) p.rt->FillGeometry(g.get(), p.B(lit ? mocha::blue : mocha::overlay1, a));
+    };
+    arrow(-1, w.autoDir < 0);
+    arrow(1, w.autoDir > 0);
+    const float d = 2.5f * s;
+    p.Round({cx - d, cy - d, cx + d, cy + d}, d, mocha::mauve, a);
+}
+
 static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     if (Set_FitBoxes(w)) {
         Set_BuildPage(w);
@@ -10370,6 +11478,16 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
                 D2D1_RECT_F src{d.left - 1, d.top - 1, d.right + 1, d.bottom + 1};
                 dc->DrawImage(blur.get(), D2D1::Point2F(src.left, src.top), src);
                 rt->PopLayer();
+                if (w.autoA > 0.003f) {  // The autoscroll disc frosts the rows under it the same way.
+                    const float r = kSetAutoR * (0.8f + 0.2f * w.autoA), cx = w.autoX, cy = w.autoY + kSetCapH;
+                    SetCom<ID2D1EllipseGeometry> disc;
+                    if (SUCCEEDED(g_setD2d->CreateEllipseGeometry(D2D1::Ellipse(D2D1::Point2F(cx, cy), r, r), disc.put()))) {
+                        rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), disc.get()), nullptr);
+                        D2D1_RECT_F ds{cx - r - 1, cy - r - 1, cx + r + 1, cy + r + 1};
+                        dc->DrawImage(blur.get(), D2D1::Point2F(ds.left, ds.top), ds);
+                        rt->PopLayer();
+                    }
+                }
                 blurred = true;
             }
         }
@@ -10383,6 +11501,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     Set_DrawFooter(p, w);
     Set_DrawRail(p, w);
     Set_DrawPopup(p, w);
+    Set_DrawAutoScroll(p, w, blurred);
     rt->SetTransform(D2D1::Matrix3x2F::Identity());
     if (false) p.GradRing({0, 0, w.cw, w.ch + kSetCapH}, SystemCornerRadius(false), 1, 1);
     HRESULT hr = rt->EndDraw();
@@ -10936,6 +12055,48 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
 
 // ---- Animation tick ----------------------------------------------------------------
 
+static bool Set_AutoScrollStart(SetWindow& w, float x, float y) {
+    if (w.render || w.contentH - Set_ViewH(w) <= 0) return false;  // Nothing to scroll.
+    Set_CommitEdit(w, true);
+    Set_ClosePopup(w);
+    w.autoScroll = true;
+    w.autoMoved = false;
+    w.autoX = x, w.autoY = y, w.autoDir = 0;
+    w.hover = SetHit();
+    SetCapture(w.hwnd);
+    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+    Set_Invalidate(w);
+    return true;
+}
+
+static void Set_AutoScrollStop(SetWindow& w) {
+    if (!w.autoScroll) return;
+    w.autoScroll = false;  // Before ReleaseCapture: its WM_CAPTURECHANGED comes straight back here.
+    w.autoDir = 0;
+    if (GetCapture() == w.hwnd) ReleaseCapture();
+    Set_Invalidate(w);
+}
+
+static void Set_AutoScrollMove(SetWindow& w, bool held) {
+    if (held && fabsf(w.mouseY - w.autoY) > kSetAutoDead) w.autoMoved = true;
+    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+}
+
+static bool Set_AutoScrollStep(SetWindow& w) {
+    if (!w.autoScroll) return false;
+    const float dy = w.mouseY - w.autoY, dist = fabsf(dy) - kSetAutoDead;
+    const float dir = dist > 0 ? (dy > 0 ? 1.0f : -1.0f) : 0.0f;
+    bool changed = dir != w.autoDir;
+    w.autoDir = dir;
+    if (dist <= 0) return changed;
+    const float maxScroll = std::max(0.0f, w.contentH - Set_ViewH(w));
+    const float next = std::clamp(w.scrollY + dir * std::min(kSetAutoMax, dist * kSetAutoGain), 0.0f, maxScroll);
+    if (next == w.scrollY) return changed;
+    w.scrollY = w.scrollTarget = next;
+    Set_PlaceEdit(w);
+    return true;
+}
+
 static bool Set_Tick(SetWindow& w) {
     bool moved = false, anim = Set_Anim(w);
     auto step = [&](float& v, float target, float rate) {
@@ -10969,6 +12130,8 @@ static bool Set_Tick(SetWindow& w) {
         if (!w.knob.count((int)k)) w.knob[(int)k] = target;
         step(w.knob[(int)k], target, 0.35f);
     }
+    if (Set_AutoScrollStep(w)) moved = true;
+    step(w.autoA, w.autoScroll ? 1.0f : 0.0f, 0.3f);
     if (w.scrollY != w.scrollTarget) {
         float d = w.scrollTarget - w.scrollY;
         if (!anim || fabsf(d) < 0.5f) {
@@ -11249,6 +12412,12 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
     auto dipX = [&](LPARAM l) { return (float)(short)LOWORD(l) * 96.0f / w->dpi; };
     auto dipY = [&](LPARAM l) { return (float)(short)HIWORD(l) * 96.0f / w->dpi - kSetCapH; };
     switch (msg) {
+        case WM_APP_SETTINGS_RELOAD:
+            if (!w->saving) {
+                Set_LoadFields(*w);
+                Set_ApplyFrame(*w);
+            }
+            return 0;
         case WM_NCCALCSIZE:
             // No system title bar: keep the side and bottom frames, the client starts at the top edge.
             if (wParam && !w->render && !w->nativeTitle) {
@@ -11278,6 +12447,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_ACTIVATE:
             w->active = LOWORD(wParam) != WA_INACTIVE;
+            if (!w->active) Set_AutoScrollStop(*w);
             Set_Invalidate(*w);
             break;
         case WM_ERASEBKGND:
@@ -11348,6 +12518,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             }
             w->mouseX = x;
             w->mouseY = y;
+            if (w->autoScroll) {
+                Set_AutoScrollMove(*w, (wParam & MK_MBUTTON) != 0);
+                return 0;
+            }
             if (w->dragRail) {
                 Set_RailDragTo(*w, x - w->dragOff);
                 return 0;
@@ -11379,7 +12553,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             POINT pointer; GetCursorPos(&pointer);
             w->tracking = false;
             w->hover = SetHit();
-            if (!w->dragRail) w->mouseX = w->mouseY = -1;
+            if (!w->dragRail && !w->autoScroll) w->mouseX = w->mouseY = -1;
             Set_Invalidate(*w);
             return 0;
         }
@@ -11394,6 +12568,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             break;
         case WM_LBUTTONDOWN: {
             if (w->saving) return 0;
+            if (w->autoScroll) {  // A click ends autoscroll and does nothing else.
+                Set_AutoScrollStop(*w);
+                return 0;
+            }
             if (!w->render) SetFocus(hwnd);
             w->kbd = false;
             float x = dipX(lParam), y = dipY(lParam);
@@ -11456,6 +12634,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_LBUTTONUP:
         case WM_CAPTURECHANGED:
+            if (msg == WM_CAPTURECHANGED && w->autoScroll && (HWND)lParam != hwnd) Set_AutoScrollStop(*w);
             if (w->capDown) {
                 int b = w->capDown - 1;
                 w->capDown = 0;
@@ -11479,7 +12658,23 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 Set_Invalidate(*w);
             }
             return 0;
+        case WM_MBUTTONDOWN:
+            if (w->saving) return 0;
+            if (w->autoScroll) Set_AutoScrollStop(*w);  // Toggle mode: the next middle click ends it.
+            else Set_AutoScrollStart(*w, dipX(lParam), dipY(lParam));
+            return 0;
+        case WM_MBUTTONUP:
+            if (w->autoScroll && w->autoMoved) Set_AutoScrollStop(*w);  // Held and dragged: stop on release.
+            return 0;
+        case WM_RBUTTONDOWN:
+        case WM_XBUTTONDOWN:
+            if (w->autoScroll) {
+                Set_AutoScrollStop(*w);
+                return msg == WM_XBUTTONDOWN ? TRUE : 0;
+            }
+            break;
         case WM_MOUSEWHEEL: {
+            Set_AutoScrollStop(*w);
             if (w->openSel >= 0 && Set_In(w->dropRect, w->mouseX, w->mouseY)) {
                 int n = (int)w->fields[w->openSel].options.size(), vis = Set_DropVisible(*w);
                 int step = GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? -3 : 3;
@@ -11501,6 +12696,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
+            if (w->autoScroll) {  // Any key ends autoscroll; Escape does nothing else.
+                Set_AutoScrollStop(*w);
+                if (wParam == VK_ESCAPE) return 0;
+            }
             if (Set_OnKey(*w, (UINT)wParam)) return 0;
             // Without a system menu (glass title bar) Windows no longer turns Alt+F4 into a close.
             if (msg == WM_SYSKEYDOWN && wParam == VK_F4 && w->recording < 0) {
@@ -11520,6 +12719,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             return 0;
         case WM_DESTROY: {
             Set_StopRecording(*w);
+            RemovePropW(hwnd, kSetAutoProp);
             if (w->timer) KillTimer(hwnd, kSetTimerId);
             if (!w->render && w->normalRect.right > w->normalRect.left) {
                 const RECT& r = w->normalRect;
@@ -11640,6 +12840,7 @@ static bool Set_Create(bool render) {
         return false;
     }
     w->hwnd = hwnd;
+    SetPropW(hwnd, kSetAutoProp, (HANDLE)1);  // Seamless Autoscroll leaves this window to Set_AutoScroll*.
     w->dpi = g_setForceDpi ? g_setForceDpi : GetDpiForWindow(hwnd);
     ApplyDarkWindow(hwnd);
     COLORREF caption = RefFromRgb(mocha::crust), captionText = RefFromRgb(mocha::text);
@@ -11725,6 +12926,23 @@ void Settings_Close() {
 }
 
 bool Settings_IsOpen() { return g_setWin && g_setWin->hwnd && !g_setWin->render; }
+
+void Settings_Reload() {
+    if (Settings_IsOpen()) PostMessageW(g_setWin->hwnd, WM_APP_SETTINGS_RELOAD, 0, 0);
+}
+
+int Settings_TrayMenu(HWND owner, POINT pt, bool paused) {
+    std::vector<SetMenuItem> rows = {
+        Set_MenuRow(kCapMenuShow, L"\uEAC0", L"Show clips"),
+        Set_MenuRow(kCapMenuPause, L"\uEAD1", L"Pause saving copies", paused),
+        Set_MenuRow(kCapMenuSettings, L"\uEB51", L"Settings"),
+        Set_MenuSep(),
+        Set_MenuRow(kCapMenuDeleteAll, L"\uEA81", L"Delete all clips..."),
+    };
+    int cmd = Set_TrayMenu(owner, rows, &pt);
+    PostMessageW(owner, WM_NULL, 0, 0);
+    return cmd;
+}
 
 // ---- PNG rendering (harness) ----------------------------------------------------
 
@@ -11970,6 +13188,7 @@ void LoadSettings() {
     s.linesPerRow = Clamped(L"linesPerRow", 1, 10, 5);
     s.showPositions = Wh_GetIntSetting(L"showPositions") != 0;
     s.showThumbnails = Wh_GetIntSetting(L"showThumbnails") != 0;
+    s.showClipDetails = Wh_GetIntSetting(L"showClipDetails") != 0;
     s.closeOnFocusLoss = Wh_GetIntSetting(L"closeOnFocusLoss") != 0;
     s.alwaysOnTop = Wh_GetIntSetting(L"alwaysOnTop") != 0;
     s.confirmDelete = Wh_GetIntSetting(L"confirmDelete") != 0;
@@ -12006,6 +13225,8 @@ void LoadSettings() {
     s.multiSeparator = Choice(L"multiSeparator", {L"newline", L"space", L"none", L"comma"});
     s.searchMode = Choice(L"searchMode", {L"contains", L"allWords", L"startsWith"});
     s.searchFullText = Wh_GetIntSetting(L"searchFullText") != 0;
+    s.highlightMatches = Wh_GetIntSetting(L"highlightMatches") != 0;
+    s.restoreClipboard = Wh_GetIntSetting(L"restoreClipboard") != 0;
     s.trayIcon = Wh_GetIntSetting(L"trayIcon") != 0 && Wh_GetIntSetting(L"settingsTrayIcon") != 0;
     g_set = std::move(s);
 }
@@ -12056,6 +13277,7 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         case WM_SCM_SETTINGS_CHANGED:
             LoadSettings();
             ApplyAll();
+            Settings_Reload();
             return 0;
         case WM_SCM_QUIT:
             DestroyWindow(hwnd);
