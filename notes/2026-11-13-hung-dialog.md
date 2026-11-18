@@ -141,3 +141,24 @@ Owner: "the task is still not done; we need to make sure that it's consistent sy
 - Mishap 2:45 am: `syserr.py --help` has no argument parsing, so it showed one test box for its
   9 s timeout while the owner may have been at the PC. It closed itself. Do not pass flags to it.
 - Still to prove live: see-through csrss body with the layout intact, dark title on the Tk window.
+
+## 1.3.5 and 1.3.6 — finished, 18 Nov, 11:19 pm
+
+- 1.3.5 (patch129.py on top of 1.3.4, installed 11:04 pm): DWM-side only. The hooks ran and
+  reported success (`sysbox.applied=3847`: dark, backdrop and blur-behind all OK), but on screen
+  nothing changed: the csrss box body stayed black (sys129.png) and a plain Tk window kept a
+  light title (outsider-after.png). Changing DWM's records from inside dwm.exe does not show.
+- Probes from a normal process (darkprobe.py, boxprobe.py): `DwmSetWindowAttribute(20)` on the
+  Tk window turns its title dark at once (dp-c.png); `DwmEnableBlurBehindWindow` plus a
+  non-waiting RedrawWindow on the csrss box makes the body see-through (bp-b.png). So the old
+  comment "DWM ignores attribute calls on another process's window" holds only for calls made
+  from dwm.exe itself.
+- 1.3.6 (patch136.py): `darkall` in the tool process. An out-of-context EVENT_OBJECT_SHOW hook
+  plus a sweep at start: csrss #32770 boxes get dark + blur-behind (mode bits 1, 4); every other
+  visible captioned top-level window gets the dark title (bit 8). Nothing waits on the target.
+- Proof on 1.3.6: outsider-136.png dark (was LIGHT), sys136.png and sys136-late.png see-through
+  body with the layout intact, tray menu opens and closes (traymenu-136.png), Explorer start
+  unchanged, dwm not restarted.
+- Rollback: `scripts\2026-11-17-seamless-title-bars-1.2.9.ps1 -Action Rollback` (base 1.3.5);
+  Install-StagedMod backups -2304 (1.3.4) and -2319 (1.3.5). Mode bits off without reinstall:
+  `-Action Mode -Mode 3`.
