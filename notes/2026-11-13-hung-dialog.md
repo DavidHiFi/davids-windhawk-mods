@@ -162,3 +162,17 @@ Owner: "the task is still not done; we need to make sure that it's consistent sy
 - Rollback: `scripts\2026-11-17-seamless-title-bars-1.2.9.ps1 -Action Rollback` (base 1.3.5);
   Install-StagedMod backups -2304 (1.3.4) and -2319 (1.3.5). Mode bits off without reinstall:
   `-Action Mode -Mode 3`.
+
+## 1.3.7 — not-responding box material (2026-11-19, 4:00 am)
+
+- The dwm-owned "not responding" box can only be styled inside dwm (outside calls fail 0x80070006).
+  1.3.7 makes its backdrop a LocalStorage switch, `hungdlg.backdrop` (1-4, read per box, code default 3).
+- Real hung-window captures over white stripes: 3 acrylic = pale grey (143,145,147), white text hard to read;
+  2 Mica = dark (31,32,36), close to Mocha base; 4 Mica Alt = navy (6,9,28).
+- Picked Mica: `HKLM\SOFTWARE\Windhawk\Engine\ModsWritable\local@seamless-title-bars\LocalStorage`
+  `hungdlg.backdrop` REG_DWORD old: absent (3 in code) -> new: 2. Rollback: delete the value, or set 3.
+  Mica blurs the wallpaper, not the window right behind; acrylic over light apps was the only true
+  behind-blur and it went light.
+- Install: 1.2.9 script -Action Install, backup local@seamless-title-bars-20261119-0400.wh.cpp,
+  Explorer not restarted. Rollback of the build: same script -Action Rollback (back to 1.3.6).
+- Proof: work/2026-11-13-hung-dialog/hung137-t2.png (chosen), -t3, -t4, hung137-final.png.
