@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.2.1
+// @version         0.6.0
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -28,14 +28,39 @@ read later, like "Discord 4.05 pm.png".
 
 - Region snips on a frozen screen. The outside dims, the region stays bright,
   and its size shows beside it.
+- A drawing bar on the region screen, like ShareX's: arrows, boxes, circles,
+  lines, a pen, text, speech balloons, numbered steps, a highlighter, an
+  eraser, blur, pixelate, a magnifier and a spotlight. Colors, sizes, fills,
+  dashed or dotted lines, shadows and outlines. Every tool carries its own
+  options on a strip under the bar, and you can pick up anything you have
+  drawn and move it. Draw, then pick the region; the drawings go into the
+  snip. Undo, redo, copy, save and done sit on the bar.
+- Every drawing tool has ShareX's options in the settings: box corner radius
+  and fill, arrow heads, their style and curved arrows, text font, color and
+  outline, step labels from a b c to roman numerals, highlighter color, blur
+  and pixel strength, shadow color, distance and softness, outline color and
+  width, the bar's colors and its position. The bar remembers what you left
+  each tool on.
+- The snip keys are caught before any app sees them, so games, remote
+  desktops and apps that grab the keyboard cannot swallow them (a setting).
+- ShareX's camera click plays after each snip, or a sound file of your own.
+- Takes Win + Shift + S from the Windows Snipping Tool (a setting), so every
+  snip key opens Snipper.
 - Hover to snap to a window, or to a button, panel or list inside it, then
   click once.
 - A magnifier with a pixel grid follows the pointer. Press C to copy the color
   under it.
 - Snip the active window, the screen you are on, or every screen at once.
 - Every snip is copied and saved, in a folder per day, as PNG or JPG.
-- A small preview card after each snip: click it to open the picture,
-  right-click it to open the folder.
+- A small preview card after each snip that slides, fades or grows in, waits
+  while you hover it and glows blue to mauve. Pick its corner, size, timing
+  and what a click, right-click and middle click do.
+- History: every snip in your folder as a grid, newest first. Type to search,
+  double-click to open, drag one into a chat or folder, right-click to copy,
+  edit or delete it. Space previews the picked snip with the Peek mod.
+- Snip the last region again with one key, or snip a region after a 3, 5 or
+  10 second timer from the tray menu (a small countdown shows; click it to
+  cancel).
 - A tray icon: click it for settings, right-click it to snip from a menu.
 - Magic Pointer: shake the mouse and point at anything on screen to ask AI
   about it, search it with Google Lens or copy its text. See below.
@@ -48,11 +73,30 @@ read later, like "Discord 4.05 pm.png".
 | Shift + Print Screen | Snip every screen |
 | Alt + Print Screen | Snip the active window |
 | Ctrl + Print Screen | Snip the screen the mouse is on |
+| Ctrl + Alt + Shift + Print Screen | Snip the last region again |
+| Ctrl + Shift + H | Open the history |
+| Win + Shift + S | Snip a region (instead of the Snipping Tool) |
 
-On the frozen screen: drag to snip a region, click a highlighted window to snip
-it, Enter takes what is highlighted, arrow keys move the pointer one pixel (ten
-with Shift), the mouse wheel zooms the magnifier, C copies the color, right
-click or Esc backs out.
+On the frozen screen:
+
+| Key or button | What it does |
+|---|---|
+| Drag, or click a highlighted window | Snip that region |
+| Enter | Snip what is highlighted or picked |
+| ~ | Snip the screen under the pointer, drawings and all |
+| Mouse side buttons | Back: every screen. Forward: the screen you are on |
+| Tab | Swap between the region tool and the last drawing tool |
+| V | Pick up and move a drawing |
+| R E L A F T O N H W B P M S | Box, circle, line, arrow, pen, text, speech balloon, number, highlighter, eraser, blur, pixelate, magnifier, spotlight |
+| Middle click | Swap, the same as Tab |
+| [ and ] | Thinner or thicker pen |
+| Shift while drawing | Square, circle or 45 degree lines |
+| Ctrl + Z, Ctrl + Y | Undo, redo (a right click also undoes) |
+| Ctrl + C, Ctrl + S | Copy only, save only |
+| Arrow keys | Move the pointer one pixel (ten with Shift) |
+| Mouse wheel | Zoom the magnifier |
+| C | Copy the color under the pointer |
+| Right click or Esc | Back out |
 
 ## Magic Pointer
 
@@ -86,8 +130,8 @@ the apps you list in the settings.
 
 ## Good to know
 
-If ShareX is running, Snipper leaves these keys to it until it closes (you can
-turn that off). Windows' own "Print Screen opens Snipping Tool" switch must be
+Snipper uses the same keys as ShareX, so close ShareX (or turn on "Let ShareX
+keep its keys" while you still use it). Windows' own "Print Screen opens Snipping Tool" switch must be
 off for Print Screen to reach Snipper.
 
 ## Credits
@@ -115,9 +159,24 @@ restyled to match the rest of Snipper.
 - monitorHotkey: "Ctrl+PrintScreen"
   $name: "Snip the active screen"
   $description: "The screen the mouse is on. Click the box and press the keys. Leave it empty to turn it off."
-- stepAside: true
+- repeatHotkey: "Ctrl+Alt+Shift+PrintScreen"
+  $name: "Snip the last region again"
+  $description: "Takes the same spot as your last region snip, straight away. Handy for a before and after. Click the box and press the keys. Leave it empty to turn it off."
+- historyHotkey: "Ctrl+Shift+H"
+  $name: "Open the history"
+  $description: "Every snip in your folder, newest first. Type to search, drag one into a chat, right-click to copy or delete it. Press the key again to put it away. Click the box and press the keys. Leave it empty to turn it off."
+- takeOverSnippingKey: true
+  $name: "Win + Shift + S opens Snipper"
+  $description: "Takes the key from the Windows Snipping Tool, so it opens the region screen here instead. Off, the key goes back to Windows."
+- stepAside: false
   $name: "Let ShareX keep its keys"
-  $description: "While ShareX is running, Snipper leaves these keys to it and takes them over once ShareX closes. The tray menu always works."
+  $description: "Only if you still run ShareX: while it is open, Snipper leaves these keys to it and takes them back once it closes. The tray menu always works."
+- catchKeys: true
+  $name: "Keys work over every window"
+  $description: "Catches the snip keys before any app sees them, so games, remote desktops and apps that grab the keyboard cannot block them. Off, Windows hands the keys out and some windows can swallow them."
+- histPeek: true
+  $name: "Space previews with Peek"
+  $description: "In the history, Space shows the picked snip in Peek, and the arrow keys step through the others. Needs the Peek mod turned on; without it, the picture opens instead."
 - copyToClipboard: true
   $name: "Copy to the clipboard"
   $description: "Every snip is ready to paste."
@@ -133,9 +192,12 @@ restyled to match the rest of Snipper.
 - captureCursor: true
   $name: "Include the mouse pointer"
   $description: "Draws the pointer into full screen, screen and window snips, as ShareX did."
-- playSound: false
-  $name: "Play a sound"
-  $description: "A short camera click after each snip."
+- playSound: true
+  $name: "Play the capture sound"
+  $description: "ShareX's camera click after each snip."
+- soundFile: ""
+  $name: "Sound file"
+  $description: "Optional: a .wav file to play instead of the camera click. Leave it empty for the click."
 - saveFolder: "G:\\Gallery"
   $name: "Folder"
   $description: "Where pictures are saved. The folder is made if it is missing."
@@ -170,6 +232,24 @@ restyled to match the rest of Snipper.
 - crosshairLines: false
   $name: "Crosshair lines"
   $description: "Thin lines across the screen through the pointer, for lining up edges."
+- drawBar: true
+  $name: "Drawing bar"
+  $description: "A bar at the top of the region screen with arrows, boxes, text, numbers, blur and more. Draw first, then pick the region; the drawings go into the snip."
+- keepRegionOpen: false
+  $name: "Draw after picking"
+  $description: "Picking a region keeps the screen up so you can draw on it. Press Enter, double-click it or use the bar to snip. Off, picking a region snips it straight away."
+- drawColor: "#F38BA8"
+  $name: "Pen color"
+  $description: "In hexadecimal. The color the drawing tools start with."
+- drawSize: 4
+  $name: "Pen size"
+  $description: "1 to 20 (Suggested: 4). The [ and ] keys change it too."
+- drawShadow: true
+  $name: "Shadows"
+  $description: "A soft shadow under each drawing, as ShareX has."
+- drawOutline: false
+  $name: "Outlines"
+  $description: "A thin contrasting edge around each drawing, so it shows on any background."
 - magnifier: true
   $name: "Magnifier"
   $description: "A zoomed view of the pixels under the pointer."
@@ -324,6 +404,227 @@ restyled to match the rest of Snipper.
 - pointerBrowserPath: ""
   $name: "Other browser program"
   $description: "Only for Other: the full path of the browser program."
+- toastPosition: "br"
+  $name: "Corner"
+  $description: "Which corner of the screen the card shows in."
+  $options:
+  - br: "Bottom right"
+  - bl: "Bottom left"
+  - tr: "Top right"
+  - tl: "Top left"
+- toastSize: 100
+  $name: "Card size (%)"
+  $description: "75 to 160 (Suggested: 100)."
+- toastShowText: true
+  $name: "Show the file name"
+  $description: "The name and size under the picture."
+- toastPauseOnHover: true
+  $name: "Stay while hovered"
+  $description: "The card waits while the mouse is on it, and starts counting again when it leaves."
+- toastAnimation: "slide"
+  $name: "Animation"
+  $description: "How the card comes in and goes away."
+  $options:
+  - slide: "Slide in from the edge"
+  - fade: "Fade"
+  - grow: "Grow from the corner"
+  - none: "None"
+- toastAnimationMs: 220
+  $name: "Animation time (ms)"
+  $description: "80 to 800 (Suggested: 220)."
+- toastGlass: true
+  $name: "Glass"
+  $description: "Frosted glass behind the card. Off, it is solid."
+- toastHoverGlow: true
+  $name: "Hover edge"
+  $description: "The blue to mauve edge when the mouse is on the card."
+- toastClick: "open"
+  $name: "Click"
+  $description: "What a click on the card does."
+  $options:
+  - open: "Open the picture"
+  - folder: "Show it in its folder"
+  - copy: "Copy it again"
+  - edit: "Draw on it"
+  - close: "Close the card"
+- toastRightClick: "folder"
+  $name: "Right-click"
+  $description: "What a right-click on the card does."
+  $options:
+  - folder: "Show it in its folder"
+  - open: "Open the picture"
+  - copy: "Copy it again"
+  - edit: "Draw on it"
+  - close: "Close the card"
+- toastMiddleClick: "copy"
+  $name: "Middle click"
+  $description: "What a middle click on the card does."
+  $options:
+  - copy: "Copy it again"
+  - open: "Open the picture"
+  - folder: "Show it in its folder"
+  - edit: "Draw on it"
+  - close: "Close the card"
+- barPosition: "top"
+  $name: "Bar position"
+  $description: "Where the drawing bar sits on the screen."
+  $options:
+  - top: "Top"
+  - bottom: "Bottom"
+- barColors: "#F38BA8 #FAB387 #F9E2AF #A6E3A1 #89B4FA #CBA6F7 #FFFFFF #11111B"
+  $name: "Bar colors"
+  $description: "The 8 color dots on the bar, in hexadecimal, split by spaces. Missing ones keep the usual color."
+- lineStyle: "solid"
+  $name: "Line style"
+  $description: "For boxes, circles, lines, arrows and the pen. The bar changes it too."
+  $options:
+  - solid: "Solid"
+  - dash: "Dashed"
+  - dot: "Dotted"
+- rememberBar: true
+  $name: "Remember the bar"
+  $description: "Each tool keeps its color, size and options between snips, like the last time you used it."
+- boxCornerRadius: 6
+  $name: "Box corner radius"
+  $description: "0 to 60 (Suggested: 6). 0 gives square corners."
+- boxFill: "none"
+  $name: "Fill"
+  $description: "The inside of boxes and circles. The bar changes it too."
+  $options:
+  - none: "None"
+  - shade: "The pen color, see-through"
+  - color: "The fill color below"
+- fillColor: "#1E1E2E"
+  $name: "Fill color"
+  $description: "In hexadecimal. Used when Fill is set to the fill color."
+- fillOpacity: 25
+  $name: "Fill opacity (%)"
+  $description: "5 to 100 (Suggested: 25)."
+- arrowHeads: "end"
+  $name: "Heads"
+  $description: "Which ends of the arrow get a head."
+  $options:
+  - end: "At the end"
+  - start: "At the start"
+  - both: "Both ends"
+- arrowStyle: "filled"
+  $name: "Head style"
+  $description: "The shape of the arrow head."
+  $options:
+  - filled: "Filled triangle"
+  - notched: "Notched triangle"
+  - open: "Open triangle"
+  - line: "Two lines"
+- arrowHeadSize: 100
+  $name: "Head size (%)"
+  $description: "50 to 250 (Suggested: 100)."
+- arrowCurved: false
+  $name: "Curved arrow"
+  $description: "The arrow bows along the drag instead of running straight."
+- textFont: "FiraCode Nerd Font"
+  $name: "Font"
+  $description: "The name of an installed font. If it is missing, Segoe UI is used."
+- textSize: 100
+  $name: "Text size (%)"
+  $description: "50 to 300 (Suggested: 100). Grows with the pen size too."
+- textBold: true
+  $name: "Bold"
+  $description: "Thick letters, easy to read on a busy picture."
+- textItalic: false
+  $name: "Italic"
+  $description: "Slanted letters."
+- textBackground: "none"
+  $name: "Background"
+  $description: "A box behind the text makes it easy to read on any picture."
+  $options:
+  - none: "None, with a shadow or outline"
+  - pen: "The pen color"
+  - dark: "Dark"
+- textColor: "#FFFFFF"
+  $name: "Text color"
+  $description: "In hexadecimal. The color of the words you type on the snip."
+- textOutline: true
+  $name: "Outline"
+  $description: "A thin edge around the letters, in a color that stands out, so text stays readable on any picture."
+- stepStyle: "numbers"
+  $name: "Step labels"
+  $description: "What the numbered steps count with."
+  $options:
+  - numbers: "1, 2, 3"
+  - letters: "A, B, C"
+  - lettersLower: "a, b, c"
+  - roman: "I, II, III"
+  - romanLower: "i, ii, iii"
+- stepStart: 1
+  $name: "Start at"
+  $description: "1 to 99 (Suggested: 1)."
+- stepSize: 100
+  $name: "Step size (%)"
+  $description: "50 to 300 (Suggested: 100)."
+- stepColor: "#F38BA8"
+  $name: "Step color"
+  $description: "In hexadecimal. The color of the numbered circles."
+- highlighterUsesPen: false
+  $name: "Use the pen color"
+  $description: "Off, the highlighter uses its own color below."
+- highlighterColor: "#F9E2AF"
+  $name: "Highlighter color"
+  $description: "In hexadecimal."
+- highlighterOpacity: 38
+  $name: "Highlighter opacity (%)"
+  $description: "10 to 80 (Suggested: 38)."
+- blurStrength: 12
+  $name: "Blur strength"
+  $description: "2 to 40 (Suggested: 12)."
+- pixelSize: 12
+  $name: "Pixel size"
+  $description: "3 to 60 (Suggested: 12)."
+- shadowColor: "#000000"
+  $name: "Shadow color"
+  $description: "In hexadecimal."
+- shadowOpacity: 45
+  $name: "Shadow opacity (%)"
+  $description: "5 to 100 (Suggested: 45)."
+- shadowOffset: 3
+  $name: "Shadow distance"
+  $description: "0 to 20 (Suggested: 3)."
+- shadowSoftness: 3
+  $name: "Shadow softness"
+  $description: "1 to 8 (Suggested: 3). 1 is a hard shadow."
+- outlineColor: "contrast"
+  $name: "Outline color"
+  $description: "The edge drawn around each drawing when Outlines is on."
+  $options:
+  - contrast: "Light or dark, whichever stands out"
+  - white: "White"
+  - black: "Black"
+- outlineWidth: 3
+  $name: "Outline width"
+  $description: "1 to 10 (Suggested: 3)."
+- magnifyZoom: "2"
+  $name: "Magnifier zoom"
+  $description: "How big the magnifier tool shows the spot under it."
+  $options:
+  - "1.5": "1.5x"
+  - 2: "2x"
+  - 3: "3x"
+  - 4: "4x"
+  - 6: "6x"
+- magnifyShape: "box"
+  $name: "Magnifier shape"
+  $description: "The outline drawn around the magnified spot."
+  $options:
+  - box: "Box"
+  - circle: "Circle"
+- spotlightShape: "box"
+  $name: "Spotlight shape"
+  $description: "The outline drawn around the spot that stays bright."
+  $options:
+  - box: "Box"
+  - circle: "Circle"
+- spotlightDim: 60
+  $name: "Spotlight dim (%)"
+  $description: "30 to 90 (Suggested: 60). How dark everything around the spot gets."
 */
 // ==/WindhawkModSettings==
 
@@ -432,6 +733,7 @@ struct Ptr {
         return &p;
     }
     T* operator->() const { return p; }
+    T* get() const { return p; }
     explicit operator bool() const { return p != nullptr; }
 };
 
@@ -559,15 +861,22 @@ std::wstring Hotkey_Format(UINT mods, UINT vk) {
 // Settings
 // ---------------------------------------------------------------------------
 
-enum { HK_REGION, HK_FULL, HK_WINDOW, HK_MONITOR, HK_COUNT };
+enum { HK_REGION, HK_FULL, HK_WINDOW, HK_MONITOR, HK_REPEAT, HK_HISTORY, HK_COUNT };
 static const PCWSTR kHotkeyKeys[HK_COUNT] = {L"regionHotkey", L"fullscreenHotkey", L"windowHotkey",
-                                             L"monitorHotkey"};
+                                             L"monitorHotkey", L"repeatHotkey",     L"historyHotkey"};
 
 struct Config {
     std::wstring hotkeys[HK_COUNT];
     bool stepAside = true;
-    bool copy = true, save = true, toast = true, cursor = true, sound = false;
+    bool catchKeys = true;
+    bool histPeek = true;
+    bool copy = true, save = true, toast = true, cursor = true, sound = true;
+    std::wstring soundFile;
     int toastSeconds = 3;
+    // The preview card.
+    std::wstring toastPos = L"br", toastAnim = L"slide", toastClick = L"open", toastRight = L"folder", toastMiddle = L"copy";
+    int toastAnimMs = 220, toastScale = 100;
+    bool toastGlass = true, toastGlow = true, toastText = true, toastPause = true;
     std::wstring folder = L"G:\\Gallery", subfolder = L"day", format = L"png";
     int jpgQuality = 92;
     int dim = 45;
@@ -576,6 +885,37 @@ struct Config {
     int magPixels = 15, magZoom = 10;
     COLORREF accent1 = RGB(0x89, 0xB4, 0xFA), accent2 = RGB(0xCB, 0xA6, 0xF7);
     bool trayIcon = true;
+    bool takeOverWss = true;
+    bool drawBar = true, keepRegionOpen = false, drawShadow = true, drawOutline = false;
+    COLORREF drawColor = RGB(0xF3, 0x8B, 0xA8);
+    int drawSize = 4;
+    // The drawing tools, ShareX's options.
+    std::wstring barPos = L"top";
+    COLORREF palette[8] = {RGB(0xF3, 0x8B, 0xA8), RGB(0xFA, 0xB3, 0x87), RGB(0xF9, 0xE2, 0xAF), RGB(0xA6, 0xE3, 0xA1),
+                           RGB(0x89, 0xB4, 0xFA), RGB(0xCB, 0xA6, 0xF7), RGB(0xFF, 0xFF, 0xFF), RGB(0x11, 0x11, 0x1B)};
+    int boxRadius = 6;
+    std::wstring fill = L"none";  // none, shade (the pen color, see-through), color (fillColor)
+    COLORREF fillColor = RGB(0x1E, 0x1E, 0x2E);
+    int fillOpacity = 25;
+    std::wstring lineStyle = L"solid", arrowHeads = L"end", arrowStyle = L"filled";
+    int arrowSize = 100;
+    std::wstring textFont = L"FiraCode Nerd Font", textBox = L"none";
+    bool textBold = true, textItalic = false;
+    int textScale = 100;
+    std::wstring stepStyle = L"numbers";
+    int stepStart = 1, stepScale = 100;
+    COLORREF markColor = RGB(0xF9, 0xE2, 0xAF);
+    bool markPen = false;
+    int markOpacity = 38;
+    int blurStrength = 12, pixelSize = 12;
+    COLORREF shadowColor = RGB(0, 0, 0);
+    int shadowOpacity = 45, shadowOffset = 3, shadowSoftness = 3;
+    std::wstring outlineColor = L"contrast";
+    int outlineWidth = 3;
+    COLORREF textColor = RGB(0xFF, 0xFF, 0xFF), stepColor = RGB(0xF3, 0x8B, 0xA8);
+    bool textOutline = true, arrowCurved = false, rememberBar = true;
+    std::wstring magnifyZoom = L"2", magnifyShape = L"box", spotlightShape = L"box";
+    int spotlightDim = 60;
 };
 
 static Config g_cfg;
@@ -590,6 +930,22 @@ static void LoadSettings() {
     c.toastSeconds = Clamp(Wh_GetIntSetting(L"toastSeconds"), 1, 10);
     c.cursor = Wh_GetIntSetting(L"captureCursor") != 0;
     c.sound = Wh_GetIntSetting(L"playSound") != 0;
+    c.soundFile = Trim(ReadStr(L"soundFile"));
+    while (c.soundFile.size() >= 2 && c.soundFile.front() == L'"' && c.soundFile.back() == L'"')
+        c.soundFile = c.soundFile.substr(1, c.soundFile.size() - 2);
+    c.catchKeys = Wh_GetIntSetting(L"catchKeys") != 0;
+    c.histPeek = Wh_GetIntSetting(L"histPeek") != 0;
+    c.toastPos = OneOf(ReadStr(L"toastPosition"), {L"br", L"bl", L"tr", L"tl"});
+    c.toastAnim = OneOf(ReadStr(L"toastAnimation"), {L"slide", L"fade", L"grow", L"none"});
+    c.toastAnimMs = Clamp(Wh_GetIntSetting(L"toastAnimationMs"), 80, 800);
+    c.toastScale = Clamp(Wh_GetIntSetting(L"toastSize"), 75, 160);
+    c.toastGlass = Wh_GetIntSetting(L"toastGlass") != 0;
+    c.toastGlow = Wh_GetIntSetting(L"toastHoverGlow") != 0;
+    c.toastText = Wh_GetIntSetting(L"toastShowText") != 0;
+    c.toastPause = Wh_GetIntSetting(L"toastPauseOnHover") != 0;
+    c.toastClick = OneOf(ReadStr(L"toastClick"), {L"open", L"folder", L"copy", L"edit", L"close"});
+    c.toastRight = OneOf(ReadStr(L"toastRightClick"), {L"folder", L"open", L"copy", L"edit", L"close"});
+    c.toastMiddle = OneOf(ReadStr(L"toastMiddleClick"), {L"copy", L"open", L"folder", L"edit", L"close"});
     c.folder = Trim(ReadStr(L"saveFolder"));
     while (c.folder.size() >= 2 && c.folder.front() == L'"' && c.folder.back() == L'"')
         c.folder = c.folder.substr(1, c.folder.size() - 2);
@@ -611,6 +967,64 @@ static void LoadSettings() {
     if (ParseHex(ReadStr(L"accentFrom"), col)) c.accent1 = col;
     if (ParseHex(ReadStr(L"accentTo"), col)) c.accent2 = col;
     c.trayIcon = Wh_GetIntSetting(L"settingsTrayIcon") != 0;
+    c.takeOverWss = Wh_GetIntSetting(L"takeOverSnippingKey") != 0;
+    c.drawBar = Wh_GetIntSetting(L"drawBar") != 0;
+    c.keepRegionOpen = Wh_GetIntSetting(L"keepRegionOpen") != 0;
+    if (ParseHex(ReadStr(L"drawColor"), col)) c.drawColor = col;
+    c.drawSize = Clamp(Wh_GetIntSetting(L"drawSize"), 1, 20);
+    c.drawShadow = Wh_GetIntSetting(L"drawShadow") != 0;
+    c.drawOutline = Wh_GetIntSetting(L"drawOutline") != 0;
+    c.barPos = OneOf(ReadStr(L"barPosition"), {L"top", L"bottom"});
+    {
+        // Up to 8 hex colors split by spaces, commas or semicolons; missing ones keep the default.
+        std::wstring pal = ReadStr(L"barColors");
+        int n = 0;
+        size_t i = 0;
+        while (i < pal.size() && n < 8) {
+            while (i < pal.size() && (pal[i] == L' ' || pal[i] == L',' || pal[i] == L';')) i++;
+            size_t j = i;
+            while (j < pal.size() && pal[j] != L' ' && pal[j] != L',' && pal[j] != L';') j++;
+            if (j > i && ParseHex(pal.substr(i, j - i), col)) c.palette[n++] = col;
+            i = j;
+        }
+    }
+    c.boxRadius = Clamp(Wh_GetIntSetting(L"boxCornerRadius"), 0, 60);
+    c.fill = OneOf(ReadStr(L"boxFill"), {L"none", L"shade", L"color"});
+    if (ParseHex(ReadStr(L"fillColor"), col)) c.fillColor = col;
+    c.fillOpacity = Clamp(Wh_GetIntSetting(L"fillOpacity"), 5, 100);
+    c.lineStyle = OneOf(ReadStr(L"lineStyle"), {L"solid", L"dash", L"dot"});
+    c.arrowHeads = OneOf(ReadStr(L"arrowHeads"), {L"end", L"start", L"both"});
+    c.arrowStyle = OneOf(ReadStr(L"arrowStyle"), {L"filled", L"notched", L"open", L"line"});
+    c.arrowSize = Clamp(Wh_GetIntSetting(L"arrowHeadSize"), 50, 250);
+    c.textFont = Trim(ReadStr(L"textFont"));
+    if (c.textFont.empty()) c.textFont = L"FiraCode Nerd Font";
+    c.textBold = Wh_GetIntSetting(L"textBold") != 0;
+    c.textItalic = Wh_GetIntSetting(L"textItalic") != 0;
+    c.textScale = Clamp(Wh_GetIntSetting(L"textSize"), 50, 300);
+    c.textBox = OneOf(ReadStr(L"textBackground"), {L"none", L"pen", L"dark"});
+    c.stepStyle = OneOf(ReadStr(L"stepStyle"), {L"numbers", L"letters", L"lettersLower", L"roman", L"romanLower"});
+    c.stepStart = Clamp(Wh_GetIntSetting(L"stepStart"), 1, 99);
+    c.stepScale = Clamp(Wh_GetIntSetting(L"stepSize"), 50, 300);
+    c.markPen = Wh_GetIntSetting(L"highlighterUsesPen") != 0;
+    if (ParseHex(ReadStr(L"highlighterColor"), col)) c.markColor = col;
+    c.markOpacity = Clamp(Wh_GetIntSetting(L"highlighterOpacity"), 10, 80);
+    c.blurStrength = Clamp(Wh_GetIntSetting(L"blurStrength"), 2, 40);
+    c.pixelSize = Clamp(Wh_GetIntSetting(L"pixelSize"), 3, 60);
+    if (ParseHex(ReadStr(L"shadowColor"), col)) c.shadowColor = col;
+    c.shadowOpacity = Clamp(Wh_GetIntSetting(L"shadowOpacity"), 5, 100);
+    c.shadowOffset = Clamp(Wh_GetIntSetting(L"shadowOffset"), 0, 20);
+    c.shadowSoftness = Clamp(Wh_GetIntSetting(L"shadowSoftness"), 1, 8);
+    c.outlineColor = OneOf(ReadStr(L"outlineColor"), {L"contrast", L"white", L"black"});
+    c.outlineWidth = Clamp(Wh_GetIntSetting(L"outlineWidth"), 1, 10);
+    if (ParseHex(ReadStr(L"textColor"), col)) c.textColor = col;
+    c.textOutline = Wh_GetIntSetting(L"textOutline") != 0;
+    if (ParseHex(ReadStr(L"stepColor"), col)) c.stepColor = col;
+    c.arrowCurved = Wh_GetIntSetting(L"arrowCurved") != 0;
+    c.magnifyZoom = OneOf(ReadStr(L"magnifyZoom"), {L"2", L"1.5", L"3", L"4", L"6"});
+    c.magnifyShape = OneOf(ReadStr(L"magnifyShape"), {L"box", L"circle"});
+    c.spotlightDim = Clamp(Wh_GetIntSetting(L"spotlightDim"), 30, 90);
+    c.spotlightShape = OneOf(ReadStr(L"spotlightShape"), {L"box", L"circle"});
+    c.rememberBar = Wh_GetIntSetting(L"rememberBar") != 0;
     g_cfg = c;
 }
 
@@ -859,6 +1273,7 @@ enum : UINT {
     WM_SNP_TRAY = WM_APP + 45,
     WM_SNP_SETTINGS,
     WM_SNP_SAVED,
+    WM_SNP_HOOKKEY,  // The key guard caught a snip key: wParam is the WM_HOTKEY id.
 };
 
 constexpr UINT kTrayId = 1;
@@ -871,9 +1286,11 @@ static HINSTANCE g_inst;
 static UINT g_taskbarCreated;
 static bool g_trayAdded;
 static HICON g_trayIcon;
-static bool g_hotkeyOn[HK_COUNT];
+static bool g_hotkeyOn[HK_COUNT + 1];  // The last one is Win + Shift + S.
+static ULONGLONG g_hookFired[HK_COUNT + 2];  // When the key guard last fired each id, to drop the hotkey twin.
 static bool g_steppedAside;
 static int g_deferredMode = -1;
+constexpr int kDeferredRepeat = 100;  // g_deferredMode: snip the last region again.
 static std::atomic<int> g_saveThreads{0};
 static std::atomic<bool> g_uiOk{false};  // The UI thread started fully (window, D2D, DirectWrite).
 
@@ -946,7 +1363,8 @@ static void BringToFront(HWND h) {
     SetFocus(h);
 }
 
-static void Deliver(Shot&& shot, const std::wstring& app);
+// how: 0 follows the settings, 1 copies only, 2 saves only (the drawing bar's Copy and Save).
+static void Deliver(Shot&& shot, const std::wstring& app, int how = 0);
 
 // ---------------------------------------------------------------------------
 // Snap targets: every visible window, top first, and the controls inside it.
@@ -983,6 +1401,9 @@ struct Overlay {
     int zoom = 10;
     DWORD copiedAt = 0;
     std::wstring copiedHex;
+    int press = 0;  // What the left button went down on: 1 the region, 2 a drawing, 3 the bar.
+    bool haveKept = false;  // "Draw after picking": the region stays up until Done, Copy or Save.
+    RECT kept{};
 };
 static Overlay g_ov;
 
@@ -1073,7 +1494,7 @@ static bool SnapAt(POINT p, RECT& out, HWND& win) {
 // The region screen
 // ---------------------------------------------------------------------------
 
-static void OvReleaseTarget() {
+static void OvReleaseTarget() {  // The drawing bar's glass is made on this target too: mk::ReleaseTarget goes with it.
     Overlay& o = g_ov;
     if (o.brush) o.brush->Release();
     if (o.bmp) o.bmp->Release();
@@ -1108,6 +1529,10 @@ static bool OvHighlight(RECT& r, bool& isDrag) {
     isDrag = o.dragging;
     if (o.dragging) {
         r = o.sel;
+        return true;
+    }
+    if (o.haveKept) {
+        r = o.kept;
         return true;
     }
     if (o.haveHover) {
@@ -1218,6 +1643,2256 @@ static void OvDrawMagnifier(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
                  D2D1::RectF(swatch.right + 7 * ui, info.top, info.right - 6 * ui, info.bottom), b, D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }
 
+// ---------------------------------------------------------------------------
+// Drawing on the frozen screen: the bar, the options strip under it, the tools, and burning the drawings
+// into the snip. Then Win + Shift + S: a key hook that hands Windows' Snipping Tool key to Snipper.
+// Inlined into core.cpp just before the region screen is drawn.
+// ---------------------------------------------------------------------------
+
+static float LiveCornerRadius();
+static IDWriteTextFormat* CenterFont(float size, bool bold, bool icons = false);
+static void DrawStr(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const std::wstring& s, IDWriteTextFormat* f,
+                    D2D1_RECT_F r, D2D1_COLOR_F c);
+
+namespace mk {
+
+// ShareX's tools, in ShareX's order.
+enum Tool {
+    T_REGION, T_SELECT, T_RECT, T_ELLIPSE, T_LINE, T_ARROW, T_PEN, T_TEXT, T_BALLOON, T_STEP, T_MARK, T_ERASER,
+    T_BLUR, T_PIXEL, T_MAGNIFY, T_SPOT, T_COUNT
+};
+
+struct ToolInfo {
+    const wchar_t* name;
+    UINT key;
+};
+static const ToolInfo kTools[T_COUNT] = {
+    {L"Region", VK_TAB},         {L"Select and move", 'V'}, {L"Box", 'R'},    {L"Circle", 'E'},      {L"Line", 'L'},
+    {L"Arrow", 'A'},             {L"Pen", 'F'},             {L"Text", 'T'},   {L"Speech balloon", 'O'}, {L"Number", 'N'},
+    {L"Highlighter", 'H'},       {L"Eraser", 'W'},          {L"Blur", 'B'},   {L"Pixelate", 'P'},    {L"Magnifier", 'M'},
+    {L"Spotlight", 'S'}};
+
+constexpr int kColorCount = 8;
+static const UINT32 kColors[kColorCount] = {0xF38BA8, 0xFAB387, 0xF9E2AF, 0xA6E3A1, 0x89B4FA, 0xCBA6F7, 0xFFFFFF, 0x11111B};
+static const wchar_t* const kColorNames[kColorCount] = {L"Red", L"Peach", L"Yellow", L"Green", L"Blue", L"Mauve", L"White", L"Black"};
+constexpr UINT_PTR kCaretTimer = 7;
+
+// The steps each option walks through.
+static const float kWidths[] = {1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24};
+static const float kTextPx[] = {12, 14, 16, 18, 20, 24, 28, 32, 40, 48, 64, 72, 96};
+static const float kStepR[] = {10, 12, 14, 17, 20, 24, 28, 34, 40, 48};
+static const float kCorners[] = {0, 2, 4, 6, 8, 12, 16, 24, 32};
+static const float kHeadK[] = {0.5f, 0.75f, 1, 1.25f, 1.5f, 2, 2.5f, 3};
+static const float kFillA[] = {0.1f, 0.25f, 0.4f, 0.6f, 0.8f, 1};
+static const float kMarkA[] = {0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.8f};
+static const float kDimA[] = {0.3f, 0.45f, 0.6f, 0.75f, 0.9f};
+static const float kStrength[] = {4, 6, 8, 12, 16, 24, 32, 48};
+static const float kZoom[] = {1.5f, 2, 3, 4, 6};
+#define MK_LIST(a) a, (int)(sizeof(a) / sizeof(a[0]))
+
+// One tool's options. Every field is 4 bytes, so the struct has no padding and can be hashed and stored as is.
+struct Opts {
+    UINT32 color, fillColor;
+    float size;    // Line width; text size in px for text and balloons; the circle's radius for numbers.
+    float alpha;   // Fill opacity for boxes and circles, the highlighter's opacity, the spotlight's dim.
+    float radius;  // Box corners, also the magnifier's and spotlight's box.
+    float arrowK, zoom;
+    int dash, fill, heads, arrowStyle, curve, textBox, stepStyle, strength;
+    int shadow, outline, bold, italic, ellipse;
+};
+// heads: 0 end, 1 start, 2 both. arrowStyle: 0 solid, 1 notched, 2 open, 3 two lines. fill: 0 none, 1 the pen
+// color, 2 its own color. textBox: 0 none, 1 the pen color, 2 dark. stepStyle: 1 2 3, A B C, a b c, I II III, i ii iii.
+
+struct Shape {
+    int tool = T_RECT;
+    Opts o{};
+    std::vector<D2D1_POINT_2F> pts;  // Two corners, or the pen's path. Text uses the first; a balloon's second is its tail.
+    std::wstring text;
+    int number = 0;     // A number's value.
+    UINT32 sample = 0;  // The eraser's color, picked up from the screen.
+};
+
+// The look that stays the same for every tool. Set by ApplySettings.
+struct Style {
+    UINT32 palette[kColorCount] = {0xF38BA8, 0xFAB387, 0xF9E2AF, 0xA6E3A1, 0x89B4FA, 0xCBA6F7, 0xFFFFFF, 0x11111B};
+    bool bottom = false, remember = true;
+    UINT32 fillColor = 0x1E1E2E;
+    std::wstring font = L"FiraCode Nerd Font";
+    int stepStart = 1;
+    UINT32 shadowColor = 0;
+    float shadowAlpha = 0.45f, shadowOff = 3;
+    int shadowSoft = 3;
+    int outlineColor = 0;  // 0 contrast, 1 white, 2 black.
+    float outlineW = 3;
+};
+static Style g_st;
+
+enum BtnKind { B_TOOL, B_COLOR, B_SIZE, B_SHADOW, B_OUTLINE, B_UNDO, B_REDO, B_DONE, B_COPY, B_SAVE, B_CLOSE, B_OPT };
+enum OptKind {
+    O_CORNERS, O_LINE, O_FILL, O_FILLCOLOR, O_ALPHA, O_HEADS, O_HEADSTYLE, O_HEADSIZE, O_CURVE, O_BOLD, O_ITALIC,
+    O_TEXTBOX, O_LABELS, O_NEXT, O_STRENGTH, O_ZOOM, O_SHAPE
+};
+struct Btn {
+    int kind, arg;
+    D2D1_RECT_F r;
+};
+
+// What a bar button or a key asks the region screen to do.
+enum Action { A_NONE, A_REDRAW, A_DONE, A_COPY, A_SAVE, A_CLOSE };
+
+struct State {
+    bool on = true;  // The bar and tools. Off, the screen is a plain region picker.
+    int tool = T_REGION, lastDraw = T_ARROW;
+    Opts opt[T_COUNT]{}, def[T_COUNT]{};  // Each tool's options now, and as the settings set them.
+    UINT32 stamp = 0;                     // A hash of def: when the settings change, the remembered options reset.
+    std::vector<Shape> shapes;
+    std::vector<std::vector<Shape>> hist, fut;  // Undo and redo: whole drawings, capped at 100.
+    bool drawing = false;
+    Shape cur;
+    int typing = -1;  // The text or balloon taking keys.
+    bool typingNew = false, typingDirty = false, caretOn = true;
+    int pick = -1;  // Select: the shape picked.
+    bool moving = false, moved = false;
+    D2D1_POINT_2F moveFrom{};
+    int stepPin = 0;  // The next number, when set on the strip; 0 counts on from the highest.
+    std::vector<Btn> btns;  // The bar's buttons, then the strip's options from nMain on.
+    size_t nMain = 0;
+    std::vector<float> seps;
+    D2D1_RECT_F bar{}, strip{};
+    float ui = 1, rad = 16;
+    RECT mon{}, avoid{};
+    bool laidOut = false, avoiding = false;
+    int hot = -1, pressed = -1;
+    POINT lastHover{-1, -1};
+    ID2D1Bitmap* frost = nullptr;  // The frozen screen behind the bar and strip, blurred.
+    D2D1_RECT_F frostRect{};
+    // Blur and pixelate change the frozen pixels; the untouched screen is kept so undo can bring them back.
+    std::vector<uint32_t> base;
+    std::vector<RECT> applied;
+};
+static State g;
+
+struct Strokes {
+    ID2D1StrokeStyle* round = nullptr;
+    ID2D1StrokeStyle* dash = nullptr;
+    ID2D1StrokeStyle* inkDash = nullptr;
+    ID2D1StrokeStyle* inkDot = nullptr;
+};
+static Strokes g_strokes;
+
+static ID2D1StrokeStyle* Round() {
+    if (!g_strokes.round && g_d2d)
+        g_d2d->CreateStrokeStyle(D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND,
+                                                             D2D1_LINE_JOIN_ROUND),
+                                 nullptr, 0, &g_strokes.round);
+    return g_strokes.round;
+}
+
+static ID2D1StrokeStyle* Dash() {
+    if (!g_strokes.dash && g_d2d)
+        g_d2d->CreateStrokeStyle(D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_FLAT,
+                                                             D2D1_LINE_JOIN_MITER, 10.0f, D2D1_DASH_STYLE_DASH),
+                                 nullptr, 0, &g_strokes.dash);
+    return g_strokes.dash;
+}
+
+// Dashed and dotted ink. The dash units scale with the stroke width; round caps add half a width at each
+// end, so a dot is a zero-length dash.
+static ID2D1StrokeStyle* InkStroke(int dash) {
+    if (dash <= 0 || !g_d2d) return Round();
+    ID2D1StrokeStyle*& slot = dash == 1 ? g_strokes.inkDash : g_strokes.inkDot;
+    if (!slot) {
+        static const float kDash[2] = {2.0f, 3.0f}, kDot[2] = {0.0f, 2.2f};
+        g_d2d->CreateStrokeStyle(D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND,
+                                                             D2D1_LINE_JOIN_ROUND, 10.0f, D2D1_DASH_STYLE_CUSTOM),
+                                 dash == 1 ? kDash : kDot, 2, &slot);
+    }
+    return slot ? slot : Round();
+}
+
+static UINT32 FromRef(COLORREF c) { return ((UINT32)GetRValue(c) << 16) | ((UINT32)GetGValue(c) << 8) | GetBValue(c); }
+
+// Dark ink on light colors, white on dark ones: for outlines, numbers and balloon text.
+static UINT32 Contrast(UINT32 c) {
+    float l = 0.2126f * ((c >> 16) & 0xFF) + 0.7152f * ((c >> 8) & 0xFF) + 0.0722f * (c & 0xFF);
+    return l > 110 ? mocha::crust : 0xFFFFFF;
+}
+
+static bool IsEffect(int t) { return t == T_BLUR || t == T_PIXEL; }
+static bool IsText(int t) { return t == T_TEXT || t == T_BALLOON; }
+static bool IsBoxy(int t) {
+    return t == T_RECT || t == T_ELLIPSE || t == T_MARK || t == T_ERASER || t == T_MAGNIFY || t == T_SPOT || IsEffect(t);
+}
+
+// Which bar buttons a tool listens to; the rest are dimmed.
+static bool Uses(int t, int kind) {
+    if (t < 0) return false;
+    bool area = IsEffect(t) || t == T_ERASER || t == T_SPOT;
+    if (kind == B_COLOR) return !area;
+    if (kind == B_SIZE || kind == B_SHADOW || kind == B_OUTLINE) return !area && t != T_MARK;
+    return true;
+}
+
+static D2D1_RECT_F Norm(D2D1_POINT_2F a, D2D1_POINT_2F b) {
+    return {std::min(a.x, b.x), std::min(a.y, b.y), std::max(a.x, b.x), std::max(a.y, b.y)};
+}
+
+static float StepList(const float* v, int n, float cur, int dir, bool wrap) {
+    int i = 0;
+    while (i < n && v[i] < cur - 0.001f) i++;
+    bool on = i < n && v[i] <= cur + 0.001f;
+    int j = dir > 0 ? (on ? i + 1 : i) : i - 1;
+    if (j >= n) j = wrap ? 0 : n - 1;
+    if (j < 0) j = wrap ? n - 1 : 0;
+    return v[j];
+}
+
+static int Cycle(int v, int n, int dir, bool wrap) {
+    v += dir;
+    return wrap ? ((v % n) + n) % n : Clamp(v, 0, n - 1);
+}
+
+static void SizeList(int t, const float*& v, int& n) {
+    if (IsText(t)) v = kTextPx, n = (int)(sizeof(kTextPx) / 4);
+    else if (t == T_STEP) v = kStepR, n = (int)(sizeof(kStepR) / 4);
+    else v = kWidths, n = (int)(sizeof(kWidths) / 4);
+}
+
+// Text formats by size and style, in the font the settings pick. Cleared when the settings change.
+static std::map<int, IDWriteTextFormat*> g_inkFonts;
+
+static void ClearInkFonts() {
+    for (auto& kv : g_inkFonts)
+        if (kv.second) kv.second->Release();
+    g_inkFonts.clear();
+}
+
+static IDWriteTextFormat* InkFont(float px, bool bold, bool italic) {
+    int key = (int)std::lround(px * 10) * 4 + (bold ? 2 : 0) + (italic ? 1 : 0);
+    auto it = g_inkFonts.find(key);
+    if (it != g_inkFonts.end()) return it->second;
+    IDWriteTextFormat* f = nullptr;
+    if (g_dw) {
+        DWRITE_FONT_WEIGHT wt = bold ? DWRITE_FONT_WEIGHT_SEMI_BOLD : DWRITE_FONT_WEIGHT_NORMAL;
+        DWRITE_FONT_STYLE st = italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL;
+        if (FAILED(g_dw->CreateTextFormat(g_st.font.c_str(), nullptr, wt, st, DWRITE_FONT_STRETCH_NORMAL, px, L"", &f)))
+            g_dw->CreateTextFormat(L"Segoe UI Variable Display", nullptr, wt, st, DWRITE_FONT_STRETCH_NORMAL, px, L"", &f);
+    }
+    if (f) f->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+    g_inkFonts[key] = f;
+    return f;
+}
+
+// The room around the words: a text's background box, a balloon's body.
+static void TextPads(const Shape& s, float& px, float& py) {
+    if (s.tool == T_BALLOON) {
+        px = std::round(s.o.size * 0.5f);
+        py = std::round(s.o.size * 0.3f);
+    } else {
+        px = s.o.textBox ? std::round(s.o.size * 0.28f) : 0;
+        py = std::round(px * 0.45f);
+    }
+}
+
+// What a number shows, in the labels picked.
+static std::wstring StepLabel(int n, int style) {
+    if (n < 1) n = 1;
+    std::wstring s;
+    if (style == 1 || style == 2) {
+        for (int k = n; k > 0; k = (k - 1) / 26) s.insert(s.begin(), (wchar_t)((style == 1 ? L'A' : L'a') + (k - 1) % 26));
+        return s;
+    }
+    if ((style == 3 || style == 4) && n < 4000) {
+        static const int v[] = {1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1};
+        static const wchar_t* r[] = {L"M", L"CM", L"D", L"CD", L"C", L"XC", L"L", L"XL", L"X", L"IX", L"V", L"IV", L"I"};
+        for (int i = 0; i < 13; i++)
+            while (n >= v[i]) s += r[i], n -= v[i];
+        if (style == 4)
+            for (auto& ch : s) ch = (wchar_t)towlower(ch);
+        return s;
+    }
+    return std::to_wstring(n);
+}
+
+// A text's layout; the box it fills is origin + its metrics.
+static bool TextLayout(const Shape& s, Ptr<IDWriteTextLayout>& lay, D2D1_RECT_F& box) {
+    IDWriteTextFormat* f = InkFont(s.o.size, s.o.bold != 0, s.o.italic != 0);
+    if (!f || !g_dw || s.pts.empty()) return false;
+    std::wstring t = s.text.empty() ? std::wstring(L" ") : s.text;
+    if (FAILED(g_dw->CreateTextLayout(t.c_str(), (UINT32)t.size(), f, 8000, 8000, lay.put()))) return false;
+    DWRITE_TEXT_METRICS m{};
+    lay->GetMetrics(&m);
+    D2D1_POINT_2F p = s.pts[0];
+    box = {p.x, p.y, p.x + std::max(m.widthIncludingTrailingWhitespace, 2.0f), p.y + m.height};
+    return true;
+}
+
+static void FillPolygon(ID2D1RenderTarget* rt, ID2D1Brush* b, const D2D1_POINT_2F* p, int n, float edge, bool fill = true) {
+    Ptr<ID2D1PathGeometry> geo;
+    if (FAILED(g_d2d->CreatePathGeometry(geo.put()))) return;
+    Ptr<ID2D1GeometrySink> sink;
+    if (FAILED(geo->Open(sink.put()))) return;
+    sink->BeginFigure(p[0], fill ? D2D1_FIGURE_BEGIN_FILLED : D2D1_FIGURE_BEGIN_HOLLOW);
+    sink->AddLines(p + 1, n - 1);
+    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+    sink->Close();
+    if (fill) rt->FillGeometry(geo.p, b);
+    if (edge > 0) rt->DrawGeometry(geo.p, b, edge, Round());
+}
+
+static void DrawPath(ID2D1RenderTarget* rt, ID2D1Brush* b, const std::vector<D2D1_POINT_2F>& pts, float w,
+                     ID2D1StrokeStyle* stroke = nullptr) {
+    if (pts.size() < 2) {
+        if (!pts.empty()) rt->FillEllipse(D2D1::Ellipse(pts[0], w / 2, w / 2), b);
+        return;
+    }
+    Ptr<ID2D1PathGeometry> geo;
+    if (FAILED(g_d2d->CreatePathGeometry(geo.put()))) return;
+    Ptr<ID2D1GeometrySink> sink;
+    if (FAILED(geo->Open(sink.put()))) return;
+    sink->BeginFigure(pts[0], D2D1_FIGURE_BEGIN_HOLLOW);
+    sink->AddLines(pts.data() + 1, (UINT32)pts.size() - 1);
+    sink->EndFigure(D2D1_FIGURE_END_OPEN);
+    sink->Close();
+    rt->DrawGeometry(geo.p, b, w, stroke ? stroke : Round());
+}
+
+static void DrawQuad(ID2D1RenderTarget* rt, ID2D1Brush* b, D2D1_POINT_2F a, D2D1_POINT_2F c, D2D1_POINT_2F z, float w,
+                     ID2D1StrokeStyle* st) {
+    Ptr<ID2D1PathGeometry> geo;
+    if (FAILED(g_d2d->CreatePathGeometry(geo.put()))) return;
+    Ptr<ID2D1GeometrySink> sink;
+    if (FAILED(geo->Open(sink.put()))) return;
+    sink->BeginFigure(a, D2D1_FIGURE_BEGIN_HOLLOW);
+    D2D1_QUADRATIC_BEZIER_SEGMENT q{c, z};
+    sink->AddQuadraticBezier(&q);
+    sink->EndFigure(D2D1_FIGURE_END_OPEN);
+    sink->Close();
+    rt->DrawGeometry(geo.p, b, w, st);
+}
+
+// A box or a circle as a geometry, for clipping and cut-outs.
+static void BoxGeo(const D2D1_RECT_F& r, bool ellipse, float rad, Ptr<ID2D1Geometry>& out) {
+    out.Reset();
+    if (ellipse) {
+        ID2D1EllipseGeometry* e = nullptr;
+        g_d2d->CreateEllipseGeometry(D2D1::Ellipse(D2D1::Point2F((r.left + r.right) / 2, (r.top + r.bottom) / 2),
+                                                   (r.right - r.left) / 2, (r.bottom - r.top) / 2),
+                                     &e);
+        out.p = e;
+    } else {
+        ID2D1RoundedRectangleGeometry* q = nullptr;
+        float rr = std::min(rad, std::min(r.right - r.left, r.bottom - r.top) / 2);
+        g_d2d->CreateRoundedRectangleGeometry(D2D1::RoundedRect(r, rr, rr), &q);
+        out.p = q;
+    }
+}
+
+// A body with a pointed tail from its middle to tip: speech balloons and numbers dragged out.
+static void WithTail(Ptr<ID2D1Geometry>& body, D2D1_POINT_2F c, float half, D2D1_POINT_2F tip) {
+    float dx = tip.x - c.x, dy = tip.y - c.y, len = std::sqrt(dx * dx + dy * dy);
+    if (!body || len < 1) return;
+    float nx = -dy / len * half, ny = dx / len * half;
+    D2D1_POINT_2F tri[3] = {{c.x + nx, c.y + ny}, tip, {c.x - nx, c.y - ny}};
+    Ptr<ID2D1PathGeometry> t, out;
+    Ptr<ID2D1GeometrySink> sink, sink2;
+    if (FAILED(g_d2d->CreatePathGeometry(t.put())) || FAILED(t->Open(sink.put()))) return;
+    sink->BeginFigure(tri[0], D2D1_FIGURE_BEGIN_FILLED);
+    sink->AddLines(tri + 1, 2);
+    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+    sink->Close();
+    if (FAILED(g_d2d->CreatePathGeometry(out.put())) || FAILED(out->Open(sink2.put()))) return;
+    if (FAILED(body->CombineWithGeometry(t.p, D2D1_COMBINE_MODE_UNION, nullptr, 0.25f, sink2.p))) return;
+    if (FAILED(sink2->Close())) return;
+    body.Reset();
+    body.p = out.p;
+    out.p = nullptr;
+}
+
+// The balloon's body around its words, with the tail when the tip is outside it.
+static bool BalloonGeo(const Shape& s, Ptr<ID2D1Geometry>& geo, Ptr<IDWriteTextLayout>& lay) {
+    D2D1_RECT_F box;
+    if (!TextLayout(s, lay, box)) return false;
+    float px, py;
+    TextPads(s, px, py);
+    D2D1_RECT_F r{box.left - px, box.top - py, box.right + px, box.bottom + py};
+    BoxGeo(r, false, std::min(s.o.size * 0.45f, (r.bottom - r.top) / 2), geo);
+    if (s.pts.size() >= 2) {
+        D2D1_POINT_2F tip = s.pts[1];
+        if (tip.x < r.left || tip.x > r.right || tip.y < r.top || tip.y > r.bottom)
+            WithTail(geo, D2D1::Point2F((r.left + r.right) / 2, (r.top + r.bottom) / 2),
+                     std::min(r.right - r.left, r.bottom - r.top) * 0.25f, tip);
+    }
+    return (bool)geo;
+}
+
+// A number's circle, with its tail when dragged out.
+static void StepGeo(const Shape& s, float grow, Ptr<ID2D1Geometry>& geo) {
+    D2D1_POINT_2F c = s.pts[0];
+    float r = s.o.size + grow;
+    BoxGeo(D2D1::RectF(c.x - r, c.y - r, c.x + r, c.y + r), true, 0, geo);
+    if (s.pts.size() >= 2) WithTail(geo, c, s.o.size * 0.55f, s.pts[1]);
+}
+
+// The arrow: a shaft, straight or curved, and a head at the end, the start or both. h[k] holds a head's tip,
+// its two back corners and the notch of the dart.
+struct ArrowGeo {
+    D2D1_POINT_2F from{}, to{}, ctrl{};
+    bool curved = false;
+    int heads = 0;
+    D2D1_POINT_2F h[2][4]{};
+};
+
+static D2D1_POINT_2F ArrowCtrl(D2D1_POINT_2F a, D2D1_POINT_2F b) {
+    float dx = b.x - a.x, dy = b.y - a.y;
+    return {(a.x + b.x) / 2 - dy * 0.22f, (a.y + b.y) / 2 + dx * 0.22f};
+}
+
+static bool ArrowParts(const Shape& s, ArrowGeo& out) {
+    if (s.pts.size() < 2) return false;
+    const Opts& o = s.o;
+    D2D1_POINT_2F a = s.pts[0], b = s.pts.back();
+    float dx = b.x - a.x, dy = b.y - a.y, len = std::sqrt(dx * dx + dy * dy);
+    if (len < 1) return false;
+    bool atEnd = o.heads != 1, atStart = o.heads != 0;
+    float L = std::min(atEnd && atStart ? len / 2 : len, std::max(12.0f, (o.size * 3.2f + 9) * o.arrowK));
+    float W = L * (o.arrowStyle == 3 ? 0.55f : 0.62f);
+    // Where the shaft stops: inside a solid head, before a dart's notch, at the back of an open one, at the tip for lines.
+    float inset = o.arrowStyle == 0 ? L * 0.55f : o.arrowStyle == 1 ? L * 0.5f : o.arrowStyle == 2 ? L : 0;
+    out = ArrowGeo{};
+    out.from = a;
+    out.to = b;
+    out.curved = o.curve != 0;
+    out.ctrl = out.curved ? ArrowCtrl(a, b) : a;
+    auto dir = [&](D2D1_POINT_2F tip, D2D1_POINT_2F from) {
+        float vx = tip.x - from.x, vy = tip.y - from.y, l = std::sqrt(vx * vx + vy * vy);
+        if (l < 0.01f) return D2D1::Point2F(dx / len, dy / len);
+        return D2D1::Point2F(vx / l, vy / l);
+    };
+    auto head = [&](D2D1_POINT_2F tip, D2D1_POINT_2F u) {
+        D2D1_POINT_2F back{tip.x - u.x * L, tip.y - u.y * L};
+        D2D1_POINT_2F* h = out.h[out.heads++];
+        h[0] = tip;
+        h[1] = {back.x - u.y * W, back.y + u.x * W};
+        h[2] = {back.x + u.y * W, back.y - u.x * W};
+        h[3] = {tip.x - u.x * L * 0.62f, tip.y - u.y * L * 0.62f};
+    };
+    if (atEnd) {
+        D2D1_POINT_2F u = dir(b, out.curved ? out.ctrl : a);
+        head(b, u);
+        out.to = {b.x - u.x * inset, b.y - u.y * inset};
+    }
+    if (atStart) {
+        D2D1_POINT_2F u = dir(a, out.curved ? out.ctrl : b);
+        head(a, u);
+        out.from = {a.x - u.x * inset, a.y - u.y * inset};
+    }
+    return true;
+}
+
+static D2D1_RECT_F ShapeRect(const Shape& s) { return Norm(s.pts[0], s.pts.back()); }
+
+static float BoxRadius(const D2D1_RECT_F& r, float want) {
+    return std::min(want, std::min(r.right - r.left, r.bottom - r.top) / 2);
+}
+
+// One pass of a shape's ink in one color; extra widens every stroke (outline and shadow passes).
+static void Ink(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const Shape& s, D2D1_COLOR_F c, float extra) {
+    if (s.pts.empty()) return;
+    const Opts& o = s.o;
+    float w = o.size + extra;
+    ID2D1StrokeStyle* st = InkStroke(o.dash);
+    b->SetColor(c);
+    D2D1_POINT_2F a = s.pts[0], z = s.pts.back();
+    switch (s.tool) {
+        case T_RECT: {
+            D2D1_RECT_F r = ShapeRect(s);
+            float rr = BoxRadius(r, o.radius);
+            if (rr > 0) rt->DrawRoundedRectangle(D2D1::RoundedRect(r, rr, rr), b, w, st);
+            else rt->DrawRectangle(r, b, w, st);
+            break;
+        }
+        case T_ELLIPSE: {
+            D2D1_RECT_F r = ShapeRect(s);
+            rt->DrawEllipse(D2D1::Ellipse(D2D1::Point2F((r.left + r.right) / 2, (r.top + r.bottom) / 2), (r.right - r.left) / 2,
+                                          (r.bottom - r.top) / 2),
+                            b, w, st);
+            break;
+        }
+        case T_LINE: rt->DrawLine(a, z, b, w, st); break;
+        case T_ARROW: {
+            ArrowGeo ag;
+            if (!ArrowParts(s, ag)) break;
+            if (ag.curved) DrawQuad(rt, b, ag.from, ag.ctrl, ag.to, w, st);
+            else rt->DrawLine(ag.from, ag.to, b, w, st);
+            for (int k = 0; k < ag.heads; k++) {
+                const D2D1_POINT_2F* h = ag.h[k];
+                if (o.arrowStyle == 0) {
+                    FillPolygon(rt, b, h, 3, extra);
+                } else if (o.arrowStyle == 1) {
+                    D2D1_POINT_2F dart[4] = {h[0], h[1], h[3], h[2]};
+                    FillPolygon(rt, b, dart, 4, extra);
+                } else if (o.arrowStyle == 2) {
+                    FillPolygon(rt, b, h, 3, w, false);
+                } else {
+                    rt->DrawLine(h[0], h[1], b, w, Round());
+                    rt->DrawLine(h[0], h[2], b, w, Round());
+                }
+            }
+            break;
+        }
+        case T_PEN: DrawPath(rt, b, s.pts, w, st); break;
+        case T_STEP: {
+            Ptr<ID2D1Geometry> geo;
+            StepGeo(s, 0, geo);
+            if (!geo) break;
+            rt->FillGeometry(geo.p, b);
+            if (extra > 0) rt->DrawGeometry(geo.p, b, extra, Round());
+            break;
+        }
+        case T_BALLOON: {
+            Ptr<ID2D1Geometry> geo;
+            Ptr<IDWriteTextLayout> lay;
+            if (!BalloonGeo(s, geo, lay)) break;
+            rt->FillGeometry(geo.p, b);
+            if (extra > 0) rt->DrawGeometry(geo.p, b, extra, Round());
+            break;
+        }
+        case T_MAGNIFY: {
+            Ptr<ID2D1Geometry> geo;
+            BoxGeo(ShapeRect(s), o.ellipse != 0, o.radius, geo);
+            if (!geo) break;
+            if (extra > 0) rt->FillGeometry(geo.p, b);  // Shadow and outline passes: the whole lens, so the glass sits on them.
+            rt->DrawGeometry(geo.p, b, w, Round());
+            break;
+        }
+        case T_TEXT: {
+            Ptr<IDWriteTextLayout> lay;
+            D2D1_RECT_F box;
+            if (s.text.empty() || !TextLayout(s, lay, box)) break;
+            if (o.textBox) {
+                // Text on a box: shadow and outline passes fill a bigger box, the main pass the box and then the text.
+                float px, py, e = extra / 2;
+                TextPads(s, px, py);
+                D2D1_RECT_F r{box.left - px - e, box.top - py - e, box.right + px + e, box.bottom + py + e};
+                float rr = std::min(8.0f, (box.bottom - box.top) / 2) + e;
+                if (extra > 0) {
+                    rt->FillRoundedRectangle(D2D1::RoundedRect(r, rr, rr), b);
+                    break;
+                }
+                b->SetColor(o.textBox == 1 ? Rgb(o.color) : Rgb(mocha::crust, 0.85f));
+                rt->FillRoundedRectangle(D2D1::RoundedRect(r, rr, rr), b);
+                b->SetColor(Rgb(o.textBox == 1 ? Contrast(o.color) : o.color));
+                rt->DrawTextLayout(a, lay.p, b);
+                break;
+            }
+            if (extra > 0) {
+                float e = extra / 2;
+                static const float k[8][2] = {{-1, -1}, {0, -1}, {1, -1}, {-1, 0}, {1, 0}, {-1, 1}, {0, 1}, {1, 1}};
+                for (auto& d : k) rt->DrawTextLayout(D2D1::Point2F(a.x + d[0] * e, a.y + d[1] * e), lay.p, b);
+            } else {
+                rt->DrawTextLayout(a, lay.p, b);
+            }
+            break;
+        }
+    }
+}
+
+static D2D1_COLOR_F OutlineColor(UINT32 pen) {
+    return Rgb(g_st.outlineColor == 1 ? 0xFFFFFF : g_st.outlineColor == 2 ? (UINT32)mocha::crust : Contrast(pen));
+}
+
+// The inside of a box or circle: none, the pen color, or its own fill color, at the fill opacity.
+static void FillInside(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const Shape& s) {
+    if (!s.o.fill || (s.tool != T_RECT && s.tool != T_ELLIPSE)) return;
+    b->SetColor(Rgb(s.o.fill == 1 ? s.o.color : s.o.fillColor, s.o.alpha));
+    D2D1_RECT_F r = ShapeRect(s);
+    if (s.tool == T_RECT) {
+        float rr = BoxRadius(r, s.o.radius);
+        rt->FillRoundedRectangle(D2D1::RoundedRect(r, rr, rr), b);
+    } else {
+        rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F((r.left + r.right) / 2, (r.top + r.bottom) / 2), (r.right - r.left) / 2,
+                                      (r.bottom - r.top) / 2),
+                        b);
+    }
+}
+
+// The magnifier's glass: the frozen screen around its middle, blown up, clipped to its box or circle.
+static void MagnifyGlass(ID2D1RenderTarget* rt, const Shape& s) {
+    Overlay& o = g_ov;
+    D2D1_RECT_F r = ShapeRect(s);
+    float w = r.right - r.left, h = r.bottom - r.top, z = std::max(1.0f, s.o.zoom);
+    if (w < 2 || h < 2 || o.shot.px.empty()) return;
+    int sw = std::min(std::max(1, (int)(w / z)), o.shot.w), sh = std::min(std::max(1, (int)(h / z)), o.shot.h);
+    int sx = Clamp((int)std::lround((r.left + r.right) / 2 - sw / 2.0f), 0, o.shot.w - sw);
+    int sy = Clamp((int)std::lround((r.top + r.bottom) / 2 - sh / 2.0f), 0, o.shot.h - sh);
+    std::vector<uint32_t> buf((size_t)sw * sh);
+    for (int y = 0; y < sh; y++) memcpy(&buf[(size_t)y * sw], &o.shot.px[(size_t)(sy + y) * o.shot.w + sx], (size_t)sw * 4);
+    Ptr<ID2D1Bitmap> bmp;
+    auto bp = D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE), 96, 96);
+    if (FAILED(rt->CreateBitmap(D2D1::SizeU(sw, sh), buf.data(), sw * 4, bp, bmp.put()))) return;
+    Ptr<ID2D1Geometry> geo;
+    Ptr<ID2D1Layer> layer;
+    BoxGeo(r, s.o.ellipse != 0, s.o.radius, geo);
+    rt->CreateLayer(nullptr, layer.put());
+    if (!geo || !layer) return;
+    rt->PushLayer(D2D1::LayerParameters(r, geo.p), layer.p);
+    rt->DrawBitmap(bmp.p, r, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, nullptr);
+    rt->PopLayer();
+}
+
+// The spotlight: everything dimmed but its box or circle.
+static void Spotlight(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const Shape& s) {
+    D2D1_RECT_F r = ShapeRect(s);
+    if (r.right - r.left < 2 || r.bottom - r.top < 2) return;
+    Ptr<ID2D1RectangleGeometry> all;
+    Ptr<ID2D1Geometry> hole;
+    g_d2d->CreateRectangleGeometry(D2D1::RectF(-10, -10, (float)g_ov.shot.w + 10, (float)g_ov.shot.h + 10), all.put());
+    BoxGeo(r, s.o.ellipse != 0, s.o.radius, hole);
+    if (!all || !hole) return;
+    ID2D1Geometry* parts[2] = {all.p, hole.p};
+    Ptr<ID2D1GeometryGroup> grp;
+    if (FAILED(g_d2d->CreateGeometryGroup(D2D1_FILL_MODE_ALTERNATE, parts, 2, grp.put()))) return;
+    b->SetColor(D2D1::ColorF(0, 0, 0, s.o.alpha));
+    rt->FillGeometry(grp.p, b);
+}
+
+static void DrawShape(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const Shape& s) {
+    if (s.pts.empty() || IsEffect(s.tool)) return;  // Blur and pixelate are already in the pixels.
+    const Opts& o = s.o;
+    switch (s.tool) {
+        case T_MARK:
+            b->SetColor(Rgb(o.color, o.alpha));
+            rt->FillRectangle(ShapeRect(s), b);
+            return;
+        case T_ERASER:
+            b->SetColor(Rgb(s.sample));
+            rt->FillRectangle(ShapeRect(s), b);
+            return;
+        case T_SPOT: Spotlight(rt, b, s); return;
+    }
+    if (o.shadow) {
+        // Softness is the number of passes; together they reach the opacity the settings pick.
+        D2D1_MATRIX_3X2_F m;
+        rt->GetTransform(&m);
+        int n = std::max(1, g_st.shadowSoft);
+        float edge = o.outline ? g_st.outlineW : 0.0f;
+        float a = 1.0f - std::pow(1.0f - std::min(g_st.shadowAlpha, 0.99f), 1.0f / (float)n);
+        D2D1_COLOR_F sc = Rgb(g_st.shadowColor, a);
+        for (int i = 0; i < n; i++) {
+            float off = g_st.shadowOff * (0.5f + 0.5f * (float)(i + 1) / (float)n);
+            rt->SetTransform(D2D1::Matrix3x2F::Translation(off, off) * m);
+            Ink(rt, b, s, sc, edge + 1.5f * (float)(n - 1 - i));
+        }
+        rt->SetTransform(m);
+    }
+    FillInside(rt, b, s);
+    if (o.outline) Ink(rt, b, s, OutlineColor(o.color), g_st.outlineW);
+    if (s.tool == T_MAGNIFY) MagnifyGlass(rt, s);
+    Ink(rt, b, s, Rgb(o.color), 0);
+    if (s.tool == T_STEP) {
+        float r = o.size;
+        D2D1_POINT_2F c = s.pts[0];
+        std::wstring t = StepLabel(s.number, o.stepStyle);
+        float k = t.size() <= 1 ? 1.1f : t.size() == 2 ? 0.85f : 0.62f;
+        DrawStr(rt, b, t, CenterFont(std::round(r * k), true), D2D1::RectF(c.x - r, c.y - r - 1, c.x + r, c.y + r - 1),
+                Rgb(Contrast(o.color)));
+    } else if (s.tool == T_BALLOON && !s.text.empty()) {
+        Ptr<IDWriteTextLayout> lay;
+        D2D1_RECT_F box;
+        if (TextLayout(s, lay, box)) {
+            b->SetColor(Rgb(Contrast(o.color)));
+            rt->DrawTextLayout(s.pts[0], lay.p, b);
+        }
+    }
+}
+
+// ---- Picking shapes ----
+
+static D2D1_RECT_F Bounds(const Shape& s) {
+    D2D1_RECT_F r{s.pts[0].x, s.pts[0].y, s.pts[0].x, s.pts[0].y};
+    auto grow = [&](float l, float t, float rr, float bb) {
+        r.left = std::min(r.left, l), r.top = std::min(r.top, t), r.right = std::max(r.right, rr), r.bottom = std::max(r.bottom, bb);
+    };
+    for (const auto& p : s.pts) grow(p.x, p.y, p.x, p.y);
+    if (IsText(s.tool)) {
+        Ptr<IDWriteTextLayout> lay;
+        D2D1_RECT_F box;
+        if (TextLayout(s, lay, box)) {
+            float px, py;
+            TextPads(s, px, py);
+            grow(box.left - px, box.top - py, box.right + px, box.bottom + py);
+        }
+    } else if (s.tool == T_STEP) {
+        D2D1_POINT_2F c = s.pts[0];
+        grow(c.x - s.o.size, c.y - s.o.size, c.x + s.o.size, c.y + s.o.size);
+    } else if (s.tool == T_ARROW && s.o.curve && s.pts.size() >= 2) {
+        D2D1_POINT_2F a = s.pts[0], z = s.pts.back(), c = ArrowCtrl(a, z);
+        float mx = (a.x + 2 * c.x + z.x) / 4, my = (a.y + 2 * c.y + z.y) / 4;
+        grow(mx, my, mx, my);
+    }
+    return r;
+}
+
+static float SegDist(D2D1_POINT_2F p, D2D1_POINT_2F a, D2D1_POINT_2F b) {
+    float dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+    float t = l2 > 0 ? std::clamp(((p.x - a.x) * dx + (p.y - a.y) * dy) / l2, 0.0f, 1.0f) : 0.0f;
+    float ex = a.x + t * dx - p.x, ey = a.y + t * dy - p.y;
+    return std::sqrt(ex * ex + ey * ey);
+}
+
+static bool HitShape(const Shape& s, D2D1_POINT_2F q) {
+    if (s.pts.empty()) return false;
+    float tol = std::max(6.0f, s.o.size / 2 + 3);
+    if (s.tool == T_LINE || s.tool == T_ARROW || s.tool == T_PEN) {
+        std::vector<D2D1_POINT_2F> path;
+        if (s.tool == T_ARROW && s.o.curve && s.pts.size() >= 2) {
+            D2D1_POINT_2F a = s.pts[0], z = s.pts.back(), c = ArrowCtrl(a, z);
+            for (int i = 0; i <= 16; i++) {
+                float t = i / 16.0f, u = 1 - t;
+                path.push_back({u * u * a.x + 2 * u * t * c.x + t * t * z.x, u * u * a.y + 2 * u * t * c.y + t * t * z.y});
+            }
+        } else {
+            path = s.pts;
+        }
+        if (path.size() == 1) return SegDist(q, path[0], path[0]) <= tol;
+        for (size_t i = 1; i < path.size(); i++)
+            if (SegDist(q, path[i - 1], path[i]) <= tol) return true;
+        return false;
+    }
+    D2D1_RECT_F r = Bounds(s);
+    return q.x >= r.left - tol && q.x <= r.right + tol && q.y >= r.top - tol && q.y <= r.bottom + tol;
+}
+
+// The topmost shape under a point, or only texts and balloons.
+static int TopHit(D2D1_POINT_2F q, bool textOnly) {
+    for (int i = (int)g.shapes.size() - 1; i >= 0; i--) {
+        const Shape& s = g.shapes[i];
+        if (textOnly && !IsText(s.tool)) continue;
+        if (HitShape(s, q)) return i;
+    }
+    return -1;
+}
+
+// ---- Blur and pixelate, straight on the frozen pixels ----
+
+static void BlurLine(const uint32_t* src, uint32_t* dst, int n, size_t stride, int rad) {
+    int sr = 0, sg = 0, sb = 0, win = rad * 2 + 1;
+    auto at = [&](int i) { return src[(size_t)Clamp(i, 0, n - 1) * stride]; };
+    for (int i = -rad; i <= rad; i++) {
+        uint32_t v = at(i);
+        sr += (v >> 16) & 0xFF, sg += (v >> 8) & 0xFF, sb += v & 0xFF;
+    }
+    for (int i = 0; i < n; i++) {
+        dst[(size_t)i * stride] = 0xFF000000u | ((UINT32)(sr / win) << 16) | ((UINT32)(sg / win) << 8) | (UINT32)(sb / win);
+        uint32_t in = at(i + rad + 1), out = at(i - rad);
+        sr += (int)((in >> 16) & 0xFF) - (int)((out >> 16) & 0xFF);
+        sg += (int)((in >> 8) & 0xFF) - (int)((out >> 8) & 0xFF);
+        sb += (int)(in & 0xFF) - (int)(out & 0xFF);
+    }
+}
+
+// Three box passes each way: close to a Gaussian.
+static void BoxBlur(std::vector<uint32_t>& px, int W, const RECT& r, int rad) {
+    int w = r.right - r.left, h = r.bottom - r.top;
+    if (w < 2 || h < 2 || rad < 1) return;
+    std::vector<uint32_t> a((size_t)w * h), b((size_t)w * h);
+    for (int y = 0; y < h; y++) memcpy(&a[(size_t)y * w], &px[(size_t)(r.top + y) * W + r.left], (size_t)w * 4);
+    for (int pass = 0; pass < 3; pass++) {
+        for (int y = 0; y < h; y++) BlurLine(&a[(size_t)y * w], &b[(size_t)y * w], w, 1, rad);
+        for (int x = 0; x < w; x++) BlurLine(&b[x], &a[x], h, (size_t)w, rad);
+    }
+    for (int y = 0; y < h; y++) memcpy(&px[(size_t)(r.top + y) * W + r.left], &a[(size_t)y * w], (size_t)w * 4);
+}
+
+static void Pixelate(std::vector<uint32_t>& px, int W, const RECT& r, int block) {
+    for (int by = r.top; by < r.bottom; by += block)
+        for (int bx = r.left; bx < r.right; bx += block) {
+            int ex = std::min(bx + block, (int)r.right), ey = std::min(by + block, (int)r.bottom);
+            UINT64 sr = 0, sg = 0, sb = 0, n = 0;
+            for (int y = by; y < ey; y++)
+                for (int x = bx; x < ex; x++) {
+                    uint32_t v = px[(size_t)y * W + x];
+                    sr += (v >> 16) & 0xFF, sg += (v >> 8) & 0xFF, sb += v & 0xFF, n++;
+                }
+            if (!n) continue;
+            uint32_t v = 0xFF000000u | ((UINT32)(sr / n) << 16) | ((UINT32)(sg / n) << 8) | (UINT32)(sb / n);
+            for (int y = by; y < ey; y++)
+                for (int x = bx; x < ex; x++) px[(size_t)y * W + x] = v;
+        }
+}
+
+static RECT EffectRect(const Shape& s) {
+    D2D1_RECT_F f = Norm(s.pts[0], s.pts.back());
+    RECT r{(LONG)std::floor(f.left), (LONG)std::floor(f.top), (LONG)std::ceil(f.right), (LONG)std::ceil(f.bottom)};
+    RECT all{0, 0, g_ov.shot.w, g_ov.shot.h}, out{};
+    IntersectRect(&out, &r, &all);
+    return out;
+}
+
+static bool HasEffects(const std::vector<Shape>& v) {
+    for (const Shape& s : v)
+        if (IsEffect(s.tool)) return true;
+    return false;
+}
+
+// Puts the untouched screen back where effects were, applies every current one again, and updates the screen.
+static void RebuildEffects() {
+    Overlay& o = g_ov;
+    int W = o.shot.w;
+    if (o.shot.px.empty()) return;
+    if (g.base.empty()) g.base = o.shot.px;
+    RECT dirty{};
+    for (const RECT& r : g.applied) {
+        for (int y = r.top; y < r.bottom; y++)
+            memcpy(&o.shot.px[(size_t)y * W + r.left], &g.base[(size_t)y * W + r.left], (size_t)(r.right - r.left) * 4);
+        UnionRect(&dirty, &dirty, &r);
+    }
+    g.applied.clear();
+    for (const Shape& s : g.shapes) {
+        if (!IsEffect(s.tool) || s.pts.size() < 2) continue;
+        RECT r = EffectRect(s);
+        if (IsRectEmpty(&r)) continue;
+        int k = std::max(2, s.o.strength);
+        if (s.tool == T_BLUR) BoxBlur(o.shot.px, W, r, k);
+        else Pixelate(o.shot.px, W, r, k);
+        g.applied.push_back(r);
+        UnionRect(&dirty, &dirty, &r);
+    }
+    if (o.bmp && !IsRectEmpty(&dirty)) {
+        D2D1_RECT_U u{(UINT32)dirty.left, (UINT32)dirty.top, (UINT32)dirty.right, (UINT32)dirty.bottom};
+        o.bmp->CopyFromMemory(&u, &o.shot.px[(size_t)dirty.top * W + dirty.left], W * 4);
+    }
+    if (g.frost) {  // The bar's glass shows the screen behind it, effects included.
+        g.frost->Release();
+        g.frost = nullptr;
+    }
+}
+
+// ---- Undo, and which options the bar is showing ----
+
+static Shape* Typing() { return g.typing >= 0 && g.typing < (int)g.shapes.size() ? &g.shapes[g.typing] : nullptr; }
+static Shape* Picked() {
+    return g.tool == T_SELECT && g.pick >= 0 && g.pick < (int)g.shapes.size() ? &g.shapes[g.pick] : nullptr;
+}
+
+// The tool whose options the bar shows: the text being typed, the picked shape, else the tool (the region shows
+// the last drawing tool's). -1 when Select has nothing picked.
+static int OptTool() {
+    if (Shape* t = Typing()) return t->tool;
+    if (g.tool == T_SELECT) {
+        Shape* p = Picked();
+        return p ? p->tool : -1;
+    }
+    return g.tool == T_REGION ? g.lastDraw : g.tool;
+}
+
+static Opts& O() {
+    if (Shape* t = Typing()) return t->o;
+    if (Shape* p = Picked()) return p->o;
+    int t = OptTool();
+    return g.opt[t < 0 ? g.lastDraw : t];
+}
+
+static void Push() {
+    g.hist.push_back(g.shapes);
+    if (g.hist.size() > 100) g.hist.erase(g.hist.begin());
+    g.fut.clear();
+}
+
+static void LayoutStrip();
+static int HitBtn(POINT p);
+
+// The strip follows the tool and the option values; laid out again at once so its pills fit their words.
+static void RefreshStrip() {
+    if (!g.laidOut) return;
+    LayoutStrip();
+    g.hot = HitBtn(g.lastHover);
+    if (g.pressed >= (int)g.btns.size()) g.pressed = -1;
+}
+
+// Changes the options in view: the text being typed (and the tool, when it is new), the picked shape, or the tool.
+template <class F>
+static void Change(F f) {
+    if (Shape* t = Typing()) {
+        f(t->o);
+        g.typingDirty = true;
+        if (g.typingNew) g.opt[t->tool] = t->o;
+    } else if (Shape* p = Picked()) {
+        Push();
+        p = Picked();
+        f(p->o);
+        if (IsEffect(p->tool)) RebuildEffects();
+    } else if (OptTool() >= 0) {
+        f(g.opt[OptTool()]);
+    }
+    RefreshStrip();
+}
+
+static void StopCaret() {
+    if (g_ov.hwnd) KillTimer(g_ov.hwnd, kCaretTimer);
+}
+
+static void StartCaret() {
+    g.caretOn = true;
+    if (g_ov.hwnd) SetTimer(g_ov.hwnd, kCaretTimer, 530, nullptr);
+}
+
+static void CommitText() {
+    if (g.typing < 0) return;
+    if (g.typing < (int)g.shapes.size()) {
+        bool empty = g.shapes[g.typing].text.empty();
+        if (g.typingNew && empty) {  // Nothing typed: as if it never happened.
+            g.shapes.erase(g.shapes.begin() + g.typing);
+            if (!g.hist.empty()) g.hist.pop_back();
+        } else if (!g.typingNew && !g.typingDirty) {  // Opened and left as it was.
+            if (!g.hist.empty()) g.hist.pop_back();
+        } else if (empty) {  // Everything deleted: the text goes.
+            g.shapes.erase(g.shapes.begin() + g.typing);
+        }
+    }
+    g.typing = -1;
+    g.typingNew = g.typingDirty = false;
+    StopCaret();
+    RefreshStrip();
+}
+
+static void Undo() {
+    CommitText();
+    if (g.hist.empty()) return;
+    bool fx = HasEffects(g.shapes);
+    g.fut.push_back(std::move(g.shapes));
+    g.shapes = std::move(g.hist.back());
+    g.hist.pop_back();
+    g.pick = -1;
+    if (fx || HasEffects(g.shapes)) RebuildEffects();
+    RefreshStrip();
+}
+
+static void Redo() {
+    CommitText();
+    if (g.fut.empty()) return;
+    bool fx = HasEffects(g.shapes);
+    g.hist.push_back(std::move(g.shapes));
+    g.shapes = std::move(g.fut.back());
+    g.fut.pop_back();
+    g.pick = -1;
+    if (fx || HasEffects(g.shapes)) RebuildEffects();
+    RefreshStrip();
+}
+
+static void DeletePick() {
+    if (!Picked()) return;
+    bool fx = IsEffect(g.shapes[g.pick].tool);
+    Push();
+    g.shapes.erase(g.shapes.begin() + g.pick);
+    g.pick = -1;
+    if (fx) RebuildEffects();
+    RefreshStrip();
+}
+
+// The next number: the one set on the strip, else one past the highest so far.
+static int NextNumber() {
+    if (g.stepPin > 0) return g.stepPin;
+    int n = g_st.stepStart;
+    for (const Shape& s : g.shapes)
+        if (s.tool == T_STEP) n = std::max(n, s.number + 1);
+    return n;
+}
+
+// ---- The options strip ----
+
+static int OptKinds(int t, const Opts& o, int* out) {
+    int n = 0;
+    switch (t) {
+        case T_RECT: out[n++] = O_CORNERS; [[fallthrough]];
+        case T_ELLIPSE:
+            out[n++] = O_LINE;
+            out[n++] = O_FILL;
+            if (o.fill == 2) out[n++] = O_FILLCOLOR;
+            if (o.fill) out[n++] = O_ALPHA;
+            break;
+        case T_LINE:
+        case T_PEN: out[n++] = O_LINE; break;
+        case T_ARROW:
+            out[n++] = O_HEADS;
+            out[n++] = O_HEADSTYLE;
+            out[n++] = O_HEADSIZE;
+            out[n++] = O_CURVE;
+            out[n++] = O_LINE;
+            break;
+        case T_TEXT:
+            out[n++] = O_BOLD;
+            out[n++] = O_ITALIC;
+            out[n++] = O_TEXTBOX;
+            break;
+        case T_BALLOON:
+            out[n++] = O_BOLD;
+            out[n++] = O_ITALIC;
+            break;
+        case T_STEP:
+            out[n++] = O_LABELS;
+            out[n++] = O_NEXT;
+            break;
+        case T_MARK: out[n++] = O_ALPHA; break;
+        case T_BLUR:
+        case T_PIXEL: out[n++] = O_STRENGTH; break;
+        case T_MAGNIFY:
+            out[n++] = O_ZOOM;
+            out[n++] = O_SHAPE;
+            break;
+        case T_SPOT:
+            out[n++] = O_ALPHA;
+            out[n++] = O_SHAPE;
+            break;
+    }
+    return n;
+}
+
+static std::wstring OptText(int k) {
+    const Opts& o = O();
+    int t = OptTool();
+    WCHAR buf[64];
+    switch (k) {
+        case O_CORNERS:
+            if (o.radius < 0.5f) return L"Square corners";
+            swprintf_s(buf, L"Corners %d", (int)std::lround(o.radius));
+            return buf;
+        case O_LINE: return o.dash == 0 ? L"Solid line" : o.dash == 1 ? L"Dashed line" : L"Dotted line";
+        case O_FILL: return o.fill == 0 ? L"No fill" : o.fill == 1 ? L"Fill: pen color" : L"Fill: own color";
+        case O_FILLCOLOR: return L"Fill color";
+        case O_ALPHA:
+            swprintf_s(buf, t == T_SPOT ? L"Dim %d%%" : t == T_MARK ? L"Opacity %d%%" : L"Fill %d%%", (int)std::lround(o.alpha * 100));
+            return buf;
+        case O_HEADS: return o.heads == 0 ? L"Head at the end" : o.heads == 1 ? L"Head at the start" : L"Heads at both ends";
+        case O_HEADSTYLE:
+            return o.arrowStyle == 0 ? L"Solid head" : o.arrowStyle == 1 ? L"Dart head" : o.arrowStyle == 2 ? L"Open head" : L"Line head";
+        case O_HEADSIZE:
+            swprintf_s(buf, L"Head size %d%%", (int)std::lround(o.arrowK * 100));
+            return buf;
+        case O_CURVE: return o.curve ? L"Curved" : L"Straight";
+        case O_BOLD: return L"Bold";
+        case O_ITALIC: return L"Italic";
+        case O_TEXTBOX: return o.textBox == 0 ? L"No background" : o.textBox == 1 ? L"On pen color" : L"On dark";
+        case O_LABELS: {
+            static const wchar_t* names[5] = {L"1 2 3", L"A B C", L"a b c", L"I II III", L"i ii iii"};
+            return names[Clamp(o.stepStyle, 0, 4)];
+        }
+        case O_NEXT: {
+            Shape* p = Picked();
+            return (p ? L"Number " : L"Next ") + StepLabel(p ? p->number : NextNumber(), o.stepStyle);
+        }
+        case O_STRENGTH:
+            swprintf_s(buf, t == T_PIXEL ? L"Pixel size %d" : L"Strength %d", o.strength);
+            return buf;
+        case O_ZOOM:
+            swprintf_s(buf, o.zoom == std::floor(o.zoom) ? L"Zoom %.0fx" : L"Zoom %.1fx", o.zoom);
+            return buf;
+        case O_SHAPE: return o.ellipse ? L"Circle" : L"Box";
+    }
+    return {};
+}
+
+static bool OptOn(int k) {
+    const Opts& o = O();
+    return (k == O_BOLD && o.bold) || (k == O_ITALIC && o.italic) || (k == O_CURVE && o.curve);
+}
+
+// One step of an option: dir 1 forward, -1 back. Clicks wrap around; the scroll wheel stops at the ends.
+static void OptStep(int k, int dir, bool wrap) {
+    int t = OptTool();
+    if (t < 0) return;
+    switch (k) {
+        case O_CORNERS: Change([&](Opts& o) { o.radius = StepList(MK_LIST(kCorners), o.radius, dir, wrap); }); break;
+        case O_LINE: Change([&](Opts& o) { o.dash = Cycle(o.dash, 3, dir, wrap); }); break;
+        case O_FILL: Change([&](Opts& o) { o.fill = Cycle(o.fill, 3, dir, wrap); }); break;
+        case O_FILLCOLOR:
+            Change([&](Opts& o) {
+                UINT32 list[kColorCount + 1];
+                list[0] = g_st.fillColor;
+                for (int i = 0; i < kColorCount; i++) list[i + 1] = g_st.palette[i];
+                int i = 0;
+                while (i <= kColorCount && list[i] != o.fillColor) i++;
+                i = i > kColorCount ? 0 : Cycle(i, kColorCount + 1, dir, wrap);
+                o.fillColor = list[i];
+            });
+            break;
+        case O_ALPHA:
+            Change([&](Opts& o) {
+                if (t == T_SPOT) o.alpha = StepList(MK_LIST(kDimA), o.alpha, dir, wrap);
+                else if (t == T_MARK) o.alpha = StepList(MK_LIST(kMarkA), o.alpha, dir, wrap);
+                else o.alpha = StepList(MK_LIST(kFillA), o.alpha, dir, wrap);
+            });
+            break;
+        case O_HEADS: Change([&](Opts& o) { o.heads = Cycle(o.heads, 3, dir, wrap); }); break;
+        case O_HEADSTYLE: Change([&](Opts& o) { o.arrowStyle = Cycle(o.arrowStyle, 4, dir, wrap); }); break;
+        case O_HEADSIZE: Change([&](Opts& o) { o.arrowK = StepList(MK_LIST(kHeadK), o.arrowK, dir, wrap); }); break;
+        case O_CURVE: Change([&](Opts& o) { o.curve = Cycle(o.curve, 2, dir, wrap); }); break;
+        case O_BOLD: Change([&](Opts& o) { o.bold = Cycle(o.bold, 2, dir, wrap); }); break;
+        case O_ITALIC: Change([&](Opts& o) { o.italic = Cycle(o.italic, 2, dir, wrap); }); break;
+        case O_TEXTBOX: Change([&](Opts& o) { o.textBox = Cycle(o.textBox, 3, dir, wrap); }); break;
+        case O_LABELS: Change([&](Opts& o) { o.stepStyle = Cycle(o.stepStyle, 5, dir, wrap); }); break;
+        case O_NEXT:
+            if (Shape* p = Picked()) {
+                Push();
+                p = Picked();
+                p->number = std::max(1, p->number + dir);
+            } else {
+                g.stepPin = std::max(1, NextNumber() + dir);
+            }
+            RefreshStrip();
+            break;
+        case O_STRENGTH:
+            Change([&](Opts& o) { o.strength = (int)StepList(MK_LIST(kStrength), (float)o.strength, dir, wrap); });
+            break;
+        case O_ZOOM: Change([&](Opts& o) { o.zoom = StepList(MK_LIST(kZoom), o.zoom, dir, wrap); }); break;
+        case O_SHAPE: Change([&](Opts& o) { o.ellipse = Cycle(o.ellipse, 2, dir, wrap); }); break;
+    }
+}
+
+static void SizeStep(int dir, bool wrap) {
+    int t = OptTool();
+    if (!Uses(t, B_SIZE)) return;
+    const float* v;
+    int n;
+    SizeList(t, v, n);
+    Change([&](Opts& o) { o.size = StepList(v, n, o.size, dir, wrap); });
+}
+
+static IDWriteTextFormat* PillFont() { return CenterFont(12.5f * g.ui, false); }
+
+static void LayoutStrip() {
+    g.btns.resize(g.nMain);
+    g.strip = {};
+    int t = g.tool == T_REGION ? -1 : OptTool();
+    int kinds[8];
+    int n = t < 0 ? 0 : OptKinds(t, O(), kinds);
+    if (!n) return;
+    float u = g.ui, ph = std::round(28 * u), pad = std::round(4 * u), gap = std::round(4 * u), H = ph + pad * 2;
+    float x = pad;
+    for (int i = 0; i < n; i++) {
+        float w = std::ceil(TextWidth(OptText(kinds[i]), PillFont())) + std::round(24 * u) + (kinds[i] == O_FILLCOLOR ? std::round(18 * u) : 0);
+        g.btns.push_back({B_OPT, kinds[i], {x, pad, x + w, pad + ph}});
+        x += w + gap;
+    }
+    float W = x - gap + pad;
+    bool below = (g.bar.top + g.bar.bottom) / 2 < (g.mon.top + g.mon.bottom) / 2.0f;
+    float x0 = std::round((g.bar.left + g.bar.right) / 2 - W / 2);
+    x0 = std::clamp(x0, (float)g.mon.left + 8, std::max((float)g.mon.left + 8, (float)g.mon.right - 8 - W));
+    float y0 = below ? g.bar.bottom + std::round(6 * u) : g.bar.top - std::round(6 * u) - H;
+    for (size_t i = g.nMain; i < g.btns.size(); i++) {
+        D2D1_RECT_F& r = g.btns[i].r;
+        r = {r.left + x0, r.top + y0, r.right + x0, r.bottom + y0};
+    }
+    g.strip = {x0, y0, x0 + W, y0 + H};
+}
+
+// ---- The bar ----
+
+static void Layout(float ui) {
+    g.btns.clear();
+    g.seps.clear();
+    float pad = std::round(6 * ui), bs = std::round(40 * ui), cs = std::round(28 * ui), gap = std::round(2 * ui),
+          sep = std::round(14 * ui);
+    float x = pad;
+    auto add = [&](int kind, int arg, float w) {
+        g.btns.push_back({kind, arg, {x, pad, x + w, pad + bs}});
+        x += w + gap;
+    };
+    auto split = [&]() {
+        g.seps.push_back(x - gap + sep / 2);
+        x += sep - gap;
+    };
+    for (int t = 0; t < T_COUNT; t++) add(B_TOOL, t, bs);
+    split();
+    for (int i = 0; i < kColorCount; i++) add(B_COLOR, i, cs);
+    split();
+    add(B_SIZE, 0, bs);
+    add(B_SHADOW, 0, bs);
+    add(B_OUTLINE, 0, bs);
+    split();
+    add(B_UNDO, 0, bs);
+    add(B_REDO, 0, bs);
+    split();
+    add(B_DONE, 0, bs);
+    add(B_COPY, 0, bs);
+    add(B_SAVE, 0, bs);
+    add(B_CLOSE, 0, bs);
+    float W = x - gap + pad, H = bs + pad * 2;
+    float room = (float)(g.mon.right - g.mon.left) - 24;
+    if (W > room && ui > 0.6f) {  // A small screen: shrink the whole bar instead of cutting it off.
+        Layout(ui * room / W);
+        return;
+    }
+    float x0 = std::round((g.mon.left + g.mon.right) / 2.0f - W / 2);
+    float y0 = g_st.bottom ? (float)g.mon.bottom - std::round(14 * ui) - H : (float)g.mon.top + std::round(14 * ui);
+    if (g.avoiding) {
+        RECT bar{(LONG)x0, (LONG)y0, (LONG)(x0 + W), (LONG)(y0 + H)}, hit;
+        if (IntersectRect(&hit, &bar, &g.avoid)) {
+            // Out of the way of the region: the other side of it, starting with the side the bar lives on.
+            float gapY = std::round(10 * ui);
+            bool below = g.avoid.bottom + gapY + H <= g.mon.bottom - 8, above = g.avoid.top - gapY - H >= g.mon.top + 8;
+            if (g_st.bottom ? !above && below : below) y0 = g.avoid.bottom + gapY;
+            else if (above) y0 = g.avoid.top - gapY - H;
+        }
+    }
+    for (auto& b : g.btns) b.r = {b.r.left + x0, b.r.top + y0, b.r.right + x0, b.r.bottom + y0};
+    for (auto& s : g.seps) s += x0;
+    g.bar = {x0, y0, x0 + W, y0 + H};
+    g.nMain = g.btns.size();
+    g.ui = ui;
+    g.rad = std::min(std::round(LiveCornerRadius() * ui), H / 2);
+}
+
+static void ReleaseTarget() {
+    if (g.frost) g.frost->Release();
+    g.frost = nullptr;
+}
+
+static void EnsureLayout(const RECT* avoid) {
+    bool want = avoid != nullptr;
+    if (g.laidOut && want == g.avoiding && (!want || EqualRect(avoid, &g.avoid))) return;
+    g.avoiding = want;
+    if (want) g.avoid = *avoid;
+    Layout(MonAt(POINT{(g.mon.left + g.mon.right) / 2, (g.mon.top + g.mon.bottom) / 2}).ui);
+    g.laidOut = true;
+    LayoutStrip();
+    g.hot = -1;
+    ReleaseTarget();
+}
+
+// Downscaled and blurred, then stretched back: the frosted glass behind the bar, with room for the strip either side.
+static void MakeFrost(ID2D1RenderTarget* rt) {
+    Overlay& o = g_ov;
+    int mx = (int)std::lround(24 * g.ui), my = (int)std::lround((24 + 6 + 36) * g.ui);
+    RECT r{(LONG)g.bar.left - mx, (LONG)g.bar.top - my, (LONG)g.bar.right + mx, (LONG)g.bar.bottom + my}, all{0, 0, o.shot.w, o.shot.h};
+    if (!IntersectRect(&r, &r, &all)) return;
+    const int k = 4;
+    int sw = (r.right - r.left) / k, sh = (r.bottom - r.top) / k;
+    if (sw < 2 || sh < 2) return;
+    std::vector<uint32_t> small((size_t)sw * sh);
+    for (int y = 0; y < sh; y++)
+        for (int x = 0; x < sw; x++) {
+            UINT32 sr = 0, sg = 0, sb = 0;
+            for (int j = 0; j < k; j++)
+                for (int i = 0; i < k; i++) {
+                    uint32_t v = o.shot.px[(size_t)(r.top + y * k + j) * o.shot.w + r.left + x * k + i];
+                    sr += (v >> 16) & 0xFF, sg += (v >> 8) & 0xFF, sb += v & 0xFF;
+                }
+            small[(size_t)y * sw + x] = 0xFF000000u | ((sr / (k * k)) << 16) | ((sg / (k * k)) << 8) | (sb / (k * k));
+        }
+    BoxBlur(small, sw, RECT{0, 0, sw, sh}, 3);
+    auto bp = D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE), 96, 96);
+    if (SUCCEEDED(rt->CreateBitmap(D2D1::SizeU(sw, sh), small.data(), sw * 4, bp, &g.frost)))
+        g.frostRect = {(float)r.left, (float)r.top, (float)(r.left + sw * k), (float)(r.top + sh * k)};
+}
+
+// Glass: the blurred screen behind it, under a dark fill strong enough that nothing reads through, and the edge.
+static void Glass(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const D2D1_RECT_F& r, float rad) {
+    Ptr<ID2D1RoundedRectangleGeometry> geo;
+    Ptr<ID2D1Layer> layer;
+    g_d2d->CreateRoundedRectangleGeometry(D2D1::RoundedRect(r, rad, rad), geo.put());
+    rt->CreateLayer(nullptr, layer.put());
+    if (geo && layer) {
+        rt->PushLayer(D2D1::LayerParameters(r, geo.p), layer.p);
+        if (g.frost) rt->DrawBitmap(g.frost, g.frostRect, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, nullptr);
+        b->SetColor(Rgb(mocha::crust, g.frost ? 0.82f : 0.97f));
+        rt->FillRectangle(r, b);
+        rt->PopLayer();
+    } else {
+        FillRound(rt, b, r, rad, Rgb(mocha::crust, 0.97f));
+    }
+    Ptr<ID2D1LinearGradientBrush> edge;
+    GradientBrush(rt, r, 0.85f, edge);
+    if (edge)
+        rt->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(r.left + 1, r.top + 1, r.right - 1, r.bottom - 1), rad - 1, rad - 1),
+                                 edge.p, 2);
+}
+
+static std::wstring Label(const Btn& b) {
+    WCHAR buf[96];
+    int t = OptTool();
+    switch (b.kind) {
+        case B_TOOL:
+            if (kTools[b.arg].key == VK_TAB)
+                swprintf_s(buf, L"%s   Tab", kTools[b.arg].name);
+            else
+                swprintf_s(buf, L"%s   %c", kTools[b.arg].name, (wchar_t)kTools[b.arg].key);
+            return buf;
+        case B_COLOR:
+            if (g_st.palette[b.arg] == kColors[b.arg]) return kColorNames[b.arg];
+            swprintf_s(buf, L"#%06X", (unsigned)g_st.palette[b.arg]);
+            return buf;
+        case B_SIZE:
+            if (!Uses(t, B_SIZE)) return L"Size";
+            swprintf_s(buf, IsText(t) ? L"Text size %d   [ ]  or scroll" : t == T_STEP ? L"Number size %d   [ ]  or scroll" : L"Width %d   [ ]  or scroll",
+                       (int)std::lround(O().size));
+            return buf;
+        case B_SHADOW: return O().shadow ? L"Shadow on" : L"Shadow off";
+        case B_OUTLINE: return O().outline ? L"Outline on" : L"Outline off";
+        case B_UNDO: return L"Undo   Ctrl+Z";
+        case B_REDO: return L"Redo   Ctrl+Y";
+        case B_DONE: return L"Done: copy and save   Enter";
+        case B_COPY: return L"Copy only   Ctrl+C";
+        case B_SAVE: return L"Save only   Ctrl+S";
+        case B_CLOSE: return L"Close   Esc";
+        case B_OPT: return L"Click for next, right click for back, or scroll";
+    }
+    return {};
+}
+
+static void Glyph(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, wchar_t code, D2D1_RECT_F r, float px, D2D1_COLOR_F c) {
+    DrawStr(rt, b, std::wstring(1, code), CenterFont(px, false, true), r, c);
+}
+
+static void DrawIcon(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const Btn& btn, D2D1_COLOR_F c) {
+    float u = g.ui, cx = (btn.r.left + btn.r.right) / 2, cy = (btn.r.top + btn.r.bottom) / 2, sw = 1.6f * u;
+    D2D1_RECT_F r = btn.r;
+    b->SetColor(c);
+    auto P = [&](float x, float y) { return D2D1::Point2F(cx + x * u, cy + y * u); };
+    auto Faded = [&](float k) { return D2D1::ColorF(c.r, c.g, c.b, c.a * k); };
+    if (btn.kind == B_TOOL) switch (btn.arg) {
+            case T_REGION: {
+                const float e = 8, l = 4.5f;
+                for (int sx = -1; sx <= 1; sx += 2)
+                    for (int sy = -1; sy <= 1; sy += 2) {
+                        rt->DrawLine(P(sx * e, sy * e), P(sx * (e - l), sy * e), b, sw, Round());
+                        rt->DrawLine(P(sx * e, sy * e), P(sx * e, sy * (e - l)), b, sw, Round());
+                    }
+                rt->FillEllipse(D2D1::Ellipse(P(0, 0), 1.6f * u, 1.6f * u), b);
+                return;
+            }
+            case T_SELECT: {
+                D2D1_POINT_2F p[7] = {P(-5, -9), P(-5, 6), P(-1.5f, 2.5f), P(1.5f, 8.5f), P(4, 7.5f), P(1, 1.5f), P(6, 1.5f)};
+                FillPolygon(rt, b, p, 7, sw, false);
+                return;
+            }
+            case T_RECT:
+                rt->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(cx - 8 * u, cy - 6 * u, cx + 8 * u, cy + 6 * u), 2 * u, 2 * u), b, sw);
+                return;
+            case T_ELLIPSE: rt->DrawEllipse(D2D1::Ellipse(P(0, 0), 8 * u, 7 * u), b, sw); return;
+            case T_ARROW: {
+                rt->DrawLine(P(-7, 7), P(4, -4), b, sw, Round());
+                D2D1_POINT_2F h[3] = {P(7.5f, -7.5f), P(0.5f, -5), P(5, -0.5f)};
+                FillPolygon(rt, b, h, 3, 0.8f * u);
+                return;
+            }
+            case T_LINE: rt->DrawLine(P(-7, 7), P(7, -7), b, sw, Round()); return;
+            case T_PEN: Glyph(rt, b, 0xE70F, r, 16 * u, c); return;
+            case T_TEXT: DrawStr(rt, b, L"T", CenterFont(std::round(18 * u), true), D2D1::RectF(r.left, r.top - 1, r.right, r.bottom - 1), c); return;
+            case T_BALLOON:
+                rt->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(cx - 8.5f * u, cy - 7.5f * u, cx + 8.5f * u, cy + 3.5f * u), 3.5f * u, 3.5f * u),
+                                         b, sw);
+                rt->DrawLine(P(-4.5f, 3.5f), P(-6, 8.5f), b, sw, Round());
+                rt->DrawLine(P(-6, 8.5f), P(0, 3.5f), b, sw, Round());
+                return;
+            case T_STEP:
+                rt->DrawEllipse(D2D1::Ellipse(P(0, 0), 8.5f * u, 8.5f * u), b, sw);
+                DrawStr(rt, b, L"1", CenterFont(std::round(11 * u), true), D2D1::RectF(r.left, r.top - 1, r.right, r.bottom - 1), c);
+                return;
+            case T_MARK:
+                b->SetColor(Rgb(0xF9E2AF, 0.45f));
+                rt->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(cx - 9 * u, cy - 4.5f * u, cx + 9 * u, cy + 4.5f * u), 2 * u, 2 * u), b);
+                b->SetColor(c);
+                rt->DrawLine(P(-6, 0), P(6, 0), b, sw, Round());
+                return;
+            case T_ERASER: Glyph(rt, b, 0xE75C, r, 16 * u, c); return;
+            case T_BLUR: {
+                const float rs[3] = {8.5f, 5.5f, 2.8f}, as[3] = {0.22f, 0.4f, 0.9f};
+                for (int i = 0; i < 3; i++) {
+                    b->SetColor(Faded(as[i]));
+                    rt->FillEllipse(D2D1::Ellipse(P(0, 0), rs[i] * u, rs[i] * u), b);
+                }
+                return;
+            }
+            case T_PIXEL:
+                for (int j = 0; j < 3; j++)
+                    for (int i = 0; i < 3; i++) {
+                        b->SetColor(Faded(((i + j) & 1) ? 0.35f : 0.95f));
+                        rt->FillRectangle(D2D1::RectF(cx + (-8 + i * 5.5f) * u, cy + (-8 + j * 5.5f) * u, cx + (-8 + i * 5.5f + 5) * u,
+                                                      cy + (-8 + j * 5.5f + 5) * u),
+                                          b);
+                    }
+                return;
+            case T_MAGNIFY: Glyph(rt, b, 0xE71E, r, 16 * u, c); return;
+            case T_SPOT:
+                b->SetColor(Faded(0.35f));
+                rt->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(cx - 9 * u, cy - 7 * u, cx + 9 * u, cy + 7 * u), 2.5f * u, 2.5f * u), b);
+                b->SetColor(c);
+                rt->FillEllipse(D2D1::Ellipse(P(0.5f, 0), 4 * u, 4 * u), b);
+                return;
+        }
+    switch (btn.kind) {
+        case B_SIZE: {
+            int t = OptTool();
+            if (IsText(t) || t == T_STEP) {
+                DrawStr(rt, b, std::to_wstring((int)std::lround(O().size)), CenterFont(std::round(12 * u), true),
+                        D2D1::RectF(r.left, r.top - 1, r.right, r.bottom - 1), c);
+                return;
+            }
+            float d = std::clamp(O().size * 0.9f, 2.5f, 15.0f) * u;
+            b->SetColor(Uses(t, B_SIZE) ? Rgb(O().color) : c);
+            rt->FillEllipse(D2D1::Ellipse(P(0, 0), d / 2, d / 2), b);
+            return;
+        }
+        case B_SHADOW:
+            b->SetColor(Faded(0.4f));
+            rt->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(cx - 4 * u, cy - 4 * u, cx + 8 * u, cy + 8 * u), 2 * u, 2 * u), b);
+            b->SetColor(c);
+            rt->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(cx - 8 * u, cy - 8 * u, cx + 4 * u, cy + 4 * u), 2 * u, 2 * u), b, sw);
+            return;
+        case B_OUTLINE:
+            b->SetColor(Faded(0.4f));
+            rt->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(cx - 7 * u, cy - 7 * u, cx + 7 * u, cy + 7 * u), 3 * u, 3 * u), b, 4.5f * u);
+            b->SetColor(c);
+            rt->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(cx - 7 * u, cy - 7 * u, cx + 7 * u, cy + 7 * u), 3 * u, 3 * u), b, 1.4f * u);
+            return;
+        case B_UNDO: Glyph(rt, b, 0xE7A7, r, 16 * u, c); return;
+        case B_REDO: Glyph(rt, b, 0xE7A6, r, 16 * u, c); return;
+        case B_DONE: Glyph(rt, b, 0xE73E, r, 16 * u, c); return;
+        case B_COPY: Glyph(rt, b, 0xE8C8, r, 16 * u, c); return;
+        case B_SAVE: Glyph(rt, b, 0xE74E, r, 16 * u, c); return;
+        case B_CLOSE: Glyph(rt, b, 0xE711, r, 15 * u, c); return;
+    }
+}
+
+// The rest and hover look shared by bar buttons and strip pills: a 2 px edge, the gradient when active or hovered.
+static void Plate(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const D2D1_RECT_F& r, float rad, bool lit, bool active, bool down) {
+    Ptr<ID2D1LinearGradientBrush> gb;
+    if (lit) GradientBrush(rt, r, active ? 1.0f : 0.7f, gb);
+    FillRound(rt, b, r, rad, Rgb(down ? mocha::surface1 : mocha::surface0, lit ? (active ? 0.95f : 0.8f) : 0.55f));
+    D2D1_ROUNDED_RECT edge = D2D1::RoundedRect(D2D1::RectF(r.left + 1, r.top + 1, r.right - 1, r.bottom - 1), rad - 1, rad - 1);
+    if (gb) {
+        rt->DrawRoundedRectangle(edge, gb.p, 2);
+    } else if (!lit) {
+        b->SetColor(Rgb(mocha::surface1, 0.9f));
+        rt->DrawRoundedRectangle(edge, b, 2);
+    }
+}
+
+static void DrawBar(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
+    if (!g.on || g.btns.empty()) return;
+    if (!g.frost) MakeFrost(rt);
+    float u = g.ui;
+    int t = OptTool();
+    const Opts& o = O();
+    Glass(rt, b, g.bar, g.rad);
+    b->SetColor(Rgb(mocha::surface1, 0.9f));
+    for (float x : g.seps) {
+        float sx = std::floor(x) + 0.5f;
+        rt->DrawLine(D2D1::Point2F(sx, g.bar.top + 14 * u), D2D1::Point2F(sx, g.bar.bottom - 14 * u), b, 1);
+    }
+    float inner = std::max(4.0f, g.rad - std::round(6 * u));
+    for (size_t i = 0; i < g.nMain; i++) {
+        const Btn& bt = g.btns[i];
+        bool hot = (int)i == g.hot, down = (int)i == g.pressed && hot;
+        if (bt.kind == B_COLOR) {
+            float cx = (bt.r.left + bt.r.right) / 2, cy = (bt.r.top + bt.r.bottom) / 2, rr = 8 * u;
+            UINT32 col = g_st.palette[bt.arg];
+            bool use = Uses(t, B_COLOR), picked = use && col == o.color;
+            b->SetColor(Rgb(col, use ? 1.0f : 0.3f));
+            rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), rr, rr), b);
+            float lum = 0.2126f * ((col >> 16) & 0xFF) + 0.7152f * ((col >> 8) & 0xFF) + 0.0722f * (col & 0xFF);
+            if (lum < 40) {  // A dark swatch gets a ring so it doesn't vanish into the bar.
+                b->SetColor(Rgb(mocha::surface2, use ? 1.0f : 0.4f));
+                rt->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), rr - 0.5f, rr - 0.5f), b, 1);
+            }
+            if (picked || (hot && use)) {
+                D2D1_RECT_F ring{cx - rr - 4 * u, cy - rr - 4 * u, cx + rr + 4 * u, cy + rr + 4 * u};
+                Ptr<ID2D1LinearGradientBrush> gb;
+                GradientBrush(rt, ring, picked ? 1.0f : 0.6f, gb);
+                if (gb) rt->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), rr + 3 * u, rr + 3 * u), gb.p, 2);
+            }
+            continue;
+        }
+        bool use = bt.kind == B_TOOL || (bt.kind != B_SIZE && bt.kind != B_SHADOW && bt.kind != B_OUTLINE) || Uses(t, bt.kind);
+        bool active = (bt.kind == B_TOOL && bt.arg == g.tool) || (use && bt.kind == B_SHADOW && o.shadow) ||
+                      (use && bt.kind == B_OUTLINE && o.outline);
+        bool off = !use || (bt.kind == B_UNDO && g.hist.empty() && g.typing < 0) || (bt.kind == B_REDO && g.fut.empty());
+        if (active || (hot && !off)) {
+            FillRound(rt, b, bt.r, inner, Rgb(down ? mocha::surface1 : mocha::surface0, active ? 0.95f : 0.8f));
+            Ptr<ID2D1LinearGradientBrush> gb;
+            GradientBrush(rt, bt.r, active ? 1.0f : 0.7f, gb);
+            if (gb)
+                rt->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(bt.r.left + 1, bt.r.top + 1, bt.r.right - 1, bt.r.bottom - 1),
+                                                           inner - 1, inner - 1),
+                                         gb.p, 2);
+        }
+        D2D1_COLOR_F ic = off ? Rgb(mocha::overlay0) : (active || hot) ? Rgb(mocha::text) : Rgb(mocha::subtext0);
+        if (bt.kind == B_CLOSE && hot) ic = Rgb(mocha::red);
+        DrawIcon(rt, b, bt, ic);
+    }
+    D2D1_RECT_F all = g.bar;
+    if (g.btns.size() > g.nMain) {
+        float srad = std::min(g.rad, (g.strip.bottom - g.strip.top) / 2);
+        Glass(rt, b, g.strip, srad);
+        float pr = std::max(4.0f, srad - std::round(4 * u));
+        for (size_t i = g.nMain; i < g.btns.size(); i++) {
+            const Btn& bt = g.btns[i];
+            bool hot = (int)i == g.hot, down = (int)i == g.pressed && hot, on = OptOn(bt.arg);
+            Plate(rt, b, bt.r, pr, on || hot, on, down);
+            D2D1_RECT_F tr{bt.r.left + std::round(12 * u), bt.r.top, bt.r.right - std::round(12 * u), bt.r.bottom};
+            if (bt.arg == O_FILLCOLOR) {
+                float sx = tr.left + 6 * u, sy = (bt.r.top + bt.r.bottom) / 2;
+                b->SetColor(Rgb(o.fillColor));
+                rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(sx, sy), 6 * u, 6 * u), b);
+                b->SetColor(Rgb(mocha::surface2));
+                rt->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(sx, sy), 6 * u - 0.5f, 6 * u - 0.5f), b, 1);
+                tr.left += std::round(18 * u);
+            }
+            DrawStr(rt, b, OptText(bt.arg), bt.arg == O_BOLD ? CenterFont(12.5f * u, true) : PillFont(), tr,
+                    Rgb((on || hot) ? mocha::text : mocha::subtext0));
+        }
+        all = {std::min(all.left, g.strip.left), std::min(all.top, g.strip.top), std::max(all.right, g.strip.right),
+               std::max(all.bottom, g.strip.bottom)};
+    }
+    if (g.hot >= 0 && g.hot < (int)g.btns.size()) {
+        const Btn& bt = g.btns[g.hot];
+        std::wstring text = Label(bt);
+        float w = TextWidth(text, Font(12.0f * u, false)) + 18 * u;
+        bool up = g.bar.top > (g.mon.top + g.mon.bottom) / 2.0f;  // A bar low on the screen shows its tip above.
+        DrawPill(rt, b, (bt.r.left + bt.r.right) / 2 - w / 2, up ? all.top - 8 * u : all.bottom + 8 * u, text, u, g.mon, up);
+    }
+}
+
+// The dashed frame drawn round the text being typed and the picked shape. Never burned into the snip.
+static void Frame(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const D2D1_RECT_F& r) {
+    b->SetColor(Rgb(mocha::crust, 0.85f));
+    rt->DrawRectangle(r, b, 2);
+    b->SetColor(Rgb(0xFFFFFF, 0.9f));
+    rt->DrawRectangle(r, b, 1, Dash());
+}
+
+// The drawings on the region screen: every shape, the one being drawn, the text box taking keys, the pick.
+static void DrawShapes(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
+    for (const Shape& s : g.shapes) DrawShape(rt, b, s);
+    if (g.drawing) {
+        if (IsEffect(g.cur.tool) && g.cur.pts.size() >= 2) Frame(rt, b, Norm(g.cur.pts[0], g.cur.pts.back()));
+        else DrawShape(rt, b, g.cur);
+    }
+    if (Shape* p = Picked()) {
+        D2D1_RECT_F r = Bounds(*p);
+        float m = 6 + (p->tool == T_LINE || p->tool == T_ARROW || p->tool == T_PEN ? p->o.size / 2 : 0);
+        Frame(rt, b, D2D1::RectF(r.left - m, r.top - m, r.right + m, r.bottom + m));
+    }
+    if (Shape* s = Typing()) {
+        Ptr<IDWriteTextLayout> lay;
+        D2D1_RECT_F box;
+        if (s->tool == T_BALLOON && s->text.empty()) DrawShape(rt, b, *s);  // An empty balloon still shows where it goes.
+        if (TextLayout(*s, lay, box)) {
+            float px, py;
+            TextPads(*s, px, py);
+            float fx = std::max(6.0f, px + 4), fy = std::max(3.0f, py + 3);
+            Frame(rt, b, D2D1::RectF(box.left - fx, box.top - fy, box.right + fx, box.bottom + fy));
+            if (g.caretOn) {
+                float cx = s->text.empty() ? box.left + 1 : box.right + 1;
+                DWRITE_LINE_METRICS lm[64];
+                UINT32 n = 0;
+                lay->GetLineMetrics(lm, 64, &n);
+                float lineH = n ? lm[std::min(n, 64u) - 1].height : box.bottom - box.top, top = box.bottom - lineH;
+                if (n > 1 || (!s->text.empty() && s->text.back() == L'\n')) {
+                    // The caret sits after the last character of the last line.
+                    DWRITE_HIT_TEST_METRICS hm;
+                    float hx, hy;
+                    lay->HitTestTextPosition((UINT32)s->text.size(), FALSE, &hx, &hy, &hm);
+                    cx = box.left + hx + 1;
+                    top = box.top + hy;
+                    lineH = hm.height;
+                }
+                UINT32 cc = s->tool == T_BALLOON || s->o.textBox == 1 ? Contrast(s->o.color) : s->o.color;
+                b->SetColor(Rgb(cc));
+                rt->DrawLine(D2D1::Point2F(cx, top + 2), D2D1::Point2F(cx, top + lineH - 2), b, 2);
+            }
+        }
+    }
+}
+
+// Paints every drawing into a finished snip. out is already cropped; the shapes are in screen-overlay pixels.
+static void Burn(Shot& out) {
+    Overlay& o = g_ov;
+    bool any = false;
+    for (const Shape& s : g.shapes)
+        if (!IsEffect(s.tool) && !(IsText(s.tool) && s.text.empty())) any = true;
+    if (!any || !g_d2d || out.px.empty()) return;
+    Ptr<IWICImagingFactory> wic;
+    if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(wic.put())))) return;
+    Ptr<IWICBitmap> bmp;
+    UINT stride = out.w * 4, bytes = stride * out.h;
+    if (FAILED(wic->CreateBitmapFromMemory(out.w, out.h, GUID_WICPixelFormat32bppPBGRA, stride, bytes, (BYTE*)out.px.data(),
+                                           bmp.put())))
+        return;
+    Ptr<ID2D1RenderTarget> rt;
+    auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                                              D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96, 96);
+    if (FAILED(g_d2d->CreateWicBitmapRenderTarget(bmp.p, props, rt.put()))) return;
+    Ptr<ID2D1SolidColorBrush> b;
+    if (FAILED(rt->CreateSolidColorBrush(Rgb(mocha::text), b.put()))) return;
+    rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+    rt->BeginDraw();
+    rt->SetTransform(D2D1::Matrix3x2F::Translation((float)(o.shot.x - out.x), (float)(o.shot.y - out.y)));
+    for (const Shape& s : g.shapes) DrawShape(rt.p, b.p, s);
+    if (FAILED(rt->EndDraw())) {
+        Wh_Log(L"Couldn't draw the markup into the snip");
+        return;
+    }
+    if (SUCCEEDED(bmp->CopyPixels(nullptr, stride, bytes, (BYTE*)out.px.data())))
+        for (auto& v : out.px) v |= 0xFF000000;
+}
+
+// ---- Input ----
+
+static bool DrawTool() { return g.on && g.tool != T_REGION; }
+
+static bool In(const D2D1_RECT_F& r, POINT p) { return p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom; }
+
+static bool OverBar(POINT p) {
+    return g.on && !g.btns.empty() && (In(g.bar, p) || (g.btns.size() > g.nMain && In(g.strip, p)));
+}
+
+static int HitBtn(POINT p) {
+    if (!OverBar(p)) return -1;
+    for (int i = 0; i < (int)g.btns.size(); i++)
+        if (In(g.btns[i].r, p)) return i;
+    return -1;
+}
+
+// Returns true when the hovered button changed.
+static bool Hover(POINT p) {
+    g.lastHover = p;
+    int h = HitBtn(p);
+    if (h == g.hot) return false;
+    g.hot = h;
+    return true;
+}
+
+static D2D1_POINT_2F F(POINT p) { return D2D1::Point2F((float)p.x, (float)p.y); }
+
+// The pointer for a spot on the region screen.
+static LPCWSTR Cursor(POINT p) {
+    if (OverBar(p)) return IDC_ARROW;
+    if (!DrawTool()) return IDC_CROSS;
+    if (g.tool == T_TEXT) return IDC_IBEAM;
+    if (g.tool == T_SELECT) return g.moving || TopHit(F(p), false) >= 0 ? IDC_SIZEALL : IDC_ARROW;
+    return IDC_CROSS;
+}
+
+static void SetTool(int t) {
+    CommitText();
+    g.drawing = g.moving = false;
+    g.pick = -1;
+    g.tool = t;
+    if (t != T_REGION && t != T_SELECT) g.lastDraw = t;
+    RefreshStrip();
+}
+
+static void Swap() { SetTool(g.tool == T_REGION ? g.lastDraw : T_REGION); }
+
+static Action Activate(int i, int dir) {
+    if (i < 0 || i >= (int)g.btns.size()) return A_NONE;
+    const Btn& b = g.btns[i];
+    int t = OptTool();
+    switch (b.kind) {
+        case B_TOOL: SetTool(b.arg); return A_REDRAW;
+        case B_COLOR:
+            if (!Uses(t, B_COLOR)) return A_NONE;
+            Change([&](Opts& o) { o.color = g_st.palette[b.arg]; });
+            return A_REDRAW;
+        case B_SIZE: SizeStep(dir, true); return A_REDRAW;
+        case B_SHADOW:
+            if (Uses(t, B_SHADOW)) Change([](Opts& o) { o.shadow = !o.shadow; });
+            return A_REDRAW;
+        case B_OUTLINE:
+            if (Uses(t, B_OUTLINE)) Change([](Opts& o) { o.outline = !o.outline; });
+            return A_REDRAW;
+        case B_UNDO: Undo(); return A_REDRAW;
+        case B_REDO: Redo(); return A_REDRAW;
+        case B_DONE: CommitText(); return A_DONE;
+        case B_COPY: CommitText(); return A_COPY;
+        case B_SAVE: CommitText(); return A_SAVE;
+        case B_CLOSE: return A_CLOSE;
+        case B_OPT: OptStep(b.arg, dir, true); return A_REDRAW;
+    }
+    return A_NONE;
+}
+
+static void BarDown(POINT p) { g.pressed = HitBtn(p); }
+
+static Action BarUp(POINT p) {
+    int was = g.pressed;
+    g.pressed = -1;
+    return was >= 0 && was == HitBtn(p) ? Activate(was, 1) : A_REDRAW;
+}
+
+// Right click on the bar or strip: an option or the size steps back. Elsewhere on the bar it does nothing.
+static int BarRight(POINT p) {
+    int i = HitBtn(p);
+    if (i < 0) return A_NONE;
+    int k = g.btns[i].kind;
+    return k == B_OPT || k == B_SIZE ? Activate(i, -1) : A_NONE;
+}
+
+// The scroll wheel: over an option or the size it steps them; while drawing, it sizes the pen. -1 leaves it to the magnifier.
+static int Wheel(POINT p, int dir) {
+    if (!g.on) return -1;
+    if (OverBar(p)) {
+        int i = HitBtn(p);
+        if (i < 0) return A_NONE;
+        if (g.btns[i].kind == B_OPT) OptStep(g.btns[i].arg, dir, false);
+        else if (g.btns[i].kind == B_SIZE) SizeStep(dir, false);
+        else return A_NONE;
+        return A_REDRAW;
+    }
+    if (DrawTool() && Uses(OptTool(), B_SIZE)) {
+        SizeStep(dir, false);
+        return A_REDRAW;
+    }
+    return -1;
+}
+
+static Shape NewShape(int tool, POINT p) {
+    Shape s;
+    s.tool = tool;
+    s.o = g.opt[tool];
+    s.pts.push_back(F(p));
+    return s;
+}
+
+static void BeginTyping(int i, bool isNew) {
+    g.typing = i;
+    g.typingNew = isNew;
+    g.typingDirty = false;
+    StartCaret();
+    RefreshStrip();
+}
+
+static void ShapeDown(POINT p) {
+    CommitText();
+    D2D1_POINT_2F q = F(p);
+    if (g.tool == T_SELECT) {
+        g.pick = TopHit(q, false);
+        if (g.pick >= 0) {
+            g.moving = true;
+            g.moved = false;
+            g.moveFrom = q;
+        }
+        RefreshStrip();
+        return;
+    }
+    if (IsText(g.tool)) {
+        int i = TopHit(q, true);  // Clicking words that are already there opens them again.
+        if (i >= 0) {
+            Push();
+            BeginTyping(i, false);
+            return;
+        }
+    }
+    if (g.tool == T_TEXT) {
+        Push();
+        g.shapes.push_back(NewShape(T_TEXT, p));
+        BeginTyping((int)g.shapes.size() - 1, true);
+        return;
+    }
+    g.cur = NewShape(g.tool, p);
+    if (g.tool != T_PEN) g.cur.pts.push_back(q);
+    if (g.tool == T_ERASER) {
+        Overlay& o = g_ov;
+        int x = Clamp(p.x, 0, o.shot.w - 1), y = Clamp(p.y, 0, o.shot.h - 1);
+        g.cur.sample = o.shot.px.empty() ? 0xFFFFFF : (o.shot.px[(size_t)y * o.shot.w + x] & 0xFFFFFF);
+    }
+    g.drawing = true;
+}
+
+static void ShapeMove(POINT p, bool shift) {
+    D2D1_POINT_2F q = F(p);
+    if (g.moving) {
+        float dx = q.x - g.moveFrom.x, dy = q.y - g.moveFrom.y;
+        if ((dx == 0 && dy == 0) || g.pick < 0 || g.pick >= (int)g.shapes.size()) return;
+        if (!g.moved) Push();  // One undo step for the whole move.
+        g.moved = true;
+        for (auto& pt : g.shapes[g.pick].pts) pt.x += dx, pt.y += dy;
+        g.moveFrom = q;
+        return;
+    }
+    if (!g.drawing) return;
+    if (g.cur.tool == T_PEN) {
+        D2D1_POINT_2F last = g.cur.pts.back();
+        if (std::abs(q.x - last.x) + std::abs(q.y - last.y) >= 2) g.cur.pts.push_back(q);
+        return;
+    }
+    if (g.cur.tool == T_BALLOON) {  // The words follow the pointer; the tail stays where the press was.
+        g.cur.pts[0] = q;
+        return;
+    }
+    D2D1_POINT_2F a = g.cur.pts[0];
+    if (shift) {
+        float dx = q.x - a.x, dy = q.y - a.y;
+        if (IsBoxy(g.cur.tool)) {  // A square or a circle.
+            float m = std::max(std::abs(dx), std::abs(dy));
+            q = {a.x + (dx < 0 ? -m : m), a.y + (dy < 0 ? -m : m)};
+        } else {  // Lines and arrows snap to 45 degrees.
+            float len = std::sqrt(dx * dx + dy * dy), ang = std::atan2(dy, dx), step = 3.14159265f / 4;
+            ang = std::round(ang / step) * step;
+            q = {a.x + std::cos(ang) * len, a.y + std::sin(ang) * len};
+        }
+    }
+    g.cur.pts[1] = q;
+}
+
+static void ShapeUp() {
+    if (g.moving) {
+        g.moving = false;
+        if (g.moved && g.pick >= 0 && g.pick < (int)g.shapes.size() && IsEffect(g.shapes[g.pick].tool)) RebuildEffects();
+        return;
+    }
+    if (!g.drawing) return;
+    g.drawing = false;
+    Shape s = std::move(g.cur);
+    D2D1_POINT_2F a = s.pts[0], b = s.pts.back();
+    float w = std::abs(b.x - a.x), h = std::abs(b.y - a.y);
+    if (s.tool == T_STEP) {
+        if (std::sqrt(w * w + h * h) < s.o.size) s.pts.resize(1);  // A click: no tail.
+        s.number = NextNumber();
+        if (g.stepPin > 0) g.stepPin++;
+        Push();
+        g.shapes.push_back(std::move(s));
+        RefreshStrip();
+        return;
+    }
+    if (s.tool == T_BALLOON) {
+        if (w + h < 6) s.pts[0] = {b.x + 24, b.y - 24 - 1.6f * s.o.size};  // A click: the words go up and to the right.
+        Push();
+        g.shapes.push_back(std::move(s));
+        BeginTyping((int)g.shapes.size() - 1, true);
+        return;
+    }
+    if (s.tool != T_PEN && (IsBoxy(s.tool) ? (w < 3 || h < 3) : (w + h < 4))) return;  // A click, not a drawing.
+    bool fx = IsEffect(s.tool);
+    Push();
+    g.shapes.push_back(std::move(s));
+    if (fx) RebuildEffects();
+}
+
+// Typing into a text or balloon. Returns true when the key was taken.
+static bool Char(wchar_t c) {
+    Shape* s = Typing();
+    if (!s) return false;
+    std::wstring& t = s->text;
+    g.caretOn = true;
+    if (c == L'\r') {
+        if (GetKeyState(VK_SHIFT) & 0x8000) t += L'\n', g.typingDirty = true;
+        else CommitText();
+    } else if (c == L'\b') {
+        if (!t.empty()) t.pop_back(), g.typingDirty = true;
+    } else if (c == 0x1B) {
+        CommitText();
+    } else if (c >= 0x20 && c != 0x7F && t.size() < 2000) {
+        t += c;
+        g.typingDirty = true;
+    }
+    return true;
+}
+
+// Right click: drop the shape being drawn or moved, finish the text, let go of the pick, or take back the last
+// change. False when there was nothing to take back.
+static bool RightClick() {
+    if (g.drawing) {
+        g.drawing = false;
+        return true;
+    }
+    if (g.moving) {
+        g.moving = false;
+        if (g.moved) Undo();
+        return true;
+    }
+    if (g.typing >= 0) {
+        CommitText();
+        return true;
+    }
+    if (Picked()) {
+        g.pick = -1;
+        RefreshStrip();
+        return true;
+    }
+    if (!g.hist.empty()) {
+        Undo();
+        return true;
+    }
+    return false;
+}
+
+// Keys on the region screen. Returns -1 when the key isn't a drawing key.
+static int Key(UINT vk, bool ctrl, bool shift) {
+    if (!g.on) return -1;
+    if (ctrl) {
+        if (vk == 'Z') {
+            shift ? Redo() : Undo();
+            return A_REDRAW;
+        }
+        if (vk == 'Y') {
+            Redo();
+            return A_REDRAW;
+        }
+        if (vk == 'C') return CommitText(), A_COPY;
+        if (vk == 'S') return CommitText(), A_SAVE;
+        return -1;
+    }
+    for (int t = 0; t < T_COUNT; t++)
+        if (kTools[t].key == vk) {
+            if (t == T_REGION) Swap();  // Tab flips between the region and the last drawing tool.
+            else SetTool(t);
+            return A_REDRAW;
+        }
+    if (vk == VK_OEM_4 || vk == VK_OEM_6) {
+        SizeStep(vk == VK_OEM_6 ? 1 : -1, false);
+        return A_REDRAW;
+    }
+    if (vk == VK_DELETE || vk == VK_BACK) {
+        if (Picked()) DeletePick();
+        else Undo();
+        return A_REDRAW;
+    }
+    return -1;
+}
+
+// ---- Life cycle ----
+
+// Each tool's options are kept across restarts until the drawing settings change.
+struct Memory {
+    UINT32 magic, stamp;
+    int lastDraw;
+    Opts opt[T_COUNT];
+};
+constexpr UINT32 kMemoryMagic = 0x534E4B31;
+
+static UINT32 Fnv(const void* p, size_t n) {
+    UINT32 h = 2166136261u;
+    for (size_t i = 0; i < n; i++) h = (h ^ ((const BYTE*)p)[i]) * 16777619u;
+    return h;
+}
+
+static bool ValidDraw(int t) { return t > T_SELECT && t < T_COUNT; }
+
+static void Sanitize() {
+    if (!ValidDraw(g.lastDraw)) g.lastDraw = T_ARROW;
+    for (Opts& o : g.opt) {
+        o.size = std::clamp(o.size, 1.0f, 200.0f);
+        o.alpha = std::clamp(o.alpha, 0.05f, 1.0f);
+        o.radius = std::clamp(o.radius, 0.0f, 60.0f);
+        o.arrowK = std::clamp(o.arrowK, 0.5f, 3.0f);
+        o.zoom = std::clamp(o.zoom, 1.5f, 6.0f);
+        o.dash = Clamp(o.dash, 0, 2), o.fill = Clamp(o.fill, 0, 2), o.heads = Clamp(o.heads, 0, 2);
+        o.arrowStyle = Clamp(o.arrowStyle, 0, 3), o.curve = Clamp(o.curve, 0, 1), o.textBox = Clamp(o.textBox, 0, 2);
+        o.stepStyle = Clamp(o.stepStyle, 0, 4), o.strength = Clamp(o.strength, 2, 60);
+        o.shadow = Clamp(o.shadow, 0, 1), o.outline = Clamp(o.outline, 0, 1), o.bold = Clamp(o.bold, 0, 1);
+        o.italic = Clamp(o.italic, 0, 1), o.ellipse = Clamp(o.ellipse, 0, 1);
+    }
+}
+
+static void SaveMemory() {
+    if (!g_st.remember) return;
+    Memory m{};
+    m.magic = kMemoryMagic;
+    m.stamp = g.stamp;
+    m.lastDraw = g.lastDraw;
+    memcpy(m.opt, g.opt, sizeof(m.opt));
+    Wh_SetBinaryValue(L"barMemory", &m, sizeof(m));
+}
+
+static void ApplySettings(const Config& c) {
+    g.on = c.drawBar;
+    Style s;
+    for (int i = 0; i < kColorCount; i++) s.palette[i] = FromRef(c.palette[i]);
+    s.bottom = c.barPos == L"bottom";
+    s.remember = c.rememberBar;
+    s.fillColor = FromRef(c.fillColor);
+    s.font = c.textFont;
+    s.stepStart = c.stepStart;
+    s.shadowColor = FromRef(c.shadowColor);
+    s.shadowAlpha = c.shadowOpacity / 100.0f;
+    s.shadowOff = (float)c.shadowOffset;
+    s.shadowSoft = c.shadowSoftness;
+    s.outlineColor = c.outlineColor == L"white" ? 1 : c.outlineColor == L"black" ? 2 : 0;
+    s.outlineW = (float)c.outlineWidth;
+    g_st = s;
+    ClearInkFonts();
+    g.laidOut = false;
+
+    // Every tool starts from the pen settings; then each tool's own.
+    Opts base;
+    memset(&base, 0, sizeof(base));
+    base.color = FromRef(c.drawColor);
+    base.fillColor = s.fillColor;
+    base.size = (float)c.drawSize;
+    base.alpha = c.fillOpacity / 100.0f;
+    base.radius = (float)c.boxRadius;
+    base.arrowK = c.arrowSize / 100.0f;
+    base.zoom = (float)_wtof(c.magnifyZoom.c_str());
+    base.dash = c.lineStyle == L"dash" ? 1 : c.lineStyle == L"dot" ? 2 : 0;
+    base.fill = c.fill == L"shade" ? 1 : c.fill == L"color" ? 2 : 0;
+    base.heads = c.arrowHeads == L"start" ? 1 : c.arrowHeads == L"both" ? 2 : 0;
+    base.arrowStyle = c.arrowStyle == L"notched" ? 1 : c.arrowStyle == L"open" ? 2 : c.arrowStyle == L"line" ? 3 : 0;
+    base.curve = c.arrowCurved;
+    base.textBox = c.textBox == L"pen" ? 1 : c.textBox == L"dark" ? 2 : 0;
+    base.stepStyle = c.stepStyle == L"letters" ? 1 : c.stepStyle == L"lettersLower" ? 2 : c.stepStyle == L"roman" ? 3
+                     : c.stepStyle == L"romanLower" ? 4 : 0;
+    base.strength = c.blurStrength;
+    base.shadow = c.drawShadow;
+    base.outline = c.drawOutline;
+    base.bold = c.textBold;
+    base.italic = c.textItalic;
+    Opts* d = g.def;
+    for (int t = 0; t < T_COUNT; t++) d[t] = base;
+    float textPx = std::round((14 + c.drawSize * 2.5f) * c.textScale / 100.0f);
+    d[T_TEXT].size = d[T_BALLOON].size = textPx;
+    d[T_TEXT].color = FromRef(c.textColor);
+    d[T_TEXT].outline = c.textOutline;
+    d[T_STEP].size = std::round((11 + c.drawSize * 1.5f) * c.stepScale / 100.0f);
+    d[T_STEP].color = FromRef(c.stepColor);
+    d[T_MARK].color = c.markPen ? base.color : FromRef(c.markColor);
+    d[T_MARK].alpha = c.markOpacity / 100.0f;
+    d[T_PIXEL].strength = c.pixelSize;
+    d[T_MAGNIFY].ellipse = c.magnifyShape == L"circle";
+    d[T_SPOT].alpha = c.spotlightDim / 100.0f;
+    d[T_SPOT].ellipse = c.spotlightShape == L"circle";
+    for (int t : {(int)T_MARK, (int)T_ERASER, (int)T_BLUR, (int)T_PIXEL, (int)T_SPOT}) d[t].shadow = d[t].outline = 0;
+
+    UINT32 stamp = Fnv(g.def, sizeof(g.def));
+    if (stamp == g.stamp) return;  // Same drawing settings: keep the options as they were left.
+    g.stamp = stamp;
+    memcpy(g.opt, g.def, sizeof(g.opt));
+    g.lastDraw = T_ARROW;
+    Memory m{};
+    if (s.remember && Wh_GetBinaryValue(L"barMemory", &m, sizeof(m)) == sizeof(m) && m.magic == kMemoryMagic && m.stamp == stamp) {
+        memcpy(g.opt, m.opt, sizeof(g.opt));
+        g.lastDraw = m.lastDraw;
+    }
+    Sanitize();
+}
+
+// A new region screen: no drawings yet, the region tool, the bar on the screen the mouse is on.
+static void Begin(const MonInfo& m) {
+    g.shapes.clear();
+    g.hist.clear();
+    g.fut.clear();
+    g.base.clear();
+    g.applied.clear();
+    g.drawing = g.moving = false;
+    g.typing = g.pick = -1;
+    g.stepPin = 0;
+    g.tool = T_REGION;
+    g.hot = g.pressed = -1;
+    g.lastHover = {-1, -1};
+    g.mon = m.r;
+    g.laidOut = false;
+    g.avoiding = false;
+    ReleaseTarget();
+}
+
+static void End() {
+    SaveMemory();
+    ReleaseTarget();
+    g.shapes.clear();
+    g.hist.clear();
+    g.fut.clear();
+    g.cur = Shape{};
+    g.drawing = g.moving = false;
+    g.typing = g.pick = -1;
+    std::vector<uint32_t>().swap(g.base);
+    g.applied.clear();
+}
+
+static void Shutdown() {
+    End();
+    if (g_strokes.round) g_strokes.round->Release();
+    if (g_strokes.dash) g_strokes.dash->Release();
+    if (g_strokes.inkDash) g_strokes.inkDash->Release();
+    if (g_strokes.inkDot) g_strokes.inkDot->Release();
+    g_strokes = {};
+    ClearInkFonts();
+}
+
+#undef MK_LIST
+}  // namespace mk
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// The key guard: a low-level key hook on its own thread that sees every snip key before any app does, so
+// games, remote desktops and apps that grab the keyboard can't swallow Print Screen. It also takes
+// Win + Shift + S from the Windows Snipping Tool. The registered hotkeys stay on as the second path: they
+// still fire while a window run as administrator is in front, where this hook isn't asked.
+// ---------------------------------------------------------------------------
+
+namespace wss {
+
+constexpr ULONG_PTR kMark = 0x534E4950;  // Our own injected keys carry this, so the hook skips them.
+constexpr UINT WM_WSS_APPLY = WM_APP + 70, WM_WSS_MASK = WM_APP + 71, WM_WSS_REHOOK = WM_APP + 73;
+
+struct Combo {
+    UINT mods, vk;
+    int id;  // The WM_HOTKEY id it stands for (HK_* + 1).
+};
+
+static HANDLE g_thread, g_ready;
+static DWORD g_tid;
+static HHOOK g_hook;
+static HWINEVENTHOOK g_fgHook;
+static SRWLOCK g_lock = SRWLOCK_INIT;
+static std::vector<Combo> g_combos, g_pending;
+static std::atomic<bool> g_want{false};
+static UINT g_eatUp[256];  // Non-zero: the key's up is ours to eat too.
+
+static bool Held(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
+
+static UINT HeldMods() {
+    UINT m = 0;
+    if (Held(VK_CONTROL)) m |= MOD_CONTROL;
+    if (Held(VK_MENU)) m |= MOD_ALT;
+    if (Held(VK_SHIFT)) m |= MOD_SHIFT;
+    if (Held(VK_LWIN) || Held(VK_RWIN)) m |= MOD_WIN;
+    return m;
+}
+
+static bool IsModifier(DWORD vk) {
+    return vk == VK_SHIFT || vk == VK_LSHIFT || vk == VK_RSHIFT || vk == VK_CONTROL || vk == VK_LCONTROL ||
+           vk == VK_RCONTROL || vk == VK_MENU || vk == VK_LMENU || vk == VK_RMENU || vk == VK_LWIN || vk == VK_RWIN;
+}
+
+static LRESULT CALLBACK KeyProc(int code, WPARAM wp, LPARAM lp) {
+    if (code == HC_ACTION) {
+        auto* k = (KBDLLHOOKSTRUCT*)lp;
+        DWORD vk = k->vkCode;
+        if (vk < 256 && k->dwExtraInfo != kMark && !IsModifier(vk)) {
+            bool down = wp == WM_KEYDOWN || wp == WM_SYSKEYDOWN;
+            if (!down && g_eatUp[vk]) {
+                g_eatUp[vk] = 0;
+                return 1;
+            }
+            if (down && g_eatUp[vk]) return 1;  // Key repeat while held.
+            if (down) {
+                UINT mods = HeldMods();
+                int id = 0;
+                AcquireSRWLockShared(&g_lock);
+                for (const Combo& c : g_combos)
+                    if (c.vk == vk && c.mods == mods) {
+                        id = c.id;
+                        break;
+                    }
+                ReleaseSRWLockShared(&g_lock);
+                if (id) {
+                    g_eatUp[vk] = 1;
+                    // A key between Win down and Win up, so letting go of Win doesn't open Start or the launcher.
+                    if (mods & MOD_WIN) PostThreadMessageW(g_tid, WM_WSS_MASK, 0, 0);
+                    if (HWND m = g_msgWnd) PostMessageW(m, WM_SNP_HOOKKEY, id, MAKELPARAM(mods, vk));
+                    return 1;
+                }
+            }
+        }
+    }
+    return CallNextHookEx(nullptr, code, wp, lp);
+}
+
+static void Unhook() {
+    if (g_hook) UnhookWindowsHookEx(g_hook);
+    g_hook = nullptr;
+    memset(g_eatUp, 0, sizeof(g_eatUp));
+}
+
+static void Hook() {
+    // Installed again on every change of foreground window, so a hook an app adds later can't stand first.
+    HHOOK h = SetWindowsHookExW(WH_KEYBOARD_LL, KeyProc, (HINSTANCE)windhawk_tool_mod::GetCurrentModuleHandle(), 0);
+    if (!h) {
+        Wh_Log(L"Couldn't start the key guard (error %lu)", GetLastError());
+        return;
+    }
+    if (g_hook) UnhookWindowsHookEx(g_hook);
+    g_hook = h;
+}
+
+static void CALLBACK OnForeground(HWINEVENTHOOK, DWORD, HWND, LONG, LONG, DWORD, DWORD) {
+    if (g_hook) PostThreadMessageW(g_tid, WM_WSS_REHOOK, 0, 0);
+}
+
+static void Sync() {
+    AcquireSRWLockExclusive(&g_lock);
+    g_combos = g_pending;
+    ReleaseSRWLockExclusive(&g_lock);
+    bool want = g_want.load() && !g_combos.empty();
+    if (want && !g_hook) {
+        Hook();
+        if (!g_fgHook)
+            g_fgHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, OnForeground, 0, 0,
+                                       WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+    } else if (!want && g_hook) {
+        Unhook();
+    }
+    if (!want && g_fgHook) {
+        UnhookWinEvent(g_fgHook);
+        g_fgHook = nullptr;
+    }
+}
+
+static DWORD WINAPI Thread(LPVOID) {
+    MSG msg;
+    PeekMessageW(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+    SetEvent(g_ready);
+    Sync();
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        if (msg.message == WM_WSS_APPLY) {
+            Sync();
+        } else if (msg.message == WM_WSS_REHOOK) {
+            MSG more;  // Several quick focus changes need one new hook.
+            while (PeekMessageW(&more, nullptr, WM_WSS_REHOOK, WM_WSS_REHOOK, PM_REMOVE)) {
+            }
+            bool held = false;
+            for (UINT v : g_eatUp) held |= v != 0;
+            if (g_hook && !held) Hook();
+        } else if (msg.message == WM_WSS_MASK) {
+            INPUT in[2]{};
+            for (int i = 0; i < 2; i++) {
+                in[i].type = INPUT_KEYBOARD;
+                in[i].ki.wVk = 0xE8;  // Unassigned: nothing acts on it.
+                in[i].ki.dwExtraInfo = kMark;
+            }
+            in[1].ki.dwFlags = KEYEVENTF_KEYUP;
+            SendInput(2, in, sizeof(INPUT));
+        } else {
+            DispatchMessageW(&msg);
+        }
+    }
+    if (g_fgHook) UnhookWinEvent(g_fgHook);
+    g_fgHook = nullptr;
+    Unhook();
+    return 0;
+}
+
+// The combos to guard; an empty list stops the hook.
+static void Apply(const std::vector<Combo>& combos) {
+    AcquireSRWLockExclusive(&g_lock);
+    g_pending = combos;
+    ReleaseSRWLockExclusive(&g_lock);
+    g_want = !combos.empty();
+    if (!g_thread && !combos.empty()) {
+        g_ready = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        g_thread = CreateThread(nullptr, 0, Thread, nullptr, 0, &g_tid);
+        if (g_thread) WaitForSingleObject(g_ready, 3000);
+        CloseHandle(g_ready);
+        g_ready = nullptr;
+        return;  // The thread syncs on start.
+    }
+    if (g_thread) PostThreadMessageW(g_tid, WM_WSS_APPLY, 0, 0);
+}
+
+static bool Active() { return g_hook != nullptr; }
+
+static void Shutdown() {
+    if (!g_thread) return;
+    PostThreadMessageW(g_tid, WM_QUIT, 0, 0);
+    if (WaitForSingleObject(g_thread, 5000) != WAIT_OBJECT_0) Wh_Log(L"Key hook thread did not stop in 5 s");
+    CloseHandle(g_thread);
+    g_thread = nullptr;
+}
+
+}  // namespace wss
+
 static void OvRender() {
     Overlay& o = g_ov;
     if (!o.hwnd || !OvEnsureTarget()) return;
@@ -1228,12 +3903,13 @@ static void OvRender() {
     rt->SetTransform(D2D1::Matrix3x2F::Identity());
     D2D1_RECT_F all{0, 0, (float)o.shot.w, (float)o.shot.h};
     rt->DrawBitmap(o.bmp, all, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR, nullptr);
+    mk::DrawShapes(rt, b);  // Under the dim, so what's outside the region looks left out.
 
     RECT h;
     bool drag;
     bool have = OvHighlight(h, drag);
     float dim = c.dim / 100.0f;
-    if (dim > 0) {
+    if (dim > 0 && (have || !mk::DrawTool())) {  // Drawing on the whole screen: no dim over the drawing.
         b->SetColor(Rgb(mocha::crust, dim));
         if (have) {
             float L = (float)h.left, T = (float)h.top, R = (float)h.right, B = (float)h.bottom;
@@ -1247,7 +3923,8 @@ static void OvRender() {
     }
     const MonInfo& mon = MonAt(o.cur);
     float ui = mon.ui;
-    if (c.crossLines) {
+    bool picking = !mk::DrawTool() && !mk::OverBar(o.cur);  // Crosshair and magnifier are for picking a region.
+    if (c.crossLines && picking) {
         b->SetColor(Ref(c.accent1, 0.55f));
         float x = o.cur.x + 0.5f, y = o.cur.y + 0.5f;
         rt->DrawLine(D2D1::Point2F(x, 0), D2D1::Point2F(x, all.bottom), b, 1);
@@ -1273,8 +3950,13 @@ static void OvRender() {
             DrawPill(rt, b, (float)h.left, y, text, ui, hm.r, above);
         }
     }
-    if (c.magnifier) OvDrawMagnifier(rt, b);
+    if (c.magnifier && picking && !o.haveKept) OvDrawMagnifier(rt, b);
+    if (mk::g.on) {
+        mk::EnsureLayout(o.haveKept ? &o.kept : nullptr);
+        mk::DrawBar(rt, b);
+    }
     if (rt->EndDraw() == (HRESULT)D2DERR_RECREATE_TARGET) {
+        mk::ReleaseTarget();
         OvReleaseTarget();
         InvalidateRect(g_ov.hwnd, nullptr, FALSE);
     }
@@ -1282,7 +3964,7 @@ static void OvRender() {
 
 static void OvUpdateHover() {
     Overlay& o = g_ov;
-    if (!g_cfg.snapWindows) {
+    if (!g_cfg.snapWindows || mk::DrawTool() || o.haveKept || mk::OverBar(o.cur)) {
         o.haveHover = false;
         return;
     }
@@ -1304,7 +3986,10 @@ static void OvClose() {
     HWND h = o.hwnd;
     o.hwnd = nullptr;
     if (GetCapture() == h) ReleaseCapture();
+    mk::End();
     OvReleaseTarget();
+    o.haveKept = false;
+    o.press = 0;
     DestroyWindow(h);
     o.shot.px.clear();
     o.shot.px.shrink_to_fit();
@@ -1312,25 +3997,93 @@ static void OvClose() {
     o.mons.clear();
 }
 
-static void OvFinish(RECT r) {
+// The last region snipped, in screen pixels, kept across restarts for "snip the last region again".
+static RECT g_lastRegion;
+static bool g_haveLast;
+
+static void RememberRegion(const RECT& r) {
+    g_lastRegion = r;
+    g_haveLast = true;
+    Wh_SetBinaryValue(L"lastRegion", &r, sizeof(r));
+}
+
+static void LoadLastRegion() {
+    RECT r{};
+    g_haveLast = Wh_GetBinaryValue(L"lastRegion", &r, sizeof(r)) == sizeof(r) && r.right > r.left && r.bottom > r.top;
+    if (g_haveLast) g_lastRegion = r;
+}
+
+// how: 0 copy and save as the settings say, 1 copy only, 2 save only. whole: every screen, not one region.
+static void OvFinish(RECT r, int how = 0, bool whole = false) {
     Overlay& o = g_ov;
-    Shot out = Crop(o.shot, r);
+    mk::CommitText();
+    Shot out = Crop(o.shot, r);  // Blur and pixelate are already in these pixels.
     if (out.w < 1 || out.h < 1) return;
+    mk::Burn(out);
+    if (!whole) RememberRegion(RECT{out.x, out.y, out.x + out.w, out.y + out.h});
     POINT mid{(r.left + r.right) / 2, (r.top + r.bottom) / 2};
-    const SnapWin* w = WinAt(mid);
+    const SnapWin* w = whole ? nullptr : WinAt(mid);
     std::wstring app = w && !w->desktop ? AppName(w->hwnd) : L"Screenshot";
     OvClose();
-    Deliver(std::move(out), app);
+    Deliver(std::move(out), app, how);
+}
+
+static void OvFinishAll() {
+    Overlay& o = g_ov;
+    OvFinish(RECT{0, 0, o.shot.w, o.shot.h}, 0, true);
+}
+
+// The region a bar button or Enter finishes with: the one picked, else the screen the bar is on.
+static RECT OvTargetRegion() {
+    Overlay& o = g_ov;
+    if (o.dragging) return o.sel;
+    if (o.haveKept) return o.kept;
+    return mk::g.mon;
+}
+
+static void OvAct(int a) {
+    Overlay& o = g_ov;
+    switch (a) {
+        case mk::A_REDRAW:
+            OvUpdateHover();
+            InvalidateRect(o.hwnd, nullptr, FALSE);
+            break;
+        case mk::A_CLOSE: OvClose(); break;
+        case mk::A_DONE: OvFinish(OvTargetRegion(), 0); break;
+        case mk::A_COPY: OvFinish(OvTargetRegion(), 1); break;
+        case mk::A_SAVE: OvFinish(OvTargetRegion(), 2); break;
+    }
 }
 
 static void OvSetCursor(POINT p) {
     Overlay& o = g_ov;
     o.cur = p;
-    if (o.pressed && !o.dragging && (std::abs(p.x - o.down.x) > 3 || std::abs(p.y - o.down.y) > 3)) o.dragging = true;
-    if (o.dragging)
-        o.sel = {std::min(o.down.x, p.x), std::min(o.down.y, p.y), std::max(o.down.x, p.x) + 1, std::max(o.down.y, p.y) + 1};
-    else OvUpdateHover();
+    bool barChanged = mk::Hover(p);
+    if (o.press == 2) {
+        mk::ShapeMove(p, (GetKeyState(VK_SHIFT) & 0x8000) != 0);
+    } else if (o.press == 1) {
+        if (o.pressed && !o.dragging && (std::abs(p.x - o.down.x) > 3 || std::abs(p.y - o.down.y) > 3)) o.dragging = true;
+        if (o.dragging)
+            o.sel = {std::min(o.down.x, p.x), std::min(o.down.y, p.y), std::max(o.down.x, p.x) + 1, std::max(o.down.y, p.y) + 1};
+    } else {
+        OvUpdateHover();
+    }
+    (void)barChanged;  // The whole screen is redrawn anyway; the magnifier follows the pointer.
     InvalidateRect(o.hwnd, nullptr, FALSE);
+}
+
+// A region was picked (dragged or clicked): snip it, or keep it up for drawing when "Draw after picking" is on.
+static void OvPicked(RECT r) {
+    Overlay& o = g_ov;
+    if (mk::g.on && g_cfg.keepRegionOpen) {
+        o.kept = r;
+        o.haveKept = true;
+        o.haveHover = false;
+        mk::SetTool(mk::g.lastDraw);
+        InvalidateRect(o.hwnd, nullptr, FALSE);
+        return;
+    }
+    OvFinish(r);
 }
 
 static void OvCopyColor() {
@@ -1355,6 +4108,35 @@ static void OvCopyColor() {
     InvalidateRect(o.hwnd, nullptr, FALSE);
 }
 
+static bool OvCtrl() { return (GetKeyState(VK_CONTROL) & 0x8000) != 0; }
+static bool OvShift() { return (GetKeyState(VK_SHIFT) & 0x8000) != 0; }
+
+static void OvLeftDown(HWND hwnd, POINT p) {
+    Overlay& o = g_ov;
+    o.cur = p;
+    if (mk::OverBar(p)) {
+        o.press = 3;
+        mk::BarDown(p);
+        SetCapture(hwnd);
+        InvalidateRect(hwnd, nullptr, FALSE);
+        return;
+    }
+    if (mk::DrawTool()) {
+        o.press = 2;
+        mk::ShapeDown(p);
+        if (mk::g.drawing) SetCapture(hwnd);
+        InvalidateRect(hwnd, nullptr, FALSE);
+        return;
+    }
+    o.press = 1;
+    o.pressed = true;
+    o.dragging = false;
+    o.haveKept = false;  // A new pick replaces the kept region.
+    o.down = p;
+    SetCapture(hwnd);
+    OvSetCursor(p);
+}
+
 static LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     Overlay& o = g_ov;
     if (hwnd != o.hwnd) return DefWindowProcW(hwnd, msg, wp, lp);
@@ -1364,62 +4146,137 @@ static LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             ValidateRect(hwnd, nullptr);
             return 0;
         case WM_ERASEBKGND: return 1;
-        case WM_SETCURSOR:
-            SetCursor(LoadCursorW(nullptr, IDC_CROSS));
+        case WM_SETCURSOR: {
+            LPCWSTR c = IDC_CROSS;
+            if (mk::OverBar(o.cur)) c = IDC_ARROW;
+            else if (mk::DrawTool() && mk::g.tool == mk::T_TEXT) c = IDC_IBEAM;
+            SetCursor(LoadCursorW(nullptr, c));
             return TRUE;
+        }
         case WM_MOUSEMOVE: OvSetCursor(POINT{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}); return 0;
-        case WM_LBUTTONDOWN:
-            o.pressed = true;
-            o.dragging = false;
-            o.down = POINT{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
-            SetCapture(hwnd);
-            OvSetCursor(o.down);
+        case WM_LBUTTONDOWN: OvLeftDown(hwnd, POINT{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}); return 0;
+        case WM_LBUTTONDBLCLK: {
+            POINT p{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            if (o.haveKept && !mk::OverBar(p) && PtInRect(&o.kept, p) && !mk::DrawTool()) {
+                OvFinish(o.kept);
+                return 0;
+            }
+            OvLeftDown(hwnd, p);
             return 0;
+        }
         case WM_LBUTTONUP: {
-            if (!o.pressed) return 0;
-            o.pressed = false;
+            POINT p{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            int was = o.press;
+            o.press = 0;
             if (GetCapture() == hwnd) ReleaseCapture();
-            OvSetCursor(POINT{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)});
+            if (was == 3) {
+                OvAct(mk::BarUp(p));
+                return 0;
+            }
+            if (was == 2) {
+                mk::ShapeUp();
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            }
+            if (was != 1 || !o.pressed) return 0;
+            o.press = 1;  // Let OvSetCursor finish the drag rectangle.
+            OvSetCursor(p);
+            o.press = 0;
+            o.pressed = false;
             if (o.dragging) {
                 RECT r = o.sel;
                 o.dragging = false;
-                OvFinish(r);
+                OvPicked(r);
             } else if (o.haveHover) {
-                OvFinish(o.hover);
+                OvPicked(o.hover);
             }
             return 0;
         }
         case WM_RBUTTONDOWN: return 0;
-        case WM_RBUTTONUP:
-            if (o.pressed || o.dragging) {
-                o.pressed = o.dragging = false;
+        case WM_RBUTTONUP: {
+            POINT p{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            if (mk::g.drawing || mk::g.typing >= 0) {
+                mk::RightClick();
+                o.press = 0;
                 if (GetCapture() == hwnd) ReleaseCapture();
-                OvSetCursor(POINT{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)});
+            } else if (o.pressed || o.dragging) {
+                o.pressed = o.dragging = false;
+                o.press = 0;
+                if (GetCapture() == hwnd) ReleaseCapture();
+                OvSetCursor(p);
+            } else if (mk::RightClick()) {
+                // Took back the last drawing.
+            } else if (o.haveKept) {
+                o.haveKept = false;
+                mk::SetTool(mk::T_REGION);
+                OvSetCursor(p);
             } else {
                 OvClose();
+                return 0;
+            }
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
+        }
+        case WM_MBUTTONUP:
+            if (mk::g.on && o.press == 0) {
+                mk::Swap();
+                OvUpdateHover();
+                InvalidateRect(hwnd, nullptr, FALSE);
             }
             return 0;
+        case WM_XBUTTONDOWN: return TRUE;
+        case WM_XBUTTONUP:
+            if (o.press != 0) return TRUE;
+            if (GET_XBUTTON_WPARAM(wp) == XBUTTON1) OvFinishAll();
+            else OvFinish(MonAt(o.cur).r);
+            return TRUE;
         case WM_MOUSEWHEEL:
             o.zoom = Clamp(o.zoom + (GET_WHEEL_DELTA_WPARAM(wp) > 0 ? 1 : -1), 4, 24);
             InvalidateRect(hwnd, nullptr, FALSE);
             return 0;
-        case WM_KEYDOWN:
+        case WM_CHAR:
+            if (mk::Char((wchar_t)wp)) InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
+        case WM_KEYDOWN: {
+            bool ctrl = OvCtrl(), shift = OvShift();
+            if (mk::g.typing >= 0 && !ctrl) return 0;  // The text box gets it as WM_CHAR.
             switch (wp) {
-                case VK_ESCAPE: OvClose(); return 0;
+                case VK_ESCAPE:
+                    if (mk::g.drawing) {
+                        mk::RightClick();
+                        o.press = 0;
+                        if (GetCapture() == hwnd) ReleaseCapture();
+                        InvalidateRect(hwnd, nullptr, FALSE);
+                    } else {
+                        OvClose();
+                    }
+                    return 0;
                 case VK_RETURN:
                     if (o.dragging) {
                         RECT r = o.sel;
                         o.pressed = o.dragging = false;
+                        o.press = 0;
+                        if (GetCapture() == hwnd) ReleaseCapture();
                         OvFinish(r);
+                    } else if (o.haveKept) {
+                        OvFinish(o.kept);
                     } else if (o.haveHover) {
                         OvFinish(o.hover);
+                    } else if (!mk::g.shapes.empty()) {
+                        OvFinish(mk::g.mon);
                     }
                     return 0;
+                case VK_OEM_3:  // The ~ key: the whole screen under the pointer, drawings and all.
+                    if (!ctrl) {
+                        OvFinish(MonAt(o.cur).r, 0, true);
+                        return 0;
+                    }
+                    break;
                 case VK_LEFT:
                 case VK_RIGHT:
                 case VK_UP:
                 case VK_DOWN: {
-                    int step = (GetKeyState(VK_SHIFT) & 0x8000) ? 10 : 1;
+                    int step = shift ? 10 : 1;
                     int dx = wp == VK_LEFT ? -step : wp == VK_RIGHT ? step : 0;
                     int dy = wp == VK_UP ? -step : wp == VK_DOWN ? step : 0;
                     POINT p{Clamp(o.cur.x + dx, 0, o.shot.w - 1), Clamp(o.cur.y + dy, 0, o.shot.h - 1)};
@@ -1427,10 +4284,34 @@ static LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     OvSetCursor(p);
                     return 0;
                 }
-                case 'C': OvCopyColor(); return 0;
+                case 'C':
+                    if (!ctrl) {
+                        OvCopyColor();
+                        return 0;
+                    }
+                    break;
             }
+            // 1 to 9 and 0, top row or number pad: that screen, counted from the left, as ShareX does.
+            if (!ctrl && !shift && ((wp >= '0' && wp <= '9') || (wp >= VK_NUMPAD0 && wp <= VK_NUMPAD9))) {
+                int d = (int)(wp >= VK_NUMPAD0 ? wp - VK_NUMPAD0 : wp - '0');
+                size_t i = d == 0 ? 9 : (size_t)d - 1;
+                std::vector<MonInfo> m = o.mons;
+                std::sort(m.begin(), m.end(), [](const MonInfo& a, const MonInfo& b) {
+                    return a.r.left != b.r.left ? a.r.left < b.r.left : a.r.top < b.r.top;
+                });
+                if (i < m.size()) OvFinish(m[i].r, 0, true);
+                return 0;
+            }
+            int a = mk::Key((UINT)wp, ctrl, shift);
+            if (a >= 0) OvAct(a);
             return 0;
+        }
         case WM_TIMER:
+            if (wp == mk::kCaretTimer) {
+                mk::g.caretOn = !mk::g.caretOn;
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            }
             KillTimer(hwnd, wp);
             InvalidateRect(hwnd, nullptr, FALSE);
             return 0;
@@ -1444,18 +4325,24 @@ static LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 static void StartRegion() {
     Overlay& o = g_ov;
     if (o.hwnd) return;
+    LARGE_INTEGER qf, t0, t1, t2;
+    QueryPerformanceFrequency(&qf);
+    QueryPerformanceCounter(&t0);
     RECT vs = VirtualScreen();
     if (!CaptureRect(vs, false, o.shot)) {
         Wh_Log(L"Couldn't capture the screen");
         return;
     }
+    QueryPerformanceCounter(&t1);
     o.wins.clear();
     o.mons.clear();
-    EnumWindows(CollectWin, 0);
     EnumDisplayMonitors(nullptr, nullptr, CollectMon, 0);
     POINT c;
     GetCursorPos(&c);
     o.cur = {c.x - o.shot.x, c.y - o.shot.y};
+    mk::Begin(MonAt(o.cur));
+    o.press = 0;
+    o.haveKept = false;
     o.pressed = o.dragging = false;
     o.haveHover = false;
     o.hoverWin = nullptr;
@@ -1475,7 +4362,7 @@ static void StartRegion() {
     // Cloaked until the first frame is drawn, so the screen never flashes.
     DwmSetWindowAttribute(o.hwnd, DWMWA_CLOAK, &on, sizeof(on));
     ShowWindow(o.hwnd, SW_SHOW);
-    OvUpdateHover();
+    // First frame before the window list is read: the screen is up as soon as it's drawn.
     OvRender();
     if (!o.rt) {  // No drawing surface (GPU lost, or a desktop wider than D2D allows): no dead overlay.
         Wh_Log(L"Couldn't draw the region screen");
@@ -1486,6 +4373,15 @@ static void StartRegion() {
     BOOL off = FALSE;
     DwmSetWindowAttribute(o.hwnd, DWMWA_CLOAK, &off, sizeof(off));
     BringToFront(o.hwnd);
+    QueryPerformanceCounter(&t2);
+    EnumWindows(CollectWin, 0);
+    OvUpdateHover();
+    InvalidateRect(o.hwnd, nullptr, FALSE);
+    int capMs = (int)((t1.QuadPart - t0.QuadPart) * 1000 / qf.QuadPart);
+    int openMs = (int)((t2.QuadPart - t0.QuadPart) * 1000 / qf.QuadPart);
+    Wh_SetIntValue(L"lastCaptureMs", capMs);
+    Wh_SetIntValue(L"lastOpenMs", openMs);
+    Wh_Log(L"Region screen up in %d ms (capture %d ms)", openMs, capMs);
 }
 
 // ---------------------------------------------------------------------------
@@ -1529,6 +4425,10 @@ struct SaveJob {
     bool save = false, toast = false, copied = false;
     SYSTEMTIME when{};
 };
+
+namespace hist {
+static bool IsOpen();
+}
 
 static DWORD WINAPI SaveThread(LPVOID param) {
     std::unique_ptr<SaveJob> job((SaveJob*)param);
@@ -1578,21 +4478,457 @@ static DWORD WINAPI SaveThread(LPVOID param) {
     job->shot.px.shrink_to_fit();
     if (SUCCEEDED(com)) CoUninitialize();
     HWND msg = g_msgWnd;
-    if (job->toast && msg && PostMessageW(msg, WM_SNP_SAVED, 0, (LPARAM)job.get())) job.release();
+    // The card, and an open history window, both want to hear about the new file.
+    if ((job->toast || hist::IsOpen()) && msg && PostMessageW(msg, WM_SNP_SAVED, 0, (LPARAM)job.get())) job.release();
     g_saveThreads--;
     return 0;
 }
 
+// ShareX's capture sound (ShareX.dll resource CaptureSound, GPL-3.0), trimmed. Base64 WAV.
+static const char kShutterWav[] =
+    "UklGRoyNAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YWiNAAAAAP//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//8AAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAD//wAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//wAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAP//AAD//wAA"
+    "AQAAAAAAAAAAAAAAAAAAAAEAAAAAAP//AAD///////8AAP//AAAAAAAAAAAAAAEAAQABAAEAAAAAAAAA//8AAAAA//////////8AAAEAAgACAAEAAQAA"
+    "AP//AAAAAAAAAAAAAP/////+////AQACAAMAAgAAAP///v/+////AAACAAIAAQD/////AAABAAMABAADAAEA/v/9//v//P/9//7//v//////AAACAAUA"
+    "BwAHAAYAAwAAAP7//f/9//3//f/6//f/9//5//7/BQALAAwACgAEAP///f/+/wIABQAFAAIA+//1//T/+v8DAAwAEQAPAAYA+//0//P/+f8AAAYABgAA"
+    "APn/9v/6/wQAEAAXABQACwD9//H/7P/u//X/+v/7//j/9f/1//z/CQAXACAAHwAWAAkA/f/3//j//P/9//r/8v/s/+v/8/8BABAAGQAYAA4AAgD5//f/"
+    "/P8DAAUAAgD6//P/8//6/wgAFQAbABcACwD8//L/8f/4/wAABAABAPr/9v/4/wQAFAAiACcAHQANAPv/7//u//T//P/+//n/7v/p/+v/+v8PACAAKAAg"
+    "AA4A+v/v/+7/9/8CAAYAAQD3/+3/6//1/wcAGQAhABwADAD6/+z/6P/u//j///8AAPn/9P/0//r/BgARABYAEgAHAPv/8v/v//H/9P/1//T/8//1//z/"
+    "BgAQABQAEQAGAPv/9P/1//v/AQACAP3/9P/u//D/+/8NABwAIQAZAAcA8//n/+f/8v8AAAoACAD+//L/7P/y/wMAFgAjACMAFAAAAO7/5P/n//L//v8G"
+    "AAQA/f/1//L/9f///wkADwAPAAkAAQD6//X/9P/3//3/BAAKAA8AEAAMAAUA/f/2//T/+f8AAAYABwACAPf/7v/s//L/AQAQABkAFQAGAPL/4f/c/+T/"
+    "9v8GAA8ACwD+//D/6v/v//7/EAAcAB0AEgD///D/6f/u//v/CwAVABgAEQAHAPv/9P/1//v/AwAKAAwACQAAAPf/8P/u//b/BAASABsAGgAOAP3/7P/l"
+    "/+z//f8SACIAIwAYAAUA9f/y//3/DwAgACQAFwD//+X/1f/X/+r/BAAaACEAGQAGAPT/7P/v//z/CQAPAAsA/v/v/+T/5P/t//v/CQATABYAEwALAAEA"
+    "+P/y//H/9/8BAA0AFAAVAA4AAgD4//b///8NABkAGQAKAPD/1f/H/87/5/8KACQALQAiAAkA8v/q//X/CgAdACEAEADy/9T/yP/T//D/FAAsADAAIgAK"
+    "APf/8P/2/wMACwAHAPz/7v/m/+r/+v8MABoAHwAcABMADAAHAAIA+v/u/+H/2P/a/+n///8TAB0AGAAKAPz/+P///w0AFQANAPX/1f++/7z/1P/8/yEA"
+    "MwAqAA0A7P/a/97/8v8HAAwA/P/d/8L/vP/T////LQBJAEcAKwAGAOn/4P/p//T/9P/j/8f/rv+s/8X/8f8dADoAPAAoAA4A/v///woAEwANAPf/2P/D"
+    "/8X/4v8LAC8APAAvABAA8//o//H/BQARAAwA9v/a/83/3P8FADUAVgBXADoADADk/9L/1//m/+z/3v/C/6j/pv/K/wgATAB6AH8AYAAxAAsAAAAMAB0A"
+    "GgD8/8f/l/+H/6X/5v8vAF4AXwA4AAAA2P/U//H/FwArABoA7P+5/6L/t//z/zkAZwBnADoA+P/C/6//wP/i//7////s/9b/1P/0/y8AawCOAIkAYAAn"
+    "APn/4f/d/97/0/+4/5v/kf+r/+j/MgBrAHwAYQAtAAEA8/8DACAALQAUANr/mv96/5X/5v9LAJYApABuABQAxP+k/8D///80ADwAEADE/4v/jv/R/zoA"
+    "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"
+    "bwDo/93/gwCtACQAlf9O/2P/KAAfATIBlQApALf/I/8A/xb/Of8aABoBvQDb/yIA0wDJAFcAsf9f/0QAHgGMABAAiACqAFkA7P/s/mn+fv+RAHkAbgDQ"
+    "AKQA1/8u/+j+EP/Y/38A5v8b/9n/xgAMABv/Of9Z/4n/WwCkAEYAewDUALYAcACl/9H+ZP9iAAgAZP/3/94A5QBoAPP/j/+q/0EAaQAnAEQAngDRAJYA"
+    "p//V/lH/fQCyAPP/y/+LAPEAdgCF/+z+jv+GACQAG/8G/+T/wgCnAJb/5f5I/zMAuABQALH/v/8yAJgAbwB2/wD/4P+LABkAwv81AK4AegDR/0D/G/+h"
+    "/58A4AD6/6n/1QC3ARMBnv94/uz+0gBpAfv/b/+DANAA0P9M/5X/of+z/yEAyP8W/+j/XwFPAef/xf4T/0UAgwDG/5P/HwCsAJQAl/+a/s/+9/+qAIIA"
+    "UQAXALb/+f8lAE7/Lf9UAOcAlQAxADkA4QAdAVEAn/90/7b/XQA4AEj/bv9yALQATwCe/8f+FP+TAA4BJADC/0sApABHADj/g/5z/8wAjwB6/07/LAD+"
+    "AJYAN//P/vz/BQH5AMQAmAAcAPn/9/8M/1D+6P6J/6n/FQBcAE0ArwDwAFgA1P/j/+H/3/9IAMkA8gDQAIYA3P8I//b+n/8TADIALQABAP7///+U/zD/"
+    "KP9Q/7//WgDGALkAVgBUAG4Ar/8N/6P/WgBoAFEAPAARAOf/p/9B/xT/cP/w/1YAtwCXACkALQAHAJ3/3P9aAKMA5gDJAJoAcQCf/wL/Kf8t/4D/RgBf"
+    "ACgAUAB1AFkA1f9i/67/MgB0AFoA3f/O/z8ALwDF/2f/Ff9A/8D/AQAqAFMAawCCAHIAIgC4/4H/rP8AAEoAXgAzABMA5v/h/08A4v/V/qb/SAEEASgA"
+    "WQCwALMAigDa//f+Kv9DAGgAwf/d/xMA+v9SAEcAxP/8/xwAg/9I/8T/dwBpAIr/YP+x/6b/YwArAWYAn/+L/zj/pv+zAHgAt//3/1EALABMAFQAjP8R"
+    "/33/d/88/0EASgHdACUArP8n/5f/1wAjAWgABwCJAPcAVwDS/y4A6v93/+7/bP+L/tr/AAFPABoAzf+l/vD+5/+5/wcAIAFCAYEACwAgAAYAlv+Y/8T/"
+    "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"
+    "bv+o/+7/4//W/8P/sf8NAGYARgAmAA8A+/8tAEkAOgBRAEwAGQAYACYACQDq/wAAHwDu/7//AwA/AOv/iP+y/xMALQAcABgAJgBMADQA2/+s/4//dv+3"
+    "/wMAAQDo//T/DADh/+L/kgDkAEEAmf9B/3b/TgCEAOX/xv8vAEMABADv/wcA2P/A/w8AFAADAFcAYgBAAGQARgD6//7/DQDv/+L/JABkAEEA/f++/6X/"
+    "6/8FAOb/EQD7/6j/t/+n/4T/zf8kAGMAVgD+/xwATAD+/9j/4//h//T/AgAtAAgAhv/o/38A8f+I//T/VwCBAEgA1//G////UgBHALn/qf/r/+//OgA7"
+    "AJ//t/8/ADgANwBoAFQAMQApANT/ZP+1/y0Arv9i//z/EQDD//j/IQAtAF0AXgBlAG8AGQDN/wsAYAD//2r/wP89APP/xv/u/+//EwD8/4n/sf8qAEUA"
+    "cwCIACUA2//W/93//P/1/+D/JgBVAA4Auv+L/8z/TQD0/2n/yf+6/0v/JACiAKv/qP+pAKAA+v/1/2gArwB6AAkAlP9t/+v/QQD2//T/YQCDACQAbv8n"
+    "/9n/fQAsAKj/2f97AKgANQCn/3X/+/+oAGUAwv/a/y4ADgDI/5//qP/v/zUALAD1/+H/3P/B/8P/6v8RAD4AVQAqAOf/2f8SACwA7v/l/x8AJwAVAO3/"
+    "pf+//xQA/P++/8r/FwBhAEgAAgDu//L/NQCIAEwA9P8YAEsATQASAJv/kf8vALYAZQCO/3X/EgA2APz/yf91/4f/xf+o/8L/2f/Z/58AFwFCAI//rv8S"
+    "AF8AIwDQ/+7/DwAmABYAxP/d/x0A9P/O/5j/dP/h/0MANAAlADIAVgBFANL/nv/v/5EA7gBVAJz/w/8kADgA9f99/5P/AgANAPn/5//4/30AowD//3b/"
+    "hv8CAC4AuP+Q//T/MwBJACYAzv/2/3oAeAABALL/lf+D/9j/cABiAO7/9f8eAAUA5//J/9r/GQAGALL/r//5/ygALgBNAGwAWwBuAGkA0f9i/8P/PgA6"
+    "AO//pf+d/+z/QgBPABIA3P/1/xYA2//J/z8AfwA4APv/8f/z/+H/o/9w/2D/kv9IAMUAWADw/yMAVQBBAA0A0v+4/8T/6v8fACcA///o//f/HwA+ADEA"
+    "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"
+    "FwAJACwAKAADAAEA+P/h/9//1//m/yIAQAApAAoA+//0//L/+//0/9j/4v////X/9P8PABYACwD3/+T/7f8AAAkACAD1/+r/+P/8//3/CAAGAAUADAAL"
+    "AAAA8P/x/wYAAQDj/97//v8hACEACgAFAAsA///t/9//5f8BACIANwAeAO7/7/8SAAoA4v/H/9j/GAA+ACAABAAOABAA9v/h/9r/2P/2/yoAHwD0/wEA"
+    "HgAFANH/sv/A/+//CQD5/+f/DQBDACkA7f/h/+n/AgAuACYA/P/+/wUA/v8CAOz/x//e/xUAHQD6//v/IwAlAP7/7v/+/xIAHwASAO//5f8EACYAIAD0"
+    "/9L/2P8CABcA///6/xsAIgD7/9L/yP/x/yIADQDh/+//DQALAPz/5//S/+f/FwAjAA8ABQAXADIALQAJAPH/5f/c/9//5v/5/xQAFgAGAPz/6f/g//X/"
+    "CQAKAAMAAgAcADkALAAJAPf//v8QAAsA8v/y/wkAEQD+/9r/xf/h/wUABQD4//3/DAAZABUA/f/s//7/IQAkAAYA/P8QAA8A7f/P/8T/z//j//b/AwAK"
+    "ABgALAAeAPj/9f8RACEAGAD8/+7/CAAgABkACQD6//P//v8KAAEA8//5/wwACQD1/+3/9P/+/wgABgD5//n/DQAbAA4A9v/w//T/7//o/+3/BwAlACYA"
+    "BQDt//H/9v/5/wwAJgArABkA/v/m/9r/0//R/+n/BwAOAA0ADAAIABkAKgAWAPn/8//w/+f/+f8gACsAFwAJAPf/3//t/w0ACwD1//H//P8BAP//AAAB"
+    "AAUAEwAYAAkA/f8EAAcAAwD+//H/5P/r/wAABAAAAAcABQD2//b//v8BAAsAEwANAAkADgAIAPP/3f/P/9n/+P8YACUAJwAkABcAAQDu/+H/5f8IACkA"
+    "IgANABUAHgAEANX/tP/C//v/HwARAP3///8OAB4AFQDs/9b/8v8UABUACAAMABAAAwDw/+D/3P/2/xsAHAD7/+b//v8bABAA/f/0/+P/9f8vADQABAAB"
+    "ABgAEAD+/+L/yv/n/xwAFQDr/+n/CgARAPr/5v/o/wAAGgANAPH//v8jACMA/f/W/8z/8v8hACIABAD5/wwAFgAEAPf/+f/4//3/BgD//wAADwADAOP/"
+    "3v/p/+//BgAoACoADwAAAP///v8EAAwAAQD5/wsAFQAAAPf/EwATAOj/0f/T/9T/9v8lAB4ABQAQABIA+P/m/+f///8kACIAAgACABcADgDv/9v/2v/x"
+    "/woABgD9/wUACwAKAAgA/P/w//j/AwALABgAIAAUAAgAAwDu/9f/3P/3/wwADAAFAAgACQABAP3/+//+/xgAIgAEAPb/CQAIAPj/7P/a/9z/9f8AAAAA"
+    "EQAdABUAAwD4//T/+v8GABUAHQAdABYABgDz/+f/4v/l//D//v8FAAcABQAAAAMAEgAPAP3/AQASAA0ABAASABoABwDt/9//3f/u/wYACAD7/wEACwD9"
+    "/+3/8f8CABcAIwAIAOT/7P8OABUABwD8//H/9v8MABQACgAHAAYA//8CAAAA8v/0/wwADwD7//f/AQD+//v/AAD8/wMAIQApAA4A+P/x//D/+f////f/"
+    "8f8AABoAHAAJAAwAEADu/9X/3v/c/+D/CgAdAAQA//8SABQACQD+//3/DAAYABgAEQAIAAkACwD3/97/z//G/97/GQAsABAADQAfABAA/v8AAPT/9f8a"
+    "ACUACAAEABAAAgDw/+D/1P/m/wYACwAGAAYAAwAIAA4AAgDu//H/DQAeAAoA9f/+/wkAAQDw/9z/4P8HACAACwADACAAJgAGAO//7f/0/wwAGAD+//L/"
+    "DgAhABQA+v/f/93///8MAPT/8/8QAB8AFwAHAPr/9P/z//L/+/8JABAADgAGAPf/6f/n//D/8//x//j/CgAWABYAEQAKAAIAAQAEAAkADwANAAMA/f/2"
+    "/+r/7/8FAAsAAgABAA0AEwAIAPz/AwALAAgAAQD7/wEAFAAWAAUA+//w/+3/+f/1/+j/9/8OABAAAwD1//L/BAAQAAkACQAMAAgABAD3/+z/8v/8//f/"
+    "8f/1/wAAAwACAAcADwANAAoADgAOAAIA9//+/wkABAD0//P/AAAIAAoABAD7//n/AAAOABUADAD//wAACQADAAAABQAFAP7/9//q/+v/BQAPAPn/6v/2"
+    "/wUACwAEAAAABAADAAQACwAAAPL//v8PAAgA9//m/+n/AwAWAA0AAgAGAAsABgD8//P/+f8AAP7//f8DAAsAEAAIAPP/7v/4//r/AAAVABsABwAAAAUA"
+    "AAD+//n/9P8EABUABwD2//n//v8CAAQA9v/s//z/DAAGAPj//v8PABMAAQDz//n/BwANAAgA/v/4//z////6//T/8f/z/wEAEgAMAAAABgAQAAMA+f/9"
+    "/wEACgAQAAIA9v/+/wcABwD8/+n/4v/1/wYACAAJABIAFwAMAP3/9P/y//P//f8JAAkABAAFAAQA+v/0//f//f/+//7/BAAJAAgACAAHAAEA/v/+//j/"
+    "9v///wQABwAIAAAA8//3/wAAAAABABAAEAAAAPv//f/+/wIABgAAAP//AwAGAAUAAAD1//H/+//+//f//P8IAAwABQAAAPv/+f/7////AQAHAAsABwAB"
+    "AAAA+//4//z/////////AQAFAAgABQAAAPv//f8BAAMAAAACAAQAAAD//wAA+v/5/wMABgAAAP7/AwACAAAAAAD9/wAABQACAP7/AAAAAP//AAAAAPr/"
+    "+/8AAAEA//8AAAMABQADAAAAAAABAAQAAwD+//v//f8AAAAAAQAAAPv//P8AAAEA/////wMAAwAAAP//AAACAAMAAgAAAAAAAQAAAAAA///8//v///8B"
+    "AAEAAAABAAEAAAD+////AAABAAEAAgACAAEAAAD//////////wAAAAAAAAAAAAAAAAAAAAD/////AAAAAAAAAAABAAEAAQAAAP////8AAAEAAAAAAAAA"
+    "AAAAAP//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+
+// ShareX's camera click, decoded once and kept for good (an async PlaySound reads it while it plays).
 static void PlayClick() {
-    std::wstring wav = ExpandPath(L"%SystemRoot%\\Media\\Windows Navigation Start.wav");
-    PlaySoundW(wav.c_str(), nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+    if (!g_cfg.soundFile.empty()) {
+        std::wstring path = ExpandPath(g_cfg.soundFile);
+        if (GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES &&
+            PlaySoundW(path.c_str(), nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT))
+            return;
+    }
+    static std::vector<BYTE> wav;
+    if (wav.empty()) {
+        DWORD n = 0;
+        if (CryptStringToBinaryA(kShutterWav, 0, CRYPT_STRING_BASE64, nullptr, &n, nullptr, nullptr) && n) {
+            wav.resize(n);
+            if (!CryptStringToBinaryA(kShutterWav, 0, CRYPT_STRING_BASE64, wav.data(), &n, nullptr, nullptr)) wav.clear();
+        }
+    }
+    if (!wav.empty()) PlaySoundW((LPCWSTR)wav.data(), nullptr, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
 }
 
-static void Deliver(Shot&& shot, const std::wstring& app) {
+static void Deliver(Shot&& shot, const std::wstring& app, int how) {
     const Config& c = g_cfg;
-    bool copied = c.copy && PutClipboardImage(shot);
+    bool wantCopy = how == 1 || (how == 0 && c.copy), wantSave = how == 2 || (how == 0 && c.save);
+    bool copied = wantCopy && PutClipboardImage(shot);
     if (c.sound) PlayClick();
-    if (!c.save && !c.toast) return;
+    if (!wantSave && !c.toast) return;
     auto* job = new SaveJob;
     job->shot = std::move(shot);
     job->app = app.empty() ? L"Screenshot" : app;
@@ -1600,7 +4936,7 @@ static void Deliver(Shot&& shot, const std::wstring& app) {
     job->subfolder = c.subfolder;
     job->format = c.format;
     job->quality = c.jpgQuality;
-    job->save = c.save;
+    job->save = wantSave;
     job->toast = c.toast;
     job->copied = copied;
     GetLocalTime(&job->when);
@@ -1614,18 +4950,34 @@ static void Deliver(Shot&& shot, const std::wstring& app) {
 }
 
 // ---------------------------------------------------------------------------
-// The preview card, bottom right
+// The preview card. A layered window that draws its own rounded shape, so the corners stay clean
+// at any radius, and it can slide, fade or grow in and out.
 // ---------------------------------------------------------------------------
+
+constexpr UINT_PTR kTimerToastAnim = 4;
 
 struct Toast {
     HWND hwnd = nullptr;
-    ID2D1HwndRenderTarget* rt = nullptr;
-    ID2D1Bitmap* bmp = nullptr;
+    ID2D1DCRenderTarget* rt = nullptr;
+    ID2D1Bitmap* bmp = nullptr;    // The thumbnail.
+    ID2D1Bitmap* frost = nullptr;  // The screen behind the card, blurred.
     ID2D1SolidColorBrush* brush = nullptr;
     std::unique_ptr<SaveJob> job;
-    UINT dpi = 96;
-    float w = 300, h = 220, thumbW = 0, thumbH = 0;
-    bool acrylic = false, hot = false;
+    HDC dc = nullptr;
+    HBITMAP dib = nullptr;
+    HGDIOBJ oldBmp = nullptr;
+    int dibW = 0, dibH = 0;
+    Shot frostPx;                 // A quarter size, blurred.
+    float dpiK = 1, s = 1, dipU = 1;  // Pixels per DIP, pixels per card unit, card units per DIP.
+    float w = 300, h = 220, thumbW = 0, thumbH = 0, radius = 16;
+    int x = 0, y = 0, pw = 0, ph = 0;  // The final spot, in pixels.
+    int slideDir = 1;                  // 1 rises from below, -1 drops from above.
+    bool hot = false, glass = false, textOn = true, dirty = true;
+    float glow = 0, drawnGlow = -1, drawnGrow = -1, vis = 0, fromVis = 0;
+    int phase = 0;  // 0 hidden, 1 coming in, 2 shown, 3 going out.
+    double t0 = 0, lastTick = 0;
+    std::wstring anim = L"slide";
+    int animMs = 220;
 };
 static Toast g_toast;
 
@@ -1655,155 +5007,361 @@ static bool SetAcrylic(HWND hwnd, bool on) {
     return fn(hwnd, &d) != FALSE;
 }
 
-static void ToastRelease() {
-    Toast& t = g_toast;
-    if (t.brush) t.brush->Release();
-    if (t.bmp) t.bmp->Release();
-    if (t.rt) t.rt->Release();
-    t.brush = nullptr;
-    t.bmp = nullptr;
-    t.rt = nullptr;
-}
-
-static void ToastHide() {
-    Toast& t = g_toast;
-    if (!t.hwnd) return;
-    KillTimer(t.hwnd, kTimerToast);
-    bool shown = IsWindowVisible(t.hwnd);
-    ShowWindow(t.hwnd, SW_HIDE);
-    if (shown) DwmFlush();  // Let the screen drop the card before the next capture.
-    if (t.bmp) t.bmp->Release();
-    t.bmp = nullptr;
-    t.job.reset();
-}
-
-static void ToastPaint() {
-    Toast& t = g_toast;
-    if (!t.job) return;
-    if (!t.rt) {
-        RECT rc;
-        GetClientRect(t.hwnd, &rc);
-        auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
-                                                  D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
-        if (FAILED(g_d2d->CreateHwndRenderTarget(props, D2D1::HwndRenderTargetProperties(t.hwnd, D2D1::SizeU(rc.right, rc.bottom)),
-                                                 &t.rt)))
-            return;
-        t.rt->CreateSolidColorBrush(Rgb(mocha::text), &t.brush);
-    }
-    const Shot& th = t.job->thumb;
-    if (!t.bmp && th.w > 0) {
-        auto bp = D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
-        t.rt->CreateBitmap(D2D1::SizeU(th.w, th.h), th.px.data(), th.w * 4, bp, &t.bmp);
-    }
-    ID2D1HwndRenderTarget* rt = t.rt;
-    ID2D1SolidColorBrush* b = t.brush;
-    rt->SetDpi((float)t.dpi, (float)t.dpi);
-    rt->BeginDraw();
-    rt->Clear(D2D1::ColorF(0, 0, 0, 0));
-    D2D1_RECT_F r{0, 0, t.w, t.h};
-    FillRound(rt, b, r, 8, Rgb(mocha::crust, t.acrylic ? 0.5f : 0.97f));
-    Ptr<ID2D1LinearGradientBrush> grad;
-    GradientBrush(rt, r, t.hot ? 1.0f : 0.75f, grad);
-    if (grad) rt->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(0.75f, 0.75f, t.w - 0.75f, t.h - 0.75f), 8, 8), grad.p, 1.5f);
-    float pad = 12;
-    D2D1_RECT_F box{pad, pad, t.w - pad, pad + t.thumbH};
-    float dx = (box.right - box.left - t.thumbW) / 2;
-    D2D1_RECT_F img{box.left + dx, box.top, box.left + dx + t.thumbW, box.top + t.thumbH};
-    if (t.bmp) {
-        Ptr<ID2D1RoundedRectangleGeometry> geo;
-        Ptr<ID2D1Layer> layer;
-        g_d2d->CreateRoundedRectangleGeometry(D2D1::RoundedRect(img, 6, 6), geo.put());
-        rt->CreateLayer(nullptr, layer.put());
-        if (geo && layer) rt->PushLayer(D2D1::LayerParameters(img, geo.p), layer.p);
-        rt->DrawBitmap(t.bmp, img, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, nullptr);
-        if (geo && layer) rt->PopLayer();
-        b->SetColor(Rgb(mocha::surface2, 0.9f));
-        rt->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(img.left + 0.5f, img.top + 0.5f, img.right - 0.5f, img.bottom - 0.5f), 6, 6), b, 1);
-    }
-    std::wstring title, sub;
-    const SaveJob& j = *t.job;
-    if (!j.path.empty()) {
-        title = j.path.substr(j.path.find_last_of(L'\\') + 1);
-        sub = j.copied ? L"Saved and copied. Click to open it." : L"Saved. Click to open it.";
-    } else if (!j.error.empty()) {
-        title = j.error;
-        sub = j.copied ? L"It was copied to the clipboard." : L"Check the folder in Snipper's settings.";
-    } else {
-        title = L"Snip copied";
-        sub = L"Ready to paste.";
-    }
-    float ty = box.bottom + 8;
-    b->SetColor(Rgb(j.error.empty() ? mocha::text : mocha::red));
-    rt->DrawText(title.c_str(), (UINT32)title.size(), Font(13.0f, true), D2D1::RectF(pad, ty, t.w - pad, ty + 20), b,
-                 D2D1_DRAW_TEXT_OPTIONS_CLIP);
-    b->SetColor(Rgb(mocha::subtext0));
-    rt->DrawText(sub.c_str(), (UINT32)sub.size(), Font(11.5f, false), D2D1::RectF(pad, ty + 20, t.w - pad, ty + 38), b,
-                 D2D1_DRAW_TEXT_OPTIONS_CLIP);
-    if (rt->EndDraw() == (HRESULT)D2DERR_RECREATE_TARGET) {
-        ToastRelease();
-        InvalidateRect(t.hwnd, nullptr, FALSE);
-    }
-}
-
 static void OpenWithShell(const std::wstring& file) {
     ShellExecuteW(nullptr, L"open", file.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
 static void ShowInFolder(const std::wstring& file) {
     PIDLIST_ABSOLUTE pidl = ILCreateFromPathW(file.c_str());
-    if (pidl) {
-        SHOpenFolderAndSelectItems(pidl, 0, nullptr, 0);
-        ILFree(pidl);
+    if (!pidl) return;
+    SHOpenFolderAndSelectItems(pidl, 0, nullptr, 0);
+    ILFree(pidl);
+}
+
+static double ToastNowMs() {
+    static LARGE_INTEGER f{};
+    if (!f.QuadPart) QueryPerformanceFrequency(&f);
+    LARGE_INTEGER c;
+    QueryPerformanceCounter(&c);
+    return (double)c.QuadPart * 1000.0 / (double)f.QuadPart;
+}
+
+static void ToastDropBitmaps() {
+    Toast& t = g_toast;
+    if (t.bmp) t.bmp->Release();
+    if (t.frost) t.frost->Release();
+    t.bmp = nullptr;
+    t.frost = nullptr;
+}
+
+static void ToastRelease() {
+    Toast& t = g_toast;
+    ToastDropBitmaps();
+    if (t.brush) t.brush->Release();
+    if (t.rt) t.rt->Release();
+    t.brush = nullptr;
+    t.rt = nullptr;
+    if (t.dc) {
+        SelectObject(t.dc, t.oldBmp);
+        DeleteObject(t.dib);
+        DeleteDC(t.dc);
     }
+    t.dc = nullptr;
+    t.dib = nullptr;
+    t.dibW = t.dibH = 0;
+}
+
+// Instant, for a snip that starts while the card is up: it must never be frozen into the next one.
+static void ToastHide() {
+    Toast& t = g_toast;
+    if (!t.hwnd) return;
+    KillTimer(t.hwnd, kTimerToast);
+    KillTimer(t.hwnd, kTimerToastAnim);
+    bool shown = IsWindowVisible(t.hwnd);
+    ShowWindow(t.hwnd, SW_HIDE);
+    if (shown) DwmFlush();  // Let the screen drop the card before the next capture.
+    ToastDropBitmaps();
+    t.job.reset();
+    t.phase = 0;
+    t.hot = false;
+    t.glow = 0;
+    t.vis = 0;
+}
+
+static bool ToastEnsureTarget() {
+    Toast& t = g_toast;
+    if (!t.dc || t.dibW != t.pw || t.dibH != t.ph) {
+        if (t.dc) {
+            SelectObject(t.dc, t.oldBmp);
+            DeleteObject(t.dib);
+            DeleteDC(t.dc);
+            t.dc = nullptr;
+            t.dib = nullptr;
+        }
+        HDC sdc = GetDC(nullptr);
+        t.dc = CreateCompatibleDC(sdc);
+        ReleaseDC(nullptr, sdc);
+        if (!t.dc) return false;
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+        bi.bmiHeader.biWidth = t.pw;
+        bi.bmiHeader.biHeight = -t.ph;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        void* bits = nullptr;
+        t.dib = CreateDIBSection(t.dc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+        if (!t.dib) {
+            DeleteDC(t.dc);
+            t.dc = nullptr;
+            return false;
+        }
+        t.oldBmp = SelectObject(t.dc, t.dib);
+        t.dibW = t.pw;
+        t.dibH = t.ph;
+    }
+    if (!t.rt) {
+        auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                                                  D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+        if (FAILED(g_d2d->CreateDCRenderTarget(&props, &t.rt))) return false;
+        t.rt->CreateSolidColorBrush(Rgb(mocha::text), &t.brush);
+        t.rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+    }
+    RECT rc{0, 0, t.pw, t.ph};
+    return SUCCEEDED(t.rt->BindDC(t.dc, &rc));
+}
+
+// The blurred screen behind the card's final spot, taken while the card is hidden.
+static void ToastFrost() {
+    Toast& t = g_toast;
+    t.frostPx = Shot{};
+    Shot sh;
+    if (!CaptureRect(RECT{t.x, t.y, t.x + t.pw, t.y + t.ph}, false, sh)) return;
+    const int k = 4;
+    int sw = sh.w / k, shh = sh.h / k;
+    if (sw < 2 || shh < 2) return;
+    Shot& o = t.frostPx;
+    o.w = sw;
+    o.h = shh;
+    o.px.resize((size_t)sw * shh);
+    for (int y = 0; y < shh; y++)
+        for (int x = 0; x < sw; x++) {
+            UINT32 sr = 0, sg = 0, sb = 0;
+            for (int j = 0; j < k; j++)
+                for (int i = 0; i < k; i++) {
+                    uint32_t v = sh.px[(size_t)(y * k + j) * sh.w + x * k + i];
+                    sr += (v >> 16) & 0xFF, sg += (v >> 8) & 0xFF, sb += v & 0xFF;
+                }
+            o.px[(size_t)y * sw + x] = 0xFF000000u | ((sr / (k * k)) << 16) | ((sg / (k * k)) << 8) | (sb / (k * k));
+        }
+    mk::BoxBlur(o.px, sw, RECT{0, 0, sw, shh}, 5);
+}
+
+static std::wstring ToastClickHint(const std::wstring& what) {
+    if (what == L"open") return L"Click to open it.";
+    if (what == L"folder") return L"Click to show it in its folder.";
+    if (what == L"copy") return L"Click to copy it again.";
+    if (what == L"edit") return L"Click to edit it.";
+    return L"";
+}
+
+static bool ToastDraw(float grow) {
+    Toast& t = g_toast;
+    if (!t.job || !t.rt) return false;
+    ID2D1DCRenderTarget* rt = t.rt;
+    ID2D1SolidColorBrush* b = t.brush;
+    const Shot& th = t.job->thumb;
+    if (!t.bmp && th.w > 0) {
+        auto bp = D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+        rt->CreateBitmap(D2D1::SizeU(th.w, th.h), th.px.data(), th.w * 4, bp, &t.bmp);
+    }
+    if (!t.frost && t.glass && t.frostPx.w > 0) {
+        auto bp = D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE));
+        rt->CreateBitmap(D2D1::SizeU(t.frostPx.w, t.frostPx.h), t.frostPx.px.data(), t.frostPx.w * 4, bp, &t.frost);
+    }
+    rt->SetDpi(96 * t.s, 96 * t.s);
+    rt->BeginDraw();
+    rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+    rt->SetTransform(D2D1::Matrix3x2F::Scale(grow, grow, D2D1::Point2F(t.w / 2, t.h / 2)));
+    D2D1_RECT_F r{0, 0, t.w, t.h};
+    float R = t.radius;
+    if (t.frost) {
+        Ptr<ID2D1RoundedRectangleGeometry> shape;
+        Ptr<ID2D1Layer> layer;
+        g_d2d->CreateRoundedRectangleGeometry(D2D1::RoundedRect(r, R, R), shape.put());
+        rt->CreateLayer(nullptr, layer.put());
+        if (shape && layer) {
+            rt->PushLayer(D2D1::LayerParameters(r, shape.p), layer.p);
+            rt->DrawBitmap(t.frost, r, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, nullptr);
+            rt->PopLayer();
+        }
+    }
+    // Glass keeps a real fill over the blur, so nothing behind reads through.
+    FillRound(rt, b, r, R, t.frost ? Rgb(mocha::crust, 0.85f) : Rgb(mocha::base));
+    if (t.glow > 0.001f) {
+        Ptr<ID2D1LinearGradientBrush> g;
+        GradientBrush(rt, r, 0.13f * t.glow, g);
+        if (g) rt->FillRoundedRectangle(D2D1::RoundedRect(r, R, R), g.p);
+    }
+    // The 2 DIP edge, blue to mauve, brighter on hover: stroke w at inset w/2, radius R - w/2.
+    float ew = 2 * t.dipU;
+    Ptr<ID2D1LinearGradientBrush> edge;
+    GradientBrush(rt, r, 0.5f + 0.5f * t.glow, edge);
+    if (edge)
+        rt->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(ew / 2, ew / 2, t.w - ew / 2, t.h - ew / 2), R - ew / 2, R - ew / 2),
+                                 edge.p, ew);
+    float pad = 12;
+    D2D1_RECT_F box{pad, pad, t.w - pad, pad + t.thumbH};
+    float dx = (box.right - box.left - t.thumbW) / 2;
+    D2D1_RECT_F img{box.left + dx, box.top, box.left + dx + t.thumbW, box.top + t.thumbH};
+    float ir = std::max(4 * t.dipU, R - pad);  // The inner corner follows the outer one.
+    if (t.bmp) {
+        Ptr<ID2D1RoundedRectangleGeometry> geo;
+        Ptr<ID2D1Layer> layer;
+        g_d2d->CreateRoundedRectangleGeometry(D2D1::RoundedRect(img, ir, ir), geo.put());
+        rt->CreateLayer(nullptr, layer.put());
+        if (geo && layer) rt->PushLayer(D2D1::LayerParameters(img, geo.p), layer.p);
+        rt->DrawBitmap(t.bmp, img, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, nullptr);
+        if (geo && layer) rt->PopLayer();
+        float lw = t.dipU;
+        b->SetColor(Rgb(mocha::surface2, 0.9f));
+        rt->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(img.left + lw / 2, img.top + lw / 2, img.right - lw / 2, img.bottom - lw / 2),
+                                                   ir - lw / 2, ir - lw / 2),
+                                 b, lw);
+    }
+    if (t.textOn) {
+        std::wstring title, sub;
+        const SaveJob& j = *t.job;
+        std::wstring hint = ToastClickHint(g_cfg.toastClick);
+        if (!j.path.empty()) {
+            title = j.path.substr(j.path.find_last_of(L'\\') + 1);
+            sub = (j.copied ? L"Saved and copied." : L"Saved.") + (hint.empty() ? L"" : L" " + hint);
+        } else if (!j.error.empty()) {
+            title = j.error;
+            sub = j.copied ? L"It was copied to the clipboard." : L"Check the folder in Snipper's settings.";
+        } else {
+            title = L"Snip copied";
+            sub = L"Ready to paste.";
+        }
+        float ty = box.bottom + 8;
+        b->SetColor(Rgb(j.error.empty() ? mocha::text : mocha::red));
+        rt->DrawText(title.c_str(), (UINT32)title.size(), Font(13.0f, true), D2D1::RectF(pad, ty, t.w - pad, ty + 20), b,
+                     D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        b->SetColor(Rgb(mocha::subtext0));
+        rt->DrawText(sub.c_str(), (UINT32)sub.size(), Font(11.5f, false), D2D1::RectF(pad, ty + 20, t.w - pad, ty + 38), b,
+                     D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    }
+    rt->SetTransform(D2D1::Matrix3x2F::Identity());
+    HRESULT hr = rt->EndDraw();
+    if (hr == (HRESULT)D2DERR_RECREATE_TARGET) {
+        ToastRelease();
+        return false;
+    }
+    return SUCCEEDED(hr);
+}
+
+// vis runs from 0 (gone) to 1 (fully in); the chosen animation turns it into alpha, position and size.
+static void ToastPresent(float vis) {
+    Toast& t = g_toast;
+    t.vis = vis;
+    float grow = t.anim == L"grow" ? 0.92f + 0.08f * vis : 1.0f;
+    if (t.dirty || std::fabs(grow - t.drawnGrow) > 0.0005f || std::fabs(t.glow - t.drawnGlow) > 0.002f) {
+        if (!t.rt && !ToastEnsureTarget()) return;
+        if (!ToastDraw(grow)) {
+            if (!ToastEnsureTarget() || !ToastDraw(grow)) return;
+        }
+        t.dirty = false;
+        t.drawnGrow = grow;
+        t.drawnGlow = t.glow;
+    }
+    int oy = t.anim == L"slide" ? t.slideDir * (int)std::lround((1 - vis) * 24 * t.dpiK) : 0;
+    POINT dst{t.x, t.y + oy}, src{0, 0};
+    SIZE sz{t.pw, t.ph};
+    BLENDFUNCTION bf{AC_SRC_OVER, 0, (BYTE)std::lround(255 * std::clamp(vis, 0.0f, 1.0f)), AC_SRC_ALPHA};
+    UpdateLayeredWindow(t.hwnd, nullptr, &dst, &sz, t.dc, &src, 0, &bf, ULW_ALPHA);
+}
+
+static void ToastKick() {
+    Toast& t = g_toast;
+    t.lastTick = ToastNowMs();
+    SetTimer(t.hwnd, kTimerToastAnim, 10, nullptr);
+}
+
+// Animated, for the timeout and the clicks.
+static void ToastDismiss() {
+    Toast& t = g_toast;
+    if (!t.hwnd || t.phase == 0 || t.phase == 3) return;
+    KillTimer(t.hwnd, kTimerToast);
+    if (t.anim == L"none") {
+        ToastHide();
+        return;
+    }
+    t.phase = 3;
+    t.fromVis = t.vis;
+    t.t0 = ToastNowMs();
+    ToastKick();
+}
+
+static void ToastTick() {
+    Toast& t = g_toast;
+    double now = ToastNowMs();
+    float dt = (float)(now - t.lastTick);
+    t.lastTick = now;
+    float target = t.hot && g_cfg.toastGlow ? 1.0f : 0.0f;
+    float step = dt / 120.0f;
+    t.glow = t.glow < target ? std::min(target, t.glow + step) : std::max(target, t.glow - step);
+    float p = t.animMs > 0 ? (float)((now - t.t0) / t.animMs) : 1.0f;
+    float vis = t.vis;
+    if (t.phase == 1) {
+        if (p >= 1) {
+            t.phase = 2;
+            vis = 1;
+        } else {
+            float q = 1 - p;
+            vis = 1 - q * q * q;  // Ease out.
+        }
+    } else if (t.phase == 3) {
+        if (p >= 1) {
+            ToastHide();
+            return;
+        }
+        vis = t.fromVis * (1 - p * p * p);  // Ease in.
+    } else if (t.phase == 2) {
+        vis = 1;
+    }
+    ToastPresent(vis);
+    if (t.phase == 2 && t.glow == target) KillTimer(t.hwnd, kTimerToastAnim);
+}
+
+static void ToastAction(const std::wstring& what, const std::wstring& path);  // After the history code.
+
+static void ToastClick(const std::wstring& what) {
+    Toast& t = g_toast;
+    std::wstring path = t.job ? t.job->path : L"";
+    ToastDismiss();
+    ToastAction(what, path);
 }
 
 static LRESULT CALLBACK ToastProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     Toast& t = g_toast;
     switch (msg) {
-        case WM_PAINT: {
-            PAINTSTRUCT ps;
-            BeginPaint(hwnd, &ps);
-            ToastPaint();
-            EndPaint(hwnd, &ps);
+        case WM_PAINT:
+            ValidateRect(hwnd, nullptr);
             return 0;
-        }
         case WM_ERASEBKGND: return 1;
-        case WM_SIZE:
-            if (t.rt) t.rt->Resize(D2D1::SizeU(LOWORD(lp), HIWORD(lp)));
-            return 0;
         case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
         case WM_SETCURSOR:
             SetCursor(LoadCursorW(nullptr, IDC_HAND));
             return TRUE;
         case WM_MOUSEMOVE:
-            if (!t.hot) {
+            if (!t.hot && t.phase != 0 && t.phase != 3) {
                 t.hot = true;
                 TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
                 TrackMouseEvent(&tme);
-                KillTimer(hwnd, kTimerToast);
-                InvalidateRect(hwnd, nullptr, FALSE);
+                if (g_cfg.toastPause) KillTimer(hwnd, kTimerToast);
+                ToastKick();
             }
             return 0;
         case WM_MOUSELEAVE:
-            t.hot = false;
-            if (t.job && IsWindowVisible(hwnd)) SetTimer(hwnd, kTimerToast, 1500, nullptr);
-            InvalidateRect(hwnd, nullptr, FALSE);
+            if (t.hot) {
+                t.hot = false;
+                if (t.job && (t.phase == 1 || t.phase == 2) && g_cfg.toastPause) SetTimer(hwnd, kTimerToast, 1500, nullptr);
+                if (t.phase != 0) ToastKick();
+            }
             return 0;
-        case WM_LBUTTONUP: {
-            std::wstring path = t.job ? t.job->path : L"";
-            ToastHide();
-            if (!path.empty()) OpenWithShell(path);
+        case WM_LBUTTONUP:
+            ToastClick(g_cfg.toastClick);
             return 0;
-        }
-        case WM_RBUTTONUP: {
-            std::wstring path = t.job ? t.job->path : L"";
-            ToastHide();
-            if (!path.empty()) ShowInFolder(path);
-            else OpenWithShell(ExpandPath(g_cfg.folder));
+        case WM_RBUTTONUP:
+            ToastClick(g_cfg.toastRight);
             return 0;
-        }
+        case WM_MBUTTONUP:
+            ToastClick(g_cfg.toastMiddle);
+            return 0;
+        case WM_CONTEXTMENU: return 0;
         case WM_TIMER:
-            if (wp == kTimerToast) ToastHide();
+            if (wp == kTimerToast) ToastDismiss();
+            else if (wp == kTimerToastAnim) ToastTick();
             return 0;
         case WM_DESTROY:
             ToastRelease();
@@ -1817,21 +5375,19 @@ static LRESULT CALLBACK ToastProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 static void ShowToast(SaveJob* raw) {
     std::unique_ptr<SaveJob> job(raw);
     Toast& t = g_toast;
-    if (!g_cfg.toast) return;
+    const Config& c = g_cfg;
+    if (!c.toast) return;
     if (!t.hwnd) {
-        t.hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, kToastClass, L"Seamless Snipper",
+        t.hwnd = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, kToastClass, L"Seamless Snipper",
                                  WS_POPUP, 0, 0, 10, 10, nullptr, nullptr, g_inst, nullptr);
         if (!t.hwnd) return;
-        int corner = 2;  // DWMWCP_ROUND
+        int corner = 1;  // DWMWCP_DONOTROUND: the card draws its own corners.
         DwmSetWindowAttribute(t.hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
-        BOOL noFade = TRUE;  // Hides at once, so a quick next snip never catches it mid-fade.
+        BOOL noFade = TRUE;  // The card runs its own animation.
         DwmSetWindowAttribute(t.hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, &noFade, sizeof(noFade));
     }
     ToastHide();
-    t.acrylic = TransparencyOn() && SetAcrylic(t.hwnd, true);
-    if (!t.acrylic) SetAcrylic(t.hwnd, false);
     t.job = std::move(job);
-    t.hot = false;
     POINT pt;
     GetCursorPos(&pt);
     HMONITOR mon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
@@ -1839,7 +5395,10 @@ static void ShowToast(SaveJob* raw) {
     GetMonitorInfoW(mon, &mi);
     UINT dx = 96, dy = 96;
     GetDpiForMonitor(mon, MDT_EFFECTIVE_DPI, &dx, &dy);
-    t.dpi = dx;
+    t.dpiK = dx / 96.0f;
+    t.s = t.dpiK * c.toastScale / 100.0f;
+    t.dipU = t.dpiK / t.s;
+    t.radius = LiveCornerRadius() * t.dipU;
     t.w = 300;
     float boxW = t.w - 24, boxH = 158;
     const Shot& th = t.job->thumb;
@@ -1851,13 +5410,2159 @@ static void ShowToast(SaveJob* raw) {
     } else {
         t.thumbW = t.thumbH = 0;
     }
-    t.h = 12 + t.thumbH + 8 + 38 + 10;
-    int pw = MulDiv((int)std::ceil(t.w), t.dpi, 96), ph = MulDiv((int)std::ceil(t.h), t.dpi, 96);
-    int margin = MulDiv(16, t.dpi, 96);
-    int x = mi.rcWork.right - pw - margin, y = mi.rcWork.bottom - ph - margin;
-    SetWindowPos(t.hwnd, HWND_TOPMOST, x, y, pw, ph, SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    InvalidateRect(t.hwnd, nullptr, FALSE);
-    SetTimer(t.hwnd, kTimerToast, g_cfg.toastSeconds * 1000, nullptr);
+    t.textOn = c.toastText || t.thumbH <= 0 || !t.job->error.empty();
+    t.h = 12 + t.thumbH + (t.textOn ? 8 + 38 + 10 : 12);
+    t.pw = (int)std::ceil(t.w * t.s);
+    t.ph = (int)std::ceil(t.h * t.s);
+    int margin = (int)std::lround(16 * t.dpiK);
+    const RECT& wa = mi.rcWork;
+    bool right = c.toastPos == L"br" || c.toastPos == L"tr", bottom = c.toastPos == L"br" || c.toastPos == L"bl";
+    t.x = right ? wa.right - t.pw - margin : wa.left + margin;
+    t.y = bottom ? wa.bottom - t.ph - margin : wa.top + margin;
+    t.slideDir = bottom ? 1 : -1;
+    t.glass = c.toastGlass && TransparencyOn();
+    t.frostPx = Shot{};
+    if (t.glass) ToastFrost();
+    t.anim = c.toastAnim;
+    BOOL animOn = TRUE;
+    if (SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animOn, 0) && !animOn) t.anim = L"none";
+    t.animMs = c.toastAnimMs;
+    if (!ToastEnsureTarget()) {
+        t.job.reset();
+        return;
+    }
+    t.hot = false;
+    t.glow = 0;
+    t.dirty = true;
+    t.phase = t.anim == L"none" ? 2 : 1;
+    t.t0 = ToastNowMs();
+    ToastPresent(t.phase == 2 ? 1.0f : 0.0f);
+    SetWindowPos(t.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    if (t.phase == 1) ToastKick();
+    SetTimer(t.hwnd, kTimerToast, c.toastSeconds * 1000 + (t.phase == 1 ? t.animMs : 0), nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// Popup menus: Clipboard Manager's own Direct2D menu renderer (owner rule 2026-11-16: every
+// tray menu uses it). One custom window per level, Mocha fill over acrylic, glyph column,
+// inset separators, blue to mauve hover and outline. Copied from
+// local@seamless-clipboard-manager; only the plumbing (factories, settings) is Snipper's.
+// Inlined into core.cpp before tools.cpp. UI thread only (g_d2d is single-threaded).
+// ---------------------------------------------------------------------------
+
+namespace ui_menu {
+
+struct UiMenuItem {
+    int id = 0;
+    std::wstring text;
+    std::wstring hint;  // Right-aligned shortcut text.
+    wchar_t glyph = 0;  // Segoe Fluent Icons code point, 0 for none.
+    bool separator = false;
+    bool disabled = false;
+    bool checked = false;
+    std::vector<UiMenuItem> sub;
+};
+
+constexpr wchar_t kGlyphChevronR = 0xE76C, kGlyphCheck = 0xE73E;
+constexpr float kBorderW = 1.5f;
+constexpr WCHAR kSnpMenuClass[] = L"SeamlessSnipperMenu";
+
+struct Fonts {
+    bool ok = false;
+    std::wstring family, iconFamily;
+    Ptr<IDWriteTextFormat> ui, uiRight, icon, iconSmall;
+    float lineH = 18;
+} T;
+
+bool FamilyExists(const std::wstring& name) {
+    Ptr<IDWriteFontCollection> sys;
+    if (name.empty() || !g_dw || FAILED(g_dw->GetSystemFontCollection(sys.put(), FALSE))) return false;
+    UINT32 index = 0;
+    BOOL exists = FALSE;
+    return SUCCEEDED(sys->FindFamilyName(name.c_str(), &index, &exists)) && exists;
+}
+
+void MakeFormat(Ptr<IDWriteTextFormat>& f, const std::wstring& family, float size, DWRITE_FONT_WEIGHT weight,
+                DWRITE_TEXT_ALIGNMENT align, bool trim) {
+    if (FAILED(g_dw->CreateTextFormat(family.c_str(), nullptr, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                      size, L"en-us", f.put())))
+        return;
+    f->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+    f->SetTextAlignment(align);
+    f->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    if (trim) {
+        Ptr<IDWriteInlineObject> sign;
+        g_dw->CreateEllipsisTrimmingSign(f.get(), sign.put());
+        DWRITE_TRIMMING t{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+        f->SetTrimming(&t, sign.get());
+    }
+}
+
+// The owner's face: FiraCode Nerd Font, 10 pt, medium (the same as Clipboard's live settings).
+bool EnsureFonts() {
+    if (T.ok) return true;
+    if (!g_dw) return false;
+    T.family = L"Segoe UI";
+    for (PCWSTR alt : {L"FiraCode Nerd Font", L"FiraCode Nerd Font Mono"})
+        if (FamilyExists(alt)) {
+            T.family = alt;
+            break;
+        }
+    T.iconFamily = FamilyExists(L"Segoe Fluent Icons") ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
+    float size = 10 * 96.0f / 72.0f;
+    auto normal = (DWRITE_FONT_WEIGHT)500;
+    MakeFormat(T.ui, T.family, size, normal, DWRITE_TEXT_ALIGNMENT_LEADING, true);
+    MakeFormat(T.uiRight, T.family, size, normal, DWRITE_TEXT_ALIGNMENT_TRAILING, true);
+    MakeFormat(T.icon, T.iconFamily, 14, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_TEXT_ALIGNMENT_CENTER, false);
+    MakeFormat(T.iconSmall, T.iconFamily, 10, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_TEXT_ALIGNMENT_CENTER, false);
+    if (!T.ui || !T.uiRight || !T.icon || !T.iconSmall) return false;
+    Ptr<IDWriteTextLayout> probe;
+    g_dw->CreateTextLayout(L"Agy", 3, T.ui.get(), 1000, 1000, probe.put());
+    DWRITE_LINE_METRICS lm{};
+    UINT32 n = 0;
+    T.lineH = probe && SUCCEEDED(probe->GetLineMetrics(&lm, 1, &n)) && n ? std::ceil(lm.height) : std::ceil(size * 1.35f);
+    T.ok = true;
+    return true;
+}
+
+float MeasureText(const std::wstring& s, IDWriteTextFormat* f) {
+    Ptr<IDWriteTextLayout> layout;
+    DWRITE_TEXT_METRICS m{};
+    if (s.empty() || FAILED(g_dw->CreateTextLayout(s.c_str(), (UINT32)s.size(), f, 10000, 1000, layout.put())) ||
+        FAILED(layout->GetMetrics(&m)))
+        return 0;
+    return m.widthIncludingTrailingWhitespace;
+}
+
+struct Ctx {
+    ID2D1RenderTarget* rt = nullptr;
+    Ptr<ID2D1SolidColorBrush> brush;
+    explicit Ctx(ID2D1RenderTarget* r) : rt(r) { rt->CreateSolidColorBrush(Rgb(mocha::text), brush.put()); }
+    ID2D1SolidColorBrush* B(UINT32 rgb, float a = 1) {
+        brush->SetColor(Rgb(rgb, a));
+        return brush.get();
+    }
+    ID2D1SolidColorBrush* BRef(COLORREF c, float a = 1) {
+        brush->SetColor(Ref(c, a));
+        return brush.get();
+    }
+    void Gradient(D2D1_POINT_2F a, D2D1_POINT_2F b, D2D1_COLOR_F c1, D2D1_COLOR_F c2, Ptr<ID2D1LinearGradientBrush>& g) {
+        D2D1_GRADIENT_STOP stops[2] = {{0, c1}, {1, c2}};
+        Ptr<ID2D1GradientStopCollection> coll;
+        if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())))
+            rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(a, b), coll.get(), g.put());
+    }
+    // Accent outline brush: blue to mauve.
+    void Accent(const D2D1_RECT_F& r, Ptr<ID2D1LinearGradientBrush>& g, float alpha = 1) {
+        Gradient({r.left, r.top}, {r.right, r.bottom}, Ref(g_cfg.accent1, alpha), Ref(g_cfg.accent2, alpha), g);
+    }
+    void Text(const std::wstring& s, IDWriteTextFormat* f, const D2D1_RECT_F& r, UINT32 color, float a = 1) {
+        if (s.empty() || r.right <= r.left) return;
+        Ptr<IDWriteTextLayout> layout;
+        if (FAILED(g_dw->CreateTextLayout(s.c_str(), (UINT32)s.size(), f, r.right - r.left, r.bottom - r.top, layout.put())))
+            return;
+        rt->DrawTextLayout({r.left, r.top}, layout.get(), B(color, a), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    }
+    void Glyph(wchar_t g, const D2D1_RECT_F& r, UINT32 color, bool small = false, float a = 1) {
+        rt->DrawText(&g, 1, small ? T.iconSmall.get() : T.icon.get(), r, B(color, a), D2D1_DRAW_TEXT_OPTIONS_NONE);
+    }
+    // Hover look: a soft blue to mauve fill and a 1 px blue to mauve ring.
+    void Glow(const D2D1_RECT_F& r, float radius, float fill, float ring, float ringW = 1) {
+        float rad = std::min(radius, std::min(r.right - r.left, r.bottom - r.top) / 2);
+        D2D1_ROUNDED_RECT rr{{r.left + ringW / 2, r.top + ringW / 2, r.right - ringW / 2, r.bottom - ringW / 2}, rad, rad};
+        if (fill > 0) {
+            Ptr<ID2D1LinearGradientBrush> f;
+            Gradient({r.left, r.top}, {r.right, r.bottom}, Ref(g_cfg.accent1, fill), Ref(g_cfg.accent2, fill), f);
+            if (f) rt->FillRoundedRectangle(rr, f.get());
+        }
+        if (ring > 0) {
+            Ptr<ID2D1LinearGradientBrush> g;
+            Accent(r, g, ring);
+            if (g) rt->DrawRoundedRectangle(rr, g.get(), ringW);
+        }
+    }
+};
+
+struct AccentPolicyData {
+    int state, flags, color, anim;
+};
+struct WindowCompositionData {
+    DWORD attrib;
+    PVOID data;
+    SIZE_T size;
+};
+
+void SetAccent(HWND h, int state, DWORD abgr) {
+    using Fn = BOOL(WINAPI*)(HWND, WindowCompositionData*);
+    static Fn fn = (Fn)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
+    if (!fn) return;
+    AccentPolicyData a{state, state ? 2 : 0, (int)abgr, 0};
+    WindowCompositionData d{19 /* WCA_ACCENT_POLICY */, &a, sizeof(a)};
+    fn(h, &d);
+}
+
+// Acrylic behind the Direct2D tint, DWM rounding, no system border (the gradient edge is ours).
+void ApplyBackdrop(HWND h) {
+    BOOL dark = TRUE;
+    DwmSetWindowAttribute(h, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+    int corner = 2;  // DWMWCP_ROUND
+    DwmSetWindowAttribute(h, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &corner, sizeof(corner));
+    COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
+    DwmSetWindowAttribute(h, 34 /* DWMWA_BORDER_COLOR */, &none, sizeof(none));
+    DwmSetWindowAttribute(h, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+    int type = 1;
+    MARGINS m{0, 0, 0, 0};
+    DwmExtendFrameIntoClientArea(h, &m);
+    DwmSetWindowAttribute(h, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &type, sizeof(type));
+    DWM_BLURBEHIND bb{};
+    bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+    bb.fEnable = TRUE;
+    bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+    DwmEnableBlurBehindWindow(h, &bb);
+    if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+    SetAccent(h, 4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 0x01000000 | 0x2E1E1E);
+    SetWindowPos(h, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+struct Surface {
+    HWND hwnd = nullptr;
+    Ptr<ID2D1HwndRenderTarget> rt;
+    bool Ensure() {
+        if (rt) return true;
+        if (!hwnd || !g_d2d) return false;
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        float dpi = (float)GetDpiForWindow(hwnd);
+        auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                                                  D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+                                                  dpi, dpi);
+        auto hp = D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU(std::max<LONG>(1, rc.right), std::max<LONG>(1, rc.bottom)));
+        return SUCCEEDED(g_d2d->CreateHwndRenderTarget(&props, &hp, rt.put()));
+    }
+    void Discard() { rt.Reset(); }
+};
+
+constexpr float kMenuPad = 6, kMenuIconW = 22, kMenuSepH = 9, kMenuOverlap = 3, kMenuMinW = 190, kMenuMaxW = 440;
+constexpr UINT_PTR kTimerMenuSub = 6, kTimerMenuFade = 7;
+constexpr UINT kMenuSubDelayMs = 200, kMenuFadeMs = 90;
+
+struct MenuLevel {
+    const std::vector<UiMenuItem>* items = nullptr;
+    HWND hwnd = nullptr;
+    Surface surf;
+    float scale = 1, wDip = 0, hDip = 0, itemH = 28, hintW = 0;
+    std::vector<float> top, height;  // Per item, DIPs inside the window.
+    int hover = -1;                  // Highlighted item.
+    int open = -1;                   // Item whose submenu is the next level.
+};
+
+struct MenuSession {
+    std::vector<std::unique_ptr<MenuLevel>> levels;
+    int result = 0;
+    bool done = false;
+    float alpha = 1;
+    ULONGLONG fadeStart = 0;
+    int pendingLevel = -1, pendingItem = -1;  // Hover timer: open (item >= 0) or close the submenu after a delay.
+    bool pressed = false;                     // A button went down inside the menu; only then does a release pick an item.
+} * g_menu;
+
+bool MenuSelectable(const UiMenuItem& m) { return !m.separator && !m.disabled; }
+
+void MenuLayout(MenuLevel& lv, float scale) {
+    const auto& items = *lv.items;
+    lv.scale = scale;
+    lv.itemH = std::max(30.0f, T.lineH + 12);
+    lv.top.assign(items.size(), 0);
+    lv.height.assign(items.size(), 0);
+    float textW = 0, hintW = 0, y = kMenuPad;
+    for (size_t i = 0; i < items.size(); i++) {
+        lv.top[i] = y;
+        lv.height[i] = items[i].separator ? kMenuSepH : lv.itemH;
+        y += lv.height[i];
+        textW = std::max(textW, MeasureText(items[i].text, T.ui.get()));
+        hintW = std::max(hintW, MeasureText(items[i].hint, T.ui.get()));
+    }
+    lv.hintW = std::ceil(hintW);
+    float w = kMenuPad * 2 + 8 + kMenuIconW + 10 + std::ceil(textW) + (hintW > 0 ? 24 + lv.hintW : 0) + 10 + 20 + 8;
+    lv.wDip = std::ceil(std::clamp(w, kMenuMinW, kMenuMaxW));
+    lv.hDip = std::ceil(y + kMenuPad);
+}
+
+int MenuItemAt(const MenuLevel& lv, float x, float y) {
+    if (x < kMenuPad || x >= lv.wDip - kMenuPad) return -1;
+    for (size_t i = 0; i < lv.top.size(); i++)
+        if (y >= lv.top[i] && y < lv.top[i] + lv.height[i]) return (*lv.items)[i].separator ? -1 : (int)i;
+    return -1;
+}
+
+// Next enabled item from `from` in direction dir (+1 or -1), wrapping. -1 when none.
+int MenuNext(const MenuLevel& lv, int from, int dir) {
+    int n = (int)lv.items->size();
+    if (!n) return -1;
+    int i = from;
+    if (i < 0) i = dir > 0 ? -1 : n;
+    for (int k = 0; k < n; k++) {
+        i = ((i + dir) % n + n) % n;
+        if (MenuSelectable((*lv.items)[(size_t)i])) return i;
+    }
+    return -1;
+}
+
+D2D1_RECT_F MenuItemRect(const MenuLevel& lv, size_t i) { return {kMenuPad, lv.top[i], lv.wDip - kMenuPad, lv.top[i] + lv.height[i]}; }
+
+void PaintMenu(ID2D1RenderTarget* rt, const MenuLevel& lv) {
+    if (!EnsureFonts()) return;
+    Ctx c(rt);
+    float w = lv.wDip, h = lv.hDip, rad = LiveCornerRadius();
+    float a = 0.80f;  // Floating surface: at least 0.80 Mocha over the blur (rice glass rule).
+    Ptr<ID2D1LinearGradientBrush> tint;
+    c.Gradient({0, 0}, {0, h}, Rgb(mocha::base, a), Rgb(mocha::base, std::min(1.0f, a + 0.04f)), tint);
+    if (tint) rt->FillRectangle({0, 0, w, h}, tint.get());
+    const auto& items = *lv.items;
+    float slotRight = w - kMenuPad - 8, slotLeft = slotRight - 20;
+    for (size_t i = 0; i < items.size(); i++) {
+        const UiMenuItem& m = items[i];
+        D2D1_RECT_F r = MenuItemRect(lv, i);
+        if (m.separator) {
+            float y = std::floor((r.top + r.bottom) / 2);
+            rt->FillRectangle({r.left + 8, y, r.right - 8, y + 1}, c.B(mocha::surface1, 0.8f));
+            continue;
+        }
+        bool hot = ((int)i == lv.hover || (int)i == lv.open) && !m.disabled;
+        if (hot) c.Glow(r, LiveCornerRadius(), 0.16f, 0.8f);
+        UINT32 col = m.disabled ? mocha::overlay0 : mocha::text;
+        if (m.glyph) c.Glyph(m.glyph, {r.left + 8, r.top, r.left + 8 + kMenuIconW, r.bottom}, col);
+        float textX = r.left + 8 + kMenuIconW + 10;
+        float hintLeft = lv.hintW > 0 ? slotLeft - 8 - lv.hintW : slotLeft - 8;
+        c.Text(m.text, T.ui.get(), {textX, r.top, hintLeft - 8, r.bottom}, col);
+        if (!m.hint.empty())
+            c.Text(m.hint, T.uiRight.get(), {hintLeft, r.top, slotLeft - 8, r.bottom}, m.disabled ? mocha::overlay0 : mocha::subtext0);
+        if (!m.sub.empty()) {
+            c.Glyph(kGlyphChevronR, {slotLeft, r.top, slotRight, r.bottom}, col, true);
+        } else if (m.checked) {
+            rt->DrawText(&kGlyphCheck, 1, T.icon.get(), {slotLeft, r.top, slotRight, r.bottom}, c.BRef(g_cfg.accent1),
+                         D2D1_DRAW_TEXT_OPTIONS_NONE);
+        }
+    }
+    // The border is always ours: Seamless Borders does not ring popups.
+    D2D1_RECT_F edge{kBorderW / 2, kBorderW / 2, w - kBorderW / 2, h - kBorderW / 2};
+    Ptr<ID2D1LinearGradientBrush> border;
+    c.Accent(edge, border);
+    float r2 = rad - kBorderW / 2;
+    if (border) rt->DrawRoundedRectangle({edge, r2, r2}, border.get(), kBorderW);
+}
+
+// Whole-surface fade by layer opacity (the window itself stays opaque so the backdrop keeps working).
+struct FadeLayer {
+    ID2D1RenderTarget* rt;
+    bool on = false;
+    Ptr<ID2D1Layer> layer;
+    FadeLayer(ID2D1RenderTarget* r, float alpha) : rt(r) {
+        if (alpha < 0.999f && SUCCEEDED(rt->CreateLayer(nullptr, layer.put()))) {
+            rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                                D2D1::IdentityMatrix(), std::max(0.0f, alpha)),
+                          layer.get());
+            on = true;
+        }
+    }
+    ~FadeLayer() {
+        if (on) rt->PopLayer();
+    }
+};
+
+bool Animate() {
+    BOOL enabled = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &enabled, 0);
+    return enabled;
+}
+
+int MenuIndexOf(HWND h) {
+    if (g_menu)
+        for (size_t i = 0; i < g_menu->levels.size(); i++)
+            if (g_menu->levels[i]->hwnd == h) return (int)i;
+    return -1;
+}
+
+void MenuInvalidate() {
+    if (g_menu)
+        for (auto& lv : g_menu->levels)
+            if (lv->hwnd) InvalidateRect(lv->hwnd, nullptr, FALSE);
+}
+
+void MenuCloseFrom(size_t n) {
+    if (!g_menu) return;
+    while (g_menu->levels.size() > n) {
+        HWND h = g_menu->levels.back()->hwnd;
+        g_menu->levels.back()->surf.Discard();
+        g_menu->levels.pop_back();
+        if (h) DestroyWindow(h);
+    }
+    if (n > 0 && !g_menu->levels.empty()) g_menu->levels.back()->open = -1;
+    MenuInvalidate();
+}
+
+void MenuFinish(int id) {
+    if (!g_menu || g_menu->done) return;
+    g_menu->result = id;
+    g_menu->done = true;
+}
+
+LRESULT CALLBACK MenuProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+
+HWND MenuCreateWindow(MenuLevel& lv, int x, int y, bool root) {
+    int w = (int)std::ceil(lv.wDip * lv.scale), h = (int)std::ceil(lv.hDip * lv.scale);
+    DWORD ex = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | (root ? 0 : WS_EX_NOACTIVATE);
+    HWND hw = CreateWindowExW(ex, kSnpMenuClass, L"", WS_POPUP, x, y, w, h, nullptr, nullptr, g_inst, nullptr);
+    if (!hw) return nullptr;
+    lv.hwnd = hw;
+    lv.surf.hwnd = hw;
+    ApplyBackdrop(hw);
+    return hw;
+}
+
+RECT MenuWorkArea(POINT pt) {
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST), &mi);
+    return mi.rcWork;
+}
+
+// Top-left of a root menu opened at pt: flips to the left or above the point when it would run off the monitor.
+POINT MenuRootOrigin(POINT pt, int w, int h) {
+    RECT wa = MenuWorkArea(pt);
+    int x = pt.x, y = pt.y;
+    if (x + w > wa.right) x = pt.x - w;
+    if (y + h > wa.bottom) y = pt.y - h;
+    x = std::clamp<int>(x, wa.left, std::max<int>(wa.left, wa.right - w));
+    y = std::clamp<int>(y, wa.top, std::max<int>(wa.top, wa.bottom - h));
+    return {x, y};
+}
+
+// A submenu sits beside its parent, level with the item; left of the parent if the right side is full.
+POINT MenuSubOrigin(const RECT& parent, int itemTopPx, int padPx, int w, int h) {
+    RECT wa = MenuWorkArea({parent.right, parent.top + itemTopPx});
+    int overlap = (int)kMenuOverlap;
+    int x = parent.right - overlap;
+    if (x + w > wa.right) x = parent.left - w + overlap;
+    int y = parent.top + itemTopPx - padPx;
+    if (y + h > wa.bottom) y = wa.bottom - h;
+    x = std::clamp<int>(x, wa.left, std::max<int>(wa.left, wa.right - w));
+    y = std::clamp<int>(y, wa.top, std::max<int>(wa.top, wa.bottom - h));
+    return {x, y};
+}
+
+void MenuOpenSub(size_t level, int item, bool keyboard) {
+    if (!g_menu || level >= g_menu->levels.size()) return;
+    MenuLevel& parent = *g_menu->levels[level];
+    const UiMenuItem& m = (*parent.items)[(size_t)item];
+    if (m.sub.empty() || m.disabled) return;
+    MenuCloseFrom(level + 1);
+    auto lv = std::make_unique<MenuLevel>();
+    lv->items = &m.sub;
+    MenuLayout(*lv, parent.scale);
+    RECT pr{};
+    GetWindowRect(parent.hwnd, &pr);
+    int w = (int)std::ceil(lv->wDip * lv->scale), h = (int)std::ceil(lv->hDip * lv->scale);
+    POINT o = MenuSubOrigin(pr, (int)(parent.top[(size_t)item] * parent.scale), (int)(kMenuPad * parent.scale), w, h);
+    if (keyboard) lv->hover = MenuNext(*lv, -1, +1);
+    MenuLevel* raw = lv.get();
+    g_menu->levels.push_back(std::move(lv));
+    parent.open = item;
+    if (!MenuCreateWindow(*raw, o.x, o.y, false)) {
+        MenuCloseFrom(level + 1);
+        return;
+    }
+    ShowWindow(raw->hwnd, SW_SHOWNOACTIVATE);
+    MenuInvalidate();
+}
+
+void MenuActivate(size_t level, int item, bool keyboard) {
+    if (!g_menu || level >= g_menu->levels.size()) return;
+    const UiMenuItem& m = (*g_menu->levels[level]->items)[(size_t)item];
+    if (!MenuSelectable(m)) return;
+    if (!m.sub.empty()) MenuOpenSub(level, item, keyboard);
+    else MenuFinish(m.id);
+}
+
+void MenuHoverChanged(size_t level, int item) {
+    if (!g_menu) return;
+    MenuLevel& lv = *g_menu->levels[level];
+    HWND root = g_menu->levels[0]->hwnd;
+    KillTimer(root, kTimerMenuSub);
+    g_menu->pendingItem = -1;
+    bool wantsSub = item >= 0 && MenuSelectable((*lv.items)[(size_t)item]) && !(*lv.items)[(size_t)item].sub.empty();
+    if (wantsSub && lv.open != item) {
+        g_menu->pendingLevel = (int)level;
+        g_menu->pendingItem = item;
+        SetTimer(root, kTimerMenuSub, kMenuSubDelayMs, nullptr);
+    } else if (!wantsSub && lv.open != -1 && g_menu->levels.size() > level + 1) {
+        g_menu->pendingLevel = (int)level;
+        g_menu->pendingItem = -1;
+        SetTimer(root, kTimerMenuSub, kMenuSubDelayMs, nullptr);
+    }
+}
+
+void MenuKey(WPARAM vk) {
+    if (!g_menu || g_menu->levels.empty()) return;
+    size_t li = g_menu->levels.size() - 1;
+    MenuLevel& cur = *g_menu->levels[li];
+    const auto& items = *cur.items;
+    switch (vk) {
+        case VK_DOWN: cur.hover = MenuNext(cur, cur.hover, +1); break;
+        case VK_UP: cur.hover = MenuNext(cur, cur.hover, -1); break;
+        case VK_HOME: cur.hover = MenuNext(cur, -1, +1); break;
+        case VK_END: cur.hover = MenuNext(cur, (int)items.size(), -1); break;
+        case VK_RIGHT:
+            if (cur.hover >= 0 && !items[(size_t)cur.hover].sub.empty()) MenuActivate(li, cur.hover, true);
+            break;
+        case VK_LEFT:
+            if (li > 0) MenuCloseFrom(li);
+            break;
+        case VK_RETURN:
+        case VK_SPACE:
+            if (cur.hover >= 0) MenuActivate(li, cur.hover, true);
+            break;
+        case VK_ESCAPE:
+            if (li > 0) MenuCloseFrom(li);
+            else MenuFinish(0);
+            break;
+        default: return;
+    }
+    MenuInvalidate();
+}
+
+void MenuFadeTick() {
+    if (!g_menu || g_menu->levels.empty()) return;
+    float t = std::min(1.0f, (GetTickCount64() - g_menu->fadeStart) / (float)kMenuFadeMs);
+    g_menu->alpha = 1 - (1 - t) * (1 - t);
+    if (t >= 1) KillTimer(g_menu->levels[0]->hwnd, kTimerMenuFade);
+    MenuInvalidate();
+}
+
+LRESULT CALLBACK MenuProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    int li = MenuIndexOf(hwnd);
+    if (!g_menu || li < 0) return DefWindowProcW(hwnd, msg, wp, lp);
+    MenuLevel& lv = *g_menu->levels[(size_t)li];
+    switch (msg) {
+        case WM_ERASEBKGND: return 1;
+        case WM_MOUSEACTIVATE: return li == 0 ? MA_ACTIVATE : MA_NOACTIVATE;
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            if (lv.surf.Ensure()) {
+                lv.surf.rt->SetDpi(96 * lv.scale, 96 * lv.scale);
+                lv.surf.rt->BeginDraw();
+                lv.surf.rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+                {
+                    FadeLayer fade(lv.surf.rt.get(), g_menu->alpha);
+                    PaintMenu(lv.surf.rt.get(), lv);
+                }
+                if (lv.surf.rt->EndDraw() == D2DERR_RECREATE_TARGET) lv.surf.Discard();
+            }
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_MOUSEMOVE: {
+            if (g_menu->pendingLevel > li) {  // The pointer reached a deeper level: stop the timer.
+                KillTimer(g_menu->levels[0]->hwnd, kTimerMenuSub);
+                g_menu->pendingItem = -1;
+                g_menu->pendingLevel = -1;
+            }
+            TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
+            TrackMouseEvent(&tme);
+            int i = MenuItemAt(lv, GET_X_LPARAM(lp) / lv.scale, GET_Y_LPARAM(lp) / lv.scale);
+            if (i >= 0 && !MenuSelectable((*lv.items)[(size_t)i])) i = -1;
+            if (i != lv.hover) {
+                lv.hover = i;
+                MenuHoverChanged((size_t)li, i);
+                MenuInvalidate();
+            }
+            return 0;
+        }
+        case WM_MOUSELEAVE:
+            if (lv.hover != -1 && lv.open != lv.hover) {
+                lv.hover = -1;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP: {
+            if (!g_menu->pressed) return 0;  // The release of the click that opened the menu.
+            int i = MenuItemAt(lv, GET_X_LPARAM(lp) / lv.scale, GET_Y_LPARAM(lp) / lv.scale);
+            if (i >= 0) MenuActivate((size_t)li, i, false);
+            return 0;
+        }
+        case WM_ACTIVATE:
+            if (LOWORD(wp) == WA_INACTIVE && li == 0 && MenuIndexOf((HWND)lp) < 0) MenuFinish(0);
+            return 0;
+        case WM_TIMER:
+            if (wp == kTimerMenuSub) {
+                KillTimer(hwnd, kTimerMenuSub);
+                int pl = g_menu->pendingLevel, pi = g_menu->pendingItem;
+                g_menu->pendingLevel = g_menu->pendingItem = -1;
+                if (pl >= 0 && (size_t)pl < g_menu->levels.size()) {
+                    if (pi >= 0) MenuOpenSub((size_t)pl, pi, false);
+                    else MenuCloseFrom((size_t)pl + 1);
+                }
+            } else if (wp == kTimerMenuFade) {
+                MenuFadeTick();
+            }
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+void RegisterMenuClass() {
+    WNDCLASSEXW probe{sizeof(probe)};
+    if (GetClassInfoExW(g_inst, kSnpMenuClass, &probe)) return;
+    WNDCLASSEXW wc{sizeof(wc)};
+    wc.hInstance = g_inst;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpfnWndProc = MenuProc;
+    wc.lpszClassName = kSnpMenuClass;
+    RegisterClassExW(&wc);
+}
+
+UINT MonitorDpiAt(POINT pt) {
+    UINT dx = 96, dy = 96;
+    if (FAILED(GetDpiForMonitor(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &dx, &dy))) dx = 96;
+    return dx;
+}
+
+int RunMenu(const std::vector<UiMenuItem>& items, POINT pt, HWND owner) {
+    if (g_menu || items.empty() || !g_d2d || !EnsureFonts()) return 0;
+    RegisterMenuClass();
+    MenuSession session;
+    g_menu = &session;
+    auto root = std::make_unique<MenuLevel>();
+    root->items = &items;
+    MenuLayout(*root, MonitorDpiAt(pt) / 96.0f);
+    int w = (int)std::ceil(root->wDip * root->scale), h = (int)std::ceil(root->hDip * root->scale);
+    POINT o = MenuRootOrigin(pt, w, h);
+    MenuLevel* raw = root.get();
+    session.levels.push_back(std::move(root));
+    if (!MenuCreateWindow(*raw, o.x, o.y, true)) {
+        g_menu = nullptr;
+        return 0;
+    }
+    if (owner && IsWindow(owner)) SetForegroundWindow(owner);  // Lets the new window take the foreground.
+    bool animate = Animate();
+    session.alpha = animate ? 0.0f : 1.0f;
+    session.fadeStart = GetTickCount64();
+    ShowWindow(raw->hwnd, SW_SHOW);
+    SetForegroundWindow(raw->hwnd);
+    SetFocus(raw->hwnd);
+    if (animate) SetTimer(raw->hwnd, kTimerMenuFade, 15, nullptr);
+
+    MSG m;
+    while (!session.done) {
+        BOOL got = GetMessageW(&m, nullptr, 0, 0);
+        if (got <= 0) {
+            if (got == 0) PostQuitMessage((int)m.wParam);
+            break;
+        }
+        switch (m.message) {
+            case WM_KEYDOWN:
+            case WM_SYSKEYDOWN:
+                MenuKey(m.wParam);
+                continue;
+            case WM_KEYUP:
+            case WM_SYSKEYUP:
+            case WM_CHAR:
+            case WM_SYSCHAR:
+                continue;
+            case WM_LBUTTONDOWN:
+            case WM_RBUTTONDOWN:
+            case WM_MBUTTONDOWN:
+            case WM_NCLBUTTONDOWN:
+            case WM_NCRBUTTONDOWN:
+                if (MenuIndexOf(m.hwnd) < 0) {  // A click on another window of ours closes the menu and is eaten.
+                    MenuFinish(0);
+                    continue;
+                }
+                session.pressed = true;
+                break;
+        }
+        TranslateMessage(&m);
+        DispatchMessageW(&m);
+    }
+    int result = session.result;
+    MenuCloseFrom(0);
+    g_menu = nullptr;
+    if (owner && IsWindow(owner) && IsWindowVisible(owner)) {
+        SetForegroundWindow(owner);
+        SetFocus(owner);
+    }
+    return result;
+}
+
+// Opens the menu at a screen point and returns the picked item's id (0 when dismissed).
+int Ui_ShowMenu(const std::vector<UiMenuItem>& items, POINT screenPt, HWND owner) { return RunMenu(items, screenPt, owner); }
+
+UiMenuItem MI(int id, std::wstring text, wchar_t glyph = 0, std::wstring hint = {}, bool enabled = true) {
+    UiMenuItem m;
+    m.id = id;
+    m.text = std::move(text);
+    m.glyph = glyph;
+    m.hint = std::move(hint);
+    m.disabled = !enabled;
+    return m;
+}
+
+UiMenuItem MSep() {
+    UiMenuItem m;
+    m.separator = true;
+    return m;
+}
+
+UiMenuItem MSub(std::wstring text, wchar_t glyph, std::vector<UiMenuItem> sub) {
+    UiMenuItem m;
+    m.text = std::move(text);
+    m.glyph = glyph;
+    m.sub = std::move(sub);
+    return m;
+}
+
+}  // namespace ui_menu
+using ui_menu::UiMenuItem;
+using ui_menu::Ui_ShowMenu;
+
+// ---------------------------------------------------------------------------
+// History (every snip in the folder, newest first) and the countdown pill for timed snips.
+// Inlined into core.cpp after the snip code, before the tray.
+// ---------------------------------------------------------------------------
+
+#include <condition_variable>
+#include <deque>
+#include <unordered_set>
+
+static HICON MakeTrayIcon();
+static void Snip(int mode);
+
+// The live window corner radius: the custom-corner-radius mod's value, 8 when it is off.
+static float LiveCornerRadius() {
+    float radius = 8.0f;
+    HKEY key;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Windhawk\\Engine\\Mods\\custom-corner-radius", 0, KEY_READ, &key) ==
+        ERROR_SUCCESS) {
+        DWORD disabled = 0, size = sizeof(disabled);
+        bool off = RegQueryValueExW(key, L"Disabled", nullptr, nullptr, (BYTE*)&disabled, &size) == ERROR_SUCCESS && disabled;
+        DWORD value = 0;
+        size = sizeof(value);
+        if (!off && RegGetValueW(key, L"Settings", L"radius", RRF_RT_REG_DWORD, nullptr, &value, &size) == ERROR_SUCCESS &&
+            value > 0 && value <= 64)
+            radius = (float)value;
+        RegCloseKey(key);
+    }
+    return radius;
+}
+
+// Text formats centered both ways, made on first use.
+static IDWriteTextFormat* CenterFont(float size, bool bold, bool icons) {  // icons defaults to false (markup.cpp)
+    static std::map<int, IDWriteTextFormat*> cache;
+    int key = ((int)std::lround(size * 10) * 2 + (bold ? 1 : 0)) * 2 + (icons ? 1 : 0);
+    auto it = cache.find(key);
+    if (it != cache.end()) return it->second;
+    IDWriteTextFormat* f = nullptr;
+    if (g_dw)
+        g_dw->CreateTextFormat(icons ? L"Segoe Fluent Icons" : L"Segoe UI Variable Text", nullptr,
+                               bold ? DWRITE_FONT_WEIGHT_SEMI_BOLD : DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+                               DWRITE_FONT_STRETCH_NORMAL, size, L"", &f);
+    if (f) {
+        f->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        f->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        f->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    }
+    cache[key] = f;
+    return f;
+}
+
+static void DrawStr(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const std::wstring& s, IDWriteTextFormat* f,
+                    D2D1_RECT_F r, D2D1_COLOR_F c) {
+    if (!f || s.empty()) return;
+    b->SetColor(c);
+    rt->DrawText(s.c_str(), (UINT32)s.size(), f, r, b, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+}
+
+namespace hist {
+
+constexpr UINT WM_HIST_SCANNED = WM_APP + 60, WM_HIST_THUMBS = WM_APP + 61;
+constexpr UINT_PTR kTimerScroll = 1, kTimerStatus = 2;
+static const wchar_t kClass[] = L"SeamlessSnipperHistory";
+
+// Layout, in DIPs.
+constexpr float kPad = 20, kHeadH = 76, kGap = 14, kCardMinW = 210, kCardPad = 10, kCardRad = 10, kNameH = 20,
+                kSubH = 18, kGlassTint = 0.55f;
+
+struct Item {
+    std::wstring path, name, match;
+    FILETIME when{};
+    ULONGLONG bytes = 0;
+    bool video = false;
+};
+
+struct Thumb {
+    int w = 0, h = 0;
+    std::vector<uint32_t> px;  // Premultiplied BGRA, top-down.
+};
+
+struct Entry {
+    std::shared_ptr<Thumb> cpu;
+    ID2D1Bitmap* bmp = nullptr;
+    bool pending = false, failed = false;
+};
+
+// Shared with the loader thread, under g_lock.
+static std::mutex g_lock;
+static std::condition_variable g_cv;
+static std::deque<std::wstring> g_queue;
+static std::vector<std::pair<std::wstring, std::shared_ptr<Thumb>>> g_ready;
+static std::unique_ptr<std::vector<Item>> g_scanned;
+static std::wstring g_scanFolder;
+static bool g_scanWanted = false, g_stop = false, g_thumbsPosted = false;
+static int g_thumbPx = 320;
+static HANDLE g_worker;
+static std::atomic<HWND> g_hwnd{nullptr};
+static bool g_oleOn;
+
+struct Win {
+    ID2D1HwndRenderTarget* rt = nullptr;
+    ID2D1SolidColorBrush* brush = nullptr;
+    HICON icon = nullptr;
+    UINT dpi = 96;
+    float cw = 0, ch = 0;
+    bool glass = false, scanned = false, active = false;
+    std::vector<Item> all;
+    std::vector<int> shown;  // Indexes into all.
+    std::wstring filter, status;
+    std::unordered_map<std::wstring, Entry> cache;
+    float scroll = 0, target = 0;
+    int hot = -1, sel = -1, pressed = -1;
+    POINT downPt{};
+    bool tracking = false, sbHot = false, sbDrag = false;
+    float sbGrab = 0;
+    int cols = 1;
+    float cardW = 0, cardH = 0, thumbH = 0, contentH = 0;
+};
+static Win g_w;
+
+static std::wstring Lower(std::wstring s) {
+    if (!s.empty()) CharLowerBuffW(&s[0], (DWORD)s.size());
+    return s;
+}
+
+static std::wstring Thousands(size_t n) {
+    std::wstring s = std::to_wstring(n);
+    for (int i = (int)s.size() - 3; i > 0; i -= 3) s.insert((size_t)i, L",");
+    return s;
+}
+
+static std::wstring SizeLabel(ULONGLONG bytes) {
+    WCHAR buf[32];
+    if (bytes < 1024ull * 1024) swprintf_s(buf, L"%llu KB", std::max(1ull, (bytes + 512) / 1024));
+    else swprintf_s(buf, L"%.1f MB", bytes / (1024.0 * 1024.0));
+    return buf;
+}
+
+static long long DayNumber(const SYSTEMTIME& s) {
+    SYSTEMTIME d{};
+    d.wYear = s.wYear;
+    d.wMonth = s.wMonth;
+    d.wDay = s.wDay;
+    FILETIME f{};
+    SystemTimeToFileTime(&d, &f);
+    return (long long)((((ULONGLONG)f.dwHighDateTime << 32) | f.dwLowDateTime) / 864000000000ull);
+}
+
+// "Today, 9.12 pm", "Yesterday, 4.05 pm", "Mon, 4.05 pm", "14 Nov, 4.05 pm".
+static std::wstring DayLabel(const FILETIME& ft) {
+    static const wchar_t* kDays[] = {L"Sun", L"Mon", L"Tue", L"Wed", L"Thu", L"Fri", L"Sat"};
+    static const wchar_t* kMonths[] = {L"Jan", L"Feb", L"Mar", L"Apr", L"May", L"Jun",
+                                       L"Jul", L"Aug", L"Sep", L"Oct", L"Nov", L"Dec"};
+    SYSTEMTIME utc, t, now;
+    FileTimeToSystemTime(&ft, &utc);
+    if (!SystemTimeToTzSpecificLocalTime(nullptr, &utc, &t)) t = utc;
+    GetLocalTime(&now);
+    long long day = DayNumber(t), diff = DayNumber(now) - day;
+    std::wstring label;
+    if (diff == 0) label = L"Today";
+    else if (diff == 1) label = L"Yesterday";
+    else if (diff > 1 && diff < 7) label = kDays[(day + 1) % 7];  // 1 Jan 1601 was a Monday.
+    else {
+        label = std::to_wstring(t.wDay) + L" " + kMonths[Clamp(t.wMonth, 1, 12) - 1];
+        if (t.wYear != now.wYear) label += L" " + std::to_wstring(t.wYear);
+    }
+    return label + L", " + TimeStamp(t);
+}
+
+static bool PictureExt(const wchar_t* name, bool& video) {
+    const wchar_t* dot = wcsrchr(name, L'.');
+    video = false;
+    if (!dot) return false;
+    for (PCWSTR e : {L".png", L".jpg", L".jpeg", L".gif", L".bmp", L".webp"})
+        if (!_wcsicmp(dot, e)) return true;
+    if (!_wcsicmp(dot, L".mp4")) return video = true;
+    return false;
+}
+
+// The folder, its subfolders and theirs (a folder per day or per app).
+static void ScanDir(const std::wstring& dir, const std::wstring& folderName, int depth, std::vector<Item>& out) {
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileExW((dir + L"\\*").c_str(), FindExInfoBasic, &fd, FindExSearchNameMatch, nullptr,
+                                FIND_FIRST_EX_LARGE_FETCH);
+    if (h == INVALID_HANDLE_VALUE) return;
+    std::vector<std::pair<std::wstring, std::wstring>> subs;
+    do {
+        if (fd.dwFileAttributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) continue;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            if (depth < 2 && wcscmp(fd.cFileName, L".") && wcscmp(fd.cFileName, L"..") &&
+                !(fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
+                subs.push_back({dir + L"\\" + fd.cFileName, fd.cFileName});
+            continue;
+        }
+        bool video;
+        if (!PictureExt(fd.cFileName, video) || out.size() >= 200000) continue;
+        Item it;
+        it.path = dir + L"\\" + fd.cFileName;
+        it.name = fd.cFileName;
+        it.name.resize(it.name.find_last_of(L'.'));
+        it.match = Lower(it.name + L" " + folderName);
+        it.when = fd.ftLastWriteTime;
+        it.bytes = ((ULONGLONG)fd.nFileSizeHigh << 32) | fd.nFileSizeLow;
+        it.video = video;
+        out.push_back(std::move(it));
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    for (auto& s : subs) ScanDir(s.first, s.second, depth + 1, out);
+}
+
+// The Explorer thumbnail (its cache makes repeat opens instant), fitted inside px by px.
+static bool LoadThumb(const std::wstring& path, int px, Thumb& t) {
+    Ptr<IShellItemImageFactory> f;
+    if (FAILED(SHCreateItemFromParsingName(path.c_str(), nullptr, IID_PPV_ARGS(f.put())))) return false;
+    HBITMAP hb = nullptr;
+    if (FAILED(f->GetImage(SIZE{px, px}, SIIGBF_RESIZETOFIT | SIIGBF_BIGGERSIZEOK, &hb)) || !hb) return false;
+    BITMAP bm{};
+    GetObjectW(hb, sizeof(bm), &bm);
+    bool ok = false;
+    if (bm.bmWidth > 0 && bm.bmHeight > 0 && bm.bmWidth <= 4096 && bm.bmHeight <= 4096) {
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+        bi.bmiHeader.biWidth = bm.bmWidth;
+        bi.bmiHeader.biHeight = -bm.bmHeight;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        t.px.resize((size_t)bm.bmWidth * bm.bmHeight);
+        HDC dc = GetDC(nullptr);
+        ok = GetDIBits(dc, hb, 0, bm.bmHeight, t.px.data(), &bi, DIB_RGB_COLORS) == bm.bmHeight;
+        ReleaseDC(nullptr, dc);
+        if (ok) {
+            t.w = bm.bmWidth;
+            t.h = bm.bmHeight;
+            bool anyAlpha = false;
+            for (uint32_t v : t.px)
+                if (v >> 24) {
+                    anyAlpha = true;
+                    break;
+                }
+            if (!anyAlpha)  // A picture without alpha comes back with alpha 0: it is opaque.
+                for (auto& v : t.px) v |= 0xFF000000;
+        } else {
+            t.px.clear();
+        }
+    }
+    DeleteObject(hb);
+    return ok;
+}
+
+static DWORD WINAPI Loader(LPVOID) {
+    HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    for (;;) {
+        std::wstring path, folder;
+        bool scan = false;
+        int px;
+        {
+            std::unique_lock<std::mutex> l(g_lock);
+            g_cv.wait(l, [] { return g_stop || g_scanWanted || !g_queue.empty(); });
+            if (g_stop) break;
+            if (g_scanWanted) {
+                scan = true;
+                g_scanWanted = false;
+                folder = g_scanFolder;
+            } else {
+                path = std::move(g_queue.front());
+                g_queue.pop_front();
+            }
+            px = g_thumbPx;
+        }
+        if (scan) {
+            auto items = std::make_unique<std::vector<Item>>();
+            ScanDir(folder, L"", 0, *items);
+            std::sort(items->begin(), items->end(),
+                      [](const Item& a, const Item& b) { return CompareFileTime(&a.when, &b.when) > 0; });
+            {
+                std::lock_guard<std::mutex> l(g_lock);
+                g_scanned = std::move(items);
+            }
+            if (HWND h = g_hwnd) PostMessageW(h, WM_HIST_SCANNED, 0, 0);
+            continue;
+        }
+        auto t = std::make_shared<Thumb>();
+        LoadThumb(path, px, *t);
+        bool post;
+        {
+            std::lock_guard<std::mutex> l(g_lock);
+            g_ready.emplace_back(path, t);
+            post = !g_thumbsPosted;
+            g_thumbsPosted = true;
+        }
+        if (post)
+            if (HWND h = g_hwnd) PostMessageW(h, WM_HIST_THUMBS, 0, 0);
+    }
+    if (SUCCEEDED(com)) CoUninitialize();
+    return 0;
+}
+
+static void RequestScan() {
+    {
+        std::lock_guard<std::mutex> l(g_lock);
+        g_scanWanted = true;
+        g_scanFolder = ExpandPath(g_cfg.folder);
+    }
+    g_cv.notify_all();
+}
+
+static void StopLoader() {
+    if (!g_worker) return;
+    {
+        std::lock_guard<std::mutex> l(g_lock);
+        g_stop = true;
+        g_queue.clear();
+    }
+    g_cv.notify_all();
+    if (WaitForSingleObject(g_worker, 8000) != WAIT_OBJECT_0) Wh_Log(L"The history loader did not stop in 8 s");
+    CloseHandle(g_worker);
+    g_worker = nullptr;
+    std::lock_guard<std::mutex> l(g_lock);
+    g_ready.clear();
+    g_scanned.reset();
+}
+
+// --- Layout -----------------------------------------------------------------
+
+static float ViewH() { return std::max(0.0f, g_w.ch - kHeadH); }
+static float MaxScroll() { return std::max(0.0f, g_w.contentH - ViewH()); }
+static float RowStep() { return g_w.cardH + kGap; }
+
+static void ClampScroll() {
+    Win& w = g_w;
+    w.target = std::clamp(w.target, 0.0f, MaxScroll());
+    w.scroll = std::clamp(w.scroll, 0.0f, MaxScroll());
+}
+
+static void Layout() {
+    Win& w = g_w;
+    float avail = std::max(120.0f, w.cw - 2 * kPad);
+    w.cols = std::max(1, (int)((avail + kGap) / (kCardMinW + kGap)));
+    w.cardW = (avail - kGap * (w.cols - 1)) / w.cols;
+    w.thumbH = std::round((w.cardW - 2 * kCardPad) * 0.6f);
+    w.cardH = kCardPad + w.thumbH + 8 + kNameH + kSubH + kCardPad - 2;
+    int rows = ((int)w.shown.size() + w.cols - 1) / w.cols;
+    w.contentH = rows ? rows * w.cardH + (rows - 1) * kGap + kPad : 0;
+    int px = (int)std::ceil((w.cardW - 2 * kCardPad) * w.dpi / 96.0f);
+    {
+        std::lock_guard<std::mutex> l(g_lock);
+        g_thumbPx = Clamp(px, 96, 768);
+    }
+    ClampScroll();
+}
+
+static D2D1_RECT_F CardRect(int i) {
+    Win& w = g_w;
+    int r = i / w.cols, c = i % w.cols;
+    float x = kPad + c * (w.cardW + kGap), y = kHeadH + r * RowStep() - w.scroll;
+    return {x, y, x + w.cardW, y + w.cardH};
+}
+
+static int HitCard(float x, float y) {
+    Win& w = g_w;
+    if (y < kHeadH || w.shown.empty()) return -1;
+    float yc = y - kHeadH + w.scroll, xc = x - kPad;
+    int r = (int)std::floor(yc / RowStep()), c = (int)std::floor(xc / (w.cardW + kGap));
+    if (r < 0 || c < 0 || c >= w.cols) return -1;
+    if (yc - r * RowStep() > w.cardH || xc - c * (w.cardW + kGap) > w.cardW) return -1;
+    int i = r * w.cols + c;
+    return i < (int)w.shown.size() ? i : -1;
+}
+
+static D2D1_RECT_F SearchRect() {
+    float sw = std::min(320.0f, std::max(180.0f, g_w.cw * 0.36f));
+    return {g_w.cw - kPad - sw, 16, g_w.cw - kPad, 52};
+}
+
+// The scrollbar thumb; empty when everything fits.
+static bool ScrollThumb(D2D1_RECT_F& r) {
+    Win& w = g_w;
+    float max = MaxScroll();
+    if (max <= 0) return false;
+    float top = kHeadH + 4, track = w.ch - 6 - top;
+    float len = std::max(40.0f, track * ViewH() / w.contentH);
+    float y = top + (track - len) * (w.scroll / max);
+    r = {w.cw - 11, y, w.cw - 5, y + len};
+    return true;
+}
+
+static const Item* At(int i) {
+    Win& w = g_w;
+    return i >= 0 && i < (int)w.shown.size() ? &w.all[(size_t)w.shown[(size_t)i]] : nullptr;
+}
+
+static void Invalidate() {
+    if (HWND h = g_hwnd) InvalidateRect(h, nullptr, FALSE);
+}
+
+static void StartScrollAnim() {
+    if (HWND h = g_hwnd) SetTimer(h, kTimerScroll, 10, nullptr);
+}
+
+static void EnsureVisible(int i) {
+    Win& w = g_w;
+    if (i < 0) return;
+    float top = (i / w.cols) * RowStep();
+    if (top < w.target) w.target = top;
+    else if (top + w.cardH > w.target + ViewH()) w.target = top + w.cardH - ViewH() + kPad;
+    ClampScroll();
+    StartScrollAnim();
+}
+
+static void ApplyFilter(bool resetScroll, const std::wstring* keepPath = nullptr) {
+    Win& w = g_w;
+    std::wstring selPath = keepPath ? *keepPath : (At(w.sel) ? At(w.sel)->path : L"");
+    std::vector<std::wstring> words;
+    std::wstring f = Lower(w.filter);
+    for (size_t a = 0; a < f.size();) {
+        size_t b = f.find(L' ', a);
+        if (b == std::wstring::npos) b = f.size();
+        if (b > a) words.push_back(f.substr(a, b - a));
+        a = b + 1;
+    }
+    w.shown.clear();
+    for (size_t i = 0; i < w.all.size(); i++) {
+        bool ok = true;
+        for (auto& word : words)
+            if (w.all[i].match.find(word) == std::wstring::npos) {
+                ok = false;
+                break;
+            }
+        if (ok) w.shown.push_back((int)i);
+    }
+    w.sel = -1;
+    if (!selPath.empty())
+        for (size_t i = 0; i < w.shown.size(); i++)
+            if (w.all[(size_t)w.shown[i]].path == selPath) {
+                w.sel = (int)i;
+                break;
+            }
+    w.hot = w.pressed = -1;
+    if (resetScroll) w.scroll = w.target = 0;
+    Layout();
+    Invalidate();
+}
+
+static void SetStatus(const std::wstring& s) {
+    g_w.status = s;
+    if (HWND h = g_hwnd) SetTimer(h, kTimerStatus, 2600, nullptr);
+    Invalidate();
+}
+
+// --- Drawing ----------------------------------------------------------------
+
+static void ReleaseTarget() {
+    Win& w = g_w;
+    for (auto& e : w.cache)
+        if (e.second.bmp) e.second.bmp->Release();
+    w.cache.clear();
+    if (w.brush) w.brush->Release();
+    if (w.rt) w.rt->Release();
+    w.brush = nullptr;
+    w.rt = nullptr;
+}
+
+static bool EnsureTarget() {
+    Win& w = g_w;
+    if (w.rt) return true;
+    HWND h = g_hwnd;
+    RECT rc;
+    GetClientRect(h, &rc);
+    auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                                              D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+    if (FAILED(g_d2d->CreateHwndRenderTarget(
+            props, D2D1::HwndRenderTargetProperties(h, D2D1::SizeU(std::max(1L, rc.right), std::max(1L, rc.bottom))), &w.rt)))
+        return false;
+    w.rt->SetDpi((float)w.dpi, (float)w.dpi);
+    w.rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);  // ClearType breaks on glass.
+    w.rt->CreateSolidColorBrush(Rgb(mocha::text), &w.brush);
+    return w.brush != nullptr;
+}
+
+static void DrawEdge(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const D2D1_RECT_F& r, float rad, bool lit, float alpha) {
+    D2D1_RECT_F e{r.left + 1, r.top + 1, r.right - 1, r.bottom - 1};
+    if (lit) {
+        Ptr<ID2D1LinearGradientBrush> g;
+        GradientBrush(rt, r, alpha, g);
+        if (g) rt->DrawRoundedRectangle(D2D1::RoundedRect(e, rad - 1, rad - 1), g.p, 2);
+    } else {
+        b->SetColor(Rgb(mocha::surface0, 0.9f));
+        rt->DrawRoundedRectangle(D2D1::RoundedRect(e, rad - 1, rad - 1), b, 2);
+    }
+}
+
+static void DrawCard(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, ID2D1Layer* layer, int i,
+                     std::vector<std::wstring>& want, std::unordered_set<std::wstring>& visible) {
+    Win& w = g_w;
+    const Item& it = *At(i);
+    D2D1_RECT_F r = CardRect(i);
+    bool hot = i == w.hot, sel = i == w.sel, down = i == w.pressed && hot;
+    FillRound(rt, b, r, kCardRad, Rgb(down ? mocha::surface0 : mocha::mantle, down ? 0.8f : (hot || sel) ? 0.72f : 0.58f));
+    DrawEdge(rt, b, r, kCardRad, hot || sel, sel ? 1.0f : 0.8f);
+
+    D2D1_RECT_F box{r.left + kCardPad, r.top + kCardPad, r.right - kCardPad, r.top + kCardPad + w.thumbH};
+    FillRound(rt, b, box, 6, Rgb(mocha::crust, 0.55f));
+    visible.insert(it.path);
+    ID2D1Bitmap* bmp = nullptr;
+    bool failed = false;
+    auto en = w.cache.find(it.path);
+    if (en == w.cache.end()) {
+        want.push_back(it.path);
+    } else {
+        Entry& e = en->second;
+        if (!e.bmp && e.cpu && e.cpu->w > 0) {
+            auto bp = D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+            rt->CreateBitmap(D2D1::SizeU(e.cpu->w, e.cpu->h), e.cpu->px.data(), e.cpu->w * 4, bp, &e.bmp);
+            e.cpu.reset();
+        }
+        bmp = e.bmp;
+        failed = e.failed;
+    }
+    if (bmp) {
+        D2D1_SIZE_U ps = bmp->GetPixelSize();
+        float bw = box.right - box.left, bh = box.bottom - box.top;
+        float k = std::min({bw / ps.width, bh / ps.height, 96.0f / w.dpi});  // Never past one pixel per pixel.
+        float dw = std::max(8.0f, ps.width * k), dh = std::max(8.0f, ps.height * k);
+        D2D1_RECT_F img{box.left + (bw - dw) / 2, box.top + (bh - dh) / 2, 0, 0};
+        img.right = img.left + dw;
+        img.bottom = img.top + dh;
+        Ptr<ID2D1RoundedRectangleGeometry> geo;
+        g_d2d->CreateRoundedRectangleGeometry(D2D1::RoundedRect(img, 6, 6), geo.put());
+        if (geo && layer) rt->PushLayer(D2D1::LayerParameters(img, geo.p), layer);
+        rt->DrawBitmap(bmp, img, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, nullptr);
+        if (geo && layer) rt->PopLayer();
+    } else {
+        // Loading, or a file Windows has no thumbnail for.
+        std::wstring glyph(1, (wchar_t)(it.video ? 0xE714 : failed ? 0xE8A5 : 0xE91B));
+        DrawStr(rt, b, glyph, CenterFont(22, false, true), box, Rgb(mocha::overlay0, failed ? 0.9f : 0.6f));
+    }
+    if (it.video) {
+        D2D1_ELLIPSE e{D2D1::Point2F(box.left + 18, box.bottom - 18), 12, 12};
+        b->SetColor(Rgb(mocha::crust, 0.85f));
+        rt->FillEllipse(e, b);
+        DrawStr(rt, b, std::wstring(1, (wchar_t)0xF5B0), CenterFont(10, false, true),
+                D2D1::RectF(e.point.x - 12, e.point.y - 12, e.point.x + 12, e.point.y + 12), Rgb(mocha::text));
+    }
+    float ty = box.bottom + 8, tx = r.left + kCardPad + 2, tr = r.right - kCardPad;
+    DrawStr(rt, b, it.name, Font(13.0f, true), D2D1::RectF(tx, ty, tr, ty + kNameH), Rgb(mocha::text));
+    std::wstring sub = DayLabel(it.when) + L"  " + std::wstring(1, (wchar_t)0x00B7) + L"  " + SizeLabel(it.bytes);
+    DrawStr(rt, b, sub, Font(11.5f, false), D2D1::RectF(tx, ty + kNameH, tr, ty + kNameH + kSubH), Rgb(mocha::subtext0));
+}
+
+// Load the thumbnails on screen first; forget queued ones that scrolled away.
+static void QueueThumbs(const std::vector<std::wstring>& want, const std::unordered_set<std::wstring>& visible) {
+    Win& w = g_w;
+    std::vector<std::wstring> dropped;
+    {
+        std::lock_guard<std::mutex> l(g_lock);
+        std::deque<std::wstring> next(want.begin(), want.end());
+        for (auto& q : g_queue) {
+            if (visible.count(q)) next.push_back(q);
+            else dropped.push_back(q);
+        }
+        g_queue.swap(next);
+    }
+    for (auto& d : dropped) {
+        auto it = w.cache.find(d);
+        if (it != w.cache.end() && it->second.pending && !it->second.bmp) w.cache.erase(it);
+    }
+    for (auto& p : want) w.cache[p].pending = true;
+    if (!want.empty()) g_cv.notify_all();
+}
+
+static void Paint() {
+    Win& w = g_w;
+    if (!EnsureTarget()) return;
+    ID2D1HwndRenderTarget* rt = w.rt;
+    ID2D1SolidColorBrush* b = w.brush;
+    rt->BeginDraw();
+    rt->SetTransform(D2D1::Matrix3x2F::Identity());
+    D2D1_RECT_F all{0, 0, w.cw, w.ch};
+    if (w.glass) {
+        // The settings window's material: the accent acrylic under one crust tint.
+        rt->Clear(D2D1::ColorF(0, 0));
+        b->SetColor(Rgb(mocha::crust, kGlassTint));
+        rt->FillRectangle(all, b);
+    } else {
+        rt->Clear(Rgb(mocha::crust));
+    }
+
+    std::vector<std::wstring> want;
+    std::unordered_set<std::wstring> visible;
+    if (!w.shown.empty()) {
+        rt->PushAxisAlignedClip(D2D1::RectF(0, kHeadH, w.cw, w.ch), D2D1_ANTIALIAS_MODE_ALIASED);
+        Ptr<ID2D1Layer> layer;
+        rt->CreateLayer(nullptr, layer.put());
+        int first = std::max(0, (int)std::floor(w.scroll / RowStep())) * w.cols;
+        int last = ((int)std::floor((w.scroll + ViewH()) / RowStep()) + 1) * w.cols;
+        last = std::min(last, (int)w.shown.size());
+        for (int i = first; i < last; i++) DrawCard(rt, b, layer.p, i, want, visible);
+        rt->PopAxisAlignedClip();
+    } else {
+        std::wstring title, sub;
+        if (!w.scanned) {
+            title = L"Looking for your snips";
+            sub = L"One moment.";
+        } else if (w.all.empty()) {
+            title = L"No snips yet";
+            sub = L"Press Print Screen to take one. Every snip saved to " + ExpandPath(g_cfg.folder) + L" shows up here.";
+        } else {
+            title = L"Nothing matches \"" + w.filter + L"\"";
+            sub = L"Press Backspace to change the search, or Esc to clear it.";
+        }
+        float mid = kHeadH + ViewH() / 2 - 20;
+        DrawStr(rt, b, title, CenterFont(16, true), D2D1::RectF(kPad, mid - 14, w.cw - kPad, mid + 12), Rgb(mocha::text));
+        DrawStr(rt, b, sub, CenterFont(12.5f, false), D2D1::RectF(kPad, mid + 14, w.cw - kPad, mid + 36),
+                Rgb(mocha::subtext0));
+    }
+
+    // Header: the count, the folder and the search box.
+    D2D1_RECT_F s = SearchRect();
+    if (w.scroll > 1) {
+        b->SetColor(Rgb(mocha::surface0, 0.7f));
+        rt->FillRectangle(D2D1::RectF(0, kHeadH - 1, w.cw, kHeadH), b);
+    }
+    std::wstring count;
+    if (!w.scanned) count = L"History";
+    else if (!w.filter.empty()) count = Thousands(w.shown.size()) + L" of " + Thousands(w.all.size()) + L" snips";
+    else count = Thousands(w.all.size()) + (w.all.size() == 1 ? L" snip" : L" snips");
+    std::wstring line = !w.status.empty() ? w.status : L"Newest first, from " + ExpandPath(g_cfg.folder);
+    DrawStr(rt, b, count, Font(16.0f, true), D2D1::RectF(kPad, 13, s.left - 16, 37), Rgb(mocha::text));
+    DrawStr(rt, b, line, Font(12.0f, false), D2D1::RectF(kPad, 37, s.left - 16, 57),
+            Rgb(w.status.empty() ? mocha::subtext0 : mocha::text));
+    FillRound(rt, b, s, 8, Rgb(mocha::mantle, 0.58f));
+    DrawEdge(rt, b, s, 8, !w.filter.empty(), 1.0f);
+    DrawStr(rt, b, std::wstring(1, (wchar_t)0xE721), CenterFont(14, false, true), D2D1::RectF(s.left + 6, s.top, s.left + 36, s.bottom),
+            Rgb(w.filter.empty() ? mocha::overlay0 : mocha::text));
+    D2D1_RECT_F tr{s.left + 38, s.top, s.right - 12, s.bottom};
+    if (w.filter.empty()) {
+        DrawStr(rt, b, L"Type to search", Font(13.0f, false), tr, Rgb(mocha::overlay0));
+    } else {
+        DrawStr(rt, b, w.filter, Font(13.0f, false), tr, Rgb(mocha::text));
+        float cx = std::min(tr.right, tr.left + TextWidth(w.filter, Font(13.0f, false)) + 2);
+        if (w.active) {
+            Ptr<ID2D1LinearGradientBrush> g;
+            D2D1_RECT_F caret{cx, s.top + 10, cx + 1.5f, s.bottom - 10};
+            GradientBrush(rt, caret, 1.0f, g);
+            if (g) rt->FillRectangle(caret, g.p);
+        }
+    }
+
+    D2D1_RECT_F th;
+    if (ScrollThumb(th)) FillRound(rt, b, th, 3, Rgb(mocha::surface2, w.sbHot || w.sbDrag ? 0.95f : 0.55f));
+
+    HRESULT hr = rt->EndDraw();
+    if (hr == (HRESULT)D2DERR_RECREATE_TARGET) {
+        ReleaseTarget();
+        Invalidate();
+        return;
+    }
+    QueueThumbs(want, visible);
+}
+
+// Keep the D2D bitmaps near the screen; drop the rest.
+static void TrimCache() {
+    Win& w = g_w;
+    if (w.cache.size() <= 360 || w.shown.empty()) return;
+    std::unordered_set<std::wstring> keep;
+    int first = std::max(0, (int)std::floor(w.scroll / RowStep()) - 6) * w.cols;
+    int last = std::min((int)w.shown.size(), ((int)std::floor((w.scroll + ViewH()) / RowStep()) + 7) * w.cols);
+    for (int i = first; i < last; i++) keep.insert(At(i)->path);
+    for (auto it = w.cache.begin(); it != w.cache.end();) {
+        if (!it->second.pending && !keep.count(it->first)) {
+            if (it->second.bmp) it->second.bmp->Release();
+            it = w.cache.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+// --- Actions ----------------------------------------------------------------
+
+static bool LoadPicture(const std::wstring& path, Shot& out) {
+    Ptr<IWICImagingFactory> f;
+    Ptr<IWICBitmapDecoder> d;
+    Ptr<IWICBitmapFrameDecode> fr;
+    Ptr<IWICFormatConverter> c;
+    HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_IWICImagingFactory,
+                                  (void**)f.put());
+    if (SUCCEEDED(hr))
+        hr = f->CreateDecoderFromFilename(path.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, d.put());
+    if (SUCCEEDED(hr)) hr = d->GetFrame(0, fr.put());
+    if (SUCCEEDED(hr)) hr = f->CreateFormatConverter(c.put());
+    if (SUCCEEDED(hr))
+        hr = c->Initialize(fr.p, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, nullptr, 0, WICBitmapPaletteTypeCustom);
+    UINT w = 0, h = 0;
+    if (SUCCEEDED(hr)) hr = c->GetSize(&w, &h);
+    if (FAILED(hr) || !w || !h || (ULONGLONG)w * h > 120000000ull) return false;
+    out.w = (int)w;
+    out.h = (int)h;
+    out.px.resize((size_t)w * h);
+    return SUCCEEDED(c->CopyPixels(nullptr, w * 4, (UINT)(out.px.size() * 4), (BYTE*)out.px.data()));
+}
+
+static bool CopyFileDrop(const std::wstring& path) {
+    size_t bytes = sizeof(DROPFILES) + (path.size() + 2) * sizeof(WCHAR);
+    HGLOBAL g = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, bytes);
+    if (!g) return false;
+    auto* df = (DROPFILES*)GlobalLock(g);
+    df->pFiles = sizeof(DROPFILES);
+    df->fWide = TRUE;
+    memcpy((BYTE*)df + sizeof(DROPFILES), path.c_str(), path.size() * sizeof(WCHAR));
+    GlobalUnlock(g);
+    bool open = false;
+    for (int i = 0; i < 20 && !(open = OpenClipboard(g_msgWnd)); i++) Sleep(15);
+    if (!open) {
+        GlobalFree(g);
+        return false;
+    }
+    EmptyClipboard();
+    bool ok = SetClipboardData(CF_HDROP, g) != nullptr;
+    if (!ok) GlobalFree(g);
+    CloseClipboard();
+    return ok;
+}
+
+static void OpenItem(int i) {
+    if (const Item* it = At(i)) OpenWithShell(it->path);
+}
+
+static void EditItem(int i) {
+    const Item* it = At(i);
+    if (!it) return;
+    if ((INT_PTR)ShellExecuteW(g_hwnd, L"edit", it->path.c_str(), nullptr, nullptr, SW_SHOWNORMAL) <= 32)
+        ShellExecuteW(g_hwnd, L"open", L"mspaint.exe", (L"\"" + it->path + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
+}
+
+static void CopyItem(int i) {
+    const Item* it = At(i);
+    if (!it) return;
+    bool ok;
+    if (it->video) {
+        ok = CopyFileDrop(it->path);
+    } else {
+        Shot s;
+        ok = LoadPicture(it->path, s) && PutClipboardImage(s);
+    }
+    SetStatus(ok ? L"Copied. Ready to paste." : L"Couldn't copy it. The file may be open in another app.");
+}
+
+// Space: Peek (the Windhawk mod) shows the snip, like Space in File Explorer. Peek starts on the
+// first path, so the list goes selected, the ones after it, then the ones before it: Right and Left
+// in Peek walk the grid in order. The same snip sent again closes Peek. No Peek: open the picture.
+constexpr ULONG_PTR kPeekOpenPaths = 0x4B454550;  // "PEEK"
+
+static bool PeekItem(int i) {
+    Win& w = g_w;
+    if (!At(i) || !g_hwnd) return false;
+    HWND peek = g_cfg.histPeek ? FindWindowExW(HWND_MESSAGE, nullptr, L"WindhawkPeekMsg", nullptr) : nullptr;
+    if (!peek) {
+        OpenItem(i);
+        return false;
+    }
+    const int n = (int)w.shown.size(), around = 150;
+    std::wstring blob;
+    auto add = [&](int k) {
+        if (const Item* it = At(k)) {
+            blob += it->path;
+            blob.push_back(L'\0');
+        }
+    };
+    add(i);
+    for (int k = i + 1; k < std::min(n, i + 1 + around); k++) add(k);
+    for (int k = std::max(0, i - around); k < i; k++) add(k);
+    COPYDATASTRUCT cds{kPeekOpenPaths, (DWORD)(blob.size() * sizeof(wchar_t)), blob.data()};
+    DWORD pid = 0;
+    GetWindowThreadProcessId(peek, &pid);
+    if (pid) AllowSetForegroundWindow(pid);
+    DWORD_PTR res = 0;
+    if (!SendMessageTimeoutW(peek, WM_COPYDATA, (WPARAM)g_hwnd.load(), (LPARAM)&cds, SMTO_ABORTIFHUNG | SMTO_BLOCK, 2000,
+                             &res)) {
+        OpenItem(i);  // Peek hung or quit. Older Peek answers FALSE but still opens, so only this falls back.
+        return false;
+    }
+    return true;
+}
+
+static void DeleteItem(int i) {
+    Win& w = g_w;
+    const Item* it = At(i);
+    if (!it) return;
+    std::wstring path = it->path;
+    std::wstring next = At(i + 1) ? At(i + 1)->path : At(i - 1) ? At(i - 1)->path : L"";
+    std::wstring from = path;
+    from.push_back(L'\0');  // A double-null list of one.
+    SHFILEOPSTRUCTW op{};
+    op.hwnd = g_hwnd;
+    op.wFunc = FO_DELETE;
+    op.pFrom = from.c_str();
+    op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI;
+    int rc = SHFileOperationW(&op);
+    if (rc != 0 || op.fAnyOperationsAborted || GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        SetStatus(L"Couldn't delete it. The file may be open in another app.");
+        return;
+    }
+    w.all.erase(w.all.begin() + w.shown[(size_t)i]);
+    auto en = w.cache.find(path);
+    if (en != w.cache.end()) {
+        if (en->second.bmp) en->second.bmp->Release();
+        w.cache.erase(en);
+    }
+    ApplyFilter(false, &next);
+    SetStatus(L"Moved to the Recycle Bin.");
+}
+
+static void StartDrag(int i) {
+    const Item* it = At(i);
+    if (!it || !g_oleOn) return;
+    Ptr<IShellItem> si;
+    if (FAILED(SHCreateItemFromParsingName(it->path.c_str(), nullptr, IID_PPV_ARGS(si.put())))) return;
+    Ptr<IDataObject> data;
+    if (FAILED(si->BindToHandler(nullptr, BHID_DataObject, IID_PPV_ARGS(data.put())))) return;
+    DWORD effect = 0;
+    SHDoDragDrop(g_hwnd, data.p, nullptr, DROPEFFECT_COPY | DROPEFFECT_LINK, &effect);
+}
+
+static void ShowMenu(int i, POINT pt) {
+    const Item* it = At(i);
+    if (!it) return;
+    enum { kOpen = 1, kPreview, kEdit, kCopy, kFolder, kDelete };
+    using ui_menu::MI;
+    std::vector<UiMenuItem> items;
+    items.push_back(MI(kOpen, L"Open", 0xE8E5, L"Enter"));
+    items.push_back(MI(kPreview, L"Preview", 0xE7B3, L"Space"));
+    if (!it->video) items.push_back(MI(kEdit, L"Edit", 0xE70F));
+    items.push_back(MI(kCopy, L"Copy", 0xE8C8, L"Ctrl+C"));
+    items.push_back(MI(kFolder, L"Show in folder", 0xE838));
+    items.push_back(ui_menu::MSep());
+    items.push_back(MI(kDelete, L"Delete", 0xE74D, L"Delete"));
+    int cmd = Ui_ShowMenu(items, pt, g_hwnd);
+    switch (cmd) {
+        case kOpen: OpenItem(i); break;
+        case kPreview: PeekItem(i); break;
+        case kEdit: EditItem(i); break;
+        case kCopy: CopyItem(i); break;
+        case kFolder:
+            if (const Item* again = At(i)) ShowInFolder(again->path);
+            break;
+        case kDelete: DeleteItem(i); break;
+    }
+}
+
+static void MoveSel(int delta) {
+    Win& w = g_w;
+    int n = (int)w.shown.size();
+    if (!n) return;
+    w.sel = w.sel < 0 ? 0 : Clamp(w.sel + delta, 0, n - 1);
+    EnsureVisible(w.sel);
+    Invalidate();
+}
+
+static POINT Dip(LPARAM lp) {
+    UINT dpi = g_w.dpi;
+    return POINT{MulDiv(GET_X_LPARAM(lp), 96, (int)dpi), MulDiv(GET_Y_LPARAM(lp), 96, (int)dpi)};
+}
+
+static void UpdateHot(POINT p) {
+    Win& w = g_w;
+    int h = HitCard((float)p.x, (float)p.y);
+    D2D1_RECT_F th;
+    bool sb = ScrollThumb(th) && p.x >= w.cw - 16 && p.y >= th.top && p.y <= th.bottom;
+    if (h != w.hot || sb != w.sbHot) {
+        w.hot = h;
+        w.sbHot = sb;
+        Invalidate();
+    }
+}
+
+static void HotFromCursor() {
+    HWND h = g_hwnd;
+    POINT pt;
+    GetCursorPos(&pt);
+    ScreenToClient(h, &pt);
+    RECT rc;
+    GetClientRect(h, &rc);
+    if (!PtInRect(&rc, pt)) return;
+    UpdateHot(POINT{MulDiv(pt.x, 96, (int)g_w.dpi), MulDiv(pt.y, 96, (int)g_w.dpi)});
+}
+
+static void ApplyMaterial(HWND h) {
+    BOOL dark = TRUE;
+    DwmSetWindowAttribute(h, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+    g_w.glass = TransparencyOn();
+    if (g_w.glass) {
+        // The universal settings window's glass: accent acrylic as one sheet, frame extended.
+        int backdrop = 1;  // DWMSBT_NONE
+        DwmSetWindowAttribute(h, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+        bb.fEnable = TRUE;
+        bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+        DwmEnableBlurBehindWindow(h, &bb);
+        if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+        struct AccentPolicy { int state, flags, abgr, animation; };
+        struct CompositionData { DWORD attribute; void* data; SIZE_T size; };
+        using SetComposition_t = BOOL(WINAPI*)(HWND, CompositionData*);
+        auto set = (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
+        if (set) {
+            AccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};
+            CompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            set(h, &data);
+        }
+        MARGINS margins{-1, -1, -1, -1};
+        DwmExtendFrameIntoClientArea(h, &margins);
+        COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
+        DwmSetWindowAttribute(h, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+    } else {
+        COLORREF caption = RGB(0x11, 0x11, 0x1B);  // Mocha crust
+        DwmSetWindowAttribute(h, 35 /* DWMWA_CAPTION_COLOR */, &caption, sizeof(caption));
+    }
+}
+
+static LRESULT CALLBACK Proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    Win& w = g_w;
+    if (hwnd != g_hwnd) return DefWindowProcW(hwnd, msg, wp, lp);
+    switch (msg) {
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            Paint();
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_ERASEBKGND: return 1;
+        case WM_SIZE:
+            if (wp == SIZE_MINIMIZED) return 0;
+            if (w.rt) w.rt->Resize(D2D1::SizeU(std::max(1, (int)LOWORD(lp)), std::max(1, (int)HIWORD(lp))));
+            w.cw = LOWORD(lp) * 96.0f / w.dpi;
+            w.ch = HIWORD(lp) * 96.0f / w.dpi;
+            Layout();
+            Invalidate();
+            return 0;
+        case WM_DPICHANGED: {
+            w.dpi = HIWORD(wp);
+            if (w.rt) w.rt->SetDpi((float)w.dpi, (float)w.dpi);
+            auto* r = (RECT*)lp;
+            SetWindowPos(hwnd, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
+            return 0;
+        }
+        case WM_GETMINMAXINFO: {
+            auto* mm = (MINMAXINFO*)lp;
+            mm->ptMinTrackSize = {MulDiv(560, (int)w.dpi, 96), MulDiv(420, (int)w.dpi, 96)};
+            return 0;
+        }
+        case WM_ACTIVATE:
+            w.active = LOWORD(wp) != WA_INACTIVE;
+            if (w.active && w.scanned) RequestScan();  // Pick up snips taken since.
+            Invalidate();
+            break;
+        case WM_HIST_SCANNED: {
+            std::unique_ptr<std::vector<Item>> items;
+            {
+                std::lock_guard<std::mutex> l(g_lock);
+                items = std::move(g_scanned);
+            }
+            if (!items) return 0;
+            std::wstring keep = At(w.sel) ? At(w.sel)->path : L"";
+            w.all = std::move(*items);
+            w.scanned = true;
+            ApplyFilter(false, &keep);
+            return 0;
+        }
+        case WM_HIST_THUMBS: {
+            std::vector<std::pair<std::wstring, std::shared_ptr<Thumb>>> ready;
+            {
+                std::lock_guard<std::mutex> l(g_lock);
+                ready.swap(g_ready);
+                g_thumbsPosted = false;
+            }
+            for (auto& r : ready) {
+                Entry& e = w.cache[r.first];
+                if (e.bmp) {
+                    e.bmp->Release();
+                    e.bmp = nullptr;
+                }
+                e.pending = false;
+                e.failed = r.second->w == 0;
+                e.cpu = e.failed ? nullptr : r.second;
+            }
+            TrimCache();
+            Invalidate();
+            return 0;
+        }
+        case WM_TIMER:
+            if (wp == kTimerScroll) {
+                float d = w.target - w.scroll;
+                if (std::fabs(d) < 0.5f) {
+                    w.scroll = w.target;
+                    KillTimer(hwnd, kTimerScroll);
+                } else {
+                    w.scroll += d * 0.3f;
+                }
+                HotFromCursor();
+                Invalidate();
+            } else if (wp == kTimerStatus) {
+                KillTimer(hwnd, kTimerStatus);
+                w.status.clear();
+                Invalidate();
+            }
+            return 0;
+        case WM_MOUSEMOVE: {
+            POINT p = Dip(lp);
+            if (!w.tracking) {
+                TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
+                w.tracking = TrackMouseEvent(&tme) != FALSE;
+            }
+            if (w.sbDrag) {
+                D2D1_RECT_F th;
+                if (ScrollThumb(th)) {
+                    float top = kHeadH + 4, track = w.ch - 6 - top, len = th.bottom - th.top;
+                    float f = std::clamp((p.y - w.sbGrab - top) / std::max(1.0f, track - len), 0.0f, 1.0f);
+                    w.scroll = w.target = f * MaxScroll();
+                    Invalidate();
+                }
+                return 0;
+            }
+            if (w.pressed >= 0 && (wp & MK_LBUTTON)) {
+                POINT raw{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+                if (std::abs(raw.x - w.downPt.x) > GetSystemMetrics(SM_CXDRAG) ||
+                    std::abs(raw.y - w.downPt.y) > GetSystemMetrics(SM_CYDRAG)) {
+                    int i = w.pressed;
+                    w.pressed = -1;
+                    ReleaseCapture();
+                    Invalidate();
+                    StartDrag(i);  // Drop it into Discord, a chat or a folder.
+                    return 0;
+                }
+            }
+            UpdateHot(p);
+            return 0;
+        }
+        case WM_MOUSELEAVE:
+            w.tracking = false;
+            if (w.hot >= 0 || w.sbHot) {
+                w.hot = -1;
+                w.sbHot = false;
+                Invalidate();
+            }
+            return 0;
+        case WM_LBUTTONDOWN: {
+            SetFocus(hwnd);
+            POINT p = Dip(lp);
+            D2D1_RECT_F th;
+            if (ScrollThumb(th) && p.x >= w.cw - 16 && p.y >= kHeadH) {
+                if (p.y < th.top || p.y > th.bottom) {  // The track: jump a page.
+                    w.target += (p.y < th.top ? -1 : 1) * ViewH() * 0.9f;
+                    ClampScroll();
+                    StartScrollAnim();
+                } else {
+                    w.sbDrag = true;
+                    w.sbGrab = p.y - th.top;
+                    SetCapture(hwnd);
+                }
+                Invalidate();
+                return 0;
+            }
+            int i = HitCard((float)p.x, (float)p.y);
+            w.sel = i;
+            w.pressed = i;
+            w.downPt = POINT{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            if (i >= 0) SetCapture(hwnd);
+            Invalidate();
+            return 0;
+        }
+        case WM_LBUTTONUP:
+            if (GetCapture() == hwnd) ReleaseCapture();
+            w.sbDrag = false;
+            w.pressed = -1;
+            Invalidate();
+            return 0;
+        case WM_CAPTURECHANGED:
+            w.sbDrag = false;
+            w.pressed = -1;
+            Invalidate();
+            return 0;
+        case WM_LBUTTONDBLCLK: {
+            POINT p = Dip(lp);
+            int i = HitCard((float)p.x, (float)p.y);
+            if (i >= 0) OpenItem(i);
+            return 0;
+        }
+        case WM_RBUTTONUP: {
+            POINT p = Dip(lp);
+            int i = HitCard((float)p.x, (float)p.y);
+            if (i >= 0) {
+                w.sel = i;
+                Invalidate();
+                POINT sp{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+                ClientToScreen(hwnd, &sp);
+                ShowMenu(i, sp);
+            }
+            return 0;
+        }
+        case WM_CONTEXTMENU:
+            if (lp == -1 && w.sel >= 0) {  // The menu key.
+                D2D1_RECT_F r = CardRect(w.sel);
+                POINT sp{MulDiv((int)((r.left + r.right) / 2), (int)w.dpi, 96), MulDiv((int)((r.top + r.bottom) / 2), (int)w.dpi, 96)};
+                ClientToScreen(hwnd, &sp);
+                ShowMenu(w.sel, sp);
+                return 0;
+            }
+            break;
+        case WM_MOUSEWHEEL:
+            w.target -= GET_WHEEL_DELTA_WPARAM(wp) / 120.0f * 160.0f;
+            ClampScroll();
+            StartScrollAnim();
+            return 0;
+        case WM_KEYDOWN: {
+            bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+            int page = std::max(1, (int)(ViewH() / RowStep())) * w.cols;
+            switch (wp) {
+                case VK_LEFT: MoveSel(-1); return 0;
+                case VK_RIGHT: MoveSel(1); return 0;
+                case VK_UP: MoveSel(-w.cols); return 0;
+                case VK_DOWN: MoveSel(w.cols); return 0;
+                case VK_PRIOR: MoveSel(-page); return 0;
+                case VK_NEXT: MoveSel(page); return 0;
+                case VK_HOME: MoveSel(-(int)w.shown.size()); return 0;
+                case VK_END: MoveSel((int)w.shown.size()); return 0;
+                case VK_RETURN: OpenItem(w.sel); return 0;
+                case VK_SPACE:
+                    if (w.filter.empty()) PeekItem(w.sel);
+                    return 0;
+                case VK_DELETE: DeleteItem(w.sel); return 0;
+                case VK_F5: RequestScan(); return 0;
+                case 'C':
+                    if (ctrl) CopyItem(w.sel);
+                    return 0;
+                case VK_ESCAPE:
+                    if (!w.filter.empty()) {
+                        w.filter.clear();
+                        ApplyFilter(true);
+                    } else {
+                        PostMessageW(hwnd, WM_CLOSE, 0, 0);
+                    }
+                    return 0;
+            }
+            break;
+        }
+        case WM_CHAR: {
+            wchar_t c = (wchar_t)wp;
+            if (c == 8) {
+                if (w.filter.empty()) return 0;
+                w.filter.pop_back();
+            } else if (c == 127) {
+                w.filter.clear();
+            } else if (c == L' ' && w.filter.empty()) {
+                return 0;  // Space with no search opens Peek (WM_KEYDOWN).
+            } else if (c >= 32 && !(GetKeyState(VK_CONTROL) & 0x8000) && w.filter.size() < 60) {
+                w.filter += c;
+            } else {
+                return 0;
+            }
+            ApplyFilter(true);
+            return 0;
+        }
+        case WM_CLOSE: DestroyWindow(hwnd); return 0;
+        case WM_DESTROY:
+            StopLoader();
+            ReleaseTarget();
+            KillTimer(hwnd, kTimerScroll);
+            KillTimer(hwnd, kTimerStatus);
+            g_hwnd = nullptr;
+            if (w.icon) DestroyIcon(w.icon);
+            g_w = Win();  // Let go of the list and the pictures.
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+static void Open() {
+    if (HWND h = g_hwnd) {
+        if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
+        BringToFront(h);
+        return;
+    }
+    if (!g_oleOn) g_oleOn = SUCCEEDED(OleInitialize(nullptr));  // Drag and drop out of the window.
+    g_w = Win();
+    POINT pt;
+    GetCursorPos(&pt);
+    HMONITOR mon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(mon, &mi);
+    UINT dx = 96, dy = 96;
+    GetDpiForMonitor(mon, MDT_EFFECTIVE_DPI, &dx, &dy);
+    RECT wa = mi.rcWork;
+    int ww = std::min(MulDiv(1060, (int)dx, 96), (int)((wa.right - wa.left) * 0.9));
+    int wh = std::min(MulDiv(740, (int)dx, 96), (int)((wa.bottom - wa.top) * 0.9));
+    int x = wa.left + (wa.right - wa.left - ww) / 2, y = wa.top + (wa.bottom - wa.top - wh) / 2;
+    HWND h = CreateWindowExW(0, kClass, L"Snip history", WS_OVERLAPPEDWINDOW, x, y, ww, wh, nullptr, nullptr, g_inst, nullptr);
+    if (!h) return;
+    g_hwnd = h;
+    g_w.dpi = GetDpiForWindow(h);
+    ApplyMaterial(h);
+    g_w.icon = MakeTrayIcon();
+    if (g_w.icon) {
+        SendMessageW(h, WM_SETICON, ICON_SMALL, (LPARAM)g_w.icon);
+        SendMessageW(h, WM_SETICON, ICON_BIG, (LPARAM)g_w.icon);
+    }
+    RECT rc;
+    GetClientRect(h, &rc);
+    g_w.cw = rc.right * 96.0f / g_w.dpi;
+    g_w.ch = rc.bottom * 96.0f / g_w.dpi;
+    Layout();
+    {
+        std::lock_guard<std::mutex> l(g_lock);
+        g_stop = false;
+        g_queue.clear();
+        g_ready.clear();
+        g_scanned.reset();
+        g_thumbsPosted = false;
+    }
+    g_worker = CreateThread(nullptr, 0, Loader, nullptr, 0, nullptr);
+    RequestScan();
+    // Cloaked until the first frame, so it never flashes white.
+    BOOL on = TRUE, off = FALSE;
+    DwmSetWindowAttribute(h, DWMWA_CLOAK, &on, sizeof(on));
+    ShowWindow(h, SW_SHOWNORMAL);
+    UpdateWindow(h);
+    DwmSetWindowAttribute(h, DWMWA_CLOAK, &off, sizeof(off));
+    BringToFront(h);
+}
+
+static bool IsOpen() { return g_hwnd.load() != nullptr; }
+
+// The key: open it, bring it up, or put it away when it is already in front.
+static void Toggle() {
+    HWND h = g_hwnd;
+    if (h && GetForegroundWindow() == h) PostMessageW(h, WM_CLOSE, 0, 0);
+    else Open();
+}
+
+static void NotifySaved() {
+    if (IsOpen()) RequestScan();
+}
+
+static void RegisterWindowClass() {
+    WNDCLASSW wc{};
+    wc.style = CS_DBLCLKS;
+    wc.lpfnWndProc = Proc;
+    wc.hInstance = g_inst;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpszClassName = kClass;
+    RegisterClassW(&wc);
+}
+
+static void Shutdown() {
+    if (HWND h = g_hwnd) DestroyWindow(h);
+    StopLoader();
+    if (g_oleOn) OleUninitialize();
+    g_oleOn = false;
+    UnregisterClassW(kClass, g_inst);
+}
+
+}  // namespace hist
+
+// ---------------------------------------------------------------------------
+// Timed snips: a small pill counts down, then the snip runs. Click it to cancel.
+// ---------------------------------------------------------------------------
+
+namespace cdown {
+
+static const wchar_t kClass[] = L"SeamlessSnipperCountdown";
+constexpr float kW = 252, kH = 56;
+constexpr UINT_PTR kTimer = 4;  // On the message window.
+
+static HWND g_hwnd;
+static ID2D1HwndRenderTarget* g_rt;
+static ID2D1SolidColorBrush* g_brush;
+static UINT g_dpi = 96;
+static int g_left = 0, g_mode = 0;
+static bool g_acrylic = false;
+static float g_radius = 8;
+
+static void ReleaseTarget() {
+    if (g_brush) g_brush->Release();
+    if (g_rt) g_rt->Release();
+    g_brush = nullptr;
+    g_rt = nullptr;
+}
+
+static void Paint() {
+    if (!g_rt) {
+        RECT rc;
+        GetClientRect(g_hwnd, &rc);
+        auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                                                  D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+        if (FAILED(g_d2d->CreateHwndRenderTarget(props, D2D1::HwndRenderTargetProperties(g_hwnd, D2D1::SizeU(rc.right, rc.bottom)),
+                                                 &g_rt)))
+            return;
+        g_rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+        g_rt->CreateSolidColorBrush(Rgb(mocha::text), &g_brush);
+    }
+    ID2D1HwndRenderTarget* rt = g_rt;
+    ID2D1SolidColorBrush* b = g_brush;
+    rt->SetDpi((float)g_dpi, (float)g_dpi);
+    rt->BeginDraw();
+    rt->Clear(D2D1::ColorF(0, 0));
+    D2D1_RECT_F r{0, 0, kW, kH};
+    float rad = std::min(g_radius, kH / 2);  // The live window radius, the same DWM cuts the glass with.
+    FillRound(rt, b, r, rad, Rgb(mocha::crust, g_acrylic ? 0.82f : 0.97f));
+    Ptr<ID2D1LinearGradientBrush> grad;
+    GradientBrush(rt, r, 1.0f, grad);
+    if (grad) {
+        rt->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(1, 1, kW - 1, kH - 1), rad - 1, rad - 1), grad.p, 2);
+        D2D1_ELLIPSE disc{D2D1::Point2F(12 + 18, kH / 2), 18, 18};
+        rt->FillEllipse(disc, grad.p);
+    }
+    DrawStr(rt, b, std::to_wstring(g_left), CenterFont(17, true), D2D1::RectF(12, kH / 2 - 18, 48, kH / 2 + 18),
+            Rgb(mocha::crust));
+    DrawStr(rt, b, L"Snipping a region", Font(13.0f, true), D2D1::RectF(60, 9, kW - 14, 29), Rgb(mocha::text));
+    DrawStr(rt, b, L"Click here to cancel", Font(11.5f, false), D2D1::RectF(60, 28, kW - 14, 47), Rgb(mocha::subtext0));
+    if (rt->EndDraw() == (HRESULT)D2DERR_RECREATE_TARGET) {
+        ReleaseTarget();
+        InvalidateRect(g_hwnd, nullptr, FALSE);
+    }
+}
+
+static bool Running() { return g_left > 0; }
+
+static void Hide() {
+    if (g_msgWnd) KillTimer(g_msgWnd, kTimer);
+    g_left = 0;
+    if (g_hwnd && IsWindowVisible(g_hwnd)) {
+        ShowWindow(g_hwnd, SW_HIDE);
+        DwmFlush();  // Gone from the screen before the snip freezes it.
+    }
+}
+
+static void Cancel() { Hide(); }
+
+static LRESULT CALLBACK Proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            Paint();
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_ERASEBKGND: return 1;
+        case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
+        case WM_SETCURSOR:
+            SetCursor(LoadCursorW(nullptr, IDC_HAND));
+            return TRUE;
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP: Cancel(); return 0;
+        case WM_DESTROY:
+            ReleaseTarget();
+            g_hwnd = nullptr;
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+static void Start(int seconds, int mode) {
+    if (!g_hwnd) {
+        g_hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, kClass, L"Seamless Snipper", WS_POPUP, 0,
+                                 0, 10, 10, nullptr, nullptr, g_inst, nullptr);
+        if (!g_hwnd) return;
+        int corner = 2;  // DWMWCP_ROUND
+        DwmSetWindowAttribute(g_hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
+        BOOL noFade = TRUE;
+        DwmSetWindowAttribute(g_hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, &noFade, sizeof(noFade));
+    }
+    g_acrylic = TransparencyOn() && SetAcrylic(g_hwnd, true);
+    if (!g_acrylic) SetAcrylic(g_hwnd, false);
+    g_radius = LiveCornerRadius();
+    g_left = seconds;
+    g_mode = mode;
+    POINT pt;
+    GetCursorPos(&pt);
+    HMONITOR mon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(mon, &mi);
+    UINT dx = 96, dy = 96;
+    GetDpiForMonitor(mon, MDT_EFFECTIVE_DPI, &dx, &dy);
+    g_dpi = dx;
+    int pw = MulDiv((int)kW, (int)dx, 96), ph = MulDiv((int)kH, (int)dx, 96);
+    int x = mi.rcWork.left + (mi.rcWork.right - mi.rcWork.left - pw) / 2, y = mi.rcWork.top + MulDiv(24, (int)dx, 96);
+    SetWindowPos(g_hwnd, HWND_TOPMOST, x, y, pw, ph, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    if (g_rt) g_rt->Resize(D2D1::SizeU(pw, ph));
+    InvalidateRect(g_hwnd, nullptr, FALSE);
+    SetTimer(g_msgWnd, kTimer, 1000, nullptr);
+}
+
+// One second passed: count down, or take the snip.
+static void Tick() {
+    if (--g_left > 0) {
+        if (g_hwnd) InvalidateRect(g_hwnd, nullptr, FALSE);
+        return;
+    }
+    int mode = g_mode;
+    Hide();
+    Snip(mode);
+}
+
+static void RegisterWindowClass() {
+    WNDCLASSW wc{};
+    wc.lpfnWndProc = Proc;
+    wc.hInstance = g_inst;
+    wc.hCursor = LoadCursorW(nullptr, IDC_HAND);
+    wc.lpszClassName = kClass;
+    RegisterClassW(&wc);
+}
+
+static void Shutdown() {
+    Hide();
+    if (g_hwnd) DestroyWindow(g_hwnd);
+    UnregisterClassW(kClass, g_inst);
+}
+
+}  // namespace cdown
+
+static void ToastAction(const std::wstring& what, const std::wstring& path) {
+    if (what == L"close") return;
+    if (path.empty()) {
+        if (what != L"copy") OpenWithShell(ExpandPath(g_cfg.folder));
+        return;
+    }
+    if (what == L"open") OpenWithShell(path);
+    else if (what == L"folder") ShowInFolder(path);
+    else if (what == L"copy") {
+        Shot s;
+        if (hist::LoadPicture(path, s)) PutClipboardImage(s);
+    } else if (what == L"edit") {
+        if ((INT_PTR)ShellExecuteW(nullptr, L"edit", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL) <= 32)
+            ShellExecuteW(nullptr, L"open", L"mspaint.exe", (L"\"" + path + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1914,6 +7619,26 @@ static void Snip(int mode) {
         return;
     }
     Deliver(std::move(s), app);
+}
+
+// The same region as last time, straight away. No last region yet (or it is off every screen now): pick one.
+static void SnipLastRegion() {
+    if (g_ov.hwnd) return;
+    RECT vs = VirtualScreen(), r;
+    if (!g_haveLast || !IntersectRect(&r, &g_lastRegion, &vs)) {
+        Snip(MODE_REGION);
+        return;
+    }
+    ToastHide();
+    Shot s;
+    if (!CaptureRect(r, false, s)) {
+        Wh_Log(L"Couldn't capture the screen");
+        return;
+    }
+    POINT mid{(r.left + r.right) / 2, (r.top + r.bottom) / 2};
+    HWND under = WindowFromPoint(mid);
+    if (under && IsOwnWindow(under)) under = nullptr;
+    Deliver(std::move(s), AppName(under));
 }
 
 // ---------------------------------------------------------------------------
@@ -2069,6 +7794,23 @@ static void RegisterHotkeys() {
     if (c.stepAside || (!aside && HotkeyMissing())) SetTimer(g_msgWnd, kTimerKeys, 3000, nullptr);
     else KillTimer(g_msgWnd, kTimerKeys);
     if (trayChange) UpdateTray(false);
+    // Win + Shift + S: taken from Windows' Snipping Tool while Snipper is the one snipping. Registered too, so
+    // it also works while a window run as administrator is in front.
+    if (g_hotkeyOn[HK_COUNT]) UnregisterHotKey(g_msgWnd, HK_COUNT + 1);
+    g_hotkeyOn[HK_COUNT] = false;
+    if (c.takeOverWss && !aside)
+        g_hotkeyOn[HK_COUNT] = RegisterHotKey(g_msgWnd, HK_COUNT + 1, MOD_WIN | MOD_SHIFT | MOD_NOREPEAT, 'S') != FALSE;
+    // The key guard sees the keys before any app, games and remote desktops included.
+    std::vector<wss::Combo> combos;
+    if (!aside) {
+        if (c.catchKeys)
+            for (int i = 0; i < HK_COUNT; i++) {
+                UINT mods, vk;
+                if (!c.hotkeys[i].empty() && Hotkey_Parse(c.hotkeys[i], mods, vk)) combos.push_back({mods, vk, i + 1});
+            }
+        if (c.takeOverWss) combos.push_back({MOD_WIN | MOD_SHIFT, 'S', HK_COUNT + 1});
+    }
+    wss::Apply(combos);
 }
 
 // Timer: take back only the keys another app has let go of, without dropping the working ones.
@@ -2082,42 +7824,58 @@ static void RetryMissingHotkeys() {
 }
 
 static void ApplyConfig() {
+    mk::ApplySettings(g_cfg);
     RegisterHotkeys();
     UpdateTray(false);
 }
 
 static void OpenSettings() { snpset::OpenSettingsWindow(); }
 
-enum : UINT { IDM_REGION = 100, IDM_WINDOW, IDM_MONITOR, IDM_FULL, IDM_FOLDER, IDM_SETTINGS, IDM_POINTER };
+enum : UINT {
+    IDM_REGION = 100,
+    IDM_WINDOW,
+    IDM_MONITOR,
+    IDM_FULL,
+    IDM_FOLDER,
+    IDM_SETTINGS,
+    IDM_POINTER,
+    IDM_REPEAT,
+    IDM_HISTORY,
+    IDM_TIMER3,
+    IDM_TIMER5,
+    IDM_TIMER10,
+    IDM_CANCELTIMER,
+};
 
-static std::wstring MenuLabel(PCWSTR text, int hk) {
-    std::wstring s = text;
-    if (hk >= 0 && !g_cfg.hotkeys[hk].empty()) s += L"\t" + g_cfg.hotkeys[hk];
-    return s;
-}
+static std::wstring KeyHint(int hk) { return hk >= 0 ? g_cfg.hotkeys[hk] : std::wstring(); }
 
+// The tray menu, drawn by Clipboard's renderer (menu-ui.cpp).
 static void ShowTrayMenu(POINT pt) {
-    HMENU menu = CreatePopupMenu();
-    AppendMenuW(menu, MF_STRING, IDM_REGION, MenuLabel(L"Snip a region", HK_REGION).c_str());
-    AppendMenuW(menu, MF_STRING, IDM_WINDOW, MenuLabel(L"Snip the active window", HK_WINDOW).c_str());
-    AppendMenuW(menu, MF_STRING, IDM_MONITOR, MenuLabel(L"Snip the active screen", HK_MONITOR).c_str());
-    AppendMenuW(menu, MF_STRING, IDM_FULL, MenuLabel(L"Snip every screen", HK_FULL).c_str());
-    if (magicptr::Enabled()) {
-        std::wstring label = L"Ask about something on screen";
-        std::wstring key = magicptr::HotkeyLabel();
-        if (!key.empty()) label += L"\t" + key;
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, IDM_POINTER, label.c_str());
+    using ui_menu::MI;
+    using ui_menu::MSep;
+    std::vector<UiMenuItem> items;
+    items.push_back(MI(IDM_REGION, L"Snip a region", 0xE7A8, KeyHint(HK_REGION)));
+    items.push_back(MI(IDM_WINDOW, L"Snip the active window", 0xE78B, KeyHint(HK_WINDOW)));
+    items.push_back(MI(IDM_MONITOR, L"Snip the active screen", 0xE7F4, KeyHint(HK_MONITOR)));
+    items.push_back(MI(IDM_FULL, L"Snip every screen", 0xE740, KeyHint(HK_FULL)));
+    items.push_back(MI(IDM_REPEAT, L"Snip the last region again", 0xE8EE, KeyHint(HK_REPEAT), g_haveLast));
+    if (cdown::Running()) {
+        items.push_back(MI(IDM_CANCELTIMER, L"Cancel the timer", 0xE711));
+    } else {
+        items.push_back(ui_menu::MSub(L"Snip a region after a timer", 0xE916,
+                                      {MI(IDM_TIMER3, L"In 3 seconds"), MI(IDM_TIMER5, L"In 5 seconds"),
+                                       MI(IDM_TIMER10, L"In 10 seconds")}));
     }
-    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING, IDM_FOLDER, L"Open the snips folder");
-    AppendMenuW(menu, MF_STRING, IDM_SETTINGS, L"Settings");
-    SetForegroundWindow(g_msgWnd);
-    UINT cmd = TrackPopupMenuEx(menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON |
-                                          (GetSystemMetrics(SM_MENUDROPALIGNMENT) ? TPM_RIGHTALIGN : TPM_LEFTALIGN),
-                                pt.x, pt.y, g_msgWnd, nullptr);
-    PostMessageW(g_msgWnd, WM_NULL, 0, 0);
-    DestroyMenu(menu);
+    items.push_back(MSep());
+    items.push_back(MI(IDM_HISTORY, L"History", 0xE81C, KeyHint(HK_HISTORY)));
+    if (magicptr::Enabled()) {
+        items.push_back(MSep());
+        items.push_back(MI(IDM_POINTER, L"Ask about something on screen", 0xE897, magicptr::HotkeyLabel()));
+    }
+    items.push_back(MSep());
+    items.push_back(MI(IDM_FOLDER, L"Open the snips folder", 0xE838));
+    items.push_back(MI(IDM_SETTINGS, L"Settings", 0xE713));
+    UINT cmd = (UINT)Ui_ShowMenu(items, pt, g_msgWnd);
     int mode = cmd == IDM_REGION ? MODE_REGION : cmd == IDM_WINDOW ? MODE_WINDOW : cmd == IDM_MONITOR ? MODE_MONITOR
                : cmd == IDM_FULL ? MODE_FULL : -1;
     if (mode >= 0) {
@@ -2132,6 +7890,15 @@ static void ShowTrayMenu(POINT pt) {
         OpenSettings();
     } else if (cmd == IDM_POINTER) {
         magicptr::Summon();
+    } else if (cmd == IDM_REPEAT) {
+        g_deferredMode = kDeferredRepeat;
+        SetTimer(g_msgWnd, kTimerDeferred, 250, nullptr);
+    } else if (cmd == IDM_HISTORY) {
+        hist::Open();
+    } else if (cmd == IDM_TIMER3 || cmd == IDM_TIMER5 || cmd == IDM_TIMER10) {
+        cdown::Start(cmd == IDM_TIMER3 ? 3 : cmd == IDM_TIMER5 ? 5 : 10, MODE_REGION);
+    } else if (cmd == IDM_CANCELTIMER) {
+        cdown::Cancel();
     }
 }
 
@@ -2141,6 +7908,8 @@ static void OnHotkey(int which) {
         case HK_FULL: Snip(MODE_FULL); break;
         case HK_WINDOW: Snip(MODE_WINDOW); break;
         case HK_MONITOR: Snip(MODE_MONITOR); break;
+        case HK_REPEAT: SnipLastRegion(); break;
+        case HK_HISTORY: hist::Toggle(); break;
     }
 }
 
@@ -2152,13 +7921,20 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     switch (msg) {
         case WM_HOTKEY:
+        case WM_SNP_HOOKKEY: {
+            if (wp < 1 || wp > HK_COUNT + 1) return 0;
+            // The same press can arrive twice, once from the key guard and once as a hotkey.
+            ULONGLONG now = GetTickCount64();
+            if (now - g_hookFired[wp] < 400) return 0;
+            if (msg == WM_SNP_HOOKKEY) g_hookFired[wp] = now;
             if (HWND s = snpset::RecordingKeyWindow()) {
                 // A key box is listening: give it the key (PrintScreen included) instead of snipping.
                 PostMessageW(s, WM_KEYDOWN, HIWORD(lp), 1);
                 return 0;
             }
-            if (wp >= 1 && wp <= HK_COUNT) OnHotkey((int)wp - 1);
+            OnHotkey(wp == HK_COUNT + 1 ? HK_REGION : (int)wp - 1);
             return 0;
+        }
         case WM_TIMER:
             if (wp == kTimerKeys) {
                 bool aside = g_cfg.stepAside && ShareXRunning();
@@ -2168,7 +7944,10 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 KillTimer(hwnd, kTimerDeferred);
                 int mode = g_deferredMode;
                 g_deferredMode = -1;
-                if (mode >= 0) Snip(mode);
+                if (mode == kDeferredRepeat) SnipLastRegion();
+                else if (mode >= 0) Snip(mode);
+            } else if (wp == cdown::kTimer) {
+                cdown::Tick();
             }
             return 0;
         case WM_SNP_TRAY:
@@ -2183,9 +7962,13 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             ApplyConfig();
             if (HWND s = snpset::g_settingsWnd) PostMessageW(s, WM_APP + 1 /* WM_APP_SETTINGS_RELOAD */, 0, 0);
             return 0;
-        case WM_SNP_SAVED:
-            ShowToast((SaveJob*)lp);
+        case WM_SNP_SAVED: {
+            auto* job = (SaveJob*)lp;
+            hist::NotifySaved();
+            if (job->toast) ShowToast(job);
+            else delete job;
             return 0;
+        }
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
@@ -2207,6 +7990,7 @@ static DWORD WINAPI UiThread(LPVOID) {
     wc.lpszClassName = L"SeamlessSnipperMsg";
     RegisterClassW(&wc);
     WNDCLASSW oc{};
+    oc.style = CS_DBLCLKS;  // Double-click a kept region to snip it.
     oc.lpfnWndProc = OverlayProc;
     oc.hInstance = g_inst;
     oc.hCursor = LoadCursorW(nullptr, IDC_CROSS);
@@ -2218,6 +8002,9 @@ static DWORD WINAPI UiThread(LPVOID) {
     tc.hCursor = LoadCursorW(nullptr, IDC_HAND);
     tc.lpszClassName = kToastClass;
     RegisterClassW(&tc);
+    hist::RegisterWindowClass();
+    cdown::RegisterWindowClass();
+    LoadLastRegion();
     g_msgWnd = CreateWindowExW(WS_EX_TOOLWINDOW, wc.lpszClassName, L"Seamless Snipper", WS_POPUP, 0, 0, 0, 0, nullptr,
                                nullptr, g_inst, nullptr);
     g_uiOk = g_msgWnd && g_d2d && g_dw;
@@ -2235,11 +8022,15 @@ static DWORD WINAPI UiThread(LPVOID) {
             DispatchMessageW(&msg);
         }
     OvClose();
+    wss::Shutdown();
+    mk::Shutdown();
     if (g_toast.hwnd) DestroyWindow(g_toast.hwnd);
+    cdown::Shutdown();
+    hist::Shutdown();
     if (g_msgWnd) {
         KillTimer(g_msgWnd, kTimerKeys);
         KillTimer(g_msgWnd, kTimerDeferred);
-        for (int i = 0; i < HK_COUNT; i++)
+        for (int i = 0; i <= HK_COUNT; i++)
             if (g_hotkeyOn[i]) UnregisterHotKey(g_msgWnd, i + 1);
         if (g_trayAdded) {
             NOTIFYICONDATAW nid{sizeof(nid)};
@@ -3119,7 +8910,59 @@ static VOID Uninit()
 static HANDLE g_singleInstance;
 static bool g_pointerOk;
 
+// After the elevated relaunch, Windhawk can load this mod a moment late when
+// the PC is busy. windhawk-mod.exe then shows a false "Running the tool mod
+// failed" box although the mod loads and works. Close that box, only in this
+// process, during the first 15 seconds.
+static BOOL CALLBACK CloseFalseFailureBox(HWND hwnd, LPARAM) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != GetCurrentProcessId()) return TRUE;
+    WCHAR cls[16]{};
+    WCHAR title[32]{};
+    GetClassNameW(hwnd, cls, ARRAYSIZE(cls));
+    GetWindowTextW(hwnd, title, ARRAYSIZE(title));
+    if (wcscmp(cls, L"#32770") == 0 && wcscmp(title, L"Windhawk") == 0) {
+        PostMessageW(hwnd, WM_CLOSE, 0, 0);
+        Wh_Log(L"Closed false tool-mod failure box");
+    }
+    return TRUE;
+}
+
+static DWORD WINAPI FalseFailureBoxThreadProc(LPVOID) {
+    for (int i = 0; i < 60; i++) {
+        EnumWindows(CloseFalseFailureBox, 0);
+        Sleep(250);
+    }
+    return 0;
+}
+
 BOOL WhTool_ModInit() {
+    // Always run elevated so the PrintScreen hotkey strikes over elevated windows.
+    HANDLE token;
+    TOKEN_ELEVATION elevation{};
+    DWORD bytes = 0;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return FALSE;
+    bool queried = GetTokenInformation(token, TokenElevation, &elevation, sizeof(elevation), &bytes);
+    CloseHandle(token);
+    if (!queried) return FALSE;
+    if (!elevation.TokenIsElevated) {
+        SHELLEXECUTEINFOW launch{sizeof(launch)};
+        launch.fMask = SEE_MASK_FLAG_NO_UI;
+        launch.lpVerb = L"runas";
+        WCHAR self[MAX_PATH];
+        if (!GetModuleFileNameW(nullptr, self, MAX_PATH)) return FALSE;
+        launch.lpFile = self;
+        launch.lpParameters = L"-windhawk-tool-mod \"" WH_MOD_ID L"\"";
+        launch.nShow = SW_HIDE;
+        // Exiting with 0 hands over to the elevated copy. Windhawk reports a
+        // failed tool mod on any other exit, so bail out quietly otherwise.
+        if (ShellExecuteExW(&launch)) ExitProcess(0);
+        return FALSE;
+    }
+    if (HANDLE boxThread = CreateThread(nullptr, 0, FalseFailureBoxThreadProc, nullptr, 0, nullptr)) {
+        CloseHandle(boxThread);
+    }
     g_singleInstance = CreateMutexW(nullptr, FALSE, L"Local\\SeamlessSnipperRunning");
     if (!g_singleInstance || GetLastError() == ERROR_ALREADY_EXISTS) {
         if (g_singleInstance) CloseHandle(g_singleInstance);
@@ -19102,6 +24945,47 @@ class SetCom {
     explicit operator bool() const { return p != nullptr; }
 };
 
+// One row of a tray menu (Set_TrayMenu). Every mod's tray menu is a list of these.
+struct SetMenuItem {
+    int id = 0;                    // What Set_TrayMenu returns when this row is picked.
+    std::wstring glyph;            // FiraCode Nerd Font glyph for the leading column.
+    std::wstring label;
+    std::wstring hint;             // Grey text on the right, such as a hotkey.
+    bool checked = false;          // Accent check mark on the right.
+    bool separator = false;
+    bool disabled = false;
+    std::vector<SetMenuItem> sub;  // A submenu, drawn by the same renderer.
+};
+
+// One open level of a tray menu: its own popup window and Direct2D target.
+struct SetMenuLevel {
+    const std::vector<SetMenuItem>* items = nullptr;
+    HWND hwnd = nullptr;
+    SetCom<ID2D1HwndRenderTarget> rt;
+    float scale = 1, wDip = 0, hDip = 0, itemH = 30, hintW = 0;
+    std::vector<float> top, height;  // Per row, DIPs inside the window.
+    int hover = -1;                  // Highlighted row.
+    int open = -1;                   // Row whose submenu is the next level.
+};
+
+// A running tray menu. It owns its factories, so it runs on whatever thread owns the tray icon.
+struct SetMenuSession {
+    SetCom<ID2D1Factory> d2d;
+    SetCom<IDWriteFactory> dw;
+    SetCom<IDWriteTextFormat> fText, fHint, fGlyph, fGlyphS;
+    std::vector<std::unique_ptr<SetMenuLevel>> levels;
+    HINSTANCE inst = nullptr;
+    std::wstring cls;
+    float radius = 8;
+    int result = 0;
+    bool done = false;
+    bool pressed = false;  // A button went down inside the menu; only then does a release pick a row.
+    bool wasActive = false;
+    float alpha = 1;
+    ULONGLONG fadeStart = 0;
+    int pendingLevel = -1, pendingItem = -1;  // Hover timer: open (item >= 0) or close a submenu after a delay.
+};
+
 struct SetField {
     enum Kind { Choice, Number, Text, Hotkey, Check, Color };
     Kind kind;
@@ -19129,54 +25013,115 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Hotkey, L"fullscreenHotkey", L"Snip every screen", L"All your screens in one picture. Click the box and press the keys. Leave it empty to turn it off.", L"Shift+PrintScreen", {}, 0, 100, 0, L"Snip keys"},
 {K::Hotkey, L"windowHotkey", L"Snip the active window", L"The window you are using, without the desktop around it. Click the box and press the keys. Leave it empty to turn it off.", L"Alt+PrintScreen", {}, 0, 100, 0, L"Snip keys"},
 {K::Hotkey, L"monitorHotkey", L"Snip the active screen", L"The screen the mouse is on. Click the box and press the keys. Leave it empty to turn it off.", L"Ctrl+PrintScreen", {}, 0, 100, 0, L"Snip keys"},
-{K::Check, L"stepAside", L"Let ShareX keep its keys", L"While ShareX is running, Snipper leaves these keys to it and takes them over once ShareX closes. The tray menu always works.", L"1", {}, 0, 100, 0, L"ShareX"},
+{K::Hotkey, L"repeatHotkey", L"Snip the last region again", L"Takes the same spot as your last region snip, straight away. Handy for a before and after. Click the box and press the keys. Leave it empty to turn it off.", L"Ctrl+Alt+Shift+PrintScreen", {}, 0, 100, 0, L"More keys"},
+{K::Hotkey, L"historyHotkey", L"Open the history", L"Every snip in your folder, newest first. Type to search, drag one into a chat, right-click to copy or delete it. Press the key again to put it away. Click the box and press the keys. Leave it empty to turn it off.", L"Ctrl+Shift+H", {}, 0, 100, 0, L"More keys"},
+{K::Check, L"takeOverSnippingKey", L"Win + Shift + S opens Snipper", L"Takes the key from the Windows Snipping Tool, so it opens the region screen here instead. Off, the key goes back to Windows.", L"1", {}, 0, 100, 0, L"More keys"},
+{K::Check, L"stepAside", L"Let ShareX keep its keys", L"Only if you still run ShareX: while it is open, Snipper leaves these keys to it and takes them back once it closes. The tray menu always works.", L"0", {}, 0, 100, 0, L"ShareX"},
+{K::Check, L"catchKeys", L"Keys work over every window", L"Catches the snip keys before any app sees them, so games, remote desktops and apps that grab the keyboard cannot block them. Off, Windows hands the keys out and some windows can swallow them.", L"1", {}, 0, 100, 0, L"More keys"},
+{K::Check, L"histPeek", L"Space previews with Peek", L"In the history, Space shows the picked snip in Peek, and the arrow keys step through the others. Needs the Peek mod turned on; without it, the picture opens instead.", L"1", {}, 0, 100, 0, L"More keys"},
 {K::Check, L"copyToClipboard", L"Copy to the clipboard", L"Every snip is ready to paste.", L"1", {}, 0, 100, 1, L"After a snip"},
 {K::Check, L"saveToFile", L"Save to a file", L"Every snip is also saved as a picture.", L"1", {}, 0, 100, 1, L"After a snip"},
-{K::Check, L"showToast", L"Show a preview card", L"A small card with the snip. Click it to open the picture, right-click it to open its folder.", L"1", {}, 0, 100, 1, L"After a snip"},
-{K::Number, L"toastSeconds", L"Card time (seconds)", L"1 to 10 (Suggested: 3).", L"3", {}, 1, 10, 1, L"After a snip"},
+{K::Check, L"showToast", L"Show a preview card", L"A small card with the snip. Click it to open the picture, right-click it to open its folder.", L"1", {}, 0, 100, 2, L"Card"},
+{K::Number, L"toastSeconds", L"Card time (seconds)", L"1 to 10 (Suggested: 3).", L"3", {}, 1, 10, 2, L"Card"},
 {K::Check, L"captureCursor", L"Include the mouse pointer", L"Draws the pointer into full screen, screen and window snips, as ShareX did.", L"1", {}, 0, 100, 1, L"After a snip"},
-{K::Check, L"playSound", L"Play a sound", L"A short camera click after each snip.", L"0", {}, 0, 100, 1, L"After a snip"},
+{K::Check, L"playSound", L"Play the capture sound", L"ShareX's camera click after each snip.", L"1", {}, 0, 100, 1, L"After a snip"},
+{K::Text, L"soundFile", L"Sound file", L"Optional: a .wav file to play instead of the camera click. Leave it empty for the click.", L"", {}, 0, 100, 1, L"After a snip"},
 {K::Text, L"saveFolder", L"Folder", L"Where pictures are saved. The folder is made if it is missing.", L"G:\\Gallery", {}, 0, 100, 1, L"Files"},
 {K::Choice, L"subfolder", L"Subfolders", L"Keeps the folder tidy.", L"day", {{L"day", L"One per day, like 12-11-26"}, {L"app", L"One per app, like Discord"}, {L"none", L"None"}}, 0, 100, 1, L"Files"},
 {K::Choice, L"fileFormat", L"Picture format", L"PNG is sharp and lossless. JPG files are smaller.", L"png", {{L"png", L"PNG"}, {L"jpg", L"JPG"}}, 0, 100, 1, L"Files"},
 {K::Number, L"jpgQuality", L"JPG quality", L"50 to 100 (Suggested: 92).", L"92", {}, 50, 100, 1, L"Files"},
-{K::Number, L"dimOpacity", L"Dim outside (%)", L"0 to 85 (Suggested: 45). How dark the screen gets around the region.", L"45", {}, 0, 85, 2, L"Screen"},
-{K::Check, L"snapWindows", L"Snap to windows", L"Hover a window and click to snip all of it, without dragging.", L"1", {}, 0, 100, 2, L"Screen"},
-{K::Check, L"snapControls", L"Snap to parts of windows", L"Hovering also finds buttons, panels and lists inside windows.", L"1", {}, 0, 100, 2, L"Screen"},
-{K::Check, L"showSize", L"Show the size", L"The size of the region, next to it.", L"1", {}, 0, 100, 2, L"Screen"},
-{K::Check, L"crosshairLines", L"Crosshair lines", L"Thin lines across the screen through the pointer, for lining up edges.", L"0", {}, 0, 100, 2, L"Screen"},
-{K::Check, L"magnifier", L"Magnifier", L"A zoomed view of the pixels under the pointer.", L"1", {}, 0, 100, 2, L"Magnifier"},
-{K::Number, L"magnifierPixels", L"Pixels across", L"7 to 31 (Suggested: 15). How many screen pixels the magnifier shows.", L"15", {}, 7, 31, 2, L"Magnifier"},
-{K::Number, L"magnifierZoom", L"Zoom", L"4 to 24 (Suggested: 10). The mouse wheel changes it too.", L"10", {}, 4, 24, 2, L"Magnifier"},
-{K::Check, L"magnifierGrid", L"Pixel grid", L"Lines between the zoomed pixels.", L"1", {}, 0, 100, 2, L"Magnifier"},
-{K::Color, L"accentFrom", L"Selection color", L"In hexadecimal. The gradient starts with this color.", L"#89B4FA", {}, 0, 100, 3, L"Selection"},
-{K::Color, L"accentTo", L"Selection color 2", L"In hexadecimal. The gradient ends with this color.", L"#CBA6F7", {}, 0, 100, 3, L"Selection"},
-{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 3, L"Settings window"},
-{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 3, L"Settings window"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"A Snipper icon in the system tray. Click it to open these settings, right-click it for a menu.", L"1", {}, 0, 100, 3, L"Settings window"},
-{K::Check, L"pointerOn", L"Magic Pointer", L"Shake the mouse or press its key, then point at anything on screen and ask about it. Off, nothing summons it.", L"1", {}, 0, 100, 4, L"Summon"},
-{K::Hotkey, L"pointerHotkey", L"Key", L"Summons the pointer. Press it again to put it away. Click the box and press the keys. Leave it empty to turn it off.", L"Win+Shift+G", {}, 0, 100, 4, L"Summon"},
-{K::Check, L"pointerShake", L"Shake to summon", L"Wiggle the mouse, or swipe back and forth on the touchpad.", L"1", {}, 0, 100, 4, L"Summon"},
-{K::Number, L"pointerSensitivity", L"Shake sensitivity", L"1 to 10 (Suggested: 5). 1 needs a big, fast shake. 10 takes a small wiggle.", L"5", {}, 1, 10, 4, L"Summon"},
-{K::Check, L"pointerFullscreen", L"Ignore shakes in fullscreen", L"Games, videos and presentations that fill the screen, borderless ones too.", L"1", {}, 0, 100, 4, L"Summon"},
-{K::Text, L"pointerSkipApps", L"Skip these apps", L"Shakes do nothing in them. Names like game.exe or window titles, split by semicolons.", L"", {}, 0, 100, 4, L"Summon"},
-{K::Check, L"pointerTypeToAsk", L"Start typing to ask", L"With the pointer showing, just type to ask without picking anything. Off, your typing stays in the app.", L"1", {}, 0, 100, 4, L"Summon"},
-{K::Number, L"pointerTimeout", L"Put away after (seconds)", L"0 to 3600 (Suggested: 15). When the mouse stays still this long. 0 keeps it until you press Esc.", L"15", {}, 0, 3600, 4, L"Summon"},
-{K::Choice, L"pointerGlow", L"Glow", L"The glow around the pointer and what you pick.", L"gradient", {{L"gradient", L"Blue to mauve, your selection colors"}, {L"accent", L"Windows accent color"}, {L"rainbow", L"Google colors"}, {L"#89B4FA", L"Blue"}, {L"#CBA6F7", L"Mauve"}}, 0, 100, 4, L"Look"},
-{K::Check, L"pointerGlass", L"Glass", L"The card and the hint get frosted glass. Off, they are solid.", L"1", {}, 0, 100, 4, L"Look"},
-{K::Check, L"pointerRipple", L"Ripple", L"The screen gently ripples when the pointer appears.", L"1", {}, 0, 100, 4, L"Look"},
-{K::Number, L"pointerSize", L"Pointer size (%)", L"50 to 300 (Suggested: 100).", L"100", {}, 50, 300, 4, L"Look"},
-{K::Text, L"pointerCursorFile", L"Pointer file", L"Optional. A .cur or .ani file shown while the pointer is out.", L"", {}, 0, 100, 4, L"Look"},
-{K::Number, L"pointerDim", L"Dim outside (%)", L"0 to 80 (Suggested: 50). How dark the screen gets around the area you drag.", L"50", {}, 0, 80, 4, L"Look"},
-{K::Check, L"pointerHint", L"Show the hint", L"A small bubble that says what to do when the pointer appears.", L"1", {}, 0, 100, 4, L"Look"},
-{K::Check, L"pointerHighlight", L"Outline what you point at", L"Buttons, pictures and text get an outline, so one click picks them.", L"1", {}, 0, 100, 4, L"Look"},
-{K::Text, L"pointerApiKey", L"AI key", L"Optional. A Gemini, ChatGPT or Claude key for answers in the card. It is kept encrypted. Type none to remove it.", L"", {}, 0, 100, 4, L"AI"},
-{K::Choice, L"pointerModel", L"Model", L"If the one you pick is busy, a faster one answers.", L"fast", {{L"fast", L"Fast, answers in a second or two"}, {L"balanced", L"Balanced, better answers, costs more"}, {L"smart", L"Smartest, slowest and costs the most"}}, 0, 100, 4, L"AI"},
-{K::Check, L"pointerSuggestions", L"Smart suggestions", L"Up to three ideas for each pick. Needs a key, and every pick is sent to the AI as soon as you make it.", L"0", {}, 0, 100, 4, L"AI"},
-{K::Choice, L"pointerTranslateTo", L"Translate to", L"For the Translate button on the card. Needs a key.", L"auto", {{L"auto", L"Your Windows language"}, {L"Arabic", L"Arabic"}, {L"Bengali", L"Bengali"}, {L"Chinese (Simplified)", L"Chinese (Simplified)"}, {L"Chinese (Traditional)", L"Chinese (Traditional)"}, {L"Croatian", L"Croatian"}, {L"Czech", L"Czech"}, {L"Danish", L"Danish"}, {L"Dutch", L"Dutch"}, {L"English", L"English"}, {L"Finnish", L"Finnish"}, {L"French", L"French"}, {L"German", L"German"}, {L"Greek", L"Greek"}, {L"Hebrew", L"Hebrew"}, {L"Hindi", L"Hindi"}, {L"Hungarian", L"Hungarian"}, {L"Indonesian", L"Indonesian"}, {L"Italian", L"Italian"}, {L"Japanese", L"Japanese"}, {L"Korean", L"Korean"}, {L"Norwegian", L"Norwegian"}, {L"Persian", L"Persian"}, {L"Polish", L"Polish"}, {L"Portuguese", L"Portuguese"}, {L"Romanian", L"Romanian"}, {L"Russian", L"Russian"}, {L"Spanish", L"Spanish"}, {L"Swedish", L"Swedish"}, {L"Tamil", L"Tamil"}, {L"Thai", L"Thai"}, {L"Turkish", L"Turkish"}, {L"Ukrainian", L"Ukrainian"}, {L"Vietnamese", L"Vietnamese"}}, 0, 100, 4, L"AI"},
-{K::Check, L"pointerOcr", L"Read text in pictures", L"Windows reads the text in each pick on your PC, so you can copy it and the AI gets it too.", L"1", {}, 0, 100, 4, L"AI"},
-{K::Choice, L"pointerBrowser", L"Browser", L"Opens Gemini and Google Lens. If it is missing, your default opens.", L"default", {{L"default", L"Windows default browser"}, {L"chrome", L"Google Chrome"}, {L"edge", L"Microsoft Edge"}, {L"firefox", L"Mozilla Firefox"}, {L"brave", L"Brave"}, {L"zen", L"Zen Browser"}, {L"opera", L"Opera"}, {L"vivaldi", L"Vivaldi"}, {L"librewolf", L"LibreWolf"}, {L"waterfox", L"Waterfox"}, {L"floorp", L"Floorp"}, {L"custom", L"Other (set its program below)"}}, 0, 100, 4, L"Browser"},
-{K::Text, L"pointerBrowserPath", L"Other browser program", L"Only for Other: the full path of the browser program.", L"", {}, 0, 100, 4, L"Browser"}
+{K::Number, L"dimOpacity", L"Dim outside (%)", L"0 to 85 (Suggested: 45). How dark the screen gets around the region.", L"45", {}, 0, 85, 3, L"Screen"},
+{K::Check, L"snapWindows", L"Snap to windows", L"Hover a window and click to snip all of it, without dragging.", L"1", {}, 0, 100, 3, L"Screen"},
+{K::Check, L"snapControls", L"Snap to parts of windows", L"Hovering also finds buttons, panels and lists inside windows.", L"1", {}, 0, 100, 3, L"Screen"},
+{K::Check, L"showSize", L"Show the size", L"The size of the region, next to it.", L"1", {}, 0, 100, 3, L"Screen"},
+{K::Check, L"crosshairLines", L"Crosshair lines", L"Thin lines across the screen through the pointer, for lining up edges.", L"0", {}, 0, 100, 3, L"Screen"},
+{K::Check, L"drawBar", L"Drawing bar", L"A bar at the top of the region screen with arrows, boxes, text, numbers, blur and more. Draw first, then pick the region; the drawings go into the snip.", L"1", {}, 0, 100, 4, L"Bar and pen"},
+{K::Check, L"keepRegionOpen", L"Draw after picking", L"Picking a region keeps the screen up so you can draw on it. Press Enter, double-click it or use the bar to snip. Off, picking a region snips it straight away.", L"0", {}, 0, 100, 4, L"Bar and pen"},
+{K::Color, L"drawColor", L"Pen color", L"In hexadecimal. The color the drawing tools start with.", L"#F38BA8", {}, 0, 100, 4, L"Bar and pen"},
+{K::Number, L"drawSize", L"Pen size", L"1 to 20 (Suggested: 4). The [ and ] keys change it too.", L"4", {}, 1, 20, 4, L"Bar and pen"},
+{K::Check, L"drawShadow", L"Shadows", L"A soft shadow under each drawing, as ShareX has.", L"1", {}, 0, 100, 4, L"Bar and pen"},
+{K::Check, L"drawOutline", L"Outlines", L"A thin contrasting edge around each drawing, so it shows on any background.", L"0", {}, 0, 100, 4, L"Bar and pen"},
+{K::Check, L"magnifier", L"Magnifier", L"A zoomed view of the pixels under the pointer.", L"1", {}, 0, 100, 3, L"Magnifier"},
+{K::Number, L"magnifierPixels", L"Pixels across", L"7 to 31 (Suggested: 15). How many screen pixels the magnifier shows.", L"15", {}, 7, 31, 3, L"Magnifier"},
+{K::Number, L"magnifierZoom", L"Zoom", L"4 to 24 (Suggested: 10). The mouse wheel changes it too.", L"10", {}, 4, 24, 3, L"Magnifier"},
+{K::Check, L"magnifierGrid", L"Pixel grid", L"Lines between the zoomed pixels.", L"1", {}, 0, 100, 3, L"Magnifier"},
+{K::Color, L"accentFrom", L"Selection color", L"In hexadecimal. The gradient starts with this color.", L"#89B4FA", {}, 0, 100, 5, L"Selection"},
+{K::Color, L"accentTo", L"Selection color 2", L"In hexadecimal. The gradient ends with this color.", L"#CBA6F7", {}, 0, 100, 5, L"Selection"},
+{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 5, L"Settings window"},
+{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 5, L"Settings window"},
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"A Snipper icon in the system tray. Click it to open these settings, right-click it for a menu.", L"1", {}, 0, 100, 5, L"Settings window"},
+{K::Check, L"pointerOn", L"Magic Pointer", L"Shake the mouse or press its key, then point at anything on screen and ask about it. Off, nothing summons it.", L"1", {}, 0, 100, 6, L"Summon"},
+{K::Hotkey, L"pointerHotkey", L"Key", L"Summons the pointer. Press it again to put it away. Click the box and press the keys. Leave it empty to turn it off.", L"Win+Shift+G", {}, 0, 100, 6, L"Summon"},
+{K::Check, L"pointerShake", L"Shake to summon", L"Wiggle the mouse, or swipe back and forth on the touchpad.", L"1", {}, 0, 100, 6, L"Summon"},
+{K::Number, L"pointerSensitivity", L"Shake sensitivity", L"1 to 10 (Suggested: 5). 1 needs a big, fast shake. 10 takes a small wiggle.", L"5", {}, 1, 10, 6, L"Summon"},
+{K::Check, L"pointerFullscreen", L"Ignore shakes in fullscreen", L"Games, videos and presentations that fill the screen, borderless ones too.", L"1", {}, 0, 100, 6, L"Summon"},
+{K::Text, L"pointerSkipApps", L"Skip these apps", L"Shakes do nothing in them. Names like game.exe or window titles, split by semicolons.", L"", {}, 0, 100, 6, L"Summon"},
+{K::Check, L"pointerTypeToAsk", L"Start typing to ask", L"With the pointer showing, just type to ask without picking anything. Off, your typing stays in the app.", L"1", {}, 0, 100, 6, L"Summon"},
+{K::Number, L"pointerTimeout", L"Put away after (seconds)", L"0 to 3600 (Suggested: 15). When the mouse stays still this long. 0 keeps it until you press Esc.", L"15", {}, 0, 3600, 6, L"Summon"},
+{K::Choice, L"pointerGlow", L"Glow", L"The glow around the pointer and what you pick.", L"gradient", {{L"gradient", L"Blue to mauve, your selection colors"}, {L"accent", L"Windows accent color"}, {L"rainbow", L"Google colors"}, {L"#89B4FA", L"Blue"}, {L"#CBA6F7", L"Mauve"}}, 0, 100, 6, L"Look"},
+{K::Check, L"pointerGlass", L"Glass", L"The card and the hint get frosted glass. Off, they are solid.", L"1", {}, 0, 100, 6, L"Look"},
+{K::Check, L"pointerRipple", L"Ripple", L"The screen gently ripples when the pointer appears.", L"1", {}, 0, 100, 6, L"Look"},
+{K::Number, L"pointerSize", L"Pointer size (%)", L"50 to 300 (Suggested: 100).", L"100", {}, 50, 300, 6, L"Look"},
+{K::Text, L"pointerCursorFile", L"Pointer file", L"Optional. A .cur or .ani file shown while the pointer is out.", L"", {}, 0, 100, 6, L"Look"},
+{K::Number, L"pointerDim", L"Dim outside (%)", L"0 to 80 (Suggested: 50). How dark the screen gets around the area you drag.", L"50", {}, 0, 80, 6, L"Look"},
+{K::Check, L"pointerHint", L"Show the hint", L"A small bubble that says what to do when the pointer appears.", L"1", {}, 0, 100, 6, L"Look"},
+{K::Check, L"pointerHighlight", L"Outline what you point at", L"Buttons, pictures and text get an outline, so one click picks them.", L"1", {}, 0, 100, 6, L"Look"},
+{K::Text, L"pointerApiKey", L"AI key", L"Optional. A Gemini, ChatGPT or Claude key for answers in the card. It is kept encrypted. Type none to remove it.", L"", {}, 0, 100, 6, L"AI"},
+{K::Choice, L"pointerModel", L"Model", L"If the one you pick is busy, a faster one answers.", L"fast", {{L"fast", L"Fast, answers in a second or two"}, {L"balanced", L"Balanced, better answers, costs more"}, {L"smart", L"Smartest, slowest and costs the most"}}, 0, 100, 6, L"AI"},
+{K::Check, L"pointerSuggestions", L"Smart suggestions", L"Up to three ideas for each pick. Needs a key, and every pick is sent to the AI as soon as you make it.", L"0", {}, 0, 100, 6, L"AI"},
+{K::Choice, L"pointerTranslateTo", L"Translate to", L"For the Translate button on the card. Needs a key.", L"auto", {{L"auto", L"Your Windows language"}, {L"Arabic", L"Arabic"}, {L"Bengali", L"Bengali"}, {L"Chinese (Simplified)", L"Chinese (Simplified)"}, {L"Chinese (Traditional)", L"Chinese (Traditional)"}, {L"Croatian", L"Croatian"}, {L"Czech", L"Czech"}, {L"Danish", L"Danish"}, {L"Dutch", L"Dutch"}, {L"English", L"English"}, {L"Finnish", L"Finnish"}, {L"French", L"French"}, {L"German", L"German"}, {L"Greek", L"Greek"}, {L"Hebrew", L"Hebrew"}, {L"Hindi", L"Hindi"}, {L"Hungarian", L"Hungarian"}, {L"Indonesian", L"Indonesian"}, {L"Italian", L"Italian"}, {L"Japanese", L"Japanese"}, {L"Korean", L"Korean"}, {L"Norwegian", L"Norwegian"}, {L"Persian", L"Persian"}, {L"Polish", L"Polish"}, {L"Portuguese", L"Portuguese"}, {L"Romanian", L"Romanian"}, {L"Russian", L"Russian"}, {L"Spanish", L"Spanish"}, {L"Swedish", L"Swedish"}, {L"Tamil", L"Tamil"}, {L"Thai", L"Thai"}, {L"Turkish", L"Turkish"}, {L"Ukrainian", L"Ukrainian"}, {L"Vietnamese", L"Vietnamese"}}, 0, 100, 6, L"AI"},
+{K::Check, L"pointerOcr", L"Read text in pictures", L"Windows reads the text in each pick on your PC, so you can copy it and the AI gets it too.", L"1", {}, 0, 100, 6, L"AI"},
+{K::Choice, L"pointerBrowser", L"Browser", L"Opens Gemini and Google Lens. If it is missing, your default opens.", L"default", {{L"default", L"Windows default browser"}, {L"chrome", L"Google Chrome"}, {L"edge", L"Microsoft Edge"}, {L"firefox", L"Mozilla Firefox"}, {L"brave", L"Brave"}, {L"zen", L"Zen Browser"}, {L"opera", L"Opera"}, {L"vivaldi", L"Vivaldi"}, {L"librewolf", L"LibreWolf"}, {L"waterfox", L"Waterfox"}, {L"floorp", L"Floorp"}, {L"custom", L"Other (set its program below)"}}, 0, 100, 6, L"Browser"},
+{K::Text, L"pointerBrowserPath", L"Other browser program", L"Only for Other: the full path of the browser program.", L"", {}, 0, 100, 6, L"Browser"},
+{K::Choice, L"toastPosition", L"Corner", L"Which corner of the screen the card shows in.", L"br", {{L"br", L"Bottom right"}, {L"bl", L"Bottom left"}, {L"tr", L"Top right"}, {L"tl", L"Top left"}}, 0, 100, 2, L"Card"},
+{K::Number, L"toastSize", L"Card size (%)", L"75 to 160 (Suggested: 100).", L"100", {}, 75, 160, 2, L"Card"},
+{K::Check, L"toastShowText", L"Show the file name", L"The name and size under the picture.", L"1", {}, 0, 100, 2, L"Card"},
+{K::Check, L"toastPauseOnHover", L"Stay while hovered", L"The card waits while the mouse is on it, and starts counting again when it leaves.", L"1", {}, 0, 100, 2, L"Card"},
+{K::Choice, L"toastAnimation", L"Animation", L"How the card comes in and goes away.", L"slide", {{L"slide", L"Slide in from the edge"}, {L"fade", L"Fade"}, {L"grow", L"Grow from the corner"}, {L"none", L"None"}}, 0, 100, 2, L"Motion"},
+{K::Number, L"toastAnimationMs", L"Animation time (ms)", L"80 to 800 (Suggested: 220).", L"220", {}, 80, 800, 2, L"Motion"},
+{K::Check, L"toastGlass", L"Glass", L"Frosted glass behind the card. Off, it is solid.", L"1", {}, 0, 100, 2, L"Look"},
+{K::Check, L"toastHoverGlow", L"Hover edge", L"The blue to mauve edge when the mouse is on the card.", L"1", {}, 0, 100, 2, L"Look"},
+{K::Choice, L"toastClick", L"Click", L"What a click on the card does.", L"open", {{L"open", L"Open the picture"}, {L"folder", L"Show it in its folder"}, {L"copy", L"Copy it again"}, {L"edit", L"Draw on it"}, {L"close", L"Close the card"}}, 0, 100, 2, L"Clicks"},
+{K::Choice, L"toastRightClick", L"Right-click", L"What a right-click on the card does.", L"folder", {{L"folder", L"Show it in its folder"}, {L"open", L"Open the picture"}, {L"copy", L"Copy it again"}, {L"edit", L"Draw on it"}, {L"close", L"Close the card"}}, 0, 100, 2, L"Clicks"},
+{K::Choice, L"toastMiddleClick", L"Middle click", L"What a middle click on the card does.", L"copy", {{L"copy", L"Copy it again"}, {L"open", L"Open the picture"}, {L"folder", L"Show it in its folder"}, {L"edit", L"Draw on it"}, {L"close", L"Close the card"}}, 0, 100, 2, L"Clicks"},
+{K::Choice, L"barPosition", L"Bar position", L"Where the drawing bar sits on the screen.", L"top", {{L"top", L"Top"}, {L"bottom", L"Bottom"}}, 0, 100, 4, L"Bar and pen"},
+{K::Text, L"barColors", L"Bar colors", L"The 8 color dots on the bar, in hexadecimal, split by spaces. Missing ones keep the usual color.", L"#F38BA8 #FAB387 #F9E2AF #A6E3A1 #89B4FA #CBA6F7 #FFFFFF #11111B", {}, 0, 100, 4, L"Bar and pen"},
+{K::Choice, L"lineStyle", L"Line style", L"For boxes, circles, lines, arrows and the pen. The bar changes it too.", L"solid", {{L"solid", L"Solid"}, {L"dash", L"Dashed"}, {L"dot", L"Dotted"}}, 0, 100, 4, L"Bar and pen"},
+{K::Check, L"rememberBar", L"Remember the bar", L"Each tool keeps its color, size and options between snips, like the last time you used it.", L"1", {}, 0, 100, 4, L"Bar and pen"},
+{K::Number, L"boxCornerRadius", L"Box corner radius", L"0 to 60 (Suggested: 6). 0 gives square corners.", L"6", {}, 0, 60, 4, L"Boxes and circles"},
+{K::Choice, L"boxFill", L"Fill", L"The inside of boxes and circles. The bar changes it too.", L"none", {{L"none", L"None"}, {L"shade", L"The pen color, see-through"}, {L"color", L"The fill color below"}}, 0, 100, 4, L"Boxes and circles"},
+{K::Color, L"fillColor", L"Fill color", L"In hexadecimal. Used when Fill is set to the fill color.", L"#1E1E2E", {}, 0, 100, 4, L"Boxes and circles"},
+{K::Number, L"fillOpacity", L"Fill opacity (%)", L"5 to 100 (Suggested: 25).", L"25", {}, 5, 100, 4, L"Boxes and circles"},
+{K::Choice, L"arrowHeads", L"Heads", L"Which ends of the arrow get a head.", L"end", {{L"end", L"At the end"}, {L"start", L"At the start"}, {L"both", L"Both ends"}}, 0, 100, 4, L"Arrows"},
+{K::Choice, L"arrowStyle", L"Head style", L"The shape of the arrow head.", L"filled", {{L"filled", L"Filled triangle"}, {L"notched", L"Notched triangle"}, {L"open", L"Open triangle"}, {L"line", L"Two lines"}}, 0, 100, 4, L"Arrows"},
+{K::Number, L"arrowHeadSize", L"Head size (%)", L"50 to 250 (Suggested: 100).", L"100", {}, 50, 250, 4, L"Arrows"},
+{K::Check, L"arrowCurved", L"Curved arrow", L"The arrow bows along the drag instead of running straight.", L"0", {}, 0, 100, 4, L"Arrows"},
+{K::Text, L"textFont", L"Font", L"The name of an installed font. If it is missing, Segoe UI is used.", L"FiraCode Nerd Font", {}, 0, 100, 4, L"Text"},
+{K::Number, L"textSize", L"Text size (%)", L"50 to 300 (Suggested: 100). Grows with the pen size too.", L"100", {}, 50, 300, 4, L"Text"},
+{K::Check, L"textBold", L"Bold", L"Thick letters, easy to read on a busy picture.", L"1", {}, 0, 100, 4, L"Text"},
+{K::Check, L"textItalic", L"Italic", L"Slanted letters.", L"0", {}, 0, 100, 4, L"Text"},
+{K::Choice, L"textBackground", L"Background", L"A box behind the text makes it easy to read on any picture.", L"none", {{L"none", L"None, with a shadow or outline"}, {L"pen", L"The pen color"}, {L"dark", L"Dark"}}, 0, 100, 4, L"Text"},
+{K::Color, L"textColor", L"Text color", L"In hexadecimal. The color of the words you type on the snip.", L"#FFFFFF", {}, 0, 100, 4, L"Text"},
+{K::Check, L"textOutline", L"Outline", L"A thin edge around the letters, in a color that stands out, so text stays readable on any picture.", L"1", {}, 0, 100, 4, L"Text"},
+{K::Choice, L"stepStyle", L"Step labels", L"What the numbered steps count with.", L"numbers", {{L"numbers", L"1, 2, 3"}, {L"letters", L"A, B, C"}, {L"lettersLower", L"a, b, c"}, {L"roman", L"I, II, III"}, {L"romanLower", L"i, ii, iii"}}, 0, 100, 4, L"Steps"},
+{K::Number, L"stepStart", L"Start at", L"1 to 99 (Suggested: 1).", L"1", {}, 1, 99, 4, L"Steps"},
+{K::Number, L"stepSize", L"Step size (%)", L"50 to 300 (Suggested: 100).", L"100", {}, 50, 300, 4, L"Steps"},
+{K::Color, L"stepColor", L"Step color", L"In hexadecimal. The color of the numbered circles.", L"#F38BA8", {}, 0, 100, 4, L"Steps"},
+{K::Check, L"highlighterUsesPen", L"Use the pen color", L"Off, the highlighter uses its own color below.", L"0", {}, 0, 100, 4, L"Highlighter"},
+{K::Color, L"highlighterColor", L"Highlighter color", L"In hexadecimal.", L"#F9E2AF", {}, 0, 100, 4, L"Highlighter"},
+{K::Number, L"highlighterOpacity", L"Highlighter opacity (%)", L"10 to 80 (Suggested: 38).", L"38", {}, 10, 80, 4, L"Highlighter"},
+{K::Number, L"blurStrength", L"Blur strength", L"2 to 40 (Suggested: 12).", L"12", {}, 2, 40, 4, L"Blur and pixelate"},
+{K::Number, L"pixelSize", L"Pixel size", L"3 to 60 (Suggested: 12).", L"12", {}, 3, 60, 4, L"Blur and pixelate"},
+{K::Color, L"shadowColor", L"Shadow color", L"In hexadecimal.", L"#000000", {}, 0, 100, 4, L"Shadow"},
+{K::Number, L"shadowOpacity", L"Shadow opacity (%)", L"5 to 100 (Suggested: 45).", L"45", {}, 5, 100, 4, L"Shadow"},
+{K::Number, L"shadowOffset", L"Shadow distance", L"0 to 20 (Suggested: 3).", L"3", {}, 0, 20, 4, L"Shadow"},
+{K::Number, L"shadowSoftness", L"Shadow softness", L"1 to 8 (Suggested: 3). 1 is a hard shadow.", L"3", {}, 1, 8, 4, L"Shadow"},
+{K::Choice, L"outlineColor", L"Outline color", L"The edge drawn around each drawing when Outlines is on.", L"contrast", {{L"contrast", L"Light or dark, whichever stands out"}, {L"white", L"White"}, {L"black", L"Black"}}, 0, 100, 4, L"Outline"},
+{K::Number, L"outlineWidth", L"Outline width", L"1 to 10 (Suggested: 3).", L"3", {}, 1, 10, 4, L"Outline"},
+{K::Choice, L"magnifyZoom", L"Magnifier zoom", L"How big the magnifier tool shows the spot under it.", L"2", {{L"1.5", L"1.5x"}, {L"2", L"2x"}, {L"3", L"3x"}, {L"4", L"4x"}, {L"6", L"6x"}}, 0, 100, 4, L"Magnifier"},
+{K::Choice, L"magnifyShape", L"Magnifier shape", L"The outline drawn around the magnified spot.", L"box", {{L"box", L"Box"}, {L"circle", L"Circle"}}, 0, 100, 4, L"Magnifier"},
+{K::Choice, L"spotlightShape", L"Spotlight shape", L"The outline drawn around the spot that stays bright.", L"box", {{L"box", L"Box"}, {L"circle", L"Circle"}}, 0, 100, 4, L"Spotlight"},
+{K::Number, L"spotlightDim", L"Spotlight dim (%)", L"30 to 90 (Suggested: 60). How dark everything around the spot gets.", L"60", {}, 30, 90, 4, L"Spotlight"}
     };
 }
 
@@ -19187,7 +25132,9 @@ struct SetPageInfo {
 static const SetPageInfo kSetPages[] = {
 {L"Keys", L"The keys that take a snip. They are the same keys ShareX used.", 0xE765},
 {L"Saving", L"Where snips go: the clipboard, the Gallery folder, and how files are named.", 0xE74E},
+{L"Preview card", L"The small card that shows each snip in the corner.", 0xE8B9},
 {L"Region snip", L"The frozen screen you drag a region on.", 0xEF20},
+{L"Drawing", L"The drawing bar and how each tool looks, like ShareX.", 0xE70F},
 {L"Look", L"Selection colors and this window.", 0xE771},
 {L"Magic Pointer", L"Point at anything on screen and ask AI about it, search it or copy its text.", 0xE7C9},
 {L"About", L"Version, credits, support and links.", 0xE946},
@@ -19212,6 +25159,9 @@ constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
 constexpr UINT_PTR kSetTimerId = 1;
+// Middle-click autoscroll: no movement inside kSetAutoDead, then speed grows with distance.
+constexpr float kSetAutoDead = 10, kSetAutoR = 18, kSetAutoGain = 0.14f, kSetAutoMax = 56;
+constexpr PCWSTR kSetAutoProp = L"SeamlessOwnAutoscroll";  // Seamless Autoscroll skips this window.
 constexpr PCWSTR kSetKofiUrl = L"https://ko-fi.com/DavidHiFi";
 constexpr PCWSTR kSetAuthorUrl = L"https://github.com/DavidHiFi";
 constexpr PCWSTR kSetDittoUrl = L"https://github.com/ShareX/ShareX";
@@ -19222,6 +25172,8 @@ constexpr PCWSTR kSetTitle = L"Seamless Snipper";
 // The self-drawn title bar. Everything below it is laid out as before, in "content" DIPs.
 static float kSetCapH = 40;
 constexpr float kSetCapBtnW = 46, kSetHoverMs = 120;
+constexpr float kSetMenuPad = 6, kSetMenuIconW = 22, kSetMenuSepH = 9, kSetMenuOverlap = 3, kSetMenuMinW = 190, kSetMenuMaxW = 640, kSetMenuBorderW = 2;
+constexpr UINT kSetMenuSubDelayMs = 200, kSetMenuFadeMs = 90, kSetMenuTimerSub = 0x5E71, kSetMenuTimerFade = 0x5E72, kSetMenuTimerPoll = 0x5E73;
 
 struct SetItem {
     enum Type { Group, Row, Banner, About, Link, Support } type = Row;
@@ -19261,6 +25213,9 @@ struct SetWindow {
     int dragSlider = -1;
     bool dragScroll = false, tracking = false, timer = false;
     float dragOff = 0;
+    // Middle-click autoscroll: the anchor in content DIPs; autoA eases the indicator in and out.
+    bool autoScroll = false, autoMoved = false;
+    float autoX = 0, autoY = 0, autoA = 0, autoDir = 0;
     // Sidebar dock: railW is the chosen open width, railCur the drawn width (eased toward
     // kSetRailMini when collapsed). railGlow / footGlow ease the dock borders on hover.
     float railW = kSetRailDef, railCur = kSetRailDef, railGlow = 0, footGlow = 0;
@@ -19404,6 +25359,579 @@ static SetCom<IDWriteTextFormat> Set_Fmt(const std::wstring& family, float size,
 }
 
 // std::wstring(L"FiraCode Nerd Font") at 500; emphasis is one step heavier, never past bold.
+static float Set_MenuCornerRadius() {
+    float radius = 8.0f;
+    HKEY key;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Windhawk\\Engine\\Mods\\custom-corner-radius", 0,
+                      KEY_READ | KEY_WOW64_64KEY, &key) == ERROR_SUCCESS) {
+        DWORD disabled = 0, size = sizeof(disabled);
+        bool off = RegQueryValueExW(key, L"Disabled", nullptr, nullptr, (BYTE*)&disabled, &size) == ERROR_SUCCESS && disabled;
+        DWORD value = 0;
+        size = sizeof(value);
+        if (!off && RegGetValueW(key, L"Settings", L"radius", RRF_RT_REG_DWORD, nullptr, &value, &size) == ERROR_SUCCESS &&
+            value > 0 && value <= 64)
+            radius = (float)value;
+        RegCloseKey(key);
+    }
+    return radius;
+}
+
+static SetMenuItem Set_MenuRow(int id, PCWSTR glyph, PCWSTR label, bool checked = false, bool disabled = false,
+                               PCWSTR hint = L"") {
+    SetMenuItem m;
+    m.id = id;
+    m.glyph = glyph ? glyph : L"";
+    m.label = label ? label : L"";
+    m.hint = hint ? hint : L"";
+    m.checked = checked;
+    m.disabled = disabled;
+    return m;
+}
+
+static SetMenuItem Set_MenuSub(PCWSTR glyph, PCWSTR label, std::vector<SetMenuItem> sub, bool disabled = false) {
+    SetMenuItem m = Set_MenuRow(0, glyph, label, false, disabled);
+    m.sub = std::move(sub);
+    return m;
+}
+
+static SetMenuItem Set_MenuSep() {
+    SetMenuItem m;
+    m.separator = true;
+    return m;
+}
+
+static SetMenuSession*& Set_MenuCur() {
+    static thread_local SetMenuSession* session = nullptr;  // One menu per thread; History menus run on the settings thread.
+    return session;
+}
+
+static bool Set_MenuSelectable(const SetMenuItem& m) { return !m.separator && !m.disabled; }
+
+static float Set_MenuTextW(SetMenuSession& s, IDWriteTextFormat* f, const std::wstring& text) {
+    SetCom<IDWriteTextLayout> layout;
+    DWRITE_TEXT_METRICS m{};
+    if (text.empty() || !f || FAILED(s.dw->CreateTextLayout(text.c_str(), (UINT32)text.size(), f, 10000, 1000, layout.put())) ||
+        FAILED(layout->GetMetrics(&m)))
+        return 0;
+    return m.widthIncludingTrailingWhitespace;
+}
+
+static bool Set_MenuFormats(SetMenuSession& s) {
+    if (!s.d2d && FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory), nullptr,
+                                           (void**)s.d2d.put())))
+        return false;
+    if (!s.dw && FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)s.dw.put())))
+        return false;
+    std::wstring family = L"Segoe UI";
+    SetCom<IDWriteFontCollection> sys;
+    if (SUCCEEDED(s.dw->GetSystemFontCollection(sys.put(), FALSE))) {
+        for (PCWSTR face : {L"FiraCode Nerd Font", L"FiraCodeNerdFont", L"FiraCode Nerd Font Mono"}) {
+            UINT32 index = 0;
+            BOOL exists = FALSE;
+            if (SUCCEEDED(sys->FindFamilyName(face, &index, &exists)) && exists) {
+                family = face;
+                break;
+            }
+        }
+    }
+    auto make = [&](float size, DWRITE_TEXT_ALIGNMENT align, SetCom<IDWriteTextFormat>& out) {
+        if (FAILED(s.dw->CreateTextFormat(family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+                                          DWRITE_FONT_STRETCH_NORMAL, size, L"en-us", out.put())))
+            return false;
+        out->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        out->SetTextAlignment(align);
+        out->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+        // Only a label wider than the widest menu (kSetMenuMaxW) is ever shortened, with an ellipsis.
+        DWRITE_TRIMMING trim{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+        SetCom<IDWriteInlineObject> sign;
+        if (SUCCEEDED(s.dw->CreateEllipsisTrimmingSign(out.get(), sign.put()))) out->SetTrimming(&trim, sign.get());
+        return true;
+    };
+    return make(13.5f, DWRITE_TEXT_ALIGNMENT_LEADING, s.fText) && make(12.5f, DWRITE_TEXT_ALIGNMENT_TRAILING, s.fHint) &&
+           make(15, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyph) && make(12, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyphS);
+}
+
+static void Set_MenuLayout(SetMenuSession& s, SetMenuLevel& lv) {
+    const auto& items = *lv.items;
+    lv.itemH = 30;
+    lv.top.assign(items.size(), 0);
+    lv.height.assign(items.size(), 0);
+    float textW = 0, hintW = 0, y = kSetMenuPad;
+    for (size_t i = 0; i < items.size(); i++) {
+        lv.top[i] = y;
+        lv.height[i] = items[i].separator ? kSetMenuSepH : lv.itemH;
+        y += lv.height[i];
+        if (items[i].separator) continue;
+        textW = std::max(textW, Set_MenuTextW(s, s.fText.get(), items[i].label));
+        hintW = std::max(hintW, Set_MenuTextW(s, s.fHint.get(), items[i].hint));
+    }
+    lv.hintW = std::ceil(hintW);
+    float w = kSetMenuPad * 2 + 8 + kSetMenuIconW + 10 + std::ceil(textW) + 2 + (hintW > 0 ? 24 + lv.hintW : 0) + 10 + 20 + 8;
+    lv.wDip = std::ceil(std::clamp(w, kSetMenuMinW, kSetMenuMaxW));
+    lv.hDip = std::ceil(y + kSetMenuPad);
+}
+
+static int Set_MenuItemAt(const SetMenuLevel& lv, float x, float y) {
+    if (x < kSetMenuPad || x >= lv.wDip - kSetMenuPad) return -1;
+    for (size_t i = 0; i < lv.top.size(); i++)
+        if (y >= lv.top[i] && y < lv.top[i] + lv.height[i]) return (*lv.items)[i].separator ? -1 : (int)i;
+    return -1;
+}
+
+static int Set_MenuNext(const SetMenuLevel& lv, int from, int dir) {
+    int n = (int)lv.items->size();
+    if (!n) return -1;
+    int i = from < 0 ? (dir > 0 ? -1 : n) : from;
+    for (int k = 0; k < n; k++) {
+        i = ((i + dir) % n + n) % n;
+        if (Set_MenuSelectable((*lv.items)[(size_t)i])) return i;
+    }
+    return -1;
+}
+
+static void Set_MenuPaint(SetMenuSession& s, SetMenuLevel& lv) {
+    ID2D1RenderTarget* rt = lv.rt.get();
+    SetCom<ID2D1SolidColorBrush> brush;
+    if (FAILED(rt->CreateSolidColorBrush(D2DColor(mocha::text), brush.put()))) return;
+    auto solid = [&](UINT32 rgb, float a) {
+        brush->SetColor(D2DColor(rgb, a));
+        return brush.get();
+    };
+    auto gradient = [&](D2D1_POINT_2F a, D2D1_POINT_2F b, D2D1_COLOR_F c1, D2D1_COLOR_F c2) {
+        SetCom<ID2D1LinearGradientBrush> g;
+        D2D1_GRADIENT_STOP stops[2] = {{0, c1}, {1, c2}};
+        SetCom<ID2D1GradientStopCollection> coll;
+        if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())))
+            rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(a, b), coll.get(), g.put());
+        return g;
+    };
+    // Blue to mauve at 45 degrees across a rect, like Seamless Borders.
+    auto accent = [&](const D2D1_RECT_F& r, float a) {
+        float d = ((r.right - r.left) + (r.bottom - r.top)) / 2;
+        return gradient({r.left, r.top}, {r.left + d, r.top + d}, D2DColor(mocha::blue, a), D2DColor(mocha::mauve, a));
+    };
+    const float w = lv.wDip, h = lv.hDip;
+    rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+    SetCom<ID2D1Layer> layer;
+    bool faded = s.alpha < 0.999f && SUCCEEDED(rt->CreateLayer(nullptr, layer.put()));
+    if (faded)
+        rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                            D2D1::IdentityMatrix(), std::max(0.0f, s.alpha)),
+                      layer.get());
+    // Dark Mocha over the acrylic blur; DWM rounds the window.
+    auto tint = gradient({0, 0}, {0, h}, D2DColor(mocha::base, 0.80f), D2DColor(mocha::base, 0.84f));
+    if (tint) rt->FillRectangle({0, 0, w, h}, tint.get());
+    const auto& items = *lv.items;
+    const float slotRight = w - kSetMenuPad - 8, slotLeft = slotRight - 20;
+    for (size_t i = 0; i < items.size(); i++) {
+        const SetMenuItem& m = items[i];
+        D2D1_RECT_F r{kSetMenuPad, lv.top[i], w - kSetMenuPad, lv.top[i] + lv.height[i]};
+        if (m.separator) {
+            float y = std::floor((r.top + r.bottom) / 2);
+            rt->FillRectangle({r.left + 8, y, r.right - 8, y + 1}, solid(mocha::surface1, 0.8f));
+            continue;
+        }
+        bool hot = ((int)i == lv.hover || (int)i == lv.open) && !m.disabled;
+        if (hot) {
+            // The hover look of every card: a faint blue to mauve wash and a 1 px gradient ring.
+            float rad = 8, ringW = 1;
+            D2D1_ROUNDED_RECT rr{{r.left + ringW / 2, r.top + ringW / 2, r.right - ringW / 2, r.bottom - ringW / 2}, rad, rad};
+            auto fill = gradient({r.left, r.top}, {r.right, r.bottom}, D2DColor(mocha::blue, 0.16f), D2DColor(mocha::mauve, 0.16f));
+            if (fill) rt->FillRoundedRectangle(rr, fill.get());
+            auto ring = accent(r, 0.8f);
+            if (ring) rt->DrawRoundedRectangle(rr, ring.get(), ringW);
+        }
+        UINT32 col = m.disabled ? mocha::overlay0 : mocha::text;
+        if (!m.glyph.empty())
+            rt->DrawText(m.glyph.c_str(), (UINT32)m.glyph.size(), s.fGlyph.get(),
+                         {r.left + 8, r.top, r.left + 8 + kSetMenuIconW, r.bottom}, solid(col, 1));
+        float textX = r.left + 8 + kSetMenuIconW + 10;
+        float hintRight = slotLeft - 10, hintLeft = hintRight - lv.hintW;
+        float textRight = lv.hintW > 0 ? hintLeft - 12 : slotLeft - 4;
+        if (!m.label.empty())
+            rt->DrawText(m.label.c_str(), (UINT32)m.label.size(), s.fText.get(), {textX, r.top, textRight, r.bottom},
+                         solid(col, 1));
+        if (!m.hint.empty())
+            rt->DrawText(m.hint.c_str(), (UINT32)m.hint.size(), s.fHint.get(), {hintLeft, r.top, hintRight, r.bottom},
+                         solid(m.disabled ? mocha::overlay0 : mocha::subtext0, 1));
+        if (!m.sub.empty()) {
+            rt->DrawText(L"", 1, s.fGlyphS.get(), {slotLeft, r.top, slotRight, r.bottom}, solid(col, 1));  // chevron_right
+        } else if (m.checked) {
+            rt->DrawText(L"", 1, s.fGlyph.get(), {slotLeft, r.top, slotRight, r.bottom},  // check
+                         solid(m.disabled ? mocha::overlay0 : mocha::blue, 1));
+        }
+    }
+    // The edge on DWM's real corner curve: 2 px, blue to mauve, inset half the stroke.
+    const float bw = kSetMenuBorderW;
+    D2D1_RECT_F edge{bw / 2, bw / 2, w - bw / 2, h - bw / 2};
+    auto border = accent({0, 0, w, h}, 1);
+    float r2 = std::max(0.0f, s.radius - bw / 2);
+    if (border) rt->DrawRoundedRectangle({edge, r2, r2}, border.get(), bw);
+    if (faded) rt->PopLayer();
+}
+
+static int Set_MenuIndexOf(HWND hwnd) {
+    if (SetMenuSession* s = Set_MenuCur())
+        for (size_t i = 0; i < s->levels.size(); i++)
+            if (s->levels[i]->hwnd == hwnd) return (int)i;
+    return -1;
+}
+
+static void Set_MenuInvalidate() {
+    if (SetMenuSession* s = Set_MenuCur())
+        for (auto& lv : s->levels)
+            if (lv->hwnd) InvalidateRect(lv->hwnd, nullptr, FALSE);
+}
+
+static void Set_MenuCloseFrom(size_t n) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s) return;
+    while (s->levels.size() > n) {
+        HWND h = s->levels.back()->hwnd;
+        s->levels.back()->rt.reset();
+        s->levels.pop_back();
+        if (h) DestroyWindow(h);
+    }
+    if (n > 0 && !s->levels.empty()) s->levels.back()->open = -1;
+    Set_MenuInvalidate();
+}
+
+static void Set_MenuFinish(int id) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || s->done) return;
+    s->result = id;
+    s->done = true;
+}
+
+static void Set_MenuBackdrop(HWND hwnd) {
+    BOOL dark = TRUE;
+    DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+    int corner = 2;  // DWMWCP_ROUND
+    DwmSetWindowAttribute(hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &corner, sizeof(corner));
+    COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE: the menu draws its own edge.
+    DwmSetWindowAttribute(hwnd, 34 /* DWMWA_BORDER_COLOR */, &none, sizeof(none));
+    DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+    int backdrop = 1;  // DWMSBT_NONE
+    DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+    DWM_BLURBEHIND bb{};
+    bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+    bb.fEnable = TRUE;
+    bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+    DwmEnableBlurBehindWindow(hwnd, &bb);
+    if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+    struct SetAccentPolicy { int state, flags, abgr, animation; };
+    struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
+    if (auto setComposition =
+            (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute")) {
+        SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};
+        SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+        setComposition(hwnd, &data);
+    }
+}
+
+static RECT Set_MenuWorkArea(POINT pt) {
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST), &mi);
+    return mi.rcWork;
+}
+
+static bool Set_MenuCreateWindow(SetMenuSession& s, SetMenuLevel& lv, POINT at, const RECT* parent, int rowTopPx) {
+    DWORD ex = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | (parent ? WS_EX_NOACTIVATE : 0);
+    HWND hwnd = CreateWindowExW(ex, s.cls.c_str(), L"", WS_POPUP, at.x, at.y, 1, 1, nullptr, nullptr, s.inst, nullptr);
+    if (!hwnd) return false;
+    lv.hwnd = hwnd;
+    lv.scale = GetDpiForWindow(hwnd) / 96.0f;
+    if (lv.scale <= 0) lv.scale = 1;
+    Set_MenuLayout(s, lv);
+    int w = (int)std::ceil(lv.wDip * lv.scale), h = (int)std::ceil(lv.hDip * lv.scale);
+    RECT wa = Set_MenuWorkArea(parent ? POINT{parent->right, parent->top + rowTopPx} : at);
+    int x = at.x, y = at.y;
+    if (parent) {
+        int overlap = (int)kSetMenuOverlap;
+        x = parent->right - overlap;
+        if (x + w > wa.right) x = parent->left - w + overlap;
+        y = parent->top + rowTopPx - (int)(kSetMenuPad * lv.scale);
+        if (y + h > wa.bottom) y = wa.bottom - h;
+    } else {
+        if (x + w > wa.right) x = at.x - w;
+        if (y + h > wa.bottom) y = at.y - h;
+    }
+    x = std::clamp<int>(x, wa.left, std::max<int>(wa.left, wa.right - w));
+    y = std::clamp<int>(y, wa.top, std::max<int>(wa.top, wa.bottom - h));
+    Set_MenuBackdrop(hwnd);
+    SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+        D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+        96 * lv.scale, 96 * lv.scale);
+    s.d2d->CreateHwndRenderTarget(props, D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU((UINT32)w, (UINT32)h)),
+                                  lv.rt.put());
+    return (bool)lv.rt;
+}
+
+static void Set_MenuOpenSub(size_t level, int item, bool keyboard) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || level >= s->levels.size()) return;
+    SetMenuLevel& parent = *s->levels[level];
+    const SetMenuItem& m = (*parent.items)[(size_t)item];
+    if (m.sub.empty() || m.disabled) return;
+    Set_MenuCloseFrom(level + 1);
+    auto lv = std::make_unique<SetMenuLevel>();
+    lv->items = &m.sub;
+    RECT pr{};
+    GetWindowRect(parent.hwnd, &pr);
+    SetMenuLevel* raw = lv.get();
+    s->levels.push_back(std::move(lv));
+    parent.open = item;
+    if (!Set_MenuCreateWindow(*s, *raw, POINT{pr.right, pr.top}, &pr, (int)(parent.top[(size_t)item] * parent.scale))) {
+        Set_MenuCloseFrom(level + 1);
+        return;
+    }
+    if (keyboard) raw->hover = Set_MenuNext(*raw, -1, +1);
+    ShowWindow(raw->hwnd, SW_SHOWNOACTIVATE);
+    Set_MenuInvalidate();
+}
+
+static void Set_MenuActivate(size_t level, int item, bool keyboard) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || level >= s->levels.size()) return;
+    const SetMenuItem& m = (*s->levels[level]->items)[(size_t)item];
+    if (!Set_MenuSelectable(m)) return;
+    if (!m.sub.empty()) Set_MenuOpenSub(level, item, keyboard);
+    else Set_MenuFinish(m.id);
+}
+
+static void Set_MenuHoverChanged(size_t level, int item) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s) return;
+    SetMenuLevel& lv = *s->levels[level];
+    HWND root = s->levels[0]->hwnd;
+    KillTimer(root, kSetMenuTimerSub);
+    s->pendingItem = -1;
+    bool wantsSub = item >= 0 && Set_MenuSelectable((*lv.items)[(size_t)item]) && !(*lv.items)[(size_t)item].sub.empty();
+    if (wantsSub && lv.open != item) {
+        s->pendingLevel = (int)level;
+        s->pendingItem = item;
+        SetTimer(root, kSetMenuTimerSub, kSetMenuSubDelayMs, nullptr);
+    } else if (!wantsSub && lv.open != -1 && s->levels.size() > level + 1) {
+        s->pendingLevel = (int)level;
+        s->pendingItem = -1;
+        SetTimer(root, kSetMenuTimerSub, kSetMenuSubDelayMs, nullptr);
+    }
+}
+
+static void Set_MenuKey(WPARAM vk) {
+    SetMenuSession* s = Set_MenuCur();
+    if (!s || s->levels.empty()) return;
+    size_t li = s->levels.size() - 1;
+    SetMenuLevel& cur = *s->levels[li];
+    const auto& items = *cur.items;
+    switch (vk) {
+        case VK_DOWN: cur.hover = Set_MenuNext(cur, cur.hover, +1); break;
+        case VK_UP: cur.hover = Set_MenuNext(cur, cur.hover, -1); break;
+        case VK_HOME: cur.hover = Set_MenuNext(cur, -1, +1); break;
+        case VK_END: cur.hover = Set_MenuNext(cur, (int)items.size(), -1); break;
+        case VK_RIGHT:
+            if (cur.hover >= 0 && !items[(size_t)cur.hover].sub.empty()) Set_MenuActivate(li, cur.hover, true);
+            break;
+        case VK_LEFT:
+            if (li > 0) Set_MenuCloseFrom(li);
+            break;
+        case VK_RETURN:
+        case VK_SPACE:
+            if (cur.hover >= 0) Set_MenuActivate(li, cur.hover, true);
+            break;
+        case VK_ESCAPE:
+        case VK_MENU:
+            if (li > 0 && vk == VK_ESCAPE) Set_MenuCloseFrom(li);
+            else Set_MenuFinish(0);
+            break;
+        default: return;
+    }
+    Set_MenuInvalidate();
+}
+
+static LRESULT CALLBACK Set_MenuProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    SetMenuSession* s = Set_MenuCur();
+    int li = Set_MenuIndexOf(hwnd);
+    if (!s || li < 0) return DefWindowProcW(hwnd, msg, wParam, lParam);
+    SetMenuLevel& lv = *s->levels[(size_t)li];
+    switch (msg) {
+        case WM_ERASEBKGND: return 1;
+        case WM_MOUSEACTIVATE: return li == 0 ? MA_ACTIVATE : MA_NOACTIVATE;
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            if (lv.rt) {
+                lv.rt->BeginDraw();
+                Set_MenuPaint(*s, lv);
+                if (lv.rt->EndDraw() == D2DERR_RECREATE_TARGET) {
+                    RECT rc;
+                    GetClientRect(hwnd, &rc);
+                    lv.rt.reset();
+                    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+                        D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96 * lv.scale,
+                        96 * lv.scale);
+                    s->d2d->CreateHwndRenderTarget(
+                        props, D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU((UINT32)rc.right, (UINT32)rc.bottom)),
+                        lv.rt.put());
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                }
+            }
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_MOUSEMOVE: {
+            if (s->pendingLevel > li) {  // The pointer reached a deeper level: keep it open.
+                KillTimer(s->levels[0]->hwnd, kSetMenuTimerSub);
+                s->pendingItem = s->pendingLevel = -1;
+            }
+            TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
+            TrackMouseEvent(&tme);
+            int i = Set_MenuItemAt(lv, (short)LOWORD(lParam) / lv.scale, (short)HIWORD(lParam) / lv.scale);
+            if (i >= 0 && !Set_MenuSelectable((*lv.items)[(size_t)i])) i = -1;
+            if (i != lv.hover) {
+                lv.hover = i;
+                Set_MenuHoverChanged((size_t)li, i);
+                Set_MenuInvalidate();
+            }
+            return 0;
+        }
+        case WM_MOUSELEAVE:
+            if (lv.hover != -1 && lv.open != lv.hover) {
+                lv.hover = -1;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP: {
+            if (!s->pressed) return 0;  // The release of the click that opened the menu.
+            int i = Set_MenuItemAt(lv, (short)LOWORD(lParam) / lv.scale, (short)HIWORD(lParam) / lv.scale);
+            if (i >= 0) Set_MenuActivate((size_t)li, i, false);
+            return 0;
+        }
+        case WM_ACTIVATE:
+            if (li == 0 && LOWORD(wParam) != WA_INACTIVE) s->wasActive = true;
+            if (li == 0 && LOWORD(wParam) == WA_INACTIVE && Set_MenuIndexOf((HWND)lParam) < 0) Set_MenuFinish(0);
+            return 0;
+        case WM_TIMER:
+            if (wParam == kSetMenuTimerSub) {
+                KillTimer(hwnd, kSetMenuTimerSub);
+                int pl = s->pendingLevel, pi = s->pendingItem;
+                s->pendingLevel = s->pendingItem = -1;
+                if (pl >= 0 && (size_t)pl < s->levels.size()) {
+                    if (pi >= 0) Set_MenuOpenSub((size_t)pl, pi, false);
+                    else Set_MenuCloseFrom((size_t)pl + 1);
+                }
+            } else if (wParam == kSetMenuTimerFade) {
+                float t = std::min(1.0f, (GetTickCount64() - s->fadeStart) / (float)kSetMenuFadeMs);
+                s->alpha = 1 - (1 - t) * (1 - t);
+                if (t >= 1) KillTimer(hwnd, kSetMenuTimerFade);
+                Set_MenuInvalidate();
+            } else if (wParam == kSetMenuTimerPoll) {
+                // Click-away when Windows kept the menu out of the foreground: a press outside every level.
+                if (GetForegroundWindow() != s->levels[0]->hwnd &&
+                    ((GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON) | GetAsyncKeyState(VK_MBUTTON)) & 0x8000)) {
+                    POINT pt;
+                    GetCursorPos(&pt);
+                    if (Set_MenuIndexOf(WindowFromPoint(pt)) < 0) Set_MenuFinish(0);
+                }
+            }
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+static int Set_TrayMenu(HWND owner, const std::vector<SetMenuItem>& items, const POINT* at = nullptr) {
+    if (Set_MenuCur()) {  // A second right-click while open closes the first menu.
+        Set_MenuFinish(0);
+        return 0;
+    }
+    if (items.empty()) return 0;
+    POINT pt{};
+    if (at) pt = *at;
+    else GetCursorPos(&pt);
+    SetMenuSession session;
+    if (!Set_MenuFormats(session)) return 0;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       (LPCWSTR)(void*)&Set_MenuProc, &session.inst);
+    // One class per mod, even when several mods share a process.
+    session.cls = L"SeamlessTrayMenu_" + std::to_wstring((unsigned long long)(uintptr_t)(void*)&Set_MenuProc);
+    PCWSTR cls = session.cls.c_str();
+    WNDCLASSEXW wc{sizeof(wc)};
+    wc.hInstance = session.inst;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpfnWndProc = Set_MenuProc;
+    wc.lpszClassName = cls;
+    RegisterClassExW(&wc);
+    session.radius = Set_MenuCornerRadius();
+    Set_MenuCur() = &session;
+    session.levels.push_back(std::make_unique<SetMenuLevel>());
+    SetMenuLevel* root = session.levels[0].get();
+    root->items = &items;
+    if (!Set_MenuCreateWindow(session, *root, pt, nullptr, 0)) {
+        Set_MenuCloseFrom(0);
+        Set_MenuCur() = nullptr;
+        UnregisterClassW(cls, session.inst);
+        return 0;
+    }
+    BOOL animations = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animations, 0);
+    session.alpha = animations ? 0.0f : 1.0f;
+    session.fadeStart = GetTickCount64();
+    if (owner && IsWindow(owner)) SetForegroundWindow(owner);  // Windows' tray rule; lets the menu take the foreground.
+    ShowWindow(root->hwnd, SW_SHOW);
+    if (!SetForegroundWindow(root->hwnd)) {
+        DWORD fg = GetWindowThreadProcessId(GetForegroundWindow(), nullptr), me = GetCurrentThreadId();
+        if (fg && fg != me && AttachThreadInput(me, fg, TRUE)) {
+            SetForegroundWindow(root->hwnd);
+            AttachThreadInput(me, fg, FALSE);
+        }
+    }
+    SetFocus(root->hwnd);
+    if (animations) SetTimer(root->hwnd, kSetMenuTimerFade, 15, nullptr);
+    SetTimer(root->hwnd, kSetMenuTimerPoll, 50, nullptr);
+    MSG m;
+    while (!session.done) {
+        BOOL got = GetMessageW(&m, nullptr, 0, 0);
+        if (got <= 0) {
+            if (got == 0) PostQuitMessage((int)m.wParam);
+            break;
+        }
+        switch (m.message) {
+            case WM_KEYDOWN:
+            case WM_SYSKEYDOWN:
+                Set_MenuKey(m.wParam);
+                continue;
+            case WM_KEYUP:
+            case WM_SYSKEYUP:
+            case WM_CHAR:
+            case WM_SYSCHAR:
+                continue;
+            case WM_LBUTTONDOWN:
+            case WM_RBUTTONDOWN:
+            case WM_MBUTTONDOWN:
+            case WM_NCLBUTTONDOWN:
+            case WM_NCRBUTTONDOWN:
+                if (Set_MenuIndexOf(m.hwnd) < 0) {  // A click on another window of this thread closes the menu.
+                    Set_MenuFinish(0);
+                    continue;
+                }
+                session.pressed = true;
+                break;
+        }
+        TranslateMessage(&m);
+        DispatchMessageW(&m);
+    }
+    int result = session.result;
+    Set_MenuCloseFrom(0);
+    Set_MenuCur() = nullptr;
+    UnregisterClassW(cls, session.inst);
+    if (owner && IsWindow(owner)) PostMessageW(owner, WM_NULL, 0, 0);
+    return result;
+}
+
 static void Set_MakeFormats(SetWindow& w) {
     w.family = Set_ResolveFamily();
     w.iconFamily = Set_FamilyExists(L"Segoe Fluent Icons") ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
@@ -20300,6 +26828,31 @@ static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
 // The title bar is drawn first; everything else is in content DIPs, shifted down by kSetCapH.
 static void Set_PlaceEdit(SetWindow& w);
 
+// The autoscroll anchor, in Seamless Autoscroll's look: a frosted Mocha disc with the 2px blue to
+// mauve ring, an arrow that lights blue the way the page moves, and a mauve centre dot.
+static void Set_DrawAutoScroll(SetPaint& p, SetWindow& w, bool frosted) {
+    if (w.autoA <= 0.003f) return;
+    const float a = w.autoA, s = 0.8f + 0.2f * a, r = kSetAutoR * s, cx = w.autoX, cy = w.autoY;
+    const D2D1_RECT_F disc{cx - r, cy - r, cx + r, cy + r};
+    p.Round(disc, r, mocha::mantle, (frosted ? 0.86f : 1.0f) * a);  // Opaque when nothing blurs under it.
+    p.GradRing(disc, r - 1, a, 2);
+    auto arrow = [&](float dir, bool lit) {
+        SetCom<ID2D1PathGeometry> g;
+        SetCom<ID2D1GeometrySink> k;
+        if (FAILED(g_setD2d->CreatePathGeometry(g.put())) || FAILED(g->Open(k.put()))) return;
+        const float tip = cy + dir * r * 0.62f, foot = cy + dir * r * 0.30f, half = r * 0.22f;
+        k->BeginFigure(D2D1::Point2F(cx, tip), D2D1_FIGURE_BEGIN_FILLED);
+        k->AddLine(D2D1::Point2F(cx + half, foot));
+        k->AddLine(D2D1::Point2F(cx - half, foot));
+        k->EndFigure(D2D1_FIGURE_END_CLOSED);
+        if (SUCCEEDED(k->Close())) p.rt->FillGeometry(g.get(), p.B(lit ? mocha::blue : mocha::overlay1, a));
+    };
+    arrow(-1, w.autoDir < 0);
+    arrow(1, w.autoDir > 0);
+    const float d = 2.5f * s;
+    p.Round({cx - d, cy - d, cx + d, cy + d}, d, mocha::mauve, a);
+}
+
 static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     if (Set_FitBoxes(w)) {
         Set_BuildPage(w);
@@ -20416,6 +26969,16 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
                 D2D1_RECT_F src{d.left - 1, d.top - 1, d.right + 1, d.bottom + 1};
                 dc->DrawImage(blur.get(), D2D1::Point2F(src.left, src.top), src);
                 rt->PopLayer();
+                if (w.autoA > 0.003f) {  // The autoscroll disc frosts the rows under it the same way.
+                    const float r = kSetAutoR * (0.8f + 0.2f * w.autoA), cx = w.autoX, cy = w.autoY + kSetCapH;
+                    SetCom<ID2D1EllipseGeometry> disc;
+                    if (SUCCEEDED(g_setD2d->CreateEllipseGeometry(D2D1::Ellipse(D2D1::Point2F(cx, cy), r, r), disc.put()))) {
+                        rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), disc.get()), nullptr);
+                        D2D1_RECT_F ds{cx - r - 1, cy - r - 1, cx + r + 1, cy + r + 1};
+                        dc->DrawImage(blur.get(), D2D1::Point2F(ds.left, ds.top), ds);
+                        rt->PopLayer();
+                    }
+                }
                 blurred = true;
             }
         }
@@ -20429,6 +26992,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     Set_DrawFooter(p, w);
     Set_DrawRail(p, w);
     Set_DrawPopup(p, w);
+    Set_DrawAutoScroll(p, w, blurred);
     rt->SetTransform(D2D1::Matrix3x2F::Identity());
     if (false) p.GradRing({0, 0, w.cw, w.ch + kSetCapH}, SystemCornerRadius(false), 1, 1);
     HRESULT hr = rt->EndDraw();
@@ -20962,6 +27526,55 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
 #endif
 }
 
+// ---- Middle-click autoscroll (every settings window, 2026-11-16) ----------------------
+// Press the middle button and move: the page scrolls, faster the farther the pointer is from
+// where it started. Press and release without moving: it keeps going until the next click, a
+// key or the wheel. Press, move and release: it stops on release. Browser behaviour.
+
+static bool Set_AutoScrollStart(SetWindow& w, float x, float y) {
+    if (w.render || w.contentH - Set_ViewH(w) <= 0) return false;  // Nothing to scroll.
+    Set_CommitEdit(w, true);
+    Set_ClosePopup(w);
+    w.autoScroll = true;
+    w.autoMoved = false;
+    w.autoX = x, w.autoY = y, w.autoDir = 0;
+    w.hover = SetHit();
+    SetCapture(w.hwnd);
+    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+    Set_Invalidate(w);
+    return true;
+}
+
+static void Set_AutoScrollStop(SetWindow& w) {
+    if (!w.autoScroll) return;
+    w.autoScroll = false;  // Before ReleaseCapture: its WM_CAPTURECHANGED comes straight back here.
+    w.autoDir = 0;
+    if (GetCapture() == w.hwnd) ReleaseCapture();
+    Set_Invalidate(w);
+}
+
+// The pointer moved while autoscrolling: keep the scroll cursor, and note a drag with the button held.
+static void Set_AutoScrollMove(SetWindow& w, bool held) {
+    if (held && fabsf(w.mouseY - w.autoY) > kSetAutoDead) w.autoMoved = true;
+    SetCursor(LoadCursorW(nullptr, IDC_SIZENS));
+}
+
+// One timer tick of autoscroll. True when something on screen changed.
+static bool Set_AutoScrollStep(SetWindow& w) {
+    if (!w.autoScroll) return false;
+    const float dy = w.mouseY - w.autoY, dist = fabsf(dy) - kSetAutoDead;
+    const float dir = dist > 0 ? (dy > 0 ? 1.0f : -1.0f) : 0.0f;
+    bool changed = dir != w.autoDir;
+    w.autoDir = dir;
+    if (dist <= 0) return changed;
+    const float maxScroll = std::max(0.0f, w.contentH - Set_ViewH(w));
+    const float next = std::clamp(w.scrollY + dir * std::min(kSetAutoMax, dist * kSetAutoGain), 0.0f, maxScroll);
+    if (next == w.scrollY) return changed;
+    w.scrollY = w.scrollTarget = next;
+    Set_PlaceEdit(w);
+    return true;
+}
+
 // ---- Animation tick ----------------------------------------------------------------
 
 static bool Set_Tick(SetWindow& w) {
@@ -20997,6 +27610,8 @@ static bool Set_Tick(SetWindow& w) {
         if (!w.knob.count((int)k)) w.knob[(int)k] = target;
         step(w.knob[(int)k], target, 0.35f);
     }
+    if (Set_AutoScrollStep(w)) moved = true;
+    step(w.autoA, w.autoScroll ? 1.0f : 0.0f, 0.3f);
     if (w.scrollY != w.scrollTarget) {
         float d = w.scrollTarget - w.scrollY;
         if (!anim || fabsf(d) < 0.5f) {
@@ -21316,6 +27931,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_ACTIVATE:
             w->active = LOWORD(wParam) != WA_INACTIVE;
+            if (!w->active) Set_AutoScrollStop(*w);
             Set_Invalidate(*w);
             break;
         case WM_ERASEBKGND:
@@ -21386,6 +28002,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             }
             w->mouseX = x;
             w->mouseY = y;
+            if (w->autoScroll) {
+                Set_AutoScrollMove(*w, (wParam & MK_MBUTTON) != 0);
+                return 0;
+            }
             if (w->dragRail) {
                 Set_RailDragTo(*w, x - w->dragOff);
                 return 0;
@@ -21417,7 +28037,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             POINT pointer; GetCursorPos(&pointer);
             w->tracking = false;
             w->hover = SetHit();
-            if (!w->dragRail) w->mouseX = w->mouseY = -1;
+            if (!w->dragRail && !w->autoScroll) w->mouseX = w->mouseY = -1;
             Set_Invalidate(*w);
             return 0;
         }
@@ -21432,6 +28052,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             break;
         case WM_LBUTTONDOWN: {
             if (w->saving) return 0;
+            if (w->autoScroll) {  // A click ends autoscroll and does nothing else.
+                Set_AutoScrollStop(*w);
+                return 0;
+            }
             if (!w->render) SetFocus(hwnd);
             w->kbd = false;
             float x = dipX(lParam), y = dipY(lParam);
@@ -21494,6 +28118,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_LBUTTONUP:
         case WM_CAPTURECHANGED:
+            if (msg == WM_CAPTURECHANGED && w->autoScroll && (HWND)lParam != hwnd) Set_AutoScrollStop(*w);
             if (w->capDown) {
                 int b = w->capDown - 1;
                 w->capDown = 0;
@@ -21517,7 +28142,23 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 Set_Invalidate(*w);
             }
             return 0;
+        case WM_MBUTTONDOWN:
+            if (w->saving) return 0;
+            if (w->autoScroll) Set_AutoScrollStop(*w);  // Toggle mode: the next middle click ends it.
+            else Set_AutoScrollStart(*w, dipX(lParam), dipY(lParam));
+            return 0;
+        case WM_MBUTTONUP:
+            if (w->autoScroll && w->autoMoved) Set_AutoScrollStop(*w);  // Held and dragged: stop on release.
+            return 0;
+        case WM_RBUTTONDOWN:
+        case WM_XBUTTONDOWN:
+            if (w->autoScroll) {
+                Set_AutoScrollStop(*w);
+                return msg == WM_XBUTTONDOWN ? TRUE : 0;
+            }
+            break;
         case WM_MOUSEWHEEL: {
+            Set_AutoScrollStop(*w);
             if (w->openSel >= 0 && Set_In(w->dropRect, w->mouseX, w->mouseY)) {
                 int n = (int)w->fields[w->openSel].options.size(), vis = Set_DropVisible(*w);
                 int step = GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? -3 : 3;
@@ -21539,6 +28180,10 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
+            if (w->autoScroll) {  // Any key ends autoscroll; Escape does nothing else.
+                Set_AutoScrollStop(*w);
+                if (wParam == VK_ESCAPE) return 0;
+            }
             if (Set_OnKey(*w, (UINT)wParam)) return 0;
             // Without a system menu (glass title bar) Windows no longer turns Alt+F4 into a close.
             if (msg == WM_SYSKEYDOWN && wParam == VK_F4 && w->recording < 0) {
@@ -21558,6 +28203,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             return 0;
         case WM_DESTROY: {
             Set_StopRecording(*w);
+            RemovePropW(hwnd, kSetAutoProp);
             if (w->timer) KillTimer(hwnd, kSetTimerId);
             if (!w->render && w->normalRect.right > w->normalRect.left) {
                 const RECT& r = w->normalRect;
@@ -21679,6 +28325,7 @@ static bool Set_Create(bool render) {
         return false;
     }
     w->hwnd = hwnd;
+    SetPropW(hwnd, kSetAutoProp, (HANDLE)1);  // Seamless Autoscroll leaves this window to Set_AutoScroll*.
     w->dpi = g_setForceDpi ? g_setForceDpi : GetDpiForWindow(hwnd);
     ApplyDarkWindow(hwnd);
     COLORREF caption = RefFromRgb(mocha::crust), captionText = RefFromRgb(mocha::text);

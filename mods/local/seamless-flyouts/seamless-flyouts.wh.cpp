@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.0.15
+// @version         2.0.16
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -6049,13 +6049,11 @@ static COLORREF TitleBarsCaptionColour()
 }
 #endif
 
-static BOOL IsDelphiProcess();
-
-const UINT_PTR DELPHI_CAPTION_TIMER_ID = 0x57490000;
+const UINT_PTR CAPTION_NOTICE_TIMER_ID = 0x57490000;
 
 // Ticks every 800 ms. Once the window is on screen, sends the notice on the 1st, 3rd and 6th
 // visible tick (DWM must have composed the window first), then stops.
-static VOID CALLBACK DelphiCaptionTimerProc(HWND hWnd, UINT, UINT_PTR id, DWORD)
+static VOID CALLBACK CaptionNoticeTimerProc(HWND hWnd, UINT, UINT_PTR id, DWORD)
 {
     if (!IsWindow(hWnd)) {
         KillTimer(hWnd, id);
@@ -6063,8 +6061,8 @@ static VOID CALLBACK DelphiCaptionTimerProc(HWND hWnd, UINT, UINT_PTR id, DWORD)
     }
     if (!IsWindowVisible(hWnd))
         return;
-    UINT_PTR n = (UINT_PTR)GetPropW(hWnd, L"SFDelphiCap") + 1;
-    SetPropW(hWnd, L"SFDelphiCap", (HANDLE)n);
+    UINT_PTR n = (UINT_PTR)GetPropW(hWnd, L"SFCapNotice") + 1;
+    SetPropW(hWnd, L"SFCapNotice", (HANDLE)n);
     if (n == 1 || n == 3 || n == 6)
         SendMessageW(hWnd, WM_DWMCOMPOSITIONCHANGED, 0, 0);
     if (n >= 6)
@@ -6100,16 +6098,14 @@ VOID HandleEffects(HWND hWnd)
             COLORREF caption = TitleBarsCaptionColour();
             DwmSetWindowAttribute(hWnd, DWMWA_CAPTION_COLOR, &caption, sizeof(caption));
 #endif
-            // Delphi windows (Inno Setup wizards) keep a solid caption over the blur until
-            // DWM re-reads the frame. A composition-changed notice makes it see-through, so
-            // the title bar shows the same blur as the body. Sent early it doesn't stick, so
-            // it goes out shortly after the last effects pass, once the window is on screen.
-            static int delphi = -1;
-            if (delphi < 0)
-                delphi = IsDelphiProcess() ? 1 : 0;
-            if (delphi && !GetPropW(hWnd, L"SFDelphiCap")) {
-                UINT_PTR ok = SetTimer(hWnd, DELPHI_CAPTION_TIMER_ID, 800, DelphiCaptionTimerProc);
-                SetPropW(hWnd, L"SFDelphiArm", (HANDLE)(UINT_PTR)(ok ? 1 : 2));
+            // Some programs (installer wizards, old utilities) keep a solid caption over
+            // the blur until DWM re-reads the frame. A composition-changed notice makes it
+            // see-through, so the title bar shows the same blur as the body. Sent early it
+            // doesn't stick, so it goes out shortly after the last effects pass, once the
+            // window is on screen.
+            if (!GetPropW(hWnd, L"SFCapNotice")) {
+                UINT_PTR ok = SetTimer(hWnd, CAPTION_NOTICE_TIMER_ID, 800, CaptionNoticeTimerProc);
+                SetPropW(hWnd, L"SFCapArm", (HANDLE)(UINT_PTR)(ok ? 1 : 2));
             }
         }
     }
@@ -7318,11 +7314,13 @@ VOID CustomRenderingHooks()
     WindhawkUtils::SetFunctionHook(GetThemeFont, HookedGetThemeFont, &GetThemeFont_orig);
 }
 
-// ---- Delphi (VCL) apps on blur: Inno Setup wizards, installers and other Delphi programs ----
-// Delphi paints every control through BeginBufferedPaint(BPBF_COMPOSITED) and then makes the
-// whole buffer opaque with BufferedPaintSetAlpha(255), so its black (themed) panels cover the
-// blur. For calls made by the app's own exe, black that nobody gave an alpha stays see-through.
-// Light picture backgrounds (installer wizard art) are cut out the same way.
+// ---- Classic GDI apps on blur: installer wizards, old utilities, any program whose own exe
+// paints controls through BeginBufferedPaint(BPBF_COMPOSITED) ----
+// These apps make the whole buffer opaque with BufferedPaintSetAlpha(255), so their black
+// (themed) panels cover the blur. For calls made by the app's own exe, black that nobody
+// gave an alpha stays see-through. Light picture backgrounds (installer wizard art) are cut
+// out the same way. The hooks only fire for calls whose return address sits in the main
+// module, so frameworks that paint from libraries (Qt, Chromium, WPF) are not affected.
 static decltype(&BufferedPaintSetAlpha) BufferedPaintSetAlpha_orig = nullptr;
 static decltype(&BitBlt) BitBlt_orig = nullptr;
 static decltype(&StretchBlt) StretchBlt_orig = nullptr;
@@ -7332,12 +7330,6 @@ static BOOL CalledFromMainModule(void* ret)
 {
     ULONG_PTR a = (ULONG_PTR)ret;
     return a >= g_mainModBase && a < g_mainModEnd;
-}
-
-static BOOL IsDelphiProcess()
-{
-    HMODULE exe = GetModuleHandleW(nullptr);
-    return exe && (FindResourceW(exe, L"DVCLAL", RT_RCDATA) || FindResourceW(exe, L"PACKAGEINFO", RT_RCDATA));
 }
 
 HRESULT WINAPI HookedBufferedPaintSetAlpha(HPAINTBUFFER hpb, const RECT* prc, BYTE alpha)
@@ -7355,6 +7347,22 @@ HRESULT WINAPI HookedBufferedPaintSetAlpha(HPAINTBUFFER hpb, const RECT* prc, BY
     const INT x0 = rc.left - rcTarget.left, x1 = rc.right - rcTarget.left;
     const INT y0 = rc.top - rcTarget.top, y1 = rc.bottom - rcTarget.top;
     if (x1 > cxRow) return BufferedPaintSetAlpha_orig(hpb, prc, alpha);
+
+    // Only dark buffers (a black panel filling most of the paint) get the treatment. A light
+    // page (white paper, sparse black text and buttons) keeps every pixel opaque, so GDI
+    // black text stays readable instead of turning into blur.
+    size_t tot = 0, blk = 0;
+    for (INT y = y0; y < y1; y++) {
+        DWORD* row = reinterpret_cast<DWORD*>(bits + (size_t)y * cxRow);
+        for (INT x = x0; x < x1; x++) {
+            DWORD p = row[x];
+            if (p & 0xFF000000) continue;            // already has alpha (our own text, D2D parts)
+            tot++;
+            if (!(p & 0x00FFFFFF)) blk++;
+        }
+    }
+    if (tot && blk * 100 < tot * 50)
+        return BufferedPaintSetAlpha_orig(hpb, prc, alpha);
 
     for (INT y = y0; y < y1; y++) {
         DWORD* row = reinterpret_cast<DWORD*>(bits + (size_t)y * cxRow);
@@ -7378,7 +7386,7 @@ static HBITMAP GetDarkArt(HDC hdcSrc)
     HBITMAP hbm = (HBITMAP)GetCurrentObject(hdcSrc, OBJ_BITMAP);
     DIBSECTION ds{};
     if (!hbm || GetObjectW(hbm, sizeof(ds), &ds) != sizeof(ds) || !ds.dsBm.bmBits)
-        return nullptr;                                   // DIB sections only (Delphi TBitmap)
+        return nullptr;                                   // DIB sections only (app-owned bitmaps)
     const INT w = ds.dsBm.bmWidth, h = abs(ds.dsBmih.biHeight);
     INT bpp = ds.dsBm.bmBitsPixel;
     if (w < 24 || h < 24 || (INT64)w * h > 2000000)
@@ -7507,16 +7515,14 @@ BOOL WINAPI HookedStretchBlt(HDC hdc, INT x, INT y, INT cx, INT cy, HDC hdcSrc, 
     return StretchBlt_orig(hdc, x, y, cx, cy, hdcSrc, x1, y1, cx1, cy1, rop);
 }
 
-VOID DelphiGlassHooks()
+VOID PaintGlassHooks()
 {
-    if (!IsDelphiProcess())
-        return;
     HMODULE exe = GetModuleHandleW(nullptr);
     auto dos = (PIMAGE_DOS_HEADER)exe;
     auto nt = (PIMAGE_NT_HEADERS)((BYTE*)exe + dos->e_lfanew);
     g_mainModBase = (ULONG_PTR)exe;
     g_mainModEnd = g_mainModBase + nt->OptionalHeader.SizeOfImage;
-    Wh_Log(L"Delphi app: buffered paint keeps black see-through");
+    Wh_Log(L"Paint glass hooks: buffered paint keeps black see-through");
     WindhawkUtils::SetFunctionHook(BufferedPaintSetAlpha, HookedBufferedPaintSetAlpha, &BufferedPaintSetAlpha_orig);
     WindhawkUtils::SetFunctionHook(BitBlt, HookedBitBlt, &BitBlt_orig);
     WindhawkUtils::SetFunctionHook(StretchBlt, HookedStretchBlt, &StretchBlt_orig);
@@ -7531,7 +7537,7 @@ VOID ApplyHooks()
         DwmExpandFrameIntoClientAreaHook();
     }
     if (g_settings.FillBg && g_settings.BgType != g_settings.Default)
-        DelphiGlassHooks();
+        PaintGlassHooks();
 }
 
 // Normalizes a path: flips slashes, trims trailing slashes, lowercases.

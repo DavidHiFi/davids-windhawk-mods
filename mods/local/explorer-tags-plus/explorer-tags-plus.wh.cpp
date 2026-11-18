@@ -1,11 +1,11 @@
 // ==WindhawkMod==
 // @id              explorer-tags-plus
 // @name            Explorer Tags Plus
-// @description     Colored tags panel at the bottom of File Explorer's navigation pane, plus a Tags submenu in the file context menu
-// @version         0.8.2
+// @description     Colored tags panel in File Explorer's navigation pane, plus a Tags submenu in the right-click menu
+// @version         0.8.7
 // @author          DavidHiFi, buedgik
 // @donateUrl       https://ko-fi.com/DavidHiFi
-// @github          https://github.com/buedgik
+// @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/buedgik/explorer-tags
 // @license         MIT
 // @include         explorer.exe
@@ -16,9 +16,8 @@
 /*
 # Explorer Tags Plus
 
-Based on [Explorer Tags](https://github.com/buedgik/explorer-tags) by buedgik.
 This copy draws the panel in Catppuccin Mocha: rounded rows like the folder tree,
-a blue to mauve edge on hover, and FiraCode Nerd Font Medium for the text.
+a blue to mauve edge on hover, and the same columns, text and pill size as the folder rows.
 
 Adds a **Tags** panel at the bottom of File Explorer's navigation pane, below
 "This PC" and "Network", and a **Tags ▸** submenu to the file context menu.
@@ -63,8 +62,8 @@ shortcuts are recreated.
 
 It works the other way round too: the shortcuts are enough to rebuild the
 record. A shortcut in a tag's folder that the record doesn't know about is
-taken in, so losing the record — uninstalling the mod takes its storage with
-it — costs nothing while the tag folders are there, and you can tag a file
+taken in, so losing the record (uninstalling the mod takes its storage with
+it) costs nothing while the tag folders are there, and you can tag a file
 by putting a shortcut to it in a tag's folder yourself. A tag whose name is
 no longer in the settings can't be rebuilt: put the name back and its files
 come back with it.
@@ -93,6 +92,10 @@ come back with it.
 - **The desktop and file dialogs are left alone.** The panel and the submenu
   are for Explorer windows; right-clicking a file on the desktop shows the
   usual menu, without Tags.
+
+## Credits
+
+Based on [Explorer Tags](https://github.com/buedgik/explorer-tags) by buedgik.
 */
 // ==/WindhawkModReadme==
 
@@ -103,7 +106,7 @@ come back with it.
       $name: Name
     - color: "#E81123"
       $name: Color
-      $description: In hex, for example #E81123
+      $description: 'Color as #RRGGBB, for example #E81123'
   $name: Tags
   $description: Each tag has a name and a color.
 - folder: ""
@@ -117,7 +120,7 @@ come back with it.
     under this folder is watched, so keep it out of busy folders.
 - maxRows: 8
   $name: Visible rows
-  $description: With more tags than this, the panel scrolls with the mouse wheel
+  $description: 'With more tags than this, the panel scrolls with the mouse wheel. 1 to 40 (Suggested: 8)'
 */
 // ==/WindhawkModSettings==
 
@@ -2244,7 +2247,7 @@ void OpenTag(Panel* p, int index, bool newWindow) {
 }
 
 struct Colors {
-    COLORREF bk, text, dim, sep, hot, selected;
+    COLORREF bk, under, text, dim, sep, hot, selected, rest, edge;
 };
 
 COLORREF Blend(COLORREF a, COLORREF b, double t) {
@@ -2252,6 +2255,9 @@ COLORREF Blend(COLORREF a, COLORREF b, double t) {
                (int)(GetGValue(a) + (GetGValue(b) - GetGValue(a)) * t),
                (int)(GetBValue(a) + (GetBValue(b) - GetBValue(a)) * t));
 }
+
+constexpr double kFillAlpha = 75.0 / 255.0;
+constexpr double kEdgeAlpha = 100.0 / 255.0;
 
 Colors GetColors(Panel* p) {
     Colors c;
@@ -2266,9 +2272,18 @@ Colors GetColors(Panel* p) {
     }
     // Measured on the tree in dark theme: background 25, separator 56, selection 51.
     c.sep = RGB(0x45, 0x47, 0x5A);       // Mocha surface1, like the toolbar lines
-    c.selected = Blend(c.bk, RGB(0x1E, 0x1E, 0x2E), 0.75);  // base, as the tree's selection
-    c.hot = Blend(c.bk, RGB(0x18, 0x18, 0x25), 0.75);       // mantle, as the tree's hover
+    // The folder tree's own state colours (Seamless Explorer View navTree.*): fills at
+    // opacity 75 and edges at 100, both out of 255, so the two lists blend the same.
+    // On Explorer's glass the tree's background is black, which shows the backdrop, so the
+    // tree's see-through pills land on the Mocha base the glass shows, not on black. Mix
+    // against that, or the pills come out near black.
+    c.under = c.bk == RGB(0, 0, 0) ? RGB(0x1E, 0x1E, 0x2E) : c.bk;
+    c.selected = Blend(c.under, RGB(0x1E, 0x1E, 0x2E), kFillAlpha);  // base: hover on the selection
+    c.rest = Blend(c.under, RGB(0x11, 0x11, 0x1B), kFillAlpha);      // crust: resting selection
+    c.hot = Blend(c.under, RGB(0x18, 0x18, 0x25), kFillAlpha);       // mantle: hover
+    c.edge = Blend(c.under, RGB(0x58, 0x5B, 0x70), kEdgeAlpha);      // surface2: resting selection edge
     c.dim = RGB(0x93, 0x99, 0xB2);       // overlay2
+    c.text = RGB(0xCD, 0xD6, 0xF4);      // Mocha text, the folder rows' colour
     return c;
 }
 
@@ -2360,9 +2375,8 @@ void FillRounded(Gdiplus::Graphics& g, COLORREF color, int x, int y, int w, int 
     g.FillPath(&brush, &path);
 }
 
-// FiraCode Nerd Font Medium at the tree's own size. GDI lists the Medium cut
-// as its own family ("FiraCode Nerd Font Med"); without it, weight 500 of the
-// main family, and without that, the tree's font.
+// FiraCode Nerd Font Regular at the tree's own size, the folder rows' weight;
+// without it, the tree's font.
 HFONT GetTextFont(Panel* p, HFONT treeFont) {
     LOGFONTW lf = {};
     if (!treeFont || !GetObjectW(treeFont, sizeof(lf), &lf)) {
@@ -2375,9 +2389,9 @@ HFONT GetTextFont(Panel* p, HFONT treeFont) {
         DeleteObject(p->textFont);
         p->textFont = nullptr;
     }
-    static const PCWSTR faces[] = {L"FiraCode Nerd Font Med", L"FiraCode Nerd Font"};
+    static const PCWSTR faces[] = {L"FiraCode Nerd Font"};
     for (PCWSTR face : faces) {
-        HFONT f = CreateFontW(lf.lfHeight, 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE,
+        HFONT f = CreateFontW(lf.lfHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                               DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
                               CLEARTYPE_QUALITY, DEFAULT_PITCH, face);
         if (!f) {
@@ -2409,9 +2423,15 @@ int TextWidth(HDC hdc, const std::wstring& text) {
 // Rounded row like the folder tree: fill, then a 2 px edge kept inside.
 // gradient = blue to mauve edge (hover), otherwise a flat edge colour.
 void DrawPill(Gdiplus::Graphics& g, int x, int y, int w, int h, COLORREF fill,
-              bool gradient, COLORREF edge) {
+              bool gradient, COLORREF edge, COLORREF under) {
     if (w <= 4 || h <= 4) {
         return;
+    }
+    // The soft rim of the pill mixes with what's under it in the buffer. On glass that's
+    // black, which left a dark outline, so lay the glass's own base colour there first.
+    {
+        Gdiplus::SolidBrush back(Gdiplus::Color(255, GetRValue(under), GetGValue(under), GetBValue(under)));
+        g.FillRectangle(&back, x, y, w, h);
     }
     Gdiplus::REAL r = (Gdiplus::REAL)std::min(w, h) / 2.0f;
     auto rounded = [](Gdiplus::GraphicsPath& path, Gdiplus::REAL x, Gdiplus::REAL y,
@@ -2433,8 +2453,8 @@ void DrawPill(Gdiplus::Graphics& g, int x, int y, int w, int h, COLORREF fill,
     if (gradient) {
         Gdiplus::LinearGradientBrush lg(Gdiplus::PointF((Gdiplus::REAL)x, (Gdiplus::REAL)y),
                                         Gdiplus::PointF((Gdiplus::REAL)(x + w), (Gdiplus::REAL)(y + h)),
-                                        Gdiplus::Color(255, 0x89, 0xB4, 0xFA),
-                                        Gdiplus::Color(255, 0xCB, 0xA6, 0xF7));
+                                        Gdiplus::Color(100, 0x89, 0xB4, 0xFA),
+                                        Gdiplus::Color(100, 0xCB, 0xA6, 0xF7));
         Gdiplus::Pen pen(&lg, 2.0f);
         g.DrawPath(&pen, &edgePath);
     } else {
@@ -2448,6 +2468,12 @@ void DrawTextAt(HDC hdc, const std::wstring& text, RECT rc, COLORREF color, UINT
     DrawTextW(hdc, text.c_str(), (int)text.size(), &rc,
               flags | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_END_ELLIPSIS);
 }
+
+// Columns copied from the folder rows above (measured at 100%): icon cell 25 to 41,
+// text at 45, selection pill from 14 to 12 past the text, so both lists read as one.
+constexpr int kPillLeft = 14;
+constexpr int kIconLeft = 25;
+constexpr int kTextX = 45;
 
 void PaintPanel(Panel* p, HDC target) {
     RECT rc;
@@ -2502,8 +2528,8 @@ void PaintPanel(Panel* p, HDC target) {
 
         if (p->hot == HIT_HEADER) {
             int left = Dip(4, dpi);
-            int right = std::min(maxRight, Dip(53, dpi) + TextWidth(hdc, L"Tags") + Dip(12, dpi));
-            DrawPill(g, left, headerTop + inset, right - left, m.rowH - inset * 2 - 1, c.hot, true, 0);
+            int right = std::min(maxRight, Dip(kTextX + 6, dpi) + TextWidth(hdc, L"Tags") + Dip(12, dpi));
+            DrawPill(g, left, headerTop + inset, right - left, m.rowH - inset * 2 - 1, c.hot, true, 0, c.under);
         }
         for (int row = 0; row < m.rowsShown; row++) {
             int i = row + p->scroll;
@@ -2513,25 +2539,25 @@ void PaintPanel(Panel* p, HDC target) {
             int y = rowsTop + row * m.rowH;
             if (i == p->dropHot || i == selected || i == p->hot) {
                 int count = GetCount(s->tags[i].name);
-                int right = Dip(61, dpi) + TextWidth(hdc, s->tags[i].name) + Dip(12, dpi);
+                int right = Dip(kTextX, dpi) + TextWidth(hdc, s->tags[i].name) + Dip(12, dpi);
                 // The count sits at the right edge, so a counted row runs to it.
                 right = count > 0 ? maxRight : std::min(maxRight, right);
-                int left = Dip(31, dpi);
+                int left = Dip(kPillLeft, dpi);
                 int top = y + inset;
                 int h = m.rowH - inset * 2 - 1;
                 if (i == p->dropHot) {
-                    DrawPill(g, left, top, right - left, h, Blend(c.bk, s->tags[i].color, 0.35), true, 0);
+                    DrawPill(g, left, top, right - left, h, Blend(c.under, s->tags[i].color, 0.35), true, 0, c.under);
                 } else if (i == p->hot) {
-                    DrawPill(g, left, top, right - left, h, i == selected ? c.selected : c.hot, true, 0);
+                    DrawPill(g, left, top, right - left, h, i == selected ? c.selected : c.hot, true, 0, c.under);
                 } else {
-                    DrawPill(g, left, top, right - left, h, c.selected, false, RGB(0x58, 0x5B, 0x70));
+                    DrawPill(g, left, top, right - left, h, c.rest, false, c.edge, c.under);
                 }
             }
 
             COLORREF tc = s->tags[i].color;
             Gdiplus::SolidBrush dot(Gdiplus::Color(255, GetRValue(tc), GetGValue(tc), GetBValue(tc)));
             Gdiplus::REAL d = (Gdiplus::REAL)Dip(10, dpi);
-            Gdiplus::REAL cx = (Gdiplus::REAL)Dip(47, dpi);
+            Gdiplus::REAL cx = (Gdiplus::REAL)Dip(kIconLeft + 8, dpi);
             Gdiplus::REAL cy = (Gdiplus::REAL)y + m.rowH / 2.0f;
             g.FillEllipse(&dot, cx - d / 2, cy - d / 2, d, d);
         }
@@ -2542,18 +2568,18 @@ void PaintPanel(Panel* p, HDC target) {
 
     // Title: collapse arrow, tag icon, "Tags".
     HGDIOBJ oldFont = SelectObject(hdc, GetIconFont(p, dpi));
-    RECT chevron = {Dip(8, dpi), headerTop, Dip(24, dpi), headerTop + m.rowH};
+    RECT chevron = {Dip(10, dpi), headerTop, Dip(26, dpi), headerTop + m.rowH};
     DrawTextAt(hdc, g_collapsed ? L"\uE76C" : L"\uE70D", chevron, c.dim, DT_CENTER);
-    RECT icon = {Dip(31, dpi), headerTop, Dip(47, dpi), headerTop + m.rowH};
+    RECT icon = {Dip(kIconLeft + 6, dpi), headerTop, Dip(kIconLeft + 22, dpi), headerTop + m.rowH};
     DrawTextAt(hdc, L"\uE8EC", icon, c.text, DT_CENTER);
 
     SelectObject(hdc, textFont ? textFont : (HFONT)GetStockObject(DEFAULT_GUI_FONT));
-    RECT title = {Dip(53, dpi), headerTop, width - Dip(8, dpi), headerTop + m.rowH};
+    RECT title = {Dip(kTextX + 6, dpi), headerTop, width - Dip(8, dpi), headerTop + m.rowH};
     DrawTextAt(hdc, L"Tags", title, c.text, DT_LEFT);
 
     if (!g_collapsed) {
         if (m.tagCount == 0 && m.rowsShown > 0) {
-            RECT r = {Dip(61, dpi), rowsTop, width - Dip(8, dpi), rowsTop + m.rowH};
+            RECT r = {Dip(kTextX, dpi), rowsTop, width - Dip(8, dpi), rowsTop + m.rowH};
             DrawTextAt(hdc, L"Create tags in the mod settings", r, c.dim, DT_LEFT);
         }
         for (int row = 0; row < m.rowsShown; row++) {
@@ -2572,7 +2598,7 @@ void PaintPanel(Panel* p, HDC target) {
                 RECT cr = {width - Dip(12, dpi) - measure.right, y, width - Dip(12, dpi), y + m.rowH};
                 DrawTextAt(hdc, countText, cr, c.dim, DT_RIGHT);
             }
-            RECT tr = {Dip(61, dpi), y, width - Dip(12, dpi) - countW, y + m.rowH};
+            RECT tr = {Dip(kTextX, dpi), y, width - Dip(12, dpi) - countW, y + m.rowH};
             DrawTextAt(hdc, s->tags[i].name, tr, c.text, DT_LEFT);
         }
     }

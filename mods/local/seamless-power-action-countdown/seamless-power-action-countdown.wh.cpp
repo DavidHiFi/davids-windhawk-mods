@@ -1,8 +1,8 @@
 // ==WindhawkMod==
-// @id              local@seamless-power-action-countdown
+// @id              seamless-power-action-countdown
 // @name            Seamless Power Action Countdown
-// @description     Mocha glass countdown before shutdown, restart, sleep or hibernation. Any key or click cancels.
-// @version         2.0.1
+// @description     Mocha glass countdown before shutdown, restart, sleep or hibernation. Any key or click cancels
+// @version         2.0.2
 // @author          DavidHiFi, Nerdworld
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,8 +21,6 @@
 A clean countdown before Windows shuts down, restarts, sleeps or hibernates.
 Any key, click or scroll cancels it. The overlay matches the Mocha rice: real
 acrylic glass, FiraCode Nerd Font and a smooth blue to mauve gradient.
-
-![Seamless Power Action Countdown preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-power-action-countdown.png)
 
 ## Features
 
@@ -62,21 +60,21 @@ by Nerdworld. MIT.
 // ==WindhawkModSettings==
 /*
 - shutdownCountdownSeconds: 5
-  $name: Shutdown countdown in seconds
-  $description: 0 to 30. 0 shuts down at once (Suggested: 5).
+  $name: Shutdown countdown (seconds)
+  $description: '0 to 30. 0 shuts down at once (Suggested: 5).'
 - restartCountdownSeconds: 5
-  $name: Restart countdown in seconds
-  $description: 0 to 30. 0 restarts at once (Suggested: 5).
+  $name: Restart countdown (seconds)
+  $description: '0 to 30. 0 restarts at once (Suggested: 5).'
 - sleepCountdownSeconds: 5
-  $name: Sleep countdown in seconds
-  $description: 0 to 30. 0 sleeps at once (Suggested: 5).
+  $name: Sleep countdown (seconds)
+  $description: '0 to 30. 0 sleeps at once (Suggested: 5).'
 - hibernateCountdownSeconds: 5
-  $name: Hibernation countdown in seconds
-  $description: 0 to 30. 0 hibernates at once (Suggested: 5).
+  $name: Hibernation countdown (seconds)
+  $description: '0 to 30. 0 hibernates at once (Suggested: 5).'
 - look:
   - backgroundMaterial: glass
     $name: Background material
-    $description: The surface behind the countdown (Suggested: Glass).
+    $description: 'The surface behind the countdown (Suggested: Glass).'
     $options:
     - glass: Glass (acrylic blur)
     - blur: Blur (frost, no tint)
@@ -84,34 +82,34 @@ by Nerdworld. MIT.
     - clear: Transparent (no material)
   - backgroundColor: "#181825"
     $name: Background color
-    $description: Hex like #181825 (Suggested: Catppuccin Mocha mantle #181825).
+    $description: 'Hex like #181825 (Suggested: Catppuccin Mocha mantle #181825).'
   - backgroundOpacity: 92
     $name: Background strength (%)
-    $description: Glass tint strength. 0 shows the blurred desktop as it is, 100 is a solid color (Suggested: 92).
+    $description: 'Glass tint strength. 0 shows the blurred desktop as it is, 100 is a solid color (Suggested: 92).'
   - openCloseAnimation: true
     $name: Open and close animation
-    $description: When on, the overlay fades in with a soft zoom and fades out (Suggested: on).
+    $description: 'Turn on to fade the overlay in with a soft zoom and out again (Suggested: on).'
   - gradientOverlay: true
     $name: Gradient overlay
-    $description: When on, a smooth gradient washes the whole overlay and the text (Suggested: on).
+    $description: 'Turn on to wash a smooth gradient over the whole overlay and the text (Suggested: on).'
   - gradientStartColor: "#89B4FA"
     $name: Gradient start color
-    $description: Top of the gradient. Hex like #89B4FA (Suggested: Mocha blue #89B4FA).
+    $description: 'Top of the gradient. Hex like #89B4FA (Suggested: Mocha blue #89B4FA).'
   - gradientEndColor: "#CBA6F7"
     $name: Gradient end color
-    $description: Bottom of the gradient. Hex like #CBA6F7 (Suggested: Mocha mauve #CBA6F7).
+    $description: 'Bottom of the gradient. Hex like #CBA6F7 (Suggested: Mocha mauve #CBA6F7).'
   - gradientAreaOpacity: 20
     $name: Gradient strength over the background (%)
-    $description: How visible the gradient wash over the whole area is, 0 to 100 (Suggested: 20).
+    $description: 'How visible the gradient wash over the whole area is, 0 to 100 (Suggested: 20).'
   $name: Look
   $description: Background material, colors and the gradient overlay.
 - font:
   - fontFamily: FiraCode Nerd Font
     $name: Font
-    $description: Any font installed on the PC. Falls back to Segoe UI (Suggested: FiraCode Nerd Font).
+    $description: 'Any font installed on the PC. Falls back to Segoe UI (Suggested: FiraCode Nerd Font).'
   - fontWeight: medium
     $name: Font weight
-    $description: How thick the text is (Suggested: Medium).
+    $description: 'How thick the text is (Suggested: Medium).'
     $options:
     - light: Light
     - regular: Regular
@@ -120,7 +118,7 @@ by Nerdworld. MIT.
     - bold: Bold
   - textColor: "#89B4FA"
     $name: Text color
-    $description: Used when the gradient overlay is off. Hex like #89B4FA (Suggested: Mocha blue #89B4FA).
+    $description: 'Used when the gradient overlay is off. Hex like #89B4FA (Suggested: Mocha blue #89B4FA).'
   $name: Font
   $description: Font family, weight and text color.
 */

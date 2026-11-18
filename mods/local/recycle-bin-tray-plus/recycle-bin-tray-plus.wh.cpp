@@ -3,7 +3,7 @@
 // @name            Recycle Bin Tray Plus
 // @description     Adds an interactive Recycle Bin icon to the Windows 11 system tray with live state updates, drag-and-drop support, theme-aware rendering, multiple icon styles, and configurable mouse actions.
 // @description:fr-FR Ajoute une icône interactive de la Corbeille à la zone de notification de Windows 11, avec mise à jour en temps réel, glisser-déposer, adaptation au thème, plusieurs styles d'icône et actions de souris configurables.
-// @version         1.0.6
+// @version         1.0.7
 // @author          DavidHiFi, Wildstyle23
 // @github          https://github.com/wildstyle23
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -458,7 +458,7 @@ This project is licensed under the GNU General Public License Version 3.0.
       Windows applique la stratégie de Corbeille de chaque lecteur source ; les éléments peuvent donc être supprimés définitivement si un lecteur est configuré pour contourner la Corbeille. Si l'icône se trouve dans le menu ^, ouvrez-le puis déposez les éléments sur l'icône de la Corbeille. L'icône n'a pas besoin de rester visible en permanence dans la zone de notification principale pour fonctionner, mais la garder visible permet un accès plus rapide. Cette fonctionnalité utilise un hook global de souris.
 
       ⚠ Le glisser-déposer est désactivé lorsque "Masquer si vide" est activé.
-  - iconStyle: system
+  - iconStyle: custom
     $name: "Icon style"
     $name:fr-FR: "Style d'icône"
     $description: "Choose how the tray icon is rendered. The Vector, Font, and Custom Icon sections below apply only to their corresponding style."
@@ -596,12 +596,12 @@ This project is licensed under the GNU General Public License Version 3.0.
       - original: Conserver les couleurs d'origine
       - themeTint: Adapter automatiquement les couleurs des images monochromes au thème
   - light:
-    - empty: ""
+    - empty: "C:/ProgramData/Windhawk/ModIcons/recycle-bin-tray-plus/recycler.png"
       $name: "Empty bin"
       $name:fr-FR: "Corbeille vide"
       $description: "Light-theme Empty-bin image (.ico, .png, .bmp, .jpg). Also used as the Dark-theme source when the corresponding Dark field is blank. Quotes from 'Copy as path' are supported."
       $description:fr-FR: "Image de la corbeille vide pour le thème clair (.ico, .png, .bmp, .jpg). Sert également de source pour le thème sombre lorsque le champ sombre correspondant est vide. Les guillemets de 'Copier en tant que chemin d'accès' sont acceptés."
-    - full: ""
+    - full: "C:/ProgramData/Windhawk/ModIcons/recycle-bin-tray-plus/recyclerfull.png"
       $name: "Full bin"
       $name:fr-FR: "Corbeille pleine"
       $description: "Light-theme Full-bin image (.ico, .png, .bmp, .jpg). Also used as the Dark-theme source when the corresponding Dark field is blank. Quotes from 'Copy as path' are supported."
@@ -2431,6 +2431,59 @@ void LoadSettingsInto(ModSettings& s) {
     LoadPathSetting(L"customIcon.light.full",  s.customIconFull);
     LoadPathSetting(L"customIcon.dark.empty", s.customIconEmptyDark);
     LoadPathSetting(L"customIcon.dark.full",  s.customIconFullDark);
+
+    // Catppuccin self-heal: the owner always wants the Catppuccin icon. Mod
+    // updates and setting resets kept dropping the tray icon back to the stock
+    // Windows one, so on every load restore the custom style and the shipped
+    // icon paths in memory, and persist them back to the mod's settings key
+    // when the process has the rights (best effort; the override works either
+    // way because the healed values are what the mod actually uses).
+    {
+        const PCWSTR kCatDir = L"C:\\ProgramData\\Windhawk\\ModIcons\\recycle-bin-tray-plus";
+        const std::wstring kCatEmpty = std::wstring(kCatDir) + L"\\recycler.png";
+        const std::wstring kCatFull = std::wstring(kCatDir) + L"\\recyclerfull.png";
+        auto iconFileMissing = [](const std::wstring& path) {
+            if (path.empty()) {
+                return true;
+            }
+            DWORD attrs = GetFileAttributesW(path.c_str());
+            return attrs == INVALID_FILE_ATTRIBUTES;
+        };
+        auto persistSetting = [](PCWSTR name, PCWSTR value) {
+            HKEY key;
+            if (RegOpenKeyExW(HKEY_LOCAL_MACHINE,
+                              L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@recycle-bin-tray-plus"
+                              L"\\Settings",
+                              0, KEY_SET_VALUE, &key) != ERROR_SUCCESS) {
+                return;
+            }
+            RegSetValueExW(key, name, 0, REG_SZ,
+                           reinterpret_cast<const BYTE*>(value),
+                           static_cast<DWORD>((wcslen(value) + 1) * sizeof(WCHAR)));
+            RegCloseKey(key);
+        };
+        bool healed = false;
+        WCHAR szStyleNow[32];
+        ReadStringSetting(L"general.iconStyle", szStyleNow, ARRAYSIZE(szStyleNow), L"system");
+        if (szStyleNow[0] == L'\0' || _wcsicmp(szStyleNow, L"system") == 0) {
+            s.iconStyle = IconStyle::Custom;
+            persistSetting(L"general.iconStyle", L"custom");
+            healed = true;
+        }
+        if (iconFileMissing(s.customIconEmpty)) {
+            s.customIconEmpty = kCatEmpty;
+            persistSetting(L"customIcon.light.empty", s.customIconEmpty.c_str());
+            healed = true;
+        }
+        if (iconFileMissing(s.customIconFull)) {
+            s.customIconFull = kCatFull;
+            persistSetting(L"customIcon.light.full", s.customIconFull.c_str());
+            healed = true;
+        }
+        if (healed) {
+            Wh_Log(L"Catppuccin icon self-heal applied (style or icon paths were missing)");
+        }
+    }
 
     // Parse all mouse actions through one helper.
     s.leftClickAction   = ReadActionSetting(L"actions.leftClick",   L"none");

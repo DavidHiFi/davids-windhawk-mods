@@ -2,7 +2,7 @@
 // @id           better-volume-mixer-plus
 // @name         Seamless Volume Mixer
 // @description  A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices
-// @version      1.4.29
+// @version      1.4.30
 // @author       DavidHiFi, 0Allu, shubho
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -4765,7 +4765,9 @@ bool GpuEnsureSurfaces(int w, int h) {
 // Static chrome, drawn once: the translucent rounded background and the
 // 3 px blue-to-mauve border ring. Same geometry as DrawSurface plus
 // DrawPopupBorder; the ring shares DWM ROUND's center with the radius
-// reduced by the stroke, per the workspace border convention.
+// reduced by the stroke, per the workspace border convention. D2D arc
+// segments take radii, not diameters: {d, d} flattened every inner corner and
+// made the ring about 5 px thick there against 3 px on the straight edges.
 void GpuDrawChrome(int w, int h) {
     if (!g_gpuChromeSurface || !g_gpuContext || !g_gpuD2dFactory) return;
     POINT offset{};
@@ -4801,7 +4803,6 @@ void GpuDrawChrome(int w, int h) {
     float c = std::min(static_cast<float>(Scale(16)),
                        std::min(static_cast<float>(w), static_cast<float>(h)) * 0.5f);
     float r = std::max(0.5f, c - stroke);
-    float d = 2.0f * r;
     ID2D1PathGeometry* ring = nullptr;
     if (SUCCEEDED(g_gpuD2dFactory->CreatePathGeometry(&ring)) && ring) {
         ID2D1GeometrySink* sink = nullptr;
@@ -4814,21 +4815,21 @@ void GpuDrawChrome(int w, int h) {
             sink->AddLine(D2D1::Point2F(-1.0f, static_cast<float>(h) + 1.0f));
             sink->EndFigure(D2D1_FIGURE_END_CLOSED);
             sink->BeginFigure(D2D1::Point2F(c - r, c), D2D1_FIGURE_BEGIN_FILLED);
-            sink->AddArc({D2D1::Point2F(c, c - r), {d, d}, 0.0f,
+            sink->AddArc({D2D1::Point2F(c, c - r), {r, r}, 0.0f,
                           D2D1_SWEEP_DIRECTION_CLOCKWISE, D2D1_ARC_SIZE_SMALL});
             sink->AddLine(D2D1::Point2F(static_cast<float>(w) - c, c - r));
             sink->AddArc({D2D1::Point2F(static_cast<float>(w) - c + r, c),
-                          {d, d}, 0.0f, D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                          {r, r}, 0.0f, D2D1_SWEEP_DIRECTION_CLOCKWISE,
                           D2D1_ARC_SIZE_SMALL});
             sink->AddLine(D2D1::Point2F(static_cast<float>(w) - c + r,
                                         static_cast<float>(h) - c));
             sink->AddArc({D2D1::Point2F(static_cast<float>(w) - c,
                                         static_cast<float>(h) - c + r),
-                          {d, d}, 0.0f, D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                          {r, r}, 0.0f, D2D1_SWEEP_DIRECTION_CLOCKWISE,
                           D2D1_ARC_SIZE_SMALL});
             sink->AddLine(D2D1::Point2F(c, static_cast<float>(h) - c + r));
             sink->AddArc({D2D1::Point2F(c - r, static_cast<float>(h) - c),
-                          {d, d}, 0.0f, D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                          {r, r}, 0.0f, D2D1_SWEEP_DIRECTION_CLOCKWISE,
                           D2D1_ARC_SIZE_SMALL});
             sink->EndFigure(D2D1_FIGURE_END_CLOSED);
             sink->Close();
