@@ -1,12 +1,12 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-20T06:17:18+08:00",
+  "generatedAt": "2026-11-20T06:35:30+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 182,
+    "mods": 183,
     "enabled": 174,
-    "local": 57
+    "local": 58
   },
   "mods": [
     {
@@ -2192,6 +2192,18 @@
       "upstream": "",
       "source": "mods/local/seamless-wobbly-windows/seamless-wobbly-windows.wh.cpp",
       "enabled": true
+    },
+    {
+      "id": "local@seamless-workshop",
+      "name": "Seamless Workshop",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-workshop/seamless-workshop.wh.cpp",
+      "enabled": false
     }
   ]
 }

@@ -2787,6 +2787,18 @@
       }
     },
     {
+      "id": "local@seamless-workshop",
+      "enabled": false,
+      "settings": {
+        "animations": 1,
+        "discordPresence": 0,
+        "feedCheck": 1,
+        "nativeSettingsTitleBar": 0,
+        "settingsGlass": 1,
+        "settingsTrayIcon": 1
+      }
+    },
+    {
       "id": "local@settings-styler-plus",
       "enabled": true,
       "settings": {

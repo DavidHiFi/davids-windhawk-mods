@@ -5189,5 +5189,13 @@
     "theme-paths[0]": "",
     "windows-apps[0].bundle": "",
     "windows-apps[0].redirect": ""
+  },
+  "local@seamless-workshop": {
+    "animations": 1,
+    "discordPresence": 0,
+    "feedCheck": 1,
+    "nativeSettingsTitleBar": 0,
+    "settingsGlass": 1,
+    "settingsTrayIcon": 1
   }
 }
