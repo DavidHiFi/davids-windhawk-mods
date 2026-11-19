@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id           better-volume-mixer-plus
-// @name         Seamless Volume Mixer
+// @name         Better Volume Mixer Plus
 // @description  A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices
-// @version      1.4.30
+// @version      1.4.32
 // @author       DavidHiFi, 0Allu, shubho
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -14,12 +14,12 @@
 
 // ==WindhawkModReadme==
 /*
-# Seamless Volume Mixer
+# Better Volume Mixer Plus
 
 A compact volume mixer in the system tray, with per-app volume up to 1000%,
 a per-app compressor and per-app audio devices.
 
-![Seamless Volume Mixer preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/better-volume-mixer-plus.png)
+![Better Volume Mixer Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/better-volume-mixer-plus.png)
 
 ## Features
 
@@ -5318,8 +5318,8 @@ TrayAction GetTrayAction(UINT event, bool version4) {
 // this exact name. With the number off, a zero-width space at the end (the tooltip
 // reads the same) keeps the rules off the icon, so the slot is normal width.
 const wchar_t* TrayTip() {
-    return g_settings.trayVolumeNumber ? L"Seamless Volume Mixer"
-                                       : L"Seamless Volume Mixer\u200B";
+    return g_settings.trayVolumeNumber ? L"Better Volume Mixer Plus"
+                                       : L"Better Volume Mixer Plus\u200B";
 }
 
 void AddTrayIcon(HWND hWnd) {
@@ -5829,9 +5829,94 @@ HICON CreateSpeakerIcon(int pixels, COLORREF color, float shapeScale = 1.0f,
     return icon;
 }
 
+// The house tray badge, the same plate as every other mod's tray icon: a
+// rounded square (radius 0.26 of the icon) in the blue 0x89B4FA to mauve
+// 0xCBA6F7 diagonal gradient, with the Segoe Fluent speaker cut out in crust
+// 0x11111B. Muted turns the plate grey (0x6C7086 to 0x585B70) and the glyph
+// into the crossed speaker, so the state still reads at a glance.
+HICON CreateMixerTrayBadge(int size, bool muted) {
+    size = ClampInt(size, 16, 256);
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = size;
+    bi.bmiHeader.biHeight = -size;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    void* bits = nullptr;
+    void* glyphBits = nullptr;
+    HDC screen = GetDC(nullptr);
+    HBITMAP color = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    HBITMAP glyph = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &glyphBits, nullptr, 0);
+    ReleaseDC(nullptr, screen);
+    if (!color || !glyph || !bits || !glyphBits) {
+        if (color) DeleteObject(color);
+        if (glyph) DeleteObject(glyph);
+        return nullptr;
+    }
+    HDC dc = CreateCompatibleDC(nullptr);
+    HGDIOBJ old = SelectObject(dc, glyph);
+    memset(glyphBits, 0, (size_t)size * size * 4);
+    HFONT font = CreateFontW(-(int)(size * 0.62f), 0, 0, 0, FW_NORMAL, 0, 0, 0,
+                             DEFAULT_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0,
+                             L"Segoe Fluent Icons");
+    HGDIOBJ oldFont = SelectObject(dc, font);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(255, 255, 255));
+    RECT r{0, 0, size, size};
+    WCHAR g[2] = {(WCHAR)(muted ? 0xE74F : 0xE995), 0};  // Mute / Volume3.
+    DrawTextW(dc, g, 1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    GdiFlush();
+    SelectObject(dc, oldFont);
+    DeleteObject(font);
+    SelectObject(dc, old);
+    DeleteDC(dc);
+
+    const float c0[3] = {muted ? 0x6C / 255.f : 0x89 / 255.f,
+                         muted ? 0x70 / 255.f : 0xB4 / 255.f,
+                         muted ? 0x86 / 255.f : 0xFA / 255.f};
+    const float c1[3] = {muted ? 0x58 / 255.f : 0xCB / 255.f,
+                         muted ? 0x5B / 255.f : 0xA6 / 255.f,
+                         muted ? 0x70 / 255.f : 0xF7 / 255.f};
+    const float ink[3] = {0x11 / 255.f, 0x11 / 255.f, 0x1B / 255.f};
+    float radius = size * 0.26f, half = size / 2.0f;
+    auto* px = static_cast<uint32_t*>(bits);
+    const auto* gp = static_cast<const uint32_t*>(glyphBits);
+    for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size; x++) {
+            float qx = std::fabs(x + 0.5f - half) - (half - radius);
+            float qy = std::fabs(y + 0.5f - half) - (half - radius);
+            float ox = std::max(qx, 0.0f), oy = std::max(qy, 0.0f);
+            float d = std::sqrt(ox * ox + oy * oy) +
+                      std::min(std::max(qx, qy), 0.0f) - radius;
+            float a = std::clamp(0.5f - d, 0.0f, 1.0f);
+            float t = std::clamp((x + y) / (2.0f * (size - 1)), 0.0f, 1.0f);
+            float cov = ((gp[y * size + x] >> 8) & 0xFF) / 255.0f;
+            float rgb[3];
+            for (int i = 0; i < 3; i++) {
+                float base = c0[i] + (c1[i] - c0[i]) * t;
+                rgb[i] = (base + (ink[i] - base) * cov) * a;  // Premultiplied.
+            }
+            px[y * size + x] = ((uint32_t)(a * 255 + 0.5f) << 24) |
+                               ((uint32_t)(rgb[0] * 255 + 0.5f) << 16) |
+                               ((uint32_t)(rgb[1] * 255 + 0.5f) << 8) |
+                               (uint32_t)(rgb[2] * 255 + 0.5f);
+        }
+    }
+    HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
+    ICONINFO ii{TRUE, 0, 0, mask, color};
+    HICON icon = CreateIconIndirect(&ii);
+    DeleteObject(mask);
+    DeleteObject(color);
+    DeleteObject(glyph);
+    return icon;
+}
+
 HICON LoadMixerIcon(int pixels, bool tray = false, bool muted = false) {
     COLORREF color = g_theme.text;
     if (tray) {
+        if (HICON badge = CreateMixerTrayBadge(pixels, muted)) {
+            return badge;
+        }
         DWORD light = 0, size = sizeof(light);
         RegGetValueW(HKEY_CURRENT_USER,
             L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",

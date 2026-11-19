@@ -1,0 +1,22 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@seamless-sound-manager",
+      "enabled": true,
+      "settings": {
+        "animations": 1,
+        "convertProprietary": 0,
+        "fileAssoc": 1,
+        "missingUseDefault": 1,
+        "nativeSettingsTitleBar": 1,
+        "patchStartupSound": 0,
+        "playSessionSounds": 1,
+        "preferStartupSound": 0,
+        "settingsGlass": 1,
+        "settingsTitleButtons": "native",
+        "settingsTrayIcon": 1
+      }
+    }
+  ]
+}

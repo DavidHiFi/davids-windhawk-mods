@@ -1,0 +1,20 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@seamless-autoclicker",
+      "enabled": true,
+      "settings": {
+        "activatorButton": "gshift",
+        "clickIntervalMs": 33,
+        "clicksPerSecond": 30,
+        "nativeSettingsTitleBar": 0,
+        "settingsGlass": 1,
+        "settingsTitleButtons": "native",
+        "settingsTrayIcon": 1,
+        "toggleHotkey": "",
+        "toggleWithRightClick": 1
+      }
+    }
+  ]
+}

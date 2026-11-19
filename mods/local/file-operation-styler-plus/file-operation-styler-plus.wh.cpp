@@ -1,10 +1,11 @@
 // ==WindhawkMod==
 // @id              file-operation-styler-plus
 // @name            File Operation Styler Plus
-// @description     Portable custom presentation for native Explorer file operations with a skin-safe unified presentation.
-// @version         1.6.5
+// @description     Modern copy, move, delete and recycle progress window for File Explorer
+// @version         1.6.6
 // @author          DavidHiFi, digART
-// @github          https://github.com/digart11
+// @github          https://github.com/DavidHiFi
+// @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @license         GPL-3.0
 // @include         explorer.exe
@@ -20,8 +21,6 @@
 A modern replacement for the standard Windows 11 file operation window.
 
 File Operation Styler Plus gives copy, move, delete, and recycle operations a cleaner modern layout while keeping the normal Windows file operation behavior. The custom-drawn chrome composites through DirectComposition: static frames draw once, progress redraws only when the progress value changes, and fades run on the compositor while the processor sleeps. A Renderer setting keeps the original GDI+ painting available.
-
-Based on File Operation Styler by digART.
 
 ![File Operation Styler](https://raw.githubusercontent.com/digart11/File-Operation-Styler/master/images/file-operation-styler.png)
 
@@ -106,6 +105,10 @@ Settings changes apply to new file-operation windows; operations already in prog
 
 File Operation Styler has been tested on Windows 11 25H2 and 26H2 x64, including build 26300.9818. It relies on private Explorer and Shell presentation interfaces, so compatibility may vary between Windows builds. Unsupported presentations fall back to the native Windows UI.
 
+
+## Credits
+
+Based on [File Operation Styler](https://github.com/digart11/File-Operation-Styler) by digART.
 */
 // ==/WindhawkModReadme==
 
@@ -113,28 +116,28 @@ File Operation Styler has been tested on Windows 11 25H2 and 26H2 x64, including
 /*
 - renderer: gpu
   $name: Renderer
-  $description: GPU draws through the compositor and only repaints when values change. Legacy uses the original GDI+ painting. GPU is suggested.
+  $description: 'GPU draws through the compositor and only repaints when values change. Legacy uses the original GDI+ painting (Suggested: GPU)'
   $options:
   - gpu: GPU (DirectComposition)
   - gdi: Legacy (GDI+)
 
 - showCurrentFileProgressBar: true
   $name: Show current-file progress bar
-  $description: Show progress for the file currently being copied or moved.
+  $description: 'Turn on to show progress for the file currently being copied or moved (Suggested: on)'
 
 - hideSmallControlButtons: false
   $name: Hide small control buttons
-  $description: Hide the small Pause / Resume and Cancel controls in the upper-right corner. The progress circle and bottom Cancel button remain available.
+  $description: 'Turn on to hide the small Pause / Resume and Cancel controls in the upper-right corner. The progress circle and bottom Cancel button remain available (Suggested: off)'
 
 - hideTitleBarPercentage: false
   $name: Hide title-bar percentage
-  $description: Hide the normal progress percentage from the visible window title bar.
+  $description: 'Turn on to hide the normal progress percentage from the visible window title bar (Suggested: off)'
 
 
 - customization:
   - enabled: false
     $name: Enable customization
-    $description: Turn on themes and custom style settings.
+    $description: 'Turn on to use themes and custom style settings (Suggested: off)'
   - preset: blueDark
     $name: Theme
     $description: Change color theme.
@@ -157,13 +160,13 @@ File Operation Styler has been tested on Windows 11 25H2 and 26H2 x64, including
 
   - glassTint: "#000000"
     $name: Blur tint
-    $description: Tint color used by Custom Blur.
+    $description: 'Tint color used by Custom Blur. Color as #RRGGBB (Suggested: #000000)'
     #! $format: colorRgb
     #! $showIf: {preset: glass, glassEffect: blur}
 
   - glassTintStrength: 0
     $name: Glass opacity
-    $description: Higher values make Custom Blur less transparent while preserving the selected tint color.
+    $description: 'Higher values make Custom Blur less transparent while keeping the selected tint color. 0 to 100 (Suggested: 0)'
     #! $showIf: {preset: glass, glassEffect: blur}
 
   - footerStyle: glass
@@ -189,7 +192,7 @@ File Operation Styler has been tested on Windows 11 25H2 and 26H2 x64, including
   - footerColor: ""
     #! $format: colorRgb
     $name: Solid footer custom color
-    $description: Used only when Solid footer color preset is Custom. Enter a hex color such as #1C3346.
+    $description: 'Used only when Solid footer color preset is Custom. Color as #RRGGBB, for example #1C3346'
     #! $showIf: {preset: glass, footerStyle: solid, footerColorPreset: custom}
   - colors:
     - backgroundOverride: ""
@@ -216,8 +219,10 @@ File Operation Styler has been tested on Windows 11 25H2 and 26H2 x64, including
   - style:
     - circleThickness: 7
       $name: Circle thickness
+      $description: 'Width of the progress circle. 1 to 30 (Suggested: 7)'
     - progressThickness: 8
       $name: Progress bar thickness
+      $description: 'Height of the progress bar. 2 to 20 (Suggested: 8)'
     $name: Progress style
   - text:
     - fontPreset: default
@@ -237,16 +242,16 @@ File Operation Styler has been tested on Windows 11 25H2 and 26H2 x64, including
       - consolas: Consolas
     - customFont: ""
       $name: Custom font
-      $description: Optional. Enter an installed font name here to use it instead of the selection above.
+      $description: Optional. An installed font name to use instead of the selection above
     - bodySize: 11
       $name: Details text size
-      $description: Source and destination, items, speed, time, Complete, and footer text.
+      $description: 'Source and destination, items, speed, time, Complete, and footer text. 8 to 24 (Suggested: 11)'
     - summarySize: 23
       $name: Summary text size
-      $description: The large transferred / total line, for example 1.2 GB / 4.0 GB.
+      $description: 'The large transferred / total line, for example 1.2 GB / 4.0 GB. 14 to 48 (Suggested: 23)'
     - percentSize: 26
       $name: Circle percentage size
-      $description: The percentage number inside the progress circle.
+      $description: 'The percentage number inside the progress circle. 14 to 56 (Suggested: 26)'
     $name: Text
   $name: Customization
 */

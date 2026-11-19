@@ -1,0 +1,23 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@peek",
+      "enabled": true,
+      "settings": {
+        "accentColor": "#cba6f7",
+        "alwaysOnTop": 1,
+        "autoPlay": 1,
+        "blurBackground": 1,
+        "blurTint": 40,
+        "closeOnFocusLoss": 0,
+        "darkMode": 1,
+        "onDesktop": 1,
+        "playMedia": 1,
+        "textFont": "FiraCode Nerd Font",
+        "upscaleImages": 1,
+        "usePreviewHandlers": 1
+      }
+    }
+  ]
+}

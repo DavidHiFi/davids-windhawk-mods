@@ -2,7 +2,7 @@
 // @id              helium-acrylic
 // @name            Helium Acrylic
 // @description     Keeps Helium's acrylic surface, Catppuccin colors and system-drawn frame working after browser updates
-// @version         3.4.0
+// @version         3.6.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -48,7 +48,6 @@ This mod keeps both alive so a plain stock install stays riced.
 ## Credits
 Written by DavidHiFi.
 */
-// ==/WindhawkModReadme==
 
 #include <windows.h>
 #include <atomic>
@@ -414,9 +413,15 @@ static DWORD WINAPI ThemeThread(LPVOID) {
 // blurred acrylic. Rather than patch that init path, this layer watches the
 // process's own top-level windows and applies the backdrop plus the dark
 // backdrop tint directly - idempotent, and it covers windows opened later.
+//
+// On Helium 0.22.1.1, DWMSBT isn't taking effect because DWM attributes are
+// overridden by Chromium's frame painting. Instead use SetWindowCompositionAttribute
+// with WCA_ACCENT_POLICY (accent acrylic) which works on this build.
+//
 struct BackdropCtx { DWORD pid; };
 
 typedef LONG (WINAPI *PFN_DwmSetWindowAttribute)(HWND, DWORD, LPCVOID, DWORD);
+typedef BOOL (WINAPI *PFN_SetWindowCompositionAttribute)(HWND, const void*);
 
 static PFN_DwmSetWindowAttribute GetDwmSetWindowAttribute() {
     static PFN_DwmSetWindowAttribute fn = nullptr;
@@ -428,6 +433,29 @@ static PFN_DwmSetWindowAttribute GetDwmSetWindowAttribute() {
     return fn;
 }
 
+static PFN_SetWindowCompositionAttribute GetSetWindowCompositionAttribute() {
+    static PFN_SetWindowCompositionAttribute fn = nullptr;
+    if (!fn) {
+        HMODULE m = GetModuleHandleW(L"user32.dll");
+        if (!m) m = LoadLibraryW(L"user32.dll");
+        if (m) fn = (PFN_SetWindowCompositionAttribute)GetProcAddress(m, "SetWindowCompositionAttribute");
+    }
+    return fn;
+}
+
+struct ACCENTPOLICY {
+    DWORD AccentState;
+    DWORD AccentFlags;
+    DWORD GradientColor;
+    DWORD AnimationId;
+};
+
+struct WINDOWCOMPOSITIONATTRDATA {
+    DWORD Attribute;
+    LPVOID Data;
+    DWORD SizeOfData;
+};
+
 static BOOL CALLBACK BackdropEnumProc(HWND hwnd, LPARAM lp) {
     DWORD pid = 0;
     GetWindowThreadProcessId(hwnd, &pid);
@@ -437,12 +465,20 @@ static BOOL CALLBACK BackdropEnumProc(HWND hwnd, LPARAM lp) {
     if (!GetClassNameW(hwnd, cls, 64) || wcscmp(cls, L"Chrome_WidgetWin_1") != 0) {
         return TRUE;
     }
+    // Use SetWindowCompositionAttribute with accent acrylic (WCA_ACCENT_POLICY)
+    // instead of DWMSBT because DWM attributes are overridden on Helium 0.22.1.1
+    PFN_SetWindowCompositionAttribute wca = GetSetWindowCompositionAttribute();
+    if (wca) {
+        ACCENTPOLICY policy = { 3, 0x20|0x40, 0x00FFFFFF, 0 }; // ACCENT_ENABLE_ACRYLICBLURBEHIND
+        WINDOWCOMPOSITIONATTRDATA data = { 19, &policy, sizeof(policy) }; // WCA_ACCENT_POLICY
+        wca(hwnd, &data);
+    }
+    // Keep DWMWA_USE_IMMERSIVE_DARK_MODE setting via DwmSetWindowAttribute
     PFN_DwmSetWindowAttribute dwm = GetDwmSetWindowAttribute();
-    if (!dwm) return TRUE;
-    int backdrop = 3;  // DWMSBT_TRANSIENTWINDOW - the acrylic-like backdrop
-    dwm(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/, &backdrop, sizeof(backdrop));
-    BOOL dark = g_dark ? TRUE : FALSE;
-    dwm(hwnd, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/, &dark, sizeof(dark));
+    if (dwm) {
+        BOOL dark = g_dark ? TRUE : FALSE;
+        dwm(hwnd, 20 /*DWMWA_USE_IMMERSIVE_DARK_MODE*/, &dark, sizeof(dark));
+    }
     return TRUE;
 }
 
@@ -463,44 +499,61 @@ static DWORD WINAPI BackdropThread(LPVOID) {
 // build does: BrowserFrameViewWin::OnPaint stops painting the titlebar,
 // BrowserDesktopWindowTreeHostWin::GetFrameMode answers FrameMode::SYSTEM_DRAWN,
 // GetDwmFrameInsetsInPixels answers Insets(-1) so Windows keeps the resize
-// borders, and LayoutCaptionButtons hides the Chromium caption buttons so the
-// system-drawn ones stand alone.
+// borders, and the caption-button hide path keeps the Chromium glyph buttons
+// from rendering beside the title-bar mod's dots.
 //
-// All four route through one helper in a generated code cave, standing in for
-// the riced build's helium::ShouldUseNativeFrameMaterials. Simplified per
-// owner decision: the pref gate is always on, only the null guards remain
-// (browser_view_ null and browser_ null must answer false, callers pass
-// garbage there). BrowserView::browser_ sits at +0x588, confirmed by the
-// stock's own inlined GetIsNormalType (mov rax,[rax+0x588];
-// cmp dword [rax+8],0) inside GetFrameMode.
+// v3.3.1 runtime truth (live side-by-side, 2026-11-18): the riced build
+// renders its custom caption dots with NO Chromium glyph buttons and full
+// acrylic. SUNE-true everywhere (v3.0.0) killed the dots (system frame drew
+// glyphs instead); SUNE-false everywhere (v3.1.0) left duplicate glyph
+// buttons beside the dots; the byte-twin site at 0xe8295b (v3.3.0's cave A)
+// sits in a different function whose rsi is an out-param, so its browser-view
+// test read garbage and changed nothing. The real caption decision lives in
+// the function that calls CommandLine::HasSwitch("hide-window-buttons")
+// directly (found by xref to the switch string at RVA 0x10405c40): its
+// switch branch calls the same virtual with the mode argument zeroed, and a
+// second sizing function branches on the same switch. Running the stock with
+// that switch was proven live today to match the riced caption exactly
+// (dots, no glyphs). So the caption hide is now two in-place branch flips
+// that make those switch branches unconditional - the stock's own switch
+// path does the work. Frame mode and insets caves stay routed but inert
+// (SUNE hardwired false), and the OnPaint site stays unpatched.
 //
 // Verified 2026-11-08 against the stock 0.21.1.1 chrome.dll: every site's
 // original bytes are checked before anything is written, the OnPaint skip
 // target was pinned by disassembly, and every resume address was read back
 // from the binary. All displaced bytes are restored in Wh_ModUninit.
-static const DWORD kRvaLCBJne = 0x1555846;     // LayoutCaptionButtons jne
-static const DWORD kRvaGFMHead = 0x3751450;    // GetFrameMode head
-static const DWORD kRvaGDFIWrite = 0x3751429;  // GetDwmFrameInsetsInPixels
-static const DWORD kRvaOnPaintPT = 0x1abbb8c;  // OnPaint PaintTitlebar head
+static const DWORD kRvaLCBSwitch = 0x18031e6;  // caption fn HasSwitch jne
+static const DWORD kRvaLCBSizing = 0xa0e27aa;  // sizing fn HasSwitch jne
+static const DWORD kRvaGFMHead = 0x374a180;    // GetFrameMode head
+static const DWORD kRvaGDFIWrite = 0x374a159;  // GetDwmFrameInsetsInPixels
+static const DWORD kRvaOnPaintPT = 0x29f8158;  // OnPaint PaintTitlebar head
 
-static const BYTE kOrigLCB[6] = {0x0F, 0x85, 0xCC, 0x00, 0x00, 0x00};
+static const BYTE kOrigLCBSwitch[6] = {0x0F, 0x85, 0xFE, 0x00, 0x00, 0x00};
+static const BYTE kOrigLCBSizing[2] = {0x75, 0x25};
 static const BYTE kOrigGFM[12] = {0x56, 0x48, 0x83, 0xEC, 0x20, 0x48, 0x8B,
                                   0x81, 0x30, 0x01, 0x00, 0x00};
 static const BYTE kOrigGDFI[5] = {0x0F, 0x57, 0xC0, 0x0F, 0x11};
 static const BYTE kOrigOnPaint[7] = {0x48, 0x8B, 0x87, 0x28, 0x03, 0x00, 0x00};
 
 // Stock addresses the caves branch to (each read back from the binary).
-static const DWORD kRvaLCBHide = 0x1555918;     // SetVisible(false) path
-static const DWORD kRvaLCBNormal = 0x155584c;   // stock flow, reloads rcx
-static const DWORD kRvaGFMNull = 0x3751525;     // xor eax,eax; jmp epilogue
-static const DWORD kRvaGFMResume = 0x3751465;   // mov rsi,rcx (reads [rax+..])
-static const DWORD kRvaGFMEpilogue = 0x375151f; // add rsp,0x20; pop rsi; ret
-static const DWORD kRvaGDFIResume = 0x375142f;  // mov al,1
-static const DWORD kRvaOnPaintResume = 0x1abbb93;
+// Cave branch targets re-derived for stock Helium 0.21.3.1 chrome.dll.
+// Each is the 0.21.1.1 address minus the per-function build delta, verified
+// by disassembly: GFM/GDFI shift -0x72D0, OnPaint shifts -0xE13D734. The
+// internal offsets within every function are preserved.
+static const DWORD kRvaGFMNull = 0x374a255;     // xor eax,eax; jmp epilogue
+static const DWORD kRvaGFMResume = 0x374a195;   // mov rsi,rcx (reads [rax+..])
+static const DWORD kRvaGFMEpilogue = 0x374a24f; // add rsp,0x20; pop rsi; ret
+static const DWORD kRvaGDFIResume = 0x374a15f;  // mov al,1
+static const DWORD kRvaOnPaintResume = 0x29f815f;
 // Pinned skip target: first instruction after the inlined PaintTitlebar body.
 // The riced build runs nothing between its skipped PaintTitlebar call and
 // this exit trace store, so the cave lands exactly there.
-static const DWORD kRvaOnPaintSkip = 0x1abc204;
+// GATED for 0.21.3.1: the derived 0x29f87d0 is a backward short jmp
+// (EB 8F -> 0x29f8761), not the exit trace store, so the skip branch is
+// never installed. SUNE is hardwired false, so cave D's replay is a no-op
+// anyway; the OnPaint site is left unpatched for this build.
+static const DWORD kRvaOnPaintSkip = 0x29f87d0;  // unverified - do not route
 
 struct FrameSite {
     BYTE* target;
@@ -536,6 +589,26 @@ static void EmitBytes(BYTE*& p, const BYTE* bytes, size_t n) {
     p += n;
 }
 
+// WM_THEMECHANGED nudge: windows created before this mod finished patching
+// keep whatever caption layout they computed at creation. The message routes
+// into Chromium's frame re-layout, so the caption function runs again - now
+// under the patch - and the glyph buttons hide on already-open windows. It
+// also re-runs the omnibox's RefreshBackground for the held-back gradient
+// layer. Collect every main-window-class HWND of this process and post to
+// each.
+struct NudgeCtx { DWORD pid; HWND hwnds[8]; int n; };
+static BOOL CALLBACK NudgeEnum(HWND h, LPARAM lp) {
+    NudgeCtx* c = (NudgeCtx*)lp;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(h, &pid);
+    if (pid != c->pid) return TRUE;
+    WCHAR cls[32];
+    if (!GetClassNameW(h, cls, 32) || wcscmp(cls, L"Chrome_WidgetWin_1") != 0)
+        return TRUE;
+    if (c->n < 8) c->hwnds[c->n++] = h;
+    return TRUE;
+}
+
 static bool ApplyStructuralPatches() {
     if (g_frameApplied) return true;
     HMODULE chrome = GetModuleHandleW(L"chrome.dll");
@@ -545,14 +618,16 @@ static bool ApplyStructuralPatches() {
     }
 
     // One mismatch at any site means a different build: nothing is written.
+    // The OnPaint site is a canary only: verified, never written.
     struct SiteSpec { DWORD rva; const BYTE* orig; int len; };
-    const SiteSpec specs[4] = {
-        {kRvaLCBJne, kOrigLCB, sizeof(kOrigLCB)},
+    const SiteSpec specs[5] = {
+        {kRvaLCBSwitch, kOrigLCBSwitch, sizeof(kOrigLCBSwitch)},
+        {kRvaLCBSizing, kOrigLCBSizing, sizeof(kOrigLCBSizing)},
         {kRvaGFMHead, kOrigGFM, sizeof(kOrigGFM)},
         {kRvaGDFIWrite, kOrigGDFI, sizeof(kOrigGDFI)},
         {kRvaOnPaintPT, kOrigOnPaint, sizeof(kOrigOnPaint)},
     };
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         BYTE* at = (BYTE*)chrome + specs[i].rva;
         if (memcmp(at, specs[i].orig, specs[i].len) != 0) {
             Wh_Log(L"native frame: site %d (RVA 0x%zX) has unexpected bytes"
@@ -585,53 +660,17 @@ static bool ApplyStructuralPatches() {
     }
     g_cavePage = mem;
 
-    // The helper: ShouldUseNativeFrameMaterials(rcx = BrowserView*).
-    // Answers true unless rcx is null or [rcx+0x588] (browser_) is null.
+    // SUNE helper: always false so Chromium caption buttons stay visible and
+    // system-drawn frame materials are not installed. This matches the riced
+    // build's runtime behavior while keeping the acrylic/transparency patches active.
     BYTE* p = mem;
     BYTE* sune = mem;
-    const BYTE suneImpl[] = {
-        0x48, 0x85, 0xC9,                          // test rcx,rcx
-        0x74, 0x12,                                // jz false
-        0x48, 0x8B, 0x81, 0x88, 0x05, 0x00, 0x00,  // mov rax,[rcx+0x588]
-        0x48, 0x85, 0xC0,                          // test rax,rax
-        0x74, 0x06,                                // jz false
-        0xB8, 0x01, 0x00, 0x00, 0x00,              // mov eax,1
-        0xC3,                                      // ret
-        0x31, 0xC0,                                // false: xor eax,eax
-        0xC3,                                      // ret
-    };
+    const BYTE suneImpl[] = { 0x31, 0xC0, 0xC3 }; // xor eax,eax; ret
     EmitBytes(p, suneImpl, sizeof(suneImpl));
 
-    // Cave A (offset 32): LayoutCaptionButtons' hide decision. The stock
-    // hides the buttons when al (CommandLine::HasSwitch) is set; the riced
-    // build adds native-frame materials to that. bv = [rsi+0x338] - 0x1f0,
-    // the stock's own inlined GetBrowserView (also at 0x155585e).
-    p = mem + 32;
-    BYTE* caveA = p;
-    const BYTE aField[] = {0x48, 0x8B, 0x86, 0x38, 0x03, 0x00, 0x00};
-    const BYTE aBv[] = {0x48, 0x8D, 0x88, 0x10, 0xFE, 0xFF, 0xFF};
-    const BYTE aTest[] = {0x48, 0x85, 0xC0};
-    const BYTE aCmove[] = {0x48, 0x0F, 0x44, 0xC8};
-    const BYTE aTestAl[] = {0x84, 0xC0};
-    const BYTE aPush[] = {0x50};
-    const BYTE aPop[] = {0x58};
-    const BYTE aJneHide1[] = {0x75, 0x0A};
-    const BYTE aJneHide2[] = {0x75, 0x05};
-    EmitBytes(p, aPush, 1);       // push rax: keep al (the switch result)
-    EmitBytes(p, aField, 7);      // mov rax,[rsi+0x338]
-    EmitBytes(p, aBv, 7);         // lea rcx,[rax-0x1f0]
-    EmitBytes(p, aTest, 3);
-    EmitBytes(p, aCmove, 4);      // cmove rcx,rax
-    EmitCallRel32(p, sune);
-    EmitBytes(p, aTestAl, 2);     // test al,al
-    EmitBytes(p, aJneHide1, 2);   // jne .hide
-    EmitBytes(p, aPop, 1);        // pop rax
-    EmitBytes(p, aTestAl, 2);     // test al,al (the original switch)
-    EmitBytes(p, aJneHide2, 2);   // jne .hide
-    EmitJmpRel32(p, (BYTE*)chrome + kRvaLCBNormal);
-    // .hide:
-    EmitBytes(p, aPop, 1);
-    EmitJmpRel32(p, (BYTE*)chrome + kRvaLCBHide);
+    // v3.3.1: the old cave A (and the byte-twin site 0xe8295b it detoured)
+    // is gone. The caption hide is two in-place branch flips written below;
+    // see Part 4's header for how the real switch-gated function was found.
 
     // Cave C (offset 96): GetFrameMode. Native frame answers 0
     // (FrameMode::SYSTEM_DRAWN); otherwise the stock flow continues with
@@ -686,6 +725,8 @@ static bool ApplyStructuralPatches() {
     // jumps past the whole body to the pinned skip target; otherwise the
     // displaced instruction is replayed. bv via the stock's own inlined
     // GetBrowserView ([rdi+0x338] - 0x1f0, cf. 0x1abc16b).
+    // Gated for 0.21.3.1: the skip target is unverified, so the body is
+    // emitted but never routed to any site.
     p = mem + 224;
     BYTE* caveD = p;
     const BYTE dField[] = {0x48, 0x8B, 0x87, 0x38, 0x03, 0x00, 0x00};
@@ -702,15 +743,51 @@ static bool ApplyStructuralPatches() {
     EmitBytes(p, dReplay, 7);     // mov rax,[rdi+0x328] (replay)
     EmitJmpRel32(p, (BYTE*)chrome + kRvaOnPaintResume);
 
-    // Route each site into its cave, saving the displaced bytes.
+    // Caption hide: two direct in-place branch flips (slots 0 and 1).
+    // Site 1 (0x18031e6): the caption function's jne over its switch path
+    // becomes an unconditional jmp, so every window runs the stock
+    // --hide-window-buttons path (virtual called with the mode argument 0).
+    // Site 2 (0xa0e27aa): the sizing function's switch branch likewise
+    // always taken. Both replicate the live-proven switch behavior.
+    static const BYTE lcbSwitchNew[6] = {0xE9, 0xFF, 0x00, 0x00, 0x00, 0x90};
+    static const BYTE lcbSizingNew[2] = {0xEB, 0x25};
+    struct RawPatch { DWORD rva; int slot; int len; const BYTE* neu; };
+    const RawPatch raws[2] = {
+        {kRvaLCBSwitch, 0, 6, lcbSwitchNew},
+        {kRvaLCBSizing, 1, 2, lcbSizingNew},
+    };
+    for (int i = 0; i < 2; i++) {
+        BYTE* at = (BYTE*)chrome + raws[i].rva;
+        DWORD oldProtect, tmp;
+        if (!VirtualProtect(at, raws[i].len, PAGE_EXECUTE_READWRITE,
+                            &oldProtect)) {
+            Wh_Log(L"native frame: VirtualProtect failed at raw %d", i);
+            return false;
+        }
+        memcpy(g_frameSites[raws[i].slot].original, at, raws[i].len);
+        memcpy(at, raws[i].neu, raws[i].len);
+        VirtualProtect(at, raws[i].len, oldProtect, &tmp);
+        if (memcmp(at, raws[i].neu, raws[i].len) != 0) {
+            memcpy(at, g_frameSites[raws[i].slot].original, raws[i].len);
+            Wh_Log(L"native frame: raw %d read-back mismatch - restored", i);
+            return false;
+        }
+        g_frameSites[raws[i].slot].target = at;
+        g_frameSites[raws[i].slot].size = raws[i].len;
+        g_frameSites[raws[i].slot].applied = true;
+        Wh_Log(L"Helium acrylic: caption switch patch %d live at RVA 0x%zX",
+               i, (size_t)raws[i].rva);
+    }
+
+    // Route the frame-mode sites into their caves, saving the displaced
+    // bytes (slots 2 and 3). OnPaint (cave D) is gated for 0.21.3.1: skip
+    // target unverified.
     struct Write { DWORD rva; int len; BYTE* cave; };
-    const Write writes[4] = {
-        {kRvaLCBJne, 6, caveA},
+    const Write writes[2] = {
         {kRvaGFMHead, 12, caveC},
         {kRvaGDFIWrite, 5, caveB},
-        {kRvaOnPaintPT, 7, caveD},
     };
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 2; i++) {
         BYTE* at = (BYTE*)chrome + writes[i].rva;
         INT64 rel = (INT64)writes[i].cave - (INT64)(at + 5);
         if (rel > 0x7FFFFFFF || rel < -0x7FFFFFFF) {
@@ -723,7 +800,7 @@ static bool ApplyStructuralPatches() {
             Wh_Log(L"native frame: VirtualProtect failed");
             return false;
         }
-        memcpy(g_frameSites[i].original, at, writes[i].len);
+        memcpy(g_frameSites[i + 2].original, at, writes[i].len);
         BYTE jmp[5] = {0xE9, 0, 0, 0, 0};
         *(DWORD*)(jmp + 1) = (DWORD)rel;
         memcpy(at, jmp, 5);
@@ -733,15 +810,23 @@ static bool ApplyStructuralPatches() {
             Wh_Log(L"native frame: site %d read-back mismatch", i);
             return false;
         }
-        g_frameSites[i].target = at;
-        g_frameSites[i].size = writes[i].len;
-        g_frameSites[i].applied = true;
+        g_frameSites[i + 2].target = at;
+        g_frameSites[i + 2].size = writes[i].len;
+        g_frameSites[i + 2].applied = true;
         Wh_Log(L"Helium acrylic: native-frame cave %d live at RVA 0x%zX",
                i, (size_t)writes[i].rva);
     }
     g_frameApplied = true;
-    Wh_Log(L"Helium acrylic: native frame live (system-drawn, Insets(-1),"
-           L" titlebar skipped, caption buttons hidden)");
+    Wh_Log(L"Helium acrylic: native frame live (caption switch always on,"
+           L" frame-mode caves routed but inert)");
+    // Re-layout windows that existed before the patches landed.
+    NudgeCtx nc;
+    nc.pid = GetCurrentProcessId();
+    nc.n = 0;
+    EnumWindows(NudgeEnum, (LPARAM)&nc);
+    for (int i = 0; i < nc.n; i++)
+        PostMessageW(nc.hwnds[i], WM_THEMECHANGED, 0, 0);
+    Wh_Log(L"Helium acrylic: theme nudge posted to %d windows", nc.n);
     return true;
 }
 
@@ -766,45 +851,49 @@ static bool ApplyStructuralPatches() {
 //   color, the riced tab pill's gradient stroke.
 // - Omnibox gradient: the resting omnibox (not caret-visible, no input in
 //   progress, not high contrast, not popup mode) is the only state that
-//   reaches RefreshBackground's inline solid-painter build (0x14BD190); the
-//   cave there installs the riced gradient painter instead. A caret-visible
-//   omnibox gets the stock-shaped painter with a solid lavender stroke
-//   (kColorFocusableBorderFocused, fetched live). Every other state (input
-//   in progress, high contrast) keeps the stock's own factory call at
-//   0x14BD37E untouched.
+//   reaches RefreshBackground's inline solid-painter build (0x1707AAA on
+//   0.21.3.1); the cave there installs the riced gradient painter instead. A
+//   caret-visible omnibox gets the stock-shaped painter with a solid lavender
+//   stroke (kColorFocusableBorderFocused, fetched live). Every other state
+//   (input in progress, high contrast) keeps the stock's own factory call
+//   later in the function untouched.
 
-static const DWORD kRvaFsGuard = 0x3751560;     // ShouldWindowContentsBeTransparent
-static const DWORD kRvaNtHide = 0x374f78f;      // sidebar new-tab store
-static const DWORD kRvaPillDraw = 0x9a81910;    // vertical-tab pill fill DrawPath
-                                                // (function 0x9A817B0, verified by
-                                                // the pill subagent: rcx=canvas,
-                                                // rdx=path, r8=fill flags)
-static const BYTE kOrigPill[5] = {0xE8, 0xFB, 0x5E, 0xCE, 0xF9};
-static const DWORD kRvaOmniB = 0x14bd190;       // RefreshBackground inline painter
+static const DWORD kRvaFsGuard = 0x374a290;     // ShouldWindowContentsBeTransparent
+static const DWORD kRvaNtHide = 0x37479f3;      // sidebar new-tab store
+static const DWORD kRvaPillDraw = 0xaac9d2b;    // vertical-tab pill stroke DrawPath
+                                                // (stock PaintTabBackgroundFill
+                                                // 0xAAC9970: rcx=canvas, rdx=path,
+                                                // r8=stroke flags; fill flags stay
+                                                // at [rsp+0xA0], xmm6=scale)
+static const BYTE kOrigPill[5] = {0xE8, 0x70, 0x82, 0xC9, 0xF8};
+static const DWORD kRvaPillResume = 0xaac9d30;  // instruction after the stroke DrawPath
+static const DWORD kRvaOmniB = 0x1707aaa;       // RefreshBackground inline painter
 static const BYTE kOrigOmniB[5] = {0xB9, 0x38, 0x00, 0x00, 0x00};
-static const DWORD kRvaGetColor = 0x44c5e80;    // ui::ColorProvider::GetColor
-static const DWORD kRvaProvider = 0x4f728e0;    // LocationBarView provider getter
+static const DWORD kRvaOmniConv = 0x1707af0;    // the wrapper alloc after the site
+static const DWORD kRvaGetColor = 0x4311790;    // ui::ColorProvider::GetColor
+static const DWORD kRvaProvider = 0x4909f60;    // view color-provider getter
 
 static const BYTE kOrigFsGuard[13] = {
     0x48, 0x83, 0xB9, 0xC8, 0x02, 0x00, 0x00, 0x00, 0x74, 0x03, 0x31, 0xC0, 0xC3};
 static const BYTE kOrigNtHide[7] = {0x4C, 0x89, 0xB6, 0x50, 0x03, 0x00, 0x00};
 static const BYTE kOldAcrylic[3] = {0xB0, 0x01, 0xC3};  // the v3.1.0 patch
 
-static const DWORD kRvaNtResume = 0x374f796;
+static const DWORD kRvaNtResume = 0x37479fa;
 
-// Stock routine pins, each verified in the stock image 2026-11-09.
-static const DWORD kRvaSave = 0x37674b0;        // gfx::Canvas::Save
-static const DWORD kRvaRestore = 0x3767500;     // gfx::Canvas::Restore
-static const DWORD kRvaUndoScale = 0x3767470;   // Canvas::UndoDeviceScaleFactor
-static const DWORD kRvaDrawPath = 0x3767810;    // gfx::Canvas::DrawPath
-static const DWORD kRvaClipPath = 0x3767590;    // gfx::Canvas::ClipPath
-static const DWORD kRvaSkPathRRect = 0x4b63000; // SkPath::RRect (real entry)
-static const DWORD kRvaRRToSkRRect = 0x3128970; // gfx::RoundedRectFToSkRRect
-static const DWORD kRvaFromColor = 0x5b20060;   // SkRGBA4f::FromColor
-static const DWORD kRvaFlagsCtor = 0x5d95860;   // cc::PaintFlags ctor
-static const DWORD kRvaFlagsDtor = 0x452bde0;   // cc::PaintFlags dtor
-static const DWORD kRvaSkPathDtor = 0x95e700;   // SkPath::~SkPath
-static const DWORD kRvaMlg = 0xa604f0;          // SkGradientShader::MakeLinear
+// Stock routine pins, re-verified on the 0.21.3.1 image 2026-11-18 (disasm
+// cross-checked against the 0.21.1.1 bodies; see the note in ApplyV320).
+static const DWORD kRvaSave = 0x3761c40;        // gfx::Canvas::Save
+static const DWORD kRvaRestore = 0x3761c90;     // gfx::Canvas::Restore
+static const DWORD kRvaUndoScale = 0x3761c00;   // Canvas::UndoDeviceScaleFactor
+static const DWORD kRvaDrawPath = 0x3761fa0;    // gfx::Canvas::DrawPath
+static const DWORD kRvaClipPath = 0x3761d20;    // gfx::Canvas::ClipPath
+static const DWORD kRvaSkPathRRect = 0x48f46c0; // SkPath::RRect (real entry)
+static const DWORD kRvaRRToSkRRect = 0x3105540; // gfx::RoundedRectFToSkRRect
+static const DWORD kRvaFromColor = 0x5a08e80;   // SkRGBA4f::FromColor
+static const DWORD kRvaFlagsCtor = 0x5c7fd60;   // cc::PaintFlags ctor
+static const DWORD kRvaFlagsDtor = 0x4599610;   // cc::PaintFlags dtor
+static const DWORD kRvaSkPathDtor = 0xac1880;   // SkPath::~SkPath
+static const DWORD kRvaMlg = 0x96fea0;          // SkGradientShader::MakeLinear
 
 static std::atomic<bool> g_gradApplied{false};
 static BYTE* g_gradPage = nullptr;
@@ -844,7 +933,9 @@ typedef void (*FlagsCtorFn)(void*);
 typedef void (*FlagsDtorFn)(void*);
 typedef void (*FromColorFn)(void*, unsigned);
 typedef void (*RRToSkRRectFn)(void*, const void*, const void*);
-typedef void (*SkPathRRectFn)(void*, const void*, unsigned);
+// 0.21.3.1 moved the corner-direction into the 4th argument (the 0.21.1.1
+// body computed it from a bool in r8b: 0 -> 6). Stock callers pass 6.
+typedef void (*SkPathRRectFn)(void*, const void*, unsigned, unsigned);
 typedef void (*SkPathDtorFn)(void*);
 typedef void (*MlgCallFn)(void*, void*, void*, const void*);
 typedef void (*ClipPathFn)(void*, const void*, unsigned);
@@ -853,22 +944,29 @@ static void MlgCall(void* sret, void* pts, void* colors) {
     ((MlgCallFn)g_mlgThunk)(sret, pts, colors, nullptr);
 }
 
-// PillStrokeC: draws the riced pill's gradient edge after the stock's own
-// fill DrawPath has run. Clips to the same path, so the 2px stroke shows as
-// 1px inside the pill; the stroke alpha is the fill color's alpha, so hover
-// fades survive. Mirrors vertical_tab_style_views.cc PaintTabBackgroundFill.
-static void PillStrokeC(void* canvas, void* path, void* fillFlags) {
+// PillStrokeC: replaces the stock solid stroke on the vertical-tab pill with
+// the riced gradient edge. Runs at the stock stroke DrawPath site inside
+// PaintTabBackgroundFill, where the canvas is already clipped to the pill and
+// xmm6 holds the UndoDeviceScaleFactor return. Mirrors vertical_tab_style_
+// views.cc PaintTabBackgroundFill: alpha = stroke_a x bg_a / 255, width
+// 2*scale (the active clip shows it as 1px inside), blue->mauve gradient
+// across the pill's own bounds.
+static void PillStrokeC(void* canvas, void* path, void* fillFlags,
+                        void* strokeFlags, float scale) {
     void* ref = *(void**)path;
     const float* bounds = (const float*)((const BYTE*)ref + 0x60);
-    const unsigned bgA =
-        (unsigned)(*(const float*)((const BYTE*)fillFlags + 0x0C) * 255.0f);
+    const float fa = *(const float*)((const BYTE*)fillFlags + 0x0C);
+    const float sa = *(const float*)((const BYTE*)strokeFlags + 0x0C);
+    float a = fa * sa;
+    if (a > 1.0f) a = 1.0f;
+    const unsigned bgA = (unsigned)(a * 255.0f + 0.5f);
     BYTE flags2[0x50];
     ((FlagsCtorFn)GradRva(kRvaFlagsCtor))(flags2);
     unsigned bf = *(unsigned*)(flags2 + 0x18);
     bf = (bf & 0xFFFFE03Fu) | (3u << 8) | 1u;  // blend kSrcOver, antialias
     bf = (bf & 0xFFFFFF3Fu) | 0x40u;           // style kStroke
     *(unsigned*)(flags2 + 0x18) = bf;
-    *(float*)(flags2 + 0x10) = 2.0f;           // clipped to 1px inside
+    *(float*)(flags2 + 0x10) = 2.0f * scale;   // clipped to 1px inside
     alignas(16) BYTE c0[16], c1[16], colors[32];
     ((FromColorFn)GradRva(kRvaFromColor))(c0, (bgA << 24) | 0x0089B4FAu);
     ((FromColorFn)GradRva(kRvaFromColor))(c1, (bgA << 24) | 0x00CBA6F7u);
@@ -920,7 +1018,7 @@ static void GradPainterPaint(void* self, void* canvas, void* sizePtr) {
     ((RRToSkRRectFn)GradRva(kRvaRRToSkRRect))(rr1, rect, corners);
     BYTE path1[16];
     memset(path1, 0, sizeof(path1));
-    ((SkPathRRectFn)GradRva(kRvaSkPathRRect))(path1, rr1, 0);
+    ((SkPathRRectFn)GradRva(kRvaSkPathRRect))(path1, rr1, 0, 6);
     ((DrawPathFn)GradRva(kRvaDrawPath))(canvas, path1, flags1);
     ((SkPathDtorFn)GradRva(kRvaSkPathDtor))(path1);
     ((FlagsDtorFn)GradRva(kRvaFlagsDtor))(flags1);
@@ -968,7 +1066,7 @@ static void GradPainterPaint(void* self, void* canvas, void* sizePtr) {
     ((RRToSkRRectFn)GradRva(kRvaRRToSkRRect))(rr2, rect, corners);
     BYTE path2[16];
     memset(path2, 0, sizeof(path2));
-    ((SkPathRRectFn)GradRva(kRvaSkPathRRect))(path2, rr2, 0);
+    ((SkPathRRectFn)GradRva(kRvaSkPathRRect))(path2, rr2, 0, 6);
     ((DrawPathFn)GradRva(kRvaDrawPath))(canvas, path2, flags2);
     ((SkPathDtorFn)GradRva(kRvaSkPathDtor))(path2);
     ((FlagsDtorFn)GradRva(kRvaFlagsDtor))(flags2);
@@ -989,27 +1087,35 @@ static void ModTrace(const char* s, size_t n) {
 }
 #define MTRACE(s) ModTrace(s "\r\n", sizeof(s "\r\n") - 1)
 
-// WM_THEMECHANGED nudge: the omnibox's RefreshBackground only runs on state
-// changes and the startup pass happened before this mod initialized. The
-// message routes into LocationBarView::OnThemeChanged -> RefreshBackground,
-// where the armed painter swap finally fires. Collect every main-window-class
-// HWND of this process and post to each; the omnibox's own pass arms on its
-// border-color fetch and consumes the arm in the same call.
-struct NudgeCtx { DWORD pid; HWND hwnds[8]; int n; };
-static BOOL CALLBACK NudgeEnum(HWND h, LPARAM lp) {
-    NudgeCtx* c = (NudgeCtx*)lp;
-    DWORD pid = 0;
-    GetWindowThreadProcessId(h, &pid);
-    if (pid != c->pid) return TRUE;
-    WCHAR cls[32];
-    if (!GetClassNameW(h, cls, 32) || wcscmp(cls, L"Chrome_WidgetWin_1") != 0)
-        return TRUE;
-    if (c->n < 8) c->hwnds[c->n++] = h;
-    return TRUE;
-}
+// omnibox's own pass arms on its border-color fetch and consumes the arm in
+// the same call. The helper itself moved above ApplyStructuralPatches so the
+// structural layer can nudge newly patched windows too.
 
 static bool ApplyV320() {
     MTRACE("v320: enter");
+    // v3.5.0 (2026-11-18): the full re-pin onto 0.21.3.1 is done and every
+    // anchor was resolved by disassembly cross-checked against the 0.21.1.1
+    // body, not by fuzzy size matching alone:
+    //   Sites: FsGuard 0x374A290 (unique pattern, bytes identical),
+    //   NtHide 0x37479F3 (store bytes identical, two methods agree),
+    //   PillDraw 0xAAC9D2B (the only DrawPath call in the matched
+    //   PaintTabBackgroundFill 0xAAC9970, context matches instruction for
+    //   instruction), OmniB 0x1707AAA (found via the painter's unique
+    //   mov dword [rax+8],0xFFFF0000 wrapper construction; convergence
+    //   wrapper alloc sits at site+0x46, same distance as 0.21.1.1).
+    //   Routines: GetColor 0x4311790 (pattern), Provider 0x4909F60 (the pill
+    //   function calls it exactly where 0.21.1.1 called 0x4F728E0; body is
+    //   the same getter, devirtualized to 97 bytes), Canvas cluster
+    //   Save/Restore/UndoScale/ClipPath/DrawPath 0x3761C40/0x3761C90/
+    //   0x3761C00/0x3761D20/0x3761FA0, FromColor 0x5A08E80 (called by the
+    //   new pill function), Mlg 0x96FEA0 (body sim 0.89), SkPathDtor
+    //   0xAC1880 (pdata 1.000), RoundedRectFToSkRRect 0x3105540 (pdata 0.96,
+    //   body is the float copy), SkPath::RRect 0x48F46C0 (prologue, type
+    //   switch, dispatch and tail all match; signature now takes the corner
+    //   direction in r9d - stock callers pass 6, so the mod does too),
+    //   PaintFlags ctor 0x5C7FD60 and dtor 0x4599610 (both taken from the
+    //   new pill function's own call sites; the dtor is also the top
+    //   mnemonic match for the 0.21.1.1 dtor).
     if (g_gradApplied) return true;
     HMODULE chrome = GetModuleHandleW(L"chrome.dll");
     if (!chrome) {
@@ -1074,19 +1180,10 @@ static bool ApplyV320() {
     BYTE* p = mem;
 
     // 0x00: a fresh copy of the native-frame helper body (rcx only, no
-    // dependency on the other layer's page).
+    // dependency on the other layer's page). v3.1.0: always false, matching
+    // the riced build's runtime behavior.
     BYTE* sune = p;
-    const BYTE suneImpl[] = {
-        0x48, 0x85, 0xC9,                          // test rcx,rcx
-        0x74, 0x12,                                // jz false
-        0x48, 0x8B, 0x81, 0x88, 0x05, 0x00, 0x00,  // mov rax,[rcx+0x588]
-        0x48, 0x85, 0xC0,                          // test rax,rax
-        0x74, 0x06,                                // jz false
-        0xB8, 0x01, 0x00, 0x00, 0x00,              // mov eax,1
-        0xC3,                                      // ret
-        0x31, 0xC0,                                // false: xor eax,eax
-        0xC3,                                      // ret
-    };
+    const BYTE suneImpl[] = { 0x31, 0xC0, 0xC3 }; // xor eax,eax; ret
     EmitBytes(p, suneImpl, sizeof(suneImpl));
 
     // 0x20: the fullscreen guard. The riced build's own guard (found at
@@ -1130,44 +1227,57 @@ static bool ApplyV320() {
                            0x31, 0xD2,                   // xor edx,edx (false)
                            0xFF, 0x90, 0x90, 0x00, 0x00, 0x00}; // call [rax+0x90]
                            // rax was loaded from [r14] above: the button's
-                           // vptr; slot 18 = View::SetVisible (vtable
-                           // 0xFCA62A8, verified by subagent a3). The old
-                           // FF 50 90 encoded [rax-0x70] - signed disp8 trap.
+                           // live vptr; slot 18 = View::SetVisible (read at
+                           // runtime, no pinned vtable address needed). The
+                           // old FF 50 90 encoded [rax-0x70] - signed disp8
+                           // trap.
     EmitBytes(p, ntHide, sizeof(ntHide));
     EmitJmpRel32(p, (BYTE*)chrome + kRvaNtResume);
 
-    // 0x100: the tab-pill stub. Runs the stock's fill DrawPath with the
-    // original arguments, then PillStrokeC adds the riced gradient edge
-    // clipped to the same path, and returns.
+    // 0x100: the tab-pill stub on the stock stroke DrawPath site inside
+    // PaintTabBackgroundFill (0xAAC9970 on 0.21.3.1). This is a mid-function
+    // patch, so the stub ends with a jmp back to 0xAAC9D30, not a ret. rsp
+    // is 16-byte aligned at the site (7 pushes + sub 0x2D0 + call), so sub
+    // 0x50 keeps every call inside the stub aligned too. xmm6 still holds
+    // the scale UndoDeviceScaleFactor returned at 0xAAC9B82; it rides in
+    // the arg5 slot.
     p = mem + 0x100;
     BYTE* pill = p;
     emitMark(2);
-    const BYTE pillFrame[] = {0x48, 0x83, 0xEC, 0x38,              // sub rsp,0x38
-                              0x48, 0x89, 0x4C, 0x24, 0x20,        // mov [rsp+0x20],rcx
-                              0x48, 0x89, 0x54, 0x24, 0x28,        // mov [rsp+0x28],rdx
-                              0x4C, 0x89, 0x44, 0x24, 0x30};       // mov [rsp+0x30],r8
-    EmitBytes(p, pillFrame, 19);
-    const BYTE pillArg[] = {0x48, 0x8B, 0x4C, 0x24, 0x20,  // mov rcx,[rsp+0x20]
-                            0x48, 0x8B, 0x54, 0x24, 0x28,  // mov rdx,[rsp+0x28]
-                            0x4C, 0x8B, 0x44, 0x24, 0x30}; // mov r8,[rsp+0x30]
-    EmitBytes(p, pillArg, 15);
-    EmitCallAbs64(p, (void*)GradRva(kRvaDrawPath));        // stock fill
-    EmitBytes(p, pillArg, 15);
+    const BYTE pillFrame[] = {0x48, 0x83, 0xEC, 0x50,              // sub rsp,0x50
+                              0x48, 0x89, 0x4C, 0x24, 0x28,        // mov [rsp+0x28],rcx
+                              0x48, 0x89, 0x54, 0x24, 0x30,        // mov [rsp+0x30],rdx
+                              0x4C, 0x89, 0x44, 0x24, 0x38,        // mov [rsp+0x38],r8
+                              0x66, 0x48, 0x0F, 0x7E, 0xF0,        // movq rax,xmm6
+                              0x48, 0x89, 0x44, 0x24, 0x20};       // mov [rsp+0x20],rax
+    EmitBytes(p, pillFrame, sizeof(pillFrame));
+    // PillStrokeC(canvas, path, fillFlags, strokeFlags, scale). The caller's
+    // fill flags ([rsp+0xA0] before the patch, still alive here) sit at
+    // [rsp+0xF0] inside this frame.
+    const BYTE pillArg[] = {0x48, 0x8B, 0x4C, 0x24, 0x28,          // mov rcx,[rsp+0x28]
+                            0x48, 0x8B, 0x54, 0x24, 0x30,          // mov rdx,[rsp+0x30]
+                            0x4C, 0x8D, 0x84, 0x24, 0xF0, 0x00,
+                            0x00, 0x00,                            // lea r8,[rsp+0xF0]
+                            0x4C, 0x8B, 0x4C, 0x24, 0x38};         // mov r9,[rsp+0x38]
+    EmitBytes(p, pillArg, sizeof(pillArg));
     EmitCallAbs64(p, (void*)&PillStrokeC);                 // gradient edge
-    const BYTE pillEpi[] = {0x48, 0x83, 0xC4, 0x38, 0xC3}; // add rsp,0x38; ret
-    EmitBytes(p, pillEpi, 5);
+    const BYTE pillEpi[] = {0x48, 0x83, 0xC4, 0x50};       // add rsp,0x50
+    EmitBytes(p, pillEpi, sizeof(pillEpi));
+    EmitJmpRel32(p, (BYTE*)chrome + kRvaPillResume);
 
-    // 0x180: the omnibox stub on the inline solid-painter build (0x14BD190),
+    // 0x180: the omnibox stub on the inline solid-painter build (0x1707AAA),
     // reached only for the resting omnibox and the caret-visible one. The
     // resting case installs the gradient blob with the current background
     // color (ebx); the caret case fetches the focus ring color live and
     // installs the blob with a solid stroke. All other states never reach
-    // here, so the stock factory call at 0x14BD37E stays untouched.
+    // here, so the stock factory call later in RefreshBackground stays
+    // untouched.
     p = mem + 0x180;
     BYTE* omni = p;
     emitMark(3);
     *p++ = 0x41; *p++ = 0x83; *p++ = 0xFC; *p++ = 0x01;    // cmp r12d,1 (caret)
     BYTE* jeCaret = p; *p++ = 0x74; p += 1;                // je .caret
+    emitMark(5);                                           // resting branch ran
     void* blob = g_omniPainter;
     *p++ = 0x48; *p++ = 0xB8;
     memcpy(p, &blob, 8); p += 8;                           // movabs rax,blob
@@ -1175,9 +1285,10 @@ static bool ApplyV320() {
     *p++ = 0xC7; *p++ = 0x40; *p++ = 0x0C;                 // mov dword [rax+0xC],0
     *p++ = 0; *p++ = 0; *p++ = 0; *p++ = 0;                //   (gradient stroke)
     *p++ = 0x49; *p++ = 0x89; *p++ = 0xC6;                 // mov r14,rax
-    EmitJmpRel32(p, (BYTE*)chrome + 0x14bd1d6);            // to the convergence
+    EmitJmpRel32(p, (BYTE*)chrome + kRvaOmniConv);           // to the convergence
     *jeCaret = 0x74;
     *(signed char*)(jeCaret + 1) = (signed char)(p - (jeCaret + 2));
+    emitMark(6);                                           // caret branch ran
     *p++ = 0x48; *p++ = 0x89; *p++ = 0xF1;                 // .caret: mov rcx,rsi
     EmitCallRel32(p, (BYTE*)chrome + kRvaProvider);        // color provider
     *p++ = 0x48; *p++ = 0x89; *p++ = 0xC1;                 // mov rcx,rax
@@ -1190,7 +1301,7 @@ static bool ApplyV320() {
     *p++ = 1; *p++ = 0; *p++ = 0; *p++ = 0;                //   (solid stroke)
     *p++ = 0x89; *p++ = 0x40; *p++ = 0x10;                 // mov [rax+0x10],eax
     *p++ = 0x49; *p++ = 0x89; *p++ = 0xC6;                 // mov r14,rax
-    EmitJmpRel32(p, (BYTE*)chrome + 0x14bd1d6);            // to the convergence
+    EmitJmpRel32(p, (BYTE*)chrome + kRvaOmniConv);           // to the convergence
 
     // 0x200: the MakeLinearGradient thunk plus its zeroed argument blobs.
     p = mem + 0x200;
@@ -1247,7 +1358,7 @@ static bool ApplyV320() {
     const Write writes[4] = {
         {kRvaFsGuard, 13, guard, false, nullptr},
         {kRvaNtHide, 7, nt, false, nullptr},
-        {kRvaPillDraw, 5, pill, true, nullptr},
+        {kRvaPillDraw, 5, pill, false, nullptr},
         {kRvaOmniB, 5, omni, false, nullptr},
     };
     for (int i = 0; i < 4; i++) {
@@ -1293,9 +1404,13 @@ static bool ApplyV320() {
         *(DWORD*)(jmp + 1) = (DWORD)rel;
         memcpy(at, jmp, 5);
         for (int j = 5; j < writes[i].len; j++) at[j] = 0x90;
+        if (memcmp(at, jmp, sizeof(jmp)) != 0) {
+            // Never leave a half-written branch live: restore and fail.
+            memcpy(at, saved, savedLen);
+            Wh_Log(L"v3.2.0: cave %d read-back mismatch - restored", i);
+        }
         VirtualProtect(at, writes[i].len, oldProtect, &tmp);
-        if (at[0] != jmp[0]) {
-            Wh_Log(L"v3.2.0: cave %d read-back mismatch", i);
+        if (memcmp(at, jmp, sizeof(jmp)) != 0) {
             return false;
         }
         switch (i) {
@@ -1369,8 +1484,43 @@ static DWORD WINAPI InitThread(LPVOID) {
     return 0;
 }
 
+// v3.3.3: Helium's web toolbar draws its own window buttons whenever its
+// code does not see --hide-window-buttons, in places the two branch flips
+// cannot reach (renderer-side toolbar state; proven live 2026-11-18: the
+// patched browser still showed them while a real switch on the command line
+// did not). So the switch must hold globally: append it to this process's
+// command line before Chromium parses it. Runs in the browser process only
+// (children get their state from the browser); the buffer append is bounded
+// by the owning memory region so it can never overrun.
+static void EnsureHideWindowButtonsSwitch() {
+    MTRACE("hwb: enter");
+    LPWSTR cmd = GetCommandLineW();
+    if (!cmd) { MTRACE("hwb: no command line"); return; }
+    if (wcsstr(cmd, L"hide-window-buttons")) { MTRACE("hwb: already present"); return; }
+    if (wcsstr(cmd, L"--type=")) { MTRACE("hwb: child process, skip"); return; }
+    size_t len = wcslen(cmd);
+    const wchar_t add[] = L" --hide-window-buttons";
+    const size_t addWchars = (sizeof(add) / sizeof(wchar_t));  // incl. NUL
+    MEMORY_BASIC_INFORMATION mbi;
+    if (!VirtualQuery(cmd, &mbi, sizeof(mbi))) {
+        MTRACE("hwb: VirtualQuery failed");
+        return;
+    }
+    SIZE_T avail = ((BYTE*)mbi.BaseAddress + mbi.RegionSize) - (BYTE*)cmd;
+    Wh_Log(L"hide-window-buttons: len=%zu need=%zu avail=%zu protect=0x%zX",
+           len, addWchars, (size_t)avail, (size_t)mbi.Protect);
+    if ((len + addWchars) * sizeof(wchar_t) > avail) {
+        MTRACE("hwb: buffer too small");
+        return;
+    }
+    wcscpy(cmd + len, add);
+    Wh_Log(L"hide-window-buttons: appended");
+    MTRACE("hwb: appended to command line");
+}
+
 BOOL Wh_ModInit() {
     Wh_Log(L">");
+    EnsureHideWindowButtonsSwitch();
     MTRACE(GetModuleHandleW(L"chrome.dll") ? "init: chrome already loaded"
                                            : "init: chrome not loaded yet");
     g_dark = ReadDarkTheme() ? 1 : 0;

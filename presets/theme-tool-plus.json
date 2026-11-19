@@ -1,0 +1,25 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@theme-tool-plus",
+      "enabled": true,
+      "settings": {
+        "action": "none",
+        "applyOnSettingsChange": 0,
+        "ignoreBackground": 1,
+        "ignoreColor": 1,
+        "ignoreCursor": 1,
+        "ignoreDesktopIcons": 1,
+        "ignoreScreensaver": 1,
+        "ignoreSound": 1,
+        "installPack": 1,
+        "noHourglass": 1,
+        "preventSettings": 1,
+        "themeName": "Main 01",
+        "themePackSilent": 1,
+        "updateLogonUI": 1
+      }
+    }
+  ]
+}

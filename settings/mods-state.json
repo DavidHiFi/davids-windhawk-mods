@@ -410,42 +410,42 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "",
-    "version": "2.3.0"
+    "version": "2.4.1"
   },
   "local@better-volume-mixer-plus": {
     "disabled": false,
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.4.3"
+    "version": "1.4.32"
   },
   "local@explorer-tags-plus": {
     "disabled": false,
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "",
-    "version": "0.8.2"
+    "version": "0.8.7"
   },
   "local@file-operation-styler-plus": {
     "disabled": false,
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.5.0"
+    "version": "1.6.6"
   },
   "local@seamless-explorer-view": {
     "disabled": false,
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.0.0"
+    "version": "2.0.4"
   },
   "local@helium-acrylic": {
     "disabled": false,
     "include": "chrome.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "3.4.0"
+    "version": "3.6.0"
   },
   "local@keyboard-shortcut-actions-plus": {
     "disabled": false,
@@ -480,77 +480,77 @@
     "include": "windhawk-mod.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.5.0"
+    "version": "1.5.2"
   },
   "local@pointer-afterimage-plus": {
     "disabled": false,
     "include": "windhawk.exe|explorer.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.2.2"
+    "version": "1.3.1"
   },
   "local@recycle-bin-tray-plus": {
     "disabled": false,
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.0.4"
+    "version": "1.0.7"
   },
   "local@seamless-autoclicker": {
     "disabled": false,
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.6.4"
+    "version": "1.6.9"
   },
   "local@seamless-autoscroll": {
     "disabled": false,
-    "include": "explorer.exe",
+    "include": "explorer.exe|chrome.exe|msedge.exe|brave.exe|vivaldi.exe|chromium.exe|opera.exe|thorium.exe|arc.exe|msedgewebview2.exe|HaloCord.exe|Discord.exe|Vesktop.exe|Code.exe|VSCodium.exe|Cursor.exe|Antigravity.exe|Antigravity IDE.exe|T3 Code*.exe|OpenCode.exe|Obsidian.exe|Notion.exe|Slack.exe|Dopamine*.exe|SoundCloud.exe|Hydra.exe|Kepler.exe|Melty.exe|Vortex.exe|Nightlight Launcher.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.0.0"
+    "version": "1.2.0"
   },
   "local@seamless-borders": {
     "disabled": false,
     "include": "windhawk.exe",
     "exclude": "",
-    "architecture": "x86-64",
-    "version": "1.0.4"
+    "architecture": "",
+    "version": "1.0.5"
   },
   "local@seamless-clipboard-manager": {
     "disabled": false,
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.3.0"
+    "version": "1.3.13"
   },
   "local@seamless-color-picker": {
     "disabled": false,
     "include": "windhawk-mod.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.0.0"
+    "version": "1.1.15"
   },
   "local@seamless-dictate": {
     "disabled": false,
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.1.0"
+    "version": "1.3.7"
   },
   "local@seamless-flyouts": {
     "disabled": false,
     "include": "*",
     "exclude": "",
     "architecture": "",
-    "version": "2.0.3"
+    "version": "2.0.17"
   },
   "local@seamless-launchpad": {
     "disabled": false,
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.2.2"
+    "version": "2.6.4"
   },
   "local@seamless-media-player": {
     "disabled": false,
@@ -564,7 +564,7 @@
     "include": "explorer.exe|RuntimeBroker.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.2"
+    "version": "2.0.2"
   },
   "local@seamless-taskbar-utilities": {
     "disabled": false,
@@ -578,7 +578,7 @@
     "include": "*|dwm.exe|windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.0"
+    "version": "1.3.10"
   },
   "local@seamless-tray-drawer": {
     "disabled": false,
@@ -590,9 +590,9 @@
   "local@seamless-window-manager": {
     "disabled": false,
     "include": "*|windhawk.exe",
-    "exclude": "",
+    "exclude": "cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe",
     "architecture": "",
-    "version": "2.4.1"
+    "version": "2.6.6"
   },
   "local@settings-styler-plus": {
     "disabled": false,
@@ -603,17 +603,17 @@
   },
   "local@shell-font-changer-plus": {
     "disabled": false,
-    "include": "explorer.exe|StartMenuExperienceHost.exe|ShellExperienceHost.exe|SearchHost.exe|ShellHost.exe|SystemSettings.exe",
+    "include": "explorer.exe|StartMenuExperienceHost.exe|SearchHost.exe|ShellExperienceHost.exe|ShellHost.exe|TextInputHost.exe|SystemSettings.exe",
     "exclude": "",
-    "architecture": "",
-    "version": "1.3.3"
+    "architecture": "x86-64",
+    "version": "2.0.0"
   },
   "local@simple-window-switcher-plus": {
     "disabled": false,
     "include": "windhawk.exe|explorer.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.0.4"
+    "version": "1.0.5"
   },
   "local@taskbar-ai-usage-plus": {
     "disabled": false,
@@ -648,7 +648,7 @@
     "include": "windhawk-ui.exe|windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.1.12"
+    "version": "2.2.9"
   },
   "local@window-manager": {
     "disabled": true,
@@ -662,7 +662,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.10.5"
+    "version": "1.10.20"
   },
   "local@wintips-osd-plus": {
     "disabled": false,
@@ -673,10 +673,10 @@
   },
   "local@zoomit": {
     "disabled": false,
-    "include": "windhawk-mod-uiaccess.exe|windhawk-mod.exe",
+    "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-uiaccess.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.1.0"
+    "version": "1.2.3"
   },
   "lock-screen-live-wallpaper": {
     "disabled": false,
@@ -1153,5 +1153,124 @@
     "exclude": "",
     "architecture": "",
     "version": "1.1"
+  },
+  "local@ableton-glass-fill": {
+    "disabled": false,
+    "include": "Ableton Live 12 Suite.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.5.0"
+  },
+  "local@explorer-tree-guard": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.0.0"
+  },
+  "local@halo-launcher": {
+    "disabled": false,
+    "include": "windhawk-mod.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "0.5.5"
+  },
+  "local@network-speedtest-plus": {
+    "disabled": false,
+    "include": "windhawk.exe|ShellHost.exe|ShellExperienceHost.exe|SystemSettings.exe|RuntimeBroker.exe|explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "2.3.1"
+  },
+  "local@power-options-button-plus": {
+    "disabled": false,
+    "include": "windhawk.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.1.0"
+  },
+  "local@seamless-compiz-cube": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.4"
+  },
+  "local@seamless-crash-watch": {
+    "disabled": false,
+    "include": "windhawk-mod.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.2.8"
+  },
+  "local@seamless-crosshair": {
+    "disabled": false,
+    "include": "windhawk.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.2.5"
+  },
+  "local@seamless-explorer-search": {
+    "disabled": false,
+    "include": "windhawk-mod.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "2.0.12"
+  },
+  "local@seamless-key-click": {
+    "disabled": false,
+    "include": "windhawk.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.1.4"
+  },
+  "local@seamless-share": {
+    "disabled": false,
+    "include": "ShellExperienceHost.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.1"
+  },
+  "local@seamless-snipper": {
+    "disabled": false,
+    "include": "windhawk.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "0.6.2"
+  },
+  "local@seamless-sound-manager": {
+    "disabled": false,
+    "include": "windhawk-mod.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.6"
+  },
+  "local@seamless-taskbar-badge-counter": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.3"
+  },
+  "local@seamless-taskbar": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "0.4.14"
+  },
+  "local@seamless-wobbly-windows": {
+    "disabled": false,
+    "include": "*|windhawk.exe",
+    "exclude": "dwm.exe|sihost.exe|RuntimeBroker.exe|StartMenuExperienceHost.exe|ShellExperienceHost.exe|SearchHost.exe|TextInputHost.exe|ApplicationFrameHost.exe|NVDisplay.Container.exe",
+    "architecture": "",
+    "version": "1.2.1"
+  },
+  "local@uwp-assets-redirect-plus": {
+    "disabled": false,
+    "include": "explorer.exe|StartMenuExperienceHost.exe|SearchHost.exe|ShellExperienceHost.exe|ShellHost.exe|RuntimeBroker.exe|Taskmgr.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.2"
   }
 }

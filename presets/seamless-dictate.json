@@ -1,0 +1,16 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@seamless-dictate",
+      "enabled": true,
+      "settings": {
+        "nativeSettingsTitleBar": 1,
+        "settingsGlass": 1,
+        "settingsTitleButtons": "native",
+        "settingsTrayIcon": 1,
+        "showTrayIcon": 1
+      }
+    }
+  ]
+}

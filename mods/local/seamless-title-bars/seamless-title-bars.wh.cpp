@@ -2,7 +2,7 @@
 // @id              seamless-title-bars
 // @name            Seamless Title Bars
 // @description     One title bar look everywhere: colours, caption buttons, a glass title dock and native frames in every kind of app
-// @version         1.3.7
+// @version         1.3.10
 // @author          DavidHiFi, Th3Fanbus, grn15RenS, Ingan121, Anixx, aubymori
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -309,9 +309,9 @@ This mod merges and keeps every option of:
   - color: "#A6ADC8"
     $name: Uptime colour
     $description: "Hex colour for the separator and uptime. Suggested: #A6ADC8 (Mocha subtext 0). Empty = same as the title."
-  - dialogs: false
+  - dialogs: true
     $name: Also in dialogs
-    $description: Off (suggested) = windows with only a close button (message boxes, Run) show no uptime.
+    $description: Turn off to hide uptime on windows with only a close button.
   $name: Window uptime
   $description: How long each window has been open, after its title.
 - exclusions:
@@ -10296,7 +10296,12 @@ void SetTitleBarColour(HWND hWnd, BOOL activate) {
     }
     BOOL useDarkMode = g_darkMode ? TRUE : FALSE;
     DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkMode, sizeof(useDarkMode));
-    COLORREF caption = (COLORREF)(activate ? g_active : g_inactive);
+    wchar_t windowClass[32]{};
+    const bool explorerFrame = GetClassNameW(hWnd, windowClass, ARRAYSIZE(windowClass)) &&
+                               wcscmp(windowClass, L"CabinetWClass") == 0;
+    // Seamless Flyouts already supplies acrylic for the Explorer frame and body.
+    const COLORREF caption = explorerFrame ? DWMWA_COLOR_DEFAULT
+                                          : (COLORREF)(activate ? g_active : g_inactive);
     DwmSetWindowAttribute(hWnd, DWMWA_CAPTION_COLOR, &caption, sizeof(caption));
 }
 
@@ -12307,7 +12312,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Choice, L"uptime.style", L"Style", L"", L"compact", {{L"compact", L"Compact: 2d 03h 05m 12s"}, {L"clock", L"Clock: 2d 3:05:12"}}, 0, 100, 1, L"Window uptime"},
 {K::Text, L"uptime.separator", L"Separator", L"Text between the title and the uptime (Suggested: \u2022). Empty = a space only.", L"\u2022", {}, 0, 100, 1, L"Window uptime"},
 {K::Text, L"uptime.color", L"Uptime colour", L"Hex colour for the separator and uptime. Suggested: #A6ADC8 (Mocha subtext 0). Empty = same as the title.", L"#A6ADC8", {}, 0, 100, 1, L"Window uptime"},
-{K::Check, L"uptime.dialogs", L"Also in dialogs", L"Off (suggested) = windows with only a close button (message boxes, Run) show no uptime.", L"0", {}, 0, 100, 1, L"Window uptime"},
+{K::Check, L"uptime.dialogs", L"Also in dialogs", L"Turn off to hide uptime on windows with only a close button.", L"1", {}, 0, 100, 1, L"Window uptime"},
 {K::Check, L"colours.enabled", L"Turn on colours", L"Sets the title bar colour in apps that use the Windows title bar. When off, apps keep their own colours.", L"1", {}, 0, 100, 2, L"Colours"},
 {K::Check, L"colours.useImmersiveDarkMode", L"Dark mode title bars", L"When on, title bars use the dark caption style.", L"1", {}, 0, 100, 2, L"Colours"},
 {K::Color, L"colours.activeColor", L"Focused colour", L"Title bar colour of the focused window, as a hex colour like #1E1E2E.", L"#1E1E2E", {}, 0, 100, 2, L"Colours"},
@@ -13176,7 +13181,7 @@ static void Set_MakeFormats(SetWindow& w) {
     int base = std::clamp(500, 100, 900);
     int bold = std::max(base, std::min(700, base + 100));
     const auto L_ = DWRITE_TEXT_ALIGNMENT_LEADING, C_ = DWRITE_TEXT_ALIGNMENT_CENTER;
-    w.fLabel = Set_Fmt(w.family, 14, base, true);
+    w.fLabel = Set_Fmt(w.family, 16, base, true);
     w.fHint = Set_Fmt(w.family, 12.5f, base, true);
     w.fTitle = Set_Fmt(w.family, 26, bold, false);
     w.fIntro = Set_Fmt(w.family, 13.5f, base, true);
@@ -13689,10 +13694,10 @@ static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
 
     float textW = w.contentW - 2 * kSetRowPad - Set_ControlW(f) - 24;
     float lh = Set_TextH(w.fLabel.get(), f.label, textW);
-    float dh = f.desc ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
+    float dh = (f.desc && *f.desc) ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
     float top = row.top + (it.h - lh - dh) / 2;
     p.Text(w.fLabel.get(), f.label, {row.left + kSetRowPad, top, row.left + kSetRowPad + textW, top + lh + 2}, mocha::text);
-    if (f.desc)
+    if (f.desc && *f.desc)
         p.Text(w.fHint.get(), f.desc, {row.left + kSetRowPad, top + lh + 3, row.left + kSetRowPad + textW, top + lh + dh + 3},
                mocha::subtext0);
 
@@ -13914,7 +13919,7 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
         UINT32 c = act ? mocha::text : mocha::subtext1;
         // The glyph sits in a fixed 44-wide slot, so it stays centered in the collapsed rail.
         p.Glyph(w.fIcon.get(), kSetPages[i].glyph, {r.left, r.top, r.left + 44, r.bottom}, act ? mocha::blue : mocha::subtext0);
-        p.Text(w.fLabel.get(), kSetPages[i].name, {r.left + 50, r.top + 8, r.left + w.railW - 24, r.bottom}, c, textA);
+        p.Text(w.fValue.get(), kSetPages[i].name, {r.left + 50, r.top, r.left + w.railW - 24, r.bottom}, c, textA);
     }
 #ifdef WH_MOD_VERSION
     p.Text(w.fSmall.get(), std::wstring(L"Version ") + WH_MOD_VERSION,
@@ -15029,6 +15034,12 @@ static void Set_Relayout(SetWindow& w) {
 
 // A switch's stored value, found by the end of its key so a "SettingsWindow." prefix still matches.
 static bool Set_FieldOn(const SetWindow& w, PCWSTR key, bool def) {
+    // The window group wins over a module option with the same suffix.
+    const std::wstring windowKey = std::wstring(L"SettingsWindow.") + key;
+    for (const auto& f : w.fields)
+        if (windowKey == f.key) return f.value == L"1";
+    for (const auto& f : w.fields)
+        if (wcscmp(f.key, key) == 0) return f.value == L"1";
     const size_t n = wcslen(key);
     for (const auto& f : w.fields) {
         const size_t m = wcslen(f.key);

@@ -1,0 +1,35 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@seamless-taskbar-badge-counter",
+      "enabled": true,
+      "settings": {
+        "Badge.backgroundColor": "#1E1E2E",
+        "Badge.borderColor": "#89B4FA",
+        "Badge.borderColorEnd": "#CBA6F7",
+        "Badge.borderThickness": 2,
+        "Badge.offsetX": 1,
+        "Badge.offsetY": 3,
+        "Badge.position": "topRight",
+        "Badge.shape": "circle",
+        "Badge.size": 14,
+        "Behavior.activeStateStyling": 1,
+        "Behavior.inactiveOpacity": 75,
+        "Behavior.maximumNumber": 99,
+        "Behavior.minimumCount": 2,
+        "Display.style": "number",
+        "Text.color": "#CDD6F4",
+        "Text.fontFamily": "FiraCode Nerd Font",
+        "Text.fontSize": 9,
+        "Text.fontWeight": "medium",
+        "VerticalDots.color": "#89B4FA",
+        "VerticalDots.colorEnd": "#CBA6F7",
+        "VerticalDots.offsetX": 0,
+        "VerticalDots.offsetY": 0,
+        "VerticalDots.position": "right",
+        "VerticalDots.size": 4
+      }
+    }
+  ]
+}

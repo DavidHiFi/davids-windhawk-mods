@@ -1,0 +1,43 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@wintips-osd-plus",
+      "enabled": true,
+      "settings": {
+        "accentColor": "#89B4FA",
+        "accentColor2": "#CBA6F7",
+        "animationPercent": 100,
+        "blurRadius": 75,
+        "borderStyle": "gradient",
+        "borderWidth": 2,
+        "cornerRadius": 12,
+        "displayMs": 2000,
+        "fontFamily": "FiraCode Nerd Font",
+        "fontWeight": "medium",
+        "glow": 35,
+        "horizontal": "center",
+        "material": "acrylic",
+        "monitor": "cursor",
+        "morphSeconds": 5,
+        "notifyAnyCopy": 1,
+        "notifyCapsLock": 1,
+        "notifyCopy": 1,
+        "notifyCut": 1,
+        "notifyInsert": 1,
+        "notifyNumLock": 1,
+        "notifyPaste": 1,
+        "notifyScrollLock": 1,
+        "offsetX": 0,
+        "offsetY": 0,
+        "palette": "mocha",
+        "pollElevated": 1,
+        "suppressFullscreen": 1,
+        "surfaceOpacity": 88,
+        "textColor": "",
+        "theme": "system",
+        "vertical": "top"
+      }
+    }
+  ]
+}

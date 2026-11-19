@@ -1,0 +1,19 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@halo-launcher",
+      "enabled": true,
+      "settings": {
+        "backgroundOpacity": 55,
+        "blur": 1,
+        "nativeSettingsTitleBar": 1,
+        "openKey": "",
+        "peekOnSpace": 1,
+        "settingsGlass": 1,
+        "settingsTrayIcon": 1,
+        "useFlowKeys": 1
+      }
+    }
+  ]
+}

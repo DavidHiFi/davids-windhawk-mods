@@ -1,0 +1,10 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@helium-acrylic",
+      "enabled": true,
+      "settings": {}
+    }
+  ]
+}

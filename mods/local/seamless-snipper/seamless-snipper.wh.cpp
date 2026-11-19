@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.6.0
+// @version         0.6.2
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -32,9 +32,10 @@ read later, like "Discord 4.05 pm.png".
   lines, a pen, text, speech balloons, numbered steps, a highlighter, an
   eraser, blur, pixelate, a magnifier and a spotlight. Colors, sizes, fills,
   dashed or dotted lines, shadows and outlines. Every tool carries its own
-  options on a strip under the bar, and you can pick up anything you have
-  drawn and move it. Draw, then pick the region; the drawings go into the
-  snip. Undo, redo, copy, save and done sit on the bar.
+  options next to the bar. Press V and pick a drawing to edit or move it.
+  Drag the handles to resize a box or adjust an arrow. Use Font and size
+  while writing text or a speech balloon, or after selecting it. Draw,
+  then pick the region to include the drawings in the snip.
 - Every drawing tool has ShareX's options in the settings: box corner radius
   and fill, arrow heads, their style and curved arrows, text font, color and
   outline, step labels from a b c to roman numerals, highlighter color, blur
@@ -1643,6 +1644,7 @@ static void OvDrawMagnifier(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
                  D2D1::RectF(swatch.right + 7 * ui, info.top, info.right - 6 * ui, info.bottom), b, D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }
 
+#include <commdlg.h>
 // ---------------------------------------------------------------------------
 // Drawing on the frozen screen: the bar, the options strip under it, the tools, and burning the drawings
 // into the snip. Then Win + Shift + S: a key hook that hands Windows' Snipping Tool key to Snipper.
@@ -1707,7 +1709,7 @@ struct Shape {
     int tool = T_RECT;
     Opts o{};
     std::vector<D2D1_POINT_2F> pts;  // Two corners, or the pen's path. Text uses the first; a balloon's second is its tail.
-    std::wstring text;
+    std::wstring text, font;
     int number = 0;     // A number's value.
     UINT32 sample = 0;  // The eraser's color, picked up from the screen.
 };
@@ -1730,7 +1732,7 @@ static Style g_st;
 enum BtnKind { B_TOOL, B_COLOR, B_SIZE, B_SHADOW, B_OUTLINE, B_UNDO, B_REDO, B_DONE, B_COPY, B_SAVE, B_CLOSE, B_OPT };
 enum OptKind {
     O_CORNERS, O_LINE, O_FILL, O_FILLCOLOR, O_ALPHA, O_HEADS, O_HEADSTYLE, O_HEADSIZE, O_CURVE, O_BOLD, O_ITALIC,
-    O_TEXTBOX, O_LABELS, O_NEXT, O_STRENGTH, O_ZOOM, O_SHAPE
+    O_FONT, O_TEXTBOX, O_LABELS, O_NEXT, O_STRENGTH, O_ZOOM, O_SHAPE
 };
 struct Btn {
     int kind, arg;
@@ -1743,6 +1745,7 @@ enum Action { A_NONE, A_REDRAW, A_DONE, A_COPY, A_SAVE, A_CLOSE };
 struct State {
     bool on = true;  // The bar and tools. Off, the screen is a plain region picker.
     int tool = T_REGION, lastDraw = T_ARROW;
+    std::wstring font[T_COUNT];
     Opts opt[T_COUNT]{}, def[T_COUNT]{};  // Each tool's options now, and as the settings set them.
     UINT32 stamp = 0;                     // A hash of def: when the settings change, the remembered options reset.
     std::vector<Shape> shapes;
@@ -1753,6 +1756,7 @@ struct State {
     bool typingNew = false, typingDirty = false, caretOn = true;
     int pick = -1;  // Select: the shape picked.
     bool moving = false, moved = false;
+    int resizePoint = -1;
     D2D1_POINT_2F moveFrom{};
     int stepPin = 0;  // The next number, when set on the strip; 0 counts on from the highest.
     std::vector<Btn> btns;  // The bar's buttons, then the strip's options from nMain on.
@@ -1859,7 +1863,7 @@ static void SizeList(int t, const float*& v, int& n) {
 }
 
 // Text formats by size and style, in the font the settings pick. Cleared when the settings change.
-static std::map<int, IDWriteTextFormat*> g_inkFonts;
+static std::map<std::pair<std::wstring, int>, IDWriteTextFormat*> g_inkFonts;
 
 static void ClearInkFonts() {
     for (auto& kv : g_inkFonts)
@@ -1867,15 +1871,15 @@ static void ClearInkFonts() {
     g_inkFonts.clear();
 }
 
-static IDWriteTextFormat* InkFont(float px, bool bold, bool italic) {
-    int key = (int)std::lround(px * 10) * 4 + (bold ? 2 : 0) + (italic ? 1 : 0);
+static IDWriteTextFormat* InkFont(const std::wstring& font, float px, bool bold, bool italic) {
+    auto key = std::make_pair(font, (int)std::lround(px * 10) * 4 + (bold ? 2 : 0) + (italic ? 1 : 0));
     auto it = g_inkFonts.find(key);
     if (it != g_inkFonts.end()) return it->second;
     IDWriteTextFormat* f = nullptr;
     if (g_dw) {
         DWRITE_FONT_WEIGHT wt = bold ? DWRITE_FONT_WEIGHT_SEMI_BOLD : DWRITE_FONT_WEIGHT_NORMAL;
         DWRITE_FONT_STYLE st = italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL;
-        if (FAILED(g_dw->CreateTextFormat(g_st.font.c_str(), nullptr, wt, st, DWRITE_FONT_STRETCH_NORMAL, px, L"", &f)))
+        if (FAILED(g_dw->CreateTextFormat(font.c_str(), nullptr, wt, st, DWRITE_FONT_STRETCH_NORMAL, px, L"", &f)))
             g_dw->CreateTextFormat(L"Segoe UI Variable Display", nullptr, wt, st, DWRITE_FONT_STRETCH_NORMAL, px, L"", &f);
     }
     if (f) f->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -1916,7 +1920,7 @@ static std::wstring StepLabel(int n, int style) {
 
 // A text's layout; the box it fills is origin + its metrics.
 static bool TextLayout(const Shape& s, Ptr<IDWriteTextLayout>& lay, D2D1_RECT_F& box) {
-    IDWriteTextFormat* f = InkFont(s.o.size, s.o.bold != 0, s.o.italic != 0);
+    IDWriteTextFormat* f = InkFont(s.font.empty() ? g_st.font : s.font, s.o.size, s.o.bold != 0, s.o.italic != 0);
     if (!f || !g_dw || s.pts.empty()) return false;
     std::wstring t = s.text.empty() ? std::wstring(L" ") : s.text;
     if (FAILED(g_dw->CreateTextLayout(t.c_str(), (UINT32)t.size(), f, 8000, 8000, lay.put()))) return false;
@@ -2622,11 +2626,13 @@ static int OptKinds(int t, const Opts& o, int* out) {
             out[n++] = O_LINE;
             break;
         case T_TEXT:
+            out[n++] = O_FONT;
             out[n++] = O_BOLD;
             out[n++] = O_ITALIC;
             out[n++] = O_TEXTBOX;
             break;
         case T_BALLOON:
+            out[n++] = O_FONT;
             out[n++] = O_BOLD;
             out[n++] = O_ITALIC;
             break;
@@ -2673,6 +2679,7 @@ static std::wstring OptText(int k) {
         case O_CURVE: return o.curve ? L"Curved" : L"Straight";
         case O_BOLD: return L"Bold";
         case O_ITALIC: return L"Italic";
+        case O_FONT: return L"Font and size";
         case O_TEXTBOX: return o.textBox == 0 ? L"No background" : o.textBox == 1 ? L"On pen color" : L"On dark";
         case O_LABELS: {
             static const wchar_t* names[5] = {L"1 2 3", L"A B C", L"a b c", L"I II III", L"i ii iii"};
@@ -3164,6 +3171,20 @@ static void Frame(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const D2D1_REC
 }
 
 // The drawings on the region screen: every shape, the one being drawn, the text box taking keys, the pick.
+static bool HasHandles(const Shape& s) {
+    return s.pts.size() == 2 && (IsBoxy(s.tool) || s.tool == T_LINE || s.tool == T_ARROW || s.tool == T_BALLOON);
+}
+
+static int HitHandle(const Shape& s, D2D1_POINT_2F q) {
+    if (!HasHandles(s)) return -1;
+    const float reach = 8 * g.ui;
+    for (int i = 0; i < 2; ++i) {
+        const auto& p = s.pts[i];
+        if (std::abs(q.x - p.x) <= reach && std::abs(q.y - p.y) <= reach) return i;
+    }
+    return -1;
+}
+
 static void DrawShapes(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
     for (const Shape& s : g.shapes) DrawShape(rt, b, s);
     if (g.drawing) {
@@ -3174,6 +3195,16 @@ static void DrawShapes(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
         D2D1_RECT_F r = Bounds(*p);
         float m = 6 + (p->tool == T_LINE || p->tool == T_ARROW || p->tool == T_PEN ? p->o.size / 2 : 0);
         Frame(rt, b, D2D1::RectF(r.left - m, r.top - m, r.right + m, r.bottom + m));
+        if (HasHandles(*p)) {
+            const float h = 5 * g.ui;
+            for (auto pt : p->pts) {
+                const auto handle = D2D1::RectF(pt.x - h, pt.y - h, pt.x + h, pt.y + h);
+                b->SetColor(Rgb(mocha::crust));
+                rt->FillRectangle(handle, b);
+                b->SetColor(Rgb(0x89B4FA));
+                rt->DrawRectangle(handle, b, 2);
+            }
+        }
     }
     if (Shape* s = Typing()) {
         Ptr<IDWriteTextLayout> lay;
@@ -3272,7 +3303,11 @@ static LPCWSTR Cursor(POINT p) {
     if (OverBar(p)) return IDC_ARROW;
     if (!DrawTool()) return IDC_CROSS;
     if (g.tool == T_TEXT) return IDC_IBEAM;
-    if (g.tool == T_SELECT) return g.moving || TopHit(F(p), false) >= 0 ? IDC_SIZEALL : IDC_ARROW;
+    if (g.tool == T_SELECT) {
+        if (g.moving && g.resizePoint >= 0) return IDC_CROSS;
+        if (const auto* shape = Picked(); shape && HitHandle(*shape, F(p)) >= 0) return IDC_CROSS;
+        return g.moving || TopHit(F(p), false) >= 0 ? IDC_SIZEALL : IDC_ARROW;
+    }
     return IDC_CROSS;
 }
 
@@ -3286,6 +3321,42 @@ static void SetTool(int t) {
 }
 
 static void Swap() { SetTool(g.tool == T_REGION ? g.lastDraw : T_REGION); }
+
+static void PickFont() {
+    const int tool = OptTool();
+    if (!IsText(tool)) return;
+    Shape* target = Typing();
+    if (!target) target = Picked();
+    const auto& family = target ? target->font : g.font[tool];
+    const UINT dpi = std::max(96u, GetDpiForWindow(g_ov.hwnd));
+    LOGFONTW lf{};
+    wcsncpy_s(lf.lfFaceName, (family.empty() ? g_st.font : family).c_str(), _TRUNCATE);
+    lf.lfHeight = -(LONG)std::lround(O().size * dpi / 96.0f);
+    lf.lfWeight = O().bold ? FW_SEMIBOLD : FW_NORMAL;
+    lf.lfItalic = O().italic != 0;
+    CHOOSEFONTW chooser{};
+    chooser.lStructSize = sizeof(chooser);
+    chooser.hwndOwner = g_ov.hwnd;
+    chooser.lpLogFont = &lf;
+    chooser.Flags = CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT | CF_LIMITSIZE;
+    chooser.nSizeMin = 6;
+    chooser.nSizeMax = 144;
+    const HWND overlay = g_ov.hwnd;
+    if (!ChooseFontW(&chooser) || g_ov.hwnd != overlay || OptTool() != tool) return;
+    Change([&](Opts& o) {
+        o.size = chooser.iPointSize * (96.0f / 720.0f);
+        o.bold = lf.lfWeight >= FW_SEMIBOLD;
+        o.italic = lf.lfItalic != 0;
+    });
+    if (auto* text = Typing()) {
+        text->font = lf.lfFaceName;
+        if (g.typingNew) g.font[tool] = text->font;
+    } else if (auto* shape = Picked()) {
+        shape->font = lf.lfFaceName;
+    } else {
+        g.font[tool] = lf.lfFaceName;
+    }
+}
 
 static Action Activate(int i, int dir) {
     if (i < 0 || i >= (int)g.btns.size()) return A_NONE;
@@ -3310,7 +3381,10 @@ static Action Activate(int i, int dir) {
         case B_COPY: CommitText(); return A_COPY;
         case B_SAVE: CommitText(); return A_SAVE;
         case B_CLOSE: return A_CLOSE;
-        case B_OPT: OptStep(b.arg, dir, true); return A_REDRAW;
+        case B_OPT:
+            if (b.arg == O_FONT) PickFont();
+            else OptStep(b.arg, dir, true);
+            return A_REDRAW;
     }
     return A_NONE;
 }
@@ -3326,7 +3400,7 @@ static Action BarUp(POINT p) {
 // Right click on the bar or strip: an option or the size steps back. Elsewhere on the bar it does nothing.
 static int BarRight(POINT p) {
     int i = HitBtn(p);
-    if (i < 0) return A_NONE;
+    if (i < 0 || (g.btns[i].kind == B_OPT && g.btns[i].arg == O_FONT)) return A_NONE;
     int k = g.btns[i].kind;
     return k == B_OPT || k == B_SIZE ? Activate(i, -1) : A_NONE;
 }
@@ -3337,7 +3411,7 @@ static int Wheel(POINT p, int dir) {
     if (OverBar(p)) {
         int i = HitBtn(p);
         if (i < 0) return A_NONE;
-        if (g.btns[i].kind == B_OPT) OptStep(g.btns[i].arg, dir, false);
+        if (g.btns[i].kind == B_OPT && g.btns[i].arg != O_FONT) OptStep(g.btns[i].arg, dir, false);
         else if (g.btns[i].kind == B_SIZE) SizeStep(dir, false);
         else return A_NONE;
         return A_REDRAW;
@@ -3353,6 +3427,7 @@ static Shape NewShape(int tool, POINT p) {
     Shape s;
     s.tool = tool;
     s.o = g.opt[tool];
+    if (IsText(tool)) s.font = g.font[tool];
     s.pts.push_back(F(p));
     return s;
 }
@@ -3369,7 +3444,9 @@ static void ShapeDown(POINT p) {
     CommitText();
     D2D1_POINT_2F q = F(p);
     if (g.tool == T_SELECT) {
-        g.pick = TopHit(q, false);
+        const auto* picked = Picked();
+        g.resizePoint = picked ? HitHandle(*picked, q) : -1;
+        if (g.resizePoint < 0) g.pick = TopHit(q, false);
         if (g.pick >= 0) {
             g.moving = true;
             g.moved = false;
@@ -3409,7 +3486,17 @@ static void ShapeMove(POINT p, bool shift) {
         if ((dx == 0 && dy == 0) || g.pick < 0 || g.pick >= (int)g.shapes.size()) return;
         if (!g.moved) Push();  // One undo step for the whole move.
         g.moved = true;
-        for (auto& pt : g.shapes[g.pick].pts) pt.x += dx, pt.y += dy;
+        auto& points = g.shapes[g.pick].pts;
+        if (g.resizePoint >= 0) {
+            auto& point = points[g.resizePoint];
+            point.x += dx;
+            point.y += dy;
+        } else {
+            for (auto& point : points) {
+                point.x += dx;
+                point.y += dy;
+            }
+        }
         g.moveFrom = q;
         return;
     }
@@ -3613,6 +3700,10 @@ static void ApplySettings(const Config& c) {
     s.shadowSoft = c.shadowSoftness;
     s.outlineColor = c.outlineColor == L"white" ? 1 : c.outlineColor == L"black" ? 2 : 0;
     s.outlineW = (float)c.outlineWidth;
+    if (!s.remember || s.font != g_st.font) {
+        g.font[T_TEXT].clear();
+        g.font[T_BALLOON].clear();
+    }
     g_st = s;
     ClearInkFonts();
     g.laidOut = false;
@@ -4124,7 +4215,7 @@ static void OvLeftDown(HWND hwnd, POINT p) {
     if (mk::DrawTool()) {
         o.press = 2;
         mk::ShapeDown(p);
-        if (mk::g.drawing) SetCapture(hwnd);
+        if (mk::g.drawing || mk::g.moving) SetCapture(hwnd);
         InvalidateRect(hwnd, nullptr, FALSE);
         return;
     }
@@ -4147,9 +4238,7 @@ static LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_ERASEBKGND: return 1;
         case WM_SETCURSOR: {
-            LPCWSTR c = IDC_CROSS;
-            if (mk::OverBar(o.cur)) c = IDC_ARROW;
-            else if (mk::DrawTool() && mk::g.tool == mk::T_TEXT) c = IDC_IBEAM;
+            LPCWSTR c = mk::Cursor(o.cur);
             SetCursor(LoadCursorW(nullptr, c));
             return TRUE;
         }
@@ -4195,7 +4284,11 @@ static LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_RBUTTONDOWN: return 0;
         case WM_RBUTTONUP: {
             POINT p{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
-            if (mk::g.drawing || mk::g.typing >= 0) {
+            if (mk::OverBar(p) && !mk::g.drawing && !mk::g.moving) {
+                OvAct(mk::BarRight(p));
+                return 0;
+            }
+            if (mk::g.drawing || mk::g.moving || mk::g.typing >= 0) {
                 mk::RightClick();
                 o.press = 0;
                 if (GetCapture() == hwnd) ReleaseCapture();
@@ -4230,10 +4323,19 @@ static LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (GET_XBUTTON_WPARAM(wp) == XBUTTON1) OvFinishAll();
             else OvFinish(MonAt(o.cur).r);
             return TRUE;
-        case WM_MOUSEWHEEL:
-            o.zoom = Clamp(o.zoom + (GET_WHEEL_DELTA_WPARAM(wp) > 0 ? 1 : -1), 4, 24);
-            InvalidateRect(hwnd, nullptr, FALSE);
+        case WM_MOUSEWHEEL: {
+            int dir = GET_WHEEL_DELTA_WPARAM(wp) > 0 ? 1 : -1;
+            POINT p{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            ScreenToClient(hwnd, &p);
+            int action = mk::Wheel(p, dir);
+            if (action < 0) {
+                o.zoom = Clamp(o.zoom + dir, 4, 24);
+                InvalidateRect(hwnd, nullptr, FALSE);
+            } else {
+                OvAct(action);
+            }
             return 0;
+        }
         case WM_CHAR:
             if (mk::Char((wchar_t)wp)) InvalidateRect(hwnd, nullptr, FALSE);
             return 0;
@@ -25938,7 +26040,7 @@ static void Set_MakeFormats(SetWindow& w) {
     int base = std::clamp(500, 100, 900);
     int bold = std::max(base, std::min(700, base + 100));
     const auto L_ = DWRITE_TEXT_ALIGNMENT_LEADING, C_ = DWRITE_TEXT_ALIGNMENT_CENTER;
-    w.fLabel = Set_Fmt(w.family, 14, base, true);
+    w.fLabel = Set_Fmt(w.family, 16, base, true);
     w.fHint = Set_Fmt(w.family, 12.5f, base, true);
     w.fTitle = Set_Fmt(w.family, 26, bold, false);
     w.fIntro = Set_Fmt(w.family, 13.5f, base, true);
@@ -26452,10 +26554,10 @@ static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
 
     float textW = w.contentW - 2 * kSetRowPad - Set_ControlW(f) - 24;
     float lh = Set_TextH(w.fLabel.get(), f.label, textW);
-    float dh = f.desc ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
+    float dh = (f.desc && *f.desc) ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
     float top = row.top + (it.h - lh - dh) / 2;
     p.Text(w.fLabel.get(), f.label, {row.left + kSetRowPad, top, row.left + kSetRowPad + textW, top + lh + 2}, mocha::text);
-    if (f.desc)
+    if (f.desc && *f.desc)
         p.Text(w.fHint.get(), f.desc, {row.left + kSetRowPad, top + lh + 3, row.left + kSetRowPad + textW, top + lh + dh + 3},
                mocha::subtext0);
 
@@ -26677,7 +26779,7 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
         UINT32 c = act ? mocha::text : mocha::subtext1;
         // The glyph sits in a fixed 44-wide slot, so it stays centered in the collapsed rail.
         p.Glyph(w.fIcon.get(), kSetPages[i].glyph, {r.left, r.top, r.left + 44, r.bottom}, act ? mocha::blue : mocha::subtext0);
-        p.Text(w.fLabel.get(), kSetPages[i].name, {r.left + 50, r.top + 8, r.left + w.railW - 24, r.bottom}, c, textA);
+        p.Text(w.fValue.get(), kSetPages[i].name, {r.left + 50, r.top, r.left + w.railW - 24, r.bottom}, c, textA);
     }
 #ifdef WH_MOD_VERSION
     p.Text(w.fSmall.get(), std::wstring(L"Version ") + WH_MOD_VERSION,
@@ -27801,6 +27903,12 @@ static void Set_Relayout(SetWindow& w) {
 
 // A switch's stored value, found by the end of its key so a "SettingsWindow." prefix still matches.
 static bool Set_FieldOn(const SetWindow& w, PCWSTR key, bool def) {
+    // The window group wins over a module option with the same suffix.
+    const std::wstring windowKey = std::wstring(L"SettingsWindow.") + key;
+    for (const auto& f : w.fields)
+        if (windowKey == f.key) return f.value == L"1";
+    for (const auto& f : w.fields)
+        if (wcscmp(f.key, key) == 0) return f.value == L"1";
     const size_t n = wcslen(key);
     for (const auto& f : w.fields) {
         const size_t m = wcslen(f.key);

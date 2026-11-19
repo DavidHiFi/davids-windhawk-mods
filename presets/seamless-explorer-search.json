@@ -1,0 +1,28 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@seamless-explorer-search",
+      "enabled": true,
+      "settings": {
+        "accentColor": "#89B4FA",
+        "animations": 1,
+        "fuzzyRanking": 1,
+        "hideOnFocusLost": 1,
+        "matchPath": 0,
+        "nativeSettingsTitleBar": 0,
+        "popupOpacity": 85,
+        "position": "top",
+        "queryTimeoutMs": 200,
+        "resultLimit": 60,
+        "sameWindow": 1,
+        "searchAsYouType": 1,
+        "searchKeys": 1,
+        "settingsGlass": 1,
+        "settingsTrayIcon": 1,
+        "thisFolderFirst": 1,
+        "typeToSearch": 1
+      }
+    }
+  ]
+}

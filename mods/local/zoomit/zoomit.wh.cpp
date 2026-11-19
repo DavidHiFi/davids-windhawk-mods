@@ -3,7 +3,7 @@
 // @name            ZoomIt
 // @description     Zoom, draw and read text bigger under the mouse with a hotkey, like Sysinternals ZoomIt
 // @version         1.2.3
-// @author          DavidHiFi
+// @author          DavidHiFi, Math Shamenson
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -157,7 +157,7 @@ Shamenson. MIT.
   $description: Higher numbers blur more. 4 is light, 30 is very strong
 - blurWidth: 400
   $name: Blur pen size (% of the pen size)
-- fontName: Segoe UI
+- fontName: FiraCode Nerd Font
   $name: Text font
 - fontSize: 32
   $name: Text size (pixels)
@@ -235,9 +235,9 @@ Shamenson. MIT.
 - hoverBorderWidth: 2
   $name: Border width (pixels)
   $description: '1 to 8 (Suggested: 2)'
-- hoverFontName: Segoe UI
+- hoverFontName: FiraCode Nerd Font
   $name: Bubble font
-  $description: 'Any font you have installed (Suggested: Segoe UI)'
+  $description: 'Any font you have installed (Suggested: FiraCode Nerd Font)'
 - hoverFontSize: 26
   $name: Bubble text size (pixels)
   $description: '10 to 120 (Suggested: 26)'
@@ -321,7 +321,7 @@ struct Settings {
     float highlighterOpacity = 0.45f, highlighterWidth = 3.0f;
     int blurStrength = 12;
     float blurWidth = 4.0f;
-    std::wstring fontName = L"Segoe UI";
+    std::wstring fontName = L"FiraCode Nerd Font";
     float fontSize = 32;
     bool fontBold = false, arrowAtStart = false;
     bool confineCursor = true, leaveOnFocusLoss = true;
@@ -387,7 +387,7 @@ void LoadSettings() {
     g_set.blurStrength = std::clamp(Wh_GetIntSetting(L"blurStrength"), 2, 60);
     g_set.blurWidth = ClampF(Wh_GetIntSetting(L"blurWidth") / 100.0f, 0.5f, 30.0f);
     g_set.fontName = ReadString(L"fontName");
-    if (g_set.fontName.empty()) g_set.fontName = L"Segoe UI";
+    if (g_set.fontName.empty()) g_set.fontName = L"FiraCode Nerd Font";
     g_set.fontSize = ClampF((float)Wh_GetIntSetting(L"fontSize"), 6, 400);
     g_set.fontBold = Wh_GetIntSetting(L"fontBold");
     g_set.arrowAtStart = Wh_GetIntSetting(L"arrowAtStart");
@@ -1980,7 +1980,7 @@ struct HoverSettings {
              border = RGB(0x58, 0x5B, 0x70);
     HoverBorder borderStyle = HoverBorder::Gradient;
     float borderWidth = 2;
-    std::wstring font = L"Segoe UI";
+    std::wstring font = L"FiraCode Nerd Font";
     float fontSize = 26;
     bool bold = false;
     float maxWidth = 640, maxHeight = 320;
@@ -2070,7 +2070,7 @@ void LoadHoverSettings() {
     g_hs.borderWidth = ClampF((float)Wh_GetIntSetting(L"hoverBorderWidth"), 1, 8);
 
     g_hs.font = ReadString(L"hoverFontName");
-    if (g_hs.font.empty()) g_hs.font = L"Segoe UI";
+    if (g_hs.font.empty()) g_hs.font = L"FiraCode Nerd Font";
     g_hs.fontSize = ClampF((float)Wh_GetIntSetting(L"hoverFontSize"), 10, 120);
     g_hs.bold = Wh_GetIntSetting(L"hoverBold");
     g_hs.maxWidth = ClampF((float)Wh_GetIntSetting(L"hoverWidth"), 200, 2400);

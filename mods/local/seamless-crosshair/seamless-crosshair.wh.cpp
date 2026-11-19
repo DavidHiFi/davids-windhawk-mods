@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id              seamless-crosshair
-// @name            Seamless Game Crosshair
+// @name            Seamless Crosshair
 // @description     A crosshair over any game: presets or your own design, any color and size, shortcuts and a tray icon
-// @version         1.2.3
+// @version         1.2.5
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -15,14 +15,14 @@
 
 // ==WindhawkModReadme==
 /*
-# Seamless Game Crosshair
+# Seamless Crosshair
 
 Puts a crosshair in the middle of your screen, over any game. Pick a ready-made
 one or build your own, in any color and size. No separate app, no installer and
 nothing injected into the game: the crosshair is a see-through window that
 clicks pass straight through.
 
-![Seamless Game Crosshair settings](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-crosshair.png)
+![Seamless Crosshair settings](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-crosshair.png)
 
 ## What it does
 
@@ -1822,7 +1822,7 @@ static void UpdateTray(bool add) {
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     nid.uCallbackMessage = WM_SGC_TRAY;
     nid.hIcon = icon ? icon : LoadIconW(nullptr, IDI_APPLICATION);
-    std::wstring tip = std::wstring(L"Seamless Game Crosshair: ") + (g_shown ? L"on, " : L"hidden, ") + StyleLabel(c.style);
+    std::wstring tip = std::wstring(L"Seamless Crosshair: ") + (g_shown ? L"on, " : L"hidden, ") + StyleLabel(c.style);
     if (!g_lookExe.empty()) tip += L" (" + g_lookExe + L"'s own look)";
     wcsncpy_s(nid.szTip, tip.c_str(), _TRUNCATE);
     if (!g_trayAdded || add) {
@@ -4036,7 +4036,7 @@ constexpr PCWSTR kSetCrossOverUrl = L"https://github.com/lacymorrow/crossover";
 constexpr PCWSTR kSetRepoUrl = L"https://github.com/DavidHiFi/davids-windhawk-mods";
 constexpr PCWSTR kSetBugUrl =
     L"https://github.com/DavidHiFi/davids-windhawk-mods/issues/new?title=%5BSeamless%20Game%20Crosshair%5D%20";
-constexpr PCWSTR kSetTitle = L"Seamless Game Crosshair";
+constexpr PCWSTR kSetTitle = L"Seamless Crosshair";
 // The self-drawn title bar. Everything below it is laid out as before, in "content" DIPs.
 static float kSetCapH = 40;
 constexpr float kSetCapBtnW = 46, kSetHoverMs = 120;
@@ -4861,7 +4861,7 @@ static void Set_MakeFormats(SetWindow& w) {
     int base = std::clamp(500, 100, 900);
     int bold = std::max(base, std::min(700, base + 100));
     const auto L_ = DWRITE_TEXT_ALIGNMENT_LEADING, C_ = DWRITE_TEXT_ALIGNMENT_CENTER;
-    w.fLabel = Set_Fmt(w.family, 14, base, true);
+    w.fLabel = Set_Fmt(w.family, 16, base, true);
     w.fHint = Set_Fmt(w.family, 12.5f, base, true);
     w.fTitle = Set_Fmt(w.family, 26, bold, false);
     w.fIntro = Set_Fmt(w.family, 13.5f, base, true);
@@ -5174,7 +5174,7 @@ static void Set_BuildPage(SetWindow& w) {
         it.field = (int)k;
         float textW = w.contentW - 2 * kSetRowPad - RowControlW(f, w.contentW) - 24;
         float lh = Set_TextH(w.fLabel.get(), f.label, textW);
-        float dh = f.desc ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
+        float dh = (f.desc && *f.desc) ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
         it.y = y;
         it.h = std::max(kSetRowMin, 28 + lh + dh) + (ColorRowStacked(f, w.contentW) ? kSgcChipLine : 0);
         y += it.h + kSetRowGap;
@@ -5386,10 +5386,10 @@ static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
 
     float textW = w.contentW - 2 * kSetRowPad - RowControlW(f, w.contentW) - 24;
     float lh = Set_TextH(w.fLabel.get(), f.label, textW);
-    float dh = f.desc ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
+    float dh = (f.desc && *f.desc) ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
     float top = row.top + (it.h - (ColorRowStacked(f, w.contentW) ? kSgcChipLine : 0) - lh - dh) / 2;
     p.Text(w.fLabel.get(), f.label, {row.left + kSetRowPad, top, row.left + kSetRowPad + textW, top + lh + 2}, mocha::text);
-    if (f.desc)
+    if (f.desc && *f.desc)
         p.Text(w.fHint.get(), f.desc, {row.left + kSetRowPad, top + lh + 3, row.left + kSetRowPad + textW, top + lh + dh + 3},
                mocha::subtext0);
 
@@ -5525,7 +5525,7 @@ static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it, int idx)
     p.GradFill(mark, 18, 1);
     p.Glyph(w.fIconL.get(), 0xF272, mark, mocha::crust);
     float x = mark.right + 20;
-    p.Text(w.fBig.get(), L"Seamless Game Crosshair", {x, row.top + 18, row.right - 16, row.top + 46}, mocha::text);
+    p.Text(w.fBig.get(), L"Seamless Crosshair", {x, row.top + 18, row.right - 16, row.top + 46}, mocha::text);
 #ifdef WH_MOD_VERSION
     std::wstring ver = std::wstring(L"Version ") + WH_MOD_VERSION + L"  \u00B7  MIT license  \u00B7  A Windhawk mod";
 #else
@@ -5611,7 +5611,7 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
         UINT32 c = act ? mocha::text : mocha::subtext1;
         // The glyph sits in a fixed 44-wide slot, so it stays centered in the collapsed rail.
         p.Glyph(w.fIcon.get(), kSetPages[i].glyph, {r.left, r.top, r.left + 44, r.bottom}, act ? mocha::blue : mocha::subtext0);
-        p.Text(w.fLabel.get(), kSetPages[i].name, {r.left + 50, r.top + 8, r.left + w.railW - 24, r.bottom}, c, textA);
+        p.Text(w.fValue.get(), kSetPages[i].name, {r.left + 50, r.top, r.left + w.railW - 24, r.bottom}, c, textA);
     }
 #ifdef WH_MOD_VERSION
     p.Text(w.fSmall.get(), std::wstring(L"Version ") + WH_MOD_VERSION,
@@ -6726,6 +6726,12 @@ static void Set_Relayout(SetWindow& w) {
 
 // A switch's stored value, found by the end of its key so a "SettingsWindow." prefix still matches.
 static bool Set_FieldOn(const SetWindow& w, PCWSTR key, bool def) {
+    // The window group wins over a module option with the same suffix.
+    const std::wstring windowKey = std::wstring(L"SettingsWindow.") + key;
+    for (const auto& f : w.fields)
+        if (windowKey == f.key) return f.value == L"1";
+    for (const auto& f : w.fields)
+        if (wcscmp(f.key, key) == 0) return f.value == L"1";
     const size_t n = wcslen(key);
     for (const auto& f : w.fields) {
         const size_t m = wcslen(f.key);

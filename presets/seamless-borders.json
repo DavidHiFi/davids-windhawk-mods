@@ -1,0 +1,33 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@seamless-borders",
+      "enabled": true,
+      "settings": {
+        "exclude[0]": "",
+        "excludedPrograms[0]": "",
+        "fadeMs": 150,
+        "focusedColor": "accent",
+        "focusedColorTo": "#cba6f7",
+        "gap": 4294967295,
+        "gradient": 1,
+        "gradientAngle": 45,
+        "menuGradientAngle": 0,
+        "menuRadius": 16,
+        "menus": 1,
+        "perCornerRadius": "",
+        "radius": 16,
+        "roundMaximizedAndSnapped": "snapped",
+        "smallRadius": 16,
+        "toast": 0,
+        "toastGap": 4294967295,
+        "toastRadius": 10,
+        "tooltipRadius": 4,
+        "unfocusedColor": "#585b70",
+        "unfocusedColorTo": "#585b70",
+        "width": 2
+      }
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@file-operation-styler-plus",
+      "enabled": true,
+      "settings": {
+        "customization.colors.accentOverride": "#89B4FA",
+        "customization.colors.backgroundOverride": "#1E1E2E",
+        "customization.colors.inactiveOverride": "#6C7086",
+        "customization.colors.primaryTextOverride": "#CDD6F4",
+        "customization.colors.secondaryTextOverride": "#BAC2DE",
+        "customization.enabled": 1,
+        "customization.footerColor": "#1E1E2E",
+        "customization.footerColorPreset": "system",
+        "customization.footerStyle": "glass",
+        "customization.glassEffect": "blur",
+        "customization.glassTint": "#1E1E2E",
+        "customization.glassTintStrength": 85,
+        "customization.preset": "glass",
+        "customization.style.circleThickness": 7,
+        "customization.style.progressThickness": 8,
+        "customization.text.bodySize": 11,
+        "customization.text.customFont": "FiraCode Nerd Font",
+        "customization.text.fontPreset": "default",
+        "customization.text.percentSize": 26,
+        "customization.text.summarySize": 23,
+        "hideSmallControlButtons": 0,
+        "hideTitleBarPercentage": 0,
+        "renderer": "gpu",
+        "showCurrentFileProgressBar": 1
+      }
+    }
+  ]
+}

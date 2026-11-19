@@ -1,0 +1,46 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@keyboard-shortcut-actions-plus",
+      "enabled": true,
+      "settings": {
+        "HotkeyActions[0].Action": "ACTION_START_PROCESS",
+        "HotkeyActions[0].AdditionalArgs": "wt.exe",
+        "HotkeyActions[0].AppName": "Windows Terminal",
+        "HotkeyActions[0].DownloadUrl": "https://aka.ms/terminal",
+        "HotkeyActions[0].Hotkey": "Alt+Shift+Enter",
+        "HotkeyActions[1].Action": "ACTION_START_PROCESS",
+        "HotkeyActions[1].AdditionalArgs": "uac;wt.exe",
+        "HotkeyActions[1].AppName": "Windows Terminal",
+        "HotkeyActions[1].DownloadUrl": "https://aka.ms/terminal",
+        "HotkeyActions[1].Hotkey": "Ctrl+Alt+Shift+Enter",
+        "HotkeyActions[2].Action": "ACTION_RESTART_EXPLORER",
+        "HotkeyActions[2].AdditionalArgs": "",
+        "HotkeyActions[2].AppName": "",
+        "HotkeyActions[2].DownloadUrl": "",
+        "HotkeyActions[2].Hotkey": "Ctrl+Alt+Shift+R",
+        "HotkeyActions[3].Action": "ACTION_START_PROCESS",
+        "HotkeyActions[3].AdditionalArgs": "%ProgramFiles%\\AutoHotkey\\UX\\WindowSpy.ahk",
+        "HotkeyActions[3].AppName": "AutoHotkey Window Spy",
+        "HotkeyActions[3].DownloadUrl": "https://www.autohotkey.com/download/",
+        "HotkeyActions[3].Hotkey": "Ctrl+Alt+Shift+S",
+        "HotkeyActions[4].Action": "ACTION_START_PROCESS",
+        "HotkeyActions[4].AdditionalArgs": "Everything.exe",
+        "HotkeyActions[4].AppName": "Everything",
+        "HotkeyActions[4].DownloadUrl": "https://www.voidtools.com/downloads/",
+        "HotkeyActions[4].Hotkey": "Ctrl+Shift+1",
+        "HotkeyActions[5].Action": "ACTION_HIDE_ICONS",
+        "HotkeyActions[5].AdditionalArgs": "",
+        "HotkeyActions[5].AppName": "",
+        "HotkeyActions[5].DownloadUrl": "",
+        "HotkeyActions[5].Hotkey": "Ctrl+Alt+H",
+        "HotkeyActions[6].Action": "ACTION_TOGGLE_OBS",
+        "HotkeyActions[6].AdditionalArgs": "--startreplaybuffer --multi",
+        "HotkeyActions[6].AppName": "OBS Studio",
+        "HotkeyActions[6].DownloadUrl": "https://obsproject.com/download",
+        "HotkeyActions[6].Hotkey": "Ctrl+Shift+F10"
+      }
+    }
+  ]
+}

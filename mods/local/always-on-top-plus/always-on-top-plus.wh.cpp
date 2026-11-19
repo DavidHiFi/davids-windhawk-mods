@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id              always-on-top-plus
-// @name            Always On Top Windows Plus
+// @name            Always On Top Plus
 // @description     Pin any window above all others with a hotkey, with a highlight border, opacity and sounds
-// @version         2.4.0
+// @version         2.4.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -14,12 +14,12 @@
 
 // ==WindhawkModReadme==
 /*
-# Always On Top Windows Plus
+# Always On Top Plus
 
 Pin the window you are working in above everything else with one shortcut, and unpin it
 with the same shortcut. A thin colored border shows which windows are pinned.
 
-![Always On Top Windows Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/always-on-top-plus.png)
+![Always On Top Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/always-on-top-plus.png)
 
 ## Features
 - **Pin and unpin with a shortcut.** The default is Win+Ctrl+T, and you can change every part of it.

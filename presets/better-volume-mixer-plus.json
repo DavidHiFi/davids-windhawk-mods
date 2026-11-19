@@ -1,0 +1,28 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@better-volume-mixer-plus",
+      "enabled": true,
+      "settings": {
+        "animations": 1,
+        "backgroundOpacity": 75,
+        "closeWhenFocusIsLost": 1,
+        "compactMode": 1,
+        "customApps[0].app": "",
+        "customApps[0].defaultVolume": 4294967295,
+        "customApps[0].displayName": "",
+        "exactVolumeEntry": 1,
+        "fontFamily": "FiraCode Nerd Font",
+        "hiddenApps[0]": "",
+        "keyboardControls": 0,
+        "maxVisibleApps": "15",
+        "renderer": "gpu",
+        "showAllSessions": 0,
+        "theme": "system",
+        "trayVolumeNumber": 0,
+        "volumeStep": 5
+      }
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.0.16
+// @version         2.0.17
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -202,9 +202,10 @@ This is caused by default by the AccentBlur API.❕
 // Menu room: shared by Seamless Flyouts and the tool mods' menu look.
 // - Every popup menu window in this process is caught as it is created, title bar (system)
 //   menus included, which never pass through TrackPopupMenu.
-// - Menus that Windows draws get 2 px more frame on every side, so the hover has the same room
-//   from the border as in Explorer's own desktop menu (4 px at the sides, 6 px top and bottom).
-//   Menus with owner-drawn rows (Explorer) already have it and are left alone.
+// - Menus that Windows draws get 2 px more frame on every side, so the hover has side room
+//   like Explorer's own desktop menu (4 px at the sides). Rows are compacted: 4 px top and
+//   bottom margin (owner ask 2026-11-19, was 6).
+//   Menus with owner-drawn rows (Explorer) already have room and are left alone.
 // - A submenu opens touching its parent, and while the pointer heads for an open submenu the
 //   parent ignores it, so rows crossed on the way don't swap the submenu (released after a
 //   short rest, so stopping on a row still opens that row).
@@ -221,7 +222,7 @@ This is caused by default by the AccentBlur API.❕
 namespace SeamlessMenuRoom {
 
 constexpr UINT_PTR kRoomId = 0x6D55;
-constexpr INT kRowMargin = 6;                  // row top and bottom margin of the menu look
+constexpr INT kRowMargin = 4;                  // row top and bottom margin of the menu look
 constexpr INT kMinRowMargin = 2;
 static const WCHAR* const kPadProp = L"SeamlessMenuRoomPad";
 static const WCHAR* const kSizeProp = L"SeamlessMenuRoomSize";
@@ -459,8 +460,8 @@ static VOID FitMenu(HMENU m, HWND owner)
     INT avail = mi.rcWork.bottom - mi.rcWork.top - px(8);
     INT pick = kRowMargin;
     for (; pick > kMinRowMargin; pick--) {
-        INT cut = px(2 * (kRowMargin - pick));   // rows measure 29 px and separators 17 px at margin 6
-        if (rows * (px(29) - cut) + seps * (px(17) - cut) + px(10) <= avail) break;
+        INT cut = px(2 * (kRowMargin - pick));   // rows measure 25 px and separators 13 px at margin 4
+        if (rows * (px(25) - cut) + seps * (px(13) - cut) + px(10) <= avail) break;
     }
     if (pick < g_rowMargin.load()) {
         g_rowMargin = pick;

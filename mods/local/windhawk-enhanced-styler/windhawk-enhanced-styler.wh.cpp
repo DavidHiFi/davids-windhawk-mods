@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.7
+// @version         2.2.9
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -11,7 +11,7 @@
 // @include         windhawk-ui.exe
 // @include         windhawk.exe
 // @architecture    x86-64
-// @compilerOptions -DWIN32_LEAN_AND_MEAN -luser32 -lgdi32 -ldwmapi -lws2_32 -ladvapi32 -lcomctl32 -luxtheme -liphlpapi
+// @compilerOptions -DWIN32_LEAN_AND_MEAN -luser32 -lgdi32 -ldwmapi -lws2_32 -ladvapi32 -lcomctl32 -luxtheme -liphlpapi -lshell32 -lole32 -luuid -lcrypt32
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -119,6 +119,9 @@ The original window frame work was adapted from [Titlebar For Everyone](https://
 - gradientEnd: "#cba6f7"
   $name: Gradient end color
   $description: "Right side of the gradient, in #RRGGBB format (Suggested: #cba6f7, Mocha mauve)"
+- mochaIcons: false
+  $name: Mocha Windhawk icons
+  $description: "Use the blue and mauve icon for the Windhawk window, tray and shortcuts"
 - enhancedBadge: true
   $name: Enhanced badge
   $description: "Show a small gradient badge beside the Windhawk name in the top left"
@@ -128,7 +131,7 @@ The original window frame work was adapted from [Titlebar For Everyone](https://
 - textColor: "#cdd6f4"
   $name: Text color
   $description: "Body and title bar text. Leave blank for Windhawk's colors"
-- fontFamily: "Segoe UI"
+- fontFamily: "FiraCode Nerd Font"
   $name: Font
   $description: "Use an installed font for the interface. Leave blank for Windhawk's font. The title bar keeps the Windows font"
 - fontWeight: 500
@@ -150,6 +153,12 @@ The original window frame work was adapted from [Titlebar For Everyone](https://
 // ==/WindhawkModSettings==
 
 #include <winsock2.h>
+#include <shlobj.h>
+#include <shellapi.h>
+#include <commctrl.h>
+#include <wincrypt.h>
+#include <atomic>
+#include <optional>
 #include <ws2tcpip.h>
 #include <windhawk_utils.h>
 #include <windows.h>
@@ -219,6 +228,7 @@ struct Settings {
     bool headerGradient = true;
     std::uint32_t gradientStart = 0x89b4fa;
     std::uint32_t gradientEnd = 0xcba6f7;
+    bool mochaIcons = false;
     bool enhancedBadge = true;
     std::string badgeText = "Enhanced";
 };
@@ -352,6 +362,7 @@ static void ReadSettings(Settings* s) {
     if (s->selectionOpacity < 0) s->selectionOpacity = 0;
     if (s->selectionOpacity > 100) s->selectionOpacity = 100;
 
+    s->mochaIcons = Wh_GetIntSetting(L"mochaIcons") != 0;
     s->headerGradient = Wh_GetIntSetting(L"headerGradient") != 0;
     PCWSTR gradStart = Wh_GetStringSetting(L"gradientStart");
     if (!HexColorToRgb(gradStart, &s->gradientStart)) s->gradientStart = 0x89b4fa;
@@ -1525,8 +1536,582 @@ static void ClearWindowStack(HWND hWnd) {
 
 static bool g_isUiProcess = false;
 
+static std::wstring IconFile() {
+    wchar_t folder[MAX_PATH];
+    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, folder))) return {};
+    std::wstring dir = std::wstring(folder) + L"\\Windhawk";
+    return dir + L"\\Windhawk-Mocha.ico";
+}
+
+static bool WriteMochaIcon(const std::wstring& path) {
+    if (GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES) return true;
+    static constexpr char data[] =
+        "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"
+    ;
+    DWORD size = 0;
+    if (!CryptStringToBinaryA(data, 0, CRYPT_STRING_BASE64, nullptr, &size, nullptr, nullptr)) return false;
+    std::vector<BYTE> bytes(size);
+    if (!CryptStringToBinaryA(data, 0, CRYPT_STRING_BASE64, bytes.data(), &size, nullptr, nullptr)) return false;
+    std::wstring dir = path.substr(0, path.rfind(L'\\'));
+    CreateDirectoryW(dir.c_str(), nullptr);
+    wchar_t temp[MAX_PATH];
+    if (!GetTempFileNameW(dir.c_str(), L"whi", 0, temp)) return false;
+    HANDLE file = CreateFileW(temp, GENERIC_WRITE, 0, nullptr, TRUNCATE_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    DWORD written = 0;
+    bool ok = file != INVALID_HANDLE_VALUE && WriteFile(file, bytes.data(), size, &written, nullptr) && written == size;
+    if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+    if (ok) ok = MoveFileExW(temp, path.c_str(), MOVEFILE_REPLACE_EXISTING);
+    DeleteFileW(temp);
+    return ok;
+}
+
+static std::mutex g_iconMutex;
+static std::map<int, HICON> g_icons;
+
+static HICON MochaIcon(int size) {
+    std::lock_guard<std::mutex> lock(g_iconMutex);
+    if (auto it = g_icons.find(size); it != g_icons.end()) return it->second;
+    auto path = IconFile();
+    if (path.empty() || !WriteMochaIcon(path)) return nullptr;
+    auto icon = (HICON)LoadImageW(nullptr, path.c_str(), IMAGE_ICON, size, size, LR_LOADFROMFILE);
+    if (icon) g_icons.emplace(size, icon);
+    return icon;
+}
+
+static bool OwnTrayWindow(HWND hwnd) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    wchar_t name[32];
+    return pid == GetCurrentProcessId() && GetClassNameW(hwnd, name, ARRAYSIZE(name)) &&
+           wcscmp(name, L"WindhawkDaemon") == 0;
+}
+
+static decltype(&Shell_NotifyIconW) g_notifyIcon;
+static std::atomic_bool g_mochaIcons;
+static std::atomic_bool g_trayAlert;
+static std::atomic_bool g_themedTray;
+
+static HICON MakeTrayIcon(int size) {
+    static constexpr UINT64 glyph[] = {
+    0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL,
+    0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL,
+    0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL,
+    0x0000000000000000ULL, 0x0000000000000000ULL, 0x000000ff80000000ULL, 0x000003fff0000000ULL,
+    0x000007fffe000000ULL, 0x00001fffffe00000ULL, 0x00003fffffffe100ULL, 0x00007fffffffff00ULL,
+    0x00007ffffffffc00ULL, 0x0000fffffffff800ULL, 0x0001fe7fffffe000ULL, 0x0007fa7fffff8000ULL,
+    0x001fecfffff80000ULL, 0x003ff9fffffc0000ULL, 0x007fffffffff0000ULL, 0x00ffffffffff8000ULL,
+    0x00ffffffffffc000ULL, 0x00ffffffffffe000ULL, 0x00ffffffff83e000ULL, 0x00fe03ffff807000ULL,
+    0x00f80fffffc00800ULL, 0x00f01fffffc00000ULL, 0x00f03fffffe00000ULL, 0x00603fffffe00000ULL,
+    0x0030700ffff00000ULL, 0x00004003fbf80000ULL, 0x00000001f9fc0000ULL, 0x00000000f87e0000ULL,
+    0x00000000780f0000ULL, 0x000000007c000000ULL, 0x0000000038000000ULL, 0x0000000038000000ULL,
+    0x0000000038000000ULL, 0x0000000018000000ULL, 0x0000000018000000ULL, 0x0000000018000000ULL,
+    0x0000000010000000ULL, 0x0000000010000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL,
+    0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL,
+    0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL,
+    0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL,
+    };
+    BITMAPV5HEADER header{};
+    header.bV5Size = sizeof(header);
+    header.bV5Width = size;
+    header.bV5Height = -size;
+    header.bV5Planes = 1;
+    header.bV5BitCount = 32;
+    header.bV5Compression = BI_BITFIELDS;
+    header.bV5RedMask = 0x00ff0000;
+    header.bV5GreenMask = 0x0000ff00;
+    header.bV5BlueMask = 0x000000ff;
+    header.bV5AlphaMask = 0xff000000;
+    void* bits = nullptr;
+    HBITMAP color = CreateDIBSection(nullptr, reinterpret_cast<BITMAPINFO*>(&header),
+                                     DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!color) return nullptr;
+    auto pixels = static_cast<UINT32*>(bits);
+    const float extent = (float)size, radius = extent * 0.26f;
+    constexpr UINT32 blue = 0x89B4FA, mauve = 0xCBA6F7, crust = 0x11111B;
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            int cover = 0, mark = 0;
+            for (int sy = 0; sy < 4; ++sy) {
+                for (int sx = 0; sx < 4; ++sx) {
+                    float fx = x + (sx + 0.5f) / 4, fy = y + (sy + 0.5f) / 4;
+                    float dx = fx - std::clamp(fx, radius, extent - radius);
+                    float dy = fy - std::clamp(fy, radius, extent - radius);
+                    if (dx * dx + dy * dy > radius * radius) continue;
+                    ++cover;
+                    mark += (glyph[(int)(fy * 64 / extent)] >> (int)(fx * 64 / extent)) & 1;
+                }
+            }
+            float mix = (x + y + 1) / (2 * extent);
+            UINT32 pixel = (cover * 255 / 16u) << 24;
+            for (int shift : {0, 8, 16}) {
+                float a = (blue >> shift) & 255, b = (mauve >> shift) & 255;
+                int ink = (crust >> shift) & 255;
+                pixel |= (UINT32)((((a + (b - a) * mix) * (cover - mark)) + ink * mark) / 16) << shift;
+            }
+            pixels[y * size + x] = pixel;
+        }
+    }
+    std::vector<BYTE> maskBits(((size + 15) / 16) * 2 * size, 0);
+    HBITMAP mask = CreateBitmap(size, size, 1, 1, maskBits.data());
+    ICONINFO info{TRUE, 0, 0, mask, color};
+    HICON icon = mask ? CreateIconIndirect(&info) : nullptr;
+    if (mask) DeleteObject(mask);
+    DeleteObject(color);
+    return icon;
+}
+
+static HICON MochaTrayIcon(HWND owner) {
+    HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
+    UINT dpi = GetDpiForWindow(taskbar ? taskbar : owner);
+    int size = GetSystemMetricsForDpi(SM_CXSMICON, dpi ? dpi : 96);
+    std::lock_guard<std::mutex> lock(g_iconMutex);
+    // Negative cache keys keep freshly drawn badges separate from file icons.
+    if (auto it = g_icons.find(-size); it != g_icons.end()) return it->second;
+    HICON icon = MakeTrayIcon(size);
+    if (icon) g_icons.emplace(-size, icon);
+    return icon;
+}
+
+static BOOL WINAPI NotifyIconHook(DWORD action, PNOTIFYICONDATAW data) {
+    if ((action != NIM_ADD && action != NIM_MODIFY) || !data ||
+        data->cbSize != sizeof(*data) || data->uID != 1 ||
+        !(data->uFlags & NIF_ICON) || !OwnTrayWindow(data->hWnd)) {
+        return g_notifyIcon(action, data);
+    }
+    if (data->uFlags & NIF_TIP) g_trayAlert = wcscmp(data->szTip, L"Windhawk") != 0;
+    if (g_mochaIcons && !g_trayAlert) {
+        if (HICON themed = MochaTrayIcon(data->hWnd)) {
+            NOTIFYICONDATAW copy = *data;
+            copy.hIcon = themed;
+            BOOL ok = g_notifyIcon(action, &copy);
+            if (ok) g_themedTray = true;
+            return ok;
+        }
+    }
+    BOOL ok = g_notifyIcon(action, data);
+    if (ok) g_themedTray = false;
+    return ok;
+}
+
+static void RefreshTrayIcon(HWND owner, bool enabled) {
+    if (!g_notifyIcon || g_trayAlert || enabled == g_themedTray) return;
+    NOTIFYICONDATAW data{sizeof(data)};
+    data.hWnd = owner;
+    data.uID = 1;
+    data.uFlags = NIF_ICON;
+    HICON stock = nullptr;
+    if (enabled) {
+        data.hIcon = MochaTrayIcon(owner);
+    } else {
+        HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
+        UINT dpi = GetDpiForWindow(taskbar ? taskbar : owner);
+        int size = GetSystemMetricsForDpi(SM_CXSMICON, dpi ? dpi : 96);
+        LoadIconWithScaleDown(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(0x80), size, size, &stock);
+        data.hIcon = stock;
+    }
+    if (data.hIcon && g_notifyIcon(NIM_MODIFY, &data)) g_themedTray = enabled;
+    if (stock) DestroyIcon(stock);
+}
+
+static void UpdateShortcutIcon(IShellLinkW* link, IPersistFile* file, const std::wstring& path,
+                               const std::wstring& icon, const std::wstring& backup, bool enabled) {
+    if (FAILED(file->Load(path.c_str(), STGM_READ))) return;
+    wchar_t target[MAX_PATH], image[MAX_PATH];
+    int index = 0;
+    if (FAILED(link->GetPath(target, ARRAYSIZE(target), nullptr, SLGP_RAWPATH)) ||
+        FAILED(link->GetIconLocation(image, ARRAYSIZE(image), &index))) return;
+    wchar_t expanded[MAX_PATH], installed[MAX_PATH];
+    DWORD count = ExpandEnvironmentStringsW(target, expanded, ARRAYSIZE(expanded));
+    if (!count || count > ARRAYSIZE(expanded) ||
+        !GetModuleFileNameW(nullptr, installed, ARRAYSIZE(installed)) ||
+        _wcsicmp(expanded, installed) != 0) return;
+
+    bool themed = _wcsicmp(image, icon.c_str()) == 0;
+    if (enabled == themed) return;
+    std::wstring next = icon;
+    int nextIndex = 0;
+    if (enabled) {
+        if (!CopyFileW(path.c_str(), backup.c_str(), FALSE)) return;
+    } else {
+        if (FAILED(file->Load(backup.c_str(), STGM_READ)) ||
+            FAILED(link->GetIconLocation(image, ARRAYSIZE(image), &nextIndex)) ||
+            FAILED(file->Load(path.c_str(), STGM_READ))) return;
+        next = image;
+    }
+    if (SUCCEEDED(link->SetIconLocation(next.c_str(), nextIndex)) &&
+        SUCCEEDED(file->Save(path.c_str(), TRUE))) {
+        SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, path.c_str(), nullptr);
+        if (!enabled) DeleteFileW(backup.c_str());
+    }
+}
+
+static void UpdateShortcutIcons(bool enabled) {
+    auto icon = IconFile();
+    if (icon.empty() || (enabled && !WriteMochaIcon(icon))) return;
+    HRESULT init = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (FAILED(init)) return;
+    IShellLinkW* link = nullptr;
+    if (SUCCEEDED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_IShellLinkW,
+                                   reinterpret_cast<void**>(&link)))) {
+        IPersistFile* file = nullptr;
+        if (SUCCEEDED(link->QueryInterface(IID_IPersistFile, reinterpret_cast<void**>(&file)))) {
+            static constexpr struct {
+                int folder;
+                PCWSTR suffix;
+                PCWSTR backupSuffix;
+            } shortcuts[] = {
+                {CSIDL_COMMON_PROGRAMS, L"\\Windhawk.lnk", L".common-programs.lnk"},
+                {CSIDL_PROGRAMS, L"\\Windhawk.lnk", L".programs.lnk"},
+                {CSIDL_COMMON_DESKTOPDIRECTORY, L"\\Windhawk.lnk", L".common-desktop.lnk"},
+                {CSIDL_DESKTOPDIRECTORY, L"\\Windhawk.lnk", L".desktop.lnk"},
+                {CSIDL_APPDATA, L"\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar\\Windhawk.lnk", L".taskbar.lnk"},
+            };
+            for (const auto& shortcut : shortcuts) {
+                wchar_t folder[MAX_PATH];
+                if (SUCCEEDED(SHGetFolderPathW(nullptr, shortcut.folder, nullptr, SHGFP_TYPE_CURRENT, folder))) {
+                    UpdateShortcutIcon(link, file, std::wstring(folder) + shortcut.suffix,
+                                       icon, icon + shortcut.backupSuffix, enabled);
+                }
+            }
+            file->Release();
+        }
+        link->Release();
+    }
+    CoUninitialize();
+}
+
 struct TrayDialogState {
     HWND list = nullptr;
+    RECT progressListMargins{};
+    RECT progressButtonMargins{};
     long long epoch = 0;  // settings generation the colors were pushed with
 };
 static std::map<HWND, TrayDialogState> g_trayDialogs;
@@ -1563,6 +2148,8 @@ static HBRUSH TrayBrush(COLORREF color) {
     return g_trayBrush;
 }
 
+static bool IsProgressDialog(HWND hwnd);
+
 static void ApplyTrayDialogLook(HWND dialog, HWND list, const Settings& s) {
     COLORREF surface = TraySurfaceColor(s);
     // LVM_SETBKCOLOR / LVM_SETTEXTBKCOLOR / LVM_SETTEXTCOLOR: rows take the
@@ -1570,7 +2157,11 @@ static void ApplyTrayDialogLook(HWND dialog, HWND list, const Settings& s) {
     SendMessageW(list, 0x1026, 0, (LPARAM)surface);
     SendMessageW(list, 0x1027, 0, (LPARAM)surface);
     if (COLORREF text = TrayTextColor(s)) SendMessageW(list, 0x1024, 0, (LPARAM)text);
-    ApplyWindowStack(dialog, s);
+    Settings frame = s;
+    if (IsProgressDialog(dialog) && frame.blur) {
+        frame.backgroundOpacity = std::clamp(frame.backgroundOpacity, 85, 99);
+    }
+    ApplyWindowStack(dialog, frame);
     InvalidateRect(dialog, nullptr, TRUE);
 }
 
@@ -1607,13 +2198,104 @@ static LRESULT CALLBACK TrayDialogProc(HWND hWnd, UINT message, WPARAM wParam, L
     return DefSubclassProc(hWnd, message, wParam, lParam);
 }
 
+static int CaptionHeight(UINT dpi);
+static void PaintCaption(HWND hwnd, HDC dc, const Settings& s);
+static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, DWORD_PTR);
+
+static bool IsProgressDialog(HWND hwnd) {
+    wchar_t title[128], expected[128];
+    return GetWindowTextW(hwnd, title, ARRAYSIZE(title)) &&
+           LoadStringW(GetModuleHandleW(nullptr), 0xbc, expected, ARRAYSIZE(expected)) &&
+           wcscmp(title, expected) == 0;
+}
+
+static LRESULT CALLBACK ProgressDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam,
+                                           DWORD_PTR) {
+    UINT dpi = GetDpiForWindow(hwnd);
+    int height = CaptionHeight(dpi);
+    if (!InterlockedExchangeAdd(&g_themeActive, 0) && message != WM_NCDESTROY) {
+        return DefSubclassProc(hwnd, message, wParam, lParam);
+    }
+    switch (message) {
+        case WM_NCDESTROY:
+            KillTimer(hwnd, 0x5EA7D0C);
+            KillTimer(hwnd, 0x5EA7D0D);
+            WindhawkUtils::RemoveWindowSubclassFromAnyThread(hwnd, ProgressDialogProc);
+            break;
+        case WM_NCCALCSIZE: {
+            RECT* area = reinterpret_cast<RECT*>(lParam);
+            LONG top = area->top;
+            LRESULT result = DefSubclassProc(hwnd, message, wParam, lParam);
+            area->top = std::max(top, area->top - height);
+            return result;
+        }
+        case WM_SIZE: {
+            if (wParam == SIZE_MINIMIZED) break;
+            int clientHeight = std::max(0, (int)HIWORD(lParam) - height);
+            LRESULT result = DefSubclassProc(hwnd, message, wParam, MAKELPARAM(LOWORD(lParam), clientHeight));
+            RECT list, button;
+            {
+                std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+                auto it = g_trayDialogs.find(hwnd);
+                if (it == g_trayDialogs.end()) return result;
+                list = it->second.progressListMargins;
+                button = it->second.progressButtonMargins;
+            }
+            int width = LOWORD(lParam);
+            int bottom = HIWORD(lParam);
+            SetWindowPos(GetDlgItem(hwnd, 1001), nullptr, list.left, list.top + height,
+                         std::max(0L, width - list.left - list.right),
+                         std::max(0L, bottom - list.top - height - list.bottom),
+                         SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(GetDlgItem(hwnd, IDOK), nullptr, width - button.right - button.left,
+                         bottom - button.bottom - button.top, button.left, button.top,
+                         SWP_NOZORDER | SWP_NOACTIVATE);
+            return result;
+        }
+        case WM_PAINT: {
+            LRESULT result = DefSubclassProc(hwnd, message, wParam, lParam);
+            HDC dc = GetDC(hwnd);
+            if (dc) {
+                Settings caption = SnapshotSettings();
+                caption.centerTitle = true;
+                PaintCaption(hwnd, dc, caption);
+                ReleaseDC(hwnd, dc);
+            }
+            return result;
+        }
+        case WM_NCACTIVATE:
+            return DefSubclassProc(hwnd, message, TRUE, lParam);
+        case WM_NCHITTEST: {
+            LRESULT hit = DefSubclassProc(hwnd, message, wParam, lParam);
+            if (hit != HTCLIENT) return hit;
+            POINT point{(short)LOWORD(lParam), (short)HIWORD(lParam)};
+            ScreenToClient(hwnd, &point);
+            if (point.y >= height) return hit;
+            if (DwmDefWindowProc(hwnd, message, wParam, lParam, &hit) &&
+                (hit == HTMINBUTTON || hit == HTMAXBUTTON || hit == HTCLOSE)) return hit;
+            return HTCAPTION;
+        }
+        case WM_NCMOUSEMOVE:
+        case WM_NCMOUSELEAVE:
+        case WM_NCMOUSEHOVER:
+        case WM_NCLBUTTONDOWN:
+        case WM_NCLBUTTONUP:
+        case WM_NCRBUTTONUP:
+        case WM_TIMER:
+            return MainWindowProc(hwnd, message, wParam, lParam, 0);
+    }
+    return DefSubclassProc(hwnd, message, wParam, lParam);
+}
+
+
 static bool IsTrayTaskDialog(HWND hWnd) {
     DWORD pid = 0;
     GetWindowThreadProcessId(hWnd, &pid);
     if (pid != GetCurrentProcessId()) return false;
     wchar_t cls[64];
     if (!GetClassNameW(hWnd, cls, 64) || wcscmp(cls, L"#32770") != 0) return false;
-    return FindWindowExW(hWnd, nullptr, L"SysListView32", nullptr) != nullptr;
+    HWND list = GetDlgItem(hWnd, 1001);
+    return list && GetClassNameW(list, cls, ARRAYSIZE(cls)) && wcscmp(cls, L"SysListView32") == 0;
 }
 
 static BOOL CALLBACK TrayDialogEnumProc(HWND hWnd, LPARAM lParam) {
@@ -1622,9 +2304,32 @@ static BOOL CALLBACK TrayDialogEnumProc(HWND hWnd, LPARAM lParam) {
     {
         std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
         fresh = !g_trayDialogs.contains(hWnd);
-        if (fresh) g_trayDialogs[hWnd] = {FindWindowExW(hWnd, nullptr, L"SysListView32", nullptr), 0};
+        if (fresh) g_trayDialogs[hWnd] = {GetDlgItem(hWnd, 1001)};
     }
     if (fresh && WindhawkUtils::SetWindowSubclassFromAnyThread(hWnd, TrayDialogProc, 0)) {
+        RECT client, list, button;
+        HWND listWindow = GetDlgItem(hWnd, 1001);
+        HWND buttonWindow = GetDlgItem(hWnd, IDOK);
+        bool progressLayout = IsProgressDialog(hWnd) && GetClientRect(hWnd, &client) &&
+            GetWindowRect(listWindow, &list) && GetWindowRect(buttonWindow, &button);
+        if (progressLayout) {
+            MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&list), 2);
+            MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&button), 2);
+            {
+                std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+                auto& state = g_trayDialogs[hWnd];
+                state.progressListMargins = {list.left, list.top, client.right - list.right, client.bottom - list.bottom};
+                state.progressButtonMargins = {button.right - button.left, button.bottom - button.top,
+                                               client.right - button.right, client.bottom - button.bottom};
+            }
+        }
+        if (progressLayout &&
+            WindhawkUtils::SetWindowSubclassFromAnyThread(hWnd, ProgressDialogProc, 0)) {
+            DWM_WINDOW_CORNER_PREFERENCE corner = DWMWCP_ROUND;
+            DwmSetWindowAttribute(hWnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
+            SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        }
         DebugNote("tray dialog themed");
     }
     return TRUE;
@@ -2226,7 +2931,10 @@ static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
         wchar_t full[608];
         swprintf_s(full, 608, L"%s%s", title, suffix);
         if (suffix[0] && g_uptimeHwnd != hwnd) UptimeArm(hwnd);
-        RECT text{inset + icon + MulDiv(8, dpi, 96), 0, client.right - MulDiv(160, dpi, 96), client.bottom};
+        RECT buttons;
+        LONG right = CaptionButtonRect(hwnd, &buttons) ? buttons.left - MulDiv(8, dpi, 96)
+                                                      : client.right - MulDiv(160, dpi, 96);
+        RECT text{inset + icon + MulDiv(8, dpi, 96), 0, right, client.bottom};
         if (s.centerTitle) {
             // Center the text on the window, icon just before it; stay clear of the buttons.
             SIZE size{};
@@ -2263,6 +2971,9 @@ static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
             CloseThemeData(theme);
         }
         HICON logo = (HICON)SendMessageW(hwnd, WM_GETICON, ICON_SMALL, 0);
+        if (s.mochaIcons) {
+            if (HICON themed = MochaIcon(icon)) logo = themed;
+        }
         if (!logo) logo = (HICON)GetClassLongPtrW(hwnd, GCLP_HICONSM);
         if (logo) DrawIconEx(paintDc, iconX, (client.bottom-icon)/2, logo, icon, icon, 0, nullptr, DI_NORMAL);
         if (oldFont) SelectObject(paintDc, oldFont);
@@ -2483,6 +3194,26 @@ static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
 }
 
 static std::set<HWND> g_mainWindows;
+static std::map<HWND, std::pair<HICON, HICON>> g_originalWindowIcons;
+
+static void UpdateWindowIcons(HWND hwnd, bool enabled) {
+    auto originals = g_originalWindowIcons.find(hwnd);
+    if (!enabled) {
+        if (originals == g_originalWindowIcons.end()) return;
+        SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)originals->second.first);
+        SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)originals->second.second);
+        g_originalWindowIcons.erase(originals);
+        return;
+    }
+    if (originals != g_originalWindowIcons.end()) return;
+    UINT dpi = GetDpiForWindow(hwnd);
+    HICON small = MochaIcon(GetSystemMetricsForDpi(SM_CXSMICON, dpi));
+    HICON large = MochaIcon(GetSystemMetricsForDpi(SM_CXICON, dpi));
+    if (!small || !large) return;
+    HICON oldSmall = (HICON)SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)small);
+    HICON oldLarge = (HICON)SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)large);
+    g_originalWindowIcons[hwnd] = {oldSmall, oldLarge};
+}
 
 static void PrepareMainWindow(HWND hwnd) {
     if (!g_mainWindows.contains(hwnd)) {
@@ -2504,6 +3235,7 @@ static void PrepareMainWindow(HWND hwnd) {
                      SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED |
                      (preserveClient ? 0 : SWP_NOSIZE));
     }
+    UpdateWindowIcons(hwnd, SnapshotSettings().mochaIcons);
     // Edge resize handles: subclass every live WebView child (the fold-in
     // moved the outside edges into it) and prune dead entries, because the
     // host can be recreated on project reloads.
@@ -3319,6 +4051,7 @@ static DWORD WINAPI StylerWorkerThread(LPVOID) {
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return 1;
     srand(GetTickCount() ^ GetCurrentProcessId());
     unsigned long long lastFullCycle = 0;
+    std::optional<bool> shortcutSetting;
     long long settingsMarker = g_seenChangeTime;  // Wh_ModInit read the settings at this marker
 
     // Late attach: the webview may already exist when the mod loads (mod
@@ -3371,7 +4104,17 @@ static DWORD WINAPI StylerWorkerThread(LPVOID) {
         }
 
         if (!g_isUiProcess) {
-            TrayDialogPass(SnapshotSettings());
+            Settings current = SnapshotSettings();
+            g_mochaIcons = current.mochaIcons;
+            HWND owner = FindWindowW(L"WindhawkDaemon", nullptr);
+            if (OwnTrayWindow(owner)) {
+                RefreshTrayIcon(owner, current.mochaIcons);
+                if (!shortcutSetting || *shortcutSetting != current.mochaIcons) {
+                    UpdateShortcutIcons(current.mochaIcons);
+                    shortcutSetting = current.mochaIcons;
+                }
+            }
+            TrayDialogPass(current);
             continue;
         }
 
@@ -3567,6 +4310,11 @@ BOOL Wh_ModInit() {
     // later bump restarts the interface.
     g_seenChangeTime = ReadModChangeTime();
 
+    g_mochaIcons = g_settings.mochaIcons;
+    if (!g_isUiProcess) {
+        Wh_SetFunctionHook((void*)Shell_NotifyIconW, (void*)NotifyIconHook, (void**)&g_notifyIcon);
+    }
+
     if (g_isUiProcess) {
         // Ask the WebView2 loader for a local debugging port, so the mod can push
         // the theme tokens and the font into the interface's own page. Must be set
@@ -3612,6 +4360,7 @@ void Wh_ModUninit() {
         if (IsOurMainUiWindow(visible) && IsWindowVisible(visible)) ownsVisible = true;
     }
     reopen = reopen && ownsVisible;
+    g_mochaIcons = false;
     InterlockedExchange(&g_themeActive, 0);
     InterlockedExchange(&g_relaunchRequested, 0);
     if (g_stopEvent) {
@@ -3631,20 +4380,51 @@ void Wh_ModUninit() {
         CloseHandle(g_stopEvent);
         g_stopEvent = nullptr;
     }
+    g_mochaIcons = false;
+    HWND tray = FindWindowW(L"WindhawkDaemon", nullptr);
+    if (OwnTrayWindow(tray)) {
+        RefreshTrayIcon(tray, false);
+        if (disabled) UpdateShortcutIcons(false);
+    }
     // The page's injected style goes with the interface process: a disable
     // relaunches it below, and a recompile re-injects over the same style tag.
     HWND hWnd = nullptr;
     for (;;) {
         hWnd = FindWindowExW(nullptr, hWnd, L"WindhawkTauriMainUI", nullptr);
         if (!hWnd) break;
-        if (IsOurMainUiWindow(hWnd)) ClearWindowStack(hWnd);
+        if (IsOurMainUiWindow(hWnd)) {
+            UpdateWindowIcons(hWnd, false);
+            ClearWindowStack(hWnd);
+        }
     }
     std::lock_guard<std::mutex> captionLock(g_captionChildrenMutex);
     for (auto& [child, size] : g_captionChildren) {
         if (IsWindow(child)) SetWindowRgn(child, nullptr, TRUE);
     }
     g_captionChildren.clear();
+    std::vector<std::pair<HWND, HWND>> trayDialogs;
+    {
+        std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+        for (const auto& [dialog, state] : g_trayDialogs) trayDialogs.emplace_back(dialog, state.list);
+    }
     WindhawkUtils::RemoveAllWindowSubclasses();
+    for (const auto& [dialog, list] : trayDialogs) {
+        if (!IsTrayTaskDialog(dialog)) continue;
+        ClearWindowStack(dialog);
+        DWM_WINDOW_CORNER_PREFERENCE corner = DWMWCP_DEFAULT;
+        DwmSetWindowAttribute(dialog, DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
+        if (IsWindow(list)) {
+            SendMessageW(list, LVM_SETBKCOLOR, 0, GetSysColor(COLOR_WINDOW));
+            SendMessageW(list, LVM_SETTEXTBKCOLOR, 0, GetSysColor(COLOR_WINDOW));
+            SendMessageW(list, LVM_SETTEXTCOLOR, 0, GetSysColor(COLOR_WINDOWTEXT));
+        }
+        SetWindowPos(dialog, nullptr, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        RECT client{};
+        GetClientRect(dialog, &client);
+        SendMessageW(dialog, WM_SIZE, SIZE_RESTORED, MAKELPARAM(client.right, client.bottom));
+        InvalidateRect(dialog, nullptr, TRUE);
+    }
     if (g_dockHwnd) KillTimer(g_dockHwnd, kDockTimer);
     if (g_uptimeHwnd) KillTimer(g_uptimeHwnd, kUptimeTimer);
     g_uptimeHwnd = nullptr;
@@ -3655,6 +4435,11 @@ void Wh_ModUninit() {
         g_trayDialogs.clear();
     }
     RestorePatches();
+    {
+        std::lock_guard<std::mutex> lock(g_iconMutex);
+        for (const auto& [size, icon] : g_icons) DestroyIcon(icon);
+        g_icons.clear();
+    }
     // Only a real disable reopens the visible interface, not app exit or recompilation.
     if (reopen) SpawnRelaunchHelper();
 }

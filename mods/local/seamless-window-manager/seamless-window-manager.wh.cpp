@@ -2,7 +2,7 @@
 // @id              seamless-window-manager
 // @name            Seamless Window Manager
 // @description     Move, resize, snap and focus windows with the mouse or keyboard, with app rules, gaps and a pause key
-// @version         2.6.4
+// @version         2.6.6
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -294,6 +294,7 @@ inline std::wstring ProcessImagePath(DWORD pid) {
 }
 }  // namespace swm
 namespace snapCommander {
+static void AnimateRects(const std::vector<std::pair<HWND, RECT>>& moves);
 static RECT GappedWorkArea(HMONITOR monitor, const RECT& work);
 void LoadIgnoreRules();
 bool IsIgnoredWindow(HWND hWnd, PCWSTR exeName);
@@ -435,6 +436,7 @@ enum class WindowAction : int {
     Lower,
     Center,
     SideSnap,
+    DragMaximize,
 };
 
 struct KeyBinding {
@@ -1102,6 +1104,7 @@ WindowAction ActionFromSetting(PCWSTR value) {
 
 void RunWindowMenu(HWND hWnd, HWND owner, POINT pt);
 bool RunWindowActionNow(HWND hWnd, WindowAction action, POINT pt);
+namespace mover { bool QueueDragMaximize(HWND wnd); }
 
 bool RunWindowAction(HWND hWnd, WindowAction action, POINT pt) {
     if (action == WindowAction::None || swm::IsPaused() ||
@@ -1160,7 +1163,10 @@ void RunWindowMenu(HWND hWnd, HWND owner, POINT pt) {
 }
 
 bool RunWindowActionNow(HWND hWnd, WindowAction action, POINT pt) {
-    if (action == WindowAction::Maximize) {
+    if (action == WindowAction::DragMaximize && mover::QueueDragMaximize(hWnd)) {
+        return true;
+    }
+    if (action == WindowAction::Maximize || action == WindowAction::DragMaximize) {
         ShowWindowAsync(hWnd, IsZoomed(hWnd) ? SW_RESTORE : SW_MAXIMIZE);
     } else if (action == WindowAction::Minimize) {
         ShowWindowAsync(hWnd, SW_MINIMIZE);
@@ -2589,12 +2595,48 @@ POINT CalcDragGrab(HWND hRootWnd, POINT ptDown) {
 namespace mover {
 std::mutex g_lock;
 HWND g_wnd;
+HWND g_maximizeWnd;
 RECT g_rect;
 UINT g_flags;
 bool g_pending;
 bool g_quit;
 HANDLE g_event;
 HANDLE g_thread;
+
+void MaximizeAfterDrag(HWND wnd) {
+    if (!CanActOnRootWindow(wnd)) return;
+    if (IsZoomed(wnd)) {
+        ShowWindowAsync(wnd, SW_RESTORE);
+        return;
+    }
+    if (swm::g_animMs <= 0 || IsIconic(wnd) || IsHungAppWindow(wnd) ||
+        !(GetWindowLongPtr(wnd, GWL_STYLE) & WS_MAXIMIZEBOX)) {
+        ShowWindowAsync(wnd, SW_MAXIMIZE);
+        return;
+    }
+
+    auto dpi = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    WINDOWPLACEMENT placement{sizeof(placement)};
+    MONITORINFO monitor{sizeof(monitor)};
+    // Wobble draws a stand-in while the real window is app-cloaked.
+    DWORD cloaked = 0;
+    ULONGLONG revealDeadline = GetTickCount64() + 325;
+    while (SUCCEEDED(DwmGetWindowAttribute(wnd, DWMWA_CLOAKED, &cloaked,
+                                            sizeof(cloaked))) &&
+           cloaked == DWM_CLOAKED_APP && GetTickCount64() < revealDeadline) {
+        Sleep(8);
+    }
+    if (GetWindowPlacement(wnd, &placement) &&
+        GetMonitorInfo(MonitorFromWindow(wnd, MONITOR_DEFAULTTONEAREST), &monitor)) {
+        snapCommander::AnimateRects({{wnd, monitor.rcWork}});
+        // Commit the maximize with the original restore rectangle.
+        placement.showCmd = SW_MAXIMIZE;
+        if (!SetWindowPlacement(wnd, &placement)) ShowWindowAsync(wnd, SW_MAXIMIZE);
+    } else {
+        ShowWindowAsync(wnd, SW_MAXIMIZE);
+    }
+    if (dpi) SetThreadDpiAwarenessContext(dpi);
+}
 
 DWORD WINAPI ThreadProc(void*) {
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
@@ -2603,14 +2645,24 @@ DWORD WINAPI ThreadProc(void*) {
             HWND wnd;
             RECT rc;
             UINT flags;
+            bool maximize;
             {
                 std::lock_guard<std::mutex> guard(g_lock);
                 if (g_quit) return 0;
-                if (!g_pending) break;
-                g_pending = false;
-                wnd = g_wnd;
-                rc = g_rect;
-                flags = g_flags;
+                maximize = !g_pending;
+                if (maximize) {
+                    wnd = std::exchange(g_maximizeWnd, nullptr);
+                    if (!wnd) break;
+                } else {
+                    g_pending = false;
+                    wnd = g_wnd;
+                    rc = g_rect;
+                    flags = g_flags;
+                }
+            }
+            if (maximize) {
+                MaximizeAfterDrag(wnd);
+                continue;
             }
             if (IsHungAppWindow(wnd)) flags |= SWP_ASYNCWINDOWPOS;
             else flags &= ~SWP_ASYNCWINDOWPOS;
@@ -2621,16 +2673,32 @@ DWORD WINAPI ThreadProc(void*) {
     return 0;
 }
 
+bool StartIfNeeded() {
+    if (g_thread) return true;
+    g_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    if (!g_event) return false;
+    g_thread = CreateThread(nullptr, 0, ThreadProc, nullptr, 0, nullptr);
+    if (!g_thread) {
+        CloseHandle(g_event);
+        g_event = nullptr;
+    }
+    return g_thread != nullptr;
+}
+
+bool QueueDragMaximize(HWND wnd) {
+    std::lock_guard<std::mutex> guard(g_lock);
+    if (g_quit || g_maximizeWnd || !StartIfNeeded()) return false;
+    g_maximizeWnd = wnd;
+    SetEvent(g_event);
+    return true;
+}
+
 void Queue(HWND wnd, const RECT& rc, UINT flags) {
     std::lock_guard<std::mutex> guard(g_lock);
-    if (!g_thread) {
-        g_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-        if (g_event) g_thread = CreateThread(nullptr, 0, ThreadProc, nullptr, 0, nullptr);
-        if (!g_thread) {
-            SetWindowPos(wnd, nullptr, rc.left, rc.top, rc.right - rc.left,
-                         rc.bottom - rc.top, flags | SWP_ASYNCWINDOWPOS);
-            return;
-        }
+    if (!StartIfNeeded()) {
+        SetWindowPos(wnd, nullptr, rc.left, rc.top, rc.right - rc.left,
+                     rc.bottom - rc.top, flags | SWP_ASYNCWINDOWPOS);
+        return;
     }
     g_wnd = wnd;
     g_rect = rc;
@@ -3336,7 +3404,7 @@ LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
             // state the toggle leaves. The Alt release of the drag is kept
             // from reaching the window, which would open its menu.
             HWND hRootWnd = g_llRootWnd;
-            if (PostWindowAction(hRootWnd, WindowAction::Maximize,
+            if (PostWindowAction(hRootWnd, WindowAction::DragMaximize,
                                  ToLogicalPoint(ms->pt))) {
                 g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
                 ResetLowLevelDragState();
@@ -13162,7 +13230,7 @@ static void Set_MakeFormats(SetWindow& w) {
     int base = std::clamp(500, 100, 900);
     int bold = std::max(base, std::min(700, base + 100));
     const auto L_ = DWRITE_TEXT_ALIGNMENT_LEADING, C_ = DWRITE_TEXT_ALIGNMENT_CENTER;
-    w.fLabel = Set_Fmt(w.family, 14, base, true);
+    w.fLabel = Set_Fmt(w.family, 16, base, true);
     w.fHint = Set_Fmt(w.family, 12.5f, base, true);
     w.fTitle = Set_Fmt(w.family, 26, bold, false);
     w.fIntro = Set_Fmt(w.family, 13.5f, base, true);
@@ -13683,10 +13751,10 @@ static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
 
     float textW = w.contentW - 2 * kSetRowPad - Set_ControlW(f) - 24;
     float lh = Set_TextH(w.fLabel.get(), f.label, textW);
-    float dh = f.desc ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
+    float dh = (f.desc && *f.desc) ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
     float top = row.top + (it.h - lh - dh) / 2;
     p.Text(w.fLabel.get(), f.label, {row.left + kSetRowPad, top, row.left + kSetRowPad + textW, top + lh + 2}, mocha::text);
-    if (f.desc)
+    if (f.desc && *f.desc)
         p.Text(w.fHint.get(), f.desc, {row.left + kSetRowPad, top + lh + 3, row.left + kSetRowPad + textW, top + lh + dh + 3},
                mocha::subtext0);
 
@@ -13908,7 +13976,7 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
         UINT32 c = act ? mocha::text : mocha::subtext1;
         // The glyph sits in a fixed 44-wide slot, so it stays centered in the collapsed rail.
         p.Glyph(w.fIcon.get(), kSetPages[i].glyph, {r.left, r.top, r.left + 44, r.bottom}, act ? mocha::blue : mocha::subtext0);
-        p.Text(w.fLabel.get(), kSetPages[i].name, {r.left + 50, r.top + 8, r.left + w.railW - 24, r.bottom}, c, textA);
+        p.Text(w.fValue.get(), kSetPages[i].name, {r.left + 50, r.top, r.left + w.railW - 24, r.bottom}, c, textA);
     }
 #ifdef WH_MOD_VERSION
     p.Text(w.fSmall.get(), std::wstring(L"Version ") + WH_MOD_VERSION,
@@ -15185,6 +15253,12 @@ static void Set_Relayout(SetWindow& w) {
 
 // A switch's stored value, found by the end of its key so a "SettingsWindow." prefix still matches.
 static bool Set_FieldOn(const SetWindow& w, PCWSTR key, bool def) {
+    // The window group wins over a module option with the same suffix.
+    const std::wstring windowKey = std::wstring(L"SettingsWindow.") + key;
+    for (const auto& f : w.fields)
+        if (windowKey == f.key) return f.value == L"1";
+    for (const auto& f : w.fields)
+        if (wcscmp(f.key, key) == 0) return f.value == L"1";
     const size_t n = wcslen(key);
     for (const auto& f : w.fields) {
         const size_t m = wcslen(f.key);

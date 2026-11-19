@@ -1,0 +1,15 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@explorer-tags-plus",
+      "enabled": true,
+      "settings": {
+        "folder": "E:\\Tags",
+        "maxRows": 8,
+        "tags[0].color": "#89B4FA",
+        "tags[0].name": "Important"
+      }
+    }
+  ]
+}

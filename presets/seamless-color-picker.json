@@ -1,0 +1,45 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@seamless-color-picker",
+      "enabled": true,
+      "settings": {
+        "Copying.closeAfterCopy": 0,
+        "Copying.copyFormat": "hex",
+        "Copying.customFormat": "{hex}",
+        "Copying.showToast": 1,
+        "Copying.upperCase": 1,
+        "Keys.hotkey": "Alt+Win+C",
+        "Keys.screenHotkey": "",
+        "Keys.screenPickAction": "copy",
+        "Look.accent": "#89B4FA",
+        "Look.accent2": "#CBA6F7",
+        "Look.animations": 1,
+        "Look.cornerRadius": 8,
+        "Look.font": "FiraCode Nerd Font",
+        "Look.glass": 1,
+        "Look.glassTint": 85,
+        "Look.glow": 1,
+        "Picker.alwaysOnTop": 1,
+        "Picker.customStartColor": "#89B4FA",
+        "Picker.livePick": 1,
+        "Picker.nativeTitleBar": 1,
+        "Picker.recentCount": 16,
+        "Picker.rememberPosition": 1,
+        "Picker.showPalette": 1,
+        "Picker.sliderMode": "hue",
+        "Picker.startColor": "last",
+        "Screen.magnifierPixels": 15,
+        "Screen.magnifierShape": "circle",
+        "Screen.magnifierZoom": 10,
+        "Screen.showCrosshair": 1,
+        "Screen.showGrid": 1,
+        "Screen.showInfo": 1,
+        "SettingsWindow.nativeSettingsTitleBar": 0,
+        "SettingsWindow.settingsGlass": 1,
+        "SettingsWindow.settingsTitleButtons": "native"
+      }
+    }
+  ]
+}

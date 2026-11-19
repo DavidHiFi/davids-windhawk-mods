@@ -6,3 +6,5 @@
 *.lib
 build/
 dist/
+# Local backups
+*.bak-*

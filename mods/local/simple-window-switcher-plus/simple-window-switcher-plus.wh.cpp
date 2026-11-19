@@ -2,7 +2,7 @@
 // @id              simple-window-switcher-plus
 // @name            Simple Window Switcher Plus
 // @description     Customizable Alt+Tab with Vista animations, background blur and elevated app support
-// @version         1.0.4
+// @version         1.0.5
 // @author          DavidHiFi, Lone, valinet, Asteski, bropines, caliberda
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -553,9 +553,9 @@ Based on Simple Window Switcher 2.1 by Lone, with improvements by Asteski and br
           $description: Nudge the icon vertically from its default position.
       $name: Badge Layout
     - Font:
-        - fontFamily: Segoe UI
+        - fontFamily: FiraCode Nerd Font
           $name: Font Family
-          $description: Font used for window titles (e.g., Segoe UI, Tahoma).
+          $description: 'Font used for window titles. Any installed font (Suggested: FiraCode Nerd Font).'
         - fontSize: 9
           $name: Font Size
           $description: Size of the font in points.
@@ -5307,7 +5307,7 @@ static void LoadSettings() {
     LoadStringSetting(L"Style.LightMode.indicatorTextColorMode", g_settings.indicatorTextColorModeLight, L"default");
     LoadStringSetting(L"Style.LightMode.customIndicatorTextColor", g_settings.customIndicatorTextColorLight, L"#000000");
 
-    LoadStringSetting(L"Appearance.Font.fontFamily", g_settings.fontFamily, L"Segoe UI");
+    LoadStringSetting(L"Appearance.Font.fontFamily", g_settings.fontFamily, L"FiraCode Nerd Font");
 
     g_settings.fontSize = Wh_GetIntSetting(L"Appearance.Font.fontSize");
     if (g_settings.fontSize <= 0) g_settings.fontSize = 9;

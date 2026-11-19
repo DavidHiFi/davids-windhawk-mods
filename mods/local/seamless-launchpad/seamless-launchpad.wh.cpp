@@ -6,7 +6,7 @@
 // @id              seamless-launchpad
 // @name            Seamless Launchpad
 // @description     A fullscreen GPU rendered grid of all your apps in place of Start, with instant search, adjustable blur, wiggle edit mode and power buttons
-// @version         2.6.1
+// @version         2.6.4
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -46,12 +46,13 @@ of the macOS Launchpad, with instant search and a blurred background.
 - **Adjustable blur.** Pick the blur type, strength, opacity and color of the
   background. The search bar, folder glass, dots and power bar use the
   Catppuccin Mocha palette.
-- **Opens like Start.** The Windows key, Ctrl+Esc and the Start button of the
-  taskbar or the Standalone Dock all open it.
-- **Your own Windows key.** The Windows key, Shift + Windows key and the Start
-  button can each open this grid, the original Start, or a program of your
-  choice, such as a launcher. The program starts even when it isn't running,
-  so this replaces the same feature of Open-Shell.
+- **Opens like Start.** The Start button of the taskbar or the Standalone Dock
+  opens it, and Shift + Windows key does from the keyboard.
+- **Your own ways in.** Shift + Windows key and the Start button can each open
+  this grid, the original Start, or a program of your choice, such as a
+  launcher. The program starts even when it isn't running, so this replaces
+  the same feature of Open-Shell. The Windows key on its own belongs to Halo
+  Launcher, and the Windows Start menu never opens from the keyboard.
 - **Your own order.** Drag icons to move them, across pages and in and out
   of folders. Drop an app on another to make a folder.
 - **Right-click menu.** Open, run as administrator, open the file location
@@ -109,9 +110,12 @@ Clicking outside the icons or switching to another window closes it.
 - The power buttons never force apps to close. If an app has unsaved work,
   Windows asks about it as usual. Hibernate shows only when hibernation is on
   in Windows.
-- Set **Windows key**, **Shift + Windows key** or **Start button** to "Open
-  the original Start" to get the normal Start menu for that action. Shift +
-  Windows key opens it by default.
+- The Windows key on its own (and Ctrl+Esc) belongs to Halo Launcher. When it
+  still reaches Start, this mod hands it to Halo, or opens this grid when Halo
+  isn't running, so the Windows Start menu never opens from the keyboard.
+- Set **Shift + Windows key** or **Start button** to "Open the original Start"
+  to get the normal Start menu for that action. Shift + Windows key opens it
+  by default.
 - If Open-Shell or another Start replacement also takes the Windows key, turn
   that feature off there, or it gets the key first.
 - The first time the mod loads, Windhawk downloads the symbols of
@@ -126,13 +130,6 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
 
 // ==WindhawkModSettings==
 /*
-- winKeyAction: grid
-  $name: Windows key
-  $description: Also Ctrl+Esc.
-  $options:
-  - grid: Open this grid
-  - start: Open the original Start
-  - program: Run the program below
 - shiftWinKeyAction: start
   $name: Shift + Windows key
   $options:
@@ -421,7 +418,6 @@ bool Animate() {
     return g_settings.animations && enabled;
 }
 // Also read in the ShowStartView hook, on Explorer's threads.
-std::atomic<KeyAction> g_winKeyAction{KeyAction::Grid};
 std::atomic<KeyAction> g_shiftWinKeyAction{KeyAction::Start};
 std::atomic<KeyAction> g_startButtonAction{KeyAction::Grid};
 
@@ -503,7 +499,6 @@ void LoadSettings() {
                : value == L"program" ? KeyAction::Program
                                      : KeyAction::Grid;
     };
-    g_winKeyAction = action(L"winKeyAction");
     g_shiftWinKeyAction = action(L"shiftWinKeyAction");
     g_startButtonAction = action(L"startButtonAction");
 }
@@ -4466,7 +4461,6 @@ struct SetField {
 static std::vector<SetField> Set_MakeFields() {
     using K = SetField;
     return {
-{K::Choice, L"winKeyAction", L"Windows key", L"Also Ctrl+Esc.", L"grid", {{L"grid", L"Open this grid"}, {L"start", L"Open the original Start"}, {L"program", L"Run the program below"}}, 0, 100, 0, L"Open Launchpad"},
 {K::Choice, L"shiftWinKeyAction", L"Shift + Windows key", L"", L"start", {{L"grid", L"Open this grid"}, {L"start", L"Open the original Start"}, {L"program", L"Run the program below"}}, 0, 100, 0, L"Open Launchpad"},
 {K::Choice, L"startButtonAction", L"Start button", L"The taskbar Start button, the Standalone Dock's, and every other way Start opens that is not the keyboard.", L"grid", {{L"grid", L"Open this grid"}, {L"start", L"Open the original Start"}, {L"program", L"Run the program below"}}, 0, 100, 0, L"Open Launchpad"},
 {K::Text, L"program", L"Program", L"What \"Run the program below\" starts. A command line such as \"C:\\Program Files\\App\\app.exe\" --flag, or a shortcut, file, folder or web address", L"", {}, 0, 100, 0, L"Open Launchpad"},
@@ -5329,7 +5323,7 @@ static void Set_MakeFormats(SetWindow& w) {
     int base = std::clamp(500, 100, 900);
     int bold = std::max(base, std::min(700, base + 100));
     const auto L_ = DWRITE_TEXT_ALIGNMENT_LEADING, C_ = DWRITE_TEXT_ALIGNMENT_CENTER;
-    w.fLabel = Set_Fmt(w.family, 14, base, true);
+    w.fLabel = Set_Fmt(w.family, 16, base, true);
     w.fHint = Set_Fmt(w.family, 12.5f, base, true);
     w.fTitle = Set_Fmt(w.family, 26, bold, false);
     w.fIntro = Set_Fmt(w.family, 13.5f, base, true);
@@ -5631,7 +5625,7 @@ static void Set_BuildPage(SetWindow& w) {
         it.field = (int)k;
         float textW = w.contentW - 2 * kSetRowPad - Set_ControlW(f) - 24;
         float lh = Set_TextH(w.fLabel.get(), f.label, textW);
-        float dh = f.desc ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
+        float dh = (f.desc && *f.desc) ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
         it.y = y;
         it.h = std::max(kSetRowMin, 28 + lh + dh);
         y += it.h + kSetRowGap;
@@ -5842,10 +5836,10 @@ static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
 
     float textW = w.contentW - 2 * kSetRowPad - Set_ControlW(f) - 24;
     float lh = Set_TextH(w.fLabel.get(), f.label, textW);
-    float dh = f.desc ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
+    float dh = (f.desc && *f.desc) ? Set_TextH(w.fHint.get(), f.desc, textW) + 3 : 0;
     float top = row.top + (it.h - lh - dh) / 2;
     p.Text(w.fLabel.get(), f.label, {row.left + kSetRowPad, top, row.left + kSetRowPad + textW, top + lh + 2}, mocha::text);
-    if (f.desc)
+    if (f.desc && *f.desc)
         p.Text(w.fHint.get(), f.desc, {row.left + kSetRowPad, top + lh + 3, row.left + kSetRowPad + textW, top + lh + dh + 3},
                mocha::subtext0);
 
@@ -6067,7 +6061,7 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
         UINT32 c = act ? mocha::text : mocha::subtext1;
         // The glyph sits in a fixed 44-wide slot, so it stays centered in the collapsed rail.
         p.Glyph(w.fIcon.get(), kSetPages[i].glyph, {r.left, r.top, r.left + 44, r.bottom}, act ? mocha::blue : mocha::subtext0);
-        p.Text(w.fLabel.get(), kSetPages[i].name, {r.left + 50, r.top + 8, r.left + w.railW - 24, r.bottom}, c, textA);
+        p.Text(w.fValue.get(), kSetPages[i].name, {r.left + 50, r.top, r.left + w.railW - 24, r.bottom}, c, textA);
     }
 #ifdef WH_MOD_VERSION
     p.Text(w.fSmall.get(), std::wstring(L"Version ") + WH_MOD_VERSION,
@@ -7207,6 +7201,12 @@ static void Set_Relayout(SetWindow& w) {
 
 // A switch's stored value, found by the end of its key so a "SettingsWindow." prefix still matches.
 static bool Set_FieldOn(const SetWindow& w, PCWSTR key, bool def) {
+    // The window group wins over a module option with the same suffix.
+    const std::wstring windowKey = std::wstring(L"SettingsWindow.") + key;
+    for (const auto& f : w.fields)
+        if (windowKey == f.key) return f.value == L"1";
+    for (const auto& f : w.fields)
+        if (wcscmp(f.key, key) == 0) return f.value == L"1";
     const size_t n = wcslen(key);
     for (const auto& f : w.fields) {
         const size_t m = wcslen(f.key);
@@ -8971,13 +8971,31 @@ HRESULT WINAPI XamlLauncher_ShowStartView_Hook(void* pThis,
                                                int showMethod,
                                                int showFlags) {
     Wh_Log(L"> method %d, flags %d", showMethod, showFlags);
-    KeyAction action = GetTickCount64() < g_shiftWinUntil
-                           ? g_shiftWinKeyAction.load()
-                       : IsKeyboardShow(showMethod, showFlags)
-                           ? g_winKeyAction.load()
-                           : g_startButtonAction.load();
+    // The Windows key belongs to Halo Launcher, which keeps Start shut for
+    // its own tap. A keyboard open that still gets here (Ctrl+Esc, or a tap
+    // while Halo was busy) is not our Shift + Windows key press: it goes to
+    // Halo with "open, never close", or to this grid when Halo isn't
+    // running, and the Windows Start menu stays shut either way. The Start
+    // button and the ways that are not the keyboard open the grid.
+    bool shiftWin = GetTickCount64() < g_shiftWinUntil;
+    bool ours = shiftWin || !IsKeyboardShow(showMethod, showFlags);
+    KeyAction action =
+        shiftWin ? g_shiftWinKeyAction.load() : g_startButtonAction.load();
     g_shiftWinUntil = 0;
     HWND wnd = g_wnd;
+    if (!ours) {
+        if (HWND halo = FindWindowW(L"HaloLauncherMsg", nullptr)) {
+            static UINT haloMsg = RegisterWindowMessageW(L"HaloLauncher.Toggle");
+            PostMessageW(halo, haloMsg, 2, 0);
+            return S_OK;
+        }
+        if (wnd) {
+            PostMessageW(wnd, WM_APP_TOGGLE, 0, 0);
+            return S_OK;
+        }
+        return XamlLauncher_ShowStartView_Original(pThis, showMethod,
+                                                   showFlags);
+    }
     if (action == KeyAction::Start || !wnd) {
         return XamlLauncher_ShowStartView_Original(pThis, showMethod,
                                                    showFlags);

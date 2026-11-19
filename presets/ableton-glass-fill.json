@@ -1,0 +1,10 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@ableton-glass-fill",
+      "enabled": true,
+      "settings": {}
+    }
+  ]
+}

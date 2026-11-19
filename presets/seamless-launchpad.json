@@ -1,0 +1,49 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@seamless-launchpad",
+      "enabled": true,
+      "settings": {
+        "accentColor": "#89B4FA",
+        "animations": 1,
+        "appSource": "pinned",
+        "backgroundOpacity": 25,
+        "blurAmount": "50",
+        "blurMode": "custom",
+        "chromeOpacity": 90,
+        "coverScreen": 1,
+        "dockAlignment": "center",
+        "glowSize": 14,
+        "glowStrength": 60,
+        "gridColumns": 10,
+        "gridIconSize": 126,
+        "gridLayout": "pages",
+        "holdTime": 420,
+        "monitor": "mouse",
+        "nativeSettingsTitleBar": 1,
+        "normalizeIcons": 1,
+        "powerBar": 1,
+        "powerButtons.hibernate": 1,
+        "powerButtons.lock": 1,
+        "powerButtons.restart": 1,
+        "powerButtons.shutDown": 1,
+        "powerButtons.signOut": 1,
+        "powerButtons.sleep": 1,
+        "powerNoConfirm": 0,
+        "program": "",
+        "settingsGlass": 1,
+        "settingsTitleButtons": "native",
+        "settingsTrayIcon": 1,
+        "shiftWinKeyAction": "grid",
+        "showLabels": 1,
+        "startButton": 1,
+        "startButtonAction": "grid",
+        "tintColor": "#1E1E2E",
+        "wiggle": 1,
+        "winKey": 1,
+        "winKeyAction": "start"
+      }
+    }
+  ]
+}

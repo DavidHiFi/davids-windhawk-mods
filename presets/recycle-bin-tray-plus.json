@@ -1,0 +1,32 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@recycle-bin-tray-plus",
+      "enabled": true,
+      "settings": {
+        "actions.confirmEmpty": 0,
+        "actions.doubleClick": "open",
+        "actions.leftClick": "none",
+        "actions.middleClick": "none",
+        "actions.rightClick": "contextMenu",
+        "customIcon.colorMode": "original",
+        "customIcon.dark.empty": "",
+        "customIcon.dark.full": "",
+        "customIcon.light.empty": "",
+        "customIcon.light.full": "",
+        "font.empty.code": "",
+        "font.empty.name": "",
+        "font.empty.weight": "regular",
+        "font.full.code": "",
+        "font.full.name": "",
+        "font.full.weight": "regular",
+        "general.enableDragDrop": 1,
+        "general.hideWhenEmpty": 0,
+        "general.iconStyle": "system",
+        "system.fallbackTimerInterval": 300,
+        "vector.style": "style1"
+      }
+    }
+  ]
+}

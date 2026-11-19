@@ -2,7 +2,7 @@
 // @id              seamless-autoscroll
 // @name            Seamless Autoscroll
 // @description     Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator
-// @version         1.1.0
+// @version         1.2.0
 // @author          DavidHiFi, crazyboyybs
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -14,6 +14,29 @@
 // @include         vivaldi.exe
 // @include         chromium.exe
 // @include         opera.exe
+// @include         thorium.exe
+// @include         arc.exe
+// @include         msedgewebview2.exe
+// @include         HaloCord.exe
+// @include         Discord.exe
+// @include         Vesktop.exe
+// @include         Code.exe
+// @include         VSCodium.exe
+// @include         Cursor.exe
+// @include         Antigravity.exe
+// @include         Antigravity IDE.exe
+// @include         T3 Code*.exe
+// @include         OpenCode.exe
+// @include         Obsidian.exe
+// @include         Notion.exe
+// @include         Slack.exe
+// @include         Dopamine*.exe
+// @include         SoundCloud.exe
+// @include         Hydra.exe
+// @include         Kepler.exe
+// @include         Melty.exe
+// @include         Vortex.exe
+// @include         Nightlight Launcher.exe
 // @compilerOptions -DWIN32_LEAN_AND_MEAN -luser32 -ladvapi32 -lole32 -loleaut32 -ldwmapi -lruntimeobject -lgdi32
 // ==/WindhawkMod==
 
@@ -62,6 +85,11 @@ own middle-click scrolling with a plain white circle. In those browsers the mod
 leaves the scrolling to the browser and swaps the white circle for the same
 frosted glass one, so links still open in a new tab on a middle click. Turn off
 **Show the indicator** to get the browser's own circle back.
+
+Apps built the same way get the frosted circle too: HaloCord, Discord, Vesktop,
+VS Code, Cursor, Obsidian, Notion, Slack, T3 Code, OpenCode, Dopamine and apps
+that show web pages through Edge. The mod only stays loaded in an app's main
+window process; it unloads itself from every other process it lands in.
 
 ## Notes
 

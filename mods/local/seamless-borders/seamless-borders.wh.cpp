@@ -2,7 +2,7 @@
 // @id              seamless-borders
 // @name            Seamless Borders
 // @description     Colored borders around windows, menus and notification banners
-// @version         1.0.4
+// @version         1.0.5
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -261,6 +261,7 @@ HWND g_main = nullptr;
 COLORREF g_accent = 0;
 std::unordered_map<HWND, Overlay> g_overlays;
 std::unordered_map<DWORD, bool> g_pidExcluded;
+std::unordered_map<DWORD, bool> g_pidChromium;
 HANDLE g_pacerWake = nullptr;
 std::atomic<bool> g_fadingAny{false};
 std::atomic<bool> g_fadePending{false};
@@ -725,6 +726,50 @@ bool ProcessExcluded(HWND hwnd) {
     return excluded;
 }
 
+// Chromium draws its bubbles ("Restore pages?", bookmark and profile pop-ups)
+// as frameless WS_POPUP windows with no owner and no tool-window bit, so the
+// Alt+Tab rule above classifies them as app windows and rings them: a grey
+// rectangle floating around the rounded bubble. They are content of the
+// browser window, not windows in their own right. Cached per process.
+bool IsChromiumPopupShape(DWORD style, DWORD ex) {
+    return (style & WS_POPUP) && !(style & (WS_CAPTION | WS_THICKFRAME)) &&
+           !(ex & WS_EX_APPWINDOW);
+}
+
+bool IsChromiumPopupHost(HWND hwnd, DWORD style, DWORD ex) {
+    if (!IsChromiumPopupShape(style, ex)) {
+        return false;
+    }
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (!pid || pid == GetCurrentProcessId()) {
+        return false;
+    }
+    auto it = g_pidChromium.find(pid);
+    if (it != g_pidChromium.end()) {
+        return it->second;
+    }
+    if (g_pidChromium.size() > 256) {
+        g_pidChromium.clear();  // pids of exited processes get reused
+    }
+    bool chromium = false;
+    HANDLE proc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (proc) {
+        wchar_t path[MAX_PATH];
+        DWORD len = MAX_PATH;
+        if (QueryFullProcessImageNameW(proc, 0, path, &len)) {
+            const wchar_t* name = wcsrchr(path, L'\\');
+            name = name ? name + 1 : path;
+            chromium = _wcsicmp(name, L"chrome.exe") == 0 ||
+                       _wcsicmp(name, L"msedge.exe") == 0 ||
+                       _wcsicmp(name, L"brave.exe") == 0;
+        }
+        CloseHandle(proc);
+    }
+    g_pidChromium[pid] = chromium;
+    return chromium;
+}
+
 // Window: a caption or sizing frame, or a frameless app window that would show
 // in Alt+Tab (unowned, not a tool window, can take focus). Menu: a classic
 // Win32 menu (#32768), only with the Menus setting on. Toasts and the other
@@ -770,9 +815,13 @@ Kind ClassifyWindow(DWORD style, DWORD ex, bool owned, const wchar_t* cls, bool 
 Kind Classify(HWND hwnd) {
     wchar_t cls[64] = {};
     GetClassNameW(hwnd, cls, 64);
-    Kind kind = ClassifyWindow((DWORD)GetWindowLongPtrW(hwnd, GWL_STYLE),
-                               (DWORD)GetWindowLongPtrW(hwnd, GWL_EXSTYLE),
-                               GetWindow(hwnd, GW_OWNER) != nullptr, cls, g_cfg.menus);
+    DWORD style = (DWORD)GetWindowLongPtrW(hwnd, GWL_STYLE);
+    DWORD ex = (DWORD)GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    Kind kind = ClassifyWindow(style, ex, GetWindow(hwnd, GW_OWNER) != nullptr,
+                               cls, g_cfg.menus);
+    if (kind == Kind::Window && IsChromiumPopupHost(hwnd, style, ex)) {
+        return Kind::None;
+    }
     return kind != Kind::None && ProcessExcluded(hwnd) ? Kind::None : kind;
 }
 

@@ -1,0 +1,36 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@always-on-top-plus",
+      "enabled": true,
+      "settings": {
+        "excludedApps": "",
+        "frameColor": "#F38BA8",
+        "frameColorMode": "gradient",
+        "frameColorTo": "#F9E2AF",
+        "frameCornerRadius": 16,
+        "frameEnabled": 1,
+        "frameOpacity": 100,
+        "frameRoundCorners": 1,
+        "frameThickness": 4,
+        "gameModeBlock": 1,
+        "hotkeyAlt": 1,
+        "hotkeyCtrl": 0,
+        "hotkeyKey": "84",
+        "hotkeyOpacityDown": "189",
+        "hotkeyOpacityUp": "187",
+        "hotkeyShift": 0,
+        "hotkeyWin": 1,
+        "notificationDuration": 5000,
+        "notificationsEnabled": 1,
+        "showInSystemMenu": 0,
+        "soundEnabled": 1,
+        "soundOff": "C:\\Windows\\Media\\Speech Off.wav",
+        "soundOn": "C:\\Windows\\Media\\Speech On.wav",
+        "soundOpacityDown": "C:\\Windows\\Media\\Windows Hardware Remove.wav",
+        "soundOpacityUp": "C:\\Windows\\Media\\Windows Hardware Insert.wav"
+      }
+    }
+  ]
+}

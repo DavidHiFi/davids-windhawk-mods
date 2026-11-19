@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.7
+// @version         1.10.20
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -12634,6 +12634,38 @@ bool BlendStatusDockGlyph(HDC hdcDest,
     bool bottomUp = ds.dsBmih.biHeight > 0;
     bool srcAlpha = ftn.AlphaFormat == AC_SRC_ALPHA;
     BYTE r = GetRValue(color), g = GetGValue(color), b = GetBValue(color);
+    // New builds draw the view glyphs as light shapes whose alpha carries the
+    // whole form; the old ones were a light tile with dark lines. When the
+    // source has no dark ink, tint every visible pixel instead of hunting for
+    // lines that are not there (they came out invisible on the dark dock).
+    bool alphaInk = false;
+    if (srcAlpha) {
+        int dark = 0;
+        for (int y = 0; y < hSrc && dark < 8; y++) {
+            int row = ySrc + y;
+            if (bottomUp) {
+                row = ds.dsBm.bmHeight - 1 - row;
+            }
+            const DWORD* in =
+                (const DWORD*)((const BYTE*)ds.dsBm.bmBits +
+                               (size_t)row * ds.dsBm.bmWidthBytes) +
+                xSrc;
+            for (int x = 0; x < wSrc && dark < 8; x++) {
+                DWORD p = in[x];
+                int a = (int)(p >> 24);
+                if (a < 32) {
+                    continue;
+                }
+                int pr = std::min(255, (int)((p >> 16) & 0xFF) * 255 / a);
+                int pg = std::min(255, (int)((p >> 8) & 0xFF) * 255 / a);
+                int pb = std::min(255, (int)(p & 0xFF) * 255 / a);
+                if ((pr * 3 + pg * 6 + pb) / 10 < 120) {
+                    dark++;
+                }
+            }
+        }
+        alphaInk = dark < 8;
+    }
     for (int y = 0; y < hSrc; y++) {
         int row = ySrc + y;
         if (bottomUp) {
@@ -12654,8 +12686,10 @@ bool BlendStatusDockGlyph(HDC hdcDest,
                     pb = std::min(255, pb * 255 / a);
                 }
                 int lum = (pr * 3 + pg * 6 + pb) / 10;
-                // Dark lines are ink; the grey tile and white are not.
-                int ink = std::clamp((150 - lum) * 255 / 120, 0, 255);
+                // Dark lines are ink on the old tile icons. New glyphs carry
+                // their shape in alpha alone: every visible pixel tints.
+                int ink = alphaInk ? 255
+                                   : std::clamp((150 - lum) * 255 / 120, 0, 255);
                 out_a = ink * a / 255 * ftn.SourceConstantAlpha / 255;
             }
             out[(size_t)y * wSrc + x] = ((DWORD)out_a << 24) |

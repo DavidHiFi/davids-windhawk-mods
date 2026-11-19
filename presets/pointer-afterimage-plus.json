@@ -1,0 +1,29 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@pointer-afterimage-plus",
+      "enabled": true,
+      "settings": {
+        "drawSpeed": 29,
+        "hideSpeed": 30,
+        "hideWhenFast": 1,
+        "nativeSettingsTitleBar": 0,
+        "particleAmount": 5,
+        "particleColor": "gradient",
+        "particleLife": 450,
+        "particleSize": 3,
+        "particles": 0,
+        "pauseInFullscreen": 1,
+        "renderer": "gpu",
+        "rippleMs": 400,
+        "rippleSize": 36,
+        "ripples": 0,
+        "settingsGlass": 1,
+        "settingsTrayIcon": 1,
+        "trailMs": 25,
+        "trailOpacity": 50
+      }
+    }
+  ]
+}

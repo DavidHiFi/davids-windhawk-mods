@@ -1,0 +1,10 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@power-options-button-plus",
+      "enabled": true,
+      "settings": {}
+    }
+  ]
+}

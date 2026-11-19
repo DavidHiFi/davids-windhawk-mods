@@ -1,0 +1,24 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@shell-font-changer-plus",
+      "enabled": true,
+      "settings": {
+        "font.forceBaseWeight": 0,
+        "font.name": "FiraCode Nerd Font",
+        "font.pause": 0,
+        "font.weight": "medium",
+        "rendering.disableDirectWrite": 0,
+        "rendering.disableGdi": 0,
+        "rendering.disableGdiDrawing": 0,
+        "rendering.gdiCreate": 0,
+        "rendering.noFit": 0,
+        "replace.additionalFonts": "",
+        "replace.excludedFonts": "",
+        "replace.replaceAllFonts": 0,
+        "replace.replaceMonospace": 0
+      }
+    }
+  ]
+}

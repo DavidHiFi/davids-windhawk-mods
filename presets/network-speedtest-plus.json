@@ -1,0 +1,29 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@network-speedtest-plus",
+      "enabled": true,
+      "settings": {
+        "autoStart": "auto",
+        "countryDisplay": "hidden",
+        "extraPatterns": "",
+        "fallbackToOriginal": 1,
+        "flyoutBorderHoverEnd": "#CBA6F7",
+        "flyoutBorderHoverStart": "#89B4FA",
+        "flyoutBorderRest": "#585B70",
+        "flyoutBorderWidth": 3,
+        "flyoutPosition": "topRight",
+        "interceptProcessLaunch": 1,
+        "ipDisplay": "hidden",
+        "language": "auto",
+        "nativeSettingsTitleBar": 1,
+        "networkDisplay": "always",
+        "serverDisplay": "always",
+        "settingsGlass": 1,
+        "settingsTrayIcon": 1,
+        "trayIcon": 1
+      }
+    }
+  ]
+}

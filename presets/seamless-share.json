@@ -1,0 +1,33 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@seamless-share",
+      "enabled": true,
+      "settings": {
+        "colors.accentEnd": "#CBA6F7",
+        "colors.accentStart": "#89B4FA",
+        "colors.edge": "#45475A",
+        "colors.subtext": "#A6ADC8",
+        "colors.surface": "#313244",
+        "colors.text": "#CDD6F4",
+        "controlStyles[0].styles[0]": "",
+        "controlStyles[0].target": "",
+        "debugDump": 0,
+        "glass.blur": 32,
+        "glass.popupTintOpacity": 88,
+        "glass.tint": "#1E1E2E",
+        "glass.tintOpacity": 55,
+        "hover": "gradient",
+        "shape.buttonRadius": 8,
+        "shape.cardRadius": 12,
+        "shape.edgeWidth": 2,
+        "shape.radius": 12,
+        "styleConstants[0]": "",
+        "text.font": "FiraCode Nerd Font",
+        "text.weight": "Medium",
+        "themeResourceVariables[0]": ""
+      }
+    }
+  ]
+}

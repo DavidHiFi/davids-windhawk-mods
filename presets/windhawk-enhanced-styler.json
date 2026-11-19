@@ -1,0 +1,35 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@windhawk-enhanced-styler",
+      "enabled": true,
+      "settings": {
+        "accentColor": "#89b4fa",
+        "backgroundColor": "#1e1e2e",
+        "backgroundOpacity": 75,
+        "badgeText": "Enhanced",
+        "blur": "acrylic",
+        "cardColor": "#181825",
+        "cardOpacity": 40,
+        "centerTitle": 1,
+        "controlColor": "#313244",
+        "cornerRadius": 16,
+        "enhancedBadge": 1,
+        "fontFamily": "FiraCode Nerd Font",
+        "fontWeight": 500,
+        "gradientEnd": "#cba6f7",
+        "gradientStart": "#89b4fa",
+        "headerGradient": 1,
+        "mochaIcons": 1,
+        "nativeTitleBar": 1,
+        "roundedCorners": 1,
+        "selectionColor": "",
+        "selectionOpacity": 40,
+        "textColor": "#cdd6f4",
+        "titleBarAcrylic": 1,
+        "titleBarColor": "#292b3d"
+      }
+    }
+  ]
+}
