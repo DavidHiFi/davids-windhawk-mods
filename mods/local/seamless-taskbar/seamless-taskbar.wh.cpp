@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.14
+// @version         0.4.15
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -11477,7 +11477,9 @@ void ApplyStackedGeometry(const ModSettings& settings) {
         return measure(total > 0 ? FormatCapacity(total, total, true).c_str() : L"99.9/99G");
     };
     double unitWidth = std::max({measure(L"MB/s"), measure(L"KB/s"), measure(L"GB/s")});
-    double wattsWidth = measure(L"999W");
+    // Owner 2026-11-19: measure the widest real value "999 W"; the thin space made
+    // three-digit watts ellipsize to "...".
+    double wattsWidth = measure(L"999\u2009W");
     double wattsGap = measure(L"9 9") - measure(L"99");
     double meterColumn = settings.showMeters ? meterWidth + small : 0;
     const double widths[] = {
@@ -23037,6 +23039,10 @@ static Grid BuildPlayerGrid() {
                 textStack.HorizontalAlignment(g_settings.mirrorLayout ? HorizontalAlignment::Right : HorizontalAlignment::Left);
             }
             textStack.Spacing((double)g_settings.textSpacing);
+            // Owner 2026-11-17: the title row sat flush with the island's top edge.
+            // A small top margin (which the centred stack halves) drops both rows
+            // about 2 DIP clear of the border.
+            textStack.Margin({0, 4, 0, 0});
             if (g_settings.showTrackTitle || g_settings.showTrackArtist) {
                 TextBlock titleBlock{nullptr};
                 TextBlock artistBlock{nullptr};
