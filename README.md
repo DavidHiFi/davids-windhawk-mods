@@ -185,6 +185,8 @@ powershell -ExecutionPolicy Bypass -File tools\Build-Repo.ps1
 
 Add `-SkipSources` to refresh settings and metadata only. The rebuild is a mirror: mods that are no longer installed are removed from the sources, the manifest, the settings and the catalog table.
 
+The `presets/` folder and the [Seamless Workshop](https://github.com/DavidHiFi/seamless-workshop) feed are written by the publisher script that runs after every mod install, not by `Build-Repo.ps1`. It copies my mod sources, saves my settings for each mod as a preset, and strips anything private from every settings file first: API keys, tokens, passwords, locations and personal folder paths.
+
 To refresh from a different machine, dump that machine's state first and rebuild from the export:
 
 ```powershell
