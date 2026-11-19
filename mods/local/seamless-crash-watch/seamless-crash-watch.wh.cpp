@@ -2,7 +2,7 @@
 // @id              seamless-crash-watch
 // @name            Seamless Crash Watch
 // @description     A notice when a program crashes. Click it and an AI agent in a terminal finds out why, like Omarchy
-// @version         1.2.8
+// @version         1.2.9
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1051,7 +1051,15 @@ constexpr WCHAR kNoticeClass[] = L"SeamlessCrashWatchNotice", kMsgClass[] = L"Se
 constexpr UINT WM_CW_CRASH = WM_APP + 10, WM_CW_SETTINGS = WM_APP + 11, WM_CW_TRAY = WM_APP + 12,
                WM_CW_EXIT = WM_APP + 13;
 constexpr UINT_PTR kTimerAnim = 1, kTimerTick = 2, kTimerPending = 3;
-constexpr UINT kTrayId = 1;
+// Each mod's own tray icon id: FNV-1a of the mod id, high bit set (as Seamless Dictate).
+// Every tool mod runs as windhawk-mod.exe and Windows keeps an icon's place per program
+// and id, so a shared id 1 made all the mods' icons move together.
+constexpr UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kTrayId = TrayIconId();
 constexpr float kPadX = 14, kPadY = 12, kSlideMs = 200, kCloseMs = 130, kCloseBox = 22;
 
 struct Notice {
