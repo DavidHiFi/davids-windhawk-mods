@@ -1,7 +1,7 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-21T03:24:15+08:00",
+  "generatedAt": "2026-11-21T03:25:34+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 183,
@@ -1166,7 +1166,7 @@
       "name": "Windows 11 File Explorer Styler Plus",
       "author": "DavidHiFi, m417z",
       "github": "https://github.com/m417z",
-      "version": "1.10.20",
+      "version": "1.10.21",
       "license": "",
       "origin": "local",
       "upstream": "",

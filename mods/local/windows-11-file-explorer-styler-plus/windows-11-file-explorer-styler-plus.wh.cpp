@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.20
+// @version         1.10.21
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -2351,6 +2351,7 @@ using namespace std::string_view_literals;
 
 #include <winrt/Microsoft.UI.Composition.h>
 #include <winrt/Microsoft.UI.Dispatching.h>
+#include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
 #include <winrt/Microsoft.UI.Text.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 #include <winrt/Microsoft.UI.Xaml.Documents.h>
@@ -2707,7 +2708,18 @@ struct ElementCustomizationStateForVisualStateGroup {
     winrt::event_token visualStateGroupCurrentStateChangedToken;
 };
 
+struct TabHoverTimer {
+    winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer timer{nullptr};
+    winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer::Tick_revoker tick;
+
+    ~TabHoverTimer() {
+        tick.revoke();
+        if (timer) timer.Stop();
+    }
+};
+
 struct ElementCustomizationState {
+    std::unique_ptr<TabHoverTimer> tabHover;
     UIElement::PointerEntered_revoker pathEntered;
     UIElement::PointerExited_revoker pathExited;
 
@@ -8984,12 +8996,14 @@ void HandleVirtualizingRepeater(ElementId elementId, FrameworkElement element) {
 
 void MergeResourceVariables();
 
-void ConfigureDetailsPaneHover(Controls::Grid grid,
-                               ElementCustomizationState& state) {
+template <typename Panel>
+void ConfigureBorderHover(Panel panel, ElementCustomizationState& state,
+                          double opacity) {
     auto border = Markup::XamlReader::Load(
-        LR"(<LinearGradientBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#6489B4FA" Offset="0"/><GradientStop Color="#64CBA6F7" Offset="1"/></LinearGradientBrush>)").as<Media::Brush>();
-    auto rest = grid.BorderBrush();
-    auto paint = [weak = winrt::make_weak(grid), border, rest](bool hovered) {
+        LR"(<LinearGradientBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#89B4FA" Offset="0"/><GradientStop Color="#CBA6F7" Offset="1"/></LinearGradientBrush>)").as<Media::Brush>();
+    border.Opacity(opacity);
+    auto rest = panel.BorderBrush();
+    auto paint = [weak = winrt::make_weak(panel), border, rest](bool hovered) {
         if (auto target = weak.get()) {
             bool previous = g_elementPropertyModifying;
             g_elementPropertyModifying = true;
@@ -8997,25 +9011,104 @@ void ConfigureDetailsPaneHover(Controls::Grid grid,
                 target.BorderBrush(hovered ? border : rest);
             } catch (...) {
                 g_elementPropertyModifying = previous;
-                Wh_Log(L"Details pane hover paint failed");
+                Wh_Log(L"Explorer border hover paint failed");
                 return;
             }
             g_elementPropertyModifying = previous;
         }
     };
-    state.pathEntered = grid.PointerEntered(winrt::auto_revoke,
+    state.pathEntered = panel.PointerEntered(winrt::auto_revoke,
         [paint](auto const&, auto const&) { paint(true); });
-    state.pathExited = grid.PointerExited(winrt::auto_revoke,
+    state.pathExited = panel.PointerExited(winrt::auto_revoke,
         [paint](auto const&, auto const&) { paint(false); });
+}
+
+void ConfigureTabHover(Controls::Grid grid, muxc::TabViewItem tab,
+                       ElementCustomizationState& state) {
+    using namespace winrt::Microsoft::UI::Dispatching;
+    using namespace winrt::Microsoft::UI::Xaml::Automation::Peers;
+    auto queue = DispatcherQueue::GetForCurrentThread();
+    if (!queue) return;
+
+    auto border = Markup::XamlReader::Load(
+        LR"(<LinearGradientBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#89B4FA" Offset="0"/><GradientStop Color="#CBA6F7" Offset="1"/></LinearGradientBrush>)").as<Media::Brush>();
+    auto rest = grid.BorderBrush();
+    auto tracking = std::make_unique<TabHoverTimer>();
+    tracking->timer = queue.CreateTimer();
+    tracking->timer.Interval(std::chrono::milliseconds{60});
+    tracking->timer.IsRepeating(true);
+    // The tab is excluded from hit testing so the caption remains draggable.
+    TabViewItemAutomationPeer peer(tab);
+    tracking->tick = tracking->timer.Tick(winrt::auto_revoke,
+        [weak = winrt::make_weak(grid), peer, border, rest, hot = false](
+            auto const& timer, auto const&) mutable {
+            auto target = weak.get();
+            if (!target || !target.IsLoaded()) {
+                timer.Stop();
+                return;
+            }
+            bool hovered = false;
+            try {
+                POINT cursor;
+                if (GetCursorPos(&cursor)) {
+                    HWND window = GetAncestor(WindowFromPoint(cursor), GA_ROOT);
+                    if (window && GetWindowThreadProcessId(window, nullptr) ==
+                                      GetCurrentThreadId()) {
+                        auto bounds = peer.GetBoundingRectangle();
+                        hovered = cursor.x >= bounds.X && cursor.y >= bounds.Y &&
+                                  cursor.x < bounds.X + bounds.Width &&
+                                  cursor.y < bounds.Y + bounds.Height;
+                    }
+                }
+                if (hovered == hot) return;
+                bool previous = std::exchange(g_elementPropertyModifying, true);
+                try {
+                    target.BorderBrush(hovered ? border : rest);
+                } catch (...) {
+                    g_elementPropertyModifying = previous;
+                    throw;
+                }
+                g_elementPropertyModifying = previous;
+                hot = hovered;
+            } catch (...) {
+                timer.Stop();
+                Wh_Log(L"Explorer tab hover tracking failed: %08X", winrt::to_hresult());
+            }
+        });
+    tracking->timer.Start();
+    state.tabHover = std::move(tracking);
 }
 
 void ConfigureAddressBarHover(FrameworkElement element,
                               ElementCustomizationState& state) {
     state.pathEntered.revoke();
     state.pathExited.revoke();
+    state.tabHover.reset();
     auto grid = element.try_as<Controls::Grid>();
+    if (auto panel = element.try_as<Controls::StackPanel>()) {
+        auto parent = Media::VisualTreeHelper::GetParent(panel);
+        auto presenter = parent.try_as<FrameworkElement>();
+        parent = presenter ? Media::VisualTreeHelper::GetParent(presenter) : nullptr;
+        auto items = parent.try_as<Controls::ItemsControl>();
+        if (items && items.Name() == L"PrimaryItemsControl") {
+            parent = Media::VisualTreeHelper::GetParent(items);
+            if (parent) parent = Media::VisualTreeHelper::GetParent(parent);
+            auto bar = parent.try_as<Controls::CommandBar>();
+            if (bar && bar.Name() == L"NavigationCommands") {
+                ConfigureBorderHover(panel, state, 100.0 / 255.0);
+            }
+        }
+        return;
+    }
+    if (grid && grid.Name() == L"LayoutRoot") {
+        auto tab = Media::VisualTreeHelper::GetParent(grid).try_as<muxc::TabViewItem>();
+        if (tab) {
+            ConfigureTabHover(grid, tab, state);
+            return;
+        }
+    }
     if (grid && grid.Name() == L"DetailsViewControlRootGrid") {
-        ConfigureDetailsPaneHover(grid, state);
+        ConfigureBorderHover(grid, state, 100.0 / 255.0);
         return;
     }
     // Command bar dock (New, Sort, View, Details): gradient edge on hover.
@@ -9027,7 +9120,7 @@ void ConfigureAddressBarHover(FrameworkElement element,
                 L"FileExplorerExtensions.CommandBarControl_Wave1";
         }
         if (commandBar) {
-            ConfigureDetailsPaneHover(grid, state);
+            ConfigureBorderHover(grid, state, 100.0 / 255.0);
             return;
         }
     }
@@ -13073,11 +13166,23 @@ bool PaintScrollBarThumb(HDC hdc,
                                              width - width * inset, height);
                 float radius = 4.0f * scale;
 
-                winrt::com_ptr<ID2D1SolidColorBrush> brush;
-                renderTarget->CreateSolidColorBrush(
-                    normal ? ThemePartColor(128, 160, 160, 160)
-                           : ThemePartColor(160, 224, 224, 224),
-                    brush.put());
+                BYTE alpha = normal ? 210 : 255;
+                const D2D1_GRADIENT_STOP stops[] = {
+                    {0.0f, ThemePartColor(alpha, 0x89, 0xB4, 0xFA)},
+                    {1.0f, ThemePartColor(alpha, 0xCB, 0xA6, 0xF7)},
+                };
+                winrt::com_ptr<ID2D1GradientStopCollection> colors;
+                renderTarget->CreateGradientStopCollection(
+                    stops, ARRAYSIZE(stops), colors.put());
+                winrt::com_ptr<ID2D1LinearGradientBrush> brush;
+                if (colors) {
+                    renderTarget->CreateLinearGradientBrush(
+                        D2D1::LinearGradientBrushProperties(
+                            D2D1::Point2F(0, 0),
+                            D2D1::Point2F(horizontal ? width : 0,
+                                          horizontal ? 0 : height)),
+                        colors.get(), brush.put());
+                }
                 if (brush) {
                     renderTarget->FillRoundedRectangle(
                         D2D1::RoundedRect(rect, radius, radius), brush.get());
