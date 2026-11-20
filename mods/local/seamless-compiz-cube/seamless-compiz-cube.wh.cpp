@@ -2,7 +2,7 @@
 // @id              seamless-compiz-cube
 // @name            Seamless Compiz Cube
 // @description     Rounded 3D desktop cube with Mocha borders, switching desktops through Seamless Window Manager
-// @version         1.0.4
+// @version         1.0.5
 // @author          DavidHiFi, Soham
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -578,9 +578,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Number, L"FrameRateLimit", L"Frame rate limit (FPS)", L"0 means match the monitor refresh rate exactly (recommended).", L"0", {}, 0, 1000, 4, L"Performance"},
 {K::Check, L"IdlePowerSave", L"Idle power saving", L"While the cube is held still and nothing moves, the render loop slows to about 30 Hz. It returns to full refresh as soon as anything moves.", L"1", {}, 0, 100, 4, L"Performance"},
 {K::Choice, L"LiveMethod", L"Live capture method", L"Troubleshooting. 0 tries Desktop Duplication then GDI. 2 forces the slower but simpler GDI capture.", L"0", {{L"0", L"Automatic"}, {L"1", L"Desktop Duplication"}, {L"2", L"GDI"}}, 0, 100, 4, L"Performance"},
-{K::Check, L"SettingsWindow.settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 4, L"Settings window"},
-{K::Check, L"SettingsWindow.nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 4, L"Settings window"},
-{K::Check, L"SettingsWindow.settingsTrayIcon", L"Tray icon", L"A cube icon in the system tray. Click it to open these settings, right-click it for a menu.", L"1", {}, 0, 100, 4, L"Settings window"},
+{K::Check, L"SettingsWindow.settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 0, L"Settings window"},
+{K::Check, L"SettingsWindow.nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 0, L"Settings window"},
+{K::Check, L"SettingsWindow.settingsTrayIcon", L"Tray icon", L"A cube icon in the system tray. Click it to open these settings, right-click it for a menu.", L"1", {}, 0, 100, 0, L"Settings window"},
 {K::Check, L"RecordingMode", L"Screen recording mode", L"Makes the cube visible to screen recorders and screenshots. Normally the cube hides itself from capture so the live view never films itself. In this mode the desktop on the front face is a still picture instead of live.", L"0", {}, 0, 100, 4, L"Debug"},
 {K::Check, L"EnableDebugLogging", L"Enable diagnostic logging", L"Write detailed traces to the Windhawk log.", L"0", {}, 0, 100, 4, L"Debug"}
     };
