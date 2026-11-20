@@ -487,7 +487,7 @@
     "include": "windhawk.exe|explorer.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.3.2"
+    "version": "1.3.3"
   },
   "local@recycle-bin-tray-plus": {
     "disabled": false,

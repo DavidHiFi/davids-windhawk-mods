@@ -2,7 +2,7 @@
 // @id              pointer-afterimage-plus
 // @name            Pointer Afterimage Plus
 // @description     A real motion blur for the mouse pointer, made of fading afterimages of your own cursor, with an optional particle trail and click ripples
-// @version         1.3.2
+// @version         1.3.3
 // @author          DavidHiFi, sidlikesgrapess
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -217,6 +217,13 @@ path, so it looks like a camera motion blur rather than a trail.
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+
+constexpr UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kTrayId = TrayIconId();
 
 #define HOLD_MS        10      // how long after the last fast moment the cursor may come back
 #define SHOW_WINDOW_MS 12      // the speed that brings the cursor back is measured over just this many ms
@@ -5382,7 +5389,7 @@ static void UpdateTray(HWND hwnd, bool recreate) {
     NOTIFYICONDATAW nid{};
     nid.cbSize = sizeof(nid);
     nid.hWnd = hwnd;
-    nid.uID = 1;
+    nid.uID = kTrayId;
     if (!Wh_GetIntSetting(L"settingsTrayIcon")) {
         if (g_trayShown) Shell_NotifyIconW(NIM_DELETE, &nid);
         g_trayShown = false;
@@ -5449,7 +5456,7 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             NOTIFYICONDATAW nid{};
             nid.cbSize = sizeof(nid);
             nid.hWnd = hwnd;
-            nid.uID = 1;
+            nid.uID = kTrayId;
             if (g_trayShown) Shell_NotifyIconW(NIM_DELETE, &nid);
             g_trayShown = false;
             PostQuitMessage(0);
