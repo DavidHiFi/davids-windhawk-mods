@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.19
+// @version         0.4.20
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -37469,6 +37469,24 @@ void SetTrayEnds(Panel panel, bool left, bool right) {
     if (!(panel.CornerRadius() == corners)) panel.CornerRadius(corners);
 }
 
+void ApplyTrayChrome(DependencyObject const& object, int depth);
+void UpdateTrayEnds();
+
+void HookTrayFrame(FrameworkElement const& frame) {
+    for (auto const& hook : g_trayFrameHooks)
+        if (hook.frame == frame) return;
+    try {
+        auto weak = winrt::make_weak(frame);
+        auto sized = frame.SizeChanged([weak](auto const&, auto const&) {
+            try {
+                if (auto live = weak.get()) ApplyTrayChrome(live, 0);
+                UpdateTrayEnds();
+            } catch (...) {}
+        });
+        g_trayFrameHooks.push_back({frame, sized});
+    } catch (...) {}
+}
+
 void UpdateTrayEnds() {
     for (size_t i = g_traySegments.size(); i-- > 0;) {
         auto& item = g_traySegments[i];
@@ -37486,16 +37504,7 @@ void UpdateTrayEnds() {
         if (!known) frames.push_back(item.frame);
     }
     for (auto const& frame : frames) {
-        bool hooked = false;
-        for (auto const& hook : g_trayFrameHooks) if (hook.frame == frame) hooked = true;
-        if (!hooked) {
-            try {
-                auto sized = frame.SizeChanged([](auto const&, auto const&) {
-                    try { UpdateTrayEnds(); } catch (...) {}
-                });
-                g_trayFrameHooks.push_back({frame, sized});
-            } catch (...) {}
-        }
+        HookTrayFrame(frame);
         FrameworkElement first{nullptr}, last{nullptr};
         double firstX = 0, lastX = 0;
         std::vector<FrameworkElement> shown;
@@ -37521,6 +37530,8 @@ void UpdateTrayEnds() {
 
 template<typename Panel>
 void StyleTraySegment(Panel panel, bool left, bool right) {
+    for (auto const& item : g_traySegments)
+        if (item.panel == panel) return;
     SaveChrome(panel, FrameworkElement::HeightProperty());
     SaveChrome(panel, FrameworkElement::VerticalAlignmentProperty());
     SaveChrome(panel, FrameworkElement::MarginProperty());
@@ -38223,7 +38234,11 @@ void ScanForClocks() {
         }
 
         ApplyTrayChrome(content);
-        try { UpdateTrayEnds(); } catch (...) {}
+        try {
+            if (auto frame = FindChildByName(content, L"SystemTrayFrameGrid", 24))
+                HookTrayFrame(frame);
+            UpdateTrayEnds();
+        } catch (...) {}
         std::vector<FrameworkElement> clocks;
         FindChildrenByClassName(content, L"SystemTray.DateTimeIconContent", 64,
                                 clocks);
