@@ -2,7 +2,7 @@
 // @id              seamless-wobbly-windows
 // @name            Seamless Wobbly Windows
 // @description     Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows
-// @version         1.2.3
+// @version         1.2.4
 // @author          DavidHiFi, HeyJeay, HaVeN80, lalimatyus
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -6119,7 +6119,7 @@ static void MatchGlass(const GlassShot& shot, const Canvas& c, GlowCB& cb) {
 // glass is, a shade off the live glass, so the copy brightened at the grab and
 // dimmed at the drop. Paint the glass read from the screen over the stand-in;
 // strength 0 adds no glow.
-static bool GlassOnly(const Canvas& c, const GlassShot& shot, GlowCB& cb) {
+static bool GlassOnly(const Canvas& c, const GlassShot& shot, GlowCB& cb, bool* even = nullptr) {
     if (!shot.ok) return false;
     float key[3];
     if (!FindGlowKey(c, MonitorScale(c.vis), key)) return false;
@@ -6133,7 +6133,13 @@ static bool GlassOnly(const Canvas& c, const GlassShot& shot, GlowCB& cb) {
     cb.body[2] = (float)(c.w - c.P); cb.body[3] = (float)(c.h - c.P);
     cb.canvas[0] = (float)c.w;       cb.canvas[1] = (float)c.h;
     MatchGlass(shot, c, cb);
-    return cb.fill[3] > 0.5f;
+    if (even) *even = cb.fill[3] > 0.5f;
+    if (cb.fill[3] > 0.5f) return true;
+    if (!even) return false;
+    // Busy background: no single colour for the glass. Only the live blur can
+    // stand in for it, tinted with the capture's own stand-in colour.
+    cb.fill[0] = key[0]; cb.fill[1] = key[1]; cb.fill[2] = key[2];
+    return true;
 }
 
 struct DragGlow {
@@ -6315,15 +6321,17 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     // The glow, when this window has one: painted onto the copy's backdrop.
     DragGlow glow;
     GlowCB glassCb;
-    bool liveGlass = false;
+    bool liveGlass = false, evenGlass = true;
     if (!glow.Start(hwnd, cfg, canvas, glass)) {
         dev.SetGlow(nullptr);
-        if (GlassOnly(canvas, glass, glassCb)) {
+        if (GlassOnly(canvas, glass, glassCb, &evenGlass)) {
             // The real blur under the copy, which then paints only the tint.
             if (ov.glass && ov.glass->Start(canvas, CornerRadius(hwnd, MonitorScale(canvas.vis)),
                                             cfg.mesh, std::max(1, 64 / std::max(1, cfg.mesh)))) {
                 glassCb.fill[3] = 2.0f + (1.0f - GlowSeeThrough(hwnd));
                 liveGlass = true;
+            } else if (!evenGlass) {
+                return;     // no live blur and no single colour: keep the native drag
             }
             dev.SetGlow(&glassCb);
         } else if (wantGlass) {
@@ -6488,21 +6496,23 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
 
     // One exact frame at rest, then the window comes back underneath it.
     mesh.Snap();
-    if (liveGlass) {
-        // The window lands under a still picture: give it the flat glass read
-        // at the grab, then take the live blur away behind it.
+    // An even glass lands under the flat colour read at the grab, then the live
+    // blur goes. A busy one has no flat colour: the live blur stays until the
+    // real window is back under it.
+    const bool flatLanding = liveGlass && evenGlass;
+    if (flatLanding) {
         glassCb.fill[3] = 1.0f;
         dev.SetGlow(&glassCb);
     }
     if (draw() == DrawResult::DeviceLost) lostDevice = true;
-    if (liveGlass && ov.glass) {
+    if (flatLanding && ov.glass) {
         DwmFlush();
         ov.glass->Hide();
     }
     ShowWindowInPlace(hwnd, hide);
     if (!regrab && !lostDevice) WaitMs(cfg.revealHoldMs);
     if (!lostDevice) ov.PresentClear();
-    ov.Hide();
+    ov.Hide();      // takes the live blur with it
 }
 
 // -----------------------------------------------------------------------------
