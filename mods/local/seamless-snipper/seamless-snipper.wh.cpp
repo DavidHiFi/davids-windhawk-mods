@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.6.2
+// @version         0.6.3
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -101,7 +101,7 @@ On the frozen screen:
 
 ## Magic Pointer
 
-1. Shake the mouse, or press Win + Shift + G.
+1. Click Magic Pointer on the snipping bar, shake the mouse, or press Win + Shift + G.
 2. Hover a button, picture or paragraph to outline it and click to pick it,
    or drag over any area.
 3. A card opens beside it. Type a question and press Enter, or pick a
@@ -681,6 +681,8 @@ void Summon();
 std::wstring HotkeyLabel();
 bool Enabled();
 }  // namespace magicptr
+
+static bool g_pointerOk;
 
 void WhTool_ModUninit();
 
@@ -1644,7 +1646,766 @@ static void OvDrawMagnifier(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
                  D2D1::RectF(swatch.right + 7 * ui, info.top, info.right - 6 * ui, info.bottom), b, D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }
 
-#include <commdlg.h>
+static float LiveCornerRadius();
+// ---------------------------------------------------------------------------
+// Popup menus: Clipboard Manager's own Direct2D menu renderer (owner rule 2026-11-16: every
+// tray menu uses it). One custom window per level, Mocha fill over acrylic, glyph column,
+// inset separators, blue to mauve hover and outline. Copied from
+// local@seamless-clipboard-manager; only the plumbing (factories, settings) is Snipper's.
+// UI thread only (g_d2d is single-threaded).
+// ---------------------------------------------------------------------------
+
+namespace ui_menu {
+
+struct UiMenuItem {
+    int id = 0;
+    std::wstring text;
+    std::wstring hint;  // Right-aligned shortcut text.
+    wchar_t glyph = 0;  // Segoe Fluent Icons code point, 0 for none.
+    bool separator = false;
+    bool disabled = false;
+    bool checked = false;
+    std::vector<UiMenuItem> sub;
+    std::wstring previewFamily;
+    COLORREF swatch = CLR_INVALID;
+};
+
+constexpr wchar_t kGlyphChevronR = 0xE76C, kGlyphCheck = 0xE73E;
+constexpr float kBorderW = 2;
+constexpr WCHAR kSnpMenuClass[] = L"SeamlessSnipperMenu";
+
+struct Fonts {
+    bool ok = false;
+    std::wstring family, iconFamily;
+    Ptr<IDWriteTextFormat> ui, uiRight, icon, iconSmall;
+    float lineH = 18;
+} T;
+
+bool FamilyExists(const std::wstring& name) {
+    Ptr<IDWriteFontCollection> sys;
+    if (name.empty() || !g_dw || FAILED(g_dw->GetSystemFontCollection(sys.put(), FALSE))) return false;
+    UINT32 index = 0;
+    BOOL exists = FALSE;
+    return SUCCEEDED(sys->FindFamilyName(name.c_str(), &index, &exists)) && exists;
+}
+
+void MakeFormat(Ptr<IDWriteTextFormat>& f, const std::wstring& family, float size, DWRITE_FONT_WEIGHT weight,
+                DWRITE_TEXT_ALIGNMENT align, bool trim) {
+    if (FAILED(g_dw->CreateTextFormat(family.c_str(), nullptr, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                      size, L"en-us", f.put())))
+        return;
+    f->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+    f->SetTextAlignment(align);
+    f->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    if (trim) {
+        Ptr<IDWriteInlineObject> sign;
+        g_dw->CreateEllipsisTrimmingSign(f.get(), sign.put());
+        DWRITE_TRIMMING t{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
+        f->SetTrimming(&t, sign.get());
+    }
+}
+
+// The owner's face: FiraCode Nerd Font, 10 pt, medium (the same as Clipboard's live settings).
+bool EnsureFonts() {
+    if (T.ok) return true;
+    if (!g_dw) return false;
+    T.family = L"Segoe UI";
+    for (PCWSTR alt : {L"FiraCode Nerd Font", L"FiraCode Nerd Font Mono"})
+        if (FamilyExists(alt)) {
+            T.family = alt;
+            break;
+        }
+    T.iconFamily = FamilyExists(L"Segoe Fluent Icons") ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
+    float size = 10 * 96.0f / 72.0f;
+    auto normal = (DWRITE_FONT_WEIGHT)500;
+    MakeFormat(T.ui, T.family, size, normal, DWRITE_TEXT_ALIGNMENT_LEADING, true);
+    MakeFormat(T.uiRight, T.family, size, normal, DWRITE_TEXT_ALIGNMENT_TRAILING, true);
+    MakeFormat(T.icon, T.iconFamily, 14, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_TEXT_ALIGNMENT_CENTER, false);
+    MakeFormat(T.iconSmall, T.iconFamily, 10, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_TEXT_ALIGNMENT_CENTER, false);
+    if (!T.ui || !T.uiRight || !T.icon || !T.iconSmall) return false;
+    Ptr<IDWriteTextLayout> probe;
+    g_dw->CreateTextLayout(L"Agy", 3, T.ui.get(), 1000, 1000, probe.put());
+    DWRITE_LINE_METRICS lm{};
+    UINT32 n = 0;
+    T.lineH = probe && SUCCEEDED(probe->GetLineMetrics(&lm, 1, &n)) && n ? std::ceil(lm.height) : std::ceil(size * 1.35f);
+    T.ok = true;
+    return true;
+}
+
+float MeasureText(const std::wstring& s, IDWriteTextFormat* f) {
+    Ptr<IDWriteTextLayout> layout;
+    DWRITE_TEXT_METRICS m{};
+    if (s.empty() || FAILED(g_dw->CreateTextLayout(s.c_str(), (UINT32)s.size(), f, 10000, 1000, layout.put())) ||
+        FAILED(layout->GetMetrics(&m)))
+        return 0;
+    return m.widthIncludingTrailingWhitespace;
+}
+
+struct Ctx {
+    ID2D1RenderTarget* rt = nullptr;
+    Ptr<ID2D1SolidColorBrush> brush;
+    explicit Ctx(ID2D1RenderTarget* r) : rt(r) { rt->CreateSolidColorBrush(Rgb(mocha::text), brush.put()); }
+    ID2D1SolidColorBrush* B(UINT32 rgb, float a = 1) {
+        brush->SetColor(Rgb(rgb, a));
+        return brush.get();
+    }
+    ID2D1SolidColorBrush* BRef(COLORREF c, float a = 1) {
+        brush->SetColor(Ref(c, a));
+        return brush.get();
+    }
+    void Gradient(D2D1_POINT_2F a, D2D1_POINT_2F b, D2D1_COLOR_F c1, D2D1_COLOR_F c2, Ptr<ID2D1LinearGradientBrush>& g) {
+        D2D1_GRADIENT_STOP stops[2] = {{0, c1}, {1, c2}};
+        Ptr<ID2D1GradientStopCollection> coll;
+        if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())))
+            rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(a, b), coll.get(), g.put());
+    }
+    // Accent outline brush: blue to mauve.
+    void Accent(const D2D1_RECT_F& r, Ptr<ID2D1LinearGradientBrush>& g, float alpha = 1) {
+        Gradient({r.left, r.top}, {r.right, r.bottom}, Ref(g_cfg.accent1, alpha), Ref(g_cfg.accent2, alpha), g);
+    }
+    void Text(const std::wstring& s, IDWriteTextFormat* f, const D2D1_RECT_F& r, UINT32 color, float a = 1) {
+        if (s.empty() || r.right <= r.left) return;
+        Ptr<IDWriteTextLayout> layout;
+        if (FAILED(g_dw->CreateTextLayout(s.c_str(), (UINT32)s.size(), f, r.right - r.left, r.bottom - r.top, layout.put())))
+            return;
+        rt->DrawTextLayout({r.left, r.top}, layout.get(), B(color, a), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    }
+    void Glyph(wchar_t g, const D2D1_RECT_F& r, UINT32 color, bool small = false, float a = 1) {
+        rt->DrawText(&g, 1, small ? T.iconSmall.get() : T.icon.get(), r, B(color, a), D2D1_DRAW_TEXT_OPTIONS_NONE);
+    }
+    // Hover look: a soft blue to mauve fill and a 1 px blue to mauve ring.
+    void Glow(const D2D1_RECT_F& r, float radius, float fill, float ring, float ringW = 1) {
+        float rad = std::min(radius, std::min(r.right - r.left, r.bottom - r.top) / 2);
+        D2D1_ROUNDED_RECT rr{{r.left + ringW / 2, r.top + ringW / 2, r.right - ringW / 2, r.bottom - ringW / 2}, rad, rad};
+        if (fill > 0) {
+            Ptr<ID2D1LinearGradientBrush> f;
+            Gradient({r.left, r.top}, {r.right, r.bottom}, Ref(g_cfg.accent1, fill), Ref(g_cfg.accent2, fill), f);
+            if (f) rt->FillRoundedRectangle(rr, f.get());
+        }
+        if (ring > 0) {
+            Ptr<ID2D1LinearGradientBrush> g;
+            Accent(r, g, ring);
+            if (g) rt->DrawRoundedRectangle(rr, g.get(), ringW);
+        }
+    }
+};
+
+struct AccentPolicyData {
+    int state, flags, color, anim;
+};
+struct WindowCompositionData {
+    DWORD attrib;
+    PVOID data;
+    SIZE_T size;
+};
+
+void SetAccent(HWND h, int state, DWORD abgr) {
+    using Fn = BOOL(WINAPI*)(HWND, WindowCompositionData*);
+    static Fn fn = (Fn)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
+    if (!fn) return;
+    AccentPolicyData a{state, state ? 2 : 0, (int)abgr, 0};
+    WindowCompositionData d{19 /* WCA_ACCENT_POLICY */, &a, sizeof(a)};
+    fn(h, &d);
+}
+
+// Acrylic behind the Direct2D tint, DWM rounding, no system border (the gradient edge is ours).
+void ApplyBackdrop(HWND h) {
+    BOOL dark = TRUE;
+    DwmSetWindowAttribute(h, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+    int corner = 2;  // DWMWCP_ROUND
+    DwmSetWindowAttribute(h, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &corner, sizeof(corner));
+    COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
+    DwmSetWindowAttribute(h, 34 /* DWMWA_BORDER_COLOR */, &none, sizeof(none));
+    DwmSetWindowAttribute(h, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+    int type = 1;
+    MARGINS m{0, 0, 0, 0};
+    DwmExtendFrameIntoClientArea(h, &m);
+    DwmSetWindowAttribute(h, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &type, sizeof(type));
+    DWM_BLURBEHIND bb{};
+    bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+    bb.fEnable = TRUE;
+    bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+    DwmEnableBlurBehindWindow(h, &bb);
+    if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+    SetAccent(h, 4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 0x01000000 | 0x2E1E1E);
+    SetWindowPos(h, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+struct Surface {
+    HWND hwnd = nullptr;
+    Ptr<ID2D1HwndRenderTarget> rt;
+    bool Ensure() {
+        if (rt) return true;
+        if (!hwnd || !g_d2d) return false;
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        float dpi = (float)GetDpiForWindow(hwnd);
+        auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                                                  D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+                                                  dpi, dpi);
+        auto hp = D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU(std::max<LONG>(1, rc.right), std::max<LONG>(1, rc.bottom)));
+        return SUCCEEDED(g_d2d->CreateHwndRenderTarget(&props, &hp, rt.put()));
+    }
+    void Discard() { rt.Reset(); }
+};
+
+constexpr float kMenuPad = 6, kMenuIconW = 22, kMenuSepH = 9, kMenuOverlap = 3, kMenuMinW = 190, kMenuMaxW = 440;
+constexpr UINT_PTR kTimerMenuSub = 6, kTimerMenuFade = 7;
+constexpr UINT kMenuSubDelayMs = 200, kMenuFadeMs = 90;
+
+struct MenuLevel {
+    const std::vector<UiMenuItem>* items = nullptr;
+    HWND hwnd = nullptr;
+    Surface surf;
+    float scale = 1, wDip = 0, hDip = 0, itemH = 28, hintW = 0;
+    std::vector<Ptr<IDWriteTextFormat>> previews;
+    std::vector<float> top, height;  // Per item, DIPs inside the window.
+    float scroll = 0, maxScroll = 0;
+    int hover = -1;                  // Highlighted item.
+    int open = -1;                   // Item whose submenu is the next level.
+};
+
+struct MenuSession {
+    std::vector<std::unique_ptr<MenuLevel>> levels;
+    int result = 0;
+    bool done = false;
+    float alpha = 1;
+    ULONGLONG fadeStart = 0;
+    int pendingLevel = -1, pendingItem = -1;  // Hover timer: open (item >= 0) or close the submenu after a delay.
+    std::wstring search;
+    ULONGLONG searchTime = 0;
+    bool pressed = false;                     // A button went down inside the menu; only then does a release pick an item.
+} * g_menu;
+
+bool MenuSelectable(const UiMenuItem& m) { return !m.separator && !m.disabled; }
+
+void MenuLayout(MenuLevel& lv, float scale) {
+    const auto& items = *lv.items;
+    lv.scale = scale;
+    lv.itemH = std::max(30.0f, T.lineH + 12);
+    lv.previews = std::vector<Ptr<IDWriteTextFormat>>(items.size());
+    lv.top.assign(items.size(), 0);
+    lv.height.assign(items.size(), 0);
+    float textW = 0, hintW = 0, y = kMenuPad;
+    for (size_t i = 0; i < items.size(); i++) {
+        lv.top[i] = y;
+        lv.height[i] = items[i].separator ? kMenuSepH : lv.itemH;
+        y += lv.height[i];
+        textW = std::max(textW, MeasureText(items[i].text, T.ui.get()));
+        hintW = std::max(hintW, MeasureText(items[i].hint, T.ui.get()));
+    }
+    lv.hintW = std::ceil(hintW);
+    float w = kMenuPad * 2 + 8 + kMenuIconW + 10 + std::ceil(textW) + (hintW > 0 ? 24 + lv.hintW : 0) + 10 + 20 + 8;
+    lv.wDip = std::ceil(std::clamp(w, kMenuMinW, kMenuMaxW));
+    lv.hDip = std::ceil(y + kMenuPad);
+}
+
+int MenuItemAt(const MenuLevel& lv, float x, float y) {
+    if (x < kMenuPad || x >= lv.wDip - kMenuPad || y < kMenuPad || y >= lv.hDip - kMenuPad) return -1;
+    y += lv.scroll;
+    for (size_t i = 0; i < lv.top.size(); i++)
+        if (y >= lv.top[i] && y < lv.top[i] + lv.height[i]) return (*lv.items)[i].separator ? -1 : (int)i;
+    return -1;
+}
+
+// Next enabled item from `from` in direction dir (+1 or -1), wrapping. -1 when none.
+int MenuNext(const MenuLevel& lv, int from, int dir) {
+    int n = (int)lv.items->size();
+    if (!n) return -1;
+    int i = from;
+    if (i < 0) i = dir > 0 ? -1 : n;
+    for (int k = 0; k < n; k++) {
+        i = ((i + dir) % n + n) % n;
+        if (MenuSelectable((*lv.items)[(size_t)i])) return i;
+    }
+    return -1;
+}
+
+D2D1_RECT_F MenuItemRect(const MenuLevel& lv, size_t i) { return {kMenuPad, lv.top[i] - lv.scroll, lv.wDip - kMenuPad, lv.top[i] + lv.height[i] - lv.scroll}; }
+
+void PaintMenu(ID2D1RenderTarget* rt, MenuLevel& lv) {
+    if (!EnsureFonts()) return;
+    Ctx c(rt);
+    float w = lv.wDip, h = lv.hDip, rad = LiveCornerRadius();
+    float a = 0.85f;
+    Ptr<ID2D1LinearGradientBrush> tint;
+    c.Gradient({0, 0}, {0, h}, Rgb(mocha::base, a), Rgb(mocha::base, std::min(1.0f, a + 0.04f)), tint);
+    if (tint) rt->FillRectangle({0, 0, w, h}, tint.get());
+    const auto& items = *lv.items;
+    rt->PushAxisAlignedClip({0, kMenuPad, w, h - kMenuPad}, D2D1_ANTIALIAS_MODE_ALIASED);
+    float slotRight = w - kMenuPad - 8, slotLeft = slotRight - 20;
+    for (size_t i = 0; i < items.size(); i++) {
+        const UiMenuItem& m = items[i];
+        D2D1_RECT_F r = MenuItemRect(lv, i);
+        if (r.bottom <= kMenuPad || r.top >= h - kMenuPad) continue;
+        if (!m.previewFamily.empty() && !lv.previews[i])
+            MakeFormat(lv.previews[i], m.previewFamily, 14, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_TEXT_ALIGNMENT_TRAILING, true);
+        if (m.separator) {
+            float y = std::floor((r.top + r.bottom) / 2);
+            rt->FillRectangle({r.left + 8, y, r.right - 8, y + 1}, c.B(mocha::surface1, 0.8f));
+            continue;
+        }
+        bool hot = ((int)i == lv.hover || (int)i == lv.open) && !m.disabled;
+        if (hot) c.Glow(r, LiveCornerRadius(), 0.16f, 0.8f);
+        UINT32 col = m.disabled ? mocha::overlay0 : mocha::text;
+        if (m.swatch != CLR_INVALID) {
+            auto dot = D2D1::Ellipse({r.left + 8 + kMenuIconW / 2, (r.top + r.bottom) / 2}, 6, 6);
+            rt->FillEllipse(dot, c.B(m.swatch));
+            rt->DrawEllipse(dot, c.B(mocha::overlay0));
+        }
+        if (m.glyph) c.Glyph(m.glyph, {r.left + 8, r.top, r.left + 8 + kMenuIconW, r.bottom}, col);
+        float textX = r.left + 8 + kMenuIconW + 10;
+        float hintLeft = lv.hintW > 0 ? slotLeft - 8 - lv.hintW : slotLeft - 8;
+        c.Text(m.text, T.ui.get(), {textX, r.top, hintLeft - 8, r.bottom}, col);
+        if (!m.hint.empty())
+            c.Text(m.hint, lv.previews[i] ? lv.previews[i].get() : T.uiRight.get(), {hintLeft, r.top, slotLeft - 8, r.bottom}, m.disabled ? mocha::overlay0 : mocha::subtext0);
+        if (!m.sub.empty()) {
+            c.Glyph(kGlyphChevronR, {slotLeft, r.top, slotRight, r.bottom}, col, true);
+        } else if (m.checked) {
+            rt->DrawText(&kGlyphCheck, 1, T.icon.get(), {slotLeft, r.top, slotRight, r.bottom}, c.BRef(g_cfg.accent1),
+                         D2D1_DRAW_TEXT_OPTIONS_NONE);
+        }
+    }
+    rt->PopAxisAlignedClip();
+    if (lv.maxScroll > 0) {
+        const float track = h - 2 * kMenuPad;
+        const float thumb = std::min(track, std::max(20.0f, track * track / (track + lv.maxScroll)));
+        const float y = kMenuPad + (track - thumb) * lv.scroll / lv.maxScroll;
+        const D2D1_RECT_F rect{w - 7, y, w - 3, y + thumb};
+        Ptr<ID2D1LinearGradientBrush> bar;
+        c.Accent(rect, bar);
+        if (bar) rt->FillRoundedRectangle(D2D1::RoundedRect(rect, 2, 2), bar.get());
+    }
+    // The border is always ours: Seamless Borders does not ring popups.
+    D2D1_RECT_F edge{kBorderW / 2, kBorderW / 2, w - kBorderW / 2, h - kBorderW / 2};
+    Ptr<ID2D1LinearGradientBrush> border;
+    c.Accent(edge, border);
+    float r2 = rad - kBorderW / 2;
+    if (border) rt->DrawRoundedRectangle({edge, r2, r2}, border.get(), kBorderW);
+}
+
+// Whole-surface fade by layer opacity (the window itself stays opaque so the backdrop keeps working).
+struct FadeLayer {
+    ID2D1RenderTarget* rt;
+    bool on = false;
+    Ptr<ID2D1Layer> layer;
+    FadeLayer(ID2D1RenderTarget* r, float alpha) : rt(r) {
+        if (alpha < 0.999f && SUCCEEDED(rt->CreateLayer(nullptr, layer.put()))) {
+            rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                                D2D1::IdentityMatrix(), std::max(0.0f, alpha)),
+                          layer.get());
+            on = true;
+        }
+    }
+    ~FadeLayer() {
+        if (on) rt->PopLayer();
+    }
+};
+
+bool Animate() {
+    BOOL enabled = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &enabled, 0);
+    return enabled;
+}
+
+int MenuIndexOf(HWND h) {
+    if (g_menu)
+        for (size_t i = 0; i < g_menu->levels.size(); i++)
+            if (g_menu->levels[i]->hwnd == h) return (int)i;
+    return -1;
+}
+
+void MenuInvalidate() {
+    if (g_menu)
+        for (auto& lv : g_menu->levels)
+            if (lv->hwnd) InvalidateRect(lv->hwnd, nullptr, FALSE);
+}
+
+void MenuCloseFrom(size_t n) {
+    if (!g_menu) return;
+    while (g_menu->levels.size() > n) {
+        HWND h = g_menu->levels.back()->hwnd;
+        g_menu->levels.back()->surf.Discard();
+        g_menu->levels.pop_back();
+        if (h) DestroyWindow(h);
+    }
+    if (n > 0 && !g_menu->levels.empty()) g_menu->levels.back()->open = -1;
+    MenuInvalidate();
+}
+
+void MenuFinish(int id) {
+    if (!g_menu || g_menu->done) return;
+    g_menu->result = id;
+    g_menu->done = true;
+}
+
+LRESULT CALLBACK MenuProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+
+HWND MenuCreateWindow(MenuLevel& lv, int x, int y, bool root) {
+    int w = (int)std::ceil(lv.wDip * lv.scale), h = (int)std::ceil(lv.hDip * lv.scale);
+    DWORD ex = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | (root ? 0 : WS_EX_NOACTIVATE);
+    HWND hw = CreateWindowExW(ex, kSnpMenuClass, L"", WS_POPUP, x, y, w, h, nullptr, nullptr, g_inst, nullptr);
+    if (!hw) return nullptr;
+    lv.hwnd = hw;
+    lv.surf.hwnd = hw;
+    ApplyBackdrop(hw);
+    return hw;
+}
+
+RECT MenuWorkArea(POINT pt) {
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST), &mi);
+    return mi.rcWork;
+}
+
+// Top-left of a root menu opened at pt: flips to the left or above the point when it would run off the monitor.
+POINT MenuRootOrigin(POINT pt, int w, int h) {
+    RECT wa = MenuWorkArea(pt);
+    int x = pt.x, y = pt.y;
+    if (x + w > wa.right) x = pt.x - w;
+    if (y + h > wa.bottom) y = pt.y - h;
+    x = std::clamp<int>(x, wa.left, std::max<int>(wa.left, wa.right - w));
+    y = std::clamp<int>(y, wa.top, std::max<int>(wa.top, wa.bottom - h));
+    return {x, y};
+}
+
+// A submenu sits beside its parent, level with the item; left of the parent if the right side is full.
+POINT MenuSubOrigin(const RECT& parent, int itemTopPx, int padPx, int w, int h) {
+    RECT wa = MenuWorkArea({parent.right, parent.top + itemTopPx});
+    int overlap = (int)kMenuOverlap;
+    int x = parent.right - overlap;
+    if (x + w > wa.right) x = parent.left - w + overlap;
+    int y = parent.top + itemTopPx - padPx;
+    if (y + h > wa.bottom) y = wa.bottom - h;
+    x = std::clamp<int>(x, wa.left, std::max<int>(wa.left, wa.right - w));
+    y = std::clamp<int>(y, wa.top, std::max<int>(wa.top, wa.bottom - h));
+    return {x, y};
+}
+
+void MenuOpenSub(size_t level, int item, bool keyboard) {
+    if (!g_menu || level >= g_menu->levels.size()) return;
+    MenuLevel& parent = *g_menu->levels[level];
+    const UiMenuItem& m = (*parent.items)[(size_t)item];
+    if (m.sub.empty() || m.disabled) return;
+    MenuCloseFrom(level + 1);
+    auto lv = std::make_unique<MenuLevel>();
+    lv->items = &m.sub;
+    MenuLayout(*lv, parent.scale);
+    RECT pr{};
+    GetWindowRect(parent.hwnd, &pr);
+    int w = (int)std::ceil(lv->wDip * lv->scale), h = (int)std::ceil(lv->hDip * lv->scale);
+    POINT o = MenuSubOrigin(pr, (int)(parent.top[(size_t)item] * parent.scale), (int)(kMenuPad * parent.scale), w, h);
+    if (keyboard) lv->hover = MenuNext(*lv, -1, +1);
+    MenuLevel* raw = lv.get();
+    g_menu->levels.push_back(std::move(lv));
+    parent.open = item;
+    if (!MenuCreateWindow(*raw, o.x, o.y, false)) {
+        MenuCloseFrom(level + 1);
+        return;
+    }
+    ShowWindow(raw->hwnd, SW_SHOWNOACTIVATE);
+    MenuInvalidate();
+}
+
+void MenuActivate(size_t level, int item, bool keyboard) {
+    if (!g_menu || level >= g_menu->levels.size()) return;
+    const UiMenuItem& m = (*g_menu->levels[level]->items)[(size_t)item];
+    if (!MenuSelectable(m)) return;
+    if (!m.sub.empty()) MenuOpenSub(level, item, keyboard);
+    else MenuFinish(m.id);
+}
+
+void MenuHoverChanged(size_t level, int item) {
+    if (!g_menu) return;
+    MenuLevel& lv = *g_menu->levels[level];
+    HWND root = g_menu->levels[0]->hwnd;
+    KillTimer(root, kTimerMenuSub);
+    g_menu->pendingItem = -1;
+    bool wantsSub = item >= 0 && MenuSelectable((*lv.items)[(size_t)item]) && !(*lv.items)[(size_t)item].sub.empty();
+    if (wantsSub && lv.open != item) {
+        g_menu->pendingLevel = (int)level;
+        g_menu->pendingItem = item;
+        SetTimer(root, kTimerMenuSub, kMenuSubDelayMs, nullptr);
+    } else if (!wantsSub && lv.open != -1 && g_menu->levels.size() > level + 1) {
+        g_menu->pendingLevel = (int)level;
+        g_menu->pendingItem = -1;
+        SetTimer(root, kTimerMenuSub, kMenuSubDelayMs, nullptr);
+    }
+}
+
+void MenuKey(WPARAM vk) {
+    if (!g_menu || g_menu->levels.empty()) return;
+    size_t li = g_menu->levels.size() - 1;
+    MenuLevel& cur = *g_menu->levels[li];
+    const auto& items = *cur.items;
+    switch (vk) {
+        case VK_DOWN: cur.hover = MenuNext(cur, cur.hover, +1); break;
+        case VK_UP: cur.hover = MenuNext(cur, cur.hover, -1); break;
+        case VK_HOME: cur.hover = MenuNext(cur, -1, +1); break;
+        case VK_END: cur.hover = MenuNext(cur, (int)items.size(), -1); break;
+        case VK_RIGHT:
+            if (cur.hover >= 0 && !items[(size_t)cur.hover].sub.empty()) MenuActivate(li, cur.hover, true);
+            break;
+        case VK_LEFT:
+            if (li > 0) MenuCloseFrom(li);
+            break;
+        case VK_RETURN:
+        case VK_SPACE:
+            if (cur.hover >= 0) MenuActivate(li, cur.hover, true);
+            break;
+        case VK_ESCAPE:
+            if (li > 0) MenuCloseFrom(li);
+            else MenuFinish(0);
+            break;
+        default: {
+            if (cur.maxScroll == 0 || !((vk >= 'A' && vk <= 'Z') || (vk >= '0' && vk <= '9'))) return;
+            const auto now = GetTickCount64();
+            if (now - g_menu->searchTime > 900) g_menu->search.clear();
+            g_menu->search.push_back((wchar_t)vk);
+            g_menu->searchTime = now;
+            const auto& prefix = g_menu->search;
+            for (size_t i = 0; i < items.size(); ++i) {
+                if (_wcsnicmp(items[i].text.c_str(), prefix.c_str(), prefix.size()) == 0) {
+                    cur.hover = (int)i;
+                    break;
+                }
+            }
+            break;
+        }
+    }
+    if (!g_menu->done && g_menu->levels.size() > li && cur.hover >= 0 && cur.maxScroll > 0) {
+        const float top = cur.top[cur.hover] - kMenuPad;
+        const float bottom = top + cur.height[cur.hover] - (cur.hDip - 2 * kMenuPad);
+        cur.scroll = std::clamp(cur.scroll, std::max(0.0f, bottom), std::min(top, cur.maxScroll));
+    }
+    MenuInvalidate();
+}
+
+void MenuFadeTick() {
+    if (!g_menu || g_menu->levels.empty()) return;
+    float t = std::min(1.0f, (GetTickCount64() - g_menu->fadeStart) / (float)kMenuFadeMs);
+    g_menu->alpha = 1 - (1 - t) * (1 - t);
+    if (t >= 1) KillTimer(g_menu->levels[0]->hwnd, kTimerMenuFade);
+    MenuInvalidate();
+}
+
+LRESULT CALLBACK MenuProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    int li = MenuIndexOf(hwnd);
+    if (!g_menu || li < 0) return DefWindowProcW(hwnd, msg, wp, lp);
+    MenuLevel& lv = *g_menu->levels[(size_t)li];
+    switch (msg) {
+        case WM_ERASEBKGND: return 1;
+        case WM_MOUSEACTIVATE: return li == 0 ? MA_ACTIVATE : MA_NOACTIVATE;
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            if (lv.surf.Ensure()) {
+                lv.surf.rt->SetDpi(96 * lv.scale, 96 * lv.scale);
+                lv.surf.rt->BeginDraw();
+                lv.surf.rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+                {
+                    FadeLayer fade(lv.surf.rt.get(), g_menu->alpha);
+                    PaintMenu(lv.surf.rt.get(), lv);
+                }
+                if (lv.surf.rt->EndDraw() == D2DERR_RECREATE_TARGET) lv.surf.Discard();
+            }
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_MOUSEWHEEL:
+            if (lv.maxScroll > 0) {
+                lv.scroll = std::clamp(lv.scroll - (float)GET_WHEEL_DELTA_WPARAM(wp) / WHEEL_DELTA * lv.itemH * 3,
+                                       0.0f, lv.maxScroll);
+                POINT p{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+                ScreenToClient(hwnd, &p);
+                lv.hover = MenuItemAt(lv, p.x / lv.scale, p.y / lv.scale);
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_MOUSEMOVE: {
+            if (g_menu->pendingLevel > li) {  // The pointer reached a deeper level: stop the timer.
+                KillTimer(g_menu->levels[0]->hwnd, kTimerMenuSub);
+                g_menu->pendingItem = -1;
+                g_menu->pendingLevel = -1;
+            }
+            TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
+            TrackMouseEvent(&tme);
+            int i = MenuItemAt(lv, GET_X_LPARAM(lp) / lv.scale, GET_Y_LPARAM(lp) / lv.scale);
+            if (i >= 0 && !MenuSelectable((*lv.items)[(size_t)i])) i = -1;
+            if (i != lv.hover) {
+                lv.hover = i;
+                MenuHoverChanged((size_t)li, i);
+                MenuInvalidate();
+            }
+            return 0;
+        }
+        case WM_MOUSELEAVE:
+            if (lv.hover != -1 && lv.open != lv.hover) {
+                lv.hover = -1;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP: {
+            if (!g_menu->pressed) return 0;  // The release of the click that opened the menu.
+            int i = MenuItemAt(lv, GET_X_LPARAM(lp) / lv.scale, GET_Y_LPARAM(lp) / lv.scale);
+            if (i >= 0) MenuActivate((size_t)li, i, false);
+            return 0;
+        }
+        case WM_ACTIVATE:
+            if (LOWORD(wp) == WA_INACTIVE && li == 0 && MenuIndexOf((HWND)lp) < 0) MenuFinish(0);
+            return 0;
+        case WM_TIMER:
+            if (wp == kTimerMenuSub) {
+                KillTimer(hwnd, kTimerMenuSub);
+                int pl = g_menu->pendingLevel, pi = g_menu->pendingItem;
+                g_menu->pendingLevel = g_menu->pendingItem = -1;
+                if (pl >= 0 && (size_t)pl < g_menu->levels.size()) {
+                    if (pi >= 0) MenuOpenSub((size_t)pl, pi, false);
+                    else MenuCloseFrom((size_t)pl + 1);
+                }
+            } else if (wp == kTimerMenuFade) {
+                MenuFadeTick();
+            }
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+void RegisterMenuClass() {
+    WNDCLASSEXW probe{sizeof(probe)};
+    if (GetClassInfoExW(g_inst, kSnpMenuClass, &probe)) return;
+    WNDCLASSEXW wc{sizeof(wc)};
+    wc.hInstance = g_inst;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpfnWndProc = MenuProc;
+    wc.lpszClassName = kSnpMenuClass;
+    RegisterClassExW(&wc);
+}
+
+UINT MonitorDpiAt(POINT pt) {
+    UINT dx = 96, dy = 96;
+    if (FAILED(GetDpiForMonitor(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &dx, &dy))) dx = 96;
+    return dx;
+}
+
+int RunMenu(const std::vector<UiMenuItem>& items, POINT pt, HWND owner, const RECT* anchor = nullptr) {
+    if (g_menu || items.empty() || !g_d2d || !EnsureFonts()) return 0;
+    RegisterMenuClass();
+    MenuSession session;
+    g_menu = &session;
+    auto root = std::make_unique<MenuLevel>();
+    root->items = &items;
+    MenuLayout(*root, MonitorDpiAt(pt) / 96.0f);
+    if (anchor) {
+        const RECT area = MenuWorkArea(pt);
+        const float maxHeight = std::min(450.0f, std::floor((area.bottom - area.top) / root->scale));
+        root->maxScroll = std::max(0.0f, root->hDip - maxHeight);
+        root->hDip -= root->maxScroll;
+        for (size_t i = 0; i < items.size(); ++i) {
+            if (!items[i].checked) continue;
+            root->hover = (int)i;
+            root->scroll = std::clamp(root->top[i] - root->hDip / 2, 0.0f, root->maxScroll);
+            break;
+        }
+    }
+    int w = (int)std::ceil(root->wDip * root->scale), h = (int)std::ceil(root->hDip * root->scale);
+    POINT o = MenuRootOrigin(pt, w, h);
+    if (anchor) {
+        const RECT wa = MenuWorkArea(pt);
+        o.x = std::clamp<int>(anchor->left, wa.left, std::max<int>(wa.left, wa.right - w));
+        const int below = anchor->bottom + 4, above = anchor->top - 4 - h;
+        o.y = std::clamp<int>(below + h <= wa.bottom ? below : above, wa.top, std::max<int>(wa.top, wa.bottom - h));
+    }
+    MenuLevel* raw = root.get();
+    session.levels.push_back(std::move(root));
+    if (!MenuCreateWindow(*raw, o.x, o.y, true)) {
+        g_menu = nullptr;
+        return 0;
+    }
+    if (owner && IsWindow(owner)) SetForegroundWindow(owner);  // Lets the new window take the foreground.
+    bool animate = Animate();
+    session.alpha = animate ? 0.0f : 1.0f;
+    session.fadeStart = GetTickCount64();
+    ShowWindow(raw->hwnd, SW_SHOW);
+    SetForegroundWindow(raw->hwnd);
+    SetFocus(raw->hwnd);
+    if (animate) SetTimer(raw->hwnd, kTimerMenuFade, 15, nullptr);
+
+    MSG m;
+    while (!session.done && (!anchor || IsWindow(owner))) {
+        BOOL got = GetMessageW(&m, nullptr, 0, 0);
+        if (got <= 0) {
+            if (got == 0) PostQuitMessage((int)m.wParam);
+            break;
+        }
+        switch (m.message) {
+            case WM_KEYDOWN:
+            case WM_SYSKEYDOWN:
+                MenuKey(m.wParam);
+                continue;
+            case WM_KEYUP:
+            case WM_SYSKEYUP:
+            case WM_CHAR:
+            case WM_SYSCHAR:
+                continue;
+            case WM_LBUTTONDOWN:
+            case WM_RBUTTONDOWN:
+            case WM_MBUTTONDOWN:
+            case WM_NCLBUTTONDOWN:
+            case WM_NCRBUTTONDOWN:
+                if (MenuIndexOf(m.hwnd) < 0) {  // A click on another window of ours closes the menu and is eaten.
+                    MenuFinish(0);
+                    continue;
+                }
+                session.pressed = true;
+                break;
+        }
+        TranslateMessage(&m);
+        DispatchMessageW(&m);
+    }
+    int result = session.result;
+    const bool restoreOwner = !anchor || MenuIndexOf(GetForegroundWindow()) >= 0 || GetForegroundWindow() == owner;
+    MenuCloseFrom(0);
+    g_menu = nullptr;
+    if (restoreOwner && owner && IsWindow(owner) && IsWindowVisible(owner)) {
+        SetForegroundWindow(owner);
+        SetFocus(owner);
+    }
+    return result;
+}
+
+// Opens the menu at a screen point and returns the picked item's id (0 when dismissed).
+int Ui_ShowMenu(const std::vector<UiMenuItem>& items, POINT screenPt, HWND owner) { return RunMenu(items, screenPt, owner); }
+
+UiMenuItem MI(int id, std::wstring text, wchar_t glyph = 0, std::wstring hint = {}, bool enabled = true) {
+    UiMenuItem m;
+    m.id = id;
+    m.text = std::move(text);
+    m.glyph = glyph;
+    m.hint = std::move(hint);
+    m.disabled = !enabled;
+    return m;
+}
+
+UiMenuItem MSep() {
+    UiMenuItem m;
+    m.separator = true;
+    return m;
+}
+
+UiMenuItem MSub(std::wstring text, wchar_t glyph, std::vector<UiMenuItem> sub) {
+    UiMenuItem m;
+    m.text = std::move(text);
+    m.glyph = glyph;
+    m.sub = std::move(sub);
+    return m;
+}
+
+}  // namespace ui_menu
+using ui_menu::UiMenuItem;
+using ui_menu::Ui_ShowMenu;
+
 // ---------------------------------------------------------------------------
 // Drawing on the frozen screen: the bar, the options strip under it, the tools, and burning the drawings
 // into the snip. Then Win + Shift + S: a key hook that hands Windows' Snipping Tool key to Snipper.
@@ -1712,6 +2473,8 @@ struct Shape {
     std::wstring text, font;
     int number = 0;     // A number's value.
     UINT32 sample = 0;  // The eraser's color, picked up from the screen.
+    // A curved arrow's bend: where its control point sits, along and across the arrow, in arrow lengths.
+    float bendA = 0, bendP = 0.22f;
 };
 
 // The look that stays the same for every tool. Set by ApplySettings.
@@ -1729,10 +2492,10 @@ struct Style {
 };
 static Style g_st;
 
-enum BtnKind { B_TOOL, B_COLOR, B_SIZE, B_SHADOW, B_OUTLINE, B_UNDO, B_REDO, B_DONE, B_COPY, B_SAVE, B_CLOSE, B_OPT };
+enum BtnKind { B_TOOL, B_COLOR, B_SIZE, B_SHADOW, B_OUTLINE, B_UNDO, B_REDO, B_DONE, B_COPY, B_SAVE, B_CLOSE, B_OPT, B_POINTER };
 enum OptKind {
     O_CORNERS, O_LINE, O_FILL, O_FILLCOLOR, O_ALPHA, O_HEADS, O_HEADSTYLE, O_HEADSIZE, O_CURVE, O_BOLD, O_ITALIC,
-    O_FONT, O_TEXTBOX, O_LABELS, O_NEXT, O_STRENGTH, O_ZOOM, O_SHAPE
+    O_FONT, O_TEXTBOX, O_LABELS, O_NEXT, O_STRENGTH, O_ZOOM, O_SHAPE, O_SIZE
 };
 struct Btn {
     int kind, arg;
@@ -1740,7 +2503,7 @@ struct Btn {
 };
 
 // What a bar button or a key asks the region screen to do.
-enum Action { A_NONE, A_REDRAW, A_DONE, A_COPY, A_SAVE, A_CLOSE };
+enum Action { A_NONE, A_REDRAW, A_DONE, A_COPY, A_SAVE, A_CLOSE, A_POINTER };
 
 struct State {
     bool on = true;  // The bar and tools. Off, the screen is a plain region picker.
@@ -1757,6 +2520,7 @@ struct State {
     int pick = -1;  // Select: the shape picked.
     bool moving = false, moved = false;
     int resizePoint = -1;
+    bool reopen = false;  // A click on words that were already picked opens them for typing on release.
     D2D1_POINT_2F moveFrom{};
     int stepPin = 0;  // The next number, when set on the strip; 0 counts on from the highest.
     std::vector<Btn> btns;  // The bar's buttons, then the strip's options from nMain on.
@@ -2047,9 +2811,31 @@ struct ArrowGeo {
     D2D1_POINT_2F h[2][4]{};
 };
 
-static D2D1_POINT_2F ArrowCtrl(D2D1_POINT_2F a, D2D1_POINT_2F b) {
+static D2D1_POINT_2F ArrowCtrl(const Shape& s) {
+    D2D1_POINT_2F a = s.pts[0], b = s.pts.back();
     float dx = b.x - a.x, dy = b.y - a.y;
-    return {(a.x + b.x) / 2 - dy * 0.22f, (a.y + b.y) / 2 + dx * 0.22f};
+    return {(a.x + b.x) / 2 + dx * s.bendA - dy * s.bendP, (a.y + b.y) / 2 + dy * s.bendA + dx * s.bendP};
+}
+
+// The middle of the arrow's curve, where its bend handle sits.
+static D2D1_POINT_2F ArrowMid(const Shape& s) {
+    D2D1_POINT_2F a = s.pts[0], z = s.pts.back();
+    if (!s.o.curve) return {(a.x + z.x) / 2, (a.y + z.y) / 2};
+    D2D1_POINT_2F c = ArrowCtrl(s);
+    return {(a.x + 2 * c.x + z.x) / 4, (a.y + 2 * c.y + z.y) / 4};
+}
+
+// Bends the arrow so its curve passes through q.
+static void BendTo(Shape& s, D2D1_POINT_2F q) {
+    D2D1_POINT_2F a = s.pts[0], z = s.pts.back();
+    float dx = z.x - a.x, dy = z.y - a.y, l2 = dx * dx + dy * dy;
+    if (l2 < 1) return;
+    // The control point minus the middle is 2q - (a + z); split it along the arrow and across it.
+    float cx = 2 * q.x - (a.x + z.x), cy = 2 * q.y - (a.y + z.y);
+    s.bendA = (cx * dx + cy * dy) / l2;
+    s.bendP = (-cx * dy + cy * dx) / l2;
+    s.o.curve = std::abs(s.bendA) + std::abs(s.bendP) > 0.03f ? 1 : 0;
+    if (!s.o.curve) s.bendA = 0, s.bendP = 0.22f;  // Straight again; the Curve option brings back the usual bend.
 }
 
 static bool ArrowParts(const Shape& s, ArrowGeo& out) {
@@ -2067,7 +2853,7 @@ static bool ArrowParts(const Shape& s, ArrowGeo& out) {
     out.from = a;
     out.to = b;
     out.curved = o.curve != 0;
-    out.ctrl = out.curved ? ArrowCtrl(a, b) : a;
+    out.ctrl = out.curved ? ArrowCtrl(s) : a;
     auto dir = [&](D2D1_POINT_2F tip, D2D1_POINT_2F from) {
         float vx = tip.x - from.x, vy = tip.y - from.y, l = std::sqrt(vx * vx + vy * vy);
         if (l < 0.01f) return D2D1::Point2F(dx / len, dy / len);
@@ -2331,7 +3117,7 @@ static D2D1_RECT_F Bounds(const Shape& s) {
         D2D1_POINT_2F c = s.pts[0];
         grow(c.x - s.o.size, c.y - s.o.size, c.x + s.o.size, c.y + s.o.size);
     } else if (s.tool == T_ARROW && s.o.curve && s.pts.size() >= 2) {
-        D2D1_POINT_2F a = s.pts[0], z = s.pts.back(), c = ArrowCtrl(a, z);
+        D2D1_POINT_2F a = s.pts[0], z = s.pts.back(), c = ArrowCtrl(s);
         float mx = (a.x + 2 * c.x + z.x) / 4, my = (a.y + 2 * c.y + z.y) / 4;
         grow(mx, my, mx, my);
     }
@@ -2351,7 +3137,7 @@ static bool HitShape(const Shape& s, D2D1_POINT_2F q) {
     if (s.tool == T_LINE || s.tool == T_ARROW || s.tool == T_PEN) {
         std::vector<D2D1_POINT_2F> path;
         if (s.tool == T_ARROW && s.o.curve && s.pts.size() >= 2) {
-            D2D1_POINT_2F a = s.pts[0], z = s.pts.back(), c = ArrowCtrl(a, z);
+            D2D1_POINT_2F a = s.pts[0], z = s.pts.back(), c = ArrowCtrl(s);
             for (int i = 0; i <= 16; i++) {
                 float t = i / 16.0f, u = 1 - t;
                 path.push_back({u * u * a.x + 2 * u * t * c.x + t * t * z.x, u * u * a.y + 2 * u * t * c.y + t * t * z.y});
@@ -2477,17 +3263,16 @@ static void RebuildEffects() {
 
 static Shape* Typing() { return g.typing >= 0 && g.typing < (int)g.shapes.size() ? &g.shapes[g.typing] : nullptr; }
 static Shape* Picked() {
-    return g.tool == T_SELECT && g.pick >= 0 && g.pick < (int)g.shapes.size() ? &g.shapes[g.pick] : nullptr;
+    // Like ShareX, a shape stays picked in any drawing tool: the one just drawn, or the one clicked.
+    return g.tool != T_REGION && g.pick >= 0 && g.pick < (int)g.shapes.size() ? &g.shapes[g.pick] : nullptr;
 }
 
 // The tool whose options the bar shows: the text being typed, the picked shape, else the tool (the region shows
 // the last drawing tool's). -1 when Select has nothing picked.
 static int OptTool() {
     if (Shape* t = Typing()) return t->tool;
-    if (g.tool == T_SELECT) {
-        Shape* p = Picked();
-        return p ? p->tool : -1;
-    }
+    if (Shape* p = Picked()) return p->tool;
+    if (g.tool == T_SELECT) return -1;
     return g.tool == T_REGION ? g.lastDraw : g.tool;
 }
 
@@ -2526,6 +3311,7 @@ static void Change(F f) {
         Push();
         p = Picked();
         f(p->o);
+        g.opt[p->tool] = p->o;  // The next one drawn looks the same, as in ShareX.
         if (IsEffect(p->tool)) RebuildEffects();
     } else if (OptTool() >= 0) {
         f(g.opt[OptTool()]);
@@ -2551,8 +3337,11 @@ static void CommitText() {
             if (!g.hist.empty()) g.hist.pop_back();
         } else if (!g.typingNew && !g.typingDirty) {  // Opened and left as it was.
             if (!g.hist.empty()) g.hist.pop_back();
+            g.pick = g.typing;
         } else if (empty) {  // Everything deleted: the text goes.
             g.shapes.erase(g.shapes.begin() + g.typing);
+        } else {
+            g.pick = g.typing;  // Finished words stay picked, ready to move or restyle.
         }
     }
     g.typing = -1;
@@ -2627,12 +3416,14 @@ static int OptKinds(int t, const Opts& o, int* out) {
             break;
         case T_TEXT:
             out[n++] = O_FONT;
+            out[n++] = O_SIZE;
             out[n++] = O_BOLD;
             out[n++] = O_ITALIC;
             out[n++] = O_TEXTBOX;
             break;
         case T_BALLOON:
             out[n++] = O_FONT;
+            out[n++] = O_SIZE;
             out[n++] = O_BOLD;
             out[n++] = O_ITALIC;
             break;
@@ -2655,9 +3446,14 @@ static int OptKinds(int t, const Opts& o, int* out) {
     return n;
 }
 
-static std::wstring OptText(int k) {
-    const Opts& o = O();
-    int t = OptTool();
+static const std::wstring& CurrentFont(int tool) {
+    const Shape* shape = Typing();
+    if (!shape) shape = Picked();
+    const auto& family = shape ? shape->font : g.font[tool];
+    return family.empty() ? g_st.font : family;
+}
+
+static std::wstring OptText(int k, const Opts& o, int t) {
     WCHAR buf[64];
     switch (k) {
         case O_CORNERS:
@@ -2677,9 +3473,13 @@ static std::wstring OptText(int k) {
             swprintf_s(buf, L"Head size %d%%", (int)std::lround(o.arrowK * 100));
             return buf;
         case O_CURVE: return o.curve ? L"Curved" : L"Straight";
+        case O_SIZE: return std::to_wstring((int)std::lround(o.size)) + L" px";
         case O_BOLD: return L"Bold";
         case O_ITALIC: return L"Italic";
-        case O_FONT: return L"Font and size";
+        case O_FONT: {
+            const auto& name = CurrentFont(t);
+            return name.size() > 22 ? name.substr(0, 21) + L"\u2026" : name;
+        }
         case O_TEXTBOX: return o.textBox == 0 ? L"No background" : o.textBox == 1 ? L"On pen color" : L"On dark";
         case O_LABELS: {
             static const wchar_t* names[5] = {L"1 2 3", L"A B C", L"a b c", L"I II III", L"i ii iii"};
@@ -2700,6 +3500,10 @@ static std::wstring OptText(int k) {
     return {};
 }
 
+static std::wstring OptText(int k) { return OptText(k, O(), OptTool()); }
+
+static bool HasOptionMenu(int k) { return k != O_BOLD && k != O_ITALIC && k != O_NEXT; }
+
 static bool OptOn(int k) {
     const Opts& o = O();
     return (k == O_BOLD && o.bold) || (k == O_ITALIC && o.italic) || (k == O_CURVE && o.curve);
@@ -2710,6 +3514,7 @@ static void OptStep(int k, int dir, bool wrap) {
     int t = OptTool();
     if (t < 0) return;
     switch (k) {
+        case O_SIZE: Change([&](Opts& o) { o.size = StepList(MK_LIST(kTextPx), o.size, dir, wrap); }); break;
         case O_CORNERS: Change([&](Opts& o) { o.radius = StepList(MK_LIST(kCorners), o.radius, dir, wrap); }); break;
         case O_LINE: Change([&](Opts& o) { o.dash = Cycle(o.dash, 3, dir, wrap); }); break;
         case O_FILL: Change([&](Opts& o) { o.fill = Cycle(o.fill, 3, dir, wrap); }); break;
@@ -2778,7 +3583,7 @@ static void LayoutStrip() {
     float u = g.ui, ph = std::round(28 * u), pad = std::round(4 * u), gap = std::round(4 * u), H = ph + pad * 2;
     float x = pad;
     for (int i = 0; i < n; i++) {
-        float w = std::ceil(TextWidth(OptText(kinds[i]), PillFont())) + std::round(24 * u) + (kinds[i] == O_FILLCOLOR ? std::round(18 * u) : 0);
+        float w = std::ceil(TextWidth(OptText(kinds[i]), PillFont())) + std::round((HasOptionMenu(kinds[i]) ? 40 : 24) * u) + (kinds[i] == O_FILLCOLOR ? std::round(18 * u) : 0);
         g.btns.push_back({B_OPT, kinds[i], {x, pad, x + w, pad + ph}});
         x += w + gap;
     }
@@ -2821,6 +3626,7 @@ static void Layout(float ui) {
     add(B_UNDO, 0, bs);
     add(B_REDO, 0, bs);
     split();
+    if (g_pointerOk && magicptr::Enabled()) add(B_POINTER, 0, bs);
     add(B_DONE, 0, bs);
     add(B_COPY, 0, bs);
     add(B_SAVE, 0, bs);
@@ -2943,7 +3749,8 @@ static std::wstring Label(const Btn& b) {
         case B_COPY: return L"Copy only   Ctrl+C";
         case B_SAVE: return L"Save only   Ctrl+S";
         case B_CLOSE: return L"Close   Esc";
-        case B_OPT: return L"Click for next, right click for back, or scroll";
+        case B_POINTER: return L"Magic Pointer";
+        case B_OPT: return b.arg == O_FONT ? L"Font family" : OptText(b.arg);
     }
     return {};
 }
@@ -3059,6 +3866,16 @@ static void DrawIcon(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const Btn& 
         case B_DONE: Glyph(rt, b, 0xE73E, r, 16 * u, c); return;
         case B_COPY: Glyph(rt, b, 0xE8C8, r, 16 * u, c); return;
         case B_SAVE: Glyph(rt, b, 0xE74E, r, 16 * u, c); return;
+        case B_POINTER: {
+            auto glint = [&](float x, float y, float radius) {
+                D2D1_POINT_2F tip[] = {P(x, y-radius), P(x+1.6f,y-1.6f), P(x+radius,y), P(x+1.6f,y+1.6f),
+                                      P(x,y+radius), P(x-1.6f,y+1.6f), P(x-radius,y), P(x-1.6f,y-1.6f)};
+                FillPolygon(rt, b, tip, ARRAYSIZE(tip), 0);
+            };
+            glint(-2, 1, 7.5f);
+            glint(6, -6, 3.5f);
+            return;
+        }
         case B_CLOSE: Glyph(rt, b, 0xE711, r, 15 * u, c); return;
     }
 }
@@ -3139,6 +3956,13 @@ static void DrawBar(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
             bool hot = (int)i == g.hot, down = (int)i == g.pressed && hot, on = OptOn(bt.arg);
             Plate(rt, b, bt.r, pr, on || hot, on, down);
             D2D1_RECT_F tr{bt.r.left + std::round(12 * u), bt.r.top, bt.r.right - std::round(12 * u), bt.r.bottom};
+            if (HasOptionMenu(bt.arg)) {
+                const float x = tr.right - 3 * u, y = (tr.top + tr.bottom) / 2;
+                b->SetColor(Rgb(hot ? mocha::text : mocha::subtext0));
+                rt->DrawLine({x - 3.5f * u, y - 2 * u}, {x, y + 2 * u}, b, 1.4f * u, Round());
+                rt->DrawLine({x, y + 2 * u}, {x + 3.5f * u, y - 2 * u}, b, 1.4f * u, Round());
+                tr.right -= 16 * u;
+            }
             if (bt.arg == O_FILLCOLOR) {
                 float sx = tr.left + 6 * u, sy = (bt.r.top + bt.r.bottom) / 2;
                 b->SetColor(Rgb(o.fillColor));
@@ -3172,16 +3996,86 @@ static void Frame(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const D2D1_REC
 
 // The drawings on the region screen: every shape, the one being drawn, the text box taking keys, the pick.
 static bool HasHandles(const Shape& s) {
-    return s.pts.size() == 2 && (IsBoxy(s.tool) || s.tool == T_LINE || s.tool == T_ARROW || s.tool == T_BALLOON);
+    return s.pts.size() == 2 &&
+           (IsBoxy(s.tool) || s.tool == T_LINE || s.tool == T_ARROW || s.tool == T_BALLOON || s.tool == T_STEP);
+}
+
+// Where a picked shape's handles sit, like ShareX. Boxes: 0 top left, 1 bottom right, 2 top right, 3 bottom left,
+// 4 top, 5 bottom, 6 left, 7 right. Lines, arrows, balloons and numbers: 0 and 1 on their two points, and an arrow
+// has 2 on its middle, which bends it.
+static int Handles(const Shape& s, D2D1_POINT_2F* out) {
+    if (!HasHandles(s)) return 0;
+    if (IsBoxy(s.tool)) {
+        D2D1_RECT_F r = Norm(s.pts[0], s.pts[1]);
+        float mx = (r.left + r.right) / 2, my = (r.top + r.bottom) / 2;
+        out[0] = {r.left, r.top}, out[1] = {r.right, r.bottom}, out[2] = {r.right, r.top}, out[3] = {r.left, r.bottom};
+        out[4] = {mx, r.top}, out[5] = {mx, r.bottom}, out[6] = {r.left, my}, out[7] = {r.right, my};
+        return 8;
+    }
+    out[0] = s.pts[0], out[1] = s.pts[1];
+    if (s.tool != T_ARROW) return 2;
+    out[2] = ArrowMid(s);
+    return 3;
 }
 
 static int HitHandle(const Shape& s, D2D1_POINT_2F q) {
-    if (!HasHandles(s)) return -1;
+    D2D1_POINT_2F h[8];
+    int n = Handles(s, h);
     const float reach = 8 * g.ui;
-    for (int i = 0; i < 2; ++i) {
-        const auto& p = s.pts[i];
-        if (std::abs(q.x - p.x) <= reach && std::abs(q.y - p.y) <= reach) return i;
+    for (int i = 0; i < n; ++i)
+        if (std::abs(q.x - h[i].x) <= reach && std::abs(q.y - h[i].y) <= reach) return i;
+    return -1;
+}
+
+static LPCWSTR HandleCursor(const Shape& s, int id) {
+    if (!IsBoxy(s.tool)) return id == 2 ? IDC_HAND : IDC_CROSS;
+    return id <= 1 ? IDC_SIZENWSE : id <= 3 ? IDC_SIZENESW : id <= 5 ? IDC_SIZENS : IDC_SIZEWE;
+}
+
+// Drags handle id to q. Boxes are kept as {top left, bottom right} while a handle is held.
+static void MoveHandle(Shape& s, int id, D2D1_POINT_2F q) {
+    auto& a = s.pts[0];
+    auto& z = s.pts[1];
+    if (!IsBoxy(s.tool)) {
+        if (id == 2) BendTo(s, q);
+        else s.pts[id] = q;
+        return;
     }
+    switch (id) {
+        case 0: a = q; break;
+        case 1: z = q; break;
+        case 2: z.x = q.x, a.y = q.y; break;
+        case 3: a.x = q.x, z.y = q.y; break;
+        case 4: a.y = q.y; break;
+        case 5: z.y = q.y; break;
+        case 6: a.x = q.x; break;
+        case 7: z.x = q.x; break;
+    }
+}
+
+// The shape a press grabs while a drawing tool is out. Areas and unfilled boxes are only grabbed on their edge, so
+// a new drawing can still start inside them, as in ShareX.
+static bool GrabShape(const Shape& s, D2D1_POINT_2F q) {
+    if (s.pts.size() == 2 && IsBoxy(s.tool) && !(s.o.fill && (s.tool == T_RECT || s.tool == T_ELLIPSE))) {
+        D2D1_RECT_F r = Norm(s.pts[0], s.pts[1]);
+        float tol = std::max(6.0f, s.o.size / 2 + 3);
+        if (s.tool == T_ELLIPSE) {
+            float rx = (r.right - r.left) / 2, ry = (r.bottom - r.top) / 2;
+            if (rx < 1 || ry < 1) return HitShape(s, q);
+            float dx = (q.x - (r.left + rx)) / rx, dy = (q.y - (r.top + ry)) / ry;
+            return std::abs(std::sqrt(dx * dx + dy * dy) - 1) * std::min(rx, ry) <= tol;
+        }
+        bool outer = q.x >= r.left - tol && q.x <= r.right + tol && q.y >= r.top - tol && q.y <= r.bottom + tol;
+        bool inner = q.x > r.left + tol && q.x < r.right - tol && q.y > r.top + tol && q.y < r.bottom - tol;
+        return outer && !inner;
+    }
+    return HitShape(s, q);
+}
+
+static int TopGrab(D2D1_POINT_2F q) {
+    if (g.tool == T_SELECT) return TopHit(q, false);
+    for (int i = (int)g.shapes.size() - 1; i >= 0; i--)
+        if (GrabShape(g.shapes[i], q)) return i;
     return -1;
 }
 
@@ -3195,15 +4089,19 @@ static void DrawShapes(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
         D2D1_RECT_F r = Bounds(*p);
         float m = 6 + (p->tool == T_LINE || p->tool == T_ARROW || p->tool == T_PEN ? p->o.size / 2 : 0);
         Frame(rt, b, D2D1::RectF(r.left - m, r.top - m, r.right + m, r.bottom + m));
-        if (HasHandles(*p)) {
-            const float h = 5 * g.ui;
-            for (auto pt : p->pts) {
-                const auto handle = D2D1::RectF(pt.x - h, pt.y - h, pt.x + h, pt.y + h);
-                b->SetColor(Rgb(mocha::crust));
-                rt->FillRectangle(handle, b);
-                b->SetColor(Rgb(0x89B4FA));
-                rt->DrawRectangle(handle, b, 2);
-            }
+        D2D1_POINT_2F hs[8];
+        int n = Handles(*p, hs);
+        const float h = 5 * g.ui;
+        for (int i = 0; i < n; i++) {
+            const auto pt = hs[i];
+            const auto handle = D2D1::RectF(pt.x - h, pt.y - h, pt.x + h, pt.y + h);
+            bool bend = !IsBoxy(p->tool) && i == 2;  // The arrow's bend handle is round.
+            b->SetColor(Rgb(mocha::crust));
+            if (bend) rt->FillEllipse(D2D1::Ellipse(pt, h, h), b);
+            else rt->FillRectangle(handle, b);
+            b->SetColor(Rgb(bend ? 0xCBA6F7 : 0x89B4FA));
+            if (bend) rt->DrawEllipse(D2D1::Ellipse(pt, h, h), b, 2);
+            else rt->DrawRectangle(handle, b, 2);
         }
     }
     if (Shape* s = Typing()) {
@@ -3302,12 +4200,20 @@ static D2D1_POINT_2F F(POINT p) { return D2D1::Point2F((float)p.x, (float)p.y); 
 static LPCWSTR Cursor(POINT p) {
     if (OverBar(p)) return IDC_ARROW;
     if (!DrawTool()) return IDC_CROSS;
-    if (g.tool == T_TEXT) return IDC_IBEAM;
-    if (g.tool == T_SELECT) {
-        if (g.moving && g.resizePoint >= 0) return IDC_CROSS;
-        if (const auto* shape = Picked(); shape && HitHandle(*shape, F(p)) >= 0) return IDC_CROSS;
-        return g.moving || TopHit(F(p), false) >= 0 ? IDC_SIZEALL : IDC_ARROW;
+    D2D1_POINT_2F q = F(p);
+    if (g.moving) {
+        const Shape* s = Picked();
+        return s && g.resizePoint >= 0 ? HandleCursor(*s, g.resizePoint) : IDC_SIZEALL;
     }
+    if (!g.drawing && g.typing < 0) {  // Anything grabbable shows it, whatever the tool, like ShareX.
+        if (const Shape* s = Picked()) {
+            int h = HitHandle(*s, q);
+            if (h >= 0) return HandleCursor(*s, h);
+        }
+        if (TopGrab(q) >= 0) return IDC_SIZEALL;
+    }
+    if (g.tool == T_SELECT) return IDC_ARROW;
+    if (g.tool == T_TEXT) return IDC_IBEAM;
     return IDC_CROSS;
 }
 
@@ -3322,45 +4228,150 @@ static void SetTool(int t) {
 
 static void Swap() { SetTool(g.tool == T_REGION ? g.lastDraw : T_REGION); }
 
-static void PickFont() {
+static int ShowChoices(const Btn& button, const std::vector<UiMenuItem>& items) {
+    HWND overlay = g_ov.hwnd;
+    POINT start{(LONG)button.r.left, (LONG)button.r.top};
+    POINT end{(LONG)button.r.right, (LONG)button.r.bottom};
+    ClientToScreen(overlay, &start);
+    ClientToScreen(overlay, &end);
+    RECT anchor{start.x, start.y, end.x, end.y};
+    const int result = ui_menu::RunMenu(items, start, overlay, &anchor);
+    return g_ov.hwnd == overlay ? result : 0;
+}
+
+static void PickOption(const Btn& button) {
+    const int kind = button.arg, tool = OptTool();
+    std::vector<UiMenuItem> items;
+    auto choose = [&](auto member, const auto& values) {
+        const Opts current = O();
+        for (auto value : values) {
+            Opts sample = current;
+            sample.*member = value;
+            auto row = ui_menu::MI((int)items.size() + 1, OptText(kind, sample, tool));
+            row.checked = sample.*member == current.*member;
+            if (kind == O_FILLCOLOR) {
+                UINT32 rgb = sample.fillColor;
+                wchar_t hex[16];
+                swprintf_s(hex, L"#%06X", (unsigned)rgb);
+                row.text = hex;
+                row.swatch = rgb;
+            }
+            items.push_back(std::move(row));
+        }
+        const int id = ShowChoices(button, items);
+        if (id > 0 && !items[id - 1].checked)
+            Change([&](Opts& o) { o.*member = values[id - 1]; });
+    };
+    const int two[] = {0, 1}, three[] = {0, 1, 2}, four[] = {0, 1, 2, 3}, five[] = {0, 1, 2, 3, 4};
+    switch (kind) {
+        case O_CORNERS: choose(&Opts::radius, kCorners); break;
+        case O_LINE: choose(&Opts::dash, three); break;
+        case O_FILL: choose(&Opts::fill, three); break;
+        case O_FILLCOLOR: {
+            std::vector<UINT32> colors{g_st.fillColor};
+            for (const auto color : g_st.palette)
+                if (std::find(colors.begin(), colors.end(), color) == colors.end()) colors.push_back(color);
+            choose(&Opts::fillColor, colors);
+            break;
+        }
+        case O_ALPHA:
+            if (tool == T_SPOT) choose(&Opts::alpha, kDimA);
+            else if (tool == T_MARK) choose(&Opts::alpha, kMarkA);
+            else choose(&Opts::alpha, kFillA);
+            break;
+        case O_HEADS: choose(&Opts::heads, three); break;
+        case O_HEADSTYLE: choose(&Opts::arrowStyle, four); break;
+        case O_HEADSIZE: choose(&Opts::arrowK, kHeadK); break;
+        case O_CURVE: choose(&Opts::curve, two); break;
+        case O_TEXTBOX: choose(&Opts::textBox, three); break;
+        case O_LABELS: choose(&Opts::stepStyle, five); break;
+        case O_STRENGTH: choose(&Opts::strength, kStrength); break;
+        case O_ZOOM: choose(&Opts::zoom, kZoom); break;
+        case O_SHAPE: choose(&Opts::ellipse, two); break;
+    }
+}
+
+static void PickSize(const Btn& button) {
+    const int tool = OptTool();
+    if (!Uses(tool, B_SIZE)) return;
+    std::vector<float> sizes;
+    if (IsText(tool)) {
+        for (int px = 8; px <= 192; ++px) sizes.push_back((float)px);
+    } else {
+        const float* presets;
+        int count;
+        SizeList(tool, presets, count);
+        sizes.assign(presets, presets + count);
+    }
+    std::vector<UiMenuItem> items;
+    for (size_t i = 0; i < sizes.size(); ++i) {
+        auto row = ui_menu::MI((int)i + 1, std::to_wstring((int)sizes[i]) + L" px");
+        row.checked = std::lround(O().size) == sizes[i];
+        items.push_back(std::move(row));
+    }
+    const int id = ShowChoices(button, items);
+    if (id > 0 && O().size != sizes[id - 1])
+        Change([&](Opts& o) { o.size = sizes[id - 1]; });
+}
+
+static std::vector<std::wstring> FontFamilies() {
+    std::vector<std::wstring> families;
+    Ptr<IDWriteFontCollection> collection;
+    if (!g_dw || FAILED(g_dw->GetSystemFontCollection(collection.put(), FALSE))) return families;
+    WCHAR locale[LOCALE_NAME_MAX_LENGTH]{};
+    GetUserDefaultLocaleName(locale, ARRAYSIZE(locale));
+    for (UINT32 i = 0; i < collection->GetFontFamilyCount(); ++i) {
+        Ptr<IDWriteFontFamily> family;
+        Ptr<IDWriteLocalizedStrings> names;
+        if (FAILED(collection->GetFontFamily(i, family.put())) || FAILED(family->GetFamilyNames(names.put()))) continue;
+        UINT32 index = 0, length = 0;
+        BOOL found = FALSE;
+        names->FindLocaleName(locale, &index, &found);
+        if (!found) names->FindLocaleName(L"en-us", &index, &found);
+        if (!found) index = 0;
+        if (FAILED(names->GetStringLength(index, &length)) || !length) continue;
+        std::wstring name(length + 1, L'\0');
+        if (FAILED(names->GetString(index, name.data(), length + 1))) continue;
+        name.resize(length);
+        families.push_back(std::move(name));
+    }
+    const auto less = [](const auto& a, const auto& b) { return _wcsicmp(a.c_str(), b.c_str()) < 0; };
+    std::sort(families.begin(), families.end(), less);
+    families.erase(std::unique(families.begin(), families.end()), families.end());
+    return families;
+}
+
+static void PickFont(const Btn& button) {
     const int tool = OptTool();
     if (!IsText(tool)) return;
-    Shape* target = Typing();
-    if (!target) target = Picked();
-    const auto& family = target ? target->font : g.font[tool];
-    const UINT dpi = std::max(96u, GetDpiForWindow(g_ov.hwnd));
-    LOGFONTW lf{};
-    wcsncpy_s(lf.lfFaceName, (family.empty() ? g_st.font : family).c_str(), _TRUNCATE);
-    lf.lfHeight = -(LONG)std::lround(O().size * dpi / 96.0f);
-    lf.lfWeight = O().bold ? FW_SEMIBOLD : FW_NORMAL;
-    lf.lfItalic = O().italic != 0;
-    CHOOSEFONTW chooser{};
-    chooser.lStructSize = sizeof(chooser);
-    chooser.hwndOwner = g_ov.hwnd;
-    chooser.lpLogFont = &lf;
-    chooser.Flags = CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT | CF_LIMITSIZE;
-    chooser.nSizeMin = 6;
-    chooser.nSizeMax = 144;
-    const HWND overlay = g_ov.hwnd;
-    if (!ChooseFontW(&chooser) || g_ov.hwnd != overlay || OptTool() != tool) return;
-    Change([&](Opts& o) {
-        o.size = chooser.iPointSize * (96.0f / 720.0f);
-        o.bold = lf.lfWeight >= FW_SEMIBOLD;
-        o.italic = lf.lfItalic != 0;
-    });
-    if (auto* text = Typing()) {
-        text->font = lf.lfFaceName;
-        if (g.typingNew) g.font[tool] = text->font;
-    } else if (auto* shape = Picked()) {
-        shape->font = lf.lfFaceName;
-    } else {
-        g.font[tool] = lf.lfFaceName;
+    const std::wstring current = CurrentFont(tool);
+
+    auto families = FontFamilies();
+    std::vector<UiMenuItem> rows;
+    for (size_t i = 0; i < families.size(); ++i) {
+        auto row = ui_menu::MI((int)i + 1, families[i], 0, L"Aa 123");
+        row.previewFamily = families[i];
+        row.checked = _wcsicmp(current.c_str(), families[i].c_str()) == 0;
+        rows.push_back(std::move(row));
     }
+    const int id = ShowChoices(button, rows);
+    if (id <= 0 || rows[id - 1].checked || OptTool() != tool) return;
+    if (auto* text = Typing()) {
+        text->font = families[id - 1];
+        g.typingDirty = true;
+        if (g.typingNew) g.font[tool] = text->font;
+    } else if (Picked()) {
+        Push();
+        Picked()->font = families[id - 1];
+    } else {
+        g.font[tool] = families[id - 1];
+    }
+    RefreshStrip();
 }
 
 static Action Activate(int i, int dir) {
     if (i < 0 || i >= (int)g.btns.size()) return A_NONE;
-    const Btn& b = g.btns[i];
+    const Btn b = g.btns[i];
     int t = OptTool();
     switch (b.kind) {
         case B_TOOL: SetTool(b.arg); return A_REDRAW;
@@ -3368,7 +4379,10 @@ static Action Activate(int i, int dir) {
             if (!Uses(t, B_COLOR)) return A_NONE;
             Change([&](Opts& o) { o.color = g_st.palette[b.arg]; });
             return A_REDRAW;
-        case B_SIZE: SizeStep(dir, true); return A_REDRAW;
+        case B_SIZE:
+            if (dir > 0) PickSize(b);
+            else SizeStep(dir, true);
+            return A_REDRAW;
         case B_SHADOW:
             if (Uses(t, B_SHADOW)) Change([](Opts& o) { o.shadow = !o.shadow; });
             return A_REDRAW;
@@ -3381,8 +4395,11 @@ static Action Activate(int i, int dir) {
         case B_COPY: CommitText(); return A_COPY;
         case B_SAVE: CommitText(); return A_SAVE;
         case B_CLOSE: return A_CLOSE;
+        case B_POINTER: return A_POINTER;
         case B_OPT:
-            if (b.arg == O_FONT) PickFont();
+            if (b.arg == O_FONT) PickFont(b);
+            else if (b.arg == O_SIZE && dir > 0) PickSize(b);
+            else if (dir > 0 && HasOptionMenu(b.arg)) PickOption(b);
             else OptStep(b.arg, dir, true);
             return A_REDRAW;
     }
@@ -3436,32 +4453,51 @@ static void BeginTyping(int i, bool isNew) {
     g.typing = i;
     g.typingNew = isNew;
     g.typingDirty = false;
+    g.pick = -1;
     StartCaret();
     RefreshStrip();
 }
 
+// A press in any drawing tool works like ShareX: a handle of the picked shape resizes it, a press on a shape picks
+// and moves it, a second click on picked words opens them for typing, and anywhere else starts a new drawing.
 static void ShapeDown(POINT p) {
+    int typed = g.typing;
+    size_t count = g.shapes.size();
     CommitText();
+    if (g.shapes.size() != count) typed = -1;  // Empty words were dropped, so the numbers moved.
     D2D1_POINT_2F q = F(p);
-    if (g.tool == T_SELECT) {
-        const auto* picked = Picked();
-        g.resizePoint = picked ? HitHandle(*picked, q) : -1;
-        if (g.resizePoint < 0) g.pick = TopHit(q, false);
-        if (g.pick >= 0) {
+    g.reopen = false;
+    g.resizePoint = -1;
+    if (Shape* s = Picked()) {
+        int h = HitHandle(*s, q);
+        if (h >= 0) {
+            if (IsBoxy(s->tool)) {
+                D2D1_RECT_F r = Norm(s->pts[0], s->pts[1]);
+                s->pts[0] = {r.left, r.top}, s->pts[1] = {r.right, r.bottom};
+                h = HitHandle(*s, q);
+            }
+            g.resizePoint = h;
             g.moving = true;
             g.moved = false;
             g.moveFrom = q;
+            RefreshStrip();
+            return;
         }
+    }
+    int was = g.pick, hit = TopGrab(q);
+    if (hit >= 0) {
+        g.pick = hit;
+        g.reopen = IsText(g.shapes[hit].tool) && (hit == was || hit == typed);
+        g.moving = true;
+        g.moved = false;
+        g.moveFrom = q;
         RefreshStrip();
         return;
     }
-    if (IsText(g.tool)) {
-        int i = TopHit(q, true);  // Clicking words that are already there opens them again.
-        if (i >= 0) {
-            Push();
-            BeginTyping(i, false);
-            return;
-        }
+    g.pick = -1;
+    if (g.tool == T_SELECT) {
+        RefreshStrip();
+        return;
     }
     if (g.tool == T_TEXT) {
         Push();
@@ -3486,11 +4522,12 @@ static void ShapeMove(POINT p, bool shift) {
         if ((dx == 0 && dy == 0) || g.pick < 0 || g.pick >= (int)g.shapes.size()) return;
         if (!g.moved) Push();  // One undo step for the whole move.
         g.moved = true;
-        auto& points = g.shapes[g.pick].pts;
-        if (g.resizePoint >= 0) {
-            auto& point = points[g.resizePoint];
-            point.x += dx;
-            point.y += dy;
+        Shape& s = g.shapes[g.pick];
+        auto& points = s.pts;
+        D2D1_POINT_2F hs[8];
+        if (g.resizePoint >= 0 && g.resizePoint < Handles(s, hs)) {
+            D2D1_POINT_2F h = hs[g.resizePoint];
+            MoveHandle(s, g.resizePoint, {h.x + dx, h.y + dy});
         } else {
             for (auto& point : points) {
                 point.x += dx;
@@ -3528,7 +4565,15 @@ static void ShapeMove(POINT p, bool shift) {
 static void ShapeUp() {
     if (g.moving) {
         g.moving = false;
-        if (g.moved && g.pick >= 0 && g.pick < (int)g.shapes.size() && IsEffect(g.shapes[g.pick].tool)) RebuildEffects();
+        g.resizePoint = -1;
+        bool live = g.pick >= 0 && g.pick < (int)g.shapes.size();
+        if (g.moved && live && IsEffect(g.shapes[g.pick].tool)) RebuildEffects();
+        if (!g.moved && live && g.reopen) {  // A second click on picked words: type into them again.
+            Push();
+            BeginTyping(g.pick, false);
+        }
+        g.reopen = false;
+        RefreshStrip();
         return;
     }
     if (!g.drawing) return;
@@ -3542,6 +4587,7 @@ static void ShapeUp() {
         if (g.stepPin > 0) g.stepPin++;
         Push();
         g.shapes.push_back(std::move(s));
+        g.pick = (int)g.shapes.size() - 1;  // A new drawing stays picked with its handles, as in ShareX.
         RefreshStrip();
         return;
     }
@@ -3556,7 +4602,27 @@ static void ShapeUp() {
     bool fx = IsEffect(s.tool);
     Push();
     g.shapes.push_back(std::move(s));
+    g.pick = (int)g.shapes.size() - 1;
     if (fx) RebuildEffects();
+    RefreshStrip();
+}
+
+// Arrow keys move the picked shape a pixel, ten with Shift. False when nothing is picked.
+static bool Nudge(int dx, int dy) {
+    if (!Picked() || g.drawing || g.moving || g.typing >= 0) return false;
+    Push();
+    Shape& s = g.shapes[g.pick];
+    for (auto& pt : s.pts) pt.x += (float)dx, pt.y += (float)dy;
+    if (IsEffect(s.tool)) RebuildEffects();
+    return true;
+}
+
+// Esc first lets go of the picked shape. False when nothing was picked.
+static bool DropPick() {
+    if (!Picked() || g.drawing || g.moving) return false;
+    g.pick = -1;
+    RefreshStrip();
+    return true;
 }
 
 // Typing into a text or balloon. Returns true when the key was taken.
@@ -4134,12 +5200,17 @@ static RECT OvTargetRegion() {
 
 static void OvAct(int a) {
     Overlay& o = g_ov;
+    if (!o.hwnd) return;
     switch (a) {
         case mk::A_REDRAW:
             OvUpdateHover();
             InvalidateRect(o.hwnd, nullptr, FALSE);
             break;
         case mk::A_CLOSE: OvClose(); break;
+        case mk::A_POINTER:
+            OvClose();
+            magicptr::Summon();
+            break;
         case mk::A_DONE: OvFinish(OvTargetRegion(), 0); break;
         case mk::A_COPY: OvFinish(OvTargetRegion(), 1); break;
         case mk::A_SAVE: OvFinish(OvTargetRegion(), 2); break;
@@ -4349,6 +5420,8 @@ static LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                         o.press = 0;
                         if (GetCapture() == hwnd) ReleaseCapture();
                         InvalidateRect(hwnd, nullptr, FALSE);
+                    } else if (mk::DropPick()) {  // Esc lets go of the picked drawing before it closes anything.
+                        InvalidateRect(hwnd, nullptr, FALSE);
                     } else {
                         OvClose();
                     }
@@ -4381,6 +5454,10 @@ static LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     int step = shift ? 10 : 1;
                     int dx = wp == VK_LEFT ? -step : wp == VK_RIGHT ? step : 0;
                     int dy = wp == VK_UP ? -step : wp == VK_DOWN ? step : 0;
+                    if (mk::Nudge(dx, dy)) {  // A picked drawing moves; otherwise the pointer does.
+                        InvalidateRect(hwnd, nullptr, FALSE);
+                        return 0;
+                    }
                     POINT p{Clamp(o.cur.x + dx, 0, o.shot.w - 1), Clamp(o.cur.y + dy, 0, o.shot.h - 1)};
                     SetCursorPos(p.x + o.shot.x, p.y + o.shot.y);
                     OvSetCursor(p);
@@ -5543,690 +6620,6 @@ static void ShowToast(SaveJob* raw) {
     if (t.phase == 1) ToastKick();
     SetTimer(t.hwnd, kTimerToast, c.toastSeconds * 1000 + (t.phase == 1 ? t.animMs : 0), nullptr);
 }
-
-// ---------------------------------------------------------------------------
-// Popup menus: Clipboard Manager's own Direct2D menu renderer (owner rule 2026-11-16: every
-// tray menu uses it). One custom window per level, Mocha fill over acrylic, glyph column,
-// inset separators, blue to mauve hover and outline. Copied from
-// local@seamless-clipboard-manager; only the plumbing (factories, settings) is Snipper's.
-// Inlined into core.cpp before tools.cpp. UI thread only (g_d2d is single-threaded).
-// ---------------------------------------------------------------------------
-
-namespace ui_menu {
-
-struct UiMenuItem {
-    int id = 0;
-    std::wstring text;
-    std::wstring hint;  // Right-aligned shortcut text.
-    wchar_t glyph = 0;  // Segoe Fluent Icons code point, 0 for none.
-    bool separator = false;
-    bool disabled = false;
-    bool checked = false;
-    std::vector<UiMenuItem> sub;
-};
-
-constexpr wchar_t kGlyphChevronR = 0xE76C, kGlyphCheck = 0xE73E;
-constexpr float kBorderW = 1.5f;
-constexpr WCHAR kSnpMenuClass[] = L"SeamlessSnipperMenu";
-
-struct Fonts {
-    bool ok = false;
-    std::wstring family, iconFamily;
-    Ptr<IDWriteTextFormat> ui, uiRight, icon, iconSmall;
-    float lineH = 18;
-} T;
-
-bool FamilyExists(const std::wstring& name) {
-    Ptr<IDWriteFontCollection> sys;
-    if (name.empty() || !g_dw || FAILED(g_dw->GetSystemFontCollection(sys.put(), FALSE))) return false;
-    UINT32 index = 0;
-    BOOL exists = FALSE;
-    return SUCCEEDED(sys->FindFamilyName(name.c_str(), &index, &exists)) && exists;
-}
-
-void MakeFormat(Ptr<IDWriteTextFormat>& f, const std::wstring& family, float size, DWRITE_FONT_WEIGHT weight,
-                DWRITE_TEXT_ALIGNMENT align, bool trim) {
-    if (FAILED(g_dw->CreateTextFormat(family.c_str(), nullptr, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
-                                      size, L"en-us", f.put())))
-        return;
-    f->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
-    f->SetTextAlignment(align);
-    f->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-    if (trim) {
-        Ptr<IDWriteInlineObject> sign;
-        g_dw->CreateEllipsisTrimmingSign(f.get(), sign.put());
-        DWRITE_TRIMMING t{DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
-        f->SetTrimming(&t, sign.get());
-    }
-}
-
-// The owner's face: FiraCode Nerd Font, 10 pt, medium (the same as Clipboard's live settings).
-bool EnsureFonts() {
-    if (T.ok) return true;
-    if (!g_dw) return false;
-    T.family = L"Segoe UI";
-    for (PCWSTR alt : {L"FiraCode Nerd Font", L"FiraCode Nerd Font Mono"})
-        if (FamilyExists(alt)) {
-            T.family = alt;
-            break;
-        }
-    T.iconFamily = FamilyExists(L"Segoe Fluent Icons") ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
-    float size = 10 * 96.0f / 72.0f;
-    auto normal = (DWRITE_FONT_WEIGHT)500;
-    MakeFormat(T.ui, T.family, size, normal, DWRITE_TEXT_ALIGNMENT_LEADING, true);
-    MakeFormat(T.uiRight, T.family, size, normal, DWRITE_TEXT_ALIGNMENT_TRAILING, true);
-    MakeFormat(T.icon, T.iconFamily, 14, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_TEXT_ALIGNMENT_CENTER, false);
-    MakeFormat(T.iconSmall, T.iconFamily, 10, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_TEXT_ALIGNMENT_CENTER, false);
-    if (!T.ui || !T.uiRight || !T.icon || !T.iconSmall) return false;
-    Ptr<IDWriteTextLayout> probe;
-    g_dw->CreateTextLayout(L"Agy", 3, T.ui.get(), 1000, 1000, probe.put());
-    DWRITE_LINE_METRICS lm{};
-    UINT32 n = 0;
-    T.lineH = probe && SUCCEEDED(probe->GetLineMetrics(&lm, 1, &n)) && n ? std::ceil(lm.height) : std::ceil(size * 1.35f);
-    T.ok = true;
-    return true;
-}
-
-float MeasureText(const std::wstring& s, IDWriteTextFormat* f) {
-    Ptr<IDWriteTextLayout> layout;
-    DWRITE_TEXT_METRICS m{};
-    if (s.empty() || FAILED(g_dw->CreateTextLayout(s.c_str(), (UINT32)s.size(), f, 10000, 1000, layout.put())) ||
-        FAILED(layout->GetMetrics(&m)))
-        return 0;
-    return m.widthIncludingTrailingWhitespace;
-}
-
-struct Ctx {
-    ID2D1RenderTarget* rt = nullptr;
-    Ptr<ID2D1SolidColorBrush> brush;
-    explicit Ctx(ID2D1RenderTarget* r) : rt(r) { rt->CreateSolidColorBrush(Rgb(mocha::text), brush.put()); }
-    ID2D1SolidColorBrush* B(UINT32 rgb, float a = 1) {
-        brush->SetColor(Rgb(rgb, a));
-        return brush.get();
-    }
-    ID2D1SolidColorBrush* BRef(COLORREF c, float a = 1) {
-        brush->SetColor(Ref(c, a));
-        return brush.get();
-    }
-    void Gradient(D2D1_POINT_2F a, D2D1_POINT_2F b, D2D1_COLOR_F c1, D2D1_COLOR_F c2, Ptr<ID2D1LinearGradientBrush>& g) {
-        D2D1_GRADIENT_STOP stops[2] = {{0, c1}, {1, c2}};
-        Ptr<ID2D1GradientStopCollection> coll;
-        if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())))
-            rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(a, b), coll.get(), g.put());
-    }
-    // Accent outline brush: blue to mauve.
-    void Accent(const D2D1_RECT_F& r, Ptr<ID2D1LinearGradientBrush>& g, float alpha = 1) {
-        Gradient({r.left, r.top}, {r.right, r.bottom}, Ref(g_cfg.accent1, alpha), Ref(g_cfg.accent2, alpha), g);
-    }
-    void Text(const std::wstring& s, IDWriteTextFormat* f, const D2D1_RECT_F& r, UINT32 color, float a = 1) {
-        if (s.empty() || r.right <= r.left) return;
-        Ptr<IDWriteTextLayout> layout;
-        if (FAILED(g_dw->CreateTextLayout(s.c_str(), (UINT32)s.size(), f, r.right - r.left, r.bottom - r.top, layout.put())))
-            return;
-        rt->DrawTextLayout({r.left, r.top}, layout.get(), B(color, a), D2D1_DRAW_TEXT_OPTIONS_CLIP);
-    }
-    void Glyph(wchar_t g, const D2D1_RECT_F& r, UINT32 color, bool small = false, float a = 1) {
-        rt->DrawText(&g, 1, small ? T.iconSmall.get() : T.icon.get(), r, B(color, a), D2D1_DRAW_TEXT_OPTIONS_NONE);
-    }
-    // Hover look: a soft blue to mauve fill and a 1 px blue to mauve ring.
-    void Glow(const D2D1_RECT_F& r, float radius, float fill, float ring, float ringW = 1) {
-        float rad = std::min(radius, std::min(r.right - r.left, r.bottom - r.top) / 2);
-        D2D1_ROUNDED_RECT rr{{r.left + ringW / 2, r.top + ringW / 2, r.right - ringW / 2, r.bottom - ringW / 2}, rad, rad};
-        if (fill > 0) {
-            Ptr<ID2D1LinearGradientBrush> f;
-            Gradient({r.left, r.top}, {r.right, r.bottom}, Ref(g_cfg.accent1, fill), Ref(g_cfg.accent2, fill), f);
-            if (f) rt->FillRoundedRectangle(rr, f.get());
-        }
-        if (ring > 0) {
-            Ptr<ID2D1LinearGradientBrush> g;
-            Accent(r, g, ring);
-            if (g) rt->DrawRoundedRectangle(rr, g.get(), ringW);
-        }
-    }
-};
-
-struct AccentPolicyData {
-    int state, flags, color, anim;
-};
-struct WindowCompositionData {
-    DWORD attrib;
-    PVOID data;
-    SIZE_T size;
-};
-
-void SetAccent(HWND h, int state, DWORD abgr) {
-    using Fn = BOOL(WINAPI*)(HWND, WindowCompositionData*);
-    static Fn fn = (Fn)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
-    if (!fn) return;
-    AccentPolicyData a{state, state ? 2 : 0, (int)abgr, 0};
-    WindowCompositionData d{19 /* WCA_ACCENT_POLICY */, &a, sizeof(a)};
-    fn(h, &d);
-}
-
-// Acrylic behind the Direct2D tint, DWM rounding, no system border (the gradient edge is ours).
-void ApplyBackdrop(HWND h) {
-    BOOL dark = TRUE;
-    DwmSetWindowAttribute(h, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
-    int corner = 2;  // DWMWCP_ROUND
-    DwmSetWindowAttribute(h, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &corner, sizeof(corner));
-    COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
-    DwmSetWindowAttribute(h, 34 /* DWMWA_BORDER_COLOR */, &none, sizeof(none));
-    DwmSetWindowAttribute(h, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
-    int type = 1;
-    MARGINS m{0, 0, 0, 0};
-    DwmExtendFrameIntoClientArea(h, &m);
-    DwmSetWindowAttribute(h, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &type, sizeof(type));
-    DWM_BLURBEHIND bb{};
-    bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
-    bb.fEnable = TRUE;
-    bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
-    DwmEnableBlurBehindWindow(h, &bb);
-    if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
-    SetAccent(h, 4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 0x01000000 | 0x2E1E1E);
-    SetWindowPos(h, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-}
-
-struct Surface {
-    HWND hwnd = nullptr;
-    Ptr<ID2D1HwndRenderTarget> rt;
-    bool Ensure() {
-        if (rt) return true;
-        if (!hwnd || !g_d2d) return false;
-        RECT rc;
-        GetClientRect(hwnd, &rc);
-        float dpi = (float)GetDpiForWindow(hwnd);
-        auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
-                                                  D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
-                                                  dpi, dpi);
-        auto hp = D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU(std::max<LONG>(1, rc.right), std::max<LONG>(1, rc.bottom)));
-        return SUCCEEDED(g_d2d->CreateHwndRenderTarget(&props, &hp, rt.put()));
-    }
-    void Discard() { rt.Reset(); }
-};
-
-constexpr float kMenuPad = 6, kMenuIconW = 22, kMenuSepH = 9, kMenuOverlap = 3, kMenuMinW = 190, kMenuMaxW = 440;
-constexpr UINT_PTR kTimerMenuSub = 6, kTimerMenuFade = 7;
-constexpr UINT kMenuSubDelayMs = 200, kMenuFadeMs = 90;
-
-struct MenuLevel {
-    const std::vector<UiMenuItem>* items = nullptr;
-    HWND hwnd = nullptr;
-    Surface surf;
-    float scale = 1, wDip = 0, hDip = 0, itemH = 28, hintW = 0;
-    std::vector<float> top, height;  // Per item, DIPs inside the window.
-    int hover = -1;                  // Highlighted item.
-    int open = -1;                   // Item whose submenu is the next level.
-};
-
-struct MenuSession {
-    std::vector<std::unique_ptr<MenuLevel>> levels;
-    int result = 0;
-    bool done = false;
-    float alpha = 1;
-    ULONGLONG fadeStart = 0;
-    int pendingLevel = -1, pendingItem = -1;  // Hover timer: open (item >= 0) or close the submenu after a delay.
-    bool pressed = false;                     // A button went down inside the menu; only then does a release pick an item.
-} * g_menu;
-
-bool MenuSelectable(const UiMenuItem& m) { return !m.separator && !m.disabled; }
-
-void MenuLayout(MenuLevel& lv, float scale) {
-    const auto& items = *lv.items;
-    lv.scale = scale;
-    lv.itemH = std::max(30.0f, T.lineH + 12);
-    lv.top.assign(items.size(), 0);
-    lv.height.assign(items.size(), 0);
-    float textW = 0, hintW = 0, y = kMenuPad;
-    for (size_t i = 0; i < items.size(); i++) {
-        lv.top[i] = y;
-        lv.height[i] = items[i].separator ? kMenuSepH : lv.itemH;
-        y += lv.height[i];
-        textW = std::max(textW, MeasureText(items[i].text, T.ui.get()));
-        hintW = std::max(hintW, MeasureText(items[i].hint, T.ui.get()));
-    }
-    lv.hintW = std::ceil(hintW);
-    float w = kMenuPad * 2 + 8 + kMenuIconW + 10 + std::ceil(textW) + (hintW > 0 ? 24 + lv.hintW : 0) + 10 + 20 + 8;
-    lv.wDip = std::ceil(std::clamp(w, kMenuMinW, kMenuMaxW));
-    lv.hDip = std::ceil(y + kMenuPad);
-}
-
-int MenuItemAt(const MenuLevel& lv, float x, float y) {
-    if (x < kMenuPad || x >= lv.wDip - kMenuPad) return -1;
-    for (size_t i = 0; i < lv.top.size(); i++)
-        if (y >= lv.top[i] && y < lv.top[i] + lv.height[i]) return (*lv.items)[i].separator ? -1 : (int)i;
-    return -1;
-}
-
-// Next enabled item from `from` in direction dir (+1 or -1), wrapping. -1 when none.
-int MenuNext(const MenuLevel& lv, int from, int dir) {
-    int n = (int)lv.items->size();
-    if (!n) return -1;
-    int i = from;
-    if (i < 0) i = dir > 0 ? -1 : n;
-    for (int k = 0; k < n; k++) {
-        i = ((i + dir) % n + n) % n;
-        if (MenuSelectable((*lv.items)[(size_t)i])) return i;
-    }
-    return -1;
-}
-
-D2D1_RECT_F MenuItemRect(const MenuLevel& lv, size_t i) { return {kMenuPad, lv.top[i], lv.wDip - kMenuPad, lv.top[i] + lv.height[i]}; }
-
-void PaintMenu(ID2D1RenderTarget* rt, const MenuLevel& lv) {
-    if (!EnsureFonts()) return;
-    Ctx c(rt);
-    float w = lv.wDip, h = lv.hDip, rad = LiveCornerRadius();
-    float a = 0.80f;  // Floating surface: at least 0.80 Mocha over the blur (rice glass rule).
-    Ptr<ID2D1LinearGradientBrush> tint;
-    c.Gradient({0, 0}, {0, h}, Rgb(mocha::base, a), Rgb(mocha::base, std::min(1.0f, a + 0.04f)), tint);
-    if (tint) rt->FillRectangle({0, 0, w, h}, tint.get());
-    const auto& items = *lv.items;
-    float slotRight = w - kMenuPad - 8, slotLeft = slotRight - 20;
-    for (size_t i = 0; i < items.size(); i++) {
-        const UiMenuItem& m = items[i];
-        D2D1_RECT_F r = MenuItemRect(lv, i);
-        if (m.separator) {
-            float y = std::floor((r.top + r.bottom) / 2);
-            rt->FillRectangle({r.left + 8, y, r.right - 8, y + 1}, c.B(mocha::surface1, 0.8f));
-            continue;
-        }
-        bool hot = ((int)i == lv.hover || (int)i == lv.open) && !m.disabled;
-        if (hot) c.Glow(r, LiveCornerRadius(), 0.16f, 0.8f);
-        UINT32 col = m.disabled ? mocha::overlay0 : mocha::text;
-        if (m.glyph) c.Glyph(m.glyph, {r.left + 8, r.top, r.left + 8 + kMenuIconW, r.bottom}, col);
-        float textX = r.left + 8 + kMenuIconW + 10;
-        float hintLeft = lv.hintW > 0 ? slotLeft - 8 - lv.hintW : slotLeft - 8;
-        c.Text(m.text, T.ui.get(), {textX, r.top, hintLeft - 8, r.bottom}, col);
-        if (!m.hint.empty())
-            c.Text(m.hint, T.uiRight.get(), {hintLeft, r.top, slotLeft - 8, r.bottom}, m.disabled ? mocha::overlay0 : mocha::subtext0);
-        if (!m.sub.empty()) {
-            c.Glyph(kGlyphChevronR, {slotLeft, r.top, slotRight, r.bottom}, col, true);
-        } else if (m.checked) {
-            rt->DrawText(&kGlyphCheck, 1, T.icon.get(), {slotLeft, r.top, slotRight, r.bottom}, c.BRef(g_cfg.accent1),
-                         D2D1_DRAW_TEXT_OPTIONS_NONE);
-        }
-    }
-    // The border is always ours: Seamless Borders does not ring popups.
-    D2D1_RECT_F edge{kBorderW / 2, kBorderW / 2, w - kBorderW / 2, h - kBorderW / 2};
-    Ptr<ID2D1LinearGradientBrush> border;
-    c.Accent(edge, border);
-    float r2 = rad - kBorderW / 2;
-    if (border) rt->DrawRoundedRectangle({edge, r2, r2}, border.get(), kBorderW);
-}
-
-// Whole-surface fade by layer opacity (the window itself stays opaque so the backdrop keeps working).
-struct FadeLayer {
-    ID2D1RenderTarget* rt;
-    bool on = false;
-    Ptr<ID2D1Layer> layer;
-    FadeLayer(ID2D1RenderTarget* r, float alpha) : rt(r) {
-        if (alpha < 0.999f && SUCCEEDED(rt->CreateLayer(nullptr, layer.put()))) {
-            rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
-                                                D2D1::IdentityMatrix(), std::max(0.0f, alpha)),
-                          layer.get());
-            on = true;
-        }
-    }
-    ~FadeLayer() {
-        if (on) rt->PopLayer();
-    }
-};
-
-bool Animate() {
-    BOOL enabled = TRUE;
-    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &enabled, 0);
-    return enabled;
-}
-
-int MenuIndexOf(HWND h) {
-    if (g_menu)
-        for (size_t i = 0; i < g_menu->levels.size(); i++)
-            if (g_menu->levels[i]->hwnd == h) return (int)i;
-    return -1;
-}
-
-void MenuInvalidate() {
-    if (g_menu)
-        for (auto& lv : g_menu->levels)
-            if (lv->hwnd) InvalidateRect(lv->hwnd, nullptr, FALSE);
-}
-
-void MenuCloseFrom(size_t n) {
-    if (!g_menu) return;
-    while (g_menu->levels.size() > n) {
-        HWND h = g_menu->levels.back()->hwnd;
-        g_menu->levels.back()->surf.Discard();
-        g_menu->levels.pop_back();
-        if (h) DestroyWindow(h);
-    }
-    if (n > 0 && !g_menu->levels.empty()) g_menu->levels.back()->open = -1;
-    MenuInvalidate();
-}
-
-void MenuFinish(int id) {
-    if (!g_menu || g_menu->done) return;
-    g_menu->result = id;
-    g_menu->done = true;
-}
-
-LRESULT CALLBACK MenuProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
-
-HWND MenuCreateWindow(MenuLevel& lv, int x, int y, bool root) {
-    int w = (int)std::ceil(lv.wDip * lv.scale), h = (int)std::ceil(lv.hDip * lv.scale);
-    DWORD ex = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | (root ? 0 : WS_EX_NOACTIVATE);
-    HWND hw = CreateWindowExW(ex, kSnpMenuClass, L"", WS_POPUP, x, y, w, h, nullptr, nullptr, g_inst, nullptr);
-    if (!hw) return nullptr;
-    lv.hwnd = hw;
-    lv.surf.hwnd = hw;
-    ApplyBackdrop(hw);
-    return hw;
-}
-
-RECT MenuWorkArea(POINT pt) {
-    MONITORINFO mi{sizeof(mi)};
-    GetMonitorInfoW(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST), &mi);
-    return mi.rcWork;
-}
-
-// Top-left of a root menu opened at pt: flips to the left or above the point when it would run off the monitor.
-POINT MenuRootOrigin(POINT pt, int w, int h) {
-    RECT wa = MenuWorkArea(pt);
-    int x = pt.x, y = pt.y;
-    if (x + w > wa.right) x = pt.x - w;
-    if (y + h > wa.bottom) y = pt.y - h;
-    x = std::clamp<int>(x, wa.left, std::max<int>(wa.left, wa.right - w));
-    y = std::clamp<int>(y, wa.top, std::max<int>(wa.top, wa.bottom - h));
-    return {x, y};
-}
-
-// A submenu sits beside its parent, level with the item; left of the parent if the right side is full.
-POINT MenuSubOrigin(const RECT& parent, int itemTopPx, int padPx, int w, int h) {
-    RECT wa = MenuWorkArea({parent.right, parent.top + itemTopPx});
-    int overlap = (int)kMenuOverlap;
-    int x = parent.right - overlap;
-    if (x + w > wa.right) x = parent.left - w + overlap;
-    int y = parent.top + itemTopPx - padPx;
-    if (y + h > wa.bottom) y = wa.bottom - h;
-    x = std::clamp<int>(x, wa.left, std::max<int>(wa.left, wa.right - w));
-    y = std::clamp<int>(y, wa.top, std::max<int>(wa.top, wa.bottom - h));
-    return {x, y};
-}
-
-void MenuOpenSub(size_t level, int item, bool keyboard) {
-    if (!g_menu || level >= g_menu->levels.size()) return;
-    MenuLevel& parent = *g_menu->levels[level];
-    const UiMenuItem& m = (*parent.items)[(size_t)item];
-    if (m.sub.empty() || m.disabled) return;
-    MenuCloseFrom(level + 1);
-    auto lv = std::make_unique<MenuLevel>();
-    lv->items = &m.sub;
-    MenuLayout(*lv, parent.scale);
-    RECT pr{};
-    GetWindowRect(parent.hwnd, &pr);
-    int w = (int)std::ceil(lv->wDip * lv->scale), h = (int)std::ceil(lv->hDip * lv->scale);
-    POINT o = MenuSubOrigin(pr, (int)(parent.top[(size_t)item] * parent.scale), (int)(kMenuPad * parent.scale), w, h);
-    if (keyboard) lv->hover = MenuNext(*lv, -1, +1);
-    MenuLevel* raw = lv.get();
-    g_menu->levels.push_back(std::move(lv));
-    parent.open = item;
-    if (!MenuCreateWindow(*raw, o.x, o.y, false)) {
-        MenuCloseFrom(level + 1);
-        return;
-    }
-    ShowWindow(raw->hwnd, SW_SHOWNOACTIVATE);
-    MenuInvalidate();
-}
-
-void MenuActivate(size_t level, int item, bool keyboard) {
-    if (!g_menu || level >= g_menu->levels.size()) return;
-    const UiMenuItem& m = (*g_menu->levels[level]->items)[(size_t)item];
-    if (!MenuSelectable(m)) return;
-    if (!m.sub.empty()) MenuOpenSub(level, item, keyboard);
-    else MenuFinish(m.id);
-}
-
-void MenuHoverChanged(size_t level, int item) {
-    if (!g_menu) return;
-    MenuLevel& lv = *g_menu->levels[level];
-    HWND root = g_menu->levels[0]->hwnd;
-    KillTimer(root, kTimerMenuSub);
-    g_menu->pendingItem = -1;
-    bool wantsSub = item >= 0 && MenuSelectable((*lv.items)[(size_t)item]) && !(*lv.items)[(size_t)item].sub.empty();
-    if (wantsSub && lv.open != item) {
-        g_menu->pendingLevel = (int)level;
-        g_menu->pendingItem = item;
-        SetTimer(root, kTimerMenuSub, kMenuSubDelayMs, nullptr);
-    } else if (!wantsSub && lv.open != -1 && g_menu->levels.size() > level + 1) {
-        g_menu->pendingLevel = (int)level;
-        g_menu->pendingItem = -1;
-        SetTimer(root, kTimerMenuSub, kMenuSubDelayMs, nullptr);
-    }
-}
-
-void MenuKey(WPARAM vk) {
-    if (!g_menu || g_menu->levels.empty()) return;
-    size_t li = g_menu->levels.size() - 1;
-    MenuLevel& cur = *g_menu->levels[li];
-    const auto& items = *cur.items;
-    switch (vk) {
-        case VK_DOWN: cur.hover = MenuNext(cur, cur.hover, +1); break;
-        case VK_UP: cur.hover = MenuNext(cur, cur.hover, -1); break;
-        case VK_HOME: cur.hover = MenuNext(cur, -1, +1); break;
-        case VK_END: cur.hover = MenuNext(cur, (int)items.size(), -1); break;
-        case VK_RIGHT:
-            if (cur.hover >= 0 && !items[(size_t)cur.hover].sub.empty()) MenuActivate(li, cur.hover, true);
-            break;
-        case VK_LEFT:
-            if (li > 0) MenuCloseFrom(li);
-            break;
-        case VK_RETURN:
-        case VK_SPACE:
-            if (cur.hover >= 0) MenuActivate(li, cur.hover, true);
-            break;
-        case VK_ESCAPE:
-            if (li > 0) MenuCloseFrom(li);
-            else MenuFinish(0);
-            break;
-        default: return;
-    }
-    MenuInvalidate();
-}
-
-void MenuFadeTick() {
-    if (!g_menu || g_menu->levels.empty()) return;
-    float t = std::min(1.0f, (GetTickCount64() - g_menu->fadeStart) / (float)kMenuFadeMs);
-    g_menu->alpha = 1 - (1 - t) * (1 - t);
-    if (t >= 1) KillTimer(g_menu->levels[0]->hwnd, kTimerMenuFade);
-    MenuInvalidate();
-}
-
-LRESULT CALLBACK MenuProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
-    int li = MenuIndexOf(hwnd);
-    if (!g_menu || li < 0) return DefWindowProcW(hwnd, msg, wp, lp);
-    MenuLevel& lv = *g_menu->levels[(size_t)li];
-    switch (msg) {
-        case WM_ERASEBKGND: return 1;
-        case WM_MOUSEACTIVATE: return li == 0 ? MA_ACTIVATE : MA_NOACTIVATE;
-        case WM_PAINT: {
-            PAINTSTRUCT ps;
-            BeginPaint(hwnd, &ps);
-            if (lv.surf.Ensure()) {
-                lv.surf.rt->SetDpi(96 * lv.scale, 96 * lv.scale);
-                lv.surf.rt->BeginDraw();
-                lv.surf.rt->Clear(D2D1::ColorF(0, 0, 0, 0));
-                {
-                    FadeLayer fade(lv.surf.rt.get(), g_menu->alpha);
-                    PaintMenu(lv.surf.rt.get(), lv);
-                }
-                if (lv.surf.rt->EndDraw() == D2DERR_RECREATE_TARGET) lv.surf.Discard();
-            }
-            EndPaint(hwnd, &ps);
-            return 0;
-        }
-        case WM_MOUSEMOVE: {
-            if (g_menu->pendingLevel > li) {  // The pointer reached a deeper level: stop the timer.
-                KillTimer(g_menu->levels[0]->hwnd, kTimerMenuSub);
-                g_menu->pendingItem = -1;
-                g_menu->pendingLevel = -1;
-            }
-            TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
-            TrackMouseEvent(&tme);
-            int i = MenuItemAt(lv, GET_X_LPARAM(lp) / lv.scale, GET_Y_LPARAM(lp) / lv.scale);
-            if (i >= 0 && !MenuSelectable((*lv.items)[(size_t)i])) i = -1;
-            if (i != lv.hover) {
-                lv.hover = i;
-                MenuHoverChanged((size_t)li, i);
-                MenuInvalidate();
-            }
-            return 0;
-        }
-        case WM_MOUSELEAVE:
-            if (lv.hover != -1 && lv.open != lv.hover) {
-                lv.hover = -1;
-                InvalidateRect(hwnd, nullptr, FALSE);
-            }
-            return 0;
-        case WM_LBUTTONUP:
-        case WM_RBUTTONUP: {
-            if (!g_menu->pressed) return 0;  // The release of the click that opened the menu.
-            int i = MenuItemAt(lv, GET_X_LPARAM(lp) / lv.scale, GET_Y_LPARAM(lp) / lv.scale);
-            if (i >= 0) MenuActivate((size_t)li, i, false);
-            return 0;
-        }
-        case WM_ACTIVATE:
-            if (LOWORD(wp) == WA_INACTIVE && li == 0 && MenuIndexOf((HWND)lp) < 0) MenuFinish(0);
-            return 0;
-        case WM_TIMER:
-            if (wp == kTimerMenuSub) {
-                KillTimer(hwnd, kTimerMenuSub);
-                int pl = g_menu->pendingLevel, pi = g_menu->pendingItem;
-                g_menu->pendingLevel = g_menu->pendingItem = -1;
-                if (pl >= 0 && (size_t)pl < g_menu->levels.size()) {
-                    if (pi >= 0) MenuOpenSub((size_t)pl, pi, false);
-                    else MenuCloseFrom((size_t)pl + 1);
-                }
-            } else if (wp == kTimerMenuFade) {
-                MenuFadeTick();
-            }
-            return 0;
-    }
-    return DefWindowProcW(hwnd, msg, wp, lp);
-}
-
-void RegisterMenuClass() {
-    WNDCLASSEXW probe{sizeof(probe)};
-    if (GetClassInfoExW(g_inst, kSnpMenuClass, &probe)) return;
-    WNDCLASSEXW wc{sizeof(wc)};
-    wc.hInstance = g_inst;
-    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wc.lpfnWndProc = MenuProc;
-    wc.lpszClassName = kSnpMenuClass;
-    RegisterClassExW(&wc);
-}
-
-UINT MonitorDpiAt(POINT pt) {
-    UINT dx = 96, dy = 96;
-    if (FAILED(GetDpiForMonitor(MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &dx, &dy))) dx = 96;
-    return dx;
-}
-
-int RunMenu(const std::vector<UiMenuItem>& items, POINT pt, HWND owner) {
-    if (g_menu || items.empty() || !g_d2d || !EnsureFonts()) return 0;
-    RegisterMenuClass();
-    MenuSession session;
-    g_menu = &session;
-    auto root = std::make_unique<MenuLevel>();
-    root->items = &items;
-    MenuLayout(*root, MonitorDpiAt(pt) / 96.0f);
-    int w = (int)std::ceil(root->wDip * root->scale), h = (int)std::ceil(root->hDip * root->scale);
-    POINT o = MenuRootOrigin(pt, w, h);
-    MenuLevel* raw = root.get();
-    session.levels.push_back(std::move(root));
-    if (!MenuCreateWindow(*raw, o.x, o.y, true)) {
-        g_menu = nullptr;
-        return 0;
-    }
-    if (owner && IsWindow(owner)) SetForegroundWindow(owner);  // Lets the new window take the foreground.
-    bool animate = Animate();
-    session.alpha = animate ? 0.0f : 1.0f;
-    session.fadeStart = GetTickCount64();
-    ShowWindow(raw->hwnd, SW_SHOW);
-    SetForegroundWindow(raw->hwnd);
-    SetFocus(raw->hwnd);
-    if (animate) SetTimer(raw->hwnd, kTimerMenuFade, 15, nullptr);
-
-    MSG m;
-    while (!session.done) {
-        BOOL got = GetMessageW(&m, nullptr, 0, 0);
-        if (got <= 0) {
-            if (got == 0) PostQuitMessage((int)m.wParam);
-            break;
-        }
-        switch (m.message) {
-            case WM_KEYDOWN:
-            case WM_SYSKEYDOWN:
-                MenuKey(m.wParam);
-                continue;
-            case WM_KEYUP:
-            case WM_SYSKEYUP:
-            case WM_CHAR:
-            case WM_SYSCHAR:
-                continue;
-            case WM_LBUTTONDOWN:
-            case WM_RBUTTONDOWN:
-            case WM_MBUTTONDOWN:
-            case WM_NCLBUTTONDOWN:
-            case WM_NCRBUTTONDOWN:
-                if (MenuIndexOf(m.hwnd) < 0) {  // A click on another window of ours closes the menu and is eaten.
-                    MenuFinish(0);
-                    continue;
-                }
-                session.pressed = true;
-                break;
-        }
-        TranslateMessage(&m);
-        DispatchMessageW(&m);
-    }
-    int result = session.result;
-    MenuCloseFrom(0);
-    g_menu = nullptr;
-    if (owner && IsWindow(owner) && IsWindowVisible(owner)) {
-        SetForegroundWindow(owner);
-        SetFocus(owner);
-    }
-    return result;
-}
-
-// Opens the menu at a screen point and returns the picked item's id (0 when dismissed).
-int Ui_ShowMenu(const std::vector<UiMenuItem>& items, POINT screenPt, HWND owner) { return RunMenu(items, screenPt, owner); }
-
-UiMenuItem MI(int id, std::wstring text, wchar_t glyph = 0, std::wstring hint = {}, bool enabled = true) {
-    UiMenuItem m;
-    m.id = id;
-    m.text = std::move(text);
-    m.glyph = glyph;
-    m.hint = std::move(hint);
-    m.disabled = !enabled;
-    return m;
-}
-
-UiMenuItem MSep() {
-    UiMenuItem m;
-    m.separator = true;
-    return m;
-}
-
-UiMenuItem MSub(std::wstring text, wchar_t glyph, std::vector<UiMenuItem> sub) {
-    UiMenuItem m;
-    m.text = std::move(text);
-    m.glyph = glyph;
-    m.sub = std::move(sub);
-    return m;
-}
-
-}  // namespace ui_menu
-using ui_menu::UiMenuItem;
-using ui_menu::Ui_ShowMenu;
 
 // ---------------------------------------------------------------------------
 // History (every snip in the folder, newest first) and the countdown pill for timed snips.
@@ -9010,7 +9403,6 @@ static VOID Uninit()
 }  // namespace SeamlessMenuSkin
 
 static HANDLE g_singleInstance;
-static bool g_pointerOk;
 
 // After the elevated relaunch, Windhawk can load this mod a moment late when
 // the PC is busy. windhawk-mod.exe then shows a false "Running the tool mod
@@ -11932,8 +12324,17 @@ void PaintPanelBase(Surface& s, const GlassPanel& panel, float scale) {
                               dark ? Rgb(30, 30, 46, 0.985f) : Rgb(252, 252, 253, 0.985f),
                               dark ? Rgb(24, 24, 37, 0.985f) : Rgb(244, 245, 248, 0.985f));
     }
-    StrokeRoundRect(s, 0.5f, 0.5f, w - 0.5f, h - 0.5f, radius - 0.5f, 1.0f,
-                    dark ? Rgb(108, 112, 134, 0.4f) : WithAlpha(kBlack, 0.10f));
+    const float edge = std::max(1.0f, std::round(2 * scale));
+    const float inset = edge / 2;
+    const Color blue = Rgb(137, 180, 250), mauve = Rgb(203, 166, 247);
+    FillShape(
+        s, 0, 0, w, h,
+        [&](float x, float y) {
+            return fabsf(SdRoundRect(x, y, inset, inset, w - inset, h - inset, radius - inset)) - inset;
+        },
+        [&](float x, float y) {
+            return Mix(blue, mauve, Clamp01((x + y) / (w + h)));
+        });
 }
 
 std::vector<float> BlurCoverage(std::vector<float> mask, int width, int height, float sigma);
