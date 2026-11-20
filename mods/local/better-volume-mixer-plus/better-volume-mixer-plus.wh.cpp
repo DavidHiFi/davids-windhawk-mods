@@ -2,7 +2,7 @@
 // @id           better-volume-mixer-plus
 // @name         Better Volume Mixer Plus
 // @description  A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices
-// @version      1.4.32
+// @version      1.4.33
 // @author       DavidHiFi, 0Allu, shubho
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -7529,7 +7529,7 @@ DWORD WINAPI ThreadProc(LPVOID) {
 namespace SeamlessMenuRoom {
 
 constexpr UINT_PTR kRoomId = 0x6D55;
-constexpr INT kRowMargin = 8;                  // row top and bottom margin of the menu look
+constexpr INT kRowMargin = 6;                  // row top and bottom margin of the menu look
 constexpr INT kMinRowMargin = 2;
 static const WCHAR* const kPadProp = L"SeamlessMenuRoomPad";
 static const WCHAR* const kSizeProp = L"SeamlessMenuRoomSize";
@@ -7750,7 +7750,7 @@ static VOID ResetRows()
     if (g_rowMargin.exchange(kRowMargin) != kRowMargin && g_flush) g_flush();
 }
 
-// Picks the largest row margin (8 down to 2) at which the whole menu fits its monitor.
+// Picks the largest row margin (6 down to 2) at which the whole menu fits its monitor.
 static VOID FitMenu(HMENU m, HWND owner)
 {
     if (!m || !g_flush || HasOwnerDraw(m)) return;
