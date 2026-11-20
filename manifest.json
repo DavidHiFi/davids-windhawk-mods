@@ -1,7 +1,7 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-20T07:02:13+08:00",
+  "generatedAt": "2026-11-20T09:12:01+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 183,
@@ -2030,7 +2030,7 @@
       "name": "Halo Launcher",
       "author": "DavidHiFi, David Ravelo",
       "github": "https://github.com/DavidHiFi",
-      "version": "0.5.5",
+      "version": "0.5.6",
       "license": "MIT",
       "origin": "local",
       "upstream": "https://windhawk.net/mods/spotlight-launcher",

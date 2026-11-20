@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.5.5
+// @version         0.5.6
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1008,6 +1008,21 @@ int HitQuery(float dipX) {
 
 void Render();
 
+// The first open used to pay for every lazy thing the draw needs: the text formats, the
+// render target, the drawing surface. On a cold start that ran to seconds between the key
+// press and the window (0.5.5's first open sat 10 s in there, and a second press in the
+// meantime made it flash open and closed). The draw tools are built here instead, while
+// the engine starts, so the first open draws like every later one.
+void WarmRender() {
+    if (!g.wnd || g.visible) return;
+    EnsureFormats();
+    ComputeLayout();
+    Layout& L = g.lay;
+    EnsureSurface(g.surface, L.pxW, L.pxH);
+    EnsureTarget();
+    Trace(L"draw tools warmed");
+}
+
 void TextChanged(bool notify) {
     g.queryLayout.Reset();
     g.caret = std::clamp(g.caret, 0, (int)g.text.size());
@@ -1509,21 +1524,26 @@ void ShowLauncher(bool selectAll) {
         g.quiet = g.quietNext;
         g.quietNext = false;
         ApplyBackdrop();
+        unsigned long t0 = GetTickCount();
         Render();  // sizes the window before it appears
+        unsigned long t1 = GetTickCount();
         // Shown cloaked, drawn, then uncloaked once Windows has composed it: the first frame
         // people see already has the blur and the new contents, never the last open's picture.
         BOOL cloak = TRUE;
         DwmSetWindowAttribute(g.wnd, 13 /* DWMWA_CLOAK */, &cloak, sizeof(cloak));
         SetWindowPos(g.wnd, HWND_TOPMOST, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-        // The first open after a start spends a while building the drawing tools and fonts
-        // in the Render above. The open animation counts from here, so it starts at its first
-        // frame on screen instead of jumping in halfway.
+        // The open animation counts from here, so it starts at its first frame on screen
+        // instead of jumping in halfway. The draw tools themselves were warmed when the
+        // engine became ready; only a settings change rebuilds them here.
         g.shownAt = GetTickCount();
         Render();
         DwmFlush();
+        unsigned long t2 = GetTickCount();
         cloak = FALSE;
         DwmSetWindowAttribute(g.wnd, 13, &cloak, sizeof(cloak));
+        if (t1 - t0 > 60 || t2 - t1 > 60)
+            Trace(L"slow open draw: prep %lu ms, show+draw+flush %lu ms", t1 - t0, t2 - t1);
     }
     if (!g.quiet) {
         ForceForeground(g.wnd);
@@ -1913,6 +1933,7 @@ void OnLine(const std::string& raw) {
     } else if (op == L"ready") {
         g.engineReady = true;
         Wh_Log(L"Engine ready: %s plugins in %s ms", field(1).c_str(), field(2).c_str());
+        WarmRender();
         // A key pressed while the engine was starting is answered now, unless it is stale.
         bool fresh = GetTickCount() - g.pendingTick < 25000;
         if (g.pendingKey && fresh) Send({L"hotkey", g.pendingKeyword});
