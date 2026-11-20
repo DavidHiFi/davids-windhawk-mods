@@ -1684,6 +1684,8 @@
     "showClipDetails": 1,
     "showPositions": 1,
     "showThumbnails": 1,
+    "syncEnabled": 1,
+    "syncPort": 4126,
     "takeOverWinV": 1,
     "trayIcon": 1,
     "windowHeight": 400,

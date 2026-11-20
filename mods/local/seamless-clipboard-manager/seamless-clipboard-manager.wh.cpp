@@ -2,7 +2,7 @@
 // @id              seamless-clipboard-manager
 // @name            Seamless Clipboard Manager
 // @description     Keeps everything you copy, text and images, in a searchable list you open with Win+V
-// @version         1.4.0
+// @version         1.4.2
 // @author          DavidHiFi, Scott Brogden, Ditto contributors
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -68,7 +68,7 @@ Open Settings from the tray icon's menu, or use the Settings tab on this mod's p
 
 ## Sync between computers
 
-Settings, page "Sync": turn on "Share clips with another computer" on both computers, and list each other under "Other computers" (their address and port, like 192.168.0.11:4126). From then on a copy made on one computer, screenshots included, appears in the other one's list at once, both ways. Clips travel straight between the two computers over your own network and nowhere else; nothing is stored online.
+Settings, page "Sync": turn on "Share clips with another computer" on both computers, and list each other under "Other computers" (their address and port, like 192.0.2.11:4126). From then on a copy made on one computer, screenshots included, appears in the other one's list at once, both ways. Clips travel straight between the two computers over your own network and nowhere else; nothing is stored online.
 
 ## Not included from Ditto
 
@@ -259,7 +259,7 @@ Based on [Ditto](https://github.com/sabrogden/Ditto) by Scott Brogden and the Di
   $description: "1024 to 65535 (Suggested: 4126). Both computers can use the same port."
 - syncPeers: ""
   $name: Other computers
-  $description: "Addresses to send copies to, separated by semicolons, like 192.168.0.11:4126. Leave empty to not share."
+  $description: "Addresses to send copies to, separated by semicolons, like 192.0.2.11:4126. Leave empty to not share."
 */
 // ==/WindhawkModSettings==
 
@@ -3040,11 +3040,19 @@ struct Cap_Hotkey {
     bool registered = false;
 };
 static std::vector<Cap_Hotkey> g_capHotkeys;
+static int g_capWinVHotkeyId;
+
+static int Cap_WinVTakeoverHotkey() {
+    if (!g_set.takeOverWinV) return 0;
+    for (const auto& h : g_capHotkeys)
+        if ((h.id == 1 || h.id == 2) && !h.bad && h.mods == MOD_WIN && h.vk == 'V') return h.id;
+    return 0;
+}
 
 static bool Cap_TryRegisterAll() {
     bool allOk = true;
     for (auto& h : g_capHotkeys) {
-        if (h.bad || h.registered) continue;
+        if (h.bad || h.registered || h.id == g_capWinVHotkeyId) continue;
         h.registered = RegisterHotKey(g_msgWnd, h.id, h.mods | MOD_NOREPEAT, h.vk) != FALSE;
         if (!h.registered) allOk = false;
     }
@@ -3095,12 +3103,16 @@ static bool Cap_WriteDisabledHotkeys(const std::wstring& keys) {
 
 // State values: winvHistoryRestore 1 = history was on; winvHotkeyRestore 1 = "V" was added
 // to an existing value, 2 = the value was created.
-static void Cap_ApplyWinVTakeover() {
-    if (g_set.takeOverWinV) {
+static void Cap_ApplyWinVTakeover(bool enabled) {
+    if (enabled) {
         if (Cap_WindowsClipboardHistoryOn() && Cap_SetClipboardHistory(0)) SetState(L"winvHistoryRestore", 1);
         std::wstring keys;
-        bool exists = Cap_ReadDisabledHotkeys(keys);
-        if (keys.find_first_of(L"Vv") == std::wstring::npos && Cap_WriteDisabledHotkeys(keys + L"V"))
+        DWORD size = 0;
+        LSTATUS status = RegGetValueW(HKEY_CURRENT_USER, kCapAdvancedKey, L"DisabledHotkeys",
+                                      RRF_RT_REG_SZ, nullptr, nullptr, &size);
+        bool exists = status == ERROR_SUCCESS && Cap_ReadDisabledHotkeys(keys);
+        if ((exists || status == ERROR_FILE_NOT_FOUND) && keys.find_first_of(L"Vv") == std::wstring::npos &&
+            Cap_WriteDisabledHotkeys(keys + L"V"))
             SetState(L"winvHotkeyRestore", exists ? 1 : 2);
         return;
     }
@@ -3110,27 +3122,28 @@ static void Cap_ApplyWinVTakeover() {
     }
     if (int how = GetState(L"winvHotkeyRestore", 0)) {
         std::wstring keys;
-        Cap_ReadDisabledHotkeys(keys);
-        size_t at = keys.find_first_of(L"Vv");
-        if (at != std::wstring::npos) keys.erase(at, 1);
-        if (how == 2 && keys.empty())
-            RegDeleteKeyValueW(HKEY_CURRENT_USER, kCapAdvancedKey, L"DisabledHotkeys");
-        else
-            Cap_WriteDisabledHotkeys(keys);
+        if (Cap_ReadDisabledHotkeys(keys)) {
+            size_t at = keys.find_first_of(L"Vv");
+            if (at != std::wstring::npos) {
+                keys.erase(at, 1);
+                if (how == 2 && keys.empty())
+                    RegDeleteKeyValueW(HKEY_CURRENT_USER, kCapAdvancedKey, L"DisabledHotkeys");
+                else
+                    Cap_WriteDisabledHotkeys(keys);
+            }
+        }
         SetState(L"winvHotkeyRestore", 0);
     }
 }
 
-// Until Explorer restarts it still owns Win+V, so RegisterHotKey fails. Then a
-// keyboard hook catches Win+V instead.
+// Explorer can still act on Win+V in an existing session. Consume the chord before it reaches the shell.
 static HHOOK g_capWinVHook;
-static int g_capWinVHotkeyId;   // 1 or 2 while the hook stands in for that hotkey
 static bool g_capWinVHeld;
 
 static LRESULT CALLBACK Cap_WinVHookProc(int code, WPARAM wp, LPARAM lp) {
     if (code == HC_ACTION) {
         auto* k = reinterpret_cast<KBDLLHOOKSTRUCT*>(lp);
-        if (k->vkCode == 'V' && !(k->flags & LLKHF_INJECTED) && g_capWinVHotkeyId) {
+        if (k->vkCode == 'V' && g_capWinVHotkeyId) {
             if (wp == WM_KEYDOWN || wp == WM_SYSKEYDOWN) {
                 bool win = ((GetAsyncKeyState(VK_LWIN) | GetAsyncKeyState(VK_RWIN)) & 0x8000) != 0;
                 bool other = ((GetAsyncKeyState(VK_CONTROL) | GetAsyncKeyState(VK_MENU) | GetAsyncKeyState(VK_SHIFT)) &
@@ -3157,26 +3170,29 @@ static LRESULT CALLBACK Cap_WinVHookProc(int code, WPARAM wp, LPARAM lp) {
     return CallNextHookEx(nullptr, code, wp, lp);
 }
 
-static void Cap_UpdateWinVHook() {
-    int need = 0;
-    if (g_set.takeOverWinV)
-        for (const auto& h : g_capHotkeys)
-            if ((h.id == 1 || h.id == 2) && !h.bad && !h.registered && h.mods == MOD_WIN && h.vk == 'V') need = h.id;
-    g_capWinVHotkeyId = need;
-#ifndef SCM_HARNESS  // Tests never hook the owner's keyboard.
-    if (need && !g_capWinVHook) {
+static bool Cap_UpdateWinVHook(int hotkeyId) {
+#ifndef SCM_HARNESS
+    if (hotkeyId && !g_capWinVHook) {
         g_capWinVHook = SetWindowsHookExW(WH_KEYBOARD_LL, Cap_WinVHookProc, g_hInstance, 0);
-    } else if (!need && g_capWinVHook) {
+        if (!g_capWinVHook) return false;
+        for (auto& h : g_capHotkeys) {
+            if (h.id == hotkeyId && h.registered) {
+                UnregisterHotKey(g_msgWnd, h.id);
+                h.registered = false;
+            }
+        }
+    } else if (!hotkeyId && g_capWinVHook) {
         UnhookWindowsHookEx(g_capWinVHook);
         g_capWinVHook = nullptr;
     }
+    if (g_capWinVHotkeyId != hotkeyId) g_capWinVHeld = false;
+    g_capWinVHotkeyId = hotkeyId;
 #endif
-    g_capWinVHeld = false;
+    return true;
 }
 
 void Hotkeys_Register() {
     if (!g_capHotkeys.empty()) Hotkeys_Unregister();
-    Cap_ApplyWinVTakeover();
     auto add = [](int id, const std::wstring& text, UINT mods = 0, UINT vk = 0) {
         Cap_Hotkey h{id, Cap_Trim(text)};
         if (vk) {
@@ -3200,8 +3216,10 @@ void Hotkeys_Register() {
                                                           : 0;
     if (posMods)
         for (int n = 0; n < 10; n++) add(10 + n, L"", posMods, n == 9 ? '0' : '1' + n);
-    if (!Cap_TryRegisterAll()) SetTimer(g_msgWnd, kTimerHotkeyRetry, 5000, nullptr);
-    Cap_UpdateWinVHook();
+    int takeOver = Cap_WinVTakeoverHotkey();
+    Cap_ApplyWinVTakeover(takeOver != 0);
+    bool hookReady = Cap_UpdateWinVHook(takeOver);
+    if (!Cap_TryRegisterAll() || !hookReady) SetTimer(g_msgWnd, kTimerHotkeyRetry, 5000, nullptr);
 }
 
 void Hotkeys_Unregister() {
@@ -3209,7 +3227,7 @@ void Hotkeys_Unregister() {
     for (auto& h : g_capHotkeys)
         if (h.registered) UnregisterHotKey(g_msgWnd, h.id);
     g_capHotkeys.clear();
-    Cap_UpdateWinVHook();
+    Cap_UpdateWinVHook(0);
 }
 
 std::wstring Hotkeys_Status() {
@@ -3269,11 +3287,11 @@ void Capture_OnTimer(UINT_PTR id) {
     } else if (id == kTimerPasteStep) {
         Cap_PasteStep();
     } else if (id == kTimerHotkeyRetry) {
-        if (Cap_TryRegisterAll()) {
+        bool hookReady = Cap_UpdateWinVHook(Cap_WinVTakeoverHotkey());
+        if (Cap_TryRegisterAll() && hookReady) {
             KillTimer(g_msgWnd, kTimerHotkeyRetry);
             Wh_Log(L"All keys are registered now");
         }
-        Cap_UpdateWinVHook();
     }
 }
 
@@ -3697,36 +3715,52 @@ int Harness_TestCapture() {
         std::wstring keys;
         Cap_SetClipboardHistory(1);
         g_set.takeOverWinV = true;
-        Cap_ApplyWinVTakeover();
+        Cap_ApplyWinVTakeover(g_set.takeOverWinV);
         bool onOk = !Cap_WindowsClipboardHistoryOn() && Cap_ReadDisabledHotkeys(keys) && keys == L"V" &&
                     GetState(L"winvHistoryRestore", 0) == 1 && GetState(L"winvHotkeyRestore", 0) == 2;
-        Cap_ApplyWinVTakeover();  // Running twice changes nothing.
+        Cap_ApplyWinVTakeover(g_set.takeOverWinV);  // Running twice changes nothing.
         bool twiceOk = Cap_ReadDisabledHotkeys(keys) && keys == L"V";
         g_set.takeOverWinV = false;
-        Cap_ApplyWinVTakeover();
+        Cap_ApplyWinVTakeover(g_set.takeOverWinV);
         bool offOk = Cap_WindowsClipboardHistoryOn() && !Cap_ReadDisabledHotkeys(keys) &&
                      GetState(L"winvHotkeyRestore", 0) == 0;
         // The owner's own "QV" with history already off: nothing to change, nothing to put back.
         Cap_SetClipboardHistory(0);
         Cap_WriteDisabledHotkeys(L"QV");
         g_set.takeOverWinV = true;
-        Cap_ApplyWinVTakeover();
+        Cap_ApplyWinVTakeover(g_set.takeOverWinV);
         g_set.takeOverWinV = false;
-        Cap_ApplyWinVTakeover();
+        Cap_ApplyWinVTakeover(g_set.takeOverWinV);
         bool ownOk = !Cap_WindowsClipboardHistoryOn() && Cap_ReadDisabledHotkeys(keys) && keys == L"QV";
         // Added to an existing value, then taken out again.
         Cap_WriteDisabledHotkeys(L"Q");
         g_set.takeOverWinV = true;
-        Cap_ApplyWinVTakeover();
+        Cap_ApplyWinVTakeover(g_set.takeOverWinV);
         bool addOk = Cap_ReadDisabledHotkeys(keys) && keys == L"QV";
         g_set.takeOverWinV = false;
-        Cap_ApplyWinVTakeover();
+        Cap_ApplyWinVTakeover(g_set.takeOverWinV);
         bool removeOk = Cap_ReadDisabledHotkeys(keys) && keys == L"Q";
         RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\SeamlessClipboardManagerHarness");
         Wh_Log(L"  win+v: on=%d twice=%d off=%d own=%d add=%d remove=%d", onOk, twiceOk, offOk, ownOk, addOk, removeOk);
         Cap_Check(onOk && twiceOk, L"win+v: takeover turns off history and adds V");
         Cap_Check(offOk, L"win+v: turning it off puts back only what the mod changed");
         Cap_Check(ownOk && addOk && removeOk, L"win+v: an existing DisabledHotkeys value is kept");
+        DWORD custom = 17;
+        RegSetKeyValueW(HKEY_CURRENT_USER, kCapAdvancedKey, L"DisabledHotkeys", REG_DWORD, &custom, sizeof(custom));
+        Cap_ApplyWinVTakeover(true);
+        Cap_ApplyWinVTakeover(false);
+        DWORD saved = 0, size = sizeof(saved);
+        Cap_Check(RegGetValueW(HKEY_CURRENT_USER, kCapAdvancedKey, L"DisabledHotkeys", RRF_RT_REG_DWORD,
+                               nullptr, &saved, &size) == ERROR_SUCCESS && saved == custom,
+                  L"win+v: an existing non-string DisabledHotkeys value is kept");
+        RegDeleteTreeW(HKEY_CURRENT_USER, L"Software\\SeamlessClipboardManagerHarness");
+
+        g_set.takeOverWinV = true;
+        g_capHotkeys = {{1, L"Ctrl+V", MOD_CONTROL, 'V'}, {2, L"Win+V", MOD_WIN, 'V'}};
+        Cap_Check(Cap_WinVTakeoverHotkey() == 2, L"win+v: takeover supports the second shortcut");
+        g_capHotkeys.pop_back();
+        Cap_Check(Cap_WinVTakeoverHotkey() == 0, L"win+v: other shortcuts leave Windows alone");
+        g_capHotkeys.clear();
         g_set = savedSet;
     }
 
@@ -9762,7 +9796,7 @@ static std::vector<SetField> Set_MakeFields() {
         {K::Check, L"highlightMatches", L"Highlight what you searched for", nullptr, L"1", {}, 0, 0, 4, L"Search"},
         {K::Check, L"syncEnabled", L"Share clips with another computer", L"Copies made here show up in the clip list on the other computer, and theirs show up here. Both computers need this on, with each other listed under \"Other computers\".", L"0", {}, 0, 0, 5, L"Share"},
         {K::Number, L"syncPort", L"Sync port", L"1024 to 65535 (Suggested: 4126). Both computers can use the same port.", L"4126", {}, 1024, 65535, 5, L"Share"},
-        {K::Text, L"syncPeers", L"Other computers", L"Addresses to send copies to, separated by semicolons, like 192.168.0.11:4126. Leave empty to not share.", L"", {}, 0, 0, 5, L"Share"},
+        {K::Text, L"syncPeers", L"Other computers", L"Addresses to send copies to, separated by semicolons, like 192.0.2.11:4126. Leave empty to not share.", L"", {}, 0, 0, 5, L"Share"},
     };
 }
 
@@ -13235,7 +13269,8 @@ struct Reader {
     std::wstring Wstr(int maxW) {
         uint32_t n = U32();
         if (bad || n > (uint32_t)maxW || p + (size_t)n * 2 > b.size()) { bad = true; return {}; }
-        std::wstring s((const wchar_t*)b.data() + p, n);
+        std::wstring s(n, L'\0');
+        memcpy(s.data(), b.data() + p, static_cast<size_t>(n) * sizeof(wchar_t));
         p += (size_t)n * 2;
         return s;
     }
@@ -13332,13 +13367,25 @@ bool SendAll(SOCKET s, const char* p, size_t n) {
     return true;
 }
 
-bool RecvAll(SOCKET s, void* p, size_t n) {
-    auto* q = (char*)p;
+bool RecvAll(SOCKET s, void* p, size_t n, ULONGLONG deadline) {
+    auto* q = static_cast<char*>(p);
+    ULONGLONG idleDeadline = GetTickCount64() + kIoTimeoutMs;
     while (n) {
-        int r = recv(s, q, (int)std::min<size_t>(n, 1 << 20), 0);
-        if (r <= 0) return false;  // Closed, or the receive timed out.
+        if (WaitForSingleObject(g_stopEvent, 0) != WAIT_TIMEOUT ||
+            GetTickCount64() >= std::min(deadline, idleDeadline)) return false;
+        fd_set readable;
+        FD_ZERO(&readable);
+        FD_SET(s, &readable);
+        timeval wait{0, 100000};
+        int ready = select(0, &readable, nullptr, nullptr, &wait);
+        if (ready == SOCKET_ERROR) return false;
+        if (!ready) continue;
+        int r = recv(s, q, static_cast<int>(std::min<size_t>(n, 1 << 20)), 0);
+        if (r == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK) continue;
+        if (r <= 0) return false;
         q += r;
-        n -= (size_t)r;
+        n -= static_cast<size_t>(r);
+        idleDeadline = GetTickCount64() + kIoTimeoutMs;
     }
     return true;
 }
@@ -13389,24 +13436,16 @@ SOCKET ConnectPeer(const SyncPeer& peer) {
 
 // -- Threads ---------------------------------------------------------------------
 void HandleConnection(SOCKET c) {
-    DWORD t = kIoTimeoutMs;
-    setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, (const char*)&t, sizeof(t));
+    ULONGLONG deadline = GetTickCount64() + kRecvDeadlineMs;
     unsigned char hdr[8];
-    if (!RecvAll(c, hdr, 8)) return;
+    if (!RecvAll(c, hdr, sizeof(hdr), deadline)) return;
     uint32_t magic, len;
     memcpy(&magic, hdr, 4);
     memcpy(&len, hdr + 4, 4);
-    uint64_t cap = g_maxClipBytes.load(std::memory_order_relaxed) + 256 * 1024;  // Clip bytes plus names and strings.
+    uint64_t cap = g_maxClipBytes.load(std::memory_order_relaxed) + 256 * 1024;
     if (magic != kEnvelopeMagic || len == 0 || len > cap) return;
     std::string payload(len, '\0');
-    ULONGLONG deadline = GetTickCount64() + kRecvDeadlineMs;
-    size_t got = 0;
-    while (got < len) {
-        int r = recv(c, payload.data() + got, (int)std::min<size_t>(len - got, 1 << 20), 0);
-        if (r <= 0) return;
-        got += (size_t)r;
-        if (GetTickCount64() > deadline) return;
-    }
+    if (!RecvAll(c, payload.data(), payload.size(), deadline)) return;
     RecvMsg m;
     if (!ParseEnvelope(payload, m)) return;
     auto* post = new (std::nothrow) RecvMsg(std::move(m));
