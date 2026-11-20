@@ -2,7 +2,7 @@
 // @id              network-speedtest-plus
 // @name            Network Speed Test Plus
 // @description     Tray speed test button next to the network icon, plus the Windows 11 network menu speed test as a native flyout: ping, jitter, download and upload measured against Cloudflare, live gauge, results chart with copy. Mocha glass, FiraCode, gradient hover. No browser, no separate app.
-// @version         2.3.2
+// @version         2.3.3
 // @author          DavidHiFi, Alessandro-Vecchio
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -232,6 +232,13 @@ requested browser process.
 #include <uxtheme.h>
 
 #include <windhawk_utils.h>
+
+constexpr UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kTrayId = TrayIconId();
 
 using ShellExecuteExW_t = decltype(&ShellExecuteExW);
 using ShellExecuteW_t = decltype(&ShellExecuteW);
@@ -751,7 +758,7 @@ static LRESULT CALLBACK TrayWndProc(HWND hwnd, UINT message, WPARAM wParam,
         case WM_DESTROY: {
             NOTIFYICONDATA nid = {sizeof(nid)};
             nid.hWnd = hwnd;
-            nid.uID = 1;
+            nid.uID = kTrayId;
             // The icon is GUID-registered: the delete needs the same flag,
             // or the GUID stays claimed and the next add fails.
             nid.uFlags = NIF_GUID;
@@ -770,7 +777,7 @@ static bool AddTrayIcon(HWND hwnd) {
     HICON icon = CreateTrayIcon();
     NOTIFYICONDATA nid = {sizeof(nid)};
     nid.hWnd = hwnd;
-    nid.uID = 1;
+    nid.uID = kTrayId;
     // NIF_GUID makes the tray register the icon under its GUID, which gives
     // it its own entry in NotifyIconSettings (promotable) instead of
     // colliding with another icon on (executable, uID).
