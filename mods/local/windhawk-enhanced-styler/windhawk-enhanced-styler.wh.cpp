@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.11
+// @version         2.2.12
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -988,12 +988,17 @@ static std::string BuildCss(const Settings& s) {
         // The bar also sits 4px in from the menu's border, so it reads as inside
         // the menu rather than on its edge.
         css += ".rc-virtual-list-scrollbar{right:4px !important;clip-path:inset(" + r + " 0 " + r + " 0 round 4px) !important;}";
-        css += ".rc-virtual-list-scrollbar-thumb{background-color:" + scrollbarColor + " !important;border-radius:999px !important;}";
+        css += ".rc-virtual-list-scrollbar-thumb{background:linear-gradient(180deg,#89b4fa,#cba6f7) !important;border-radius:999px !important;}";
         // Windhawk's own scrollbar overlay claims any scrollable box, drop-down lists
         // included, and draws a square bar over it that ignores the curve. Hiding the
         // native bar here makes the scan skip the list, so the rounded bar above is the
         // only one in a drop-down.
         css += ".ant-select-dropdown .rc-virtual-list-holder{scrollbar-width:none !important;}";
+        // Windhawk's own overlay scrollbar can sit fixed over an open pop-up and run
+        // straight past its rounded corners (2026-11-20 screenshot). Inside a pop-up the
+        // clipped antd bar above is the one bar; the fixed case is cut to the pop-up's
+        // rounded shape by the page script in BuildInjectJs.
+        css += ".ant-select-dropdown :is(.wh-cscroll-track,.wh-cscroll-thumb),.ant-dropdown :is(.wh-cscroll-track,.wh-cscroll-thumb),.ant-picker-dropdown :is(.wh-cscroll-track,.wh-cscroll-thumb){display:none !important;}";
     }
     if (s.nativeTitleBar && s.titleBarAcrylic) {
         int caption = GetSystemMetricsForDpi(SM_CYCAPTION, 96) +
@@ -1292,6 +1297,14 @@ body:has(.ant-popconfirm:not(.ant-popover-hidden))>#root{filter:blur(14px) satur
 :root [class*="ModDetailsSettingsView__SettingSummary"]{background:#181825 !important;color:#a6adc8 !important;border:2px solid #45475a !important;border-radius:999px !important;padding:0 10px !important;line-height:20px !important;font-size:12px !important;transition:border-color .15s,color .15s;}
 :root [class*="ModDetailsSettingsView__SettingSummary"]:hover,:root [data-testid="mod-setting-array-item-summary"]:hover [class*="ModDetailsSettingsView__SettingSummary"]{color:#cdd6f4 !important;border-color:transparent !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
 :root [class*="ModDetailsSettingsView__ArraySettingsItemWrapper"],:root [class*="ModDetailsSettingsView__ArraySettingsFooter"]{padding-inline-start:24px !important;}
+/* 2.2.12: drop-downs wear the dialog glass. While a menu is open the page frosts behind
+   it — the one real blur this WebView can do (measured 2026-11-06: a filtered element
+   cannot read the page under it) — and the menu takes the frosted fill instead of a flat box. */
+body:has(.ant-select-dropdown:not(.ant-select-dropdown-hidden)),body:has(.ant-dropdown:not(.ant-dropdown-hidden)),body:has(.ant-picker-dropdown:not(.ant-picker-dropdown-hidden))>#root{filter:blur(16px) saturate(120%) brightness(.85) !important;}
+:root :is(.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu){background-color:rgba(24,24,37,.9) !important;backdrop-filter:none !important;}
+/* 2.2.12: header nav buttons rest on Mocha base instead of mantle, so they stop reading
+   as black chips against the glass page (owner, 2026-11-20: like base, about rgb 30,30,46). */
+:root :is([data-testid="nav-home"],[data-testid="nav-explore"],[data-testid="nav-settings"],[data-testid="nav-about"],#wh-header-create){--whb-f:#1e1e2e !important;}
 )WHB";
     return css;
 }
@@ -1441,6 +1454,26 @@ document.addEventListener('mouseout',e=>{if(cur&&(!e.relatedTarget||!cur.contain
 window.addEventListener('blur',hide);
 })();
 )WHT";
+    // 2.2.12: Windhawk's own overlay scrollbar is fixed to the window, so it runs straight
+    // past an open pop-up's rounded corners (2026-11-20 screenshot). While one is open,
+    // clip it to that pop-up's live rect with its real radius, rounded on the corners.
+    js += R"WHC((()=>{
+ if(window.whcClip)return;window.whcClip=1;
+ const style=document.createElement('style');style.id='whc-clip';document.head.appendChild(style);
+ const upd=()=>{
+  const open=document.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden),.ant-dropdown:not(.ant-dropdown-hidden),.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)');
+  if(!open.length){if(style.textContent)style.textContent='';return;}
+  let rule='';
+  open.forEach(d=>{const r=d.getBoundingClientRect();if(r.width<8||r.height<8)return;
+   const rad=Math.min(16,parseFloat(getComputedStyle(d).borderRadius)||16);
+   rule+='.wh-cscroll-host{clip-path:inset('+r.top+'px -100vmax '+(innerHeight-r.bottom)+'px '+r.left+'px round '+rad+'px) !important;}';});
+  style.textContent=rule;
+ };
+ const mo=new MutationObserver(()=>setTimeout(upd,0));
+ mo.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
+ addEventListener('resize',upd);addEventListener('scroll',upd,true);
+})();
+)WHC";
     js += "};";
     js += "if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',rest,{once:true});else rest();";
     js += "return 'ok len='+css.length;";

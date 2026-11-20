@@ -2720,7 +2720,7 @@
     "gradientEnd": "#cba6f7",
     "gradientStart": "#89b4fa",
     "headerGradient": 1,
-    "mochaIcons": 1,
+    "mochaIcons": 0,
     "nativeTitleBar": 1,
     "roundedCorners": 1,
     "selectionColor": "",
