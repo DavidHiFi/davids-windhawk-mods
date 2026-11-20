@@ -2,7 +2,7 @@
 // @id              seamless-clipboard-manager
 // @name            Seamless Clipboard Manager
 // @description     Keeps everything you copy, text and images, in a searchable list you open with Win+V
-// @version         1.4.4
+// @version         1.4.5
 // @author          DavidHiFi, Scott Brogden, Ditto contributors
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -9166,7 +9166,9 @@ void List_Show() {
     // The first open builds the window and the drawing device, which can take a few hundred ms;
     // start the clock now so the whole slide is seen.
     A.last = GetTickCount64();
-    SetForegroundWindow(L.surf.hwnd);
+    // Win+V reaches us through the keyboard hook, not a registered hotkey, so Windows may refuse
+    // a plain foreground request; Cap_Activate borrows the front app's input queue for it.
+    Cap_Activate(L.surf.hwnd);
     SetFocus(L.surf.hwnd);
 }
 
