@@ -2,7 +2,7 @@
 // @id              seamless-explorer-search
 // @name            Seamless Explorer Search
 // @description     Start typing in any File Explorer window to search it, and every drive, with Everything
-// @version         2.0.14
+// @version         2.0.15
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -78,9 +78,9 @@ used: search runs on Everything by voidtools (https://www.voidtools.com).
 - resultLimit: 60
   $name: "Result limit"
   $description: "10 to 200 results kept (Suggested: 60)."
-- queryTimeoutMs: 200
+- queryTimeoutMs: 750
   $name: "Query timeout (ms)"
-  $description: "50 to 1000 (Suggested: 200). A stuck query is dropped after this, so Explorer never waits on it."
+  $description: "100 to 3000 (Suggested: 750). How long to wait for Everything. Explorer never waits on it, and a new keystroke drops the old search."
 - matchPath: false
   $name: "Search in paths too"
   $description: "Match folder names in the full path, not just the file name."
@@ -328,7 +328,7 @@ struct Settings {
     bool hideOnFocusLost = true;
     bool searchAsYouType = true;
     int resultLimit = 60;
-    int queryTimeoutMs = 200;
+    int queryTimeoutMs = 750;
     bool matchPath = false;
     bool thisFolderFirst = true;
     bool fuzzyRanking = true;
@@ -351,7 +351,7 @@ static void LoadSettings() {
     s.hideOnFocusLost = Wh_GetIntSetting(L"hideOnFocusLost") != 0;
     s.searchAsYouType = Wh_GetIntSetting(L"searchAsYouType") != 0;
     s.resultLimit = Clamp(Wh_GetIntSetting(L"resultLimit"), 10, 200);
-    s.queryTimeoutMs = Clamp(Wh_GetIntSetting(L"queryTimeoutMs"), 50, 1000);
+    s.queryTimeoutMs = Clamp(Wh_GetIntSetting(L"queryTimeoutMs"), 100, 3000);
     s.matchPath = Wh_GetIntSetting(L"matchPath") != 0;
     s.thisFolderFirst = Wh_GetIntSetting(L"thisFolderFirst") != 0;
     s.fuzzyRanking = Wh_GetIntSetting(L"fuzzyRanking") != 0;
@@ -401,7 +401,7 @@ struct EvRequest {
     std::wstring query;
     std::wstring folder;  // Empty: everywhere only.
     int limit = 60;
-    int timeoutMs = 200;
+    int timeoutMs = 750;
     bool matchPath = false;
 };
 
@@ -497,6 +497,8 @@ static int EvQuery(HWND ev, const std::wstring& search, DWORD searchFlags, DWORD
     if (!res && !g_evGot) return kEvError;
     MSG m;
     while (!g_evGot && !g_evStop) {
+        // A newer keystroke is waiting: drop this search, its late answer is ignored.
+        if (g_evPending.load()) break;
         now = GetTickCount64();
         if (now >= deadline) break;
         // Only sent messages (the reply) run here; a posted kick waits its turn.
@@ -3540,7 +3542,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"hideOnFocusLost", L"Hide when focus is lost", L"The search box closes when you click somewhere else.", L"1", {}, 0, 100, 0, L"Behaviour"},
 {K::Check, L"searchAsYouType", L"Search as you type", L"Results update on every keystroke. Off, press Enter to search.", L"1", {}, 0, 100, 0, L"Behaviour"},
 {K::Number, L"resultLimit", L"Result limit", L"10 to 200 results kept (Suggested: 60).", L"60", {}, 10, 200, 1, L"Everything"},
-{K::Number, L"queryTimeoutMs", L"Query timeout (ms)", L"50 to 1000 (Suggested: 200). A stuck query is dropped after this, so Explorer never waits on it.", L"200", {}, 50, 1000, 1, L"Everything"},
+{K::Number, L"queryTimeoutMs", L"Query timeout (ms)", L"100 to 3000 (Suggested: 750). How long to wait for Everything. Explorer never waits on it, and a new keystroke drops the old search.", L"750", {}, 100, 3000, 1, L"Everything"},
 {K::Check, L"matchPath", L"Search in paths too", L"Match folder names in the full path, not just the file name.", L"0", {}, 0, 100, 1, L"Everything"},
 {K::Check, L"thisFolderFirst", L"This folder first", L"Matches inside the folder you are in, and the folders below it, sit above the rest.", L"1", {}, 0, 100, 1, L"Ranking"},
 {K::Check, L"fuzzyRanking", L"Smart ranking", L"Start-of-name and word matches beat matches in the middle.", L"1", {}, 0, 100, 1, L"Ranking"},
