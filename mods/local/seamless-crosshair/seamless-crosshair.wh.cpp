@@ -2,7 +2,7 @@
 // @id              seamless-crosshair
 // @name            Seamless Crosshair
 // @description     A crosshair over any game: presets or your own design, any color and size, shortcuts and a tray icon
-// @version         1.2.5
+// @version         1.2.6
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -3968,9 +3968,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Hotkey, L"settingsHotkey", L"Open settings", L"", L"", {}, 0, 100, 4, L"Shortcuts"},
 {K::Hotkey, L"lookHotkey", L"Keep this look for the game in front", L"The game gets the crosshair as it is now, every time it comes to the front. Shortcuts pressed in that game then change only its look. Press again to give it the normal look back. The tray menu does the same.", L"", {}, 0, 100, 4, L"Shortcuts"},
 {K::Text, L"colorCycle", L"Colors for \"Next color\"", L"Hexadecimal colors split with \";\". They also fill the tray menu's Color list.", L"#00FF00; #00FFFF; #FFFF00; #FF00FF; #FFFFFF; #FF0000", {}, 0, 100, 4, L"Shortcuts"},
-{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 4, L"Settings window"},
-{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 4, L"Settings window"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open these settings. Right-click it to show or hide the crosshair, or pick a style, color or size. When off, change settings in Windhawk.", L"1", {}, 0, 100, 4, L"Settings window"},
+{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 6, L"Settings window"},
+{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 6, L"Settings window"},
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open these settings. Right-click it to show or hide the crosshair, or pick a style, color or size. When off, change settings in Windhawk.", L"1", {}, 0, 100, 6, L"Settings window"},
 {K::Check, L"popupOn", L"On and off pop-up", L"A small dock says \"Crosshair enabled\" or \"Crosshair disabled\" each time you switch it.", L"1", {}, 0, 100, 5, L"Pop-up"},
 {K::Choice, L"popupWhen", L"Show it for", L"", L"both", {{L"both", L"The shortcut and the tray menu"}, {L"shortcut", L"Only the shortcut"}, {L"tray", L"Only the tray menu"}}, 0, 100, 5, L"Pop-up"},
 {K::Choice, L"popupDetail", L"Second line", L"The smaller line under \"Crosshair enabled\".", L"style", {{L"style", L"The crosshair style"}, {L"shortcut", L"The shortcut that switches it"}, {L"none", L"Nothing"}}, 0, 100, 5, L"Pop-up"},
@@ -4005,6 +4005,7 @@ static const SetPageInfo kSetPages[] = {
 {L"When to show", L"When the crosshair shows, and when it gets out of the way.", 0xE7B3},
 {L"Keys and tray", L"Shortcuts, the tray icon and this window.", 0xE765},
 {L"Pop-up and fade", L"The pop-up that says the crosshair is on or off, and how the crosshair fades.", 0xE7E7},
+{L"Look", L"Choose how this settings window looks and whether its tray icon is shown.", 0xE790},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
