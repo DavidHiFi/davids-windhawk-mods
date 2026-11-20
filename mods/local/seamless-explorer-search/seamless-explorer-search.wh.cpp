@@ -2,7 +2,7 @@
 // @id              seamless-explorer-search
 // @name            Seamless Explorer Search
 // @description     Start typing in any File Explorer window to search it, and every drive, with Everything
-// @version         2.0.12
+// @version         2.0.13
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -93,6 +93,18 @@ used: search runs on Everything by voidtools (https://www.voidtools.com).
 - accentColor: "#89B4FA"
   $name: "Accent color"
   $description: "Tints the selection, the sliders and the hover gradient start."
+- searchFontFamily: "FiraCode Nerd Font"
+  $name: "Search font family"
+  $description: "Font for search text, results and key hints. Missing fonts use the suggested font."
+- searchFontWeight: "500"
+  $name: "Search font weight"
+  $description: "Weight for search text, results and key hints."
+  $options:
+  - "300": "Light"
+  - "400": "Regular"
+  - "500": "Medium"
+  - "600": "Semibold"
+  - "700": "Bold"
 - popupOpacity: 85
   $name: "Search box opacity"
   $description: "How solid the glass is, 50 to 100 percent. 85 matches File Explorer (Suggested: 85)."
@@ -890,7 +902,7 @@ static Com<ID2D1Factory> g_d2d;
 static Com<IDWriteFactory> g_dw;
 static Com<IDWriteTextFormat> g_fQuery, g_fName, g_fDir, g_fHint, g_fHintRight, g_fGlyph, g_fGlyphBig;
 static Com<IDWriteInlineObject> g_ellName, g_ellDir, g_ellQuery, g_ellHint;
-static std::wstring g_family = L"Segoe UI";
+constexpr PCWSTR kSearchFontFamily = L"FiraCode Nerd Font";
 
 static bool FontExists(const std::wstring& family) {
     Com<IDWriteFontCollection> fc;
@@ -918,18 +930,25 @@ static void MakeFormat(Com<IDWriteTextFormat>& f, Com<IDWriteInlineObject>* ell,
 }
 
 static void MakeFormats() {
-    g_family = L"Segoe UI";
-    for (PCWSTR f : {L"Segoe UI Variable Text", L"Segoe UI"})
-        if (FontExists(f)) {
-            g_family = f;
+    const auto requestedFamily = Trim(ReadStr(L"searchFontFamily"));
+    const std::wstring family = FontExists(requestedFamily) ? requestedFamily
+        : FontExists(kSearchFontFamily) ? kSearchFontFamily : L"Segoe UI";
+    const auto weightSetting = ReadStr(L"searchFontWeight");
+    auto weight = DWRITE_FONT_WEIGHT_MEDIUM;
+    for (auto option : {DWRITE_FONT_WEIGHT_LIGHT, DWRITE_FONT_WEIGHT_NORMAL,
+                        DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_WEIGHT_BOLD}) {
+        if (weightSetting == std::to_wstring(option)) {
+            weight = option;
             break;
         }
+    }
     std::wstring icons = FontExists(L"Segoe Fluent Icons") ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
-    MakeFormat(g_fQuery, &g_ellQuery, g_family, 17, DWRITE_FONT_WEIGHT_NORMAL);
-    MakeFormat(g_fName, &g_ellName, g_family, 14, DWRITE_FONT_WEIGHT_SEMI_BOLD);
-    MakeFormat(g_fDir, &g_ellDir, g_family, 11.5f, DWRITE_FONT_WEIGHT_NORMAL);
-    MakeFormat(g_fHint, &g_ellHint, g_family, 11.5f, DWRITE_FONT_WEIGHT_NORMAL);
-    MakeFormat(g_fHintRight, nullptr, g_family, 11.5f, DWRITE_FONT_WEIGHT_NORMAL);
+    MakeFormat(g_fQuery, &g_ellQuery, family, 17, weight);
+    MakeFormat(g_fName, &g_ellName, family, 14, weight);
+    MakeFormat(g_fDir, &g_ellDir, family, 11.5f, weight);
+    MakeFormat(g_fHint, &g_ellHint, family, 11.5f, weight);
+    MakeFormat(g_fHintRight, nullptr, family, 11.5f, weight);
+    Wh_Log(L"Search font: %s, weight %d", family.c_str(), static_cast<int>(weight));
     MakeFormat(g_fGlyph, nullptr, icons, 16, DWRITE_FONT_WEIGHT_NORMAL);
     MakeFormat(g_fGlyphBig, nullptr, icons, 18, DWRITE_FONT_WEIGHT_NORMAL);
     for (auto* f : {&g_fGlyph, &g_fGlyphBig})
@@ -1378,7 +1397,7 @@ static void DrawPopup() {
             rt->DrawText(count.c_str(), (UINT32)count.size(), g_fHintRight.get(), {W - kPad - 14 - countW, H - kFootH, W - kPad - 14, H - 4},
                          b.get());
         }
-        PCWSTR hint = L"Enter  open   \x00B7   Ctrl+Enter  show in folder   \x00B7   Tab  more   \x00B7   Esc  close";
+        PCWSTR hint = L"Enter open \x00B7 Ctrl+Enter folder \x00B7 Tab more \x00B7 Esc close";
         rt->DrawText(hint, (UINT32)wcslen(hint), g_fHint.get(), {kPad + 14, H - kFootH, W - kPad - 14 - countW - 8, H - 4},
                      b.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
     }
@@ -2335,6 +2354,8 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_LS_SETTINGS:
             LoadSettings();
+            MakeFormats();
+            if (g_pop.visible) InvalidateRect(g_pop.hwnd, nullptr, FALSE);
             ApplyHook();
             UpdateTray(false);
             if (g_pop.visible) RunSearch();
@@ -3524,6 +3545,8 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"thisFolderFirst", L"This folder first", L"Matches inside the folder you are in, and the folders below it, sit above the rest.", L"1", {}, 0, 100, 1, L"Ranking"},
 {K::Check, L"fuzzyRanking", L"Smart ranking", L"Start-of-name and word matches beat matches in the middle.", L"1", {}, 0, 100, 1, L"Ranking"},
 {K::Color, L"accentColor", L"Accent color", L"Tints the selection, the sliders and the hover gradient start.", L"#89B4FA", {}, 0, 100, 2, L"Search box"},
+{K::Text, L"searchFontFamily", L"Search font family", L"Font for search text, results and key hints. Missing fonts use the suggested font.", kSearchFontFamily, {}, 0, 0, 2, L"Search box"},
+{K::Choice, L"searchFontWeight", L"Search font weight", L"Weight for search text, results and key hints.", L"500", {{L"300", L"Light"}, {L"400", L"Regular"}, {L"500", L"Medium"}, {L"600", L"Semibold"}, {L"700", L"Bold"}}, 0, 0, 2, L"Search box"},
 {K::Number, L"popupOpacity", L"Search box opacity", L"How solid the glass is, 50 to 100 percent. 85 matches File Explorer (Suggested: 85).", L"85", {}, 50, 100, 2, L"Search box"},
 {K::Check, L"animations", L"Animations", L"Off, everything appears and closes with no movement.", L"1", {}, 0, 100, 2, L"Search box"},
 {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 2, L"Settings window"},

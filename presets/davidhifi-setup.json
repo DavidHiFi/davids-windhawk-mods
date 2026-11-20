@@ -1471,6 +1471,8 @@
         "resultLimit": 60,
         "sameWindow": 1,
         "searchAsYouType": 1,
+        "searchFontFamily": "FiraCode Nerd Font",
+        "searchFontWeight": "500",
         "searchKeys": 1,
         "settingsGlass": 1,
         "settingsTrayIcon": 1,
