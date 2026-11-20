@@ -6,7 +6,7 @@
       "enabled": true,
       "settings": {
         "action": "none",
-        "applyOnSettingsChange": 0,
+        "applyOnSettingsChange": 1,
         "ignoreBackground": 1,
         "ignoreColor": 1,
         "ignoreCursor": 1,

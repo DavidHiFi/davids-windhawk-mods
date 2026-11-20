@@ -23,7 +23,7 @@
         "font.full.weight": "regular",
         "general.enableDragDrop": 1,
         "general.hideWhenEmpty": 0,
-        "general.iconStyle": "system",
+        "general.iconStyle": "badge",
         "system.fallbackTimerInterval": 300,
         "vector.style": "style1"
       }
