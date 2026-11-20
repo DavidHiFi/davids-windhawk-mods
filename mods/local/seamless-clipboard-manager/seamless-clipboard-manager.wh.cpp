@@ -2,7 +2,7 @@
 // @id              seamless-clipboard-manager
 // @name            Seamless Clipboard Manager
 // @description     Keeps everything you copy, text and images, in a searchable list you open with Win+V
-// @version         1.4.2
+// @version         1.4.3
 // @author          DavidHiFi, Scott Brogden, Ditto contributors
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -2110,6 +2110,13 @@ int Harness_TestDb() { return dbx_test::Run(); }
 
 #include <random>
 
+constexpr UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kTrayId = TrayIconId();
+
 bool g_capturePaused;
 HWND g_pasteTarget;
 
@@ -3304,7 +3311,7 @@ static HICON g_capTrayIcon;
 static NOTIFYICONDATAW Cap_TrayData() {
     NOTIFYICONDATAW nid{sizeof(nid)};
     nid.hWnd = g_msgWnd;
-    nid.uID = 1;
+    nid.uID = kTrayId;
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     nid.uCallbackMessage = WM_SCM_TRAY;
     std::wstring tip = L"Seamless Clipboard Manager";
@@ -3337,7 +3344,7 @@ void Tray_Remove() {
     if (g_capTrayAdded) {
         NOTIFYICONDATAW nid{sizeof(nid)};
         nid.hWnd = g_msgWnd;
-        nid.uID = 1;
+        nid.uID = kTrayId;
         Shell_NotifyIconW(NIM_DELETE, &nid);
     }
     g_capTrayAdded = false;
