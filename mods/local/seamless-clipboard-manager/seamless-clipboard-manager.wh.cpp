@@ -2,14 +2,14 @@
 // @id              seamless-clipboard-manager
 // @name            Seamless Clipboard Manager
 // @description     Keeps everything you copy, text and images, in a searchable list you open with Win+V
-// @version         1.3.13
+// @version         1.4.0
 // @author          DavidHiFi, Scott Brogden, Ditto contributors
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         windhawk.exe
 // @architecture    x86-64
-// @compilerOptions -lgdi32 -luser32 -lshell32 -lshlwapi -lole32 -loleaut32 -luuid -ld2d1 -ldwrite -lwindowscodecs -ldwmapi -lcomctl32 -luxtheme -lcomdlg32 -limm32 -loleacc -ladvapi32
+// @compilerOptions -lgdi32 -luser32 -lshell32 -lshlwapi -lole32 -loleaut32 -luuid -ld2d1 -ldwrite -lwindowscodecs -ldwmapi -lcomctl32 -luxtheme -lcomdlg32 -limm32 -loleacc -ladvapi32 -lws2_32
 // @license         GPL-3.0
 // ==/WindhawkMod==
 
@@ -32,6 +32,7 @@ Keeps what you copy in a list you open with Win+V: text, images, copied files an
 - Right-click a link to open it, a copied file to open it or show it in its folder, or an image to save it to Pictures.
 - Clips that are color codes show the colors.
 - Can put back what was on the clipboard after a paste from the list.
+- Share your clips with this mod on another computer, both ways.
 
 ## Coming from Ditto
 
@@ -65,9 +66,13 @@ Win+V normally opens the Windows clipboard history. The mod turns that off and t
 
 Open Settings from the tray icon's menu, or use the Settings tab on this mod's page in Windhawk. Both change the same settings.
 
+## Sync between computers
+
+Settings, page "Sync": turn on "Share clips with another computer" on both computers, and list each other under "Other computers" (their address and port, like 192.168.0.11:4126). From then on a copy made on one computer, screenshots included, appears in the other one's list at once, both ways. Clips travel straight between the two computers over your own network and nowhere else; nothing is stored online.
+
 ## Not included from Ditto
 
-Syncing clips between computers over the network, scripts and add-ins.
+Scripts and add-ins.
 
 ## Credits
 
@@ -246,6 +251,15 @@ Based on [Ditto](https://github.com/sabrogden/Ditto) by Scott Brogden and the Di
 - settingsTrayIcon: true
   $name: Tray icon (settings window)
   $description: The same switch as the settings window's "Tray icon" row. The icon shows only when both are on. Click it to open the clip list, right-click it for a menu with Settings.
+- syncEnabled: false
+  $name: Share clips with another computer
+  $description: Copies made here show up in the clip list on the other computer, and theirs show up here. Both computers need this on, with each other listed under "Other computers".
+- syncPort: 4126
+  $name: Sync port
+  $description: "1024 to 65535 (Suggested: 4126). Both computers can use the same port."
+- syncPeers: ""
+  $name: Other computers
+  $description: "Addresses to send copies to, separated by semicolons, like 192.168.0.11:4126. Leave empty to not share."
 */
 // ==/WindhawkModSettings==
 
@@ -257,6 +271,9 @@ Based on [Ditto](https://github.com/sabrogden/Ditto) by Scott Brogden and the Di
 // without telling the lead.
 // ---------------------------------------------------------------------------
 
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <ctime>
 #include <windows.h>
 #include <windowsx.h>
 #include <shellapi.h>
@@ -310,12 +327,14 @@ constexpr UINT WM_SCM_SHOW_LIST = WM_APP + 3;         // Open the clip list (wPa
 constexpr UINT WM_SCM_CLIP_SAVED = WM_APP + 4;        // A clip was saved; refresh an open list.
 constexpr UINT WM_SCM_OPEN_SETTINGS = WM_APP + 5;     // Open the settings window.
 constexpr UINT WM_SCM_QUIT = WM_APP + 6;              // Tear down and leave the loop.
+constexpr UINT WM_SCM_SYNC_RECV = WM_APP + 7;         // A clip arrived from another computer (lParam: heap SyncRecvMsg).
 
 // Timer ids on g_msgWnd. Parts own the ranges noted.
 constexpr UINT_PTR kTimerCaptureDebounce = 10;   // 30-capture
 constexpr UINT_PTR kTimerHotkeyRetry = 11;       // 30-capture
 constexpr UINT_PTR kTimerPasteStep = 12;         // 30-capture
 constexpr UINT_PTR kTimerCleanup = 13;           // 90-main (calls Db_Cleanup)
+constexpr UINT_PTR kTimerSyncRefresh = 14;       // 35-sync: one list refresh per burst of received clips
 // 40-ui uses timers on its own windows only.
 
 constexpr WCHAR kMsgClass[] = L"SeamlessClipboardManagerMsg";
@@ -390,6 +409,10 @@ struct Settings {
     bool searchFullText;            // "searchFullText" default true (search the whole text, not just the first line)
     // Other
     bool trayIcon;                  // "trayIcon" default true
+    // Sync (35-sync)
+    bool syncEnabled;               // "syncEnabled" default false: share clips with the computers in syncPeers
+    int syncPort;                   // "syncPort"    1024..65535, default 4126
+    std::wstring syncPeers;         // "syncPeers"   ";" separated host:port list, default ""
 };
 extern Settings g_set;
 void LoadSettings();  // 90-main.cpp
@@ -508,6 +531,8 @@ bool Db_GetClipData(int64_t id, ClipData& out);           // All stored formats.
 bool Db_GetFormat(int64_t id, const std::wstring& formatName, std::string& out);
 std::wstring Db_GetClipText(int64_t id);                  // CF_UNICODETEXT, else CF_TEXT (ANSI->wide), else file list, else mText.
 int64_t Db_SaveClip(const ClipData& clip);                // New id, or existing id when a duplicate moved to the top. 0 on failure.
+int32_t Db_SyncCrc(const std::vector<ClipFormat>& formats);        // Content id two computers agree on whatever their settings.
+int64_t Db_SyncSaveRemote(const ClipData& clip, int32_t syncCrc);  // A clip received from another computer; same path as a copy made here.
 bool Db_MoveToTop(int64_t id);                            // On paste: new clipOrder (and clipGroupOrder in a group), lastPasteDate = now.
 bool Db_DeleteClips(const std::vector<int64_t>& ids);     // Groups: their clips go back to the main list (Ditto behavior).
 bool Db_SetDescription(int64_t id, const std::wstring& text);
@@ -565,6 +590,14 @@ void Tray_Remove();
 void Tray_Update();                // Tooltip/icon after pause toggles or settings.
 void Tray_OnMessage(WPARAM wParam, LPARAM lParam);
 void Tray_OnTaskbarCreated();      // Re-add after Explorer restarts.
+
+// ---------------------------------------------------------------------------
+// 35-sync : share clips with another computer over the local network.
+// ---------------------------------------------------------------------------
+void Sync_ApplySettings();          // Start or stop the sync threads to match g_set (UI thread).
+void Sync_Stop();                   // Tear the sync threads down (UI thread, before Db_Close).
+void Sync_OnClipSaved(int64_t id);  // Queue a just-saved clip for sending (UI thread).
+void Sync_OnRecvMsg(LPARAM lp);     // A clip arrived; save it and refresh the list (UI thread).
 
 // ---------------------------------------------------------------------------
 // 40-ui.cpp : clip list window, preview, editor, properties, groups.
@@ -910,6 +943,13 @@ static bool EnsureSchema(sqlite3* db) {
     if (!Exec(db, "CREATE TABLE IF NOT EXISTS ScmSource(clipID INTEGER PRIMARY KEY, app TEXT, lastCopy INTEGER);"
                   "CREATE TRIGGER IF NOT EXISTS ScmSource_Delete AFTER DELETE ON Main BEGIN "
                   "DELETE FROM ScmSource WHERE clipID = old.lID; END;"))
+        return false;
+    // Our sync ledger: the content id (SyncCrc) of every clip saved or received here, so a clip
+    // sent back to us is recognized as the same one instead of saved twice.
+    if (!Exec(db, "CREATE TABLE IF NOT EXISTS ScmSync(clipID INTEGER PRIMARY KEY, crc INTEGER);"
+                  "CREATE INDEX IF NOT EXISTS ScmSync_Crc ON ScmSync(crc);"
+                  "CREATE TRIGGER IF NOT EXISTS ScmSync_Delete AFTER DELETE ON Main BEGIN "
+                  "DELETE FROM ScmSync WHERE clipID = old.lID; END;"))
         return false;
     return Exec(db, kTriggersAndIndexes);
 }
@@ -1265,6 +1305,38 @@ static int32_t ClipCrc(const std::vector<ClipFormat>& unordered) {
     return (int32_t)~crc;
 }
 
+// Like ClipCrc but independent of this database's Types order and locale: formats sorted by
+// name, so both ends of a sync compute the same value from the same bytes.
+static int32_t SyncCrc(const std::vector<ClipFormat>& unordered) {
+    std::vector<const ClipFormat*> formats;
+    for (auto& f : unordered) formats.push_back(&f);
+    std::stable_sort(formats.begin(), formats.end(), [](const ClipFormat* a, const ClipFormat* b) {
+        return _wcsicmp(a->name.c_str(), b->name.c_str()) < 0;
+    });
+    uint32_t crc = 0xFFFFFFFF;
+    for (auto* fp : formats) {
+        const ClipFormat& f = *fp;
+        crc = Crc32(f.name.c_str(), f.name.size() * sizeof(wchar_t), crc);
+        crc = Crc32("\x1f", 1, crc);
+        const std::string& d = f.data;
+        size_t n = d.size();
+        if (f.name == L"Rich Text Format") {
+            std::string rtf(d.c_str(), strnlen(d.c_str(), d.size()));
+            RtfRemoveSection(rtf, "{\\*\\datastore");
+            RtfDeleteParam(rtf, "\\rsid", true);
+            RtfDeleteParam(rtf, "\\insrsid", true);
+            RtfDeleteParam(rtf, "\\mdispDef1", false);
+            crc = Crc32(rtf.data(), rtf.size(), crc);
+            continue;
+        }
+        if (f.name == L"CF_TEXT") n = std::min(n, strnlen(d.data(), n) + 1);
+        else if (f.name == L"CF_UNICODETEXT")
+            n = std::min(n, (wcsnlen(reinterpret_cast<const wchar_t*>(d.data()), n / 2) + 1) * 2);
+        crc = Crc32(d.data(), n, crc);
+    }
+    return (int32_t)~crc;
+}
+
 static std::vector<ClipFormat> StoredFormats(int64_t id) {
     std::vector<ClipFormat> out;
     Stmt s("SELECT strClipBoardFormat, ooData FROM Data WHERE lParentID = ? ORDER BY lID");
@@ -1444,9 +1516,15 @@ static void SaveSource(int64_t id, const std::wstring& app) {
     s.Int(1, id).Str(2, app).Int(3, UnixNow()).Run();
 }
 
+static void MarkSync(int64_t id, int32_t syncCrc) {
+    Stmt s("INSERT OR REPLACE INTO ScmSync(clipID, crc) VALUES(?1, ?2)");
+    s.Int(1, id).Int(2, syncCrc).Run();
+}
+
 int64_t Db_SaveClip(const ClipData& clip) {
     if (!g_db || clip.formats.empty()) return 0;
     int32_t crc = ClipCrc(clip.formats);
+    int32_t syncCrc = SyncCrc(clip.formats);
     Txn t;
     if (!t) return 0;
     if (!g_set.allowDuplicates) {  // Clip.cpp AddToDB / FindDuplicate: only clipOrder moves
@@ -1456,6 +1534,7 @@ int64_t Db_SaveClip(const ClipData& clip) {
             Stmt up("UPDATE Main SET clipOrder = ? WHERE lID = ?");
             if (!up.Dbl(1, NewOrder(-1)).Int(2, id).Run()) return 0;
             SaveSource(id, clip.sourceApp);
+            MarkSync(id, syncCrc);
             return t.Commit() ? id : 0;
         }
     }
@@ -1467,8 +1546,43 @@ int64_t Db_SaveClip(const ClipData& clip) {
     int64_t id = api.last_insert_rowid(g_db);
     if (!InsertFormats(id, clip.formats)) return 0;
     SaveSource(id, clip.sourceApp);
+    MarkSync(id, syncCrc);
     return t.Commit() ? id : 0;
 }
+
+// A clip that arrived from another computer: the same path as a copy made here (same dedupe,
+// same transaction), but it is never sent on again. Only the capture path feeds Sync_OnClipSaved.
+int64_t Db_SyncSaveRemote(const ClipData& clip, int32_t syncCrc) {
+    if (!g_db || clip.formats.empty()) return 0;
+    Txn t;
+    if (!t) return 0;
+    int64_t id = 0;
+    Stmt seen("SELECT clipID FROM ScmSync WHERE crc = ? LIMIT 1");
+    if (seen.Int(1, syncCrc).Row()) id = seen.I64(0);
+    if (!id && !g_set.allowDuplicates) {
+        Stmt dup("SELECT lID FROM Main WHERE CRC = ? AND bIsGroup = 0 LIMIT 1");
+        if (dup.Int(1, ClipCrc(clip.formats)).Row()) id = dup.I64(0);
+    }
+    if (id && !g_set.allowDuplicates) {  // Same content again: only clipOrder moves, like a repeat copy.
+        Stmt up("UPDATE Main SET clipOrder = ? WHERE lID = ?");
+        if (!up.Dbl(1, NewOrder(-1)).Int(2, id).Run()) return 0;
+        SaveSource(id, clip.sourceApp);
+        MarkSync(id, syncCrc);
+        return t.Commit() ? id : 0;
+    }
+    int64_t now = UnixNow();
+    Stmt ins("INSERT INTO Main (lDate, mText, lShortCut, lDontAutoDelete, CRC, bIsGroup, lParentID, QuickPasteText, clipOrder, "
+             "clipGroupOrder, globalShortCut, lastPasteDate, stickyClipOrder, stickyClipGroupOrder, MoveToGroupShortCut, "
+             "GlobalMoveToGroupShortCut) VALUES (?1, ?2, 0, 0, ?3, 0, -1, '', ?4, 0, 0, ?1, -(2147483647), -(2147483647), 0, 0)");
+    if (!ins.Int(1, now).Str(2, Desc(clip.description)).Int(3, ClipCrc(clip.formats)).Dbl(4, NewOrder(-1)).Run()) return 0;
+    int64_t nid = api.last_insert_rowid(g_db);
+    if (!InsertFormats(nid, clip.formats)) return 0;
+    SaveSource(nid, clip.sourceApp);
+    MarkSync(nid, syncCrc);
+    return t.Commit() ? nid : 0;
+}
+
+int32_t Db_SyncCrc(const std::vector<ClipFormat>& formats) { return SyncCrc(formats); }
 
 bool Db_MoveToTop(int64_t id) {  // ProcessPaste.cpp:200
     if (!g_db) return false;
@@ -2312,10 +2426,12 @@ static void Cap_ProcessClipboard() {
     }
     if (v != Cap_Verdict::Save) return;
     int64_t id = Db_SaveClip(clip);
-    if (id)
+    if (id) {
         PostMessageW(g_msgWnd, WM_SCM_CLIP_SAVED, 0, (LPARAM)id);
-    else
+        Sync_OnClipSaved(id);  // Send it to the other computers, if sharing is on.
+    } else {
         Wh_Log(L"Saving the copy failed: %s", Db_LastError().c_str());
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -8480,7 +8596,10 @@ struct EditorForm : Form {
                 data.description = clean;
                 saved = Db_SaveClip(data);
             }
-            if (saved) List_OnClipSaved(saved);
+            if (saved) {
+                List_OnClipSaved(saved);
+                Sync_OnClipSaved(saved);
+            }
             DestroyWindow(hwnd);
         } else if (cmd == IDCANCEL) {
             DestroyWindow(hwnd);
@@ -9641,6 +9760,9 @@ static std::vector<SetField> Set_MakeFields() {
         {K::Choice, L"searchMode", L"Search finds", nullptr, L"contains", {{L"contains", L"Clips that contain the text"}, {L"allWords", L"Clips with all the words, in any order"}, {L"startsWith", L"Clips that start with the text"}}, 0, 0, 4, L"Search"},
         {K::Check, L"searchFullText", L"Search the whole clip", L"When off, search looks only at the start of each clip, which is faster with very large clips.", L"1", {}, 0, 0, 4, L"Search"},
         {K::Check, L"highlightMatches", L"Highlight what you searched for", nullptr, L"1", {}, 0, 0, 4, L"Search"},
+        {K::Check, L"syncEnabled", L"Share clips with another computer", L"Copies made here show up in the clip list on the other computer, and theirs show up here. Both computers need this on, with each other listed under \"Other computers\".", L"0", {}, 0, 0, 5, L"Share"},
+        {K::Number, L"syncPort", L"Sync port", L"1024 to 65535 (Suggested: 4126). Both computers can use the same port.", L"4126", {}, 1024, 65535, 5, L"Share"},
+        {K::Text, L"syncPeers", L"Other computers", L"Addresses to send copies to, separated by semicolons, like 192.168.0.11:4126. Leave empty to not share.", L"", {}, 0, 0, 5, L"Share"},
     };
 }
 
@@ -9654,6 +9776,7 @@ static const SetPageInfo kSetPages[] = {
 {L"Look", L"Font, background, colors of the list, and this window.", 0xE790},
 {L"Clips", L"What gets saved, how long it stays and which apps are listened to.", 0xE8C8},
 {L"Paste and search", L"How a clip is pasted and how the search box matches.", 0xE721},
+{L"Sync", L"Share your clips with this mod on another computer.", 0xE774},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
@@ -13017,6 +13140,476 @@ int Harness_TestSettings() { return 0; }
 #endif
 
 // ---------------------------------------------------------------------------
+// 35-sync.cpp : share clips with another computer over the local network
+// ---------------------------------------------------------------------------
+// A clip saved here is sent once to every computer listed under "Other
+// computers"; a clip that arrives here is saved through the same database
+// path as a copy made here, so it dedupes, shows up in the list and expires
+// like any other clip, and it is never sent on again. The database is only
+// ever touched on the UI thread: the send thread receives finished envelopes
+// through a queue, and the listen thread hands arrivals back to the message
+// window. One short-lived connection per clip, so there is nothing to keep
+// connected; a computer that is off simply gets nothing until its next copy.
+
+namespace syncx {
+
+constexpr uint32_t kEnvelopeMagic = 0x314D4353;  // "SCM1" little endian.
+constexpr int kMaxFormats = 64;                  // A clip carries at most this many formats.
+constexpr int kMaxNameWchars = 256;              // Caps for the strings in an envelope.
+constexpr int kMaxDescWchars = 500;              // (Desc() stores at most 500.)
+constexpr int kMaxAppWchars = 260;
+constexpr int kMaxPeers = 16;
+constexpr int kMaxQueue = 32;                    // Stop queueing past this; a later copy re-sends anyway.
+constexpr DWORD kConnectTimeoutMs = 3000;
+constexpr DWORD kIoTimeoutMs = 5000;             // Per blocking send/recv call.
+constexpr DWORD kRecvDeadlineMs = 60000;         // One arrival may take at most this long overall.
+
+struct SyncPeer {
+    std::wstring host;  // For the log.
+    std::string hostUtf8;
+    uint16_t port = 0;
+};
+
+std::mutex g_lock;                 // Guards the queue and the peer list.
+std::vector<std::string> g_queue;  // Finished envelopes waiting to be sent.
+std::vector<SyncPeer> g_peers;
+HANDLE g_queueEvent = nullptr;     // Auto-reset: something was pushed.
+HANDLE g_stopEvent = nullptr;      // Manual-reset: shut the threads down.
+HANDLE g_sendThread = nullptr;
+HANDLE g_listenThread = nullptr;
+SOCKET g_listenSock = INVALID_SOCKET;
+std::atomic<uint64_t> g_maxClipBytes{0};  // The listen thread reads this instead of g_set.
+bool g_started = false;
+bool g_wsaUp = false;
+
+// -- Envelope ----------------------------------------------------------------
+// [u32 magic][u32 payload length][payload]
+// payload: [u32 format count] then per format [u32 name wchars][utf16 name]
+// [u32 data bytes][bytes] ... then [u32 desc wchars][utf16] [u32 app wchars]
+// [utf16] [u32 content crc] [u64 copied at] [u32 flags]. Little endian.
+void PutU32(std::string& b, uint32_t v) { char t[4]; memcpy(t, &v, 4); b.append(t, 4); }
+void PutU64(std::string& b, uint64_t v) { char t[8]; memcpy(t, &v, 8); b.append(t, 8); }
+void PutWstr(std::string& b, const std::wstring& s, int maxW) {
+    std::wstring t = s.substr(0, (size_t)maxW);
+    PutU32(b, (uint32_t)t.size());
+    b.append((const char*)t.data(), t.size() * sizeof(wchar_t));
+}
+
+bool BuildEnvelope(const ClipData& clip, int32_t crc, std::string& out) {
+    if (clip.formats.empty() || (int)clip.formats.size() > kMaxFormats) return false;
+    uint64_t bytes = 0;
+    for (auto& f : clip.formats) bytes += f.data.size();
+    if (bytes > g_maxClipBytes.load(std::memory_order_relaxed)) return false;
+    out.clear();
+    PutU32(out, kEnvelopeMagic);
+    PutU32(out, 0);  // Payload length, filled in below.
+    PutU32(out, (uint32_t)clip.formats.size());
+    for (auto& f : clip.formats) {
+        PutWstr(out, f.name, kMaxNameWchars);
+        PutU32(out, (uint32_t)f.data.size());
+        out.append(f.data);
+    }
+    PutWstr(out, clip.description, kMaxDescWchars);
+    PutWstr(out, clip.sourceApp, kMaxAppWchars);
+    PutU32(out, (uint32_t)crc);
+    PutU64(out, (uint64_t)time(nullptr));
+    PutU32(out, 0);  // Flags.
+    uint32_t len = (uint32_t)(out.size() - 8);
+    memcpy(out.data() + 4, &len, 4);
+    return true;
+}
+
+struct Reader {
+    const std::string& b;
+    size_t p = 0;
+    bool bad = false;
+    explicit Reader(const std::string& s) : b(s) {}
+    uint32_t U32() {
+        if (bad || p + 4 > b.size()) { bad = true; return 0; }
+        uint32_t v; memcpy(&v, b.data() + p, 4); p += 4; return v;
+    }
+    uint64_t U64() {
+        if (bad || p + 8 > b.size()) { bad = true; return 0; }
+        uint64_t v; memcpy(&v, b.data() + p, 8); p += 8; return v;
+    }
+    std::wstring Wstr(int maxW) {
+        uint32_t n = U32();
+        if (bad || n > (uint32_t)maxW || p + (size_t)n * 2 > b.size()) { bad = true; return {}; }
+        std::wstring s((const wchar_t*)b.data() + p, n);
+        p += (size_t)n * 2;
+        return s;
+    }
+    std::string Blob(uint64_t budget) {
+        uint32_t n = U32();
+        if (bad || n > budget || p + n > b.size()) { bad = true; return {}; }
+        std::string s(b, p, n);
+        p += n;
+        return s;
+    }
+};
+
+// What the listen thread hands to the UI thread. Heap-allocated; freed by the handler.
+struct RecvMsg {
+    ClipData clip;
+    int32_t crc = 0;
+};
+
+bool ParseEnvelope(const std::string& payload, RecvMsg& out) {
+    Reader r(payload);
+    uint32_t n = r.U32();
+    if (r.bad || n == 0 || n > kMaxFormats) return false;
+    uint64_t budget = g_maxClipBytes.load(std::memory_order_relaxed);
+    for (uint32_t i = 0; i < n; i++) {
+        ClipFormat f;
+        f.name = r.Wstr(kMaxNameWchars);
+        f.data = r.Blob(budget);
+        if (r.bad || f.name.empty()) return false;
+        budget -= f.data.size();
+        out.clip.formats.push_back(std::move(f));
+    }
+    out.clip.description = r.Wstr(kMaxDescWchars);
+    out.clip.sourceApp = r.Wstr(kMaxAppWchars);
+    out.crc = (int32_t)r.U32();
+    r.U64();  // Copied at: informational, the receiver stamps its own save time.
+    r.U32();  // Flags.
+    return !r.bad && r.p == payload.size();
+}
+
+// -- Peers ---------------------------------------------------------------------
+std::vector<SyncPeer> ParsePeers(const std::wstring& text) {
+    std::vector<SyncPeer> out;
+    size_t pos = 0;
+    while (pos < text.size() && (int)out.size() < kMaxPeers) {
+        size_t end = text.find_first_of(L";,\r\n", pos);
+        std::wstring tok = text.substr(pos, end == std::wstring::npos ? std::wstring::npos : end - pos);
+        pos = end == std::wstring::npos ? text.size() : end + 1;
+        size_t a = tok.find_first_not_of(L" \t");
+        if (a == std::wstring::npos) continue;
+        size_t b2 = tok.find_last_not_of(L" \t");
+        tok = tok.substr(a, b2 - a + 1);
+        std::wstring host, portStr;
+        if (tok[0] == L'[') {  // [ipv6 literal]:port
+            size_t close = tok.find(L']');
+            if (close == std::wstring::npos || close + 1 >= tok.size() || tok[close + 1] != L':') continue;
+            host = tok.substr(1, close - 1);
+            portStr = tok.substr(close + 2);
+        } else {
+            size_t colon = tok.rfind(L':');
+            if (colon == std::wstring::npos || colon == 0 || colon + 1 >= tok.size()) continue;
+            host = tok.substr(0, colon);
+            portStr = tok.substr(colon + 1);
+        }
+        int port = _wtoi(portStr.c_str());
+        if (host.empty() || port < 1 || port > 65535) {
+            Wh_Log(L"Sync: skipped an address that did not look like host:port");
+            continue;
+        }
+        SyncPeer p;
+        p.host = host;
+        p.hostUtf8 = WideToUtf8(host);
+        p.port = (uint16_t)port;
+        bool dup = false;
+        for (auto& e : out) if (e.hostUtf8 == p.hostUtf8 && e.port == p.port) dup = true;
+        if (!dup) out.push_back(std::move(p));
+    }
+    return out;
+}
+
+// -- Sockets --------------------------------------------------------------------
+bool SendAll(SOCKET s, const char* p, size_t n) {
+    ULONGLONG deadline = GetTickCount64() + kRecvDeadlineMs;
+    while (n) {
+        int chunk = (int)std::min<size_t>(n, 1 << 20);
+        int r = send(s, p, chunk, 0);
+        if (r == SOCKET_ERROR) {
+            if (WSAGetLastError() != WSAETIMEDOUT) return false;
+        } else {
+            p += r;
+            n -= (size_t)r;
+        }
+        if (GetTickCount64() > deadline) return false;
+    }
+    return true;
+}
+
+bool RecvAll(SOCKET s, void* p, size_t n) {
+    auto* q = (char*)p;
+    while (n) {
+        int r = recv(s, q, (int)std::min<size_t>(n, 1 << 20), 0);
+        if (r <= 0) return false;  // Closed, or the receive timed out.
+        q += r;
+        n -= (size_t)r;
+    }
+    return true;
+}
+
+SOCKET ConnectPeer(const SyncPeer& peer) {
+    addrinfo hints{};
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+    char port[8];
+    _snprintf_s(port, sizeof(port), _TRUNCATE, "%u", peer.port);
+    addrinfo* res = nullptr;
+    if (getaddrinfo(peer.hostUtf8.c_str(), port, &hints, &res) != 0 || !res) return INVALID_SOCKET;
+    SOCKET s = INVALID_SOCKET;
+    for (addrinfo* ai = res; ai; ai = ai->ai_next) {
+        s = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+        if (s == INVALID_SOCKET) continue;
+        u_long nb = 1;
+        ioctlsocket(s, FIONBIO, &nb);
+        if (connect(s, ai->ai_addr, (int)ai->ai_addrlen) != 0) {
+            fd_set w;
+            FD_ZERO(&w);
+            FD_SET(s, &w);
+            timeval tv{kConnectTimeoutMs / 1000, 0};
+            if (select(0, nullptr, &w, nullptr, &tv) != 1) {
+                closesocket(s);
+                s = INVALID_SOCKET;
+                continue;
+            }
+            int soerr = 0;
+            int slen = sizeof(soerr);
+            getsockopt(s, SOL_SOCKET, SO_ERROR, (char*)&soerr, &slen);
+            if (soerr != 0) {
+                closesocket(s);
+                s = INVALID_SOCKET;
+                continue;
+            }
+        }
+        u_long block = 0;
+        ioctlsocket(s, FIONBIO, &block);
+        DWORD t = kIoTimeoutMs;
+        setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (const char*)&t, sizeof(t));
+        break;
+    }
+    freeaddrinfo(res);
+    return s;
+}
+
+// -- Threads ---------------------------------------------------------------------
+void HandleConnection(SOCKET c) {
+    DWORD t = kIoTimeoutMs;
+    setsockopt(c, SOL_SOCKET, SO_RCVTIMEO, (const char*)&t, sizeof(t));
+    unsigned char hdr[8];
+    if (!RecvAll(c, hdr, 8)) return;
+    uint32_t magic, len;
+    memcpy(&magic, hdr, 4);
+    memcpy(&len, hdr + 4, 4);
+    uint64_t cap = g_maxClipBytes.load(std::memory_order_relaxed) + 256 * 1024;  // Clip bytes plus names and strings.
+    if (magic != kEnvelopeMagic || len == 0 || len > cap) return;
+    std::string payload(len, '\0');
+    ULONGLONG deadline = GetTickCount64() + kRecvDeadlineMs;
+    size_t got = 0;
+    while (got < len) {
+        int r = recv(c, payload.data() + got, (int)std::min<size_t>(len - got, 1 << 20), 0);
+        if (r <= 0) return;
+        got += (size_t)r;
+        if (GetTickCount64() > deadline) return;
+    }
+    RecvMsg m;
+    if (!ParseEnvelope(payload, m)) return;
+    auto* post = new (std::nothrow) RecvMsg(std::move(m));
+    if (post && !PostMessageW(g_msgWnd, WM_SCM_SYNC_RECV, 0, (LPARAM)post)) delete post;
+}
+
+DWORD WINAPI ListenThread(LPVOID) {
+    for (;;) {
+        if (WaitForSingleObject(g_stopEvent, 0) == WAIT_OBJECT_0) break;
+        sockaddr_storage sa;
+        int slen = sizeof(sa);
+        SOCKET c = accept(g_listenSock, (sockaddr*)&sa, &slen);
+        if (c == INVALID_SOCKET) {
+            WaitForSingleObject(g_stopEvent, 200);  // Nothing to accept; the socket is non-blocking.
+            continue;
+        }
+        HandleConnection(c);
+        closesocket(c);
+    }
+    return 0;
+}
+
+DWORD WINAPI SendThread(LPVOID) {
+    HANDLE waits[] = {g_queueEvent, g_stopEvent};
+    for (;;) {
+        DWORD w = WaitForMultipleObjects(2, waits, FALSE, INFINITE);
+        if (w != WAIT_OBJECT_0) break;  // Stopped (or the wait failed).
+        for (;;) {
+            std::string payload;
+            std::vector<SyncPeer> peers;
+            {
+                std::lock_guard<std::mutex> lk(g_lock);
+                if (g_queue.empty()) break;
+                payload = std::move(g_queue.front());
+                g_queue.erase(g_queue.begin());
+                peers = g_peers;
+            }
+            for (auto& p : peers) {
+                if (WaitForSingleObject(g_stopEvent, 0) == WAIT_OBJECT_0) break;
+                SOCKET s = ConnectPeer(p);
+                if (s == INVALID_SOCKET) {
+                    Wh_Log(L"Sync: could not reach %s:%u", p.host.c_str(), p.port);
+                    continue;
+                }
+                if (SendAll(s, payload.data(), payload.size()))
+                    Wh_Log(L"Sync: sent a clip to %s:%u", p.host.c_str(), p.port);
+                else
+                    Wh_Log(L"Sync: sending to %s:%u failed", p.host.c_str(), p.port);
+                closesocket(s);
+            }
+        }
+    }
+    return 0;
+}
+
+// -- Start and stop ------------------------------------------------------------
+bool Start() {  // UI thread.
+    if (!g_wsaUp) {
+        WSADATA d;
+        if (WSAStartup(MAKEWORD(2, 2), &d) != 0) {
+            Wh_Log(L"Sync: could not start Windows sockets");
+            return false;
+        }
+        g_wsaUp = true;
+    }
+    g_maxClipBytes = (uint64_t)g_set.maxClipMB * 1024 * 1024;
+    {
+        std::lock_guard<std::mutex> lk(g_lock);
+        g_peers = ParsePeers(g_set.syncPeers);
+    }
+    g_stopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    g_queueEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    if (!g_stopEvent || !g_queueEvent) {
+        Sync_Stop();
+        return false;
+    }
+    // One listener that takes both IPv4 and IPv6 when it can, IPv4 when it cannot.
+    SOCKET s = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
+    if (s != INVALID_SOCKET) {
+        int only6 = 0;
+        setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)&only6, sizeof(only6));
+        sockaddr_in6 a{};
+        a.sin6_family = AF_INET6;
+        a.sin6_port = htons((u_short)g_set.syncPort);
+        a.sin6_addr = in6addr_any;
+        if (bind(s, (sockaddr*)&a, sizeof(a)) != 0) {
+            closesocket(s);
+            s = INVALID_SOCKET;
+        }
+    }
+    if (s == INVALID_SOCKET) {
+        s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        if (s != INVALID_SOCKET) {
+            sockaddr_in a{};
+            a.sin_family = AF_INET;
+            a.sin_port = htons((u_short)g_set.syncPort);
+            a.sin_addr.s_addr = INADDR_ANY;
+            if (bind(s, (sockaddr*)&a, sizeof(a)) != 0) {
+                closesocket(s);
+                s = INVALID_SOCKET;
+            }
+        }
+    }
+    if (s == INVALID_SOCKET || listen(s, 4) != 0) {
+        Wh_Log(L"Sync: could not listen on port %u", g_set.syncPort);
+        if (s != INVALID_SOCKET) closesocket(s);
+        Sync_Stop();
+        return false;
+    }
+    u_long nb = 1;
+    ioctlsocket(s, FIONBIO, &nb);
+    g_listenSock = s;
+    g_sendThread = CreateThread(nullptr, 0, SendThread, nullptr, 0, nullptr);
+    g_listenThread = CreateThread(nullptr, 0, ListenThread, nullptr, 0, nullptr);
+    if (!g_sendThread || !g_listenThread) {
+        Wh_Log(L"Sync: could not start the sync threads");
+        Sync_Stop();
+        return false;
+    }
+    g_started = true;
+    return true;
+}
+
+void Stop() {  // UI thread. The threads never touch the database, so a straggler is harmless.
+    g_started = false;
+    if (g_stopEvent) SetEvent(g_stopEvent);
+    if (g_sendThread) {
+        if (WaitForSingleObject(g_sendThread, 3000) != WAIT_OBJECT_0)
+            Wh_Log(L"Sync: the sender did not stop in time");
+        CloseHandle(g_sendThread);
+        g_sendThread = nullptr;
+    }
+    if (g_listenThread) {
+        if (WaitForSingleObject(g_listenThread, 3000) != WAIT_OBJECT_0)
+            Wh_Log(L"Sync: the listener did not stop in time");
+        CloseHandle(g_listenThread);
+        g_listenThread = nullptr;
+    }
+    if (g_listenSock != INVALID_SOCKET) {
+        closesocket(g_listenSock);
+        g_listenSock = INVALID_SOCKET;
+    }
+    {
+        std::lock_guard<std::mutex> lk(g_lock);
+        g_queue.clear();
+        g_peers.clear();
+    }
+    if (g_queueEvent) {
+        CloseHandle(g_queueEvent);
+        g_queueEvent = nullptr;
+    }
+    if (g_stopEvent) {
+        CloseHandle(g_stopEvent);
+        g_stopEvent = nullptr;
+    }
+    if (g_wsaUp) {
+        WSACleanup();
+        g_wsaUp = false;
+    }
+}
+
+}  // namespace syncx
+
+void Sync_ApplySettings() {  // UI thread.
+    bool want = g_set.syncEnabled && !g_set.syncPeers.empty();
+    if (want && !syncx::g_started) {
+        if (syncx::Start()) Wh_Log(L"Sync: sharing clips on port %u", g_set.syncPort);
+    } else if (!want && syncx::g_started) {
+        Sync_Stop();
+    }
+}
+
+void Sync_Stop() { syncx::Stop(); }
+
+// Called right after a clip was saved here. Builds the finished envelope on this thread (the
+// only one allowed into the database) and hands the bytes to the sender.
+void Sync_OnClipSaved(int64_t id) {  // UI thread.
+    if (!syncx::g_started) return;
+    ClipData clip;
+    if (!Db_GetClipData(id, clip) || clip.formats.empty()) return;
+    std::string env;
+    if (!syncx::BuildEnvelope(clip, Db_SyncCrc(clip.formats), env)) return;
+    {
+        std::lock_guard<std::mutex> lk(syncx::g_lock);
+        if (syncx::g_queue.size() >= syncx::kMaxQueue) return;
+        syncx::g_queue.push_back(std::move(env));
+    }
+    SetEvent(syncx::g_queueEvent);
+}
+
+void Sync_OnRecvMsg(LPARAM lp) {  // UI thread.
+    auto* m = (syncx::RecvMsg*)lp;
+    if (!m) return;
+    int64_t id = Db_SyncSaveRemote(m->clip, m->crc);
+    if (id) {
+        SetTimer(g_msgWnd, kTimerSyncRefresh, 150, nullptr);  // Coalesce a burst into one list refresh.
+    } else {
+        Wh_Log(L"Sync: a clip from another computer could not be saved: %s", Db_LastError().c_str());
+    }
+    delete m;
+}
+
+// ---------------------------------------------------------------------------
 // 90-main.cpp : settings, shared helpers, the UI thread and the tool mod
 // entry points. Owned by the lead.
 // ---------------------------------------------------------------------------
@@ -13234,6 +13827,9 @@ void LoadSettings() {
     s.highlightMatches = Wh_GetIntSetting(L"highlightMatches") != 0;
     s.restoreClipboard = Wh_GetIntSetting(L"restoreClipboard") != 0;
     s.trayIcon = Wh_GetIntSetting(L"trayIcon") != 0 && Wh_GetIntSetting(L"settingsTrayIcon") != 0;
+    s.syncEnabled = Wh_GetIntSetting(L"syncEnabled") != 0;
+    s.syncPort = Clamped(L"syncPort", 1024, 65535, 4126);
+    s.syncPeers = GetStringSetting(L"syncPeers");
     g_set = std::move(s);
 }
 
@@ -13247,6 +13843,7 @@ static void ApplyAll() {
         Tray_Remove();
     }
     List_ApplySettings();
+    Sync_ApplySettings();  // Start or stop sharing to match the new settings.
 }
 
 static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -13264,6 +13861,9 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         case WM_TIMER:
             if (wParam == kTimerCleanup) {
                 Db_Cleanup();
+            } else if (wParam == kTimerSyncRefresh) {  // One refresh per burst of received clips.
+                KillTimer(hwnd, kTimerSyncRefresh);
+                List_OnClipSaved(0);
             } else {
                 Capture_OnTimer(wParam);
             }
@@ -13276,6 +13876,9 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             return 0;
         case WM_SCM_CLIP_SAVED:
             List_OnClipSaved((int64_t)lParam);
+            return 0;
+        case WM_SCM_SYNC_RECV:  // From the listen thread: a clip arrived (lParam: heap RecvMsg).
+            Sync_OnRecvMsg(lParam);
             return 0;
         case WM_SCM_OPEN_SETTINGS:
             Settings_Open();
@@ -13291,6 +13894,7 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         case WM_DESTROY:
             g_stopping = true;
             KillTimer(hwnd, kTimerCleanup);
+            Sync_Stop();
             Capture_Stop();
             Hotkeys_Unregister();
             Tray_Remove();
