@@ -2,7 +2,7 @@
 // @id              seamless-wobbly-windows
 // @name            Seamless Wobbly Windows
 // @description     Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows
-// @version         1.2.4
+// @version         1.2.5
 // @author          DavidHiFi, HeyJeay, HaVeN80, lalimatyus
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -5171,6 +5171,8 @@ struct LiveGlass {
     bool active = false;        // this drag uses it
     bool shown = false;
     bool com = false, registered = false;
+    int step = 0;               // how far the last setup got, for the drag's note
+    HRESULT lastHr = S_OK;
     HMODULE coreMessaging = nullptr;
     winrt::Windows::System::DispatcherQueueController queue{nullptr};
     liveglass::WUC::Compositor comp{nullptr};
@@ -5208,15 +5210,21 @@ bool LiveGlass::Ensure() {
     DropWindow();
     if (w < 1 || h < 1) return false;
     try {
+        step = 1;
         if (!com) {
             const HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-            if (FAILED(hr)) {
+            if (hr == RPC_E_CHANGED_MODE) {
+                // The thread already has COM of the other kind: use it as it is.
+            } else if (FAILED(hr)) {
                 Wh_Log(L"glass: no apartment hr=0x%08X", hr);
+                lastHr = hr;
                 failed = true;
                 return false;
+            } else {
+                com = true;
             }
-            com = true;
         }
+        step = 2;
         if (!queue) {
             if (!coreMessaging)
                 coreMessaging = LoadLibraryExW(L"CoreMessaging.dll", nullptr,
@@ -5227,11 +5235,14 @@ bool LiveGlass::Ensure() {
             if (!create) winrt::throw_last_error();
             glowtool::DispatcherQueueOptionsAbi o{sizeof(o),
                                                   glowtool::kDispatcherQueueThreadCurrent,
-                                                  glowtool::kDispatcherQueueComSta};
+                                                  com ? glowtool::kDispatcherQueueComSta : 0};
             winrt::check_hresult(create(o, winrt::put_abi(queue)));
         }
+        step = 3;
         if (!comp) comp = liveglass::WUC::Compositor();
+        step = 4;
         if (!d2d.p) winrt::check_hresult(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d));
+        step = 5;
         if (!registered) {
             WNDCLASSEXW wc{};
             wc.cbSize = sizeof(wc);
@@ -5243,6 +5254,7 @@ bool LiveGlass::Ensure() {
             registered = true;
         }
         vx = x; vy = y; vw = w; vh = h;
+        step = 6;
         hwnd = CreateWindowExW(WS_EX_NOREDIRECTIONBITMAP | WS_EX_LAYERED | WS_EX_TRANSPARENT |
                                    WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
                                liveglass::kClass, L"", WS_POPUP, vx, vy, vw, vh, nullptr, nullptr,
@@ -5253,10 +5265,13 @@ bool LiveGlass::Ensure() {
         DwmSetWindowAttribute(hwnd, 17 /* DWMWA_USE_HOSTBACKDROPBRUSH */, &on, sizeof(on));
         DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, &on, sizeof(on));
 
+        step = 7;
         winrt::com_ptr<glowtool::DesktopInterop> interop;
         winrt::check_hresult(winrt::get_unknown(comp)->QueryInterface(glowtool::kDesktopInteropIid,
                                                                       interop.put_void()));
+        step = 8;
         winrt::check_hresult(interop->CreateDesktopWindowTarget(hwnd, TRUE, winrt::put_abi(target)));
+        step = 9;
         root = comp.CreateContainerVisual();
         root.RelativeSizeAdjustment({1, 1});
         target.Root(root);
@@ -5279,9 +5294,11 @@ bool LiveGlass::Ensure() {
         sprite.Clip(comp.CreateGeometricClip(path));
         sprite.IsVisible(false);
         root.Children().InsertAtTop(sprite);
+        step = 10;
         return true;
     } catch (...) {
-        Wh_Log(L"glass: setup failed hr=0x%08X", (unsigned)winrt::to_hresult());
+        lastHr = winrt::to_hresult();
+        Wh_Log(L"glass: setup failed at %d hr=0x%08X", step, (unsigned)lastHr);
         failed = true;
         DropWindow();
         return false;
@@ -6322,6 +6339,15 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     DragGlow glow;
     GlowCB glassCb;
     bool liveGlass = false, evenGlass = true;
+    // A note on the window of how its glass went this drag, for checking it
+    // from outside: stage * 100 + setup step, then the last error.
+    auto note = [&](int stage) {
+        const int s = ov.glass ? ov.glass->step : 0;
+        const uint32_t hr = ov.glass ? (uint32_t)ov.glass->lastHr : 0;
+        SetPropW(hwnd, L"SeamlessWobblyGlassNote",
+                 (HANDLE)(((uintptr_t)(stage * 100 + s) << (sizeof(void*) > 4 ? 32 : 16)) |
+                          (sizeof(void*) > 4 ? hr : (hr & 0xFFFF))));
+    };
     if (!glow.Start(hwnd, cfg, canvas, glass)) {
         dev.SetGlow(nullptr);
         if (GlassOnly(canvas, glass, glassCb, &evenGlass)) {
@@ -6330,11 +6356,16 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
                                             cfg.mesh, std::max(1, 64 / std::max(1, cfg.mesh)))) {
                 glassCb.fill[3] = 2.0f + (1.0f - GlowSeeThrough(hwnd));
                 liveGlass = true;
+                note(4);
             } else if (!evenGlass) {
+                note(3);
                 return;     // no live blur and no single colour: keep the native drag
+            } else {
+                note(3);
             }
             dev.SetGlow(&glassCb);
         } else if (wantGlass) {
+            note(2);
             // Keep the native drag when the capture would replace glass with a dark fill.
             return;
         }
