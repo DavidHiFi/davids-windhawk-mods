@@ -1,7 +1,7 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-21T06:00:09+08:00",
+  "generatedAt": "2026-11-21T06:01:37+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 184,
@@ -2066,7 +2066,7 @@
       "name": "Seamless Key Click",
       "author": "DavidHiFi, Anixx",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.1.4",
+      "version": "1.1.5",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",

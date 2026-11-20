@@ -2,7 +2,7 @@
 // @id              seamless-key-click
 // @name            Seamless Key Click
 // @description     Mechanical keyboard and mouse sounds as you type and click, with every Keyboard Sounds pack, shortcuts and a tray icon
-// @version         1.1.4
+// @version         1.1.5
 // @author          DavidHiFi, Anixx
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -2015,7 +2015,12 @@ static DWORD WINAPI InputThread(LPVOID) {
 // UI thread: tray icon, menu, shortcuts.
 // ---------------------------------------------------------------------------
 
-constexpr UINT kTrayId = 1;
+constexpr UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kTrayId = TrayIconId();
 constexpr UINT_PTR kVolumeTimer = 7;
 static UINT g_taskbarCreated;
 static bool g_trayAdded;

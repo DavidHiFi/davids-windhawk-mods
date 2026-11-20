@@ -1222,7 +1222,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.1.4"
+    "version": "1.1.5"
   },
   "local@seamless-share": {
     "disabled": false,
