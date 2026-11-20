@@ -1304,7 +1304,7 @@ body:has(.ant-select-dropdown:not(.ant-select-dropdown-hidden)),body:has(.ant-dr
 :root :is(.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu){background-color:rgba(24,24,37,.9) !important;backdrop-filter:none !important;}
 /* 2.2.12: header nav buttons rest on Mocha base instead of mantle, so they stop reading
    as black chips against the glass page (owner, 2026-11-20: like base, about rgb 30,30,46). */
-:root :is([data-testid="nav-home"],[data-testid="nav-explore"],[data-testid="nav-settings"],[data-testid="nav-about"],#wh-header-create){--whb-f:#1e1e2e !important;}
+:root :is([data-testid="nav-home"],[data-testid="nav-explore"],[data-testid="nav-settings"],[data-testid="nav-about"],#wh-header-create):not(.ant-btn-primary){--whb-f:#1e1e2e !important;}
 )WHB";
     return css;
 }
