@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.10
+// @version         2.2.11
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,16 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.11
+
+- The window buttons on the Windhawk title bar dim when the window is in the background and light up when you click back into it, like every other window. The glass behind them stays.
+- Turning on Mocha Windhawk icons now also changes the shared Start menu and desktop shortcuts, not only the taskbar one.
+
+## What's new in 2.2.10
+
+- New switch, Mocha Windhawk icons: the Windhawk window, its tray icon and its shortcuts on the taskbar, Start menu and desktop use the blue and mauve icon. Turning it off puts the stock icons back.
+- The mod tasks window at the bottom right and the Loaded mods window get rounded corners, the dark glass, and the centred title dock with its uptime.
 
 ## What's new in 2.2.6
 
@@ -1461,7 +1471,9 @@ static COLORREF NativeBorderColor(HWND hwnd) {
 }
 
 static void ApplyWindowStack(HWND hWnd, const Settings& s) {
-    BOOL activeLook = s.nativeTitleBar && s.titleBarAcrylic && s.blur;
+    // Never force the active look: Windows dims the title buttons on a background
+    // window from the real focus state. The accent glass stays either way.
+    BOOL activeLook = FALSE;
     WINCOMPATTRDATA appearance{WCA_FORCE_ACTIVEWINDOW_APPEARANCE, &activeLook, sizeof(activeLook)};
     SetWindowCompositionAttribute(hWnd, &appearance);
     // DWM draws the backdrop and border with the system's current corner radius.
@@ -2054,8 +2066,16 @@ static void RefreshTrayIcon(HWND owner, bool enabled) {
     if (stock) DestroyIcon(stock);
 }
 
+// Shared shortcuts (all-users Start menu and desktop) need admin rights the
+// daemon lacks. Their edited copies are saved beside the icon and copied in by
+// one hidden elevated step after the loop.
+struct ShortcutCopy {
+    std::wstring from, to;
+};
+
 static void UpdateShortcutIcon(IShellLinkW* link, IPersistFile* file, const std::wstring& path,
-                               const std::wstring& icon, const std::wstring& backup, bool enabled) {
+                               const std::wstring& icon, const std::wstring& backup, bool enabled,
+                               std::vector<ShortcutCopy>& pending) {
     if (FAILED(file->Load(path.c_str(), STGM_READ))) return;
     wchar_t target[MAX_PATH], image[MAX_PATH];
     int index = 0;
@@ -2079,10 +2099,40 @@ static void UpdateShortcutIcon(IShellLinkW* link, IPersistFile* file, const std:
             FAILED(file->Load(path.c_str(), STGM_READ))) return;
         next = image;
     }
-    if (SUCCEEDED(link->SetIconLocation(next.c_str(), nextIndex)) &&
-        SUCCEEDED(file->Save(path.c_str(), TRUE))) {
+    if (FAILED(link->SetIconLocation(next.c_str(), nextIndex))) return;
+    if (SUCCEEDED(file->Save(path.c_str(), TRUE))) {
         SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, path.c_str(), nullptr);
         if (!enabled) DeleteFileW(backup.c_str());
+        return;
+    }
+    std::wstring staged = backup + L".new.lnk";
+    if (SUCCEEDED(file->Save(staged.c_str(), FALSE))) pending.push_back({staged, path});
+}
+
+static void CopySharedShortcuts(const std::vector<ShortcutCopy>& pending) {
+    if (pending.empty()) return;
+    std::wstring args = L"/d /c";
+    for (size_t i = 0; i < pending.size(); ++i) {
+        args += i ? L" & copy /y \"" : L" copy /y \"";
+        args += pending[i].from + L"\" \"" + pending[i].to + L"\" >nul";
+    }
+    wchar_t cmd[MAX_PATH];
+    if (!GetSystemDirectoryW(cmd, ARRAYSIZE(cmd))) return;
+    std::wstring exe = std::wstring(cmd) + L"\\cmd.exe";
+    SHELLEXECUTEINFOW info{sizeof(info)};
+    info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC;
+    info.lpVerb = L"runas";
+    info.lpFile = exe.c_str();
+    info.lpParameters = args.c_str();
+    info.nShow = SW_HIDE;
+    if (!ShellExecuteExW(&info)) return;
+    if (info.hProcess) {
+        WaitForSingleObject(info.hProcess, 15000);
+        CloseHandle(info.hProcess);
+    }
+    for (const auto& item : pending) {
+        DeleteFileW(item.from.c_str());
+        SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, item.to.c_str(), nullptr);
     }
 }
 
@@ -2107,14 +2157,16 @@ static void UpdateShortcutIcons(bool enabled) {
                 {CSIDL_DESKTOPDIRECTORY, L"\\Windhawk.lnk", L".desktop.lnk"},
                 {CSIDL_APPDATA, L"\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar\\Windhawk.lnk", L".taskbar.lnk"},
             };
+            std::vector<ShortcutCopy> pending;
             for (const auto& shortcut : shortcuts) {
                 wchar_t folder[MAX_PATH];
                 if (SUCCEEDED(SHGetFolderPathW(nullptr, shortcut.folder, nullptr, SHGFP_TYPE_CURRENT, folder))) {
                     UpdateShortcutIcon(link, file, std::wstring(folder) + shortcut.suffix,
-                                       icon, icon + shortcut.backupSuffix, enabled);
+                                       icon, icon + shortcut.backupSuffix, enabled, pending);
                 }
             }
             file->Release();
+            CopySharedShortcuts(pending);
         }
         link->Release();
     }
@@ -2276,8 +2328,6 @@ static LRESULT CALLBACK ProgressDialogProc(HWND hwnd, UINT message, WPARAM wPara
             }
             return result;
         }
-        case WM_NCACTIVATE:
-            return DefSubclassProc(hwnd, message, TRUE, lParam);
         case WM_NCHITTEST: {
             LRESULT hit = DefSubclassProc(hwnd, message, wParam, lParam);
             if (hit != HTCLIENT) return hit;
@@ -3184,9 +3234,6 @@ static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wparam,
             client->bottom = frameRect.bottom;
         }
         return 0;
-    }
-    if (message == WM_NCACTIVATE && s.nativeTitleBar && s.titleBarAcrylic && s.blur) {
-        return DefSubclassProc(hwnd, message, TRUE, lparam);
     }
     // Black is transparent inside the extended DWM frame; erase the old splash pixels.
     if (message == WM_ERASEBKGND) {
