@@ -1,7 +1,7 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-21T03:25:34+08:00",
+  "generatedAt": "2026-11-21T03:27:43+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 183,
@@ -758,7 +758,7 @@
       "name": "Seamless Explorer View",
       "author": "DavidHiFi, DarkionAvey, crazyboyybs, Languster, valinet",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.0.4",
+      "version": "2.0.5",
       "license": "GPL-2.0",
       "origin": "local",
       "upstream": "https://windhawk.net/mods/gpu-accelerated-explorer-view",

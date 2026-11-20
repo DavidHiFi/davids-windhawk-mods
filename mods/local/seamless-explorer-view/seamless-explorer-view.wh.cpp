@@ -2,7 +2,7 @@
 // @id              seamless-explorer-view
 // @name            Seamless Explorer View
 // @description     GPU-accelerated Explorer views with smooth scrolling and right-click submenus that populate fully
-// @version         2.0.4
+// @version         2.0.5
 // @author          DavidHiFi, DarkionAvey, crazyboyybs, Languster, valinet
 // @include         explorer.exe
 // @architecture    x86-64
@@ -14221,6 +14221,32 @@ bool OnScrollbar(ViewState& state, int x, int y) {
         static_cast<float>(Scale96(3, ViewDpi(state))));
 }
 
+// Fill() with a top-to-bottom gradient (RTL only mirrors the rect).
+void FillGradientV(ViewState& state, float l, float t, float r, float b,
+                   unsigned from, unsigned to, float a=1.f, float radius=0) {
+    if(!VisibleOpacity(a) || r<=l || b<=t) return;
+    if (state.rtlLayout) {
+        const float newLeft = state.paintWidth - r;
+        r = state.paintWidth - l;
+        l = newLeft;
+    }
+    const auto rect=SnapDrawRect(state.target.Get(),D2D1::RectF(l,t,r,b));
+    if(rect.right<=rect.left || rect.bottom<=rect.top) return;
+    a = std::min(1.f, a);
+    auto* rt = static_cast<ID2D1RenderTarget*>(state.target.Get());
+    D2D1_GRADIENT_STOP stops[2] = {{0.f, Packed(from, a)}, {1.f, Packed(to, a)}};
+    ComPtr<ID2D1GradientStopCollection> coll;
+    ComPtr<ID2D1LinearGradientBrush> grad;
+    ID2D1Brush* brush = state.brush.Get();
+    if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, &coll)) &&
+        SUCCEEDED(rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(
+            D2D1::Point2F(rect.left, rect.top), D2D1::Point2F(rect.left, rect.bottom)), coll.Get(), &grad)))
+        brush = grad.Get();
+    else state.brush->SetColor(Packed(from, a));
+    if (radius > 0.f) rt->FillRoundedRectangle(D2D1::RoundedRect(rect, radius, radius), brush);
+    else rt->FillRectangle(rect, brush);
+}
+
 void DrawScrollbar(ViewState& state, const ScrollbarGeometry& bar,
                    unsigned color, bool active, bool dragging) {
     const bool horizontal = bar.axis == ScrollAxis::Horizontal;
@@ -14242,15 +14268,16 @@ void DrawScrollbar(ViewState& state, const ScrollbarGeometry& bar,
     if (hot > 0.f || pressed > 0.f)
         Fill(state, bar.left, bar.top, bar.right, bar.bottom, color,
              .09f*hot + .08f*pressed, breadth * .5f);
-    const float alpha = .44f + .34f*hot + .16f*pressed;
+    // House thumb: Mocha blue to mauve, never a grey thumb.
+    const float alpha = .62f + .30f*hot + .08f*pressed;
     if (horizontal) {
-        Fill(state, bar.thumbStart, bar.top + inset,
+        FillGradient(state, bar.thumbStart, bar.top + inset,
              bar.thumbStart + bar.thumbLength, bar.bottom - inset,
-             color, alpha, (breadth - 2.f * inset) * .5f);
+             0x89B4FA, 0xCBA6F7, alpha, (breadth - 2.f * inset) * .5f);
     } else {
-        Fill(state, bar.left + inset, bar.thumbStart,
+        FillGradientV(state, bar.left + inset, bar.thumbStart,
              bar.right - inset, bar.thumbStart + bar.thumbLength,
-             color, alpha, (breadth - 2.f * inset) * .5f);
+             0x89B4FA, 0xCBA6F7, alpha, (breadth - 2.f * inset) * .5f);
     }
 }
 
@@ -29151,7 +29178,7 @@ void DrawViewToggle(const ViewState& state, const DRAWITEMSTRUCT& destination) {
     }
     if ((item.itemState & (ODS_FOCUS | ODS_NOFOCUSRECT)) == ODS_FOCUS) {
         SelectObject(item.hDC, GetStockObject(DC_PEN));
-        SetDCPenColor(item.hDC, foreground); SelectObject(item.hDC, GetStockObject(NULL_BRUSH));
+        SetDCPenColor(item.hDC, RGB(0x89, 0xB4, 0xFA)); SelectObject(item.hDC, GetStockObject(NULL_BRUSH));
         RoundRect(item.hDC, bounds.left, bounds.top, bounds.right, bounds.bottom, radius, radius);
     }
     if (HICON icon = state.viewToggleIcons[disabled ? 1 : 0]) {
