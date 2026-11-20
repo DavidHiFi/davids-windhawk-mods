@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.12
+// @version         2.2.13
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,14 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.13
+
+- The "Mod tasks in progress" window now gets the centred title and uptime like the main window. It was missed because its title ends in "- Windhawk".
+
+## What's new in 2.2.12
+
+- Drop-down menus in Windhawk get the frosted glass, the scrollbar stays inside their rounded corners, and the top buttons rest on the Mocha base colour.
 
 ## What's new in 2.2.11
 
@@ -2304,7 +2312,8 @@ static bool IsProgressDialog(HWND hwnd) {
     wchar_t title[128], expected[128];
     return GetWindowTextW(hwnd, title, ARRAYSIZE(title)) &&
            LoadStringW(GetModuleHandleW(nullptr), 0xbc, expected, ARRAYSIZE(expected)) &&
-           wcscmp(title, expected) == 0;
+           // The window reads "Mod tasks in progress - Windhawk", so match the start.
+           wcsncmp(title, expected, wcslen(expected)) == 0;
 }
 
 static LRESULT CALLBACK ProgressDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam,
