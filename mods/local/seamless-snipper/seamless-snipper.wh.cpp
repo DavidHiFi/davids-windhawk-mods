@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.6.3
+// @version         0.6.4
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -33,7 +33,8 @@ read later, like "Discord 4.05 pm.png".
   eraser, blur, pixelate, a magnifier and a spotlight. Colors, sizes, fills,
   dashed or dotted lines, shadows and outlines. Every tool carries its own
   options next to the bar. Press V and pick a drawing to edit or move it.
-  Drag the handles to resize a box or adjust an arrow. Use Font and size
+  Drag the handles to resize a box, adjust an arrow or set how wide text
+  runs before it wraps. Use Font and size
   while writing text or a speech balloon, or after selecting it. Draw,
   then pick the region to include the drawings in the snip.
 - Every drawing tool has ShareX's options in the settings: box corner radius
@@ -2475,6 +2476,7 @@ struct Shape {
     UINT32 sample = 0;  // The eraser's color, picked up from the screen.
     // A curved arrow's bend: where its control point sits, along and across the arrow, in arrow lengths.
     float bendA = 0, bendP = 0.22f;
+    float wrap = 0;  // A text's or balloon's line width, set by its side handles; 0 keeps the words on one line.
 };
 
 // The look that stays the same for every tool. Set by ApplySettings.
@@ -2687,11 +2689,15 @@ static bool TextLayout(const Shape& s, Ptr<IDWriteTextLayout>& lay, D2D1_RECT_F&
     IDWriteTextFormat* f = InkFont(s.font.empty() ? g_st.font : s.font, s.o.size, s.o.bold != 0, s.o.italic != 0);
     if (!f || !g_dw || s.pts.empty()) return false;
     std::wstring t = s.text.empty() ? std::wstring(L" ") : s.text;
-    if (FAILED(g_dw->CreateTextLayout(t.c_str(), (UINT32)t.size(), f, 8000, 8000, lay.put()))) return false;
+    const bool wrapped = s.wrap > 0;
+    if (FAILED(g_dw->CreateTextLayout(t.c_str(), (UINT32)t.size(), f, wrapped ? s.wrap : 8000, 8000, lay.put())))
+        return false;
+    if (wrapped) lay->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
     DWRITE_TEXT_METRICS m{};
     lay->GetMetrics(&m);
     D2D1_POINT_2F p = s.pts[0];
-    box = {p.x, p.y, p.x + std::max(m.widthIncludingTrailingWhitespace, 2.0f), p.y + m.height};
+    float w = wrapped ? std::max(s.wrap, m.width) : std::max(m.widthIncludingTrailingWhitespace, 2.0f);
+    box = {p.x, p.y, p.x + w, p.y + m.height};
     return true;
 }
 
@@ -3996,15 +4002,44 @@ static void Frame(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const D2D1_REC
 
 // The drawings on the region screen: every shape, the one being drawn, the text box taking keys, the pick.
 static bool HasHandles(const Shape& s) {
+    if (s.tool == T_TEXT) return !s.pts.empty() && !s.text.empty();
     return s.pts.size() == 2 &&
            (IsBoxy(s.tool) || s.tool == T_LINE || s.tool == T_ARROW || s.tool == T_BALLOON || s.tool == T_STEP);
 }
 
+// A text's or balloon's words box with its room around it.
+static bool WordsFrame(const Shape& s, D2D1_RECT_F& box, D2D1_RECT_F& r, float& px) {
+    Ptr<IDWriteTextLayout> lay;
+    if (!TextLayout(s, lay, box)) return false;
+    float py;
+    TextPads(s, px, py);
+    r = {box.left - px, box.top - py, box.right + px, box.bottom + py};
+    return true;
+}
+
 // Where a picked shape's handles sit, like ShareX. Boxes: 0 top left, 1 bottom right, 2 top right, 3 bottom left,
-// 4 top, 5 bottom, 6 left, 7 right. Lines, arrows, balloons and numbers: 0 and 1 on their two points, and an arrow
-// has 2 on its middle, which bends it.
+// 4 top, 5 bottom, 6 left, 7 right. Text: 0 top left, 1 bottom right, 2 top right, 3 bottom left, 4 left, 5 right,
+// and every one sets how wide the lines run. Lines, arrows, balloons and numbers: 0 and 1 on their two points; an
+// arrow has 2 on its middle, which bends it, and a balloon 2 on its body's right edge, which sets its line width.
 static int Handles(const Shape& s, D2D1_POINT_2F* out) {
     if (!HasHandles(s)) return 0;
+    if (s.tool == T_TEXT) {
+        D2D1_RECT_F box, r;
+        float px;
+        if (!WordsFrame(s, box, r, px)) return 0;
+        float my = (r.top + r.bottom) / 2;
+        out[0] = {r.left, r.top}, out[1] = {r.right, r.bottom}, out[2] = {r.right, r.top}, out[3] = {r.left, r.bottom};
+        out[4] = {r.left, my}, out[5] = {r.right, my};
+        return 6;
+    }
+    if (s.tool == T_BALLOON) {
+        out[0] = s.pts[0], out[1] = s.pts[1];
+        D2D1_RECT_F box, r;
+        float px;
+        if (!WordsFrame(s, box, r, px)) return 2;
+        out[2] = {r.right, (r.top + r.bottom) / 2};
+        return 3;
+    }
     if (IsBoxy(s.tool)) {
         D2D1_RECT_F r = Norm(s.pts[0], s.pts[1]);
         float mx = (r.left + r.right) / 2, my = (r.top + r.bottom) / 2;
@@ -4028,12 +4063,30 @@ static int HitHandle(const Shape& s, D2D1_POINT_2F q) {
 }
 
 static LPCWSTR HandleCursor(const Shape& s, int id) {
+    if (s.tool == T_TEXT) return id <= 1 ? IDC_SIZENWSE : id <= 3 ? IDC_SIZENESW : IDC_SIZEWE;
+    if (s.tool == T_BALLOON && id == 2) return IDC_SIZEWE;
     if (!IsBoxy(s.tool)) return id == 2 ? IDC_HAND : IDC_CROSS;
     return id <= 1 ? IDC_SIZENWSE : id <= 3 ? IDC_SIZENESW : id <= 5 ? IDC_SIZENS : IDC_SIZEWE;
 }
 
 // Drags handle id to q. Boxes are kept as {top left, bottom right} while a handle is held.
 static void MoveHandle(Shape& s, int id, D2D1_POINT_2F q) {
+    if (s.tool == T_TEXT || (s.tool == T_BALLOON && id == 2)) {
+        // Words wrap to the box, as in ShareX. The left handles keep the right edge where it is.
+        D2D1_RECT_F box, r;
+        float px;
+        if (!WordsFrame(s, box, r, px)) return;
+        const float least = std::max(12.0f, s.o.size * 1.5f);
+        bool left = s.tool == T_TEXT && (id == 0 || id == 3 || id == 4);
+        if (left) {
+            float l = std::min(q.x + px, box.right - least);
+            s.wrap = box.right - l;
+            s.pts[0].x = l;
+        } else {
+            s.wrap = std::max(least, q.x - px - box.left);
+        }
+        return;
+    }
     auto& a = s.pts[0];
     auto& z = s.pts[1];
     if (!IsBoxy(s.tool)) {
@@ -4095,7 +4148,7 @@ static void DrawShapes(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
         for (int i = 0; i < n; i++) {
             const auto pt = hs[i];
             const auto handle = D2D1::RectF(pt.x - h, pt.y - h, pt.x + h, pt.y + h);
-            bool bend = !IsBoxy(p->tool) && i == 2;  // The arrow's bend handle is round.
+            bool bend = p->tool == T_ARROW && i == 2;  // The arrow's bend handle is round.
             b->SetColor(Rgb(mocha::crust));
             if (bend) rt->FillEllipse(D2D1::Ellipse(pt, h, h), b);
             else rt->FillRectangle(handle, b);
