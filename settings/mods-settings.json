@@ -551,6 +551,7 @@
     "Selection.selectionOpacity": 60,
     "Selection.selectionRadius": 16,
     "enableLogging": 0,
+    "nativeSettingsTitleBar": 0,
     "navTree.byText.extraLeft": 30,
     "navTree.byText.extraRight": 10,
     "navTree.cornerRadius": 16,
@@ -645,7 +646,9 @@
     "navTree.selectedNoFocus.textRed": 205,
     "navTree.selectedNoFocus.textStyle": "default",
     "navTree.selectedNoFocus.textWeight": "default",
-    "navTree.widthMode": "byText"
+    "navTree.widthMode": "byText",
+    "settingsGlass": 1,
+    "settingsTrayIcon": 1
   },
   "local@keyboard-shortcut-actions-plus": {
     "HotkeyActions[0].Action": "ACTION_START_PROCESS",
