@@ -1,7 +1,7 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-21T06:25:08+08:00",
+  "generatedAt": "2026-11-21T06:26:29+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 184,
@@ -1142,7 +1142,7 @@
       "name": "Windhawk Enhanced Styler",
       "author": "DavidHiFi, Ingan121",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.2.13",
+      "version": "2.2.14",
       "license": "MIT",
       "origin": "local",
       "upstream": "",

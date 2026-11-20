@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.13
+// @version         2.2.14
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.14
+
+- The "Mod tasks in progress" and "Loaded mods" windows now match the main window all the way: dark glass body, the list on a rounded card with the grey edge, FiraCode text, quiet column headings, and an "Open Windhawk" pill button that gets the blue to mauve edge on hover. The bright row bands, the boxy list border and the resize dots are gone.
 
 ## What's new in 2.2.13
 
@@ -2219,10 +2223,25 @@ struct TrayDialogState {
     RECT progressListMargins{};
     RECT progressButtonMargins{};
     long long epoch = 0;  // settings generation the colors were pushed with
+    LONG_PTR listExStyle = 0;  // the list's own border style, put back on unload
+    bool partsSet = false;
 };
 static std::map<HWND, TrayDialogState> g_trayDialogs;
 static std::mutex g_trayDialogsMutex;
 static volatile long long g_trayEpoch = 1;
+
+// The rectangle Windhawk gives the list (parent client coordinates). It becomes the
+// rounded card, and the list itself sits inside it with room for the corners.
+static std::map<HWND, RECT> g_trayCards;
+static std::mutex g_trayCardsMutex;
+
+static bool TrayCardRect(HWND list, RECT* out) {
+    std::lock_guard<std::mutex> lock(g_trayCardsMutex);
+    auto it = g_trayCards.find(list);
+    if (it == g_trayCards.end()) return false;
+    *out = it->second;
+    return true;
+}
 
 static COLORREF CssColorToColorref(const std::string& css) {
     unsigned r = 0, g = 0, b = 0;
@@ -2255,20 +2274,27 @@ static HBRUSH TrayBrush(COLORREF color) {
 }
 
 static bool IsProgressDialog(HWND hwnd);
+static HFONT TrayFont(HWND dialog, const Settings& s);
+static void PaintTrayDialog(HWND hwnd);
+static void SetupTrayDialogParts(HWND dialog);
+static void HideSizeGrips(HWND dialog, bool hide);
 
 static void ApplyTrayDialogLook(HWND dialog, HWND list, const Settings& s) {
-    COLORREF surface = TraySurfaceColor(s);
-    // LVM_SETBKCOLOR / LVM_SETTEXTBKCOLOR / LVM_SETTEXTCOLOR: rows take the
-    // theme surface and text, so the list melts into the dialog with no box.
-    SendMessageW(list, 0x1026, 0, (LPARAM)surface);
-    SendMessageW(list, 0x1027, 0, (LPARAM)surface);
-    if (COLORREF text = TrayTextColor(s)) SendMessageW(list, 0x1024, 0, (LPARAM)text);
+    // The list is drawn as a text mask: white text on black, which the list's own
+    // paint turns into Mocha text on the glass card (GDI has no alpha of its own).
+    SendMessageW(list, LVM_SETBKCOLOR, 0, (LPARAM)RGB(0, 0, 0));
+    SendMessageW(list, LVM_SETTEXTBKCOLOR, 0, (LPARAM)RGB(0, 0, 0));
+    SendMessageW(list, LVM_SETTEXTCOLOR, 0, (LPARAM)RGB(255, 255, 255));
+    SendMessageW(list, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_GRIDLINES, 0);
+    SetWindowTheme(list, L"DarkMode_Explorer", nullptr);  // dark scrollbar
+    SendMessageW(list, WM_CHANGEUISTATE, MAKEWPARAM(UIS_SET, UISF_HIDEFOCUS), 0);
+    if (HFONT font = TrayFont(dialog, s)) SendMessageW(list, WM_SETFONT, (WPARAM)font, TRUE);
     Settings frame = s;
     if (IsProgressDialog(dialog) && frame.blur) {
         frame.backgroundOpacity = std::clamp(frame.backgroundOpacity, 85, 99);
     }
     ApplyWindowStack(dialog, frame);
-    InvalidateRect(dialog, nullptr, TRUE);
+    RedrawWindow(dialog, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);
 }
 
 static LRESULT CALLBACK TrayDialogProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam,
@@ -2284,20 +2310,36 @@ static LRESULT CALLBACK TrayDialogProc(HWND hWnd, UINT message, WPARAM wParam, L
     if (InterlockedExchangeAdd(&g_themeActive, 0)) {
         Settings s = SnapshotSettings();
         switch (message) {
-            case WM_ERASEBKGND: {
-                RECT rect;
-                GetClientRect(hWnd, &rect);
-                FillRect((HDC)wParam, &rect, TrayBrush(TraySurfaceColor(s)));
-                return 1;
+            case WM_ERASEBKGND:
+                return 1;  // WM_PAINT draws the glass body and the card
+            case WM_PAINT:
+                PaintTrayDialog(hWnd);
+                return 0;
+            case WM_SIZE: {
+                LRESULT result = DefSubclassProc(hWnd, message, wParam, lParam);
+                HideSizeGrips(hWnd, true);
+                InvalidateRect(hWnd, nullptr, FALSE);
+                return result;
+            }
+            case WM_NOTIFY: {
+                // No selected rows: the list only reports, and a selection band would
+                // be the one bright stripe left on the card.
+                auto* hdr = reinterpret_cast<NMHDR*>(lParam);
+                if (hdr && hdr->idFrom == 1001 && hdr->code == LVN_ITEMCHANGING) {
+                    auto* nm = reinterpret_cast<NMLISTVIEW*>(lParam);
+                    if ((nm->uChanged & LVIF_STATE) && (nm->uNewState & ~nm->uOldState & LVIS_SELECTED))
+                        return TRUE;
+                }
+                break;
             }
             case WM_CTLCOLORDLG:
             case WM_CTLCOLORSTATIC:
             case WM_CTLCOLORBTN: {
+                // Black is clear on the glass; any stray label keeps the theme text.
                 HDC dc = (HDC)wParam;
-                COLORREF surface = TraySurfaceColor(s);
-                SetBkColor(dc, surface);
+                SetBkColor(dc, RGB(0, 0, 0));
                 if (COLORREF text = TrayTextColor(s)) SetTextColor(dc, text);
-                return (LRESULT)TrayBrush(surface);
+                return (LRESULT)GetStockObject(BLACK_BRUSH);
             }
         }
     }
@@ -2435,6 +2477,7 @@ static BOOL CALLBACK TrayDialogEnumProc(HWND hWnd, LPARAM lParam) {
             SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
                          SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
         }
+        SetupTrayDialogParts(hWnd);
         DebugNote("tray dialog themed");
     }
     return TRUE;
@@ -3086,6 +3129,473 @@ static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
         EndBufferedPaint(buffer, TRUE);
     }
     BufferedPaintUnInit();
+}
+
+// ---- Tray windows ("Mod tasks in progress", "Loaded mods"): the main window's look ----
+// Every part paints straight alpha-correct pixels, so the glass shows through exactly
+// where it should and nothing GDI drew comes out see-through or brightened.
+static const std::uint32_t kTrayEdge = 0x45475A;     // surface1: card and button edge at rest
+static const std::uint32_t kTraySubtext = 0xA6ADC8;  // column headings
+static const std::uint32_t kTrayControl = 0x313244;  // button fill
+
+static std::uint32_t TrayCssRgb(const std::string& css, std::uint32_t fallback) {
+    unsigned r = 0, g = 0, b = 0;
+    if (sscanf_s(css.c_str(), "rgb(%u,%u,%u)", &r, &g, &b) != 3) return fallback;
+    return (r << 16) | (g << 8) | b;
+}
+
+static std::uint32_t TrayTextRgb(const Settings& s) {
+    return s.text.empty() ? 0xCDD6F4 : s.textRgb;
+}
+
+// The rounded card behind the list: the theme's card colour and opacity, 2 px grey edge.
+static TitleDockLook TrayCardLook(const Settings& s) {
+    TitleDockLook d;
+    d.hover = false;
+    d.shine = false;
+    d.radius = 12;
+    d.edge = 2;
+    d.fill = TrayCssRgb(s.card, 0x181825);
+    d.fillA = s.card.empty() ? 40 : s.cardOpacity;
+    d.edgeC = kTrayEdge;
+    return d;
+}
+
+// FiraCode (or the theme font) at the dialog's own size, grey-scale smoothed so its
+// coverage can be read back as alpha.
+static HFONT TrayFont(HWND dialog, const Settings& s) {
+    LOGFONTW lf{};
+    HFONT base = (HFONT)SendMessageW(dialog, WM_GETFONT, 0, 0);
+    if (!base || !GetObjectW(base, sizeof(lf), &lf)) {
+        NONCLIENTMETRICSW metrics{sizeof(metrics)};
+        SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0,
+                                   GetDpiForWindow(dialog));
+        lf = metrics.lfMessageFont;
+    }
+    lf.lfQuality = ANTIALIASED_QUALITY;
+    TitleDockLook d;
+    std::wstring family = s.font;
+    size_t comma = family.find(L',');
+    if (comma != std::wstring::npos) family.resize(comma);
+    while (!family.empty() && (family.back() == L' ' || family.back() == L'"' || family.back() == L'\''))
+        family.pop_back();
+    size_t first = family.find_first_not_of(L" \"'");
+    family = first == std::wstring::npos ? L"" : family.substr(first);
+    d.live = !family.empty();
+    wcsncpy_s(d.family, family.c_str(), _TRUNCATE);
+    d.weight = s.fontWeight;
+    wchar_t key[160];
+    swprintf_s(key, L"%s|%d|%ld", d.family, d.weight, lf.lfHeight);
+    static std::mutex mutex;
+    static std::map<std::wstring, HFONT> cache;  // kept for the process: lists hold these
+    std::lock_guard<std::mutex> lock(mutex);
+    auto it = cache.find(key);
+    if (it != cache.end()) return it->second;
+    HDC dc = GetDC(nullptr);
+    HFONT font = DockTitleFont(dc, lf, d);
+    ReleaseDC(nullptr, dc);
+    if (font) cache[key] = font;
+    return font;
+}
+
+// Grey-scale text coverage from a white-on-black GDI draw, blended in as real alpha.
+static void TrayBlendText(RGBQUAD* px, int stride, int w, int h, HFONT font, const wchar_t* text, RECT rc,
+                          UINT flags, std::uint32_t rgb, float alpha) {
+    RECT bounds{0, 0, w, h};
+    IntersectRect(&rc, &rc, &bounds);
+    int mw = rc.right - rc.left, mh = rc.bottom - rc.top;
+    if (!text || !text[0] || mw <= 0 || mh <= 0) return;
+    HDC dc = CreateCompatibleDC(nullptr);
+    if (!dc) return;
+    BITMAPINFO bi{};
+    bi.bmiHeader = {sizeof(BITMAPINFOHEADER), mw, -mh, 1, 32, BI_RGB};
+    void* bits = nullptr;
+    HBITMAP bmp = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (bmp) {
+        HGDIOBJ oldBmp = SelectObject(dc, bmp);
+        HGDIOBJ oldFont = font ? SelectObject(dc, font) : nullptr;
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, RGB(255, 255, 255));
+        RECT local{0, 0, mw, mh};
+        DrawTextW(dc, text, -1, &local, flags);
+        GdiFlush();
+        const RGBQUAD* m = (const RGBQUAD*)bits;
+        for (int y = 0; y < mh; ++y) {
+            for (int x = 0; x < mw; ++x) {
+                const RGBQUAD& c = m[y * mw + x];
+                int v = std::max({c.rgbRed, c.rgbGreen, c.rgbBlue});
+                if (v) DockBlend(px[(rc.top + y) * stride + rc.left + x], rgb, alpha * v / 255.0f);
+            }
+        }
+        if (oldFont) SelectObject(dc, oldFont);
+        SelectObject(dc, oldBmp);
+        DeleteObject(bmp);
+    }
+    DeleteDC(dc);
+}
+
+// One buffered, cleared, alpha-correct paint of a window's client area.
+template <typename Draw>
+static void TrayBufferedPaint(HWND hwnd, LONG top, Draw draw) {
+    PAINTSTRUCT ps;
+    HDC dc = BeginPaint(hwnd, &ps);
+    if (!dc) return;
+    RECT area;
+    GetClientRect(hwnd, &area);
+    area.top = std::min(top, area.bottom);
+    if (area.right > 0 && area.bottom > area.top) {
+        BufferedPaintInit();
+        HDC paintDc = nullptr;
+        HPAINTBUFFER buffer = BeginBufferedPaint(dc, &area, BPBF_TOPDOWNDIB, nullptr, &paintDc);
+        if (buffer) {
+            BufferedPaintClear(buffer, nullptr);
+            RGBQUAD* pixels = nullptr;
+            int stride = 0;
+            if (SUCCEEDED(GetBufferedPaintBits(buffer, &pixels, &stride)))
+                draw(dc, pixels, stride, (int)area.right, (int)(area.bottom - area.top));
+            EndBufferedPaint(buffer, TRUE);
+        }
+        BufferedPaintUnInit();
+    }
+    EndPaint(hwnd, &ps);
+}
+
+// The dialog body is the window's own glass; the card is drawn where the list sits.
+static void PaintTrayDialog(HWND hwnd) {
+    UINT dpi = GetDpiForWindow(hwnd);
+    LONG top = IsProgressDialog(hwnd) ? CaptionHeight(dpi) : 0;
+    TrayBufferedPaint(hwnd, top, [&](HDC, RGBQUAD* px, int stride, int w, int h) {
+        RECT card;
+        if (!TrayCardRect(GetDlgItem(hwnd, 1001), &card)) return;
+        OffsetRect(&card, 0, -top);
+        DrawDockPixels(px, stride, w, h, card, TrayCardLook(SnapshotSettings()), 0.0f, dpi);
+    });
+}
+
+static void PaintTrayList(HWND hwnd) {
+    Settings s = SnapshotSettings();
+    TitleDockLook card = TrayCardLook(s);
+    std::uint32_t text = TrayTextRgb(s);
+    TrayBufferedPaint(hwnd, 0, [&](HDC dc, RGBQUAD* px, int stride, int w, int h) {
+        HDC maskDc = CreateCompatibleDC(dc);
+        BITMAPINFO bi{};
+        bi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -h, 1, 32, BI_RGB};
+        void* bits = nullptr;
+        HBITMAP bmp = maskDc ? CreateDIBSection(maskDc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
+        HGDIOBJ old = bmp ? SelectObject(maskDc, bmp) : nullptr;
+        if (bmp) {
+            SendMessageW(hwnd, WM_PRINTCLIENT, (WPARAM)maskDc, PRF_CLIENT | PRF_ERASEBKGND);
+            GdiFlush();
+        }
+        const RGBQUAD* m = (const RGBQUAD*)bits;
+        float fillA = card.fillA / 100.0f;
+        for (int y = 0; y < h; ++y) {
+            for (int x = 0; x < w; ++x) {
+                RGBQUAD& p = px[y * stride + x];
+                DockBlend(p, card.fill, fillA);
+                if (!m) continue;
+                const RGBQUAD& c = m[y * w + x];
+                // Faint theme bands (hover, selection) sit under the floor and stay off.
+                int v = std::max({c.rgbRed, c.rgbGreen, c.rgbBlue});
+                if (v > 64) DockBlend(p, text, (v - 64) / 191.0f);
+            }
+        }
+        if (old) SelectObject(maskDc, old);
+        if (bmp) DeleteObject(bmp);
+        if (maskDc) DeleteDC(maskDc);
+    });
+}
+
+static void PaintTrayHeader(HWND hwnd) {
+    Settings s = SnapshotSettings();
+    TitleDockLook card = TrayCardLook(s);
+    HWND dialog = GetAncestor(hwnd, GA_ROOT);
+    HFONT font = TrayFont(dialog, s);
+    UINT dpi = GetDpiForWindow(hwnd);
+    int hot = -1;
+    POINT pt;
+    if (GetCursorPos(&pt) && WindowFromPoint(pt) == hwnd && ScreenToClient(hwnd, &pt)) {
+        HDHITTESTINFO hit{};
+        hit.pt = pt;
+        if (SendMessageW(hwnd, HDM_HITTEST, 0, (LPARAM)&hit) >= 0 && (hit.flags & HHT_ONHEADER)) hot = hit.iItem;
+    }
+    std::uint32_t accent = s.accent.empty() ? s.gradientStart : s.accentRgb;
+    TrayBufferedPaint(hwnd, 0, [&](HDC, RGBQUAD* px, int stride, int w, int h) {
+        float fillA = card.fillA / 100.0f;
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x) DockBlend(px[y * stride + x], card.fill, fillA);
+        int count = (int)SendMessageW(hwnd, HDM_GETITEMCOUNT, 0, 0);
+        int padX = MulDiv(8, dpi, 96);
+        for (int i = 0; i < count; ++i) {
+            RECT r{};
+            if (!SendMessageW(hwnd, HDM_GETITEMRECT, i, (LPARAM)&r)) continue;
+            wchar_t label[128] = L"";
+            HDITEMW item{};
+            item.mask = HDI_TEXT | HDI_FORMAT;
+            item.pszText = label;
+            item.cchTextMax = ARRAYSIZE(label);
+            SendMessageW(hwnd, HDM_GETITEMW, i, (LPARAM)&item);
+            UINT align = (item.fmt & HDF_JUSTIFYMASK) == HDF_RIGHT    ? DT_RIGHT
+                         : (item.fmt & HDF_JUSTIFYMASK) == HDF_CENTER ? DT_CENTER
+                                                                       : DT_LEFT;
+            RECT tr{r.left + padX, r.top, r.right - padX, r.bottom};
+            TrayBlendText(px, stride, w, h, font, label, tr,
+                          align | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX,
+                          i == hot ? accent : kTraySubtext, 1.0f);
+            if (i < count - 1 && r.right - 1 >= 0 && r.right - 1 < w) {
+                int inset = (r.bottom - r.top) / 4;
+                for (int y = std::max(0, (int)r.top + inset); y < std::min(h, (int)r.bottom - inset); ++y)
+                    DockBlend(px[y * stride + r.right - 1], kTrayEdge, 0.8f);
+            }
+        }
+        if (h > 0)
+            for (int x = 0; x < w; ++x) DockBlend(px[(h - 1) * stride + x], kTrayEdge, 0.6f);
+    });
+}
+
+struct TrayButtonAnim {
+    float p = 0.0f;
+    int want = 0;
+};
+static std::map<HWND, TrayButtonAnim> g_trayButtons;
+static std::mutex g_trayButtonsMutex;
+static const UINT_PTR kTrayButtonTimer = 0x5EA7D0E;
+
+static void PaintTrayButton(HWND hwnd) {
+    Settings s = SnapshotSettings();
+    float hoverP = 0.0f;
+    {
+        std::lock_guard<std::mutex> lock(g_trayButtonsMutex);
+        hoverP = g_trayButtons[hwnd].p;
+    }
+    bool pressed = (SendMessageW(hwnd, BM_GETSTATE, 0, 0) & BST_PUSHED) != 0;
+    bool enabled = IsWindowEnabled(hwnd);
+    HFONT font = TrayFont(GetAncestor(hwnd, GA_ROOT), s);
+    UINT dpi = GetDpiForWindow(hwnd);
+    wchar_t label[128] = L"";
+    GetWindowTextW(hwnd, label, ARRAYSIZE(label));
+    TrayBufferedPaint(hwnd, 0, [&](HDC, RGBQUAD* px, int stride, int w, int h) {
+        TitleDockLook d;
+        d.shine = false;
+        d.hover = enabled;
+        d.radius = 100;  // a pill: half the height
+        d.edge = 2;
+        d.fill = TrayCssRgb(s.control, kTrayControl);
+        d.fillA = 55;
+        d.edgeC = kTrayEdge;
+        d.h1 = s.gradientStart;
+        d.h2 = s.gradientEnd;
+        float p = enabled ? hoverP : 0.0f;
+        if (pressed && enabled) {
+            d.fill = DockMix(d.fill, d.h2, 0.3f);
+            d.fillA = 70;
+            d.h1 = d.h2;
+            p = 1.0f;
+        }
+        RECT rc{0, 0, w, h};
+        DrawDockPixels(px, stride, w, h, rc, d, p, dpi);
+        TrayBlendText(px, stride, w, h, font, label, rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_HIDEPREFIX,
+                      enabled ? TrayTextRgb(s) : kTraySubtext, enabled ? 1.0f : 0.6f);
+    });
+}
+
+// 150 ms ease each way, like the title dock.
+static void TrayButtonHover(HWND hwnd, int want) {
+    {
+        std::lock_guard<std::mutex> lock(g_trayButtonsMutex);
+        TrayButtonAnim& a = g_trayButtons[hwnd];
+        if (a.want == want && (want ? a.p >= 1.0f : a.p <= 0.0f)) return;
+        a.want = want;
+    }
+    SetTimer(hwnd, kTrayButtonTimer, 15, nullptr);
+}
+
+static LRESULT CALLBACK TrayButtonProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, DWORD_PTR) {
+    if (message == WM_NCDESTROY) {
+        KillTimer(hwnd, kTrayButtonTimer);
+        {
+            std::lock_guard<std::mutex> lock(g_trayButtonsMutex);
+            g_trayButtons.erase(hwnd);
+        }
+        WindhawkUtils::RemoveWindowSubclassFromAnyThread(hwnd, TrayButtonProc);
+        return DefSubclassProc(hwnd, message, wParam, lParam);
+    }
+    if (!InterlockedExchangeAdd(&g_themeActive, 0)) return DefSubclassProc(hwnd, message, wParam, lParam);
+    switch (message) {
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_PAINT:
+            PaintTrayButton(hwnd);
+            return 0;
+        case WM_TIMER:
+            if (wParam != kTrayButtonTimer) break;
+            {
+                bool settled;
+                {
+                    std::lock_guard<std::mutex> lock(g_trayButtonsMutex);
+                    TrayButtonAnim& a = g_trayButtons[hwnd];
+                    a.p = std::clamp(a.p + (a.want ? 0.1f : -0.1f), 0.0f, 1.0f);
+                    settled = a.want ? a.p >= 1.0f : a.p <= 0.0f;
+                }
+                if (settled) KillTimer(hwnd, kTrayButtonTimer);
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_MOUSEMOVE: {
+            LRESULT result = DefSubclassProc(hwnd, message, wParam, lParam);
+            TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd, 0};
+            TrackMouseEvent(&track);
+            TrayButtonHover(hwnd, 1);
+            return result;
+        }
+        case WM_MOUSELEAVE: {
+            LRESULT result = DefSubclassProc(hwnd, message, wParam, lParam);
+            TrayButtonHover(hwnd, 0);
+            return result;
+        }
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_LBUTTONDBLCLK:
+        case WM_KEYDOWN:
+        case WM_KEYUP:
+        case WM_SETFOCUS:
+        case WM_KILLFOCUS:
+        case WM_ENABLE:
+        case WM_CAPTURECHANGED:
+        case WM_SETTEXT:
+        case WM_UPDATEUISTATE:
+        case BM_SETSTATE:
+        case BM_SETSTYLE: {
+            // The stock button paints some states straight away; paint ours over it at once.
+            LRESULT result = DefSubclassProc(hwnd, message, wParam, lParam);
+            RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+            return result;
+        }
+    }
+    return DefSubclassProc(hwnd, message, wParam, lParam);
+}
+
+static LRESULT CALLBACK TrayHeaderProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, DWORD_PTR) {
+    if (message == WM_NCDESTROY) {
+        WindhawkUtils::RemoveWindowSubclassFromAnyThread(hwnd, TrayHeaderProc);
+        return DefSubclassProc(hwnd, message, wParam, lParam);
+    }
+    if (!InterlockedExchangeAdd(&g_themeActive, 0)) return DefSubclassProc(hwnd, message, wParam, lParam);
+    switch (message) {
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_PAINT:
+            PaintTrayHeader(hwnd);
+            return 0;
+        case WM_MOUSEMOVE: {
+            LRESULT result = DefSubclassProc(hwnd, message, wParam, lParam);
+            TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd, 0};
+            TrackMouseEvent(&track);
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return result;
+        }
+        case WM_MOUSELEAVE: {
+            LRESULT result = DefSubclassProc(hwnd, message, wParam, lParam);
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return result;
+        }
+    }
+    return DefSubclassProc(hwnd, message, wParam, lParam);
+}
+
+static int TrayCardPad(HWND list) {
+    return MulDiv(6, GetDpiForWindow(list), 96);
+}
+
+static LRESULT CALLBACK TrayListProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, DWORD_PTR) {
+    if (message == WM_NCDESTROY) {
+        {
+            std::lock_guard<std::mutex> lock(g_trayCardsMutex);
+            g_trayCards.erase(hwnd);
+        }
+        WindhawkUtils::RemoveWindowSubclassFromAnyThread(hwnd, TrayListProc);
+        return DefSubclassProc(hwnd, message, wParam, lParam);
+    }
+    if (!InterlockedExchangeAdd(&g_themeActive, 0)) return DefSubclassProc(hwnd, message, wParam, lParam);
+    switch (message) {
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_PAINT:
+            PaintTrayList(hwnd);
+            return 0;
+        case WM_WINDOWPOSCHANGING: {
+            // Whatever rectangle Windhawk gives the list becomes the card; the list
+            // itself moves inside it, clear of the rounded corners.
+            auto* wp = reinterpret_cast<WINDOWPOS*>(lParam);
+            if ((wp->flags & SWP_NOMOVE) && (wp->flags & SWP_NOSIZE)) break;
+            RECT card;
+            if (!TrayCardRect(hwnd, &card)) break;
+            int pad = TrayCardPad(hwnd);
+            int x = (wp->flags & SWP_NOMOVE) ? card.left : wp->x;
+            int y = (wp->flags & SWP_NOMOVE) ? card.top : wp->y;
+            int cx = (wp->flags & SWP_NOSIZE) ? card.right - card.left : wp->cx;
+            int cy = (wp->flags & SWP_NOSIZE) ? card.bottom - card.top : wp->cy;
+            {
+                std::lock_guard<std::mutex> lock(g_trayCardsMutex);
+                g_trayCards[hwnd] = {x, y, x + cx, y + cy};
+            }
+            wp->x = x + pad;
+            wp->y = y + pad;
+            wp->cx = std::max(0, cx - 2 * pad);
+            wp->cy = std::max(0, cy - 2 * pad);
+            wp->flags &= ~(SWP_NOMOVE | SWP_NOSIZE);
+            break;
+        }
+        case WM_WINDOWPOSCHANGED:
+            if (HWND parent = GetParent(hwnd)) InvalidateRect(parent, nullptr, FALSE);
+            break;
+    }
+    return DefSubclassProc(hwnd, message, wParam, lParam);
+}
+
+static BOOL CALLBACK HideGripProc(HWND child, LPARAM hide) {
+    wchar_t cls[32];
+    if (GetClassNameW(child, cls, ARRAYSIZE(cls)) && !wcscmp(cls, L"ScrollBar") &&
+        (GetWindowLongPtrW(child, GWL_STYLE) & SBS_SIZEGRIP)) {
+        if (hide && IsWindowVisible(child)) ShowWindow(child, SW_HIDE);
+        else if (!hide && !IsWindowVisible(child)) ShowWindow(child, SW_SHOWNA);
+    }
+    return TRUE;
+}
+
+// The resize dots: the window edges still resize, the dots would be the one stock part left.
+static void HideSizeGrips(HWND dialog, bool hide) {
+    EnumChildWindows(dialog, HideGripProc, hide);
+}
+
+static void SetupTrayDialogParts(HWND dialog) {
+    HWND list = GetDlgItem(dialog, 1001);
+    if (!list) return;
+    HWND header = (HWND)SendMessageW(list, LVM_GETHEADER, 0, 0);
+    HWND button = GetDlgItem(dialog, IDOK);
+    RECT card;
+    if (!GetWindowRect(list, &card)) return;
+    MapWindowPoints(nullptr, dialog, reinterpret_cast<POINT*>(&card), 2);
+    LONG_PTR ex = GetWindowLongPtrW(list, GWL_EXSTYLE);
+    {
+        std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+        auto it = g_trayDialogs.find(dialog);
+        if (it == g_trayDialogs.end() || it->second.partsSet) return;
+        it->second.partsSet = true;
+        it->second.listExStyle = ex;
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_trayCardsMutex);
+        g_trayCards[list] = card;
+    }
+    WindhawkUtils::SetWindowSubclassFromAnyThread(list, TrayListProc, 0);
+    if (header) WindhawkUtils::SetWindowSubclassFromAnyThread(header, TrayHeaderProc, 0);
+    if (button) WindhawkUtils::SetWindowSubclassFromAnyThread(button, TrayButtonProc, 0);
+    SetWindowLongPtrW(list, GWL_EXSTYLE, ex & ~(LONG_PTR)(WS_EX_CLIENTEDGE | WS_EX_STATICEDGE));
+    SetWindowPos(list, nullptr, card.left, card.top, card.right - card.left, card.bottom - card.top,
+                 SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    HideSizeGrips(dialog, true);
+    RedrawWindow(dialog, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
 
 // With the side/bottom frame band folded into the client, the outer resize
@@ -4505,9 +5015,19 @@ void Wh_ModUninit() {
     }
     g_captionChildren.clear();
     std::vector<std::pair<HWND, HWND>> trayDialogs;
+    std::map<HWND, LONG_PTR> trayListStyles;
+    std::map<HWND, RECT> trayCards;
     {
         std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
-        for (const auto& [dialog, state] : g_trayDialogs) trayDialogs.emplace_back(dialog, state.list);
+        for (const auto& [dialog, state] : g_trayDialogs) {
+            trayDialogs.emplace_back(dialog, state.list);
+            if (state.partsSet) trayListStyles[state.list] = state.listExStyle;
+        }
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_trayCardsMutex);
+        trayCards = g_trayCards;
+        g_trayCards.clear();
     }
     WindhawkUtils::RemoveAllWindowSubclasses();
     for (const auto& [dialog, list] : trayDialogs) {
@@ -4519,7 +5039,19 @@ void Wh_ModUninit() {
             SendMessageW(list, LVM_SETBKCOLOR, 0, GetSysColor(COLOR_WINDOW));
             SendMessageW(list, LVM_SETTEXTBKCOLOR, 0, GetSysColor(COLOR_WINDOW));
             SendMessageW(list, LVM_SETTEXTCOLOR, 0, GetSysColor(COLOR_WINDOWTEXT));
+            SendMessageW(list, WM_SETFONT, SendMessageW(dialog, WM_GETFONT, 0, 0), TRUE);
+            SetWindowTheme(list, L"Explorer", nullptr);
+            auto style = trayListStyles.find(list);
+            if (style != trayListStyles.end()) SetWindowLongPtrW(list, GWL_EXSTYLE, style->second);
+            auto card = trayCards.find(list);
+            if (card != trayCards.end()) {
+                const RECT& r = card->second;
+                SetWindowPos(list, nullptr, r.left, r.top, r.right - r.left, r.bottom - r.top,
+                             SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+            }
         }
+        HideSizeGrips(dialog, false);
+        RedrawWindow(dialog, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);
         SetWindowPos(dialog, nullptr, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
         RECT client{};
