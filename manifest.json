@@ -1,7 +1,7 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-21T06:03:50+08:00",
+  "generatedAt": "2026-11-21T06:06:01+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 184,
@@ -998,7 +998,7 @@
       "name": "Seamless Sound Manager",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "license": "CDDL-1.0",
       "origin": "local",
       "upstream": "",

@@ -2,7 +2,7 @@
 // @id              seamless-sound-manager
 // @name            Seamless Sound Manager
 // @description     Change every Windows sound with a scheme: 161 presets, startup and logon sounds. A port of Sound Manager
-// @version         1.0.6
+// @version         1.0.7
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -2466,7 +2466,12 @@ constexpr UINT WM_SM_TRAY = WM_APP + 10;
 constexpr UINT WM_SM_SETTINGS = WM_APP + 11;
 constexpr UINT WM_SM_OPEN = WM_APP + 12;
 constexpr UINT WM_APP_SETTINGS_RELOAD = WM_APP + 1;
-constexpr UINT kTrayId = 1;
+constexpr UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kTrayId = TrayIconId();
 
 static HWND g_msgWnd = nullptr;
 static HINSTANCE g_inst = nullptr;

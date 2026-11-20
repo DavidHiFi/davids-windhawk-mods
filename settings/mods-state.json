@@ -1243,7 +1243,7 @@
     "include": "windhawk-mod.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.6"
+    "version": "1.0.7"
   },
   "local@seamless-taskbar-badge-counter": {
     "disabled": false,
