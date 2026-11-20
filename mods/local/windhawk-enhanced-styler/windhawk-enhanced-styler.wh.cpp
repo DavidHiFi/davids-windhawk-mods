@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.9
+// @version         2.2.10
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1174,8 +1174,8 @@ static std::string BuildCss(const Settings& s) {
    state bar paints at -18px, 3px wide (ModDetailsSettingsView__SettingsListItem
    ::before, measured in the app bundle and on screen); the old margin -18px
    hung this box exactly over it. Grey 2px edge, blue to mauve on hover. */
-:root [data-testid="mod-setting-collapse"]{width:20px !important;height:20px !important;min-width:20px !important;padding:0 !important;margin:0 8px 0 0 !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;background:#181825 !important;border:2px solid #45475a !important;border-radius:7px !important;color:#a6adc8 !important;box-shadow:none !important;transition:border-color .15s,color .15s;}
-:root [data-testid="mod-setting-collapse"] svg{width:9px !important;height:9px !important;display:block !important;margin:0 !important;transition:transform .2s ease;}
+:root [data-testid="mod-setting-collapse"]{width:20px !important;height:20px !important;min-width:20px !important;padding:0 !important;margin:0 8px 0 0 !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;background:#181825 !important;border:2px solid #45475a !important;border-radius:999px !important;color:#a6adc8 !important;box-shadow:none !important;transition:border-color .15s,color .15s;}
+:root [data-testid="mod-setting-collapse"] svg{width:10px !important;height:10px !important;display:block !important;margin:0 !important;transition:transform .2s ease;}
 :root [data-testid="mod-setting-collapse"]:hover,:root [data-testid="mod-setting-collapse"]:focus-visible{color:#cdd6f4 !important;border-color:transparent !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
 /* "5 settings" badge on a collapsed section: dark chip, grey edge, blue to mauve edge on hover. */
 :root [data-testid="mod-setting-summary"]{background:#181825 !important;color:#a6adc8 !important;border:2px solid #45475a !important;border-radius:999px !important;padding:0 10px !important;line-height:20px !important;font-size:12px !important;transition:border-color .15s,color .15s;}
@@ -1269,6 +1269,19 @@ body:has(.ant-popconfirm:not(.ant-popover-hidden))>#root{filter:blur(14px) satur
 :root #wh-header-create{padding:0 15px !important;}
 :root #wh-header-create svg{width:18px !important;height:18px !important;}
 :root #wh-header-create .ant-btn-icon{display:inline-flex;width:18px;height:18px;align-items:center;justify-content:center;}
+/* 2.2.10: list items (per-program lists and the like). Both arrows are the same round dark bubble, chevron 10px in a 16px inside so it sits on whole pixels.
+   The drag handle is a matching dark pill, and the item chip matches the "5 settings" chip. Grey 2px edge at rest, blue to mauve on hover. */
+:root [data-testid="mod-setting-collapse"] svg,:root [data-testid="mod-setting-array-item-collapse"] svg{width:10px !important;height:10px !important;display:block !important;margin:0 !important;flex:none !important;}
+:root [class*="ModDetailsSettingsView__ArraySettingsItemWrapper"]{--whui-settings-array-grip-offset:27px !important;--whui-settings-array-handle-width:14px !important;}
+:root [data-testid="mod-setting-array-item-collapse"]{width:20px !important;min-width:20px !important;height:20px !important;top:6px !important;margin-inline-end:4px !important;padding:0 !important;display:inline-flex !important;align-items:center !important;justify-content:center !important;background:#181825 !important;border:2px solid #45475a !important;border-radius:999px !important;color:#a6adc8 !important;box-shadow:none !important;transition:opacity 120ms ease-out,border-color .15s,color .15s !important;}
+:root [data-testid="mod-setting-array-item-collapse"]:hover,:root [data-testid="mod-setting-array-item-collapse"]:focus-visible{color:#cdd6f4 !important;border-color:transparent !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
+:root [class*="ModDetailsSettingsView__ArraySettingsItemDragHandle"],:root [class*="ModDetailsSettingsView__ArrayItemDragBadge"]{background:#181825 !important;border:2px solid #45475a !important;border-radius:999px !important;color:#a6adc8 !important;box-shadow:none !important;}
+:root [class*="ModDetailsSettingsView__ArraySettingsItemDragHandle"]{top:6px !important;height:20px !important;box-sizing:border-box !important;transition:opacity 120ms ease-out,border-color .15s,color .15s !important;}
+:root [class*="ModDetailsSettingsView__ArraySettingsItemDragHandle"] svg{height:10px !important;width:auto !important;display:block !important;}
+:root [class*="ModDetailsSettingsView__ArraySettingsItemDragHandle"]:hover,:root [class*="ModDetailsSettingsView__ArraySettingsItemDragHandle"]:active,:root [class*="ModDetailsSettingsView__ArrayItemDragBadge"]{color:#cdd6f4 !important;border-color:transparent !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
+:root [class*="ModDetailsSettingsView__SettingSummary"]{background:#181825 !important;color:#a6adc8 !important;border:2px solid #45475a !important;border-radius:999px !important;padding:0 10px !important;line-height:20px !important;font-size:12px !important;transition:border-color .15s,color .15s;}
+:root [class*="ModDetailsSettingsView__SettingSummary"]:hover,:root [data-testid="mod-setting-array-item-summary"]:hover [class*="ModDetailsSettingsView__SettingSummary"]{color:#cdd6f4 !important;border-color:transparent !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
+:root [class*="ModDetailsSettingsView__ArraySettingsItemWrapper"],:root [class*="ModDetailsSettingsView__ArraySettingsFooter"]{padding-inline-start:24px !important;}
 )WHB";
     return css;
 }
