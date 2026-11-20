@@ -7,6 +7,8 @@
       "settings": {
         "backgroundOpacity": 55,
         "blur": 1,
+        "fontFamily": "FiraCode Nerd Font",
+        "fontWeight": "Medium",
         "nativeSettingsTitleBar": 1,
         "openKey": "",
         "peekOnSpace": 1,

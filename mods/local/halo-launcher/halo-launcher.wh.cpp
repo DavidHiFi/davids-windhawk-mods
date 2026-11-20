@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.5.6
+// @version         0.6.0
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -76,6 +76,18 @@ Every key in that list can be changed on the Keys page of the settings.
 - blur: true
   $name: "Blur behind the window"
   $description: "Off, the window is solid Mocha."
+- fontFamily: "FiraCode Nerd Font"
+  $name: "Font"
+  $description: "The font for all of Halo's words: the search box, results, clock, hints and preview. If it is not installed, Segoe UI is used at the same size."
+- fontWeight: "Medium"
+  $name: "Font weight"
+  $description: "How thick the letters are."
+  $options:
+  - Light: "Light"
+  - Normal: "Regular"
+  - Medium: "Medium"
+  - SemiBold: "Semi-bold"
+  - Bold: "Bold"
 - settingsGlass: true
   $name: "Blurred settings window"
   $description: "On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save."
@@ -128,10 +140,18 @@ using Microsoft::WRL::ComPtr;
 
 // The settings window (namespace haloset, at the end of the file) runs on its own thread. It reads
 // the search engine's settings and plugins from this bridge and saves them with a line to it.
+// One row of a Halo menu, drawn by the settings engine's styled menu (haloset::ShowMenu).
+struct HaloMenuItem {
+    int id = 0;
+    std::wstring glyph, label, hint;
+    bool checked = false, disabled = false, separator = false;
+    std::vector<HaloMenuItem> sub;
+};
 namespace haloset {
-int ShowTrayMenu(HWND owner, const POINT* at);
-void OpenSettingsWindow();
+void OpenSettingsWindow(int page = -1);
 void CloseSettingsWindow();
+int ShowTrayMenu(HWND owner, const POINT* at);
+int ShowMenu(HWND owner, const std::vector<HaloMenuItem>& items, const POINT* at);
 extern std::atomic<HWND> g_settingsWnd;
 }  // namespace haloset
 
@@ -157,6 +177,7 @@ constexpr UINT WM_APP_ENGINEDONE = WM_APP + 2;  // the engine said bye or its th
 constexpr UINT WM_APP_SETTINGS = WM_APP + 3;
 constexpr UINT WM_APP_TRAY = WM_APP + 5;      // the tray icon's callback
 constexpr UINT WM_APP_RECORD = WM_APP + 6;    // wParam 1: a key box in the settings listens
+constexpr UINT WM_APP_APPMENU = WM_APP + 7;   // the engine answered a row's right-click menu
 constexpr UINT kTrayId = 1;
 constexpr UINT WM_APP_HOOKKEY = WM_APP + 4;   // wParam: hotkey slot
 constexpr UINT_PTR kTimerFrame = 1;
@@ -346,6 +367,17 @@ struct ResultBlock {
     std::vector<Item> items;
 };
 
+// One row's right-click menu as the engine sent it: the plugin's own actions, and the app id
+// or path the Windows menu is built from.
+struct AppMenuAction {
+    std::wstring title, sub;
+};
+struct AppMenuData {
+    int row = -1;
+    std::wstring aumid, path;
+    std::vector<AppMenuAction> flow;
+};
+
 struct GlobalKey {
     Hotkey hk;
     std::wstring keyword;   // empty: toggle the window
@@ -381,7 +413,15 @@ struct State {
     bool blur = true;
     bool peekOnSpace = true;
     bool trayIcon = true;
+    std::wstring fontFamily = L"FiraCode Nerd Font";  // every word Halo draws; sizes stay per place
+    std::wstring fontWeight = L"Medium";
     bool trayAdded = false;
+    bool menuOpen = false;   // one of Halo's styled menus has the focus; the launcher stays
+    AppMenuData appMenu, appMenuPending;
+    bool inAppMenu = false;
+    int appMenuWant = -1;        // the row whose menu was asked for, -1 when none is wanted
+    DWORD appMenuAsked = 0;
+    POINT appMenuAt{};
     bool recording = false;  // a key box in the settings window listens, so Halo's keys stand down
     std::vector<HaloBridgePlugin> plugPending;
 
@@ -718,27 +758,34 @@ void ResetFormats() {
     g.queryLayout.Reset();
 }
 
+// True when Windows has the family installed. DirectWrite would quietly swap in another font.
+bool FontInstalled(const std::wstring& family) {
+    ComPtr<IDWriteFontCollection> fonts;
+    UINT32 index = 0;
+    BOOL found = FALSE;
+    if (family.empty() || FAILED(g.dwrite->GetSystemFontCollection(&fonts, TRUE))) return false;
+    return SUCCEEDED(fonts->FindFamilyName(family.c_str(), &index, &found)) && found;
+}
+
 void EnsureFormats() {
     if (g.fQuery) return;
-    g.fQuery = MakeFormat(SetStr(L"QueryBoxFont", L"Segoe UI"), SetStr(L"QueryBoxFontWeight", L"Normal"),
-                          SetStr(L"QueryBoxFontStyle", L"Normal"), (float)SetInt(L"QueryBoxFontSize", 16), false);
-    g.fTitle = MakeFormat(SetStr(L"ResultFont", L"Segoe UI"), SetStr(L"ResultFontWeight", L"Normal"),
-                          SetStr(L"ResultFontStyle", L"Normal"), (float)SetInt(L"ResultItemFontSize", 16), true);
-    g.fSub = MakeFormat(SetStr(L"ResultSubFont", L"Segoe UI"), SetStr(L"ResultSubFontWeight", L"Normal"),
-                        SetStr(L"ResultSubFontStyle", L"Normal"), (float)SetInt(L"ResultSubItemFontSize", 13), true);
-    g.fClock = MakeFormat(L"Segoe UI", L"Normal", L"Normal", 14, false);
+    // One font for all of Halo's text (its own setting, default FiraCode Nerd Font Medium). A
+    // missing family falls back to Segoe UI at the same size, never a smaller one.
+    std::wstring fam = FontInstalled(g.fontFamily) ? g.fontFamily : L"Segoe UI";
+    const std::wstring& wt = g.fontWeight;
+    g.fQuery = MakeFormat(fam, wt, SetStr(L"QueryBoxFontStyle", L"Normal"), (float)SetInt(L"QueryBoxFontSize", 16), false);
+    g.fTitle = MakeFormat(fam, wt, SetStr(L"ResultFontStyle", L"Normal"), (float)SetInt(L"ResultItemFontSize", 16), true);
+    g.fSub = MakeFormat(fam, wt, SetStr(L"ResultSubFontStyle", L"Normal"), (float)SetInt(L"ResultSubItemFontSize", 13), true);
+    g.fClock = MakeFormat(fam, wt, L"Normal", 14, false);
     g.fClock->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
-    // Flow gives the Alt+number hint the result font; the owner's theme leaves its size
-    // at the app default, which measures 14 on the real window.
-    g.fHint = MakeFormat(SetStr(L"ResultFont", L"Segoe UI"), SetStr(L"ResultFontWeight", L"Normal"),
-                         SetStr(L"ResultFontStyle", L"Normal"), 14, false);
+    // The Alt+number hint measures 14 on Flow's real window.
+    g.fHint = MakeFormat(fam, wt, L"Normal", 14, false);
     g.fHint->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     g.fHint->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-    g.fPrevTitle = MakeFormat(SetStr(L"ResultFont", L"Segoe UI"), SetStr(L"ResultFontWeight", L"Normal"),
-                              L"Normal", 15, false);
+    g.fPrevTitle = MakeFormat(fam, wt, L"Normal", 15, false);
     g.fPrevTitle->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
     g.fPrevTitle->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-    g.fPrevSub = MakeFormat(SetStr(L"ResultSubFont", L"Segoe UI"), L"Normal", L"Normal", 12, false);
+    g.fPrevSub = MakeFormat(fam, wt, L"Normal", 12, false);
     g.fPrevSub->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
     g.fPrevSub->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, 18, 14);
 }
@@ -1537,6 +1584,11 @@ void ShowLauncher(bool selectAll) {
         // instead of jumping in halfway. The draw tools themselves were warmed when the
         // engine became ready; only a settings change rebuilds them here.
         g.shownAt = GetTickCount();
+        // Focus is taken while still hidden, so anything activation repaints is never seen.
+        if (!g.quiet) {
+            ForceForeground(g.wnd);
+            SetFocus(g.wnd);
+        }
         Render();
         DwmFlush();
         unsigned long t2 = GetTickCount();
@@ -1545,8 +1597,8 @@ void ShowLauncher(bool selectAll) {
         if (t1 - t0 > 60 || t2 - t1 > 60)
             Trace(L"slow open draw: prep %lu ms, show+draw+flush %lu ms", t1 - t0, t2 - t1);
     }
-    if (!g.quiet) {
-        ForceForeground(g.wnd);
+    if (!g.quiet && (was || GetForegroundWindow() != g.wnd)) {
+        ForceForeground(g.wnd);  // already open, or the first try lost the race: one more try
         SetFocus(g.wnd);
     }
     if (!was)
@@ -1811,6 +1863,12 @@ void LoadSettings() {
     g.blur = Wh_GetIntSetting(L"blur") != 0;
     g.peekOnSpace = Wh_GetIntSetting(L"peekOnSpace") != 0;
     g.trayIcon = Wh_GetIntSetting(L"settingsTrayIcon") != 0;
+    s = Wh_GetStringSetting(L"fontFamily");
+    g.fontFamily = s && *s ? s : L"FiraCode Nerd Font";
+    Wh_FreeStringSetting(s);
+    s = Wh_GetStringSetting(L"fontWeight");
+    g.fontWeight = s && *s ? s : L"Medium";
+    Wh_FreeStringSetting(s);
 }
 
 // What the settings window reads; written on this thread, read on the settings thread.
@@ -1827,10 +1885,10 @@ void ReloadSettingsWindow() {
     if (HWND s = haloset::g_settingsWnd) PostMessageW(s, WM_APP + 1 /* its reload message */, 0, 0);
 }
 
-void OpenHaloSettings() {
+void OpenHaloSettings(int page = -1) {
     HideLauncher();
     AllowSetForegroundWindow(ASFW_ANY);
-    haloset::OpenSettingsWindow();
+    haloset::OpenSettingsWindow(page);
 }
 
 void BeginSettingsBlock() {
@@ -1912,6 +1970,22 @@ void OnLine(const std::string& raw) {
         RegisterKeys();
         Render();
         ReloadSettingsWindow();
+    } else if (op == L"cm") {
+        g.appMenuPending = {};
+        g.appMenuPending.row = _wtoi(field(1).c_str());
+        g.appMenuPending.aumid = field(3);
+        g.appMenuPending.path = field(4);
+        g.inAppMenu = true;
+    } else if (op == L"ci") {
+        if (g.inAppMenu) g.appMenuPending.flow.push_back({field(2), field(3)});
+    } else if (op == L"cmend") {
+        g.inAppMenu = false;
+        g.appMenu = std::move(g.appMenuPending);
+        g.appMenuPending = {};
+        // A late answer (the engine was busy, the owner moved on) opens nothing.
+        if (g.appMenu.row == g.appMenuWant && GetTickCount() - g.appMenuAsked < 2500 && g.visible)
+            PostMessageW(g.wnd, WM_APP_APPMENU, 0, 0);
+        g.appMenuWant = -1;
     } else if (op == L"settings") {
         OpenHaloSettings();
     } else if (op == L"seterr") {
@@ -2002,6 +2076,8 @@ void TogglePreview() {
     Render();
 }
 
+void RequestAppMenuForSelection();
+
 bool OnKeyDown(UINT vk, UINT mods) {
     bool atEnd = g.caret == (int)g.text.size() && !HasSelection();
     bool results = g.res.view == L"results";
@@ -2045,6 +2121,12 @@ bool OnKeyDown(UINT vk, UINT mods) {
     };
     if (Matches(L"SettingWindowHotkey", vk, mods)) {
         OpenHaloSettings();
+        return true;
+    }
+    // The menu key, Shift+F10 and the context-menu key open the same menu as a right-click.
+    if (results && (Matches(L"OpenContextMenuHotkey", vk, mods) || (vk == VK_APPS && mods == 0) ||
+                    (vk == VK_F10 && mods == kShift) || (vk == VK_RETURN && mods == kShift))) {
+        RequestAppMenuForSelection();
         return true;
     }
     for (auto& e : table) {
@@ -2162,11 +2244,329 @@ int RowAt(float dipX, float dipY) {
 
 // ---------------------------------------------------------------- window procedures
 
+// Runs one of Halo's styled menus over the open launcher. The menu takes the focus, so the
+// launcher must not close for it; afterwards a click elsewhere closes Halo, anything else
+// hands the keyboard back.
+int RunLauncherMenu(const std::vector<HaloMenuItem>& items, POINT at) {
+    g.menuOpen = true;
+    KillTimer(g.wnd, kTimerHide);
+    int id = haloset::ShowMenu(g.wnd, items, &at);
+    g.menuOpen = false;
+    if (!g.visible) return id;
+    if (id == 0) {
+        POINT pt;
+        GetCursorPos(&pt);
+        RECT r;
+        GetWindowRect(g.wnd, &r);
+        bool pressed = ((GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON) | GetAsyncKeyState(VK_MBUTTON)) & 0x8001) != 0;
+        HWND fg = GetForegroundWindow();
+        DWORD pid = 0;
+        if (fg) GetWindowThreadProcessId(fg, &pid);
+        if (pressed && !PtInRect(&r, pt) && fg && pid != GetCurrentProcessId() &&
+            SetBool(L"HideWhenDeactivated", true)) {
+            HideLauncher();
+            Send({L"hide"});
+            return 0;
+        }
+    }
+    ForceForeground(g.wnd);
+    SetFocus(g.wnd);
+    Render();
+    return id;
+}
+
+// Right-click on the launcher's empty space.
+void ShowLauncherMenu(POINT at) {
+    enum { kSettings = 1, kPlugins, kRestart, kHide };
+    std::vector<HaloMenuItem> items(5);
+    items[0] = {kSettings, L"\uEB51", L"Settings", SetStr(L"SettingWindowHotkey", L"Ctrl+I")};
+    items[1] = {kPlugins, L"\uEAE6", L"Modules"};
+    items[2].separator = true;
+    items[3] = {kRestart, L"\uEB37", L"Restart the search engine"};
+    items[4] = {kHide, L"\uEAE7", L"Hide Halo", L"Esc"};
+    int id = RunLauncherMenu(items, at);
+    if (id == kSettings) {
+        OpenHaloSettings();
+    } else if (id == kPlugins) {
+        OpenHaloSettings(4 /* the Plugins page */);
+    } else if (id == kRestart) {
+        HideLauncher();
+        if (!Send({L"restartengine"})) RestartProcess(kExitRestart);
+    } else if (id == kHide) {
+        HideLauncher();
+        Send({L"hide"});
+    }
+}
+
+// ---------------------------------------------------------------- a row's right-click menu
+// Windows' own menu for the app or file (the same entries File Explorer and Start show),
+// with fitting icons, then the plugin's actions Windows has no entry for, then pin to taskbar
+// through Seamless Taskbar (Windows takes that one from File Explorer's process only).
+
+constexpr UINT kShellFirst = 1, kShellLast = 0x6FFF;   // Windows' entries
+constexpr int kFlowFirst = 0x7000;                    // the plugin's actions, by position
+constexpr int kPinTaskbar = 0x7F00, kUnpinTaskbar = 0x7F01;
+
+// Icons from FiraCode Nerd Font, picked by the entry's verb first, then by its words.
+std::wstring AppMenuGlyph(const std::wstring& verbIn, const std::wstring& labelIn) {
+    std::wstring verb = verbIn, label = labelIn;
+    for (auto& c : verb) c = (wchar_t)towlower(c);
+    for (auto& c : label) c = (wchar_t)towlower(c);
+    static const struct { const wchar_t* key; const wchar_t* glyph; } verbs[] = {
+        {L"runasuser", L"\uEB99"}, {L"runas", L"\uEB53"}, {L"opencontaining", L"\uEAF7"},
+        {L"openfilelocation", L"\uEAF7"}, {L"properties", L"\uEA74"}, {L"delete", L"\uEA81"},
+        {L"cut", L"\U000F0190"}, {L"copyaspath", L"\uEAC0"}, {L"copy", L"\uEBCC"}, {L"paste", L"\U000F0192"},
+        {L"rename", L"\uEA73"}, {L"link", L"\uEAEE"}, {L"edit", L"\uEA73"}, {L"find", L"\uEA6D"},
+        {L"unpin", L"\U000F0404"}, {L"pin", L"\U000F0403"}, {L"uninstall", L"\uEA81"},
+        {L"share", L"\U000F0496"}, {L"openas", L"\uEB7F"}, {L"openwith", L"\uEB7F"}, {L"sendto", L"\uEC0F"},
+        {L"compress", L"\U000F05C4"}, {L"powershell", L"\uEBC7"}, {L"cmd", L"\uEA85"}, {L"terminal", L"\uEA85"},
+        {L"explore", L"\uEA83"}, {L"opennewwindow", L"\uEB7F"}, {L"open", L"\uEB14"},
+    };
+    if (!verb.empty())
+        for (auto& v : verbs)
+            if (verb.find(v.key) != std::wstring::npos) return v.glyph;
+    static const struct { const wchar_t* key; const wchar_t* glyph; } words[] = {
+        {L"administrator", L"\uEB53"}, {L"admin", L"\uEB53"}, {L"different user", L"\uEB99"},
+        {L"file location", L"\uEAF7"}, {L"containing folder", L"\uEAF7"}, {L"open folder", L"\uEAF7"},
+        {L"properties", L"\uEA74"}, {L"uninstall", L"\uEA81"}, {L"delete", L"\uEA81"}, {L"unpin", L"\U000F0404"},
+        {L"pin", L"\U000F0403"}, {L"copy as path", L"\uEAC0"}, {L"copy path", L"\uEAC0"}, {L"copy", L"\uEBCC"},
+        {L"cut", L"\U000F0190"}, {L"paste", L"\U000F0192"}, {L"rename", L"\uEA73"}, {L"shortcut", L"\uEAEE"},
+        {L"share", L"\U000F0496"}, {L"send to", L"\uEC0F"}, {L"open with", L"\uEB7F"}, {L"zip", L"\U000F05C4"},
+        {L"compress", L"\U000F05C4"}, {L"archive", L"\U000F05C4"}, {L"extract", L"\U000F05C4"}, {L"7-zip", L"\U000F05C4"},
+        {L"powershell", L"\uEBC7"}, {L"terminal", L"\uEA85"}, {L"command", L"\uEA85"}, {L"visual studio", L"\uEAC4"},
+        {L"code", L"\uEAC4"}, {L"notepad", L"\uEA73"}, {L"edit", L"\uEA73"}, {L"scan", L"\uEB53"},
+        {L"defender", L"\uEB53"}, {L"security", L"\uEB53"}, {L"hide", L"\uEAE7"}, {L"disable", L"\uEAE7"},
+        {L"setting", L"\uEB51"}, {L"option", L"\uEB51"}, {L"search", L"\uEA6D"}, {L"find", L"\uEA6D"},
+        {L"history", L"\uEA82"}, {L"top", L"\uEB59"}, {L"favourite", L"\uEB59"}, {L"favorite", L"\uEB59"},
+        {L"info", L"\uEA74"}, {L"about", L"\uEA74"}, {L"refresh", L"\uEB37"}, {L"reload", L"\uEB37"},
+        {L"web", L"\uEB01"}, {L"browser", L"\uEB01"}, {L"url", L"\uEB01"}, {L"link", L"\uEB15"},
+        {L"repair", L"\uEB6D"}, {L"reset", L"\uEB6D"}, {L"new window", L"\uEB7F"}, {L"folder", L"\uEA83"},
+        {L"open", L"\uEB14"}, {L"run", L"\uEB2C"}, {L"start", L"\uEB2C"}, {L"file", L"\uEA7B"},
+    };
+    for (auto& w : words)
+        if (label.find(w.key) != std::wstring::npos) return w.glyph;
+    return L"\uEAE6";  // an add-on's entry with no better match
+}
+
+// "Open &file location\tCtrl+O" -> label "Open file location", hint "Ctrl+O".
+void CleanMenuText(const wchar_t* raw, std::wstring& label, std::wstring& hint) {
+    std::wstring s = raw;
+    size_t tab = s.find(L'\t');
+    if (tab != std::wstring::npos) {
+        hint = s.substr(tab + 1);
+        s.resize(tab);
+    }
+    label.clear();
+    for (size_t i = 0; i < s.size(); i++) {
+        if (s[i] == L'&') {
+            if (i + 1 < s.size() && s[i + 1] == L'&') { label += L'&'; i++; }
+            continue;
+        }
+        label += s[i];
+    }
+    // "(&F)" style keys some apps add after the words.
+    if (label.size() > 3 && label.back() == L')' && label[label.size() - 3] == L'(') label.resize(label.size() - 3);
+    while (!label.empty() && iswspace(label.back())) label.pop_back();
+}
+
+std::wstring MenuKey(std::wstring s) {
+    std::wstring k;
+    for (wchar_t c : s)
+        if (iswalnum(c)) k += (wchar_t)towlower(c);
+    if (k == L"openfilelocation") k = L"opencontainingfolder";
+    return k;
+}
+
+void ShellMenuToItems(IContextMenu* cm, IContextMenu3* cm3, IContextMenu2* cm2, HMENU menu,
+                      std::vector<HaloMenuItem>& out, int depth) {
+    int count = GetMenuItemCount(menu);
+    for (int i = 0; i < count; i++) {
+        wchar_t text[260] = {};
+        MENUITEMINFOW mi{sizeof(mi)};
+        mi.fMask = MIIM_FTYPE | MIIM_ID | MIIM_SUBMENU | MIIM_STATE | MIIM_STRING;
+        mi.dwTypeData = text;
+        mi.cch = ARRAYSIZE(text) - 1;
+        if (!GetMenuItemInfoW(menu, i, TRUE, &mi)) continue;
+        if (mi.fType & MFT_SEPARATOR) {
+            if (!out.empty() && !out.back().separator) out.push_back(HaloMenuItem{.separator = true});
+            continue;
+        }
+        if (mi.fType & MFT_OWNERDRAW) text[0] = 0;  // the text belongs to the extension's drawing
+        HaloMenuItem item;
+        CleanMenuText(text, item.label, item.hint);
+        if (item.label.empty()) continue;
+        std::wstring verb;
+        if (!mi.hSubMenu && mi.wID >= kShellFirst && mi.wID <= kShellLast) {
+            wchar_t v[128] = {};
+            if (SUCCEEDED(cm->GetCommandString(mi.wID - kShellFirst, GCS_VERBW, nullptr, (LPSTR)v, ARRAYSIZE(v)))) verb = v;
+            // Windows takes these from File Explorer only; Halo offers them through Seamless Taskbar.
+            if (_wcsicmp(verb.c_str(), L"taskbarpin") == 0 || _wcsicmp(verb.c_str(), L"taskbarunpin") == 0) continue;
+        }
+        item.glyph = AppMenuGlyph(verb, item.label);
+        item.disabled = (mi.fState & MFS_DISABLED) != 0;
+        item.checked = (mi.fState & MFS_CHECKED) != 0;
+        if (mi.hSubMenu) {
+            if (depth >= 2) continue;
+            // "Send to" and "Open with" fill themselves when they are about to open.
+            if (cm3) cm3->HandleMenuMsg2(WM_INITMENUPOPUP, (WPARAM)mi.hSubMenu, i, nullptr);
+            else if (cm2) cm2->HandleMenuMsg(WM_INITMENUPOPUP, (WPARAM)mi.hSubMenu, i);
+            ShellMenuToItems(cm, cm3, cm2, mi.hSubMenu, item.sub, depth + 1);
+            while (!item.sub.empty() && item.sub.back().separator) item.sub.pop_back();
+            if (item.sub.empty()) continue;
+        } else {
+            item.id = (int)mi.wID;
+        }
+        out.push_back(std::move(item));
+    }
+}
+
+// Seamless Taskbar answers from inside File Explorer: 2 pinned, 1 not pinned, 0 not possible.
+LRESULT AskTaskbarPin(DWORD code, const std::wstring& name) {
+    HWND bridge = FindWindowExW(HWND_MESSAGE, nullptr, L"SeamlessTaskbarPinBridge", nullptr);
+    if (!bridge || name.empty()) return 0;
+    COPYDATASTRUCT cd{code, (DWORD)(name.size() * sizeof(wchar_t)), (void*)name.data()};
+    DWORD_PTR result = 0;
+    if (!SendMessageTimeoutW(bridge, WM_COPYDATA, (WPARAM)g.wnd, (LPARAM)&cd, SMTO_ABORTIFHUNG | SMTO_BLOCK, 1500, &result))
+        return 0;
+    return (LRESULT)result;
+}
+constexpr DWORD kPinQuery = 0x51504E53, kPinDo = 0x50504E53, kPinUndo = 0x55504E53;
+
+void RequestAppMenu(int index, POINT at) {
+    g.appMenuWant = index;
+    g.appMenuAsked = GetTickCount();
+    g.appMenuAt = at;
+    Send({L"sel", std::to_wstring(index)});
+    if (!Send({L"ctxmenu", std::to_wstring(index)})) g.appMenuWant = -1;
+}
+
+// From the keyboard: the menu opens under the selected row.
+void RequestAppMenuForSelection() {
+    if (g.res.view != L"results" || g.res.items.empty()) return;
+    int sel = std::clamp(g.res.sel, g.res.top, g.res.top + (int)g.res.items.size() - 1);
+    int vis = sel - g.res.top;
+    POINT at{(LONG)((kEdge + 56) * g.lay.s), (LONG)((kEdge + g.lay.listY + 10 + (vis + 1) * g.lay.rowH) * g.lay.s)};
+    ClientToScreen(g.wnd, &at);
+    RequestAppMenu(g.res.items[vis].index, at);
+}
+
+void ShowAppMenu() {
+    AppMenuData d = g.appMenu;
+    DWORD t0 = GetTickCount();
+    std::wstring name = !d.aumid.empty() ? L"shell:AppsFolder\\" + d.aumid : d.path;
+
+    ComPtr<IContextMenu> cm;
+    ComPtr<IContextMenu2> cm2;
+    ComPtr<IContextMenu3> cm3;
+    HMENU menu = nullptr;
+    std::vector<HaloMenuItem> items;
+    if (!name.empty()) {
+        PIDLIST_ABSOLUTE pidl = nullptr;
+        if (SUCCEEDED(SHParseDisplayName(name.c_str(), nullptr, &pidl, 0, nullptr)) && pidl) {
+            ComPtr<IShellFolder> parent;
+            PCUITEMID_CHILD child = nullptr;
+            if (SUCCEEDED(SHBindToParent(pidl, IID_PPV_ARGS(&parent), &child)) &&
+                SUCCEEDED(parent->GetUIObjectOf(g.wnd, 1, &child, IID_IContextMenu, nullptr, (void**)cm.GetAddressOf()))) {
+                cm.As(&cm3);
+                cm.As(&cm2);
+                menu = CreatePopupMenu();
+                if (menu && SUCCEEDED(cm->QueryContextMenu(menu, 0, kShellFirst, kShellLast, CMF_NORMAL)))
+                    ShellMenuToItems(cm.Get(), cm3.Get(), cm2.Get(), menu, items, 0);
+            }
+            CoTaskMemFree(pidl);
+        }
+    }
+    while (!items.empty() && items.back().separator) items.pop_back();
+
+    // Pin to taskbar sits beside Windows' other pin entries, or after the first group.
+    bool pinnable = !d.aumid.empty() || (!d.path.empty() && (PathMatchSpecW(d.path.c_str(), L"*.lnk") || PathMatchSpecW(d.path.c_str(), L"*.exe")));
+    if (pinnable) {
+        LRESULT state = AskTaskbarPin(kPinQuery, name);
+        if (state == 1 || state == 2) {
+            HaloMenuItem pin;
+            pin.id = state == 2 ? kUnpinTaskbar : kPinTaskbar;
+            pin.label = state == 2 ? L"Unpin from taskbar" : L"Pin to taskbar";
+            pin.glyph = state == 2 ? L"\U000F0404" : L"\U000F0403";
+            size_t at = items.size();
+            for (size_t i = 0; i < items.size(); i++)
+                if (!items[i].separator && MenuKey(items[i].label).find(L"start") != std::wstring::npos &&
+                    MenuKey(items[i].label).find(L"pin") != std::wstring::npos) at = i + 1;
+            if (at == items.size())
+                for (size_t i = 0; i < items.size(); i++)
+                    if (items[i].separator) { at = i; break; }
+            items.insert(items.begin() + at, pin);
+        }
+    }
+
+    // The plugin's actions Windows has no entry for.
+    std::set<std::wstring> have;
+    for (auto& it : items)
+        if (!it.separator) have.insert(MenuKey(it.label));
+    std::vector<HaloMenuItem> extra;
+    for (size_t n = 0; n < d.flow.size(); n++) {
+        if (d.flow[n].title.empty() || have.count(MenuKey(d.flow[n].title))) continue;
+        HaloMenuItem it;
+        it.id = kFlowFirst + (int)n;
+        it.label = d.flow[n].title;
+        it.glyph = AppMenuGlyph(L"", d.flow[n].title);
+        extra.push_back(std::move(it));
+    }
+    if (!extra.empty()) {
+        if (!items.empty()) items.push_back(HaloMenuItem{.separator = true});
+        for (auto& e : extra) items.push_back(std::move(e));
+    }
+    Wh_Log(L"row menu: %d entries in %u ms (Windows menu %s, %d plugin actions)", (int)items.size(),
+           GetTickCount() - t0, cm ? L"yes" : L"no", (int)extra.size());
+    if (items.empty()) {
+        if (menu) DestroyMenu(menu);
+        return;
+    }
+
+    int id = RunLauncherMenu(items, g.appMenuAt);
+    if (id >= (int)kShellFirst && id <= (int)kShellLast && cm) {
+        HideLauncher();
+        Send({L"hide"});
+        AllowSetForegroundWindow(ASFW_ANY);
+        CMINVOKECOMMANDINFOEX ici{sizeof(ici)};
+        ici.fMask = CMIC_MASK_UNICODE | CMIC_MASK_PTINVOKE;
+        ici.hwnd = g.wnd;
+        ici.lpVerb = MAKEINTRESOURCEA(id - kShellFirst);
+        ici.lpVerbW = MAKEINTRESOURCEW(id - kShellFirst);
+        ici.nShow = SW_SHOWNORMAL;
+        ici.ptInvoke = g.appMenuAt;
+        HRESULT hr = cm->InvokeCommand((CMINVOKECOMMANDINFO*)&ici);
+        Wh_Log(L"row menu: Windows entry %d -> 0x%08X", id - (int)kShellFirst, (unsigned)hr);
+    } else if (id >= kFlowFirst && id < kFlowFirst + (int)d.flow.size()) {
+        Send({L"ctxrun", std::to_wstring(id - kFlowFirst)});
+    } else if (id == kPinTaskbar || id == kUnpinTaskbar) {
+        LRESULT ok = AskTaskbarPin(id == kPinTaskbar ? kPinDo : kPinUndo, name);
+        Wh_Log(L"row menu: taskbar %s -> %d", id == kPinTaskbar ? L"pin" : L"unpin", (int)ok);
+    }
+    if (menu) DestroyMenu(menu);
+}
+
 LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+        case WM_APP_APPMENU:
+            ShowAppMenu();
+            return 0;
         case WM_NCCALCSIZE:
-            if (wp) return 0;  // no frame: the whole window is ours
-            break;
+            return 0;
+        // Windows still thinks this window was born with a caption (every overlapped window is),
+        // so the stock handlers paint an old light-blue title strip over the top of the glass
+        // when it gains focus or its name changes. The window has no frame to paint.
+        case WM_NCACTIVATE:
+            return DefWindowProcW(hwnd, msg, wp, -1);  // keep the focus bookkeeping, skip the repaint
+        case WM_NCPAINT:
+            return 0;
+        case WM_SETTEXT:
+        case WM_SETICON: {
+            LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+            SetWindowLongPtrW(hwnd, GWL_STYLE, style & ~WS_VISIBLE);  // store it, draw nothing
+            LRESULT r = DefWindowProcW(hwnd, msg, wp, lp);
+            SetWindowLongPtrW(hwnd, GWL_STYLE, style);
+            return r;
+        }
         case WM_ERASEBKGND:
             return 1;  // every frame is drawn whole, an erase would only flash
         case WM_PAINT:
@@ -2208,7 +2608,7 @@ LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (!g.animating && !g.busy) Render();
             } else if (wp == kTimerHide) {
                 HWND fg = GetForegroundWindow();
-                if (!g.visible || fg == hwnd) {
+                if (!g.visible || fg == hwnd || g.menuOpen) {
                     KillTimer(hwnd, kTimerHide);
                 } else if (IsCaptureTool(fg) || (!fg && g_hideNoOwnerChecks++ < 12)) {
                     // Look again once the capture closes. With no window in front at all
@@ -2231,7 +2631,7 @@ LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 wchar_t fgCls[64] = L"";
                 GetClassNameW(GetForegroundWindow(), fgCls, 64);
                 Trace(L"lost focus to '%s' (foreground '%s')", cls, fgCls);
-                if (!toPeek && SetBool(L"HideWhenDeactivated", true)) {
+                if (!toPeek && !g.menuOpen && SetBool(L"HideWhenDeactivated", true)) {
                     // Hide a moment later, as Flow does (100 ms), and not at all while a screen
                     // capture tool is in front: ShareX and the Snipping Tool list the windows on
                     // screen after their own window opens, and a hidden Halo is not one of them.
@@ -2293,9 +2693,12 @@ LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         case WM_RBUTTONUP: {
             int row = RowAt(GET_X_LPARAM(lp) / g.lay.s - kEdge, GET_Y_LPARAM(lp) / g.lay.s - kEdge);
+            POINT at{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            ClientToScreen(hwnd, &at);
             if (row >= 0 && g.res.view == L"results") {
-                Send({L"sel", std::to_wstring(g.res.items[row].index)});
-                Cmd(L"LoadContextMenu");
+                RequestAppMenu(g.res.items[row].index, at);
+            } else if (row < 0) {
+                ShowLauncherMenu(at);
             }
             return 0;
         }
@@ -2527,6 +2930,7 @@ LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_APP_SETTINGS:
             LoadSettings();
+            ResetFormats();
             UpdateTray(false);
             RegisterKeys();
             ApplyBackdrop();
@@ -3886,6 +4290,8 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Number, L"flow:WindowSize", L"Width", L"500 to 1600 (Suggested: 780).", L"780", {}, 500, 1600, 3, L"Window"},
 {K::Number, L"flow:WindowHeightSize", L"Search box height", L"30 to 80 (Suggested: 42).", L"42", {}, 30, 80, 3, L"Window"},
 {K::Number, L"flow:ItemHeightSize", L"Row height", L"40 to 90 (Suggested: 58).", L"58", {}, 40, 90, 3, L"Window"},
+{K::Text, L"fontFamily", L"Font", L"The font for all of Halo's words: the search box, results, clock, hints and preview. If it is not installed, Segoe UI is used at the same size.", L"FiraCode Nerd Font", {}, 0, 100, 3, L"Text"},
+{K::Choice, L"fontWeight", L"Font weight", L"How thick the letters are.", L"Medium", {{L"Light", L"Light"}, {L"Normal", L"Regular"}, {L"Medium", L"Medium"}, {L"SemiBold", L"Semi-bold"}, {L"Bold", L"Bold"}}, 0, 100, 3, L"Text"},
 {K::Number, L"flow:QueryBoxFontSize", L"Search text size", L"12 to 32 (Suggested: 16).", L"16", {}, 12, 32, 3, L"Text"},
 {K::Number, L"flow:ResultItemFontSize", L"Result title size", L"10 to 28 (Suggested: 16).", L"16", {}, 10, 28, 3, L"Text"},
 {K::Number, L"flow:ResultSubItemFontSize", L"Result detail size", L"8 to 24 (Suggested: 13).", L"13", {}, 8, 24, 3, L"Text"},
@@ -4133,13 +4539,10 @@ static bool Set_FamilyExists(const std::wstring& name) {
 // The font setting, or its Nerd Font build ("Fira Code" is installed as
 // "FiraCode Nerd Font"), or Segoe UI.
 static std::wstring Set_ResolveFamily() {
-    if (Set_FamilyExists(std::wstring(L"FiraCode Nerd Font"))) return std::wstring(L"FiraCode Nerd Font");
-    std::wstring joined;
-    for (WCHAR c : std::wstring(L"FiraCode Nerd Font"))
-        if (c != L' ') joined += c;
-    for (const std::wstring& face : {joined + L" Nerd Font", std::wstring(L"FiraCode Nerd Font") + L" Nerd Font", joined})
-        if (Set_FamilyExists(face)) return face;
-    return L"Segoe UI";
+    PCWSTR setting = Wh_GetStringSetting(L"fontFamily");
+    std::wstring family = setting && *setting ? setting : L"FiraCode Nerd Font";
+    Wh_FreeStringSetting(setting);
+    return Set_FamilyExists(family) ? family : L"Segoe UI";
 }
 
 static float Set_TextW(IDWriteTextFormat* fmt, const std::wstring& text);
@@ -4163,7 +4566,6 @@ static SetCom<IDWriteTextFormat> Set_Fmt(const std::wstring& family, float size,
     return f;
 }
 
-// std::wstring(L"FiraCode Nerd Font") at 500; emphasis is one step heavier, never past bold.
 static float Set_MenuCornerRadius() {
     float radius = 8.0f;
     HKEY key;
@@ -4227,20 +4629,9 @@ static bool Set_MenuFormats(SetMenuSession& s) {
         return false;
     if (!s.dw && FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)s.dw.put())))
         return false;
-    std::wstring family = L"Segoe UI";
-    SetCom<IDWriteFontCollection> sys;
-    if (SUCCEEDED(s.dw->GetSystemFontCollection(sys.put(), FALSE))) {
-        for (PCWSTR face : {L"FiraCode Nerd Font", L"FiraCodeNerdFont", L"FiraCode Nerd Font Mono"}) {
-            UINT32 index = 0;
-            BOOL exists = FALSE;
-            if (SUCCEEDED(sys->FindFamilyName(face, &index, &exists)) && exists) {
-                family = face;
-                break;
-            }
-        }
-    }
-    auto make = [&](float size, DWRITE_TEXT_ALIGNMENT align, SetCom<IDWriteTextFormat>& out) {
-        if (FAILED(s.dw->CreateTextFormat(family.c_str(), nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+    std::wstring family = Set_ResolveFamily();
+    auto make = [&](float size, DWRITE_TEXT_ALIGNMENT align, SetCom<IDWriteTextFormat>& out, bool icon = false) {
+        if (FAILED(s.dw->CreateTextFormat((icon ? L"FiraCode Nerd Font" : family.c_str()), nullptr, icon ? DWRITE_FONT_WEIGHT_NORMAL : WeightOf(g.fontWeight), DWRITE_FONT_STYLE_NORMAL,
                                           DWRITE_FONT_STRETCH_NORMAL, size, L"en-us", out.put())))
             return false;
         out->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -4253,7 +4644,7 @@ static bool Set_MenuFormats(SetMenuSession& s) {
         return true;
     };
     return make(13.5f, DWRITE_TEXT_ALIGNMENT_LEADING, s.fText) && make(12.5f, DWRITE_TEXT_ALIGNMENT_TRAILING, s.fHint) &&
-           make(15, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyph) && make(12, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyphS);
+           make(15, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyph, true) && make(12, DWRITE_TEXT_ALIGNMENT_CENTER, s.fGlyphS, true);
 }
 
 static void Set_MenuLayout(SetMenuSession& s, SetMenuLevel& lv) {
@@ -4737,10 +5128,11 @@ static int Set_TrayMenu(HWND owner, const std::vector<SetMenuItem>& items, const
     return result;
 }
 
+// std::wstring(L"FiraCode Nerd Font") at 500; emphasis is one step heavier, never past bold.
 static void Set_MakeFormats(SetWindow& w) {
     w.family = Set_ResolveFamily();
     w.iconFamily = Set_FamilyExists(L"Segoe Fluent Icons") ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
-    int base = std::clamp(500, 100, 900);
+    int base = (int)WeightOf(g.fontWeight);
     int bold = std::max(base, std::min(700, base + 100));
     const auto L_ = DWRITE_TEXT_ALIGNMENT_LEADING, C_ = DWRITE_TEXT_ALIGNMENT_CENTER;
     w.fLabel = Set_Fmt(w.family, 16, base, true);
@@ -7142,6 +7534,7 @@ static void Set_RememberRect(SetWindow& w) {
     GetWindowRect(w.hwnd, &w.normalRect);
 }
 
+static void Set_TakeStartPage();
 static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     SetWindow* w = g_setWin && g_setWin->hwnd == hwnd ? g_setWin.get() : nullptr;
     if (!w) return DefWindowProcW(hwnd, msg, wParam, lParam);
@@ -7158,7 +7551,7 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 Set_ApplyFrame(*w);
             }
             return 0;
-        case WM_APP_SETTINGS_ACTIVATE: ShowWindow(hwnd, SW_RESTORE); ForceForeground(hwnd); return 0;
+        case WM_APP_SETTINGS_ACTIVATE: ShowWindow(hwnd, SW_RESTORE); Set_TakeStartPage(); ForceForeground(hwnd); return 0;
         case WM_NCCALCSIZE:
             // No system title bar: keep the side and bottom frames, the client starts at the top edge.
             if (wParam && !w->render && !w->nativeTitle) {
@@ -7678,16 +8071,24 @@ void Settings_Close() {
 bool Settings_IsOpen() { return g_setWin && g_setWin->hwnd && !g_setWin->render; }
 
 
+// The page the next open or activation shows (-1: wherever it was).
+std::atomic<int> g_settingsStartPage{-1};
+static void Set_TakeStartPage() {
+    int page = g_settingsStartPage.exchange(-1);
+    if (page >= 0 && g_setWin) Set_GoPage(*g_setWin, page);
+}
 DWORD WINAPI SettingsThread(void*) {
  SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
  CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
  Settings_Open();
  if (g_setWin) g_settingsWnd=g_setWin->hwnd;
+ Set_TakeStartPage();
  MSG msg;
  while (g_settingsWnd && GetMessageW(&msg,nullptr,0,0)>0) { TranslateMessage(&msg); DispatchMessageW(&msg); }
  Settings_Close(); UnregisterClassW(kSettingsClass,(HINSTANCE)&__ImageBase); Set_ReleaseFactories(); CoUninitialize(); return 0;
 }
-void OpenSettingsWindow() {
+void OpenSettingsWindow(int page) {
+ g_settingsStartPage=page;
  if (HWND hwnd=g_settingsWnd) { PostMessageW(hwnd,WM_APP_SETTINGS_ACTIVATE,0,0); return; }
  if(g_settingsThread) { if(WaitForSingleObject(g_settingsThread,0)==WAIT_TIMEOUT) return; CloseHandle(g_settingsThread); }
  g_settingsStop=false; g_settingsThread=CreateThread(nullptr,0,SettingsThread,nullptr,0,nullptr);
@@ -7698,11 +8099,25 @@ void CloseSettingsWindow() {
  if(g_settingsThread) { WaitForSingleObject(g_settingsThread,15000); CloseHandle(g_settingsThread); g_settingsThread=nullptr; }
 }
 
+// Halo's own menus (empty-area and result right-click) in the engine's look. Core builds
+// plain rows; they become the engine's rows here, submenus included.
+static SetMenuItem Set_FromHalo(const HaloMenuItem& h) {
+    if (h.separator) return Set_MenuSep();
+    SetMenuItem m = Set_MenuRow(h.id, h.glyph.c_str(), h.label.c_str(), h.checked, h.disabled, h.hint.c_str());
+    for (const auto& s : h.sub) m.sub.push_back(Set_FromHalo(s));
+    return m;
+}
+int ShowMenu(HWND owner, const std::vector<HaloMenuItem>& items, const POINT* at) {
+    std::vector<SetMenuItem> rows;
+    for (const auto& h : items) rows.push_back(Set_FromHalo(h));
+    return Set_TrayMenu(owner, rows, at);
+}
+
 // The tray menu: the engine's own menu (Set_TrayMenu). Ids match the tray code's enum.
 int ShowTrayMenu(HWND owner, const POINT* at) {
-    return Set_TrayMenu(owner, {Set_MenuRow(1, L"", L"Open Halo Launcher"),
-                                Set_MenuRow(2, L"", L"Settings"),
+    return Set_TrayMenu(owner, {Set_MenuRow(1, L"\uEB44", L"Open Halo Launcher"),
+                                Set_MenuRow(2, L"\uEB51", L"Settings"),
                                 Set_MenuSep(),
-                                Set_MenuRow(3, L"", L"Restart its search engine")}, at);
+                                Set_MenuRow(3, L"\uEB37", L"Restart its search engine")}, at);
 }
 }  // namespace haloset
