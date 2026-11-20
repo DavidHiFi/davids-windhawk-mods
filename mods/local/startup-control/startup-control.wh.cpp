@@ -2,7 +2,7 @@
 // @id startup-control
 // @name Startup Control
 // @description Manage startup apps, scheduled tasks and Windows startup locations.
-// @version 0.1.1
+// @version 0.1.2
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods
@@ -2590,7 +2590,7 @@ static void Set_MakeFormats(SetWindow& w) {
     const float railW = kSetRailMin - 90 - 10;
     for (float size = 18; size >= 15.5f; size -= 0.5f) {
         w.fRailName = Set_Fmt(w.family, size, bold, false, L_, true);
-        if (w.fRailName && Set_TextW(w.fRailName.get(), L"Startup") <= railW) break;
+        if (w.fRailName && Set_TextW(w.fRailName.get(), L"Control") <= railW) break;
     }
 }
 
@@ -3285,8 +3285,8 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
         float my = (tb.top + tb.bottom) / 2;
         Set_DrawMark(p, w.fIcon.get(), {d.left + 56, my - 13, d.left + 82, my + 13}, textA);
     }
-    p.Text(w.fRailName.get(), L"Seamless", {d.left + 90, d.top + 9, d.left + w.railW - 10, d.top + 33}, mocha::text, textA);
-    p.Text(w.fRailName.get(), L"Startup", {d.left + 90, d.top + 32, d.left + w.railW - 10, d.top + 56}, mocha::text, textA);
+    p.Text(w.fRailName.get(), L"Startup", {d.left + 90, d.top + 9, d.left + w.railW - 10, d.top + 33}, mocha::text, textA);
+    p.Text(w.fRailName.get(), L"Control", {d.left + 90, d.top + 32, d.left + w.railW - 10, d.top + 56}, mocha::text, textA);
     for (int i = 0; i < kSetPageCount; i++) {
         D2D1_RECT_F r = Set_RailRect(w, i);
         if (i == kSetAboutPage) {
@@ -5219,11 +5219,15 @@ static bool SC_Toggleable(const sc::Entry& e) {
     return e.kind == sc::Kind::Registry || e.kind == sc::Kind::Shortcut || e.kind == sc::Kind::Task ||
            e.kind == sc::Kind::Service || e.kind == sc::Kind::Driver || e.kind == sc::Kind::Device;
 }
-static std::wstring SC_Where(const sc::Entry& e) {
+static std::wstring SC_WhereRaw(const sc::Entry& e) {
     if (e.kind == sc::Kind::Task) return e.target.empty() ? e.source : e.target;
     if (!e.command.empty()) return e.command;
     if (!e.target.empty()) return e.target;
     return e.source;
+}
+// The 32-bit registry copy reads like a duplicate unless it says which one it is.
+static std::wstring SC_Where(const sc::Entry& e) {
+    return e.view == KEY_WOW64_32KEY ? L"32-bit · " + SC_WhereRaw(e) : SC_WhereRaw(e);
 }
 static PCWSTR SC_ModeName(DWORD mode) {
     static const PCWSTR names[] = {L"At boot", L"With Windows", L"Automatic", L"When needed", L"Disabled"};
@@ -5659,7 +5663,7 @@ static void SC_DrawRow(SetPaint& p, SetWindow& w, const SC_Item& it, float hov) 
     D2D1_RECT_F icon{r.left + 12, mid - 16, r.left + 44, mid + 16};
     p.Round(icon, 9, mocha::surface0, 0.8f);
     p.Glyph(w.fIcon.get(), SC_Glyph(e), {icon.left, icon.top + 1, icon.right, icon.bottom}, e.enabled ? mocha::blue : mocha::overlay1);
-    float right = r.right - 84;
+    float right = r.right - (SC_Toggleable(e) ? 84 : 112);
     if (e.missing) {
         D2D1_RECT_F badge{right - 92, mid - 11, right - 8, mid + 11};
         p.Round(badge, 11, mocha::peach, 0.16f);
@@ -5672,8 +5676,8 @@ static void SC_DrawRow(SetPaint& p, SetWindow& w, const SC_Item& it, float hov) 
     if (SC_Toggleable(e)) {
         SC_DrawSwitch(p, {r.right - 56, mid - 11, r.right - 16, mid + 11}, SC_KnobOf(e), hov, g_sc.want.count(e.id) > 0);
     } else {
-        p.Glyph(w.fIconS.get(), 0xE72E, {r.right - 74, r.top, r.right - 58, r.bottom}, mocha::overlay1);
-        p.Text(g_sc.fSub.get(), L"View only", {r.right - 56, r.top, r.right - 8, r.bottom}, mocha::overlay1);
+        p.Glyph(w.fIconS.get(), 0xE72E, {r.right - 104, r.top, r.right - 88, r.bottom}, mocha::overlay1);
+        p.Text(g_sc.fSub.get(), L"View only", {r.right - 84, r.top, r.right - 12, r.bottom}, mocha::overlay1);
     }
 }
 static void SC_DrawCardItem(SetPaint& p, SetWindow& w, const SC_Item& it) {
