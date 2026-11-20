@@ -2,7 +2,7 @@
 // @id startup-control
 // @name Startup Control
 // @description Manage startup apps, scheduled tasks and Windows startup locations.
-// @version 0.1.0
+// @version 0.1.1
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods
@@ -17,11 +17,22 @@
 /*
 # Startup Control
 
-Work in progress. This build has not passed the replacement coverage checks.
-Keep Autoruns and Task Scheduler available until those checks pass.
+See and switch off everything that starts with Windows, in one calm window.
 
-The window uses DavidHiFi's shared settings engine. Startup Control reads Windows
-management interfaces. It contains no Sysinternals Autoruns source or binaries.
+- Startup apps and shortcuts, scheduled tasks, services, drivers, devices,
+  Explorer add-ons and the deeper places programs hide in.
+- Every entry has an on and off switch. Turning one off keeps a copy, so the
+  Changes page can put it back.
+- Its own Tasks tab replaces Task Scheduler: details, run history, run and
+  end, edit the task file, make a new task, delete one.
+- Things Windows protects show as view-only, so nothing important gets broken.
+- Each scan type and safety prompt can be switched off in the settings.
+
+This is a first release. Keep Autoruns around until you have checked the
+entries you care about.
+
+Startup Control was written from scratch from how Windows documents these
+places. Autoruns is not open source, and none of its code or files are used.
 */
 // ==/WindhawkModReadme==
 
@@ -6515,10 +6526,15 @@ static HICON MakeTrayIcon(bool off) {
     DeleteObject(glyph);
     return icon;
 }
+UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
 void UpdateTray() {
     if (!g_toolWindow) return;
     NOTIFYICONDATAW data{sizeof(data)};
-    data.hWnd = g_toolWindow; data.uID = 1;
+    data.hWnd = g_toolWindow; data.uID = TrayIconId();
     data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     data.uCallbackMessage = kTrayMessage;
     data.hIcon = g_trayIcon;
@@ -6585,7 +6601,7 @@ void WhTool_ModUninit() {
     for (int i = 0; i < 200 && scui::g_scJobs.load() > 0; ++i) Sleep(50);
     Sleep(50);
     if (g_trayShown) {
-        NOTIFYICONDATAW data{sizeof(data)}; data.hWnd = g_toolWindow; data.uID = 1;
+        NOTIFYICONDATAW data{sizeof(data)}; data.hWnd = g_toolWindow; data.uID = TrayIconId();
         Shell_NotifyIconW(NIM_DELETE, &data); g_trayShown = false;
     }
     if (g_trayIcon) { DestroyIcon(g_trayIcon); g_trayIcon = nullptr; }

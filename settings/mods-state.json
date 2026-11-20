@@ -1285,6 +1285,6 @@
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "",
-    "version": "0.1.0"
+    "version": "0.1.1"
   }
 }
