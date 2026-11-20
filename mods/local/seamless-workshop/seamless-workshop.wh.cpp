@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.0.0
+// @version         1.0.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -367,10 +367,10 @@ struct SetField {
 static std::vector<SetField> Set_MakeFields() {
     using K = SetField;
     return {
-{K::Check, L"settingsGlass", L"Blurred window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 5, L"Window"},
-{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 5, L"Window"},
-{K::Check, L"animations", L"Animations", L"Off, everything snaps instantly: page changes, hover fades and switches.", L"1", {}, 0, 100, 5, L"Window"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"Keeps Seamless Workshop in the system tray. Closing the window then hides it there. Click the icon to open it, right-click it to quit.", L"1", {}, 0, 100, 5, L"Tray"}
+{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 6, L"Settings window"},
+{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 6, L"Settings window"},
+{K::Check, L"animations", L"Animations", L"Off, everything snaps instantly: page changes, hover fades and switches.", L"1", {}, 0, 100, 6, L"Settings window"},
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"Keeps Seamless Workshop in the system tray. Closing the window then hides it there. Click the icon to open it, right-click it to quit.", L"1", {}, 0, 100, 6, L"Settings window"}
     };
 }
 
@@ -384,7 +384,8 @@ static const SetPageInfo kSetPages[] = {
 {L"Updates", L"Check the library, then choose each mod to update.", 0xE895},
 {L"Presets", L"Save selected mods and their settings, then restore them together.", 0xE8F1},
 {L"Developer", L"Inspect source, check metadata and compile a disabled mod.", 0xE943},
-{L"Settings", L"How this window looks and behaves.", 0xE713},
+{L"Settings", L"Manage backups and Windhawk settings.", 0xE713},
+{L"Look", L"Choose how this settings window looks and whether its tray icon is shown.", 0xE790},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));

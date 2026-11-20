@@ -2790,12 +2790,12 @@
     },
     {
       "id": "local@seamless-workshop",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "animations": 1,
-        "discordPresence": 0,
+        "discordPresence": 1,
         "feedCheck": 1,
-        "nativeSettingsTitleBar": 0,
+        "nativeSettingsTitleBar": 1,
         "settingsGlass": 1,
         "settingsTrayIcon": 1
       }
