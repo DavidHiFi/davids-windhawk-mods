@@ -2,7 +2,7 @@
 // @id              seamless-crosshair
 // @name            Seamless Crosshair
 // @description     A crosshair over any game: presets or your own design, any color and size, shortcuts and a tray icon
-// @version         1.2.6
+// @version         1.2.7
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1264,7 +1264,12 @@ enum : UINT {
     WM_SGC_SETTINGS,
 };
 
-constexpr UINT kTrayId = 1;
+constexpr UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kTrayId = TrayIconId();
 constexpr UINT_PTR kTimerTrack = 1, kTimerAim = 2, kTimerTopmost = 3, kTimerSave = 4, kTimerBlink = 5,
                    kTimerFullscreen = 6, kTimerFade = 7;
 
