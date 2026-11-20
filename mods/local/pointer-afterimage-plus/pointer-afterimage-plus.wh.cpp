@@ -2,7 +2,7 @@
 // @id              pointer-afterimage-plus
 // @name            Pointer Afterimage Plus
 // @description     A real motion blur for the mouse pointer, made of fading afterimages of your own cursor, with an optional particle trail and click ripples
-// @version         1.3.1
+// @version         1.3.2
 // @author          DavidHiFi, sidlikesgrapess
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1958,9 +1958,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Number, L"rippleMs", L"Ripple duration (ms)", L"150 to 1000 (Suggested: 400). How long one ring takes to grow and fade.", L"400", {}, 150, 1000, 1, L"Click ripples"},
 {K::Check, L"pauseInFullscreen", L"Pause in fullscreen apps and games", L"On, nothing is drawn while a game or video fills the screen.", L"1", {}, 0, 100, 2, L"Running"},
 {K::Choice, L"renderer", L"Renderer", L"GPU is suggested. GDI is the older painter, kept for troubleshooting and for drawing above the Start menu. If the GPU cannot start, the mod falls back to GDI by itself.", L"gpu", {{L"gpu", L"GPU (suggested)"}, {L"gdi", L"GDI (older, on the CPU)"}}, 0, 100, 2, L"Running"},
-{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 2, L"Settings window"},
-{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 2, L"Settings window"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open these settings. Right-click it to pause the effects or open settings. When off, change settings in Windhawk.", L"1", {}, 0, 100, 2, L"Settings window"}
+{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 3, L"Settings window"},
+{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 3, L"Settings window"},
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open these settings. Right-click it to pause the effects or open settings. When off, change settings in Windhawk.", L"1", {}, 0, 100, 3, L"Settings window"}
     };
 }
 
@@ -1972,6 +1972,7 @@ static const SetPageInfo kSetPages[] = {
 {L"Cursor blur", L"The fading copies of your pointer that follow it while it moves.", 0xE8B0},
 {L"Effects", L"A particle trail behind the pointer and ripples where you click.", 0xF4A5},
 {L"General", L"When the effects run, how they are drawn, and this window.", 0xE713},
+{L"Look", L"Choose how this settings window looks and whether its tray icon is shown.", 0xE790},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
