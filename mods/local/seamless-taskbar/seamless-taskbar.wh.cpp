@@ -48729,7 +48729,7 @@ static void ResolveAntigravityProject(StoredToken* token) {
     OAuthSecretWiper headerWiper{headers};
     HttpResult result = HttpRequest(L"POST", L"cloudcode-pa.googleapis.com", L"/v1internal:loadCodeAssist",
         kAntigravityUserAgent, headers,
-        R"({"metadata":{"ideType":"ANTIGRAVITY","platform":"WINDOWS","pluginType":"GEMINI"}})",
+        R"({"metadata":{"ideType":"ANTIGRAVITY","platform":"WINDOWS_AMD64","pluginType":"GEMINI"}})",
         true);
     WipeBuffer(headers);
     if (result.ok && result.status >= 200 && result.status < 300) {
@@ -52086,6 +52086,10 @@ static void FetchAntigravityAccount(const AccountConfig& account, AccountData* d
                     // The daily host may reject a session the primary one accepted; a rejection by
                     // the primary host ends this attempt.
                     if (wcscmp(host, L"cloudcode-pa.googleapis.com") != 0) continue;
+                    // The summary answers 403 SUBSCRIPTION_REQUIRED for some plans while the
+                    // models list still works, so only the models list decides the sign-in.
+                    if (result.status == 403 &&
+                        wcscmp(operation, L"/v1internal:retrieveUserQuotaSummary") == 0) break;
                     authFailed = true;
                     if (result.status == 401 && !refreshed && attempt == 0) renew = true;
                     break;
@@ -52101,6 +52105,17 @@ static void FetchAntigravityAccount(const AccountConfig& account, AccountData* d
                     bool parsed = wcscmp(operation, L"/v1internal:retrieveUserQuotaSummary") == 0
                         ? ParseAntigravityQuotaSummary(result.body, &fresh, nullptr)
                         : ParseAntigravityAvailableModels(result.body, &fresh);
+                    if (parsed && fresh.win5h.pct < 0 && fresh.winWeek.pct < 0 && !g_unloading &&
+                        wcscmp(operation, L"/v1internal:retrieveUserQuotaSummary") == 0) {
+                        HttpResult models = HttpRequest(L"POST", host, L"/v1internal:fetchAvailableModels",
+                                                        kAntigravityUserAgent, headers, body, true);
+                        AccountData gemini;
+                        if (models.ok && models.status >= 200 && models.status < 300 &&
+                            ParseAntigravityAvailableModels(models.body, &gemini)) {
+                            if (gemini.win5h.pct >= 0) fresh.win5h = gemini.win5h;
+                            if (gemini.winWeek.pct >= 0) fresh.winWeek = gemini.winWeek;
+                        }
+                    }
                     if (parsed) {
                         WipeBuffer(headers);
                         if (g_unloading) return;
