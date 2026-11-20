@@ -2,7 +2,7 @@
 // @id              seamless-explorer-view
 // @name            Seamless Explorer View
 // @description     GPU-accelerated Explorer views with smooth scrolling and right-click submenus that populate fully
-// @version         2.0.6
+// @version         2.0.7
 // @author          DavidHiFi, DarkionAvey, crazyboyybs, Languster, valinet
 // @include         explorer.exe
 // @architecture    x86-64
@@ -38721,6 +38721,8 @@ namespace ModSettings {
 static void Start();
 static void Stop();
 static void Reload();
+static void StartForShell();
+static void StopForShell();
 }
 
 BOOL Wh_ModInit() {
@@ -38793,9 +38795,7 @@ void Wh_ModAfterInit() {
     StartColdAttachObserver();
     NavTree::AfterInit();
     NavOffset::AfterInit();
-    DWORD shellPid = 0;
-    GetWindowThreadProcessId(FindWindowW(L"Shell_TrayWnd", nullptr), &shellPid);
-    if (shellPid == GetCurrentProcessId()) ModSettings::Start();
+    ModSettings::StartForShell();
 }
 BOOL Wh_ModSettingsChanged(BOOL* bReload) {
     *bReload = FALSE;
@@ -38817,7 +38817,7 @@ BOOL Wh_ModSettingsChanged(BOOL* bReload) {
     return TRUE;
 }
 void Wh_ModBeforeUninit() {
-    ModSettings::Stop();
+    ModSettings::StopForShell();
     NavOffset::BeforeUninit();
     if (g_pageAnimActive) PageAnim::BeforeUninit();
     Wh_Log(L"[GPU lifetime] QUIESCE overlays=%d window-callbacks=%u",g_instances.load(),g_windowCallbacks.load());
@@ -42708,5 +42708,49 @@ static void Stop() {
 
 static void Reload() {
     if (HWND hwnd = g_trayWindow.load()) PostMessageW(hwnd, kTrayReload, 0, 0);
+}
+// The taskbar appears a few seconds after a fresh Explorer starts, after this mod loads.
+static HANDLE g_shellWaitThread;
+static HANDLE g_shellWaitStop;
+
+static DWORD WINAPI ShellWait(void*) {
+    for (int i = 0; i < 180; i++) {
+        if (HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr)) {
+            DWORD pid = 0;
+            GetWindowThreadProcessId(tray, &pid);
+            if (pid != GetCurrentProcessId()) return 0;
+            // Loaded before the taskbar existed, so this Explorer already has the colors.
+            // Marking it stops a later mod update from restarting it.
+            int stamp = 0;
+            if (i > 0) {
+                NavTree::ShouldSuggestExplorerRestart(&stamp);
+                Wh_SetIntValue(L"NavTreeHandledExplorer", stamp);
+            }
+            Start();
+            return 0;
+        }
+        if (WaitForSingleObject(g_shellWaitStop, 1000) == WAIT_OBJECT_0) return 0;
+    }
+    return 0;
+}
+
+static void StartForShell() {
+    g_shellWaitStop = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!g_shellWaitStop) return;
+    g_shellWaitThread = CreateThread(nullptr, 0, ShellWait, nullptr, 0, nullptr);
+}
+
+static void StopForShell() {
+    if (g_shellWaitThread) {
+        SetEvent(g_shellWaitStop);
+        WaitForSingleObject(g_shellWaitThread, INFINITE);
+        CloseHandle(g_shellWaitThread);
+        g_shellWaitThread = nullptr;
+    }
+    if (g_shellWaitStop) {
+        CloseHandle(g_shellWaitStop);
+        g_shellWaitStop = nullptr;
+    }
+    Stop();
 }
 }  // namespace ModSettings
