@@ -2,7 +2,7 @@
 // @id startup-control
 // @name Startup Control
 // @description Manage startup apps, scheduled tasks and Windows startup locations.
-// @version 0.1.2
+// @version 0.1.3
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods
@@ -263,7 +263,9 @@ inline std::wstring Identity(const Entry& e) {
 }
 inline void Add(Inventory& inv, Entry e) {
     if (e.id.empty()) e.id = Identity(e);
-    if (e.target.empty() && !e.command.empty()) e.target = Target(e.command);
+    // A task's command field holds its XML definition, never a file path.
+    if (e.target.empty() && !e.command.empty() && e.kind != Kind::Task) e.target = Target(e.command);
+    if (e.target.size() > 1 && e.target.front() == L'"' && e.target.back() == L'"') e.target = e.target.substr(1, e.target.size() - 2);
     if (!e.target.empty() && e.target.find(L":\\") != e.target.npos)
         e.missing = GetFileAttributesW(e.target.c_str()) == INVALID_FILE_ATTRIBUTES;
     inv.entries.push_back(std::move(e));
@@ -558,7 +560,7 @@ void TaskFolderScan(Inventory& inv, ITaskFolder* folder, unsigned depth = 0) {
                     ComPtr<IAction> action; ComPtr<IExecAction> exec;
                     if (SUCCEEDED(actions->get_Item(a, &action)) && SUCCEEDED(action.As(&exec))) {
                         BSTR p = nullptr; exec->get_Path(&p);
-                        if (e.target.empty()) e.target = Expand(Bstr(p));
+                        if (e.target.empty()) e.target = Target(Expand(Bstr(p)));
                         SysFreeString(p);
                     }
                 }
@@ -5665,7 +5667,7 @@ static void SC_DrawRow(SetPaint& p, SetWindow& w, const SC_Item& it, float hov) 
     p.Glyph(w.fIcon.get(), SC_Glyph(e), {icon.left, icon.top + 1, icon.right, icon.bottom}, e.enabled ? mocha::blue : mocha::overlay1);
     float right = r.right - (SC_Toggleable(e) ? 84 : 112);
     if (e.missing) {
-        D2D1_RECT_F badge{right - 92, mid - 11, right - 8, mid + 11};
+        D2D1_RECT_F badge{right - 112, mid - 11, right - 8, mid + 11};
         p.Round(badge, 11, mocha::peach, 0.16f);
         p.Text(g_sc.fChip.get(), L"File missing", badge, mocha::peach);
         right = badge.left;
