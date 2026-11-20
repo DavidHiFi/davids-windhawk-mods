@@ -1194,7 +1194,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.5"
+    "version": "1.0.6"
   },
   "local@seamless-crash-watch": {
     "disabled": false,

@@ -2,7 +2,7 @@
 // @id              seamless-compiz-cube
 // @name            Seamless Compiz Cube
 // @description     Rounded 3D desktop cube with Mocha borders, switching desktops through Seamless Window Manager
-// @version         1.0.5
+// @version         1.0.6
 // @author          DavidHiFi, Soham
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -3921,7 +3921,12 @@ namespace scctray {
 constexpr UINT WM_TRAY = WM_APP + 21;
 constexpr UINT WM_QUIT_HOST = WM_APP + 22;
 constexpr UINT WM_REFRESH = WM_APP + 23;
-constexpr UINT kTrayId = 1;
+constexpr UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kTrayId = TrayIconId();
 constexpr UINT_PTR kTimerFind = 1;
 constexpr wchar_t kHostClass[] = L"WindhawkSeamlessCompizCubeTray";
 
