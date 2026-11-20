@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.14
+// @version         2.2.15
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.15
+
+- The mod tasks window keeps its column names in view, sizes its columns to the text so mod names and status read in full, and no longer shows the resize dots.
 
 ## What's new in 2.2.14
 
@@ -2315,6 +2319,7 @@ static LRESULT CALLBACK TrayDialogProc(HWND hWnd, UINT message, WPARAM wParam, L
             case WM_PAINT:
                 PaintTrayDialog(hWnd);
                 return 0;
+            case WM_SHOWWINDOW:
             case WM_SIZE: {
                 LRESULT result = DefSubclassProc(hWnd, message, wParam, lParam);
                 HideSizeGrips(hWnd, true);
@@ -3276,10 +3281,20 @@ static void PaintTrayList(HWND hwnd) {
     Settings s = SnapshotSettings();
     TitleDockLook card = TrayCardLook(s);
     std::uint32_t text = TrayTextRgb(s);
-    TrayBufferedPaint(hwnd, 0, [&](HDC dc, RGBQUAD* px, int stride, int w, int h) {
+    // The header is a child of the list: paint only below it, or every list
+    // repaint wipes the column names.
+    LONG top = 0;
+    HWND header = (HWND)SendMessageW(hwnd, LVM_GETHEADER, 0, 0);
+    RECT hr;
+    if (header && IsWindowVisible(header) && GetWindowRect(header, &hr)) {
+        MapWindowPoints(nullptr, hwnd, reinterpret_cast<POINT*>(&hr), 2);
+        top = std::max(0L, hr.bottom);
+    }
+    TrayBufferedPaint(hwnd, top, [&](HDC dc, RGBQUAD* px, int stride, int w, int h) {
         HDC maskDc = CreateCompatibleDC(dc);
+        int fullH = h + top;
         BITMAPINFO bi{};
-        bi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -h, 1, 32, BI_RGB};
+        bi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -fullH, 1, 32, BI_RGB};
         void* bits = nullptr;
         HBITMAP bmp = maskDc ? CreateDIBSection(maskDc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
         HGDIOBJ old = bmp ? SelectObject(maskDc, bmp) : nullptr;
@@ -3294,7 +3309,7 @@ static void PaintTrayList(HWND hwnd) {
                 RGBQUAD& p = px[y * stride + x];
                 DockBlend(p, card.fill, fillA);
                 if (!m) continue;
-                const RGBQUAD& c = m[y * w + x];
+                const RGBQUAD& c = m[(y + top) * w + x];
                 // Faint theme bands (hover, selection) sit under the floor and stay off.
                 int v = std::max({c.rgbRed, c.rgbGreen, c.rgbBlue});
                 if (v > 64) DockBlend(p, text, (v - 64) / 191.0f);
@@ -3507,17 +3522,121 @@ static int TrayCardPad(HWND list) {
     return MulDiv(6, GetDpiForWindow(list), 96);
 }
 
+static UINT TrayFitMessage() {
+    static UINT msg = RegisterWindowMessageW(L"WindhawkEnhancedStyler.TrayFit");
+    return msg;
+}
+
+static const wchar_t kTrayFitProp[] = L"WindhawkEnhancedStyler.TrayFitPending";
+
+// Fira Code runs wider than the stock font, so Windhawk's fixed column widths cut
+// every row short. Size columns to their text; when it all can't fit, short columns
+// keep their full width and the long ones share what is left.
+static void TrayFitColumns(HWND list) {
+    HWND header = (HWND)SendMessageW(list, LVM_GETHEADER, 0, 0);
+    int cols = header ? (int)SendMessageW(header, HDM_GETITEMCOUNT, 0, 0) : 0;
+    RECT rc;
+    if (cols <= 0 || cols > 16 || !GetClientRect(list, &rc)) return;
+    int avail = rc.right - rc.left;
+    if (avail <= 0) return;
+    int pad = MulDiv(20, GetDpiForWindow(list), 96);
+    int rows = (int)SendMessageW(list, LVM_GETITEMCOUNT, 0, 0);
+    std::vector<int> need(cols, 0);
+    wchar_t text[512];
+    for (int c = 0; c < cols; ++c) {
+        LVCOLUMNW col{};
+        col.mask = LVCF_TEXT;
+        col.pszText = text;
+        col.cchTextMax = ARRAYSIZE(text);
+        text[0] = 0;
+        if (SendMessageW(list, LVM_GETCOLUMNW, c, (LPARAM)&col))
+            need[c] = (int)SendMessageW(list, LVM_GETSTRINGWIDTHW, 0, (LPARAM)text);
+        for (int r = 0; r < rows && r < 200; ++r) {
+            LVITEMW item{};
+            item.iSubItem = c;
+            item.pszText = text;
+            item.cchTextMax = ARRAYSIZE(text);
+            text[0] = 0;
+            SendMessageW(list, LVM_GETITEMTEXTW, r, (LPARAM)&item);
+            need[c] = std::max(need[c], (int)SendMessageW(list, LVM_GETSTRINGWIDTHW, 0, (LPARAM)text));
+        }
+        need[c] += pad;
+    }
+    std::vector<int> width(cols, 0);
+    std::vector<bool> done(cols, false);
+    int left = avail, open = cols;
+    // Water-fill: any column that fits in an even share of the space left gets
+    // its full width; repeat until the rest are all too long for their share.
+    for (bool changed = true; changed && open > 0;) {
+        changed = false;
+        for (int c = 0; c < cols; ++c) {
+            if (done[c] || need[c] > left / open) continue;
+            width[c] = need[c];
+            left -= need[c];
+            done[c] = true;
+            --open;
+            changed = true;
+        }
+    }
+    if (open > 0) {
+        long long sum = 0;
+        for (int c = 0; c < cols; ++c)
+            if (!done[c]) sum += need[c];
+        int given = 0, last = -1;
+        for (int c = 0; c < cols; ++c) {
+            if (done[c]) continue;
+            width[c] = sum > 0 ? (int)(left * (long long)need[c] / sum) : left / open;
+            given += width[c];
+            last = c;
+        }
+        if (last >= 0) width[last] += left - given;
+    } else if (cols > 0) {
+        width[cols - 1] += left;  // spare room goes to the last column
+    }
+    for (int c = 0; c < cols; ++c) {
+        if (SendMessageW(list, LVM_GETCOLUMNWIDTH, c, 0) != width[c])
+            SendMessageW(list, LVM_SETCOLUMNWIDTH, c, MAKELPARAM(width[c], 0));
+    }
+}
+
+static void TrayQueueFit(HWND list) {
+    if (GetPropW(list, kTrayFitProp)) return;
+    SetPropW(list, kTrayFitProp, (HANDLE)1);
+    PostMessageW(list, TrayFitMessage(), 0, 0);
+}
+
 static LRESULT CALLBACK TrayListProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, DWORD_PTR) {
     if (message == WM_NCDESTROY) {
         {
             std::lock_guard<std::mutex> lock(g_trayCardsMutex);
             g_trayCards.erase(hwnd);
         }
+        RemovePropW(hwnd, kTrayFitProp);
         WindhawkUtils::RemoveWindowSubclassFromAnyThread(hwnd, TrayListProc);
         return DefSubclassProc(hwnd, message, wParam, lParam);
     }
+    if (message == TrayFitMessage()) {
+        RemovePropW(hwnd, kTrayFitProp);
+        if (InterlockedExchangeAdd(&g_themeActive, 0)) TrayFitColumns(hwnd);
+        return 0;
+    }
     if (!InterlockedExchangeAdd(&g_themeActive, 0)) return DefSubclassProc(hwnd, message, wParam, lParam);
     switch (message) {
+        case LVM_INSERTITEMW:
+        case LVM_INSERTITEMA:
+        case LVM_SETITEMW:
+        case LVM_SETITEMA:
+        case LVM_SETITEMTEXTW:
+        case LVM_SETITEMTEXTA:
+        case LVM_DELETEITEM:
+        case LVM_DELETEALLITEMS:
+        case LVM_INSERTCOLUMNW:
+        case LVM_INSERTCOLUMNA:
+        case WM_SETFONT: {
+            LRESULT result = DefSubclassProc(hwnd, message, wParam, lParam);
+            TrayQueueFit(hwnd);
+            return result;
+        }
         case WM_ERASEBKGND:
             return 1;
         case WM_PAINT:
@@ -3548,6 +3667,7 @@ static LRESULT CALLBACK TrayListProc(HWND hwnd, UINT message, WPARAM wParam, LPA
         }
         case WM_WINDOWPOSCHANGED:
             if (HWND parent = GetParent(hwnd)) InvalidateRect(parent, nullptr, FALSE);
+            if (!(reinterpret_cast<WINDOWPOS*>(lParam)->flags & SWP_NOSIZE)) TrayQueueFit(hwnd);
             break;
     }
     return DefSubclassProc(hwnd, message, wParam, lParam);
@@ -3557,8 +3677,10 @@ static BOOL CALLBACK HideGripProc(HWND child, LPARAM hide) {
     wchar_t cls[32];
     if (GetClassNameW(child, cls, ARRAYSIZE(cls)) && !wcscmp(cls, L"ScrollBar") &&
         (GetWindowLongPtrW(child, GWL_STYLE) & SBS_SIZEGRIP)) {
-        if (hide && IsWindowVisible(child)) ShowWindow(child, SW_HIDE);
-        else if (!hide && !IsWindowVisible(child)) ShowWindow(child, SW_SHOWNA);
+        // The style bit, not IsWindowVisible: the dialog is still hidden at setup.
+        bool shown = (GetWindowLongPtrW(child, GWL_STYLE) & WS_VISIBLE) != 0;
+        if (hide && shown) ShowWindow(child, SW_HIDE);
+        else if (!hide && !shown) ShowWindow(child, SW_SHOWNA);
     }
     return TRUE;
 }
@@ -3595,6 +3717,7 @@ static void SetupTrayDialogParts(HWND dialog) {
     SetWindowPos(list, nullptr, card.left, card.top, card.right - card.left, card.bottom - card.top,
                  SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
     HideSizeGrips(dialog, true);
+    TrayQueueFit(list);
     RedrawWindow(dialog, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
 
