@@ -6,7 +6,7 @@
 // @id              seamless-launchpad
 // @name            Seamless Launchpad
 // @description     A fullscreen GPU rendered grid of all your apps in place of Start, with instant search, adjustable blur, wiggle edit mode and power buttons
-// @version         2.6.4
+// @version         2.6.5
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -9049,7 +9049,12 @@ void OnAppsLoaded(AppList* list, int key) {
 // The tray icon (Look > Tray icon): click opens the settings, right-click shows a menu.
 // It lives on the grid's window and thread, like the rest of Launchpad.
 constexpr UINT WM_APP_TRAY = WM_APP + 21;
-constexpr UINT kTrayId = 1;
+constexpr UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kTrayId = TrayIconId();
 static HICON g_trayIcon;
 static bool g_trayShown;
 static UINT g_taskbarCreated;

@@ -1,7 +1,7 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-21T06:10:50+08:00",
+  "generatedAt": "2026-11-21T06:11:04+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 184,
@@ -962,7 +962,7 @@
       "name": "Seamless Launchpad",
       "author": "DavidHiFi, Rafael Mendes",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.6.4",
+      "version": "2.6.5",
       "license": "MIT",
       "origin": "local",
       "upstream": "",
