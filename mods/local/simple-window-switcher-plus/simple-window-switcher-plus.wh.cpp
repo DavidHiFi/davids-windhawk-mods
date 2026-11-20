@@ -2,7 +2,7 @@
 // @id              simple-window-switcher-plus
 // @name            Simple Window Switcher Plus
 // @description     Customizable Alt+Tab with Vista animations, background blur and elevated app support
-// @version         1.0.6
+// @version         1.0.7
 // @author          DavidHiFi, Lone, valinet, Asteski, bropines, caliberda
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -13997,6 +13997,7 @@ void Settings_Open() {
     if (g_setWin && g_setWin->hwnd && !g_setWin->render) {
         HWND hwnd = g_setWin->hwnd;
         if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
+        else if (!IsWindowVisible(hwnd)) ShowWindow(hwnd, SW_SHOWNORMAL);
         SetForegroundWindow(hwnd);
         return;
     }
@@ -14004,6 +14005,8 @@ void Settings_Open() {
     if (!Set_Create(false)) return;
     HWND hwnd = g_setWin->hwnd;
     ShowWindow(hwnd, SW_SHOW);
+    // The admin host starts with SW_HIDE, which Windows applies to its first ShowWindow.
+    if (!IsWindowVisible(hwnd)) ShowWindow(hwnd, SW_SHOWNORMAL);
     SetForegroundWindow(hwnd);
     SetFocus(hwnd);
 }
