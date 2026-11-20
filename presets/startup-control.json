@@ -1,0 +1,21 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@startup-control",
+      "enabled": true,
+      "settings": {
+        "confirmDevices": 1,
+        "nativeSettingsTitleBar": 0,
+        "scanDevices": 1,
+        "scanRegistry": 1,
+        "scanServices": 1,
+        "scanTasks": 1,
+        "scanWmi": 1,
+        "settingsGlass": 1,
+        "settingsTrayIcon": 1,
+        "showViewOnly": 1
+      }
+    }
+  ]
+}

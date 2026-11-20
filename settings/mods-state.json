@@ -1279,5 +1279,12 @@
     "exclude": "",
     "architecture": "x86-64",
     "version": "1.0.1"
+  },
+  "local@startup-control": {
+    "disabled": false,
+    "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "0.1.0"
   }
 }

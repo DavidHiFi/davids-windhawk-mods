@@ -1,12 +1,12 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-21T04:46:32+08:00",
+  "generatedAt": "2026-11-21T04:51:16+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 183,
-    "enabled": 175,
-    "local": 58
+    "mods": 184,
+    "enabled": 176,
+    "local": 59
   },
   "mods": [
     {
@@ -2203,6 +2203,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-workshop/seamless-workshop.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@startup-control",
+      "name": "Startup Control",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "0.1.0",
+      "license": "",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/startup-control/startup-control.wh.cpp",
       "enabled": true
     }
   ]
