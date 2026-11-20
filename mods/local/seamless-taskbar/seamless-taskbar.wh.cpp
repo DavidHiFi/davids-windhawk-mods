@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.20
+// @version         0.4.21
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -37424,6 +37424,7 @@ Media::AcrylicBrush DockMaterial() {
 struct TraySegment {
     FrameworkElement panel{nullptr};
     FrameworkElement frame{nullptr};
+    bool faded = false;
 };
 struct TrayFrameHook {
     FrameworkElement frame{nullptr};
@@ -37508,10 +37509,15 @@ void UpdateTrayEnds() {
         FrameworkElement first{nullptr}, last{nullptr};
         double firstX = 0, lastX = 0;
         std::vector<FrameworkElement> shown;
-        for (auto const& item : g_traySegments) {
+        for (auto& item : g_traySegments) {
             if (item.frame != frame) continue;
             try {
-                if (!TraySegmentShown(item.panel, frame)) continue;
+                bool empty = !TraySegmentShown(item.panel, frame);
+                if (empty != item.faded) {
+                    item.panel.Opacity(empty ? 0.0 : 1.0);
+                    item.faded = empty;
+                }
+                if (empty) continue;
                 double x = item.panel.TransformToVisual(frame).TransformPoint({0, 0}).X;
                 shown.push_back(item.panel);
                 if (!first || x < firstX) { first = item.panel; firstX = x; }
@@ -37539,6 +37545,7 @@ void StyleTraySegment(Panel panel, bool left, bool right) {
     SaveChrome(panel, Panel::BorderBrushProperty());
     SaveChrome(panel, Panel::BorderThicknessProperty());
     SaveChrome(panel, Panel::CornerRadiusProperty());
+    SaveChrome(panel, UIElement::OpacityProperty());
     panel.Height(34);
     panel.VerticalAlignment(VerticalAlignment::Center);
     panel.Margin({0, 0, 0, 0});
