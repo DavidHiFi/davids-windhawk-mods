@@ -2,7 +2,7 @@
 // @id              seamless-explorer-search
 // @name            Seamless Explorer Search
 // @description     Start typing in any File Explorer window to search it, and every drive, with Everything
-// @version         2.0.13
+// @version         2.0.14
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -3549,9 +3549,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Choice, L"searchFontWeight", L"Search font weight", L"Weight for search text, results and key hints.", L"500", {{L"300", L"Light"}, {L"400", L"Regular"}, {L"500", L"Medium"}, {L"600", L"Semibold"}, {L"700", L"Bold"}}, 0, 0, 2, L"Search box"},
 {K::Number, L"popupOpacity", L"Search box opacity", L"How solid the glass is, 50 to 100 percent. 85 matches File Explorer (Suggested: 85).", L"85", {}, 50, 100, 2, L"Search box"},
 {K::Check, L"animations", L"Animations", L"Off, everything appears and closes with no movement.", L"1", {}, 0, 100, 2, L"Search box"},
-{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 2, L"Settings window"},
-{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 2, L"Settings window"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it for settings, right-click it for the menu.", L"1", {}, 0, 100, 2, L"Settings window"}
+{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 3, L"Settings window"},
+{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 3, L"Settings window"},
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it for settings, right-click it for the menu.", L"1", {}, 0, 100, 3, L"Settings window"}
     };
 }
 
@@ -3562,7 +3562,8 @@ struct SetPageInfo {
 static const SetPageInfo kSetPages[] = {
 {L"General", L"How the search box opens inside File Explorer and how it behaves.", 0xE713},
 {L"Search", L"Everything does the indexing; the mod shapes the results.", 0xE721},
-{L"Appearance", L"The search box look and this settings window.", 0xE790},
+{L"Appearance", L"Choose how the search box looks.", 0xE790},
+{L"Look", L"Choose how this settings window looks and whether its tray icon is shown.", 0xE790},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
