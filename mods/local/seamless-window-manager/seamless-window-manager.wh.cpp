@@ -2,7 +2,7 @@
 // @id              seamless-window-manager
 // @name            Seamless Window Manager
 // @description     Move, resize, snap and focus windows with the mouse or keyboard, with app rules, gaps and a pause key
-// @version         2.6.6
+// @version         2.6.7
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -12410,7 +12410,7 @@ static const SetPageInfo kSetPages[] = {
 {L"Focus", L"Which window is active, and keys to move between windows.", 0xE8B0},
 {L"Animation and fade", L"Gliding windows, the focus effect and see-through background windows.", 0xE945},
 {L"Rules", L"Place, pin or skip chosen apps automatically.", 0xE71C},
-{L"Settings window", L"How this window looks, and its tray icon.", 0xE790},
+{L"Look", L"How this window looks, and its tray icon.", 0xE790},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
