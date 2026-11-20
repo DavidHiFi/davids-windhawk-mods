@@ -2,7 +2,7 @@
 // @id              seamless-wobbly-windows
 // @name            Seamless Wobbly Windows
 // @description     Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows
-// @version         1.2.1
+// @version         1.2.2
 // @author          DavidHiFi, HeyJeay, HaVeN80, lalimatyus
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -3252,32 +3252,20 @@ static RingSpec ReadRingSpec(float scale, bool focused) {
     return s;
 }
 
-// Seamless Borders draws its ring as four "SeamlessBordersPart" windows. A
-// visible top strip sitting on this window means it has a ring now; that also
-// covers its exclude list, maximized and fullscreen windows without reading
-// any of it.
-struct RingFind { RECT want; int tolerance; bool found; };
-
-static BOOL CALLBACK FindRingProc(HWND h, LPARAM lp) {
-    RingFind* f = (RingFind*)lp;
-    wchar_t cls[32];
-    if (!GetClassNameW(h, cls, 32) || wcscmp(cls, L"SeamlessBordersPart")) return TRUE;
-    if (!IsWindowVisible(h)) return TRUE;
-    RECT r{};
-    if (!GetWindowRect(h, &r)) return TRUE;
-    if (abs((r.right - r.left) - (f->want.right - f->want.left)) <= 1 &&
-        abs(r.left - f->want.left) <= f->tolerance &&
-        abs(r.top - f->want.top) <= f->tolerance) {
-        f->found = true;
-        return FALSE;
+// The border worker stacks its four parts immediately above their target.
+static bool BordersRingShown(HWND hwnd, const RECT& vis, int pad, int tolerance) {
+    HWND part = GetWindow(hwnd, GW_HWNDPREV);
+    for (int i = 0; part && i < 4; ++i, part = GetWindow(part, GW_HWNDPREV)) {
+        wchar_t cls[32];
+        if (!GetClassNameW(part, cls, ARRAYSIZE(cls)) ||
+            wcscmp(cls, L"SeamlessBordersPart")) break;
+        RECT r{};
+        if (!IsWindowVisible(part) || !GetWindowRect(part, &r)) continue;
+        if (abs((r.right - r.left) - (vis.right - vis.left + 2 * pad)) <= 1 &&
+            abs(r.left - vis.left + pad) <= tolerance &&
+            abs(r.top - vis.top + pad) <= tolerance) return true;
     }
-    return TRUE;
-}
-
-static bool BordersRingShown(const RECT& vis, int pad, int tolerance) {
-    RingFind f{ { vis.left - pad, vis.top - pad, vis.right + pad, vis.top }, tolerance, false };
-    EnumWindows(FindRingProc, (LPARAM)&f);
-    return f.found;
+    return false;
 }
 
 // -----------------------------------------------------------------------------
@@ -5889,7 +5877,7 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     bool ringShown = false;
     if (bordersOn && !startZoomed) {
         const RingSpec probe = ReadRingSpec(MonitorScale(startVis), true);
-        ringShown = BordersRingShown(startVis, probe.pad, 2);
+        ringShown = BordersRingShown(hwnd, startVis, probe.pad, 2);
     }
 
     // The live glass of a see-through window (glow or not): read once the
@@ -5919,13 +5907,7 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
         if (wantGlass && !glass.tried && NowSeconds() - waitStart >= 0.04) ShootGlass(hwnd, glass);
         if (!WaitMs(1)) return;
     }
-    if (wantGlass && !glass.tried) ShootGlass(hwnd, glass);
-
-    if (bordersOn && startZoomed) {
-        const RECT v = [&] { RECT o{}, vv{}; ReadFramePair(hwnd, o, vv); return vv; }();
-        const RingSpec probe = ReadRingSpec(MonitorScale(v), true);
-        ringShown = BordersRingShown(v, probe.pad, 48);
-    }
+    if (wantGlass && !glass.ok) ShootGlass(hwnd, glass);
 
     // Picture, then a final check that the size held still meanwhile.
     Canvas canvas;
@@ -5936,7 +5918,10 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
         RECT o{}, v{};
         if (!ReadFramePair(hwnd, o, v)) return;
         ring = RingSpec{};
-        if (ringShown) ring = ReadRingSpec(MonitorScale(v), GetForegroundWindow() == hwnd);
+        if (bordersOn) {
+            const RingSpec probe = ReadRingSpec(MonitorScale(v), GetForegroundWindow() == hwnd);
+            if (ringShown || BordersRingShown(hwnd, v, probe.pad, 48)) ring = probe;
+        }
         if (!BuildCanvas(hwnd, ring, canvas)) continue;
         RECT now{};
         if (!GetWindowRect(hwnd, &now) || !SameSize(now, canvas.outer)) continue;
@@ -5959,8 +5944,14 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     if (!glow.Start(hwnd, cfg, canvas, glass)) {
         dev.SetGlow(nullptr);
         GlowCB glassCb;
-        if (GlassOnly(canvas, glass, glassCb)) dev.SetGlow(&glassCb);
+        if (GlassOnly(canvas, glass, glassCb)) {
+            dev.SetGlow(&glassCb);
+        } else if (wantGlass) {
+            // Keep the native drag when the capture would replace glass with a dark fill.
+            return;
+        }
     }
+    if (wantGlass && glow.on && glow.cb.fill[3] <= 0.5f) return;
     std::vector<uint32_t>().swap(glass.px);
     auto draw = [&] {
         glow.Update(dev);
