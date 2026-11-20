@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.0
+// @version         0.6.1
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -29,8 +29,8 @@ its own settings window: open it from the tray icon or with Ctrl+I in Halo.
   tap replaces the Windows Start menu: Start never opens for it. With Seamless
   Launchpad, Shift + Windows key and the Start button open its app grid.
 - Shortcut keys for searches you use a lot, like Win+R for the command line.
-- Modules: turn each one on or off, change the words that call it, and open
-  the settings a module brings with it.
+- Modules: turn each one on or off, change the words that call it, and change
+  a module's own settings right in its card when you open it.
 - History, a preview of the selected file (F1), and Space to open it in the Peek
   mod once you have moved through the results.
 - A tray icon: click it for settings, right-click it to open Halo or restart its
@@ -159,7 +159,16 @@ struct HaloBridgePlugin {
     std::wstring id, name, desc, keywords, defaultKeywords, version, author;
     bool disabled = false, hasSettings = false;
 };
+// A module's own settings panel, made by the engine as a child window inside a holder the
+// settings window owns. px: its height in pixels.
+struct HaloBridgePanel {
+    HWND child = nullptr;
+    int px = 0;
+    bool failed = false;
+};
 namespace halobridge {
+bool Panel(const std::wstring& id, HaloBridgePanel* out);
+void DropPanel(const std::wstring& id);
 bool Ready();
 std::wstring Setting(const std::wstring& name, bool* found);
 std::vector<HaloBridgePlugin> Plugins();
@@ -1877,9 +1886,11 @@ struct Bridge {
     bool ready = false;
     std::map<std::wstring, std::wstring> set;
     std::vector<HaloBridgePlugin> plugins;
+    std::map<std::wstring, HaloBridgePanel> panels;
     std::wstring error;
 };
 [[clang::no_destroy]] Bridge g_bridge;
+constexpr UINT WM_APP_SETTINGS_PANELS = WM_APP + 9;  // the settings window's "a panel came or went" (wParam 1: ask again)
 
 void ReloadSettingsWindow() {
     if (HWND s = haloset::g_settingsWnd) PostMessageW(s, WM_APP + 1 /* its reload message */, 0, 0);
@@ -1986,6 +1997,23 @@ void OnLine(const std::string& raw) {
         if (g.appMenu.row == g.appMenuWant && GetTickCount() - g.appMenuAsked < 2500 && g.visible)
             PostMessageW(g.wnd, WM_APP_APPMENU, 0, 0);
         g.appMenuWant = -1;
+    } else if (op == L"panel" || op == L"panelgone") {
+        // panel: id, child window, height in pixels, failed. panelgone: id, child window.
+        HWND child = (HWND)(ULONG_PTR)wcstoull(field(2).c_str(), nullptr, 10);
+        {
+            std::lock_guard<std::mutex> guard(g_bridge.lock);
+            if (op == L"panel") {
+                HaloBridgePanel p;
+                p.child = child;
+                p.px = _wtoi(field(3).c_str());
+                p.failed = field(4) == L"1";
+                g_bridge.panels[field(1)] = p;
+            } else {
+                auto it = g_bridge.panels.find(field(1));
+                if (it != g_bridge.panels.end() && (!child || it->second.child == child)) g_bridge.panels.erase(it);
+            }
+        }
+        if (HWND s = haloset::g_settingsWnd) PostMessageW(s, WM_APP_SETTINGS_PANELS, 0, 0);
     } else if (op == L"settings") {
         OpenHaloSettings();
     } else if (op == L"seterr") {
@@ -2007,6 +2035,12 @@ void OnLine(const std::string& raw) {
     } else if (op == L"ready") {
         g.engineReady = true;
         Wh_Log(L"Engine ready: %s plugins in %s ms", field(1).c_str(), field(2).c_str());
+        {
+            // A new engine: the old one's panels are gone, open cards ask the new one.
+            std::lock_guard<std::mutex> guard(g_bridge.lock);
+            g_bridge.panels.clear();
+        }
+        if (HWND s = haloset::g_settingsWnd) PostMessageW(s, WM_APP_SETTINGS_PANELS, 1, 0);
         WarmRender();
         // A key pressed while the engine was starting is answered now, unless it is stale.
         bool fresh = GetTickCount() - g.pendingTick < 25000;
@@ -3121,6 +3155,17 @@ std::wstring Setting(const std::wstring& name, bool* found) {
 std::vector<HaloBridgePlugin> Plugins() {
     std::lock_guard<std::mutex> guard(g_bridge.lock);
     return g_bridge.plugins;
+}
+bool Panel(const std::wstring& id, HaloBridgePanel* out) {
+    std::lock_guard<std::mutex> guard(g_bridge.lock);
+    auto it = g_bridge.panels.find(id);
+    if (it == g_bridge.panels.end()) return false;
+    *out = it->second;
+    return true;
+}
+void DropPanel(const std::wstring& id) {
+    std::lock_guard<std::mutex> guard(g_bridge.lock);
+    g_bridge.panels.erase(id);
 }
 std::wstring TakeError() {
     std::lock_guard<std::mutex> guard(g_bridge.lock);
@@ -4383,7 +4428,7 @@ constexpr float kSetMenuPad = 6, kSetMenuIconW = 22, kSetMenuSepH = 9, kSetMenuO
 constexpr UINT kSetMenuSubDelayMs = 200, kSetMenuFadeMs = 90, kSetMenuTimerSub = 0x5E71, kSetMenuTimerFade = 0x5E72, kSetMenuTimerPoll = 0x5E73;
 
 struct SetItem {
-    enum Type { Group, Row, Banner, About, Link, Support, PlugCard, PlugBtn, Seg } type = Row;
+    enum Type { Group, Row, Banner, About, Link, Support, PlugCard, PlugPanel, Seg } type = Row;
     int field = -1;  // Row: index into fields.
     float y = 0, h = 0;
     std::wstring text, sub, url;
@@ -4392,6 +4437,7 @@ struct SetItem {
     int aux = -1;         // Halo: a card's "turned on" field; a Seg's view (0 grid, 1 list).
     int card = -1;        // Halo: the card a body item belongs to (a Row with a card is drawn bare).
     std::wstring note;    // Halo: a card's version and author line.
+    bool open = false;    // Halo: a grid tile whose open card sits under its row.
 };
 
 // What the pointer is over. id picks the hover glow.
@@ -5518,8 +5564,10 @@ static float Halo_LinkH(SetWindow& w, const std::wstring& sub) {
     return std::max(56.0f, std::ceil(30 + Set_TextH(w.fHint.get(), sub, w.contentW - kSetRowPad - 50) + 10));
 }
 // ---- Halo: the Plugins page cards ----------------------------------------------
-constexpr float kHaloGridMaxW = 1040;  // The grid may use more of a wide window than the rows do.
-constexpr float kHaloCardMinW = 300, kHaloCardGap = 12, kHaloCardPad = 16, kHaloSegW = 84, kHaloSegH = 30;
+// The grid uses the page's whole width: as many columns as fit, an open card spans its row.
+constexpr float kHaloCardMinW = 280, kHaloCardGap = 12, kHaloCardPad = 16, kHaloSegW = 84, kHaloSegH = 30;
+constexpr float kHaloPanelMaxW = 920;  // a module's own settings: laid out for about this width
+constexpr int kHaloMaxCols = 8;
 static int g_haloView = -1;  // 0 grid, 1 list; read once from the mod's stored state.
 [[clang::no_destroy]] static std::set<std::wstring> g_haloOpen;  // Plugin ids whose card is open.
 static int Halo_View() {
@@ -5533,17 +5581,24 @@ static D2D1_RECT_F Halo_CardSwitch(const SetWindow& w, const SetItem& it) {
     return {r.right - kHaloCardPad - 40, mid - 11, r.right - kHaloCardPad, mid + 11};
 }
 static float Halo_DescW(const SetItem& it) { return it.w - 38 - kHaloCardPad; }
-// Where an open card's body lines start, from the card's top.
-struct HaloBody { float note, rule, cap, box, hint, btn, end; };
-static HaloBody Halo_Body(float head, float line, bool button) {
+// Where an open card's body lines start, from the card's top. panelH < 0: the module has no
+// settings of its own.
+struct HaloBody { float note, rule, cap, box, hint, rule2, panel, end; };
+static HaloBody Halo_Body(float head, float line, float panelH) {
     HaloBody b;
     b.note = head;
     b.rule = b.note + line + 12;
     b.cap = b.rule + 13;
     b.box = b.cap + line + 4;
     b.hint = b.box + 40 + 2;
-    b.btn = b.hint + line + 12;
-    b.end = (button ? b.btn + 34 : b.hint + line) + kHaloCardPad;
+    if (panelH >= 0) {
+        b.rule2 = b.hint + line + 14;
+        b.panel = b.rule2 + 15;
+        b.end = b.panel + panelH + kHaloCardPad;
+    } else {
+        b.rule2 = b.panel = -1;
+        b.end = b.hint + line + kHaloCardPad;
+    }
     return b;
 }
 // "12 modules, 9 on", read from the switches as they are now.
@@ -5553,6 +5608,62 @@ static std::wstring Halo_CountText(const SetWindow& w) {
         if (f.kind == SetField::Check && wcsncmp(f.key, L"plugin:", 7) == 0) total++, on += f.cur == L"1";
     if (!total) return L"No modules yet";
     return std::to_wstring(total) + (total == 1 ? L" module, " : L" modules, ") + std::to_wstring(on) + L" on";
+}
+static SetItem Halo_CardBase(const SetWindow& w, size_t k, const HaloBridgePlugin* pl, const std::wstring& id) {
+    SetItem card;
+    card.type = SetItem::PlugCard;
+    card.aux = (int)k;
+    card.text = w.fields[k].group;
+    card.sub = pl ? pl->desc : L"";
+    if (card.sub.empty()) card.sub = L"No description.";
+    if (pl && (!pl->version.empty() || !pl->author.empty()))
+        card.note = (pl->version.empty() ? L"" : L"Version " + pl->version) +
+                    (pl->version.empty() || pl->author.empty() ? L"" : L"  \u00B7  ") +
+                    (pl->author.empty() ? L"" : L"by " + pl->author);
+    card.url = L"halo:fold:" + id;
+    return card;
+}
+// An open card at card.x, card.y, card.w with its body: the words that call it, then the
+// module's own settings right in the card. Returns its height.
+static float Halo_AddOpenCard(SetWindow& w, SetItem card, size_t k, const HaloBridgePlugin* pl, const std::wstring& id,
+                              float nameH, float line) {
+    float top = kHaloCardPad + nameH + 4;
+    card.head = top + Set_TextH(w.fHint.get(), card.sub, Halo_DescW(card)) + 8;
+    bool settings = pl && pl->hasSettings;
+    HaloBridgePanel bp;
+    bool known = settings && ::halobridge::Panel(id, &bp);
+    bool live = known && !bp.failed && bp.px > 0 && bp.child && IsWindow(bp.child);
+    float panelH = !settings ? -1.0f : live ? bp.px * 96.0f / (float)w.dpi : line + 12;
+    HaloBody b = Halo_Body(card.head, line, panelH);
+    card.h = b.end;
+    int ci = (int)w.items.size();
+    w.items.push_back(card);
+    if (k + 1 < w.fields.size()) {
+        SetItem words;
+        words.type = SetItem::Row;
+        words.field = (int)k + 1;  // The "words that call it" field follows its switch.
+        words.card = ci;
+        words.x = card.x;
+        words.w = card.w;
+        words.y = card.y + b.box;
+        words.h = 40;
+        w.items.push_back(words);
+    }
+    if (settings) {
+        SetItem pn;
+        pn.type = SetItem::PlugPanel;
+        pn.card = ci;
+        pn.url = id;
+        pn.x = card.x + kHaloCardPad;
+        pn.w = std::min(card.w - 2 * kHaloCardPad, kHaloPanelMaxW);
+        pn.y = card.y + b.panel;
+        pn.h = panelH;
+        pn.aux = live ? bp.px : 0;
+        pn.sub = live ? L"" : known && bp.failed ? L"Its settings could not load. Close this card and open it again to retry."
+                                                 : L"Loading its settings";
+        w.items.push_back(pn);
+    }
+    return card.h;
 }
 // Lays the cards out from y; returns the y under them.
 static float Halo_BuildPlugins(SetWindow& w, float y) {
@@ -5580,10 +5691,8 @@ static float Halo_BuildPlugins(SetWindow& w, float y) {
         w.items.push_back(s);
     }
     y += kHaloSegH + 14;
-    int cols = grid ? std::clamp((int)((w.contentW + kHaloCardGap) / (kHaloCardMinW + kHaloCardGap)), 1, 3) : 1;
-    float colW = (w.contentW - (cols - 1) * kHaloCardGap) / cols;
-    std::vector<float> colY(cols, y);
-    int n = 0;
+    struct Entry { size_t k; std::wstring id; const HaloBridgePlugin* pl; };
+    std::vector<Entry> list;
     for (size_t k = 0; k < w.fields.size(); k++) {
         const SetField& f = w.fields[k];
         if (f.kind != SetField::Check || wcsncmp(f.key, L"plugin:", 7) != 0) continue;
@@ -5591,62 +5700,42 @@ static float Halo_BuildPlugins(SetWindow& w, float y) {
         const HaloBridgePlugin* pl = nullptr;
         for (const auto& p : plugins)
             if (p.id == id) pl = &p;
-        int c = n++ % cols;  // Round robin: opening a card moves only the cards under it.
-        SetItem card;
-        card.type = SetItem::PlugCard;
-        card.aux = (int)k;
-        card.text = f.group;
-        card.sub = pl ? pl->desc : L"";
-        if (card.sub.empty()) card.sub = L"No description.";
-        if (pl && (!pl->version.empty() || !pl->author.empty()))
-            card.note = (pl->version.empty() ? L"" : L"Version " + pl->version) +
-                        (pl->version.empty() || pl->author.empty() ? L"" : L"  \u00B7  ") +
-                        (pl->author.empty() ? L"" : L"by " + pl->author);
-        card.url = L"halo:fold:" + id;
-        card.x = w.contentX + c * (colW + kHaloCardGap);
-        card.w = colW;
-        card.y = colY[c];
-        bool open = g_haloOpen.count(id) > 0;
-        float top = kHaloCardPad + nameH + 4;
-        if (!open) {
-            card.h = card.head = top + 2 * line + 14;  // Every closed card the same height, so rows line up.
-            w.items.push_back(card);
-        } else {
-            card.head = top + Set_TextH(w.fHint.get(), card.sub, Halo_DescW(card)) + 8;
-            bool button = pl && pl->hasSettings;
-            HaloBody b = Halo_Body(card.head, line, button);
-            card.h = b.end;
-            int ci = (int)w.items.size();
-            w.items.push_back(card);
-            if (k + 1 < w.fields.size()) {
-                SetItem words;
-                words.type = SetItem::Row;
-                words.field = (int)k + 1;  // The "words that call it" field follows its switch.
-                words.card = ci;
-                words.x = card.x;
-                words.w = card.w;
-                words.y = card.y + b.box;
-                words.h = 40;
-                w.items.push_back(words);
-            }
-            if (button) {
-                SetItem btn;
-                btn.type = SetItem::PlugBtn;
-                btn.card = ci;
-                btn.text = L"Open its settings";
-                btn.url = L"halo:plugset:" + id;
-                btn.x = card.x + kHaloCardPad;
-                btn.w = std::min(card.w - 2 * kHaloCardPad, Set_TextW(w.fValue.get(), btn.text) + 56);
-                btn.y = card.y + b.btn;
-                btn.h = 34;
-                w.items.push_back(btn);
-            }
-        }
-        colY[c] += card.h + kHaloCardGap;
+        list.push_back({k, id, pl});
     }
-    float bottom = y;
-    for (float v : colY) bottom = std::max(bottom, v);
-    return bottom;
+    const int cols =
+        grid ? std::clamp((int)((w.contentW + kHaloCardGap) / (kHaloCardMinW + kHaloCardGap)), 1, kHaloMaxCols) : 1;
+    const float colW = (w.contentW - (cols - 1) * kHaloCardGap) / cols;
+    const float closedH = kHaloCardPad + nameH + 4 + 2 * line + 14;  // Every closed card the same height.
+    for (size_t r0 = 0; r0 < list.size(); r0 += cols) {
+        std::vector<size_t> opened;
+        for (int c = 0; c < cols && r0 + c < list.size(); c++) {
+            const Entry& e = list[r0 + c];
+            SetItem card = Halo_CardBase(w, e.k, e.pl, e.id);
+            card.x = w.contentX + c * (colW + kHaloCardGap);
+            card.w = colW;
+            card.y = y;
+            bool open = g_haloOpen.count(e.id) > 0;
+            if (open && cols == 1) {  // The list opens a card in place.
+                y += Halo_AddOpenCard(w, card, e.k, e.pl, e.id, nameH, line) - closedH;
+                continue;
+            }
+            card.h = card.head = closedH;
+            card.open = open;
+            w.items.push_back(card);
+            if (open) opened.push_back(r0 + c);
+        }
+        y += closedH + kHaloCardGap;
+        // The grid: an open tile's card spans the full width under its row.
+        for (size_t i : opened) {
+            const Entry& e = list[i];
+            SetItem card = Halo_CardBase(w, e.k, e.pl, e.id);
+            card.x = w.contentX;
+            card.w = w.contentW;
+            card.y = y;
+            y += Halo_AddOpenCard(w, card, e.k, e.pl, e.id, nameH, line) + kHaloCardGap;
+        }
+    }
+    return y;
 }
 static void Set_CommitEdit(SetWindow& w, bool apply);
 // After a fold or a view change: the page is laid out again where it is.
@@ -5658,7 +5747,7 @@ static void Halo_Relayout() {
 static void Set_BuildPage(SetWindow& w) {
     w.items.clear();
     const float space = Set_RailSpace(w), avail = w.cw - space;
-    const float maxW = w.page == kHaloPluginsPage && Halo_View() == 0 ? kHaloGridMaxW : kSetMaxW;
+    const float maxW = w.page == kHaloPluginsPage && Halo_View() == 0 ? 100000.0f : kSetMaxW;  // the grid fills the page
     w.contentW = std::clamp(avail - 2 * kSetPadX, 420.0f, maxW);
     w.contentX = space + std::max(kSetPadX, (avail - w.contentW) / 2);
     float introH = Set_TextH(w.fIntro.get(), kSetPages[w.page].intro, w.contentW);
@@ -6334,15 +6423,21 @@ static float Halo_CardGlow(const SetWindow& w, int idx) {
 static void Halo_DrawPlugCard(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
     D2D1_RECT_F r = Set_RowRect(w, it);
     float hov = Halo_CardGlow(w, idx);
-    Set_DrawCard(p, r, hov);
-    p.GradFill(r, 10, 0.13f * hov);
-    p.GradRing(r, 10, hov, 1.5f);
+    const SetItem* panel = nullptr;  // the module's own settings, when the card is open
+    for (size_t i = idx + 1; i < w.items.size() && w.items[i].card == idx; i++)
+        if (w.items[i].type == SetItem::PlugPanel) panel = &w.items[i];
+    // A tile whose card is open under its row keeps its ring lit, so the two read as one.
+    float ring = it.open ? std::max(hov, 0.85f) : hov;
+    Set_DrawCard(p, r, ring);
+    // No hover tint over a card that holds a settings panel: the panel's colour is the card's.
+    if (!(panel && panel->aux > 0)) p.GradFill(r, 10, 0.13f * hov);
+    p.GradRing(r, 10, ring, 1.5f);
     const SetField* f = it.aux >= 0 && it.aux < (int)w.fields.size() ? &w.fields[it.aux] : nullptr;
     bool on = f && f->cur == L"1", open = it.h > it.head + 1;
     const float nameH = Halo_LineH(w.fLabel.get()), line = Halo_LineH(w.fHint.get());
     float top = r.top + kHaloCardPad;
-    p.Glyph(w.fIconS.get(), open ? 0xE70D : 0xE76C, {r.left + 10, top, r.left + 34, top + nameH},
-            hov > 0.5f ? mocha::text : mocha::overlay2);
+    p.Glyph(w.fIconS.get(), open || it.open ? 0xE70D : 0xE76C, {r.left + 10, top, r.left + 34, top + nameH},
+            hov > 0.5f || it.open ? mocha::text : mocha::overlay2);
     D2D1_RECT_F sw = Halo_CardSwitch(w, it);
     p.Text(w.fLabel.get(), it.text, {r.left + 38, top, sw.left - 12, top + nameH + 2}, on ? mocha::text : mocha::overlay1);
     D2D1_RECT_F desc{r.left + 38, top + nameH + 4, r.left + 38 + Halo_DescW(it), r.top + it.head - (open ? 8 : 14) + 1};
@@ -6357,10 +6452,7 @@ static void Halo_DrawPlugCard(SetPaint& p, SetWindow& w, const SetItem& it, int 
         if (w.kbd && w.focus == it.aux) p.GradRing({sw.left - 3, sw.top - 3, sw.right + 3, sw.bottom + 3}, 14, 1, 2);
     }
     if (!open) return;
-    bool button = idx + 1 < (int)w.items.size() &&
-                  std::any_of(w.items.begin() + idx + 1, w.items.end(),
-                              [&](const SetItem& b) { return b.card == idx && b.type == SetItem::PlugBtn; });
-    HaloBody b = Halo_Body(it.head, line, button);
+    HaloBody b = Halo_Body(it.head, line, panel ? panel->h : -1.0f);
     float l = r.left + kHaloCardPad, rr = r.right - kHaloCardPad;
     p.Text(w.fHint.get(), it.note.empty() ? std::wstring(L"No version given") : it.note,
            {r.left + 38, r.top + b.note, rr, r.top + b.note + line + 2}, mocha::overlay1);
@@ -6368,6 +6460,7 @@ static void Halo_DrawPlugCard(SetPaint& p, SetWindow& w, const SetItem& it, int 
     p.Text(w.fHint.get(), L"Words that call it", {l, r.top + b.cap, rr, r.top + b.cap + line + 2}, mocha::subtext1);
     p.Text(w.fHint.get(), L"Several words work. * means every search.", {l, r.top + b.hint, rr, r.top + b.hint + line + 2},
            mocha::overlay1);
+    if (panel) p.Fill({l, r.top + b.rule2, rr, r.top + b.rule2 + 1}, mocha::surface1, 0.7f);
 }
 
 // The words box of an open card: the template's Text box, with no row card around it.
@@ -6383,15 +6476,12 @@ static void Halo_DrawWordsBox(SetPaint& p, SetWindow& w, const SetItem& it) {
                {b.left + 12, b.top, b.right - 10, b.bottom}, f.cur.empty() ? mocha::overlay0 : mocha::text);
 }
 
-static void Halo_DrawPlugBtn(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
+// A module's own settings: the engine's panel window sits here. Until it does (or when it could
+// not load), a quiet line says so.
+static void Halo_DrawPlugPanel(SetPaint& p, SetWindow& w, const SetItem& it) {
+    if (it.aux > 0) return;
     D2D1_RECT_F r = Set_RowRect(w, it);
-    float hov = Set_GlowOf(w, 3000 + idx);
-    p.Round(r, 8, kSetBoxFill);
-    p.Edge(r, 8, mocha::overlay0, 0.7f * (1 - hov), 1.25f);
-    p.GradFill(r, 8, 0.13f * hov);
-    p.GradRing(r, 8, hov, 1.75f);
-    p.Glyph(w.fIconS.get(), 0xE713, {r.left + 10, r.top, r.left + 34, r.bottom}, mocha::subtext1);
-    p.Text(w.fValue.get(), it.text, {r.left + 38, r.top, r.right - 10, r.bottom}, mocha::text);
+    p.Text(w.fHint.get(), it.sub, {r.left, r.top, r.right, r.bottom}, mocha::overlay1);
 }
 
 static void Halo_DrawSeg(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
@@ -6411,11 +6501,188 @@ static void Halo_DrawSeg(SetPaint& p, SetWindow& w, const SetItem& it, int idx) 
     p.Text(w.fValue.get(), it.text, {r.left + 34, r.top, r.right - 8, r.bottom}, sel ? mocha::crust : mocha::text);
 }
 
+// ---- Halo: a module's own settings, inside its open card ----------------------------
+// The engine builds the module's settings panel (the one Flow shows in its own settings) as a
+// child window of a holder this window owns. The holder sits where the card's panel item is,
+// cut to the visible page (under the title bar, not under the footer dock), so the panel
+// scrolls with the page. The engine reports the panel's height; the card grows to fit it.
+constexpr wchar_t kHaloPanelClass[] = L"HaloPanelHolder";
+struct HaloPanelHost {
+    HWND clip = nullptr;
+    int askedW = 0;  // the width the engine was last asked for, in pixels
+    RECT at{}, vis{}, foot{};
+    bool shown = false;
+};
+[[clang::no_destroy]] static std::map<std::wstring, HaloPanelHost> g_haloPanels;
+struct HaloPanelDying {
+    HWND clip, child;
+    DWORD tick;
+};
+[[clang::no_destroy]] static std::vector<HaloPanelDying> g_haloPanelsDying;
+
+static LRESULT CALLBACK Halo_PanelProc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
+    if (m == WM_ERASEBKGND) return 1;
+    if (m == WM_PAINT) {  // Only seen where the panel does not reach: the card's own colour.
+        PAINTSTRUCT ps;
+        HDC dc = BeginPaint(h, &ps);
+        HBRUSH b = CreateSolidBrush(RGB(0x24, 0x24, 0x35));
+        FillRect(dc, &ps.rcPaint, b);
+        DeleteObject(b);
+        EndPaint(h, &ps);
+        return 0;
+    }
+    return DefWindowProcW(h, m, wp, lp);
+}
+
+static void Halo_RegisterPanelClass() {
+    static bool done = false;
+    if (done) return;
+    done = true;
+    UnregisterClassW(kHaloPanelClass, (HINSTANCE)&__ImageBase);  // a class left by an older build
+    WNDCLASSEXW wc{sizeof(wc)};
+    wc.lpfnWndProc = Halo_PanelProc;
+    wc.hInstance = (HINSTANCE)&__ImageBase;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpszClassName = kHaloPanelClass;
+    RegisterClassExW(&wc);
+}
+
+// Holders whose panel the engine has let go of (or that waited long enough) are destroyed.
+static void Halo_ReapPanels(bool all) {
+    for (size_t i = 0; i < g_haloPanelsDying.size();) {
+        const HaloPanelDying& d = g_haloPanelsDying[i];
+        if (all || !d.child || !IsWindow(d.child) || GetTickCount() - d.tick > 3000) {
+            if (!all && IsWindow(d.clip)) DestroyWindow(d.clip);
+            g_haloPanelsDying.erase(g_haloPanelsDying.begin() + i);
+        } else {
+            i++;
+        }
+    }
+}
+
+static void Halo_ClosePanel(const std::wstring& id, HaloPanelHost& h) {
+    HaloBridgePanel bp;
+    HWND child = ::halobridge::Panel(id, &bp) ? bp.child : nullptr;
+    ::halobridge::DropPanel(id);
+    ::halobridge::SendLine({L"panelclose", id});
+    if (h.clip) {
+        ShowWindow(h.clip, SW_HIDE);
+        g_haloPanelsDying.push_back({h.clip, child, GetTickCount()});
+    }
+}
+
+// The settings window is going: the engine lets go of every panel (their windows go with ours).
+static void Halo_DropAllPanels() {
+    for (auto& kv : g_haloPanels) ::halobridge::DropPanel(kv.first);
+    if (!g_haloPanels.empty() || !g_haloPanelsDying.empty()) ::halobridge::SendLine({L"panelclose", L"*"});
+    g_haloPanels.clear();
+    Halo_ReapPanels(true);
+}
+
+static void Halo_PlacePanels(SetWindow& w);
+
+// Halo's own messages on the settings window: a panel came, changed height or went (wParam 1: a
+// new engine, ask it again), and the window going. Hooked here so the shared window code stays
+// the same as every other mod's.
+static LRESULT CALLBACK Halo_SetHook(HWND h, UINT m, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR) {
+    if (m == WM_APP_SETTINGS_PANELS) {
+        SetWindow* w = g_setWin && g_setWin->hwnd == h ? g_setWin.get() : nullptr;
+        if (wp == 1)
+            for (auto& kv : g_haloPanels) kv.second.askedW = 0;
+        Halo_ReapPanels(false);
+        if (w && w->page == kHaloPluginsPage) {
+            Set_BuildAndClamp(*w);
+            Halo_PlacePanels(*w);
+            InvalidateRect(h, nullptr, FALSE);
+        }
+        return 0;
+    }
+    if (m == WM_DESTROY) Halo_DropAllPanels();
+    if (m == WM_NCDESTROY) RemoveWindowSubclass(h, Halo_SetHook, id);
+    return DefSubclassProc(h, m, wp, lp);
+}
+
+// Puts every open card's panel where its card is now. Cheap when nothing moved.
+static void Halo_PlacePanels(SetWindow& w) {
+    if (w.render || !w.hwnd) return;
+    Halo_RegisterPanelClass();
+    SetWindowSubclass(w.hwnd, Halo_SetHook, 0x4841, 0);  // once per window; a repeat call is a no-op
+    const bool onPage = w.page == kHaloPluginsPage;
+    std::set<std::wstring> want;
+    if (onPage)
+        for (const auto& it : w.items)
+            if (it.type == SetItem::PlugPanel) want.insert(it.url);
+    for (auto i = g_haloPanels.begin(); i != g_haloPanels.end();) {
+        if (want.count(i->first)) {
+            ++i;
+            continue;
+        }
+        Halo_ClosePanel(i->first, i->second);
+        i = g_haloPanels.erase(i);
+    }
+    Halo_ReapPanels(false);
+    if (!onPage) return;
+    const float s = (float)w.dpi / 96.0f;
+    auto px = [&](float v) { return (int)std::lround(v * s); };
+    const float viewH = Set_ViewH(w);
+    RECT view{px(Set_RailSpace(w) + 4), px(kSetCapH), px(w.cw), px(kSetCapH + viewH)};
+    D2D1_RECT_F fd = Set_FooterDock(w);
+    RECT foot{px(fd.left) - 2, px(fd.top + kSetCapH) - 2, px(fd.right) + 2, px(fd.bottom + kSetCapH) + 2};
+    for (const auto& it : w.items) {
+        if (it.type != SetItem::PlugPanel) continue;
+        HaloPanelHost& h = g_haloPanels[it.url];
+        if (!h.clip) {
+            h.clip = CreateWindowExW(WS_EX_NOPARENTNOTIFY, kHaloPanelClass, L"", WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                                     0, 0, 1, 1, w.hwnd, nullptr, (HINSTANCE)&__ImageBase, nullptr);
+            if (!h.clip) continue;
+        }
+        const int wpx = std::max(1, px(it.w));
+        if (h.askedW != wpx) {
+            wchar_t hw[24];
+            swprintf(hw, 24, L"%llu", (unsigned long long)(ULONG_PTR)h.clip);
+            if (::halobridge::SendLine({L"panel", it.url, hw, std::to_wstring(wpx), w.family})) h.askedW = wpx;
+        }
+        HaloBridgePanel bp;
+        bool live = it.aux > 0 && ::halobridge::Panel(it.url, &bp) && !bp.failed && bp.child && IsWindow(bp.child);
+        RECT at{px(it.x), px(it.y - w.scrollY + kSetCapH), 0, 0};
+        at.right = at.left + wpx;
+        at.bottom = at.top + (live ? bp.px : 0);
+        RECT vis{};
+        if (!live || w.pageT < 1 || !IntersectRect(&vis, &at, &view)) {
+            if (h.shown) ShowWindow(h.clip, SW_HIDE);
+            h.shown = false;
+            continue;
+        }
+        OffsetRect(&vis, -at.left, -at.top);
+        RECT f = foot;
+        OffsetRect(&f, -at.left, -at.top);
+        if (!EqualRect(&vis, &h.vis) || !EqualRect(&f, &h.foot) || !h.shown) {
+            HRGN rgn = CreateRectRgnIndirect(&vis);
+            HRGN pill = CreateRoundRectRgn(f.left, f.top, f.right + 1, f.bottom + 1, f.bottom - f.top, f.bottom - f.top);
+            CombineRgn(rgn, rgn, pill, RGN_DIFF);
+            DeleteObject(pill);
+            SetWindowRgn(h.clip, rgn, FALSE);  // the window owns rgn now
+            h.vis = vis;
+            h.foot = f;
+        }
+        if (!EqualRect(&at, &h.at) || !h.shown) {
+            SetWindowPos(h.clip, HWND_TOP, at.left, at.top, at.right - at.left, at.bottom - at.top,
+                         SWP_NOACTIVATE | (h.shown ? 0 : SWP_SHOWWINDOW));
+            h.at = at;
+        }
+        if (!h.shown) {
+            ShowWindow(h.clip, SW_SHOWNA);
+            h.shown = true;
+        }
+    }
+}
+
 static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
     if (Set_FitBoxes(w)) {
         Set_BuildPage(w);
         Set_PlaceEdit(w);
     }
+    Halo_PlacePanels(w);
     SetPaint p(w, rt);
     const auto base = D2D1::Matrix3x2F::Translation(0, kSetCapH);
     rt->BeginDraw();
@@ -6479,7 +6746,7 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
                     else Set_DrawRow(cp, w, it);
                     break;
                 case SetItem::PlugCard: Halo_DrawPlugCard(cp, w, it, (int)i); break;
-                case SetItem::PlugBtn: Halo_DrawPlugBtn(cp, w, it, (int)i); break;
+                case SetItem::PlugPanel: Halo_DrawPlugPanel(cp, w, it); break;
                 case SetItem::Seg: Halo_DrawSeg(cp, w, it, (int)i); break;
                 case SetItem::Banner: Set_DrawBanner(cp, w, it); break;
                 case SetItem::About: Set_DrawAbout(cp, w, it, (int)i); break;
@@ -6651,7 +6918,9 @@ static SetHit Set_Hit(SetWindow& w, float x, float y) {
                 h.kind = SetHit::Link;
                 h.a = (int)i;
             }
-        } else if (it.type == SetItem::Link || it.type == SetItem::PlugBtn || it.type == SetItem::Seg) {
+        } else if (it.type == SetItem::PlugPanel) {
+            h.id = 3000 + it.card;  // Over the settings stand-in the card stays lit; nothing to click.
+        } else if (it.type == SetItem::Link || it.type == SetItem::Seg) {
             h.kind = SetHit::Link;
             h.a = (int)i;
             h.id = 3000 + (int)i;
@@ -6931,12 +7200,6 @@ static void Set_GoPage(SetWindow& w, int page) {
 
 static void Set_OpenLink(PCWSTR url) {
     std::wstring u = url;  // url can point into an item, and the page is laid out again below.
-    if (u.rfind(L"halo:plugset:", 0) == 0) {
-        // The engine opens the plugin's own settings window; let it come to the front.
-        AllowSetForegroundWindow(ASFW_ANY);
-        ::halobridge::SendLine({L"plugsettings", u.substr(13)});
-        return;
-    }
     if (u.rfind(L"halo:fold:", 0) == 0) {
         std::wstring id = u.substr(10);
         if (!g_haloOpen.erase(id)) g_haloOpen.insert(id);
@@ -7279,7 +7542,7 @@ static std::vector<int> Set_FocusOrder(const SetWindow& w) {
     std::vector<int> order;
     for (auto& it : w.items)
         if (it.type == SetItem::Row) order.push_back(it.field);
-        else if (it.type == SetItem::PlugCard) order.push_back(it.aux);  // Halo: Tab reaches a card's switch.
+        else if (it.type == SetItem::PlugCard && !it.open) order.push_back(it.aux);  // Halo: Tab reaches a card's switch.
     order.push_back(-1);
     order.push_back(-2);
     order.push_back(-3);
