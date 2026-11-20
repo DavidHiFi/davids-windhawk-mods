@@ -1579,7 +1579,7 @@
     "activatorButton": "gshift",
     "clickIntervalMs": 33,
     "clicksPerSecond": 30,
-    "nativeSettingsTitleBar": 0,
+    "nativeSettingsTitleBar": 1,
     "settingsGlass": 1,
     "settingsTitleButtons": "native",
     "settingsTrayIcon": 1,

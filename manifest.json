@@ -1,7 +1,7 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-20T10:08:45+08:00",
+  "generatedAt": "2026-11-20T10:09:25+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 183,
@@ -866,7 +866,7 @@
       "name": "Seamless AutoClicker",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.6.9",
+      "version": "1.6.10",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",

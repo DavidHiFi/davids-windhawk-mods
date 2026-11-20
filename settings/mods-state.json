@@ -501,7 +501,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.6.9"
+    "version": "1.6.10"
   },
   "local@seamless-autoscroll": {
     "disabled": false,

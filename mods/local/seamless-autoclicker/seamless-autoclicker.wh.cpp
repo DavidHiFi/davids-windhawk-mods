@@ -2,7 +2,7 @@
 // @id              seamless-autoclicker
 // @name            Seamless AutoClicker
 // @description     Hold a side mouse button and left click keeps clicking, with a lock, a tray switch and its own settings window
-// @version         1.6.9
+// @version         1.6.10
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1965,9 +1965,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"toggleWithRightClick", L"Right click locks clicking on", L"While auto clicking, press right click and the clicking keeps going after you let go. Press right click again to stop.", L"1", {}, 0, 100, 0, L"Hold to click"},
 {K::Number, L"clickIntervalMs", L"Click interval (milliseconds)", L"Time between clicks, press and release included. 16 to 1000 (Suggested: 33, about 30 clicks a second). Lower is faster.", L"33", {}, 16, 1000, 0, L"Speed"},
 {K::Hotkey, L"toggleHotkey", L"Turn auto clicking on or off", L"Press the keys in the box. Backspace clears it. The tray icon does the same.", L"", {}, 0, 100, 1, L"Shortcut"},
-{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 1, L"Settings window"},
-{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 1, L"Settings window"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to turn auto clicking on or off. Right-click it for these settings. When off, change settings in Windhawk.", L"1", {}, 0, 100, 1, L"Settings window"}
+{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 2, L"Settings window"},
+{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 2, L"Settings window"},
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to turn auto clicking on or off. Right-click it for these settings. When off, change settings in Windhawk.", L"1", {}, 0, 100, 2, L"Settings window"}
     };
 }
 
@@ -1978,6 +1978,7 @@ struct SetPageInfo {
 static const SetPageInfo kSetPages[] = {
 {L"Clicking", L"The button you hold, how fast it clicks and the right-click lock.", 0xE962},
 {L"Shortcut and tray", L"A key that turns auto clicking on or off, the tray icon and this window.", 0xE765},
+{L"Look", L"Choose how this settings window looks and whether its tray icon is shown.", 0xE790},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
