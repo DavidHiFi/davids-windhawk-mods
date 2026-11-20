@@ -522,7 +522,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.4.3"
+    "version": "1.4.4"
   },
   "local@seamless-color-picker": {
     "disabled": false,

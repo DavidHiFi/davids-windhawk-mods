@@ -2,7 +2,7 @@
 // @id              seamless-clipboard-manager
 // @name            Seamless Clipboard Manager
 // @description     Keeps everything you copy, text and images, in a searchable list you open with Win+V
-// @version         1.4.3
+// @version         1.4.4
 // @author          DavidHiFi, Scott Brogden, Ditto contributors
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -260,6 +260,9 @@ Based on [Ditto](https://github.com/sabrogden/Ditto) by Scott Brogden and the Di
 - syncPeers: ""
   $name: Other computers
   $description: "Addresses to send copies to, separated by semicolons, like 192.0.2.11:4126. Leave empty to not share."
+- syncHistoryMB: 100
+  $name: Old clips to send a new computer (MB)
+  $description: "0 to 4096 (Suggested: 100). The first time a computer is added, your newest clips up to this size go to it. Copies made while it was off always catch up."
 */
 // ==/WindhawkModSettings==
 
@@ -328,6 +331,7 @@ constexpr UINT WM_SCM_CLIP_SAVED = WM_APP + 4;        // A clip was saved; refre
 constexpr UINT WM_SCM_OPEN_SETTINGS = WM_APP + 5;     // Open the settings window.
 constexpr UINT WM_SCM_QUIT = WM_APP + 6;              // Tear down and leave the loop.
 constexpr UINT WM_SCM_SYNC_RECV = WM_APP + 7;         // A clip arrived from another computer (lParam: heap SyncRecvMsg).
+constexpr UINT WM_SCM_SYNC_SENT = WM_APP + 8;         // The send thread finished one send (lParam: heap syncx::SentMsg).
 
 // Timer ids on g_msgWnd. Parts own the ranges noted.
 constexpr UINT_PTR kTimerCaptureDebounce = 10;   // 30-capture
@@ -335,6 +339,7 @@ constexpr UINT_PTR kTimerHotkeyRetry = 11;       // 30-capture
 constexpr UINT_PTR kTimerPasteStep = 12;         // 30-capture
 constexpr UINT_PTR kTimerCleanup = 13;           // 90-main (calls Db_Cleanup)
 constexpr UINT_PTR kTimerSyncRefresh = 14;       // 35-sync: one list refresh per burst of received clips
+constexpr UINT_PTR kTimerSyncPump = 15;          // 35-sync: retry clips owed to a computer that was off
 // 40-ui uses timers on its own windows only.
 
 constexpr WCHAR kMsgClass[] = L"SeamlessClipboardManagerMsg";
@@ -413,6 +418,7 @@ struct Settings {
     bool syncEnabled;               // "syncEnabled" default false: share clips with the computers in syncPeers
     int syncPort;                   // "syncPort"    1024..65535, default 4126
     std::wstring syncPeers;         // "syncPeers"   ";" separated host:port list, default ""
+    int syncHistoryMB;              // "syncHistoryMB" 0..4096, default 100: old clips a newly added computer gets
 };
 extern Settings g_set;
 void LoadSettings();  // 90-main.cpp
@@ -532,7 +538,18 @@ bool Db_GetFormat(int64_t id, const std::wstring& formatName, std::string& out);
 std::wstring Db_GetClipText(int64_t id);                  // CF_UNICODETEXT, else CF_TEXT (ANSI->wide), else file list, else mText.
 int64_t Db_SaveClip(const ClipData& clip);                // New id, or existing id when a duplicate moved to the top. 0 on failure.
 int32_t Db_SyncCrc(const std::vector<ClipFormat>& formats);        // Content id two computers agree on whatever their settings.
-int64_t Db_SyncSaveRemote(const ClipData& clip, int32_t syncCrc);  // A clip received from another computer; same path as a copy made here.
+// A clip received from another computer; same path as a copy made here. copiedAt is the sender's copy
+// time: a fresh one goes to the top like a copy made here, an old one (catch-up) slots in by date and
+// never moves a clip this computer already has.
+int64_t Db_SyncSaveRemote(const ClipData& clip, int32_t syncCrc, int64_t copiedAt);
+int64_t Db_SyncClipTime(int64_t id);                       // When it was last copied (unix seconds), 0 if gone.
+bool Db_SyncIsRemote(int64_t id);                          // It arrived from another computer.
+int64_t Db_SyncOwedAfter(int64_t after);                   // Oldest clip made here with lID > after, 0 if none.
+int64_t Db_SyncMaxId();                                    // Newest clip id, 0 if empty.
+// The last clip id a computer has from us. A computer never seen before starts so it is owed only
+// the newest clips made here, up to historyBytes in total.
+int64_t Db_SyncCursor(const std::wstring& peer, uint64_t historyBytes);
+void Db_SetSyncCursor(const std::wstring& peer, int64_t id);
 bool Db_MoveToTop(int64_t id);                            // On paste: new clipOrder (and clipGroupOrder in a group), lastPasteDate = now.
 bool Db_DeleteClips(const std::vector<int64_t>& ids);     // Groups: their clips go back to the main list (Ditto behavior).
 bool Db_SetDescription(int64_t id, const std::wstring& text);
@@ -598,6 +615,8 @@ void Sync_ApplySettings();          // Start or stop the sync threads to match g
 void Sync_Stop();                   // Tear the sync threads down (UI thread, before Db_Close).
 void Sync_OnClipSaved(int64_t id);  // Queue a just-saved clip for sending (UI thread).
 void Sync_OnRecvMsg(LPARAM lp);     // A clip arrived; save it and refresh the list (UI thread).
+void Sync_OnSentMsg(LPARAM lp);     // A send finished; move that computer's catch-up on (UI thread).
+void Sync_OnPumpTimer();            // kTimerSyncPump: retry computers that were off (UI thread).
 
 // ---------------------------------------------------------------------------
 // 40-ui.cpp : clip list window, preview, editor, properties, groups.
@@ -950,6 +969,13 @@ static bool EnsureSchema(sqlite3* db) {
                   "CREATE INDEX IF NOT EXISTS ScmSync_Crc ON ScmSync(crc);"
                   "CREATE TRIGGER IF NOT EXISTS ScmSync_Delete AFTER DELETE ON Main BEGIN "
                   "DELETE FROM ScmSync WHERE clipID = old.lID; END;"))
+        return false;
+    // Catch-up: the last clip id each other computer has from us, and which clips arrived from
+    // another computer (those are never sent on).
+    if (!Exec(db, "CREATE TABLE IF NOT EXISTS ScmSyncPeer(peer TEXT PRIMARY KEY, lastId INTEGER);"
+                  "CREATE TABLE IF NOT EXISTS ScmSyncRemote(clipID INTEGER PRIMARY KEY);"
+                  "CREATE TRIGGER IF NOT EXISTS ScmSyncRemote_Delete AFTER DELETE ON Main BEGIN "
+                  "DELETE FROM ScmSyncRemote WHERE clipID = old.lID; END;"))
         return false;
     return Exec(db, kTriggersAndIndexes);
 }
@@ -1550,18 +1576,40 @@ int64_t Db_SaveClip(const ClipData& clip) {
     return t.Commit() ? id : 0;
 }
 
+// clipOrder for a clip copied at `when`: just above the newest clip here that is not newer.
+static double OrderForDate(int64_t when) {
+    Stmt below("SELECT MAX(clipOrder) FROM Main WHERE lDate <= ?");
+    if (!below.Int(1, when).Row() || below.IsNull(0)) {
+        Stmt low("SELECT MIN(clipOrder) FROM Main");
+        return low.Row() && !low.IsNull(0) ? low.D(0) - 1 : 0;
+    }
+    double a = below.D(0);
+    Stmt above("SELECT MIN(clipOrder) FROM Main WHERE clipOrder > ?");
+    if (!above.Dbl(1, a).Row() || above.IsNull(0)) return a + 1;
+    return (a + above.D(0)) / 2;
+}
+
 // A clip that arrived from another computer: the same path as a copy made here (same dedupe,
-// same transaction), but it is never sent on again. Only the capture path feeds Sync_OnClipSaved.
-int64_t Db_SyncSaveRemote(const ClipData& clip, int32_t syncCrc) {
+// same transaction), but it is marked remote and never sent on again.
+int64_t Db_SyncSaveRemote(const ClipData& clip, int32_t syncCrc, int64_t copiedAt) {
     if (!g_db || clip.formats.empty()) return 0;
+    int64_t now = UnixNow();
+    // A copy made in the last few minutes (or by an older build, which stamps the send time) acts
+    // like a copy made here. Anything older is catch-up and keeps its place in time.
+    bool fresh = copiedAt <= 0 || copiedAt > now - 300;
     Txn t;
     if (!t) return 0;
     int64_t id = 0;
     Stmt seen("SELECT clipID FROM ScmSync WHERE crc = ? LIMIT 1");
     if (seen.Int(1, syncCrc).Row()) id = seen.I64(0);
+    if (id && !fresh) return t.Commit() ? id : 0;  // Already here; catch-up never reorders the list.
     if (!id && !g_set.allowDuplicates) {
         Stmt dup("SELECT lID FROM Main WHERE CRC = ? AND bIsGroup = 0 LIMIT 1");
         if (dup.Int(1, ClipCrc(clip.formats)).Row()) id = dup.I64(0);
+    }
+    if (id && !fresh) {  // Same content under another id: leave it where it is.
+        MarkSync(id, syncCrc);
+        return t.Commit() ? id : 0;
     }
     if (id && !g_set.allowDuplicates) {  // Same content again: only clipOrder moves, like a repeat copy.
         Stmt up("UPDATE Main SET clipOrder = ? WHERE lID = ?");
@@ -1570,19 +1618,78 @@ int64_t Db_SyncSaveRemote(const ClipData& clip, int32_t syncCrc) {
         MarkSync(id, syncCrc);
         return t.Commit() ? id : 0;
     }
-    int64_t now = UnixNow();
+    int64_t when = fresh ? now : copiedAt;
+    double order = fresh ? NewOrder(-1) : OrderForDate(copiedAt);
     Stmt ins("INSERT INTO Main (lDate, mText, lShortCut, lDontAutoDelete, CRC, bIsGroup, lParentID, QuickPasteText, clipOrder, "
              "clipGroupOrder, globalShortCut, lastPasteDate, stickyClipOrder, stickyClipGroupOrder, MoveToGroupShortCut, "
              "GlobalMoveToGroupShortCut) VALUES (?1, ?2, 0, 0, ?3, 0, -1, '', ?4, 0, 0, ?1, -(2147483647), -(2147483647), 0, 0)");
-    if (!ins.Int(1, now).Str(2, Desc(clip.description)).Int(3, ClipCrc(clip.formats)).Dbl(4, NewOrder(-1)).Run()) return 0;
+    if (!ins.Int(1, when).Str(2, Desc(clip.description)).Int(3, ClipCrc(clip.formats)).Dbl(4, order).Run()) return 0;
     int64_t nid = api.last_insert_rowid(g_db);
     if (!InsertFormats(nid, clip.formats)) return 0;
-    SaveSource(nid, clip.sourceApp);
+    {
+        Stmt s("INSERT OR REPLACE INTO ScmSource(clipID, app, lastCopy) VALUES(?1, NULLIF(?2, ''), ?3)");
+        if (!s.Int(1, nid).Str(2, clip.sourceApp).Int(3, when).Run()) return 0;
+    }
     MarkSync(nid, syncCrc);
+    Stmt remote("INSERT OR REPLACE INTO ScmSyncRemote(clipID) VALUES(?)");
+    if (!remote.Int(1, nid).Run()) return 0;
     return t.Commit() ? nid : 0;
 }
 
 int32_t Db_SyncCrc(const std::vector<ClipFormat>& formats) { return SyncCrc(formats); }
+
+int64_t Db_SyncClipTime(int64_t id) {
+    if (!g_db) return 0;
+    Stmt s("SELECT COALESCE((SELECT lastCopy FROM ScmSource WHERE clipID = ?1), lDate) FROM Main WHERE lID = ?1");
+    return s.Int(1, id).Row() && !s.IsNull(0) ? s.I64(0) : 0;
+}
+
+bool Db_SyncIsRemote(int64_t id) {
+    if (!g_db) return false;
+    Stmt s("SELECT 1 FROM ScmSyncRemote WHERE clipID = ?");
+    return s.Int(1, id).Row();
+}
+
+int64_t Db_SyncOwedAfter(int64_t after) {
+    if (!g_db) return 0;
+    Stmt s("SELECT lID FROM Main WHERE lID > ? AND bIsGroup = 0 "
+           "AND lID NOT IN (SELECT clipID FROM ScmSyncRemote) ORDER BY lID LIMIT 1");
+    return s.Int(1, after).Row() ? s.I64(0) : 0;
+}
+
+int64_t Db_SyncMaxId() {
+    if (!g_db) return 0;
+    Stmt s("SELECT MAX(lID) FROM Main");
+    return s.Row() && !s.IsNull(0) ? s.I64(0) : 0;
+}
+
+int64_t Db_SyncCursor(const std::wstring& peer, uint64_t historyBytes) {
+    if (!g_db) return 0;
+    Stmt have("SELECT lastId FROM ScmSyncPeer WHERE peer = ?");
+    if (have.Str(1, peer).Row()) return have.I64(0);
+    // New computer: walk back from the newest clip made here until the budget is spent.
+    // length() reads the blob size from the record header, so this does not load the images.
+    int64_t cursor = 0;
+    uint64_t used = 0;
+    Stmt walk("SELECT lID, (SELECT COALESCE(SUM(length(ooData)), 0) FROM Data WHERE lParentID = Main.lID) "
+              "FROM Main WHERE bIsGroup = 0 AND lID NOT IN (SELECT clipID FROM ScmSyncRemote) ORDER BY lID DESC");
+    while (walk.Row()) {
+        uint64_t size = (uint64_t)walk.I64(1);
+        if (used + size > historyBytes) {
+            cursor = walk.I64(0);
+            break;
+        }
+        used += size;
+    }
+    Db_SetSyncCursor(peer, cursor);
+    return cursor;
+}
+
+void Db_SetSyncCursor(const std::wstring& peer, int64_t id) {
+    if (!g_db) return;
+    Stmt s("INSERT OR REPLACE INTO ScmSyncPeer(peer, lastId) VALUES(?1, ?2)");
+    s.Str(1, peer).Int(2, id).Run();
+}
 
 bool Db_MoveToTop(int64_t id) {  // ProcessPaste.cpp:200
     if (!g_db) return false;
@@ -9804,6 +9911,7 @@ static std::vector<SetField> Set_MakeFields() {
         {K::Check, L"syncEnabled", L"Share clips with another computer", L"Copies made here show up in the clip list on the other computer, and theirs show up here. Both computers need this on, with each other listed under \"Other computers\".", L"0", {}, 0, 0, 5, L"Share"},
         {K::Number, L"syncPort", L"Sync port", L"1024 to 65535 (Suggested: 4126). Both computers can use the same port.", L"4126", {}, 1024, 65535, 5, L"Share"},
         {K::Text, L"syncPeers", L"Other computers", L"Addresses to send copies to, separated by semicolons, like 192.0.2.11:4126. Leave empty to not share.", L"", {}, 0, 0, 5, L"Share"},
+        {K::Number, L"syncHistoryMB", L"Old clips to send a new computer (MB)", L"0 to 4096 (Suggested: 100). The first time a computer is added, your newest clips up to this size go to it. Copies made while it was off always catch up.", L"100", {}, 0, 4096, 5, L"Share"},
     };
 }
 
@@ -13190,11 +13298,24 @@ int Harness_TestSettings() { return 0; }
 // ever touched on the UI thread: the send thread receives finished envelopes
 // through a queue, and the listen thread hands arrivals back to the message
 // window. One short-lived connection per clip, so there is nothing to keep
-// connected; a computer that is off simply gets nothing until its next copy.
+// connected.
+//
+// Catch-up: for each other computer the database keeps the id of the last
+// clip it confirmed (ScmSyncPeer). The pump sends that computer the next
+// clip made here, one at a time, and moves the mark on when the other side
+// answers "got it". A computer that is off is retried every 15 seconds to
+// 2 minutes, and straight away when it sends us anything, so copies made
+// while it was off arrive when it is back. The first time a computer is
+// added, the mark starts far enough back to send the newest clips up to the
+// "old clips" budget. Each clip carries the time it was copied, so old ones
+// land at their place in time instead of on top. Before any catch-up the
+// pump says hello and waits for an answer: builds before 1.4.4 never answer,
+// so they only ever get new copies, as before.
 
 namespace syncx {
 
 constexpr uint32_t kEnvelopeMagic = 0x314D4353;  // "SCM1" little endian.
+constexpr uint32_t kAckMagic = 0x4B4D4353;       // "SCMK": the receiver's "got it" (1.4.4 and later).
 constexpr int kMaxFormats = 64;                  // A clip carries at most this many formats.
 constexpr int kMaxNameWchars = 256;              // Caps for the strings in an envelope.
 constexpr int kMaxDescWchars = 500;              // (Desc() stores at most 500.)
@@ -13211,9 +13332,43 @@ struct SyncPeer {
     uint16_t port = 0;
 };
 
+enum class ItemKind { Direct, Hello, CatchUp };
+
+struct SendItem {
+    std::string payload;
+    size_t peer = 0;                    // Index into g_peers.
+    int64_t id = 0;                     // Clip id (catch-up only).
+    ItemKind kind = ItemKind::Direct;
+    uint32_t gen = 0;
+};
+
+// What the send thread hands back to the UI thread. Heap-allocated; freed by the handler.
+struct SentMsg {
+    uint32_t gen = 0;
+    size_t peer = 0;
+    int64_t id = 0;
+    ItemKind kind = ItemKind::Direct;
+    bool ok = false;
+};
+
+// Catch-up state per other computer. UI thread only.
+struct PeerState {
+    std::wstring key;         // "host:port", the ScmSyncPeer row.
+    int64_t cursor = 0;
+    bool loaded = false;      // cursor read from the database.
+    bool capable = false;     // Answered hello: takes catch-up.
+    bool busy = false;        // A hello or catch-up clip is in flight.
+    ULONGLONG busySince = 0;
+    ULONGLONG retryAt = 0;    // Off or unreachable: wait until then.
+    DWORD backoff = 0;
+    int sent = 0;             // Catch-up clips confirmed since the last "caught up" log line.
+};
+
 std::mutex g_lock;                 // Guards the queue and the peer list.
-std::vector<std::string> g_queue;  // Finished envelopes waiting to be sent.
+std::vector<SendItem> g_queue;     // Finished envelopes waiting to be sent.
 std::vector<SyncPeer> g_peers;
+std::vector<PeerState> g_state;    // Same order as g_peers. UI thread only.
+uint32_t g_gen = 0;                // Bumped on every Start, so replies from before a restart are dropped.
 HANDLE g_queueEvent = nullptr;     // Auto-reset: something was pushed.
 HANDLE g_stopEvent = nullptr;      // Manual-reset: shut the threads down.
 HANDLE g_sendThread = nullptr;
@@ -13236,7 +13391,16 @@ void PutWstr(std::string& b, const std::wstring& s, int maxW) {
     b.append((const char*)t.data(), t.size() * sizeof(wchar_t));
 }
 
-bool BuildEnvelope(const ClipData& clip, int32_t crc, std::string& out) {
+// A hello is an envelope with no formats. Builds before 1.4.4 drop it without answering.
+std::string HelloEnvelope() {
+    std::string out;
+    PutU32(out, kEnvelopeMagic);
+    PutU32(out, 4);
+    PutU32(out, 0);
+    return out;
+}
+
+bool BuildEnvelope(const ClipData& clip, int32_t crc, int64_t copiedAt, std::string& out) {
     if (clip.formats.empty() || (int)clip.formats.size() > kMaxFormats) return false;
     uint64_t bytes = 0;
     for (auto& f : clip.formats) bytes += f.data.size();
@@ -13253,7 +13417,7 @@ bool BuildEnvelope(const ClipData& clip, int32_t crc, std::string& out) {
     PutWstr(out, clip.description, kMaxDescWchars);
     PutWstr(out, clip.sourceApp, kMaxAppWchars);
     PutU32(out, (uint32_t)crc);
-    PutU64(out, (uint64_t)time(nullptr));
+    PutU64(out, (uint64_t)(copiedAt > 0 ? copiedAt : (int64_t)time(nullptr)));
     PutU32(out, 0);  // Flags.
     uint32_t len = (uint32_t)(out.size() - 8);
     memcpy(out.data() + 4, &len, 4);
@@ -13294,6 +13458,8 @@ struct Reader {
 struct RecvMsg {
     ClipData clip;
     int32_t crc = 0;
+    int64_t copiedAt = 0;
+    std::string from;  // Sender's address, to retry that computer's catch-up now.
 };
 
 bool ParseEnvelope(const std::string& payload, RecvMsg& out) {
@@ -13312,7 +13478,7 @@ bool ParseEnvelope(const std::string& payload, RecvMsg& out) {
     out.clip.description = r.Wstr(kMaxDescWchars);
     out.clip.sourceApp = r.Wstr(kMaxAppWchars);
     out.crc = (int32_t)r.U32();
-    r.U64();  // Copied at: informational, the receiver stamps its own save time.
+    out.copiedAt = (int64_t)r.U64();  // Builds before 1.4.4 send the send time here.
     r.U32();  // Flags.
     return !r.bad && r.p == payload.size();
 }
@@ -13442,7 +13608,19 @@ SOCKET ConnectPeer(const SyncPeer& peer) {
 }
 
 // -- Threads ---------------------------------------------------------------------
-void HandleConnection(SOCKET c) {
+void SendAck(SOCKET c) {
+    char ack[4];
+    memcpy(ack, &kAckMagic, 4);
+    send(c, ack, 4, 0);  // Four bytes always fit the send buffer; an old sender may have gone already.
+}
+
+// The 4-byte "got it" after a send. Builds before 1.4.4 close without one.
+bool WaitAck(SOCKET s) {
+    uint32_t v = 0;
+    return RecvAll(s, &v, 4, GetTickCount64() + kIoTimeoutMs * 2) && v == kAckMagic;
+}
+
+void HandleConnection(SOCKET c, const std::string& from) {
     ULONGLONG deadline = GetTickCount64() + kRecvDeadlineMs;
     unsigned char hdr[8];
     if (!RecvAll(c, hdr, sizeof(hdr), deadline)) return;
@@ -13453,10 +13631,29 @@ void HandleConnection(SOCKET c) {
     if (magic != kEnvelopeMagic || len == 0 || len > cap) return;
     std::string payload(len, '\0');
     if (!RecvAll(c, payload.data(), payload.size(), deadline)) return;
-    RecvMsg m;
-    if (!ParseEnvelope(payload, m)) return;
-    auto* post = new (std::nothrow) RecvMsg(std::move(m));
-    if (post && !PostMessageW(g_msgWnd, WM_SCM_SYNC_RECV, 0, (LPARAM)post)) delete post;
+    auto* post = new (std::nothrow) RecvMsg();
+    if (!post) return;
+    post->from = from;
+    if (len == 4 && payload == std::string(4, '\0')) {  // Hello: answer, and tell the UI it is back.
+        if (PostMessageW(g_msgWnd, WM_SCM_SYNC_RECV, 0, (LPARAM)post)) SendAck(c);
+        else delete post;
+        return;
+    }
+    if (!ParseEnvelope(payload, *post)) {
+        delete post;
+        return;
+    }
+    if (PostMessageW(g_msgWnd, WM_SCM_SYNC_RECV, 0, (LPARAM)post)) SendAck(c);
+    else delete post;
+}
+
+// "192.168.0.121" for an IPv4 caller, also when it arrived on the dual-stack socket.
+std::string AddressText(const sockaddr_storage& sa, int len) {
+    char host[NI_MAXHOST] = {};
+    if (getnameinfo((const sockaddr*)&sa, len, host, sizeof(host), nullptr, 0, NI_NUMERICHOST) != 0) return {};
+    std::string s = host;
+    if (s.rfind("::ffff:", 0) == 0) s = s.substr(7);
+    return s;
 }
 
 DWORD WINAPI ListenThread(LPVOID) {
@@ -13469,7 +13666,7 @@ DWORD WINAPI ListenThread(LPVOID) {
             WaitForSingleObject(g_stopEvent, 200);  // Nothing to accept; the socket is non-blocking.
             continue;
         }
-        HandleConnection(c);
+        HandleConnection(c, AddressText(sa, slen));
         closesocket(c);
     }
     return 0;
@@ -13481,28 +13678,44 @@ DWORD WINAPI SendThread(LPVOID) {
         DWORD w = WaitForMultipleObjects(2, waits, FALSE, INFINITE);
         if (w != WAIT_OBJECT_0) break;  // Stopped (or the wait failed).
         for (;;) {
-            std::string payload;
-            std::vector<SyncPeer> peers;
+            SendItem item;
+            SyncPeer p;
+            bool have = false;
             {
                 std::lock_guard<std::mutex> lk(g_lock);
                 if (g_queue.empty()) break;
-                payload = std::move(g_queue.front());
+                item = std::move(g_queue.front());
                 g_queue.erase(g_queue.begin());
-                peers = g_peers;
+                if (item.peer < g_peers.size()) {
+                    p = g_peers[item.peer];
+                    have = true;
+                }
             }
-            for (auto& p : peers) {
-                if (WaitForSingleObject(g_stopEvent, 0) == WAIT_OBJECT_0) break;
+            if (WaitForSingleObject(g_stopEvent, 0) == WAIT_OBJECT_0) break;
+            bool ok = false;
+            if (have) {
                 SOCKET s = ConnectPeer(p);
                 if (s == INVALID_SOCKET) {
-                    Wh_Log(L"Sync: could not reach %s:%u", p.host.c_str(), p.port);
-                    continue;
+                    if (item.kind != ItemKind::CatchUp) Wh_Log(L"Sync: could not reach %s:%u", p.host.c_str(), p.port);
+                } else {
+                    ok = SendAll(s, item.payload.data(), item.payload.size());
+                    // A new copy counts as sent once the bytes are out, so builds before 1.4.4 still
+                    // get it. Hello and catch-up wait for the other side to say it got the clip.
+                    if (ok && item.kind != ItemKind::Direct) ok = WaitAck(s);
+                    if (item.kind == ItemKind::Direct)
+                        Wh_Log(L"Sync: %s a clip to %s:%u", ok ? L"sent" : L"failed to send",
+                               p.host.c_str(), p.port);
+                    closesocket(s);
                 }
-                if (SendAll(s, payload.data(), payload.size()))
-                    Wh_Log(L"Sync: sent a clip to %s:%u", p.host.c_str(), p.port);
-                else
-                    Wh_Log(L"Sync: sending to %s:%u failed", p.host.c_str(), p.port);
-                closesocket(s);
             }
+            auto* m = new (std::nothrow) SentMsg();
+            if (!m) continue;
+            m->gen = item.gen;
+            m->peer = item.peer;
+            m->id = item.id;
+            m->kind = item.kind;
+            m->ok = ok;
+            if (!PostMessageW(g_msgWnd, WM_SCM_SYNC_SENT, 0, (LPARAM)m)) delete m;
         }
     }
     return 0;
@@ -13522,7 +13735,14 @@ bool Start() {  // UI thread.
     {
         std::lock_guard<std::mutex> lk(g_lock);
         g_peers = ParsePeers(g_set.syncPeers);
+        g_state.clear();
+        for (auto& p : g_peers) {
+            PeerState st;
+            st.key = p.host + L":" + std::to_wstring(p.port);
+            g_state.push_back(std::move(st));
+        }
     }
+    g_gen++;
     g_stopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     g_queueEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     if (!g_stopEvent || !g_queueEvent) {
@@ -13573,11 +13793,13 @@ bool Start() {  // UI thread.
         return false;
     }
     g_started = true;
+    if (g_msgWnd) SetTimer(g_msgWnd, kTimerSyncPump, 15000, nullptr);
     return true;
 }
 
 void Stop() {  // UI thread. The threads never touch the database, so a straggler is harmless.
     g_started = false;
+    if (g_msgWnd) KillTimer(g_msgWnd, kTimerSyncPump);
     if (g_stopEvent) SetEvent(g_stopEvent);
     if (g_sendThread) {
         if (WaitForSingleObject(g_sendThread, 3000) != WAIT_OBJECT_0)
@@ -13599,6 +13821,7 @@ void Stop() {  // UI thread. The threads never touch the database, so a straggle
         std::lock_guard<std::mutex> lk(g_lock);
         g_queue.clear();
         g_peers.clear();
+        g_state.clear();
     }
     if (g_queueEvent) {
         CloseHandle(g_queueEvent);
@@ -13614,12 +13837,76 @@ void Stop() {  // UI thread. The threads never touch the database, so a straggle
     }
 }
 
+void LoadCursor(PeerState& st) {  // UI thread.
+    if (st.loaded) return;
+    st.cursor = Db_SyncCursor(st.key, (uint64_t)g_set.syncHistoryMB * 1024 * 1024);
+    st.loaded = true;
+}
+
+// Hand each other computer that is free its next owed clip (or a hello first). UI thread.
+void Pump() {
+    if (!g_started) return;
+    ULONGLONG now = GetTickCount64();
+    bool pushed = false;
+    for (size_t i = 0; i < g_state.size(); i++) {
+        PeerState& st = g_state[i];
+        if (st.busy && now - st.busySince > 5 * 60 * 1000) st.busy = false;  // Lost reply: try again.
+        if (st.busy || now < st.retryAt) continue;
+        SendItem item;
+        item.peer = i;
+        item.gen = g_gen;
+        if (!st.capable) {
+            item.kind = ItemKind::Hello;
+            item.payload = HelloEnvelope();
+        } else {
+            LoadCursor(st);
+            item.kind = ItemKind::CatchUp;
+            for (int skips = 0; skips < 64 && item.payload.empty(); skips++) {
+                int64_t id = Db_SyncOwedAfter(st.cursor);
+                if (!id) break;
+                ClipData clip;
+                if (Db_GetClipData(id, clip) && !clip.formats.empty() &&
+                    BuildEnvelope(clip, Db_SyncCrc(clip.formats), Db_SyncClipTime(id), item.payload)) {
+                    item.id = id;
+                    break;
+                }
+                item.payload.clear();
+                st.cursor = id;  // Gone, or over the size limit: never sendable, so step past it.
+                Db_SetSyncCursor(st.key, id);
+            }
+            if (item.payload.empty()) {
+                if (st.sent) {
+                    Wh_Log(L"Sync: %s is caught up (%d clips)", st.key.c_str(), st.sent);
+                    st.sent = 0;
+                }
+                continue;
+            }
+        }
+        st.busy = true;
+        st.busySince = now;
+        {
+            std::lock_guard<std::mutex> lk(g_lock);
+            g_queue.push_back(std::move(item));
+        }
+        pushed = true;
+    }
+    if (pushed) SetEvent(g_queueEvent);
+}
+
 }  // namespace syncx
 
 void Sync_ApplySettings() {  // UI thread.
+    static std::wstring applied;  // What the running threads were started with.
     bool want = g_set.syncEnabled && !g_set.syncPeers.empty();
+    std::wstring sig = g_set.syncPeers + L"|" + std::to_wstring(g_set.syncPort) + L"|" +
+                       std::to_wstring(g_set.syncHistoryMB) + L"|" + std::to_wstring(g_set.maxClipMB);
+    if (want && syncx::g_started && sig != applied) Sync_Stop();  // Peers or port changed: start over.
     if (want && !syncx::g_started) {
-        if (syncx::Start()) Wh_Log(L"Sync: sharing clips on port %u", g_set.syncPort);
+        if (syncx::Start()) {
+            applied = sig;
+            Wh_Log(L"Sync: sharing clips on port %u", g_set.syncPort);
+            syncx::Pump();
+        }
     } else if (!want && syncx::g_started) {
         Sync_Stop();
     }
@@ -13627,33 +13914,96 @@ void Sync_ApplySettings() {  // UI thread.
 
 void Sync_Stop() { syncx::Stop(); }
 
-// Called right after a clip was saved here. Builds the finished envelope on this thread (the
-// only one allowed into the database) and hands the bytes to the sender.
+// Called right after a clip was saved here. A clip newer than a computer's mark goes out through
+// its catch-up queue; one it already has (a repeat copy, or a clip that came from another
+// computer) is sent straight away so it moves to the top there too.
 void Sync_OnClipSaved(int64_t id) {  // UI thread.
     if (!syncx::g_started) return;
-    ClipData clip;
-    if (!Db_GetClipData(id, clip) || clip.formats.empty()) return;
+    bool remote = Db_SyncIsRemote(id);
     std::string env;
-    if (!syncx::BuildEnvelope(clip, Db_SyncCrc(clip.formats), env)) return;
-    {
+    bool built = false;
+    bool queued = false;
+    for (size_t i = 0; i < syncx::g_state.size(); i++) {
+        syncx::PeerState& st = syncx::g_state[i];
+        bool catchUp = st.capable && !remote && (syncx::LoadCursor(st), id > st.cursor);
+        if (catchUp) continue;
+        if (!built) {
+            built = true;
+            ClipData clip;
+            if (!Db_GetClipData(id, clip) || clip.formats.empty() ||
+                !syncx::BuildEnvelope(clip, Db_SyncCrc(clip.formats), UnixNow(), env)) env.clear();
+        }
+        if (env.empty()) break;
+        syncx::SendItem item;
+        item.payload = env;
+        item.peer = i;
+        item.gen = syncx::g_gen;
         std::lock_guard<std::mutex> lk(syncx::g_lock);
-        if (syncx::g_queue.size() >= syncx::kMaxQueue) return;
-        syncx::g_queue.push_back(std::move(env));
+        if (syncx::g_queue.size() >= syncx::kMaxQueue) break;
+        syncx::g_queue.push_back(std::move(item));
+        queued = true;
     }
-    SetEvent(syncx::g_queueEvent);
+    if (queued) SetEvent(syncx::g_queueEvent);
+    syncx::Pump();
 }
 
 void Sync_OnRecvMsg(LPARAM lp) {  // UI thread.
     auto* m = (syncx::RecvMsg*)lp;
     if (!m) return;
-    int64_t id = Db_SyncSaveRemote(m->clip, m->crc);
-    if (id) {
-        SetTimer(g_msgWnd, kTimerSyncRefresh, 150, nullptr);  // Coalesce a burst into one list refresh.
-    } else {
-        Wh_Log(L"Sync: a clip from another computer could not be saved: %s", Db_LastError().c_str());
+    // Whoever sent this is on: retry its catch-up now instead of at the end of its wait.
+    bool matched = false;
+    for (size_t i = 0; i < syncx::g_peers.size() && i < syncx::g_state.size(); i++) {
+        if (syncx::g_peers[i].hostUtf8 == m->from) {
+            syncx::g_state[i].retryAt = 0;
+            syncx::g_state[i].backoff = 0;
+            matched = true;
+        }
+    }
+    if (!matched)  // Listed by name, not address: retry them all.
+        for (auto& st : syncx::g_state) st.retryAt = 0, st.backoff = 0;
+    if (!m->clip.formats.empty()) {
+        int64_t id = Db_SyncSaveRemote(m->clip, m->crc, m->copiedAt);
+        if (id) {
+            SetTimer(g_msgWnd, kTimerSyncRefresh, 150, nullptr);  // Coalesce a burst into one list refresh.
+        } else {
+            Wh_Log(L"Sync: a clip from another computer could not be saved: %s", Db_LastError().c_str());
+        }
     }
     delete m;
+    syncx::Pump();
 }
+
+void Sync_OnSentMsg(LPARAM lp) {  // UI thread.
+    auto* m = (syncx::SentMsg*)lp;
+    if (!m) return;
+    if (m->gen != syncx::g_gen || m->peer >= syncx::g_state.size()) {
+        delete m;
+        return;
+    }
+    syncx::PeerState& st = syncx::g_state[m->peer];
+    if (m->kind != syncx::ItemKind::Direct) st.busy = false;
+    if (m->ok) {
+        st.backoff = 0;
+        st.retryAt = 0;
+        if (m->kind == syncx::ItemKind::Hello && !st.capable) {
+            st.capable = true;
+            syncx::LoadCursor(st);
+            Wh_Log(L"Sync: %s is on; catching it up from clip %lld", st.key.c_str(), (long long)st.cursor);
+        } else if (m->kind == syncx::ItemKind::CatchUp && m->id > st.cursor) {
+            st.cursor = m->id;
+            Db_SetSyncCursor(st.key, m->id);
+            st.sent++;
+        }
+    } else if (m->kind != syncx::ItemKind::Direct) {
+        st.backoff = st.backoff ? std::min<DWORD>(st.backoff * 2, 120000) : 15000;
+        st.retryAt = GetTickCount64() + st.backoff;
+        st.capable = false;  // Say hello again when it is back: it may have been updated or replaced.
+    }
+    delete m;
+    syncx::Pump();
+}
+
+void Sync_OnPumpTimer() { syncx::Pump(); }  // UI thread.
 
 // ---------------------------------------------------------------------------
 // 90-main.cpp : settings, shared helpers, the UI thread and the tool mod
@@ -13876,6 +14226,7 @@ void LoadSettings() {
     s.syncEnabled = Wh_GetIntSetting(L"syncEnabled") != 0;
     s.syncPort = Clamped(L"syncPort", 1024, 65535, 4126);
     s.syncPeers = GetStringSetting(L"syncPeers");
+    s.syncHistoryMB = Clamped(L"syncHistoryMB", 0, 4096, 100);
     g_set = std::move(s);
 }
 
@@ -13910,6 +14261,8 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             } else if (wParam == kTimerSyncRefresh) {  // One refresh per burst of received clips.
                 KillTimer(hwnd, kTimerSyncRefresh);
                 List_OnClipSaved(0);
+            } else if (wParam == kTimerSyncPump) {  // Retry computers that were off.
+                Sync_OnPumpTimer();
             } else {
                 Capture_OnTimer(wParam);
             }
@@ -13925,6 +14278,9 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             return 0;
         case WM_SCM_SYNC_RECV:  // From the listen thread: a clip arrived (lParam: heap RecvMsg).
             Sync_OnRecvMsg(lParam);
+            return 0;
+        case WM_SCM_SYNC_SENT:  // From the send thread: a send finished (lParam: heap SentMsg).
+            Sync_OnSentMsg(lParam);
             return 0;
         case WM_SCM_OPEN_SETTINGS:
             Settings_Open();
