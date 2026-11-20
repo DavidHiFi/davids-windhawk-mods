@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.16
+// @version         0.4.19
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -30,6 +30,17 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 
+## Tray tools
+
+Keep awake can also keep the display on and can stop after a set time.
+Network toggle switches one named Windows adapter. Windows may ask for administrator permission.
+Tray icon rules match app names or paths. Add each selected app to this mod's custom
+process inclusion list in Windhawk Advanced, then restart that app to apply or restore its icon.
+
+Inspired by [Caffeine by ALMAS CP](https://windhawk.net/mods/caffeine),
+[Net-Toggle by BlackPaw](https://windhawk.net/mods/net-toggle) and
+[Change Tray Icons by aubymori](https://windhawk.net/mods/change-tray-icons).
+
 ## Safe start
 
 If Explorer restarts three times within a minute, Seamless Taskbar starts with every module
@@ -39,7 +50,9 @@ off so the taskbar comes back. Reload the mod (turn it off and on) to try again.
 
 Built from the authors' mods listed above. Hide taskbar tooltips is gilnett's
 [Hide Taskbar Tooltips](https://windhawk.net/mods/hide-taskbar-tooltips) (GPL-3.0), included
-unchanged as a module. The whole mod is published under GPL-3.0.
+unchanged as a module. The taskbar position menu is based on Oji's
+[Taskbar Position Shortcut](https://windhawk.net/mods/taskbar-position-shortcut).
+The whole mod is published under GPL-3.0.
 */
 // ==/WindhawkModReadme==
 
@@ -1953,6 +1966,20 @@ unchanged as a module. The whole mod is published under GPL-3.0.
       $name: Menu text
     $name: Auto-hide taskbar
     $description: Turns taskbar auto-hide on or off. The box beside it shows whether it is on.
+  - position:
+    - enabled: true
+      $name: Show in menu
+      $description: Choose the taskbar edge from its right-click menu. Changing this reloads the mod.
+    - label: Taskbar position
+      $name: Menu text
+    - maximizedOnly: false
+      $name: Only switch for maximized apps
+    - switchDelayMs: 400
+      $name: App switch delay (ms)
+    - ignoredApps: ""
+      $name: Ignored apps
+      $description: Enter app names such as explorer.exe, separated by commas.
+    $name: Taskbar position
   - iconSeparators:
     - enabled: true
       $name: Turn on separators
@@ -2037,6 +2064,60 @@ unchanged as a module. The whole mod is published under GPL-3.0.
     $description: Font, border and colors for the menu items and the result cards.
   $name: Right-click tools
   $description: Quick system tools in the taskbar right-click menu, with result cards.
+- keepAwake:
+  - moduleOn: false
+    $name: Enable keep awake
+  - startEnabled: false
+    $name: Start active
+    $description: Keep Windows awake when this module starts.
+  - keepDisplay: false
+    $name: Keep the screen on
+    $description: Keep the display on while keep awake is active.
+  - minutes: 0
+    $name: Default duration
+    $description: Minutes for the tray toggle. Use zero to stay awake until turned off.
+  $name: Keep awake
+  $description: Keep Windows awake from the tray.
+- networkToggle:
+  - moduleOn: false
+    $name: Enable network toggle
+  - adapter: ""
+    $name: Adapter name
+    $description: Enter the exact Windows adapter name, such as Ethernet.
+  - clickToToggle: false
+    $name: Toggle on click
+    $description: Switch the adapter on click. With this off, click opens the menu.
+  $name: Network toggle
+  $description: Switch a chosen network adapter on or off.
+- trayIcons:
+  - moduleOn: false
+    $name: Enable tray icon rules
+  - app1Exe: ""
+    $name: App 1
+    $description: Enter the app name or full path. Add the app to the Windhawk inclusion list.
+  - app1Ico: ""
+    $name: Icon 1
+    $description: Enter the full path to the ICO file.
+  - app2Exe: ""
+    $name: App 2
+    $description: Enter the app name or full path. Add the app to the Windhawk inclusion list.
+  - app2Ico: ""
+    $name: Icon 2
+    $description: Enter the full path to the ICO file.
+  - app3Exe: ""
+    $name: App 3
+    $description: Enter the app name or full path. Add the app to the Windhawk inclusion list.
+  - app3Ico: ""
+    $name: Icon 3
+    $description: Enter the full path to the ICO file.
+  - app4Exe: ""
+    $name: App 4
+    $description: Enter the app name or full path. Add the app to the Windhawk inclusion list.
+  - app4Ico: ""
+    $name: Icon 4
+    $description: Enter the full path to the ICO file.
+  $name: Tray icon rules
+  $description: Use your own icons for selected apps.
 - SettingsWindow:
   - settingsGlass: true
     $name: Blurred settings window
@@ -2516,8 +2597,8 @@ asm(".text\n"
 namespace st {
 inline constexpr const wchar_t* kRealModId = kStRealModIdValue;
 inline constexpr size_t kNameCap = 512;
-inline constexpr int kModCount = 8;
-inline constexpr const wchar_t* kModKeys[kModCount] = {L"sysinfo", L"media", L"apps", L"clock", L"tooltips", L"tray", L"ai", L"utils"};
+inline constexpr int kModCount = 11;
+inline constexpr const wchar_t* kModKeys[kModCount] = {L"sysinfo", L"media", L"apps", L"clock", L"tooltips", L"tray", L"ai", L"utils", L"keepAwake", L"networkToggle", L"trayIcons"};
 inline constexpr bool kModTool[kModCount] = {false, true, false, false, false, false, false, false};
 inline void* const kHookThunks[96] = {(void*)st_hook_thunk_0, (void*)st_hook_thunk_1, (void*)st_hook_thunk_2, (void*)st_hook_thunk_3, (void*)st_hook_thunk_4, (void*)st_hook_thunk_5, (void*)st_hook_thunk_6, (void*)st_hook_thunk_7, (void*)st_hook_thunk_8, (void*)st_hook_thunk_9, (void*)st_hook_thunk_10, (void*)st_hook_thunk_11, (void*)st_hook_thunk_12, (void*)st_hook_thunk_13, (void*)st_hook_thunk_14, (void*)st_hook_thunk_15, (void*)st_hook_thunk_16, (void*)st_hook_thunk_17, (void*)st_hook_thunk_18, (void*)st_hook_thunk_19, (void*)st_hook_thunk_20, (void*)st_hook_thunk_21, (void*)st_hook_thunk_22, (void*)st_hook_thunk_23, (void*)st_hook_thunk_24, (void*)st_hook_thunk_25, (void*)st_hook_thunk_26, (void*)st_hook_thunk_27, (void*)st_hook_thunk_28, (void*)st_hook_thunk_29, (void*)st_hook_thunk_30, (void*)st_hook_thunk_31, (void*)st_hook_thunk_32, (void*)st_hook_thunk_33, (void*)st_hook_thunk_34, (void*)st_hook_thunk_35, (void*)st_hook_thunk_36, (void*)st_hook_thunk_37, (void*)st_hook_thunk_38, (void*)st_hook_thunk_39, (void*)st_hook_thunk_40, (void*)st_hook_thunk_41, (void*)st_hook_thunk_42, (void*)st_hook_thunk_43, (void*)st_hook_thunk_44, (void*)st_hook_thunk_45, (void*)st_hook_thunk_46, (void*)st_hook_thunk_47, (void*)st_hook_thunk_48, (void*)st_hook_thunk_49, (void*)st_hook_thunk_50, (void*)st_hook_thunk_51, (void*)st_hook_thunk_52, (void*)st_hook_thunk_53, (void*)st_hook_thunk_54, (void*)st_hook_thunk_55, (void*)st_hook_thunk_56, (void*)st_hook_thunk_57, (void*)st_hook_thunk_58, (void*)st_hook_thunk_59, (void*)st_hook_thunk_60, (void*)st_hook_thunk_61, (void*)st_hook_thunk_62, (void*)st_hook_thunk_63, (void*)st_hook_thunk_64, (void*)st_hook_thunk_65, (void*)st_hook_thunk_66, (void*)st_hook_thunk_67, (void*)st_hook_thunk_68, (void*)st_hook_thunk_69, (void*)st_hook_thunk_70, (void*)st_hook_thunk_71, (void*)st_hook_thunk_72, (void*)st_hook_thunk_73, (void*)st_hook_thunk_74, (void*)st_hook_thunk_75, (void*)st_hook_thunk_76, (void*)st_hook_thunk_77, (void*)st_hook_thunk_78, (void*)st_hook_thunk_79, (void*)st_hook_thunk_80, (void*)st_hook_thunk_81, (void*)st_hook_thunk_82, (void*)st_hook_thunk_83, (void*)st_hook_thunk_84, (void*)st_hook_thunk_85, (void*)st_hook_thunk_86, (void*)st_hook_thunk_87, (void*)st_hook_thunk_88, (void*)st_hook_thunk_89, (void*)st_hook_thunk_90, (void*)st_hook_thunk_91, (void*)st_hook_thunk_92, (void*)st_hook_thunk_93, (void*)st_hook_thunk_94, (void*)st_hook_thunk_95};
 inline void* const kOrigThunks[96] = {(void*)st_orig_thunk_0, (void*)st_orig_thunk_1, (void*)st_orig_thunk_2, (void*)st_orig_thunk_3, (void*)st_orig_thunk_4, (void*)st_orig_thunk_5, (void*)st_orig_thunk_6, (void*)st_orig_thunk_7, (void*)st_orig_thunk_8, (void*)st_orig_thunk_9, (void*)st_orig_thunk_10, (void*)st_orig_thunk_11, (void*)st_orig_thunk_12, (void*)st_orig_thunk_13, (void*)st_orig_thunk_14, (void*)st_orig_thunk_15, (void*)st_orig_thunk_16, (void*)st_orig_thunk_17, (void*)st_orig_thunk_18, (void*)st_orig_thunk_19, (void*)st_orig_thunk_20, (void*)st_orig_thunk_21, (void*)st_orig_thunk_22, (void*)st_orig_thunk_23, (void*)st_orig_thunk_24, (void*)st_orig_thunk_25, (void*)st_orig_thunk_26, (void*)st_orig_thunk_27, (void*)st_orig_thunk_28, (void*)st_orig_thunk_29, (void*)st_orig_thunk_30, (void*)st_orig_thunk_31, (void*)st_orig_thunk_32, (void*)st_orig_thunk_33, (void*)st_orig_thunk_34, (void*)st_orig_thunk_35, (void*)st_orig_thunk_36, (void*)st_orig_thunk_37, (void*)st_orig_thunk_38, (void*)st_orig_thunk_39, (void*)st_orig_thunk_40, (void*)st_orig_thunk_41, (void*)st_orig_thunk_42, (void*)st_orig_thunk_43, (void*)st_orig_thunk_44, (void*)st_orig_thunk_45, (void*)st_orig_thunk_46, (void*)st_orig_thunk_47, (void*)st_orig_thunk_48, (void*)st_orig_thunk_49, (void*)st_orig_thunk_50, (void*)st_orig_thunk_51, (void*)st_orig_thunk_52, (void*)st_orig_thunk_53, (void*)st_orig_thunk_54, (void*)st_orig_thunk_55, (void*)st_orig_thunk_56, (void*)st_orig_thunk_57, (void*)st_orig_thunk_58, (void*)st_orig_thunk_59, (void*)st_orig_thunk_60, (void*)st_orig_thunk_61, (void*)st_orig_thunk_62, (void*)st_orig_thunk_63, (void*)st_orig_thunk_64, (void*)st_orig_thunk_65, (void*)st_orig_thunk_66, (void*)st_orig_thunk_67, (void*)st_orig_thunk_68, (void*)st_orig_thunk_69, (void*)st_orig_thunk_70, (void*)st_orig_thunk_71, (void*)st_orig_thunk_72, (void*)st_orig_thunk_73, (void*)st_orig_thunk_74, (void*)st_orig_thunk_75, (void*)st_orig_thunk_76, (void*)st_orig_thunk_77, (void*)st_orig_thunk_78, (void*)st_orig_thunk_79, (void*)st_orig_thunk_80, (void*)st_orig_thunk_81, (void*)st_orig_thunk_82, (void*)st_orig_thunk_83, (void*)st_orig_thunk_84, (void*)st_orig_thunk_85, (void*)st_orig_thunk_86, (void*)st_orig_thunk_87, (void*)st_orig_thunk_88, (void*)st_orig_thunk_89, (void*)st_orig_thunk_90, (void*)st_orig_thunk_91, (void*)st_orig_thunk_92, (void*)st_orig_thunk_93, (void*)st_orig_thunk_94, (void*)st_orig_thunk_95};
@@ -2887,6 +2968,22 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"tooltips.moduleOn", L"Hide taskbar tooltips", L"Turns off the hover tooltips on apps, Start, the tray and the overflow.", L"0", {}, 0, 100, 0, L"Modules"},
 {K::Check, L"tray.moduleOn", L"Tray drawer", L"Folds tray icons into a drawer that opens from the chevron.", L"0", {}, 0, 100, 0, L"Modules"},
 {K::Check, L"ai.moduleOn", L"AI usage", L"Usage meters for your AI accounts on the dock.", L"0", {}, 0, 100, 0, L"Modules"},
+{K::Check, L"keepAwake.moduleOn", L"Keep awake", L"Keep Windows awake from the tray.", L"0", {}, 0, 100, 0, L"Modules"},
+{K::Check, L"keepAwake.startEnabled", L"Start active", L"Keep Windows awake when this module starts.", L"0", {}, 0, 1440, 11, L"Keep awake"},
+{K::Check, L"keepAwake.keepDisplay", L"Keep the screen on", L"Keep the display on while keep awake is active.", L"0", {}, 0, 1440, 11, L"Keep awake"},
+{K::Number, L"keepAwake.minutes", L"Default duration", L"Minutes for the tray toggle. Use zero to stay awake until turned off.", L"0", {}, 0, 1440, 11, L"Keep awake"},
+{K::Check, L"networkToggle.moduleOn", L"Network toggle", L"Switch a chosen network adapter on or off.", L"0", {}, 0, 100, 0, L"Modules"},
+{K::Text, L"networkToggle.adapter", L"Adapter name", L"Enter the exact Windows adapter name, such as Ethernet.", L"", {}, 0, 1440, 11, L"Network toggle"},
+{K::Check, L"networkToggle.clickToToggle", L"Toggle on click", L"Switch the adapter on click. With this off, click opens the menu.", L"0", {}, 0, 1440, 11, L"Network toggle"},
+{K::Check, L"trayIcons.moduleOn", L"Tray icon rules", L"Use your own icons for selected apps.", L"0", {}, 0, 100, 0, L"Modules"},
+{K::Text, L"trayIcons.app1Exe", L"App 1", L"Enter the app name or full path. Add the app to the Windhawk inclusion list.", L"", {}, 0, 1440, 11, L"Tray icon rules"},
+{K::Text, L"trayIcons.app1Ico", L"Icon 1", L"Enter the full path to the ICO file.", L"", {}, 0, 1440, 11, L"Tray icon rules"},
+{K::Text, L"trayIcons.app2Exe", L"App 2", L"Enter the app name or full path. Add the app to the Windhawk inclusion list.", L"", {}, 0, 1440, 11, L"Tray icon rules"},
+{K::Text, L"trayIcons.app2Ico", L"Icon 2", L"Enter the full path to the ICO file.", L"", {}, 0, 1440, 11, L"Tray icon rules"},
+{K::Text, L"trayIcons.app3Exe", L"App 3", L"Enter the app name or full path. Add the app to the Windhawk inclusion list.", L"", {}, 0, 1440, 11, L"Tray icon rules"},
+{K::Text, L"trayIcons.app3Ico", L"Icon 3", L"Enter the full path to the ICO file.", L"", {}, 0, 1440, 11, L"Tray icon rules"},
+{K::Text, L"trayIcons.app4Exe", L"App 4", L"Enter the app name or full path. Add the app to the Windhawk inclusion list.", L"", {}, 0, 1440, 11, L"Tray icon rules"},
+{K::Text, L"trayIcons.app4Ico", L"Icon 4", L"Enter the full path to the ICO file.", L"", {}, 0, 1440, 11, L"Tray icon rules"},
 {K::Check, L"utils.moduleOn", L"Right-click tools", L"Quick system tools in the taskbar right-click menu, with result cards.", L"0", {}, 0, 100, 0, L"Modules"},
 {K::Number, L"sysinfo.width", L"Widget width", L"0 fits the content automatically. A positive value sets a minimum width, up to 800 logical pixels.", L"0", {}, 0, 100, 1, L"System info and weather"},
 {K::Number, L"sysinfo.leftOffset", L"Left offset", L"Distance from the left taskbar edge, from 0 to 1000 pixels.", L"10", {}, 0, 1000, 1, L"System info and weather"},
@@ -3190,6 +3287,11 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"utils.flushDns.showCard", L"Show result card", L"When on, a card confirms the cache was cleared.", L"1", {}, 0, 100, 8, L"Clean DNS Cache"},
 {K::Check, L"utils.autoHide.enabled", L"Show in menu", L"", L"1", {}, 0, 100, 8, L"Auto-hide taskbar"},
 {K::Text, L"utils.autoHide.label", L"Menu text", L"", L"Auto-hide taskbar", {}, 0, 100, 8, L"Auto-hide taskbar"},
+{K::Check, L"utils.position.enabled", L"Show in menu", L"Choose the taskbar edge from its right-click menu. Changing this reloads the mod.", L"1", {}, 0, 100, 8, L"Taskbar position"},
+{K::Text, L"utils.position.label", L"Menu text", L"", L"Taskbar position", {}, 0, 100, 8, L"Taskbar position"},
+{K::Check, L"utils.position.maximizedOnly", L"Only switch for maximized apps", L"", L"0", {}, 0, 100, 8, L"Taskbar position"},
+{K::Number, L"utils.position.switchDelayMs", L"App switch delay (ms)", L"", L"400", {}, 0, 10000, 8, L"Taskbar position"},
+{K::Text, L"utils.position.ignoredApps", L"Ignored apps", L"Enter app names such as explorer.exe, separated by commas.", L"", {}, 0, 100, 8, L"Taskbar position"},
 {K::Check, L"utils.iconSeparators.enabled", L"Turn on separators", L"Adds thin dividers you can place between taskbar icons. Changing this reloads the mod.", L"1", {}, 0, 100, 8, L"Icon separators"},
 {K::Text, L"utils.iconSeparators.label", L"Menu text", L"", L"Add separator", {}, 0, 100, 8, L"Icon separators"},
 {K::Choice, L"utils.iconSeparators.interaction", L"How to add and remove", L"Right-click menu: Add separator in this menu, right-click a separator to remove it. Middle click: middle-click empty taskbar space to add, middle-click a separator to remove it.", L"contextMenu", {{L"contextMenu", L"Right-click menu"}, {L"middleClick", L"Middle click"}}, 0, 100, 8, L"Icon separators"},
@@ -3249,6 +3351,7 @@ static const SetPageInfo kSetPages[] = {
 {L"Right-click tools", L"The taskbar right-click menu: tools, result cards and icon separators.", 0xE90F},
 {L"Tooltips", L"Hide the hover tooltips on apps, Start, the tray and the overflow.", 0xE8BD},
 {L"Look", L"This settings window and its tray icon.", 0xE790},
+{L"Tray tools", L"Keep awake, network switch and app icons.", 0xE8F1},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
@@ -4421,6 +4524,9 @@ static void Set_BuildPage(SetWindow& w) {
         add(SetItem::Link, 56, L"Tray drawer", L"By MEI", L"https://github.com/DavidHiFi/davids-windhawk-mods");
         add(SetItem::Link, 56, L"AI usage", L"By Sof2245", L"https://github.com/DavidHiFi/davids-windhawk-mods");
         add(SetItem::Link, 56, L"Right-click tools", L"By Marco Petrucci", L"https://github.com/DavidHiFi/davids-windhawk-mods");
+        add(SetItem::Link, 56, L"Caffeine", L"By ALMAS CP", L"https://windhawk.net/mods/caffeine");
+        add(SetItem::Link, 56, L"Net-Toggle", L"By BlackPaw", L"https://windhawk.net/mods/net-toggle");
+        add(SetItem::Link, 56, L"Change Tray Icons", L"By aubymori", L"https://windhawk.net/mods/change-tray-icons");
         group(L"Project");
         add(SetItem::Link, 56, L"Project page on GitHub", L"github.com/DavidHiFi/davids-windhawk-mods", kSetRepoUrl);
         add(SetItem::Link, 56, L"Report a problem", L"Opens a new issue on GitHub, with the mod's name filled in", kSetBugUrl);
@@ -6602,6 +6708,369 @@ void CloseSettingsWindow() {
 ////////////////////////////////////////////////////////////////////////////////
 // The tray icon (Look > Tray icon): click opens the settings, right-click shows a menu.
 // It lives on its own small thread and hidden window, in the taskbar's Explorer only.
+// Tray icon replacement is scoped to explicitly included apps with matching rules.
+namespace sticons {
+static SRWLOCK lock = SRWLOCK_INIT;
+static HICON icon;
+static decltype(&Shell_NotifyIconW) original;
+
+static std::wstring Setting(PCWSTR key) {
+    PCWSTR value = Wh_GetStringSetting(L"%s", key);
+    std::wstring result(value);
+    Wh_FreeStringSetting(value);
+    return result;
+}
+
+static HICON LoadReplacement() {
+    WCHAR exe[32768];
+    DWORD length = GetModuleFileNameW(nullptr, exe, ARRAYSIZE(exe));
+    if (!length || length >= ARRAYSIZE(exe)) return nullptr;
+    PCWSTR slash = wcsrchr(exe, L'\\');
+    PCWSTR name = slash ? slash + 1 : exe;
+    for (int i = 1; i <= 4; ++i) {
+        std::wstring prefix = L"trayIcons.app" + std::to_wstring(i);
+        auto target = Setting((prefix + L"Exe").c_str());
+        if (_wcsicmp(target.c_str(), exe) && _wcsicmp(target.c_str(), name)) continue;
+        auto path = Setting((prefix + L"Ico").c_str());
+        int size = GetSystemMetrics(SM_CXSMICON);
+        auto replacement = static_cast<HICON>(
+            LoadImageW(nullptr, path.c_str(), IMAGE_ICON, size, size, LR_LOADFROMFILE));
+        if (replacement) return replacement;
+    }
+    return nullptr;
+}
+
+static void Refresh() {
+    HICON replacement = Wh_GetIntSetting(L"trayIcons.moduleOn") ? LoadReplacement() : nullptr;
+    AcquireSRWLockExclusive(&lock);
+    HICON old = std::exchange(icon, replacement);
+    ReleaseSRWLockExclusive(&lock);
+    if (old) DestroyIcon(old);
+}
+
+static BOOL WINAPI Notify(DWORD message, PNOTIFYICONDATAW data) {
+    if ((message != NIM_ADD && message != NIM_MODIFY) || !data ||
+        data->cbSize < NOTIFYICONDATAW_V1_SIZE || data->cbSize > sizeof(*data) ||
+        !(data->uFlags & NIF_ICON)) return original(message, data);
+
+    AcquireSRWLockShared(&lock);
+    HICON replacement = icon ? CopyIcon(icon) : nullptr;
+    ReleaseSRWLockShared(&lock);
+    if (!replacement) return original(message, data);
+
+    NOTIFYICONDATAW updated{};
+    memcpy(&updated, data, data->cbSize);
+    updated.hIcon = replacement;
+    BOOL result = original(message, &updated);
+    DestroyIcon(replacement);
+    return result;
+}
+
+static bool Start() {
+    if (!Wh_GetIntSetting(L"trayIcons.moduleOn")) return false;
+    icon = LoadReplacement();
+    if (!icon) return false;
+    if (WindhawkUtils::SetFunctionHook(Shell_NotifyIconW, Notify, &original)) return true;
+    DestroyIcon(std::exchange(icon, nullptr));
+    return false;
+}
+
+static void Stop() {
+    if (icon) DestroyIcon(std::exchange(icon, nullptr));
+}
+}  // namespace sticons
+
+namespace sttools {
+constexpr UINT kCallback = WM_APP + 23;
+constexpr UINT_PTR kTimer = 1;
+constexpr UINT kAwakeId = 2, kNetworkId = 3;
+
+struct TrayBadge {
+    HICON icon = nullptr;
+    bool shown = false;
+    bool active = false;
+    std::wstring tooltip;
+};
+
+static TrayBadge awakeBadge, networkBadge;
+static bool awake;
+static ULONGLONG expiresAt;
+static HANDLE networkCommand;
+static DWORD networkError;
+
+static HICON MakeBadge(WCHAR symbol, bool off) {
+    int size = GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem());
+    if (size < 16) size = 16;
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = size;
+    bi.bmiHeader.biHeight = -size;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    void* bits = nullptr;
+    void* glyphBits = nullptr;
+    HDC screen = GetDC(nullptr);
+    HBITMAP color = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    HBITMAP glyph = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &glyphBits, nullptr, 0);
+    ReleaseDC(nullptr, screen);
+    if (!color || !glyph) {
+        if (color) DeleteObject(color);
+        if (glyph) DeleteObject(glyph);
+        return nullptr;
+    }
+    HDC dc = CreateCompatibleDC(nullptr);
+    HGDIOBJ old = SelectObject(dc, glyph);
+    memset(glyphBits, 0, (size_t)size * size * 4);
+    HFONT font = CreateFontW(-(int)(size * 0.66f), 0, 0, 0, FW_MEDIUM, 0, 0, 0, DEFAULT_CHARSET, 0, 0,
+                             ANTIALIASED_QUALITY, 0, L"FiraCode Nerd Font");
+    HGDIOBJ oldFont = SelectObject(dc, font);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(255, 255, 255));
+    RECT r{0, 0, size, size};
+    WCHAR g[2] = {symbol, 0};
+    DrawTextW(dc, g, 1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    GdiFlush();
+    SelectObject(dc, oldFont);
+    DeleteObject(font);
+    SelectObject(dc, old);
+    DeleteDC(dc);
+
+    const float c0[3] = {off ? 0x6C / 255.f : 0x89 / 255.f, off ? 0x70 / 255.f : 0xB4 / 255.f, off ? 0x86 / 255.f : 0xFA / 255.f};
+    const float c1[3] = {off ? 0x58 / 255.f : 0xCB / 255.f, off ? 0x5B / 255.f : 0xA6 / 255.f, off ? 0x70 / 255.f : 0xF7 / 255.f};
+    const float ink[3] = {0x11 / 255.f, 0x11 / 255.f, 0x1B / 255.f};
+    float radius = size * 0.26f, half = size / 2.0f;
+    uint32_t* px = (uint32_t*)bits;
+    const uint32_t* gp = (const uint32_t*)glyphBits;
+    for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++) {
+            float qx = std::fabs(x + 0.5f - half) - (half - radius), qy = std::fabs(y + 0.5f - half) - (half - radius);
+            float ox = std::max(qx, 0.0f), oy = std::max(qy, 0.0f);
+            float d = std::sqrt(ox * ox + oy * oy) + std::min(std::max(qx, qy), 0.0f) - radius;
+            float a = std::clamp(0.5f - d, 0.0f, 1.0f);
+            float t = std::clamp((x + y) / (2.0f * (size - 1)), 0.0f, 1.0f);
+            float cov = ((gp[y * size + x] >> 8) & 0xFF) / 255.0f;
+            float rgb[3];
+            for (int i = 0; i < 3; i++) {
+                float base = c0[i] + (c1[i] - c0[i]) * t;
+                rgb[i] = (base + (ink[i] - base) * cov) * a;
+            }
+            px[y * size + x] = ((uint32_t)(a * 255 + 0.5f) << 24) | ((uint32_t)(rgb[0] * 255 + 0.5f) << 16) |
+                               ((uint32_t)(rgb[1] * 255 + 0.5f) << 8) | (uint32_t)(rgb[2] * 255 + 0.5f);
+        }
+    HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
+    ICONINFO ii{TRUE, 0, 0, mask, color};
+    HICON icon = CreateIconIndirect(&ii);
+    DeleteObject(mask);
+    DeleteObject(color);
+    DeleteObject(glyph);
+    return icon;
+}
+
+
+
+static NOTIFYICONDATAW Data(HWND hwnd, UINT id) {
+    NOTIFYICONDATAW data{sizeof(data)};
+    data.hWnd = hwnd;
+    data.uID = id;
+    return data;
+}
+
+static void Remove(HWND hwnd, UINT id, TrayBadge& badge) {
+    auto data = Data(hwnd, id);
+    if (badge.shown) Shell_NotifyIconW(NIM_DELETE, &data);
+    if (badge.icon) DestroyIcon(badge.icon);
+    badge = {};
+}
+
+static void Update(HWND hwnd, UINT id, TrayBadge& badge, bool active, WCHAR symbol, PCWSTR text) {
+    if (badge.shown && badge.active == active && badge.tooltip == text) return;
+    auto data = Data(hwnd, id);
+    if (!badge.icon || badge.active != active) {
+        HICON icon = MakeBadge(symbol, !active);
+        if (!icon) return;
+        if (badge.icon) DestroyIcon(badge.icon);
+        badge.icon = icon;
+        badge.active = active;
+    }
+    data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
+    data.uCallbackMessage = kCallback;
+    data.hIcon = badge.icon;
+    wcscpy_s(data.szTip, text);
+    badge.tooltip = text;
+    if (badge.shown && Shell_NotifyIconW(NIM_MODIFY, &data)) return;
+    badge.shown = Shell_NotifyIconW(NIM_ADD, &data) != FALSE;
+    if (badge.shown) {
+        data.uVersion = NOTIFYICON_VERSION_4;
+        Shell_NotifyIconW(NIM_SETVERSION, &data);
+    }
+}
+
+static void SetAwake(bool enable, int minutes = 0) {
+    EXECUTION_STATE flags = ES_CONTINUOUS;
+    if (enable) {
+        flags |= ES_SYSTEM_REQUIRED;
+        if (Wh_GetIntSetting(L"keepAwake.keepDisplay")) flags |= ES_DISPLAY_REQUIRED;
+    }
+    if (!SetThreadExecutionState(flags)) {
+        Wh_Log(L"Keep awake: execution state change failed");
+        return;
+    }
+    awake = enable;
+    expiresAt = enable && minutes ? GetTickCount64() + 60000ULL * minutes : 0;
+}
+
+static int DefaultMinutes() {
+    return std::clamp(Wh_GetIntSetting(L"keepAwake.minutes"), 0, 1440);
+}
+
+static void ToggleAwake() {
+    SetAwake(!awake, DefaultMinutes());
+}
+
+static std::wstring AdapterAlias() {
+    return sticons::Setting(L"networkToggle.adapter");
+}
+
+static bool AdapterState(const std::wstring& alias, MIB_IF_ROW2& row) {
+    if (alias.empty() || alias.size() > IF_MAX_STRING_SIZE ||
+        alias.find_first_of(L"\\\"\r\n") != std::wstring::npos) return false;
+    return ConvertInterfaceAliasToLuid(alias.c_str(), &row.InterfaceLuid) == NO_ERROR &&
+           GetIfEntry2(&row) == NO_ERROR;
+}
+
+static void ToggleNetwork(HWND hwnd) {
+    if (networkCommand) return;
+    auto alias = AdapterAlias();
+    MIB_IF_ROW2 row{};
+    if (!AdapterState(alias, row)) return;
+    const bool enable = row.AdminStatus != NET_IF_ADMIN_STATUS_UP;
+    WCHAR system[MAX_PATH];
+    UINT length = GetSystemDirectoryW(system, ARRAYSIZE(system));
+    if (!length || length >= ARRAYSIZE(system)) return;
+    std::wstring exe = std::wstring(system) + L"\\netsh.exe";
+    std::wstring args = L"interface set interface name=\"" + alias + L"\" admin=" +
+                        (enable ? L"enabled" : L"disabled");
+    SHELLEXECUTEINFOW params{sizeof(params)};
+    params.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
+    params.hwnd = hwnd;
+    params.lpVerb = L"runas";
+    params.lpFile = exe.c_str();
+    params.lpParameters = args.c_str();
+    params.nShow = SW_HIDE;
+    if (ShellExecuteExW(&params) && params.hProcess) {
+        networkCommand = params.hProcess;
+        networkError = 0;
+    } else {
+        networkError = GetLastError();
+    }
+}
+
+static void Refresh(HWND hwnd) {
+    if (st::g_safeMode) return;
+    if (networkCommand && WaitForSingleObject(networkCommand, 0) == WAIT_OBJECT_0) {
+        if (!GetExitCodeProcess(networkCommand, &networkError)) networkError = GetLastError();
+        CloseHandle(std::exchange(networkCommand, nullptr));
+    }
+    if (st::g_modOn[8]) {
+        if (awake && expiresAt && GetTickCount64() >= expiresAt) SetAwake(false);
+        Update(hwnd, kAwakeId, awakeBadge, awake, L'\uF0F4',
+               awake ? L"Keep awake is on" : L"Keep awake is off");
+    }
+    if (st::g_modOn[9]) {
+        auto alias = AdapterAlias();
+        MIB_IF_ROW2 row{};
+        bool valid = AdapterState(alias, row);
+        bool enabled = valid && row.AdminStatus == NET_IF_ADMIN_STATUS_UP;
+        bool connected = enabled && row.OperStatus == IfOperStatusUp;
+        PCWSTR status = networkCommand ? L"Changing network adapter" :
+            networkError ? L"Network change failed. Open the tray menu to retry." :
+            !valid ? L"Choose a network adapter in Settings" :
+            !enabled ? L"Network adapter is off" :
+            connected ? L"Network adapter is connected" : L"Network adapter is on. No link.";
+        Update(hwnd, kNetworkId, networkBadge, connected, L'\uF0AC', status);
+    }
+}
+
+static void OnTray(HWND hwnd, WPARAM location, LPARAM event) {
+    if (st::g_safeMode) return;
+    UINT id = HIWORD(event);
+    if (LOWORD(event) == NIN_SELECT || LOWORD(event) == NIN_KEYSELECT) {
+        if (id == kAwakeId) {
+            ToggleAwake();
+            Refresh(hwnd);
+            return;
+        }
+        if (id == kNetworkId && Wh_GetIntSetting(L"networkToggle.clickToToggle")) {
+            ToggleNetwork(hwnd);
+            Refresh(hwnd);
+            return;
+        }
+    } else if (LOWORD(event) != WM_CONTEXTMENU) {
+        return;
+    }
+
+    using stset::Set_MenuRow;
+    std::vector<stset::SetMenuItem> items;
+    if (id == kAwakeId) {
+        items.push_back(Set_MenuRow(1, L"\uF0F4", awake ? L"Turn off keep awake" : L"Turn on keep awake"));
+        items.push_back(Set_MenuRow(2, L"\uF017", L"Keep awake for 30 minutes"));
+        items.push_back(Set_MenuRow(3, L"\uF017", L"Keep awake for 2 hours"));
+        items.push_back(Set_MenuRow(4, L"\uF017", L"Keep awake until turned off"));
+    } else if (id == kNetworkId) {
+        auto alias = AdapterAlias();
+        MIB_IF_ROW2 row{};
+        bool valid = AdapterState(alias, row);
+        std::wstring label = valid ? (row.AdminStatus == NET_IF_ADMIN_STATUS_UP ?
+            L"Turn off " : L"Turn on ") + alias : L"Choose an adapter in Settings";
+        items.push_back(Set_MenuRow(1, L"\uF0AC", label.c_str(), false, !valid || networkCommand));
+        items.push_back(Set_MenuRow(2, L"\uF08E", L"Windows network settings"));
+    } else {
+        return;
+    }
+    items.push_back(Set_MenuRow(5, L"\uF013", L"Taskbar settings"));
+    POINT point{static_cast<SHORT>(LOWORD(location)), static_cast<SHORT>(HIWORD(location))};
+    int command = stset::Set_TrayMenu(hwnd, items, &point);
+    if (command == 5) stset::OpenSettingsWindow();
+    if (id == kAwakeId) {
+        if (command == 1) ToggleAwake();
+        if (command == 2) SetAwake(true, 30);
+        if (command == 3) SetAwake(true, 120);
+        if (command == 4) SetAwake(true);
+    } else {
+        if (command == 1) ToggleNetwork(hwnd);
+        if (command == 2) ShellExecuteW(hwnd, L"open", L"ms-settings:network-status", nullptr, nullptr, SW_SHOWNORMAL);
+    }
+    Refresh(hwnd);
+}
+
+static void Start(HWND hwnd) {
+    if (st::g_safeMode) return;
+    if (st::g_modOn[8] && Wh_GetIntSetting(L"keepAwake.startEnabled")) {
+        SetAwake(true, DefaultMinutes());
+    }
+    if (st::g_modOn[8] || st::g_modOn[9]) SetTimer(hwnd, kTimer, 2000, nullptr);
+    Refresh(hwnd);
+}
+
+static void SettingsChanged(HWND hwnd) {
+    if (awake) {
+        ULONGLONG deadline = expiresAt;
+        SetAwake(true);
+        expiresAt = deadline;
+    }
+    networkError = 0;
+    Refresh(hwnd);
+}
+
+static void Stop(HWND hwnd) {
+    KillTimer(hwnd, kTimer);
+    if (awake) SetAwake(false);
+    if (networkCommand) CloseHandle(std::exchange(networkCommand, nullptr));
+    Remove(hwnd, kAwakeId, awakeBadge);
+    Remove(hwnd, kNetworkId, networkBadge);
+}
+}  // namespace sttools
+
 namespace sttray {
 constexpr UINT WM_APP_TRAY = WM_APP + 21, WM_APP_TRAY_REFRESH = WM_APP + 22;
 constexpr UINT kTrayId = 1;
@@ -6731,12 +7200,18 @@ inline LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
     if (g_taskbarCreated && msg == g_taskbarCreated) {
         g_shown = false;  // The new taskbar has no icons yet.
         Update(hwnd);
+        sttools::awakeBadge.shown = sttools::networkBadge.shown = false;
+        sttools::Refresh(hwnd);
         return 0;
     }
     switch (msg) {
+        case sttools::kCallback: sttools::OnTray(hwnd, wParam, lParam); return 0;
+        case WM_TIMER:
+            if (wParam == sttools::kTimer) sttools::Refresh(hwnd);
+            return 0;
         case WM_APP_TRAY: OnTray(hwnd, lParam); return 0;
-        case WM_APP_TRAY_REFRESH: Update(hwnd); return 0;
-        case WM_CLOSE: Remove(hwnd); DestroyWindow(hwnd); return 0;
+        case WM_APP_TRAY_REFRESH: Update(hwnd); sttools::SettingsChanged(hwnd); return 0;
+        case WM_CLOSE: sttools::Stop(hwnd); Remove(hwnd); DestroyWindow(hwnd); return 0;
         case WM_DESTROY: g_wnd = nullptr; PostQuitMessage(0); return 0;
     }
     return DefWindowProcW(hwnd, msg, wParam, lParam);
@@ -6755,6 +7230,7 @@ inline DWORD WINAPI Thread(LPVOID) {
     if (hwnd) {
         g_wnd = hwnd;
         Update(hwnd);
+        sttools::Start(hwnd);
         MSG msg;
         while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
             TranslateMessage(&msg);
@@ -36941,6 +37417,108 @@ Media::AcrylicBrush DockMaterial() {
     return brush;
 }
 
+// The dock's round ends belong to whichever tray pieces are first and last on
+// screen. The quick settings button collapses when network, volume and battery
+// are all hidden, and the hidden-icons arrow goes away with no hidden icons, so
+// the ends move to the next piece instead of the dock stopping square.
+struct TraySegment {
+    FrameworkElement panel{nullptr};
+    FrameworkElement frame{nullptr};
+};
+struct TrayFrameHook {
+    FrameworkElement frame{nullptr};
+    winrt::event_token sized;
+};
+[[clang::no_destroy]] std::vector<TraySegment> g_traySegments;
+[[clang::no_destroy]] std::vector<TrayFrameHook> g_trayFrameHooks;
+
+void RememberTraySegment(FrameworkElement const& panel) {
+    for (auto const& item : g_traySegments)
+        if (item.panel == panel) return;
+    g_traySegments.push_back({panel, nullptr});
+}
+
+FrameworkElement TrayFrameOf(FrameworkElement const& element) {
+    FrameworkElement node = element;
+    for (int depth = 0; node && depth < 16; ++depth) {
+        auto parent = Media::VisualTreeHelper::GetParent(node).try_as<FrameworkElement>();
+        if (!parent) return nullptr;
+        if (parent.Name() == L"SystemTrayFrameGrid") return parent;
+        node = parent;
+    }
+    return nullptr;
+}
+
+bool TraySegmentShown(FrameworkElement const& panel, FrameworkElement const& frame) {
+    if (panel.ActualWidth() < 6.0) return false;
+    FrameworkElement node = panel;
+    for (int depth = 0; node && depth < 16; ++depth) {
+        if (node == frame) return true;
+        if (node.Visibility() != Visibility::Visible) return false;
+        node = Media::VisualTreeHelper::GetParent(node).try_as<FrameworkElement>();
+    }
+    return false;
+}
+
+template<typename Panel>
+void SetTrayEnds(Panel panel, bool left, bool right) {
+    Thickness border{left ? 2.0 : 0.0, 2.0, right ? 2.0 : 0.0, 2.0};
+    CornerRadius corners{left ? 10.0 : 0.0, right ? 10.0 : 0.0,
+                         right ? 10.0 : 0.0, left ? 10.0 : 0.0};
+    if (!(panel.BorderThickness() == border)) panel.BorderThickness(border);
+    if (!(panel.CornerRadius() == corners)) panel.CornerRadius(corners);
+}
+
+void UpdateTrayEnds() {
+    for (size_t i = g_traySegments.size(); i-- > 0;) {
+        auto& item = g_traySegments[i];
+        try {
+            if (!item.frame) item.frame = TrayFrameOf(item.panel);
+            if (!item.frame) g_traySegments.erase(g_traySegments.begin() + i);
+        } catch (...) {
+            g_traySegments.erase(g_traySegments.begin() + i);
+        }
+    }
+    std::vector<FrameworkElement> frames;
+    for (auto const& item : g_traySegments) {
+        bool known = false;
+        for (auto const& frame : frames) if (frame == item.frame) known = true;
+        if (!known) frames.push_back(item.frame);
+    }
+    for (auto const& frame : frames) {
+        bool hooked = false;
+        for (auto const& hook : g_trayFrameHooks) if (hook.frame == frame) hooked = true;
+        if (!hooked) {
+            try {
+                auto sized = frame.SizeChanged([](auto const&, auto const&) {
+                    try { UpdateTrayEnds(); } catch (...) {}
+                });
+                g_trayFrameHooks.push_back({frame, sized});
+            } catch (...) {}
+        }
+        FrameworkElement first{nullptr}, last{nullptr};
+        double firstX = 0, lastX = 0;
+        std::vector<FrameworkElement> shown;
+        for (auto const& item : g_traySegments) {
+            if (item.frame != frame) continue;
+            try {
+                if (!TraySegmentShown(item.panel, frame)) continue;
+                double x = item.panel.TransformToVisual(frame).TransformPoint({0, 0}).X;
+                shown.push_back(item.panel);
+                if (!first || x < firstX) { first = item.panel; firstX = x; }
+                if (!last || x > lastX) { last = item.panel; lastX = x; }
+            } catch (...) {}
+        }
+        for (auto const& panel : shown) {
+            bool left = panel == first, right = panel == last;
+            try {
+                if (auto grid = panel.try_as<Controls::Grid>()) SetTrayEnds(grid, left, right);
+                else if (auto stack = panel.try_as<Controls::StackPanel>()) SetTrayEnds(stack, left, right);
+            } catch (...) {}
+        }
+    }
+}
+
 template<typename Panel>
 void StyleTraySegment(Panel panel, bool left, bool right) {
     SaveChrome(panel, FrameworkElement::HeightProperty());
@@ -36958,6 +37536,7 @@ void StyleTraySegment(Panel panel, bool left, bool right) {
     panel.BorderThickness({left ? 2.0 : 0.0, 2, right ? 2.0 : 0.0, 2});
     panel.CornerRadius({left ? 10.f : 0.f, right ? 10.f : 0.f,
                         right ? 10.f : 0.f, left ? 10.f : 0.f});
+    RememberTraySegment(panel);
 }
 
 // The native hover circle hides while this layer owns the hover: a Mocha
@@ -37044,6 +37623,11 @@ void ApplyTrayChrome(DependencyObject const& object, int depth = 0) {
 }
 
 void RestoreTrayChrome() {
+    for (auto const& hook : g_trayFrameHooks) {
+        try { hook.frame.SizeChanged(hook.sized); } catch (...) {}
+    }
+    g_trayFrameHooks.clear();
+    g_traySegments.clear();
     for (auto const& item : g_trayHovers) {
         try {
             item.parent.PointerEntered(item.entered);
@@ -37639,6 +38223,7 @@ void ScanForClocks() {
         }
 
         ApplyTrayChrome(content);
+        try { UpdateTrayEnds(); } catch (...) {}
         std::vector<FrameworkElement> clocks;
         FindChildrenByClassName(content, L"SystemTray.DateTimeIconContent", 64,
                                 clocks);
@@ -86989,8 +87574,902 @@ void OnAutoHideClick(wf::IInspectable const&, wux::RoutedEventArgs const&) {
     });
 }
 
+// Taskbar position, after Oji's Taskbar Position Shortcut: a submenu that moves
+// the taskbar for this Explorer session, and keeps a position per app. The
+// native move is message 0x5CA to Shell_TrayWnd; the hooks keep the frame and
+// the XAML content on the chosen edge without writing the Windows setting.
+namespace tps {
+
+constexpr wchar_t kRegistryPath[] =
+    L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced";
+constexpr wchar_t kLocationValue[] = L"TaskbarLocation";
+constexpr UINT kTaskbarLocationMessage = 0x5CA;
+constexpr int kUseWindowsDefault = -1;
+constexpr int kNoPendingChange = -2;
+constexpr int kRuleWindowsDefault = -3;
+constexpr int kRuleUnlisted = -4;
+constexpr int kNoStoredOverride = -5;
+constexpr int kRuleExcluded = -6;
+
+struct EdgeOption {
+    const wchar_t* label;
+    int edge;
+};
+constexpr EdgeOption kEdges[] = {
+    {L"Top", ABE_TOP},
+    {L"Left", ABE_LEFT},
+    {L"Right", ABE_RIGHT},
+    {L"Bottom", ABE_BOTTOM},
+};
+
+std::atomic<bool> g_stopping{false};
+std::atomic<bool> g_enabled{false};
+std::atomic<bool> g_hostProcess{false};
+std::atomic<bool> g_runtimeHookReady{false};
+std::atomic<bool> g_afterInit{false};
+std::atomic<DWORD> g_taskbarThreadId{0};
+std::atomic<int> g_effectiveEdge{-1};
+std::atomic<bool> g_maximizedOnly{false};
+std::atomic<int> g_quickPosition{kNoPendingChange};
+std::atomic<int> g_switchDelayMs{400};
+thread_local bool g_inTaskbarSettingsLoad = false;
+thread_local std::wstring g_menuTargetApp;
+
+std::mutex g_rulesMutex;
+std::vector<std::wstring> g_ignored;
+std::wstring g_label = L"Taskbar position";
+std::mutex g_foregroundMutex;
+std::wstring g_lastForegroundApp;
+std::mutex g_threadMutex;
+HANDLE g_stopEvent = nullptr;
+HANDLE g_wakeEvent = nullptr;
+HANDLE g_monitorThread = nullptr;
+
+// Click handlers live in this mod's code, so they are revoked on unload.
+struct ClickEntry {
+    winrt::weak_ref<wuxc::MenuFlyoutItem> item;
+    winrt::event_token token{};
+};
+std::vector<ClickEntry> g_clicks;  // Taskbar UI thread only.
+
+bool IsValidEdge(int edge) {
+    return edge >= ABE_LEFT && edge <= ABE_BOTTOM;
+}
+
+void Wake() {
+    if (g_wakeEvent) {
+        SetEvent(g_wakeEvent);
+    }
+}
+
+std::wstring NormalizeExecutable(std::wstring input) {
+    auto nonSpace = [](wchar_t c) { return !iswspace(c); };
+    auto begin = std::find_if(input.begin(), input.end(), nonSpace);
+    auto end = std::find_if(input.rbegin(), input.rend(), nonSpace).base();
+    if (begin >= end) {
+        return {};
+    }
+    input = std::wstring(begin, end);
+    if (input.size() >= 2 && input.front() == L'"' && input.back() == L'"') {
+        input = input.substr(1, input.size() - 2);
+    }
+    auto slash = input.find_last_of(L"\\/");
+    if (slash != std::wstring::npos) {
+        input.erase(0, slash + 1);
+    }
+    std::transform(input.begin(), input.end(), input.begin(),
+                   [](wchar_t c) { return static_cast<wchar_t>(towlower(c)); });
+    if (input.empty()) {
+        return {};
+    }
+    if (input.size() < 4 || input.substr(input.size() - 4) != L".exe") {
+        input += L".exe";
+    }
+    return input;
+}
+
+void LoadSettings() {
+    g_enabled.store(Wh_GetIntSetting(L"position.enabled") != 0);
+    g_maximizedOnly.store(Wh_GetIntSetting(L"position.maximizedOnly") != 0);
+    g_switchDelayMs.store(
+        std::clamp(Wh_GetIntSetting(L"position.switchDelayMs"), 0, 10000));
+
+    std::wstring label;
+    {
+        auto setting = WindhawkUtils::StringSetting::make(L"position.label");
+        label = setting.get();
+    }
+    std::wstring list;
+    {
+        auto setting = WindhawkUtils::StringSetting::make(L"position.ignoredApps");
+        list = setting.get();
+    }
+    std::vector<std::wstring> ignored;
+    size_t start = 0;
+    while (start <= list.size()) {
+        size_t stop = list.find_first_of(L",;", start);
+        if (stop == std::wstring::npos) {
+            stop = list.size();
+        }
+        std::wstring name = NormalizeExecutable(list.substr(start, stop - start));
+        if (!name.empty() &&
+            std::find(ignored.begin(), ignored.end(), name) == ignored.end()) {
+            ignored.push_back(std::move(name));
+        }
+        start = stop + 1;
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_rulesMutex);
+        g_ignored.swap(ignored);
+        g_label = label.empty() ? L"Taskbar position" : label;
+    }
+    Wake();
+}
+
+std::wstring MenuLabel() {
+    std::lock_guard<std::mutex> lock(g_rulesMutex);
+    return g_label;
+}
+
+using RegGetValueW_t = decltype(&RegGetValueW);
+RegGetValueW_t RegGetValueW_Original = nullptr;
+void StartMonitorWhenReady();
+
+void ActivateTaskbarHost() {
+    if (g_stopping.load()) {
+        return;
+    }
+    g_taskbarThreadId = GetCurrentThreadId();
+    g_hostProcess = true;
+    StartMonitorWhenReady();
+}
+
+using TrayUI_GetSaveStateAndInitRects_t = void(__cdecl*)(void*);
+TrayUI_GetSaveStateAndInitRects_t TrayUI_GetSaveStateAndInitRects_Original = nullptr;
+void __cdecl TrayUI_GetSaveStateAndInitRects_Hook(void* pThis) {
+    ActivateTaskbarHost();
+    bool old = g_inTaskbarSettingsLoad;
+    g_inTaskbarSettingsLoad = true;
+    TrayUI_GetSaveStateAndInitRects_Original(pThis);
+    g_inTaskbarSettingsLoad = old;
+}
+
+using CSecondaryTray_LoadSettings_t = HRESULT(__cdecl*)(void*);
+CSecondaryTray_LoadSettings_t CSecondaryTray_LoadSettings_Original = nullptr;
+HRESULT __cdecl CSecondaryTray_LoadSettings_Hook(void* pThis) {
+    bool old = g_inTaskbarSettingsLoad;
+    g_inTaskbarSettingsLoad = true;
+    HRESULT result = CSecondaryTray_LoadSettings_Original(pThis);
+    g_inTaskbarSettingsLoad = old;
+    return result;
+}
+
+using TrayUI_WndProc_t = LRESULT(WINAPI*)(void*, HWND, UINT, WPARAM, LPARAM, bool*);
+TrayUI_WndProc_t TrayUI_WndProc_Original = nullptr;
+LRESULT WINAPI TrayUI_WndProc_Hook(void* pThis, HWND window, UINT message,
+                                    WPARAM wParam, LPARAM lParam, bool* flag) {
+    if (message == kTaskbarLocationMessage && wParam == 6 &&
+        !g_stopping.load() && g_hostProcess.load()) {
+        int effective = g_effectiveEdge.load();
+        if (IsValidEdge(effective)) {
+            lParam = static_cast<LPARAM>(effective);
+        }
+    }
+    return TrayUI_WndProc_Original(pThis, window, message, wParam, lParam, flag);
+}
+
+using TaskbarSettings_Location_t = int(__cdecl*)(void* pThis);
+TaskbarSettings_Location_t TaskbarSettings_Location_Original = nullptr;
+int __cdecl TaskbarSettings_Location_Hook(void* pThis) {
+    if (!g_stopping.load() && g_hostProcess.load()) {
+        int edge = g_effectiveEdge.load();
+        if (IsValidEdge(edge)) {
+            return edge;
+        }
+    }
+    return TaskbarSettings_Location_Original(pThis);
+}
+
+bool TryReadTaskbarEdge(DWORD* edge) {
+    DWORD value = ABE_BOTTOM;
+    DWORD size = sizeof(value);
+    auto read = RegGetValueW_Original ? RegGetValueW_Original : RegGetValueW;
+    LONG error = read(HKEY_CURRENT_USER, kRegistryPath, kLocationValue,
+                      RRF_RT_REG_DWORD, nullptr, &value, &size);
+    if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
+        // No value means the Windows default, Bottom. Never write it.
+        *edge = ABE_BOTTOM;
+        return true;
+    }
+    if (error != ERROR_SUCCESS || !IsValidEdge(static_cast<int>(value))) {
+        return false;
+    }
+    *edge = value;
+    return true;
+}
+
+LONG WINAPI RegGetValueW_Hook(HKEY hkey, LPCWSTR subkey, LPCWSTR value,
+                              DWORD flags, LPDWORD type, PVOID data, LPDWORD size) {
+    DWORD bufferSize = size ? *size : 0;
+    LONG result = RegGetValueW_Original(hkey, subkey, value, flags, type, data, size);
+    if (g_stopping.load() || !g_hostProcess.load() ||
+        (!g_inTaskbarSettingsLoad &&
+         GetCurrentThreadId() != g_taskbarThreadId.load()) ||
+        hkey != HKEY_CURRENT_USER || !subkey || !value || !data || !size ||
+        _wcsicmp(subkey, kRegistryPath) || _wcsicmp(value, kLocationValue) ||
+        !(flags & RRF_RT_REG_DWORD) || bufferSize < sizeof(DWORD)) {
+        return result;
+    }
+    int edge = g_effectiveEdge.load();
+    if (!IsValidEdge(edge)) {
+        return result;
+    }
+    *static_cast<DWORD*>(data) = static_cast<DWORD>(edge);
+    *size = sizeof(DWORD);
+    if (type) {
+        *type = REG_DWORD;
+    }
+    return ERROR_SUCCESS;
+}
+
+bool SendEdge(HWND taskbar, DWORD edge) {
+    DWORD_PTR result = 0;
+    if (!SendMessageTimeoutW(taskbar, kTaskbarLocationMessage, 6,
+                             static_cast<LPARAM>(edge),
+                             SMTO_ABORTIFHUNG | SMTO_BLOCK, 1500, &result)) {
+        return false;
+    }
+    SendMessageTimeoutW(taskbar, WM_SETTINGCHANGE, 0,
+                        reinterpret_cast<LPARAM>(L"TraySettings"),
+                        SMTO_ABORTIFHUNG | SMTO_BLOCK, 1500, &result);
+    return true;
+}
+
+bool ApplyTaskbarEdge(DWORD edge) {
+    if (!IsValidEdge(static_cast<int>(edge)) || !g_runtimeHookReady.load()) {
+        return false;
+    }
+    HWND taskbar = FindCurrentProcessTaskbarWnd();
+    if (!taskbar) {
+        return false;
+    }
+    int previous = g_effectiveEdge.exchange(static_cast<int>(edge));
+    if (!SendEdge(taskbar, edge)) {
+        g_effectiveEdge.store(previous);
+        return false;
+    }
+    Wh_Log(L"Taskbar moved to edge %lu", edge);
+    return true;
+}
+
+bool TryGetForegroundApp(HWND window, std::wstring* executable) {
+    if (!window) {
+        return false;
+    }
+    DWORD pid = 0;
+    GetWindowThreadProcessId(window, &pid);
+    if (!pid) {
+        return false;
+    }
+    if (pid == GetCurrentProcessId()) {
+        wchar_t className[128] = {};
+        if (!GetClassNameW(window, className, ARRAYSIZE(className))) {
+            return false;
+        }
+        if (_wcsicmp(className, L"Progman") == 0 ||
+            _wcsicmp(className, L"WorkerW") == 0) {
+            executable->clear();
+            return true;
+        }
+        if (_wcsicmp(className, L"CabinetWClass") != 0 &&
+            _wcsicmp(className, L"ExploreWClass") != 0) {
+            return false;
+        }
+    }
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!process) {
+        return false;
+    }
+    std::wstring path(32768, L'\0');
+    DWORD length = static_cast<DWORD>(path.size());
+    BOOL ok = QueryFullProcessImageNameW(process, 0, path.data(), &length);
+    CloseHandle(process);
+    if (!ok) {
+        return false;
+    }
+    *executable = NormalizeExecutable(path.substr(0, length));
+    if (*executable == L"shellexperiencehost.exe" ||
+        *executable == L"startmenuexperiencehost.exe" ||
+        *executable == L"searchhost.exe" ||
+        *executable == L"textinputhost.exe") {
+        return false;
+    }
+    return !executable->empty();
+}
+
+bool IsMaximizedAppWindow(HWND window) {
+    if (!window || !IsWindowVisible(window) || IsIconic(window) || !IsZoomed(window)) {
+        return false;
+    }
+    DWORD cloaked = 0;
+    return FAILED(DwmGetWindowAttribute(window, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) ||
+           !cloaked;
+}
+
+struct MaximizedWindowSearch {
+    HMONITOR monitor;
+    std::wstring executable;
+};
+
+BOOL CALLBACK FindMaximizedWindow(HWND window, LPARAM context) {
+    auto* search = reinterpret_cast<MaximizedWindowSearch*>(context);
+    if (!IsMaximizedAppWindow(window) || GetAncestor(window, GA_ROOT) != window ||
+        (GetWindowLongPtrW(window, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) ||
+        MonitorFromWindow(window, MONITOR_DEFAULTTONULL) != search->monitor) {
+        return TRUE;
+    }
+    std::wstring app;
+    if (!TryGetForegroundApp(window, &app) || app.empty()) {
+        return TRUE;
+    }
+    search->executable = std::move(app);
+    return FALSE;
+}
+
+// The highest maximized app on the monitor in front; a small window over it
+// does not replace its rule.
+std::wstring TopMaximizedAppOnForegroundMonitor() {
+    HWND foreground = GetForegroundWindow();
+    HMONITOR monitor = foreground ? MonitorFromWindow(foreground, MONITOR_DEFAULTTONULL) : nullptr;
+    if (!monitor) {
+        return {};
+    }
+    MaximizedWindowSearch search{monitor, {}};
+    EnumWindows(FindMaximizedWindow, reinterpret_cast<LPARAM>(&search));
+    return search.executable;
+}
+
+void UpdateForegroundApp(HWND window) {
+    std::wstring executable;
+    if (!TryGetForegroundApp(window, &executable)) {
+        return;
+    }
+    bool changed = false;
+    {
+        std::lock_guard<std::mutex> lock(g_foregroundMutex);
+        if (g_lastForegroundApp != executable) {
+            g_lastForegroundApp = std::move(executable);
+            changed = true;
+        }
+    }
+    if (changed) {
+        Wake();
+    }
+}
+
+std::wstring LastForegroundApp() {
+    std::lock_guard<std::mutex> lock(g_foregroundMutex);
+    return g_lastForegroundApp;
+}
+
+std::wstring CurrentApp() {
+    return g_maximizedOnly.load() ? TopMaximizedAppOnForegroundMonitor() : LastForegroundApp();
+}
+
+void CALLBACK ForegroundChanged(HWINEVENTHOOK, DWORD event, HWND window,
+                                LONG, LONG, DWORD, DWORD) {
+    if (event == EVENT_SYSTEM_FOREGROUND && !g_stopping.load()) {
+        UpdateForegroundApp(window);
+    }
+}
+
+bool IsIgnoredInSettings(std::wstring const& executable) {
+    if (executable.empty()) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(g_rulesMutex);
+    return std::find(g_ignored.begin(), g_ignored.end(), executable) != g_ignored.end();
+}
+
+std::wstring StorageName(wchar_t const* prefix, std::wstring executable) {
+    std::replace(executable.begin(), executable.end(), L'=', L'*');
+    return std::wstring(prefix) + executable;
+}
+
+int GetStoredAppPosition(std::wstring const& executable) {
+    if (executable.empty()) {
+        return kNoStoredOverride;
+    }
+    int value = Wh_GetIntValue(StorageName(L"AppPosition::", executable).c_str(),
+                               kNoStoredOverride);
+    if (value == kRuleUnlisted || value == kRuleWindowsDefault || IsValidEdge(value)) {
+        return value;
+    }
+    return kNoStoredOverride;
+}
+
+bool IsAppExcluded(std::wstring const& executable) {
+    if (executable.empty()) {
+        return false;
+    }
+    if (IsIgnoredInSettings(executable)) {
+        return true;
+    }
+    return Wh_GetIntValue(StorageName(L"Excluded::", executable).c_str(), 0) != 0;
+}
+
+void SetAppExcluded(std::wstring const& executable, bool excluded) {
+    if (executable.empty() || g_stopping.load()) {
+        return;
+    }
+    std::wstring key = StorageName(L"Excluded::", executable);
+    if (excluded) {
+        Wh_SetIntValue(key.c_str(), 1);
+    } else {
+        Wh_DeleteValue(key.c_str());
+    }
+    Wake();
+}
+
+int FindAppPosition(std::wstring const& executable) {
+    if (IsAppExcluded(executable)) {
+        return kRuleExcluded;
+    }
+    int stored = GetStoredAppPosition(executable);
+    return stored != kNoStoredOverride ? stored : kRuleUnlisted;
+}
+
+void CALLBACK WindowStateChanged(HWINEVENTHOOK, DWORD event, HWND window,
+                                 LONG object, LONG child, DWORD, DWORD) {
+    if (g_stopping.load() || !g_maximizedOnly.load() || object != OBJID_WINDOW ||
+        child != CHILDID_SELF || !window) {
+        return;
+    }
+    if (event == EVENT_OBJECT_LOCATIONCHANGE && GetAncestor(window, GA_ROOT) != window) {
+        return;
+    }
+    Wake();
+}
+
+DWORD WINAPI MonitorThreadProc(void*) {
+    MSG message{};
+    PeekMessageW(&message, nullptr, 0, 0, PM_NOREMOVE);
+    HWINEVENTHOOK foregroundHook =
+        SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr,
+                        ForegroundChanged, 0, 0, WINEVENT_OUTOFCONTEXT);
+    HWINEVENTHOOK stateHooks[4] = {};
+    bool stateHooksOn = false;
+    auto updateStateHooks = [&]() {
+        bool want = g_maximizedOnly.load() && g_enabled.load();
+        if (want == stateHooksOn) {
+            return;
+        }
+        stateHooksOn = want;
+        if (want) {
+            stateHooks[0] = SetWinEventHook(EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND,
+                                            nullptr, WindowStateChanged, 0, 0,
+                                            WINEVENT_OUTOFCONTEXT);
+            stateHooks[1] = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE,
+                                            EVENT_OBJECT_LOCATIONCHANGE, nullptr,
+                                            WindowStateChanged, 0, 0,
+                                            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+            stateHooks[2] = SetWinEventHook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE, nullptr,
+                                            WindowStateChanged, 0, 0,
+                                            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+            stateHooks[3] = SetWinEventHook(EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED,
+                                            nullptr, WindowStateChanged, 0, 0,
+                                            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+        } else {
+            for (auto& hook : stateHooks) {
+                if (hook) {
+                    UnhookWinEvent(hook);
+                }
+                hook = nullptr;
+            }
+        }
+    };
+    UpdateForegroundApp(GetForegroundWindow());
+    HKEY registryKey = nullptr;
+    HANDLE registryEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    RegOpenKeyExW(HKEY_CURRENT_USER, kRegistryPath, 0, KEY_NOTIFY, &registryKey);
+    auto armNotification = [&]() {
+        if (registryKey && registryEvent) {
+            RegNotifyChangeKeyValue(registryKey, FALSE, REG_NOTIFY_CHANGE_LAST_SET,
+                                    registryEvent, TRUE);
+        }
+    };
+    armNotification();
+    int candidate = kNoPendingChange;
+    ULONGLONG candidateSince = 0;
+    ULONGLONG lastChangeAt = 0;
+    ULONGLONG nextRetryAt = 0;
+    constexpr ULONGLONG kMinimumInterval = 350;
+    DWORD lastRealEdge = ABE_BOTTOM;
+    TryReadTaskbarEdge(&lastRealEdge);
+    bool evaluate = true;
+    bool useQuickDelay = false;
+    while (!g_stopping.load()) {
+        updateStateHooks();
+        if (evaluate) {
+            DWORD realEdge = ABE_BOTTOM;
+            if (TryReadTaskbarEdge(&realEdge)) {
+                int manual = g_quickPosition.load();
+                int desired = static_cast<int>(realEdge);
+                bool quickMode = false;
+                if (g_enabled.load()) {
+                    if (IsValidEdge(manual)) {
+                        desired = manual;
+                    }
+                    int position = FindAppPosition(CurrentApp());
+                    quickMode = manual != kNoPendingChange && !IsValidEdge(position);
+                    if (position == kRuleExcluded) {
+                        desired = g_effectiveEdge.load();
+                        if (!IsValidEdge(desired)) {
+                            desired = static_cast<int>(realEdge);
+                        }
+                        quickMode = false;
+                    } else if (IsValidEdge(position)) {
+                        desired = position;
+                    }
+                }
+                useQuickDelay = quickMode;
+                ULONGLONG now = GetTickCount64();
+                if (candidate != desired) {
+                    candidate = desired;
+                    candidateSince = now;
+                }
+                int applied = g_effectiveEdge.load();
+                if (!IsValidEdge(applied)) {
+                    applied = static_cast<int>(realEdge);
+                }
+                if (desired != applied &&
+                    now - candidateSince >=
+                        static_cast<ULONGLONG>(quickMode ? 0 : g_switchDelayMs.load()) &&
+                    (!lastChangeAt || now - lastChangeAt >= kMinimumInterval) &&
+                    now >= nextRetryAt) {
+                    if (ApplyTaskbarEdge(static_cast<DWORD>(desired))) {
+                        lastChangeAt = GetTickCount64();
+                        nextRetryAt = 0;
+                    } else {
+                        nextRetryAt = GetTickCount64() + 1000;
+                    }
+                }
+                lastRealEdge = realEdge;
+            }
+        }
+        ULONGLONG now = GetTickCount64();
+        DWORD timeout = INFINITE;
+        int effective = g_effectiveEdge.load();
+        if (!IsValidEdge(effective)) {
+            effective = static_cast<int>(lastRealEdge);
+        }
+        if (candidate != effective && IsValidEdge(candidate)) {
+            ULONGLONG ready = candidateSince +
+                              static_cast<ULONGLONG>(useQuickDelay ? 0 : g_switchDelayMs.load());
+            if (lastChangeAt) {
+                ready = std::max(ready, lastChangeAt + kMinimumInterval);
+            }
+            ready = std::max(ready, nextRetryAt);
+            timeout = ready > now ? static_cast<DWORD>(std::min<ULONGLONG>(ready - now, 10000)) : 0;
+        }
+        if (!foregroundHook) {
+            timeout = std::min<DWORD>(timeout, 400);
+        }
+        HANDLE handles[3] = {g_stopEvent, g_wakeEvent, registryEvent};
+        DWORD count = registryEvent && registryKey ? 3 : 2;
+        DWORD result = MsgWaitForMultipleObjects(count, handles, FALSE, timeout, QS_ALLINPUT);
+        if (result == WAIT_OBJECT_0) {
+            break;
+        }
+        evaluate = result != WAIT_OBJECT_0 + count;
+        if (count == 3 && result == WAIT_OBJECT_0 + 2) {
+            armNotification();
+        }
+        if (result == WAIT_OBJECT_0 + count) {
+            MSG msg;
+            while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+        }
+        if (!foregroundHook) {
+            UpdateForegroundApp(GetForegroundWindow());
+        }
+    }
+    if (foregroundHook) {
+        UnhookWinEvent(foregroundHook);
+    }
+    for (auto hook : stateHooks) {
+        if (hook) {
+            UnhookWinEvent(hook);
+        }
+    }
+    if (registryKey) {
+        RegCloseKey(registryKey);
+    }
+    if (registryEvent) {
+        CloseHandle(registryEvent);
+    }
+    return 0;
+}
+
+void StartMonitorWhenReady() {
+    if (!g_afterInit.load() || !g_hostProcess.load() || !g_runtimeHookReady.load() ||
+        g_stopping.load()) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(g_threadMutex);
+    if (g_monitorThread || g_stopping.load()) {
+        return;
+    }
+    if (!g_stopEvent) {
+        g_stopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    }
+    if (!g_wakeEvent) {
+        g_wakeEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    }
+    if (g_stopEvent && g_wakeEvent) {
+        g_monitorThread = CreateThread(nullptr, 0, MonitorThreadProc, nullptr, 0, nullptr);
+    }
+    if (!g_monitorThread) {
+        Wh_Log(L"Taskbar position watcher did not start: %lu", GetLastError());
+    }
+}
+
+// Called from the utils module's Wh_ModInit, before hooks are applied.
+void Init() {
+    LoadSettings();
+    if (HWND taskbar = FindCurrentProcessTaskbarWnd()) {
+        g_hostProcess = true;
+        g_taskbarThreadId = GetWindowThreadProcessId(taskbar, nullptr);
+    }
+
+    if (!g_enabled.load()) {
+        return;
+    }
+
+    HMODULE kernelBase = GetModuleHandleW(L"kernelbase.dll");
+    auto regGetValue = kernelBase ? reinterpret_cast<RegGetValueW_t>(
+                                        GetProcAddress(kernelBase, "RegGetValueW"))
+                                  : nullptr;
+    if (regGetValue &&
+        !WindhawkUtils::SetFunctionHook(regGetValue, RegGetValueW_Hook, &RegGetValueW_Original)) {
+        Wh_Log(L"Taskbar position: RegGetValueW hook failed");
+    }
+
+    HMODULE taskbarDll = LoadLibraryExW(L"taskbar.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!taskbarDll) {
+        Wh_Log(L"Taskbar position: taskbar.dll did not load (%lu)", GetLastError());
+        return;
+    }
+    WindhawkUtils::SYMBOL_HOOK hooks[] = {
+        {
+            {LR"(public: virtual __int64 __cdecl TrayUI::WndProc(struct HWND__ *,unsigned int,unsigned __int64,__int64,bool *))"},
+            &TrayUI_WndProc_Original,
+            TrayUI_WndProc_Hook,
+        },
+        {
+            {LR"(public: enum winrt::WindowsUdk::UI::Shell::TaskbarLocation __cdecl winrt::WindowsUdk::UI::Shell::implementation::TaskbarSettings::Location(void))"},
+            &TaskbarSettings_Location_Original,
+            TaskbarSettings_Location_Hook,
+        },
+        {
+            {LR"(public: void __cdecl TrayUI::_GetSaveStateAndInitRects(void))"},
+            &TrayUI_GetSaveStateAndInitRects_Original,
+            TrayUI_GetSaveStateAndInitRects_Hook,
+            true,
+        },
+        {
+            {LR"(private: long __cdecl CSecondaryTray::_LoadSettings(void))"},
+            &CSecondaryTray_LoadSettings_Original,
+            CSecondaryTray_LoadSettings_Hook,
+            true,
+        },
+    };
+    bool resolved = WindhawkUtils::HookSymbols(taskbarDll, hooks, ARRAYSIZE(hooks));
+    g_runtimeHookReady = resolved && RegGetValueW_Original && TaskbarSettings_Location_Original &&
+                         TrayUI_WndProc_Original;
+    Wh_Log(L"Taskbar position hooks: %s", g_runtimeHookReady.load() ? L"ready" : L"unavailable");
+}
+
+void AfterInit() {
+    g_afterInit = true;
+    if (!g_hostProcess.load()) {
+        if (HWND taskbar = FindCurrentProcessTaskbarWnd()) {
+            g_hostProcess = true;
+            g_taskbarThreadId = GetWindowThreadProcessId(taskbar, nullptr);
+        }
+    }
+    StartMonitorWhenReady();
+}
+
+// Runs on the taskbar UI thread, from Wh_ModUninit.
+void RevokeClicksOnUiThread() {
+    for (auto const& entry : g_clicks) {
+        try {
+            if (auto item = entry.item.get()) {
+                item.Click(entry.token);
+            }
+        } catch (...) {
+        }
+    }
+    g_clicks.clear();
+}
+
+void StopMonitor() {
+    g_stopping = true;
+    std::lock_guard<std::mutex> lock(g_threadMutex);
+    if (g_stopEvent) {
+        SetEvent(g_stopEvent);
+    }
+    if (g_monitorThread) {
+        WaitForSingleObject(g_monitorThread, INFINITE);
+        CloseHandle(g_monitorThread);
+        g_monitorThread = nullptr;
+    }
+}
+
+// After StopMonitor: puts the taskbar back where Windows has it, only if we moved it.
+void RestoreWindowsEdge() {
+    int effective = g_effectiveEdge.exchange(-1);
+    DWORD real = ABE_BOTTOM;
+    if (IsValidEdge(effective) && TryReadTaskbarEdge(&real) &&
+        effective != static_cast<int>(real)) {
+        if (HWND taskbar = FindCurrentProcessTaskbarWnd()) {
+            SendEdge(taskbar, real);
+        }
+    }
+    if (g_wakeEvent) {
+        CloseHandle(g_wakeEvent);
+        g_wakeEvent = nullptr;
+    }
+    if (g_stopEvent) {
+        CloseHandle(g_stopEvent);
+        g_stopEvent = nullptr;
+    }
+}
+
+// Inside ShowTaskbarSettingsContextMenu: remember the app the menu is about.
+void CaptureMenuTarget() {
+    UpdateForegroundApp(GetForegroundWindow());
+    g_menuTargetApp = g_enabled.load() ? CurrentApp() : std::wstring{};
+}
+
+bool MenuReady() {
+    return g_enabled.load() && g_runtimeHookReady.load() && g_hostProcess.load() &&
+           !g_stopping.load();
+}
+
+template <typename Handler>
+void AddClick(wuxc::MenuFlyoutItem const& item, Handler handler) {
+    auto token = item.Click(wux::RoutedEventHandler{handler});
+    g_clicks.push_back({winrt::weak_ref<wuxc::MenuFlyoutItem>(item), token});
+}
+
+wuxc::MenuFlyoutItem MakeChoice(const wchar_t* text, bool checked) {
+    wuxc::MenuFlyoutItem item;
+    item.Text(text);
+    if (checked) {
+        item.Icon(CreateFluentIcon(L"\xE73E"));
+    }
+    return item;
+}
+
+void QueueQuickPositionChange(int edge) {
+    if (g_stopping.load() || (edge != kUseWindowsDefault && !IsValidEdge(edge))) {
+        return;
+    }
+    g_quickPosition.store(edge);
+    Wake();
+}
+
+void QueueAppPositionChange(std::wstring const& executable, int position) {
+    if (g_stopping.load() || executable.empty()) {
+        return;
+    }
+    std::wstring key = StorageName(L"AppPosition::", executable);
+    BOOL saved = position == kNoStoredOverride ? Wh_DeleteValue(key.c_str())
+                                               : Wh_SetIntValue(key.c_str(), position);
+    if (saved) {
+        Wake();
+    }
+}
+
+void AppendAppOptions(wuxc::MenuFlyoutSubItem const& submenu, std::wstring const& app) {
+    int stored = GetStoredAppPosition(app);
+    bool excluded = IsAppExcluded(app);
+    bool settingsExcluded = IsIgnoredInSettings(app);
+
+    auto defaultItem = MakeChoice(L"Default (use global position)",
+                                  stored == kRuleUnlisted || stored == kRuleWindowsDefault ||
+                                      stored == kNoStoredOverride);
+    AddClick(defaultItem, [app](wf::IInspectable const&, wux::RoutedEventArgs const&) {
+        QueueAppPositionChange(app, kNoStoredOverride);
+    });
+    submenu.Items().Append(defaultItem);
+    submenu.Items().Append(wuxc::MenuFlyoutSeparator{});
+
+    for (auto const& option : kEdges) {
+        int edge = option.edge;
+        auto item = MakeChoice(option.label, stored == edge);
+        AddClick(item, [app, edge](wf::IInspectable const&, wux::RoutedEventArgs const&) {
+            QueueAppPositionChange(app, edge);
+        });
+        submenu.Items().Append(item);
+    }
+
+    submenu.Items().Append(wuxc::MenuFlyoutSeparator{});
+    auto excludeItem = MakeChoice(settingsExcluded ? L"Ignored in settings"
+                                  : excluded      ? L"Stop ignoring this app"
+                                                  : L"Ignore this app",
+                                  excluded);
+    excludeItem.IsEnabled(!settingsExcluded);
+    AddClick(excludeItem, [app, excluded](wf::IInspectable const&, wux::RoutedEventArgs const&) {
+        SetAppExcluded(app, !excluded);
+    });
+    submenu.Items().Append(excludeItem);
+}
+
+// The "Taskbar position" row, built on the taskbar UI thread.
+wuxc::MenuFlyoutSubItem BuildSubmenu() {
+    std::erase_if(g_clicks, [](ClickEntry const& entry) { return !entry.item.get(); });
+
+    wuxc::MenuFlyoutSubItem submenu;
+    submenu.Text(MenuLabel());
+    submenu.Icon(CreateFluentIcon(L"\xE90E"));
+
+    int selected = g_quickPosition.load();
+    auto follow = MakeChoice(L"Follow Windows setting",
+                             selected == kUseWindowsDefault || selected == kNoPendingChange);
+    AddClick(follow, [](wf::IInspectable const&, wux::RoutedEventArgs const&) {
+        QueueQuickPositionChange(kUseWindowsDefault);
+    });
+    submenu.Items().Append(follow);
+    submenu.Items().Append(wuxc::MenuFlyoutSeparator{});
+    for (auto const& option : kEdges) {
+        int edge = option.edge;
+        auto item = MakeChoice(option.label, edge == selected);
+        AddClick(item, [edge](wf::IInspectable const&, wux::RoutedEventArgs const&) {
+            QueueQuickPositionChange(edge);
+        });
+        submenu.Items().Append(item);
+    }
+
+    std::wstring app = g_menuTargetApp;
+    if (!app.empty()) {
+        submenu.Items().Append(wuxc::MenuFlyoutSeparator{});
+        wuxc::MenuFlyoutSubItem appSubmenu;
+        appSubmenu.Text(winrt::hstring{app});
+        appSubmenu.Icon(CreateFluentIcon(L"\xE8B7"));
+        AppendAppOptions(appSubmenu, app);
+        submenu.Items().Append(appSubmenu);
+    }
+
+    ThemeMenuItemOnce(submenu, 0);
+    return submenu;
+}
+
+}  // namespace tps
+
 void AppendInjectedItems(void* vectorThis) {
     auto cfg = GetSettingsSnapshot();
+
+    bool positionInjected = false;
+    if (tps::MenuReady()) {
+        // Set first: the submenu's own Append calls pass through the hook.
+        g_currentMenuInjected = true;
+        try {
+            auto submenu = tps::BuildSubmenu();
+            submenu.Name(kGuardItemName);
+            MenuFlyoutItemBaseVector_Append_Original(vectorThis, submenu);
+            wuxc::MenuFlyoutSeparator separator;
+            ThemeMenuItem(separator);
+            MenuFlyoutItemBaseVector_Append_Original(vectorThis, separator);
+            positionInjected = true;
+        } catch (...) {
+            Wh_Log(L"Taskbar position submenu failed");
+        }
+    }
 
     const MenuItemSpec specs[] = {
         {cfg.showRestartExplorer, cfg.textRestartExplorer, L"\xE72C",
@@ -87018,7 +88497,7 @@ void AppendInjectedItems(void* vectorThis) {
         }
 
         wuxc::MenuFlyoutItem menuItem;
-        if (!anyInjected) {
+        if (!anyInjected && !positionInjected) {
             menuItem.Name(kGuardItemName);
         }
         menuItem.Text(spec.text);
@@ -87068,6 +88547,10 @@ struct ScopedTaskbarSettingsMenuBuild {
         outer = g_taskbarSettingsMenuDepth++ == 0;
         if (outer) {
             g_currentMenuInjected = false;
+            try {
+                tps::CaptureMenuTarget();
+            } catch (...) {
+            }
         }
     }
 
@@ -87420,6 +88903,8 @@ BOOL Wh_ModInit() {
                                        &LoadLibraryExW_Original);
     }
 
+    tps::Init();
+
     if (GetSettingsSnapshot().separators) {
         g_sepActive.store(sep::ExplorerModInit());
         if (!g_sepActive.load()) {
@@ -87439,6 +88924,7 @@ void Wh_ModAfterInit() {
             HandleLoadedModuleIfTaskbarView(taskbarViewModule, true);
         }
     }
+    tps::AfterInit();
     if (g_sepActive.load()) {
         sep::ExplorerModAfterInit();
     }
@@ -87447,10 +88933,12 @@ void Wh_ModAfterInit() {
 BOOL Wh_ModSettingsChanged(BOOL* bReload) {
     const bool wasSeparators = GetSettingsSnapshot().separators;
     LoadSettings();
-    if (GetSettingsSnapshot().separators != wasSeparators) {
+    if (GetSettingsSnapshot().separators != wasSeparators ||
+        (Wh_GetIntSetting(L"position.enabled") != 0) != tps::g_enabled.load()) {
         *bReload = TRUE;
         return TRUE;
     }
+    tps::LoadSettings();
     if (g_sepActive.load()) {
         return sep::ExplorerModSettingsChanged(bReload);
     }
@@ -87459,6 +88947,11 @@ BOOL Wh_ModSettingsChanged(BOOL* bReload) {
 }
 
 void Wh_ModBeforeUninit() {
+    tps::StopMonitor();
+    tps::RestoreWindowsEdge();
+    if (HWND taskbar = FindCurrentProcessTaskbarWnd()) {
+        RunFromWindowThread(taskbar, tps::RevokeClicksOnUiThread);
+    }
     if (g_sepActive.load()) {
         sep::ExplorerModBeforeUninit();
     }
@@ -87499,6 +88992,12 @@ void Wh_ModUninit() {
 BOOL Wh_ModInit() {
     DWORD session = 0;
     if (ProcessIdToSessionId(GetCurrentProcessId(), &session) && session == 0) return FALSE;
+    WCHAR path[MAX_PATH]{};
+    GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
+    PCWSTR name = wcsrchr(path, L'\\');
+    if (!name || _wcsicmp(name + 1, L"explorer.exe")) {
+        return sticons::Start();
+    }
     st::ProcessKind kind = st::GetProcessKind();
     if (kind == st::ProcessKind::Other) return FALSE;
     st::g_kind = kind;
@@ -87622,6 +89121,10 @@ void Wh_ModBeforeUninit() {
 }
 
 void Wh_ModUninit() {
+    if (st::g_kind == st::ProcessKind::Other) {
+        sticons::Stop();
+        return;
+    }
     if (!st::g_safeMode) ::Wh_SetIntValue(L"st.quickStarts", 0);
     if (st::g_modActive[7]) mod_utils::Wh_ModUninit();
     if (st::g_modActive[6]) mod_ai::Wh_ModUninit();
@@ -87634,6 +89137,10 @@ void Wh_ModUninit() {
 }
 
 BOOL Wh_ModSettingsChanged(BOOL* bReload) {
+    if (st::g_kind == st::ProcessKind::Other) {
+        sticons::Refresh();
+        return TRUE;
+    }
     for (int i = 0; i < st::kModCount; i++) {
         if (st::ReadSwitch(i) != st::g_modOn[i]) {
             if (stset::g_settingsWnd) ::Wh_SetIntValue(L"st.reopenSettings", 1);
