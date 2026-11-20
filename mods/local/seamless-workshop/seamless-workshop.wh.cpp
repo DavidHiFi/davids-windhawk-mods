@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.0.1
+// @version         1.1.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -59,7 +59,7 @@ DavidHiFi's settings, any setting like that keeps your own value.
   $description: "Once a day, look for new versions of his mods and of Seamless Workshop. Nothing installs without you."
 - discordPresence: false
   $name: "Discord Rich Presence"
-  $description: "Show that you are using Seamless Workshop. Needs your Discord application id, set in the window. Off by default."
+  $description: "Show on your Discord profile that you are using Seamless Workshop. Off by default."
 */
 // ==/WindhawkModSettings==
 
@@ -115,7 +115,7 @@ DavidHiFi's settings, any setting like that keeps your own value.
 extern "C" IMAGE_DOS_HEADER __ImageBase;
 
 #ifndef HUB_MOD
-#define WH_MOD_VERSION L"1.0.0"
+#define WH_MOD_VERSION L"1.1.0"
 #define Wh_Log(...) ((void)0)
 #endif
 constexpr WCHAR kHubSelfId[] = L"local@seamless-workshop";  // How Windhawk lists this mod.
@@ -207,6 +207,18 @@ static void Hub_Presence();
 static std::wstring Hub_RegText(const std::wstring& key);
 static bool Hub_SetText(const std::wstring& key, const std::wstring& value);
 static bool Hub_Backup(const std::vector<std::wstring>& ids, std::wstring& err);
+struct SetPaint;
+struct SetItem;
+struct SetHit;
+static float Hub_MaxW(const SetWindow& w);
+static bool Hub_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it);
+static bool Hub_DrawLink(SetPaint& p, SetWindow& w, const SetItem& it, int idx);
+static bool Hub_BarBox(const SetField& f, const D2D1_RECT_F& row, D2D1_RECT_F& box);
+static bool Hub_HitRow(SetWindow& w, const SetItem& it, const D2D1_RECT_F& row, float x, float cy, SetHit& h);
+static void Hub_HitLink(SetWindow& w, int i, const D2D1_RECT_F& row, float x, float cy, SetHit& h);
+static void Hub_CardClick(SetWindow& w, int a, int b);
+static void Hub_Chose(SetWindow& w, int k);
+static void Hub_Reflow(SetWindow& w, float& y);
 constexpr UINT WM_HUB_ACTION = WM_APP + 14, WM_HUB_RESULT = WM_APP + 15, WM_HUB_FEED = WM_APP + 16;
 
 // ---- engine-hub.inc (inlined) ----
@@ -379,12 +391,12 @@ struct SetPageInfo {
     WCHAR glyph;
 };
 static const SetPageInfo kSetPages[] = {
-{L"Mods", L"Every mod you have installed. Flip a switch to turn one on or off, or click a mod for its settings.", 0xEA86},
+{L"Mods", L"Every mod you have installed. Flip a switch to turn one on or off, or open a card for its settings.", 0xEA86},
 {L"Marketplace", L"Find mods in the Windhawk library. New installs stay off until you turn them on.", 0xE719},
 {L"Updates", L"Check the library, then choose each mod to update.", 0xE895},
 {L"Presets", L"Save selected mods and their settings, then restore them together.", 0xE8F1},
 {L"Developer", L"Inspect source, check metadata and compile a disabled mod.", 0xE943},
-{L"Settings", L"Manage backups and Windhawk settings.", 0xE713},
+{L"Settings", L"How Seamless Workshop checks, saves and backs up.", 0xE713},
 {L"Look", L"Choose how this settings window looks and whether its tray icon is shown.", 0xE790},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
@@ -428,12 +440,13 @@ struct SetItem {
     enum Type { Group, Row, Banner, About, Link, Support } type = Row;
     int field = -1;  // Row: index into fields.
     float y = 0, h = 0;
+    float x = 0, w = 0;  // Hub: a card cell; 0 means the full content width.
     std::wstring text, sub, url;
 };
 
 // What the pointer is over. id picks the hover glow.
 struct SetHit {
-    enum Kind { None, Rail, Row, Control, Slider, Clear, Chip, Footer, Drop, Link, Scroll, Popup, Caption, RailToggle, RailEdge, Open } kind = None;
+    enum Kind { None, Rail, Row, Control, Slider, Clear, Chip, Footer, Drop, Link, Scroll, Popup, Caption, RailToggle, RailEdge, Open, Card } kind = None;
     int a = -1, b = -1;
     int id = -1;
 };
@@ -1425,6 +1438,7 @@ struct SetParts {
 
 static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
     SetParts p;
+    if (Hub_BarBox(f, row, p.box)) return p;
     float r = row.right - kSetRowPad, mid = (row.top + row.bottom) / 2, h = kSetBoxH / 2;
     switch (f.kind) {
         case SetField::Check:
@@ -1462,6 +1476,7 @@ static SetParts Set_Parts(const SetField& f, const D2D1_RECT_F& row) {
 static bool Set_In(const D2D1_RECT_F& r, float x, float y) { return x >= r.left && x < r.right && y >= r.top && y < r.bottom; }
 
 static D2D1_RECT_F Set_RowRect(const SetWindow& w, const SetItem& it) {
+    if (it.w > 0) return {it.x, it.y, it.x + it.w, it.y + it.h};  // Hub card cell.
     return {w.contentX, it.y, w.contentX + w.contentW, it.y + it.h};  // Content y (not scrolled).
 }
 
@@ -1469,7 +1484,7 @@ static D2D1_RECT_F Set_RowRect(const SetWindow& w, const SetItem& it) {
 static void Set_BuildPage(SetWindow& w) {
     w.items.clear();
     const float space = Set_RailSpace(w), avail = w.cw - space;
-    w.contentW = std::clamp(avail - 2 * kSetPadX, 420.0f, kSetMaxW);
+    w.contentW = std::clamp(avail - 2 * kSetPadX, 420.0f, std::max(420.0f, Hub_MaxW(w)));
     w.contentX = space + std::max(kSetPadX, (avail - w.contentW) / 2);
     float introH = Set_TextH(w.fIntro.get(), Hub_PageIntro(w), w.contentW);
     float y = 36 + 36 + 4 + introH + 24;
@@ -1513,6 +1528,7 @@ static void Set_BuildPage(SetWindow& w) {
         w.items.push_back(it);
     }
     Hub_ItemsBottom(w, y);
+    Hub_Reflow(w, y);
     if (w.page == kSetAboutPage) {
         auto add = [&](SetItem::Type t, float h, PCWSTR text, PCWSTR sub, PCWSTR url) {
             SetItem it;
@@ -1691,6 +1707,7 @@ static void Set_HoverIds(const SetHit& h, int ids[2]) {
     ids[1] = -1;
     if (h.kind == SetHit::Control || h.kind == SetHit::Slider || h.kind == SetHit::Clear || h.kind == SetHit::Chip)
         ids[1] = 6000 + h.a;
+    if (h.kind == SetHit::Card) ids[1] = h.a >= 0 ? 1000 + h.a : 3000 + (-h.a - 1);  // Light the card too.
 }
 
 static bool Set_Valid(const SetWindow& w, int k) { return k >= 0 && k < (int)w.fields.size(); }
@@ -1706,6 +1723,7 @@ static void Set_DrawBox(SetPaint& p, SetWindow& w, int k, const D2D1_RECT_F& box
 }
 
 static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
+    if (Hub_DrawRow(p, w, it)) return;
     const SetField& f = w.fields[it.field];
     int k = it.field;
     D2D1_RECT_F row = Set_RowRect(w, it);
@@ -1824,6 +1842,7 @@ static void Set_DrawCard(SetPaint& p, const D2D1_RECT_F& row, float hov) {
 }
 
 static void Set_DrawLinkRow(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
+    if (Hub_DrawLink(p, w, it, idx)) return;
     D2D1_RECT_F row = Set_RowRect(w, it);
     float hov = Set_GlowOf(w, 3000 + idx);
     Set_DrawCard(p, row, hov);
@@ -2343,6 +2362,7 @@ static SetHit Set_Hit(SetWindow& w, float x, float y) {
             h.kind = SetHit::Link;
             h.a = (int)i;
             h.id = 3000 + (int)i;
+            Hub_HitLink(w, (int)i, row, x, cy, h);
         } else if (it.type == SetItem::Support) {
             h.id = 3700 + (int)i;  // The card lights up; only its button clicks.
             if (Set_In(Set_SupportButton(w, it), x, cy)) {
@@ -2357,6 +2377,7 @@ static SetHit Set_Hit(SetWindow& w, float x, float y) {
             SetParts pt = Set_Parts(f, row);
             h.a = it.field;
             h.id = 1000 + it.field;
+            if (Hub_HitRow(w, it, row, x, cy, h)) return h;
             h.kind = f.kind == SetField::Check ? SetHit::Control : SetHit::Row;
             if (f.hub == 1 && !Set_In({pt.box.left - 10, row.top, row.right, row.bottom}, x, cy)) {
                 h.kind = SetHit::Open;  // The row opens the mod; only the switch flips it.
@@ -2387,7 +2408,7 @@ static SetHit Set_Hit(SetWindow& w, float x, float y) {
 static bool Set_Clickable(const SetHit& h) {
     return h.kind == SetHit::Rail || h.kind == SetHit::Footer || h.kind == SetHit::Control || h.kind == SetHit::Slider ||
            h.kind == SetHit::Clear || h.kind == SetHit::Chip || h.kind == SetHit::Drop || h.kind == SetHit::Link ||
-           h.kind == SetHit::Scroll || h.kind == SetHit::RailToggle || h.kind == SetHit::Open;
+           h.kind == SetHit::Scroll || h.kind == SetHit::RailToggle || h.kind == SetHit::Open || h.kind == SetHit::Card;
 }
 
 // Sidebar width from a drag: below the snap point it collapses to the icon rail.
@@ -2593,6 +2614,7 @@ static void Set_Choose(SetWindow& w, int k, int option) {
     SetField& f = w.fields[k];
     if (option >= 0 && option < (int)f.options.size()) f.cur = f.options[option].first;
     Set_ClosePopup(w);
+    Hub_Chose(w, k);
 }
 
 static void Set_SliderTo(SetWindow& w, int k, float x) {
@@ -2655,6 +2677,7 @@ static void Set_ActivateField(SetWindow& w, int k, const SetHit* hit) {
         case SetField::Check:
             f.cur = f.cur == L"1" ? L"0" : L"1";
             Set_Invalidate(w);
+            Hub_Chose(w, k);
             break;
         case SetField::Choice:
             if (w.openSel == k) {
@@ -2931,6 +2954,7 @@ static bool Set_OnKey(SetWindow& w, UINT vk) {
         case VK_RIGHT:
             w.kbd = true;
             Set_Adjust(w, vk == VK_RIGHT ? 1 : -1);
+            Hub_Chose(w, w.focus);
             return true;
         case VK_UP: w.scrollTarget = std::clamp(w.scrollTarget - 60, 0.0f, maxScroll); break;
         case VK_DOWN: w.scrollTarget = std::clamp(w.scrollTarget + 60, 0.0f, maxScroll); break;
@@ -3288,6 +3312,9 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                     Set_Invalidate(*w);
                     break;
                 }
+                case SetHit::Card:
+                    Hub_CardClick(*w, h.a, h.b);
+                    break;
                 case SetHit::Open:
                     PostMessageW(hwnd, WM_HUB_OPEN, (WPARAM)h.a, 0);
                     break;
@@ -3622,6 +3649,8 @@ void CloseSettingsWindow() {
  if(g_settingsThread) { WaitForSingleObject(g_settingsThread,15000); CloseHandle(g_settingsThread); g_settingsThread=nullptr; }
 }
 // ---- end of engine-hub.inc ----
+static bool g_cardsGrid = true;  // Saved as Set.modsView: 1 grid, 0 list.
+
 // ---- JSON ---------------------------------------------------------------------
 
 struct Js {
@@ -4309,6 +4338,16 @@ static void Hub_LoadList(SetWindow& w, std::vector<HubMod>* fresh = nullptr) {
     group.value = group.cur;
     g_hub.groupField = (int)w.fields.size();
     w.fields.push_back(group);
+    g_cardsGrid = Hub_RegGet(L"Set.modsView", 1) != 0;
+    SetField view{};
+    view.kind = SetField::Check;
+    view.key = L"hub.view";
+    view.label = L"View";
+    view.group = L"Search";
+    view.hub = 2;
+    view.def = L"1";
+    view.cur = view.value = g_cardsGrid ? L"1" : L"0";
+    w.fields.push_back(view);
     Hub_PlaceMods(w);
     Hub_ResetView(w);
     Set_BuildAndClamp(w);
@@ -4669,10 +4708,6 @@ static void Hub_ItemsTop(SetWindow& w, float& y) {
     if (g_hub.groupField >= 0 && g_hub.groupField < (int)w.fields.size() && w.hwnd &&
         _wtoi(w.fields[g_hub.groupField].cur.c_str()) != g_hub.groupBy)
         PostMessageW(w.hwnd, WM_HUB_REGROUP, 0, 0);
-    Hub_AddLink(w, y, L"Open Windhawk",
-                L"Windhawk keeps working on its own underneath. Changes made there show up here by themselves.",
-                L"hub:stock");
-    y += 6;
 }
 
 static bool Hub_Show(SetWindow& w, const SetField& f) {
@@ -5238,6 +5273,18 @@ static void Hub_RemoveClick(SetWindow& w) {
     Set_SetStatus(w, (L"Removed " + name).c_str());
 }
 
+// Windows remembers a pinned tray icon by program path and icon id. Every tool mod runs
+// as windhawk-mod.exe, so each one needs its own id or pinning one moves them all.
+#ifndef WH_MOD_ID
+#define WH_MOD_ID L"local@seamless-workshop"  // the test exe build
+#endif
+static UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+
+static std::wstring Hub_LiveText(SetWindow& w, PCWSTR key);
 // ---- features.inc (inlined) ----
 // App pages share the Launchpad controls and material.
 static std::thread g_reader;
@@ -5247,6 +5294,8 @@ static std::wstring g_readError, g_readKind, g_featureStatus, g_repoDetail;
 static std::vector<HubMod> g_repo;
 static std::wstring g_repoId, g_repoReadme, g_engineStatus;
 static HANDLE g_discord = INVALID_HANDLE_VALUE;
+// Public id of the "Seamless Workshop" Discord app. Not a secret: Discord shows it to everyone.
+static constexpr PCWSTR kDiscordAppId = L"1573117909683798127";
 static std::wstring g_discordId;
 static std::string g_discordBuffer;
 static bool g_discordReady = false;
@@ -5404,24 +5453,26 @@ struct HubWhSetting {
 
 static const std::vector<HubWhSetting>& Hub_WhSettings() {
     static const std::vector<std::pair<PCWSTR, PCWSTR>> logs = {{L"0", L"None"}, {L"1", L"Errors"}, {L"2", L"Everything"}};
+    static const std::vector<std::pair<PCWSTR, PCWSTR>> waits = {
+        {L"0", L"Right away"}, {L"1000", L"1 second"}, {L"2000", L"2 seconds"}, {L"5000", L"5 seconds"}, {L"10000", L"10 seconds"}};
     static const std::vector<HubWhSetting> list = {
-        {L"wh!disableUpdateCheck", L"Check for Windhawk updates", L"Windhawk looks for new versions of itself and of your library mods.", L"Windhawk", SetField::Check},
-        {L"wh.hideTrayIcon", L"Hide Windhawk's tray icon", L"Windhawk keeps running without its own icon. Seamless Workshop keeps its icon.", L"Windhawk", SetField::Check},
-        {L"wh!disableRunUIScheduledTask", L"Open Windhawk without an admin prompt", L"Windhawk uses a scheduled task so its window opens without asking for admin rights.", L"Windhawk", SetField::Check},
-        {L"wh!devModeOptOut", L"Developer tools in Windhawk", L"Show the mod editor and the other developer tools in Windhawk's window.", L"Windhawk", SetField::Check},
-        {L"wh.alwaysCompileModsLocally", L"Always compile mods on this PC", L"Skip ready-made builds from the library and compile every mod here.", L"Windhawk", SetField::Check},
-        {L"wh!dontAutoShowToolkit", L"Show the toolkit when something goes wrong", L"The small Windhawk toolkit window opens on its own when a mod may be causing trouble.", L"Windhawk", SetField::Check},
-        {L"wh!disableToolkitHotkey", L"Toolkit shortcut", L"Ctrl+Win+Alt+W opens the Windhawk toolkit.", L"Windhawk", SetField::Check},
-        {L"wh.modTasksDialogDelay", L"Wait before showing mod progress", L"In milliseconds. The window that shows mods loading or compiling waits this long first. Suggested: 2000.", L"Windhawk", SetField::Number, 0, 60000},
-        {L"wh.theme", L"Windhawk window theme", L"Dark or light, for Windhawk's own window.", L"Windhawk", SetField::Choice, 0, 0, {{L"dark", L"Dark"}, {L"light", L"Light"}}},
+        {L"wh!disableUpdateCheck", L"Check for Windhawk updates", L"Windhawk looks for new versions of itself and your library mods.", L"Windhawk", SetField::Check},
+        {L"wh.hideTrayIcon", L"Hide Windhawk's tray icon", L"Windhawk keeps running. This app keeps its own icon.", L"Windhawk", SetField::Check},
+        {L"wh!disableRunUIScheduledTask", L"Open Windhawk without an admin prompt", nullptr, L"Windhawk", SetField::Check},
+        {L"wh.theme", L"Windhawk's own window", nullptr, L"Windhawk", SetField::Choice, 0, 0, {{L"dark", L"Dark"}, {L"light", L"Light"}}},
         {L"wh.language", L"Windhawk language", L"A language code, like en, de or fr.", L"Windhawk", SetField::Text},
-        {L"wh.loggingVerbosity", L"Windhawk log detail", L"How much Windhawk writes to its log.", L"Windhawk", SetField::Choice, 0, 0, logs},
-        {L"wh.engine.loggingVerbosity", L"Engine log detail", L"How much the part that loads mods writes to the log.", L"Windhawk engine", SetField::Choice, 0, 0, logs},
-        {L"wh.engine.injectIntoGames", L"Load mods into games", L"Off by default, since anti-cheat can flag it.", L"Windhawk engine", SetField::Check},
-        {L"wh.engine.injectIntoIncompatiblePrograms", L"Load mods into programs known to clash", L"Off by default. Some programs crash or misbehave with any mod loaded.", L"Windhawk engine", SetField::Check},
-        {L"wh.engine.injectIntoCriticalProcesses", L"Load mods into critical system processes", L"Risky. A broken mod there can stop Windows from starting.", L"Windhawk engine", SetField::Check},
-        {L"wh.engine.include", L"Always load mods into", L"Program names or paths, separated by semicolons. Careful: a wrong entry can slow down every app.", L"Windhawk engine", SetField::Text},
-        {L"wh.engine.exclude", L"Never load mods into", L"Program names or paths, separated by semicolons.", L"Windhawk engine", SetField::Text},
+        {L"wh.modTasksDialogDelay", L"Show mod progress after", L"How long a mod has to be loading or compiling before its progress box shows.", L"Windhawk", SetField::Choice, 0, 0, waits},
+        {L"wh!devModeOptOut", L"Developer tools in Windhawk", nullptr, L"Advanced", SetField::Check},
+        {L"wh.alwaysCompileModsLocally", L"Always compile mods on this PC", L"Skips ready-made builds from the library.", L"Advanced", SetField::Check},
+        {L"wh!dontAutoShowToolkit", L"Show the toolkit when something goes wrong", nullptr, L"Advanced", SetField::Check},
+        {L"wh!disableToolkitHotkey", L"Toolkit shortcut", L"Ctrl+Win+Alt+W opens the Windhawk toolkit.", L"Advanced", SetField::Check},
+        {L"wh.loggingVerbosity", L"Windhawk log detail", nullptr, L"Advanced", SetField::Choice, 0, 0, logs},
+        {L"wh.engine.loggingVerbosity", L"Mod loader log detail", nullptr, L"Advanced", SetField::Choice, 0, 0, logs},
+        {L"wh.engine.injectIntoGames", L"Load mods into games", L"Anti-cheat can flag this.", L"Advanced", SetField::Check},
+        {L"wh.engine.injectIntoIncompatiblePrograms", L"Load mods into programs known to clash", nullptr, L"Advanced", SetField::Check},
+        {L"wh.engine.injectIntoCriticalProcesses", L"Load mods into critical system processes", L"Risky. A broken mod there can stop Windows starting.", L"Advanced", SetField::Check},
+        {L"wh.engine.include", L"Always load mods into", L"Program names, separated by semicolons.", L"Advanced", SetField::Text},
+        {L"wh.engine.exclude", L"Never load mods into", L"Program names, separated by semicolons.", L"Advanced", SetField::Text},
     };
     return list;
 }
@@ -5486,24 +5537,34 @@ static void Hub_FeatureFields(SetWindow& w) {
         for (auto& [k, v] : g_fill) if (k == key) f.cur = v;
         w.fields.push_back(f);
     };
-    add(1, L"hub.marketSearch", L"Find a mod", L"Search names, authors and descriptions, then choose Search.", L"Library");
+    add(1, L"hub.marketSearch", L"Find a mod", nullptr, L"Library");
+    SetField mshow{};
+    mshow.kind = SetField::Choice; mshow.key = L"hub.marketShow"; mshow.label = L"Show"; mshow.group = L"Library";
+    mshow.page = 1; mshow.hub = 5; mshow.vtype = 1; mshow.def = L"all";
+    mshow.options = {{L"all", L"Everything"}, {L"new", L"Not installed"}, {L"mine", L"From DavidHiFi"}};
+    mshow.cur = mshow.value = L"all";
+    w.fields.push_back(mshow);
+    SetField mview{};
+    mview.kind = SetField::Check; mview.key = L"hub.marketView"; mview.label = L"View"; mview.group = L"Library";
+    mview.page = 1; mview.hub = 5; mview.def = L"1";
+    mview.cur = mview.value = Hub_RegGet(L"Set.modsView", 1) ? L"1" : L"0";
+    w.fields.push_back(mview);
     add(3, L"hub.presetName", L"Preset name", L"Letters, numbers, spaces and hyphens. Saving never overwrites a preset.", L"Save a preset");
     add(3, L"hub.presetMods", L"Mods to save", L"Comma-separated mod ids. Only these mods are included. Copy an id from a mod's page.", L"Save a preset");
     add(4, L"hub.devId", L"Installed mod id", L"Use the id shown in the mod's source. Compile is available only while the mod is off.", L"Installed source");
     add(4, L"hub.devPath", L"Staged source file", L"Full path to a .wh.cpp source file. Check reads it without installing.", L"Staged source");
-    SetField presence{};
-    presence.kind = SetField::Check; presence.key = L"discordPresence"; presence.label = L"Discord Rich Presence";
-    presence.desc = L"Show that you are using Seamless Workshop. Requires your Discord application id below. Off by default.";
-    presence.def = L"0"; presence.group = L"Discord"; presence.page = 5;
-    presence.cur = presence.value = Hub_AppInt(L"discordPresence", 0) ? L"1" : L"0";
-    w.fields.push_back(presence);
-    add(5, L"discordAppId", L"Discord application id", L"The public application id from the Discord developer portal. This is not a password.", L"Discord", 6);
     SetField feed{};
-    feed.kind = SetField::Check; feed.key = L"feedCheck"; feed.label = L"Check for updates from DavidHiFi";
-    feed.desc = L"Once a day, look for new versions of DavidHiFi's mods and of Seamless Workshop. Nothing installs without you.";
-    feed.def = L"1"; feed.group = L"Updates"; feed.page = 5;
+    feed.kind = SetField::Check; feed.key = L"feedCheck"; feed.label = L"Check for updates every day";
+    feed.desc = L"For DavidHiFi's mods and this app. Nothing installs without you.";
+    feed.def = L"1"; feed.group = L"Seamless Workshop"; feed.page = 5;
     feed.cur = feed.value = Hub_AppInt(L"feedCheck", 1) ? L"1" : L"0";
     w.fields.push_back(feed);
+    SetField presence{};
+    presence.kind = SetField::Check; presence.key = L"discordPresence"; presence.label = L"Show on Discord";
+    presence.desc = L"Your Discord profile shows that you are using Seamless Workshop.";
+    presence.def = L"0"; presence.group = L"Seamless Workshop"; presence.page = 5;
+    presence.cur = presence.value = Hub_AppInt(L"discordPresence", 0) ? L"1" : L"0";
+    w.fields.push_back(presence);
     Hub_WhFields(w);
 }
 
@@ -5693,7 +5754,7 @@ static bool Hub_ParseFeed(std::string raw, std::vector<HubFeedMod>& mods, HubFee
 static void Hub_TrayBalloon(SetWindow& w, const std::wstring& title, const std::wstring& text) {
     if (!g_hub.trayOn) return;
     NOTIFYICONDATAW nid{};
-    nid.cbSize = sizeof(nid); nid.hWnd = w.hwnd; nid.uID = 1; nid.uFlags = NIF_INFO;
+    nid.cbSize = sizeof(nid); nid.hWnd = w.hwnd; nid.uID = TrayIconId(); nid.uFlags = NIF_INFO;
     nid.dwInfoFlags = NIIF_INFO | NIIF_RESPECT_QUIET_TIME;
     wcsncpy_s(nid.szInfoTitle, title.c_str(), _TRUNCATE);
     wcsncpy_s(nid.szInfo, text.c_str(), _TRUNCATE);
@@ -5865,7 +5926,6 @@ static void Hub_FeatureItems(SetWindow& w, float& y) {
         Hub_AddLink(w, y, title, desc, Hub_In(action));
     };
     if (w.page == 1) {
-        link(L"Search the library", L"Reads the current Windhawk library without changing installed mods.", L"hub:market");
         if (!g_repoId.empty()) {
             link(L"Back to results", L"Keep the current search.", L"hub:repoBack");
             Hub_Notice(w, y, g_repoDetail);
@@ -5875,15 +5935,35 @@ static void Hub_FeatureItems(SetWindow& w, float& y) {
             else Hub_Notice(w, y, L"Already installed. Change its settings on the Mods page.");
             link(L"Full description and credits", L"Open this mod's page on the Windhawk website.", L"https://windhawk.net/mods/" + g_repoId);
         } else {
-            const auto query = Hub_Lower(Hub_Input(w, L"hub.marketSearch"));
+            auto query = Hub_Lower(Hub_LiveText(w, L"hub.marketSearch"));
+            while (!query.empty() && query.back() == L' ') query.pop_back();
+            const std::wstring show = Hub_Input(w, L"hub.marketShow");
             int n = 0;
-            for (auto& m : g_repo) {
-                if (!query.empty() && m.lower.find(query) == std::wstring::npos) continue;
-                if (++n > 60) break;
-                link(m.name.c_str(), (m.author + L". " + m.desc).c_str(), L"hub:repo:" + m.id);
+            bool head = false;
+            for (auto& f : g_feed) {
+                if (show == L"new" && Hub_FindMod(f.id)) continue;
+                if (!query.empty() && Hub_Lower(f.name + L" " + f.desc + L" " + f.id).find(query) == std::wstring::npos) continue;
+                if (!head) { Hub_Group(w, y, L"From DavidHiFi"); head = true; }
+                link(f.name.c_str(), f.desc.c_str(), L"hub:feed:" + f.id);
+                n++;
             }
-            if (!g_repo.empty() && n == 0) Hub_Notice(w, y, L"No matches. Try a shorter name or another word.");
-            if (n > 60) Hub_Notice(w, y, L"More results are available. Narrow the search to see them.");
+            if (show != L"mine") {
+                head = false;
+                int shown = 0;
+                for (auto& m : g_repo) {
+                    if (show == L"new" && Hub_FindMod(m.id)) continue;
+                    if (!query.empty() && m.lower.find(query) == std::wstring::npos) continue;
+                    if (Hub_FeedFind(m.id)) continue;
+                    if (++shown > 90) break;
+                    if (!head) { Hub_Group(w, y, L"From the Windhawk library"); head = true; }
+                    link(m.name.c_str(), m.desc.c_str(), L"hub:repo:" + m.id);
+                    n++;
+                }
+                if (shown > 90) Hub_Notice(w, y, L"More mods match. Type more of a name to narrow it down.");
+            }
+            if (g_repo.empty() && !g_reading) Hub_Notice(w, y, L"The library has not been read yet.");
+            else if (n == 0) Hub_Notice(w, y, L"No matches. Try a shorter name or another word.");
+            link(L"Reload the library", L"Reads the Windhawk library again. Installed mods stay as they are.", L"hub:market");
         }
     } else if (w.page == 2) {
         link(L"Check for updates", L"Read the library and compare it with your installed mods.", L"hub:updates");
@@ -5954,8 +6034,6 @@ static void Hub_FeatureItems(SetWindow& w, float& y) {
         link(L"Open reports and backups", L"Saved command results and preset rollback files.", L"hub:reports");
         link(L"Open stock Windhawk", L"Use Windhawk's own editor and log window.", L"hub:stock");
     } else if (w.page == 5) {
-        Hub_Notice(w, y, L"Some Windhawk settings only take effect after Windhawk restarts. Seamless Workshop never restarts it for you.");
-        link(L"Open stock Windhawk", L"Windhawk's own window, for anything not here.", L"hub:stock");
         Hub_Group(w, y, L"Backup");
         link(L"Back up everything", L"Every mod, its settings and Windhawk's settings, in one file you choose.", L"hub:export");
         link(L"Restore from a backup", L"Choose a backup file. It is read first; nothing changes yet.", L"hub:restorePick");
@@ -5965,8 +6043,8 @@ static void Hub_FeatureItems(SetWindow& w, float& y) {
             else
                 link(L"Restore now", L"Brings back the mods and settings in the chosen backup. Saves the current state first.", L"hub:restore");
         }
-        Hub_Group(w, y, L"Discord setup");
-        link(L"Discord application setup", L"Create an application called Seamless Workshop, then copy its application id above.", L"https://discord.com/developers/applications");
+        Hub_Group(w, y, L"Windhawk itself");
+        link(L"Open Windhawk", L"Some of its settings apply only after it restarts. This app never restarts it for you.", L"hub:stock");
     }
     if (w.page >= 1 && w.page <= 5) Hub_Notice(w, y, g_reading ? L"Reading Windhawk. You can keep using the window." : g_featureStatus);
 }
@@ -6107,7 +6185,8 @@ static void Hub_ReadResult(SetWindow& w) {
 static void Hub_PageChanged(SetWindow& w) {
     g_featureStatus.clear();
     if (w.page == 1 && g_repo.empty() && !w.render) Hub_StartRead(w, L"market", L"repo list");
-    if (w.page == 2 && !g_feedChecked && !g_feedBusy && !w.render && Hub_AppInt(L"feedCheck", 1)) Hub_FeedStart(w.hwnd, true);
+    const bool wantFeed = w.page == 1 || (w.page == 2 && Hub_AppInt(L"feedCheck", 1));
+    if (wantFeed && !g_feedChecked && !g_feedBusy && !w.render) Hub_FeedStart(w.hwnd, true);
 }
 
 static std::wstring Hub_JsDump(const Js& j) {
@@ -6767,9 +6846,12 @@ static void Hub_ClearPresence() {
 
 static void Hub_Presence() {
     if (!Hub_AppInt(L"discordPresence", 0)) { Hub_ClearPresence(); return; }
-    const auto id = Hub_RegText(L"Set.discordAppId");
-    if (id != g_discordId && g_discord != INVALID_HANDLE_VALUE) Hub_ClearPresence();
-    if (id.size() < 15 || id.size() > 22 || id.find_first_not_of(L"0123456789") != std::wstring::npos) { Hub_ClearPresence(); return; }
+    const std::wstring id = kDiscordAppId;
+    static const long long since = [] {
+        FILETIME ft; GetSystemTimeAsFileTime(&ft);
+        ULARGE_INTEGER u{}; u.LowPart = ft.dwLowDateTime; u.HighPart = ft.dwHighDateTime;
+        return (long long)((u.QuadPart - 116444736000000000ull) / 10000000ull);
+    }();
     if (g_discord == INVALID_HANDLE_VALUE) {
         if (GetTickCount64() < g_discordRetry) return;
         g_discordRetry = GetTickCount64() + 15000;
@@ -6805,11 +6887,510 @@ static void Hub_Presence() {
     }
     if (!g_discordReady || GetTickCount64() < g_discordSent + 30000) return;
     const std::string payload = "{\"cmd\":\"SET_ACTIVITY\",\"args\":{\"pid\":" + std::to_string(GetCurrentProcessId()) +
-        ",\"activity\":{\"details\":\"Managing Windhawk mods\",\"state\":\"Seamless Workshop\"}},\"nonce\":\"" + std::to_string(GetTickCount64()) + "\"}";
+        ",\"activity\":{\"details\":\"Setting up Windhawk mods\",\"assets\":{\"large_image\":\"logo\",\"large_text\":\"Seamless Workshop\"},"
+        "\"timestamps\":{\"start\":" + std::to_string(since) + "}}},\"nonce\":\"" + std::to_string(GetTickCount64()) + "\"}";
     if (!Hub_DiscordSend(1, payload)) Hub_ClearPresence();
     else g_discordSent = GetTickCount64();
 }
 // ---- end of features.inc ----
+// ---- cards.inc (inlined) ----
+// Seamless Workshop 1.1: the Mods and Marketplace pages as a full-width card grid or list,
+// with one toolbar line (search, Show, Sort into, Grid or List). Toolbar choices apply at once.
+
+static std::wstring g_cardArmId;         // The mod whose bin was clicked once.
+static ULONGLONG g_cardArmAt = 0;
+static std::wstring g_cfFamily;
+static SetCom<IDWriteTextFormat> g_cfName, g_cfMeta, g_cfDesc, g_cfBtn;
+
+constexpr float kCardMin = 300, kCardGap = 16, kCardH = 188, kListH = 68, kBarH = 40, kCardPad = 18;
+enum { kBtnDetails, kBtnSettings, kBtnSource, kBtnRemove, kBtnUpdate, kBtnInstall };
+
+static bool Hub_ListPage(const SetWindow& w) {
+    return (w.page == 0 && g_hub.detail < 0) || (w.page == 1 && g_repoId.empty());
+}
+
+static float Hub_MaxW(const SetWindow& w) { return Hub_ListPage(w) ? 1680.0f : kSetMaxW; }
+
+static bool Hub_KeyIs(const SetField& f, PCWSTR key) { return f.key && wcscmp(f.key, key) == 0; }
+
+static bool Hub_IsBar(const SetField& f) {
+    return f.hub == 2 || Hub_KeyIs(f, L"hub.marketSearch") || Hub_KeyIs(f, L"hub.marketShow") ||
+           Hub_KeyIs(f, L"hub.marketView");
+}
+
+static bool Hub_IsView(const SetField& f) { return Hub_KeyIs(f, L"hub.view") || Hub_KeyIs(f, L"hub.marketView"); }
+
+static bool Hub_BarBox(const SetField& f, const D2D1_RECT_F& row, D2D1_RECT_F& box) {
+    if (!Hub_IsBar(f)) return false;
+    box = row;
+    if (f.kind == SetField::Text) box.left += 26;  // Room for the magnifier; the edit box starts after it.
+    return true;
+}
+
+// A link that is a library or feed mod: drawn as a card.
+static bool Hub_LinkCard(const SetItem& it) {
+    return it.type == SetItem::Link && (it.url.rfind(L"hub:repo:", 0) == 0 || it.url.rfind(L"hub:feed:", 0) == 0);
+}
+
+static bool Hub_IsCard(const SetWindow& w, const SetItem& it) {
+    if (it.type == SetItem::Row) return w.fields[it.field].hub == 1;
+    return Hub_LinkCard(it);
+}
+
+static void Hub_CardFonts(const SetWindow& w) {
+    if (g_cfFamily == w.family && g_cfName) return;
+    g_cfFamily = w.family;
+    g_cfName = Set_Fmt(w.family, 15.5f, 600, false, DWRITE_TEXT_ALIGNMENT_LEADING, true);
+    g_cfMeta = Set_Fmt(w.family, 12, 500, false, DWRITE_TEXT_ALIGNMENT_LEADING, true);
+    g_cfBtn = Set_Fmt(w.family, 12.5f, 600, false, DWRITE_TEXT_ALIGNMENT_CENTER, true);
+    g_cfDesc = Set_Fmt(w.family, 12.5f, 500, true);
+    if (g_cfDesc) {
+        SetCom<IDWriteInlineObject> sign;
+        g_setDw->CreateEllipsisTrimmingSign(g_cfDesc.get(), sign.put());
+        DWRITE_TRIMMING t{DWRITE_TRIMMING_GRANULARITY_WORD, 0, 0};
+        g_cfDesc->SetTrimming(&t, sign.get());
+    }
+}
+
+// ---- Layout: the toolbar on one line, then cards in a fluid grid or a single list ----
+
+static void Hub_Reflow(SetWindow& w, float& y) {
+    if (!Hub_ListPage(w)) return;
+    size_t s = 0;
+    while (s < w.items.size() && !(w.items[s].type == SetItem::Row && Hub_IsBar(w.fields[w.items[s].field]))) s++;
+    if (s == w.items.size()) return;
+    float top = w.items[s].y;
+    if (s > 0 && w.items[s - 1].type == SetItem::Group) {  // The toolbar needs no heading.
+        top = w.items[s - 1].y;
+        w.items.erase(w.items.begin() + (s - 1));
+        s--;
+    }
+    const float X = w.contentX, W = w.contentW, gap = 10;
+    size_t e = s;
+    while (e < w.items.size() && w.items[e].type == SetItem::Row && Hub_IsBar(w.fields[w.items[e].field])) e++;
+    // A drop-down is as wide as its label plus its longest option (the font is monospaced).
+    auto want = [&](const SetField& f) {
+        if (f.kind == SetField::Check) return 96.0f;
+        if (f.kind != SetField::Choice) return 0.0f;
+        size_t longest = 0;
+        for (const auto& o : f.options) longest = std::max(longest, wcslen(o.second));
+        return std::clamp((float)(wcslen(f.label) + longest) * 8.6f + 76.0f, 200.0f, 360.0f);
+    };
+    float fixed = 0;
+    for (size_t i = s; i < e; i++) {
+        const SetField& f = w.fields[w.items[i].field];
+        if (f.kind != SetField::Text) fixed += want(f) + gap;
+    }
+    float cx = X, cy = top;
+    const bool oneLine = W - fixed >= 260;
+    for (size_t i = s; i < e; i++) {
+        SetItem& it = w.items[i];
+        const SetField& f = w.fields[it.field];
+        float fw = f.kind == SetField::Text ? (oneLine ? W - fixed : W) : std::min(want(f), W);
+        if (cx > X && cx + fw > X + W + 0.5f) { cx = X; cy += kBarH + gap; }
+        it.x = cx; it.w = fw; it.y = cy; it.h = kBarH;
+        cx += fw + gap;
+    }
+    y = cy + kBarH + 20;
+
+    const bool grid = g_cardsGrid;
+    const int cols = grid ? std::clamp((int)((W + kCardGap) / (kCardMin + kCardGap)), 1, 6) : 1;
+    const float cw = (W - kCardGap * (cols - 1)) / cols, ch = grid ? kCardH : kListH, rowGap = grid ? kCardGap : kSetRowGap;
+    int col = 0;
+    bool first = true;
+    auto flush = [&] {
+        if (col) { y += ch + rowGap; col = 0; }
+    };
+    for (size_t i = e; i < w.items.size(); i++) {
+        SetItem& it = w.items[i];
+        if (Hub_IsCard(w, it)) {
+            it.x = X + col * (cw + kCardGap); it.w = cw; it.y = y; it.h = ch;
+            if (++col == cols) flush();
+        } else {
+            flush();
+            it.x = X; it.w = W;
+            if (it.type == SetItem::Group) {
+                y += first ? 0 : 14;
+                it.y = y;
+                y += it.h + 8;
+            } else {
+                it.y = y;
+                y += it.h + kSetRowGap;
+            }
+        }
+        first = false;
+    }
+    flush();
+}
+
+// ---- Card parts, shared by drawing and hit testing ----
+
+struct HubBtn { D2D1_RECT_F r; int id; PCWSTR label; WCHAR glyph; };
+struct HubCardParts {
+    D2D1_RECT_F sw{}, name{}, meta{}, desc{};
+    bool hasSwitch = false;
+    HubBtn btn[6];
+    int n = 0;
+};
+
+static float Hub_BtnW(PCWSTR label) { return Set_TextW(g_cfBtn.get(), label) + 26; }
+
+// Buttons are laid from the right edge leftwards; the ones that do not fit are dropped,
+// Details first (a click on the card opens it too).
+static HubCardParts Hub_CardParts(const SetWindow& w, const SetItem& it, const D2D1_RECT_F& r) {
+    Hub_CardFonts(w);
+    HubCardParts c;
+    const bool grid = g_cardsGrid;
+    std::vector<HubBtn> want;
+    if (it.type == SetItem::Row) {
+        const SetField& f = w.fields[it.field];
+        const HubMod& m = g_hub.mods[f.mod];
+        const HubFeedMod* feed = Hub_FeedFind(m.id);
+        const bool upd = m.update || (feed && Hub_Newer(feed->version, m.version));
+        c.hasSwitch = true;
+        if (upd) want.push_back({{}, kBtnUpdate, L"Update", 0});
+        want.push_back({{}, kBtnDetails, L"Details", 0});
+        want.push_back({{}, kBtnSettings, L"Settings", 0});
+        want.push_back({{}, kBtnSource, nullptr, 0xE943});
+        want.push_back({{}, kBtnRemove, nullptr, 0xE74D});
+    } else {
+        const std::wstring id = it.url.substr(9);
+        if (it.url.rfind(L"hub:feed:", 0) == 0) {
+            const HubMod* m = Hub_FindMod(id);
+            const HubFeedMod* f = Hub_FeedFind(id);
+            if (!m) want.push_back({{}, kBtnInstall, L"Install", 0});
+            else if (f && Hub_Newer(f->version, m->version)) want.push_back({{}, kBtnUpdate, L"Update", 0});
+        } else if (!Hub_FindMod(id)) {
+            want.push_back({{}, kBtnInstall, L"Install", 0});
+        }
+    }
+    const float bh = 30;
+    float right = r.right - kCardPad, left = r.left + kCardPad;
+    float by = grid ? r.bottom - 16 - bh : (r.top + r.bottom) / 2 - bh / 2;
+    if (c.hasSwitch) {
+        c.sw = grid ? D2D1_RECT_F{right - 40, r.top + 18, right, r.top + 40}
+                    : D2D1_RECT_F{right - 40, (r.top + r.bottom) / 2 - 11, right, (r.top + r.bottom) / 2 + 11};
+        if (!grid) right = c.sw.left - 18;
+    }
+    // Widest set that fits: drop Details, then Settings, if the card is narrow.
+    float limit = grid ? left : left + std::min(220.0f, (r.right - r.left) * 0.35f);
+    auto total = [&](const std::vector<HubBtn>& v) {
+        float t = 0;
+        for (auto& b : v) t += (b.label ? Hub_BtnW(b.label) : bh) + 6;
+        return t;
+    };
+    for (int drop : {kBtnDetails, kBtnSettings})
+        if (right - total(want) < limit)
+            for (size_t i = 0; i < want.size(); i++)
+                if (want[i].id == drop) { want.erase(want.begin() + i); break; }
+    // Text buttons sit on the left of a grid card, icon buttons on the right.
+    float lx = left, rx = right;
+    if (grid) {
+        for (auto it2 = want.rbegin(); it2 != want.rend(); ++it2)
+            if (!it2->label) { it2->r = {rx - bh, by, rx, by + bh}; rx -= bh + 6; }
+        for (auto& b : want)
+            if (b.label) { float bw = Hub_BtnW(b.label); b.r = {lx, by, lx + bw, by + bh}; lx += bw + 6; }
+    } else {
+        for (auto it2 = want.rbegin(); it2 != want.rend(); ++it2) {
+            float bw = it2->label ? Hub_BtnW(it2->label) : bh;
+            it2->r = {rx - bw, by, rx, by + bh};
+            rx -= bw + 6;
+        }
+    }
+    for (auto& b : want) if (c.n < 6) c.btn[c.n++] = b;
+    const float textR = grid ? (c.hasSwitch ? c.sw.left - 12 : r.right - kCardPad) : rx - 12;
+    if (grid) {
+        c.name = {left, r.top + 15, textR, r.top + 39};
+        c.meta = {left, r.top + 39, r.right - kCardPad, r.top + 57};
+        c.desc = {left, r.top + 64, r.right - kCardPad, by - 10};
+    } else {
+        c.name = {left, r.top + 11, textR, r.top + 35};
+        c.meta = {left, r.top + 35, textR, r.top + 55};
+    }
+    return c;
+}
+
+static int Hub_BtnHoverId(int k, int b) { return 20000 + k * 8 + b; }
+static int Hub_LinkBtnHoverId(int i, int b) { return 40000 + i * 8 + b; }
+
+static void Hub_DrawBtn(SetPaint& p, SetWindow& w, const HubBtn& b, int hoverId, bool armed) {
+    const float g = Set_GlowOf(w, hoverId);
+    const bool accent = b.id == kBtnUpdate || b.id == kBtnInstall;
+    p.Round(b.r, 8, kSetBoxFill);
+    if (accent) p.GradFill(b.r, 8, 0.22f + 0.2f * g);
+    if (armed) p.Round(b.r, 8, mocha::red, 0.22f);
+    p.Edge(b.r, 8, armed ? mocha::red : mocha::overlay0, (armed ? 0.9f : 0.6f) * (1 - g), 1.25f);
+    p.GradRing(b.r, 8, g, 1.5f);
+    const UINT32 c = armed ? mocha::red : accent ? mocha::text : mocha::subtext1;
+    if (b.label) p.Text(g_cfBtn.get(), b.label, b.r, c);
+    else p.Glyph(w.fIconS.get(), b.glyph, b.r, c);
+}
+
+static void Hub_DrawSwitch(SetPaint& p, SetWindow& w, int k, const D2D1_RECT_F& tr) {
+    const bool on = w.fields[k].cur == L"1";
+    const float kn = w.knob.count(k) ? w.knob.at(k) : (on ? 1.0f : 0.0f);
+    p.Round(tr, 11, mocha::surface1);
+    p.GradFill(tr, 11, kn);
+    p.GradRing(tr, 11, Set_GlowOf(w, 6000 + k) * 0.8f, 1.25f);
+    const float cx = tr.left + 11 + kn * 18, cy = (tr.top + tr.bottom) / 2;
+    p.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 8, 8), p.B(on ? mocha::crust : mocha::text));
+}
+
+static void Hub_CardBack(SetPaint& p, const D2D1_RECT_F& r, float hov, bool focus) {
+    p.Round(r, 12, mocha::base);
+    p.Round(r, 12, mocha::surface0, 0.32f);
+    p.Edge(r, 12, mocha::surface2, 0.55f * (1 - hov), 1.5f);
+    p.GradFill(r, 12, 0.10f * hov);
+    p.GradRing(r, 12, hov, 1.5f);
+    if (focus) p.GradRing(r, 12, 1.0f, 2.0f);
+}
+
+static void Hub_DrawModCard(SetPaint& p, SetWindow& w, const SetItem& it) {
+    const int k = it.field;
+    const SetField& f = w.fields[k];
+    const HubMod& m = g_hub.mods[f.mod];
+    const D2D1_RECT_F r = Set_RowRect(w, it);
+    float hov = Set_GlowOf(w, 1000 + k);
+    for (int b = 0; b < 8; b++) hov = std::max(hov, Set_GlowOf(w, Hub_BtnHoverId(k, b)));
+    hov = std::max(hov, Set_GlowOf(w, 6000 + k) * 0.6f);
+    Hub_CardBack(p, r, hov, w.kbd && w.focus == k);
+    const HubCardParts c = Hub_CardParts(w, it, r);
+    const bool armed = g_cardArmId == m.id && GetTickCount64() - g_cardArmAt < 5000;
+    p.Text(g_cfName.get(), m.name, c.name, mocha::text);
+    std::wstring meta = m.author.empty() ? std::wstring() : m.author;
+    if (!m.version.empty()) meta += (meta.empty() ? L"Version " : L"  \u00B7  ") + m.version;
+    if (Set_FieldValue(f) != f.value) meta += f.cur == L"1" ? L"  \u00B7  Turns on when you save" : L"  \u00B7  Turns off when you save";
+    if (armed) p.Text(g_cfMeta.get(), L"Click the bin again to remove it", c.meta, mocha::red);
+    else p.Text(g_cfMeta.get(), meta, c.meta, mocha::overlay2);
+    if (g_cardsGrid)
+        p.Text(g_cfDesc.get(), m.desc.empty() ? std::wstring(L"No description.") : m.desc, c.desc,
+               m.desc.empty() ? mocha::overlay0 : mocha::subtext0);
+    for (int i = 0; i < c.n; i++)
+        Hub_DrawBtn(p, w, c.btn[i], Hub_BtnHoverId(k, c.btn[i].id), armed && c.btn[i].id == kBtnRemove);
+    Hub_DrawSwitch(p, w, k, c.sw);
+}
+
+// The toolbar: a search box, two drop-downs and the Grid or List switch.
+static void Hub_DrawBar(SetPaint& p, SetWindow& w, const SetItem& it) {
+    const int k = it.field;
+    const SetField& f = w.fields[k];
+    const D2D1_RECT_F r = Set_RowRect(w, it);
+    const float g = std::max({Set_GlowOf(w, 6000 + k), Set_GlowOf(w, 1000 + k),
+                              (w.editing == k || w.openSel == k) ? 1.0f : 0.0f});
+    if (Hub_IsView(f)) {
+        const bool grid = f.cur == L"1";
+        p.Round(r, 10, kSetBoxFill);
+        p.Edge(r, 10, mocha::overlay0, 0.7f * (1 - g), 1.25f);
+        p.GradRing(r, 10, g, 1.5f);
+        const float mid = (r.left + r.right) / 2;
+        D2D1_RECT_F a{r.left + 4, r.top + 4, mid - 1, r.bottom - 4}, b{mid + 1, r.top + 4, r.right - 4, r.bottom - 4};
+        p.GradFill(grid ? a : b, 7, 0.9f);
+        p.Glyph(w.fIconS.get(), 0xF0E2, a, grid ? mocha::crust : mocha::subtext0);
+        p.Glyph(w.fIconS.get(), 0xEA37, b, grid ? mocha::subtext0 : mocha::crust);
+        return;
+    }
+    p.Round(r, 10, kSetBoxFill);
+    p.Edge(r, 10, mocha::overlay0, 0.7f * (1 - g), 1.25f);
+    p.GradRing(r, 10, g, 1.75f);
+    if (f.kind == SetField::Text) {
+        p.Glyph(w.fIconS.get(), 0xE721, {r.left + 10, r.top, r.left + 34, r.bottom}, mocha::overlay1);
+        if (w.editing != k) {
+            if (f.cur.empty()) p.Text(w.fValue.get(), Hub_KeyIs(f, L"hub.search") ? L"Search your mods" : L"Search the library",
+                                      {r.left + 38, r.top, r.right - 12, r.bottom}, mocha::overlay0);
+            else p.Text(w.fValue.get(), f.cur, {r.left + 38, r.top, r.right - 12, r.bottom}, mocha::text);
+        }
+        return;
+    }
+    const std::wstring lead = std::wstring(f.label) + L"  ";
+    const float lw = Set_TextW(w.fValue.get(), lead);
+    p.Text(w.fValue.get(), lead, {r.left + 14, r.top, r.left + 14 + lw, r.bottom}, mocha::overlay1);
+    p.Text(w.fValue.get(), Set_ChoiceLabel(f), {r.left + 14 + lw, r.top, r.right - 32, r.bottom}, mocha::text);
+    p.Glyph(w.fIconS.get(), 0xE70D, {r.right - 32, r.top, r.right - 8, r.bottom}, mocha::subtext0);
+}
+
+static bool Hub_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
+    if (!Hub_ListPage(w)) return false;
+    const SetField& f = w.fields[it.field];
+    if (f.hub == 1) { Hub_DrawModCard(p, w, it); return true; }
+    if (Hub_IsBar(f)) { Hub_DrawBar(p, w, it); return true; }
+    return false;
+}
+
+static bool Hub_DrawLink(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
+    if (!Hub_ListPage(w) || !Hub_LinkCard(it)) return false;
+    const D2D1_RECT_F r = Set_RowRect(w, it);
+    float hov = Set_GlowOf(w, 3000 + idx);
+    for (int b = 0; b < 8; b++) hov = std::max(hov, Set_GlowOf(w, Hub_LinkBtnHoverId(idx, b)));
+    Hub_CardBack(p, r, hov, false);
+    const HubCardParts c = Hub_CardParts(w, it, r);
+    const std::wstring id = it.url.substr(9);
+    std::wstring name = it.text, meta, desc = it.sub;
+    if (it.url.rfind(L"hub:feed:", 0) == 0) {
+        if (const HubFeedMod* f = Hub_FeedFind(id)) { name = f->name; desc = f->desc; meta = L"DavidHiFi  \u00B7  " + f->version; }
+    } else {
+        for (auto& m : g_repo)
+            if (m.id == id) { name = m.name; desc = m.desc; meta = m.author + (m.version.empty() ? L"" : L"  \u00B7  " + m.version); break; }
+    }
+    if (const HubMod* mine = Hub_FindMod(id)) meta += L"  \u00B7  Installed";
+    D2D1_RECT_F nameR = c.name;
+    if (g_cardsGrid) nameR.right = r.right - kCardPad;
+    p.Text(g_cfName.get(), name, nameR, mocha::text);
+    p.Text(g_cfMeta.get(), meta, c.meta, mocha::overlay2);
+    if (g_cardsGrid) p.Text(g_cfDesc.get(), desc.empty() ? std::wstring(L"No description.") : desc, c.desc,
+                            desc.empty() ? mocha::overlay0 : mocha::subtext0);
+    for (int i = 0; i < c.n; i++) Hub_DrawBtn(p, w, c.btn[i], Hub_LinkBtnHoverId(idx, c.btn[i].id), false);
+    if (!c.n) p.Glyph(w.fIcon.get(), 0xE8A7, {r.right - 46, r.bottom - 40, r.right - 12, r.bottom - 10}, mocha::subtext1);
+    return true;
+}
+
+// ---- Hit testing and clicks ----
+
+static bool Hub_HitRow(SetWindow& w, const SetItem& it, const D2D1_RECT_F& row, float x, float cy, SetHit& h) {
+    if (!Hub_ListPage(w)) return false;
+    const SetField& f = w.fields[it.field];
+    if (Hub_IsView(f)) {
+        const bool grid = f.cur == L"1", leftHalf = x < (row.left + row.right) / 2;
+        h.kind = grid == leftHalf ? SetHit::None : SetHit::Control;  // The side already on does nothing.
+        return true;
+    }
+    if (Hub_IsBar(f)) { h.kind = SetHit::Control; return true; }  // The whole box opens, magnifier included.
+    if (f.hub != 1) return false;
+    const HubCardParts c = Hub_CardParts(w, it, row);
+    if (Set_In({c.sw.left - 6, c.sw.top - 6, c.sw.right + 6, c.sw.bottom + 6}, x, cy)) {
+        h.kind = SetHit::Control;
+        return true;
+    }
+    for (int i = 0; i < c.n; i++)
+        if (Set_In(c.btn[i].r, x, cy)) {
+            h.kind = SetHit::Card;
+            h.b = c.btn[i].id;
+            h.id = Hub_BtnHoverId(it.field, c.btn[i].id);
+            return true;
+        }
+    h.kind = SetHit::Open;
+    return true;
+}
+
+static void Hub_HitLink(SetWindow& w, int i, const D2D1_RECT_F& row, float x, float cy, SetHit& h) {
+    if (!Hub_ListPage(w) || !Hub_LinkCard(w.items[i])) return;
+    const HubCardParts c = Hub_CardParts(w, w.items[i], row);
+    for (int b = 0; b < c.n; b++)
+        if (Set_In(c.btn[b].r, x, cy)) {
+            h.kind = SetHit::Card;
+            h.a = -(i + 1);
+            h.b = c.btn[b].id;
+            h.id = Hub_LinkBtnHoverId(i, c.btn[b].id);
+        }
+}
+
+static int Hub_HoverCard(const SetHit& h) { return h.a >= 0 ? 1000 + h.a : 3000 + (-h.a - 1); }
+
+static void Hub_ScrollToGroup(SetWindow& w, PCWSTR name) {
+    for (auto& it : w.items)
+        if (it.type == SetItem::Group && it.text == name) {
+            w.scrollTarget = std::clamp(it.y - 16, 0.0f, std::max(0.0f, w.contentH - Set_ViewH(w)));
+            Set_Invalidate(w);
+            return;
+        }
+}
+
+static void Hub_CardRemove(SetWindow& w, const std::wstring& id, const std::wstring& name) {
+    Set_CommitEdit(w, true);
+    if (Set_ChangedCount(w) > 0) {
+        Set_SetStatus(w, L"Save or cancel your changes before removing a mod.", true);
+        return;
+    }
+    const ULONGLONG now = GetTickCount64();
+    if (g_cardArmId != id || now - g_cardArmAt > 5000) {
+        g_cardArmId = id;
+        g_cardArmAt = now;
+        SetTimer(w.hwnd, kHubArmTimer, 5050, nullptr);
+        Set_Invalidate(w);
+        return;
+    }
+    g_cardArmId.clear();
+    std::wstring err;
+    if (!Hub_Backup({id}, err)) { Set_SetStatus(w, err.c_str(), true); return; }
+    if (!Hub_RunJob(w, {L"mod remove " + Set_QuoteArg(id) + L" --yes"}, err)) {
+        Set_BuildAndClamp(w);
+        Set_SetStatus(w, err.c_str(), true);
+        return;
+    }
+    const float keep = w.scrollTarget;
+    Hub_LoadList(w);
+    w.scrollY = w.scrollTarget = std::clamp(keep, 0.0f, std::max(0.0f, w.contentH - Set_ViewH(w)));
+    Set_BuildAndClamp(w);
+    Set_SetStatus(w, (L"Removed " + name + L". A backup was saved first.").c_str());
+}
+
+static void Hub_CardClick(SetWindow& w, int a, int b) {
+    if (w.saving) return;
+    if (a < 0) {
+        const int i = -a - 1;
+        if (i >= (int)w.items.size()) return;
+        const std::wstring url = w.items[i].url, id = url.substr(9);
+        if (url.rfind(L"hub:feed:", 0) == 0) Hub_Link(url.c_str());
+        else if (b == kBtnInstall) Hub_Link((L"hub:install:" + id).c_str());
+        return;
+    }
+    if (a >= (int)w.fields.size() || w.fields[a].hub != 1) return;
+    const HubMod m = g_hub.mods[w.fields[a].mod];
+    switch (b) {
+        case kBtnDetails:
+            if (Hub_OpenDetail(w, m.id)) Hub_ScrollToGroup(w, L"More");
+            break;
+        case kBtnSettings:
+            Hub_OpenDetail(w, m.id);
+            break;
+        case kBtnSource: {
+            const auto source = L"C:\\ProgramData\\Windhawk\\ModsSource\\" + m.id + L".wh.cpp";
+            if (GetFileAttributesW(source.c_str()) == INVALID_FILE_ATTRIBUTES) Set_SetStatus(w, L"This mod's source file was not found.", true);
+            else Hub_OpenFile(w.hwnd, source);
+            break;
+        }
+        case kBtnRemove:
+            Hub_CardRemove(w, m.id, m.name);
+            break;
+        case kBtnUpdate: {
+            const HubFeedMod* f = Hub_FeedFind(m.id);
+            Hub_Link(((f && Hub_Newer(f->version, m.version) ? L"hub:feed:" : L"hub:update:") + m.id).c_str());
+            break;
+        }
+    }
+}
+
+// A toolbar choice changed: apply it now, not at Save.
+static void Hub_Chose(SetWindow& w, int k) {
+    if (k < 0 || k >= (int)w.fields.size()) return;
+    SetField& f = w.fields[k];
+    if (!Hub_IsBar(f)) return;
+    f.value = f.cur;
+    if (Hub_IsView(f)) {
+        g_cardsGrid = f.cur == L"1";
+        Hub_RegSet(L"Set.modsView", g_cardsGrid ? 1 : 0);
+        for (auto& o : w.fields)
+            if (Hub_IsView(o)) o.cur = o.value = f.cur;
+    }
+    if (Hub_KeyIs(f, L"hub.group")) { Hub_Regroup(w); return; }
+    w.scrollY = w.scrollTarget = 0;
+    Hub_ResetView(w);
+    Set_BuildAndClamp(w);
+}
+
+// Live search on the Marketplace too: the cards follow each key typed.
+static bool Hub_LiveSearch(SetWindow& w) {
+    if (w.editing < 0 || w.editing >= (int)w.fields.size()) return false;
+    const SetField& f = w.fields[w.editing];
+    return (w.editing == g_hub.searchField && g_hub.detail < 0) || Hub_KeyIs(f, L"hub.marketSearch");
+}
+
+static std::wstring Hub_LiveText(SetWindow& w, PCWSTR key) {
+    for (size_t i = 0; i < w.fields.size(); i++)
+        if (Hub_KeyIs(w.fields[i], key))
+            return (int)i == w.editing && w.edit ? Set_WindowText(w.edit) : w.fields[i].cur;
+    return L"";
+}
+// ---- end of cards.inc ----
 // ---- Tray ---------------------------------------------------------------------------
 
 // The shared tray badge (copied from Seamless Crosshair's MakeTrayIcon): a rounded square in the
@@ -6887,7 +7468,7 @@ static void Hub_TrayUpdate(SetWindow& w) {
     NOTIFYICONDATAW nid{};
     nid.cbSize = sizeof(nid);
     nid.hWnd = w.hwnd;
-    nid.uID = 1;
+    nid.uID = TrayIconId();
     const bool want = !g_hub.noTray && Set_FieldOn(w, L"settingsTrayIcon", true) && w.hwnd;
     if (!want) {
         if (g_hub.trayOn) Shell_NotifyIconW(NIM_DELETE, &nid);
@@ -7043,8 +7624,7 @@ static LRESULT CALLBACK Hub_SubProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, U
             return 0;
         case WM_COMMAND:
             // Live search: the list follows each key typed in the search box.
-            if (w->edit && (HWND)lp == w->edit && HIWORD(wp) == EN_CHANGE && w->editing == g_hub.searchField &&
-                g_hub.detail < 0) {
+            if (w->edit && (HWND)lp == w->edit && HIWORD(wp) == EN_CHANGE && Hub_LiveSearch(*w)) {
                 w->scrollY = w->scrollTarget = 0;
                 Set_BuildAndClamp(*w);
             } else if (w->edit && (HWND)lp == w->edit && HIWORD(wp) == EN_KILLFOCUS) {
@@ -7095,6 +7675,7 @@ static LRESULT CALLBACK Hub_SubProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, U
                 bool lapsed = false;
                 for (ULONGLONG* armed : {&g_hub.removeArmed, &g_resetArmed, &g_restoreArmed, &g_setupArmed})
                     if (*armed && now - *armed >= 5000) *armed = 0, lapsed = true;
+                if (!g_cardArmId.empty() && now - g_cardArmAt >= 5000) g_cardArmId.clear(), lapsed = true;
                 if (lapsed) Set_BuildAndClamp(*w);
             }
             return 0;
@@ -7199,7 +7780,25 @@ static int Hub_Render(const std::wstring& dir, const std::wstring& mod) {
     int failed = 0;
     w.pageT = 1;
     w.page = 0;
+    const float normalW = w.cw;
+    w.cw = 1440;  // A wide window: the cards fill the width.
+    auto setView = [&](bool grid) {  // The switch draws from its field, the cards from g_cardsGrid.
+        g_cardsGrid = grid;
+        for (auto& f : w.fields)
+            if (Hub_IsView(f)) f.cur = f.value = grid ? L"1" : L"0";
+    };
+    setView(true);
     failed += !Hub_Shot(w, dir + L"\\mods.png", false);
+    setView(false);
+    failed += !Hub_Shot(w, dir + L"\\mods-list.png", false);
+    setView(true);
+    w.cw = 760;  // Narrow: one column, the toolbar wraps.
+    failed += !Hub_Shot(w, dir + L"\\mods-narrow.png", false);
+    w.cw = 1440;
+    w.page = 1;
+    failed += !Hub_Shot(w, dir + L"\\marketplace-grid.png", false);
+    w.page = 0;
+    w.cw = normalW;
     if (g_hub.searchField >= 0) {
         w.fields[g_hub.searchField].cur = L"volume";
         failed += !Hub_Shot(w, dir + L"\\search.png", false);
@@ -7215,10 +7814,11 @@ static int Hub_Render(const std::wstring& dir, const std::wstring& mod) {
         }
     }
     w.pageT = 1;
-    const PCWSTR names[] = {L"mods", L"marketplace", L"updates", L"presets", L"developer", L"settings", L"about"};
-    for (int page = 1; page < 7; ++page) {
+    const PCWSTR names[] = {L"mods", L"marketplace", L"updates", L"presets", L"developer", L"settings", L"look", L"about"};
+    static_assert(sizeof(names) / sizeof(names[0]) == kSetPageCount, "one shot name per page");
+    for (int page = 1; page < kSetPageCount; ++page) {
         w.page = page;
-        failed += !Hub_Shot(w, dir + L"\\" + names[page] + L".png", page == 5);
+        failed += !Hub_Shot(w, dir + L"\\" + names[page] + L".png", page == 5 || page == 6);
     }
     std::string log = "mods " + std::to_string(g_hub.mods.size()) + "\nfailed " + std::to_string(failed) + "\n";
     if (!g_hub.error.empty()) log += Hub_Utf8(g_hub.error) + "\n";
