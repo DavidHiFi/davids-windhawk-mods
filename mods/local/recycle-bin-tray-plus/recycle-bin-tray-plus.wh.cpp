@@ -3,7 +3,7 @@
 // @name            Recycle Bin Tray Plus
 // @description     Adds an interactive Recycle Bin icon to the Windows 11 system tray with live state updates, drag-and-drop support, theme-aware rendering, multiple icon styles, and configurable mouse actions.
 // @description:fr-FR Ajoute une icône interactive de la Corbeille à la zone de notification de Windows 11, avec mise à jour en temps réel, glisser-déposer, adaptation au thème, plusieurs styles d'icône et actions de souris configurables.
-// @version         1.0.7
+// @version         1.0.8
 // @author          DavidHiFi, Wildstyle23
 // @github          https://github.com/wildstyle23
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -184,7 +184,11 @@ For emptying actions triggered through the mod, this setting takes precedence ov
 
 ## Icon Styles
 
-> **Choose one icon style:** `System` · `Vector` · `Font` · `Custom Icon`
+> **Choose one icon style:** `Seamless badge` · `System` · `Vector` · `Font` · `Custom Icon`
+
+### Seamless badge
+
+The default. A trash can drawn on the same blue to mauve rounded badge as every other Seamless tray icon: an outline can when the bin is empty, a solid can with its lid tipped open when it holds files. It looks the same in light and dark mode.
 
 ### System
 
@@ -458,7 +462,7 @@ This project is licensed under the GNU General Public License Version 3.0.
       Windows applique la stratégie de Corbeille de chaque lecteur source ; les éléments peuvent donc être supprimés définitivement si un lecteur est configuré pour contourner la Corbeille. Si l'icône se trouve dans le menu ^, ouvrez-le puis déposez les éléments sur l'icône de la Corbeille. L'icône n'a pas besoin de rester visible en permanence dans la zone de notification principale pour fonctionner, mais la garder visible permet un accès plus rapide. Cette fonctionnalité utilise un hook global de souris.
 
       ⚠ Le glisser-déposer est désactivé lorsque "Masquer si vide" est activé.
-  - iconStyle: custom
+  - iconStyle: badge
     $name: "Icon style"
     $name:fr-FR: "Style d'icône"
     $description: "Choose how the tray icon is rendered. The Vector, Font, and Custom Icon sections below apply only to their corresponding style."
@@ -468,11 +472,13 @@ This project is licensed under the GNU General Public License Version 3.0.
       - vector: Custom vector icon (Windows 11 style)
       - font: Font glyph (installed font)
       - custom: Custom files (.ico, .png, .bmp, .jpg)
+      - badge: Seamless badge (blue to mauve)
     $options:fr-FR:
       - system: Icône système par défaut
       - vector: Icône vectorielle personnalisée (style Windows 11)
       - font: Glyphe d'une police installée
       - custom: Fichiers personnalisés (.ico, .png, .bmp, .jpg)
+      - badge: Badge Seamless (bleu vers mauve)
   $name: "General"
   $name:fr-FR: "Général"
   $description: "Core tray behavior and icon renderer selection."
@@ -957,7 +963,8 @@ enum class IconStyle {
     System,
     Vector,
     Font,
-    Custom
+    Custom,
+    Badge
 };
 
 // Cache key for rendered icon content
@@ -2398,6 +2405,7 @@ void LoadSettingsInto(ModSettings& s) {
     if (_wcsicmp(szStyle, L"vector") == 0) s.iconStyle = IconStyle::Vector;
     else if (_wcsicmp(szStyle, L"font") == 0) s.iconStyle = IconStyle::Font;
     else if (_wcsicmp(szStyle, L"custom") == 0) s.iconStyle = IconStyle::Custom;
+    else if (_wcsicmp(szStyle, L"badge") == 0) s.iconStyle = IconStyle::Badge;
     else s.iconStyle = IconStyle::System;
 
     // Accept only known vector variants.
@@ -2466,8 +2474,8 @@ void LoadSettingsInto(ModSettings& s) {
         WCHAR szStyleNow[32];
         ReadStringSetting(L"general.iconStyle", szStyleNow, ARRAYSIZE(szStyleNow), L"system");
         if (szStyleNow[0] == L'\0' || _wcsicmp(szStyleNow, L"system") == 0) {
-            s.iconStyle = IconStyle::Custom;
-            persistSetting(L"general.iconStyle", L"custom");
+            s.iconStyle = IconStyle::Badge;
+            persistSetting(L"general.iconStyle", L"badge");
             healed = true;
         }
         if (iconFileMissing(s.customIconEmpty)) {
@@ -3572,12 +3580,120 @@ HICON LoadCustomIcon(
     return hIcon;
 }
 
+// Seamless badge: the house tray badge (rounded plate, Catppuccin Mocha blue
+// to mauve) with a trash can in crust. Empty is an outline can; full is a solid
+// can with its lid tipped open and paper heaped over the rim. It does not
+// follow the light or dark theme, like every other Seamless tray badge.
+static float RbSegDist(float px, float py, float ax, float ay, float bx, float by) {
+    const float dx = bx - ax, dy = by - ay;
+    float t = ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy);
+    t = t < 0.f ? 0.f : (t > 1.f ? 1.f : t);
+    return std::hypot(px - ax - t * dx, py - ay - t * dy);
+}
+
+static float RbBadgeInk(float x, float y, int n, bool full) {
+    const float w = std::max(0.085f, 1.35f / static_cast<float>(n));
+    const float h = w / 2.f;
+    const float body[4][2] = {{0.27f, 0.36f}, {0.73f, 0.36f}, {0.68f, 0.86f}, {0.32f, 0.86f}};
+    if (full) {
+        const float a = -18.f * 3.14159265f / 180.f;
+        const float px = 0.80f, py = 0.30f;
+        const float rx = px + (x - px) * std::cos(a) - (y - py) * std::sin(a);
+        const float ry = py + (x - px) * std::sin(a) + (y - py) * std::cos(a);
+        if (RbSegDist(rx, ry, 0.22f, 0.30f, 0.80f, 0.30f) <= h) return 1.f;
+        if (RbSegDist(rx, ry, 0.42f, 0.21f, 0.58f, 0.21f) <= h ||
+            RbSegDist(rx, ry, 0.42f, 0.21f, 0.42f, 0.30f) <= h ||
+            RbSegDist(rx, ry, 0.58f, 0.21f, 0.58f, 0.30f) <= h) return 1.f;
+        bool inside = true;
+        for (int i = 0; i < 4 && inside; i++) {
+            const float ax = body[i][0], ay = body[i][1];
+            const float bx = body[(i + 1) % 4][0], by = body[(i + 1) % 4][1];
+            if ((bx - ax) * (y - ay) - (by - ay) * (x - ax) < 0.f) inside = false;
+        }
+        if (inside) {
+            if (y >= 0.44f && y <= 0.76f &&
+                (std::fabs(x - 0.43f) <= h * 0.8f || std::fabs(x - 0.57f) <= h * 0.8f)) return 0.f;
+            return 1.f;
+        }
+        const float paper[3][3] = {{0.36f, 0.31f, 0.10f}, {0.52f, 0.27f, 0.10f}, {0.64f, 0.33f, 0.07f}};
+        for (const auto& p : paper) {
+            if ((x - p[0]) * (x - p[0]) + (y - p[1]) * (y - p[1]) <= p[2] * p[2]) return 0.42f;
+        }
+        return 0.f;
+    }
+    if (RbSegDist(x, y, 0.20f, 0.30f, 0.80f, 0.30f) <= h) return 1.f;
+    if (RbSegDist(x, y, 0.42f, 0.20f, 0.58f, 0.20f) <= h ||
+        RbSegDist(x, y, 0.42f, 0.20f, 0.42f, 0.30f) <= h ||
+        RbSegDist(x, y, 0.58f, 0.20f, 0.58f, 0.30f) <= h) return 1.f;
+    for (int i = 1; i < 4; i++) {
+        if (RbSegDist(x, y, body[i][0], body[i][1], body[(i + 1) % 4][0], body[(i + 1) % 4][1]) <= h) return 1.f;
+    }
+    if (y >= 0.46f && y <= 0.74f &&
+        (std::fabs(x - 0.44f) <= h * 0.8f || std::fabs(x - 0.56f) <= h * 0.8f)) return 1.f;
+    return 0.f;
+}
+
+HICON CreateBadgeTrashIcon(int iconSize, bool isEmpty) {
+    const int n = iconSize > 0 ? iconSize : 16;
+    BITMAPINFO bi = {};
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = n;
+    bi.bmiHeader.biHeight = -n;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP color = CreateDIBSection(NULL, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
+    if (!color || !bits) {
+        if (color) DeleteObject(color);
+        return NULL;
+    }
+    const float c0[3] = {0x89, 0xB4, 0xFA}, c1[3] = {0xCB, 0xA6, 0xF7}, ink[3] = {0x11, 0x11, 0x1B};
+    const float rad = n * 0.26f, half = n / 2.f;
+    const int ss = 4;
+    DWORD* px = static_cast<DWORD*>(bits);
+    for (int y = 0; y < n; y++) {
+        for (int x = 0; x < n; x++) {
+            const float qx = std::fabs(x + 0.5f - half) - (half - rad);
+            const float qy = std::fabs(y + 0.5f - half) - (half - rad);
+            const float d = std::hypot(std::max(qx, 0.f), std::max(qy, 0.f)) +
+                            std::min(std::max(qx, qy), 0.f) - rad;
+            const float a = std::clamp(0.5f - d, 0.f, 1.f);
+            float cov = 0.f;
+            for (int sy = 0; sy < ss; sy++)
+                for (int sx = 0; sx < ss; sx++)
+                    cov += RbBadgeInk((x + (sx + 0.5f) / ss) / n, (y + (sy + 0.5f) / ss) / n, n, !isEmpty);
+            cov /= ss * ss;
+            const float t = std::clamp((x + y) / (2.f * (n - 1)), 0.f, 1.f);
+            BYTE ch[3];
+            for (int k = 0; k < 3; k++) {
+                const float base = c0[k] + (c1[k] - c0[k]) * t;
+                ch[k] = static_cast<BYTE>(std::lround((base + (ink[k] - base) * cov) * a));
+            }
+            const BYTE alpha = static_cast<BYTE>(std::lround(a * 255.f));
+            px[y * n + x] = (static_cast<DWORD>(alpha) << 24) | (static_cast<DWORD>(ch[0]) << 16) |
+                            (static_cast<DWORD>(ch[1]) << 8) | ch[2];
+        }
+    }
+    std::vector<BYTE> maskBits(static_cast<size_t>(((n + 15) / 16) * 2) * n, 0);
+    HBITMAP mask = CreateBitmap(n, n, 1, 1, maskBits.data());
+    ICONINFO ii = {};
+    ii.fIcon = TRUE;
+    ii.hbmMask = mask;
+    ii.hbmColor = color;
+    HICON icon = mask ? CreateIconIndirect(&ii) : NULL;
+    if (mask) DeleteObject(mask);
+    DeleteObject(color);
+    return icon;
+}
+
 // Shared icon cache key and renderer dispatch
 IconCacheKey BuildIconCacheKey(bool isEmpty, bool isDark, int iconSize) {
     IconCacheKey key;
     key.style = g_settings.iconStyle;
     key.empty = isEmpty;
-    key.dark = (g_settings.iconStyle == IconStyle::System) ? false : isDark;
+    key.dark = (g_settings.iconStyle == IconStyle::System ||
+                g_settings.iconStyle == IconStyle::Badge) ? false : isDark;
     key.iconSize = iconSize;
 
     switch (g_settings.iconStyle) {
@@ -3606,6 +3722,7 @@ IconCacheKey BuildIconCacheKey(bool isEmpty, bool isDark, int iconSize) {
             key.customPath = GetCustomIconPath(isEmpty, isDark);
             key.customThemeTint = g_settings.customIconThemeTint;
             break;
+        case IconStyle::Badge:
         case IconStyle::System:
         default:
             break;
@@ -3623,6 +3740,8 @@ HICON LoadDesiredIcon(const IconCacheKey& key) {
         case IconStyle::Custom:
             return LoadCustomIcon(
                 key.iconSize, key.customPath, key.dark, key.customThemeTint);
+        case IconStyle::Badge:
+            return CreateBadgeTrashIcon(key.iconSize, key.empty);
         case IconStyle::System:
         default:
             return GetSystemRecycleBinIcon(key.empty, key.iconSize);
@@ -4107,6 +4226,7 @@ bool UpdateTrayState() {
             case IconStyle::Vector: styleName = L"vector"; break;
             case IconStyle::Font: styleName = L"font"; break;
             case IconStyle::Custom: styleName = L"custom"; break;
+            case IconStyle::Badge: styleName = L"badge"; break;
             default: break;
         }
         Wh_Log(
