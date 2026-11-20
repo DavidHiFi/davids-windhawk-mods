@@ -2,7 +2,7 @@
 // @id              seamless-autoclicker
 // @name            Seamless AutoClicker
 // @description     Hold a side mouse button and left click keeps clicking, with a lock, a tray switch and its own settings window
-// @version         1.6.10
+// @version         1.6.11
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -601,7 +601,12 @@ DWORD WINAPI FalseFailureBoxThreadProc(LPVOID) {
 
 constexpr UINT WM_AC_TRAY = WM_APP + 45;
 constexpr UINT WM_AC_SETTINGS = WM_APP + 46;
-constexpr UINT kTrayId = 1;
+constexpr UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kTrayId = TrayIconId();
 constexpr int kHotkeyId = 1;
 UINT g_taskbarCreated = 0;
 bool g_trayAdded = false;
