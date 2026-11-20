@@ -5,7 +5,7 @@
       "id": "local@seamless-taskbar",
       "enabled": true,
       "settings": {
-        "SettingsWindow.nativeSettingsTitleBar": 0,
+        "SettingsWindow.nativeSettingsTitleBar": 1,
         "SettingsWindow.settingsGlass": 1,
         "SettingsWindow.settingsTrayIcon": 1,
         "ai.moduleOn": 1,
@@ -132,7 +132,7 @@
         "media.DebugSettings.showDebugBorders": 0,
         "media.DebugSettings.showLayoutAnchors": 0,
         "media.DebugSettings.showMiniPlayerBorder": 0,
-        "media.DebugSettings.showRestartButton": 0,
+        "media.DebugSettings.showRestartButton": 1,
         "media.MainSettings.AlbumArtSetting.albumArtHeight": "24 24",
         "media.MainSettings.AlbumArtSetting.albumArtMargin": "0 0",
         "media.MainSettings.AlbumArtSetting.albumArtWidth": "24 24",

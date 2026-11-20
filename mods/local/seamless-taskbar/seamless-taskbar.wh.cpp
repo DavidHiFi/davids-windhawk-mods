@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.15
+// @version         0.4.16
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -19484,12 +19484,7 @@ static void AttachTextHalo(Canvas const& host, TextBlock const& tb, bool inCanva
             sprite.RelativeSizeAdjustment({1.0f, 1.0f});
             root.Children().InsertAtTop(sprite);
         };
-        // Even glow centred on the letters (0.4.4): a soft wide layer, then two mid and two
-        // tight layers stacked so the rim is solid. No offsets, so no side looks heavier.
-        add(6.0f, 0.0f, 0.0f, 0.55f);
         add(2.5f, 0.0f, 0.0f, 1.0f);
-        add(2.5f, 0.0f, 0.0f, 1.0f);
-        add(1.0f, 0.0f, 0.0f, 1.0f);
         add(1.0f, 0.0f, 0.0f, 1.0f);
         winrt::Windows::UI::Xaml::Hosting::ElementCompositionPreview::SetElementChildVisual(host, root);
         winrt::weak_ref<TextBlock> wtb{tb};
@@ -23039,10 +23034,9 @@ static Grid BuildPlayerGrid() {
                 textStack.HorizontalAlignment(g_settings.mirrorLayout ? HorizontalAlignment::Right : HorizontalAlignment::Left);
             }
             textStack.Spacing((double)g_settings.textSpacing);
-            // Owner 2026-11-17: the title row sat flush with the island's top edge.
-            // A small top margin (which the centred stack halves) drops both rows
-            // about 2 DIP clear of the border.
-            textStack.Margin({0, 4, 0, 0});
+            // The container already reserves the progress track's height.
+            // Adding a top margin here squeezes the two lines into that track.
+            if (!LiftCover()) textStack.Margin({0, 4, 0, 0});
             if (g_settings.showTrackTitle || g_settings.showTrackArtist) {
                 TextBlock titleBlock{nullptr};
                 TextBlock artistBlock{nullptr};
@@ -23156,6 +23150,8 @@ static Grid BuildPlayerGrid() {
                         clone.Name(cloneName);
                         clone.Text(block.Text());
                         clone.FontSize(block.FontSize());
+                        clone.LineStackingStrategy(block.LineStackingStrategy());
+                        clone.LineHeight(block.LineHeight());
                         clone.FontFamily(block.FontFamily());
                         clone.FontWeight(block.FontWeight());
                         clone.FontStyle(block.FontStyle());
@@ -23238,10 +23234,8 @@ static Grid BuildPlayerGrid() {
             if (g_settings.vizOverlay) {
                 textContainer.VerticalAlignment(VerticalAlignment::Stretch);
                 textContainer.Padding({4, 0, 0, 0});
-                // Owner 2026-11-20: title and artist sit on the same dark rounded pill as
-                // the elapsed/remaining time, so all text over the bars reads alike.
                 Border textPlate;
-                textPlate.Background(MakeBrush({0xEB, 0x1E, 0x1E, 0x2E}));
+                textPlate.Background(MakeBrush({0x80, 0x1E, 0x1E, 0x2E}));
                 textPlate.CornerRadius({4, 4, 4, 4});
                 textPlate.Padding({4, 0, 4, 0});
                 textPlate.VerticalAlignment(VerticalAlignment::Center);
@@ -23372,9 +23366,8 @@ static Grid BuildPlayerGrid() {
                     timeText.IsHitTestVisible(false);
                     Border timePlate;
                     timePlate.Name(kTimePlateName);
-                    // Owner 2026-11-17: the clock pill always carries a solid dark fill so the
-                    // elapsed/remaining text stays readable over the visualizer bars.
-                    timePlate.Background(MakeBrush({0xEB, 0x1E, 0x1E, 0x2E}));
+                    const uint8_t timePlateAlpha = g_settings.vizOverlay ? 0x80 : 0xEB;
+                    timePlate.Background(MakeBrush({timePlateAlpha, 0x1E, 0x1E, 0x2E}));
                     timePlate.CornerRadius({4, 4, 4, 4});
                     timePlate.Padding({4, 1, 4, 1});
                     timePlate.VerticalAlignment(VerticalAlignment::Center);
