@@ -2,7 +2,7 @@
 // @id              network-speedtest-plus
 // @name            Network Speed Test Plus
 // @description     Tray speed test button next to the network icon, plus the Windows 11 network menu speed test as a native flyout: ping, jitter, download and upload measured against Cloudflare, live gauge, results chart with copy. Mocha glass, FiraCode, gradient hover. No browser, no separate app.
-// @version         2.3.1
+// @version         2.3.2
 // @author          DavidHiFi, Alessandro-Vecchio
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -5912,9 +5912,9 @@ static std::vector<SetField> Set_MakeFields() {
         {K::Choice, L"autoStart", L"Start the test automatically", L"Starts the test when the flyout opens. Auto waits for a click on metered connections. Never requires a click every time.", L"auto", {{L"auto", L"Auto (waits on metered connections)"}, {L"always", L"Always"}, {L"never", L"Never (click to start)"}}, 0, 100, 0, L"Speed test"},
         {K::Choice, L"language", L"Language", L"Language of the flyout texts. Auto follows the Windows display language.", L"auto", {{L"auto", L"Automatic (Windows display language)"}, {L"it", L"Italiano"}, {L"en", L"English"}}, 0, 100, 0, L"Speed test"},
         {K::Choice, L"flyoutPosition", L"Where the window opens", L"Corner of the screen the speed test window opens in, on the screen under the mouse. Auto opens it next to the tray, at the taskbar's edge.", L"auto", {{L"auto", L"Auto (next to the tray)"}, {L"topRight", L"Top right"}, {L"topLeft", L"Top left"}, {L"bottomRight", L"Bottom right"}, {L"bottomLeft", L"Bottom left"}, {L"center", L"Center of the screen"}}, 0, 100, 0, L"Speed test"},
-        {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 0, L"Settings window"},
-        {K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 0, L"Settings window"},
-        {K::Check, L"settingsTrayIcon", L"Tray icon", L"Show the speed test tray icon. Right-click it for settings.", L"1", {}, 0, 100, 0, L"Settings window"}
+        {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 3, L"Settings window"},
+        {K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 3, L"Settings window"},
+        {K::Check, L"settingsTrayIcon", L"Tray icon", L"Show the speed test tray icon. Right-click it for settings.", L"1", {}, 0, 100, 3, L"Settings window"}
     };
 }
 
@@ -5926,6 +5926,7 @@ static const SetPageInfo kSetPages[] = {
     {L"Speed test", L"Choose when and where the speed test opens.", 0xE9D9},
     {L"Network details", L"Choose which details appear and when they are readable.", 0xE968},
     {L"Appearance", L"Set the border thickness and colors.", 0xE790},
+    {L"Look", L"Choose how this settings window looks and whether its tray icon is shown.", 0xE790},
     {L"About", L"Version, credits and support.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
