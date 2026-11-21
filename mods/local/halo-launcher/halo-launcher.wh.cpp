@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.3
+// @version         0.6.4
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -19,6 +19,8 @@
 
 Press a key, type a few letters, press Enter. Halo finds apps, files, settings,
 bookmarks and web searches, does sums, and runs modules for everything else.
+
+![Halo Launcher settings](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/halo-launcher.png)
 
 Halo draws its own window on dark Mocha glass with a blue to mauve edge, and has
 its own settings window: open it from the tray icon or with Ctrl+I in Halo.
