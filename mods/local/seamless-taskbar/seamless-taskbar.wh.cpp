@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.25
+// @version         0.4.26
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -37563,6 +37563,9 @@ void StyleTraySegment(Panel panel, bool left, bool right) {
     panel.Height(34);
     panel.VerticalAlignment(VerticalAlignment::Center);
     panel.Margin({0, 0, 0, 0});
+    // This mod owns the inner padding of every piece but the hidden-icons end; SetTrayEnds
+    // adds room after the last icon. A styler Padding rule on these pieces overrides it.
+    if (!left) panel.Padding({0, 0, 0, 0});
     panel.Background(DockMaterial());
     panel.BorderBrush(Media::SolidColorBrush({0xE6, 0x45, 0x47, 0x5A}));
     panel.BorderThickness({left ? 2.0 : 0.0, 2, right ? 2.0 : 0.0, 2});
