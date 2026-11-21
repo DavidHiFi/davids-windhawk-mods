@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.0.18
+// @version         2.0.19
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -958,8 +958,13 @@ VOID CALLBACK DelayedReapplyTimerProc(HWND hWnd, UINT msg, UINT_PTR idEvent, DWO
     // (measured 2026-10-31), so repeat it at +0.5 s and +2 s.
     if (attempt >= REAPPLY_FOLLOWUP_BASE)
     {
-        DisableAccentBlurBehind(hWnd);
-        NewWindowShown(hWnd);
+        // Hidden or cloaked right now (a snap or focus animation): toggling here would
+        // switch the glass off with no way back on, so leave it to the repair below.
+        if (IsWindowVisible(hWnd) && IsWindowEligible(hWnd))
+        {
+            DisableAccentBlurBehind(hWnd);
+            NewWindowShown(hWnd);
+        }
         if (attempt == REAPPLY_FOLLOWUP_BASE)
             SetTimer(hWnd, idEvent + 1, 1500, DelayedReapplyTimerProc);
         return;
@@ -990,6 +995,85 @@ VOID CALLBACK DelayedReapplyTimerProc(HWND hWnd, UINT msg, UINT_PTR idEvent, DWO
     SetTimer(hWnd, REAPPLY_TIMER_ID_BASE + REAPPLY_FOLLOWUP_BASE, 500, DelayedReapplyTimerProc);
 }
 
+// Local fix (2026-11-21): folder windows went flat black at the top some time after
+// opening (snap, focus change, a mod hiding and showing the window). The glass was only
+// set in the first ~2.5 s, and other mods that hide a window in place only send a
+// light refresh, which DWM ignores. Each folder window now repairs its own glass a
+// moment after it is shown again, resized, snapped or switched to.
+const UINT_PTR BACKDROP_HEAL_TIMER_ID = 0x574A0000;
+const UINT BACKDROP_HEAL_DELAY = 150; // ms after the last change
+constexpr WCHAR BACKDROP_HEAL_PROP[] = L"SFBackdropHeal";
+UINT g_backdropHealMsg = 0;
+
+LRESULT CALLBACK BackdropHealSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, DWORD_PTR)
+{
+    BOOL arm = FALSE;
+    switch (msg)
+    {
+    case WM_TIMER:
+        if (wParam == BACKDROP_HEAL_TIMER_ID)
+        {
+            KillTimer(hWnd, BACKDROP_HEAL_TIMER_ID);
+            if (!g_settings.Unload && IsWindowVisible(hWnd) && !IsIconic(hWnd) && IsWindowEligible(hWnd))
+            {
+                DisableAccentBlurBehind(hWnd);
+                NewWindowShown(hWnd);
+            }
+            return 0;
+        }
+        break;
+    case WM_ACTIVATE:
+    case WM_EXITSIZEMOVE:
+        arm = TRUE;
+        break;
+    case WM_WINDOWPOSCHANGED:
+    {
+        const WINDOWPOS* wp = (const WINDOWPOS*)lParam;
+        if (wp && (!(wp->flags & SWP_NOSIZE) || (wp->flags & (SWP_SHOWWINDOW | SWP_FRAMECHANGED))))
+            arm = TRUE;
+        break;
+    }
+    case WM_NCDESTROY:
+        KillTimer(hWnd, BACKDROP_HEAL_TIMER_ID);
+        RemovePropW(hWnd, BACKDROP_HEAL_PROP);
+        WindhawkUtils::RemoveWindowSubclassFromAnyThread(hWnd, BackdropHealSubclassProc);
+        break;
+    default:
+        if (g_backdropHealMsg && msg == g_backdropHealMsg)
+        {
+            if (!g_settings.Unload)
+                SetTimer(hWnd, BACKDROP_HEAL_TIMER_ID, BACKDROP_HEAL_DELAY, nullptr);
+            return 0;
+        }
+        break;
+    }
+
+    // A null timer proc: the WM_TIMER comes through the window, so nothing points into
+    // this DLL after it unloads.
+    if (arm && !g_settings.Unload)
+        SetTimer(hWnd, BACKDROP_HEAL_TIMER_ID, BACKDROP_HEAL_DELAY, nullptr);
+
+    return DefSubclassProc(hWnd, msg, wParam, lParam);
+}
+
+VOID AttachBackdropHeal(HWND hWnd)
+{
+    if (g_settings.Unload || GetPropW(hWnd, BACKDROP_HEAL_PROP))
+        return;
+    if (WindhawkUtils::SetWindowSubclassFromAnyThread(hWnd, BackdropHealSubclassProc, 0))
+        SetPropW(hWnd, BACKDROP_HEAL_PROP, (HANDLE)1);
+}
+
+VOID DetachBackdropHeal(HWND hWnd)
+{
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hWnd, &pid);
+    if (pid != GetCurrentProcessId() || !GetPropW(hWnd, BACKDROP_HEAL_PROP))
+        return;
+    WindhawkUtils::RemoveWindowSubclassFromAnyThread(hWnd, BackdropHealSubclassProc);
+    RemovePropW(hWnd, BACKDROP_HEAL_PROP);
+}
+
 VOID ArmAccentReapplyTimer(HWND hWnd)
 {
     // Explorer only: the reported bug is in Explorer windows. This mod's rules
@@ -1017,6 +1101,7 @@ VOID ArmAccentReapplyTimer(HWND hWnd)
         return;
 
     SetTimer(hWnd, REAPPLY_TIMER_ID_BASE, REAPPLY_TIMER_INTERVAL, DelayedReapplyTimerProc);
+    AttachBackdropHeal(hWnd);
 }
 
 
@@ -1316,7 +1401,17 @@ D2D1_COLOR_F IsAccentColorPossibleD2D(BYTE R, BYTE G, BYTE B, AccentColorShade A
 }
 
 HRESULT WINAPI HookedDwmSetWindowAttribute(HWND hWnd, DWORD dwAttribute, LPCVOID pvAttribute, DWORD cbAttribute)
-{    
+{
+    // A folder window shown again after a mod cloaked it (13 = DWMWA_CLOAK): ask the
+    // window to repair its glass. Posted, because the caller may be another thread.
+    if (dwAttribute == 13 && g_backdropHealMsg && pvAttribute && cbAttribute >= sizeof(BOOL) &&
+        !*(const BOOL*)pvAttribute && GetPropW(hWnd, BACKDROP_HEAL_PROP))
+    {
+        HRESULT hr = DwmSetWindowAttribute_orig(hWnd, dwAttribute, pvAttribute, cbAttribute);
+        PostMessageW(hWnd, g_backdropHealMsg, 0, 0);
+        return hr;
+    }
+
     if(!IsWindowEligible(hWnd))
         return DwmSetWindowAttribute_orig(hWnd, dwAttribute, pvAttribute, cbAttribute);
     
@@ -6421,7 +6516,10 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam)
         if (hParentWnd && hParentWnd != GetDesktopWindow())
             return TRUE;
         else if(g_settings.Unload)
+        {
+            DetachBackdropHeal(hWnd);
             RestoreWindowCustomizations(hWnd);
+        }
         else
         {
             NewWindowShown(hWnd);
@@ -7821,8 +7919,10 @@ BOOL Wh_ModInit(VOID)
     g_settings.Unload = FALSE;
     g_DefaultSysColors = FALSE;
     g_InsideExplorerProc = CheckExplorerProcess();
-    if (g_InsideExplorerProc)
+    if (g_InsideExplorerProc) {
         g_explorerStylerNoBackgroundEffectAtom = AddAtom(L"WindhawkFileExplorerStylerNoBackgroundEffect");
+        g_backdropHealMsg = RegisterWindowMessageW(L"SeamlessFlyoutsBackdropHeal");
+    }
     if (InTaskManagerProcess())
         g_InsideTaskMgrProc = TRUE;
 
