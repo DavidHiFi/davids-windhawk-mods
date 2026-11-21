@@ -2,7 +2,7 @@
 // @id              seamless-power-action-countdown
 // @name            Seamless Power Action Countdown
 // @description     Mocha glass countdown before shutdown, restart, sleep or hibernation. Any key or click cancels
-// @version         2.0.2
+// @version         2.0.3
 // @author          DavidHiFi, Nerdworld
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,8 @@
 A clean countdown before Windows shuts down, restarts, sleeps or hibernates.
 Any key, click or scroll cancels it. The overlay matches the Mocha rice: real
 acrylic glass, FiraCode Nerd Font and a smooth blue to mauve gradient.
+
+![Seamless Power Action Countdown preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-power-action-countdown.png)
 
 ## Features
 
