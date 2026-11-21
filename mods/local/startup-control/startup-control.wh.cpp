@@ -2,7 +2,7 @@
 // @id startup-control
 // @name Startup Control
 // @description Manage startup apps, scheduled tasks and Windows startup locations.
-// @version 0.1.4
+// @version 0.1.5
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods
@@ -10,7 +10,7 @@
 // @include windhawk.exe
 // @include windhawk-mod.exe
 // @include windhawk-mod-elevated.exe
-// @compilerOptions -ld2d1 -ldwrite -ldwmapi -lwindowscodecs -lole32 -loleaut32 -luuid -ltaskschd -lwevtapi -lsetupapi -lcfgmgr32 -ladvapi32 -lshell32 -lshlwapi -lcomdlg32 -lcomctl32 -luxtheme -lgdi32 -lwbemuuid -lversion
+// @compilerOptions -ld2d1 -ldwrite -ldwmapi -lwindowscodecs -lole32 -loleaut32 -luuid -ltaskschd -lwevtapi -lsetupapi -lcfgmgr32 -ladvapi32 -lshell32 -lshlwapi -lcomdlg32 -lcomctl32 -luxtheme -lgdi32 -lwbemuuid -lversion -lwintrust
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -96,6 +96,7 @@ places. Autoruns is not open source, and none of its code or files are used.
 #include <cfgmgr32.h>
 #include <cfg.h>
 #include <wintrust.h>
+#include <mscat.h>
 #include <softpub.h>
 #include <wincrypt.h>
 #include <sddl.h>
@@ -223,6 +224,7 @@ inline std::wstring Target(const std::wstring& command) {
     auto s = Expand(command);
     if (s.rfind(L"\\SystemRoot\\", 0) == 0) s = Expand(L"%SystemRoot%\\") + s.substr(12);
     if (s.rfind(L"\\??\\", 0) == 0) s = s.substr(4);
+    if (Lower(s).rfind(L"system32\\", 0) == 0) s = Expand(L"%SystemRoot%\\") + s;
     if (s.empty()) return s;
     if (s.front() == L'\"') {
         auto end = s.find(L'\"', 1);
@@ -293,6 +295,42 @@ inline bool MicrosoftFile(const std::wstring& path) {
     cache[key] = ms;
     return ms;
 }
+inline bool WindowsCatalog(const std::wstring& path) {
+    static std::mutex lock;
+    static std::map<std::wstring, bool> cache;
+    static HCATADMIN admin = [] {
+        HCATADMIN a = nullptr;
+        if (!CryptCATAdminAcquireContext2(&a, nullptr, L"SHA256", nullptr, 0)) a = nullptr;
+        return a;
+    }();
+    std::wstring key = Lower(path);
+    std::lock_guard<std::mutex> g(lock);
+    auto it = cache.find(key);
+    if (it != cache.end()) return it->second;
+    bool windows = false;
+    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              nullptr, OPEN_EXISTING, 0, nullptr);
+    if (admin && file != INVALID_HANDLE_VALUE) {
+        DWORD size = 0;
+        CryptCATAdminCalcHashFromFileHandle2(admin, file, &size, nullptr, 0);
+        std::vector<BYTE> hash(size);
+        if (size && CryptCATAdminCalcHashFromFileHandle2(admin, file, &size, hash.data(), 0)) {
+            HCATINFO info = CryptCATAdminEnumCatalogFromHash(admin, hash.data(), size, 0, nullptr);
+            if (info) {
+                CATALOG_INFO ci{sizeof(ci)};
+                if (CryptCATCatalogInfoFromContext(info, &ci, 0)) {
+                    const wchar_t* name = wcsrchr(ci.wszCatalogFile, L'\\');
+                    name = name ? name + 1 : ci.wszCatalogFile;
+                    windows = _wcsnicmp(name, L"oem", 3) != 0;
+                }
+                CryptCATAdminReleaseCatalogContext(admin, info, 0);
+            }
+        }
+    }
+    if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+    cache[key] = windows;
+    return windows;
+}
 inline bool PartOfWindows(const Entry& e) {
     if (e.kind == Kind::Device) return false;
     if (e.kind == Kind::Task && Lower(e.source).rfind(L"\\microsoft\\", 0) == 0) return true;
@@ -303,11 +341,20 @@ inline bool PartOfWindows(const Entry& e) {
         return Lower(std::wstring(buf) + L"\\");
     }();
     std::wstring t = Lower(e.target);
-    if (t.rfind(windir, 0) != 0 || t.find(L"\\driverstore\\") != t.npos) return false;
-    return MicrosoftFile(e.target);
+    if (t.rfind(windir, 0) != 0) return false;
+    if (t.find(L"\\driverstore\\") == t.npos && MicrosoftFile(e.target)) return true;
+    return WindowsCatalog(e.target);
 }
 inline void Add(Inventory& inv, Entry e) {
     if (e.id.empty()) e.id = Identity(e);
+    if (e.name.size() > 1 && e.name[0] == L'@') {
+        wchar_t text[512]{};
+        std::wstring ref = e.name, fallback;
+        auto semi = ref.find(L';');
+        if (semi != ref.npos) { fallback = ref.substr(semi + 1); ref = ref.substr(0, semi); }
+        if (SUCCEEDED(SHLoadIndirectString(Expand(ref).c_str(), text, ARRAYSIZE(text), nullptr)) && *text) e.name = text;
+        else e.name = !fallback.empty() ? fallback : (!e.value.empty() ? e.value : e.name);
+    }
     // A task's command field holds its XML definition, never a file path.
     if (e.target.empty() && !e.command.empty() && e.kind != Kind::Task) e.target = Target(e.command);
     if (e.target.size() > 1 && e.target.front() == L'"' && e.target.back() == L'"') e.target = e.target.substr(1, e.target.size() - 2);
@@ -6420,8 +6467,8 @@ static bool SC_Message(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, LRESULT& resul
             SC_Filter(w);
             size_t n = 0;
             for (auto& e : g_sc.entries) if (e.kind != sc::Kind::Notice) n++;
-            SC_Status(w, L"Found " + std::to_wstring(n) + L" entries." +
-                             (g_sc.errors.empty() ? L"" : L" Some locations could not be read."));
+            (void)n;
+            SC_Status(w, g_sc.errors.empty() ? L"" : L"Some skipped");
             if (g_sc.mode != 0 && !SC_Sel()) g_sc.mode = 0;
             SC_Rebuild(w);
             result = 0;
