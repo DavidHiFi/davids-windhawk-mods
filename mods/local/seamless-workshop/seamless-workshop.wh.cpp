@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.1.1
+// @version         1.2.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -34,6 +34,13 @@ Needs the latest Windhawk alpha.
 - Saves your settings as presets, so you can try something and go back.
 - Use DavidHiFi's settings for one mod, or apply his whole setup in one go.
   Your current settings are saved as a preset first, so you can always go back.
+
+## What's new in 1.2.0
+
+- His mods come first in Marketplace, with a count of how many you have.
+- Updates show what changed before you install them.
+- A welcome on first open, with his whole setup in one click.
+- Remove all of DavidHiFi's mods in one go, with a backup saved first.
 
 ## Nothing private is shared
 
@@ -4691,6 +4698,7 @@ static void Hub_AddLink(SetWindow& w, float& y, const std::wstring& text, const 
 
 static void Hub_DetailExtras(SetWindow& w, float& y);   // features.inc
 static std::wstring Hub_AppSettingLine(const SetField& f);  // features.inc
+static void Hub_WelcomeItems(SetWindow& w, float& y);       // features.inc
 
 static void Hub_ItemsTop(SetWindow& w, float& y) {
     if (w.page != 0) return;
@@ -4699,6 +4707,7 @@ static void Hub_ItemsTop(SetWindow& w, float& y) {
         y += 6;
         return;
     }
+    Hub_WelcomeItems(w, y);
     std::wstring text;
     if (g_hub.searchField >= 0 && g_hub.searchField < (int)w.fields.size()) {
         text = w.editing == g_hub.searchField && w.edit ? Set_WindowText(w.edit) : w.fields[g_hub.searchField].cur;
@@ -5308,13 +5317,13 @@ static std::wstring g_checkedPath, g_checkedSha, g_checkedId, g_checkPendingPath
 // Mod page extras: published versions, the "click again" resets, and whose page the status belongs to.
 static std::vector<std::pair<std::wstring, bool>> g_versions;
 static std::wstring g_statusFor;
-static ULONGLONG g_resetArmed = 0, g_restoreArmed = 0, g_setupArmed = 0;
+static ULONGLONG g_resetArmed = 0, g_restoreArmed = 0, g_setupArmed = 0, g_removeAllArmed = 0;
 // Whole backups (Settings page).
 static std::wstring g_exportFile, g_restorePending, g_restoreFile;
 // DavidHiFi's update feed: his own mods and new versions of this app.
 // A mod may carry DavidHiFi's own settings as a preset: on/off plus text or number values.
 struct HubFeedMod {
-    std::wstring id, name, version, desc, url, sha;
+    std::wstring id, name, version, desc, url, sha, changes;  // changes: what is new in this version, one line.
     bool hasPreset = false, presetOn = false;
     Js preset;  // Flat object: setting name to text or number.
 };
@@ -5715,6 +5724,8 @@ static bool Hub_FeedEntry(const Js& j, HubFeedMod& m, bool app) {
     if (m.name.empty()) m.name = app ? L"Seamless Workshop" : m.id.substr(6);
     if (m.name.size() > 80) m.name.resize(80);
     if (m.desc.size() > 300) m.desc.resize(300);
+    m.changes = Js_Text(j.get(L"changes"));
+    if (m.changes.size() > 300) m.changes.resize(300);
     // Optional "preset": {"enabled": bool, "settings": {name: text|number}}. A bad preset is
     // dropped; the mod itself still counts.
     if (const Js* p = app ? nullptr : j.get(L"preset"); p && p->t == Js::Obj) {
@@ -5790,13 +5801,13 @@ static void Hub_FeedResult(SetWindow& w, bool manual) {
         g_feedStatus = err;
     } else {
         g_feed = std::move(mods); g_feedApp = app; g_feedChecked = true;
-        std::wstring keys, first;
+        std::wstring keys, first, firstChanges;
         int updates = 0, missing = 0;
         for (auto& f : g_feed) {
             const HubMod* m = Hub_FindMod(f.id);
             if (!m) { missing++; continue; }
             if (!Hub_Newer(f.version, m->version)) continue;
-            if (!updates++) first = f.name;
+            if (!updates++) { first = f.name + L" " + f.version; firstChanges = f.changes; }
             keys += f.id + L"=" + f.version + L";";
         }
         if (Hub_AppNewer()) keys += L"app=" + g_feedApp.version + L";";
@@ -5811,15 +5822,21 @@ static void Hub_FeedResult(SetWindow& w, bool manual) {
             at = end + 1;
         }
         if (fresh && !manual) {
-            std::wstring text = updates == 1 ? L"A new version of " + first + L" is ready."
+            std::wstring text = updates == 1 ? first + L" is ready."
                               : updates ? std::to_wstring(updates) + L" of your mods have new versions."
                                         : L"";
             if (Hub_AppNewer()) text += (text.empty() ? L"" : L" ") + std::wstring(L"Seamless Workshop ") + g_feedApp.version + L" is ready.";
-            Hub_TrayBalloon(w, L"Updates from DavidHiFi", text + L" Open the Updates page to install.");
+            text += L" Open the Updates page to install.";
+            // One update: say what changed, so the user can decide from the tray.
+            const std::wstring& news = updates == 1 && !Hub_AppNewer() ? firstChanges
+                                     : !updates && Hub_AppNewer() ? g_feedApp.changes : std::wstring();
+            if (!news.empty()) text += L" New: " + news;
+            Hub_TrayBalloon(w, L"Updates from DavidHiFi", text);
         }
         Hub_SetText(L"Set.feedSeen", keys);
     }
-    if (w.page == 2) Set_BuildAndClamp(w);
+    // The lists that show feed cards rebuild when it lands; a detail view keeps its scroll.
+    if (w.page == 2 || (w.page == 0 && g_hub.detail < 0) || (w.page == 1 && g_repoId.empty())) Set_BuildAndClamp(w);
 }
 
 // ---- DavidHiFi's settings ---------------------------------------------------------------
@@ -5876,6 +5893,19 @@ static const HubFeedMod* Hub_FeedFind(const std::wstring& id) {
     return nullptr;
 }
 
+// DavidHiFi's installed mods, without this app: in his feed, or his name first in the author line.
+static std::vector<std::wstring> Hub_DavidIds() {
+    std::vector<std::wstring> ids;
+    for (auto& m : g_hub.mods)
+        if (m.id != kHubSelfId && (Hub_FeedFind(m.id) || Hub_ModSource(m) == 0)) ids.push_back(m.id);
+    return ids;
+}
+
+// First open: nobody has set anything up yet. Gone once a choice is made or his mods are there.
+static bool Hub_ShowWelcome() {
+    return !g_reading && !Hub_RegGet(L"Set.welcomed", 0) && Hub_DavidIds().empty();
+}
+
 // ---- Mod page extras (versions, settings as text, reset) ---------------------------------
 
 static std::wstring Hub_EditFile(const std::wstring& id) {
@@ -5923,6 +5953,28 @@ static void Hub_DetailExtras(SetWindow& w, float& y) {
     Hub_Notice(w, y, g_reading ? L"Reading Windhawk. You can keep using the window." : g_featureStatus);
 }
 
+// First open, Mods page: a short welcome with the two ways in, above the list.
+static void Hub_WelcomeItems(SetWindow& w, float& y) {
+    if (!Hub_ShowWelcome()) return;
+    static bool asked = false;  // One feed read for the welcome; a failed one waits for the Updates page.
+    if (!asked && !g_feedChecked && !g_feedBusy && !w.render && w.hwnd) { asked = true; Hub_FeedStart(w.hwnd, true); }
+    Hub_Group(w, y, L"Welcome to Seamless Workshop");
+    Hub_Notice(w, y, L"This window installs, updates and removes DavidHiFi's Windhawk mods. "
+                     L"Get his whole setup in one go, or pick the mods you want.");
+    const bool armed = g_setupArmed && GetTickCount64() - g_setupArmed < 5000;
+    bool anyPreset = false;
+    for (auto& f : g_feed) anyPreset |= f.hasPreset;
+    if (anyPreset)
+        Hub_AddLink(w, y, armed ? L"Click again to apply his whole setup" : L"Apply DavidHiFi's whole setup",
+                    L"Installs his mods and sets each one up the way he uses it. Your other mods stay as they are.",
+                    L"hub:davidSetup");
+    Hub_AddLink(w, y, L"Pick from his mods", L"Opens Marketplace with only his mods, so you can install the ones you like.",
+                L"hub:welcomePick");
+    Hub_AddLink(w, y, L"Not now", L"Hide this. Both choices stay on the Updates and Marketplace pages.", L"hub:welcomeDone");
+    if (g_feed.empty()) Hub_Notice(w, y, g_feedBusy ? std::wstring(L"Reading DavidHiFi's mods...") : g_feedStatus);
+    y += 6;
+}
+
 static void Hub_FeatureItems(SetWindow& w, float& y) {
     auto link = [&](PCWSTR title, PCWSTR desc, const std::wstring& action) {
         Hub_AddLink(w, y, title, desc, Hub_In(action));
@@ -5940,15 +5992,25 @@ static void Hub_FeatureItems(SetWindow& w, float& y) {
             auto query = Hub_Lower(Hub_LiveText(w, L"hub.marketSearch"));
             while (!query.empty() && query.back() == L' ') query.pop_back();
             const std::wstring show = Hub_Input(w, L"hub.marketShow");
-            int n = 0;
+            int n = 0, mine = 0, have = 0;
             bool head = false;
             for (auto& f : g_feed) {
                 if (show == L"new" && Hub_FindMod(f.id)) continue;
                 if (!query.empty() && Hub_Lower(f.name + L" " + f.desc + L" " + f.id).find(query) == std::wstring::npos) continue;
-                if (!head) { Hub_Group(w, y, L"From DavidHiFi"); head = true; }
+                if (!head) {
+                    // His mods come first, with a count so it is clear how many there are.
+                    Hub_Group(w, y, L"From DavidHiFi");
+                    head = true;
+                    for (auto& g : g_feed) { mine++; have += Hub_FindMod(g.id) != nullptr; }
+                    Hub_Notice(w, y, std::to_wstring(mine) + L" mods made by DavidHiFi, " + std::to_wstring(have) +
+                                         L" of them installed. Click one to install it or open it.");
+                }
                 link(f.name.c_str(), f.desc.c_str(), L"hub:feed:" + f.id);
                 n++;
             }
+            if (g_feed.empty())
+                Hub_Notice(w, y, g_feedBusy ? std::wstring(L"Reading DavidHiFi's mods...")
+                                            : g_feedStatus.empty() ? std::wstring() : L"DavidHiFi's mods: " + g_feedStatus);
             if (show != L"mine") {
                 head = false;
                 int shown = 0;
@@ -5984,7 +6046,8 @@ static void Hub_FeatureItems(SetWindow& w, float& y) {
             const HubMod* m = Hub_FindMod(f.id);
             if (!m || !Hub_Newer(f.version, m->version)) continue;
             updates++;
-            link((L"Update " + f.name + L" to " + f.version).c_str(), (L"You have " + m->version + L". Backs up first. Stays on or off as it is now.").c_str(), L"hub:feed:" + f.id);
+            const std::wstring news = f.changes.empty() ? std::wstring() : L"New: " + f.changes + L" ";
+            link((L"Update " + f.name + L" to " + f.version).c_str(), (news + L"You have " + m->version + L". Backs up first. Stays on or off as it is now.").c_str(), L"hub:feed:" + f.id);
         }
         if (updates >= 2) link(L"Update all from DavidHiFi", L"Every update above, one backup, one admin prompt.", L"hub:feedAll");
         link(L"Check the feed now", L"Look for new versions of DavidHiFi's mods and of this app.", L"hub:feedCheck");
@@ -5996,24 +6059,36 @@ static void Hub_FeatureItems(SetWindow& w, float& y) {
         }
         bool anyPreset = false;
         for (auto& f : g_feed) anyPreset |= f.hasPreset;
-        if (anyPreset) {
+        const size_t his = Hub_DavidIds().size();
+        if (anyPreset || his) {
             Hub_Group(w, y, L"DavidHiFi's setup");
-            if (g_setupArmed && GetTickCount64() - g_setupArmed < 5000)
+            if (anyPreset && g_setupArmed && GetTickCount64() - g_setupArmed < 5000)
                 link(L"Click again to apply his whole setup",
                      L"Your current settings are saved as a preset first. Mods that are not his stay as they are.",
                      L"hub:davidSetup");
-            else
+            else if (anyPreset)
                 link(L"Apply DavidHiFi's whole setup",
                      L"Installs his missing mods, then sets each one up and turns it on or off the way he uses it. Nothing private is copied.",
                      L"hub:davidSetup");
+            // A clean way out: every one of his mods comes off in one go, with a backup first.
+            const std::wstring count = std::to_wstring(his) + (his == 1 ? L" mod" : L" mods");
+            if (his && g_removeAllArmed && GetTickCount64() - g_removeAllArmed < 5000)
+                link((L"Click again to remove " + count).c_str(),
+                     L"Their settings are saved as a preset first, so you can put them back from the Presets page.",
+                     L"hub:removeAll");
+            else if (his)
+                link(L"Remove all of DavidHiFi's mods",
+                     (L"Takes off his " + count + L". Your other mods and Seamless Workshop stay. A backup is saved first.").c_str(),
+                     L"hub:removeAll");
         }
         Hub_Group(w, y, L"Seamless Workshop");
+        const std::wstring appNews = g_feedApp.changes.empty() ? std::wstring() : L"New: " + g_feedApp.changes + L" ";
 #ifdef HUB_MOD
         if (Hub_AppNewer())
-            link((L"Update Seamless Workshop to " + g_feedApp.version).c_str(), L"Downloads it, checks it and installs it through Windhawk. The window reopens by itself.", L"hub:appUpdate");
+            link((L"Update Seamless Workshop to " + g_feedApp.version).c_str(), (appNews + L"Downloads it, checks it and installs it through Windhawk. The window reopens by itself.").c_str(), L"hub:appUpdate");
 #else
         if (Hub_AppNewer())
-            link((L"Update Seamless Workshop to " + g_feedApp.version).c_str(), L"Downloads it, checks it, swaps it in and opens the new version.", L"hub:appUpdate");
+            link((L"Update Seamless Workshop to " + g_feedApp.version).c_str(), (appNews + L"Downloads it, checks it, swaps it in and opens the new version.").c_str(), L"hub:appUpdate");
 #endif
         else
             Hub_Notice(w, y, std::wstring(L"Seamless Workshop ") + WH_MOD_VERSION + (g_feedChecked ? L". This is the newest version." : L"."));
@@ -6274,7 +6349,7 @@ template<class Operation> static bool Hub_WaitRead(SetWindow& w, Operation opera
     return result;
 }
 
-static bool Hub_BackupFiles(const std::vector<std::wstring>& ids, std::wstring& err) {
+static bool Hub_BackupFiles(const std::vector<std::wstring>& ids, std::wstring& err, std::wstring* restoreOut = nullptr) {
     std::set<std::wstring> unique(ids.begin(), ids.end());
     std::vector<std::wstring> selected(unique.begin(), unique.end());
     const auto stamp = std::to_wstring(GetTickCount64());
@@ -6287,7 +6362,9 @@ static bool Hub_BackupFiles(const std::vector<std::wstring>& ids, std::wstring& 
             err = L"Could not back up the installed source. Nothing changed."; return false;
         }
     }
-    if (!Hub_Snapshot(selected, dir + L"\\restore.json", err)) return false;
+    // A backup covers every mod it was given; "update all" and "remove all" can pass more than 32.
+    if (!Hub_Snapshot(selected, dir + L"\\restore.json", err, std::max<size_t>(32, selected.size()))) return false;
+    if (restoreOut) *restoreOut = dir + L"\\restore.json";
     return Hub_WriteFile(dir + L"\\undo.txt", "Reinstall the saved source turned off if removed. Import restore.json on the Presets page, then apply it.\r\n");
 }
 
@@ -6809,7 +6886,42 @@ static void Hub_Action(SetWindow& w, const std::wstring& action) {
         std::wstring done = L"DavidHiFi's setup is in place.";
         if (dropped) done += L" Private settings were left as yours.";
         if (!installed.empty()) done += L" Your old settings are saved as a Before preset.";
+        if (ok) Hub_RegSet(L"Set.welcomed", 1);
         Set_SetStatus(w, ok ? done.c_str() : (err + L" Use the Before preset to go back.").c_str(), !ok);
+    } else if (action == L"hub:welcomePick") {
+        // Welcome card: show only his mods in Marketplace, so they are easy to pick from.
+        Hub_RegSet(L"Set.welcomed", 1);
+        if (SetField* show = Hub_Field(w, L"hub.marketShow")) show->cur = show->value = L"mine";
+        Set_GoPage(w, 1);
+    } else if (action == L"hub:welcomeDone") {
+        Hub_RegSet(L"Set.welcomed", 1);
+        Set_BuildAndClamp(w);
+    } else if (action == L"hub:removeAll") {
+        const std::vector<std::wstring> ids = Hub_DavidIds();
+        if (ids.empty()) { Set_SetStatus(w, L"None of DavidHiFi's mods are installed."); return; }
+        if (!g_removeAllArmed || GetTickCount64() - g_removeAllArmed >= 5000) {
+            g_removeAllArmed = GetTickCount64();
+            SetTimer(w.hwnd, kHubArmTimer, 5050, nullptr);
+            Set_BuildAndClamp(w);
+            return;
+        }
+        g_removeAllArmed = 0;
+        // Backup first: the installed source and every setting. The settings also go to the
+        // Presets page as a Before preset, so putting them back is one click there.
+        std::wstring err, restore;
+        if (!Hub_WaitRead(w, [&] { return Hub_BackupFiles(ids, err, &restore); }, L"Saving a backup of his mods...")) {
+            Set_SetStatus(w, err.c_str(), true); return;
+        }
+        const auto before = Hub_PresetDir() + L"\\Before removing DavidHiFi's mods " + std::to_wstring(GetTickCount64()) + L".json";
+        const bool kept = CopyFileW(restore.c_str(), before.c_str(), TRUE);
+        std::vector<std::wstring> lines;
+        for (auto& id : ids) lines.push_back(L"mod remove " + Set_QuoteArg(id) + L" --yes");
+        const bool ok = Hub_RunJob(w, lines, err);
+        Hub_LoadList(w);
+        Set_BuildAndClamp(w);
+        std::wstring done = L"Removed " + std::to_wstring(ids.size()) + (ids.size() == 1 ? L" mod." : L" mods.");
+        done += kept ? L" Their settings are saved as a Before preset on the Presets page." : L" A backup is in the Workshop's data folder.";
+        Set_SetStatus(w, ok ? done.c_str() : (err + L" A backup was saved first.").c_str(), !ok);
     } else if (action == L"hub:settingsReset") {
         const auto id = g_hub.detailId;
         if (!Hub_ValidId(id)) return;
@@ -7062,6 +7174,7 @@ static HubCardParts Hub_CardParts(const SetWindow& w, const SetItem& it, const D
             const HubFeedMod* f = Hub_FeedFind(id);
             if (!m) want.push_back({{}, kBtnInstall, L"Install", 0});
             else if (f && Hub_Newer(f->version, m->version)) want.push_back({{}, kBtnUpdate, L"Update", 0});
+            else want.push_back({{}, kBtnDetails, L"Open", 0});
         } else if (!Hub_FindMod(id)) {
             want.push_back({{}, kBtnInstall, L"Install", 0});
         }
@@ -7228,7 +7341,15 @@ static bool Hub_DrawLink(SetPaint& p, SetWindow& w, const SetItem& it, int idx) 
     const std::wstring id = it.url.substr(9);
     std::wstring name = it.text, meta, desc = it.sub;
     if (it.url.rfind(L"hub:feed:", 0) == 0) {
-        if (const HubFeedMod* f = Hub_FeedFind(id)) { name = f->name; desc = f->desc; meta = L"DavidHiFi  \u00B7  " + f->version; }
+        if (const HubFeedMod* f = Hub_FeedFind(id)) {
+            name = f->name; desc = f->desc; meta = L"DavidHiFi  \u00B7  " + f->version;
+            // An update waiting: the card says what is new in it, before anyone clicks Update.
+            const HubMod* m = Hub_FindMod(id);
+            if (m && Hub_Newer(f->version, m->version)) {
+                meta += L"  \u00B7  You have " + m->version;
+                if (!f->changes.empty()) desc = L"New in " + f->version + L": " + f->changes;
+            }
+        }
     } else {
         for (auto& m : g_repo)
             if (m.id == id) { name = m.name; desc = m.desc; meta = m.author + (m.version.empty() ? L"" : L"  \u00B7  " + m.version); break; }
@@ -7331,8 +7452,13 @@ static void Hub_CardClick(SetWindow& w, int a, int b) {
         const int i = -a - 1;
         if (i >= (int)w.items.size()) return;
         const std::wstring url = w.items[i].url, id = url.substr(9);
-        if (url.rfind(L"hub:feed:", 0) == 0) Hub_Link(url.c_str());
-        else if (b == kBtnInstall) Hub_Link((L"hub:install:" + id).c_str());
+        if (url.rfind(L"hub:feed:", 0) == 0) {
+            // Installed and current: open it on the Mods page rather than installing it again.
+            const HubMod* m = Hub_FindMod(id);
+            const HubFeedMod* f = Hub_FeedFind(id);
+            if (m && !(f && Hub_Newer(f->version, m->version))) Hub_OpenDetail(w, id);
+            else Hub_Link(url.c_str());
+        } else if (b == kBtnInstall) Hub_Link((L"hub:install:" + id).c_str());
         return;
     }
     if (a >= (int)w.fields.size() || w.fields[a].hub != 1) return;
@@ -7675,7 +7801,7 @@ static LRESULT CALLBACK Hub_SubProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, U
             {
                 const ULONGLONG now = GetTickCount64();
                 bool lapsed = false;
-                for (ULONGLONG* armed : {&g_hub.removeArmed, &g_resetArmed, &g_restoreArmed, &g_setupArmed})
+                for (ULONGLONG* armed : {&g_hub.removeArmed, &g_resetArmed, &g_restoreArmed, &g_setupArmed, &g_removeAllArmed})
                     if (*armed && now - *armed >= 5000) *armed = 0, lapsed = true;
                 if (!g_cardArmId.empty() && now - g_cardArmAt >= 5000) g_cardArmId.clear(), lapsed = true;
                 if (lapsed) Set_BuildAndClamp(*w);
