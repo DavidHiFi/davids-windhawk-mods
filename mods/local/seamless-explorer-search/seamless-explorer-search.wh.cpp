@@ -2,7 +2,7 @@
 // @id              seamless-explorer-search
 // @name            Seamless Explorer Search
 // @description     Start typing in any File Explorer window to search it, and every drive, with Everything
-// @version         2.0.15
+// @version         2.0.16
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1021,7 +1021,12 @@ constexpr UINT kFolderWaitMs = 250, kWatchMs = 250;
 // straight back to its own Explorer window (not a click) takes the keyboard back, at most twice.
 constexpr UINT kLostCheckMs = 60, kRegrabMs = 1000;
 constexpr UINT WM_ES_DIAG = WM_APP + 43;  // To the msg window. wParam = pass reason, lParam = focused HWND.
-constexpr UINT kTrayId = 1;
+constexpr UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kTrayId = TrayIconId();
 // Layout in DIPs.
 constexpr float kPopW = 640, kPopMinW = 420, kMargin = 12, kPad = 12, kQueryTop = 10, kQueryH = 40, kListTop = 62,
                 kRowH = 46, kFootH = 34;
