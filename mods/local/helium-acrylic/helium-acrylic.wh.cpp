@@ -2,12 +2,13 @@
 // @id              helium-acrylic
 // @name            Helium Acrylic
 // @description     Keeps Helium's acrylic surface, Catppuccin colors and system-drawn frame working after browser updates
-// @version         3.6.0
+// @version         3.7.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         chrome.exe
 // @architecture    x86-64
+// @compilerOptions -lgdi32
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -34,6 +35,12 @@ This mod keeps both alive so a plain stock install stays riced.
   like the riced build's native-frame mode. The code behind this sits in a
   generated cave and is byte-verified the same way; an update that moves a
   site is left untouched and logged.
+- **Your colors.** Every color the rice sets is a setting: base, toolbar,
+  address bar, tabs, text. Change them and the browser follows without a
+  restart.
+- **Your icon.** The app icon can switch to the Seamless badge, the same
+  rounded square with the blue to mauve gradient the settings windows use,
+  with a globe cut out. Windows and the taskbar follow.
 - **Quiet.** If the code it looks for cannot be matched exactly once, the mod
   does nothing and logs why. Safe by default.
 - **Dark theme only.** The color layer follows the Windows app theme; light
@@ -42,6 +49,8 @@ This mod keeps both alive so a plain stock install stays riced.
 ## Notes
 - The blur itself comes from a window blur rule for Helium. This mod only
   keeps the surface behind it translucent and the colors right.
+- The acrylic and title-bar switches apply on the next browser start. The
+  colors and the icon apply at once.
 - A future Helium that moves the code this mod looks for needs a pattern
   refresh (the helium-acrylic-update skill handles that).
 
@@ -49,8 +58,94 @@ This mod keeps both alive so a plain stock install stays riced.
 Written by DavidHiFi.
 */
 
+// ==WindhawkModSettings==
+/*
+- acrylicEnabled: true
+  $name: Keep the acrylic surface
+  $description: "Keeps the browser see-through so the window blur shows. Applies on the next browser start."
+- colorsEnabled: true
+  $name: Keep the Catppuccin colors
+  $description: "Resolves the browser's dark colors to the palette below. Applies at once."
+- colorBase: "#1E1E2E"
+  $name: Base color
+  $description: "Window frame and toolbar background (Mocha Base)."
+- colorToolbarIcon: "#A6ADC8"
+  $name: Toolbar icon color
+  $description: "Toolbar buttons at rest (Mocha Subtext)."
+- colorToolbarIconHover: "#CDD6F4"
+  $name: Toolbar icon hover color
+  $description: "Toolbar buttons under the mouse (Mocha Text)."
+- colorLocationBar: "#313244"
+  $name: Address bar color
+  $description: "Address bar background (Mocha Surface0)."
+- locationBarOpacity: 85
+  $name: Address bar strength (%)
+  $description: "0 to 100. Lower shows more of the page behind."
+- colorLocationBarHover: "#45475A"
+  $name: Address bar hover color
+  $description: "Address bar background with the mouse in it (Mocha Surface1)."
+- colorLocationBarBorder: "#585B70"
+  $name: Address bar edge color
+  $description: "The line around the address bar (Mocha Surface2)."
+- colorOmniboxResults: "#181825"
+  $name: Suggestions background
+  $description: "The drop-down under the address bar (Mocha Mantle)."
+- colorOmniboxResultsHover: "#313244"
+  $name: Suggestions hover background
+  $description: "The highlighted suggestion (Mocha Surface0)."
+- colorOmniboxText: "#CDD6F4"
+  $name: Address bar text color
+  $description: "What you type and the suggestions (Mocha Text)."
+- colorOmniboxTextDim: "#7F849C"
+  $name: Address bar dim text color
+  $description: "The dimmed part, like the search hint (Mocha Overlay)."
+- colorTabActive: "#313244"
+  $name: Active tab color
+  $description: "The tab of the page you are on (Mocha Surface0)."
+- tabActiveOpacity: 85
+  $name: Active tab strength (%)
+  $description: "0 to 100. Lower shows more of the page behind."
+- colorTabSelected: "#313244"
+  $name: Selected tab color
+  $description: "Tabs picked in the tab strip (Mocha Surface0)."
+- tabSelectedOpacity: 69
+  $name: Selected tab strength (%)
+  $description: "0 to 100. Lower shows more of the page behind."
+- colorTabHover: "#313244"
+  $name: Tab hover color
+  $description: "A tab under the mouse (Mocha Surface0)."
+- tabInactiveHoverOpacity: 60
+  $name: Tab hover strength (%)
+  $description: "0 to 100. Lower shows more of the page behind."
+- colorTabTextActive: "#CDD6F4"
+  $name: Active tab text color
+  $description: "The title on the current tab (Mocha Text)."
+- colorTabTextInactive: "#A6ADC8"
+  $name: Background tab text color
+  $description: "Titles on the other tabs (Mocha Subtext)."
+- colorTabStroke: "#585B70"
+  $name: Tab edge color
+  $description: "The line between tabs (Mocha Surface2)."
+- colorFocusBorder: "#B4BEFE"
+  $name: Focus outline color
+  $description: "The outline on a focused control (Mocha Lavender)."
+- nativeFrameEnabled: true
+  $name: Keep the system title bar
+  $description: "Windows draws the title bar and keeps the resize borders. Applies on the next browser start."
+- appIcon: gradient
+  $name: App icon
+  $description: "The icon in the title bar and on the taskbar."
+  $options:
+  - gradient: Seamless gradient badge
+  - default: Helium's own icon
+*/
+// ==/WindhawkModSettings==
+
 #include <windows.h>
+#include <algorithm>
 #include <atomic>
+#include <cmath>
+#include <cwchar>
 #include <vector>
 
 // ---------------------------------------------------------------------------
@@ -115,6 +210,93 @@ static const ColorEntry kColors[] = {
     {319,  0xFFB4BEFEu},   // kColorFocusableBorderFocused -> lavender
 };
 static const int kColorCount = sizeof(kColors) / sizeof(kColors[0]);
+
+// ---------------------------------------------------------------------------
+// Settings. Every layer can be switched, the palette is the owner's copy of
+// the rice's mixer table, and the app icon can become the Seamless badge.
+struct Settings {
+    bool acrylic = true;
+    bool colors = true;
+    bool nativeFrame = true;
+    bool gradientIcon = true;
+};
+static Settings g_set;
+static std::vector<ColorEntry> g_liveColors;
+
+static unsigned int ParseHexColor(PCWSTR s, unsigned int fallback, BYTE alpha) {
+    if (!s) return fallback;
+    while (*s == L' ' || *s == L'#') s++;
+    if (wcslen(s) != 6) return fallback;
+    for (int i = 0; i < 6; i++) {
+        wchar_t c = s[i];
+        if (!((c >= L'0' && c <= L'9') || (c >= L'a' && c <= L'f') ||
+              (c >= L'A' && c <= L'F')))
+            return fallback;
+    }
+    unsigned long v = wcstoul(s, nullptr, 16);
+    return ((unsigned int)alpha << 24) | (unsigned int)v;
+}
+
+static BYTE OpacityByte(int pct) {
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    return (BYTE)(pct * 255 / 100);
+}
+
+static void LoadSettings() {
+    Settings s;
+    s.acrylic = Wh_GetIntSetting(L"acrylicEnabled") != 0;
+    s.colors = Wh_GetIntSetting(L"colorsEnabled") != 0;
+    s.nativeFrame = Wh_GetIntSetting(L"nativeFrameEnabled") != 0;
+    PCWSTR icon = Wh_GetStringSetting(L"appIcon");
+    s.gradientIcon = !icon || wcscmp(icon, L"default") != 0;
+    if (icon) Wh_FreeStringSetting(icon);
+    g_set = s;
+
+    auto colorOf = [](PCWSTR name, unsigned int fallback, BYTE alpha) -> unsigned int {
+        PCWSTR v = Wh_GetStringSetting(name);
+        unsigned int out = ParseHexColor(v, fallback, alpha);
+        Wh_FreeStringSetting(v);
+        return out;
+    };
+    BYTE aLoc  = OpacityByte(Wh_GetIntSetting(L"locationBarOpacity"));
+    BYTE aTabA = OpacityByte(Wh_GetIntSetting(L"tabActiveOpacity"));
+    BYTE aTabS = OpacityByte(Wh_GetIntSetting(L"tabSelectedOpacity"));
+    BYTE aTabH = OpacityByte(Wh_GetIntSetting(L"tabInactiveHoverOpacity"));
+    unsigned int base = colorOf(L"colorBase", 0xFF1E1E2Eu, 0xFF);
+    unsigned int tabSel = colorOf(L"colorTabSelected", 0xFF313244u, aTabS);
+    unsigned int tabHov = colorOf(L"colorTabHover", 0xFF313244u, aTabH);
+    unsigned int tabTxtA = colorOf(L"colorTabTextActive", 0xFFCDD6F4u, 0xFF);
+    unsigned int tabTxtI = colorOf(L"colorTabTextInactive", 0xFFA6ADC8u, 0xFF);
+    unsigned int tabStrk = colorOf(L"colorTabStroke", 0xFF585B70u, 0xFF);
+    std::vector<ColorEntry> c;
+    c.push_back({321,  base});
+    c.push_back({326,  base});
+    c.push_back({1597, base});
+    c.push_back({1602, colorOf(L"colorToolbarIcon", 0xFFA6ADC8u, 0xFF)});
+    c.push_back({1605, colorOf(L"colorToolbarIconHover", 0xFFCDD6F4u, 0xFF)});
+    c.push_back({801,  colorOf(L"colorLocationBar", 0xFF313244u, aLoc)});
+    c.push_back({802,  colorOf(L"colorLocationBarHover", 0xFF45475Au, aLoc)});
+    c.push_back({803,  colorOf(L"colorLocationBarBorder", 0xFF585B70u, 0xFF)});
+    c.push_back({1020, colorOf(L"colorOmniboxResults", 0xFF181825u, 0xFF)});
+    c.push_back({1021, colorOf(L"colorOmniboxResultsHover", 0xFF313244u, 0xFF)});
+    c.push_back({1062, colorOf(L"colorOmniboxText", 0xFFCDD6F4u, 0xFF)});
+    c.push_back({1063, colorOf(L"colorOmniboxTextDim", 0xFF7F849Cu, 0xFF)});
+    c.push_back({1466, colorOf(L"colorTabActive", 0xFF313244u, aTabA)});
+    c.push_back({1468, colorOf(L"colorTabActive", 0xFF313244u, aTabA)});
+    c.push_back({1473, tabSel});
+    c.push_back({1474, tabSel});
+    c.push_back({1471, tabHov});
+    c.push_back({1472, tabHov});
+    c.push_back({1483, tabTxtA});
+    c.push_back({1484, tabTxtA});
+    c.push_back({1485, tabTxtI});
+    c.push_back({1486, tabTxtI});
+    c.push_back({1538, tabStrk});
+    c.push_back({1539, tabStrk});
+    c.push_back({319,  colorOf(L"colorFocusBorder", 0xFFB4BEFEu, 0xFF)});
+    g_liveColors = std::move(c);
+}
 
 static std::atomic<bool> g_colorsApplied{false};
 static BYTE* g_gcTarget = nullptr;
@@ -266,8 +448,11 @@ static bool ApplyAcrylicPatch() {
 // Stack-free, register-safe: only eax/eflags are touched on hits, and the
 // miss path replays the displaced pushes and jumps back into GetColor.
 
-static bool InstallColorHook() {
-    if (g_colorsApplied) return true;
+static bool EmitAndInstallColors(const ColorEntry* colors, int count) {
+    if (count < 1 || count > 64) {
+        Wh_Log(L"colors: bad table size %d", count);
+        return false;
+    }
     HMODULE chrome = GetModuleHandleW(L"chrome.dll");
     if (!chrome) {
         Wh_Log(L"chrome.dll not loaded yet");
@@ -332,8 +517,8 @@ static bool InstallColorHook() {
 
     // compare chain
     BYTE* hits[64];
-    for (int i = 0; i < kColorCount; i++) {
-        *p++ = 0x81; *p++ = 0xFA; emit32(kColors[i].id);  // cmp edx, id
+    for (int i = 0; i < count; i++) {
+        *p++ = 0x81; *p++ = 0xFA; emit32(colors[i].id);  // cmp edx, id
         *p++ = 0x0F; *p++ = 0x84; hits[i] = p; p += 4;    // je hit_i (rel32 later)
     }
     // miss: replay displaced bytes and jump back
@@ -346,9 +531,9 @@ static bool InstallColorHook() {
     *p++ = 0xE9; emit32((DWORD)back);
     *(DWORD*)(jeMiss + 2) = (DWORD)(INT64)(miss - (jeMiss + 6));
     // hits
-    for (int i = 0; i < kColorCount; i++) {
+    for (int i = 0; i < count; i++) {
         *(DWORD*)(hits[i]) = (DWORD)(INT64)(p - (hits[i] + 4));
-        *p++ = 0xB8; emit32(kColors[i].color);  // mov eax, color
+        *p++ = 0xB8; emit32(colors[i].color);  // mov eax, color
         *p++ = 0xC3;                            // ret
     }
 
@@ -377,8 +562,13 @@ static bool InstallColorHook() {
     g_gcTarget = entry;
     g_colorsApplied = true;
     Wh_Log(L"Helium acrylic: color hook live at RVA 0x%zX (%d colors)",
-           (size_t)(entry - (BYTE*)chrome), kColorCount);
+           (size_t)(entry - (BYTE*)chrome), count);
     return true;
+}
+
+static bool InstallColorHook() {
+    if (g_colorsApplied) return true;
+    return EmitAndInstallColors(kColors, kColorCount);
 }
 
 static bool ReadDarkTheme() {
@@ -1438,12 +1628,18 @@ static bool ApplyV320() {
 static void ApplyOnePass() {
     ApplyV320();
     MTRACE("pass: v320 returned");
-    ApplyAcrylicPatch();
-    MTRACE("pass: acrylic returned");
-    InstallColorHook();
-    MTRACE("pass: colors returned");
-    ApplyStructuralPatches();
-    MTRACE("pass: frame returned");
+    if (g_set.acrylic) {
+        ApplyAcrylicPatch();
+        MTRACE("pass: acrylic returned");
+    }
+    if (g_set.colors) {
+        InstallColorHook();
+        MTRACE("pass: colors returned");
+    }
+    if (g_set.nativeFrame) {
+        ApplyStructuralPatches();
+        MTRACE("pass: frame returned");
+    }
 }
 
 // v3.1.0: a browser that starts while Windhawk is still delivering the mod
@@ -1518,14 +1714,178 @@ static void EnsureHideWindowButtonsSwitch() {
     MTRACE("hwb: appended to command line");
 }
 
+// ---------------------------------------------------------------------------
+// Part 5: the app icon.
+//
+// The Seamless badge, the same plate every mod's tray icon uses: rounded
+// square (corner radius 0.26 of the icon), blue #89B4FA to mauve #CBA6F7
+// diagonal, a Segoe Fluent Icons glyph cut out in #11111B. Drawn with GDI,
+// cached per DPI, and re-applied when Chromium puts its own icon back.
+// A globe for a browser: Segoe Fluent Icons E774.
+static std::atomic<bool> g_iconWant{false};
+static HICON g_badgeSmall = nullptr;
+static HICON g_badgeBig = nullptr;
+static UINT g_badgeDpi = 0;
+static HICON g_origClassIcon = nullptr;
+static HICON g_origClassIconSm = nullptr;
+static bool g_classIconReplaced = false;
+
+static HICON MakeBadgeIcon(int size, WCHAR glyph) {
+    if (size < 16) size = 16;
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = size;
+    bi.bmiHeader.biHeight = -size;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    void* bits = nullptr;
+    void* glyphBits = nullptr;
+    HDC screen = GetDC(nullptr);
+    HBITMAP color = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    HBITMAP glyphBm = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &glyphBits, nullptr, 0);
+    ReleaseDC(nullptr, screen);
+    if (!color || !glyphBm) {
+        if (color) DeleteObject(color);
+        if (glyphBm) DeleteObject(glyphBm);
+        return nullptr;
+    }
+    HDC dc = CreateCompatibleDC(nullptr);
+    HGDIOBJ old = SelectObject(dc, glyphBm);
+    memset(glyphBits, 0, (size_t)size * size * 4);
+    HFONT font = CreateFontW(-(int)(size * 0.62f), 0, 0, 0, FW_NORMAL, 0, 0, 0,
+                             DEFAULT_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0,
+                             L"Segoe Fluent Icons");
+    HGDIOBJ oldFont = SelectObject(dc, font);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(255, 255, 255));
+    RECT r{0, 0, size, size};
+    WCHAR g[2] = {glyph, 0};
+    DrawTextW(dc, g, 1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    GdiFlush();
+    SelectObject(dc, oldFont);
+    DeleteObject(font);
+    SelectObject(dc, old);
+    DeleteDC(dc);
+
+    const float c0[3] = {0x89 / 255.f, 0xB4 / 255.f, 0xFA / 255.f};
+    const float c1[3] = {0xCB / 255.f, 0xA6 / 255.f, 0xF7 / 255.f};
+    const float ink[3] = {0x11 / 255.f, 0x11 / 255.f, 0x1B / 255.f};
+    float radius = size * 0.26f, half = size / 2.0f;
+    uint32_t* px = (uint32_t*)bits;
+    const uint32_t* gp = (const uint32_t*)glyphBits;
+    for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++) {
+            float qx = std::fabs(x + 0.5f - half) - (half - radius);
+            float qy = std::fabs(y + 0.5f - half) - (half - radius);
+            float ox = std::max(qx, 0.0f), oy = std::max(qy, 0.0f);
+            float d = std::sqrt(ox * ox + oy * oy) +
+                      std::min(std::max(qx, qy), 0.0f) - radius;
+            float a = std::clamp(0.5f - d, 0.0f, 1.0f);
+            float t = std::clamp((x + y) / (2.0f * (size - 1)), 0.0f, 1.0f);
+            float cov = ((gp[y * size + x] >> 8) & 0xFF) / 255.0f;
+            float rgb[3];
+            for (int i = 0; i < 3; i++) {
+                float base = c0[i] + (c1[i] - c0[i]) * t;
+                rgb[i] = (base + (ink[i] - base) * cov) * a;
+            }
+            px[y * size + x] = ((uint32_t)(a * 255 + 0.5f) << 24) |
+                               ((uint32_t)(rgb[0] * 255 + 0.5f) << 16) |
+                               ((uint32_t)(rgb[1] * 255 + 0.5f) << 8) |
+                               (uint32_t)(rgb[2] * 255 + 0.5f);
+        }
+    HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
+    ICONINFO ii{TRUE, 0, 0, mask, color};
+    HICON icon = CreateIconIndirect(&ii);
+    DeleteObject(mask);
+    DeleteObject(color);
+    DeleteObject(glyphBm);
+    return icon;
+}
+
+static void RefreshBadges(UINT dpi) {
+    if (g_badgeSmall && g_badgeBig && dpi == g_badgeDpi) return;
+    if (g_badgeSmall) DestroyIcon(g_badgeSmall);
+    if (g_badgeBig) DestroyIcon(g_badgeBig);
+    g_badgeSmall = MakeBadgeIcon(GetSystemMetricsForDpi(SM_CXSMICON, dpi), 0xE774);
+    g_badgeBig = MakeBadgeIcon(GetSystemMetricsForDpi(SM_CXICON, dpi), 0xE774);
+    g_badgeDpi = dpi;
+    Wh_Log(L"icon: badges drawn for dpi %u", dpi);
+}
+
+struct IconCtx { DWORD pid; };
+
+static BOOL CALLBACK IconEnumProc(HWND hwnd, LPARAM lp) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != ((IconCtx*)lp)->pid) return TRUE;
+    if (!IsWindowVisible(hwnd)) return TRUE;
+    wchar_t cls[64];
+    if (!GetClassNameW(hwnd, cls, 64) || wcscmp(cls, L"Chrome_WidgetWin_1") != 0)
+        return TRUE;
+    DWORD_PTR smallIcon = 0, bigIcon = 0;
+    SendMessageTimeoutW(hwnd, WM_GETICON, ICON_SMALL, 0, SMTO_ABORTIFHUNG, 500, &smallIcon);
+    SendMessageTimeoutW(hwnd, WM_GETICON, ICON_BIG, 0, SMTO_ABORTIFHUNG, 500, &bigIcon);
+    if ((HICON)smallIcon == g_badgeSmall && (HICON)bigIcon == g_badgeBig) return TRUE;
+    // First takeover: remember Helium's class icons so a disable or unload
+    // can hand them back.
+    if (!g_classIconReplaced) {
+        g_origClassIcon = (HICON)GetClassLongPtrW(hwnd, GCLP_HICON);
+        g_origClassIconSm = (HICON)GetClassLongPtrW(hwnd, GCLP_HICONSM);
+        if (g_origClassIcon) SetClassLongPtrW(hwnd, GCLP_HICON, (LONG_PTR)g_badgeBig);
+        if (g_origClassIconSm) SetClassLongPtrW(hwnd, GCLP_HICONSM, (LONG_PTR)g_badgeSmall);
+        g_classIconReplaced = true;
+    }
+    SendMessageTimeoutW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)g_badgeSmall,
+                        SMTO_ABORTIFHUNG, 500, nullptr);
+    SendMessageTimeoutW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)g_badgeBig,
+                        SMTO_ABORTIFHUNG, 500, nullptr);
+    return TRUE;
+}
+
+static void RestoreHeliumIcons() {
+    if (!g_classIconReplaced) return;
+    HWND hwnd = nullptr;
+    do {
+        hwnd = FindWindowExW(nullptr, hwnd, L"Chrome_WidgetWin_1", nullptr);
+        if (!hwnd) break;
+        DWORD pid = 0;
+        GetWindowThreadProcessId(hwnd, &pid);
+        if (pid != GetCurrentProcessId()) continue;
+        if (g_origClassIcon) SetClassLongPtrW(hwnd, GCLP_HICON, (LONG_PTR)g_origClassIcon);
+        if (g_origClassIconSm) SetClassLongPtrW(hwnd, GCLP_HICONSM, (LONG_PTR)g_origClassIconSm);
+        SendMessageTimeoutW(hwnd, WM_SETICON, ICON_SMALL, 0, SMTO_ABORTIFHUNG, 500, nullptr);
+        SendMessageTimeoutW(hwnd, WM_SETICON, ICON_BIG, 0, SMTO_ABORTIFHUNG, 500, nullptr);
+    } while (hwnd);
+    g_classIconReplaced = false;
+    Wh_Log(L"icon: Helium's own icons restored");
+}
+
+static DWORD WINAPI IconThread(LPVOID) {
+    while (!g_stop) {
+        if (g_iconWant.load(std::memory_order_relaxed) &&
+            GetModuleHandleW(L"chrome.dll")) {
+            RefreshBadges(GetDpiForSystem());
+            IconCtx ctx = { GetCurrentProcessId() };
+            EnumWindows(IconEnumProc, (LPARAM)&ctx);
+        } else if (g_classIconReplaced) {
+            RestoreHeliumIcons();
+        }
+        Sleep(2000);
+    }
+    return 0;
+}
+
 BOOL Wh_ModInit() {
     Wh_Log(L">");
-    EnsureHideWindowButtonsSwitch();
+    LoadSettings();
+    if (g_set.nativeFrame) EnsureHideWindowButtonsSwitch();
     MTRACE(GetModuleHandleW(L"chrome.dll") ? "init: chrome already loaded"
                                            : "init: chrome not loaded yet");
     g_dark = ReadDarkTheme() ? 1 : 0;
     HANDLE hBackdrop = CreateThread(nullptr, 0, BackdropThread, nullptr, 0, nullptr);
     if (hBackdrop) CloseHandle(hBackdrop);
+    HANDLE hIcon = CreateThread(nullptr, 0, IconThread, nullptr, 0, nullptr);
+    if (hIcon) CloseHandle(hIcon);
     if (GetModuleHandleW(L"chrome.dll")) {
         ApplyAllLayers();
         HANDLE h = CreateThread(nullptr, 0, ThemeThread, nullptr, 0, nullptr);
@@ -1537,8 +1897,36 @@ BOOL Wh_ModInit() {
     return TRUE;
 }
 
+void Wh_ModSettingsChanged() {
+    LoadSettings();
+    // Colors rebuild live: restore the entry, re-emit the hook with the new
+    // table. The old code page stays allocated: a thread may still be inside
+    // it, and one page per settings save is nothing.
+    if (g_colorsApplied && g_gcTarget) {
+        DWORD oldProtect, tmp;
+        if (VirtualProtect(g_gcTarget, sizeof(g_gcOriginal), PAGE_EXECUTE_READWRITE, &oldProtect)) {
+            memcpy(g_gcTarget, g_gcOriginal, sizeof(g_gcOriginal));
+            VirtualProtect(g_gcTarget, sizeof(g_gcOriginal), oldProtect, &tmp);
+        }
+        g_colorsApplied = false;
+    }
+    if (g_set.colors && !g_colorsApplied && GetModuleHandleW(L"chrome.dll")) {
+        EmitAndInstallColors(g_liveColors.data(), (int)g_liveColors.size());
+    }
+    g_iconWant.store(g_set.gradientIcon, std::memory_order_relaxed);
+    Wh_Log(L"settings changed: acrylic=%d colors=%d frame=%d icon=%d "
+           L"(acrylic and frame need a browser restart)",
+           (int)g_set.acrylic, (int)g_set.colors, (int)g_set.nativeFrame,
+           (int)g_set.gradientIcon);
+}
+
 void Wh_ModUninit() {
     g_stop = true;
+    RestoreHeliumIcons();
+    if (g_badgeSmall) DestroyIcon(g_badgeSmall);
+    if (g_badgeBig) DestroyIcon(g_badgeBig);
+    g_badgeSmall = nullptr;
+    g_badgeBig = nullptr;
     if (g_acrylicApplied && g_acrylicTarget) {
         DWORD oldProtect;
         if (VirtualProtect(g_acrylicTarget, sizeof(g_acrylicOriginal), PAGE_EXECUTE_READWRITE, &oldProtect)) {
