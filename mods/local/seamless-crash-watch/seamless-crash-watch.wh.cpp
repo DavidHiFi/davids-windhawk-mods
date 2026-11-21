@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id              seamless-crash-watch
 // @name            Seamless Crash Watch
-// @description     A notice when a program crashes. Click it and an AI agent in a terminal finds out why, like Omarchy
-// @version         1.2.9
+// @description     A notice when a program crashes or freezes. Click it and an AI agent in a terminal finds out why, like Omarchy
+// @version         1.3.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -32,6 +32,14 @@ OpenCode, Gemini CLI or your own command work too.
 - Also catches crashes from the exit code (access violation, stack overflow,
   heap corruption, fail fast and the rest), so it still works on a PC where
   Windows Error Reporting is turned off and no crash event is ever written.
+- Catches a program that freezes while it is still open: "Notepad is not
+  responding" shows after 15 seconds and goes away by itself if the program
+  wakes up. The menu has Wait, Close the app and Find out why with AI. If
+  the frozen one is a Windhawk mod helper, it names the mod and offers
+  Restart the mod.
+- Quiets idle Windhawk helpers: a helper that has done nothing for 5 minutes
+  gives its memory back and runs gently until it has work again. Mods that
+  listen for keys or the mouse are left alone, and you can add more.
 - Shows a notice in Catppuccin Mocha with frosted glass, a grey edge at rest
   and a blue to mauve gradient border on hover.
 - Click: writes a crash report (program, path, error code, faulting module,
@@ -57,6 +65,14 @@ The agent runs as you, without admin rights, even though Windhawk itself runs
 elevated. It only reads: the report tells it to leave the system as it found
 it, and to offer, not force, muting the program.
 
+## What's new in 1.3.0
+
+- A program that freezes now gets a notice while it is still frozen, not only after Windows
+  closes it. Wait, Close the app, or Find out why with AI.
+- A frozen Windhawk mod helper is named, and you can restart just that mod.
+- New Helpers page: idle Windhawk helpers give their memory back and run gently until they
+  have work again.
+
 ## Credits
 
 Based on the crash notice and the diagnose-crash skill in Omarchy by David
@@ -81,12 +97,30 @@ nf-md-robot_dead from Nerd Fonts, as in Omarchy.
 - quietSeconds: 60
   $name: "Quiet time per program (seconds)"
   $description: "0 to 3600 (Suggested: 60). A program that keeps crashing shows one notice in this time."
+- catchFrozen: true
+  $name: "Catch frozen programs"
+  $description: "Show a notice when a program stops answering for a while. It goes away on its own if the program wakes up."
+- frozenSeconds: 15
+  $name: "Seconds before it counts as frozen"
+  $description: "5 to 120 (Suggested: 15)."
+- frozenIgnore: ""
+  $name: "Never watch these for freezes"
+  $description: "Program names split with \";\", such as game.exe; helper.exe. * and ? work as wildcards."
 - ignoredPrograms: ""
   $name: "Never show"
   $description: "Program names split with \";\", such as game.exe; helper.exe. * and ? work as wildcards."
 - mutedPrograms: ""
   $name: "Muted programs"
   $description: "Programs muted from a notice's right-click menu. Delete a name to hear about it again."
+- quietHelpers: true
+  $name: "Quiet idle helpers"
+  $description: "A Windhawk helper that has done nothing for a while gives its memory back and runs gently until it has work again. Mods that listen for keys or the mouse stay as they are."
+- quietMinutes: 5
+  $name: "Minutes idle before quieting"
+  $description: "1 to 60 (Suggested: 5)."
+- quietNever: "seamless-window-manager; seamless-autoscroll; seamless-autoscroll-global; seamless-key-click; seamless-dictate; seamless-autoclicker; seamless-crosshair; seamless-borders; seamless-wobbly-windows; zoomit; seamless-snipper; fast-backspace; remap-copilot-key; force-kill-active-window; cursor-idle-fade; pointer-afterimage-plus; taskbar-hover-animations; parallax-wallpaper; halo-launcher; smart-process-priority-ram-optimizer"
+  $name: "Never quiet these mods"
+  $description: "Mod names split with \";\", such as seamless-dictate. * and ? work as wildcards."
 - position: "topRight"
   $name: "Position"
   $description: "The screen corner the notices stack from."
@@ -271,6 +305,7 @@ nf-md-robot_dead from Nerd Fonts, as in Omarchy.
 #include <imm.h>
 #include <winevt.h>
 #include <tlhelp32.h>
+#include <psapi.h>
 #include <sddl.h>
 #include <shellscalingapi.h>
 
@@ -525,6 +560,12 @@ struct Config {
     std::wstring agent = L"claude", model, custom, extra, terminal = L"wt", workDir;
     int keepReports = 50;
     bool tray = true;
+    bool catchFrozen = true;
+    int frozenSeconds = 15;
+    std::vector<std::wstring> frozenIgnored;
+    bool quietHelpers = true;
+    int quietMinutes = 5;
+    std::vector<std::wstring> quietNever;
 };
 
 static Config g_cfg;  // UI thread only; workers get a copy.
@@ -591,6 +632,12 @@ static void LoadSettings() {
     c.workDir = Trim(ReadStr(L"workingFolder"));
     c.keepReports = Clamp(Wh_GetIntSetting(L"keepReports"), 5, 500);
     c.tray = Wh_GetIntSetting(L"settingsTrayIcon") != 0;
+    c.catchFrozen = Wh_GetIntSetting(L"catchFrozen") != 0;
+    c.frozenSeconds = Clamp(Wh_GetIntSetting(L"frozenSeconds"), 5, 120);
+    c.frozenIgnored = SplitList(ReadStr(L"frozenIgnore"));
+    c.quietHelpers = Wh_GetIntSetting(L"quietHelpers") != 0;
+    c.quietMinutes = Clamp(Wh_GetIntSetting(L"quietMinutes"), 1, 60);
+    c.quietNever = SplitList(ReadStr(L"quietNever"));
     g_cfg = std::move(c);
     SyncMutedView();
 }
@@ -681,6 +728,12 @@ struct Crash {
     bool fromExit = false;  // Caught from the exit code: no Application log event exists.
     UINT64 record = 0;
     SYSTEMTIME utc{}, local{};
+    // Caught frozen while still running (not a crash): its friendly name, the Windhawk mod it is,
+    // when its process began (so a reused process number is never closed) and how long it had been frozen.
+    bool frozen = false;
+    std::wstring label, modId;
+    ULONGLONG started = 0;
+    DWORD frozenSecs = 0;
 };
 
 static std::wstring XmlUnescape(const std::wstring& s) {
@@ -1160,8 +1213,12 @@ static void MeasureNotice(Notice& n) {
     n.title = FillTemplate(c.titleText.empty() ? L"Process crashed: {name}" : c.titleText, n.crash);
     if (n.crash.hang && c.titleText == L"Process crashed: {name}") n.title = L"Not responding: " + n.crash.name;
     n.body = FillTemplate(c.bodyText, n.crash);
+    if (n.crash.frozen) {
+        n.title = n.crash.label + L" is not responding";
+        n.body = n.crash.modId.empty() ? L"Click to wait, close it or find out why" : L"Click to restart it or find out why";
+    }
     n.detail.clear();
-    if (c.details) n.detail = ErrorLine(n.crash);
+    if (c.details && !n.crash.frozen) n.detail = ErrorLine(n.crash);
     n.w = (float)c.width;
     float textH = g_titleLineH + (n.body.empty() ? 0 : 3 + g_bodyLineH) + (n.detail.empty() ? 0 : 2 + g_detailLineH);
     float iconH = c.showIcon ? (float)c.iconSize + 4 : 0;
@@ -1376,7 +1433,7 @@ static void SetHover(Notice& n, bool on) {
     n.hoverTo = on ? 1.0f : 0.0f;
     n.hoverStart = now;
     // Hovering pauses the timer; leaving gives at least two more seconds.
-    if (g_cfg.timeout > 0) {
+    if (g_cfg.timeout > 0 && !n.crash.frozen) {
         if (on) n.remaining = (LONGLONG)n.deadline - (LONGLONG)now;
         else n.deadline = now + (ULONGLONG)std::max<LONGLONG>(n.remaining, 2000);
     }
@@ -1387,6 +1444,7 @@ static void Diagnose(const Crash& c);
 static void MuteProgram(const std::wstring& name);
 static void UnmuteCrash(const Crash& c);
 static void EnableDarkMenus();
+static void FrozenMenu(Notice* n, POINT pt);
 
 static void CopyText(const std::wstring& s) {
     if (!OpenClipboard(g_msgWnd)) return;
@@ -1413,6 +1471,10 @@ static std::wstring Summary(const Crash& c) {
 }
 
 static void NoticeMenu(Notice* n, POINT pt) {
+    if (n->crash.frozen) {
+        FrozenMenu(n, pt);
+        return;
+    }
     enum { IDM_DIAG = 1, IDM_COPY, IDM_EVENTS, IDM_MUTE, IDM_DISMISS, IDM_ALL };
     using R = cwset::TrayRow;
     R sep;
@@ -1495,7 +1557,11 @@ static LRESULT CALLBACK NoticeProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (n && n->pressed && !n->closing) {
                 n->pressed = false;
                 if (OverClose(*n, GET_X_LPARAM(lp), GET_Y_LPARAM(lp))) Dismiss(n);
-                else {
+                else if (n->crash.frozen) {
+                    POINT pt{};
+                    GetCursorPos(&pt);
+                    NoticeMenu(n, pt);
+                } else {
                     Crash c = n->crash;
                     Dismiss(n);
                     Diagnose(c);
@@ -1545,7 +1611,7 @@ static void ShowNotice(const Crash& crash) {
     n->acrylic = c.glass && TransparencyOn() && SetAcrylic(n->hwnd, true, c.bg, c.tint);
     n->shown = GetTickCount64();
     n->hoverStart = n->shown;
-    n->deadline = c.timeout > 0 ? n->shown + (ULONGLONG)c.timeout * 1000 : 0;
+    n->deadline = c.timeout > 0 && !crash.frozen ? n->shown + (ULONGLONG)c.timeout * 1000 : 0;
     g_notices.insert(g_notices.begin(), n);
     Layout();
     ApplyGeometry(*n, n->shown);
@@ -1661,6 +1727,8 @@ static void LoadHistory() {
         c.code = f[6], c.offset = f[7], c.reportId = f[8], c.package = f[9], c.sid = f[10];
         c.pid = (DWORD)wcstoul(f[11].c_str(), nullptr, 10);
         c.hang = f[12] == L"1";
+        c.frozen = c.hang && c.code == L"frozen";
+        if (c.frozen) { c.label = c.name; size_t d = c.label.rfind(L"."); if (d != std::wstring::npos && d > 0) c.label.resize(d); }
         c.fromExit = f[13] == L"1";
         c.record = _wcstoui64(f[14].c_str(), nullptr, 10);
         c.utc = SystemTimeOf(_wcstoui64(f[15].c_str(), nullptr, 10));
@@ -2260,7 +2328,10 @@ static std::wstring BuildReport(const Crash& c, const Config& cfg, const std::ws
     r += L"- Path: " + Or(c.path, L"not recorded") + L"\n";
     r += L"- Version: " + Or(c.version, L"not recorded") + L"\n";
     r += std::wstring(L"- Time: ") + when + L"\n";
-    if (c.fromExit)
+    if (c.frozen)
+        r += L"- Event: none. Seamless Crash Watch saw the program's window stop answering (Windows' own "
+             L"hung-window check) while the program was still running. It may have woken up since.\n";
+    else if (c.fromExit)
         r += L"- Event: none. Caught from the process exit code. Windows Error Reporting "
              L"(HKLM\\SOFTWARE\\Microsoft\\Windows\\Windows Error Reporting, value Disabled) is likely off, so "
              L"Windows logged no Application Error event, wrote no WER report and kept no dump. Skip the steps "
@@ -2275,7 +2346,9 @@ static std::wstring BuildReport(const Crash& c, const Config& cfg, const std::ws
         r += L"- Module path: " + Or(c.modulePath, L"not recorded") + L"\n";
         r += L"- Offset in module: " + Or(c.offset, L"not recorded") + L"\n";
     } else {
-        r += L"- What happened: the program stopped responding and Windows closed it\n";
+        r += c.frozen ? L"- What happened: the program's window stopped answering for about " +
+                            std::to_wstring(c.frozenSecs) + L" seconds and was still running when the notice showed\n"
+                      : std::wstring(L"- What happened: the program stopped responding and Windows closed it\n");
     }
     if (!c.package.empty()) r += L"- Store package: " + c.package + L"\n";
     r += L"- WER report ID: " + Or(c.reportId, L"not recorded") + L"\n";
@@ -2286,6 +2359,14 @@ static std::wstring BuildReport(const Crash& c, const Config& cfg, const std::ws
          L"\n";
     r += L"- This report: " + reportPath + L"\n\n";
     if (!cfg.extra.empty()) r += L"## From the user\n\n" + cfg.extra + L"\n\n";
+    if (c.frozen)
+        r += L"## This program is frozen, not crashed\n\nThere is no crash to find. Look at the live process "
+             L"instead: is process " + std::to_wstring(c.pid) + L" still running, how much CPU and memory it uses "
+             L"and whether that grows, what its threads wait on, which modules it loaded, and what the Application "
+             L"and System logs recorded around the freeze time (disk, driver or network trouble, a hung plug-in, a "
+             L"modal dialog hidden behind the window). Do not end the process or change anything unless the user "
+             L"asks. The Windows Error Reporting and dump steps below usually find nothing for a program that "
+             L"has not crashed; skip them quickly.\n\n";
     std::wstring skill = ReplaceAll(kSkill, L"{record}", std::to_wstring(c.record));
     skill = ReplaceAll(skill, L"{name}", c.name);
     r += skill;
@@ -2700,6 +2781,581 @@ static void ShowTrayMenu(POINT pt) {
 }
 
 // ---------------------------------------------------------------------------
+// Frozen apps and quiet idle helpers
+// ---------------------------------------------------------------------------
+
+constexpr UINT_PTR kTimerFreeze = 4, kTimerQuiet = 5;
+constexpr UINT kFreezeTickMs = 3000, kQuietTickMs = 20000;
+constexpr ULONGLONG kHungHeadStartMs = 5000;  // Windows calls a window hung after 5 s without an answer.
+constexpr ULONGLONG kIdleGrowMs = 250;        // CPU a helper may use in a minute and still count as idle.
+
+static ULONGLONG FtValue(const FILETIME& f) { return ((ULONGLONG)f.dwHighDateTime << 32) | f.dwLowDateTime; }
+
+// NtQueryInformationProcess class 60 hands back a counted string followed by its characters.
+struct CwCountedString {
+    USHORT length, maxLength;
+    PWSTR buffer;
+};
+
+static std::wstring ProcessCommandLine(HANDLE process) {
+    using Query = LONG(NTAPI*)(HANDLE, ULONG, PVOID, ULONG, PULONG);
+    static Query query = (Query)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtQueryInformationProcess");
+    if (!query) return {};
+    ULONG need = 0;
+    query(process, 60 /* ProcessCommandLineInformation */, nullptr, 0, &need);
+    if (need < sizeof(CwCountedString) || need > 32768) return {};
+    std::vector<BYTE> buf(need + 16);
+    ULONG got = 0;
+    if (query(process, 60, buf.data(), (ULONG)buf.size(), &got) < 0) return {};
+    auto* u = (CwCountedString*)buf.data();
+    BYTE* text = (BYTE*)u->buffer;
+    if (!text || !u->length || text < buf.data() || text + u->length > buf.data() + buf.size()) return {};
+    return std::wstring(u->buffer, u->length / 2);
+}
+
+// The mod a Windhawk helper runs, read from its command line: ... -tool-mod "local@id"
+static std::wstring ToolModId(const std::wstring& cmd) {
+    const std::wstring flag = L" -tool-mod ";
+    size_t p = cmd.find(flag);
+    if (p == std::wstring::npos) return {};
+    std::wstring rest = Trim(cmd.substr(p + flag.size()));
+    if (rest.empty()) return {};
+    if (rest[0] == L'"') {
+        size_t q = rest.find(L'"', 1);
+        return rest.substr(1, q == std::wstring::npos ? std::wstring::npos : q - 1);
+    }
+    return rest.substr(0, rest.find(L' '));
+}
+
+static std::wstring ModKey(std::wstring id) {
+    id = Lower(id);
+    if (id.rfind(L"local@", 0) == 0) id = id.substr(6);
+    return id;
+}
+
+static std::wstring ModTitle(const std::wstring& id) {
+    std::wstring s = ModKey(id);
+    bool up = true;
+    for (auto& ch : s) {
+        if (ch == L'-' || ch == L'_') {
+            ch = L' ';
+            up = true;
+        } else if (up) {
+            ch = (wchar_t)towupper(ch);
+            up = false;
+        }
+    }
+    return s;
+}
+
+static std::wstring FriendlyName(const std::wstring& exe) {
+    std::wstring s = exe;
+    if (s.size() > 4 && _wcsicmp(s.c_str() + s.size() - 4, L".exe") == 0) s.resize(s.size() - 4);
+    if (!s.empty()) s[0] = (wchar_t)towupper(s[0]);
+    return s;
+}
+
+struct ProcInfo {
+    std::wstring name, path, sid, modId;
+    ULONGLONG started = 0;
+    bool helper = false;  // A Windhawk mod helper.
+};
+
+static ProcInfo ReadProcInfo(DWORD pid) {
+    ProcInfo pi;
+    HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!h) return pi;
+    WCHAR buf[MAX_PATH * 2];
+    DWORD len = ARRAYSIZE(buf);
+    if (QueryFullProcessImageNameW(h, 0, buf, &len)) pi.path.assign(buf, len);
+    size_t slash = pi.path.find_last_of(L'\\');
+    pi.name = slash == std::wstring::npos ? pi.path : pi.path.substr(slash + 1);
+    FILETIME cr{}, ex{}, ke{}, us{};
+    if (GetProcessTimes(h, &cr, &ex, &ke, &us)) pi.started = FtValue(cr);
+    pi.sid = ProcessUserSid(h);
+    if (_wcsicmp(pi.name.c_str(), L"windhawk-mod.exe") == 0 || _wcsicmp(pi.name.c_str(), L"windhawk.exe") == 0) {
+        pi.modId = ToolModId(ProcessCommandLine(h));
+        pi.helper = !pi.modId.empty();
+    }
+    CloseHandle(h);
+    return pi;
+}
+
+static bool NeverClose(const std::wstring& name) {
+    static const PCWSTR kKeep[] = {L"explorer.exe", L"dwm.exe",      L"winlogon.exe", L"csrss.exe",   L"services.exe",
+                                   L"lsass.exe",    L"svchost.exe", L"smss.exe",     L"wininit.exe", L"fontdrvhost.exe"};
+    for (PCWSTR k : kKeep)
+        if (_wcsicmp(name.c_str(), k) == 0) return true;
+    return false;
+}
+
+// --- Frozen programs --------------------------------------------------------
+
+struct FrozenApp {
+    ProcInfo info;
+    HWND hwnd = nullptr;
+    ULONGLONG since = 0;
+    bool notified = false, ignore = false;
+};
+static std::map<DWORD, FrozenApp> g_frozen;  // UI thread only. One entry per process that is hung right now.
+static bool g_freezeTimerOn, g_quietTimerOn;
+
+struct HungWindows {
+    HWND shown = nullptr, hidden = nullptr;
+};
+
+static bool WindowCountsAsApp(HWND h) {
+    if (!IsWindowVisible(h) || GetWindow(h, GW_OWNER)) return false;
+    if (GetWindowLongPtrW(h, GWL_EXSTYLE) & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)) return false;
+    DWORD cloaked = 0;
+    // A window an app or its frame host cloaked is asleep on purpose (a suspended Store app).
+    if (SUCCEEDED(DwmGetWindowAttribute(h, 14 /* DWMWA_CLOAKED */, &cloaked, sizeof(cloaked))) && (cloaked & (1 | 4))) return false;
+    return true;
+}
+
+static BOOL CALLBACK HungEnumProc(HWND h, LPARAM lp) {
+    if (!IsHungAppWindow(h)) return TRUE;  // Sends nothing, so it can never block here.
+    DWORD pid = 0;
+    GetWindowThreadProcessId(h, &pid);
+    if (!pid || pid == GetCurrentProcessId()) return TRUE;
+    HungWindows& slot = (*(std::map<DWORD, HungWindows>*)lp)[pid];
+    if (WindowCountsAsApp(h)) {
+        if (!slot.shown) slot.shown = h;
+    } else if (!slot.hidden) {
+        slot.hidden = h;
+    }
+    return TRUE;
+}
+
+static void OnFrozen(const Crash& c) {
+    const Config& cfg = g_cfg;
+    std::wstring name = Lower(c.name);
+    if (cfg.onlyMine && !c.sid.empty() && !g_userSid.empty() && _wcsicmp(c.sid.c_str(), g_userSid.c_str()) != 0) {
+        Trace(L"%s (pid %lu, frozen): another account's program, skipped", c.name.c_str(), c.pid);
+        return;
+    }
+    if (MatchList(cfg.frozenIgnored, c) || MatchList(cfg.ignored, c) || MatchList(cfg.muted, c)) {
+        Trace(L"%s (pid %lu, frozen): ignored or muted", c.name.c_str(), c.pid);
+        return;
+    }
+    ULONGLONG now = GetTickCount64();
+    std::wstring key = L"frozen:" + name;
+    auto it = g_lastShown.find(key);
+    if (cfg.quietSeconds > 0 && it != g_lastShown.end() && now - it->second < (ULONGLONG)cfg.quietSeconds * 1000) {
+        Trace(L"%s (pid %lu, frozen): froze again within the quiet time", c.name.c_str(), c.pid);
+        return;
+    }
+    g_lastShown[key] = now;
+    RememberRecent(c);
+    if (g_paused) {
+        Trace(L"%s (pid %lu, frozen): notices paused, kept in Recent crashes", c.name.c_str(), c.pid);
+        return;
+    }
+    if (cfg.quietFullscreen) {
+        QUERY_USER_NOTIFICATION_STATE st = QUNS_ACCEPTS_NOTIFICATIONS;
+        if (SUCCEEDED(SHQueryUserNotificationState(&st)) &&
+            (st == QUNS_BUSY || st == QUNS_RUNNING_D3D_FULL_SCREEN || st == QUNS_PRESENTATION_MODE)) {
+            Trace(L"%s (pid %lu, frozen): full screen, kept in Recent crashes", c.name.c_str(), c.pid);
+            return;
+        }
+    }
+    Trace(L"%s (pid %lu, frozen): notice shown after about %lu s", c.name.c_str(), c.pid, c.frozenSecs);
+    ShowNotice(c);
+}
+
+static void ReportFrozen(DWORD pid, const FrozenApp& f, ULONGLONG now) {
+    Crash c;
+    c.name = f.info.name;
+    c.path = f.info.path;
+    c.sid = f.info.sid;
+    c.pid = pid;
+    c.hang = true;
+    c.frozen = true;
+    c.code = L"frozen";
+    c.modId = f.info.modId;
+    c.started = f.info.started;
+    c.label = f.info.helper ? ModTitle(f.info.modId) + L" mod" : FriendlyName(f.info.name);
+    c.frozenSecs = (DWORD)((now - f.since) / 1000);
+    GetSystemTime(&c.utc);
+    GetLocalTime(&c.local);
+    OnFrozen(c);
+}
+
+static void FrozenRecovered(DWORD pid, const FrozenApp& f) {
+    if (!f.notified) return;
+    for (Notice* n : std::vector<Notice*>(g_notices))
+        if (n->crash.frozen && n->crash.pid == pid && !n->closing) Dismiss(n);
+    Trace(L"%s (pid %lu): answering again", f.info.name.c_str(), pid);
+}
+
+static void ClearFrozen() {
+    for (Notice* n : std::vector<Notice*>(g_notices))
+        if (n->crash.frozen && !n->closing) Dismiss(n);
+    g_frozen.clear();
+}
+
+static void FreezeTick() {
+    if (!g_cfg.catchFrozen) return;
+    std::map<DWORD, HungWindows> hung;
+    EnumWindows(HungEnumProc, (LPARAM)&hung);
+    // Tray helpers often have only a message-only window; those count for Windhawk helpers (checked below).
+    for (HWND h = nullptr; (h = FindWindowExW(HWND_MESSAGE, h, nullptr, nullptr)) != nullptr;) {
+        if (!IsHungAppWindow(h)) continue;
+        DWORD pid = 0;
+        GetWindowThreadProcessId(h, &pid);
+        if (!pid || pid == GetCurrentProcessId()) continue;
+        HungWindows& slot = hung[pid];
+        if (!slot.hidden) slot.hidden = h;
+    }
+    ULONGLONG now = GetTickCount64();
+    for (auto it = g_frozen.begin(); it != g_frozen.end();) {
+        if (hung.count(it->first)) {
+            ++it;
+            continue;
+        }
+        FrozenRecovered(it->first, it->second);
+        it = g_frozen.erase(it);
+    }
+    for (auto& [pid, w] : hung) {
+        HWND hw = w.shown ? w.shown : w.hidden;
+        auto it = g_frozen.find(pid);
+        if (it == g_frozen.end()) {
+            FrozenApp f;
+            f.info = ReadProcInfo(pid);
+            // IsHungAppWindow is true only after 5 s of silence, so the freeze began about then.
+            f.since = now > kHungHeadStartMs ? now - kHungHeadStartMs : 0;
+            // A hidden window counts only for a Windhawk helper; the program's own window must be on screen.
+            f.ignore = f.info.name.empty() || (!w.shown && !f.info.helper);
+            it = g_frozen.emplace(pid, std::move(f)).first;
+        }
+        FrozenApp& f = it->second;
+        f.hwnd = hw;
+        if (f.ignore || f.notified) continue;
+        if (now - f.since < (ULONGLONG)g_cfg.frozenSeconds * 1000) continue;
+        // A last look with a short timeout: a program that answers is not frozen.
+        DWORD_PTR reply = 0;
+        if (!IsWindow(hw) || SendMessageTimeoutW(hw, WM_NULL, 0, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, 100, &reply)) {
+            g_frozen.erase(it);
+            continue;
+        }
+        f.notified = true;
+        ReportFrozen(pid, f, now);
+    }
+}
+
+// --- What the frozen notice's menu does -------------------------------------
+
+static void CloseFrozenApp(const Crash& c) {
+    if (!c.pid || c.pid == GetCurrentProcessId() || NeverClose(c.name)) return;
+    HANDLE h = OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, c.pid);
+    if (!h) {
+        Trace(L"%s (pid %lu): could not open it to close it", c.name.c_str(), c.pid);
+        return;
+    }
+    FILETIME cr{}, ex{}, ke{}, us{};
+    if (GetProcessTimes(h, &cr, &ex, &ke, &us) && c.started && FtValue(cr) == c.started) {
+        TerminateProcess(h, 1);
+        Trace(L"%s (pid %lu): closed, you chose Close", c.name.c_str(), c.pid);
+    } else {
+        Trace(L"%s (pid %lu): already gone or replaced, nothing closed", c.name.c_str(), c.pid);
+    }
+    CloseHandle(h);
+}
+
+static bool ModIdSafe(const std::wstring& id) {
+    if (id.empty() || id.size() > 128) return false;
+    for (wchar_t ch : id)
+        if (!(iswalnum(ch) || ch == L'@' || ch == L'-' || ch == L'_' || ch == L'.')) return false;
+    return true;
+}
+
+// Windhawk watches HKLM\SOFTWARE\Windhawk\Engine\Mods\<id>: Disabled and SettingsChangeTime.
+static bool SetModOff(const std::wstring& id, bool off) {
+    HKEY k = nullptr;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, (L"SOFTWARE\\Windhawk\\Engine\\Mods\\" + id).c_str(), 0, KEY_SET_VALUE, &k) !=
+        ERROR_SUCCESS)
+        return false;
+    FILETIME ft{};
+    GetSystemTimeAsFileTime(&ft);
+    DWORD unix = (DWORD)((FtValue(ft) - 116444736000000000ULL) / 10000000ULL);
+    DWORD disabled = off ? 1 : 0;
+    bool ok = RegSetValueExW(k, L"Disabled", 0, REG_DWORD, (const BYTE*)&disabled, sizeof(disabled)) == ERROR_SUCCESS;
+    RegSetValueExW(k, L"SettingsChangeTime", 0, REG_DWORD, (const BYTE*)&unix, sizeof(unix));
+    RegCloseKey(k);
+    return ok;
+}
+
+static bool SameProcessAlive(DWORD pid, ULONGLONG started) {
+    HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, pid);
+    if (!h) return false;
+    FILETIME cr{}, ex{}, ke{}, us{};
+    bool alive = GetProcessTimes(h, &cr, &ex, &ke, &us) && FtValue(cr) == started && WaitForSingleObject(h, 0) == WAIT_TIMEOUT;
+    CloseHandle(h);
+    return alive;
+}
+
+struct RestartJob {
+    std::wstring id;
+    DWORD pid;
+    ULONGLONG started;
+};
+
+// Off, wait until the old helper is gone, on. A fixed off, sleep, on leaves the mod dead and Windhawk
+// shows "Running the mod failed", so it waits for the exit first.
+static DWORD WINAPI RestartModThread(LPVOID p) {
+    std::unique_ptr<RestartJob> job((RestartJob*)p);
+    if (SetModOff(job->id, true)) {
+        for (int i = 0; i < 30 && SameProcessAlive(job->pid, job->started); i++) Sleep(500);
+        if (SameProcessAlive(job->pid, job->started)) {
+            // It is frozen and you asked for a restart, so end it.
+            if (HANDLE h = OpenProcess(PROCESS_TERMINATE, FALSE, job->pid)) {
+                TerminateProcess(h, 1);
+                CloseHandle(h);
+            }
+            Sleep(500);
+        }
+        Sleep(2000);
+        SetModOff(job->id, false);
+        Trace(L"%s: restarted (off, old helper gone, on)", job->id.c_str());
+    } else {
+        // Not allowed to write the key: ask Windows for admin once and do the same there.
+        std::wstring ps =
+            L"$k='HKLM:\\SOFTWARE\\Windhawk\\Engine\\Mods\\" + job->id +
+            L"'; function B{Set-ItemProperty $k SettingsChangeTime ([int][DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) -Type DWord}; "
+            L"Set-ItemProperty $k Disabled 1 -Type DWord; B; $p=Get-Process -Id " +
+            std::to_wstring(job->pid) +
+            L" -ErrorAction SilentlyContinue; if($p){$p.WaitForExit(15000)|Out-Null; if(!$p.HasExited){$p.Kill()}}; "
+            L"Start-Sleep 2; Set-ItemProperty $k Disabled 0 -Type DWord; B";
+        std::wstring args = L"-NoProfile -WindowStyle Hidden -Command \"" + ps + L"\"";
+        SHELLEXECUTEINFOW sei{sizeof(sei)};
+        sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
+        sei.lpVerb = L"runas";
+        sei.lpFile = L"powershell.exe";
+        sei.lpParameters = args.c_str();
+        sei.nShow = SW_HIDE;
+        if (ShellExecuteExW(&sei) && sei.hProcess) {
+            WaitForSingleObject(sei.hProcess, 60000);
+            CloseHandle(sei.hProcess);
+            Trace(L"%s: restarted through an admin prompt", job->id.c_str());
+        } else {
+            Trace(L"%s: could not restart (no admin rights)", job->id.c_str());
+        }
+    }
+    g_workers--;
+    return 0;
+}
+
+static void RestartMod(const Crash& c) {
+    if (!ModIdSafe(c.modId)) return;
+    auto* job = new RestartJob{c.modId, c.pid, c.started};
+    g_workers++;
+    HANDLE t = CreateThread(nullptr, 0, RestartModThread, job, 0, nullptr);
+    if (t) CloseHandle(t);
+    else {
+        g_workers--;
+        delete job;
+    }
+}
+
+static void FrozenMenu(Notice* n, POINT pt) {
+    enum { IDF_RESTART = 1, IDF_WAIT, IDF_CLOSE, IDF_DIAG, IDF_COPY };
+    using R = cwset::TrayRow;
+    R sep;
+    sep.separator = true;
+    const bool helper = !n->crash.modId.empty();
+    std::vector<R> rows;
+    if (helper) rows.push_back(R{IDF_RESTART, L"", L"Restart the mod"});
+    rows.push_back(R{IDF_WAIT, L"", L"Wait"});
+    if (!helper) {
+        R close{IDF_CLOSE, L"", L"Close " + n->crash.label};
+        close.disabled = NeverClose(n->crash.name) || n->crash.pid == GetCurrentProcessId();
+        rows.push_back(close);
+    }
+    rows.push_back(sep);
+    rows.push_back(R{IDF_DIAG, L"", L"Find out why with AI"});
+    rows.push_back(R{IDF_COPY, L"", L"Copy details"});
+    UINT cmd = (UINT)cwset::ShowTrayMenu(g_msgWnd, &pt, rows);
+    if (std::find(g_notices.begin(), g_notices.end(), n) == g_notices.end()) return;
+    Crash crash = n->crash;
+    switch (cmd) {
+        case IDF_RESTART:
+            Dismiss(n);
+            RestartMod(crash);
+            break;
+        case IDF_WAIT: Dismiss(n); break;  // The hang stays marked as seen, so it does not come back.
+        case IDF_CLOSE:
+            Dismiss(n);
+            CloseFrozenApp(crash);
+            break;
+        case IDF_DIAG:
+            Dismiss(n);
+            Diagnose(crash);
+            break;
+        case IDF_COPY:
+            CopyText(Summary(crash) + L"\r\nFrozen for about " + std::to_wstring(crash.frozenSecs) + L" seconds when caught");
+            break;
+    }
+}
+
+// --- Quiet idle helpers -----------------------------------------------------
+
+struct QuietState {
+    ULONGLONG started = 0, lastCpu = 0, lastTick = 0, idleSince = 0;
+    std::wstring id;
+    bool idRead = false, skip = false, skipLogged = false, emptied = false, eco = false;
+};
+static std::map<DWORD, QuietState> g_quiet;  // UI thread only.
+
+// Mode 1: run gently (EcoQoS). Mode 0: hand the choice back to Windows.
+static bool SetEco(HANDLE h, int mode) {
+    struct PowerThrottle {
+        ULONG version, controlMask, stateMask;
+    };
+    using Fn = BOOL(WINAPI*)(HANDLE, int, LPVOID, DWORD);
+    static Fn fn = (Fn)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "SetProcessInformation");
+    if (!fn) return false;
+    PowerThrottle t{1, mode ? 1u : 0u, mode ? 1u : 0u};
+    return fn(h, 4 /* ProcessPowerThrottling */, &t, sizeof(t)) != 0;
+}
+
+static bool QuietExempt(const std::wstring& id) {
+    std::wstring key = ModKey(id);
+    for (const std::wstring& raw : g_cfg.quietNever) {
+        std::wstring p = ModKey(raw);
+        if (p == key || PathMatchSpecW(key.c_str(), p.c_str())) return true;
+    }
+    return false;
+}
+
+static ULONGLONG WorkingSetOf(HANDLE h) {
+    PROCESS_MEMORY_COUNTERS pmc{};
+    pmc.cb = sizeof(pmc);
+    return K32GetProcessMemoryInfo(h, &pmc, sizeof(pmc)) ? (ULONGLONG)pmc.WorkingSetSize : 0;
+}
+
+static void QuietReleaseAll() {
+    for (auto& [pid, s] : g_quiet) {
+        if (!s.eco) continue;
+        if (HANDLE h = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid)) {
+            FILETIME cr{}, ex{}, ke{}, us{};
+            if (GetProcessTimes(h, &cr, &ex, &ke, &us) && FtValue(cr) == s.started) SetEco(h, 0);
+            CloseHandle(h);
+        }
+        s.eco = false;
+    }
+    g_quiet.clear();
+}
+
+static void QuietTick() {
+    if (!g_cfg.quietHelpers) return;
+    ULONGLONG now = GetTickCount64();
+    std::set<DWORD> live;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return;
+    PROCESSENTRY32W pe{sizeof(pe)};
+    for (BOOL ok = Process32FirstW(snap, &pe); ok; ok = Process32NextW(snap, &pe))
+        if (_wcsicmp(pe.szExeFile, L"windhawk-mod.exe") == 0 && pe.th32ProcessID != GetCurrentProcessId())
+            live.insert(pe.th32ProcessID);
+    CloseHandle(snap);
+    std::erase_if(g_quiet, [&](const auto& kv) { return !live.count(kv.first); });
+    const ULONGLONG idleNeeded = (ULONGLONG)g_cfg.quietMinutes * 60000;
+    for (DWORD pid : live) {
+        QuietState& s = g_quiet[pid];
+        if (s.skip) continue;
+        HANDLE h = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_SET_QUOTA | PROCESS_SET_INFORMATION, FALSE, pid);
+        if (!h) {
+            s.skip = true;
+            Trace(L"quiet: pid %lu can't be opened quietly, left alone", pid);
+            continue;
+        }
+        FILETIME cr{}, ex{}, ke{}, us{};
+        if (!GetProcessTimes(h, &cr, &ex, &ke, &us)) {
+            CloseHandle(h);
+            continue;
+        }
+        ULONGLONG started = FtValue(cr), cpu = FtValue(ke) + FtValue(us);
+        if (s.started && s.started != started) s = QuietState{};  // A new process under an old number.
+        bool first = s.started == 0;
+        s.started = started;
+        if (!s.idRead) {
+            s.idRead = true;
+            s.id = ToolModId(ProcessCommandLine(h));
+            if (s.id.empty()) {
+                s.skip = true;
+                Trace(L"quiet: pid %lu has no mod name on its command line, left alone", pid);
+                CloseHandle(h);
+                continue;
+            }
+        }
+        if (QuietExempt(s.id)) {
+            if (s.eco) {
+                SetEco(h, 0);
+                s.eco = false;
+            }
+            s.skip = true;  // Left alone; the exempt list is read again when settings change.
+            CloseHandle(h);
+            continue;
+        }
+        if (first) {
+            SetEco(h, 0);  // Clears a leftover from an earlier run of this mod.
+        } else {
+            ULONGLONG elapsed = std::max<ULONGLONG>(now - s.lastTick, 1000);
+            ULONGLONG growMs = (cpu - s.lastCpu) / 10000;
+            ULONGLONG perMinute = growMs * 60000 / elapsed;
+            if (perMinute > kIdleGrowMs) {
+                if (s.eco) {
+                    SetEco(h, 0);
+                    s.eco = false;
+                    Trace(L"quiet: %s is busy again, back to normal", s.id.c_str());
+                }
+                s.idleSince = 0;
+                s.emptied = false;
+            } else {
+                if (!s.idleSince) s.idleSince = s.lastTick;
+                if (now - s.idleSince >= idleNeeded) {
+                    if (!s.emptied) {
+                        ULONGLONG before = WorkingSetOf(h);
+                        K32EmptyWorkingSet(h);
+                        ULONGLONG after = WorkingSetOf(h);
+                        s.emptied = true;
+                        Trace(L"quiet: %s idle %d min, memory %llu -> %llu KB", s.id.c_str(), g_cfg.quietMinutes, before / 1024,
+                              after / 1024);
+                    }
+                    if (!s.eco && SetEco(h, 1)) s.eco = true;
+                }
+            }
+        }
+        s.lastCpu = cpu;
+        s.lastTick = now;
+        CloseHandle(h);
+    }
+}
+
+static void ApplyFeatureTimers() {
+    if (!g_msgWnd) return;
+    if (g_cfg.catchFrozen) {
+        if (!g_freezeTimerOn) SetTimer(g_msgWnd, kTimerFreeze, kFreezeTickMs, nullptr);
+        g_freezeTimerOn = true;
+    } else if (g_freezeTimerOn) {
+        KillTimer(g_msgWnd, kTimerFreeze);
+        g_freezeTimerOn = false;
+        ClearFrozen();
+    }
+    if (g_cfg.quietHelpers) {
+        if (!g_quietTimerOn) SetTimer(g_msgWnd, kTimerQuiet, kQuietTickMs, nullptr);
+        g_quietTimerOn = true;
+        // The exempt list may have changed: look at every helper again.
+        for (auto& kv : g_quiet) {
+            if (kv.second.skip && !kv.second.id.empty()) kv.second.skip = false;
+        }
+    } else if (g_quietTimerOn) {
+        KillTimer(g_msgWnd, kTimerQuiet);
+        g_quietTimerOn = false;
+        QuietReleaseAll();
+    }
+}
+
+// ---------------------------------------------------------------------------
 // UI thread
 // ---------------------------------------------------------------------------
 
@@ -2729,6 +3385,8 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_TIMER:
             if (wp == kTimerPending) FlushPendingExits(false);
             else if (wp == kTimerAnim) AnimTick();
+            else if (wp == kTimerFreeze) FreezeTick();
+            else if (wp == kTimerQuiet) QuietTick();
             else if (wp == kTimerTick) {
                 ULONGLONG now = GetTickCount64();
                 for (Notice* n : std::vector<Notice*>(g_notices))
@@ -2748,6 +3406,7 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             LoadSettings();
             MakeFormats();
             Subscribe();
+            ApplyFeatureTimers();
             UpdateTray(false);
             RelayoutAll();
             if (HWND s = cwset::g_settingsWnd) PostMessageW(s, WM_APP + 1 /* WM_APP_SETTINGS_RELOAD */, 0, 0);
@@ -2794,6 +3453,7 @@ static DWORD WINAPI UiThread(LPVOID) {
         MakeFormats();
         UpdateTray(true);
         Subscribe();
+        ApplyFeatureTimers();
     }
     SetEvent(g_uiReady);
     if (g_msgWnd) {
@@ -2802,6 +3462,8 @@ static DWORD WINAPI UiThread(LPVOID) {
             DispatchMessageW(&msg);
         }
     }
+    QuietReleaseAll();  // Every helper this mod set to run gently goes back to normal.
+    g_frozen.clear();
     if (g_sub) EvtClose(g_sub);  // Waits for a callback in flight.
     g_sub = nullptr;
     while (PeekMessageW(&msg, g_msgWnd, WM_CW_CRASH, WM_CW_CRASH, PM_REMOVE)) delete (Crash*)msg.lParam;
@@ -3907,6 +4569,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"includeHangs", L"Programs that stop responding", L"Also show a notice when Windows closes a program that hung.", L"0", {}, 0, 100, 0, L"Crashes"},
 {K::Check, L"quietFullscreen", L"Quiet during full screen", L"No notice while a game, video or presentation fills the screen. It still shows in the tray menu.", L"1", {}, 0, 100, 0, L"Crashes"},
 {K::Number, L"quietSeconds", L"Quiet time per program (seconds)", L"0 to 3600 (Suggested: 60). A program that keeps crashing shows one notice in this time.", L"60", {}, 0, 3600, 0, L"Crashes"},
+{K::Check, L"catchFrozen", L"Catch frozen programs", L"Show a notice when a program stops answering for a while. It goes away on its own if the program wakes up.", L"1", {}, 0, 100, 0, L"Frozen programs"},
+{K::Number, L"frozenSeconds", L"Seconds before it counts as frozen", L"5 to 120 (Suggested: 15).", L"15", {}, 5, 120, 0, L"Frozen programs"},
+{K::Text, L"frozenIgnore", L"Never watch these for freezes", L"Program names split with \";\", such as game.exe; helper.exe. * and ? work as wildcards.", L"", {}, 0, 100, 0, L"Frozen programs"},
 {K::Text, L"ignoredPrograms", L"Never show", L"Program names split with \";\", such as game.exe; helper.exe. * and ? work as wildcards.", L"", {}, 0, 100, 0, L"Ignore and mute"},
 {K::Text, L"mutedPrograms", L"Muted programs", L"Programs muted from a notice's right-click menu. Delete a name to hear about it again.", L"", {}, 0, 100, 0, L"Ignore and mute"},
 {K::Choice, L"position", L"Position", L"The screen corner the notices stack from.", L"topRight", {{L"topRight", L"Top right"}, {L"topCenter", L"Top center"}, {L"topLeft", L"Top left"}, {L"bottomRight", L"Bottom right"}, {L"bottomCenter", L"Bottom center"}, {L"bottomLeft", L"Bottom left"}}, 0, 100, 1, L"Placement"},
@@ -3950,7 +4615,10 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 2, L"Settings window"},
 {K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 2, L"Settings window"},
 {K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open these settings. Right-click it to pause notices, see recent crashes or unmute a program. When off, change settings in Windhawk.", L"1", {}, 0, 100, 2, L"Settings window"},
-{K::Check, L"historyConfirm", L"Ask before removing", L"On, the trash button and \"Remove from history\" ask first. Off, a crash leaves the list at once.", L"1", {}, 0, 100, 4, L"History"}
+{K::Check, L"quietHelpers", L"Quiet idle helpers", L"A Windhawk helper that has done nothing for a while gives its memory back and runs gently until it has work again. Mods that listen for keys or the mouse stay as they are.", L"1", {}, 0, 100, 4, L"Idle helpers"},
+{K::Number, L"quietMinutes", L"Minutes idle before quieting", L"1 to 60 (Suggested: 5).", L"5", {}, 1, 60, 4, L"Idle helpers"},
+{K::Text, L"quietNever", L"Never quiet these mods", L"Mod names split with \";\", such as seamless-dictate. * and ? work as wildcards.", L"seamless-window-manager; seamless-autoscroll; seamless-autoscroll-global; seamless-key-click; seamless-dictate; seamless-autoclicker; seamless-crosshair; seamless-borders; seamless-wobbly-windows; zoomit; seamless-snipper; fast-backspace; remap-copilot-key; force-kill-active-window; cursor-idle-fade; pointer-afterimage-plus; taskbar-hover-animations; parallax-wallpaper; halo-launcher; smart-process-priority-ram-optimizer", {}, 0, 100, 4, L"Idle helpers"},
+{K::Check, L"historyConfirm", L"Ask before removing", L"On, the trash button and \"Remove from history\" ask first. Off, a crash leaves the list at once.", L"1", {}, 0, 100, 5, L"History"}
     };
 }
 
@@ -3959,10 +4627,11 @@ struct SetPageInfo {
     WCHAR glyph;
 };
 static const SetPageInfo kSetPages[] = {
-{L"Crashes", L"Which crashes show a notice, and which never do.", 0xE7BA},
+{L"Crashes", L"Which crashes and frozen programs show a notice, and which never do.", 0xE7BA},
 {L"Notice", L"Where the notice shows, how long it stays and how it moves.", 0xE8BD},
 {L"Look", L"Fonts, sizes, colors, the glass and this window.", 0xE790},
 {L"Diagnose", L"The AI agent that opens when you click a notice.", 0xE99A},
+{L"Helpers", L"Windhawk helpers with nothing to do give their memory back and run gently.", 0xE945},
 {L"History", L"Every crash it caught, kept after the notice goes. Click one to diagnose it with AI; right-click for more.", 0xE81C},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
