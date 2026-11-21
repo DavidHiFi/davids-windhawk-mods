@@ -61,90 +61,92 @@ An AI agent can do all of this on its own: [AGENTS.md](AGENTS.md) is the runbook
 
 ## Features
 
-### Taskbar and tray
+Grouped by what they change. Retired mods and what replaced them: [mods/retired](mods/retired).
+
+### Taskbar
+
+The taskbar, the tray and what sits on them.
 
 | | Mod | What it does |
 | --- | --- | --- |
-| <img src="media/previews/seamless-media-player.png" width="220" alt="Taskbar media player with spectrum bars"> | [Seamless Media Player](mods/local/seamless-media-player) | A media player with a live audio visualizer beside it, right on the taskbar. |
-| <img src="media/previews/taskbar-system-info-weather.png" width="220" alt="CPU and GPU readouts on the taskbar"> | [Taskbar System Info Plus](mods/local/taskbar-system-info-weather) | CPU, GPU, RAM, VRAM, temperatures and network speed on the taskbar, with optional graphs. |
-| <img src="media/previews/taskbar-ai-usage-plus.png" width="220" alt="Usage rings on the taskbar"> | [Taskbar AI Usage Plus](mods/local/taskbar-ai-usage-plus) | Claude, Codex, Antigravity and Copilot limits as ring tiles, with a Fluent flyout for the details. |
-| <img src="media/previews/better-volume-mixer-plus.png" width="220" alt="Tray volume mixer"> | [Seamless Volume Mixer](mods/local/better-volume-mixer-plus) | A tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices. |
-| <img src="media/previews/seamless-tray-drawer.png" width="220" alt="Hidden icons panel with a blue to mauve border"> | [Seamless Tray Drawer](mods/local/seamless-tray-drawer) | A second drawer for rarely used tray icons, with your own colors, border and blur. |
-| <img src="media/previews/recycle-bin-tray-plus.png" width="220" alt="Recycle Bin icon in the tray"> | [Recycle Bin Tray Plus](mods/local/recycle-bin-tray-plus) | A Recycle Bin icon in the tray, with drag and drop and themed menus. |
-| <img src="media/previews/taskbar-collapse-to-running-plus.png" width="220" alt="Taskbar showing only running apps"> | [Taskbar Collapse to Running Plus](mods/local/taskbar-collapse-to-running-plus) | Hides pinned apps that are not running, and reveals them on hover. |
-| | [Micrographics Taskbar Clock Plus](mods/local/micrographics-taskbar-clock-plus) | A Nothing OS style Micrographics clock for the taskbar, with pill badges and a weather line. |
-| | [Seamless Taskbar Utilities](mods/local/seamless-taskbar-utilities) | Quick system tools, an auto-hide switch and icon separators in the taskbar right-click menu, with Catppuccin result cards. |
+| <img src="media/previews/seamless-taskbar.png" width="220" alt="Seamless Taskbar"> | [Seamless Taskbar](mods/local/seamless-taskbar) | The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch |
 | <img src="media/previews/seamless-taskbar-badge-counter.png" width="220" alt="Window count badges on taskbar icons"> | [Seamless Taskbar Badge Counter](mods/local/seamless-taskbar-badge-counter) | See how many windows each taskbar app has open, on a Catppuccin Mocha badge with a gradient edge. |
-| <img src="media/previews/seamless-crash-watch.png" width="220" alt="Crash notice on dark glass"> | [Seamless Crash Watch](mods/local/seamless-crash-watch) | A notice when a program crashes. Click it and an AI agent in a terminal finds out why. |
-| <img src="media/previews/seamless-sound-manager.png" width="220" alt="Sound scheme settings window"> | [Seamless Sound Manager](mods/local/seamless-sound-manager) | Change every Windows sound with a scheme: 161 presets, startup and logon sounds. |
+| <img src="media/previews/recycle-bin-tray-plus.png" width="220" alt="Recycle Bin icon in the tray"> | [Recycle Bin Tray Plus](mods/local/recycle-bin-tray-plus) | A Recycle Bin icon in the tray, with drag and drop and themed menus. |
+| <img src="media/previews/better-volume-mixer-plus.png" width="220" alt="Tray volume mixer"> | [Seamless Volume Mixer](mods/local/better-volume-mixer-plus) | A tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices. |
+| <img src="media/previews/power-options-button-plus.png" width="220" alt="Power Options Button Plus"> | [Power Options Button Plus](mods/local/power-options-button-plus) | Tray icon to switch between Windows power plans with the mouse wheel. The icon is the house tray badge with a glyph for each plan. |
+|  | [Network Speed Test Plus](mods/local/network-speedtest-plus) | Tray speed test button next to the network icon, plus the Windows 11 network menu speed test as a native flyout: ping, jitter, download and upload measured against Cloudflare, live gauge, results chart with copy. Mocha glass, FiraCode, gradient hover. No browser, no separate app. |
 
-### Windows, borders and Alt+Tab
+### Explorer
 
-| | Mod | What it does |
-| --- | --- | --- |
-| | [Seamless Borders](mods/local/seamless-borders) | Colored borders around windows, menus and notification banners. |
-| <img src="media/previews/seamless-title-bars.png" width="220" alt="Steam and Helium on native title bars with centred titles"> | [Seamless Title Bars](mods/local/seamless-title-bars) | One title bar look everywhere: colors, caption buttons and native frames in every kind of app. |
-| <img src="media/previews/simple-window-switcher-plus.gif" width="220" alt="Vista-style Alt+Tab"> | [Simple Window Switcher Plus](mods/local/simple-window-switcher-plus) | Alt+Tab with Vista animations, background blur and elevated app support. |
-| <img src="media/previews/always-on-top-plus.png" width="220" alt="Pinned window with a red to yellow ring"> | [Always On Top Windows Plus](mods/local/always-on-top-plus) | Pin any window on top with a hotkey, marked by a Mocha red to yellow ring. |
-| | [Seamless Window Manager](mods/local/seamless-window-manager) | Move, resize, snap and focus windows with the mouse or keyboard, with app rules and a pause key. |
-| <img src="media/previews/seamless-power-action-countdown.png" width="220" alt="Restart countdown on dark Mocha glass"> | [Seamless Power Action Countdown](mods/local/seamless-power-action-countdown) | A glassy countdown before shutdown, restart, sleep or hibernation that any key or click cancels. |
-| <img src="media/previews/wintips-osd-plus.png" width="220" alt="Caps Lock On and Off cards with a blue to mauve gradient border"> | [WinTips OSD Plus](mods/local/wintips-osd-plus) | The Windows tips OSD rebuilt in Capuchin Mocha: gradient-border cards for lock keys and clipboard actions. |
-
-### Start menu and launchers
-
-| | Mod | What it does |
-| --- | --- | --- |
-| <img src="media/previews/seamless-launchpad.png" width="220" alt="Fullscreen Launchpad grid of app icons"> | [Seamless Launchpad](mods/local/seamless-launchpad) | A fullscreen, Launchpad-style grid of all your apps in place of Start, with instant search and blur. |
-| | [Seamless Clipboard Manager](mods/local/seamless-clipboard-manager) | Everything you copy, text and images, in a searchable list you open with Win+V. |
-| | [Theme Tool Plus](mods/local/theme-tool-plus) | Switch Windows themes from the settings tab, custom themes included. Comes with the Main 01 Catppuccin theme, cursors and sounds. |
-| | [Halo Launcher](mods/local/halo-launcher) | Press a key, type a few letters, press Enter: apps, files, sums, web searches and every plugin. |
-| | [UWP Assets Redirect Plus](mods/local/uwp-assets-redirect-plus) | Swap the icons of Store and system apps, with a built-in Catppuccin icon theme. |
-
-### Explorer and files
+File Explorer and working with files.
 
 | | Mod | What it does |
 | --- | --- | --- |
 | <img src="media/previews/windows-11-file-explorer-styler-plus.png" width="220" alt="File Explorer with a dark Catppuccin theme and rounded toolbar buttons"> | [File Explorer Styler Plus](mods/local/windows-11-file-explorer-styler-plus) | Themes for File Explorer, plus a rounded Catppuccin dock for the status bar with Mocha view buttons. |
 | <img src="media/previews/seamless-explorer-view.png" width="220" alt="Explorer window with Seamless Explorer View: GPU-rendered file list, custom nav pane highlights, FiraCode file names"> | [Seamless Explorer View](mods/local/seamless-explorer-view) | GPU-rendered file lists and icon grids, populated submenus, page animations and navigation pane styling. |
+| | [Seamless Explorer Search](mods/local/seamless-explorer-search) | Start typing in any File Explorer window to search it, and every drive, with Everything. |
 | | [Explorer Tags Plus](mods/local/explorer-tags-plus) | Colored tags in Explorer's navigation pane and a Tags submenu on files. |
 | | [File Operation Styler Plus](mods/local/file-operation-styler-plus) | A modern copy, move, delete and recycle window for Explorer, drawn on the GPU. |
 | <img src="media/previews/peek.png" width="220" alt="Peek preview window playing an mp3 with a seek bar"> | [Peek](mods/local/peek) | Select a file in Explorer and press Space to preview it, with media playback for audio and video. |
 | <img src="media/previews/shell-font-changer-plus.png" width="220" alt="Explorer text in Segoe UI and in FiraCode Nerd Font"> | [Shell Font Changer Plus](mods/local/shell-font-changer-plus) | Any installed font in File Explorer, with icons and emoji left intact. |
-| <img src="media/previews/seamless-color-picker.png" width="220" alt="Color picker with a screen magnifier"> | [Seamless Color Picker](mods/local/seamless-color-picker) | A full color picker on a hotkey, with a screen magnifier, recent colors and one-click copy. |
-| | [ZoomIt](mods/local/zoomit) | Zoom into any part of the screen and draw on it with a hotkey, like Sysinternals ZoomIt. Hold Ctrl to read small text in a big bubble. |
-| | [Seamless Explorer Search](mods/local/seamless-explorer-search) | Start typing in any File Explorer window to search it, and every drive, with Everything. |
-| <img src="media/previews/seamless-snipper.png" width="220" alt="Seamless Snipper shortcut settings"> | [Seamless Snipper](mods/local/seamless-snipper) | Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it. |
 
-### Menus, flyouts and apps
+### Windows and menus
+
+Window frames, menus, flyouts, Start and the Windows look.
 
 | | Mod | What it does |
 | --- | --- | --- |
+| <img src="media/previews/seamless-title-bars.png" width="220" alt="Steam and Helium on native title bars with centred titles"> | [Seamless Title Bars](mods/local/seamless-title-bars) | One title bar look everywhere: colors, caption buttons and native frames in every kind of app. |
+| | [Seamless Borders](mods/local/seamless-borders) | Colored borders around windows, menus and notification banners. |
 | <img src="media/previews/seamless-flyouts.png" width="220" alt="Acrylic context menu"> | [Seamless Flyouts](mods/local/seamless-flyouts) | Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps. |
+| | [Seamless Window Manager](mods/local/seamless-window-manager) | Move, resize, snap and focus windows with the mouse or keyboard, with app rules and a pause key. |
+| <img src="media/previews/seamless-wobbly-windows.gif" width="220" alt="Seamless Wobbly Windows"> | [Seamless Wobbly Windows](mods/local/seamless-wobbly-windows) | Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows |
+| <img src="media/previews/seamless-compiz-cube.gif" width="220" alt="Seamless Compiz Cube"> | [Seamless Compiz Cube](mods/local/seamless-compiz-cube) | Rounded 3D desktop cube with Mocha borders, switching desktops through Seamless Window Manager |
+| <img src="media/previews/simple-window-switcher-plus.gif" width="220" alt="Vista-style Alt+Tab"> | [Simple Window Switcher Plus](mods/local/simple-window-switcher-plus) | Alt+Tab with Vista animations, background blur and elevated app support. |
+| <img src="media/previews/always-on-top-plus.png" width="220" alt="Pinned window with a red to yellow ring"> | [Always On Top Windows Plus](mods/local/always-on-top-plus) | Pin any window on top with a hotkey, marked by a Mocha red to yellow ring. |
+| <img src="media/previews/seamless-launchpad.png" width="220" alt="Fullscreen Launchpad grid of app icons"> | [Seamless Launchpad](mods/local/seamless-launchpad) | A fullscreen, Launchpad-style grid of all your apps in place of Start, with instant search and blur. |
+| | [Halo Launcher](mods/local/halo-launcher) | Press a key, type a few letters, press Enter: apps, files, sums, web searches and every plugin. |
 | <img src="media/previews/notification-center-styler-plus.png" width="220" alt="Notification panel with a group options menu opening to the left"> | [Notification Center Styler Plus](mods/local/notification-center-styler-plus) | Themes for the notification panel, with gradient hover borders and a group options menu that stays fully in view. |
 | <img src="media/previews/settings-styler-plus.png" width="220" alt="Windows Settings app with a custom theme"> | [Settings Styler Plus](mods/local/settings-styler-plus) | Themes for the Settings app, with the normal title bar and a blur that stays when unfocused. |
-| | [Helium Acrylic](mods/local/helium-acrylic) | Keeps Helium's acrylic surface, Catppuccin colors and system-drawn frame working after browser updates. |
-| <img src="media/previews/seamless-crosshair.png" width="220" alt="Seamless Game Crosshair settings"> | [Seamless Game Crosshair](mods/local/seamless-crosshair) | A crosshair over any game: presets or your own design, any color and size, shortcuts and a tray icon. |
 | <img src="media/previews/seamless-share.png" width="220" alt="Share window on dark glass with a blue to mauve border"> | [Seamless Share](mods/local/seamless-share) | Restyles the Windows 11 share window and its menus: blurred glass, your font, soft gradient hover edges, all adjustable. |
+| | [Theme Tool Plus](mods/local/theme-tool-plus) | Switch Windows themes from the settings tab, custom themes included. Comes with the Main 01 Catppuccin theme, cursors and sounds. |
+| | [UWP Assets Redirect Plus](mods/local/uwp-assets-redirect-plus) | Swap the icons of Store and system apps, with a built-in Catppuccin icon theme. |
+| <img src="media/previews/seamless-power-action-countdown.png" width="220" alt="Restart countdown on dark Mocha glass"> | [Seamless Power Action Countdown](mods/local/seamless-power-action-countdown) | A glassy countdown before shutdown, restart, sleep or hibernation that any key or click cancels. |
+| <img src="media/previews/wintips-osd-plus.png" width="220" alt="Caps Lock On and Off cards with a blue to mauve gradient border"> | [WinTips OSD Plus](mods/local/wintips-osd-plus) | The Windows tips OSD rebuilt in Capuchin Mocha: gradient-border cards for lock keys and clipboard actions. |
+| <img src="media/previews/windhawk-enhanced-styler.png" width="220" alt="Themed Windhawk window"> | [Windhawk Enhanced Styler](mods/local/windhawk-enhanced-styler) | Your own colors, gradients, font, transparency and blur for the Windhawk window. |
 
-### Input
+### Tools
+
+Things you call up with a key, a click or the tray.
 
 | | Mod | What it does |
 | --- | --- | --- |
-| <img src="media/previews/seamless-autoscroll.png" width="220" alt="Frosted glass autoscroll circle with a blue to mauve ring"> | [Seamless Autoscroll](mods/local/seamless-autoscroll) | Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator. |
-| <img src="media/previews/seamless-autoclicker.png" width="220" alt="Seamless AutoClicker settings in Catppuccin Mocha"> | [Seamless AutoClicker](mods/local/seamless-autoclicker) | Hold a side mouse button and left click keeps clicking, with a right-click lock, a tray switch and its own settings window. |
+| <img src="media/previews/seamless-workshop.png" width="220" alt="Seamless Workshop"> | [Seamless Workshop](mods/local/seamless-workshop) | One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods |
+| | [Seamless Clipboard Manager](mods/local/seamless-clipboard-manager) | Everything you copy, text and images, in a searchable list you open with Win+V. |
+| <img src="media/previews/seamless-snipper.png" width="220" alt="Seamless Snipper shortcut settings"> | [Seamless Snipper](mods/local/seamless-snipper) | Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it. |
+| <img src="media/previews/seamless-color-picker.png" width="220" alt="Color picker with a screen magnifier"> | [Seamless Color Picker](mods/local/seamless-color-picker) | A full color picker on a hotkey, with a screen magnifier, recent colors and one-click copy. |
 | <img src="media/previews/seamless-dictate.png" width="220" alt="Seamless Dictate settings in Catppuccin Mocha"> | [Seamless Dictate](mods/local/seamless-dictate) | Hold a shortcut and speak to type in any app, with AI cleanup and mic privacy while you talk. |
-| | [Magic Pointer Plus](mods/local/magic-pointer-plus) | Shake the pointer, then point at anything and ask an AI about it, with matching menus. |
+| | [ZoomIt](mods/local/zoomit) | Zoom into any part of the screen and draw on it with a hotkey, like Sysinternals ZoomIt. Hold Ctrl to read small text in a big bubble. |
+| <img src="media/previews/seamless-crosshair.png" width="220" alt="Seamless Game Crosshair settings"> | [Seamless Game Crosshair](mods/local/seamless-crosshair) | A crosshair over any game: presets or your own design, any color and size, shortcuts and a tray icon. |
+| <img src="media/previews/seamless-autoclicker.png" width="220" alt="Seamless AutoClicker settings in Catppuccin Mocha"> | [Seamless AutoClicker](mods/local/seamless-autoclicker) | Hold a side mouse button and left click keeps clicking, with a right-click lock, a tray switch and its own settings window. |
+| <img src="media/previews/seamless-autoscroll.png" width="220" alt="Frosted glass autoscroll circle with a blue to mauve ring"> | [Seamless Autoscroll](mods/local/seamless-autoscroll) | Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator. |
+|  | [Seamless Autoscroll Global](mods/local/seamless-autoscroll-global) | The frosted autoscroll circle in every app the per-app mod does not cover, with the same look |
+| <img src="media/previews/seamless-key-click.png" width="220" alt="Seamless Key Click sound settings"> | [Seamless Key Click](mods/local/seamless-key-click) | Mechanical keyboard and mouse sounds as you type and click, with every Keyboard Sounds pack, shortcuts and a tray icon. |
 | | [Pointer Afterimage Plus](mods/local/pointer-afterimage-plus) | A real motion blur for the mouse pointer, drawn on the GPU. |
 | | [Keyboard Shortcut Actions Plus](mods/local/keyboard-shortcut-actions-plus) | Global shortcuts for apps and Windows actions, with a download offer when an app is missing. |
-| <img src="media/previews/seamless-key-click.png" width="220" alt="Seamless Key Click sound settings"> | [Seamless Key Click](mods/local/seamless-key-click) | Mechanical keyboard and mouse sounds as you type and click, with every Keyboard Sounds pack, shortcuts and a tray icon. |
+| <img src="media/previews/seamless-sound-manager.png" width="220" alt="Sound scheme settings window"> | [Seamless Sound Manager](mods/local/seamless-sound-manager) | Change every Windows sound with a scheme: 161 presets, startup and logon sounds. |
+| <img src="media/previews/startup-control.png" width="220" alt="Startup Control"> | [Startup Control](mods/local/startup-control) | Manage startup apps, scheduled tasks and Windows startup locations. |
+| <img src="media/previews/seamless-crash-watch.png" width="220" alt="Crash notice on dark glass"> | [Seamless Crash Watch](mods/local/seamless-crash-watch) | A notice when a program crashes. Click it and an AI agent in a terminal finds out why. |
 
-### Windhawk and app fixes
+### Fixes
+
+Small fixes for one app or one crash.
 
 | | Mod | What it does |
 | --- | --- | --- |
-| <img src="media/previews/windhawk-enhanced-styler.png" width="220" alt="Themed Windhawk window"> | [Windhawk Enhanced Styler](mods/local/windhawk-enhanced-styler) | Your own colors, gradients, font, transparency and blur for the Windhawk window. |
-| <img src="media/previews/npp-taskdlg-textcolor.png" width="220" alt="Notepad++ dark dialog"> | [Notepad++ Dark Dialog Fix](mods/local/npp-taskdlg-textcolor) | Readable text in Notepad++ Save and confirm dialogs in dark mode. |
 | | [Explorer Tree Guard](mods/local/explorer-tree-guard) | Stops File Explorer windows crashing when the folder tree gets a request from a thread that already gave up. |
+| | [Helium Acrylic](mods/local/helium-acrylic) | Keeps Helium's acrylic surface, Catppuccin colors and system-drawn frame working after browser updates. |
+| <img src="media/previews/ableton-glass-fill.png" width="220" alt="Ableton Glass Fill"> | [Ableton Glass Fill](mods/local/ableton-glass-fill) | Matches Ableton's menu bar and Settings window to its title bar glass, and keeps the glass tint Mocha |
 
 ### Themes
 

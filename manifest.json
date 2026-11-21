@@ -5,7 +5,7 @@
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 185,
-    "enabled": 177,
+    "enabled": 169,
     "local": 60
   },
   "mods": [
@@ -715,7 +715,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/always-on-top-plus/always-on-top-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@better-volume-mixer-plus",
@@ -727,7 +728,8 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/better-volume-mixer",
       "source": "mods/local/better-volume-mixer-plus/better-volume-mixer-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Taskbar"
     },
     {
       "id": "local@explorer-tags-plus",
@@ -739,7 +741,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/explorer-tags-plus/explorer-tags-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Explorer"
     },
     {
       "id": "local@file-operation-styler-plus",
@@ -751,7 +754,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/file-operation-styler-plus/file-operation-styler-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Explorer"
     },
     {
       "id": "local@seamless-explorer-view",
@@ -763,7 +767,8 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/gpu-accelerated-explorer-view",
       "source": "mods/local/seamless-explorer-view/seamless-explorer-view.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Explorer"
     },
     {
       "id": "local@helium-acrylic",
@@ -775,7 +780,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/helium-acrylic/helium-acrylic.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Fixes"
     },
     {
       "id": "local@keyboard-shortcut-actions-plus",
@@ -787,7 +793,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/keyboard-shortcut-actions-plus/keyboard-shortcut-actions-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "local@magic-pointer-plus",
@@ -798,8 +805,10 @@
       "license": "",
       "origin": "local",
       "upstream": "",
-      "source": "mods/local/magic-pointer-plus/magic-pointer-plus.wh.cpp",
-      "enabled": true
+      "source": "mods/retired/magic-pointer-plus/magic-pointer-plus.wh.cpp",
+      "enabled": false,
+      "retired": true,
+      "replacedBy": "local@seamless-snipper"
     },
     {
       "id": "local@micrographics-taskbar-clock-plus",
@@ -810,8 +819,10 @@
       "license": "MIT",
       "origin": "local",
       "upstream": "",
-      "source": "mods/local/micrographics-taskbar-clock-plus/micrographics-taskbar-clock-plus.wh.cpp",
-      "enabled": true
+      "source": "mods/retired/micrographics-taskbar-clock-plus/micrographics-taskbar-clock-plus.wh.cpp",
+      "enabled": false,
+      "retired": true,
+      "replacedBy": "local@seamless-taskbar"
     },
     {
       "id": "local@notification-center-styler-plus",
@@ -823,7 +834,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/notification-center-styler-plus/notification-center-styler-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@peek",
@@ -835,7 +847,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/peek/peek.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Explorer"
     },
     {
       "id": "local@pointer-afterimage-plus",
@@ -847,7 +860,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/pointer-afterimage-plus/pointer-afterimage-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "local@recycle-bin-tray-plus",
@@ -859,7 +873,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/recycle-bin-tray-plus/recycle-bin-tray-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Taskbar"
     },
     {
       "id": "local@seamless-autoclicker",
@@ -871,7 +886,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-autoclicker/seamless-autoclicker.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "local@seamless-autoscroll",
@@ -883,7 +899,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-autoscroll/seamless-autoscroll.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "local@seamless-borders",
@@ -895,7 +912,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-borders/seamless-borders.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@seamless-clipboard-manager",
@@ -907,7 +925,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-clipboard-manager/seamless-clipboard-manager.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "local@seamless-color-picker",
@@ -919,7 +938,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-color-picker/seamless-color-picker.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "local@seamless-crash-watch",
@@ -931,7 +951,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-crash-watch/seamless-crash-watch.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "local@seamless-dictate",
@@ -943,7 +964,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-dictate/seamless-dictate.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "local@seamless-flyouts",
@@ -955,7 +977,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-flyouts/seamless-flyouts.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@seamless-launchpad",
@@ -967,7 +990,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-launchpad/seamless-launchpad.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@seamless-media-player",
@@ -978,8 +1002,10 @@
       "license": "MIT",
       "origin": "local",
       "upstream": "",
-      "source": "mods/local/seamless-media-player/seamless-media-player.wh.cpp",
-      "enabled": true
+      "source": "mods/retired/seamless-media-player/seamless-media-player.wh.cpp",
+      "enabled": false,
+      "retired": true,
+      "replacedBy": "local@seamless-taskbar"
     },
     {
       "id": "local@seamless-power-action-countdown",
@@ -991,7 +1017,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-power-action-countdown/seamless-power-action-countdown.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@seamless-sound-manager",
@@ -1003,7 +1030,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-sound-manager/seamless-sound-manager.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "local@seamless-taskbar-utilities",
@@ -1014,8 +1042,10 @@
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
-      "source": "mods/local/seamless-taskbar-utilities/seamless-taskbar-utilities.wh.cpp",
-      "enabled": true
+      "source": "mods/retired/seamless-taskbar-utilities/seamless-taskbar-utilities.wh.cpp",
+      "enabled": false,
+      "retired": true,
+      "replacedBy": "local@seamless-taskbar"
     },
     {
       "id": "local@seamless-title-bars",
@@ -1027,7 +1057,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-title-bars/seamless-title-bars.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@seamless-tray-drawer",
@@ -1038,8 +1069,10 @@
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
-      "source": "mods/local/seamless-tray-drawer/seamless-tray-drawer.wh.cpp",
-      "enabled": true
+      "source": "mods/retired/seamless-tray-drawer/seamless-tray-drawer.wh.cpp",
+      "enabled": false,
+      "retired": true,
+      "replacedBy": "local@seamless-taskbar"
     },
     {
       "id": "local@seamless-window-manager",
@@ -1051,7 +1084,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-window-manager/seamless-window-manager.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@settings-styler-plus",
@@ -1063,7 +1097,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/settings-styler-plus/settings-styler-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@shell-font-changer-plus",
@@ -1075,7 +1110,8 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/explorer-font-changer",
       "source": "mods/local/shell-font-changer-plus/shell-font-changer-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Explorer"
     },
     {
       "id": "local@simple-window-switcher-plus",
@@ -1087,7 +1123,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/simple-window-switcher-plus/simple-window-switcher-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@taskbar-ai-usage-plus",
@@ -1098,8 +1135,10 @@
       "license": "MIT",
       "origin": "local",
       "upstream": "",
-      "source": "mods/local/taskbar-ai-usage-plus/taskbar-ai-usage-plus.wh.cpp",
-      "enabled": true
+      "source": "mods/retired/taskbar-ai-usage-plus/taskbar-ai-usage-plus.wh.cpp",
+      "enabled": false,
+      "retired": true,
+      "replacedBy": "local@seamless-taskbar"
     },
     {
       "id": "local@taskbar-collapse-to-running-plus",
@@ -1110,8 +1149,10 @@
       "license": "MIT",
       "origin": "local",
       "upstream": "",
-      "source": "mods/local/taskbar-collapse-to-running-plus/taskbar-collapse-to-running-plus.wh.cpp",
-      "enabled": true
+      "source": "mods/retired/taskbar-collapse-to-running-plus/taskbar-collapse-to-running-plus.wh.cpp",
+      "enabled": false,
+      "retired": true,
+      "replacedBy": "local@seamless-taskbar"
     },
     {
       "id": "local@taskbar-system-info-weather",
@@ -1122,8 +1163,10 @@
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
-      "source": "mods/local/taskbar-system-info-weather/taskbar-system-info-weather.wh.cpp",
-      "enabled": true
+      "source": "mods/retired/taskbar-system-info-weather/taskbar-system-info-weather.wh.cpp",
+      "enabled": false,
+      "retired": true,
+      "replacedBy": "local@seamless-taskbar"
     },
     {
       "id": "local@theme-tool-plus",
@@ -1135,7 +1178,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/theme-tool-plus/theme-tool-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@windhawk-enhanced-styler",
@@ -1147,7 +1191,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/windhawk-enhanced-styler/windhawk-enhanced-styler.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@window-manager",
@@ -1158,8 +1203,10 @@
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
-      "source": "mods/local/window-manager/window-manager.wh.cpp",
-      "enabled": false
+      "source": "mods/retired/window-manager/window-manager.wh.cpp",
+      "enabled": false,
+      "retired": true,
+      "replacedBy": "local@seamless-window-manager"
     },
     {
       "id": "local@windows-11-file-explorer-styler-plus",
@@ -1171,7 +1218,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/windows-11-file-explorer-styler-plus/windows-11-file-explorer-styler-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Explorer"
     },
     {
       "id": "local@wintips-osd-plus",
@@ -1183,7 +1231,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/wintips-osd-plus/wintips-osd-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@zoomit",
@@ -1195,7 +1244,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/zoomit/zoomit.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "lock-screen-live-wallpaper",
@@ -2023,7 +2073,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/explorer-tree-guard/explorer-tree-guard.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Fixes"
     },
     {
       "id": "local@halo-launcher",
@@ -2035,7 +2086,8 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/spotlight-launcher",
       "source": "mods/local/halo-launcher/halo-launcher.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@seamless-crosshair",
@@ -2047,7 +2099,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-crosshair/seamless-crosshair.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "local@seamless-explorer-search",
@@ -2059,7 +2112,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-explorer-search/seamless-explorer-search.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Explorer"
     },
     {
       "id": "local@seamless-key-click",
@@ -2071,7 +2125,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-key-click/seamless-key-click.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "local@seamless-share",
@@ -2083,7 +2138,8 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/windows-11-notification-center-styler",
       "source": "mods/local/seamless-share/seamless-share.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@seamless-snipper",
@@ -2095,7 +2151,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-snipper/seamless-snipper.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "local@seamless-taskbar-badge-counter",
@@ -2107,7 +2164,8 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/taskbar-count-badges",
       "source": "mods/local/seamless-taskbar-badge-counter/seamless-taskbar-badge-counter.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Taskbar"
     },
     {
       "id": "local@uwp-assets-redirect-plus",
@@ -2119,7 +2177,8 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/uwp-assets-redirect",
       "source": "mods/local/uwp-assets-redirect-plus/uwp-assets-redirect-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@ableton-glass-fill",
@@ -2131,7 +2190,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/ableton-glass-fill/ableton-glass-fill.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Fixes"
     },
     {
       "id": "local@network-speedtest-plus",
@@ -2143,7 +2203,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/network-speedtest-plus/network-speedtest-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Taskbar"
     },
     {
       "id": "local@power-options-button-plus",
@@ -2155,7 +2216,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/power-options-button-plus/power-options-button-plus.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Taskbar"
     },
     {
       "id": "local@seamless-compiz-cube",
@@ -2167,7 +2229,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-compiz-cube/seamless-compiz-cube.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@seamless-taskbar",
@@ -2179,7 +2242,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-taskbar/seamless-taskbar.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Taskbar"
     },
     {
       "id": "local@seamless-wobbly-windows",
@@ -2191,7 +2255,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-wobbly-windows/seamless-wobbly-windows.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Windows and menus"
     },
     {
       "id": "local@seamless-workshop",
@@ -2203,7 +2268,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-workshop/seamless-workshop.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "local@startup-control",
@@ -2215,7 +2281,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/startup-control/startup-control.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     },
     {
       "id": "local@seamless-autoscroll-global",
@@ -2227,7 +2294,8 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-autoscroll-global/seamless-autoscroll-global.wh.cpp",
-      "enabled": true
+      "enabled": true,
+      "category": "Tools"
     }
   ]
 }
