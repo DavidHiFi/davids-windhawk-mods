@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.15
+// @version         2.2.16
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,11 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.16
+
+- The Windhawk toolkit box (Loaded mods, Safe mode, Exit) now matches the other tray windows: dark glass body, FiraCode text and pill buttons with the blue to mauve edge on hover.
+- Tray windows take the look the moment they open, so the stock grey never flashes first.
 
 ## What's new in 2.2.15
 
@@ -2440,6 +2445,16 @@ static LRESULT CALLBACK ProgressDialogProc(HWND hwnd, UINT message, WPARAM wPara
 }
 
 
+// The toolkit box: Loaded mods (1003), Exit (1004), Safe mode (1005), Close (1006).
+static bool IsToolkitDialog(HWND hWnd) {
+    wchar_t cls[64];
+    for (int id : {1003, 1006}) {
+        HWND b = GetDlgItem(hWnd, id);
+        if (!b || !GetClassNameW(b, cls, ARRAYSIZE(cls)) || wcscmp(cls, L"Button") != 0) return false;
+    }
+    return true;
+}
+
 static bool IsTrayTaskDialog(HWND hWnd) {
     DWORD pid = 0;
     GetWindowThreadProcessId(hWnd, &pid);
@@ -2447,7 +2462,8 @@ static bool IsTrayTaskDialog(HWND hWnd) {
     wchar_t cls[64];
     if (!GetClassNameW(hWnd, cls, 64) || wcscmp(cls, L"#32770") != 0) return false;
     HWND list = GetDlgItem(hWnd, 1001);
-    return list && GetClassNameW(list, cls, ARRAYSIZE(cls)) && wcscmp(cls, L"SysListView32") == 0;
+    if (list && GetClassNameW(list, cls, ARRAYSIZE(cls)) && wcscmp(cls, L"SysListView32") == 0) return true;
+    return IsToolkitDialog(hWnd);
 }
 
 static BOOL CALLBACK TrayDialogEnumProc(HWND hWnd, LPARAM lParam) {
@@ -2511,12 +2527,26 @@ static void TrayDialogPass(const Settings& s) {
     for (auto& [dialog, list] : due) {
         if (!IsWindow(dialog)) continue;
         list = FindWindowExW(dialog, nullptr, L"SysListView32", nullptr);
-        if (!list) continue;
-        ApplyTrayDialogLook(dialog, list, s);
+        if (list) {
+            ApplyTrayDialogLook(dialog, list, s);
+        } else {
+            ApplyWindowStack(dialog, s);
+            RedrawWindow(dialog, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);
+        }
         std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
         auto it = g_trayDialogs.find(dialog);
         if (it != g_trayDialogs.end()) it->second.epoch = epoch;
     }
+}
+
+static void CALLBACK TrayShowEvent(HWINEVENTHOOK, DWORD, HWND hwnd, LONG idObject, LONG idChild, DWORD, DWORD) {
+    if (idObject != OBJID_WINDOW || idChild != CHILDID_SELF || !hwnd) return;
+    if (GetAncestor(hwnd, GA_ROOT) != hwnd || !IsTrayTaskDialog(hwnd)) return;
+    {
+        std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+        if (g_trayDialogs.contains(hwnd)) return;
+    }
+    TrayDialogPass(SnapshotSettings());
 }
 
 static bool IsOurMainUiWindow(HWND hWnd) {
@@ -3690,9 +3720,68 @@ static void HideSizeGrips(HWND dialog, bool hide) {
     EnumChildWindows(dialog, HideGripProc, hide);
 }
 
+// A static label drawn as real alpha text, so it reads on the glass.
+static LRESULT CALLBACK TrayStaticProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, DWORD_PTR) {
+    if (message == WM_NCDESTROY) {
+        WindhawkUtils::RemoveWindowSubclassFromAnyThread(hwnd, TrayStaticProc);
+        return DefSubclassProc(hwnd, message, wParam, lParam);
+    }
+    if (!InterlockedExchangeAdd(&g_themeActive, 0)) return DefSubclassProc(hwnd, message, wParam, lParam);
+    switch (message) {
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_PAINT: {
+            Settings s = SnapshotSettings();
+            HFONT font = TrayFont(GetAncestor(hwnd, GA_ROOT), s);
+            wchar_t text[1024] = L"";
+            GetWindowTextW(hwnd, text, ARRAYSIZE(text));
+            LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+            UINT align = (style & SS_TYPEMASK) == SS_CENTER ? DT_CENTER : (style & SS_TYPEMASK) == SS_RIGHT ? DT_RIGHT : DT_LEFT;
+            TrayBufferedPaint(hwnd, 0, [&](HDC, RGBQUAD* px, int stride, int w, int h) {
+                RECT rc{0, 0, w, h};
+                TrayBlendText(px, stride, w, h, font, text, rc, align | DT_WORDBREAK | DT_NOPREFIX, TrayTextRgb(s), 1.0f);
+            });
+            return 0;
+        }
+        case WM_SETTEXT:
+        case WM_ENABLE: {
+            LRESULT result = DefSubclassProc(hwnd, message, wParam, lParam);
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return result;
+        }
+    }
+    return DefSubclassProc(hwnd, message, wParam, lParam);
+}
+
+static BOOL CALLBACK ToolkitPartProc(HWND child, LPARAM) {
+    wchar_t cls[32];
+    if (!GetClassNameW(child, cls, ARRAYSIZE(cls))) return TRUE;
+    if (!wcscmp(cls, L"Button")) {
+        LONG_PTR type = GetWindowLongPtrW(child, GWL_STYLE) & BS_TYPEMASK;
+        if (type == BS_PUSHBUTTON || type == BS_DEFPUSHBUTTON)
+            WindhawkUtils::SetWindowSubclassFromAnyThread(child, TrayButtonProc, 0);
+    } else if (!wcscmp(cls, L"Static")) {
+        LONG_PTR type = GetWindowLongPtrW(child, GWL_STYLE) & SS_TYPEMASK;
+        if (type == SS_LEFT || type == SS_CENTER || type == SS_RIGHT || type == SS_LEFTNOWORDWRAP)
+            WindhawkUtils::SetWindowSubclassFromAnyThread(child, TrayStaticProc, 0);
+    }
+    return TRUE;
+}
+
 static void SetupTrayDialogParts(HWND dialog) {
     HWND list = GetDlgItem(dialog, 1001);
-    if (!list) return;
+    if (!list) {
+        if (!IsToolkitDialog(dialog)) return;
+        {
+            std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+            auto it = g_trayDialogs.find(dialog);
+            if (it == g_trayDialogs.end() || it->second.partsSet) return;
+            it->second.partsSet = true;
+        }
+        EnumChildWindows(dialog, ToolkitPartProc, 0);
+        RedrawWindow(dialog, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN);
+        return;
+    }
     HWND header = (HWND)SendMessageW(list, LVM_GETHEADER, 0, 0);
     HWND button = GetDlgItem(dialog, IDOK);
     RECT card;
@@ -4808,6 +4897,14 @@ static DWORD WINAPI StylerWorkerThread(LPVOID) {
         }
     }
 
+    // Tray process: catch our own dialogs as they show. The callback runs on
+    // this thread through the message pump below.
+    HWINEVENTHOOK trayShowHook = nullptr;
+    if (!g_isUiProcess) {
+        trayShowHook = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, nullptr, TrayShowEvent,
+                                       GetCurrentProcessId(), 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNTHREAD);
+    }
+
     for (;;) {
         // The interface window frame (title bar, blur, borders) is set by this
         // loop. Poll quickly while the window is still coming up, so the stock
@@ -4933,6 +5030,7 @@ static DWORD WINAPI StylerWorkerThread(LPVOID) {
         // the stylesheet to every new document before it paints.
     }
 
+    if (trayShowHook) UnhookWinEvent(trayShowHook);
 
     WSACleanup();
     return 0;
