@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.24
+// @version         0.4.26
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -59950,6 +59950,8 @@ static std::array<HWND, 10> SettingsRowWindows(const SettingsRow& row) {
 struct NativeTheme {
     bool dark = false;
     bool highContrast = false;
+    // Catppuccin Mocha look (account editor): toggles, pill buttons and blue to mauve edges.
+    bool mocha = false;
     UiColor text{}, textSecondary{}, textDisabled{};
     UiColor control{}, controlHover{}, controlPressed{}, controlDisabled{}, controlStroke{};
     UiColor strongStroke{}, strongStrokeDisabled{}, altFill{}, altFillHover{}, knobOff{};
@@ -60703,6 +60705,8 @@ struct AccountEditorState {
     int wheelRemainder = 0;
     bool layingOut = false;
     bool updatingVisuals = false;
+    RECT footerDock{};  // Rounded dock behind OK and Cancel (Mocha).
+    int composedChecks = 0;  // kNativeComposedTimer checks after showing.
 };
 
 static constexpr PCWSTR kSettingsWindowClass = L"AiUsageSettings_" WH_MOD_ID;
@@ -61021,6 +61025,20 @@ static void NativeChildControlSurface(HWND hWnd, const NativeTheme& theme, COLOR
         state->controlSurface = rounded;
         state->controlCornerFill = base;
         state->cardFill = NativeOver(fill, base);
+    }
+}
+
+// Control over a translucent dock (not a card): its corners keep the dock's alpha.
+static void NativeChildSurfaceOver(HWND hWnd, const NativeTheme& theme, COLORREF flat, UiColor fill,
+                                   COLORREF under, UiColor underFill) {
+    if (auto* state = NativeChildPaintStateOf(hWnd)) {
+        state->cardSurface = !theme.highContrast;
+        state->roundedSurface = false;
+        state->cardBase = under;
+        state->cardColor = flat;
+        state->controlSurface = true;
+        state->controlCornerFill = underFill;
+        state->cardFill = NativeOver(fill, underFill);
     }
 }
 
@@ -61413,6 +61431,12 @@ public:
         cards_[cardCount_++] = {rect, theme.card, theme.cardFill};
     }
 
+    // Rounded surface with its own token (the editor's footer dock).
+    void Surface(RECT rect, COLORREF flat, UiColor fill) {
+        if (!transparent_ || cardCount_ == cards_.size() || !Visible(rect)) return;
+        cards_[cardCount_++] = {rect, flat, fill};
+    }
+
     void Input(RECT rect, const NativeTheme& theme, HWND edit, bool secondary = false) {
         if (!transparent_ || theme.highContrast || cardCount_ == cards_.size() ||
             !edit || !IsWindowVisible(edit) || IsRectEmpty(&rect) || !Visible(rect)) return;
@@ -61517,6 +61541,31 @@ static HFONT CreateSettingsFont(UINT dpi, int pixels, int weight, bool display =
     return font;
 }
 
+// FiraCode Nerd Font, the rice's face, for the Mocha editor. GDI silently substitutes a missing font,
+// so the chosen name is checked; without it the settings font is used.
+static HFONT CreateMochaFont(UINT dpi, int pixels, int weight) {
+    LOGFONTW lf{};
+    lf.lfHeight = -ScaleForDpi(pixels, dpi);
+    lf.lfWeight = weight;
+    lf.lfCharSet = DEFAULT_CHARSET;
+    lf.lfQuality = ANTIALIASED_QUALITY;
+    wcscpy_s(lf.lfFaceName, L"FiraCode Nerd Font");
+    if (HFONT font = CreateFontIndirectW(&lf)) {
+        bool matches = false;
+        if (HDC dc = GetDC(nullptr)) {
+            wchar_t face[LF_FACESIZE] = {};
+            HGDIOBJ old = SelectObject(dc, font);
+            GetTextFaceW(dc, LF_FACESIZE, face);
+            SelectObject(dc, old);
+            ReleaseDC(nullptr, dc);
+            matches = _wcsicmp(face, lf.lfFaceName) == 0;
+        }
+        if (matches) return font;
+        DeleteObject(font);
+    }
+    return CreateSettingsFont(dpi, pixels, weight);
+}
+
 // Icon font for the icon buttons: Segoe Fluent Icons (Windows 11) with Segoe MDL2 Assets as
 // fallback. Since GDI silently substitutes a missing font, the chosen name is checked; if neither
 // exists, returns nullptr and the button draws a Unicode symbol.
@@ -61563,7 +61612,7 @@ static void ReleaseNativeTheme(NativeTheme& t) {
 // TextOnAccentFillColor*, CardBackgroundFillColorDefault and SolidBackgroundFillColorBase (the Mica
 // tone). Text, dividers, card border, accent and footer come from GetUiPalette. Settings thread
 // only: GetUiPalette uses WinRT, not XAML.
-static void BuildNativeTheme(NativeTheme& t, UINT dpi) {
+static void BuildNativeTheme(NativeTheme& t, UINT dpi, bool mocha = false) {
     NativeTheme next;
     bool dark = IsWindowsDarkMode();
     UiPalette p = GetUiPalette(!dark);
@@ -61706,6 +61755,55 @@ static void BuildNativeTheme(NativeTheme& t, UINT dpi) {
         next.statusGlyph = argb(next.dark ? 0xE4000000 : 0xFFFFFFFF);
         next.statusText = next.statusFill;
     }
+    if (mocha && !next.highContrast) {
+        // Catppuccin Mocha, the universal settings window's palette: mantle window under glass,
+        // opaque surface cards, overlay edges, blue accent and the rice's status colours.
+        next.mocha = true;
+        next.dark = true;
+        next.back = next.footer = RGB(0x18, 0x18, 0x25);
+        next.text = argb(0xFFCDD6F4);
+        next.textSecondary = argb(0xFFA6ADC8);
+        next.textDisabled = argb(0xFF6C7086);
+        next.control = argb(0xFF232434);
+        next.controlHover = argb(0xFF2A2B3D);
+        next.controlPressed = argb(0xFF1F2030);
+        next.controlDisabled = argb(0xFF202130);
+        next.controlStroke = argb(0xB26C7086);
+        next.strongStroke = argb(0xFF585B70);
+        next.strongStrokeDisabled = argb(0x80585B70);
+        next.altFill = argb(0xFF45475A);
+        next.altFillHover = argb(0xFF585B70);
+        next.knobOff = argb(0xFFCDD6F4);
+        next.accent = argb(0xFF89B4FA);
+        next.accentHover = argb(0xFF9DAFF9);
+        next.accentPressed = argb(0xFF7AA2E8);
+        next.accentDisabled = argb(0x6045475A);
+        next.accentText = argb(0xFF11111B);
+        next.accentTextDisabled = argb(0x806C7086);
+        next.linkText = argb(0xFF89B4FA);
+        next.linkTextHover = argb(0xFFB4BEFE);
+        next.linkTextPressed = argb(0xFF74C7EC);
+        next.cardFill = next.cardSecondaryFill = argb(0xFF242435);
+        next.cardFillHover = argb(0xFF2A2A3D);
+        next.cardStroke = argb(0x8C585B70);
+        next.dividerStroke = argb(0xFF313244);
+        next.focusStroke = argb(0xFF89B4FA);
+        next.focusInner = argb(0x00000000);
+        next.controlStrokeSecondary = argb(0xFF45475A);
+        next.accentStroke = argb(0x14FFFFFF);
+        next.accentStrokeSecondary = argb(0x23000000);
+        next.subtleSecondary = argb(0x33313244);
+        next.subtleTertiary = argb(0x55313244);
+        next.subtleHover = argb(0x33313244);
+        next.subtlePressed = argb(0x55313244);
+        next.popup = RGB(0x18, 0x18, 0x25);
+        next.popupTint = argb(0x99181825);
+        next.popupStroke = argb(0xFF585B70);
+        next.statusFill = {argb(0xFF89B4FA), argb(0xFFA6E3A1), argb(0xFFF9E2AF), argb(0xFFF38BA8)};
+        next.statusBackground = {argb(0x08FFFFFF), argb(0xFF393D1B), argb(0xFF433519), argb(0xFF442726)};
+        next.statusGlyph = argb(0xE4000000);
+        next.statusText = next.statusFill;
+    }
     next.card = BlendColor(next.cardFill, next.back);
     next.cardSecondary = BlendColor(next.cardSecondaryFill, next.back);
     next.cardSecondaryBrush = CreateSolidBrush(next.cardSecondary);
@@ -61724,11 +61822,14 @@ static void BuildNativeTheme(NativeTheme& t, UINT dpi) {
     next.inputBrush = CreateSolidBrush(next.input);
     next.inputDisabledBrush = CreateSolidBrush(next.inputDisabled);
     next.popupBrush = CreateSolidBrush(next.popup);
-    next.body = CreateSettingsFont(dpi, 14, FW_NORMAL);
-    next.bodyStrong = CreateSettingsFont(dpi, 14, FW_SEMIBOLD);
-    next.caption = CreateSettingsFont(dpi, 12, FW_NORMAL);
+    auto textFont = [&](int pixels, int weight) {
+        return next.mocha ? CreateMochaFont(dpi, pixels, weight) : CreateSettingsFont(dpi, pixels, weight);
+    };
+    next.body = textFont(14, FW_NORMAL);
+    next.bodyStrong = textFont(14, FW_SEMIBOLD);
+    next.caption = textFont(12, FW_NORMAL);
     next.subtitle = CreateSettingsFont(dpi, 28, FW_SEMIBOLD, true);
-    next.rowTitle = CreateSettingsFont(dpi, 14, FW_NORMAL);
+    next.rowTitle = textFont(14, FW_NORMAL);
     // Windows 11 title bar: Caption 12 regular.
     next.windowTitle = CreateSettingsFont(dpi, 12, FW_NORMAL);
     next.icons = CreateSettingsIconFont(dpi, 14);
@@ -61890,6 +61991,25 @@ static void SmoothRoundRect(HDC dc, const RECT& r, int radius, COLORREF fill, CO
     }
 }
 
+// Blue to mauve ring inside `r` (the Mocha hover and focus edge), antialiased at 4x.
+static void DrawGradientRing(HDC dc, const RECT& r, int radius, int width) {
+    int w = r.right - r.left, h = r.bottom - r.top;
+    if (w <= 0 || h <= 0) return;
+    PaintSmooth(dc, r, [&](HDC target, int scale) {
+        RECT shape{0, 0, w, h};
+        int band = std::max(1, std::min(4, w));
+        for (int x = 0; x < w; x += band) {
+            double k = std::clamp(w > 1 ? (double)(x + band / 2) / (w - 1) : 0.0, 0.0, 1.0);
+            COLORREF c = RGB((BYTE)(0x89 + (0xCB - 0x89) * k), (BYTE)(0xB4 + (0xA6 - 0xB4) * k),
+                             (BYTE)(0xFA + (0xF7 - 0xFA) * k));
+            int saved = SaveDC(target);
+            IntersectClipRect(target, x * scale, 0, std::min(w, x + band) * scale, h * scale);
+            DrawRoundShape(target, scale, shape, radius, c, c, width, false);
+            RestoreDC(target, saved);
+        }
+    });
+}
+
 static void FillSolid(HDC dc, const RECT& r, COLORREF color) {
     SetDCBrushColor(dc, color);
     FillRect(dc, &r, reinterpret_cast<HBRUSH>(GetStockObject(DC_BRUSH)));
@@ -61919,6 +62039,10 @@ static void DrawWrappedTextIn(HDC dc, HFONT font, COLORREF color,
 // one (FocusStrokeColorInner). Only with keyboard cues active.
 static void DrawFocusRing(HDC dc, const NativeTheme& t, UINT dpi, RECT r, int radius,
                           COLORREF under) {
+    if (t.mocha) {
+        DrawGradientRing(dc, r, radius, std::max(1, ScaleForDpi(2, dpi)));
+        return;
+    }
     int outer = std::max(1, ScaleForDpi(2, dpi));
     SmoothRoundRect(dc, r, radius, under, BlendColor(t.focusStroke, under), outer, false);
     RECT inner = r;
@@ -62018,6 +62142,26 @@ static void DrawFluentSwitch(HDC dc, const NativeTheme& t, UINT dpi, RECT track,
 // 20 x 20 Fluent checkbox (radius 4) with a drawn check mark, for the account editor.
 static void DrawFluentCheckBox(HDC dc, const NativeTheme& t, UINT dpi, RECT box, bool checked,
                                bool hot, bool pressed, bool disabled, COLORREF under) {
+    if (t.mocha) {
+        // Mocha toggle: blue track and dark knob when on, surface track and text knob when off.
+        int w = box.right - box.left, h = box.bottom - box.top;
+        COLORREF track = checked ?
+            (disabled ? BlendColor(UiColor{0x60, 0x89, 0xB4, 0xFA}, under) :
+                        BlendColor(pressed ? t.accentPressed : hot ? t.accentHover : t.accent, under)) :
+            BlendColor(hot && !disabled ? t.altFillHover : t.altFill, under);
+        COLORREF knob = checked ? UiColorRef(t.accentText) :
+                                  BlendColor(disabled ? t.textDisabled : t.knobOff, under);
+        int inset = ScaleForDpi(3, dpi);
+        int knobSize = std::max(1, h - 2 * inset);
+        PaintSmooth(dc, box, [&](HDC target, int scale) {
+            RECT shape{0, 0, w, h};
+            DrawRoundShape(target, scale, shape, h / 2, track, track, 0, true);
+            int left = checked ? w - inset - knobSize : inset;
+            RECT knobRect{left, inset, left + knobSize, inset + knobSize};
+            DrawRoundShape(target, scale, knobRect, knobSize, knob, knob, 0, true);
+        });
+        return;
+    }
     COLORREF fill, border;
     if (checked) {
         fill = BlendColor(disabled ? t.accentDisabled : pressed ? t.accentPressed :
@@ -62104,8 +62248,18 @@ static LRESULT PaintFluentButton(const NativeTheme& t, UINT dpi, NMCUSTOMDRAW* d
                           hot ? t.accentHover : t.accent) :
                          (disabled ? t.controlDisabled : pressed ? t.controlPressed :
                           hot ? t.controlHover : t.control), under);
-            SmoothRoundRect(dc, r, sc(4), fill, border);
-            if (elevated) DrawElevationEdge(dc, t, r, sc(4), accent, under);
+            if (t.mocha) {
+                // Mocha pill: a 2 px edge at rest (the fill's own on accent) and the blue to mauve
+                // one on hover and focus, the same width so nothing moves.
+                int pill = (r.bottom - r.top) / 2;
+                int edge = std::max(1, sc(2));
+                SmoothRoundRect(dc, r, pill, fill, accent ? fill :
+                                BlendColor(disabled ? t.strongStrokeDisabled : t.strongStroke, under), edge);
+                if ((hot || focus) && !disabled && !pressed) DrawGradientRing(dc, r, pill, edge);
+            } else {
+                SmoothRoundRect(dc, r, sc(4), fill, border);
+                if (elevated) DrawElevationEdge(dc, t, r, sc(4), accent, under);
+            }
             DrawTextIn(dc, t.body, textColor, text, r, DT_CENTER | DT_VCENTER);
             // The window paints the focus ring outside it (PaintFluentFocusVisual).
             break;
@@ -62216,15 +62370,26 @@ static LRESULT PaintFluentButton(const NativeTheme& t, UINT dpi, NMCUSTOMDRAW* d
         }
         case FluentButtonKind::CheckBox: {
             if (under == t.card) NativeChildCardSurface(button, t);
-            int size = sc(20);
-            RECT box{r.left + sc(2), r.top + (r.bottom - r.top - size) / 2, r.left + sc(2) + size,
+            // Mocha: a 40 x 22 toggle in place of the 20 x 20 box; same BUTTON and check state.
+            int size = sc(t.mocha ? 22 : 20);
+            int boxWidth = t.mocha ? sc(40) : size;
+            RECT box{r.left + sc(2), r.top + (r.bottom - r.top - size) / 2, r.left + sc(2) + boxWidth,
                      r.top + (r.bottom - r.top - size) / 2 + size};
             DrawFluentCheckBox(dc, t, dpi, box, checked, hot, pressed, disabled, under);
             RECT textRect{box.right + sc(8), r.top, r.right - sc(2), r.bottom};
             DrawTextIn(dc, t.body, BlendColor(disabled ? t.textDisabled : t.text, under), text,
                        textRect, DT_LEFT | DT_VCENTER);
-            // The editor's checkboxes are stacked without gaps: focus goes inside its row.
-            if (focus) DrawFocusRing(dc, t, dpi, r, sc(4), under);
+            if (t.mocha) {
+                // Hover and focus: the blue to mauve ring around the toggle itself.
+                if ((focus || hot) && !disabled) {
+                    RECT ring = box;
+                    InflateRect(&ring, sc(2), sc(2));
+                    DrawGradientRing(dc, ring, (ring.bottom - ring.top) / 2, std::max(1, sc(2)));
+                }
+            } else if (focus) {
+                // The editor's checkboxes are stacked without gaps: focus goes inside its row.
+                DrawFocusRing(dc, t, dpi, r, sc(4), under);
+            }
             break;
         }
         case FluentButtonKind::Hyperlink: {
@@ -62256,8 +62421,15 @@ static LRESULT PaintFluentButton(const NativeTheme& t, UINT dpi, NMCUSTOMDRAW* d
                 disabled ? t.controlDisabled : pressed ? t.controlPressed :
                 hot ? t.controlHover : t.control, under);
             COLORREF border = BlendColor(t.controlStroke, under);
-            SmoothRoundRect(dc, r, sc(4), fill, border);
-            if (!disabled && !pressed) DrawElevationEdge(dc, t, r, sc(4), false, under);
+            if (t.mocha) {
+                int edge = std::max(1, sc(2));
+                SmoothRoundRect(dc, r, sc(8), fill,
+                                BlendColor(disabled ? t.strongStrokeDisabled : t.strongStroke, under), edge);
+                if ((hot || focus) && !disabled && !pressed) DrawGradientRing(dc, r, sc(8), edge);
+            } else {
+                SmoothRoundRect(dc, r, sc(4), fill, border);
+                if (!disabled && !pressed) DrawElevationEdge(dc, t, r, sc(4), false, under);
+            }
             if (kind == FluentButtonKind::Icon) {
                 COLORREF glyphColor = BlendColor(disabled ? t.textDisabled :
                                                  pressed ? t.textSecondary : t.text, fill);
@@ -62300,6 +62472,14 @@ static void PaintInputFrame(HDC dc, const NativeTheme& t, UINT dpi, RECT frame, 
     bool focused = GetFocus() == edit;
     COLORREF under = secondary ? t.cardSecondary : t.card;
     COLORREF fill = BlendColor(enabled ? t.control : t.controlDisabled, under);
+    if (t.mocha) {
+        // Mocha value box: radius 8, a 2 px edge, blue to mauve with focus.
+        int edge = std::max(1, ScaleForDpi(2, dpi));
+        SmoothRoundRect(dc, frame, ScaleForDpi(8, dpi), fill,
+                        BlendColor(enabled ? t.strongStroke : t.strongStrokeDisabled, under), edge);
+        if (enabled && focused) DrawGradientRing(dc, frame, ScaleForDpi(8, dpi), edge);
+        return;
+    }
     SmoothRoundRect(dc, frame, ScaleForDpi(4, dpi), fill, BlendColor(t.controlStroke, under));
     if (!enabled) return;
     int line = focused ? std::max(2, ScaleForDpi(2, dpi)) : 1;
@@ -62378,8 +62558,17 @@ static void PaintFluentComboField(HWND combo, HDC dc, const NativeTheme& t) {
     NativeChildControlSurface(combo, t, fill,
         disabled ? t.controlDisabled : open ? t.controlPressed : hot ? t.controlHover : t.control,
         under);
-    SmoothRoundRect(dc, r, sc(4), fill, BlendColor(t.controlStroke, under));
-    if (!disabled && !open) DrawElevationEdge(dc, t, r, sc(4), false, under);
+    if (t.mocha) {
+        int edge = std::max(1, sc(2));
+        bool focused = GetFocus() == combo &&
+                       !(SendMessageW(combo, WM_QUERYUISTATE, 0, 0) & UISF_HIDEFOCUS);
+        SmoothRoundRect(dc, r, sc(8), fill,
+                        BlendColor(disabled ? t.strongStrokeDisabled : t.strongStroke, under), edge);
+        if (!disabled && (hot || open || focused)) DrawGradientRing(dc, r, sc(8), edge);
+    } else {
+        SmoothRoundRect(dc, r, sc(4), fill, BlendColor(t.controlStroke, under));
+        if (!disabled && !open) DrawElevationEdge(dc, t, r, sc(4), false, under);
+    }
     RECT glyph{r.right - sc(14) - sc(12), r.top, r.right - sc(14), r.bottom};
     // Padding 5 at the top and 7 at the bottom: the text sits 1 px above center.
     RECT textRect{r.left + sc(12), r.top, glyph.left - sc(8), r.bottom - sc(2)};
@@ -62996,6 +63185,7 @@ static bool FluentFocusVisualRect(HWND owner, bool switchCards, RECT& ring, int&
 
 // `switchCards`: the window's checkboxes are cards with an 8 px radius.
 static void PaintFluentFocusVisual(HWND owner, HDC dc, const NativeTheme& t, bool switchCards) {
+    if (t.mocha) return;  // Mocha controls draw focus on their own edge.
     RECT ring{};
     int radius = 0;
     if (FluentFocusVisualRect(owner, switchCards, ring, radius)) {
@@ -69674,6 +69864,9 @@ static constexpr int kEditorMargin = 16;
 static constexpr int kEditorCardHeight = kSettingsCardHeight;
 static constexpr int kEditorCheckHeight = 32;
 static constexpr int kEditorFooterHeight = 64;
+// Mocha footer dock: its own flat colour (never the window key) and its translucent token.
+static constexpr COLORREF kEditorDockFlat = RGB(0x18, 0x18, 0x26);
+static const UiColor kEditorDockFill{0x94, 0x18, 0x18, 0x25};
 // Editor-specific messages: a notice for a saved SVG that could not be loaded (after the window is
 // shown) and focus after closing the icon list.
 static constexpr UINT kEditorIconUnavailableMessage = WM_APP + 40;
@@ -69716,7 +69909,7 @@ static int AccountEditorClientHeight(UINT dpi, int providerIndex) {
     int rows = 3;
     int gaps = rows + (EditorHasLoginCard(providerIndex) ? 1 : 0) +
                (EditorHasProviderOptions(providerIndex) ? 1 : 0);
-    return sc(kNativeCaptionHeight + kEditorMargin) + sc(kEditorCardHeight) * rows + arcsCard +
+    return sc(kEditorMargin) + sc(kEditorCardHeight) * rows + arcsCard +
            EditorAdditionalMetersHeight(dpi, providerIndex) +
            EditorLoginCardHeight(dpi, providerIndex) + sc(4) * gaps +
            sc(kEditorMargin) + sc(kEditorFooterHeight);
@@ -69798,7 +69991,7 @@ static void LayoutAccountEditor(HWND hWnd, AccountEditorState& state) {
                            arcsHeight + extra(EditorMessageField::Credits) + extra(EditorMessageField::Arcs),
                            EditorAdditionalMetersHeight(state.dpi, providerIndex),
                            EditorLoginCardHeight(state.dpi, providerIndex)};
-    int y = margin + sc(kNativeCaptionHeight) - state.scrollY;
+    int y = margin - state.scrollY;
     for (int i = 0; i < 6; i++) {
         if (!heights[i]) {
             state.cards[i] = {};
@@ -69914,7 +70107,7 @@ static void LayoutAccountEditor(HWND hWnd, AccountEditorState& state) {
     SetWindowPos(GetDlgItem(hWnd, kAccountCliLogin), nullptr, innerLeft - sc(2), cliTop,
                  innerRight - innerLeft + sc(2), sc(kEditorCheckHeight), flags);
     // Indented by the checkbox glyph and its gap, so its text lines up with the CLI sign-in's.
-    RECT renewalRect{innerLeft - sc(2) + sc(28), cliTop + sc(kEditorCheckHeight), innerRight,
+    RECT renewalRect{innerLeft - sc(2) + sc(state.theme.mocha ? 48 : 28), cliTop + sc(kEditorCheckHeight), innerRight,
                      cliTop + 2 * sc(kEditorCheckHeight)};
     SetWindowPos(GetDlgItem(hWnd, kAccountCliRenewal), nullptr, renewalRect.left, renewalRect.top,
                  renewalRect.right - renewalRect.left, renewalRect.bottom - renewalRect.top, flags);
@@ -69965,30 +70158,25 @@ static void LayoutAccountEditor(HWND hWnd, AccountEditorState& state) {
     placeMessage(EditorMessageField::Arcs, innerLeft,
                  arcsCard.top + arcsHeight - sc(4) + extra(EditorMessageField::Credits), sc(8));
 
-    // Footer: OK (accent) and Cancel on the right; scrolls with the form on small work areas.
+    // Footer: OK (accent) and Cancel on the right, in a rounded dock with Mocha; scrolls with the
+    // form on small work areas.
     state.footerTop = std::max(y - sc(4) + margin, height - sc(kEditorFooterHeight));
     int buttonWidth = std::max(sc(96), std::max(MeasureTextWidth(state.theme.body, Tr(Str::CommonCancel)),
                                                MeasureTextWidth(state.theme.body, Tr(Str::EditorOK))) + sc(24));
-    int buttonY = state.footerTop + (sc(kEditorFooterHeight) - controlHeight) / 2;
-    SetWindowPos(GetDlgItem(hWnd, IDCANCEL), nullptr, width - margin - buttonWidth, buttonY,
-                 buttonWidth, controlHeight, flags);
-    SetWindowPos(GetDlgItem(hWnd, IDOK), nullptr, width - margin - buttonWidth * 2 - sc(8),
-                 buttonY, buttonWidth, controlHeight, flags);
-    // Keep scrolled controls out of the integrated title bar without changing tab order.
-    for (HWND child = GetWindow(hWnd, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT)) {
-        if (!(GetWindowLongPtrW(child, GWL_STYLE) & WS_CHILD)) continue;
-        int id = GetDlgCtrlID(child);
-        if (id >= kNativeCaptionTitle && id <= kNativeCaptionMaximize) continue;
-        RECT rect{};
-        GetWindowRect(child, &rect);
-        MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&rect), 2);
-        int top = std::clamp(sc(kNativeCaptionHeight) - (int)rect.top, 0, (int)(rect.bottom - rect.top));
-        HRGN region = top ? CreateRectRgn(0, top, rect.right - rect.left, rect.bottom - rect.top) : nullptr;
-        if (!SetWindowRgn(child, region, TRUE) && region) DeleteObject(region);
-    }
+    state.footerDock = {margin, state.footerTop + sc(6), width - margin,
+                        state.footerTop + sc(kEditorFooterHeight) - sc(6)};
+    bool dock = state.theme.mocha;
+    int buttonHeight = dock ? sc(36) : controlHeight;
+    int buttonY = dock ? state.footerDock.top + (state.footerDock.bottom - state.footerDock.top - buttonHeight) / 2 :
+                         state.footerTop + (sc(kEditorFooterHeight) - controlHeight) / 2;
+    int buttonRight = dock ? state.footerDock.right - sc(8) : width - margin;
+    SetWindowPos(GetDlgItem(hWnd, IDCANCEL), nullptr, buttonRight - buttonWidth, buttonY,
+                 buttonWidth, buttonHeight, flags);
+    SetWindowPos(GetDlgItem(hWnd, IDOK), nullptr, buttonRight - buttonWidth * 2 - sc(8),
+                 buttonY, buttonWidth, buttonHeight, flags);
     SCROLLINFO scroll{sizeof(scroll), SIF_RANGE | SIF_PAGE | SIF_POS};
-    scroll.nMax = std::max(0, contentHeight - sc(kNativeCaptionHeight) - 1);
-    scroll.nPage = std::max(1, height - sc(kNativeCaptionHeight));
+    scroll.nMax = std::max(0, contentHeight - 1);
+    scroll.nPage = std::max(1, height);
     scroll.nPos = state.scrollY;
     SetScrollInfo(hWnd, SB_VERT, &scroll, TRUE);
     RECT updated{};
@@ -70045,7 +70233,7 @@ static void EnsureEditorFocusVisible(HWND hWnd, AccountEditorState& state) {
     }
     GetClientRect(hWnd, &client);
     int margin = ScaleForDpi(4, state.dpi);
-    int top = ScaleForDpi(kNativeCaptionHeight, state.dpi) + margin;
+    int top = margin;
     int delta = rect.top < top ? rect.top - top :
                 rect.bottom > client.bottom - margin ? rect.bottom - client.bottom + margin : 0;
     if (delta) {
@@ -70054,10 +70242,38 @@ static void EnsureEditorFocusVisible(HWND hWnd, AccountEditorState& state) {
     }
 }
 
+// Mocha glass: the accent acrylic under a crust tint at 55%, the universal settings window's
+// material (Set_ApplyFrame). Without the material (transparency effects off, high contrast) the
+// accent is cleared and the window paints opaque Mocha.
+static void ApplyEditorGlass(HWND hWnd, const AccountEditorState& state) {
+    struct AccentPolicy { int state, flags, abgr, animation; };
+    struct CompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, CompositionData*);
+    auto setComposition = (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"),
+                                                                   "SetWindowCompositionAttribute");
+    bool glass = state.theme.mocha && state.backdrop.enabled;
+    DWM_BLURBEHIND bb{};
+    bb.dwFlags = glass ? DWM_BB_ENABLE | DWM_BB_BLURREGION : DWM_BB_ENABLE;
+    bb.fEnable = glass;
+    bb.hRgnBlur = glass ? CreateRectRgn(0, 0, -1, -1) : nullptr;
+    DwmEnableBlurBehindWindow(hWnd, &bb);
+    if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+    if (setComposition) {
+        AccentPolicy policy = glass ? AccentPolicy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2,
+                                                   (int)0x8C1B1111, 0} : AccentPolicy{0, 0, 0, 0};
+        CompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+        setComposition(hWnd, &data);
+    }
+    if (state.theme.mocha) {
+        COLORREF caption = glass ? 0xFFFFFFFE /* DWMWA_COLOR_NONE */ : RGB(0x18, 0x18, 0x25);
+        DwmSetWindowAttribute(hWnd, 35 /* DWMWA_CAPTION_COLOR */, &caption, sizeof(caption));
+    }
+}
+
 static void RecreateAccountEditorVisuals(HWND hWnd, AccountEditorState& state) {
     if (state.updatingVisuals || g_unloading || g_settingsWindowCancelRequested) return;
     state.updatingVisuals = true;
-    BuildNativeTheme(state.theme, state.dpi);
+    BuildNativeTheme(state.theme, state.dpi, true);
     const NativeTheme& t = state.theme;
     state.backdrop.childBackground = t.card;
     EnumChildWindows(hWnd, [](HWND child, LPARAM param) -> BOOL {
@@ -70078,16 +70294,15 @@ static void RecreateAccountEditorVisuals(HWND hWnd, AccountEditorState& state) {
     if (state.toolTip) {
         SendMessageW(state.toolTip, TTM_SETMAXTIPWIDTH, 0, ScaleForDpi(320, state.dpi));
     }
-    InstallNativeCaption(hWnd, t, false, &state.backdrop);
     InstallFluentFocusTracking(hWnd);
-    ApplyNativeWindowTheme(hWnd, t.dark, t.highContrast, &state.backdrop);
+    ApplyNativeWindowTheme(hWnd, t.dark, t.highContrast, &state.backdrop, t.mocha ? 1 : 2);
+    ApplyEditorGlass(hWnd, state);
     // The window scrollbar appears only when the form cannot fit the monitor's work area.
     if (HMODULE uxTheme = GetModuleHandleW(L"uxtheme.dll")) {
         using SetWindowTheme_t = HRESULT(WINAPI*)(HWND, LPCWSTR, LPCWSTR);
         auto setTheme = reinterpret_cast<SetWindowTheme_t>(GetProcAddress(uxTheme, "SetWindowTheme"));
         if (setTheme) setTheme(hWnd, t.dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);
     }
-    InstallNativeCaption(hWnd, t, false, &state.backdrop);
     RedrawWindow(hWnd, nullptr, nullptr,
                  RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
     state.updatingVisuals = false;
@@ -70102,14 +70317,11 @@ static void PaintAccountEditor(HWND hWnd, AccountEditorState& state, HDC target)
     NativeBackdropPaint buffer(hWnd, target, client, t.back, state.backdrop);
     HDC dc = buffer.dc;
     int saved = SaveDC(dc);
-    IntersectClipRect(dc, 0, sc(kNativeCaptionHeight), client.right, client.bottom);
-    auto visibleFrame = [&](RECT rect) {
-        rect.top = std::max(rect.top, (LONG)sc(kNativeCaptionHeight));
-        return rect;
-    };
+    auto visibleFrame = [](RECT rect) { return rect; };
     for (const RECT& card : state.cards) {
         if (card.bottom > card.top) {
-            SmoothRoundRect(dc, card, sc(kSettingsCardRadius), t.card, t.cardBorder);
+            if (t.mocha) SmoothRoundRect(dc, card, sc(10), t.card, t.cardBorder, std::max(1, sc(2)));
+            else SmoothRoundRect(dc, card, sc(kSettingsCardRadius), t.card, t.cardBorder);
             buffer.Card(visibleFrame(card), t);
         }
     }
@@ -70127,6 +70339,13 @@ static void PaintAccountEditor(HWND hWnd, AccountEditorState& state, HDC target)
         const auto& message = state.messages[(size_t)field];
         if (message.text.empty() || message.kind != EditorMessageKind::Error ||
             !IsWindowVisible(control) || IsRectEmpty(&frame)) return;
+        if (t.mocha) {
+            // The whole 2 px edge turns red, over the box's own edge.
+            SmoothRoundRect(dc, frame, sc(8), t.input,
+                            BlendColor(t.statusText[(size_t)InfoBarSeverity::Error], t.card),
+                            std::max(1, sc(2)), false);
+            return;
+        }
         RECT stroke{frame.left + sc(3), frame.bottom - sc(2), frame.right - sc(3), frame.bottom};
         FillSolid(dc, stroke, BlendColor(t.statusText[(size_t)InfoBarSeverity::Error], t.input));
     };
@@ -70135,6 +70354,12 @@ static void PaintAccountEditor(HWND hWnd, AccountEditorState& state, HDC target)
     errorStroke(EditorMessageField::Credits, state.creditsFrame, GetDlgItem(hWnd, kAccountCreditsMax));
     RECT footer{0, state.footerTop, client.right, client.bottom};
     if (!state.backdrop.enabled) FillSolid(dc, footer, t.footer);
+    if (t.mocha && !IsRectEmpty(&state.footerDock)) {
+        int dockHeight = state.footerDock.bottom - state.footerDock.top;
+        SmoothRoundRect(dc, state.footerDock, dockHeight / 2, kEditorDockFlat,
+                        BlendColor(t.strongStroke, t.back), std::max(1, sc(2)));
+        buffer.Surface(state.footerDock, kEditorDockFlat, kEditorDockFill);
+    }
     PaintFluentFocusVisual(hWnd, dc, t, false);
     RestoreDC(dc, saved);
     buffer.Finish(state.backdrop.enabled ? RECT{} : footer);
@@ -70769,10 +70994,29 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
                 int id = GetDlgCtrlID(draw->hdr.hwndFrom);
                 if (id == kAccountIconChoose) return PaintEditorIconButton(hWnd, *state, draw);
                 if (id == IDOK || id == IDCANCEL) {
-                    return PaintFluentButton(state->theme, state->dpi, draw,
-                                             id == IDOK ? FluentButtonKind::Accent :
-                                                          FluentButtonKind::Push,
-                                             state->theme.footer);
+                    const NativeTheme& theme = state->theme;
+                    COLORREF under = theme.mocha ? kEditorDockFlat : theme.footer;
+                    LRESULT result = PaintFluentButton(theme, state->dpi, draw,
+                                                       id == IDOK ? FluentButtonKind::Accent :
+                                                                    FluentButtonKind::Push,
+                                                       under);
+                    if (theme.mocha && draw->dwDrawStage == CDDS_PREPAINT) {
+                        // Over the translucent dock: the pill's corners keep the dock's alpha.
+                        HWND button = draw->hdr.hwndFrom;
+                        LRESULT buttonState = SendMessageW(button, BM_GETSTATE, 0, 0);
+                        bool disabled = !IsWindowEnabled(button);
+                        bool pressed = !disabled && ((draw->uItemState & CDIS_SELECTED) ||
+                                                     (buttonState & BST_PUSHED));
+                        bool hot = !disabled && ((draw->uItemState & CDIS_HOT) || (buttonState & BST_HOT));
+                        UiColor token = id == IDOK ?
+                            (disabled ? theme.accentDisabled : pressed ? theme.accentPressed :
+                             hot ? theme.accentHover : theme.accent) :
+                            (disabled ? theme.controlDisabled : pressed ? theme.controlPressed :
+                             hot ? theme.controlHover : theme.control);
+                        NativeChildSurfaceOver(button, theme, BlendColor(token, under), token, under,
+                                               kEditorDockFill);
+                    }
+                    return result;
                 }
                 return PaintFluentButton(state->theme, state->dpi, draw,
                                          FluentButtonKind::CheckBox, state->theme.card);
@@ -71107,7 +71351,7 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
                 int step = ScaleForDpi(24, state->dpi);
                 RECT client{};
                 GetClientRect(hWnd, &client);
-                int page = std::max(1, (int)client.bottom - ScaleForDpi(kNativeCaptionHeight, state->dpi));
+                int page = std::max(1, (int)client.bottom);
                 if (message == WM_MOUSEWHEEL) {
                     state->wheelRemainder += GET_WHEEL_DELTA_WPARAM(wParam);
                     UINT lines = 3;
@@ -71168,6 +71412,14 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
         case WM_DISPLAYCHANGE:
             if (state) RecreateAccountEditorVisuals(hWnd, *state);
             return 0;
+        case WM_TIMER:
+            // ShowNativeWindowComposed: another mod may put WS_EX_COMPOSITED back for a few seconds.
+            if (wParam == kNativeComposedTimer) {
+                ClearNativeComposited(hWnd);
+                if (!state || ++state->composedChecks >= 16) KillTimer(hWnd, kNativeComposedTimer);
+                return 0;
+            }
+            break;
         case WM_ACTIVATE:
             // DWM already switches Mica between active and inactive. Reapplying the theme here sent
             // WM_THEMECHANGED to every child and all of them repainted (flicker) on focus changes.
@@ -71201,10 +71453,10 @@ static bool ShowAccountEditor(HWND owner, AccountConfig* account, bool adding) {
     state.adding = adding;
     state.originalIdentity = adding ? 0 : AccountIdentityHash(*account);
     UINT dpi = WindowDpi(owner);
-    // Window sized to its rows (AccountEditorClientHeight) plus the frame. WS_THICKFRAME (without
-    // resizing, see NativeCaptionState) gives the DWM border, shadow and corners; the classic modal
-    // frame (WS_EX_DLGMODALFRAME) painted as a 2 px white border.
-    constexpr DWORD editorStyle = WS_POPUP | WS_THICKFRAME | WS_SYSMENU | WS_VSCROLL;
+    // Window sized to its rows (AccountEditorClientHeight) plus the frame. The Windows title bar
+    // (WS_CAPTION, fixed size) gives the DWM border, shadow and corners, and Seamless Title Bars draws
+    // its centred dock on it like on every other window.
+    constexpr DWORD editorStyle = WS_CAPTION | WS_SYSMENU | WS_VSCROLL;
     constexpr DWORD editorExStyle = 0;
     RECT frame{0, 0, ScaleForDpi(g_uiLanguage.load(std::memory_order_relaxed) == UiLanguage::English ? kEditorClientWidth : 540, dpi),
                AccountEditorClientHeight(dpi, account->provider == L"openai" ? 1 :
@@ -71230,7 +71482,6 @@ static bool ShowAccountEditor(HWND owner, AccountConfig* account, bool adding) {
     x = std::clamp(x, (int)monitorInfo.rcWork.left, (int)monitorInfo.rcWork.right - width);
     y = std::clamp(y, (int)monitorInfo.rcWork.top, (int)monitorInfo.rcWork.bottom - height);
     std::wstring title = adding ? Tr(Str::EditorAddAccount) : Tr(Str::EditorEditAccount);
-    title += L" — Taskbar AI Usage Plus";
     HWND window = CreateWindowExW(editorExStyle, kAccountEditorClass,
                                   title.c_str(),
                                   editorStyle,

@@ -1257,7 +1257,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "0.4.24"
+    "version": "0.4.26"
   },
   "local@seamless-wobbly-windows": {
     "disabled": false,
