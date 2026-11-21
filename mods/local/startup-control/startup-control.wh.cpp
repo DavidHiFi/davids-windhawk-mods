@@ -2,7 +2,7 @@
 // @id startup-control
 // @name Startup Control
 // @description Manage startup apps, scheduled tasks and Windows startup locations.
-// @version 0.1.3
+// @version 0.1.4
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods
@@ -10,7 +10,7 @@
 // @include windhawk.exe
 // @include windhawk-mod.exe
 // @include windhawk-mod-elevated.exe
-// @compilerOptions -ld2d1 -ldwrite -ldwmapi -lwindowscodecs -lole32 -loleaut32 -luuid -ltaskschd -lwevtapi -lsetupapi -lcfgmgr32 -ladvapi32 -lshell32 -lshlwapi -lcomdlg32 -lcomctl32 -luxtheme -lgdi32 -lwbemuuid
+// @compilerOptions -ld2d1 -ldwrite -ldwmapi -lwindowscodecs -lole32 -loleaut32 -luuid -ltaskschd -lwevtapi -lsetupapi -lcfgmgr32 -ladvapi32 -lshell32 -lshlwapi -lcomdlg32 -lcomctl32 -luxtheme -lgdi32 -lwbemuuid -lversion
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -243,6 +243,7 @@ struct Entry {
     DWORD view = KEY_WOW64_64KEY, type = 0;
     bool machine = false, enabled = true, writable = false, missing = false;
     bool disabledStore = false;
+    bool windows = false;  // shipped by Microsoft as part of Windows
     std::vector<BYTE> raw;
     DWORD startMode = 0;
 };
@@ -261,6 +262,50 @@ inline std::wstring Identity(const Entry& e) {
     return std::to_wstring(static_cast<int>(e.kind)) + L"|" + (e.machine ? L"M|" : L"U|") +
            std::to_wstring(e.view) + L"|" + e.source + L"|" + e.value;
 }
+// Part of Windows: a Microsoft file inside the Windows folder, or a task in Microsoft's own
+// task folder. Third-party drivers in the driver store stay with the apps.
+inline bool MicrosoftFile(const std::wstring& path) {
+    static std::mutex lock;
+    static std::map<std::wstring, bool> cache;
+    std::wstring key = Lower(path);
+    {
+        std::lock_guard<std::mutex> g(lock);
+        auto it = cache.find(key);
+        if (it != cache.end()) return it->second;
+    }
+    bool ms = false;
+    DWORD handle = 0, size = GetFileVersionInfoSizeW(path.c_str(), &handle);
+    if (size && size < 4 * 1024 * 1024) {
+        std::vector<BYTE> data(size);
+        struct Lang { WORD lang, page; }* langs = nullptr;
+        UINT len = 0;
+        if (GetFileVersionInfoW(path.c_str(), 0, size, data.data()) &&
+            VerQueryValueW(data.data(), L"\\VarFileInfo\\Translation", reinterpret_cast<void**>(&langs), &len) && len >= sizeof(Lang)) {
+            wchar_t query[64];
+            swprintf(query, 64, L"\\StringFileInfo\\%04x%04x\\CompanyName", langs->lang, langs->page);
+            wchar_t* company = nullptr;
+            UINT clen = 0;
+            if (VerQueryValueW(data.data(), query, reinterpret_cast<void**>(&company), &clen) && clen && company)
+                ms = wcsstr(company, L"Microsoft") != nullptr;
+        }
+    }
+    std::lock_guard<std::mutex> g(lock);
+    cache[key] = ms;
+    return ms;
+}
+inline bool PartOfWindows(const Entry& e) {
+    if (e.kind == Kind::Device) return false;
+    if (e.kind == Kind::Task && Lower(e.source).rfind(L"\\microsoft\\", 0) == 0) return true;
+    if (e.target.empty() || e.missing) return false;
+    static const std::wstring windir = [] {
+        wchar_t buf[MAX_PATH]{};
+        GetWindowsDirectoryW(buf, MAX_PATH);
+        return Lower(std::wstring(buf) + L"\\");
+    }();
+    std::wstring t = Lower(e.target);
+    if (t.rfind(windir, 0) != 0 || t.find(L"\\driverstore\\") != t.npos) return false;
+    return MicrosoftFile(e.target);
+}
 inline void Add(Inventory& inv, Entry e) {
     if (e.id.empty()) e.id = Identity(e);
     // A task's command field holds its XML definition, never a file path.
@@ -268,6 +313,7 @@ inline void Add(Inventory& inv, Entry e) {
     if (e.target.size() > 1 && e.target.front() == L'"' && e.target.back() == L'"') e.target = e.target.substr(1, e.target.size() - 2);
     if (!e.target.empty() && e.target.find(L":\\") != e.target.npos)
         e.missing = GetFileAttributesW(e.target.c_str()) == INVALID_FILE_ATTRIBUTES;
+    e.windows = PartOfWindows(e);
     inv.entries.push_back(std::move(e));
 }
 inline std::wstring State(const Entry& e) {
@@ -1749,11 +1795,11 @@ static const SetPageInfo kSetPages[] = {
 {L"Everything", L"Search startup entries from every scanned location.", 0xE8A9},
 {L"Startup apps", L"Apps and shortcuts that run when you sign in.", 0xE7F4},
 {L"Scheduled tasks", L"Task folders, definitions, actions and history.", 0xE787},
-{L"Services", L"Service startup settings and current state.", 0xE713},
+{L"Services", L"Service startup settings and current state.", 0xE90F},
 {L"Drivers", L"Driver startup settings. Some changes need a restart.", 0xE950},
 {L"Devices", L"Connected and remembered devices.", 0xE772},
 {L"Explorer add-ons", L"Extensions and handlers registered with Windows.", 0xE8B7},
-{L"Advanced locations", L"Other startup and system integration locations.", 0xE9CE},
+{L"Advanced locations", L"Other startup and system integration locations.", 0xE81E},
 {L"Changes", L"Saved originals and receipts for changes made here.", 0xE81C},
 {L"Settings", L"Scanning, display and this window.", 0xE713},
 {L"About", L"Startup Control, credits and support.", 0xE946},
@@ -5205,24 +5251,29 @@ static bool SC_InPage(const sc::Entry& e, int page) {
 static WCHAR SC_Glyph(const sc::Entry& e) {
     switch (e.kind) {
         case sc::Kind::Task: return 0xE787;
-        case sc::Kind::Service: return 0xE713;
+        case sc::Kind::Service: return 0xE90F;
         case sc::Kind::Driver: return 0xE950;
         case sc::Kind::Device: return 0xE772;
-        case sc::Kind::Wmi: return 0xE9CE;
+        case sc::Kind::Wmi: return 0xE945;
         case sc::Kind::Shortcut: return 0xE71B;
         default: break;
     }
     if (e.category == L"Startup apps") return 0xE7F4;
     if (e.category == L"Explorer add-ons") return 0xE8B7;
-    return 0xE9CE;
+    return 0xE81E;
 }
 static bool SC_Toggleable(const sc::Entry& e) {
     if (!e.writable) return false;
     return e.kind == sc::Kind::Registry || e.kind == sc::Kind::Shortcut || e.kind == sc::Kind::Task ||
            e.kind == sc::Kind::Service || e.kind == sc::Kind::Driver || e.kind == sc::Kind::Device;
 }
+static PCWSTR SC_ModeName(DWORD mode);
 static std::wstring SC_WhereRaw(const sc::Entry& e) {
     if (e.kind == sc::Kind::Task) return e.target.empty() ? e.source : e.target;
+    if (e.kind == sc::Kind::Service || e.kind == sc::Kind::Driver) {
+        std::wstring file = e.target.empty() ? e.command : e.target;
+        return file.empty() ? std::wstring(SC_ModeName(e.startMode)) : std::wstring(SC_ModeName(e.startMode)) + L" · " + file;
+    }
     if (!e.command.empty()) return e.command;
     if (!e.target.empty()) return e.target;
     return e.source;
@@ -5275,6 +5326,12 @@ static void SC_RunAsync(HWND hwnd, F fn) {
 
 // ---- List order ----------------------------------------------------------------------------
 static bool SC_Grouped(const SetWindow& w) { return w.page == 0 && Wh_GetIntSetting(L"groupByLocation") != 0; }
+// Every list except Devices splits into what apps added and what Windows ships.
+static bool SC_Split(const SetWindow& w) { return !SC_Grouped(w) && w.page != 5; }
+static std::wstring SC_Group(const SetWindow& w, const sc::Entry& e) {
+    if (SC_Grouped(w)) return e.category;
+    return e.windows ? L"Part of Windows" : L"Added by apps";
+}
 static void SC_Filter(SetWindow& w) {
     g_sc.order.clear();
     std::wstring q = sc::Lower(g_sc.filter);
@@ -5285,15 +5342,16 @@ static void SC_Filter(SetWindow& w) {
         if (!viewOnly && !e.writable) continue;
         if (g_sc.show == 1 && !e.enabled) continue;
         if (g_sc.show == 2 && e.enabled) continue;
-        if (!q.empty() && sc::Lower(e.name + L" " + e.source + L" " + SC_Where(e) + L" " + e.category + L" " + e.user).find(q) ==
+        if (!q.empty() && sc::Lower(e.name + L" " + e.source + L" " + SC_Where(e) + L" " + e.command + L" " + e.category + L" " + e.user).find(q) ==
                               std::wstring::npos)
             continue;
         g_sc.order.push_back(i);
     }
-    bool grouped = SC_Grouped(w);
+    bool grouped = SC_Grouped(w), split = SC_Split(w);
     int sort = g_sc.sort;
     std::stable_sort(g_sc.order.begin(), g_sc.order.end(), [&](int a, int b) {
         const auto &x = g_sc.entries[a], &y = g_sc.entries[b];
+        if (split && x.windows != y.windows) return !x.windows;
         if (grouped) {
             int c = _wcsicmp(x.category.c_str(), y.category.c_str());
             if (c) return c < 0;
@@ -5410,18 +5468,22 @@ static float SC_BuildList(SetWindow& w, float y) {
     y = SC_AddNote(w, y, count);
     if (g_sc.order.empty())
         return SC_AddNote(w, y, g_sc.filter.empty() && !g_sc.show ? L"Nothing here." : L"Nothing matches. Clear the search or pick All.");
-    bool grouped = SC_Grouped(w);
+    bool grouped = SC_Grouped(w) || SC_Split(w);
     std::map<std::wstring, int> counts;
     if (grouped)
-        for (int i : g_sc.order) counts[g_sc.entries[i].category]++;
+        for (int i : g_sc.order) counts[SC_Group(w, g_sc.entries[i])]++;
     std::wstring group;
     bool hidden = false;
     for (int i : g_sc.order) {
         const auto& e = g_sc.entries[i];
-        if (grouped && (group != e.category || g_sc.items.back().type == SC_Item::Note)) {
-            if (group != e.category) {
-                group = e.category;
-                hidden = g_sc.collapsed.count(group) && g_sc.collapsed[group];
+        std::wstring name = grouped ? SC_Group(w, e) : std::wstring();
+        if (grouped && (group != name || g_sc.items.back().type == SC_Item::Note)) {
+            if (group != name) {
+                group = name;
+                // Windows' own items start folded; a search always shows what it found.
+                auto c = g_sc.collapsed.find(group);
+                bool folded = c != g_sc.collapsed.end() ? c->second : group == L"Part of Windows";
+                hidden = folded && g_sc.filter.empty();
                 auto& head = SC_Add(SC_Item::Head, {L, y + 4, R, y + 36}, A_Head);
                 head.text = group;
                 head.sub = std::to_wstring(counts[group]);
@@ -6151,7 +6213,7 @@ static void SC_Do(SetWindow& w, int i, float x) {
             SC_Rebuild(w);
             break;
         case A_Copy:
-            if (sel) SC_Status(w, SC_CopyText(w.hwnd, SC_Where(*sel)) ? L"Copied." : L"Could not reach the clipboard.");
+            if (sel) SC_Status(w, SC_CopyText(w.hwnd, sel->command.empty() ? SC_WhereRaw(*sel) : sel->command) ? L"Copied." : L"Could not reach the clipboard.");
             break;
         case A_Reveal:
             if (sel) ShellExecuteW(nullptr, L"open", L"explorer.exe", (L"/select,\"" + sel->target + L"\"").c_str(), nullptr, SW_SHOWNORMAL);
