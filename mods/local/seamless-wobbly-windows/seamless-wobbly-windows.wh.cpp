@@ -2,7 +2,7 @@
 // @id              seamless-wobbly-windows
 // @name            Seamless Wobbly Windows
 // @description     Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows
-// @version         1.2.5
+// @version         1.2.6
 // @author          DavidHiFi, HeyJeay, HaVeN80, lalimatyus
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -6137,7 +6137,8 @@ static void MatchGlass(const GlassShot& shot, const Canvas& c, GlowCB& cb) {
 // dimmed at the drop. Paint the glass read from the screen over the stand-in;
 // strength 0 adds no glow.
 static bool GlassOnly(const Canvas& c, const GlassShot& shot, GlowCB& cb, bool* even = nullptr) {
-    if (!shot.ok) return false;
+    // No screen read (the move began first): only the live blur can stand in.
+    if (!shot.ok && !even) return false;
     float key[3];
     if (!FindGlowKey(c, MonitorScale(c.vis), key)) return false;
     cb = GlowCB{};
@@ -6345,7 +6346,7 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
         const int s = ov.glass ? ov.glass->step : 0;
         const uint32_t hr = ov.glass ? (uint32_t)ov.glass->lastHr : 0;
         SetPropW(hwnd, L"SeamlessWobblyGlassNote",
-                 (HANDLE)(((uintptr_t)(stage * 100 + s) << (sizeof(void*) > 4 ? 32 : 16)) |
+                 (HANDLE)(((uintptr_t)(stage * 100 + (glass.ok ? 0 : 50) + s) << (sizeof(void*) > 4 ? 32 : 16)) |
                           (sizeof(void*) > 4 ? hr : (hr & 0xFFFF))));
     };
     if (!glow.Start(hwnd, cfg, canvas, glass)) {
