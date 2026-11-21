@@ -1,7 +1,7 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-21T21:14:48+08:00",
+  "generatedAt": "2026-11-21T21:17:03+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 184,
@@ -2078,7 +2078,7 @@
       "name": "Seamless Share",
       "author": "DavidHiFi, m417z",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "license": "MIT",
       "origin": "local",
       "upstream": "https://windhawk.net/mods/windows-11-notification-center-styler",

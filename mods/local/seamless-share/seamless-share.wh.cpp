@@ -2,7 +2,7 @@
 // @id              seamless-share
 // @name            Seamless Share
 // @description     Restyles the Windows 11 share window: blurred glass, your font, soft gradient hover edges
-// @version         1.0.1
+// @version         1.0.2
 // @author          DavidHiFi, m417z
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,6 +26,8 @@ Restyles the share window you get from "Share" in File Explorer, Edge, Snipping
 Tool and other apps. It covers the link preview card, the QR code and copy
 buttons, contacts, Nearby Sharing, the "Share using" app grid, the "..." menu
 and the tooltips.
+
+![Seamless Share preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-share.png)
 
 Out of the box it uses Catppuccin Mocha: a blurred dark glass window, FiraCode
 Nerd Font in Medium weight, 2 px grey edges at rest and a blue to mauve
