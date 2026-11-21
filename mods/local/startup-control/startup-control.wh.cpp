@@ -2,7 +2,7 @@
 // @id startup-control
 // @name Startup Control
 // @description Manage startup apps, scheduled tasks and Windows startup locations.
-// @version 0.1.6
+// @version 0.1.7
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods
@@ -18,6 +18,8 @@
 # Startup Control
 
 See and switch off everything that starts with Windows, in one calm window.
+
+![Startup Control](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/startup-control.png)
 
 - Startup apps and shortcuts, scheduled tasks, services, drivers, devices,
   Explorer add-ons and the deeper places programs hide in.
