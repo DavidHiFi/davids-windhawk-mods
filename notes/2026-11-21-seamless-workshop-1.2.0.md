@@ -35,6 +35,15 @@ Owner asked for four in-app changes as one update ("1, do all four").
 Registry value added by the app: HKCU Seamless Workshop key, `Set.welcomed` (DWORD 1). Delete it
 to see the welcome again.
 
+## Install (2026-11-22, 5:23 am)
+
+Ableton had been open since 7:12 pm, and the load gate holds every install while it is open. After
+two waits ran out, the owner said "Install it now anyway". So the install went round the gate on the
+owner's word: under the engine lock, at Idle priority (work/2026-11-21-tray-ids/install-now.ps1).
+Result: registry v1.2.0 (was v1.1.1), the tool process runs 1.2.0, the release v1.2.0 has both files,
+the feed app entry carries `changes`, and 5 of 49 mods have a "What's new" line. The desktop shell
+process did not restart.
+
 ## Habit for every mod release
 
 Put a `## What's new in <version>` section in the mod's readme. That is the only place the
