@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.17
+// @version         2.2.18
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.18
+
+- The tray icon stays blue and mauve when mod updates are waiting. It used to fall back to the stock icon then; now it keeps the hawk and shows a small peach dot in the corner.
 
 ## What's new in 2.2.17
 
@@ -2000,9 +2004,11 @@ static bool OwnTrayWindow(HWND hwnd) {
 static decltype(&Shell_NotifyIconW) g_notifyIcon;
 static std::atomic_bool g_mochaIcons;
 static std::atomic_bool g_trayAlert;
-static std::atomic_bool g_themedTray;
+static std::atomic_int g_themedTray{-1};  // -1 stock, 0 hawk, 1 hawk with update badge
+static HICON g_stockTrayIcon;  // copy of the last icon Windhawk itself set, to put back
+static constexpr wchar_t kTrayAlertProp[] = L"WhEnhStylerTrayAlert";
 
-static HICON MakeTrayIcon(int size) {
+static HICON MakeTrayIcon(int size, bool badge) {
     static constexpr UINT64 glyph[] = {
     0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL,
     0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL,
@@ -2038,13 +2044,22 @@ static HICON MakeTrayIcon(int size) {
     if (!color) return nullptr;
     auto pixels = static_cast<UINT32*>(bits);
     const float extent = (float)size, radius = extent * 0.26f;
-    constexpr UINT32 blue = 0x89B4FA, mauve = 0xCBA6F7, crust = 0x11111B;
+    constexpr UINT32 blue = 0x89B4FA, mauve = 0xCBA6F7, crust = 0x11111B, peach = 0xFAB387;
+    // Update badge: a peach dot with a crust ring in the bottom-right corner,
+    // standing in for the dot Windhawk's own alert icon carries.
+    const float dotR = extent * 0.17f, ringR = dotR + extent * 0.06f;
+    const float dotC = extent - ringR;
     for (int y = 0; y < size; ++y) {
         for (int x = 0; x < size; ++x) {
-            int cover = 0, mark = 0;
+            int cover = 0, mark = 0, ring = 0, dot = 0;
             for (int sy = 0; sy < 4; ++sy) {
                 for (int sx = 0; sx < 4; ++sx) {
                     float fx = x + (sx + 0.5f) / 4, fy = y + (sy + 0.5f) / 4;
+                    if (badge) {
+                        float bx = fx - dotC, by = fy - dotC, d2 = bx * bx + by * by;
+                        if (d2 <= dotR * dotR) { ++dot; continue; }
+                        if (d2 <= ringR * ringR) { ++ring; continue; }
+                    }
                     float dx = fx - std::clamp(fx, radius, extent - radius);
                     float dy = fy - std::clamp(fy, radius, extent - radius);
                     if (dx * dx + dy * dy > radius * radius) continue;
@@ -2053,11 +2068,12 @@ static HICON MakeTrayIcon(int size) {
                 }
             }
             float mix = (x + y + 1) / (2 * extent);
-            UINT32 pixel = (cover * 255 / 16u) << 24;
+            // The ring cuts the badge out of the tile, so it is transparent.
+            UINT32 pixel = ((cover + dot) * 255 / 16u) << 24;
             for (int shift : {0, 8, 16}) {
                 float a = (blue >> shift) & 255, b = (mauve >> shift) & 255;
-                int ink = (crust >> shift) & 255;
-                pixel |= (UINT32)((((a + (b - a) * mix) * (cover - mark)) + ink * mark) / 16) << shift;
+                int ink = (crust >> shift) & 255, fill = (peach >> shift) & 255;
+                pixel |= (UINT32)((((a + (b - a) * mix) * (cover - mark)) + ink * mark + fill * dot) / 16) << shift;
             }
             pixels[y * size + x] = pixel;
         }
@@ -2071,15 +2087,17 @@ static HICON MakeTrayIcon(int size) {
     return icon;
 }
 
-static HICON MochaTrayIcon(HWND owner) {
+static HICON MochaTrayIcon(HWND owner, bool badge) {
     HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
     UINT dpi = GetDpiForWindow(taskbar ? taskbar : owner);
     int size = GetSystemMetricsForDpi(SM_CXSMICON, dpi ? dpi : 96);
+    // Negative cache keys keep freshly drawn tray icons separate from file
+    // icons; the badged one sits 1000 further down.
+    int key = -size - (badge ? 1000 : 0);
     std::lock_guard<std::mutex> lock(g_iconMutex);
-    // Negative cache keys keep freshly drawn badges separate from file icons.
-    if (auto it = g_icons.find(-size); it != g_icons.end()) return it->second;
-    HICON icon = MakeTrayIcon(size);
-    if (icon) g_icons.emplace(-size, icon);
+    if (auto it = g_icons.find(key); it != g_icons.end()) return it->second;
+    HICON icon = MakeTrayIcon(size, badge);
+    if (icon) g_icons.emplace(key, icon);
     return icon;
 }
 
@@ -2089,38 +2107,63 @@ static BOOL WINAPI NotifyIconHook(DWORD action, PNOTIFYICONDATAW data) {
         !(data->uFlags & NIF_ICON) || !OwnTrayWindow(data->hWnd)) {
         return g_notifyIcon(action, data);
     }
-    if (data->uFlags & NIF_TIP) g_trayAlert = wcscmp(data->szTip, L"Windhawk") != 0;
-    if (g_mochaIcons && !g_trayAlert) {
-        if (HICON themed = MochaTrayIcon(data->hWnd)) {
+    if (data->uFlags & NIF_TIP) {
+        g_trayAlert = wcscmp(data->szTip, L"Windhawk") != 0;
+        // Kept on the tray window so a reloaded mod knows the alert is up.
+        SetPropW(data->hWnd, kTrayAlertProp, (HANDLE)(INT_PTR)(g_trayAlert ? 1 : 2));
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_iconMutex);
+        if (g_stockTrayIcon) DestroyIcon(g_stockTrayIcon);
+        g_stockTrayIcon = data->hIcon ? CopyIcon(data->hIcon) : nullptr;
+    }
+    // Updates waiting: Windhawk swaps in its alert icon. Keep the hawk and
+    // add a badge instead of falling back to the stock look.
+    bool badge = g_trayAlert;
+    if (g_mochaIcons) {
+        if (HICON themed = MochaTrayIcon(data->hWnd, badge)) {
             NOTIFYICONDATAW copy = *data;
             copy.hIcon = themed;
             BOOL ok = g_notifyIcon(action, &copy);
-            if (ok) g_themedTray = true;
+            if (ok) g_themedTray = badge ? 1 : 0;
             return ok;
         }
     }
     BOOL ok = g_notifyIcon(action, data);
-    if (ok) g_themedTray = false;
+    if (ok) g_themedTray = -1;
     return ok;
 }
 
 static void RefreshTrayIcon(HWND owner, bool enabled) {
-    if (!g_notifyIcon || g_trayAlert || enabled == g_themedTray) return;
+    static bool alertRestored = false;
+    if (!alertRestored) {
+        alertRestored = true;
+        if (HANDLE saved = GetPropW(owner, kTrayAlertProp)) g_trayAlert = saved == (HANDLE)1;
+    }
+    bool badge = g_trayAlert;
+    int want = enabled ? (badge ? 1 : 0) : -1;
+    if (!g_notifyIcon || want == g_themedTray) return;
     NOTIFYICONDATAW data{sizeof(data)};
     data.hWnd = owner;
     data.uID = 1;
     data.uFlags = NIF_ICON;
     HICON stock = nullptr;
     if (enabled) {
-        data.hIcon = MochaTrayIcon(owner);
+        data.hIcon = MochaTrayIcon(owner, badge);
     } else {
-        HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
-        UINT dpi = GetDpiForWindow(taskbar ? taskbar : owner);
-        int size = GetSystemMetricsForDpi(SM_CXSMICON, dpi ? dpi : 96);
-        LoadIconWithScaleDown(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(0x80), size, size, &stock);
+        {
+            std::lock_guard<std::mutex> lock(g_iconMutex);
+            if (g_stockTrayIcon) stock = CopyIcon(g_stockTrayIcon);
+        }
+        if (!stock) {
+            HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
+            UINT dpi = GetDpiForWindow(taskbar ? taskbar : owner);
+            int size = GetSystemMetricsForDpi(SM_CXSMICON, dpi ? dpi : 96);
+            LoadIconWithScaleDown(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(0x80), size, size, &stock);
+        }
         data.hIcon = stock;
     }
-    if (data.hIcon && g_notifyIcon(NIM_MODIFY, &data)) g_themedTray = enabled;
+    if (data.hIcon && g_notifyIcon(NIM_MODIFY, &data)) g_themedTray = want;
     if (stock) DestroyIcon(stock);
 }
 
