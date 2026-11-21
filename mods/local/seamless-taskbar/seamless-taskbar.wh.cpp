@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.29
+// @version         0.4.30
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -32,11 +32,12 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 
-## What's new in 0.4.28
+## What's new in 0.4.30
 
 The drawer's three folders now hold icons. Right-click a folder and tick the icons it should
-keep, or drop an icon on it. Clicking an empty folder opens the same list. The folders are
-called Devices, Apps and Tools, and hovering one shows its name.
+keep, or drop an icon on it. Clicking a folder shows its icons right in the drawer, and
+clicking it again brings the rest back. Clicking an empty folder opens the list. The folders
+are called Devices, Apps and Tools, and hovering one shows its name.
 
 ## Tray tools
 
@@ -41738,6 +41739,10 @@ struct DrawerState {
     winrt::event_token groupClosing{};
     winrt::event_token groupClosed{};
     int groupOpen{-1};
+    // While a folder is open the drawer's own list shows its icons: the list
+    // it replaced, and the folder list put in its place.
+    IInspectable folderSaved{nullptr};
+    IInspectable folderView{nullptr};
     int pendingGroup{-1};
     int dragOverGroup{-1};
     // How many drawer icons live in a folder group right now; part of the
@@ -41836,7 +41841,48 @@ bool DeferNativeDismiss(void* manager, PCWSTR source) {
     return true;
 }
 
+PCWSTR GroupGlyph(std::wstring const& glyph);
+
+void SetFolderGlyph(DrawerState& state, int slot) {
+    if (slot < 0 || slot >= 3 || !state.groupButtons[slot])
+        return;
+    if (auto icon = state.groupButtons[slot].Content().try_as<Controls::FontIcon>())
+        icon.Glyph(state.groupOpen == slot ? L"\xE838"  // FolderOpen.
+                                           : GroupGlyph(CurrentSettings().groupGlyphs[slot]));
+}
+
+// Puts the drawer's own list back after a folder showed its icons there. Only
+// swaps back when the folder list is still the one showing, so a source that
+// was replaced meanwhile is never overwritten with an old one.
+void CloseFolderView(DrawerState& state) {
+    int slot = state.groupOpen;
+    if (slot < 0)
+        return;
+    state.groupOpen = -1;
+    auto saved = state.folderSaved;
+    auto view = state.folderView;
+    state.folderSaved = nullptr;
+    state.folderView = nullptr;
+    try {
+        if (state.nativeItems && saved && view && state.nativeItems.ItemsSource() == view) {
+            bool wasChanging = state.changing;
+            state.changing = true;
+            state.nativeItems.ItemsSource(saved);
+            state.expectedSource = saved;
+            state.nativeItems.UpdateLayout();
+            state.changing = wasChanging;
+        }
+    } catch (...) {
+        LogException(L"Close folder in drawer");
+    }
+    try {
+        SetFolderGlyph(state, slot);
+    } catch (...) {
+    }
+}
+
 void RestoreSelected(DrawerState& state, bool restoreBinding = true) {
+    CloseFolderView(state);
     if (state.dragOverChevron)
         VisualStateManager::GoToState(state.chevron, L"Normal", true);
     state.dragOverChevron = false;
@@ -42080,6 +42126,7 @@ void RefreshClassification(DrawerState& state) {
             }
             rare = std::move(visible);
         }
+        CloseFolderView(state);
         state.changing = true;
         ResetMenuHold(state);
         state.innerItems.ItemsSource(nullptr);
@@ -42369,8 +42416,7 @@ void ShowGroupMenu(DrawerState& state, int slot) {
     state.restoreClick = {};
     state.restoreCommand = nullptr;
     state.picker.Items().Clear();
-    if (state.groupOpen >= 0)
-        state.groupFlyout.Hide();
+    CloseFolderView(state);
 
     bool styled = s.theme && s.styleMenu && !state.accessibility.HighContrast();
     auto look = [&](Controls::MenuFlyoutItem const& item) {
@@ -42527,6 +42573,7 @@ void RemoveDrawer() noexcept {
     CleanupStep(L"Hide folder group flyout", [&] {
         if (state.groupFlyout)
             state.groupFlyout.Hide();
+        CloseFolderView(state);
     });
     // Detach inner views first. An unrelated cleanup failure must never skip
     // restoration of the original native ItemsSource/binding.
@@ -42830,7 +42877,7 @@ void UpdateDrawerAppearance(DrawerState& state) {
             if (!show)
                 continue;
             if (auto icon = button.Content().try_as<Controls::FontIcon>()) {
-                icon.Glyph(GroupGlyph(s.groupGlyphs[slot]));
+                icon.Glyph(state.groupOpen == slot ? L"\xE838" : GroupGlyph(s.groupGlyphs[slot]));
                 icon.Foreground(brush(s.groupColors[slot]));
             }
             PCWSTR fallback = slot == 0 ? L"Left folder"
@@ -42951,26 +42998,41 @@ void ShowGroupFlyout(DrawerState& state, int slot) {
     }
     if (models.empty())
         return;
-    auto itemTemplate = state.nativeItems.ItemTemplate();
-    if (!itemTemplate)
+    // A separate pop-up cannot draw tray icons (live check 2026-11-22: the
+    // folder showed an empty glass box), so the folder's icons take the
+    // drawer's own list until the folder is clicked again.
+    if (!state.partitioned || !state.nativeItems)
         return;
-    state.groupItems.ItemsSource(nullptr);
-    state.groupItems.ItemTemplate(itemTemplate);
-    state.groupItems.ItemTemplateSelector(state.nativeItems.ItemTemplateSelector());
-    state.groupItems.ItemContainerStyle(state.nativeItems.ItemContainerStyle());
-    state.groupItems.ItemsPanel(state.nativeItems.ItemsPanel());
-    state.groupItems.DataContext(state.nativeItems.DataContext());
-    state.groupItems.ItemsSource(
-        winrt::single_threaded_observable_vector<IInspectable>(std::move(models)));
-    state.groupItems.UpdateLayout();
+    CloseFolderView(state);
+    auto current = state.nativeItems.ItemsSource();
+    if (!current || current != state.expectedSource)
+        return;
     if (state.open)
         state.inner.Hide();
-    Controls::Primitives::FlyoutShowOptions options;
-    options.Placement(Controls::Primitives::FlyoutPlacementMode::Top);
-    state.groupFlyout.ShowAt(state.groupButtons[slot], options);
-    // Marked only after a successful show, so a failed show can never wedge
-    // the toggle state.
+    auto view = winrt::single_threaded_observable_vector<IInspectable>(std::move(models));
+    uint32_t shown = view.Size();
+    bool wasChanging = state.changing;
+    state.changing = true;
+    try {
+        state.nativeItems.ItemsSource(view);
+        state.nativeItems.UpdateLayout();
+    } catch (...) {
+        try {
+            state.nativeItems.ItemsSource(current);
+        } catch (...) {
+        }
+        state.changing = wasChanging;
+        throw;
+    }
+    state.folderSaved = current;
+    state.folderView = view;
+    state.expectedSource = view;
+    state.changing = wasChanging;
+    // Marked only after a successful swap, so a failed one never wedges the
+    // toggle state.
     state.groupOpen = slot;
+    SetFolderGlyph(state, slot);
+    Wh_Log(L"Folder %d opened in the drawer: %u icons", slot, shown);
 }
 
 PCWSTR GroupGlyph(std::wstring const& glyph) {
@@ -43524,7 +43586,7 @@ void InstallDrawer(Grid const& root) {
                     if (!CurrentSettings().groupEnabled[captured])
                         return;
                     if (state.groupOpen == captured) {
-                        state.groupFlyout.Hide();
+                        CloseFolderView(state);
                         return;
                     }
                     ShowGroupFlyout(state, captured);
@@ -43694,6 +43756,7 @@ void InstallDrawer(Grid const& root) {
                 Wh_Log(L"COEXISTENCE NOT VERIFIED: outer unloaded while inner was open");
             g_drawer->inner.Hide();
             g_drawer->groupFlyout.Hide();
+            CloseFolderView(*g_drawer);
             g_drawer->picker.Hide();
         } catch (...) {
             LogException(L"Outer drawer unloaded");
@@ -44103,6 +44166,7 @@ void WINAPI Hide_Hook(void* self) {
                 Wh_Log(L"Native outer Hide requested while inner is open; inspect coexistence");
             g_drawer->inner.Hide();
             g_drawer->groupFlyout.Hide();
+            CloseFolderView(*g_drawer);
             g_drawer->picker.Hide();
         }
     } catch (...) {
