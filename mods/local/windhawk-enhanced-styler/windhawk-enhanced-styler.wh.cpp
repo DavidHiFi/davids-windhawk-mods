@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.19
+// @version         2.2.20
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.20
+
+- Opening the sort menu, the filter menu or any other drop-down no longer blurs the whole Windhawk window. The menu now has a solid dark fill so it stays easy to read.
 
 ## What's new in 2.2.19
 
@@ -1332,11 +1336,10 @@ body:has(.ant-popconfirm:not(.ant-popover-hidden))>#root{filter:blur(14px) satur
 :root [class*="ModDetailsSettingsView__SettingSummary"]{background:#181825 !important;color:#a6adc8 !important;border:2px solid #45475a !important;border-radius:999px !important;padding:0 10px !important;line-height:20px !important;font-size:12px !important;transition:border-color .15s,color .15s;}
 :root [class*="ModDetailsSettingsView__SettingSummary"]:hover,:root [data-testid="mod-setting-array-item-summary"]:hover [class*="ModDetailsSettingsView__SettingSummary"]{color:#cdd6f4 !important;border-color:transparent !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
 :root [class*="ModDetailsSettingsView__ArraySettingsItemWrapper"],:root [class*="ModDetailsSettingsView__ArraySettingsFooter"]{padding-inline-start:24px !important;}
-/* 2.2.12: drop-downs wear the dialog glass. While a menu is open the page frosts behind
-   it — the one real blur this WebView can do (measured 2026-11-06: a filtered element
-   cannot read the page under it) — and the menu takes the frosted fill instead of a flat box. */
-body:has(.ant-select-dropdown:not(.ant-select-dropdown-hidden)),body:has(.ant-dropdown:not(.ant-dropdown-hidden)),body:has(.ant-picker-dropdown:not(.ant-picker-dropdown-hidden))>#root{filter:blur(16px) saturate(120%) brightness(.85) !important;}
-:root :is(.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu){background-color:rgba(24,24,37,.9) !important;backdrop-filter:none !important;}
+/* 2.2.20: drop-downs (sort, filter, selects, pickers) no longer frost the whole page
+   (owner, 2026-11-22: the sort menu blurred the entire window). This WebView cannot blur
+   what sits under a menu, so menus take solid Mocha mantle instead of a see-through fill. */
+:root :is(.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu){background-color:#181825 !important;backdrop-filter:none !important;}
 /* 2.2.12: header nav buttons rest on Mocha base instead of mantle, so they stop reading
    as black chips against the glass page (owner, 2026-11-20: like base, about rgb 30,30,46). */
 :root :is([data-testid="nav-home"],[data-testid="nav-explore"],[data-testid="nav-settings"],[data-testid="nav-about"],#wh-header-create):not(.ant-btn-primary){--whb-f:#1e1e2e !important;}
