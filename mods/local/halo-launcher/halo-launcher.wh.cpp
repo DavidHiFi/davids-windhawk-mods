@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.1
+// @version         0.6.2
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -4574,9 +4574,10 @@ static void Set_ReleaseFactories() {
     g_setD2d.reset();
 }
 
-static bool Set_FamilyExists(const std::wstring& name) {
+static bool Set_FamilyExists(const std::wstring& name, IDWriteFactory* dw = nullptr) {
+    if (!dw) dw = g_setDw.get();
     SetCom<IDWriteFontCollection> sys;
-    if (name.empty() || FAILED(g_setDw->GetSystemFontCollection(sys.put(), FALSE))) return false;
+    if (name.empty() || !dw || FAILED(dw->GetSystemFontCollection(sys.put(), FALSE))) return false;
     UINT32 index = 0;
     BOOL exists = FALSE;
     return SUCCEEDED(sys->FindFamilyName(name.c_str(), &index, &exists)) && exists;
@@ -4584,11 +4585,11 @@ static bool Set_FamilyExists(const std::wstring& name) {
 
 // The font setting, or its Nerd Font build ("Fira Code" is installed as
 // "FiraCode Nerd Font"), or Segoe UI.
-static std::wstring Set_ResolveFamily() {
+static std::wstring Set_ResolveFamily(IDWriteFactory* dw = nullptr) {
     PCWSTR setting = Wh_GetStringSetting(L"fontFamily");
     std::wstring family = setting && *setting ? setting : L"FiraCode Nerd Font";
     Wh_FreeStringSetting(setting);
-    return Set_FamilyExists(family) ? family : L"Segoe UI";
+    return Set_FamilyExists(family, dw) ? family : L"Segoe UI";
 }
 
 static float Set_TextW(IDWriteTextFormat* fmt, const std::wstring& text);
@@ -4675,7 +4676,9 @@ static bool Set_MenuFormats(SetMenuSession& s) {
         return false;
     if (!s.dw && FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)s.dw.put())))
         return false;
-    std::wstring family = Set_ResolveFamily();
+    // The menu can open before the settings window ever made the shared factories, so it
+    // checks the font with its own (0.6.1 crashed here on the first empty-space right-click).
+    std::wstring family = Set_ResolveFamily(s.dw.get());
     auto make = [&](float size, DWRITE_TEXT_ALIGNMENT align, SetCom<IDWriteTextFormat>& out, bool icon = false) {
         if (FAILED(s.dw->CreateTextFormat((icon ? L"FiraCode Nerd Font" : family.c_str()), nullptr, icon ? DWRITE_FONT_WEIGHT_NORMAL : WeightOf(g.fontWeight), DWRITE_FONT_STYLE_NORMAL,
                                           DWRITE_FONT_STRETCH_NORMAL, size, L"en-us", out.put())))
