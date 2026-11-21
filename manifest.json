@@ -1,7 +1,7 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-22T05:25:27+08:00",
+  "generatedAt": "2026-11-22T05:29:53+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 185,
@@ -775,7 +775,7 @@
       "name": "Helium Acrylic",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi/davids-windhawk-mods",
-      "version": "3.8.0",
+      "version": "3.8.1",
       "license": "",
       "origin": "local",
       "upstream": "",

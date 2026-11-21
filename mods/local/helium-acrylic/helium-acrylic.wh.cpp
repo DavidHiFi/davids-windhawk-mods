@@ -2,7 +2,7 @@
 // @id              helium-acrylic
 // @name            Helium Acrylic
 // @description     Keeps Helium's acrylic surface, Catppuccin colors and system-drawn frame working after browser updates
-// @version         3.8.0
+// @version         3.8.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -18,6 +18,10 @@ wash the whole look out: the strip turns black and the Catppuccin tint is gone.
 This mod keeps both alive so a plain stock install stays riced.
 
 ![Helium Acrylic preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/helium-acrylic.png)
+
+## What's new in 3.8.1
+- The icon now shows as soon as Helium opens. Before, it only appeared after
+  you changed a setting.
 
 ## What's new in 3.8.0
 - The app icon is now Helium's own logo in the rice colors: the rounded
@@ -2187,6 +2191,7 @@ static DWORD WINAPI IconThread(LPVOID) {
 BOOL Wh_ModInit() {
     Wh_Log(L">");
     LoadSettings();
+    g_iconWant.store(g_set.gradientIcon, std::memory_order_relaxed);
     if (g_set.nativeFrame) EnsureHideWindowButtonsSwitch();
     MTRACE(GetModuleHandleW(L"chrome.dll") ? "init: chrome already loaded"
                                            : "init: chrome not loaded yet");
