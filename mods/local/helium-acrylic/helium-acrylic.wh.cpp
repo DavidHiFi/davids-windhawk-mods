@@ -2,13 +2,13 @@
 // @id              helium-acrylic
 // @name            Helium Acrylic
 // @description     Keeps Helium's acrylic surface, Catppuccin colors and system-drawn frame working after browser updates
-// @version         3.7.0
+// @version         3.8.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         chrome.exe
 // @architecture    x86-64
-// @compilerOptions -lgdi32
+// @compilerOptions -lgdi32 -lole32 -lshell32 -luuid
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -18,6 +18,17 @@ wash the whole look out: the strip turns black and the Catppuccin tint is gone.
 This mod keeps both alive so a plain stock install stays riced.
 
 ![Helium Acrylic preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/helium-acrylic.png)
+
+## What's new in 3.8.0
+- The app icon is now Helium's own logo in the rice colors: the rounded
+  square runs blue to mauve and the star turns dark. It shows in the title
+  bar, on the taskbar and on your Start menu, desktop and taskbar shortcuts.
+  Pick Helium's own icon in the settings to put every one of them back.
+
+## What's new in 3.7.1
+- No more square frame around popups. Menus, extension popups and bubbles
+  are rounded inside a square window, and the blur used to fill that square.
+  Popups now stay clean. A new setting turns their blur back on.
 
 ## Features
 - **Survives updates.** Everything lives in memory, not in the browser's files,
@@ -38,9 +49,9 @@ This mod keeps both alive so a plain stock install stays riced.
 - **Your colors.** Every color the rice sets is a setting: base, toolbar,
   address bar, tabs, text. Change them and the browser follows without a
   restart.
-- **Your icon.** The app icon can switch to the Seamless badge, the same
-  rounded square with the blue to mauve gradient the settings windows use,
-  with a globe cut out. Windows and the taskbar follow.
+- **Your icon.** Helium's logo repainted blue to mauve with a dark star,
+  the same look as the other riced icons. The title bar, the taskbar and
+  your Start menu, desktop and taskbar shortcuts all follow.
 - **Quiet.** If the code it looks for cannot be matched exactly once, the mod
   does nothing and logs why. Safe by default.
 - **Dark theme only.** The color layer follows the Windows app theme; light
@@ -132,11 +143,14 @@ Written by DavidHiFi.
 - nativeFrameEnabled: true
   $name: Keep the system title bar
   $description: "Windows draws the title bar and keeps the resize borders. Applies on the next browser start."
+- popupAcrylic: false
+  $name: Blur behind popups and menus
+  $description: "Off keeps rounded popups clean. On also blurs menus and extension popups, but Windows then draws a square frosted frame around them. Applies at once."
 - appIcon: gradient
   $name: App icon
-  $description: "The icon in the title bar and on the taskbar."
+  $description: "The icon in the title bar, on the taskbar and on your Start menu, desktop and taskbar shortcuts."
   $options:
-  - gradient: Seamless gradient badge
+  - gradient: Helium logo, blue to mauve
   - default: Helium's own icon
 */
 // ==/WindhawkModSettings==
@@ -147,6 +161,9 @@ Written by DavidHiFi.
 #include <cmath>
 #include <cwchar>
 #include <vector>
+#include <string>
+#include <shlobj.h>
+#include <shobjidl.h>
 
 // ---------------------------------------------------------------------------
 // Part 1: the acrylic patch.
@@ -219,6 +236,7 @@ struct Settings {
     bool colors = true;
     bool nativeFrame = true;
     bool gradientIcon = true;
+    bool popupAcrylic = false;
 };
 static Settings g_set;
 static std::vector<ColorEntry> g_liveColors;
@@ -248,6 +266,7 @@ static void LoadSettings() {
     s.acrylic = Wh_GetIntSetting(L"acrylicEnabled") != 0;
     s.colors = Wh_GetIntSetting(L"colorsEnabled") != 0;
     s.nativeFrame = Wh_GetIntSetting(L"nativeFrameEnabled") != 0;
+    s.popupAcrylic = Wh_GetIntSetting(L"popupAcrylic") != 0;
     PCWSTR icon = Wh_GetStringSetting(L"appIcon");
     s.gradientIcon = !icon || wcscmp(icon, L"default") != 0;
     if (icon) Wh_FreeStringSetting(icon);
@@ -655,6 +674,27 @@ static BOOL CALLBACK BackdropEnumProc(HWND hwnd, LPARAM lp) {
     if (!GetClassNameW(hwnd, cls, 64) || wcscmp(cls, L"Chrome_WidgetWin_1") != 0) {
         return TRUE;
     }
+    // Bubbles, menus and extension popups are rounded inside a square window
+    // with a see-through shadow margin. Acrylic fills the whole square, so the
+    // margin shows as a frosted square frame. Skip them unless asked, and
+    // clear it once from any popup that got it earlier.
+    LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    LONG_PTR exStyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    bool bubble = (style & WS_POPUP) && !(style & (WS_CAPTION | WS_THICKFRAME)) &&
+                  !(exStyle & WS_EX_APPWINDOW);
+    if (bubble && !g_set.popupAcrylic) {
+        if (!GetPropW(hwnd, L"HeliumAcrylicPopupClear")) {
+            PFN_SetWindowCompositionAttribute clear = GetSetWindowCompositionAttribute();
+            if (clear) {
+                ACCENTPOLICY off = { 0, 0, 0, 0 }; // ACCENT_DISABLED
+                WINDOWCOMPOSITIONATTRDATA d = { 19, &off, sizeof(off) };
+                clear(hwnd, &d);
+            }
+            SetPropW(hwnd, L"HeliumAcrylicPopupClear", (HANDLE)1);
+        }
+        return TRUE;
+    }
+    if (bubble) RemovePropW(hwnd, L"HeliumAcrylicPopupClear");
     // Use SetWindowCompositionAttribute with accent acrylic (WCA_ACCENT_POLICY)
     // instead of DWMSBT because DWM attributes are overridden on Helium 0.22.1.1
     PFN_SetWindowCompositionAttribute wca = GetSetWindowCompositionAttribute();
@@ -1717,11 +1757,12 @@ static void EnsureHideWindowButtonsSwitch() {
 // ---------------------------------------------------------------------------
 // Part 5: the app icon.
 //
-// The Seamless badge, the same plate every mod's tray icon uses: rounded
-// square (corner radius 0.26 of the icon), blue #89B4FA to mauve #CBA6F7
-// diagonal, a Segoe Fluent Icons glyph cut out in #11111B. Drawn with GDI,
-// cached per DPI, and re-applied when Chromium puts its own icon back.
-// A globe for a browser: Segoe Fluent Icons E774.
+// Helium's own logo (the IDR_MAINFRAME icon in chrome.exe) repainted in the
+// rice: the plate runs blue #89B4FA to mauve #CBA6F7 on the diagonal and the
+// white star turns #11111B, the look of the Mocha Windhawk icon. The same
+// pixels go to the windows (re-applied when Chromium puts its own icon back)
+// and to an .ico file the user's Helium shortcuts point at. A chrome.exe whose
+// logo is not Helium's blue plate gets the Seamless globe badge instead.
 static std::atomic<bool> g_iconWant{false};
 static HICON g_badgeSmall = nullptr;
 static HICON g_badgeBig = nullptr;
@@ -1802,14 +1843,276 @@ static HICON MakeBadgeIcon(int size, WCHAR glyph) {
     return icon;
 }
 
+// Helium's logo at one size as top-down BGRA with straight alpha, repainted.
+// False when the icon is missing or is not Helium's blue plate.
+static bool RicedLogoPixels(int size, std::vector<uint32_t>& px) {
+    // Scale-down loading picks the next larger image and shrinks it cleanly.
+    // Looked up at run time so a comctl32 without it only costs quality.
+    typedef HRESULT(WINAPI * ScaleDownFn)(HINSTANCE, PCWSTR, int, int, HICON*);
+    static ScaleDownFn scaleDown = [] {
+        HMODULE cc = GetModuleHandleW(L"comctl32.dll");
+        if (!cc) cc = LoadLibraryW(L"comctl32.dll");
+        return cc ? (ScaleDownFn)GetProcAddress(cc, "LoadIconWithScaleDown") : nullptr;
+    }();
+    HINSTANCE exe = GetModuleHandleW(nullptr);
+    HICON src = nullptr;
+    if (!scaleDown || FAILED(scaleDown(exe, L"IDR_MAINFRAME", size, size, &src)))
+        src = (HICON)LoadImageW(exe, L"IDR_MAINFRAME", IMAGE_ICON, size, size, 0);
+    if (!src) return false;
+    ICONINFO ii{};
+    bool ok = GetIconInfo(src, &ii) && ii.hbmColor;
+    if (ok) {
+        BITMAP bm{};
+        ok = GetObjectW(ii.hbmColor, sizeof(bm), &bm) && bm.bmWidth == size &&
+             bm.bmHeight == size;
+    }
+    if (ok) {
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+        bi.bmiHeader.biWidth = size;
+        bi.bmiHeader.biHeight = -size;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        px.assign((size_t)size * size, 0);
+        HDC dc = GetDC(nullptr);
+        ok = GetDIBits(dc, ii.hbmColor, 0, size, px.data(), &bi, DIB_RGB_COLORS) == size;
+        ReleaseDC(nullptr, dc);
+    }
+    if (ii.hbmColor) DeleteObject(ii.hbmColor);
+    if (ii.hbmMask) DeleteObject(ii.hbmMask);
+    DestroyIcon(src);
+    if (!ok) return false;
+
+    // The plate's colour, read just inside its left edge at mid height.
+    uint32_t ref = px[(size_t)(size / 2) * size + size / 8];
+    int pr = (ref >> 16) & 0xFF, pg = (ref >> 8) & 0xFF, pb = ref & 0xFF;
+    if ((ref >> 24) < 0xF0 || pb < pr + 80 || pb < pg + 60) return false;
+    float plate = (float)std::min({pr, pg, pb});
+
+    const float c0[3] = {0x89, 0xB4, 0xFA};
+    const float c1[3] = {0xCB, 0xA6, 0xF7};
+    const float ink[3] = {0x11, 0x11, 0x1B};
+    for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++) {
+            uint32_t p = px[(size_t)y * size + x];
+            uint32_t a = p >> 24;
+            if (!a) continue;
+            int m = std::min({(int)((p >> 16) & 0xFF), (int)((p >> 8) & 0xFF), (int)(p & 0xFF)});
+            float cov = std::clamp((m - plate) / (255.0f - plate), 0.0f, 1.0f);
+            float t = std::clamp((x + y) / (2.0f * (size - 1)), 0.0f, 1.0f);
+            uint32_t rgb[3];
+            for (int i = 0; i < 3; i++) {
+                float base = c0[i] + (c1[i] - c0[i]) * t;
+                rgb[i] = (uint32_t)(base + (ink[i] - base) * cov + 0.5f);
+            }
+            px[(size_t)y * size + x] = (a << 24) | (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+        }
+    return true;
+}
+
+static HICON MakeRicedLogoIcon(int size) {
+    std::vector<uint32_t> px;
+    if (!RicedLogoPixels(size, px)) return nullptr;
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = size;
+    bi.bmiHeader.biHeight = -size;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    void* bits = nullptr;
+    HBITMAP color = CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!color) return nullptr;
+    memcpy(bits, px.data(), px.size() * 4);
+    HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
+    ICONINFO ii{TRUE, 0, 0, mask, color};
+    HICON icon = CreateIconIndirect(&ii);
+    DeleteObject(mask);
+    DeleteObject(color);
+    return icon;
+}
+
+static HICON MakeAppIcon(int size) {
+    HICON icon = MakeRicedLogoIcon(size);
+    return icon ? icon : MakeBadgeIcon(size, 0xE774);
+}
+
 static void RefreshBadges(UINT dpi) {
     if (g_badgeSmall && g_badgeBig && dpi == g_badgeDpi) return;
     if (g_badgeSmall) DestroyIcon(g_badgeSmall);
     if (g_badgeBig) DestroyIcon(g_badgeBig);
-    g_badgeSmall = MakeBadgeIcon(GetSystemMetricsForDpi(SM_CXSMICON, dpi), 0xE774);
-    g_badgeBig = MakeBadgeIcon(GetSystemMetricsForDpi(SM_CXICON, dpi), 0xE774);
+    g_badgeSmall = MakeAppIcon(GetSystemMetricsForDpi(SM_CXSMICON, dpi));
+    g_badgeBig = MakeAppIcon(GetSystemMetricsForDpi(SM_CXICON, dpi));
     g_badgeDpi = dpi;
-    Wh_Log(L"icon: badges drawn for dpi %u", dpi);
+    Wh_Log(L"icon: app icons drawn for dpi %u", dpi);
+}
+
+// ---- shortcuts ------------------------------------------------------------
+// Only the browser process (no --type=) touches files. The .ico lives beside
+// the Mocha Windhawk icon; a shortcut is changed only when it starts this
+// very chrome.exe, and turning the icon off points it back at chrome.exe,0,
+// the icon Helium's installer gives it.
+
+static bool IsBrowserProcess() {
+    PCWSTR cmd = GetCommandLineW();
+    return cmd && !wcsstr(cmd, L"--type=");
+}
+
+static std::wstring RicedIconFile() {
+    wchar_t folder[MAX_PATH];
+    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, folder)))
+        return {};
+    std::wstring dir = std::wstring(folder) + L"\\Windhawk";
+    CreateDirectoryW(dir.c_str(), nullptr);
+    return dir + L"\\Helium-Mocha.ico";
+}
+
+// Every size as a 32-bit bitmap entry. Written only when the bytes changed,
+// so Explorer's icon cache is not churned on every browser start.
+static bool WriteRicedIcon(const std::wstring& path) {
+    static const int kSizes[] = {16, 20, 24, 32, 40, 48, 64, 96, 128, 256};
+    const int n = (int)(sizeof(kSizes) / sizeof(kSizes[0]));
+    std::vector<BYTE> dir(6 + 16 * n), body;
+    *(WORD*)&dir[2] = 1;
+    *(WORD*)&dir[4] = (WORD)n;
+    for (int i = 0; i < n; i++) {
+        int s = kSizes[i];
+        std::vector<uint32_t> px;
+        if (!RicedLogoPixels(s, px)) return false;
+        DWORD maskRow = ((s + 31) / 32) * 4;
+        DWORD bytes = sizeof(BITMAPINFOHEADER) + s * s * 4 + maskRow * s;
+        BYTE* e = &dir[6 + 16 * i];
+        e[0] = (BYTE)(s & 0xFF);
+        e[1] = (BYTE)(s & 0xFF);
+        *(WORD*)&e[4] = 1;
+        *(WORD*)&e[6] = 32;
+        *(DWORD*)&e[8] = bytes;
+        *(DWORD*)&e[12] = (DWORD)(dir.size() + body.size());
+        BITMAPINFOHEADER h{};
+        h.biSize = sizeof(h);
+        h.biWidth = s;
+        h.biHeight = s * 2;
+        h.biPlanes = 1;
+        h.biBitCount = 32;
+        h.biSizeImage = s * s * 4 + maskRow * s;
+        const BYTE* hp = (const BYTE*)&h;
+        body.insert(body.end(), hp, hp + sizeof(h));
+        for (int y = s - 1; y >= 0; y--) {
+            const BYTE* row = (const BYTE*)&px[(size_t)y * s];
+            body.insert(body.end(), row, row + s * 4);
+        }
+        body.insert(body.end(), (size_t)maskRow * s, 0);
+    }
+    dir.insert(dir.end(), body.begin(), body.end());
+
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                           OPEN_EXISTING, 0, nullptr);
+    if (f != INVALID_HANDLE_VALUE) {
+        LARGE_INTEGER len{};
+        bool same = false;
+        if (GetFileSizeEx(f, &len) && len.QuadPart == (LONGLONG)dir.size()) {
+            std::vector<BYTE> old(dir.size());
+            DWORD got = 0;
+            same = ReadFile(f, old.data(), (DWORD)old.size(), &got, nullptr) &&
+                   got == old.size() && old == dir;
+        }
+        CloseHandle(f);
+        if (same) return true;
+    }
+    std::wstring tmp = path + L".tmp";
+    f = CreateFileW(tmp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return false;
+    DWORD wrote = 0;
+    bool ok = WriteFile(f, dir.data(), (DWORD)dir.size(), &wrote, nullptr) && wrote == dir.size();
+    CloseHandle(f);
+    if (!ok || !MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+        DeleteFileW(tmp.c_str());
+        return false;
+    }
+    Wh_Log(L"icon: wrote %s", path.c_str());
+    return true;
+}
+
+static int RetargetShortcut(IShellLinkW* link, IPersistFile* file, const std::wstring& path,
+                            PCWSTR exe, const std::wstring& icon, bool riced) {
+    if (FAILED(file->Load(path.c_str(), STGM_READ))) return 0;
+    wchar_t target[MAX_PATH], expanded[MAX_PATH], image[MAX_PATH];
+    int index = 0;
+    if (FAILED(link->GetPath(target, MAX_PATH, nullptr, SLGP_RAWPATH)) ||
+        FAILED(link->GetIconLocation(image, MAX_PATH, &index)))
+        return 0;
+    DWORD n = ExpandEnvironmentStringsW(target, expanded, MAX_PATH);
+    if (!n || n > MAX_PATH || _wcsicmp(expanded, exe) != 0) return 0;
+    bool isRiced = _wcsicmp(image, icon.c_str()) == 0;
+    if (riced == isRiced) return 0;
+    if (FAILED(link->SetIconLocation(riced ? icon.c_str() : exe, 0)) ||
+        FAILED(file->Save(path.c_str(), TRUE)))
+        return 0;
+    SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, path.c_str(), nullptr);
+    Wh_Log(L"icon: %s -> %s", path.c_str(), riced ? L"riced" : L"stock");
+    return 1;
+}
+
+static int RetargetFolder(IShellLinkW* link, IPersistFile* file, const std::wstring& folder,
+                          PCWSTR exe, const std::wstring& icon, bool riced, bool subfolders) {
+    int changed = 0;
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW((folder + L"\\*").c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    do {
+        std::wstring name = fd.cFileName;
+        if (name == L"." || name == L"..") continue;
+        std::wstring full = folder + L"\\" + name;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            if (subfolders && !(fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
+                changed += RetargetFolder(link, file, full, exe, icon, riced, false);
+        } else if (name.size() > 4 && _wcsicmp(name.c_str() + name.size() - 4, L".lnk") == 0) {
+            changed += RetargetShortcut(link, file, full, exe, icon, riced);
+        }
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    return changed;
+}
+
+// Start menu (one folder deep), desktop and taskbar pins of this user.
+static void UpdateShortcutIcons(bool riced) {
+    std::wstring icon = RicedIconFile();
+    if (icon.empty()) return;
+    if (riced && !WriteRicedIcon(icon)) {
+        Wh_Log(L"icon: no riced .ico (logo not Helium's), shortcuts left alone");
+        return;
+    }
+    wchar_t exe[MAX_PATH];
+    if (!GetModuleFileNameW(nullptr, exe, MAX_PATH)) return;
+    HRESULT init = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    IShellLinkW* link = nullptr;
+    if (SUCCEEDED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                                   IID_IShellLinkW, (void**)&link))) {
+        IPersistFile* file = nullptr;
+        if (SUCCEEDED(link->QueryInterface(IID_IPersistFile, (void**)&file))) {
+            int changed = 0;
+            wchar_t folder[MAX_PATH];
+            if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_PROGRAMS, nullptr, 0, folder)))
+                changed += RetargetFolder(link, file, folder, exe, icon, riced, true);
+            if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_DESKTOPDIRECTORY, nullptr, 0, folder)))
+                changed += RetargetFolder(link, file, folder, exe, icon, riced, false);
+            if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, folder)))
+                changed += RetargetFolder(link, file,
+                    std::wstring(folder) + L"\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar",
+                    exe, icon, riced, false);
+            file->Release();
+            Wh_Log(L"icon: %d shortcut(s) set to %s", changed, riced ? L"riced" : L"stock");
+        }
+        link->Release();
+    }
+    if (SUCCEEDED(init)) CoUninitialize();
+}
+
+static bool ModDisabledInWindhawk() {
+    std::wstring key = L"SOFTWARE\\Windhawk\\Engine\\Mods\\";
+    key += WH_MOD_ID;
+    DWORD disabled = 0, size = sizeof(disabled);
+    return RegGetValueW(HKEY_LOCAL_MACHINE, key.c_str(), L"Disabled", RRF_RT_REG_DWORD,
+                        nullptr, &disabled, &size) == ERROR_SUCCESS && disabled;
 }
 
 struct IconCtx { DWORD pid; };
@@ -1861,9 +2164,15 @@ static void RestoreHeliumIcons() {
 }
 
 static DWORD WINAPI IconThread(LPVOID) {
+    const bool browser = IsBrowserProcess();
+    int shortcuts = -1;  // what the shortcuts were last set to this process
     while (!g_stop) {
-        if (g_iconWant.load(std::memory_order_relaxed) &&
-            GetModuleHandleW(L"chrome.dll")) {
+        bool want = g_iconWant.load(std::memory_order_relaxed);
+        if (browser && GetModuleHandleW(L"chrome.dll") && shortcuts != (int)want) {
+            UpdateShortcutIcons(want);
+            shortcuts = (int)want;
+        }
+        if (want && GetModuleHandleW(L"chrome.dll")) {
             RefreshBadges(GetDpiForSystem());
             IconCtx ctx = { GetCurrentProcessId() };
             EnumWindows(IconEnumProc, (LPARAM)&ctx);
@@ -1923,6 +2232,9 @@ void Wh_ModSettingsChanged() {
 void Wh_ModUninit() {
     g_stop = true;
     RestoreHeliumIcons();
+    // Closing Helium also unloads the mod; only a real disable in Windhawk
+    // hands the shortcuts back their stock icon.
+    if (IsBrowserProcess() && ModDisabledInWindhawk()) UpdateShortcutIcons(false);
     if (g_badgeSmall) DestroyIcon(g_badgeSmall);
     if (g_badgeBig) DestroyIcon(g_badgeBig);
     g_badgeSmall = nullptr;

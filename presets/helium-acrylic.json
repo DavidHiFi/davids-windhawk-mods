@@ -4,7 +4,30 @@
     {
       "id": "local@helium-acrylic",
       "enabled": true,
-      "settings": {}
+      "settings": {
+        "acrylicEnabled": 1,
+        "appIcon": "gradient",
+        "colorBase": "#1E1E2E",
+        "colorFocusBorder": "#B4BEFE",
+        "colorOmniboxResults": "#181825",
+        "colorOmniboxResultsHover": "#313244",
+        "colorOmniboxText": "#CDD6F4",
+        "colorOmniboxTextDim": "#7F849C",
+        "colorTabActive": "#313244",
+        "colorTabHover": "#313244",
+        "colorTabSelected": "#313244",
+        "colorTabStroke": "#585B70",
+        "colorTabTextActive": "#CDD6F4",
+        "colorTabTextInactive": "#A6ADC8",
+        "colorToolbarIcon": "#A6ADC8",
+        "colorToolbarIconHover": "#CDD6F4",
+        "colorsEnabled": 1,
+        "nativeFrameEnabled": 1,
+        "popupAcrylic": 0,
+        "tabActiveOpacity": 85,
+        "tabInactiveHoverOpacity": 60,
+        "tabSelectedOpacity": 69
+      }
     }
   ]
 }
