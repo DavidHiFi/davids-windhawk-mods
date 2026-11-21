@@ -2,7 +2,7 @@
 // @id              seamless-window-manager
 // @name            Seamless Window Manager
 // @description     Move, resize, snap and focus windows with the mouse or keyboard, with app rules, gaps and a pause key
-// @version         2.6.7
+// @version         2.7.0
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -42,8 +42,10 @@ when a game needs Alt. Works on administrator windows too.
 - **Send to another monitor** with Ctrl+Shift+arrow keys. Down is the main
   monitor, and the other arrows pick the monitor above, left or right of it.
   Maximized windows stay maximized, and the mouse pointer can come along.
-- **Tiling.** New windows fill the screen side by side, like GlazeWM.
-  Move them around with Alt+Shift+arrow keys, grow them with
+- **Tiling.** New windows fill the screen side by side, like GlazeWM. A new
+  window takes half of the biggest tile, so nothing opens as a thin strip.
+  Over a full-screen game it opens in the middle instead and joins the tiles
+  once the game closes. Move them around with Alt+Shift+arrow keys, grow them with
   Ctrl+Alt+Shift+arrow keys, and float one with Alt+T. The half and quarter
   keys rearrange the tiles around the window. Dragging a tiled window onto
   another swaps them, and dragging an edge resizes its neighbours too. A tile
@@ -54,9 +56,10 @@ when a game needs Alt. Works on administrator windows too.
   whole monitor, taskbar included. Press either again to go back.
 - **Hide the title bar** with Ctrl+Win+Alt+T. The window keeps its size and
   place; press again to bring the title bar back.
-- **Stacked windows.** When windows sit on top of each other, such as two
-  filled with Alt+F, Alt+PageDown brings up the one behind and Alt+PageUp
-  goes back the other way.
+- **Hidden windows.** Alt+PageDown brings up the window hidden behind the
+  ones in front, even one behind two tiles side by side. Press again for the
+  one behind that, and once more to come back round. Alt+PageUp goes the
+  other way.
 - **Focus by direction.** Alt+arrow keys switch to the nearest window on that
   side, on any monitor, and the mouse pointer jumps with you. The window you
   land on gets a soft blue to mauve ring that closes in on its edge and
@@ -6556,16 +6559,16 @@ void ToolModUninit() {
     Brings back the window you minimized last, at its old size and place.
     Press again for the one before it.
 - hotkeyMRUUp: Alt+PageUp
-  $name: Bring the last one back
+  $name: Go back up the hidden windows
   $description: >-
-    Undoes one press of the key below. The window at the back of the stack
-    comes to the front.
+    Walks the same windows as the key below, the other way round.
 - hotkeyMRUDown: Alt+PageDown
-  $name: Raise the window below this one
+  $name: Bring up a hidden window
   $description: >-
-    When windows are stacked on top of each other, brings up the one behind
-    the active window and sends the active one to the back. Press again to
-    walk the whole stack. Windows tiled beside it are left alone.
+    Brings up the window hidden behind the ones in front on this monitor, even
+    one behind two tiles side by side. Press again for the one behind that,
+    and once more to come back to where you started. Windows in plain view
+    are left to the focus keys.
 - hotkeyClose: Alt+Shift+Q
   $name: Close
 - hotkeyMenu: ''
@@ -6717,8 +6720,10 @@ void ToolModUninit() {
     - enabled: true
       $name: Tile new windows
       $description: >-
-        New app windows fill the screen side by side, like GlazeWM. Dialogs,
-        small windows and windows on top stay floating.
+        New app windows fill the screen side by side, like GlazeWM. A new one
+        takes half of the biggest tile. Over a full-screen game it opens in
+        the middle and tiles once the game is gone. Dialogs, small windows and
+        windows on top stay floating.
     - existing: true
       $name: Tile windows already open
       $description: When on, the windows already open are tiled when the mod starts.
@@ -8878,10 +8883,64 @@ void Destroy() {
 
 }  // namespace ring
 
+// Windows Animations plays its switch zoom (the window vanishes, then fades
+// in) on any focus change made while Alt is held, so our Alt hotkeys got it
+// too. It asks a window switcher's note window first: a fresh note that
+// names no source means "not a switch", and it plays nothing. Real Alt+Tab
+// leaves no note, so it keeps its zoom.
+namespace switchNote {
+
+constexpr PCWSTR kClass = L"WindhawkSWS_Switcher";
+constexpr PCWSTR kTitle = L"WindhawkSWS_InputEndpoint";
+constexpr PCWSTR kVersion = L"WindhawkSWS.SelectionProtocolV1";
+constexpr PCWSTR kToken = L"WindhawkSWS.SelectionTokenV1";
+constexpr PCWSTR kTick = L"WindhawkSWS.SelectionTickV1";
+std::atomic<HWND> g_endpoint{nullptr};
+std::atomic<DWORD> g_token{0};
+
+void Create() {
+    // A real switcher already owns the note window: leave it alone.
+    if (FindWindowW(kClass, kTitle)) return;
+    WNDCLASSEXW wc{sizeof(wc)};
+    wc.lpfnWndProc = DefWindowProcW;
+    wc.hInstance = GetModuleHandleW(nullptr);
+    wc.lpszClassName = kClass;
+    RegisterClassExW(&wc);
+    HWND endpoint = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, kClass, kTitle,
+                                    WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, wc.hInstance,
+                                    nullptr);
+    if (!endpoint) return;
+    SetPropW(endpoint, kVersion, (HANDLE)(ULONG_PTR)1);
+    g_endpoint = endpoint;
+}
+
+// Called just before one of our focus moves.
+void Mark() {
+    HWND endpoint = g_endpoint;
+    if (!endpoint) return;
+    DWORD token = ++g_token;
+    if (!token) token = ++g_token;
+    // Tick before token: the reader checks the token first.
+    SetPropW(endpoint, kTick, (HANDLE)(ULONG_PTR)GetTickCount());
+    SetPropW(endpoint, kToken, (HANDLE)(ULONG_PTR)token);
+}
+
+void Destroy() {
+    HWND endpoint = g_endpoint.exchange(nullptr);
+    if (endpoint) {
+        for (PCWSTR prop : {kVersion, kToken, kTick}) RemovePropW(endpoint, prop);
+        DestroyWindow(endpoint);
+    }
+    UnregisterClassW(kClass, GetModuleHandleW(nullptr));
+}
+
+}  // namespace switchNote
+
 DWORD WINAPI ThreadProc(LPVOID ready) {
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     MSG msg;
     PeekMessageW(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+    switchNote::Create();
     SetEvent((HANDLE)ready);
     if (!g_d2d) D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &g_d2d);
     auto handle = [](const MSG& msg) {
@@ -8917,6 +8976,7 @@ DWORD WINAPI ThreadProc(LPVOID ready) {
         if (GetMessageW(&msg, nullptr, 0, 0) <= 0) break;
         handle(msg);
     }
+    switchNote::Destroy();
     ring::Destroy();
     Hide();
     if (g_window) {
@@ -10066,19 +10126,126 @@ bool StillShown(HWND hWnd) {
            (IsWindowVisible(hWnd) || IsHungAppWindow(hWnd));
 }
 
+// A new window takes half of the biggest tile, cut along its long side, so it
+// never opens as a thin strip beside the others (a spiral layout).
+void InsertSplit(Workspace* ws, HWND hWnd) {
+    ComputeLayout(ws);
+    std::vector<Node*> leaves;
+    CollectLeaves(ws->root.get(), &leaves);
+    Node* best = nullptr;
+    long long bestArea = -1;
+    for (Node* leaf : leaves) {
+        if (leaf->hidden || leaf->fill) continue;
+        long long area = (long long)Width(leaf->slot) * Height(leaf->slot);
+        // On a tie, the one that had focus gives up its half.
+        if (area > bestArea || (area == bestArea && leaf->hWnd == ws->lastFocused)) {
+            best = leaf;
+            bestArea = area;
+        }
+    }
+    if (!best) {
+        InsertLeaf(ws, ws->root.get(), ws->root->children.size(), hWnd);
+        return;
+    }
+    bool vertical = Height(best->slot) > Width(best->slot);
+    Node* parent = best->parent;
+    if (parent->vertical == vertical) {
+        // Already cut this way: the two halves share its old place.
+        std::vector<double> weights;
+        for (auto& child : parent->children) weights.push_back(child->weight);
+        size_t index = IndexOf(best);
+        Node* leaf = InsertLeaf(ws, parent, index + 1, hWnd);
+        for (size_t i = 0, j = 0; i < parent->children.size(); i++) {
+            if (parent->children[i].get() == leaf) continue;
+            parent->children[i]->weight = weights[j++];
+        }
+        best->weight /= 2;
+        leaf->weight = best->weight;
+        return;
+    }
+    // Cut the other way: the tile becomes a split of the old window and the new one.
+    size_t index = IndexOf(best);
+    auto split = std::make_unique<Node>();
+    split->vertical = vertical;
+    split->weight = best->weight;
+    split->parent = parent;
+    Node* raw = split.get();
+    std::unique_ptr<Node> old = std::move(parent->children[index]);
+    old->parent = raw;
+    old->weight = 1.0;
+    raw->children.push_back(std::move(old));
+    parent->children[index] = std::move(split);
+    InsertLeaf(ws, raw, 1, hWnd);
+}
+
+// A full-screen app (a game, a video) in front on this monitor, other than hWnd.
+struct FullscreenSearch {
+    HMONITOR monitor;
+    HWND skip;
+    HWND found;
+};
+
+BOOL CALLBACK FullscreenSearchProc(HWND hWnd, LPARAM param) {
+    auto* s = reinterpret_cast<FullscreenSearch*>(param);
+    if (hWnd == s->skip || !IsWindowVisible(hWnd) || IsIconic(hWnd) || IsZoomed(hWnd) ||
+        IsCloaked(hWnd) || GetAncestor(hWnd, GA_ROOT) != hWnd) {
+        return TRUE;
+    }
+    LONG_PTR ex = GetWindowLongPtrW(hWnd, GWL_EXSTYLE);
+    // Overlays and the click-through layers other mods draw don't count.
+    if (ex & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT)) return TRUE;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hWnd, &pid);
+    if (pid == GetCurrentProcessId()) return TRUE;
+    WCHAR cls[32] = {};
+    GetClassNameW(hWnd, cls, ARRAYSIZE(cls));
+    if (!wcscmp(cls, L"Progman") || !wcscmp(cls, L"WorkerW")) return TRUE;
+    if (MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST) != s->monitor ||
+        !effects::IsFullscreen(hWnd)) {
+        return TRUE;
+    }
+    s->found = hWnd;
+    return FALSE;
+}
+
+HWND FullscreenOn(HMONITOR monitor, HWND skip) {
+    FullscreenSearch s{monitor, skip, nullptr};
+    EnumWindows(FullscreenSearchProc, reinterpret_cast<LPARAM>(&s));
+    return s.found;
+}
+
+// Over a game: opens in the middle at a good size, and joins the tiles once
+// the game closes or leaves full screen.
+std::unordered_set<HWND> g_waiting;
+int g_waitTicks = 0;
+
+void FloatCentered(HWND hWnd, HMONITOR monitor) {
+    MONITORINFO mi{sizeof(mi)};
+    RECT win{}, frame{};
+    if (!GetMonitorInfoW(monitor, &mi) || !GetWindowRect(hWnd, &win) || !GetFrame(hWnd, &frame)) {
+        return;
+    }
+    Node probe{};
+    probe.hWnd = hWnd;
+    QueryMinSize(&probe);
+    const RECT& work = mi.rcWork;
+    int w = std::min(Width(work), std::max(MulDiv(Width(work), 3, 5), probe.minW));
+    int h = std::min(Height(work), std::max(MulDiv(Height(work), 3, 4), probe.minH));
+    int x = work.left + (Width(work) - w) / 2;
+    int y = work.top + (Height(work) - h) / 2;
+    // The app's window is a little bigger than what shows (its invisible edges).
+    SetWindowPos(hWnd, nullptr, x - (frame.left - win.left), y - (frame.top - win.top),
+                 w + Width(win) - Width(frame), h + Height(win) - Height(frame),
+                 SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_ASYNCWINDOWPOS);
+}
+
 Workspace* AddWindow(HWND hWnd) {
     if (g_leaves.count(hWnd)) return g_leaves[hWnd].ws;
+    g_waiting.erase(hWnd);
     HMONITOR monitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
     Workspace* ws = GetWorkspace(monitor, DesktopOf(hWnd));
-    // Like GlazeWM: a new window goes right after the one that had focus.
-    auto anchor = ws->lastFocused ? g_leaves.find(ws->lastFocused) : g_leaves.end();
-    if (anchor != g_leaves.end() && anchor->second.ws == ws) {
-        Node* node = anchor->second.node;
-        InsertLeaf(ws, node->parent, IndexOf(node) + 1, hWnd);
-    } else {
-        InsertLeaf(ws, ws->root.get(), ws->root->children.size(), hWnd);
-    }
-    // The next window opens beside this one if it has focus now.
+    InsertSplit(ws, hWnd);
+    // On a tie for the biggest tile, the next window splits this one.
     if (GetAncestor(GetForegroundWindow(), GA_ROOT) == hWnd) ws->lastFocused = hWnd;
     TLog(L"Tiling: added %p", hWnd);
     return ws;
@@ -10109,7 +10276,8 @@ void Reconcile() {
     for (auto& item : items) {
         HMONITOR monitor = MonitorFromWindow(item.second, MONITOR_DEFAULTTONEAREST);
         Workspace* ws = GetWorkspace(monitor, DesktopOf(item.second));
-        InsertLeaf(ws, ws->root.get(), ws->root->children.size(), item.second);
+        g_waiting.erase(item.second);
+        InsertSplit(ws, item.second);
     }
     if (!items.empty()) TLog(L"Tiling: %d open windows tiled", (int)items.size());
     LayoutAll();
@@ -10159,6 +10327,7 @@ void ClearAll() {
     g_workspaces.clear();
     g_pending.clear();
     g_cloakCheck.clear();
+    g_waiting.clear();
     PublishTiled();
 }
 
@@ -10804,14 +10973,30 @@ void FlipCommand() {
     Layout(ws);
 }
 
-// Alt+PageDown / Alt+PageUp: walk the windows stacked behind the active one.
+// Alt+PageDown / Alt+PageUp: walk the windows hidden behind the ones in front,
+// on this monitor: behind the active window, or mostly covered by any windows
+// above it (say one window behind two tiles side by side).
 struct CycleFocusEnumData {
     RECT current;
+    HMONITOR monitor;
+    HRGN above;  // Everything in front of the window being looked at.
     std::vector<HWND>* out;
 };
 
 LONG RectArea(const RECT& r) {
     return std::max(0L, r.right - r.left) * std::max(0L, r.bottom - r.top);
+}
+
+long long RegionArea(HRGN rgn) {
+    DWORD size = GetRegionData(rgn, 0, nullptr);
+    if (!size) return 0;
+    std::vector<BYTE> buffer(size);
+    auto* data = reinterpret_cast<RGNDATA*>(buffer.data());
+    if (!GetRegionData(rgn, size, data)) return 0;
+    long long area = 0;
+    const RECT* rects = reinterpret_cast<const RECT*>(data->Buffer);
+    for (DWORD i = 0; i < data->rdh.nCount; i++) area += RectArea(rects[i]);
+    return area;
 }
 
 BOOL CALLBACK CycleFocusProc(HWND hWnd, LPARAM param) {
@@ -10821,43 +11006,73 @@ BOOL CALLBACK CycleFocusProc(HWND hWnd, LPARAM param) {
         !altSnapDrag::CanActOnRootWindow(hWnd)) {
         return TRUE;
     }
+    WCHAR cls[32] = {};
+    GetClassNameW(hWnd, cls, ARRAYSIZE(cls));
+    if (!wcscmp(cls, L"Progman") || !wcscmp(cls, L"WorkerW") || !wcscmp(cls, L"Shell_TrayWnd")) {
+        return TRUE;
+    }
     RECT frame{};
     if (!GetFrame(hWnd, &frame) || frame.right - frame.left < 2 ||
-        frame.bottom - frame.top < 2) {
+        frame.bottom - frame.top < 2 ||
+        MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST) != d->monitor) {
         return TRUE;
     }
-    // Only windows stacked behind this one: at least half of the smaller of the
-    // two must overlap, so tiles beside it are left to the focus keys.
+    // Behind this one: at least half of the smaller of the two overlaps.
     RECT overlap{};
     IntersectRect(&overlap, &frame, &d->current);
-    if (RectArea(overlap) * 2 < std::min(RectArea(frame), RectArea(d->current))) {
-        return TRUE;
+    bool behind = RectArea(overlap) * 2 >= std::min(RectArea(frame), RectArea(d->current));
+    // Or at least half of it is out of sight under the windows in front. A tile
+    // beside this one is in plain view, so it stays with the focus keys.
+    HRGN mine = CreateRectRgnIndirect(&frame);
+    HRGN covered = CreateRectRgn(0, 0, 0, 0);
+    bool hidden = false;
+    if (mine && covered && CombineRgn(covered, mine, d->above, RGN_AND) != ERROR) {
+        hidden = RegionArea(covered) * 2 >= RectArea(frame);
     }
-    d->out->push_back(hWnd);
+    if (behind || hidden) d->out->push_back(hWnd);
+    if (mine) CombineRgn(d->above, d->above, mine, RGN_OR);
+    if (covered) DeleteObject(covered);
+    if (mine) DeleteObject(mine);
     return TRUE;
 }
+
+// One walk: the windows found on the first press, front to back, with the one
+// that was active first. Pressing again goes on down the same list, so a window
+// brought up doesn't shuffle the rest; it lasts while our pick keeps the focus.
+std::vector<HWND> g_cycleList;
+size_t g_cycleAt = 0;
 
 void CycleFocusCommand(int direction) {
     HWND hCur = ActiveRoot();
     if (!hCur) return;
-    CycleFocusEnumData data{};
-    if (!GetFrame(hCur, &data.current)) return;
-    std::vector<HWND> stack;
-    data.out = &stack;
-    EnumWindows(CycleFocusProc, reinterpret_cast<LPARAM>(&data));
-    // EnumWindows walks top to bottom. The active window goes first.
-    stack.erase(std::remove(stack.begin(), stack.end(), hCur), stack.end());
-    if (stack.empty()) return;
-    if (direction >= 0) {
-        // Behind: bring up the next window and send this one to the back, so
-        // pressing again walks the whole stack instead of swapping two.
-        FocusWindow(stack.front());
-        SetWindowPos(hCur, HWND_BOTTOM, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
-    } else {
-        // Back: the window at the very back comes up, undoing one step.
-        FocusWindow(stack.back());
+    bool fresh = g_cycleList.size() < 2 || g_cycleAt >= g_cycleList.size() ||
+                 g_cycleList[g_cycleAt] != hCur;
+    if (!fresh) {
+        for (HWND hWnd : g_cycleList) {
+            if (!IsWindow(hWnd) || !IsWindowVisible(hWnd) || IsIconic(hWnd)) fresh = true;
+        }
     }
+    if (fresh) {
+        CycleFocusEnumData data{};
+        if (!GetFrame(hCur, &data.current)) return;
+        data.monitor = MonitorFromWindow(hCur, MONITOR_DEFAULTTONEAREST);
+        data.above = CreateRectRgn(0, 0, 0, 0);
+        if (!data.above) return;
+        std::vector<HWND> stack;
+        data.out = &stack;
+        // EnumWindows walks front to back.
+        EnumWindows(CycleFocusProc, reinterpret_cast<LPARAM>(&data));
+        DeleteObject(data.above);
+        stack.erase(std::remove(stack.begin(), stack.end(), hCur), stack.end());
+        if (stack.empty()) return;
+        g_cycleList.clear();
+        g_cycleList.push_back(hCur);
+        g_cycleList.insert(g_cycleList.end(), stack.begin(), stack.end());
+        g_cycleAt = 0;
+    }
+    size_t count = g_cycleList.size();
+    g_cycleAt = direction >= 0 ? (g_cycleAt + 1) % count : (g_cycleAt + count - 1) % count;
+    FocusWindow(g_cycleList[g_cycleAt]);
 }
 
 // Windows minimized while the mod runs, newest last. Kept on the tiling thread,
@@ -10913,7 +11128,7 @@ void RunCommand(TilingCommand command, int arg) {
 
 void QueuePending(HWND hWnd) {
     if (g_active && !g_leaves.count(hWnd) && !g_floated.count(hWnd) && !g_pending.count(hWnd) &&
-        !g_borderless.count(hWnd) && !g_noTile.count(hWnd)) {
+        !g_borderless.count(hWnd) && !g_noTile.count(hWnd) && !g_waiting.count(hWnd)) {
         g_pending[hWnd] = 0;
     }
 }
@@ -10941,6 +11156,7 @@ void HandleEvent(const Event& e) {
     if (e.event == EVENT_OBJECT_DESTROY || e.event == EVENT_OBJECT_HIDE ||
         e.event == EVENT_SYSTEM_MINIMIZESTART) {
         g_noTile.erase(hWnd);
+        if (e.event != EVENT_OBJECT_HIDE || !StillShown(hWnd)) g_waiting.erase(hWnd);
     }
     switch (e.event) {
         case EVENT_OBJECT_DESTROY:
@@ -11028,7 +11244,14 @@ void OnPendingTimer() {
         }
         bool cloaked = IsCloaked(hWnd), lasting = false;
         if (!cloaked && CanTile(hWnd, false, &lasting)) {
-            touched.push_back(AddWindow(hWnd));
+            HMONITOR monitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+            if (HWND game = FullscreenOn(monitor, hWnd)) {
+                TLog(L"Tiling: %p waits over full-screen %p", hWnd, game);
+                FloatCentered(hWnd, monitor);
+                g_waiting.insert(hWnd);
+            } else {
+                touched.push_back(AddWindow(hWnd));
+            }
             it = g_pending.erase(it);
         } else if ((cloaked || !IsWindowVisible(hWnd)) && ticks < 30) {
             ++it;
@@ -11055,6 +11278,31 @@ void OnPendingTimer() {
             OnCurrentDesktop(hWnd)) {
             TLog(L"Tiling: %p hidden in place", hWnd);
             touched.push_back(RemoveWindow(hWnd));
+        }
+    }
+    // Once a second: the windows waiting over a game tile when it's gone.
+    if (!g_waiting.empty() && ++g_waitTicks >= 10) {
+        g_waitTicks = 0;
+        std::vector<HWND> ready;
+        for (auto it = g_waiting.begin(); it != g_waiting.end();) {
+            HWND hWnd = *it;
+            if (!IsWindow(hWnd) || g_leaves.count(hWnd) || g_floated.count(hWnd) ||
+                !IsWindowVisible(hWnd) || IsIconic(hWnd)) {
+                it = g_waiting.erase(it);
+                continue;
+            }
+            if (!IsCloaked(hWnd) &&
+                !FullscreenOn(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), hWnd)) {
+                ready.push_back(hWnd);
+            }
+            ++it;
+        }
+        for (HWND hWnd : ready) {
+            g_waiting.erase(hWnd);
+            if (CanTile(hWnd, false)) {
+                TLog(L"Tiling: %p joins the tiles, the full-screen app is gone", hWnd);
+                touched.push_back(AddWindow(hWnd));
+            }
         }
     }
     std::sort(touched.begin(), touched.end());
@@ -11332,7 +11580,8 @@ void UpdateTimers() {
     if (want && g_enforceTimer && ms != g_enforceMs) SetTimerState(&g_enforceTimer, false, 0);
     if (want && !g_enforceTimer) g_enforceMs = ms;
     SetTimerState(&g_enforceTimer, want, ms);
-    SetTimerState(&g_pendingTimer, g_active && (!g_pending.empty() || !g_cloakCheck.empty()),
+    SetTimerState(&g_pendingTimer,
+                  g_active && (!g_pending.empty() || !g_cloakCheck.empty() || !g_waiting.empty()),
                   100);
 }
 
@@ -11512,6 +11761,7 @@ void FocusWindow(HWND hWnd) {
     if (animate && !g_focusRing) {
         PostMessageW(root, altSnapDrag::g_focusPulseMessage, g_focusAnimMs, 0);
     }
+    osd::switchNote::Mark();
     if (!SetForegroundWindow(hWnd)) {
         // A zero-distance mouse input counts as user input and unlocks it.
         INPUT input{};
@@ -12285,8 +12535,8 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Hotkey, L"hotkeyMaximize", L"Maximize or restore", L"Type the whole shortcut, such as \"Alt+X\" or \"Ctrl+Alt+X\". It needs at least one of Alt, Ctrl, Shift or Win. Leave empty to turn it off. Same for every shortcut below. Off by default, because Alt+F fills the screen.", L"", {}, 0, 100, 0, L"Window keys"},
 {K::Hotkey, L"hotkeyMinimize", L"Minimize", L"", L"Alt+M", {}, 0, 100, 0, L"Window keys"},
 {K::Hotkey, L"hotkeyRestoreMinimized", L"Restore minimized window", L"Brings back the window you minimized last, at its old size and place. Press again for the one before it.", L"Alt+Shift+M", {}, 0, 100, 0, L"Window keys"},
-{K::Hotkey, L"hotkeyMRUUp", L"Bring the last one back", L"Undoes one press of the key below. The window at the back of the stack comes to the front.", L"Alt+PageUp", {}, 0, 100, 0, L"Window keys"},
-{K::Hotkey, L"hotkeyMRUDown", L"Raise the window below this one", L"When windows are stacked on top of each other, brings up the one behind the active window and sends the active one to the back. Press again to walk the whole stack. Windows tiled beside it are left alone.", L"Alt+PageDown", {}, 0, 100, 0, L"Window keys"},
+{K::Hotkey, L"hotkeyMRUUp", L"Go back up the hidden windows", L"Walks the same windows as the key below, the other way round.", L"Alt+PageUp", {}, 0, 100, 0, L"Window keys"},
+{K::Hotkey, L"hotkeyMRUDown", L"Bring up a hidden window", L"Brings up the window hidden behind the ones in front on this monitor, even one behind two tiles side by side. Press again for the one behind that, and once more to come back to where you started. Windows in plain view are left to the focus keys.", L"Alt+PageDown", {}, 0, 100, 0, L"Window keys"},
 {K::Hotkey, L"hotkeyClose", L"Close", L"", L"Alt+Shift+Q", {}, 0, 100, 0, L"Window keys"},
 {K::Hotkey, L"hotkeyMenu", L"Open the window menu", L"", L"", {}, 0, 100, 0, L"Window keys"},
 {K::Hotkey, L"hotkeyTopmost", L"Toggle always on top", L"", L"", {}, 0, 100, 0, L"Window keys"},
@@ -12323,7 +12573,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Choice, L"leftDoubleAction", L"Left double click", L"", L"none", {{L"menu", L"Open the window menu"}, {L"maximize", L"Toggle maximize"}, {L"minimize", L"Minimize"}, {L"close", L"Close"}, {L"topmost", L"Toggle always on top"}, {L"lower", L"Send to the back"}, {L"center", L"Center"}, {L"sideSnap", L"Snap to the nearest side"}, {L"none", L"Nothing"}}, 0, 100, 1, L"Clicks"},
 {K::Choice, L"middleDoubleAction", L"Middle double click", L"", L"none", {{L"menu", L"Open the window menu"}, {L"maximize", L"Toggle maximize"}, {L"minimize", L"Minimize"}, {L"close", L"Close"}, {L"topmost", L"Toggle always on top"}, {L"lower", L"Send to the back"}, {L"center", L"Center"}, {L"sideSnap", L"Snap to the nearest side"}, {L"none", L"Nothing"}}, 0, 100, 1, L"Clicks"},
 {K::Choice, L"rightDoubleAction", L"Right double click", L"", L"none", {{L"menu", L"Open the window menu"}, {L"maximize", L"Toggle maximize"}, {L"minimize", L"Minimize"}, {L"close", L"Close"}, {L"topmost", L"Toggle always on top"}, {L"lower", L"Send to the back"}, {L"center", L"Center"}, {L"sideSnap", L"Snap to the nearest side"}, {L"none", L"Nothing"}}, 0, 100, 1, L"Clicks"},
-{K::Check, L"tiling.enabled", L"Tile new windows", L"New app windows fill the screen side by side, like GlazeWM. Dialogs, small windows and windows on top stay floating.", L"1", {}, 0, 100, 2, L"Tiling"},
+{K::Check, L"tiling.enabled", L"Tile new windows", L"New app windows fill the screen side by side, like GlazeWM. A new one takes half of the biggest tile. Over a full-screen game it opens in the middle and tiles once the game is gone. Dialogs, small windows and windows on top stay floating.", L"1", {}, 0, 100, 2, L"Tiling"},
 {K::Check, L"tiling.existing", L"Tile windows already open", L"When on, the windows already open are tiled when the mod starts.", L"1", {}, 0, 100, 2, L"Tiling"},
 {K::Number, L"tiling.innerGap", L"Space between tiled windows (px)", L"Always pixels. The space at the screen edges comes from the screen-edge gaps. 0 to 100 (Suggested: 20).", L"20", {}, 0, 100, 2, L"Tiling"},
 {K::Number, L"tiling.resizeStep", L"Tile grow keys: step (%)", L"How far each press of a grow key moves the edge, as a share of the screen. 1 to 20 (Suggested: 5).", L"5", {}, 1, 20, 2, L"Tiling"},

@@ -592,7 +592,7 @@
     "include": "*|windhawk.exe",
     "exclude": "cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe",
     "architecture": "",
-    "version": "2.6.7"
+    "version": "2.7.0"
   },
   "local@settings-styler-plus": {
     "disabled": false,

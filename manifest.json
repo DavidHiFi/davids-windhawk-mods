@@ -1,7 +1,7 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-22T05:24:49+08:00",
+  "generatedAt": "2026-11-22T05:25:27+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 185,
@@ -1079,7 +1079,7 @@
       "name": "Seamless Window Manager",
       "author": "DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.6.7",
+      "version": "2.7.0",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
