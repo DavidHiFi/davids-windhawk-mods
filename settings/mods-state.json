@@ -1159,7 +1159,7 @@
     "include": "Ableton Live 12 Suite.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.5.0"
+    "version": "1.5.1"
   },
   "local@explorer-tree-guard": {
     "disabled": false,

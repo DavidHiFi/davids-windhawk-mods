@@ -2,7 +2,7 @@
 // @id              ableton-glass-fill
 // @name            Ableton Glass Fill
 // @description     Matches Ableton's menu bar and Settings window to its title bar glass, and keeps the glass tint Mocha
-// @version         1.5.0
+// @version         1.5.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -17,6 +17,8 @@ Ableton paints its menu bar with a see-through dark colour, so on a window with 
 it the area comes out lighter than the title bar. This mod paints that fill black so the glass
 shows through as is. The glass tint is a light Mocha veil (38% on the main window, 25% on
 Settings), so the blur stays visible like Explorer's frosted glass instead of a flat slab.
+
+![Ableton Glass Fill preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/ableton-glass-fill.png)
 
 The Settings window paints its whole body, slate background included, into a Direct3D frame
 that sits on top of the glass. For that one window the mod turns the background colour into
