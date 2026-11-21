@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.28
+// @version         0.4.29
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -141,7 +141,7 @@ The whole mod is published under GPL-3.0.
 
   - stackedLayout: false
     $name: Stacked layout
-    $description: "Two compact rows that fit inside the dock: CPU and GPU, then RAM and VRAM, then temperatures, then upload and download. Uses the stacked font size below."
+    $description: "Two compact rows that fit inside the dock: CPU and GPU with their temperatures, then RAM and VRAM, then upload and download. Uses the stacked font size below."
 
   - stackedFontSize: 10
     $name: Stacked font size
@@ -3006,7 +3006,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"sysinfo.showMemoryGraphs", L"Show RAM/VRAM graphs", L"Show separate history line graphs after the RAM/VRAM gigabyte readings. These do not draw behind the text.", L"1", {}, 0, 100, 1, L"System info and weather"},
 {K::Check, L"sysinfo.showMemoryBars", L"Show RAM/VRAM capacity bars", L"Show the original thin filled bars underneath the RAM/VRAM readings. Each fills from empty to full capacity.", L"1", {}, 0, 100, 1, L"System info and weather"},
 {K::Check, L"sysinfo.showMeters", L"Show segmented meters", L"Show a small segmented bar after each CPU, GPU, RAM and VRAM label. Segments turn from green to yellow to red as the load rises.", L"1", {}, 0, 100, 1, L"System info and weather"},
-{K::Check, L"sysinfo.stackedLayout", L"Stacked layout", L"Two compact rows that fit inside the dock: CPU and GPU, then RAM and VRAM, then temperatures, then upload and download. Uses the stacked font size below.", L"0", {}, 0, 100, 1, L"System info and weather"},
+{K::Check, L"sysinfo.stackedLayout", L"Stacked layout", L"Two compact rows that fit inside the dock: CPU and GPU with their temperatures, then RAM and VRAM, then upload and download. Uses the stacked font size below.", L"0", {}, 0, 100, 1, L"System info and weather"},
 {K::Number, L"sysinfo.stackedFontSize", L"Stacked font size", L"Text size for the stacked layout, from 7 to 11 pixels. Suggested: 10. At 11 the rows still fit a 34-pixel dock.", L"10", {}, 7, 11, 1, L"System info and weather"},
 {K::Number, L"sysinfo.meterSegments", L"Meter segments", L"Number of segments in each meter, from 4 to 20.", L"10", {}, 4, 20, 1, L"System info and weather"},
 {K::Choice, L"sysinfo.colorTheme", L"Color theme", L"Colors labels, values, temperatures, network speeds and meters as a set. System keeps the adaptive or manual colors below. Warning and critical colors still show when a threshold is crossed.", L"system", {{L"system", L"System (adaptive or manual colors)"}, {L"catppuccinMocha", L"Catppuccin Mocha"}, {L"catppuccinMacchiato", L"Catppuccin Macchiato"}, {L"catppuccinFrappe", L"Catppuccin Frapp\u00E9"}, {L"catppuccinLatte", L"Catppuccin Latte"}}, 0, 100, 1, L"System info and weather"},
@@ -11911,8 +11911,8 @@ double StackedRowHeight(int fontSize) {
     return std::ceil(fontSize * 1.2);
 }
 
-// Two rows. Row 0: CPU | RAM | CPU temperature | upload.
-// Row 1: GPU | VRAM | GPU temperature | download.
+// Two rows. Row 0: CPU + temperature | RAM | upload.
+// Row 1: GPU + temperature | VRAM | download.
 // Columns are measured with the stacked font.
 void ApplyStackedGeometry(const ModSettings& settings) {
     if (!g_stackedGrid) return;
@@ -11936,10 +11936,7 @@ void ApplyStackedGeometry(const ModSettings& settings) {
         icon.Text(kTempIconPrefix);
         icon.FontSize(settings.stackedFontSize * kTempIconScale);
         icon.CharacterSpacing(kTempIconTighten);
-        Documents::Run name;
-        name.Text(L"GPU");
         probe.Inlines().Append(icon);
-        probe.Inlines().Append(name);
         probe.Measure(Size{10000, 100});
         return std::ceil(static_cast<double>(probe.DesiredSize().Width)) + 1;
     };
@@ -11971,10 +11968,16 @@ void ApplyStackedGeometry(const ModSettings& settings) {
     double wattsWidth = measure(L"999\u2009W");
     double wattsGap = measure(L"9 9") - measure(L"99");
     double meterColumn = settings.showMeters ? meterWidth + small : 0;
+    // Owner 2026-11-22: temperatures sit right after the usage percent, so the
+    // third section holds only upload and download.
+    double tempGap = small + wattsGap;
     const double widths[] = {
         std::max(measure(L"CPU", true), measure(L"GPU", true)) + small,
         meterColumn,
         measure(L"100%"),
+        tempGap + measureTempLabel(),
+        measure(L"115"),
+        small + measure(L"\u00B0C"),
         small + wattsWidth + wattsGap + measure(L"9.9\u2009GHz"),
         std::max(gap, 10.0),
         std::max(measure(L"RAM", true), measure(L"VRAM", true)) + small + 2,
@@ -11983,10 +11986,7 @@ void ApplyStackedGeometry(const ModSettings& settings) {
         small + wattsWidth + wattsGap +
             std::max(fullCapacityWidth(g_ramLayoutCapacityGb),
                      fullCapacityWidth(g_vramLayoutCapacityGb)),
-        std::max(gap, 10.0),
-        measureTempLabel() + small,
-        measure(L"115"),
-        small + measure(L"\u00B0C"),
+        settings.showNetwork ? std::max(gap, 10.0) : 0.0,
         settings.showNetwork ? gap + measure(L"\u2193", true) + small : 0.0,
         settings.showNetwork ? measure(L"999.9") : 0.0,
         settings.showNetwork ? small + unitWidth : 0.0,
@@ -12037,6 +12037,11 @@ void ApplyStackedGeometry(const ModSettings& settings) {
     for (TextBlock text : {g_downloadLabel, g_uploadLabel, g_downloadText,
                            g_uploadText, g_downloadUnit, g_uploadUnit}) {
         if (text) text.Visibility(settings.showNetwork ? Visibility::Visible : Visibility::Collapsed);
+    }
+    if (g_stackDivider)
+        g_stackDivider.Visibility(settings.showNetwork ? Visibility::Visible : Visibility::Collapsed);
+    for (TextBlock t : {g_cpuTempLabel, g_gpuTempLabel, g_cpuTempIcon, g_gpuTempIcon}) {
+        if (t) t.Margin(Thickness{tempGap, 0, 0, 0});
     }
     g_widgetHeight = rowHeight * 2;
     g_widgetWidth = std::max(static_cast<double>(settings.width), width);
@@ -13026,7 +13031,7 @@ void BuildStackedWidget(Grid widget) {
         const Left& item = left[index];
         std::wstring prefix = item.prefix;
         int row = index % 2;
-        int col = index < 2 ? 0 : 5;
+        int col = index < 2 ? 0 : 8;
         *item.labelText = text((prefix + L"Label").c_str(), item.label, TextAlignment::Left, row, col);
         *item.meter = CreateMeter((prefix + L"Meter").c_str());
         place(*item.meter, row, col + 1);
@@ -13069,13 +13074,13 @@ void BuildStackedWidget(Grid widget) {
         cell.text.Inlines().Clear();
         cell.wattsText.Inlines().Append(cell.watts);
         cell.wattsText.Inlines().Append(cell.wattsUnit);
-        place(cell.wattsText, row, 3);
+        place(cell.wattsText, row, 6);
         cell.clock = run(L"-.-");
         cell.clockUnit = run(L"\u2009GHz");
-        place(cell.text, row, 3);
+        place(cell.text, row, 6);
         return cell;
     };
-    // Lines between CPU/GPU and RAM/VRAM (column 4) and before the temperatures (column 9).
+    // Lines between CPU/GPU and RAM/VRAM (column 7) and before upload/download (column 12).
     auto makeDivider = [&](PCWSTR name, int column) {
         XamlRectangle divider;
         divider.Name(name);
@@ -13091,8 +13096,8 @@ void BuildStackedWidget(Grid widget) {
         });
         return divider;
     };
-    g_stackDivider2 = makeDivider(L"StackDividerMemory", 4);
-    g_stackDivider = makeDivider(L"StackDivider", 9);
+    g_stackDivider2 = makeDivider(L"StackDividerMemory", 7);
+    g_stackDivider = makeDivider(L"StackDivider", 12);
     g_cpuPowerCell = powerCell(L"CpuPower", 0);
     g_gpuPowerCell = powerCell(L"GpuPower", 1);
     auto tempLabel = [&](TextBlock label, PCWSTR name, PCWSTR iconName, int row,
@@ -13108,7 +13113,7 @@ void BuildStackedWidget(Grid widget) {
         label.Inlines().Append(nameRun);
         // Same cell and style as the label, so the glyph lands exactly on the
         // spacer before the nudge.
-        icon = text(iconName, L"", TextAlignment::Left, row, 10);
+        icon = text(iconName, L"", TextAlignment::Left, row, 3);
         Documents::Run iconRun;
         iconRun.Text(kTempIconPrefix);
         icon.Inlines().Append(iconRun);
@@ -13117,11 +13122,11 @@ void BuildStackedWidget(Grid widget) {
         icon.RenderTransform(shift);
         return iconRun;
     };
-    g_cpuTempLabel = text(L"CpuTemperatureLabel", L"CPU", TextAlignment::Left, 0, 10);
-    g_cpuTempIconRun = tempLabel(g_cpuTempLabel, L"CPU", L"CpuTemperatureIcon", 0,
+    g_cpuTempLabel = text(L"CpuTemperatureLabel", L"", TextAlignment::Left, 0, 3);
+    g_cpuTempIconRun = tempLabel(g_cpuTempLabel, L"", L"CpuTemperatureIcon", 0,
                                  -kTempIconNudge, g_cpuTempIcon, g_cpuTempIconSpacer);
-    g_gpuTempLabel = text(L"GpuTemperatureLabel", L"GPU", TextAlignment::Left, 1, 10);
-    g_gpuTempIconRun = tempLabel(g_gpuTempLabel, L"GPU", L"GpuTemperatureIcon", 1,
+    g_gpuTempLabel = text(L"GpuTemperatureLabel", L"", TextAlignment::Left, 1, 3);
+    g_gpuTempIconRun = tempLabel(g_gpuTempLabel, L"", L"GpuTemperatureIcon", 1,
                                  kTempIconNudge, g_gpuTempIcon, g_gpuTempIconSpacer);
     g_uploadLabel = text(L"UploadLabel", L"UP", TextAlignment::Right, 0, 13);
     g_downloadLabel = text(L"DownloadLabel", L"DOWN", TextAlignment::Right, 1, 13);
@@ -13137,10 +13142,10 @@ void BuildStackedWidget(Grid widget) {
     };
     g_uploadArrowRun = arrowLabel(g_uploadLabel, L"\u2191", L"");
     g_downloadArrowRun = arrowLabel(g_downloadLabel, L"\u2193", L"");
-    g_cpuTempText = text(L"CpuTemperature", L"--", TextAlignment::Right, 0, 11);
-    g_gpuTempText = text(L"GpuTemperature", L"--", TextAlignment::Right, 1, 11);
-    g_cpuTempUnit = text(L"CpuTemperatureUnit", L"\u00B0C", TextAlignment::Right, 0, 12);
-    g_gpuTempUnit = text(L"GpuTemperatureUnit", L"\u00B0C", TextAlignment::Right, 1, 12);
+    g_cpuTempText = text(L"CpuTemperature", L"--", TextAlignment::Right, 0, 4);
+    g_gpuTempText = text(L"GpuTemperature", L"--", TextAlignment::Right, 1, 4);
+    g_cpuTempUnit = text(L"CpuTemperatureUnit", L"\u00B0C", TextAlignment::Right, 0, 5);
+    g_gpuTempUnit = text(L"GpuTemperatureUnit", L"\u00B0C", TextAlignment::Right, 1, 5);
     g_uploadText = text(L"UploadValue", L"--", TextAlignment::Right, 0, 14);
     g_downloadText = text(L"DownloadValue", L"--", TextAlignment::Right, 1, 14);
     g_uploadUnit = text(L"UploadUnit", L"B/s", TextAlignment::Right, 0, 15);
