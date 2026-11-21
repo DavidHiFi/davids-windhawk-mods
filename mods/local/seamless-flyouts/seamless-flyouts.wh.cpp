@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.0.17
+// @version         2.0.18
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -802,15 +802,34 @@ enum WINDOWCOMPOSITIONATTRIB
 typedef BOOL(WINAPI* pSetWindowCompositionAttribute)(HWND, WINCOMPATTRDATA*);
 auto SetWindowCompositionAttribute = (pSetWindowCompositionAttribute) GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
 
-ID2D1Factory* g_d2dFactory = nullptr;
+static SRWLOCK g_d2dFactoryLock = SRWLOCK_INIT;
+static Microsoft::WRL::ComPtr<ID2D1Factory> g_d2dFactory;
+
+// A paint already in progress keeps its reference across settings reloads.
+static Microsoft::WRL::ComPtr<ID2D1Factory> AcquireDirect2DFactory()
+{
+    AcquireSRWLockShared(&g_d2dFactoryLock);
+    auto factory = g_d2dFactory;
+    ReleaseSRWLockShared(&g_d2dFactoryLock);
+    return factory;
+}
 
 VOID InitDirect2D()
 {
+    AcquireSRWLockExclusive(&g_d2dFactoryLock);
     if (!g_d2dFactory)
     {
         D2D1_FACTORY_OPTIONS options = {};
-        D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED, options, &g_d2dFactory);
+        D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED, options, g_d2dFactory.GetAddressOf());
     }
+    ReleaseSRWLockExclusive(&g_d2dFactoryLock);
+}
+
+static void ReleaseDirect2DFactory()
+{
+    AcquireSRWLockExclusive(&g_d2dFactoryLock);
+    auto factory = std::move(g_d2dFactory);
+    ReleaseSRWLockExclusive(&g_d2dFactoryLock);
 }
 
 VS_FIXEDFILEINFO* GetModuleVersionInfo(HMODULE hModule, UINT *puPtrLen)
@@ -2343,7 +2362,7 @@ HRESULT WINAPI HookedGetColorTheme(HTHEME hTheme, INT iPartId, INT iStateId, INT
 HRESULT CreateBoundD2DRenderTarget(HDC hdc, LPCRECT pRect, ID2D1Factory* pFactory, ID2D1DCRenderTarget** ppRenderTarget)
 {
     if (!pFactory || !ppRenderTarget)
-        return FALSE;
+        return E_POINTER;
 
     D2D1_RENDER_TARGET_PROPERTIES rtProps = D2D1::RenderTargetProperties(
         D2D1_RENDER_TARGET_TYPE_SOFTWARE,
@@ -2638,10 +2657,11 @@ VOID DrawNineGridStretch(HDC hdc, HDC& srcDC, LPCRECT dstRect, INT left = 0, INT
 
 BOOL PaintScroll(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
+    auto factory = AcquireDirect2DFactory();
     if ((iPartId == SBP_UPPERTRACKVERT || iPartId == SBP_LOWERTRACKVERT
     || iPartId == SBP_UPPERTRACKHORZ || iPartId == SBP_LOWERTRACKHORZ))
         return TRUE;
-    if ((!g_d2dFactory ||(iPartId != SBP_THUMBBTNVERT && iPartId != SBP_THUMBBTNHORZ)))
+    if ((!factory ||(iPartId != SBP_THUMBBTNVERT && iPartId != SBP_THUMBBTNHORZ)))
         return FALSE;
     
     INT index = (iStateId == SCRBS_NORMAL) ? 0 : 1;
@@ -2658,6 +2678,7 @@ BOOL PaintScroll(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheScrollbar(INT iPartId, INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     INT width = 17 * scale, height = 11 * scale;
     if (iPartId == SBP_THUMBBTNHORZ)
@@ -2669,7 +2690,7 @@ BOOL CThemeCache::CacheScrollbar(INT iPartId, INT iStateId, INT stateIndex)
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.scrollbar[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.scrollbar[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     D2D1_RECT_F Rect;
@@ -2697,11 +2718,12 @@ BOOL CThemeCache::CacheScrollbar(INT iPartId, INT iStateId, INT stateIndex)
 
 BOOL PaintScrollBarArrows(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (iPartId != SBP_ARROWBTN || !g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if (iPartId != SBP_ARROWBTN || !factory)
         return FALSE;
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> dcRenderTarget = nullptr;
-    if (FAILED(CreateBoundD2DRenderTarget(hdc, pRect, g_d2dFactory, &dcRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(hdc, pRect, factory.Get(), &dcRenderTarget)))
         return FALSE;
 
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
@@ -2769,7 +2791,7 @@ BOOL PaintScrollBarArrows(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
     dcRenderTarget->BeginDraw();
 
     Microsoft::WRL::ComPtr<ID2D1PathGeometry> triangleGeo = nullptr;
-    if (SUCCEEDED(g_d2dFactory->CreatePathGeometry(&triangleGeo)))
+    if (SUCCEEDED(factory->CreatePathGeometry(&triangleGeo)))
     {
         Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink = nullptr;
         if (SUCCEEDED(triangleGeo->Open(&sink)))
@@ -2793,7 +2815,8 @@ BOOL PaintScrollBarArrows(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL PaintPushButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect, LPCRECT pClipRect)
 {
-    if (iPartId != BP_PUSHBUTTON || !g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if (iPartId != BP_PUSHBUTTON || !factory)
         return FALSE;
     
     RECT clipRect{ *pRect };
@@ -2812,6 +2835,7 @@ BOOL PaintPushButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect, LPCRECT 
 
 BOOL CThemeCache::CachePushButton(INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     INT width = 18, height = 18;
     FLOAT cornerRadius = 3.f * scale;
@@ -2821,7 +2845,7 @@ BOOL CThemeCache::CachePushButton(INT iStateId, INT stateIndex)
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.pushbutton[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.pushbutton[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     D2D1_ROUNDED_RECT rr = {
@@ -2850,7 +2874,8 @@ BOOL CThemeCache::CachePushButton(INT iStateId, INT stateIndex)
 
 BOOL PaintRadioButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (iPartId != BP_RADIOBUTTON || !g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if (iPartId != BP_RADIOBUTTON || !factory)
         return FALSE;
     
     INT index = iStateId - 1;
@@ -2865,6 +2890,7 @@ BOOL PaintRadioButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheRadioButton(LPCRECT pRect,  INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT width = RECTWIDTH(pRect), height = RECTHEIGHT(pRect);
     if (!g_themeCache.CreateDIB(g_themeCache.radiobutton[stateIndex], width, height))
@@ -2872,7 +2898,7 @@ BOOL CThemeCache::CacheRadioButton(LPCRECT pRect,  INT iStateId, INT stateIndex)
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, (INT)width, (INT)height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.radiobutton[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.radiobutton[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     FLOAT diameter = width - 1.f;
@@ -2948,7 +2974,8 @@ BOOL CThemeCache::CacheRadioButton(LPCRECT pRect,  INT iStateId, INT stateIndex)
 
 BOOL PaintCheckBox(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (iPartId != BP_CHECKBOX || !g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if (iPartId != BP_CHECKBOX || !factory)
         return FALSE;
     
     INT index = iStateId - 1;
@@ -2962,6 +2989,7 @@ BOOL PaintCheckBox(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheCheckButton(LPCRECT pRect, INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT width = RECTWIDTH(pRect), height = RECTHEIGHT(pRect);
     FLOAT cornerRadius = 3.f * scale;
@@ -2971,7 +2999,7 @@ BOOL CThemeCache::CacheCheckButton(LPCRECT pRect, INT iStateId, INT stateIndex)
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, (INT)width, (INT)height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.checkbutton[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.checkbutton[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     D2D1_ROUNDED_RECT roundedRect = {
@@ -3066,11 +3094,12 @@ BOOL CThemeCache::CacheCheckButton(LPCRECT pRect, INT iStateId, INT stateIndex)
 
 BOOL PaintGroupBox(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect, LPCRECT pClippedRect)
 {
-    if (!g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if (!factory)
         return FALSE;
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
-    if (FAILED(CreateBoundD2DRenderTarget(hdc, pRect, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(hdc, pRect, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     const FLOAT radius = 4.0f;
@@ -3086,7 +3115,7 @@ BOOL PaintGroupBox(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect, LPCRECT pC
 
     Microsoft::WRL::ComPtr<ID2D1PathGeometry> geometry;
     Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
-    g_d2dFactory->CreatePathGeometry(&geometry);
+    factory->CreatePathGeometry(&geometry);
     geometry->Open(&sink);
     
     if (!pClippedRect) // Top line if label does clip it
@@ -3127,7 +3156,8 @@ BOOL PaintGroupBox(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect, LPCRECT pC
 
 BOOL PaintCommandLink(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (iPartId != BP_COMMANDLINK || !g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if (iPartId != BP_COMMANDLINK || !factory)
         return FALSE;
     
     INT index = (iStateId == CMDLS_NORMAL || iStateId == CMDLS_DISABLED) ? 0 : (iStateId == CMDLS_HOT) ? 1
@@ -3142,6 +3172,7 @@ BOOL PaintCommandLink(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheCommandlinkButton(INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     INT width = 18, height = 18;
     FLOAT cornerRadius = 4.f * scale;
@@ -3151,7 +3182,7 @@ BOOL CThemeCache::CacheCommandlinkButton(INT iStateId, INT stateIndex)
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.commandlinkbutton[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.commandlinkbutton[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     D2D1_ROUNDED_RECT roundedRect = { D2D1::RectF(0, 0, width, height), cornerRadius, cornerRadius};
@@ -3186,7 +3217,8 @@ BOOL CThemeCache::CacheCommandlinkButton(INT iStateId, INT stateIndex)
 
 BOOL PaintCommandLinkGlyph(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (iPartId != BP_COMMANDLINKGLYPH || !g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if (iPartId != BP_COMMANDLINKGLYPH || !factory)
         return FALSE;
     
     INT index = (iStateId == CMDLGS_HOT) ? 1 : (iStateId == CMDLGS_PRESSED) ? 2
@@ -3201,6 +3233,7 @@ BOOL PaintCommandLinkGlyph(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheCommandlinkGlyph(INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     INT x = 0;
     INT width = 20 * scale, height = 20 * scale;
@@ -3209,7 +3242,7 @@ BOOL CThemeCache::CacheCommandlinkGlyph(INT iStateId, INT stateIndex)
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.commandlinkglyph[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.commandlinkglyph[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     FLOAT tailScale = 1.f;
@@ -3268,7 +3301,8 @@ BOOL SanitizeAddressCombobox(HTHEME hTheme, HDC hdc, INT iPartId, INT iStateId)
 
 BOOL PaintCombobox(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || (iPartId != CP_READONLY && iPartId != CP_BORDER))
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || (iPartId != CP_READONLY && iPartId != CP_BORDER))
         return FALSE;
     
     INT index = (iPartId == CP_READONLY) ? iStateId - 1 : iStateId + 3;
@@ -3282,6 +3316,7 @@ BOOL PaintCombobox(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheCombobox(INT iPartId, INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 3.f * scale;
     INT width = 18, height = 18;
@@ -3292,7 +3327,7 @@ BOOL CThemeCache::CacheCombobox(INT iPartId, INT iStateId, INT stateIndex)
     // Direct2D render target
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.combobox[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.combobox[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     D2D1_ROUNDED_RECT roundedRect = {D2D1::RectF(0.5, 0.5, width - .5f, height - .5f), cornerRadius, cornerRadius};
@@ -3357,7 +3392,8 @@ BOOL IsAddressInnerBackground(HTHEME hTheme, HDC hdc, INT iPartId)
 
 BOOL PaintEditBox(HTHEME hTheme, HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || (iPartId != EP_EDITBORDER_NOSCROLL && iPartId != EP_EDITBORDER_HSCROLL
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || (iPartId != EP_EDITBORDER_NOSCROLL && iPartId != EP_EDITBORDER_HSCROLL
     && iPartId != EP_EDITBORDER_VSCROLL && iPartId != EP_EDITBORDER_HVSCROLL && iPartId != EP_BACKGROUND
     && (!IsAddressInnerBackground(hTheme, hdc, iPartId))
     ))
@@ -3381,6 +3417,7 @@ BOOL PaintEditBox(HTHEME hTheme, HDC hdc, INT iPartId, INT iStateId, LPCRECT pRe
 
 BOOL CThemeCache::CacheEditBox(INT iPartId, INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 3.f * scale;
     INT x = 0, y = 0;
@@ -3390,7 +3427,7 @@ BOOL CThemeCache::CacheEditBox(INT iPartId, INT iStateId, INT stateIndex)
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.editbox[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.editbox[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     D2D1_ROUNDED_RECT rect = D2D1::RoundedRect(D2D1::RectF(x + .5f, y + .5f, width - .5f, height - .5f), cornerRadius, cornerRadius);
@@ -3435,11 +3472,12 @@ BOOL CThemeCache::CacheEditBox(INT iPartId, INT iStateId, INT stateIndex)
 
 BOOL PaintListBox(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if (!factory)
         return FALSE;
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
-    if (FAILED(CreateBoundD2DRenderTarget(hdc, pRect, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(hdc, pRect, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     D2D1_RECT_F rect((FLOAT)pRect->left, (FLOAT)pRect->top, (FLOAT)RECTWIDTH(pRect), (FLOAT)RECTHEIGHT(pRect));
@@ -3482,12 +3520,13 @@ BOOL PaintListBox(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL PaintDropDownArrow(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect, BOOL addressPart)
 {
-    if (!g_d2dFactory || (iPartId != CP_DROPDOWNBUTTON && iPartId != CP_DROPDOWNBUTTONRIGHT
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || (iPartId != CP_DROPDOWNBUTTON && iPartId != CP_DROPDOWNBUTTONRIGHT
         && iPartId != CP_DROPDOWNBUTTONLEFT))
         return FALSE;
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
-    if (FAILED(CreateBoundD2DRenderTarget(hdc, pRect, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(hdc, pRect, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush;
@@ -3535,7 +3574,8 @@ BOOL PaintDropDownArrow(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect, BOOL 
 
 BOOL PaintTab(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (iPartId == TABP_PANE || !g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if (iPartId == TABP_PANE || !factory)
         return FALSE;
 
     INT index = (iStateId == TIS_NORMAL) ? 0 
@@ -3551,6 +3591,7 @@ BOOL PaintTab(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheTab(INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 4.f * scale;
     INT width = 18, height = 18;
@@ -3560,7 +3601,7 @@ BOOL CThemeCache::CacheTab(INT iStateId, INT stateIndex)
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.tab[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.tab[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     pRenderTarget->BeginDraw();
@@ -3605,7 +3646,8 @@ BOOL CThemeCache::CacheTab(INT iStateId, INT stateIndex)
 
 BOOL PaintTrackbar(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || (iPartId != TKP_TRACK && iPartId != TKP_TRACKVERT))
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || (iPartId != TKP_TRACK && iPartId != TKP_TRACKVERT))
         return FALSE;
     
     INT index = (iPartId == TKP_TRACK) ? 0 : 1;
@@ -3619,13 +3661,14 @@ BOOL PaintTrackbar(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheTrackBar(INT iPartId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     INT width = 6, height = 6;
     if(!g_themeCache.CreateDIB(g_themeCache.trackbar[stateIndex], width, height))
         return FALSE;
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.trackbar[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.trackbar[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     pRenderTarget->BeginDraw();
@@ -3640,7 +3683,8 @@ BOOL CThemeCache::CacheTrackBar(INT iPartId, INT stateIndex)
 
 BOOL PaintTrackbarThumb(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || (iPartId != TKP_THUMB && iPartId != TKP_THUMBVERT))
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || (iPartId != TKP_THUMB && iPartId != TKP_THUMBVERT))
         return FALSE;
     
     if (iStateId == TUBS_FOCUSED) iStateId = 1;
@@ -3656,6 +3700,7 @@ BOOL PaintTrackbarThumb(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheTrackBarThumb(INT iPartId, INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 3.f * scale;
     INT width = 10 * scale, height = 21 * scale;
@@ -3668,7 +3713,7 @@ BOOL CThemeCache::CacheTrackBarThumb(INT iPartId, INT iStateId, INT stateIndex)
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.trackbarthumb[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.trackbarthumb[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     D2D1_COLOR_F fillColor = (iStateId == TUBS_HOT) ? IsAccentColorPossibleD2D(102, 206, 255, SystemAccentColorLight3) : 
@@ -3686,7 +3731,8 @@ BOOL CThemeCache::CacheTrackBarThumb(INT iPartId, INT iStateId, INT stateIndex)
 
 BOOL PaintTrackBarPointedThumb(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || (iPartId != TKP_THUMBBOTTOM && iPartId != TKP_THUMBTOP 
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || (iPartId != TKP_THUMBBOTTOM && iPartId != TKP_THUMBTOP 
         && iPartId != TKP_THUMBLEFT && iPartId != TKP_THUMBRIGHT))
         return FALSE;
 
@@ -3704,6 +3750,7 @@ BOOL PaintTrackBarPointedThumb(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect
 
 BOOL CThemeCache::CacheTrackBarPointedThumb(INT iPartId, INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     INT width = 11 * scale, height = 19 * scale;
 
@@ -3715,7 +3762,7 @@ BOOL CThemeCache::CacheTrackBarPointedThumb(INT iPartId, INT iStateId, INT state
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.trackbarthumb[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.trackbarthumb[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     D2D1_COLOR_F fillColor = (iStateId == TUBS_HOT) ? IsAccentColorPossibleD2D(102, 206, 255, SystemAccentColorLight3) : 
@@ -3743,7 +3790,7 @@ BOOL CThemeCache::CacheTrackBarPointedThumb(INT iPartId, INT iStateId, INT state
         D2D1_POINT_2F p2 = D2D1::Point2F(cx + width * 0.5f, bodyHeight - 1.f);
         D2D1_POINT_2F p3 = D2D1::Point2F(cx, height);
 
-        g_d2dFactory->CreatePathGeometry(&triangleGeo);
+        factory->CreatePathGeometry(&triangleGeo);
         triangleGeo->Open(&sink);
         sink->BeginFigure(p1, D2D1_FIGURE_BEGIN_FILLED);
         sink->AddLine(p2);
@@ -3765,7 +3812,7 @@ BOOL CThemeCache::CacheTrackBarPointedThumb(INT iPartId, INT iStateId, INT state
         D2D1_POINT_2F p2 = D2D1::Point2F(cx + width * 0.5f, tipHeight + 1.f);
         D2D1_POINT_2F p3 = D2D1::Point2F(cx, 0);
 
-        g_d2dFactory->CreatePathGeometry(&triangleGeo);
+        factory->CreatePathGeometry(&triangleGeo);
         triangleGeo->Open(&sink);
         sink->BeginFigure(p1, D2D1_FIGURE_BEGIN_FILLED);
         sink->AddLine(p2);
@@ -3787,7 +3834,7 @@ BOOL CThemeCache::CacheTrackBarPointedThumb(INT iPartId, INT iStateId, INT state
         D2D1_POINT_2F p2 = D2D1::Point2F(tipWidth + 1.f, cy + height * 0.5f);
         D2D1_POINT_2F p3 = D2D1::Point2F(0, cy);
 
-        g_d2dFactory->CreatePathGeometry(&triangleGeo);
+        factory->CreatePathGeometry(&triangleGeo);
         triangleGeo->Open(&sink);
         sink->BeginFigure(p1, D2D1_FIGURE_BEGIN_FILLED);
         sink->AddLine(p2);
@@ -3810,7 +3857,7 @@ BOOL CThemeCache::CacheTrackBarPointedThumb(INT iPartId, INT iStateId, INT state
         D2D1_POINT_2F p2 = D2D1::Point2F(bodyWidth - 1.f, cy + height * 0.5f);
         D2D1_POINT_2F p3 = D2D1::Point2F(width, cy);
 
-        g_d2dFactory->CreatePathGeometry(&triangleGeo);
+        factory->CreatePathGeometry(&triangleGeo);
         triangleGeo->Open(&sink);
         sink->BeginFigure(p1, D2D1_FIGURE_BEGIN_FILLED);
         sink->AddLine(p2);
@@ -3827,7 +3874,8 @@ BOOL CThemeCache::CacheTrackBarPointedThumb(INT iPartId, INT iStateId, INT state
 
 BOOL PaintProgressBar(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if (!factory)
         return FALSE;
     if (iPartId == PP_PULSEOVERLAY || iPartId == PP_MOVEOVERLAY || iPartId == PP_PULSEOVERLAYVERT || iPartId == PP_MOVEOVERLAYVERT)
         return TRUE;
@@ -3849,6 +3897,7 @@ BOOL PaintProgressBar(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheProgressBar(INT iPartId, INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 3.f * scale;
     INT x = 0, y = 0;
@@ -3864,7 +3913,7 @@ BOOL CThemeCache::CacheProgressBar(INT iPartId, INT iStateId, INT stateIndex)
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { x, y, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.progressbar[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.progressbar[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     D2D1_RECT_F rect = D2D1::RectF(0, 0, width, height);
@@ -3946,7 +3995,8 @@ BOOL CThemeCache::CacheProgressBar(INT iPartId, INT iStateId, INT stateIndex)
 
 BOOL PaintIndeterminateProgressBar(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if (!factory)
         return FALSE;
     if (iPartId != PP_MOVEOVERLAY && iPartId != PP_MOVEOVERLAYVERT)
         return TRUE;
@@ -3977,6 +4027,7 @@ BOOL PaintIndeterminateProgressBar(HDC hdc, INT iPartId, INT iStateId, LPCRECT p
 
 BOOL CThemeCache::CacheIndeterminateBar(INT iPartId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 3.f * scale;
     INT width = 12, height = 12;
@@ -3989,7 +4040,7 @@ BOOL CThemeCache::CacheIndeterminateBar(INT iPartId, INT stateIndex)
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = {0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.indeterminatebar[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.indeterminatebar[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     D2D1_ROUNDED_RECT rounded = D2D1::RoundedRect(D2D1::RectF(0, 0, width, height), cornerRadius, cornerRadius);
@@ -4005,7 +4056,8 @@ BOOL CThemeCache::CacheIndeterminateBar(INT iPartId, INT stateIndex)
 
 BOOL PaintListView(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || (iPartId != THEMECLS_COMMONPROPS_PART && iPartId != LVP_LISTITEM 
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || (iPartId != THEMECLS_COMMONPROPS_PART && iPartId != LVP_LISTITEM 
         && iPartId != LVP_GROUPHEADER && iPartId != LVP_GROUPHEADERLINE && iPartId != LVP_COLUMNDETAIL))
         return FALSE;
 
@@ -4043,6 +4095,7 @@ BOOL PaintListView(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheListItem(INT iPartId, INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     if (iPartId != THEMECLS_COMMONPROPS_PART && iPartId != LVP_LISTITEM)
         return FALSE;
     
@@ -4056,7 +4109,7 @@ BOOL CThemeCache::CacheListItem(INT iPartId, INT iStateId, INT stateIndex)
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.listview[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.listview[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush;
@@ -4118,6 +4171,7 @@ BOOL CThemeCache::CacheListItem(INT iPartId, INT iStateId, INT stateIndex)
 
 BOOL CThemeCache::CacheListGroupHeader(INT iPartId, INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     if (iPartId != LVP_GROUPHEADER && iPartId != LVP_GROUPHEADERLINE && iPartId != LVP_COLUMNDETAIL)
         return FALSE;
 
@@ -4131,7 +4185,7 @@ BOOL CThemeCache::CacheListGroupHeader(INT iPartId, INT iStateId, INT stateIndex
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.listview[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.listview[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush;
@@ -4208,7 +4262,8 @@ BOOL CThemeCache::CacheListGroupHeader(INT iPartId, INT iStateId, INT stateIndex
 
 BOOL PaintTreeViewButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || (iPartId != THEMECLS_COMMONPROPS_PART && iPartId != TVP_TREEITEM))
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || (iPartId != THEMECLS_COMMONPROPS_PART && iPartId != TVP_TREEITEM))
         return FALSE;
     
     INT index = (iPartId == THEMECLS_COMMONPROPS_PART) ? 0 : (iStateId == TREIS_HOT) ? 1 : (iStateId == TREIS_SELECTED) ? 2 :
@@ -4223,6 +4278,7 @@ BOOL PaintTreeViewButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheTreeViewButton(INT iPartId, INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 5.f * scale;
     FLOAT x = 0, y = 0;
@@ -4233,7 +4289,7 @@ BOOL CThemeCache::CacheTreeViewButton(INT iPartId, INT iStateId, INT stateIndex)
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.treeview[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.treeview[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     D2D1_ROUNDED_RECT roundedRect = D2D1::RoundedRect(D2D1::RectF(x, y, width, height), cornerRadius, cornerRadius);
@@ -4270,7 +4326,8 @@ BOOL CThemeCache::CacheTreeViewButton(INT iPartId, INT iStateId, INT stateIndex)
 
 BOOL PaintTreeViewGlyph(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || (iPartId != TVP_GLYPH && iPartId != TVP_HOTGLYPH))
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || (iPartId != TVP_GLYPH && iPartId != TVP_HOTGLYPH))
         return FALSE;
 
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
@@ -4295,6 +4352,7 @@ BOOL PaintTreeViewGlyph(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheTreeViewGlyph(INT iPartId, INT iStateId, INT stateIndex, BOOL ExplorerTreeView)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     INT width = 9 * scale;
     INT height = 9 * scale;
@@ -4307,7 +4365,7 @@ BOOL CThemeCache::CacheTreeViewGlyph(INT iPartId, INT iStateId, INT stateIndex, 
 
     RECT rc {0, 0, width, height};
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.treeviewglyph[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.treeviewglyph[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     D2D1_COLOR_F arrowColor;
@@ -4357,7 +4415,8 @@ BOOL CThemeCache::CacheTreeViewGlyph(INT iPartId, INT iStateId, INT stateIndex, 
 
 BOOL PaintItemsView(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || (iPartId != 1 && iPartId != 3 && iPartId != 6
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || (iPartId != 1 && iPartId != 3 && iPartId != 6
         && (iPartId != 4 && (iStateId == 11 || iStateId == 12))))
         return FALSE;
 
@@ -4379,6 +4438,7 @@ BOOL PaintItemsView(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheItemsView(INT iPartId, INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 4.f * scale;
     INT x = 0, y = 0;
@@ -4389,7 +4449,7 @@ BOOL CThemeCache::CacheItemsView(INT iPartId, INT iStateId, INT stateIndex)
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { x, y, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.itemsview[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.itemsview[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     x = y += 1;
@@ -4442,7 +4502,8 @@ BOOL CThemeCache::CacheItemsView(INT iPartId, INT iStateId, INT stateIndex)
 
 BOOL PaintHeader(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || iPartId != HP_HEADERITEM)
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || iPartId != HP_HEADERITEM)
         return FALSE;
 
     if (iStateId % 3 == 1) return TRUE;
@@ -4457,6 +4518,7 @@ BOOL PaintHeader(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheHeader(INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 6.f * scale;
     INT x = 0, y = 0;
@@ -4467,7 +4529,7 @@ BOOL CThemeCache::CacheHeader(INT iStateId, INT stateIndex)
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { x, y, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.header[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.header[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     D2D1_COLOR_F fillColor;
@@ -4489,7 +4551,7 @@ BOOL CThemeCache::CacheHeader(INT iStateId, INT stateIndex)
     Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
     pRenderTarget->BeginDraw();
 
-    g_d2dFactory->CreatePathGeometry(&geometry);
+    factory->CreatePathGeometry(&geometry);
     geometry->Open(&sink);
     sink->BeginFigure(D2D1::Point2F(x, y), D2D1_FIGURE_BEGIN_FILLED);
     sink->AddLine(D2D1::Point2F(width, y));
@@ -4515,7 +4577,8 @@ BOOL CThemeCache::CacheHeader(INT iStateId, INT stateIndex)
 
 BOOL PaintPreviewPaneSeparator(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || (iPartId != 3 && iPartId != 4))
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || (iPartId != 3 && iPartId != 4))
         return FALSE;
 
     if (!g_themeCache.previewseparator[0])
@@ -4529,6 +4592,7 @@ BOOL PaintPreviewPaneSeparator(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect
 
 BOOL CThemeCache::CachePreviewPaneSeparator()
 {
+    auto factory = AcquireDirect2DFactory();
     INT x = 0, y = 0;
     INT width = 3, height = 3;
     if(!g_themeCache.CreateDIB(g_themeCache.previewseparator[0], width, height))
@@ -4536,7 +4600,7 @@ BOOL CThemeCache::CachePreviewPaneSeparator()
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { x, y, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.previewseparator[0], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.previewseparator[0], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush;
@@ -4552,7 +4616,8 @@ BOOL CThemeCache::CachePreviewPaneSeparator()
 
 BOOL PaintModuleButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if ((iPartId != 3) || !g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if ((iPartId != 3) || !factory)
         return FALSE;
     // Let windows theme paint its (transparent) buttons
     if (iStateId == 1 || iStateId == 6) return FALSE;
@@ -4567,6 +4632,7 @@ BOOL PaintModuleButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheModuleButton(INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 4.f * scale;
     INT x = 0, y = 0;
@@ -4577,7 +4643,7 @@ BOOL CThemeCache::CacheModuleButton(INT iStateId, INT stateIndex)
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { x, y, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.modulebutton[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.modulebutton[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     D2D1_COLOR_F fillColor;
@@ -4624,7 +4690,8 @@ BOOL CThemeCache::CacheModuleButton(INT iStateId, INT stateIndex)
 
 BOOL PaintModuleLocation(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if ((iPartId != 9) || !g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if ((iPartId != 9) || !factory)
         return FALSE;
     if (iStateId == 6) return FALSE;
     INT index = iStateId - 1; 
@@ -4638,6 +4705,7 @@ BOOL PaintModuleLocation(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheModuleLocationButton(INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 4.f * scale;
     INT x = 0, y = 0;
@@ -4647,7 +4715,7 @@ BOOL CThemeCache::CacheModuleLocationButton(INT iStateId, INT stateIndex)
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { x, y, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.modulelocationbutton[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.modulelocationbutton[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     D2D1_COLOR_F fillColor;
@@ -4699,7 +4767,8 @@ BOOL CThemeCache::CacheModuleLocationButton(INT iStateId, INT stateIndex)
 
 BOOL PaintModuleSplitButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || (iPartId != 4 && iPartId != 5))
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || (iPartId != 4 && iPartId != 5))
         return FALSE;
     if (iStateId == 1 || iStateId == 6) return FALSE;
     INT index = (iPartId == 4) ? iStateId - 2 : iStateId + 2; 
@@ -4714,6 +4783,7 @@ BOOL PaintModuleSplitButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheModuleSplitButton(INT iPartId, INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 4.f * scale;
     INT x = 0, y = 0;
@@ -4724,7 +4794,7 @@ BOOL CThemeCache::CacheModuleSplitButton(INT iPartId, INT iStateId, INT stateInd
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { x, y, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.modulesplitbutton[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.modulesplitbutton[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     D2D1_COLOR_F fillColor;
@@ -4740,7 +4810,7 @@ BOOL CThemeCache::CacheModuleSplitButton(INT iPartId, INT iStateId, INT stateInd
     {
         Microsoft::WRL::ComPtr<ID2D1PathGeometry> path;
         Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
-        g_d2dFactory->CreatePathGeometry(&path);
+        factory->CreatePathGeometry(&path);
         path->Open(&sink);
 
         sink->BeginFigure(D2D1::Point2F(width, y), D2D1_FIGURE_BEGIN_FILLED);
@@ -4776,7 +4846,7 @@ BOOL CThemeCache::CacheModuleSplitButton(INT iPartId, INT iStateId, INT stateInd
     {
         Microsoft::WRL::ComPtr<ID2D1PathGeometry> path;
         Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
-        g_d2dFactory->CreatePathGeometry(&path);
+        factory->CreatePathGeometry(&path);
         path->Open(&sink);
 
         sink->BeginFigure(D2D1::Point2F(x, y), D2D1_FIGURE_BEGIN_FILLED);
@@ -4815,7 +4885,8 @@ BOOL CThemeCache::CacheModuleSplitButton(INT iPartId, INT iStateId, INT stateInd
 
 BOOL PaintNavigationButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if (!factory)
         return FALSE;
     INT index = (iPartId == NAV_BACKBUTTON) ? iStateId - 1 : (iPartId == NAV_FORWARDBUTTON) ? iStateId + 3 : iStateId + 7;
 
@@ -4828,6 +4899,7 @@ BOOL PaintNavigationButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheNavigationButton(INT iPartId, INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 4.f * scale;
     INT x = 0, y = 0;
@@ -4841,7 +4913,7 @@ BOOL CThemeCache::CacheNavigationButton(INT iPartId, INT iStateId, INT stateInde
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { x, y, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.navigationbutton[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.navigationbutton[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     D2D1_COLOR_F fillColor, arrowColor;
     switch (iStateId) 
@@ -4954,7 +5026,8 @@ BOOL CThemeCache::CacheNavigationButton(INT iPartId, INT iStateId, INT stateInde
 
 BOOL PaintToolbarButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || (iPartId != TP_BUTTON && iPartId != TP_DROPDOWNBUTTON && iPartId != TP_SPLITBUTTON))
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || (iPartId != TP_BUTTON && iPartId != TP_DROPDOWNBUTTON && iPartId != TP_SPLITBUTTON))
         return FALSE;
     if (iStateId == TS_NORMAL || iStateId == TS_DISABLED || iStateId == TS_NEARHOT) return FALSE;
 
@@ -4969,6 +5042,7 @@ BOOL PaintToolbarButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheToolbarButton(INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 4.f * scale;
     INT width = 18, height = 18;
@@ -4978,7 +5052,7 @@ BOOL CThemeCache::CacheToolbarButton(INT iStateId, INT stateIndex)
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.toolbarbutton[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.toolbarbutton[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     D2D1_COLOR_F fillColor = (iStateId == TS_HOT || iStateId == TS_OTHERSIDEHOT) ? MyD2D1Color(96, 144, 144, 144) :
                              (iStateId == TS_PRESSED || iStateId == TS_CHECKED) ? MyD2D1Color(64, 144, 144, 144) : MyD2D1Color(80, 144, 144, 144);
@@ -5004,7 +5078,8 @@ BOOL CThemeCache::CacheToolbarButton(INT iStateId, INT stateIndex)
 
 BOOL PaintToolbarSplitDropDown(HDC hdc, INT iPartId,  INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || iPartId != TP_SPLITBUTTONDROPDOWN)
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || iPartId != TP_SPLITBUTTONDROPDOWN)
         return FALSE;
     
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
@@ -5012,7 +5087,7 @@ BOOL PaintToolbarSplitDropDown(HDC hdc, INT iPartId,  INT iStateId, LPCRECT pRec
     INT width = RECTWIDTH(pRect), height = RECTHEIGHT(pRect);
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
-    if (FAILED(CreateBoundD2DRenderTarget(hdc, pRect, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(hdc, pRect, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     D2D1_COLOR_F fillColor = (iStateId == TS_HOT || iStateId == TS_HOTCHECKED || iStateId == TS_OTHERSIDEHOT) ? MyD2D1Color(96, 144, 144, 144) : 
@@ -5052,7 +5127,8 @@ BOOL PaintToolbarSplitDropDown(HDC hdc, INT iPartId,  INT iStateId, LPCRECT pRec
 
 BOOL PaintAddressBand(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || iPartId != 1)
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || iPartId != 1)
         return FALSE;
     INT index = iStateId - 1;
 
@@ -5065,6 +5141,7 @@ BOOL PaintAddressBand(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheAddressBand(INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 5.f * scale;
     INT width = 24, height = 24;
@@ -5074,7 +5151,7 @@ BOOL CThemeCache::CacheAddressBand(INT iStateId, INT stateIndex)
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.addressband[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.addressband[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     D2D1_COLOR_F fillColor, borderColor;
     switch (iStateId) 
@@ -5254,8 +5331,9 @@ static VOID EndMenuCbt()
 
 BOOL PaintMenu(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
+    auto factory = AcquireDirect2DFactory();
     // Part:14 (Win10) - Part:27 (Win11)
-    if (!g_d2dFactory || (iPartId != 26 && iPartId != 27 && iPartId != MENU_POPUPITEM && iPartId != MENU_BARITEM && iPartId != MENU_POPUPSEPARATOR))
+    if (!factory || (iPartId != 26 && iPartId != 27 && iPartId != MENU_POPUPITEM && iPartId != MENU_BARITEM && iPartId != MENU_POPUPSEPARATOR))
         return FALSE;
     // Part 26 is the keyboard focus ring; draw it as the normal hover so arrow keys and
     // the mouse give the same row.
@@ -5275,7 +5353,7 @@ BOOL PaintMenu(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
         RECT rc = *pRect;
         if (index == 1) {
             InflateRect(&rc, 0, -MulDiv(2, g_Dpi, USER_DEFAULT_SCREEN_DPI));
-            if (SeamlessMenuPill::Draw(g_d2dFactory, hdc, rc, g_Dpi)) return TRUE;
+            if (SeamlessMenuPill::Draw(factory.Get(), hdc, rc, g_Dpi)) return TRUE;
         }
         DrawNineGridStretch(hdc, g_themeCache.menuitem[index], &rc, 9, 9, 8, 8);
     }
@@ -5295,6 +5373,7 @@ BOOL PaintMenu(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheMenuItem(INT iPartId, INT iStateId, INT indexState)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     FLOAT cornerRadius = 4.f * scale;
     INT width = 18, height = 18;
@@ -5309,7 +5388,7 @@ BOOL CThemeCache::CacheMenuItem(INT iPartId, INT iStateId, INT indexState)
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.menuitem[indexState], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.menuitem[indexState], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     pRenderTarget->BeginDraw();
@@ -5345,7 +5424,8 @@ BOOL CThemeCache::CacheMenuItem(INT iPartId, INT iStateId, INT indexState)
 
 BOOL PaintDragDrop(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory || iPartId != DD_IMAGEBG)
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || iPartId != DD_IMAGEBG)
         return FALSE;
 
     if (!g_themeCache.dragdrop[0])
@@ -5357,6 +5437,7 @@ BOOL PaintDragDrop(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheDragDrop()
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     INT width = 108, height = 108;
     FLOAT cornerRadius = 4.f * scale;
@@ -5366,7 +5447,7 @@ BOOL CThemeCache::CacheDragDrop()
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.dragdrop[0], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.dragdrop[0], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     D2D1_ROUNDED_RECT roundedRect = { D2D1::RectF(0, 0, width, height), cornerRadius, cornerRadius};
@@ -5383,14 +5464,15 @@ BOOL CThemeCache::CacheDragDrop()
 
 BOOL PaintSpinArrowGlyph(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if (!factory)
         return FALSE;
 
     INT width = RECTWIDTH(pRect);
     INT height = RECTHEIGHT(pRect);
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
-    if (FAILED(CreateBoundD2DRenderTarget(hdc, pRect, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(hdc, pRect, factory.Get(), &pRenderTarget)))
         return FALSE;
 
     D2D1_COLOR_F arrowColor =
@@ -5446,7 +5528,8 @@ BOOL PaintSpinArrowGlyph(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL PaintSpin(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
-    if (!g_d2dFactory)
+    auto factory = AcquireDirect2DFactory();
+    if (!factory)
         return FALSE;
 
     INT index = (iStateId == UPS_HOT) ? 1 : (iStateId == UPS_PRESSED) ? 2
@@ -5474,6 +5557,7 @@ BOOL PaintSpin(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 
 BOOL CThemeCache::CacheSpinButton(INT iPartId, INT iStateId, INT stateIndex)
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
     INT width = 12, height = 12;
     FLOAT cornerRadius = 2.f * scale;
@@ -5483,7 +5567,7 @@ BOOL CThemeCache::CacheSpinButton(INT iPartId, INT iStateId, INT stateIndex)
 
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
     RECT rc = { 0, 0, width, height};
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.spin[stateIndex], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.spin[stateIndex], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     D2D1_ROUNDED_RECT roundedRect = {{0.f, 0.f, (FLOAT)width, (FLOAT)height}, cornerRadius, cornerRadius};
@@ -6901,6 +6985,7 @@ VOID Comctl32Hooks()
 
 BOOL CThemeCache::CacheNavigationDivider()
 {
+    auto factory = AcquireDirect2DFactory();
     FLOAT x = 0, y = 0;
     FLOAT width = 2, height = 2;
 
@@ -6910,7 +6995,7 @@ BOOL CThemeCache::CacheNavigationDivider()
     RECT rc = {(INT)x, (INT)y, (INT)width, (INT)height};
     
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pRenderTarget;
-    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.navigationdivider[0], &rc, g_d2dFactory, &pRenderTarget)))
+    if (FAILED(CreateBoundD2DRenderTarget(g_themeCache.navigationdivider[0], &rc, factory.Get(), &pRenderTarget)))
         return FALSE;
     
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush;
@@ -6933,6 +7018,7 @@ __int64 (THISCALL *CNscTree_GetWindowsDDT_orig)(class CNscTree*, HWND *, HWND *)
 void (THISCALL *CNscTree_DrawDivider_orig)(class CNscTree* , HDC, struct _TREEITEM*);
 void THISCALL Hooked_CNscTree_DrawDivider(CNscTree *__this, HDC hdc, struct _TREEITEM *hTreeItem)
 {
+    auto factory = AcquireDirect2DFactory();
     auto Fallback = [&](LPCWSTR errorMessage = NULL) {
         if (errorMessage)
             Wh_Log(L"%s", errorMessage);
@@ -6951,7 +7037,7 @@ void THISCALL Hooked_CNscTree_DrawDivider(CNscTree *__this, HDC hdc, struct _TRE
     if (!SendMessageW(hwndTreeView, TVM_GETITEMRECT, 0, (LPARAM)&treeItemRect))
         return Fallback();
     
-    if (!g_d2dFactory)
+    if (!factory)
         return Fallback();
 
     if (!g_themeCache.navigationdivider[0] && !g_themeCache.CacheNavigationDivider())
@@ -7732,13 +7818,13 @@ VOID LoadSettings()
 
 BOOL Wh_ModInit(VOID) 
 {
+    g_settings.Unload = FALSE;
+    g_DefaultSysColors = FALSE;
     g_InsideExplorerProc = CheckExplorerProcess();
     if (g_InsideExplorerProc)
         g_explorerStylerNoBackgroundEffectAtom = AddAtom(L"WindhawkFileExplorerStylerNoBackgroundEffect");
     if (InTaskManagerProcess())
         g_InsideTaskMgrProc = TRUE;
-
-    LoadSettings();
 
     HMODULE hModule = GetModuleHandle(L"win32u.dll");
     if (!hModule) 
@@ -7748,6 +7834,8 @@ BOOL Wh_ModInit(VOID)
     if (!pNtUserCreateWindowEx)
         return FALSE;
     
+    LoadSettings();
+
     WindhawkUtils::SetFunctionHook(pNtUserCreateWindowEx, HookedNtUserCreateWindowEx, &NtUserCreateWindowEx_Original);
     WindhawkUtils::SetFunctionHook(SetThemeAppProperties, SetThemeAppProperties_Hook, &SetThemeAppProperties_Original);
     
@@ -7777,8 +7865,7 @@ VOID Wh_ModUninit(VOID)
      
     g_settings.Unload = TRUE;
     UnwatchMenuTheme();
-    if (g_settings.FillBg && g_d2dFactory)
-        g_d2dFactory->Release();
+    ReleaseDirect2DFactory();
     
     if (g_settings.SetSystemColors)
         RevertSysColors();
