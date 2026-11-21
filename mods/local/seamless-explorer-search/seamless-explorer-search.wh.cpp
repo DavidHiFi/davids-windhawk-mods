@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id              seamless-explorer-search
 // @name            Seamless Explorer Search
-// @description     Start typing in any File Explorer window to search it, and every drive, with Everything
-// @version         2.0.17
+// @description     Start typing in any File Explorer window, or any app's Open or Save window, to search it and every drive with Everything
+// @version         2.1.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -29,6 +29,10 @@ everything else on your drives.
 
 - Type in a folder's file list and the search box opens with your letters in it.
   Ctrl+F, Ctrl+E and F3 open it too, in place of the Windows search box.
+- Works in the Open and Save windows of every app too (the one Discord, your
+  browser or Notepad shows when you pick a file). Enter on a file picks it,
+  Enter on a folder goes there, and in a Save window a file's name is filled
+  in for you to check before you save.
 - Matches from this folder and the folders below it sit on top; matches from
   everywhere else follow, newest first.
 - Names that start with what you typed rank above names that only contain it,
@@ -41,6 +45,11 @@ everything else on your drives.
 - Files open as you, without admin rights, even though Windhawk runs elevated.
 - Catppuccin Mocha look with frosted glass and a blue to mauve gradient on the
   selected row. Every option is in the settings window: click the tray icon.
+
+## What's new in 2.1.0
+
+- Type-to-search now works in every app's Open and Save window, not only in
+  File Explorer. Files in the folder that window shows come first.
 
 ## What it needs
 
@@ -316,6 +325,70 @@ static HWND ListOf(HWND view) {
     if (!view) return nullptr;
     HWND list = FindWindowExW(view, nullptr, L"DirectUIHWND", nullptr);
     return list ? list : FindWindowExW(view, nullptr, L"SysListView32", nullptr);
+}
+
+// An app's Open or Save window (the common item dialog). It runs inside that app, not in
+// Explorer: a #32770 holding the same shell view and address bar as an Explorer window.
+static bool IsFileDialog(HWND top) {
+    return ClassIs(top, L"#32770") && FindWindowExW(top, nullptr, L"DUIViewWndClassName", nullptr);
+}
+
+// Open windows keep the file name box as control 1148; Save windows host it in the view.
+static bool DialogIsSave(HWND top) {
+    return !GetDlgItem(top, 1148);
+}
+
+// The folder the dialog shows, from its address bar ("Address: H:\x"). Read with
+// InternalGetWindowText so a busy app is never sent a message. "" for virtual folders.
+static std::wstring DialogFolder(HWND top) {
+    HWND crumb = nullptr;
+    EnumChildWindows(
+        top,
+        [](HWND h, LPARAM lp) -> BOOL {
+            if (ClassIs(h, L"ToolbarWindow32") && ClassIs(GetParent(h), L"Breadcrumb Parent")) {
+                *(HWND*)lp = h;
+                return FALSE;
+            }
+            return TRUE;
+        },
+        (LPARAM)&crumb);
+    if (!crumb) return L"";
+    wchar_t buf[1024] = L"";
+    InternalGetWindowText(crumb, buf, 1024);
+    std::wstring s = buf;
+    size_t c = s.find(L": ");
+    if (c != std::wstring::npos) s = s.substr(c + 2);
+    s = Trim(s);
+    return IsFileSystemPath(s) ? s : L"";
+}
+
+// The file name box: Open has it as 1148 (ComboBoxEx > ComboBox > Edit), Save as the first
+// Edit in a ComboBox under a FloatNotifySink.
+static HWND DialogNameEdit(HWND top) {
+    if (HWND cbx = GetDlgItem(top, 1148)) {
+        HWND edit = nullptr;
+        EnumChildWindows(
+            cbx,
+            [](HWND h, LPARAM lp) -> BOOL {
+                if (!ClassIs(h, L"Edit")) return TRUE;
+                *(HWND*)lp = h;
+                return FALSE;
+            },
+            (LPARAM)&edit);
+        return edit;
+    }
+    HWND edit = nullptr;
+    EnumChildWindows(
+        top,
+        [](HWND h, LPARAM lp) -> BOOL {
+            HWND combo = GetParent(h);
+            if (!ClassIs(h, L"Edit") || !ClassIs(combo, L"ComboBox") || !ClassIs(GetParent(combo), L"FloatNotifySink"))
+                return TRUE;
+            *(HWND*)lp = h;
+            return FALSE;
+        },
+        (LPARAM)&edit);
+    return edit;
 }
 
 // ---------------------------------------------------------------------------
@@ -786,7 +859,7 @@ static bool RevealIn(IWebBrowser2* wb, const std::wstring& full, const std::wstr
 
 constexpr UINT WM_ES_FOLDER = WM_APP + 42;  // To the popup. wParam = open number, lParam = std::wstring*.
 
-enum JobKind { kJobFolder, kJobNavigate, kJobReveal, kJobLaunch, kJobFocus };
+enum JobKind { kJobFolder, kJobNavigate, kJobReveal, kJobLaunch, kJobFocus, kJobDialogFile, kJobDialogFolder, kJobDialogPick };
 
 struct ExplorerJob {
     int kind;
@@ -837,6 +910,81 @@ static void FocusFileList(const ExplorerJob* job) {
     }
 }
 
+// Dialog jobs talk to the app's window with timeouts only: a hung app holds this thread, nothing else.
+static bool DialogSetText(HWND edit, const std::wstring& text) {
+    DWORD_PTR r;
+    return edit && SendMessageTimeoutW(edit, WM_SETTEXT, 0, (LPARAM)text.c_str(), SMTO_ABORTIFHUNG, 1000, &r);
+}
+
+static std::wstring DialogGetText(HWND edit) {
+    wchar_t buf[1024] = L"";
+    DWORD_PTR r;
+    if (edit) SendMessageTimeoutW(edit, WM_GETTEXT, 1024, (LPARAM)buf, SMTO_ABORTIFHUNG, 1000, &r);
+    return buf;
+}
+
+// The same as clicking Open or Save: the dialog reads the name box, then picks the file or,
+// for a folder path, goes to that folder.
+static void DialogPressOk(HWND top) {
+    PostMessageW(top, WM_COMMAND, MAKEWPARAM(IDOK, BN_CLICKED), (LPARAM)GetDlgItem(top, IDOK));
+}
+
+// Shows `dir` in the dialog. True once the address bar says so (3 s at most).
+static bool DialogGo(HWND top, HWND edit, const std::wstring& dir) {
+    if (SamePath(DialogFolder(top), dir)) return true;
+    if (!DialogSetText(edit, dir)) return false;
+    DialogPressOk(top);
+    for (ULONGLONG until = GetTickCount64() + 3000; GetTickCount64() < until && !g_stopping; Sleep(60)) {
+        if (!IsWindow(top)) return false;  // A folder picker took the folder and closed.
+        if (SamePath(DialogFolder(top), dir)) return true;
+    }
+    return false;
+}
+
+// Puts the keyboard in the name box with the name selected, once the dialog is in front.
+static void DialogFocusName(HWND top, HWND edit) {
+    ULONGLONG until = GetTickCount64() + 500;
+    while (GetForegroundWindow() != top && GetTickCount64() < until && !g_stopping) Sleep(20);
+    if (g_stopping || GetForegroundWindow() != top || !IsWindow(edit)) return;
+    MSG m;
+    PeekMessageW(&m, nullptr, 0, 0, PM_NOREMOVE);
+    DWORD me = GetCurrentThreadId(), tid = GetWindowThreadProcessId(edit, nullptr);
+    if (!AttachThreadInput(me, tid, TRUE)) return;
+    SetFocus(edit);
+    AttachThreadInput(me, tid, FALSE);
+    DWORD_PTR r;
+    SendMessageTimeoutW(edit, EM_SETSEL, 0, -1, SMTO_ABORTIFHUNG, 500, &r);
+}
+
+static bool RunDialogJob(const ExplorerJob* job) {
+    HWND top = job->top;
+    if (!IsWindow(top)) return false;
+    HWND edit = DialogNameEdit(top);
+    if (!edit) return false;
+    switch (job->kind) {
+        case kJobDialogFile:  // Open window, a file: pick it.
+            if (!DialogSetText(edit, job->path)) return false;
+            DialogPressOk(top);
+            return true;
+        case kJobDialogFolder: {  // A folder: go there, keep what was in the name box.
+            std::wstring kept = DialogIsSave(top) ? DialogGetText(edit) : L"";
+            bool ok = DialogGo(top, edit, job->path);
+            if (IsWindow(top)) DialogSetText(edit, kept);
+            return ok;
+        }
+        case kJobDialogPick: {  // Show the file in its folder with its name in the box, to confirm.
+            size_t slash = job->path.find_last_of(L'\\');
+            std::wstring name = slash == std::wstring::npos ? job->path : job->path.substr(slash + 1);
+            bool ok = job->dir.empty() || DialogGo(top, edit, job->dir);
+            if (!IsWindow(top)) return ok;
+            DialogSetText(edit, name);
+            DialogFocusName(top, edit);
+            return ok;
+        }
+    }
+    return false;
+}
+
 static std::atomic<int> g_jobs{0};
 
 // Each job runs on its own thread: a cross-process call on the UI thread once parked the
@@ -884,6 +1032,11 @@ static DWORD WINAPI ExplorerJobThread(LPVOID param) {
             break;
         case kJobFocus:
             FocusFileList(job);
+            break;
+        case kJobDialogFile:
+        case kJobDialogFolder:
+        case kJobDialogPick:
+            ok = RunDialogJob(job);
             break;
     }
     if (SUCCEEDED(co)) CoUninitialize();
@@ -1038,6 +1191,7 @@ constexpr int kMaxRows = 8, kMinRows = 3;
 struct Target {
     HWND top = nullptr, tab = nullptr, view = nullptr;
     std::wstring folder;  // Its folder path, once the lookup answers. Empty: not a real folder.
+    bool dialog = false;  // An app's Open or Save window, not an Explorer window.
 };
 
 struct Row {
@@ -1577,7 +1731,9 @@ static void ShowFor(const Target& t, wchar_t ch) {
         p.freeMon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
     }
     // This folder first: the first search waits for the folder, at most kFolderWaitMs.
-    if (g_settings.thisFolderFirst && t.top && StartJob(kJobFolder, t, L"", L"")) {
+    if (t.dialog) {
+        if (g_settings.thisFolderFirst) p.target.folder = DialogFolder(t.top);
+    } else if (g_settings.thisFolderFirst && t.top && StartJob(kJobFolder, t, L"", L"")) {
         p.folderPending = true;
         SetTimer(p.hwnd, kTimerFolder, kFolderWaitMs, nullptr);
     }
@@ -1600,7 +1756,8 @@ static void ShowFor(const Target& t, wchar_t ch) {
 static void OnExplorerType(HWND focus, wchar_t ch) {
     if (!focus || !IsWindow(focus)) return;
     HWND top = GetAncestor(focus, GA_ROOT);
-    if (!ClassIs(top, L"CabinetWClass")) return;
+    bool dialog = !ClassIs(top, L"CabinetWClass");
+    if (dialog && !IsFileDialog(top)) return;
     Popup& p = g_pop;
     if (p.visible && p.target.top == top) {
         if (ch && p.query.size() < 512) {
@@ -1623,7 +1780,8 @@ static void OnExplorerType(HWND focus, wchar_t ch) {
     }
     Target t;
     t.top = top;
-    t.tab = SelfOrAncestor(focus, L"ShellTabWindowClass", top);
+    t.dialog = dialog;
+    t.tab = dialog ? nullptr : SelfOrAncestor(focus, L"ShellTabWindowClass", top);
     t.view = SelfOrAncestor(focus, L"SHELLDLL_DefView", top);
     if (!t.view) t.view = FindShownView(t.tab ? t.tab : top);
     if (!t.view) return;
@@ -1645,7 +1803,18 @@ static void OpenRow(int i, int how) {
     Row r = p.rows[i];
     Target t = p.target;
     HidePopup(true);
-    bool inPlace = g_settings.sameWindow && t.top && IsWindow(t.top);
+    // In an Open or Save window Enter always acts there: that window is waiting for a pick.
+    if (t.dialog && how != kOpenNewWindow && IsWindow(t.top)) {
+        bool save = DialogIsSave(t.top);
+        if (r.item.folder && how != kOpenReveal)
+            StartJob(kJobDialogFolder, t, r.full, L"");
+        else if (how == kOpenReveal || save)
+            StartJob(kJobDialogPick, t, r.full, r.item.folder ? L"" : r.item.dir);
+        else
+            StartJob(kJobDialogFile, t, r.full, L"");
+        return;
+    }
+    bool inPlace = g_settings.sameWindow && t.top && IsWindow(t.top) && !t.dialog;
     if (!inPlace) t = Target{};
     if (how == kOpenReveal) {
         StartJob(kJobReveal, t, r.full, r.item.dir);
@@ -2040,7 +2209,8 @@ static LRESULT CALLBACK ExplorerKeyProc(int code, WPARAM wp, LPARAM lp) {
         return CallNextHookEx(nullptr, code, wp, lp);
     }
     HWND fg = GetForegroundWindow();
-    if (!ClassIs(fg, L"CabinetWClass")) return CallNextHookEx(nullptr, code, wp, lp);
+    bool dialog = !ClassIs(fg, L"CabinetWClass");
+    if (dialog && !IsFileDialog(fg)) return CallNextHookEx(nullptr, code, wp, lp);
     DWORD tid = GetWindowThreadProcessId(fg, nullptr);
     GUITHREADINFO gti{};
     gti.cbSize = sizeof(gti);
@@ -2057,7 +2227,8 @@ static LRESULT CALLBACK ExplorerKeyProc(int code, WPARAM wp, LPARAM lp) {
 
     // Explorer's search keys: Ctrl+F, Ctrl+E and F3, from the file list or the folder tree.
     if (g_hookKeys && !shift && ((ctrl && (vk == 'F' || vk == 'E')) || (!ctrl && vk == VK_F3))) {
-        bool inTree = ClassIs(focus, L"SysTreeView32") && SelfOrAncestor(focus, L"ShellTabWindowClass", fg);
+        bool inTree = ClassIs(focus, L"SysTreeView32") &&
+                      SelfOrAncestor(focus, dialog ? L"NamespaceTreeControl" : L"ShellTabWindowClass", fg);
         if (inView || inTree) {
             g_eaten[vk] = true;
             PostMessageW(msgWnd, WM_ES_TYPE, 0, (LPARAM)focus);
