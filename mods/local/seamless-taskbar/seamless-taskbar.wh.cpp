@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.22
+// @version         0.4.23
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -7073,7 +7073,12 @@ static void Stop(HWND hwnd) {
 
 namespace sttray {
 constexpr UINT WM_APP_TRAY = WM_APP + 21, WM_APP_TRAY_REFRESH = WM_APP + 22;
-constexpr UINT kTrayId = 1;
+constexpr UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kTrayId = TrayIconId();
 constexpr WCHAR kTrayClass[] = L"WindhawkSeamlessTaskbarTray";
 inline HANDLE g_thread;
 inline std::atomic<HWND> g_wnd;
@@ -41201,6 +41206,84 @@ bool DecodeIdentityAdjustment(const BYTE* query, IdentityMachine machine, ptrdif
     return true;
 }
 
+// Newer builds inline the same adjustment into the QueryInterface body:
+// lea X,[rcx-d] .. neg rcx .. sbb Y,Y .. and Y,X. In between only stack saves,
+// pushes, rsp arithmetic and register moves that leave rcx, X and Y alone are
+// accepted, and nothing that writes flags may sit between neg and sbb.
+bool DecodeInlineIdentityAdjustment(const BYTE* query, ptrdiff_t& adjustment) {
+    constexpr auto machine = IdentityMachine::X64;
+    int leaReg = -1, maskReg = -1;
+    bool negated = false;
+    int64_t delta{};
+    for (int i = 0; i < 16; ++i) {
+        IdentityInstruction instruction;
+        if (!ReadIdentityInstruction(query, machine, instruction))
+            return false;
+        auto const& op = instruction.operation;
+        auto const& args = instruction.operands;
+        if (op == "nop" || op == "endbr64")
+            continue;
+        if (leaReg < 0 && op == "lea") {
+            int base{};
+            auto destination = args.size() == 2 ? IdentityReg(args[0], machine) : IdentityRegister{};
+            if (destination.index < 0 || destination.width != 8 || destination.index == 1 ||
+                destination.index == 4 || !IdentityMemory(args[1], machine, base, delta) || base != 1)
+                return false;
+            leaReg = destination.index;
+            continue;
+        }
+        if (leaReg >= 0 && !negated && op == "neg") {
+            if (args != std::vector<std::string>{"rcx"})
+                return false;
+            negated = true;
+            continue;
+        }
+        if (negated && maskReg < 0 && op == "sbb") {
+            auto mask = args.size() == 2 ? IdentityReg(args[0], machine) : IdentityRegister{};
+            if (args.size() != 2 || args[0] != args[1] || mask.index < 0 || mask.width != 8 ||
+                mask.index == 1 || mask.index == 4 || mask.index == leaReg)
+                return false;
+            maskReg = mask.index;
+            continue;
+        }
+        if (maskReg >= 0 && op == "and") {
+            if (args.size() != 2 || IdentityReg(args[0], machine).index != maskReg ||
+                IdentityReg(args[0], machine).width != 8 ||
+                IdentityReg(args[1], machine).index != leaReg ||
+                IdentityReg(args[1], machine).width != 8 || delta >= 0 || delta < -4096)
+                return false;
+            adjustment = static_cast<ptrdiff_t>(delta);
+            return true;
+        }
+        bool flagsLive = negated && maskReg < 0;
+        if (op == "push" && args.size() == 1 && IdentityReg(args[0], machine).index >= 0)
+            continue;
+        if ((op == "sub" || op == "add") && !flagsLive && args.size() == 2 && args[0] == "rsp") {
+            int64_t immediate{};
+            if (!IdentityNumber(args[1], immediate) || immediate < 0 || immediate > 4096)
+                return false;
+            continue;
+        }
+        if (op == "mov" && args.size() == 2) {
+            auto destination = IdentityReg(args[0], machine);
+            if (destination.index < 0) {
+                int base{};
+                int64_t displacement{};
+                if (IdentityMemory(args[0], machine, base, displacement) && base == 4 &&
+                    IdentityReg(args[1], machine).index >= 0)
+                    continue;
+                return false;
+            }
+            if (destination.index == 1 || destination.index == 4 || destination.index == leaReg ||
+                destination.index == maskReg)
+                return false;
+            continue;
+        }
+        return false;
+    }
+    return false;
+}
+
 // Track only register aliases, constant pointer additions and three prefix
 // load/store pairs, rather than attempting to interpret arbitrary native code.
 struct IdentityValue {
@@ -41274,6 +41357,14 @@ bool DecodeIdentityPrefix(const BYTE* function,
                     continue;
             }
         }
+        if (machine == IdentityMachine::X64 && (op == "xor" || op == "xorps" || op == "pxor") &&
+            args.size() == 2 && args[0] == args[1]) {
+            auto cleared = IdentityReg(args[0], machine);
+            if (cleared.index < 0 || cleared.index == stack)
+                return false;
+            registers[cleared.index] = {};
+            continue;
+        }
         bool move = op == "mov" || op == "movups" || op == "movdqu" || op == "movdqa";
         bool load = move || op == "ldr" || op == "ldur";
         bool store = move || op == "str" || op == "stur";
@@ -41335,6 +41426,12 @@ bool DecodeIdentityPrefix(const BYTE* function,
             auto destination = IdentityReg(args[0], machine);
             int base{};
             int64_t displacement{};
+            if (machine == IdentityMachine::X64 && destination.index >= 0 &&
+                destination.index != stack && destination.width == 4 &&
+                IdentityMemory(args[1], machine, base, displacement)) {
+                registers[destination.index] = {};
+                continue;
+            }
             if (destination.index < 0 || destination.width != 8 ||
                 !IdentityMemory(args[1], machine, base, displacement))
                 return false;
@@ -41384,7 +41481,8 @@ bool DecodeIdentityAccessor(const BYTE* query,
     size_t copiedOffset{};
     bool copyVerified = DecodeIdentityPrefix(copy, nullptr, false, false, machine, copiedOffset) &&
                         copiedOffset == 0;
-    return DecodeIdentityAdjustment(query, machine, adjustment) &&
+    return (DecodeIdentityAdjustment(query, machine, adjustment) ||
+            (machine == IdentityMachine::X64 && DecodeInlineIdentityAdjustment(query, adjustment))) &&
            DecodeIdentityPrefix(getter, copy, copyVerified, true, machine, identityOffset);
 }
 // END IDENTITY ACCESSOR
