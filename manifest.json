@@ -1,7 +1,7 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-21T22:17:59+08:00",
+  "generatedAt": "2026-11-21T22:18:11+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 185,
@@ -2090,7 +2090,7 @@
       "name": "Seamless Snipper",
       "author": "DavidHiFi, Jaex, ShareX contributors, Rono",
       "github": "https://github.com/DavidHiFi",
-      "version": "0.6.5",
+      "version": "0.6.6",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",

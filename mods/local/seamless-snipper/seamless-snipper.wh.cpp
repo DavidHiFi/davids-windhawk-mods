@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.6.5
+// @version         0.6.6
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -9640,6 +9640,9 @@ constexpr UINT WM_APP_TEMP_FILE = WM_APP + 6;
 constexpr UINT WM_APP_FOREGROUND = WM_APP + 7;
 constexpr UINT WM_APP_RIPPLE = WM_APP + 8;
 constexpr UINT WM_APP_SUMMON = WM_APP + 40;
+// Shows a hover state without moving the mouse, for screenshots: wParam = hit id (0 none),
+// lParam = 1 lights the card edge. The next real mouse move takes over again.
+constexpr UINT WM_APP_PREVIEW_HOVER = WM_APP + 41;
 
 constexpr int kHotkeyActivate = 1;
 constexpr int kHotkeyEscape = 2;
@@ -12280,7 +12283,7 @@ void ReadCornerRadius() {
 }
 
 Color GlassTint(bool dark) {
-    return dark ? Rgb(30, 30, 46, 0.85f) : Rgb(249, 249, 252, 0.82f);
+    return dark ? Rgb(30, 30, 46, 0.60f) : Rgb(249, 249, 252, 0.62f);
 }
 
 class GlassPanel {
@@ -12396,6 +12399,29 @@ class GlassPanel {
     int margin_ = 0;
 };
 
+constexpr Color kEdgeRest = Rgb(88, 91, 112);  // Mocha surface2
+constexpr Color kEdgeBlue = Rgb(137, 180, 250);
+constexpr Color kEdgeMauve = Rgb(203, 166, 247);
+
+// The recipe's 2px edge: grey at rest, blue to mauve as hot goes to 1. The stroke sits
+// inside the box on radius - width/2 so it follows the rounded fill exactly.
+void PaintEdge(Surface& s, float l, float t, float r, float b, float radius, float scale,
+               float hot, Color rest = kEdgeRest) {
+    const float edge = std::max(1.0f, std::round(2 * scale));
+    const float inset = edge / 2;
+    const float span = std::max(1.0f, (r - l) + (b - t));
+    FillShape(
+        s, l, t, r, b,
+        [&](float x, float y) {
+            return fabsf(SdRoundRect(x, y, l + inset, t + inset, r - inset, b - inset,
+                                     std::max(0.0f, radius - inset))) - inset;
+        },
+        [&](float x, float y) {
+            const Color glow = Mix(kEdgeBlue, kEdgeMauve, Clamp01(((x - l) + (y - t)) / span));
+            return Mix(rest, glow, Clamp01(hot));
+        });
+}
+
 void PaintPanelBase(Surface& s, const GlassPanel& panel, float scale) {
     const float w = static_cast<float>(s.Width());
     const float h = static_cast<float>(s.Height());
@@ -12405,20 +12431,10 @@ void PaintPanelBase(Surface& s, const GlassPanel& panel, float scale) {
         FillRoundRect(s, 0, 0, w, h, radius, GlassTint(dark));
     } else {
         FillRoundRectGradient(s, 0, 0, w, h, radius,
-                              dark ? Rgb(30, 30, 46, 0.985f) : Rgb(252, 252, 253, 0.985f),
-                              dark ? Rgb(24, 24, 37, 0.985f) : Rgb(244, 245, 248, 0.985f));
+                              dark ? Rgb(30, 30, 46) : Rgb(252, 252, 253),
+                              dark ? Rgb(24, 24, 37) : Rgb(244, 245, 248));
     }
-    const float edge = std::max(1.0f, std::round(2 * scale));
-    const float inset = edge / 2;
-    const Color blue = Rgb(137, 180, 250), mauve = Rgb(203, 166, 247);
-    FillShape(
-        s, 0, 0, w, h,
-        [&](float x, float y) {
-            return fabsf(SdRoundRect(x, y, inset, inset, w - inset, h - inset, radius - inset)) - inset;
-        },
-        [&](float x, float y) {
-            return Mix(blue, mauve, Clamp01((x + y) / (w + h)));
-        });
+    PaintEdge(s, 0, 0, w, h, radius, scale, 0.0f);
 }
 
 std::vector<float> BlurCoverage(std::vector<float> mask, int width, int height, float sigma);
@@ -13672,7 +13688,7 @@ class HintPill {
         const RECT textRect{static_cast<LONG>((10 + 18 + 8) * s), 0, width_, height_};
         text_.Draw(foreground, font, hint, textRect,
                    DT_SINGLELINE | DT_VCENTER | DT_LEFT,
-                   dark ? WithAlpha(kWhite, 0.96f) : WithAlpha(kBlack, 0.88f));
+                   dark ? Rgb(205, 214, 244) : WithAlpha(kBlack, 0.88f));
         PaintPanelBase(content_, panel_, s);
         for (int y = 0; y < height_; y++) {
             for (int x = 0; x < width_; x++) {
@@ -14009,7 +14025,7 @@ class GlowFrame {
         const float s = scale_;
         const Look look = CurrentLook(now);
 
-        const float radius = std::min(12.0f * s, std::min(r - l, b - t) * 0.5f);
+        const float radius = std::min(g_cornerRadius * s, std::min(r - l, b - t) * 0.5f);
         const float border = look.border * s;
         const float tight = look.tightSigma * s;
         const float wide = look.wideSigma * s;
@@ -14048,7 +14064,7 @@ class GlowFrame {
         for (int i = 0; i < 64; i++) {
             const Color c = g_glow.At(i / 64.0f);
             colors[i] = PackPremultiplied(c, 1.0f);
-            lines[i] = PackPremultiplied(Mix(c, kWhite, 0.65f), 1.0f);
+            lines[i] = PackPremultiplied(c, 1.0f);
         }
 
         const float cx = (l + r) * 0.5f;
@@ -19237,15 +19253,15 @@ Palette MakePalette(bool dark) {
     p.text = WithAlpha(ink, dark ? 1.0f : 0.894f);
     p.secondary = dark ? Rgb(186, 194, 222) : WithAlpha(ink, 0.606f);  // subtext1
     p.tertiary = dark ? Rgb(166, 173, 200) : WithAlpha(ink, 0.446f);   // subtext0
-    p.divider = WithAlpha(ink, dark ? 0.0837f : 0.0803f);
+    p.divider = dark ? Rgb(69, 71, 90) : WithAlpha(ink, 0.0803f);  // surface1
     p.controlFill = dark ? Rgb(49, 50, 68, 0.70f) : WithAlpha(kWhite, 0.70f);
     p.controlFillHover =
         dark ? Rgb(69, 71, 90, 0.75f) : Rgb(249, 249, 249, 0.50f);
     p.controlFillFocus = dark ? Rgb(24, 24, 37, 0.80f) : kWhite;
-    p.controlBorder = dark ? Rgb(108, 112, 134, 0.4f) : WithAlpha(ink, 0.0578f);
+    p.controlBorder = dark ? Rgb(88, 91, 112) : WithAlpha(ink, 0.0578f);  // surface2
     p.controlStrong = WithAlpha(ink, dark ? 0.544f : 0.446f);
-    p.subtleHover = WithAlpha(ink, dark ? 0.0605f : 0.0373f);
-    p.subtlePressed = WithAlpha(ink, dark ? 0.0419f : 0.0241f);
+    p.subtleHover = dark ? Rgb(49, 50, 68, 0.55f) : WithAlpha(ink, 0.0373f);  // surface0
+    p.subtlePressed = dark ? Rgb(69, 71, 90, 0.60f) : WithAlpha(ink, 0.0241f);  // surface1
     p.accent = g_glow.Accent(dark);
     const float luminance =
         p.accent.r * 0.2126f + p.accent.g * 0.7152f + p.accent.b * 0.0722f;
@@ -19255,7 +19271,7 @@ Palette MakePalette(bool dark) {
     p.userBubble = WithAlpha(p.accent, dark ? 0.22f : 0.14f);
     p.codeBg = dark ? Rgb(17, 17, 27, 0.55f) : WithAlpha(kBlack, 0.045f);
     p.tooltipBg = dark ? Rgb(30, 30, 46, 0.98f) : Rgb(249, 249, 249, 0.98f);
-    p.tooltipBorder = dark ? Rgb(108, 112, 134, 0.4f) : WithAlpha(kBlack, 0.10f);
+    p.tooltipBorder = dark ? Rgb(88, 91, 112) : WithAlpha(kBlack, 0.10f);
     return p;
 }
 
@@ -19555,6 +19571,7 @@ class AskCard {
         scroll_ = 0;
         status_.clear();
         hover_ = pressed_ = kHitNone;
+        cardHotTo_ = cardHotFrom_ = 0.0f;
         OnCardClosed();
     }
 
@@ -19634,6 +19651,10 @@ class AskCard {
             ScrollBy(answerDragPoint_.y < convoRect_.top ? -SI(8) : SI(8));
             answerCaret_ = AnswerIndexAt(answerDragPoint_);
             render = true;
+        }
+        if (CardHotMoving(now) || CardHotMoving(now - 17.0)) {
+            render = true;
+            next = std::min(next, 1000.0 / 60.0);
         }
         if (hover_ != kHitNone && hover_ <= kHitAdd && !tooltipShown_) {
             const double wait = kTooltipDelayMs - (now - hoverStart_);
@@ -20690,7 +20711,7 @@ class AskCard {
                     break;
                 case ConvoItem::Kind::Text:
                     if (item.code) {
-                        FillRoundRect(convo_, l, t, r, b, S(6), palette_.codeBg);
+                        FillRoundRect(convo_, l, t, r, b, S(8), palette_.codeBg);
                     }
                     if (!item.bullet.empty()) {
                         const RECT bulletRect{item.rect.left, textRect.top,
@@ -20950,6 +20971,18 @@ class AskCard {
         return true;
     }
 
+    // One hover frame per box: surface0 fill and the 2px blue to mauve edge, mauve while pressed.
+    void HoverBox(const RECT& rc, int id) {
+        const float l = static_cast<float>(rc.left);
+        const float t = static_cast<float>(rc.top);
+        const float r = static_cast<float>(rc.right);
+        const float b = static_cast<float>(rc.bottom);
+        const bool down = pressed_ == id;
+        FillRoundRect(surface_, l, t, r, b, S(8),
+                      down ? palette_.subtlePressed : palette_.subtleHover);
+        PaintEdge(surface_, l, t, r, b, S(8), scale_, down ? 0.0f : 1.0f, kEdgeMauve);
+    }
+
     void DrawButton(int id, Glyph glyph) {
         const RECT& rc = buttonRects_[id];
         if (rc.right <= rc.left) {
@@ -20957,10 +20990,7 @@ class AskCard {
         }
         const bool hovered = hover_ == id;
         if (hovered) {
-            FillRoundRect(surface_, static_cast<float>(rc.left),
-                          static_cast<float>(rc.top), static_cast<float>(rc.right),
-                          static_cast<float>(rc.bottom), S(4),
-                          pressed_ == id ? palette_.subtlePressed : palette_.subtleHover);
+            HoverBox(rc, id);
         }
         DrawGlyph(surface_, text_, glyph, (rc.left + rc.right) * 0.5f,
                   (rc.top + rc.bottom) * 0.5f, scale_,
@@ -20982,21 +21012,19 @@ class AskCard {
             const float t = static_cast<float>(rc.top);
             const float r = static_cast<float>(rc.right);
             const float b = static_cast<float>(rc.bottom);
-            DrawImageRounded(surface_, attachment.thumb, l, t, r, b, S(6),
+            DrawImageRounded(surface_, attachment.thumb, l, t, r, b, S(8),
                              palette_.controlFill);
-            StrokeRoundRect(surface_, l + 0.5f, t + 0.5f, r - 0.5f, b - 0.5f, S(6),
-                            1.0f, palette_.controlBorder);
+            PaintEdge(surface_, l, t, r, b, S(8), scale_, 0.0f, palette_.controlBorder);
             if (attachment.ocrPending) {
                 const float sweep = static_cast<float>(fmod(now / 1300.0, 1.0));
                 const float lineY = t - S(8) + (b - t + S(16)) * sweep;
                 const float sigma = S(5);
-                const Color glow = Mix(g_glow.At(static_cast<float>(now / 3000.0)),
-                                       kWhite, 0.35f);
+                const Color glow = g_glow.At(static_cast<float>(now / 3000.0));
                 FillShape(
                     surface_, l, std::max(t, lineY - sigma * 3), r,
                     std::min(b, lineY + sigma * 3),
                     [&](float x, float y) {
-                        return SdRoundRect(x, y, l, t, r, b, S(6));
+                        return SdRoundRect(x, y, l, t, r, b, S(8));
                     },
                     [&](float, float y) {
                         const float d = (y - lineY) / sigma;
@@ -21012,10 +21040,11 @@ class AskCard {
             const float r = static_cast<float>(addRect_.right);
             const float b = static_cast<float>(addRect_.bottom);
             if (hovered) {
-                FillRoundRect(surface_, l, t, r, b, S(6), palette_.subtleHover);
+                HoverBox(addRect_, kHitAdd);
+            } else {
+                StrokeRoundRectDashed(surface_, l + S(1), t + S(1), r - S(1), b - S(1),
+                                      S(8) - S(1), S(1.2f), S(4), WithAlpha(color, 0.75f));
             }
-            StrokeRoundRectDashed(surface_, l + S(1), t + S(1), r - S(1), b - S(1),
-                                  S(6), S(1.2f), S(4), WithAlpha(color, 0.75f));
             DrawGlyph(surface_, text_, Glyph::Add, (l + r) * 0.5f, (t + b) * 0.5f,
                       scale_, color);
         }
@@ -21122,11 +21151,7 @@ class AskCard {
                 case ConvoItem::Kind::CopyButton: {
                     const bool hovered = hover_ == kHitCopyAnswer + item.turn;
                     if (hovered) {
-                        FillRoundRect(surface_, static_cast<float>(visible.left),
-                                      static_cast<float>(visible.top),
-                                      static_cast<float>(visible.right),
-                                      static_cast<float>(visible.bottom), S(4),
-                                      palette_.subtleHover);
+                        HoverBox(visible, hover_);
                     }
                     const Color color = hovered ? palette_.text : palette_.secondary;
                     const float cy = (rc.top + rc.bottom) * 0.5f;
@@ -21151,22 +21176,15 @@ class AskCard {
         const float t = static_cast<float>(inputRect_.top);
         const float r = static_cast<float>(inputRect_.right);
         const float b = static_cast<float>(inputRect_.bottom);
-        const float radius = S(4);
+        const float radius = S(8);
         const bool hovered = hover_ == kHitInput || hover_ == kHitSend;
         FillRoundRect(surface_, l, t, r, b, radius,
                       inputFocused ? palette_.controlFillFocus
                       : hovered ? palette_.controlFillHover
                                 : palette_.controlFill);
-        StrokeRoundRect(surface_, l + 0.5f, t + 0.5f, r - 0.5f, b - 0.5f, radius,
-                        1.0f, palette_.controlBorder);
-        const float line = inputFocused ? std::max(2.0f, S(2)) : 1.0f;
-        const Color lineColor = inputFocused ? palette_.accent : palette_.controlStrong;
-        FillShape(
-            surface_, l, b - line - 1, r, b,
-            [&](float x, float y) {
-                return std::max(SdRoundRect(x, y, l, t, r, b, radius), b - line - y);
-            },
-            [&](float, float) { return lineColor; });
+        // Rest grey, hover blue to mauve, focus a steady blue ring.
+        PaintEdge(surface_, l, t, r, b, radius, scale_, hovered && !inputFocused ? 1.0f : 0.0f,
+                  inputFocused ? kEdgeBlue : palette_.controlBorder);
 
         HFONT font = InputFont();
         const int textX = inputText_.left - inputScroll_;
@@ -21206,11 +21224,11 @@ class AskCard {
         const float sb = static_cast<float>(sendRect_.bottom);
         const bool enabled = !Trim(input_).empty();
         if (enabled) {
-            FillRoundRect(surface_, sl, st, sr, sb, S(4),
+            FillRoundRect(surface_, sl, st, sr, sb, S(8),
                           hover_ == kHitSend ? WithAlpha(palette_.accent, 0.9f)
                                              : palette_.accent);
         } else if (hover_ == kHitSend) {
-            FillRoundRect(surface_, sl, st, sr, sb, S(4), palette_.subtleHover);
+            FillRoundRect(surface_, sl, st, sr, sb, S(8), palette_.subtleHover);
         }
         DrawGlyph(surface_, text_, Glyph::Send, (sl + sr) * 0.5f, (st + sb) * 0.5f,
                   scale_ * 0.875f, enabled ? palette_.onAccent : palette_.tertiary);
@@ -21262,8 +21280,7 @@ class AskCard {
             const int id = kHitChip + static_cast<int>(i);
             const bool hovered = hover_ == id;
             if (hovered) {
-                FillRoundRect(surface_, l, t, r, b, S(4),
-                              pressed_ == id ? palette_.subtlePressed : palette_.subtleHover);
+                HoverBox(rc, id);
             }
             const Chip& chip = chips_[i];
             const Color iconColor = hovered ? palette_.text : palette_.secondary;
@@ -21335,11 +21352,10 @@ class AskCard {
         const float t = static_cast<float>(top);
         const float r = static_cast<float>(left + width);
         const float b = static_cast<float>(top + height);
-        DrawShadow(surface_, l, t + S(2), r, b + S(2), S(4), S(4),
+        DrawShadow(surface_, l, t + S(2), r, b + S(2), S(8), S(4),
                    WithAlpha(kBlack, palette_.dark ? 0.35f : 0.12f));
-        FillRoundRect(surface_, l, t, r, b, S(4), palette_.tooltipBg);
-        StrokeRoundRect(surface_, l + 0.5f, t + 0.5f, r - 0.5f, b - 0.5f, S(4), 1.0f,
-                        palette_.tooltipBorder);
+        FillRoundRect(surface_, l, t, r, b, S(8), palette_.tooltipBg);
+        PaintEdge(surface_, l, t, r, b, S(8), scale_, 0.0f, palette_.tooltipBorder);
         const RECT rc{left, top, left + width, top + height};
         text_.Draw(surface_, font, tooltip, rc, DT_SINGLELINE | DT_VCENTER | DT_CENTER,
                    palette_.text);
@@ -21357,6 +21373,11 @@ class AskCard {
         }
         for (int y = 0; y < height_; y++) {
             memcpy(surface_.Row(y), chrome_.Row(y), static_cast<size_t>(width_) * 4);
+        }
+        const float hot = CardHot(now);
+        if (hot > 0.004f) {
+            PaintEdge(surface_, 0, 0, static_cast<float>(width_), static_cast<float>(height_),
+                      panel_.Radius(scale_), scale_, hot);
         }
 
         DrawThumbnails(now);
@@ -21400,6 +21421,28 @@ class AskCard {
             }
         }
         return kHitNone;
+    }
+
+    static constexpr double kEdgeFadeMs = 150;
+
+    float CardHot(double now) const {
+        const float k = static_cast<float>(Clamp01(static_cast<float>((now - cardHotStart_) / kEdgeFadeMs)));
+        return cardHotFrom_ + (cardHotTo_ - cardHotFrom_) * k;
+    }
+
+    bool CardHotMoving(double now) const {
+        return now - cardHotStart_ < kEdgeFadeMs && cardHotFrom_ != cardHotTo_;
+    }
+
+    void SetCardHot(bool hot, double now) {
+        const float to = hot ? 1.0f : 0.0f;
+        if (to == cardHotTo_) {
+            return;
+        }
+        cardHotFrom_ = CardHot(now);
+        cardHotTo_ = to;
+        cardHotStart_ = now;
+        RequestTick();
     }
 
     void SetHover(int hit, double now) {
@@ -21493,6 +21536,7 @@ class AskCard {
                     TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd, 0};
                     trackingMouse_ = TrackMouseEvent(&track);
                 }
+                SetCardHot(true, now);
                 if (selectingAnswer_) {
                     answerDragPoint_ = pt;
                     if (pt.y < convoRect_.top || pt.y >= convoRect_.bottom) {
@@ -21515,8 +21559,15 @@ class AskCard {
                 SetHover(kHitNone, now);
                 return false;
 
+            case WM_APP_PREVIEW_HOVER:
+                SetCardHot(lParam != 0, now);
+                SetHover(static_cast<int>(wParam), now);
+                result = 0;
+                return true;
+
             case WM_MOUSELEAVE:
                 trackingMouse_ = false;
+                SetCardHot(false, now);
                 SetHover(kHitNone, now);
                 result = 0;
                 return true;
@@ -21754,6 +21805,9 @@ class AskCard {
     int hover_ = kHitNone;
     int pressed_ = kHitNone;
     double hoverStart_ = 0;
+    float cardHotFrom_ = 0.0f;
+    float cardHotTo_ = 0.0f;
+    double cardHotStart_ = 0;
     bool tooltipShown_ = false;
     bool trackingMouse_ = false;
     bool focused_ = false;
