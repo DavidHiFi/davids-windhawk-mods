@@ -2,7 +2,7 @@
 // @id              seamless-explorer-search
 // @name            Seamless Explorer Search
 // @description     Start typing in any File Explorer window to search it, and every drive, with Everything
-// @version         2.0.16
+// @version         2.0.17
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -22,6 +22,8 @@ This mod replaces it. Click into any folder and just start typing: a search box
 drops into the top of that window and fills with matches as you type, straight
 from Everything's index. Files in the folder you are in come first, then
 everything else on your drives.
+
+![Seamless Explorer Search settings](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-explorer-search.png)
 
 ## What it does
 
