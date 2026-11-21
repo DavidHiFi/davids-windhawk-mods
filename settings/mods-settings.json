@@ -1688,7 +1688,7 @@
     "showPositions": 1,
     "showThumbnails": 1,
     "syncEnabled": 1,
-    "syncHistoryMB": 100,
+    "syncHistoryMB": 4096,
     "syncPort": 4126,
     "takeOverWinV": 1,
     "trayIcon": 1,

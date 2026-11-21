@@ -2,7 +2,7 @@
 // @id              seamless-clipboard-manager
 // @name            Seamless Clipboard Manager
 // @description     Keeps everything you copy, text and images, in a searchable list you open with Win+V
-// @version         1.4.5
+// @version         1.4.6
 // @author          DavidHiFi, Scott Brogden, Ditto contributors
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -18,6 +18,8 @@
 # Seamless Clipboard Manager
 
 Keeps what you copy in a list you open with Win+V: text, images, copied files and the formatting of text from web pages and Word. Pick a clip and press Enter to paste it.
+
+![Seamless Clipboard Manager preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-clipboard-manager.png)
 
 ## Features
 
