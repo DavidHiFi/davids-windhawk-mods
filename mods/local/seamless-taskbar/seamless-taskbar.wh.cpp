@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.23
+// @version         0.4.24
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -18,6 +18,8 @@
 
 All of the riced taskbar in one mod. Every part is a module with its own switch and its own
 group of settings, so you can turn on only what you want. Everything starts off.
+
+![Seamless Taskbar](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-taskbar.png)
 
 | Module | What it does | Credits | Licence |
 |---|---|---|---|
