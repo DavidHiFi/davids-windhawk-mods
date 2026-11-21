@@ -1,12 +1,12 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-21T21:37:43+08:00",
+  "generatedAt": "2026-11-21T21:40:13+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 184,
-    "enabled": 176,
-    "local": 59
+    "mods": 185,
+    "enabled": 177,
+    "local": 60
   },
   "mods": [
     {
@@ -2215,6 +2215,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/startup-control/startup-control.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-autoscroll-global",
+      "name": "Seamless Autoscroll Global",
+      "author": "DavidHiFi, crazyboyybs",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-autoscroll-global/seamless-autoscroll-global.wh.cpp",
       "enabled": true
     }
   ]
