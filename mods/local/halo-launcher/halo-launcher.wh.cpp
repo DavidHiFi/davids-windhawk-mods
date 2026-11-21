@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.4
+// @version         0.6.5
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1714,9 +1714,14 @@ UINT AsyncMods() {
 LRESULT CALLBACK KeyboardProc(int code, WPARAM wp, LPARAM lp) {
     if (code != HC_ACTION) return CallNextHookEx(nullptr, code, wp, lp);
     auto* k = (KBDLLHOOKSTRUCT*)lp;
-    if (k->flags & LLKHF_INJECTED) return CallNextHookEx(nullptr, code, wp, lp);
     bool down = wp == WM_KEYDOWN || wp == WM_SYSKEYDOWN;
     bool isWin = k->vkCode == VK_LWIN || k->vkCode == VK_RWIN;
+    if (k->flags & LLKHF_INJECTED) {
+        // Another tool that swallows its own Win chord (Seamless Clipboard on Win+V) sends an
+        // unused key while Win is held, so that press was a chord, not a lone tap.
+        if (down && !isWin) g_winAlone = false;
+        return CallNextHookEx(nullptr, code, wp, lp);
+    }
     int tapSlot = g_winTapSlot.load();
     if (isWin && tapSlot >= 0) {
         if (down) {
