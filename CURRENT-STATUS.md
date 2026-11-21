@@ -1,6 +1,12 @@
 # Current status
 
-Last updated: 2026-11-09
+Last updated: 2026-11-22
+
+- 2026-11-21: Seamless Window Manager 2.7.0: new windows split the biggest tile, a window
+  opened over a full-screen app floats centered and tiles once it is gone, the mod's own focus
+  jumps skip the Windows Animations fade (Alt+Tab keeps its zoom), Alt+PageDown/PageUp walk
+  hidden windows. Installed and published 2026-11-22 5:25 am after 16 of 16 test PC checks.
+  Note: `notes\2026-11-21-window-manager-2.7.0.md`.
 
 ## 2026-11-09: Seamless Title Bars
 
