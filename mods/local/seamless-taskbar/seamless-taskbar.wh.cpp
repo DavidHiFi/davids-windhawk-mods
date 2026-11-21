@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.26
+// @version         0.4.27
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -3251,18 +3251,18 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"tray.hoverZoom.enabled", L"Grow icons on hover", L"", L"1", {}, 0, 100, 6, L"Icon hover zoom"},
 {K::Number, L"tray.hoverZoom.size", L"Largest size (%)", L"100 to 200. Suggested 130, the same as the taskbar dock", L"130", {}, 100, 200, 6, L"Icon hover zoom"},
 {K::Number, L"tray.hoverZoom.reach", L"Reach (px)", L"20 to 200. How far from the pointer icons still grow. Suggested 64", L"64", {}, 20, 200, 6, L"Icon hover zoom"},
-{K::Check, L"tray.group.left.enabled", L"Show the left folder", L"A folder button beside the overflow arrow that holds tray icons you drop on it", L"0", {}, 0, 100, 6, L"Folder groups"},
+{K::Check, L"tray.group.left.enabled", L"Show the left folder", L"A folder button beside the overflow arrow that holds tray icons you drop on it", L"1", {}, 0, 100, 6, L"Folder groups"},
 {K::Text, L"tray.group.left.name", L"Left folder name", L"Shown as the button's tooltip", L"Left", {}, 0, 100, 6, L"Folder groups"},
 {K::Choice, L"tray.group.left.glyph", L"Left folder icon", L"", L"folder", {{L"folder", L"Folder"}, {L"star", L"Star"}, {L"more", L"Three dots"}, {L"grid", L"Grid"}, {L"heart", L"Heart"}, {L"clock", L"Clock"}}, 0, 100, 6, L"Folder groups"},
-{K::Color, L"tray.group.left.color", L"Left folder color", L"", L"#89B4FA", {}, 0, 100, 6, L"Folder groups"},
-{K::Check, L"tray.group.centre.enabled", L"Show the centre folder", L"", L"0", {}, 0, 100, 6, L"Folder groups"},
+{K::Color, L"tray.group.left.color", L"Left folder color", L"", L"#A6E3A1", {}, 0, 100, 6, L"Folder groups"},
+{K::Check, L"tray.group.centre.enabled", L"Show the centre folder", L"", L"1", {}, 0, 100, 6, L"Folder groups"},
 {K::Text, L"tray.group.centre.name", L"Centre folder name", L"", L"Centre", {}, 0, 100, 6, L"Folder groups"},
 {K::Choice, L"tray.group.centre.glyph", L"Centre folder icon", L"", L"folder", {{L"folder", L"Folder"}, {L"star", L"Star"}, {L"more", L"Three dots"}, {L"grid", L"Grid"}, {L"heart", L"Heart"}, {L"clock", L"Clock"}}, 0, 100, 6, L"Folder groups"},
-{K::Color, L"tray.group.centre.color", L"Centre folder color", L"", L"#CBA6F7", {}, 0, 100, 6, L"Folder groups"},
-{K::Check, L"tray.group.right.enabled", L"Show the right folder", L"", L"0", {}, 0, 100, 6, L"Folder groups"},
+{K::Color, L"tray.group.centre.color", L"Centre folder color", L"", L"#89B4FA", {}, 0, 100, 6, L"Folder groups"},
+{K::Check, L"tray.group.right.enabled", L"Show the right folder", L"", L"1", {}, 0, 100, 6, L"Folder groups"},
 {K::Text, L"tray.group.right.name", L"Right folder name", L"", L"Right", {}, 0, 100, 6, L"Folder groups"},
 {K::Choice, L"tray.group.right.glyph", L"Right folder icon", L"", L"folder", {{L"folder", L"Folder"}, {L"star", L"Star"}, {L"more", L"Three dots"}, {L"grid", L"Grid"}, {L"heart", L"Heart"}, {L"clock", L"Clock"}}, 0, 100, 6, L"Folder groups"},
-{K::Color, L"tray.group.right.color", L"Right folder color", L"", L"#A6E3A1", {}, 0, 100, 6, L"Folder groups"},
+{K::Color, L"tray.group.right.color", L"Right folder color", L"", L"#FAB387", {}, 0, 100, 6, L"Folder groups"},
 {K::Check, L"ai.settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 7, L"AI usage"},
 {K::Check, L"ai.nativeSettingsTitleBar", L"Use the Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 7, L"AI usage"},
 {K::Check, L"ai.settingsTrayIcon", L"Tray icon", L"Adds a gauge icon to the tray. Click it to open the settings.", L"0", {}, 0, 100, 7, L"AI usage"},
@@ -40555,7 +40555,9 @@ struct Settings {
     bool groupEnabled[3]{};
     std::wstring groupNames[3];
     std::wstring groupGlyphs[3];
-    Color groupColors[3]{};
+    // Never transparent: a missing color setting must still draw the button.
+    Color groupColors[3]{Color{255, 0xA6, 0xE3, 0xA1}, Color{255, 0x89, 0xB4, 0xFA},
+                         Color{255, 0xFA, 0xB3, 0x87}};
 };
 
 SRWLOCK g_settingsLock = SRWLOCK_INIT;
