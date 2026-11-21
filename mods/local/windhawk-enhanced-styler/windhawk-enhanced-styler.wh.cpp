@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.16
+// @version         2.2.17
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.17
+
+- In the Windhawk toolkit box, Exit Windhawk and Safe mode now have a soft red edge, and their hover glow runs red to pink, so they stand apart from the safe buttons.
 
 ## What's new in 2.2.16
 
@@ -3172,6 +3176,7 @@ static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
 static const std::uint32_t kTrayEdge = 0x45475A;     // surface1: card and button edge at rest
 static const std::uint32_t kTraySubtext = 0xA6ADC8;  // column headings
 static const std::uint32_t kTrayControl = 0x313244;  // button fill
+static const std::uint32_t kTrayDanger = 0xF38BA8;   // red: buttons that stop mods
 
 static std::uint32_t TrayCssRgb(const std::string& css, std::uint32_t fallback) {
     unsigned r = 0, g = 0, b = 0;
@@ -3431,6 +3436,13 @@ static void PaintTrayButton(HWND hwnd) {
         d.h1 = s.gradientStart;
         d.h2 = s.gradientEnd;
         float p = enabled ? hoverP : 0.0f;
+        // Exit Windhawk (1004) and Safe mode (1005) stop or restart every mod: red, not blue.
+        int id = GetDlgCtrlID(hwnd);
+        if ((id == 1004 || id == 1005) && IsToolkitDialog(GetParent(hwnd))) {
+            d.edgeC = DockMix(kTrayEdge, kTrayDanger, 0.55f);
+            d.h1 = kTrayDanger;
+            d.h2 = 0xEBA0AC;  // maroon
+        }
         if (pressed && enabled) {
             d.fill = DockMix(d.fill, d.h2, 0.3f);
             d.fillA = 70;
