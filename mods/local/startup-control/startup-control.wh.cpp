@@ -2,7 +2,7 @@
 // @id startup-control
 // @name Startup Control
 // @description Manage startup apps, scheduled tasks and Windows startup locations.
-// @version 0.1.5
+// @version 0.1.6
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods
@@ -357,6 +357,8 @@ inline void Add(Inventory& inv, Entry e) {
     }
     // A task's command field holds its XML definition, never a file path.
     if (e.target.empty() && !e.command.empty() && e.kind != Kind::Task) e.target = Target(e.command);
+    if (e.target.empty() && e.command.empty() && e.kind == Kind::Driver && !e.value.empty())
+        e.target = Expand(L"%SystemRoot%\\System32\\drivers\\" + e.value + L".sys");
     if (e.target.size() > 1 && e.target.front() == L'"' && e.target.back() == L'"') e.target = e.target.substr(1, e.target.size() - 2);
     if (!e.target.empty() && e.target.find(L":\\") != e.target.npos)
         e.missing = GetFileAttributesW(e.target.c_str()) == INVALID_FILE_ATTRIBUTES;
@@ -423,6 +425,7 @@ const Location kLocations[] = {
 inline bool Relevant(const std::wstring& key, const std::wstring& name) {
     auto k = Lower(key), n = Lower(name);
     if (k == L"environment") return n == L"userinitmprlogonscript";
+    if (k.find(L"active setup\\installed components\\") != k.npos) return n == L"stubpath";
     if (k.ends_with(L"command processor")) return n == L"autorun";
     if (k.ends_with(L"currentversion\\windows")) return n == L"appinit_dlls" || n == L"loadappinit_dlls" || n == L"load" || n == L"run";
     if (k.ends_with(L"session manager")) return n == L"bootexecute" || n == L"execute" || n == L"s0initialcommand" || n == L"setupexecute";
@@ -457,6 +460,10 @@ void RegistryLocation(Inventory& inv, HKEY root, const std::wstring& key, const 
         e.machine = root == HKEY_LOCAL_MACHINE;
         e.key = key; e.value.assign(name.data(), nc); e.view = view; e.type = type;
         e.name = e.value.empty() ? std::filesystem::path(key).filename().wstring() + L" (default)" : e.value;
+        if (Lower(e.value) == L"stubpath") {
+            std::wstring title = TextValue(h.h, L"");
+            e.name = title.empty() ? std::filesystem::path(key).filename().wstring() : title;
+        }
         e.category = category;
         e.source = (e.machine ? L"HKLM\\" : L"HKCU\\") + key;
         e.raw.assign(data.begin(), data.begin() + bytes);
@@ -5500,9 +5507,11 @@ static float SC_BuildList(SetWindow& w, float y) {
     static const PCWSTR sorts[] = {L"Name", L"State", L"Location"};
     float sx = R;
     for (int i = 2; i >= 0; i--) sx -= SC_PillW(sorts[i], 0) + 8;
-    auto& sortLabel = SC_Add(SC_Item::Label, {sx - 54, y, sx - 6, y + 30});
-    sortLabel.text = L"Sort";
-    sortLabel.tone = 1;
+    if (sx - 54 >= x + 8) {
+        auto& sortLabel = SC_Add(SC_Item::Label, {sx - 54, y, sx - 6, y + 30});
+        sortLabel.text = L"Sort";
+        sortLabel.tone = 1;
+    }
     for (int i = 0; i < 3; i++) SC_AddPill(sx, y, 30, sorts[i], 0, A_Sort, i, 0, SC_Item::Chip).on = g_sc.sort == i;
     y += 44;
     if (!g_sc.loaded) return SC_AddNote(w, y, L"Reading startup locations. This takes a few seconds the first time.");
@@ -6468,7 +6477,7 @@ static bool SC_Message(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, LRESULT& resul
             size_t n = 0;
             for (auto& e : g_sc.entries) if (e.kind != sc::Kind::Notice) n++;
             (void)n;
-            SC_Status(w, g_sc.errors.empty() ? L"" : L"Some skipped");
+            SC_Status(w, L"");
             if (g_sc.mode != 0 && !SC_Sel()) g_sc.mode = 0;
             SC_Rebuild(w);
             result = 0;
