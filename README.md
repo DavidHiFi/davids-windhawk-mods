@@ -24,6 +24,16 @@ Taskbar, window and Start menu mods, every catalog mod and setting I use, and sc
 
 ## Installation
 
+### The easy way: Seamless Workshop
+
+[Seamless Workshop](https://github.com/DavidHiFi/seamless-workshop) is a Windhawk mod that installs, updates and removes every mod here from one window, with my presets, and keeps them current. Paste this into PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/main/Install-SeamlessWorkshop.ps1 | iex
+```
+
+It gets the Windhawk alpha too if you need it. Then click its tray icon, open **Updates** and pick the mods you want, or **Apply DavidHiFi's whole setup**.
+
 ### One mod
 
 1. Install [Windhawk](https://windhawk.net).
