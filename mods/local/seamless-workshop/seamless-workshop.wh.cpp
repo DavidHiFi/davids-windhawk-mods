@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.1.0
+// @version         1.1.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -20,6 +20,8 @@
 One place for DavidHiFi's Windhawk mods. Install them, keep them up to date,
 turn them on and off, and change their settings, all from one window that
 lives in the tray.
+
+![Seamless Workshop](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-workshop.png)
 
 Needs the latest Windhawk alpha.
 
