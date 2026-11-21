@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.21
+// @version         0.4.22
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -37696,6 +37696,8 @@ struct ClockInstance {
 winrt::event_token g_timerTickToken;
 unsigned g_tickCounter;
 int g_startupScansLeft;
+int g_trayPassesLeft;
+unsigned g_trayPassCounter;
 
 // Whether new clocks are reported by the DateTimeIconContent::OnApplyTemplate
 // hook.
@@ -38255,6 +38257,45 @@ void ScanForClocks() {
     }
 }
 
+// The clock hook can fill g_instances before the tray icons exist, which ends
+// the startup scans, so the tray dock gets its own pass from the timer.
+void TrayChromePass() {
+    HWND hTaskbarWnd = FindCurrentProcessTaskbarWnd();
+    if (!hTaskbarWnd) {
+        return;
+    }
+
+    std::vector<std::pair<HWND, bool>> taskbars{{hTaskbarWnd, false}};
+    EnumThreadWindows(
+        GetWindowThreadProcessId(hTaskbarWnd, nullptr),
+        [](HWND hWnd, LPARAM lParam) -> BOOL {
+            WCHAR className[32];
+            if (GetClassName(hWnd, className, ARRAYSIZE(className)) &&
+                _wcsicmp(className, L"Shell_SecondaryTrayWnd") == 0) {
+                auto& taskbars =
+                    *reinterpret_cast<std::vector<std::pair<HWND, bool>>*>(
+                        lParam);
+                taskbars.emplace_back(hWnd, true);
+            }
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(&taskbars));
+
+    for (auto [hWnd, secondary] : taskbars) {
+        try {
+            XamlRoot xamlRoot = GetTaskbarXamlRoot(hWnd, secondary);
+            if (!xamlRoot) continue;
+            auto content = xamlRoot.Content();
+            if (!content) continue;
+            auto frame = FindChildByName(content, L"SystemTrayFrameGrid", 24);
+            if (!frame) continue;
+            ApplyTrayChrome(frame, 0);
+            HookTrayFrame(frame);
+        } catch (...) {}
+    }
+    try { UpdateTrayEnds(); } catch (...) {}
+}
+
 // Drops clocks which are no longer part of a taskbar, e.g. after a monitor
 // was disconnected.
 void PruneInstances() {
@@ -38297,6 +38338,13 @@ void RefreshClocks(bool forceScan) {
         ScanForClocks();
     }
 
+    if (g_trayPassesLeft > 0) {
+        g_trayPassesLeft--;
+        TrayChromePass();
+    } else if (g_trayPassCounter++ % 10 == 0) {
+        TrayChromePass();
+    }
+
     UpdateClocks();
 }
 
@@ -38331,6 +38379,7 @@ void StartClockUi() {
     }
 
     g_startupScansLeft = 10;
+    g_trayPassesLeft = 60;
 
     // Started here rather than at initialization, to only make network
     // requests in the explorer process which hosts the taskbar.
