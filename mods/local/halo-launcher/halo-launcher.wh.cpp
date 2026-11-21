@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.2
+// @version         0.6.3
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -187,7 +187,12 @@ constexpr UINT WM_APP_SETTINGS = WM_APP + 3;
 constexpr UINT WM_APP_TRAY = WM_APP + 5;      // the tray icon's callback
 constexpr UINT WM_APP_RECORD = WM_APP + 6;    // wParam 1: a key box in the settings listens
 constexpr UINT WM_APP_APPMENU = WM_APP + 7;   // the engine answered a row's right-click menu
-constexpr UINT kTrayId = 1;
+constexpr UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kTrayId = TrayIconId();
 constexpr UINT WM_APP_HOOKKEY = WM_APP + 4;   // wParam: hotkey slot
 constexpr UINT_PTR kTimerFrame = 1;
 constexpr UINT_PTR kTimerCaret = 2;
