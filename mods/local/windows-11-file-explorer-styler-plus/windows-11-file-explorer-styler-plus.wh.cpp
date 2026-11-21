@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.21
+// @version         1.10.22
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -11273,13 +11273,21 @@ struct StatusDockBuffer {
     // The root fill covered the whole client, so the band, if any, is painted
     // in this buffer.
     bool fullPaint;
-    // The view button just painted; its glyph slices follow and are recolored.
-    bool hasButton;
-    RECT button;
-    COLORREF glyph;
     // For the toggle: the folder view under it. band holds the pill in toggle
     // client coordinates.
     HWND view;
+    // The view buttons painted in this buffer. A button's face is painted
+    // only together with a visible glyph, so a missing icon never leaves an
+    // empty face behind.
+    struct Button {
+        RECT rect;
+        RECT face;
+        int shape;  // StatusDockShape, or -1 for no face
+        COLORREF glyph;
+        bool faceDone;
+        bool drawn;
+    } buttons[2];
+    int buttonCount;
 };
 
 // The status band height of each folder view, measured on its last full
@@ -11381,6 +11389,7 @@ HPAINTBUFFER WINAPI BeginBufferedPaint_Hook(HDC hdcTarget,
 }
 
 void FinishStatusDockToggle(const StatusDockBuffer& buffer);
+void FinishStatusDockButtons(StatusDockBuffer& buffer);
 
 using EndBufferedPaint_t = decltype(&EndBufferedPaint);
 EndBufferedPaint_t EndBufferedPaint_Original;
@@ -11390,7 +11399,10 @@ HRESULT WINAPI EndBufferedPaint_Hook(HPAINTBUFFER hBufferedPaint,
         HDC hdc = GetBufferedPaintDC(hBufferedPaint);
         for (int i = 0; i < g_statusDockBufferCountForThread; i++) {
             if (g_statusDockBuffersForThread[i].mem == hdc) {
-                const StatusDockBuffer& ended = g_statusDockBuffersForThread[i];
+                StatusDockBuffer& ended = g_statusDockBuffersForThread[i];
+                if (fUpdateTarget && !ended.isToggle && ended.buttonCount > 0) {
+                    FinishStatusDockButtons(ended);
+                }
                 // A full paint without a band: the status bar is hidden.
                 if (ended.fullPaint && !ended.hasBand && !ended.isToggle) {
                     AcquireSRWLockExclusive(&g_statusDockBandsLock);
@@ -11584,7 +11596,11 @@ bool BlendStatusDockGlyph(HDC hdcDest,
                           int hSrc,
                           BLENDFUNCTION ftn,
                           COLORREF color,
-                          decltype(&GdiAlphaBlend) blendOriginal);
+                          decltype(&GdiAlphaBlend) blendOriginal,
+                          bool* inked = nullptr,
+                          HDC hdcFace = nullptr,
+                          StatusDockBuffer* faceBuffer = nullptr,
+                          StatusDockBuffer::Button* faceButton = nullptr);
 
 bool DrawStatusDockIcon(HDC hdc,
                         int x,
@@ -11592,7 +11608,23 @@ bool DrawStatusDockIcon(HDC hdc,
                         HICON icon,
                         int width,
                         int height,
-                        COLORREF color);
+                        StatusDockBuffer* buffer,
+                        StatusDockBuffer::Button* button,
+                        bool* inked);
+void PaintStatusDockButtonFace(HDC hdc,
+                               StatusDockBuffer* buffer,
+                               StatusDockBuffer::Button* button);
+
+StatusDockBuffer::Button* FindStatusDockButton(StatusDockBuffer* buffer,
+                                               const RECT& dest) {
+    RECT overlap;
+    for (int i = 0; i < buffer->buttonCount; i++) {
+        if (IntersectRect(&overlap, &dest, &buffer->buttons[i].rect)) {
+            return &buffer->buttons[i];
+        }
+    }
+    return nullptr;
+}
 
 using DrawIconEx_t = decltype(&DrawIconEx);
 DrawIconEx_t DrawIconEx_Original;
@@ -11609,13 +11641,25 @@ BOOL WINAPI DrawIconEx_Hook(HDC hdc,
         cyWidth > 0 && !hbrFlickerFreeDraw) {
         StatusDockBuffer* buffer = FindStatusDockBuffer(hdc);
         RECT dest = {xLeft, yTop, xLeft + cxWidth, yTop + cyWidth};
-        RECT overlap;
-        if (buffer && buffer->hasButton && !buffer->isToggle &&
-            IntersectRect(&overlap, &dest, &buffer->button) &&
-            EqualRect(&overlap, &dest) &&
-            DrawStatusDockIcon(hdc, xLeft, yTop, hIcon, cxWidth, cyWidth,
-                               buffer->glyph)) {
-            return TRUE;
+        StatusDockBuffer::Button* button =
+            buffer && !buffer->isToggle ? FindStatusDockButton(buffer, dest)
+                                        : nullptr;
+        if (button) {
+            RECT overlap;
+            IntersectRect(&overlap, &dest, &button->rect);
+            bool inked = false;
+            if (EqualRect(&overlap, &dest) &&
+                DrawStatusDockIcon(hdc, xLeft, yTop, hIcon, cxWidth, cyWidth,
+                                   buffer, button, &inked)) {
+                // A blank icon leaves the button to FinishStatusDockButtons.
+                if (inked) {
+                    button->drawn = true;
+                }
+                return TRUE;
+            }
+            // Not recolored: the face goes under Explorer's own icon.
+            PaintStatusDockButtonFace(hdc, buffer, button);
+            button->drawn = true;
         }
     }
 
@@ -12693,7 +12737,14 @@ bool BlendStatusDockGlyph(HDC hdcDest,
                           int hSrc,
                           BLENDFUNCTION ftn,
                           COLORREF color,
-                          decltype(&GdiAlphaBlend) blendOriginal) {
+                          decltype(&GdiAlphaBlend) blendOriginal,
+                          bool* inked,
+                          HDC hdcFace,
+                          StatusDockBuffer* faceBuffer,
+                          StatusDockBuffer::Button* faceButton) {
+    if (inked) {
+        *inked = false;
+    }
     if (wSrc <= 0 || hSrc <= 0 || wSrc > 256 || hSrc > 256) {
         return false;
     }
@@ -12759,37 +12810,73 @@ bool BlendStatusDockGlyph(HDC hdcDest,
         }
         alphaInk = dark < 8;
     }
-    for (int y = 0; y < hSrc; y++) {
-        int row = ySrc + y;
-        if (bottomUp) {
-            row = ds.dsBm.bmHeight - 1 - row;
-        }
-        const DWORD* in = (const DWORD*)((const BYTE*)ds.dsBm.bmBits +
-                                         (size_t)row * ds.dsBm.bmWidthBytes) +
-                          xSrc;
-        for (int x = 0; x < wSrc; x++) {
-            DWORD p = in[x];
-            int a = srcAlpha ? (int)(p >> 24) : 255;
-            int out_a = 0;
-            if (a > 0) {
-                int pr = (p >> 16) & 0xFF, pg = (p >> 8) & 0xFF, pb = p & 0xFF;
-                if (srcAlpha) {
-                    pr = std::min(255, pr * 255 / a);
-                    pg = std::min(255, pg * 255 / a);
-                    pb = std::min(255, pb * 255 / a);
-                }
-                int lum = (pr * 3 + pg * 6 + pb) / 10;
-                // Dark lines are ink on the old tile icons. New glyphs carry
-                // their shape in alpha alone: every visible pixel tints.
-                int ink = alphaInk ? 255
-                                   : std::clamp((150 - lum) * 255 / 120, 0, 255);
-                out_a = ink * a / 255 * ftn.SourceConstantAlpha / 255;
+    // A light glyph with a few dark edge pixels passes the dark-ink test yet
+    // has almost no dark lines: it came out blank (the empty view button,
+    // 2026-11-21). Too little ink retries with the alpha shape.
+    long long coverage = 0;
+    long long solid = 0;
+    for (int pass = 0; pass < 2; pass++) {
+        coverage = 0;
+        solid = 0;
+        for (int y = 0; y < hSrc; y++) {
+            int row = ySrc + y;
+            if (bottomUp) {
+                row = ds.dsBm.bmHeight - 1 - row;
             }
-            out[(size_t)y * wSrc + x] = ((DWORD)out_a << 24) |
-                                        ((DWORD)(r * out_a / 255) << 16) |
-                                        ((DWORD)(g * out_a / 255) << 8) |
-                                        (DWORD)(b * out_a / 255);
+            const DWORD* in =
+                (const DWORD*)((const BYTE*)ds.dsBm.bmBits +
+                               (size_t)row * ds.dsBm.bmWidthBytes) +
+                xSrc;
+            for (int x = 0; x < wSrc; x++) {
+                DWORD p = in[x];
+                int a = srcAlpha ? (int)(p >> 24) : 255;
+                int out_a = 0;
+                if (a > 0) {
+                    int pr = (p >> 16) & 0xFF, pg = (p >> 8) & 0xFF,
+                        pb = p & 0xFF;
+                    if (srcAlpha) {
+                        pr = std::min(255, pr * 255 / a);
+                        pg = std::min(255, pg * 255 / a);
+                        pb = std::min(255, pb * 255 / a);
+                    }
+                    int lum = (pr * 3 + pg * 6 + pb) / 10;
+                    // Dark lines are ink on the old tile icons. New glyphs
+                    // carry their shape in alpha alone: every visible pixel
+                    // tints.
+                    int ink = alphaInk
+                                  ? 255
+                                  : std::clamp((150 - lum) * 255 / 120, 0, 255);
+                    out_a = ink * a / 255 * ftn.SourceConstantAlpha / 255;
+                }
+                coverage += out_a;
+                solid += a >= 200;
+                out[(size_t)y * wSrc + x] = ((DWORD)out_a << 24) |
+                                            ((DWORD)(r * out_a / 255) << 16) |
+                                            ((DWORD)(g * out_a / 255) << 8) |
+                                            (DWORD)(b * out_a / 255);
+            }
         }
+        // Real glyph lines cover well over a twentieth of the icon. An opaque
+        // tile is never tinted whole.
+        if (alphaInk || !srcAlpha ||
+            coverage * 20 >= 255LL * wSrc * hSrc ||
+            solid * 10 >= 7LL * wSrc * hSrc) {
+            break;
+        }
+        alphaInk = true;
+    }
+
+    // Nothing visible: draw nothing, so no face is left without a glyph.
+    if (coverage < 255LL * 4) {
+        DeleteObject(hBitmap);
+        return true;
+    }
+    if (inked) {
+        *inked = true;
+    }
+    if (faceButton) {
+        PaintStatusDockButtonFace(hdcFace ? hdcFace : hdcDest, faceBuffer,
+                                  faceButton);
     }
 
     BOOL result = FALSE;
@@ -12814,7 +12901,10 @@ bool DrawStatusDockIcon(HDC hdc,
                         HICON icon,
                         int width,
                         int height,
-                        COLORREF color) {
+                        StatusDockBuffer* buffer,
+                        StatusDockBuffer::Button* button,
+                        bool* inked) {
+    *inked = false;
     if (width > 256 || height > 256) {
         return false;
     }
@@ -12866,8 +12956,9 @@ bool DrawStatusDockIcon(HDC hdc,
             SelectObject(hdcMem, bitmaps[2]);
             BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
             ok = BlendStatusDockGlyph(hdc, x, y, width, height, hdcMem, 0, 0,
-                                      width, height, blend, color,
-                                      GdiAlphaBlend);
+                                      width, height, blend, button->glyph,
+                                      GdiAlphaBlend, inked, hdc, buffer,
+                                      button);
         }
         SelectObject(hdcMem, old);
     }
@@ -12881,6 +12972,137 @@ bool DrawStatusDockIcon(HDC hdc,
         }
     }
     return ok;
+}
+
+// The face of a view button (current view or hover), painted once, right
+// before its glyph.
+void PaintStatusDockButtonFace(HDC hdc,
+                               StatusDockBuffer* buffer,
+                               StatusDockBuffer::Button* button) {
+    if (button->faceDone) {
+        return;
+    }
+    button->faceDone = true;
+    if (button->shape < 0) {
+        return;
+    }
+    PaintStatusDockShape(hdc, button->face, button->face,
+                         StatusDockDpi(buffer->hWnd),
+                         (StatusDockShape)button->shape);
+}
+
+// Explorer sometimes paints a view button without an icon, or with one that
+// comes out blank. Draw the view's own Fluent glyph instead: details for the
+// first button, large icons for the last.
+void DrawStatusDockFallbackGlyph(HDC hdc,
+                                 const RECT& rect,
+                                 bool trailing,
+                                 COLORREF color,
+                                 UINT dpi) {
+    int size = std::max(8, MulDiv(16, dpi, 96));
+    int width = rect.right - rect.left, height = rect.bottom - rect.top;
+    if (width < size || height < size) {
+        size = std::min(width, height);
+    }
+    if (size <= 0 || size > 256) {
+        return;
+    }
+
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader.biSize = sizeof(bmi.bmiHeader);
+    bmi.bmiHeader.biWidth = size;
+    bmi.bmiHeader.biHeight = -size;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    DWORD* bits = nullptr;
+    HBITMAP bitmap =
+        CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, (void**)&bits, nullptr, 0);
+    HDC hdcMem = bitmap ? CreateCompatibleDC(nullptr) : nullptr;
+    if (!hdcMem) {
+        if (bitmap) {
+            DeleteObject(bitmap);
+        }
+        return;
+    }
+
+    HGDIOBJ oldBitmap = SelectObject(hdcMem, bitmap);
+    const WCHAR glyph = trailing ? L'\xF0E2' : L'\xE8FD';
+    bool ink = false;
+    for (PCWSTR face : {L"Segoe Fluent Icons", L"Segoe MDL2 Assets"}) {
+        HFONT font = CreateFontW(-size, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                                 CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
+                                 DEFAULT_PITCH, face);
+        if (!font) {
+            continue;
+        }
+        HGDIOBJ oldFont = SelectObject(hdcMem, font);
+        WORD index = 0xFFFF;
+        if (GetGlyphIndicesW(hdcMem, &glyph, 1, &index,
+                             GGI_MARK_NONEXISTING_GLYPHS) != GDI_ERROR &&
+            index != 0xFFFF) {
+            std::fill(bits, bits + (size_t)size * size, 0);
+            SetBkMode(hdcMem, TRANSPARENT);
+            SetTextColor(hdcMem, RGB(255, 255, 255));
+            RECT box = {0, 0, size, size};
+            DrawTextW(hdcMem, &glyph, 1, &box,
+                      DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+            GdiFlush();
+            ink = std::any_of(bits, bits + (size_t)size * size,
+                              [](DWORD p) { return (p & 0xFFFFFF) != 0; });
+        }
+        SelectObject(hdcMem, oldFont);
+        DeleteObject(font);
+        if (ink) {
+            break;
+        }
+    }
+
+    if (ink) {
+        BYTE r = GetRValue(color), g = GetGValue(color), b = GetBValue(color);
+        for (size_t i = 0; i < (size_t)size * size; i++) {
+            DWORD p = bits[i];
+            DWORD a = std::max({(p >> 16) & 0xFF, (p >> 8) & 0xFF, p & 0xFF});
+            bits[i] = (a << 24) | ((r * a / 255) << 16) | ((g * a / 255) << 8) |
+                      (b * a / 255);
+        }
+        BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        GdiAlphaBlend(hdc, rect.left + (width - size) / 2,
+                      rect.top + (height - size) / 2, size, size, hdcMem, 0, 0,
+                      size, size, blend);
+    }
+
+    SelectObject(hdcMem, oldBitmap);
+    DeleteDC(hdcMem);
+    DeleteObject(bitmap);
+}
+
+// Before a status bar buffer reaches the screen: every view button whose
+// icon never showed gets its face and the fallback glyph together.
+void FinishStatusDockButtons(StatusDockBuffer& buffer) {
+    UINT dpi = StatusDockDpi(buffer.hWnd);
+    for (int i = 0; i < buffer.buttonCount; i++) {
+        StatusDockBuffer::Button& button = buffer.buttons[i];
+        if (button.drawn) {
+            continue;
+        }
+
+        // The last button (large icons) sits at the trailing end: the other
+        // button in this paint, or the band's end in a repaint of one.
+        bool trailing;
+        if (buffer.buttonCount == 2) {
+            trailing = button.rect.left > buffer.buttons[1 - i].rect.left;
+        } else {
+            int width = button.rect.right - button.rect.left;
+            trailing = buffer.band.right - button.rect.right < width;
+        }
+
+        PaintStatusDockButtonFace(buffer.mem, &buffer, &button);
+        DrawStatusDockFallbackGlyph(buffer.mem, button.rect, trailing,
+                                    button.glyph, dpi);
+        button.drawn = true;
+    }
 }
 
 // The GPU view toggle, after its own painter: the dock slice, a face like the
@@ -13102,20 +13324,35 @@ bool PaintStatusDockViewButton(HDC hdc, int iStateId, LPCRECT pRect) {
     }
 
     bool selected = iStateId == 2;
-    // Glyph: blue for the current view, text on hover, subtext0 otherwise.
-    buffer->hasButton = true;
-    buffer->button = *pRect;
-    buffer->glyph = selected ? RGB(0x89, 0xB4, 0xFA)
-                    : hover  ? RGB(0xCD, 0xD6, 0xF4)
-                             : RGB(0xA6, 0xAD, 0xC8);
-    if (!selected && !hover) {
-        return true;
+    // The same button painted again in this buffer replaces its record.
+    StatusDockBuffer::Button* button = nullptr;
+    for (int i = 0; i < buffer->buttonCount; i++) {
+        if (EqualRect(&buffer->buttons[i].rect, pRect)) {
+            button = &buffer->buttons[i];
+        }
+    }
+    if (!button) {
+        if (buffer->buttonCount == ARRAYSIZE(buffer->buttons)) {
+            buffer->buttons[0] = buffer->buttons[1];
+            buffer->buttonCount--;
+        }
+        button = &buffer->buttons[buffer->buttonCount++];
     }
 
-    PaintStatusDockShape(hdc, face, face, dpi,
-                         selected ? (hover ? StatusDockShape::SelectedHover
-                                           : StatusDockShape::Selected)
-                                  : StatusDockShape::Hover);
+    // Glyph: blue for the current view, text on hover, subtext0 otherwise.
+    // The face waits for the glyph (DrawIconEx_Hook or
+    // FinishStatusDockButtons), so it never shows empty.
+    *button = {};
+    button->rect = *pRect;
+    button->face = face;
+    button->glyph = selected ? RGB(0x89, 0xB4, 0xFA)
+                    : hover  ? RGB(0xCD, 0xD6, 0xF4)
+                             : RGB(0xA6, 0xAD, 0xC8);
+    button->shape =
+        selected ? (int)(hover ? StatusDockShape::SelectedHover
+                               : StatusDockShape::Selected)
+        : hover  ? (int)StatusDockShape::Hover
+                 : -1;
     return true;
 }
 
