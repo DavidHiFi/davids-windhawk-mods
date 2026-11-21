@@ -2,7 +2,7 @@
 // @id              seamless-title-bars
 // @name            Seamless Title Bars
 // @description     One title bar look everywhere: colours, caption buttons, a glass title dock and native frames in every kind of app
-// @version         1.3.10
+// @version         1.3.11
 // @author          DavidHiFi, Th3Fanbus, grn15RenS, Ingan121, Anixx, aubymori
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -33,7 +33,8 @@ switch, so you only turn on what you want.
 - **Icon and title.** Center, left or right alignment, icon position, gaps,
   and hiding the icon or the title.
 - **Title dock.** A rounded glass box around the window icon and title, a
-  light Catppuccin Mocha tint with a soft shine over the blurred title bar. The
+  dark Catppuccin Mocha tint with a soft shine over the blurred title bar.
+  Turn the glass off for a solid fill. The
   grey edge turns into a blue to mauve gradient on hover and the fill brightens
   with it. Right-click it for a menu with the app name, copy title, copy all
   (title and uptime) and the usual window commands. Middle-click it to close
@@ -76,6 +77,12 @@ switch, so you only turn on what you want.
   restarts (sign out and back in).
 - Spotify options marked with * need a Spotify restart.
 - Changing the native frames app list needs those apps restarted.
+
+## What's new in 1.3.11
+- The title dock is frosted glass now: the blurred title bar shows through a
+  dark Mocha base tint. "Glass fill" turns it off for a solid colour, and
+  "Glass tint" sets how dark the glass is.
+- The dock's fill colour defaults to Mocha base (#1E1E2E).
 
 ## Credits
 This mod merges and keeps every option of:
@@ -253,12 +260,18 @@ This mod merges and keeps every option of:
   - edgeWidth: 2
     $name: Edge thickness (px)
     $description: "Scales with the display. 1 to 4 (Suggested: 2)."
-  - fillColor: "#313244"
+  - fillColor: "#1E1E2E"
     $name: Fill colour
-    $description: "Hex colour. Suggested: #313244 (Mocha surface 0)."
-  - fillOpacity: 45
+    $description: "Hex colour. Suggested: #1E1E2E (Mocha base)."
+  - glassFill: true
+    $name: Glass fill
+    $description: "On = frosted glass, the blurred title bar shows through the fill colour. Off = a solid fill at the opacity below."
+  - glassTint: 60
+    $name: Glass tint (%)
+    $description: "How dark the glass is. 30 to 90 (Suggested: 60). Lower shows more blur."
+  - fillOpacity: 100
     $name: Fill opacity (%)
-    $description: "0 to 100 (Suggested: 45). Lower lets more of the blurred title bar through."
+    $description: "Used when Glass fill is off. 0 to 100 (Suggested: 100)."
   - glassShine: true
     $name: Glass shine
     $description: A soft light along the top half of the dock, like the taskbar docks.
@@ -684,8 +697,8 @@ static struct {
     bool iconClickable;
     int dialogAlign;
     // Title dock
-    bool dockOn, dockHover, dockHoverFill, dockShine, dockMenu;
-    int dockPadX, dockPadY, dockRadius, dockEdge, dockFillA;
+    bool dockOn, dockHover, dockHoverFill, dockShine, dockMenu, dockGlass;
+    int dockPadX, dockPadY, dockRadius, dockEdge, dockFillA, dockGlassA;
     DWORD dockFill, dockEdgeC, dockHov1, dockHov2;   // 0xRRGGBB
     // Window uptime
     bool upOn, upD, upH, upM, upS, upClock, upDialogs, upColorSet;
@@ -826,7 +839,9 @@ static void LoadSettings() {
     g_settings.dockRadius = Clamp(Wh_GetIntSetting(L"titleDock.radius"), 0, 20);
     g_settings.dockEdge = Clamp(Wh_GetIntSetting(L"titleDock.edgeWidth"), 1, 4);
     g_settings.dockFillA = Clamp(Wh_GetIntSetting(L"titleDock.fillOpacity"), 0, 100);
-    g_settings.dockFill = ReadRgbSetting(L"titleDock.fillColor", 0x313244, nullptr);
+    g_settings.dockGlass = Wh_GetIntSetting(L"titleDock.glassFill") != 0;
+    g_settings.dockGlassA = Clamp(Wh_GetIntSetting(L"titleDock.glassTint"), 30, 90);
+    g_settings.dockFill = ReadRgbSetting(L"titleDock.fillColor", 0x1E1E2E, nullptr);
     g_settings.dockEdgeC = ReadRgbSetting(L"titleDock.edgeColor", 0x45475A, nullptr);
     g_settings.dockHov1 = ReadRgbSetting(L"titleDock.hoverStart", 0x89B4FA, nullptr);
     g_settings.dockHov2 = ReadRgbSetting(L"titleDock.hoverEnd", 0xCBA6F7, nullptr);
@@ -2769,8 +2784,10 @@ static void DrawDock(ID2D1RenderTarget* rt, D2D1_POINT_2F o) {
     D2D1_ANTIALIAS_MODE oldAa = rt->GetAntialiasMode();
     rt->SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     ID2D1SolidColorBrush* fill = nullptr;
-    if (g_settings.dockFillA > 0 &&
-        SUCCEEDED(rt->CreateSolidColorBrush(Rgb(g_settings.dockFill, g_settings.dockFillA / 100.0f), &fill))) {
+    // Glass: the blurred title bar behind the text surface shows through a lighter tint.
+    int fillA = g_settings.dockGlass ? g_settings.dockGlassA : g_settings.dockFillA;
+    if (fillA > 0 &&
+        SUCCEEDED(rt->CreateSolidColorBrush(Rgb(g_settings.dockFill, fillA / 100.0f), &fill))) {
         rt->FillRoundedRectangle(rr, fill);
         fill->Release();
         if (g_settings.dockHoverFill && c.hoverA > 0.003f) {
@@ -12291,8 +12308,10 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Number, L"titleDock.paddingY", L"Top and bottom padding (px)", L"Gets smaller by itself in low title bars. 0 to 12 (Suggested: 4).", L"4", {}, 0, 12, 0, L"Title dock"},
 {K::Number, L"titleDock.radius", L"Corner radius (px)", L"0 to 20 (Suggested: 8).", L"8", {}, 0, 20, 0, L"Title dock"},
 {K::Number, L"titleDock.edgeWidth", L"Edge thickness (px)", L"Scales with the display. 1 to 4 (Suggested: 2).", L"2", {}, 1, 4, 0, L"Title dock"},
-{K::Color, L"titleDock.fillColor", L"Fill colour", L"Hex colour. Suggested: #313244 (Mocha surface 0).", L"#313244", {}, 0, 100, 0, L"Title dock"},
-{K::Number, L"titleDock.fillOpacity", L"Fill opacity (%)", L"0 to 100 (Suggested: 45). Lower lets more of the blurred title bar through.", L"45", {}, 0, 100, 0, L"Title dock"},
+{K::Color, L"titleDock.fillColor", L"Fill colour", L"Hex colour. Suggested: #1E1E2E (Mocha base).", L"#1E1E2E", {}, 0, 100, 0, L"Title dock"},
+{K::Check, L"titleDock.glassFill", L"Glass fill", L"On = frosted glass, the blurred title bar shows through the fill colour. Off = a solid fill at the opacity below.", L"1", {}, 0, 100, 0, L"Title dock"},
+{K::Number, L"titleDock.glassTint", L"Glass tint (%)", L"How dark the glass is. 30 to 90 (Suggested: 60). Lower shows more blur.", L"60", {}, 30, 90, 0, L"Title dock"},
+{K::Number, L"titleDock.fillOpacity", L"Fill opacity (%)", L"Used when Glass fill is off. 0 to 100 (Suggested: 100).", L"100", {}, 0, 100, 0, L"Title dock"},
 {K::Check, L"titleDock.glassShine", L"Glass shine", L"A soft light along the top half of the dock, like the taskbar docks.", L"1", {}, 0, 100, 0, L"Title dock"},
 {K::Color, L"titleDock.edgeColor", L"Edge colour", L"Hex colour. Suggested: #45475A (Mocha surface 1).", L"#45475A", {}, 0, 100, 0, L"Title dock"},
 {K::Check, L"titleDock.hover", L"Gradient edge on hover", L"The edge fades into a gradient while the pointer is over the dock.", L"1", {}, 0, 100, 0, L"Title dock"},

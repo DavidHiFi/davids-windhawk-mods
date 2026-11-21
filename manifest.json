@@ -1,7 +1,7 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-22T04:00:06+08:00",
+  "generatedAt": "2026-11-22T04:53:22+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 185,
@@ -1022,7 +1022,7 @@
       "name": "Seamless Title Bars",
       "author": "DavidHiFi, Th3Fanbus, grn15RenS, Ingan121, Anixx, aubymori",
       "github": null,
-      "version": "1.3.10",
+      "version": "1.3.11",
       "license": "MIT",
       "origin": "local",
       "upstream": "",
