@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.6.6
+// @version         0.6.7
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -12283,7 +12283,7 @@ void ReadCornerRadius() {
 }
 
 Color GlassTint(bool dark) {
-    return dark ? Rgb(30, 30, 46, 0.60f) : Rgb(249, 249, 252, 0.62f);
+    return dark ? Rgb(30, 30, 46, 0.42f) : Rgb(249, 249, 252, 0.46f);
 }
 
 class GlassPanel {
