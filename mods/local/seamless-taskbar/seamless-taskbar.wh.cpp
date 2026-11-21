@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.27
+// @version         0.4.28
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -31,6 +31,12 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | Tray drawer | Folds tray icons into a drawer that opens from the chevron. | DavidHiFi, MEI | GPL-3.0 |
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
+
+## What's new in 0.4.28
+
+The drawer's three folders now hold icons. Right-click a folder and tick the icons it should
+keep, or drop an icon on it. Clicking an empty folder opens the same list. The folders are
+called Devices, Apps and Tools, and hovering one shows its name.
 
 ## Tray tools
 
@@ -3251,16 +3257,16 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"tray.hoverZoom.enabled", L"Grow icons on hover", L"", L"1", {}, 0, 100, 6, L"Icon hover zoom"},
 {K::Number, L"tray.hoverZoom.size", L"Largest size (%)", L"100 to 200. Suggested 130, the same as the taskbar dock", L"130", {}, 100, 200, 6, L"Icon hover zoom"},
 {K::Number, L"tray.hoverZoom.reach", L"Reach (px)", L"20 to 200. How far from the pointer icons still grow. Suggested 64", L"64", {}, 20, 200, 6, L"Icon hover zoom"},
-{K::Check, L"tray.group.left.enabled", L"Show the left folder", L"A folder button beside the overflow arrow that holds tray icons you drop on it", L"1", {}, 0, 100, 6, L"Folder groups"},
-{K::Text, L"tray.group.left.name", L"Left folder name", L"Shown as the button's tooltip", L"Left", {}, 0, 100, 6, L"Folder groups"},
+{K::Check, L"tray.group.left.enabled", L"Show the left folder", L"A folder button beside the overflow arrow. Drop a tray icon on it, or right-click it and tick the icons it should hold", L"1", {}, 0, 100, 6, L"Folder groups"},
+{K::Text, L"tray.group.left.name", L"Left folder name", L"Shown as the button's tooltip", L"Devices", {}, 0, 100, 6, L"Folder groups"},
 {K::Choice, L"tray.group.left.glyph", L"Left folder icon", L"", L"folder", {{L"folder", L"Folder"}, {L"star", L"Star"}, {L"more", L"Three dots"}, {L"grid", L"Grid"}, {L"heart", L"Heart"}, {L"clock", L"Clock"}}, 0, 100, 6, L"Folder groups"},
 {K::Color, L"tray.group.left.color", L"Left folder color", L"", L"#A6E3A1", {}, 0, 100, 6, L"Folder groups"},
 {K::Check, L"tray.group.centre.enabled", L"Show the centre folder", L"", L"1", {}, 0, 100, 6, L"Folder groups"},
-{K::Text, L"tray.group.centre.name", L"Centre folder name", L"", L"Centre", {}, 0, 100, 6, L"Folder groups"},
+{K::Text, L"tray.group.centre.name", L"Centre folder name", L"", L"Apps", {}, 0, 100, 6, L"Folder groups"},
 {K::Choice, L"tray.group.centre.glyph", L"Centre folder icon", L"", L"folder", {{L"folder", L"Folder"}, {L"star", L"Star"}, {L"more", L"Three dots"}, {L"grid", L"Grid"}, {L"heart", L"Heart"}, {L"clock", L"Clock"}}, 0, 100, 6, L"Folder groups"},
 {K::Color, L"tray.group.centre.color", L"Centre folder color", L"", L"#89B4FA", {}, 0, 100, 6, L"Folder groups"},
 {K::Check, L"tray.group.right.enabled", L"Show the right folder", L"", L"1", {}, 0, 100, 6, L"Folder groups"},
-{K::Text, L"tray.group.right.name", L"Right folder name", L"", L"Right", {}, 0, 100, 6, L"Folder groups"},
+{K::Text, L"tray.group.right.name", L"Right folder name", L"", L"Tools", {}, 0, 100, 6, L"Folder groups"},
 {K::Choice, L"tray.group.right.glyph", L"Right folder icon", L"", L"folder", {{L"folder", L"Folder"}, {L"star", L"Star"}, {L"more", L"Three dots"}, {L"grid", L"Grid"}, {L"heart", L"Heart"}, {L"clock", L"Clock"}}, 0, 100, 6, L"Folder groups"},
 {K::Color, L"tray.group.right.color", L"Right folder color", L"", L"#FAB387", {}, 0, 100, 6, L"Folder groups"},
 {K::Check, L"ai.settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 7, L"AI usage"},
@@ -41723,6 +41729,7 @@ struct DrawerState {
     Flyout groupFlyout{nullptr};
     ItemsControl groupItems{nullptr};
     winrt::event_token groupClicks[3]{};
+    winrt::event_token groupMenus[3]{};
     winrt::event_token groupClosing{};
     winrt::event_token groupClosed{};
     int groupOpen{-1};
@@ -42192,6 +42199,247 @@ void ShowRestoreMenu() {
     state.picker.ShowAt(state.chevron);
 }
 
+// BEGIN FOLDER MENU
+// Right-click a folder: every tray icon with a tick on the ones it holds.
+// Ticking files the icon there (it leaves the drawer, like a drop on the
+// folder); unticking puts it back in the main drawer.
+[[clang::no_destroy]] std::map<std::wstring, std::wstring> g_iconNames;
+
+std::wstring NameFromElement(DependencyObject const& root) {
+    std::vector<DependencyObject> stack{root};
+    std::wstring fallback;
+    for (int visited = 0; !stack.empty() && visited < 96; ++visited) {
+        auto element = stack.back();
+        stack.pop_back();
+        if (auto ui = element.try_as<UIElement>()) {
+            auto peer = Automation::Peers::FrameworkElementAutomationPeer::FromElement(ui);
+            if (!peer && element.try_as<Controls::Primitives::ButtonBase>())
+                peer = Automation::Peers::FrameworkElementAutomationPeer::CreatePeerForElement(ui);
+            if (peer && element.try_as<Controls::Primitives::ButtonBase>()) {
+                auto name = peer.GetName();
+                if (!name.empty())
+                    return std::wstring(name);
+            }
+            if (fallback.empty()) {
+                auto name = Automation::AutomationProperties::GetName(element);
+                if (!name.empty())
+                    fallback = name;
+            }
+        }
+        int count = Media::VisualTreeHelper::GetChildrenCount(element);
+        for (int i = count - 1; i >= 0; --i)
+            stack.push_back(Media::VisualTreeHelper::GetChild(element, i));
+    }
+    return fallback;
+}
+
+std::wstring NameFromKey(std::wstring const& key) {
+    if (key.rfind(L"p:", 0) == 0) {
+        auto colon = key.find(L':', 2);
+        if (colon != std::wstring::npos) {
+            std::wstring path;
+            for (size_t i = colon + 1; i + 4 <= key.size(); i += 4)
+                path += static_cast<wchar_t>(std::wcstoul(key.substr(i, 4).c_str(), nullptr, 16));
+            auto slash = path.find_last_of(L"\\/");
+            auto name = slash == std::wstring::npos ? path : path.substr(slash + 1);
+            if (auto dot = name.rfind(L'.'); dot != std::wstring::npos && dot > 0)
+                name.resize(dot);
+            if (!name.empty()) {
+                name[0] = static_cast<wchar_t>(towupper(name[0]));
+                return name;
+            }
+        }
+    }
+    return L"Tray icon";
+}
+
+std::wstring IconLabel(DrawerState& state, IInspectable const& model, std::wstring const& key) {
+    for (auto const& items : {state.nativeItems, state.innerItems, state.groupItems}) {
+        try {
+            if (!items)
+                continue;
+            auto container = items.ContainerFromItem(model).try_as<DependencyObject>();
+            if (!container)
+                continue;
+            auto name = NameFromElement(container);
+            if (auto cut = name.find_first_of(L"\r\n"); cut != std::wstring::npos)
+                name.resize(cut);
+            while (!name.empty() && (name.back() == L' ' || name.back() == L'\x200B'))
+                name.pop_back();
+            if (name.size() > 40)
+                name = name.substr(0, 39) + L"\x2026";
+            if (!name.empty()) {
+                g_iconNames[key] = name;
+                return name;
+            }
+        } catch (...) {
+        }
+    }
+    if (auto it = g_iconNames.find(key); it != g_iconNames.end())
+        return it->second;
+    return NameFromKey(key);
+}
+
+std::wstring FolderName(Settings const& s, int slot) {
+    if (!s.groupNames[slot].empty())
+        return s.groupNames[slot];
+    return slot == 0 ? L"Left folder" : slot == 1 ? L"Centre folder" : L"Right folder";
+}
+
+// Files the icon with this key into a folder, or with -1 takes it out of
+// every folder and back into the main drawer. One folder per icon.
+void SetIconFolder(std::wstring const& key, int target) {
+    if (!g_drawer || g_unloading || key.empty())
+        return;
+    auto& state = *g_drawer;
+    IInspectable model{nullptr};
+    for (auto const& candidate : state.sourceSnapshot) {
+        try {
+            if (StableIconKey(candidate) == key) {
+                model = candidate;
+                break;
+            }
+        } catch (...) {
+        }
+    }
+    for (int slot = 0; slot < 3; ++slot) {
+        if (slot == target)
+            continue;
+        std::vector<std::wstring> keys;
+        if (!ReadGroup(slot, keys))
+            continue;
+        auto it = std::find(keys.begin(), keys.end(), key);
+        if (it != keys.end()) {
+            keys.erase(it);
+            WriteGroup(slot, keys);
+        }
+    }
+    if (target >= 0) {
+        if (!model) {
+            Wh_Log(L"Folder menu: icon is gone, nothing filed");
+            return;
+        }
+        std::vector<std::wstring> keys;
+        if (!ReadGroup(target, keys))
+            return;
+        if (std::find(keys.begin(), keys.end(), key) == keys.end()) {
+            keys.push_back(key);
+            if (!WriteGroup(target, keys))
+                return;
+        }
+        // Filed icons leave the drawer the same way a dropped one does.
+        if (!SelectIcon(IconCandidate{model})) {
+            keys.erase(std::remove(keys.begin(), keys.end(), key), keys.end());
+            WriteGroup(target, keys);
+            Wh_Log(L"Folder menu: icon could not be collected, folder %d left as it was", target);
+        } else {
+            Wh_Log(L"Icon filed into folder group %d from its menu", target);
+        }
+    } else {
+        {
+            CollectionLock lock;
+            std::vector<std::wstring> saved;
+            if (lock.acquired && ReadCollection(saved)) {
+                auto it = std::find(saved.begin(), saved.end(), key);
+                if (it != saved.end()) {
+                    saved.erase(it);
+                    WriteCollection(saved);
+                }
+            }
+        }
+        Wh_Log(L"Icon taken out of its folder from the menu");
+    }
+    RefreshClassification(state);
+    QueueCollectionRefresh();
+}
+
+void ShowGroupMenu(DrawerState& state, int slot) {
+    if (slot < 0 || slot >= 3 || !state.groupButtons[slot] || !state.picker)
+        return;
+    auto s = CurrentSettings();
+    if (!s.groupEnabled[slot])
+        return;
+    if (state.restoreCommand && state.restoreClick.value)
+        state.restoreCommand.Click(state.restoreClick);
+    state.restoreClick = {};
+    state.restoreCommand = nullptr;
+    state.picker.Items().Clear();
+    if (state.groupOpen >= 0)
+        state.groupFlyout.Hide();
+
+    bool styled = s.theme && s.styleMenu && !state.accessibility.HighContrast();
+    auto look = [&](Controls::MenuFlyoutItem const& item) {
+        if (!styled)
+            return;
+        item.Foreground(Media::SolidColorBrush(s.text));
+        item.FontFamily(Media::FontFamily(L"FiraCode Nerd Font"));
+        item.FontWeight(winrt::Windows::UI::Text::FontWeights::Medium());
+    };
+
+    struct Entry {
+        std::wstring key, name;
+        int group;
+    };
+    std::vector<Entry> entries;
+    for (auto const& model : state.sourceSnapshot) {
+        try {
+            auto key = StableIconKey(model);
+            if (key.empty() || std::any_of(entries.begin(), entries.end(),
+                                           [&](Entry const& e) { return e.key == key; }))
+                continue;
+            entries.push_back({key, IconLabel(state, model, key), GroupOfKey(key)});
+        } catch (...) {
+        }
+    }
+    std::sort(entries.begin(), entries.end(), [](Entry const& a, Entry const& b) {
+        return _wcsicmp(a.name.c_str(), b.name.c_str()) < 0;
+    });
+
+    auto add = [&](Entry const& entry, bool inHere) {
+        Controls::ToggleMenuFlyoutItem item;
+        std::wstring text = entry.name;
+        if (!inHere && entry.group >= 0)
+            text += L"  (in " + FolderName(s, entry.group) + L")";
+        item.Text(text);
+        item.IsChecked(inHere);
+        look(item);
+        auto key = entry.key;
+        int target = inHere ? -1 : slot;
+        item.Click([key, target](auto const&, auto const&) noexcept {
+            UiCallbackScope callbackScope;
+            if (g_unloading || !g_runtimeAvailable)
+                return;
+            try {
+                SetIconFolder(key, target);
+            } catch (...) {
+                LogException(L"File icon from folder menu");
+            }
+        });
+        state.picker.Items().Append(item);
+    };
+
+    Controls::MenuFlyoutItem header;
+    header.Text(FolderName(s, slot) + L": tick the icons this folder holds");
+    header.IsEnabled(false);
+    look(header);
+    state.picker.Items().Append(header);
+    state.picker.Items().Append(Controls::MenuFlyoutSeparator());
+    bool any = false;
+    for (auto const& entry : entries)
+        if (entry.group == slot) {
+            add(entry, true);
+            any = true;
+        }
+    if (any)
+        state.picker.Items().Append(Controls::MenuFlyoutSeparator());
+    for (auto const& entry : entries)
+        if (entry.group != slot)
+            add(entry, false);
+    state.picker.ShowAt(state.groupButtons[slot]);
+    Wh_Log(L"Folder menu %d shown: %zu icons", slot, entries.size());
+}
+// END FOLDER MENU
+
 // BEGIN CLEANUP STEP
 template <typename F>
 bool CleanupStep(PCWSTR operation, F&& action) noexcept {
@@ -42223,6 +42471,8 @@ void RemoveDrawer() noexcept {
     for (int slot = 0; slot < 3; ++slot) {
         if (state.groupClicks[slot].value && state.groupButtons[slot])
             state.groupButtons[slot].Click(state.groupClicks[slot]);
+        if (state.groupMenus[slot].value && state.groupButtons[slot])
+            state.groupButtons[slot].ContextRequested(state.groupMenus[slot]);
     }
     if (state.groupClosing.value)
         state.groupFlyout.Closing(state.groupClosing);
@@ -42583,6 +42833,9 @@ void UpdateDrawerAppearance(DrawerState& state) {
                                           : L"Right folder";
             Automation::AutomationProperties::SetName(
                 button, s.groupNames[slot].empty() ? fallback : s.groupNames[slot].c_str());
+            Controls::ToolTipService::SetToolTip(
+                button, winrt::box_value(winrt::hstring(
+                            s.groupNames[slot].empty() ? fallback : s.groupNames[slot].c_str())));
         }
     }
 
@@ -43270,8 +43523,21 @@ void InstallDrawer(Grid const& root) {
                         return;
                     }
                     ShowGroupFlyout(state, captured);
+                    if (state.groupOpen != captured)
+                        ShowGroupMenu(state, captured);
                 } catch (...) {
                     LogException(L"Open folder group");
+                }
+            });
+        current.groupMenus[slot] = current.groupButtons[slot].ContextRequested(
+            [captured](auto const&, Input::ContextRequestedEventArgs const& args) noexcept {
+                UiCallbackScope callbackScope;
+                try {
+                    args.Handled(true);
+                    if (g_drawer && !g_unloading)
+                        ShowGroupMenu(*g_drawer, captured);
+                } catch (...) {
+                    LogException(L"Open folder menu");
                 }
             });
     }
