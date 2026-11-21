@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.6.4
+// @version         0.6.5
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -33,8 +33,8 @@ read later, like "Discord 4.05 pm.png".
   eraser, blur, pixelate, a magnifier and a spotlight. Colors, sizes, fills,
   dashed or dotted lines, shadows and outlines. Every tool carries its own
   options next to the bar. Press V and pick a drawing to edit or move it.
-  Drag the handles to resize a box, adjust an arrow or set how wide text
-  runs before it wraps. Use Font and size
+  Drag the handles to resize a box, adjust an arrow, stretch a pen line
+  or set how wide text runs before it wraps. Use Font and size
   while writing text or a speech balloon, or after selecting it. Draw,
   then pick the region to include the drawings in the snip.
 - Every drawing tool has ShareX's options in the settings: box corner radius
@@ -4000,9 +4000,15 @@ static void Frame(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const D2D1_REC
     rt->DrawRectangle(r, b, 1, Dash());
 }
 
+// How far the pick's frame sits outside a shape's bounds.
+static float FrameRoom(const Shape& s) {
+    return 6 + (s.tool == T_LINE || s.tool == T_ARROW || s.tool == T_PEN ? s.o.size / 2 : 0);
+}
+
 // The drawings on the region screen: every shape, the one being drawn, the text box taking keys, the pick.
 static bool HasHandles(const Shape& s) {
     if (s.tool == T_TEXT) return !s.pts.empty() && !s.text.empty();
+    if (s.tool == T_PEN) return s.pts.size() >= 2;
     return s.pts.size() == 2 &&
            (IsBoxy(s.tool) || s.tool == T_LINE || s.tool == T_ARROW || s.tool == T_BALLOON || s.tool == T_STEP);
 }
@@ -4019,7 +4025,7 @@ static bool WordsFrame(const Shape& s, D2D1_RECT_F& box, D2D1_RECT_F& r, float& 
 
 // Where a picked shape's handles sit, like ShareX. Boxes: 0 top left, 1 bottom right, 2 top right, 3 bottom left,
 // 4 top, 5 bottom, 6 left, 7 right. Text: 0 top left, 1 bottom right, 2 top right, 3 bottom left, 4 left, 5 right,
-// and every one sets how wide the lines run. Lines, arrows, balloons and numbers: 0 and 1 on their two points; an
+// and every one sets how wide the lines run. Pen strokes: the box handles on their frame, which stretch the stroke. Lines, arrows, balloons and numbers: 0 and 1 on their two points; an
 // arrow has 2 on its middle, which bends it, and a balloon 2 on its body's right edge, which sets its line width.
 static int Handles(const Shape& s, D2D1_POINT_2F* out) {
     if (!HasHandles(s)) return 0;
@@ -4040,8 +4046,13 @@ static int Handles(const Shape& s, D2D1_POINT_2F* out) {
         out[2] = {r.right, (r.top + r.bottom) / 2};
         return 3;
     }
-    if (IsBoxy(s.tool)) {
+    if (IsBoxy(s.tool) || s.tool == T_PEN) {
         D2D1_RECT_F r = Norm(s.pts[0], s.pts[1]);
+        if (s.tool == T_PEN) {
+            const float m = FrameRoom(s);
+            r = Bounds(s);
+            r = {r.left - m, r.top - m, r.right + m, r.bottom + m};
+        }
         float mx = (r.left + r.right) / 2, my = (r.top + r.bottom) / 2;
         out[0] = {r.left, r.top}, out[1] = {r.right, r.bottom}, out[2] = {r.right, r.top}, out[3] = {r.left, r.bottom};
         out[4] = {mx, r.top}, out[5] = {mx, r.bottom}, out[6] = {r.left, my}, out[7] = {r.right, my};
@@ -4065,12 +4076,32 @@ static int HitHandle(const Shape& s, D2D1_POINT_2F q) {
 static LPCWSTR HandleCursor(const Shape& s, int id) {
     if (s.tool == T_TEXT) return id <= 1 ? IDC_SIZENWSE : id <= 3 ? IDC_SIZENESW : IDC_SIZEWE;
     if (s.tool == T_BALLOON && id == 2) return IDC_SIZEWE;
-    if (!IsBoxy(s.tool)) return id == 2 ? IDC_HAND : IDC_CROSS;
+    if (!IsBoxy(s.tool) && s.tool != T_PEN) return id == 2 ? IDC_HAND : IDC_CROSS;
     return id <= 1 ? IDC_SIZENWSE : id <= 3 ? IDC_SIZENESW : id <= 5 ? IDC_SIZENS : IDC_SIZEWE;
+}
+
+// Stretches a pen stroke so the dragged edge of its frame follows q; the opposite edge stays put.
+static void StretchPen(Shape& s, int id, D2D1_POINT_2F q) {
+    const D2D1_RECT_F b = Bounds(s);
+    const float m = FrameRoom(s), least = 4;
+    float l = b.left, t = b.top, r = b.right, bt = b.bottom;
+    if (id == 0 || id == 3 || id == 6) l = std::min(q.x + m, b.right - least);
+    if (id == 1 || id == 2 || id == 7) r = std::max(q.x - m, b.left + least);
+    if (id == 0 || id == 2 || id == 4) t = std::min(q.y + m, b.bottom - least);
+    if (id == 1 || id == 3 || id == 5) bt = std::max(q.y - m, b.top + least);
+    const bool wide = b.right - b.left > 0.5f, tall = b.bottom - b.top > 0.5f;  // A flat stroke keeps its flat side.
+    for (auto& p : s.pts) {
+        if (wide) p.x = l + (p.x - b.left) * (r - l) / (b.right - b.left);
+        if (tall) p.y = t + (p.y - b.top) * (bt - t) / (b.bottom - b.top);
+    }
 }
 
 // Drags handle id to q. Boxes are kept as {top left, bottom right} while a handle is held.
 static void MoveHandle(Shape& s, int id, D2D1_POINT_2F q) {
+    if (s.tool == T_PEN) {
+        StretchPen(s, id, q);
+        return;
+    }
     if (s.tool == T_TEXT || (s.tool == T_BALLOON && id == 2)) {
         // Words wrap to the box, as in ShareX. The left handles keep the right edge where it is.
         D2D1_RECT_F box, r;
@@ -4140,7 +4171,7 @@ static void DrawShapes(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
     }
     if (Shape* p = Picked()) {
         D2D1_RECT_F r = Bounds(*p);
-        float m = 6 + (p->tool == T_LINE || p->tool == T_ARROW || p->tool == T_PEN ? p->o.size / 2 : 0);
+        float m = FrameRoom(*p);
         Frame(rt, b, D2D1::RectF(r.left - m, r.top - m, r.right + m, r.bottom + m));
         D2D1_POINT_2F hs[8];
         int n = Handles(*p, hs);
