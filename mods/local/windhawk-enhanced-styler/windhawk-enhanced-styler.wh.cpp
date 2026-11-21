@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.18
+// @version         2.2.19
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,12 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.19
+
+- In the Mod tasks and Loaded mods windows, the scrollbars are blue to mauve now instead of grey. They sit on the card, grow a little when you point at them, and their arrows light up on hover.
+- The card around those lists and the title dock at the top glow blue to mauve when you point at them, like the buttons do.
+- Hover glows no longer stall while the pointer keeps moving.
 
 ## What's new in 2.2.18
 
@@ -2281,7 +2287,10 @@ struct TrayDialogState {
     long long epoch = 0;  // settings generation the colors were pushed with
     LONG_PTR listExStyle = 0;  // the list's own border style, put back on unload
     bool partsSet = false;
+    float cardP = 0.0f;  // card hover: 0 rest .. 1 full gradient edge
+    int cardWant = 0;
 };
+static const UINT_PTR kTrayCardTimer = 0x5EA7D0F;
 static std::map<HWND, TrayDialogState> g_trayDialogs;
 static std::mutex g_trayDialogsMutex;
 static volatile long long g_trayEpoch = 1;
@@ -2334,6 +2343,9 @@ static HFONT TrayFont(HWND dialog, const Settings& s);
 static void PaintTrayDialog(HWND hwnd);
 static void SetupTrayDialogParts(HWND dialog);
 static void HideSizeGrips(HWND dialog, bool hide);
+static void TrayCardHover(HWND dialog);
+static void TrayCardTick(HWND dialog);
+static void DockMouseMove(HWND hwnd, LPARAM lparam);
 
 static void ApplyTrayDialogLook(HWND dialog, HWND list, const Settings& s) {
     // The list is drawn as a text mask: white text on black, which the list's own
@@ -2342,7 +2354,7 @@ static void ApplyTrayDialogLook(HWND dialog, HWND list, const Settings& s) {
     SendMessageW(list, LVM_SETTEXTBKCOLOR, 0, (LPARAM)RGB(0, 0, 0));
     SendMessageW(list, LVM_SETTEXTCOLOR, 0, (LPARAM)RGB(255, 255, 255));
     SendMessageW(list, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_GRIDLINES, 0);
-    SetWindowTheme(list, L"DarkMode_Explorer", nullptr);  // dark scrollbar
+    SetWindowTheme(list, L"DarkMode_Explorer", nullptr);  // dark scrollbar, repainted blue to mauve by the theme hooks
     SendMessageW(list, WM_CHANGEUISTATE, MAKEWPARAM(UIS_SET, UISF_HIDEFOCUS), 0);
     if (HFONT font = TrayFont(dialog, s)) SendMessageW(list, WM_SETFONT, (WPARAM)font, TRUE);
     Settings frame = s;
@@ -2363,6 +2375,10 @@ static LRESULT CALLBACK TrayDialogProc(HWND hWnd, UINT message, WPARAM wParam, L
         WindhawkUtils::RemoveWindowSubclassFromAnyThread(hWnd, TrayDialogProc);
         return DefSubclassProc(hWnd, message, wParam, lParam);
     }
+    if (message == WM_TIMER && wParam == kTrayCardTimer && !InterlockedExchangeAdd(&g_themeActive, 0)) {
+        KillTimer(hWnd, kTrayCardTimer);
+        return 0;
+    }
     if (InterlockedExchangeAdd(&g_themeActive, 0)) {
         Settings s = SnapshotSettings();
         switch (message) {
@@ -2371,6 +2387,13 @@ static LRESULT CALLBACK TrayDialogProc(HWND hWnd, UINT message, WPARAM wParam, L
             case WM_PAINT:
                 PaintTrayDialog(hWnd);
                 return 0;
+            case WM_TIMER:
+                if (wParam != kTrayCardTimer) break;
+                TrayCardTick(hWnd);
+                return 0;
+            case WM_MOUSEMOVE:
+                TrayCardHover(hWnd);  // the rim around the list
+                break;
             case WM_SHOWWINDOW:
             case WM_SIZE: {
                 LRESULT result = DefSubclassProc(hWnd, message, wParam, lParam);
@@ -2426,6 +2449,7 @@ static LRESULT CALLBACK ProgressDialogProc(HWND hwnd, UINT message, WPARAM wPara
         case WM_NCDESTROY:
             KillTimer(hwnd, 0x5EA7D0C);
             KillTimer(hwnd, 0x5EA7D0D);
+            KillTimer(hwnd, kTrayCardTimer);
             WindhawkUtils::RemoveWindowSubclassFromAnyThread(hwnd, ProgressDialogProc);
             break;
         case WM_NCCALCSIZE: {
@@ -2480,12 +2504,16 @@ static LRESULT CALLBACK ProgressDialogProc(HWND hwnd, UINT message, WPARAM wPara
             return HTCAPTION;
         }
         case WM_NCMOUSEMOVE:
+            DockMouseMove(hwnd, lParam);  // the title dock glows on hover here too
+            return MainWindowProc(hwnd, message, wParam, lParam, 0);
+        case WM_TIMER:
+            if (wParam == kTrayCardTimer) break;  // the card's own ease, run by TrayDialogProc
+            return MainWindowProc(hwnd, message, wParam, lParam, 0);
         case WM_NCMOUSELEAVE:
         case WM_NCMOUSEHOVER:
         case WM_NCLBUTTONDOWN:
         case WM_NCLBUTTONUP:
         case WM_NCRBUTTONUP:
-        case WM_TIMER:
             return MainWindowProc(hwnd, message, wParam, lParam, 0);
     }
     return DefSubclassProc(hwnd, message, wParam, lParam);
@@ -2996,6 +3024,11 @@ static bool CursorOnDock(HWND hwnd) {
 static void DockHoverTo(HWND hwnd, int want) {
     if (!DockLook().hover) want = 0;
     if (want == g_dockHoverWant && (want ? g_dockHoverP >= 1.0f : g_dockHoverP <= 0.0f)) return;
+    // Same target: the 15 ms ease is already running on this window. Setting the timer
+    // again on every mouse move would push the next step back and stall the glow.
+    static HWND easing;
+    if (want == g_dockHoverWant && easing == hwnd && IsWindow(hwnd)) return;
+    easing = hwnd;
     g_dockHoverWant = want;
     SetTimer(hwnd, kDockTimer, 15, nullptr);
 }
@@ -3234,7 +3267,9 @@ static std::uint32_t TrayTextRgb(const Settings& s) {
 // The rounded card behind the list: the theme's card colour and opacity, 2 px grey edge.
 static TitleDockLook TrayCardLook(const Settings& s) {
     TitleDockLook d;
-    d.hover = false;
+    d.hover = true;   // blue to mauve edge while the pointer is on the card
+    d.h1 = s.gradientStart;
+    d.h2 = s.gradientEnd;
     d.shine = false;
     d.radius = 12;
     d.edge = 2;
@@ -3351,8 +3386,78 @@ static void PaintTrayDialog(HWND hwnd) {
         RECT card;
         if (!TrayCardRect(GetDlgItem(hwnd, 1001), &card)) return;
         OffsetRect(&card, 0, -top);
-        DrawDockPixels(px, stride, w, h, card, TrayCardLook(SnapshotSettings()), 0.0f, dpi);
+        float p = 0.0f;
+        {
+            std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+            auto it = g_trayDialogs.find(hwnd);
+            if (it != g_trayDialogs.end()) p = it->second.cardP;
+        }
+        DrawDockPixels(px, stride, w, h, card, TrayCardLook(SnapshotSettings()), p, dpi);
     });
+}
+
+// The pointer is on this dialog's card: the list, its header, its scrollbars or the rim.
+static bool CursorOnTrayCard(HWND dialog) {
+    RECT card;
+    POINT pt;
+    if (!GetCursorPos(&pt) || !TrayCardRect(GetDlgItem(dialog, 1001), &card)) return false;
+    HWND under = WindowFromPoint(pt);
+    if (!under || GetAncestor(under, GA_ROOT) != dialog) return false;
+    return ScreenToClient(dialog, &pt) && PtInRect(&card, pt);
+}
+
+// Only the rim is the dialog's own paint; the list covers the rest of the card.
+static void InvalidateTrayCardRim(HWND dialog) {
+    HWND list = GetDlgItem(dialog, 1001);
+    RECT card, inner;
+    if (!TrayCardRect(list, &card)) return;
+    HRGN rim = CreateRectRgnIndirect(&card);
+    if (!rim) return;
+    if (GetWindowRect(list, &inner)) {
+        MapWindowPoints(nullptr, dialog, reinterpret_cast<POINT*>(&inner), 2);
+        if (HRGN hole = CreateRectRgnIndirect(&inner)) {
+            CombineRgn(rim, rim, hole, RGN_DIFF);
+            DeleteObject(hole);
+        }
+    }
+    InvalidateRgn(dialog, rim, FALSE);
+    DeleteObject(rim);
+}
+
+// Start the 150 ms ease in. Leaving is seen by the tick, wherever the pointer goes.
+static void TrayCardHover(HWND dialog) {
+    if (!dialog) return;
+    {
+        std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+        auto it = g_trayDialogs.find(dialog);
+        if (it == g_trayDialogs.end() || it->second.cardWant) return;  // already easing in or on
+        it->second.cardWant = 1;
+    }
+    SetTimer(dialog, kTrayCardTimer, 15, nullptr);
+}
+
+static void TrayCardTick(HWND dialog) {
+    int want = CursorOnTrayCard(dialog) ? 1 : 0;
+    float before = 0.0f, p = 0.0f;
+    {
+        std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+        auto it = g_trayDialogs.find(dialog);
+        if (it == g_trayDialogs.end()) {
+            KillTimer(dialog, kTrayCardTimer);
+            return;
+        }
+        it->second.cardWant = want;
+        before = it->second.cardP;
+        p = std::clamp(before + (want ? 0.1f : -0.1f), 0.0f, 1.0f);
+        it->second.cardP = p;
+    }
+    if (p != before) {
+        InvalidateTrayCardRim(dialog);
+        SetTimer(dialog, kTrayCardTimer, 15, nullptr);
+        return;
+    }
+    if (want) SetTimer(dialog, kTrayCardTimer, 100, nullptr);  // settled on: slow watch for leaving
+    else KillTimer(dialog, kTrayCardTimer);
 }
 
 static void PaintTrayList(HWND hwnd) {
@@ -3504,7 +3609,7 @@ static void TrayButtonHover(HWND hwnd, int want) {
     {
         std::lock_guard<std::mutex> lock(g_trayButtonsMutex);
         TrayButtonAnim& a = g_trayButtons[hwnd];
-        if (a.want == want && (want ? a.p >= 1.0f : a.p <= 0.0f)) return;
+        if (a.want == want) return;  // settled, or the ease toward it is already running
         a.want = want;
     }
     SetTimer(hwnd, kTrayButtonTimer, 15, nullptr);
@@ -3592,6 +3697,7 @@ static LRESULT CALLBACK TrayHeaderProc(HWND hwnd, UINT message, WPARAM wParam, L
             TRACKMOUSEEVENT track{sizeof(track), TME_LEAVE, hwnd, 0};
             TrackMouseEvent(&track);
             InvalidateRect(hwnd, nullptr, FALSE);
+            TrayCardHover(GetAncestor(hwnd, GA_ROOT));
             return result;
         }
         case WM_MOUSELEAVE: {
@@ -3727,6 +3833,10 @@ static LRESULT CALLBACK TrayListProc(HWND hwnd, UINT message, WPARAM wParam, LPA
         case WM_PAINT:
             PaintTrayList(hwnd);
             return 0;
+        case WM_MOUSEMOVE:
+        case WM_NCMOUSEMOVE:  // the scrollbars
+            TrayCardHover(GetParent(hwnd));
+            break;
         case WM_WINDOWPOSCHANGING: {
             // Whatever rectangle Windhawk gives the list becomes the card; the list
             // itself moves inside it, clear of the rounded corners.
@@ -4227,6 +4337,215 @@ static HRESULT WINAPI DwmExtendFrameIntoClientArea_hook(HWND hwnd, const MARGINS
         hr = DwmExtendFrameIntoClientArea_orig(hwnd, &full);
     }
     return hr;
+}
+
+// ---- Tray list scrollbars: blue to mauve thumbs on the card ----
+// The lists keep their own scrollbars (dragging, paging, wheel and hover all stay
+// native); only the parts' drawing is replaced. comctl32 opens them through
+// OpenNcThemeData(L"ScrollBar") and draws each part with DrawThemeBackground.
+using OpenThemeData_t = HTHEME(WINAPI*)(HWND, LPCWSTR);
+using OpenThemeDataForDpi_t = HTHEME(WINAPI*)(HWND, LPCWSTR, UINT);
+using CloseThemeData_t = HRESULT(WINAPI*)(HTHEME);
+using DrawThemeBackground_t = HRESULT(WINAPI*)(HTHEME, HDC, int, int, LPCRECT, LPCRECT);
+using DrawThemeBackgroundEx_t = HRESULT(WINAPI*)(HTHEME, HDC, int, int, LPCRECT, const DTBGOPTS*);
+static OpenThemeData_t OpenNcThemeData_orig;
+static OpenThemeData_t OpenThemeData_orig;
+static OpenThemeDataForDpi_t OpenThemeDataForDpi_orig;
+static CloseThemeData_t CloseThemeData_orig;
+static DrawThemeBackground_t DrawThemeBackground_orig;
+static DrawThemeBackgroundEx_t DrawThemeBackgroundEx_orig;
+static std::mutex g_scrollThemesMutex;
+static std::set<HTHEME> g_scrollThemes;
+
+static void NoteScrollTheme(HTHEME theme, LPCWSTR classes) {
+    if (!theme || !classes) return;
+    wchar_t low[160];
+    wcsncpy_s(low, classes, _TRUNCATE);
+    _wcslwr_s(low, ARRAYSIZE(low));
+    if (!wcsstr(low, L"scrollbar")) return;
+    std::lock_guard<std::mutex> lock(g_scrollThemesMutex);
+    g_scrollThemes.insert(theme);
+}
+
+static HTHEME WINAPI OpenNcThemeData_hook(HWND hwnd, LPCWSTR classes) {
+    HTHEME theme = OpenNcThemeData_orig(hwnd, classes);
+    NoteScrollTheme(theme, classes);
+    return theme;
+}
+
+static HTHEME WINAPI OpenThemeData_hook(HWND hwnd, LPCWSTR classes) {
+    HTHEME theme = OpenThemeData_orig(hwnd, classes);
+    NoteScrollTheme(theme, classes);
+    return theme;
+}
+
+static HTHEME WINAPI OpenThemeDataForDpi_hook(HWND hwnd, LPCWSTR classes, UINT dpi) {
+    HTHEME theme = OpenThemeDataForDpi_orig(hwnd, classes, dpi);
+    NoteScrollTheme(theme, classes);
+    return theme;
+}
+
+static HRESULT WINAPI CloseThemeData_hook(HTHEME theme) {
+    {
+        std::lock_guard<std::mutex> lock(g_scrollThemesMutex);
+        g_scrollThemes.erase(theme);
+    }
+    return CloseThemeData_orig(theme);
+}
+
+// A small filled arrow, 4x4 samples a pixel. dir: 0 up, 1 down, 2 left, 3 right.
+static void DrawScrollArrow(RGBQUAD* px, int w, int h, int dir, std::uint32_t rgb, float alpha, float scale) {
+    float size = std::min(std::min(w, h) * 0.30f, 7.0f * scale);
+    if (size < 2.0f) return;
+    float cx = w / 2.0f, cy = h / 2.0f;
+    // Pointing up: apex, then the two base corners; rotated for the other directions.
+    float ux[3] = {0.0f, -0.62f, 0.62f}, uy[3] = {-0.42f, 0.36f, 0.36f};
+    float vx[3], vy[3];
+    for (int i = 0; i < 3; ++i) {
+        float x = ux[i] * size, y = uy[i] * size;
+        if (dir == 1) y = -y;
+        else if (dir == 2) { float t = x; x = y; y = t; }
+        else if (dir == 3) { float t = x; x = -y; y = t; }
+        vx[i] = cx + x;
+        vy[i] = cy + y;
+    }
+    auto edge = [](float ax, float ay, float bx, float by, float x, float y) {
+        return (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+    };
+    int x0 = std::max(0, (int)(cx - size) - 1), x1 = std::min(w, (int)(cx + size) + 2);
+    int y0 = std::max(0, (int)(cy - size) - 1), y1 = std::min(h, (int)(cy + size) + 2);
+    for (int y = y0; y < y1; ++y) {
+        for (int x = x0; x < x1; ++x) {
+            int in = 0;
+            for (int sy = 0; sy < 4; ++sy) {
+                for (int sx = 0; sx < 4; ++sx) {
+                    float fx = x + (sx + 0.5f) / 4, fy = y + (sy + 0.5f) / 4;
+                    float e0 = edge(vx[0], vy[0], vx[1], vy[1], fx, fy);
+                    float e1 = edge(vx[1], vy[1], vx[2], vy[2], fx, fy);
+                    float e2 = edge(vx[2], vy[2], vx[0], vy[0], fx, fy);
+                    if ((e0 >= 0 && e1 >= 0 && e2 >= 0) || (e0 <= 0 && e1 <= 0 && e2 <= 0)) ++in;
+                }
+            }
+            if (in) DockBlend(px[y * w + x], rgb, alpha * in / 16.0f);
+        }
+    }
+}
+
+// Draws one scrollbar part on the card. False leaves it to the theme.
+static bool PaintTrayScrollPart(HTHEME theme, HDC dc, int part, int state, const RECT* rc, const RECT* clip) {
+    if (!rc || g_isUiProcess || !InterlockedExchangeAdd(&g_themeActive, 0)) return false;
+    if (part < SBP_ARROWBTN || part > 11) return false;  // 11: the size box background
+    {
+        std::lock_guard<std::mutex> lock(g_scrollThemesMutex);
+        if (!g_scrollThemes.contains(theme)) return false;
+    }
+    if (part == SBP_GRIPPERHORZ || part == SBP_GRIPPERVERT) return true;  // drawn over the thumb: no dots
+    int w = rc->right - rc->left, h = rc->bottom - rc->top;
+    if (w <= 0 || h <= 0 || w > 8192 || h > 8192) return true;
+    Settings s = SnapshotSettings();
+    TitleDockLook card = TrayCardLook(s);
+    HWND wnd = WindowFromDC(dc);
+    float scale = (wnd ? GetDpiForWindow(wnd) : GetDpiForSystem()) / 96.0f;
+    if (scale <= 0.0f) scale = 1.0f;
+    HDC mem = CreateCompatibleDC(dc);
+    if (!mem) return false;
+    BITMAPINFO bi{};
+    bi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -h, 1, 32, BI_RGB};
+    void* bits = nullptr;
+    HBITMAP bmp = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!bmp) {
+        DeleteDC(mem);
+        return false;
+    }
+    HGDIOBJ old = SelectObject(mem, bmp);
+    RGBQUAD* px = (RGBQUAD*)bits;
+    // The track is the card itself: the same fill the list paints under its rows.
+    float fillA = card.fillA / 100.0f;
+    for (int i = 0; i < w * h; ++i) {
+        px[i] = RGBQUAD{};
+        DockBlend(px[i], card.fill, fillA);
+    }
+    if (part == SBP_THUMBBTNHORZ || part == SBP_THUMBBTNVERT) {
+        bool horz = part == SBP_THUMBBTNHORZ;
+        bool grab = state == SCRBS_HOT || state == SCRBS_PRESSED;
+        bool nearBar = state == SCRBS_HOVER;
+        float across = (float)(horz ? h : w);
+        float thick = std::min(std::round((grab ? 10.0f : nearBar ? 8.0f : 6.0f) * scale), across - 2.0f);
+        float inset = std::round(2.0f * scale);
+        float l, t, r, b;
+        if (horz) {
+            l = inset; r = w - inset; t = std::round((h - thick) / 2); b = t + thick;
+        } else {
+            t = inset; b = h - inset; l = std::round((w - thick) / 2); r = l + thick;
+        }
+        if (r - l < thick) { float m = (l + r) / 2; l = m - thick / 2; r = m + thick / 2; }
+        if (b - t < thick) { float m = (t + b) / 2; t = m - thick / 2; b = m + thick / 2; }
+        float a = state == SCRBS_DISABLED ? 0.35f : grab ? 1.0f : nearBar ? 0.92f : 0.8f;
+        std::uint32_t c1 = s.gradientStart, c2 = s.gradientEnd;
+        if (state == SCRBS_PRESSED) {
+            c1 = DockMix(c1, 0xFFFFFF, 0.15f);
+            c2 = DockMix(c2, 0xFFFFFF, 0.15f);
+        }
+        float rad = thick / 2;
+        float len = horz ? r - l : b - t;
+        for (int y = 0; y < h; ++y) {
+            for (int x = 0; x < w; ++x) {
+                float cx = x + 0.5f, cy = y + 0.5f;
+                float cov = std::clamp(0.5f - DockSdf(cx, cy, l, t, r, b, rad), 0.0f, 1.0f);
+                if (cov <= 0.0f) continue;
+                float g = len > 0 ? std::clamp(((horz ? cx - l : cy - t)) / len, 0.0f, 1.0f) : 0.0f;
+                DockBlend(px[y * w + x], DockMix(c1, c2, g), cov * a);
+            }
+        }
+    } else if (part == SBP_ARROWBTN) {
+        int dir = 0, look = 0;  // look: 0 rest, 1 hot, 2 pressed, 3 disabled, 4 bar hovered
+        if (state >= 1 && state <= 16) {
+            dir = (state - 1) / 4;
+            look = (state - 1) % 4;
+        } else if (state >= 17 && state <= 20) {
+            dir = state - 17;
+            look = 4;
+        }
+        std::uint32_t c = look == 1 ? s.gradientStart : look == 2 ? s.gradientEnd : kTraySubtext;
+        float a = look == 3 ? 0.25f : look == 0 ? 0.55f : look == 4 ? 0.8f : 1.0f;
+        DrawScrollArrow(px, w, h, dir, c, a, scale);
+    }
+    GdiFlush();
+    int saved = SaveDC(dc);
+    if (clip) IntersectClipRect(dc, clip->left, clip->top, clip->right, clip->bottom);
+    BitBlt(dc, rc->left, rc->top, w, h, mem, 0, 0, SRCCOPY);
+    RestoreDC(dc, saved);
+    SelectObject(mem, old);
+    DeleteObject(bmp);
+    DeleteDC(mem);
+    return true;
+}
+
+static HRESULT WINAPI DrawThemeBackground_hook(HTHEME theme, HDC dc, int part, int state, LPCRECT rc, LPCRECT clip) {
+    if (PaintTrayScrollPart(theme, dc, part, state, rc, clip)) return S_OK;
+    return DrawThemeBackground_orig(theme, dc, part, state, rc, clip);
+}
+
+static HRESULT WINAPI DrawThemeBackgroundEx_hook(HTHEME theme, HDC dc, int part, int state, LPCRECT rc,
+                                                 const DTBGOPTS* options) {
+    const RECT* clip = options && (options->dwFlags & DTBG_CLIPRECT) ? &options->rcClip : nullptr;
+    if (PaintTrayScrollPart(theme, dc, part, state, rc, clip)) return S_OK;
+    return DrawThemeBackgroundEx_orig(theme, dc, part, state, rc, options);
+}
+
+static void InitScrollbarHooks() {
+    HMODULE ux = GetModuleHandleW(L"uxtheme.dll");
+    if (!ux) ux = LoadLibraryW(L"uxtheme.dll");
+    if (!ux) return;
+    auto hook = [&](LPCSTR name, void* fn, void** orig) {
+        if (FARPROC p = GetProcAddress(ux, name)) Wh_SetFunctionHook((void*)p, fn, orig);
+    };
+    hook(MAKEINTRESOURCEA(49), (void*)OpenNcThemeData_hook, (void**)&OpenNcThemeData_orig);
+    hook("OpenThemeData", (void*)OpenThemeData_hook, (void**)&OpenThemeData_orig);
+    hook("OpenThemeDataForDpi", (void*)OpenThemeDataForDpi_hook, (void**)&OpenThemeDataForDpi_orig);
+    hook("CloseThemeData", (void*)CloseThemeData_hook, (void**)&CloseThemeData_orig);
+    hook("DrawThemeBackground", (void*)DrawThemeBackground_hook, (void**)&DrawThemeBackground_orig);
+    hook("DrawThemeBackgroundEx", (void*)DrawThemeBackgroundEx_hook, (void**)&DrawThemeBackgroundEx_orig);
 }
 
 static void InitFrameWatch() {
@@ -5223,6 +5542,7 @@ BOOL Wh_ModInit() {
         if (g_isUiProcess) g_cdpThread = CreateThread(nullptr, 0, CdpSessionThread, nullptr, 0, nullptr);
     }
 
+    if (!g_isUiProcess) InitScrollbarHooks();
     if (g_isUiProcess) {
         InitFrameWatch();
         if (!Wh_SetFunctionHook((void*)BitBlt, (void*)BitBlt_hook, (void**)&BitBlt_orig)) {
@@ -5232,6 +5552,21 @@ BOOL Wh_ModInit() {
     }
 
     return TRUE;
+}
+
+void Wh_ModAfterInit() {
+    if (g_isUiProcess) return;
+    std::vector<HWND> lists;
+    {
+        std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+        for (auto& [dialog, state] : g_trayDialogs)
+            if (state.list && IsWindow(state.list)) lists.push_back(state.list);
+    }
+    for (HWND list : lists) {
+        SetWindowTheme(list, L"DarkMode_Explorer", nullptr);
+        SetWindowPos(list, nullptr, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    }
 }
 
 void Wh_ModUninit() {
