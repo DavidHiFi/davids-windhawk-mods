@@ -94,3 +94,17 @@ Plan: `docs\plans\2026-11-22-seamless-controls.md`. Build folder on Warden:
 - Settings window capture: waiting in line for the desktop (number 7). Script ready:
   `tower\capture-settings.ps1`, run elevated, opens the window through its own tray message,
   captures, closes without saving.
+
+## Finish (2026-11-23, 2:20 to 2:27 am)
+
+- Drag box, run again on the fixed check window (Type and Size filled in): 13 rows selected,
+  the dotted box drew, and a forced repaint after letting go changed 0 pixels. Shots in
+  `tower\live\drag-*.png`. The box is Windows' own dotted outline, on purpose (lists keep it).
+- Settings window: `tower\settings-shot.ps1`, run elevated, posts WM_APP+40 / NIN_SELECT to
+  `SeamlessControlsMsg`. The window opened, was captured (`tower\live\settings-window.png`),
+  and closed by WM_CLOSE with nothing saved.
+- 1.0.2: the preview link pointed at `/previews/`, which does not exist. It now points at
+  `/media/previews/` (returns 200). Built, compiled offline through the load gate, installed
+  with Install-StagedMod (desktop fine 60 s after loading), published as mods 576aa4d and feed 92a7835.
+  The feed no longer lists it under Other.
+- Rollback: Install-StagedMod's backup `local@seamless-controls-20261123-0224.wh.cpp` (1.0.1).
