@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.24
+// @version         1.10.25
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -42,6 +42,15 @@ adds after every other window's title is added here too: how long the
 window has been open, after the folder name. It uses Seamless Title Bars'
 own uptime settings (which units, compact or clock, separator, colour) and
 hides when that mod or its uptime is off.
+
+## What's new in 1.10.25
+
+- The back, forward, up, refresh and home dock now lights its edge blue to
+  mauve while the cursor is on any of its buttons, like the command bar.
+- The thin divider lines inside the window are gone: the line between the
+  folder tree and the file list, the lines in the folder tree, and the line
+  along the top of the status bar. The status bar still lights its top edge
+  blue to mauve on hover.
 
 ## Status bar dock
 
@@ -2351,6 +2360,7 @@ using namespace std::string_view_literals;
 
 #include <winrt/Microsoft.UI.Composition.h>
 #include <winrt/Microsoft.UI.Dispatching.h>
+#include <winrt/Microsoft.UI.Input.h>
 #include <winrt/Microsoft.UI.Xaml.Automation.Peers.h>
 #include <winrt/Microsoft.UI.Text.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
@@ -2718,8 +2728,24 @@ struct TabHoverTimer {
     }
 };
 
+struct HandledHover {
+    winrt::weak_ref<UIElement> element;
+    Input::PointerEventHandler handler{nullptr};
+
+    ~HandledHover() {
+        try {
+            if (auto target = element.get()) {
+                target.RemoveHandler(UIElement::PointerEnteredEvent(), winrt::box_value(handler));
+                target.RemoveHandler(UIElement::PointerExitedEvent(), winrt::box_value(handler));
+            }
+        } catch (...) {
+        }
+    }
+};
+
 struct ElementCustomizationState {
     std::unique_ptr<TabHoverTimer> tabHover;
+    std::unique_ptr<HandledHover> borderHover;
     UIElement::PointerEntered_revoker pathEntered;
     UIElement::PointerExited_revoker pathExited;
 
@@ -9017,10 +9043,26 @@ void ConfigureBorderHover(Panel panel, ElementCustomizationState& state,
             g_elementPropertyModifying = previous;
         }
     };
-    state.pathEntered = panel.PointerEntered(winrt::auto_revoke,
-        [paint](auto const&, auto const&) { paint(true); });
-    state.pathExited = panel.PointerExited(winrt::auto_revoke,
-        [paint](auto const&, auto const&) { paint(false); });
+    // Buttons inside mark the pointer events handled, so plain handlers miss
+    // a pointer that enters straight onto a button. Handled events too, and
+    // a child's bubbled event, are judged by where the pointer is.
+    auto hover = std::make_unique<HandledHover>();
+    hover->element = winrt::make_weak(UIElement(panel));
+    hover->handler = Input::PointerEventHandler(
+        [weak = winrt::make_weak(panel), paint](
+            winrt::Windows::Foundation::IInspectable const&,
+            Input::PointerRoutedEventArgs const& args) {
+            auto target = weak.get();
+            if (!target) return;
+            auto at = args.GetCurrentPoint(target).Position();
+            paint(at.X >= 0 && at.Y >= 0 && at.X < target.ActualWidth() &&
+                  at.Y < target.ActualHeight());
+        });
+    panel.AddHandler(UIElement::PointerEnteredEvent(),
+                     winrt::box_value(hover->handler), true);
+    panel.AddHandler(UIElement::PointerExitedEvent(),
+                     winrt::box_value(hover->handler), true);
+    state.borderHover = std::move(hover);
 }
 
 void ConfigureTabHover(Controls::Grid grid, muxc::TabViewItem tab,
@@ -9084,6 +9126,7 @@ void ConfigureAddressBarHover(FrameworkElement element,
     state.pathEntered.revoke();
     state.pathExited.revoke();
     state.tabHover.reset();
+    state.borderHover.reset();
     auto grid = element.try_as<Controls::Grid>();
     if (auto panel = element.try_as<Controls::StackPanel>()) {
         auto parent = Media::VisualTreeHelper::GetParent(panel);
@@ -11546,8 +11589,8 @@ using FillRect_t = decltype(&FillRect);
 FillRect_t FillRect_Original;
 
 // The pane splitters (navigation pane | content | details pane) are thin
-// vertical lines in the folder view's DirectUIHWND, drawn translucent. They are
-// painted solid Catppuccin Mocha surface1, like the toolbar and dock lines.
+// vertical lines in the folder view's DirectUIHWND, drawn translucent. The
+// owner wants no divider lines inside the window, so they are not drawn.
 bool PaintPaneSplitter(HDC hdc, int x, int y, int w, int h) {
     HWND hWnd = GetEntireWindowEffectDCWnd(hdc);
     if (!hWnd || w <= 0) {
@@ -11560,11 +11603,6 @@ bool PaintPaneSplitter(HDC hdc, int x, int y, int w, int h) {
         return false;
     }
 
-    RECT rc = {x, y, x + w, y + h};
-    COLORREF previous = SetDCBrushColor(hdc, RGB(0x45, 0x47, 0x5A));
-    FillRect_Original(hdc, &rc, (HBRUSH)GetStockObject(DC_BRUSH));
-    SetDCBrushColor(hdc, previous);
-    MakeOpaque(hdc, x, y, w, h);
     return true;
 }
 
@@ -11866,8 +11904,8 @@ BOOL WINAPI DeleteDC_Hook(HDC hdc) {
 }
 
 // The navigation pane lines (the horizontal divider and the vertical pane
-// edge) are drawn by ExplorerFrame.dll with GDI, which loses alpha on glass.
-// Both are redrawn as solid Catppuccin Mocha surface1, the window's line color.
+// edge) are drawn by ExplorerFrame.dll with GDI. The owner wants no divider
+// lines inside the window, so they are skipped.
 using Polyline_t = decltype(&Polyline);
 Polyline_t Polyline_Original;
 BOOL WINAPI Polyline_Hook(HDC hdc, const POINT* apt, int cpt) {
@@ -11886,22 +11924,6 @@ BOOL WINAPI Polyline_Hook(HDC hdc, const POINT* apt, int cpt) {
 
     if (!IsHookCallerFromModule(__builtin_return_address(0),
                                 L"ExplorerFrame.dll")) {
-        return Polyline_Original(hdc, apt, cpt);
-    }
-
-    // A wide pen is centered on the line, and the last point isn't drawn.
-    int width = std::max(pen.lopnWidth.x, 1L);
-    RECT rect;
-    if (horizontal) {
-        int top = apt[0].y - width / 2;
-        rect = {std::min(apt[0].x, apt[1].x), top,
-                std::max(apt[0].x, apt[1].x), top + width};
-    } else {
-        int left = apt[0].x - width / 2;
-        rect = {left, std::min(apt[0].y, apt[1].y), left + width,
-                std::max(apt[0].y, apt[1].y)};
-    }
-    if (!FillRectWithAlpha(hdc, &rect, RGB(0x45, 0x47, 0x5A), 255)) {
         return Polyline_Original(hdc, apt, cpt);
     }
 
@@ -12385,9 +12407,8 @@ void AlphaBlendNineGrid(HDC hdc,
 }
 
 // The dock: a see-through Catppuccin Mocha base band (the window glass shows
-// through) across the whole view with one
-// 1px surface1 line along its top (blue to mauve while hovered). View button
-// faces sit inside it.
+// through) across the whole view, with a 1px blue to mauve line along its top
+// while hovered. View button faces sit inside it.
 enum class StatusDockShape {
     Dock,
     Hover,          // mantle face, blue to mauve gradient ring
@@ -12409,17 +12430,12 @@ void PaintStatusDockBand(ID2D1RenderTarget* renderTarget,
                                     fill.get());
     }
 
-    float line = std::max(1.0f, std::floor(scale));
-    D2D1_RECT_F top = D2D1::RectF(0, 0, width, line);
+    // No resting divider line along the top; only the hover gradient.
     if (!hover) {
-        winrt::com_ptr<ID2D1SolidColorBrush> brush;
-        renderTarget->CreateSolidColorBrush(
-            ThemePartColor(0xFF, 0x45, 0x47, 0x5A), brush.put());
-        if (brush) {
-            renderTarget->FillRectangle(top, brush.get());
-        }
         return;
     }
+    float line = std::max(1.0f, std::floor(scale));
+    D2D1_RECT_F top = D2D1::RectF(0, 0, width, line);
 
     D2D1_GRADIENT_STOP stops[] = {
         {0.0f, ThemePartColor(0xFF, 0x89, 0xB4, 0xFA)},
