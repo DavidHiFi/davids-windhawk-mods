@@ -325,15 +325,6 @@
       }
     },
     {
-      "id": "dark-theme-browser-colors-fix",
-      "name": "Fix browser and Teams text colors in dark mode",
-      "version": "1.0",
-      "enabled": true,
-      "settings": {
-        "applyToAllMsEdgeWebView": 1
-      }
-    },
-    {
       "id": "disable-feedback-hub-hotkey",
       "name": "Disable Feedback Hub Hotkey",
       "version": "1.0.0",

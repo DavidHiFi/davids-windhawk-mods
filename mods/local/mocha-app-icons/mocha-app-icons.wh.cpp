@@ -2,7 +2,7 @@
 // @id              mocha-app-icons
 // @name            Mocha App Icons
 // @description     Gives Ableton Live and Yapfast blue to mauve icons on their windows, taskbar buttons and shortcuts
-// @version         1.0.0
+// @version         1.0.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,11 @@
 Swaps the icons of Ableton Live and Yapfast for Catppuccin Mocha ones: each app's own mark on a blue to mauve tile, the same tile as Mocha Steam Icons. Windows shows them on the app's windows, its taskbar button, Alt+Tab and its shortcuts.
 
 ![Mocha App Icons preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/mocha-app-icons.png)
+
+## What's new in 1.0.1
+
+- Fixed: 1.0.0 never made its icon folder, so no icon showed. The icons now appear as soon as the mod loads.
+- A redrawn icon now replaces the old one even when the two files are the same size.
 
 ## What's new in 1.0.0
 
@@ -1554,7 +1559,7 @@ static bool WriteIcon(const std::wstring& path) {
         if (ok && got == size && !memcmp(have.data(), bytes.data(), size)) return true;
     }
     std::wstring dir = path.substr(0, path.rfind(L'\\'));
-    CreateDirectoryW(dir.c_str(), nullptr);
+    SHCreateDirectoryExW(nullptr, dir.c_str(), nullptr);
     wchar_t temp[MAX_PATH];
     if (!GetTempFileNameW(dir.c_str(), L"msi", 0, temp)) return false;
     HANDLE file = CreateFileW(temp, GENERIC_WRITE, 0, nullptr, TRUNCATE_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
