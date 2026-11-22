@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.36
+// @version         0.4.37
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -91277,6 +91277,56 @@ Gdiplus::Color ToGdiPlusColor(COLORREF color) {
                           GetBValue(color));
 }
 
+// Icon glyphs go through GDI+. Shell font mods hook DrawTextW inside Explorer
+// and trim Nerd Font icons, whose ink runs past their advance, to half a glyph.
+// Returns the ink's right edge from the pen position, for spacing.
+int DrawIconGlyph(HDC dc, WCHAR glyph, const RECT& rect, COLORREF color,
+                  bool center) {
+    if (!g_breadcrumbIconFont) {
+        return 0;
+    }
+    HGDIOBJ priorFont = SelectObject(dc, g_breadcrumbIconFont);
+    ABC abc{};
+    SIZE advance{};
+    const WCHAR text[] = {glyph, L'\0'};
+    GetTextExtentPoint32W(dc, text, 1, &advance);
+    if (!GetCharABCWidthsW(dc, glyph, glyph, &abc)) {
+        abc.abcA = 0;
+        abc.abcB = (UINT)advance.cx;
+    }
+    if (priorFont) {
+        SelectObject(dc, priorFont);
+    }
+    const int inkLeft = abc.abcA;
+    const int inkRight = abc.abcA + (int)abc.abcB;
+
+    Gdiplus::Graphics graphics(dc);
+    Gdiplus::Font iconFont(dc, g_breadcrumbIconFont);
+    if (graphics.GetLastStatus() != Gdiplus::Ok ||
+        iconFont.GetLastStatus() != Gdiplus::Ok) {
+        return std::max((int)advance.cx, inkRight);
+    }
+    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    graphics.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
+    Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());
+    format.SetFormatFlags(format.GetFormatFlags() |
+                          Gdiplus::StringFormatFlagsNoClip |
+                          Gdiplus::StringFormatFlagsNoWrap);
+    format.SetAlignment(Gdiplus::StringAlignmentNear);
+    format.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+    Gdiplus::REAL penX = (Gdiplus::REAL)rect.left;
+    if (center) {
+        penX = (Gdiplus::REAL)(rect.left + rect.right) / 2.0f -
+               (Gdiplus::REAL)(inkLeft + inkRight) / 2.0f;
+    }
+    Gdiplus::RectF layout(penX, (Gdiplus::REAL)rect.top,
+                          (Gdiplus::REAL)(inkRight + 8),
+                          (Gdiplus::REAL)(rect.bottom - rect.top));
+    Gdiplus::SolidBrush brush(ToGdiPlusColor(color));
+    graphics.DrawString(text, 1, &iconFont, layout, &format, &brush);
+    return std::max((int)advance.cx, inkRight);
+}
+
 void FillRoundedMenuItem(Gdiplus::Graphics& graphics, const RECT& rect,
                          float radius, COLORREF color) {
     const float x = (float)rect.left;
@@ -91412,8 +91462,7 @@ bool DrawBreadcrumbMenuItem(const DRAWITEMSTRUCT* item) {
             item->rcItem.left + 30,
             item->rcItem.bottom
         };
-        DrawTextW(item->hDC, itemGlyph, 1, &iconRect,
-                  DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        DrawIconGlyph(item->hDC, itemGlyph[0], iconRect, g_text, false);
 
         if (oldIconFont) {
             SelectObject(item->hDC, oldIconFont);
@@ -93932,8 +93981,7 @@ bool DrawBreadcrumb(const DRAWITEMSTRUCT* item) {
         RECT iconRect{x + chipHorizontalPadding, item->rcItem.top, right,
                       item->rcItem.bottom};
         SetTextColor(dc, g_muted);
-        DrawTextW(dc, folderGlyph, 1, &iconRect,
-                  DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        DrawIconGlyph(dc, folderGlyph[0], iconRect, g_muted, false);
         if (priorFont) {
             SelectObject(dc, priorFont);
         }
@@ -94010,8 +94058,7 @@ bool DrawBreadcrumb(const DRAWITEMSTRUCT* item) {
                               item->rcItem.top, right,
                               item->rcItem.bottom};
                 SetTextColor(dc, g_muted);
-                DrawTextW(dc, folderGlyph, 1, &iconRect,
-                          DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                DrawIconGlyph(dc, folderGlyph[0], iconRect, g_muted, false);
                 if (priorFont) {
                     SelectObject(dc, priorFont);
                 }
@@ -94086,10 +94133,10 @@ bool DrawBreadcrumb(const DRAWITEMSTRUCT* item) {
         const WCHAR searchGlyph[] = {0xF002, L'\0'};
         RECT searchGlyphRect{searchLeft, item->rcItem.top,
                             item->rcItem.right - 1, item->rcItem.bottom};
-        SetTextColor(dc, g_searchButtonHovered || g_searchExpanded
-                             ? g_text : g_muted);
-        DrawTextW(dc, searchGlyph, 1, &searchGlyphRect,
-                  DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        DrawIconGlyph(dc, searchGlyph[0], searchGlyphRect,
+                      g_searchButtonHovered || g_searchExpanded
+                          ? g_text : g_muted,
+                      true);
         if (priorFont) SelectObject(dc, priorFont);
     }
 
@@ -94145,25 +94192,18 @@ bool DrawPageLabel(const DRAWITEMSTRUCT* item) {
             GetTextExtentPoint32W(item->hDC, text, length, &size);
             RECT textRect{x, top, right, bottom};
             DrawTextW(item->hDC, text, length, &textRect,
-                      DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                      DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX |
+                          DT_END_ELLIPSIS);
             x += (int)size.cx + gap;
         };
         auto drawIcon = [&](WCHAR glyph, int gap) {
             if (!g_breadcrumbIconFont) {
                 return;
             }
-            HGDIOBJ priorFont = SelectObject(item->hDC,
-                                             g_breadcrumbIconFont);
-            const WCHAR text[] = {glyph, L'\0'};
-            SIZE size{};
-            GetTextExtentPoint32W(item->hDC, text, 1, &size);
             RECT iconRect{x, top, right, bottom};
-            DrawTextW(item->hDC, text, 1, &iconRect,
-                      DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-            if (priorFont) {
-                SelectObject(item->hDC, priorFont);
-            }
-            x += (int)size.cx + gap;
+            x += DrawIconGlyph(item->hDC, glyph, iconRect, g_muted,
+                               false) +
+                 gap;
         };
 
         const std::wstring pageText =
@@ -94179,11 +94219,11 @@ bool DrawPageLabel(const DRAWITEMSTRUCT* item) {
                  (int)(sizeof(arrowKeys) / sizeof(arrowKeys[0]) - 1), 8);
         drawText(separator, 1, 8);
         drawIcon(0xF149, 5);
-        const WCHAR apply[] = L"Enter/Space applies";
+        const WCHAR apply[] = L"Enter sets it";
         drawText(apply, (int)(sizeof(apply) / sizeof(apply[0]) - 1), 8);
         drawText(separator, 1, 8);
 
-        const WCHAR scrollPages[] = L"Scroll changes pages";
+        const WCHAR scrollPages[] = L"Scroll for more";
         drawText(scrollPages,
                  (int)(sizeof(scrollPages) / sizeof(scrollPages[0]) - 1), 0);
     }
