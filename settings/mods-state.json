@@ -662,7 +662,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.10.27"
+    "version": "1.10.28"
   },
   "local@wintips-osd-plus": {
     "disabled": false,

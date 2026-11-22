@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.27
+// @version         1.10.28
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -42,6 +42,11 @@ adds after every other window's title is added here too: how long the
 window has been open, after the folder name. It uses Seamless Title Bars'
 own uptime settings (which units, compact or clock, separator, colour) and
 hides when that mod or its uptime is off.
+
+## What's new in 1.10.28
+
+- Another try at the line between the folder tree and the file list: it is
+  blended in see-through, a way of drawing the mod did not catch before.
 
 ## What's new in 1.10.27
 
@@ -11658,8 +11663,19 @@ bool PaintPaneSplitter(HDC hdc, int x, int y, int w, int h) {
             }
         }
     }
+    bool untracked = false;
+    if (!hWnd && g_statusDockPaintWndForThread) {
+        hWnd = g_statusDockPaintWndForThread;
+        untracked = true;
+    }
     if (!hWnd || w <= 0) {
         return false;
+    }
+    if (untracked) {
+        RECT client;
+        if (!GetClientRect(hWnd, &client) || h < client.bottom / 3) {
+            return false;
+        }
     }
 
     UINT dpi = GetDpiForWindow(hWnd);
@@ -11669,6 +11685,22 @@ bool PaintPaneSplitter(HDC hdc, int x, int y, int w, int h) {
     }
 
     return true;
+}
+
+using GdiAlphaBlend_t = decltype(&GdiAlphaBlend);
+GdiAlphaBlend_t GdiAlphaBlend_Original;
+BOOL WINAPI GdiAlphaBlend_Hook(HDC hdcDest, int xDest, int yDest, int wDest,
+                               int hDest, HDC hdcSrc, int xSrc, int ySrc,
+                               int wSrc, int hSrc, BLENDFUNCTION ftn) {
+    if (wDest > 0 && wDest <= 2 && hDest >= 40) {
+        bool skip = PaintPaneSplitter(hdcDest, xDest, yDest, wDest, hDest);
+        LogThinLine(L"AlphaBlend", hdcDest, xDest, yDest, wDest, hDest, skip);
+        if (skip) {
+            return TRUE;
+        }
+    }
+    return GdiAlphaBlend_Original(hdcDest, xDest, yDest, wDest, hDest, hdcSrc,
+                                  xSrc, ySrc, wSrc, hSrc, ftn);
 }
 
 int WINAPI FillRect_Hook(HDC hDC, const RECT* lprc, HBRUSH hbr) {
@@ -13770,10 +13802,14 @@ bool PaintThemeBackground(HTHEME hTheme,
         _wcsicmp(themeClass, L"ShellStatusBarSeparator") == 0) {
         return PaintStatusDockSeparator(hdc, pRect);
     }
-    if (pRect && PaintPaneSplitter(hdc, pRect->left, pRect->top,
-                                   pRect->right - pRect->left,
-                                   pRect->bottom - pRect->top)) {
-        return true;
+    if (pRect) {
+        int w = pRect->right - pRect->left, h = pRect->bottom - pRect->top;
+        bool skip = PaintPaneSplitter(hdc, pRect->left, pRect->top, w, h);
+        LogThinLine(L"ThemeBackground", hdc, pRect->left, pRect->top, w, h,
+                    skip);
+        if (skip) {
+            return true;
+        }
     }
 
     if (!IsEntireWindowEffectDC(hdc)) {
@@ -14638,6 +14674,8 @@ BOOL Wh_ModInit() {
     WindhawkUtils::SetFunctionHook(PatBlt, PatBlt_Hook, &PatBlt_Original);
 
     WindhawkUtils::SetFunctionHook(Polyline, Polyline_Hook, &Polyline_Original);
+    WindhawkUtils::SetFunctionHook(GdiAlphaBlend, GdiAlphaBlend_Hook,
+                                   &GdiAlphaBlend_Original);
 
     WindhawkUtils::SetFunctionHook(DrawThemeBackground,
                                    DrawThemeBackground_Hook,
