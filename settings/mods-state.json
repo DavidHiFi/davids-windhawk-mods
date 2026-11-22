@@ -1335,5 +1335,12 @@
     "exclude": "",
     "architecture": "x86-64",
     "version": "1.0.0"
+  },
+  "local@seamless-dock": {
+    "disabled": false,
+    "include": "windhawk.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "0.1.0"
   }
 }

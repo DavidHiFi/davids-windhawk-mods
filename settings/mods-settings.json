@@ -5430,5 +5430,22 @@
     "toggleForegroundApp": "Ctrl+Alt+F",
     "warnOnVpnOrRemote": 1,
     "windowSizePreset": "default"
+  },
+  "local@seamless-dock": {
+    "bottomGap": 8,
+    "edgeColor": "#585b70",
+    "edgeWidth": 2,
+    "fadeMs": 150,
+    "font": "FiraCode Nerd Font",
+    "hideOnFullscreen": 1,
+    "hoverColorFrom": "#89b4fa",
+    "hoverColorTo": "#cba6f7",
+    "hoverDelay": 350,
+    "iconSize": 36,
+    "previews": 1,
+    "reserveSpace": 1,
+    "showOpenApps": 1,
+    "spacing": 6,
+    "surfaceOpacity": 60
   }
 }
