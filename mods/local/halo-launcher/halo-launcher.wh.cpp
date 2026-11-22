@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.8
+// @version         0.6.9
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -57,6 +57,13 @@ its own settings window: open it from the tray icon or with Ctrl+I in Halo.
 | Esc | Back, then close |
 
 Every key in that list can be changed on the Keys page of the settings.
+
+## What's new in 0.6.9
+
+- The settings key (Ctrl+Alt+F10) opens the settings window straight away, and
+  the restart key (Ctrl+Alt+F11) restarts Halo. Before, both only typed their
+  words into the search box and showed a web search under them.
+- Halo's log no longer writes the same key line every few seconds.
 
 ## What's new in 0.6.8
 
@@ -1958,13 +1965,42 @@ void RegisterKeys() {
         if (g.keys[i].registered) taken++;
         else if (hookKeys[i].vk) hooked++;
     }
-    Trace(L"keys: %d of %d taken, %d more through the key hook, Windows-key tap %s", taken, (int)g.keys.size(), hooked,
-          tap >= 0 ? L"on" : L"off");
+    // Launchpad asks Halo to look again every few seconds; say it in the log only when it changed.
+    static int lastSummary = -1;
+    int summary = ((taken * 64 + (int)g.keys.size()) * 64 + hooked) * 2 + (tap >= 0);
+    if (summary != lastSummary) {
+        lastSummary = summary;
+        Trace(L"keys: %d of %d taken, %d more through the key hook, Windows-key tap %s", taken, (int)g.keys.size(),
+              hooked, tap >= 0 ? L"on" : L"off");
+    }
     if (needHook && !g.hookThread) {
         g.hookThread = CreateThread(nullptr, 0, HookThreadProc, nullptr, 0, &g.hookThreadId);
     } else if (!needHook) {
         StopHook();
     }
+}
+
+void OpenHaloSettings(int page = -1);
+void RestartHalo();
+
+// A key whose words are one of Halo's own commands does that command, instead of typing the
+// words and leaving a web search for them under the result.
+static bool FireBuiltInKey(const std::wstring& words) {
+    std::wstring t = words;
+    while (!t.empty() && iswspace(t.back())) t.pop_back();
+    while (!t.empty() && iswspace(t.front())) t.erase(t.begin());
+    if (_wcsicmp(t.c_str(), L"Tweak Halo Launcher's settings") == 0 ||
+        _wcsicmp(t.c_str(), L"Tweak Flow Launcher's settings") == 0) {
+        Trace(L"key opens settings");
+        OpenHaloSettings(-1);
+        return true;
+    }
+    if (_wcsicmp(t.c_str(), L"Restart Halo Launcher") == 0 || _wcsicmp(t.c_str(), L"Restart Flow Launcher") == 0) {
+        Trace(L"key restarts Halo");
+        RestartHalo();
+        return true;
+    }
+    return false;
 }
 
 void FireKey(size_t slot) {
@@ -1974,6 +2010,7 @@ void FireKey(size_t slot) {
         RequestToggle();
         return;
     }
+    if (FireBuiltInKey(k.keyword)) return;
     Trace(L"key for '%s' (engine ready %d)", k.keyword.c_str(), g.engineReady);
     g.keyShow = true;
     if (g.engineReady) {
@@ -2021,7 +2058,7 @@ void ReloadSettingsWindow() {
     if (HWND s = haloset::g_settingsWnd) PostMessageW(s, WM_APP + 1 /* its reload message */, 0, 0);
 }
 
-void OpenHaloSettings(int page = -1) {
+void OpenHaloSettings(int page) {
     HideLauncher();
     AllowSetForegroundWindow(ASFW_ANY);
     haloset::OpenSettingsWindow(page);
@@ -3052,10 +3089,14 @@ void ShowTrayMenu(POINT pt) {
     } else if (cmd == kSettings) {
         OpenHaloSettings();
     } else if (cmd == kRestart) {
-        // The engine saves, answers "restart" and says bye; this process then ends with
-        // kExitRestart and Windhawk's launcher starts a fresh one.
-        if (!Send({L"restartengine"})) RestartProcess(kExitRestart);
+        RestartHalo();
     }
+}
+
+void RestartHalo() {
+    // The engine saves, answers "restart" and says bye; this process then ends with
+    // kExitRestart and Windhawk's launcher starts a fresh one.
+    if (!Send({L"restartengine"})) RestartProcess(kExitRestart);
 }
 
 LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
