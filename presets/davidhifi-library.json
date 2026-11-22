@@ -1833,7 +1833,7 @@
       "id": "win11-home-group-restorer",
       "name": "Windows 11 HomeGroup Page Restorer",
       "version": "1.0.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "enableAdvancedWriter": 1,
         "keepFilesOnDisable": 1,
@@ -2092,7 +2092,7 @@
         "controlStyles[53].styles[2]": "HorizontalAlignment=Center",
         "controlStyles[53].styles[3]": "VerticalAlignment=Center",
         "controlStyles[53].target": "SystemTray.OmniButton#ControlCenterButton > Grid > Border#BackgroundBorder",
-        "controlStyles[54].styles[0]": "Margin=0,0,-6,0",
+        "controlStyles[54].styles[0]": "Margin=0,0,-4,0",
         "controlStyles[54].target": "SystemTray.ChevronIconView",
         "controlStyles[55].styles[0]": "Opacity=1",
         "controlStyles[55].target": "SystemTray.OmniButton#ControlCenterButton > Grid > Border#BackgroundBorder",

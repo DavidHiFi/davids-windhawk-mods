@@ -2500,7 +2500,7 @@
     "replace.additionalFonts": "",
     "replace.excludedFonts": "",
     "replace.replaceAllFonts": 1,
-    "replace.replaceMonospace": 0
+    "replace.replaceMonospace": 1
   },
   "local@simple-window-switcher-plus": {
     "Accessibility.altBacktickBehavior": "backward",
