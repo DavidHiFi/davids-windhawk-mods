@@ -438,7 +438,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.0.7"
+    "version": "2.0.8"
   },
   "local@helium-acrylic": {
     "disabled": false,

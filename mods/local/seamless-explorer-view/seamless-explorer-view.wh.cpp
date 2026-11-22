@@ -2,7 +2,7 @@
 // @id              seamless-explorer-view
 // @name            Seamless Explorer View
 // @description     GPU-accelerated Explorer views with smooth scrolling and right-click submenus that populate fully
-// @version         2.0.7
+// @version         2.0.8
 // @author          DavidHiFi, DarkionAvey, crazyboyybs, Languster, valinet
 // @include         explorer.exe
 // @architecture    x86-64
@@ -23,6 +23,12 @@ menu, such as NanaZip's archive actions, open fully populated instead of an
 empty box.
 
 ![Seamless Explorer View preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-explorer-view.png)
+
+## What's new in 2.0.8
+
+The thin lines in the column header are gone: the line under the column names
+and the short lines between columns. A hovered column name no longer runs into
+a line.
 
 ## Features
 - **GPU rendering.** Details lists and icon grids draw smoothly, thumbnails included.
@@ -15825,8 +15831,7 @@ void Paint(ViewState& state) {
             D2D1::RectF(0.f, 0.f, w, header),
             D2D1_ANTIALIAS_MODE_ALIASED);
         // Caption bounds and hit testing retain edgeMargin; hover decoration fills the header cell.
-        // The header rules are decorative: paint those after removing this clip,
-        // so they can reach both physical edges without changing hit testing.
+        // No header rules or column dividers: the owner wants no divider lines.
         // Native Shell columns are already ordered and localized. Painting never
         // asks an item for properties or measures every filename.
         if (details) {
@@ -15863,9 +15868,6 @@ void Paint(ViewState& state) {
                 if (sorted && visibleEnd - std::max(0.f, from) >= arrowRoom)
                     DrawHeaderSortChevron(state, visibleEnd,
                         state.sort.direction == SORT_DESCENDING, headerColor, fade);
-                if (compositionFrame.Widths() || to <= listEnd)
-                    Fill(state, to - .5f, headerOffset, to + .5f, headerBottom, headerColor,
-                         .14f * fade);
             }
             if (compositionFrame.Widths()) compositionFrame.Background();
             // The grabbed header is painted LAST, above the moving neighbors.
@@ -15896,20 +15898,6 @@ void Paint(ViewState& state) {
             // trailing end of the header; nothing is painted when not hovered.
         }
         state.target->PopAxisAlignedClip(); // header captions / column hit zone
-        if (details && columnHeader > 0.f) {
-            state.target->PushAxisAlignedClip(D2D1::RectF(0.f,0.f,w,columnHeader),D2D1_ANTIALIAS_MODE_ALIASED);
-            // Full-width header rules, including the left/right edgeMargin areas.
-            // These are paint-only and never expand file/header hit targets.
-            Fill(state, 0.f, headerBottom - 1.f, w, headerBottom,
-                 headerColor, .12f * modeOpacity);
-            // The scrollbar gap separates this outer rule from the last column
-            // divider. Without a vertical scrollbar the two can overlap and form
-            // an unnaturally bright double line, so only paint the outer rule
-            // when the scrollbar is actually present.
-            if (bar.usable && w >= 1.f)
-                Fill(state, w - 1.f, headerOffset, w, headerBottom, headerColor, .14f * modeOpacity);
-            state.target->PopAxisAlignedClip();
-        }
         state.textRasterBuildTicks+=bodyRasterTicks;
     };
     if (compositionFrame.active && !compositionFrame.Rows() && !state.gridView) {
