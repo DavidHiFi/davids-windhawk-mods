@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.31
+// @version         0.4.32
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -32,6 +32,13 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 
+## What's new in 0.4.32
+The Bluetooth and Safely Remove Hardware icons wear the same blue to mauve badge
+as the other tray icons (Tray drawer, Style the Bluetooth and USB icons). The
+drawer's folder buttons and overflow arrow now sit in one evenly spaced row, the end
+buttons right under the first and last icon columns. An open folder stays open while
+icons come and go.
+
 ## What's new in 0.4.31
 
 In the music player, a long artist name now slides slowly like the song title instead of
@@ -43,7 +50,8 @@ glow behind the player's text is softer and even.
 
 The drawer's three folders now hold icons. Right-click a folder and tick the icons it should
 keep, or drop an icon on it. Clicking a folder shows its icons right in the drawer, and
-clicking it again brings the rest back. Clicking an empty folder opens the list. The folders
+clicking it again brings the rest back. An open folder stays open while icons come and
+go. Clicking an empty folder opens the list. The folders
 are called Devices, Apps and Tools, and hovering one shows its name.
 
 ## Tray tools
@@ -1874,6 +1882,9 @@ The whole mod is published under GPL-3.0.
     $name: Second drawer
   - styleMenu: true
     $name: Theme the right-click menu
+  - windowsIcons: true
+    $name: Style the Bluetooth and USB icons
+    $description: Gives the Bluetooth and Safely Remove Hardware icons the same blue to mauve badge as the other tray icons
   - hoverZoom:
     - enabled: true
       $name: Grow icons on hover
@@ -3241,6 +3252,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Number, L"tray.cornerRadius", L"Corner radius (px)", L"15 matches a rounded taskbar", L"15", {}, 0, 100, 6, L"Tray drawer"},
 {K::Color, L"tray.textColor", L"Text color", L"Used by the counter and the right-click menu", L"#CDD6F4", {}, 0, 100, 6, L"Tray drawer"},
 {K::Check, L"tray.styleMenu", L"Theme the right-click menu", L"", L"1", {}, 0, 100, 6, L"Tray drawer"},
+{K::Check, L"tray.windowsIcons", L"Style the Bluetooth and USB icons", L"Gives the Bluetooth and Safely Remove Hardware icons the same blue to mauve badge as the other tray icons", L"1", {}, 0, 100, 6, L"Tray drawer"},
 {K::Check, L"tray.border.enabled", L"Show border", L"", L"1", {}, 0, 100, 6, L"Border"},
 {K::Color, L"tray.border.startColor", L"Border start color", L"", L"#89B4FA", {}, 0, 100, 6, L"Border"},
 {K::Color, L"tray.border.endColor", L"Border end color", L"Use the same color as the start for a plain border", L"#CBA6F7", {}, 0, 100, 6, L"Border"},
@@ -6814,7 +6826,7 @@ static ULONGLONG expiresAt;
 static HANDLE networkCommand;
 static DWORD networkError;
 
-static HICON MakeBadge(WCHAR symbol, bool off) {
+static HICON MakeBadgeText(PCWSTR symbol, bool off) {
     int size = GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem());
     if (size < 16) size = 16;
     BITMAPINFO bi{};
@@ -6843,8 +6855,7 @@ static HICON MakeBadge(WCHAR symbol, bool off) {
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(255, 255, 255));
     RECT r{0, 0, size, size};
-    WCHAR g[2] = {symbol, 0};
-    DrawTextW(dc, g, 1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    DrawTextW(dc, symbol, -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     GdiFlush();
     SelectObject(dc, oldFont);
     DeleteObject(font);
@@ -6883,6 +6894,11 @@ static HICON MakeBadge(WCHAR symbol, bool off) {
 }
 
 
+
+static HICON MakeBadge(WCHAR symbol, bool off) {
+    WCHAR text[2] = {symbol, 0};
+    return MakeBadgeText(text, off);
+}
 
 static NOTIFYICONDATAW Data(HWND hwnd, UINT id) {
     NOTIFYICONDATAW data{sizeof(data)};
@@ -40586,6 +40602,7 @@ struct Settings {
     int innerPadding{6};
     bool matchStyle{true};
     bool styleMenu{true};
+    bool windowsIcons{true};
     bool zoom{true};
     int zoomSize{130};
     int zoomReach{64};
@@ -40696,6 +40713,7 @@ void LoadSettings() {
     next.innerPadding = IntSetting(L"secondDrawer.padding", defaults.innerPadding, 0, 24);
     next.matchStyle = Wh_GetIntSetting(L"secondDrawer.matchStyle") != 0;
     next.styleMenu = Wh_GetIntSetting(L"styleMenu") != 0;
+    next.windowsIcons = Wh_GetIntSetting(L"windowsIcons") != 0;
     next.zoom = Wh_GetIntSetting(L"hoverZoom.enabled") != 0;
     next.zoomSize = IntSetting(L"hoverZoom.size", defaults.zoomSize, 100, 200);
     next.zoomReach = IntSetting(L"hoverZoom.reach", defaults.zoomReach, 20, 200);
@@ -41582,31 +41600,39 @@ std::wstring GuidCollectionKey(GUID const& guid) {
     return std::wstring(L"g:") + text;
 }
 
-std::wstring StableIconKey(IInspectable const& model) {
+struct NativeIconIdentity {
+    HWND owner;
+    uint32_t uid;
+    GUID guid;
+};
+
+bool ReadNativeIdentity(IInspectable const& model, NativeIconIdentity& fields) {
     if (g_identityState != 2)
-        return {};
+        return false;
     auto config = NativeObjectProperty(model, g_viewIid, g_viewVtable, g_getConfiguration);
     auto dataModel = NativeObjectProperty(config, g_configIid, g_configVtable, g_getDataModel);
     auto icon = NativeObjectProperty(dataModel, g_modelIid, g_modelVtable, g_getUdkObject);
     if (!icon)
-        return {};
+        return false;
     winrt::com_ptr<IUnknown> native;
     if (FAILED(reinterpret_cast<IUnknown*>(winrt::get_abi(icon))
                    ->QueryInterface(*g_nativeIconIid, native.put_void())) ||
         *reinterpret_cast<void**>(native.get()) != g_nativeIconVtable ||
         (*reinterpret_cast<void***>(native.get()))[0] != g_nativeQueryInterface)
-        return {};
-    struct IdentityPrefix {
-        HWND owner;
-        uint32_t uid;
-        GUID guid;
-    } fields{};
-    static_assert(offsetof(IdentityPrefix, uid) == 8 && offsetof(IdentityPrefix, guid) == 12);
+        return false;
+    static_assert(offsetof(NativeIconIdentity, uid) == 8 &&
+                  offsetof(NativeIconIdentity, guid) == 12);
+    fields = {};
     SIZE_T copied{};
     auto address = reinterpret_cast<const BYTE*>(native.get()) + g_nativeThisAdjustment +
                    g_nativeIdentityOffset;
-    if (!ReadProcessMemory(GetCurrentProcess(), address, &fields, sizeof(fields), &copied) ||
-        copied != sizeof(fields))
+    return ReadProcessMemory(GetCurrentProcess(), address, &fields, sizeof(fields), &copied) &&
+           copied == sizeof(fields);
+}
+
+std::wstring StableIconKey(IInspectable const& model) {
+    NativeIconIdentity fields;
+    if (!ReadNativeIdentity(model, fields))
         return {};
     if (auto key = GuidCollectionKey(fields.guid); !key.empty())
         return key;
@@ -41755,7 +41781,6 @@ struct DrawerState {
     std::chrono::steady_clock::time_point zoomLast{};
     // Folder groups: three footer buttons, each holding collected icons.
     Controls::Grid footerGrid{nullptr};
-    Controls::StackPanel groupStack{nullptr};
     Controls::Button groupButtons[3]{nullptr};
     Flyout groupFlyout{nullptr};
     ItemsControl groupItems{nullptr};
@@ -42069,6 +42094,134 @@ bool TrackNativeSource(DrawerState& state) {
     return true;
 }
 
+// BEGIN WINDOWS ICON BADGES
+// Bluetooth and Safely Remove Hardware are Explorer's own tray icons. With the
+// windowsIcons setting on they wear the same blue to mauve badge as the mod
+// icons: every icon update they send is swapped on its way to the tray, and
+// icons that were already shown get one update when the drawer first reads them.
+constexpr UINT kHotplugIconId = 0x464;  // the uID hotplug.dll registers
+constexpr UINT kBadgeWindowsIconsMessage = WM_APP + 0x735;
+
+enum class WindowsIcon { None, Bluetooth, Eject };
+
+WindowsIcon WindowsIconOf(HWND owner, UINT id) {
+    DWORD process{};
+    WCHAR name[64]{};
+    if (!owner || !GetWindowThreadProcessId(owner, &process) ||
+        process != GetCurrentProcessId() || !GetClassNameW(owner, name, ARRAYSIZE(name)))
+        return WindowsIcon::None;
+    if (!wcscmp(name, L"BluetoothNotificationAreaIconWindowClass"))
+        return WindowsIcon::Bluetooth;
+    if (id == kHotplugIconId && !wcscmp(name, L"SystemTray_Main"))
+        return WindowsIcon::Eject;
+    return WindowsIcon::None;
+}
+
+bool WindowsIconsWanted() {
+    auto s = CurrentSettings();
+    return s.theme && s.windowsIcons;
+}
+
+SRWLOCK g_badgeLock = SRWLOCK_INIT;
+HICON g_badgeIcons[2]{};
+
+HICON WindowsIconBadge(WindowsIcon kind) {
+    int index = kind == WindowsIcon::Bluetooth ? 0 : 1;
+    AcquireSRWLockExclusive(&g_badgeLock);
+    if (!g_badgeIcons[index])
+        g_badgeIcons[index] =
+            ::sttools::MakeBadgeText(index == 0 ? L"\U000F00AF" : L"\U000F129E", false);
+    HICON icon = g_badgeIcons[index];
+    ReleaseSRWLockExclusive(&g_badgeLock);
+    return icon;
+}
+
+void FreeWindowsIconBadges() {
+    AcquireSRWLockExclusive(&g_badgeLock);
+    for (auto& icon : g_badgeIcons)
+        if (icon)
+            DestroyIcon(std::exchange(icon, nullptr));
+    ReleaseSRWLockExclusive(&g_badgeLock);
+}
+
+decltype(&Shell_NotifyIconW) Shell_NotifyIconW_Original;
+BOOL WINAPI Shell_NotifyIconW_Hook(DWORD message, PNOTIFYICONDATAW data) {
+    if ((message == NIM_ADD || message == NIM_MODIFY) && data && !g_unloading &&
+        data->cbSize >= NOTIFYICONDATAW_V1_SIZE && data->cbSize <= sizeof(*data) &&
+        (data->uFlags & NIF_ICON)) {
+        static std::atomic<bool> s_hotplugLogged;
+        if (data->uID == kHotplugIconId && !s_hotplugLogged.exchange(true)) {
+            WCHAR name[64]{};
+            GetClassNameW(data->hWnd, name, ARRAYSIZE(name));
+            Wh_Log(L"Tray icon uid 0x464 owner class: %s", name);
+        }
+        auto kind = WindowsIconOf(data->hWnd, data->uID);
+        if (kind != WindowsIcon::None && WindowsIconsWanted()) {
+            if (HICON badge = WindowsIconBadge(kind)) {
+                NOTIFYICONDATAW updated{};
+                memcpy(&updated, data, data->cbSize);
+                updated.hIcon = badge;
+                return Shell_NotifyIconW_Original(message, &updated);
+            }
+        }
+    }
+    return Shell_NotifyIconW_Original(message, data);
+}
+
+// UI thread only.
+std::vector<NativeIconIdentity> g_badgedIcons, g_pendingBadges;
+
+void QueueWindowsIconBadges(std::vector<IInspectable> const& models) {
+    if (!WindowsIconsWanted())
+        return;
+    for (auto const& model : models) {
+        NativeIconIdentity id;
+        try {
+            if (!ReadNativeIdentity(model, id))
+                continue;
+        } catch (...) {
+            continue;
+        }
+        if (WindowsIconOf(id.owner, id.uid) == WindowsIcon::None)
+            continue;
+        auto same = [&](NativeIconIdentity const& seen) {
+            return seen.owner == id.owner && seen.uid == id.uid;
+        };
+        if (std::any_of(g_badgedIcons.begin(), g_badgedIcons.end(), same))
+            continue;
+        g_badgedIcons.push_back(id);
+        g_pendingBadges.push_back(id);
+    }
+    // Sent later from the UI window, never inside the collection scan.
+    if (!g_pendingBadges.empty() && g_uiWindow)
+        PostMessageW(g_uiWindow, kBadgeWindowsIconsMessage, 0, 0);
+}
+
+void SendWindowsIconBadges() {
+    auto pending = std::exchange(g_pendingBadges, {});
+    if (!WindowsIconsWanted())
+        return;
+    for (auto const& id : pending) {
+        auto kind = WindowsIconOf(id.owner, id.uid);
+        HICON badge = kind == WindowsIcon::None ? nullptr : WindowsIconBadge(kind);
+        if (!badge)
+            continue;
+        NOTIFYICONDATAW data{sizeof(data)};
+        data.hWnd = id.owner;
+        data.uID = id.uid;
+        data.uFlags = NIF_ICON;
+        data.hIcon = badge;
+        if (id.guid != GUID{}) {
+            data.uFlags |= NIF_GUID;
+            data.guidItem = id.guid;
+        }
+        BOOL ok = Shell_NotifyIconW(NIM_MODIFY, &data);
+        Wh_Log(L"Windows icon badge: %s uid=0x%X sent=%d",
+               kind == WindowsIcon::Bluetooth ? L"Bluetooth" : L"Safely Remove", id.uid, ok);
+    }
+}
+// END WINDOWS ICON BADGES
+
 std::vector<std::wstring> LiveCollectionKeys(std::vector<IInspectable> const& models) {
     std::vector<std::wstring> keys;
     for (auto const& model : models) {
@@ -42083,6 +42236,8 @@ std::vector<std::wstring> LiveCollectionKeys(std::vector<IInspectable> const& mo
 
 void UpdateCount(DrawerState& state);
 
+void ShowGroupFlyout(DrawerState& state, int slot);
+
 void RefreshClassification(DrawerState& state) {
     if (g_unloading || state.closing || state.changing)
         return;
@@ -42091,6 +42246,9 @@ void RefreshClassification(DrawerState& state) {
         return;
     }
     state.refreshDeferred = false;
+    // A folder open in the drawer is put back once the list is rebuilt, so a
+    // tray icon changing does not throw the folder closed.
+    int reopenFolder = state.groupOpen;
     try {
         if (state.originalItemsSource && state.nativeItems.ItemsSource() != state.expectedSource) {
             // Windows replaced its source. Do not restore an obsolete binding
@@ -42116,6 +42274,7 @@ void RefreshClassification(DrawerState& state) {
                 L"Invalid/unsupported saved collection; leaving icons visible and record untouched");
         }
         auto keys = LiveCollectionKeys(all);
+        QueueWindowsIconBadges(all);
         Wh_Log(L"Persistent identity scan: total=%zu identified=%zu", keys.size(),
                static_cast<size_t>(std::count_if(keys.begin(), keys.end(),
                                                  [](auto const& key) { return !key.empty(); })));
@@ -42187,6 +42346,13 @@ void RefreshClassification(DrawerState& state) {
         Wh_Log(L"Persistent collection reconciled: saved=%zu original=%u outer=%u inner=%u",
                saved.size(), count, state.nativeItems.Items().Size(),
                state.innerItems.Items().Size());
+        if (reopenFolder >= 0 && state.groupOpen < 0 && !state.closing) {
+            try {
+                ShowGroupFlyout(state, reopenFolder);
+            } catch (...) {
+                LogException(L"Keep folder open in drawer");
+            }
+        }
     } catch (...) {
         LogException(L"Reconcile saved collection");
         RestoreSelected(state);
@@ -42868,6 +43034,97 @@ void ApplyFlyoutLooks(DrawerState& state, Settings const& s, bool themed) {
 // Defined further down; the appearance pass references it for folder glyphs.
 PCWSTR GroupGlyph(std::wstring const& glyph);
 
+// The shown folder buttons and the overflow button share one row with equal
+// gaps: the outer two line up with the panel's edges and star columns split
+// the space between them. The overflow button keeps the side it is set to.
+void LayoutFooterRow(DrawerState& state, Settings const& s, bool themed) {
+    if (!state.footerGrid || !state.chevron)
+        return;
+    std::vector<FrameworkElement> row;
+    for (auto const& button : state.groupButtons)
+        if (button && button.Visibility() == Visibility::Visible)
+            row.push_back(button);
+    size_t at = s.position == L"left"     ? 0
+                : s.position == L"center" ? row.size() / 2
+                                          : row.size();
+    row.insert(row.begin() + static_cast<ptrdiff_t>(at), state.chevron);
+    auto columns = state.footerGrid.ColumnDefinitions();
+    columns.Clear();
+    if (row.size() == 1) {
+        Grid::SetColumn(state.chevron, 0);
+        state.chevron.HorizontalAlignment(themed && s.position == L"left" ? HorizontalAlignment::Left
+                                          : themed && s.position == L"center"
+                                              ? HorizontalAlignment::Center
+                                              : HorizontalAlignment::Right);
+        return;
+    }
+    for (size_t i = 0; i < row.size(); ++i) {
+        if (i) {
+            Controls::ColumnDefinition gap;
+            gap.Width(GridLength{1, GridUnitType::Star});
+            columns.Append(gap);
+        }
+        Controls::ColumnDefinition cell;
+        cell.Width(GridLength{1, GridUnitType::Auto});
+        columns.Append(cell);
+        Grid::SetColumn(row[i], static_cast<int32_t>(columns.Size() - 1));
+        row[i].HorizontalAlignment(HorizontalAlignment::Center);
+    }
+}
+
+// Lines the footer row up with the icon grid: the outer two buttons sit centred
+// on the first and last icon columns. Runs after each panel layout; a change
+// under half a pixel is left alone, so it settles after one extra pass.
+void AlignFooterToIcons(DrawerState& state) {
+    if (!state.footerGrid || !state.nativeItems || state.groupOpen >= 0)
+        return;
+    double width = state.footerGrid.ActualWidth();
+    if (width <= 0)
+        return;
+    auto items = state.nativeItems.Items();
+    double minX = 1e9, maxX = -1e9;
+    uint32_t seen = 0;
+    for (uint32_t i = 0; i < items.Size(); ++i) {
+        auto view = state.nativeItems.ContainerFromIndex(i).try_as<FrameworkElement>();
+        if (!view || view.Visibility() != Visibility::Visible || view.ActualWidth() <= 0)
+            continue;
+        auto p = view.TransformToVisual(state.footerGrid)
+                     .TransformPoint({static_cast<float>(view.ActualWidth() / 2), 0.0f});
+        minX = std::min(minX, static_cast<double>(p.X));
+        maxX = std::max(maxX, static_cast<double>(p.X));
+        ++seen;
+    }
+    if (seen < 2 || maxX - minX < 1)
+        return;
+    FrameworkElement first{nullptr}, last{nullptr};
+    int32_t lo = std::numeric_limits<int32_t>::max(), hi = -1;
+    for (auto const& child : state.footerGrid.Children()) {
+        auto e = child.try_as<FrameworkElement>();
+        if (!e || e.Visibility() != Visibility::Visible || e.ActualWidth() <= 0)
+            continue;
+        int32_t c = Grid::GetColumn(e);
+        if (c < lo) {
+            lo = c;
+            first = e;
+        }
+        if (c > hi) {
+            hi = c;
+            last = e;
+        }
+    }
+    if (!first || !last)
+        return;
+    auto m = state.footerGrid.Margin();
+    double left = m.Left + minX - first.ActualWidth() / 2;
+    double right = m.Right + width - (maxX + last.ActualWidth() / 2);
+    if (std::abs(left - m.Left) < 0.5 && std::abs(right - m.Right) < 0.5)
+        return;
+    // A half-built panel can report wild positions; never move more than a tile.
+    if (std::abs(left) > 40 || std::abs(right) > 40)
+        return;
+    state.footerGrid.Margin(Thickness{left, m.Top, right, m.Bottom});
+}
+
 void UpdateDrawerAppearance(DrawerState& state) {
     using namespace winrt::Windows::UI::ViewManagement;
     auto s = CurrentSettings();
@@ -42880,25 +43137,19 @@ void UpdateDrawerAppearance(DrawerState& state) {
 
     state.footer.Height(themed ? s.footerHeight : 40);
     state.chevron.Height(themed ? s.footerHeight - 8 : 32);
-    state.chevron.HorizontalAlignment(themed && s.position == L"left" ? HorizontalAlignment::Left
-                                      : themed && s.position == L"center"
-                                          ? HorizontalAlignment::Center
-                                          : HorizontalAlignment::Right);
     if (state.arrow)
         state.arrow.Glyph(ChevronGlyph(state, themed ? s : Settings{.theme = false}));
 
     // Folder groups: show the enabled buttons, tinted with their own colour,
-    // on the opposite side of the footer from the overflow button.
-    if (state.groupStack) {
-        state.groupStack.HorizontalAlignment(themed && s.position == L"left"
-                                                 ? HorizontalAlignment::Right
-                                                 : HorizontalAlignment::Left);
+    // the same size as the overflow button.
+    {
         for (int slot = 0; slot < 3; ++slot) {
             auto& button = state.groupButtons[slot];
             if (!button)
                 continue;
             bool show = themed && s.groupEnabled[slot];
             button.Visibility(show ? Visibility::Visible : Visibility::Collapsed);
+            button.Height(state.chevron.Height());
             if (!show)
                 continue;
             if (auto icon = button.Content().try_as<Controls::FontIcon>()) {
@@ -42915,6 +43166,7 @@ void UpdateDrawerAppearance(DrawerState& state) {
                             s.groupNames[slot].empty() ? fallback : s.groupNames[slot].c_str())));
         }
     }
+    LayoutFooterRow(state, s, themed);
 
     if (highContrast) {
         UISettings colors;
@@ -43121,13 +43373,13 @@ Controls::Border CreateDrawerFooter() {
     // Folder-group buttons share the chevron's hover look and sit on the
     // opposite side of the footer; UpdateDrawerAppearance fills in glyph and
     // colour, and shows only the enabled ones.
-    Controls::StackPanel groups;
-    groups.Orientation(Controls::Orientation::Horizontal);
-    groups.VerticalAlignment(VerticalAlignment::Center);
-    groups.Spacing(4);
+    // Children 0 to 2 are the folder buttons and 3 is the overflow button;
+    // LayoutFooterRow places them in columns.
+    Controls::Grid footerHost;
     for (int slot = 0; slot < 3; ++slot) {
         Controls::Button group;
-        group.Width(28);
+        group.Width(40);
+        group.VerticalAlignment(VerticalAlignment::Center);
         group.Height(32);
         group.MinWidth(0);
         group.MinHeight(0);
@@ -43148,10 +43400,8 @@ Controls::Border CreateDrawerFooter() {
         icon.FontFamily(Media::FontFamily(L"Segoe Fluent Icons"));
         icon.FontSize(13);
         group.Content(icon);
-        groups.Children().Append(group);
+        footerHost.Children().Append(group);
     }
-    Controls::Grid footerHost;
-    footerHost.Children().Append(groups);
     footerHost.Children().Append(button);
     footer.Child(footerHost);
     return footer;
@@ -43478,10 +43728,9 @@ void InstallDrawer(Grid const& root) {
     state->accessibility = winrt::Windows::UI::ViewManagement::AccessibilitySettings();
     state->footer = CreateDrawerFooter();
     state->footerGrid = state->footer.Child().as<Controls::Grid>();
-    state->groupStack = state->footerGrid.Children().GetAt(0).as<Controls::StackPanel>();
-    state->chevron = state->footerGrid.Children().GetAt(1).as<Button>();
+    state->chevron = state->footerGrid.Children().GetAt(3).as<Button>();
     for (int slot = 0; slot < 3; ++slot)
-        state->groupButtons[slot] = state->groupStack.Children().GetAt(slot).as<Button>();
+        state->groupButtons[slot] = state->footerGrid.Children().GetAt(slot).as<Button>();
     state->inner = Flyout();
     state->groupFlyout = Flyout();
     state->groupItems = ItemsControl();
@@ -43820,6 +44069,7 @@ void InstallDrawer(Grid const& root) {
                 if (g_drawer->originalItemsSource &&
                     g_drawer->nativeItems.ItemsSource() != g_drawer->expectedSource)
                     QueueCollectionRefresh();
+                AlignFooterToIcons(*g_drawer);
             } catch (...) {
                 LogException(L"Observe native source replacement");
             }
@@ -43843,8 +44093,13 @@ LRESULT CALLBACK UiWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM l
     // Cleanup messages deliberately stay outside this scope.
     std::optional<UiCallbackScope> work;
     if (message == kRefreshAppearanceMessage || message == kRefreshCollectionMessage ||
-        message == kCollectDroppedIconMessage)
+        message == kCollectDroppedIconMessage || message == kBadgeWindowsIconsMessage)
         work.emplace();
+    if (message == kBadgeWindowsIconsMessage) {
+        if (!g_unloading)
+            SendWindowsIconBadges();
+        return 0;
+    }
     if (message == kRefreshAppearanceMessage) {
         if (!g_unloading && g_runtimeAvailable && g_drawer && !g_drawer->closing) {
             try {
@@ -44335,6 +44590,9 @@ BOOL Wh_ModInit() {
     auto load = reinterpret_cast<LoadLibrary_t>(GetProcAddress(kernel, "LoadLibraryExW"));
     if (!load || !WindhawkUtils::SetFunctionHook(load, LoadLibrary_Hook, &LoadLibrary_Original))
         return FALSE;
+    if (!WindhawkUtils::SetFunctionHook(Shell_NotifyIconW, Shell_NotifyIconW_Hook,
+                                        &Shell_NotifyIconW_Original))
+        Wh_Log(L"Windows icon badges unavailable: Shell_NotifyIconW hook failed");
     if (auto native = GetModuleHandleW(L"taskbar.dll"); native && !ResolveNativeIdentity(native))
         return FALSE;
     auto tray = GetSystemTrayModuleHandle();
@@ -44398,6 +44656,7 @@ void Wh_ModBeforeUninit() {
 
 void Wh_ModUninit() {
     // Hooks are removed by the engine before this callback.
+    FreeWindowsIconBadges();
     if (g_uiThreadHandle) {
         CloseHandle(g_uiThreadHandle);
         g_uiThreadHandle = nullptr;
