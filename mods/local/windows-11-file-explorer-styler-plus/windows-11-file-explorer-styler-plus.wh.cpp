@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.22
+// @version         1.10.23
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -11309,6 +11309,30 @@ thread_local HWND g_statusDockPaintWndForThread;
 thread_local StatusDockBuffer g_statusDockBuffersForThread[4];
 thread_local int g_statusDockBufferCountForThread;
 
+// DOCKDIAG: temporary trace of the status bar view buttons, capped.
+LONG g_dockDiagLines;
+void DockDiag(PCSTR format, ...) {
+    if (InterlockedIncrement(&g_dockDiagLines) > 600) {
+        return;
+    }
+    char line[400];
+    int n = wsprintfA(line, "%lu t%lu ", GetTickCount(), GetCurrentThreadId());
+    va_list args;
+    va_start(args, format);
+    n += wvsprintfA(line + n, format, args);
+    va_end(args);
+    line[n++] = '\r';
+    line[n++] = '\n';
+    HANDLE file = CreateFileW(L"C:\\Users\\Public\\styler-dock.log",
+                              FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                              nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file != INVALID_HANDLE_VALUE) {
+        DWORD written;
+        WriteFile(file, line, n, &written, nullptr);
+        CloseHandle(file);
+    }
+}
+
 bool IsStatusDockWnd(HWND hWnd) {
     WCHAR className[32];
     if (!GetClassName(hWnd, className, ARRAYSIZE(className)) ||
@@ -11373,7 +11397,29 @@ HPAINTBUFFER WINAPI BeginBufferedPaint_Hook(HDC hdcTarget,
     }
 
     HWND hWnd = g_statusDockPaintWndForThread;
-    if (hWnd && dwFormat == BPBF_COMPATIBLEBITMAP &&
+    StatusDockBuffer* parent = nullptr;
+    for (int i = 0; i < g_statusDockBufferCountForThread; i++) {
+        if (g_statusDockBuffersForThread[i].mem == hdcTarget &&
+            !g_statusDockBuffersForThread[i].isToggle) {
+            parent = &g_statusDockBuffersForThread[i];
+        }
+    }
+    if (hWnd || parent) {
+        DockDiag("BBP fmt %d target %p wnd %p paintWnd %p parent %d rc %d,%d,%d,%d",
+                 (int)dwFormat, hdcTarget, WindowFromDC(hdcTarget), hWnd,
+                 parent ? 1 : 0, prcTarget ? prcTarget->left : -1,
+                 prcTarget ? prcTarget->top : -1,
+                 prcTarget ? prcTarget->right : -1,
+                 prcTarget ? prcTarget->bottom : -1);
+    }
+    if (parent) {
+        // A buffer nested in the folder view's own buffer (an element with
+        // its own layer): same coordinates, same band.
+        StatusDockBuffer child = {*phdc, parent->hWnd, parent->band,
+                                  parent->hasBand, false, false};
+        g_statusDockBuffersForThread[g_statusDockBufferCountForThread++] =
+            child;
+    } else if (hWnd && dwFormat == BPBF_COMPATIBLEBITMAP &&
         WindowFromDC(hdcTarget) == hWnd) {
         g_statusDockBuffersForThread[g_statusDockBufferCountForThread++] = {
             *phdc, hWnd, {}, false, false};
@@ -11400,6 +11446,11 @@ HRESULT WINAPI EndBufferedPaint_Hook(HPAINTBUFFER hBufferedPaint,
         for (int i = 0; i < g_statusDockBufferCountForThread; i++) {
             if (g_statusDockBuffersForThread[i].mem == hdc) {
                 StatusDockBuffer& ended = g_statusDockBuffersForThread[i];
+                if (!ended.isToggle) {
+                    DockDiag("EBP mem %p wnd %p upd %d band %d full %d buttons %d",
+                             ended.mem, ended.hWnd, fUpdateTarget,
+                             ended.hasBand, ended.fullPaint, ended.buttonCount);
+                }
                 if (fUpdateTarget && !ended.isToggle && ended.buttonCount > 0) {
                     FinishStatusDockButtons(ended);
                 }
@@ -11614,6 +11665,9 @@ bool DrawStatusDockIcon(HDC hdc,
 void PaintStatusDockButtonFace(HDC hdc,
                                StatusDockBuffer* buffer,
                                StatusDockBuffer::Button* button);
+bool DrawStatusDockButton(HDC hdc,
+                          StatusDockBuffer* buffer,
+                          StatusDockBuffer::Button* button);
 
 StatusDockBuffer::Button* FindStatusDockButton(StatusDockBuffer* buffer,
                                                const RECT& dest) {
@@ -11645,21 +11699,15 @@ BOOL WINAPI DrawIconEx_Hook(HDC hdc,
             buffer && !buffer->isToggle ? FindStatusDockButton(buffer, dest)
                                         : nullptr;
         if (button) {
-            RECT overlap;
-            IntersectRect(&overlap, &dest, &button->rect);
-            bool inked = false;
-            if (EqualRect(&overlap, &dest) &&
-                DrawStatusDockIcon(hdc, xLeft, yTop, hIcon, cxWidth, cyWidth,
-                                   buffer, button, &inked)) {
-                // A blank icon leaves the button to FinishStatusDockButtons.
-                if (inked) {
-                    button->drawn = true;
-                }
-                return TRUE;
-            }
-            // Not recolored: the face goes under Explorer's own icon.
-            PaintStatusDockButtonFace(hdc, buffer, button);
-            button->drawn = true;
+            // Explorer's own view icons come out blank or faint on some
+            // builds (the empty bubble, 2026-11-22). Never draw them: the
+            // button gets the view's Fluent glyph, with its face only when
+            // that glyph has ink.
+            bool ink = DrawStatusDockButton(hdc, buffer, button);
+            DockDiag("ICON btn %d,%d,%d,%d ink %d", button->rect.left,
+                     button->rect.top, button->rect.right, button->rect.bottom,
+                     ink);
+            return TRUE;
         }
     }
 
@@ -12991,21 +13039,24 @@ void PaintStatusDockButtonFace(HDC hdc,
                          (StatusDockShape)button->shape);
 }
 
-// Explorer sometimes paints a view button without an icon, or with one that
-// comes out blank. Draw the view's own Fluent glyph instead: details for the
-// first button, large icons for the last.
-void DrawStatusDockFallbackGlyph(HDC hdc,
+// The view's own Fluent glyph for a view button: details for the first
+// button, large icons for the last. The glyph is rendered first; the face
+// and the glyph go on together only when it has ink, so a face never shows
+// empty.
+bool DrawStatusDockFallbackGlyph(HDC hdc,
                                  const RECT& rect,
                                  bool trailing,
                                  COLORREF color,
-                                 UINT dpi) {
+                                 UINT dpi,
+                                 StatusDockBuffer* buffer,
+                                 StatusDockBuffer::Button* button) {
     int size = std::max(8, MulDiv(16, dpi, 96));
     int width = rect.right - rect.left, height = rect.bottom - rect.top;
     if (width < size || height < size) {
         size = std::min(width, height);
     }
     if (size <= 0 || size > 256) {
-        return;
+        return false;
     }
 
     BITMAPINFO bmi = {};
@@ -13023,7 +13074,7 @@ void DrawStatusDockFallbackGlyph(HDC hdc,
         if (bitmap) {
             DeleteObject(bitmap);
         }
-        return;
+        return false;
     }
 
     HGDIOBJ oldBitmap = SelectObject(hdcMem, bitmap);
@@ -13067,6 +13118,9 @@ void DrawStatusDockFallbackGlyph(HDC hdc,
             bits[i] = (a << 24) | ((r * a / 255) << 16) | ((g * a / 255) << 8) |
                       (b * a / 255);
         }
+        if (button) {
+            PaintStatusDockButtonFace(hdc, buffer, button);
+        }
         BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
         GdiAlphaBlend(hdc, rect.left + (width - size) / 2,
                       rect.top + (height - size) / 2, size, size, hdcMem, 0, 0,
@@ -13076,32 +13130,39 @@ void DrawStatusDockFallbackGlyph(HDC hdc,
     SelectObject(hdcMem, oldBitmap);
     DeleteDC(hdcMem);
     DeleteObject(bitmap);
+    return ink;
 }
 
-// Before a status bar buffer reaches the screen: every view button whose
-// icon never showed gets its face and the fallback glyph together.
+// One view button, once per buffer: face and glyph together, or nothing.
+bool DrawStatusDockButton(HDC hdc,
+                          StatusDockBuffer* buffer,
+                          StatusDockBuffer::Button* button) {
+    if (button->drawn) {
+        return true;
+    }
+    button->drawn = true;
+
+    // The last button (large icons) sits at the trailing end of the band;
+    // the first one is a whole button away from it.
+    int width = button->rect.right - button->rect.left;
+    bool trailing = buffer->band.right - button->rect.right < width;
+    return DrawStatusDockFallbackGlyph(hdc, button->rect, trailing,
+                                       button->glyph,
+                                       StatusDockDpi(buffer->hWnd), buffer,
+                                       button);
+}
+
+// Before a status bar buffer reaches the screen: every view button Explorer
+// painted without an icon gets its glyph (and face) too.
 void FinishStatusDockButtons(StatusDockBuffer& buffer) {
-    UINT dpi = StatusDockDpi(buffer.hWnd);
     for (int i = 0; i < buffer.buttonCount; i++) {
         StatusDockBuffer::Button& button = buffer.buttons[i];
-        if (button.drawn) {
-            continue;
+        if (!button.drawn) {
+            bool ink = DrawStatusDockButton(buffer.mem, &buffer, &button);
+            DockDiag("FINISH btn %d,%d,%d,%d ink %d", button.rect.left,
+                     button.rect.top, button.rect.right, button.rect.bottom,
+                     ink);
         }
-
-        // The last button (large icons) sits at the trailing end: the other
-        // button in this paint, or the band's end in a repaint of one.
-        bool trailing;
-        if (buffer.buttonCount == 2) {
-            trailing = button.rect.left > buffer.buttons[1 - i].rect.left;
-        } else {
-            int width = button.rect.right - button.rect.left;
-            trailing = buffer.band.right - button.rect.right < width;
-        }
-
-        PaintStatusDockButtonFace(buffer.mem, &buffer, &button);
-        DrawStatusDockFallbackGlyph(buffer.mem, button.rect, trailing,
-                                    button.glyph, dpi);
-        button.drawn = true;
     }
 }
 
@@ -13297,7 +13358,20 @@ void StatusDockAfterFill(HDC hdc, const RECT* rect, HBRUSH hbr) {
 // repaints when the cursor enters or leaves.
 bool PaintStatusDockViewButton(HDC hdc, int iStateId, LPCRECT pRect) {
     StatusDockBuffer* buffer = FindStatusDockBuffer(hdc);
-    if (!buffer || buffer->isToggle || !buffer->hasBand || !pRect) {
+    if (!buffer || buffer->isToggle || !pRect) {
+        return false;
+    }
+    // A repaint of the button alone, with no band fill before it: the band
+    // of the view's last full paint, when the button sits inside it.
+    if (!buffer->hasBand) {
+        RECT band;
+        if (GetStatusDockBand(buffer->hWnd, &band) && pRect->top >= band.top &&
+            pRect->bottom <= band.bottom) {
+            buffer->band = band;
+            buffer->hasBand = true;
+        }
+    }
+    if (!buffer->hasBand) {
         return false;
     }
 
@@ -13627,12 +13701,22 @@ bool PaintThemeBackground(HTHEME hTheme,
     }
 
     WCHAR themeClass[64];
-    if (iPartId == 4 && g_statusDockBufferCountForThread > 0 &&
-        FindStatusDockBuffer(hdc) &&
+    if (iPartId == 4 && g_settings.statusBarDock &&
         SUCCEEDED(g_pGetThemeClass(hTheme, themeClass,
                                    ARRAYSIZE(themeClass))) &&
         _wcsicmp(themeClass, L"CommandModule") == 0) {
-        return PaintStatusDockViewButton(hdc, iStateId, pRect);
+        StatusDockBuffer* buffer = FindStatusDockBuffer(hdc);
+        bool painted = buffer && PaintStatusDockViewButton(hdc, iStateId, pRect);
+        DockDiag("CMD hdc %p wnd %p paintWnd %p bufs %d found %d band %d state %d rc %d,%d,%d,%d painted %d",
+                 hdc, WindowFromDC(hdc), g_statusDockPaintWndForThread,
+                 g_statusDockBufferCountForThread, buffer ? 1 : 0,
+                 buffer ? buffer->hasBand : -1, iStateId,
+                 pRect ? pRect->left : -1, pRect ? pRect->top : -1,
+                 pRect ? pRect->right : -1, pRect ? pRect->bottom : -1,
+                 painted);
+        if (painted) {
+            return true;
+        }
     }
     if (iPartId == 1 && g_statusDockBufferCountForThread > 0 && pRect &&
         SUCCEEDED(g_pGetThemeClass(hTheme, themeClass,
