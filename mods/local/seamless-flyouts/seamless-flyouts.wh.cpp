@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.1.3
+// @version         2.1.4
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -27,6 +27,13 @@ It also brings acrylic, Mica and blur to Windows 11 apps, and keeps re-applying 
 Explorer folder windows that open hidden or late, so they never show up black.
 
 Built on Translucent Windows by Undisputed00x.
+
+## What's new in 2.1.4
+
+- Open and Save windows now match File Explorer: the side panel uses the same round pills,
+  row height, font and colours, with no pins, arrows or lines, and the column header is plain
+  with no dividers or sort arrow.
+- Seamless Controls now leaves these windows to Seamless Flyouts, so no square grey slab.
 
 ## What's new in 2.1.3
 
@@ -1902,6 +1909,282 @@ static VOID OnCreate(HWND hWnd, HWND parent)
 
 }  // namespace SeamlessFileDialogBar
 
+// 2.1.4: Open and Save windows get File Explorer's look: the side panel's round pills with no
+// pins, arrows or lines, Explorer's row height and font, and a plain column header. The window
+// is marked with a property so Seamless Controls leaves it to us (it draws square fills and
+// column dividers there otherwise).
+namespace SeamlessPicker {
+
+constexpr wchar_t kPickerProp[] = L"SeamlessFlyouts_Picker";
+constexpr wchar_t kPaintProp[] = L"SeamlessFlyouts_PickerPaint";
+constexpr wchar_t kTreeStyleProp[] = L"SeamlessFlyouts_PickerTreeStyle";
+constexpr wchar_t kTreeFontProp[] = L"SeamlessFlyouts_PickerTreeFont";
+constexpr wchar_t kTreeOldFontProp[] = L"SeamlessFlyouts_PickerTreeOldFont";
+constexpr DWORD kTreeStrip = TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT;
+static thread_local HWND t_paint = nullptr;   // The picker window painting on this thread.
+static thread_local INT t_tidying = 0;
+
+static BOOL IsPickerRoot(HWND root) { return root && GetPropW(root, kPickerProp) != nullptr; }
+static BOOL PaintingTree() { return t_paint && IsWindowClass(t_paint, L"SysTreeView32"); }
+static BOOL PaintingPicker() { return t_paint != nullptr; }
+
+static INT RowHeight(HWND tree)
+{
+    UINT dpi = GetDpiForWindow(tree);
+    return MulDiv(32, dpi ? dpi : USER_DEFAULT_SCREEN_DPI, USER_DEFAULT_SCREEN_DPI);
+}
+
+static VOID SetTreeFont(HWND tree)
+{
+    if (GetPropW(tree, kTreeFontProp))
+        return;
+    HFONT cur = (HFONT)SendMessageW(tree, WM_GETFONT, 0, 0);
+    LOGFONTW lf = {};
+    if (!cur || !GetObjectW(cur, sizeof(lf), &lf))
+        return;
+    wcscpy_s(lf.lfFaceName, L"FiraCode Nerd Font");
+    lf.lfWeight = FW_NORMAL;
+    lf.lfQuality = CLEARTYPE_QUALITY;
+    HFONT f = CreateFontIndirectW(&lf);
+    if (!f)
+        return;
+    SetPropW(tree, kTreeOldFontProp, (HANDLE)cur);
+    SetPropW(tree, kTreeFontProp, (HANDLE)f);
+    SendMessageW(tree, WM_SETFONT, (WPARAM)f, FALSE);
+}
+
+static VOID Tidy(HWND tree)
+{
+    t_tidying++;
+    LONG_PTR st = GetWindowLongPtrW(tree, GWL_STYLE);
+    if (st & kTreeStrip)
+        SetWindowLongPtrW(tree, GWL_STYLE, st & ~(LONG_PTR)kTreeStrip);
+    if (SendMessageW(tree, TVM_GETIMAGELIST, TVSIL_STATE, 0))
+        SendMessageW(tree, TVM_SETIMAGELIST, TVSIL_STATE, 0);
+    SetTreeFont(tree);
+    INT h = RowHeight(tree);
+    if ((INT)SendMessageW(tree, TVM_GETITEMHEIGHT, 0, 0) != h)
+        SendMessageW(tree, TVM_SETITEMHEIGHT, h, 0);
+    t_tidying--;
+}
+
+static LRESULT CALLBACK PaintProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, DWORD_PTR)
+{
+    BOOL tree = IsWindowClass(hWnd, L"SysTreeView32");
+    if (!g_settings.Unload) {
+        if (uMsg == WM_PAINT || uMsg == WM_PRINTCLIENT) {
+            HWND saved = t_paint;
+            t_paint = hWnd;
+            LRESULT r = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+            t_paint = saved;
+            return r;
+        }
+        if (tree && !t_tidying) {
+            if (uMsg == WM_STYLECHANGING && wParam == (WPARAM)GWL_STYLE)
+                ((STYLESTRUCT*)lParam)->styleNew &= ~kTreeStrip;
+            else if (uMsg == TVM_SETIMAGELIST && wParam == TVSIL_STATE)
+                lParam = 0;
+            else if (uMsg == TVM_SETITEMHEIGHT)
+                wParam = (WPARAM)RowHeight(hWnd);
+            else if (uMsg == WM_SETFONT) {
+                // Keep the app's choice as the size, in our face.
+                LRESULT r = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+                if (HFONT mine = (HFONT)GetPropW(hWnd, kTreeFontProp)) {
+                    if ((HFONT)wParam != mine) {
+                        RemovePropW(hWnd, kTreeFontProp);
+                        DeleteObject(mine);
+                        t_tidying++;
+                        SetTreeFont(hWnd);
+                        t_tidying--;
+                    }
+                }
+                return r;
+            }
+            else if (uMsg == WM_DPICHANGED_AFTERPARENT) {
+                LRESULT r = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+                Tidy(hWnd);
+                return r;
+            }
+        }
+    }
+    if (uMsg == WM_NCDESTROY) {
+        RemovePropW(hWnd, kPaintProp);
+        RemovePropW(hWnd, kTreeStyleProp);
+        RemovePropW(hWnd, kTreeOldFontProp);
+        if (HFONT mine = (HFONT)RemovePropW(hWnd, kTreeFontProp))
+            DeleteObject(mine);
+    }
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
+static VOID OnCreate(HWND hWnd, HWND parent)
+{
+    if (g_settings.Unload)
+        return;
+    HWND root = GetAncestor(parent, GA_ROOT);
+    if (!root || !IsWindowClass(root, L"#32770"))
+        return;
+    // The view host only exists in the Open and Save windows (and the folder picker).
+    if (IsWindowClass(hWnd, L"DUIViewWndClassName") && parent == root) {
+        SetPropW(root, kPickerProp, (HANDLE)1);
+        return;
+    }
+    if (!IsPickerRoot(root) || GetPropW(hWnd, kPaintProp))
+        return;
+    BOOL tree = IsWindowClass(hWnd, L"SysTreeView32");
+    if (!tree && !IsWindowClass(hWnd, L"DirectUIHWND"))
+        return;
+    if (!WindhawkUtils::SetWindowSubclassFromAnyThread(hWnd, PaintProc, 0))
+        return;
+    SetPropW(hWnd, kPaintProp, (HANDLE)1);
+    if (tree) {
+        SetPropW(hWnd, kTreeStyleProp, (HANDLE)(GetWindowLongPtrW(hWnd, GWL_STYLE) & kTreeStrip));
+        Tidy(hWnd);
+    }
+}
+
+// Explorer's side panel pill: from 30 px left of the text to 10 px past it, 2 px in from the row,
+// on the live corner radius, Mocha fill at 75% and a 2 px edge (blue to mauve when hovered).
+static BOOL DrawTreeItem(HDC hdc, INT iStateId, LPCRECT pRect, LPCRECT pClip)
+{
+    HWND tree = t_paint;
+    if (!tree || !pRect)
+        return FALSE;
+    if (iStateId != TREIS_HOT && iStateId != TREIS_SELECTED && iStateId != TREIS_SELECTEDNOTFOCUS &&
+        iStateId != TREIS_HOTSELECTED)
+        return TRUE;  // Rest rows: glass only.
+    INT mid = (pRect->top + pRect->bottom) / 2;
+    HTREEITEM item = TreeView_GetFirstVisible(tree);
+    RECT text = {};
+    BOOL found = FALSE;
+    for (INT guard = 0; item && guard < 400; guard++, item = TreeView_GetNextVisible(tree, item)) {
+        RECT full = {};
+        *(HTREEITEM*)&full = item;
+        if (!SendMessageW(tree, TVM_GETITEMRECT, FALSE, (LPARAM)&full))
+            continue;
+        if (full.top > mid)
+            break;
+        if (mid < full.bottom) {
+            *(HTREEITEM*)&text = item;
+            found = (BOOL)SendMessageW(tree, TVM_GETITEMRECT, TRUE, (LPARAM)&text);
+            break;
+        }
+    }
+    RECT r = *pRect;
+    if (found) {
+        r.left = std::max(pRect->left, text.left - 30);
+        r.right = std::min(pRect->right, text.right + 10);
+    }
+    r.top += 2;
+    r.bottom -= 3;
+    INT w = r.right - r.left, h = r.bottom - r.top;
+    auto factory = AcquireDirect2DFactory();
+    if (!factory || w <= 4 || h <= 4)
+        return FALSE;
+    HDC dc = CreateCompatibleDC(hdc);
+    if (!dc)
+        return FALSE;
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -h, 1, 32, BI_RGB};
+    VOID* bits = nullptr;
+    HBITMAP bmp = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!bmp) { DeleteDC(dc); return FALSE; }
+    HGDIOBJ old = SelectObject(dc, bmp);
+    auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_SOFTWARE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0,
+        D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE, D2D1_FEATURE_LEVEL_DEFAULT);
+    ID2D1DCRenderTarget* rt = nullptr;
+    RECT rc = {0, 0, w, h};
+    BOOL ok = FALSE;
+    if (SUCCEEDED(factory->CreateDCRenderTarget(&props, &rt)) && SUCCEEDED(rt->BindDC(dc, &rc))) {
+        UINT dpi = GetDpiForWindow(tree);
+        FLOAT s = (dpi ? dpi : USER_DEFAULT_SCREEN_DPI) / (FLOAT)USER_DEFAULT_SCREEN_DPI;
+        FLOAT edgeW = std::min(2.f * std::max(1.f, std::floor(s + 0.25f)), std::min((FLOAT)w, (FLOAT)h) / 2.f);
+        FLOAT rad = std::min(16.f * s, std::min((FLOAT)w, (FLOAT)h) / 2.f);
+        FLOAT inner = std::max(rad - edgeW / 2, 0.f);
+        D2D1_ROUNDED_RECT fillR = {{0, 0, (FLOAT)w, (FLOAT)h}, rad, rad};
+        D2D1_ROUNDED_RECT edgeR = {{edgeW / 2, edgeW / 2, w - edgeW / 2, h - edgeW / 2}, inner, inner};
+        auto solid = [&](COLORREF c, FLOAT a) {
+            ID2D1SolidColorBrush* b = nullptr;
+            rt->CreateSolidColorBrush({GetRValue(c) / 255.f, GetGValue(c) / 255.f, GetBValue(c) / 255.f, a}, &b);
+            return (ID2D1Brush*)b;
+        };
+        BOOL hover = iStateId == TREIS_HOT || iStateId == TREIS_HOTSELECTED;
+        COLORREF fillC = iStateId == TREIS_HOT ? RGB(18, 18, 25)
+                       : iStateId == TREIS_SELECTEDNOTFOCUS ? RGB(0x11, 0x11, 0x1B) : RGB(0x1E, 0x1E, 0x2E);
+        rt->BeginDraw();
+        rt->Clear({0, 0, 0, 0});
+        ID2D1Brush* fb = solid(fillC, 0.75f);
+        ID2D1Brush* eb = nullptr;
+        if (hover) {
+            ID2D1GradientStopCollection* stops = nullptr;
+            D2D1_GRADIENT_STOP st[2] = {{0.f, {137 / 255.f, 180 / 255.f, 250 / 255.f, 1.f}},
+                                        {1.f, {203 / 255.f, 166 / 255.f, 247 / 255.f, 1.f}}};
+            ID2D1LinearGradientBrush* gb = nullptr;
+            if (SUCCEEDED(rt->CreateGradientStopCollection(st, 2, &stops)))
+                rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties({0, 0}, {(FLOAT)w, (FLOAT)h}),
+                                              stops, &gb);
+            if (stops) stops->Release();
+            eb = gb;
+        } else {
+            eb = solid(iStateId == TREIS_SELECTEDNOTFOCUS ? RGB(0x58, 0x5B, 0x70) : RGB(0x89, 0xB4, 0xFA), 1.f);
+        }
+        if (fb) rt->FillRoundedRectangle(&fillR, fb);
+        if (eb) rt->DrawRoundedRectangle(&edgeR, eb, edgeW);
+        ok = SUCCEEDED(rt->EndDraw()) && fb && eb;
+        if (fb) fb->Release();
+        if (eb) eb->Release();
+    }
+    if (rt) rt->Release();
+    if (ok) {
+        INT saved = pClip ? SaveDC(hdc) : 0;
+        if (pClip) IntersectClipRect(hdc, pClip->left, pClip->top, pClip->right, pClip->bottom);
+        BLENDFUNCTION bf = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        ok = GdiAlphaBlend(hdc, r.left, r.top, w, h, dc, 0, 0, w, h, bf);
+        if (saved) RestoreDC(hdc, saved);
+    }
+    SelectObject(dc, old);
+    DeleteObject(bmp);
+    DeleteDC(dc);
+    return ok;
+}
+
+// Undo what we changed, so the window looks stock again (and Seamless Controls takes it back).
+static BOOL CALLBACK RestoreChild(HWND hWnd, LPARAM)
+{
+    if (GetPropW(hWnd, kTreeStyleProp) || GetPropW(hWnd, kTreeFontProp)) {
+        LONG_PTR bits = (LONG_PTR)GetPropW(hWnd, kTreeStyleProp);
+        if (bits)
+            SetWindowLongPtrW(hWnd, GWL_STYLE, GetWindowLongPtrW(hWnd, GWL_STYLE) | bits);
+        DWORD_PTR res = 0;
+        if (HFONT oldFont = (HFONT)GetPropW(hWnd, kTreeOldFontProp))
+            SendMessageTimeoutW(hWnd, WM_SETFONT, (WPARAM)oldFont, FALSE, SMTO_ABORTIFHUNG, 300, &res);
+        SendMessageTimeoutW(hWnd, TVM_SETITEMHEIGHT, (WPARAM)-1, 0, SMTO_ABORTIFHUNG, 300, &res);
+        RemovePropW(hWnd, kTreeStyleProp);
+        RemovePropW(hWnd, kTreeOldFontProp);
+        if (HFONT mine = (HFONT)RemovePropW(hWnd, kTreeFontProp))
+            DeleteObject(mine);
+        RedrawWindow(hWnd, nullptr, nullptr, RDW_INVALIDATE | RDW_FRAME | RDW_ERASE);
+    }
+    RemovePropW(hWnd, kPaintProp);
+    return TRUE;
+}
+
+static BOOL CALLBACK RestoreTop(HWND hWnd, LPARAM)
+{
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hWnd, &pid);
+    if (pid == GetCurrentProcessId() && RemovePropW(hWnd, kPickerProp)) {
+        EnumChildWindows(hWnd, RestoreChild, 0);
+        RedrawWindow(hWnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_ERASE);
+    }
+    return TRUE;
+}
+
+static VOID Uninit() { EnumWindows(RestoreTop, 0); }
+
+}  // namespace SeamlessPicker
+
 HWND WINAPI HookedNtUserCreateWindowEx(DWORD dwExStyle,
                                        PUNICODE_STRING UnsafeClassName,
                                        LPCWSTR         VersionedClass,
@@ -1931,8 +2214,10 @@ HWND WINAPI HookedNtUserCreateWindowEx(DWORD dwExStyle,
         ArmAccentReapplyTimer(hWnd);
         if (!(dwStyle & WS_CHILD))
             WatchMenuThemeForThread(GetCurrentThreadId());
-        else if (hWndParent)
+        else if (hWndParent) {
             SeamlessFileDialogBar::OnCreate(hWnd, hWndParent);
+            SeamlessPicker::OnCreate(hWnd, hWndParent);
+        }
     }
 
     return hWnd;
@@ -2624,6 +2909,10 @@ HRESULT WINAPI HookedGetColorTheme(HTHEME hTheme, INT iPartId, INT iStateId, INT
     }
     else if (ThemeClassName == L"TreeView" && iPropId == TMT_TEXTCOLOR)
     {
+        if (g_IsSysThemeDarkMode && SeamlessPicker::PaintingTree()) {
+            *pColor = RGB(0xCD, 0xD6, 0xF4);  // File Explorer's side panel text.
+            return S_OK;
+        }
         *pColor = (g_IsSysThemeDarkMode && *pColor == RGB(0, 0, 0)) ? RGB(255, 255, 255) : *pColor;
         return S_OK;
     }
@@ -2650,6 +2939,10 @@ HRESULT WINAPI HookedGetColorTheme(HTHEME hTheme, INT iPartId, INT iStateId, INT
     }
     else if (ThemeClassName == L"Header" && iPropId == TMT_TEXTCOLOR)
     {
+        if (g_IsSysThemeDarkMode && SeamlessPicker::PaintingPicker()) {
+            *pColor = RGB(167, 167, 173);  // File Explorer's muted column names.
+            return S_OK;
+        }
         *pColor = (g_IsSysThemeDarkMode) ? RGB(255, 255, 255) : *pColor;
         return S_OK;
     }
@@ -6204,6 +6497,9 @@ HRESULT WINAPI HookedDrawThemeBackground(
     }
     else if (ThemeClassName == L"TreeView")
     {
+        if (iPartId == TVP_TREEITEM && SeamlessPicker::PaintingTree() &&
+            SeamlessPicker::DrawTreeItem(hdc, iStateId, pRect, pClipRect))
+            return S_OK;
         if (PaintTreeViewButton(hdc, iPartId, iStateId, pRect))
             return S_OK;
         if (PaintTreeViewGlyph(hdc, iPartId, iStateId, pRect))
@@ -6211,6 +6507,8 @@ HRESULT WINAPI HookedDrawThemeBackground(
     }
     else if (ThemeClassName == L"Header")
     {
+        if (iPartId == HP_HEADERSORTARROW && SeamlessPicker::PaintingPicker())
+            return S_OK;  // File Explorer shows no sort arrow.
         if (PaintHeader(hdc, iPartId, iStateId, pRect))
             return S_OK;
     }
@@ -6356,8 +6654,16 @@ HRESULT WINAPI HookedDrawThemeBackgroundEx(
         if (PaintItemsView(hdc, iPartId, iStateId, pRect))
             return S_OK;
     }
+    else if (ThemeClassName == L"TreeView" && iPartId == TVP_TREEITEM && SeamlessPicker::PaintingTree())
+    {
+        if (SeamlessPicker::DrawTreeItem(hdc, iStateId, pRect,
+                (pOptions && (pOptions->dwFlags & DTBG_CLIPRECT)) ? &pOptions->rcClip : nullptr))
+            return S_OK;
+    }
     else if (ThemeClassName == L"Header")
     {
+        if (iPartId == HP_HEADERSORTARROW && SeamlessPicker::PaintingPicker())
+            return S_OK;  // File Explorer shows no sort arrow.
         if (PaintHeader(hdc, iPartId, iStateId, pRect))
             return S_OK;
     }
@@ -8542,6 +8848,7 @@ VOID Wh_ModAfterInit()
 VOID Wh_ModUninit(VOID) 
 {
     WindhawkUtils::RemoveAllWindowSubclasses();
+    SeamlessPicker::Uninit();
     SeamlessMenuRoom::Uninit();
     if (g_explorerStylerNoBackgroundEffectAtom)
         DeleteAtom(g_explorerStylerNoBackgroundEffectAtom);
