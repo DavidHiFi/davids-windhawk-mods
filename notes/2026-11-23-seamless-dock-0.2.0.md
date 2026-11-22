@@ -1,0 +1,93 @@
+# Seamless Dock 0.2.0: top bar title, app buttons off the top bar (2026-11-23)
+
+The owner asked for this in the bottom dock job (2026-11-22). Item 4: the top bar's middle shows
+the active window's app and title, in place of the app buttons.
+
+## What changed
+
+- **Seamless Dock 0.2.0** (`work\2026-11-22-bottom-dock\seamless-dock.wh.cpp`; the 0.1.0 copy is
+  `seamless-dock-0.1.0.wh.cpp`).
+  - A new click-through layered window, `SeamlessDockTitle`, sits centred on a top Shell_TrayWnd.
+    It copies the look of the bar's pills: 34 px tall, corner radius 10, a 2 px Surface1 edge
+    and a clear inside. It shows the app icon, the app name (Text, semibold) and the window
+    title (Subtext). It is refreshed from Rebuild and once a second, and repaints only when
+    its text changes.
+  - New setting `showTitle` ("Window title on the top bar"), on by default.
+  - Idle redraw fix, reported by the "find why window drawing is busy" thread: Rebuild now
+    compares an item signature and skips the layout and the repaint when nothing changed.
+    Before, every tooltip or pop-up anywhere repainted the dock (about 20 frames a second
+    while idle).
+- **Taskbar Styler** (HKLM\SOFTWARE\Windhawk\Engine\Mods\windows-11-taskbar-styler\Settings)
+  - old: `controlStyles[5].styles[1]` not present (rule 5 = `Taskbar.TaskListButton#TaskListButton`, styles[0] `Margin=0`)
+  - new: `controlStyles[5].styles[1] = Visibility=Collapsed`
+  - Seamless Taskbar's apps island hides itself when no task buttons are visible.
+  - **Result: reverted.** The buttons never hid, and the taskbar thread of the shell froze
+    (one core busy, memory climbing past 2.5 GB, Shell_TrayWnd hung). Windows restarted the
+    shell at 3:08 am. The value was deleted at 3:08 am (`reg delete`, since
+    Remove-ItemProperty reads `[5]` as a wildcard and deleted nothing on the first try).
+    Backup: `backups\taskbar-styler-settings.bak-20261123-0258.reg`. The 40 s check after the
+    write looked at the wrong Explorer (pid 4112, not the shell): always find the shell pid
+    from Shell_TrayWnd.
+  - Never hide task buttons with a styler rule while Seamless Taskbar runs. The hide was
+    handed to the "Make taskbar and dock modular" thread as an "App buttons" module inside
+    Seamless Taskbar.
+- **Dock showTitle** (HKLM\...\local@seamless-dock\Settings): old 1, new 0, 3:11 am, so the
+  pill does not cover the bar's app buttons. Turn back on once the buttons are gone.
+- **Found after the restart:** 0.2.0 does not take its reserved strip back after a shell
+  restart (TaskbarCreated reset `g_appbar` but kept `g_barHeightSent`, so SETPOS was skipped).
+  The work area went back to the full screen.
+
+## 0.2.1 (staged, checked offline, not installed yet)
+
+- TaskbarCreated also clears `g_barHeightSent` and `g_barRect`, so the strip is set again.
+- TitleWindow falls back to the top eligible, not minimized window in z-order (tray menus and
+  the hidden icons panel left the pill empty).
+- Install waits until the owner stops gaming (engine lock, Install-StagedMod, base hash of the
+  0.2.0 source). 0.2.0 copy: `seamless-dock-0.2.0.wh.cpp`.
+
+## Handoff (owner gaming, install held)
+
+- The dock file went to the "Make taskbar and dock modular" thread (fa897eef). It installs
+  0.2.1 inside its 0.3.0, so the dock reloads once. It also hides the top bar's app buttons
+  as a Seamless Taskbar module, then sets showTitle back to 1.
+
+## 0.3.1 (installed 4:56 am, published, mods b4cdfca, feed b29cbfe)
+
+The dock came back to this thread. 0.3.1 is 0.3.0 (place control for the taskbar's
+Modules and Dock position menus, wp 1-5 kept) plus:
+
+- Pinned apps no longer show twice. A window now matches a pin when its program sits in
+  the pin's own folder (Steam's steamwebhelper.exe, Windhawk's UI\Windhawk.exe). The
+  Windows folder and windhawk-mod.exe never match, and the folder must be 3 levels deep.
+- Unpinned windows whose app id is in the Apps folder launch and pin by that id.
+- The strip heals itself: every 5 s, if the work area reaches into the dock again or the
+  appbar went away (shell restart), the dock drops and re-adds its strip.
+- New menu row "Open file location". Menu already had: window list, Open/New window,
+  Pin to dock / Unpin from dock, Close window(s), Dock options. Bin: Open, Empty, Remove.
+- Defaults written: position auto, recycleBin 1. showTitle stays 0 until the top bar's
+  app buttons are off (Seamless Taskbar 0.4.45, the other thread installs it).
+- Backup of the live 0.2.0 source: `local@seamless-dock-20261123-0456.wh.cpp`.
+
+Proof (`D:\Agent Work\seamless-dock\proof\fix-031\`):
+- dock.png: seven pins, one icon each, running dots under T3, Steam, Helium; one
+  unpinned app after the divider; Recycle Bin at the end.
+- Work area 0,56,2560,1366; dock edge at y 1366 by pixel.
+- tile.log: a test window moved onto the main screen (no focus, no input) was tiled by
+  Seamless Window Manager to 20,76,2540,1346, so 20 px above the dock, same as the sides.
+
+## Title back on (5:50 am)
+
+- Seamless Taskbar 0.4.46 with apps.HideAllButtons=1 went live at 5:48 am (thread fa897eef).
+- Dock control message wp 4, lp 1: state 0x40000410 to 0x40000430. Title window 1187,14,1373,48.
+- **Dock showTitle** (HKLM\...\local@seamless-dock\Settings): old 0, new 1, SettingsChangeTime bumped.
+  Backup: `backups\seamless-dock-settings.bak-20261123-0550.reg`. Rollback: `elevated-title-off.ps1`.
+- Proof `D:\Agent Work\seamless-dock\proof\title-1123\`: topbar.png, title.png. check-dock-align ok,
+  work area still 0,56,2560,1366, Explorer 4112 unchanged.
+- Still open: live capture of the dock's right-click menu. Desktop lock held by the Hydra thread;
+  this thread is queued (13th). Menu rows are in the code (see 0.3.1 above).
+
+## Rollback
+
+- Styler: already rolled back. `reg import` the backup to see the old state.
+- Dock: install `seamless-dock-0.1.0.wh.cpp` (or `-0.2.0`) with Install-StagedMod.
+- Title: set `showTitle` to 1 and bump `SettingsChangeTime`.
