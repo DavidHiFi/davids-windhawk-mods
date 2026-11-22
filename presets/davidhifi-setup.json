@@ -1897,6 +1897,17 @@
         "gameGuard.allow": "",
         "gameGuard.enabled": 1,
         "gameGuard.skip": ""
+      },
+      "config": {
+        "includeCustom": [
+          "*.exe",
+          "*.tmp"
+        ],
+        "excludeCustom": [
+          "FreeDictate.exe",
+          "WindowsTerminal.exe"
+        ],
+        "includeExcludeCustomOnly": true
       }
     },
     {

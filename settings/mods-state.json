@@ -541,9 +541,9 @@
   "local@seamless-flyouts": {
     "disabled": false,
     "include": "*",
-    "exclude": "",
+    "exclude": "cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe",
     "architecture": "",
-    "version": "2.0.20"
+    "version": "2.1.0"
   },
   "local@seamless-launchpad": {
     "disabled": false,

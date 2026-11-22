@@ -2,12 +2,17 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.0.20
+// @version         2.1.0
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         *
+// @exclude         cloudflared.exe
+// @exclude         ollama.exe
+// @exclude         ollama app.exe
+// @exclude         tailscale-ipn.exe
+// @exclude         esbuild.exe
 // @compilerOptions -ldwmapi -luxtheme -lcomctl32 -lgdi32 -ld2d1 -lmsimg32 -lshcore -lversion -ladvapi32 -ffp-exception-behavior=maytrap
 // ==/WindhawkMod==
 
@@ -22,6 +27,16 @@ It also brings acrylic, Mica and blur to Windows 11 apps, and keeps re-applying 
 Explorer folder windows that open hidden or late, so they never show up black.
 
 Built on Translucent Windows by Undisputed00x.
+
+## What's new in 2.1.0
+
+- Open and Save windows in every app now look like File Explorer: the address bar is a
+  rounded dock, back, forward and up share one dock beside it, and the search box is gone
+  (Seamless Explorer Search does that job, just start typing).
+- Buttons, drop-down boxes and text boxes in classic windows get the same rounded dock with
+  a grey edge, glowing blue to mauve when you point at them or type in them.
+- Toolbar buttons and back and forward get the soft menu pill when you point at them.
+- The strip behind File name, Open and Cancel is clear glass instead of a grey slab.
 
 ### ⚠️ FAQ section below ⚠️
 ### ❗For any excluded process, if the global "New system colors" setting is enabled, please add the excluded processes to the process rules in the mod settings instead.❗
@@ -641,6 +656,88 @@ static BOOL Draw(ID2D1Factory* factory, HDC hdc, const RECT& r, UINT dpi)
 }
 
 }  // namespace SeamlessMenuPill
+
+// ---------------------------------------------------------------------------------------------
+// Dock: the File Explorer look for boxes and buttons. A 2 px Mocha grey edge (#585B70) at rest,
+// the blue to mauve gradient edge on hover or focus, radius 16 (a pill when the box is lower),
+// drawn at the real size like the menu pill. Docks for areas that repaint piece by piece
+// (address bar, the back/forward dock) use no fill, so a second paint changes nothing.
+// ---------------------------------------------------------------------------------------------
+namespace SeamlessDock {
+
+enum Edge { kEdgeRest, kEdgeHover, kEdgeDim };
+enum Fill { kFillNone, kFillButton, kFillPressed };
+constexpr FLOAT kRadius = 16.f;      // The live corner radius on this setup (custom-corner-radius).
+constexpr FLOAT kInputRadius = 6.f;  // Text boxes: the box inside covers anything rounder.
+
+static BOOL Draw(ID2D1Factory* factory, HDC hdc, const RECT& r, UINT dpi, Edge edge, Fill fill,
+                 FLOAT radiusCap = 0.f, LPCRECT clip = nullptr)
+{
+    INT w = r.right - r.left, h = r.bottom - r.top;
+    if (!factory || !hdc || w <= 4 || h <= 4) return FALSE;
+    HDC dc = CreateCompatibleDC(hdc);
+    if (!dc) return FALSE;
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -h, 1, 32, BI_RGB};
+    VOID* bits = nullptr;
+    HBITMAP bmp = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!bmp) { DeleteDC(dc); return FALSE; }
+    HGDIOBJ old = SelectObject(dc, bmp);
+    auto props = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_SOFTWARE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 0, 0,
+        D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE, D2D1_FEATURE_LEVEL_DEFAULT);
+    ID2D1DCRenderTarget* rt = nullptr;
+    RECT rc = {0, 0, w, h};
+    BOOL ok = FALSE;
+    if (SUCCEEDED(factory->CreateDCRenderTarget(&props, &rt)) && SUCCEEDED(rt->BindDC(dc, &rc))) {
+        FLOAT s = (dpi ? dpi : USER_DEFAULT_SCREEN_DPI) / (FLOAT)USER_DEFAULT_SCREEN_DPI;
+        FLOAT edgeW = 2.f * std::max(1.f, std::floor(s + 0.25f));
+        FLOAT rad = (radiusCap > 0.f ? radiusCap : kRadius) * s;
+        rad = std::min(rad, std::min((FLOAT)w, (FLOAT)h) / 2.f) - edgeW / 2;
+        D2D1_ROUNDED_RECT rr = {{edgeW / 2, edgeW / 2, w - edgeW / 2, h - edgeW / 2}, rad, rad};
+        auto gradient = [&](FLOAT a) {
+            ID2D1LinearGradientBrush* brush = nullptr;
+            ID2D1GradientStopCollection* stops = nullptr;
+            D2D1_GRADIENT_STOP st[2] = {{0.f, {137 / 255.f, 180 / 255.f, 250 / 255.f, a}},
+                                        {1.f, {203 / 255.f, 166 / 255.f, 247 / 255.f, a}}};
+            if (SUCCEEDED(rt->CreateGradientStopCollection(st, 2, &stops)))
+                rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties({0, 0}, {(FLOAT)w, (FLOAT)h}),
+                                              stops, &brush);
+            if (stops) stops->Release();
+            return (ID2D1Brush*)brush;
+        };
+        auto solid = [&](BYTE cr, BYTE cg, BYTE cb, FLOAT a) {
+            ID2D1SolidColorBrush* brush = nullptr;
+            rt->CreateSolidColorBrush({cr / 255.f, cg / 255.f, cb / 255.f, a}, &brush);
+            return (ID2D1Brush*)brush;
+        };
+        rt->BeginDraw();
+        rt->Clear({0, 0, 0, 0});
+        ID2D1Brush* fb = fill == kFillButton ? solid(0x31, 0x32, 0x44, edge == kEdgeDim ? 0.25f : 0.55f)
+                       : fill == kFillPressed ? gradient(0.18f) : nullptr;
+        ID2D1Brush* eb = edge == kEdgeHover ? gradient(1.f)
+                       : solid(0x58, 0x5B, 0x70, edge == kEdgeDim ? 0.45f : 1.f);
+        if (fb) rt->FillRoundedRectangle(&rr, fb);
+        if (eb) rt->DrawRoundedRectangle(&rr, eb, edgeW);
+        ok = SUCCEEDED(rt->EndDraw()) && eb;
+        if (fb) fb->Release();
+        if (eb) eb->Release();
+    }
+    if (rt) rt->Release();
+    if (ok) {
+        INT saved = clip ? SaveDC(hdc) : 0;
+        if (clip) IntersectClipRect(hdc, clip->left, clip->top, clip->right, clip->bottom);
+        BLENDFUNCTION bf = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        ok = GdiAlphaBlend(hdc, r.left, r.top, w, h, dc, 0, 0, w, h, bf);
+        if (saved) RestoreDC(hdc, saved);
+    }
+    SelectObject(dc, old);
+    DeleteObject(bmp);
+    DeleteDC(dc);
+    return ok;
+}
+
+}  // namespace SeamlessDock
 
 #define RECTWIDTH(lprc)     ((lprc)->right - (lprc)->left)
 #define RECTHEIGHT(lprc)    ((lprc)->bottom - (lprc)->top)
@@ -1537,6 +1634,215 @@ static VOID WINAPI SetThemeAppProperties_Hook(DWORD props)
         EnumWindows(WatchMenuThemeEnumProc, 0);
 }
 
+// ---------------------------------------------------------------------------------------------
+// File dialog bar: the strip with back/forward/up, the address bar and the search box in every
+// app's Open and Save window (a ReBarWindow32 under a WorkerW in a #32770).
+// - The search box band and its separators are hidden, so the address bar runs to the edge.
+// - Back, forward and up get room on both sides and one rounded dock around them, as tall as
+//   the address dock. The dock crosses several windows (the bar, the band hosts and their
+//   toolbars), so each of them draws its own piece after it paints.
+// ---------------------------------------------------------------------------------------------
+namespace SeamlessFileDialogBar {
+
+static UINT g_fixMsg = 0;  // Registered on first use, never while the loader lock is held.
+constexpr wchar_t kPendingProp[] = L"SeamlessFlyouts_DialogBarPending";
+constexpr wchar_t kNavProp[] = L"SeamlessFlyouts_DialogBarNav";
+constexpr wchar_t kFixCountProp[] = L"SeamlessFlyouts_DialogBarFixes";
+constexpr INT kMaxFixes = 40;  // If the dialog keeps undoing the layout, stop instead of fighting it.
+constexpr INT kTravelHeader = 10;  // Room left of back, inside the dock.
+constexpr INT kAddressHeader = 20; // Gap between the dock and the address bar.
+constexpr INT kDockPadLeft = 8, kDockPadRight = 6;
+static thread_local INT t_fixing = 0;
+
+static std::wstring BandClass(HWND rebar, UINT i, REBARBANDINFOW* bi)
+{
+    *bi = {};
+    bi->cbSize = sizeof(*bi);
+    bi->fMask = RBBIM_CHILD | RBBIM_STYLE | RBBIM_HEADERSIZE;
+    if (!SendMessageW(rebar, RB_GETBANDINFOW, i, (LPARAM)bi) || !bi->hwndChild)
+        return L"";
+    return GetWindowClass(bi->hwndChild);
+}
+
+// The search band and the separators after the address bar.
+static BOOL IsHiddenBand(HWND rebar, UINT index)
+{
+    REBARBANDINFOW bi;
+    BOOL afterAddress = FALSE;
+    for (UINT i = 0; i <= index; i++) {
+        std::wstring c = BandClass(rebar, i, &bi);
+        if (c == L"Address Band Root")
+            afterAddress = TRUE;
+        else if (i == index)
+            return afterAddress && (c == L"UniversalSearchBand" || c == L"SeparatorBand");
+    }
+    return FALSE;
+}
+
+static BOOL NavDockRect(HWND rebar, RECT* out)
+{
+    HWND travel = FindWindowExW(rebar, nullptr, L"TravelBand", nullptr);
+    if (!travel || !IsWindowVisible(travel))
+        return FALSE;
+    RECT g, r;
+    GetWindowRect(travel, &g);
+    HWND up = FindWindowExW(rebar, nullptr, L"UpBand", nullptr);
+    if (up && IsWindowVisible(up)) {
+        GetWindowRect(up, &r);
+        UnionRect(&g, &g, &r);
+    }
+    UINT dpi = g_Dpi ? g_Dpi : USER_DEFAULT_SCREEN_DPI;
+    HWND addr = FindWindowExW(rebar, nullptr, L"Address Band Root", nullptr);
+    HWND box = addr ? FindWindowExW(addr, nullptr, L"msctls_progress32", nullptr) : nullptr;
+    if (box && IsWindowVisible(box)) {
+        GetWindowRect(box, &r);  // The address dock: the same top and bottom.
+        g.top = r.top;
+        g.bottom = r.bottom;
+    } else {
+        InflateRect(&g, 0, MulDiv(2, dpi, 96));
+    }
+    g.left -= MulDiv(kDockPadLeft, dpi, 96);
+    g.right += MulDiv(kDockPadRight, dpi, 96);
+    *out = g;
+    return TRUE;
+}
+
+static VOID PaintNavDock(HWND self, HWND rebar)
+{
+    auto factory = AcquireDirect2DFactory();
+    RECT g, cr, x;
+    if (!factory || !NavDockRect(rebar, &g))
+        return;
+    MapWindowPoints(HWND_DESKTOP, self, (POINT*)&g, 2);
+    GetClientRect(self, &cr);
+    if (!IntersectRect(&x, &g, &cr))
+        return;
+    HDC dc = GetDCEx(self, nullptr, DCX_CACHE | DCX_CLIPCHILDREN | DCX_CLIPSIBLINGS);
+    if (!dc)
+        return;
+    SeamlessDock::Draw(factory.Get(), dc, g, g_Dpi, SeamlessDock::kEdgeRest, SeamlessDock::kFillNone);
+    ReleaseDC(self, dc);
+}
+
+static LRESULT CALLBACK NavProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, DWORD_PTR rebar)
+{
+    LRESULT r = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+    if (uMsg == WM_PAINT && !wParam && !g_settings.Unload)
+        PaintNavDock(hWnd, (HWND)rebar);
+    else if (uMsg == WM_NCDESTROY)
+        RemovePropW(hWnd, kNavProp);
+    return r;
+}
+
+static VOID WatchNav(HWND band, HWND rebar)
+{
+    HWND parts[3] = {band, FindWindowExW(band, nullptr, L"ToolbarWindow32", nullptr), nullptr};
+    for (HWND h : parts) {
+        if (!h || GetPropW(h, kNavProp))
+            continue;
+        if (WindhawkUtils::SetWindowSubclassFromAnyThread(h, NavProc, (DWORD_PTR)rebar))
+            SetPropW(h, kNavProp, (HANDLE)1);
+    }
+}
+
+static VOID Fix(HWND rebar)
+{
+    RemovePropW(rebar, kPendingProp);
+    INT_PTR fixes = (INT_PTR)GetPropW(rebar, kFixCountProp);
+    if (fixes >= kMaxFixes)
+        return;
+    UINT dpi = g_Dpi ? g_Dpi : USER_DEFAULT_SCREEN_DPI;
+    UINT n = (UINT)SendMessageW(rebar, RB_GETBANDCOUNT, 0, 0);
+    BOOL afterAddress = FALSE, changed = FALSE;
+    t_fixing++;
+    for (UINT i = 0; i < n; i++) {
+        REBARBANDINFOW bi;
+        std::wstring c = BandClass(rebar, i, &bi);
+        INT header = -1;
+        if (c == L"TravelBand") {
+            header = MulDiv(kTravelHeader, dpi, 96);
+            WatchNav(bi.hwndChild, rebar);
+        } else if (c == L"UpBand") {
+            WatchNav(bi.hwndChild, rebar);
+        } else if (c == L"Address Band Root") {
+            header = MulDiv(kAddressHeader, dpi, 96);
+            afterAddress = TRUE;
+        } else if (afterAddress && (c == L"UniversalSearchBand" || c == L"SeparatorBand") &&
+                   !(bi.fStyle & RBBS_HIDDEN)) {
+            SendMessageW(rebar, RB_SHOWBAND, i, FALSE);
+            changed = TRUE;
+        }
+        if (header >= 0 && bi.cxHeader != (UINT)header) {
+            REBARBANDINFOW set = {};
+            set.cbSize = sizeof(set);
+            set.fMask = RBBIM_HEADERSIZE;
+            set.cxHeader = header;
+            SendMessageW(rebar, RB_SETBANDINFOW, i, (LPARAM)&set);
+            changed = TRUE;
+        }
+    }
+    t_fixing--;
+    if (changed)
+        SetPropW(rebar, kFixCountProp, (HANDLE)(fixes + 1));
+    if (changed)
+        RedrawWindow(rebar, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+}
+
+static VOID QueueFix(HWND rebar)
+{
+    if (GetPropW(rebar, kPendingProp))
+        return;
+    SetPropW(rebar, kPendingProp, (HANDLE)1);
+    PostMessageW(rebar, g_fixMsg, 0, 0);
+}
+
+static LRESULT CALLBACK RebarProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, DWORD_PTR)
+{
+    if (g_fixMsg && uMsg == g_fixMsg) {
+        if (!g_settings.Unload)
+            Fix(hWnd);
+        return 0;
+    }
+    // Keep the search box hidden when the dialog shows its bands again.
+    if (uMsg == RB_SHOWBAND && lParam && !t_fixing && !g_settings.Unload &&
+        (INT_PTR)GetPropW(hWnd, kFixCountProp) < kMaxFixes && IsHiddenBand(hWnd, (UINT)wParam))
+        return TRUE;
+    LRESULT r = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+    switch (uMsg) {
+        case WM_PAINT:
+            if (!wParam && !g_settings.Unload)
+                PaintNavDock(hWnd, hWnd);
+            break;
+        case RB_INSERTBANDW:
+        case RB_INSERTBANDA:
+        case RB_SETBANDINFOW:
+        case RB_SETBANDINFOA:
+        case RB_SHOWBAND:
+        case WM_SIZE:
+            if (!t_fixing && !g_settings.Unload)
+                QueueFix(hWnd);
+            break;
+        case WM_NCDESTROY:
+            RemovePropW(hWnd, kPendingProp);
+            RemovePropW(hWnd, kFixCountProp);
+            break;
+    }
+    return r;
+}
+
+static VOID OnCreate(HWND hWnd, HWND parent)
+{
+    if (g_settings.Unload || !IsWindowClass(hWnd, L"ReBarWindow32") || !IsWindowClass(parent, L"WorkerW") ||
+        !IsWindowClass(GetAncestor(parent, GA_ROOT), L"#32770") || !AcquireDirect2DFactory())
+        return;
+    if (!g_fixMsg)
+        g_fixMsg = RegisterWindowMessageW(L"SeamlessFlyouts_DialogBarFix");
+    if (g_fixMsg && WindhawkUtils::SetWindowSubclassFromAnyThread(hWnd, RebarProc, 0))
+        QueueFix(hWnd);
+}
+
+}  // namespace SeamlessFileDialogBar
+
 HWND WINAPI HookedNtUserCreateWindowEx(DWORD dwExStyle,
                                        PUNICODE_STRING UnsafeClassName,
                                        LPCWSTR         VersionedClass,
@@ -1566,6 +1872,8 @@ HWND WINAPI HookedNtUserCreateWindowEx(DWORD dwExStyle,
         ArmAccentReapplyTimer(hWnd);
         if (!(dwStyle & WS_CHILD))
             WatchMenuThemeForThread(GetCurrentThreadId());
+        else if (hWndParent)
+            SeamlessFileDialogBar::OnCreate(hWnd, hWndParent);
     }
 
     return hWnd;
@@ -2934,14 +3242,12 @@ BOOL PaintPushButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect, LPCRECT 
     if (pClipRect)
         IntersectRect(&clipRect, &clipRect, pClipRect);
 
-    INT index = (iStateId == PBS_HOT) ? 1 : (iStateId == PBS_PRESSED) ? 2
-    : (iStateId == PBS_DISABLED) ? 3 : 0;
-
-    if (!g_themeCache.pushbutton[index])
-        if (!g_themeCache.CachePushButton(iStateId, index))
-            return FALSE;
-    DrawNineGridStretch(hdc, g_themeCache.pushbutton[index], &clipRect, 9, 9, 8, 8);
-    return TRUE;
+    // 2.1.0: the Explorer dock, drawn at the button's real size.
+    using namespace SeamlessDock;
+    Edge edge = (iStateId == PBS_HOT || iStateId == PBS_PRESSED) ? kEdgeHover
+              : iStateId == PBS_DISABLED ? kEdgeDim : kEdgeRest;
+    return Draw(factory.Get(), hdc, *pRect, g_Dpi, edge, iStateId == PBS_PRESSED ? kFillPressed : kFillButton,
+                0.f, &clipRect);
 }
 
 BOOL CThemeCache::CachePushButton(INT iStateId, INT stateIndex)
@@ -3416,13 +3722,12 @@ BOOL PaintCombobox(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
     if (!factory || (iPartId != CP_READONLY && iPartId != CP_BORDER))
         return FALSE;
     
-    INT index = (iPartId == CP_READONLY) ? iStateId - 1 : iStateId + 3;
-    
-    if (!g_themeCache.combobox[index])
-        if (!g_themeCache.CacheCombobox(iPartId, iStateId, index))
-            return FALSE;
-    DrawNineGridStretch(hdc, g_themeCache.combobox[index], pRect, 9, 9, 8, 8);
-    return TRUE;
+    // 2.1.0: drop-down lists are button docks, editable boxes are text box docks.
+    using namespace SeamlessDock;
+    Edge edge = (iStateId == 2 || iStateId == 3) ? kEdgeHover : iStateId == 4 ? kEdgeDim : kEdgeRest;
+    if (iPartId == CP_READONLY)
+        return Draw(factory.Get(), hdc, *pRect, g_Dpi, edge, iStateId == 3 ? kFillPressed : kFillButton);
+    return Draw(factory.Get(), hdc, *pRect, g_Dpi, edge, kFillNone, kInputRadius);
 }
 
 BOOL CThemeCache::CacheCombobox(INT iPartId, INT iStateId, INT stateIndex)
@@ -3514,6 +3819,13 @@ BOOL PaintEditBox(HTHEME hTheme, HDC hdc, INT iPartId, INT iStateId, LPCRECT pRe
     if (iPartId ==  EP_BACKGROUND) {
         FillRect(hdc, pRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
         return TRUE;
+    }
+    if (iPartId == EP_EDITBORDER_NOSCROLL || iPartId == EP_EDITBORDER_HSCROLL ||
+        iPartId == EP_EDITBORDER_VSCROLL || iPartId == EP_EDITBORDER_HVSCROLL) {  // 2.1.0: text boxes are docks, focus glows.
+        using namespace SeamlessDock;
+        Edge edge = (iStateId == EPSN_HOT || iStateId == EPSN_FOCUSED) ? kEdgeHover
+                  : iStateId == EPSN_DISABLED ? kEdgeDim : kEdgeRest;
+        return Draw(factory.Get(), hdc, *pRect, g_Dpi, edge, kFillNone, kInputRadius);
     }
     INT index = (iPartId == EP_BACKGROUNDWITHBORDER) ? 3 : (iStateId == 1) ? 0 : iStateId - 2;
 
@@ -4999,6 +5311,10 @@ BOOL PaintNavigationButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
     auto factory = AcquireDirect2DFactory();
     if (!factory)
         return FALSE;
+    // 2.1.0: hover and press are the menu pill with the plain arrow on top.
+    if ((iStateId == NAV_BB_HOT || iStateId == NAV_BB_PRESSED) && iPartId != NAV_MENUBUTTON &&
+        SeamlessMenuPill::Draw(factory.Get(), hdc, *pRect, g_Dpi))
+        iStateId = NAV_BB_NORMAL;
     INT index = (iPartId == NAV_BACKBUTTON) ? iStateId - 1 : (iPartId == NAV_FORWARDBUTTON) ? iStateId + 3 : iStateId + 7;
 
     if (!g_themeCache.navigationbutton[index])
@@ -5141,6 +5457,8 @@ BOOL PaintToolbarButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
     if (!factory || (iPartId != TP_BUTTON && iPartId != TP_DROPDOWNBUTTON && iPartId != TP_SPLITBUTTON))
         return FALSE;
     if (iStateId == TS_NORMAL || iStateId == TS_DISABLED || iStateId == TS_NEARHOT) return FALSE;
+    // 2.1.0: hover, press and checked are the menu pill.
+    if (SeamlessMenuPill::Draw(factory.Get(), hdc, *pRect, g_Dpi)) return TRUE;
 
     INT index = (iStateId == TS_HOTCHECKED) ? 0 : (iStateId == TS_PRESSED) ? 1 : (iStateId == TS_CHECKED) ? 2 : 3;
 
@@ -5241,6 +5559,13 @@ BOOL PaintAddressBand(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
     auto factory = AcquireDirect2DFactory();
     if (!factory || iPartId != 1)
         return FALSE;
+    // 2.1.0: the Explorer address dock. 1 rest, 2 hot, 3 disabled, 4 typing in it.
+    {
+        using namespace SeamlessDock;
+        Edge edge = (iStateId == 2 || iStateId == 4) ? kEdgeHover : iStateId == 3 ? kEdgeDim : kEdgeRest;
+        if (Draw(factory.Get(), hdc, *pRect, g_Dpi, edge, kFillNone))
+            return TRUE;
+    }
     INT index = iStateId - 1;
 
     if (!g_themeCache.addressband[index])
@@ -7322,7 +7647,7 @@ BOOL __fastcall HookedSetDarkThemeColors(void **Brush, HDC hdc)
     SetBkColor(hdc, RGB(0, 0, 0));
     SetTextColor(hdc, g_IsSysThemeDarkMode ? RGB(255, 255, 255) : RGB(0, 0, 0));
     //if ( !*Brush )
-        *Brush = (void*)GetSysColorBrush(COLOR_WINDOW);
+        *Brush = (void*)GetStockObject(BLACK_BRUSH);  // 2.1.0: black is glass; the window colour showed grey
     return *Brush != nullptr;
 }
 
@@ -8150,6 +8475,7 @@ VOID Wh_ModAfterInit()
 
 VOID Wh_ModUninit(VOID) 
 {
+    WindhawkUtils::RemoveAllWindowSubclasses();
     SeamlessMenuRoom::Uninit();
     if (g_explorerStylerNoBackgroundEffectAtom)
         DeleteAtom(g_explorerStylerNoBackgroundEffectAtom);
