@@ -1300,5 +1300,12 @@
     "exclude": "",
     "architecture": "x86-64",
     "version": "1.0.0"
+  },
+  "local@mocha-app-icons": {
+    "disabled": false,
+    "include": "Ableton Live*.exe|yapfast.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.0"
   }
 }
