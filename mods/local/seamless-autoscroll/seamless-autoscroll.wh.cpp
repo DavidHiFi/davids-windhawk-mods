@@ -2,7 +2,7 @@
 // @id              seamless-autoscroll
 // @name            Seamless Autoscroll
 // @description     Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator, in every app
-// @version         2.0.1
+// @version         2.0.2
 // @author          DavidHiFi, crazyboyybs
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -59,6 +59,11 @@ in File Explorer, your browser and every other app. A small frosted glass circle
 marks where you started and lights up the way you are scrolling.
 
 ![Seamless Autoscroll preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-autoscroll.png)
+
+## What's new in 2.0.2
+
+- The scroll goes to the window under your mouse. Before, in apps outside File
+  Explorer and your browser, it could scroll whichever window had focus instead.
 
 ## What's new in 2.0.1
 
@@ -774,18 +779,15 @@ static bool ForegroundFullscreen(POINT pt) {
            wr.right >= mi.rcMonitor.right && wr.bottom >= mi.rcMonitor.bottom;
 }
 
+// The window under the mouse gets the scroll, the way Windows sends real wheel
+// turns. The focused window is only a fallback: a toggle click never reaches
+// the app, so focus can sit in a different window than the one clicked.
 static HWND ScrollTargetForPoint(POINT pt) {
+    HWND hwnd = WindowFromPoint(pt);
+    if (hwnd && IsWindowVisible(hwnd)) return hwnd;
     GUITHREADINFO gti{};
     gti.cbSize = sizeof(gti);
-    HWND hwnd = nullptr;
-    if (GetGUIThreadInfo(0, &gti) && gti.hwndFocus) {
-        hwnd = gti.hwndFocus;
-    }
-    if (!hwnd) {
-        hwnd = WindowFromPoint(pt);
-        if (hwnd) hwnd = GetAncestor(hwnd, GA_ROOT);
-    }
-    if (hwnd && !IsWindowVisible(hwnd)) hwnd = WindowFromPoint(pt);
+    if (GetGUIThreadInfo(0, &gti) && gti.hwndFocus) return gti.hwndFocus;
     return hwnd;
 }
 
