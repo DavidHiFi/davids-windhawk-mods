@@ -424,7 +424,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "",
-    "version": "0.8.7"
+    "version": "0.8.8"
   },
   "local@file-operation-styler-plus": {
     "disabled": false,

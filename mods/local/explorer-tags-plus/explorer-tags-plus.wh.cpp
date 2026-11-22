@@ -2,7 +2,7 @@
 // @id              explorer-tags-plus
 // @name            Explorer Tags Plus
 // @description     Colored tags panel in File Explorer's navigation pane, plus a Tags submenu in the right-click menu
-// @version         0.8.7
+// @version         0.8.8
 // @author          DavidHiFi, buedgik
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @github          https://github.com/DavidHiFi
@@ -44,6 +44,11 @@ Windows' own tags only work for file types with a property handler, so `.txt`,
   changed.
 
 Tags are defined in the mod settings (name and color).
+
+## What's new in 0.8.8
+
+The thin line above the Tags title is gone, so the panel sits in the folder
+tree with no divider.
 
 ## How files are tracked
 
@@ -2287,42 +2292,6 @@ Colors GetColors(Panel* p) {
     return c;
 }
 
-// The container leaves a thin margin between the pane and the window border
-// (left) and the splitter (right). The separator carries on across it so the
-// line meets both edges; the margin belongs to the parent, so it's painted
-// there.
-void PaintSeparatorBleed(Panel* p) {
-    if (!p->wnd || !IsWindow(p->host) || !IsWindowVisible(p->wnd) || !IsWindowVisible(p->sink)) {
-        return;
-    }
-    RECT sink, panel;
-    GetWindowRect(p->sink, &sink);
-    GetWindowRect(p->wnd, &panel);
-    MapWindowPoints(nullptr, p->host, (POINT*)&sink, 2);
-    MapWindowPoints(nullptr, p->host, (POINT*)&panel, 2);
-    int dpi = GetDpiForWindow(p->wnd);
-    int gap = sink.left;
-    if (gap <= 0 || gap > Dip(6, dpi) || panel.bottom <= panel.top) {
-        return;
-    }
-    auto s = GetSettings();
-    Metrics m = GetMetrics(p, *s, panel.bottom - panel.top);
-    Colors c = GetColors(p);
-    int y = panel.top + m.sepY;
-    HDC dc = GetDC(p->host);
-    if (!dc) {
-        return;
-    }
-    HBRUSH brush = CreateSolidBrush(c.sep);
-    RECT left = {0, y, panel.left, y + 1};
-    RECT right = {panel.right, y, panel.right + gap, y + 1};
-    FillRect(dc, &left, brush);
-    FillRect(dc, &right, brush);
-    DeleteObject(brush);
-    ReleaseDC(p->host, dc);
-}
-
-
 // A lambda here would be a __cdecl function pointer and wouldn't build for
 // x86 or arm64, where FONTENUMPROCW is __stdcall.
 int CALLBACK FoundFontFamily(const LOGFONTW*, const TEXTMETRICW*, DWORD, LPARAM param) {
@@ -2497,11 +2466,6 @@ void PaintPanel(Panel* p, HDC target) {
     HBRUSH bk = CreateSolidBrush(c.bk);
     FillRect(hdc, &rc, bk);
     DeleteObject(bk);
-
-    RECT sep = {0, m.sepY, width, m.sepY + 1};
-    HBRUSH sepBrush = CreateSolidBrush(c.sep);
-    FillRect(hdc, &sep, sepBrush);
-    DeleteObject(sepBrush);
 
     int selected = HIT_NONE;
     const std::wstring& current = p->currentFolder;
@@ -3391,10 +3355,6 @@ LRESULT CALLBACK TreeSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPa
 LRESULT CALLBACK HostSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, DWORD_PTR) {
     if (msg == WM_PAINT) {
         LRESULT result = DefSubclassProc(hWnd, msg, wParam, lParam);
-        Panel* p = FindPanel(hWnd);
-        if (p && p->host == hWnd) {
-            PaintSeparatorBleed(p);
-        }
         return result;
     }
     return DefSubclassProc(hWnd, msg, wParam, lParam);
