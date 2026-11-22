@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.3.0
+// @version         1.4.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -32,12 +32,19 @@ Needs the latest Windhawk alpha.
 - Shows when one of DavidHiFi's mods has a new version, and installs it after
   checking that the download is exactly the one he published.
 - Saves your settings as presets, so you can try something and go back.
-- Use DavidHiFi's settings for one mod, or apply his whole setup in one go.
-  Your current settings are saved as a preset first, so you can always go back.
+- Use DavidHiFi's settings for one mod, or copy his whole setup in one go:
+  every mod he runs, with or without his settings, on a clean slate if you
+  like. Your current mods are backed up first, so you can always go back.
 
-## What's new in 1.3.0
+## What's new in 1.4.0
 
-- Mods, Marketplace and Updates sort DavidHiFi's mods into groups: Taskbar, Explorer, Windows and menus, Tools and Fixes. Search still looks through all of them.
+- DavidHiFi's whole setup in one go: every mod he runs, his own and the ones
+  from the Windhawk library. Copy it with his settings, or install everything
+  turned off with default settings.
+- "Clean slate first" takes your current mods off before the setup goes in.
+  A backup of them is saved first.
+- One mod that fails no longer stops the rest. The window shows which step it
+  is on and names any mod that did not work.
 
 ## Nothing private is shared
 
@@ -111,6 +118,7 @@ DavidHiFi's settings, any setting like that keeps your own value.
 #include <string>
 #include <vector>
 #include <thread>
+#include <mutex>
 #include <regex>
 #include <fstream>
 
@@ -4960,6 +4968,12 @@ static bool Hub_Elevated() {
     return elevated;
 }
 
+// One mod's share of a long job, named for the progress line.
+struct HubBlock {
+    std::wstring name;
+    std::vector<std::wstring> lines;
+};
+
 #ifdef HUB_MOD
 // A line that changes the Workshop itself (turn off, remove, update) would end this process,
 // so those run last, after the window has shown the result. Its own settings are safe.
@@ -4971,12 +4985,25 @@ static bool Hub_SelfLine(const std::wstring& l) {
 
 // The tool mod already runs with admin rights, so each line goes straight to windhawk-cli on
 // a worker thread while the window keeps painting.
-static bool Hub_RunJob(SetWindow& w, const std::vector<std::wstring>& lines, std::wstring& err) {
-    std::vector<std::wstring> now, last;
-    for (auto& l : lines) (Hub_SelfLine(l) ? last : now).push_back(l);
+// Blocks: one per mod. Without "failed", the first refused line stops the whole job (the usual
+// way). With it, a refused line skips only the rest of its block, the block's index is added to
+// "failed", and the next block runs, so one bad mod never stops a setup of 180. A line holding a
+// tab is a first choice and a fallback: the part after the tab runs when the first is refused.
+static bool Hub_RunBlocks(SetWindow& w, const std::vector<HubBlock>& blocks, std::wstring& err,
+                          std::vector<size_t>* failed = nullptr) {
+    std::vector<HubBlock> now;
+    std::vector<std::wstring> last;
+    for (auto& b : blocks) {
+        HubBlock keep{b.name, {}};
+        for (auto& l : b.lines) (Hub_SelfLine(l) ? last : keep.lines).push_back(l);
+        now.push_back(std::move(keep));
+    }
     struct Run {
         HANDLE done = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-        std::wstring err;
+        std::mutex lock;
+        std::wstring err, name;
+        std::vector<size_t> failed;
+        std::atomic<size_t> step = 0;
         bool ok = true;
         ~Run() { if (done) CloseHandle(done); }
     };
@@ -4985,26 +5012,49 @@ static bool Hub_RunJob(SetWindow& w, const std::vector<std::wstring>& lines, std
     w.saving = true;
     Set_SetStatus(w, L"Saving…");
     ULONGLONG budget = 20000;
-    for (auto& l : now) budget += Hub_LongCli(l) ? 310000 : 15000;
-    std::thread worker([run, now] {
-        for (const std::wstring& line : now) {
-            Js data;
-            std::wstring e;
-            if (!Hub_Cli(line, data, e)) {
-                run->ok = false;
-                run->err = e.empty() ? L"Windhawk refused the change." : e;
-                break;
+    for (auto& b : now)
+        for (auto& l : b.lines) budget += (Hub_LongCli(l) ? 310000 : 15000) * (l.find(L'\t') != std::wstring::npos ? 2 : 1);
+    const bool keepGoing = failed != nullptr;
+    std::thread worker([run, now, keepGoing] {
+        for (size_t i = 0; i < now.size(); i++) {
+            { std::lock_guard<std::mutex> g(run->lock); run->name = now[i].name; }
+            run->step = i + 1;
+            for (const std::wstring& line : now[i].lines) {
+                Js data;
+                std::wstring e;
+                const size_t tab = line.find(L'\t');
+                bool ok = Hub_Cli(line.substr(0, tab), data, e);
+                if (!ok && tab != std::wstring::npos) { e.clear(); ok = Hub_Cli(line.substr(tab + 1), data, e); }
+                if (!ok) {
+                    std::lock_guard<std::mutex> g(run->lock);
+                    if (run->err.empty())
+                        run->err = (now[i].name.empty() ? L"" : now[i].name + L": ") + (e.empty() ? L"Windhawk refused the change." : e);
+                    run->ok = false;
+                    run->failed.push_back(i);
+                    break;
+                }
             }
+            if (!run->ok && !keepGoing) break;
         }
         SetEvent(run->done);
     });
     const ULONGLONG deadline = GetTickCount64() + budget;
     bool quit = false, finished = false;
     int quitCode = 0;
+    size_t shown = 0;
     for (;;) {
         DWORD r = MsgWaitForMultipleObjects(1, &run->done, FALSE, 100, QS_ALLINPUT);
         if (r == WAIT_OBJECT_0) { finished = true; break; }
         if (GetTickCount64() > deadline) break;
+        // A long job says where it is: "Step 37 of 181: Taskbar Styler".
+        if (now.size() > 3 && run->step != shown) {
+            shown = run->step;
+            std::wstring name;
+            { std::lock_guard<std::mutex> g(run->lock); name = run->name; }
+            const std::wstring text = L"Step " + std::to_wstring(shown) + L" of " + std::to_wstring(now.size()) +
+                                      (name.empty() ? L"" : L": " + name) + L". You can keep using the window.";
+            Set_SetStatus(w, text.c_str());
+        }
         MSG m;
         while (PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) {
             if (m.message == WM_QUIT) {
@@ -5027,6 +5077,7 @@ static bool Hub_RunJob(SetWindow& w, const std::vector<std::wstring>& lines, std
     }
     if (!run->ok) {
         err = run->err;
+        if (failed) *failed = run->failed;
         return false;
     }
     if (!last.empty())
@@ -5039,6 +5090,10 @@ static bool Hub_RunJob(SetWindow& w, const std::vector<std::wstring>& lines, std
             }
         }).detach();
     return true;
+}
+
+static bool Hub_RunJob(SetWindow& w, const std::vector<std::wstring>& lines, std::wstring& err) {
+    return Hub_RunBlocks(w, {HubBlock{L"", lines}}, err);
 }
 #else
 // Runs CLI command lines through the elevated helper while the window keeps painting.
@@ -5117,6 +5172,18 @@ static bool Hub_RunJob(SetWindow& w, const std::vector<std::wstring>& lines, std
         return false;
     }
     return true;
+}
+
+// The standalone build runs every block in one admin run and stops at the first refusal. A
+// fallback after a tab is dropped here: the elevated helper takes one command per line.
+static bool Hub_RunBlocks(SetWindow& w, const std::vector<HubBlock>& blocks, std::wstring& err,
+                          std::vector<size_t>* failed = nullptr) {
+    std::vector<std::wstring> lines;
+    for (auto& b : blocks)
+        for (auto& l : b.lines) lines.push_back(l.substr(0, l.find(L'\t')));
+    const bool ok = Hub_RunJob(w, lines, err);
+    if (!ok && failed) failed->clear();
+    return ok;
 }
 #endif
 
@@ -5350,7 +5417,15 @@ struct HubFeedMod {
     std::wstring category;  // The group it shows under, such as "Taskbar". Empty: "Other".
     bool hasPreset = false, presetOn = false;
     Js preset;  // Flat object: setting name to text or number.
+    // Optional custom app lists from the preset's "config": which apps the mod loads into.
+    bool hasConfig = false, customOnly = false;
+    std::vector<std::wstring> includeCustom, excludeCustom;
 };
+// The Windhawk library mods DavidHiFi runs (the feed's "library"), for the whole-setup copy.
+// Same fields: no url or sha, the id is a library id, version pins what he has.
+static std::vector<HubFeedMod> g_feedLib;
+static ULONGLONG g_fullArmed = 0;
+static bool g_fullArmedConfig = false;
 constexpr WCHAR kHubFeedUrl[] = L"https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/main/feed.json";
 constexpr UINT_PTR kHubFeedTimer = 0x4857;
 static std::thread g_feedThread;
@@ -5738,6 +5813,55 @@ static bool Hub_FeedVersion(const std::wstring& v) {
     return !v.empty() && v.size() < 40 && v.front() != L'.' && v.find_first_not_of(L"0123456789.") == std::wstring::npos;
 }
 
+// Optional "preset": {"enabled": bool, "settings": {name: text|number}, "config": {...}}. A bad
+// preset is dropped; the mod itself still counts. A bad config is dropped on its own.
+static void Hub_FeedPreset(const Js& j, HubFeedMod& m) {
+    const Js* p = j.get(L"preset");
+    if (!p || p->t != Js::Obj) return;
+    const Js *on = p->get(L"enabled"), *settings = p->get(L"settings");
+    bool flat = settings && settings->t == Js::Obj && settings->a.size() <= 2000;
+    if (flat)
+        for (auto& v : settings->a) flat &= v.t == Js::Str || v.t == Js::Num;
+    if (!on || on->t != Js::Bool || !flat) return;
+    m.hasPreset = true;
+    m.presetOn = on->b;
+    m.preset = *settings;
+    const Js* c = p->get(L"config");
+    if (!c || c->t != Js::Obj) return;
+    // Each entry is an app name or pattern such as "explorer.exe" or "*\\steam\\*". Quotes, line
+    // breaks and the list separator never belong in one.
+    auto list = [](const Js* a, std::vector<std::wstring>& out) {
+        if (!a) return true;
+        if (a->t != Js::Arr || a->a.size() > 200) return false;
+        for (auto& e : a->a) {
+            if (e.t != Js::Str || e.s.empty() || e.s.size() > 260 || e.s.find_first_of(L"\"|\r\n") != std::wstring::npos)
+                return false;
+            out.push_back(e.s);
+        }
+        return true;
+    };
+    HubFeedMod t;
+    const Js* only = c->get(L"includeExcludeCustomOnly");
+    if (!list(c->get(L"includeCustom"), t.includeCustom) || !list(c->get(L"excludeCustom"), t.excludeCustom) ||
+        (only && only->t != Js::Bool))
+        return;
+    m.hasConfig = true;
+    m.customOnly = only && only->b;
+    m.includeCustom = std::move(t.includeCustom);
+    m.excludeCustom = std::move(t.excludeCustom);
+}
+
+// One "library" entry: a Windhawk library id (never local@), a plain version and a preset.
+static bool Hub_FeedLibEntry(const Js& j, HubFeedMod& m) {
+    m.id = Js_Text(j.get(L"id")); m.name = Js_Text(j.get(L"name")); m.version = Js_Text(j.get(L"version"));
+    if (m.id.empty() || m.id.size() > 100 || m.id.find(L'@') != std::wstring::npos || !Hub_ValidId(m.id)) return false;
+    if (!m.version.empty() && !Hub_FeedVersion(m.version)) m.version.clear();
+    if (m.name.empty()) m.name = m.id;
+    if (m.name.size() > 80) m.name.resize(80);
+    Hub_FeedPreset(j, m);
+    return true;
+}
+
 static bool Hub_FeedEntry(const Js& j, HubFeedMod& m, bool app) {
     m.id = Js_Text(j.get(L"id")); m.name = Js_Text(j.get(L"name")); m.version = Js_Text(j.get(L"version"));
     m.desc = Js_Text(j.get(L"description")); m.url = Js_Text(j.get(L"url")); m.sha = Hub_Lower(Js_Text(j.get(L"sha256")));
@@ -5752,26 +5876,15 @@ static bool Hub_FeedEntry(const Js& j, HubFeedMod& m, bool app) {
     if (m.changes.size() > 300) m.changes.resize(300);
     m.category = Js_Text(j.get(L"category"));
     if (m.category.size() > 40) m.category.clear();
-    // Optional "preset": {"enabled": bool, "settings": {name: text|number}}. A bad preset is
-    // dropped; the mod itself still counts.
-    if (const Js* p = app ? nullptr : j.get(L"preset"); p && p->t == Js::Obj) {
-        const Js *on = p->get(L"enabled"), *settings = p->get(L"settings");
-        bool flat = settings && settings->t == Js::Obj && settings->a.size() <= 2000;
-        if (flat)
-            for (auto& v : settings->a) flat &= v.t == Js::Str || v.t == Js::Num;
-        if (on && on->t == Js::Bool && flat) {
-            m.hasPreset = true;
-            m.presetOn = on->b;
-            m.preset = *settings;
-        }
-    }
+    if (!app) Hub_FeedPreset(j, m);
     return true;
 }
 
 static bool Hub_ParseFeed(std::string raw, std::vector<HubFeedMod>& mods, HubFeedMod& app, std::wstring& err,
-                          std::vector<std::wstring>* cats = nullptr) {
+                          std::vector<std::wstring>* cats = nullptr, std::vector<HubFeedMod>* lib = nullptr) {
     mods.clear(); app = {};
     if (cats) cats->clear();
+    if (lib) lib->clear();
     if (raw.rfind("\xEF\xBB\xBF", 0) == 0) raw.erase(0, 3);
     Js j;
     const std::wstring format = Js_Parse(Hub_Wide(raw), j) && j.t == Js::Obj ? Js_Text(j.get(L"format")) : L"";
@@ -5789,6 +5902,14 @@ static bool Hub_ParseFeed(std::string raw, std::vector<HubFeedMod>& mods, HubFee
         }
     }
     if (const Js* a = j.get(L"app"); a && a->t == Js::Obj && !Hub_FeedEntry(*a, app, true)) app = {};
+    if (const Js* list = j.get(L"library"); lib && list && list->t == Js::Arr) {
+        std::set<std::wstring> seen;
+        for (auto& e : list->a) {
+            HubFeedMod m;
+            if (lib->size() < 500 && e.t == Js::Obj && Hub_FeedLibEntry(e, m) && seen.insert(m.id).second)
+                lib->push_back(m);
+        }
+    }
     // The groups, in the order the lists show them. Odd entries are skipped.
     if (const Js* list = j.get(L"categories"); cats && list && list->t == Js::Arr)
         for (auto& e : list->a) {
@@ -5846,13 +5967,15 @@ static void Hub_FeedResult(SetWindow& w, bool manual) {
     std::wstring err = g_feedErr;
     std::vector<HubFeedMod> mods; HubFeedMod app;
     std::vector<std::wstring> cats;
-    if (err.empty()) Hub_ParseFeed(g_feedRaw, mods, app, err, &cats);
+    std::vector<HubFeedMod> lib;
+    if (err.empty()) Hub_ParseFeed(g_feedRaw, mods, app, err, &cats, &lib);
     g_feedRaw.clear();
     if (!err.empty()) {
         g_feedStatus = err;
     } else {
         g_feed = std::move(mods); g_feedApp = app; g_feedChecked = true;
         g_feedCats = std::move(cats);
+        g_feedLib = std::move(lib);
         g_feedCatOf.clear();
         for (auto& f : g_feed) g_feedCatOf[f.id] = f.category;
         // The Mods page sorted by group before the feed's words were known: sort again.
@@ -6009,6 +6132,29 @@ static void Hub_DetailExtras(SetWindow& w, float& y) {
     Hub_Notice(w, y, g_reading ? L"Reading Windhawk. You can keep using the window." : g_featureStatus);
 }
 
+// "DavidHiFi's whole setup": every mod he runs (his own and the library ones) in one go, with or
+// without his settings, on top of what is there or after clearing it. The labels match the
+// install steps in the Workshop readme.
+static void Hub_FullSetupItems(SetWindow& w, float& y) {
+    const size_t total = g_feed.size() + g_feedLib.size();
+    if (!total) return;
+    Hub_Group(w, y, L"DavidHiFi's whole setup");
+    const bool clean = Hub_RegGet(L"Set.cleanSlate", 1) != 0;
+    Hub_AddLink(w, y, clean ? L"Clean slate first: on" : L"Clean slate first: off",
+                clean ? L"Every mod you have now comes off first, except this one. A backup is saved before anything is removed. Click to turn off."
+                      : L"Your mods stay. Ones you already have are not installed again. Click to turn on.",
+                L"hub:cleanSlate");
+    const bool armed = g_fullArmed && GetTickCount64() - g_fullArmed < 5000;
+    const std::wstring count = std::to_wstring(total) + L" mods";
+    Hub_AddLink(w, y, armed && g_fullArmedConfig ? L"Click again to copy everything" : L"Copy everything, settings included",
+                (L"Installs all " + count + L" with DavidHiFi's settings, each one on or off the way he has it. "
+                 L"Nothing private is copied. Takes 15 to 30 minutes.").c_str(),
+                L"hub:fullSetup:config");
+    Hub_AddLink(w, y, armed && !g_fullArmedConfig ? L"Click again to install everything" : L"Install everything, default settings",
+                (L"Installs all " + count + L" turned off, with each mod's own settings. Turn on the ones you want on the Mods page.").c_str(),
+                L"hub:fullSetup:plain");
+}
+
 // First open, Mods page: a short welcome with the two ways in, above the list.
 static void Hub_WelcomeItems(SetWindow& w, float& y) {
     if (!Hub_ShowWelcome()) return;
@@ -6017,16 +6163,11 @@ static void Hub_WelcomeItems(SetWindow& w, float& y) {
     Hub_Group(w, y, L"Welcome to Seamless Workshop");
     Hub_Notice(w, y, L"This window installs, updates and removes DavidHiFi's Windhawk mods. "
                      L"Get his whole setup in one go, or pick the mods you want.");
-    const bool armed = g_setupArmed && GetTickCount64() - g_setupArmed < 5000;
-    bool anyPreset = false;
-    for (auto& f : g_feed) anyPreset |= f.hasPreset;
-    if (anyPreset)
-        Hub_AddLink(w, y, armed ? L"Click again to apply his whole setup" : L"Apply DavidHiFi's whole setup",
-                    L"Installs his mods and sets each one up the way he uses it. Your other mods stay as they are.",
-                    L"hub:davidSetup");
+    Hub_FullSetupItems(w, y);
+    Hub_Group(w, y, L"Or choose yourself");
     Hub_AddLink(w, y, L"Pick from his mods", L"Opens Marketplace with only his mods, so you can install the ones you like.",
                 L"hub:welcomePick");
-    Hub_AddLink(w, y, L"Not now", L"Hide this. Both choices stay on the Updates and Marketplace pages.", L"hub:welcomeDone");
+    Hub_AddLink(w, y, L"Not now", L"Hide this. Every choice stays on the Updates and Marketplace pages.", L"hub:welcomeDone");
     if (g_feed.empty()) Hub_Notice(w, y, g_feedBusy ? std::wstring(L"Reading DavidHiFi's mods...") : g_feedStatus);
     y += 6;
 }
@@ -6129,18 +6270,19 @@ static void Hub_FeatureItems(SetWindow& w, float& y) {
                 link((L"Install " + f.name).c_str(), (f.desc.empty() ? std::wstring(L"Installs turned off.") : f.desc + L" Installs turned off.").c_str(), L"hub:feed:" + f.id);
             });
         }
+        Hub_FullSetupItems(w, y);
         bool anyPreset = false;
         for (auto& f : g_feed) anyPreset |= f.hasPreset;
         const size_t his = Hub_DavidIds().size();
         if (anyPreset || his) {
-            Hub_Group(w, y, L"DavidHiFi's setup");
+            Hub_Group(w, y, L"Only his own mods");
             if (anyPreset && g_setupArmed && GetTickCount64() - g_setupArmed < 5000)
-                link(L"Click again to apply his whole setup",
+                link(L"Click again to set up his own mods",
                      L"Your current settings are saved as a preset first. Mods that are not his stay as they are.",
                      L"hub:davidSetup");
             else if (anyPreset)
-                link(L"Apply DavidHiFi's whole setup",
-                     L"Installs his missing mods, then sets each one up and turns it on or off the way he uses it. Nothing private is copied.",
+                link(L"Set up his own mods with his settings",
+                     L"Only the mods he made: installs the missing ones, then sets each one up the way he uses it. Library mods are left alone.",
                      L"hub:davidSetup");
             // A clean way out: every one of his mods comes off in one go, with a backup first.
             const std::wstring count = std::to_wstring(his) + (his == 1 ? L" mod" : L" mods");
@@ -6567,6 +6709,139 @@ static void Hub_FeedInstall(SetWindow& w, const std::vector<HubFeedMod>& list) {
     Set_SetStatus(w, installed.empty() ? L"Installed turned off. Turn it on from the Mods page." : L"Updated. The old copies are in backups.");
 }
 
+// The config lines for one mod: which apps it loads into beyond its own list.
+static void Hub_ConfigLines(const HubFeedMod& f, std::vector<std::wstring>& lines) {
+    if (!f.hasConfig) return;
+    const std::wstring head = L"mod config set " + Set_QuoteArg(f.id) + L" ";
+    std::wstring inc = head + L"includeCustom", exc = head + L"excludeCustom";
+    for (auto& v : f.includeCustom) inc += L" " + Set_QuoteArg(v);
+    for (auto& v : f.excludeCustom) exc += L" " + Set_QuoteArg(v);
+    lines.push_back(inc);
+    lines.push_back(exc);
+    lines.push_back(head + L"includeExcludeCustomOnly " + (f.customOnly ? L"true" : L"false"));
+}
+
+// DavidHiFi's whole setup: his own mods from the feed and the library mods he runs. With
+// "Clean slate first" every mod here (not this app) is backed up and removed first. Everything
+// installs turned off; with his settings, each mod then gets his settings and app lists, and
+// the last step turns on the ones he has on. One mod that fails is skipped, not the whole job.
+static void Hub_FullSetup(SetWindow& w, bool withConfig) {
+    if (g_feed.empty() && g_feedLib.empty()) {
+        Set_SetStatus(w, L"DavidHiFi's feed has not been read yet. Choose Check the feed now, then try again.", true); return;
+    }
+    if (!g_fullArmed || GetTickCount64() - g_fullArmed >= 5000 || g_fullArmedConfig != withConfig) {
+        g_fullArmed = GetTickCount64();
+        g_fullArmedConfig = withConfig;
+        SetTimer(w.hwnd, kHubArmTimer, 5050, nullptr);
+        Set_BuildAndClamp(w);
+        return;
+    }
+    g_fullArmed = 0;
+    const bool clean = Hub_RegGet(L"Set.cleanSlate", 1) != 0;
+    // Copies, not pointers: the feed can land again while the window waits below.
+    std::vector<std::pair<std::wstring, std::wstring>> have;  // id, name
+    for (auto& m : g_hub.mods)
+        if (m.id != kHubSelfId) have.push_back({m.id, m.name.empty() ? m.id : m.name});
+    std::vector<HubFeedMod> local, lib, keep;
+    for (auto& f : g_feed) (clean || !Hub_FindMod(f.id) ? local : keep).push_back(f);
+    for (auto& f : g_feedLib) (clean || !Hub_FindMod(f.id) ? lib : keep).push_back(f);
+    if (!withConfig) keep.clear();  // Default settings: mods already here are left alone.
+    if (local.empty() && lib.empty() && keep.empty()) { Set_SetStatus(w, L"You already have every one of his mods."); return; }
+    // A backup comes first whenever a mod that is here now will change or go.
+    std::vector<std::wstring> backupIds;
+    if (clean) for (auto& [id, name] : have) backupIds.push_back(id);
+    else for (auto& f : keep) backupIds.push_back(f.id);
+    std::vector<std::wstring> files;
+    std::map<std::wstring, Js> current;
+    std::wstring err, restore;
+    const bool ready = Hub_WaitRead(w, [&] {
+        if (!backupIds.empty() && !Hub_BackupFiles(backupIds, err, &restore)) return false;
+        for (auto& f : keep) {
+            if (!f.hasPreset) continue;
+            Js data;
+            if (!Hub_Cli(L"mod settings get " + Set_QuoteArg(f.id), data, err)) return false;
+            if (const Js* s = data.get(L"settings")) current[f.id] = *s;
+        }
+        return Hub_FeedFetch(local, files, err);
+    }, L"Saving a backup and downloading DavidHiFi's mods...");
+    std::vector<std::wstring> temp = files;
+    auto cleanup = [&] { for (auto& p : temp) if (!p.empty()) DeleteFileW(p.c_str()); };
+    if (!ready) { cleanup(); Set_SetStatus(w, err.c_str(), true); return; }
+    bool kept = false;
+    if (!restore.empty()) {
+        const auto before = Hub_PresetDir() + L"\\Before DavidHiFi's whole setup " + std::to_wstring(GetTickCount64()) + L".json";
+        kept = CopyFileW(restore.c_str(), before.c_str(), TRUE) != FALSE;
+    }
+    std::vector<HubBlock> blocks;
+    int dropped = 0;
+    bool wrote = true;
+    // His settings for one mod, laid over what it has now (nothing for a fresh install).
+    auto settingsLine = [&](const HubFeedMod& f, std::vector<std::wstring>& lines) {
+        if (!withConfig) return;
+        if (!f.hasPreset) { Hub_ConfigLines(f, lines); return; }
+        const auto it = current.find(f.id);
+        int skipped = 0;
+        const std::wstring merged = Hub_PresetMerge(f.preset, it == current.end() ? nullptr : &it->second, &skipped);
+        dropped += skipped;
+        const auto file = Hub_DataDir() + L"\\full-setting-" + std::to_wstring(GetTickCount64()) + L"-" + std::to_wstring(temp.size()) + L".json";
+        if (!Hub_WriteFile(file, Hub_Utf8(merged))) { wrote = false; return; }
+        temp.push_back(file);
+        lines.push_back(L"mod settings write " + Set_QuoteArg(f.id) + L" " + Set_QuoteArg(file));
+        Hub_ConfigLines(f, lines);
+    };
+    if (clean)
+        for (auto& [id, name] : have) blocks.push_back({L"Removing " + name, {L"mod remove " + Set_QuoteArg(id) + L" --yes"}});
+    for (size_t i = 0; i < local.size(); i++) {
+        HubBlock b{local[i].name, {L"@install " + local[i].sha + L" " + Set_QuoteArg(files[i])}};
+        settingsLine(local[i], b.lines);
+        blocks.push_back(std::move(b));
+    }
+    for (auto& f : lib) {
+        // His exact version first; if the library no longer has it, the newest one.
+        const std::wstring base = L"mod install " + Set_QuoteArg(f.id);
+        HubBlock b{f.name, {f.version.empty() ? base + L" --disabled"
+                                              : base + L" " + Set_QuoteArg(f.version) + L" --disabled\t" + base + L" --disabled"}};
+        settingsLine(f, b.lines);
+        blocks.push_back(std::move(b));
+    }
+    for (auto& f : keep) {
+        HubBlock b{f.name, {}};
+        settingsLine(f, b.lines);
+        if (!b.lines.empty()) blocks.push_back(std::move(b));
+    }
+    if (!wrote) { cleanup(); Set_SetStatus(w, L"Could not prepare the settings. Nothing changed.", true); return; }
+    // On and off last, so a job that stops partway never leaves a half set-up mod running.
+    if (withConfig) {
+        for (auto* list : {&local, &lib, &keep})
+            for (auto& f : *list)
+                if (f.hasPreset && (f.presetOn || list == &keep))
+                    blocks.push_back({f.name, {(f.presetOn ? L"mod enable " : L"mod disable ") + Set_QuoteArg(f.id)}});
+    }
+    std::vector<size_t> failed;
+    const bool ok = Hub_RunBlocks(w, blocks, err, &failed);
+    cleanup();
+    Hub_RegSet(L"Set.welcomed", 1);
+    Hub_LoadList(w);
+    Set_BuildAndClamp(w);
+    const size_t total = local.size() + lib.size() + keep.size();
+    std::wstring done = withConfig ? L"DavidHiFi's whole setup is in place: " + std::to_wstring(total) + L" mods with his settings."
+                                   : std::to_wstring(total) + L" mods installed turned off, with their own settings. Turn on the ones you want on the Mods page.";
+    if (dropped) done += L" Private settings were left out.";
+    if (!restore.empty()) done += kept ? L" Your old mods are saved as a Before preset and a backup." : L" A backup of your old mods is in the Workshop's data folder.";
+    if (ok) { Set_SetStatus(w, done.c_str()); return; }
+    if (failed.empty()) { Set_SetStatus(w, (err + L" A backup was saved first.").c_str(), true); return; }
+    std::set<std::wstring> names;
+    for (size_t i : failed) names.insert(blocks[i].name);
+    std::wstring list;
+    size_t n = 0;
+    for (auto& name : names) {
+        if (n++ == 5) { list += L" and " + std::to_wstring(names.size() - 5) + L" more"; break; }
+        list += (n > 1 ? L", " : L"") + name;
+    }
+    Set_SetStatus(w, (L"Finished, but " + std::to_wstring(names.size()) + (names.size() == 1 ? L" step" : L" steps") +
+                      L" did not work: " + list + L". First problem: " + err + L" Everything else is in place.").c_str(), true);
+}
+
 #ifdef HUB_MOD
 // The mod build updates itself as a mod: the new .wh.cpp is downloaded, checked against the
 // feed's fingerprint and @id, and then installed by Windhawk ("@selfinstall"), which restarts it.
@@ -6900,6 +7175,12 @@ static void Hub_Action(SetWindow& w, const std::wstring& action) {
         Hub_WriteAllSettings(w, id, settings, dropped
             ? L"Done. Private settings were left as yours. Your old settings are saved as a Before preset."
             : L"Done. Your old settings are saved as a Before preset.");
+    } else if (action == L"hub:cleanSlate") {
+        Hub_RegSet(L"Set.cleanSlate", Hub_RegGet(L"Set.cleanSlate", 1) ? 0 : 1);
+        g_fullArmed = 0;
+        Set_BuildAndClamp(w);
+    } else if (action == L"hub:fullSetup:config" || action == L"hub:fullSetup:plain") {
+        Hub_FullSetup(w, action == L"hub:fullSetup:config");
     } else if (action == L"hub:davidSetup") {
         if (!g_setupArmed || GetTickCount64() - g_setupArmed >= 5000) {
             g_setupArmed = GetTickCount64();
@@ -7873,7 +8154,7 @@ static LRESULT CALLBACK Hub_SubProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, U
             {
                 const ULONGLONG now = GetTickCount64();
                 bool lapsed = false;
-                for (ULONGLONG* armed : {&g_hub.removeArmed, &g_resetArmed, &g_restoreArmed, &g_setupArmed, &g_removeAllArmed})
+                for (ULONGLONG* armed : {&g_hub.removeArmed, &g_resetArmed, &g_restoreArmed, &g_setupArmed, &g_removeAllArmed, &g_fullArmed})
                     if (*armed && now - *armed >= 5000) *armed = 0, lapsed = true;
                 if (!g_cardArmId.empty() && now - g_cardArmAt >= 5000) g_cardArmId.clear(), lapsed = true;
                 if (lapsed) Set_BuildAndClamp(*w);
