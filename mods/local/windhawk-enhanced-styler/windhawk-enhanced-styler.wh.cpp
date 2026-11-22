@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.22
+// @version         2.2.23
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,11 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.23
+
+- The Enhanced badge next to the Windhawk name is gone, so the top left looks cleaner.
+- With Mocha Windhawk icons on, the logo in the top left is now the blue and mauve app tile, the same icon as the window, tray and shortcuts.
 
 ## What's new in 2.2.22
 
@@ -99,7 +104,7 @@ Choose Windhawk's colors, gradients, font, transparency and background blur.
 - **Background.** Pick a color and opacity, with Acrylic or no background effect.
 - **Cards and dialogs.** Set their color and opacity. Cards, tables, Advanced settings, dialogs and pop-up menus use that surface; pop-ups that float over the page take a solid card surface so text under them stays hidden. Every box has one outline, the same color all the way around its corners.
 - **Controls.** Choose colors for buttons and inputs, plus a global accent for selections, hovers, badges, spinners, links and modified settings. Number spinners sit in a rounded pill. The save bar floats while the settings scroll, and mode and version switches join into single pills.
-- **Header gradient.** The Windhawk logo, its name and section titles such as Installed mods take a two-color gradient, blue to mauve by default. An optional Enhanced badge sits beside the name.
+- **Header gradient.** The Windhawk name and section titles such as Installed mods take a two-color gradient, blue to mauve by default. With Mocha icons on, the logo beside the name is the blue and mauve app tile.
 - **Selected text.** Highlighted text uses the accent color, or a color of its own, instead of the stock blue.
 - **Corners.** Round cards, tables, dialogs, pop-up menus, buttons and inputs with an adjustable radius, or keep Windhawk's squared look.
 - **Tray pop-ups.** The Mod tasks in progress and Loaded mods windows from the taskbar icon use the same colors as the rest of the theme.
@@ -178,13 +183,7 @@ The original window frame work was adapted from [Titlebar For Everyone](https://
   $description: "Right side of the gradient, in #RRGGBB format (Suggested: #cba6f7, Mocha mauve)"
 - mochaIcons: false
   $name: Mocha Windhawk icons
-  $description: "Use the blue and mauve icon for the Windhawk window, tray and shortcuts"
-- enhancedBadge: true
-  $name: Enhanced badge
-  $description: "Show a small gradient badge beside the Windhawk name in the top left"
-- badgeText: "Enhanced"
-  $name: Badge text
-  $description: "Words shown in the badge, up to 24 characters (Suggested: Enhanced)"
+  $description: "Use the blue and mauve icon for the Windhawk window, tray, shortcuts and the logo in the top left"
 - textColor: "#cdd6f4"
   $name: Text color
   $description: "Body and title bar text. Leave blank for Windhawk's colors"
@@ -286,8 +285,6 @@ struct Settings {
     std::uint32_t gradientStart = 0x89b4fa;
     std::uint32_t gradientEnd = 0xcba6f7;
     bool mochaIcons = false;
-    bool enhancedBadge = true;
-    std::string badgeText = "Enhanced";
 };
 
 static Settings g_settings;
@@ -428,17 +425,6 @@ static void ReadSettings(Settings* s) {
     if (!HexColorToRgb(gradEnd, &s->gradientEnd)) s->gradientEnd = 0xcba6f7;
     Wh_FreeStringSetting(gradEnd);
 
-    s->enhancedBadge = Wh_GetIntSetting(L"enhancedBadge") != 0;
-    // Badge text goes into a CSS string: keep printable ASCII only, drop
-    // quotes and backslashes, cap the length.
-    s->badgeText.clear();
-    PCWSTR badge = Wh_GetStringSetting(L"badgeText");
-    for (PCWSTR p = badge; p && *p && s->badgeText.size() < 24; p++) {
-        if (*p >= 0x20 && *p < 0x7f && *p != L'"' && *p != L'\\' && *p != L'<' && *p != L'>')
-            s->badgeText += (char)*p;
-    }
-    Wh_FreeStringSetting(badge);
-    if (s->badgeText.find_first_not_of(' ') == std::string::npos) s->enhancedBadge = false;
 }
 
 static Settings SnapshotSettings() {
@@ -630,11 +616,110 @@ static std::string BuildPolishCss(const Settings&) {
     return css;
 }
 
-// Selected text, the gradient header and the Enhanced badge.
+// Selected text, the gradient header and the Mocha header logo.
 // The page sets no ::selection rule of its own (measured 2026-11-07), so
 // selections drew in Chromium's stock blue. The logo is a white mask on a
 // span, the section icons are Font Awesome SVGs painted with currentColor;
 // the SVG icons take their gradient from #wh-enh-grad, injected by the JS.
+// The Mocha tile (96 px PNG) shown as the Windhawk logo in the header.
+static constexpr char kMochaLogoPng[] =
+    "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"
+    "AElFTkSuQmCC";
+
 static std::string BuildEnhancedCss(const Settings& s) {
     std::string css;
     std::uint32_t selRgb = s.selectionColorSet ? s.selectionRgb : (s.accent.empty() ? 0x89b4fa : s.accentRgb);
@@ -654,10 +739,9 @@ static std::string BuildEnhancedCss(const Settings& s) {
     if (s.headerGradient) {
         const std::string clipText = "background-image:" + grad + " !important;-webkit-background-clip:text !important;background-clip:text !important;"
                                      "color:transparent !important;-webkit-text-fill-color:transparent !important;";
-        // The button box also holds the logo (and the badge), so the stops
-        // are pulled in to run the whole gradient across the word itself.
-        const std::string titleGrad = s.enhancedBadge ? "linear-gradient(90deg," + a + " 24%," + b + " 74%)"
-                                                      : "linear-gradient(90deg," + a + " 30%," + b + " 100%)";
+        // The button box also holds the logo, so the stops are pulled in to
+        // run the whole gradient across the word itself.
+        const std::string titleGrad = "linear-gradient(90deg," + a + " 30%," + b + " 100%)";
         css += logoBtn + "," + logoBtn + ":hover," + logoBtn + ":focus{" + clipText + "background-image:" + titleGrad + " !important;}";
         css += "[class*=\"AppHeader__LogoMark\"]{background-color:transparent !important;background-image:linear-gradient(135deg," + a + "," + b + ") !important;}";
         css += sectionH2 + "{width:fit-content !important;" + clipText + "}";
@@ -665,15 +749,13 @@ static std::string BuildEnhancedCss(const Settings& s) {
         css += sectionH2 + ">svg path,[class*=\"SectionIcon\"] path{fill:url(#wh-enh-grad) !important;}";
         css += logoBtn + "::selection," + sectionH2 + "::selection{-webkit-text-fill-color:" + RgbToCss(s.gradientEnd) + " !important;}";
     }
-    if (s.enhancedBadge) {
-        // Sized against the 40px title: a pill about a third of its height,
-        // centered on the letters, like the T3 Code Enhanced badge.
-        css += logoBtn + "{white-space:nowrap !important;}";
-        css += logoBtn + "::after{content:\"" + s.badgeText + "\";display:inline-block;margin-left:14px;padding:3px 11px 4px;"
-               "font-size:15px;line-height:1.25;font-weight:700;letter-spacing:0.02em;border-radius:999px;"
-               "background:" + grad + ";-webkit-background-clip:border-box;background-clip:border-box;"
-               "color:#11111b;-webkit-text-fill-color:#11111b;box-shadow:0 0 12px " + RgbaFromRgb(s.gradientEnd, 30) + ";"
-               "vertical-align:middle;position:relative;top:-3px;}";
+    if (s.mochaIcons) {
+        // The stock logo is a white hawk mask on a span; swap it for the Mocha
+        // tile the window, tray and shortcuts use. Listed after the gradient
+        // rule so it wins over its background.
+        css += "[class*=\"AppHeader__LogoMark\"]{-webkit-mask:none !important;mask:none !important;"
+               "background:url(data:image/png;base64," + std::string(kMochaLogoPng) + ") center/contain no-repeat !important;"
+               "-webkit-background-clip:border-box !important;background-clip:border-box !important;}";
     }
     return css;
 }
