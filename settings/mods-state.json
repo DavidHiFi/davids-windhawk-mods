@@ -1328,5 +1328,12 @@
     "exclude": "",
     "architecture": "x86-64",
     "version": "1.0.0"
+  },
+  "local@dsx-tray-icon-fix": {
+    "disabled": false,
+    "include": "DSX.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.0"
   }
 }

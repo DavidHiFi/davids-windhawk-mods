@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-23T02:00:52+08:00",
+  "generatedAt": "2026-11-23T02:05:33+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 167,
-    "enabled": 163,
-    "local": 56
+    "mods": 168,
+    "enabled": 164,
+    "local": 57
   },
   "mods": [
     {
@@ -2060,6 +2060,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-windows-firewall/seamless-windows-firewall.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@dsx-tray-icon-fix",
+      "name": "DSX Tray Icon Fix",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/dsx-tray-icon-fix/dsx-tray-icon-fix.wh.cpp",
       "enabled": true
     }
   ]

@@ -78,6 +78,11 @@
       }
     },
     {
+      "id": "local@dsx-tray-icon-fix",
+      "enabled": true,
+      "settings": {}
+    },
+    {
       "id": "local@explorer-tags-plus",
       "enabled": true,
       "settings": {
