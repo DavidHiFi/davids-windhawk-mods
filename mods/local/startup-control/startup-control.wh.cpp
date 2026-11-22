@@ -2,7 +2,7 @@
 // @id startup-control
 // @name Startup Control
 // @description Manage startup apps, scheduled tasks and Windows startup locations.
-// @version 0.1.8
+// @version 0.1.9
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods
@@ -29,6 +29,10 @@ See and switch off everything that starts with Windows, in one calm window.
   end, edit the task file, make a new task, delete one.
 - Things Windows protects show as view-only, so nothing important gets broken.
 - Each scan type and safety prompt can be switched off in the settings.
+
+## What's new in 0.1.9
+
+- The tray menu shows its proper icons.
 
 ## What's new in 0.1.8
 
@@ -6709,8 +6713,8 @@ LRESULT CALLBACK ToolWindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (LOWORD(lp) == NIN_SELECT || LOWORD(lp) == NIN_KEYSELECT) scui::OpenSettingsWindow();
         if (LOWORD(lp) == WM_CONTEXTMENU) {
             std::vector<scui::SetMenuItem> menu = {
-                {1, L"\uE7F4", L"Open Startup Control"},
-                {2, L"\uE72C", L"Refresh entries"},
+                {1, L"\uEA7A", L"Open Startup Control"},  // Nerd Font codicons, like the other mods' menus.
+                {2, L"\uEB37", L"Refresh entries"},
             };
             POINT at{GET_X_LPARAM(wp), GET_Y_LPARAM(wp)};
             int result = scui::Set_TrayMenu(hwnd, menu, &at);
