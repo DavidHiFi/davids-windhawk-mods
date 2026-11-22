@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.5
+// @version         0.6.6
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -53,6 +53,11 @@ its own settings window: open it from the tray icon or with Ctrl+I in Halo.
 | Esc | Back, then close |
 
 Every key in that list can be changed on the Keys page of the settings.
+
+## What's new in 0.6.6
+
+- A module's own settings no longer leave copies of the Save bar behind
+  while you scroll the page.
 
 ## Credits
 
@@ -6671,7 +6676,11 @@ static void Halo_PlacePanels(SetWindow& w) {
         OffsetRect(&vis, -at.left, -at.top);
         RECT f = foot;
         OffsetRect(&f, -at.left, -at.top);
+        // A move or a new cut on a shown holder repaints all of it: bits copied along or newly
+        // uncovered would keep stale pixels (the footer pill smeared down the panel on scroll).
+        bool dirty = false;
         if (!EqualRect(&vis, &h.vis) || !EqualRect(&f, &h.foot) || !h.shown) {
+            dirty = h.shown;
             HRGN rgn = CreateRectRgnIndirect(&vis);
             HRGN pill = CreateRoundRectRgn(f.left, f.top, f.right + 1, f.bottom + 1, f.bottom - f.top, f.bottom - f.top);
             CombineRgn(rgn, rgn, pill, RGN_DIFF);
@@ -6682,9 +6691,11 @@ static void Halo_PlacePanels(SetWindow& w) {
         }
         if (!EqualRect(&at, &h.at) || !h.shown) {
             SetWindowPos(h.clip, HWND_TOP, at.left, at.top, at.right - at.left, at.bottom - at.top,
-                         SWP_NOACTIVATE | (h.shown ? 0 : SWP_SHOWWINDOW));
+                         SWP_NOACTIVATE | SWP_NOCOPYBITS | (h.shown ? 0 : SWP_SHOWWINDOW));
             h.at = at;
+            dirty = dirty || h.shown;
         }
+        if (dirty) RedrawWindow(h.clip, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN);
         if (!h.shown) {
             ShowWindow(h.clip, SW_SHOWNA);
             h.shown = true;
