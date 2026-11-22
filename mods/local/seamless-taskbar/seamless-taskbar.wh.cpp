@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.41
+// @version         0.4.42
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -90671,6 +90671,7 @@ constexpr int kSearchTextPadding = 7;
 constexpr int kPickerEdgeMargin = 12;
 constexpr PCWSTR kWindowClass = L"SeamlessTaskbarWallpaperPicker";
 constexpr PCWSTR kBackdropWindowClass = L"SeamlessTaskbarWallpaperBackdrop";
+constexpr PCWSTR kRingWindowClass = L"SeamlessTaskbarWallpaperRing";
 
 COLORREF g_background = RGB(48, 45, 71);
 COLORREF g_surface = RGB(68, 64, 90);
@@ -90690,6 +90691,9 @@ std::wstring g_pickerPosition = L"center";
 int g_pickerOffsetX = 0;
 int g_pickerOffsetY = 0;
 HWND g_pickerBackdropWindow = nullptr;
+// Glass mode's edge layer (see PaintPickerRing). Failed = fall back to the in-window edge.
+HWND g_pickerRingWindow = nullptr;
+bool g_pickerRingFailed = false;
 
 HWND g_hostWindow;
 HWND g_pickerWindow;
@@ -95036,7 +95040,107 @@ LRESULT CALLBACK PickerBackdropProc(HWND hwnd, UINT message, WPARAM wParam,
     return DefWindowProcW(hwnd, message, wParam, lParam);
 }
 
+// The glass picker is cut to shape by a hard-edged window region, so an edge drawn
+// inside it loses half its width on every curve and the corners go dim. Its edge lives
+// on this click-through, per-pixel-alpha layer above the picker instead: 2px, smoothed,
+// at inset 1 on radius R - 1, so all four corners match the straight sides.
+LRESULT CALLBACK PickerRingProc(HWND hwnd, UINT message, WPARAM wParam,
+                                LPARAM lParam) {
+    switch (message) {
+        case WM_NCHITTEST:
+            return HTTRANSPARENT;
+        case WM_MOUSEACTIVATE:
+            return MA_NOACTIVATE;
+        case WM_CLOSE:
+            ShowWindow(hwnd, SW_HIDE);
+            return 0;
+    }
+    return DefWindowProcW(hwnd, message, wParam, lParam);
+}
+
+bool PaintPickerRing(const RECT& bounds) {
+    const int width = bounds.right - bounds.left;
+    const int height = bounds.bottom - bounds.top;
+    if (!g_pickerRingWindow || !g_gdiplusToken || width <= 4 || height <= 4) {
+        return false;
+    }
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = -height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    HDC screen = GetDC(nullptr);
+    HDC memory = screen ? CreateCompatibleDC(screen) : nullptr;
+    void* bits = nullptr;
+    HBITMAP bitmap = memory ? CreateDIBSection(memory, &info, DIB_RGB_COLORS,
+                                               &bits, nullptr, 0)
+                            : nullptr;
+    bool ok = false;
+    if (bitmap && bits) {
+        HGDIOBJ oldBitmap = SelectObject(memory, bitmap);
+        ZeroMemory(bits, (size_t)width * (size_t)height * 4);
+        {
+            Gdiplus::Bitmap canvas(width, height, width * 4,
+                                   PixelFormat32bppPARGB, (BYTE*)bits);
+            Gdiplus::Graphics graphics(&canvas);
+            graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+            graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+            const Gdiplus::RectF rect(1.0f, 1.0f, (Gdiplus::REAL)width - 2.0f,
+                                      (Gdiplus::REAL)height - 2.0f);
+            Gdiplus::GraphicsPath path;
+            if (AddRoundedRectanglePath(
+                    &path, rect, (Gdiplus::REAL)PickerCornerRadius() - 1.0f)) {
+                Gdiplus::Pen pen(Gdiplus::Color(255, GetRValue(g_edge),
+                                                GetGValue(g_edge),
+                                                GetBValue(g_edge)),
+                                 2.0f);
+                ok = graphics.DrawPath(&pen, &path) == Gdiplus::Ok;
+            }
+        }
+        if (ok) {
+            POINT position{bounds.left, bounds.top};
+            SIZE size{width, height};
+            POINT source{0, 0};
+            BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+            ok = UpdateLayeredWindow(g_pickerRingWindow, screen, &position,
+                                     &size, memory, &source, 0, &blend,
+                                     ULW_ALPHA) != FALSE;
+        }
+        SelectObject(memory, oldBitmap);
+    }
+    if (bitmap) DeleteObject(bitmap);
+    if (memory) DeleteDC(memory);
+    if (screen) ReleaseDC(nullptr, screen);
+    return ok;
+}
+
+void HidePickerRing() {
+    if (g_pickerRingWindow) {
+        ShowWindow(g_pickerRingWindow, SW_HIDE);
+    }
+}
+
+void ShowPickerRing(const RECT& bounds) {
+    if (!g_pickerRingWindow || g_pickerRingFailed) {
+        return;
+    }
+    if (!PaintPickerRing(bounds)) {
+        Wh_Log(L"[Wallpaper] edge layer failed (%lu); drawing the edge in the picker",
+               GetLastError());
+        g_pickerRingFailed = true;
+        HidePickerRing();
+        if (g_pickerWindow) {
+            InvalidateRect(g_pickerWindow, nullptr, TRUE);
+        }
+        return;
+    }
+    ShowWindow(g_pickerRingWindow, SW_SHOWNOACTIVATE);
+}
+
 void HidePickerBackdrop() {
+    HidePickerRing();
     if (g_pickerBackdropWindow) {
         ShowWindow(g_pickerBackdropWindow, SW_HIDE);
     }
@@ -95129,6 +95233,7 @@ void PositionPickerBackdrop() {
                  SWP_NOACTIVATE);
     SetPickerRoundRegion(g_pickerBackdropWindow, true, PickerCornerRadius() * 2);
     ShowWindow(g_pickerBackdropWindow, SW_SHOWNOACTIVATE);
+    ShowPickerRing(bounds);
 }
 
 void SetPickerColorKey(HWND window, bool enabled) {
@@ -95269,6 +95374,9 @@ void DrawPickerEdge(HDC dc, const RECT& client) {
     const int radius = PickerCornerRadius();
     const bool keyed = g_pickerWindow &&
                        (GetWindowLongPtrW(g_pickerWindow, GWL_EXSTYLE) & WS_EX_LAYERED);
+    if (keyed && g_pickerRingWindow && !g_pickerRingFailed) {
+        return;  // the smooth edge layer above the picker draws it
+    }
     if (!keyed && g_gdiplusToken) {
         Gdiplus::Graphics graphics(dc);
         graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
@@ -95603,6 +95711,10 @@ LRESULT CALLBACK PickerProc(HWND hwnd, UINT message, WPARAM wParam,
                 DestroyWindow(g_pickerBackdropWindow);
                 g_pickerBackdropWindow = nullptr;
             }
+            if (g_pickerRingWindow) {
+                DestroyWindow(g_pickerRingWindow);
+                g_pickerRingWindow = nullptr;
+            }
             KillTimer(hwnd, kBreadcrumbMenuDismissTimer);
             KillTimer(hwnd, kBreadcrumbChevronAnimationTimer);
             KillTimer(hwnd, kSearchFilterTimer);
@@ -95880,6 +95992,12 @@ DWORD WINAPI UiThreadProc(void*) {
     backdropClass.lpszClassName = kBackdropWindowClass;
     RegisterClassExW(&backdropClass);
 
+    WNDCLASSEXW ringClass{sizeof(ringClass)};
+    ringClass.lpfnWndProc = PickerRingProc;
+    ringClass.hInstance = (HINSTANCE)&__ImageBase;
+    ringClass.lpszClassName = kRingWindowClass;
+    RegisterClassExW(&ringClass);
+
     g_hostWindow = CreateWindowExW(WS_EX_TOOLWINDOW,
         hostClass.lpszClassName, L"", WS_POPUP,
         0, 0, 0, 0, nullptr, nullptr, hostClass.hInstance, nullptr);
@@ -95899,6 +96017,22 @@ DWORD WINAPI UiThreadProc(void*) {
                 const COLORREF noBorder = 0xfffffffeu;
                 DwmSetWindowAttribute(
                     g_pickerBackdropWindow,
+                    static_cast<DWMWINDOWATTRIBUTE>(34),
+                    &noBorder, sizeof(noBorder));
+            }
+            // Owned by the picker, so it always stays above it.
+            g_pickerRingWindow = CreateWindowExW(
+                WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE |
+                    WS_EX_TOOLWINDOW,
+                kRingWindowClass, L"", WS_POPUP, 0, 0, 1, 1,
+                g_pickerWindow, nullptr, pickerClass.hInstance, nullptr);
+            if (g_pickerRingWindow) {
+                const DWORD noRounding = 1;  // DWMWCP_DONOTROUND
+                DwmSetWindowAttribute(g_pickerRingWindow, 33, &noRounding,
+                                      sizeof(noRounding));
+                const COLORREF noBorder = 0xfffffffeu;
+                DwmSetWindowAttribute(
+                    g_pickerRingWindow,
                     static_cast<DWMWINDOWATTRIBUTE>(34),
                     &noBorder, sizeof(noBorder));
             }
@@ -95932,6 +96066,7 @@ DWORD WINAPI UiThreadProc(void*) {
     }
     UnregisterClassW(kWindowClass, (HINSTANCE)&__ImageBase);
     UnregisterClassW(kBackdropWindowClass, (HINSTANCE)&__ImageBase);
+    UnregisterClassW(kRingWindowClass, (HINSTANCE)&__ImageBase);
     UnregisterClassW(kHostWindowClass, (HINSTANCE)&__ImageBase);
     return 0;
 }
