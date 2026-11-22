@@ -638,13 +638,6 @@
       }
     },
     {
-      "id": "fix-10-taskbar-notifications",
-      "name": "Fix 11's notifications crash in Win10 taskbar under Win11 24H2+",
-      "version": "0.1",
-      "enabled": true,
-      "settings": {}
-    },
-    {
       "id": "fix-explorer-row-right-click",
       "name": "Fix Explorer Row Right-Click",
       "version": "1.0.0",
@@ -1132,7 +1125,7 @@
       "id": "parallax-wallpaper",
       "name": "Parallax Wallpaper",
       "version": "0.9.2",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "hdrColorManagement": 1,
         "independent": 1,
@@ -1550,13 +1543,6 @@
       }
     },
     {
-      "id": "taskbar-disappearing-icon-fix-win11",
-      "name": "Taskbar Disappearing Icon Fix for Windows 11",
-      "version": "1.0.1",
-      "enabled": true,
-      "settings": {}
-    },
-    {
       "id": "taskbar-disappearing-tray-icons-fix",
       "name": "Disappearing Tray Icons Fix",
       "version": "1.2",
@@ -1818,16 +1804,6 @@
       "settings": {
         "systemFilesShortcutModifier": "shift",
         "toggleProtectedFiles": 1
-      }
-    },
-    {
-      "id": "tray-ghost-cleaner",
-      "name": "Tray Ghost Icon Cleaner",
-      "version": "1.0",
-      "enabled": true,
-      "settings": {
-        "logToFile": 1,
-        "refreshOnLoad": 1
       }
     },
     {

@@ -2,7 +2,7 @@
 // @id              mocha-app-icons
 // @name            Mocha App Icons
 // @description     Gives Ableton Live and Yapfast blue to mauve icons on their windows, taskbar buttons and shortcuts
-// @version         1.0.2
+// @version         1.0.3
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Swaps the icons of Ableton Live and Yapfast for Catppuccin Mocha ones: each app's own mark on a blue to mauve tile, the same tile as Mocha Steam Icons. Windows shows them on the app's windows, its taskbar button, Alt+Tab and its shortcuts.
 
 ![Mocha App Icons preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/mocha-app-icons.png)
+
+## What's new in 1.0.3
+
+- Fixed: when Windows saved a taskbar pin again (after an Explorer restart, for example), the pin lost its Mocha icon until the app was reopened. The mod now watches the taskbar pins and puts the icon back within a few seconds.
 
 ## What's new in 1.0.2
 
@@ -2150,17 +2154,35 @@ static DWORD WINAPI Worker(LPVOID) {
     EnumWindows(AttachExisting, 0);
     RefreshTray(g_trayOn);
     UpdateShortcutIcons(g_shortcutsOn, g_stopEvent);
-    HANDLE events[] = {g_stopEvent, g_settingsEvent};
+    // Windows saves a taskbar pin again now and then (after an Explorer
+    // restart, for one) and drops our icon, so watch the pins.
+    HANDLE pins = INVALID_HANDLE_VALUE;
+    wchar_t appData[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, appData))) {
+        std::wstring dir = std::wstring(appData) + L"\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar";
+        pins = FindFirstChangeNotificationW(dir.c_str(), FALSE,
+                                            FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE);
+    }
+    HANDLE events[] = {g_stopEvent, g_settingsEvent, pins};
+    DWORD count = pins != INVALID_HANDLE_VALUE ? 3 : 2;
     for (;;) {
-        DWORD wait = MsgWaitForMultipleObjects(2, events, FALSE, INFINITE, QS_ALLINPUT);
+        DWORD wait = MsgWaitForMultipleObjects(count, events, FALSE, INFINITE, QS_ALLINPUT);
         if (wait == WAIT_OBJECT_0) break;
         if (wait == WAIT_OBJECT_0 + 1) {
             ApplyAll();
             continue;
         }
+        if (count == 3 && wait == WAIT_OBJECT_0 + 2) {
+            // Let the writer finish, and fold a burst of changes into one pass.
+            if (WaitForSingleObject(g_stopEvent, 3000) == WAIT_OBJECT_0) break;
+            FindNextChangeNotification(pins);
+            if (g_shortcutsOn) UpdateShortcutIcons(true, g_stopEvent);
+            continue;
+        }
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) DispatchMessageW(&msg);
     }
+    if (pins != INVALID_HANDLE_VALUE) FindCloseChangeNotification(pins);
     if (hook) UnhookWinEvent(hook);
     return 0;
 }
