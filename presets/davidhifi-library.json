@@ -97,7 +97,7 @@
       "settings": {
         "customItemsGroup.enabled": 0,
         "customItemsGroup.label": "Custom",
-        "customItemsGroup.order": 4294967293,
+        "customItemsGroup.order": -3,
         "customItems[0].arguments": "",
         "customItems[0].command": "",
         "customItems[0].enabled": 1,
@@ -143,7 +143,7 @@
         "menus.applyToPageMenu": 1,
         "menus.applyToTabMenu": 1,
         "menus.cornerRadius": "8",
-        "menus.extensionsGroupOrder": 4294967294,
+        "menus.extensionsGroupOrder": -2,
         "menus.fontSize": "default",
         "menus.groupBottomSpacing": "6",
         "menus.groupExtensions": 1,
@@ -689,7 +689,7 @@
         "customIcon": "shell32.dll;23",
         "logo.center": 1,
         "logo.enabled": 1,
-        "logo.height": 4294967295,
+        "logo.height": -1,
         "logo.path": "C:/Windows/System32/DisplaySystemToastIcon.png",
         "logo.width": 0,
         "logo.x": 0,
@@ -1157,7 +1157,7 @@
         "smoothRendering": 1,
         "strength": 25,
         "strengthY": 25,
-        "thresholdPercent": 4294967295
+        "thresholdPercent": -1
       }
     },
     {
@@ -1403,7 +1403,7 @@
         "startMenu.horizontalAlignment": "center",
         "startMenu.horizontalShift": 0,
         "startMenu.verticalAlignment": "center",
-        "startMenu.verticalShift": 4294967046
+        "startMenu.verticalShift": -250
       }
     },
     {

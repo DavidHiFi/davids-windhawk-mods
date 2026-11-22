@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-22T14:23:14+08:00",
+  "generatedAt": "2026-11-22T15:09:56+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 187,
@@ -1052,7 +1052,7 @@
       "name": "Seamless Title Bars",
       "author": "DavidHiFi, Th3Fanbus, grn15RenS, Ingan121, Anixx, aubymori",
       "github": null,
-      "version": "1.3.12",
+      "version": "1.3.13",
       "license": "MIT",
       "origin": "local",
       "upstream": "",

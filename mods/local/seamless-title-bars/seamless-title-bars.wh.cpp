@@ -2,7 +2,7 @@
 // @id              seamless-title-bars
 // @name            Seamless Title Bars
 // @description     One title bar look everywhere: colours, caption buttons, a glass title dock and native frames in every kind of app
-// @version         1.3.12
+// @version         1.3.13
 // @author          DavidHiFi, Th3Fanbus, grn15RenS, Ingan121, Anixx, aubymori
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -77,6 +77,13 @@ switch, so you only turn on what you want.
   restarts (sign out and back in).
 - Spotify options marked with * need a Spotify restart.
 - Changing the native frames app list needs those apps restarted.
+
+## What's new in 1.3.13
+- Resting the pointer on the title dock keeps it lit. Before, the hover glow
+  could switch itself off a second later, when the uptime ticked over, and
+  flash back on as soon as the pointer moved.
+- The dock no longer drops out for a single frame when Windows redraws a title
+  without measuring it again.
 
 ## What's new in 1.3.12
 - Game guard: the mod now stays out of games and their anti-cheat, so title bars
@@ -563,6 +570,11 @@ struct Block {
     LONG dockL, dockR, band, pad;   // dock in window coordinates (x from the window's left edge, y 0..band)
     ULONGLONG tick;          // GetTickCount64 of the last write
     wchar_t suf[48];         // the hot window's uptime suffix (" \u2022 1h 05m 12s"), empty when none
+    // Counters written by dwm.exe, read from outside to check the dock (no logging in dwm.exe).
+    volatile LONG renderOk, renderMiss, renderCached, lastMiss;   // lastMiss: metrics | overhang<<1 | drew<<2
+    volatile LONG hoverStarts, hoverDrops, hitSticky, hitSeen;
+    LONG dropX, dropY, dropL, dropR, dropBand, dropDock;          // where the pointer was when a hover ended
+    ULONGLONG dropTick, missTick;
 };
 static HANDLE g_map;
 static Block* volatile g_blk;
@@ -1716,6 +1728,13 @@ static void Uninit() {
 
 
 // Per window, filled by RepositionTitle (layout) and the title text hook.
+// Dock geometry from the last good render of a title, reused when DWM draws the same
+// layout again without asking for its metrics (otherwise the dock would skip that frame).
+struct DockGeo {
+    void* layout;        // compared only, never used
+    float E, visW, mleft, mtop, mw, mh, layoutW, layoutH, ox, padY;
+};
+
 struct TitleInfo {
     void* text;          // CDWriteText of the title
     HWND hwnd;
@@ -1735,6 +1754,11 @@ struct TitleInfo {
     bool wantRelayout;
     bool tooLong;        // title too long for a suffix: the timer leaves it alone
     int ovrUp = -1;      // per-app uptime rule: -1 inherit, 0 off, 1 on
+    bool hitInside;      // the last hit test that matched the pointer landed on the dock
+    POINT hitCur;        // pointer (screen) at that hit test
+    RECT hitRect;        // window rect at that hit test
+    int outTicks;        // hover ticks in a row with the pointer off the dock
+    DockGeo geo;         // last good render
 };
 static std::unordered_map<void*, TitleInfo> g_titles;   // CTopLevelWindow* -> info
 static std::unordered_map<void*, void*> g_textToWin;    // CDWriteText* (and its clones) -> CTopLevelWindow*
@@ -2055,7 +2079,8 @@ static void StoreTitleInfo(void* text, bool dock, bool rightFromVisual, int E, i
     ti.rightFromVisual = rightFromVisual;
     ti.E = E; ti.R = R; ti.textMax = textMax;
     ti.visL = visL; ti.visW = visW;
-    ti.dpi = dpi; ti.band = band;
+    ti.dpi = dpi;
+    if (band > 0 || !dock) ti.band = band;   // mid re-layout the band is unknown: keep the last one
     {   // per-app rules for this window (cached resolve): dock off and uptime override
         int pd, pal;
         ResolvePerApp(t_seq.hwnd, pd, pal, ti.ovrUp);
@@ -2550,6 +2575,8 @@ struct DockCtx {
     UINT32 sufStart, sufLen;
     int dockL, dockR;   // window x of the drawn dock
     HWND hwnd;          // window the text belongs to, for the per-frame per-app check
+    DockGeo cache;      // last good render of this window's title
+    bool usedCache;     // this render drew from the cache
 };
 static thread_local DockCtx t_dock;
 
@@ -2672,6 +2699,7 @@ static long CreateTextBrush_Hook(void* text, void** out) {
             c.hoverA = g_settings.dockHover ? 1.0f - (1.0f - p) * (1.0f - p) : 0.0f;   // ease-out
             c.sufStart = (UINT32)ti.sufStart;
             c.sufLen = (UINT32)ti.sufLen;
+            c.cache = ti.geo;
         }
     }
     ReleaseSRWLockShared(&g_titleLock);
@@ -2691,6 +2719,16 @@ static long CreateTextBrush_Hook(void* text, void** out) {
     if (done.dock && r >= 0) {
         bool good = done.gotMetrics && done.gotOverhang && done.drew;
         bool hasText = !done.gotMetrics || done.mw > 0.5f;   // empty text may skip steps on purpose
+        stbshared::Block* db = g_unloading ? nullptr : stbshared::g_blk;
+        if (db) {
+            if (done.usedCache) InterlockedIncrement(&db->renderCached);
+            else if (good) InterlockedIncrement(&db->renderOk);
+            else {
+                InterlockedIncrement(&db->renderMiss);
+                db->lastMiss = (int)done.gotMetrics | ((int)done.gotOverhang << 1) | ((int)done.drew << 2);
+                db->missTick = GetTickCount64();
+            }
+        }
         if (good) {
             InterlockedIncrement(&g_dockOkCount);
             InterlockedExchange(&g_dockMissCount, 0);
@@ -2705,7 +2743,13 @@ static long CreateTextBrush_Hook(void* text, void** out) {
         if (primary && done.drew && done.dockR > done.dockL) {
             AcquireSRWLockExclusive(&g_titleLock);
             auto it = g_titles.find(win);
-            if (it != g_titles.end()) { it->second.dockL = done.dockL; it->second.dockR = done.dockR; }
+            if (it != g_titles.end()) {
+                it->second.dockL = done.dockL;
+                it->second.dockR = done.dockR;
+                if (good && !done.usedCache)
+                    it->second.geo = DockGeo{done.layout, done.E,  done.visW, done.mleft, done.mtop, done.mw,
+                                             done.mh,     done.layoutW, done.layoutH, done.ox, done.padYeff};
+            }
             ReleaseSRWLockExclusive(&g_titleLock);
         }
     }
@@ -2857,6 +2901,18 @@ static void DrawDock(ID2D1RenderTarget* rt, D2D1_POINT_2F o) {
 
 static void STDMETHODCALLTYPE DrawTextLayout_Hook(ID2D1RenderTarget* rt, D2D1_POINT_2F o, IDWriteTextLayout* layout,
                                                   ID2D1Brush* brush, D2D1_DRAW_TEXT_OPTIONS opt) {
+    if (t_dock.on && t_dock.dock && !t_dock.layout && !t_dock.drew && rt && layout &&
+        layout == t_dock.cache.layout && t_dock.cache.E == t_dock.E && t_dock.cache.visW == t_dock.visW) {
+        // DWM reused the layout without measuring it: its overhang is the one we widened last time,
+        // so the text sits where it did. Draw the dock from that render instead of skipping the frame.
+        DockCtx& c = t_dock;
+        c.layout = layout;
+        c.mleft = c.cache.mleft; c.mtop = c.cache.mtop; c.mw = c.cache.mw; c.mh = c.cache.mh;
+        c.layoutW = c.cache.layoutW; c.layoutH = c.cache.layoutH;
+        c.ox = c.cache.ox; c.padYeff = c.cache.padY;
+        c.gotMetrics = c.gotOverhang = true;
+        c.usedCache = true;
+    }
     if (!t_dock.on || layout != t_dock.layout || t_dock.drew || !rt) {
         DrawTextLayout_Orig(rt, o, layout, brush, opt);
         return;
@@ -3025,13 +3081,33 @@ static void HoverTick() {
     AcquireSRWLockExclusive(&g_titleLock);
     for (auto& [win, ti] : g_titles) {
         bool in = false;
-        if (ti.hoverIn && ti.hwnd && ti.dock && !g_unloading) {
+        if (ti.hoverIn && ti.hwnd && !g_unloading) {
             RECT wr;
+            int x = 0, y = 0;
             if (GetWindowRect(ti.hwnd, &wr)) {
-                int x = cur.x - wr.left, y = cur.y - wr.top;
-                in = x >= ti.dockL && x < ti.dockR && y >= 0 && y <= ti.band;
+                x = cur.x - wr.left; y = cur.y - wr.top;
+                const int k = 2;   // a pixel or two of slack at the dock's edge
+                bool geo = ti.dock && ti.dockR > ti.dockL && x >= ti.dockL - k && x < ti.dockR + k && y >= -k &&
+                           y <= ti.band + k;
+                // The pointer has not moved since a hit test put it on the dock, and neither has the window:
+                // it is still there, whatever a re-layout did to the numbers meanwhile.
+                bool still = ti.hitInside && cur.x == ti.hitCur.x && cur.y == ti.hitCur.y && EqualRect(&wr, &ti.hitRect);
+                in = geo || still;
             }
-            if (!in) ti.hoverIn = false;
+            if (in) {
+                ti.outTicks = 0;
+            } else if (++ti.outTicks < 3) {
+                in = true;   // a short grace so one odd tick never blinks the hover
+            } else {
+                ti.hoverIn = false;
+                ti.outTicks = 0;
+                if (stbshared::Block* db = stbshared::g_blk) {
+                    InterlockedIncrement(&db->hoverDrops);
+                    db->dropX = x; db->dropY = y; db->dropL = ti.dockL; db->dropR = ti.dockR;
+                    db->dropBand = ti.band; db->dropDock = ti.dock;
+                    db->dropTick = now;
+                }
+            }
         }
         if (in) {
             hotWnd = ti.hwnd; hotL = ti.dockL; hotR = ti.dockR; hotBand = ti.band;
@@ -3065,7 +3141,9 @@ static void HoverStart(void* win) {
     auto it = g_titles.find(win);
     if (it != g_titles.end() && it->second.dock) {
         it->second.hoverIn = true;
+        it->second.outTicks = 0;
         g_hoverWin = win;
+        if (stbshared::Block* db = stbshared::g_blk) InterlockedIncrement(&db->hoverStarts);
         start = true;
         hw = it->second.hwnd; hl = it->second.dockL; hr = it->second.dockR; hb = it->second.band;
     }
@@ -3249,14 +3327,27 @@ static void NotifyDockHover(void* win, const POINT* pt) {
     HWND mw = g_msgWnd;
     if (!mw || g_unloading || !g_settings.dockOn || !(g_settings.dockHover || g_settings.dockMenu)) return;
     bool post = false;
-    AcquireSRWLockShared(&g_titleLock);
+    POINT cur = {};
+    GetCursorPos(&cur);
+    AcquireSRWLockExclusive(&g_titleLock);
     auto it = g_titles.find(win);
     if (it != g_titles.end()) {
-        const TitleInfo& ti = it->second;
-        post = ti.dock && !ti.hoverIn && ti.dockR > ti.dockL &&
-               pt->x >= ti.dockL && pt->x < ti.dockR && pt->y >= 0 && pt->y <= ti.band;
+        TitleInfo& ti = it->second;
+        bool inside = ti.dock && ti.dockR > ti.dockL && pt->x >= ti.dockL && pt->x < ti.dockR && pt->y >= 0 &&
+                      pt->y <= ti.band;
+        post = inside && !ti.hoverIn;
+        // Trust the verdict for a resting pointer only when this hit test is for where the pointer is now.
+        RECT wr;
+        bool live = ti.hwnd && GetWindowRect(ti.hwnd, &wr) && abs(cur.x - wr.left - pt->x) <= 2 &&
+                    abs(cur.y - wr.top - pt->y) <= 2;
+        ti.hitInside = inside && live;
+        if (live) { ti.hitCur = cur; ti.hitRect = wr; }
+        if (stbshared::Block* db = stbshared::g_blk) {
+            if (inside) InterlockedIncrement(&db->hitSeen);
+            if (ti.hitInside) InterlockedIncrement(&db->hitSticky);
+        }
     }
-    ReleaseSRWLockShared(&g_titleLock);
+    ReleaseSRWLockExclusive(&g_titleLock);
     if (post) PostMessageW(mw, kMsgHover, 0, (LPARAM)win);
 }
 
