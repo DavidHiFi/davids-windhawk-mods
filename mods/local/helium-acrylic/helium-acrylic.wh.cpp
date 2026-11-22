@@ -2,7 +2,7 @@
 // @id              helium-acrylic
 // @name            Helium Acrylic
 // @description     Keeps Helium's acrylic surface, Catppuccin colors and system-drawn frame working after browser updates
-// @version         3.9.0
+// @version         3.9.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -18,6 +18,12 @@ wash the whole look out: the strip turns black and the Catppuccin tint is gone.
 This mod keeps both alive so a plain stock install stays riced.
 
 ![Helium Acrylic preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/helium-acrylic.png)
+
+## What's new in 3.9.1
+- The taskbar now shows your icon when Helium is signed in to a profile.
+  Before, the taskbar kept Helium's own icon while the title bar had yours.
+- The mod now leaves Google Chrome and other browsers alone. It used to load
+  into anything named chrome.exe.
 
 ## What's new in 3.9.0
 - Turning the mod on, or saving a setting, now reaches the windows you
@@ -175,6 +181,8 @@ Written by DavidHiFi.
 #include <string>
 #include <shlobj.h>
 #include <shobjidl.h>
+#include <propsys.h>
+#include <map>
 
 // ---------------------------------------------------------------------------
 // Part 1: the acrylic patch.
@@ -2199,6 +2207,11 @@ static void UpdateShortcutIcons(bool riced) {
                 changed += RetargetFolder(link, file,
                     std::wstring(folder) + L"\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar",
                     exe, icon, riced, false);
+            // A signed-in profile gets its own taskbar shortcut here, one folder per app.
+            if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, folder)))
+                changed += RetargetFolder(link, file,
+                    std::wstring(folder) + L"\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\ImplicitAppShortcuts",
+                    exe, icon, riced, true);
             file->Release();
             Wh_Log(L"icon: %d shortcut(s) set to %s", changed, riced ? L"riced" : L"stock");
         }
@@ -2216,6 +2229,41 @@ static bool ModDisabledInWindhawk() {
 }
 
 struct IconCtx { DWORD pid; };
+
+// A window of a signed-in profile tells the taskbar which icon file to show
+// (the profile's own .ico). Point that at the riced icon, and remember what it
+// was so turning the icon off hands it back. A window without one is left alone:
+// the taskbar already uses its window icon.
+static const PROPERTYKEY kPkeyRelaunchIcon =
+    {{0x9F4C2855, 0x9F79, 0x4B39, {0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3}}, 3};
+static std::map<HWND, std::wstring> g_relaunchOrig;
+
+static void SetRelaunchIcon(HWND hwnd, const std::wstring& value, bool remember) {
+    HRESULT init = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    IPropertyStore* store = nullptr;
+    if (SUCCEEDED(SHGetPropertyStoreForWindow(hwnd, IID_IPropertyStore, (void**)&store)) && store) {
+        PROPVARIANT cur;
+        PropVariantInit(&cur);
+        bool has = SUCCEEDED(store->GetValue(kPkeyRelaunchIcon, &cur)) && cur.vt == VT_LPWSTR &&
+                   cur.pwszVal && *cur.pwszVal;
+        if (has && _wcsicmp(cur.pwszVal, value.c_str()) != 0) {
+            if (remember) g_relaunchOrig[hwnd] = cur.pwszVal;
+            PROPVARIANT pv;
+            PropVariantInit(&pv);
+            size_t bytes = (value.size() + 1) * sizeof(wchar_t);
+            pv.pwszVal = (PWSTR)CoTaskMemAlloc(bytes);
+            if (pv.pwszVal) {
+                memcpy(pv.pwszVal, value.c_str(), bytes);
+                pv.vt = VT_LPWSTR;
+                if (SUCCEEDED(store->SetValue(kPkeyRelaunchIcon, pv))) store->Commit();
+                PropVariantClear(&pv);
+            }
+        }
+        PropVariantClear(&cur);
+        store->Release();
+    }
+    if (SUCCEEDED(init)) CoUninitialize();
+}
 
 static BOOL CALLBACK IconEnumProc(HWND hwnd, LPARAM lp) {
     DWORD pid = 0;
@@ -2242,11 +2290,17 @@ static BOOL CALLBACK IconEnumProc(HWND hwnd, LPARAM lp) {
                         SMTO_ABORTIFHUNG, 500, nullptr);
     SendMessageTimeoutW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)g_badgeBig,
                         SMTO_ABORTIFHUNG, 500, nullptr);
+    std::wstring file = RicedIconFile();
+    if (!file.empty() && GetFileAttributesW(file.c_str()) != INVALID_FILE_ATTRIBUTES)
+        SetRelaunchIcon(hwnd, file + L",0", true);
     return TRUE;
 }
 
 static void RestoreHeliumIcons() {
     if (!g_classIconReplaced) return;
+    for (auto& [wnd, old] : g_relaunchOrig)
+        if (IsWindow(wnd)) SetRelaunchIcon(wnd, old, false);
+    g_relaunchOrig.clear();
     HWND hwnd = nullptr;
     do {
         hwnd = FindWindowExW(nullptr, hwnd, L"Chrome_WidgetWin_1", nullptr);
@@ -2284,8 +2338,20 @@ static DWORD WINAPI IconThread(LPVOID) {
     return 0;
 }
 
+// Only Helium. Google Chrome and other browsers are also named chrome.exe.
+static bool IsHeliumExe() {
+    wchar_t exe[MAX_PATH];
+    if (!GetModuleFileNameW(nullptr, exe, MAX_PATH)) return false;
+    CharLowerW(exe);
+    return wcsstr(exe, L"helium") != nullptr;
+}
+
 BOOL Wh_ModInit() {
     Wh_Log(L">");
+    if (!IsHeliumExe()) {
+        Wh_Log(L"not Helium, leaving this browser alone");
+        return FALSE;
+    }
     LoadSettings();
     g_iconWant.store(g_set.gradientIcon, std::memory_order_relaxed);
     if (g_set.nativeFrame) EnsureHideWindowButtonsSwitch();
