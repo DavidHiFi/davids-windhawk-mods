@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.38
+// @version         0.4.39
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -33,7 +33,13 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
 
-## What's new in 0.4.36
+## What's new in 0.4.39
+
+The bars behind the player now follow the screen refresh too. Before, only the separate
+bars did, so with Behind widget the bars still ran on a plain clock that drifts against the
+screen. Fixed timer under Visualizer, Performance brings the old pacing back.
+
+## Earlier: 0.4.36
 
 A new Wallpaper switcher module. Turn it on and a picture button joins the tray. Click it
 for a picker with your wallpapers as thumbnails, click one and it fades onto the desktop.
@@ -1593,7 +1599,7 @@ The whole mod is published under GPL-3.0.
       - frameTiming: refresh
         $name: Frame timing
         $description: Follow the screen refresh draws each frame right after the screen's own refresh
-          tick, which keeps motion even. Fixed timer is the older method, paced by a plain clock.
+          tick, which keeps motion even, in both placements. Fixed timer is the older method, paced by a plain clock.
         $options:
         - refresh: Follow the screen refresh (smoother)
         - timer: Fixed timer (old)
@@ -3287,7 +3293,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Number, L"media.Visualizer.background.borderSize", L"Panel border width", L"0 to 8 logical pixels. 0 removes the border.", L"0", {}, 0, 8, 3, L"Background"},
 {K::Color, L"media.Visualizer.background.borderColor", L"Panel border color", L"Color of the panel border.", L"#FF45475A", {}, 0, 100, 3, L"Background"},
 {K::Number, L"media.Visualizer.performance.targetFps", L"Frame rate", L"10 to 120 frames per second. Default is 30.", L"30", {}, 10, 120, 3, L"Performance"},
-{K::Choice, L"media.Visualizer.performance.frameTiming", L"Frame timing", L"Follow the screen refresh draws each frame right after the screen's own refresh tick, which keeps motion even. Fixed timer is the older method, paced by a plain clock.", L"refresh", {{L"refresh", L"Follow the screen refresh (smoother)"}, {L"timer", L"Fixed timer (old)"}}, 0, 100, 3, L"Performance"},
+{K::Choice, L"media.Visualizer.performance.frameTiming", L"Frame timing", L"Follow the screen refresh draws each frame right after the screen's own refresh tick, which keeps motion even, in both placements. Fixed timer is the older method, paced by a plain clock.", L"refresh", {{L"refresh", L"Follow the screen refresh (smoother)"}, {L"timer", L"Fixed timer (old)"}}, 0, 100, 3, L"Performance"},
 {K::Number, L"media.Visualizer.performance.pauseWhenSilentSeconds", L"Idle delay", L"After this many silent seconds, draw at 5 FPS. The strip remains visible and resumes its normal rate when audio returns. 0 disables idle throttling.", L"10", {}, 0, 300, 3, L"Performance"},
 {K::Check, L"media.Visualizer.performance.hideWhenFullscreen", L"Hide when fullscreen", L"Hide the bars and media buttons when a fullscreen or borderless window covers the taskbar monitor, for example a game. The strip returns when you leave the game. The taskbar itself stays clickable at all times.", L"1", {}, 0, 100, 3, L"Performance"},
 {K::Check, L"media.Visualizer.performance.followTaskbarAutoHide", L"Follow taskbar auto-hide", L"Slide out of view with the taskbar whenever the Windows taskbar auto-hides, and come back when it is shown again, like any other taskbar widget. Keyed to the shell's live state. While the taskbar behaves as a permanent bar that holds its screen space (for example a wedged auto-hide), the strip stays visible with it.", L"1", {}, 0, 100, 3, L"Performance"},
@@ -16023,6 +16029,13 @@ inline winrt::Windows::UI::Xaml::Media::Brush Make(winrt::Windows::UI::Xaml::UIE
 // ===========================================================================
 // Media player (runs in the taskbar process)
 // ===========================================================================
+// The player's own bars (Behind widget) read the visualizer's frame timing setting and
+// write their timing lines to its diagnostic log.
+namespace viz {
+extern std::atomic<bool> g_debugLogging;
+extern std::atomic<int> g_frameTiming;
+void VizDebugLog(PCWSTR format, ...);
+}  // namespace viz
 namespace fmp {
 using namespace winrt::Windows::UI::Xaml;
 using namespace winrt::Windows::UI::Xaml::Controls;
@@ -19910,13 +19923,131 @@ static void VizApplyFrame() {
 static winrt::event_token g_vizDispatcherTimerToken{};
 static bool g_vizDispatcherTimerHasToken = false;
 static void DockFitTick();
-static void VizTimerTick(winrt::Windows::Foundation::IInspectable const&,
-                        winrt::Windows::Foundation::IInspectable const&) {
+// Bar tick counter for the player's own bars. Only runs while the visualizer's "Diagnostic
+// logging" is on. Every 10 s it writes one [FrameTiming] line to diagnostic.log: ticks, mean
+// and worst gap, spread, and how many gaps ran over one screen refresh late.
+struct BarTickStats {
+    LONGLONG last = 0, windowStart = 0;
+    ULONGLONG n = 0, late = 0;
+    double sum = 0, sumSq = 0, worst = 0;
+};
+static BarTickStats g_barTickStats;
+static double g_barRefreshMs = 1000.0 / 60.0;
+static int g_barRefreshAge = 1 << 20;
+static LONGLONG BarQpcFreq() {
+    static LONGLONG freq = 0;
+    if (!freq) {
+        LARGE_INTEGER f;
+        QueryPerformanceFrequency(&f);
+        freq = f.QuadPart;
+    }
+    return freq;
+}
+static void BarRefreshUpdate() {
+    if (++g_barRefreshAge < 240) return;
+    g_barRefreshAge = 0;
+    DWM_TIMING_INFO info = {};
+    info.cbSize = sizeof(info);
+    if (SUCCEEDED(DwmGetCompositionTimingInfo(nullptr, &info)) && info.qpcRefreshPeriod > 0)
+        g_barRefreshMs = (double)info.qpcRefreshPeriod * 1000.0 / (double)BarQpcFreq();
+}
+static void BarTickRecord(LONGLONG now) {
+    auto& s = g_barTickStats;
+    if (!viz::g_debugLogging.load(std::memory_order_relaxed)) {
+        s = BarTickStats{};
+        return;
+    }
+    BarRefreshUpdate();
+    LONGLONG freq = BarQpcFreq();
+    if (s.last != 0) {
+        double gap = (double)(now - s.last) * 1000.0 / (double)freq;
+        if (gap < 1000.0) {  // longer gaps are stops (hidden player), not pacing
+            if (s.windowStart == 0) s.windowStart = now;
+            ++s.n;
+            s.sum += gap;
+            s.sumSq += gap * gap;
+            if (gap > s.worst) s.worst = gap;
+            if (gap > 1000.0 / 60.0 + 1.5 * g_barRefreshMs) ++s.late;
+        }
+    }
+    s.last = now;
+    if (s.windowStart != 0 && (now - s.windowStart) >= 10 * freq && s.n > 0) {
+        double mean = s.sum / (double)s.n;
+        double sd = std::sqrt(std::max(0.0, s.sumSq / (double)s.n - mean * mean));
+        viz::VizDebugLog(L"[FrameTiming] player-bars mode=%s refresh=%.2fms frames=%llu mean=%.2fms "
+                         L"worst=%.2fms spread=%.2fms lateOverRefresh=%llu",
+                         viz::g_frameTiming.load() == 1 ? L"refresh" : L"timer", g_barRefreshMs,
+                         s.n, mean, s.worst, sd, s.late);
+        LONGLONG keep = s.last;
+        s = BarTickStats{};
+        s.last = keep;
+    }
+}
+static void VizFrameTick() {
     if (g_unloading || g_applyingSettings) return;
+    LARGE_INTEGER q;
+    QueryPerformanceCounter(&q);
+    BarTickRecord(q.QuadPart);
     if (g_settings.island) UpdateMediaIslandHover();
     if (!g_settings.vizEnabled) return;
     DockFitTick();
     VizApplyFrame();
+}
+// "Follow the screen refresh": the tick rides XAML's per-frame event, so every bar update
+// lands on a screen refresh. Frames are due on a fixed 60 a second grid and drawn on the
+// first refresh at or after each due time; refreshes in between return at once.
+static winrt::event_token g_vizRenderingToken{};
+static bool g_vizRenderingHooked = false;
+static LONGLONG g_vizNextDueQpc = 0;
+static void VizHookRendering();
+static void VizUnhookRendering() {
+    if (!g_vizRenderingHooked) return;
+    g_vizRenderingHooked = false;
+    try {
+        winrt::Windows::UI::Xaml::Media::CompositionTarget::Rendering(g_vizRenderingToken);
+    } catch (...) {}
+    g_vizRenderingToken = {};
+}
+static void VizRenderingTick(winrt::Windows::Foundation::IInspectable const&,
+                             winrt::Windows::Foundation::IInspectable const&) {
+    if (g_unloading) {
+        VizUnhookRendering();
+        return;
+    }
+    if (viz::g_frameTiming.load(std::memory_order_relaxed) != 1) {  // switched to the timer
+        VizUnhookRendering();
+        try { if (g_vizDispatcherTimer) g_vizDispatcherTimer.Start(); } catch (...) {}
+        return;
+    }
+    LARGE_INTEGER q;
+    QueryPerformanceCounter(&q);
+    LONGLONG freq = BarQpcFreq();
+    BarRefreshUpdate();
+    LONGLONG intervalQpc = freq / 60;
+    LONGLONG halfRefreshQpc = (LONGLONG)(g_barRefreshMs * 0.5 * (double)freq / 1000.0);
+    if (g_vizNextDueQpc == 0 || q.QuadPart - g_vizNextDueQpc > 2 * intervalQpc) g_vizNextDueQpc = q.QuadPart;
+    if (q.QuadPart + halfRefreshQpc < g_vizNextDueQpc) return;
+    g_vizNextDueQpc += intervalQpc;
+    VizFrameTick();
+}
+static void VizHookRendering() {
+    if (g_vizRenderingHooked) return;
+    try {
+        g_vizNextDueQpc = 0;
+        g_vizRenderingToken = winrt::Windows::UI::Xaml::Media::CompositionTarget::Rendering(&VizRenderingTick);
+        g_vizRenderingHooked = true;
+    } catch (...) {}
+}
+static void VizTimerTick(winrt::Windows::Foundation::IInspectable const&,
+                        winrt::Windows::Foundation::IInspectable const&) {
+    if (!g_unloading && viz::g_frameTiming.load(std::memory_order_relaxed) == 1) {
+        VizHookRendering();
+        if (g_vizRenderingHooked) {
+            try { g_vizDispatcherTimer.Stop(); } catch (...) {}
+            return;
+        }
+    }
+    VizFrameTick();
 }
 static void StartVizTimer() {
     HWND hWnd = g_taskbarWnd;
@@ -19930,13 +20061,15 @@ static void StartVizTimer() {
                 g_vizDispatcherTimerToken = g_vizDispatcherTimer.Tick(&VizTimerTick);
                 g_vizDispatcherTimerHasToken = true;
             }
-            g_vizDispatcherTimer.Start();
+            if (viz::g_frameTiming.load(std::memory_order_relaxed) == 1) VizHookRendering();
+            if (!g_vizRenderingHooked) g_vizDispatcherTimer.Start();
         } catch (...) {}
     }, nullptr);
 }
 static void StopVizTimer() {
     HWND hWnd = g_taskbarWnd;
     auto stop = [](void*) {
+        VizUnhookRendering();
         try {
             if (g_vizDispatcherTimer) {
                 g_vizDispatcherTimer.Stop();
