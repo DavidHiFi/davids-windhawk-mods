@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id           better-volume-mixer-plus
-// @name         Better Volume Mixer Plus
+// @name         Seamless Volume Mixer
 // @description  A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices
-// @version      1.4.33
+// @version      1.4.34
 // @author       DavidHiFi, 0Allu, shubho
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -14,12 +14,12 @@
 
 // ==WindhawkModReadme==
 /*
-# Better Volume Mixer Plus
+# Seamless Volume Mixer
 
 A compact volume mixer in the system tray, with per-app volume up to 1000%,
 a per-app compressor and per-app audio devices.
 
-![Better Volume Mixer Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/better-volume-mixer-plus.png)
+![Seamless Volume Mixer preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/better-volume-mixer-plus.png)
 
 ## Features
 
@@ -5318,8 +5318,8 @@ TrayAction GetTrayAction(UINT event, bool version4) {
 // this exact name. With the number off, a zero-width space at the end (the tooltip
 // reads the same) keeps the rules off the icon, so the slot is normal width.
 const wchar_t* TrayTip() {
-    return g_settings.trayVolumeNumber ? L"Better Volume Mixer Plus"
-                                       : L"Better Volume Mixer Plus\u200B";
+    return g_settings.trayVolumeNumber ? L"Seamless Volume Mixer"
+                                       : L"Seamless Volume Mixer\u200B";
 }
 
 void AddTrayIcon(HWND hWnd) {
