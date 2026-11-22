@@ -223,12 +223,12 @@
         "media.Visualizer.background.cornerRadius": "14",
         "media.Visualizer.background.enabled": 0,
         "media.Visualizer.background.padding": "24",
-        "media.Visualizer.diagnostics.enabled": 0,
+        "media.Visualizer.diagnostics.enabled": 1,
         "media.Visualizer.performance.followTaskbarAutoHide": 1,
         "media.Visualizer.performance.frameTiming": "refresh",
-        "media.Visualizer.performance.hideWhenFullscreen": 1,
-        "media.Visualizer.performance.pauseWhenObscured": 1,
-        "media.Visualizer.performance.pauseWhenSilentSeconds": 10,
+        "media.Visualizer.performance.hideWhenFullscreen": 0,
+        "media.Visualizer.performance.pauseWhenObscured": 0,
+        "media.Visualizer.performance.pauseWhenSilentSeconds": 0,
         "media.Visualizer.performance.targetFps": 30,
         "media.Visualizer.position.overlayOpacity": 45,
         "media.Visualizer.position.placement": "overlay",
@@ -390,7 +390,15 @@
         "utils.restartExplorer.enabled": 1,
         "utils.restartExplorer.label": "Restart Explorer",
         "utils.restartGpu.enabled": 1,
-        "utils.restartGpu.label": "Restart Graphics Driver"
+        "utils.restartGpu.label": "Restart Graphics Driver",
+        "wallpaper.folder": "",
+        "wallpaper.hotkey": "ctrl+alt+w",
+        "wallpaper.material": "glass",
+        "wallpaper.moduleOn": 0,
+        "wallpaper.offsetX": 0,
+        "wallpaper.offsetY": 0,
+        "wallpaper.position": "center",
+        "wallpaper.transition": "random"
       }
     }
   ]
