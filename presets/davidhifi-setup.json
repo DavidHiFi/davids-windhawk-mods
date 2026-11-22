@@ -1153,6 +1153,7 @@
         "borderColor2": "#CBA6F7",
         "borderStyle": "gradient",
         "borderWidth": 2,
+        "coverAllApps": 1,
         "deadzone": 8,
         "dotColor": "#CBA6F7",
         "glassBlur": 1,

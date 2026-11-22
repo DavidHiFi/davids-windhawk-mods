@@ -505,10 +505,10 @@
   },
   "local@seamless-autoscroll": {
     "disabled": false,
-    "include": "explorer.exe|chrome.exe|msedge.exe|brave.exe|vivaldi.exe|chromium.exe|opera.exe|thorium.exe|arc.exe|msedgewebview2.exe|HaloCord.exe|Discord.exe|Vesktop.exe|Code.exe|VSCodium.exe|Cursor.exe|Antigravity.exe|Antigravity IDE.exe|T3 Code*.exe|OpenCode.exe|Obsidian.exe|Notion.exe|Slack.exe|Dopamine*.exe|SoundCloud.exe|Hydra.exe|Kepler.exe|Melty.exe|Vortex.exe|Nightlight Launcher.exe",
+    "include": "explorer.exe|chrome.exe|msedge.exe|brave.exe|vivaldi.exe|chromium.exe|opera.exe|thorium.exe|arc.exe|msedgewebview2.exe|HaloCord.exe|Discord.exe|Vesktop.exe|Code.exe|VSCodium.exe|Cursor.exe|Antigravity.exe|Antigravity IDE.exe|T3 Code*.exe|OpenCode.exe|Obsidian.exe|Notion.exe|Slack.exe|Dopamine*.exe|SoundCloud.exe|Hydra.exe|Kepler.exe|Melty.exe|Vortex.exe|Nightlight Launcher.exe|windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.2.0"
+    "version": "2.0.0"
   },
   "local@seamless-borders": {
     "disabled": false,

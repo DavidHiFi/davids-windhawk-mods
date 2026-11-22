@@ -1,12 +1,13 @@
 // ==WindhawkMod==
 // @id              seamless-autoscroll
 // @name            Seamless Autoscroll
-// @description     Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator
-// @version         1.2.0
+// @description     Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator, in every app
+// @version         2.0.0
 // @author          DavidHiFi, crazyboyybs
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
+// @license         GPL-3.0
 // @include         explorer.exe
 // @include         chrome.exe
 // @include         msedge.exe
@@ -37,8 +38,13 @@
 // @include         Melty.exe
 // @include         Vortex.exe
 // @include         Nightlight Launcher.exe
-// @compilerOptions -DWIN32_LEAN_AND_MEAN -luser32 -ladvapi32 -lole32 -loleaut32 -ldwmapi -lruntimeobject -lgdi32
+// @include         windhawk.exe
+// @include         windhawk-mod.exe
+// @include         windhawk-mod-elevated.exe
+// @compilerOptions -DWIN32_LEAN_AND_MEAN -luser32 -ladvapi32 -lole32 -loleaut32 -ldwmapi -lruntimeobject -lgdi32 -lshell32
 // ==/WindhawkMod==
+
+// Source code is published under The GNU General Public License v3.0.
 
 // ==WindhawkModReadme==
 /*
@@ -48,16 +54,25 @@ Made by **DavidHiFi**. Based on
 [AutoScroll Win32](https://windhawk.net/mods/autoscroll-win32) by
 [crazyboyybs](https://github.com/crazyboyybs).
 
-Hold the middle mouse button in File Explorer (or any app you add) and move the
-mouse to scroll, the way browsers do. A small frosted glass circle marks where
-you started and lights up the way you are scrolling.
+Hold the middle mouse button and move the mouse to scroll, the way browsers do,
+in File Explorer, your browser and every other app. A small frosted glass circle
+marks where you started and lights up the way you are scrolling.
 
 ![Seamless Autoscroll preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-autoscroll.png)
+
+## What's new in 2.0.0
+
+- Seamless Autoscroll Global is now part of this mod. One mod, one set of
+  settings, and the frosted circle in every app. Turn off **Every other app
+  too** to keep it to File Explorer, browsers and your list.
+- If you had Seamless Autoscroll Global, remove it. This version does its job.
 
 ## Features
 
 - **Browser-style scrolling.** The farther you move from the starting point,
   the faster it scrolls, up, down and sideways.
+- **Every app.** File Explorer and browsers get the full built-in treatment,
+  and a small helper gives every other app the same scrolling and circle.
 - **Frosted glass indicator.** Real blur of what is behind it, drawn by the
   graphics card, with a Catppuccin Mocha tint and a blue to mauve ring.
 - **Your colors.** Background, ring, arrows and center dot each have their own
@@ -66,6 +81,7 @@ you started and lights up the way you are scrolling.
   change direction. Turn it off or set the speed.
 - **Hold or toggle.** Hold the button to scroll, or click once to start and
   again to stop.
+- **Games stay untouched.** In a fullscreen game a middle click is left alone.
 - **Works with Smooth Scroll.** It sends normal mouse wheel messages, so Smooth
   Scroll Win32 animates them like real wheel turns.
 
@@ -76,7 +92,7 @@ you started and lights up the way you are scrolling.
 3. Let go to stop. Escape or any other mouse button also stops it.
 
 A quick middle click with no scrolling still reaches the app, so opening a
-folder in a new tab keeps working.
+folder or a link in a new tab keeps working.
 
 ## In your browser
 
@@ -88,14 +104,23 @@ frosted glass one, so links still open in a new tab on a middle click. Turn off
 
 Apps built the same way get the frosted circle too: HaloCord, Discord, Vesktop,
 VS Code, Cursor, Obsidian, Notion, Slack, T3 Code, OpenCode, Dopamine and apps
-that show web pages through Edge. The mod only stays loaded in an app's main
-window process; it unloads itself from every other process it lands in.
+that show web pages through Edge. Inside those apps the mod only stays loaded in
+the main window process; it unloads itself from every other process it lands in.
+
+## Every other app
+
+With **Every other app too** on, a small helper runs once for the whole desktop
+and covers every app the list above misses: PDF readers, file tools, chat apps
+you install later. It runs with admin rights so it also works in apps that run
+as admin. Where the mod is already loaded inside an app, the helper steps aside,
+so there is never a double circle. In an app the mod does not know, a quick
+middle click with no scrolling may do nothing; the scrolling itself always works.
 
 ## Notes
 
 - Turn off **AutoScroll Win32** if you have it. Both together scroll twice.
-- To use it in other apps, add them under **Advanced > Include processes**.
-  A Chromium browser you add gets the browser mode above.
+- To give an app the built-in treatment, add it under **Advanced > Include
+  processes**. A Chromium browser you add gets the browser mode above.
 - The blur follows the Windows transparency effects setting. With it off, the
   circle shows a plain tinted background.
 
@@ -109,6 +134,9 @@ the indicator was redrawn for this version.
 
 // ==WindhawkModSettings==
 /*
+- coverAllApps: true
+  $name: Every other app too
+  $description: "When on, a small helper gives every app outside the list the same scrolling and circle, apart from fullscreen games. When off, only File Explorer, browsers and the apps under Advanced get it."
 - toggleMode: false
   $name: Click to start and stop
   $description: "When on, one middle click starts scrolling and the next one stops it. When off, hold the button to scroll."
@@ -189,6 +217,7 @@ the indicator was redrawn for this version.
 
 #include <windows.h>
 #include <windowsx.h>
+#include <shellapi.h>
 #include <dwmapi.h>
 #include <dispatcherqueue.h>
 #include <winrt/Windows.Foundation.h>
@@ -205,6 +234,7 @@ the indicator was redrawn for this version.
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <string>
 #include <thread>
 
 // ===========================================================================
@@ -217,6 +247,8 @@ static std::atomic<int>  g_speedMult{30};
 static std::atomic<bool> g_showIndicator{true};
 static std::atomic<bool> g_toggleMode{false};
 static std::atomic<bool> g_blockMiddleRelease{false};
+// Scope: the helper process covers every app outside the include list.
+static std::atomic<bool> g_coverAllApps{true};
 
 // Indicator look. Written only while the indicator thread is stopped (see
 // Wh_ModSettingsChanged), read only by that thread.
@@ -288,6 +320,12 @@ static std::atomic<DWORD> g_frameMs{16};
 static bool              g_chromium = false;
 static std::atomic<bool> g_mirror{false};
 static std::atomic<HWND> g_dpiHwnd{nullptr};
+
+// Helper process (every other app): set while a gesture it owns runs.
+static std::atomic<bool> g_active{false};
+// True when the current helper gesture swallowed the middle button down,
+// so the paired up must be swallowed too.
+static std::atomic<bool> g_ateDown{false};
 
 // ===========================================================================
 // Scroll thread
@@ -392,6 +430,7 @@ static void StartAutoscroll(HWND hwnd, POINT screenOrigin) {
     g_originY.store(screenOrigin.y, std::memory_order_relaxed);
     g_scrolledSinceStart.store(false, std::memory_order_relaxed);
     g_targetHwnd.store(hwnd, std::memory_order_release);
+    g_active.store(true, std::memory_order_release);
     if (g_scrollEvent) SetEvent(g_scrollEvent);
     HWND ind = g_indicatorHwnd.load(std::memory_order_acquire);
     if (ind) PostMessageW(ind, WM_IND_SHOW, 0, 0);
@@ -399,6 +438,8 @@ static void StartAutoscroll(HWND hwnd, POINT screenOrigin) {
 
 static void StopAutoscroll() {
     g_targetHwnd.store(nullptr, std::memory_order_release);
+    g_active.store(false, std::memory_order_release);
+    g_ateDown.store(false, std::memory_order_release);
     HWND ind = g_indicatorHwnd.load(std::memory_order_acquire);
     if (ind) PostMessageW(ind, WM_IND_HIDE, 0, 0);
 }
@@ -639,6 +680,259 @@ static bool IsExplorerProcess() {
     if (!GetModuleFileNameW(nullptr, path, MAX_PATH)) return false;
     const wchar_t* name = wcsrchr(path, L'\\');
     return _wcsicmp(name ? name + 1 : path, L"explorer.exe") == 0;
+}
+
+// ===========================================================================
+// Helper process (every other app). Who owns the click: apps on the include
+// list run the mod inside them, fullscreen games are left completely alone,
+// everything else is the helper's.
+// ===========================================================================
+static SRWLOCK g_coverLock = SRWLOCK_INIT;
+static std::wstring g_coverLower;     // this mod's include list, lowercase
+
+static void Lower(std::wstring& s) {
+    for (auto& c : s) c = (wchar_t)towlower(c);
+}
+
+// Name matches one entry of the pipe-separated list. An entry ending in *
+// matches by prefix, the way Windhawk matches process names.
+static bool MatchesList(const std::wstring& list, const std::wstring& name) {
+    size_t pos = 0;
+    while (pos < list.size()) {
+        size_t bar = list.find(L'|', pos);
+        if (bar == std::wstring::npos) bar = list.size();
+        std::wstring entry = list.substr(pos, bar - pos);
+        pos = bar + 1;
+        if (entry.empty()) continue;
+        bool prefix = false;
+        if (!entry.empty() && entry.back() == L'*') {
+            prefix = true;
+            entry.pop_back();
+        }
+        if (prefix) {
+            if (name.size() >= entry.size() &&
+                name.compare(0, entry.size(), entry) == 0) return true;
+        } else if (name == entry) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Chromium browsers missing from the include list draw their own white circle
+// on middle down, so the helper swallows that down there. Browsers on the list
+// get browser mode inside their own process instead.
+static bool IsChromiumImage(const std::wstring& exe) {
+    static const wchar_t* kNames[] = {
+        L"chrome.exe", L"msedge.exe", L"brave.exe", L"vivaldi.exe",
+        L"chromium.exe", L"opera.exe", L"thorium.exe", L"arc.exe",
+        L"msedgewebview2.exe", L"helium.exe", L"min.exe", L"supermium.exe",
+        L"iridium.exe", L"ungoogled-chromium.exe", L"librewolf.exe",
+        L"waterfox.exe", L"floorp.exe", L"zen.exe", L"dia.exe",
+    };
+    for (const wchar_t* n : kNames) {
+        if (_wcsicmp(exe.c_str(), n) == 0) return true;
+    }
+    return false;
+}
+
+static bool ProcessNameForWindow(HWND hwnd, std::wstring& name) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (!pid) return false;
+    HANDLE proc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!proc) return false;
+    wchar_t path[MAX_PATH]{};
+    DWORD size = MAX_PATH;
+    bool ok = QueryFullProcessImageNameW(proc, 0, path, &size) != 0;
+    CloseHandle(proc);
+    if (!ok) return false;
+    const wchar_t* slash = wcsrchr(path, L'\\');
+    name = slash ? slash + 1 : path;
+    Lower(name);
+    return true;
+}
+
+// A fullscreen window covering a whole monitor is a game or a video. Pass
+// everything through untouched there.
+static bool ForegroundFullscreen(POINT pt) {
+    HWND hwnd = WindowFromPoint(pt);
+    if (!hwnd) hwnd = GetForegroundWindow();
+    if (!hwnd) return false;
+    hwnd = GetAncestor(hwnd, GA_ROOT);
+    HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi{sizeof(mi)};
+    if (!GetMonitorInfoW(mon, &mi)) return false;
+    RECT wr{};
+    if (!GetWindowRect(hwnd, &wr)) return false;
+    return wr.left <= mi.rcMonitor.left && wr.top <= mi.rcMonitor.top &&
+           wr.right >= mi.rcMonitor.right && wr.bottom >= mi.rcMonitor.bottom;
+}
+
+static HWND ScrollTargetForPoint(POINT pt) {
+    GUITHREADINFO gti{};
+    gti.cbSize = sizeof(gti);
+    HWND hwnd = nullptr;
+    if (GetGUIThreadInfo(0, &gti) && gti.hwndFocus) {
+        hwnd = gti.hwndFocus;
+    }
+    if (!hwnd) {
+        hwnd = WindowFromPoint(pt);
+        if (hwnd) hwnd = GetAncestor(hwnd, GA_ROOT);
+    }
+    if (hwnd && !IsWindowVisible(hwnd)) hwnd = WindowFromPoint(pt);
+    return hwnd;
+}
+
+// ===========================================================================
+// Global mouse hook. Runs on its own thread with a message window; the hook
+// callback does only light work and posts to the indicator.
+// ===========================================================================
+static HWND  g_hookWnd = nullptr;
+static HHOOK g_hook = nullptr;
+static HHOOK g_kbdHook = nullptr;
+static DWORD g_hookThreadId = 0;
+static std::thread* g_hookThread = nullptr;
+
+static const UINT kHookClose = WM_APP + 1;
+
+// Esc stops a running scroll, the same as inside apps. The key is never
+// swallowed.
+LRESULT CALLBACK GlobalKeyProc(int code, WPARAM wp, LPARAM lp) {
+    if (code == HC_ACTION && wp == WM_KEYDOWN && lp) {
+        auto* info = reinterpret_cast<KBDLLHOOKSTRUCT*>(lp);
+        if (info->vkCode == VK_ESCAPE &&
+            g_active.load(std::memory_order_acquire))
+            StopAutoscroll();
+    }
+    return CallNextHookEx(nullptr, code, wp, lp);
+}
+
+LRESULT CALLBACK GlobalMouseProc(int code, WPARAM wp, LPARAM lp) {
+    if (code == HC_ACTION && lp) {
+        auto* info = reinterpret_cast<MSLLHOOKSTRUCT*>(lp);
+        if (wp == WM_MBUTTONDOWN) {
+            std::wstring exe;
+            HWND target = ScrollTargetForPoint(info->pt);
+            HWND root = target ? GetAncestor(target, GA_ROOT) : nullptr;
+            bool covered = false;
+            if (root && ProcessNameForWindow(root, exe)) {
+                AcquireSRWLockShared(&g_coverLock);
+                covered = MatchesList(g_coverLower, exe);
+                ReleaseSRWLockShared(&g_coverLock);
+            }
+            // Settings windows of our own mods run their middle-click
+            // autoscroll and mark themselves; leave them alone.
+            bool owned = root && GetPropW(root, L"SeamlessOwnAutoscroll");
+            if (covered || owned || ForegroundFullscreen(info->pt))
+                return CallNextHookEx(nullptr, code, wp, lp);
+
+            bool toggleMode = g_toggleMode.load(std::memory_order_relaxed);
+            if (g_active.load(std::memory_order_acquire)) {
+                if (toggleMode) {
+                    StopAutoscroll();
+                    g_suppressNextMBUp.store(true, std::memory_order_relaxed);
+                    return 1;
+                }
+                return CallNextHookEx(nullptr, code, wp, lp);
+            }
+            g_ateDown.store(false, std::memory_order_relaxed);
+            StartAutoscroll(target ? target : WindowFromPoint(info->pt),
+                            info->pt);
+            // Toggle mode consumes every middle click, the same as the
+            // in-app path, so the app never sees it.
+            if (toggleMode) return 1;
+            // Chromium draws its own white circle on middle down; swallow it
+            // so only ours shows, then drive the scroll with wheel posts.
+            if (IsChromiumImage(exe)) {
+                g_ateDown.store(true, std::memory_order_release);
+                return 1;
+            }
+            // Hold mode passes the down through, the same as inside apps.
+            return CallNextHookEx(nullptr, code, wp, lp);
+        }
+        if (wp == WM_LBUTTONDOWN || wp == WM_RBUTTONDOWN ||
+            wp == WM_XBUTTONDOWN) {
+            if (g_active.load(std::memory_order_acquire)) StopAutoscroll();
+            return CallNextHookEx(nullptr, code, wp, lp);
+        }
+        if (wp == WM_MBUTTONUP) {
+            if (g_suppressNextMBUp.exchange(false, std::memory_order_relaxed))
+                return 1;
+            if (!g_active.load(std::memory_order_acquire))
+                return CallNextHookEx(nullptr, code, wp, lp);
+            bool ate = g_ateDown.load(std::memory_order_acquire);
+            bool toggleMode = g_toggleMode.load(std::memory_order_relaxed);
+            StopAutoscroll();
+            bool swallow = ate
+                || g_blockMiddleRelease.load(std::memory_order_relaxed)
+                || g_scrolledSinceStart.load(std::memory_order_relaxed);
+            if (swallow) {
+                // Hold mode let the down through, so the app may hold the
+                // mouse capture; end it without a click action.
+                HWND target = ScrollTargetForPoint(info->pt);
+                if (target)
+                    SendMessageTimeoutW(target, WM_CANCELMODE, 0, 0,
+                                        SMTO_ABORTIFHUNG, 200, nullptr);
+                return 1;
+            }
+            if (toggleMode) return 1;
+            return CallNextHookEx(nullptr, code, wp, lp);
+        }
+    }
+    return CallNextHookEx(nullptr, code, wp, lp);
+}
+
+static LRESULT CALLBACK HookWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+    case kHookClose:
+        if (g_hook) {
+            UnhookWindowsHookEx(g_hook);
+            g_hook = nullptr;
+        }
+        if (g_kbdHook) {
+            UnhookWindowsHookEx(g_kbdHook);
+            g_kbdHook = nullptr;
+        }
+        DestroyWindow(hwnd);
+        return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+// Plain cdecl entry: this toolchain's std::thread rejects a WINAPI function.
+static DWORD HookThreadProc() {
+    static const wchar_t kClass[] = L"WH_SeamlessAutoscrollHook";
+    HMODULE hMod = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                           GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       reinterpret_cast<LPCWSTR>(&HookWndProc), &hMod);
+    if (!hMod) return 1;
+
+    WNDCLASSEXW wc{sizeof(wc)};
+    wc.lpfnWndProc   = HookWndProc;
+    wc.hInstance     = hMod;
+    wc.lpszClassName = kClass;
+    // The helper can stop and start again on a settings change.
+    if (!RegisterClassExW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return 1;
+
+    g_hookWnd = CreateWindowExW(0, kClass, L"", WS_POPUP, 0, 0, 0, 0,
+                                nullptr, nullptr, hMod, nullptr);
+    if (!g_hookWnd) return 1;
+
+    g_hookThreadId = GetCurrentThreadId();
+    g_kbdHook = SetWindowsHookExW(WH_KEYBOARD_LL, GlobalKeyProc, hMod, 0);
+    g_hook = SetWindowsHookExW(WH_MOUSE_LL, GlobalMouseProc, hMod, 0);
+
+    MSG msg{};
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+    return 0;
 }
 
 // ===========================================================================
@@ -1234,6 +1528,7 @@ static void LoadSettings() {
     g_showIndicator     .store(Wh_GetIntSetting(L"showIndicator") != 0,   std::memory_order_relaxed);
     g_toggleMode        .store(Wh_GetIntSetting(L"toggleMode") != 0,      std::memory_order_relaxed);
     g_blockMiddleRelease.store(Wh_GetIntSetting(L"blockMiddleRelease") != 0, std::memory_order_relaxed);
+    g_coverAllApps      .store(Wh_GetIntSetting(L"coverAllApps") != 0,     std::memory_order_relaxed);
 
     Look d;
     Look L;
@@ -1301,7 +1596,12 @@ static void StartIndicator() {
     g_indicatorThread = new std::thread(IndicatorThreadProc);
 }
 
-BOOL Wh_ModInit() {
+// ---------------------------------------------------------------------------
+// Inside an app (File Explorer, a Chromium browser's main process)
+// ---------------------------------------------------------------------------
+static bool g_inApp = false;
+
+static BOOL InAppInit() {
     if (!IsExplorerProcess()) {
         // Browser child processes (renderer, GPU) and any non-Chromium app
         // added by hand: browser mode only runs in the main browser process.
@@ -1333,7 +1633,7 @@ BOOL Wh_ModInit() {
     return TRUE;
 }
 
-void Wh_ModAfterInit() {
+static void InAppAfterInit() {
     if (g_chromium) {
         if (g_showIndicator.load(std::memory_order_relaxed)) StartIndicator();
         return;
@@ -1349,7 +1649,7 @@ void Wh_ModAfterInit() {
         StartIndicator();
 }
 
-void Wh_ModSettingsChanged() {
+static void InAppSettingsChanged() {
     StopAutoscroll();
     g_mirror.store(false, std::memory_order_relaxed);
     // The indicator thread reads g_look, so stop it before reloading and
@@ -1360,14 +1660,14 @@ void Wh_ModSettingsChanged() {
         StartIndicator();
 }
 
-void Wh_ModBeforeUninit() {
+static void InAppBeforeUninit() {
     StopAutoscroll();
     g_mirror.store(false, std::memory_order_relaxed);
     HWND ind = g_indicatorHwnd.load(std::memory_order_acquire);
     if (ind) PostMessageW(ind, WM_CLOSE, 0, 0);
 }
 
-void Wh_ModUninit() {
+static void InAppUninit() {
     g_threadRunning.store(false, std::memory_order_relaxed);
     if (g_scrollEvent) SetEvent(g_scrollEvent);
     JoinAndDeleteThread(g_scrollThread);
@@ -1379,3 +1679,435 @@ void Wh_ModUninit() {
     g_origDispatchMessageW = nullptr;
     g_origDispatchMessageA = nullptr;
 }
+
+static bool IsWindhawkHost() {
+    wchar_t path[MAX_PATH];
+    if (!GetModuleFileNameW(nullptr, path, MAX_PATH)) return false;
+    const wchar_t* name = wcsrchr(path, L'\\');
+    name = name ? name + 1 : path;
+    return _wcsicmp(name, L"windhawk.exe") == 0 ||
+           _wcsicmp(name, L"windhawk-mod.exe") == 0 ||
+           _wcsicmp(name, L"windhawk-mod-elevated.exe") == 0;
+}
+
+// Launcher side: runs in every included process that is not the helper.
+BOOL WhToolLauncher_ModInit(BOOL* launch) {
+    if (IsWindhawkHost()) {
+        // Windhawk itself starts the helper. It idles when the scope is off.
+        *launch = TRUE;
+        return TRUE;
+    }
+    *launch = FALSE;
+    if (!InAppInit()) return FALSE;
+    g_inApp = true;
+    return TRUE;
+}
+
+void WhToolLauncher_ModAfterInit() {
+    if (g_inApp) InAppAfterInit();
+}
+
+void WhToolLauncher_ModSettingsChanged(BOOL* reload) {
+    if (!g_inApp) {
+        // Reloading in Windhawk starts the helper again if it is not running.
+        *reload = TRUE;
+        return;
+    }
+    *reload = FALSE;
+    InAppSettingsChanged();
+}
+
+void WhToolLauncher_ModBeforeUninit() {
+    if (g_inApp) InAppBeforeUninit();
+}
+
+void WhToolLauncher_ModUninit() {
+    if (g_inApp) InAppUninit();
+}
+
+// ---------------------------------------------------------------------------
+// Helper process (every other app)
+// ---------------------------------------------------------------------------
+#if __has_include(<windhawk_tool_mod.h>)
+#define SA_TOOL_ARG L"-windhawk-tool-mod"
+#else
+#define SA_TOOL_ARG L"-tool-mod"
+#endif
+
+// The include list decides which apps run the mod inside them; the helper
+// leaves those alone. Windhawk's own processes are never scroll targets here.
+static void LoadCoverList() {
+    std::wstring list;
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE,
+                      L"SOFTWARE\\Windhawk\\Engine\\Mods\\" WH_MOD_ID, 0,
+                      KEY_READ | KEY_WOW64_64KEY, &key) == ERROR_SUCCESS) {
+        DWORD type = 0, size = 0;
+        if (RegQueryValueExW(key, L"Include", nullptr, &type, nullptr, &size) == ERROR_SUCCESS &&
+            type == REG_SZ && size >= sizeof(wchar_t)) {
+            list.resize(size / sizeof(wchar_t));
+            if (RegQueryValueExW(key, L"Include", nullptr, nullptr,
+                                 reinterpret_cast<BYTE*>(list.data()), &size) == ERROR_SUCCESS) {
+                list.resize(wcsnlen(list.c_str(), list.size()));
+            } else {
+                list.clear();
+            }
+        }
+        RegCloseKey(key);
+    }
+    Lower(list);
+    std::wstring kept;
+    size_t pos = 0;
+    while (pos < list.size()) {
+        size_t bar = list.find(L'|', pos);
+        if (bar == std::wstring::npos) bar = list.size();
+        std::wstring entry = list.substr(pos, bar - pos);
+        pos = bar + 1;
+        if (entry.empty() || entry.rfind(L"windhawk", 0) == 0) continue;
+        if (!kept.empty()) kept += L'|';
+        kept += entry;
+    }
+    AcquireSRWLockExclusive(&g_coverLock);
+    g_coverLower = kept;
+    ReleaseSRWLockExclusive(&g_coverLock);
+}
+
+static bool IsElevatedProcess() {
+    HANDLE token;
+    TOKEN_ELEVATION elevation{};
+    DWORD bytes = 0;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return false;
+    bool queried = GetTokenInformation(token, TokenElevation, &elevation,
+                                       sizeof(elevation), &bytes);
+    CloseHandle(token);
+    return queried && elevation.TokenIsElevated;
+}
+
+// The helper needs admin rights so its hook also reaches apps that run as
+// admin. The plain copy hands over to an admin one, the same way Seamless
+// Window Manager runs its global helper, and leaves cleanly.
+static bool HandOverToElevated() {
+    SHELLEXECUTEINFOW launch{sizeof(launch)};
+    launch.fMask = SEE_MASK_FLAG_NO_UI;
+    launch.lpVerb = L"runas";
+    WCHAR self[MAX_PATH];
+    if (!GetModuleFileNameW(nullptr, self, MAX_PATH)) return false;
+    launch.lpFile = self;
+    launch.lpParameters = SA_TOOL_ARG L" \"" WH_MOD_ID L"\"";
+    launch.nShow = SW_HIDE;
+    return ShellExecuteExW(&launch) != FALSE;
+}
+
+static BOOL CALLBACK CloseFalseFailureBox(HWND hwnd, LPARAM) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != GetCurrentProcessId()) return TRUE;
+    WCHAR cls[16]{};
+    WCHAR title[32]{};
+    GetClassNameW(hwnd, cls, ARRAYSIZE(cls));
+    GetWindowTextW(hwnd, title, ARRAYSIZE(title));
+    if (wcscmp(cls, L"#32770") == 0 && wcscmp(title, L"Windhawk") == 0) {
+        PostMessageW(hwnd, WM_CLOSE, 0, 0);
+        Wh_Log(L"Closed false tool-mod failure box");
+    }
+    return TRUE;
+}
+
+static DWORD WINAPI FalseFailureBoxThreadProc(LPVOID) {
+    for (int i = 0; i < 60; i++) {
+        EnumWindows(CloseFalseFailureBox, 0);
+        Sleep(250);
+    }
+    return 0;
+}
+
+static bool g_helperRunning = false;
+
+static bool StartHelper() {
+    g_scrollEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    if (!g_scrollEvent) {
+        Wh_Log(L"CreateEventW failed (%lu)", GetLastError());
+        return false;
+    }
+    g_threadRunning.store(true, std::memory_order_relaxed);
+    g_scrollThread = new std::thread(ScrollThreadProc);
+
+    g_hookThread = new std::thread(HookThreadProc);
+    // Wait for the hook to come up before reporting success.
+    for (int i = 0; i < 100 && !g_hook; ++i) Sleep(10);
+    if (!g_hook) {
+        Wh_Log(L"mouse hook failed to start");
+        return false;
+    }
+    if (g_showIndicator.load(std::memory_order_relaxed)) StartIndicator();
+    g_helperRunning = true;
+    return true;
+}
+
+static void StopHelper() {
+    StopAutoscroll();
+    g_threadRunning.store(false, std::memory_order_relaxed);
+    if (g_scrollEvent) SetEvent(g_scrollEvent);
+    JoinAndDeleteThread(g_scrollThread);
+    if (g_scrollEvent) {
+        CloseHandle(g_scrollEvent);
+        g_scrollEvent = nullptr;
+    }
+    if (g_hookWnd) PostMessageW(g_hookWnd, kHookClose, 0, 0);
+    JoinAndDeleteThread(g_hookThread);
+    g_hookWnd = nullptr;
+    g_hookThreadId = 0;
+    StopIndicator();
+    g_helperRunning = false;
+}
+
+BOOL WhTool_ModInit() {
+    LoadSettings();
+    // Scope off: stay idle and plain; a settings change can wake the helper.
+    if (!g_coverAllApps.load(std::memory_order_relaxed)) return TRUE;
+    if (!IsElevatedProcess()) {
+        // Returning FALSE exits with code 1, which Windhawk reports as a
+        // failed tool mod. The admin copy takes over, so leave cleanly.
+        if (HandOverToElevated()) ExitProcess(0);
+        return FALSE;
+    }
+    if (HANDLE boxThread = CreateThread(nullptr, 0, FalseFailureBoxThreadProc,
+                                        nullptr, 0, nullptr)) {
+        CloseHandle(boxThread);
+    }
+    LoadCoverList();
+    return StartHelper() ? TRUE : FALSE;
+}
+
+void WhTool_ModSettingsChanged() {
+    bool was = g_helperRunning;
+    if (was) {
+        StopAutoscroll();
+        StopIndicator();
+    }
+    LoadSettings();
+    LoadCoverList();
+    bool want = g_coverAllApps.load(std::memory_order_relaxed);
+    if (want && !was) {
+        if (!IsElevatedProcess()) {
+            if (HandOverToElevated()) ExitProcess(0);
+            Wh_Log(L"could not start the admin helper");
+            return;
+        }
+        StartHelper();
+    } else if (!want && was) {
+        StopHelper();
+    } else if (was && g_showIndicator.load(std::memory_order_relaxed)) {
+        StartIndicator();
+    }
+}
+
+void WhTool_ModUninit() {
+    if (g_helperRunning) StopHelper();
+}
+
+// Windhawk 2 ships the tool mod launcher as a header. Windhawk 1.x does not,
+// so it gets an equivalent launcher at the end of this file.
+#if __has_include(<windhawk_tool_mod.h>)
+#include <windhawk_tool_mod.h>
+#else
+
+////////////////////////////////////////////////////////////////////////////////
+// Windhawk 1.x: the same split as windhawk_tool_mod.h. The helper runs in a
+// dedicated windhawk.exe process; every other included process gets the
+// launcher callbacks above.
+// https://github.com/ramensoftware/windhawk/wiki/Mods-as-tools:-Running-mods-in-a-dedicated-process
+
+bool g_isToolModProcessLauncher;
+bool g_launchToolModProcess;
+HANDLE g_toolModProcessMutex;
+
+void WINAPI EntryPoint_Hook() {
+    Wh_Log(L">");
+    ExitThread(0);
+}
+
+BOOL Wh_ModInit() {
+    DWORD sessionId;
+    if (ProcessIdToSessionId(GetCurrentProcessId(), &sessionId) &&
+        sessionId == 0) {
+        return FALSE;
+    }
+
+    bool isExcluded = false;
+    bool isToolModProcess = false;
+    bool isCurrentToolModProcess = false;
+    int argc;
+    LPWSTR* argv = CommandLineToArgvW(GetCommandLine(), &argc);
+    if (!argv) {
+        Wh_Log(L"CommandLineToArgvW failed");
+        return FALSE;
+    }
+
+    for (int i = 1; i < argc; i++) {
+        if (wcscmp(argv[i], L"-service") == 0 ||
+            wcscmp(argv[i], L"-service-start") == 0 ||
+            wcscmp(argv[i], L"-service-stop") == 0) {
+            isExcluded = true;
+            break;
+        }
+    }
+
+    for (int i = 1; i < argc - 1; i++) {
+        if (wcscmp(argv[i], L"-tool-mod") == 0) {
+            isToolModProcess = true;
+            if (wcscmp(argv[i + 1], WH_MOD_ID) == 0) {
+                isCurrentToolModProcess = true;
+            }
+            break;
+        }
+    }
+
+    LocalFree(argv);
+
+    if (isExcluded) {
+        return FALSE;
+    }
+
+    if (isCurrentToolModProcess) {
+        g_toolModProcessMutex =
+            CreateMutex(nullptr, TRUE, L"windhawk-tool-mod_" WH_MOD_ID);
+        if (!g_toolModProcessMutex) {
+            Wh_Log(L"CreateMutex failed");
+            ExitProcess(1);
+        }
+
+        if (GetLastError() == ERROR_ALREADY_EXISTS) {
+            Wh_Log(L"Tool mod already running (%s)", WH_MOD_ID);
+            ExitProcess(1);
+        }
+
+        if (!WhTool_ModInit()) {
+            ExitProcess(1);
+        }
+
+        IMAGE_DOS_HEADER* dosHeader =
+            (IMAGE_DOS_HEADER*)GetModuleHandle(nullptr);
+        IMAGE_NT_HEADERS* ntHeaders =
+            (IMAGE_NT_HEADERS*)((BYTE*)dosHeader + dosHeader->e_lfanew);
+
+        DWORD entryPointRVA = ntHeaders->OptionalHeader.AddressOfEntryPoint;
+        void* entryPoint = (BYTE*)dosHeader + entryPointRVA;
+
+        Wh_SetFunctionHook(entryPoint, (void*)EntryPoint_Hook, nullptr);
+        return TRUE;
+    }
+
+    if (isToolModProcess) {
+        return FALSE;
+    }
+
+    BOOL launch = TRUE;
+    if (!WhToolLauncher_ModInit(&launch)) {
+        return FALSE;
+    }
+    g_isToolModProcessLauncher = true;
+    g_launchToolModProcess = launch;
+    return TRUE;
+}
+
+static void LaunchToolModProcess() {
+    WCHAR currentProcessPath[MAX_PATH];
+    switch (GetModuleFileName(nullptr, currentProcessPath,
+                              ARRAYSIZE(currentProcessPath))) {
+        case 0:
+        case ARRAYSIZE(currentProcessPath):
+            Wh_Log(L"GetModuleFileName failed");
+            return;
+    }
+
+    WCHAR
+    commandLine[MAX_PATH + 2 +
+                (sizeof(L" -tool-mod \"" WH_MOD_ID "\"") / sizeof(WCHAR)) - 1];
+    swprintf_s(commandLine, L"\"%s\" -tool-mod \"%s\"", currentProcessPath,
+               WH_MOD_ID);
+
+    HMODULE kernelModule = GetModuleHandle(L"kernelbase.dll");
+    if (!kernelModule) {
+        kernelModule = GetModuleHandle(L"kernel32.dll");
+        if (!kernelModule) {
+            Wh_Log(L"No kernelbase.dll/kernel32.dll");
+            return;
+        }
+    }
+
+    using CreateProcessInternalW_t = BOOL(WINAPI*)(
+        HANDLE hUserToken, LPCWSTR lpApplicationName, LPWSTR lpCommandLine,
+        LPSECURITY_ATTRIBUTES lpProcessAttributes,
+        LPSECURITY_ATTRIBUTES lpThreadAttributes, WINBOOL bInheritHandles,
+        DWORD dwCreationFlags, LPVOID lpEnvironment, LPCWSTR lpCurrentDirectory,
+        LPSTARTUPINFOW lpStartupInfo,
+        LPPROCESS_INFORMATION lpProcessInformation,
+        PHANDLE hRestrictedUserToken);
+    CreateProcessInternalW_t pCreateProcessInternalW =
+        (CreateProcessInternalW_t)GetProcAddress(kernelModule,
+                                                 "CreateProcessInternalW");
+    if (!pCreateProcessInternalW) {
+        Wh_Log(L"No CreateProcessInternalW");
+        return;
+    }
+
+    STARTUPINFO si{
+        .cb = sizeof(STARTUPINFO),
+        .dwFlags = STARTF_FORCEOFFFEEDBACK,
+    };
+    PROCESS_INFORMATION pi;
+    if (!pCreateProcessInternalW(nullptr, currentProcessPath, commandLine,
+                                 nullptr, nullptr, FALSE, NORMAL_PRIORITY_CLASS,
+                                 nullptr, nullptr, &si, &pi, nullptr)) {
+        Wh_Log(L"CreateProcess failed");
+        return;
+    }
+
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+}
+
+void Wh_ModAfterInit() {
+    if (!g_isToolModProcessLauncher) {
+        return;
+    }
+    if (g_launchToolModProcess) {
+        LaunchToolModProcess();
+    }
+    WhToolLauncher_ModAfterInit();
+}
+
+void Wh_ModBeforeUninit() {
+    if (g_isToolModProcessLauncher) {
+        WhToolLauncher_ModBeforeUninit();
+    }
+}
+
+void Wh_ModSettingsChanged() {
+    if (g_isToolModProcessLauncher) {
+        BOOL reload = FALSE;
+        WhToolLauncher_ModSettingsChanged(&reload);
+        // 1.x has no reload request here; start the helper if it is gone.
+        if (reload && g_launchToolModProcess) {
+            HANDLE m = OpenMutexW(SYNCHRONIZE, FALSE, L"windhawk-tool-mod_" WH_MOD_ID);
+            if (m) CloseHandle(m);
+            else if (GetLastError() == ERROR_FILE_NOT_FOUND) LaunchToolModProcess();
+        }
+        return;
+    }
+
+    WhTool_ModSettingsChanged();
+}
+
+void Wh_ModUninit() {
+    if (g_isToolModProcessLauncher) {
+        WhToolLauncher_ModUninit();
+        return;
+    }
+
+    WhTool_ModUninit();
+    ExitProcess(0);
+}
+
+#endif
