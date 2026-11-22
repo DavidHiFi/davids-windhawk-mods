@@ -2,7 +2,7 @@
 // @id startup-control
 // @name Startup Control
 // @description Manage startup apps, scheduled tasks and Windows startup locations.
-// @version 0.1.7
+// @version 0.1.8
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods
@@ -17,9 +17,9 @@
 /*
 # Startup Control
 
-See and switch off everything that starts with Windows, in one calm window.
-
 ![Startup Control](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/startup-control.png)
+
+See and switch off everything that starts with Windows, in one calm window.
 
 - Startup apps and shortcuts, scheduled tasks, services, drivers, devices,
   Explorer add-ons and the deeper places programs hide in.
@@ -29,6 +29,13 @@ See and switch off everything that starts with Windows, in one calm window.
   end, edit the task file, make a new task, delete one.
 - Things Windows protects show as view-only, so nothing important gets broken.
 - Each scan type and safety prompt can be switched off in the settings.
+
+## What's new in 0.1.8
+
+- The window shows its own icon on the taskbar instead of a blank one.
+- Right-clicking the tray icon opens its menu and the menu stays open.
+- You can open the window from this settings page: flip "Open the settings
+  window" and press Save.
 
 This is a first release. Keep Autoruns around until you have checked the
 entries you care about.
@@ -40,6 +47,9 @@ places. Autoruns is not open source, and none of its code or files are used.
 
 // ==WindhawkModSettings==
 /*
+- openSettingsWindow: false
+  $name: "Open the settings window"
+  $description: "Flip this switch either way and press Save to open the Startup Control window."
 - scanRegistry: true
   $name: "Scan registry locations"
   $description: "Include logon entries and advanced integrations."
@@ -6461,6 +6471,17 @@ static bool SC_Key(SetWindow& w, UINT vk) {
 
 // ---- Window messages -----------------------------------------------------------------------
 static bool SC_Message(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, LRESULT& result) {
+    // The window runs elevated, so the taskbar cannot ask it for its icon and falls back to
+    // the class icon. Mirror every icon the window gets onto its class so the taskbar sees it.
+    if (msg == WM_SETICON && (wp == ICON_BIG || wp == ICON_SMALL)) {
+        result = DefWindowProcW(hwnd, msg, wp, lp);
+        SetClassLongPtrW(hwnd, wp == ICON_BIG ? GCLP_HICON : GCLP_HICONSM, lp);
+        return true;
+    }
+    if (msg == WM_NCDESTROY) {
+        SetClassLongPtrW(hwnd, GCLP_HICON, 0);
+        SetClassLongPtrW(hwnd, GCLP_HICONSM, 0);
+    }
     SetWindow* pw = g_setWin.get();
     if (!pw || pw->hwnd != hwnd) return false;
     SetWindow& w = *pw;
@@ -6671,15 +6692,28 @@ void UpdateTray() {
         data.uVersion = NOTIFYICON_VERSION_4; Shell_NotifyIconW(NIM_SETVERSION, &data);
     } else if (g_trayShown) { Shell_NotifyIconW(NIM_DELETE, &data); g_trayShown = false; }
 }
+// The "Open the settings window" switch on Windhawk's page: any flip since the last look counts
+// as a press. The first look only records the value.
+static bool OpenRequestChanged() {
+    int now = Wh_GetIntSetting(L"openSettingsWindow") ? 1 : 0;
+    int seen = Wh_GetIntValue(L"openSettingsWindowSeen", -1);
+    if (now == seen) return false;
+    Wh_SetIntValue(L"openSettingsWindowSeen", now);
+    return seen != -1;
+}
 LRESULT CALLBACK ToolWindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == kTrayMessage) {
-        if (LOWORD(lp) == WM_LBUTTONUP || LOWORD(lp) == NIN_SELECT || LOWORD(lp) == NIN_KEYSELECT) scui::OpenSettingsWindow();
-        if (LOWORD(lp) == WM_CONTEXTMENU || LOWORD(lp) == WM_RBUTTONUP) {
+        // Version 4 tray messages: a left click arrives as WM_LBUTTONUP then NIN_SELECT, a right
+        // click as WM_RBUTTONUP then WM_CONTEXTMENU. Act on one of each, or the second message
+        // closes the menu the first one opened.
+        if (LOWORD(lp) == NIN_SELECT || LOWORD(lp) == NIN_KEYSELECT) scui::OpenSettingsWindow();
+        if (LOWORD(lp) == WM_CONTEXTMENU) {
             std::vector<scui::SetMenuItem> menu = {
                 {1, L"\uE7F4", L"Open Startup Control"},
                 {2, L"\uE72C", L"Refresh entries"},
             };
-            int result = scui::Set_TrayMenu(hwnd, menu);
+            POINT at{GET_X_LPARAM(wp), GET_Y_LPARAM(wp)};
+            int result = scui::Set_TrayMenu(hwnd, menu, &at);
             if (result == 1) scui::OpenSettingsWindow();
             if (result == 2) {
                 scui::OpenSettingsWindow();
@@ -6689,6 +6723,7 @@ LRESULT CALLBACK ToolWindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     if (msg == kReloadMessage) {
+        if (OpenRequestChanged()) scui::OpenSettingsWindow();
         UpdateTray();
         if (HWND window = scui::g_settingsWnd.load()) PostMessageW(window, scui::WM_APP_SETTINGS_RELOAD, 0, 0);
         return 0;
@@ -6711,7 +6746,7 @@ BOOL WhTool_ModInit() {
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     g_trayIcon = MakeTrayIcon(false);
     UpdateTray();
-    if (!g_trayShown) scui::OpenSettingsWindow();
+    if (OpenRequestChanged() || !g_trayShown) scui::OpenSettingsWindow();
     return TRUE;
 }
 void WhTool_ModEntryPoint() {

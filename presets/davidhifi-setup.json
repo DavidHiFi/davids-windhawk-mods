@@ -3110,7 +3110,8 @@
       "enabled": true,
       "settings": {
         "confirmDevices": 1,
-        "nativeSettingsTitleBar": 0,
+        "nativeSettingsTitleBar": 1,
+        "openSettingsWindow": 0,
         "scanDevices": 1,
         "scanRegistry": 1,
         "scanServices": 1,

@@ -1285,7 +1285,7 @@
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "",
-    "version": "0.1.7"
+    "version": "0.1.8"
   },
   "local@seamless-autoscroll-global": {
     "disabled": false,

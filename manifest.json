@@ -1,7 +1,7 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-22T11:11:20+08:00",
+  "generatedAt": "2026-11-22T11:13:48+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 187,
@@ -2276,7 +2276,7 @@
       "name": "Startup Control",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "license": "",
       "origin": "local",
       "upstream": "",
