@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-22T19:44:20+08:00",
+  "generatedAt": "2026-11-22T19:49:36+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 173,
-    "enabled": 169,
-    "local": 53
+    "mods": 174,
+    "enabled": 170,
+    "local": 54
   },
   "mods": [
     {
@@ -2133,6 +2133,18 @@
       "source": "mods/local/zoomit/zoomit.wh.cpp",
       "enabled": true,
       "category": "Tools"
+    },
+    {
+      "id": "local@seamless-task-manager",
+      "name": "Seamless Task Manager",
+      "author": "DavidHiFi, GF-Huang, Luiz Bizzio, sb4ssman, chenxustu1, Joe Ye, Nehoray-Bitan, Abdullah Masood, m417z",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-task-manager/seamless-task-manager.wh.cpp",
+      "enabled": true
     }
   ]
 }
