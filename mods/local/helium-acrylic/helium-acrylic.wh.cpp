@@ -2,7 +2,7 @@
 // @id              helium-acrylic
 // @name            Helium Acrylic
 // @description     Keeps Helium's acrylic surface, Catppuccin colors and system-drawn frame working after browser updates
-// @version         3.8.1
+// @version         3.9.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -18,6 +18,12 @@ wash the whole look out: the strip turns black and the Catppuccin tint is gone.
 This mod keeps both alive so a plain stock install stays riced.
 
 ![Helium Acrylic preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/helium-acrylic.png)
+
+## What's new in 3.9.0
+- Turning the mod on, or saving a setting, now reaches the windows you
+  already have open. You no longer need to restart the browser.
+- Turning the mod off puts open windows back to stock straight away, and
+  it no longer risks crashing the browser on the way out.
 
 ## What's new in 3.8.1
 - The icon now shows as soon as Helium opens. Before, it only appeared after
@@ -35,8 +41,9 @@ This mod keeps both alive so a plain stock install stays riced.
   Popups now stay clean. A new setting turns their blur back on.
 
 ## Features
-- **Survives updates.** Everything lives in memory, not in the browser's files,
-  so an update cannot wash it out and UniGetUI can update Helium normally.
+- **Lives in memory.** Nothing in the browser's files is changed. A Helium
+  update can still move the code it looks for, so keep Helium on UniGetUI's
+  skip list and update it on purpose.
 - **Applies reliably.** If the browser starts while the mod is still being
   delivered, the patch layers retry on a short leash instead of giving up for
   the life of the process, and every write is read back and logged. A build
@@ -64,8 +71,8 @@ This mod keeps both alive so a plain stock install stays riced.
 ## Notes
 - The blur itself comes from a window blur rule for Helium. This mod only
   keeps the surface behind it translucent and the colors right.
-- The acrylic and title-bar switches apply on the next browser start. The
-  colors and the icon apply at once.
+- Every switch applies to open windows at once. If the see-through surface
+  or the system title bar looks half done, one browser restart finishes it.
 - A future Helium that moves the code this mod looks for needs a pattern
   refresh (the helium-acrylic-update skill handles that).
 
@@ -77,7 +84,7 @@ Written by DavidHiFi.
 /*
 - acrylicEnabled: true
   $name: Keep the acrylic surface
-  $description: "Keeps the browser see-through so the window blur shows. Applies on the next browser start."
+  $description: "Keeps the browser see-through so the window blur shows. Applies at once."
 - colorsEnabled: true
   $name: Keep the Catppuccin colors
   $description: "Resolves the browser's dark colors to the palette below. Applies at once."
@@ -146,7 +153,7 @@ Written by DavidHiFi.
   $description: "The outline on a focused control (Mocha Lavender)."
 - nativeFrameEnabled: true
   $name: Keep the system title bar
-  $description: "Windows draws the title bar and keeps the resize borders. Applies on the next browser start."
+  $description: "Windows draws the title bar and keeps the resize borders. Applies at once."
 - popupAcrylic: false
   $name: Blur behind popups and menus
   $description: "Off keeps rounded popups clean. On also blurs menus and extension popups, but Windows then draws a square frosted frame around them. Applies at once."
@@ -185,6 +192,27 @@ static const char kAcrylicPattern[] =
     "48 83 B9 C8 02 00 00 00 74 03 31 C0 C3";
 
 static std::atomic<bool> g_stop{false};
+// v3.9.0: every loop waits on this instead of a bare Sleep, so a disable
+// wakes them at once, and unload waits for them before the DLL goes away.
+static HANDLE g_stopEvent = nullptr;
+static HANDLE g_threads[16];
+static std::atomic<int> g_threadCount{0};
+
+static void StartModThread(LPTHREAD_START_ROUTINE fn) {
+    HANDLE h = CreateThread(nullptr, 0, fn, nullptr, 0, nullptr);
+    if (!h) return;
+    int i = g_threadCount.fetch_add(1);
+    if (i < 16) g_threads[i] = h;
+    else CloseHandle(h);
+}
+
+// True when the mod is stopping.
+static bool WaitOrStop(DWORD ms) {
+    if (g_stopEvent) return WaitForSingleObject(g_stopEvent, ms) == WAIT_OBJECT_0 || g_stop;
+    Sleep(ms);
+    return g_stop;
+}
+
 static std::atomic<bool> g_acrylicApplied{false};
 static BYTE g_acrylicOriginal[3];
 static BYTE* g_acrylicTarget = nullptr;
@@ -612,7 +640,7 @@ static bool ReadDarkTheme() {
 static DWORD WINAPI ThemeThread(LPVOID) {
     while (!g_stop) {
         g_dark = ReadDarkTheme() ? 1 : 0;
-        Sleep(5000);
+        if (WaitOrStop(5000)) break;
     }
     return 0;
 }
@@ -720,7 +748,7 @@ static DWORD WINAPI BackdropThread(LPVOID) {
     while (!g_stop) {
         BackdropCtx ctx = { GetCurrentProcessId() };
         EnumWindows(BackdropEnumProc, (LPARAM)&ctx);
-        Sleep(2000);
+        if (WaitOrStop(2000)) break;
     }
     return 0;
 }
@@ -1669,6 +1697,76 @@ static bool ApplyV320() {
     return true;
 }
 
+// v3.9.0: make changes show on windows that are already open. Enabling the
+// mod or saving a setting used to wait for the next browser start for the
+// see-through and frame layers, and up to two seconds for the blur.
+// WM_DWMCOMPOSITIONCHANGED makes Chromium ask again whether the window is
+// see-through and which frame it uses, so a patch written just now is
+// answered on open windows too; WM_THEMECHANGED re-lays the caption. Only
+// posts, so it is safe from any thread.
+static void LiveRefresh(bool backdrop) {
+    if (!GetModuleHandleW(L"chrome.dll")) return;
+    if (backdrop) {
+        BackdropCtx ctx = { GetCurrentProcessId() };
+        EnumWindows(BackdropEnumProc, (LPARAM)&ctx);
+    }
+    NudgeCtx nc;
+    nc.pid = GetCurrentProcessId();
+    nc.n = 0;
+    EnumWindows(NudgeEnum, (LPARAM)&nc);
+    for (int i = 0; i < nc.n; i++) {
+        PostMessageW(nc.hwnds[i], WM_DWMCOMPOSITIONCHANGED, 0, 0);
+        PostMessageW(nc.hwnds[i], WM_THEMECHANGED, 0, 0);
+    }
+    MTRACE("live: refresh posted");
+}
+
+// Takes every open window back to stock blur: no accent, so Windows draws
+// the window the way the browser asked for it.
+static BOOL CALLBACK ClearAccentEnumProc(HWND hwnd, LPARAM lp) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != (DWORD)lp) return TRUE;
+    wchar_t cls[64];
+    if (!GetClassNameW(hwnd, cls, 64) || wcscmp(cls, L"Chrome_WidgetWin_1") != 0)
+        return TRUE;
+    PFN_SetWindowCompositionAttribute wca = GetSetWindowCompositionAttribute();
+    if (wca) {
+        ACCENTPOLICY off = { 0, 0, 0, 0 };
+        WINDOWCOMPOSITIONATTRDATA d = { 19, &off, sizeof(off) };
+        wca(hwnd, &d);
+    }
+    RemovePropW(hwnd, L"HeliumAcrylicPopupClear");
+    return TRUE;
+}
+
+static void RestoreAcrylic() {
+    if (!g_acrylicApplied || !g_acrylicTarget) return;
+    DWORD oldProtect, tmp;
+    if (VirtualProtect(g_acrylicTarget, sizeof(g_acrylicOriginal), PAGE_EXECUTE_READWRITE, &oldProtect)) {
+        memcpy(g_acrylicTarget, g_acrylicOriginal, sizeof(g_acrylicOriginal));
+        VirtualProtect(g_acrylicTarget, sizeof(g_acrylicOriginal), oldProtect, &tmp);
+    }
+    g_acrylicApplied = false;
+}
+
+static void RestoreFrame() {
+    for (int i = 0; i < 4; i++) {
+        if (g_frameSites[i].applied && g_frameSites[i].target) {
+            DWORD oldProtect, tmp;
+            if (VirtualProtect(g_frameSites[i].target, g_frameSites[i].size,
+                               PAGE_EXECUTE_READWRITE, &oldProtect)) {
+                memcpy(g_frameSites[i].target, g_frameSites[i].original,
+                       g_frameSites[i].size);
+                VirtualProtect(g_frameSites[i].target, g_frameSites[i].size,
+                               oldProtect, &tmp);
+            }
+            g_frameSites[i].applied = false;
+        }
+    }
+    g_frameApplied = false;
+}
+
 static void ApplyOnePass() {
     ApplyV320();
     MTRACE("pass: v320 returned");
@@ -1692,14 +1790,14 @@ static void ApplyOnePass() {
 // that window; a build where nothing matched at all is left alone, so the
 // riced install's processes never rescan.
 static DWORD WINAPI RetryOnceThread(LPVOID) {
-    Sleep(10000);
-    if (g_stop) return 0;
+    if (WaitOrStop(10000)) return 0;
     if (g_acrylicApplied && g_colorsApplied && g_frameApplied &&
         g_gradApplied) return 0;
     if (!GetModuleHandleW(L"chrome.dll")) return 0;
     if (!g_acrylicApplied && !g_colorsApplied && !g_frameApplied &&
         !g_gradApplied) return 0;
     ApplyOnePass();
+    LiveRefresh(false);
     Wh_Log(L"apply state after retry: acrylic=%d colors=%d frame=%d",
            (int)g_acrylicApplied, (int)g_colorsApplied,
            (int)g_frameApplied);
@@ -1708,19 +1806,17 @@ static DWORD WINAPI RetryOnceThread(LPVOID) {
 
 static void ApplyAllLayers() {
     ApplyOnePass();
-    HANDLE h = CreateThread(nullptr, 0, RetryOnceThread, nullptr, 0, nullptr);
-    if (h) CloseHandle(h);
+    StartModThread(RetryOnceThread);
 }
 
 static DWORD WINAPI InitThread(LPVOID) {
     for (int i = 0; i < 300 && !g_stop; i++) {
         if (GetModuleHandleW(L"chrome.dll")) break;
-        Sleep(200);
+        if (WaitOrStop(200)) return 0;
     }
     if (g_stop) return 0;
     ApplyAllLayers();
-    HANDLE h = CreateThread(nullptr, 0, ThemeThread, nullptr, 0, nullptr);
-    if (h) CloseHandle(h);
+    StartModThread(ThemeThread);
     return 0;
 }
 
@@ -2183,7 +2279,7 @@ static DWORD WINAPI IconThread(LPVOID) {
         } else if (g_classIconReplaced) {
             RestoreHeliumIcons();
         }
-        Sleep(2000);
+        if (WaitOrStop(2000)) break;
     }
     return 0;
 }
@@ -2196,17 +2292,17 @@ BOOL Wh_ModInit() {
     MTRACE(GetModuleHandleW(L"chrome.dll") ? "init: chrome already loaded"
                                            : "init: chrome not loaded yet");
     g_dark = ReadDarkTheme() ? 1 : 0;
-    HANDLE hBackdrop = CreateThread(nullptr, 0, BackdropThread, nullptr, 0, nullptr);
-    if (hBackdrop) CloseHandle(hBackdrop);
-    HANDLE hIcon = CreateThread(nullptr, 0, IconThread, nullptr, 0, nullptr);
-    if (hIcon) CloseHandle(hIcon);
+    g_stopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    StartModThread(BackdropThread);
+    StartModThread(IconThread);
     if (GetModuleHandleW(L"chrome.dll")) {
+        // Enabled while the browser is open: patch, then make the open
+        // windows pick it up now instead of at the next start.
         ApplyAllLayers();
-        HANDLE h = CreateThread(nullptr, 0, ThemeThread, nullptr, 0, nullptr);
-        if (h) CloseHandle(h);
+        LiveRefresh(true);
+        StartModThread(ThemeThread);
     } else {
-        HANDLE h = CreateThread(nullptr, 0, InitThread, nullptr, 0, nullptr);
-        if (h) CloseHandle(h);
+        StartModThread(InitThread);
     }
     return TRUE;
 }
@@ -2228,14 +2324,28 @@ void Wh_ModSettingsChanged() {
         EmitAndInstallColors(g_liveColors.data(), (int)g_liveColors.size());
     }
     g_iconWant.store(g_set.gradientIcon, std::memory_order_relaxed);
-    Wh_Log(L"settings changed: acrylic=%d colors=%d frame=%d icon=%d "
-           L"(acrylic and frame need a browser restart)",
+    // v3.9.0: the see-through and frame switches apply live too.
+    if (GetModuleHandleW(L"chrome.dll")) {
+        if (g_set.acrylic) ApplyAcrylicPatch();
+        else RestoreAcrylic();
+        if (g_set.nativeFrame) ApplyStructuralPatches();
+        else RestoreFrame();
+        LiveRefresh(true);
+    }
+    Wh_Log(L"settings changed: acrylic=%d colors=%d frame=%d icon=%d (applied live)",
            (int)g_set.acrylic, (int)g_set.colors, (int)g_set.nativeFrame,
            (int)g_set.gradientIcon);
 }
 
 void Wh_ModUninit() {
     g_stop = true;
+    // Wake every loop and wait for it to leave this DLL before anything it
+    // uses is torn down. Bounded, so a stuck call can never hang the browser.
+    if (g_stopEvent) SetEvent(g_stopEvent);
+    for (int pass = 0; pass < 2; pass++) {
+        int n = std::min(g_threadCount.load(), 16);
+        if (n > 0) WaitForMultipleObjects((DWORD)n, g_threads, TRUE, 3000);
+    }
     RestoreHeliumIcons();
     // Closing Helium also unloads the mod; only a real disable in Windhawk
     // hands the shortcuts back their stock icon.
@@ -2244,15 +2354,7 @@ void Wh_ModUninit() {
     if (g_badgeBig) DestroyIcon(g_badgeBig);
     g_badgeSmall = nullptr;
     g_badgeBig = nullptr;
-    if (g_acrylicApplied && g_acrylicTarget) {
-        DWORD oldProtect;
-        if (VirtualProtect(g_acrylicTarget, sizeof(g_acrylicOriginal), PAGE_EXECUTE_READWRITE, &oldProtect)) {
-            memcpy(g_acrylicTarget, g_acrylicOriginal, sizeof(g_acrylicOriginal));
-            DWORD tmp;
-            VirtualProtect(g_acrylicTarget, sizeof(g_acrylicOriginal), oldProtect, &tmp);
-        }
-        g_acrylicApplied = false;
-    }
+    RestoreAcrylic();
     if (g_colorsApplied && g_gcTarget) {
         DWORD oldProtect;
         if (VirtualProtect(g_gcTarget, sizeof(g_gcOriginal), PAGE_EXECUTE_READWRITE, &oldProtect)) {
@@ -2262,19 +2364,7 @@ void Wh_ModUninit() {
         }
         g_colorsApplied = false;
     }
-    for (int i = 0; i < 4; i++) {
-        if (g_frameSites[i].applied && g_frameSites[i].target) {
-            DWORD oldProtect, tmp;
-            if (VirtualProtect(g_frameSites[i].target, g_frameSites[i].size,
-                               PAGE_EXECUTE_READWRITE, &oldProtect)) {
-                memcpy(g_frameSites[i].target, g_frameSites[i].original,
-                       g_frameSites[i].size);
-                VirtualProtect(g_frameSites[i].target, g_frameSites[i].size,
-                               oldProtect, &tmp);
-            }
-            g_frameSites[i].applied = false;
-        }
-    }
+    RestoreFrame();
     if (g_fsGuardSite) {
         DWORD oldProtect, tmp;
         if (VirtualProtect(g_fsGuardSite, sizeof(g_fsGuardOrig), PAGE_EXECUTE_READWRITE, &oldProtect)) {
@@ -2307,16 +2397,23 @@ void Wh_ModUninit() {
         }
         g_omniSite = nullptr;
     }
-    if (g_gradPage) {
-        VirtualFree(g_gradPage, 0, MEM_RELEASE);
-        g_gradPage = nullptr;
+    // The generated code pages stay allocated on purpose. A browser thread
+    // can still be inside one when its entry jump is put back, and freeing it
+    // under that thread crashes the browser. A few pages is nothing.
+    g_gradPage = nullptr;
+    g_cavePage = nullptr;
+    g_hookMem = nullptr;
+    // Back to stock on the windows that are open now, without a restart.
+    if (GetModuleHandleW(L"chrome.dll")) {
+        EnumWindows(ClearAccentEnumProc, (LPARAM)GetCurrentProcessId());
+        LiveRefresh(false);
     }
-    if (g_cavePage) {
-        VirtualFree(g_cavePage, 0, MEM_RELEASE);
-        g_cavePage = nullptr;
+    for (int i = 0; i < std::min(g_threadCount.load(), 16); i++) {
+        if (g_threads[i]) CloseHandle(g_threads[i]);
+        g_threads[i] = nullptr;
     }
-    if (g_hookMem) {
-        VirtualFree(g_hookMem, 0, MEM_RELEASE);
-        g_hookMem = nullptr;
+    if (g_stopEvent) {
+        CloseHandle(g_stopEvent);
+        g_stopEvent = nullptr;
     }
 }
