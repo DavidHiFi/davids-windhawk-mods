@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.6
+// @version         0.6.7
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -30,9 +30,13 @@ its own settings window: open it from the tray icon or with Ctrl+I in Halo.
 - Opens on a tap of the Windows key, or any key you pick in the settings. The
   tap replaces the Windows Start menu: Start never opens for it. With Seamless
   Launchpad, Shift + Windows key and the Start button open its app grid.
-- Shortcut keys for searches you use a lot, like Win+R for the command line.
+- As many open keys as you like, and your own shortcut keys that open Halo with
+  text already typed, like Win+R for "> " (the command line). Make, change and
+  remove them on the Keys page.
+- Typed shortcuts: type a short word and Halo swaps in the longer text.
 - Modules: turn each one on or off, change the words that call it, and change
-  a module's own settings right in its card when you open it.
+  a module's own settings right in its card when you open it. Every module in
+  Flow Launcher's plugin store is listed too, off until you turn it on.
 - History, a preview of the selected file (F1), and Space to open it in the Peek
   mod once you have moved through the results.
 - A tray icon: click it for settings, right-click it to open Halo or restart its
@@ -54,6 +58,16 @@ its own settings window: open it from the tray icon or with Ctrl+I in Halo.
 
 Every key in that list can be changed on the Keys page of the settings.
 
+## What's new in 0.6.7
+
+- The Keys page lists your own shortcut keys. Add one, change the key or the
+  text it types, turn it off, or clear it to remove it.
+- Open keys are one list on the General page, each with its own switch. The
+  old "Second open key" and its extra switch are gone.
+- Typed shortcuts can be made and changed on the Search page.
+- The Modules page lists every module in Flow Launcher's plugin store. Turn one
+  on and save: Halo downloads it, plus Python or Node when it needs them.
+
 ## What's new in 0.6.6
 
 - A module's own settings no longer leave copies of the Save bar behind
@@ -68,12 +82,6 @@ Every key in that list can be changed on the Keys page of the settings.
 
 // ==WindhawkModSettings==
 /*
-- openKey: ""
-  $name: "Second open key"
-  $description: "Another key that opens and closes Halo, kept even when the keys below are off. Leave it empty for none."
-- useFlowKeys: true
-  $name: "Use the open key and shortcut keys"
-  $description: "Halo answers the open key above and the query shortcut keys, like Win+R for the command line. Off, only the second open key works."
 - peekOnSpace: true
   $name: "Space previews the file"
   $description: "After moving through the results with the arrows or Tab, Space opens the selected file in the Peek mod. Typing a space still works before that."
@@ -166,6 +174,19 @@ struct HaloBridgePlugin {
     std::wstring id, name, desc, keywords, defaultKeywords, version, author;
     bool disabled = false, hasSettings = false;
 };
+// A global key: an empty text opens and closes Halo, any other text is typed into it.
+struct HaloBridgeKey {
+    std::wstring key, text;
+    bool on = true;
+};
+// A typed shortcut: what you type, and what it becomes.
+struct HaloBridgeShort {
+    std::wstring key, value;
+};
+// A module in Flow's plugin store that is not installed yet.
+struct HaloBridgeStore {
+    std::wstring id, name, desc, author, version, language, website;
+};
 // A module's own settings panel, made by the engine as a child window inside a holder the
 // settings window owns. px: its height in pixels.
 struct HaloBridgePanel {
@@ -181,6 +202,10 @@ std::wstring Setting(const std::wstring& name, bool* found);
 std::vector<HaloBridgePlugin> Plugins();
 std::wstring TakeError();
 bool SendLine(std::initializer_list<std::wstring> fields);
+bool SendFields(const std::vector<std::wstring>& fields);
+std::vector<HaloBridgeKey> Keys();
+std::vector<HaloBridgeShort> Shorts();
+std::vector<HaloBridgeStore> Store();
 }  // namespace halobridge
 std::wstring Hotkey_Format(UINT mods, UINT vk);
 void HaloGlyph(ID2D1RenderTarget* rt, D2D1_RECT_F r, float alpha);
@@ -428,8 +453,6 @@ struct State {
     bool quiet = false, quietNext = false;
 
     // Windhawk settings
-    std::wstring openKey;
-    bool useFlowKeys = false;
     int backgroundOpacity = 55;
     bool blur = true;
     bool peekOnSpace = true;
@@ -454,7 +477,10 @@ struct State {
     std::wstring pendingKeyword;
     DWORD pendingTick = 0;
     std::map<std::wstring, std::wstring> set, setPending;
-    std::vector<std::pair<std::wstring, std::wstring>> hk, hkPending;
+    std::vector<HaloBridgeKey> hk, hkPending;
+    std::vector<HaloBridgeShort> scPending;
+    std::vector<HaloBridgeStore> storePending;
+    bool hkHasOn = false;  // the engine sends an on field: it owns the open keys too
     bool inSet = false;
     ResultBlock res, resPending;
     bool inRes = false;
@@ -1807,11 +1833,8 @@ void RegisterKeys() {
             if (k.hk.vk == hk.vk && k.hk.mods == hk.mods) return;
         g.keys.push_back({hk, keyword, false});
     };
-    add(g.openKey, L"");
-    if (g.useFlowKeys) {
-        add(SetStr(L"Hotkey"), L"");
-        for (auto& h : g.hk) add(h.first, h.second);
-    }
+    for (auto& h : g.hk)
+        if (h.on) add(h.key, h.text);
     std::vector<HookKey> hookKeys(g.keys.size(), HookKey{0, 0});
     bool needHook = false;
     int tap = -1;
@@ -1881,10 +1904,7 @@ void FireKey(size_t slot) {
 // ---------------------------------------------------------------- engine messages
 
 void LoadSettings() {
-    PCWSTR s = Wh_GetStringSetting(L"openKey");
-    g.openKey = s ? s : L"";
-    Wh_FreeStringSetting(s);
-    g.useFlowKeys = Wh_GetIntSetting(L"useFlowKeys") != 0;
+    PCWSTR s = nullptr;
     g.backgroundOpacity = std::clamp(Wh_GetIntSetting(L"backgroundOpacity"), 0, 100);
     g.blur = Wh_GetIntSetting(L"blur") != 0;
     g.peekOnSpace = Wh_GetIntSetting(L"peekOnSpace") != 0;
@@ -1903,6 +1923,9 @@ struct Bridge {
     bool ready = false;
     std::map<std::wstring, std::wstring> set;
     std::vector<HaloBridgePlugin> plugins;
+    std::vector<HaloBridgeKey> keys;
+    std::vector<HaloBridgeShort> shorts;
+    std::vector<HaloBridgeStore> store;
     std::map<std::wstring, HaloBridgePanel> panels;
     std::wstring error;
 };
@@ -1925,6 +1948,8 @@ void BeginSettingsBlock() {
     g.setPending.clear();
     g.hkPending.clear();
     g.plugPending.clear();
+    g.scPending.clear();
+    g.storePending.clear();
 }
 
 void OnLine(const std::string& raw) {
@@ -1965,8 +1990,16 @@ void OnLine(const std::string& raw) {
         BeginSettingsBlock();
         g.setPending[field(1)] = field(2);
     } else if (op == L"hk") {
+        // key, text, on (an engine before 0.6.6 sends no third field: on)
         BeginSettingsBlock();
-        g.hkPending.push_back({field(1), field(2)});
+        g.hkPending.push_back({field(1), field(2), field(3) != L"0"});
+        if (f.size() > 3) g.hkHasOn = true;
+    } else if (op == L"sc") {
+        BeginSettingsBlock();
+        g.scPending.push_back({field(1), field(2)});
+    } else if (op == L"store") {
+        BeginSettingsBlock();
+        g.storePending.push_back({field(1), field(2), field(3), field(4), field(5), field(6), field(7)});
     } else if (op == L"plug") {
         // id, name, description, keywords, off, own settings, version, author, default keywords
         BeginSettingsBlock();
@@ -1985,15 +2018,28 @@ void OnLine(const std::string& raw) {
         g.inSet = false;
         g.set = std::move(g.setPending);
         g.hk = std::move(g.hkPending);
+        if (!g.hkHasOn) {
+            // An older engine lists only the typing keys; its open key is the Hotkey setting.
+            auto it = g.set.find(L"Hotkey");
+            if (it != g.set.end() && !it->second.empty()) g.hk.insert(g.hk.begin(), {it->second, L"", true});
+        }
+        g.hkHasOn = false;
         g.setPending.clear();
         g.hkPending.clear();
         {
             std::lock_guard<std::mutex> guard(g_bridge.lock);
             g_bridge.ready = true;
             g_bridge.set = g.set;
-            if (!g.plugPending.empty()) g_bridge.plugins = std::move(g.plugPending);
+            g_bridge.keys = g.hk;
+            g_bridge.shorts = std::move(g.scPending);
+            if (!g.plugPending.empty()) {
+                g_bridge.plugins = std::move(g.plugPending);
+                g_bridge.store = std::move(g.storePending);
+            }
         }
         g.plugPending.clear();
+        g.scPending.clear();
+        g.storePending.clear();
         ResetFormats();
         RegisterKeys();
         Render();
@@ -3191,6 +3237,26 @@ std::wstring TakeError() {
     return e;
 }
 bool SendLine(std::initializer_list<std::wstring> fields) { return Send(fields); }
+bool SendFields(const std::vector<std::wstring>& fields) {
+    std::string line;
+    for (size_t i = 0; i < fields.size(); i++) {
+        if (i) line += '\t';
+        line += Escape(Utf8(fields[i]));
+    }
+    return PipeSendRaw(line);
+}
+std::vector<HaloBridgeKey> Keys() {
+    std::lock_guard<std::mutex> guard(g_bridge.lock);
+    return g_bridge.keys;
+}
+std::vector<HaloBridgeShort> Shorts() {
+    std::lock_guard<std::mutex> guard(g_bridge.lock);
+    return g_bridge.shorts;
+}
+std::vector<HaloBridgeStore> Store() {
+    std::lock_guard<std::mutex> guard(g_bridge.lock);
+    return g_bridge.store;
+}
 }  // namespace halobridge
 
 void HaloRecording(bool on) {
@@ -4307,6 +4373,7 @@ struct SetField {
     float fitW = 0;      // Box width that fits the text (Set_FitBoxes); 0 until measured.
     float fitText = -1;  // Measured text width behind fitW.
     std::wstring fitFor; // The text that was measured.
+    bool loaded = false; // value holds what was loaded, even when that is empty.
 };
 
 // Names, descriptions and option labels match the ==WindhawkModSettings== block word for word.
@@ -4314,9 +4381,6 @@ struct SetField {
 static std::vector<SetField> Set_MakeFields() {
     using K = SetField;
     std::vector<SetField> fields = {
-{K::Hotkey, L"flow:Hotkey", L"Open key", L"Opens and closes Halo. Click the box and press the keys. LWin means a tap of the Windows key on its own.", L"LWin", {}, 0, 100, 0, L"Opening Halo"},
-{K::Hotkey, L"openKey", L"Second open key", L"Another key that opens and closes Halo, kept even when the keys below are off. Leave it empty for none.", L"", {}, 0, 100, 0, L"Opening Halo"},
-{K::Check, L"useFlowKeys", L"Use the open key and shortcut keys", L"Halo answers the open key above and the query shortcut keys, like Win+R for the command line. Off, only the second open key works.", L"1", {}, 0, 100, 0, L"Opening Halo"},
 {K::Check, L"flow:IgnoreHotkeysOnFullscreen", L"Ignore the keys in fullscreen apps", L"The open key does nothing while a game or video fills the screen.", L"0", {}, 0, 100, 0, L"Opening Halo"},
 {K::Choice, L"flow:SearchWindowScreen", L"Screen", L"Which screen Halo opens on.", L"Cursor", {{L"Cursor", L"The screen with the mouse"}, {L"Focus", L"The screen of the app in front"}, {L"Primary", L"The main screen"}}, 0, 100, 0, L"Where it shows"},
 {K::Choice, L"flow:SearchWindowAlign", L"Position", L"Where on that screen.", L"Center", {{L"Center", L"Middle"}, {L"CenterTop", L"Top middle"}, {L"LeftTop", L"Top left"}, {L"RightTop", L"Top right"}}, 0, 100, 0, L"Where it shows"},
@@ -4392,6 +4456,53 @@ static std::vector<SetField> Set_MakeFields() {
                     Pool(p.defaultKeywords.empty() ? p.keywords : p.defaultKeywords), {}, 0, 100, kHaloPluginsPage, name};
         fields.push_back(kw);
     }
+    // Store modules not added yet: a switch each, off. Turning one on downloads it on save.
+    for (const auto& s : ::halobridge::Store()) {
+        PCWSTR name = Pool(s.name.empty() ? s.id : s.name);
+        fields.push_back({K::Check, Pool(L"store:" + s.id + L":on"), L"Add it", Pool(s.desc), L"0", {}, 0, 100,
+                          kHaloPluginsPage, name});
+    }
+    // Every key Halo listens for, from the engine's one list: a key with no text opens Halo,
+    // a key with text opens it with that text typed in.
+    const auto keys = ::halobridge::Keys();
+    std::vector<SetField> open;
+    int nShort = 0;
+    for (size_t i = 0; i < keys.size(); i++) {
+        std::wstring base = L"key:" + std::to_wstring(i) + L":";
+        if (keys[i].text.empty()) {
+            open.push_back({K::Hotkey, Pool(base + L"key"), Pool(L"Open key " + std::to_wstring(open.size() / 2 + 1)),
+                            L"Opens and closes Halo. LWin means a tap of the Windows key on its own. Clear it to remove it.",
+                            L"", {}, 0, 100, 0, L"Opening Halo"});
+            open.push_back({K::Check, Pool(base + L"on"), L"Use this key", L"", L"1", {}, 0, 100, 0, L"Opening Halo"});
+            continue;
+        }
+        PCWSTR group = Pool(L"Shortcut key " + std::to_wstring(++nShort));
+        fields.push_back({K::Hotkey, Pool(base + L"key"), L"Key", L"Clear it to remove this shortcut.", L"", {}, 0, 100, 2, group});
+        fields.push_back({K::Text, Pool(base + L"text"), L"Types",
+                          L"Halo opens with this in the search box. A space at the end counts. Empty, it is an open key.",
+                          L"", {}, 0, 100, 2, group});
+        fields.push_back({K::Check, Pool(base + L"on"), L"Turned on", L"", L"1", {}, 0, 100, 2, group});
+    }
+    open.push_back({K::Hotkey, L"key:newopen:key", L"Add an open key", L"Press a key here to add another one that opens Halo.",
+                    L"", {}, 0, 100, 0, L"Opening Halo"});
+    fields.insert(fields.begin(), open.begin(), open.end());
+    fields.push_back({K::Hotkey, L"key:newshort:key", L"Key", L"Press the keys for a new shortcut, then say what it types.",
+                      L"", {}, 0, 100, 2, L"New shortcut key"});
+    fields.push_back({K::Text, L"key:newshort:text", L"Types", L"For example \"> \" for the command line.", L"", {}, 0, 100, 2,
+                      L"New shortcut key"});
+    // Typed shortcuts: words that turn into other words as you type them.
+    PCWSTR shortDesc = L"When the search box holds exactly this, Halo swaps in the text below.";
+    const auto shorts = ::halobridge::Shorts();
+    for (size_t i = 0; i < shorts.size(); i++) {
+        std::wstring base = L"short:" + std::to_wstring(i) + L":";
+        PCWSTR group = Pool(L"Typed shortcut " + std::to_wstring(i + 1));
+        fields.push_back({K::Text, Pool(base + L"key"), L"You type", L"Clear it to remove this shortcut.", L"", {}, 0, 100, 1, group});
+        fields.push_back({K::Text, Pool(base + L"value"), L"It becomes", L"", L"", {}, 0, 100, 1, group});
+    }
+    fields.push_back({K::Text, L"short:new:key", L"You type", shortDesc, L"", {}, 0, 100, 1, L"New typed shortcut"});
+    fields.push_back({K::Text, L"short:new:value", L"It becomes",
+                      L"Two are built in: {clipboard} is what you copied last, {active_explorer_path} is the folder open in File Explorer.",
+                      L"", {}, 0, 100, 1, L"New typed shortcut"});
     return fields;
 }
 
@@ -4401,10 +4512,10 @@ struct SetPageInfo {
 };
 static const SetPageInfo kSetPages[] = {
 {L"General", L"The keys that open Halo, where it shows and what it keeps.", 0xE80F},
-{L"Search", L"How Halo finds and ranks results.", 0xE721},
-{L"Keys", L"Keys inside the open window. Click a box, press the keys. Esc cancels, Backspace clears.", 0xE765},
+{L"Search", L"How Halo finds and ranks results, and your typed shortcuts.", 0xE721},
+{L"Keys", L"Keys inside the open window, then your own shortcut keys that open Halo with text typed in. Click a box, press the keys. Esc cancels, Backspace clears.", 0xE765},
 {L"Look", L"Glass, size, text, the clock, motion and sound.", 0xE790},
-{L"Modules", L"Turn modules on or off and change the words that call them.", 0xEA86},
+{L"Modules", L"Turn modules on or off and change the words that call them. A module from Flow's plugin store downloads when you turn it on and save, then Halo restarts.", 0xEA86},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
@@ -5306,13 +5417,37 @@ static std::wstring Set_EngineValue(const SetField& f, bool* found) {
             return what == L"on" ? (p.disabled ? L"0" : L"1") : p.keywords;
         }
     }
+    if (key.rfind(L"store:", 0) == 0) {
+        *found = true;
+        return L"0";
+    }
+    bool isKey = key.rfind(L"key:", 0) == 0, isShort = key.rfind(L"short:", 0) == 0;
+    if (isKey || isShort) {
+        size_t a = key.find(L':') + 1, c = key.rfind(L':');
+        std::wstring idx = key.substr(a, c - a), what = key.substr(c + 1);
+        *found = true;
+        if (idx.empty() || !iswdigit(idx[0])) return what == L"on" ? L"1" : L"";  // a blank "add one" slot
+        size_t i = (size_t)_wtoi(idx.c_str());
+        if (isKey) {
+            const auto keys = ::halobridge::Keys();
+            if (i >= keys.size()) return L"";
+            if (what == L"on") return keys[i].on ? L"1" : L"0";
+            return what == L"text" ? keys[i].text : Halo_KeyText(keys[i].key);
+        }
+        const auto shorts = ::halobridge::Shorts();
+        if (i >= shorts.size()) return L"";
+        return what == L"key" ? shorts[i].key : shorts[i].value;
+    }
     return L"";
 }
 
+// The fields are rebuilt when the set of modules, keys or shortcuts changes.
 static std::wstring Set_PluginKey(const std::vector<SetField>& fields) {
     std::wstring s;
     for (const auto& f : fields)
-        if (wcsncmp(f.key, L"plugin:", 7) == 0) s += f.key;
+        if (wcsncmp(f.key, L"plugin:", 7) == 0 || wcsncmp(f.key, L"store:", 6) == 0 || wcsncmp(f.key, L"key:", 4) == 0 ||
+            wcsncmp(f.key, L"short:", 6) == 0)
+            s += f.key, s += L'|';
     return s;
 }
 
@@ -5329,6 +5464,7 @@ static void Set_LoadFields(SetWindow& w) {
                 if (it != kept.end()) {
                     f.cur = it->second.first;
                     f.value = it->second.second;
+                    f.loaded = true;
                 }
             }
             w.focus = -1;
@@ -5336,7 +5472,7 @@ static void Set_LoadFields(SetWindow& w) {
         }
     }
     for (auto& f : w.fields) {
-        bool touched = !f.value.empty() && Set_FieldValue(f) != f.value;
+        bool touched = (f.loaded || !f.value.empty()) && Set_FieldValue(f) != f.value;
         if (touched) continue;
         if (wcschr(f.key, L':')) {
             bool found = false;
@@ -5351,6 +5487,7 @@ static void Set_LoadFields(SetWindow& w) {
             Set_PutValue(f, isInt ? std::to_wstring(Wh_GetIntSetting(f.key)) : GetStringSetting(f.key));
         }
         f.value = Set_FieldValue(f);  // What the window shows, so an untouched field never saves.
+        f.loaded = true;
     }
     std::wstring error = ::halobridge::TakeError();
     if (!error.empty() && w.hwnd) Set_SetStatus(w, error.c_str(), true);
@@ -5755,6 +5892,34 @@ static float Halo_BuildPlugins(SetWindow& w, float y) {
             y += Halo_AddOpenCard(w, card, e.k, e.pl, e.id, nameH, line) + kHaloCardGap;
         }
     }
+    // Flow's plugin store: the modules not added yet, as cards with only a switch. No url, so they don't fold.
+    std::vector<size_t> store;
+    for (size_t k = 0; k < w.fields.size(); k++)
+        if (wcsncmp(w.fields[k].key, L"store:", 6) == 0) store.push_back(k);
+    if (store.empty()) return y;
+    SetItem sg;
+    sg.type = SetItem::Group;
+    sg.text = L"More from Flow's plugin store (" + std::to_wstring(store.size()) + L")";
+    sg.y = y + 14;
+    sg.h = 22;
+    y = sg.y + sg.h + 10;
+    w.items.push_back(sg);
+    for (size_t r0 = 0; r0 < store.size(); r0 += cols) {
+        for (int c = 0; c < cols && r0 + c < store.size(); c++) {
+            const SetField& f = w.fields[store[r0 + c]];
+            SetItem card;
+            card.type = SetItem::PlugCard;
+            card.aux = (int)store[r0 + c];
+            card.text = f.group;
+            card.sub = f.desc && *f.desc ? f.desc : L"No description.";
+            card.x = w.contentX + c * (colW + kHaloCardGap);
+            card.w = colW;
+            card.y = y;
+            card.h = card.head = closedH;
+            w.items.push_back(card);
+        }
+        y += closedH + kHaloCardGap;
+    }
     return y;
 }
 static void Set_CommitEdit(SetWindow& w, bool apply);
@@ -5788,7 +5953,7 @@ static void Set_BuildPage(SetWindow& w) {
     for (size_t k = 0; k < w.fields.size(); k++) {
         const SetField& f = w.fields[k];
         if (f.page != w.page) continue;
-        if (wcsncmp(f.key, L"plugin:", 7) == 0) continue;  // Cards, laid out below.
+        if (wcsncmp(f.key, L"plugin:", 7) == 0 || wcsncmp(f.key, L"store:", 6) == 0) continue;  // Cards, laid out below.
         if (!lastGroup || wcscmp(lastGroup, f.group) != 0) {
             SetItem g;
             g.type = SetItem::Group;
@@ -6456,7 +6621,7 @@ static void Halo_DrawPlugCard(SetPaint& p, SetWindow& w, const SetItem& it, int 
     bool on = f && f->cur == L"1", open = it.h > it.head + 1;
     const float nameH = Halo_LineH(w.fLabel.get()), line = Halo_LineH(w.fHint.get());
     float top = r.top + kHaloCardPad;
-    p.Glyph(w.fIconS.get(), open || it.open ? 0xE70D : 0xE76C, {r.left + 10, top, r.left + 34, top + nameH},
+    p.Glyph(w.fIconS.get(), it.url.empty() ? 0xE896 : open || it.open ? 0xE70D : 0xE76C, {r.left + 10, top, r.left + 34, top + nameH},
             hov > 0.5f || it.open ? mocha::text : mocha::overlay2);
     D2D1_RECT_F sw = Halo_CardSwitch(w, it);
     p.Text(w.fLabel.get(), it.text, {r.left + 38, top, sw.left - 12, top + nameH + 2}, on ? mocha::text : mocha::overlay1);
@@ -6680,7 +6845,6 @@ static void Halo_PlacePanels(SetWindow& w) {
         // uncovered would keep stale pixels (the footer pill smeared down the panel on scroll).
         bool dirty = false;
         if (!EqualRect(&vis, &h.vis) || !EqualRect(&f, &h.foot) || !h.shown) {
-            dirty = h.shown;
             HRGN rgn = CreateRectRgnIndirect(&vis);
             HRGN pill = CreateRoundRectRgn(f.left, f.top, f.right + 1, f.bottom + 1, f.bottom - f.top, f.bottom - f.top);
             CombineRgn(rgn, rgn, pill, RGN_DIFF);
@@ -6688,6 +6852,7 @@ static void Halo_PlacePanels(SetWindow& w) {
             SetWindowRgn(h.clip, rgn, FALSE);  // the window owns rgn now
             h.vis = vis;
             h.foot = f;
+            dirty = h.shown;
         }
         if (!EqualRect(&at, &h.at) || !h.shown) {
             SetWindowPos(h.clip, HWND_TOP, at.left, at.top, at.right - at.left, at.bottom - at.top,
@@ -6940,7 +7105,7 @@ static SetHit Set_Hit(SetWindow& w, float x, float y) {
             if (it.aux >= 0 && Set_In(Halo_CardSwitch(w, it), x, cy)) {
                 h.kind = SetHit::Control;
                 h.a = it.aux;
-            } else if (cy < it.y + it.head) {
+            } else if (cy < it.y + it.head && !it.url.empty()) {  // A store card has no url: only its switch clicks.
                 h.kind = SetHit::Link;
                 h.a = (int)i;
             }
@@ -7315,9 +7480,78 @@ static std::wstring Set_ChangedParams(SetWindow& w, int& changed) {
 // Sends the engine's changed fields. Returns how many were sent, or -1 when it isn't running.
 static int Set_SaveEngine(SetWindow& w) {
     int sent = 0;
-    bool any = false;
+    bool any = false, keysChanged = false, shortsChanged = false;
+    std::vector<std::wstring> storeIds;
+    auto cur = [&](const std::wstring& key) -> std::wstring {
+        for (const auto& f : w.fields)
+            if (key == f.key) return Set_FieldValue(f);
+        return L"";
+    };
+    for (const auto& f : w.fields) {
+        if (Set_FieldValue(f) == f.value) continue;
+        if (wcsncmp(f.key, L"key:", 4) == 0) keysChanged = true;
+        else if (wcsncmp(f.key, L"short:", 6) == 0) shortsChanged = true;
+        else if (wcsncmp(f.key, L"store:", 6) == 0 && f.cur == L"1") {
+            std::wstring k = f.key;
+            storeIds.push_back(k.substr(6, k.size() - 9));
+        }
+    }
+    // The key list goes over whole: each key, what it types and whether it is on. Clearing a key drops it.
+    if (keysChanged) {
+        std::vector<std::wstring> line{L"keys"};
+        auto add = [&](const std::wstring& key, const std::wstring& text, const std::wstring& on) {
+            if (key.empty()) return;
+            line.push_back(key);
+            line.push_back(text);
+            line.push_back(on == L"0" ? L"0" : L"1");
+        };
+        const auto keys = ::halobridge::Keys();
+        for (size_t i = 0; i < keys.size(); i++) {
+            std::wstring base = L"key:" + std::to_wstring(i) + L":";
+            add(cur(base + L"key"), keys[i].text.empty() ? L"" : cur(base + L"text"), cur(base + L"on"));
+        }
+        add(cur(L"key:newopen:key"), L"", L"1");
+        std::wstring nt = cur(L"key:newshort:text");
+        add(cur(L"key:newshort:key"), nt, L"1");
+        bool opener = false;  // Without one open key left on, only the tray icon could bring Halo back.
+        for (size_t i = 1; i + 2 < line.size(); i += 3) opener |= line[i + 1].empty() && line[i + 2] == L"1";
+        if (!opener) {
+            Set_SetStatus(w, L"Keep one open key on", true);
+            return -2;
+        }
+        if (!::halobridge::SendFields(line)) return -1;
+        sent++;
+    }
+    if (shortsChanged) {
+        std::vector<std::wstring> line{L"shorts"};
+        const auto shorts = ::halobridge::Shorts();
+        for (size_t i = 0; i <= shorts.size(); i++) {
+            std::wstring base = i < shorts.size() ? L"short:" + std::to_wstring(i) + L":" : std::wstring(L"short:new:");
+            std::wstring k = cur(base + L"key");
+            if (k.empty()) continue;
+            line.push_back(k);
+            line.push_back(cur(base + L"value"));
+        }
+        if (!::halobridge::SendFields(line)) return -1;
+        sent++;
+    }
+    if (!storeIds.empty()) {
+        std::vector<std::wstring> line{L"storeget"};
+        line.insert(line.end(), storeIds.begin(), storeIds.end());
+        if (!::halobridge::SendFields(line)) return -1;
+        sent++;
+    }
+    for (auto& f : w.fields) {
+        std::wstring k0 = f.key;
+        if (k0.rfind(L"key:", 0) == 0 || k0.rfind(L"short:", 0) == 0 || k0.rfind(L"store:", 0) == 0) {
+            if (Set_FieldValue(f) != f.value) any = true, f.value = Set_FieldValue(f);
+            continue;
+        }
+    }
     for (auto& f : w.fields) {
         if (!wcschr(f.key, L':')) continue;
+        std::wstring k0 = f.key;
+        if (k0.rfind(L"key:", 0) == 0 || k0.rfind(L"short:", 0) == 0 || k0.rfind(L"store:", 0) == 0) continue;
         std::wstring value = Set_FieldValue(f);
         if (value == f.value) continue;
         any = true;
@@ -7343,6 +7577,7 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
     if (w.saving) return;
     Set_StopRecording(w);
     int engine = Set_SaveEngine(w);
+    if (engine == -2) return;  // Refused, and the status says why.
     int changed = 0;
     std::wstring params = Set_ChangedParams(w, changed);
     if (!changed) {
