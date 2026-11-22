@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.0.19
+// @version         2.0.20
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -47,6 +47,11 @@ Built on Translucent Windows by Undisputed00x.
 | **Mica (SystemBackdrop)** | **MicaAlt (SystemBackdrop)** |
 |:---:|:---:|
 | ![Mica](https://i.imgur.com/1ciJJck.png) | ![MicaTabbed](https://i.imgur.com/5Dxj5PS.png) |
+
+## What's new in 2.0.20
+- Game guard: menus and flyouts no longer load into games or their anti-cheat,
+  so they cannot add stutter or a ban risk there. Launchers such as Steam keep
+  the look. Turn it off or add your own lists in the new "Game guard" settings.
 
 ## Credits 
 The custom theme is a close copy of the Rectify 11 theme created by [WinExperiments](https://github.com/WinExperiments).
@@ -180,6 +185,17 @@ This is caused by default by the AccentBlur API.❕
   $description: >-
       Add rules to each specified process or processes from specific subdirectories
        ❗ Add process rules for the excluded process instead of using Windhawk's process exclusion when the "New system colors" global setting is enabled.
+- gameGuard:
+  - enabled: true
+    $name: Stay out of games
+    $description: 'On, this mod does not load into games or their anti-cheat, so it cannot cause stutter or a ban. Launchers such as Steam keep the look. Applies the next time an app starts. Suggested: on.'
+  - allow: ""
+    $name: Always allow these apps
+    $description: 'Apps to style even when they look like a game. Process names separated by commas, for example MyTool.exe, Editor*.exe. The * works as a wildcard.'
+  - skip: ""
+    $name: Also skip these apps
+    $description: 'Extra apps to leave alone, written the same way.'
+  $name: Game guard
 */
 // ==/WindhawkModSettings==
 
@@ -7914,8 +7930,183 @@ VOID LoadSettings()
     ApplyHooks();
 }
 
+// ---- Game guard: keeps this mod out of games ----
+// Decides from this process's own exe path and the files next to it. It never
+// opens or looks at other processes. About a dozen file lookups, once, at init.
+#include <wctype.h>
+#include <string>
+
+namespace gameguard {
+
+// Case-insensitive match where * stands for any run of characters.
+static bool Wild(PCWSTR pat, PCWSTR s) {
+    for (;;) {
+        if (*pat == L'*') {
+            while (*pat == L'*') pat++;
+            if (!*pat) return true;
+            for (;; s++) {
+                if (Wild(pat, s)) return true;
+                if (!*s) return false;
+            }
+        }
+        if (!*pat || !*s) return *pat == *s;
+        if (towlower(*pat) != towlower(*s)) return false;
+        pat++;
+        s++;
+    }
+}
+
+// Names separated by commas, semicolons or new lines.
+static bool InList(PCWSTR list, PCWSTR exe) {
+    if (!list) return false;
+    PCWSTR p = list;
+    while (*p) {
+        while (*p == L',' || *p == L';' || *p == L' ' || *p == L'\t' || *p == L'\r' || *p == L'\n') p++;
+        PCWSTR b = p;
+        while (*p && *p != L',' && *p != L';' && *p != L'\r' && *p != L'\n') p++;
+        PCWSTR e = p;
+        while (e > b && (e[-1] == L' ' || e[-1] == L'\t')) e--;
+        if (e > b && e - b < 260) {
+            wchar_t t[260];
+            wmemcpy(t, b, e - b);
+            t[e - b] = 0;
+            if (Wild(t, exe)) return true;
+        }
+    }
+    return false;
+}
+
+static bool Exists(const std::wstring& dir, PCWSTR name) {
+    return GetFileAttributesW((dir + L"\\" + name).c_str()) != INVALID_FILE_ATTRIBUTES;
+}
+
+// True when something in dir matches the pattern (one lookup, no recursion).
+static bool Has(const std::wstring& dir, PCWSTR pattern) {
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileExW((dir + L"\\" + pattern).c_str(), FindExInfoBasic, &fd,
+                                FindExSearchNameMatch, nullptr, 0);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    FindClose(h);
+    return true;
+}
+
+static bool Contains(const std::wstring& lowPath, PCWSTR part) {
+    return lowPath.find(part) != std::wstring::npos;
+}
+
+// Anti-cheat files beside the exe or one folder up.
+static PCWSTR AntiCheatIn(const std::wstring& dir) {
+    if (dir.size() < 4) return nullptr;
+    static const PCWSTR pats[] = {
+        L"EasyAntiCheat*", L"BattlEye", L"BEClient*.dll", L"vanguard*", L"vgc.exe",
+        L"xigncode*", L"x3.xem", L"nProtect*", L"GameGuard*", L"npgg*", L"PnkBstr*",
+    };
+    for (PCWSTR pat : pats) {
+        if (Has(dir, pat)) return L"anti-cheat files next to it";
+    }
+    if (Exists(dir, L"pb\\pbcl.dll")) return L"PunkBuster files next to it";
+    if (Exists(dir, L".build.info")) return L"Battle.net game folder";
+    return nullptr;
+}
+
+// Returns a short reason when this process is a game, or nullptr.
+static PCWSTR Reason(PCWSTR path, PCWSTR exe, PCWSTR skipList) {
+    std::wstring low(path);
+    for (auto& c : low) c = (wchar_t)towlower(c);
+
+    // Never block the shell, Windhawk itself, Windows programs and game launchers.
+    static const PCWSTR never[] = {
+        L"explorer.exe", L"dwm.exe", L"windhawk.exe", L"windhawk-mod.exe",
+        L"windhawk-mod-uiaccess.exe", L"windhawk-mod-elevated.exe", L"windhawk-ui.exe",
+        L"steam.exe", L"steamwebhelper.exe", L"steamservice.exe",
+        L"epicgameslauncher.exe", L"epicwebhelper.exe", L"unrealcefsubprocess.exe",
+        L"battle.net.exe", L"agent.exe", L"galaxyclient.exe", L"galaxyclient helper.exe",
+        L"riotclientservices.exe", L"riotclientux.exe", L"riotclientuxrender.exe",
+        L"eadesktop.exe", L"eabackgroundservice.exe", L"upc.exe", L"ubisoftconnect.exe",
+    };
+    for (PCWSTR n : never) {
+        if (_wcsicmp(exe, n) == 0) return nullptr;
+    }
+    if (_wcsnicmp(exe, L"battle.net", 10) == 0) return nullptr;
+    wchar_t win[MAX_PATH];
+    UINT wl = GetWindowsDirectoryW(win, MAX_PATH);
+    if (wl && wl < MAX_PATH) {
+        std::wstring w(win);
+        for (auto& c : w) c = (wchar_t)towlower(c);
+        w += L"\\";
+        if (low.compare(0, w.size(), w) == 0) return nullptr;
+    }
+    static const PCWSTR launcherDirs[] = {
+        L"\\epic games\\launcher\\", L"\\riot games\\riot client\\",
+        L"\\rockstar games\\launcher\\", L"\\rockstar games\\social club\\",
+    };
+    for (PCWSTR d : launcherDirs) {
+        if (Contains(low, d)) return nullptr;
+    }
+
+    if (InList(skipList, exe)) return L"on your skip list";
+
+    static const PCWSTR libraries[] = {
+        L"\\steamapps\\common\\", L"\\epic games\\", L"\\xboxgames\\", L"\\riot games\\",
+        L"\\gog galaxy\\games\\", L"\\gog games\\", L"\\ubisoft game launcher\\games\\",
+        L"\\ea games\\", L"\\battle.net\\", L"\\rockstar games\\",
+    };
+    for (PCWSTR d : libraries) {
+        if (Contains(low, d)) return L"inside a game library folder";
+    }
+
+    std::wstring dir(path);
+    size_t cut = dir.rfind(L'\\');
+    if (cut == std::wstring::npos) return nullptr;
+    dir.resize(cut);
+    std::wstring parent = dir;
+    cut = parent.rfind(L'\\');
+    if (cut != std::wstring::npos) parent.resize(cut);
+
+    if (Contains(low, L"\\windowsapps\\") &&
+        (Exists(dir, L"MicrosoftGame.config") || Exists(parent, L"MicrosoftGame.config"))) {
+        return L"Store game (MicrosoftGame.config)";
+    }
+    if (PCWSTR r = AntiCheatIn(dir)) return r;
+    if (PCWSTR r = AntiCheatIn(parent)) return r;
+    if (Exists(dir, L"UnityPlayer.dll") || Exists(dir, L"GameAssembly.dll")) return L"Unity game files next to it";
+    static const wchar_t kShip[] = L"-win64-shipping.exe";
+    size_t el = wcslen(exe);
+    if ((el > ARRAYSIZE(kShip) - 1 && _wcsicmp(exe + el - (ARRAYSIZE(kShip) - 1), kShip) == 0) ||
+        Contains(low, L"\\binaries\\win64\\")) {
+        return L"Unreal Engine game layout";
+    }
+    return nullptr;
+}
+
+// TRUE when this process is a game and the mod should not load into it.
+static BOOL ShouldSkipProcess() {
+    if (!Wh_GetIntSetting(L"gameGuard.enabled")) return FALSE;
+    wchar_t path[2 * MAX_PATH];
+    DWORD len = GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
+    if (!len || len >= ARRAYSIZE(path)) return FALSE;
+    PCWSTR exe = wcsrchr(path, L'\\');
+    exe = exe ? exe + 1 : path;
+
+    PCWSTR allow = Wh_GetStringSetting(L"gameGuard.allow");
+    bool allowed = InList(allow, exe);
+    Wh_FreeStringSetting(allow);
+    if (allowed) return FALSE;
+
+    PCWSTR skip = Wh_GetStringSetting(L"gameGuard.skip");
+    PCWSTR why = Reason(path, exe, skip);
+    Wh_FreeStringSetting(skip);
+    if (!why) return FALSE;
+    Wh_Log(L"Game guard: %s stays unstyled (%s)", exe, why);
+    return TRUE;
+}
+
+}  // namespace gameguard
+// ---- end of game guard ----
+
 BOOL Wh_ModInit(VOID) 
 {
+    if (gameguard::ShouldSkipProcess()) return FALSE;
     g_settings.Unload = FALSE;
     g_DefaultSysColors = FALSE;
     g_InsideExplorerProc = CheckExplorerProcess();

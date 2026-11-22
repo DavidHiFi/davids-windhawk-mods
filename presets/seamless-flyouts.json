@@ -181,7 +181,10 @@
         "RuledPrograms[9].BackgroundEffects.type": "acrylicblur",
         "RuledPrograms[9].RenderingMod.AccentColorControls": 1,
         "RuledPrograms[9].RenderingMod.ThemeBackground": 1,
-        "RuledPrograms[9].target": "cmd.exe"
+        "RuledPrograms[9].target": "cmd.exe",
+        "gameGuard.allow": "",
+        "gameGuard.enabled": 1,
+        "gameGuard.skip": ""
       }
     }
   ]
