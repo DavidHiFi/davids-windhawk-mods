@@ -172,7 +172,7 @@
         "media.MainSettings.TextAreaSetting.textAreaHeight": "0 0",
         "media.MainSettings.TextAreaSetting.textAreaMargin": "6 2",
         "media.MainSettings.TextAreaSetting.textAreaWidth": "76 88",
-        "media.MainSettings.TextAreaSetting.textSpacing": 4294967295,
+        "media.MainSettings.TextAreaSetting.textSpacing": -1,
         "media.NotificationSettings.showSuccessNotification": 0,
         "media.PlayerMenuSettings.PlayerMenuSettingsNear.miniPlayerHorizontalOffsetNear": 0,
         "media.PlayerMenuSettings.PlayerMenuSettingsNear.miniPlayerVerticalPlacementNear": "bottom",

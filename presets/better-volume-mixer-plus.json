@@ -10,7 +10,7 @@
         "closeWhenFocusIsLost": 1,
         "compactMode": 1,
         "customApps[0].app": "",
-        "customApps[0].defaultVolume": 4294967295,
+        "customApps[0].defaultVolume": -1,
         "customApps[0].displayName": "",
         "exactVolumeEntry": 1,
         "fontFamily": "FiraCode Nerd Font",
