@@ -351,7 +351,58 @@ def installed_owner_mods() -> dict[str, dict]:
                       'exclude': str(key.get('Exclude', '')), 'architecture': str(key.get('Architecture', '')),
                       'version': str(key.get('Version', ''))},
             'settings': dict(sorted(reg_values(rf'{REG_MODS}\{mid}\Settings').items())),
+            'config': custom_config(key),
         }
+    return mods
+
+
+def custom_config(key: dict) -> dict:
+    """The user's own include/exclude lists for a mod (registry values), scrubbed, or {} when none are set."""
+    out = {}
+    for reg, name in (('IncludeCustom', 'includeCustom'), ('ExcludeCustom', 'excludeCustom')):
+        items = []
+        for part in str(key.get(reg, '') or '').split('|'):
+            part = part.strip()
+            if not part:
+                continue
+            clean, _ = scrub_string(part)
+            if clean and clean == part:
+                items.append(part)
+        if items:
+            out[name] = items
+    if int(key.get('IncludeExcludeCustomOnly', 0) or 0):
+        out['includeExcludeCustomOnly'] = True
+    return out
+
+
+def installed_library_mods() -> dict[str, dict]:
+    """{'id': {'name','version','disabled','settings','config'}} for every installed Windhawk library mod."""
+    import winreg
+    ids = []
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, REG_MODS, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as k:
+            i = 0
+            while True:
+                try:
+                    ids.append(winreg.EnumKey(k, i))
+                except OSError:
+                    break
+                i += 1
+    except FileNotFoundError:
+        return {}
+    mods = {}
+    for mid in sorted(ids):
+        if mid.startswith('local@') or not re.fullmatch(r'[a-z0-9][a-z0-9\-]{0,99}', mid):
+            continue
+        key = reg_values(rf'{REG_MODS}\{mid}')
+        if not key.get('Version'):
+            continue
+        src = MODS_SOURCE / f'{mid}.wh.cpp'
+        h = header(src.read_text(encoding='utf-8', errors='replace')) if src.exists() else {'name': ''}
+        mods[mid] = {'name': h.get('name', '') or mid, 'version': str(key['Version']),
+                     'disabled': int(key.get('Disabled', 0) or 0) != 0,
+                     'settings': dict(sorted(reg_values(rf'{REG_MODS}\{mid}\Settings').items())),
+                     'config': custom_config(key)}
     return mods
 
 
@@ -468,7 +519,25 @@ def preset_doc(entries: list[dict]) -> dict:
 
 def preset_entry(mid: str, info: dict) -> tuple[dict, list]:
     clean, notes = scrub_flat(info['settings'])
-    return {'id': mid, 'enabled': not info['state']['disabled'], 'settings': clean}, notes
+    e = {'id': mid, 'enabled': not info['state']['disabled'], 'settings': clean}
+    if info.get('config'):
+        e['config'] = info['config']
+    return e, notes
+
+
+def library_doc() -> tuple[dict, list]:
+    """presets/davidhifi-library.json: every installed library mod, its version, on/off, scrubbed settings and
+    include/exclude lists. The Workshop installs these from the Windhawk library at that exact version."""
+    entries, notes = [], []
+    for mid, info in installed_library_mods().items():
+        clean, sub = scrub_flat(info['settings'])
+        notes += [f'{mid} {k} ({why})' for k, why in sub]
+        e = {'id': mid, 'name': info['name'], 'version': info['version'], 'enabled': not info['disabled'],
+             'settings': clean}
+        if info['config']:
+            e['config'] = info['config']
+        entries.append(e)
+    return {'format': PRESET_FORMAT, 'mods': entries}, notes
 
 
 def scrub_settings_files(stage: Stage, repo: Path) -> list[str]:
@@ -562,6 +631,10 @@ def publish_mods_repo(args) -> tuple[str, list[str]]:
                 setup.pop(mid)
     stage.put('presets/davidhifi-setup.json',
               jdump(preset_doc([setup[k] for k in sorted(setup, key=lambda x: x.removeprefix('local@'))])))
+    # Every library mod as it is on this PC right now, refreshed on every run.
+    lib, lib_notes = library_doc()
+    scrub_notes += lib_notes
+    stage.put('presets/davidhifi-library.json', jdump(lib))
 
     if new_manifest_mods != manifest['mods']:
         m2 = dict(manifest)
@@ -644,6 +717,10 @@ def build_feed(repo: Path, ref: str) -> dict:
     if WORKSHOP_ID not in ids and WORKSHOP_ID in by_id:
         ids.append(WORKSHOP_ID)
     presets = {e['id']: e for e in setup['mods']}
+    cats_raw = show('mods/categories.json')  # mod id -> group, see davids-windhawk-mods/mods/categories.json
+    cats = json.loads(cats_raw) if cats_raw else {}
+    if cats.get('order'):
+        feed['categories'] = cats['order']
     for mid in ids:
         m = by_id.get(mid)
         if not m or not m.get('source'):
@@ -664,15 +741,35 @@ def build_feed(repo: Path, ref: str) -> dict:
             changes = one_line(changelog_notes(item['version']))
         if changes:
             item['changes'] = changes
+        if cats:
+            item['category'] = cats.get('mods', {}).get(mid, 'Other')
+            if item['category'] == 'Other' and mid != WORKSHOP_ID:
+                print(f'feed: {mid} has no group in mods/categories.json, listed under Other')
         if mid == WORKSHOP_ID:
             feed['app'] = item
             continue
         p = presets.get(mid, {'enabled': bool(m.get('enabled')), 'settings': {}})
         item['preset'] = {'enabled': bool(p.get('enabled')), 'settings': p.get('settings', {})}
+        if p.get('config'):
+            item['preset']['config'] = p['config']
         mods.append(item)
     if 'app' in feed:  # key order: app before mods
-        feed = {'format': feed['format'], 'commit': commit_sha, 'generatedAt': '', 'app': feed['app']}
+        feed = {k: feed[k] for k in ('format', 'commit', 'generatedAt', 'categories', 'app') if k in feed}
     feed['mods'] = sorted(mods, key=lambda x: x['name'].lower())
+    # Library mods: installed from the Windhawk library at the version listed, then set up like his.
+    lib_raw = show('presets/davidhifi-library.json')
+    lib = json.loads(lib_raw) if lib_raw else {'mods': []}
+    library = []
+    for e in lib.get('mods', []):
+        if not re.fullmatch(r'[a-z0-9][a-z0-9\-]{0,99}', str(e.get('id', ''))) or not e.get('version'):
+            continue
+        item = {'id': e['id'], 'name': e.get('name') or e['id'], 'version': str(e['version']),
+                'preset': {'enabled': bool(e.get('enabled')), 'settings': e.get('settings', {})}}
+        if e.get('config'):
+            item['preset']['config'] = e['config']
+        library.append(item)
+    if library:
+        feed['library'] = sorted(library, key=lambda x: x['name'].lower())
     return feed
 
 
