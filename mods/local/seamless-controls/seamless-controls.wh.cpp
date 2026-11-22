@@ -2,7 +2,7 @@
 // @id              seamless-controls
 // @name            Seamless Controls
 // @description     Rounded, Mocha dark buttons, boxes, tabs and lists in every classic Windows window
-// @version         1.0.2
+// @version         1.0.3
 // @author          DavidHiFi, crazyboyybs
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -80,8 +80,11 @@ windows are left out, since they have no classic controls.
 Click the tray icon for the settings window, or change them here in Windhawk. Both show
 the same settings.
 
-## What's new in 1.0.2
+## What's new in 1.0.3
 
+- Steps aside in Open and Save windows that Seamless Flyouts draws, so they match File Explorer.
+- The details and large icons buttons at the bottom right of File Explorer show their icons
+  again: Explorer Styler Plus draws them, and this mod no longer paints an empty box there.
 - The preview picture now shows in Windhawk and the Workshop.
 - Selected rows and selected text are dark on the mauve fill, so they read clearly.
 - First release as Seamless Controls.
@@ -1545,12 +1548,16 @@ static void FilePickerRule(HDC hdc, const RECT& line, bool composited)
 // is built after the view). Explorer's own windows (CabinetWClass roots),
 // its property sheets and the folder browser (#32770 with a tree but no
 // view host) never match. Text scope uses this identity without enabling Mica.
+// Seamless: Seamless Flyouts marks the Open and Save windows it draws in our Explorer
+// look; leave them to it.
+static bool FlyoutsOwnsPicker(HWND root) { return root && GetPropW(root, L"SeamlessFlyouts_Picker"); }
+
 static HWND FilePickerDialogRoot(HWND hwnd)
 {
     if (!hwnd)
         return nullptr;
     HWND root = GetAncestor(hwnd, GA_ROOT);
-    if (!root || !IsClassName(root, L"#32770") ||
+    if (!root || !IsClassName(root, L"#32770") || FlyoutsOwnsPicker(root) ||
         !FindWindowExW(root, nullptr, L"DUIViewWndClassName", nullptr) ||
         !NavDividerRootContainsNamespaceTree(root, /*cacheNegative=*/false))
         return nullptr;
@@ -1585,7 +1592,7 @@ static bool IsFilePickerListHost(HWND hwnd)
     for (HWND p = GetParent(hwnd); p && !viewHost; p = GetParent(p))
         viewHost = IsClassName(p, L"DUIViewWndClassName");
     HWND root = GetAncestor(hwnd, GA_ROOT);
-    return viewHost && root && IsClassName(root, L"#32770");
+    return viewHost && root && IsClassName(root, L"#32770") && !FlyoutsOwnsPicker(root);
 }
 
 // The windows the picker's view opens its ItemsView theme on (logged:
@@ -1598,7 +1605,7 @@ static bool IsFilePickerViewThemeOpener(HWND hwnd)
     if (IsFilePickerListHost(hwnd))
         return true;
     HWND root = GetAncestor(hwnd, GA_ROOT);
-    if (!root || !IsClassName(root, L"#32770"))
+    if (!root || !IsClassName(root, L"#32770") || FlyoutsOwnsPicker(root))
         return false;
     if (IsClassName(hwnd, L"DUIViewWndClassName"))
         return GetParent(hwnd) == root;
@@ -7337,6 +7344,13 @@ static HWND ResolvePaintHwndFreshFirst(HDC hdc)
             return hwnd;
     }
     return g_tlsPaintHwnd;
+}
+
+// Seamless: a draw inside an Open or Save window Seamless Flyouts owns.
+static bool HdcInFlyoutsPicker(HDC hdc)
+{
+    HWND w = ResolvePaintHwndFreshFirst(hdc);
+    return w && FlyoutsOwnsPicker(GetAncestor(w, GA_ROOT));
 }
 
 // GetThemeColor takes no HWND/HDC at all, so a FILLCOLOR query nested inside
@@ -33953,6 +33967,19 @@ static bool PaintExplorerInfoBarClose(HDC hdc, INT state, LPCRECT glyphRect)
     return true;
 }
 
+// Seamless: Explorer Styler Plus draws the view buttons on its status bar dock.
+static bool g_stylerOwnsStatusDock = false;
+static bool HdcInStylerStatusDock(HDC hdc)
+{
+    if (!g_stylerOwnsStatusDock)
+        return false;
+    HWND w = ResolvePaintHwndFreshFirst(hdc);
+    if (!w || !IsClassName(w, L"DirectUIHWND") || IsLegacyExplorerFrame(w))
+        return false;
+    HWND parent = GetParent(w);
+    return parent && IsClassName(parent, L"DUIViewWndClassName");
+}
+
 static bool HandleThemeDraw(HTHEME hTheme, HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
     if (!pRect) return false;
@@ -33987,7 +34014,7 @@ static bool HandleThemeDraw(HTHEME hTheme, HDC hdc, INT iPartId, INT iStateId, L
         return true;
     }
 
-    if (g_settings.AccentColorize && cls == L"Header" &&
+    if (g_settings.AccentColorize && cls == L"Header" && !HdcInFlyoutsPicker(hdc) &&
         iPartId == HP_HEADERITEM && PaintRoundedHeaderItem(hdc, iStateId, pRect))
     {
         return true;
@@ -34462,7 +34489,8 @@ static bool HandleThemeDraw(HTHEME hTheme, HDC hdc, INT iPartId, INT iStateId, L
         // Part 3: task button (Organize, New folder)
         // Parts 4/5: split button pair
         // Part 9: location button
-        bool isModBtn = (iPartId == 3 || iPartId == 4 || iPartId == 5 || iPartId == 9);
+        bool isModBtn = (iPartId == 3 || iPartId == 4 || iPartId == 5 || iPartId == 9) &&
+            !(iPartId == 4 && HdcInStylerStatusDock(hdc));
         if (isModBtn) {
             // State 1 (NORMAL), 6 (DISABLED): suppress → transparent bg
             if (iStateId == 1 || iStateId == 6) return true;
@@ -37294,7 +37322,7 @@ HRESULT WINAPI DrawThemeBackground_hook(HTHEME hTheme, HDC hdc, INT iPartId,
         return S_OK;
 
     // ── Dark mode post-processing ───────────────────────────────────────
-    if (g_darkModeActive && pRect) {
+    if (g_darkModeActive && pRect && !HdcInFlyoutsPicker(hdc)) {
         const std::wstring& pcls = GetCachedThemeClass(hTheme);
         HBRUSH darkBr = GetCachedSolidBrush(GetSysColor(COLOR_WINDOW));
 
@@ -37358,7 +37386,7 @@ HRESULT WINAPI DrawThemeBackgroundEx_hook(HTHEME hTheme, HDC hdc, INT iPartId,
     // Acrylic menu parts handled in HandleThemeDraw above — no post step here.
 
     // Header hot/pressed → semi-transparent accent color (AccentColorize, both modes)
-    if (g_settings.AccentColorize && pRect) {
+    if (g_settings.AccentColorize && pRect && !HdcInFlyoutsPicker(hdc)) {
         const std::wstring& hcls = GetCachedThemeClass(hTheme);
         if (hcls == L"Header" && iPartId == HP_HEADERITEM) {
             bool isHot = (iStateId == HIS_HOT || iStateId == 5 || iStateId == 8);
@@ -37413,7 +37441,7 @@ HRESULT WINAPI DrawThemeBackgroundEx_hook(HTHEME hTheme, HDC hdc, INT iPartId,
     }
 
     // Dark mode post-processing
-    if (g_darkModeActive && pRect) {
+    if (g_darkModeActive && pRect && !HdcInFlyoutsPicker(hdc)) {
         const std::wstring& pcls = GetCachedThemeClass(hTheme);
 
         // TreeView: suppress original bg (return S_OK, no FillRect)
@@ -53290,6 +53318,17 @@ static bool SeamlessModEnabled(PCWSTR id) {
     return st != ERROR_SUCCESS || type != REG_DWORD || value == 0;
 }
 
+// Seamless: a switch in another mod's settings (a DWORD; missing means the default).
+static bool SeamlessModSettingOn(PCWSTR id, PCWSTR name, bool defaultOn) {
+    WCHAR path[256];
+    swprintf_s(path, L"SOFTWARE\\Windhawk\\Engine\\Mods\\%s\\Settings", id);
+    DWORD value = 0, size = sizeof(value);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, path, name, RRF_RT_REG_DWORD | RRF_SUBKEY_WOW6464KEY,
+                     nullptr, &value, &size) != ERROR_SUCCESS)
+        return defaultOn;
+    return value != 0;
+}
+
 static Settings LoadSettings()
 {
     Settings next{};
@@ -53613,6 +53652,10 @@ static Settings LoadSettings()
     next.FluentPinIcon = FALSE;
     next.NormalizeDragDrop = FALSE;
     if (IsCurrentProcessExplorer()) {
+        // The view buttons on Explorer's status bar dock belong to Explorer Styler Plus.
+        g_stylerOwnsStatusDock =
+            SeamlessModEnabled(L"local@windows-11-file-explorer-styler-plus") &&
+            SeamlessModSettingOn(L"local@windows-11-file-explorer-styler-plus", L"statusBarDock", true);
         // Explorer's scroll bars come from our Explorer mods.
         next.ModernScrollbars = FALSE;
         if (SeamlessModEnabled(L"explorer-hide-focus-border"))
