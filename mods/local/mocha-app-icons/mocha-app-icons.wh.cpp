@@ -2,7 +2,7 @@
 // @id              mocha-app-icons
 // @name            Mocha App Icons
 // @description     Gives Ableton Live and Yapfast blue to mauve icons on their windows, taskbar buttons and shortcuts
-// @version         1.0.1
+// @version         1.0.2
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Swaps the icons of Ableton Live and Yapfast for Catppuccin Mocha ones: each app's own mark on a blue to mauve tile, the same tile as Mocha Steam Icons. Windows shows them on the app's windows, its taskbar button, Alt+Tab and its shortcuts.
 
 ![Mocha App Icons preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/mocha-app-icons.png)
+
+## What's new in 1.0.2
+
+- Fixed: the taskbar could keep the old icon after the shortcuts changed. The mod now gives Windows a moment to read the new shortcut before asking it to redraw.
 
 ## What's new in 1.0.1
 
@@ -1896,7 +1900,8 @@ static bool g_shortcutChanged;
 
 // The taskbar and Start keep showing a shortcut's old picture until the shell
 // hears that picture changed, so tell it about both the app's and ours.
-static void RefreshShellImages(const std::wstring& icon) {
+static void RefreshShellImages(const std::wstring& icon, HANDLE stop) {
+    if (stop ? WaitForSingleObject(stop, 2000) == WAIT_OBJECT_0 : (Sleep(1500), false)) return;
     wchar_t exe[MAX_PATH];
     std::vector<std::wstring> files{icon};
     if (GetModuleFileNameW(nullptr, exe, ARRAYSIZE(exe))) files.push_back(exe);
@@ -2099,7 +2104,7 @@ static void UpdateShortcutIcons(bool enabled, HANDLE stop) {
                 }
                 file->Release();
                 CopySharedShortcuts(pending, enabled, stop);
-                if (g_shortcutChanged) RefreshShellImages(icon);
+                if (g_shortcutChanged) RefreshShellImages(icon, stop);
             }
             link->Release();
         }

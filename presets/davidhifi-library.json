@@ -1347,7 +1347,7 @@
       "id": "remove-shortcut-arrows",
       "name": "Remove Shortcut Arrow Icons",
       "version": "2.0.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "custom_icon_path": ""
       }
