@@ -1299,7 +1299,7 @@
     "include": "steam.exe|steamwebhelper.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.1"
+    "version": "1.0.2"
   },
   "local@mocha-app-icons": {
     "disabled": false,

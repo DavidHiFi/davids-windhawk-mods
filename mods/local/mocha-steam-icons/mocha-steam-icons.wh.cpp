@@ -2,7 +2,7 @@
 // @id              mocha-steam-icons
 // @name            Mocha Steam Icons
 // @description     Gives Steam a blue to mauve icon in the tray, on its windows and on its shortcuts
-// @version         1.0.1
+// @version         1.0.2
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,12 @@
 Swaps Steam's icon for a Catppuccin Mocha one, the Steam logo on a blue to mauve tile, everywhere Windows shows it. It goes well with the MochaSteam theme for Millennium and works without it too.
 
 ![Mocha Steam Icons preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/mocha-steam-icons.png)
+
+## What's new in 1.0.2
+
+- Fixed: when Windows saved the taskbar pin again (after an Explorer restart, for example), the pin could lose its Mocha icon. The mod now watches the taskbar pins and puts the icon back within a few seconds.
+- Fixed: the taskbar could keep the old icon after the shortcuts changed. The mod now gives Windows a moment to read the new shortcut before asking it to redraw.
+- A redrawn icon now replaces the old one even when the two files are the same size.
 
 ## What's new in 1.0.1
 
@@ -540,10 +546,13 @@ static bool WriteIcon(const std::wstring& path) {
     if (!CryptStringToBinaryA(data, 0, CRYPT_STRING_BASE64, nullptr, &size, nullptr, nullptr)) return false;
     std::vector<BYTE> bytes(size);
     if (!CryptStringToBinaryA(data, 0, CRYPT_STRING_BASE64, bytes.data(), &size, nullptr, nullptr)) return false;
-    WIN32_FILE_ATTRIBUTE_DATA info;
-    if (GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &info) && !info.nFileSizeHigh &&
-        info.nFileSizeLow == size) {
-        return true;
+    HANDLE old = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (old != INVALID_HANDLE_VALUE) {
+        std::vector<BYTE> have(size + 1);
+        DWORD got = 0;
+        BOOL ok = ReadFile(old, have.data(), size + 1, &got, nullptr);
+        CloseHandle(old);
+        if (ok && got == size && !memcmp(have.data(), bytes.data(), size)) return true;
     }
     std::wstring dir = path.substr(0, path.rfind(L'\\'));
     CreateDirectoryW(dir.c_str(), nullptr);
@@ -883,7 +892,8 @@ static bool g_shortcutChanged;
 
 // The taskbar and Start keep showing a shortcut's old picture until the shell
 // hears that picture changed, so tell it about both Steam's and ours.
-static void RefreshShellImages(const std::wstring& icon) {
+static void RefreshShellImages(const std::wstring& icon, HANDLE stop) {
+    if (stop ? WaitForSingleObject(stop, 2000) == WAIT_OBJECT_0 : (Sleep(1500), false)) return;
     wchar_t exe[MAX_PATH];
     std::vector<std::wstring> files{icon};
     if (GetModuleFileNameW(nullptr, exe, ARRAYSIZE(exe))) files.push_back(exe);
@@ -1045,7 +1055,7 @@ static void UpdateShortcutIcons(bool enabled, HANDLE stop) {
             }
             file->Release();
             CopySharedShortcuts(pending, enabled, stop);
-            if (g_shortcutChanged) RefreshShellImages(icon);
+            if (g_shortcutChanged) RefreshShellImages(icon, stop);
         }
         link->Release();
     }
@@ -1090,17 +1100,35 @@ static DWORD WINAPI Worker(LPVOID) {
         RefreshTray(g_trayOn);
         UpdateShortcutIcons(g_shortcutsOn, g_stopEvent);
     }
-    HANDLE events[] = {g_stopEvent, g_settingsEvent};
+    // Windows saves a taskbar pin again now and then (after an Explorer
+    // restart, for one) and drops our icon, so steam.exe watches the pins.
+    HANDLE pins = INVALID_HANDLE_VALUE;
+    wchar_t appData[MAX_PATH];
+    if (g_isSteam && SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, appData))) {
+        std::wstring dir = std::wstring(appData) + L"\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar";
+        pins = FindFirstChangeNotificationW(dir.c_str(), FALSE,
+                                            FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE);
+    }
+    HANDLE events[] = {g_stopEvent, g_settingsEvent, pins};
+    DWORD count = pins != INVALID_HANDLE_VALUE ? 3 : 2;
     for (;;) {
-        DWORD wait = MsgWaitForMultipleObjects(2, events, FALSE, INFINITE, QS_ALLINPUT);
+        DWORD wait = MsgWaitForMultipleObjects(count, events, FALSE, INFINITE, QS_ALLINPUT);
         if (wait == WAIT_OBJECT_0) break;
         if (wait == WAIT_OBJECT_0 + 1) {
             ApplyAll();
             continue;
         }
+        if (count == 3 && wait == WAIT_OBJECT_0 + 2) {
+            // Let the writer finish, and fold a burst of changes into one pass.
+            if (WaitForSingleObject(g_stopEvent, 3000) == WAIT_OBJECT_0) break;
+            FindNextChangeNotification(pins);
+            if (g_shortcutsOn) UpdateShortcutIcons(true, g_stopEvent);
+            continue;
+        }
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) DispatchMessageW(&msg);
     }
+    if (pins != INVALID_HANDLE_VALUE) FindCloseChangeNotification(pins);
     if (hook) UnhookWinEvent(hook);
     return 0;
 }
