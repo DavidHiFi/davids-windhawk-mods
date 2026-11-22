@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.39
+// @version         0.4.40
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -33,7 +33,7 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
 
-## What's new in 0.4.39
+## What's new in 0.4.40
 
 The bars behind the player now follow the screen refresh too. Before, only the separate
 bars did, so with Behind widget the bars still ran on a plain clock that drifts against the
@@ -16509,6 +16509,10 @@ static void LoadSettings() {
     // 1.9.0 settings. Behind-widget bars reuse the inline XAML visualizer and
     // its in-process capture, styled from the shared Audio visualizer settings.
     g_settings.vizOverlay = Str(L"Visualizer.position.placement", L"overlay") == L"overlay";
+    // The player bars read the visualizer's timing and logging settings here, because the
+    // visualizer's own settings load only runs in its tool process.
+    viz::g_frameTiming.store(Str(L"Visualizer.performance.frameTiming", L"refresh") == L"timer" ? 0 : 1);
+    viz::g_debugLogging.store(Wh_GetIntSetting(L"Visualizer.diagnostics.enabled") != 0);
     {
         int op = Wh_GetIntSetting(L"Visualizer.position.overlayOpacity");
         g_settings.vizOverlayOpacity = op > 0 ? std::clamp(op, 10, 80) : 45;
