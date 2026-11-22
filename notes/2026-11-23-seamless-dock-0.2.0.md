@@ -83,8 +83,16 @@ Proof (`D:\Agent Work\seamless-dock\proof\fix-031\`):
   Backup: `backups\seamless-dock-settings.bak-20261123-0550.reg`. Rollback: `elevated-title-off.ps1`.
 - Proof `D:\Agent Work\seamless-dock\proof\title-1123\`: topbar.png, title.png. check-dock-align ok,
   work area still 0,56,2560,1366, Explorer 4112 unchanged.
-- Still open: live capture of the dock's right-click menu. Desktop lock held by the Hydra thread;
-  this thread is queued (13th). Menu rows are in the code (see 0.3.1 above).
+- Right-click menus captured live 7:20 am (desktop lock, posted WM_RBUTTONUP from an elevated
+  script, closed with a posted Escape): `D:\Agent Work\seamless-dock\proof\menu-1123\`
+  steam-menu.png (Steam, New window, Unpin from dock, Open file location, Close window, Dock
+  options) and bin-menu.png (Open, Remove from dock, Dock options; Empty shows only when the bin
+  has something in it). Script: `menu-capture.ps1 -Mon N -X -Y`.
+- The PC rebooted at 7:10 am (not from this job). After it: work area 0,56,2560,1366, taskbar
+  0.4.47 with hide-all 1, dock title 1 showing, dock and bin back. The main screen's capture
+  index moved from 3 to 1; probe it every time.
+- The 120 s lock ran out before the bin capture; another thread held the desktop by then. Use a
+  longer ttl (300) for multi-step captures.
 
 ## Rollback
 
