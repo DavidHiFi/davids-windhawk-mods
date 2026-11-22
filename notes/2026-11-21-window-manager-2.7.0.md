@@ -82,5 +82,10 @@ desktop leaves no input desktop and every capture fails.
 - Published: davids-windhawk-mods 6f96df0, seamless-workshop feed 6fe5a9e.
 - One helper (`windhawk-mod.exe -windhawk-tool-mod`) restarted at 5:25:24 am on the new
   build; Explorer and about a hundred apps hold 2.7.0; no application errors after install.
-- Not driven by hand on the tower: the owner was at the PC (last input 0 s), and the hotkey
-  checks move focus. The test PC run above covers them.
+- Hand test on the tower, first pass (under the desktop lock, elevated script
+  `C:\Users\Public\swm-hand\hand.ps1`): a new 500x400 window took 49% x 98% of the work
+  area (a proper half, not a thin column); the switch note window exists and belongs to
+  our helper; the owner's front window was put back afterwards.
+- Still open on the tower: the Alt+PageDown / Alt+PageUp walk and the note token rising.
+  The second pass is queued for the screen (ninth in line at 2026-11-22). The test PC run
+  above passed both.
