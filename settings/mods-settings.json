@@ -1574,7 +1574,7 @@
     "font.full.weight": "regular",
     "general.enableDragDrop": 1,
     "general.hideWhenEmpty": 0,
-    "general.iconStyle": "badge",
+    "general.iconStyle": "system",
     "system.fallbackTimerInterval": 300,
     "vector.style": "style1"
   },

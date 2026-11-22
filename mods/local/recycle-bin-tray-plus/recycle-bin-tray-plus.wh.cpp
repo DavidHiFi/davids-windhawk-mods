@@ -3,7 +3,7 @@
 // @name            Recycle Bin Tray Plus
 // @description     Adds an interactive Recycle Bin icon to the Windows 11 system tray with live state updates, drag-and-drop support, theme-aware rendering, multiple icon styles, and configurable mouse actions.
 // @description:fr-FR Ajoute une icône interactive de la Corbeille à la zone de notification de Windows 11, avec mise à jour en temps réel, glisser-déposer, adaptation au thème, plusieurs styles d'icône et actions de souris configurables.
-// @version         1.0.8
+// @version         1.0.9
 // @author          DavidHiFi, Wildstyle23
 // @github          https://github.com/wildstyle23
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -18,6 +18,13 @@
 The Plus version gives its menus the same look as the rest of the desktop: a blurred,
 rounded Catppuccin menu with roomy rows and one soft hover, matching Seamless Flyouts.
 Based on Recycle Bin Tray by Wildstyle23.
+
+## What's new in 1.0.9
+
+- The tray now shows the same empty and full Recycle Bin icons as Seamless Dock: the
+  Windows icons from your icon theme. System is the default style again, and the mod no
+  longer switches it back to the badge on every start.
+
 ![Drag and drop support](https://raw.githubusercontent.com/wildstyle23/Recycle-Bin-Tray-Icon/refs/heads/main/Images/Recycle%20Bin%20Tray%20Icon.png)
 
 A lightweight [Windhawk](https://windhawk.net/) Windows 11 mod that places an interactive Recycle Bin directly into your system tray.
@@ -184,15 +191,15 @@ For emptying actions triggered through the mod, this setting takes precedence ov
 
 ## Icon Styles
 
-> **Choose one icon style:** `Seamless badge` · `System` · `Vector` · `Font` · `Custom Icon`
+> **Choose one icon style:** `System` · `Seamless badge` · `Vector` · `Font` · `Custom Icon`
 
 ### Seamless badge
 
-The default. A trash can drawn on the same blue to mauve rounded badge as every other Seamless tray icon: an outline can when the bin is empty, a solid can with its lid tipped open when it holds files. It looks the same in light and dark mode.
+A trash can drawn on the same blue to mauve rounded badge as every other Seamless tray icon: an outline can when the bin is empty, a solid can with its lid tipped open when it holds files. It looks the same in light and dark mode.
 
 ### System
 
-Uses the Windows Shell's own Recycle Bin icon.
+The default. Uses the Windows Shell's own empty and full Recycle Bin icons, the same pair Seamless Dock shows, so the tray and the dock always match.
 
 This is the simplest option and generally provides the closest match to the native Windows appearance.
 
@@ -462,7 +469,7 @@ This project is licensed under the GNU General Public License Version 3.0.
       Windows applique la stratégie de Corbeille de chaque lecteur source ; les éléments peuvent donc être supprimés définitivement si un lecteur est configuré pour contourner la Corbeille. Si l'icône se trouve dans le menu ^, ouvrez-le puis déposez les éléments sur l'icône de la Corbeille. L'icône n'a pas besoin de rester visible en permanence dans la zone de notification principale pour fonctionner, mais la garder visible permet un accès plus rapide. Cette fonctionnalité utilise un hook global de souris.
 
       ⚠ Le glisser-déposer est désactivé lorsque "Masquer si vide" est activé.
-  - iconStyle: badge
+  - iconStyle: system
     $name: "Icon style"
     $name:fr-FR: "Style d'icône"
     $description: "Choose how the tray icon is rendered. The Vector, Font, and Custom Icon sections below apply only to their corresponding style."
@@ -2472,10 +2479,12 @@ void LoadSettingsInto(ModSettings& s) {
         };
         bool healed = false;
         WCHAR szStyleNow[32];
+        // 1.0.9: the style is no longer forced to the badge. System is the
+        // default so the tray shows the same icons as Seamless Dock.
         ReadStringSetting(L"general.iconStyle", szStyleNow, ARRAYSIZE(szStyleNow), L"system");
-        if (szStyleNow[0] == L'\0' || _wcsicmp(szStyleNow, L"system") == 0) {
-            s.iconStyle = IconStyle::Badge;
-            persistSetting(L"general.iconStyle", L"badge");
+        if (szStyleNow[0] == L'\0') {
+            s.iconStyle = IconStyle::System;
+            persistSetting(L"general.iconStyle", L"system");
             healed = true;
         }
         if (iconFileMissing(s.customIconEmpty)) {
