@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.37
+// @version         0.4.38
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -94621,7 +94621,7 @@ bool ConfigurePickerBackdrop(HWND hwnd) {
     policy.flags = 0;
     // Keep the theme surface visible over desktop colors. Blur needs a
     // stronger tint to blend antialiased thumbnail edges with the base color.
-    const DWORD tintOpacity = acrylic ? 0x99 : 208;
+    const DWORD tintOpacity = acrylic ? 0x66 : 208;
     policy.gradientColor = (tintOpacity << 24) |
                            (static_cast<DWORD>(g_background) & 0x00ffffffu);
     PickerWindowCompositionAttributeData data{19, &policy, sizeof(policy)};
