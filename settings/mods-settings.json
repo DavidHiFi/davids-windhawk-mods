@@ -5334,7 +5334,7 @@
     "yapfast": 1
   },
   "local@dark-theme-browser-colors-fix-plus": {
-    "applyToAllMsEdgeWebView": 0,
+    "applyToAllMsEdgeWebView": 1,
     "heliumBuilds": "0.21.1.1"
   }
 }

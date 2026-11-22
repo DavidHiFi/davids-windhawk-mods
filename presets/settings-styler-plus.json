@@ -11,6 +11,11 @@
         "styleConstants[0]": "",
         "theme": "Translucent_Settings11",
         "themeResourceVariables[0]": ""
+      },
+      "config": {
+        "includeCustom": [
+          "SystemSettings.exe"
+        ]
       }
     }
   ]

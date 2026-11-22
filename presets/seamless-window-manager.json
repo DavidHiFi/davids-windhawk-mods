@@ -148,6 +148,13 @@
         "tiling.singleNoGaps": 0,
         "x1Action": "none",
         "x2Action": "none"
+      },
+      "config": {
+        "excludeCustom": [
+          "ESDDiscord.exe",
+          "StreamDeck.exe",
+          "VBAudioMatrix*.exe"
+        ]
       }
     }
   ]

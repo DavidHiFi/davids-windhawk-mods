@@ -106,6 +106,14 @@
         "uwp.blur": 1,
         "uwp.enabled": 1,
         "uwp.tint": 60
+      },
+      "config": {
+        "excludeCustom": [
+          "FreeDictate.exe",
+          "WindowsTerminal.exe",
+          "ESDDiscord.exe",
+          "windhawk-ui.exe"
+        ]
       }
     }
   ]

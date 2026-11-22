@@ -58,13 +58,22 @@
         "theme": "system",
         "trayVolumeNumber": 0,
         "volumeStep": 5
+      },
+      "config": {
+        "includeCustom": [
+          "halocord.exe",
+          "vbaudiomatrixcoconut_x64.exe",
+          "halocord-loopback.exe",
+          "t3 code (nightly).exe",
+          "yapfast.exe"
+        ]
       }
     },
     {
       "id": "local@dark-theme-browser-colors-fix-plus",
       "enabled": true,
       "settings": {
-        "applyToAllMsEdgeWebView": 0,
+        "applyToAllMsEdgeWebView": 1,
         "heliumBuilds": "0.21.1.1"
       }
     },
@@ -1213,6 +1222,12 @@
         "unfocusedColor": "#585b70",
         "unfocusedColorTo": "#585b70",
         "width": 2
+      },
+      "config": {
+        "includeCustom": [
+          "windhawk.exe"
+        ],
+        "includeExcludeCustomOnly": true
       }
     },
     {
@@ -2724,6 +2739,14 @@
         "uwp.blur": 1,
         "uwp.enabled": 1,
         "uwp.tint": 60
+      },
+      "config": {
+        "excludeCustom": [
+          "FreeDictate.exe",
+          "WindowsTerminal.exe",
+          "ESDDiscord.exe",
+          "windhawk-ui.exe"
+        ]
       }
     },
     {
@@ -2873,6 +2896,13 @@
         "tiling.singleNoGaps": 0,
         "x1Action": "none",
         "x2Action": "none"
+      },
+      "config": {
+        "excludeCustom": [
+          "ESDDiscord.exe",
+          "StreamDeck.exe",
+          "VBAudioMatrix*.exe"
+        ]
       }
     },
     {
@@ -2957,6 +2987,11 @@
         "styleConstants[0]": "",
         "theme": "Translucent_Settings11",
         "themeResourceVariables[0]": ""
+      },
+      "config": {
+        "includeCustom": [
+          "SystemSettings.exe"
+        ]
       }
     },
     {

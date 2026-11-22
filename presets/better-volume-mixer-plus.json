@@ -22,6 +22,15 @@
         "theme": "system",
         "trayVolumeNumber": 0,
         "volumeStep": 5
+      },
+      "config": {
+        "includeCustom": [
+          "halocord.exe",
+          "vbaudiomatrixcoconut_x64.exe",
+          "halocord-loopback.exe",
+          "t3 code (nightly).exe",
+          "yapfast.exe"
+        ]
       }
     }
   ]

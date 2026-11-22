@@ -27,6 +27,12 @@
         "unfocusedColor": "#585b70",
         "unfocusedColorTo": "#585b70",
         "width": 2
+      },
+      "config": {
+        "includeCustom": [
+          "windhawk.exe"
+        ],
+        "includeExcludeCustomOnly": true
       }
     }
   ]
