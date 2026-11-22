@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-22T16:02:11+08:00",
+  "generatedAt": "2026-11-22T16:12:01+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 173,
@@ -2040,7 +2040,7 @@
       "name": "Windows 11 File Explorer Styler Plus",
       "author": "DavidHiFi, m417z",
       "github": "https://github.com/m417z",
-      "version": "1.10.25",
+      "version": "1.10.26",
       "license": "",
       "origin": "local",
       "upstream": "",

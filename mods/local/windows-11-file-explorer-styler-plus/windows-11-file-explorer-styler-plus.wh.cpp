@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.25
+// @version         1.10.26
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -42,6 +42,13 @@ adds after every other window's title is added here too: how long the
 window has been open, after the folder name. It uses Seamless Title Bars'
 own uptime settings (which units, compact or clock, separator, colour) and
 hides when that mod or its uptime is off.
+
+## What's new in 1.10.26
+
+- The back, forward, up, refresh and home dock edge now really lights blue
+  to mauve on hover. Before, the dock was found too early and never lit.
+- The line between the folder tree and the file list is gone with the
+  frame-only see-through setting too, not only with the whole-window one.
 
 ## What's new in 1.10.25
 
@@ -2746,6 +2753,7 @@ struct HandledHover {
 struct ElementCustomizationState {
     std::unique_ptr<TabHoverTimer> tabHover;
     std::unique_ptr<HandledHover> borderHover;
+    FrameworkElement::Loaded_revoker navDockLoaded;
     UIElement::PointerEntered_revoker pathEntered;
     UIElement::PointerExited_revoker pathExited;
 
@@ -9127,19 +9135,42 @@ void ConfigureAddressBarHover(FrameworkElement element,
     state.pathExited.revoke();
     state.tabHover.reset();
     state.borderHover.reset();
+    state.navDockLoaded.revoke();
     auto grid = element.try_as<Controls::Grid>();
     if (auto panel = element.try_as<Controls::StackPanel>()) {
-        auto parent = Media::VisualTreeHelper::GetParent(panel);
-        auto presenter = parent.try_as<FrameworkElement>();
-        parent = presenter ? Media::VisualTreeHelper::GetParent(presenter) : nullptr;
-        auto items = parent.try_as<Controls::ItemsControl>();
-        if (items && items.Name() == L"PrimaryItemsControl") {
-            parent = Media::VisualTreeHelper::GetParent(items);
-            if (parent) parent = Media::VisualTreeHelper::GetParent(parent);
-            auto bar = parent.try_as<Controls::CommandBar>();
-            if (bar && bar.Name() == L"NavigationCommands") {
-                ConfigureBorderHover(panel, state, 100.0 / 255.0);
+        // Back, forward, up, refresh, home: the StackPanel that holds the
+        // nav buttons, inside PrimaryItemsControl of CommandBar
+        // NavigationCommands. The depth between them depends on the
+        // template, so look up a few levels.
+        auto isNavDock = [](Controls::StackPanel const& panel) {
+            bool items = false;
+            auto node = Media::VisualTreeHelper::GetParent(panel);
+            for (int depth = 0; node && depth < 8; ++depth) {
+                if (auto control = node.try_as<Controls::ItemsControl>()) {
+                    if (control.Name() == L"PrimaryItemsControl") items = true;
+                }
+                if (auto bar = node.try_as<Controls::CommandBar>()) {
+                    return items && bar.Name() == L"NavigationCommands";
+                }
+                node = Media::VisualTreeHelper::GetParent(node);
             }
+            return false;
+        };
+        if (isNavDock(panel)) {
+            ConfigureBorderHover(panel, state, 100.0 / 255.0);
+            Wh_Log(L"Nav dock hover wired");
+        } else if (!Media::VisualTreeHelper::GetParent(panel) || !panel.IsLoaded()) {
+            // Reported before it joined the tree: check again once loaded.
+            // The revoker lives in this state, so the handler never outlives it.
+            state.navDockLoaded = panel.Loaded(winrt::auto_revoke,
+                [&state, isNavDock, weak = winrt::make_weak(panel)](auto const&, auto const&) {
+                    auto target = weak.get();
+                    if (!target || state.borderHover) return;
+                    if (isNavDock(target)) {
+                        ConfigureBorderHover(target, state, 100.0 / 255.0);
+                        Wh_Log(L"Nav dock hover wired after load");
+                    }
+                });
         }
         return;
     }
@@ -11593,6 +11624,19 @@ FillRect_t FillRect_Original;
 // owner wants no divider lines inside the window, so they are not drawn.
 bool PaintPaneSplitter(HDC hdc, int x, int y, int w, int h) {
     HWND hWnd = GetEntireWindowEffectDCWnd(hdc);
+    if (!hWnd && g_statusDockPaintWndForThread) {
+        if (WindowFromDC(hdc) == g_statusDockPaintWndForThread) {
+            hWnd = g_statusDockPaintWndForThread;
+        } else {
+            for (int i = 0; i < g_statusDockBufferCountForThread; i++) {
+                if (g_statusDockBuffersForThread[i].mem == hdc &&
+                    !g_statusDockBuffersForThread[i].isToggle) {
+                    hWnd = g_statusDockBuffersForThread[i].hWnd;
+                    break;
+                }
+            }
+        }
+    }
     if (!hWnd || w <= 0) {
         return false;
     }
