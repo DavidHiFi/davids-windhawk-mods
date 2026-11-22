@@ -2043,7 +2043,6 @@
         "controlStyles[59].styles[3]": "Foreground:=<SolidColorBrush Color=\"#FFCDD6F4\"/>",
         "controlStyles[59].target": "StackPanel#LogitechBatteryTray > Button > ContentPresenter#ContentPresenter > Viewbox > Border > StackPanel > TextBlock, StackPanel#LogitechBatteryTray > Button > ContentPresenter#ContentPresenter > Viewbox > StackPanel > TextBlock",
         "controlStyles[5].styles[0]": "Margin=0",
-        "controlStyles[5].styles[1]": "Visibility=Collapsed",
         "controlStyles[5].target": "Taskbar.TaskListButton#TaskListButton",
         "controlStyles[60].styles[0]": "Opacity=0",
         "controlStyles[60].target": "StackPanel#LogitechBatteryTray > Button > Grid > Border",

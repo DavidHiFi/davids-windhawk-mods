@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.42
+// @version         0.4.43
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -71746,7 +71746,7 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
             SetWindowLongPtrW(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
             state->dpi = WindowDpi(hWnd);
             auto sc = [&](int value) { return ScaleForDpi(value, state->dpi); };
-            HWND providerLabel = CreateWindowExW(0, L"STATIC", Tr(Str::CommonProvider), WS_CHILD | WS_VISIBLE,
+            HWND providerLabel = CreateWindowExW(0, L"STATIC", Tr(Str::CommonProvider), WS_CHILD | WS_VISIBLE | SS_OWNERDRAW,
                                                   sc(16), sc(18), sc(100), sc(22), hWnd,
                                                   reinterpret_cast<HMENU>(kAccountProviderLabel),
                                                   GetModuleHandleW(nullptr), nullptr);
@@ -71765,7 +71765,7 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
                                 state->account.provider == L"copilot" ? 3 : 0;
             SendMessageW(provider, CB_SETCURSEL, providerIndex, 0);
 
-            HWND labelLabel = CreateWindowExW(0, L"STATIC", Tr(Str::CommonLabel), WS_CHILD | WS_VISIBLE,
+            HWND labelLabel = CreateWindowExW(0, L"STATIC", Tr(Str::CommonLabel), WS_CHILD | WS_VISIBLE | SS_OWNERDRAW,
                                                sc(16), sc(58), sc(100), sc(22), hWnd,
                                                reinterpret_cast<HMENU>(kAccountLabelLabel),
                                                GetModuleHandleW(nullptr), nullptr);
@@ -71779,7 +71779,7 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
             state->updatingLabel = false;
 
             // Tile icon (presentation only): provider logo or text/symbol.
-            CreateWindowExW(0, L"STATIC", Tr(Str::EditorIcon), WS_CHILD | WS_VISIBLE,
+            CreateWindowExW(0, L"STATIC", Tr(Str::EditorIcon), WS_CHILD | WS_VISIBLE | SS_OWNERDRAW,
                             sc(16), sc(98), sc(100), sc(22), hWnd,
                             reinterpret_cast<HMENU>(kAccountIconLabel),
                             GetModuleHandleW(nullptr), nullptr);
@@ -71803,7 +71803,7 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
                 }
             }
             // The caption is kept out of view and names the two-character box.
-            CreateWindowExW(0, L"STATIC", Tr(Str::EditorIconText), WS_CHILD | WS_VISIBLE,
+            CreateWindowExW(0, L"STATIC", Tr(Str::EditorIconText), WS_CHILD | WS_VISIBLE | SS_OWNERDRAW,
                             0, 0, 1, 1, hWnd,
                             reinterpret_cast<HMENU>(kAccountIconTextLabel),
                             GetModuleHandleW(nullptr), nullptr);
@@ -71887,7 +71887,7 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
                                               GetModuleHandleW(nullptr), nullptr);
             SendMessageW(cliRenewal, BM_SETCHECK,
                          state->account.allowCliRenewal ? BST_CHECKED : BST_UNCHECKED, 0);
-            CreateWindowExW(0, L"STATIC", Tr(Str::CopilotGithubLogin), WS_CHILD,
+            CreateWindowExW(0, L"STATIC", Tr(Str::CopilotGithubLogin), WS_CHILD | SS_OWNERDRAW,
                             0, 0, 1, 1, hWnd, reinterpret_cast<HMENU>(kAccountCopilotLoginLabel),
                             GetModuleHandleW(nullptr), nullptr);
             HWND copilotLogin = CreateWindowExW(0, L"COMBOBOX", Tr(Str::CopilotGithubLogin),
@@ -71907,7 +71907,7 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
                 if (SameGithubLogin(state->copilotLogins[i], state->account.copilotLogin)) selectedLogin = (int)i + 1;
             }
             SendMessageW(copilotLogin, CB_SETCURSEL, selectedLogin, 0);
-            CreateWindowExW(0, L"STATIC", Tr(Str::EditorAdditionalMeters), WS_CHILD,
+            CreateWindowExW(0, L"STATIC", Tr(Str::EditorAdditionalMeters), WS_CHILD | SS_OWNERDRAW,
                 0, 0, 1, 1, hWnd, reinterpret_cast<HMENU>(kAccountAdditionalMetersHeading),
                 GetModuleHandleW(nullptr), nullptr);
             HWND fableWeekly = CreateWindowExW(0, L"BUTTON", Tr(Str::SettingsShowAnthropicFableWeeklyLimit),
@@ -71953,7 +71953,7 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
             (void)cancel;
             for (auto& message : state->messages) {
                 message.window = CreateWindowExW(0, L"STATIC", L"",
-                    WS_CHILD | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL,
+                    WS_CHILD | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL | SS_OWNERDRAW,
                     0, 0, 1, 1, hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
                 if (!message.window) return -1;
             }
@@ -72050,6 +72050,43 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
             if (auto* draw = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
                 state && draw && draw->CtlType == ODT_COMBOBOX) {
                 DrawFluentComboItem(state->theme, draw);
+                return TRUE;
+            }
+            if (auto* draw = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
+                state && draw && draw->CtlType == ODT_STATIC) {
+                // Captions draw themselves so they take the card's glass, like the toggles. A plain
+                // STATIC left an opaque base-coloured box on the translucent card.
+                const NativeTheme& t = state->theme;
+                NativeChildCardSurface(draw->hwndItem, t);
+                FillSolid(draw->hDC, draw->rcItem, t.card);
+                const int length = GetWindowTextLengthW(draw->hwndItem);
+                std::wstring caption(static_cast<size_t>(std::max(0, length)) + 1, L'\0');
+                caption.resize(GetWindowTextW(draw->hwndItem, caption.data(), length + 1));
+                HFONT font = reinterpret_cast<HFONT>(SendMessageW(draw->hwndItem, WM_GETFONT, 0, 0));
+                if (!font) font = t.body;
+                COLORREF ink = IsWindowEnabled(draw->hwndItem) ? t.textOnCard : t.disabledOnCard;
+                bool message = false;
+                for (const auto& m : state->messages) {
+                    if (m.window != draw->hwndItem) continue;
+                    message = true;
+                    ink = BlendColor(m.kind == EditorMessageKind::Error ? t.statusText[(size_t)InfoBarSeverity::Error] :
+                                     m.kind == EditorMessageKind::Warning ? t.statusText[(size_t)InfoBarSeverity::Warning] :
+                                                                            t.textSecondary,
+                                     t.card);
+                    break;
+                }
+                if (message) {
+                    // Messages wrap over several lines.
+                    HGDIOBJ old = SelectObject(draw->hDC, font);
+                    SetBkMode(draw->hDC, TRANSPARENT);
+                    SetTextColor(draw->hDC, ink);
+                    RECT r = draw->rcItem;
+                    DrawTextW(draw->hDC, caption.c_str(), -1, &r,
+                              DT_LEFT | DT_WORDBREAK | DT_NOPREFIX | DT_EDITCONTROL);
+                    SelectObject(draw->hDC, old);
+                } else {
+                    DrawTextIn(draw->hDC, font, ink, caption, draw->rcItem, DT_LEFT | DT_VCENTER);
+                }
                 return TRUE;
             }
             break;
