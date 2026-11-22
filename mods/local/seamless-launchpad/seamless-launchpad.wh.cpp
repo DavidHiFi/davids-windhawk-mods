@@ -6,7 +6,7 @@
 // @id              seamless-launchpad
 // @name            Seamless Launchpad
 // @description     A fullscreen GPU rendered grid of all your apps in place of Start, with instant search, adjustable blur, wiggle edit mode and power buttons
-// @version         2.7.0
+// @version         2.7.1
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -122,6 +122,9 @@ Clicking outside the icons or switching to another window closes it.
   `twinui.pcshell.dll`, which can take a minute.
 - A new Shortcut works at once. Other setting changes apply the next time
   Start opens.
+
+## What's new in 2.7.1
+- The Keys page no longer talks about opening other programs.
 
 ## What's new in 2.7.0
 - One **Shortcut** setting replaces the old Shift + Windows key, Start button
@@ -4796,7 +4799,7 @@ struct SetPageInfo {
     WCHAR glyph;
 };
 static const SetPageInfo kSetPages[] = {
-{L"Keys", L"Choose how you open Launchpad and other programs.", 0xE765},
+{L"Keys", L"Choose the keys that open Launchpad.", 0xE765},
 {L"Grid", L"Apps, icon sizes, pages and motion.", 0xE80A},
 {L"Look", L"Blur, colors, glow, search bar and this window.", 0xE790},
 {L"Power", L"Choose which power actions appear in the dock.", 0xE7E8},
