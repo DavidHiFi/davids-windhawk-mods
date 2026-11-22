@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.26
+// @version         1.10.27
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -42,6 +42,12 @@ adds after every other window's title is added here too: how long the
 window has been open, after the folder name. It uses Seamless Title Bars'
 own uptime settings (which units, compact or clock, separator, colour) and
 hides when that mod or its uptime is off.
+
+## What's new in 1.10.27
+
+- The line between the folder tree and the file list is really gone now with
+  the frame-only see-through setting. It is drawn by the folder tree's own
+  edge, which was only hidden with the whole-window setting.
 
 ## What's new in 1.10.26
 
@@ -11622,6 +11628,21 @@ FillRect_t FillRect_Original;
 // The pane splitters (navigation pane | content | details pane) are thin
 // vertical lines in the folder view's DirectUIHWND, drawn translucent. The
 // owner wants no divider lines inside the window, so they are not drawn.
+void LogThinLine(PCWSTR api, HDC hdc, int x, int y, int w, int h,
+                 bool skipped) {
+    static LONG count;
+    if ((w > 2 && h > 2) || std::max(w, h) < 40 ||
+        InterlockedIncrement(&count) > 60) {
+        return;
+    }
+    WCHAR className[64] = L"-";
+    if (HWND dcWnd = WindowFromDC(hdc)) {
+        GetClassName(dcWnd, className, ARRAYSIZE(className));
+    }
+    Wh_Log(L"Thin line %s at %d,%d %dx%d, dc window %s, %s", api, x, y, w, h,
+           className, skipped ? L"skipped" : L"drawn");
+}
+
 bool PaintPaneSplitter(HDC hdc, int x, int y, int w, int h) {
     HWND hWnd = GetEntireWindowEffectDCWnd(hdc);
     if (!hWnd && g_statusDockPaintWndForThread) {
@@ -11651,10 +11672,13 @@ bool PaintPaneSplitter(HDC hdc, int x, int y, int w, int h) {
 }
 
 int WINAPI FillRect_Hook(HDC hDC, const RECT* lprc, HBRUSH hbr) {
-    if (lprc && PaintPaneSplitter(hDC, lprc->left, lprc->top,
-                                  lprc->right - lprc->left,
-                                  lprc->bottom - lprc->top)) {
-        return TRUE;
+    if (lprc) {
+        int w = lprc->right - lprc->left, h = lprc->bottom - lprc->top;
+        bool skip = PaintPaneSplitter(hDC, lprc->left, lprc->top, w, h);
+        LogThinLine(L"FillRect", hDC, lprc->left, lprc->top, w, h, skip);
+        if (skip) {
+            return TRUE;
+        }
     }
 
     HWND hWnd = GetEntireWindowEffectDCWnd(hDC);
@@ -11758,7 +11782,9 @@ BOOL WINAPI DrawIconEx_Hook(HDC hdc,
 }
 
 BOOL WINAPI PatBlt_Hook(HDC hdc, int x, int y, int w, int h, DWORD rop) {
-    if (rop == PATCOPY && PaintPaneSplitter(hdc, x, y, w, h)) {
+    bool skip = rop == PATCOPY && PaintPaneSplitter(hdc, x, y, w, h);
+    LogThinLine(L"PatBlt", hdc, x, y, w, h, skip);
+    if (skip) {
         return TRUE;
     }
 
@@ -11955,7 +11981,13 @@ Polyline_t Polyline_Original;
 BOOL WINAPI Polyline_Hook(HDC hdc, const POINT* apt, int cpt) {
     bool horizontal = cpt == 2 && apt[0].y == apt[1].y;
     bool vertical = cpt == 2 && apt[0].x == apt[1].x;
-    if ((!horizontal && !vertical) || !IsEntireWindowEffectDC(hdc)) {
+    if (!horizontal && !vertical) {
+        return Polyline_Original(hdc, apt, cpt);
+    }
+    // Short strokes are glyph parts, not dividers.
+    int length = horizontal ? abs(apt[1].x - apt[0].x)
+                            : abs(apt[1].y - apt[0].y);
+    if (length < 20) {
         return Polyline_Original(hdc, apt, cpt);
     }
 
@@ -11966,8 +11998,13 @@ BOOL WINAPI Polyline_Hook(HDC hdc, const POINT* apt, int cpt) {
         return Polyline_Original(hdc, apt, cpt);
     }
 
-    if (!IsHookCallerFromModule(__builtin_return_address(0),
-                                L"ExplorerFrame.dll")) {
+    bool fromFrame = IsHookCallerFromModule(__builtin_return_address(0),
+                                            L"ExplorerFrame.dll");
+    LogThinLine(L"Polyline", hdc, std::min(apt[0].x, apt[1].x),
+                std::min(apt[0].y, apt[1].y),
+                abs(apt[1].x - apt[0].x) + 1, abs(apt[1].y - apt[0].y) + 1,
+                fromFrame);
+    if (!fromFrame) {
         return Polyline_Original(hdc, apt, cpt);
     }
 
