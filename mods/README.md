@@ -70,8 +70,7 @@ now live inside another mod; [retired/README.md](retired/README.md) says where.
 | [ZoomIt](local/zoomit) | Zoom, draw and read text bigger under the mouse with a hotkey, like Sysinternals ZoomIt | 1.2.3 |  |
 | [Seamless Crosshair](local/seamless-crosshair) | A crosshair over any game: presets or your own design, any color and size, shortcuts and a tray icon | 1.2.7 | MIT |
 | [Seamless AutoClicker](local/seamless-autoclicker) | Hold a side mouse button and left click keeps clicking, with a lock, a tray switch and its own settings window | 1.6.11 | GPL-3.0 |
-| [Seamless Autoscroll](local/seamless-autoscroll) | Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator | 1.2.0 |  |
-| [Seamless Autoscroll Global](local/seamless-autoscroll-global) | The frosted autoscroll circle in every app the per-app mod does not cover, with the same look | 1.0.0 | GPL-3.0 |
+| [Seamless Autoscroll](local/seamless-autoscroll) | Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator, in every app | 2.0.0 |  |
 | [Seamless Key Click](local/seamless-key-click) | Mechanical keyboard and mouse sounds as you type and click, with every Keyboard Sounds pack, shortcuts and a tray icon | 1.1.5 | GPL-3.0 |
 | [Pointer Afterimage Plus](local/pointer-afterimage-plus) | A real motion blur for the mouse pointer, made of fading afterimages of your own cursor, with an optional particle trail and click ripples | 1.3.3 | Unlicense |
 | [Keyboard Shortcut Actions Plus](local/keyboard-shortcut-actions-plus) | Global shortcuts for apps and Windows actions that work on any PC and offer a download when an app is missing | 1.1.2 |  |

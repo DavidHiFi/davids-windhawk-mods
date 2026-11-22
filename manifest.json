@@ -4,9 +4,9 @@
   "generatedAt": "2026-11-22T14:23:14+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 188,
-    "enabled": 172,
-    "local": 63
+    "mods": 187,
+    "enabled": 171,
+    "local": 62
   },
   "mods": [
     {
@@ -2281,19 +2281,6 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/startup-control/startup-control.wh.cpp",
-      "enabled": true,
-      "category": "Tools"
-    },
-    {
-      "id": "local@seamless-autoscroll-global",
-      "name": "Seamless Autoscroll Global",
-      "author": "DavidHiFi, crazyboyybs",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.0",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-autoscroll-global/seamless-autoscroll-global.wh.cpp",
       "enabled": true,
       "category": "Tools"
     },

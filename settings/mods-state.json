@@ -1287,13 +1287,6 @@
     "architecture": "",
     "version": "0.1.8"
   },
-  "local@seamless-autoscroll-global": {
-    "disabled": false,
-    "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
-    "exclude": "",
-    "architecture": "",
-    "version": "1.0.0"
-  },
   "local@mocha-steam-icons": {
     "disabled": false,
     "include": "steam.exe|steamwebhelper.exe",
