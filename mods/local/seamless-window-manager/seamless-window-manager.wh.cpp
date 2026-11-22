@@ -2,7 +2,7 @@
 // @id              seamless-window-manager
 // @name            Seamless Window Manager
 // @description     Move, resize, snap and focus windows with the mouse or keyboard, with app rules, gaps and a pause key
-// @version         2.7.0
+// @version         2.8.0
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -7060,6 +7060,30 @@ void ToolModUninit() {
         - window: Every time the active window changes
   $name: Focus and mouse
   $description: Which window is active, and where the mouse pointer goes.
+- agentWindows:
+    - enabled: true
+      $name: Keep agent windows out of the way
+      $description: >-
+        Windows that coding agents open, and everything they start, never take
+        the keyboard, the mouse or the window in front. They open on a monitor
+        you are not using. Clicking one still makes it active as normal.
+    - screen: side
+      $name: Where agent windows open
+      $description: >-
+        Never the monitor with the window you are using or the mouse pointer.
+      $options:
+        - side: The biggest other monitor
+        - left: The leftmost other monitor
+        - right: The rightmost other monitor
+        - top: The highest other monitor
+        - none: Where the app puts them
+    - apps: claude.exe, codex.exe, opencode.exe, gemini.exe, grok.exe
+      $name: Agent programs
+      $description: >-
+        Everything these programs start counts as an agent window. Separate
+        names with commas. Agents T3 Code runs through node also count.
+  $name: Agent windows
+  $description: Windows your coding agents open stay out of your way.
 - effects:
     - animation: 180
       $name: Animation length (ms)
@@ -12636,6 +12660,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Hotkey, L"hotkeyFocusUp", L"Focus the window above", L"", L"Alt+Up", {}, 0, 100, 4, L"Focus keys"},
 {K::Hotkey, L"hotkeyFocusDown", L"Focus the window below", L"", L"Alt+Down", {}, 0, 100, 4, L"Focus keys"},
 {K::Hotkey, L"hotkeyFocusLast", L"Focus the last window", L"Goes back to the window you used before. Press again to come back.", L"Alt+Shift+L", {}, 0, 100, 4, L"Focus keys"},
+{K::Check, L"agentWindows.enabled", L"Keep agent windows out of the way", L"Windows that coding agents open, and everything they start, never take the keyboard, the mouse or the window in front. They open on a monitor you are not using. Clicking one still makes it active as normal.", L"1", {}, 0, 100, 4, L"Agent windows"},
+{K::Choice, L"agentWindows.screen", L"Where agent windows open", L"Never the monitor with the window you are using or the mouse pointer.", L"side", {{L"side", L"The biggest other monitor"}, {L"left", L"The leftmost other monitor"}, {L"right", L"The rightmost other monitor"}, {L"top", L"The highest other monitor"}, {L"none", L"Where the app puts them"}}, 0, 100, 4, L"Agent windows"},
+{K::Text, L"agentWindows.apps", L"Agent programs", L"Everything these programs start counts as an agent window. Separate names with commas. Agents T3 Code runs through node also count.", L"claude.exe, codex.exe, opencode.exe, gemini.exe, grok.exe", {}, 0, 100, 4, L"Agent windows"},
 {K::Number, L"effects.animation", L"Animation length (ms)", L"How long windows take to glide into place when they tile, float, fill, snap or go borderless. 0 turns it off. 0 to 400 (Suggested: 180).", L"180", {}, 0, 400, 5, L"Animation and fade"},
 {K::Choice, L"effects.focusAnimation", L"Focus animation", L"What the window you jump to with the focus keys (Alt+arrows, Alt+1 to 4, Alt+Page Up or Down) does. Ring: a blue to mauve outline closes in on its edge and fades, and the window itself stays still. Zoom in: the window grows in from slightly smaller, like Alt+Tab.", L"ring", {{L"ring", L"Ring"}, {L"zoom", L"Zoom in"}, {L"off", L"Off"}}, 0, 100, 5, L"Animation and fade"},
 {K::Number, L"effects.inactiveOpacity", L"Fade windows you are not using (%)", L"Makes every window except the active one see-through. 100 turns this off. 30 to 100 (Suggested: 92).", L"100", {}, 30, 100, 5, L"Animation and fade"},
@@ -16493,12 +16520,485 @@ void WhTool_ModUninit() {
     if (g_globalMutex) CloseHandle(g_globalMutex);
 }
 
+// ==== Agent windows ====
+// Windows that coding agents (and everything they start) open never take the keyboard, the mouse
+// or the foreground, and they open on a monitor the owner is not using. Runs in every process; the
+// hooks go in only where the process descends from an agent program. SWM_AGENT_QUIET=1 is passed
+// down to children so a broken parent chain still counts, and =0 opts a launch out on purpose.
+// While an agent holds the coop desktop lock with --input (owner away, not gaming), focus and
+// input are let through.
+namespace agentQuiet {
+
+bool g_active = false;
+bool g_enabled = false;
+int g_screen = 0;  // 0 side, 1 left, 2 right, 3 top, -1 leave where the app puts it
+std::vector<std::wstring> g_apps;
+std::vector<DWORD> g_ancestors;
+
+constexpr WCHAR kEnv[] = L"SWM_AGENT_QUIET";
+constexpr WCHAR kPlaced[] = L"SwmAgentPlaced";
+
+// The owner's shell and Windows' own UI never go quiet, and they drop the marker so apps the
+// owner opens from an Explorer an agent restarted still behave normally.
+constexpr PCWSTR kNeverQuiet[] = {
+    L"explorer.exe", L"dwm.exe", L"sihost.exe", L"windhawk.exe", L"shellexperiencehost.exe",
+    L"startmenuexperiencehost.exe", L"searchhost.exe", L"textinputhost.exe", L"ctfmon.exe",
+    L"applicationframehost.exe", L"lockapp.exe", L"logonui.exe", L"consent.exe",
+    L"credentialuibroker.exe", L"t3 code.exe", L"t3 code (nightly).exe",
+};
+
+std::wstring Lower(std::wstring s) {
+    for (auto& c : s) c = (WCHAR)towlower(c);
+    return s;
+}
+
+std::wstring Trim(const std::wstring& s) {
+    size_t a = s.find_first_not_of(L" \t\r\n"), b = s.find_last_not_of(L" \t\r\n");
+    return a == std::wstring::npos ? L"" : s.substr(a, b - a + 1);
+}
+
+std::wstring ExeOf(HANDLE process) {
+    WCHAR path[MAX_PATH]{};
+    DWORD n = ARRAYSIZE(path);
+    if (!QueryFullProcessImageNameW(process, 0, path, &n)) return L"";
+    return Lower(PathFindFileNameW(path));
+}
+
+std::wstring StringSetting(PCWSTR name) {
+    PCWSTR p = Wh_GetStringSetting(name);
+    std::wstring s = p ? p : L"";
+    if (p) Wh_FreeStringSetting(p);
+    return s;
+}
+
+void LoadSettings() {
+    g_enabled = Wh_GetIntSetting(L"agentWindows.enabled") != 0;
+    std::wstring screen = StringSetting(L"agentWindows.screen");
+    g_screen = screen == L"left" ? 1 : screen == L"right" ? 2 : screen == L"top" ? 3
+             : screen == L"none" ? -1 : 0;
+    std::wstring apps = StringSetting(L"agentWindows.apps");
+    g_apps.clear();
+    size_t i = 0;
+    while (i <= apps.size()) {
+        size_t j = apps.find_first_of(L",;", i);
+        if (j == std::wstring::npos) j = apps.size();
+        std::wstring t = Lower(Trim(apps.substr(i, j - i)));
+        if (!t.empty()) {
+            if (t.size() < 4 || t.compare(t.size() - 4, 4, L".exe") != 0) t += L".exe";
+            g_apps.push_back(t);
+        }
+        i = j + 1;
+    }
+}
+
+bool IsAgentExe(const std::wstring& exe) {
+    for (auto& a : g_apps)
+        if (exe == a) return true;
+    return false;
+}
+
+struct BasicInfo {
+    PVOID exitStatus;
+    PVOID peb;
+    ULONG_PTR affinity;
+    PVOID basePriority;
+    ULONG_PTR pid;
+    ULONG_PTR parent;
+};
+using NtQueryInformationProcess_t = LONG(NTAPI*)(HANDLE, ULONG, PVOID, ULONG, PULONG);
+
+// Walks up the parent chain. A parent created after its child is a reused process id: stop.
+bool FromAgent() {
+    auto query = (NtQueryInformationProcess_t)GetProcAddress(GetModuleHandleW(L"ntdll.dll"),
+                                                             "NtQueryInformationProcess");
+    if (!query) return false;
+    FILETIME created{}, x1, x2, x3;
+    if (!GetProcessTimes(GetCurrentProcess(), &created, &x1, &x2, &x3)) return false;
+    std::wstring below = ExeOf(GetCurrentProcess());
+    HANDLE h = GetCurrentProcess();
+    bool own = false, found = false;
+    for (int depth = 0; depth < 24 && !found; depth++) {
+        BasicInfo bi{};
+        LONG st = query(h, 0, &bi, sizeof(bi), nullptr);
+        if (own) CloseHandle(h);
+        own = false;
+        if (st < 0 || !bi.parent) break;
+        HANDLE p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, (DWORD)bi.parent);
+        if (!p) break;
+        h = p;
+        own = true;
+        FILETIME pc{};
+        if (!GetProcessTimes(p, &pc, &x1, &x2, &x3) || CompareFileTime(&pc, &created) > 0) break;
+        created = pc;
+        std::wstring exe = ExeOf(p);
+        g_ancestors.push_back((DWORD)bi.parent);
+        // Agents T3 Code runs through node or bun (Halo's harness) count as agents too.
+        if (IsAgentExe(exe) ||
+            ((below == L"node.exe" || below == L"bun.exe") && exe.rfind(L"t3 code", 0) == 0))
+            found = true;
+        below = exe;
+    }
+    if (own) CloseHandle(h);
+    return found;
+}
+
+// --- When to stand aside -----------------------------------------------------------------------
+
+DWORD LastInputAgeMs() {
+    LASTINPUTINFO li{sizeof(li)};
+    if (!GetLastInputInfo(&li)) return MAXDWORD;
+    return GetTickCount() - li.dwTime;
+}
+
+// The owner is already in this app, or just clicked something in the app that started it
+// (for example a link in T3 Code): then the window behaves normally.
+bool OwnerIntent() {
+    HWND fg = GetForegroundWindow();
+    if (!fg) return false;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(fg, &pid);
+    if (pid == GetCurrentProcessId()) return true;
+    if (LastInputAgeMs() > 1500) return false;
+    for (DWORD a : g_ancestors)
+        if (a == pid) return true;
+    return false;
+}
+
+std::string ReadSmall(const std::wstring& path) {
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                           nullptr, OPEN_EXISTING, 0, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return "";
+    char buf[4096];
+    DWORD n = 0;
+    BOOL ok = ReadFile(f, buf, sizeof(buf) - 1, &n, nullptr);
+    CloseHandle(f);
+    return ok ? std::string(buf, n) : "";
+}
+
+double JsonNumber(const std::string& s, const char* key) {
+    size_t k = s.find(key);
+    if (k == std::string::npos) return -1;
+    size_t c = s.find(':', k);
+    return c == std::string::npos ? -1 : strtod(s.c_str() + c + 1, nullptr);
+}
+
+bool JsonTrue(const std::string& s, const char* key) {
+    size_t k = s.find(key);
+    if (k == std::string::npos) return false;
+    size_t c = s.find(':', k);
+    if (c == std::string::npos) return false;
+    size_t v = s.find_first_not_of(" \t\r\n", c + 1);
+    return v != std::string::npos && s.compare(v, 4, "true") == 0;
+}
+
+// An agent holds the coop desktop lock with --input (owner away a minute) and the owner is not
+// gaming: focus and input pass. Checked at most once a second.
+bool InputPass() {
+    static ULONGLONG lastCheck = 0;
+    static bool last = false;
+    ULONGLONG tick = GetTickCount64();
+    if (lastCheck && tick - lastCheck < 1000) return last;
+    lastCheck = tick;
+    last = false;
+    WCHAR base[MAX_PATH]{};
+    WCHAR home[MAX_PATH]{};
+    std::wstring dir;
+    if (GetEnvironmentVariableW(L"COOP_HOME", home, MAX_PATH)) dir = home;
+    else if (GetEnvironmentVariableW(L"LOCALAPPDATA", base, MAX_PATH)) dir = std::wstring(base) + L"\\agent-coop";
+    else return false;
+    std::string lock = ReadSmall(dir + L"\\projects\\machine\\locks\\desktop\\owner.json");
+    if (lock.empty() || !JsonTrue(lock, "\"input\"")) return false;
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    double unixNow = (double)((((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime) -
+                              116444736000000000ULL) / 1e7;
+    double acquired = JsonNumber(lock, "\"acquired\""), ttl = JsonNumber(lock, "\"ttl\"");
+    if (acquired <= 0 || ttl <= 0 || acquired + ttl < unixNow) return false;
+    if (JsonTrue(ReadSmall(dir + L"\\guard.json"), "\"hands_off\"")) return false;
+    last = true;
+    return true;
+}
+
+bool Quiet() { return g_enabled && !OwnerIntent() && !InputPass(); }
+
+// Only top-level windows take the foreground; child windows keep their own behaviour.
+bool TopLevel(HWND h) { return h && !(GetWindowLongW(h, GWL_STYLE) & WS_CHILD); }
+
+// --- Where new windows open --------------------------------------------------------------------
+
+struct Mon {
+    HMONITOR h;
+    RECT work;
+    bool primary;
+};
+
+BOOL CALLBACK AddMonitor(HMONITOR h, HDC, LPRECT, LPARAM lp) {
+    MONITORINFO mi{sizeof(mi)};
+    if (GetMonitorInfoW(h, &mi))
+        ((std::vector<Mon>*)lp)->push_back({h, mi.rcWork, (mi.dwFlags & MONITORINFOF_PRIMARY) != 0});
+    return TRUE;
+}
+
+// A monitor away from the window in front and from the mouse pointer.
+bool TargetWork(RECT* out) {
+    std::vector<Mon> mons;
+    EnumDisplayMonitors(nullptr, nullptr, AddMonitor, (LPARAM)&mons);
+    if (mons.size() < 2) return false;
+    HWND fg = GetForegroundWindow();
+    HMONITOR busy = fg ? MonitorFromWindow(fg, MONITOR_DEFAULTTOPRIMARY)
+                       : MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY);
+    POINT pt{};
+    GetCursorPos(&pt);
+    HMONITOR pointer = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+    std::vector<Mon> pick;
+    for (auto& m : mons)
+        if (m.h != busy && m.h != pointer) pick.push_back(m);
+    if (pick.empty())
+        for (auto& m : mons)
+            if (m.h != busy) pick.push_back(m);
+    if (pick.empty()) return false;
+    auto area = [](const RECT& r) { return (LONGLONG)(r.right - r.left) * (r.bottom - r.top); };
+    const Mon* best = &pick[0];
+    for (auto& m : pick) {
+        bool better = false;
+        switch (g_screen) {
+            case 1: better = m.work.left < best->work.left; break;
+            case 2: better = m.work.right > best->work.right; break;
+            case 3: better = m.work.top < best->work.top; break;
+            default:
+                better = area(m.work) > area(best->work) ||
+                         (area(m.work) == area(best->work) && best->primary && !m.primary);
+        }
+        if (better) best = &m;
+    }
+    *out = best->work;
+    return true;
+}
+
+// A hidden, unowned top-level window about to be shown for the first time.
+bool Eligible(HWND h) {
+    if (g_screen < 0 || !h || !IsWindow(h) || IsWindowVisible(h)) return false;
+    LONG style = GetWindowLongW(h, GWL_STYLE), ex = GetWindowLongW(h, GWL_EXSTYLE);
+    if ((style & WS_CHILD) || (ex & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE))) return false;
+    if (GetWindow(h, GW_OWNER) || GetPropW(h, kPlaced)) return false;
+    return !IsZoomed(h) && !IsIconic(h);
+}
+
+// Where the window goes, keeping its size inside the target monitor. False: leave it alone.
+bool Spot(HWND h, int* x, int* y, int* w, int* hh) {
+    SetPropW(h, kPlaced, (HANDLE)1);
+    RECT r{};
+    if (!GetWindowRect(h, &r)) return false;
+    int cw = *w > 0 ? *w : r.right - r.left, ch = *hh > 0 ? *hh : r.bottom - r.top;
+    if (cw < 120 || ch < 80) return false;
+    RECT work{};
+    if (!TargetWork(&work)) return false;
+    cw = std::min<int>(cw, work.right - work.left);
+    ch = std::min<int>(ch, work.bottom - work.top);
+    *x = work.left + (work.right - work.left - cw) / 2;
+    *y = work.top + (work.bottom - work.top - ch) / 2;
+    *w = cw;
+    *hh = ch;
+    return true;
+}
+
+// --- Hooks ---------------------------------------------------------------------------------------
+
+using SetWindowPos_t = BOOL(WINAPI*)(HWND, HWND, int, int, int, int, UINT);
+using ShowWindow_t = BOOL(WINAPI*)(HWND, int);
+using SetForegroundWindow_t = BOOL(WINAPI*)(HWND);
+using SwitchToThisWindow_t = void(WINAPI*)(HWND, BOOL);
+using AllowSetForegroundWindow_t = BOOL(WINAPI*)(DWORD);
+using SendInput_t = UINT(WINAPI*)(UINT, LPINPUT, int);
+using SetCursorPos_t = BOOL(WINAPI*)(int, int);
+using CreateWindowExW_t = HWND(WINAPI*)(DWORD, LPCWSTR, LPCWSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
+using CreateWindowExA_t = HWND(WINAPI*)(DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
+
+SetWindowPos_t SetWindowPos_Orig;
+ShowWindow_t ShowWindow_Orig;
+ShowWindow_t ShowWindowAsync_Orig;
+SetForegroundWindow_t SetForegroundWindow_Orig;
+SwitchToThisWindow_t SwitchToThisWindow_Orig;
+AllowSetForegroundWindow_t AllowSetForegroundWindow_Orig;
+SendInput_t SendInput_Orig;
+SetCursorPos_t SetCursorPos_Orig;
+CreateWindowExW_t CreateWindowExW_Orig;
+CreateWindowExA_t CreateWindowExA_Orig;
+
+void PlaceHidden(HWND h) {
+    if (!Eligible(h) || OwnerIntent()) return;
+    int x, y, w = 0, hh = 0;
+    if (Spot(h, &x, &y, &w, &hh))
+        SetWindowPos_Orig(h, nullptr, x, y, w, hh, SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+}
+
+int QuietShowCmd(int cmd) {
+    switch (cmd) {
+        case SW_SHOWNORMAL: case SW_SHOWMAXIMIZED: case SW_RESTORE: case SW_SHOWDEFAULT:
+            return SW_SHOWNOACTIVATE;
+        case SW_SHOW: return SW_SHOWNA;
+        case SW_SHOWMINIMIZED: return SW_SHOWMINNOACTIVE;
+        default: return cmd;
+    }
+}
+
+bool Shows(int cmd) { return cmd != SW_HIDE && cmd != SW_MINIMIZE && cmd != SW_FORCEMINIMIZE; }
+
+BOOL WINAPI ShowWindow_Hook(HWND h, int cmd) {
+    if (!TopLevel(h)) return ShowWindow_Orig(h, cmd);
+    if (Shows(cmd)) PlaceHidden(h);
+    if (Quiet()) cmd = QuietShowCmd(cmd);
+    return ShowWindow_Orig(h, cmd);
+}
+
+BOOL WINAPI ShowWindowAsync_Hook(HWND h, int cmd) {
+    if (!TopLevel(h)) return ShowWindowAsync_Orig(h, cmd);
+    if (Shows(cmd)) PlaceHidden(h);
+    if (Quiet()) cmd = QuietShowCmd(cmd);
+    return ShowWindowAsync_Orig(h, cmd);
+}
+
+BOOL WINAPI SetWindowPos_Hook(HWND h, HWND after, int x, int y, int cx, int cy, UINT flags) {
+    if ((flags & SWP_SHOWWINDOW) && Eligible(h) && !OwnerIntent()) {
+        int nx, ny, w = (flags & SWP_NOSIZE) ? 0 : cx, hh = (flags & SWP_NOSIZE) ? 0 : cy;
+        if (Spot(h, &nx, &ny, &w, &hh)) {
+            x = nx;
+            y = ny;
+            flags &= ~SWP_NOMOVE;
+            if (!(flags & SWP_NOSIZE)) { cx = w; cy = hh; }
+        }
+    }
+    if (!(flags & SWP_NOACTIVATE) && TopLevel(h) && Quiet()) flags |= SWP_NOACTIVATE;
+    return SetWindowPos_Orig(h, after, x, y, cx, cy, flags);
+}
+
+BOOL WINAPI SetForegroundWindow_Hook(HWND h) {
+    if (Quiet()) {
+        Wh_Log(L"agent window: kept %p from taking the foreground", h);
+        return FALSE;
+    }
+    return SetForegroundWindow_Orig(h);
+}
+
+void WINAPI SwitchToThisWindow_Hook(HWND h, BOOL altTab) {
+    if (Quiet()) return;
+    SwitchToThisWindow_Orig(h, altTab);
+}
+
+// Handing foreground rights to another app (how a browser or Explorer window jumps in front
+// after an agent opens a link or folder) is declined quietly.
+BOOL WINAPI AllowSetForegroundWindow_Hook(DWORD pid) {
+    if (Quiet()) return TRUE;
+    return AllowSetForegroundWindow_Orig(pid);
+}
+
+UINT WINAPI SendInput_Hook(UINT count, LPINPUT inputs, int size) {
+    if (Quiet()) {
+        Wh_Log(L"agent window: blocked %u synthetic inputs", count);
+        SetLastError(ERROR_ACCESS_DENIED);
+        return 0;
+    }
+    return SendInput_Orig(count, inputs, size);
+}
+
+BOOL WINAPI SetCursorPos_Hook(int x, int y) {
+    if (Quiet()) {
+        SetLastError(ERROR_ACCESS_DENIED);
+        return FALSE;
+    }
+    return SetCursorPos_Orig(x, y);
+}
+
+// A top-level window created visible would show and activate inside the create call; make it
+// hidden, place it, then show it without activating.
+bool HoldVisible(DWORD style) {
+    return g_enabled && !(style & WS_CHILD) && (style & WS_VISIBLE) &&
+           !(style & (WS_MAXIMIZE | WS_MINIMIZE)) && !OwnerIntent();
+}
+
+void ShowHeld(HWND h) {
+    if (!h) return;
+    PlaceHidden(h);
+    ShowWindow_Orig(h, Quiet() ? SW_SHOWNA : SW_SHOW);
+}
+
+HWND WINAPI CreateWindowExW_Hook(DWORD ex, LPCWSTR cls, LPCWSTR name, DWORD style, int x, int y, int w,
+                                 int h, HWND parent, HMENU menu, HINSTANCE inst, LPVOID param) {
+    if (!HoldVisible(style)) return CreateWindowExW_Orig(ex, cls, name, style, x, y, w, h, parent, menu, inst, param);
+    HWND hwnd = CreateWindowExW_Orig(ex, cls, name, style & ~WS_VISIBLE, x, y, w, h, parent, menu, inst, param);
+    ShowHeld(hwnd);
+    return hwnd;
+}
+
+HWND WINAPI CreateWindowExA_Hook(DWORD ex, LPCSTR cls, LPCSTR name, DWORD style, int x, int y, int w,
+                                 int h, HWND parent, HMENU menu, HINSTANCE inst, LPVOID param) {
+    if (!HoldVisible(style)) return CreateWindowExA_Orig(ex, cls, name, style, x, y, w, h, parent, menu, inst, param);
+    HWND hwnd = CreateWindowExA_Orig(ex, cls, name, style & ~WS_VISIBLE, x, y, w, h, parent, menu, inst, param);
+    ShowHeld(hwnd);
+    return hwnd;
+}
+
+template <typename T>
+bool Hook(HMODULE module, const char* name, T hook, T* orig) {
+    void* p = module ? (void*)GetProcAddress(module, name) : nullptr;
+    if (!p) return false;
+    return Wh_SetFunctionHook(p, (void*)hook, (void**)orig);
+}
+
+// The syscall stubs in win32u catch the calls user32 makes internally too (message boxes,
+// dialogs); user32 is the fallback where a stub is missing.
+bool ModInit() {
+    WCHAR self[MAX_PATH]{};
+    GetModuleFileNameW(nullptr, self, ARRAYSIZE(self));
+    std::wstring exe = Lower(PathFindFileNameW(self));
+    for (PCWSTR n : kNeverQuiet)
+        if (exe == n) {
+            SetEnvironmentVariableW(kEnv, nullptr);
+            return false;
+        }
+    WCHAR v[8]{};
+    DWORD n = GetEnvironmentVariableW(kEnv, v, ARRAYSIZE(v));
+    if (n == 1 && v[0] == L'0') return false;
+    LoadSettings();
+    if (!g_enabled) return false;
+    bool marked = n == 1 && v[0] == L'1';
+    if (!marked && !FromAgent()) return false;
+    if (!marked) SetEnvironmentVariableW(kEnv, L"1");
+
+    HMODULE u = LoadLibraryW(L"win32u.dll");
+    HMODULE user = LoadLibraryW(L"user32.dll");
+    bool ok = true;
+    ok &= Hook(u, "NtUserSetWindowPos", SetWindowPos_Hook, &SetWindowPos_Orig) ||
+          Hook(user, "SetWindowPos", SetWindowPos_Hook, &SetWindowPos_Orig);
+    ok &= Hook(u, "NtUserShowWindow", ShowWindow_Hook, &ShowWindow_Orig) ||
+          Hook(user, "ShowWindow", ShowWindow_Hook, &ShowWindow_Orig);
+    ok &= Hook(u, "NtUserShowWindowAsync", ShowWindowAsync_Hook, &ShowWindowAsync_Orig) ||
+          Hook(user, "ShowWindowAsync", ShowWindowAsync_Hook, &ShowWindowAsync_Orig);
+    ok &= Hook(u, "NtUserSetForegroundWindow", SetForegroundWindow_Hook, &SetForegroundWindow_Orig) ||
+          Hook(user, "SetForegroundWindow", SetForegroundWindow_Hook, &SetForegroundWindow_Orig);
+    ok &= Hook(u, "NtUserSendInput", SendInput_Hook, &SendInput_Orig) ||
+          Hook(user, "SendInput", SendInput_Hook, &SendInput_Orig);
+    Hook(user, "SwitchToThisWindow", SwitchToThisWindow_Hook, &SwitchToThisWindow_Orig);
+    Hook(user, "AllowSetForegroundWindow", AllowSetForegroundWindow_Hook, &AllowSetForegroundWindow_Orig);
+    Hook(user, "SetCursorPos", SetCursorPos_Hook, &SetCursorPos_Orig);
+    Hook(user, "CreateWindowExW", CreateWindowExW_Hook, &CreateWindowExW_Orig);
+    Hook(user, "CreateWindowExA", CreateWindowExA_Hook, &CreateWindowExA_Orig);
+    g_active = ok;
+    Wh_Log(L"agent windows: quiet in %s (%s)", exe.c_str(), ok ? L"hooked" : L"hook failed");
+    return ok;
+}
+
+}  // namespace agentQuiet
+
+bool g_agentQuietInited = false;
+
 BOOL WhToolLauncher_ModInit(BOOL* launch) {
     WCHAR path[MAX_PATH]{};
     GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
     *launch = _wcsicmp(PathFindFileNameW(path), L"windhawk.exe") == 0;
     g_packDragInited = altSnapDrag::ModInit();
-    return g_packDragInited;
+    g_agentQuietInited = agentQuiet::ModInit();
+    return g_packDragInited || g_agentQuietInited;
 }
 
 void WhToolLauncher_ModUninit() {

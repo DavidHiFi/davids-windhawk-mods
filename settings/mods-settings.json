@@ -2335,6 +2335,9 @@
     "hoverZoom.reach": 64
   },
   "local@seamless-window-manager": {
+    "agentWindows.apps": "claude.exe, codex.exe, opencode.exe, gemini.exe, grok.exe",
+    "agentWindows.enabled": 1,
+    "agentWindows.screen": "side",
     "aroundMain": 1,
     "centerOnMove": 1,
     "cursorFollowsWindow": 1,
