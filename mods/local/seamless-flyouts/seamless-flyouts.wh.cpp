@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.1.0
+// @version         2.1.1
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -27,6 +27,13 @@ It also brings acrylic, Mica and blur to Windows 11 apps, and keeps re-applying 
 Explorer folder windows that open hidden or late, so they never show up black.
 
 Built on Translucent Windows by Undisputed00x.
+
+## What's new in 2.1.1
+
+- The strip behind File name, Open and Cancel is now the same dark colour as the rest of the
+  Open or Save window. In 2.1.0 the glass behind it still read as a lighter grey bar.
+- Typing boxes with a drop-down (File name) are now dark inside, so the arrow corner no longer
+  shows a grey square.
 
 ## What's new in 2.1.0
 
@@ -666,7 +673,7 @@ static BOOL Draw(ID2D1Factory* factory, HDC hdc, const RECT& r, UINT dpi)
 namespace SeamlessDock {
 
 enum Edge { kEdgeRest, kEdgeHover, kEdgeDim };
-enum Fill { kFillNone, kFillButton, kFillPressed };
+enum Fill { kFillNone, kFillButton, kFillPressed, kFillBase };
 constexpr FLOAT kRadius = 16.f;      // The live corner radius on this setup (custom-corner-radius).
 constexpr FLOAT kInputRadius = 6.f;  // Text boxes: the box inside covers anything rounder.
 
@@ -714,7 +721,8 @@ static BOOL Draw(ID2D1Factory* factory, HDC hdc, const RECT& r, UINT dpi, Edge e
         rt->BeginDraw();
         rt->Clear({0, 0, 0, 0});
         ID2D1Brush* fb = fill == kFillButton ? solid(0x31, 0x32, 0x44, edge == kEdgeDim ? 0.25f : 0.55f)
-                       : fill == kFillPressed ? gradient(0.18f) : nullptr;
+                       : fill == kFillPressed ? gradient(0.18f)
+                       : fill == kFillBase ? solid(0x1E, 0x1E, 0x2E, 1.f) : nullptr;
         ID2D1Brush* eb = edge == kEdgeHover ? gradient(1.f)
                        : solid(0x58, 0x5B, 0x70, edge == kEdgeDim ? 0.45f : 1.f);
         if (fb) rt->FillRoundedRectangle(&rr, fb);
@@ -3727,7 +3735,8 @@ BOOL PaintCombobox(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
     Edge edge = (iStateId == 2 || iStateId == 3) ? kEdgeHover : iStateId == 4 ? kEdgeDim : kEdgeRest;
     if (iPartId == CP_READONLY)
         return Draw(factory.Get(), hdc, *pRect, g_Dpi, edge, iStateId == 3 ? kFillPressed : kFillButton);
-    return Draw(factory.Get(), hdc, *pRect, g_Dpi, edge, kFillNone, kInputRadius);
+    // 2.1.1: solid Mocha base inside, so the drop-down arrow corner never shows the window behind.
+    return Draw(factory.Get(), hdc, *pRect, g_Dpi, edge, kFillBase, kInputRadius);
 }
 
 BOOL CThemeCache::CacheCombobox(INT iPartId, INT iStateId, INT stateIndex)
@@ -6349,10 +6358,16 @@ HRESULT WINAPI HookedDrawThemeBackgroundEx(
         || (ThemeClassName == L"TaskDialog" && (iPartId == TDLG_CONTENTPANE || iPartId == TDLG_FOOTNOTESEPARATOR ||  iPartId == TDLG_FOOTNOTEPANE || iPartId == TDLG_SECONDARYPANEL) && iStateId == 0)
         || (ThemeClassName == L"TaskDialog" && iPartId == TDLG_PRIMARYPANEL)
         || (ThemeClassName == L"AeroWizard" && (iPartId == AW_TITLEBAR || iPartId == AW_HEADERAREA || iPartId == AW_CONTENTAREA || iPartId == AW_COMMANDAREA))
-        || (ThemeClassName == L"CommonItemsDialog" && iPartId == 1)
         || (ThemeClassName == L"ControlPanel" && (iPartId == CPANEL_CONTENTPANE || iPartId == CPANEL_CONTENTPANELINE || iPartId == CPANEL_BANNERAREA || iPartId == CPANEL_LARGECOMMANDAREA || iPartId == CPANEL_SMALLCOMMANDAREA)))
     {
         FillRect(hdc, pRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+        return S_OK;
+    }
+    else if (ThemeClassName == L"CommonItemsDialog" && iPartId == 1)
+    {
+        // 2.1.1: the Open/Save footer matches the file list (Mocha base), not lighter glass.
+        static HBRUSH footer = CreateSolidBrush(RGB(30, 30, 46));
+        FillRect(hdc, pRect, footer);
         return S_OK;
     }
     return hr;
@@ -7644,10 +7659,11 @@ BOOL WINAPI HookedFillRect(HDC hdc, LPCRECT lprc, HBRUSH hbr)
 BOOL (__fastcall *SetDarkThemeColors_orig)(void **, HDC);
 BOOL __fastcall HookedSetDarkThemeColors(void **Brush, HDC hdc)
 {
-    SetBkColor(hdc, RGB(0, 0, 0));
+    // 2.1.1: Mocha base, the colour the file list paints. Black let a lighter grey glass show
+    // through as a slab. The caller owns and deletes this brush, so make a new one each time.
+    SetBkColor(hdc, RGB(30, 30, 46));
     SetTextColor(hdc, g_IsSysThemeDarkMode ? RGB(255, 255, 255) : RGB(0, 0, 0));
-    //if ( !*Brush )
-        *Brush = (void*)GetStockObject(BLACK_BRUSH);  // 2.1.0: black is glass; the window colour showed grey
+    *Brush = (void*)CreateSolidBrush(RGB(30, 30, 46));
     return *Brush != nullptr;
 }
 
