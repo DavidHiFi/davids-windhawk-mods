@@ -1264,7 +1264,7 @@
     "include": "*|windhawk.exe",
     "exclude": "dwm.exe|sihost.exe|RuntimeBroker.exe|StartMenuExperienceHost.exe|ShellExperienceHost.exe|SearchHost.exe|TextInputHost.exe|ApplicationFrameHost.exe|NVDisplay.Container.exe",
     "architecture": "",
-    "version": "1.2.7"
+    "version": "1.2.8"
   },
   "local@uwp-assets-redirect-plus": {
     "disabled": false,

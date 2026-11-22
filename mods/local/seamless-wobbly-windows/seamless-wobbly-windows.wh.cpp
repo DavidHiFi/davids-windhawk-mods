@@ -2,7 +2,7 @@
 // @id              seamless-wobbly-windows
 // @name            Seamless Wobbly Windows
 // @description     Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows
-// @version         1.2.7
+// @version         1.2.8
 // @author          DavidHiFi, HeyJeay, HaVeN80, lalimatyus
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -88,6 +88,10 @@ title bar to move a window without the wobble.
 - Nothing is loaded into dwm.exe. The effect runs inside each app.
 - Turn off the other wobble mods (Wobbly Windows, Window Wobble) before using
   this one.
+
+## What's new in 1.2.8
+- The frosted glass under a dragged window no longer turns dark on windows
+  that have their own frosted background.
 
 ## What's new in 1.2.7
 - Game guard: wobbly windows and glows no longer load into games or their
@@ -5585,6 +5589,8 @@ struct HideState {
     bool  cloaked   = false;
     bool  hadCorner = false;
     DWORD corner    = 0;
+    bool  dropped   = false;    // its own backdrop was switched off for the drag
+    DWORD backdrop  = 0;
 };
 
 static void SaveCorners(HWND hwnd, HideState& st) {
@@ -5602,10 +5608,30 @@ static void RestoreCorners(HWND hwnd, const HideState& st) {
     DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
 }
 
-static bool HideWindowInPlace(HWND hwnd, HideState& st) {
+// A cloaked window's own system backdrop can land in the live blur's backdrop
+// as black. With the live blur on, switch that backdrop off for the drag and
+// put it back after.
+static bool HideWindowInPlace(HWND hwnd, HideState& st, bool dropBackdrop = false) {
     SaveCorners(hwnd, st);
+    if (dropBackdrop) {
+        DWORD type = 0;
+        if (SUCCEEDED(DwmGetWindowAttribute(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/, &type, sizeof(type))) &&
+            type > 1) {
+            DWORD none = 1;
+            if (SUCCEEDED(DwmSetWindowAttribute(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/, &none, sizeof(none)))) {
+                st.dropped  = true;
+                st.backdrop = type;
+            }
+        }
+    }
     BOOL on = TRUE;
-    if (FAILED(DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &on, sizeof(on)))) return false;
+    if (FAILED(DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &on, sizeof(on)))) {
+        if (st.dropped) {
+            DwmSetWindowAttribute(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/, &st.backdrop, sizeof(st.backdrop));
+            st.dropped = false;
+        }
+        return false;
+    }
     st.cloaked = true;
     return true;
 }
@@ -5628,6 +5654,10 @@ static void ShowWindowInPlace(HWND hwnd, HideState& st) {
     if (!st.cloaked) return;
     st.cloaked = false;
     BOOL off = FALSE;
+    if (st.dropped) {
+        DwmSetWindowAttribute(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/, &st.backdrop, sizeof(st.backdrop));
+        st.dropped = false;
+    }
     DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &off, sizeof(off));
     RestoreCorners(hwnd, st);
     if (IsWindow(hwnd)) RefreshBackdropAfterShow(hwnd);
@@ -6418,7 +6448,7 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     // frame first let the real window slide out from under the copy (1.0.x).
     HideState hide;
     if (glow.on) glowProp.Set(hwnd);
-    if (!HideWindowInPlace(hwnd, hide)) {
+    if (!HideWindowInPlace(hwnd, hide, liveGlass)) {
         glowProp.Drop();
         Wh_Log(L"abort: cannot cloak window");
         ov.PresentClear();
