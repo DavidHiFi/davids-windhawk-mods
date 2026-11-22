@@ -23,7 +23,7 @@
         "colorToolbarIconHover": "#CDD6F4",
         "colorsEnabled": 1,
         "nativeFrameEnabled": 1,
-        "popupAcrylic": 0,
+        "popupAcrylic": 1,
         "tabActiveOpacity": 85,
         "tabInactiveHoverOpacity": 60,
         "tabSelectedOpacity": 69

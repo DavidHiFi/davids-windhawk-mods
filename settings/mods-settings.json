@@ -2499,7 +2499,7 @@
     "rendering.noFit": 0,
     "replace.additionalFonts": "",
     "replace.excludedFonts": "",
-    "replace.replaceAllFonts": 0,
+    "replace.replaceAllFonts": 1,
     "replace.replaceMonospace": 0
   },
   "local@simple-window-switcher-plus": {
@@ -5291,7 +5291,7 @@
     "colorToolbarIconHover": "#CDD6F4",
     "colorsEnabled": 1,
     "nativeFrameEnabled": 1,
-    "popupAcrylic": 0,
+    "popupAcrylic": 1,
     "tabActiveOpacity": 85,
     "tabInactiveHoverOpacity": 60,
     "tabSelectedOpacity": 69

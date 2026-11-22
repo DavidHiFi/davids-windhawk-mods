@@ -16,7 +16,7 @@
         "rendering.noFit": 0,
         "replace.additionalFonts": "",
         "replace.excludedFonts": "",
-        "replace.replaceAllFonts": 0,
+        "replace.replaceAllFonts": 1,
         "replace.replaceMonospace": 0
       }
     }
