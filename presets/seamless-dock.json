@@ -18,6 +18,7 @@
         "previews": 1,
         "reserveSpace": 1,
         "showOpenApps": 1,
+        "showTitle": 1,
         "spacing": 6,
         "surfaceOpacity": 60
       }

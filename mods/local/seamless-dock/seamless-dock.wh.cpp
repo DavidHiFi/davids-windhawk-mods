@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock at the bottom of the screen for your pinned and open apps
-// @version         0.1.0
+// @version         0.2.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,6 +26,14 @@ you have open. Your taskbar stays where it is, so you get a clean bar on top
 and a dock below, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
+
+## What's new in 0.2.0
+
+- The middle of a top taskbar now shows the app and title of the window you
+  are using, in a pill that matches the other pills on the bar. Turn it off
+  with "Window title on the top bar".
+- The dock now redraws only when something it shows changes, so it stays
+  quiet while you work.
 
 ## What's new in 0.1.0
 
@@ -51,6 +59,8 @@ and a dock below, like a Linux desktop.
   covers anything. Turn this off to let the dock float over windows instead.
 - **Out of the way for games.** The dock hides while a game or video fills the
   screen.
+- **Window title on the top bar.** With your taskbar at the top of the screen,
+  its middle shows the app and title of the window you are using.
 - **Frosted glass.** Catppuccin Mocha glass with a grey edge that turns blue to
   mauve when you point at it. Every color and size is in the settings.
 
@@ -95,6 +105,9 @@ and a dock below, like a Linux desktop.
 - hideOnFullscreen: true
   $name: Hide for full screen apps
   $description: When on, the dock hides while a game or video fills the screen.
+- showTitle: true
+  $name: Window title on the top bar
+  $description: When your taskbar sits at the top of the screen, its middle shows the app and title of the window you are using.
 - surfaceOpacity: 60
   $name: Glass tint
   $description: 'How much Mocha color sits over the blur, in percent. 30 to 100 (Suggested: 60).'
@@ -151,7 +164,7 @@ namespace dock {
 // ---------------------------------------------------------------------------
 struct Settings {
     int iconSize = 36, spacing = 6, bottomGap = 8, hoverDelay = 350, opacity = 60, edgeWidth = 2, fadeMs = 150;
-    bool reserve = true, showOpen = true, previews = true, hideFull = true;
+    bool reserve = true, showOpen = true, previews = true, hideFull = true, showTitle = true;
     UINT edge = 0x585B70, from = 0x89B4FA, to = 0xCBA6F7;
     std::wstring font = L"FiraCode Nerd Font";
 } S;
@@ -186,6 +199,7 @@ void LoadSettings() {
     S.previews = Wh_GetIntSetting(L"previews") != 0;
     S.hoverDelay = Clamp(Wh_GetIntSetting(L"hoverDelay"), 0, 2000);
     S.hideFull = Wh_GetIntSetting(L"hideOnFullscreen") != 0;
+    S.showTitle = Wh_GetIntSetting(L"showTitle") != 0;
     S.opacity = Clamp(Wh_GetIntSetting(L"surfaceOpacity"), 30, 100);
     S.edge = ColorSetting(L"edgeColor", 0x585B70);
     S.from = ColorSetting(L"hoverColorFrom", 0x89B4FA);
@@ -824,13 +838,30 @@ bool PinMatches(const Pin& p, const WinMeta& m, const std::wstring& exeLower) {
 }
 
 void Relayout(bool forceBar = false);
+void UpdateTitle(bool force = false);
 
 BOOL CALLBACK CollectWin(HWND h, LPARAM lp) {
     if (Eligible(h)) ((std::vector<HWND>*)lp)->push_back(h);
     return TRUE;
 }
 
-void Rebuild() {
+// What the dock draws for its items. Equal means nothing on screen would change.
+std::wstring ItemsSig(const std::vector<Item>& v) {
+    std::wstring sig;
+    for (auto& it : v) {
+        sig += it.key + L'\x1f' + it.name + L'\x1f' + it.iconSrc + L'\x1f' + it.iconAlt;
+        sig += it.active ? L'A' : L'a';
+        sig += it.flash ? L'F' : L'f';
+        for (HWND h : it.wins) sig += std::to_wstring((UINT_PTR)h) + L',';
+        sig += L'\x1e';
+    }
+    return sig;
+}
+
+// Returns false when the items came out the same, so nothing is laid out or
+// repainted. Windows show and hide all the time (tooltips, pop-ups) and most of
+// those events change nothing the dock shows.
+bool Rebuild(bool force = false) {
     std::vector<HWND> zorder;
     EnumWindows(CollectWin, (LPARAM)&zorder);
 
@@ -928,8 +959,15 @@ void Rebuild() {
     for (auto it = g_flash.begin(); it != g_flash.end();)
         it = IsWindow(*it) ? std::next(it) : g_flash.erase(it);
 
+    if (!force && items.size() == g_items.size() && ItemsSig(items) == ItemsSig(g_items)) {
+        for (size_t i = 0; i < items.size(); i++) g_items[i].top = items[i].top;
+        UpdateTitle();
+        return false;
+    }
     g_items = std::move(items);
     Relayout();
+    UpdateTitle();
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -1131,7 +1169,7 @@ void PinItem(const std::wstring& key) {
         ResolvePin(p);
         g_pins.push_back(p);
         SavePins();
-        Rebuild();
+        Rebuild(true);
         return;
     }
 }
@@ -1141,7 +1179,7 @@ void UnpinItem(const std::wstring& key) {
         if (it.key != key || it.pin < 0) continue;
         g_pins.erase(g_pins.begin() + it.pin);
         SavePins();
-        Rebuild();
+        Rebuild(true);
         return;
     }
 }
@@ -1725,6 +1763,240 @@ void CheckFullscreen() {
         ShowWindow(g_dock, SW_SHOWNOACTIVATE);
         SetWindowPos(g_dock, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
+    UpdateTitle();
+}
+
+// ---------------------------------------------------------------------------
+// Top bar title: the app and title of the window in use, in the middle of a
+// taskbar along the top of the screen (its app buttons moved to the dock). It
+// copies the bar's own pills: clear inside with a grey edge, so the bar's glass
+// shows through and nothing doubles it.
+// ---------------------------------------------------------------------------
+HWND g_title = nullptr, g_titleWin = nullptr;
+ComPtr<ID2D1DCRenderTarget> g_titleRt;
+std::wstring g_titleKey, g_titleApp, g_titleSrc, g_titleAlt;
+
+// Size and corner of the bar's own pills, and the bar's inner top margin that
+// pushes its content down from the window's top edge.
+constexpr float kTitleH = 34, kTitleR = 10, kTitleMaxW = 720, kBarInnerTop = 6;
+
+bool TopBarRect(RECT& r) {
+    HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+    if (!tray || !IsWindowVisible(tray) || !GetWindowRect(tray, &r)) return false;
+    int monW = g_monRect.right - g_monRect.left, monH = g_monRect.bottom - g_monRect.top;
+    return r.top <= g_monRect.top + 2 && r.bottom > g_monRect.top + 20 && r.bottom - r.top < monH / 4 &&
+           r.right - r.left > monW / 2;
+}
+
+bool IsDesktop(HWND h) {
+    wchar_t cls[64];
+    GetClassNameW(h, cls, ARRAYSIZE(cls));
+    return !wcscmp(cls, L"Progman") || !wcscmp(cls, L"WorkerW");
+}
+
+// The window to name. A click on the bar, a tray flyout or a dialog keeps the
+// window it belongs to; the desktop clears it.
+HWND TitleWindow() {
+    HWND fg = GetForegroundWindow();
+    if (fg && IsDesktop(fg)) return nullptr;
+    if (fg && Eligible(fg)) return fg;
+    HWND root = fg ? GetAncestor(fg, GA_ROOTOWNER) : nullptr;
+    if (root && root != fg && Eligible(root)) return root;
+    if (g_titleWin && IsWindow(g_titleWin) && Eligible(g_titleWin)) return g_titleWin;
+    return nullptr;
+}
+
+void TitleApp(HWND h) {
+    g_titleApp.clear();
+    g_titleSrc.clear();
+    g_titleAlt.clear();
+    for (auto& it : g_items)
+        if (std::find(it.wins.begin(), it.wins.end(), h) != it.wins.end()) {
+            g_titleApp = it.name;
+            g_titleSrc = it.iconSrc;
+            g_titleAlt = it.iconAlt;
+            return;
+        }
+    auto m = g_winMeta.find(h);
+    if (m == g_winMeta.end() || m->second.exe.empty()) return;
+    g_titleAlt = m->second.exe;
+    g_titleApp = FileDescription(m->second.exe);
+    if (g_titleApp.empty()) g_titleApp = StripExt(FileName(m->second.exe));
+}
+
+// "Report.docx - Word" names the app twice; drop the tail the app name covers.
+std::wstring TitleText(HWND h, const std::wstring& app) {
+    std::wstring t = WindowTitle(h);
+    if (app.empty()) return t;
+    if (_wcsicmp(t.c_str(), app.c_str()) == 0) return L"";
+    for (PCWSTR sep : {L" - ", L" \x2014 ", L" \x2013 ", L" | "}) {
+        std::wstring tail = sep + app;
+        if (t.size() > tail.size() && _wcsicmp(t.c_str() + t.size() - tail.size(), tail.c_str()) == 0) {
+            t.resize(t.size() - tail.size());
+            break;
+        }
+    }
+    return t;
+}
+
+void HideTitle() {
+    if (g_title && IsWindowVisible(g_title)) ShowWindow(g_title, SW_HIDE);
+    g_titleKey.clear();
+}
+
+// Clicking the bar lifts it over us; come back on top of it.
+void RaiseTitle() {
+    HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+    for (HWND w = GetWindow(g_title, GW_HWNDPREV); w; w = GetWindow(w, GW_HWNDPREV))
+        if (w == tray) {
+            SetWindowPos(g_title, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            break;
+        }
+}
+
+bool PaintTitle(const std::wstring& app, const std::wstring& title, Icon* ic, const RECT& bar) {
+    if (!EnsureFactories()) return false;
+    float sc = MonitorDpi(g_mon) / 96.f;
+    IDWriteTextFormat* fApp = Format(13 * sc, DWRITE_FONT_WEIGHT_SEMI_BOLD);
+    IDWriteTextFormat* fTitle = Format(13 * sc, DWRITE_FONT_WEIGHT_NORMAL);
+    if (!fApp || !fTitle) return false;
+    float pad = std::round(12 * sc), iconSz = std::round(18 * sc), gap = std::round(8 * sc);
+    float sepGap = std::round(12 * sc);
+    int Hi = (int)std::lround(kTitleH * sc);
+    float appW = std::ceil(TextWidth(app, fApp));
+    float titleW = title.empty() ? 0 : std::ceil(TextWidth(title, fTitle));
+    float fixed = 2 * pad + (ic ? iconSz + gap : 0) + (title.empty() ? 0 : sepGap);
+    float room = std::round(kTitleMaxW * sc) - fixed;
+    if (appW + titleW > room) {
+        float appCap = title.empty() ? room : std::max(room * 0.4f, room - titleW);
+        appW = std::min(appW, appCap);
+        titleW = std::max(0.f, room - appW);
+    }
+    int W = (int)std::ceil(fixed + appW + titleW);
+    int top = (int)std::lround(kBarInnerTop * sc);
+    int x0 = (bar.left + bar.right - W) / 2;
+    int y0 = bar.top + top + (bar.bottom - bar.top - top - Hi) / 2;
+
+    HDC screen = GetDC(nullptr);
+    HDC mem = CreateCompatibleDC(screen);
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = W;
+    bi.bmiHeader.biHeight = -Hi;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    void* bits = nullptr;
+    HBITMAP dib = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    HGDIOBJ old = dib ? SelectObject(mem, dib) : nullptr;
+    bool ok = false;
+    if (dib) {
+        if (!g_titleRt) {
+            auto props = D2D1::RenderTargetProperties(
+                D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96, 96);
+            if (SUCCEEDED(g_d2d->CreateDCRenderTarget(&props, g_titleRt.GetAddressOf())))
+                g_titleRt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+        }
+        RECT rc{0, 0, W, Hi};
+        if (g_titleRt && SUCCEEDED(g_titleRt->BindDC(mem, &rc))) {
+            ID2D1DCRenderTarget* rt = g_titleRt.Get();
+            rt->BeginDraw();
+            rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+            float w = std::max(1.f, std::round(2 * sc));
+            D2D1_RECT_F r{w / 2, w / 2, W - w / 2, Hi - w / 2};
+            float rr = std::max(0.f, kTitleR * sc - w / 2);
+            ComPtr<ID2D1SolidColorBrush> edge, text, sub;
+            rt->CreateSolidColorBrush(Col(kSurface1, 0.9f), edge.GetAddressOf());
+            rt->CreateSolidColorBrush(Col(kText), text.GetAddressOf());
+            rt->CreateSolidColorBrush(Col(kSubtext), sub.GetAddressOf());
+            rt->DrawRoundedRectangle(D2D1::RoundedRect(r, rr, rr), edge.Get(), w);
+            float x = pad;
+            if (ic && ic->w > 0 && ic->h > 0) {
+                ComPtr<ID2D1Bitmap> bmp;
+                rt->CreateBitmap(D2D1::SizeU(ic->w, ic->h), ic->px.data(), ic->w * 4,
+                                 D2D1::BitmapProperties(
+                                     D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+                                     96, 96),
+                                 bmp.GetAddressOf());
+                float iy = std::round((Hi - iconSz) / 2);
+                if (bmp)
+                    rt->DrawBitmap(bmp.Get(), D2D1::RectF(x, iy, x + iconSz, iy + iconSz), 1.f,
+                                   D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, ic->src);
+                x += iconSz + gap;
+            } else if (ic) {
+                x += iconSz + gap;
+            }
+            rt->DrawText(app.c_str(), (UINT32)app.size(), fApp, D2D1::RectF(x, 0, x + appW, (float)Hi), text.Get(),
+                         D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            x += appW + sepGap;
+            if (!title.empty() && titleW > 0)
+                rt->DrawText(title.c_str(), (UINT32)title.size(), fTitle, D2D1::RectF(x, 0, x + titleW, (float)Hi),
+                             sub.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            ok = SUCCEEDED(rt->EndDraw());
+            if (!ok) g_titleRt.Reset();
+        }
+    }
+    if (ok) {
+        POINT dst{x0, y0}, src{0, 0};
+        SIZE sz{W, Hi};
+        BLENDFUNCTION bf{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        ok = UpdateLayeredWindow(g_title, screen, &dst, &sz, mem, &src, 0, &bf, ULW_ALPHA) != FALSE;
+    }
+    if (old) SelectObject(mem, old);
+    if (dib) DeleteObject(dib);
+    DeleteDC(mem);
+    ReleaseDC(nullptr, screen);
+    return ok;
+}
+
+void UpdateTitle(bool force) {
+    if (!g_title) return;
+    RECT bar;
+    if (!S.showTitle || g_fullscreen || !TopBarRect(bar)) {
+        HideTitle();
+        return;
+    }
+    HWND h = TitleWindow();
+    if (!h) {
+        g_titleWin = nullptr;
+        HideTitle();
+        return;
+    }
+    if (h != g_titleWin || force || g_titleApp.empty()) {
+        g_titleWin = h;
+        TitleApp(h);
+    }
+    std::wstring title = TitleText(h, g_titleApp);
+    std::wstring app = g_titleApp;
+    if (app.empty()) app.swap(title);
+    if (app.empty()) {
+        HideTitle();
+        return;
+    }
+    UINT dpi = MonitorDpi(g_mon);
+    std::wstring key = app + L"\n" + title + L"\n" + std::to_wstring(bar.left) + L"," + std::to_wstring(bar.top) +
+                       L"," + std::to_wstring(bar.right) + L"," + std::to_wstring(bar.bottom) + L"," +
+                       std::to_wstring(dpi) + L"," + std::to_wstring((UINT_PTR)h);
+    bool shown = IsWindowVisible(g_title) != FALSE;
+    if (!force && shown && key == g_titleKey) {
+        RaiseTitle();
+        return;
+    }
+    Icon* ic = GetIcon(g_titleSrc, g_titleAlt, h, (int)std::lround(32 * dpi / 96.f));
+    if (!PaintTitle(app, title, ic, bar)) return;
+    g_titleKey = key;
+    if (!shown) {
+        ShowWindow(g_title, SW_SHOWNOACTIVATE);
+        SetWindowPos(g_title, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    } else {
+        RaiseTitle();
+    }
+}
+
+LRESULT CALLBACK TitleProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_NCHITTEST) return HTTRANSPARENT;
+    if (msg == WM_MOUSEACTIVATE) return MA_NOACTIVATE;
+    return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
 // ---------------------------------------------------------------------------
@@ -1876,8 +2148,7 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 case kTimerRebuild:
                     KillTimer(hwnd, kTimerRebuild);
                     g_rebuildPending = false;
-                    Rebuild();
-                    StartAnim();
+                    if (Rebuild()) StartAnim();
                     break;
                 case kTimerAnim:
                     if (!StepAnim()) KillTimer(hwnd, kTimerAnim);
@@ -1913,6 +2184,7 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 }
                 case kTimerFull:
                     CheckFullscreen();
+                    UpdateTitle();
                     break;
             }
             return 0;
@@ -1935,6 +2207,7 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             g_icons.clear();
             g_formats.clear();
             Relayout();
+            UpdateTitle(true);
             return 0;
         case WM_SETTINGCHANGE:
             if (lp && !wcscmp((PCWSTR)lp, L"ImmersiveColorSet")) InvalidateRect(hwnd, nullptr, FALSE);
@@ -1947,8 +2220,10 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             g_dockSurf.Discard();
             g_popSurf.Discard();
             g_menuSurf.Discard();
+            g_titleRt.Reset();
             if (!S.reserve) AppBarRemove();
-            Rebuild();
+            Rebuild(true);
+            UpdateTitle(true);
             return 0;
         }
         case WM_CLOSE:
@@ -1962,7 +2237,8 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             UnregisterThumbs();
             if (g_pop) DestroyWindow(g_pop);
             if (g_menu) DestroyWindow(g_menu);
-            g_pop = g_menu = nullptr;
+            if (g_title) DestroyWindow(g_title);
+            g_pop = g_menu = g_title = nullptr;
             PostQuitMessage(0);
             return 0;
     }
@@ -1988,6 +2264,9 @@ DWORD WINAPI DockThread(void*) {
     wc.lpfnWndProc = MenuProc;
     wc.lpszClassName = L"SeamlessDockMenu";
     RegisterClassExW(&wc);
+    wc.lpfnWndProc = TitleProc;
+    wc.lpszClassName = L"SeamlessDockTitle";
+    RegisterClassExW(&wc);
 
     LoadSettings();
     LoadPins();
@@ -1999,6 +2278,10 @@ DWORD WINAPI DockThread(void*) {
                             L"Seamless Dock preview", WS_POPUP, 0, 0, 10, 10, nullptr, nullptr, inst, nullptr);
     g_menu = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, L"SeamlessDockMenu", L"Seamless Dock menu", WS_POPUP,
                              0, 0, 10, 10, nullptr, nullptr, inst, nullptr);
+    // Click-through and never focused: clicks land on the bar under it.
+    g_title = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TRANSPARENT,
+                              L"SeamlessDockTitle", L"Seamless Dock title", WS_POPUP, 0, 0, 10, 10, nullptr, nullptr,
+                              inst, nullptr);
     if (!g_dock || !g_pop || !g_menu) {
         Wh_Log(L"CreateWindow failed: %u", GetLastError());
         SetEvent(g_ready);
@@ -2026,7 +2309,7 @@ DWORD WINAPI DockThread(void*) {
         if (h) g_hooks.push_back(h);
     }
 
-    Rebuild();
+    Rebuild(true);
     CheckFullscreen();
     SetTimer(g_dock, kTimerFull, 1000, nullptr);
     SetEvent(g_ready);
@@ -2040,6 +2323,7 @@ DWORD WINAPI DockThread(void*) {
     g_dockSurf.Discard();
     g_popSurf.Discard();
     g_menuSurf.Discard();
+    g_titleRt.Reset();
     g_icons.clear();
     g_formats.clear();
     g_d2d.Reset();
