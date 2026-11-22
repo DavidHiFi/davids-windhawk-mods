@@ -5023,6 +5023,7 @@
     "media.Visualizer.background.padding": "24",
     "media.Visualizer.diagnostics.enabled": 0,
     "media.Visualizer.performance.followTaskbarAutoHide": 1,
+    "media.Visualizer.performance.frameTiming": "refresh",
     "media.Visualizer.performance.hideWhenFullscreen": 1,
     "media.Visualizer.performance.pauseWhenObscured": 1,
     "media.Visualizer.performance.pauseWhenSilentSeconds": 10,

@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.34
+// @version         0.4.35
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -31,6 +31,12 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | Tray drawer | Folds tray icons into a drawer that opens from the chevron. | DavidHiFi, MEI | GPL-3.0 |
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
+
+## What's new in 0.4.35
+
+The music visualizer now draws each frame in step with your screen's refresh, so the
+bars move more evenly. If anything looks off, set "Frame timing" in the performance
+settings back to "Fixed timer" for the old way.
 
 ## What's new in 0.4.34
 The Bluetooth and Safely Remove Hardware icons wear the same blue to mauve badge
@@ -1580,6 +1586,13 @@ The whole mod is published under GPL-3.0.
       - targetFps: 30
         $name: Frame rate
         $description: 10 to 120 frames per second. Default is 30.
+      - frameTiming: refresh
+        $name: Frame timing
+        $description: Follow the screen refresh draws each frame right after the screen's own refresh
+          tick, which keeps motion even. Fixed timer is the older method, paced by a plain clock.
+        $options:
+        - refresh: Follow the screen refresh (smoother)
+        - timer: Fixed timer (old)
       - pauseWhenSilentSeconds: 10
         $name: Idle delay
         $description: After this many silent seconds, draw at 5 FPS. The strip remains visible and resumes
@@ -3213,6 +3226,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Number, L"media.Visualizer.background.borderSize", L"Panel border width", L"0 to 8 logical pixels. 0 removes the border.", L"0", {}, 0, 8, 3, L"Background"},
 {K::Color, L"media.Visualizer.background.borderColor", L"Panel border color", L"Color of the panel border.", L"#FF45475A", {}, 0, 100, 3, L"Background"},
 {K::Number, L"media.Visualizer.performance.targetFps", L"Frame rate", L"10 to 120 frames per second. Default is 30.", L"30", {}, 10, 120, 3, L"Performance"},
+{K::Choice, L"media.Visualizer.performance.frameTiming", L"Frame timing", L"Follow the screen refresh draws each frame right after the screen's own refresh tick, which keeps motion even. Fixed timer is the older method, paced by a plain clock.", L"refresh", {{L"refresh", L"Follow the screen refresh (smoother)"}, {L"timer", L"Fixed timer (old)"}}, 0, 100, 3, L"Performance"},
 {K::Number, L"media.Visualizer.performance.pauseWhenSilentSeconds", L"Idle delay", L"After this many silent seconds, draw at 5 FPS. The strip remains visible and resumes its normal rate when audio returns. 0 disables idle throttling.", L"10", {}, 0, 300, 3, L"Performance"},
 {K::Check, L"media.Visualizer.performance.hideWhenFullscreen", L"Hide when fullscreen", L"Hide the bars and media buttons when a fullscreen or borderless window covers the taskbar monitor, for example a game. The strip returns when you leave the game. The taskbar itself stays clickable at all times.", L"1", {}, 0, 100, 3, L"Performance"},
 {K::Check, L"media.Visualizer.performance.followTaskbarAutoHide", L"Follow taskbar auto-hide", L"Slide out of view with the taskbar whenever the Windows taskbar auto-hides, and come back when it is shown again, like any other taskbar widget. Keyed to the shell's live state. While the taskbar behaves as a permanent bar that holds its screen space (for example a wedged auto-hide), the strip stays visible with it.", L"1", {}, 0, 100, 3, L"Performance"},
@@ -26447,6 +26461,8 @@ PCWSTR VizStringSetting(PCWSTR name) { return Wh_GetStringSetting(L"Visualizer.%
 std::mutex g_settingsMutex;
 std::atomic<bool> g_debugLogging{false};
 std::atomic<int> g_frameRate{30}, g_idleDelay{10};
+// Frame timing: 1 = wake on the screen's own refresh (compositor clock), 0 = fixed timer.
+std::atomic<int> g_frameTiming{1};
 int g_taskbarOffset = 500, g_taskbarVerticalOffset = 0, g_mediaGap = 18;
 struct AudioOptions { bool hardwareLoopbacks=true, defaultOnly=false; std::wstring filter, endpointId; };
 AudioOptions g_audioOptions;
@@ -30657,6 +30673,64 @@ bool RectsApproxEqual(const D2D1_RECT_F& a, const D2D1_RECT_F& b) {
            eq(a.right, b.right) && eq(a.bottom, b.bottom);
 }
 
+// Frame timing counter. Only runs while "Diagnostic logging" is on. Every 10 s of drawing it
+// writes one line: frames, mean and worst gap, spread, and how many gaps ran late.
+// "ticks" are the render ticks reaching the UI thread, "presents" are real screen updates.
+struct FrameStats {
+    LONGLONG last = 0, windowStart = 0;
+    ULONGLONG n = 0, lateTarget = 0, lateRefresh = 0;
+    double sum = 0, sumSq = 0, worst = 0;
+};
+std::atomic<double> g_refreshMs{0.0};
+FrameStats g_presentStats, g_tickStats;
+
+void FrameStatsRecord(FrameStats& s, PCWSTR tag) {
+    if (!g_debugLogging.load(std::memory_order_relaxed)) {
+        s = FrameStats{};
+        return;
+    }
+    static LONGLONG freq = 0;
+    if (!freq) {
+        LARGE_INTEGER f;
+        QueryPerformanceFrequency(&f);
+        freq = f.QuadPart;
+    }
+    LARGE_INTEGER q;
+    QueryPerformanceCounter(&q);
+    if (g_slowMode) {  // idle drawing is not what is being measured
+        s.last = 0;
+        return;
+    }
+    if (s.last != 0) {
+        double gap = (double)(q.QuadPart - s.last) * 1000.0 / (double)freq;
+        if (gap < 1000.0) {  // longer gaps are pauses (silence, fullscreen), not pacing
+            double target = 1000.0 / (double)std::max(1, g_frameRate.load());
+            double refresh = g_refreshMs.load(std::memory_order_relaxed);
+            if (refresh <= 0.0) refresh = 1000.0 / 60.0;
+            if (s.windowStart == 0) s.windowStart = q.QuadPart;
+            ++s.n;
+            s.sum += gap;
+            s.sumSq += gap * gap;
+            if (gap > s.worst) s.worst = gap;
+            if (gap > 1.5 * target) ++s.lateTarget;
+            if (gap > target + 1.5 * refresh) ++s.lateRefresh;
+        }
+    }
+    s.last = q.QuadPart;
+    if (s.windowStart != 0 && (q.QuadPart - s.windowStart) >= 10 * freq && s.n > 0) {
+        double mean = s.sum / (double)s.n;
+        double sd = std::sqrt(std::max(0.0, s.sumSq / (double)s.n - mean * mean));
+        VizDebugLog(L"[FrameTiming] %s mode=%s fps=%d refresh=%.2fms frames=%llu mean=%.2fms worst=%.2fms "
+                    L"spread=%.2fms late15xTarget=%llu lateOverRefresh=%llu",
+                    tag, g_frameTiming.load() == 1 ? L"refresh" : L"timer", g_frameRate.load(),
+                    g_refreshMs.load(), s.n, mean, s.worst, sd, s.lateTarget, s.lateRefresh);
+        LONGLONG keep = s.last;
+        s = FrameStats{};
+        s.last = keep;
+    }
+}
+inline void FrameStatsPresent() { FrameStatsRecord(g_presentStats, L"presents"); }
+
 void RenderVisualizer() {
     if (g_unloading || !g_dc || !g_swapChain) return;
     // The bar brushes can be gone while the device context survives (a failed
@@ -30713,6 +30787,7 @@ void RenderVisualizer() {
         g_dc->Clear(D2D1::ColorF(0, 0, 0, 0));
         g_dc->EndDraw();
         g_swapChain->Present(0, 0);
+    FrameStatsPresent();
         g_autoHideBlanked = true;
         return;
     }
@@ -30950,6 +31025,7 @@ void RenderVisualizer() {
             if (useFadeLayer) g_dc->PopLayer();
             g_dc->EndDraw();
             g_swapChain->Present(0, 0);
+    FrameStatsPresent();
             return;
         }
 
@@ -31521,6 +31597,7 @@ void RenderVisualizer() {
     // Measured across 219 five-second windows: time in Present drops by a third
     // and windows where the thread parks for >8% of wall time fall from 18% to 4%.
     g_swapChain->Present(0, 0);
+    FrameStatsPresent();
 }
 
 void RenderThreadProc() {
@@ -31562,6 +31639,23 @@ void RenderThreadProc() {
         Sleep((DWORD)std::ceil(ms));
     };
 
+    // Screen-refresh pacing. DCompositionWaitForCompositorClock (Windows 11, dcomp.dll) returns
+    // each time the compositor starts a frame, so the render tick lands once per screen refresh
+    // and the Present that follows is picked up by the very next frame. It is the same clock the
+    // swap chain is composed on, needs no change to the swap chain, and costs one wait per
+    // refresh instead of a timer. Loaded by name: when it is missing the timer path below runs.
+    using WaitClockFn = DWORD(WINAPI*)(UINT, const HANDLE*, DWORD);
+    WaitClockFn waitClock = nullptr;
+    HMODULE hDcompClock = LoadLibraryExW(L"dcomp.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (hDcompClock) {
+        waitClock = reinterpret_cast<WaitClockFn>(GetProcAddress(hDcompClock, "DCompositionWaitForCompositorClock"));
+    }
+    LONGLONG nextDueQpc = 0;
+    bool wasFollowing = false;
+    int clockTicks = 1 << 20;
+    int clockFastReturns = 0;
+    double clockRefreshMs = 1000.0 / 60.0;
+
     while (g_renderThreadRunning.load(std::memory_order_relaxed)) {
         HWND overlayWnd = g_overlayWnd.load(std::memory_order_relaxed);
         bool paused = g_fullscreenPaused.load(std::memory_order_relaxed);
@@ -31585,6 +31679,52 @@ void RenderThreadProc() {
             g_slowMode = false;
         }
 
+        // Follow the screen refresh while drawing at the normal rate. Idle (slow) drawing, a
+        // missing clock or a clock that misbehaves all use the timer path below.
+        bool followed = false;
+        if (waitClock && !g_slowMode && g_frameTiming.load(std::memory_order_relaxed) == 1) {
+            LARGE_INTEGER w0, q;
+            QueryPerformanceCounter(&w0);
+            DWORD waited = waitClock(0, nullptr, 100);
+            QueryPerformanceCounter(&q);
+            if (waited != WAIT_FAILED && waited != WAIT_TIMEOUT) {
+                double waitMs = (double)(q.QuadPart - w0.QuadPart) * 1000.0 / (double)qpcFreq.QuadPart;
+                // A clock that keeps returning at once would spin the thread: give it up.
+                if (waitMs < 0.3) {
+                    if (++clockFastReturns >= 30) {
+                        Wh_Log(L"[Viz] Compositor clock returns at once, using the timer");
+                        waitClock = nullptr;
+                        continue;
+                    }
+                } else {
+                    clockFastReturns = 0;
+                }
+                if (++clockTicks >= 240) {
+                    clockTicks = 0;
+                    DWM_TIMING_INFO info = {};
+                    info.cbSize = sizeof(info);
+                    if (SUCCEEDED(DwmGetCompositionTimingInfo(nullptr, &info)) && info.qpcRefreshPeriod > 0) {
+                        clockRefreshMs = (double)info.qpcRefreshPeriod * 1000.0 / (double)qpcFreq.QuadPart;
+                        g_refreshMs.store(clockRefreshMs, std::memory_order_relaxed);
+                    }
+                }
+                LONGLONG intervalQpc = (LONGLONG)(intervalMs * (double)qpcFreq.QuadPart / 1000.0);
+                LONGLONG halfRefreshQpc = (LONGLONG)(clockRefreshMs * 0.5 * (double)qpcFreq.QuadPart / 1000.0);
+                // Frames are due on a fixed grid of the target interval and drawn on the first
+                // refresh tick at or after each due time, so the average rate stays on target.
+                if (!wasFollowing || nextDueQpc == 0 || q.QuadPart - nextDueQpc > 2 * intervalQpc) {
+                    nextDueQpc = q.QuadPart;
+                }
+                if (q.QuadPart + halfRefreshQpc < nextDueQpc) {
+                    wasFollowing = true;
+                    continue;
+                }
+                nextDueQpc += intervalQpc;
+                followed = true;
+            }
+        }
+        wasFollowing = followed;
+
         // GetTickCount64 is still fine for the stuck-tick watchdog below -- that
         // compares against 1000ms, far above the tick resolution.
         ULONGLONG now = GetTickCount64();
@@ -31593,7 +31733,7 @@ void RenderThreadProc() {
         double elapsedMs = (lastRenderQpc == 0)
             ? intervalMs
             : (double)(nowQpc.QuadPart - lastRenderQpc) * 1000.0 / (double)qpcFreq.QuadPart;
-        if (elapsedMs < intervalMs) {
+        if (!followed && elapsedMs < intervalMs) {
             preciseWait(intervalMs - elapsedMs);
             continue;
         }
@@ -31614,6 +31754,7 @@ void RenderThreadProc() {
     }
 
     if (hTimer) CloseHandle(hTimer);
+    if (hDcompClock) FreeLibrary(hDcompClock);
 }
 
 void StartRenderThread() {
@@ -31713,6 +31854,7 @@ LRESULT CALLBACK OverlayWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_APP_RENDER_TICK:
             g_renderTickPending.store(false, std::memory_order_relaxed);
             if (!g_unloading && !g_fullscreenPaused.load()) {
+                FrameStatsRecord(g_tickStats, L"ticks");
                 RenderVisualizer();
             }
             return 0;
@@ -32331,6 +32473,14 @@ void LoadSettings() {
     g_settings.targetFps=number(L"performance.targetFps",10,120);
     g_settings.pauseWhenSilentSeconds=number(L"performance.pauseWhenSilentSeconds",0,3600);
     g_frameRate.store(g_settings.targetFps); g_idleDelay.store(g_settings.pauseWhenSilentSeconds);
+    {
+        PCWSTR timing = VizStringSetting(L"performance.frameTiming");
+        int mode = 1;
+        if (timing && wcscmp(timing, L"timer") == 0) mode = 0;
+        else if (timing && wcscmp(timing, L"refresh") == 0) mode = 1;
+        Wh_FreeStringSetting(timing);
+        g_frameTiming.store(mode);
+    }
     g_debugLogging.store(VizIntSetting(L"diagnostics.enabled")!=0);
     Wh_Log(L"Settings offset=%d vertical=%d bars=%d width=%d gap=%d height=%d media=%d fps=%d hideFullscreen=%d followAutoHide=%d obscured=%d",
         g_taskbarOffset,g_taskbarVerticalOffset,g_settings.barCount,g_settings.barWidth,g_settings.barGap,g_settings.barMaxSize,g_settings.mediaControlsEnabled,g_settings.targetFps,(int)g_settings.pauseOnFullscreen,(int)g_settings.followTaskbarAutoHide,(int)g_settings.pauseWhenObscured);
