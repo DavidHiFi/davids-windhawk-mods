@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.7
+// @version         0.6.8
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -57,6 +57,13 @@ its own settings window: open it from the tray icon or with Ctrl+I in Halo.
 | Esc | Back, then close |
 
 Every key in that list can be changed on the Keys page of the settings.
+
+## What's new in 0.6.8
+
+- Seamless Launchpad and Halo can share a keyboard. When Launchpad opens with
+  one of Halo's keys, Launchpad gets it and Halo leaves it alone. Halo takes the
+  key back as soon as Launchpad stops using it.
+- The General and Keys pages warn you when a key there is also Launchpad's.
 
 ## What's new in 0.6.7
 
@@ -397,6 +404,78 @@ UINT CurrentMods() {
     if (GetAsyncKeyState(VK_MENU) < 0) m |= kAlt;
     if (GetAsyncKeyState(VK_LWIN) < 0 || GetAsyncKeyState(VK_RWIN) < 0) m |= kWin;
     return m;
+}
+
+// Both Windows keys count as one, and "Win + LWin" is the Windows key on its own.
+Hotkey NormalKey(Hotkey hk) {
+    if (!hk.vk && (hk.mods & kWin)) hk.vk = VK_LWIN;
+    if (hk.vk == VK_RWIN) hk.vk = VK_LWIN;
+    if (hk.vk == VK_LWIN) hk.mods &= ~kWin;
+    return hk;
+}
+
+bool SameKey(Hotkey a, Hotkey b) {
+    a = NormalKey(a);
+    b = NormalKey(b);
+    return a.vk && a.vk == b.vk && a.mods == b.mods;
+}
+
+// The key Seamless Launchpad opens with, read from its settings by its own rules: none while
+// it is off or set to Off, or when its own keys are empty or keys it won't use. running: only
+// while its window is up in Explorer, so Halo has the key back when Launchpad is gone.
+Hotkey LaunchpadKey(bool running) {
+    HKEY key;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@seamless-launchpad", 0,
+                      KEY_READ | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
+        return {};
+    DWORD disabled = 0, size = sizeof(disabled);
+    bool off = RegQueryValueExW(key, L"Disabled", nullptr, nullptr, (BYTE*)&disabled, &size) == ERROR_SUCCESS && disabled;
+    auto text = [&](const wchar_t* name) {
+        wchar_t buf[256] = L"";
+        DWORD bytes = sizeof(buf);
+        if (RegGetValueW(key, L"Settings", name, RRF_RT_REG_SZ, nullptr, buf, &bytes) != ERROR_SUCCESS)
+            return std::wstring();
+        return std::wstring(buf);
+    };
+    std::wstring mode = text(L"shortcut"), custom = text(L"customShortcut");
+    RegCloseKey(key);
+    if (off || (running && !FindWindowW(L"WindhawkSeamlessLaunchpad", nullptr))) return {};
+    if (mode == L"win") return {0, VK_LWIN};
+    if (mode == L"none") return {};
+    if (mode != L"custom") return {kShift, VK_LWIN};
+    Hotkey hk;
+    size_t pos = 0;
+    while (pos <= custom.size()) {
+        size_t plus = custom.find(L'+', pos);
+        std::wstring tok = Trim(custom.substr(pos, plus == std::wstring::npos ? std::wstring::npos : plus - pos));
+        if (!tok.empty()) {
+            if (EqualsNoCase(tok, L"Ctrl") || EqualsNoCase(tok, L"Control")) hk.mods |= kCtrl;
+            else if (EqualsNoCase(tok, L"Shift")) hk.mods |= kShift;
+            else if (EqualsNoCase(tok, L"Alt")) hk.mods |= kAlt;
+            else if (EqualsNoCase(tok, L"Win") || EqualsNoCase(tok, L"Windows")) hk.mods |= kWin;
+            else {
+                UINT vk = KeyNameToVk(tok);
+                if (!vk && tok.size() > 2 && _wcsnicmp(tok.c_str(), L"0x", 2) == 0)
+                    vk = wcstoul(tok.c_str() + 2, nullptr, 16) & 0xFF;
+                if (!vk || hk.vk) return {};  // Launchpad opens on nothing it can't read.
+                hk.vk = vk;
+            }
+        }
+        if (plus == std::wstring::npos) break;
+        pos = plus + 1;
+    }
+    hk = NormalKey(hk);
+    UINT v = hk.vk;
+    if (v == VK_LWIN) return hk.mods == 0 || hk.mods == kShift ? hk : Hotkey{};
+    bool modifier = v == VK_SHIFT || v == VK_LSHIFT || v == VK_RSHIFT || v == VK_CONTROL || v == VK_LCONTROL ||
+                    v == VK_RCONTROL || v == VK_MENU || v == VK_LMENU || v == VK_RMENU;
+    // Keys that type: Launchpad wants Ctrl, Alt or the Windows key with them.
+    bool typing = (v >= 'A' && v <= 'Z') || (v >= '0' && v <= '9') || (v >= VK_NUMPAD0 && v <= VK_DIVIDE) ||
+                  (v >= VK_OEM_1 && v <= VK_OEM_3) || (v >= VK_OEM_4 && v <= VK_OEM_8) || v == VK_OEM_102 ||
+                  (v >= VK_PRIOR && v <= VK_DOWN) || v == VK_SPACE || v == VK_RETURN || v == VK_TAB ||
+                  v == VK_BACK || v == VK_ESCAPE || v == VK_INSERT || v == VK_DELETE;
+    if (!v || modifier || (typing && !(hk.mods & (kCtrl | kAlt | kWin)))) return {};
+    return hk;
 }
 
 // ---------------------------------------------------------------- state
@@ -1826,9 +1905,15 @@ void UnregisterKeys() {
 void RegisterKeys() {
     UnregisterKeys();
     if (g.recording) return;  // back when the key box stops listening
-    auto add = [](const std::wstring& text, const std::wstring& keyword) {
+    // Seamless Launchpad's key is Launchpad's while it runs; it says when that changes.
+    const Hotkey launchpad = LaunchpadKey(true);
+    auto add = [&](const std::wstring& text, const std::wstring& keyword) {
         Hotkey hk = ParseHotkey(text);
         if (!hk.valid()) return;
+        if (SameKey(hk, launchpad)) {
+            Trace(L"hotkey %u+%u is Seamless Launchpad's, left to it", hk.mods, hk.vk);
+            return;
+        }
         for (auto& k : g.keys)
             if (k.hk.vk == hk.vk && k.hk.mods == hk.mods) return;
         g.keys.push_back({hk, keyword, false});
@@ -2828,6 +2913,8 @@ LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 UINT g_toggleMsg = 0;
 UINT g_taskbarCreated = 0;
+UINT g_launchpadKeysMsg = 0;
+constexpr UINT_PTR kTimerLaunchpadKeys = 0x4C50;
 
 // ---------------------------------------------------------------- tray icon
 
@@ -2975,6 +3062,19 @@ LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (g_taskbarCreated && msg == g_taskbarCreated) {
         g.trayAdded = false;
         UpdateTray(true);
+        RegisterKeys();  // a new Explorer has no Launchpad yet; it says when it has
+        return 0;
+    }
+    if (g_launchpadKeysMsg && msg == g_launchpadKeysMsg) {
+        // Seamless Launchpad changed its key, started or stopped. Look now, and again once its
+        // window has come or gone.
+        RegisterKeys();
+        SetTimer(hwnd, kTimerLaunchpadKeys, 1500, nullptr);
+        return 0;
+    }
+    if (msg == WM_TIMER && wp == kTimerLaunchpadKeys) {
+        KillTimer(hwnd, kTimerLaunchpadKeys);
+        RegisterKeys();
         return 0;
     }
     if (g_toggleMsg && msg == g_toggleMsg) {
@@ -3128,6 +3228,7 @@ DWORD WINAPI ThreadProc(void*) {
     SetCurrentProcessExplicitAppUserModelID(L"DavidHiFi.HaloLauncher");
     g_toggleMsg = RegisterWindowMessageW(L"HaloLauncher.Toggle");
     g_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
+    g_launchpadKeysMsg = RegisterWindowMessageW(L"SeamlessLaunchpad.KeysChanged");
     EnableDarkMenus();
 
     WNDCLASSW mc{};
@@ -3146,6 +3247,7 @@ DWORD WINAPI ThreadProc(void*) {
     // A hidden top-level window, so other mods can find Halo by class and ask it to open.
     g.msgWnd = CreateWindowExW(WS_EX_TOOLWINDOW, kMsgClass, L"Halo Launcher", WS_POPUP, 0, 0, 0, 0, nullptr,
                                nullptr, inst, nullptr);
+    if (g.msgWnd) ChangeWindowMessageFilterEx(g.msgWnd, g_launchpadKeysMsg, MSGFLT_ALLOW, nullptr);
     // One plain frameless window, built the way Flow Launcher's is: not a popup, so the
     // borders mod rings it exactly as it ringed Flow, and glass all over, so Windows
     // rounds and shadows it.
@@ -4643,6 +4745,48 @@ static std::wstring Set_KeyStatusText() {
     return std::wstring();
 }
 
+// The General and Keys pages warn about a key there (as the window shows it now, saved or not)
+// that Seamless Launchpad also opens with: while Launchpad runs, that key opens Launchpad.
+// Empty when nothing clashes.
+static std::wstring g_launchpadWarnShown;
+
+static std::wstring Halo_LaunchpadKeyText(::Hotkey hk) {
+    hk = ::NormalKey(hk);
+    std::wstring s;
+    if (hk.mods & ::kCtrl) s += L"Ctrl + ";
+    if (hk.mods & ::kAlt) s += L"Alt + ";
+    if (hk.mods & ::kShift) s += L"Shift + ";
+    if (hk.mods & ::kWin) s += L"Windows key + ";
+    return s + (hk.vk == VK_LWIN ? std::wstring(L"Windows key") : ::Hotkey_Format(0, hk.vk));
+}
+
+static std::wstring Halo_LaunchpadWarning(const SetWindow& w) {
+    static ::Hotkey launchpad;
+    static ULONGLONG readAt;
+    ULONGLONG now = GetTickCount64();
+    if (!readAt || now - readAt > 1000) {  // asked on every paint
+        launchpad = ::LaunchpadKey(false);
+        readAt = now;
+    }
+    if (!launchpad.valid()) return L"";
+    auto field = [&](const std::wstring& key) -> const SetField* {
+        for (const SetField& f : w.fields)
+            if (key == f.key) return &f;
+        return nullptr;
+    };
+    for (const SetField& f : w.fields) {
+        if (f.page != w.page || f.kind != SetField::Hotkey || wcsncmp(f.key, L"key:", 4) != 0) continue;
+        std::wstring k = f.key;  // "key:3:key" has the switch "key:3:on"; a new key has none
+        const SetField* on = field(k.substr(0, k.size() - 3) + L"on");
+        if (on && on->cur == L"0") continue;
+        if (!::SameKey(::ParseHotkey(f.cur), launchpad)) continue;
+        return L"Seamless Launchpad also uses " + Halo_LaunchpadKeyText(launchpad) +
+               L". While both have it, it opens Launchpad, not Halo. Pick another key here, or change "
+               L"the Shortcut in Launchpad's settings.";
+    }
+    return L"";
+}
+
 // Quotes one argument the way CommandLineToArgvW reads it back.
 static std::wstring Set_QuoteArg(const std::wstring& arg) {
     std::wstring out = L"\"";
@@ -5945,6 +6089,18 @@ static void Set_BuildPage(SetWindow& w) {
             it.text = status;
             it.y = y;
             it.h = Set_TextH(w.fHint.get(), status, w.contentW - 32) + 28;
+            y += it.h + kSetRowGap + 8;
+            w.items.push_back(it);
+        }
+    }
+    if (w.page == 0 || w.page == 2) {  // General (open keys) and Keys (shortcut keys)
+        g_launchpadWarnShown = Halo_LaunchpadWarning(w);
+        if (!g_launchpadWarnShown.empty()) {
+            SetItem it;
+            it.type = SetItem::Banner;
+            it.text = g_launchpadWarnShown;
+            it.y = y;
+            it.h = Set_TextH(w.fHint.get(), it.text, w.contentW - 32) + 28;
             y += it.h + kSetRowGap + 8;
             w.items.push_back(it);
         }
@@ -8601,11 +8757,25 @@ static void Set_TakeStartPage() {
     int page = g_settingsStartPage.exchange(-1);
     if (page >= 0 && g_setWin) Set_GoPage(*g_setWin, page);
 }
+// The Launchpad warning follows the key boxes: recording a key doesn't lay the page out again,
+// so a paint that finds another warning does.
+static LRESULT CALLBACK Halo_KeyWarnHook(HWND h, UINT m, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR) {
+    if (m == WM_PAINT) {
+        std::shared_ptr<SetWindow> w = g_setWin;
+        if (w && w->hwnd == h && (w->page == 0 || w->page == 2) && Halo_LaunchpadWarning(*w) != g_launchpadWarnShown)
+            Set_BuildAndClamp(*w);
+    } else if (m == WM_NCDESTROY) {
+        RemoveWindowSubclass(h, Halo_KeyWarnHook, id);
+    }
+    return DefSubclassProc(h, m, wp, lp);
+}
+
 DWORD WINAPI SettingsThread(void*) {
  SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
  CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
  Settings_Open();
  if (g_setWin) g_settingsWnd=g_setWin->hwnd;
+ if (HWND hwnd=g_settingsWnd) SetWindowSubclass(hwnd,Halo_KeyWarnHook,0x484B,0);
  Set_TakeStartPage();
  MSG msg;
  while (g_settingsWnd && GetMessageW(&msg,nullptr,0,0)>0) { TranslateMessage(&msg); DispatchMessageW(&msg); }

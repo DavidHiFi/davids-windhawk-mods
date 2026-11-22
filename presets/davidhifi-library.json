@@ -1848,6 +1848,7 @@
         "controlStyles[18].styles[1]": "Margin=0",
         "controlStyles[18].target": "SystemTray.SystemTrayFrame > StackPanel#SystemTrayFrameGrid, SystemTray.SystemTrayFrame > Grid#SystemTrayFrameGrid",
         "controlStyles[19].styles[0]": "MinHeight=50",
+        "controlStyles[19].styles[1]": "Height=56",
         "controlStyles[19].target": "SystemTray.SystemTrayFrame",
         "controlStyles[1].styles[0]": "Visibility=Collapsed",
         "controlStyles[1].target": "Taskbar.TaskbarBackground#BackgroundControl > Grid > Rectangle#BackgroundStroke",
