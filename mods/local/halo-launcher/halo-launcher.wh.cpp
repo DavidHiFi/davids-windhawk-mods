@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.9
+// @version         0.6.10
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -57,6 +57,11 @@ its own settings window: open it from the tray icon or with Ctrl+I in Halo.
 | Esc | Back, then close |
 
 Every key in that list can be changed on the Keys page of the settings.
+
+## What's new in 0.6.10
+
+- The close key (Ctrl+Alt+F12) closes Halo's search window. Before, it typed its
+  words into the search box like the settings key did.
 
 ## What's new in 0.6.9
 
@@ -1998,6 +2003,12 @@ static bool FireBuiltInKey(const std::wstring& words) {
     if (_wcsicmp(t.c_str(), L"Restart Halo Launcher") == 0 || _wcsicmp(t.c_str(), L"Restart Flow Launcher") == 0) {
         Trace(L"key restarts Halo");
         RestartHalo();
+        return true;
+    }
+    if (_wcsicmp(t.c_str(), L"Close Halo Launcher") == 0 || _wcsicmp(t.c_str(), L"Close Flow Launcher") == 0) {
+        // Same as the engine's Exit row: closing Halo hides the launcher; the mod keeps running.
+        Trace(L"key closes the launcher (visible %d)", g.visible);
+        if (g.visible && g.engineReady) Send({L"hide"});
         return true;
     }
     return false;
