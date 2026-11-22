@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.21
+// @version         2.2.22
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.22
+
+- The full screen settings view starts below the title bar, so the save bar shows whole and its buttons work.
 
 ## What's new in 2.2.21
 
@@ -1050,6 +1054,11 @@ static std::string BuildCss(const Settings& s) {
         std::string height = std::to_string(caption) + "px";
         css += "#root{position:fixed;inset:" + height + " 0 0 0;height:auto !important;margin:0 !important;overflow:hidden !important;}";
         css += "#root>[class*=\"Panel__PanelContainer\"],#root>[class*=\"Panel__PanelContainer\"]>[class*=\"Panel__MainArea\"]{height:100% !important;min-height:0 !important;}";
+        // 2.2.22: the expanded settings view (the full screen button) is fixed to the
+        // window, not to #root, so it started at the very top, under the title strip,
+        // and the save bar showed only its bottom half (owner, 2026-11-22). Start it
+        // below the strip like the rest of the page.
+        css += "form[class*=\"SettingsForm\"]:has(button[aria-label=\"Collapse\"]){inset:" + height + " 0 0 0 !important;}";
     }
     css += BuildPolishCss(s);
     css += BuildNoticeCss(s);
