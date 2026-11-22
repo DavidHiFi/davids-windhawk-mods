@@ -1,20 +1,21 @@
-# Contributing to David's Windhawk mods
+# Contributing to Seamless Workshop
 
 Thanks for helping. Bug reports, ideas and pull requests are all welcome.
 
 ## Reporting a bug
 
-[Open an issue](https://github.com/DavidHiFi/davids-windhawk-mods/issues/new) and include:
+[Open an issue](https://github.com/DavidHiFi/seamless-workshop/issues/new) and include:
 
 - what you did, what you expected and what happened instead
 - the mod's name and version, your Windhawk version and your Windows build (`winver`)
 - a screenshot of the problem, and any error Windhawk shows when it compiles or loads the mod
+- for the install or update scripts: the full text PowerShell printed
 
 Mods that break after a Windows or Windhawk update are the most useful reports.
 
 ## Suggesting a feature
 
-Open an issue that describes what you want the mod to do and why. A screenshot or a mock-up helps.
+Open an issue that describes what you want the mod or the Workshop to do and why. A screenshot or a mock-up helps.
 
 ## Sending a pull request
 
@@ -33,7 +34,13 @@ All changes go through pull requests against `main`.
 5. Bump `@version` in the mod header, and update the mod's readme if behavior changed.
 6. Keep each pull request to one mod and one change, and say in the description how you tested it.
 
-Leave `mods/catalog/`, `settings/` and `manifest.json` alone unless the change is about the snapshot itself. `tools\Build-Repo.ps1` regenerates them from a live install.
+For the two scripts in the repo root:
+
+- Keep `Install-SeamlessWorkshop.ps1` and `Update-Windhawk.ps1` working in Windows PowerShell 5.1. No PowerShell 7-only syntax.
+- Run `Update-Windhawk.ps1 -SelfTest` and `-Check`, and `Install-SeamlessWorkshop.ps1 -Check`, before you push.
+- The download, hash, signature and version checks are the point of these scripts. Do not add a way to skip them.
+
+Leave `mods/catalog/`, `settings/`, `presets/`, `manifest.json` and `feed.json` alone unless the change is about the snapshot itself. They are written by `tools\Build-Repo.ps1` and the publisher each time a mod is published.
 
 ## License
 

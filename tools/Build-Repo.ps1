@@ -312,7 +312,7 @@ if ($removed.Count) { Write-Output ("removed {0} path(s) no longer installed:`n 
 
 # --- manifest ---
 $manifest = [ordered]@{
-    name            = 'davids-windhawk-mods'
+    name            = 'seamless-workshop'
     description     = 'A full Windhawk setup: every mod source and every setting.'
     generatedAt     = (Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')
     windhawkVersion = $(if ($export) { $v = Join-Path $export 'windhawk-version.txt'; if (Test-Path $v) { (Get-Content $v -Raw).Trim() } else { '' } } else { (Get-Item 'C:\Program Files\Windhawk\windhawk.exe').VersionInfo.ProductVersion })

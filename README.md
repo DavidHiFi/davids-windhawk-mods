@@ -1,21 +1,21 @@
 <div align="center">
 
-<img src="media/previews/windhawk-enhanced-styler.png" alt="Windhawk's Installed mods page themed by Windhawk Enhanced Styler, listing the mods from this repo" width="560">
+<img src="media/social-preview.png" alt="The Seamless Workshop window on its Mods page: search, show and sort controls above DavidHiFi's mods, each with an on and off switch" width="100%">
 
-# David's Windhawk mods
+# Seamless Workshop
 
-**My [Windhawk](https://windhawk.net) mods for Windows 11, plus a full snapshot of the setup they run in.**
+**Every DavidHiFi [Windhawk](https://windhawk.net) mod for Windows 11, and the one window that installs, updates and removes them.**
 
-Taskbar, window and Start menu mods, every catalog mod and setting I use, and scripts to copy it all onto another PC.
+One command sets it up. From then on it keeps itself, the mods and their presets up to date.
 
-<a href="https://github.com/DavidHiFi/davids-windhawk-mods/releases/latest">
+<a href="https://github.com/DavidHiFi/seamless-workshop/releases/latest">
 <img src="https://img.shields.io/badge/%E2%AC%87%EF%B8%8F%20DOWNLOAD%20LATEST%20RELEASE-2EA043?style=for-the-badge&labelColor=161B22" alt="Download the latest release" height="42">
 </a>
 
 <br><br>
 
-<img src="https://img.shields.io/github/v/release/DavidHiFi/davids-windhawk-mods?style=flat-square&label=version&color=8957E5&labelColor=161B22" alt="Latest version">
-<img src="https://img.shields.io/github/downloads/DavidHiFi/davids-windhawk-mods/total?style=flat-square&labelColor=161B22" alt="Total downloads">
+<img src="https://img.shields.io/github/v/release/DavidHiFi/seamless-workshop?style=flat-square&label=version&color=8957E5&labelColor=161B22" alt="Latest version">
+<img src="https://img.shields.io/github/downloads/DavidHiFi/seamless-workshop/total?style=flat-square&label=downloads&color=1F6FEB&labelColor=161B22" alt="Total downloads">
 <img src="https://img.shields.io/badge/platform-Windows%2011-DB6D28?style=flat-square&labelColor=161B22" alt="Platform: Windows 11">
 
 </div>
@@ -24,26 +24,85 @@ Taskbar, window and Start menu mods, every catalog mod and setting I use, and sc
 
 ## Installation
 
-### The easy way: Seamless Workshop
+> [!IMPORTANT]
+> **Seamless Workshop needs the Windhawk 2.0.0-alpha.8 preview or newer.** It does not run on the normal 1.x release. The install line below gets the preview for you.
 
-[Seamless Workshop](https://github.com/DavidHiFi/seamless-workshop) is a Windhawk mod that installs, updates and removes every mod here from one window, with my presets, and keeps them current. Paste this into PowerShell:
+1. **Install Seamless Workshop.** Paste this into PowerShell and press Enter. Windows asks for admin rights once.
+
+   ```powershell
+   irm https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/main/Install-SeamlessWorkshop.ps1 | iex
+   ```
+
+   It installs Windhawk or updates it to the preview if you need that, and keeps your mods and settings. Then it downloads the Workshop from the latest release, throws it away if it does not match its checksum, and installs it through Windhawk's own command-line tool. Running the line again is safe: if you already have the newest version, it says so and changes nothing.
+2. **Pick your mods.** Click the Seamless Workshop icon in the tray. The **Mods** page installs one mod at a time.
+3. **Or copy the whole setup.** Open the **Updates** page. In the group **DavidHiFi's whole setup**:
+   - Turn **Clean slate first** on or off.
+   - Choose **Copy everything, settings included** or **Install everything, default settings**.
+   - Each choice asks for a second click to confirm.
+
+What each choice does:
+
+- **Clean slate first** removes every mod you already have, except Seamless Workshop. A backup is saved before anything is removed.
+- **Install everything, default settings** installs every mod turned off, with its own default settings. You switch on the ones you want.
+- **Copy everything, settings included** installs every mod with DavidHiFi's settings and his on and off choices. Nothing private (keys, tokens, folder paths, names) is ever copied.
+
+Afterwards you can turn any mod on or off and change its settings on the Workshop's **Mods** page or in Windhawk.
+
+> [!NOTE]
+> A full install builds around 180 mods (his own and about 130 from the Windhawk library), so it can take roughly 15 to 30 minutes. The window shows progress.
+
+<details>
+<summary><b>Only update Windhawk to the preview</b></summary>
+
+<br>
+
+`Update-Windhawk.ps1` takes Windhawk 1.7.8 (or any older version) to the newest 2.0 preview, and installs Windhawk if you do not have it yet. It checks the installer's hash, signature and version before it runs it. Mods and settings are kept.
 
 ```powershell
-irm https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/main/Install-SeamlessWorkshop.ps1 | iex
+iwr 'https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/main/Update-Windhawk.ps1' -OutFile "$env:TEMP\Update-Windhawk.ps1"; powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\Update-Windhawk.ps1"
 ```
 
-It gets the Windhawk alpha too if you need it. Then click its tray icon, open **Updates** and pick the mods you want, or **Apply DavidHiFi's whole setup**.
+Windows asks for administrator permission. Wait for the green line "Windhawk ... is installed", then restart the PC when it suits you.
 
-### One mod
+| Switch | What it does |
+|---|---|
+| *(none)* | Install or update to the newest pre-release. |
+| `-Check` | Show the installed and newest versions. Changes nothing. |
+| `-Tag 2.0.0-alpha.8` | Install one specific release instead of the newest. |
+| `-Offline` | Use the full offline installer (about 178 MB) instead of the small web setup. |
+| `-SelfTest` | Run the script's version-comparison checks and exit. |
+
+</details>
+
+<details>
+<summary><b>Install the Workshop by hand</b></summary>
+
+<br>
+
+1. Download `seamless-workshop.wh.cpp` from the [latest release](https://github.com/DavidHiFi/seamless-workshop/releases/latest) and open it in Notepad.
+2. In Windhawk, click **Create a new mod**, delete the sample code and paste the file in.
+3. Click **Compile and enable**, then **Exit editing mode**.
+
+</details>
+
+<details>
+<summary><b>One mod, without the Workshop</b></summary>
+
+<br>
 
 1. Install [Windhawk](https://windhawk.net).
 2. Open the mod's folder below and copy its `.wh.cpp` file.
 3. In Windhawk, choose **Create a new mod**, paste the file and click **Compile**.
 4. If the mod is a "Plus" version of a catalog mod, disable the original first.
 
-Each release on the Releases page carries one mod, so the latest release is the most recently updated mod.
+The latest release is always Seamless Workshop itself. Single mods live in their folders.
 
-### The whole setup
+</details>
+
+<details>
+<summary><b>The whole setup by script</b></summary>
+
+<br>
 
 1. Install [Windhawk](https://windhawk.net). Windhawk Enhanced Styler needs the 2.0 interface; its [legacy edition](mods/local/windhawk-enhanced-styler/legacy) covers the older one.
 2. Install the catalog mods listed in [mods/catalog/README.md](mods/catalog/README.md) from Windhawk's Explore tab, and my mods from their folders.
@@ -59,9 +118,23 @@ Each release on the Releases page carries one mod, so the latest release is the 
 
 An AI agent can do all of this on its own: [AGENTS.md](AGENTS.md) is the runbook it should follow.
 
+</details>
+
 ## Features
 
-Grouped by what they change. Retired mods and what replaced them: [mods/retired](mods/retired).
+### The Workshop
+
+- **Every DavidHiFi mod in one list:** his mods come first in Marketplace, with what each one does. One click installs it.
+- **The Windhawk library too:** Marketplace finds and installs any mod from Windhawk's own catalog.
+- **On, off or gone:** flip a mod's switch, or remove it with its settings, without opening the Windhawk editor.
+- **A clean way out:** "Remove all of DavidHiFi's mods" takes his mods off in one go and saves their settings as a preset first.
+- **Daily update check:** once a day the Workshop looks for new versions of the mods and of itself, and tells you in the tray.
+- **See what changed first:** each update says what is new in it before you install it.
+- **One click:** update one mod, or all of them at once with one backup and one admin prompt.
+- **Checked downloads:** every file is checked against a checksum before it installs.
+- **Presets:** DavidHiFi's settings for one mod or his whole setup, and your own saved sets. Your current settings are saved first, so you can always go back.
+
+The mods below are grouped by what they change. Retired mods and what replaced them: [mods/retired](mods/retired).
 
 ### Taskbar
 
@@ -156,10 +229,19 @@ Small fixes for one app or one crash.
 ## Notes
 
 > [!NOTE]
+> **Nothing private is shared.** Published presets never hold API keys, tokens, passwords, locations or personal folder paths. The Workshop only downloads. It never uploads your settings.
+
+> [!WARNING]
+> **Loading a preset replaces that mod's settings.** The Workshop saves your current ones as a preset first.
+
+> [!NOTE]
 > **Windhawk compiles every mod on your PC.** The repo has no mod DLLs, only sources and settings.
 
 > [!IMPORTANT]
 > **Disable the original before a "Plus" mod.** Each Plus mod replaces the catalog mod it is based on, so turn the original off before you enable it.
+
+> [!WARNING]
+> **The Windhawk preview is a test build.** Expect rough edges. A Windhawk update finishes with a reboot: programs that were open keep the old engine until they restart.
 
 <details>
 <summary><b>What each folder holds</b></summary>
@@ -175,6 +257,11 @@ Small fixes for one app or one crash.
 | `mod-storage/` | Files mods wrote, currently the Taskbar Styler images. |
 | `editor/` | The Windhawk mod editor's settings. |
 | `manifest.json` | Every mod with version, author, license, origin and enabled state. |
+| `presets/` | My settings for each mod, and the whole setup, with anything private stripped out. |
+| `feed.json` | The list Seamless Workshop reads. Rebuilt each time a mod is published, pinned to an exact commit with a SHA-256 checksum for every file. |
+| `Install-SeamlessWorkshop.ps1` | The install command above. Run it as a file with `-Check` to see what it would do. |
+| `Update-Windhawk.ps1` | Installs Windhawk or updates it to the newest preview. |
+| `CHANGELOG.md` | What changed in each Seamless Workshop release. |
 | `tools/` | Scripts to apply this snapshot, rebuild it from a live install, or from another machine's export. |
 | `media/` | Screenshots and previews. |
 
@@ -197,7 +284,7 @@ powershell -ExecutionPolicy Bypass -File tools\Build-Repo.ps1
 
 Add `-SkipSources` to refresh settings and metadata only. The rebuild is a mirror: mods that are no longer installed are removed from the sources, the manifest, the settings and the catalog table.
 
-The `presets/` folder and the [Seamless Workshop](https://github.com/DavidHiFi/seamless-workshop) feed are written by the publisher script that runs after every mod install, not by `Build-Repo.ps1`. It copies my mod sources, saves my settings for each mod as a preset, and strips anything private from every settings file first: API keys, tokens, passwords, locations and personal folder paths.
+The `presets/` folder and `feed.json` are written by the publisher script that runs after every mod install, not by `Build-Repo.ps1`. It copies my mod sources, saves my settings for each mod as a preset, and strips anything private from every settings file first: API keys, tokens, passwords, locations and personal folder paths.
 
 To refresh from a different machine, dump that machine's state first and rebuild from the export:
 
@@ -224,7 +311,7 @@ Catalog mods in `mods/catalog/` keep their authors' licenses.
 
 ## Contributing
 
-Reports of mods that break after a Windows or Windhawk update help the most, along with compile fixes and pull requests.
+Reports of mods that break after a Windows or Windhawk update help the most, along with compile fixes, mod requests and pull requests.
 
 <a href="CONTRIBUTING.md">
 <img src="https://img.shields.io/badge/%F0%9F%A4%9D%20HOW%20TO%20CONTRIBUTE-8957E5?style=for-the-badge&labelColor=161B22" alt="How to contribute" height="36">
@@ -234,11 +321,11 @@ Reports of mods that break after a Windows or Windhawk update help the most, alo
 
 Thanks to everyone running these mods and reporting what breaks.
 
-<a href="https://www.star-history.com/?repos=DavidHiFi%2Fdavids-windhawk-mods&amp;type=date">
+<a href="https://www.star-history.com/?repos=DavidHiFi%2Fseamless-workshop&amp;type=date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=DavidHiFi/davids-windhawk-mods&amp;type=date&amp;theme=dark&amp;legend=top-left" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=DavidHiFi/davids-windhawk-mods&amp;type=date" />
-    <img alt="DavidHiFi/davids-windhawk-mods GitHub star history" src="https://api.star-history.com/chart?repos=DavidHiFi/davids-windhawk-mods&amp;type=date" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=DavidHiFi/seamless-workshop&amp;type=date&amp;theme=dark&amp;legend=top-left" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=DavidHiFi/seamless-workshop&amp;type=date" />
+    <img alt="DavidHiFi/seamless-workshop GitHub star history" src="https://api.star-history.com/chart?repos=DavidHiFi/seamless-workshop&amp;type=date" />
   </picture>
 </a>
 
@@ -250,6 +337,7 @@ Most of my mods build on someone else's mod. Each mod's source names its sources
 
 | Who | What |
 | --- | --- |
+| **Michael Maltsev** and **Ramen Software** ([Windhawk](https://github.com/ramensoftware/windhawk)) | The mod platform, its tool-mod support and the command-line tool the installer uses. `Update-Windhawk.ps1` only downloads, checks and runs their official installer. |
 | **m417z** ([GitHub](https://github.com/m417z)) | AltDrag, the base of Seamless Window Manager. His [Multirow taskbar](https://windhawk.net/mods/taskbar-multirow) and [Taskbar Clock Customization](https://windhawk.net/mods/taskbar-clock-customization) code lives on in Taskbar System Info Plus. Windows 11 Notification Center Styler, Windows 11 File Explorer Styler, Windows 11 Settings Styler and [Keyboard Shortcut Actions](https://windhawk.net/mods/keyboard-shortcut-actions) are the bases of their Plus versions. |
 | **RamonUnch** ([AltSnap](https://github.com/RamonUnch/AltSnap)) | The shortcuts and gestures in Seamless Window Manager. |
 | **Stefan Sundin** ([AltDrag](https://stefansundin.github.io/altdrag/)) | The original AltDrag that Seamless Window Manager traces back to. |
@@ -308,15 +396,17 @@ Most of my mods build on someone else's mod. Each mod's source names its sources
 | **ferrys** ([UWP Assets Redirect](https://windhawk.net/mods/uwp-assets-redirect)) | The base of UWP Assets Redirect Plus. |
 | **Catalog mod authors** ([full list](mods/catalog/README.md)) | Every catalog mod in `mods/catalog/`, copied as installed. Each one is its author's work. |
 
-Built on [Windhawk](https://github.com/ramensoftware/windhawk) by m417z, with its bundled [LLVM clang](https://llvm.org/) compiler and [PowerShell](https://github.com/PowerShell/PowerShell) for the snapshot scripts.
+Built on [Windhawk](https://github.com/ramensoftware/windhawk) by m417z, with its bundled [LLVM clang](https://llvm.org/) compiler, [Direct2D](https://learn.microsoft.com/windows/win32/direct2d/direct2d-portal), [DirectWrite](https://learn.microsoft.com/windows/win32/directwrite/direct-write-portal) and [WinHTTP](https://learn.microsoft.com/windows/win32/winhttp/about-winhttp) for the Workshop window, and [PowerShell](https://github.com/PowerShell/PowerShell) for the install and snapshot scripts.
 
-> Missing or wrong credit? [Open an issue](https://github.com/DavidHiFi/davids-windhawk-mods/issues/new) and I'll fix it.
+> Missing or wrong credit? [Open an issue](https://github.com/DavidHiFi/seamless-workshop/issues/new) and I'll fix it.
 
 ## Disclaimers
 
-Most of the code in my own mods was developed with AI coding agents, including Claude Code, Codex and OpenCode. No single AI agent made the project. The catalog mods in `mods/catalog/` are other people's work, copied unchanged.
+Most of the code in my own mods and scripts was developed with AI coding agents, including Claude Code, Codex and OpenCode. No single AI agent made the project. The catalog mods in `mods/catalog/` are other people's work, copied unchanged.
 
-The mods hook into Windows processes such as Explorer. Windhawk lets you disable any mod in one click if something misbehaves after a Windows update.
+The mods hook into Windows processes such as Explorer. If something misbehaves after a Windows update, turn the mod off in Windhawk or start Windhawk in safe mode.
+
+`Update-Windhawk.ps1` downloads Windhawk from GitHub over an encrypted connection and checks it before running it. It changes nothing outside the Windhawk install.
 
 <div align="center">
 <br>
