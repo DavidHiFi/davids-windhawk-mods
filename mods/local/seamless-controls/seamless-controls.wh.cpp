@@ -2,7 +2,7 @@
 // @id              seamless-controls
 // @name            Seamless Controls
 // @description     Rounded, Mocha dark buttons, boxes, tabs and lists in every classic Windows window
-// @version         1.0.0
+// @version         1.0.1
 // @author          DavidHiFi, crazyboyybs
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -80,8 +80,9 @@ windows are left out, since they have no classic controls.
 Click the tray icon for the settings window, or change them here in Windhawk. Both show
 the same settings.
 
-## What's new in 1.0.0
+## What's new in 1.0.1
 
+- Selected rows and selected text are dark on the mauve fill, so they read clearly.
 - First release as Seamless Controls.
 - Catppuccin Mocha colours and the blue to mauve gradient everywhere it draws.
 - Drag boxes in lists never leave trails: lists keep Windows' own focus outline.
@@ -19867,8 +19868,10 @@ static COLORREF GetDarkSysColor(int nIndex)
     case COLOR_WINDOWTEXT:    return RGB(0xE6, 0xE6, 0xE6);
     case COLOR_MENUTEXT:
     case COLOR_BTNTEXT:
-    case COLOR_HIGHLIGHTTEXT:
         return WinUI::Dark::TextFillColorPrimary;
+    // Seamless: the highlight is the light Mocha accent, so its text is dark.
+    case COLOR_HIGHLIGHTTEXT:
+        return WinUI::Dark::TextOnAccentFillColorPrimary;
     case COLOR_GRAYTEXT:      return RGB(0x80, 0x80, 0x80);
     case COLOR_HIGHLIGHT:     case COLOR_MENUHILIGHT:
     case COLOR_HOTLIGHT:
