@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.2.0
+// @version         1.3.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -35,12 +35,9 @@ Needs the latest Windhawk alpha.
 - Use DavidHiFi's settings for one mod, or apply his whole setup in one go.
   Your current settings are saved as a preset first, so you can always go back.
 
-## What's new in 1.2.0
+## What's new in 1.3.0
 
-- His mods come first in Marketplace, with a count of how many you have.
-- Updates show what changed before you install them.
-- A welcome on first open, with his whole setup in one click.
-- Remove all of DavidHiFi's mods in one go, with a backup saved first.
+- Mods, Marketplace and Updates sort DavidHiFi's mods into groups: Taskbar, Explorer, Windows and menus, Tools and Fixes. Search still looks through all of them.
 
 ## Nothing private is shared
 
@@ -4053,10 +4050,9 @@ static int Hub_ModSource(const HubMod& m) {
     return m.id.rfind(L"local@", 0) == 0 ? 2 : 1;
 }
 
-// What a mod changes, from the programs it loads into, then words in its name.
-constexpr PCWSTR kHubAreaName[] = {L"Window look",          L"Taskbar, Start and tray", L"Every app",
-                                   L"File Explorer and desktop", L"Tools that run on their own",
-                                   L"Single apps",          L"Set by hand"};
+// What a mod changes, from the programs it loads into, then words in its name:
+// 0 window look, 1 taskbar, Start and tray, 2 every app, 3 File Explorer and desktop,
+// 4 tools that run on their own, 5 single apps, 6 set by hand. Hub_ModCat turns it into a group.
 
 static int Hub_ModArea(const HubMod& m) {
     const std::wstring name = Hub_Lower(m.name);
@@ -4211,8 +4207,35 @@ static std::wstring Hub_ModSig(const std::vector<HubMod>& mods) {
     return s;
 }
 
+// DavidHiFi's feed sorts his mods into a few groups, listed in the order they show. Until the
+// feed is read, the groups it carries today. A missing or unknown group shows under "Other".
+static const std::vector<std::wstring> kHubDefaultCats = {L"Taskbar", L"Explorer", L"Windows and menus", L"Tools", L"Fixes"};
+static std::vector<std::wstring> g_feedCats;
+static std::map<std::wstring, std::wstring> g_feedCatOf;  // Mod id to its group in the feed.
+
+static const std::vector<std::wstring>& Hub_CatList() { return g_feedCats.empty() ? kHubDefaultCats : g_feedCats; }
+
+static size_t Hub_CatIndex(const std::wstring& cat) {
+    const auto& list = Hub_CatList();
+    for (size_t i = 0; i < list.size(); i++)
+        if (!cat.empty() && _wcsicmp(list[i].c_str(), cat.c_str()) == 0) return i;
+    return list.size();
+}
+
+static std::wstring Hub_CatName(size_t i) {
+    const auto& list = Hub_CatList();
+    return i < list.size() ? list[i] : L"Other";
+}
+
+// A mod's group: the feed's word for his mods, a guess from what it loads into for the rest.
+static int Hub_ModCat(const HubMod& m) {
+    if (auto c = g_feedCatOf.find(m.id); c != g_feedCatOf.end()) return (int)Hub_CatIndex(c->second);
+    static const PCWSTR kAreaCat[] = {L"Windows and menus", L"Taskbar", L"Windows and menus", L"Explorer", L"Tools", L"", L""};
+    return (int)Hub_CatIndex(kAreaCat[std::clamp(m.area, 0, 6)]);
+}
+
 static int Hub_GroupKey(const HubMod& m) {
-    if (g_hub.groupBy == 1) return m.area;
+    if (g_hub.groupBy == 1) return Hub_ModCat(m);
     if (g_hub.groupBy == 2) return m.enabled ? 0 : 1;
     return m.src;
 }
@@ -4246,7 +4269,7 @@ static void Hub_PlaceMods(SetWindow& w) {
         std::wstring head;
         if (g_hub.groupBy == 2) head = (key == 0 ? L"Turned on (" : L"Turned off (") + std::to_wstring(c.first) + L")";
         else
-            head = std::wstring(g_hub.groupBy == 1 ? kHubAreaName[key] : kHubSrcName[key]) + L" (" +
+            head = (g_hub.groupBy == 1 ? Hub_CatName(key) : std::wstring(kHubSrcName[key])) + L" (" +
                    std::to_wstring(c.first) + L", " + std::to_wstring(c.second) + L" on)";
         SetField f{};
         f.kind = SetField::Check;
@@ -4293,7 +4316,7 @@ static void Hub_LoadList(SetWindow& w, std::vector<HubMod>* fresh = nullptr) {
     if (g_hub.showField >= 0 && g_hub.showField < (int)w.fields.size()) g_hub.show = Set_FieldValue(w.fields[g_hub.showField]);
     if (g_hub.groupField >= 0 && g_hub.groupField < (int)w.fields.size())
         g_hub.groupBy = _wtoi(Set_FieldValue(w.fields[g_hub.groupField]).c_str());
-    if (g_hub.groupBy < 0 || g_hub.groupBy > 2) g_hub.groupBy = std::clamp(Hub_RegGet(L"Set.modsGroup", 0), 0, 2);
+    if (g_hub.groupBy < 0 || g_hub.groupBy > 2) g_hub.groupBy = std::clamp(Hub_RegGet(L"Set.modsGroup", 1), 0, 2);
     size_t app = 0;
     while (app < w.fields.size() && w.fields[app].hub != 1 && w.fields[app].hub != 2) app++;
     w.fields.resize(app);
@@ -4338,10 +4361,10 @@ static void Hub_LoadList(SetWindow& w, std::vector<HubMod>* fresh = nullptr) {
     group.kind = SetField::Choice;
     group.key = L"hub.group";
     group.label = L"Sort into";
-    group.desc = L"Split the list by where each mod comes from, by what it changes, or by on and off.";
+    group.desc = L"Split the list by what each mod changes (taskbar, Explorer, windows and menus, tools, fixes), by where it comes from, or by on and off.";
     group.group = L"Search";
     group.hub = 2;
-    group.def = L"0";
+    group.def = L"1";
     group.options = {{L"0", L"Where it comes from"}, {L"1", L"What it changes"}, {L"2", L"On or off"}};
     Set_PutValue(group, std::to_wstring(g_hub.groupBy));
     group.value = group.cur;
@@ -5324,6 +5347,7 @@ static std::wstring g_exportFile, g_restorePending, g_restoreFile;
 // A mod may carry DavidHiFi's own settings as a preset: on/off plus text or number values.
 struct HubFeedMod {
     std::wstring id, name, version, desc, url, sha, changes;  // changes: what is new in this version, one line.
+    std::wstring category;  // The group it shows under, such as "Taskbar". Empty: "Other".
     bool hasPreset = false, presetOn = false;
     Js preset;  // Flat object: setting name to text or number.
 };
@@ -5726,6 +5750,8 @@ static bool Hub_FeedEntry(const Js& j, HubFeedMod& m, bool app) {
     if (m.desc.size() > 300) m.desc.resize(300);
     m.changes = Js_Text(j.get(L"changes"));
     if (m.changes.size() > 300) m.changes.resize(300);
+    m.category = Js_Text(j.get(L"category"));
+    if (m.category.size() > 40) m.category.clear();
     // Optional "preset": {"enabled": bool, "settings": {name: text|number}}. A bad preset is
     // dropped; the mod itself still counts.
     if (const Js* p = app ? nullptr : j.get(L"preset"); p && p->t == Js::Obj) {
@@ -5742,8 +5768,10 @@ static bool Hub_FeedEntry(const Js& j, HubFeedMod& m, bool app) {
     return true;
 }
 
-static bool Hub_ParseFeed(std::string raw, std::vector<HubFeedMod>& mods, HubFeedMod& app, std::wstring& err) {
+static bool Hub_ParseFeed(std::string raw, std::vector<HubFeedMod>& mods, HubFeedMod& app, std::wstring& err,
+                          std::vector<std::wstring>* cats = nullptr) {
     mods.clear(); app = {};
+    if (cats) cats->clear();
     if (raw.rfind("\xEF\xBB\xBF", 0) == 0) raw.erase(0, 3);
     Js j;
     const std::wstring format = Js_Parse(Hub_Wide(raw), j) && j.t == Js::Obj ? Js_Text(j.get(L"format")) : L"";
@@ -5761,7 +5789,29 @@ static bool Hub_ParseFeed(std::string raw, std::vector<HubFeedMod>& mods, HubFee
         }
     }
     if (const Js* a = j.get(L"app"); a && a->t == Js::Obj && !Hub_FeedEntry(*a, app, true)) app = {};
+    // The groups, in the order the lists show them. Odd entries are skipped.
+    if (const Js* list = j.get(L"categories"); cats && list && list->t == Js::Arr)
+        for (auto& e : list->a) {
+            const std::wstring c = e.t == Js::Str ? e.s : L"";
+            if (c.empty() || c.size() > 40 || cats->size() >= 20 || _wcsicmp(c.c_str(), L"Other") == 0) continue;
+            bool dup = false;
+            for (auto& have : *cats) dup |= _wcsicmp(have.c_str(), c.c_str()) == 0;
+            if (!dup) cats->push_back(c);
+        }
     return true;
+}
+
+// Feed mods under one heading per group, in the feed's order, then "Other". Empty groups stay hidden.
+template <class Want, class Emit>
+static void Hub_FeedByCat(SetWindow& w, float& y, Want want, Emit emit) {
+    std::vector<std::vector<const HubFeedMod*>> parts(Hub_CatList().size() + 1);
+    for (auto& f : g_feed)
+        if (want(f)) parts[Hub_CatIndex(f.category)].push_back(&f);
+    for (size_t i = 0; i < parts.size(); i++) {
+        if (parts[i].empty()) continue;
+        Hub_Group(w, y, Hub_CatName(i) + L" (" + std::to_wstring(parts[i].size()) + L")");
+        for (auto* f : parts[i]) emit(*f);
+    }
 }
 
 static void Hub_TrayBalloon(SetWindow& w, const std::wstring& title, const std::wstring& text) {
@@ -5795,12 +5845,18 @@ static void Hub_FeedResult(SetWindow& w, bool manual) {
     g_feedBusy = false;
     std::wstring err = g_feedErr;
     std::vector<HubFeedMod> mods; HubFeedMod app;
-    if (err.empty()) Hub_ParseFeed(g_feedRaw, mods, app, err);
+    std::vector<std::wstring> cats;
+    if (err.empty()) Hub_ParseFeed(g_feedRaw, mods, app, err, &cats);
     g_feedRaw.clear();
     if (!err.empty()) {
         g_feedStatus = err;
     } else {
         g_feed = std::move(mods); g_feedApp = app; g_feedChecked = true;
+        g_feedCats = std::move(cats);
+        g_feedCatOf.clear();
+        for (auto& f : g_feed) g_feedCatOf[f.id] = f.category;
+        // The Mods page sorted by group before the feed's words were known: sort again.
+        if (w.page == 0 && g_hub.detail < 0 && g_hub.groupBy == 1) Hub_PlaceMods(w);
         std::wstring keys, first, firstChanges;
         int updates = 0, missing = 0;
         for (auto& f : g_feed) {
@@ -5994,19 +6050,25 @@ static void Hub_FeatureItems(SetWindow& w, float& y) {
             const std::wstring show = Hub_Input(w, L"hub.marketShow");
             int n = 0, mine = 0, have = 0;
             bool head = false;
-            for (auto& f : g_feed) {
-                if (show == L"new" && Hub_FindMod(f.id)) continue;
-                if (!query.empty() && Hub_Lower(f.name + L" " + f.desc + L" " + f.id).find(query) == std::wstring::npos) continue;
-                if (!head) {
-                    // His mods come first, with a count so it is clear how many there are.
-                    Hub_Group(w, y, L"From DavidHiFi");
-                    head = true;
-                    for (auto& g : g_feed) { mine++; have += Hub_FindMod(g.id) != nullptr; }
-                    Hub_Notice(w, y, std::to_wstring(mine) + L" mods made by DavidHiFi, " + std::to_wstring(have) +
-                                         L" of them installed. Click one to install it or open it.");
-                }
-                link(f.name.c_str(), f.desc.c_str(), L"hub:feed:" + f.id);
-                n++;
+            // Search looks through every group, its name included ("taskbar" finds them all).
+            auto wantMine = [&](const HubFeedMod& f) {
+                if (show == L"new" && Hub_FindMod(f.id)) return false;
+                return query.empty() ||
+                       Hub_Lower(f.name + L" " + f.desc + L" " + f.id + L" " + Hub_CatName(Hub_CatIndex(f.category)))
+                               .find(query) != std::wstring::npos;
+            };
+            for (auto& f : g_feed) head |= wantMine(f);
+            if (head) {
+                // His mods come first, with a count so it is clear how many there are, then one
+                // heading per group in the feed's order.
+                Hub_Group(w, y, L"From DavidHiFi");
+                for (auto& g : g_feed) { mine++; have += Hub_FindMod(g.id) != nullptr; }
+                Hub_Notice(w, y, std::to_wstring(mine) + L" mods made by DavidHiFi, " + std::to_wstring(have) +
+                                     L" of them installed. Click one to install it or open it.");
+                Hub_FeedByCat(w, y, wantMine, [&](const HubFeedMod& f) {
+                    link(f.name.c_str(), f.desc.c_str(), L"hub:feed:" + f.id);
+                    n++;
+                });
             }
             if (g_feed.empty())
                 Hub_Notice(w, y, g_feedBusy ? std::wstring(L"Reading DavidHiFi's mods...")
@@ -6041,21 +6103,31 @@ static void Hub_FeatureItems(SetWindow& w, float& y) {
         if (Hub_FileThere(Hub_Tool(L"Tool.engineGuide")))
             link(L"Windhawk preview updates", L"Open the checked update helper's instructions. Engine restarts wait until T3 Code is closed.", L"hub:engineGuide");
         Hub_Group(w, y, L"From DavidHiFi");
-        int updates = 0;
-        for (auto& f : g_feed) {
+        auto hasUpdate = [](const HubFeedMod& f) {
             const HubMod* m = Hub_FindMod(f.id);
-            if (!m || !Hub_Newer(f.version, m->version)) continue;
-            updates++;
-            const std::wstring news = f.changes.empty() ? std::wstring() : L"New: " + f.changes + L" ";
-            link((L"Update " + f.name + L" to " + f.version).c_str(), (news + L"You have " + m->version + L". Backs up first. Stays on or off as it is now.").c_str(), L"hub:feed:" + f.id);
-        }
-        if (updates >= 2) link(L"Update all from DavidHiFi", L"Every update above, one backup, one admin prompt.", L"hub:feedAll");
+            return m && Hub_Newer(f.version, m->version);
+        };
+        int updates = 0;
+        for (auto& f : g_feed) updates += hasUpdate(f);
         link(L"Check the feed now", L"Look for new versions of DavidHiFi's mods and of this app.", L"hub:feedCheck");
         Hub_Notice(w, y, g_feedBusy ? L"Checking DavidHiFi's feed..." : g_feedStatus);
-        bool anyNew = false;
-        for (auto& f : g_feed) if (!Hub_FindMod(f.id)) {
-            if (!anyNew) { Hub_Group(w, y, L"More from DavidHiFi"); anyNew = true; }
-            link((L"Install " + f.name).c_str(), (f.desc.empty() ? std::wstring(L"Installs turned off.") : f.desc + L" Installs turned off.").c_str(), L"hub:feed:" + f.id);
+        if (updates >= 2) link(L"Update all from DavidHiFi", L"Every update below, one backup, one admin prompt.", L"hub:feedAll");
+        // His updates, then his mods not installed yet, each under its group in the feed's order.
+        Hub_FeedByCat(w, y, hasUpdate, [&](const HubFeedMod& f) {
+            const HubMod* m = Hub_FindMod(f.id);
+            const std::wstring news = f.changes.empty() ? std::wstring() : L"New: " + f.changes + L" ";
+            link((L"Update " + f.name + L" to " + f.version).c_str(), (news + L"You have " + m->version + L". Backs up first. Stays on or off as it is now.").c_str(), L"hub:feed:" + f.id);
+        });
+        auto notHere = [](const HubFeedMod& f) { return !Hub_FindMod(f.id); };
+        int missing = 0;
+        for (auto& f : g_feed) missing += notHere(f);
+        if (missing) {
+            Hub_Group(w, y, L"More from DavidHiFi");
+            Hub_Notice(w, y, std::to_wstring(missing) + (missing == 1 ? L" of his mods is" : L" of his mods are") +
+                                 L" not installed yet. Each one installs turned off.");
+            Hub_FeedByCat(w, y, notHere, [&](const HubFeedMod& f) {
+                link((L"Install " + f.name).c_str(), (f.desc.empty() ? std::wstring(L"Installs turned off.") : f.desc + L" Installs turned off.").c_str(), L"hub:feed:" + f.id);
+            });
         }
         bool anyPreset = false;
         for (auto& f : g_feed) anyPreset |= f.hasPreset;
@@ -8039,6 +8111,28 @@ static int Hub_SelfTest(const std::wstring& report) {
         check(!Hub_ParseFeed("{\"format\":\"other\"}", mods, app, err));
         check(Hub_ParseFeed("\xEF\xBB\xBF{\"format\":\"seamless-hub-feed-1\",\"mods\":[{\"id\":\"local@x\",\"version\":\"1\",\"url\":\"http://plain.invalid/x\",\"sha256\":\"" + sha + "\"}]}", mods, app, err) && mods.empty());
         g_feedUrlOverride = saved;
+    }
+    {
+        // Groups: the feed's order, then "Other" for a missing or unknown one.
+        const std::string sha(64, 'c');
+        const std::string feed = "{\"format\":\"seamless-workshop-feed-1\",\"categories\":[\"Tools\",\"Taskbar\",\"tools\",\"\",\"Other\",5],\"mods\":["
+            "{\"id\":\"local@a\",\"version\":\"1\",\"url\":\"https://example.invalid/a\",\"sha256\":\"" + sha + "\",\"category\":\"Taskbar\"},"
+            "{\"id\":\"local@b\",\"version\":\"1\",\"url\":\"https://example.invalid/b\",\"sha256\":\"" + sha + "\",\"category\":\"Nope\"}]}";
+        std::vector<HubFeedMod> mods; HubFeedMod app; std::wstring err; std::vector<std::wstring> cats;
+        check(Hub_ParseFeed(feed, mods, app, err, &cats) && cats.size() == 2 && cats[0] == L"Tools" && mods.size() == 2);
+        const auto savedCats = g_feedCats;
+        const auto savedOf = g_feedCatOf;
+        g_feedCats = cats;
+        check(Hub_CatIndex(mods[0].category) == 1 && Hub_CatIndex(mods[1].category) == 2 && Hub_CatName(2) == L"Other");
+        g_feedCatOf = {{L"local@a", L"Taskbar"}};
+        HubMod a; a.id = L"local@a"; a.area = 3;
+        HubMod lib; lib.id = L"x"; lib.area = 4;  // Not in the feed: a tool, from what it loads into.
+        HubMod odd; odd.id = L"y"; odd.area = 5;
+        check(Hub_ModCat(a) == 1 && Hub_ModCat(lib) == 0 && Hub_ModCat(odd) == 2);
+        g_feedCats.clear();
+        check(Hub_CatIndex(L"Explorer") == 1 && Hub_CatIndex(L"") == 5 && Hub_CatName(5) == L"Other");
+        g_feedCats = savedCats;
+        g_feedCatOf = savedOf;
     }
     {
         // The Workshop feed: presets ride along, the Workshop itself never shows as a mod.
