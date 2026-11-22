@@ -5310,5 +5310,10 @@
     "tabActiveOpacity": 85,
     "tabInactiveHoverOpacity": 60,
     "tabSelectedOpacity": 69
+  },
+  "local@mocha-steam-icons": {
+    "shortcutIcons": 1,
+    "trayIcon": 1,
+    "windowIcons": 1
   }
 }

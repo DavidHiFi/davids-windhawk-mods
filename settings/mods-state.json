@@ -1293,5 +1293,12 @@
     "exclude": "",
     "architecture": "",
     "version": "1.0.0"
+  },
+  "local@mocha-steam-icons": {
+    "disabled": false,
+    "include": "steam.exe|steamwebhelper.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.0"
   }
 }

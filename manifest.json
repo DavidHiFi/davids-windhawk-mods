@@ -1,12 +1,12 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-22T08:32:10+08:00",
+  "generatedAt": "2026-11-22T08:39:39+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 185,
-    "enabled": 169,
-    "local": 60
+    "mods": 186,
+    "enabled": 170,
+    "local": 61
   },
   "mods": [
     {
@@ -2296,6 +2296,18 @@
       "source": "mods/local/seamless-autoscroll-global/seamless-autoscroll-global.wh.cpp",
       "enabled": true,
       "category": "Tools"
+    },
+    {
+      "id": "local@mocha-steam-icons",
+      "name": "Mocha Steam Icons",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/mocha-steam-icons/mocha-steam-icons.wh.cpp",
+      "enabled": true
     }
   ]
 }
