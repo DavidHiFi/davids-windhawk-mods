@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.44
+// @version         0.4.45
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -61050,6 +61050,11 @@ struct NativeBackdrop {
     bool childPaintFailed = false;
     COLORREF childBackground = 0;
     uint64_t paintGeneration = 0;  // Invalidates the scroll captures when a child changes.
+    // A child that paints without asking its parent for a colour (an Edit during WM_PRINTCLIENT)
+    // takes this card surface instead of an opaque block of childBackground.
+    bool childCardFallback = false;
+    COLORREF childCardBase = 0;
+    UiColor childCardFill{};
 };
 
 // Reusable panel surface; holds only GDI and belongs to the settings thread.
@@ -62154,6 +62159,14 @@ static bool PaintNativeChild(HWND hWnd, HDC target, UINT printMessage, LPARAM fl
         DeleteObject(bitmap);
         DeleteDC(buffer);
         return true;
+    }
+    if (!state.cardSurface && !state.transparentBase && state.backdrop->childCardFallback) {
+        state.cardSurface = true;
+        state.roundedSurface = false;
+        state.controlSurface = false;
+        state.cardBase = state.backdrop->childCardBase;
+        state.cardColor = background;
+        state.cardFill = state.backdrop->childCardFill;
     }
     GdiFlush();
     uint32_t key = (GetRValue(state.transparentColor) << 16) |
@@ -71321,6 +71334,9 @@ static void RecreateAccountEditorVisuals(HWND hWnd, AccountEditorState& state) {
     BuildNativeTheme(state.theme, state.dpi, true);
     const NativeTheme& t = state.theme;
     state.backdrop.childBackground = t.card;
+    state.backdrop.childCardFallback = !t.highContrast;
+    state.backdrop.childCardBase = t.back;
+    state.backdrop.childCardFill = t.cardFill;
     EnumChildWindows(hWnd, [](HWND child, LPARAM param) -> BOOL {
         SendMessageW(child, WM_SETFONT, param, FALSE);
         return TRUE;
