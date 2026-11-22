@@ -33,6 +33,19 @@ own and the Windhawk library ones, with or without his settings, optionally on a
 | seamless-workshop/CHANGELOG.md | top 1.3.0 | 1.4.0 entry | git revert |
 | Live mod local@seamless-workshop | 1.3.0, sha256 11b3278d...9de2 | 1.4.0 | reinstall the v1.3.0 release asset with Install-StagedMod.ps1 |
 
+## Proof (10:56 to 11:00 am)
+
+- Installed on the owner's "Install it now anyway" (Ableton open), engine lock, Idle priority.
+  Registry v1.4.0, library local@seamless-workshop_1.4.0_377236.dll.
+- The compile stopped the tool process; disable and enable started it again at 10:59 am, and the
+  elevated process has the 1.4.0 dll loaded. (A normal-rights process list cannot see it.)
+- Auto-publish failed once (github unreachable from the elevated shell); a rerun pushed
+  seamless-workshop e5895ae and cut release v1.4.0 with both files. Changelog commit a7791af.
+- Live feed: app 1.4.0, 50 own mods all with a preset, 125 library mods (6 stale ones were
+  removed by another thread today), 5 library mods with custom app lists, no private paths.
+- Not run: the whole-setup buttons themselves. They remove and install mods, so they are never
+  clicked on the owner's PC; the friend's live test is the first real run.
+
 ## Install
 
 Staged at `work/2026-11-21-tray-ids/staged/seamless-workshop.wh.cpp` (sha256 2d9d8ca0...d60f).
