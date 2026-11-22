@@ -61,6 +61,14 @@
       }
     },
     {
+      "id": "local@dark-theme-browser-colors-fix-plus",
+      "enabled": true,
+      "settings": {
+        "applyToAllMsEdgeWebView": 0,
+        "heliumBuilds": "0.21.1.1"
+      }
+    },
+    {
       "id": "local@explorer-tags-plus",
       "enabled": true,
       "settings": {

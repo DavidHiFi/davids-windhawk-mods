@@ -1,12 +1,12 @@
 {
   "name": "davids-windhawk-mods",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-22T11:54:28+08:00",
+  "generatedAt": "2026-11-22T11:54:51+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 187,
-    "enabled": 171,
-    "local": 62
+    "mods": 188,
+    "enabled": 172,
+    "local": 63
   },
   "mods": [
     {
@@ -2319,6 +2319,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/mocha-app-icons/mocha-app-icons.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@dark-theme-browser-colors-fix-plus",
+      "name": "Dark Theme Browser Colors Fix Plus",
+      "author": "DavidHiFi, Roland Pihlakas",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.1.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/dark-theme-browser-colors-fix-plus/dark-theme-browser-colors-fix-plus.wh.cpp",
       "enabled": true
     }
   ]

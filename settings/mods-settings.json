@@ -5332,5 +5332,9 @@
     "trayIcon": 1,
     "windowIcons": 1,
     "yapfast": 1
+  },
+  "local@dark-theme-browser-colors-fix-plus": {
+    "applyToAllMsEdgeWebView": 0,
+    "heliumBuilds": "0.21.1.1"
   }
 }
