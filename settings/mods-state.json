@@ -1296,10 +1296,10 @@
   },
   "local@mocha-app-icons": {
     "disabled": false,
-    "include": "Ableton Live*.exe|yapfast.exe",
+    "include": "Ableton Live*.exe|yapfast.exe|ApplicationFrameHost.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.3"
+    "version": "1.1.0"
   },
   "local@dark-theme-browser-colors-fix-plus": {
     "disabled": false,
