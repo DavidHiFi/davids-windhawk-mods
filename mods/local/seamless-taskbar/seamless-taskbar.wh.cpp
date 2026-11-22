@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.32
+// @version         0.4.33
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -32,9 +32,11 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 
-## What's new in 0.4.32
+## What's new in 0.4.33
 The Bluetooth and Safely Remove Hardware icons wear the same blue to mauve badge
-as the other tray icons (Tray drawer, Style the Bluetooth and USB icons). The
+as the other tray icons (Tray drawer, Style the Bluetooth and USB icons), so the
+Bluetooth icon can no longer go blank. Windows registers both by a fixed ID and the
+mod now finds them that way. The
 drawer's folder buttons and overflow arrow now sit in one evenly spaced row, the end
 buttons right under the first and last icon columns. An open folder stays open while
 icons come and go.
@@ -42095,24 +42097,50 @@ bool TrackNativeSource(DrawerState& state) {
 }
 
 // BEGIN WINDOWS ICON BADGES
-// Bluetooth and Safely Remove Hardware are Explorer's own tray icons. With the
-// windowsIcons setting on they wear the same blue to mauve badge as the mod
-// icons: every icon update they send is swapped on its way to the tray, and
-// icons that were already shown get one update when the drawer first reads them.
-constexpr UINT kHotplugIconId = 0x464;  // the uID hotplug.dll registers
+// Bluetooth and Safely Remove Hardware are Explorer's own tray icons. Windows
+// registers both by a fixed GUID, so they are found by that GUID; an update by
+// window and number never reaches them. With the windowsIcons setting on they
+// wear the same blue to mauve badge as the mod icons: every icon update they send
+// is swapped on its way to the tray, and icons already shown get one update the
+// first times the drawer reads its list.
+constexpr UINT kHotplugIconId = 0x464;
 constexpr UINT kBadgeWindowsIconsMessage = WM_APP + 0x735;
+// {6DA68F06-00F1-4E6E-8158-7F1FFD4F9DB9}, bthprops.cpl
+constexpr GUID kBluetoothIconGuid = {
+    0x6DA68F06, 0x00F1, 0x4E6E, {0x81, 0x58, 0x7F, 0x1F, 0xFD, 0x4F, 0x9D, 0xB9}};
+// {7820AE78-23E3-4229-82C1-E41CB67D5B9C}, stobject.dll (Safely Remove Hardware)
+constexpr GUID kEjectIconGuid = {
+    0x7820AE78, 0x23E3, 0x4229, {0x82, 0xC1, 0xE4, 0x1C, 0xB6, 0x7D, 0x5B, 0x9C}};
 
 enum class WindowsIcon { None, Bluetooth, Eject };
 
-WindowsIcon WindowsIconOf(HWND owner, UINT id) {
+struct KnownWindowsIcon {
+    WindowsIcon kind;
+    GUID guid;
+    PCWSTR ownerClass;
+};
+constexpr KnownWindowsIcon kKnownWindowsIcons[] = {
+    {WindowsIcon::Bluetooth, kBluetoothIconGuid, L"BluetoothNotificationAreaIconWindowClass"},
+    {WindowsIcon::Eject, kEjectIconGuid, L"SystemTray_Main"},
+};
+
+WindowsIcon WindowsIconOf(const NOTIFYICONDATAW* data) {
+    if ((data->uFlags & NIF_GUID) &&
+        data->cbSize >= offsetof(NOTIFYICONDATAW, guidItem) + sizeof(GUID)) {
+        for (auto const& known : kKnownWindowsIcons)
+            if (IsEqualGUID(data->guidItem, known.guid))
+                return known.kind;
+        return WindowsIcon::None;
+    }
+    // Older builds register by window and number.
     DWORD process{};
     WCHAR name[64]{};
-    if (!owner || !GetWindowThreadProcessId(owner, &process) ||
-        process != GetCurrentProcessId() || !GetClassNameW(owner, name, ARRAYSIZE(name)))
+    if (!data->hWnd || !GetWindowThreadProcessId(data->hWnd, &process) ||
+        process != GetCurrentProcessId() || !GetClassNameW(data->hWnd, name, ARRAYSIZE(name)))
         return WindowsIcon::None;
-    if (!wcscmp(name, L"BluetoothNotificationAreaIconWindowClass"))
+    if (!wcscmp(name, kKnownWindowsIcons[0].ownerClass))
         return WindowsIcon::Bluetooth;
-    if (id == kHotplugIconId && !wcscmp(name, L"SystemTray_Main"))
+    if (data->uID == kHotplugIconId && !wcscmp(name, kKnownWindowsIcons[1].ownerClass))
         return WindowsIcon::Eject;
     return WindowsIcon::None;
 }
@@ -42136,26 +42164,15 @@ HICON WindowsIconBadge(WindowsIcon kind) {
     return icon;
 }
 
-void FreeWindowsIconBadges() {
-    AcquireSRWLockExclusive(&g_badgeLock);
-    for (auto& icon : g_badgeIcons)
-        if (icon)
-            DestroyIcon(std::exchange(icon, nullptr));
-    ReleaseSRWLockExclusive(&g_badgeLock);
-}
+// The two badges stay alive after unload: the tray may still be drawing them.
+void FreeWindowsIconBadges() {}
 
 decltype(&Shell_NotifyIconW) Shell_NotifyIconW_Original;
 BOOL WINAPI Shell_NotifyIconW_Hook(DWORD message, PNOTIFYICONDATAW data) {
     if ((message == NIM_ADD || message == NIM_MODIFY) && data && !g_unloading &&
         data->cbSize >= NOTIFYICONDATAW_V1_SIZE && data->cbSize <= sizeof(*data) &&
         (data->uFlags & NIF_ICON)) {
-        static std::atomic<bool> s_hotplugLogged;
-        if (data->uID == kHotplugIconId && !s_hotplugLogged.exchange(true)) {
-            WCHAR name[64]{};
-            GetClassNameW(data->hWnd, name, ARRAYSIZE(name));
-            Wh_Log(L"Tray icon uid 0x464 owner class: %s", name);
-        }
-        auto kind = WindowsIconOf(data->hWnd, data->uID);
+        auto kind = WindowsIconOf(data);
         if (kind != WindowsIcon::None && WindowsIconsWanted()) {
             if (HICON badge = WindowsIconBadge(kind)) {
                 NOTIFYICONDATAW updated{};
@@ -42168,56 +42185,69 @@ BOOL WINAPI Shell_NotifyIconW_Hook(DWORD message, PNOTIFYICONDATAW data) {
     return Shell_NotifyIconW_Original(message, data);
 }
 
-// UI thread only.
-std::vector<NativeIconIdentity> g_badgedIcons, g_pendingBadges;
+// The one top-level window of this class in Explorer, or null when there is
+// not exactly one (never guess the owner: the tray sends its clicks there).
+HWND FindOwnWindow(PCWSTR className) {
+    struct Search {
+        PCWSTR className;
+        HWND found;
+        int count;
+    } search{className, nullptr, 0};
+    EnumWindows(
+        [](HWND window, LPARAM param) -> BOOL {
+            auto& s = *reinterpret_cast<Search*>(param);
+            DWORD process{};
+            WCHAR name[64]{};
+            if (GetWindowThreadProcessId(window, &process) && process == GetCurrentProcessId() &&
+                GetClassNameW(window, name, ARRAYSIZE(name)) && !wcscmp(name, s.className)) {
+                s.found = window;
+                ++s.count;
+            }
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(&search));
+    return search.count == 1 ? search.found : nullptr;
+}
 
-void QueueWindowsIconBadges(std::vector<IInspectable> const& models) {
-    if (!WindowsIconsWanted())
+// UI thread only. An icon that is not there yet (no USB drive plugged in) gets
+// its badge from the hook when Windows adds it.
+bool g_windowsIconBadged[2]{};
+int g_windowsIconTries = 0;
+
+void QueueWindowsIconBadges(std::vector<IInspectable> const&) {
+    if (!WindowsIconsWanted()) {
+        g_windowsIconBadged[0] = g_windowsIconBadged[1] = false;
+        g_windowsIconTries = 0;
         return;
-    for (auto const& model : models) {
-        NativeIconIdentity id;
-        try {
-            if (!ReadNativeIdentity(model, id))
-                continue;
-        } catch (...) {
-            continue;
-        }
-        if (WindowsIconOf(id.owner, id.uid) == WindowsIcon::None)
-            continue;
-        auto same = [&](NativeIconIdentity const& seen) {
-            return seen.owner == id.owner && seen.uid == id.uid;
-        };
-        if (std::any_of(g_badgedIcons.begin(), g_badgedIcons.end(), same))
-            continue;
-        g_badgedIcons.push_back(id);
-        g_pendingBadges.push_back(id);
     }
+    if ((g_windowsIconBadged[0] && g_windowsIconBadged[1]) || g_windowsIconTries >= 20)
+        return;
     // Sent later from the UI window, never inside the collection scan.
-    if (!g_pendingBadges.empty() && g_uiWindow)
+    if (g_uiWindow)
         PostMessageW(g_uiWindow, kBadgeWindowsIconsMessage, 0, 0);
 }
 
 void SendWindowsIconBadges() {
-    auto pending = std::exchange(g_pendingBadges, {});
-    if (!WindowsIconsWanted())
+    if (!WindowsIconsWanted() || g_windowsIconTries >= 20)
         return;
-    for (auto const& id : pending) {
-        auto kind = WindowsIconOf(id.owner, id.uid);
-        HICON badge = kind == WindowsIcon::None ? nullptr : WindowsIconBadge(kind);
-        if (!badge)
+    ++g_windowsIconTries;
+    for (int i = 0; i < 2; ++i) {
+        auto const& known = kKnownWindowsIcons[i];
+        if (g_windowsIconBadged[i])
+            continue;
+        HWND owner = FindOwnWindow(known.ownerClass);
+        HICON badge = WindowsIconBadge(known.kind);
+        if (!owner || !badge)
             continue;
         NOTIFYICONDATAW data{sizeof(data)};
-        data.hWnd = id.owner;
-        data.uID = id.uid;
-        data.uFlags = NIF_ICON;
+        data.hWnd = owner;
+        data.uFlags = NIF_ICON | NIF_GUID;
+        data.guidItem = known.guid;
         data.hIcon = badge;
-        if (id.guid != GUID{}) {
-            data.uFlags |= NIF_GUID;
-            data.guidItem = id.guid;
-        }
-        BOOL ok = Shell_NotifyIconW(NIM_MODIFY, &data);
-        Wh_Log(L"Windows icon badge: %s uid=0x%X sent=%d",
-               kind == WindowsIcon::Bluetooth ? L"Bluetooth" : L"Safely Remove", id.uid, ok);
+        g_windowsIconBadged[i] = Shell_NotifyIconW(NIM_MODIFY, &data) != FALSE;
+        Wh_Log(L"Windows icon badge: %s sent=%d try=%d",
+               i == 0 ? L"Bluetooth" : L"Safely Remove", g_windowsIconBadged[i],
+               g_windowsIconTries);
     }
 }
 // END WINDOWS ICON BADGES
