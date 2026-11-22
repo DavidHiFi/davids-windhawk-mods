@@ -1577,7 +1577,7 @@
         "IconSizeSmall": 16,
         "TaskbarButtonWidth": 32,
         "TaskbarButtonWidthSmall": 32,
-        "TaskbarHeight": 50
+        "TaskbarHeight": 56
       }
     },
     {
@@ -2148,6 +2148,10 @@
         "controlStyles[67].styles[1]": "FontWeight=SemiBold",
         "controlStyles[67].styles[2]": "Opacity=1",
         "controlStyles[67].target": "TextBlock#FluentMedia_Artist, TextBlock#FluentMedia_ArtistClone",
+        "controlStyles[68].styles[0]": "Margin=0,6,0,0",
+        "controlStyles[68].target": "Taskbar.TaskbarFrame > Grid#RootGrid",
+        "controlStyles[69].styles[0]": "Margin=0,6,0,0",
+        "controlStyles[69].target": "SystemTray.SystemTrayFrame",
         "controlStyles[6].styles[0]": "HorizontalAlignment=Center",
         "controlStyles[6].styles[1]": "VerticalAlignment=Center",
         "controlStyles[6].styles[2]": "Margin=0",
@@ -2313,7 +2317,7 @@
       "id": "windows-update-control-panel-restorer",
       "name": "Windows Update Control Panel Page Restorer",
       "version": "1.1.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "Language": "auto",
         "LinkSystemSettingsText": 0,

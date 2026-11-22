@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.23
+// @version         1.10.24
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -11309,30 +11309,6 @@ thread_local HWND g_statusDockPaintWndForThread;
 thread_local StatusDockBuffer g_statusDockBuffersForThread[4];
 thread_local int g_statusDockBufferCountForThread;
 
-// DOCKDIAG: temporary trace of the status bar view buttons, capped.
-LONG g_dockDiagLines;
-void DockDiag(PCSTR format, ...) {
-    if (InterlockedIncrement(&g_dockDiagLines) > 600) {
-        return;
-    }
-    char line[400];
-    int n = wsprintfA(line, "%lu t%lu ", GetTickCount(), GetCurrentThreadId());
-    va_list args;
-    va_start(args, format);
-    n += wvsprintfA(line + n, format, args);
-    va_end(args);
-    line[n++] = '\r';
-    line[n++] = '\n';
-    HANDLE file = CreateFileW(L"C:\\Users\\Public\\styler-dock.log",
-                              FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                              nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file != INVALID_HANDLE_VALUE) {
-        DWORD written;
-        WriteFile(file, line, n, &written, nullptr);
-        CloseHandle(file);
-    }
-}
-
 bool IsStatusDockWnd(HWND hWnd) {
     WCHAR className[32];
     if (!GetClassName(hWnd, className, ARRAYSIZE(className)) ||
@@ -11404,14 +11380,6 @@ HPAINTBUFFER WINAPI BeginBufferedPaint_Hook(HDC hdcTarget,
             parent = &g_statusDockBuffersForThread[i];
         }
     }
-    if (hWnd || parent) {
-        DockDiag("BBP fmt %d target %p wnd %p paintWnd %p parent %d rc %d,%d,%d,%d",
-                 (int)dwFormat, hdcTarget, WindowFromDC(hdcTarget), hWnd,
-                 parent ? 1 : 0, prcTarget ? prcTarget->left : -1,
-                 prcTarget ? prcTarget->top : -1,
-                 prcTarget ? prcTarget->right : -1,
-                 prcTarget ? prcTarget->bottom : -1);
-    }
     if (parent) {
         // A buffer nested in the folder view's own buffer (an element with
         // its own layer): same coordinates, same band.
@@ -11446,11 +11414,6 @@ HRESULT WINAPI EndBufferedPaint_Hook(HPAINTBUFFER hBufferedPaint,
         for (int i = 0; i < g_statusDockBufferCountForThread; i++) {
             if (g_statusDockBuffersForThread[i].mem == hdc) {
                 StatusDockBuffer& ended = g_statusDockBuffersForThread[i];
-                if (!ended.isToggle) {
-                    DockDiag("EBP mem %p wnd %p upd %d band %d full %d buttons %d",
-                             ended.mem, ended.hWnd, fUpdateTarget,
-                             ended.hasBand, ended.fullPaint, ended.buttonCount);
-                }
                 if (fUpdateTarget && !ended.isToggle && ended.buttonCount > 0) {
                     FinishStatusDockButtons(ended);
                 }
@@ -11703,10 +11666,7 @@ BOOL WINAPI DrawIconEx_Hook(HDC hdc,
             // builds (the empty bubble, 2026-11-22). Never draw them: the
             // button gets the view's Fluent glyph, with its face only when
             // that glyph has ink.
-            bool ink = DrawStatusDockButton(hdc, buffer, button);
-            DockDiag("ICON btn %d,%d,%d,%d ink %d", button->rect.left,
-                     button->rect.top, button->rect.right, button->rect.bottom,
-                     ink);
+            DrawStatusDockButton(hdc, buffer, button);
             return TRUE;
         }
     }
@@ -13158,10 +13118,7 @@ void FinishStatusDockButtons(StatusDockBuffer& buffer) {
     for (int i = 0; i < buffer.buttonCount; i++) {
         StatusDockBuffer::Button& button = buffer.buttons[i];
         if (!button.drawn) {
-            bool ink = DrawStatusDockButton(buffer.mem, &buffer, &button);
-            DockDiag("FINISH btn %d,%d,%d,%d ink %d", button.rect.left,
-                     button.rect.top, button.rect.right, button.rect.bottom,
-                     ink);
+            DrawStatusDockButton(buffer.mem, &buffer, &button);
         }
     }
 }
@@ -13706,15 +13663,7 @@ bool PaintThemeBackground(HTHEME hTheme,
                                    ARRAYSIZE(themeClass))) &&
         _wcsicmp(themeClass, L"CommandModule") == 0) {
         StatusDockBuffer* buffer = FindStatusDockBuffer(hdc);
-        bool painted = buffer && PaintStatusDockViewButton(hdc, iStateId, pRect);
-        DockDiag("CMD hdc %p wnd %p paintWnd %p bufs %d found %d band %d state %d rc %d,%d,%d,%d painted %d",
-                 hdc, WindowFromDC(hdc), g_statusDockPaintWndForThread,
-                 g_statusDockBufferCountForThread, buffer ? 1 : 0,
-                 buffer ? buffer->hasBand : -1, iStateId,
-                 pRect ? pRect->left : -1, pRect ? pRect->top : -1,
-                 pRect ? pRect->right : -1, pRect ? pRect->bottom : -1,
-                 painted);
-        if (painted) {
+        if (buffer && PaintStatusDockViewButton(hdc, iStateId, pRect)) {
             return true;
         }
     }
