@@ -2,7 +2,7 @@
 // @id              seamless-windows-firewall
 // @name            Seamless Windows Firewall
 // @description     Block or allow any app's internet in one click, from the tray, a shortcut or a small edge pill
-// @version         1.0.0
+// @version         1.1.0
 // @author          DavidHiFi, Ashix
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -41,8 +41,8 @@ works next to Windows Firewall and leaves your own firewall rules alone.
 - **Edge pill.** A small pill on the screen edge opens the panel too. Turn it
   off in the settings, and it hides by itself while a game runs full screen.
 - **Safe by default.** Core Windows parts, Windhawk itself and your antivirus
-  can never be blocked. You get a warning before blocking a remote desktop or
-  VPN app while one is in use.
+  can never be blocked. You get a warning box before blocking a remote desktop
+  or VPN app while one is in use.
 
 ## Default shortcuts
 
@@ -60,6 +60,15 @@ Change or clear any of them in the settings.
 - The Blocked list has a second view, Blocked by Windows Firewall, that shows
   the apps your own firewall rules block. Change those in Windows Defender
   Firewall.
+
+## What's new in 1.1.0
+- The warnings before blocking a VPN or remote app, and before stopping a
+  timer, now open in the same frosted Mocha box as the panel instead of the
+  plain Windows message box. On a risky question the safe button is picked
+  first, so Enter keeps things as they are. Y says yes, Esc or N says no,
+  Tab moves between the buttons.
+- First release (1.0.0): a port of !Net with the Mocha look, the shared
+  settings window, a tray icon, an edge pill and Ctrl+Alt+F shortcuts.
 
 ## Credits
 Based on [!Net](https://windhawk.net/mods/not-net) by Ashix.
@@ -689,6 +698,10 @@ static void NotifyCycleFocusChanged(const std::wstring& fgExeLower);
 static void NotifyCycleSystemResume();
 static HWND g_hCyclePopup = nullptr;
 static HWND g_hCycleWidget = nullptr;
+// The Mocha yes/no box (replaces the stock Windows message box). question = blue "?" icon.
+static HWND g_hConfirm = nullptr;
+static bool FwConfirm(const wchar_t* title, const wchar_t* body, const wchar_t* yes, const wchar_t* no,
+                      bool danger, bool question);
 static void OpenCyclePopupForApp(const AppEntry& app);
 static void SyncCycleWidgetWindow(bool reposition);
 static void DestroyCycleWidgetWindow();
@@ -1680,10 +1693,10 @@ static bool ApplyBlock(std::wstring exePath, Direction dir, bool includeChildren
         return false;
     }
     if (warnVpn && askUser && IsVpnOrRemoteExe(low)) {
-        int res = MessageBoxW(g_hWnd,
-                              L"Blocking this app may disconnect your active VPN or Remote Desktop session.\n\nContinue?",
-                              L"Seamless Windows Firewall", MB_YESNO | MB_ICONWARNING | MB_TOPMOST);
-        if (res != IDYES) return false;
+        if (!FwConfirm(L"Block a VPN or remote app?",
+                       L"Blocking this app may cut your VPN or Remote Desktop connection.",
+                       L"Block anyway", L"Keep it", true, false))
+            return false;
     }
 
     std::vector<std::wstring> targets;
@@ -2092,10 +2105,9 @@ static bool StartCycleForApp(std::wstring exePath, const CycleConfig& cfg, std::
             warnVpn = g_settings.warnOnVpnOrRemote;
         }
         if (warnVpn && IsVpnOrRemoteExe(low)) {
-            int res = MessageBoxW(g_hWnd,
-                                  L"Blocking this app may disconnect your active VPN or Remote Desktop session.\n\nContinue?",
-                                  L"Seamless Windows Firewall", MB_YESNO | MB_ICONWARNING | MB_TOPMOST);
-            if (res != IDYES) {
+            if (!FwConfirm(L"Put a VPN or remote app on a timer?",
+                           L"The timer blocks this app on and off, which may cut your VPN or Remote Desktop connection.",
+                           L"Start anyway", L"Keep it", true, false)) {
                 outErr = L"Cancelled by user.";
                 return false;
             }
@@ -3241,6 +3253,341 @@ struct FwLayer {
     }
 };
 
+// ---------------------------------------------------------------------------
+// The Mocha yes/no box: frosted glass, one 2px window edge, the panel's buttons.
+// Enter or Space picks the focused button, Esc or N says no, Y says yes, Tab and
+// the arrow keys move between the two.
+// ---------------------------------------------------------------------------
+constexpr wchar_t kConfirmClass[] = L"SeamlessFirewall_Confirm_v1";
+constexpr UINT_PTR TIMER_CONFIRM_FADE = 90;
+
+struct FwConfirmState {
+    std::wstring title, body, yes, no;
+    bool danger = false, question = false, glass = false;
+    bool inside = false, tracking = false, done = false, result = false;
+    int hover = 0;  // 1 = no button, 2 = yes button
+    int focus = 2;
+    RECT rcNo{}, rcYes{};
+    int bodyTop = 0, bodyH = 0;
+    DWORD openTick = 0;
+};
+static FwConfirmState* g_confirm = nullptr;
+
+static int FwConfirmHit(const FwConfirmState* st, POINT pt) {
+    if (PtInRect(&st->rcYes, pt)) return 2;
+    if (PtInRect(&st->rcNo, pt)) return 1;
+    return 0;
+}
+
+static SIZE FwConfirmLayout(HWND hwnd, FwConfirmState* st) {
+    UINT dpi = GetDpiForWindow(hwnd);
+    int pad = DpiScale(20, dpi);
+    int w = DpiScale(380, dpi);
+    int textX = pad + DpiScale(34, dpi);
+    const wchar_t* face = FwTextFace();
+    Gdiplus::Font bodyFont(face, (Gdiplus::REAL)DpiScale(12, dpi), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+    Gdiplus::Font btnFont(face, (Gdiplus::REAL)DpiScale(12, dpi), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
+    HDC dc = GetDC(hwnd);
+    Gdiplus::RectF bodyBox, yesBox, noBox;
+    {
+        Gdiplus::Graphics g(dc);
+        g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
+        Gdiplus::RectF lay(0, 0, (Gdiplus::REAL)(w - textX - pad), 4000.0f);
+        g.MeasureString(st->body.c_str(), -1, &bodyFont, lay, &bodyBox);
+        Gdiplus::PointF o(0, 0);
+        g.MeasureString(st->yes.c_str(), -1, &btnFont, o, &yesBox);
+        g.MeasureString(st->no.c_str(), -1, &btnFont, o, &noBox);
+    }
+    ReleaseDC(hwnd, dc);
+    st->bodyTop = pad + DpiScale(24, dpi);
+    st->bodyH = (int)std::ceil(bodyBox.Height) + DpiScale(2, dpi);
+    int btnTop = st->bodyTop + st->bodyH + DpiScale(20, dpi);
+    int btnH = DpiScale(32, dpi);
+    int minW = DpiScale(88, dpi), side = DpiScale(18, dpi), gap = DpiScale(8, dpi);
+    int yesW = std::max(minW, (int)std::ceil(yesBox.Width) + 2 * side);
+    int noW = std::max(minW, (int)std::ceil(noBox.Width) + 2 * side);
+    st->rcYes = RECT{w - pad - yesW, btnTop, w - pad, btnTop + btnH};
+    st->rcNo = RECT{st->rcYes.left - gap - noW, btnTop, st->rcYes.left - gap, btnTop + btnH};
+    return SIZE{w, btnTop + btnH + pad};
+}
+
+static void FwConfirmPaint(HWND hwnd, FwConfirmState* st) {
+    PAINTSTRUCT ps{};
+    HDC hdc = BeginPaint(hwnd, &ps);
+    RECT rc{};
+    GetClientRect(hwnd, &rc);
+    int w = rc.right, h = rc.bottom;
+    FwLayer layer;
+    if (w > 0 && h > 0 && st && layer.Make(hdc, w, h)) {
+        UINT dpi = GetDpiForWindow(hwnd);
+        Gdiplus::Bitmap canvas(w, h, w * 4, PixelFormat32bppPARGB, (BYTE*)layer.bits);
+        Gdiplus::Graphics g(&canvas);
+        g.SetSmoothingMode(Gdiplus::SmoothingModeHighQuality);
+        g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+        g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
+
+        // Frosted Mocha like the panel while the glass is on, solid Mocha otherwise.
+        g.Clear(Moc(fwc::base, st->glass ? 0.55 : 1.0));
+        Gdiplus::REAL winR = (Gdiplus::REAL)DpiScale(PanelCornerRadius(), dpi);
+        Gdiplus::REAL ew = (Gdiplus::REAL)std::max(2, DpiScale(2, dpi));
+        if (st->inside)
+            FwGradEdge(g, 0, 0, (Gdiplus::REAL)w, (Gdiplus::REAL)h, winR, ew);
+        else
+            FwEdge(g, Moc(fwc::surface2), 0, 0, (Gdiplus::REAL)w, (Gdiplus::REAL)h, winR, ew);
+
+        const wchar_t* face = FwTextFace();
+        Gdiplus::Font titleFont(face, (Gdiplus::REAL)DpiScale(15, dpi), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
+        Gdiplus::Font bodyFont(face, (Gdiplus::REAL)DpiScale(12, dpi), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+        Gdiplus::Font btnFont(face, (Gdiplus::REAL)DpiScale(12, dpi), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
+        Gdiplus::Font iconFont(FwIconFace(), (Gdiplus::REAL)DpiScale(18, dpi), Gdiplus::FontStyleRegular,
+                               Gdiplus::UnitPixel);
+        Gdiplus::SolidBrush textBr(Moc(fwc::text)), subBr(Moc(fwc::subtext1)), crustBr(Moc(fwc::crust));
+        Gdiplus::SolidBrush iconBr(Moc(st->question ? fwc::blue : fwc::peach));
+        Gdiplus::StringFormat sfCenter, sfLeft;
+        sfCenter.SetAlignment(Gdiplus::StringAlignmentCenter);
+        sfCenter.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+        sfLeft.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+        sfLeft.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
+        sfLeft.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
+
+        int pad = DpiScale(20, dpi);
+        int textX = pad + DpiScale(34, dpi);
+        Gdiplus::RectF iconRf((Gdiplus::REAL)pad, (Gdiplus::REAL)pad, (Gdiplus::REAL)DpiScale(24, dpi),
+                              (Gdiplus::REAL)DpiScale(24, dpi));
+        g.DrawString(st->question ? L"\xE9CE" : L"\xE7BA", -1, &iconFont, iconRf, &sfCenter, &iconBr);
+        Gdiplus::RectF titleRf((Gdiplus::REAL)textX, (Gdiplus::REAL)pad, (Gdiplus::REAL)(w - textX - pad),
+                               (Gdiplus::REAL)DpiScale(24, dpi));
+        g.DrawString(st->title.c_str(), -1, &titleFont, titleRf, &sfLeft, &textBr);
+        Gdiplus::RectF bodyRf((Gdiplus::REAL)textX, (Gdiplus::REAL)st->bodyTop, (Gdiplus::REAL)(w - textX - pad),
+                              (Gdiplus::REAL)st->bodyH);
+        g.DrawString(st->body.c_str(), -1, &bodyFont, bodyRf, nullptr, &subBr);
+
+        Gdiplus::REAL rad = (Gdiplus::REAL)DpiScale(8, dpi);
+        Gdiplus::REAL ew2 = (Gdiplus::REAL)std::max(2, DpiScale(2, dpi));
+        auto rf = [](const RECT& r) {
+            return Gdiplus::RectF((Gdiplus::REAL)r.left, (Gdiplus::REAL)r.top, (Gdiplus::REAL)(r.right - r.left),
+                                  (Gdiplus::REAL)(r.bottom - r.top));
+        };
+        // "No": Mocha surface with one 2px edge, grey at rest, blue to mauve on hover or focus.
+        {
+            Gdiplus::RectF r = rf(st->rcNo);
+            bool lit = st->hover == 1 || st->focus == 1;
+            FwRound(g, Moc(st->hover == 1 ? fwc::surface1 : fwc::surface0, 0.85), r.X, r.Y, r.Width, r.Height, rad);
+            if (lit) FwGradEdge(g, r.X, r.Y, r.Width, r.Height, rad, ew2);
+            else FwEdge(g, Moc(fwc::surface2), r.X, r.Y, r.Width, r.Height, rad, ew2);
+            g.DrawString(st->no.c_str(), -1, &btnFont, r, &sfCenter, lit ? &textBr : &subBr);
+        }
+        // "Yes": red when it cuts something off, the accent gradient otherwise; hover lifts it,
+        // focus draws a light 2px ring inside it.
+        {
+            Gdiplus::RectF r = rf(st->rcYes);
+            if (st->danger) FwRound(g, Moc(fwc::red), r.X, r.Y, r.Width, r.Height, rad);
+            else FwGradFill(g, r.X, r.Y, r.Width, r.Height, rad);
+            if (st->hover == 2) FwRound(g, Moc(fwc::text, 0.14), r.X, r.Y, r.Width, r.Height, rad);
+            if (st->focus == 2) FwEdge(g, Moc(fwc::text, 0.85), r.X, r.Y, r.Width, r.Height, rad, ew2);
+            g.DrawString(st->yes.c_str(), -1, &btnFont, r, &sfCenter, &crustBr);
+        }
+        BitBlt(hdc, 0, 0, w, h, layer.dc, 0, 0, SRCCOPY);
+    }
+    EndPaint(hwnd, &ps);
+}
+
+static void FwConfirmFinish(HWND hwnd, FwConfirmState* st, bool yes) {
+    if (!st || st->done) return;
+    st->result = yes;
+    st->done = true;
+    ShowWindow(hwnd, SW_HIDE);
+}
+
+static LRESULT CALLBACK FwConfirmProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    FwConfirmState* st = g_confirm;
+    switch (msg) {
+        case WM_CREATE: {
+            BOOL dark = TRUE;
+            DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+            DWORD pref = DWMWCP_ROUND;
+            DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &pref, sizeof(pref));
+            MARGINS m{-1, -1, -1, -1};
+            DwmExtendFrameIntoClientArea(hwnd, &m);
+            bool glass = TransparencyOn();
+            ApplyPanelGlass(hwnd, glass);
+            if (st) st->glass = glass;
+            return 0;
+        }
+        case WM_NCACTIVATE:
+            return TRUE;
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_PAINT:
+            FwConfirmPaint(hwnd, st);
+            return 0;
+        case WM_TIMER:
+            if (wParam == TIMER_CONFIRM_FADE && st) {
+                double t = std::min(1.0, (GetTickCount() - st->openTick) / 120.0);
+                SetLayeredWindowAttributes(hwnd, 0, (BYTE)std::lround(255.0 * (1.0 - (1.0 - t) * (1.0 - t))),
+                                           LWA_ALPHA);
+                if (t >= 1.0) KillTimer(hwnd, TIMER_CONFIRM_FADE);
+            }
+            return 0;
+        case WM_SETCURSOR:
+            if (st && LOWORD(lParam) == HTCLIENT) {
+                POINT pt{};
+                GetCursorPos(&pt);
+                ScreenToClient(hwnd, &pt);
+                SetCursor(LoadCursorW(nullptr, FwConfirmHit(st, pt) ? IDC_HAND : IDC_ARROW));
+                return TRUE;
+            }
+            break;
+        case WM_MOUSEMOVE:
+            if (st) {
+                if (!st->tracking) {
+                    TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
+                    TrackMouseEvent(&tme);
+                    st->tracking = true;
+                }
+                POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+                int hov = FwConfirmHit(st, pt);
+                if (hov != st->hover || !st->inside) {
+                    st->hover = hov;
+                    st->inside = true;
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                }
+            }
+            return 0;
+        case WM_MOUSELEAVE:
+            if (st) {
+                st->tracking = false;
+                st->inside = false;
+                st->hover = 0;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_LBUTTONDOWN:
+            SetCapture(hwnd);
+            return 0;
+        case WM_LBUTTONUP: {
+            ReleaseCapture();
+            POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            int hit = st ? FwConfirmHit(st, pt) : 0;
+            if (hit) FwConfirmFinish(hwnd, st, hit == 2);
+            return 0;
+        }
+        case WM_KEYDOWN:
+            if (!st) return 0;
+            switch (wParam) {
+                case VK_RETURN:
+                case VK_SPACE:
+                    FwConfirmFinish(hwnd, st, st->focus == 2);
+                    break;
+                case VK_ESCAPE:
+                case 'N':
+                    FwConfirmFinish(hwnd, st, false);
+                    break;
+                case 'Y':
+                    FwConfirmFinish(hwnd, st, true);
+                    break;
+                case VK_TAB:
+                case VK_LEFT:
+                case VK_RIGHT:
+                    st->focus = (st->focus == 2) ? 1 : 2;
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                    break;
+            }
+            return 0;
+        case WM_CLOSE:
+            FwConfirmFinish(hwnd, st, false);
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+static bool FwConfirm(const wchar_t* title, const wchar_t* body, const wchar_t* yes, const wchar_t* no,
+                      bool danger, bool question) {
+    if (g_hConfirm) return false;  // one question at a time; a second one counts as "no"
+    static bool registered = false;
+    HINSTANCE inst = GetModuleHandleW(nullptr);
+    if (!registered) {
+        WNDCLASSEXW wc{sizeof(wc)};
+        wc.lpfnWndProc = FwConfirmProc;
+        wc.hInstance = inst;
+        wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        wc.lpszClassName = kConfirmClass;
+        registered = RegisterClassExW(&wc) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
+    }
+    HWND owner = (g_hCyclePopup && IsWindow(g_hCyclePopup)) ? g_hCyclePopup : g_hWnd;
+
+    // Centre on the open panel, or on the screen under the pointer when the panel is closed.
+    RECT anchor{};
+    bool onPanel = g_hWnd && g_uiState == UiState::Panel && GetWindowRect(g_hWnd, &anchor);
+    POINT cpt{};
+    GetCursorPos(&cpt);
+    HMONITOR mon = onPanel ? MonitorFromRect(&anchor, MONITOR_DEFAULTTONEAREST)
+                           : MonitorFromPoint(cpt, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(mon, &mi);
+    if (!onPanel) anchor = mi.rcWork;
+    int cx = (anchor.left + anchor.right) / 2, cy = (anchor.top + anchor.bottom) / 2;
+
+    FwConfirmState st;
+    st.title = title;
+    st.body = body;
+    st.yes = yes;
+    st.no = no;
+    st.danger = danger;
+    st.focus = danger ? 1 : 2;  // a risky box starts on the safe button, so Enter keeps things as they are
+    st.question = question;
+    g_confirm = &st;
+    HWND hwnd = registered ? CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED, kConfirmClass, title,
+                                             WS_POPUP, cx, cy, 10, 10, owner, nullptr, inst, nullptr)
+                           : nullptr;
+    if (!hwnd) {
+        // Never skip the safety question: fall back to the stock box if ours cannot open.
+        g_confirm = nullptr;
+        std::wstring text = std::wstring(body) + L"\n\n" + yes + L"?";
+        return MessageBoxW(owner, text.c_str(), L"Seamless Windows Firewall",
+                           MB_YESNO | (question ? MB_ICONQUESTION : MB_ICONWARNING) | MB_TOPMOST) == IDYES;
+    }
+    g_hConfirm = hwnd;
+    SIZE sz = FwConfirmLayout(hwnd, &st);
+    int x = std::clamp(cx - (int)sz.cx / 2, (int)mi.rcWork.left, (int)mi.rcWork.right - (int)sz.cx);
+    int y = std::clamp(cy - (int)sz.cy / 2, (int)mi.rcWork.top, (int)mi.rcWork.bottom - (int)sz.cy);
+    SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
+    SetWindowPos(hwnd, HWND_TOPMOST, x, y, sz.cx, sz.cy, SWP_NOACTIVATE);
+
+    bool ownerEnabled = owner && IsWindowEnabled(owner);
+    if (ownerEnabled) EnableWindow(owner, FALSE);
+    ShowWindow(hwnd, SW_SHOW);
+    SetForegroundWindow(hwnd);
+    SetFocus(hwnd);
+    st.openTick = GetTickCount();
+    SetTimer(hwnd, TIMER_CONFIRM_FADE, 10, nullptr);
+
+    bool quit = false;
+    WPARAM quitCode = 0;
+    MSG m{};
+    while (!st.done) {
+        BOOL r = GetMessageW(&m, nullptr, 0, 0);
+        if (r == 0) {
+            quit = true;
+            quitCode = m.wParam;
+            break;
+        }
+        if (r < 0) break;
+        TranslateMessage(&m);
+        DispatchMessageW(&m);
+    }
+    bool result = st.done && st.result;
+    if (ownerEnabled && IsWindow(owner)) EnableWindow(owner, TRUE);
+    DestroyWindow(hwnd);
+    g_hConfirm = nullptr;
+    g_confirm = nullptr;
+    // Hand focus back only to a window the owner had open; a closed pill never takes it.
+    if (owner && IsWindow(owner) && (owner == g_hCyclePopup || g_uiState == UiState::Panel))
+        SetForegroundWindow(owner);
+    if (quit) PostQuitMessage((int)quitCode);
+    return result;
+}
+
 static void SyncHoverSensorTimer(HWND hwnd) {
     if (!hwnd) return;
     bool needSensor = false;
@@ -4195,10 +4542,11 @@ static void HandleClickAction(const HitRect& hr) {
         }
         CycleStatusSnapshot cyc;
         if (GetCycleSnapshot(app.exePath, cyc)) {
-            int res = MessageBoxW(g_hWnd,
-                L"This app has an active Cycle Mode schedule.\n\nStop the cycle and toggle manually?",
-                L"Seamless Windows Firewall", MB_YESNO | MB_ICONQUESTION | MB_TOPMOST);
-            if (res != IDYES) return;
+            if (!FwConfirm(L"Stop the timer?",
+                           L"This app is switching between blocked and allowed on a timer. Stop the timer and "
+                           L"change it by hand?",
+                           L"Stop timer", L"Keep timer", false, true))
+                return;
             StopCycleForApp(app.displayPath, false);
         }
         bool blockedNow = false;
@@ -5497,7 +5845,8 @@ static LRESULT CALLBACK CyclePopupWndProc(HWND hwnd, UINT msg, WPARAM wParam, LP
             return 0;
         case WM_ACTIVATE: {
             if (LOWORD(wParam) == WA_INACTIVE && st) {
-                if (st->modalOpen || st->openingRunDrop || (st->hRunDrop && IsWindow(st->hRunDrop))) return 0;
+                if (st->modalOpen || st->openingRunDrop || (st->hRunDrop && IsWindow(st->hRunDrop)) || g_hConfirm)
+                    return 0;
                 PostMessageW(hwnd, WM_CLOSE, 0, 0);
             }
             return 0;
@@ -6591,7 +6940,8 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         case WM_ACTIVATE: {
             if (LOWORD(wParam) == WA_INACTIVE && !g_pinned && g_uiState == UiState::Panel && !g_drag.dragging) {
                 HWND newActive = reinterpret_cast<HWND>(lParam);
-                if ((!g_hCyclePopup || !IsWindow(g_hCyclePopup)) && (!g_hCycleWidget || newActive != g_hCycleWidget)) {
+                if ((!g_hCyclePopup || !IsWindow(g_hCyclePopup)) && (!g_hCycleWidget || newActive != g_hCycleWidget) &&
+                    (!g_hConfirm || newActive != g_hConfirm)) {
                     g_hasPendingNavigateCycle = false;
                     KillTimer(hwnd, TIMER_NAVIGATE_OPEN_CYCLE);
                     KillTimer(hwnd, TIMER_OUTSIDE_CLICK);
