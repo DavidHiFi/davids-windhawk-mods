@@ -2,6 +2,11 @@
 
 What changed in each Seamless Workshop release. The Workshop checks for a new version once a day and offers it on its Updates page.
 
+## 1.4.1
+
+- DavidHiFi's settings now bring his keyboard shortcuts and look settings. Before, anything with "key" in its name was left out.
+- Settings are fitted to each mod before they are saved: old settings are left out, missing ones get the mod's default, and newer Windhawk takes them first try.
+
 ## 1.4.0
 
 - DavidHiFi's whole setup in one go, on the Updates page and the welcome card: every mod he runs, his own and the Windhawk library ones.
