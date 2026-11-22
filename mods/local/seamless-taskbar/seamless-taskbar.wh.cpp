@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.46
+// @version         0.4.47
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -33,7 +33,12 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
 
-## What's new in 0.4.46
+## What's new in 0.4.47
+
+The progress bar under the player now runs the whole width, with the same gap at both
+ends. The song picture sits just above it, so the two never touch.
+
+## Earlier: 0.4.46
 
 Right-click empty taskbar space and open Modules to turn each part on or off as you
 go: the app buttons, system stats, the media player, AI usage, date and time, the tray icons, the tray
@@ -20340,12 +20345,14 @@ static void AddCanvasHalo(Canvas const& view, TextBlock const& tb) {
 }
 // With bars and a progress bar the cover is 2 DIP smaller and lifted clear of the bar.
 static bool LiftCover() { return g_settings.vizOverlay && g_settings.showProgressBar; }
-// Owner 2026-11-22: the cover no longer sits in the band above the progress track (the
-// track starts past it anyway). It is centred in the whole player, 3 DIP clear of the
-// top and bottom edges, so it is the full set size up to that limit.
+// Owner 2026-11-23: the progress track runs the whole player width, so the cover sits
+// in the band above it: 2 DIP under the top edge and 2 DIP over the track's rim.
+static constexpr double kCoverTopGap = 2.0;
+static double CoverBottomGap() { return 2.0 + ((double)g_settings.progressHeight + 2.0) + 2.0; }
 static double CoverSide() {
     double s = (double)(g_settings.albumArtMaxHeight > 0 ? g_settings.albumArtMaxHeight : g_settings.albumArtMinHeight);
-    if (g_settings.playerMaxHeight > 6 && s > g_settings.playerMaxHeight - 6.0) s = g_settings.playerMaxHeight - 6.0;
+    double room = (double)g_settings.playerMaxHeight - kCoverTopGap - CoverBottomGap();
+    if (g_settings.playerMaxHeight > 0 && room > 2 && s > room) s = room;
     return s;
 }
 // Pause glyph stays well inside the cover (under half its height).
@@ -20464,9 +20471,9 @@ static double ProgressCoverClearance() {
 // strip on top that takes left clicks to seek.
 static FrameworkElement BuildProgressLayer(double phMin, double phMax) {
     double h = (double)g_settings.progressHeight;
-    // Owner 2026-11-22: the bar sat off to the right. It keeps clear of the cover and has
-    // the same gap on the far end, so it is centred in the player.
-    double clearL = ProgressCoverClearance();
+    // Owner 2026-11-23: the bar runs the whole player width with the same gap at each
+    // end; the cover sits above it instead of beside it.
+    double clearL = LiftCover() ? 0.0 : ProgressCoverClearance();
     double clearR = clearL;
     Grid layer;
     layer.Name(kProgressLayerName);
@@ -23583,6 +23590,8 @@ static Grid BuildPlayerGrid() {
                 if (side > 2) {
                     artContainer.MinHeight(side); artContainer.MaxHeight(side);
                     artContainer.MinWidth(side);  artContainer.MaxWidth(side);
+                    // Centred in the band above the progress track, not the whole player.
+                    artContainer.Margin({artLeftMargin, kCoverTopGap, artRightMargin, CoverBottomGap()});
                 }
             }
             artContainer.Opacity(g_settings.albumArtOpacity / 100.0);

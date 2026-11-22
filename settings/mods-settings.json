@@ -4819,7 +4819,7 @@
     "apps.AnimationMode": "slide",
     "apps.Collapsed": 1,
     "apps.ElementPaddingPx": 12,
-    "apps.HideAllButtons": 0,
+    "apps.HideAllButtons": 1,
     "apps.Hotkey": "Ctrl+Alt+Shift+T",
     "apps.HoverGraceMs": 400,
     "apps.RestSpeedPxPerSec": 300,
