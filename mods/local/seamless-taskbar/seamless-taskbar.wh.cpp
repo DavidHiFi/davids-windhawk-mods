@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.45
+// @version         0.4.46
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -33,7 +33,21 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
 
-## What's new in 0.4.44
+## What's new in 0.4.46
+
+Right-click empty taskbar space and open Modules to turn each part on or off as you
+go: the app buttons, system stats, the media player, AI usage, date and time, the tray icons, the tray
+drawer and the rest. The Logitech mouse battery and the Recycle Bin in the tray show
+there too when you have those mods. App buttons off hides every button on the bar,
+running ones too, so Seamless Dock alone shows your apps. With Seamless Dock running, the same menu moves
+the dock to any edge and turns its Recycle Bin on or off. The dock moves across from
+the taskbar by itself when you move the taskbar.
+
+## Earlier: 0.4.45
+
+Text boxes in the settings window sit on the card again instead of a solid block.
+
+## Earlier: 0.4.44
 
 The system info block no longer re-measures itself every second. It used to rebuild
 its sizes and lay out the whole taskbar on each update, which showed as a short hitch
@@ -1644,6 +1658,9 @@ The whole mod is published under GPL-3.0.
   - moduleOn: false
     $name: Turn on apps dock
     $description: Applies at once; the mod reloads.
+  - HideAllButtons: false
+    $name: Hide all app buttons
+    $description: Hides every app button, running ones too, for when Seamless Dock shows your apps.
   - Hotkey: Ctrl+Alt+T
     $name: Toggle hotkey
     $description: Modifiers Ctrl, Alt, Shift, Win plus one of A-Z, 0-9, F1-F24, Space. Leave empty for no hotkey
@@ -2039,6 +2056,16 @@ The whole mod is published under GPL-3.0.
       $name: Ignored apps
       $description: Enter app names such as explorer.exe, separated by commas.
     $name: Taskbar position
+  - modules:
+    - enabled: true
+      $name: Show in menu
+      $description: Adds a Modules list to the taskbar's right-click menu to turn each part on or off.
+    - showTray: true
+      $name: Show the tray corner
+      $description: Off hides the whole right corner (tray icons, network, sound and the clock).
+    - showClock: true
+      $name: Show date and time
+    $name: Modules menu
   - iconSeparators:
     - enabled: true
       $name: Turn on separators
@@ -3306,6 +3333,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"media.Visualizer.performance.followTaskbarAutoHide", L"Follow taskbar auto-hide", L"Slide out of view with the taskbar whenever the Windows taskbar auto-hides, and come back when it is shown again, like any other taskbar widget. Keyed to the shell's live state. While the taskbar behaves as a permanent bar that holds its screen space (for example a wedged auto-hide), the strip stays visible with it.", L"1", {}, 0, 100, 3, L"Performance"},
 {K::Check, L"media.Visualizer.performance.pauseWhenObscured", L"Hide when covered", L"Hide the bars while an always-on-top window covers the strip, and bring them back when the space is free again. Ordinary windows sit below the taskbar and can never cover the strip, so this reacts to topmost surfaces such as pinned players.", L"1", {}, 0, 100, 3, L"Performance"},
 {K::Check, L"media.Visualizer.diagnostics.enabled", L"Diagnostic logging", L"Write endpoint status and level summaries to diagnostic.log in this mod Windhawk storage directory. Logs rotate at 1 MiB. Audio samples are never recorded.", L"0", {}, 0, 100, 3, L"Diagnostics"},
+{K::Check, L"apps.HideAllButtons", L"Hide all app buttons", L"Hides every app button, running ones too, for when Seamless Dock shows your apps.", L"0", {}, 0, 100, 4, L"Apps dock"},
 {K::Text, L"apps.Hotkey", L"Toggle hotkey", L"Modifiers Ctrl, Alt, Shift, Win plus one of A-Z, 0-9, F1-F24, Space. Leave empty for no hotkey", L"Ctrl+Alt+T", {}, 0, 100, 4, L"Apps dock"},
 {K::Choice, L"apps.RevealTrigger", L"Reveal trigger", L"", L"click", {{L"click", L"Click"}, {L"rest", L"Rest"}, {L"hover", L"Hover"}, {L"never", L"None, hotkey only"}}, 0, 100, 4, L"Apps dock"},
 {K::Check, L"apps.RevealOnWinStart", L"Reveal on Start Menu", L"Reveals taskbar whilst Windows Start Menu is open", L"0", {}, 0, 100, 4, L"Apps dock"},
@@ -3410,6 +3438,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"utils.position.maximizedOnly", L"Only switch for maximized apps", L"", L"0", {}, 0, 100, 8, L"Taskbar position"},
 {K::Number, L"utils.position.switchDelayMs", L"App switch delay (ms)", L"", L"400", {}, 0, 10000, 8, L"Taskbar position"},
 {K::Text, L"utils.position.ignoredApps", L"Ignored apps", L"Enter app names such as explorer.exe, separated by commas.", L"", {}, 0, 100, 8, L"Taskbar position"},
+{K::Check, L"utils.modules.enabled", L"Show in menu", L"Adds a Modules list to the taskbar's right-click menu to turn each part on or off.", L"1", {}, 0, 100, 8, L"Modules menu"},
+{K::Check, L"utils.modules.showTray", L"Show the tray corner", L"Off hides the whole right corner (tray icons, network, sound and the clock).", L"1", {}, 0, 100, 8, L"Modules menu"},
+{K::Check, L"utils.modules.showClock", L"Show date and time", L"", L"1", {}, 0, 100, 8, L"Modules menu"},
 {K::Check, L"utils.iconSeparators.enabled", L"Turn on separators", L"Adds thin dividers you can place between taskbar icons. Changing this reloads the mod.", L"1", {}, 0, 100, 8, L"Icon separators"},
 {K::Text, L"utils.iconSeparators.label", L"Menu text", L"", L"Add separator", {}, 0, 100, 8, L"Icon separators"},
 {K::Choice, L"utils.iconSeparators.interaction", L"How to add and remove", L"Right-click menu: Add separator in this menu, right-click a separator to remove it. Middle click: middle-click empty taskbar space to add, middle-click a separator to remove it.", L"contextMenu", {{L"contextMenu", L"Right-click menu"}, {L"middleClick", L"Middle click"}}, 0, 100, 8, L"Icon separators"},
@@ -33303,6 +33334,7 @@ constexpr double kGapHoldMs = 250.0;
 struct {
     std::atomic<RevealTrigger> revealTrigger;
     std::atomic<bool> revealOnWinStart;
+    std::atomic<bool> hideAll;
     std::atomic<int> restSpeedPxPerSec;
     std::atomic<int> revealDelayMs;
     std::atomic<int> elementPaddingPx;
@@ -33596,6 +33628,9 @@ bool TaskListButton_IsRunning(FrameworkElement taskListButtonElement) {
         winrt::get_class_name(taskListButtonElement) !=
             L"Taskbar.TaskListButton") {
         return true;
+    }
+    if (g_settings.hideAll) {
+        return false;
     }
     bool isRunning = false;
     if (FAILED(TaskListButton_get_IsRunning_Original(
@@ -33936,7 +33971,7 @@ void SetCollapseState(
         try {
             bool weHidIt = TakeFromHiddenSet(ctx.hiddenByUs, button, false);
             bool running = TaskListButton_IsRunning(button);
-            bool shouldHide = collapse && !running;
+            bool shouldHide = (collapse || g_settings.hideAll) && !running;
 
             if (shouldHide && IsParkedOffBar(ctx, button)) {
                 continue;
@@ -34721,6 +34756,9 @@ void StartGapCloseAnimation(
 
 // Never runs mid-animation; reports false so pending work can retry.
 bool ApplyToFrame(FrameContext& ctx, bool collapse, bool instantRequested) {
+    if (g_settings.hideAll) {
+        collapse = true;
+    }
     auto frame = ctx.frame.get();
     if (!frame) {
         return false;
@@ -36375,6 +36413,7 @@ void CleanupOnThisThread() {
 
 void LoadSettings() {
     g_settings.revealOnWinStart = Wh_GetIntSetting(L"RevealOnWinStart") != 0;
+    g_settings.hideAll = Wh_GetIntSetting(L"HideAllButtons") != 0;
 
     auto trigger = WindhawkUtils::StringSetting::make(L"RevealTrigger");
     g_settings.revealTrigger = RevealTrigger::Click;
@@ -89359,6 +89398,9 @@ bool ApplyTaskbarEdge(DWORD edge) {
         return false;
     }
     Wh_Log(L"Taskbar moved to edge %lu", edge);
+    if (HWND dock = FindWindowW(L"SeamlessDock", nullptr)) {
+        PostMessageW(dock, RegisterWindowMessageW(L"SeamlessDock.Control"), 5, 0);
+    }
     return true;
 }
 
@@ -89976,6 +90018,563 @@ wuxc::MenuFlyoutSubItem BuildSubmenu() {
 
 }  // namespace tps
 
+// The right corner of the primary taskbar (tray icons, network and sound, the
+// clock) can be hidden from the Modules menu. Only the stock pieces are hidden,
+// so tiles other modules put in the corner stay. Primary taskbar only.
+namespace corner {
+
+using GetTaskbarHost_t = void*(WINAPI*)(void* pThis, void* sharedPtr);
+using FrameHeight_t = int(WINAPI*)(void* pThis);
+using Decref_t = void(WINAPI*)(void* pThis);
+GetTaskbarHost_t g_getTaskbarHost = nullptr;
+FrameHeight_t g_frameHeight = nullptr;
+Decref_t g_decref = nullptr;
+void* g_siteVftable = nullptr;
+
+std::atomic<bool> g_symbolsReady{false};
+std::atomic<bool> g_showTray{true};
+std::atomic<bool> g_showClock{true};
+std::atomic<bool> g_stopping{false};
+
+constexpr wchar_t kClockName[] = L"NotificationCenterButton";
+constexpr const wchar_t* kStockNames[] = {
+    L"NotifyIconStack",     L"NotificationAreaIcons", L"MainStack",
+    L"NonActivatableStack", L"ControlCenterButton",   L"ShowDesktopStack",
+};
+
+// Taskbar UI thread only.
+struct HiddenEntry {
+    winrt::weak_ref<wux::UIElement> element;
+    void* abi = nullptr;
+};
+std::vector<HiddenEntry> g_hidden;
+wux::DispatcherTimer g_timer{nullptr};
+winrt::event_token g_tickToken{};
+winrt::weak_ref<wux::FrameworkElement> g_grid;
+bool g_loggedTree = false;
+
+void LoadSettings() {
+    g_showTray.store(Wh_GetIntSetting(L"modules.showTray") != 0);
+    g_showClock.store(Wh_GetIntSetting(L"modules.showClock") != 0);
+}
+
+void LookupSymbols() {
+    HMODULE module = LoadLibraryExW(L"taskbar.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!module) {
+        return;
+    }
+    WindhawkUtils::SYMBOL_HOOK symbols[] = {
+        {{LR"(const CTaskBand::`vftable'{for `ITaskListWndSite'})"}, &g_siteVftable},
+        {{LR"(public: virtual class std::shared_ptr<class TaskbarHost> __cdecl CTaskBand::GetTaskbarHost(void)const )"},
+         &g_getTaskbarHost},
+        {{LR"(public: int __cdecl TaskbarHost::FrameHeight(void)const )"}, &g_frameHeight},
+        {{LR"(public: void __cdecl std::_Ref_count_base::_Decref(void))"}, &g_decref},
+    };
+    bool found = WindhawkUtils::HookSymbols(module, symbols, ARRAYSIZE(symbols));
+    g_symbolsReady = found && g_siteVftable && g_getTaskbarHost && g_frameHeight && g_decref;
+    if (!g_symbolsReady.load()) {
+        Wh_Log(L"Tray corner: taskbar symbols not found, hiding is off");
+    }
+}
+
+wux::XamlRoot GetRoot(HWND taskbar) {
+    if (!g_symbolsReady.load() || !taskbar) {
+        return nullptr;
+    }
+    HWND band = reinterpret_cast<HWND>(GetPropW(taskbar, L"TaskbandHWND"));
+    void* taskBand = band ? reinterpret_cast<void*>(GetWindowLongPtrW(band, 0)) : nullptr;
+    if (!taskBand) {
+        return nullptr;
+    }
+    void* site = taskBand;
+    for (int i = 0;; i++) {
+        if (*reinterpret_cast<void**>(site) == g_siteVftable) {
+            break;
+        }
+        if (i == 20) {
+            return nullptr;
+        }
+        site = reinterpret_cast<void**>(site) + 1;
+    }
+    void* host[2]{};
+    g_getTaskbarHost(site, host);
+    struct Guard {
+        void* reference;
+        ~Guard() {
+            if (reference) {
+                g_decref(reference);
+            }
+        }
+    } guard{host[1]};
+    if (!host[0] || !host[1]) {
+        return nullptr;
+    }
+    size_t offset = 0;
+#if defined(_M_X64)
+    const BYTE* code = reinterpret_cast<const BYTE*>(g_frameHeight);
+    if (code[0] == 0x48 && code[1] == 0x83 && code[2] == 0xEC && code[4] == 0x48 &&
+        code[5] == 0x83 && code[6] == 0xC1 && code[7] <= 0x7F) {
+        offset = code[7];
+    } else {
+        return nullptr;
+    }
+#elif defined(_M_ARM64)
+    const DWORD* code = reinterpret_cast<const DWORD*>(g_frameHeight);
+    if (code[0] == 0xD503237F && (code[1] & 0xFFC07FFF) == 0xA9807BFD &&
+        code[2] == 0x910003FD && (code[3] & 0xFFF00FE0) == 0xF8400C00) {
+        offset = (code[3] >> 12) & 0xFF;
+    } else {
+        return nullptr;
+    }
+#else
+#error "Unsupported architecture"
+#endif
+    auto* unknown = *reinterpret_cast<::IUnknown**>(static_cast<BYTE*>(host[0]) + offset);
+    if (!unknown) {
+        return nullptr;
+    }
+    wux::FrameworkElement element = nullptr;
+    unknown->QueryInterface(winrt::guid_of<wux::FrameworkElement>(), winrt::put_abi(element));
+    return element ? element.XamlRoot() : nullptr;
+}
+
+wux::FrameworkElement FindNamed(wux::DependencyObject const& parent, std::wstring_view name,
+                                int depth) {
+    if (!parent || depth > 24) {
+        return nullptr;
+    }
+    int count = wuxm::VisualTreeHelper::GetChildrenCount(parent);
+    for (int i = 0; i < count; i++) {
+        auto child = wuxm::VisualTreeHelper::GetChild(parent, i);
+        if (auto element = child.try_as<wux::FrameworkElement>()) {
+            if (element.Name() == name) {
+                return element;
+            }
+        }
+        if (auto found = FindNamed(child, name, depth + 1)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+wux::FrameworkElement FindGrid(HWND taskbar) {
+    if (auto grid = g_grid.get()) {
+        if (wuxm::VisualTreeHelper::GetParent(grid)) {
+            return grid;
+        }
+    }
+    auto root = GetRoot(taskbar);
+    auto content = root ? root.Content() : nullptr;
+    auto grid = content ? FindNamed(content, L"SystemTrayFrameGrid", 0) : nullptr;
+    g_grid = grid ? winrt::make_weak(grid) : winrt::weak_ref<wux::FrameworkElement>{};
+    return grid;
+}
+
+bool IsStock(wux::FrameworkElement const& element) {
+    auto name = element.Name();
+    for (auto stock : kStockNames) {
+        if (name == stock) {
+            return true;
+        }
+    }
+    return std::wstring_view(winrt::get_class_name(element)).starts_with(L"SystemTray.");
+}
+
+void Collect(wux::DependencyObject const& parent, bool tray, bool clock,
+             std::vector<wux::UIElement>& out, int depth) {
+    int count = wuxm::VisualTreeHelper::GetChildrenCount(parent);
+    for (int i = 0; i < count; i++) {
+        auto element = wuxm::VisualTreeHelper::GetChild(parent, i).try_as<wux::FrameworkElement>();
+        if (!element) {
+            continue;
+        }
+        if (element.Name() == kClockName) {
+            if (!clock) {
+                out.push_back(element);
+            }
+            continue;
+        }
+        // A box that holds the clock: look inside it, so the clock can stay.
+        if (depth < 4 && FindNamed(element, kClockName, 18)) {
+            Collect(element, tray, clock, out, depth + 1);
+            continue;
+        }
+        if (!tray && IsStock(element)) {
+            out.push_back(element);
+        }
+    }
+}
+
+void LogTreeOnce(wux::FrameworkElement const& grid) {
+    if (g_loggedTree) {
+        return;
+    }
+    g_loggedTree = true;
+    int count = wuxm::VisualTreeHelper::GetChildrenCount(grid);
+    for (int i = 0; i < count; i++) {
+        if (auto e = wuxm::VisualTreeHelper::GetChild(grid, i).try_as<wux::FrameworkElement>()) {
+            Wh_Log(L"Tray corner child %d: %s (%s)", i, e.Name().c_str(),
+                   winrt::get_class_name(e).c_str());
+        }
+    }
+}
+
+void Restore() {
+    for (auto const& entry : g_hidden) {
+        try {
+            if (auto element = entry.element.get()) {
+                element.Visibility(wux::Visibility::Visible);
+            }
+        } catch (...) {
+        }
+    }
+    g_hidden.clear();
+}
+
+void StopTimer() {
+    if (g_timer) {
+        try {
+            g_timer.Stop();
+            g_timer.Tick(g_tickToken);
+        } catch (...) {
+        }
+        g_timer = nullptr;
+    }
+}
+
+void ApplyOnUi();
+
+void EnsureTimer() {
+    if (g_timer) {
+        return;
+    }
+    // A slow re-check: the tray rebuilds its pieces now and then. No change
+    // watchers, so another module that shows a piece again can't start a loop.
+    g_timer = wux::DispatcherTimer();
+    g_timer.Interval(std::chrono::seconds(3));
+    g_tickToken = g_timer.Tick([](auto const&, auto const&) { ApplyOnUi(); });
+    g_timer.Start();
+}
+
+void ApplyOnUi() {
+    try {
+        if (g_stopping.load()) {
+            return;
+        }
+        bool tray = g_showTray.load(), clock = g_showClock.load();
+        if (tray && clock) {
+            Restore();
+            StopTimer();
+            return;
+        }
+        EnsureTimer();
+        HWND taskbar = FindCurrentProcessTaskbarWnd();
+        auto grid = FindGrid(taskbar);
+        if (!grid) {
+            return;
+        }
+        LogTreeOnce(grid);
+        std::vector<wux::UIElement> want;
+        Collect(grid, tray, clock, want, 0);
+
+        auto wanted = [&](void* abi) {
+            for (auto const& e : want) {
+                if (winrt::get_abi(e) == abi) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        std::erase_if(g_hidden, [&](HiddenEntry const& entry) {
+            auto element = entry.element.get();
+            if (!element) {
+                return true;
+            }
+            if (wanted(entry.abi)) {
+                return false;
+            }
+            element.Visibility(wux::Visibility::Visible);
+            return true;
+        });
+        for (auto const& element : want) {
+            void* abi = winrt::get_abi(element);
+            bool tracked = std::any_of(g_hidden.begin(), g_hidden.end(),
+                                       [abi](HiddenEntry const& e) { return e.abi == abi; });
+            if (element.Visibility() == wux::Visibility::Visible) {
+                element.Visibility(wux::Visibility::Collapsed);
+                if (!tracked) {
+                    g_hidden.push_back({winrt::make_weak(element), abi});
+                }
+            }
+        }
+    } catch (...) {
+        Wh_Log(L"Tray corner: apply failed");
+    }
+}
+
+void StopOnUi() {
+    StopTimer();
+    Restore();
+    g_grid = {};
+}
+
+// Settings changed: hide or show again at once.
+void Reload() {
+    LoadSettings();
+    if (!g_symbolsReady.load()) {
+        return;
+    }
+    if (HWND taskbar = FindCurrentProcessTaskbarWnd()) {
+        RunFromWindowThread(taskbar, ApplyOnUi);
+    }
+}
+
+// At start the taskbar may not be up yet; wait for it on a tracked thread.
+void Start() {
+    if (!g_symbolsReady.load() || (g_showTray.load() && g_showClock.load())) {
+        return;
+    }
+    RunAsyncTracked([]() {
+        for (int i = 0; i < 120 && !g_unloading.load() && !g_stopping.load(); i++) {
+            if (HWND taskbar = FindCurrentProcessTaskbarWnd()) {
+                RunFromWindowThread(taskbar, ApplyOnUi);
+                return;
+            }
+            Sleep(500);
+        }
+    });
+}
+
+void BeforeUninit() {
+    g_stopping = true;
+    if (HWND taskbar = FindCurrentProcessTaskbarWnd()) {
+        RunFromWindowThread(taskbar, StopOnUi);
+    }
+}
+
+}  // namespace corner
+
+// The "Modules" and "Dock position" rows of the taskbar's right-click menu.
+// Turning a module on or off saves the setting through windhawk-cli, the same
+// way the settings window does, and the mod reloads with the new set.
+namespace modmenu {
+
+constexpr wchar_t kLogitechMod[] = L"logitech-battery-tray";
+constexpr wchar_t kRecycleTrayMod[] = L"local@recycle-bin-tray-plus";
+
+bool Enabled() {
+    return Wh_GetIntSetting(L"modules.enabled") != 0;
+}
+
+UINT DockMessage() {
+    static UINT message = RegisterWindowMessageW(L"SeamlessDock.Control");
+    return message;
+}
+
+// What the dock has set, or -1 when it isn't running.
+LONG_PTR QueryDock() {
+    HWND dock = FindWindowW(L"SeamlessDock", nullptr);
+    if (!dock || !DockMessage()) {
+        return -1;
+    }
+    DWORD_PTR result = 0;
+    if (!SendMessageTimeoutW(dock, DockMessage(), 1, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, 200,
+                             &result) ||
+        !(result & 0x40000000)) {
+        return -1;
+    }
+    return static_cast<LONG_PTR>(result);
+}
+
+void PostDock(WPARAM command, LPARAM value) {
+    if (HWND dock = FindWindowW(L"SeamlessDock", nullptr)) {
+        PostMessageW(dock, DockMessage(), command, value);
+    }
+}
+
+// 0 = not installed, 1 = off, 2 = on.
+int OtherModState(const wchar_t* id) {
+    std::wstring path = std::wstring(L"SOFTWARE\\Windhawk\\Engine\\Mods\\") + id;
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, path.c_str(), 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY,
+                      &key) != ERROR_SUCCESS) {
+        return 0;
+    }
+    DWORD value = 0, size = sizeof(value), type = 0;
+    LONG result = RegQueryValueExW(key, L"Disabled", nullptr, &type,
+                                   reinterpret_cast<BYTE*>(&value), &size);
+    RegCloseKey(key);
+    return result == ERROR_SUCCESS && type == REG_DWORD && value ? 1 : 2;
+}
+
+// Runs windhawk-cli on a tracked thread and does not wait for it: the change
+// reloads this mod, and the reload waits for tracked threads.
+void RunCli(std::wstring params) {
+    RunAsyncTracked([params = std::move(params)]() {
+        std::wstring cli = ::stset::Set_CliPath();
+        if (cli.empty()) {
+            Wh_Log(L"Modules menu: windhawk-cli.exe not found");
+            return;
+        }
+        HRESULT co = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        SHELLEXECUTEINFOW info{sizeof(info)};
+        info.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+        info.lpVerb = L"runas";
+        info.lpFile = cli.c_str();
+        info.lpParameters = params.c_str();
+        info.nShow = SW_HIDE;
+        if (!ShellExecuteExW(&info)) {
+            Wh_Log(L"Modules menu: windhawk-cli did not start (%lu)", GetLastError());
+        }
+        if (SUCCEEDED(co)) {
+            CoUninitialize();
+        }
+    });
+}
+
+void SaveSettings(std::initializer_list<std::pair<std::wstring, bool>> values) {
+    std::wstring params = L"--quiet mod settings set " + ::stset::Set_QuoteArg(::st::kRealModId);
+    for (auto const& [key, on] : values) {
+        params += L" " + ::stset::Set_QuoteArg(key + (on ? L"=1" : L"=0"));
+    }
+    RunCli(std::move(params));
+}
+
+void SaveSetting(std::wstring const& key, bool on) {
+    SaveSettings({{key, on}});
+}
+
+void SetOtherMod(const wchar_t* id, bool on) {
+    RunCli(std::wstring(L"--quiet mod ") + (on ? L"enable " : L"disable ") +
+           ::stset::Set_QuoteArg(id));
+}
+
+using Click = std::function<void()>;
+
+void AddToggle(wuxc::MenuFlyoutSubItem const& menu, const wchar_t* text, bool on, Click click) {
+    wuxc::ToggleMenuFlyoutItem item;
+    item.Text(text);
+    item.IsChecked(on);
+    tps::AddClick(item, [click](wf::IInspectable const&, wux::RoutedEventArgs const&) { click(); });
+    menu.Items().Append(item);
+}
+
+void AddModule(wuxc::MenuFlyoutSubItem const& menu, const wchar_t* text, int index) {
+    bool on = ::st::g_modOn[index];
+    std::wstring key = std::wstring(::st::kModKeys[index]) + L".moduleOn";
+    AddToggle(menu, text, on, [key, on]() { SaveSetting(key, !on); });
+}
+
+void AddUtilsSetting(wuxc::MenuFlyoutSubItem const& menu, const wchar_t* text,
+                     const wchar_t* name) {
+    bool on = Wh_GetIntSetting(name) != 0;
+    std::wstring key = std::wstring(kStPrefix) + name;
+    AddToggle(menu, text, on, [key, on]() { SaveSetting(key, !on); });
+}
+
+void AddOtherMod(wuxc::MenuFlyoutSubItem const& menu, const wchar_t* text, const wchar_t* id) {
+    int state = OtherModState(id);
+    if (!state) {
+        return;
+    }
+    bool on = state == 2;
+    std::wstring copy = id;
+    AddToggle(menu, text, on, [copy, on]() { SetOtherMod(copy.c_str(), !on); });
+}
+
+wuxc::MenuFlyoutSubItem BuildModules(LONG_PTR dock) {
+    wuxc::MenuFlyoutSubItem menu;
+    menu.Text(L"Modules");
+    menu.Icon(CreateFluentIcon(L"\xE71D"));
+
+    // App buttons are hidden by the apps module, so turning them off also
+    // turns that module on.
+    bool appsShown = !(::st::g_modOn[2] && ::Wh_GetIntSetting(L"apps.HideAllButtons"));
+    AddToggle(menu, L"App buttons", appsShown, [appsShown]() {
+        if (appsShown) {
+            SaveSettings({{L"apps.moduleOn", true}, {L"apps.HideAllButtons", true}});
+        } else {
+            SaveSetting(L"apps.HideAllButtons", false);
+        }
+    });
+    AddModule(menu, L"System stats", 0);
+    AddModule(menu, L"Media player", 1);
+    AddModule(menu, L"AI usage", 6);
+    AddUtilsSetting(menu, L"Date and time", L"modules.showClock");
+    AddUtilsSetting(menu, L"Tray icons", L"modules.showTray");
+    AddModule(menu, L"Tray drawer", 5);
+    AddOtherMod(menu, L"Logitech mouse battery", kLogitechMod);
+    AddOtherMod(menu, L"Recycle Bin in the tray", kRecycleTrayMod);
+    if (dock >= 0) {
+        bool recycle = (dock & 0x10) != 0, title = (dock & 0x20) != 0;
+        AddToggle(menu, L"Recycle Bin in the dock", recycle, [recycle]() { PostDock(3, !recycle); });
+        AddToggle(menu, L"App names in the dock", title, [title]() { PostDock(4, !title); });
+    }
+
+    menu.Items().Append(wuxc::MenuFlyoutSeparator{});
+    AddModule(menu, L"Clock island", 3);
+    AddModule(menu, L"Apps dock", 2);
+    AddModule(menu, L"Hide tooltips", 4);
+    AddModule(menu, L"Keep awake", 8);
+    AddModule(menu, L"Network toggle", 9);
+    AddModule(menu, L"Tray icon rules", 10);
+    AddModule(menu, L"Wallpaper switcher", 11);
+
+    ThemeMenuItemOnce(menu, 0);
+    return menu;
+}
+
+wuxc::MenuFlyoutSubItem BuildDockPosition(LONG_PTR dock) {
+    wuxc::MenuFlyoutSubItem menu;
+    menu.Text(L"Dock position");
+    menu.Icon(CreateFluentIcon(L"\xE7C4"));
+    struct Place {
+        const wchar_t* text;
+        int place;
+    };
+    static constexpr Place kPlaces[] = {
+        {L"Across from the taskbar", 0}, {L"Bottom", 1}, {L"Top", 2}, {L"Left", 3}, {L"Right", 4},
+    };
+    int current = static_cast<int>(dock & 0x7);
+    for (auto const& option : kPlaces) {
+        int place = option.place;
+        auto item = tps::MakeChoice(option.text, place == current);
+        tps::AddClick(item, [place](wf::IInspectable const&, wux::RoutedEventArgs const&) {
+            PostDock(2, place);
+        });
+        menu.Items().Append(item);
+        if (place == 0) {
+            menu.Items().Append(wuxc::MenuFlyoutSeparator{});
+        }
+    }
+    ThemeMenuItemOnce(menu, 0);
+    return menu;
+}
+
+// Adds the rows to the taskbar menu; true when something was added.
+bool Append(void* vectorThis, bool nameFirst) {
+    if (!Enabled() || !tps::g_hostProcess.load() || g_unloading.load()) {
+        return false;
+    }
+    std::erase_if(tps::g_clicks, [](tps::ClickEntry const& entry) { return !entry.item.get(); });
+    LONG_PTR dock = QueryDock();
+    auto modules = BuildModules(dock);
+    if (nameFirst) {
+        modules.Name(kGuardItemName);
+    }
+    MenuFlyoutItemBaseVector_Append_Original(vectorThis, modules);
+    if (dock >= 0) {
+        MenuFlyoutItemBaseVector_Append_Original(vectorThis, BuildDockPosition(dock));
+    }
+    wuxc::MenuFlyoutSeparator separator;
+    ThemeMenuItem(separator);
+    MenuFlyoutItemBaseVector_Append_Original(vectorThis, separator);
+    return true;
+}
+
+}  // namespace modmenu
+
 void AppendInjectedItems(void* vectorThis) {
     auto cfg = GetSettingsSnapshot();
 
@@ -89994,6 +90593,17 @@ void AppendInjectedItems(void* vectorThis) {
         } catch (...) {
             Wh_Log(L"Taskbar position submenu failed");
         }
+    }
+    try {
+        bool before = g_currentMenuInjected;
+        g_currentMenuInjected = true;
+        if (modmenu::Append(vectorThis, !positionInjected)) {
+            positionInjected = true;
+        } else {
+            g_currentMenuInjected = before;
+        }
+    } catch (...) {
+        Wh_Log(L"Modules submenu failed");
     }
 
     const MenuItemSpec specs[] = {
@@ -90429,6 +91039,8 @@ BOOL Wh_ModInit() {
     }
 
     tps::Init();
+    corner::LoadSettings();
+    corner::LookupSymbols();
 
     if (GetSettingsSnapshot().separators) {
         g_sepActive.store(sep::ExplorerModInit());
@@ -90450,6 +91062,7 @@ void Wh_ModAfterInit() {
         }
     }
     tps::AfterInit();
+    corner::Start();
     if (g_sepActive.load()) {
         sep::ExplorerModAfterInit();
     }
@@ -90464,6 +91077,7 @@ BOOL Wh_ModSettingsChanged(BOOL* bReload) {
         return TRUE;
     }
     tps::LoadSettings();
+    corner::Reload();
     if (g_sepActive.load()) {
         return sep::ExplorerModSettingsChanged(bReload);
     }
@@ -90477,6 +91091,7 @@ void Wh_ModBeforeUninit() {
     if (HWND taskbar = FindCurrentProcessTaskbarWnd()) {
         RunFromWindowThread(taskbar, tps::RevokeClicksOnUiThread);
     }
+    corner::BeforeUninit();
     if (g_sepActive.load()) {
         sep::ExplorerModBeforeUninit();
     }
