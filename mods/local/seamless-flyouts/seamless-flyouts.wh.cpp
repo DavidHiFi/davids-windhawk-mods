@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.1.2
+// @version         2.1.3
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -28,11 +28,12 @@ Explorer folder windows that open hidden or late, so they never show up black.
 
 Built on Translucent Windows by Undisputed00x.
 
-## What's new in 2.1.2
+## What's new in 2.1.3
 
 - The strip behind File name, Open and Cancel, and the bottom bar of Save windows, now really
   match the file list. 2.1.1 aimed at the wrong painter, so the grey bar stayed.
 - The Save window's middle panel is dark again (2.1.1 made it lighter).
+- The File name label no longer sits in a grey box.
 
 ## What's new in 2.1.1
 
@@ -1865,6 +1866,13 @@ static LRESULT CALLBACK FooterProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
                 FillRect(dc, &ps.rcPaint, (HBRUSH)GetStockObject(BLACK_BRUSH));
             EndPaint(hWnd, &ps);
             return 0;
+        }
+        // Labels on the footer (File name) get the same grey from the dialog as a box behind
+        // their text. Keep the dialog's text colour, swap the box for glass.
+        if (uMsg == WM_CTLCOLORSTATIC || uMsg == WM_CTLCOLORBTN || uMsg == WM_CTLCOLORDLG) {
+            DefSubclassProc(hWnd, uMsg, wParam, lParam);
+            SetBkColor((HDC)wParam, RGB(0, 0, 0));
+            return (LRESULT)GetStockObject(BLACK_BRUSH);
         }
     }
     if (uMsg == WM_NCDESTROY)
