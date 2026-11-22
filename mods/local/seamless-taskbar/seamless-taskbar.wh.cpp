@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.43
+// @version         0.4.44
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -33,7 +33,14 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
 
-## What's new in 0.4.40
+## What's new in 0.4.44
+
+The system info block no longer re-measures itself every second. It used to rebuild
+its sizes and lay out the whole taskbar on each update, which showed as a short hitch
+about once a second. Now it only does that when a setting, the memory totals or the
+taskbar height change. The numbers still update every second.
+
+## Earlier: 0.4.40
 
 The bars behind the player now follow the screen refresh too. Before, only the separate
 bars did, so with Behind widget the bars still ran on a plain clock that drifts against the
@@ -12308,8 +12315,12 @@ void ApplyReservedSpace(const ModSettings& settings) {
                            ? WeatherAwareLeftOffset(settings) + g_widgetWidth +
                                  settings.reserveGap
                            : 0.0;
-    margin.Left = baseLeft + g_reservedMargin;
-    g_taskItemsRepeater.Margin(margin);
+    double wantLeft = baseLeft + g_reservedMargin;
+    if (std::abs(margin.Left - wantLeft) >= 0.01) {
+        margin.Left = wantLeft;
+        g_taskItemsRepeater.Margin(margin);
+    }
+    margin.Left = wantLeft;
     if (g_reservedMargin != 0.0) {
         g_lastAppliedRepeaterMarginLeft = margin.Left;
     } else {
@@ -12393,6 +12404,28 @@ void ApplyWidgetSettings() {
     UpdateAppsIsland();
 
     UpdateTimerInterval();
+}
+
+// The widget's sizes come from the settings, the memory totals, the row height, the
+// taskbar height and the weather edge, never from the live numbers. Redoing them on
+// every sample re-measured about twenty probe texts and laid out the whole taskbar
+// once a second, so the refresh only redoes them when one of these changes.
+bool WidgetGeometryChanged(const ModSettings* settings, double leftOffset) {
+    struct Key {
+        const void* settings = nullptr;
+        void* widget = nullptr;
+        double ram = -1, vram = -1, row = -1, height = -1, left = -1;
+        bool stacked = false;
+        bool operator==(const Key&) const = default;
+    };
+    static Key last;
+    Key now{settings, winrt::get_abi(g_widget), g_ramLayoutCapacityGb,
+            g_vramLayoutCapacityGb, g_stackedRowHeight,
+            g_rootGrid ? static_cast<double>(g_rootGrid.ActualHeight()) : 0.0,
+            leftOffset, g_widgetStacked};
+    if (now == last) return false;
+    last = now;
+    return true;
 }
 
 void UpdateWidgetText(bool force = false) {
@@ -12525,7 +12558,10 @@ void UpdateWidgetText(bool force = false) {
     setNetwork(g_downloadText,g_downloadUnit,snapshot.downloadBps,false);
     if (snapshot.ramAvailable) g_ramLayoutCapacityGb = snapshot.ramTotalGb;
     if (snapshot.vramAvailable) g_vramLayoutCapacityGb = snapshot.vramTotalGb;
-    ApplyWidgetGeometry(settings);
+    if (WidgetGeometryChanged(settingsSnapshot.get(), WeatherAwareLeftOffset(settings)) ||
+        force) {
+        ApplyWidgetGeometry(settings);
+    }
     ApplyReservedSpace(settings);
     if (HWND taskbar = g_taskbarWindow.load()) {
         SetPropW(taskbar, L"WindhawkTaskbarSystemInfoRightDip", reinterpret_cast<HANDLE>(static_cast<INT_PTR>(PublishedRightEdge(WeatherAwareLeftOffset(settings)))));
