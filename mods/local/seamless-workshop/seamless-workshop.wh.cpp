@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.4.0
+// @version         1.4.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -21,7 +21,7 @@ One place for DavidHiFi's Windhawk mods. Install them, keep them up to date,
 turn them on and off, and change their settings, all from one window that
 lives in the tray.
 
-![Seamless Workshop](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-workshop.png)
+![Seamless Workshop](https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/main/media/previews/seamless-workshop.png)
 
 Needs the latest Windhawk alpha.
 
@@ -35,6 +35,15 @@ Needs the latest Windhawk alpha.
 - Use DavidHiFi's settings for one mod, or copy his whole setup in one go:
   every mod he runs, with or without his settings, on a clean slate if you
   like. Your current mods are backed up first, so you can always go back.
+
+## What's new in 1.4.1
+
+- DavidHiFi's settings now bring his keyboard shortcuts and his look
+  settings along. Before, anything with "key" in its name was left out, so
+  every shortcut was missing.
+- Settings are fitted to each mod before they are saved. Old settings a mod
+  no longer has are left out, and anything missing gets the mod's default, so
+  newer Windhawk versions take them on the first try.
 
 ## What's new in 1.4.0
 
@@ -4974,6 +4983,8 @@ struct HubBlock {
     std::vector<std::wstring> lines;
 };
 
+static void Hub_FitSettingsFile(const std::wstring& line);
+
 #ifdef HUB_MOD
 // A line that changes the Workshop itself (turn off, remove, update) would end this process,
 // so those run last, after the window has shown the result. Its own settings are safe.
@@ -5013,7 +5024,9 @@ static bool Hub_RunBlocks(SetWindow& w, const std::vector<HubBlock>& blocks, std
     Set_SetStatus(w, L"Saving…");
     ULONGLONG budget = 20000;
     for (auto& b : now)
-        for (auto& l : b.lines) budget += (Hub_LongCli(l) ? 310000 : 15000) * (l.find(L'\t') != std::wstring::npos ? 2 : 1);
+        for (auto& l : b.lines)
+            budget += (Hub_LongCli(l) ? 310000 : l.find(L"mod settings write ") == 0 ? 30000 : 15000) *
+                      (l.find(L'\t') != std::wstring::npos ? 2 : 1);
     const bool keepGoing = failed != nullptr;
     std::thread worker([run, now, keepGoing] {
         for (size_t i = 0; i < now.size(); i++) {
@@ -5023,6 +5036,7 @@ static bool Hub_RunBlocks(SetWindow& w, const std::vector<HubBlock>& blocks, std
                 Js data;
                 std::wstring e;
                 const size_t tab = line.find(L'\t');
+                if (line.find(L"mod settings write ") == 0) Hub_FitSettingsFile(line.substr(0, tab));
                 bool ok = Hub_Cli(line.substr(0, tab), data, e);
                 if (!ok && tab != std::wstring::npos) { e.clear(); ok = Hub_Cli(line.substr(tab + 1), data, e); }
                 if (!ok) {
@@ -6023,19 +6037,188 @@ static void Hub_FeedResult(SetWindow& w, bool manual) {
 // or account id is never written, and neither is a value that looks like one. The user's own
 // value for such a setting stays as it is.
 
+// A setting name in lower-case words. Dots, list marks, _ - / and spaces split it, and so does
+// each capital that starts a word: "accounts[0].apiKey" is accounts, api, key. Matching whole
+// words keeps shortcuts ("hotkeyCenter", "toggleKey", "keyboardSounds") out of the private list.
+static std::vector<std::wstring> Hub_KeyWords(const std::wstring& key) {
+    std::wstring s;
+    for (size_t i = 0; i < key.size(); i++) {
+        if (key[i] == L'[') {
+            const size_t end = key.find(L']', i);
+            if (end != std::wstring::npos && key.find_first_not_of(L"0123456789", i + 1) == end) { s += L' '; i = end; continue; }
+        }
+        const wchar_t c = key[i];
+        if (iswupper(c) && i > 0) {
+            const wchar_t p = key[i - 1];
+            const bool nextLower = i + 1 < key.size() && iswlower(key[i + 1]);
+            if (iswlower(p) || iswdigit(p) || (iswupper(p) && nextLower)) s += L' ';
+        }
+        s += c;
+    }
+    std::vector<std::wstring> words;
+    std::wstring cur;
+    for (wchar_t c : s) {
+        if (c == L' ' || c == L'.' || c == L'_' || c == L'-' || c == L'/' || c == L'\t') {
+            if (!cur.empty()) words.push_back(cur), cur.clear();
+        } else {
+            cur += (wchar_t)towlower(c);
+        }
+    }
+    if (!cur.empty()) words.push_back(cur);
+    return words;
+}
+
+// The same word lists the publisher scrubs presets with, so what he leaves out and what the
+// Workshop keeps as yours line up. Plain "key" counts only as the whole last part of a name.
 static bool Hub_SecretKey(const std::wstring& key) {
-    static const std::wregex secret(
-        L"key|token|secret|password|passw|apikey|api_key|webhook|auth|bearer|cookie|credential|client.?id|application.?id|discord.*id",
-        std::regex::icase);
-    return std::regex_search(key, secret);
+    static const std::set<std::wstring> words = {
+        L"token", L"tokens", L"secret", L"secrets", L"password", L"passwords", L"passwd", L"pwd", L"passphrase",
+        L"apikey", L"apikeys", L"webhook", L"webhooks", L"auth", L"oauth", L"bearer", L"cookie", L"cookies",
+        L"credential", L"credentials", L"clientid", L"appsecret", L"privatekey", L"accesskey",
+        L"location", L"city", L"latitude", L"longitude", L"lat", L"lon", L"lng", L"zip", L"zipcode", L"postcode",
+        L"postal", L"address", L"email", L"username", L"phone", L"country", L"street", L"placename", L"geo"};
+    static const std::set<std::pair<std::wstring, std::wstring>> pairs = {
+        {L"api", L"key"}, {L"client", L"id"}, {L"client", L"secret"}, {L"application", L"id"}, {L"user", L"name"},
+        {L"place", L"name"}, {L"access", L"key"}, {L"secret", L"key"}, {L"private", L"key"}, {L"license", L"key"},
+        {L"subscription", L"key"}, {L"auth", L"key"}, {L"zip", L"code"}, {L"post", L"code"}, {L"e", L"mail"},
+        {L"session", L"key"}, {L"refresh", L"token"}, {L"access", L"token"}, {L"sync", L"peers"}};
+    static const std::set<std::pair<std::wstring, std::wstring>> safe = {
+        {L"taskbar", L"location"}, {L"target", L"location"}, {L"detect", L"location"}, {L"address", L"bar"},
+        {L"country", L"display"}, {L"password", L"screen"}, {L"location", L"secondary"}};
+    const auto w = Hub_KeyWords(key);
+    for (size_t i = 0; i + 1 < w.size(); i++)
+        if (safe.count({w[i], w[i + 1]})) return false;
+    bool discord = false;
+    for (size_t i = 0; i < w.size(); i++) {
+        if (words.count(w[i])) return true;
+        if (i + 1 < w.size() && pairs.count({w[i], w[i + 1]})) return true;
+        if (w[i] == L"discord") discord = true;
+        else if (discord && w[i] == L"id") return true;  // A Discord account, server or app id.
+    }
+    std::wstring last = key;
+    while (!last.empty() && last.back() == L']') last.pop_back();
+    if (const size_t at = last.find_last_of(L".]"); at != std::wstring::npos) last = last.substr(at + 1);
+    const auto lw = Hub_KeyWords(last.empty() ? key : last);
+    return lw.size() == 1 && (lw[0] == L"key" || lw[0] == L"keys");
+}
+
+// A run that flips between capitals, small letters and digits all the time, as keys do. Names
+// and styles flip once a word ("BackgroundSizing=InnerBorderEdge"), so they stay.
+static bool Hub_LooksRandom(const std::wstring& run) {
+    if (run.size() >= 32 && run.find_first_not_of(L"0123456789abcdefABCDEF") == std::wstring::npos) return true;
+    bool lo = false, up = false;
+    size_t digits = 0, flips = 0;
+    for (size_t i = 0; i < run.size(); i++) {
+        const wchar_t a = run[i];
+        lo |= a >= L'a' && a <= L'z';
+        up |= a >= L'A' && a <= L'Z';
+        digits += a >= L'0' && a <= L'9';
+        if (i + 1 < run.size()) {
+            const wchar_t b = run[i + 1];
+            const bool al = a >= L'a' && a <= L'z', au = a >= L'A' && a <= L'Z', ad = a >= L'0' && a <= L'9';
+            const bool bl = b >= L'a' && b <= L'z', bu = b >= L'A' && b <= L'Z', bd = b >= L'0' && b <= L'9';
+            flips += (al && bu) || (au && bl) || (ad != bd);
+        }
+    }
+    return lo && up && digits >= 3 && flips * 100 >= run.size() * 35;
 }
 
 static bool Hub_SecretValue(const Js& v) {
     if (v.t != Js::Str) return false;
     for (PCWSTR prefix : {L"sk-", L"ghp_", L"github_pat_", L"xox", L"AIza", L"Bearer "})
         if (v.s.rfind(prefix, 0) == 0) return true;
-    if (v.s.size() < 32) return false;
-    return v.s.find_first_not_of(L"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=_-") == std::wstring::npos;
+    static const std::wregex token(
+        L"\\b(sk-[A-Za-z0-9_\\-]{8,}|sk_(live|test)_[A-Za-z0-9]{10,}|gh[pousr]_[A-Za-z0-9]{10,}|github_pat_[A-Za-z0-9_]{20,}|"
+        L"xox[abposr]-|AIza[0-9A-Za-z_\\-]{10,}|AKIA[0-9A-Z]{12,}|eyJ[A-Za-z0-9_\\-]{8,}\\.[A-Za-z0-9_\\-]{4,}|"
+        L"bearer\\s+[A-Za-z0-9._~+/\\-]{12,})|discord(app)?\\.com/api/webhooks|hooks\\.slack\\.com/|-----BEGIN [A-Z ]*PRIVATE KEY",
+        std::regex::icase);
+    if (std::regex_search(v.s, token)) return true;
+    static const std::wregex run(L"[A-Za-z0-9+/=_\\-]{32,}");
+    for (std::wsregex_iterator it(v.s.begin(), v.s.end(), run), end; it != end; ++it)
+        if (Hub_LooksRandom(it->str())) return true;
+    static const std::wregex email(L"[A-Za-z0-9._%+\\-]+@[A-Za-z0-9\\-]+(\\.[A-Za-z0-9\\-]+)*\\.[A-Za-z]{2,24}\\b");
+    for (std::wsregex_iterator it(v.s.begin(), v.s.end(), email), end; it != end; ++it) {
+        std::wstring m = it->str();
+        for (auto& c : m) c = (wchar_t)towlower(c);
+        if (m.rfind(L"local@", 0) != 0) return true;
+    }
+    return false;
+}
+
+// A list item's shape: "rows[3].name" is "rows[].name".
+static std::wstring Hub_KeyShape(const std::wstring& k) {
+    std::wstring s;
+    for (size_t i = 0; i < k.size(); i++) {
+        s += k[i];
+        if (k[i] != L'[') continue;
+        size_t j = i + 1;
+        while (j < k.size() && iswdigit(k[j])) j++;
+        if (j > i + 1 && j < k.size() && k[j] == L']') i = j - 1;
+    }
+    return s;
+}
+
+// Fits a settings set to what the mod declares on this PC, so Windhawk takes it: names the mod
+// no longer has are left out, a number saved as unsigned (4294967295) goes back to -1, a number
+// where the mod wants text becomes text, and every declared setting the set lacks gets the
+// mod's default. A list the set holds is kept whole; its default items are not added to it.
+static std::wstring Hub_FitSettings(const Js& want, const Js& defs, int* dropped = nullptr) {
+    std::map<std::wstring, const Js*> declared;
+    std::set<std::wstring> tops;
+    for (size_t i = 0; i < defs.keys.size(); i++) {
+        declared[Hub_KeyShape(defs.keys[i])] = &defs.a[i];
+        if (const size_t at = defs.keys[i].find(L'['); at != std::wstring::npos) tops.insert(defs.keys[i].substr(0, at));
+    }
+    std::vector<std::pair<std::wstring, std::wstring>> out;
+    std::set<std::wstring> have, wantTops;
+    int skipped = 0;
+    for (size_t i = 0; i < want.keys.size(); i++) {
+        const std::wstring& k = want.keys[i];
+        const size_t at = k.find(L'[');
+        const auto d = declared.find(Hub_KeyShape(k));
+        if (d == declared.end() && !(at != std::wstring::npos && tops.count(k.substr(0, at)))) { skipped++; continue; }
+        if (at != std::wstring::npos) wantTops.insert(k.substr(0, at));
+        Js v = want.a[i];
+        const Js* def = d == declared.end() ? nullptr : d->second;
+        if (v.t == Js::Num && def && def->t == Js::Str) {
+            v.t = Js::Str;
+        } else if (v.t == Js::Num && v.s.find_first_not_of(L"0123456789") == std::wstring::npos && v.s.size() == 10) {
+            const unsigned long long n = wcstoull(v.s.c_str(), nullptr, 10);
+            if (n > 0x7FFFFFFFull && n <= 0xFFFFFFFFull) v.s = std::to_wstring((long long)n - 0x100000000ll);
+        }
+        have.insert(k);
+        out.push_back({k, Hub_JsDump(v)});
+    }
+    for (size_t i = 0; i < defs.keys.size(); i++) {
+        const std::wstring& k = defs.keys[i];
+        if (have.count(k)) continue;
+        if (const size_t at = k.find(L'['); at != std::wstring::npos && wantTops.count(k.substr(0, at))) continue;
+        out.push_back({k, Hub_JsDump(defs.a[i])});
+    }
+    if (dropped) *dropped = skipped;
+    std::wstring json = L"{";
+    for (size_t i = 0; i < out.size(); i++) json += (i ? L",\n  " : L"\n  ") + Js_Quote(out[i].first) + L": " + out[i].second;
+    return json + L"\n}\n";
+}
+
+// Run inside a job just before "mod settings write <id> <file>": the file is fitted to the mod
+// as it is installed now. When the mod's defaults cannot be read the file is left as it is.
+static void Hub_FitSettingsFile(const std::wstring& line) {
+    int argc = 0;
+    LPWSTR* argv = CommandLineToArgvW(line.c_str(), &argc);
+    if (!argv) return;
+    const std::wstring id = argc == 5 ? argv[3] : L"", file = argc == 5 ? argv[4] : L"";
+    LocalFree(argv);
+    if (id.empty() || file.empty()) return;
+    Js defs, want;
+    std::wstring err;
+    std::string raw;
+    if (!Hub_Cli(L"mod settings defaults " + Set_QuoteArg(id), defs, err) || !Hub_ReadFile(file, raw) ||
+        !Js_Parse(Hub_Wide(raw), want) || want.t != Js::Obj)
+        return;
+    const Js* s = defs.get(L"settings");
+    if (!s || s->t != Js::Obj) return;
+    Hub_WriteFile(file, Hub_Utf8(Hub_FitSettings(want, *s)));
 }
 
 // The settings to write: the user's current settings with DavidHiFi's safe values laid over
@@ -8429,11 +8612,35 @@ static int Hub_SelfTest(const std::wstring& report) {
               mods[0].preset.a.size() == 2 && !mods[1].hasPreset);
         check(Hub_SecretKey(L"discordClientId") && Hub_SecretKey(L"API_KEY") && Hub_SecretKey(L"webhookUrl") &&
               Hub_SecretKey(L"list[0].authToken") && !Hub_SecretKey(L"cornerSize") && !Hub_SecretKey(L"monitor"));
+        // Shortcuts and look settings are not private; real keys still are.
+        for (PCWSTR k : {L"hotkeyCenter", L"toggleHotkey", L"winKey", L"keyboardSounds", L"HotkeyActions[0].Hotkey",
+                         L"shortcuts.keyCenter", L"taskbarLocation", L"addressBarHeight", L"monkey"})
+            check(!Hub_SecretKey(k));
+        for (PCWSTR k : {L"accounts[0].apiKey", L"key", L"server.keys", L"clock.weather.location", L"discordUserId",
+                         L"refreshToken", L"userName", L"email"})
+            check(Hub_SecretKey(k));
         Js v; v.t = Js::Str;
-        for (PCWSTR s : {L"sk-abc", L"ghp_x", L"Bearer x", L"AIzaSy", L"0123456789abcdef0123456789abcdef"}) {
+        for (PCWSTR s : {L"sk-abc", L"ghp_x", L"Bearer x", L"AIzaSy", L"0123456789abcdef0123456789abcdef",
+                         L"aK3jQ9zX7mP2wL5vR8tY1uN4bC6dE0fG", L"mail me at someone@example.com"}) {
             v.s = s; check(Hub_SecretValue(v));
         }
-        v.s = L"Segoe UI Variable Display semibold"; check(!Hub_SecretValue(v));
+        for (PCWSTR s : {L"Segoe UI Variable Display semibold", L"BackgroundSizing=InnerBorderEdge",
+                         L"Background:=<AcrylicBrush TintColor=\"#1E1E2E\" TintOpacity=\"0.4\"/>",
+                         L"TaskNeedsAttentionRunningIndicator=1", L"Ctrl+Alt+Shift+G", L"local@seamless-taskbar"}) {
+            v.s = s; check(!Hub_SecretValue(v));
+        }
+        {
+            // Fitting to what the mod declares: old names out, unsigned back to signed, text
+            // where text is declared, missing defaults filled, a set list kept whole.
+            Js defs, want, fit;
+            check(Js_Parse(L"{\"gap\":4,\"count\":\"7\",\"weather.location\":\"\",\"rows[0].name\":\"\",\"rows[0].size\":1,\"on\":1}", defs));
+            check(Js_Parse(L"{\"gap\":4294967295,\"count\":9,\"oldName\":1,\"rows[0].name\":\"a\",\"rows[1].name\":\"b\",\"on\":0}", want));
+            int gone = 0;
+            check(Js_Parse(Hub_FitSettings(want, defs, &gone), fit) && gone == 1 && !fit.get(L"oldName") &&
+                  fit.get(L"gap") && fit.get(L"gap")->s == L"-1" && fit.get(L"count") && fit.get(L"count")->t == Js::Str &&
+                  Js_Text(fit.get(L"count")) == L"9" && fit.get(L"weather.location") && Js_Text(fit.get(L"rows[1].name")) == L"b" &&
+                  !fit.get(L"rows[0].size") && fit.get(L"on") && fit.get(L"on")->s == L"0");
+        }
         Js cur, pre, out;
         check(Js_Parse(L"{\"size\":4,\"token\":\"mine\",\"rows[0].name\":\"a\",\"rows[1].name\":\"b\",\"other\":1}", cur));
         check(Js_Parse(L"{\"size\":8,\"token\":\"his\",\"rows[0].name\":\"c\",\"note\":\"ghp_leak\"}", pre));
