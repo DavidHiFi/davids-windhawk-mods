@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.33
+// @version         0.4.34
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -32,11 +32,11 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 
-## What's new in 0.4.33
+## What's new in 0.4.34
 The Bluetooth and Safely Remove Hardware icons wear the same blue to mauve badge
 as the other tray icons (Tray drawer, Style the Bluetooth and USB icons), so the
-Bluetooth icon can no longer go blank. Windows registers both by a fixed ID and the
-mod now finds them that way. The
+Bluetooth icon can no longer go blank. The mod's helper sends the badge, because
+Windows ignores an icon change Explorer sends to its own tray. The
 drawer's folder buttons and overflow arrow now sit in one evenly spaced row, the end
 buttons right under the first and last icon columns. An open folder stays open while
 icons come and go.
@@ -89824,6 +89824,140 @@ void Wh_ModUninit() {
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// Bluetooth and Safely Remove Hardware badges, sent from the helper process.
+// Explorer accepts an icon change it sends to its own tray but never draws it, so
+// the helper (outside Explorer) sends the badge by each icon's fixed GUID: at
+// start, after the taskbar comes back, on a settings change and every 30 seconds.
+namespace stbadge {
+struct Known {
+    GUID guid;
+    PCWSTR ownerClass;
+    PCWSTR symbol;
+};
+// {6DA68F06-00F1-4E6E-8158-7F1FFD4F9DB9} bthprops.cpl, {7820AE78-23E3-4229-82C1-E41CB67D5B9C} stobject.dll
+inline const Known kKnown[2] = {
+    {{0x6DA68F06, 0x00F1, 0x4E6E, {0x81, 0x58, 0x7F, 0x1F, 0xFD, 0x4F, 0x9D, 0xB9}},
+     L"BluetoothNotificationAreaIconWindowClass", L"\U000F00AF"},
+    {{0x7820AE78, 0x23E3, 0x4229, {0x82, 0xC1, 0xE4, 0x1C, 0xB6, 0x7D, 0x5B, 0x9C}},
+     L"SystemTray_Main", L"\U000F129E"},
+};
+constexpr UINT_PTR kResendTimer = 1, kTaskbarTimer = 2;
+constexpr UINT kPoke = WM_APP + 31;
+constexpr WCHAR kClass[] = L"WindhawkSeamlessTaskbarBadges";
+inline HANDLE g_thread;
+inline std::atomic<HWND> g_wnd;
+inline HICON g_icons[2];
+inline UINT g_taskbarCreated;
+
+inline bool Wanted() {
+    return st::g_modOn[5] && ::Wh_GetIntSetting(L"tray.theme") &&
+           ::Wh_GetIntSetting(L"tray.windowsIcons");
+}
+
+// The one top-level window of this class in the taskbar's process, or null when
+// there is not exactly one (the tray sends the icon's clicks there).
+inline HWND Owner(PCWSTR className) {
+    HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+    DWORD shell = 0;
+    if (!tray || !GetWindowThreadProcessId(tray, &shell)) return nullptr;
+    struct Search {
+        PCWSTR className;
+        DWORD shell;
+        HWND found;
+        int count;
+    } search{className, shell, nullptr, 0};
+    EnumWindows(
+        [](HWND window, LPARAM param) -> BOOL {
+            auto& s = *reinterpret_cast<Search*>(param);
+            DWORD process = 0;
+            WCHAR name[64]{};
+            if (GetWindowThreadProcessId(window, &process) && process == s.shell &&
+                GetClassNameW(window, name, ARRAYSIZE(name)) && !wcscmp(name, s.className)) {
+                s.found = window;
+                ++s.count;
+            }
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(&search));
+    return search.count == 1 ? search.found : nullptr;
+}
+
+inline void Send() {
+    if (!Wanted()) return;
+    for (int i = 0; i < 2; ++i) {
+        HWND owner = Owner(kKnown[i].ownerClass);
+        if (!owner) continue;  // Not there yet, e.g. no USB drive plugged in.
+        if (!g_icons[i]) g_icons[i] = sttools::MakeBadgeText(kKnown[i].symbol, false);
+        if (!g_icons[i]) continue;
+        NOTIFYICONDATAW data{sizeof(data)};
+        data.hWnd = owner;
+        data.uFlags = NIF_ICON | NIF_GUID;
+        data.guidItem = kKnown[i].guid;
+        data.hIcon = g_icons[i];
+        Shell_NotifyIconW(NIM_MODIFY, &data);
+    }
+}
+
+inline LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (g_taskbarCreated && msg == g_taskbarCreated) {
+        // Windows adds its own icons back a moment after the taskbar returns.
+        SetTimer(hwnd, kTaskbarTimer, 3000, nullptr);
+        return 0;
+    }
+    switch (msg) {
+        case WM_TIMER:
+            if (wParam == kTaskbarTimer) KillTimer(hwnd, kTaskbarTimer);
+            Send();
+            return 0;
+        case kPoke: Send(); return 0;
+        case WM_CLOSE: DestroyWindow(hwnd); return 0;
+        case WM_DESTROY: g_wnd = nullptr; PostQuitMessage(0); return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+inline DWORD WINAPI Thread(LPVOID) {
+    HINSTANCE inst = (HINSTANCE)&__ImageBase;
+    WNDCLASSW wc{};
+    wc.lpfnWndProc = WndProc;
+    wc.hInstance = inst;
+    wc.lpszClassName = kClass;
+    RegisterClassW(&wc);
+    g_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
+    HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, kClass, L"", WS_POPUP, 0, 0, 0, 0, nullptr,
+                                nullptr, inst, nullptr);
+    if (hwnd) {
+        g_wnd = hwnd;
+        Send();
+        SetTimer(hwnd, kResendTimer, 30000, nullptr);
+        MSG msg;
+        while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
+    UnregisterClassW(kClass, inst);
+    return 0;
+}
+
+inline void Start() {
+    if (!g_thread && st::g_modOn[5]) g_thread = CreateThread(nullptr, 0, Thread, nullptr, 0, nullptr);
+}
+
+inline void Poke() {
+    if (HWND hwnd = g_wnd) PostMessageW(hwnd, kPoke, 0, 0);
+}
+
+inline void Stop() {
+    if (!g_thread) return;
+    if (HWND hwnd = g_wnd) PostMessageW(hwnd, WM_CLOSE, 0, 0);
+    WaitForSingleObject(g_thread, 2000);
+    CloseHandle(g_thread);
+    g_thread = nullptr;
+}
+}  // namespace stbadge
+
+////////////////////////////////////////////////////////////////////////////////
 // Entry points: one set for the whole mod, each module runs only when its switch is on.
 
 BOOL Wh_ModInit() {
@@ -89933,6 +90067,7 @@ void Wh_ModAfterInit() {
     if (st::g_modActive[5]) mod_tray::Wh_ModAfterInit();
     if (st::g_modActive[6]) mod_ai::Wh_ModAfterInit();
     if (st::g_modActive[7]) mod_utils::Wh_ModAfterInit();
+    if (st::g_kind == st::ProcessKind::ToolMod) stbadge::Start();
     if (st::g_kind == st::ProcessKind::Shell) {
         sttray::Start();
         // A switch change reloads the mod; bring back the settings window it closed.
@@ -89944,6 +90079,7 @@ void Wh_ModAfterInit() {
 }
 
 void Wh_ModBeforeUninit() {
+    if (st::g_kind == st::ProcessKind::ToolMod) stbadge::Stop();
     if (st::g_kind == st::ProcessKind::Shell) {
         sttray::Stop();
         stset::CloseSettingsWindow();
@@ -89985,6 +90121,7 @@ BOOL Wh_ModSettingsChanged(BOOL* bReload) {
             return TRUE;
         }
     }
+    if (st::g_kind == st::ProcessKind::ToolMod) stbadge::Poke();
     if (st::g_kind == st::ProcessKind::Shell) {
         if (HWND h = stset::g_settingsWnd) PostMessageW(h, stset::WM_APP_SETTINGS_RELOAD, 0, 0);
         sttray::Refresh();
