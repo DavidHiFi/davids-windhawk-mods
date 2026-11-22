@@ -2,7 +2,7 @@
 // @id              seamless-window-manager
 // @name            Seamless Window Manager
 // @description     Move, resize, snap and focus windows with the mouse or keyboard, with app rules, gaps and a pause key
-// @version         2.8.3
+// @version         2.8.4
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -138,6 +138,11 @@ the keys above, the key above wins.
   app no longer flickers. Apps started before tiling was turned on keep the
   stand-in until they restart.
 
+## What's new in 2.8.4
+- Alt+PageDown and Alt+PageUp now work when a remote desktop window (like
+  RustDesk) is in front. Those apps used to send the keys to the other PC,
+  so the walk got stuck on them. Every other key still goes to the other PC.
+
 ## What's new in 2.8.3
 - Agent windows: only the agent that was let use the mouse and keys gets them.
   Other agents running at the same time stay hands-off.
@@ -260,6 +265,7 @@ constexpr ULONG_PTR kFocusInputExtraInfo = 0x53574D31;
 constexpr UINT kPauseChangedMessage = WM_APP + 300;
 bool IsPaused();
 bool OnResizeKey(WPARAM message, const KBDLLHOOKSTRUCT* key);
+bool OnWalkKey(WPARAM message, const KBDLLHOOKSTRUCT* key);
 bool OnLowLevelThreadMessage(const MSG& msg);
 void RegisterModeKeys();
 void UnregisterModeKeys();
@@ -3525,6 +3531,7 @@ LRESULT CALLBACK GlobalAltProc(int code, WPARAM message, LPARAM data) {
     if (code == HC_ACTION) {
         auto key = reinterpret_cast<KBDLLHOOKSTRUCT*>(data);
         if (swm::OnResizeKey(message, key)) return 1;
+        if (swm::OnWalkKey(message, key)) return 1;
         // Never swallow the Alt release: Windows would then keep Alt held,
         // which eats typing and makes plain drags act as Alt drags. A dummy
         // key tap ahead of the real release stops the window menu opening.
@@ -3546,6 +3553,25 @@ LRESULT CALLBACK GlobalAltProc(int code, WPARAM message, LPARAM data) {
         }
     }
     return CallNextHookEx(nullptr, code, message, data);
+}
+
+// The newest keyboard hook runs first. Apps like RustDesk hook the keyboard
+// when their window comes to the front and keep the walk keys, so the hook is
+// put back on top each time the front window changes, and twice more shortly
+// after in case the app hooks a moment late. The new hook goes in before the
+// old one comes out, so no key slips past.
+UINT_PTR g_rehookTimer;
+int g_rehooksLeft;
+void RehookGlobalAlt() {
+    HHOOK fresh = SetWindowsHookEx(WH_KEYBOARD_LL, GlobalAltProc, GetModuleHandle(nullptr), 0);
+    if (!fresh) return;
+    if (g_globalAltHook) UnhookWindowsHookEx(g_globalAltHook);
+    g_globalAltHook = fresh;
+}
+void CALLBACK OnForegroundForHook(HWINEVENTHOOK, DWORD, HWND, LONG, LONG, DWORD, DWORD) {
+    RehookGlobalAlt();
+    g_rehooksLeft = 2;
+    g_rehookTimer = SetTimer(nullptr, g_rehookTimer, 400, nullptr);
 }
 
 DWORD WINAPI LowLevelMouseHookThreadProc(void*) {
@@ -3575,11 +3601,15 @@ DWORD WINAPI LowLevelMouseHookThreadProc(void*) {
         }
     };
     UINT_PTR retry = 0;
+    HWINEVENTHOOK foregroundHook = nullptr;
     if (g_globalInput) {
         g_globalAltHook = SetWindowsHookEx(WH_KEYBOARD_LL, GlobalAltProc, GetModuleHandle(nullptr), 0);
         registerActions();
         swm::RegisterModeKeys();
         retry = SetTimer(nullptr, 0, 2000, nullptr);
+        foregroundHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND,
+                                         nullptr, OnForegroundForHook, 0, 0,
+                                         WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
     }
     auto unregisterActions = [&] {
         for (size_t i = 0; i < registered.size(); ++i) {
@@ -3608,6 +3638,15 @@ DWORD WINAPI LowLevelMouseHookThreadProc(void*) {
                 continue;
             }
             if (swm::OnLowLevelThreadMessage(msg)) continue;
+            if (msg.message == WM_TIMER && !msg.hwnd && g_rehookTimer &&
+                msg.wParam == g_rehookTimer) {
+                RehookGlobalAlt();
+                if (--g_rehooksLeft <= 0) {
+                    KillTimer(nullptr, g_rehookTimer);
+                    g_rehookTimer = 0;
+                }
+                continue;
+            }
             if (msg.message == WM_TIMER && !msg.hwnd && msg.wParam == retry) {
                 registerActions();
                 swm::RegisterModeKeys();
@@ -3670,7 +3709,11 @@ DWORD WINAPI LowLevelMouseHookThreadProc(void*) {
         swm::LeaveResizeMode();
         swm::UnregisterModeKeys();
     }
+    if (foregroundHook) UnhookWinEvent(foregroundHook);
+    if (g_rehookTimer) KillTimer(nullptr, g_rehookTimer);
+    g_rehookTimer = 0;
     if (g_globalAltHook) UnhookWindowsHookEx(g_globalAltHook);
+    g_globalAltHook = nullptr;
     if (retry) KillTimer(nullptr, retry);
     for (size_t i = 0; i < registered.size(); ++i)
         if (registered[i]) UnregisterHotKey(nullptr, 0x6000 + i);
@@ -12024,8 +12067,14 @@ bool g_resizeActive;
 HWND g_resizeTarget;
 UINT_PTR g_resizeTimer;
 std::array<bool, 256> g_swallowedKeys{};
+// The two walk keys, for the keyboard hook on this same thread. Empty while
+// paused or unbound. g_walkKeyHeld is the walk key down right now.
+constexpr int kWalkUpKey = 35;
+std::array<ModeKey, 2> g_walkKeys{};
+DWORD g_walkKeyHeld;
 
 void UnregisterModeKeys() {
+    g_walkKeys = {};
     for (size_t i = 0; i < g_modeKeyRegistered.size(); i++) {
         if (g_modeKeyRegistered[i]) {
             UnregisterHotKey(nullptr, kModeKeyBase + (int)i);
@@ -12047,6 +12096,9 @@ void RegisterModeKeys() {
     }
     Settings s = GetSettings();
     bool paused = IsPaused();
+    for (int w = 0; w < 2; w++) {
+        g_walkKeys[w] = paused ? ModeKey{} : s.keys[kWalkUpKey + w];
+    }
     for (size_t i = 0; i < g_modeKeyRegistered.size(); i++) {
         bool want = s.keys[i].key && (!paused || i == 0);
         if (!want) {
@@ -12206,6 +12258,62 @@ bool OnResizeKey(WPARAM message, const KBDLLHOOKSTRUCT* key) {
     }
     altSnapDrag::g_swallowedPress = GetAsyncKeyState(VK_MENU) < 0;
     return true;
+}
+
+// From the keyboard hook: the walk keys are taken here, ahead of any app
+// whose own keyboard hook would keep them (a remote desktop window sends
+// every key to the other PC). One step per press; the release is kept too.
+// Those apps keep Alt too, and a kept key never reaches GetAsyncKeyState, so
+// the hook notes the modifiers itself. A held key repeats, so a note older
+// than 1.5 s is a release that never came (the secure desktop eats those).
+std::array<DWORD, 4> g_modifierDownTick{};
+bool OnWalkKey(WPARAM message, const KBDLLHOOKSTRUCT* key) {
+    DWORD vk = key->vkCode;
+    bool down = message == WM_KEYDOWN || message == WM_SYSKEYDOWN;
+    int modifier = -1;
+    switch (vk) {
+        case VK_CONTROL: case VK_LCONTROL: case VK_RCONTROL: modifier = 0; break;
+        case VK_MENU: case VK_LMENU: case VK_RMENU: modifier = 1; break;
+        case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT: modifier = 2; break;
+        case VK_LWIN: case VK_RWIN: modifier = 3; break;
+    }
+    if (modifier >= 0) {
+        if (key->dwExtraInfo != altSnapDrag::kOwnInputExtraInfo) {
+            g_modifierDownTick[modifier] = down ? (GetTickCount() | 1) : 0;
+        }
+        return false;
+    }
+    if (!down) {
+        if (g_walkKeyHeld && vk == g_walkKeyHeld) {
+            g_walkKeyHeld = 0;
+            return true;
+        }
+        return false;
+    }
+    if (key->dwExtraInfo == altSnapDrag::kOwnInputExtraInfo) {
+        return false;
+    }
+    if (g_walkKeyHeld && vk == g_walkKeyHeld) {
+        return true;
+    }
+    DWORD held = altSnapDrag::HeldModifiers(GetAsyncKeyState);
+    constexpr DWORD kBits[] = {altSnapDrag::kModifierCtrl, altSnapDrag::kModifierAlt,
+                               altSnapDrag::kModifierShift, altSnapDrag::kModifierWin};
+    DWORD now = GetTickCount();
+    for (int m = 0; m < 4; m++) {
+        if (g_modifierDownTick[m] && now - g_modifierDownTick[m] < 1500) held |= kBits[m];
+    }
+    for (int w = 0; w < 2; w++) {
+        const ModeKey& walk = g_walkKeys[w];
+        if (!walk.key || (DWORD)walk.key != vk || walk.modifiers != held) {
+            continue;
+        }
+        g_walkKeyHeld = vk;
+        PostThreadMessageW(GetCurrentThreadId(), WM_HOTKEY, kModeKeyBase + kWalkUpKey + w,
+                           0);
+        return true;
+    }
+    return false;
 }
 
 void TogglePause() {
