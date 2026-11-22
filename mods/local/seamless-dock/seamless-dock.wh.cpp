@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id              seamless-dock
 // @name            Seamless Dock
-// @description     A floating dock at the bottom of the screen for your pinned and open apps
-// @version         0.2.0
+// @description     A floating dock on any edge of the screen for your pinned and open apps
+// @version         0.3.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,11 +21,41 @@
 /*
 # Seamless Dock
 
-A floating dock at the bottom of the screen with your pinned apps and the apps
-you have open. Your taskbar stays where it is, so you get a clean bar on top
-and a dock below, like a Linux desktop.
+A floating dock with your pinned apps and the apps you have open. It sits on
+the edge of the screen across from your taskbar, so you get a clean bar on one
+side and a dock on the other, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
+
+## What's new in 0.3.1
+
+- A pinned app shows once. Steam, Windhawk and other apps whose windows come
+  from a helper program inside their own folder now light up their pinned icon
+  instead of adding a second one.
+- If Windows drops the space kept for the dock, the dock takes it back within
+  a few seconds, so tiled and maximized windows always stop above it.
+- Right-click an app for "Open file location".
+
+## What's new in 0.3.0
+
+- The dock can sit on any edge: bottom, top, left or right, always in the
+  middle of that edge.
+- By default it sits across from your taskbar, and moves when you move the
+  taskbar.
+- Pick a side from the dock's right-click menu or from the taskbar's. The side
+  you pick stays until you pick "Across from the taskbar" again.
+- When the dock and the taskbar share an edge, the dock sits just inside the
+  taskbar and never covers it.
+- The Recycle Bin can sit at the end of the dock. Its icon shows when it holds
+  files. Click to open it, right-click to empty it.
+- Right-click an empty part of the dock for its own options.
+
+## What's new in 0.2.1
+
+- After Explorer restarts, the dock takes its space back, so windows stop
+  above it again.
+- The title pill keeps showing while a tray menu or the hidden icons panel is
+  open. It names the window underneath.
 
 ## What's new in 0.2.0
 
@@ -55,12 +85,17 @@ and a dock below, like a Linux desktop.
   a new window.
 - **Live previews.** Rest the pointer on an open app to see its windows. Click
   one to go to it, or close it from there.
-- **Windows stop above it.** Maximized windows end above the dock, so it never
+- **Any edge.** Bottom, top, left or right. By default it sits across from your
+  taskbar and follows it.
+- **Recycle Bin.** At the end of the dock, full or empty at a glance.
+- **Windows stop short of it.** Maximized windows end at the dock, so it never
   covers anything. Turn this off to let the dock float over windows instead.
 - **Out of the way for games.** The dock hides while a game or video fills the
   screen.
 - **Window title on the top bar.** With your taskbar at the top of the screen,
   its middle shows the app and title of the window you are using.
+- **Change it on the go.** Right-click the dock, or empty space on Seamless
+  Taskbar, to move the dock or switch the Recycle Bin and the title on or off.
 - **Frosted glass.** Catppuccin Mocha glass with a grey edge that turns blue to
   mauve when you point at it. Every color and size is in the settings.
 
@@ -87,12 +122,24 @@ and a dock below, like a Linux desktop.
 - spacing: 6
   $name: Space between icons
   $description: '0 to 24 (Suggested: 6).'
+- position: auto
+  $name: Dock position
+  $description: 'Which edge of the screen the dock sits on, in the middle of it. Across from the taskbar moves the dock when you move the taskbar. The right-click menu on the dock or the taskbar changes this too (Suggested: Across from the taskbar).'
+  $options:
+  - auto: Across from the taskbar
+  - bottom: Bottom
+  - top: Top
+  - left: Left
+  - right: Right
 - bottomGap: 8
-  $name: Gap below the dock
-  $description: 'Space between the dock and the bottom of the screen. 0 to 48 (Suggested: 8).'
+  $name: Gap from the screen edge
+  $description: 'Space between the dock and its edge of the screen, or the taskbar when they share an edge. 0 to 48 (Suggested: 8).'
 - reserveSpace: true
-  $name: Keep windows above the dock
-  $description: When on, maximized windows stop above the dock. When off, the dock floats over them.
+  $name: Keep windows clear of the dock
+  $description: When on, maximized windows stop at the dock. When off, the dock floats over them.
+- recycleBin: true
+  $name: Recycle Bin in the dock
+  $description: Shows the Recycle Bin at the end of the dock. Click it to open it, right-click it to empty it.
 - showOpenApps: true
   $name: Show open apps
   $description: When on, apps you have open but did not pin show after a thin line. When off, the dock shows pinned apps only.
@@ -164,7 +211,8 @@ namespace dock {
 // ---------------------------------------------------------------------------
 struct Settings {
     int iconSize = 36, spacing = 6, bottomGap = 8, hoverDelay = 350, opacity = 60, edgeWidth = 2, fadeMs = 150;
-    bool reserve = true, showOpen = true, previews = true, hideFull = true, showTitle = true;
+    bool reserve = true, showOpen = true, previews = true, hideFull = true, showTitle = true, recycle = true;
+    int place = 0;  // Place: 0 across from the taskbar, 1 bottom, 2 top, 3 left, 4 right
     UINT edge = 0x585B70, from = 0x89B4FA, to = 0xCBA6F7;
     std::wstring font = L"FiraCode Nerd Font";
 } S;
@@ -190,6 +238,34 @@ UINT ColorSetting(PCWSTR name, UINT def) {
     return c;
 }
 
+// The dock's menu and the taskbar's menu change position, Recycle Bin and title on
+// the go. Those picks are kept as stored values; changing the setting itself in
+// Windhawk wins again and clears the pick.
+int Overridable(const std::wstring& name, int settingVal) {
+    std::wstring seen = L"seen." + name, ov = L"ov." + name;
+    if (Wh_GetIntValue(seen.c_str(), -999) != settingVal) {
+        Wh_SetIntValue(seen.c_str(), settingVal);
+        Wh_SetIntValue(ov.c_str(), -1);
+    }
+    int v = Wh_GetIntValue(ov.c_str(), -1);
+    return v < 0 ? settingVal : v;
+}
+
+void SetOverride(const std::wstring& name, int v) { Wh_SetIntValue((L"ov." + name).c_str(), v); }
+
+int PlaceSetting() {
+    PCWSTR v = Wh_GetStringSetting(L"position");
+    int r = 0;
+    if (v) {
+        if (!wcscmp(v, L"bottom")) r = 1;
+        else if (!wcscmp(v, L"top")) r = 2;
+        else if (!wcscmp(v, L"left")) r = 3;
+        else if (!wcscmp(v, L"right")) r = 4;
+    }
+    Wh_FreeStringSetting(v);
+    return r;
+}
+
 void LoadSettings() {
     S.iconSize = Clamp(Wh_GetIntSetting(L"iconSize"), 24, 64);
     S.spacing = Clamp(Wh_GetIntSetting(L"spacing"), 0, 24);
@@ -199,7 +275,9 @@ void LoadSettings() {
     S.previews = Wh_GetIntSetting(L"previews") != 0;
     S.hoverDelay = Clamp(Wh_GetIntSetting(L"hoverDelay"), 0, 2000);
     S.hideFull = Wh_GetIntSetting(L"hideOnFullscreen") != 0;
-    S.showTitle = Wh_GetIntSetting(L"showTitle") != 0;
+    S.showTitle = Overridable(L"showTitle", Wh_GetIntSetting(L"showTitle") != 0) != 0;
+    S.recycle = Overridable(L"recycleBin", Wh_GetIntSetting(L"recycleBin") != 0) != 0;
+    S.place = Clamp(Overridable(L"position", PlaceSetting()), 0, 4);
     S.opacity = Clamp(Wh_GetIntSetting(L"surfaceOpacity"), 30, 100);
     S.edge = ColorSetting(L"edgeColor", 0x585B70);
     S.from = ColorSetting(L"hoverColorFrom", 0x89B4FA);
@@ -727,11 +805,7 @@ bool IconFromShell(const std::wstring& src, int size, Icon& ic) {
     return ok;
 }
 
-bool IconFromWindow(HWND h, int size, Icon& ic) {
-    DWORD_PTR r = 0;
-    HICON hi = nullptr;
-    if (SendMessageTimeoutW(h, WM_GETICON, ICON_BIG, 0, SMTO_ABORTIFHUNG, 100, &r) && r) hi = (HICON)r;
-    if (!hi) hi = (HICON)GetClassLongPtrW(h, GCLP_HICON);
+bool IconFromHicon(HICON hi, int size, Icon& ic) {
     if (!hi) return false;
     BITMAPINFO bi{};
     bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
@@ -755,12 +829,35 @@ bool IconFromWindow(HWND h, int size, Icon& ic) {
     return ok;
 }
 
+bool IconFromWindow(HWND h, int size, Icon& ic) {
+    DWORD_PTR r = 0;
+    HICON hi = nullptr;
+    if (SendMessageTimeoutW(h, WM_GETICON, ICON_BIG, 0, SMTO_ABORTIFHUNG, 100, &r) && r) hi = (HICON)r;
+    if (!hi) hi = (HICON)GetClassLongPtrW(h, GCLP_HICON);
+    return IconFromHicon(hi, size, ic);
+}
+
+// The shell's own empty and full Recycle Bin icons, so the dock matches the
+// desktop and the icon theme.
+bool IconFromRecycle(bool full, int size, Icon& ic) {
+    SHSTOCKICONINFO si{sizeof(si)};
+    if (FAILED(SHGetStockIconInfo(full ? SIID_RECYCLERFULL : SIID_RECYCLER, SHGSI_ICONLOCATION, &si))) return false;
+    HICON hi = nullptr;
+    if (FAILED(SHDefExtractIconW(si.szPath, si.iIcon, 0, &hi, nullptr, MAKELONG(size, 0))) || !hi) return false;
+    bool ok = IconFromHicon(hi, size, ic);
+    DestroyIcon(hi);
+    return ok;
+}
+
 Icon* GetIcon(const std::wstring& src, const std::wstring& alt, HWND win, int size) {
     std::wstring key = src + L"|" + alt + L"|" + std::to_wstring(size);
     auto it = g_icons.find(key);
     if (it != g_icons.end()) return it->second.px.empty() ? nullptr : &it->second;
     Icon ic;
-    if (!IconFromShell(src, size, ic) && !IconFromShell(alt, size, ic) && win) IconFromWindow(win, size, ic);
+    if (src.rfind(L"recycle:", 0) == 0)
+        IconFromRecycle(src == L"recycle:full", size, ic);
+    else if (!IconFromShell(src, size, ic) && !IconFromShell(alt, size, ic) && win)
+        IconFromWindow(win, size, ic);
     auto& slot = g_icons[key];
     slot = std::move(ic);
     return slot.px.empty() ? nullptr : &slot;
@@ -791,6 +888,7 @@ struct Item {
     std::wstring key, name, iconSrc, iconAlt;
     std::wstring launchKind, launchValue;  // lnk | aumid | exe
     int pin = -1;
+    bool recycle = false;    // the Recycle Bin at the end of the dock
     std::vector<HWND> wins;  // stable order
     HWND top = nullptr;      // most recently used
     bool active = false, flash = false;
@@ -801,6 +899,45 @@ std::vector<Item> g_items;
 int g_pinnedCount = 0;
 
 HWND g_dock, g_pop, g_menu;
+
+// ---------------------------------------------------------------------------
+// Recycle Bin
+// ---------------------------------------------------------------------------
+bool g_recycleFull = false;
+ULONG g_recycleNotify = 0;
+constexpr UINT kRecycleMsg = WM_APP + 3;
+const wchar_t kRecycleFolder[] = L"::{645FF040-5081-101B-9F08-00AA002F954E}";
+
+bool RecycleHasFiles() {
+    SHQUERYRBINFO q{sizeof(q)};
+    return SUCCEEDED(SHQueryRecycleBinW(nullptr, &q)) && q.i64NumItems > 0;
+}
+
+void OpenRecycleBin() {
+    ShellExecuteW(nullptr, L"open", L"explorer.exe", L"shell:RecycleBinFolder", nullptr, SW_SHOWNORMAL);
+}
+
+// Windows asks "Are you sure?" first, the same as on the desktop.
+void EmptyRecycleBin() { SHEmptyRecycleBinW(g_dock, nullptr, 0); }
+
+// The shell tells us when the bin changes; we only look at it then.
+void WatchRecycle(bool on) {
+    if (on && !g_recycleNotify && g_dock) {
+        PIDLIST_ABSOLUTE pidl = nullptr;
+        if (SUCCEEDED(SHGetKnownFolderIDList(FOLDERID_RecycleBinFolder, 0, nullptr, &pidl))) {
+            SHChangeNotifyEntry e{pidl, TRUE};
+            g_recycleNotify = SHChangeNotifyRegister(
+                g_dock, SHCNRF_ShellLevel | SHCNRF_InterruptLevel | SHCNRF_NewDelivery,
+                SHCNE_CREATE | SHCNE_DELETE | SHCNE_MKDIR | SHCNE_RMDIR | SHCNE_UPDATEDIR | SHCNE_UPDATEITEM |
+                    SHCNE_RENAMEITEM | SHCNE_RENAMEFOLDER | SHCNE_UPDATEIMAGE,
+                kRecycleMsg, 1, &e);
+            CoTaskMemFree(pidl);
+        }
+    } else if (!on && g_recycleNotify) {
+        SHChangeNotifyDeregister(g_recycleNotify);
+        g_recycleNotify = 0;
+    }
+}
 
 bool Eligible(HWND h) {
     if (!IsWindowVisible(h)) return false;
@@ -830,10 +967,32 @@ bool IsHostExe(const std::wstring& exeLower) {
            FileName(exeLower) == L"applicationframehost.exe";
 }
 
+// The window's program sits inside the pinned program's own install folder. Steam's
+// windows come from steamwebhelper.exe under Steam's folder and Windhawk's from
+// UI\Windhawk.exe under Windhawk's, while their pins start steam.exe and windhawk.exe.
+// Shared folders (Windows, Program Files itself) and Windhawk's mod host, which shows
+// windows for every mod, never count.
+bool InPinFolder(const std::wstring& pinExeLower, const std::wstring& exeLower) {
+    size_t slash = pinExeLower.rfind(L'\\');
+    if (slash == std::wstring::npos || exeLower.empty()) return false;
+    std::wstring dir = pinExeLower.substr(0, slash + 1);
+    if (std::count(dir.begin(), dir.end(), L'\\') < 3) return false;
+    static std::wstring win;
+    if (win.empty()) {
+        wchar_t buf[MAX_PATH] = {};
+        GetWindowsDirectoryW(buf, MAX_PATH);
+        win = Lower(buf) + L"\\";
+    }
+    if (dir.rfind(win, 0) == 0) return false;
+    if (FileName(exeLower) == L"windhawk-mod.exe") return false;
+    return exeLower.size() > dir.size() && exeLower.compare(0, dir.size(), dir) == 0;
+}
+
 bool PinMatches(const Pin& p, const WinMeta& m, const std::wstring& exeLower) {
     if (!p.aumid.empty() && !m.aumid.empty()) return _wcsicmp(p.aumid.c_str(), m.aumid.c_str()) == 0;
     if (!p.exeLower.empty() && p.exeLower == exeLower) return true;
     if (!p.procStart.empty() && FileName(exeLower) == p.procStart) return true;
+    if (!p.exeLower.empty() && InPinFolder(p.exeLower, exeLower)) return true;
     return false;
 }
 
@@ -912,15 +1071,19 @@ bool Rebuild(bool force = false) {
                 Item it;
                 it.key = key;
                 bool host = IsHostExe(exeLower);
+                bool knownId = false;
                 if (!m.aumid.empty()) {
                     it.iconSrc = L"shell:AppsFolder\\" + m.aumid;
                     it.name = ShellDisplayName(it.iconSrc);
+                    knownId = !it.name.empty();
                 }
                 if (!host) it.iconAlt = m.exe;
                 if (it.name.empty() && !host) it.name = FileDescription(m.exe);
                 if (it.name.empty()) it.name = WindowTitle(h);
                 if (it.name.empty()) it.name = StripExt(FileName(m.exe));
-                if (host && !m.aumid.empty()) {
+                // An app the Start menu knows by its id starts (and pins) by that id,
+                // not by a helper program such as Steam's steamwebhelper.exe.
+                if (!m.aumid.empty() && (host || knownId)) {
                     it.launchKind = L"aumid";
                     it.launchValue = m.aumid;
                 } else {
@@ -937,6 +1100,18 @@ bool Rebuild(bool force = false) {
         if (h == fgRoot) it.active = true;
         if (g_flash.count(h)) it.flash = true;
         if (it.iconSrc.empty() && it.iconAlt.empty() && it.pin < 0) it.iconAlt = m.exe;
+    }
+
+    if (S.recycle) {
+        static std::wstring name;
+        if (name.empty()) name = ShellDisplayName(kRecycleFolder);
+        if (name.empty()) name = L"Recycle Bin";
+        Item it;
+        it.key = L"special:recycle";
+        it.name = name;
+        it.recycle = true;
+        it.iconSrc = g_recycleFull ? L"recycle:full" : L"recycle:empty";
+        items.push_back(it);
     }
 
     // Keep animation state and the order windows were first seen in.
@@ -973,23 +1148,110 @@ bool Rebuild(bool force = false) {
 // ---------------------------------------------------------------------------
 // Layout
 // ---------------------------------------------------------------------------
+// L.w is the dock's length along its edge and L.h its depth. On a side edge the
+// window turns: it is L.h wide and L.w tall.
 struct Layout {
     float s = 1, plate = 48, icon = 36, gap = 6, padX = 10, padTop = 8, dotArea = 10, w = 100, h = 66;
-    float divX = -1, radius = 16, plateR = 12, lift = 3;
-    std::vector<float> x;
+    float radius = 16, plateR = 12, lift = 3;
+    std::vector<float> x;     // where each item starts along the dock
+    std::vector<float> divs;  // thin lines before the open apps and the Recycle Bin
     int iconPx = 36;
 } L;
 
 HMONITOR g_mon;
-RECT g_monRect{}, g_barRect{};
+RECT g_monRect{}, g_barRect{}, g_tbRect{};
+UINT g_edge = ABE_BOTTOM;  // the screen edge the dock sits on
+int g_tbEdge = -1;         // the taskbar's edge, -1 when there is none
+int g_outerWant = 0;       // the line the dock stands on: its screen edge, or the taskbar's inner side
+bool g_tbSolidSeen = false;
 bool g_appbar = false, g_fullscreen = false;
 int g_dragIndex = -1;
 float g_dragX = 0, g_dragGrab = 0;
 
 constexpr UINT kAppBarMsg = WM_APP + 2, kReloadMsg = WM_APP + 1;
-UINT g_shellMsg, g_taskbarCreatedMsg;
+UINT g_shellMsg, g_taskbarCreatedMsg, g_ctlMsg;
 
-void ComputeLayout(float maxW) {
+bool Vertical() { return g_edge == ABE_LEFT || g_edge == ABE_RIGHT; }
+
+// Along and depth to window points. Depth 0 is the dock's inner side, toward the
+// middle of the screen. It grows toward the screen edge, where the open dots sit;
+// a pointed-at icon lifts the other way.
+D2D1_RECT_F Place(float a0, float d0, float a1, float d1) {
+    float T = L.h;
+    switch (g_edge) {
+        case ABE_TOP:
+            return D2D1::RectF(a0, T - d1, a1, T - d0);
+        case ABE_RIGHT:
+            return D2D1::RectF(d0, a0, d1, a1);
+        case ABE_LEFT:
+            return D2D1::RectF(T - d1, a0, T - d0, a1);
+    }
+    return D2D1::RectF(a0, d0, a1, d1);
+}
+
+D2D1_POINT_2F PlacePt(float a, float d) {
+    D2D1_RECT_F r = Place(a, d, a, d);
+    return D2D1::Point2F(r.left, r.top);
+}
+
+void Unplace(POINT px, float& a, float& d) {
+    float x = px.x / L.s, y = px.y / L.s, T = L.h;
+    switch (g_edge) {
+        case ABE_TOP:
+            a = x, d = T - y;
+            return;
+        case ABE_RIGHT:
+            a = y, d = x;
+            return;
+        case ABE_LEFT:
+            a = y, d = T - x;
+            return;
+    }
+    a = x, d = y;
+}
+
+float WinW() { return Vertical() ? L.h : L.w; }
+float WinH() { return Vertical() ? L.w : L.h; }
+
+// Which edge the taskbar is on, from where its window sits. `solid` is false when
+// it hides itself, so nothing needs to make room for it.
+int TaskbarEdge(RECT& r, bool& solid) {
+    solid = false;
+    HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+    if (!tray || !GetWindowRect(tray, &r)) return -1;
+    APPBARDATA abd{sizeof(abd)};
+    bool autoHide = (SHAppBarMessage(ABM_GETSTATE, &abd) & ABS_AUTOHIDE) != 0;
+    int w = r.right - r.left, h = r.bottom - r.top;
+    solid = IsWindowVisible(tray) && !autoHide && std::min(w, h) > 4;
+    int cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    int mx = (g_monRect.left + g_monRect.right) / 2, my = (g_monRect.top + g_monRect.bottom) / 2;
+    if (w >= h) return cy < my ? ABE_TOP : ABE_BOTTOM;
+    return cx < mx ? ABE_LEFT : ABE_RIGHT;
+}
+
+UINT ChosenEdge() {
+    switch (S.place) {
+        case 1:
+            return ABE_BOTTOM;
+        case 2:
+            return ABE_TOP;
+        case 3:
+            return ABE_LEFT;
+        case 4:
+            return ABE_RIGHT;
+    }
+    switch (g_tbEdge) {
+        case ABE_BOTTOM:
+            return ABE_TOP;
+        case ABE_LEFT:
+            return ABE_RIGHT;
+        case ABE_RIGHT:
+            return ABE_LEFT;
+    }
+    return ABE_BOTTOM;
+}
+
+void ComputeLayout(float maxLen) {
     L.s = MonitorDpi(g_mon) / 96.f;
     float k = 1;
     for (int pass = 0; pass < 2; pass++) {
@@ -1002,13 +1264,13 @@ void ComputeLayout(float maxW) {
         L.plateR = std::min(12.f, L.plate / 4);
         L.lift = 3;
         L.x.assign(g_items.size(), 0);
-        L.divX = -1;
+        L.divs.clear();
         float x = L.padX;
         for (size_t i = 0; i < g_items.size(); i++) {
             if (i > 0) x += L.gap;
-            if ((int)i == g_pinnedCount && g_pinnedCount > 0) {
+            if (i > 0 && (g_items[i].recycle || ((int)i == g_pinnedCount && g_pinnedCount > 0))) {
                 float dp = std::max(4.f, L.gap);
-                L.divX = x + dp;
+                L.divs.push_back(x + dp);
                 x += dp * 2 + 1;
             }
             L.x[i] = x;
@@ -1017,24 +1279,26 @@ void ComputeLayout(float maxW) {
         if (g_items.empty()) x += L.plate;
         L.w = x + L.padX;
         L.h = L.padTop + L.plate + L.dotArea;
-        if (L.w * L.s <= maxW || pass == 1) break;
-        k = std::max(0.4f, maxW / (L.w * L.s));
+        if (L.w * L.s <= maxLen || pass == 1) break;
+        k = std::max(0.4f, maxLen / (L.w * L.s));
     }
     L.iconPx = std::max(16, (int)std::lround(L.icon * L.s));
     L.radius = (float)LiveRadius();
 }
 
-void AppBarSetPos(int heightPx, bool force = false);
+void AppBarSetPos(int depthPx, bool force = false);
 
 int ReservePx() {
     int gapPx = (int)std::lround(S.bottomGap * L.s);
-    // Reserve up to the dock's top edge only. The window manager adds its own
-    // gap above that, so tiled windows sit as far from the dock as from every
+    // Reserve up to the dock's inner side only. The window manager adds its own
+    // gap past that, so tiled windows sit as far from the dock as from every
     // other screen edge.
     return (int)std::ceil(L.h * L.s) + gapPx;
 }
 
 Surface g_dockSurf, g_popSurf, g_menuSurf;
+void HidePopup();
+void CloseMenu();
 
 void Relayout(bool forceBar) {
     if (!g_dock) return;
@@ -1042,29 +1306,72 @@ void Relayout(bool forceBar) {
     MONITORINFO mi{sizeof(mi)};
     GetMonitorInfoW(g_mon, &mi);
     g_monRect = mi.rcMonitor;
-    ComputeLayout((float)(g_monRect.right - g_monRect.left) - 32);
-    int W = (int)std::ceil(L.w * L.s), H = (int)std::ceil(L.h * L.s);
-    int bottom = g_monRect.bottom;
+    bool tbSolid = false;
+    g_tbEdge = TaskbarEdge(g_tbRect, tbSolid);
+    g_tbSolidSeen = tbSolid;
+    UINT edge = ChosenEdge();
+    if (edge != g_edge) {
+        g_edge = edge;
+        forceBar = true;
+        HidePopup();
+        CloseMenu();
+    }
+    bool share = tbSolid && g_tbEdge == (int)g_edge;
+
+    // A taskbar on a side edge takes its end of the dock's run.
+    RECT span = g_monRect;
+    if (tbSolid && !share) {
+        if (!Vertical() && g_tbEdge == ABE_LEFT) span.left = std::max(span.left, g_tbRect.right);
+        if (!Vertical() && g_tbEdge == ABE_RIGHT) span.right = std::min(span.right, g_tbRect.left);
+        if (Vertical() && g_tbEdge == ABE_TOP) span.top = std::max(span.top, g_tbRect.bottom);
+        if (Vertical() && g_tbEdge == ABE_BOTTOM) span.bottom = std::min(span.bottom, g_tbRect.top);
+    }
+    ComputeLayout((float)(Vertical() ? span.bottom - span.top : span.right - span.left) - 32);
+    int W = (int)std::ceil(WinW() * L.s), H = (int)std::ceil(WinH() * L.s);
+
+    // Sharing an edge with the taskbar, the dock stands just inside it.
+    int outer = g_edge == ABE_TOP     ? (int)g_monRect.top
+                : g_edge == ABE_LEFT  ? (int)g_monRect.left
+                : g_edge == ABE_RIGHT ? (int)g_monRect.right
+                                      : (int)g_monRect.bottom;
+    if (share) {
+        if (g_edge == ABE_TOP) outer = std::max(outer, (int)g_tbRect.bottom);
+        if (g_edge == ABE_LEFT) outer = std::max(outer, (int)g_tbRect.right);
+        if (g_edge == ABE_RIGHT) outer = std::min(outer, (int)g_tbRect.left);
+        if (g_edge == ABE_BOTTOM) outer = std::min(outer, (int)g_tbRect.top);
+    }
+    g_outerWant = outer;
     if (S.reserve) {
         AppBarSetPos(ReservePx(), forceBar);
-        if (g_appbar) bottom = g_barRect.bottom;
+        if (g_appbar) {
+            if (g_edge == ABE_TOP) outer = std::max(outer, (int)g_barRect.top);
+            if (g_edge == ABE_LEFT) outer = std::max(outer, (int)g_barRect.left);
+            if (g_edge == ABE_RIGHT) outer = std::min(outer, (int)g_barRect.right);
+            if (g_edge == ABE_BOTTOM) outer = std::min(outer, (int)g_barRect.bottom);
+        }
     }
     int gapPx = (int)std::lround(S.bottomGap * L.s);
-    int x = g_monRect.left + (g_monRect.right - g_monRect.left - W) / 2;
-    int y = bottom - gapPx - H;
+    int x, y;
+    if (Vertical()) {
+        y = span.top + (span.bottom - span.top - H) / 2;
+        x = g_edge == ABE_LEFT ? outer + gapPx : outer - gapPx - W;
+    } else {
+        x = span.left + (span.right - span.left - W) / 2;
+        y = g_edge == ABE_TOP ? outer + gapPx : outer - gapPx - H;
+    }
     bool show = !g_fullscreen;
-    SetWindowPos(g_dock, HWND_TOPMOST, x, y, W, H,
-                 SWP_NOACTIVATE | (show ? SWP_SHOWWINDOW : SWP_HIDEWINDOW));
+    SetWindowPos(g_dock, HWND_TOPMOST, x, y, W, H, SWP_NOACTIVATE | (show ? SWP_SHOWWINDOW : SWP_HIDEWINDOW));
     g_dockSurf.Resize();
     InvalidateRect(g_dock, nullptr, FALSE);
 }
 
 // ---------------------------------------------------------------------------
-// Appbar: maximized windows stop above the dock
+// Appbar: maximized windows stop at the dock
 // ---------------------------------------------------------------------------
 // Only talk to the shell when the reserved strip really changed. Every SETPOS
 // tells the other bars to move, and their answer comes back as ABN_POSCHANGED.
-int g_barHeightSent = -1;
+int g_barHeightSent = -1, g_barOuterSent = 0;
+UINT g_barEdgeSent = ABE_BOTTOM;
 RECT g_barMonSent{};
 bool g_inBarSetPos = false;
 
@@ -1085,26 +1392,42 @@ void AppBarRemove() {
     g_barHeightSent = -1;
 }
 
-void AppBarSetPos(int heightPx, bool force) {
+// Keep the strip depthPx deep from its outer side, whatever the shell moved.
+void ShapeStrip(RECT& rc, int depthPx) {
+    if (g_edge == ABE_TOP) rc.bottom = rc.top + depthPx;
+    else if (g_edge == ABE_LEFT) rc.right = rc.left + depthPx;
+    else if (g_edge == ABE_RIGHT) rc.left = rc.right - depthPx;
+    else rc.top = rc.bottom - depthPx;
+}
+
+void AppBarSetPos(int depthPx, bool force) {
     AppBarRegister();
     if (!g_appbar || g_inBarSetPos) return;
-    if (!force && heightPx == g_barHeightSent && EqualRect(&g_barMonSent, &g_monRect)) return;
+    bool same = depthPx == g_barHeightSent && g_edge == g_barEdgeSent && g_outerWant == g_barOuterSent &&
+                EqualRect(&g_barMonSent, &g_monRect);
+    if (!force && same) return;
     g_inBarSetPos = true;
     APPBARDATA abd{sizeof(abd)};
     abd.hWnd = g_dock;
-    abd.uEdge = ABE_BOTTOM;
+    abd.uEdge = g_edge;
     abd.rc = g_monRect;
-    abd.rc.top = abd.rc.bottom - heightPx;
+    if (g_edge == ABE_TOP) abd.rc.top = g_outerWant;
+    else if (g_edge == ABE_LEFT) abd.rc.left = g_outerWant;
+    else if (g_edge == ABE_RIGHT) abd.rc.right = g_outerWant;
+    else abd.rc.bottom = g_outerWant;
+    ShapeStrip(abd.rc, depthPx);
     SHAppBarMessage(ABM_QUERYPOS, &abd);
-    abd.rc.top = abd.rc.bottom - heightPx;
-    if (force && heightPx == g_barHeightSent && EqualRect(&abd.rc, &g_barRect)) {
+    ShapeStrip(abd.rc, depthPx);
+    if (force && same && EqualRect(&abd.rc, &g_barRect)) {
         // Another bar moved but our strip is still right: say nothing, or we echo forever.
         g_inBarSetPos = false;
         return;
     }
     SHAppBarMessage(ABM_SETPOS, &abd);
     g_barRect = abd.rc;
-    g_barHeightSent = heightPx;
+    g_barHeightSent = depthPx;
+    g_barEdgeSent = g_edge;
+    g_barOuterSent = g_outerWant;
     g_barMonSent = g_monRect;
     g_inBarSetPos = false;
 }
@@ -1140,6 +1463,10 @@ void Launch(Item& it) {
 void ClickItem(int i, bool middle) {
     if (i < 0 || i >= (int)g_items.size()) return;
     Item& it = g_items[i];
+    if (it.recycle) {
+        OpenRecycleBin();
+        return;
+    }
     if (middle || it.wins.empty()) {
         Launch(it);
         return;
@@ -1200,7 +1527,9 @@ float g_dockT = 0;
 ULONGLONG g_lastAnim = 0, g_outSince = 0;
 std::wstring g_popKey;  // item the preview shows
 
-constexpr UINT_PTR kTimerRebuild = 1, kTimerAnim = 2, kTimerHover = 3, kTimerTrack = 4, kTimerFull = 5;
+constexpr UINT_PTR kTimerRebuild = 1, kTimerAnim = 2, kTimerHover = 3, kTimerTrack = 4, kTimerFull = 5,
+                   kTimerRecycle = 6;
+ULONGLONG g_recycleChecked = 0;
 bool g_rebuildPending = false;
 
 void ScheduleRebuild(UINT ms) {
@@ -1244,11 +1573,12 @@ bool StepAnim() {
 // ---------------------------------------------------------------------------
 // Dock painting
 // ---------------------------------------------------------------------------
+float PlateAlong(int i) { return i == g_dragIndex ? g_dragX - g_dragGrab : L.x[i]; }
+
 D2D1_RECT_F PlateRect(int i) {
-    float x = L.x[i];
-    if (i == g_dragIndex) x = g_dragX - g_dragGrab;
-    float y = L.padTop - L.lift * g_items[i].hoverT;
-    return D2D1::RectF(x, y, x + L.plate, y + L.plate);
+    float a = PlateAlong(i);
+    float d = L.padTop - L.lift * g_items[i].hoverT;
+    return Place(a, d, a + L.plate, d + L.plate);
 }
 
 void PaintDock() {
@@ -1256,7 +1586,7 @@ void PaintDock() {
     if (!s.Ensure()) return;
     s.rt->BeginDraw();
     s.rt->Clear(D2D1::ColorF(0, 0));
-    D2D1_RECT_F all = D2D1::RectF(0, 0, L.w, L.h);
+    D2D1_RECT_F all = D2D1::RectF(0, 0, WinW(), WinH());
     auto tint = s.Solid(kBase, TintAlpha());
     s.rt->FillRectangle(all, tint.Get());
 
@@ -1266,10 +1596,10 @@ void PaintDock() {
         if (g_dockT > 0) StrokeRound(s, all, L.radius, ew, s.Grad(all, g_dockT).Get());
     }
 
-    if (L.divX >= 0) {
+    for (float dv : L.divs) {
         float h = L.plate * 0.6f;
-        float cy = L.padTop + L.plate / 2;
-        s.rt->FillRectangle(D2D1::RectF(L.divX, cy - h / 2, L.divX + 1, cy + h / 2), s.Solid(kSurface1).Get());
+        float cd = L.padTop + L.plate / 2;
+        s.rt->FillRectangle(Place(dv, cd - h / 2, dv + 1, cd + h / 2), s.Solid(kSurface1).Get());
     }
 
     ULONGLONG now = GetTickCount64();
@@ -1298,22 +1628,23 @@ void PaintDock() {
             if (f) f->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         }
 
-        float dotY = L.padTop + L.plate + L.dotArea / 2;
-        float ox = (L.x[i] + L.plate / 2);
-        if (i == g_dragIndex) ox = cx;
+        // The open dots sit between the icon and the screen edge.
+        float dotD = L.padTop + L.plate + L.dotArea / 2;
+        D2D1_POINT_2F dot = PlacePt(PlateAlong(i) + L.plate / 2, dotD);
         if (it.launchUntil > now && it.wins.empty()) {
             float a = 0.35f + 0.65f * (0.5f + 0.5f * std::sin((float)(now % 100000) / 140.f));
-            s.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(ox, dotY), 2, 2), s.Solid(S.from, a).Get());
+            s.rt->FillEllipse(D2D1::Ellipse(dot, 2, 2), s.Solid(S.from, a).Get());
         } else if (!it.wins.empty()) {
             if (it.flash) {
-                s.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(ox, dotY), 2.5f, 2.5f), s.Solid(kPeach).Get());
+                s.rt->FillEllipse(D2D1::Ellipse(dot, 2.5f, 2.5f), s.Solid(kPeach).Get());
             } else {
                 float half = Lerp(2, 7, it.activeT);
-                D2D1_RECT_F d = D2D1::RectF(ox - half, dotY - 2, ox + half, dotY + 2);
+                float da = PlateAlong(i) + L.plate / 2;
+                D2D1_RECT_F d = Place(da - half, dotD - 2, da + half, dotD + 2);
                 if (it.activeT > 0.01f)
                     s.rt->FillRoundedRectangle(D2D1::RoundedRect(d, 2, 2), s.Grad(d, 1).Get());
                 else
-                    s.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(ox, dotY), 2, 2), s.Solid(S.from).Get());
+                    s.rt->FillEllipse(D2D1::Ellipse(dot, 2, 2), s.Solid(S.from).Get());
             }
         }
     };
@@ -1328,13 +1659,32 @@ void PaintDock() {
 }
 
 int ItemAt(POINT pxPt) {
-    float x = pxPt.x / L.s, y = pxPt.y / L.s;
-    if (y < 0 || y > L.h) return -1;
+    float a, d;
+    Unplace(pxPt, a, d);
+    if (d < 0 || d > L.h) return -1;
     for (size_t i = 0; i < g_items.size(); i++) {
         float l = L.x[i] - L.gap / 2, r = L.x[i] + L.plate + L.gap / 2;
-        if (x >= l && x < r) return (int)i;
+        if (a >= l && a < r) return (int)i;
     }
     return -1;
+}
+
+// Where a W x H window beside the dock goes: on the screen side of the dock,
+// centred on the item at `along` (dock points), kept on the monitor.
+POINT BesideDock(float along, int W, int H) {
+    RECT dr;
+    GetWindowRect(g_dock, &dr);
+    int c = (int)std::lround(along * L.s), gap = (int)std::lround(8 * L.s);
+    RECT m = g_monRect;
+    POINT p{};
+    if (Vertical()) {
+        p.y = std::clamp((int)dr.top + c - H / 2, (int)m.top + 8, std::max((int)m.top + 8, (int)m.bottom - H - 8));
+        p.x = g_edge == ABE_LEFT ? dr.right + gap : dr.left - gap - W;
+    } else {
+        p.x = std::clamp((int)dr.left + c - W / 2, (int)m.left + 8, std::max((int)m.left + 8, (int)m.right - W - 8));
+        p.y = g_edge == ABE_TOP ? dr.bottom + gap : dr.top - gap - H;
+    }
+    return p;
 }
 
 // ---------------------------------------------------------------------------
@@ -1383,7 +1733,7 @@ void ShowPopup(int i) {
     } else {
         size_t n = std::min<size_t>(it.wins.size(), 8);
         float bw = 208, imgH = 118, titleH = 26, gap = 8;
-        float maxW = (g_monRect.right - g_monRect.left) / L.s - 32;
+        float maxW = (g_monRect.right - g_monRect.left) / L.s - 32 - (Vertical() ? WinW() + 16 : 0);
         float need = pad * 2 + n * bw + (n - 1) * gap;
         if (need > maxW) bw = std::max(120.f, (maxW - pad * 2 - (n - 1) * gap) / n);
         P.w = pad * 2 + n * bw + (n - 1) * gap;
@@ -1400,12 +1750,8 @@ void ShowPopup(int i) {
         }
     }
     int W = (int)std::ceil(P.w * L.s), H = (int)std::ceil(P.h * L.s);
-    RECT dr;
-    GetWindowRect(g_dock, &dr);
-    int cx = dr.left + (int)std::lround((L.x[i] + L.plate / 2) * L.s);
-    int x = std::clamp(cx - W / 2, (int)g_monRect.left + 8, (int)g_monRect.right - W - 8);
-    int y = dr.top - (int)std::lround(8 * L.s) - H;
-    SetWindowPos(g_pop, HWND_TOPMOST, x, y, W, H, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    POINT at = BesideDock(L.x[i] + L.plate / 2, W, H);
+    SetWindowPos(g_pop, HWND_TOPMOST, at.x, at.y, W, H, SWP_NOACTIVATE | SWP_SHOWWINDOW);
     g_popSurf.Resize();
     for (auto& t : P.thumbs) {
         if (FAILED(DwmRegisterThumbnail(g_pop, t.src, &t.th))) {
@@ -1495,10 +1841,110 @@ void CloseMenu() {
     StartAnim();
 }
 
+void ShowMenu(float along) {
+    auto* f = Format(14, DWRITE_FONT_WEIGHT_MEDIUM);
+    float textW = 0;
+    for (auto& r : M.rows)
+        if (!r.sep) textW = std::max(textW, TextWidth(r.text, f));
+    M.w = std::clamp(textW + 6 + 10 + 28 + 18 + 6, 200.f, 420.f);
+    float y = 6;
+    for (auto& r : M.rows) {
+        r.top = y;
+        y += r.sep ? 9 : 30;
+        r.bottom = y;
+    }
+    M.h = y + 6;
+
+    float s = L.s;
+    int W = (int)std::ceil(M.w * s), H = (int)std::ceil(M.h * s);
+    POINT at = BesideDock(along, W, H);
+    SetWindowPos(g_menu, HWND_TOPMOST, at.x, at.y, W, H, SWP_SHOWWINDOW);
+    g_menuSurf.Resize();
+    SetForegroundWindow(g_menu);
+    InvalidateRect(g_menu, nullptr, FALSE);
+    StartAnim();
+}
+
+// ---------------------------------------------------------------------------
+// Changing the dock on the go, from its own menu or from the taskbar's
+// ---------------------------------------------------------------------------
+void SetPlace(int v) {
+    S.place = Clamp(v, 0, 4);
+    SetOverride(L"position", S.place);
+    Relayout(true);
+}
+
+void SetRecycleOn(bool on) {
+    S.recycle = on;
+    SetOverride(L"recycleBin", on ? 1 : 0);
+    if (on) g_recycleFull = RecycleHasFiles();
+    WatchRecycle(on);
+    Rebuild(true);
+}
+
+void SetTitleOn(bool on) {
+    S.showTitle = on;
+    SetOverride(L"showTitle", on ? 1 : 0);
+    UpdateTitle(true);
+}
+
+constexpr wchar_t kCheck[] = L"\xE73E";
+
+void OpenDockMenu(float along);
+
+void AddDockRow(float along) {
+    M.rows.push_back(MenuRow{L"", L"", true});
+    M.rows.push_back(MenuRow{L"Dock options", L"\xE713", false, false, [along] { OpenDockMenu(along); }});
+}
+
+void OpenDockMenu(float along) {
+    if (!g_menu) return;
+    HidePopup();
+    M.rows.clear();
+    M.key.clear();
+    M.hot = -1;
+    M.rows.push_back(MenuRow{L"Seamless Dock", L"", false, true, nullptr});
+    M.rows.push_back(MenuRow{L"", L"", true});
+    M.rows.push_back(MenuRow{L"Position", L"", false, true, nullptr});
+    const wchar_t* names[] = {L"Across from the taskbar", L"Bottom", L"Top", L"Left", L"Right"};
+    for (int v = 0; v < 5; v++)
+        M.rows.push_back(MenuRow{names[v], S.place == v ? kCheck : L"", false, false, [v] { SetPlace(v); }});
+    M.rows.push_back(MenuRow{L"", L"", true});
+    M.rows.push_back(MenuRow{L"Recycle Bin in the dock", S.recycle ? kCheck : L"", false, false,
+                             [] { SetRecycleOn(!S.recycle); }});
+    M.rows.push_back(MenuRow{L"Window title in the taskbar", S.showTitle ? kCheck : L"", false, false,
+                             [] { SetTitleOn(!S.showTitle); }});
+    ShowMenu(along);
+}
+
+void OpenRecycleMenu(int i) {
+    Item& it = g_items[i];
+    float along = L.x[i] + L.plate / 2;
+    g_recycleFull = RecycleHasFiles();
+    M.rows.push_back(MenuRow{it.name, L"", false, true, nullptr});
+    M.rows.push_back(MenuRow{L"", L"", true});
+    M.rows.push_back(MenuRow{L"Open", L"\xE838", false, false, [] { OpenRecycleBin(); }});
+    if (g_recycleFull)
+        M.rows.push_back(MenuRow{L"Empty Recycle Bin", L"\xE74D", false, false, [] {
+                                     EmptyRecycleBin();
+                                     if (g_dock) SetTimer(g_dock, kTimerRecycle, 250, nullptr);
+                                 }});
+    M.rows.push_back(MenuRow{L"Remove from dock", L"\xE77A", false, false, [] { SetRecycleOn(false); }});
+    AddDockRow(along);
+    ShowMenu(along);
+}
+
 void OpenMenu(int i) {
     if (!g_menu || i < 0 || i >= (int)g_items.size()) return;
     HidePopup();
     Item& it = g_items[i];
+    if (it.recycle) {
+        M.rows.clear();
+        M.key = it.key;
+        M.hot = -1;
+        OpenRecycleMenu(i);
+        return;
+    }
     M.rows.clear();
     M.key = it.key;
     M.hot = -1;
@@ -1523,6 +1969,17 @@ void OpenMenu(int i) {
         M.rows.push_back(MenuRow{L"Unpin from dock", L"\xE77A", false, false, [key] { UnpinItem(key); }});
     else
         M.rows.push_back(MenuRow{L"Pin to dock", L"\xE718", false, false, [key] { PinItem(key); }});
+    std::wstring where = it.pin >= 0 && it.pin < (int)g_pins.size() ? g_pins[it.pin].exeLower
+                         : it.launchKind == L"exe"                 ? it.launchValue
+                                                                   : L"";
+    if (!where.empty() && GetFileAttributesW(where.c_str()) != INVALID_FILE_ATTRIBUTES)
+        M.rows.push_back(MenuRow{L"Open file location", L"\xE838", false, false, [where] {
+                                     PIDLIST_ABSOLUTE pidl = ILCreateFromPathW(where.c_str());
+                                     if (pidl) {
+                                         SHOpenFolderAndSelectItems(pidl, 0, nullptr, 0);
+                                         ILFree(pidl);
+                                     }
+                                 }});
     if (!wins.empty()) {
         M.rows.push_back(MenuRow{L"", L"", true});
         M.rows.push_back(MenuRow{wins.size() > 1 ? L"Close all windows" : L"Close window", L"\xE8BB", false, false,
@@ -1530,32 +1987,8 @@ void OpenMenu(int i) {
                                      for (HWND h : wins) CloseWin(h);
                                  }});
     }
-
-    auto* f = Format(14, DWRITE_FONT_WEIGHT_MEDIUM);
-    float textW = 0;
-    for (auto& r : M.rows)
-        if (!r.sep) textW = std::max(textW, TextWidth(r.text, f));
-    M.w = std::clamp(textW + 6 + 10 + 28 + 18 + 6, 200.f, 420.f);
-    float y = 6;
-    for (auto& r : M.rows) {
-        r.top = y;
-        y += r.sep ? 9 : 30;
-        r.bottom = y;
-    }
-    M.h = y + 6;
-
-    float s = L.s;
-    int W = (int)std::ceil(M.w * s), H = (int)std::ceil(M.h * s);
-    RECT dr;
-    GetWindowRect(g_dock, &dr);
-    int cx = dr.left + (int)std::lround((L.x[i] + L.plate / 2) * s);
-    int x = std::clamp(cx - W / 2, (int)g_monRect.left + 8, (int)g_monRect.right - W - 8);
-    int yy = dr.top - (int)std::lround(8 * s) - H;
-    SetWindowPos(g_menu, HWND_TOPMOST, x, yy, W, H, SWP_SHOWWINDOW);
-    g_menuSurf.Resize();
-    SetForegroundWindow(g_menu);
-    InvalidateRect(g_menu, nullptr, FALSE);
-    StartAnim();
+    AddDockRow(L.x[i] + L.plate / 2);
+    ShowMenu(L.x[i] + L.plate / 2);
 }
 
 void PaintMenu() {
@@ -1803,6 +2236,8 @@ HWND TitleWindow() {
     HWND root = fg ? GetAncestor(fg, GA_ROOTOWNER) : nullptr;
     if (root && root != fg && Eligible(root)) return root;
     if (g_titleWin && IsWindow(g_titleWin) && Eligible(g_titleWin)) return g_titleWin;
+    for (HWND h = GetTopWindow(nullptr); h; h = GetWindow(h, GW_HWNDNEXT))
+        if (Eligible(h) && !IsIconic(h)) return h;
     return nullptr;
 }
 
@@ -2056,7 +2491,38 @@ void DragTo(float x) {
     InvalidateRect(g_dock, nullptr, FALSE);
 }
 
+// The taskbar's menu asks and sets through "SeamlessDock.Control":
+// 1 = what is set (bits 0-2 position, bit 4 Recycle Bin, bit 5 title, bits 8+ edge + 1),
+// 2 = set position (0 across from the taskbar, 1 bottom, 2 top, 3 left, 4 right),
+// 3 = Recycle Bin on or off, 4 = title on or off, 5 = the taskbar moved.
+LRESULT DockControl(WPARAM wp, LPARAM lp) {
+    switch (wp) {
+        case 2:
+            SetPlace((int)lp);
+            break;
+        case 3:
+            SetRecycleOn(lp != 0);
+            break;
+        case 4:
+            SetTitleOn(lp != 0);
+            break;
+        case 5:
+            Relayout(true);
+            break;
+    }
+    return 0x40000000 | S.place | (S.recycle ? 0x10 : 0) | (S.showTitle ? 0x20 : 0) | ((LRESULT)(g_edge + 1) << 8);
+}
+
+void CheckRecycle() {
+    g_recycleChecked = GetTickCount64();
+    bool full = RecycleHasFiles();
+    if (full == g_recycleFull) return;
+    g_recycleFull = full;
+    if (S.recycle) Rebuild(true);
+}
+
 LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == g_ctlMsg && g_ctlMsg) return DockControl(wp, lp);
     if (msg == g_shellMsg && g_shellMsg) {
         HWND h = (HWND)lp;
         if (wp == HSHELL_FLASH) {
@@ -2071,8 +2537,13 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == g_taskbarCreatedMsg && g_taskbarCreatedMsg) {
         // Explorer restarted: the appbar and the shell hook went with it.
         g_appbar = false;
+        g_barHeightSent = -1;
+        g_barRect = RECT{};
         RegisterShellHookWindow(hwnd);
-        Relayout();
+        WatchRecycle(false);
+        WatchRecycle(S.recycle);
+        Relayout(true);
+        UpdateTitle(true);
         return 0;
     }
     switch (msg) {
@@ -2094,15 +2565,18 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_MOUSEMOVE: {
             POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            float along, depth, pressAlong;
+            Unplace(pt, along, depth);
+            Unplace(g_pressPt, pressAlong, depth);
             if (g_press >= 0 && g_dragIndex < 0 && g_press < g_pinnedCount && !g_pressMiddle &&
-                std::abs(pt.x - g_pressPt.x) > 6 * L.s) {
+                std::abs(along - pressAlong) > 6) {
                 g_dragIndex = g_press;
-                g_dragGrab = g_pressPt.x / L.s - L.x[g_press];
+                g_dragGrab = pressAlong - L.x[g_press];
                 HidePopup();
                 KillTimer(hwnd, kTimerHover);
             }
             if (g_dragIndex >= 0) {
-                DragTo(pt.x / L.s);
+                DragTo(along);
                 StartAnim();
                 return 0;
             }
@@ -2140,9 +2614,18 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (g_dragIndex >= 0 && (HWND)lp != hwnd) EndDrag(true);
             g_press = -1;
             return 0;
-        case WM_RBUTTONUP:
-            OpenMenu(ItemAt(POINT{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}));
+        case WM_RBUTTONUP: {
+            POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            int at = ItemAt(pt);
+            if (at >= 0) {
+                OpenMenu(at);
+            } else {
+                float along, depth;
+                Unplace(pt, along, depth);
+                OpenDockMenu(along);
+            }
             return 0;
+        }
         case WM_TIMER:
             switch (wp) {
                 case kTimerRebuild:
@@ -2167,8 +2650,13 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     if (PopupVisible()) GetWindowRect(g_pop, &pr);
                     bool in = PtInRect(&dr, pt) || (PopupVisible() && PtInRect(&pr, pt));
                     // The strip between the dock and its preview counts as inside.
-                    if (PopupVisible() && pt.y >= pr.bottom && pt.y < dr.top && pt.x >= pr.left && pt.x < pr.right)
-                        in = true;
+                    if (PopupVisible()) {
+                        RECT gapStrip = g_edge == ABE_TOP     ? RECT{pr.left, dr.bottom, pr.right, pr.top}
+                                        : g_edge == ABE_LEFT  ? RECT{dr.right, pr.top, pr.left, pr.bottom}
+                                        : g_edge == ABE_RIGHT ? RECT{pr.right, pr.top, dr.left, pr.bottom}
+                                                              : RECT{pr.left, pr.bottom, pr.right, dr.top};
+                        if (PtInRect(&gapStrip, pt)) in = true;
+                    }
                     ULONGLONG now = GetTickCount64();
                     if (in || g_dragIndex >= 0) {
                         g_outSince = 0;
@@ -2182,12 +2670,57 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     }
                     break;
                 }
-                case kTimerFull:
+                case kTimerFull: {
                     CheckFullscreen();
                     UpdateTitle();
+                    // The taskbar moved or changed size: follow it.
+                    RECT r{};
+                    bool solid = false;
+                    int e = TaskbarEdge(r, solid);
+                    if (e != g_tbEdge || solid != g_tbSolidSeen || (solid && !EqualRect(&r, &g_tbRect)))
+                        Relayout(true);
+                    // The shell can drop the reserved strip without telling us (a shell
+                    // restart, a display change). Then windows and the window manager's
+                    // tiles run under the dock. Every 5 s, if the work area reaches into
+                    // the strip, register it again.
+                    static ULONGLONG stripChecked = 0;
+                    if (S.reserve && !g_fullscreen && GetTickCount64() - stripChecked > 5000) {
+                        stripChecked = GetTickCount64();
+                        MONITORINFO mi{sizeof(mi)};
+                        if (g_mon && GetMonitorInfoW(g_mon, &mi) && !IsRectEmpty(&g_barRect)) {
+                            const RECT& w = mi.rcWork;
+                            bool lost = g_edge == ABE_TOP     ? w.top < g_barRect.bottom
+                                        : g_edge == ABE_LEFT  ? w.left < g_barRect.right
+                                        : g_edge == ABE_RIGHT ? w.right > g_barRect.left
+                                                              : w.bottom > g_barRect.top;
+                            if (lost || !g_appbar) {
+                                AppBarRemove();
+                                g_barRect = RECT{};
+                                Relayout(true);
+                            }
+                        } else if (!g_appbar || IsRectEmpty(&g_barRect)) {
+                            g_barHeightSent = -1;
+                            Relayout(true);
+                        }
+                    }
+                    // A slow backup in case the shell's change notices never arrive.
+                    if (S.recycle && GetTickCount64() - g_recycleChecked > 15000) CheckRecycle();
+                    break;
+                }
+                case kTimerRecycle:
+                    KillTimer(hwnd, kTimerRecycle);
+                    CheckRecycle();
                     break;
             }
             return 0;
+        case kRecycleMsg: {
+            PIDLIST_ABSOLUTE* pidls = nullptr;
+            LONG ev = 0;
+            HANDLE lock = SHChangeNotification_Lock((HANDLE)wp, (DWORD)lp, &pidls, &ev);
+            if (lock) SHChangeNotification_Unlock(lock);
+            SetTimer(hwnd, kTimerRecycle, 250, nullptr);
+            return 0;
+        }
         case kAppBarMsg:
             if (wp == ABN_POSCHANGED) {
                 Relayout(true);
@@ -2222,7 +2755,10 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             g_menuSurf.Discard();
             g_titleRt.Reset();
             if (!S.reserve) AppBarRemove();
+            if (S.recycle) g_recycleFull = RecycleHasFiles();
+            WatchRecycle(S.recycle);
             Rebuild(true);
+            Relayout(true);
             UpdateTitle(true);
             return 0;
         }
@@ -2233,6 +2769,7 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             for (auto h : g_hooks) UnhookWinEvent(h);
             g_hooks.clear();
             DeregisterShellHookWindow(hwnd);
+            WatchRecycle(false);
             AppBarRemove();
             UnregisterThumbs();
             if (g_pop) DestroyWindow(g_pop);
@@ -2298,6 +2835,11 @@ DWORD WINAPI DockThread(void*) {
     g_shellMsg = RegisterWindowMessageW(L"SHELLHOOK");
     g_taskbarCreatedMsg = RegisterWindowMessageW(L"TaskbarCreated");
     ChangeWindowMessageFilterEx(g_dock, g_taskbarCreatedMsg, MSGFLT_ALLOW, nullptr);
+    // The dock runs with full rights; the taskbar's menu and the shell's change
+    // notices come from a normal-rights Explorer.
+    g_ctlMsg = RegisterWindowMessageW(L"SeamlessDock.Control");
+    ChangeWindowMessageFilterEx(g_dock, g_ctlMsg, MSGFLT_ALLOW, nullptr);
+    ChangeWindowMessageFilterEx(g_dock, kRecycleMsg, MSGFLT_ALLOW, nullptr);
     RegisterShellHookWindow(g_dock);
     const DWORD ranges[][2] = {{EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND},
                                {EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND},
@@ -2309,6 +2851,9 @@ DWORD WINAPI DockThread(void*) {
         if (h) g_hooks.push_back(h);
     }
 
+    if (S.recycle) g_recycleFull = RecycleHasFiles();
+    g_recycleChecked = GetTickCount64();
+    WatchRecycle(S.recycle);
     Rebuild(true);
     CheckFullscreen();
     SetTimer(g_dock, kTimerFull, 1000, nullptr);

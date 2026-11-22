@@ -15,10 +15,12 @@
         "hoverColorTo": "#cba6f7",
         "hoverDelay": 350,
         "iconSize": 36,
+        "position": "auto",
         "previews": 1,
+        "recycleBin": 1,
         "reserveSpace": 1,
         "showOpenApps": 1,
-        "showTitle": 1,
+        "showTitle": 0,
         "spacing": 6,
         "surfaceOpacity": 60
       }
