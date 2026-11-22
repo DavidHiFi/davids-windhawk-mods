@@ -2,7 +2,7 @@
 // @id              seamless-window-manager
 // @name            Seamless Window Manager
 // @description     Move, resize, snap and focus windows with the mouse or keyboard, with app rules, gaps and a pause key
-// @version         2.8.1
+// @version         2.8.2
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -137,6 +137,10 @@ the keys above, the key above wins.
   tiling is on, Windows doesn't swap in its pale stand-in window, so a busy
   app no longer flickers. Apps started before tiling was turned on keep the
   stand-in until they restart.
+
+## What's new in 2.8.2
+- Agent windows: when an agent has been let use the mouse and keys because you
+  stepped away, it loses them the moment you touch the mouse or keyboard again.
 
 ## What's new in 2.8.1
 - Game guard: the per-app part (window dragging, snapping, wobble) no longer
@@ -16551,6 +16555,12 @@ namespace agentQuiet {
 
 bool g_active = false;
 bool g_enabled = false;
+// Input pass of this process: the lock's acquire time, that time as a tick, and the tick of this
+// process's own last injected input.
+double g_passAcquired = 0;
+DWORD g_passTick = 0;
+DWORD g_agentTick = 0;
+bool g_touchLogged = false;
 int g_screen = 0;  // 0 side, 1 left, 2 right, 3 top, -1 leave where the app puts it
 std::vector<std::wstring> g_apps;
 std::vector<DWORD> g_ancestors;
@@ -16735,11 +16745,38 @@ bool InputPass() {
     double acquired = JsonNumber(lock, "\"acquired\""), ttl = JsonNumber(lock, "\"ttl\"");
     if (acquired <= 0 || ttl <= 0 || acquired + ttl < unixNow) return false;
     if (JsonTrue(ReadSmall(dir + L"\\guard.json"), "\"hands_off\"")) return false;
+    if (acquired != g_passAcquired) {
+        g_passAcquired = acquired;
+        g_passTick = GetTickCount() - (DWORD)((unixNow - acquired) * 1000);
+        g_agentTick = g_passTick;
+        g_touchLogged = false;
+    }
     last = true;
     return true;
 }
 
-bool Quiet() { return g_enabled && !OwnerIntent() && !InputPass(); }
+// The owner touched the mouse or keys since the pass began: the session's last input is newer
+// than this process's own last click, key or cursor move (100 ms slack, as Windows counts
+// injected input a moment after the call returns). The lock is only granted after a minute
+// without input, so anything later that is not ours is the owner, remote play and macro
+// tools included. Works with an elevated window in front, where raw input never arrives.
+// Once touched, the pass stays closed until the thread takes the lock again.
+bool OwnerTouched() {
+    LASTINPUTINFO li{sizeof(li)};
+    if (!GetLastInputInfo(&li)) return true;
+    if ((LONG)(li.dwTime - g_agentTick) <= 100) return false;
+    if (!g_touchLogged) {
+        g_touchLogged = true;
+        Wh_Log(L"agent windows: owner touched the PC, input pass closed");
+    }
+    return true;
+}
+
+void MarkAgentInput() {
+    if (g_passAcquired > 0) g_agentTick = GetTickCount();
+}
+
+bool Quiet() { return g_enabled && !OwnerIntent() && (!InputPass() || OwnerTouched()); }
 
 // Only top-level windows take the foreground; child windows keep their own behaviour.
 bool TopLevel(HWND h) { return h && !(GetWindowLongW(h, GWL_STYLE) & WS_CHILD); }
@@ -16918,7 +16955,9 @@ UINT WINAPI SendInput_Hook(UINT count, LPINPUT inputs, int size) {
         SetLastError(ERROR_ACCESS_DENIED);
         return 0;
     }
-    return SendInput_Orig(count, inputs, size);
+    UINT sent = SendInput_Orig(count, inputs, size);
+    MarkAgentInput();
+    return sent;
 }
 
 BOOL WINAPI SetCursorPos_Hook(int x, int y) {
@@ -16926,7 +16965,9 @@ BOOL WINAPI SetCursorPos_Hook(int x, int y) {
         SetLastError(ERROR_ACCESS_DENIED);
         return FALSE;
     }
-    return SetCursorPos_Orig(x, y);
+    BOOL ok = SetCursorPos_Orig(x, y);
+    MarkAgentInput();
+    return ok;
 }
 
 // A top-level window created visible would show and activate inside the create call; make it
