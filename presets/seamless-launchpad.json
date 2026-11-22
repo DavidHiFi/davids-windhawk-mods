@@ -32,19 +32,15 @@
         "powerButtons.signOut": 1,
         "powerButtons.sleep": 1,
         "powerNoConfirm": 0,
-        "program": "",
         "settingsGlass": 1,
         "settingsTitleButtons": "native",
         "settingsTrayIcon": 1,
-        "shiftWinKeyAction": "grid",
         "shortcut": "shiftWin",
         "showLabels": 1,
         "startButton": 1,
-        "startButtonAction": "grid",
         "tintColor": "#1E1E2E",
         "wiggle": 1,
-        "winKey": 1,
-        "winKeyAction": "start"
+        "winKey": 1
       }
     }
   ]
