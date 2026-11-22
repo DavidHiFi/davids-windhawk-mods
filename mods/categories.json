@@ -12,7 +12,8 @@
     "Explorer": "File Explorer and working with files.",
     "Windows and menus": "Window frames, menus, flyouts, Start and the Windows look.",
     "Tools": "Things you call up with a key, a click or the tray.",
-    "Fixes": "Small fixes for one app or one crash."
+    "Fixes": "Small fixes for one app or one crash.",
+    "local@seamless-controls": "Windows and menus"
   },
   "mods": {
     "local@seamless-taskbar": "Taskbar",
