@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-22T21:36:44+08:00",
+  "generatedAt": "2026-11-22T21:40:19+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 166,
-    "enabled": 162,
-    "local": 55
+    "mods": 167,
+    "enabled": 163,
+    "local": 56
   },
   "mods": [
     {
@@ -2048,6 +2048,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-controls/seamless-controls.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-windows-firewall",
+      "name": "Seamless Windows Firewall",
+      "author": "DavidHiFi, Ashix",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-windows-firewall/seamless-windows-firewall.wh.cpp",
       "enabled": true
     }
   ]
