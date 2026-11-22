@@ -2,7 +2,7 @@
 // @id              mocha-steam-icons
 // @name            Mocha Steam Icons
 // @description     Gives Steam a blue to mauve icon in the tray, on its windows and on its shortcuts
-// @version         1.0.0
+// @version         1.0.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Swaps Steam's icon for a Catppuccin Mocha one, the Steam logo on a blue to mauve tile, everywhere Windows shows it. It goes well with the MochaSteam theme for Millennium and works without it too.
 
 ![Mocha Steam Icons preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/mocha-steam-icons.png)
+
+## What's new in 1.0.1
+
+- The taskbar button now changes straight away. Before, it could keep the old blue Steam icon until Windows redrew its icons.
 
 ## What's new in 1.0.0
 
@@ -875,6 +879,23 @@ struct ShortcutCopy {
     std::wstring from, to;
 };
 
+static bool g_shortcutChanged;
+
+// The taskbar and Start keep showing a shortcut's old picture until the shell
+// hears that picture changed, so tell it about both Steam's and ours.
+static void RefreshShellImages(const std::wstring& icon) {
+    wchar_t exe[MAX_PATH];
+    std::vector<std::wstring> files{icon};
+    if (GetModuleFileNameW(nullptr, exe, ARRAYSIZE(exe))) files.push_back(exe);
+    for (const auto& path : files) {
+        SHFILEINFOW info{};
+        if (SHGetFileInfoW(path.c_str(), 0, &info, sizeof(info), SHGFI_SYSICONINDEX) && info.iIcon > 0) {
+            SHChangeNotify(SHCNE_UPDATEIMAGE, SHCNF_DWORD, (LPCVOID)(INT_PTR)info.iIcon, nullptr);
+        }
+    }
+    Wh_Log(L"shortcuts: asked the shell to redraw Steam's icons");
+}
+
 static void UpdateShortcutIcon(IShellLinkW* link, IPersistFile* file, const std::wstring& path,
                                const std::wstring& icon, const std::wstring& backup, bool enabled,
                                std::vector<ShortcutCopy>& pending) {
@@ -909,6 +930,7 @@ static void UpdateShortcutIcon(IShellLinkW* link, IPersistFile* file, const std:
     if (FAILED(link->SetIconLocation(next.c_str(), nextIndex))) return;
     if (SUCCEEDED(file->Save(path.c_str(), TRUE))) {
         SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, path.c_str(), nullptr);
+        g_shortcutChanged = true;
         Wh_Log(L"shortcut %s: %s", enabled ? L"Mocha" : L"restored", path.c_str());
         if (!enabled) DeleteFileW(backup.c_str());
         return;
@@ -972,6 +994,7 @@ static void CopySharedShortcuts(const std::vector<ShortcutCopy>& pending, bool e
                 if (code == 0) {
                     for (const auto& item : pending) {
                         SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, item.to.c_str(), nullptr);
+                        g_shortcutChanged = true;
                         Wh_Log(L"shortcut %s (shared): %s", enabled ? L"Mocha" : L"restored", item.to.c_str());
                     }
                 } else if (code == 5) {
@@ -1012,6 +1035,7 @@ static void UpdateShortcutIcons(bool enabled, HANDLE stop) {
                 {CSIDL_APPDATA, L"\\Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar\\Steam.lnk", L".taskbar.lnk"},
             };
             std::vector<ShortcutCopy> pending;
+            g_shortcutChanged = false;
             for (const auto& shortcut : shortcuts) {
                 wchar_t folder[MAX_PATH];
                 if (SUCCEEDED(SHGetFolderPathW(nullptr, shortcut.folder, nullptr, SHGFP_TYPE_CURRENT, folder))) {
@@ -1021,6 +1045,7 @@ static void UpdateShortcutIcons(bool enabled, HANDLE stop) {
             }
             file->Release();
             CopySharedShortcuts(pending, enabled, stop);
+            if (g_shortcutChanged) RefreshShellImages(icon);
         }
         link->Release();
     }
