@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.1.1
+// @version         2.1.2
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -27,6 +27,12 @@ It also brings acrylic, Mica and blur to Windows 11 apps, and keeps re-applying 
 Explorer folder windows that open hidden or late, so they never show up black.
 
 Built on Translucent Windows by Undisputed00x.
+
+## What's new in 2.1.2
+
+- The strip behind File name, Open and Cancel, and the bottom bar of Save windows, now really
+  match the file list. 2.1.1 aimed at the wrong painter, so the grey bar stayed.
+- The Save window's middle panel is dark again (2.1.1 made it lighter).
 
 ## What's new in 2.1.1
 
@@ -1838,11 +1844,48 @@ static LRESULT CALLBACK RebarProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
     return r;
 }
 
+// 2.1.2: the window paints its own footer (behind File name / Open / Cancel, and Save's bottom
+// bar) a grey that lands on top of the glass, so it read as a lighter slab. Paint it black,
+// which the glass shows through exactly like the file list above it. Every control on the
+// footer is a child window and paints itself (the dialog clips its children).
+constexpr wchar_t kFooterProp[] = L"SeamlessFlyouts_DialogFooter";
+
+static LRESULT CALLBACK FooterProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, DWORD_PTR)
+{
+    if (!g_settings.Unload) {
+        if (uMsg == WM_ERASEBKGND || uMsg == WM_PRINTCLIENT) {
+            RECT rc;
+            GetClientRect(hWnd, &rc);
+            FillRect((HDC)wParam, &rc, (HBRUSH)GetStockObject(BLACK_BRUSH));
+            return uMsg == WM_ERASEBKGND ? 1 : 0;
+        }
+        if (uMsg == WM_PAINT && !wParam) {
+            PAINTSTRUCT ps;
+            if (HDC dc = BeginPaint(hWnd, &ps))
+                FillRect(dc, &ps.rcPaint, (HBRUSH)GetStockObject(BLACK_BRUSH));
+            EndPaint(hWnd, &ps);
+            return 0;
+        }
+    }
+    if (uMsg == WM_NCDESTROY)
+        RemovePropW(hWnd, kFooterProp);
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
+static VOID WatchFooter(HWND dialog)
+{
+    if (!dialog || GetPropW(dialog, kFooterProp))
+        return;
+    if (WindhawkUtils::SetWindowSubclassFromAnyThread(dialog, FooterProc, 0))
+        SetPropW(dialog, kFooterProp, (HANDLE)1);
+}
+
 static VOID OnCreate(HWND hWnd, HWND parent)
 {
     if (g_settings.Unload || !IsWindowClass(hWnd, L"ReBarWindow32") || !IsWindowClass(parent, L"WorkerW") ||
         !IsWindowClass(GetAncestor(parent, GA_ROOT), L"#32770") || !AcquireDirect2DFactory())
         return;
+    WatchFooter(GetAncestor(parent, GA_ROOT));
     if (!g_fixMsg)
         g_fixMsg = RegisterWindowMessageW(L"SeamlessFlyouts_DialogBarFix");
     if (g_fixMsg && WindhawkUtils::SetWindowSubclassFromAnyThread(hWnd, RebarProc, 0))
@@ -6365,9 +6408,8 @@ HRESULT WINAPI HookedDrawThemeBackgroundEx(
     }
     else if (ThemeClassName == L"CommonItemsDialog" && iPartId == 1)
     {
-        // 2.1.1: the Open/Save footer matches the file list (Mocha base), not lighter glass.
-        static HBRUSH footer = CreateSolidBrush(RGB(30, 30, 46));
-        FillRect(hdc, pRect, footer);
+        // The Open/Save footer: black is glass, the same as the file list.
+        FillRect(hdc, pRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
         return S_OK;
     }
     return hr;
@@ -7659,11 +7701,11 @@ BOOL WINAPI HookedFillRect(HDC hdc, LPCRECT lprc, HBRUSH hbr)
 BOOL (__fastcall *SetDarkThemeColors_orig)(void **, HDC);
 BOOL __fastcall HookedSetDarkThemeColors(void **Brush, HDC hdc)
 {
-    // 2.1.1: Mocha base, the colour the file list paints. Black let a lighter grey glass show
-    // through as a slab. The caller owns and deletes this brush, so make a new one each time.
-    SetBkColor(hdc, RGB(30, 30, 46));
+    // Black is glass, the same as the file list. Any other colour is added on top of the glass
+    // and comes out lighter (2.1.1 tried Mocha base and the Save panel turned grey-blue).
+    SetBkColor(hdc, RGB(0, 0, 0));
     SetTextColor(hdc, g_IsSysThemeDarkMode ? RGB(255, 255, 255) : RGB(0, 0, 0));
-    *Brush = (void*)CreateSolidBrush(RGB(30, 30, 46));
+    *Brush = (void*)GetStockObject(BLACK_BRUSH);
     return *Brush != nullptr;
 }
 
