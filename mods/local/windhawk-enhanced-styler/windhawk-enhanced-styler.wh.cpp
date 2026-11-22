@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.20
+// @version         2.2.21
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.21
+
+- Opening the filter or sort menu no longer hides the mod list. The page stays sharp behind the menu instead of turning into a big blur.
 
 ## What's new in 2.2.20
 
@@ -1492,26 +1496,10 @@ document.addEventListener('mouseout',e=>{if(cur&&(!e.relatedTarget||!cur.contain
 window.addEventListener('blur',hide);
 })();
 )WHT";
-    // 2.2.12: Windhawk's own overlay scrollbar is fixed to the window, so it runs straight
-    // past an open pop-up's rounded corners (2026-11-20 screenshot). While one is open,
-    // clip it to that pop-up's live rect with its real radius, rounded on the corners.
-    js += R"WHC((()=>{
- if(window.whcClip)return;window.whcClip=1;
- const style=document.createElement('style');style.id='whc-clip';document.head.appendChild(style);
- const upd=()=>{
-  const open=document.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden),.ant-dropdown:not(.ant-dropdown-hidden),.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)');
-  if(!open.length){if(style.textContent)style.textContent='';return;}
-  let rule='';
-  open.forEach(d=>{const r=d.getBoundingClientRect();if(r.width<8||r.height<8)return;
-   const rad=Math.min(16,parseFloat(getComputedStyle(d).borderRadius)||16);
-   rule+='.wh-cscroll-host{clip-path:inset('+r.top+'px -100vmax '+(innerHeight-r.bottom)+'px '+r.left+'px round '+rad+'px) !important;}';});
-  style.textContent=rule;
- };
- const mo=new MutationObserver(()=>setTimeout(upd,0));
- mo.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
- addEventListener('resize',upd);addEventListener('scroll',upd,true);
-})();
-)WHC";
+    // 2.2.21: the 2.2.12 pop-up clip is gone. It clipped .wh-cscroll-host, which is the
+    // whole page scroller, so opening the filter or sort menu hid every mod card and the
+    // window read as one big blur (owner, 2026-11-22). Menus are solid and sit above the
+    // scrollbar, so nothing needs clipping.
     js += "};";
     js += "if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',rest,{once:true});else rest();";
     js += "return 'ok len='+css.length;";
