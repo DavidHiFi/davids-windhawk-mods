@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-22T20:37:30+08:00",
+  "generatedAt": "2026-11-22T20:41:07+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 165,
-    "enabled": 161,
-    "local": 54
+    "mods": 166,
+    "enabled": 162,
+    "local": 55
   },
   "mods": [
     {
@@ -2037,6 +2037,18 @@
       "source": "mods/local/zoomit/zoomit.wh.cpp",
       "enabled": true,
       "category": "Tools"
+    },
+    {
+      "id": "local@seamless-controls",
+      "name": "Seamless Controls",
+      "author": "DavidHiFi, crazyboyybs",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-controls/seamless-controls.wh.cpp",
+      "enabled": true
     }
   ]
 }

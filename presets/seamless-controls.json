@@ -1,0 +1,38 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@seamless-controls",
+      "enabled": true,
+      "settings": {
+        "DarkModeExcludeList[0].target": "",
+        "ExplorerSection.DiskChartAccentColor": 1,
+        "ExplorerSection.Enabled": 1,
+        "ExplorerSection.LegacyRebarControls": "on",
+        "ExplorerSection.NavPaneExpandAnimation": 0,
+        "ExplorerSection.NavPaneHoverFade": 0,
+        "ExplorerSection.NavPanePill": "off",
+        "ExplorerSection.NavPillNoClip": 0,
+        "ExplorerSection.NeutralSelection": 0,
+        "ExplorerSection.StatusBarWidth": "off",
+        "GeneralSection.AccentGradients": 1,
+        "GeneralSection.EnableDarkMode": 1,
+        "GeneralSection.Enabled": 1,
+        "GeneralSection.InsertMarkColor": "accent",
+        "GeneralSection.ModernFocusRect": "modern",
+        "GeneralSection.ModernInsertMark": 1,
+        "GeneralSection.ModernScrollbars": 1,
+        "GeneralSection.ModernSeparators": 1,
+        "GeneralSection.ProgressBars": 1,
+        "GeneralSection.RoundedButtons": 1,
+        "GeneralSection.RoundedTabPane": "winui",
+        "RegeditSection.Enabled": 1,
+        "RegeditSection.GlyphIcons": 0,
+        "RegeditSection.TransparentBg": "off",
+        "nativeSettingsTitleBar": 0,
+        "settingsGlass": 1,
+        "settingsTrayIcon": 1
+      }
+    }
+  ]
+}
