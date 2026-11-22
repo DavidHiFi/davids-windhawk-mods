@@ -2,7 +2,7 @@
 // @id              seamless-window-manager
 // @name            Seamless Window Manager
 // @description     Move, resize, snap and focus windows with the mouse or keyboard, with app rules, gaps and a pause key
-// @version         2.8.2
+// @version         2.8.3
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -137,6 +137,10 @@ the keys above, the key above wins.
   tiling is on, Windows doesn't swap in its pale stand-in window, so a busy
   app no longer flickers. Apps started before tiling was turned on keep the
   stand-in until they restart.
+
+## What's new in 2.8.3
+- Agent windows: only the agent that was let use the mouse and keys gets them.
+  Other agents running at the same time stay hands-off.
 
 ## What's new in 2.8.2
 - Agent windows: when an agent has been let use the mouse and keys because you
@@ -16721,6 +16725,28 @@ bool JsonTrue(const std::string& s, const char* key) {
     return v != std::string::npos && s.compare(v, 4, "true") == 0;
 }
 
+// The pass belongs to the thread that took the lock: the lock's holder must be one of the
+// thread ids in this process's environment (T3 and coop hand these down to everything an agent
+// starts). Another thread's programs, and programs that carry no id, stay quiet.
+bool LockIsMine(const std::string& lock) {
+    size_t k = lock.find("\"agent\"");
+    if (k == std::string::npos) return false;
+    size_t c = lock.find(':', k);
+    if (c == std::string::npos) return false;
+    size_t q1 = lock.find('"', c + 1);
+    if (q1 == std::string::npos) return false;
+    size_t q2 = lock.find('"', q1 + 1);
+    if (q2 == std::string::npos || q2 == q1 + 1) return false;
+    std::string holder = lock.substr(q1 + 1, q2 - q1 - 1);
+    for (const char* name : {"COOP_AGENT", "T3CODE_THREAD_ID", "T3_THREAD_ID", "CLAUDE_CODE_SESSION_ID",
+                             "CLAUDE_SESSION_ID"}) {
+        char v[256];
+        DWORD n = GetEnvironmentVariableA(name, v, sizeof(v));
+        if (n > 0 && n < sizeof(v) && holder == std::string(v, n)) return true;
+    }
+    return false;
+}
+
 // An agent holds the coop desktop lock with --input (owner away a minute) and the owner is not
 // gaming: focus and input pass. Checked at most once a second.
 bool InputPass() {
@@ -16738,6 +16764,7 @@ bool InputPass() {
     else return false;
     std::string lock = ReadSmall(dir + L"\\projects\\machine\\locks\\desktop\\owner.json");
     if (lock.empty() || !JsonTrue(lock, "\"input\"")) return false;
+    if (!LockIsMine(lock)) return false;
     FILETIME ft;
     GetSystemTimeAsFileTime(&ft);
     double unixNow = (double)((((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime) -
