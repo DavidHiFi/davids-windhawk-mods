@@ -1320,7 +1320,7 @@
     "include": "*|windhawk.exe",
     "exclude": "dwm.exe|mmc.exe|conhost.exe|OpenConsole.exe|csrss.exe|LogonUI.exe|cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe|chrome.exe|msedge.exe|msedgewebview2.exe|firefox.exe|brave.exe|opera.exe|vivaldi.exe|Discord.exe|Code.exe|T3 Code.exe|Spotify.exe|steamwebhelper.exe|ms-teams.exe|Obsidian.exe|Tidal.exe|Dopamine.exe|C:\\Program Files\\Git\\*",
     "architecture": "x86-64",
-    "version": "1.0.1"
+    "version": "1.0.2"
   },
   "local@seamless-windows-firewall": {
     "disabled": false,

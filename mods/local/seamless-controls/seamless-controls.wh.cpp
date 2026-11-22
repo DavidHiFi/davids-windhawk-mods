@@ -2,7 +2,7 @@
 // @id              seamless-controls
 // @name            Seamless Controls
 // @description     Rounded, Mocha dark buttons, boxes, tabs and lists in every classic Windows window
-// @version         1.0.1
+// @version         1.0.2
 // @author          DavidHiFi, crazyboyybs
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -51,7 +51,7 @@ little dialogs inside older programs) still use buttons and boxes from Windows 7
 mod redraws them so they match the rest of your desktop: rounded buttons and boxes,
 clean tabs, slim progress bars, and a Mocha dark look for windows that have none.
 
-![Seamless Controls](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/previews/seamless-controls.png)
+![Seamless Controls](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-controls.png)
 
 Based on [Win32 UI Modernizer](https://windhawk.net/mods/win32-ui-modernizer) by
 [crazyboyybs](https://github.com/crazyboyybs), reworked to sit beside the other Seamless
@@ -80,8 +80,9 @@ windows are left out, since they have no classic controls.
 Click the tray icon for the settings window, or change them here in Windhawk. Both show
 the same settings.
 
-## What's new in 1.0.1
+## What's new in 1.0.2
 
+- The preview picture now shows in Windhawk and the Workshop.
 - Selected rows and selected text are dark on the mauve fill, so they read clearly.
 - First release as Seamless Controls.
 - Catppuccin Mocha colours and the blue to mauve gradient everywhere it draws.
