@@ -6,7 +6,7 @@
 // @id              seamless-launchpad
 // @name            Seamless Launchpad
 // @description     A fullscreen GPU rendered grid of all your apps in place of Start, with instant search, adjustable blur, wiggle edit mode and power buttons
-// @version         2.6.5
+// @version         2.7.0
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -47,12 +47,13 @@ of the macOS Launchpad, with instant search and a blurred background.
   background. The search bar, folder glass, dots and power bar use the
   Catppuccin Mocha palette.
 - **Opens like Start.** The Start button of the taskbar or the Standalone Dock
-  opens it, and Shift + Windows key does from the keyboard.
-- **Your own ways in.** Shift + Windows key and the Start button can each open
-  this grid, the original Start, or a program of your choice, such as a
-  launcher. The program starts even when it isn't running, so this replaces
-  the same feature of Open-Shell. The Windows key on its own belongs to Halo
-  Launcher, and the Windows Start menu never opens from the keyboard.
+  always opens it. From the keyboard, pick the **Shortcut**: Shift + Windows
+  key (the default), the Windows key, your own keys, or off.
+- **Your own keys.** Pick "Your own keys", click the box and press up to four
+  keys, such as Ctrl + Alt + Space. Backspace clears the box.
+- **Gets along with Halo Launcher.** When Halo Launcher uses the same key, the
+  settings window tells you, and the key opens Launchpad while both have it.
+  Halo's settings window warns you the same way.
 - **Your own order.** Drag icons to move them, across pages and in and out
   of folders. Drop an app on another to make a folder.
 - **Right-click menu.** Open, run as administrator, open the file location
@@ -64,9 +65,10 @@ of the macOS Launchpad, with instant search and a blurred background.
   the same button does it. Turn on **No confirmation** to act on the first
   click.
 - **Works over administrator windows.** Windows keeps keys pressed in an app
-  running as administrator away from Explorer, so Shift + Windows key can't
-  open the grid there. The optional helper in the `helper` folder of this
-  mod's repository runs as administrator and fixes that (see its README).
+  running as administrator away from Explorer. The Windows key works there
+  anyway. For Shift + Windows key, the optional helper in the `helper` folder
+  of this mod's repository runs as administrator and fixes that (see its
+  README). Your own keys don't work over those windows.
 
 ## Keyboard and mouse
 | Key | Action |
@@ -110,17 +112,26 @@ Clicking outside the icons or switching to another window closes it.
 - The power buttons never force apps to close. If an app has unsaved work,
   Windows asks about it as usual. Hibernate shows only when hibernation is on
   in Windows.
-- The Windows key on its own (and Ctrl+Esc) belongs to Halo Launcher. When it
-  still reaches Start, this mod hands it to Halo, or opens this grid when Halo
-  isn't running, so the Windows Start menu never opens from the keyboard.
-- Set **Shift + Windows key** or **Start button** to "Open the original Start"
-  to get the normal Start menu for that action. Shift + Windows key opens it
-  by default.
+- Unless the Shortcut is the Windows key, the Windows key on its own (and
+  Ctrl+Esc) goes to Halo Launcher when it runs, or else opens this grid, so
+  the Windows Start menu doesn't open from the keyboard. With the Shortcut off
+  and no Halo Launcher, the Windows key opens the Windows Start menu as usual.
 - If Open-Shell or another Start replacement also takes the Windows key, turn
   that feature off there, or it gets the key first.
 - The first time the mod loads, Windhawk downloads the symbols of
   `twinui.pcshell.dll`, which can take a minute.
-- Setting changes apply the next time Start opens.
+- A new Shortcut works at once. Other setting changes apply the next time
+  Start opens.
+
+## What's new in 2.7.0
+- One **Shortcut** setting replaces the old Shift + Windows key, Start button
+  and Program settings: Shift + Windows key, the Windows key, your own keys,
+  or off.
+- Record your own keys, up to four, such as Ctrl + Alt + Space.
+- The settings window warns you when Halo Launcher uses the same key, and the
+  key opens Launchpad while both have it.
+- The Start button always opens the grid. The option to run a program instead
+  is gone.
 
 ## Credits
 Based on [Fullscreen Start (Launchpad style)](https://windhawk.net/mods/fullscreen-start)
@@ -130,22 +141,17 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
 
 // ==WindhawkModSettings==
 /*
-- shiftWinKeyAction: start
-  $name: Shift + Windows key
+- shortcut: shiftWin
+  $name: Shortcut
+  $description: The keys that open Launchpad. The Start button always opens it.
   $options:
-  - grid: Open this grid
-  - start: Open the original Start
-  - program: Run the program below
-- startButtonAction: grid
-  $name: Start button
-  $description: The taskbar Start button, the Standalone Dock's, and every other way Start opens that is not the keyboard.
-  $options:
-  - grid: Open this grid
-  - start: Open the original Start
-  - program: Run the program below
-- program: ""
-  $name: Program
-  $description: 'What "Run the program below" starts. A command line such as "C:\Program Files\App\app.exe" --flag, or a shortcut, file, folder or web address'
+  - shiftWin: Shift + Windows key
+  - win: Windows key
+  - custom: Your own keys
+  - none: "Off"
+- customShortcut: ""
+  $name: Your own keys
+  $description: Used when Shortcut is Your own keys. Up to four keys, such as Ctrl + Alt + Space.
 - monitor: mouse
   $name: Monitor
   $description: Where the grid opens. Monitors 2 to 4 are the other monitors, counted left to right. If the picked monitor is not connected, it opens where the mouse is.
@@ -270,6 +276,7 @@ by [Rafael Mendes](https://github.com/RafaelMendes1407). MIT.
 #include <knownfolders.h>
 #include <shellscalingapi.h>
 #include <commdlg.h>
+#include <commctrl.h>
 #include <uxtheme.h>
 #include <dwmapi.h>
 #include <propsys.h>
@@ -312,7 +319,6 @@ constexpr UINT WM_APP_TOGGLE = WM_APP + 1;
 constexpr UINT WM_APP_APPS = WM_APP + 2;  // lParam: new AppList*.
 constexpr UINT WM_APP_RELOAD = WM_APP + 3;
 constexpr UINT WM_APP_QUIT = WM_APP + 4;
-constexpr UINT WM_APP_RUN = WM_APP + 5;
 constexpr UINT WM_APP_SHIFT_WIN = WM_APP + 6;
 
 constexpr UINT_PTR kTimerFrame = 1;
@@ -358,7 +364,7 @@ bool EndsWith(const std::wstring& text, const std::wstring& suffix) {
 
 enum class BlurMode { Custom, Acrylic, Blur, None };
 enum class AppSource { AllApps, Desktop, Both, Pinned };
-enum class KeyAction { Grid, Start, Program };
+enum class Shortcut { ShiftWin, Win, Custom, Off };
 enum class DockAlign { Left, Center, Right };
 
 struct Settings {
@@ -372,7 +378,6 @@ struct Settings {
     bool coverScreen = false;
     AppSource source = AppSource::AllApps;
     int monitor = 0;  // 0: the one with the mouse; 1: main; 2+: the others, left to right.
-    std::wstring program;
     bool powerBar = true;
     bool powerShown[6] = {true, true, true, true, true, true};  // kPower order.
     bool powerNoConfirm = false;
@@ -417,9 +422,9 @@ bool Animate() {
     SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &enabled, 0);
     return g_settings.animations && enabled;
 }
-// Also read in the ShowStartView hook, on Explorer's threads.
-std::atomic<KeyAction> g_shiftWinKeyAction{KeyAction::Start};
-std::atomic<KeyAction> g_startButtonAction{KeyAction::Grid};
+// Also read in the keyboard and ShowStartView hooks, on Explorer's threads.
+std::atomic<Shortcut> g_shortcut{Shortcut::ShiftWin};
+std::atomic<UINT> g_customKey{0};  // Your own keys: (mods << 16) | vk.
 
 std::wstring GetStringSetting(PCWSTR name) {
     return WindhawkUtils::StringSetting::make(name).get();
@@ -447,6 +452,325 @@ D2D1_COLOR_F ParseColor(std::wstring text, D2D1_COLOR_F fallback) {
                         ((rgb >> 8) & 0xFF) / 255.0f, (rgb & 0xFF) / 255.0f);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Keys
+//
+// Written the way Halo Launcher writes its keys ("Ctrl + Alt + Space"), so the
+// two can be compared. The modifier bits match Halo's too.
+
+constexpr UINT kKeyCtrl = 1, kKeyShift = 2, kKeyAlt = 4, kKeyWin = 8;
+
+struct KeyCombo {
+    UINT mods = 0;
+    UINT vk = 0;  // 0: none. Both Windows keys are VK_LWIN.
+    bool operator==(const KeyCombo&) const = default;
+};
+
+struct KeyNameEntry {
+    UINT vk;
+    PCWSTR name;
+};
+
+// A key's first name is the one written; the others are read too.
+constexpr KeyNameEntry kKeyNames[] = {
+    {VK_SPACE, L"Space"}, {VK_TAB, L"Tab"}, {VK_RETURN, L"Enter"},
+    {VK_RETURN, L"Return"}, {VK_ESCAPE, L"Escape"}, {VK_ESCAPE, L"Esc"},
+    {VK_BACK, L"Back"}, {VK_BACK, L"Backspace"}, {VK_DELETE, L"Delete"},
+    {VK_DELETE, L"Del"}, {VK_INSERT, L"Insert"}, {VK_INSERT, L"Ins"},
+    {VK_HOME, L"Home"}, {VK_END, L"End"}, {VK_PRIOR, L"PageUp"},
+    {VK_PRIOR, L"Prior"}, {VK_NEXT, L"PageDown"}, {VK_NEXT, L"Next"},
+    {VK_UP, L"Up"}, {VK_DOWN, L"Down"}, {VK_LEFT, L"Left"},
+    {VK_RIGHT, L"Right"}, {VK_OEM_3, L"OemTilde"}, {VK_OEM_3, L"Oem3"},
+    {VK_OEM_PLUS, L"OemPlus"}, {VK_OEM_MINUS, L"OemMinus"},
+    {VK_OEM_COMMA, L"OemComma"}, {VK_OEM_PERIOD, L"OemPeriod"},
+    {VK_OEM_2, L"OemQuestion"}, {VK_OEM_2, L"Oem2"},
+    {VK_OEM_1, L"OemSemicolon"}, {VK_OEM_1, L"Oem1"},
+    {VK_OEM_4, L"OemOpenBrackets"}, {VK_OEM_4, L"Oem4"},
+    {VK_OEM_5, L"OemPipe"}, {VK_OEM_5, L"Oem5"},
+    {VK_OEM_6, L"OemCloseBrackets"}, {VK_OEM_6, L"Oem6"},
+    {VK_OEM_7, L"OemQuotes"}, {VK_OEM_7, L"Oem7"},
+    {VK_OEM_102, L"OemBackslash"}, {VK_OEM_102, L"Oem102"},
+    {VK_CAPITAL, L"CapsLock"}, {VK_CAPITAL, L"Capital"},
+    {VK_SNAPSHOT, L"PrintScreen"}, {VK_SNAPSHOT, L"Snapshot"},
+    {VK_PAUSE, L"Pause"}, {VK_APPS, L"Apps"}, {VK_MULTIPLY, L"Multiply"},
+    {VK_ADD, L"Add"}, {VK_SUBTRACT, L"Subtract"}, {VK_DIVIDE, L"Divide"},
+    {VK_DECIMAL, L"Decimal"}, {VK_LWIN, L"LWin"}, {VK_RWIN, L"RWin"},
+};
+
+std::wstring VkName(UINT vk) {
+    for (const auto& entry : kKeyNames) {
+        if (entry.vk == vk) {
+            return entry.name;
+        }
+    }
+    if ((vk >= 'A' && vk <= 'Z') || (vk >= '0' && vk <= '9')) {
+        return std::wstring(1, (WCHAR)vk);
+    }
+    if (vk >= VK_F1 && vk <= VK_F24) {
+        return L"F" + std::to_wstring(vk - VK_F1 + 1);
+    }
+    if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9) {
+        return L"NumPad" + std::to_wstring(vk - VK_NUMPAD0);
+    }
+    WCHAR hex[8];
+    swprintf_s(hex, L"0x%02X", vk);
+    return hex;
+}
+
+bool IsModifierVk(UINT vk) {
+    switch (vk) {
+        case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT:
+        case VK_CONTROL: case VK_LCONTROL: case VK_RCONTROL:
+        case VK_MENU: case VK_LMENU: case VK_RMENU:
+            return true;
+    }
+    return false;
+}
+
+// Keys that type or move the caret: alone or with only Shift, catching them
+// would take them from whatever you type.
+bool NeedsModifier(UINT vk) {
+    return (vk >= 'A' && vk <= 'Z') || (vk >= '0' && vk <= '9') ||
+           (vk >= VK_NUMPAD0 && vk <= VK_DIVIDE) ||
+           (vk >= VK_OEM_1 && vk <= VK_OEM_3) ||
+           (vk >= VK_OEM_4 && vk <= VK_OEM_8) || vk == VK_OEM_102 ||
+           (vk >= VK_PRIOR && vk <= VK_DOWN) || vk == VK_SPACE ||
+           vk == VK_RETURN || vk == VK_TAB || vk == VK_BACK ||
+           vk == VK_ESCAPE || vk == VK_INSERT || vk == VK_DELETE;
+}
+
+// "Ctrl + Alt + Space", Halo's way, or with friendly names for the window.
+std::wstring KeyComboText(KeyCombo key, bool friendly = false) {
+    if (!key.vk) {
+        return L"";
+    }
+    std::wstring text;
+    if (key.mods & kKeyCtrl) text += L"Ctrl + ";
+    if (key.mods & kKeyAlt) text += L"Alt + ";
+    if (key.mods & kKeyShift) text += L"Shift + ";
+    if (key.mods & kKeyWin) text += friendly ? L"Windows key + " : L"Win + ";
+    return text + (friendly && key.vk == VK_LWIN ? L"Windows key"
+                                                 : VkName(key.vk));
+}
+
+// Reads Halo's names, single characters, D0 to D9, F1 to F24, NumPad0 to 9
+// and 0xNN. Anything it doesn't know gives no key at all.
+KeyCombo ParseKeyCombo(const std::wstring& text) {
+    KeyCombo key;
+    size_t start = 0;
+    while (start <= text.size()) {
+        size_t end = text.find(L'+', start);
+        std::wstring part = text.substr(
+            start, end == std::wstring::npos ? std::wstring::npos : end - start);
+        part.erase(0, part.find_first_not_of(L" \t"));
+        part.erase(part.find_last_not_of(L" \t") + 1);
+        if (!part.empty()) {
+            PCWSTR p = part.c_str();
+            UINT vk = 0;
+            if (!_wcsicmp(p, L"Ctrl") || !_wcsicmp(p, L"Control")) {
+                key.mods |= kKeyCtrl;
+            } else if (!_wcsicmp(p, L"Shift")) {
+                key.mods |= kKeyShift;
+            } else if (!_wcsicmp(p, L"Alt")) {
+                key.mods |= kKeyAlt;
+            } else if (!_wcsicmp(p, L"Win") || !_wcsicmp(p, L"Windows")) {
+                key.mods |= kKeyWin;
+            } else {
+                for (const auto& entry : kKeyNames) {
+                    if (!_wcsicmp(p, entry.name)) {
+                        vk = entry.vk;
+                        break;
+                    }
+                }
+                WCHAR c = towupper(part[0]);
+                if (vk) {
+                } else if (part.size() == 1 &&
+                           ((c >= L'A' && c <= L'Z') || (c >= L'0' && c <= L'9'))) {
+                    vk = c;
+                } else if (part.size() == 1) {
+                    SHORT scan = VkKeyScanW(part[0]);
+                    vk = scan == -1 ? 0 : (scan & 0xFF);
+                } else if (part.size() == 2 && c == L'D' && iswdigit(part[1])) {
+                    vk = part[1];
+                } else if (c == L'F' && part.size() <= 3 &&
+                           std::all_of(part.begin() + 1, part.end(), iswdigit)) {
+                    int n = _wtoi(p + 1);
+                    vk = n >= 1 && n <= 24 ? VK_F1 + n - 1 : 0;
+                } else if (part.size() == 7 && !_wcsnicmp(p, L"NumPad", 6) &&
+                           iswdigit(part[6])) {
+                    vk = VK_NUMPAD0 + (part[6] - L'0');
+                } else if (part.size() > 2 && !_wcsnicmp(p, L"0x", 2)) {
+                    vk = wcstoul(p + 2, nullptr, 16) & 0xFF;
+                }
+                if (!vk || key.vk) {
+                    return {};  // Unknown, or a second key.
+                }
+                key.vk = vk;
+            }
+        }
+        if (end == std::wstring::npos) {
+            break;
+        }
+        start = end + 1;
+    }
+    if (!key.vk && (key.mods & kKeyWin)) {
+        key.vk = VK_LWIN;
+    }
+    if (key.vk == VK_RWIN) {
+        key.vk = VK_LWIN;
+    }
+    if (key.vk == VK_LWIN) {
+        key.mods &= ~kKeyWin;
+    }
+    return key;
+}
+
+enum class KeyProblem { None, Empty, Unknown, NeedsModifier };
+
+// The Shortcut setting with "Your own keys" as what opens the grid. Your own
+// keys that come down to the Windows key, or Shift with it, act as those
+// choices. Keys the hook can't catch, or that would be caught while you type,
+// open nothing. key gets your own keys whenever they parse.
+Shortcut ResolveShortcut(const std::wstring& mode, const std::wstring& custom,
+                         KeyCombo* key, KeyProblem* problem = nullptr) {
+    KeyProblem unused;
+    if (!problem) {
+        problem = &unused;
+    }
+    *key = {};
+    *problem = KeyProblem::None;
+    if (mode == L"win") {
+        return Shortcut::Win;
+    }
+    if (mode == L"none") {
+        return Shortcut::Off;
+    }
+    if (mode != L"custom") {
+        return Shortcut::ShiftWin;
+    }
+    if (custom.find_first_not_of(L" \t") == std::wstring::npos) {
+        *problem = KeyProblem::Empty;
+        return Shortcut::Off;
+    }
+    KeyCombo k = ParseKeyCombo(custom);
+    *key = k;
+    if (k.vk == VK_LWIN && k.mods == 0) {
+        return Shortcut::Win;
+    }
+    if (k.vk == VK_LWIN && k.mods == kKeyShift) {
+        return Shortcut::ShiftWin;
+    }
+    if (!k.vk || k.vk == VK_LWIN || IsModifierVk(k.vk)) {
+        *problem = KeyProblem::Unknown;
+        return Shortcut::Off;
+    }
+    if (NeedsModifier(k.vk) && !(k.mods & (kKeyCtrl | kKeyAlt | kKeyWin))) {
+        *problem = KeyProblem::NeedsModifier;
+        return Shortcut::Off;
+    }
+    return Shortcut::Custom;
+}
+
+bool HaloEnabled() {
+    HKEY key;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE,
+                      L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@halo-launcher",
+                      0, KEY_READ, &key) != ERROR_SUCCESS) {
+        return false;
+    }
+    DWORD disabled = 0, size = sizeof(disabled);
+    LSTATUS rc = RegQueryValueExW(key, L"Disabled", nullptr, nullptr,
+                                  (BYTE*)&disabled, &size);
+    RegCloseKey(key);
+    return rc != ERROR_SUCCESS || disabled == 0;
+}
+
+// One JSON string from just after its opening quote, escapes decoded.
+std::wstring JsonString(const std::string& text, size_t p) {
+    std::wstring out;
+    while (p < text.size() && text[p] != '"') {
+        char c = text[p++];
+        if (c != '\\' || p >= text.size()) {
+            out += (WCHAR)(unsigned char)c;
+            continue;
+        }
+        char e = text[p++];
+        if (e == 'u' && p + 4 <= text.size()) {
+            out += (WCHAR)strtoul(text.substr(p, 4).c_str(), nullptr, 16);
+            p += 4;
+        } else {
+            out += e == 'n' ? L'\n' : e == 't' ? L'\t' : e == 'r' ? L'\r'
+                                                         : (WCHAR)(unsigned char)e;
+        }
+    }
+    return out;
+}
+
+// The keys Halo Launcher holds: its own under "Hotkey" in its settings file,
+// and each plugin's under CustomPluginHotkeys, also as "Hotkey". Halo keeps
+// that file in step with the keys it has on. Read on the settings window's
+// thread only, at most every 2 seconds.
+const std::vector<KeyCombo>& HaloKeys() {
+    static std::vector<KeyCombo> keys;
+    static ULONGLONG readAt;
+    ULONGLONG now = GetTickCount64();
+    if (readAt && now - readAt < 2000) {
+        return keys;
+    }
+    readAt = now;
+    keys.clear();
+    if (!HaloEnabled()) {
+        return keys;
+    }
+    WCHAR path[MAX_PATH];
+    if (!ExpandEnvironmentStringsW(
+            L"%LOCALAPPDATA%\\HaloLauncher\\engine\\UserData\\Settings\\Settings.json",
+            path, ARRAYSIZE(path))) {
+        return keys;
+    }
+    HANDLE file = CreateFileW(path, GENERIC_READ,
+                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              nullptr, OPEN_EXISTING, 0, nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        return keys;
+    }
+    std::string text;
+    LARGE_INTEGER size{};
+    if (GetFileSizeEx(file, &size) && size.QuadPart > 0 &&
+        size.QuadPart < (4 << 20)) {
+        text.resize((size_t)size.QuadPart);
+        DWORD got = 0;
+        if (!ReadFile(file, text.data(), (DWORD)text.size(), &got, nullptr)) {
+            got = 0;
+        }
+        text.resize(got);
+    }
+    CloseHandle(file);
+    const std::string name = "\"Hotkey\"";
+    for (size_t at = text.find(name); at != std::string::npos;
+         at = text.find(name, at + 1)) {
+        size_t p = at + name.size();
+        while (p < text.size() && isspace((unsigned char)text[p])) p++;
+        if (p >= text.size() || text[p] != ':') continue;
+        p++;
+        while (p < text.size() && isspace((unsigned char)text[p])) p++;
+        if (p >= text.size() || text[p] != '"') continue;
+        KeyCombo key = ParseKeyCombo(JsonString(text, p + 1));
+        if (key.vk) {
+            keys.push_back(key);
+        }
+    }
+    return keys;
+}
+
+// Halo Launcher steps off a key this mod holds. It looks again when told.
+void NotifyHalo() {
+    if (HWND halo = FindWindowW(L"HaloLauncherMsg", nullptr)) {
+        static UINT msg = RegisterWindowMessageW(L"SeamlessLaunchpad.KeysChanged");
+        PostMessageW(halo, msg, 0, 0);
+    }
+}
+
 void LoadSettings() {
     Settings s;
     std::wstring mode = GetStringSetting(L"blurMode");
@@ -468,7 +792,6 @@ void LoadSettings() {
                : source == L"pinned" ? AppSource::Pinned
                                      : AppSource::AllApps;
     s.monitor = std::max(0, _wtoi(GetStringSetting(L"monitor").c_str()));
-    s.program = GetStringSetting(L"program");
     s.powerBar = Wh_GetIntSetting(L"powerBar") != 0;
     for (int i = 0; i < 6; i++) {
         s.powerShown[i] =
@@ -493,40 +816,11 @@ void LoadSettings() {
     s.normalizeIcons = IntSetting(L"normalizeIcons", 1) != 0;
     s.trayIcon = IntSetting(L"settingsTrayIcon", 1) != 0;
     g_settings = s;
-    auto action = [](PCWSTR name) {
-        std::wstring value = GetStringSetting(name);
-        return value == L"start"     ? KeyAction::Start
-               : value == L"program" ? KeyAction::Program
-                                     : KeyAction::Grid;
-    };
-    g_shiftWinKeyAction = action(L"shiftWinKeyAction");
-    g_startButtonAction = action(L"startButtonAction");
-}
-
-// Runs the "program" setting: a command line, or else anything ShellExecute
-// opens (a shortcut, file, folder or web address).
-void RunProgram() {
-    std::wstring command = g_settings.program;
-    command.erase(0, command.find_first_not_of(L" \t"));
-    command.erase(command.find_last_not_of(L" \t") + 1);
-    if (command.empty()) {
-        return;
-    }
-    STARTUPINFOW si{sizeof(si)};
-    PROCESS_INFORMATION pi{};
-    std::wstring line = command;
-    if (CreateProcessW(nullptr, line.data(), nullptr, nullptr, FALSE, 0,
-                       nullptr, nullptr, &si, &pi)) {
-        CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
-        return;
-    }
-    if (command.size() > 1 && command.front() == L'"' &&
-        command.back() == L'"') {
-        command = command.substr(1, command.size() - 2);
-    }
-    ShellExecuteW(nullptr, nullptr, command.c_str(), nullptr, nullptr,
-                  SW_SHOWNORMAL);
+    KeyCombo key;
+    Shortcut shortcut = ResolveShortcut(GetStringSetting(L"shortcut"),
+                                        GetStringSetting(L"customShortcut"), &key);
+    g_customKey = shortcut == Shortcut::Custom ? (key.mods << 16) | key.vk : 0;
+    g_shortcut = shortcut;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4461,9 +4755,8 @@ struct SetField {
 static std::vector<SetField> Set_MakeFields() {
     using K = SetField;
     return {
-{K::Choice, L"shiftWinKeyAction", L"Shift + Windows key", L"", L"start", {{L"grid", L"Open this grid"}, {L"start", L"Open the original Start"}, {L"program", L"Run the program below"}}, 0, 100, 0, L"Open Launchpad"},
-{K::Choice, L"startButtonAction", L"Start button", L"The taskbar Start button, the Standalone Dock's, and every other way Start opens that is not the keyboard.", L"grid", {{L"grid", L"Open this grid"}, {L"start", L"Open the original Start"}, {L"program", L"Run the program below"}}, 0, 100, 0, L"Open Launchpad"},
-{K::Text, L"program", L"Program", L"What \"Run the program below\" starts. A command line such as \"C:\\Program Files\\App\\app.exe\" --flag, or a shortcut, file, folder or web address", L"", {}, 0, 100, 0, L"Open Launchpad"},
+{K::Choice, L"shortcut", L"Shortcut", L"The keys that open Launchpad. The Start button always opens it.", L"shiftWin", {{L"shiftWin", L"Shift + Windows key"}, {L"win", L"Windows key"}, {L"custom", L"Your own keys"}, {L"none", L"Off"}}, 0, 100, 0, L"Open Launchpad"},
+{K::Hotkey, L"customShortcut", L"Your own keys", L"Used when Shortcut is Your own keys. Up to four keys, such as Ctrl + Alt + Space.", L"", {}, 0, 100, 0, L"Open Launchpad"},
 {K::Choice, L"monitor", L"Monitor", L"Where the grid opens. Monitors 2 to 4 are the other monitors, counted left to right. If the picked monitor is not connected, it opens where the mouse is.", L"mouse", {{L"mouse", L"The monitor with the mouse"}, {L"1", L"Main monitor"}, {L"2", L"Monitor 2"}, {L"3", L"Monitor 3"}, {L"4", L"Monitor 4"}}, 0, 100, 1, L"Grid"},
 {K::Choice, L"appSource", L"Apps to show", L"With pinned apps, search still finds every app. Right-click an app to pin or unpin it.", L"allApps", {{L"allApps", L"Start menu apps (the All apps list)"}, {L"desktop", L"Desktop icons"}, {L"both", L"Start menu apps and desktop icons"}, {L"pinned", L"Only the apps you pin"}}, 0, 100, 1, L"Grid"},
 {K::Choice, L"gridLayout", L"Layout", L"How the grid is arranged.", L"scroll", {{L"scroll", L"One list that scrolls up and down"}, {L"pages", L"Pages that flip left and right, like Launchpad"}}, 0, 100, 1, L"Grid"},
@@ -5585,6 +5878,53 @@ static D2D1_RECT_F Set_RowRect(const SetWindow& w, const SetItem& it) {
     return {w.contentX, it.y, w.contentX + w.contentW, it.y + it.h};  // Content y (not scrolled).
 }
 
+// The Keys page's warning about the Shortcut, from what the window shows now
+// (saved or not): your own keys missing or unusable, or a key Halo Launcher
+// also holds. Empty when all is well.
+std::wstring g_keyWarnShown;
+
+std::wstring ShortcutWarning(const SetWindow& w) {
+    std::wstring mode, custom;
+    for (const SetField& f : w.fields) {
+        if (!wcscmp(f.key, L"shortcut")) {
+            mode = f.cur;
+        } else if (!wcscmp(f.key, L"customShortcut")) {
+            custom = f.cur;
+        }
+    }
+    KeyCombo key;
+    KeyProblem problem;
+    Shortcut shortcut = ResolveShortcut(mode, custom, &key, &problem);
+    switch (problem) {
+        case KeyProblem::Empty:
+            return L"Your own keys is empty, so no key opens Launchpad. Click "
+                   L"the box below and press the keys.";
+        case KeyProblem::Unknown:
+            return L"Launchpad can't use " + custom +
+                   L" as your own keys. Click the box below and press other "
+                   L"keys, such as Ctrl + Alt + Space.";
+        case KeyProblem::NeedsModifier:
+            return KeyComboText(key, true) +
+                   L" would open Launchpad while you type. Add Ctrl, Alt or "
+                   L"the Windows key to your own keys.";
+        case KeyProblem::None:
+            break;
+    }
+    KeyCombo held = shortcut == Shortcut::Win        ? KeyCombo{0, VK_LWIN}
+                    : shortcut == Shortcut::ShiftWin ? KeyCombo{kKeyShift, VK_LWIN}
+                    : shortcut == Shortcut::Custom   ? key
+                                                     : KeyCombo{};
+    if (held.vk) {
+        for (const KeyCombo& halo : HaloKeys()) {
+            if (halo == held) {
+                return L"Halo Launcher also uses " + KeyComboText(held, true) +
+                       L". While both have it, it opens Launchpad, not Halo.";
+            }
+        }
+    }
+    return L"";
+}
+
 // Lays out the current page's items for the current width.
 static void Set_BuildPage(SetWindow& w) {
     w.items.clear();
@@ -5601,6 +5941,16 @@ static void Set_BuildPage(SetWindow& w) {
             it.text = status;
             it.y = y;
             it.h = Set_TextH(w.fHint.get(), status, w.contentW - 32) + 28;
+            y += it.h + kSetRowGap + 8;
+            w.items.push_back(it);
+        }
+        g_keyWarnShown = ShortcutWarning(w);
+        if (!g_keyWarnShown.empty()) {
+            SetItem it;
+            it.type = SetItem::Banner;
+            it.text = g_keyWarnShown;
+            it.y = y;
+            it.h = Set_TextH(w.fHint.get(), it.text, w.contentW - 32) + 28;
             y += it.h + kSetRowGap + 8;
             w.items.push_back(it);
         }
@@ -6524,21 +6874,13 @@ static void Set_ToggleRail(SetWindow& w) {
 // ---- Editing, recording, choosing -----------------------------------------------
 
 static std::wstring Set_FormatHotkey(UINT mods, UINT vk) {
-    std::wstring text = std::to_wstring(vk);
-    if (!text.empty()) return text;
-    // Fallback while the capture part is a stub.
-    if (mods & MOD_CONTROL) text += L"Ctrl+";
-    if (mods & MOD_ALT) text += L"Alt+";
-    if (mods & MOD_SHIFT) text += L"Shift+";
-    if (mods & MOD_WIN) text += L"Win+";
-    WCHAR name[64] = {};
-    LONG scan = (LONG)MapVirtualKeyW(vk, MAPVK_VK_TO_VSC) << 16;
-    if (GetKeyNameTextW(scan, name, ARRAYSIZE(name)) > 0) {
-        text += name;
-    } else {
-        text += std::to_wstring(vk);
-    }
-    return text;
+    // Written the way Halo Launcher writes keys, so the two compare.
+    UINT bits = 0;
+    if (mods & MOD_CONTROL) bits |= kKeyCtrl;
+    if (mods & MOD_ALT) bits |= kKeyAlt;
+    if (mods & MOD_SHIFT) bits |= kKeyShift;
+    if (mods & MOD_WIN) bits |= kKeyWin;
+    return KeyComboText({bits, vk == VK_RWIN ? (UINT)VK_LWIN : vk});
 }
 
 static bool Set_IsModifier(UINT vk) {
@@ -7819,11 +8161,28 @@ void Settings_Close() {
 bool Settings_IsOpen() { return g_setWin && g_setWin->hwnd && !g_setWin->render; }
 
 
+// The Keys page warning follows the Shortcut boxes: choosing or recording
+// doesn't lay the page out again, so a paint that finds another warning does.
+LRESULT CALLBACK KeyWarnSubclass(HWND hwnd, UINT msg, WPARAM wParam,
+                                 LPARAM lParam, UINT_PTR id, DWORD_PTR) {
+    if (msg == WM_PAINT) {
+        std::shared_ptr<SetWindow> w = g_setWin;
+        if (w && w->hwnd == hwnd && w->page == 0 &&
+            ShortcutWarning(*w) != g_keyWarnShown) {
+            Set_BuildAndClamp(*w);
+        }
+    } else if (msg == WM_NCDESTROY) {
+        RemoveWindowSubclass(hwnd, KeyWarnSubclass, id);
+    }
+    return DefSubclassProc(hwnd, msg, wParam, lParam);
+}
+
 DWORD WINAPI SettingsThread(void*) {
  SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
  CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
  Settings_Open();
  if (g_setWin) g_settingsWnd=g_setWin->hwnd;
+ if (HWND hwnd=g_settingsWnd) SetWindowSubclass(hwnd,KeyWarnSubclass,1,0);
  MSG msg;
  while (g_settingsWnd && GetMessageW(&msg,nullptr,0,0)>0) { TranslateMessage(&msg); DispatchMessageW(&msg); }
  Settings_Close(); UnregisterClassW(kSettingsClass,(HINSTANCE)&__ImageBase); Set_ReleaseFactories(); CoUninitialize(); return 0;
@@ -8877,8 +9236,8 @@ void OnKeyDown(WPARAM key) {
 // Every way of opening Start (Windows key, Ctrl+Esc, the taskbar's Start
 // button, WM_SYSCOMMAND/SC_TASKLIST from the Dock) goes through
 // XamlLauncher::ShowStartView in twinui.pcshell.dll. The hook asks the mod's
-// window to toggle and doesn't call the original, so the Windows Start never
-// opens.
+// window to toggle, or hands the key to Halo Launcher, and calls the original
+// only when this mod has no key and Halo Launcher isn't running.
 
 // Observed on Windows 11 build 26300: the Windows key and Ctrl+Esc arrive as
 // method 1 with flag 8; WM_SYSCOMMAND/SC_TASKLIST (the Dock's Start button)
@@ -8890,36 +9249,82 @@ bool IsKeyboardShow(int showMethod, int showFlags) {
     return showMethod == kShowMethodKeyboard && (showFlags & kShowFlagKeyboard);
 }
 
-// Shift + Windows key
+// Shift + Windows key and your own keys
 //
 // Windows doesn't open Start for the Windows key pressed with Shift, so
 // ShowStartView never sees it. A low-level keyboard hook on its own thread
 // (the window thread can be busy drawing) watches for a Windows key press
 // with Shift down during it, and no other key pressed in between (Shift+Win+S and
-// the like stay Windows shortcuts). For the grid and the original Start, the
-// window presses Ctrl+Esc once the keys are up, and the ShowStartView hook
-// gives that one the Shift + Windows key action.
+// the like stay Windows shortcuts). The same hook catches your own keys on
+// their way down and keeps them from the app in front. Either way the window
+// presses Ctrl+Esc once the keys are up, and the ShowStartView hook opens the
+// grid for that one.
 //
 // Windows keeps keys typed in an administrator window from this hook, and
 // drops the Ctrl+Esc it would press there. The optional helper
-// (helper/launchpad-keys.cpp) runs as administrator with the same hook. While its
-// window exists, this hook leaves the key to it, and the helper sends
-// WM_APP_SHIFT_WIN with wParam 1, then presses Ctrl+Esc itself if the answer
-// is 1.
+// (helper/launchpad-keys.cpp) runs as administrator with the same hook, for
+// Shift + Windows key only. While its window exists, this hook leaves that
+// key to it, and the helper sends WM_APP_SHIFT_WIN with wParam 1, then
+// presses Ctrl+Esc itself if the answer is 1.
 constexpr WCHAR kHelperClass[] = L"SeamlessLaunchpadKeys";
 
-std::atomic<ULONGLONG> g_shiftWinUntil;
+std::atomic<ULONGLONG> g_ourKeyUntil;
 HANDLE g_keyThread;
 DWORD g_keyThreadId;
+int g_keyWait;  // Timer ticks spent waiting for the keys to come up.
+
+bool OwnsTaskbar();
+
+// The modifiers held right now, as kKey bits.
+UINT HeldMods() {
+    UINT mods = 0;
+    if (GetAsyncKeyState(VK_CONTROL) < 0) mods |= kKeyCtrl;
+    if (GetAsyncKeyState(VK_SHIFT) < 0) mods |= kKeyShift;
+    if (GetAsyncKeyState(VK_MENU) < 0) mods |= kKeyAlt;
+    if (GetAsyncKeyState(VK_LWIN) < 0 || GetAsyncKeyState(VK_RWIN) < 0) {
+        mods |= kKeyWin;
+    }
+    return mods;
+}
 
 LRESULT CALLBACK KeyboardHook(int code, WPARAM wParam, LPARAM lParam) {
     // Keyboards that send Shift+Win from one key (macro keys) let go of Shift
     // a moment before Win, so Shift counts if it was down at any point.
     static bool winDown, otherKey, withShift;
+    static DWORD swallowVk;  // Your own keys' key, kept from apps until it's up.
     if (code == HC_ACTION) {
-        DWORD vk = ((KBDLLHOOKSTRUCT*)lParam)->vkCode;
+        auto* info = (KBDLLHOOKSTRUCT*)lParam;
+        DWORD vk = info->vkCode;
         bool up = wParam == WM_KEYUP || wParam == WM_SYSKEYUP;
         bool shift = vk == VK_SHIFT || vk == VK_LSHIFT || vk == VK_RSHIFT;
+        if (swallowVk && vk == swallowVk) {
+            if (up) {
+                swallowVk = 0;
+            }
+            return 1;
+        }
+        UINT custom = g_customKey;
+        if (!up && custom && !(info->flags & LLKHF_INJECTED) &&
+            g_shortcut == Shortcut::Custom && vk == (custom & 0xFFFF) &&
+            HeldMods() == (custom >> 16)) {
+            HWND wnd = g_wnd;
+            // Not while the settings window records new keys.
+            if (wnd && GetForegroundWindow() != g_settingsWnd.load() &&
+                OwnsTaskbar()) {
+                swallowVk = vk;
+                if ((custom >> 16) & (kKeyWin | kKeyAlt)) {
+                    // A Windows key or Alt let go with nothing in between
+                    // opens Start or the menu bar: press a key no one uses.
+                    INPUT keys[2] = {};
+                    keys[0].type = keys[1].type = INPUT_KEYBOARD;
+                    keys[0].ki.wVk = keys[1].ki.wVk = 0xE8;
+                    keys[1].ki.dwFlags = KEYEVENTF_KEYUP;
+                    SendInput(2, keys, sizeof(INPUT));
+                }
+                PostMessageW(wnd, WM_APP_SHIFT_WIN, 2, 0);
+                return 1;
+            }
+        }
         if (vk == VK_LWIN || vk == VK_RWIN) {
             if (!up && !winDown) {
                 winDown = true;
@@ -8929,6 +9334,7 @@ LRESULT CALLBACK KeyboardHook(int code, WPARAM wParam, LPARAM lParam) {
                 winDown = false;
                 HWND wnd = g_wnd;
                 if (!otherKey && withShift && wnd &&
+                    g_shortcut == Shortcut::ShiftWin &&
                     !FindWindowW(kHelperClass, nullptr)) {
                     PostMessageW(wnd, WM_APP_SHIFT_WIN, 0, 0);
                 }
@@ -8971,24 +9377,18 @@ HRESULT WINAPI XamlLauncher_ShowStartView_Hook(void* pThis,
                                                int showMethod,
                                                int showFlags) {
     Wh_Log(L"> method %d, flags %d", showMethod, showFlags);
-    // The Windows key belongs to Halo Launcher, which keeps Start shut for
-    // its own tap. A keyboard open that still gets here (Ctrl+Esc, or a tap
-    // while Halo was busy) is not our Shift + Windows key press: it goes to
-    // Halo with "open, never close", or to this grid when Halo isn't
-    // running, and the Windows Start menu stays shut either way. The Start
-    // button and the ways that are not the keyboard open the grid.
-    bool shiftWin = GetTickCount64() < g_shiftWinUntil;
-    bool ours = shiftWin || !IsKeyboardShow(showMethod, showFlags);
-    KeyAction action =
-        shiftWin ? g_shiftWinKeyAction.load() : g_startButtonAction.load();
-    g_shiftWinUntil = 0;
+    // The Start button, the ways that are not the keyboard, and the Ctrl+Esc
+    // this mod presses for its own keys open the grid, and so does the
+    // Windows key when it is the Shortcut. Any other keyboard open (the
+    // Windows key, Ctrl+Esc) goes to Halo Launcher with "open, never close"
+    // when it runs, or else to this grid, so the Windows Start menu stays
+    // shut. Only with the Shortcut off and no Halo does it open.
+    bool ours = GetTickCount64() < g_ourKeyUntil;
+    g_ourKeyUntil = 0;
+    Shortcut shortcut = g_shortcut;
     HWND wnd = g_wnd;
-    if (!ours) {
-        if (HWND halo = FindWindowW(L"HaloLauncherMsg", nullptr)) {
-            static UINT haloMsg = RegisterWindowMessageW(L"HaloLauncher.Toggle");
-            PostMessageW(halo, haloMsg, 2, 0);
-            return S_OK;
-        }
+    if (ours || shortcut == Shortcut::Win ||
+        !IsKeyboardShow(showMethod, showFlags)) {
         if (wnd) {
             PostMessageW(wnd, WM_APP_TOGGLE, 0, 0);
             return S_OK;
@@ -8996,14 +9396,16 @@ HRESULT WINAPI XamlLauncher_ShowStartView_Hook(void* pThis,
         return XamlLauncher_ShowStartView_Original(pThis, showMethod,
                                                    showFlags);
     }
-    if (action == KeyAction::Start || !wnd) {
-        return XamlLauncher_ShowStartView_Original(pThis, showMethod,
-                                                   showFlags);
+    if (HWND halo = FindWindowW(L"HaloLauncherMsg", nullptr)) {
+        static UINT haloMsg = RegisterWindowMessageW(L"HaloLauncher.Toggle");
+        PostMessageW(halo, haloMsg, 2, 0);
+        return S_OK;
     }
-    PostMessageW(wnd, action == KeyAction::Program ? WM_APP_RUN
-                                                   : WM_APP_TOGGLE,
-                 0, 0);
-    return S_OK;
+    if (shortcut != Shortcut::Off && wnd) {
+        PostMessageW(wnd, WM_APP_TOGGLE, 0, 0);
+        return S_OK;
+    }
+    return XamlLauncher_ShowStartView_Original(pThis, showMethod, showFlags);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -9187,6 +9589,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_APP_RELOAD:
             LoadSettings();
+            NotifyHalo();
             UpdateTrayIcon(hwnd);
             if (g_shown) {
                 HideNow();
@@ -9196,35 +9599,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
             return 0;
 
-        case WM_APP_RUN:
-            if (g_shown) {
-                HideNow();
-            }
-            RunProgram();
-            return 0;
-
         case WM_APP_SHIFT_WIN:
             // Explorer runs this mod in each of its processes; only the
-            // taskbar's one answers the key.
+            // taskbar's one answers the key. wParam: 0 Shift + Windows key
+            // from this mod's hook, 1 the same from the helper, 2 your own
+            // keys.
             if (!OwnsTaskbar()) {
                 return 0;
             }
-            if (g_shiftWinKeyAction == KeyAction::Program) {
-                PostMessageW(hwnd, WM_APP_RUN, 0, 0);
-                return 0;
-            }
-            if (g_shown && g_shiftWinKeyAction == KeyAction::Start) {
-                HideNow();
-            }
             if (wParam == 1) {
                 // The helper presses Ctrl+Esc once the keys are up.
-                g_shiftWinUntil = GetTickCount64() + 3000;
+                if (g_shortcut != Shortcut::ShiftWin) {
+                    return 0;
+                }
+                g_ourKeyUntil = GetTickCount64() + 3000;
                 return 1;
             }
-            // The grid and the original Start open through Ctrl+Esc, once
-            // Shift is up (with Shift it's Task Manager): only a Start that
-            // Windows opens may take the foreground. SC_TASKLIST to the
-            // taskbar does nothing here.
+            // The grid opens through Ctrl+Esc, once the keys are up (with
+            // Shift it's Task Manager): only a Start that Windows opens may
+            // take the foreground. SC_TASKLIST to the taskbar does nothing
+            // here.
+            g_keyWait = 0;
             SetTimer(hwnd, kTimerShiftWin, 20, nullptr);
             return 0;
 
@@ -9239,11 +9634,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     OnFrame();
                     break;
                 case kTimerShiftWin:
-                    if (GetAsyncKeyState(VK_SHIFT) >= 0 &&
-                        GetAsyncKeyState(VK_LWIN) >= 0 &&
-                        GetAsyncKeyState(VK_RWIN) >= 0) {
+                    if (++g_keyWait > 500) {
+                        KillTimer(hwnd, kTimerShiftWin);  // A key stuck down.
+                    } else if (GetAsyncKeyState(VK_SHIFT) >= 0 &&
+                               GetAsyncKeyState(VK_CONTROL) >= 0 &&
+                               GetAsyncKeyState(VK_MENU) >= 0 &&
+                               GetAsyncKeyState(VK_LWIN) >= 0 &&
+                               GetAsyncKeyState(VK_RWIN) >= 0) {
                         KillTimer(hwnd, kTimerShiftWin);
-                        g_shiftWinUntil = GetTickCount64() + 1000;
+                        g_ourKeyUntil = GetTickCount64() + 1000;
                         INPUT keys[4] = {};
                         WORD vks[4] = {VK_CONTROL, VK_ESCAPE, VK_ESCAPE,
                                        VK_CONTROL};
@@ -9632,6 +10031,7 @@ DWORD WINAPI StartThread(void*) {
         // The app list is read a bit later, so it doesn't weigh on explorer's
         // startup.
         SetTimer(wnd, kTimerFirstLoad, 3000, nullptr);
+        NotifyHalo();
     }
     SetEvent(g_readyEvent);
 
@@ -9767,6 +10167,7 @@ void Wh_ModUninit() {
     g_thread = nullptr;
     CloseHandle(g_readyEvent);
     g_readyEvent = nullptr;
+    NotifyHalo();  // The window is gone: Halo may take its keys back.
     // Last: until the grid's thread ends, its "..." menu can open the window.
     CloseSettingsWindow();
 }

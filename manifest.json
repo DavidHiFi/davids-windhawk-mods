@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-22T20:30:45+08:00",
+  "generatedAt": "2026-11-22T20:34:01+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 165,
@@ -1350,7 +1350,7 @@
       "name": "Seamless Launchpad",
       "author": "DavidHiFi, Rafael Mendes",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.6.5",
+      "version": "2.7.0",
       "license": "MIT",
       "origin": "local",
       "upstream": "",
