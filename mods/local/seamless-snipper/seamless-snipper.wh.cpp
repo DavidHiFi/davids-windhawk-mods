@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.7.0
+// @version         0.7.1
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -24,7 +24,12 @@ read later, like "Discord 4.05 pm.png".
 
 ![Seamless Snipper preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-snipper.png)
 
-## What's new in 0.7.0
+## What's new in 0.7.1
+
+- History opens the first time you press its key after Windows starts. Before,
+  that first window stayed hidden and the key did nothing until a restart.
+
+## New in 0.7.0
 
 - Ask about a snip: set a preview card click to "Ask Magic Pointer about it",
   or right-click a snip in History, and the card opens with that picture.
@@ -7937,6 +7942,7 @@ static LRESULT CALLBACK Proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 static void Open() {
     if (HWND h = g_hwnd) {
         if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
+        else if (!IsWindowVisible(h)) ShowWindow(h, SW_SHOWNORMAL);
         BringToFront(h);
         return;
     }
@@ -7982,6 +7988,8 @@ static void Open() {
     BOOL on = TRUE, off = FALSE;
     DwmSetWindowAttribute(h, DWMWA_CLOAK, &on, sizeof(on));
     ShowWindow(h, SW_SHOWNORMAL);
+    // Windhawk starts this process hidden, and the first ShowWindow takes that hidden flag.
+    if (!IsWindowVisible(h)) ShowWindow(h, SW_SHOWNORMAL);
     UpdateWindow(h);
     DwmSetWindowAttribute(h, DWMWA_CLOAK, &off, sizeof(off));
     BringToFront(h);
