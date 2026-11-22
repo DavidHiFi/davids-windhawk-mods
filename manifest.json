@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-22T16:22:04+08:00",
+  "generatedAt": "2026-11-22T16:28:58+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 173,
@@ -1218,7 +1218,7 @@
       "name": "Seamless Autoscroll",
       "author": "DavidHiFi, crazyboyybs",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.0.0",
+      "version": "2.0.1",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",

@@ -2,7 +2,7 @@
 // @id              seamless-autoscroll
 // @name            Seamless Autoscroll
 // @description     Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator, in every app
-// @version         2.0.0
+// @version         2.0.1
 // @author          DavidHiFi, crazyboyybs
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -59,6 +59,11 @@ in File Explorer, your browser and every other app. A small frosted glass circle
 marks where you started and lights up the way you are scrolling.
 
 ![Seamless Autoscroll preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-autoscroll.png)
+
+## What's new in 2.0.1
+
+- Toggle mode now works in every app. Before, apps outside File Explorer and
+  your browser still stopped when you let go of the button.
 
 ## What's new in 2.0.0
 
@@ -863,6 +868,9 @@ LRESULT CALLBACK GlobalMouseProc(int code, WPARAM wp, LPARAM lp) {
                 return CallNextHookEx(nullptr, code, wp, lp);
             bool ate = g_ateDown.load(std::memory_order_acquire);
             bool toggleMode = g_toggleMode.load(std::memory_order_relaxed);
+            // Toggle mode: the release after the start click keeps the
+            // scroll going, the same as inside apps. The next click stops it.
+            if (toggleMode) return 1;
             StopAutoscroll();
             bool swallow = ate
                 || g_blockMiddleRelease.load(std::memory_order_relaxed)
