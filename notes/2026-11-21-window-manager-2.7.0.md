@@ -86,6 +86,13 @@ desktop leaves no input desktop and every capture fails.
   `C:\Users\Public\swm-hand\hand.ps1`): a new 500x400 window took 49% x 98% of the work
   area (a proper half, not a thin column); the switch note window exists and belongs to
   our helper; the owner's front window was put back afterwards.
-- Still open on the tower: the Alt+PageDown / Alt+PageUp walk and the note token rising.
-  The second pass is queued for the screen (ninth in line at 2026-11-22). The test PC run
-  above passed both.
+- Second pass (2026-11-22, 1:00 pm, under `coop lock desktop --input`): the new window
+  again took 49% x 98%. After Alt+T floated it, Alt+PageDown went to a hidden window
+  (a Windows Script Host box), then to the RustDesk remote session window, and each of
+  those jumps marked the switch note (token 14 to 16), so no fade. From there on every key
+  stayed on RustDesk: its remote session grabs the keyboard and sends Alt+PageDown and
+  Alt+PageUp to the remote PC, so the mod never sees them. Not a 2.7 fault; the test PC run
+  walked the full loop. Possible later fix: a low-level key hook in the mod that runs
+  ahead of RustDesk's. The owner's front window was put back afterwards.
+- Side finding: the Script Host box was a compile error in the Hydra theme thread's
+  `HydraMocha\guard.vbs` (line 2, unterminated string). Closed it and posted a coop note.
