@@ -91,9 +91,8 @@ Plan: `docs\plans\2026-11-22-seamless-controls.md`. Build folder on Warden:
 - Workshop group and preview: already in the mods repo (1da75f6, "Windows and menus"); the feed
   lists 1.0.1 under that group. A second pass (a4154ab) wrote the group into the wrong section
   and swapped in a thinner preview; 71a69df put both back exactly. Net change zero.
-- Settings window capture: waiting in line for the desktop (number 7). Script ready:
-  `tower\capture-settings.ps1`, run elevated, opens the window through its own tray message,
-  captures, closes without saving.
+- Settings window capture: done by the other Seamless Controls thread (2b7eaf9f) at 2:20 to
+  2:27 am, `tower\live\settings-window.png`; this thread left the desktop line unused.
 
 ## Finish (2026-11-23, 2:20 to 2:27 am)
 
@@ -108,3 +107,20 @@ Plan: `docs\plans\2026-11-22-seamless-controls.md`. Build folder on Warden:
   with Install-StagedMod (desktop fine 60 s after loading), published as mods 576aa4d and feed 92a7835.
   The feed no longer lists it under Other.
 - Rollback: Install-StagedMod's backup `local@seamless-controls-20261123-0224.wh.cpp` (1.0.1).
+
+## 1.0.3: Explorer view buttons go back to Explorer Styler Plus (2026-11-23, 2:40 am)
+
+- Bug: the details and large icons buttons at the bottom right of File Explorer sometimes
+  showed an empty rounded box with no icon. Cause: HandleThemeDraw's CommandModule block
+  draws parts 3, 4, 5 and 9 itself and returns, and DrawThemeBackground_hook then never calls
+  the original. Seamless Controls loaded after Explorer Styler Plus, so its hook sits on top
+  and Styler Plus's status bar dock (part 4 in a DirectUIHWND under DUIViewWndClassName)
+  never got the paint, so its Fluent glyphs were never drawn.
+- Fix (build.py): `HdcInStylerStatusDock(hdc)` skips part 4 in that host when Styler Plus is
+  on and its `statusBarDock` setting is on (read once per settings load via the new
+  `SeamlessModSettingOn`). Legacy Control Panel frames keep the rounded fill.
+- Also carries the file picker thread's Flyouts picker stand-down (gated on the
+  `SeamlessFlyouts_Picker` prop, idle until Flyouts sets it).
+- Backups: `build.py.bak-20261123-0240`, `install\base-hash.txt.bak-20261123-0240`.
+  Base hash for this install = live 1.0.2 sha256 f4b8cfe0...60c3.
+- Rollback: Install-StagedMod's backup of 1.0.2, base hash = live 1.0.3 sha256.
