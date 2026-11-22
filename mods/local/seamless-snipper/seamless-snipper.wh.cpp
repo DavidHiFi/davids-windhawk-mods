@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.6.7
+// @version         0.7.0
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -23,6 +23,17 @@ goes to your clipboard and your pictures folder at once, with a name you can
 read later, like "Discord 4.05 pm.png".
 
 ![Seamless Snipper preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-snipper.png)
+
+## What's new in 0.7.0
+
+- Ask about a snip: set a preview card click to "Ask Magic Pointer about it",
+  or right-click a snip in History, and the card opens with that picture.
+- Magic Pointer's buttons use the same FiraCode icons as our menus.
+- Two new settings for the card: how solid the glass is, and its edge colors
+  (grey at rest, blue to mauve on hover).
+- The tray menu is the shared one from our other mods, with an icon on every row.
+- Temporary pictures moved to their own Seamless Snipper folder. The old one
+  is cleared out.
 
 ## What it does
 
@@ -102,11 +113,16 @@ On the frozen screen:
 
 ## Magic Pointer
 
+![Magic Pointer](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-snipper-magic-pointer.gif)
+
 1. Click Magic Pointer on the snipping bar, shake the mouse, or press Win + Shift + G.
 2. Hover a button, picture or paragraph to outline it and click to pick it,
    or drag over any area.
 3. A card opens beside it. Type a question and press Enter, or pick a
    suggestion. While the pointer is out you can also just start typing.
+
+To ask about a snip you already took, right-click it in History and pick Ask
+Magic Pointer, or set a preview card click to do it.
 
 Esc or a right click puts it away. It also leaves when the mouse stays still.
 
@@ -124,7 +140,7 @@ text and your question to the service whose key you use, over HTTPS. Smart
 suggestions (off by default) sends each pick as soon as you make it. Google
 Lens uploads the pick to Google. Free Gemini keys may be used by Google to
 improve its products, so keep private content off the free tier. Temporary
-pictures go to %LOCALAPPDATA%\MagicPointerPlus\Temp, which only your account
+pictures go to %LOCALAPPDATA%\SeamlessSnipper\Temp, which only your account
 can open, and they are deleted within 30 minutes.
 
 Shakes are ignored while a game, video or presentation fills the screen, and in
@@ -315,6 +331,18 @@ restyled to match the rest of Snipper.
 - pointerGlass: true
   $name: "Glass"
   $description: "The card and the hint get frosted glass. Off, they are solid."
+- pointerGlassStrength: 42
+  $name: "Glass strength (%)"
+  $description: "40 to 65 (Suggested: 42). How much color sits on the glass. Higher is more solid."
+- pointerEdge: "#585B70"
+  $name: "Card edge"
+  $description: "In hexadecimal. The edge of the card and the hint at rest."
+- pointerEdgeFrom: "#89B4FA"
+  $name: "Card edge on hover"
+  $description: "In hexadecimal. The hover edge starts with this color."
+- pointerEdgeTo: "#CBA6F7"
+  $name: "Card edge on hover 2"
+  $description: "In hexadecimal. The hover edge ends with this color."
 - pointerRipple: true
   $name: "Ripple"
   $description: "The screen gently ripples when the pointer appears."
@@ -448,6 +476,7 @@ restyled to match the rest of Snipper.
   - folder: "Show it in its folder"
   - copy: "Copy it again"
   - edit: "Draw on it"
+  - ask: "Ask Magic Pointer about it"
   - close: "Close the card"
 - toastRightClick: "folder"
   $name: "Right-click"
@@ -457,6 +486,7 @@ restyled to match the rest of Snipper.
   - open: "Open the picture"
   - copy: "Copy it again"
   - edit: "Draw on it"
+  - ask: "Ask Magic Pointer about it"
   - close: "Close the card"
 - toastMiddleClick: "copy"
   $name: "Middle click"
@@ -466,6 +496,7 @@ restyled to match the rest of Snipper.
   - open: "Open the picture"
   - folder: "Show it in its folder"
   - edit: "Draw on it"
+  - ask: "Ask Magic Pointer about it"
   - close: "Close the card"
 - barPosition: "top"
   $name: "Bar position"
@@ -671,6 +702,15 @@ void OpenSettingsWindow();
 void CloseSettingsWindow();
 extern std::atomic<HWND> g_settingsWnd;
 HWND RecordingKeyWindow();
+// One tray menu row, handed to the engine's shared menu (Set_TrayMenu in settings-block.cpp).
+struct TrayRow {
+    int id = 0;
+    wchar_t glyph = 0;  // Codicon from FiraCode Nerd Font, 0 for none.
+    std::wstring label, hint;
+    bool disabled = false, separator = false;
+    std::vector<TrayRow> sub;
+};
+int ShowTrayMenu(HWND owner, const std::vector<TrayRow>& rows, POINT pt);
 }  // namespace snpset
 
 // Magic Pointer, the point-and-ask tool (magic-pointer.cpp, inlined after this file).
@@ -679,6 +719,7 @@ BOOL ToolInit();
 void ToolSettingsChanged();
 void ToolUninit();
 void Summon();
+void AskAboutImage(int width, int height, const uint32_t* px, RECT anchor);
 std::wstring HotkeyLabel();
 bool Enabled();
 }  // namespace magicptr
@@ -947,9 +988,9 @@ static void LoadSettings() {
     c.toastGlow = Wh_GetIntSetting(L"toastHoverGlow") != 0;
     c.toastText = Wh_GetIntSetting(L"toastShowText") != 0;
     c.toastPause = Wh_GetIntSetting(L"toastPauseOnHover") != 0;
-    c.toastClick = OneOf(ReadStr(L"toastClick"), {L"open", L"folder", L"copy", L"edit", L"close"});
-    c.toastRight = OneOf(ReadStr(L"toastRightClick"), {L"folder", L"open", L"copy", L"edit", L"close"});
-    c.toastMiddle = OneOf(ReadStr(L"toastMiddleClick"), {L"copy", L"open", L"folder", L"edit", L"close"});
+    c.toastClick = OneOf(ReadStr(L"toastClick"), {L"open", L"folder", L"copy", L"edit", L"ask", L"close"});
+    c.toastRight = OneOf(ReadStr(L"toastRightClick"), {L"folder", L"open", L"copy", L"edit", L"ask", L"close"});
+    c.toastMiddle = OneOf(ReadStr(L"toastMiddleClick"), {L"copy", L"open", L"folder", L"edit", L"ask", L"close"});
     c.folder = Trim(ReadStr(L"saveFolder"));
     while (c.folder.size() >= 2 && c.folder.front() == L'"' && c.folder.back() == L'"')
         c.folder = c.folder.substr(1, c.folder.size() - 2);
@@ -6405,6 +6446,7 @@ static std::wstring ToastClickHint(const std::wstring& what) {
     if (what == L"folder") return L"Click to show it in its folder.";
     if (what == L"copy") return L"Click to copy it again.";
     if (what == L"edit") return L"Click to edit it.";
+    if (what == L"ask") return L"Click to ask Magic Pointer about it.";
     return L"";
 }
 
@@ -7532,13 +7574,14 @@ static void StartDrag(int i) {
 static void ShowMenu(int i, POINT pt) {
     const Item* it = At(i);
     if (!it) return;
-    enum { kOpen = 1, kPreview, kEdit, kCopy, kFolder, kDelete };
+    enum { kOpen = 1, kPreview, kEdit, kCopy, kAsk, kFolder, kDelete };
     using ui_menu::MI;
     std::vector<UiMenuItem> items;
     items.push_back(MI(kOpen, L"Open", 0xE8E5, L"Enter"));
     items.push_back(MI(kPreview, L"Preview", 0xE7B3, L"Space"));
     if (!it->video) items.push_back(MI(kEdit, L"Edit", 0xE70F));
     items.push_back(MI(kCopy, L"Copy", 0xE8C8, L"Ctrl+C"));
+    if (!it->video && magicptr::Enabled()) items.push_back(MI(kAsk, L"Ask Magic Pointer", 0xE8F2));
     items.push_back(MI(kFolder, L"Show in folder", 0xE838));
     items.push_back(ui_menu::MSep());
     items.push_back(MI(kDelete, L"Delete", 0xE74D, L"Delete"));
@@ -7548,6 +7591,14 @@ static void ShowMenu(int i, POINT pt) {
         case kPreview: PeekItem(i); break;
         case kEdit: EditItem(i); break;
         case kCopy: CopyItem(i); break;
+        case kAsk:
+            if (const Item* again = At(i)) {
+                Shot s;
+                RECT anchor{};
+                GetWindowRect(g_hwnd, &anchor);
+                if (LoadPicture(again->path, s)) magicptr::AskAboutImage(s.w, s.h, s.px.data(), anchor);
+            }
+            break;
         case kFolder:
             if (const Item* again = At(i)) ShowInFolder(again->path);
             break;
@@ -8129,6 +8180,14 @@ static void Shutdown() {
 
 static void ToastAction(const std::wstring& what, const std::wstring& path) {
     if (what == L"close") return;
+    if (what == L"ask") {
+        Shot s;
+        RECT anchor{};
+        if (g_toast.hwnd) GetWindowRect(g_toast.hwnd, &anchor);
+        if (!path.empty() && magicptr::Enabled() && hist::LoadPicture(path, s))
+            magicptr::AskAboutImage(s.w, s.h, s.px.data(), anchor);
+        return;
+    }
     if (path.empty()) {
         if (what != L"copy") OpenWithShell(ExpandPath(g_cfg.folder));
         return;
@@ -8428,33 +8487,43 @@ enum : UINT {
 
 static std::wstring KeyHint(int hk) { return hk >= 0 ? g_cfg.hotkeys[hk] : std::wstring(); }
 
-// The tray menu, drawn by Clipboard's renderer (menu-ui.cpp).
+// The tray menu, drawn by the engine's shared renderer with the catalog's codicons.
 static void ShowTrayMenu(POINT pt) {
-    using ui_menu::MI;
-    using ui_menu::MSep;
-    std::vector<UiMenuItem> items;
-    items.push_back(MI(IDM_REGION, L"Snip a region", 0xE7A8, KeyHint(HK_REGION)));
-    items.push_back(MI(IDM_WINDOW, L"Snip the active window", 0xE78B, KeyHint(HK_WINDOW)));
-    items.push_back(MI(IDM_MONITOR, L"Snip the active screen", 0xE7F4, KeyHint(HK_MONITOR)));
-    items.push_back(MI(IDM_FULL, L"Snip every screen", 0xE740, KeyHint(HK_FULL)));
-    items.push_back(MI(IDM_REPEAT, L"Snip the last region again", 0xE8EE, KeyHint(HK_REPEAT), g_haveLast));
+    using snpset::TrayRow;
+    auto row = [](int id, PCWSTR label, wchar_t glyph = 0, std::wstring hint = {}, bool enabled = true) {
+        TrayRow r;
+        r.id = id;
+        r.label = label;
+        r.glyph = glyph;
+        r.hint = std::move(hint);
+        r.disabled = !enabled;
+        return r;
+    };
+    TrayRow sep;
+    sep.separator = true;
+    std::vector<TrayRow> items;
+    items.push_back(row(IDM_REGION, L"Snip a region", 0xEC7F, KeyHint(HK_REGION)));         // screen_cut
+    items.push_back(row(IDM_WINDOW, L"Snip the active window", 0xEB7F, KeyHint(HK_WINDOW)));  // window
+    items.push_back(row(IDM_MONITOR, L"Snip the active screen", 0xEB4D, KeyHint(HK_MONITOR)));  // screen_normal
+    items.push_back(row(IDM_FULL, L"Snip every screen", 0xEB23, KeyHint(HK_FULL)));           // multiple_windows
+    items.push_back(row(IDM_REPEAT, L"Snip the last region again", 0xEB37, KeyHint(HK_REPEAT), g_haveLast));  // refresh
     if (cdown::Running()) {
-        items.push_back(MI(IDM_CANCELTIMER, L"Cancel the timer", 0xE711));
+        items.push_back(row(IDM_CANCELTIMER, L"Cancel the timer", 0xEA76));  // close
     } else {
-        items.push_back(ui_menu::MSub(L"Snip a region after a timer", 0xE916,
-                                      {MI(IDM_TIMER3, L"In 3 seconds"), MI(IDM_TIMER5, L"In 5 seconds"),
-                                       MI(IDM_TIMER10, L"In 10 seconds")}));
+        TrayRow timer = row(0, L"Snip a region after a timer", 0xEB7C);  // watch
+        timer.sub = {row(IDM_TIMER3, L"In 3 seconds"), row(IDM_TIMER5, L"In 5 seconds"), row(IDM_TIMER10, L"In 10 seconds")};
+        items.push_back(timer);
     }
-    items.push_back(MSep());
-    items.push_back(MI(IDM_HISTORY, L"History", 0xE81C, KeyHint(HK_HISTORY)));
+    items.push_back(sep);
+    items.push_back(row(IDM_HISTORY, L"History", 0xEA82, KeyHint(HK_HISTORY)));  // history
     if (magicptr::Enabled()) {
-        items.push_back(MSep());
-        items.push_back(MI(IDM_POINTER, L"Ask about something on screen", 0xE897, magicptr::HotkeyLabel()));
+        items.push_back(sep);
+        items.push_back(row(IDM_POINTER, L"Ask about something on screen", 0xEC10, magicptr::HotkeyLabel()));  // sparkle
     }
-    items.push_back(MSep());
-    items.push_back(MI(IDM_FOLDER, L"Open the snips folder", 0xE838));
-    items.push_back(MI(IDM_SETTINGS, L"Settings", 0xE713));
-    UINT cmd = (UINT)Ui_ShowMenu(items, pt, g_msgWnd);
+    items.push_back(sep);
+    items.push_back(row(IDM_FOLDER, L"Open the snips folder", 0xEAF7));  // folder_opened
+    items.push_back(row(IDM_SETTINGS, L"Settings", 0xEB51));             // settings_gear
+    UINT cmd = (UINT)snpset::ShowTrayMenu(g_msgWnd, items, pt);
     int mode = cmd == IDM_REGION ? MODE_REGION : cmd == IDM_WINDOW ? MODE_WINDOW : cmd == IDM_MONITOR ? MODE_MONITOR
                : cmd == IDM_FULL ? MODE_FULL : -1;
     if (mode >= 0) {
@@ -9643,6 +9712,8 @@ constexpr UINT WM_APP_SUMMON = WM_APP + 40;
 // Shows a hover state without moving the mouse, for screenshots: wParam = hit id (0 none),
 // lParam = 1 lights the card edge. The next real mouse move takes over again.
 constexpr UINT WM_APP_PREVIEW_HOVER = WM_APP + 41;
+// From Snipper's preview card and History: ask about a snip. lParam owns an AskImageMessage.
+constexpr UINT WM_APP_ASK_IMAGE = WM_APP + 42;
 
 constexpr int kHotkeyActivate = 1;
 constexpr int kHotkeyEscape = 2;
@@ -11615,8 +11686,9 @@ class FontCache {
                                           L"Segoe UI", L"Tahoma"};
         static const PCWSTR kMonoFaces[] = {L"FiraCode Nerd Font Mono", L"Cascadia Mono", L"Consolas",
                                             L"Courier New"};
-        static const PCWSTR kIconFaces[] = {L"Segoe Fluent Icons",
-                                            L"Segoe MDL2 Assets"};
+        // The catalog's icon set: codicons from the Nerd Font, the same glyphs as every
+        // Seamless menu. Without it the icons are drawn by hand (DrawIcon).
+        static const PCWSTR kIconFaces[] = {L"FiraCode Nerd Font"};
         face_ = PickFace(kUiFaces, ARRAYSIZE(kUiFaces), true);
         monoFace_ = PickFace(kMonoFaces, ARRAYSIZE(kMonoFaces), true);
         iconFace_ = PickFace(kIconFaces, ARRAYSIZE(kIconFaces), false);
@@ -11940,16 +12012,16 @@ void DrawIcon(Surface& s, Icon icon, float cx, float cy, float scale, Color c) {
     }
 }
 
-enum class Glyph : wchar_t {
-    Close = 0xE711,
-    Copy = 0xE8C8,
-    Search = 0xE721,
-    OpenInNew = 0xE8A7,
-    Send = 0xE725,
-    Add = 0xE710,
-    Camera = 0xE722,
-    Text = 0xE8D2,
-    Translate = 0xE8C1,
+enum class Glyph : wchar_t {  // Codicons (nf-cod-*).
+    Close = 0xEA76,
+    Copy = 0xEBCC,
+    Search = 0xEA6D,
+    OpenInNew = 0xEB14,
+    Send = 0xEC0F,
+    Add = 0xEA60,
+    Camera = 0xEADA,
+    Text = 0xEB7E,
+    Translate = 0xEB01,
 };
 
 void DrawGlyph(Surface& s,
@@ -12282,8 +12354,35 @@ void ReadCornerRadius() {
     g_cornerRadius = radius;
 }
 
+// The card look from Snipper's settings: how much Mocha sits on the glass, and the edge
+// colors (grey at rest, blue to mauve on hover).
+float g_glassAlpha = 0.42f;
+Color g_edgeRest = Rgb(88, 91, 112);  // Mocha surface2
+Color g_edgeFrom = Rgb(137, 180, 250);
+Color g_edgeTo = Rgb(203, 166, 247);
+
+void ReadCardLook() {
+    const int strength = Wh_GetIntSetting(L"pointerGlassStrength");
+    g_glassAlpha = strength <= 0 ? 0.42f : std::clamp(strength, 40, 65) / 100.0f;
+    auto hex = [](PCWSTR name, Color fallback) {
+        PCWSTR value = Wh_GetStringSetting(name);
+        std::wstring text = value ? value : L"";
+        if (value) Wh_FreeStringSetting(value);
+        text = Trim(text);
+        if (text.size() != 7 || text[0] != L'#' ||
+            text.find_first_not_of(L"0123456789abcdefABCDEF", 1) != std::wstring::npos) {
+            return fallback;
+        }
+        const unsigned long v = wcstoul(text.c_str() + 1, nullptr, 16);
+        return Rgb((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF);
+    };
+    g_edgeRest = hex(L"pointerEdge", Rgb(88, 91, 112));
+    g_edgeFrom = hex(L"pointerEdgeFrom", Rgb(137, 180, 250));
+    g_edgeTo = hex(L"pointerEdgeTo", Rgb(203, 166, 247));
+}
+
 Color GlassTint(bool dark) {
-    return dark ? Rgb(30, 30, 46, 0.42f) : Rgb(249, 249, 252, 0.46f);
+    return dark ? Rgb(30, 30, 46, g_glassAlpha) : Rgb(249, 249, 252, g_glassAlpha + 0.04f);
 }
 
 class GlassPanel {
@@ -12399,14 +12498,11 @@ class GlassPanel {
     int margin_ = 0;
 };
 
-constexpr Color kEdgeRest = Rgb(88, 91, 112);  // Mocha surface2
-constexpr Color kEdgeBlue = Rgb(137, 180, 250);
-constexpr Color kEdgeMauve = Rgb(203, 166, 247);
 
 // The recipe's 2px edge: grey at rest, blue to mauve as hot goes to 1. The stroke sits
 // inside the box on radius - width/2 so it follows the rounded fill exactly.
 void PaintEdge(Surface& s, float l, float t, float r, float b, float radius, float scale,
-               float hot, Color rest = kEdgeRest) {
+               float hot, Color rest) {
     const float edge = std::max(1.0f, std::round(2 * scale));
     const float inset = edge / 2;
     const float span = std::max(1.0f, (r - l) + (b - t));
@@ -12417,9 +12513,14 @@ void PaintEdge(Surface& s, float l, float t, float r, float b, float radius, flo
                                      std::max(0.0f, radius - inset))) - inset;
         },
         [&](float x, float y) {
-            const Color glow = Mix(kEdgeBlue, kEdgeMauve, Clamp01(((x - l) + (y - t)) / span));
+            const Color glow = Mix(g_edgeFrom, g_edgeTo, Clamp01(((x - l) + (y - t)) / span));
             return Mix(rest, glow, Clamp01(hot));
         });
+}
+
+void PaintEdge(Surface& s, float l, float t, float r, float b, float radius, float scale,
+               float hot) {
+    PaintEdge(s, l, t, r, b, radius, scale, hot, g_edgeRest);
 }
 
 void PaintPanelBase(Surface& s, const GlassPanel& panel, float scale) {
@@ -15973,7 +16074,24 @@ std::wstring PrivateCaptureDirectory() {
                                 SHGFP_TYPE_CURRENT, local)) || !local[0]) {
         return {};
     }
-    const std::wstring base = std::wstring(local) + L"\\MagicPointerPlus";
+    // The folder from before Magic Pointer moved into Snipper: empty it once and remove it.
+    static std::once_flag oldFolder;
+    std::call_once(oldFolder, [&local] {
+        const std::wstring oldBase = std::wstring(local) + L"\\MagicPointerPlus";
+        const std::wstring oldTemp = oldBase + L"\\Temp";
+        WIN32_FIND_DATAW fd{};
+        HANDLE find = FindFirstFileW((oldTemp + L"\\*").c_str(), &fd);
+        if (find != INVALID_HANDLE_VALUE) {
+            do {
+                if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+                    DeleteFileW((oldTemp + L"\\" + fd.cFileName).c_str());
+            } while (FindNextFileW(find, &fd));
+            FindClose(find);
+        }
+        RemoveDirectoryW(oldTemp.c_str());
+        RemoveDirectoryW(oldBase.c_str());
+    });
+    const std::wstring base = std::wstring(local) + L"\\SeamlessSnipper";
     const std::wstring temp = base + L"\\Temp";
     if (!ProtectDirectoryForCurrentUser(base) || !ProtectDirectoryForCurrentUser(temp)) return {};
     return temp;
@@ -19258,7 +19376,7 @@ Palette MakePalette(bool dark) {
     p.controlFillHover =
         dark ? Rgb(69, 71, 90, 0.75f) : Rgb(249, 249, 249, 0.50f);
     p.controlFillFocus = dark ? Rgb(24, 24, 37, 0.80f) : kWhite;
-    p.controlBorder = dark ? Rgb(88, 91, 112) : WithAlpha(ink, 0.0578f);  // surface2
+    p.controlBorder = dark ? g_edgeRest : WithAlpha(ink, 0.0578f);  // surface2
     p.controlStrong = WithAlpha(ink, dark ? 0.544f : 0.446f);
     p.subtleHover = dark ? Rgb(49, 50, 68, 0.55f) : WithAlpha(ink, 0.0373f);  // surface0
     p.subtlePressed = dark ? Rgb(69, 71, 90, 0.60f) : WithAlpha(ink, 0.0241f);  // surface1
@@ -20980,7 +21098,7 @@ class AskCard {
         const bool down = pressed_ == id;
         FillRoundRect(surface_, l, t, r, b, S(8),
                       down ? palette_.subtlePressed : palette_.subtleHover);
-        PaintEdge(surface_, l, t, r, b, S(8), scale_, down ? 0.0f : 1.0f, kEdgeMauve);
+        PaintEdge(surface_, l, t, r, b, S(8), scale_, down ? 0.0f : 1.0f, g_edgeTo);
     }
 
     void DrawButton(int id, Glyph glyph) {
@@ -21184,7 +21302,7 @@ class AskCard {
                                 : palette_.controlFill);
         // Rest grey, hover blue to mauve, focus a steady blue ring.
         PaintEdge(surface_, l, t, r, b, radius, scale_, hovered && !inputFocused ? 1.0f : 0.0f,
-                  inputFocused ? kEdgeBlue : palette_.controlBorder);
+                  inputFocused ? g_edgeFrom : palette_.controlBorder);
 
         HFONT font = InputFont();
         const int textX = inputText_.left - inputScroll_;
@@ -22180,6 +22298,30 @@ void CompleteSelection(RECT rect, const std::wstring& text, double now) {
     RequestTick();
 }
 
+struct AskImageMessage {
+    Image image;
+    RECT anchor{};
+};
+
+// A finished snip handed over by Snipper: the card opens on it, or takes it as one more
+// picture when a card is already open and has room.
+void OnAskImage(std::unique_ptr<AskImageMessage> message) {
+    if (!message || message->image.Empty()) {
+        return;
+    }
+    const double now = NowMs();
+    DeactivatePointer(now, false);
+    g_addingToCard = false;
+    Attachment attachment;
+    attachment.image = std::make_shared<Image>(std::move(message->image));
+    if (g_card.IsOpen() && g_card.CanAddMore()) {
+        g_card.AddAttachment(std::move(attachment), now);
+    } else {
+        g_card.Open(std::move(attachment), message->anchor, now);
+    }
+    RequestTick();
+}
+
 RECT DragRect(POINT pt) {
     return {std::min(g_pressPoint.x, pt.x), std::min(g_pressPoint.y, pt.y),
             std::max(g_pressPoint.x, pt.x) + 1, std::max(g_pressPoint.y, pt.y) + 1};
@@ -22555,6 +22697,7 @@ void ApplySettings(const Settings& settings) {
     SetLanguage(g_settings.language);
     g_glow = ParseGlowColor(g_settings.glowColor);
     ReadCornerRadius();
+    ReadCardLook();
     g_styleVersion++;
     g_cursors.Clear();
     g_cursors.SetCustom(LoadCustomCursor(g_settings.customCursor));
@@ -22683,6 +22826,10 @@ LRESULT CALLBACK MessageWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 
         case WM_APP_SUMMON:
             OnHotkey(kHotkeyActivate, 0);
+            return 0;
+
+        case WM_APP_ASK_IMAGE:
+            OnAskImage(std::unique_ptr<AskImageMessage>(reinterpret_cast<AskImageMessage*>(lParam)));
             return 0;
 
         case WM_TIMER:
@@ -22938,8 +23085,29 @@ void Summon() {
     if (g_messageWindow) PostMessageW(g_messageWindow, WM_APP_SUMMON, 0, 0);
 }
 
+// From Snipper: opens the card on a snip. px is top-down BGRA; an empty anchor centres the
+// card on the monitor under the mouse.
+void AskAboutImage(int width, int height, const uint32_t* px, RECT anchor) {
+    if (!g_messageWindow || !px || width <= 0 || height <= 0) return;
+    auto message = std::make_unique<AskImageMessage>();
+    message->image.width = width;
+    message->image.height = height;
+    message->image.pixels.assign(px, px + (size_t)width * height);
+    for (uint32_t& p : message->image.pixels) p |= 0xFF000000u;
+    if (IsRectEmpty(&anchor)) {
+        POINT pt{};
+        GetCursorPos(&pt);
+        const RECT monitor = MonitorRectAt(pt, true);
+        const POINT c = RectCenter(monitor);
+        anchor = {c.x - 1, c.y - 1, c.x + 1, c.y + 1};
+    }
+    message->anchor = anchor;
+    PostOwned(g_messageWindow, WM_APP_ASK_IMAGE, std::move(message));
+}
+
 BOOL ToolInit() {
     ReadCornerRadius();
+    ReadCardLook();
     Wh_Log(L">");
     g_instance = GetModuleHandleW(nullptr);
     g_settings = LoadSettings();
@@ -25701,6 +25869,10 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Number, L"pointerTimeout", L"Put away after (seconds)", L"0 to 3600 (Suggested: 15). When the mouse stays still this long. 0 keeps it until you press Esc.", L"15", {}, 0, 3600, 6, L"Summon"},
 {K::Choice, L"pointerGlow", L"Glow", L"The glow around the pointer and what you pick.", L"gradient", {{L"gradient", L"Blue to mauve, your selection colors"}, {L"accent", L"Windows accent color"}, {L"rainbow", L"Google colors"}, {L"#89B4FA", L"Blue"}, {L"#CBA6F7", L"Mauve"}}, 0, 100, 6, L"Look"},
 {K::Check, L"pointerGlass", L"Glass", L"The card and the hint get frosted glass. Off, they are solid.", L"1", {}, 0, 100, 6, L"Look"},
+{K::Number, L"pointerGlassStrength", L"Glass strength (%)", L"40 to 65 (Suggested: 42). How much color sits on the glass. Higher is more solid.", L"42", {}, 40, 65, 6, L"Look"},
+{K::Color, L"pointerEdge", L"Card edge", L"In hexadecimal. The edge of the card and the hint at rest.", L"#585B70", {}, 0, 100, 6, L"Look"},
+{K::Color, L"pointerEdgeFrom", L"Card edge on hover", L"In hexadecimal. The hover edge starts with this color.", L"#89B4FA", {}, 0, 100, 6, L"Look"},
+{K::Color, L"pointerEdgeTo", L"Card edge on hover 2", L"In hexadecimal. The hover edge ends with this color.", L"#CBA6F7", {}, 0, 100, 6, L"Look"},
 {K::Check, L"pointerRipple", L"Ripple", L"The screen gently ripples when the pointer appears.", L"1", {}, 0, 100, 6, L"Look"},
 {K::Number, L"pointerSize", L"Pointer size (%)", L"50 to 300 (Suggested: 100).", L"100", {}, 50, 300, 6, L"Look"},
 {K::Text, L"pointerCursorFile", L"Pointer file", L"Optional. A .cur or .ani file shown while the pointer is out.", L"", {}, 0, 100, 6, L"Look"},
@@ -25722,9 +25894,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Number, L"toastAnimationMs", L"Animation time (ms)", L"80 to 800 (Suggested: 220).", L"220", {}, 80, 800, 2, L"Motion"},
 {K::Check, L"toastGlass", L"Glass", L"Frosted glass behind the card. Off, it is solid.", L"1", {}, 0, 100, 2, L"Look"},
 {K::Check, L"toastHoverGlow", L"Hover edge", L"The blue to mauve edge when the mouse is on the card.", L"1", {}, 0, 100, 2, L"Look"},
-{K::Choice, L"toastClick", L"Click", L"What a click on the card does.", L"open", {{L"open", L"Open the picture"}, {L"folder", L"Show it in its folder"}, {L"copy", L"Copy it again"}, {L"edit", L"Draw on it"}, {L"close", L"Close the card"}}, 0, 100, 2, L"Clicks"},
-{K::Choice, L"toastRightClick", L"Right-click", L"What a right-click on the card does.", L"folder", {{L"folder", L"Show it in its folder"}, {L"open", L"Open the picture"}, {L"copy", L"Copy it again"}, {L"edit", L"Draw on it"}, {L"close", L"Close the card"}}, 0, 100, 2, L"Clicks"},
-{K::Choice, L"toastMiddleClick", L"Middle click", L"What a middle click on the card does.", L"copy", {{L"copy", L"Copy it again"}, {L"open", L"Open the picture"}, {L"folder", L"Show it in its folder"}, {L"edit", L"Draw on it"}, {L"close", L"Close the card"}}, 0, 100, 2, L"Clicks"},
+{K::Choice, L"toastClick", L"Click", L"What a click on the card does.", L"open", {{L"open", L"Open the picture"}, {L"folder", L"Show it in its folder"}, {L"copy", L"Copy it again"}, {L"edit", L"Draw on it"}, {L"ask", L"Ask Magic Pointer about it"}, {L"close", L"Close the card"}}, 0, 100, 2, L"Clicks"},
+{K::Choice, L"toastRightClick", L"Right-click", L"What a right-click on the card does.", L"folder", {{L"folder", L"Show it in its folder"}, {L"open", L"Open the picture"}, {L"copy", L"Copy it again"}, {L"edit", L"Draw on it"}, {L"ask", L"Ask Magic Pointer about it"}, {L"close", L"Close the card"}}, 0, 100, 2, L"Clicks"},
+{K::Choice, L"toastMiddleClick", L"Middle click", L"What a middle click on the card does.", L"copy", {{L"copy", L"Copy it again"}, {L"open", L"Open the picture"}, {L"folder", L"Show it in its folder"}, {L"edit", L"Draw on it"}, {L"ask", L"Ask Magic Pointer about it"}, {L"close", L"Close the card"}}, 0, 100, 2, L"Clicks"},
 {K::Choice, L"barPosition", L"Bar position", L"Where the drawing bar sits on the screen.", L"top", {{L"top", L"Top"}, {L"bottom", L"Bottom"}}, 0, 100, 4, L"Bar and pen"},
 {K::Text, L"barColors", L"Bar colors", L"The 8 color dots on the bar, in hexadecimal, split by spaces. Missing ones keep the usual color.", L"#F38BA8 #FAB387 #F9E2AF #A6E3A1 #89B4FA #CBA6F7 #FFFFFF #11111B", {}, 0, 100, 4, L"Bar and pen"},
 {K::Choice, L"lineStyle", L"Line style", L"For boxes, circles, lines, arrows and the pen. The bar changes it too.", L"solid", {{L"solid", L"Solid"}, {L"dash", L"Dashed"}, {L"dot", L"Dotted"}}, 0, 100, 4, L"Bar and pen"},
@@ -29084,5 +29256,28 @@ void CloseSettingsWindow() {
 HWND RecordingKeyWindow() {
     SetWindow* w = g_setWin.get();
     return w && w->recording >= 0 ? w->hwnd : nullptr;
+}
+
+static std::vector<SetMenuItem> TrayRowsToMenu(const std::vector<TrayRow>& rows) {
+    std::vector<SetMenuItem> out;
+    for (const TrayRow& r : rows) {
+        if (r.separator) {
+            out.push_back(Set_MenuSep());
+            continue;
+        }
+        std::wstring glyph = r.glyph ? std::wstring(1, r.glyph) : std::wstring();
+        if (!r.sub.empty()) {
+            out.push_back(Set_MenuSub(glyph.c_str(), r.label.c_str(), TrayRowsToMenu(r.sub), r.disabled));
+        } else {
+            out.push_back(Set_MenuRow(r.id, glyph.c_str(), r.label.c_str(), false, r.disabled, r.hint.c_str()));
+        }
+    }
+    return out;
+}
+
+// The tray menu, drawn by the engine's shared renderer like every Seamless mod.
+int ShowTrayMenu(HWND owner, const std::vector<TrayRow>& rows, POINT pt) {
+    std::vector<SetMenuItem> items = TrayRowsToMenu(rows);
+    return Set_TrayMenu(owner, items, &pt);
 }
 }  // namespace snpset
