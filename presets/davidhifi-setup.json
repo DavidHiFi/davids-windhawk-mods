@@ -2371,7 +2371,7 @@
         "media.MainSettings.PlayerSetting.position": "taskbar_after_system_info",
         "media.MainSettings.TextAreaSetting.emptyArtistText": "",
         "media.MainSettings.TextAreaSetting.emptyTitleText": "Untitled",
-        "media.MainSettings.TextAreaSetting.enableArtistScrolling": 0,
+        "media.MainSettings.TextAreaSetting.enableArtistScrolling": 1,
         "media.MainSettings.TextAreaSetting.enableTitleScrolling": 1,
         "media.MainSettings.TextAreaSetting.loopGap": 40,
         "media.MainSettings.TextAreaSetting.noMediaArtistText": "",

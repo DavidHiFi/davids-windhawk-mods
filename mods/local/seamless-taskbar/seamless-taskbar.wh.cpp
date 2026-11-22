@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.30
+// @version         0.4.31
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -32,7 +32,14 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 
-## What's new in 0.4.30
+## What's new in 0.4.31
+
+In the music player, a long artist name now slides slowly like the song title instead of
+ending in dots. The song picture is a little bigger with a clean edge round it that lights
+up blue to mauve under the pointer. The progress bar has the same gap at both ends, and the
+glow behind the player's text is softer and even.
+
+## Earlier: 0.4.30
 
 The drawer's three folders now hold icons. Right-click a folder and tick the icons it should
 keep, or drop an icon on it. Clicking a folder shows its icons right in the drawer, and
@@ -472,7 +479,7 @@ The whole mod is published under GPL-3.0.
         $name:ru-RU: Включить прокрутку названия трека
         $description: When enabled, the track title will scroll horizontally if it overflows the text area.
         $description:ru-RU: Если включено, название трека будет прокручиваться горизонтально при переполнении текстовой области.
-      - enableArtistScrolling: false
+      - enableArtistScrolling: true
         $name: Enable artist name scrolling
         $name:ru-RU: Включить прокрутку имени исполнителя
         $description: When enabled, the artist name will scroll horizontally if it overflows the text area.
@@ -3053,7 +3060,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Text, L"media.MainSettings.TextAreaSetting.textAreaMargin", L"Text area margin (left right)", L"", L"5 5", {}, 0, 100, 2, L"Text area"},
 {K::Number, L"media.MainSettings.TextAreaSetting.textSpacing", L"Spacing between title and artist", L"", L"-1", {}, -10, 20, 2, L"Text area"},
 {K::Check, L"media.MainSettings.TextAreaSetting.enableTitleScrolling", L"Enable track title scrolling", L"When enabled, the track title will scroll horizontally if it overflows the text area.", L"1", {}, 0, 100, 2, L"Text area"},
-{K::Check, L"media.MainSettings.TextAreaSetting.enableArtistScrolling", L"Enable artist name scrolling", L"When enabled, the artist name will scroll horizontally if it overflows the text area.", L"0", {}, 0, 100, 2, L"Text area"},
+{K::Check, L"media.MainSettings.TextAreaSetting.enableArtistScrolling", L"Enable artist name scrolling", L"When enabled, the artist name will scroll horizontally if it overflows the text area.", L"1", {}, 0, 100, 2, L"Text area"},
 {K::Number, L"media.MainSettings.TextAreaSetting.scrollSpeed", L"Scroll speed (1-10)", L"Controls how fast the text scrolls. 1 = slowest, 10 = fastest.", L"1", {}, 1, 10, 2, L"Text area"},
 {K::Number, L"media.MainSettings.TextAreaSetting.scrollPauseDuration", L"Pause duration at edges (ms)", L"How long (in milliseconds) scrolling pauses at the start and end before reversing direction.", L"1000", {}, 0, 10000, 2, L"Text area"},
 {K::Choice, L"media.MainSettings.TextAreaSetting.scrollMode", L"Scroll mode", L"", L"bounce", {{L"bounce", L"Bounce (back and forth)"}, {L"loop", L"Loop (continuous)"}}, 0, 100, 2, L"Text area"},
@@ -16042,7 +16049,7 @@ struct ModSettings {
     int          titleCharacterSpacing  = 0;
     int          artistCharacterSpacing = 0;
     int          textSpacing          = -1;
-    bool         enableArtistScrolling = false;
+    bool         enableArtistScrolling = true;
     bool         enableTitleScrolling = true;
     int          scrollSpeed          = 1;
     int          scrollPauseDuration  = 1000;
@@ -19959,7 +19966,7 @@ static void ApplySoftScrim(Border const& b, uint8_t alpha = 0xB8) {
     });
 }
 // Room kept around clipped media text so its glow is never cut into a box.
-static constexpr float kHaloPad = 7.0f;
+static constexpr float kHaloPad = 11.0f;
 // Dark halo behind media text so it reads over the bars (2026-11-17). host is an empty
 // Canvas drawn just behind tb; the shadow takes the shape of the text itself.
 static void AttachTextHalo(Canvas const& host, TextBlock const& tb, bool inCanvas) {
@@ -19979,8 +19986,10 @@ static void AttachTextHalo(Canvas const& host, TextBlock const& tb, bool inCanva
             sprite.RelativeSizeAdjustment({1.0f, 1.0f});
             root.Children().InsertAtTop(sprite);
         };
-        add(2.5f, 0.0f, 0.0f, 1.0f);
-        add(1.0f, 0.0f, 0.0f, 1.0f);
+        // Owner 2026-11-22: two tight full-strength layers read as a blotchy hard ring.
+        // Two wide, light layers centred on the glyphs give one smooth falloff.
+        add(9.0f, 0.0f, 0.0f, 0.55f);
+        add(4.5f, 0.0f, 0.0f, 0.6f);
         winrt::Windows::UI::Xaml::Hosting::ElementCompositionPreview::SetElementChildVisual(host, root);
         winrt::weak_ref<TextBlock> wtb{tb};
         winrt::weak_ref<Canvas> whost{host};
@@ -20034,10 +20043,18 @@ static void AddCanvasHalo(Canvas const& view, TextBlock const& tb) {
 }
 // With bars and a progress bar the cover is 2 DIP smaller and lifted clear of the bar.
 static bool LiftCover() { return g_settings.vizOverlay && g_settings.showProgressBar; }
+// Owner 2026-11-22: the cover no longer sits in the band above the progress track (the
+// track starts past it anyway). It is centred in the whole player, 3 DIP clear of the
+// top and bottom edges, so it is the full set size up to that limit.
+static double CoverSide() {
+    double s = (double)(g_settings.albumArtMaxHeight > 0 ? g_settings.albumArtMaxHeight : g_settings.albumArtMinHeight);
+    if (g_settings.playerMaxHeight > 6 && s > g_settings.playerMaxHeight - 6.0) s = g_settings.playerMaxHeight - 6.0;
+    return s;
+}
 // Pause glyph stays well inside the cover (under half its height).
 static double PauseIconSize() {
     double h = (double)(g_settings.albumArtMaxHeight > 0 ? g_settings.albumArtMaxHeight : g_settings.albumArtMinHeight);
-    if (LiftCover() && h > 2) h -= 2;
+    if (LiftCover()) h = CoverSide();
     double s = (double)g_settings.pauseOverlayIconSize;
     if (h > 0) s = std::min(s, std::round(h * 0.45));
     return std::max(8.0, s);
@@ -20139,8 +20156,8 @@ static double ProgressCoverClearance() {
     if (!g_settings.showAlbumArt) return 0.0;
     double w = (double)(g_settings.albumArtMaxWidth > 0 ? g_settings.albumArtMaxWidth
                                                        : g_settings.albumArtMinWidth);
+    if (LiftCover()) w = CoverSide();
     if (w <= 0) return 0.0;
-    if (LiftCover() && w > 2) w -= 2;
     double nearMargin = g_settings.mirrorLayout ? (double)g_settings.albumArtRightMargin
                                                 : (double)g_settings.albumArtLeftMargin - 1.0;
     double edge = 4.0 + nearMargin + w + 3.0;
@@ -20150,8 +20167,10 @@ static double ProgressCoverClearance() {
 // strip on top that takes left clicks to seek.
 static FrameworkElement BuildProgressLayer(double phMin, double phMax) {
     double h = (double)g_settings.progressHeight;
-    double clearL = g_settings.mirrorLayout ? 0.0 : ProgressCoverClearance();
-    double clearR = g_settings.mirrorLayout ? ProgressCoverClearance() : 0.0;
+    // Owner 2026-11-22: the bar sat off to the right. It keeps clear of the cover and has
+    // the same gap on the far end, so it is centred in the player.
+    double clearL = ProgressCoverClearance();
+    double clearR = clearL;
     Grid layer;
     layer.Name(kProgressLayerName);
     layer.HorizontalAlignment(HorizontalAlignment::Stretch);
@@ -23241,7 +23260,6 @@ static Grid BuildPlayerGrid() {
         // Owner 2026-11-19: song icon and the two text lines share one band above the
         // progress track, centred in it, so neither touches the top edge or the track.
         double mediaInset = LiftCover() ? (double)g_settings.progressHeight + 2.0 : 0.0;
-        double mediaBand = phMax > 0 ? phMax - 4.0 - mediaInset : 0.0;
         Grid artContainer{nullptr};
         if (g_settings.showAlbumArt) {
             int iconSz = g_settings.appIconSize;
@@ -23264,9 +23282,7 @@ static Grid BuildPlayerGrid() {
             double artRightMargin = (double)g_settings.albumArtRightMargin;
             artContainer.Margin({artLeftMargin, 0, artRightMargin, 0});
             if (LiftCover()) {
-                artContainer.Margin({artLeftMargin, 0, artRightMargin, mediaInset});
-                double side = (double)g_settings.albumArtMaxHeight - 2.0;
-                if (mediaBand > 4 && side > mediaBand - 1.0) side = mediaBand - 1.0;
+                double side = CoverSide();
                 if (side > 2) {
                     artContainer.MinHeight(side); artContainer.MaxHeight(side);
                     artContainer.MinWidth(side);  artContainer.MaxWidth(side);
@@ -23299,6 +23315,25 @@ static Grid BuildPlayerGrid() {
             });
             artBorder.HorizontalAlignment(HorizontalAlignment::Stretch);
             artBorder.VerticalAlignment(VerticalAlignment::Stretch);
+            // Owner 2026-11-22: a clean ring round the cover. The ring is the Border's own
+            // edge, so the picture is clipped to its inside and never bleeds past it:
+            // Mocha surface2 at rest, blue to mauve while the pointer is on the cover.
+            {
+                artBorder.BorderThickness({1, 1, 1, 1});
+                auto rest = MakeBrush({0xFF, 0x58, 0x5B, 0x70});
+                winrt::Windows::UI::Xaml::Media::LinearGradientBrush lit;
+                lit.StartPoint({0.0f, 0.0f});
+                lit.EndPoint({1.0f, 1.0f});
+                GradientStop la; la.Color({0xFF, 0x89, 0xB4, 0xFA}); la.Offset(0.0);
+                GradientStop lb; lb.Color({0xFF, 0xCB, 0xA6, 0xF7}); lb.Offset(1.0);
+                lit.GradientStops().Append(la);
+                lit.GradientStops().Append(lb);
+                artBorder.BorderBrush(rest);
+                winrt::weak_ref<Border> wb{artBorder};
+                artContainer.PointerEntered([wb, lit](auto const&, auto const&) { if (auto b = wb.get()) b.BorderBrush(lit); });
+                artContainer.PointerExited([wb, rest](auto const&, auto const&) { if (auto b = wb.get()) b.BorderBrush(rest); });
+                artContainer.PointerCaptureLost([wb, rest](auto const&, auto const&) { if (auto b = wb.get()) b.BorderBrush(rest); });
+            }
             Controls::Image artImage;
             artImage.Name(kArtImageName);
             bool isSquare = (g_settings.albumArtMinWidth == g_settings.albumArtMinHeight) &&
@@ -23327,16 +23362,6 @@ static Grid BuildPlayerGrid() {
             }
             artBorder.Child(artInnerGrid);
             artContainer.Children().Append(artBorder);
-            Border artRing;
-            artRing.CornerRadius({
-                g_settings.albumArtCornerRadiusTL,
-                g_settings.albumArtCornerRadiusTR,
-                g_settings.albumArtCornerRadiusBR,
-                g_settings.albumArtCornerRadiusBL
-            });
-            artRing.BorderThickness({1,1,1,1});
-            artRing.BorderBrush(MakeBrush({0x25,0x80,0x80,0x80}));
-            artContainer.Children().Append(artRing);
             if (g_settings.showAppIcon) {
                 Grid iconOverlay;
                 iconOverlay.VerticalAlignment(VerticalAlignment::Stretch);

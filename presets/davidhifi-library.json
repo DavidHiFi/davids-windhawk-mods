@@ -2150,7 +2150,7 @@
         "controlStyles[67].target": "TextBlock#FluentMedia_Artist, TextBlock#FluentMedia_ArtistClone",
         "controlStyles[68].styles[0]": "Margin=0,6,0,0",
         "controlStyles[68].target": "Taskbar.TaskbarFrame > Grid#RootGrid",
-        "controlStyles[69].styles[0]": "Margin=0,6,0,0",
+        "controlStyles[69].styles[0]": "Margin=0,3,0,0",
         "controlStyles[69].target": "SystemTray.SystemTrayFrame",
         "controlStyles[6].styles[0]": "HorizontalAlignment=Center",
         "controlStyles[6].styles[1]": "VerticalAlignment=Center",
