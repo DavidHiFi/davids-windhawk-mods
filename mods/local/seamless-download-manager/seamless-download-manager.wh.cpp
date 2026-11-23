@@ -2,7 +2,7 @@
 // @id              seamless-download-manager
 // @name            Seamless Download Manager
 // @description     A fast tray download manager: downloads in parts, resumes where it stopped, takes browser links
-// @version         1.0.5
+// @version         1.0.7
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-download-manager
@@ -56,8 +56,7 @@ Windows.
 
 Everything the app can set is in the mod's own settings window: where files
 go, connections, speed limit, the browser link, name lookup, sounds, site
-rules, queues and bringing over your list from AB Download Manager. This page
-only holds how the windows look.
+rules and queues. This page only holds how the windows look.
 
 ## Credits
 
@@ -1637,9 +1636,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"sdm.sound", L"Play a sound when a download ends", L"One sound every two seconds at most, so big batches stay quiet.", L"1", {}, 0, 100, 3, L"Sounds"},
 {K::Text, L"sdm.soundDone", L"When it finishes", L"A .wav file. Empty plays the Windows sound.", L"", {}, 0, 100, 3, L"Sounds"},
 {K::Text, L"sdm.soundFail", L"When it fails", L"A .wav file. Empty plays the Windows sound.", L"", {}, 0, 100, 3, L"Sounds"},
-{K::Check, L"settingsGlass", L"Blurred windows", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 5, L"Windows"},
-{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 5, L"Windows"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open your downloads. Right-click it for more. When off, closing the window keeps downloads running and your browser can still open it.", L"1", {}, 0, 100, 5, L"Windows"}
+{K::Check, L"settingsGlass", L"Blurred windows", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 4, L"Windows"},
+{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 4, L"Windows"},
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open your downloads. Right-click it for more. When off, closing the window keeps downloads running and your browser can still open it.", L"1", {}, 0, 100, 4, L"Windows"}
     };
 }
 
@@ -1652,7 +1651,6 @@ static const SetPageInfo kSetPages[] = {
 {L"Speed and files", L"A speed limit, how sizes show and what happens to unfinished files.", 0xEC4A},
 {L"Browser and lookup", L"How your browser sends downloads here, and how site names are looked up.", 0xE774},
 {L"Sounds and sites", L"Sounds when downloads end, and rules for single sites.", 0xE767},
-{L"AB Download Manager", L"Copies the list, queues, file types and settings. AB Download Manager is left as it is.", 0xE8B5},
 {L"Look", L"How the download window, its small windows and this settings window look.", 0xE790},
 {L"About", L"Version, updates, credits, support and links.", 0xE946},
 };
@@ -3002,6 +3000,46 @@ static void Set_DrawBox(SetPaint& p, SetWindow& w, int k, const D2D1_RECT_F& box
     p.GradRing(box, 8, g, 1.75f);
 }
 
+// Text that should not sit in plain view (the browser key): it shows frosted, and the
+// pointer on its row eases it clear.
+static bool Set_IsSecret(const SetField& f) { return wcscmp(f.key, L"sdm.key") == 0; }
+
+static void Set_DrawSecret(SetPaint& p, SetWindow& w, const std::wstring& s, const D2D1_RECT_F& r, const D2D1_RECT_F& box,
+                           float reveal) {
+    if (s.empty()) return;
+    reveal = std::clamp(reveal, 0.0f, 1.0f);
+    if (reveal > 0.003f) p.Text(w.fValue.get(), s, r, mocha::text, reveal);
+    float a = 1 - reveal;
+    if (a <= 0.003f) return;
+    const float pad = 10;
+    D2D1_SIZE_F sz = D2D1::SizeF(r.right - r.left + 2 * pad, r.bottom - r.top);
+    SetCom<ID2D1DeviceContext> dc;
+    SetCom<ID2D1BitmapRenderTarget> tmp;
+    SetCom<ID2D1Effect> blur;
+    SetCom<ID2D1SolidColorBrush> br;
+    SetCom<ID2D1Bitmap> bmp;
+    if (sz.width > 1 && SUCCEEDED(p.rt->QueryInterface(__uuidof(ID2D1DeviceContext), (void**)dc.put())) &&
+        SUCCEEDED(dc->CreateEffect(CLSID_D2D1GaussianBlur, blur.put())) &&
+        SUCCEEDED(p.rt->CreateCompatibleRenderTarget(sz, tmp.put())) &&
+        SUCCEEDED(tmp->CreateSolidColorBrush(D2DColor(mocha::text, a * p.fade), br.put()))) {
+        tmp->BeginDraw();
+        tmp->Clear(D2D1::ColorF(0, 0));
+        tmp->DrawText(s.c_str(), (UINT32)s.size(), w.fValue.get(), D2D1::RectF(pad, 0, sz.width - pad, sz.height), br.get(),
+                      D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        if (SUCCEEDED(tmp->EndDraw()) && SUCCEEDED(tmp->GetBitmap(bmp.put()))) {
+            blur->SetInput(0, bmp.get());
+            blur->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, 3.5f);
+            blur->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE, D2D1_BORDER_MODE_SOFT);
+            p.rt->PushAxisAlignedClip({box.left + 2, box.top + 2, box.right - 2, box.bottom - 2}, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+            dc->DrawImage(blur.get(), D2D1::Point2F(r.left - pad, r.top));
+            p.rt->PopAxisAlignedClip();
+            return;
+        }
+    }
+    // No blur on this target: dots in place of the key.
+    p.Text(w.fValue.get(), std::wstring(std::min<size_t>(s.size(), 24), L'\x2022'), r, mocha::overlay1, a);
+}
+
 static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
     const SetField& f = w.fields[it.field];
     int k = it.field;
@@ -3062,7 +3100,10 @@ static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
         case SetField::Text: {
             bool ed = w.editing == k;
             Set_DrawBox(p, w, k, b, ed);
-            if (!ed) p.Text(w.fValue.get(), f.cur, {b.left + 12, b.top, b.right - 10, b.bottom}, mocha::text);
+            D2D1_RECT_F tr{b.left + 12, b.top, b.right - 10, b.bottom};
+            if (ed) break;
+            if (Set_IsSecret(f)) Set_DrawSecret(p, w, f.cur, tr, b, std::max(Set_GlowOf(w, 1000 + k), Set_GlowOf(w, 6000 + k)));
+            else p.Text(w.fValue.get(), f.cur, tr, mocha::text);
             break;
         }
         case SetField::Hotkey: {
@@ -3356,16 +3397,24 @@ static D2D1_RECT_F Set_CapTitleRect(const SetWindow& w) {
 }
 
 static void Set_DrawMark(SetPaint& p, IDWriteTextFormat* glyph, const D2D1_RECT_F& r, float a) {
-    float s = r.right - r.left;
+    // The mod's glyph alone in the blue to mauve gradient on a clear background, no plate
+    // (owner, 2026-11-24), scaled up about its centre to fill the room the plate had.
+    const float cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    const float ix = (r.right - r.left) * 0.31f, iy = (r.bottom - r.top) * 0.31f;
     SetCom<ID2D1LinearGradientBrush> g;
     D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::blue, a * p.fade)}, {1, D2DColor(mocha::mauve, a * p.fade)}};
     SetCom<ID2D1GradientStopCollection> coll;
-    if (SUCCEEDED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
-        SUCCEEDED(p.rt->CreateLinearGradientBrush(
-            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.right, r.bottom)),
+    if (FAILED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) ||
+        FAILED(p.rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(cx - ix, cy - iy), D2D1::Point2F(cx + ix, cy + iy)),
             coll.get(), g.put())))
-        p.rt->FillRoundedRectangle(D2D1::RoundedRect(r, s * 0.24f, s * 0.24f), g.get());
-    p.Glyph(glyph, 0xE896, r, mocha::crust);
+        return;
+    D2D1_MATRIX_3X2_F old;
+    p.rt->GetTransform(&old);
+    p.rt->SetTransform(D2D1::Matrix3x2F::Scale(1.4f, 1.4f, D2D1::Point2F(cx, cy)) * old);
+    const WCHAR mark = 0xE896;
+    p.rt->DrawText(&mark, 1, glyph, r, g.get());
+    p.rt->SetTransform(old);
 }
 
 static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
@@ -6952,7 +7001,8 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 GetClientRect(hwnd, &rc);
                 m.cw = rc.right * 96.0f / m.dpi;
                 m.ch = rc.bottom * 96.0f / m.dpi;
-                if (m.rt) m.rt->Resize(D2D1::SizeU(std::max(1L, rc.right), std::max(1L, rc.bottom)));
+                if (!IsWindowVisible(hwnd)) m.rt.reset();
+                else if (m.rt) m.rt->Resize(D2D1::SizeU(std::max(1L, rc.right), std::max(1L, rc.bottom)));
                 Main_Invalidate();
             }
             return 0;
@@ -7201,6 +7251,7 @@ void Main_Show(bool activate) {
     } else if (!IsWindowVisible(hwnd)) {
         ShowWindow(hwnd, SW_SHOWNOACTIVATE);
     }
+    RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
     g_shown = true;
     Wake();
 }
@@ -9360,13 +9411,11 @@ Val g_statusCache;                       // The engine's last "status", for the 
 std::string g_statusDump;
 std::wstring g_updateText, g_updateUrl;  // "Check for updates" state.
 bool g_updateBusy = false, g_updateNewer = false;
-std::wstring g_importText;               // "Bring over" state.
-bool g_importBusy = false, g_importBad = false;
 std::atomic<bool> g_setLoaded{false};    // The settings window holds the engine's values.
 std::atomic<int> g_startPage{-1};        // A page the settings window should open on.
 std::string g_loadedLimitMode;           // Kept so "when busy" survives a save.
 
-constexpr int kPageAbout = 6;
+constexpr int kPageAbout = 5;
 
 // Asks the settings window to lay its page out again (new link text, a new page).
 void Settings_Refresh() {
@@ -9550,7 +9599,6 @@ const PageLink kLinks[] = {
     {3, L"sdm.soundDone", L"Sounds", L"sdm:sounddone"},
     {3, L"sdm.soundFail", L"Sounds", L"sdm:soundfail"},
     {3, L"", L"Sites", L"sdm:sites"},
-    {4, L"", L"Bring over", L"sdm:import"},
 };
 
 std::vector<const PageLink*> LinksFor(int page, PCWSTR after) {
@@ -9586,14 +9634,6 @@ std::wstring LinkText(PCWSTR url, bool sub) {
         if (!sub) return g_updateNewer ? L"Get the new version" : L"Check for updates";
         if (g_updateBusy) return L"Looking for a new version";
         return g_updateText.empty() ? std::wstring(L"You have version ") + kEngineVersion + L"." : g_updateText;
-    }
-    if (u == L"sdm:import") {
-        std::lock_guard<std::mutex> lock(g_linkLock);
-        if (!sub) return L"Bring over downloads, queues and settings";
-        if (g_importBusy) return L"Copying from AB Download Manager";
-        return g_importText.empty()
-                   ? L"Copies the list, queues, file types and settings. AB Download Manager is left as it is."
-                   : g_importText;
     }
     return L"";
 }
@@ -9673,33 +9713,10 @@ void LinkAction(PCWSTR url) {
         }
         if (!open.empty()) ShellExecuteW(nullptr, L"open", open.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         else PostUi(WM_SDM_OPEN, 2);
-    } else if (u == L"sdm:import") {
-        PostUi(WM_SDM_OPEN, 3);
     }
 }
 
 // ---- Jobs started from the settings window (UI thread) ------------------------------------
-
-int64_t NumAfter(const std::string& s, const char* label) {
-    size_t at = s.find(label);
-    if (at == std::string::npos) return 0;
-    return _atoi64(s.c_str() + at + strlen(label));
-}
-
-int64_t CountErrors(const std::string& s) {
-    size_t at = s.find("errors: [");
-    if (at == std::string::npos) return 0;
-    int64_t quotes = 0;
-    for (size_t i = at + 9; i < s.size(); i++) {
-        if (s[i] == '\\') {
-            i++;
-            continue;
-        }
-        if (s[i] == '"') quotes++;
-        else if (s[i] == ']' && quotes % 2 == 0) break;
-    }
-    return quotes / 2;
-}
 
 void StartUpdateCheck() {
     {
@@ -9724,48 +9741,6 @@ void StartUpdateCheck() {
                 g_updateNewer = !g_updateUrl.empty();
             } else g_updateText = L"You have the newest version.";
         }
-        Settings_Refresh();
-    });
-}
-
-void StartImport() {
-    std::wstring dir;
-    WCHAR home[MAX_PATH];
-    if (GetEnvironmentVariableW(L"USERPROFILE", home, MAX_PATH)) dir = std::wstring(home) + L"\\.abdm\\config";
-    {
-        std::lock_guard<std::mutex> lock(g_linkLock);
-        if (g_importBusy) return;
-        if (dir.empty() || !DirExists(dir)) {
-            g_importText = L"AB Download Manager's data folder was not found.";
-            g_importBad = true;
-            dir.clear();
-        } else {
-            g_importBusy = true;
-        }
-    }
-    Settings_Refresh();
-    if (dir.empty()) return;
-    Val req = Cmd("import_abdm");
-    req.set("path", sj::Str(sj::U8(dir)));
-    StartJob(req, [](bool ok, const Val& r, const std::wstring& e) {
-        {
-            std::lock_guard<std::mutex> lock(g_linkLock);
-            g_importBusy = false;
-            g_importBad = !ok;
-            if (!ok) {
-                g_importText = L"Could not copy: " + e;
-            } else {
-                const std::string& rep = r["report"].str();
-                int64_t d = NumAfter(rep, "downloads: "), q = NumAfter(rep, "queues: "), c = NumAfter(rep, "categories: "),
-                        s = NumAfter(rep, "skipped: "), errs = CountErrors(rep);
-                std::wstring t = L"Brought over " + std::to_wstring(d) + L" downloads, " + std::to_wstring(q) + L" queues and " +
-                                 std::to_wstring(c) + L" file types.";
-                if (s > 0) t += L" " + std::to_wstring(s) + L" were already here.";
-                if (errs > 0) t += L" " + std::to_wstring(errs) + L" could not be read.";
-                g_importText = t;
-            }
-        }
-        Refresh();
         Settings_Refresh();
     });
 }
@@ -10118,8 +10093,6 @@ LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (Running()) OpenSitesDialog();
             } else if (wp == 2) {
                 StartUpdateCheck();
-            } else if (wp == 3) {
-                StartImport();
             }
             return 0;
         case WM_SDM_SETTINGS:
