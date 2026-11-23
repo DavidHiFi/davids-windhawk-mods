@@ -200,12 +200,69 @@ also flickers, deal with it, we need consistency."
   v0.3.5, tool restarted (pid 29664), desktop fine 60 s after. Published: mods 9f5d9ec, feed
   f86e97e. Backup `local@seamless-dock-20261124-0153.wh.cpp`. Live source equals the work copy
   (line endings aside). Pill at rest captured: `proof\title-1124\pill-rest.png` (grey edge).
-- Still to prove under `coop lock desktop --input` (refused at 2:05 am, owner active, first in
-  line): pill hover capture, a taskbar right-click recording with no pill blink, and the
-  separator menu test above.
+- Proofs at 2:18 am under `coop lock desktop --input` (`proof\title-1124\`, `proof\sep-1124\`):
+  - Hover: `pill-hover.png` shows the gradient edge with the cursor on the pill. Pass.
+  - Separators: "Add separator after" widened the dock 538 -> 557 px with a centred line,
+    "Remove separator" put it back to 538, Dock options opened and closed. Pass.
+  - Right-click: FAIL. `watch.ps1` (read-only z-order poll) logged the pill under the bar for
+    49 ms, and `rightclick.mp4` lost the pill for 3 frames. The bar lifts itself a moment
+    after it turns active, so the single raise on the foreground event ran too early; the
+    pill only came back on the menu's show event.
+
+## 0.3.6: no blink at all on a taskbar click (2026-11-24)
+
+- After a foreground or mouse-capture event, the dock thread runs a 500 ms burst: a
+  high-resolution waitable timer every 2 ms in the message loop (MsgWaitForMultipleObjectsEx)
+  calls RaiseTitle, which does nothing unless the bar sits above the pill. Hooks gained
+  EVENT_SYSTEM_CAPTURESTART..CAPTUREEND.
+- Installed 2:23 am (heavy slots full, owner had said "skip the queue": clang pre-check
+  skipped, Windhawk compile passed). Registry v0.3.6, tool pid 19480, desktop fine.
+  Published: mods 0778dad, feed f710e6e. Rollback copy `seamless-dock-0.3.5.wh.cpp`.
+- Proof: `run-036.sh` waits for the lock, then three right-clicks with the watcher and a
+  recording; `blink2.py` measures the pill in every frame.
+- Result 2:28 am: better but not gone. Pill under the bar 27 ms (one frame, frame 36 dimmed)
+  on the first click that made the bar active; later clicks clean. The dock thread is busy
+  (CheckFullscreen, Rebuild) right when the bar lifts itself.
+- 2:31 am: Seamless Workshop 1.5.2's hourly update put 0.3.5 back (backup
+  `%LOCALAPPDATA%\SeamlessWorkshop\backup-66246250`). Its mods list came from `mod list`
+  read earlier, so it saw an older dock than the one installed and "updated" it to the
+  feed's 0.3.5. Fixed in Workshop 1.5.3 (below).
+
+## 0.3.7: the pill gets its own z-guard thread (2026-11-24)
+
+- New thread `ZGuardThread` with its own out-of-context WinEvent hooks (FOREGROUND,
+  CAPTURESTART, skip own process), its own high-resolution waitable timer (2 ms for
+  500 ms) and its own message loop. It only calls RaiseTitle. The dock thread lost its
+  burst and the CAPTURE hook range. RaiseTitle adds SWP_NOSENDCHANGING so a cross-thread
+  reorder never waits on the dock thread.
+- Installed 2:55 am, registry v0.3.7, desktop fine after the 60 s watch. Published: mods
+  f680e44, feed 640f2d1. Rollback copy `seamless-dock-0.3.6.wh.cpp` (taken from the
+  Workshop backup, the real 0.3.6).
+- Seamless Workshop 1.5.3 (`work\2026-11-24-workshop-no-downgrade`): before an automatic
+  update writes a mod, it reads the installed version from
+  `HKLM\SOFTWARE\Windhawk\Engine\Mods\<id>\Version` and skips the mod unless the feed is
+  newer. Installed 3:00 am, registry v1.5.3, desktop fine. Published: mods 4f07e27, feed
+  5192c93, release v1.5.3. Rollback: install `seamless-workshop-1.5.2-live.wh.cpp`.
+
+- Seamless Workshop 1.5.4 (asked for by the speedtest thread 7df9f2fe): new Look group
+  "All mods" with `motionEnabled` (check, on) and `motionSpeed` (choice: veryQuick, quick,
+  normal, relaxed, slow; default normal), mirrored in the YAML. `Hub_WriteMotion` writes
+  `HKCU\Software\DavidHiFi\Motion` Enabled (DWORD) and Speed (REG_SZ) at startup and in
+  `WhTool_ModSettingsChanged`. `GetStringSetting` is now real in the mod build, and Save
+  writes a choice by name instead of `_wtoi`. Installed 3:36 am, registry v1.5.4, desktop
+  fine. Published: mods 1c77407, feed 1bdaf0a, release v1.5.4. Live check: key 1/normal
+  after the install, followed a CLI change to 0/quick and back. The window's own Save
+  button was not clicked (owner at the PC). Rollback: install
+  `seamless-workshop-1.5.3.wh.cpp` from the same folder. The work copy is ahead of the old
+  `work\2026-11-12-seamless-hub` src tree (still 1.5.2); regenerate from there only after
+  porting 1.5.3 and 1.5.4 back.
 
 ## Rollback
 
+- Workshop 1.5.4: install `work\2026-11-24-workshop-no-downgrade\seamless-workshop-1.5.3.wh.cpp`.
+- Workshop 1.5.3: install `work\2026-11-24-workshop-no-downgrade\seamless-workshop-1.5.2-live.wh.cpp`.
+- Dock 0.3.7: install `seamless-dock-0.3.6.wh.cpp` with Install-StagedMod.
+- Dock 0.3.6: install `seamless-dock-0.3.5.wh.cpp` with Install-StagedMod.
 - Dock 0.3.5: install `seamless-dock-0.3.4-live.wh.cpp` with Install-StagedMod.
 - Dock 0.3.3: install `seamless-dock-0.3.2.wh.cpp` with Install-StagedMod.
 - Dock 0.3.2: install `seamless-dock-0.3.1.wh.cpp` with Install-StagedMod.
