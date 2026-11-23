@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.11
+// @version         0.6.12
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -232,7 +232,8 @@ std::vector<HaloBridgeShort> Shorts();
 std::vector<HaloBridgeStore> Store();
 }  // namespace halobridge
 std::wstring Hotkey_Format(UINT mods, UINT vk);
-void HaloGlyph(ID2D1RenderTarget* rt, D2D1_RECT_F r, float alpha);
+// fill: draw the mark alone in that brush, scaled up to fill the box (no plate behind it).
+void HaloGlyph(ID2D1RenderTarget* rt, D2D1_RECT_F r, float alpha, ID2D1Brush* fill = nullptr);
 void HaloRecording(bool on);
 
 namespace {
@@ -3007,7 +3008,7 @@ float SegmentDistance(float px, float py, float ax, float ay, float bx, float by
     return std::sqrt(dx * dx + dy * dy);
 }
 
-// The rounded square in the blue to mauve gradient with Halo's mark in crust.
+// Halo's mark alone in the blue to mauve gradient on a clear background.
 HICON MakeTrayIcon() {
     int size = GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem());
     if (size < 16) size = 16;
@@ -3027,17 +3028,11 @@ HICON MakeTrayIcon() {
     }
     const float c0[3] = {0x89 / 255.f, 0xB4 / 255.f, 0xFA / 255.f};
     const float c1[3] = {0xCB / 255.f, 0xA6 / 255.f, 0xF7 / 255.f};
-    const float ink[3] = {0x11 / 255.f, 0x11 / 255.f, 0x1B / 255.f};
-    float radius = size * 0.26f, half = size / 2.0f;
-    HaloMark m(0, 0, (float)size);
+    HaloMark m(-size * 0.2f, -size * 0.2f, size * 1.4f);  // Scaled up about the centre to fill the room the plate had.
     uint32_t* px = (uint32_t*)bits;
     for (int y = 0; y < size; y++)
         for (int x = 0; x < size; x++) {
             float fx = x + 0.5f, fy = y + 0.5f;
-            float qx = std::fabs(fx - half) - (half - radius), qy = std::fabs(fy - half) - (half - radius);
-            float ox = std::max(qx, 0.0f), oy = std::max(qy, 0.0f);
-            float d = std::sqrt(ox * ox + oy * oy) + std::min(std::max(qx, qy), 0.0f) - radius;
-            float a = std::clamp(0.5f - d, 0.0f, 1.0f);
             float t = std::clamp((x + y) / (2.0f * (size - 1)), 0.0f, 1.0f);
             float toLens = std::sqrt((fx - m.lx) * (fx - m.lx) + (fy - m.ly) * (fy - m.ly));
             float dRing = std::fabs(toLens - m.lr) - m.ring / 2;
@@ -3047,9 +3042,9 @@ HICON MakeTrayIcon() {
             float rgb[3];
             for (int i = 0; i < 3; i++) {
                 float base = c0[i] + (c1[i] - c0[i]) * t;
-                rgb[i] = (base + (ink[i] - base) * cov) * a;
+                rgb[i] = base * cov;
             }
-            px[y * size + x] = ((uint32_t)(a * 255 + 0.5f) << 24) | ((uint32_t)(rgb[0] * 255 + 0.5f) << 16) |
+            px[y * size + x] = ((uint32_t)(cov * 255 + 0.5f) << 24) | ((uint32_t)(rgb[0] * 255 + 0.5f) << 16) |
                                ((uint32_t)(rgb[1] * 255 + 0.5f) << 8) | (uint32_t)(rgb[2] * 255 + 0.5f);
         }
     HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
@@ -3465,13 +3460,19 @@ std::wstring Hotkey_Format(UINT mods, UINT vk) {
 }
 
 // Halo's mark in crust: the settings window's rail tile, About card and window icon.
-void HaloGlyph(ID2D1RenderTarget* rt, D2D1_RECT_F r, float alpha) {
+void HaloGlyph(ID2D1RenderTarget* rt, D2D1_RECT_F r, float alpha, ID2D1Brush* fill) {
     if (!rt) return;
     float s = std::min(r.right - r.left, r.bottom - r.top);
     float x = (r.left + r.right - s) / 2, y = (r.top + r.bottom - s) / 2;
-    HaloMark m(x, y, s);
-    ComPtr<ID2D1SolidColorBrush> ink;
-    if (FAILED(rt->CreateSolidColorBrush(D2D1::ColorF(0x11111B, alpha), &ink))) return;
+    HaloMark m = fill ? HaloMark(x - s * 0.2f, y - s * 0.2f, s * 1.4f) : HaloMark(x, y, s);
+    ComPtr<ID2D1Brush> ink;
+    if (fill) {
+        ink = fill;
+    } else {
+        ComPtr<ID2D1SolidColorBrush> solid;
+        if (FAILED(rt->CreateSolidColorBrush(D2D1::ColorF(0x11111B, alpha), &solid))) return;
+        ink = solid;
+    }
     ComPtr<ID2D1Factory> factory;
     rt->GetFactory(&factory);
     ComPtr<ID2D1StrokeStyle> round;
@@ -6525,6 +6526,8 @@ static void Set_DrawSupport(SetPaint& p, SetWindow& w, const SetItem& it, int id
     p.Text(w.fButton.get(), L"Open Ko-fi", b, mocha::crust);
 }
 
+static void Set_DrawMark(SetPaint& p, IDWriteTextFormat* glyph, const D2D1_RECT_F& r, float a);
+
 static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
     D2D1_RECT_F row = Set_RowRect(w, it);
     float hov = Set_GlowOf(w, 3800 + idx);
@@ -6532,8 +6535,7 @@ static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it, int idx)
     p.GradFill(row, 10, 0.13f * hov);
     p.GradRing(row, 10, hov, 1.5f);
     D2D1_RECT_F mark{row.left + 20, row.top + 20, row.left + 92, row.top + 92};
-    p.GradFill(mark, 18, 1);
-    ::HaloGlyph(p.rt, mark, p.fade);
+    Set_DrawMark(p, nullptr, mark, 1);
     float x = mark.right + 20, ys[4];
     Halo_AboutLayout(w, ys);
     p.Text(w.fBig.get(), L"Halo Launcher", {x, row.top + 18, row.right - 16, row.top + 46}, mocha::text);
@@ -6738,11 +6740,11 @@ static void Set_DrawMark(SetPaint& p, IDWriteTextFormat* glyph, const D2D1_RECT_
     SetCom<ID2D1GradientStopCollection> coll;
     if (SUCCEEDED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
         SUCCEEDED(p.rt->CreateLinearGradientBrush(
-            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.right, r.bottom)),
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left + s * 0.19f, r.top + s * 0.19f),
+                                                D2D1::Point2F(r.right - s * 0.19f, r.bottom - s * 0.19f)),
             coll.get(), g.put())))
-        p.rt->FillRoundedRectangle(D2D1::RoundedRect(r, s * 0.24f, s * 0.24f), g.get());
+        ::HaloGlyph(p.rt, r, p.fade, g.get());  // Halo's mark alone, no plate (owner, 2026-11-24).
     (void)glyph;
-    ::HaloGlyph(p.rt, r, p.fade);
 }
 
 static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
