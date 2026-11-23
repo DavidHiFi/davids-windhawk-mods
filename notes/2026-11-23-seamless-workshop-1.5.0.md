@@ -116,12 +116,26 @@ The first run (`out\run1\`) was cut short when thread 7bb65bc7 rewound the test 
 - Every PC on 1.5.0 needs one click on the Updates page to reach 1.5.1, because 1.5.0 cannot
   update itself. The friend's PC is on 1.4.0 (before auto updates), same click.
 
+## Friend's PC, 1.4.0 to 1.5.1 (2026-11-23, 5:24 pm here, 3:24 am there)
+
+- He was in a Zombies game, so only the Workshop itself was put in: it runs in its own process,
+  never inside the game, and the compile ran at idle priority. Checksum of the published file
+  checked first (3ce101e1..., same bytes as the tower's installed copy).
+- `windhawk-cli mod install --file`, about 12 seconds. Version 1.5.1, still on, new process
+  started. Settings: nothing changed or lost, three new ones added with their defaults
+  (`autoUpdate`, `autoDeps`, `autoApps`).
+- Backup on his PC: local app data, `SeamlessWorkshop-backups\20261123-0324` (old source and a
+  registry export of the mod's key). Rollback: `windhawk-cli mod install --file` with that source,
+  then import the `.reg`.
+- Within a minute the new Workshop read the list and saw 15 of his DavidHiFi mods older than the
+  list (`Set.feedSeen`). It holds them while a game is full screen or he used the PC in the last
+  two minutes. Watcher: `friend\watch-friend.ps1` in the job folder (detached, every 10 minutes,
+  up to 8 hours, log `friend\round.log`).
+
 ## Still to do
 
-- Test PC: retest of the two remove fixes, and the Editor clip encode. Both run outside T3 now
-  (`run-detached.ps1` in the job folder, started 11:53 am, `clip.gate.log` and `retest.gate.log`),
-  because T3 restarts cancelled them three times. Neither has run: the load gate holds every heavy
-  job while Ableton is open (open since 8:07 am, owner away). Their wait ends 3:53 pm with "nothing
-  was run"; after that, start them again with the same script once Ableton is closed.
-- Prove that a changed mod arrives by itself on a PC that has an older copy. The tower is the
-  source, so it never has one; the friend's PC will show it once it is on 1.5.1.
+- Test PC: retest of the two remove fixes, and the Editor clip encode. The 11:53 am runs gave up
+  at 3:53 pm with nothing run (Ableton open all day, owner away). Put back at 5:21 pm as one job,
+  so they hold one load-gate slot: `both.ps1` through `run-detached.ps1 -Wait 43200`, log
+  `both.gate.log`. It runs by itself once Ableton closes and a slot is free.
+- Prove that a changed mod arrives by itself on an older PC: the friend's round (above).
