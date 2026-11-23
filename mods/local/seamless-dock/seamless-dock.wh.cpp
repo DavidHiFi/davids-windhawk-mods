@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.3
+// @version         0.3.4
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,6 +26,12 @@ the edge of the screen across from your taskbar, so you get a clean bar on one
 side and a dock on the other, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
+
+## What's new in 0.3.4
+
+- Windows no longer dip under the dock when another app sends the "taskbar
+  restarted" signal while Explorer is still the same. The dock only gives up and
+  takes back its space when Explorer really restarted.
 
 ## What's new in 0.3.3
 
@@ -1559,6 +1565,17 @@ UINT g_barEdgeSent = ABE_BOTTOM;
 RECT g_barMonSent{};
 bool g_inBarSetPos = false;
 
+// The taskbar our reserved strip was registered with. A TaskbarCreated
+// broadcast only means Explorer restarted when this changed.
+HWND g_appbarTray = nullptr;
+DWORD g_appbarTrayPid = 0;
+
+void CurrentTray(HWND* tray, DWORD* pid) {
+    *tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+    *pid = 0;
+    if (*tray) GetWindowThreadProcessId(*tray, pid);
+}
+
 void AppBarRegister() {
     if (g_appbar || !g_dock || !ShellResponds()) return;
     APPBARDATA abd{sizeof(abd)};
@@ -1570,6 +1587,7 @@ void AppBarRegister() {
         SHAppBarMessage(ABM_REMOVE, &abd);
         g_appbar = SHAppBarMessage(ABM_NEW, &abd) != 0;
     }
+    if (g_appbar) CurrentTray(&g_appbarTray, &g_appbarTrayPid);
 }
 
 void AppBarRemove() {
@@ -2838,7 +2856,20 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     if (msg == g_taskbarCreatedMsg && g_taskbarCreatedMsg) {
+        HWND tray;
+        DWORD trayPid;
+        CurrentTray(&tray, &trayPid);
+        if (g_appbar && tray && tray == g_appbarTray && trayPid == g_appbarTrayPid) {
+            // Same Explorer: a stray broadcast from some app. Keep the reserved
+            // strip, or windows dip under the dock while it is taken back.
+            Wh_Log(L"TaskbarCreated from the same shell (pid %u): strip kept", trayPid);
+            RegisterShellHookWindow(hwnd);
+            WatchRecycle(false);
+            WatchRecycle(S.recycle);
+            return 0;
+        }
         // Explorer restarted: the appbar and the shell hook went with it.
+        Wh_Log(L"TaskbarCreated from a new shell (pid %u): strip taken back", trayPid);
         g_appbar = false;
         g_barHeightSent = -1;
         g_barRect = RECT{};
