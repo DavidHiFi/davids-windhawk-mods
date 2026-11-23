@@ -2,7 +2,7 @@
 // @id              seamless-wobbly-windows
 // @name            Seamless Wobbly Windows
 // @description     Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows
-// @version         1.2.8
+// @version         1.2.9
 // @author          DavidHiFi, HeyJeay, HaVeN80, lalimatyus
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -88,6 +88,9 @@ title bar to move a window without the wobble.
 - Nothing is loaded into dwm.exe. The effect runs inside each app.
 - Turn off the other wobble mods (Wobbly Windows, Window Wobble) before using
   this one.
+
+## What's new in 1.2.9
+- Checks for the frosted glass during a drag (no change in look).
 
 ## What's new in 1.2.8
 - The frosted glass under a dragged window no longer turns dark on windows
@@ -4611,12 +4614,16 @@ struct Device {
     bool ok = false;
     bool warmed = false;
     bool glowSet = false;      // cbGlow holds sprites, not a zero count
+    HRESULT glowHr = S_OK;     // DIAG 1.2.9
+    unsigned glowWrites = 0;   // DIAG 1.2.9
 
     // nullptr turns the glow off (a zero count), written once.
     void SetGlow(const GlowCB* g) {
         if (!g && !glowSet) return;
         D3D11_MAPPED_SUBRESOURCE map{};
-        if (FAILED(ctx->Map(cbGlow, 0, D3D11_MAP_WRITE_DISCARD, 0, &map))) return;
+        glowHr = ctx->Map(cbGlow, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);    // DIAG 1.2.9
+        if (FAILED(glowHr)) return;
+        ++glowWrites;
         if (g) memcpy(map.pData, g, sizeof(GlowCB));
         else   memset(map.pData, 0, sizeof(GlowCB));
         ctx->Unmap(cbGlow, 0);
@@ -6404,6 +6411,21 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
                 glassCb.fill[3] = 2.0f + (1.0f - GlowSeeThrough(hwnd));
                 liveGlass = true;
                 note(4);
+                {   // DIAG 1.2.9: the constants the copy is drawn with.
+                    int bd = -1;
+                    DwmGetWindowAttribute(hwnd, 38, &bd, sizeof(bd));
+                    auto b8 = [](float v) { return (uint64_t)std::clamp((int)(v * 255.0f + 0.5f), 0, 255); };
+                    const uint64_t v =
+                        (uint64_t)std::clamp((int)(glassCb.fill[3] * 1000.0f), 0, 65535) |
+                        (b8(glassCb.key[0]) << 16) | (b8(glassCb.key[1]) << 24) | (b8(glassCb.key[2]) << 32) |
+                        ((uint64_t)(bd & 255) << 40) |
+                        ((uint64_t)std::clamp((int)glassCb.hdr[0], 0, 255) << 48) |
+                        ((uint64_t)std::clamp((int)(glassCb.hdr[2] * 1000.0f), 0, 255) << 56);
+                    SetPropW(hwnd, L"SeamlessWobblyGlassFill", (HANDLE)(uintptr_t)v);
+                }
+                dev.SetGlow(&glassCb);
+                SetPropW(hwnd, L"SeamlessWobblyGlassMap",
+                         (HANDLE)(((uintptr_t)dev.glowWrites << (sizeof(void*) > 4 ? 32 : 16)) | (uint32_t)dev.glowHr));
             } else if (!evenGlass) {
                 note(3);
                 return;     // no live blur and no single colour: keep the native drag
