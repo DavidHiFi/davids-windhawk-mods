@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.28
+// @version         2.2.29
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -22,9 +22,13 @@ Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
 
+## What's new in 2.2.29
+
+- The Loaded mods window shows its title buttons again. Version 2.2.28 drew over them. The see-through title strip it tried to fix was not this mod: Windhawk's Loaded mods window freezes for a few seconds after it opens, and Windows shows a plain stand-in copy until it wakes up.
+
 ## What's new in 2.2.28
 
-- The Loaded mods window now draws its own title strip, the way the Mod tasks window does. Windows was drawing it before, and turned it see-through whenever another window was in front. Both windows now keep a solid dark strip in the background, and their title buttons dim there like every other window again.
+- The Loaded mods window now draws its own title strip, the way the Mod tasks window does. Both windows keep a solid dark strip in the background, and their title buttons dim there like every other window again.
 
 ## What's new in 2.2.27
 
@@ -2637,6 +2641,14 @@ static bool IsTrayTaskDialog(HWND hWnd) {
     return IsToolkitDialog(hWnd);
 }
 
+static bool IsProgressDialog(HWND hwnd) {
+    wchar_t title[128], expected[128];
+    return GetWindowTextW(hwnd, title, ARRAYSIZE(title)) &&
+           LoadStringW(GetModuleHandleW(nullptr), 0xbc, expected, ARRAYSIZE(expected)) &&
+           // The window reads "Mod tasks in progress - Windhawk", so match the start.
+           wcsncmp(title, expected, wcslen(expected)) == 0;
+}
+
 static BOOL CALLBACK TrayDialogEnumProc(HWND hWnd, LPARAM lParam) {
     if (!IsTrayTaskDialog(hWnd)) return TRUE;
     bool fresh = false;
@@ -2649,10 +2661,12 @@ static BOOL CALLBACK TrayDialogEnumProc(HWND hWnd, LPARAM lParam) {
         RECT client, list, button;
         HWND listWindow = GetDlgItem(hWnd, 1001);
         HWND buttonWindow = GetDlgItem(hWnd, IDOK);
-        // Both list windows (Mod tasks and Loaded mods) take the title strip into
-        // their own paint. Left to DWM, a background window's strip turns clear
-        // with its text at 40%, whatever fill the body has (live-0928, 2026-11-23).
-        bool progressLayout = listWindow && buttonWindow && GetClientRect(hWnd, &client) &&
+        // Only Mod tasks takes the title strip into its own paint. Loaded mods keeps
+        // the native strip: folded in, our fill covers DWM's title buttons (2.2.28).
+        // Its "see-through strip" was Windows' stand-in for a hung window, not ours
+        // (live-0943 and live-0945, 2026-11-23, the second with the styler off).
+        bool progressLayout = IsProgressDialog(hWnd) && listWindow && buttonWindow &&
+            GetClientRect(hWnd, &client) &&
             GetWindowRect(listWindow, &list) && GetWindowRect(buttonWindow, &button);
         if (progressLayout) {
             MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&list), 2);
