@@ -94,8 +94,62 @@ Proof (`D:\Agent Work\seamless-dock\proof\fix-031\`):
 - The 120 s lock ran out before the bin capture; another thread held the desktop by then. Use a
   longer ttl (300) for multi-step captures.
 
+## 0.3.2: audit fixes and new settings (installed 7:02 pm, published)
+
+Live health at 0.3.1, before the change (`health-sample.ps1`, `idle-watch.ps1` in
+`work\2026-11-22-bottom-dock\`): handles flat at 589, GDI 43, USER 21-22 over 2.5 min, about
+32 MB in use, about 2% of one core while the owner worked, 0.4 redraws a second idle.
+
+Source: `work\2026-11-23-modular-bar\seamless-dock.wh.cpp`; 0.3.1 copy `seamless-dock-0.3.1.wh.cpp`.
+
+- Every appbar call first checks that Explorer answers (WM_NULL, 300 ms, abort if hung). If
+  ABM_NEW fails while it answers, ABM_REMOVE and try once more.
+- Strip heal backs off: after 3 heals in a row it checks once a minute, not every 5 s.
+- kAppBarMsg allowed through the message filter (the dock runs elevated).
+- App names (shell name, file description) cached per item key, cleared on settings reload.
+- Recycle Bin query on its own thread (kRecycleDone = WM_APP+4); startup, reload, the bin
+  menu and turning the bin on no longer wait on it. Teardown waits up to 3 s for it.
+- A failed icon load is retried after 30 s, not cached forever.
+- Drag fix: ReleaseCapture ended the drag through WM_CAPTURECHANGED, then the button-up
+  saw no drag and clicked the item. A drag dropped on its own place opened or hid the app.
+- Window meta with no app id and no program is looked up again; such windows key as `w:`+hwnd.
+- Relayout guarded against running inside itself (queued, at most 3 more passes).
+- A maximized window with a caption no longer counts as full screen.
+- GetMonitorInfoW checked; a failed window creation leaves no half-made dock.
+- Clicking the dock closes its menu; the 1 s tick closes a menu Windows would not focus
+  once another window comes to the front.
+- New settings: `iconLift` (0-10, 3), `previewSize` (140-360, 208, image height scales),
+  `titleMaxWidth` (200-1400, 720). Settings regrouped: place and size, what shows, look,
+  title, behavior. Keys unchanged. Menu row renamed "Window title on the top bar".
+- After install, `elevated-dock-032-defaults.ps1` writes the three new values when missing
+  (checked live: iconLift 3, previewSize 208, titleMaxWidth 720).
+
+Install incident: Install-StagedMod's "tool process came back" check saw the old pid, which
+then exited, and no new dock process started. The dock was gone until I ran
+`2026-11-10-tool-mod-restart.ps1` by hand. Fix in Install-StagedMod (uncommitted, the file also
+holds other threads' edits): it records the tool pids before the compile and only a pid that
+was not there before counts. Coop note posted. Also: an elevated script's `coop lock` lands on
+a private System32 board unless it first does `Set-Location 'H:\Windhawk Configuration'`.
+
+Health after 0.3.2: handles flat 577-584, GDI 43, USER 20-21, about 2.4% of one core idle.
+
+## 0.3.3: ghost and icon fixes (staged, syntax checked, install held while the owner games)
+
+Found in the 0.3.2 dock capture (`D:\Agent Work\seamless-dock\proof\v032\`): Yapfast twice,
+a folder icon and a blank page among the open apps.
+
+- Class `Ghost` skipped in Eligible. Windows draws a Ghost window (owned by dwm.exe, no icon,
+  so the shell's blank page) over a frozen app; Yapfast had hung, so it showed twice.
+- `windhawk-mod*.exe` never matches a pin by the program folder, so Startup Control and other
+  mod windows get their own item instead of lighting up the Windhawk pin.
+- IconFromShell refuses an .exe with no icon resources (ExtractIconExW count 0), so GetIcon
+  falls through to the window's own icon instead of the blank page.
+- Install: `work\2026-11-23-modular-bar\install-dock-033.ps1` (refuses unless live = 0.3.2).
+
 ## Rollback
 
+- Dock 0.3.3: install `seamless-dock-0.3.2.wh.cpp` with Install-StagedMod.
+- Dock 0.3.2: install `seamless-dock-0.3.1.wh.cpp` with Install-StagedMod.
 - Styler: already rolled back. `reg import` the backup to see the old state.
 - Dock: install `seamless-dock-0.1.0.wh.cpp` (or `-0.2.0`) with Install-StagedMod.
 - Title: set `showTitle` to 1 and bump `SettingsChangeTime`.
