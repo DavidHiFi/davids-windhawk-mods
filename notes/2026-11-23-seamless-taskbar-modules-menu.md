@@ -69,5 +69,9 @@ base hash check, auto-publish), held until the owner stopped playing. Live hash 
   fresh shell with Seamless Taskbar off, checks it answers, switches the mod on through
   Set-ModState and checks again (turns it off if the shell stops answering). Log:
   `recover-shell.log`.
+- Ran at 12:12 am on 11-24 (owner said get it done, so no waiting): box closed by posted
+  BM_CLICK, old shell exited, Windows started shell 11956, it answered with the mod off,
+  Seamless Taskbar 0.4.50 switched on (gate watched 60 s: desktop fine), shell still
+  answering 90 s later. Full bar captured: `tower-top-fixed.png`.
 - Lesson: a blank bar with a frozen UI thread waiting on LpcReply can be a fail-fast stuck
   on a hidden crash box. List `#32770` windows owned by csrss before anything else.
