@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.49
+// @version         0.4.50
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -33,7 +33,12 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
 
-## What's new in 0.4.49
+## What's new in 0.4.50
+
+Right-clicking empty taskbar space shows Modules and Dock position again on Windows
+builds that make that menu a little differently, like 26200.
+
+## Earlier: 0.4.49
 
 The Edit account window and the AI usage settings no longer freeze the taskbar. When Windows
 or the taskbar changes a setting while they are open, they now catch up a moment later instead
@@ -90628,7 +90633,7 @@ wuxc::MenuFlyoutSubItem BuildDockPosition(LONG_PTR dock) {
 
 // Adds the rows to the taskbar menu; true when something was added.
 bool Append(void* vectorThis, bool nameFirst) {
-    if (!Enabled() || !tps::g_hostProcess.load() || g_unloading.load()) {
+    if (!Enabled() || g_unloading.load()) {
         return false;
     }
     std::erase_if(tps::g_clicks, [](tps::ClickEntry const& entry) { return !entry.item.get(); });
@@ -90796,6 +90801,75 @@ void __cdecl ContextMenus_ShowTaskbarSettingsContextMenu_Hook(
         target, taskbarSettings, args, options);
 }
 
+// Older builds (26200) make the same menu without the TaskbarSettings input.
+using ContextMenus_ShowTaskbarSettingsContextMenuNoSettings_t =
+    void(__cdecl*)(wux::FrameworkElement const& target,
+                   wuxi::ContextRequestedEventArgs const& args,
+                   unsigned long long options);
+ContextMenus_ShowTaskbarSettingsContextMenuNoSettings_t
+    ContextMenus_ShowTaskbarSettingsContextMenuNoSettings_Original;
+
+void __cdecl ContextMenus_ShowTaskbarSettingsContextMenuNoSettings_Hook(
+    wux::FrameworkElement const& target,
+    wuxi::ContextRequestedEventArgs const& args,
+    unsigned long long options) {
+    try {
+        if (target && target.XamlRoot()) {
+            g_lastTargetWeak = target;
+        }
+    } catch (...) {
+    }
+    HWND foreground = GetForegroundWindow();
+    if (foreground && foreground != FindWindowW(L"Shell_TrayWnd", nullptr)) {
+        g_menuPrevForeground = foreground;
+    }
+
+    ScopedTaskbarSettingsMenuBuild scopedBuild;
+
+    ContextMenus_ShowTaskbarSettingsContextMenuNoSettings_Original(target, args,
+                                                                   options);
+}
+
+// 26200 adds the stock rows through inlined vector calls, so the Append hook
+// never sees them. Put our rows first just before the menu opens instead.
+using ShowFlyoutAtPointerPosition_t =
+    void(__cdecl*)(wuxcp::FlyoutBase const& flyout,
+                   wux::FrameworkElement const& target,
+                   wuxi::ContextRequestedEventArgs const& args,
+                   unsigned long long options);
+ShowFlyoutAtPointerPosition_t ShowFlyoutAtPointerPosition_Original;
+
+void __cdecl ShowFlyoutAtPointerPosition_Hook(
+    wuxcp::FlyoutBase const& flyout,
+    wux::FrameworkElement const& target,
+    wuxi::ContextRequestedEventArgs const& args,
+    unsigned long long options) {
+    if (g_taskbarSettingsMenuDepth > 0 && !g_currentMenuInjected) {
+        try {
+            if (auto menu = flyout.try_as<wuxc::MenuFlyout>()) {
+                auto items = menu.Items();
+                std::vector<wuxc::MenuFlyoutItemBase> stock;
+                for (auto const& item : items) {
+                    stock.push_back(item);
+                }
+                items.Clear();
+                AppendInjectedItems(&items);
+                g_currentMenuInjected = true;
+                for (auto const& item : stock) {
+                    try {
+                        ThemeMenuItem(item);
+                    } catch (...) {
+                    }
+                    MenuFlyoutItemBaseVector_Append_Original(&items, item);
+                }
+            }
+        } catch (...) {
+            Wh_Log(L"Taskbar menu rows before show failed");
+        }
+    }
+    ShowFlyoutAtPointerPosition_Original(flyout, target, args, options);
+}
+
 // The clock's right-click menu (Adjust date and time, Notifications settings)
 // is a MenuFlyout that SystemTray.dll keeps on the clock's Grid. Every tray
 // icon menu, the clock's included, opens through
@@ -90927,6 +91001,23 @@ bool HookTaskbarViewDllSymbols(HMODULE module) {
             },
             &ContextMenus_ShowTaskbarSettingsContextMenu_Original,
             ContextMenus_ShowTaskbarSettingsContextMenu_Hook,
+            true,
+        },
+        {
+            {
+                LR"(void __cdecl winrt::Taskbar::implementation::ContextMenus::ShowTaskbarSettingsContextMenu(struct winrt::Windows::UI::Xaml::FrameworkElement const &,struct winrt::Windows::UI::Xaml::Input::ContextRequestedEventArgs const &,unsigned __int64))",
+            },
+            &ContextMenus_ShowTaskbarSettingsContextMenuNoSettings_Original,
+            ContextMenus_ShowTaskbarSettingsContextMenuNoSettings_Hook,
+            true,
+        },
+        {
+            {
+                LR"(void __cdecl ShowFlyoutAtPointerPosition(struct winrt::Windows::UI::Xaml::Controls::Primitives::FlyoutBase const &,struct winrt::Windows::UI::Xaml::FrameworkElement const &,struct winrt::Windows::UI::Xaml::Input::ContextRequestedEventArgs const &,unsigned __int64))",
+            },
+            &ShowFlyoutAtPointerPosition_Original,
+            ShowFlyoutAtPointerPosition_Hook,
+            true,
         },
         {
             {
@@ -90937,7 +91028,15 @@ bool HookTaskbarViewDllSymbols(HMODULE module) {
         },
     };
 
-    return HookSymbols(module, symbolHooks, ARRAYSIZE(symbolHooks));
+    if (!HookSymbols(module, symbolHooks, ARRAYSIZE(symbolHooks))) {
+        return false;
+    }
+    if (!ContextMenus_ShowTaskbarSettingsContextMenu_Original &&
+        !ContextMenus_ShowTaskbarSettingsContextMenuNoSettings_Original) {
+        Wh_Log(L"Taskbar settings menu not found; Modules menu unavailable");
+        return false;
+    }
+    return true;
 }
 
 void HandleLoadedModuleIfTaskbarView(HMODULE module, bool applyHookOperations) {
