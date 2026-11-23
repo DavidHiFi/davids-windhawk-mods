@@ -208,9 +208,11 @@ switch ($Mode) {
             $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
             $p.DisplayName -like 'Everything*' -and $p.InstallLocation -and ($p.InstallLocation.TrimEnd('\') -eq $dir.TrimEnd('\'))
         } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-        # A deleted file that something still has open lingers until it is let go, so the program can
-        # still be there for a moment after the folder delete "worked". Wait for both to be gone.
+        # The program file is still held for a moment after the service goes, so the first folder
+        # delete leaves it behind, and then Test-Path says the folder is gone while the file is still
+        # there (seen on the test PC twice). So delete the file by itself too, and retry until both go.
         for ($i = 0; $i -lt 10 -and ((Test-Path $dir) -or (Test-Path $exe)); $i++) {
+            try { [IO.File]::Delete($exe) } catch {}
             Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
             if ((Test-Path $dir) -or (Test-Path $exe)) { Start-Sleep 2 }
         }
