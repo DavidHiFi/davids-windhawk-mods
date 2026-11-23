@@ -5448,14 +5448,17 @@
     "hoverColorFrom": "#89b4fa",
     "hoverColorTo": "#cba6f7",
     "hoverDelay": 350,
+    "iconLift": 3,
     "iconSize": 36,
     "position": "auto",
+    "previewSize": 208,
     "previews": 1,
     "recycleBin": 1,
     "reserveSpace": 1,
     "showOpenApps": 1,
-    "showTitle": 0,
+    "showTitle": 1,
     "spacing": 6,
-    "surfaceOpacity": 60
+    "surfaceOpacity": 60,
+    "titleMaxWidth": 720
   }
 }
