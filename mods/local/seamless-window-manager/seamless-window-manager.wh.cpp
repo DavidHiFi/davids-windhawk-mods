@@ -2,7 +2,7 @@
 // @id              seamless-window-manager
 // @name            Seamless Window Manager
 // @description     Move, resize, snap and focus windows with the mouse or keyboard, with app rules, gaps and a pause key
-// @version         2.8.7
+// @version         2.8.8
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -138,6 +138,12 @@ the keys above, the key above wins.
   app no longer flickers. Apps started before tiling was turned on keep the
   stand-in until they restart.
 
+## What's new in 2.8.8
+- Two windows that can't both fit in one column no longer make every tiled
+  window bounce. A window that grows back to its own smallest size is no
+  longer taken for one you resized by hand just because you clicked
+  somewhere in the last two seconds.
+
 ## What's new in 2.8.7
 - The walk keys log less: one line per step, and nothing for a plain Page Up
   or Page Down. 2.8.5 wrote a line for every press of those keys.
@@ -261,6 +267,10 @@ inline std::atomic<HWND> g_trayWnd{nullptr};
 constexpr UINT kTrayUpdateMessage = WM_APP + 46;
 // Last mouse button press or release seen by the helper's low level hook.
 inline std::atomic<ULONGLONG> g_lastMouseButtonTick{0};
+// The last window moved or sized by hand (title bar drag, edge resize or Alt drag), and when.
+// Only that window's change counts as the owner's own; a click anywhere else does not.
+inline std::atomic<HWND> g_handMovedWnd{nullptr};
+inline std::atomic<ULONGLONG> g_handMovedTick{0};
 inline std::atomic<int> g_resizeStepPct{2};
 // Glide length for snaps and tiles; 0 is off. g_animOff > 0 skips it on a thread.
 inline std::atomic<int> g_animMs{180};
@@ -3242,6 +3252,8 @@ bool OnLowLevelButtonDown(const MSLLHOOKSTRUCT* ms, int button) {
            button, (DWORD)(ULONG_PTR)hWnd, (DWORD)(ULONG_PTR)hRootWnd);
 
     g_llRootWnd = hRootWnd;
+    swm::g_handMovedWnd = hRootWnd;
+    swm::g_handMovedTick = GetTickCount64();
     g_llCommand = command;
     g_llButton = button;
     g_llDownPt = pt;
@@ -3422,6 +3434,7 @@ LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
     bool down;
     int button = ButtonOfMessage((UINT)wParam, HIWORD(ms->mouseData), &down);
     if (button) swm::g_lastMouseButtonTick = GetTickCount64();
+    if (button && g_llRootWnd) swm::g_handMovedTick = GetTickCount64();  // The Alt drag's release.
     if (button && !down) {
         if (DWORD tiling = swm::g_tilingNudgeThread) {
             PostThreadMessageW(tiling, swm::kTilingNudgeMessage, 0, 0);
@@ -11257,6 +11270,10 @@ void CheckDesktop(HWND hWnd) {
 
 void HandleEvent(const Event& e) {
     HWND hWnd = e.hWnd;
+    if (e.event == EVENT_SYSTEM_MOVESIZESTART || e.event == EVENT_SYSTEM_MOVESIZEEND) {
+        g_handMovedWnd = hWnd;
+        g_handMovedTick = GetTickCount64();
+    }
     if (e.event == EVENT_SYSTEM_MINIMIZESTART) RememberMinimized(hWnd);
     if (e.event == EVENT_OBJECT_DESTROY || e.event == EVENT_OBJECT_HIDE ||
         e.event == EVENT_SYSTEM_MINIMIZESTART) {
@@ -11640,7 +11657,10 @@ void OnEnforceTimer() {
                 PlaceLeaf(leaf);
                 continue;
             }
-            if (OnWindowMoved(ws, leaf, frame, byMouse)) return;
+            // Moved by the mouse only if this window had the drag: an app that grows back to
+            // its own minimum while the owner clicks in a game must not move its neighbours.
+            bool byHand = byMouse && hWnd == g_handMovedWnd.load() && now - g_handMovedTick < 2000;
+            if (OnWindowMoved(ws, leaf, frame, byHand)) return;
         }
     }
 }
