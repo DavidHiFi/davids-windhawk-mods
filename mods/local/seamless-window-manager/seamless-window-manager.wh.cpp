@@ -2,7 +2,7 @@
 // @id              seamless-window-manager
 // @name            Seamless Window Manager
 // @description     Move, resize, snap and focus windows with the mouse or keyboard, with app rules, gaps and a pause key
-// @version         2.8.5
+// @version         2.8.6
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -137,6 +137,10 @@ the keys above, the key above wins.
   tiling is on, Windows doesn't swap in its pale stand-in window, so a busy
   app no longer flickers. Apps started before tiling was turned on keep the
   stand-in until they restart.
+
+## What's new in 2.8.6
+- Alt+PageDown and Alt+PageUp no longer stop working after a remote desktop
+  window catches the moment you let go of the key.
 
 ## What's new in 2.8.5
 - Alt+PageDown and Alt+PageUp note each step in the mod's log, to track down
@@ -12079,6 +12083,9 @@ std::array<bool, 256> g_swallowedKeys{};
 constexpr int kWalkUpKey = 35;
 std::array<ModeKey, 2> g_walkKeys{};
 DWORD g_walkKeyHeld;
+// When the held walk key last came down. Key repeat keeps it fresh; a press after a gap
+// is a new press, so a release another app ate never leaves the key stuck.
+DWORD g_walkKeyTick;
 
 void UnregisterModeKeys() {
     g_walkKeys = {};
@@ -12301,7 +12308,13 @@ bool OnWalkKey(WPARAM message, const KBDLLHOOKSTRUCT* key) {
         return false;
     }
     if (g_walkKeyHeld && vk == g_walkKeyHeld) {
-        return true;
+        DWORD gap = GetTickCount() - g_walkKeyTick;
+        if (gap < 1100) {  // the longest key repeat delay is 1 s
+            g_walkKeyTick = GetTickCount();
+            return true;
+        }
+        tiling::TLog(L"Walk: key %u was stuck held %u ms, new press", vk, gap);
+        g_walkKeyHeld = 0;
     }
     DWORD held = altSnapDrag::HeldModifiers(GetAsyncKeyState);
     constexpr DWORD kBits[] = {altSnapDrag::kModifierCtrl, altSnapDrag::kModifierAlt,
@@ -12316,6 +12329,7 @@ bool OnWalkKey(WPARAM message, const KBDLLHOOKSTRUCT* key) {
             continue;
         }
         g_walkKeyHeld = vk;
+        g_walkKeyTick = GetTickCount();
         BOOL posted = PostThreadMessageW(GetCurrentThreadId(), WM_HOTKEY,
                                          kModeKeyBase + kWalkUpKey + w, 0);
         tiling::TLog(L"Walk: key %u posted %d", vk, (int)posted);
