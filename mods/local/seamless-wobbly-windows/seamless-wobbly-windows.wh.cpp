@@ -2,7 +2,7 @@
 // @id              seamless-wobbly-windows
 // @name            Seamless Wobbly Windows
 // @description     Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows
-// @version         1.2.10
+// @version         1.2.11
 // @author          DavidHiFi, HeyJeay, HaVeN80, lalimatyus
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -88,6 +88,12 @@ title bar to move a window without the wobble.
 - Nothing is loaded into dwm.exe. The effect runs inside each app.
 - Turn off the other wobble mods (Wobbly Windows, Window Wobble) before using
   this one.
+
+## What's new in 1.2.11
+- Frosted windows now keep their frosted glass while you drag them, by
+  the title bar or with Alt. Windows could report a window as solid the
+  moment it was clicked, so the mod now remembers the glass the app asked
+  for when the window was made.
 
 ## What's new in 1.2.10
 - The dragged window's frosted glass no longer turns solid dark during a
@@ -5613,6 +5619,26 @@ static void RestoreCorners(HWND hwnd, const HideState& st) {
     DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
 }
 
+// The system backdrop each window's app last asked for, kept on the window.
+// Windows can report it as 0 once the window is clicked (seen live on the
+// owner's PC, 1.2.9 and 1.2.10), so the read alone is not enough.
+static ATOM g_backdropAtom = 0;
+static std::atomic<DWORD> g_ownBackdropThread{0};   // the thread doing our own drop
+
+static void RememberBackdrop(HWND hwnd, DWORD type) {
+    if (!g_backdropAtom || !hwnd || g_ownBackdropThread.load() == GetCurrentThreadId()) return;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != GetCurrentProcessId()) return;
+    SetPropW(hwnd, MAKEINTATOM(g_backdropAtom), (HANDLE)(ULONG_PTR)(type + 1));
+}
+
+static int RememberedBackdrop(HWND hwnd) {
+    if (!g_backdropAtom) return -1;
+    const ULONG_PTR v = (ULONG_PTR)GetPropW(hwnd, MAKEINTATOM(g_backdropAtom));
+    return v ? (int)(v - 1) : -1;
+}
+
 // A cloaked window's own system backdrop can land in the live blur's backdrop
 // as black. With the live blur on, switch that backdrop off for the drag and
 // put it back after.
@@ -5620,10 +5646,15 @@ static bool HideWindowInPlace(HWND hwnd, HideState& st, bool dropBackdrop = fals
     SaveCorners(hwnd, st);
     if (dropBackdrop) {
         DWORD type = 0;
-        if (SUCCEEDED(DwmGetWindowAttribute(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/, &type, sizeof(type))) &&
-            type > 1) {
+        if (FAILED(DwmGetWindowAttribute(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/, &type, sizeof(type))))
+            type = 0;
+        if (RememberedBackdrop(hwnd) >= 0) type = (DWORD)RememberedBackdrop(hwnd);
+        if (type > 1) {
             DWORD none = 1;
-            if (SUCCEEDED(DwmSetWindowAttribute(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/, &none, sizeof(none)))) {
+            g_ownBackdropThread.store(GetCurrentThreadId());
+            const HRESULT hr = DwmSetWindowAttribute(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/, &none, sizeof(none));
+            g_ownBackdropThread.store(0);
+            if (SUCCEEDED(hr)) {
                 st.dropped  = true;
                 st.backdrop = type;
             }
@@ -5764,8 +5795,12 @@ static void ClearGlowProp() {
 // tools like Translucent Windows set.
 static float GlowSeeThrough(HWND hwnd) {
     int backdrop = 0;
-    if (SUCCEEDED(DwmGetWindowAttribute(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/,
-                                        &backdrop, sizeof(backdrop))) && backdrop == 3)
+    if (FAILED(DwmGetWindowAttribute(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/,
+                                     &backdrop, sizeof(backdrop))))
+        backdrop = 0;
+    // Only the window's own app can set it, so what it asked for wins.
+    if (RememberedBackdrop(hwnd) >= 0) backdrop = RememberedBackdrop(hwnd);
+    if (backdrop == 3)
         return 0.28f;    // the acrylic's tint lets through about 28% (measured live)
     struct Accent { int state, flags; DWORD color; int anim; };
     struct Data { DWORD attr; PVOID data; ULONG size; };
@@ -6794,6 +6829,16 @@ static LRESULT WINAPI DefWindowProcA_hook(HWND hWnd, UINT msg, WPARAM wp, LPARAM
     return DefWindowProcA_orig(hWnd, msg, wp, lp);
 }
 
+using DwmSetWindowAttribute_t = HRESULT(WINAPI*)(HWND, DWORD, LPCVOID, DWORD);
+static DwmSetWindowAttribute_t DwmSetWindowAttribute_orig;
+
+static HRESULT WINAPI DwmSetWindowAttribute_hook(HWND hwnd, DWORD attr, LPCVOID value, DWORD size) {
+    const HRESULT hr = DwmSetWindowAttribute_orig(hwnd, attr, value, size);
+    if (attr == 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/ && SUCCEEDED(hr) && value && size >= sizeof(DWORD))
+        RememberBackdrop(hwnd, *(const DWORD*)value);
+    return hr;
+}
+
 // -----------------------------------------------------------------------------
 // Entry points
 // -----------------------------------------------------------------------------
@@ -6919,7 +6964,13 @@ static BOOL WobbleInit() {
     const BOOL a  = WindhawkUtils::SetFunctionHook(DefWindowProcA, DefWindowProcA_hook, &DefWindowProcA_orig);
     const BOOL dw = WindhawkUtils::SetFunctionHook(DispatchMessageW, DispatchMessageW_hook, &DispatchMessageW_orig);
     const BOOL da = WindhawkUtils::SetFunctionHook(DispatchMessageA, DispatchMessageA_hook, &DispatchMessageA_orig);
-    Wh_Log(L"init: hooks defW=%d defA=%d dispW=%d dispA=%d", w, a, dw, da);
+    g_backdropAtom = GlobalAddAtomW(L"SeamlessWobblyBackdrop");
+    BOOL bd = FALSE;
+    if (HMODULE dwm = LoadLibraryW(L"dwmapi.dll"))
+        if (auto f = (DwmSetWindowAttribute_t)(void*)GetProcAddress(dwm, "DwmSetWindowAttribute"))
+            bd = Wh_SetFunctionHook((void*)f, (void*)DwmSetWindowAttribute_hook,
+                                    (void**)&DwmSetWindowAttribute_orig);
+    Wh_Log(L"init: hooks defW=%d defA=%d dispW=%d dispA=%d backdrop=%d", w, a, dw, da, bd);
     return TRUE;
 }
 
