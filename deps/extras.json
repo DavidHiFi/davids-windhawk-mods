@@ -32,6 +32,16 @@
       "mods": ["logitech-battery-tray"]
     },
     {
+      "id": "seamless-download-core",
+      "name": "Seamless download engine",
+      "kind": "dep",
+      "script": "deps/seamless-download-core.ps1",
+      "why": "The download manager does its downloading with it. Small, runs inside the mod, no admin rights.",
+      "admin": false,
+      "auto": true,
+      "mods": ["local@seamless-download-manager"]
+    },
+    {
       "id": "mocha-steam",
       "name": "Mocha Steam",
       "kind": "app",
