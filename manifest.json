@@ -1,11 +1,11 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-24T01:25:22+08:00",
+  "generatedAt": "2026-11-24T01:27:07+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 171,
-    "enabled": 167,
+    "enabled": 166,
     "local": 60
   },
   "mods": [
@@ -1497,7 +1497,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-workshop/seamless-workshop.wh.cpp",
-      "enabled": true,
+      "enabled": false,
       "category": "Tools"
     },
     {

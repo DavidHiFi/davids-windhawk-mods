@@ -25,7 +25,7 @@
         "buttons.showDialogClose": 1,
         "colours.activeColor": "#1E1E2E",
         "colours.enabled": 1,
-        "colours.excludedApps": "Discord*.exe, ESDDiscord.exe, FreeDictate.exe, chrome.exe, WindowsTerminal.exe, devenv.exe, windhawk-ui.exe",
+        "colours.excludedApps": "Discord*.exe, ESDDiscord.exe, FreeDictate.exe, chrome.exe, WindowsTerminal.exe, devenv.exe, windhawk-ui.exe, Hydra.exe",
         "colours.inactiveColor": "#1E1E2E",
         "colours.useImmersiveDarkMode": 1,
         "debugLog": 0,

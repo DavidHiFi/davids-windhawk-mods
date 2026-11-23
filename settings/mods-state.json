@@ -1274,7 +1274,7 @@
     "version": "1.2"
   },
   "local@seamless-workshop": {
-    "disabled": false,
+    "disabled": true,
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
