@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.5.0
+// @version         1.5.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -35,6 +35,11 @@ Needs the latest Windhawk alpha.
 - Use DavidHiFi's settings for one mod, or copy his whole setup in one go:
   every mod he runs, with or without his settings, on a clean slate if you
   like. Your current mods are backed up first, so you can always go back.
+
+## What's new in 1.5.1
+
+- Updates now really go in by themselves. In 1.5.0 they only showed on the
+  Updates page and waited for a click.
 
 ## What's new in 1.5.0
 
@@ -155,7 +160,7 @@ DavidHiFi's settings, any setting like that keeps your own value.
 extern "C" IMAGE_DOS_HEADER __ImageBase;
 
 #ifndef HUB_MOD
-#define WH_MOD_VERSION L"1.5.0"
+#define WH_MOD_VERSION L"1.5.1"
 #define Wh_Log(...) ((void)0)
 #endif
 constexpr WCHAR kHubSelfId[] = L"local@seamless-workshop";  // How Windhawk lists this mod.
@@ -5563,7 +5568,13 @@ static std::vector<HubFeedMod> g_feedLib;
 static ULONGLONG g_fullArmed = 0;
 constexpr WCHAR kHubFeedUrl[] = L"https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/main/feed.json";
 constexpr UINT_PTR kHubFeedTimer = 0x4857;
-constexpr UINT_PTR kHubAutoTimer = 0x4858;  // A few seconds after a check: put in what is new.
+constexpr UINT_PTR kHubAutoTimer = 0x4859;  // A few seconds after a check: put in what is new.
+// 1.5.0 gave the auto timer the sync timer's id, so WM_TIMER ran the sync and no round ever ran.
+static_assert(kHubAutoTimer != kHubSyncTimer && kHubAutoTimer != kHubFeedTimer && kHubAutoTimer != kHubArmTimer &&
+                  kHubAutoTimer != 0x4856 && kHubFeedTimer != kHubSyncTimer && kHubFeedTimer != kHubArmTimer &&
+                  kHubFeedTimer != 0x4856 && kHubSyncTimer != kHubArmTimer && kHubSyncTimer != 0x4856 &&
+                  kHubArmTimer != 0x4856,
+              "every hub window timer needs its own id");
 static std::thread g_feedThread;
 static std::atomic<bool> g_feedBusy = false;
 static std::string g_feedRaw;
