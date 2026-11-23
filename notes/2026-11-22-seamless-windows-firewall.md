@@ -170,7 +170,7 @@ waits until answered (the app stays blocked meanwhile, as with Windows).
 
 - 1.2.2 result (11-24): test PC 30 of 30 (1:58 am). Installed 2:00 am over 1.2.1, registry 1.2.2,
   desktop fine after the 60 s watch, mod pushed ecce141, feed 2ad4a0f. Live captures 2:16 am
-  (`media\live.2.2\`): none of our windows visible on any screen at rest, the tray opens the
+  (`media\live\1.2.2\`): none of our windows visible on any screen at rest, the tray opens the
   panel dead centre on the main screen (0,0 off), a second tray click closes it, the connection
   box came up in 1.3 s centred, alpha 255, the app in front kept the keyboard, Esc saved Block and
   the test rule was removed. Clips: panel-from-tray and connection-box-motion (mp4 and gif).
