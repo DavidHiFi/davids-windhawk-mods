@@ -1147,6 +1147,17 @@
       }
     },
     {
+      "id": "rdp-icon-refresh",
+      "name": "Sharp Taskbar Icons After Remote Desktop",
+      "version": "1.0",
+      "enabled": true,
+      "settings": {
+        "delaySeconds": 3,
+        "logToFile": 0,
+        "refreshOnLoad": 1
+      }
+    },
+    {
       "id": "remap-copilot-key",
       "name": "Remap Copilot Key",
       "version": "2.0",
