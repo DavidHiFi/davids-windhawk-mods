@@ -1201,7 +1201,7 @@
     "include": "windhawk-mod.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.3.0"
+    "version": "1.3.2"
   },
   "local@seamless-crosshair": {
     "disabled": false,
