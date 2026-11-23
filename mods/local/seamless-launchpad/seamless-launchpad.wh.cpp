@@ -6,7 +6,7 @@
 // @id              seamless-launchpad
 // @name            Seamless Launchpad
 // @description     A fullscreen GPU rendered grid of all your apps in place of Start, with instant search, adjustable blur, wiggle edit mode and power buttons
-// @version         2.7.1
+// @version         2.7.2
 // @author          DavidHiFi, Rafael Mendes
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -6325,8 +6325,16 @@ static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it, int idx)
     p.GradFill(row, 10, 0.13f * hov);
     p.GradRing(row, 10, hov, 1.5f);
     D2D1_RECT_F mark{row.left + 20, row.top + 20, row.left + 92, row.top + 92};
-    p.GradFill(mark, 18, 1);
-    p.Glyph(w.fIconL.get(), 0xE80A, mark, mocha::crust);
+    {  // The glyph alone in the gradient, no plate (owner, 2026-11-24).
+        D2D1_MATRIX_3X2_F old;
+        p.rt->GetTransform(&old);
+        const D2D1_POINT_2F mc{(mark.left + mark.right) / 2, (mark.top + mark.bottom) / 2};
+        p.rt->SetTransform(D2D1::Matrix3x2F::Scale(1.75f, 1.75f, mc) * old);
+        const WCHAR glyph = 0xE80A;
+        auto br = p.G({mc.x - 19, mc.y - 19, mc.x + 19, mc.y + 19});
+        if (br) p.rt->DrawText(&glyph, 1, w.fIconL.get(), mark, br.get());
+        p.rt->SetTransform(old);
+    }
     float x = mark.right + 20;
     p.Text(w.fBig.get(), L"Seamless Launchpad", {x, row.top + 18, row.right - 16, row.top + 46}, mocha::text);
 #ifdef WH_MOD_VERSION
@@ -6531,16 +6539,24 @@ static D2D1_RECT_F Set_CapTitleRect(const SetWindow& w) {
 }
 
 static void Set_DrawMark(SetPaint& p, IDWriteTextFormat* glyph, const D2D1_RECT_F& r, float a) {
-    float s = r.right - r.left;
+    // The mod's glyph alone in the blue to mauve gradient on a clear background, no plate
+    // (owner, 2026-11-24), scaled up about its centre to fill the room the plate had.
+    const float cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    const float ix = (r.right - r.left) * 0.31f, iy = (r.bottom - r.top) * 0.31f;
     SetCom<ID2D1LinearGradientBrush> g;
     D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::blue, a * p.fade)}, {1, D2DColor(mocha::mauve, a * p.fade)}};
     SetCom<ID2D1GradientStopCollection> coll;
-    if (SUCCEEDED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
-        SUCCEEDED(p.rt->CreateLinearGradientBrush(
-            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.right, r.bottom)),
+    if (FAILED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) ||
+        FAILED(p.rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(cx - ix, cy - iy), D2D1::Point2F(cx + ix, cy + iy)),
             coll.get(), g.put())))
-        p.rt->FillRoundedRectangle(D2D1::RoundedRect(r, s * 0.24f, s * 0.24f), g.get());
-    p.Glyph(glyph, 0xE80A, r, mocha::crust);
+        return;
+    D2D1_MATRIX_3X2_F old;
+    p.rt->GetTransform(&old);
+    p.rt->SetTransform(D2D1::Matrix3x2F::Scale(1.4f, 1.4f, D2D1::Point2F(cx, cy)) * old);
+    const WCHAR mark = 0xE80A;
+    p.rt->DrawText(&mark, 1, glyph, r, g.get());
+    p.rt->SetTransform(old);
 }
 
 static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
@@ -9477,11 +9493,7 @@ static HICON MakeTrayIcon(int size) {
     ReleaseDC(nullptr, dc);
     if (!color) return nullptr;
     auto px = (UINT32*)bits;
-    const float n = (float)size, rad = n * 0.26f, ss = 4;
-    auto inRound = [&](float x, float y) {
-        float cx = std::clamp(x, rad, n - rad), cy = std::clamp(y, rad, n - rad);
-        return (x - cx) * (x - cx) + (y - cy) * (y - cy) <= rad * rad;
-    };
+    const float n = (float)size, ss = 4, zoom = 1 / 1.55f;  // The dots alone, scaled up about the centre to fill the room the plate had.
     auto inDot = [&](float x, float y) {
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < 3; j++) {
@@ -9492,18 +9504,16 @@ static HICON MakeTrayIcon(int size) {
     };
     for (int y = 0; y < size; y++)
         for (int x = 0; x < size; x++) {
-            float cover = 0, dot = 0;
+            float cover = 0;
             for (int sy = 0; sy < ss; sy++)
                 for (int sx = 0; sx < ss; sx++) {
                     float fx = x + (sx + 0.5f) / ss, fy = y + (sy + 0.5f) / ss;
-                    if (inRound(fx, fy)) { cover++; if (inDot(fx, fy)) dot++; }
+                    if (inDot(n * 0.5f + (fx - n * 0.5f) * zoom, n * 0.5f + (fy - n * 0.5f) * zoom)) cover++;
                 }
-            cover /= ss * ss; dot /= ss * ss;
+            cover /= ss * ss;
             float t = std::clamp((x + y) / (2.0f * n), 0.0f, 1.0f);
-            // 0x89B4FA to 0xCBA6F7, with the dots in crust (0x11111B).
+            // The dots in 0x89B4FA to 0xCBA6F7 on a clear background.
             float r = (0x89 + (0xCB - 0x89) * t), g = (0xB4 + (0xA6 - 0xB4) * t), b = (0xFA + (0xF7 - 0xFA) * t);
-            float k = cover > 0 ? dot / cover : 0;
-            r = r * (1 - k) + 0x11 * k; g = g * (1 - k) + 0x11 * k; b = b * (1 - k) + 0x1B * k;
             BYTE a = (BYTE)(cover * 255 + 0.5f);
             px[y * size + x] = ((UINT32)a << 24) | ((UINT32)(r * cover) << 16) | ((UINT32)(g * cover) << 8) | (UINT32)(b * cover);
         }
