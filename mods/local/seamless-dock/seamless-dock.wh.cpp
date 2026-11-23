@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.6
+// @version         0.3.7
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -27,10 +27,15 @@ side and a dock on the other, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
 
+## What's new in 0.3.7
+
+- The title pill stays on top when you click or right-click the taskbar, even
+  on the first click. A small helper of its own keeps it there, so a busy dock
+  can no longer let it slip under the bar for a frame.
+
 ## What's new in 0.3.6
 
-- The title pill no longer blinks for a moment when you click or right-click
-  the taskbar. 0.3.5 shortened the blink; this removes it.
+- The title pill blinks far less when you click or right-click the taskbar.
 
 ## What's new in 0.3.5
 
@@ -2525,8 +2530,11 @@ HWND g_title = nullptr, g_titleWin = nullptr;
 ComPtr<ID2D1DCRenderTarget> g_titleRt;
 ComPtr<ID2D1GradientStopCollection> g_titleStops;
 // After a click on the bar, the bar lifts itself a moment after it turns active,
-// so one raise on the event lands too early. Re-check every 2 ms for a short burst.
-HANDLE g_raiseTimer = nullptr;
+// so one raise on the event lands too early, and the dock thread may be busy
+// rebuilding right then. A small thread of its own re-checks every 2 ms for a
+// short burst. It only reorders the pill; everything else stays on the dock thread.
+HANDLE g_raiseTimer = nullptr, g_zThread = nullptr, g_zReady = nullptr;
+DWORD g_zThreadId = 0;
 ULONGLONG g_raiseUntil = 0;
 std::wstring g_titleKey, g_titleApp, g_titleSrc, g_titleAlt;
 // What the pill shows now, so a hover fade can paint it again, and where it sits.
@@ -2616,31 +2624,94 @@ void RaiseTitle() {
     for (HWND w = GetWindow(g_title, GW_HWNDPREV); w; w = GetWindow(w, GW_HWNDPREV))
         if (w == tray) {
             HWND above = GetWindow(tray, GW_HWNDPREV);
+            // NOSENDCHANGING: from the guard thread the reorder must not wait on
+            // a busy dock thread to answer WM_WINDOWPOSCHANGING first.
             SetWindowPos(g_title, above ? above : HWND_TOPMOST, 0, 0, 0, 0,
-                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER |
+                             SWP_NOSENDCHANGING);
             break;
         }
 }
 
+// Guard thread only from here to ZGuardThread.
 void StopRaiseBurst() {
     if (g_raiseTimer) CancelWaitableTimer(g_raiseTimer);
     g_raiseUntil = 0;
 }
 
 void StartRaiseBurst() {
-    if (!g_title || !IsWindowVisible(g_title)) return;
-    if (!g_raiseTimer) {
-        // 0x2 = CREATE_WAITABLE_TIMER_HIGH_RESOLUTION; older systems refuse it.
-        g_raiseTimer = CreateWaitableTimerExW(nullptr, nullptr, 0x2, TIMER_ALL_ACCESS);
-        if (!g_raiseTimer) g_raiseTimer = CreateWaitableTimerExW(nullptr, nullptr, 0, TIMER_ALL_ACCESS);
-        if (!g_raiseTimer) return;
-    }
+    if (!g_title || !g_raiseTimer || !IsWindowVisible(g_title)) return;
     bool running = g_raiseUntil != 0;
     g_raiseUntil = GetTickCount64() + 500;
     if (running) return;
     LARGE_INTEGER due;
     due.QuadPart = -20000;  // 2 ms, then every 2 ms
     SetWaitableTimer(g_raiseTimer, &due, 2, nullptr, nullptr, FALSE);
+}
+
+void CALLBACK ZEventProc(HWINEVENTHOOK, DWORD, HWND h, LONG idObj, LONG idChild, DWORD, DWORD) {
+    if (idObj != OBJID_WINDOW || idChild != CHILDID_SELF || !h) return;
+    RaiseTitle();
+    StartRaiseBurst();
+}
+
+DWORD WINAPI ZGuardThread(void*) {
+    MSG m;
+    PeekMessageW(&m, nullptr, 0, 0, PM_NOREMOVE);  // make the queue before saying ready
+    // 0x2 = CREATE_WAITABLE_TIMER_HIGH_RESOLUTION; older systems refuse it.
+    g_raiseTimer = CreateWaitableTimerExW(nullptr, nullptr, 0x2, TIMER_ALL_ACCESS);
+    if (!g_raiseTimer) g_raiseTimer = CreateWaitableTimerExW(nullptr, nullptr, 0, TIMER_ALL_ACCESS);
+    HWINEVENTHOOK hooks[2] = {
+        SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, ZEventProc, 0, 0,
+                        WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS),
+        SetWinEventHook(EVENT_SYSTEM_CAPTURESTART, EVENT_SYSTEM_CAPTURESTART, nullptr, ZEventProc,
+                        0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS)};
+    SetEvent(g_zReady);
+    for (bool quit = false; !quit;) {
+        if (g_raiseUntil && g_raiseTimer) {
+            DWORD r = MsgWaitForMultipleObjectsEx(1, &g_raiseTimer, INFINITE, QS_ALLINPUT,
+                                                  MWMO_INPUTAVAILABLE);
+            if (r == WAIT_OBJECT_0) {
+                RaiseTitle();
+                if (GetTickCount64() >= g_raiseUntil) StopRaiseBurst();
+                continue;
+            }
+            while (PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) {
+                if (m.message == WM_QUIT) { quit = true; break; }
+                DispatchMessageW(&m);
+            }
+            continue;
+        }
+        if (GetMessageW(&m, nullptr, 0, 0) <= 0) break;
+        DispatchMessageW(&m);
+    }
+    for (HWINEVENTHOOK h : hooks)
+        if (h) UnhookWinEvent(h);
+    StopRaiseBurst();
+    if (g_raiseTimer) {
+        CloseHandle(g_raiseTimer);
+        g_raiseTimer = nullptr;
+    }
+    return 0;
+}
+
+void StartZGuard() {
+    g_zReady = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    g_zThread = CreateThread(nullptr, 0, ZGuardThread, nullptr, 0, &g_zThreadId);
+    if (g_zThread) WaitForSingleObject(g_zReady, 2000);
+}
+
+void StopZGuard() {
+    if (g_zThread) {
+        PostThreadMessageW(g_zThreadId, WM_QUIT, 0, 0);
+        WaitForSingleObject(g_zThread, 3000);
+        CloseHandle(g_zThread);
+        g_zThread = nullptr;
+    }
+    if (g_zReady) {
+        CloseHandle(g_zReady);
+        g_zReady = nullptr;
+    }
 }
 
 bool PaintTitle(const std::wstring& app, const std::wstring& title, Icon* ic, const RECT& bar) {
@@ -2853,8 +2924,6 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD ev, HWND h, LONG idObj, LONG idC
     // the pill. Climb back at once, not after the rebuild's wait, or the pill
     // blinks under the bar's glass for a moment.
     if (ev == EVENT_SYSTEM_FOREGROUND || ev == EVENT_OBJECT_SHOW) RaiseTitle();
-    if (ev == EVENT_SYSTEM_FOREGROUND || ev == EVENT_SYSTEM_CAPTURESTART) StartRaiseBurst();
-    if (ev == EVENT_SYSTEM_CAPTURESTART || ev == EVENT_SYSTEM_CAPTUREEND) return;
     if (ev == EVENT_SYSTEM_FOREGROUND) {
         ScheduleRebuild(30);
         CheckFullscreen();
@@ -3320,7 +3389,6 @@ DWORD WINAPI DockThread(void*) {
     ChangeWindowMessageFilterEx(g_dock, kAppBarMsg, MSGFLT_ALLOW, nullptr);
     RegisterShellHookWindow(g_dock);
     const DWORD ranges[][2] = {{EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND},
-                               {EVENT_SYSTEM_CAPTURESTART, EVENT_SYSTEM_CAPTUREEND},
                                {EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND},
                                {EVENT_OBJECT_SHOW, EVENT_OBJECT_HIDE},
                                {EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED}};
@@ -3338,32 +3406,13 @@ DWORD WINAPI DockThread(void*) {
     SetTimer(g_dock, kTimerFull, 1000, nullptr);
     SetEvent(g_ready);
 
+    StartZGuard();
     MSG m;
-    for (bool quit = false; !quit;) {
-        if (g_raiseUntil && g_raiseTimer) {
-            DWORD r = MsgWaitForMultipleObjectsEx(1, &g_raiseTimer, INFINITE, QS_ALLINPUT,
-                                                  MWMO_INPUTAVAILABLE);
-            if (r == WAIT_OBJECT_0) {
-                RaiseTitle();
-                if (GetTickCount64() >= g_raiseUntil) StopRaiseBurst();
-                continue;
-            }
-            while (PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) {
-                if (m.message == WM_QUIT) { quit = true; break; }
-                TranslateMessage(&m);
-                DispatchMessageW(&m);
-            }
-            continue;
-        }
-        if (GetMessageW(&m, nullptr, 0, 0) <= 0) break;
+    while (GetMessageW(&m, nullptr, 0, 0) > 0) {
         TranslateMessage(&m);
         DispatchMessageW(&m);
     }
-    StopRaiseBurst();
-    if (g_raiseTimer) {
-        CloseHandle(g_raiseTimer);
-        g_raiseTimer = nullptr;
-    }
+    StopZGuard();
 
     // A bin check still running posts to a window that is gone; wait for it briefly.
     if (g_recycleThread) {
