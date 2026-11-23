@@ -208,9 +208,11 @@ switch ($Mode) {
             $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
             $p.DisplayName -like 'Everything*' -and $p.InstallLocation -and ($p.InstallLocation.TrimEnd('\') -eq $dir.TrimEnd('\'))
         } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-        for ($i = 0; $i -lt 5 -and (Test-Path $dir); $i++) {
+        # A deleted file that something still has open lingers until it is let go, so the program can
+        # still be there for a moment after the folder delete "worked". Wait for both to be gone.
+        for ($i = 0; $i -lt 10 -and ((Test-Path $dir) -or (Test-Path $exe)); $i++) {
             Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
-            if (Test-Path $dir) { Start-Sleep 2 }
+            if ((Test-Path $dir) -or (Test-Path $exe)) { Start-Sleep 2 }
         }
         if (Test-Path $exe) { Done $false 'Everything could not be removed. Close it and try again.' }
         Done $true 'Everything is removed. Your search settings were kept.'
