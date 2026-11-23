@@ -2,7 +2,7 @@
 // @id              seamless-color-picker
 // @name            Seamless Color Picker
 // @description     A full color picker on a hotkey, with a screen magnifier, recent colors and one-click copy
-// @version         1.1.15
+// @version         1.1.16
 // @author          DavidHiFi, Jaex, ShareX contributors
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1897,8 +1897,16 @@ static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it, int idx)
     p.GradFill(row, 10, 0.13f * hov);
     p.GradRing(row, 10, hov, 1.5f);
     D2D1_RECT_F mark{row.left + 20, row.top + 20, row.left + 92, row.top + 92};
-    p.GradFill(mark, 18, 1);
-    p.Glyph(w.fIconL.get(), 0xEF3C, mark, mocha::crust);
+    {  // The glyph alone in the gradient, no plate (owner, 2026-11-24).
+        D2D1_MATRIX_3X2_F old;
+        p.rt->GetTransform(&old);
+        const D2D1_POINT_2F mc{(mark.left + mark.right) / 2, (mark.top + mark.bottom) / 2};
+        p.rt->SetTransform(D2D1::Matrix3x2F::Scale(1.75f, 1.75f, mc) * old);
+        const WCHAR glyph = 0xEF3C;
+        auto br = p.G({mc.x - 19, mc.y - 19, mc.x + 19, mc.y + 19});
+        if (br) p.rt->DrawText(&glyph, 1, w.fIconL.get(), mark, br.get());
+        p.rt->SetTransform(old);
+    }
     float x = mark.right + 20;
     p.Text(w.fBig.get(), L"Seamless Color Picker", {x, row.top + 18, row.right - 16, row.top + 46}, mocha::text);
 #ifdef WH_MOD_VERSION
@@ -2100,16 +2108,24 @@ static D2D1_RECT_F Set_CapTitleRect(const SetWindow& w) {
 }
 
 static void Set_DrawMark(SetPaint& p, IDWriteTextFormat* glyph, const D2D1_RECT_F& r, float a) {
-    float s = r.right - r.left;
+    // The mod's glyph alone in the blue to mauve gradient on a clear background, no plate
+    // (owner, 2026-11-24), scaled up about its centre to fill the room the plate had.
+    const float cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    const float ix = (r.right - r.left) * 0.31f, iy = (r.bottom - r.top) * 0.31f;
     SetCom<ID2D1LinearGradientBrush> g;
     D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::blue, a * p.fade)}, {1, D2DColor(mocha::mauve, a * p.fade)}};
     SetCom<ID2D1GradientStopCollection> coll;
-    if (SUCCEEDED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
-        SUCCEEDED(p.rt->CreateLinearGradientBrush(
-            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.right, r.bottom)),
+    if (FAILED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) ||
+        FAILED(p.rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(cx - ix, cy - iy), D2D1::Point2F(cx + ix, cy + iy)),
             coll.get(), g.put())))
-        p.rt->FillRoundedRectangle(D2D1::RoundedRect(r, s * 0.24f, s * 0.24f), g.get());
-    p.Glyph(glyph, 0xEF3C, r, mocha::crust);
+        return;
+    D2D1_MATRIX_3X2_F old;
+    p.rt->GetTransform(&old);
+    p.rt->SetTransform(D2D1::Matrix3x2F::Scale(1.4f, 1.4f, D2D1::Point2F(cx, cy)) * old);
+    const WCHAR mark = 0xEF3C;
+    p.rt->DrawText(&mark, 1, glyph, r, g.get());
+    p.rt->SetTransform(old);
 }
 
 static void Set_DrawCaption(SetPaint& p, SetWindow& w) {

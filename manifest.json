@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-24T06:32:53+08:00",
+  "generatedAt": "2026-11-24T06:44:39+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 172,
@@ -1233,7 +1233,7 @@
       "name": "Seamless Color Picker",
       "author": "DavidHiFi, Jaex, ShareX contributors",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.1.15",
+      "version": "1.1.16",
       "license": "",
       "origin": "local",
       "upstream": "",
