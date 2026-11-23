@@ -2,7 +2,7 @@
 // @id              seamless-windows-firewall
 // @name            Seamless Windows Firewall
 // @description     Block or allow any app's internet in one click, from the tray, a shortcut or a small edge pill
-// @version         1.2.0
+// @version         1.2.1
 // @author          DavidHiFi, Ashix
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -64,6 +64,10 @@ Change or clear any of them in the settings.
 - The Blocked list has a second view, Blocked by Windows Firewall, that shows
   the apps your own firewall rules block. Change those in Windows Defender
   Firewall.
+
+## What's new in 1.2.1
+- The connection box now shows straight away on a busy PC. Before, it could stay
+  invisible, and the panel could stall while opening.
 
 ## What's new in 1.2.0
 - The Windows Firewall pop-up ("allow this app?") is replaced by the mod's own
@@ -373,6 +377,14 @@ constexpr UINT_PTR TIMER_DEBOUNCE_REFRESH = 6;
 constexpr UINT_PTR TIMER_WIDGET_PROXIMITY = 86;
 constexpr UINT_PTR TIMER_OUTSIDE_CLICK    = 87;
 constexpr UINT_PTR TIMER_LATE_CHILD_POLL  = 88;
+constexpr UINT_PTR TIMER_EVENT_FLUSH      = 91;
+
+// Windows open and close all the time on a busy PC (consoles, tooltips, menus). One posted
+// message per event kept this thread's queue full, and Windows only hands out timer ticks
+// when the queue is empty, so the panel animation and the connection box's fade-in never
+// ran. The hook now only marks what changed and one short timer handles it. The hook runs
+// on this thread, so plain flags are enough.
+static bool g_evFgDirty = false, g_evAppsDirty = false, g_evFlushArmed = false;
 
 constexpr int HK_TOGGLE_FG   = 1;
 constexpr int HK_EXPAND_PILL = 2;
@@ -4097,9 +4109,19 @@ static void ListenPump(bool fullscreen) {
     if (g_hListenBox) {
         if (!IsWindow(g_hListenBox) || (g_listenBoxState && g_listenBoxState->done)) return;
         bool vis = IsWindowVisible(g_hListenBox) != FALSE;
+        // Never leave the box see-through if its fade tick was held up.
+        if (vis && g_listenBoxState && GetTickCount() - g_listenBoxState->openTick > 300) {
+            BYTE a = 0;
+            DWORD fl = 0;
+            if (GetLayeredWindowAttributes(g_hListenBox, nullptr, &a, &fl) && a < 255) {
+                KillTimer(g_hListenBox, TIMER_CONFIRM_FADE);
+                SetLayeredWindowAttributes(g_hListenBox, 0, 255, LWA_ALPHA);
+            }
+        }
         if (fullscreen && vis) {
             ShowWindow(g_hListenBox, SW_HIDE);
         } else if (!fullscreen && !vis) {
+            SetLayeredWindowAttributes(g_hListenBox, 0, 255, LWA_ALPHA);
             SetWindowPos(g_hListenBox, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             ShowWindow(g_hListenBox, SW_SHOWNOACTIVATE);
         }
@@ -7779,6 +7801,13 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 }
             } else if (wParam == TIMER_LATE_CHILD_POLL) {
                 SyncLateChildBlocks();
+            } else if (wParam == TIMER_EVENT_FLUSH) {
+                KillTimer(hwnd, TIMER_EVENT_FLUSH);
+                g_evFlushArmed = false;
+                bool fg = g_evFgDirty, apps = g_evAppsDirty;
+                g_evFgDirty = g_evAppsDirty = false;
+                if (fg) SendMessageW(hwnd, WM_APP_FOREGROUND_CHG, 0, 0);
+                if (apps) SendMessageW(hwnd, WM_APP_REFRESH_APPS, 0, 0);
             } else if (wParam == TIMER_DEBOUNCE_REFRESH) {
                 KillTimer(hwnd, TIMER_DEBOUNCE_REFRESH);
                 SyncLateChildBlocks();
@@ -8134,10 +8163,15 @@ static void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG id
     if (event == EVENT_SYSTEM_FOREGROUND || event == EVENT_SYSTEM_SWITCHEND || event == EVENT_SYSTEM_MINIMIZEEND) {
         PostMessageW(g_hWnd, WM_APP_FOREGROUND_CHG, 0, 0);
     } else if (event == EVENT_OBJECT_DESTROY && idObject == OBJID_WINDOW) {
-        PostMessageW(g_hWnd, WM_APP_FOREGROUND_CHG, 0, 0);
-        PostMessageW(g_hWnd, WM_APP_REFRESH_APPS, 0, 0);
+        g_evFgDirty = g_evAppsDirty = true;
     } else if (event == EVENT_OBJECT_CREATE && idObject == OBJID_WINDOW) {
-        PostMessageW(g_hWnd, WM_APP_REFRESH_APPS, 0, 0);
+        g_evAppsDirty = true;
+    } else {
+        return;
+    }
+    if (!g_evFlushArmed) {
+        g_evFlushArmed = true;
+        SetTimer(g_hWnd, TIMER_EVENT_FLUSH, 60, nullptr);
     }
 }
 
