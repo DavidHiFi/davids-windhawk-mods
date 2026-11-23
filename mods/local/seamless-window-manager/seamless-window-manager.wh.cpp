@@ -2,7 +2,7 @@
 // @id              seamless-window-manager
 // @name            Seamless Window Manager
 // @description     Move, resize, snap and focus windows with the mouse or keyboard, with app rules, gaps and a pause key
-// @version         2.8.4
+// @version         2.8.5
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -137,6 +137,10 @@ the keys above, the key above wins.
   tiling is on, Windows doesn't swap in its pale stand-in window, so a busy
   app no longer flickers. Apps started before tiling was turned on keep the
   stand-in until they restart.
+
+## What's new in 2.8.5
+- Alt+PageDown and Alt+PageUp note each step in the mod's log, to track down
+  a PC where they do nothing over a full-screen remote desktop window.
 
 ## What's new in 2.8.4
 - Alt+PageDown and Alt+PageUp now work when a remote desktop window (like
@@ -11136,6 +11140,7 @@ size_t g_cycleAt = 0;
 
 void CycleFocusCommand(int direction) {
     HWND hCur = ActiveRoot();
+    TLog(L"Walk: front %p root %p", GetForegroundWindow(), hCur);
     if (!hCur) return;
     bool fresh = g_cycleList.size() < 2 || g_cycleAt >= g_cycleList.size() ||
                  g_cycleList[g_cycleAt] != hCur;
@@ -11156,6 +11161,7 @@ void CycleFocusCommand(int direction) {
         EnumWindows(CycleFocusProc, reinterpret_cast<LPARAM>(&data));
         DeleteObject(data.above);
         stack.erase(std::remove(stack.begin(), stack.end(), hCur), stack.end());
+        TLog(L"Walk: %zu behind", stack.size());
         if (stack.empty()) return;
         g_cycleList.clear();
         g_cycleList.push_back(hCur);
@@ -11165,6 +11171,7 @@ void CycleFocusCommand(int direction) {
     size_t count = g_cycleList.size();
     g_cycleAt = direction >= 0 ? (g_cycleAt + 1) % count : (g_cycleAt + count - 1) % count;
     FocusWindow(g_cycleList[g_cycleAt]);
+    TLog(L"Walk: to %p, front now %p", g_cycleList[g_cycleAt], GetForegroundWindow());
 }
 
 // Windows minimized while the mod runs, newest last. Kept on the tiling thread,
@@ -12309,9 +12316,15 @@ bool OnWalkKey(WPARAM message, const KBDLLHOOKSTRUCT* key) {
             continue;
         }
         g_walkKeyHeld = vk;
-        PostThreadMessageW(GetCurrentThreadId(), WM_HOTKEY, kModeKeyBase + kWalkUpKey + w,
-                           0);
+        BOOL posted = PostThreadMessageW(GetCurrentThreadId(), WM_HOTKEY,
+                                         kModeKeyBase + kWalkUpKey + w, 0);
+        tiling::TLog(L"Walk: key %u posted %d", vk, (int)posted);
         return true;
+    }
+    if (vk == VK_PRIOR || vk == VK_NEXT) {
+        tiling::TLog(L"Walk: key %u held %u no match (%u/%u %u/%u)", vk, held,
+                     (DWORD)g_walkKeys[0].key, g_walkKeys[0].modifiers,
+                     (DWORD)g_walkKeys[1].key, g_walkKeys[1].modifiers);
     }
     return false;
 }
@@ -12367,6 +12380,8 @@ bool OnLowLevelThreadMessage(const MSG& msg) {
         return false;
     }
     int id = (int)msg.wParam - kModeKeyBase;
+    if (id == 35 || id == 36) tiling::TLog(L"Walk: hotkey %d paused %d tiling %u", id,
+                                           (int)IsPaused(), g_tilingThreadId);
     if (id == 0) {
         TogglePause();
     } else if (!IsPaused()) {
