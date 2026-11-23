@@ -28,6 +28,7 @@
     "local@explorer-tags-plus": "Explorer",
     "local@file-operation-styler-plus": "Explorer",
     "local@peek": "Explorer",
+    "local@remove-shortcut-arrows": "Explorer",
     "local@shell-font-changer-plus": "Explorer",
     "local@seamless-title-bars": "Windows and menus",
     "local@seamless-borders": "Windows and menus",
@@ -70,6 +71,10 @@
     "local@mocha-steam-icons": "Windows and menus",
     "local@mocha-app-icons": "Windows and menus",
     "local@seamless-windows-firewall": "Tools",
-    "local@seamless-dock": "Taskbar"
+    "local@seamless-dock": "Taskbar",
+    "local@logitech-battery-tray": "Taskbar",
+    "local@seamless-task-manager": "Tools",
+    "local@dsx-tray-icon-fix": "Fixes",
+    "local@dark-theme-browser-colors-fix-plus": "Fixes"
   }
 }
