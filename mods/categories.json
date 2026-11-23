@@ -15,6 +15,7 @@
     "Fixes": "Small fixes for one app or one crash."
   },
   "mods": {
+    "local@parallax-wallpaper": "Windows and menus",
     "local@seamless-taskbar": "Taskbar",
     "local@seamless-taskbar-badge-counter": "Taskbar",
     "local@recycle-bin-tray-plus": "Taskbar",
