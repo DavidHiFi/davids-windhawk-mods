@@ -56,6 +56,48 @@ publish with credit (original has no license, we claim none); full Mocha rice.
   Output in `media\live\1.1.0\` (capture.json, analyze.json). capture-all.py refuses to send
   the hotkey unless the remote desktop app is in front, so it can never block a real app.
 
+## 1.2.0 (2026-11-23): our own box replaces the Windows Firewall pop-up
+
+Owner asked for the "allow this app?" pop-up to use the mod's look. Picks: same apps as
+Windows asks about, keep Windows Firewall and swap only the pop-up, a centred box, and the box
+waits until answered (the app stays blocked meanwhile, as with Windows).
+
+- How: a worker thread looks at the TCP and UDP listeners every 2 s (IPv4 and IPv6, loopback
+  skipped). An app in the desktop session, outside Windows' folders, with no inbound firewall
+  rule of its own, is asked once per session, and only while a current network profile has the
+  firewall on and inbound blocked by default. The box is the FwConfirm box, centred on the
+  screen under the pointer, never activated (the app you type in keeps the keyboard), hidden
+  while a game is full screen. Allow or Block adds a normal inbound rule named
+  "Seamless Firewall: <app>" in the group "Seamless Windows Firewall" (Allow: private and
+  domain, plus public if the setting is on or you are on a public network now; Block: all).
+- Settings (Blocking, Connection requests): "Ask with our own box" (on) and "Allow on public
+  networks too" (off).
+- **Windows setting changed while the mod runs:** each profile's "notify on listen"
+  (`NotificationsDisabled` through the firewall's own interface). Old: the per-profile value
+  found at start, saved in the mod's storage (`fwPromptOrig_domain/_private/_public`). New:
+  notifications off. Given back when the setting goes off, when the mod stops, and at the next
+  start if the setting is off (covers a crash).
+- Rollback: `Set-ModState.ps1 -Id local@seamless-windows-firewall -Off`. If the mod ever
+  crashed and was then turned off before it could give the setting back:
+  `netsh advfirewall set allprofiles settings inboundusernotification enable`.
+- Offline compile passed (test\compile.log). Test PC kit: `D:\Agent Work\swf-120\`.
+- Test PC (10:37 pm): 20 of 20. Box comes for a listening app, no Windows alert, centred to the
+  pixel, Notepad kept the keyboard, Allow by click and Block by N each saved the right rule, a
+  second app got its own box, no box while a full-screen window was in front and it showed
+  after, setting off gave the Windows pop-up back and on took it again, Explorer and the tool
+  stayed up, no error events, no crash dumps. Logs and shots: `D:\Agent Work\swf-120\results\out\`.
+  The test PC has no GPU, so corners and glass are proven on the tower captures instead.
+- Before the tower install: every app already listening there has an inbound rule
+  (test\dry-run-listeners.ps1), so no burst of boxes at install.
+- Tower install: test\install-when-free.ps1 (log test\install-1.2.0.log). It writes the two new
+  settings (on, off) when missing, since a missing setting reads as off.
+- Tower result (10:39 pm): registry 1.2.0 (was 1.1.1), desktop fine after the 60 s watch, the
+  engine had already written the two new settings (on, off), Windows pop-up switch now off on all
+  three profiles, mod pushed (26d53b7) and feed pushed (b8d0334).
+- Live captures: capture-all.py now calls the box up with a throwaway listener app (no hotkey,
+  so no real app can be blocked), slides it over the open panel for the glass check, answers
+  Block with Esc, then removes the rule and the app. Output `media\live\1.2.0\`.
+
 ## Open
 
 1. Live captures and the glass check: queued for the screen (see above).
