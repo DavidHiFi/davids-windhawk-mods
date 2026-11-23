@@ -2,7 +2,7 @@
 // @id              seamless-wobbly-windows
 // @name            Seamless Wobbly Windows
 // @description     Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows
-// @version         1.2.12
+// @version         1.2.13
 // @author          DavidHiFi, HeyJeay, HaVeN80, lalimatyus
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -88,6 +88,10 @@ title bar to move a window without the wobble.
 - Nothing is loaded into dwm.exe. The effect runs inside each app.
 - Turn off the other wobble mods (Wobbly Windows, Window Wobble) before using
   this one.
+
+## What's new in 1.2.13
+- With Seamless Borders on, the window's coloured ring no longer stays
+  behind at the old spot while the window wobbles somewhere else.
 
 ## What's new in 1.2.12
 - No more blurry picture of the window itself for a moment when a frosted
@@ -5692,6 +5696,9 @@ static bool HideWindowInPlace(HWND hwnd, HideState& st, bool dropBackdrop = fals
         return false;
     }
     st.cloaked = true;
+    // Seamless Borders never heard of this cloak and left its ring at the
+    // start spot for the whole drag (1.2.12), so say it ourselves.
+    NotifyWinEvent(EVENT_OBJECT_CLOAKED, hwnd, OBJID_WINDOW, CHILDID_SELF);
     return true;
 }
 
@@ -5718,6 +5725,7 @@ static void ShowWindowInPlace(HWND hwnd, HideState& st) {
         st.dropped = false;
     }
     DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &off, sizeof(off));
+    NotifyWinEvent(EVENT_OBJECT_UNCLOAKED, hwnd, OBJID_WINDOW, CHILDID_SELF);
     RestoreCorners(hwnd, st);
     if (IsWindow(hwnd)) RefreshBackdropAfterShow(hwnd);
 }
