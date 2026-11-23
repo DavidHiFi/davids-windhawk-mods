@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.24
+// @version         2.2.25
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.25
+
+- The title strip of the Loaded mods and Mod tasks windows now stays frosted too when another window is in front.
 
 ## What's new in 2.2.24
 
@@ -2445,15 +2449,15 @@ static void ApplyTrayDialogLook(HWND dialog, HWND list, const Settings& s) {
     if (HFONT font = TrayFont(dialog, s)) SendMessageW(list, WM_SETFONT, (WPARAM)font, TRUE);
     // Both tray windows float over other apps and are almost never in front, and
     // Windows drops the acrylic blur from a background window. So the body keeps a
-    // near solid Mocha fill and the title strip a solid one: nothing behind is
-    // ever readable, with or without the blur.
+    // near solid Mocha fill, and the window keeps the active look: on a background
+    // window DWM leaves the title strip (client drawn, clear) with no material at
+    // all, and a caption color does not reach it (measured 2026-11-23, 2.2.24).
     Settings frame = s;
     if (frame.blur) frame.backgroundOpacity = std::clamp(frame.backgroundOpacity, 95, 99);
     ApplyWindowStack(dialog, frame);
-    if (s.nativeTitleBar) {
-        COLORREF caption = Bgr(frame.background);
-        DwmSetWindowAttribute(dialog, DWMWA_CAPTION_COLOR, &caption, sizeof(caption));
-    }
+    BOOL activeLook = TRUE;
+    WINCOMPATTRDATA appearance{WCA_FORCE_ACTIVEWINDOW_APPEARANCE, &activeLook, sizeof(activeLook)};
+    SetWindowCompositionAttribute(dialog, &appearance);
     RedrawWindow(dialog, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);
 }
 
