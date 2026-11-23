@@ -5275,6 +5275,9 @@
   },
   "local@seamless-workshop": {
     "animations": 1,
+    "autoApps": 1,
+    "autoDeps": 1,
+    "autoUpdate": 1,
     "discordPresence": 1,
     "feedCheck": 1,
     "nativeSettingsTitleBar": 1,
