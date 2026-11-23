@@ -2,7 +2,7 @@
 // @id              seamless-download-manager
 // @name            Seamless Download Manager
 // @description     A fast tray download manager: downloads in parts, resumes where it stopped, takes browser links
-// @version         1.0.2
+// @version         1.0.3
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-download-manager
@@ -6341,7 +6341,7 @@ void DrawSidebar(Pt& p, float top, float bottom) {
     bool mini = w < kSideW;
     D2D1_RECT_F dock{kGap, top, kGap + w, bottom};
     float rad = Radius();
-    p.Round(dock, rad, mocha::mantle, 0.45f);
+    p.Round(dock, rad, mocha::mantle, 0.35f);
     p.Edge(dock, rad, mocha::surface2, 1);
     p.rt->PushAxisAlignedClip({dock.left + 2, dock.top + 2, dock.right - 2, dock.bottom - 2}, D2D1_ANTIALIAS_MODE_ALIASED);
     float y = dock.top + 10;
