@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.5.2
+// @version         1.5.3
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -35,6 +35,12 @@ Needs the latest Windhawk alpha.
 - Use DavidHiFi's settings for one mod, or copy his whole setup in one go:
   every mod he runs, with or without his settings, on a clean slate if you
   like. Your current mods are backed up first, so you can always go back.
+
+## What's new in 1.5.3
+
+- Updates never put an older version back. Before it swaps a mod, the
+  Workshop checks what is installed right now, so a mod you just updated by
+  hand stays as it is.
 
 ## What's new in 1.5.2
 
@@ -5706,6 +5712,18 @@ static std::wstring Hub_RegText(const std::wstring& key) {
     return s;
 }
 
+// The version Windhawk has installed right now. The mods list is read once and
+// can be an hour old, so an update checks this first and never goes backwards.
+static std::wstring Hub_LiveVersion(const std::wstring& id) {
+    const std::wstring key = L"SOFTWARE\\Windhawk\\Engine\\Mods\\" + id;
+    WCHAR buf[64]{};
+    DWORD bytes = sizeof(buf);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, key.c_str(), L"Version", RRF_RT_REG_SZ, nullptr, buf, &bytes) !=
+        ERROR_SUCCESS)
+        return {};
+    return buf;
+}
+
 static bool Hub_SetText(const std::wstring& name, const std::wstring& value) {
     HKEY key;
     if (RegCreateKeyExW(HKEY_CURRENT_USER, kHubKey, 0, nullptr, 0, KEY_SET_VALUE, nullptr, &key, nullptr) != ERROR_SUCCESS)
@@ -9427,6 +9445,11 @@ static void Hub_AutoUpdate(SetWindow& w) {
     for (size_t i = 0; i < fetch.size(); i++) {
         if (files[i].empty()) continue;
         const HubFeedMod& f = fetch[i];
+        if (!isNew.count(f.id)) {
+            // Installed since the list was read (by hand, or a newer build): leave it.
+            const std::wstring now = Hub_LiveVersion(f.id);
+            if (!now.empty() && !Hub_Newer(f.version, now)) continue;
+        }
         std::vector<std::wstring> lines;
         if (wasOn.count(f.id)) lines.push_back(L"mod disable " + Set_QuoteArg(f.id));
         lines.push_back(L"@install " + f.sha + L" " + Set_QuoteArg(files[i]));
