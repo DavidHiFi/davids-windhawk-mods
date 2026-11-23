@@ -284,6 +284,9 @@ also flickers, deal with it, we need consistency."
 - Installed, registry v0.3.9, live source equals the work file (CR stripped), desktop fine
   after the 60 s watch. Published: mods 582ef02, feed c5b65e9. Rollback copy
   `seamless-dock-0.3.8.wh.cpp`.
+- Proof 5:58 am (`run-039b.sh`, owner said skip the queue): 3 right-clicks, every menu frame
+  shows the menu covering the pill (`frame-039.png`, `rightclick-039.mp4` / `.gif`); between
+  menus the pill area is steady. Explorer the same process after.
 - Lesson: in a z-order proof, check the menu against the pill in the frames, not only dips
   under the bar.
 
