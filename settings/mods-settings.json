@@ -5462,5 +5462,21 @@
     "spacing": 6,
     "surfaceOpacity": 60,
     "titleMaxWidth": 720
+  },
+  "local@logitech-battery-tray": {
+    "buttonWidth": 80,
+    "devices[0].match": "",
+    "devices[0].show": 1,
+    "directHidpp": 1,
+    "displayMode": "auto",
+    "iconSize": 20,
+    "iconStyle": "batteryAndDevice",
+    "lowBatteryPercent": 20,
+    "openGHubOnClick": 1,
+    "placement": "batteryArea",
+    "refreshSeconds": 30,
+    "showBatteryBar": 0,
+    "showNewDevices": 1,
+    "showPercentage": 1
   }
 }

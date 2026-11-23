@@ -1342,5 +1342,12 @@
     "exclude": "",
     "architecture": "",
     "version": "0.3.2"
+  },
+  "local@logitech-battery-tray": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64|x86",
+    "version": "0.1.4"
   }
 }
