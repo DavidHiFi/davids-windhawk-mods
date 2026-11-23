@@ -2,7 +2,7 @@
 // @id              seamless-windows-firewall
 // @name            Seamless Windows Firewall
 // @description     Block or allow any app's internet in one click, from the tray, a shortcut or a small edge pill
-// @version         1.1.0
+// @version         1.1.1
 // @author          DavidHiFi, Ashix
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -61,7 +61,11 @@ Change or clear any of them in the settings.
   the apps your own firewall rules block. Change those in Windows Defender
   Firewall.
 
-## What's new in 1.1.0
+## What's new in 1.1.1
+- The warning box is a little clearer glass, so the panel's colours show
+  softly through it, the same frosted look as the rest of the mod.
+
+## 1.1.0
 - The warnings before blocking a VPN or remote app, and before stopping a
   timer, now open in the same frosted Mocha box as the panel instead of the
   plain Windows message box. On a risky question the safe button is picked
@@ -3326,8 +3330,9 @@ static void FwConfirmPaint(HWND hwnd, FwConfirmState* st) {
         g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
         g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
 
-        // Frosted Mocha like the panel while the glass is on, solid Mocha otherwise.
-        g.Clear(Moc(fwc::base, st->glass ? 0.55 : 1.0));
+        // Frosted Mocha while the glass is on, solid Mocha otherwise. The box always sits on the
+        // dark panel, so its fill is lighter than the panel's or the colour under it never moves.
+        g.Clear(Moc(fwc::base, st->glass ? 0.40 : 1.0));
         Gdiplus::REAL winR = (Gdiplus::REAL)DpiScale(PanelCornerRadius(), dpi);
         Gdiplus::REAL ew = (Gdiplus::REAL)std::max(2, DpiScale(2, dpi));
         if (st->inside)
