@@ -2,7 +2,7 @@
 // @id              seamless-explorer-search
 // @name            Seamless Explorer Search
 // @description     Start typing in any File Explorer window, or any app's Open or Save window, to search it and every drive with Everything
-// @version         2.1.0
+// @version         2.1.2
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -2348,7 +2348,7 @@ static HICON MakeTrayIcon(bool paused) {
     HDC dc = CreateCompatibleDC(nullptr);
     HGDIOBJ old = SelectObject(dc, glyph);
     memset(glyphBits, 0, (size_t)size * size * 4);
-    HFONT font = CreateFontW(-(int)(size * 0.62f), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0,
+    HFONT font = CreateFontW(-(int)(size * 0.84f), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0,
                              L"Segoe Fluent Icons");
     HGDIOBJ oldFont = SelectObject(dc, font);
     WCHAR face[64]{};
@@ -2356,7 +2356,7 @@ static HICON MakeTrayIcon(bool paused) {
     if (_wcsicmp(face, L"Segoe Fluent Icons") != 0) {
         SelectObject(dc, oldFont);
         DeleteObject(font);
-        font = CreateFontW(-(int)(size * 0.62f), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0,
+        font = CreateFontW(-(int)(size * 0.84f), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0,
                            L"Segoe MDL2 Assets");
         oldFont = SelectObject(dc, font);
     }
@@ -2375,24 +2375,18 @@ static HICON MakeTrayIcon(bool paused) {
                          paused ? 0x86 / 255.f : 0xFA / 255.f};
     const float c1[3] = {paused ? 0x58 / 255.f : 0xCB / 255.f, paused ? 0x5B / 255.f : 0xA6 / 255.f,
                          paused ? 0x70 / 255.f : 0xF7 / 255.f};
-    const float ink[3] = {0x11 / 255.f, 0x11 / 255.f, 0x1B / 255.f};
-    float radius = size * 0.26f, half = size / 2.0f;
     uint32_t* px = (uint32_t*)bits;
     const uint32_t* gp = (const uint32_t*)glyphBits;
     for (int y = 0; y < size; y++)
         for (int x = 0; x < size; x++) {
-            float qx = std::fabs(x + 0.5f - half) - (half - radius), qy = std::fabs(y + 0.5f - half) - (half - radius);
-            float ox = std::max(qx, 0.0f), oy = std::max(qy, 0.0f);
-            float d = std::sqrt(ox * ox + oy * oy) + std::min(std::max(qx, qy), 0.0f) - radius;
-            float a = std::clamp(0.5f - d, 0.0f, 1.0f);
             float t = std::clamp((x + y) / (2.0f * (size - 1)), 0.0f, 1.0f);
             float cov = ((gp[y * size + x] >> 8) & 0xFF) / 255.0f;
             float rgb[3];
             for (int i = 0; i < 3; i++) {
                 float base = c0[i] + (c1[i] - c0[i]) * t;
-                rgb[i] = (base + (ink[i] - base) * cov) * a;
+                rgb[i] = base * cov;
             }
-            px[y * size + x] = ((uint32_t)(a * 255 + 0.5f) << 24) | ((uint32_t)(rgb[0] * 255 + 0.5f) << 16) |
+            px[y * size + x] = ((uint32_t)(cov * 255 + 0.5f) << 24) | ((uint32_t)(rgb[0] * 255 + 0.5f) << 16) |
                                ((uint32_t)(rgb[1] * 255 + 0.5f) << 8) | (uint32_t)(rgb[2] * 255 + 0.5f);
         }
     HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
@@ -5235,8 +5229,16 @@ static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it) {
     D2D1_RECT_F row = Set_RowRect(w, it);
     Set_DrawCard(p, row, 0);
     D2D1_RECT_F mark{row.left + 20, row.top + 20, row.left + 92, row.top + 92};
-    p.GradFill(mark, 18, 1);
-    p.Glyph(w.fIconL.get(), 0xE721, mark, mocha::crust);
+    {  // The glyph alone in the gradient, no plate (owner, 2026-11-24).
+        D2D1_MATRIX_3X2_F old;
+        p.rt->GetTransform(&old);
+        const D2D1_POINT_2F mc{(mark.left + mark.right) / 2, (mark.top + mark.bottom) / 2};
+        p.rt->SetTransform(D2D1::Matrix3x2F::Scale(1.75f, 1.75f, mc) * old);
+        const WCHAR glyph = 0xE721;
+        auto br = p.G({mc.x - 19, mc.y - 19, mc.x + 19, mc.y + 19});
+        if (br) p.rt->DrawText(&glyph, 1, w.fIconL.get(), mark, br.get());
+        p.rt->SetTransform(old);
+    }
     float x = mark.right + 20, r = row.right - 16, y = row.top + 18;
     SearchAboutGeo g = SearchAboutLayout(w);
     if (g.splitTitle) {
@@ -5439,16 +5441,24 @@ static D2D1_RECT_F Set_CapTitleRect(const SetWindow& w) {
 }
 
 static void Set_DrawMark(SetPaint& p, IDWriteTextFormat* glyph, const D2D1_RECT_F& r, float a) {
-    float s = r.right - r.left;
+    // The mod's glyph alone in the blue to mauve gradient on a clear background, no plate
+    // (owner, 2026-11-24), scaled up about its centre to fill the room the plate had.
+    const float cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    const float ix = (r.right - r.left) * 0.31f, iy = (r.bottom - r.top) * 0.31f;
     SetCom<ID2D1LinearGradientBrush> g;
     D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::blue, a * p.fade)}, {1, D2DColor(mocha::mauve, a * p.fade)}};
     SetCom<ID2D1GradientStopCollection> coll;
-    if (SUCCEEDED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
-        SUCCEEDED(p.rt->CreateLinearGradientBrush(
-            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.right, r.bottom)),
+    if (FAILED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) ||
+        FAILED(p.rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(cx - ix, cy - iy), D2D1::Point2F(cx + ix, cy + iy)),
             coll.get(), g.put())))
-        p.rt->FillRoundedRectangle(D2D1::RoundedRect(r, s * 0.24f, s * 0.24f), g.get());
-    p.Glyph(glyph, 0xE721, r, mocha::crust);
+        return;
+    D2D1_MATRIX_3X2_F old;
+    p.rt->GetTransform(&old);
+    p.rt->SetTransform(D2D1::Matrix3x2F::Scale(1.4f, 1.4f, D2D1::Point2F(cx, cy)) * old);
+    const WCHAR mark = 0xE721;
+    p.rt->DrawText(&mark, 1, glyph, r, g.get());
+    p.rt->SetTransform(old);
 }
 
 static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
