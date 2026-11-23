@@ -25,9 +25,8 @@
       "name": "Logitech G HUB",
       "kind": "dep",
       "script": "deps/ghub.ps1",
-      "why": "The battery tray reads your Logitech mouse and headset from it. Only needed with a Logitech device.",
+      "why": "Optional. The battery tray reads most Logitech mice and headsets without it. Only goes in when you ask for it.",
       "admin": true,
-      "auto": true,
       "optional": true,
       "mods": ["logitech-battery-tray"]
     },
