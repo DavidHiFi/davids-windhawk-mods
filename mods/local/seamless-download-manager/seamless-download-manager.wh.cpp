@@ -2,7 +2,7 @@
 // @id              seamless-download-manager
 // @name            Seamless Download Manager
 // @description     A fast tray download manager: downloads in parts, resumes where it stopped, takes browser links
-// @version         1.0.0
+// @version         1.0.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-download-manager
@@ -9769,7 +9769,14 @@ void StartImport() {
 
 // ---- The tray ------------------------------------------------------------------------------
 
-constexpr UINT kTrayId = 1;
+// Windows files tray settings (shown or hidden) per program and number, and every mod is
+// windhawk-mod.exe, so the number comes from the mod id like the other mods' trays.
+constexpr UINT TrayIconId() {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kTrayId = TrayIconId();
 UINT g_taskbarCreated = 0;
 bool g_trayAdded = false;
 bool g_trayIconOn = true;
