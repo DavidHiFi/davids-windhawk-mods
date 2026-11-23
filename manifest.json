@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-24T06:22:04+08:00",
+  "generatedAt": "2026-11-24T06:28:32+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 172,
@@ -1181,7 +1181,7 @@
       "name": "Seamless AutoClicker",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.6.11",
+      "version": "1.6.13",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
