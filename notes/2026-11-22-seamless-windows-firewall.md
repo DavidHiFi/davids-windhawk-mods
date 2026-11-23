@@ -130,9 +130,55 @@ waits until answered (the app stays blocked meanwhile, as with Windows).
 - test\pipeline-1.2.1.ps1 runs build (load gate), test PC, install (base = the live 1.2.0
   source), then the live captures into `media\live\1.2.1\`. Log test\pipeline-1.2.1.log.
 
+- 1.2.1 result (11-24, 1:02 am): test PC 21 of 21, the box read 255 of 255 while the busy-PC
+  flood ran. Installed on the tower (install exit 0, registry 1.2.1), published (feed 368fe40).
+  Its live captures were dropped for 1.2.2, which supersedes it.
+
+## 1.2.2: no edge pill, no hover (11-24)
+
+- Owner, 11-24: the pill on the top monitor and the hover reveal at the bottom right were never
+  wanted. The mod is a tray icon plus the centred connection box, nothing else on screen.
+- core.cpp (backup src\core.cpp.bak-20261124-pre-122, edit script edit122.py): the window
+  starts hidden and is shown only while the panel is open. The panel opens centred on the work
+  area of the screen the pointer is on (the tray's screen after a tray click), with a short grow
+  from 94%, and hides the moment it closes. Settings for the pill, hover reveal, edge position,
+  remember position, follow cursor and the clock button next to the pill are forced off in
+  LoadSettings, so old registry values from 1.2.1 cannot bring the pill back. A header drag
+  moves the panel for that opening only (no edge snapping, nothing saved). A tray click within
+  400 ms of an outside-click close is ignored, so one click on the icon closes an open panel
+  instead of reopening it.
+- spec.py (edit122spec.py): those settings are gone from the settings window and Windhawk's
+  page; "Hide from screenshots" moved to the Panel page. gen.py: 20 fields.
+- assemble.py (edit122readme.py): version 1.2.2, readme without the pill, "What's new in 1.2.2".
+- Offline compile clean. Test PC kit `D:\Agent Work\swf-122\` adds: nothing of ours visible at
+  rest, pointer resting on four screen edges opens nothing, a posted tray click and
+  Ctrl+Alt+Shift+F each open the panel centred (3 px), a click outside, the shortcut again
+  and a second tray click each close it. All 1.2.1 box checks stay.
+- test\pipeline-1.2.2.ps1: build, test PC (must pass the no-pill and tray checks too), install
+  (base = the live 1.2.1 source), then capture-122.py: a shot of every screen at rest, the panel
+  opened from the tray on the main screen (recorded), and the connection box. Log
+  test\pipeline-1.2.2.log, media in `media\live\1.2.2\`.
+- First test PC run (1:28 am, test\pipeline-1.2.2-run1.log): 25 of 29, not installed. No pill,
+  edges open nothing, the tray opens the panel centred to half a pixel, every box check passed.
+  The miss: a click outside did not close a panel opened from the tray, and the three checks
+  after it failed only because of that. Cause: the panel never takes focus now, so only the 50 ms
+  button poll could see the click, and a short click falls between two polls.
+- Fix (backup src\core.cpp.bak-20261124-pre-122b, edit122b.py): while the panel is open a
+  low-level mouse hook passes every press to the panel, which closes when the press is outside
+  it, the connection box and the clock. The hook is removed the moment the panel closes. The
+  test click now holds the button 150 ms like a real one. Rerun started 1:34 am.
+
+- 1.2.2 result (11-24): test PC 30 of 30 (1:58 am). Installed 2:00 am over 1.2.1, registry 1.2.2,
+  desktop fine after the 60 s watch, mod pushed ecce141, feed 2ad4a0f. Live captures 2:16 am
+  (`media\live.2.2\`): none of our windows visible on any screen at rest, the tray opens the
+  panel dead centre on the main screen (0,0 off), a second tray click closes it, the connection
+  box came up in 1.3 s centred, alpha 255, the app in front kept the keyboard, Esc saved Block and
+  the test rule was removed. Clips: panel-from-tray and connection-box-motion (mp4 and gif).
+
 ## Open
 
-1. 1.2.1: build, busy-PC test PC run, install and live captures queued (pipeline-1.2.1).
+1. The connection box's glass reads flat over the open panel (movement 0.4, same as 1.1.0's
+   0.26). Not changed by 1.2.2; lighten its tint in a later pass and recheck with glass-check.
 2. The panel's own glass: the app list fills it, so the box over the panel is the measured
    floating surface. The box is modal, so the unfocused-glass check does not apply to it.
 
