@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.7.3
+// @version         0.7.4
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -8611,7 +8611,7 @@ static HICON MakeTrayIcon() {
     HDC dc = CreateCompatibleDC(nullptr);
     HGDIOBJ old = SelectObject(dc, glyph);
     memset(glyphBits, 0, (size_t)size * size * 4);
-    HFONT font = CreateFontW(-(int)(size * 0.66f), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0,
+    HFONT font = CreateFontW(-(int)(size * 0.84f), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0,
                              ANTIALIASED_QUALITY, 0, L"Segoe Fluent Icons");
     HGDIOBJ oldFont = SelectObject(dc, font);
     SetBkMode(dc, TRANSPARENT);
@@ -8627,24 +8627,18 @@ static HICON MakeTrayIcon() {
 
     const float c0[3] = {GetRValue(g_cfg.accent1) / 255.f, GetGValue(g_cfg.accent1) / 255.f, GetBValue(g_cfg.accent1) / 255.f};
     const float c1[3] = {GetRValue(g_cfg.accent2) / 255.f, GetGValue(g_cfg.accent2) / 255.f, GetBValue(g_cfg.accent2) / 255.f};
-    const float ink[3] = {0x11 / 255.f, 0x11 / 255.f, 0x1B / 255.f};
-    float radius = size * 0.26f, half = size / 2.0f;
     uint32_t* px = (uint32_t*)bits;
     const uint32_t* gp = (const uint32_t*)glyphBits;
     for (int y = 0; y < size; y++)
         for (int x = 0; x < size; x++) {
-            float qx = std::fabs(x + 0.5f - half) - (half - radius), qy = std::fabs(y + 0.5f - half) - (half - radius);
-            float ox = std::max(qx, 0.0f), oy = std::max(qy, 0.0f);
-            float d = std::sqrt(ox * ox + oy * oy) + std::min(std::max(qx, qy), 0.0f) - radius;
-            float a = std::clamp(0.5f - d, 0.0f, 1.0f);
             float t = std::clamp((x + y) / (2.0f * (size - 1)), 0.0f, 1.0f);
             float cov = ((gp[y * size + x] >> 8) & 0xFF) / 255.0f;
             float rgb[3];
             for (int i = 0; i < 3; i++) {
                 float base = c0[i] + (c1[i] - c0[i]) * t;
-                rgb[i] = (base + (ink[i] - base) * cov) * a;
+                rgb[i] = base * cov;
             }
-            px[y * size + x] = ((uint32_t)(a * 255 + 0.5f) << 24) | ((uint32_t)(rgb[0] * 255 + 0.5f) << 16) |
+            px[y * size + x] = ((uint32_t)(cov * 255 + 0.5f) << 24) | ((uint32_t)(rgb[0] * 255 + 0.5f) << 16) |
                                ((uint32_t)(rgb[1] * 255 + 0.5f) << 8) | (uint32_t)(rgb[2] * 255 + 0.5f);
         }
     HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
@@ -27688,8 +27682,16 @@ static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it, int idx)
     p.GradFill(row, 10, 0.13f * hov);
     p.GradRing(row, 10, hov, 1.5f);
     D2D1_RECT_F mark{row.left + 20, row.top + 20, row.left + 92, row.top + 92};
-    p.GradFill(mark, 18, 1);
-    p.Glyph(w.fIconL.get(), 0xF406, mark, mocha::crust);
+    {  // The glyph alone in the gradient, no plate (owner, 2026-11-24).
+        D2D1_MATRIX_3X2_F old;
+        p.rt->GetTransform(&old);
+        const D2D1_POINT_2F mc{(mark.left + mark.right) / 2, (mark.top + mark.bottom) / 2};
+        p.rt->SetTransform(D2D1::Matrix3x2F::Scale(1.75f, 1.75f, mc) * old);
+        const WCHAR glyph = 0xF406;
+        auto br = p.G({mc.x - 19, mc.y - 19, mc.x + 19, mc.y + 19});
+        if (br) p.rt->DrawText(&glyph, 1, w.fIconL.get(), mark, br.get());
+        p.rt->SetTransform(old);
+    }
     float x = mark.right + 20;
     p.Text(w.fBig.get(), L"Seamless Snipper", {x, row.top + 18, row.right - 16, row.top + 46}, mocha::text);
 #ifdef WH_MOD_VERSION
