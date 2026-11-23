@@ -39,6 +39,8 @@ the snippet's own `lpReserved` warning, pushed as eb8cc7f. Kit: Warden
 `D:\Agent Work\weather-tool-161\`. Behaviour in a user session is unchanged, so no new test PC
 run.
 
-## Next
+## State
 
-When the AI review of 1.6.1 comes back clean, comment `/ready-for-reviewer`.
+The AI review of 1.6.1 found nothing blocking (only the network item, which is for the
+maintainer). `/ready-for-reviewer` posted; the label is now `waiting-for-reviewer`. Next is
+m417z's own review.
