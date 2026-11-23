@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.10
+// @version         0.6.11
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -57,6 +57,11 @@ its own settings window: open it from the tray icon or with Ctrl+I in Halo.
 | Esc | Back, then close |
 
 Every key in that list can be changed on the Keys page of the settings.
+
+## What's new in 0.6.11
+
+- In a narrow settings window, the text under each page title shows every line. Before,
+  its third line was cut in half.
 
 ## What's new in 0.6.10
 
@@ -7125,7 +7130,10 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
         place(0, rise);
         cp.Text(w.fTitle.get(), kSetPages[w.page].name, {w.contentX, 36, w.contentX + w.contentW, 72}, mocha::text);
         place(1, rise);
-        cp.Text(w.fIntro.get(), kSetPages[w.page].intro, {w.contentX, 76, w.contentX + w.contentW, 76 + 40}, mocha::subtext0);
+        cp.Text(w.fIntro.get(), kSetPages[w.page].intro,
+                {w.contentX, 76, w.contentX + w.contentW,
+                 76 + Set_TextH(w.fIntro.get(), kSetPages[w.page].intro, w.contentW) + 4},
+                mocha::subtext0);
         for (size_t i = 0; i < w.items.size(); i++) {
             const SetItem& it = w.items[i];
             if (it.y + it.h < w.scrollY - 20 || it.y > w.scrollY + viewH + 20) continue;

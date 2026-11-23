@@ -874,7 +874,7 @@
       "id": "lock-screen-live-wallpaper",
       "name": "Lock Screen Live Wallpaper",
       "version": "1.1.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "colorAdjustments.brightness": 0,
         "colorAdjustments.contrast": 100,
@@ -1320,15 +1320,6 @@
       }
     },
     {
-      "id": "remove-shortcut-arrows",
-      "name": "Remove Shortcut Arrow Icons",
-      "version": "2.0.0",
-      "enabled": false,
-      "settings": {
-        "custom_icon_path": ""
-      }
-    },
-    {
       "id": "restore-folder-menubar-25h2",
       "name": "ExplorerFrame and menubar fixes fork",
       "version": "4.2",
@@ -1744,17 +1735,6 @@
         "ignoreRules[0].title": "",
         "ignoreTopmostNoTitleBarWindows": 1,
         "minWindowSize": 100
-      }
-    },
-    {
-      "id": "win11-home-group-restorer",
-      "name": "Windows 11 HomeGroup Page Restorer",
-      "version": "1.0.0",
-      "enabled": false,
-      "settings": {
-        "enableAdvancedWriter": 1,
-        "keepFilesOnDisable": 1,
-        "language": "auto"
       }
     },
     {
@@ -2233,21 +2213,6 @@
       "version": "1.1",
       "enabled": true,
       "settings": {}
-    },
-    {
-      "id": "windows-update-control-panel-restorer",
-      "name": "Windows Update Control Panel Page Restorer",
-      "version": "1.1.0",
-      "enabled": false,
-      "settings": {
-        "Language": "auto",
-        "LinkSystemSettingsText": 0,
-        "RemoveLegacyBrokenOption": 1,
-        "ShowAvailableUpdates": 1,
-        "ShowNativeCombobox": 0,
-        "ShowServiceNotice": 1,
-        "UpdatePageSkin": "windows7"
-      }
     },
     {
       "id": "xs-nomsedgewebview4copilot",

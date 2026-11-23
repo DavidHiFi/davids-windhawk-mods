@@ -1173,7 +1173,7 @@
     "include": "windhawk-mod.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "0.6.10"
+    "version": "0.6.11"
   },
   "local@network-speedtest-plus": {
     "disabled": false,
