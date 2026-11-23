@@ -2943,7 +2943,7 @@
     "controlStyles[28].styles[6]": "FontWeight=Medium",
     "controlStyles[28].styles[7]": "Padding=10,6,10,7",
     "controlStyles[28].target": "ToolTip",
-    "controlStyles[29].styles[0]": "Background:=<AcrylicBrush TintColor=\"#313244\" TintOpacity=\"0.85\" TintLuminosityOpacity=\"0.75\" FallbackColor=\"#FF313244\"/>",
+    "controlStyles[29].styles[0]": "Background:=<AcrylicBrush TintColor=\"#1E1E2E\" TintOpacity=\"0.88\" TintLuminosityOpacity=\"0.85\" FallbackColor=\"#F21E1E2E\"/>",
     "controlStyles[29].styles[1]": "BorderBrush:=<LinearGradientBrush StartPoint=\"0,0\" EndPoint=\"1,1\"><GradientStop Color=\"#89B4FA\" Offset=\"0\"/><GradientStop Color=\"#CBA6F7\" Offset=\"1\"/></LinearGradientBrush>",
     "controlStyles[29].styles[2]": "BorderThickness=1",
     "controlStyles[29].styles[3]": "CornerRadius=8",

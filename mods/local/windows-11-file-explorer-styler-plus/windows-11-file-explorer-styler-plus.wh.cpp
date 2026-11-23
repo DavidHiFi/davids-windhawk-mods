@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.28
+// @version         1.10.29
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -2346,6 +2346,7 @@ HRESULT InjectWindhawkTAP() noexcept
 #include <cmath>
 #include <condition_variable>
 #include <filesystem>
+#include <functional>
 #include <limits>
 #include <list>
 #include <memory>
@@ -2749,13 +2750,23 @@ struct TabHoverTimer {
 struct HandledHover {
     winrt::weak_ref<UIElement> element;
     Input::PointerEventHandler handler{nullptr};
+    // Runs while the edge shows: a missed PointerExited (the pointer leaving
+    // the window fast, or into a menu) left the gradient on for good.
+    winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer timer{nullptr};
+    winrt::Microsoft::UI::Dispatching::DispatcherQueueTimer::Tick_revoker tick;
+    std::function<void(bool)> paint;
+    std::shared_ptr<bool> hot = std::make_shared<bool>(false);
 
     ~HandledHover() {
         try {
+            tick.revoke();
+            if (timer) timer.Stop();
             if (auto target = element.get()) {
                 target.RemoveHandler(UIElement::PointerEnteredEvent(), winrt::box_value(handler));
                 target.RemoveHandler(UIElement::PointerExitedEvent(), winrt::box_value(handler));
             }
+            // Never leave the hover edge behind when the hover is rebuilt.
+            if (*hot && paint) paint(false);
         } catch (...) {
         }
     }
@@ -9047,13 +9058,35 @@ void ConfigureBorderHover(Panel panel, ElementCustomizationState& state,
     auto border = Markup::XamlReader::Load(
         LR"(<LinearGradientBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#89B4FA" Offset="0"/><GradientStop Color="#CBA6F7" Offset="1"/></LinearGradientBrush>)").as<Media::Brush>();
     border.Opacity(opacity);
-    auto rest = panel.BorderBrush();
-    auto paint = [weak = winrt::make_weak(panel), border, rest](bool hovered) {
+    Media::Brush rest = panel.BorderBrush();
+    // A hover edge left over from an earlier build of this hover is not the
+    // resting edge.
+    if (auto gradient = rest.try_as<Media::LinearGradientBrush>()) {
+        try {
+            auto stops = gradient.GradientStops();
+            if (stops.Size() > 0 &&
+                stops.GetAt(0).Color() ==
+                    winrt::Windows::UI::Color{0xFF, 0x89, 0xB4, 0xFA}) {
+                rest = Media::SolidColorBrush(
+                    winrt::Windows::UI::Color{0x64, 0x58, 0x5B, 0x70});
+            }
+        } catch (...) {
+        }
+    }
+    auto hover = std::make_unique<HandledHover>();
+    auto hot = hover->hot;
+    auto paint = [weak = winrt::make_weak(panel), border, rest, hot](bool hovered) {
         if (auto target = weak.get()) {
+            // Only take back our own edge: a restyle may have set a new one.
+            if (!hovered && target.BorderBrush() != border) {
+                *hot = false;
+                return;
+            }
             bool previous = g_elementPropertyModifying;
             g_elementPropertyModifying = true;
             try {
                 target.BorderBrush(hovered ? border : rest);
+                *hot = hovered;
             } catch (...) {
                 g_elementPropertyModifying = previous;
                 Wh_Log(L"Explorer border hover paint failed");
@@ -9062,20 +9095,70 @@ void ConfigureBorderHover(Panel panel, ElementCustomizationState& state,
             g_elementPropertyModifying = previous;
         }
     };
+    hover->paint = paint;
+
+    // While the edge shows, the cursor is checked every 60 ms against the
+    // panel's screen box, so the edge always goes when the pointer does.
+    using namespace winrt::Microsoft::UI::Dispatching;
+    if (auto queue = DispatcherQueue::GetForCurrentThread()) {
+        hover->timer = queue.CreateTimer();
+        hover->timer.Interval(std::chrono::milliseconds{60});
+        hover->timer.IsRepeating(true);
+        Automation::Peers::FrameworkElementAutomationPeer peer{nullptr};
+        try {
+            peer = Automation::Peers::FrameworkElementAutomationPeer(panel);
+        } catch (...) {
+        }
+        hover->tick = hover->timer.Tick(winrt::auto_revoke,
+            [weak = winrt::make_weak(panel), peer, paint, hot](
+                auto const& timer, auto const&) {
+                auto target = weak.get();
+                if (!target || !*hot) {
+                    timer.Stop();
+                    return;
+                }
+                bool inside = false;
+                try {
+                    POINT cursor;
+                    if (peer && target.IsLoaded() && GetCursorPos(&cursor)) {
+                        HWND window = GetAncestor(WindowFromPoint(cursor), GA_ROOT);
+                        if (window && GetWindowThreadProcessId(window, nullptr) ==
+                                          GetCurrentThreadId()) {
+                            auto bounds = peer.GetBoundingRectangle();
+                            inside = cursor.x >= bounds.X && cursor.y >= bounds.Y &&
+                                     cursor.x < bounds.X + bounds.Width &&
+                                     cursor.y < bounds.Y + bounds.Height;
+                        }
+                    }
+                } catch (...) {
+                }
+                if (!inside) {
+                    paint(false);
+                    *hot = false;
+                    timer.Stop();
+                }
+            });
+    }
+
     // Buttons inside mark the pointer events handled, so plain handlers miss
     // a pointer that enters straight onto a button. Handled events too, and
     // a child's bubbled event, are judged by where the pointer is.
-    auto hover = std::make_unique<HandledHover>();
     hover->element = winrt::make_weak(UIElement(panel));
     hover->handler = Input::PointerEventHandler(
-        [weak = winrt::make_weak(panel), paint](
+        [weak = winrt::make_weak(panel), paint,
+         timer = hover->timer](
             winrt::Windows::Foundation::IInspectable const&,
             Input::PointerRoutedEventArgs const& args) {
             auto target = weak.get();
             if (!target) return;
             auto at = args.GetCurrentPoint(target).Position();
-            paint(at.X >= 0 && at.Y >= 0 && at.X < target.ActualWidth() &&
-                  at.Y < target.ActualHeight());
+            bool inside = at.X >= 0 && at.Y >= 0 && at.X < target.ActualWidth() &&
+                          at.Y < target.ActualHeight();
+            paint(inside);
+            if (timer) {
+                if (inside) timer.Start();
+                else timer.Stop();
+            }
         });
     panel.AddHandler(UIElement::PointerEnteredEvent(),
                      winrt::box_value(hover->handler), true);
@@ -11373,6 +11456,8 @@ struct StatusDockBuffer {
         bool drawn;
     } buttons[2];
     int buttonCount;
+    // Drawn into another status buffer, which is measured instead.
+    bool nested;
 };
 
 // The status band height of each folder view, measured on its last full
@@ -11380,11 +11465,26 @@ struct StatusDockBuffer {
 // band, so they find the band through this.
 SRWLOCK g_statusDockBandsLock = SRWLOCK_INIT;
 std::unordered_map<HWND, int> g_statusDockBands;
-// Views whose dock the cursor is over, views with the hover subclass, and the
-// GPU view toggle that sits over each view's dock.
-std::unordered_set<HWND> g_statusDockHovered;
+// The small dock under the cursor in each view (1 the item count, 2 the view
+// buttons), views with the hover subclass, and the GPU view toggle that sits
+// over each view's dock.
+std::unordered_map<HWND, int> g_statusDockHovered;
 std::unordered_set<HWND> g_statusDockSubclassed;
 std::unordered_map<HWND, HWND> g_statusDockToggles;
+// Where the status text and the view buttons sit, measured on earlier paints.
+// The buttons move with the right edge, so they are kept as distances from it.
+struct StatusDockLayout {
+    int textLeft = 0;
+    int textRight = 0;
+    int buttonsLeftFromRight = 0;
+    int buttonsRightFromRight = 0;
+};
+bool SameStatusDockLayout(const StatusDockLayout& a, const StatusDockLayout& b) {
+    return a.textLeft == b.textLeft && a.textRight == b.textRight &&
+           a.buttonsLeftFromRight == b.buttonsLeftFromRight &&
+           a.buttonsRightFromRight == b.buttonsRightFromRight;
+}
+std::unordered_map<HWND, StatusDockLayout> g_statusDockLayouts;
 
 bool IsStatusDockToggleWnd(HWND hWnd) {
     return hWnd && GetPropW(hWnd, L"WindhawkExplorerGpuViewToggleOwner");
@@ -11470,6 +11570,7 @@ HPAINTBUFFER WINAPI BeginBufferedPaint_Hook(HDC hdcTarget,
         // its own layer): same coordinates, same band.
         StatusDockBuffer child = {*phdc, parent->hWnd, parent->band,
                                   parent->hasBand, false, false};
+        child.nested = true;
         g_statusDockBuffersForThread[g_statusDockBufferCountForThread++] =
             child;
     } else if (hWnd && dwFormat == BPBF_COMPATIBLEBITMAP &&
@@ -11489,6 +11590,8 @@ HPAINTBUFFER WINAPI BeginBufferedPaint_Hook(HDC hdcTarget,
 
 void FinishStatusDockToggle(const StatusDockBuffer& buffer);
 void FinishStatusDockButtons(StatusDockBuffer& buffer);
+void MeasureStatusDock(const StatusDockBuffer& buffer,
+                       HPAINTBUFFER paintBuffer);
 
 using EndBufferedPaint_t = decltype(&EndBufferedPaint);
 EndBufferedPaint_t EndBufferedPaint_Original;
@@ -11501,6 +11604,10 @@ HRESULT WINAPI EndBufferedPaint_Hook(HPAINTBUFFER hBufferedPaint,
                 StatusDockBuffer& ended = g_statusDockBuffersForThread[i];
                 if (fUpdateTarget && !ended.isToggle && ended.buttonCount > 0) {
                     FinishStatusDockButtons(ended);
+                }
+                if (fUpdateTarget && !ended.isToggle && !ended.nested &&
+                    ended.hasBand) {
+                    MeasureStatusDock(ended, hBufferedPaint);
                 }
                 // A full paint without a band: the status bar is hidden.
                 if (ended.fullPaint && !ended.hasBand && !ended.isToggle) {
@@ -11636,8 +11743,8 @@ FillRect_t FillRect_Original;
 void LogThinLine(PCWSTR api, HDC hdc, int x, int y, int w, int h,
                  bool skipped) {
     static LONG count;
-    if ((w > 2 && h > 2) || std::max(w, h) < 40 ||
-        InterlockedIncrement(&count) > 60) {
+    if (std::min(w, h) > 6 || std::max(w, h) < 40 ||
+        InterlockedIncrement(&count) > 200) {
         return;
     }
     WCHAR className[64] = L"-";
@@ -11692,7 +11799,8 @@ GdiAlphaBlend_t GdiAlphaBlend_Original;
 BOOL WINAPI GdiAlphaBlend_Hook(HDC hdcDest, int xDest, int yDest, int wDest,
                                int hDest, HDC hdcSrc, int xSrc, int ySrc,
                                int wSrc, int hSrc, BLENDFUNCTION ftn) {
-    if (wDest > 0 && wDest <= 2 && hDest >= 40) {
+    if (((wDest > 0 && wDest <= 6 && hDest >= 40) ||
+         (hDest > 0 && hDest <= 6 && wDest >= 40))) {
         bool skip = PaintPaneSplitter(hdcDest, xDest, yDest, wDest, hDest);
         LogThinLine(L"AlphaBlend", hdcDest, xDest, yDest, wDest, hDest, skip);
         if (skip) {
@@ -12519,16 +12627,68 @@ void AlphaBlendNineGrid(HDC hdc,
     }
 }
 
-// The dock: a see-through Catppuccin Mocha base band (the window glass shows
-// through) across the whole view, with a 1px blue to mauve line along its top
-// while hovered. View button faces sit inside it.
+// The status bar: two small docks on the window glass, one around the item
+// count and one around the view buttons, styled like the command bar dock at
+// the top. View button faces sit inside the right one.
 enum class StatusDockShape {
     Dock,
     Hover,          // mantle face, blue to mauve gradient ring
     Selected,       // surface0 face, blue ring
     SelectedHover,  // surface0 face, blue to mauve gradient ring
     DockHover,      // the dock with a blue to mauve gradient top line
+    Pill,           // a small dock: crust glass, surface2 edge
+    PillHover,      // a small dock with the blue to mauve edge
 };
+
+// Same as the command bar dock: a #4B11111B fill and a 2px edge, #64585B70 at
+// rest and blue to mauve at the same strength on hover.
+void PaintStatusDockPill(ID2D1RenderTarget* renderTarget,
+                         int width,
+                         int height,
+                         float scale,
+                         bool hover) {
+    float edge = std::max(1.0f, std::round(2.0f * scale));
+    float radius = std::min(12.0f * scale, height / 2.0f);
+    winrt::com_ptr<ID2D1SolidColorBrush> fill;
+    renderTarget->CreateSolidColorBrush(ThemePartColor(0x4B, 0x11, 0x11, 0x1B),
+                                        fill.put());
+    if (fill) {
+        renderTarget->FillRoundedRectangle(
+            D2D1::RoundedRect(D2D1::RectF(0, 0, width, height), radius, radius),
+            fill.get());
+    }
+
+    D2D1_ROUNDED_RECT ring = D2D1::RoundedRect(
+        D2D1::RectF(edge / 2, edge / 2, width - edge / 2, height - edge / 2),
+        radius - edge / 2, radius - edge / 2);
+    if (!hover) {
+        winrt::com_ptr<ID2D1SolidColorBrush> rest;
+        renderTarget->CreateSolidColorBrush(
+            ThemePartColor(0x64, 0x58, 0x5B, 0x70), rest.put());
+        if (rest) {
+            renderTarget->DrawRoundedRectangle(ring, rest.get(), edge);
+        }
+        return;
+    }
+
+    D2D1_GRADIENT_STOP stops[] = {
+        {0.0f, ThemePartColor(0x64, 0x89, 0xB4, 0xFA)},
+        {1.0f, ThemePartColor(0x64, 0xCB, 0xA6, 0xF7)},
+    };
+    winrt::com_ptr<ID2D1GradientStopCollection> stopCollection;
+    renderTarget->CreateGradientStopCollection(stops, ARRAYSIZE(stops),
+                                               stopCollection.put());
+    winrt::com_ptr<ID2D1LinearGradientBrush> brush;
+    if (stopCollection) {
+        renderTarget->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, 0),
+                                                D2D1::Point2F(width, height)),
+            stopCollection.get(), brush.put());
+    }
+    if (brush) {
+        renderTarget->DrawRoundedRectangle(ring, brush.get(), edge);
+    }
+}
 
 void PaintStatusDockBand(ID2D1RenderTarget* renderTarget,
                          int width,
@@ -12575,6 +12735,12 @@ HDC CreateStatusDockBitmap(int width,
                            StatusDockShape shape) {
     return CreateThemePartBitmap(
         width, height, [&](ID2D1RenderTarget* renderTarget) {
+            if (shape == StatusDockShape::Pill ||
+                shape == StatusDockShape::PillHover) {
+                PaintStatusDockPill(renderTarget, width, height, scale,
+                                    shape == StatusDockShape::PillHover);
+                return;
+            }
             bool dock = shape == StatusDockShape::Dock ||
                         shape == StatusDockShape::DockHover;
             if (dock) {
@@ -12727,18 +12893,100 @@ void PaintStatusDockShape(HDC hdc,
     ReleaseSRWLockExclusive(&g_themePartCacheLock);
 }
 
-bool IsStatusDockHovered(HWND hViewWnd) {
+int StatusDockHoverPart(HWND hViewWnd) {
     AcquireSRWLockShared(&g_statusDockBandsLock);
-    bool hovered = g_statusDockHovered.contains(hViewWnd);
+    auto it = g_statusDockHovered.find(hViewWnd);
+    int part = it != g_statusDockHovered.end() ? it->second : 0;
     ReleaseSRWLockShared(&g_statusDockBandsLock);
-    return hovered;
+    return part;
 }
 
-void PaintStatusDock(HDC hdc, RECT pill, RECT clip, UINT dpi, HWND hViewWnd) {
-    PaintStatusDockShape(hdc, pill, clip, dpi,
-                         IsStatusDockHovered(hViewWnd)
-                             ? StatusDockShape::DockHover
-                             : StatusDockShape::Dock);
+// The two small docks in view client coordinates: the item count on the
+// left, the view buttons with the GPU view toggle on the right. The band
+// outside them stays glass.
+void GetStatusDockPills(HWND hViewWnd,
+                        RECT band,
+                        UINT dpi,
+                        RECT* textPill,
+                        RECT* buttonsPill) {
+    float scale = dpi / 96.0f;
+    AcquireSRWLockShared(&g_statusDockBandsLock);
+    StatusDockLayout layout;
+    if (auto it = g_statusDockLayouts.find(hViewWnd);
+        it != g_statusDockLayouts.end()) {
+        layout = it->second;
+    }
+    auto toggle = g_statusDockToggles.find(hViewWnd);
+    HWND hToggleWnd =
+        toggle != g_statusDockToggles.end() ? toggle->second : nullptr;
+    ReleaseSRWLockShared(&g_statusDockBandsLock);
+
+    int inset = std::max(1, (int)(1 * scale));
+    LONG top = band.top + inset;
+    LONG bottom = band.bottom - inset;
+    // Clear of the window's rounded bottom corners.
+    LONG sideRoom = (LONG)(8 * scale);
+
+    LONG textLeft = band.left + (LONG)(12 * scale);
+    LONG textRight = textLeft + (LONG)(48 * scale);
+    if (layout.textRight > layout.textLeft) {
+        textLeft = layout.textLeft;
+        textRight = layout.textRight;
+    }
+    LONG textPad = (LONG)(10 * scale);
+
+    LONG buttonsRight = band.right - (LONG)(10 * scale);
+    LONG buttonsLeft = buttonsRight - (LONG)(48 * scale);
+    if (layout.buttonsLeftFromRight > layout.buttonsRightFromRight) {
+        buttonsLeft = band.right - layout.buttonsLeftFromRight;
+        buttonsRight = band.right - layout.buttonsRightFromRight;
+    }
+    RECT toggleRect;
+    if (hToggleWnd && IsWindowVisible(hToggleWnd) &&
+        GetWindowRect(hToggleWnd, &toggleRect)) {
+        MapWindowPoints(nullptr, hViewWnd, (POINT*)&toggleRect, 2);
+        if (toggleRect.left < band.right && toggleRect.right > band.left &&
+            toggleRect.top < band.bottom && toggleRect.bottom > band.top) {
+            buttonsLeft = std::min(buttonsLeft, toggleRect.left);
+            buttonsRight = std::max(buttonsRight, toggleRect.right);
+        }
+    }
+    LONG buttonsPad = (LONG)(4 * scale);
+
+    *buttonsPill = {buttonsLeft - buttonsPad, top,
+                    std::min(band.right - sideRoom, buttonsRight + buttonsPad),
+                    bottom};
+    *textPill = {std::max(band.left + sideRoom, textLeft - textPad), top,
+                 std::min(textRight + textPad,
+                          buttonsPill->left - (LONG)(6 * scale)),
+                 bottom};
+}
+
+// offset maps view client coordinates to those of hdc.
+void PaintStatusDock(HDC hdc, POINT offset, RECT clip, UINT dpi, HWND hViewWnd) {
+    RECT band;
+    if (!GetStatusDockBand(hViewWnd, &band)) {
+        return;
+    }
+    RECT pills[2];
+    GetStatusDockPills(hViewWnd, band, dpi, &pills[0], &pills[1]);
+    int part = StatusDockHoverPart(hViewWnd);
+    for (int i = 0; i < 2; i++) {
+        if (pills[i].right <= pills[i].left) {
+            continue;
+        }
+        OffsetRect(&pills[i], offset.x, offset.y);
+        PaintStatusDockShape(hdc, pills[i], clip, dpi,
+                             part == i + 1 ? StatusDockShape::PillHover
+                                           : StatusDockShape::Pill);
+    }
+}
+
+// View client coordinates to those of another window.
+POINT StatusDockOffset(HWND hViewWnd, HWND hWnd) {
+    POINT origin = {0, 0};
+    MapWindowPoints(hViewWnd, hWnd, &origin, 1);
+    return origin;
 }
 
 UINT StatusDockDpi(HWND hWnd);
@@ -12751,31 +12999,39 @@ constexpr UINT_PTR kStatusDockHoverTimer = 0x57444B31;  // 'WDK1'
 // only while hovered, ends it (the cursor may leave over the toggle, which is
 // another window).
 void UpdateStatusDockHover(HWND hViewWnd, const POINT* clientPoint) {
-    bool inside = false;
+    int part = 0;
     RECT band;
     if (GetStatusDockBand(hViewWnd, &band)) {
-        RECT pill = StatusDockPillFromBand(band, StatusDockDpi(hViewWnd));
-        POINT cursor;
+        RECT pills[2];
+        GetStatusDockPills(hViewWnd, band, StatusDockDpi(hViewWnd), &pills[0],
+                           &pills[1]);
+        POINT point;
+        bool known = false;
         if (clientPoint) {
-            inside = PtInRect(&pill, *clientPoint);
-        } else if (GetCursorPos(&cursor)) {
-            HWND hAtWnd = WindowFromPoint(cursor);
+            point = *clientPoint;
+            known = true;
+        } else if (GetCursorPos(&point)) {
+            HWND hAtWnd = WindowFromPoint(point);
             AcquireSRWLockShared(&g_statusDockBandsLock);
             auto it = g_statusDockToggles.find(hViewWnd);
             HWND hToggleWnd =
                 it != g_statusDockToggles.end() ? it->second : nullptr;
             ReleaseSRWLockShared(&g_statusDockBandsLock);
-            ScreenToClient(hViewWnd, &cursor);
-            inside = (hAtWnd == hViewWnd ||
-                      (hToggleWnd && hAtWnd == hToggleWnd)) &&
-                     PtInRect(&pill, cursor);
+            ScreenToClient(hViewWnd, &point);
+            known = hAtWnd == hViewWnd || (hToggleWnd && hAtWnd == hToggleWnd);
+        }
+        if (known) {
+            part = PtInRect(&pills[0], point)   ? 1
+                   : PtInRect(&pills[1], point) ? 2
+                                                : 0;
         }
     }
 
     AcquireSRWLockExclusive(&g_statusDockBandsLock);
-    bool was = g_statusDockHovered.contains(hViewWnd);
-    if (inside) {
-        g_statusDockHovered.insert(hViewWnd);
+    auto hovered = g_statusDockHovered.find(hViewWnd);
+    int was = hovered != g_statusDockHovered.end() ? hovered->second : 0;
+    if (part) {
+        g_statusDockHovered[hViewWnd] = part;
     } else {
         g_statusDockHovered.erase(hViewWnd);
     }
@@ -12783,11 +13039,11 @@ void UpdateStatusDockHover(HWND hViewWnd, const POINT* clientPoint) {
     HWND hToggleWnd = it != g_statusDockToggles.end() ? it->second : nullptr;
     ReleaseSRWLockExclusive(&g_statusDockBandsLock);
 
-    if (inside == was) {
+    if (part == was) {
         return;
     }
 
-    if (inside) {
+    if (part) {
         SetTimer(hViewWnd, kStatusDockHoverTimer, 50, nullptr);
     } else {
         KillTimer(hViewWnd, kStatusDockHoverTimer);
@@ -12843,6 +13099,7 @@ void RemoveStatusDockHover(HWND hViewWnd) {
     g_statusDockHovered.erase(hViewWnd);
     g_statusDockSubclassed.erase(hViewWnd);
     g_statusDockToggles.erase(hViewWnd);
+    g_statusDockLayouts.erase(hViewWnd);
     ReleaseSRWLockExclusive(&g_statusDockBandsLock);
 }
 
@@ -13269,7 +13526,15 @@ void FinishStatusDockToggle(const StatusDockBuffer& buffer) {
 
     UINT dpi = StatusDockDpi(hToggleWnd);
     float scale = dpi / 96.0f;
-    PaintStatusDock(buffer.mem, buffer.band, client, dpi, buffer.view);
+    POINT offset = StatusDockOffset(buffer.view, hToggleWnd);
+    PaintStatusDock(buffer.mem, offset, client, dpi, buffer.view);
+    RECT viewBand, textPill, buttonsPill;
+    if (!GetStatusDockBand(buffer.view, &viewBand)) {
+        return;
+    }
+    GetStatusDockPills(buffer.view, viewBand, dpi, &textPill, &buttonsPill);
+    OffsetRect(&buttonsPill, offset.x, offset.y);
+    LONG edge = std::max(1, (int)std::round(2 * scale));
 
     POINT cursor;
     bool hot = GetCursorPos(&cursor) && WindowFromPoint(cursor) == hToggleWnd;
@@ -13279,9 +13544,8 @@ void FinishStatusDockToggle(const StatusDockBuffer& buffer) {
         RECT face = client;
         face.left += (int)(1 * scale);
         face.right -= (int)(1 * scale);
-        face.top = std::max(buffer.band.top, 0L) + (int)(1 * scale);
-        face.bottom =
-            std::min(buffer.band.bottom, client.bottom) - (int)(1 * scale);
+        face.top = std::max(buttonsPill.top + edge, 0L);
+        face.bottom = std::min(buttonsPill.bottom - edge, client.bottom);
         if (face.right > face.left && face.bottom > face.top) {
             PaintStatusDockShape(buffer.mem, face, face, dpi,
                                  pressed ? StatusDockShape::SelectedHover
@@ -13295,7 +13559,7 @@ void FinishStatusDockToggle(const StatusDockBuffer& buffer) {
                DI_NORMAL);
 
     // Entering the dock over the toggle also counts as hovering the dock.
-    if (hot && buffer.view && !IsStatusDockHovered(buffer.view)) {
+    if (hot && buffer.view && StatusDockHoverPart(buffer.view) != 2) {
         UpdateStatusDockHover(buffer.view, nullptr);
     }
 }
@@ -13355,7 +13619,7 @@ void StatusDockAfterFill(HDC hdc, const RECT* rect, HBRUSH hbr) {
             if (!GetStatusDockBand(hWnd, &band)) {
                 continue;
             }
-            RECT pillScreen = StatusDockPillFromBand(band, dpi);
+            RECT pillScreen = band;
             MapWindowPoints(hWnd, nullptr, (POINT*)&pillScreen, 2);
             if (IntersectRect(&overlap, &pillScreen, &toggleScreen)) {
                 hViewWnd = hWnd;
@@ -13368,7 +13632,11 @@ void StatusDockAfterFill(HDC hdc, const RECT* rect, HBRUSH hbr) {
         }
 
         OffsetRect(&pill, -toggleScreen.left, -toggleScreen.top);
-        PaintStatusDock(hdc, pill, *rect, dpi, hViewWnd);
+        AcquireSRWLockExclusive(&g_statusDockBandsLock);
+        g_statusDockToggles[hViewWnd] = buffer->hWnd;
+        ReleaseSRWLockExclusive(&g_statusDockBandsLock);
+        PaintStatusDock(hdc, StatusDockOffset(hViewWnd, buffer->hWnd), *rect,
+                        dpi, hViewWnd);
         buffer->band = pill;
         buffer->hasBand = true;
         buffer->view = hViewWnd;
@@ -13414,8 +13682,7 @@ void StatusDockAfterFill(HDC hdc, const RECT* rect, HBRUSH hbr) {
         g_statusDockBands[buffer->hWnd] = height;
         ReleaseSRWLockExclusive(&g_statusDockBandsLock);
 
-        PaintStatusDock(hdc, StatusDockPillFromBand(*rect, dpi), *rect, dpi,
-                        buffer->hWnd);
+        PaintStatusDock(hdc, POINT{0, 0}, *rect, dpi, buffer->hWnd);
         EnsureStatusDockHover(buffer->hWnd);
         return;
     }
@@ -13434,8 +13701,7 @@ void StatusDockAfterFill(HDC hdc, const RECT* rect, HBRUSH hbr) {
     // Child element backgrounds inside the band erase the pill, repaint it.
     RECT overlap;
     if (buffer->hasBand && IntersectRect(&overlap, rect, &buffer->band)) {
-        PaintStatusDock(hdc, StatusDockPillFromBand(buffer->band, dpi), overlap,
-                        dpi, buffer->hWnd);
+        PaintStatusDock(hdc, POINT{0, 0}, overlap, dpi, buffer->hWnd);
     }
 }
 
@@ -13463,15 +13729,25 @@ bool PaintStatusDockViewButton(HDC hdc, int iStateId, LPCRECT pRect) {
 
     UINT dpi = StatusDockDpi(buffer->hWnd);
     float scale = dpi / 96.0f;
-    RECT pill = StatusDockPillFromBand(buffer->band, dpi);
+    RECT band, textPill, pill;
+    if (!GetStatusDockBand(buffer->hWnd, &band)) {
+        band = buffer->band;
+    }
+    GetStatusDockPills(buffer->hWnd, band, dpi, &textPill, &pill);
 
     // The fills before this already restored the dock under the button.
     RECT face = *pRect;
-    // As large as the dock allows, so the ring clears the 16px glyph.
+    // Inside the dock's edge, as large as it allows, so the ring clears the
+    // 16px glyph.
+    LONG edge = std::max(1, (int)std::round(2 * scale));
     face.left += (int)(1 * scale);
     face.right -= (int)(1 * scale);
-    face.top = pill.top + std::max(2, (int)(2 * scale));
-    face.bottom = pill.bottom - std::max(1, (int)(1 * scale));
+    face.top = pill.top + edge;
+    face.bottom = pill.bottom - edge;
+    if (face.bottom - face.top < (LONG)(18 * scale)) {
+        face.top = pill.top + 1;
+        face.bottom = pill.bottom - 1;
+    }
     if (face.right <= face.left || face.bottom <= face.top) {
         return true;
     }
@@ -13516,26 +13792,145 @@ bool PaintStatusDockViewButton(HDC hdc, int iStateId, LPCRECT pRect) {
     return true;
 }
 
-// The separators between status fields ("7 items | 1 item selected"): one
-// surface1 line from just under the dock's top line to its bottom edge.
+// The separators between status fields ("7 items | 1 item selected"): the
+// fields share one small dock, so no line is drawn.
 bool PaintStatusDockSeparator(HDC hdc, LPCRECT pRect) {
     StatusDockBuffer* buffer = FindStatusDockBuffer(hdc);
-    if (!buffer || buffer->isToggle || !buffer->hasBand) {
+    if (!buffer || buffer->isToggle || !pRect) {
         return false;
     }
+    if (buffer->hasBand) {
+        return true;
+    }
+    RECT band;
+    return GetStatusDockBand(buffer->hWnd, &band) && pRect->top >= band.top &&
+           pRect->bottom <= band.bottom;
+}
 
-    UINT dpi = StatusDockDpi(buffer->hWnd);
-    RECT pill = StatusDockPillFromBand(buffer->band, dpi);
-    if (pRect->left < pill.left || pRect->right > pill.right) {
-        return false;
+// Finds the status text in the finished paint: bright grey pixels in the
+// middle rows of the band, left of the view buttons. When it moved, the band
+// is painted again with the dock around the text.
+void MeasureStatusDock(const StatusDockBuffer& buffer,
+                       HPAINTBUFFER paintBuffer) {
+    HWND hViewWnd = buffer.hWnd;
+    RECT band, client;
+    if (!GetStatusDockBand(hViewWnd, &band) ||
+        !GetClientRect(hViewWnd, &client)) {
+        return;
+    }
+    UINT dpi = StatusDockDpi(hViewWnd);
+    float scale = dpi / 96.0f;
+
+    AcquireSRWLockShared(&g_statusDockBandsLock);
+    StatusDockLayout old;
+    if (auto it = g_statusDockLayouts.find(hViewWnd);
+        it != g_statusDockLayouts.end()) {
+        old = it->second;
+    }
+    ReleaseSRWLockShared(&g_statusDockBandsLock);
+    StatusDockLayout layout = old;
+
+    if (buffer.buttonCount == 2) {
+        LONG left = std::min(buffer.buttons[0].rect.left,
+                             buffer.buttons[1].rect.left);
+        LONG right = std::max(buffer.buttons[0].rect.right,
+                              buffer.buttons[1].rect.right);
+        layout.buttonsLeftFromRight = client.right - left;
+        layout.buttonsRightFromRight = client.right - right;
     }
 
-    int line = std::max(1, (int)(dpi / 96));
-    int x = pRect->left + (pRect->right - pRect->left - line) / 2;
-    RECT rc = {x, pill.top + line, x + line, pill.bottom};
-    SetDCBrushColor(hdc, RGB(0x45, 0x47, 0x5A));
-    FillRect_Original(hdc, &rc, (HBRUSH)GetStockObject(DC_BRUSH));
-    return true;
+    RECT textPill, buttonsPill;
+    GetStatusDockPills(hViewWnd, band, dpi, &textPill, &buttonsPill);
+    LONG scanRight = buttonsPill.left;
+    if (layout.buttonsLeftFromRight > layout.buttonsRightFromRight) {
+        scanRight = std::min(scanRight, client.right - layout.buttonsLeftFromRight);
+    }
+    scanRight -= (LONG)(2 * scale);
+    RECT scan = {band.left, band.top + (LONG)(4 * scale), scanRight,
+                 band.bottom - (LONG)(4 * scale)};
+    RECT target, area;
+    if (scan.right > scan.left && scan.bottom > scan.top &&
+        SUCCEEDED(GetBufferedPaintTargetRect(paintBuffer, &target)) &&
+        IntersectRect(&area, &scan, &target)) {
+        int width = area.right - area.left;
+        int height = area.bottom - area.top;
+        BITMAPINFO info = {};
+        info.bmiHeader.biSize = sizeof(info.bmiHeader);
+        info.bmiHeader.biWidth = width;
+        info.bmiHeader.biHeight = -height;
+        info.bmiHeader.biPlanes = 1;
+        info.bmiHeader.biBitCount = 32;
+        info.bmiHeader.biCompression = BI_RGB;
+        void* bits = nullptr;
+        HBITMAP dib = CreateDIBSection(nullptr, &info, DIB_RGB_COLORS, &bits,
+                                       nullptr, 0);
+        HDC copy = dib ? CreateCompatibleDC(buffer.mem) : nullptr;
+        int found = -1, last = -1;
+        if (copy && bits) {
+            HGDIOBJ previous = SelectObject(copy, dib);
+            if (BitBlt(copy, 0, 0, width, height, buffer.mem, area.left,
+                       area.top, SRCCOPY)) {
+                GdiFlush();
+                const BYTE* pixels = (const BYTE*)bits;
+                for (int x = 0; x < width; x++) {
+                    for (int y = 0; y < height; y++) {
+                        const BYTE* px = pixels + ((size_t)y * width + x) * 4;
+                        BYTE high = std::max({px[0], px[1], px[2]});
+                        BYTE low = std::min({px[0], px[1], px[2]});
+                        if (high >= 0x90 && high - low < 0x48) {
+                            if (found < 0) {
+                                found = x;
+                            }
+                            last = x;
+                            break;
+                        }
+                    }
+                }
+            }
+            SelectObject(copy, previous);
+        }
+        if (copy) {
+            DeleteDC(copy);
+        }
+        if (dib) {
+            DeleteObject(dib);
+        }
+
+        bool whole = area.left <= scan.left && area.right >= scan.right;
+        if (found >= 0) {
+            int left = area.left + found;
+            int right = area.left + last + 1;
+            if (whole || old.textRight <= old.textLeft) {
+                layout.textLeft = left;
+                layout.textRight = right;
+            } else {
+                layout.textLeft = std::min(layout.textLeft, left);
+                layout.textRight = std::max(layout.textRight, right);
+            }
+        }
+    }
+
+    if (SameStatusDockLayout(layout, old)) {
+        return;
+    }
+    AcquireSRWLockExclusive(&g_statusDockBandsLock);
+    g_statusDockLayouts[hViewWnd] = layout;
+    auto it = g_statusDockToggles.find(hViewWnd);
+    HWND hToggleWnd = it != g_statusDockToggles.end() ? it->second : nullptr;
+    ReleaseSRWLockExclusive(&g_statusDockBandsLock);
+
+    auto moved = [](int a, int b) { return std::abs(a - b) > 1; };
+    bool textMoved = moved(layout.textLeft, old.textLeft) ||
+                     moved(layout.textRight, old.textRight);
+    bool buttonsMoved =
+        moved(layout.buttonsLeftFromRight, old.buttonsLeftFromRight) ||
+        moved(layout.buttonsRightFromRight, old.buttonsRightFromRight);
+    if (textMoved || buttonsMoved) {
+        InvalidateRect(hViewWnd, &band, FALSE);
+    }
+    if (buttonsMoved && hToggleWnd && IsWindow(hToggleWnd)) {
+        InvalidateRect(hToggleWnd, nullptr, FALSE);
+    }
 }
 
 bool PaintScrollBarThumb(HDC hdc,
