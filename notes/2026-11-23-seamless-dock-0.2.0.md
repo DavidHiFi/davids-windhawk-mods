@@ -151,6 +151,33 @@ a folder icon and a blank page among the open apps.
   falls through to the window's own icon instead of the blank page.
 - Install: `work\2026-11-23-modular-bar\install-dock-033.ps1` (refuses unless live = 0.3.2).
 
+Owner, 2026-11-24, with a screenshot: "that line separator is miss-aligned, it should be properly
+centered also adding separators for the dock, i should be able to right click and remove
+separators/add separators". Folded into 0.3.3 (never installed):
+
+- Centring: the line had gap + pad on its left and only pad on its right, so it sat 3 px right
+  of the middle (measured 490 vs 487 and 611 vs 608 in the screenshot). Now gap + pad on both
+  sides; the block is one gap wider.
+- Own separators: `sepAfter` on a pin, saved in a new stored value `seps` (kind:value lines),
+  apart from `pins` so 0.3.2 still reads the pin list on a rollback. Right-click a pinned app:
+  "Add separator after" / "Remove separator after". Right-click a line (the room between two
+  icons): "Remove separator". The bin menu: "Add/Remove separator before".
+- The two built-in lines can go too: stored values `lineOpen` and `lineBin` (missing = on, not
+  settings, so no defaults script is needed). Dock options has a Separators group with both.
+- Drag uses the nearest pinned place (spacing is uneven now); separators keep their places while
+  an app moves between them.
+
+Installed 1:12 am 2026-11-24 (install-dock-033.ps1, syntax check clean, mods 363db46, feed
+284a378). The installer again missed the tool restart and restarted it itself (new pid 18248);
+desktop fine after 60 s. Live source equals the work copy (line endings aside). Work area still
+0,56,2560,1366. Main screen capture index is 1.
+
+Proof `D:\Agent Work\seamless-dock\proof\sep-1124\`: dock-after.png, measure.py on row 32: both
+lines have 12 px of room on each side (382-393 | 394 | 395-406 and 455-466 | 467 | 468-479).
+Menu test (`sep-test.ps1`, elevated, posted messages only) is queued for the desktop lock
+(another thread held it at 1:20 am): run it under `coop lock desktop --input`, check
+sep-test.log and the menu-*.png / dock-*.png captures.
+
 ## Rollback
 
 - Dock 0.3.3: install `seamless-dock-0.3.2.wh.cpp` with Install-StagedMod.
