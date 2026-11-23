@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.29
+// @version         2.2.30
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -22,9 +22,13 @@ Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
 
+## What's new in 2.2.30
+
+- The Loaded mods window no longer turns see-through a few seconds after it opens. Windhawk freezes that window briefly while it fills the list, and Windows used to show a plain stand-in copy with a clear title strip until it woke up. The styled window now stays on screen the whole time.
+
 ## What's new in 2.2.29
 
-- The Loaded mods window shows its title buttons again. Version 2.2.28 drew over them. The see-through title strip it tried to fix was not this mod: Windhawk's Loaded mods window freezes for a few seconds after it opens, and Windows shows a plain stand-in copy until it wakes up.
+- The Loaded mods window shows its title buttons again. Version 2.2.28 drew over them.
 
 ## What's new in 2.2.28
 
@@ -2465,8 +2469,8 @@ static void ApplyTrayDialogLook(HWND dialog, HWND list, const Settings& s) {
     if (HFONT font = TrayFont(dialog, s)) SendMessageW(list, WM_SETFONT, (WPARAM)font, TRUE);
     // Both tray windows float over other apps and are almost never in front, and
     // Windows drops the acrylic blur from a background window. So the body keeps a
-    // near solid Mocha fill. The title strip is client paint too (ProgressDialogProc)
-    // and carries the same fill (PaintCaption).
+    // near solid Mocha fill. Mod tasks paints its title strip itself (ProgressDialogProc)
+    // with the same fill (PaintCaption); Loaded mods keeps the native strip.
     Settings frame = s;
     if (frame.blur) frame.backgroundOpacity = std::clamp(frame.backgroundOpacity, 95, 99);
     ApplyWindowStack(dialog, frame);
@@ -5650,6 +5654,12 @@ BOOL Wh_ModInit() {
     g_mochaIcons = g_settings.mochaIcons;
     if (!g_isUiProcess) {
         Wh_SetFunctionHook((void*)Shell_NotifyIconW, (void*)NotifyIconHook, (void**)&g_notifyIcon);
+        // Windhawk's Loaded mods window stops answering for a few seconds after it
+        // opens, styled or not. After 5 s Windows swaps in a plain stand-in copy with
+        // a see-through title strip, and that is what showed in the background
+        // (live-0943, -0945 with the styler off, -1002). Without ghosting the real
+        // window just keeps its last frame until Windhawk wakes up.
+        DisableProcessWindowsGhosting();
     }
 
     if (g_isUiProcess) {
