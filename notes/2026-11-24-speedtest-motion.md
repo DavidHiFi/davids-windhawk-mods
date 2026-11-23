@@ -25,11 +25,16 @@ default with a switch.
 - Installed 3:30 am with `install-240.ps1` (Install-StagedMod): registry 2.4.0, tool process
   back (pid 32164), desktop fine after the watch minute. Published: mods ac88cb4, feed
   7cd7413. Installer backup `local@network-speedtest-plus-20261124-0330.wh.cpp`.
-- Not yet proven live: the recording of the open and close. Queued on the desktop lock
-  (number 4) while the owner plays. To record: post `SpeedTestFlyout.Show` to the
-  `SpeedTestFlyout_Native` window, then WM_KEYDOWN VK_ESCAPE to close; record the monitor
-  with vcap. Look for a black box or a shadow popping in during the fade, and for the
-  glass coming on after the open.
+- Proven live at 4:02 am (owner said do it now; plain `coop lock desktop`, no game in front).
+  Recorded with vcap on gfxcapture monitor 3 (the left screen; the flyout opens at
+  -412,181). Posts must come from an elevated script (Invoke-Elevated), the tool process is
+  elevated. Escape only cancels the auto-started test; WM_CLOSE twice, 0.25 s apart, cancels
+  then closes.
+- Measured frame by frame (opacity fitted between the open and closed frames): open goes
+  0, 0.44, 0.74, 0.9, 1.0 over about 170 ms; close 1.0, 0.92, 0.7, 0.4, 0.1, 0 over about
+  150 ms. No black box, no shadow pop, no see-through frame. The small dip just after the
+  open settles is the glass switching on, as designed.
+- Clips: `work\2026-11-24-speedtest-motion\rec\` (real speed MP4, quarter-speed MP4 and GIF).
 
 ## The rules (backups `.bak-20261124-0314` beside each file)
 

@@ -2,6 +2,11 @@
 
 Last updated: 2026-11-22
 
+- 2026-11-24: Network Speed Test Plus 2.4.0 live 3:30 am: the window fades and slides open
+  and closed, with its own on/off and speed (follows the global speed). Published. New rule
+  for every UI: open and close animation, toggleable. Live recording still queued. Note:
+  `notes\2026-11-24-speedtest-motion.md`.
+- 2026-11-23: Seamless Controls 1.0.5 live 7:50 pm: skips about 30 windowless helpers (152 to 66 programs), clearer turned-off text; test PC 11 of 11.
 - 2026-11-23: Seamless Controls 1.0.2 live: preview picture fixed, settings window and drag box checked live.
 - 2026-11-22: Seamless Controls 1.0.1 (`local@seamless-controls`, our fork of Win32 UI
   Modernizer): Mocha dark classic windows and controls, stands down where our own mods own a

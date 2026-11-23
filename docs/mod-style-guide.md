@@ -34,6 +34,32 @@ One line, under about 100 characters, no trailing period. Say what the user
 gets, not how it works: "Current weather on the taskbar with a details card on
 hover. No Widgets, browser or API key needed".
 
+## Settings block (owner rule, 2026-11-04)
+
+Every mod with settings writes its `==WindhawkModSettings==` block the way the
+StartPad mod (Frankh93) does. Reference copy:
+`docs\reference\startpad-settings-block.yaml`.
+
+- Each setting has a short plain `$name` and a `$description` that says the
+  range and the suggested value ("4 to 12 (Suggested: 8).") or what on and off
+  do ("When off, the Windows key opens the original Start menu.").
+- Choices use `$options` with readable labels (`light: Light`), never raw ids.
+- Order settings the way a person thinks: opening and keys, layout, icons,
+  background, look (colors, glow, opacity), extra bars, behavior.
+- Give the user many knobs for the look: accent color (Catppuccin Mocha blue
+  `#89B4FA` default), glow strength and size, surface opacity, alignment.
+- Never rename an existing key when rewording; saved values live under it.
+- Defaults live in the schema; clamp every value in code.
+- Every mod that draws a window, flyout, panel or menu animates it open and closed
+  (owner rule, 2026-11-24) and carries two settings for it, grouped under Motion on
+  its Appearance page:
+  - `flyoutAnimation` (or `<surface>Animation`): "Open and close animation", on.
+  - `animationSpeed`: "Animation speed", `global` (Follow the global speed),
+    `veryQuick`, `quick`, `normal`, `relaxed`, `slow`; default `global`.
+  The global base lives in `HKCU\Software\DavidHiFi\Motion` (`Enabled`, `Speed`), and
+  Windows "Animation effects" off makes it still. Look and timing: the rice recipe,
+  `references\style.md`, Motion. Worked example: Network Speed Test Plus 2.4.0.
+
 ## Readme layout
 
 ```
