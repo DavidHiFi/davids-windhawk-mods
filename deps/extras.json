@@ -1,0 +1,51 @@
+{
+  "extras": [
+    {
+      "id": "hwinfo",
+      "name": "HWiNFO",
+      "kind": "dep",
+      "script": "deps/hwinfo.ps1",
+      "why": "The taskbar reads your temperatures and fan speeds from it. Always the newest beta, starts with Windows.",
+      "admin": true,
+      "auto": true,
+      "mods": ["local@seamless-taskbar"]
+    },
+    {
+      "id": "everything",
+      "name": "Everything",
+      "kind": "dep",
+      "script": "deps/everything.ps1",
+      "why": "Explorer search and folder sizes come from it. The newest beta, set up the way DavidHiFi has it.",
+      "admin": true,
+      "auto": true,
+      "mods": ["local@seamless-explorer-search", "explorer-details-better-file-sizes"]
+    },
+    {
+      "id": "ghub",
+      "name": "Logitech G HUB",
+      "kind": "dep",
+      "script": "deps/ghub.ps1",
+      "why": "The battery tray reads your Logitech mouse and headset from it. Only needed with a Logitech device.",
+      "admin": true,
+      "auto": true,
+      "optional": true,
+      "mods": ["logitech-battery-tray"]
+    },
+    {
+      "id": "mocha-steam",
+      "name": "Mocha Steam",
+      "kind": "app",
+      "script": "deps/mocha-steam.ps1",
+      "why": "DavidHiFi's look for Steam, with his plugins. Steam closes for a moment while it goes in.",
+      "admin": true
+    },
+    {
+      "id": "freedictate",
+      "name": "FreeDictate",
+      "kind": "app",
+      "script": "deps/freedictate.ps1",
+      "why": "Type with your voice in any app. It runs on your PC, nothing goes online.",
+      "admin": false
+    }
+  ]
+}
