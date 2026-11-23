@@ -2,7 +2,7 @@
 // @id              helium-acrylic
 // @name            Helium Acrylic
 // @description     Keeps Helium's acrylic surface, Catppuccin colors and system-drawn frame working after browser updates
-// @version         3.9.1
+// @version         3.9.2
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -1901,7 +1901,7 @@ static HICON MakeBadgeIcon(int size, WCHAR glyph) {
     HDC dc = CreateCompatibleDC(nullptr);
     HGDIOBJ old = SelectObject(dc, glyphBm);
     memset(glyphBits, 0, (size_t)size * size * 4);
-    HFONT font = CreateFontW(-(int)(size * 0.62f), 0, 0, 0, FW_NORMAL, 0, 0, 0,
+    HFONT font = CreateFontW(-(int)(size * 0.84f), 0, 0, 0, FW_NORMAL, 0, 0, 0,
                              DEFAULT_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0,
                              L"Segoe Fluent Icons");
     HGDIOBJ oldFont = SelectObject(dc, font);
@@ -1918,26 +1918,18 @@ static HICON MakeBadgeIcon(int size, WCHAR glyph) {
 
     const float c0[3] = {0x89 / 255.f, 0xB4 / 255.f, 0xFA / 255.f};
     const float c1[3] = {0xCB / 255.f, 0xA6 / 255.f, 0xF7 / 255.f};
-    const float ink[3] = {0x11 / 255.f, 0x11 / 255.f, 0x1B / 255.f};
-    float radius = size * 0.26f, half = size / 2.0f;
     uint32_t* px = (uint32_t*)bits;
     const uint32_t* gp = (const uint32_t*)glyphBits;
     for (int y = 0; y < size; y++)
         for (int x = 0; x < size; x++) {
-            float qx = std::fabs(x + 0.5f - half) - (half - radius);
-            float qy = std::fabs(y + 0.5f - half) - (half - radius);
-            float ox = std::max(qx, 0.0f), oy = std::max(qy, 0.0f);
-            float d = std::sqrt(ox * ox + oy * oy) +
-                      std::min(std::max(qx, qy), 0.0f) - radius;
-            float a = std::clamp(0.5f - d, 0.0f, 1.0f);
             float t = std::clamp((x + y) / (2.0f * (size - 1)), 0.0f, 1.0f);
             float cov = ((gp[y * size + x] >> 8) & 0xFF) / 255.0f;
             float rgb[3];
             for (int i = 0; i < 3; i++) {
                 float base = c0[i] + (c1[i] - c0[i]) * t;
-                rgb[i] = (base + (ink[i] - base) * cov) * a;
+                rgb[i] = base * cov;
             }
-            px[y * size + x] = ((uint32_t)(a * 255 + 0.5f) << 24) |
+            px[y * size + x] = ((uint32_t)(cov * 255 + 0.5f) << 24) |
                                ((uint32_t)(rgb[0] * 255 + 0.5f) << 16) |
                                ((uint32_t)(rgb[1] * 255 + 0.5f) << 8) |
                                (uint32_t)(rgb[2] * 255 + 0.5f);
