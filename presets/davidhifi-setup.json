@@ -3007,6 +3007,7 @@
       "id": "local@seamless-windows-firewall",
       "enabled": true,
       "settings": {
+        "allowOnPublicNetworks": 0,
         "autoBlockedApps[0].appPath": "",
         "autoBlockedApps[0].direction": "fully_offline",
         "autoBlockedApps[0].includeChildProcesses": 1,
@@ -3030,6 +3031,7 @@
         "pillIndicatorMode": "always",
         "rememberCycleTemplates": 1,
         "rememberWindowPosition": 1,
+        "replaceFirewallPrompt": 1,
         "restoreAll": "",
         "settingsGlass": 1,
         "settingsTrayIcon": 1,

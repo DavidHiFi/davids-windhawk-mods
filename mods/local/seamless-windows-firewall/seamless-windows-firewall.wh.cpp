@@ -2,7 +2,7 @@
 // @id              seamless-windows-firewall
 // @name            Seamless Windows Firewall
 // @description     Block or allow any app's internet in one click, from the tray, a shortcut or a small edge pill
-// @version         1.1.1
+// @version         1.2.0
 // @author          DavidHiFi, Ashix
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -11,7 +11,7 @@
 // @include         windhawk-mod.exe
 // @include         windhawk-mod-elevated.exe
 // @architecture    x86-64
-// @compilerOptions -DWIN32_LEAN_AND_MEAN -lfwpuclnt -lrpcrt4 -lole32 -loleaut32 -luuid -lshell32 -lgdi32 -lgdiplus -ld2d1 -ldwrite -ldwmapi -luser32 -lcomctl32 -liphlpapi -ladvapi32 -lshlwapi -lwindowscodecs -luxtheme -lcomdlg32 -limm32
+// @compilerOptions -DWIN32_LEAN_AND_MEAN -lfwpuclnt -lrpcrt4 -lole32 -loleaut32 -luuid -lshell32 -lgdi32 -lgdiplus -ld2d1 -ldwrite -ldwmapi -luser32 -lcomctl32 -liphlpapi -ladvapi32 -lshlwapi -lwindowscodecs -luxtheme -lcomdlg32 -limm32 -lversion
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -43,6 +43,10 @@ works next to Windows Firewall and leaves your own firewall rules alone.
 - **Safe by default.** Core Windows parts, Windhawk itself and your antivirus
   can never be blocked. You get a warning box before blocking a remote desktop
   or VPN app while one is in use.
+- **Its own connection box.** When an app wants other devices to connect to
+  it, such as a game hosting a match, the mod asks in its own frosted box
+  instead of the Windows Firewall pop-up. Windows Firewall keeps guarding, and
+  your answer is saved as a normal firewall rule.
 
 ## Default shortcuts
 
@@ -61,7 +65,17 @@ Change or clear any of them in the settings.
   the apps your own firewall rules block. Change those in Windows Defender
   Firewall.
 
-## What's new in 1.1.1
+## What's new in 1.2.0
+- The Windows Firewall pop-up ("allow this app?") is replaced by the mod's own
+  frosted box, in the middle of the screen. Allow or Block saves a normal
+  Windows Firewall rule for that app, the same as the Windows pop-up did.
+- The box never takes the keyboard from the app you are using, and it waits
+  while a game runs full screen. Until you answer, Windows keeps the app
+  blocked, the same as before.
+- Turn it off under Blocking, Connection requests. Windows' own pop-up comes
+  back as soon as it is off or the mod stops.
+
+## 1.1.1
 - The warning box is a little clearer glass, so the panel's colours show
   softly through it, the same frosted look as the rest of the mod.
 
@@ -97,6 +111,12 @@ Based on [!Net](https://windhawk.net/mods/not-net) by Ashix.
 - warnOnVpnOrRemote: true
   $name: "Warn before blocking a VPN or remote desktop"
   $description: "Blocking one of these can cut off the connection you are using right now."
+- replaceFirewallPrompt: true
+  $name: "Ask with our own box"
+  $description: "When an app wants other devices to connect to it, such as a game hosting a match, this box asks instead of the Windows Firewall pop-up. Windows Firewall keeps guarding, and your answer is saved as a normal firewall rule."
+- allowOnPublicNetworks: false
+  $name: "Allow on public networks too"
+  $description: "Off, Allow lets the app in on home and work networks only. On a public network you are using right now, Allow always covers it."
 - showPill: true
   $name: "Edge pill"
   $description: "A small pill on the screen edge that opens the panel. Off, open it from the tray icon or the shortcut."
@@ -422,6 +442,8 @@ struct ModSettings {
 
     bool lockSystemProcesses = true;
     bool warnOnVpnOrRemote = true;
+    bool replaceFirewallPrompt = true;
+    bool allowOnPublicNetworks = false;
 
     HotkeyBinding hkToggleFg;
     HotkeyBinding hkExpandPill;
@@ -3003,6 +3025,8 @@ static void LoadSettings() {
 
     next.lockSystemProcesses = Wh_GetIntSetting(L"lockSystemProcesses") != 0;
     next.warnOnVpnOrRemote = Wh_GetIntSetting(L"warnOnVpnOrRemote") != 0;
+    next.replaceFirewallPrompt = Wh_GetIntSetting(L"replaceFirewallPrompt") != 0;
+    next.allowOnPublicNetworks = Wh_GetIntSetting(L"allowOnPublicNetworks") != 0;
 
     auto readHk = [&](PCWSTR key) {
         auto raw = WindhawkUtils::StringSetting::make(key);
@@ -3274,6 +3298,10 @@ struct FwConfirmState {
     RECT rcNo{}, rcYes{};
     int bodyTop = 0, bodyH = 0;
     DWORD openTick = 0;
+    // A box that does not wait (the connection request) posts doneMsg to doneTo with the
+    // answer in wParam and its own window in lParam instead of ending a message loop.
+    HWND doneTo = nullptr;
+    UINT doneMsg = 0;
 };
 static FwConfirmState* g_confirm = nullptr;
 
@@ -3402,10 +3430,16 @@ static void FwConfirmFinish(HWND hwnd, FwConfirmState* st, bool yes) {
     st->result = yes;
     st->done = true;
     ShowWindow(hwnd, SW_HIDE);
+    if (st->doneMsg && st->doneTo) PostMessageW(st->doneTo, st->doneMsg, yes ? 1 : 0, (LPARAM)hwnd);
 }
 
 static LRESULT CALLBACK FwConfirmProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    FwConfirmState* st = g_confirm;
+    if (msg == WM_NCCREATE) {
+        auto* cs = reinterpret_cast<CREATESTRUCTW*>(lParam);
+        if (cs && cs->lpCreateParams) SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)cs->lpCreateParams);
+    }
+    FwConfirmState* st = reinterpret_cast<FwConfirmState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (!st) st = g_confirm;
     switch (msg) {
         case WM_CREATE: {
             BOOL dark = TRUE;
@@ -3591,6 +3625,564 @@ static bool FwConfirm(const wchar_t* title, const wchar_t* body, const wchar_t* 
         SetForegroundWindow(owner);
     if (quit) PostQuitMessage((int)quitCode);
     return result;
+}
+
+// ---------------------------------------------------------------------------
+// Connection requests: our own box in place of the Windows Firewall pop-up.
+// Windows Firewall keeps guarding. Its "allow this app?" pop-up is switched off per
+// profile while this runs and put back as it was when the setting goes off or the mod
+// stops. A worker looks every 2 s for apps in the user's session that wait for other
+// devices (a listening TCP port, or a fixed UDP port) and have no inbound rule yet. Each
+// one gets the frosted box, once per session; the answer is saved as a normal inbound
+// firewall rule. Until then Windows keeps the app blocked, as it did with its own pop-up.
+// ---------------------------------------------------------------------------
+constexpr UINT WM_APP_LISTEN_FOUND = WM_APP + 107;
+constexpr UINT WM_APP_LISTEN_DONE  = WM_APP + 108;
+
+struct ListenAsk {
+    std::wstring path;  // as Windows reports it
+    std::wstring name;  // the app's own description, or its file name
+    int port = 0;
+};
+
+static std::mutex g_listenMtx;
+static std::condition_variable g_listenCv;
+static bool g_listenStop = false;
+static HANDLE g_listenThread = nullptr;
+static std::atomic<bool> g_listenRunning{false};
+static std::unordered_set<std::wstring> g_listenSeen;  // worker thread only while it runs
+static std::vector<std::unique_ptr<ListenAsk>> g_listenQueue;  // UI thread
+static HWND g_hListenBox = nullptr;
+static std::unique_ptr<FwConfirmState> g_listenBoxState;
+static std::unique_ptr<ListenAsk> g_listenCurrent;
+static bool g_listenPromptsOff = false;
+
+struct ListenRuleCache {
+    std::unordered_set<std::wstring> apps;     // lower-case, expanded paths with any inbound rule
+    std::vector<std::pair<int, int>> ports;    // inbound allow rules for any app, by local port
+    ULONGLONG tick = 0;
+};
+static ListenRuleCache g_listenRules;  // worker thread only
+
+template <class F>
+static bool WithFwPolicy(F&& fn) {
+    HRESULT hrCo = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    INetFwPolicy2* p = nullptr;
+    bool ok = SUCCEEDED(CoCreateInstance(__uuidof(NetFwPolicy2), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&p))) &&
+              p;
+    if (ok) {
+        fn(p);
+        p->Release();
+    }
+    if (SUCCEEDED(hrCo)) CoUninitialize();
+    return ok;
+}
+
+struct FwProfileKey {
+    NET_FW_PROFILE_TYPE2 type;
+    const wchar_t* key;
+};
+static const FwProfileKey kFwProfiles[] = {
+    {NET_FW_PROFILE2_DOMAIN, L"fwPromptOrig_domain"},
+    {NET_FW_PROFILE2_PRIVATE, L"fwPromptOrig_private"},
+    {NET_FW_PROFILE2_PUBLIC, L"fwPromptOrig_public"},
+};
+
+// Switch the Windows pop-up off, keeping what each profile had so it can be put back.
+static void ListenPromptsTakeOver() {
+    WithFwPolicy([](INetFwPolicy2* p) {
+        for (const auto& pk : kFwProfiles) {
+            VARIANT_BOOL cur = VARIANT_FALSE;
+            if (FAILED(p->get_NotificationsDisabled(pk.type, &cur))) continue;
+            if (Wh_GetIntValue(pk.key, -1) == -1) Wh_SetIntValue(pk.key, cur == VARIANT_TRUE ? 1 : 0);
+            if (cur != VARIANT_TRUE) {
+                HRESULT hr = p->put_NotificationsDisabled(pk.type, VARIANT_TRUE);
+                if (FAILED(hr)) Wh_Log(L"Could not switch off the Windows pop-up for %s: 0x%08X", pk.key, (unsigned)hr);
+            }
+        }
+    });
+    g_listenPromptsOff = true;
+    LogAudit(L"Connection requests: the Windows Firewall pop-up is switched off; this mod asks instead.");
+}
+
+// Put the Windows pop-up back the way each profile had it. Also runs at start with the
+// setting off, so a crash never leaves the pop-up switched off for good.
+static void ListenPromptsGiveBack() {
+    bool any = false;
+    WithFwPolicy([&](INetFwPolicy2* p) {
+        for (const auto& pk : kFwProfiles) {
+            int v = Wh_GetIntValue(pk.key, -1);
+            if (v == -1) continue;
+            HRESULT hr = p->put_NotificationsDisabled(pk.type, v ? VARIANT_TRUE : VARIANT_FALSE);
+            if (SUCCEEDED(hr)) {
+                Wh_DeleteValue(pk.key);
+                any = true;
+            } else {
+                Wh_Log(L"Could not put back the Windows pop-up for %s: 0x%08X", pk.key, (unsigned)hr);
+            }
+        }
+    });
+    g_listenPromptsOff = false;
+    if (any) LogAudit(L"Connection requests: the Windows Firewall pop-up is back.");
+}
+
+// True when a profile in use has the firewall on and blocks unasked inbound traffic, the
+// only case in which Windows would have shown its pop-up.
+static bool InboundBlockedByDefault(bool* onPublic) {
+    bool blocked = false;
+    WithFwPolicy([&](INetFwPolicy2* p) {
+        long cur = 0;
+        if (FAILED(p->get_CurrentProfileTypes(&cur))) return;
+        if (onPublic) *onPublic = (cur & NET_FW_PROFILE2_PUBLIC) != 0;
+        for (const auto& pk : kFwProfiles) {
+            if (!(cur & pk.type)) continue;
+            VARIANT_BOOL on = VARIANT_FALSE, all = VARIANT_FALSE;
+            NET_FW_ACTION def = NET_FW_ACTION_ALLOW;
+            if (SUCCEEDED(p->get_FirewallEnabled(pk.type, &on)) && on == VARIANT_TRUE &&
+                SUCCEEDED(p->get_DefaultInboundAction(pk.type, &def)) && def == NET_FW_ACTION_BLOCK &&
+                SUCCEEDED(p->get_BlockAllInboundTraffic(pk.type, &all)) && all != VARIANT_TRUE)
+                blocked = true;
+        }
+    });
+    return blocked;
+}
+
+static int ListenPortFromNet(DWORD p) {
+    return (int)(((p & 0xFF) << 8) | ((p >> 8) & 0xFF));
+}
+
+// pid -> the first port it waits on. Loopback-only sockets never reach other devices, and
+// UDP ports Windows hands out by itself (49152 and up) are an app talking out, not waiting.
+static std::unordered_map<DWORD, int> CollectListeners() {
+    std::unordered_map<DWORD, int> out;
+    auto add = [&](DWORD pid, int port) {
+        if (pid > 4 && out.find(pid) == out.end()) out[pid] = port;
+    };
+    auto grab = [](auto fn, std::vector<BYTE>& buf) {
+        DWORD size = 0;
+        for (int i = 0; i < 4; ++i) {
+            DWORD r = fn(buf.empty() ? nullptr : buf.data(), &size);
+            if (r == NO_ERROR) return true;
+            if (r != ERROR_INSUFFICIENT_BUFFER) return false;
+            buf.resize(size + 4096);
+        }
+        return false;
+    };
+    std::vector<BYTE> buf;
+    if (grab([](void* b, DWORD* s) { return GetExtendedTcpTable(b, s, FALSE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0); },
+             buf)) {
+        auto* t = reinterpret_cast<MIB_TCPTABLE_OWNER_PID*>(buf.data());
+        for (DWORD i = 0; i < t->dwNumEntries; ++i) {
+            const auto& r = t->table[i];
+            if ((r.dwLocalAddr & 0xFF) == 127) continue;
+            add(r.dwOwningPid, ListenPortFromNet(r.dwLocalPort));
+        }
+    }
+    buf.clear();
+    if (grab([](void* b, DWORD* s) { return GetExtendedTcpTable(b, s, FALSE, AF_INET6, TCP_TABLE_OWNER_PID_LISTENER, 0); },
+             buf)) {
+        auto* t = reinterpret_cast<MIB_TCP6TABLE_OWNER_PID*>(buf.data());
+        static const UCHAR kLoop6[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
+        for (DWORD i = 0; i < t->dwNumEntries; ++i) {
+            const auto& r = t->table[i];
+            if (memcmp(r.ucLocalAddr, kLoop6, 16) == 0) continue;
+            add(r.dwOwningPid, ListenPortFromNet(r.dwLocalPort));
+        }
+    }
+    buf.clear();
+    if (grab([](void* b, DWORD* s) { return GetExtendedUdpTable(b, s, FALSE, AF_INET, UDP_TABLE_OWNER_PID, 0); }, buf)) {
+        auto* t = reinterpret_cast<MIB_UDPTABLE_OWNER_PID*>(buf.data());
+        for (DWORD i = 0; i < t->dwNumEntries; ++i) {
+            const auto& r = t->table[i];
+            int port = ListenPortFromNet(r.dwLocalPort);
+            if ((r.dwLocalAddr & 0xFF) == 127 || port < 1 || port > 49151) continue;
+            add(r.dwOwningPid, port);
+        }
+    }
+    buf.clear();
+    if (grab([](void* b, DWORD* s) { return GetExtendedUdpTable(b, s, FALSE, AF_INET6, UDP_TABLE_OWNER_PID, 0); }, buf)) {
+        auto* t = reinterpret_cast<MIB_UDP6TABLE_OWNER_PID*>(buf.data());
+        static const UCHAR kLoop6[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
+        for (DWORD i = 0; i < t->dwNumEntries; ++i) {
+            const auto& r = t->table[i];
+            int port = ListenPortFromNet(r.dwLocalPort);
+            if (memcmp(r.ucLocalAddr, kLoop6, 16) == 0 || port < 1 || port > 49151) continue;
+            add(r.dwOwningPid, port);
+        }
+    }
+    return out;
+}
+
+static std::wstring ListenExpandLower(const wchar_t* s) {
+    if (!s || !*s) return L"";
+    wchar_t buf[MAX_PATH * 2]{};
+    DWORD n = ExpandEnvironmentStringsW(s, buf, ARRAYSIZE(buf));
+    return ToLower((n > 0 && n <= ARRAYSIZE(buf)) ? std::wstring(buf) : std::wstring(s));
+}
+
+static void ListenParsePorts(const wchar_t* s, std::vector<std::pair<int, int>>& out) {
+    if (!s || !*s) return;
+    std::wstring t(s);
+    size_t i = 0;
+    while (i < t.size()) {
+        size_t j = t.find(L',', i);
+        if (j == std::wstring::npos) j = t.size();
+        std::wstring part = t.substr(i, j - i);
+        wchar_t* end = nullptr;
+        long a = wcstol(part.c_str(), &end, 10);
+        if (end != part.c_str() && a > 0) {
+            long b = a;
+            if (end && *end == L'-') b = wcstol(end + 1, nullptr, 10);
+            if (b >= a) out.emplace_back((int)a, (int)b);
+        }
+        i = j + 1;
+    }
+}
+
+static void ListenRefreshRules() {
+    ULONGLONG now = GetTickCount64();
+    if (g_listenRules.tick && now - g_listenRules.tick < 5000) return;
+    ListenRuleCache fresh;
+    WithFwPolicy([&](INetFwPolicy2* p) {
+        long cur = NET_FW_PROFILE2_ALL;
+        p->get_CurrentProfileTypes(&cur);
+        INetFwRules* rules = nullptr;
+        if (FAILED(p->get_Rules(&rules)) || !rules) return;
+        IUnknown* unk = nullptr;
+        IEnumVARIANT* en = nullptr;
+        if (SUCCEEDED(rules->get__NewEnum(&unk)) && unk && SUCCEEDED(unk->QueryInterface(IID_PPV_ARGS(&en))) && en) {
+            VARIANT var;
+            VariantInit(&var);
+            ULONG got = 0;
+            while (en->Next(1, &var, &got) == S_OK && got == 1) {
+                INetFwRule* r = nullptr;
+                if (var.vt == VT_DISPATCH && var.pdispVal && SUCCEEDED(var.pdispVal->QueryInterface(IID_PPV_ARGS(&r))) &&
+                    r) {
+                    NET_FW_RULE_DIRECTION dir = NET_FW_RULE_DIR_OUT;
+                    if (SUCCEEDED(r->get_Direction(&dir)) && dir == NET_FW_RULE_DIR_IN) {
+                        BSTR app = nullptr, svc = nullptr, lp = nullptr;
+                        r->get_ApplicationName(&app);
+                        if (app && *app && wcscmp(app, L"*") != 0) {
+                            // Any inbound rule for the app, allow or block, on or off, is an answer
+                            // already given; Windows never asked again either.
+                            fresh.apps.insert(ListenExpandLower(app));
+                        } else {
+                            VARIANT_BOOL on = VARIANT_FALSE;
+                            NET_FW_ACTION act = NET_FW_ACTION_BLOCK;
+                            long prof = 0;
+                            r->get_ServiceName(&svc);
+                            if ((!svc || !*svc || wcscmp(svc, L"*") == 0) && SUCCEEDED(r->get_Enabled(&on)) &&
+                                on == VARIANT_TRUE && SUCCEEDED(r->get_Action(&act)) && act == NET_FW_ACTION_ALLOW &&
+                                SUCCEEDED(r->get_Profiles(&prof)) && (prof & cur) && SUCCEEDED(r->get_LocalPorts(&lp)))
+                                ListenParsePorts(lp, fresh.ports);
+                        }
+                        if (app) SysFreeString(app);
+                        if (svc) SysFreeString(svc);
+                        if (lp) SysFreeString(lp);
+                    }
+                    r->Release();
+                }
+                VariantClear(&var);
+            }
+            en->Release();
+        }
+        if (unk) unk->Release();
+        rules->Release();
+    });
+    fresh.tick = now;
+    g_listenRules = std::move(fresh);
+}
+
+static std::wstring ListenFriendlyName(const std::wstring& path) {
+    std::wstring file = GetFileNameOnly(path);
+    DWORD dummy = 0;
+    DWORD size = GetFileVersionInfoSizeW(path.c_str(), &dummy);
+    if (size) {
+        std::vector<BYTE> data(size);
+        if (GetFileVersionInfoW(path.c_str(), 0, size, data.data())) {
+            struct LangCp { WORD lang, cp; };
+            LangCp* tr = nullptr;
+            UINT trLen = 0;
+            std::vector<std::wstring> keys;
+            if (VerQueryValueW(data.data(), L"\\VarFileInfo\\Translation", (void**)&tr, &trLen) && tr &&
+                trLen >= sizeof(LangCp)) {
+                wchar_t k[64];
+                swprintf_s(k, L"\\StringFileInfo\\%04x%04x\\FileDescription", tr[0].lang, tr[0].cp);
+                keys.push_back(k);
+            }
+            keys.push_back(L"\\StringFileInfo\\040904b0\\FileDescription");
+            keys.push_back(L"\\StringFileInfo\\040904e4\\FileDescription");
+            for (const auto& k : keys) {
+                wchar_t* v = nullptr;
+                UINT len = 0;
+                if (VerQueryValueW(data.data(), k.c_str(), (void**)&v, &len) && v && len > 1) {
+                    std::wstring d(v);
+                    while (!d.empty() && iswspace(d.back())) d.pop_back();
+                    while (!d.empty() && iswspace(d.front())) d.erase(d.begin());
+                    if (!d.empty() && d.size() < 80) return d;
+                }
+            }
+        }
+    }
+    return file;
+}
+
+static void ListenScanOnce() {
+    auto hits = CollectListeners();
+    if (hits.empty()) return;
+    DWORD self = GetCurrentProcessId();
+    struct Cand { std::wstring path, lower; int port; };
+    std::vector<Cand> cands;
+    std::unordered_set<std::wstring> batch;
+    for (const auto& [pid, port] : hits) {
+        if (pid == self) continue;
+        DWORD sid = 0;
+        if (!ProcessIdToSessionId(pid, &sid) || sid == 0) continue;  // services answer to their own rules
+        std::wstring path = QueryProcessExePath(pid);
+        if (path.empty()) continue;
+        std::wstring lower = ToLower(path);
+        if (g_listenSeen.count(lower) || batch.count(lower)) continue;
+        if (IsSystemPath(lower) || IsCriticalSystemExe(lower) || lower.find(L"\\windowsapps\\") != std::wstring::npos ||
+            lower.find(L"\\windhawk\\") != std::wstring::npos)
+            continue;
+        batch.insert(lower);
+        cands.push_back({path, lower, port});
+    }
+    if (cands.empty()) return;
+    bool onPublic = false;
+    if (!InboundBlockedByDefault(&onPublic)) return;  // nothing would be blocked, so nothing to ask
+    ListenRefreshRules();
+    for (auto& c : cands) {
+        g_listenSeen.insert(c.lower);
+        if (g_listenRules.apps.count(c.lower)) continue;
+        bool portOpen = false;
+        for (const auto& pr : g_listenRules.ports)
+            if (c.port >= pr.first && c.port <= pr.second) portOpen = true;
+        if (portOpen) continue;
+        auto* a = new ListenAsk{c.path, ListenFriendlyName(c.path), c.port};
+        HWND w = g_hWnd;
+        if (!w || !PostMessageW(w, WM_APP_LISTEN_FOUND, 0, (LPARAM)a)) {
+            delete a;
+            g_listenSeen.erase(c.lower);
+        } else {
+            Wh_Log(L"Connection request: %s on port %d", c.path.c_str(), c.port);
+        }
+    }
+}
+
+static DWORD WINAPI ListenThreadProc(LPVOID) {
+    HRESULT hrCo = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    std::unique_lock<std::mutex> lk(g_listenMtx);
+    while (!g_listenStop) {
+        lk.unlock();
+        ListenScanOnce();
+        lk.lock();
+        g_listenCv.wait_for(lk, std::chrono::seconds(2), [] { return g_listenStop; });
+    }
+    lk.unlock();
+    if (SUCCEEDED(hrCo)) CoUninitialize();
+    return 0;
+}
+
+static void ListenWatchStart() {
+    if (g_listenThread) return;
+    {
+        std::lock_guard<std::mutex> lk(g_listenMtx);
+        g_listenStop = false;
+    }
+    g_listenRunning = true;
+    g_listenThread = CreateThread(nullptr, 0, ListenThreadProc, nullptr, 0, nullptr);
+    if (!g_listenThread) g_listenRunning = false;
+}
+
+static void ListenWatchStop() {
+    if (g_listenThread) {
+        {
+            std::lock_guard<std::mutex> lk(g_listenMtx);
+            g_listenStop = true;
+        }
+        g_listenCv.notify_all();
+        WaitForSingleObject(g_listenThread, 10000);
+        CloseHandle(g_listenThread);
+        g_listenThread = nullptr;
+    }
+    g_listenRunning = false;
+    g_listenSeen.clear();
+    g_listenRules = ListenRuleCache{};
+}
+
+static bool EnsureConfirmClass() {
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSEXW wc{sizeof(wc)};
+        wc.lpfnWndProc = FwConfirmProc;
+        wc.hInstance = GetModuleHandleW(nullptr);
+        wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        wc.lpszClassName = kConfirmClass;
+        registered = RegisterClassExW(&wc) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
+    }
+    return registered;
+}
+
+static void ListenCloseBox() {
+    if (g_hListenBox && IsWindow(g_hListenBox)) DestroyWindow(g_hListenBox);
+    g_hListenBox = nullptr;
+    g_listenBoxState.reset();
+    g_listenCurrent.reset();
+    g_listenQueue.clear();
+}
+
+static void ShowNextListenBox() {
+    if (g_listenQueue.empty() || !EnsureConfirmClass()) return;
+    std::unique_ptr<ListenAsk> a = std::move(g_listenQueue.front());
+    g_listenQueue.erase(g_listenQueue.begin());
+
+    bool publicToo = false;
+    {
+        std::lock_guard<std::mutex> lk(g_settingsMtx);
+        publicToo = g_settings.allowOnPublicNetworks;
+    }
+    bool onPublic = false;
+    InboundBlockedByDefault(&onPublic);
+
+    auto st = std::make_unique<FwConfirmState>();
+    st->title = L"Let other devices connect?";
+    std::wstring file = GetFileNameOnly(a->path);
+    std::wstring who = (_wcsicmp(a->name.c_str(), file.c_str()) == 0) ? a->name : (a->name + L" (" + file + L")");
+    st->body = who + L" is waiting for other devices to connect to it";
+    if (a->port) st->body += L" on port " + std::to_wstring(a->port);
+    st->body += L". Windows Firewall keeps it blocked until you choose.";
+    if (onPublic)
+        st->body += L" You are on a public network, so Allow lets it in here too.";
+    else if (!publicToo)
+        st->body += L" Allow lets it in on home and work networks.";
+    st->yes = L"Allow";
+    st->no = L"Block";
+    st->question = true;
+    st->focus = 2;
+    st->doneTo = g_hWnd;
+    st->doneMsg = WM_APP_LISTEN_DONE;
+
+    POINT cpt{};
+    GetCursorPos(&cpt);
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(MonitorFromPoint(cpt, MONITOR_DEFAULTTOPRIMARY), &mi);
+    int cx = (mi.rcWork.left + mi.rcWork.right) / 2, cy = (mi.rcWork.top + mi.rcWork.bottom) / 2;
+    // No owner and never activated: the box sits on top and waits, but the app you are
+    // typing in keeps the keyboard. A click on a button still answers it.
+    HWND hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_NOACTIVATE, kConfirmClass,
+                                st->title.c_str(), WS_POPUP, cx, cy, 10, 10, nullptr, nullptr,
+                                GetModuleHandleW(nullptr), st.get());
+    if (!hwnd) {
+        Wh_Log(L"Connection request box could not open (%u); Windows keeps %s blocked.", GetLastError(),
+               a->path.c_str());
+        return;
+    }
+    SIZE sz = FwConfirmLayout(hwnd, st.get());
+    int x = std::clamp(cx - (int)sz.cx / 2, (int)mi.rcWork.left, (int)mi.rcWork.right - (int)sz.cx);
+    int y = std::clamp(cy - (int)sz.cy / 2, (int)mi.rcWork.top, (int)mi.rcWork.bottom - (int)sz.cy);
+    SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
+    SetWindowPos(hwnd, HWND_TOPMOST, x, y, sz.cx, sz.cy, SWP_NOACTIVATE);
+    ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+    st->openTick = GetTickCount();
+    SetTimer(hwnd, TIMER_CONFIRM_FADE, 10, nullptr);
+    g_hListenBox = hwnd;
+    g_listenBoxState = std::move(st);
+    g_listenCurrent = std::move(a);
+}
+
+// Shows the next request, and keeps the open one out of the way while a game or video
+// fills the screen.
+static void ListenPump(bool fullscreen) {
+    if (g_hListenBox) {
+        if (!IsWindow(g_hListenBox) || (g_listenBoxState && g_listenBoxState->done)) return;
+        bool vis = IsWindowVisible(g_hListenBox) != FALSE;
+        if (fullscreen && vis) {
+            ShowWindow(g_hListenBox, SW_HIDE);
+        } else if (!fullscreen && !vis) {
+            SetWindowPos(g_hListenBox, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            ShowWindow(g_hListenBox, SW_SHOWNOACTIVATE);
+        }
+        return;
+    }
+    if (!fullscreen && !g_listenQueue.empty()) ShowNextListenBox();
+}
+
+static void AddListenRule(const ListenAsk& a, bool allow) {
+    bool publicToo = false;
+    {
+        std::lock_guard<std::mutex> lk(g_settingsMtx);
+        publicToo = g_settings.allowOnPublicNetworks;
+    }
+    HRESULT result = E_FAIL;
+    WithFwPolicy([&](INetFwPolicy2* p) {
+        long cur = 0;
+        p->get_CurrentProfileTypes(&cur);
+        long profiles = NET_FW_PROFILE2_ALL;
+        if (allow) {
+            profiles = NET_FW_PROFILE2_PRIVATE | NET_FW_PROFILE2_DOMAIN;
+            if (publicToo || (cur & NET_FW_PROFILE2_PUBLIC)) profiles |= NET_FW_PROFILE2_PUBLIC;
+        }
+        INetFwRules* rules = nullptr;
+        if (FAILED(p->get_Rules(&rules)) || !rules) return;
+        INetFwRule* r = nullptr;
+        if (SUCCEEDED(CoCreateInstance(__uuidof(NetFwRule), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&r))) && r) {
+            std::wstring nm = L"Seamless Firewall: " + a.name;
+            std::wstring desc = allow ? L"Allowed from the Seamless Windows Firewall connection box."
+                                      : L"Blocked from the Seamless Windows Firewall connection box.";
+            BSTR bName = SysAllocString(nm.c_str());
+            BSTR bDesc = SysAllocString(desc.c_str());
+            BSTR bApp = SysAllocString(a.path.c_str());
+            BSTR bGrp = SysAllocString(L"Seamless Windows Firewall");
+            r->put_Name(bName);
+            r->put_Description(bDesc);
+            r->put_ApplicationName(bApp);
+            r->put_Grouping(bGrp);
+            r->put_Protocol(NET_FW_IP_PROTOCOL_ANY);
+            r->put_Direction(NET_FW_RULE_DIR_IN);
+            r->put_Action(allow ? NET_FW_ACTION_ALLOW : NET_FW_ACTION_BLOCK);
+            r->put_Profiles(profiles);
+            r->put_Enabled(VARIANT_TRUE);
+            result = rules->Add(r);
+            SysFreeString(bName);
+            SysFreeString(bDesc);
+            SysFreeString(bApp);
+            SysFreeString(bGrp);
+            r->Release();
+        }
+        rules->Release();
+    });
+    if (SUCCEEDED(result))
+        LogAudit(std::wstring(allow ? L"Connection request allowed: " : L"Connection request blocked: ") + a.path);
+    else
+        Wh_Log(L"Could not save the firewall rule for %s: 0x%08X", a.path.c_str(), (unsigned)result);
+}
+
+static void ListenBoxAnswered(HWND box, bool allow) {
+    if (!box || box != g_hListenBox) return;
+    if (g_listenCurrent) AddListenRule(*g_listenCurrent, allow);
+    DestroyWindow(box);
+    g_hListenBox = nullptr;
+    g_listenBoxState.reset();
+    g_listenCurrent.reset();
+    ListenPump(IsFullscreenActive());
+}
+
+// Turns the feature on or off to match the setting. UI thread.
+static void ListenSync() {
+    bool on = false;
+    {
+        std::lock_guard<std::mutex> lk(g_settingsMtx);
+        on = g_settings.replaceFirewallPrompt;
+    }
+    if (on && IsProcessElevated()) {
+        if (!g_listenPromptsOff) ListenPromptsTakeOver();
+        ListenWatchStart();
+    } else {
+        ListenWatchStop();
+        ListenCloseBox();
+        ListenPromptsGiveBack();
+    }
 }
 
 static void SyncHoverSensorTimer(HWND hwnd) {
@@ -6885,6 +7477,7 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             SetTimer(hwnd, TIMER_FULLSCREEN, 1000, nullptr);
             SetTimer(hwnd, TIMER_LATE_CHILD_POLL, 3000, nullptr);
             SyncHoverSensorTimer(hwnd);
+            ListenSync();
             return 0;
         }
         case WM_NCACTIVATE:
@@ -7241,7 +7834,9 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     std::lock_guard<std::mutex> lk(g_settingsMtx);
                     fb = g_settings.fullscreenBehavior;
                 }
-                bool shouldHide = (fb == FullscreenBehavior::Hide) && IsFullscreenActive();
+                bool fsActive = IsFullscreenActive();
+                ListenPump(fsActive);
+                bool shouldHide = (fb == FullscreenBehavior::Hide) && fsActive;
                 if (shouldHide && g_hCyclePopup && IsWindow(g_hCyclePopup)) {
                     DestroyWindow(g_hCyclePopup);
                 }
@@ -7465,6 +8060,17 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             RequestRepaint();
             return 0;
         }
+        case WM_APP_LISTEN_FOUND: {
+            std::unique_ptr<ListenAsk> a(reinterpret_cast<ListenAsk*>(lParam));
+            if (a && g_listenRunning) {
+                g_listenQueue.push_back(std::move(a));
+                ListenPump(IsFullscreenActive());
+            }
+            return 0;
+        }
+        case WM_APP_LISTEN_DONE:
+            ListenBoxAnswered(reinterpret_cast<HWND>(lParam), wParam != 0);
+            return 0;
         case WM_POWERBROADCAST: {
             if (wParam == PBT_APMRESUMESUSPEND || wParam == PBT_APMRESUMEAUTOMATIC) {
                 NotifyCycleSystemResume();
@@ -7484,6 +8090,8 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             KillTimer(hwnd, TIMER_OUTSIDE_CLICK);
             if (g_hCyclePopup && IsWindow(g_hCyclePopup)) DestroyWindow(g_hCyclePopup);
             DestroyCycleWidgetWindow();
+            ListenWatchStop();
+            ListenCloseBox();
             for (int id = 1; id <= 3; ++id) UnregisterHotKey(hwnd, id);
             if (g_hTooltip) { DestroyWindow(g_hTooltip); g_hTooltip = nullptr; }
             RemoveTrayIcon();
@@ -7507,6 +8115,7 @@ static LRESULT CALLBACK ControlWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
         }
         SyncAutoBlockedApps();
         if (g_hWnd) {
+            ListenSync();
             ApplyCaptureExclusionAll();
             RegisterAllHotkeys(g_hWnd);
             AddTrayIcon(g_hWnd);
@@ -8497,6 +9106,9 @@ void WhTool_ModUninit() {
         std::lock_guard<std::mutex> lk(g_engineMtx);
         CloseWfpEngineLocked();
     }
+    // The Windows pop-up comes back whenever the mod stops.
+    ListenWatchStop();
+    ListenPromptsGiveBack();
     LogAudit(L"Seamless Windows Firewall stopped cleanly.");
     SeamlessMenuSkin::Uninit();
 }
@@ -8686,6 +9298,8 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"includeChildProcesses", L"Block helper programs too", L"Also blocks the other programs in the app's own folder, such as its updater or web helper.", L"1", {}, 0, 100, 0, L"Blocking"},
 {K::Check, L"lockSystemProcesses", L"Keep Windows helpers safe", L"Windows itself, Windhawk and your antivirus are always safe from a block. On, Windows' smaller helpers are locked too.", L"1", {}, 0, 100, 0, L"Safety"},
 {K::Check, L"warnOnVpnOrRemote", L"Warn before blocking a VPN or remote desktop", L"Blocking one of these can cut off the connection you are using right now.", L"1", {}, 0, 100, 0, L"Safety"},
+{K::Check, L"replaceFirewallPrompt", L"Ask with our own box", L"When an app wants other devices to connect to it, such as a game hosting a match, this box asks instead of the Windows Firewall pop-up. Windows Firewall keeps guarding, and your answer is saved as a normal firewall rule.", L"1", {}, 0, 100, 0, L"Connection requests"},
+{K::Check, L"allowOnPublicNetworks", L"Allow on public networks too", L"Off, Allow lets the app in on home and work networks only. On a public network you are using right now, Allow always covers it.", L"0", {}, 0, 100, 0, L"Connection requests"},
 {K::Check, L"showPill", L"Edge pill", L"A small pill on the screen edge that opens the panel. Off, open it from the tray icon or the shortcut.", L"1", {}, 0, 100, 1, L"Pill"},
 {K::Choice, L"dockEdge", L"Where the pill sits", L"Drag the pill to move it. The corners show an L-shaped pill.", L"right", {{L"right", L"Right edge"}, {L"left", L"Left edge"}, {L"top", L"Top edge"}, {L"bottom", L"Bottom edge"}, {L"top_left", L"Top left corner"}, {L"bottom_left", L"Bottom left corner"}, {L"bottom_right", L"Bottom right corner"}}, 0, 100, 1, L"Pill"},
 {K::Check, L"followCursorMonitor", L"Follow the pointer", L"With more than one screen, the pill moves to the screen the pointer is on.", L"1", {}, 0, 100, 1, L"Pill"},
@@ -8721,7 +9335,7 @@ struct SetPageInfo {
     WCHAR glyph;
 };
 static const SetPageInfo kSetPages[] = {
-{L"Blocking", L"How a block works, and the apps that are kept safe from it.", 0xE72E},
+{L"Blocking", L"How a block works, the apps kept safe from it, and apps that ask to be reached.", 0xE72E},
 {L"Panel", L"The edge pill, the panel it opens and the app list.", 0xE8A7},
 {L"Cycle Mode", L"Block and allow an app on a timer.", 0xE916},
 {L"Shortcuts", L"Keys that block the app in front, open the panel and undo every block.", 0xE765},
