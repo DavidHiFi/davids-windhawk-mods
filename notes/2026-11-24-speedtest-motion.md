@@ -48,6 +48,14 @@ mod, reinstall 2.3.3 from the installer's backup.
 
 ## Workshop global control
 
+Done by the Seamless Dock thread (f28b8868): Seamless Workshop 1.5.4 has a new "All mods"
+group on its Look page, holding motionEnabled and motionSpeed. It writes the Motion key at
+startup and on every settings change. It is published (mods 1c77407, feed 1bdaf0a, release
+v1.5.4). Checked here at 3:39 am: the registry shows 1.5.4, and the key reads Enabled=1,
+Speed=normal. The Workshop window's own Save button has not been clicked through yet.
+
+Original handoff, kept for the record:
+
 Handed to the thread that owns the Workshop's code ("Fix middle dock right-click pill"):
 two Look settings, motionEnabled and motionSpeed, are written to the Motion key. The
 Workshop's src folder is still at 1.5.2 while the live copy is 1.5.3, so it waits for that
