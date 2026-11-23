@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id              seamless-windows-firewall
 // @name            Seamless Windows Firewall
-// @description     Block or allow any app's internet in one click, from the tray, a shortcut or a small edge pill
-// @version         1.2.1
+// @description     Block or allow any app's internet in one click, from the tray icon or a shortcut
+// @version         1.2.2
 // @author          DavidHiFi, Ashix
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -35,11 +35,9 @@ works next to Windows Firewall and leaves your own firewall rules alone.
   the mod starts.
 - **Cycle Mode.** Double-click an app to switch it between blocked and allowed
   on a timer: for a set number of rounds, for a set time, or until you stop it.
-  A small clock shows the timer while it runs.
-- **Tray icon.** Click it to open the panel. Right-click for the settings and
-  for allowing every blocked app at once.
-- **Edge pill.** A small pill on the screen edge opens the panel too. Turn it
-  off in the settings, and it hides by itself while a game runs full screen.
+  The panel shows the timer while it runs.
+- **Tray icon.** Click it to open the panel in the middle of the screen.
+  Right-click for the settings and for allowing every blocked app at once.
 - **Safe by default.** Core Windows parts, Windhawk itself and your antivirus
   can never be blocked. You get a warning box before blocking a remote desktop
   or VPN app while one is in use.
@@ -64,6 +62,11 @@ Change or clear any of them in the settings.
 - The Blocked list has a second view, Blocked by Windows Firewall, that shows
   the apps your own firewall rules block. Change those in Windows Defender
   Firewall.
+
+## What's new in 1.2.2
+- No more edge pill and no more opening on hover. The mod lives in the tray:
+  click the icon, or press Ctrl+Alt+Shift+F, and the panel opens in the middle
+  of that screen. Click anywhere else to close it.
 
 ## What's new in 1.2.1
 - The connection box now shows straight away on a busy PC. Before, it could stay
@@ -121,58 +124,12 @@ Based on [!Net](https://windhawk.net/mods/not-net) by Ashix.
 - allowOnPublicNetworks: false
   $name: "Allow on public networks too"
   $description: "Off, Allow lets the app in on home and work networks only. On a public network you are using right now, Allow always covers it."
-- showPill: true
-  $name: "Edge pill"
-  $description: "A small pill on the screen edge that opens the panel. Off, open it from the tray icon or the shortcut."
-- dockEdge: "right"
-  $name: "Where the pill sits"
-  $description: "Drag the pill to move it. The corners show an L-shaped pill."
-  $options:
-  - right: "Right edge"
-  - left: "Left edge"
-  - top: "Top edge"
-  - bottom: "Bottom edge"
-  - top_left: "Top left corner"
-  - bottom_left: "Bottom left corner"
-  - bottom_right: "Bottom right corner"
-- followCursorMonitor: true
-  $name: "Follow the pointer"
-  $description: "With more than one screen, the pill moves to the screen the pointer is on."
-- rememberWindowPosition: true
-  $name: "Remember where the pill was"
-- pillIndicatorMode: "always"
-  $name: "Pill colour"
-  $description: "Green means the app in front can reach the internet, red means it is blocked."
-  $options:
-  - always: "Always show green or red"
-  - pulse: "Grey, with a short flash when it changes"
-- hoverExpand: true
-  $name: "Open on hover"
-  $description: "Resting the pointer on the pill opens the panel. Off, click the pill."
-- expandHoverHitArea: false
-  $name: "Bigger hover area"
-  $description: "The panel also opens when the pointer comes close to the pill."
-- hoverHitMarginPx: 12
-  $name: "Hover area size (px)"
-  $description: "4 to 40 (Suggested: 12). Used when the bigger hover area is on."
-- fullscreenBehavior: "hide"
-  $name: "During games and full-screen apps"
-  $description: "Hide keeps the pill out of the way while a game or a video fills the screen."
-  $options:
-  - hide: "Hide the pill"
-  - allow: "Keep showing it"
-- hideDuringCapture: true
-  $name: "Hide from screenshots and recordings"
-  $description: "The pill and panel stay out of screen captures, streams and screen sharing."
 - windowSizePreset: "default"
   $name: "Panel size"
   $options:
   - default: "Normal (436 by 480)"
   - large: "Large (680 by 680)"
   - extralarge: "Extra large (840 by 840)"
-- panelEdgeOffsetPx: 8
-  $name: "Gap from the screen edge (px)"
-  $description: "0 to 12 (Suggested: 8)."
 - defaultFilter: "user"
   $name: "List shown first"
   $description: "The tab the panel opens on."
@@ -188,6 +145,9 @@ Based on [!Net](https://windhawk.net/mods/not-net) by Ashix.
 - showTooltips: false
   $name: "Tooltips"
   $description: "Show a short tip when the pointer rests on a button, a switch or the clock."
+- hideDuringCapture: true
+  $name: "Hide from screenshots and recordings"
+  $description: "The panel stays out of screen captures, streams and screen sharing."
 - enableCycleScheduler: true
   $name: "Cycle Mode"
   $description: "Block and allow an app on a timer. Double-click or right-click an app in the panel to set it up."
@@ -197,18 +157,6 @@ Based on [!Net](https://windhawk.net/mods/not-net) by Ashix.
 - showCycleMs: false
   $name: "Milliseconds box"
   $description: "Show a box for milliseconds in the timer window."
-- showCycleWidget: true
-  $name: "Clock button by the pill"
-  $description: "A small clock beside the pill while a timer runs."
-- cycleWidgetSize: 5
-  $name: "Clock button size"
-  $description: "0 to 10 (Suggested: 5)."
-- cycleWidgetAction: "scheduler_only"
-  $name: "Clicking the clock"
-  $description: "What happens when you click the clock button."
-  $options:
-  - scheduler_only: "Open the timer window only"
-  - navigate_pill: "Open the panel, pick the app, then open its timer"
 - toggleForegroundApp: "Ctrl+Alt+F"
   $name: "Block or allow the app in front"
   $description: "Press the keys in the box. Backspace clears it."
@@ -219,7 +167,7 @@ Based on [!Net](https://windhawk.net/mods/not-net) by Ashix.
   $description: "Off by default. Pick keys that no other app uses."
 - settingsTrayIcon: true
   $name: "Tray icon"
-  $description: "Click it to open the panel. Right-click it for settings and more. When off, use the pill or the shortcut."
+  $description: "Click it to open the panel. Right-click it for settings and more. When off, use the shortcut."
 - settingsGlass: true
   $name: "Blurred settings window"
   $description: "On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save."
@@ -596,6 +544,13 @@ static int g_lastSettingDockEdge = -1;
 static int g_posX = 0;
 static int g_posY = 0;
 static bool g_posLoaded = false;
+// 1.2.2: there is no edge pill. The panel opens in the middle of the screen the pointer is on
+// (the tray icon's screen after a tray click) and hides again when it closes.
+static HMONITOR g_panelMon = nullptr;
+static bool g_panelMoved = false;
+static POINT g_panelMovedPos{};
+static bool g_panelWasOpen = false;
+static DWORD g_panelClosedTick = 0;
 
 static std::mutex g_engineMtx;
 static HANDLE g_wfpEngine = nullptr;
@@ -684,6 +639,28 @@ static bool ApplyBlock(std::wstring exePath, Direction dir, bool includeChildren
 static bool ApplyAllow(std::wstring exePath);
 static void RestoreAllSessionBlocks();
 static void UpdateWindowGeometry(bool immediate);
+constexpr UINT WM_APP_OUTSIDE_CLICK = WM_APP + 109;
+static HHOOK g_outsideMouseHook = nullptr;
+// While the panel is open, every mouse press anywhere is passed to the panel's window, which
+// closes the panel when the press is outside it. A polled button state missed short clicks.
+static LRESULT CALLBACK OutsideMouseProc(int code, WPARAM wParam, LPARAM lParam) {
+    if (code == HC_ACTION && g_hWnd &&
+        (wParam == WM_LBUTTONDOWN || wParam == WM_RBUTTONDOWN || wParam == WM_MBUTTONDOWN))
+        PostMessageW(g_hWnd, WM_APP_OUTSIDE_CLICK, 0, 0);
+    return CallNextHookEx(nullptr, code, wParam, lParam);
+}
+static void SyncOutsideMouseHook(bool want) {
+    if (want && !g_outsideMouseHook && g_hWnd &&
+        GetWindowThreadProcessId(g_hWnd, nullptr) == GetCurrentThreadId()) {
+        HMODULE mod = nullptr;
+        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           reinterpret_cast<LPCWSTR>(&OutsideMouseProc), &mod);
+        g_outsideMouseHook = SetWindowsHookExW(WH_MOUSE_LL, OutsideMouseProc, mod, 0);
+    } else if (!want && g_outsideMouseHook) {
+        UnhookWindowsHookEx(g_outsideMouseHook);
+        g_outsideMouseHook = nullptr;
+    }
+}
 static void RequestRepaint(const RECT* dirty = nullptr);
 static void OpenWindhawkSettingsUI();
 static void TriggerForegroundPulse(const std::wstring& fgExe);
@@ -3048,7 +3025,15 @@ static void LoadSettings() {
     next.hkExpandPill = readHk(L"expandCollapsePill");
     next.hkRestoreAll = readHk(L"restoreAll");
 
-    next.showPill = Wh_GetIntSetting(L"showPill") != 0;
+    // No edge pill, no hover reveal, no clock button beside the pill (owner, 2026-11-24).
+    next.showPill = false;
+    next.hoverExpand = false;
+    next.expandHoverHitArea = false;
+    next.showCycleWidget = false;
+    next.followCursorMonitor = false;
+    next.rememberWindowPosition = false;
+    next.cycleWidgetAction = CycleWidgetAction::SchedulerOnly;
+    next.fullscreenBehavior = FullscreenBehavior::Allow;
     next.trayIcon = Wh_GetIntSetting(L"settingsTrayIcon") != 0;
 
     for (int i = 0; i < 64; ++i) {
@@ -4242,6 +4227,17 @@ static void SetWindowFrameMode(HWND hwnd, bool roundedPanel) {
     }
 }
 
+static UINT GetDpiForMonitorSafe(HMONITOR mon, HWND fallback) {
+    UINT dx = 0, dy = 0;
+    using GetDpiForMonitorFn = HRESULT(WINAPI*)(HMONITOR, int, UINT*, UINT*);
+    static GetDpiForMonitorFn fn = []() -> GetDpiForMonitorFn {
+        HMODULE m = LoadLibraryW(L"shcore.dll");
+        return m ? (GetDpiForMonitorFn)GetProcAddress(m, "GetDpiForMonitor") : nullptr;
+    }();
+    if (fn && mon && SUCCEEDED(fn(mon, 0, &dx, &dy)) && dx) return dx;
+    return fallback ? GetDpiForWindow(fallback) : 96;
+}
+
 static SIZE GetExpandedLogicalSize() {
     ModSettings s;
     {
@@ -4265,96 +4261,57 @@ static HMONITOR GetTargetMonitor(bool followCursor) {
 }
 
 static void ComputeTargetRect(double progress, RECT& outRc) {
-    UINT dpi = g_hWnd ? GetDpiForWindow(g_hWnd) : 96;
-    ModSettings s;
-    {
-        std::lock_guard<std::mutex> lk(g_settingsMtx);
-        s = g_settings;
-    }
-
-    HMONITOR mon = GetTargetMonitor(s.followCursorMonitor);
+    HMONITOR mon = g_panelMon ? g_panelMon : MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY);
     MONITORINFO mi{sizeof(mi)};
     GetMonitorInfoW(mon, &mi);
     RECT wa = mi.rcWork;
+    UINT dpi = GetDpiForMonitorSafe(mon, g_hWnd);
 
-    int lineThick = DpiScale(6, dpi);
-    int lineLen   = DpiScale(64, dpi);
-    int cornerLen = DpiScale(36, dpi);
-    SIZE expLog   = GetExpandedLogicalSize();
-    int expW      = DpiScale(expLog.cx, dpi);
-    int expH      = DpiScale(expLog.cy, dpi);
+    SIZE expLog = GetExpandedLogicalSize();
+    int expW = std::min(DpiScale(expLog.cx, dpi), (int)(wa.right - wa.left));
+    int expH = std::min(DpiScale(expLog.cy, dpi), (int)(wa.bottom - wa.top));
+    double sc = 0.94 + 0.06 * std::clamp(progress, 0.0, 1.0);
+    int curW = std::max(1, (int)std::round(expW * sc));
+    int curH = std::max(1, (int)std::round(expH * sc));
 
-    int curW = IsCornerDock(s.dockEdge)
-                   ? (int)std::round(cornerLen + (expW - cornerLen) * progress)
-                   : ((s.dockEdge == DockEdge::Left || s.dockEdge == DockEdge::Right)
-                          ? (int)std::round(lineThick + (expW - lineThick) * progress)
-                          : (int)std::round(lineLen + (expW - lineLen) * progress));
-    int curH = IsCornerDock(s.dockEdge)
-                   ? (int)std::round(cornerLen + (expH - cornerLen) * progress)
-                   : ((s.dockEdge == DockEdge::Top || s.dockEdge == DockEdge::Bottom)
-                          ? (int)std::round(lineThick + (expH - lineThick) * progress)
-                          : (int)std::round(lineLen + (expH - lineLen) * progress));
-
-    int panelOffsetPx = DpiScale(s.panelEdgeOffsetPx, dpi);
-    int edgeInset = (int)std::round((double)panelOffsetPx * progress);
-
-    if (s.rememberWindowPosition && !g_posLoaded) {
-        g_posX = Wh_GetIntValue(L"posX", wa.left + (wa.right - wa.left - expW) / 2);
-        g_posY = Wh_GetIntValue(L"posY", wa.top + DpiScale(240, dpi));
-        g_posLoaded = true;
+    int fullL = wa.left + (wa.right - wa.left - expW) / 2;
+    int fullT = wa.top + (wa.bottom - wa.top - expH) / 2;
+    if (g_panelMoved) {
+        fullL = std::clamp((int)g_panelMovedPos.x, (int)wa.left, (int)wa.right - expW);
+        fullT = std::clamp((int)g_panelMovedPos.y, (int)wa.top, (int)wa.bottom - expH);
     }
-    int savedY = s.rememberWindowPosition ? g_posY : (wa.top + DpiScale(240, dpi));
-    int savedX = s.rememberWindowPosition ? g_posX : (wa.left + (wa.right - wa.left - expW) / 2);
-
-    switch (s.dockEdge) {
-        case DockEdge::Left:
-            outRc.left = wa.left + edgeInset;
-            outRc.right = outRc.left + curW;
-            outRc.top = std::clamp(savedY, (int)wa.top, (int)wa.bottom - curH);
-            outRc.bottom = outRc.top + curH;
-            break;
-        case DockEdge::Top:
-            outRc.top = wa.top + edgeInset;
-            outRc.bottom = outRc.top + curH;
-            outRc.left = std::clamp(savedX, (int)wa.left, (int)wa.right - curW);
-            outRc.right = outRc.left + curW;
-            break;
-        case DockEdge::Bottom:
-            outRc.bottom = wa.bottom - edgeInset;
-            outRc.top = outRc.bottom - curH;
-            outRc.left = std::clamp(savedX, (int)wa.left, (int)wa.right - curW);
-            outRc.right = outRc.left + curW;
-            break;
-        case DockEdge::TopLeft:
-            outRc.left = wa.left + edgeInset;
-            outRc.top = wa.top + edgeInset;
-            outRc.right = outRc.left + curW;
-            outRc.bottom = outRc.top + curH;
-            break;
-        case DockEdge::BottomLeft:
-            outRc.left = wa.left + edgeInset;
-            outRc.bottom = wa.bottom - edgeInset;
-            outRc.right = outRc.left + curW;
-            outRc.top = outRc.bottom - curH;
-            break;
-        case DockEdge::BottomRight:
-            outRc.right = wa.right - edgeInset;
-            outRc.bottom = wa.bottom - edgeInset;
-            outRc.left = outRc.right - curW;
-            outRc.top = outRc.bottom - curH;
-            break;
-        default:
-            outRc.right = wa.right - edgeInset;
-            outRc.left = outRc.right - curW;
-            outRc.top = std::clamp(savedY, (int)wa.top, (int)wa.bottom - curH);
-            outRc.bottom = outRc.top + curH;
-            break;
-    }
+    outRc.left = fullL + (expW - curW) / 2;
+    outRc.top = fullT + (expH - curH) / 2;
+    outRc.right = outRc.left + curW;
+    outRc.bottom = outRc.top + curH;
 }
 
 static void UpdateWindowGeometry(bool immediate) {
     if (!g_hWnd) return;
     double target = (g_uiState == UiState::Line) ? 0.0 : 1.0;
+    bool open = g_uiState != UiState::Line;
+    if (open && !g_panelWasOpen) {
+        POINT cur{};
+        GetCursorPos(&cur);
+        g_panelMon = MonitorFromPoint(cur, MONITOR_DEFAULTTOPRIMARY);
+        g_panelMoved = false;
+        g_expandClock.currentVal = 0.0;
+        g_expandClock.active = false;
+    }
+    if (!open && g_panelWasOpen) g_panelClosedTick = GetTickCount();
+    g_panelWasOpen = open;
+    if (!open) {
+        // Closed: no pill to shrink into, so the window simply goes away.
+        g_expandClock.currentVal = 0.0;
+        g_expandClock.active = false;
+        KillTimer(g_hWnd, TIMER_OUTSIDE_CLICK);
+        SyncOutsideMouseHook(false);
+        ShowWindow(g_hWnd, SW_HIDE);
+        SetWindowFrameMode(g_hWnd, false);
+        SyncHoverSensorTimer(g_hWnd);
+        SyncCycleWidgetWindow(true);
+        return;
+    }
     if (immediate) {
         g_expandClock.currentVal = target;
         g_expandClock.active = false;
@@ -4366,11 +4323,12 @@ static void UpdateWindowGeometry(bool immediate) {
     RECT rc{};
     ComputeTargetRect(g_expandClock.currentVal, rc);
     SetWindowPos(g_hWnd, HWND_TOPMOST, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
-                 SWP_NOACTIVATE);
+                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
     SyncHoverSensorTimer(g_hWnd);
     if (g_hWnd) {
         if (g_uiState == UiState::Panel && !g_pinned) SetTimer(g_hWnd, TIMER_OUTSIDE_CLICK, 50, nullptr);
         else KillTimer(g_hWnd, TIMER_OUTSIDE_CLICK);
+        SyncOutsideMouseHook(g_uiState == UiState::Panel && !g_pinned);
     }
     SyncCycleWidgetWindow(true);
     RequestRepaint();
@@ -4994,6 +4952,7 @@ static void AddTrayIcon(HWND hwnd) {
 }
 
 static void TogglePanelFromTray() {
+    if (g_uiState == UiState::Line && GetTickCount() - g_panelClosedTick < 400) return;
     g_uiState = (g_uiState == UiState::Line) ? UiState::Panel : UiState::Line;
     if (g_uiState == UiState::Panel) {
         g_userPinnedFilter = false;
@@ -7654,41 +7613,9 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 ReleaseCapture();
                 RECT rc{};
                 GetWindowRect(hwnd, &rc);
-                HMONITOR mon = MonitorFromRect(&rc, MONITOR_DEFAULTTONEAREST);
-                MONITORINFO mi{sizeof(mi)};
-                GetMonitorInfoW(mon, &mi);
-                RECT wa = mi.rcWork;
-                UINT dpi = GetDpiForWindow(hwnd);
-                int cx = (rc.left + rc.right) / 2;
-                int cy = (rc.top + rc.bottom) / 2;
-                int dLeft   = std::max(0, (int)(cx - wa.left));
-                int dRight  = std::max(0, (int)(wa.right - cx));
-                int dTop    = std::max(0, (int)(cy - wa.top));
-                int dBottom = std::max(0, (int)(wa.bottom - cy));
-                int cornerZone = DpiScale(96, dpi);
-                DockEdge snapped = DockEdge::Top;
-                if (dTop < cornerZone && dLeft < cornerZone) {
-                    snapped = DockEdge::TopLeft;
-                } else if (dBottom < cornerZone && dLeft < cornerZone) {
-                    snapped = DockEdge::BottomLeft;
-                } else if (dBottom < cornerZone && dRight < cornerZone) {
-                    snapped = DockEdge::BottomRight;
-                } else {
-                    int best = dTop; snapped = DockEdge::Top;
-                    if (dBottom < best) { best = dBottom; snapped = DockEdge::Bottom; }
-                    if (dLeft < best)   { best = dLeft;   snapped = DockEdge::Left; }
-                    if (dRight < best)  { best = dRight;  snapped = DockEdge::Right; }
-                }
-                {
-                    std::lock_guard<std::mutex> lk(g_settingsMtx);
-                    g_settings.dockEdge = snapped;
-                }
-                Wh_SetIntValue(L"dockEdgeOverride", (int)snapped);
-                g_posX = rc.left;
-                g_posY = rc.top;
-                g_posLoaded = true;
-                Wh_SetIntValue(L"posX", rc.left);
-                Wh_SetIntValue(L"posY", rc.top);
+                g_panelMon = MonitorFromRect(&rc, MONITOR_DEFAULTTONEAREST);
+                g_panelMoved = true;
+                g_panelMovedPos = POINT{rc.left, rc.top};
                 UpdateWindowGeometry(false);
             }
             g_pressedHitId = -1;
@@ -7821,27 +7748,7 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 } else if (!g_drag.dragging && !(g_hCyclePopup && IsWindow(g_hCyclePopup))) {
                     bool btnDown = ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0) ||
                                    ((GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0);
-                    if (btnDown) {
-                        POINT cur{};
-                        GetCursorPos(&cur);
-                        RECT prc{};
-                        GetWindowRect(hwnd, &prc);
-                        bool overWidget = false;
-                        if (g_hCycleWidget && IsWindowVisible(g_hCycleWidget)) {
-                            RECT wrc{};
-                            GetWindowRect(g_hCycleWidget, &wrc);
-                            overWidget = PtInRect(&wrc, cur);
-                        }
-                        if (!PtInRect(&prc, cur) && !overWidget) {
-                            KillTimer(hwnd, TIMER_OUTSIDE_CLICK);
-                            g_hasPendingNavigateCycle = false;
-                            KillTimer(hwnd, TIMER_NAVIGATE_OPEN_CYCLE);
-                            g_uiState = UiState::Line;
-                            g_kbSelectedIdx = -1;
-                            g_userPinnedFilter = false;
-                            UpdateWindowGeometry(false);
-                        }
-                    }
+                    if (btnDown) SendMessageW(hwnd, WM_APP_OUTSIDE_CLICK, 0, 0);
                 }
             } else if (wParam == TIMER_NAVIGATE_OPEN_CYCLE) {
                 KillTimer(hwnd, TIMER_NAVIGATE_OPEN_CYCLE);
@@ -7993,6 +7900,30 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             }
             return 0;
         }
+        case WM_APP_OUTSIDE_CLICK: {
+            if (g_uiState != UiState::Panel || g_pinned) { SyncOutsideMouseHook(false); return 0; }
+            if (g_drag.dragging || (g_hCyclePopup && IsWindow(g_hCyclePopup))) return 0;
+            POINT cur{};
+            GetCursorPos(&cur);
+            RECT prc{};
+            GetWindowRect(hwnd, &prc);
+            bool keep = PtInRect(&prc, cur) != FALSE;
+            for (HWND other : {g_hCycleWidget, g_hConfirm, g_hListenBox}) {
+                if (keep || !other || !IsWindowVisible(other)) continue;
+                RECT orc{};
+                GetWindowRect(other, &orc);
+                keep = PtInRect(&orc, cur) != FALSE;
+            }
+            if (keep) return 0;
+            KillTimer(hwnd, TIMER_OUTSIDE_CLICK);
+            g_hasPendingNavigateCycle = false;
+            KillTimer(hwnd, TIMER_NAVIGATE_OPEN_CYCLE);
+            g_uiState = UiState::Line;
+            g_kbSelectedIdx = -1;
+            g_userPinnedFilter = false;
+            UpdateWindowGeometry(false);
+            return 0;
+        }
         case WM_APP_TRAY_CALLBACK: {
             switch (LOWORD(lParam)) {
                 case NIN_SELECT:
@@ -8117,6 +8048,7 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             KillTimer(hwnd, TIMER_DEBOUNCE_REFRESH);
             KillTimer(hwnd, TIMER_WIDGET_PROXIMITY);
             KillTimer(hwnd, TIMER_OUTSIDE_CLICK);
+            SyncOutsideMouseHook(false);
             if (g_hCyclePopup && IsWindow(g_hCyclePopup)) DestroyWindow(g_hCyclePopup);
             DestroyCycleWidgetWindow();
             ListenWatchStop();
@@ -8211,7 +8143,6 @@ static DWORD WINAPI UiThreadProc(LPVOID) {
         nullptr, nullptr, wc.hInstance, nullptr);
 
     if (g_hWnd) {
-        ShowWindow(g_hWnd, SW_SHOWNOACTIVATE);
         UpdateWindowGeometry(true);
         UpdateWindow(g_hWnd);
         PostMessageW(g_hWnd, WM_APP_FOREGROUND_CHG, 0, 0);
@@ -9334,31 +9265,18 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"warnOnVpnOrRemote", L"Warn before blocking a VPN or remote desktop", L"Blocking one of these can cut off the connection you are using right now.", L"1", {}, 0, 100, 0, L"Safety"},
 {K::Check, L"replaceFirewallPrompt", L"Ask with our own box", L"When an app wants other devices to connect to it, such as a game hosting a match, this box asks instead of the Windows Firewall pop-up. Windows Firewall keeps guarding, and your answer is saved as a normal firewall rule.", L"1", {}, 0, 100, 0, L"Connection requests"},
 {K::Check, L"allowOnPublicNetworks", L"Allow on public networks too", L"Off, Allow lets the app in on home and work networks only. On a public network you are using right now, Allow always covers it.", L"0", {}, 0, 100, 0, L"Connection requests"},
-{K::Check, L"showPill", L"Edge pill", L"A small pill on the screen edge that opens the panel. Off, open it from the tray icon or the shortcut.", L"1", {}, 0, 100, 1, L"Pill"},
-{K::Choice, L"dockEdge", L"Where the pill sits", L"Drag the pill to move it. The corners show an L-shaped pill.", L"right", {{L"right", L"Right edge"}, {L"left", L"Left edge"}, {L"top", L"Top edge"}, {L"bottom", L"Bottom edge"}, {L"top_left", L"Top left corner"}, {L"bottom_left", L"Bottom left corner"}, {L"bottom_right", L"Bottom right corner"}}, 0, 100, 1, L"Pill"},
-{K::Check, L"followCursorMonitor", L"Follow the pointer", L"With more than one screen, the pill moves to the screen the pointer is on.", L"1", {}, 0, 100, 1, L"Pill"},
-{K::Check, L"rememberWindowPosition", L"Remember where the pill was", L"", L"1", {}, 0, 100, 1, L"Pill"},
-{K::Choice, L"pillIndicatorMode", L"Pill colour", L"Green means the app in front can reach the internet, red means it is blocked.", L"always", {{L"always", L"Always show green or red"}, {L"pulse", L"Grey, with a short flash when it changes"}}, 0, 100, 1, L"Pill"},
-{K::Check, L"hoverExpand", L"Open on hover", L"Resting the pointer on the pill opens the panel. Off, click the pill.", L"1", {}, 0, 100, 1, L"Pill"},
-{K::Check, L"expandHoverHitArea", L"Bigger hover area", L"The panel also opens when the pointer comes close to the pill.", L"0", {}, 0, 100, 1, L"Pill"},
-{K::Number, L"hoverHitMarginPx", L"Hover area size (px)", L"4 to 40 (Suggested: 12). Used when the bigger hover area is on.", L"12", {}, 4, 40, 1, L"Pill"},
-{K::Choice, L"fullscreenBehavior", L"During games and full-screen apps", L"Hide keeps the pill out of the way while a game or a video fills the screen.", L"hide", {{L"hide", L"Hide the pill"}, {L"allow", L"Keep showing it"}}, 0, 100, 1, L"Pill"},
-{K::Check, L"hideDuringCapture", L"Hide from screenshots and recordings", L"The pill and panel stay out of screen captures, streams and screen sharing.", L"1", {}, 0, 100, 1, L"Pill"},
 {K::Choice, L"windowSizePreset", L"Panel size", L"", L"default", {{L"default", L"Normal (436 by 480)"}, {L"large", L"Large (680 by 680)"}, {L"extralarge", L"Extra large (840 by 840)"}}, 0, 100, 1, L"Panel"},
-{K::Number, L"panelEdgeOffsetPx", L"Gap from the screen edge (px)", L"0 to 12 (Suggested: 8).", L"8", {}, 0, 12, 1, L"Panel"},
 {K::Choice, L"defaultFilter", L"List shown first", L"The tab the panel opens on.", L"user", {{L"user", L"Running apps"}, {L"allowed", L"Allowed"}, {L"blocked", L"Blocked"}, {L"system", L"System apps"}, {L"excluded", L"Hidden apps"}}, 0, 100, 1, L"Panel"},
 {K::Check, L"showNonActionableInRunning", L"Show locked apps in Running", L"Also list Windows helpers and apps that Windows Firewall already blocks, even though you cannot change them here.", L"0", {}, 0, 100, 1, L"Panel"},
 {K::Check, L"showTooltips", L"Tooltips", L"Show a short tip when the pointer rests on a button, a switch or the clock.", L"0", {}, 0, 100, 1, L"Panel"},
+{K::Check, L"hideDuringCapture", L"Hide from screenshots and recordings", L"The panel stays out of screen captures, streams and screen sharing.", L"1", {}, 0, 100, 1, L"Panel"},
 {K::Check, L"enableCycleScheduler", L"Cycle Mode", L"Block and allow an app on a timer. Double-click or right-click an app in the panel to set it up.", L"1", {}, 0, 100, 2, L"Cycle Mode"},
 {K::Check, L"rememberCycleTemplates", L"Remember each app's timer", L"The last timer you used for an app fills in next time. It never starts by itself.", L"1", {}, 0, 100, 2, L"Cycle Mode"},
 {K::Check, L"showCycleMs", L"Milliseconds box", L"Show a box for milliseconds in the timer window.", L"0", {}, 0, 100, 2, L"Cycle Mode"},
-{K::Check, L"showCycleWidget", L"Clock button by the pill", L"A small clock beside the pill while a timer runs.", L"1", {}, 0, 100, 2, L"Clock button"},
-{K::Number, L"cycleWidgetSize", L"Clock button size", L"0 to 10 (Suggested: 5).", L"5", {}, 0, 10, 2, L"Clock button"},
-{K::Choice, L"cycleWidgetAction", L"Clicking the clock", L"What happens when you click the clock button.", L"scheduler_only", {{L"scheduler_only", L"Open the timer window only"}, {L"navigate_pill", L"Open the panel, pick the app, then open its timer"}}, 0, 100, 2, L"Clock button"},
 {K::Hotkey, L"toggleForegroundApp", L"Block or allow the app in front", L"Press the keys in the box. Backspace clears it.", L"Ctrl+Alt+F", {}, 0, 100, 3, L"Shortcuts"},
 {K::Hotkey, L"expandCollapsePill", L"Open or close the panel", L"", L"Ctrl+Alt+Shift+F", {}, 0, 100, 3, L"Shortcuts"},
 {K::Hotkey, L"restoreAll", L"Allow every blocked app again", L"Off by default. Pick keys that no other app uses.", L"", {}, 0, 100, 3, L"Shortcuts"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open the panel. Right-click it for settings and more. When off, use the pill or the shortcut.", L"1", {}, 0, 100, 4, L"Tray icon"},
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open the panel. Right-click it for settings and more. When off, use the shortcut.", L"1", {}, 0, 100, 4, L"Tray icon"},
 {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 4, L"Settings window"},
 {K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 4, L"Settings window"}
     };
@@ -9370,7 +9288,7 @@ struct SetPageInfo {
 };
 static const SetPageInfo kSetPages[] = {
 {L"Blocking", L"How a block works, the apps kept safe from it, and apps that ask to be reached.", 0xE72E},
-{L"Panel", L"The edge pill, the panel it opens and the app list.", 0xE8A7},
+{L"Panel", L"The panel the tray icon opens, and its app list.", 0xE8A7},
 {L"Cycle Mode", L"Block and allow an app on a timer.", 0xE916},
 {L"Shortcuts", L"Keys that block the app in front, open the panel and undo every block.", 0xE765},
 {L"Look", L"The tray icon and this settings window.", 0xE790},
