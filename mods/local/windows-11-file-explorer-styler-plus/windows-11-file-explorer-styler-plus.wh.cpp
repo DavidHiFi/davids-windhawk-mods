@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.29
+// @version         1.10.30
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -42,6 +42,19 @@ adds after every other window's title is added here too: how long the
 window has been open, after the folder name. It uses Seamless Title Bars'
 own uptime settings (which units, compact or clock, separator, colour) and
 hides when that mod or its uptime is off.
+
+## What's new in 1.10.30
+
+- The thin line in the folder tree above This PC is gone. It used to cut
+  through the hover pill.
+- The line between the folder tree and the file list is gone again, also
+  in larger windows where it was drawn wider.
+- The view buttons at the bottom right sit in one even dock: no grey patch
+  behind the toggle and no leftover curve at its left end.
+
+## What's new in 1.10.29
+
+- The path drop-down is darker, with its blur kept.
 
 ## What's new in 1.10.28
 
@@ -11491,6 +11504,9 @@ bool IsStatusDockToggleWnd(HWND hWnd) {
 }
 
 thread_local HWND g_statusDockPaintWndForThread;
+// Set while the navigation tree paints on this thread.
+thread_local HWND g_treePaintWndForThread;
+bool IsNavTreeWnd(HWND hWnd);
 thread_local StatusDockBuffer g_statusDockBuffersForThread[4];
 thread_local int g_statusDockBufferCountForThread;
 
@@ -11527,6 +11543,9 @@ HDC WINAPI BeginPaint_Hook(HWND hWnd, LPPAINTSTRUCT lpPaint) {
     if (hdc && g_settings.statusBarDock && IsStatusDockWnd(hWnd)) {
         g_statusDockPaintWndForThread = hWnd;
     }
+    if (hdc && IsNavTreeWnd(hWnd)) {
+        g_treePaintWndForThread = hWnd;
+    }
 
     return hdc;
 }
@@ -11537,6 +11556,9 @@ BOOL WINAPI EndPaint_Hook(HWND hWnd, const PAINTSTRUCT* lpPaint) {
     PopPaintingWnd(hWnd);
     if (hWnd == g_statusDockPaintWndForThread) {
         g_statusDockPaintWndForThread = nullptr;
+    }
+    if (hWnd == g_treePaintWndForThread) {
+        g_treePaintWndForThread = nullptr;
     }
 
     return EndPaint_Original(hWnd, lpPaint);
@@ -11740,22 +11762,77 @@ FillRect_t FillRect_Original;
 // The pane splitters (navigation pane | content | details pane) are thin
 // vertical lines in the folder view's DirectUIHWND, drawn translucent. The
 // owner wants no divider lines inside the window, so they are not drawn.
+bool IsNavTreeWnd(HWND hWnd) {
+    WCHAR className[32];
+    if (!GetClassName(hWnd, className, ARRAYSIZE(className)) ||
+        wcscmp(className, L"SysTreeView32") != 0) {
+        return false;
+    }
+    HWND hParentWnd = GetParent(hWnd);
+    return hParentWnd &&
+           GetClassName(hParentWnd, className, ARRAYSIZE(className)) &&
+           wcscmp(className, L"NamespaceTreeControl") == 0;
+}
+
+// The navigation tree draws a thin rule between its groups (above This PC).
+// It crosses the hover pill, so it is not drawn.
+bool IsTreeSeparator(int w, int h) {
+    HWND tree = g_treePaintWndForThread;
+    if (!tree || w <= 0 || h <= 0) {
+        return false;
+    }
+    int line = std::max(1, (int)(GetDpiForWindow(tree) / 96));
+    RECT client;
+    return h <= 2 * line && GetClientRect(tree, &client) &&
+           w >= client.right / 2;
+}
+
+// Each distinct thin line is logged once, so the log never runs dry.
 void LogThinLine(PCWSTR api, HDC hdc, int x, int y, int w, int h,
                  bool skipped) {
-    static LONG count;
-    if (std::min(w, h) > 6 || std::max(w, h) < 40 ||
-        InterlockedIncrement(&count) > 200) {
+    if (std::min(w, h) > 6 || std::max(w, h) < 40) {
         return;
     }
     WCHAR className[64] = L"-";
     if (HWND dcWnd = WindowFromDC(hdc)) {
         GetClassName(dcWnd, className, ARRAYSIZE(className));
+    } else if (g_treePaintWndForThread) {
+        wcscpy_s(className, L"(tree paint)");
+    } else if (g_statusDockPaintWndForThread) {
+        wcscpy_s(className, L"(view paint)");
     }
-    Wh_Log(L"Thin line %s at %d,%d %dx%d, dc window %s, %s", api, x, y, w, h,
-           className, skipped ? L"skipped" : L"drawn");
+
+    UINT64 key = 1469598103934665603ull;
+    auto mix = [&key](UINT64 v) { key = (key ^ v) * 1099511628211ull; };
+    for (PCWSTR p = api; *p; p++) mix(*p);
+    for (PCWSTR p = className; *p; p++) mix(*p);
+    mix((UINT64)(UINT)x);
+    mix((UINT64)(UINT)w);
+    mix((UINT64)(UINT)h);
+    mix(skipped);
+
+    static SRWLOCK lock = SRWLOCK_INIT;
+    static UINT64 seen[512];
+    static int seenCount;
+    AcquireSRWLockExclusive(&lock);
+    bool fresh = seenCount < (int)ARRAYSIZE(seen);
+    for (int i = 0; fresh && i < seenCount; i++) {
+        fresh = seen[i] != key;
+    }
+    if (fresh) {
+        seen[seenCount++] = key;
+    }
+    ReleaseSRWLockExclusive(&lock);
+    if (fresh) {
+        Wh_Log(L"Thin line %s at %d,%d %dx%d, dc window %s, %s", api, x, y, w,
+               h, className, skipped ? L"skipped" : L"drawn");
+    }
 }
 
 bool PaintPaneSplitter(HDC hdc, int x, int y, int w, int h) {
+    if (IsTreeSeparator(w, h)) {
+        return true;
+    }
     HWND hWnd = GetEntireWindowEffectDCWnd(hdc);
     if (!hWnd && g_statusDockPaintWndForThread) {
         if (WindowFromDC(hdc) == g_statusDockPaintWndForThread) {
@@ -11787,11 +11864,17 @@ bool PaintPaneSplitter(HDC hdc, int x, int y, int w, int h) {
 
     UINT dpi = GetDpiForWindow(hWnd);
     int line = std::max(1, (int)(dpi / 96));
-    if (w > line || h < MulDiv(40, dpi, 96) || !IsStatusDockWnd(hWnd)) {
+    if (h < MulDiv(40, dpi, 96) || !IsStatusDockWnd(hWnd)) {
         return false;
     }
-
-    return true;
+    if (w <= line) {
+        return true;
+    }
+    // The wider sidebar splitter runs the full height of the view. Scroll
+    // thumbs and other narrow parts never do.
+    RECT client;
+    return w <= 6 * line && GetClientRect(hWnd, &client) &&
+           h * 10 >= client.bottom * 9;
 }
 
 using GdiAlphaBlend_t = decltype(&GdiAlphaBlend);
@@ -12140,15 +12223,34 @@ BOOL WINAPI Polyline_Hook(HDC hdc, const POINT* apt, int cpt) {
 
     bool fromFrame = IsHookCallerFromModule(__builtin_return_address(0),
                                             L"ExplorerFrame.dll");
+    int lineW = abs(apt[1].x - apt[0].x) + 1;
+    int lineH = abs(apt[1].y - apt[0].y) + 1;
+    bool skip = fromFrame || IsTreeSeparator(lineW, lineH);
     LogThinLine(L"Polyline", hdc, std::min(apt[0].x, apt[1].x),
-                std::min(apt[0].y, apt[1].y),
-                abs(apt[1].x - apt[0].x) + 1, abs(apt[1].y - apt[0].y) + 1,
-                fromFrame);
-    if (!fromFrame) {
+                std::min(apt[0].y, apt[1].y), lineW, lineH, skip);
+    if (!skip) {
         return Polyline_Original(hdc, apt, cpt);
     }
 
     return TRUE;
+}
+
+using LineTo_t = decltype(&LineTo);
+LineTo_t LineTo_Original;
+BOOL WINAPI LineTo_Hook(HDC hdc, int x, int y) {
+    POINT from;
+    if ((g_treePaintWndForThread || g_statusDockPaintWndForThread) &&
+        GetCurrentPositionEx(hdc, &from)) {
+        int w = abs(x - from.x) + 1, h = abs(y - from.y) + 1;
+        bool skip = IsTreeSeparator(w, h);
+        LogThinLine(L"LineTo", hdc, std::min(x, (int)from.x), std::min(y, (int)from.y),
+                    w, h, skip);
+        if (skip) {
+            MoveToEx(hdc, x, y, nullptr);
+            return TRUE;
+        }
+    }
+    return LineTo_Original(hdc, x, y);
 }
 
 BYTE g_lightTextAlphaLut[256];
@@ -13633,16 +13735,32 @@ void StatusDockAfterFill(HDC hdc, const RECT* rect, HBRUSH hbr) {
 
         OffsetRect(&pill, -toggleScreen.left, -toggleScreen.top);
         AcquireSRWLockExclusive(&g_statusDockBandsLock);
+        auto known = g_statusDockToggles.find(hViewWnd);
+        bool newToggle =
+            known == g_statusDockToggles.end() || known->second != buffer->hWnd;
         g_statusDockToggles[hViewWnd] = buffer->hWnd;
         ReleaseSRWLockExclusive(&g_statusDockBandsLock);
+        // The view drew its pill before it knew the toggle: redraw it wider,
+        // or the old left end stays behind as a stray arc.
+        if (newToggle) {
+            RECT viewBand;
+            if (GetStatusDockBand(hViewWnd, &viewBand)) {
+                InvalidateRect(hViewWnd, &viewBand, FALSE);
+            }
+        }
+        // The toggle has no glass under it, and Explorer's grey fill would
+        // make its slice of the pill darker than the rest. Start from the
+        // band colour the view shows instead.
+        HBRUSH base = CreateSolidBrush(RGB(32, 32, 47));
+        if (base) {
+            FillRect_Original(hdc, rect, base);
+            DeleteObject(base);
+        }
         PaintStatusDock(hdc, StatusDockOffset(hViewWnd, buffer->hWnd), *rect,
                         dpi, hViewWnd);
         buffer->band = pill;
         buffer->hasBand = true;
         buffer->view = hViewWnd;
-        AcquireSRWLockExclusive(&g_statusDockBandsLock);
-        g_statusDockToggles[hViewWnd] = buffer->hWnd;
-        ReleaseSRWLockExclusive(&g_statusDockBandsLock);
 
         // Rows of the button above or below the pill would stay black, so
         // clip the button to the pill's height. Only when it changes, since
@@ -15056,6 +15174,7 @@ BOOL Wh_ModInit() {
     WindhawkUtils::SetFunctionHook(CreateCompatibleDC, CreateCompatibleDC_Hook,
                                    &CreateCompatibleDC_Original);
 
+    WindhawkUtils::SetFunctionHook(LineTo, LineTo_Hook, &LineTo_Original);
     WindhawkUtils::SetFunctionHook(DeleteDC, DeleteDC_Hook, &DeleteDC_Original);
 
     WindhawkUtils::SetFunctionHook(ExtTextOutW, ExtTextOutW_Hook,
