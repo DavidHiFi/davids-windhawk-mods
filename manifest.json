@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-24T07:35:54+08:00",
+  "generatedAt": "2026-11-24T07:40:31+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 173,
@@ -1337,7 +1337,7 @@
       "name": "Seamless Key Click",
       "author": "DavidHiFi, Anixx",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.1.5",
+      "version": "1.1.7",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
