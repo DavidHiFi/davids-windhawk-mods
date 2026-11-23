@@ -272,9 +272,24 @@ also flickers, deal with it, we need consistency."
 - Proof 4:20 am (`run-038.sh`, D:\Agent Work\seamless-dock\proof\title-1124): 3 right-clicks
   plus 2 later owner clicks, watch.log "pill fell under 0 (0 ms total)", 479 frames with no
   pill-area change over 4. Clip `rightclick-038.mp4` / `.gif`. Explorer the same pid after.
+- Missed in that proof: `frame-038.png` shows the pill drawn over the taskbar's right-click
+  menu. Ownership also lifts the pill over menus the bar opens. The owner caught it; fixed in 0.3.9.
+
+## 0.3.9: the right-click menu opens over the pill (2026-11-24)
+
+- `TitleOverMenu()`: walking down from the pill to the bar, any visible uncloaked window that
+  overlaps the pill (a menu or its shadow) means the pill is too high. `RaiseTitle()` then puts
+  the pill straight above the bar (after `GetWindow(tray, GW_HWNDPREV)`), not at the top.
+- The z-guard thread also hooks EVENT_SYSTEM_MENUPOPUPSTART and runs the same raise burst.
+- Installed, registry v0.3.9, live source equals the work file (CR stripped), desktop fine
+  after the 60 s watch. Published: mods 582ef02, feed c5b65e9. Rollback copy
+  `seamless-dock-0.3.8.wh.cpp`.
+- Lesson: in a z-order proof, check the menu against the pill in the frames, not only dips
+  under the bar.
 
 ## Rollback
 
+- Dock 0.3.9: install `seamless-dock-0.3.8.wh.cpp` with Install-StagedMod.
 - Dock 0.3.8: install `seamless-dock-0.3.7.wh.cpp` with Install-StagedMod.
 
 - Workshop 1.5.4: install `work\2026-11-24-workshop-no-downgrade\seamless-workshop-1.5.3.wh.cpp`.
