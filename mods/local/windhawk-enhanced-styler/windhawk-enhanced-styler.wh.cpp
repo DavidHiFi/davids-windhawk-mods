@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.27
+// @version         2.2.28
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.28
+
+- The Loaded mods window now draws its own title strip, the way the Mod tasks window does. Windows was drawing it before, and turned it see-through whenever another window was in front. Both windows now keep a solid dark strip in the background, and their title buttons dim there like every other window again.
 
 ## What's new in 2.2.27
 
@@ -2385,6 +2389,7 @@ struct TrayDialogState {
     long long epoch = 0;  // settings generation the colors were pushed with
     LONG_PTR listExStyle = 0;  // the list's own border style, put back on unload
     bool partsSet = false;
+    bool captionIn = false;  // the title strip is our own paint (ProgressDialogProc), not DWM's
     float cardP = 0.0f;  // card hover: 0 rest .. 1 full gradient edge
     int cardWant = 0;
 };
@@ -2436,7 +2441,6 @@ static HBRUSH TrayBrush(COLORREF color) {
     return g_trayBrush;
 }
 
-static bool IsProgressDialog(HWND hwnd);
 static HFONT TrayFont(HWND dialog, const Settings& s);
 static void PaintTrayDialog(HWND hwnd);
 static void SetupTrayDialogParts(HWND dialog);
@@ -2457,16 +2461,11 @@ static void ApplyTrayDialogLook(HWND dialog, HWND list, const Settings& s) {
     if (HFONT font = TrayFont(dialog, s)) SendMessageW(list, WM_SETFONT, (WPARAM)font, TRUE);
     // Both tray windows float over other apps and are almost never in front, and
     // Windows drops the acrylic blur from a background window. So the body keeps a
-    // near solid Mocha fill. The title strip paints the same fill itself (PaintCaption),
-    // but DWM only shows that fill while the frame looks active: in the background
-    // look it clears the whole band, fill and title alike (measured 2026-11-23 on
-    // 2.2.26). So these windows keep the active look, here and on WM_NCACTIVATE.
+    // near solid Mocha fill. The title strip is client paint too (ProgressDialogProc)
+    // and carries the same fill (PaintCaption).
     Settings frame = s;
     if (frame.blur) frame.backgroundOpacity = std::clamp(frame.backgroundOpacity, 95, 99);
     ApplyWindowStack(dialog, frame);
-    BOOL activeLook = TRUE;
-    WINCOMPATTRDATA appearance{WCA_FORCE_ACTIVEWINDOW_APPEARANCE, &activeLook, sizeof(activeLook)};
-    SetWindowCompositionAttribute(dialog, &appearance);
     RedrawWindow(dialog, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);
 }
 
@@ -2489,11 +2488,6 @@ static LRESULT CALLBACK TrayDialogProc(HWND hWnd, UINT message, WPARAM wParam, L
         switch (message) {
             case WM_ERASEBKGND:
                 return 1;  // WM_PAINT draws the glass body and the card
-            case WM_NCACTIVATE:
-                // Focus still moves away; only the frame keeps its active look, so DWM
-                // keeps showing the strip's fill (see ApplyTrayDialogLook).
-                DefSubclassProc(hWnd, message, TRUE, lParam);
-                return TRUE;
             case WM_PAINT:
                 PaintTrayDialog(hWnd);
                 return 0;
@@ -2539,14 +2533,6 @@ static LRESULT CALLBACK TrayDialogProc(HWND hWnd, UINT message, WPARAM wParam, L
 static int CaptionHeight(UINT dpi);
 static void PaintCaption(HWND hwnd, HDC dc, const Settings& s);
 static LRESULT CALLBACK MainWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, DWORD_PTR);
-
-static bool IsProgressDialog(HWND hwnd) {
-    wchar_t title[128], expected[128];
-    return GetWindowTextW(hwnd, title, ARRAYSIZE(title)) &&
-           LoadStringW(GetModuleHandleW(nullptr), 0xbc, expected, ARRAYSIZE(expected)) &&
-           // The window reads "Mod tasks in progress - Windhawk", so match the start.
-           wcsncmp(title, expected, wcslen(expected)) == 0;
-}
 
 static LRESULT CALLBACK ProgressDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam,
                                            DWORD_PTR) {
@@ -2663,7 +2649,10 @@ static BOOL CALLBACK TrayDialogEnumProc(HWND hWnd, LPARAM lParam) {
         RECT client, list, button;
         HWND listWindow = GetDlgItem(hWnd, 1001);
         HWND buttonWindow = GetDlgItem(hWnd, IDOK);
-        bool progressLayout = IsProgressDialog(hWnd) && GetClientRect(hWnd, &client) &&
+        // Both list windows (Mod tasks and Loaded mods) take the title strip into
+        // their own paint. Left to DWM, a background window's strip turns clear
+        // with its text at 40%, whatever fill the body has (live-0928, 2026-11-23).
+        bool progressLayout = listWindow && buttonWindow && GetClientRect(hWnd, &client) &&
             GetWindowRect(listWindow, &list) && GetWindowRect(buttonWindow, &button);
         if (progressLayout) {
             MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT*>(&list), 2);
@@ -2678,6 +2667,10 @@ static BOOL CALLBACK TrayDialogEnumProc(HWND hWnd, LPARAM lParam) {
         }
         if (progressLayout &&
             WindhawkUtils::SetWindowSubclassFromAnyThread(hWnd, ProgressDialogProc, 0)) {
+            {
+                std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+                g_trayDialogs[hWnd].captionIn = true;
+            }
             DWM_WINDOW_CORNER_PREFERENCE corner = DWMWCP_ROUND;
             DwmSetWindowAttribute(hWnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
             SetWindowPos(hWnd, nullptr, 0, 0, 0, 0,
@@ -3498,7 +3491,13 @@ static void TrayBufferedPaint(HWND hwnd, LONG top, Draw draw) {
 // The dialog body is the window's own glass; the card is drawn where the list sits.
 static void PaintTrayDialog(HWND hwnd) {
     UINT dpi = GetDpiForWindow(hwnd);
-    LONG top = IsProgressDialog(hwnd) ? CaptionHeight(dpi) : 0;
+    bool captionIn = false;
+    {
+        std::lock_guard<std::mutex> lock(g_trayDialogsMutex);
+        auto it = g_trayDialogs.find(hwnd);
+        captionIn = it != g_trayDialogs.end() && it->second.captionIn;
+    }
+    LONG top = captionIn ? CaptionHeight(dpi) : 0;
     TrayBufferedPaint(hwnd, top, [&](HDC, RGBQUAD* px, int stride, int w, int h) {
         RECT card;
         if (!TrayCardRect(GetDlgItem(hwnd, 1001), &card)) return;
