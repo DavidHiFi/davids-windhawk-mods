@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.48
+// @version         0.4.49
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -33,7 +33,14 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
 
-## What's new in 0.4.47
+## What's new in 0.4.49
+
+The Edit account window and the AI usage settings no longer freeze the taskbar. When Windows
+or the taskbar changes a setting while they are open, they now catch up a moment later instead
+of resizing in the middle of the taskbar's own work. The value boxes in Edit account also use
+the same glass as the rest of the window.
+
+## Earlier: 0.4.47
 
 The progress bar under the player now runs the whole width, with the same gap at both
 ends. The song picture sits just above it, so the two never touch.
@@ -61661,6 +61668,9 @@ struct SettingsWindowState {
     UINT dpi = 96;
     bool updating = false;
     bool inSizeMove = false;
+    bool changeQueued = false;  // A kSettingsDeferredChangeMessage is posted and not yet handled.
+    bool visualsQueued = false;
+    bool fitQueued = false;
     int activationRepaints = 0;  // Pending passes of kSettingsActivationRepaintTimer.
     bool zoomed = false;         // Last maximized state seen in WM_SIZE.
     SIZE layoutSize{};           // Client area of the last LayoutSettingsWindow.
@@ -61803,6 +61813,11 @@ struct AccountEditorState {
     int wheelRemainder = 0;
     bool layingOut = false;
     bool updatingVisuals = false;
+    bool refreshing = false;
+    bool refreshQueued = false;  // A kEditorDeferredRefreshMessage is posted and not yet handled.
+    bool visualsQueued = false;  // That pass also rebuilds the visuals.
+    int sizeSeenWidth = -1;
+    int sizeSeenHeight = -1;
     RECT footerDock{};  // Rounded dock behind OK and Cancel (Mocha).
     int composedChecks = 0;  // kNativeComposedTimer checks after showing.
 };
@@ -70985,6 +71000,11 @@ static const UiColor kEditorDockFill{0x94, 0x18, 0x18, 0x25};
 // shown) and focus after closing the icon list.
 static constexpr UINT kEditorIconUnavailableMessage = WM_APP + 40;
 static constexpr UINT kEditorIconKindClosedMessage = WM_APP + 42;
+// Settings and theme changes are handled in a pass posted to the window itself, never inside the
+// sender's call: the taskbar sends WM_SETTINGCHANGE while it sizes itself, and a window that
+// resized in that call kept both threads trading size messages until the shell hung (2026-11-23).
+static constexpr UINT kEditorDeferredRefreshMessage = WM_APP + 44;
+static constexpr UINT kSettingsDeferredChangeMessage = WM_APP + 45;
 // Tooltip tool for the icon square (a rectangle in the editor): covers the logo's disabled square,
 // which does not receive the mouse.
 static constexpr UINT_PTR kEditorIconSquareTool = 1;
@@ -71301,9 +71321,10 @@ static void LayoutAccountEditor(HWND hWnd, AccountEditorState& state) {
 }
 
 static void RefreshEditorMessages(HWND hWnd, AccountEditorState& state) {
-    if (g_unloading || g_settingsWindowCancelRequested || !IsWindow(hWnd)) return;
+    if (state.refreshing || g_unloading || g_settingsWindowCancelRequested || !IsWindow(hWnd)) return;
     RECT frame{}, client{};
     if (!GetWindowRect(hWnd, &frame) || !GetClientRect(hWnd, &client)) return;
+    state.refreshing = true;
     int provider = (int)SendDlgItemMessageW(hWnd, kAccountProvider, CB_GETCURSEL, 0, 0);
     int height = AccountEditorClientHeight(state.dpi, provider) + MeasureEditorMessages(hWnd, state) +
                  (frame.bottom - frame.top) - client.bottom;
@@ -71311,10 +71332,13 @@ static void RefreshEditorMessages(HWND hWnd, AccountEditorState& state) {
     if (GetMonitorInfoW(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), &monitor)) {
         height = std::min(height, (int)(monitor.rcWork.bottom - monitor.rcWork.top));
         int top = std::clamp((int)frame.top, (int)monitor.rcWork.top, (int)monitor.rcWork.bottom - height);
-        SetWindowPos(hWnd, nullptr, frame.left, top, frame.right - frame.left, height,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
+        if (top != frame.top || height != frame.bottom - frame.top) {
+            SetWindowPos(hWnd, nullptr, frame.left, top, frame.right - frame.left, height,
+                         SWP_NOZORDER | SWP_NOACTIVATE);
+        }
     }
     LayoutAccountEditor(hWnd, state);
+    state.refreshing = false;
     for (auto& message : state.messages) {
         if (message.announce && IsWindowVisible(message.window)) {
             NotifyWinEvent(EVENT_SYSTEM_ALERT, message.window, OBJID_CLIENT, CHILDID_SELF);
@@ -72496,7 +72520,12 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
             }
             break;
         case WM_SIZE:
-            if (state && state->messages[0].window) LayoutAccountEditor(hWnd, *state);
+            if (state && state->messages[0].window &&
+                (LOWORD(lParam) != state->sizeSeenWidth || HIWORD(lParam) != state->sizeSeenHeight)) {
+                state->sizeSeenWidth = LOWORD(lParam);
+                state->sizeSeenHeight = HIWORD(lParam);
+                LayoutAccountEditor(hWnd, *state);
+            }
             return 0;
         case WM_MOUSEWHEEL:
         case WM_VSCROLL:
@@ -72557,8 +72586,21 @@ static LRESULT CALLBACK AccountEditorWndProc(HWND hWnd, UINT message,
         case WM_THEMECHANGED:
         case WM_SYSCOLORCHANGE:
         case WM_DWMCOLORIZATIONCOLORCHANGED:
-            if (state && !state->updatingVisuals) {
-                RecreateAccountEditorVisuals(hWnd, *state);
+            if (state && !state->updatingVisuals && !g_unloading) {
+                if (message != WM_SETTINGCHANGE || wParam != SPI_SETWORKAREA) state->visualsQueued = true;
+                if (!state->refreshQueued) {
+                    state->refreshQueued = true;
+                    PostMessageW(hWnd, kEditorDeferredRefreshMessage, 0, 0);
+                }
+            }
+            return 0;
+        case kEditorDeferredRefreshMessage:
+            if (state) {
+                state->refreshQueued = false;
+                if (state->visualsQueued) {
+                    state->visualsQueued = false;
+                    RecreateAccountEditorVisuals(hWnd, *state);
+                }
                 RefreshEditorMessages(hWnd, *state);
             }
             return 0;
@@ -74274,9 +74316,24 @@ static LRESULT CALLBACK SettingsWindowProc(HWND hWnd, UINT message,
             return 0;
         case WM_SETTINGCHANGE:
             if (state) {
-                RecreateSettingsVisuals(*state);
-                if (wParam == SPI_SETWORKAREA) {
-                    FitSettingsWindowToContent(*state);
+                if (wParam == SPI_SETWORKAREA) state->fitQueued = true;
+                else state->visualsQueued = true;
+                if (!state->changeQueued) {
+                    state->changeQueued = true;
+                    PostMessageW(hWnd, kSettingsDeferredChangeMessage, 0, 0);
+                }
+            }
+            return 0;
+        case kSettingsDeferredChangeMessage:
+            if (state) {
+                state->changeQueued = false;
+                if (state->visualsQueued) {
+                    state->visualsQueued = false;
+                    RecreateSettingsVisuals(*state);
+                }
+                if (state->fitQueued) {
+                    state->fitQueued = false;
+                    if (!state->inSizeMove) FitSettingsWindowToContent(*state);
                     LayoutSettingsWindow(*state);
                 }
             }
