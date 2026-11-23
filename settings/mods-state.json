@@ -1341,7 +1341,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "",
-    "version": "0.3.4"
+    "version": "0.3.5"
   },
   "local@logitech-battery-tray": {
     "disabled": false,

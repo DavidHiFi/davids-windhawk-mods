@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.4
+// @version         0.3.5
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,6 +26,12 @@ the edge of the screen across from your taskbar, so you get a clean bar on one
 side and a dock on the other, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
+
+## What's new in 0.3.5
+
+- The title pill on the top bar lights up with the blue to mauve edge when you
+  point at it, the same as the other pills on the bar.
+- Right-clicking the taskbar no longer makes the title pill flicker.
 
 ## What's new in 0.3.4
 
@@ -1736,7 +1742,7 @@ ULONGLONG g_lastAnim = 0, g_outSince = 0;
 std::wstring g_popKey;  // item the preview shows
 
 constexpr UINT_PTR kTimerRebuild = 1, kTimerAnim = 2, kTimerHover = 3, kTimerTrack = 4, kTimerFull = 5,
-                   kTimerRecycle = 6;
+                   kTimerRecycle = 6, kTimerTitle = 7;
 ULONGLONG g_recycleChecked = 0;
 bool g_rebuildPending = false;
 
@@ -2513,7 +2519,13 @@ void CheckFullscreen() {
 // ---------------------------------------------------------------------------
 HWND g_title = nullptr, g_titleWin = nullptr;
 ComPtr<ID2D1DCRenderTarget> g_titleRt;
+ComPtr<ID2D1GradientStopCollection> g_titleStops;
 std::wstring g_titleKey, g_titleApp, g_titleSrc, g_titleAlt;
+// What the pill shows now, so a hover fade can paint it again, and where it sits.
+std::wstring g_titleShownApp, g_titleShownText;
+RECT g_titleBar{}, g_titleRect{};
+float g_titleHoverT = 0;
+ULONGLONG g_titleTick = 0;
 
 // Size and corner of the bar's own pills, and the bar's inner top margin that
 // pushes its content down from the window's top edge.
@@ -2583,14 +2595,21 @@ std::wstring TitleText(HWND h, const std::wstring& app) {
 void HideTitle() {
     if (g_title && IsWindowVisible(g_title)) ShowWindow(g_title, SW_HIDE);
     g_titleKey.clear();
+    g_titleHoverT = 0;
+    g_titleRect = RECT{};
 }
 
-// Clicking the bar lifts it over us; come back on top of it.
+// Clicking the bar lifts it over us; come back just above it. Not to the very
+// top: the taskbar's own menu opens above the bar and must stay above the pill.
 void RaiseTitle() {
+    if (!g_title || !IsWindowVisible(g_title)) return;
     HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+    if (!tray) return;
     for (HWND w = GetWindow(g_title, GW_HWNDPREV); w; w = GetWindow(w, GW_HWNDPREV))
         if (w == tray) {
-            SetWindowPos(g_title, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            HWND above = GetWindow(tray, GW_HWNDPREV);
+            SetWindowPos(g_title, above ? above : HWND_TOPMOST, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
             break;
         }
 }
@@ -2647,10 +2666,24 @@ bool PaintTitle(const std::wstring& app, const std::wstring& title, Icon* ic, co
             D2D1_RECT_F r{w / 2, w / 2, W - w / 2, Hi - w / 2};
             float rr = std::max(0.f, kTitleR * sc - w / 2);
             ComPtr<ID2D1SolidColorBrush> edge, text, sub;
-            rt->CreateSolidColorBrush(Col(kSurface1, 0.9f), edge.GetAddressOf());
+            float h = g_titleHoverT;
+            rt->CreateSolidColorBrush(Col(kSurface1, 0.9f * (1 - h)), edge.GetAddressOf());
             rt->CreateSolidColorBrush(Col(kText), text.GetAddressOf());
             rt->CreateSolidColorBrush(Col(kSubtext), sub.GetAddressOf());
-            rt->DrawRoundedRectangle(D2D1::RoundedRect(r, rr, rr), edge.Get(), w);
+            if (h < 1) rt->DrawRoundedRectangle(D2D1::RoundedRect(r, rr, rr), edge.Get(), w);
+            // Pointing at it fades in the blue to mauve edge the bar's other pills have.
+            if (h > 0) {
+                if (!g_titleStops) {
+                    D2D1_GRADIENT_STOP gs[2] = {{0.f, Col(S.from)}, {1.f, Col(S.to)}};
+                    rt->CreateGradientStopCollection(gs, 2, g_titleStops.GetAddressOf());
+                }
+                ComPtr<ID2D1LinearGradientBrush> grad;
+                if (g_titleStops)
+                    rt->CreateLinearGradientBrush(
+                        D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, (float)Hi), D2D1::Point2F((float)W, 0)),
+                        D2D1::BrushProperties(h), g_titleStops.Get(), grad.GetAddressOf());
+                if (grad) rt->DrawRoundedRectangle(D2D1::RoundedRect(r, rr, rr), grad.Get(), w);
+            }
             float x = pad;
             if (ic && ic->w > 0 && ic->h > 0) {
                 ComPtr<ID2D1Bitmap> bmp;
@@ -2674,7 +2707,10 @@ bool PaintTitle(const std::wstring& app, const std::wstring& title, Icon* ic, co
                 rt->DrawText(title.c_str(), (UINT32)title.size(), fTitle, D2D1::RectF(x, 0, x + titleW, (float)Hi),
                              sub.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
             ok = SUCCEEDED(rt->EndDraw());
-            if (!ok) g_titleRt.Reset();
+            if (!ok) {
+                g_titleRt.Reset();
+                g_titleStops.Reset();
+            }
         }
     }
     if (ok) {
@@ -2682,6 +2718,7 @@ bool PaintTitle(const std::wstring& app, const std::wstring& title, Icon* ic, co
         SIZE sz{W, Hi};
         BLENDFUNCTION bf{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
         ok = UpdateLayeredWindow(g_title, screen, &dst, &sz, mem, &src, 0, &bf, ULW_ALPHA) != FALSE;
+        if (ok) g_titleRect = RECT{x0, y0, x0 + W, y0 + Hi};
     }
     if (old) SelectObject(mem, old);
     if (dib) DeleteObject(dib);
@@ -2726,12 +2763,48 @@ void UpdateTitle(bool force) {
     Icon* ic = GetIcon(g_titleSrc, g_titleAlt, h, (int)std::lround(32 * dpi / 96.f));
     if (!PaintTitle(app, title, ic, bar)) return;
     g_titleKey = key;
+    g_titleShownApp = app;
+    g_titleShownText = title;
+    g_titleBar = bar;
     if (!shown) {
         ShowWindow(g_title, SW_SHOWNOACTIVATE);
         SetWindowPos(g_title, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        SetTimer(g_dock, kTimerTitle, 50, nullptr);
     } else {
         RaiseTitle();
     }
+}
+
+// The pill lets clicks through to the bar, so it never hears the mouse. Watch
+// the pointer instead: 20 times a second while resting, every frame while the
+// edge fades.
+void TitleHoverTick() {
+    if (!g_title || !IsWindowVisible(g_title) || IsRectEmpty(&g_titleRect)) {
+        KillTimer(g_dock, kTimerTitle);
+        g_titleTick = 0;
+        return;
+    }
+    POINT pt;
+    GetCursorPos(&pt);
+    float target = PtInRect(&g_titleRect, pt) ? 1.f : 0.f;
+    ULONGLONG now = GetTickCount64();
+    if (g_titleHoverT == target) {
+        if (g_titleTick) SetTimer(g_dock, kTimerTitle, 50, nullptr);
+        g_titleTick = 0;
+        return;
+    }
+    if (!g_titleTick) {
+        g_titleTick = now;
+        SetTimer(g_dock, kTimerTitle, 15, nullptr);
+        if (S.fadeMs) return;
+    }
+    float step = S.fadeMs ? (float)(now - g_titleTick) / S.fadeMs : 1.f;
+    g_titleTick = now;
+    g_titleHoverT = target > g_titleHoverT ? std::min(target, g_titleHoverT + step)
+                                           : std::max(target, g_titleHoverT - step);
+    UINT dpi = MonitorDpi(g_mon);
+    Icon* ic = g_titleWin ? GetIcon(g_titleSrc, g_titleAlt, g_titleWin, (int)std::lround(32 * dpi / 96.f)) : nullptr;
+    PaintTitle(g_titleShownApp, g_titleShownText, ic, g_titleBar);
 }
 
 LRESULT CALLBACK TitleProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -2747,6 +2820,10 @@ std::vector<HWINEVENTHOOK> g_hooks;
 
 void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD ev, HWND h, LONG idObj, LONG idChild, DWORD, DWORD) {
     if (idObj != OBJID_WINDOW || idChild != CHILDID_SELF || !h) return;
+    // A click on the bar (its right-click menu most of all) lifts the bar over
+    // the pill. Climb back at once, not after the rebuild's wait, or the pill
+    // blinks under the bar's glass for a moment.
+    if (ev == EVENT_SYSTEM_FOREGROUND || ev == EVENT_OBJECT_SHOW) RaiseTitle();
     if (ev == EVENT_SYSTEM_FOREGROUND) {
         ScheduleRebuild(30);
         CheckFullscreen();
@@ -3066,6 +3143,9 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     KillTimer(hwnd, kTimerRecycle);
                     CheckRecycle();
                     break;
+                case kTimerTitle:
+                    TitleHoverTick();
+                    break;
             }
             return 0;
         case kRecycleMsg: {
@@ -3112,6 +3192,7 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             g_popSurf.Discard();
             g_menuSurf.Discard();
             g_titleRt.Reset();
+            g_titleStops.Reset();
             if (!S.reserve) AppBarRemove();
             g_names.clear();
             if (S.recycle) CheckRecycleAsync();
@@ -3240,6 +3321,7 @@ DWORD WINAPI DockThread(void*) {
     g_dockSurf.Discard();
     g_popSurf.Discard();
     g_menuSurf.Discard();
+    g_titleStops.Reset();
     g_titleRt.Reset();
     g_icons.clear();
     g_formats.clear();
