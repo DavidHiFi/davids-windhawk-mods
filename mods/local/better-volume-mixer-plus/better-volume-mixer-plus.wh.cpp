@@ -2,7 +2,7 @@
 // @id           better-volume-mixer-plus
 // @name         Seamless Volume Mixer
 // @description  A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices
-// @version      1.4.35
+// @version      1.4.36
 // @author       DavidHiFi, 0Allu, shubho
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -69,6 +69,11 @@ To avoid two volume icons, install
 [Taskbar tray system icon tweaks](https://windhawk.net/mods/taskbar-tray-system-icon-tweaks)
 and turn on **Hide volume icon**. Disable the original Better Volume Mixer
 before enabling this mod.
+
+## What's new in 1.4.36
+
+- Title bar menus get the same blurred Mocha body as every other menu again. They
+  showed pitch black because the part that spots new menus stopped right after start.
 
 ## Credits
 
@@ -7832,6 +7837,23 @@ static VOID CALLBACK OnEvent(HWINEVENTHOOK, DWORD ev, HWND h, LONG obj, LONG chi
     }
 }
 
+static HMODULE g_hookSelf = nullptr;
+static HANDLE g_hookThread = nullptr, g_hookReady = nullptr;
+static DWORD g_hookThreadId = 0;
+static DWORD WINAPI HookThreadProc(LPVOID)
+{
+    MSG m;
+    PeekMessageW(&m, nullptr, 0, 0, PM_NOREMOVE);  // a queue, so WM_QUIT can reach this thread
+    DWORD pid = GetCurrentProcessId();
+    g_createHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE, g_hookSelf, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+    g_menuHook = SetWinEventHook(EVENT_SYSTEM_MENUSTART, EVENT_SYSTEM_MENUEND, g_hookSelf, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+    if (g_hookReady) SetEvent(g_hookReady);
+    while (GetMessageW(&m, nullptr, 0, 0) > 0) {}
+    for (HWINEVENTHOOK* hk : {&g_createHook, &g_menuHook})
+        if (*hk) { UnhookWinEvent(*hk); *hk = nullptr; }
+    return 0;
+}
+
 // onCreate (optional) runs for each new popup menu window, on its own thread, after creation.
 static VOID Init(VOID (*onCreate)(HWND))
 {
@@ -7842,13 +7864,23 @@ static VOID Init(VOID (*onCreate)(HWND))
     HMODULE self = nullptr;
     GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        reinterpret_cast<LPCWSTR>(&OnEvent), &self);
-    DWORD pid = GetCurrentProcessId();
-    g_createHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE, self, OnEvent, pid, 0, WINEVENT_INCONTEXT);
-    g_menuHook = SetWinEventHook(EVENT_SYSTEM_MENUSTART, EVENT_SYSTEM_MENUEND, self, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+    g_hookSelf = self;
+    // Tool mods run init on the main thread, which exits right after, and Windows drops a
+    // thread's event hooks when it ends. Keep them on a small thread that lives with the mod.
+    if (!g_hookReady) g_hookReady = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    g_hookThread = CreateThread(nullptr, 0, HookThreadProc, nullptr, 0, &g_hookThreadId);
+    if (g_hookThread && g_hookReady) WaitForSingleObject(g_hookReady, 5000);
 }
 
 static VOID Uninit()
 {
+    if (g_hookThread) {  // the hook thread removes its own hooks on the way out
+        PostThreadMessageW(g_hookThreadId, WM_QUIT, 0, 0);
+        WaitForSingleObject(g_hookThread, 2000);
+        CloseHandle(g_hookThread);
+        g_hookThread = nullptr;
+    }
+    if (g_hookReady) { CloseHandle(g_hookReady); g_hookReady = nullptr; }
     for (HWINEVENTHOOK* hk : {&g_createHook, &g_menuHook})
         if (*hk) { UnhookWinEvent(*hk); *hk = nullptr; }
     {
