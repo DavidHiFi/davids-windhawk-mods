@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.2
+// @version         0.3.3
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,6 +26,20 @@ the edge of the screen across from your taskbar, so you get a clean bar on one
 side and a dock on the other, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
+
+## What's new in 0.3.3
+
+- An app that stops responding keeps one icon. Before, the stand-in window
+  Windows shows for a frozen app turned up as an extra blank icon.
+- Windows from Windhawk mods (a mod's settings or Startup Control) get their
+  own icon instead of lighting up the Windhawk pin.
+- An app whose program has no icon of its own shows its window's icon, not a
+  blank page.
+- The thin lines in the dock sit exactly in the middle between two icons.
+- Add your own separators. Right-click a pinned app and pick "Add separator
+  after". Right-click a separator to remove it. The lines before your open apps
+  and before the Recycle Bin can be removed the same way, or switched in Dock
+  options.
 
 ## What's new in 0.3.2
 
@@ -93,6 +107,8 @@ side and a dock on the other, like a Linux desktop.
 - **Pinned apps first.** The dock starts with the apps pinned to your taskbar,
   in the same order. Drag an icon to move it. Pin or unpin from the right-click
   menu.
+- **Separators.** Group your pinned apps with thin lines. Add one from an app's
+  right-click menu, remove one by right-clicking it.
 - **Open apps too.** Apps you have open but did not pin sit after a thin line.
   A dot under an icon means the app is open, and a wider dot marks the one you
   are using.
@@ -238,6 +254,7 @@ struct Settings {
     int iconSize = 36, spacing = 6, bottomGap = 8, hoverDelay = 350, opacity = 60, edgeWidth = 2, fadeMs = 150;
     int iconLift = 3, previewW = 208, titleMaxW = 720;
     bool reserve = true, showOpen = true, previews = true, hideFull = true, showTitle = true, recycle = true;
+    bool lineOpen = true, lineBin = true;  // the lines before the open apps and the Recycle Bin
     int place = 0;  // Place: 0 across from the taskbar, 1 bottom, 2 top, 3 left, 4 right
     UINT edge = 0x585B70, from = 0x89B4FA, to = 0xCBA6F7;
     std::wstring font = L"FiraCode Nerd Font";
@@ -304,6 +321,8 @@ void LoadSettings() {
     S.showTitle = Overridable(L"showTitle", Wh_GetIntSetting(L"showTitle") != 0) != 0;
     S.recycle = Overridable(L"recycleBin", Wh_GetIntSetting(L"recycleBin") != 0) != 0;
     S.place = Clamp(Overridable(L"position", PlaceSetting()), 0, 4);
+    S.lineOpen = Wh_GetIntValue(L"lineOpen", 1) != 0;
+    S.lineBin = Wh_GetIntValue(L"lineBin", 1) != 0;
     S.opacity = Clamp(Wh_GetIntSetting(L"surfaceOpacity"), 30, 100);
     S.edge = ColorSetting(L"edgeColor", 0x585B70);
     S.from = ColorSetting(L"hoverColorFrom", 0x89B4FA);
@@ -609,6 +628,7 @@ float TintAlpha() { return TransparencyOn() ? S.opacity / 100.f : 1.f; }
 struct Pin {
     std::wstring kind, value;  // lnk | aumid | exe
     std::wstring name, exeLower, aumid, procStart, iconSrc;
+    bool sepAfter = false;  // a separator line after this pin
 };
 std::vector<Pin> g_pins;
 
@@ -653,10 +673,15 @@ void ResolvePin(Pin& p) {
     if (p.name.empty()) p.name = StripExt(FileName(p.value));
 }
 
+// Separators are kept apart from the pins, so an older dock still reads the pin list.
 void SavePins() {
-    std::wstring s;
-    for (auto& p : g_pins) s += p.kind + L":" + p.value + L"\n";
+    std::wstring s, seps;
+    for (auto& p : g_pins) {
+        s += p.kind + L":" + p.value + L"\n";
+        if (p.sepAfter) seps += p.kind + L":" + p.value + L"\n";
+    }
     Wh_SetStringValue(L"pins", s.c_str());
+    Wh_SetStringValue(L"seps", seps.c_str());
 }
 
 // The taskbar's own pins, in its order: the Taskband blob names each pinned shortcut in
@@ -754,7 +779,13 @@ void LoadPins() {
             g_pins.push_back(p);
         }
     }
-    for (auto& p : g_pins) ResolvePin(p);
+    std::vector<wchar_t> sb(32768);
+    Wh_GetStringValue(L"seps", sb.data(), sb.size());
+    std::wstring seps = L"\n" + std::wstring(sb.data());
+    for (auto& p : g_pins) {
+        ResolvePin(p);
+        p.sepAfter = seps.find(L"\n" + p.kind + L":" + p.value + L"\n") != std::wstring::npos;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -827,6 +858,11 @@ bool PixelsFromHBitmap(HBITMAP bitmap, Icon& ic) {
 
 bool IconFromShell(const std::wstring& src, int size, Icon& ic) {
     if (src.empty()) return false;
+    // A program with no icon inside it gets the shell's blank page; the window's
+    // own icon is better then.
+    if (src.size() > 4 && _wcsicmp(src.c_str() + src.size() - 4, L".exe") == 0 &&
+        ExtractIconExW(src.c_str(), -1, nullptr, nullptr, 0) == 0)
+        return false;
     ComPtr<IShellItem> item;
     ComPtr<IShellItemImageFactory> f;
     HBITMAP bmp = nullptr;
@@ -1020,7 +1056,9 @@ bool Eligible(HWND h) {
     if (cloaked) return false;
     wchar_t cls[64];
     GetClassNameW(h, cls, ARRAYSIZE(cls));
-    for (PCWSTR bad : {L"Progman", L"WorkerW", L"Shell_TrayWnd", L"Shell_SecondaryTrayWnd"})
+    // "Ghost" is the stand-in Windows draws over a frozen app. The frozen window
+    // itself stays in the list, so the app keeps its one icon, as on the taskbar.
+    for (PCWSTR bad : {L"Progman", L"WorkerW", L"Shell_TrayWnd", L"Shell_SecondaryTrayWnd", L"Ghost"})
         if (!wcscmp(cls, bad)) return false;
     wchar_t t[2];
     if (!appWin && InternalGetWindowText(h, t, 2) == 0) return false;
@@ -1049,7 +1087,8 @@ bool InPinFolder(const std::wstring& pinExeLower, const std::wstring& exeLower) 
         win = Lower(buf) + L"\\";
     }
     if (dir.rfind(win, 0) == 0) return false;
-    if (FileName(exeLower) == L"windhawk-mod.exe") return false;
+    // windhawk-mod.exe and windhawk-mod-elevated.exe
+    if (FileName(exeLower).rfind(L"windhawk-mod", 0) == 0) return false;
     return exeLower.size() > dir.size() && exeLower.compare(0, dir.size(), dir) == 0;
 }
 
@@ -1239,7 +1278,8 @@ struct Layout {
     float s = 1, plate = 48, icon = 36, gap = 6, padX = 10, padTop = 8, dotArea = 10, w = 100, h = 66;
     float radius = 16, plateR = 12, lift = 3;
     std::vector<float> x;     // where each item starts along the dock
-    std::vector<float> divs;  // thin lines before the open apps and the Recycle Bin
+    std::vector<float> divs;  // thin lines: separators, before the open apps and the Recycle Bin
+    std::vector<int> divItem;  // the item each line comes before
     int iconPx = 36;
 } L;
 
@@ -1345,6 +1385,30 @@ UINT ChosenEdge() {
     return ABE_BOTTOM;
 }
 
+// Where a line may sit before item i: 1 after a pinned app (a separator you add),
+// 2 before the open apps, 3 before the Recycle Bin, 0 nowhere.
+int SlotKind(int i) {
+    if (i <= 0 || i >= (int)g_items.size()) return 0;
+    if (g_items[i].recycle) return 3;
+    if (i == g_pinnedCount) return 2;
+    if (i < g_pinnedCount) return 1;
+    return 0;
+}
+
+bool SlotOn(int i) {
+    switch (SlotKind(i)) {
+        case 1: {
+            int p = g_items[i - 1].pin;
+            return p >= 0 && p < (int)g_pins.size() && g_pins[p].sepAfter;
+        }
+        case 2:
+            return S.lineOpen;
+        case 3:
+            return S.lineBin;
+    }
+    return false;
+}
+
 void ComputeLayout(float maxLen) {
     L.s = MonitorDpi(g_mon) / 96.f;
     float k = 1;
@@ -1359,13 +1423,16 @@ void ComputeLayout(float maxLen) {
         L.lift = (float)S.iconLift;
         L.x.assign(g_items.size(), 0);
         L.divs.clear();
+        L.divItem.clear();
         float x = L.padX;
         for (size_t i = 0; i < g_items.size(); i++) {
             if (i > 0) x += L.gap;
-            if (i > 0 && (g_items[i].recycle || ((int)i == g_pinnedCount && g_pinnedCount > 0))) {
+            if (SlotOn((int)i)) {
+                // The same room on both sides: gap, pad, the line, pad, gap.
                 float dp = std::max(4.f, L.gap);
                 L.divs.push_back(x + dp);
-                x += dp * 2 + 1;
+                L.divItem.push_back((int)i);
+                x += dp * 2 + 1 + L.gap;
             }
             L.x[i] = x;
             x += L.plate;
@@ -1792,6 +1859,20 @@ int ItemAt(POINT pxPt) {
     return -1;
 }
 
+// The line under the point, as an index into L.divs: the room between the two icons.
+int DivAt(POINT pxPt) {
+    float a, d;
+    Unplace(pxPt, a, d);
+    if (d < 0 || d > L.h) return -1;
+    for (size_t k = 0; k < L.divs.size() && k < L.divItem.size(); k++) {
+        int i = L.divItem[k];
+        if (i <= 0 || i >= (int)L.x.size()) continue;
+        float l = L.x[i - 1] + L.plate + L.gap / 2, r = L.x[i] - L.gap / 2;
+        if (a >= l && a < r) return (int)k;
+    }
+    return -1;
+}
+
 // Where a W x H window beside the dock goes: on the screen side of the dock,
 // centred on the item at `along` (dock points), kept on the monitor.
 POINT BesideDock(float along, int W, int H) {
@@ -2016,7 +2097,39 @@ void SetTitleOn(bool on) {
     UpdateTitle(true);
 }
 
-constexpr wchar_t kCheck[] = L"\xE73E";
+// Turns the line before item i on or off. A separator after a pin is saved with the
+// pins; the lines before the open apps and the Recycle Bin are kept as stored values.
+void SetSlot(int i, bool on) {
+    switch (SlotKind(i)) {
+        case 1: {
+            int p = g_items[i - 1].pin;
+            if (p < 0 || p >= (int)g_pins.size()) return;
+            g_pins[p].sepAfter = on;
+            SavePins();
+            break;
+        }
+        case 2:
+            S.lineOpen = on;
+            Wh_SetIntValue(L"lineOpen", on ? 1 : 0);
+            break;
+        case 3:
+            S.lineBin = on;
+            Wh_SetIntValue(L"lineBin", on ? 1 : 0);
+            break;
+        default:
+            return;
+    }
+    Rebuild(true);
+}
+
+// Menus run after the dock may have changed, so they name the item by its key:
+// the line goes after it (after = true) or before it.
+void SetSepBy(const std::wstring& key, bool after, bool on) {
+    int j = FindItem(key);
+    if (j >= 0) SetSlot(after ? j + 1 : j, on);
+}
+
+constexpr wchar_t kCheck[] = L"\xE73E", kAddGlyph[] = L"\xE710", kRemoveGlyph[] = L"\xE738";
 
 void OpenDockMenu(float along);
 
@@ -2042,6 +2155,36 @@ void OpenDockMenu(float along) {
                              [] { SetRecycleOn(!S.recycle); }});
     M.rows.push_back(MenuRow{L"Window title on the top bar", S.showTitle ? kCheck : L"", false, false,
                              [] { SetTitleOn(!S.showTitle); }});
+    M.rows.push_back(MenuRow{L"", L"", true});
+    M.rows.push_back(MenuRow{L"Separators", L"", false, true, nullptr});
+    M.rows.push_back(MenuRow{L"Before open apps", S.lineOpen ? kCheck : L"", false, false, [] {
+                                 S.lineOpen = !S.lineOpen;
+                                 Wh_SetIntValue(L"lineOpen", S.lineOpen ? 1 : 0);
+                                 Rebuild(true);
+                             }});
+    M.rows.push_back(MenuRow{L"Before the Recycle Bin", S.lineBin ? kCheck : L"", false, false, [] {
+                                 S.lineBin = !S.lineBin;
+                                 Wh_SetIntValue(L"lineBin", S.lineBin ? 1 : 0);
+                                 Rebuild(true);
+                             }});
+    ShowMenu(along);
+}
+
+// Right-click on a line: remove it.
+void OpenSepMenu(int k) {
+    if (!g_menu || k < 0 || k >= (int)L.divs.size() || k >= (int)L.divItem.size()) return;
+    int i = L.divItem[k];
+    if (i <= 0 || i >= (int)g_items.size()) return;
+    HidePopup();
+    M.rows.clear();
+    M.key.clear();
+    M.hot = -1;
+    float along = L.divs[k];
+    std::wstring key = g_items[i].key;
+    M.rows.push_back(MenuRow{L"Separator", L"", false, true, nullptr});
+    M.rows.push_back(MenuRow{L"", L"", true});
+    M.rows.push_back(MenuRow{L"Remove separator", kRemoveGlyph, false, false, [key] { SetSepBy(key, false, false); }});
+    AddDockRow(along);
     ShowMenu(along);
 }
 
@@ -2059,6 +2202,13 @@ void OpenRecycleMenu(int i) {
                                      if (g_dock) SetTimer(g_dock, kTimerRecycle, 250, nullptr);
                                  }});
     M.rows.push_back(MenuRow{L"Remove from dock", L"\xE77A", false, false, [] { SetRecycleOn(false); }});
+    if (SlotKind(i)) {
+        bool on = SlotOn(i);
+        std::wstring key = it.key;
+        M.rows.push_back(MenuRow{on ? L"Remove separator before" : L"Add separator before",
+                                 on ? kRemoveGlyph : kAddGlyph, false, false,
+                                 [key, on] { SetSepBy(key, false, !on); }});
+    }
     AddDockRow(along);
     ShowMenu(along);
 }
@@ -2098,6 +2248,12 @@ void OpenMenu(int i) {
         M.rows.push_back(MenuRow{L"Unpin from dock", L"\xE77A", false, false, [key] { UnpinItem(key); }});
     else
         M.rows.push_back(MenuRow{L"Pin to dock", L"\xE718", false, false, [key] { PinItem(key); }});
+    if (SlotKind(i + 1)) {
+        bool on = SlotOn(i + 1);
+        M.rows.push_back(MenuRow{on ? L"Remove separator after" : L"Add separator after",
+                                 on ? kRemoveGlyph : kAddGlyph, false, false,
+                                 [key, on] { SetSepBy(key, true, !on); }});
+    }
     std::wstring where = it.pin >= 0 && it.pin < (int)g_pins.size() ? g_pins[it.pin].exeLower
                          : it.launchKind == L"exe"                 ? it.launchValue
                                                                    : L"";
@@ -2606,13 +2762,24 @@ void EndDrag(bool save) {
 
 void DragTo(float x) {
     g_dragX = x;
-    float unit = L.plate + L.gap;
-    int slot = std::clamp((int)std::floor((x - g_dragGrab + L.plate / 2 - L.padX + L.gap / 2) / unit), 0,
-                          g_pinnedCount - 1);
-    if (slot != g_dragIndex && slot >= 0) {
+    // The nearest pinned place; separators make the spacing uneven.
+    float c = x - g_dragGrab + L.plate / 2, best = 1e9f;
+    int slot = -1;
+    for (int j = 0; j < g_pinnedCount && j < (int)L.x.size() && j < (int)g_pins.size(); j++) {
+        float dd = std::fabs(L.x[j] + L.plate / 2 - c);
+        if (dd < best) {
+            best = dd;
+            slot = j;
+        }
+    }
+    if (slot != g_dragIndex && slot >= 0 && g_dragIndex < (int)g_pins.size()) {
+        // Separators keep their places; only the app moves between them.
+        std::vector<bool> seps;
+        for (auto& q : g_pins) seps.push_back(q.sepAfter);
         Pin p = g_pins[g_dragIndex];
         g_pins.erase(g_pins.begin() + g_dragIndex);
         g_pins.insert(g_pins.begin() + slot, p);
+        for (size_t j = 0; j < g_pins.size(); j++) g_pins[j].sepAfter = seps[j];
         Item it = g_items[g_dragIndex];
         g_items.erase(g_items.begin() + g_dragIndex);
         g_items.insert(g_items.begin() + slot, it);
@@ -2757,8 +2924,11 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_RBUTTONUP: {
             POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             int at = ItemAt(pt);
+            int dv = at >= 0 ? -1 : DivAt(pt);
             if (at >= 0) {
                 OpenMenu(at);
+            } else if (dv >= 0) {
+                OpenSepMenu(dv);
             } else {
                 float along, depth;
                 Unplace(pt, along, depth);
