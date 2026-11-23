@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.25
+// @version         2.2.26
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -22,9 +22,13 @@ Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
 
+## What's new in 2.2.26
+
+- The title strip of the Loaded mods and Mod tasks windows keeps its dark fill when another window is in front, so nothing behind shows through it.
+
 ## What's new in 2.2.25
 
-- The title strip of the Loaded mods and Mod tasks windows now stays frosted too when another window is in front.
+- A first try at keeping the title strip frosted. It did not hold, so 2.2.26 replaces it.
 
 ## What's new in 2.2.24
 
@@ -2449,15 +2453,13 @@ static void ApplyTrayDialogLook(HWND dialog, HWND list, const Settings& s) {
     if (HFONT font = TrayFont(dialog, s)) SendMessageW(list, WM_SETFONT, (WPARAM)font, TRUE);
     // Both tray windows float over other apps and are almost never in front, and
     // Windows drops the acrylic blur from a background window. So the body keeps a
-    // near solid Mocha fill, and the window keeps the active look: on a background
-    // window DWM leaves the title strip (client drawn, clear) with no material at
-    // all, and a caption color does not reach it (measured 2026-11-23, 2.2.24).
+    // near solid Mocha fill. The title strip paints the same fill itself (PaintCaption):
+    // on a background window DWM leaves that band with no material at all, and
+    // neither a caption color nor a forced active look reaches it (measured
+    // 2026-11-23 on 2.2.24 and 2.2.25).
     Settings frame = s;
     if (frame.blur) frame.backgroundOpacity = std::clamp(frame.backgroundOpacity, 95, 99);
     ApplyWindowStack(dialog, frame);
-    BOOL activeLook = TRUE;
-    WINCOMPATTRDATA appearance{WCA_FORCE_ACTIVEWINDOW_APPEARANCE, &activeLook, sizeof(activeLook)};
-    SetWindowCompositionAttribute(dialog, &appearance);
     RedrawWindow(dialog, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);
 }
 
@@ -3269,8 +3271,15 @@ static void PaintCaption(HWND hwnd, HDC dc, const Settings& s) {
             // The strip stays clear, like any Windows title bar over a backdrop:
             // DWM draws the caption buttons under the client, so a tint here
             // would dim them, and a hole cut for them would show as a box.
+            // The tray windows are the exception: they sit behind other windows,
+            // where DWM gives the strip no material, so it carries the body's fill.
+            RGBQUAD strip{};
+            if (IsTrayTaskDialog(hwnd)) {
+                float a = s.blur ? std::clamp(s.backgroundOpacity, 95, 99) / 100.0f : 1.0f;
+                DockBlend(strip, s.background, a);
+            }
             for (int y = 0; y < client.bottom; ++y) {
-                std::fill_n(pixels + y * stride, client.right, RGBQUAD{});
+                std::fill_n(pixels + y * stride, client.right, strip);
             }
         }
         UINT dpi = GetDpiForWindow(hwnd);
