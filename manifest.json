@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-24T04:16:22+08:00",
+  "generatedAt": "2026-11-24T04:24:57+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 171,
@@ -1427,7 +1427,7 @@
       "name": "Seamless Taskbar",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "0.4.51",
+      "version": "0.4.52",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",

@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.51
+// @version         0.4.52
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -33,7 +33,16 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
 
-## What's new in 0.4.50
+## What's new in 0.4.52
+
+The wallpaper switcher is bigger and you can size it: tiles across, tiles down, tile
+size, the space between tiles and their corner rounding, and the window fits itself to
+them. It grows out of its tray button and fades in when it opens, and shrinks away when
+it closes; you can turn that off or change how long it takes. New settings also show
+file names under the pictures, hide the key hints and close the switcher after you pick
+one. Its tray button is now a mountain and sun in blue and mauve.
+
+## Earlier: 0.4.50
 
 Right-clicking empty taskbar space shows Modules and Dock position again on Windows
 builds that make that menu a little differently, like 26200.
@@ -2268,6 +2277,36 @@ The whole mod is published under GPL-3.0.
   - offsetY: 0
     $name: Move up or down
     $description: 'Pixels from the chosen position. Positive moves down. Range -1000 to 1000 (Suggested: 0).'
+  - columns: 5
+    $name: Tiles across
+    $description: 'How many pictures in each row. Range 2 to 8 (Suggested: 5).'
+  - rows: 4
+    $name: Tiles down
+    $description: 'How many rows of pictures. Range 1 to 6 (Suggested: 4).'
+  - tileSize: 176
+    $name: Tile size
+    $description: 'Width of each picture in pixels. The height follows, and the window grows to fit. Range 96 to 320 (Suggested: 176).'
+  - tileGap: 8
+    $name: Space between tiles
+    $description: 'Pixels between the pictures. Range 0 to 32 (Suggested: 8).'
+  - tileRadius: 8
+    $name: Tile corner rounding
+    $description: 'How round the picture corners are, in pixels. Range 2 to 24 (Suggested: 8).'
+  - showNames: false
+    $name: File names under pictures
+    $description: Shows each picture's file name below it.
+  - showHint: true
+    $name: Key hints
+    $description: Shows the arrow, Enter and scroll hints next to the page number.
+  - closeAfterPick: false
+    $name: Close after picking
+    $description: Closes the switcher as soon as you set a wallpaper.
+  - animate: true
+    $name: Open and close motion
+    $description: The switcher grows out of its tray button and fades in, and shrinks away when it closes.
+  - animSpeed: 180
+    $name: Motion length
+    $description: 'How long opening takes, in milliseconds. Closing is a little quicker. Range 80 to 600 (Suggested: 180).'
   $name: Wallpaper switcher
   $description: A tray button that opens a picker to change your wallpaper.
 - SettingsWindow:
@@ -3144,6 +3183,16 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Choice, L"wallpaper.position", L"Picker position", L"Where the picker opens on the screen.", L"center", {{L"top-left", L"Top left"}, {L"top-center", L"Top center"}, {L"top-right", L"Top right"}, {L"middle-left", L"Middle left"}, {L"center", L"Center"}, {L"middle-right", L"Middle right"}, {L"bottom-left", L"Bottom left"}, {L"bottom-center", L"Bottom center"}, {L"bottom-right", L"Bottom right"}}, 0, 100, 11, L"Wallpaper switcher"},
 {K::Number, L"wallpaper.offsetX", L"Move sideways", L"Pixels from the chosen position. Positive moves right. Range -1000 to 1000 (Suggested: 0).", L"0", {}, -1000, 1000, 11, L"Wallpaper switcher"},
 {K::Number, L"wallpaper.offsetY", L"Move up or down", L"Pixels from the chosen position. Positive moves down. Range -1000 to 1000 (Suggested: 0).", L"0", {}, -1000, 1000, 11, L"Wallpaper switcher"},
+{K::Number, L"wallpaper.columns", L"Tiles across", L"How many pictures in each row. Range 2 to 8 (Suggested: 5).", L"5", {}, 2, 8, 11, L"Wallpaper switcher"},
+{K::Number, L"wallpaper.rows", L"Tiles down", L"How many rows of pictures. Range 1 to 6 (Suggested: 4).", L"4", {}, 1, 6, 11, L"Wallpaper switcher"},
+{K::Number, L"wallpaper.tileSize", L"Tile size", L"Width of each picture in pixels. The height follows, and the window grows to fit. Range 96 to 320 (Suggested: 176).", L"176", {}, 96, 320, 11, L"Wallpaper switcher"},
+{K::Number, L"wallpaper.tileGap", L"Space between tiles", L"Pixels between the pictures. Range 0 to 32 (Suggested: 8).", L"8", {}, 0, 32, 11, L"Wallpaper switcher"},
+{K::Number, L"wallpaper.tileRadius", L"Tile corner rounding", L"How round the picture corners are, in pixels. Range 2 to 24 (Suggested: 8).", L"8", {}, 2, 24, 11, L"Wallpaper switcher"},
+{K::Check, L"wallpaper.showNames", L"File names under pictures", L"Shows each picture's file name below it.", L"0", {}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Check, L"wallpaper.showHint", L"Key hints", L"Shows the arrow, Enter and scroll hints next to the page number.", L"1", {}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Check, L"wallpaper.closeAfterPick", L"Close after picking", L"Closes the switcher as soon as you set a wallpaper.", L"0", {}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Check, L"wallpaper.animate", L"Open and close motion", L"The switcher grows out of its tray button and fades in, and shrinks away when it closes.", L"1", {}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Number, L"wallpaper.animSpeed", L"Motion length", L"How long opening takes, in milliseconds. Closing is a little quicker. Range 80 to 600 (Suggested: 180).", L"180", {}, 80, 600, 11, L"Wallpaper switcher"},
 {K::Check, L"utils.moduleOn", L"Right-click tools", L"Quick system tools in the taskbar right-click menu, with result cards.", L"0", {}, 0, 100, 0, L"Modules"},
 {K::Number, L"sysinfo.width", L"Widget width", L"0 fits the content automatically. A positive value sets a minimum width, up to 800 logical pixels.", L"0", {}, 0, 100, 1, L"System info and weather"},
 {K::Number, L"sysinfo.leftOffset", L"Left offset", L"Distance from the left taskbar edge, from 0 to 1000 pixels.", L"10", {}, 0, 1000, 1, L"System info and weather"},
@@ -91533,13 +91582,9 @@ constexpr UINT_PTR kSearchFilterTimer = 0xB743;
 constexpr UINT_PTR kTrayRetryTimer = 0xB744;
 constexpr UINT kSearchFilterDelayMs = 160;
 constexpr UINT kFirstTileId = 4000;
-constexpr size_t kPageSize = 12;
+constexpr size_t kMaxTiles = 48;
 constexpr size_t kThumbnailCachePages = 3;
 constexpr size_t kMaxThumbnailWorkers = 3;
-constexpr size_t kGridColumns = 4;
-constexpr UINT kThumbnailWidth = 128;
-constexpr UINT kThumbnailHeight = 76;
-constexpr int kThumbnailCornerDiameter = 16;
 constexpr int kSelectedBorderWidth = 2;
 constexpr int kBreadcrumbSearchButtonWidth = 30;
 constexpr int kBreadcrumbSearchEditWidth = 150;
@@ -91549,6 +91594,7 @@ constexpr int kPickerEdgeMargin = 12;
 constexpr PCWSTR kWindowClass = L"SeamlessTaskbarWallpaperPicker";
 constexpr PCWSTR kBackdropWindowClass = L"SeamlessTaskbarWallpaperBackdrop";
 constexpr PCWSTR kRingWindowClass = L"SeamlessTaskbarWallpaperRing";
+constexpr PCWSTR kAnimWindowClass = L"SeamlessTaskbarWallpaperMotion";
 
 COLORREF g_background = RGB(48, 45, 71);
 COLORREF g_surface = RGB(68, 64, 90);
@@ -91567,18 +91613,59 @@ bool g_automaticTheme = false;
 std::wstring g_pickerPosition = L"center";
 int g_pickerOffsetX = 0;
 int g_pickerOffsetY = 0;
+// The grid as LayoutPicker last built it from the size settings (logical pixels).
+size_t g_pageSize = 20;
+size_t g_gridColumns = 5;
+UINT g_tileWidth = 176;
+UINT g_tileHeight = 105;
+int g_tileCornerDiameter = 16;
+int g_nameHeight = 0;
+int g_tileGap = 8;
+int g_pickerWidth = 944;
+int g_pickerHeight = 564;
+// Size and behaviour settings as read (LoadSettings).
+int g_setColumns = 5;
+int g_setRows = 4;
+int g_setTileSize = 176;
+int g_setTileGap = 8;
+int g_setTileRadius = 8;
+bool g_showNames = false;
+bool g_showHint = true;
+bool g_closeAfterPick = false;
+bool g_animate = true;
+int g_animMs = 180;
+// Glass mode: the picker is colour-keyed (SetPickerColorKey). Its own layered state can't
+// tell, because the open motion makes the solid picker layered for a moment too.
+bool g_pickerKeyed = false;
+bool g_pickerAnimating = false;
+bool g_pickerOpenFromTray = false;
+HWND g_pickerAnimWindow = nullptr;
+struct PickerSnapshot {
+    HBITMAP bitmap = nullptr;
+    void* bits = nullptr;
+    int width = 0;
+    int height = 0;
+    RECT bounds{};
+};
+bool CapturePickerSnapshot(PickerSnapshot& shot);
+void FreePickerSnapshot(PickerSnapshot& shot);
+void PlayPickerMotion(const PickerSnapshot& shot, bool opening, void (*afterFirstFrame)());
+bool PreparePickerOpenMotion();
+void RestorePickerAfterMotion();
+void SetPickerRoundRegion(HWND window, bool rounded, int diameter);
+void HidePickerRing();
 HWND g_pickerBackdropWindow = nullptr;
 // Glass mode's edge layer (see PaintPickerRing). Failed = fall back to the in-window edge.
 HWND g_pickerRingWindow = nullptr;
 bool g_pickerRingFailed = false;
 RECT g_pickerRingBounds{};
 // Each tile's edge as the edge layer draws it: 0 none, 1 rest, 2 lit (blue to mauve).
-BYTE g_tileEdgeState[kPageSize] = {};
+BYTE g_tileEdgeState[kMaxTiles] = {};
 void SetTileEdgeState(size_t slot, BYTE state);
 
 HWND g_hostWindow;
 HWND g_pickerWindow;
-HWND g_tiles[kPageSize];
+HWND g_tiles[kMaxTiles];
 HWND g_folderLabel;
 HWND g_pageLabel;
 HWND g_searchEdit;
@@ -91731,12 +91818,18 @@ struct ThumbnailPageJob {
     std::uint64_t generation;
     size_t page;
     std::vector<std::wstring> paths;
+    UINT width;
+    UINT height;
+    size_t pageSize;
 };
 
 struct ThumbnailPageResult {
     std::uint64_t generation;
     size_t page;
     std::vector<HBITMAP> bitmaps;
+    UINT width;
+    UINT height;
+    size_t pageSize;
 };
 
 void StartImageScan();
@@ -92116,6 +92209,18 @@ void LoadSettings() {
     }
     g_pickerOffsetX = std::clamp(Wh_GetIntSetting(L"offsetX"), -1000, 1000);
     g_pickerOffsetY = std::clamp(Wh_GetIntSetting(L"offsetY"), -1000, 1000);
+    // A fresh install stores no values (every one reads 0): use the defaults until saved.
+    const bool freshSize = Wh_GetIntSetting(L"columns") == 0;
+    g_setColumns = freshSize ? 5 : std::clamp(Wh_GetIntSetting(L"columns"), 2, 8);
+    g_setRows = freshSize ? 4 : std::clamp(Wh_GetIntSetting(L"rows"), 1, 6);
+    g_setTileSize = freshSize ? 176 : std::clamp(Wh_GetIntSetting(L"tileSize"), 96, 320);
+    g_setTileGap = freshSize ? 8 : std::clamp(Wh_GetIntSetting(L"tileGap"), 0, 32);
+    g_setTileRadius = freshSize ? 8 : std::clamp(Wh_GetIntSetting(L"tileRadius"), 2, 24);
+    g_showNames = !freshSize && Wh_GetIntSetting(L"showNames") != 0;
+    g_showHint = freshSize || Wh_GetIntSetting(L"showHint") != 0;
+    g_closeAfterPick = !freshSize && Wh_GetIntSetting(L"closeAfterPick") != 0;
+    g_animate = freshSize || Wh_GetIntSetting(L"animate") != 0;
+    g_animMs = freshSize ? 180 : std::clamp(Wh_GetIntSetting(L"animSpeed"), 80, 600);
 
     const std::wstring configuredFolder =
         ReadConfiguredStringSetting(L"folder");
@@ -92346,7 +92451,8 @@ DWORD WINAPI ImageListThreadProc(void* parameter) {
     }
     return 0;
 }
-HBITMAP CreateThumbnailBitmap(IWICImagingFactory* factory, PCWSTR path);
+HBITMAP CreateThumbnailBitmap(IWICImagingFactory* factory, PCWSTR path,
+                              UINT tileWidth, UINT tileHeight);
 
 DWORD WINAPI ThumbnailPageThreadProc(void* parameter) {
     std::unique_ptr<ThumbnailPageJob> job((ThumbnailPageJob*)parameter);
@@ -92358,9 +92464,8 @@ DWORD WINAPI ThumbnailPageThreadProc(void* parameter) {
                          IID_PPV_ARGS(factory.put()));
     }
 
-    std::vector<HBITMAP> bitmaps(kPageSize, nullptr);
-    for (size_t slot = 0; factory && slot < job->paths.size() &&
-                           slot < kPageSize; ++slot) {
+    std::vector<HBITMAP> bitmaps(job->paths.size(), nullptr);
+    for (size_t slot = 0; factory && slot < job->paths.size(); ++slot) {
         if (g_shuttingDown.load() ||
             job->generation != g_folderGeneration.load()) {
             break;
@@ -92369,7 +92474,8 @@ DWORD WINAPI ThumbnailPageThreadProc(void* parameter) {
             continue;
         }
         bitmaps[slot] = CreateThumbnailBitmap(factory.get(),
-                                               job->paths[slot].c_str());
+                                               job->paths[slot].c_str(),
+                                               job->width, job->height);
     }
     factory = nullptr;
     if (SUCCEEDED(com)) {
@@ -92377,7 +92483,8 @@ DWORD WINAPI ThumbnailPageThreadProc(void* parameter) {
     }
 
     ThumbnailPageResult* result = new ThumbnailPageResult{
-        job->generation, job->page, std::move(bitmaps)};
+        job->generation, job->page, std::move(bitmaps), job->width,
+        job->height, job->pageSize};
     if (!PostBackgroundMessage(job->notifyWindow, kThumbnailPageReady, 0,
                                (LPARAM)result)) {
         FreeThumbnailPageResult(result);
@@ -93002,7 +93109,7 @@ void RebuildSearchResults(bool invalidateThumbnailGeneration,
                                         (size_t)g_selectedImage);
         if (selected != g_visibleImageIndices.end()) {
             g_page = (size_t)std::distance(g_visibleImageIndices.begin(), selected) /
-                     kPageSize;
+                     g_pageSize;
         }
     }
     if (invalidateThumbnailGeneration && !g_imageScanInProgress) {
@@ -93142,7 +93249,7 @@ void UpdatePageLabel() {
         return;
     }
     const size_t count = DisplayImageCount();
-    const size_t pages = (count + kPageSize - 1) / kPageSize;
+    const size_t pages = (count + g_pageSize - 1) / g_pageSize;
     std::wstring label;
     if (g_images.empty()) {
         if (g_folder.empty()) {
@@ -93170,7 +93277,7 @@ bool IsPageInList(const std::vector<size_t>& pages, size_t page) {
 std::vector<size_t> DesiredThumbnailPages() {
     std::vector<size_t> pages;
     const size_t pageCount =
-        (DisplayImageCount() + kPageSize - 1) / kPageSize;
+        (DisplayImageCount() + g_pageSize - 1) / g_pageSize;
     if (!pageCount) {
         return pages;
     }
@@ -93228,7 +93335,7 @@ bool HasPendingPage(size_t page) {
 
 size_t ImageIndexForPageSlot(size_t page, size_t slot) {
     const size_t count = g_visibleImageIndices.size();
-    const size_t displayPosition = page * kPageSize + slot;
+    const size_t displayPosition = page * g_pageSize + slot;
     if (!count || displayPosition >= count) {
         return g_images.size();
     }
@@ -93247,7 +93354,7 @@ size_t PageForImageIndex(size_t image) {
     const size_t anchor = g_viewAnchor % count;
     const size_t offset = position >= anchor ? position - anchor
                                              : count - (anchor - position);
-    return offset / kPageSize;
+    return offset / g_pageSize;
 }
 
 size_t SlotForImageIndex(size_t image) {
@@ -93262,7 +93369,7 @@ size_t SlotForImageIndex(size_t image) {
     const size_t anchor = g_viewAnchor % count;
     const size_t offset = position >= anchor ? position - anchor
                                              : count - (anchor - position);
-    return offset % kPageSize;
+    return offset % g_pageSize;
 }
 
 void SetViewAnchor(size_t image) {
@@ -93312,14 +93419,15 @@ bool StartThumbnailPageLoad(size_t page) {
         return false;
     }
     std::vector<std::wstring> paths;
-    paths.reserve(kPageSize);
-    for (size_t slot = 0; slot < kPageSize; ++slot) {
+    paths.reserve(g_pageSize);
+    for (size_t slot = 0; slot < g_pageSize; ++slot) {
         const size_t image = ImageIndexForPageSlot(page, slot);
         paths.push_back(image < g_images.size() ? g_images[image]
                                                 : std::wstring());
     }
     auto* job = new ThumbnailPageJob{g_hostWindow, g_folderGeneration.load(), page,
-                                     std::move(paths)};
+                                     std::move(paths), g_tileWidth,
+                                     g_tileHeight, g_pageSize};
     g_pendingThumbnailPages.push_back({g_folderGeneration.load(), page});
     if (!StartBackgroundThread(ThumbnailPageThreadProc, job)) {
         g_pendingThumbnailPages.pop_back();
@@ -93355,13 +93463,13 @@ void RefreshList() {
     }
     g_page = std::min(g_page, g_visibleImageIndices.empty()
                                   ? size_t(0)
-                                  : (g_visibleImageIndices.size() - 1) / kPageSize);
+                                  : (g_visibleImageIndices.size() - 1) / g_pageSize);
     ScheduleThumbnailWindow();
 
-    for (size_t slot = 0; slot < kPageSize; ++slot) {
+    for (size_t slot = 0; slot < g_pageSize; ++slot) {
         if (g_tiles[slot]) {
             const bool slotHasImage =
-                g_page * kPageSize + slot < DisplayImageCount();
+                g_page * g_pageSize + slot < DisplayImageCount();
             ShowWindow(g_tiles[slot], slotHasImage ? SW_SHOW : SW_HIDE);
             if (!slotHasImage) {
                 SetTileEdgeState(slot, 0);
@@ -93581,7 +93689,8 @@ winrt::com_ptr<IWICBitmapSource> CreateDisplayBitmap(
     return premultiplied.as<IWICBitmapSource>();
 }
 
-HBITMAP CreateThumbnailBitmap(IWICImagingFactory* factory, PCWSTR path) {
+HBITMAP CreateThumbnailBitmap(IWICImagingFactory* factory, PCWSTR path,
+                              UINT tileWidth, UINT tileHeight) {
     auto oriented = ReadOrientedFrame(factory, path);
     if (!oriented) {
         return nullptr;
@@ -93596,7 +93705,7 @@ HBITMAP CreateThumbnailBitmap(IWICImagingFactory* factory, PCWSTR path) {
         return nullptr;
     }
 
-    const double targetAspect = (double)kThumbnailWidth / kThumbnailHeight;
+    const double targetAspect = (double)tileWidth / tileHeight;
     const double sourceAspect = (double)sourceWidth / sourceHeight;
     WICRect crop{0, 0, (INT)sourceWidth, (INT)sourceHeight};
     if (sourceAspect > targetAspect) {
@@ -93615,8 +93724,8 @@ HBITMAP CreateThumbnailBitmap(IWICImagingFactory* factory, PCWSTR path) {
     if (FAILED(factory->CreateBitmapClipper(clipper.put())) ||
         FAILED(clipper->Initialize(oriented.get(), &crop)) ||
         FAILED(factory->CreateBitmapScaler(scaler.put())) ||
-        FAILED(scaler->Initialize(clipper.get(), kThumbnailWidth,
-                                 kThumbnailHeight,
+        FAILED(scaler->Initialize(clipper.get(), tileWidth,
+                                 tileHeight,
                                  WICBitmapInterpolationModeFant)) ||
         FAILED(factory->CreateFormatConverter(converter.put())) ||
         FAILED(converter->Initialize(
@@ -93628,8 +93737,8 @@ HBITMAP CreateThumbnailBitmap(IWICImagingFactory* factory, PCWSTR path) {
 
     BITMAPINFO info{};
     info.bmiHeader.biSize = sizeof(info.bmiHeader);
-    info.bmiHeader.biWidth = (LONG)kThumbnailWidth;
-    info.bmiHeader.biHeight = -(LONG)kThumbnailHeight;
+    info.bmiHeader.biWidth = (LONG)tileWidth;
+    info.bmiHeader.biHeight = -(LONG)tileHeight;
     info.bmiHeader.biPlanes = 1;
     info.bmiHeader.biBitCount = 32;
     info.bmiHeader.biCompression = BI_RGB;
@@ -93643,8 +93752,8 @@ HBITMAP CreateThumbnailBitmap(IWICImagingFactory* factory, PCWSTR path) {
     }
     if (!bitmap || !pixels ||
         FAILED(converter->CopyPixels(
-            nullptr, kThumbnailWidth * 4,
-            kThumbnailWidth * kThumbnailHeight * 4,
+            nullptr, tileWidth * 4,
+            tileWidth * tileHeight * 4,
             (BYTE*)pixels))) {
         if (bitmap) {
             DeleteObject(bitmap);
@@ -94677,7 +94786,7 @@ void ApplyImageIndex(int image) {
     }
     if (g_searchEdit && GetFocus() == g_searchEdit) {
         const size_t slot = SlotForImageIndex((size_t)image);
-        if (slot < kPageSize && g_tiles[slot] &&
+        if (slot < g_pageSize && g_tiles[slot] &&
             IsWindowVisible(g_tiles[slot])) {
             SetFocus(g_tiles[slot]);
         } else if (g_pickerWindow) {
@@ -94693,6 +94802,9 @@ void ApplyImageIndex(int image) {
     }
 
     StartWallpaperChange(image);
+    if (g_closeAfterPick && g_pickerWindow && IsWindowVisible(g_pickerWindow)) {
+        PostMessageW(g_pickerWindow, WM_CLOSE, 0, 0);
+    }
 }
 
 void StepImage(int step) {
@@ -94719,7 +94831,7 @@ void StepImage(int step) {
 
 void StepPage(int step) {
     const int pages = (int)std::max<size_t>(
-        1, (DisplayImageCount() + kPageSize - 1) / kPageSize);
+        1, (DisplayImageCount() + g_pageSize - 1) / g_pageSize);
     const int page = ((int)g_page + step % pages + pages) % pages;
     if ((size_t)page == g_page) {
         return;
@@ -94780,7 +94892,7 @@ void FocusSelectedResult() {
         RefreshList();
     }
     const size_t slot = SlotForImageIndex((size_t)g_selectedImage);
-    if (slot < kPageSize && g_tiles[slot] && IsWindowVisible(g_tiles[slot])) {
+    if (slot < g_pageSize && g_tiles[slot] && IsWindowVisible(g_tiles[slot])) {
         SetFocus(g_tiles[slot]);
     }
 }
@@ -94794,10 +94906,10 @@ bool HandlePickerKey(UINT key) {
             MoveSelection(1);
             return true;
         case VK_UP:
-            MoveSelection(-(int)kGridColumns);
+            MoveSelection(-(int)g_gridColumns);
             return true;
         case VK_DOWN:
-            MoveSelection((int)kGridColumns);
+            MoveSelection((int)g_gridColumns);
             return true;
         case VK_SPACE:
         case VK_RETURN:
@@ -94986,7 +95098,125 @@ LRESULT CALLBACK BreadcrumbSubclassProc(HWND hwnd, UINT message,
     return DefSubclassProc(hwnd, message, wParam, lParam);
 }
 
+// Builds the grid from the size settings: tiles, labels and the picker size. The tiles are
+// as big as the setting asks and shrink only when the grid would not fit the work area.
+bool LayoutPicker(HWND hwnd, bool refresh) {
+    if (!hwnd) {
+        return false;
+    }
+    RECT work{0, 0, 1920, 1040};
+    POINT cursor{};
+    GetCursorPos(&cursor);
+    MONITORINFO monitorInfo{sizeof(monitorInfo)};
+    if (GetMonitorInfoW(MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST),
+                        &monitorInfo)) {
+        work = monitorInfo.rcWork;  // logical: this thread is DPI-unaware
+    }
+    constexpr int kTop = 59;
+    constexpr int kBottom = 61;
+    constexpr int kSide = 16;
+    constexpr int kFit = 24;
+    const int columns = g_setColumns;
+    const int rows = g_setRows;
+    const int gap = g_setTileGap;
+    const int nameH = g_showNames ? 20 : 0;
+    const int roomW = (int)(work.right - work.left) - 2 * kFit - 2 * kSide;
+    const int roomH = (int)(work.bottom - work.top) - 2 * kFit - kTop - kBottom;
+    const int fitW = (roomW - (columns - 1) * gap) / columns;
+    const int fitH = ((roomH - (rows - 1) * gap) / rows - nameH) * 128 / 76;
+    const int tileW = std::max(64, std::min({g_setTileSize, fitW, fitH}));
+    const int tileH = (int)std::lround(tileW * 76.0 / 128.0);
+    const int cellH = tileH + nameH;
+    const int gridW = columns * tileW + (columns - 1) * gap;
+    const int gridH = rows * cellH + (rows - 1) * gap;
+    const int width = std::max(420, gridW + 2 * kSide);
+    const int height = kTop + gridH + kBottom;
+    const int left = (width - gridW) / 2;
+    const size_t pageSize = (size_t)(columns * rows);
+    const int corner = std::clamp(g_setTileRadius * 2, 4, std::min(tileW, tileH));
+    const bool thumbsChanged = pageSize != g_pageSize ||
+                               (UINT)tileW != g_tileWidth ||
+                               (UINT)tileH != g_tileHeight;
+    const bool changed = thumbsChanged || corner != g_tileCornerDiameter ||
+                         nameH != g_nameHeight || gap != g_tileGap ||
+                         width != g_pickerWidth || height != g_pickerHeight ||
+                         (size_t)columns != g_gridColumns;
+    g_pageSize = pageSize;
+    g_gridColumns = (size_t)columns;
+    g_tileWidth = (UINT)tileW;
+    g_tileHeight = (UINT)tileH;
+    g_tileCornerDiameter = corner;
+    g_nameHeight = nameH;
+    g_tileGap = gap;
+    g_pickerWidth = width;
+    g_pickerHeight = height;
+
+    for (size_t slot = 0; slot < kMaxTiles; ++slot) {
+        if (slot >= pageSize) {
+            if (g_tiles[slot]) {
+                ShowWindow(g_tiles[slot], SW_HIDE);
+                SetTileEdgeState(slot, 0);
+            }
+            continue;
+        }
+        const int x = left + (int)(slot % (size_t)columns) * (tileW + gap);
+        const int y = kTop + (int)(slot / (size_t)columns) * (cellH + gap);
+        if (!g_tiles[slot]) {
+            g_tiles[slot] = CreateWindowExW(0, L"BUTTON", L"",
+                WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, x, y, tileW, cellH, hwnd,
+                (HMENU)(INT_PTR)(kFirstTileId + slot),
+                (HINSTANCE)&__ImageBase, nullptr);
+            if (g_tiles[slot]) {
+                SetWindowSubclass(g_tiles[slot], TileSubclassProc, 1,
+                                  (DWORD_PTR)hwnd);
+            }
+        } else {
+            SetWindowPos(g_tiles[slot], nullptr, x, y, tileW, cellH,
+                         SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+    }
+    const int inner = width - 2 * kSide;
+    if (g_folderLabel) {
+        SetWindowPos(g_folderLabel, nullptr, kSide, 13, inner, 33,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    if (g_searchEdit) {
+        SetWindowPos(g_searchEdit, nullptr,
+                     kSide + inner - kBreadcrumbSearchButtonWidth -
+                         kBreadcrumbSearchEditWidth + kBreadcrumbSearchEditInset,
+                     20, kBreadcrumbSearchEditWidth - kBreadcrumbSearchEditInset - 5,
+                     24, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    g_breadcrumbSearchButtonRect = {inner - kBreadcrumbSearchButtonWidth, 0, inner, 33};
+    if (g_pageLabel) {
+        SetWindowPos(g_pageLabel, nullptr, kSide, kTop + gridH + 24, inner, 24,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    if (refresh && changed) {
+        if (thumbsChanged) {
+            if (g_selectedImage >= 0) {
+                g_page = PageForImageIndex((size_t)g_selectedImage);
+            }
+            ClearThumbnailCache();
+        }
+        RefreshList();
+        RedrawWindow(hwnd, nullptr, nullptr,
+                     RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+    }
+    return changed;
+}
+
+void PositionPickerWindowAt(HMONITOR monitor);
+
+// Positions and sizes the picker, then keeps the glass clip on its new size.
 void PositionPickerWindow(HMONITOR monitor) {
+    PositionPickerWindowAt(monitor);
+    if (g_pickerWindow && g_pickerKeyed) {
+        SetPickerRoundRegion(g_pickerWindow, true, PickerCornerRadius() * 2);
+    }
+}
+
+void PositionPickerWindowAt(HMONITOR monitor) {
     if (!g_pickerWindow) {
         return;
     }
@@ -95011,8 +95241,8 @@ void PositionPickerWindow(HMONITOR monitor) {
                                 &dpiX, &dpiY))) {
         dpiX = dpiY = 96;
     }
-    const int width = MulDiv(560, (int)dpiX, 96);
-    const int height = MulDiv(360, (int)dpiY, 96);
+    const int width = MulDiv(g_pickerWidth, (int)dpiX, 96);
+    const int height = MulDiv(g_pickerHeight, (int)dpiY, 96);
     const int horizontalEdgeMargin = MulDiv(kPickerEdgeMargin,
                                             (int)dpiX, 96);
     const int verticalEdgeMargin = MulDiv(kPickerEdgeMargin,
@@ -95082,6 +95312,7 @@ void ShowPicker() {
             g_previousForegroundWindow =
                 GetAncestor(foreground, GA_ROOT);
         }
+        LayoutPicker(g_pickerWindow, true);
         PositionPickerWindow(nullptr);
     }
     const bool currentIsVisible = g_currentImage >= 0 &&
@@ -95100,29 +95331,39 @@ void ShowPicker() {
                               ? -1
                               : (int)ImageIndexForPageSlot(g_page, 0);
     }
-    const bool usesBackdrop =
-        _wcsicmp(g_configuredMaterial.c_str(), L"blur") == 0 ||
-        _wcsicmp(g_configuredMaterial.c_str(), L"acrylic") == 0;
-    if (!IsWindowVisible(g_pickerWindow)) {
-        // AnimateWindow's alpha blend conflicts with the color-keyed layered
-        // surface used to reveal the material backdrop. Show it directly.
-        if (usesBackdrop ||
-            !AnimateWindow(g_pickerWindow, 160, AW_BLEND | AW_ACTIVATE)) {
-            ShowWindow(g_pickerWindow, SW_SHOWNORMAL);
-        }
+    const bool opening = !IsWindowVisible(g_pickerWindow);
+    // The open motion: the picker comes up invisible, its pixels are copied once, and the
+    // copy grows and fades in on the motion layer above it before the real one shows.
+    const bool animate = opening && g_animate && PreparePickerOpenMotion();
+    if (opening) {
+        ShowWindow(g_pickerWindow, SW_SHOWNORMAL);
     }
     PositionPickerBackdrop();
     SetForegroundWindow(g_pickerWindow);
     if (g_selectedImage >= 0 && !g_transitionActive) {
         const size_t slot = SlotForImageIndex((size_t)g_selectedImage);
-        if (g_tiles[slot]) {
+        if (slot < kMaxTiles && g_tiles[slot]) {
             SetFocus(g_tiles[slot]);
         }
     }
-    // AnimateWindow can show the parent before every owner-drawn child has
-    // completed its first paint. Refresh the whole tree once it is visible.
+    // Paint every owner-drawn child once it is up, before any snapshot.
     RedrawWindow(g_pickerWindow, nullptr, nullptr,
                  RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+    if (animate) {
+        PickerSnapshot shot;
+        if (CapturePickerSnapshot(shot)) {
+            PlayPickerMotion(shot, true, nullptr);
+        }
+        g_pickerAnimating = false;
+        RestorePickerAfterMotion();
+        PositionPickerBackdrop();
+        DwmFlush();
+        if (g_pickerAnimWindow) {
+            ShowWindow(g_pickerAnimWindow, SW_HIDE);
+        }
+        FreePickerSnapshot(shot);
+    }
+    g_pickerOpenFromTray = false;
 }
 
 void TogglePicker() {
@@ -95484,24 +95725,26 @@ bool DrawPageLabel(const DRAWITEMSTRUCT* item) {
 
         const std::wstring pageText =
             std::to_wstring(g_page + 1) + L" / " +
-            std::to_wstring((DisplayImageCount() + kPageSize - 1) / kPageSize);
+            std::to_wstring((DisplayImageCount() + g_pageSize - 1) / g_pageSize);
         drawText(pageText.c_str(), (int)pageText.size(), 10);
-        const WCHAR separator[] = {0x00B7, L'\0'};
-        drawText(separator, 1, 10);
+        if (g_showHint) {
+            const WCHAR separator[] = {0x00B7, L'\0'};
+            drawText(separator, 1, 10);
 
-        drawIcon(0xF11C, 5);
-        const WCHAR arrowKeys[] = L"Arrow keys move";
-        drawText(arrowKeys,
-                 (int)(sizeof(arrowKeys) / sizeof(arrowKeys[0]) - 1), 8);
-        drawText(separator, 1, 8);
-        drawIcon(0xF149, 5);
-        const WCHAR apply[] = L"Enter sets it";
-        drawText(apply, (int)(sizeof(apply) / sizeof(apply[0]) - 1), 8);
-        drawText(separator, 1, 8);
+            drawIcon(0xF11C, 5);
+            const WCHAR arrowKeys[] = L"Arrow keys move";
+            drawText(arrowKeys,
+                     (int)(sizeof(arrowKeys) / sizeof(arrowKeys[0]) - 1), 8);
+            drawText(separator, 1, 8);
+            drawIcon(0xF149, 5);
+            const WCHAR apply[] = L"Enter sets it";
+            drawText(apply, (int)(sizeof(apply) / sizeof(apply[0]) - 1), 8);
+            drawText(separator, 1, 8);
 
-        const WCHAR scrollPages[] = L"Scroll for more";
-        drawText(scrollPages,
-                 (int)(sizeof(scrollPages) / sizeof(scrollPages[0]) - 1), 0);
+            const WCHAR scrollPages[] = L"Scroll for more";
+            drawText(scrollPages,
+                     (int)(sizeof(scrollPages) / sizeof(scrollPages[0]) - 1), 0);
+        }
     }
 
     if (oldFont) {
@@ -95557,8 +95800,8 @@ bool CreateAntialiasedRoundedThumbnail(HBITMAP sourceBitmap,
                 Gdiplus::InterpolationModeHighQualityBicubic) !=
                 Gdiplus::Ok ||
             content.DrawImage(&source,
-                              Gdiplus::Rect(0, 0, (INT)kThumbnailWidth,
-                                            (INT)kThumbnailHeight),
+                              Gdiplus::Rect(0, 0, (INT)g_tileWidth,
+                                            (INT)g_tileHeight),
                               0, 0, (Gdiplus::REAL)source.GetWidth(),
                               (Gdiplus::REAL)source.GetHeight(),
                               Gdiplus::UnitPixel) != Gdiplus::Ok) {
@@ -95566,7 +95809,7 @@ bool CreateAntialiasedRoundedThumbnail(HBITMAP sourceBitmap,
         }
     }
 
-    Gdiplus::Bitmap mask(kThumbnailWidth, kThumbnailHeight,
+    Gdiplus::Bitmap mask(g_tileWidth, g_tileHeight,
                          PixelFormat32bppARGB);
     if (mask.GetLastStatus() != Gdiplus::Ok) {
         return false;
@@ -95584,9 +95827,9 @@ bool CreateAntialiasedRoundedThumbnail(HBITMAP sourceBitmap,
         if (!AddRoundedRectanglePath(
                 &shape,
                 Gdiplus::RectF(0.5f, 0.5f,
-                               (Gdiplus::REAL)kThumbnailWidth - 1.0f,
-                               (Gdiplus::REAL)kThumbnailHeight - 1.0f),
-                kThumbnailCornerDiameter / 2.0f)) {
+                               (Gdiplus::REAL)g_tileWidth - 1.0f,
+                               (Gdiplus::REAL)g_tileHeight - 1.0f),
+                g_tileCornerDiameter / 2.0f)) {
             return false;
         }
         Gdiplus::SolidBrush white(Gdiplus::Color(255, 255, 255, 255));
@@ -95595,7 +95838,7 @@ bool CreateAntialiasedRoundedThumbnail(HBITMAP sourceBitmap,
         }
     }
 
-    Gdiplus::Rect lockRect(0, 0, kThumbnailWidth, kThumbnailHeight);
+    Gdiplus::Rect lockRect(0, 0, g_tileWidth, g_tileHeight);
     Gdiplus::BitmapData imageData{};
     Gdiplus::BitmapData maskData{};
     if (roundedBitmap->LockBits(&lockRect,
@@ -95610,10 +95853,10 @@ bool CreateAntialiasedRoundedThumbnail(HBITMAP sourceBitmap,
         return false;
     }
 
-    for (int y = 0; y < (int)kThumbnailHeight; ++y) {
+    for (int y = 0; y < (int)g_tileHeight; ++y) {
         BYTE* imageRow = (BYTE*)imageData.Scan0 + y * imageData.Stride;
         const BYTE* maskRow = (const BYTE*)maskData.Scan0 + y * maskData.Stride;
-        for (int x = 0; x < (int)kThumbnailWidth; ++x) {
+        for (int x = 0; x < (int)g_tileWidth; ++x) {
             const BYTE coverage = maskRow[x * 4 + 3];
             BYTE* pixel = imageRow + x * 4;
             for (int channel = 0; channel < 4; ++channel) {
@@ -95627,7 +95870,7 @@ bool CreateAntialiasedRoundedThumbnail(HBITMAP sourceBitmap,
 }
 
 bool DrawAntialiasedThumbnail(HDC dc, const RECT& rect, HBITMAP bitmap) {
-    Gdiplus::Bitmap rounded(kThumbnailWidth, kThumbnailHeight,
+    Gdiplus::Bitmap rounded(g_tileWidth, g_tileHeight,
                             PixelFormat32bppPARGB);
     if (rounded.GetLastStatus() != Gdiplus::Ok ||
         !CreateAntialiasedRoundedThumbnail(bitmap, &rounded)) {
@@ -95646,8 +95889,8 @@ bool DrawAntialiasedThumbnail(HDC dc, const RECT& rect, HBITMAP bitmap) {
                               (Gdiplus::REAL)rect.top,
                               (Gdiplus::REAL)(rect.right - rect.left),
                               (Gdiplus::REAL)(rect.bottom - rect.top)),
-               0, 0, (Gdiplus::REAL)kThumbnailWidth,
-               (Gdiplus::REAL)kThumbnailHeight,
+               0, 0, (Gdiplus::REAL)g_tileWidth,
+               (Gdiplus::REAL)g_tileHeight,
                Gdiplus::UnitPixel) == Gdiplus::Ok;
 }
 
@@ -95671,7 +95914,7 @@ bool DrawAntialiasedTileBorder(HDC dc, const RECT& rect, COLORREF color,
     Gdiplus::GraphicsPath path;
     if (!AddRoundedRectanglePath(
             &path, border,
-            std::max(1.0f, kThumbnailCornerDiameter / 2.0f - inset))) {
+            std::max(1.0f, g_tileCornerDiameter / 2.0f - inset))) {
         return false;
     }
     if (gradient) {
@@ -95710,8 +95953,8 @@ bool DrawBlurClippedThumbnail(HDC targetDc, const RECT& rect,
         HRGN rounded = CreateRoundRectRgn(
             rect.left + inset, rect.top + inset,
             rect.right - inset, rect.bottom - inset,
-            kThumbnailCornerDiameter - 2 * inset,
-            kThumbnailCornerDiameter - 2 * inset);
+            g_tileCornerDiameter - 2 * inset,
+            g_tileCornerDiameter - 2 * inset);
         if (rounded) {
             SelectClipRgn(targetDc, rounded);
             SetStretchBltMode(targetDc, HALFTONE);
@@ -95730,10 +95973,10 @@ bool DrawBlurClippedThumbnail(HDC targetDc, const RECT& rect,
     return drawn;
 }
 
-bool DrawTileButton(const DRAWITEMSTRUCT* item) {
+bool DrawTileImage(const DRAWITEMSTRUCT* item) {
     if (!item || item->CtlType != ODT_BUTTON ||
         item->CtlID < kFirstTileId ||
-        item->CtlID >= kFirstTileId + kPageSize) {
+        item->CtlID >= kFirstTileId + g_pageSize) {
         return false;
     }
     const size_t slot = item->CtlID - kFirstTileId;
@@ -95742,9 +95985,7 @@ bool DrawTileButton(const DRAWITEMSTRUCT* item) {
     // Glass mode is colour-keyed: a smoothed pixel blended with the key colour is not
     // see-through, it shows as a dark speck outside the curve. So nothing smoothed is
     // drawn here in glass mode; the tile edge goes on the edge layer above.
-    const bool keyed =
-        g_pickerWindow &&
-        (GetWindowLongPtrW(g_pickerWindow, GWL_EXSTYLE) & WS_EX_LAYERED);
+    const bool keyed = g_pickerKeyed;
     const bool layerEdge = keyed && g_gdiplusToken && g_pickerRingWindow &&
                            !g_pickerRingFailed;
     if (index >= g_images.size()) {
@@ -95792,17 +96033,17 @@ bool DrawTileButton(const DRAWITEMSTRUCT* item) {
                     HRGN rounded = CreateRoundRectRgn(
                         item->rcItem.left, item->rcItem.top,
                         item->rcItem.right + 1, item->rcItem.bottom + 1,
-                        kThumbnailCornerDiameter,
-                        kThumbnailCornerDiameter);
+                        g_tileCornerDiameter,
+                        g_tileCornerDiameter);
                     if (rounded) {
                         SelectClipRgn(item->hDC, rounded);
                         const double scale = std::max(
-                            (double)kThumbnailWidth / bitmapInfo.bmWidth,
-                            (double)kThumbnailHeight / bitmapInfo.bmHeight);
+                            (double)g_tileWidth / bitmapInfo.bmWidth,
+                            (double)g_tileHeight / bitmapInfo.bmHeight);
                         const int cropWidth = std::max(
-                            1, (int)std::lround(kThumbnailWidth / scale));
+                            1, (int)std::lround(g_tileWidth / scale));
                         const int cropHeight = std::max(
-                            1, (int)std::lround(kThumbnailHeight / scale));
+                            1, (int)std::lround(g_tileHeight / scale));
                         const int cropX = (int)std::max(
                             0L, (bitmapInfo.bmWidth - cropWidth) / 2);
                         const int cropY = (int)std::max(
@@ -95813,13 +96054,13 @@ bool DrawTileButton(const DRAWITEMSTRUCT* item) {
                             BLENDFUNCTION blend{AC_SRC_OVER, 0, 255,
                                                 AC_SRC_ALPHA};
                             AlphaBlend(item->hDC, item->rcItem.left,
-                                       item->rcItem.top, kThumbnailWidth,
-                                       kThumbnailHeight, sourceDc, cropX,
+                                       item->rcItem.top, g_tileWidth,
+                                       g_tileHeight, sourceDc, cropX,
                                        cropY, cropWidth, cropHeight, blend);
                         } else {
                             StretchBlt(item->hDC, item->rcItem.left,
-                                       item->rcItem.top, kThumbnailWidth,
-                                       kThumbnailHeight, sourceDc, cropX,
+                                       item->rcItem.top, g_tileWidth,
+                                       g_tileHeight, sourceDc, cropX,
                                        cropY, cropWidth, cropHeight, SRCCOPY);
                         }
                         DeleteObject(rounded);
@@ -95853,13 +96094,59 @@ bool DrawTileButton(const DRAWITEMSTRUCT* item) {
             InflateRect(&border, -(borderWidth / 2), -(borderWidth / 2));
             RoundRect(item->hDC, border.left, border.top,
                       border.right, border.bottom,
-                      kThumbnailCornerDiameter, kThumbnailCornerDiameter);
+                      g_tileCornerDiameter, g_tileCornerDiameter);
             SelectObject(item->hDC, oldBrush);
             SelectObject(item->hDC, oldPen);
             DeleteObject(pen);
         }
     }
     return true;
+}
+
+// "File names under pictures": the picture keeps its own drawing, the name sits in a strip
+// of plain background below it (the edge layer leaves the strip out too).
+bool DrawTileButton(const DRAWITEMSTRUCT* item) {
+    if (!item || item->CtlType != ODT_BUTTON ||
+        item->CtlID < kFirstTileId ||
+        item->CtlID >= kFirstTileId + g_pageSize) {
+        return false;
+    }
+    if (g_nameHeight <= 0) {
+        return DrawTileImage(item);
+    }
+    DRAWITEMSTRUCT picture = *item;
+    picture.rcItem.bottom -= g_nameHeight;
+    RECT strip = item->rcItem;
+    strip.top = picture.rcItem.bottom;
+    FillRect(item->hDC, &strip, g_backgroundBrush);
+    const bool drawn = DrawTileImage(&picture);
+    const size_t slot = item->CtlID - kFirstTileId;
+    const size_t index = ImageIndexForPageSlot(g_page, slot);
+    if (index < g_images.size()) {
+        std::wstring name = PathFindFileNameW(g_images[index].c_str());
+        const size_t dot = name.find_last_of(L'.');
+        if (dot != std::wstring::npos && dot > 0) {
+            name.resize(dot);
+        }
+        const int saved = SaveDC(item->hDC);
+        SetBkMode(item->hDC, TRANSPARENT);
+        const bool lit = (int)index == g_selectedImage ||
+                         item->hwndItem == g_hoverTile;
+        SetTextColor(item->hDC, lit ? g_text : g_muted);
+        if (g_pickerFont) {
+            SelectObject(item->hDC, g_pickerFont);
+        }
+        RECT textRect = strip;
+        textRect.top += 2;
+        InflateRect(&textRect, -4, 0);
+        DrawTextW(item->hDC, name.c_str(), (int)name.size(), &textRect,
+                  DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS |
+                      DT_NOPREFIX);
+        if (saved) {
+            RestoreDC(item->hDC, saved);
+        }
+    }
+    return drawn;
 }
 
 void StylePickerWindow(HWND hwnd) {
@@ -95956,6 +96243,59 @@ LRESULT CALLBACK PickerRingProc(HWND hwnd, UINT message, WPARAM wParam,
     return DefWindowProcW(hwnd, message, wParam, lParam);
 }
 
+// The picker edge and the tile edges, drawn on a per-pixel-alpha canvas of the picker's
+// size (the edge layer, and the motion snapshot in glass mode).
+bool DrawPickerRingShapes(Gdiplus::Graphics& graphics, int width, int height,
+                          const RECT& bounds) {
+    bool ok = false;
+    const Gdiplus::RectF rect(1.0f, 1.0f, (Gdiplus::REAL)width - 2.0f,
+                              (Gdiplus::REAL)height - 2.0f);
+    Gdiplus::GraphicsPath path;
+    if (AddRoundedRectanglePath(
+            &path, rect, (Gdiplus::REAL)PickerCornerRadius() - 1.0f)) {
+        Gdiplus::Pen pen(Gdiplus::Color(255, GetRValue(g_edge),
+                                        GetGValue(g_edge),
+                                        GetBValue(g_edge)),
+                         2.0f);
+        ok = graphics.DrawPath(&pen, &path) == Gdiplus::Ok;
+    }
+    // Tile edges: 2px at inset 1 on radius r - 1, rest grey or lit blue to mauve.
+    for (size_t slot = 0; ok && slot < g_pageSize; ++slot) {
+        const BYTE state = g_tileEdgeState[slot];
+        RECT tile{};
+        if (!state || !g_tiles[slot] || !IsWindowVisible(g_tiles[slot]) ||
+            !GetWindowRect(g_tiles[slot], &tile)) {
+            continue;
+        }
+        const Gdiplus::RectF edge(
+            (Gdiplus::REAL)(tile.left - bounds.left) + 1.0f,
+            (Gdiplus::REAL)(tile.top - bounds.top) + 1.0f,
+            (Gdiplus::REAL)(tile.right - tile.left) - 2.0f,
+            (Gdiplus::REAL)(tile.bottom - tile.top - g_nameHeight) - 2.0f);
+        Gdiplus::GraphicsPath tilePath;
+        if (!AddRoundedRectanglePath(
+                &tilePath, edge,
+                g_tileCornerDiameter / 2.0f - 1.0f)) {
+            continue;
+        }
+        if (state == 2) {
+            Gdiplus::LinearGradientBrush brush(
+                edge, Gdiplus::Color(255, 0x89, 0xB4, 0xFA),
+                Gdiplus::Color(255, 0xCB, 0xA6, 0xF7),
+                Gdiplus::LinearGradientModeHorizontal);
+            Gdiplus::Pen tilePen(&brush, 2.0f);
+            ok = graphics.DrawPath(&tilePen, &tilePath) == Gdiplus::Ok;
+        } else {
+            Gdiplus::Pen tilePen(
+                Gdiplus::Color(255, GetRValue(g_edge), GetGValue(g_edge),
+                               GetBValue(g_edge)),
+                2.0f);
+            ok = graphics.DrawPath(&tilePen, &tilePath) == Gdiplus::Ok;
+        }
+    }
+    return ok;
+}
+
 bool PaintPickerRing(const RECT& bounds) {
     const int width = bounds.right - bounds.left;
     const int height = bounds.bottom - bounds.top;
@@ -95985,51 +96325,7 @@ bool PaintPickerRing(const RECT& bounds) {
             Gdiplus::Graphics graphics(&canvas);
             graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
             graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
-            const Gdiplus::RectF rect(1.0f, 1.0f, (Gdiplus::REAL)width - 2.0f,
-                                      (Gdiplus::REAL)height - 2.0f);
-            Gdiplus::GraphicsPath path;
-            if (AddRoundedRectanglePath(
-                    &path, rect, (Gdiplus::REAL)PickerCornerRadius() - 1.0f)) {
-                Gdiplus::Pen pen(Gdiplus::Color(255, GetRValue(g_edge),
-                                                GetGValue(g_edge),
-                                                GetBValue(g_edge)),
-                                 2.0f);
-                ok = graphics.DrawPath(&pen, &path) == Gdiplus::Ok;
-            }
-            // Tile edges: 2px at inset 1 on radius r - 1, rest grey or lit blue to mauve.
-            for (size_t slot = 0; ok && slot < kPageSize; ++slot) {
-                const BYTE state = g_tileEdgeState[slot];
-                RECT tile{};
-                if (!state || !g_tiles[slot] || !IsWindowVisible(g_tiles[slot]) ||
-                    !GetWindowRect(g_tiles[slot], &tile)) {
-                    continue;
-                }
-                const Gdiplus::RectF edge(
-                    (Gdiplus::REAL)(tile.left - bounds.left) + 1.0f,
-                    (Gdiplus::REAL)(tile.top - bounds.top) + 1.0f,
-                    (Gdiplus::REAL)(tile.right - tile.left) - 2.0f,
-                    (Gdiplus::REAL)(tile.bottom - tile.top) - 2.0f);
-                Gdiplus::GraphicsPath tilePath;
-                if (!AddRoundedRectanglePath(
-                        &tilePath, edge,
-                        kThumbnailCornerDiameter / 2.0f - 1.0f)) {
-                    continue;
-                }
-                if (state == 2) {
-                    Gdiplus::LinearGradientBrush brush(
-                        edge, Gdiplus::Color(255, 0x89, 0xB4, 0xFA),
-                        Gdiplus::Color(255, 0xCB, 0xA6, 0xF7),
-                        Gdiplus::LinearGradientModeHorizontal);
-                    Gdiplus::Pen tilePen(&brush, 2.0f);
-                    ok = graphics.DrawPath(&tilePen, &tilePath) == Gdiplus::Ok;
-                } else {
-                    Gdiplus::Pen tilePen(
-                        Gdiplus::Color(255, GetRValue(g_edge), GetGValue(g_edge),
-                                       GetBValue(g_edge)),
-                        2.0f);
-                    ok = graphics.DrawPath(&tilePen, &tilePath) == Gdiplus::Ok;
-                }
-            }
+            ok = DrawPickerRingShapes(graphics, width, height, bounds);
         }
         if (ok) {
             POINT position{bounds.left, bounds.top};
@@ -96075,7 +96371,7 @@ void ShowPickerRing(const RECT& bounds) {
 
 // A tile's edge changed (hover, select, page): redraw the edge layer if it is up.
 void SetTileEdgeState(size_t slot, BYTE state) {
-    if (slot >= kPageSize || g_tileEdgeState[slot] == state) {
+    if (slot >= kMaxTiles || g_tileEdgeState[slot] == state) {
         return;
     }
     g_tileEdgeState[slot] = state;
@@ -96102,13 +96398,21 @@ void HidePickerBackdrop() {
     }
 }
 
+void HidePickerUnderMotion() {
+    HidePickerRing();  // the motion layer carries the edges now
+    if (g_pickerWindow) {
+        ShowWindow(g_pickerWindow, SW_HIDE);
+    }
+}
+
 void HidePickerWindow(HWND hwnd) {
     if (!hwnd) {
         return;
     }
-    const bool usesBackdrop =
-        _wcsicmp(g_configuredMaterial.c_str(), L"blur") == 0 ||
-        _wcsicmp(g_configuredMaterial.c_str(), L"acrylic") == 0;
+    PickerSnapshot shot;
+    const bool animate = g_animate && !g_pickerAnimating &&
+                         hwnd == g_pickerWindow && IsWindowVisible(hwnd) &&
+                         CapturePickerSnapshot(shot);
     const bool wasForeground = GetForegroundWindow() == hwnd;
     if (GetFocus() == g_searchEdit) {
         SetFocus(hwnd);
@@ -96128,9 +96432,21 @@ void HidePickerWindow(HWND hwnd) {
     if (g_folderLabel) {
         InvalidateRect(g_folderLabel, nullptr, FALSE);
     }
-    if (usesBackdrop || !AnimateWindow(hwnd, 130, AW_BLEND | AW_HIDE)) {
+    if (animate) {
+        g_pickerAnimating = true;
+        PlayPickerMotion(shot, false, HidePickerUnderMotion);
+        if (IsWindowVisible(hwnd)) {
+            ShowWindow(hwnd, SW_HIDE);
+        }
+        if (g_pickerAnimWindow) {
+            ShowWindow(g_pickerAnimWindow, SW_HIDE);
+        }
+        g_pickerAnimating = false;
+    } else {
         ShowWindow(hwnd, SW_HIDE);
     }
+    FreePickerSnapshot(shot);
+    g_pickerOpenFromTray = false;
     HidePickerBackdrop();
     if (wasForeground && g_previousForegroundWindow &&
         IsWindow(g_previousForegroundWindow)) {
@@ -96166,6 +96482,9 @@ void SetPickerRoundRegion(HWND window, bool rounded, int diameter) {
 }
 
 void PositionPickerBackdrop() {
+    if (g_pickerAnimating) {
+        return;  // PlayPickerMotion moves the backdrop itself
+    }
     if (!g_pickerWindow || !g_pickerBackdropWindow ||
         !IsWindowVisible(g_pickerWindow)) {
         HidePickerBackdrop();
@@ -96196,6 +96515,9 @@ void SetPickerColorKey(HWND window, bool enabled) {
     if (!window) {
         return;
     }
+    if (window == g_pickerWindow) {
+        g_pickerKeyed = enabled;
+    }
     const LONG_PTR style = GetWindowLongPtrW(window, GWL_EXSTYLE);
     if (enabled) {
         if (!(style & WS_EX_LAYERED)) {
@@ -96214,6 +96536,302 @@ void SetPickerColorKey(HWND window, bool enabled) {
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
                          SWP_NOACTIVATE | SWP_FRAMECHANGED);
     }
+}
+
+// ---- Open and close motion (wallpaper.animate) -----------------------------------------
+// The picker's pixels are copied once (PrintWindow) into a premultiplied snapshot. A
+// click-through per-pixel-alpha window above the picker shows that copy scaled from 92% to
+// 100% around the tray button (or the middle) while it fades in; closing runs it back. In
+// glass mode the see-through key pixels go clear, the edge layer's shapes are drawn into the
+// copy, and the frosted backdrop follows the same rectangle so the glass grows with it.
+void FreePickerSnapshot(PickerSnapshot& shot) {
+    if (shot.bitmap) {
+        DeleteObject(shot.bitmap);
+    }
+    shot = PickerSnapshot{};
+}
+
+bool CapturePickerSnapshot(PickerSnapshot& shot) {
+    shot = PickerSnapshot{};
+    if (!g_pickerWindow || !g_pickerAnimWindow || !g_gdiplusToken) {
+        return false;
+    }
+    RECT bounds{};
+    if (!GetWindowRect(g_pickerWindow, &bounds)) {
+        return false;
+    }
+    const int width = bounds.right - bounds.left;
+    const int height = bounds.bottom - bounds.top;
+    if (width < 32 || height < 32) {
+        return false;
+    }
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = -height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    HDC screen = GetDC(nullptr);
+    HDC memory = screen ? CreateCompatibleDC(screen) : nullptr;
+    void* bits = nullptr;
+    HBITMAP bitmap = memory ? CreateDIBSection(memory, &info, DIB_RGB_COLORS,
+                                               &bits, nullptr, 0)
+                            : nullptr;
+    bool ok = false;
+    if (bitmap && bits) {
+        HGDIOBJ oldBitmap = SelectObject(memory, bitmap);
+        DWORD* px = (DWORD*)bits;
+        const size_t count = (size_t)width * (size_t)height;
+        const DWORD key = ((DWORD)GetRValue(g_background) << 16) |
+                          ((DWORD)GetGValue(g_background) << 8) |
+                          (DWORD)GetBValue(g_background);
+        const bool keyed = g_pickerKeyed;
+        // 2 = PW_RENDERFULLCONTENT (what DWM holds; see-through key pixels read black),
+        // 0 = WM_PRINT (the key colour comes back as itself).
+        const UINT flags[2] = {2, 0};
+        for (UINT flag : flags) {
+            std::fill(px, px + count, 0x00FF00FFu);
+            GdiFlush();
+            if (!PrintWindow(g_pickerWindow, memory, flag)) {
+                continue;
+            }
+            GdiFlush();
+            // x = 6 sits in the left margin: always plain background.
+            const DWORD probe = px[(size_t)(height / 2) * (size_t)width + 6] & 0x00FFFFFFu;
+            if (keyed ? (probe != key && probe != 0) : probe != key) {
+                continue;
+            }
+            size_t opaque = 0;
+            for (size_t i = 0; i < count; ++i) {
+                const DWORD c = px[i] & 0x00FFFFFFu;
+                if (keyed && c == probe) {
+                    px[i] = 0;
+                } else {
+                    px[i] = c | 0xFF000000u;
+                    ++opaque;
+                }
+            }
+            if (opaque * 100 >= count) {
+                ok = true;
+                break;
+            }
+        }
+        if (ok) {
+            // Smooth the four corners on the live radius, then premultiply.
+            const int radius = std::max(1, PickerCornerRadius());
+            for (int y = 0; y < height; ++y) {
+                const bool cornerRow = y < radius || y >= height - radius;
+                for (int x = 0; x < width; ++x) {
+                    DWORD& c = px[(size_t)y * (size_t)width + (size_t)x];
+                    float alpha = (float)(c >> 24) / 255.0f;
+                    if (cornerRow && (x < radius || x >= width - radius)) {
+                        const float cx = x < radius ? (float)radius : (float)(width - radius);
+                        const float cy = y < radius ? (float)radius : (float)(height - radius);
+                        const float dx = (float)x + 0.5f - cx;
+                        const float dy = (float)y + 0.5f - cy;
+                        const float coverage = std::clamp(
+                            (float)radius - std::sqrt(dx * dx + dy * dy) + 0.5f, 0.0f, 1.0f);
+                        alpha *= coverage;
+                    }
+                    const DWORD a = (DWORD)std::lround(alpha * 255.0f);
+                    const DWORD r = ((c >> 16) & 0xFF) * a / 255;
+                    const DWORD g = ((c >> 8) & 0xFF) * a / 255;
+                    const DWORD b = (c & 0xFF) * a / 255;
+                    c = (a << 24) | (r << 16) | (g << 8) | b;
+                }
+            }
+            if (keyed && g_pickerRingWindow && !g_pickerRingFailed) {
+                Gdiplus::Bitmap canvas(width, height, width * 4,
+                                       PixelFormat32bppPARGB, (BYTE*)bits);
+                Gdiplus::Graphics graphics(&canvas);
+                graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+                graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+                DrawPickerRingShapes(graphics, width, height, bounds);
+            }
+            GdiFlush();
+        }
+        SelectObject(memory, oldBitmap);
+    }
+    if (memory) {
+        DeleteDC(memory);
+    }
+    if (screen) {
+        ReleaseDC(nullptr, screen);
+    }
+    if (!ok) {
+        if (bitmap) {
+            DeleteObject(bitmap);
+        }
+        Wh_Log(L"[Wallpaper] motion snapshot failed; showing without motion");
+        return false;
+    }
+    shot.bitmap = bitmap;
+    shot.bits = bits;
+    shot.width = width;
+    shot.height = height;
+    shot.bounds = bounds;
+    return true;
+}
+
+void PlayPickerMotion(const PickerSnapshot& shot, bool opening,
+                      void (*afterFirstFrame)()) {
+    if (!shot.bitmap || !shot.bits || !g_pickerAnimWindow) {
+        if (afterFirstFrame) {
+            afterFirstFrame();
+        }
+        return;
+    }
+    const int width = shot.width;
+    const int height = shot.height;
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = -height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    HDC screen = GetDC(nullptr);
+    HDC memory = screen ? CreateCompatibleDC(screen) : nullptr;
+    void* frameBits = nullptr;
+    HBITMAP frame = memory ? CreateDIBSection(memory, &info, DIB_RGB_COLORS,
+                                              &frameBits, nullptr, 0)
+                           : nullptr;
+    bool firstDone = false;
+    if (frame && frameBits) {
+        HGDIOBJ oldBitmap = SelectObject(memory, frame);
+        POINT origin{width / 2, height / 2};
+        if (g_pickerOpenFromTray) {
+            POINT cursor{};
+            if (GetCursorPos(&cursor)) {
+                origin.x = std::clamp<LONG>(cursor.x - shot.bounds.left, 0, width);
+                origin.y = std::clamp<LONG>(cursor.y - shot.bounds.top, 0, height);
+            }
+        }
+        const double seconds =
+            std::max(40.0, (opening ? 1.0 : 0.8) * (double)g_animMs) / 1000.0;
+        LARGE_INTEGER frequency{};
+        LARGE_INTEGER start{};
+        QueryPerformanceFrequency(&frequency);
+        QueryPerformanceCounter(&start);
+        const int cornerDiameter = PickerCornerRadius() * 2;
+        {
+            Gdiplus::Bitmap source(width, height, width * 4, PixelFormat32bppPARGB,
+                                   (BYTE*)shot.bits);
+            Gdiplus::Bitmap canvas(width, height, width * 4, PixelFormat32bppPARGB,
+                                   (BYTE*)frameBits);
+            Gdiplus::Graphics graphics(&canvas);
+            graphics.SetInterpolationMode(Gdiplus::InterpolationModeBilinear);
+            graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+            graphics.SetCompositingMode(Gdiplus::CompositingModeSourceCopy);
+            for (int step = 0; step < 240; ++step) {
+                LARGE_INTEGER now{};
+                QueryPerformanceCounter(&now);
+                const double t = std::min(
+                    1.0, (double)(now.QuadPart - start.QuadPart) /
+                             (double)std::max<LONGLONG>(1, frequency.QuadPart) / seconds);
+                // e is how open the picker is: ease out on open, ease in on close.
+                const double e = opening ? 1.0 - std::pow(1.0 - t, 3.0)
+                                         : 1.0 - t * t;
+                const double scale = 0.92 + 0.08 * e;
+                const float drawW = (float)(width * scale);
+                const float drawH = (float)(height * scale);
+                const float drawX = (float)(origin.x * (1.0 - scale));
+                const float drawY = (float)(origin.y * (1.0 - scale));
+                ZeroMemory(frameBits, (size_t)width * (size_t)height * 4);
+                graphics.DrawImage(&source, Gdiplus::RectF(drawX, drawY, drawW, drawH),
+                                   0.0f, 0.0f, (Gdiplus::REAL)width,
+                                   (Gdiplus::REAL)height, Gdiplus::UnitPixel);
+                GdiFlush();
+                POINT position{shot.bounds.left, shot.bounds.top};
+                SIZE size{width, height};
+                POINT sourcePoint{0, 0};
+                BLENDFUNCTION blend{AC_SRC_OVER, 0,
+                                    (BYTE)std::clamp<long>(std::lround(255.0 * e), 0, 255),
+                                    AC_SRC_ALPHA};
+                UpdateLayeredWindow(g_pickerAnimWindow, screen, &position, &size,
+                                    memory, &sourcePoint, 0, &blend, ULW_ALPHA);
+                if (g_pickerKeyed && g_pickerBackdropWindow) {
+                    const int bx = shot.bounds.left + (int)std::lround(drawX);
+                    const int by = shot.bounds.top + (int)std::lround(drawY);
+                    SetWindowPos(g_pickerBackdropWindow, g_pickerWindow, bx, by,
+                                 std::max(1, (int)std::lround(drawW)),
+                                 std::max(1, (int)std::lround(drawH)),
+                                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                    SetPickerRoundRegion(g_pickerBackdropWindow, true,
+                                         (int)std::lround(cornerDiameter * scale));
+                }
+                if (!firstDone) {
+                    ShowWindow(g_pickerAnimWindow, SW_SHOWNOACTIVATE);
+                    SetWindowPos(g_pickerAnimWindow, HWND_TOPMOST, 0, 0, 0, 0,
+                                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                    firstDone = true;
+                    if (afterFirstFrame) {
+                        afterFirstFrame();
+                    }
+                }
+                if (t >= 1.0) {
+                    break;
+                }
+                if (FAILED(DwmFlush())) {
+                    Sleep(8);
+                }
+            }
+        }
+        SelectObject(memory, oldBitmap);
+    }
+    if (!firstDone && afterFirstFrame) {
+        afterFirstFrame();
+    }
+    if (frame) {
+        DeleteObject(frame);
+    }
+    if (memory) {
+        DeleteDC(memory);
+    }
+    if (screen) {
+        ReleaseDC(nullptr, screen);
+    }
+}
+
+// The picker comes up invisible for the open motion: glass keeps its colour key at alpha 0,
+// solid is made layered at alpha 0 for the moment (RestorePickerAfterMotion undoes it).
+bool PreparePickerOpenMotion() {
+    if (!g_pickerWindow || !g_pickerAnimWindow || !g_gdiplusToken) {
+        return false;
+    }
+    if (g_pickerKeyed) {
+        SetLayeredWindowAttributes(g_pickerWindow, g_background, 0,
+                                   LWA_COLORKEY | LWA_ALPHA);
+    } else {
+        const LONG_PTR style = GetWindowLongPtrW(g_pickerWindow, GWL_EXSTYLE);
+        SetWindowLongPtrW(g_pickerWindow, GWL_EXSTYLE, style | WS_EX_LAYERED);
+        SetLayeredWindowAttributes(g_pickerWindow, 0, 0, LWA_ALPHA);
+    }
+    g_pickerAnimating = true;
+    return true;
+}
+
+void RestorePickerAfterMotion() {
+    if (!g_pickerWindow) {
+        return;
+    }
+    if (g_pickerKeyed) {
+        SetLayeredWindowAttributes(g_pickerWindow, g_background, 0, LWA_COLORKEY);
+        return;
+    }
+    SetLayeredWindowAttributes(g_pickerWindow, 0, 255, LWA_ALPHA);
+    const LONG_PTR style = GetWindowLongPtrW(g_pickerWindow, GWL_EXSTYLE);
+    if (style & WS_EX_LAYERED) {
+        SetWindowLongPtrW(g_pickerWindow, GWL_EXSTYLE,
+                          style & ~static_cast<LONG_PTR>(WS_EX_LAYERED));
+        SetWindowPos(g_pickerWindow, nullptr, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                         SWP_FRAMECHANGED);
+    }
+    RedrawWindow(g_pickerWindow, nullptr, nullptr,
+                 RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN |
+                     RDW_UPDATENOW);
 }
 
 void RedrawPickerChildren() {
@@ -96286,6 +96904,94 @@ constexpr UINT WallpaperTrayId() {
     return hash | 0x80000000u;
 }
 
+// The tray button: a back peak, a front peak with a clear cut between them, and a sun, filled
+// with the blue to mauve gradient on a clear background (no box). Drawn on a 24-unit grid with
+// 4x4 samples per pixel.
+HICON MakeMountainIcon() {
+    int size = GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem());
+    if (size < 16) size = 16;
+    struct Pt { float x, y; };
+    const Pt back[3] = {{9.0f, 20.0f}, {16.0f, 6.0f}, {23.0f, 20.0f}};
+    const Pt front[3] = {{1.0f, 20.0f}, {8.0f, 10.0f}, {15.0f, 20.0f}};
+    const Pt sun{6.5f, 5.0f};
+    const float sunRadius = 2.6f;
+    const float cutWidth = 1.5f;
+    auto edgeSide = [](const Pt& a, const Pt& b, float x, float y) {
+        return (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
+    };
+    auto inside = [&](const Pt* t, float x, float y) {
+        const float d0 = edgeSide(t[0], t[1], x, y);
+        const float d1 = edgeSide(t[1], t[2], x, y);
+        const float d2 = edgeSide(t[2], t[0], x, y);
+        const bool neg = d0 < 0 || d1 < 0 || d2 < 0;
+        const bool pos = d0 > 0 || d1 > 0 || d2 > 0;
+        return !(neg && pos);
+    };
+    auto segmentDistance = [](const Pt& a, const Pt& b, float x, float y) {
+        const float vx = b.x - a.x, vy = b.y - a.y;
+        const float k = std::clamp(((x - a.x) * vx + (y - a.y) * vy) / (vx * vx + vy * vy),
+                                   0.0f, 1.0f);
+        const float dx = x - (a.x + k * vx), dy = y - (a.y + k * vy);
+        return std::sqrt(dx * dx + dy * dy);
+    };
+    auto nearFront = [&](float x, float y) {
+        if (inside(front, x, y)) return true;
+        const float d = std::min({segmentDistance(front[0], front[1], x, y),
+                                  segmentDistance(front[1], front[2], x, y),
+                                  segmentDistance(front[2], front[0], x, y)});
+        return d < cutWidth;
+    };
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = size;
+    bi.bmiHeader.biHeight = -size;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    void* bits = nullptr;
+    HDC screen = GetDC(nullptr);
+    HBITMAP color = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    ReleaseDC(nullptr, screen);
+    if (!color || !bits) {
+        if (color) DeleteObject(color);
+        return nullptr;
+    }
+    const float unit = 24.0f / (float)size;
+    uint32_t* px = (uint32_t*)bits;
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            int hits = 0;
+            for (int sy = 0; sy < 4; ++sy) {
+                for (int sx = 0; sx < 4; ++sx) {
+                    const float ux = ((float)x + (sx + 0.5f) / 4.0f) * unit;
+                    const float uy = ((float)y + (sy + 0.5f) / 4.0f) * unit;
+                    const float dx = ux - sun.x, dy = uy - sun.y;
+                    const bool on = inside(front, ux, uy) ||
+                                    (inside(back, ux, uy) && !nearFront(ux, uy)) ||
+                                    dx * dx + dy * dy <= sunRadius * sunRadius;
+                    hits += on ? 1 : 0;
+                }
+            }
+            const float t = std::clamp(((float)x + (float)y) / (2.0f * (float)(size - 1)),
+                                       0.0f, 1.0f);
+            const uint32_t r = (uint32_t)std::lround(0x89 + (0xCB - 0x89) * t);
+            const uint32_t g = (uint32_t)std::lround(0xB4 + (0xA6 - 0xB4) * t);
+            const uint32_t b = (uint32_t)std::lround(0xFA + (0xF7 - 0xFA) * t);
+            const uint32_t a = (uint32_t)std::lround(255.0f * (float)hits / 16.0f);
+            px[(size_t)y * (size_t)size + (size_t)x] =
+                a ? (a << 24) | (r << 16) | (g << 8) | b : 0;
+        }
+    }
+    HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
+    ICONINFO ii{};
+    ii.fIcon = TRUE;
+    ii.hbmColor = color;
+    ii.hbmMask = mask;
+    HICON icon = mask ? CreateIconIndirect(&ii) : nullptr;
+    DeleteObject(color);
+    if (mask) DeleteObject(mask);
+    return icon;
+}
+
 void AddTrayIcon(HWND hwnd) {
     g_notifyIcon = {};
     g_notifyIcon.cbSize = sizeof(g_notifyIcon);
@@ -96294,7 +97000,10 @@ void AddTrayIcon(HWND hwnd) {
     g_notifyIcon.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     g_notifyIcon.uCallbackMessage = kTrayCallback;
     if (!g_trayIcon) {
-        g_trayIcon = ::sttools::MakeBadge(L'\uF03E', false);
+        g_trayIcon = MakeMountainIcon();
+        if (!g_trayIcon) {
+            g_trayIcon = ::sttools::MakeBadge(L'\uF03E', false);
+        }
     }
     g_notifyIcon.hIcon = g_trayIcon ? g_trayIcon : LoadIcon(nullptr, IDI_APPLICATION);
     wcscpy_s(g_notifyIcon.szTip, L"Wallpaper switcher");
@@ -96328,8 +97037,7 @@ int ShowTrayMenu(HWND hwnd) {
 // so its edge is drawn without smoothing to match the window region exactly.
 void DrawPickerEdge(HDC dc, const RECT& client) {
     const int radius = PickerCornerRadius();
-    const bool keyed = g_pickerWindow &&
-                       (GetWindowLongPtrW(g_pickerWindow, GWL_EXSTYLE) & WS_EX_LAYERED);
+    const bool keyed = g_pickerKeyed;
     if (keyed && g_pickerRingWindow && !g_pickerRingFailed) {
         return;  // the smooth edge layer above the picker draws it
     }
@@ -96420,19 +97128,7 @@ LRESULT CALLBACK PickerProc(HWND hwnd, UINT message, WPARAM wParam,
                 ShowWindow(g_searchEdit, SW_HIDE);
             }
             g_breadcrumbSearchButtonRect = {498, 0, 528, 33};
-            for (size_t slot = 0; slot < kPageSize; ++slot) {
-                const int x = 14 + (int)(slot % kGridColumns) * 132;
-                const int y = 59 + (int)(slot / kGridColumns) * 82;
-                g_tiles[slot] = CreateWindowExW(0, L"BUTTON", L"",
-                    WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, x, y, kThumbnailWidth,
-                    kThumbnailHeight, hwnd,
-                    (HMENU)(INT_PTR)(kFirstTileId + slot),
-                    (HINSTANCE)&__ImageBase, nullptr);
-                if (g_tiles[slot]) {
-                    SetWindowSubclass(g_tiles[slot], TileSubclassProc, 1,
-                                      (DWORD_PTR)hwnd);
-                }
-            }
+            LayoutPicker(hwnd, false);
             g_pageLabel = CreateWindowExW(0, L"STATIC", L"1 / 1",
                 WS_CHILD | WS_VISIBLE | SS_OWNERDRAW, 16, 323, 528, 24,
                 hwnd, (HMENU)(INT_PTR)kPageLabelId, nullptr, nullptr);
@@ -96440,6 +97136,7 @@ LRESULT CALLBACK PickerProc(HWND hwnd, UINT message, WPARAM wParam,
                 SendMessageW(g_pageLabel, WM_SETFONT,
                              (WPARAM)g_pickerFont, TRUE);
             }
+            LayoutPicker(hwnd, false);  // again, now the page label exists
             UpdateFolderLabel();
             if (!g_folder.empty()) {
                 StartImageScan();
@@ -96471,7 +97168,7 @@ LRESULT CALLBACK PickerProc(HWND hwnd, UINT message, WPARAM wParam,
                 }
             }
             if (LOWORD(wParam) >= kFirstTileId &&
-                LOWORD(wParam) < kFirstTileId + kPageSize) {
+                LOWORD(wParam) < kFirstTileId + g_pageSize) {
                 const size_t slot = LOWORD(wParam) - kFirstTileId;
                 const size_t image = ImageIndexForPageSlot(g_page, slot);
                 if (image < g_images.size()) {
@@ -96530,7 +97227,7 @@ LRESULT CALLBACK PickerProc(HWND hwnd, UINT message, WPARAM wParam,
         case WM_SHOWWINDOW:
             if (wParam) {
                 PositionPickerBackdrop();
-            } else {
+            } else if (!g_pickerAnimating) {
                 HidePickerBackdrop();
             }
             return 0;
@@ -96671,6 +97368,10 @@ LRESULT CALLBACK PickerProc(HWND hwnd, UINT message, WPARAM wParam,
                 DestroyWindow(g_pickerRingWindow);
                 g_pickerRingWindow = nullptr;
             }
+            if (g_pickerAnimWindow) {
+                DestroyWindow(g_pickerAnimWindow);
+                g_pickerAnimWindow = nullptr;
+            }
             KillTimer(hwnd, kBreadcrumbMenuDismissTimer);
             KillTimer(hwnd, kBreadcrumbChevronAnimationTimer);
             KillTimer(hwnd, kSearchFilterTimer);
@@ -96787,6 +97488,9 @@ LRESULT CALLBACK HostProc(HWND hwnd, UINT message, WPARAM wParam,
 
             const std::vector<size_t> desired = DesiredThumbnailPages();
             if (result->generation == g_folderGeneration.load() &&
+                result->width == g_tileWidth &&
+                result->height == g_tileHeight &&
+                result->pageSize == g_pageSize &&
                 IsPageInList(desired, result->page)) {
                 for (auto it = g_thumbnailCache.begin();
                      it != g_thumbnailCache.end(); ++it) {
@@ -96834,8 +97538,10 @@ LRESULT CALLBACK HostProc(HWND hwnd, UINT message, WPARAM wParam,
         case kReloadSettings:
             LoadSettings();
             RefreshPickerAppearance(g_pickerWindow);
+            LayoutPicker(g_pickerWindow, true);
             if (g_pickerWindow && IsWindowVisible(g_pickerWindow)) {
                 PositionPickerWindow(nullptr);
+                PositionPickerBackdrop();
             }
             if (!RegisterPickerHotkey(hwnd)) {
                 Wh_Log(L"RegisterHotKey failed after settings change");
@@ -96850,6 +97556,7 @@ LRESULT CALLBACK HostProc(HWND hwnd, UINT message, WPARAM wParam,
         case kTrayCallback:
             if (LOWORD(lParam) == WM_LBUTTONUP ||
                 LOWORD(lParam) == WM_LBUTTONDBLCLK) {
+                g_pickerOpenFromTray = true;  // the motion grows from here
                 TogglePicker();
             } else if (LOWORD(lParam) == NIN_KEYSELECT) {
                 TogglePicker();
@@ -96954,6 +97661,12 @@ DWORD WINAPI UiThreadProc(void*) {
     ringClass.lpszClassName = kRingWindowClass;
     RegisterClassExW(&ringClass);
 
+    WNDCLASSEXW animClass{sizeof(animClass)};
+    animClass.lpfnWndProc = PickerRingProc;  // click-through, never activates
+    animClass.hInstance = (HINSTANCE)&__ImageBase;
+    animClass.lpszClassName = kAnimWindowClass;
+    RegisterClassExW(&animClass);
+
     g_hostWindow = CreateWindowExW(WS_EX_TOOLWINDOW,
         hostClass.lpszClassName, L"", WS_POPUP,
         0, 0, 0, 0, nullptr, nullptr, hostClass.hInstance, nullptr);
@@ -96992,6 +97705,21 @@ DWORD WINAPI UiThreadProc(void*) {
                     static_cast<DWMWINDOWATTRIBUTE>(34),
                     &noBorder, sizeof(noBorder));
             }
+            g_pickerAnimWindow = CreateWindowExW(
+                WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE |
+                    WS_EX_TOOLWINDOW,
+                kAnimWindowClass, L"", WS_POPUP, 0, 0, 1, 1,
+                g_pickerWindow, nullptr, pickerClass.hInstance, nullptr);
+            if (g_pickerAnimWindow) {
+                const DWORD noRounding = 1;  // DWMWCP_DONOTROUND
+                DwmSetWindowAttribute(g_pickerAnimWindow, 33, &noRounding,
+                                      sizeof(noRounding));
+                const COLORREF noBorder = 0xfffffffeu;
+                DwmSetWindowAttribute(
+                    g_pickerAnimWindow,
+                    static_cast<DWMWINDOWATTRIBUTE>(34),
+                    &noBorder, sizeof(noBorder));
+            }
             StylePickerWindow(g_pickerWindow);
             ApplyPickerMaterial(g_pickerWindow);
         }
@@ -97023,6 +97751,7 @@ DWORD WINAPI UiThreadProc(void*) {
     UnregisterClassW(kWindowClass, (HINSTANCE)&__ImageBase);
     UnregisterClassW(kBackdropWindowClass, (HINSTANCE)&__ImageBase);
     UnregisterClassW(kRingWindowClass, (HINSTANCE)&__ImageBase);
+    UnregisterClassW(kAnimWindowClass, (HINSTANCE)&__ImageBase);
     UnregisterClassW(kHostWindowClass, (HINSTANCE)&__ImageBase);
     return 0;
 }

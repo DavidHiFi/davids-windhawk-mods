@@ -2717,6 +2717,10 @@
         "utils.restartExplorer.label": "Restart Explorer",
         "utils.restartGpu.enabled": 1,
         "utils.restartGpu.label": "Restart Graphics Driver",
+        "wallpaper.animSpeed": 180,
+        "wallpaper.animate": 1,
+        "wallpaper.closeAfterPick": 0,
+        "wallpaper.columns": 5,
         "wallpaper.folder": "H:\\Customization\\Wallpapers",
         "wallpaper.hotkey": "ctrl+alt+w",
         "wallpaper.material": "glass",
@@ -2724,6 +2728,12 @@
         "wallpaper.offsetX": 0,
         "wallpaper.offsetY": 0,
         "wallpaper.position": "center",
+        "wallpaper.rows": 4,
+        "wallpaper.showHint": 1,
+        "wallpaper.showNames": 0,
+        "wallpaper.tileGap": 8,
+        "wallpaper.tileRadius": 8,
+        "wallpaper.tileSize": 176,
         "wallpaper.transition": "random"
       }
     },
