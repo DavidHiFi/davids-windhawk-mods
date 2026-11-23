@@ -2,7 +2,7 @@
 // @id              seamless-controls
 // @name            Seamless Controls
 // @description     Rounded, Mocha dark buttons, boxes, tabs and lists in every classic Windows window
-// @version         1.0.3
+// @version         1.0.5
 // @author          DavidHiFi, crazyboyybs
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -36,6 +36,33 @@
 // @exclude         Obsidian.exe
 // @exclude         Tidal.exe
 // @exclude         Dopamine.exe
+// @exclude         T3 Code (Nightly).exe
+// @exclude         Hydra.exe
+// @exclude         UA Connect.exe
+// @exclude         Mullvad VPN.exe
+// @exclude         cmd.exe
+// @exclude         claude.exe
+// @exclude         opencode.exe
+// @exclude         node.exe
+// @exclude         lazy-mcp.exe
+// @exclude         crashpad_handler.exe
+// @exclude         millennium.luavm64.exe
+// @exclude         millennium.crashhandler64.exe
+// @exclude         gameoverlayui64.exe
+// @exclude         RTSSHooksLoader64.exe
+// @exclude         PresentMonDataProvider.exe
+// @exclude         NVDisplay.Container.exe
+// @exclude         GameInputRawInputProxy.exe
+// @exclude         GameInputRedistService.exe
+// @exclude         WavesLocalServer.exe
+// @exclude         uacloudhelper.exe
+// @exclude         ElgatoAudioControlServer.exe
+// @exclude         ElgatoAudioControlServerWatcher.exe
+// @exclude         unsecapp.exe
+// @exclude         t3keeper.exe
+// @exclude         t3guard.exe
+// @exclude         t3-resource-monitor.exe
+// @exclude         agent-guard.exe
 // @exclude         C:\Program Files\Git\*
 // @architecture    x86-64
 // @compilerOptions -ldwmapi -lusp10 -lgdi32 -lcomctl32 -ld2d1 -ldwrite -luxtheme -lwinmm -lmsimg32 -lshcore -lole32 -lshell32 -lshlwapi -luuid -lgdiplus -luser32 -loleaut32 -lwindowscodecs -lcomdlg32 -limm32 -ladvapi32 -lurlmon -lwininet -Wl,--delayload=windowscodecs.dll -Wl,--delayload=comdlg32.dll -Wl,--delayload=imm32.dll -Wl,--delayload=urlmon.dll -Wl,--delayload=wininet.dll -ldelayimp
@@ -60,8 +87,8 @@ mods without stepping on them.
 ## What it does
 
 - Rounded buttons, check boxes, radio buttons, drop-down boxes and group boxes.
-- The main button in a window, selected items and progress bars in the blue to mauve
-  gradient.
+- The main button in a window, progress bars, the side pane pill and the focus line under a
+  text box in the blue to mauve gradient. Selected rows get a mauve fill and edge.
 - Clean tabs in Properties windows, in one row or several.
 - A dark, modern Registry Editor.
 - A Mocha dark look for old windows that have none, done inside each program. Windows'
@@ -80,8 +107,17 @@ windows are left out, since they have no classic controls.
 Click the tray icon for the settings window, or change them here in Windhawk. Both show
 the same settings.
 
-## What's new in 1.0.3
+## What's new in 1.0.5
 
+- Skips about 30 background helpers that have no windows to style, so it loads into far
+  fewer programs.
+- Turned-off buttons and boxes have easier to read text.
+- The setting for the blue to mauve look now says what it really colours.
+
+## Earlier
+
+- In Open and Save windows that Seamless Flyouts draws, the side panel, the file list and the
+  column names are left to Flyouts too, so they get File Explorer's rounded look.
 - Steps aside in Open and Save windows that Seamless Flyouts draws, so they match File Explorer.
 - The details and large icons buttons at the bottom right of File Explorer show their icons
   again: Explorer Styler Plus draws them, and this mod no longer paints an empty box there.
@@ -107,7 +143,7 @@ the same settings.
     $description: "Buttons, check boxes, radio buttons and drop-down boxes get rounded corners."
   - AccentGradients: true
     $name: "Blue to mauve fills"
-    $description: "The main button in a window, selected items and progress bars get the blue to mauve gradient."
+    $description: "The main button in a window, progress bars and the side pane pill get the blue to mauve gradient. Selected rows keep a mauve fill and edge, so long lists stay quick."
   - ModernSeparators: true
     $name: "Clean dividers"
     $description: "Thin lines between groups instead of the old sunken ones."
@@ -969,9 +1005,9 @@ struct Color {
     X(TextFillColorPrimary,                       RGB(0xCD, 0xD6, 0xF4), 0xFF,  RGB(0x00, 0x00, 0x00), 0xE4) \
     X(TextFillColorSecondary,                     RGB(0xCD, 0xD6, 0xF4), 0xC5,  RGB(0x00, 0x00, 0x00), 0x9E) \
     X(TextFillColorTertiary,                      RGB(0xCD, 0xD6, 0xF4), 0x87,  RGB(0x00, 0x00, 0x00), 0x72) \
-    X(TextFillColorDisabled,                      RGB(0xCD, 0xD6, 0xF4), 0x5D,  RGB(0x00, 0x00, 0x00), 0x5C) \
+    X(TextFillColorDisabled,                      RGB(0xCD, 0xD6, 0xF4), 0x8C,  RGB(0x00, 0x00, 0x00), 0x5C) \
     X(TextFillColorInverse,                       RGB(0x00, 0x00, 0x00), 0xE4,  RGB(0xFF, 0xFF, 0xFF), 0xFF) \
-    X(AccentTextFillColorDisabled,                RGB(0xCD, 0xD6, 0xF4), 0x5D,  RGB(0x00, 0x00, 0x00), 0x5C) \
+    X(AccentTextFillColorDisabled,                RGB(0xCD, 0xD6, 0xF4), 0x8C,  RGB(0x00, 0x00, 0x00), 0x5C) \
     X(TextOnAccentFillColorSelectedText,          RGB(0xFF, 0xFF, 0xFF), 0xFF,  RGB(0xFF, 0xFF, 0xFF), 0xFF) \
     X(TextOnAccentFillColorPrimary,               RGB(0x11, 0x11, 0x1B), 0xFF,  RGB(0xFF, 0xFF, 0xFF), 0xFF) \
     X(TextOnAccentFillColorSecondary,             RGB(0x00, 0x00, 0x00), 0x80,  RGB(0xFF, 0xFF, 0xFF), 0xB3) \
@@ -33980,6 +34016,14 @@ static bool HdcInStylerStatusDock(HDC hdc)
     return parent && IsClassName(parent, L"DUIViewWndClassName");
 }
 
+// Seamless: list, tree and header parts Seamless Flyouts draws in its Open and Save windows.
+static bool FlyoutsPickerListPart(const std::wstring& cls, HDC hdc)
+{
+    return (cls.find(L"TreeView") != std::wstring::npos || cls.find(L"ListView") != std::wstring::npos ||
+            cls.find(L"Header") != std::wstring::npos || cls.find(L"ItemsView") != std::wstring::npos) &&
+           HdcInFlyoutsPicker(hdc);
+}
+
 static bool HandleThemeDraw(HTHEME hTheme, HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
     if (!pRect) return false;
@@ -33991,6 +34035,8 @@ static bool HandleThemeDraw(HTHEME hTheme, HDC hdc, INT iPartId, INT iStateId, L
     EnsureD2DFactory();
 
     const std::wstring& cls = GetCachedThemeClass(hTheme);
+    if (FlyoutsPickerListPart(cls, hdc))
+        return false;  // Seamless: Flyouts draws it.
     if (cls.find(L"Edit") != std::wstring::npos &&
         PaintAlignedSpinBuddyBorder(
             hTheme, hdc, iPartId, iStateId, pRect)) {
@@ -36062,7 +36108,7 @@ static void HandlePostDraw(HTHEME hTheme, HDC hdc, INT iPartId, INT iStateId, LP
 
     const std::wstring& cls = GetCachedThemeClass(hTheme);
 
-    if (!g_settings.ExplorerSection) return;
+    if (!g_settings.ExplorerSection || FlyoutsPickerListPart(cls, hdc)) return;
 
     // ReadingPane's background and divider are separate UIFILE elements:
     // ReadingPane owns the surface, while its sibling ReadingPaneSizer draws
@@ -71474,7 +71520,7 @@ static std::vector<SetField> Set_MakeFields() {
     return {
 {K::Check, L"GeneralSection.Enabled", L"Modern controls", L"Redraws buttons, check boxes, tabs, progress bars and lists in classic Windows windows. Off, Windows draws them its own way.", L"1", {}, 0, 100, 0, L"Controls"},
 {K::Check, L"GeneralSection.RoundedButtons", L"Rounded buttons and boxes", L"Buttons, check boxes, radio buttons and drop-down boxes get rounded corners.", L"1", {}, 0, 100, 0, L"Controls"},
-{K::Check, L"GeneralSection.AccentGradients", L"Blue to mauve fills", L"The main button in a window, selected items and progress bars get the blue to mauve gradient.", L"1", {}, 0, 100, 0, L"Controls"},
+{K::Check, L"GeneralSection.AccentGradients", L"Blue to mauve fills", L"The main button in a window, progress bars and the side pane pill get the blue to mauve gradient. Selected rows keep a mauve fill and edge, so long lists stay quick.", L"1", {}, 0, 100, 0, L"Controls"},
 {K::Check, L"GeneralSection.ModernSeparators", L"Clean dividers", L"Thin lines between groups instead of the old sunken ones.", L"1", {}, 0, 100, 0, L"Controls"},
 {K::Check, L"GeneralSection.ProgressBars", L"Modern progress bars", L"Slim rounded bars in the blue to mauve gradient.", L"1", {}, 0, 100, 0, L"Controls"},
 {K::Choice, L"GeneralSection.RoundedTabPane", L"Tabs in Properties windows", L"How the tabs look at the top of a Properties window.", L"winui", {{L"winui", L"Rounded tabs, more than one row"}, {L"winui_single", L"Rounded tabs in one row that scrolls"}, {L"native", L"Windows' own tabs"}}, 0, 100, 0, L"Controls"},
