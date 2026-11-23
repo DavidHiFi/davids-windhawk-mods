@@ -111,9 +111,28 @@ waits until answered (the app stays blocked meanwhile, as with Windows).
   fade level are logged, and analyze.py cuts a second shot of the box from the video. Rerun
   queued (test\capture-1.2.0b.log).
 
+- Correction, third run (10:59 pm, test\capture-1.2.0c.log): the capture fixes worked, and the
+  box really was invisible. It was up after 3 s, centred, keyboard kept, Esc saved Block, but its
+  fade level read 0 of 255 a second later, the glass check saw straight through it and the video
+  shows no box. So the earlier "only the capture" line above was wrong. The panel's open
+  animation stalled in the same run (6 px wide).
+- Cause: every window that opens or closes anywhere on the PC (consoles, tooltips, menus)
+  made the hook post one message to the mod's window thread. On the busy tower that stream
+  never stops, and Windows only hands out timer ticks when the queue is empty, so the box's
+  10 ms fade-in timer and the panel animation never ran. The test PC is quiet, so it passed there.
+- Fix in 1.2.1: the hook only marks "apps changed" and "front window may have changed" and arms
+  one 60 ms timer that handles both once. The 1 s full-screen check also forces the box to full
+  strength if it is still see-through after 300 ms, and a box shown again after a game ends
+  comes back at full strength. Readme "What's new in 1.2.1" added. Backups:
+  src\core.cpp.bak-20261123-pre-121, assemble.py.bak-20261123-pre-121.
+- Test PC kit for 1.2.1: `D:\Agent Work\swf-121\`, with flood.ps1 that opens and closes hidden
+  windows nonstop while the first box comes up, and a new check that the box reads 255.
+- test\pipeline-1.2.1.ps1 runs build (load gate), test PC, install (base = the live 1.2.0
+  source), then the live captures into `media\live\1.2.1\`. Log test\pipeline-1.2.1.log.
+
 ## Open
 
-1. Live captures and the glass check: rerun queued for the screen (see above).
+1. 1.2.1: build, busy-PC test PC run, install and live captures queued (pipeline-1.2.1).
 2. The panel's own glass: the app list fills it, so the box over the panel is the measured
    floating surface. The box is modal, so the unfocused-glass check does not apply to it.
 
