@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.5
+// @version         0.3.6
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -27,11 +27,15 @@ side and a dock on the other, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
 
+## What's new in 0.3.6
+
+- The title pill no longer blinks for a moment when you click or right-click
+  the taskbar. 0.3.5 shortened the blink; this removes it.
+
 ## What's new in 0.3.5
 
 - The title pill on the top bar lights up with the blue to mauve edge when you
   point at it, the same as the other pills on the bar.
-- Right-clicking the taskbar no longer makes the title pill flicker.
 
 ## What's new in 0.3.4
 
@@ -2520,6 +2524,10 @@ void CheckFullscreen() {
 HWND g_title = nullptr, g_titleWin = nullptr;
 ComPtr<ID2D1DCRenderTarget> g_titleRt;
 ComPtr<ID2D1GradientStopCollection> g_titleStops;
+// After a click on the bar, the bar lifts itself a moment after it turns active,
+// so one raise on the event lands too early. Re-check every 2 ms for a short burst.
+HANDLE g_raiseTimer = nullptr;
+ULONGLONG g_raiseUntil = 0;
 std::wstring g_titleKey, g_titleApp, g_titleSrc, g_titleAlt;
 // What the pill shows now, so a hover fade can paint it again, and where it sits.
 std::wstring g_titleShownApp, g_titleShownText;
@@ -2612,6 +2620,27 @@ void RaiseTitle() {
                          SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
             break;
         }
+}
+
+void StopRaiseBurst() {
+    if (g_raiseTimer) CancelWaitableTimer(g_raiseTimer);
+    g_raiseUntil = 0;
+}
+
+void StartRaiseBurst() {
+    if (!g_title || !IsWindowVisible(g_title)) return;
+    if (!g_raiseTimer) {
+        // 0x2 = CREATE_WAITABLE_TIMER_HIGH_RESOLUTION; older systems refuse it.
+        g_raiseTimer = CreateWaitableTimerExW(nullptr, nullptr, 0x2, TIMER_ALL_ACCESS);
+        if (!g_raiseTimer) g_raiseTimer = CreateWaitableTimerExW(nullptr, nullptr, 0, TIMER_ALL_ACCESS);
+        if (!g_raiseTimer) return;
+    }
+    bool running = g_raiseUntil != 0;
+    g_raiseUntil = GetTickCount64() + 500;
+    if (running) return;
+    LARGE_INTEGER due;
+    due.QuadPart = -20000;  // 2 ms, then every 2 ms
+    SetWaitableTimer(g_raiseTimer, &due, 2, nullptr, nullptr, FALSE);
 }
 
 bool PaintTitle(const std::wstring& app, const std::wstring& title, Icon* ic, const RECT& bar) {
@@ -2824,6 +2853,8 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD ev, HWND h, LONG idObj, LONG idC
     // the pill. Climb back at once, not after the rebuild's wait, or the pill
     // blinks under the bar's glass for a moment.
     if (ev == EVENT_SYSTEM_FOREGROUND || ev == EVENT_OBJECT_SHOW) RaiseTitle();
+    if (ev == EVENT_SYSTEM_FOREGROUND || ev == EVENT_SYSTEM_CAPTURESTART) StartRaiseBurst();
+    if (ev == EVENT_SYSTEM_CAPTURESTART || ev == EVENT_SYSTEM_CAPTUREEND) return;
     if (ev == EVENT_SYSTEM_FOREGROUND) {
         ScheduleRebuild(30);
         CheckFullscreen();
@@ -3289,6 +3320,7 @@ DWORD WINAPI DockThread(void*) {
     ChangeWindowMessageFilterEx(g_dock, kAppBarMsg, MSGFLT_ALLOW, nullptr);
     RegisterShellHookWindow(g_dock);
     const DWORD ranges[][2] = {{EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND},
+                               {EVENT_SYSTEM_CAPTURESTART, EVENT_SYSTEM_CAPTUREEND},
                                {EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND},
                                {EVENT_OBJECT_SHOW, EVENT_OBJECT_HIDE},
                                {EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED}};
@@ -3307,9 +3339,30 @@ DWORD WINAPI DockThread(void*) {
     SetEvent(g_ready);
 
     MSG m;
-    while (GetMessageW(&m, nullptr, 0, 0) > 0) {
+    for (bool quit = false; !quit;) {
+        if (g_raiseUntil && g_raiseTimer) {
+            DWORD r = MsgWaitForMultipleObjectsEx(1, &g_raiseTimer, INFINITE, QS_ALLINPUT,
+                                                  MWMO_INPUTAVAILABLE);
+            if (r == WAIT_OBJECT_0) {
+                RaiseTitle();
+                if (GetTickCount64() >= g_raiseUntil) StopRaiseBurst();
+                continue;
+            }
+            while (PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) {
+                if (m.message == WM_QUIT) { quit = true; break; }
+                TranslateMessage(&m);
+                DispatchMessageW(&m);
+            }
+            continue;
+        }
+        if (GetMessageW(&m, nullptr, 0, 0) <= 0) break;
         TranslateMessage(&m);
         DispatchMessageW(&m);
+    }
+    StopRaiseBurst();
+    if (g_raiseTimer) {
+        CloseHandle(g_raiseTimer);
+        g_raiseTimer = nullptr;
     }
 
     // A bin check still running posts to a window that is gone; wait for it briefly.
