@@ -2,7 +2,7 @@
 // @id              seamless-download-manager
 // @name            Seamless Download Manager
 // @description     A fast tray download manager: downloads in parts, resumes where it stopped, takes browser links
-// @version         1.0.3
+// @version         1.0.4
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-download-manager
@@ -5907,7 +5907,7 @@ bool OpenWorkshop();
 
 constexpr WCHAR kMainClass[] = L"SeamlessDownloadManagerWindow";
 constexpr float kSideW = 220, kSideMini = 60, kToolH = 48, kHeadH = 34, kRowH = 44, kStatusH = 30, kGap = 10;
-constexpr float kMainTint = 0x60 / 255.0f;
+constexpr float kMainTint = 0x38 / 255.0f;
 constexpr UINT_PTR kMainTimer = 1, kToastMs = 2600;
 
 enum Ids {
@@ -6341,7 +6341,7 @@ void DrawSidebar(Pt& p, float top, float bottom) {
     bool mini = w < kSideW;
     D2D1_RECT_F dock{kGap, top, kGap + w, bottom};
     float rad = Radius();
-    p.Round(dock, rad, mocha::mantle, 0.35f);
+    p.Round(dock, rad, mocha::mantle, 0.18f);
     p.Edge(dock, rad, mocha::surface2, 1);
     p.rt->PushAxisAlignedClip({dock.left + 2, dock.top + 2, dock.right - 2, dock.bottom - 2}, D2D1_ANTIALIAS_MODE_ALIASED);
     float y = dock.top + 10;
@@ -6542,7 +6542,7 @@ float MaxScroll() {
 void DrawList(Pt& p, const D2D1_RECT_F& dock) {
     MainWin& m = g_main;
     float rad = Radius();
-    p.Round(dock, rad, mocha::mantle, 0.35f);
+    p.Round(dock, rad, mocha::mantle, 0.18f);
     p.Edge(dock, rad, mocha::surface2, 1);
     D2D1_RECT_F inner{dock.left + 2, dock.top + 2, dock.right - 2, dock.bottom - 2};
     if (!Running() || g_fetching.load()) {
