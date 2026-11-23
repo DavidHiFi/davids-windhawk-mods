@@ -133,6 +133,11 @@ a private System32 board unless it first does `Set-Location 'H:\Windhawk Configu
 
 Health after 0.3.2: handles flat 577-584, GDI 43, USER 20-21, about 2.4% of one core idle.
 
+7:36-7:46 pm: another thread's cut-off cdb peek left Explorer suspended, and Seamless Taskbar
+was turned off (0.4.48, disabled). Right after, the work area bottom read 1440 (dock space
+lost); by 7:55 pm the dock's heal had it back at 1366 without help. Ghost readings from that
+window are not a dock fault.
+
 ## 0.3.3: ghost and icon fixes (staged, syntax checked, install held while the owner games)
 
 Found in the 0.3.2 dock capture (`D:\Agent Work\seamless-dock\proof\v032\`): Yapfast twice,
