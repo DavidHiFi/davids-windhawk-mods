@@ -2,7 +2,7 @@
 // @id              seamless-wobbly-windows
 // @name            Seamless Wobbly Windows
 // @description     Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows
-// @version         1.2.9
+// @version         1.2.10
 // @author          DavidHiFi, HeyJeay, HaVeN80, lalimatyus
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -89,8 +89,10 @@ title bar to move a window without the wobble.
 - Turn off the other wobble mods (Wobbly Windows, Window Wobble) before using
   this one.
 
-## What's new in 1.2.9
-- Checks for the frosted glass during a drag (no change in look).
+## What's new in 1.2.10
+- The dragged window's frosted glass no longer turns solid dark during a
+  drag. The mod now reads how see-through the window is once, as the drag
+  starts, instead of again after Windows had stopped reporting it.
 
 ## What's new in 1.2.8
 - The frosted glass under a dragged window no longer turns dark on windows
@@ -4614,16 +4616,12 @@ struct Device {
     bool ok = false;
     bool warmed = false;
     bool glowSet = false;      // cbGlow holds sprites, not a zero count
-    HRESULT glowHr = S_OK;     // DIAG 1.2.9
-    unsigned glowWrites = 0;   // DIAG 1.2.9
 
     // nullptr turns the glow off (a zero count), written once.
     void SetGlow(const GlowCB* g) {
         if (!g && !glowSet) return;
         D3D11_MAPPED_SUBRESOURCE map{};
-        glowHr = ctx->Map(cbGlow, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);    // DIAG 1.2.9
-        if (FAILED(glowHr)) return;
-        ++glowWrites;
+        if (FAILED(ctx->Map(cbGlow, 0, D3D11_MAP_WRITE_DISCARD, 0, &map))) return;
         if (g) memcpy(map.pData, g, sizeof(GlowCB));
         else   memset(map.pData, 0, sizeof(GlowCB));
         ctx->Unmap(cbGlow, 0);
@@ -6224,11 +6222,12 @@ struct DragGlow {
     double   lastDraw = 0.0;
     double   lastPoll = 0.0;
 
-    bool Start(HWND h, const Settings& cfg, const Canvas& c, const GlassShot& shot) {
+    // through: GlowSeeThrough read as the drag began; a fresh read by now can
+    // come back 0, which would paint the tint solid.
+    bool Start(HWND h, const Settings& cfg, const Canvas& c, const GlassShot& shot, float through) {
         on = false;
         const auto& g = cfg.glow;
         if (!g.enabled || !g.inDrag || g.dragStrength <= 0) return false;
-        const float through = GlowSeeThrough(h);
         if (through <= 0.0f || !map.Open()) return false;
         GlowClock clk;
         if (!ReadGlowClock(map.m, h, clk)) { map.Close(); return false; }
@@ -6334,7 +6333,9 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     // press has had a frame or two to show the window active, or as the move
     // begins.
     GlassShot glass;
-    const bool wantGlass = GlowSeeThrough(hwnd) > 0.0f;
+    // Read once, now: by the time the copy is built the same read returns 0.
+    const float seeThrough = GlowSeeThrough(hwnd);
+    const bool wantGlass = seeThrough > 0.0f;
 
     // Wait for the move to begin: a press alone is a click.
     const double waitStart = NowSeconds();
@@ -6393,48 +6394,19 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     DragGlow glow;
     GlowCB glassCb;
     bool liveGlass = false, evenGlass = true;
-    // A note on the window of how its glass went this drag, for checking it
-    // from outside: stage * 100 + setup step, then the last error.
-    auto note = [&](int stage) {
-        const int s = ov.glass ? ov.glass->step : 0;
-        const uint32_t hr = ov.glass ? (uint32_t)ov.glass->lastHr : 0;
-        SetPropW(hwnd, L"SeamlessWobblyGlassNote",
-                 (HANDLE)(((uintptr_t)(stage * 100 + (glass.ok ? 0 : 50) + s) << (sizeof(void*) > 4 ? 32 : 16)) |
-                          (sizeof(void*) > 4 ? hr : (hr & 0xFFFF))));
-    };
-    if (!glow.Start(hwnd, cfg, canvas, glass)) {
+    if (!glow.Start(hwnd, cfg, canvas, glass, seeThrough)) {
         dev.SetGlow(nullptr);
         if (GlassOnly(canvas, glass, glassCb, &evenGlass)) {
             // The real blur under the copy, which then paints only the tint.
             if (ov.glass && ov.glass->Start(canvas, CornerRadius(hwnd, MonitorScale(canvas.vis)),
                                             cfg.mesh, std::max(1, 64 / std::max(1, cfg.mesh)))) {
-                glassCb.fill[3] = 2.0f + (1.0f - GlowSeeThrough(hwnd));
+                glassCb.fill[3] = 2.0f + (1.0f - seeThrough);
                 liveGlass = true;
-                note(4);
-                {   // DIAG 1.2.9: the constants the copy is drawn with.
-                    int bd = -1;
-                    DwmGetWindowAttribute(hwnd, 38, &bd, sizeof(bd));
-                    auto b8 = [](float v) { return (uint64_t)std::clamp((int)(v * 255.0f + 0.5f), 0, 255); };
-                    const uint64_t v =
-                        (uint64_t)std::clamp((int)(glassCb.fill[3] * 1000.0f), 0, 65535) |
-                        (b8(glassCb.key[0]) << 16) | (b8(glassCb.key[1]) << 24) | (b8(glassCb.key[2]) << 32) |
-                        ((uint64_t)(bd & 255) << 40) |
-                        ((uint64_t)std::clamp((int)glassCb.hdr[0], 0, 255) << 48) |
-                        ((uint64_t)std::clamp((int)(glassCb.hdr[2] * 1000.0f), 0, 255) << 56);
-                    SetPropW(hwnd, L"SeamlessWobblyGlassFill", (HANDLE)(uintptr_t)v);
-                }
-                dev.SetGlow(&glassCb);
-                SetPropW(hwnd, L"SeamlessWobblyGlassMap",
-                         (HANDLE)(((uintptr_t)dev.glowWrites << (sizeof(void*) > 4 ? 32 : 16)) | (uint32_t)dev.glowHr));
             } else if (!evenGlass) {
-                note(3);
                 return;     // no live blur and no single colour: keep the native drag
-            } else {
-                note(3);
             }
             dev.SetGlow(&glassCb);
         } else if (wantGlass) {
-            note(2);
             // Keep the native drag when the capture would replace glass with a dark fill.
             return;
         }
