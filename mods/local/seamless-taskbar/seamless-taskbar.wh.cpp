@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.50
+// @version         0.4.51
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -91571,6 +91571,10 @@ HWND g_pickerBackdropWindow = nullptr;
 // Glass mode's edge layer (see PaintPickerRing). Failed = fall back to the in-window edge.
 HWND g_pickerRingWindow = nullptr;
 bool g_pickerRingFailed = false;
+RECT g_pickerRingBounds{};
+// Each tile's edge as the edge layer draws it: 0 none, 1 rest, 2 lit (blue to mauve).
+BYTE g_tileEdgeState[kPageSize] = {};
+void SetTileEdgeState(size_t slot, BYTE state);
 
 HWND g_hostWindow;
 HWND g_pickerWindow;
@@ -93359,6 +93363,9 @@ void RefreshList() {
             const bool slotHasImage =
                 g_page * kPageSize + slot < DisplayImageCount();
             ShowWindow(g_tiles[slot], slotHasImage ? SW_SHOW : SW_HIDE);
+            if (!slotHasImage) {
+                SetTileEdgeState(slot, 0);
+            }
             InvalidateRect(g_tiles[slot], nullptr, TRUE);
             if (slotHasImage) {
                 UpdateWindow(g_tiles[slot]);
@@ -95683,7 +95690,7 @@ bool DrawAntialiasedTileBorder(HDC dc, const RECT& rect, COLORREF color,
 }
 
 bool DrawBlurClippedThumbnail(HDC targetDc, const RECT& rect,
-                              HBITMAP thumbnail) {
+                              HBITMAP thumbnail, int inset = 0) {
     if (!targetDc || !thumbnail) {
         return false;
     }
@@ -95701,8 +95708,10 @@ bool DrawBlurClippedThumbnail(HDC targetDc, const RECT& rect,
     bool drawn = false;
     if (savedDc) {
         HRGN rounded = CreateRoundRectRgn(
-            rect.left, rect.top, rect.right, rect.bottom,
-            kThumbnailCornerDiameter, kThumbnailCornerDiameter);
+            rect.left + inset, rect.top + inset,
+            rect.right - inset, rect.bottom - inset,
+            kThumbnailCornerDiameter - 2 * inset,
+            kThumbnailCornerDiameter - 2 * inset);
         if (rounded) {
             SelectClipRgn(targetDc, rounded);
             SetStretchBltMode(targetDc, HALFTONE);
@@ -95730,7 +95739,16 @@ bool DrawTileButton(const DRAWITEMSTRUCT* item) {
     const size_t slot = item->CtlID - kFirstTileId;
     const size_t index = ImageIndexForPageSlot(g_page, slot);
     FillRect(item->hDC, &item->rcItem, g_backgroundBrush);
+    // Glass mode is colour-keyed: a smoothed pixel blended with the key colour is not
+    // see-through, it shows as a dark speck outside the curve. So nothing smoothed is
+    // drawn here in glass mode; the tile edge goes on the edge layer above.
+    const bool keyed =
+        g_pickerWindow &&
+        (GetWindowLongPtrW(g_pickerWindow, GWL_EXSTYLE) & WS_EX_LAYERED);
+    const bool layerEdge = keyed && g_gdiplusToken && g_pickerRingWindow &&
+                           !g_pickerRingFailed;
     if (index >= g_images.size()) {
+        SetTileEdgeState(slot, 0);
         return true;
     }
     HBITMAP thumbnail = CachedThumbnail(g_page, slot);
@@ -95753,11 +95771,11 @@ bool DrawTileButton(const DRAWITEMSTRUCT* item) {
     bool antialiasedImageDrawn = false;
     const bool blurMaterial =
         _wcsicmp(g_configuredMaterial.c_str(), L"blur") == 0;
-    if (thumbnail && blurMaterial) {
-        // Avoid antialiased pixels matted against the color-key background.
-        // The rounded clip keeps these thumbnail corners clean over Blur.
+    if (thumbnail && (blurMaterial || keyed)) {
+        // Hard clip, never smoothed against the colour key. With the edge layer the
+        // clip sits one pixel in, so its stepped cut is under the 2px edge.
         antialiasedImageDrawn = DrawBlurClippedThumbnail(
-            item->hDC, item->rcItem, thumbnail);
+            item->hDC, item->rcItem, thumbnail, layerEdge ? 1 : 0);
     } else if (thumbnail && g_gdiplusToken) {
         antialiasedImageDrawn = DrawAntialiasedThumbnail(
             item->hDC, item->rcItem, thumbnail);
@@ -95817,12 +95835,15 @@ bool DrawTileButton(const DRAWITEMSTRUCT* item) {
     const bool lit = selected || item->hwndItem == g_hoverTile ||
                      (item->itemState & (ODS_HOTLIGHT | ODS_SELECTED)) != 0 ||
                      ((item->itemState & ODS_FOCUS) && !(item->itemState & ODS_NOFOCUSRECT));
-    {
+    if (layerEdge) {
+        SetTileEdgeState(slot, lit ? 2 : 1);
+    } else {
         const COLORREF color = lit ? g_accent : g_edge;
         const int borderWidth = kSelectedBorderWidth;
         const bool antialiasedBorderDrawn =
-            g_gdiplusToken && DrawAntialiasedTileBorder(
-                                  item->hDC, item->rcItem, color, borderWidth, lit);
+            !keyed && g_gdiplusToken &&
+            DrawAntialiasedTileBorder(item->hDC, item->rcItem, color,
+                                      borderWidth, lit);
         if (!antialiasedBorderDrawn) {
             HPEN pen = CreatePen(PS_SOLID, borderWidth, color);
             HGDIOBJ oldPen = SelectObject(item->hDC, pen);
@@ -95975,6 +95996,40 @@ bool PaintPickerRing(const RECT& bounds) {
                                  2.0f);
                 ok = graphics.DrawPath(&pen, &path) == Gdiplus::Ok;
             }
+            // Tile edges: 2px at inset 1 on radius r - 1, rest grey or lit blue to mauve.
+            for (size_t slot = 0; ok && slot < kPageSize; ++slot) {
+                const BYTE state = g_tileEdgeState[slot];
+                RECT tile{};
+                if (!state || !g_tiles[slot] || !IsWindowVisible(g_tiles[slot]) ||
+                    !GetWindowRect(g_tiles[slot], &tile)) {
+                    continue;
+                }
+                const Gdiplus::RectF edge(
+                    (Gdiplus::REAL)(tile.left - bounds.left) + 1.0f,
+                    (Gdiplus::REAL)(tile.top - bounds.top) + 1.0f,
+                    (Gdiplus::REAL)(tile.right - tile.left) - 2.0f,
+                    (Gdiplus::REAL)(tile.bottom - tile.top) - 2.0f);
+                Gdiplus::GraphicsPath tilePath;
+                if (!AddRoundedRectanglePath(
+                        &tilePath, edge,
+                        kThumbnailCornerDiameter / 2.0f - 1.0f)) {
+                    continue;
+                }
+                if (state == 2) {
+                    Gdiplus::LinearGradientBrush brush(
+                        edge, Gdiplus::Color(255, 0x89, 0xB4, 0xFA),
+                        Gdiplus::Color(255, 0xCB, 0xA6, 0xF7),
+                        Gdiplus::LinearGradientModeHorizontal);
+                    Gdiplus::Pen tilePen(&brush, 2.0f);
+                    ok = graphics.DrawPath(&tilePen, &tilePath) == Gdiplus::Ok;
+                } else {
+                    Gdiplus::Pen tilePen(
+                        Gdiplus::Color(255, GetRValue(g_edge), GetGValue(g_edge),
+                                       GetBValue(g_edge)),
+                        2.0f);
+                    ok = graphics.DrawPath(&tilePen, &tilePath) == Gdiplus::Ok;
+                }
+            }
         }
         if (ok) {
             POINT position{bounds.left, bounds.top};
@@ -96003,17 +96058,41 @@ void ShowPickerRing(const RECT& bounds) {
     if (!g_pickerRingWindow || g_pickerRingFailed) {
         return;
     }
+    g_pickerRingBounds = bounds;
     if (!PaintPickerRing(bounds)) {
         Wh_Log(L"[Wallpaper] edge layer failed (%lu); drawing the edge in the picker",
                GetLastError());
         g_pickerRingFailed = true;
         HidePickerRing();
         if (g_pickerWindow) {
-            InvalidateRect(g_pickerWindow, nullptr, TRUE);
+            RedrawWindow(g_pickerWindow, nullptr, nullptr,
+                         RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
         }
         return;
     }
     ShowWindow(g_pickerRingWindow, SW_SHOWNOACTIVATE);
+}
+
+// A tile's edge changed (hover, select, page): redraw the edge layer if it is up.
+void SetTileEdgeState(size_t slot, BYTE state) {
+    if (slot >= kPageSize || g_tileEdgeState[slot] == state) {
+        return;
+    }
+    g_tileEdgeState[slot] = state;
+    if (!g_pickerRingWindow || g_pickerRingFailed ||
+        !IsWindowVisible(g_pickerRingWindow)) {
+        return;  // ShowPickerRing paints the current states
+    }
+    if (!PaintPickerRing(g_pickerRingBounds)) {
+        Wh_Log(L"[Wallpaper] edge layer failed (%lu); drawing the edges in the picker",
+               GetLastError());
+        g_pickerRingFailed = true;
+        HidePickerRing();
+        if (g_pickerWindow) {
+            RedrawWindow(g_pickerWindow, nullptr, nullptr,
+                         RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+        }
+    }
 }
 
 void HidePickerBackdrop() {
