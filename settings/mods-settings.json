@@ -4327,10 +4327,12 @@
     "useFlowKeys": 1
   },
   "local@network-speedtest-plus": {
+    "animationSpeed": "global",
     "autoStart": "auto",
     "countryDisplay": "hidden",
     "extraPatterns": "",
     "fallbackToOriginal": 1,
+    "flyoutAnimation": 1,
     "flyoutBorderHoverEnd": "#CBA6F7",
     "flyoutBorderHoverStart": "#89B4FA",
     "flyoutBorderRest": "#585B70",

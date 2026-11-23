@@ -2,7 +2,7 @@
 // @id              network-speedtest-plus
 // @name            Network Speed Test Plus
 // @description     Tray speed test button next to the network icon, plus the Windows 11 network menu speed test as a native flyout: ping, jitter, download and upload measured against Cloudflare, live gauge, results chart with copy. Mocha glass, FiraCode, gradient hover. No browser, no separate app.
-// @version         2.3.3
+// @version         2.4.0
 // @author          DavidHiFi, Alessandro-Vecchio
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -19,6 +19,15 @@
 // ==WindhawkModReadme==
 /*
 # Network Menu Speed Test Plus
+
+## What's new in 2.4.0
+
+- The speed test window now fades and slides in when it opens, and back out
+  when it closes. It slides down from a top taskbar and up from a bottom one.
+- Two new settings under Appearance: **Open and close animation** turns it on
+  or off, and **Animation speed** picks how quick it plays. The default follows
+  the global speed shared by all DavidHiFi mods.
+- The animation also stays off when Windows "Animation effects" is off.
 
 Based on Network Menu Speed Test by Alessandro-Vecchio.
 
@@ -69,7 +78,8 @@ when you click outside, but never while a measurement is running.
 It is keyboard accessible (Tab / Enter / Esc with a WinUI-style focus ring),
 exposed to screen readers through MSAA (`WM_GETOBJECT`), and honours the
 "Animation effects" system setting: with animations off every transition is
-instant. The error view shrinks the window to fit its content.
+instant, the open and close animation included. The error view shrinks the
+window to fit its content.
 
 ## Settings
 
@@ -89,6 +99,11 @@ instant. The error view shrinks the window to fit its content.
   icon. A left click opens the flyout and starts the test right away, even on
   a metered connection. Right-click does nothing; the icon can be hidden into
   the overflow like any other tray icon.
+- **Open and close animation**: the window fades and slides in and out. On by
+  default.
+- **Animation speed**: how quick the window's animations play. Follow the
+  global speed (the default) uses the speed shared by all DavidHiFi mods,
+  stored in `HKCU\Software\DavidHiFi\Motion`.
 
 Diagnostics go to the Windhawk mod log: enable logging for this mod from its
 Details page in Windhawk when you need them.
@@ -176,6 +191,19 @@ requested browser process.
   - hover: Blurred until hover
   - click: Blurred until click
   - hidden: Hidden
+- flyoutAnimation: true
+  $name: Open and close animation
+  $description: The window fades and slides in when it opens and out when it closes. It also stays still when Windows animation effects are off.
+- animationSpeed: global
+  $name: Animation speed
+  $description: How quick the window's animations play. Follow the global speed uses the speed shared by all DavidHiFi mods.
+  $options:
+  - global: Follow the global speed
+  - veryQuick: Very quick
+  - quick: Quick
+  - normal: Normal
+  - relaxed: Relaxed
+  - slow: Slow
 - flyoutBorderWidth: 3
   $name: Border width
   $description: Thickness of the speed test window border at 100% scaling.
@@ -267,6 +295,10 @@ static std::atomic<bool> g_startFromTray{false};
 // Where the flyout opens: 0 auto (tray edge), 1 top right, 2 top left,
 // 3 bottom right, 4 bottom left, 5 centre.
 static std::atomic<int> g_flyoutPosition{0};
+// Open and close animation switch, and the speed: 0 follows the global speed
+// in HKCU\Software\DavidHiFi\Motion, 1..5 = very quick .. slow.
+static std::atomic<bool> g_flyoutAnimation{true};
+static std::atomic<int> g_animationSpeed{0};
 
 // The flyout window handle and the mod's own image base. Declared here
 // because the tray button, which lives before the flyout section, uses both.
@@ -467,6 +499,19 @@ static void LoadSettings() {
         }
     }
     g_flyoutPosition.store(positionIndex, std::memory_order_relaxed);
+    g_flyoutAnimation.store(Wh_GetIntSetting(L"flyoutAnimation") != 0,
+                            std::memory_order_relaxed);
+    auto speed = WindhawkUtils::StringSetting::make(L"animationSpeed");
+    static const PCWSTR kSpeeds[] = {L"global", L"veryQuick", L"quick",
+                                     L"normal", L"relaxed",   L"slow"};
+    int speedIndex = 0;
+    for (int i = 0; i < (int)ARRAYSIZE(kSpeeds); i++) {
+        if (_wcsicmp(speed.get(), kSpeeds[i]) == 0) {
+            speedIndex = i;
+            break;
+        }
+    }
+    g_animationSpeed.store(speedIndex, std::memory_order_relaxed);
 }
 
 // ---------------------------------------------------------------------------
@@ -2417,6 +2462,11 @@ static IDXGISwapChain1* g_swapChain = nullptr;
 static IDCompositionDevice* g_dcompDevice = nullptr;
 static IDCompositionTarget* g_dcompTarget = nullptr;
 static IDCompositionVisual* g_dcompVisual = nullptr;
+// Open and close animation: the root visual's opacity and vertical offset,
+// played by the compositor so it never waits on the UI thread.
+static IDCompositionEffectGroup* g_dcompEffect = nullptr;
+static IDCompositionAnimation* g_motionOpacity = nullptr;
+static IDCompositionAnimation* g_motionOffset = nullptr;
 static ID2D1DeviceContext* g_context = nullptr;
 static ID2D1Bitmap1* g_contextBitmap = nullptr;
 static UINT g_targetWidth = 0;
@@ -3247,6 +3297,67 @@ static bool AnimationsEnabled() {
     return enabled != FALSE;
 }
 
+// Shared motion settings for every DavidHiFi mod, written by Seamless
+// Workshop: HKCU\Software\DavidHiFi\Motion, Enabled (DWORD, 0 = all window
+// animations off) and Speed (a level name, or a DWORD percent of normal).
+// A missing key means on at normal speed.
+static float SpeedLevelScale(int level) {
+    static constexpr float kScales[] = {1.0f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f};
+    return level > 0 && level < (int)ARRAYSIZE(kScales) ? kScales[level] : 1.0f;
+}
+
+static void ReadGlobalMotion(bool* enabled, float* scale) {
+    *enabled = true;
+    *scale = 1.0f;
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\DavidHiFi\\Motion", 0,
+                      KEY_QUERY_VALUE, &key) != ERROR_SUCCESS) {
+        return;
+    }
+    DWORD value = 0, type = 0, size = sizeof(value);
+    if (RegQueryValueExW(key, L"Enabled", nullptr, &type, (BYTE*)&value,
+                         &size) == ERROR_SUCCESS &&
+        type == REG_DWORD) {
+        *enabled = value != 0;
+    }
+    WCHAR text[32] = {};
+    size = sizeof(text) - sizeof(WCHAR);
+    if (RegQueryValueExW(key, L"Speed", nullptr, &type, (BYTE*)text, &size) ==
+        ERROR_SUCCESS) {
+        if (type == REG_DWORD) {
+            DWORD percent = *(DWORD*)text;
+            *scale = std::clamp((float)percent, 25.0f, 400.0f) / 100.0f;
+        } else if (type == REG_SZ) {
+            static const PCWSTR kNames[] = {L"", L"veryQuick", L"quick",
+                                            L"normal", L"relaxed", L"slow"};
+            for (int i = 1; i < (int)ARRAYSIZE(kNames); i++) {
+                if (_wcsicmp(text, kNames[i]) == 0) {
+                    *scale = SpeedLevelScale(i);
+                }
+            }
+        }
+    }
+    RegCloseKey(key);
+}
+
+// Duration multiplier for every animation in the flyout, refreshed each time
+// it opens. 1 = normal; 2 = twice as long.
+static float g_motionScale = 1.0f;
+// The open and close animation may play: the mod's own switch, the global
+// switch and Windows "Animation effects" all have to allow it.
+static bool g_motionAllowed = true;
+
+static void RefreshMotion() {
+    bool globalEnabled = true;
+    float globalScale = 1.0f;
+    ReadGlobalMotion(&globalEnabled, &globalScale);
+    int level = g_animationSpeed.load(std::memory_order_relaxed);
+    g_motionScale = level == 0 ? globalScale : SpeedLevelScale(level);
+    g_motionAllowed = globalEnabled &&
+                      g_flyoutAnimation.load(std::memory_order_relaxed) &&
+                      AnimationsEnabled();
+}
+
 // Keyboard focus is only drawn while the window really has it, so the ring
 // does not linger after the flyout loses activation.
 static bool FocusVisible() {
@@ -3254,7 +3365,7 @@ static bool FocusVisible() {
 }
 
 static float AnimT() {
-    return Clamp01((float)(Now() - g_animStart) / kAnimMs);
+    return Clamp01((float)(Now() - g_animStart) / (kAnimMs * g_motionScale));
 }
 
 static float AnimOut() {
@@ -3880,6 +3991,18 @@ static void ReleaseTargets() {
         g_hwndTarget->Release();
         g_hwndTarget = nullptr;
     }
+    if (g_motionOpacity) {
+        g_motionOpacity->Release();
+        g_motionOpacity = nullptr;
+    }
+    if (g_motionOffset) {
+        g_motionOffset->Release();
+        g_motionOffset = nullptr;
+    }
+    if (g_dcompEffect) {
+        g_dcompEffect->Release();
+        g_dcompEffect = nullptr;
+    }
     if (g_dcompVisual) {
         g_dcompVisual->Release();
         g_dcompVisual = nullptr;
@@ -4384,6 +4507,8 @@ static HWND FindTaskbarForMonitor(HMONITOR monitor) {
     return ctx.found;
 }
 
+static bool g_anchorTop = false;
+
 static void PositionFlyout(HWND hwnd, HMONITOR monitor) {
     MONITORINFO info = {sizeof(info)};
     if (!monitor || !GetMonitorInfoW(monitor, &info)) {
@@ -4436,6 +4561,10 @@ static void PositionFlyout(HWND hwnd, HMONITOR monitor) {
         }
     }
 
+    // The open animation slides away from the edge the window sits against:
+    // down from a top bar, up from a bottom one (and up for the centre).
+    g_anchorTop = y < (work.top + work.bottom - height) / 2;
+
     // Position and size only: visibility is controlled by ShowFlyoutWindow so
     // the first frame can be presented before the window becomes visible.
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, width, height, SWP_NOACTIVATE);
@@ -4468,10 +4597,146 @@ static bool IsConnectionMetered() {
     return metered;
 }
 
+// ---------------------------------------------------------------------------
+// Open and close animation
+// ---------------------------------------------------------------------------
+// The root visual fades and slides 8 px from its anchor edge. The DWM glass
+// cannot fade, so it stays off while the window moves: the open plays over
+// the solid frame and the glass comes on (with the usual scrim fade) once it
+// settles; the close turns the glass off first and fades the solid frame.
+
+static constexpr UINT_PTR kOpenDoneTimer = 8;
+static constexpr UINT_PTR kCloseDoneTimer = 9;
+static constexpr float kOpenMs = 160.0f;
+static constexpr float kCloseMs = 120.0f;
+static constexpr float kSlideDip = 8.0f;
+
+static bool g_closing = false;
+static ULONGLONG g_motionAt = 0;
+static bool g_motionOpening = false;
+static float g_motionFrom = 1.0f;
+static float g_motionTo = 1.0f;
+static float g_motionMs = 1.0f;
+
+static bool EnsureMotion() {
+    if (!g_composition || !g_dcompDevice || !g_dcompVisual) {
+        return false;
+    }
+    if (!g_dcompEffect) {
+        if (FAILED(g_dcompDevice->CreateEffectGroup(&g_dcompEffect))) {
+            g_dcompEffect = nullptr;
+            return false;
+        }
+        g_dcompVisual->SetEffect(g_dcompEffect);
+    }
+    if (!g_motionOpacity &&
+        FAILED(g_dcompDevice->CreateAnimation(&g_motionOpacity))) {
+        g_motionOpacity = nullptr;
+        return false;
+    }
+    if (!g_motionOffset &&
+        FAILED(g_dcompDevice->CreateAnimation(&g_motionOffset))) {
+        g_motionOffset = nullptr;
+        return false;
+    }
+    return true;
+}
+
+// Opening eases out (fast start, soft landing); closing eases in.
+static float MotionCurve(float u, bool opening) {
+    return opening ? 1.0f - (1.0f - u) * (1.0f - u) * (1.0f - u) : u * u;
+}
+
+static void SetMotionCurve(IDCompositionAnimation* animation, float from,
+                           float to, float seconds, bool opening) {
+    float d = to - from;
+    float s = seconds;
+    animation->Reset();
+    if (opening) {
+        animation->AddCubic(0.0, from, 3.0f * d / s, -3.0f * d / (s * s),
+                            d / (s * s * s));
+    } else {
+        animation->AddCubic(0.0, from, 0.0f, d / (s * s), 0.0f);
+    }
+    animation->End(seconds, to);
+}
+
+// Opacity the window shows right now, so an interrupted open or close
+// carries on from where it is instead of jumping.
+static float MotionOpacityNow(bool visible) {
+    if (!visible) {
+        return 0.0f;
+    }
+    if (!g_motionAt) {
+        return 1.0f;
+    }
+    float u = Clamp01((float)(Now() - g_motionAt) / g_motionMs);
+    return g_motionFrom + (g_motionTo - g_motionFrom) * MotionCurve(u, g_motionOpening);
+}
+
+static bool PlayMotion(bool opening, float from) {
+    if (!EnsureMotion()) {
+        return false;
+    }
+    float to = opening ? 1.0f : 0.0f;
+    float full = (opening ? kOpenMs : kCloseMs) * g_motionScale;
+    float ms = std::max(1.0f, full * std::fabs(to - from));
+    float slide = kSlideDip * g_scale * (g_anchorTop ? -1.0f : 1.0f);
+    SetMotionCurve(g_motionOpacity, from, to, ms / 1000.0f, opening);
+    SetMotionCurve(g_motionOffset, slide * (1.0f - from), slide * (1.0f - to),
+                   ms / 1000.0f, opening);
+    g_dcompEffect->SetOpacity(g_motionOpacity);
+    g_dcompVisual->SetOffsetY(g_motionOffset);
+    if (FAILED(g_dcompDevice->Commit())) {
+        return false;
+    }
+    g_motionAt = Now();
+    g_motionOpening = opening;
+    g_motionFrom = from;
+    g_motionTo = to;
+    g_motionMs = ms;
+    return true;
+}
+
+static void ResetMotion() {
+    g_motionAt = 0;
+    if (!g_dcompEffect || !g_dcompVisual || !g_dcompDevice) {
+        return;
+    }
+    g_dcompEffect->SetOpacity(1.0f);
+    g_dcompVisual->SetOffsetY(0.0f);
+    g_dcompDevice->Commit();
+}
+
+// The glass comes on once the open animation has settled.
+static void FinishOpen(HWND hwnd) {
+    KillTimer(hwnd, kOpenDoneTimer);
+    if (g_uiVisible && !g_closing && g_translucent) {
+        ApplyBackdrop(hwnd, true);
+        g_scrimFadeAt = Now();
+        InvalidateRect(hwnd, nullptr, FALSE);
+    }
+}
+
+static void FinishHide(HWND hwnd) {
+    KillTimer(hwnd, kCloseDoneTimer);
+    g_closing = false;
+    ShowWindow(hwnd, SW_HIDE);
+    ResetMotion();
+}
+
 static void ShowFlyoutWindow(HWND hwnd) {
     if (!hwnd) {
         return;
     }
+
+    // A show during the close animation turns it round from where it is.
+    float fromOpacity = g_closing || g_uiVisible ? MotionOpacityNow(true) : 0.0f;
+    if (g_closing) {
+        KillTimer(hwnd, kCloseDoneTimer);
+        g_closing = false;
+    }
+    KillTimer(hwnd, kOpenDoneTimer);
 
     bool startTest = !TestRunning();
     if (startTest) {
@@ -4512,6 +4777,7 @@ static void ShowFlyoutWindow(HWND hwnd) {
     g_heightFrom = g_layoutHeight;
 
     RefreshAppearance();
+    RefreshMotion();
 
     // Start from the solid surface and present one fully opaque frame before
     // the window becomes visible. The material is turned on only afterwards:
@@ -4522,6 +4788,14 @@ static void ShowFlyoutWindow(HWND hwnd) {
     PositionFlyout(hwnd, MonitorUnderCursor());
     InvalidateRect(hwnd, nullptr, FALSE);
     UpdateWindow(hwnd);
+
+    // The first composed frame is already the start of the fade, so the
+    // window never flashes in at full strength.
+    bool animated = g_motionAllowed && fromOpacity < 0.99f &&
+                    PlayMotion(true, fromOpacity);
+    if (!animated) {
+        ResetMotion();
+    }
 
     SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
@@ -4538,10 +4812,11 @@ static void ShowFlyoutWindow(HWND hwnd) {
 
     // Now that the window is visible, setting the attribute is a real change.
     // The scrim stays up for the first frames and then fades to transparent.
-    if (g_translucent) {
-        ApplyBackdrop(hwnd, true);
-        g_scrimFadeAt = Now();
-        InvalidateRect(hwnd, nullptr, FALSE);
+    // With the open animation the glass waits until the window has settled.
+    if (animated) {
+        SetTimer(hwnd, kOpenDoneTimer, (UINT)std::ceil(g_motionMs), nullptr);
+    } else {
+        FinishOpen(hwnd);
     }
 
     if (startTest) {
@@ -4550,13 +4825,16 @@ static void ShowFlyoutWindow(HWND hwnd) {
 }
 
 static void HideFlyoutWindow(HWND hwnd, bool restoreForeground = true) {
-    if (!hwnd) {
+    if (!hwnd || g_closing) {
         return;
     }
-    ShowWindow(hwnd, SW_HIDE);
+    bool visible = IsWindowVisible(hwnd) != FALSE;
+    float fromOpacity = MotionOpacityNow(visible);
     KillTimer(hwnd, 1);
     KillTimer(hwnd, kRetryStartTimer);
+    KillTimer(hwnd, kOpenDoneTimer);
     // Leave the material off so the next show is a state change DWM honours.
+    // It goes off before the close animation too: the glass cannot fade.
     ApplyBackdrop(hwnd, false);
     g_scrimFadeAt = 0;
     g_uiVisible = false;
@@ -4569,6 +4847,20 @@ static void HideFlyoutWindow(HWND hwnd, bool restoreForeground = true) {
         SetForegroundWindow(g_previousForeground);
     }
     g_previousForeground = nullptr;
+
+    if (visible && g_motionAllowed && fromOpacity > 0.01f) {
+        // Repaint with the solid scrim the fade starts from.
+        InvalidateRect(hwnd, nullptr, FALSE);
+        UpdateWindow(hwnd);
+        if (PlayMotion(false, fromOpacity)) {
+            g_closing = true;
+            // One extra frame so the last, fully clear one is composed.
+            SetTimer(hwnd, kCloseDoneTimer, (UINT)std::ceil(g_motionMs) + 16,
+                     nullptr);
+            return;
+        }
+    }
+    FinishHide(hwnd);
 }
 
 // ---------------------------------------------------------------------------
@@ -4578,6 +4870,9 @@ static void HideFlyoutWindow(HWND hwnd, bool restoreForeground = true) {
 // One entry point for mouse clicks, keyboard activation and MSAA, so all three
 // paths behave identically.
 static void ActivateHot(HWND hwnd, Hot hot) {
+    if (g_closing) {
+        return;  // A click on the window while it fades out does nothing.
+    }
     switch (hot) {
         case Hot::Settings:
             speedset::OpenSettingsWindow();
@@ -5267,6 +5562,10 @@ static LRESULT CALLBACK FlyoutWndProc(HWND hwnd, UINT message, WPARAM wParam,
                 if (!StateRunning(CopyState())) {
                     StartOrCancelTest(hwnd);
                 }
+            } else if (wParam == kOpenDoneTimer) {
+                FinishOpen(hwnd);
+            } else if (wParam == kCloseDoneTimer) {
+                FinishHide(hwnd);
             }
             return 0;
 
@@ -5909,6 +6208,8 @@ static std::vector<SetField> Set_MakeFields() {
         {K::Color, L"flyoutBorderRest", L"Resting color", L"Hex color for the resting color of the speed test window border.", L"#585B70", {}, 0, 100, 2, L"Flyout border"},
         {K::Color, L"flyoutBorderHoverStart", L"Hover start color", L"Hex color for the hover start color of the speed test window border.", L"#89B4FA", {}, 0, 100, 2, L"Flyout border"},
         {K::Color, L"flyoutBorderHoverEnd", L"Hover end color", L"Hex color for the hover end color of the speed test window border.", L"#CBA6F7", {}, 0, 100, 2, L"Flyout border"},
+        {K::Check, L"flyoutAnimation", L"Open and close animation", L"The window fades and slides in when it opens and out when it closes. It also stays still when Windows animation effects are off.", L"1", {}, 0, 100, 2, L"Motion"},
+        {K::Choice, L"animationSpeed", L"Animation speed", L"How quick the window's animations play. Follow the global speed uses the speed shared by all DavidHiFi mods.", L"global", {{L"global", L"Follow the global speed"}, {L"veryQuick", L"Very quick"}, {L"quick", L"Quick"}, {L"normal", L"Normal"}, {L"relaxed", L"Relaxed"}, {L"slow", L"Slow"}}, 0, 100, 2, L"Motion"},
         {K::Choice, L"networkDisplay", L"Network name", L"Choose how the flyout shows the network name.", L"always", {{L"always", L"Always show"}, {L"hover", L"Blurred until hover"}, {L"click", L"Blurred until click"}, {L"hidden", L"Hidden"}}, 0, 100, 1, L"Network details"},
         {K::Choice, L"serverDisplay", L"Test server", L"Choose how the flyout shows the test server.", L"always", {{L"always", L"Always show"}, {L"hover", L"Blurred until hover"}, {L"click", L"Blurred until click"}, {L"hidden", L"Hidden"}}, 0, 100, 1, L"Network details"},
         {K::Choice, L"ipDisplay", L"Public IP address", L"Choose how the flyout shows the public ip address.", L"hidden", {{L"always", L"Always show"}, {L"hover", L"Blurred until hover"}, {L"click", L"Blurred until click"}, {L"hidden", L"Hidden"}}, 0, 100, 1, L"Network details"},
@@ -5932,7 +6233,7 @@ struct SetPageInfo {
 static const SetPageInfo kSetPages[] = {
     {L"Speed test", L"Choose when and where the speed test opens.", 0xE9D9},
     {L"Network details", L"Choose which details appear and when they are readable.", 0xE968},
-    {L"Appearance", L"Set the border thickness and colors.", 0xE790},
+    {L"Appearance", L"Set the border and how the window opens and closes.", 0xE790},
     {L"Look", L"Choose how this settings window looks and whether its tray icon is shown.", 0xE790},
     {L"About", L"Version, credits and support.", 0xE946},
 };
