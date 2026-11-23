@@ -2245,7 +2245,6 @@
         "soundFile": "",
         "spotlightDim": 60,
         "spotlightShape": "box",
-        "stepAside": 0,
         "stepColor": "#F38BA8",
         "stepSize": 100,
         "stepStart": 1,

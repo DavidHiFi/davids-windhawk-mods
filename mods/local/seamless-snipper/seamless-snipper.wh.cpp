@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.7.2
+// @version         0.7.3
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -24,7 +24,13 @@ read later, like "Discord 4.05 pm.png".
 
 ![Seamless Snipper preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-snipper.png)
 
-## What's new in 0.7.2
+## What's new in 0.7.3
+
+- The drawing bar's setting no longer says the bar sits at the top, since it
+  can sit anywhere now.
+- The settings window's icon is the clean glyph now, with no plate behind it.
+
+## New in 0.7.2
 
 - The drawing bar can sit in eight places: top left, top middle or top right,
   either side of the screen (it stands up), or bottom left, middle or right.
@@ -357,7 +363,7 @@ restyled to match the rest of Snipper.
   $description: "Lines between the zoomed pixels."
 - drawBar: true
   $name: "Drawing bar"
-  $description: "A bar at the top of the region screen with arrows, boxes, text, numbers, blur and more. Draw first, then pick the region; the drawings go into the snip."
+  $description: "A bar on the region screen with arrows, boxes, text, numbers, blur and more. Draw first, then pick the region; the drawings go into the snip."
 - keepRegionOpen: false
   $name: "Draw after picking"
   $description: "Picking a region keeps the screen up so you can draw on it. Press Enter, double-click it or use the bar to snip. Off, picking a region snips it straight away."
@@ -26135,7 +26141,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Number, L"magnifierPixels", L"Pixels across", L"7 to 31 (Suggested: 15). How many screen pixels the magnifier shows.", L"15", {}, 7, 31, 3, L"Magnifier"},
 {K::Number, L"magnifierZoom", L"Zoom", L"4 to 24 (Suggested: 10). The mouse wheel changes it too.", L"10", {}, 4, 24, 3, L"Magnifier"},
 {K::Check, L"magnifierGrid", L"Pixel grid", L"Lines between the zoomed pixels.", L"1", {}, 0, 100, 3, L"Magnifier"},
-{K::Check, L"drawBar", L"Drawing bar", L"A bar at the top of the region screen with arrows, boxes, text, numbers, blur and more. Draw first, then pick the region; the drawings go into the snip.", L"1", {}, 0, 100, 4, L"Bar"},
+{K::Check, L"drawBar", L"Drawing bar", L"A bar on the region screen with arrows, boxes, text, numbers, blur and more. Draw first, then pick the region; the drawings go into the snip.", L"1", {}, 0, 100, 4, L"Bar"},
 {K::Check, L"keepRegionOpen", L"Draw after picking", L"Picking a region keeps the screen up so you can draw on it. Press Enter, double-click it or use the bar to snip. Off, picking a region snips it straight away.", L"0", {}, 0, 100, 4, L"Bar"},
 {K::Choice, L"barPosition", L"Bar position", L"Where the drawing bar sits on the screen.", L"top", {{L"top", L"Top middle"}, {L"topLeft", L"Top left"}, {L"topRight", L"Top right"}, {L"bottom", L"Bottom middle"}, {L"bottomLeft", L"Bottom left"}, {L"bottomRight", L"Bottom right"}, {L"left", L"Left side, standing up"}, {L"right", L"Right side, standing up"}}, 0, 100, 4, L"Bar"},
 {K::Number, L"barSize", L"Bar size (%)", L"75 to 150 (Suggested: 100). A bar too big for the screen shrinks to fit.", L"100", {}, 75, 150, 4, L"Bar"},
@@ -27888,16 +27894,24 @@ static D2D1_RECT_F Set_CapTitleRect(const SetWindow& w) {
 }
 
 static void Set_DrawMark(SetPaint& p, IDWriteTextFormat* glyph, const D2D1_RECT_F& r, float a) {
-    float s = r.right - r.left;
+    // The mod's glyph alone in the blue to mauve gradient on a clear background, no plate
+    // (owner, 2026-11-24), scaled up about its centre to fill the room the plate had.
+    const float cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    const float ix = (r.right - r.left) * 0.31f, iy = (r.bottom - r.top) * 0.31f;
     SetCom<ID2D1LinearGradientBrush> g;
     D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::blue, a * p.fade)}, {1, D2DColor(mocha::mauve, a * p.fade)}};
     SetCom<ID2D1GradientStopCollection> coll;
-    if (SUCCEEDED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
-        SUCCEEDED(p.rt->CreateLinearGradientBrush(
-            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.right, r.bottom)),
+    if (FAILED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) ||
+        FAILED(p.rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(cx - ix, cy - iy), D2D1::Point2F(cx + ix, cy + iy)),
             coll.get(), g.put())))
-        p.rt->FillRoundedRectangle(D2D1::RoundedRect(r, s * 0.24f, s * 0.24f), g.get());
-    p.Glyph(glyph, 0xF406, r, mocha::crust);
+        return;
+    D2D1_MATRIX_3X2_F old;
+    p.rt->GetTransform(&old);
+    p.rt->SetTransform(D2D1::Matrix3x2F::Scale(1.4f, 1.4f, D2D1::Point2F(cx, cy)) * old);
+    const WCHAR mark = 0xF406;
+    p.rt->DrawText(&mark, 1, glyph, r, g.get());
+    p.rt->SetTransform(old);
 }
 
 static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
