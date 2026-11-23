@@ -178,8 +178,35 @@ Menu test (`sep-test.ps1`, elevated, posted messages only) is queued for the des
 (another thread held it at 1:20 am): run it under `coop lock desktop --input`, check
 sep-test.log and the menu-*.png / dock-*.png captures.
 
+## 0.3.5: title pill hover edge and taskbar right-click flicker (2026-11-24)
+
+Owner (screenshot of the Steam pill): "it should have the same hover gradient for the border
+same as the other docks on the taskbar, also when i right click the taskbar this new middle dock
+also flickers, deal with it, we need consistency."
+
+- Hover: the pill is click-through (HTTRANSPARENT), so it never gets mouse messages. A
+  `kTimerTitle` on the dock polls the cursor against `g_titleRect` (50 ms at rest, 15 ms while
+  fading) and fades `g_titleHoverT` over `fadeMs`. Rest = Surface1 grey edge as before; hover =
+  the same blue (bottom left) to mauve (top right) gradient the dock plates use.
+- Flicker: a click on the bar activates Shell_TrayWnd, which jumps above the topmost pill; the
+  pill came back only after the 30 ms rebuild, so it blinked under the bar's glass.
+  WinEventProc now calls RaiseTitle at once on foreground and show events, and RaiseTitle puts
+  the pill just above the tray (not the top of the band), so the bar's own menu stays on top.
+- Merge: another thread installed its own 0.3.4 at 1:34 am (TaskbarCreated from the same shell
+  keeps the strip). Three-way merged on the published 0.3.3 (davids-windhawk-mods 363db46);
+  one readme conflict, resolved. Live 0.3.4 saved as `seamless-dock-0.3.4-live.wh.cpp`.
+- Installed 1:58 am straight after the owner's "skip the queue" (load gate slots were held by
+  test PC jobs, so the clang pre-check was skipped; Windhawk's own compile passed). Registry
+  v0.3.5, tool restarted (pid 29664), desktop fine 60 s after. Published: mods 9f5d9ec, feed
+  f86e97e. Backup `local@seamless-dock-20261124-0153.wh.cpp`. Live source equals the work copy
+  (line endings aside). Pill at rest captured: `proof\title-1124\pill-rest.png` (grey edge).
+- Still to prove under `coop lock desktop --input` (refused at 2:05 am, owner active, first in
+  line): pill hover capture, a taskbar right-click recording with no pill blink, and the
+  separator menu test above.
+
 ## Rollback
 
+- Dock 0.3.5: install `seamless-dock-0.3.4-live.wh.cpp` with Install-StagedMod.
 - Dock 0.3.3: install `seamless-dock-0.3.2.wh.cpp` with Install-StagedMod.
 - Dock 0.3.2: install `seamless-dock-0.3.1.wh.cpp` with Install-StagedMod.
 - Styler: already rolled back. `reg import` the backup to see the old state.
