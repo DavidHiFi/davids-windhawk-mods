@@ -2,7 +2,7 @@
 // @id              seamless-window-manager
 // @name            Seamless Window Manager
 // @description     Move, resize, snap and focus windows with the mouse or keyboard, with app rules, gaps and a pause key
-// @version         2.8.8
+// @version         2.8.10
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -137,6 +137,13 @@ the keys above, the key above wins.
   tiling is on, Windows doesn't swap in its pale stand-in window, so a busy
   app no longer flickers. Apps started before tiling was turned on keep the
   stand-in until they restart.
+
+## What's new in 2.8.10
+- A window that can't shrink as small as its tile no longer bounces between
+  two sizes. Its tile now gives it its own smallest size, and after a few
+  tries the manager leaves it where it is.
+- The settings window shows the mod's icon as a clean gradient glyph, without
+  the old plate.
 
 ## What's new in 2.8.8
 - Two windows that can't both fit in one column no longer make every tiled
@@ -9586,6 +9593,7 @@ struct Node {
     RECT placed{};     // The frame read back after placing.
     ULONGLONG placedTick = 0;
     int fights = 0;
+    ULONGLONG fightTick = 0;  // The last time the app refused its place.
     RECT slot{};           // The whole tile, before the insets.
     int inset[4]{};        // Edges pulled in by the grow keys, per Direction.
     bool fill = false;     // Fills the screen inside the gaps (Alt+F).
@@ -10045,6 +10053,15 @@ void KeepInside(HWND hWnd, const RECT& target, RECT* frame) {
     GetFrame(hWnd, frame);
 }
 
+// The tile, grown to the app's own smallest size once it showed one. Asking for less
+// only makes the app grow back, and the two then trade sizes for good.
+RECT Wanted(const Node* leaf) {
+    RECT t = leaf->target;
+    if (leaf->minW > Width(t)) t.right = t.left + leaf->minW;
+    if (leaf->minH > Height(t)) t.bottom = t.top + leaf->minH;
+    return t;
+}
+
 void PlaceLeaf(Node* leaf) {
     leaf->placedFor = leaf->target;
     HWND hWnd = leaf->hWnd;
@@ -10052,7 +10069,7 @@ void PlaceLeaf(Node* leaf) {
         leaf->placed = {};
         return;
     }
-    const RECT& t = leaf->target;
+    const RECT t = Wanted(leaf);
     RECT frame{};
     GetFrame(hWnd, &frame);
     for (int pass = 0; pass < 2 && !SameRect(frame, t); pass++) {
@@ -10080,7 +10097,7 @@ void PlaceLeaf(Node* leaf) {
 void PlaceLeaves(const std::vector<Node*>& leaves) {
     std::vector<std::pair<HWND, RECT>> moves;
     for (Node* leaf : leaves) {
-        if (CanPlace(leaf->hWnd)) moves.push_back({leaf->hWnd, leaf->target});
+        if (CanPlace(leaf->hWnd)) moves.push_back({leaf->hWnd, Wanted(leaf)});
     }
     snapCommander::AnimateRects(moves);
     for (Node* leaf : leaves) PlaceLeaf(leaf);
@@ -11459,6 +11476,7 @@ bool OnWindowMoved(Workspace* ws, Node* leaf, const RECT& frame, bool byMouse) {
             PublishTiled();
             return true;
         }
+        leaf->fightTick = GetTickCount64();
         if (++leaf->fights > 3) {
             leaf->placed = frame;  // The app insists on its own size; let it be.
             return false;
@@ -11649,7 +11667,8 @@ void OnEnforceTimer() {
             RECT frame{};
             if (!GetFrame(hWnd, &frame)) continue;
             if (SameRect(frame, leaf->target) || SameRect(frame, leaf->placed)) {
-                leaf->fights = 0;
+                // A window that sits still for a moment and then grows again is still fighting.
+                if (now - leaf->fightTick > 10000) leaf->fights = 0;
                 continue;
             }
             if (now - leaf->placedTick < 500) continue;  // Still animating into place.
@@ -14549,16 +14568,24 @@ static D2D1_RECT_F Set_CapTitleRect(const SetWindow& w) {
 }
 
 static void Set_DrawMark(SetPaint& p, IDWriteTextFormat* glyph, const D2D1_RECT_F& r, float a) {
-    float s = r.right - r.left;
+    // The mod's glyph alone in the blue to mauve gradient on a clear background, no plate
+    // (owner, 2026-11-24), scaled up about its centre to fill the room the plate had.
+    const float cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    const float ix = (r.right - r.left) * 0.31f, iy = (r.bottom - r.top) * 0.31f;
     SetCom<ID2D1LinearGradientBrush> g;
     D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::blue, a * p.fade)}, {1, D2DColor(mocha::mauve, a * p.fade)}};
     SetCom<ID2D1GradientStopCollection> coll;
-    if (SUCCEEDED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
-        SUCCEEDED(p.rt->CreateLinearGradientBrush(
-            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.right, r.bottom)),
+    if (FAILED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) ||
+        FAILED(p.rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(cx - ix, cy - iy), D2D1::Point2F(cx + ix, cy + iy)),
             coll.get(), g.put())))
-        p.rt->FillRoundedRectangle(D2D1::RoundedRect(r, s * 0.24f, s * 0.24f), g.get());
-    p.Glyph(glyph, 0xF0E2, r, mocha::crust);
+        return;
+    D2D1_MATRIX_3X2_F old;
+    p.rt->GetTransform(&old);
+    p.rt->SetTransform(D2D1::Matrix3x2F::Scale(1.4f, 1.4f, D2D1::Point2F(cx, cy)) * old);
+    const WCHAR mark = 0xF0E2;
+    p.rt->DrawText(&mark, 1, glyph, r, g.get());
+    p.rt->SetTransform(old);
 }
 
 static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
