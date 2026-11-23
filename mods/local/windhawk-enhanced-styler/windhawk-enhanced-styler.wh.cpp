@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.26
+// @version         2.2.27
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.27
+
+- The title strip of the Loaded mods and Mod tasks windows now stays dark for real when another window is in front. These two windows keep their title buttons lit, because that is the only state in which Windows keeps the strip filled.
 
 ## What's new in 2.2.26
 
@@ -2453,13 +2457,16 @@ static void ApplyTrayDialogLook(HWND dialog, HWND list, const Settings& s) {
     if (HFONT font = TrayFont(dialog, s)) SendMessageW(list, WM_SETFONT, (WPARAM)font, TRUE);
     // Both tray windows float over other apps and are almost never in front, and
     // Windows drops the acrylic blur from a background window. So the body keeps a
-    // near solid Mocha fill. The title strip paints the same fill itself (PaintCaption):
-    // on a background window DWM leaves that band with no material at all, and
-    // neither a caption color nor a forced active look reaches it (measured
-    // 2026-11-23 on 2.2.24 and 2.2.25).
+    // near solid Mocha fill. The title strip paints the same fill itself (PaintCaption),
+    // but DWM only shows that fill while the frame looks active: in the background
+    // look it clears the whole band, fill and title alike (measured 2026-11-23 on
+    // 2.2.26). So these windows keep the active look, here and on WM_NCACTIVATE.
     Settings frame = s;
     if (frame.blur) frame.backgroundOpacity = std::clamp(frame.backgroundOpacity, 95, 99);
     ApplyWindowStack(dialog, frame);
+    BOOL activeLook = TRUE;
+    WINCOMPATTRDATA appearance{WCA_FORCE_ACTIVEWINDOW_APPEARANCE, &activeLook, sizeof(activeLook)};
+    SetWindowCompositionAttribute(dialog, &appearance);
     RedrawWindow(dialog, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);
 }
 
@@ -2482,6 +2489,11 @@ static LRESULT CALLBACK TrayDialogProc(HWND hWnd, UINT message, WPARAM wParam, L
         switch (message) {
             case WM_ERASEBKGND:
                 return 1;  // WM_PAINT draws the glass body and the card
+            case WM_NCACTIVATE:
+                // Focus still moves away; only the frame keeps its active look, so DWM
+                // keeps showing the strip's fill (see ApplyTrayDialogLook).
+                DefSubclassProc(hWnd, message, TRUE, lParam);
+                return TRUE;
             case WM_PAINT:
                 PaintTrayDialog(hWnd);
                 return 0;
