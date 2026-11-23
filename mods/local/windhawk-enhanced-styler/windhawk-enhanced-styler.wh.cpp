@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.31
+// @version         2.2.32
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.32
+
+- The hawk on the blue and mauve logo is now drawn dark, like the app icon. Before, it was a hole in the tile, so it showed whatever sat behind the see-through window.
 
 ## What's new in 2.2.31
 
@@ -684,16 +688,16 @@ static std::string BuildEnhancedCss(const Settings& s) {
     }
     if (s.mochaIcons) {
         // The Mocha tile the window, tray and shortcuts use. The page's CSP
-        // blocks data: and blob: images, so the tile is a gradient and the hawk
-        // is Windhawk's own logo mask cut out of it. The page script copies that
-        // mask into --wh-logo-mask and sets the class once it has found it.
+        // blocks data: and blob: images, so the tile is a gradient and the dark
+        // hawk is Windhawk's own logo mask painted Crust on a ::after layer (a
+        // cut-out would show whatever is behind the see-through window). The
+        // page script copies that mask into --wh-logo-mask and sets the class.
         const std::string m = "html.wh-logo-tile [class*=\"AppHeader__LogoMark\"]";
-        css += m + "{background:linear-gradient(135deg,#89b4fa,#cba6f7) !important;border-radius:24% !important;"
-               "-webkit-background-clip:border-box !important;background-clip:border-box !important;"
-               "-webkit-mask-composite:xor !important;"
-               "mask-image:var(--wh-logo-mask),linear-gradient(#000 0 0) !important;"
-               "mask-size:66% 66%,100% 100% !important;mask-position:center,center !important;"
-               "mask-repeat:no-repeat,no-repeat !important;mask-composite:exclude !important;}";
+        css += m + "{-webkit-mask:none !important;mask:none !important;position:relative !important;"
+               "background:linear-gradient(135deg,#89b4fa,#cba6f7) !important;border-radius:24% !important;"
+               "-webkit-background-clip:border-box !important;background-clip:border-box !important;}";
+        css += m + "::after{content:\"\";position:absolute;inset:17%;background:#11111b;"
+               "-webkit-mask:var(--wh-logo-mask) center/contain no-repeat;mask:var(--wh-logo-mask) center/contain no-repeat;}";
     }
     return css;
 }
