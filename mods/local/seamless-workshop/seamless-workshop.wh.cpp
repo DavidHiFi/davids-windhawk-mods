@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.5.1
+// @version         1.5.2
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -35,6 +35,12 @@ Needs the latest Windhawk alpha.
 - Use DavidHiFi's settings for one mod, or copy his whole setup in one go:
   every mod he runs, with or without his settings, on a clean slate if you
   like. Your current mods are backed up first, so you can always go back.
+
+## What's new in 1.5.2
+
+- When DavidHiFi ships his own fixed copy of a mod from the Windhawk
+  library, it replaces the library one: the library copy is switched off, so
+  the mod never runs twice (two battery icons, for one).
 
 ## What's new in 1.5.1
 
@@ -9314,12 +9320,48 @@ static bool Hub_AutoQuiet() {
     return !GetLastInputInfo(&li) || GetTickCount() - li.dwTime >= 2 * 60000;
 }
 
+// His fixed copy of someone else's mod keeps that mod's id, so it sits here as "local@x" next to
+// the library's "x". Both on runs the mod twice (two tray icons, every hook twice), so while his
+// copy is on, the library one goes off. Returns how many it turned off.
+static size_t Hub_AutoTwinsOff(SetWindow& w) {
+    std::vector<HubBlock> blocks;
+    std::vector<std::wstring> ids;
+    for (auto& f : g_feed) {
+        if (f.id.rfind(L"local@", 0) != 0) continue;
+        const HubMod* mine = Hub_FindMod(f.id);
+        const HubMod* lib = Hub_FindMod(f.id.substr(6));
+        if (!mine || !mine->enabled || !lib || !lib->enabled) continue;
+        ids.push_back(lib->id);
+        blocks.push_back({f.name, {L"mod disable " + Set_QuoteArg(lib->id)}});
+    }
+    if (blocks.empty()) return 0;
+    std::wstring err;
+    std::vector<size_t> failed;
+    Hub_RunBlocks(w, blocks, err, &failed);
+    Hub_LoadList(w);
+    size_t off = 0;
+    for (auto& id : ids) if (const HubMod* m = Hub_FindMod(id); m && !m->enabled) off++;
+    return off;
+}
+
+static std::wstring Hub_TwinsText(size_t n) {
+    return n == 1 ? std::wstring(L"1 mod was on twice. The library copy is off now; DavidHiFi's copy stays on.")
+                  : std::to_wstring(n) + L" mods were on twice. The library copies are off now; DavidHiFi's copies stay on.";
+}
+
 static void Hub_AutoUpdate(SetWindow& w) {
     KillTimer(w.hwnd, kHubAutoTimer);
     if (!Hub_AutoOn() || !g_feedChecked || w.render) return;
     // Never in the middle of something the user is doing: look again in a minute.
     if (w.saving || g_reading || g_feedBusy || w.editing >= 0 || Set_ChangedCount(w)) { Hub_AutoArm(w, 60000); return; }
     if (!Hub_AutoQuiet()) { Hub_AutoArm(w, 2 * 60000); return; }
+    size_t twins = Hub_AutoTwinsOff(w);
+    auto twinsOnly = [&] {  // Nothing to put in this round: still say what changed.
+        if (!twins) return;
+        g_feedStatus = Hub_TwinsText(twins);
+        Set_BuildAndClamp(w);
+        Set_SetStatus(w, g_feedStatus.c_str(), false);
+    };
     const std::wstring tried = L";" + Hub_RegText(L"Set.autoFailed");
     const bool follow = Hub_RegGet(L"Set.follow", 0) != 0;
     std::vector<HubFeedMod> fetch, lib;  // From his repo (updates first); from the Windhawk library.
@@ -9344,7 +9386,7 @@ static void Hub_AutoUpdate(SetWindow& w) {
                 continue;
             lib.push_back(f);
         }
-    if (fetch.empty() && lib.empty()) { if (!Hub_ExtrasAuto(w, false)) Hub_AutoSelf(w); return; }
+    if (fetch.empty() && lib.empty()) { twinsOnly(); if (!Hub_ExtrasAuto(w, false)) Hub_AutoSelf(w); return; }
 
     std::vector<std::wstring> files(fetch.size()), backupIds;
     for (auto& f : fetch) if (!isNew.count(f.id)) backupIds.push_back(f.id);
@@ -9406,7 +9448,7 @@ static void Hub_AutoUpdate(SetWindow& w) {
             push(f, {L"mod enable " + Set_QuoteArg(f.id)});
     }
     for (auto& f : lib) if (f.hasPreset) push(f, {L"mod enable " + Set_QuoteArg(f.id)});
-    if (blocks.empty()) { if (!Hub_ExtrasAuto(w, false)) Hub_AutoSelf(w); return; }
+    if (blocks.empty()) { twinsOnly(); if (!Hub_ExtrasAuto(w, false)) Hub_AutoSelf(w); return; }
 
     std::vector<size_t> failed;
     Hub_RunBlocks(w, blocks, err, &failed);
@@ -9419,6 +9461,7 @@ static void Hub_AutoUpdate(SetWindow& w) {
     for (auto& [id, version] : bad) failedText += id + L"=" + version + L";";
     if (!bad.empty()) Hub_SetText(L"Set.autoFailed", failedText);
     Hub_LoadList(w);
+    twins += Hub_AutoTwinsOff(w);  // His copy of a library mod may have just come in.
 
     size_t updated = 0, added = 0;
     std::wstring first;
@@ -9440,6 +9483,7 @@ static void Hub_AutoUpdate(SetWindow& w) {
     if (!bad.empty())
         text += (text.empty() ? L"" : L" ") + std::to_wstring(bad.size()) + (bad.size() == 1 ? L" mod" : L" mods") +
                 L" did not install. The Workshop tries again when a newer version comes out.";
+    if (twins) text += (text.empty() ? L"" : L" ") + Hub_TwinsText(twins);
     if (!text.empty()) {
         g_feedStatus = text;
         Hub_TrayBalloon(w, L"Updated from DavidHiFi", text);
