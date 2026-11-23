@@ -132,10 +132,40 @@ The first run (`out\run1\`) was cut short when thread 7bb65bc7 rewound the test 
   two minutes. Watcher: `friend\watch-friend.ps1` in the job folder (detached, every 10 minutes,
   up to 8 hours, log `friend\round.log`).
 
+## Test PC retest and the Editor clip (2026-11-23, 6:30 to 7:10 pm)
+
+The 11:53 am runs gave up at 3:53 pm with nothing run (Ableton open all day). Put back at 5:21 pm
+as one job (`both.ps1` through `run-detached.ps1 -Wait 43200`, log `both.gate.log`). It started
+once Ableton closed and finished at 7:10 pm, exit 0.
+
+- Editor clip: `proof\editor-test.mp4` and `editor-test.gif` in the job folder, from the 3:40 am
+  live recording.
+- G HUB remove (`out-c\`): install about 3.5 minutes, remove about 1.5 minutes, nothing of G HUB
+  left running, no window on the test PC screen (`after.png`), program folder empty. Fixed.
+- Everything remove (`out-c\`), twice: the folder, service, program and task were all gone and
+  the user's settings stayed, but both times it still said "could not be removed".
+- First fix (repo b07f123, not published): retry up to 20 seconds. Retest 7:52 pm (`out-d1\`):
+  still failed both times, so waiting was not it.
+- Diagnosis run 8:33 pm (`out-d2\`, test-only checks in `everything.ps1.diag-copy`): the first
+  folder delete leaves the program file behind (still held by the service as it goes), and after
+  that `Test-Path` says the folder is gone while the file is still there. So the retry loop only
+  ever deleted the folder, which "was not there". Deleting the file itself
+  (`[IO.File]::Delete`) cleared it at once. Nothing else held it (no process mapped it).
+- Fix: every retry deletes the program file by itself as well as the folder.
+- Check, 9:28 pm (`deps-testpc-d.ps1`, phase D, results `out-d\`): two rounds of install then
+  remove. Both removes said "Everything is removed. Your search settings were kept." (8 s and
+  6 s), and folder, service, process and task were gone with the settings kept, both times.
+  Side note: the second install could not read the voidtools beta page and fell back to
+  winget's beta (1.5.0.1423, one build older). The hourly round brings it up to date.
+- Shipped 9:35 pm: repo commit 9440334, pushed by `publish-mods.py --mod seamless-workshop`.
+  Feed 9a6e1dc (56 mods, app 1.5.1). All five extras are pinned to 9440334, and each checksum
+  matches the bytes GitHub serves (the Everything script carries the fix). No app version
+  change, so no new release; v1.5.1 stays current.
+
 ## Still to do
 
-- Test PC: retest of the two remove fixes, and the Editor clip encode. The 11:53 am runs gave up
-  at 3:53 pm with nothing run (Ableton open all day, owner away). Put back at 5:21 pm as one job,
-  so they hold one load-gate slot: `both.ps1` through `run-detached.ps1 -Wait 43200`, log
-  `both.gate.log`. It runs by itself once Ableton closes and a slot is free.
-- Prove that a changed mod arrives by itself on an older PC: the friend's round (above).
+- Nothing for the Workshop itself.
+- Dropped (owner, 2026-11-23, 9:15 pm): the friend's round. His PC is cut off from ours now
+  (System Configuration `notes\2026-11-22-friend-pc-remote-setup.md`), so a changed mod
+  arriving by itself on an older PC stays unproven there. The tower's own round (1.5.1 above)
+  is the proof that the round runs.
