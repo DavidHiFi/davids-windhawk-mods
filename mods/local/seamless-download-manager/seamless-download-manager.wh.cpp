@@ -2,7 +2,7 @@
 // @id              seamless-download-manager
 // @name            Seamless Download Manager
 // @description     A fast tray download manager: downloads in parts, resumes where it stopped, takes browser links
-// @version         1.0.1
+// @version         1.0.2
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-download-manager
@@ -129,7 +129,7 @@ extern std::atomic<HWND> g_settingsWnd;
 }  // namespace acset
 
 namespace sdm {
-constexpr WCHAR kEngineVersion[] = L"0.1.1";
+constexpr WCHAR kEngineVersion[] = L"0.1.2";
 constexpr PCWSTR kAppRepo = L"https://github.com/DavidHiFi/seamless-download-manager";
 constexpr PCWSTR kAbRepo = L"https://github.com/amir1376/ab-download-manager";
 struct PageLink {
