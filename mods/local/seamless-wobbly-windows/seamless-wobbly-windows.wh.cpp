@@ -2,7 +2,7 @@
 // @id              seamless-wobbly-windows
 // @name            Seamless Wobbly Windows
 // @description     Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows
-// @version         1.2.13
+// @version         1.2.14
 // @author          DavidHiFi, HeyJeay, HaVeN80, lalimatyus
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -88,6 +88,10 @@ title bar to move a window without the wobble.
 - Nothing is loaded into dwm.exe. The effect runs inside each app.
 - Turn off the other wobble mods (Wobbly Windows, Window Wobble) before using
   this one.
+
+## What's new in 1.2.14
+- The Seamless Borders ring is told twice more that the window stepped
+  aside, so it leaves the old spot sooner on an Alt-drag.
 
 ## What's new in 1.2.13
 - With Seamless Borders on, the window's coloured ring no longer stays
@@ -6521,6 +6525,9 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
         return;
     }
     DwmFlush();
+    // Border mods hear the cloak through WinEvents and may read the cloak
+    // state before DWM applied it; say it again once DWM has a frame.
+    NotifyWinEvent(EVENT_OBJECT_CLOAKED, hwnd, OBJID_WINDOW, CHILDID_SELF);
     struct Reveal {
         HWND h; HideState& st;
         ~Reveal() { ShowWindowInPlace(h, st); }
@@ -6590,8 +6597,14 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
         return true;
     };
 
+    const double recloakAt = NowSeconds() + 0.25;
+    bool recloaked = false;
     while (!lostDevice && HeldFor(rq)) {
         if (QuitRequested() || NowSeconds() > deadline || !IsWindow(hwnd)) break;
+        if (!recloaked && NowSeconds() > recloakAt) {
+            recloaked = true;
+            NotifyWinEvent(EVENT_OBJECT_CLOAKED, hwnd, OBJID_WINDOW, CHILDID_SELF);
+        }
         if (rq.external &&
             (IsHungAppWindow(hwnd) || NowSeconds() - lastChange > 5.0)) {
             // The end message may never come (window manager turned off
