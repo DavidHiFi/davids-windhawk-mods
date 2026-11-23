@@ -1363,5 +1363,12 @@
     "exclude": "",
     "architecture": "",
     "version": "1.0.0"
+  },
+  "local@remove-shortcut-arrows": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "2.0.2"
   }
 }

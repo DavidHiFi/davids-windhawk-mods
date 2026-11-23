@@ -1187,6 +1187,13 @@
       }
     },
     {
+      "id": "local@remove-shortcut-arrows",
+      "enabled": true,
+      "settings": {
+        "custom_icon_path": ""
+      }
+    },
+    {
       "id": "local@seamless-autoclicker",
       "enabled": true,
       "settings": {

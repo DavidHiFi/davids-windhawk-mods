@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-24T06:44:39+08:00",
+  "generatedAt": "2026-11-24T06:48:03+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 172,
-    "enabled": 167,
-    "local": 61
+    "mods": 173,
+    "enabled": 168,
+    "local": 62
   },
   "mods": [
     {
@@ -2120,6 +2120,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/parallax-wallpaper/parallax-wallpaper.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@remove-shortcut-arrows",
+      "name": "Remove Shortcut Arrow Icons",
+      "author": "DavidHiFi, Dev-StudioCode",
+      "github": "https://github.com/DavidHiFi",
+      "version": "2.0.2",
+      "license": "",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/remove-shortcut-arrows/remove-shortcut-arrows.wh.cpp",
       "enabled": true
     }
   ]

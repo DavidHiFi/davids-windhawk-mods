@@ -5537,5 +5537,8 @@
     "strength": 25,
     "strengthY": 25,
     "thresholdPercent": -1
+  },
+  "local@remove-shortcut-arrows": {
+    "custom_icon_path": ""
   }
 }
