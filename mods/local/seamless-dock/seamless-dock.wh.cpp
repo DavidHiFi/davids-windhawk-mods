@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.7
+// @version         0.3.8
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,6 +26,11 @@ the edge of the screen across from your taskbar, so you get a clean bar on one
 side and a dock on the other, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
+
+## What's new in 0.3.8
+
+- The title pill now belongs to the taskbar, so Windows lifts the two together
+  when you click the bar. The pill no longer dips under it for a frame.
 
 ## What's new in 0.3.7
 
@@ -2536,6 +2541,10 @@ ComPtr<ID2D1GradientStopCollection> g_titleStops;
 HANDLE g_raiseTimer = nullptr, g_zThread = nullptr, g_zReady = nullptr;
 DWORD g_zThreadId = 0;
 ULONGLONG g_raiseUntil = 0;
+// The pill is owned by the taskbar, so Windows raises both in one step when the
+// bar is clicked. An owned window shares input with its owner's thread, so the
+// pill lives on the small guard thread, never on the busy dock thread.
+bool g_titleLost = false, g_zQuitting = false;
 std::wstring g_titleKey, g_titleApp, g_titleSrc, g_titleAlt;
 // What the pill shows now, so a hover fade can paint it again, and where it sits.
 std::wstring g_titleShownApp, g_titleShownText;
@@ -2608,6 +2617,12 @@ std::wstring TitleText(HWND h, const std::wstring& app) {
     return t;
 }
 
+void OwnTitle() {
+    HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+    if (g_title && tray && GetWindow(g_title, GW_OWNER) != tray)
+        SetWindowLongPtrW(g_title, GWLP_HWNDPARENT, (LONG_PTR)tray);
+}
+
 void HideTitle() {
     if (g_title && IsWindowVisible(g_title)) ShowWindow(g_title, SW_HIDE);
     g_titleKey.clear();
@@ -2655,9 +2670,18 @@ void CALLBACK ZEventProc(HWINEVENTHOOK, DWORD, HWND h, LONG idObj, LONG idChild,
     StartRaiseBurst();
 }
 
+HWND MakeTitle() {
+    // Click-through and never focused: clicks land on the bar under it.
+    return CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TRANSPARENT,
+                           L"SeamlessDockTitle", L"Seamless Dock title", WS_POPUP, 0, 0, 10, 10, nullptr, nullptr,
+                           GetModuleHandleW(nullptr), nullptr);
+}
+
 DWORD WINAPI ZGuardThread(void*) {
     MSG m;
     PeekMessageW(&m, nullptr, 0, 0, PM_NOREMOVE);  // make the queue before saying ready
+    g_zQuitting = false;
+    g_title = MakeTitle();
     // 0x2 = CREATE_WAITABLE_TIMER_HIGH_RESOLUTION; older systems refuse it.
     g_raiseTimer = CreateWaitableTimerExW(nullptr, nullptr, 0x2, TIMER_ALL_ACCESS);
     if (!g_raiseTimer) g_raiseTimer = CreateWaitableTimerExW(nullptr, nullptr, 0, TIMER_ALL_ACCESS);
@@ -2680,10 +2704,21 @@ DWORD WINAPI ZGuardThread(void*) {
                 if (m.message == WM_QUIT) { quit = true; break; }
                 DispatchMessageW(&m);
             }
-            continue;
+        } else if (GetMessageW(&m, nullptr, 0, 0) <= 0) {
+            break;
+        } else {
+            DispatchMessageW(&m);
         }
-        if (GetMessageW(&m, nullptr, 0, 0) <= 0) break;
-        DispatchMessageW(&m);
+        if (g_titleLost && !quit) {
+            g_titleLost = false;
+            g_title = MakeTitle();
+            Wh_Log(L"title pill made again after its owner went away");
+        }
+    }
+    g_zQuitting = true;
+    if (HWND t = g_title) {
+        g_title = nullptr;
+        DestroyWindow(t);
     }
     for (HWINEVENTHOOK h : hooks)
         if (h) UnhookWinEvent(h);
@@ -2834,6 +2869,7 @@ void UpdateTitle(bool force) {
         HideTitle();
         return;
     }
+    OwnTitle();
     HWND h = TitleWindow();
     if (!h) {
         g_titleWin = nullptr;
@@ -2909,6 +2945,11 @@ void TitleHoverTick() {
 
 LRESULT CALLBACK TitleProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_NCHITTEST) return HTTRANSPARENT;
+    // A shell restart can take the pill down with its owner; the guard makes a new one.
+    if (msg == WM_NCDESTROY && hwnd == g_title && !g_zQuitting) {
+        g_title = nullptr;
+        g_titleLost = true;
+    }
     if (msg == WM_MOUSEACTIVATE) return MA_NOACTIVATE;
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
@@ -3314,8 +3355,9 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             UnregisterThumbs();
             if (g_pop) DestroyWindow(g_pop);
             if (g_menu) DestroyWindow(g_menu);
-            if (g_title) DestroyWindow(g_title);
-            g_pop = g_menu = g_title = nullptr;
+            // The guard thread owns the pill and destroys it when it stops.
+            if (g_title) ShowWindow(g_title, SW_HIDE);
+            g_pop = g_menu = nullptr;
             PostQuitMessage(0);
             return 0;
     }
@@ -3355,14 +3397,13 @@ DWORD WINAPI DockThread(void*) {
                             L"Seamless Dock preview", WS_POPUP, 0, 0, 10, 10, nullptr, nullptr, inst, nullptr);
     g_menu = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, L"SeamlessDockMenu", L"Seamless Dock menu", WS_POPUP,
                              0, 0, 10, 10, nullptr, nullptr, inst, nullptr);
-    // Click-through and never focused: clicks land on the bar under it.
-    g_title = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TRANSPARENT,
-                              L"SeamlessDockTitle", L"Seamless Dock title", WS_POPUP, 0, 0, 10, 10, nullptr, nullptr,
-                              inst, nullptr);
+    // The pill is made on the guard thread (see OwnTitle).
+    StartZGuard();
     if (!g_dock || !g_pop || !g_menu) {
         Wh_Log(L"CreateWindow failed: %u", GetLastError());
+        StopZGuard();
         // Leave nothing half made: the init check reads g_dock to say we failed.
-        for (HWND* h : {&g_title, &g_menu, &g_pop, &g_dock})
+        for (HWND* h : {&g_menu, &g_pop, &g_dock})
             if (*h) {
                 DestroyWindow(*h);
                 *h = nullptr;
@@ -3406,7 +3447,6 @@ DWORD WINAPI DockThread(void*) {
     SetTimer(g_dock, kTimerFull, 1000, nullptr);
     SetEvent(g_ready);
 
-    StartZGuard();
     MSG m;
     while (GetMessageW(&m, nullptr, 0, 0) > 0) {
         TranslateMessage(&m);
