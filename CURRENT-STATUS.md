@@ -6,7 +6,7 @@ Last updated: 2026-11-22
 - 2026-11-22: Seamless Controls 1.0.1 (`local@seamless-controls`, our fork of Win32 UI
   Modernizer): Mocha dark classic windows and controls, stands down where our own mods own a
   part, universal settings window. Test PC first load clean, installed and published on the
-  tower 8:45 pm. Note: `notes6-11-22-seamless-controls.md`.
+  tower 8:45 pm. Note: `notes\2026-11-22-seamless-controls.md`.
 - 2026-11-23: Seamless Window Manager 2.8.7: Alt+PageDown/PageUp get past a remote desktop
   window that grabs the keyboard (RustDesk, since 2.8.4), and since 2.8.6 a key release that
   window eats no longer locks the walk key. 24 of 24 test PC checks, tower hand test passed
@@ -95,7 +95,7 @@ The full Safety, Traps and Conventions text from `AGENTS.md` before the 2026-11-
 
 - `local@taskbar-stats-fit` was uninstalled 2026-11-07 (bloat; its pointer hook churned the shell). Also uninstalled as superseded: `micrographics-taskbar-clock` (use the -plus fork), `windows-11-file-explorer-styler` (use the -plus fork), Explorer TreeItem Tweaker Plus (built into GPU Accelerated Explorer). Never reinstall a mod a fork or merge replaced; remove the old one when the replacement ships. Backups and rollback: `notes\2026-11-07-mod-debloat.md`.
 - GPU Accelerated Explorer draws the file list itself, so it owns sorting: every column sort must match real Explorer (Size is true biggest/smallest with folder sizes included), and each folder must reopen with the sort Explorer saved for it. Never ship a change that resets or ignores the saved sort (owner, 2026-11-07, 1.2.3).
-- The Windhawk UI theme mod is `local@windhawk-enhanced-styler` ("Windhawk Enhanced Styler"), renamed from `local@windhawk-styler` on 2026-11-07, id included. Scripts that name the old id are dead. Gradient titles, selection color and the Enhanced badge are settings in it, never a second mod.
+- The Windhawk UI theme mod is `local@windhawk-enhanced-styler` ("Windhawk Enhanced Styler"), renamed from `local@windhawk-styler` on 2026-11-07, id included. Scripts that name the old id are dead. Gradient titles and selection color are settings in it, never a second mod. 2026-11-23: the Enhanced badge is removed (2.2.23, owner ask) and, with Mocha icons on, the header logo is the Mocha tile with a dark hawk (2.2.32, CSS only: the Windhawk page blocks embedded pictures). Note: `notes\2026-11-23-styler-header-logo.md`.
 - 2026-11-12: Enhanced Styler 2.2.3 themes the Windhawk window from its first frame. It registers the theme in-process, in the background-colour hook, before Windhawk navigates. The debugger session is only a fallback, and its port moves off 9333 when Dopamine holds it. Settings are re-read only on a save. Never force-kill the Windhawk UI in tests. Note and rollback: `notes\2026-11-12-styler-fastpaint.md`.
 - 2026-11-14: Enhanced Styler 2.2.6 wraps long mod descriptions on a mod's page instead of cutting them off. Note: `notes\2026-11-14-styler-desc-wrap.md`.
 - 2026-11-14: Seamless Window Manager 2.5.6 asks each app for its smallest size when it joins the layout (idea from the public Adaptive Windows mod; ideas only). Remaining Adaptive Windows ideas, ranked, at the end of `notes\2026-11-09-seamless-window-manager-build.md`.
@@ -143,7 +143,7 @@ The full Safety, Traps and Conventions text from `AGENTS.md` before the 2026-11-
 - Explorer Tags Plus 0.8.5 and Seamless Explorer View 2.0.2: Tags pills now identical to the folder pills (fill, edge, height sampled live within 1-2 shades); hover edge is the blue to mauve gradient on both.
 - Right-click menus: folder list and Tags use the same glass, edge and font (sampled live).
 - Open: hover state not forced live (posted mouse moves do not trigger it); This PC drive tiles not reviewed this pass.
-- Record and rollbacks: `notes6-11-14-explorer-menu-and-pills.md`.
+- Record and rollbacks: `notes\2026-11-14-explorer-menu-and-pills.md`.
 
 ## 2026-11-12: Seamless Explorer View 2.0.0 (renamed from GPU Accelerated Explorer View Plus, id included)
 
@@ -170,7 +170,7 @@ The full Safety, Traps and Conventions text from `AGENTS.md` before the 2026-11-
 ## 2026-11-07: Windhawk Enhanced Styler 2.1.0 (renamed from Windhawk Styler, id included)
 - Selected text uses Mocha blue at 40%, Windhawk logo, name and section titles/icons carry a blue to mauve gradient, Enhanced badge beside the name. All configurable.
 - Verified 11/7 by registry (2.1.0 enabled, old id removed, settings carried), CDP computed styles and a window capture: `reports6-11-07-enhanced-styler-window.png`.
-- Note and rollback: `notes6-11-07-windhawk-enhanced-styler.md`.
+- Note and rollback: `notes\2026-11-07-windhawk-enhanced-styler.md`.
 
 ## 2026-11-01: window-borders 2.1.0 live, context menus get the border
 - New Menus option (on, menuRadius 16) rings classic `#32768` menus and submenus with
