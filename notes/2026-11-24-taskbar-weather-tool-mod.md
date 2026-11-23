@@ -29,6 +29,16 @@ Two earlier runs said "label none". The mod was fine: the probe passed `$null` a
 title to `FindWindowExW`, which PowerShell turns into "", so only empty-titled windows matched.
 Use `[NullString]::Value` (memory: powershell-null-string-findwindow).
 
+## 1.6.1 (AI review of 1.6.0)
+
+The robot review had no code problems. It asked for the launcher block to match the wiki
+snippet exactly (the session 0 check and the full header comment were missing) and for the
+README to say "a crash can't take Explorer down" instead of "a problem can't take the taskbar
+down" (a hang can still stall taskbar input). Both done, compiled for 32 and 64 bit with only
+the snippet's own `lpReserved` warning, pushed as eb8cc7f. Kit: Warden
+`D:\Agent Work\weather-tool-161\`. Behaviour in a user session is unchanged, so no new test PC
+run.
+
 ## Next
 
-When the AI review comes back clean, comment `/ready-for-reviewer`.
+When the AI review of 1.6.1 comes back clean, comment `/ready-for-reviewer`.
