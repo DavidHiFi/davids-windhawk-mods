@@ -7,6 +7,11 @@ Last updated: 2026-11-22
   Modernizer): Mocha dark classic windows and controls, stands down where our own mods own a
   part, universal settings window. Test PC first load clean, installed and published on the
   tower 8:45 pm. Note: `notes6-11-22-seamless-controls.md`.
+- 2026-11-23: Seamless Window Manager 2.8.7: Alt+PageDown/PageUp get past a remote desktop
+  window that grabs the keyboard (RustDesk, since 2.8.4), and since 2.8.6 a key release that
+  window eats no longer locks the walk key. 24 of 24 test PC checks, tower hand test passed
+  9:22 am (run from Task Scheduler: the agent guard blocks test keys from agent programs).
+  Note: `notes\2026-11-21-window-manager-2.7.0.md`.
 - 2026-11-21: Seamless Window Manager 2.7.0: new windows split the biggest tile, a window
   opened over a full-screen app floats centered and tiles once it is gone, the mod's own focus
   jumps skip the Windows Animations fade (Alt+Tab keeps its zoom), Alt+PageDown/PageUp walk

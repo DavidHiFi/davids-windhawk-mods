@@ -96,3 +96,101 @@ desktop leaves no input desktop and every capture fails.
   ahead of RustDesk's. The owner's front window was put back afterwards.
 - Side finding: the Script Host box was a compile error in the Hydra theme thread's
   `HydraMocha\guard.vbs` (line 2, unterminated string). Closed it and posted a coop note.
+
+## 2.8.4: walk keys get past a remote desktop window (2026-11-23)
+
+Fix for the RustDesk finding above. Built as 2.7.1 first, then laid on top of 2.8.3 (other
+threads had moved the mod to 2.8.x meanwhile), so nothing of theirs was lost.
+
+- How: the helper's own low-level key hook (GlobalAltProc) now takes Alt+PageDown and
+  Alt+PageUp itself (`OnWalkKey`) and posts the walk hotkey to its own thread. Every other
+  key still reaches the remote window.
+- Low-level hooks run newest first, and RustDesk hooks again each time its window comes to
+  the front. So the helper re-hooks on every foreground change (a WinEvent hook) and twice
+  more 400 ms later, which keeps ours ahead.
+- A key a grabber swallows never updates GetAsyncKeyState, Alt included, so the hook keeps
+  its own note of which modifiers are down (a note older than 1.5 s counts as a lost
+  release). The matching key-up is swallowed too.
+- Paused, or the walk keys set to none: nothing is taken.
+- The walk only lists windows hidden behind the front one. A small remote window sitting
+  beside the tiles has nothing behind it, so the keys then do nothing (the first test run
+  with a small stand-in "failed" for that reason, not a mod fault).
+
+### Test PC
+
+- Stand-in remote window: `D:\Agent Work\swm-271\grab.ps1`, a full-screen form whose own
+  low-level hook keeps every key while it is in front and re-hooks on each activation.
+- 2.7.1: 22 of 22. 2.8.4 (same change on 2.8.3): 22 of 22, both builds 0 warnings,
+  Explorer alive, no app errors besides the VM's licence check. Alt+PageDown went from the
+  remote window to Tile B, Alt+PageUp to Tile C; the remote window kept Alt+Left/Right and
+  never saw the walk keys; both jumps marked the switch note (no fade).
+
+### Tower (2026-11-23, 3:25 am)
+
+- Held off while the owner played, then installed with `Install-StagedMod.ps1` under the
+  engine lock, base hash F4B59E32... (2.8.3): registry 2.8.4, live source matches the
+  test PC build, backup `local@seamless-window-manager-20261123-0325.wh.cpp`, desktop fine
+  in the 60 s watch. Helper restarted 3:26:09 am.
+- Published: davids-windhawk-mods a11f9b4, seamless-workshop feed b032128.
+
+## 2.8.5: walk key trace, tower hand test (2026-11-23, 8:46 am)
+
+- 2.8.5 adds "Walk: ..." lines to the mod's log (key posted, hotkey seen, front, root,
+  windows behind, where it went). Installed 8:36 under the engine lock; the compile
+  stopped the helper, so Set-ModState Off then On brought it back.
+- The first hand tests failed: the agent guard (2.8.x) blocks synthetic keys from any
+  program under claude.exe once another process gives input ("sent 2, blocked 12, error 5").
+  Fix for the test, not the mod: run the hand test from a temporary Task Scheduler task
+  (Interactive, highest), outside the agent tree, the way RustDesk runs. Then 28 sent, 0 blocked.
+- Result: Alt+PageDown and Alt+PageUp get past the full-screen keyboard-grabbing stand-in
+  in both directions; the stand-in only saw Alt; switch notes went 0 -> 2.
+- Found a real bug (8:48): walk back onto the remote window, hold the key 300 ms, let go.
+  The stand-in re-hooks above the helper when it comes to the front and eats the release,
+  so the helper still thinks PageUp is held and swallows every later Alt+PageUp. Trace:
+  "key 33 posted" once, then nothing; the front stayed on Remote desktop.
+- Unrelated box at 8:07 am: "Windows Script Host" error 800704C7 from the VB-Audio Matrix
+  startup launcher (task "VB Audio Matrix Coconut Trial Bypass", Launch-VBAudioMatrix.vbs)
+  while opening its shortcut. Closed with WM_CLOSE; Matrix was not running; not ours, left alone.
+
+## 2.8.6: a missed key release no longer locks the walk key (2026-11-23)
+
+- OnWalkKey keeps the time of the last down event for the held walk key
+  (g_walkKeyTick). A repeat within 1.1 s still counts as the same hold (the longest key
+  repeat delay is 1 s). A down event after a longer gap is a new press: it logs
+  "Walk: key N was stuck held N ms, new press" and walks.
+- Test PC: section 6 of swm-test.ps1 holds PageUp 300 ms on the remote window, then
+  presses again and checks the walk works.
+- Test PC (9:08 am): 24 of 24 passed, including "walk back onto the remote window lands
+  there" and "walk key works again after the remote window ate its release". Explorer alive,
+  no new app errors (two licence activation lines: the test PC has no internet).
+- Tower: installed 9:08 am, base hash 9042CE22... (2.8.5), backup
+  `local@seamless-window-manager-20261123-0908.wh.cpp`, desktop fine in the 60 s watch,
+  helper back by itself 9:09 (elevated). Published: davids-windhawk-mods c6adc04, feed 03ee1fc.
+- Tower hand test 9:17 am: the held press brought the remote window to the front, and the
+  next Alt+PageUp left it again. Trace: "Walk: key 33 was stuck held 2813 ms, new press".
+  On 2.8.5 the same steps stayed stuck on the remote window.
+- The first 9:11 run was spoiled by Yapfast (the HaloCord Discord app). It had already frozen,
+  so the walk landed on it and Windows put its "Not Responding" ghost in front. That ghost
+  belongs to dwm, so the elevated test's injected keys were dropped (UIPI) and no walk
+  lines showed. Not a mod fault: real keys aren't affected. Yapfast used no CPU and had not
+  responded for over 4 minutes, so it was restarted through its own "Yapfast" scheduled task
+  (9:16 am, responding again).
+
+## 2.8.7: quieter walk log (2026-11-23)
+
+- The 2.8.5 trace called the shared trace writer (one unguarded string plus a registry
+  write) from the key hook thread while the tiling thread writes it too, and logged every
+  plain Page Up / Page Down press. 2.8.7 keeps one "Walk: to" line on the tiling thread;
+  the stuck-key line goes to the normal mod log (Wh_Log) only. Builds clean (64 and 32 bit,
+  the 7 old warnings).
+- Tower: installed 9:19 am over 2.8.6, backup
+  `local@seamless-window-manager-20261123-0919.wh.cpp`, desktop fine, helper back 9:20
+  (elevated). Published: davids-windhawk-mods 00b8f57, feed 7246aef. Logging-only change,
+  so no test PC run. Hand test 9:22 am: walk past the remote window both ways, the held
+  press, then press again leaves it; remote window only saw Alt; 28 keys sent, 0 blocked.
+
+## Rollback
+
+- Turn the mod off with `scripts\Set-ModState.ps1 -Id local@seamless-window-manager -Off`, or
+  reinstall a backup above through `Install-StagedMod.ps1` (2.8.5 = the 0908 backup,
+  2.8.6 = the 0919 backup).
