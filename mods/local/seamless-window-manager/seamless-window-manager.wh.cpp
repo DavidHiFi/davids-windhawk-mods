@@ -2,7 +2,7 @@
 // @id              seamless-window-manager
 // @name            Seamless Window Manager
 // @description     Move, resize, snap and focus windows with the mouse or keyboard, with app rules, gaps and a pause key
-// @version         2.8.6
+// @version         2.8.7
 // @author          DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -137,6 +137,10 @@ the keys above, the key above wins.
   tiling is on, Windows doesn't swap in its pale stand-in window, so a busy
   app no longer flickers. Apps started before tiling was turned on keep the
   stand-in until they restart.
+
+## What's new in 2.8.7
+- The walk keys log less: one line per step, and nothing for a plain Page Up
+  or Page Down. 2.8.5 wrote a line for every press of those keys.
 
 ## What's new in 2.8.6
 - Alt+PageDown and Alt+PageUp no longer stop working after a remote desktop
@@ -11144,7 +11148,6 @@ size_t g_cycleAt = 0;
 
 void CycleFocusCommand(int direction) {
     HWND hCur = ActiveRoot();
-    TLog(L"Walk: front %p root %p", GetForegroundWindow(), hCur);
     if (!hCur) return;
     bool fresh = g_cycleList.size() < 2 || g_cycleAt >= g_cycleList.size() ||
                  g_cycleList[g_cycleAt] != hCur;
@@ -11165,7 +11168,6 @@ void CycleFocusCommand(int direction) {
         EnumWindows(CycleFocusProc, reinterpret_cast<LPARAM>(&data));
         DeleteObject(data.above);
         stack.erase(std::remove(stack.begin(), stack.end(), hCur), stack.end());
-        TLog(L"Walk: %zu behind", stack.size());
         if (stack.empty()) return;
         g_cycleList.clear();
         g_cycleList.push_back(hCur);
@@ -12313,7 +12315,7 @@ bool OnWalkKey(WPARAM message, const KBDLLHOOKSTRUCT* key) {
             g_walkKeyTick = GetTickCount();
             return true;
         }
-        tiling::TLog(L"Walk: key %u was stuck held %u ms, new press", vk, gap);
+        Wh_Log(L"Walk: key %u was stuck held %u ms, new press", vk, gap);
         g_walkKeyHeld = 0;
     }
     DWORD held = altSnapDrag::HeldModifiers(GetAsyncKeyState);
@@ -12330,15 +12332,9 @@ bool OnWalkKey(WPARAM message, const KBDLLHOOKSTRUCT* key) {
         }
         g_walkKeyHeld = vk;
         g_walkKeyTick = GetTickCount();
-        BOOL posted = PostThreadMessageW(GetCurrentThreadId(), WM_HOTKEY,
-                                         kModeKeyBase + kWalkUpKey + w, 0);
-        tiling::TLog(L"Walk: key %u posted %d", vk, (int)posted);
+        PostThreadMessageW(GetCurrentThreadId(), WM_HOTKEY,
+                           kModeKeyBase + kWalkUpKey + w, 0);
         return true;
-    }
-    if (vk == VK_PRIOR || vk == VK_NEXT) {
-        tiling::TLog(L"Walk: key %u held %u no match (%u/%u %u/%u)", vk, held,
-                     (DWORD)g_walkKeys[0].key, g_walkKeys[0].modifiers,
-                     (DWORD)g_walkKeys[1].key, g_walkKeys[1].modifiers);
     }
     return false;
 }
@@ -12394,8 +12390,6 @@ bool OnLowLevelThreadMessage(const MSG& msg) {
         return false;
     }
     int id = (int)msg.wParam - kModeKeyBase;
-    if (id == 35 || id == 36) tiling::TLog(L"Walk: hotkey %d paused %d tiling %u", id,
-                                           (int)IsPaused(), g_tilingThreadId);
     if (id == 0) {
         TogglePause();
     } else if (!IsPaused()) {
