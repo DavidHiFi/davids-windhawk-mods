@@ -3,7 +3,7 @@
 // @name            Logitech Battery Tray
 // @description     Native taskbar battery indicators for Logitech G HUB and HID++ devices.
 // @description:ru  Индикаторы заряда устройств Logitech через G HUB и HID++ в панели задач.
-// @version         0.1.4
+// @version         0.1.5
 // @author          DavidHiFi, uMk0
 // @github          https://github.com/umk0
 // @license         GPL-3.0-or-later
@@ -973,6 +973,8 @@ static bool IsConfirmedHidAbsence(unsigned feature, const std::vector<BYTE>& pay
         (payload[2] == 0 || payload[2] == 0x0F);
 }
 
+static bool SameLogitechDevice(const DeviceBattery& a, const DeviceBattery& b);
+
 static void UpdateHidPresence(DeviceBattery& device, const DeviceBattery* reading,
                               HidPresence& presence, ULONGLONG now, bool confirmedUnavailable = true,
                               bool freshInputDuringRequest = false) {
@@ -1178,7 +1180,10 @@ public:
                     for (int attempt = 0; attempt < 3 && !collection.headset && !QueryType(slot, nameIndex); ++attempt) {}
                 }
                 if (BYTE infoIndex = Feature(slotNumber, 3)) {
-                    auto info = Request(slotNumber, infoIndex, 0);
+                    // The unit number is what makes one mouse seen on two receiver
+                    // interfaces count as one. A waking mouse drops replies, so ask again.
+                    std::vector<BYTE> info;
+                    for (int attempt = 0; attempt < 3 && info.size() < 5; ++attempt) info = Request(slotNumber, infoIndex, 0);
                     if (info.size() >= 5) {
                         unsigned unit = (unsigned(info[1]) << 24) | (unsigned(info[2]) << 16) | (unsigned(info[3]) << 8) | info[4];
                         if (unit) { wchar_t text[16]{}; swprintf_s(text, ARRAYSIZE(text), L"%08X", unit); slot.device.unit = text; slot.device.key = L"hidpp:" + slot.device.unit; }
@@ -1331,7 +1336,8 @@ public:
     std::vector<DeviceBattery> Snapshot() const {
         std::vector<DeviceBattery> result;
         for (const auto& channel : channels) for (auto device : channel->Snapshot()) {
-            auto same = std::find_if(result.begin(), result.end(), [&](auto& d) { return d.key == device.key; });
+            // Same key, or the same device found again on another interface with no unit number.
+            auto same = std::find_if(result.begin(), result.end(), [&](auto& d) { return d.key == device.key || SameLogitechDevice(d, device); });
             if (same == result.end()) result.push_back(std::move(device));
             else if (device.online && (!same->online || device.observedAt > same->observedAt)) *same = std::move(device);
         }

@@ -1348,7 +1348,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64|x86",
-    "version": "0.1.4"
+    "version": "0.1.5"
   },
   "local@seamless-download-manager": {
     "disabled": false,

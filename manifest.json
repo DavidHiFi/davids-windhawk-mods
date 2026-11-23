@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-24T01:27:07+08:00",
+  "generatedAt": "2026-11-24T01:32:33+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 171,
@@ -2091,7 +2091,7 @@
       "name": "Logitech Battery Tray",
       "author": "DavidHiFi, uMk0",
       "github": "https://github.com/umk0",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "license": "GPL-3.0-or-later",
       "origin": "local",
       "upstream": "",
