@@ -118,6 +118,10 @@ The first run (`out\run1\`) was cut short when thread 7bb65bc7 rewound the test 
 
 ## Still to do
 
-- Test PC: retest of the two remove fixes (requeued 10:08 am; the 8:20 try never got a slot).
+- Test PC: retest of the two remove fixes, and the Editor clip encode. Both run outside T3 now
+  (`run-detached.ps1` in the job folder, started 11:53 am, `clip.gate.log` and `retest.gate.log`),
+  because T3 restarts cancelled them three times. Neither has run: the load gate holds every heavy
+  job while Ableton is open (open since 8:07 am, owner away). Their wait ends 3:53 pm with "nothing
+  was run"; after that, start them again with the same script once Ableton is closed.
 - Prove that a changed mod arrives by itself on a PC that has an older copy. The tower is the
   source, so it never has one; the friend's PC will show it once it is on 1.5.1.
