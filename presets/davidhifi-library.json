@@ -910,7 +910,7 @@
       "id": "logitech-battery-tray",
       "name": "Logitech Battery Tray",
       "version": "0.1.2",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "buttonWidth": 80,
         "devices[0].match": "",
@@ -1506,7 +1506,7 @@
         "excludedProcesses[0]": "",
         "initialDelaySeconds": 5,
         "intervalSeconds": 5,
-        "passiveBroadcast": 1
+        "passiveBroadcast": 0
       }
     },
     {

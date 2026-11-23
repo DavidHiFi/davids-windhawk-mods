@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-24T01:18:03+08:00",
+  "generatedAt": "2026-11-24T01:25:22+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 170,
-    "enabled": 166,
-    "local": 59
+    "mods": 171,
+    "enabled": 167,
+    "local": 60
   },
   "mods": [
     {
@@ -2096,6 +2096,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/logitech-battery-tray/logitech-battery-tray.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-download-manager",
+      "name": "Seamless Download Manager",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-download-manager/seamless-download-manager.wh.cpp",
       "enabled": true
     }
   ]

@@ -1349,5 +1349,12 @@
     "exclude": "",
     "architecture": "x86-64|x86",
     "version": "0.1.4"
+  },
+  "local@seamless-download-manager": {
+    "disabled": false,
+    "include": "windhawk.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.0"
   }
 }

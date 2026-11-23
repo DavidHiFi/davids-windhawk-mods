@@ -5478,5 +5478,10 @@
     "showBatteryBar": 0,
     "showNewDevices": 1,
     "showPercentage": 1
+  },
+  "local@seamless-download-manager": {
+    "nativeSettingsTitleBar": 0,
+    "settingsGlass": 1,
+    "settingsTrayIcon": 1
   }
 }

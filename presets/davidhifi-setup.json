@@ -1620,6 +1620,15 @@
       }
     },
     {
+      "id": "local@seamless-download-manager",
+      "enabled": true,
+      "settings": {
+        "nativeSettingsTitleBar": 0,
+        "settingsGlass": 1,
+        "settingsTrayIcon": 1
+      }
+    },
+    {
       "id": "local@seamless-explorer-search",
       "enabled": true,
       "settings": {
