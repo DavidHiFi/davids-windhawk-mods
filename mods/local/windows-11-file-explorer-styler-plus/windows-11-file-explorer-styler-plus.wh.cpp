@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.30
+// @version         1.10.31
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -42,6 +42,15 @@ adds after every other window's title is added here too: how long the
 window has been open, after the folder name. It uses Seamless Title Bars'
 own uptime settings (which units, compact or clock, separator, colour) and
 hides when that mod or its uptime is off.
+
+## What's new in 1.10.31
+
+- The command bar dock (New, Cut, Copy, Sort, View) shows its blue to mauve
+  edge on hover again.
+- The status bar dock has a line between each part (count, size,
+  selection, details), each running the full height of the dock.
+- The view buttons at the bottom right sit fully inside their dock.
+- No lighter line runs down between the folder tree and the file list.
 
 ## What's new in 1.10.30
 
@@ -9065,6 +9074,44 @@ void HandleVirtualizingRepeater(ElementId elementId, FrameworkElement element) {
 
 void MergeResourceVariables();
 
+// True when the cursor is over the element on screen. The element's box comes
+// from its own layout, mapped through the island window that hosts it.
+bool CursorOverElement(FrameworkElement const& target) {
+    POINT cursor;
+    if (!target.IsLoaded() || !GetCursorPos(&cursor)) return false;
+    auto root = target.XamlRoot();
+    if (!root) return false;
+    HWND bridge = WindowFromPoint(cursor);
+    while (bridge) {
+        WCHAR name[64];
+        if (GetClassNameW(bridge, name, ARRAYSIZE(name)) &&
+            wcscmp(name, L"Microsoft.UI.Content.DesktopChildSiteBridge") == 0) {
+            break;
+        }
+        bridge = GetAncestor(bridge, GA_PARENT);
+    }
+    if (!bridge || GetWindowThreadProcessId(bridge, nullptr) != GetCurrentThreadId()) {
+        return false;
+    }
+    double scale = root.RasterizationScale();
+    if (scale <= 0) scale = 1;
+    RECT client;
+    GetClientRect(bridge, &client);
+    auto size = root.Size();
+    if (std::abs(client.right / scale - size.Width) > 2 ||
+        std::abs(client.bottom / scale - size.Height) > 2) {
+        return false;
+    }
+    POINT local = cursor;
+    ScreenToClient(bridge, &local);
+    auto box = target.TransformToVisual(nullptr).TransformBounds(
+        {0, 0, static_cast<float>(target.ActualWidth()),
+         static_cast<float>(target.ActualHeight())});
+    double x = local.x / scale, y = local.y / scale;
+    return x >= box.X && y >= box.Y && x < box.X + box.Width &&
+           y < box.Y + box.Height;
+}
+
 template <typename Panel>
 void ConfigureBorderHover(Panel panel, ElementCustomizationState& state,
                           double opacity) {
@@ -9117,13 +9164,8 @@ void ConfigureBorderHover(Panel panel, ElementCustomizationState& state,
         hover->timer = queue.CreateTimer();
         hover->timer.Interval(std::chrono::milliseconds{60});
         hover->timer.IsRepeating(true);
-        Automation::Peers::FrameworkElementAutomationPeer peer{nullptr};
-        try {
-            peer = Automation::Peers::FrameworkElementAutomationPeer(panel);
-        } catch (...) {
-        }
         hover->tick = hover->timer.Tick(winrt::auto_revoke,
-            [weak = winrt::make_weak(panel), peer, paint, hot](
+            [weak = winrt::make_weak(panel), paint, hot](
                 auto const& timer, auto const&) {
                 auto target = weak.get();
                 if (!target || !*hot) {
@@ -9132,17 +9174,7 @@ void ConfigureBorderHover(Panel panel, ElementCustomizationState& state,
                 }
                 bool inside = false;
                 try {
-                    POINT cursor;
-                    if (peer && target.IsLoaded() && GetCursorPos(&cursor)) {
-                        HWND window = GetAncestor(WindowFromPoint(cursor), GA_ROOT);
-                        if (window && GetWindowThreadProcessId(window, nullptr) ==
-                                          GetCurrentThreadId()) {
-                            auto bounds = peer.GetBoundingRectangle();
-                            inside = cursor.x >= bounds.X && cursor.y >= bounds.Y &&
-                                     cursor.x < bounds.X + bounds.Width &&
-                                     cursor.y < bounds.Y + bounds.Height;
-                        }
-                    }
+                    inside = CursorOverElement(target);
                 } catch (...) {
                 }
                 if (!inside) {
@@ -11471,6 +11503,9 @@ struct StatusDockBuffer {
     int buttonCount;
     // Drawn into another status buffer, which is measured instead.
     bool nested;
+    // Centres of the status field separators Explorer painted in this buffer.
+    LONG separators[8];
+    int separatorCount;
 };
 
 // The status band height of each folder view, measured on its last full
@@ -11614,6 +11649,73 @@ void FinishStatusDockToggle(const StatusDockBuffer& buffer);
 void FinishStatusDockButtons(StatusDockBuffer& buffer);
 void MeasureStatusDock(const StatusDockBuffer& buffer,
                        HPAINTBUFFER paintBuffer);
+void DrawStatusDockSeparators(const StatusDockBuffer& buffer,
+                              HPAINTBUFFER paintBuffer);
+
+using GdiAlphaBlend_t = decltype(&GdiAlphaBlend);
+GdiAlphaBlend_t GdiAlphaBlend_Original;
+
+// The navigation pane and the file list each lay their own dark tint over the
+// glass. The few pixels of the folder view between them (and left of the
+// navigation pane) had none, so they showed as a lighter line the full height
+// of the window. They get the same tint.
+void TintPaneGaps(const StatusDockBuffer& buffer, HPAINTBUFFER paintBuffer) {
+    HWND hViewWnd = buffer.hWnd;
+    if (!GdiAlphaBlend_Original) {
+        return;
+    }
+    HWND sink = FindWindowExW(hViewWnd, nullptr, L"CtrlNotifySink", nullptr);
+    HWND root = GetAncestor(hViewWnd, GA_ROOT);
+    HWND list = root ? FindWindowExW(root, nullptr,
+                                     L"local@seamless-explorer-view-overlay",
+                                     nullptr)
+                     : nullptr;
+    RECT nav, files, target;
+    if (!sink || !list || !IsWindowVisible(sink) || !IsWindowVisible(list) ||
+        !GetWindowRect(sink, &nav) || !GetWindowRect(list, &files) ||
+        FAILED(GetBufferedPaintTargetRect(paintBuffer, &target))) {
+        return;
+    }
+    MapWindowPoints(nullptr, hViewWnd, (POINT*)&nav, 2);
+    MapWindowPoints(nullptr, hViewWnd, (POINT*)&files, 2);
+    UINT dpi = GetDpiForWindow(hViewWnd);
+    float scale = (dpi ? dpi : 96) / 96.0f;
+    LONG most = (LONG)(12 * scale);
+    LONG top = std::max(nav.top, files.top);
+    LONG bottom = std::min(nav.bottom, files.bottom);
+    RECT gaps[2] = {{nav.right, top, files.left, bottom},
+                    {0, top, nav.left, bottom}};
+    BITMAPINFO dot = {};
+    dot.bmiHeader.biSize = sizeof(dot.bmiHeader);
+    dot.bmiHeader.biWidth = 1;
+    dot.bmiHeader.biHeight = 1;
+    dot.bmiHeader.biPlanes = 1;
+    dot.bmiHeader.biBitCount = 32;
+    dot.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP dib = CreateDIBSection(nullptr, &dot, DIB_RGB_COLORS, &bits,
+                                   nullptr, 0);
+    HDC dc = dib ? CreateCompatibleDC(buffer.mem) : nullptr;
+    if (dc && bits) {
+        *(DWORD*)bits = 0x6A000000;
+        HGDIOBJ previous = SelectObject(dc, dib);
+        BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        for (const RECT& gap : gaps) {
+            RECT area;
+            if (gap.right - gap.left <= 0 || gap.right - gap.left > most ||
+                !IntersectRect(&area, &gap, &target)) {
+                continue;
+            }
+            GdiAlphaBlend_Original(buffer.mem, area.left, area.top,
+                                   area.right - area.left,
+                                   area.bottom - area.top, dc, 0, 0, 1, 1,
+                                   blend);
+        }
+        SelectObject(dc, previous);
+    }
+    if (dc) DeleteDC(dc);
+    if (dib) DeleteObject(dib);
+}
 
 using EndBufferedPaint_t = decltype(&EndBufferedPaint);
 EndBufferedPaint_t EndBufferedPaint_Original;
@@ -11629,7 +11731,11 @@ HRESULT WINAPI EndBufferedPaint_Hook(HPAINTBUFFER hBufferedPaint,
                 }
                 if (fUpdateTarget && !ended.isToggle && !ended.nested &&
                     ended.hasBand) {
+                    DrawStatusDockSeparators(ended, hBufferedPaint);
                     MeasureStatusDock(ended, hBufferedPaint);
+                }
+                if (fUpdateTarget && !ended.isToggle && !ended.nested) {
+                    TintPaneGaps(ended, hBufferedPaint);
                 }
                 // A full paint without a band: the status bar is hidden.
                 if (ended.fullPaint && !ended.hasBand && !ended.isToggle) {
@@ -11877,8 +11983,6 @@ bool PaintPaneSplitter(HDC hdc, int x, int y, int w, int h) {
            h * 10 >= client.bottom * 9;
 }
 
-using GdiAlphaBlend_t = decltype(&GdiAlphaBlend);
-GdiAlphaBlend_t GdiAlphaBlend_Original;
 BOOL WINAPI GdiAlphaBlend_Hook(HDC hdcDest, int xDest, int yDest, int wDest,
                                int hDest, HDC hdcSrc, int xSrc, int ySrc,
                                int wSrc, int hSrc, BLENDFUNCTION ftn) {
@@ -13053,10 +13157,14 @@ void GetStatusDockPills(HWND hViewWnd,
             buttonsRight = std::max(buttonsRight, toggleRect.right);
         }
     }
-    LONG buttonsPad = (LONG)(4 * scale);
+    // Room around the icons, so none touches the dock edge. The round end of
+    // the dock fits inside the window's own round corner, so the dock may run
+    // closer to the right edge than the text dock does to the left.
+    LONG buttonsPad = (LONG)(6 * scale);
 
     *buttonsPill = {buttonsLeft - buttonsPad, top,
-                    std::min(band.right - sideRoom, buttonsRight + buttonsPad),
+                    std::min(band.right - (LONG)(3 * scale),
+                             buttonsRight + buttonsPad),
                     bottom};
     *textPill = {std::max(band.left + sideRoom, textLeft - textPad), top,
                  std::min(textRight + textPad,
@@ -13911,18 +14019,185 @@ bool PaintStatusDockViewButton(HDC hdc, int iStateId, LPCRECT pRect) {
 }
 
 // The separators between status fields ("7 items | 1 item selected"): the
-// fields share one small dock, so no line is drawn.
+// stock line is skipped and its place kept, so a line the full height of the
+// small dock is drawn there when the paint ends.
 bool PaintStatusDockSeparator(HDC hdc, LPCRECT pRect) {
     StatusDockBuffer* buffer = FindStatusDockBuffer(hdc);
     if (!buffer || buffer->isToggle || !pRect) {
         return false;
     }
     if (buffer->hasBand) {
+        StatusDockBuffer* owner = buffer;
+        if (buffer->nested) {
+            for (int i = 0; i < g_statusDockBufferCountForThread; i++) {
+                StatusDockBuffer& other = g_statusDockBuffersForThread[i];
+                if (!other.nested && !other.isToggle &&
+                    other.hWnd == buffer->hWnd) {
+                    owner = &other;
+                    break;
+                }
+            }
+        }
+        if (owner->separatorCount < (int)ARRAYSIZE(owner->separators)) {
+            owner->separators[owner->separatorCount++] =
+                (pRect->left + pRect->right) / 2;
+        }
         return true;
     }
     RECT band;
     return GetStatusDockBand(buffer->hWnd, &band) && pRect->top >= band.top &&
            pRect->bottom <= band.bottom;
+}
+
+// Draws the field separators of the text dock, each the full inner height of
+// the dock. The places come from Explorer's own separators and from a "│"
+// that another mod writes into the status text; that glyph is covered with
+// the dock background first.
+void DrawStatusDockSeparators(const StatusDockBuffer& buffer,
+                              HPAINTBUFFER paintBuffer) {
+    HWND hViewWnd = buffer.hWnd;
+    RECT band;
+    if (!GetStatusDockBand(hViewWnd, &band)) {
+        return;
+    }
+    UINT dpi = StatusDockDpi(hViewWnd);
+    float scale = dpi / 96.0f;
+    RECT textPill, buttonsPill;
+    GetStatusDockPills(hViewWnd, band, dpi, &textPill, &buttonsPill);
+    LONG edge = std::max(1L, (LONG)std::lround(2.0f * scale));
+    RECT inner = {textPill.left + edge, textPill.top + edge,
+                  textPill.right - edge, textPill.bottom - edge};
+    RECT target, area;
+    if (inner.right <= inner.left || inner.bottom <= inner.top ||
+        FAILED(GetBufferedPaintTargetRect(paintBuffer, &target)) ||
+        !IntersectRect(&area, &inner, &target) ||
+        area.top != inner.top || area.bottom != inner.bottom) {
+        return;
+    }
+
+    LONG lines[16];
+    int lineCount = 0;
+    for (int i = 0; i < buffer.separatorCount; i++) {
+        LONG x = buffer.separators[i];
+        if (x > inner.left && x < inner.right) {
+            lines[lineCount++] = x;
+        }
+    }
+
+    int width = area.right - area.left;
+    int height = area.bottom - area.top;
+    BITMAPINFO info = {};
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = -height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP dib =
+        CreateDIBSection(nullptr, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
+    HDC copy = dib ? CreateCompatibleDC(buffer.mem) : nullptr;
+    if (copy && bits) {
+        HGDIOBJ previous = SelectObject(copy, dib);
+        if (BitBlt(copy, 0, 0, width, height, buffer.mem, area.left, area.top,
+                   SRCCOPY)) {
+            GdiFlush();
+            const BYTE* pixels = (const BYTE*)bits;
+            auto lit = [&](int x, int y, int floor) {
+                const BYTE* px = pixels + ((size_t)y * width + x) * 4;
+                BYTE high = std::max({px[0], px[1], px[2]});
+                BYTE low = std::min({px[0], px[1], px[2]});
+                return high >= floor && high - low < 0x48;
+            };
+            // A letter stands at most about half the inner height; the
+            // glyph runs most of it.
+            int tall = std::max(4, height * 7 / 10);
+            std::vector<bool> glyph(width, false);
+            for (int x = 0; x < width; x++) {
+                int run = 0, best = 0;
+                for (int y = 0; y < height; y++) {
+                    run = lit(x, y, 0x60) ? run + 1 : 0;
+                    best = std::max(best, run);
+                }
+                glyph[x] = best >= tall;
+            }
+            auto blank = [&](int x) {
+                if (x < 0 || x >= width) return false;
+                for (int y = 0; y < height; y++) {
+                    if (lit(x, y, 0x50)) return false;
+                }
+                return true;
+            };
+            for (int x = 0; x < width;) {
+                if (!glyph[x]) {
+                    x++;
+                    continue;
+                }
+                int end = x;
+                while (end + 1 < width && glyph[end + 1]) end++;
+                int from = std::max(0, x - 1), to = std::min(width - 1, end + 1);
+                int source = -1;
+                for (int d = 2; d <= 8 && source < 0; d++) {
+                    if (blank(x - d)) source = x - d;
+                    else if (blank(end + d)) source = end + d;
+                }
+                if (source >= 0) {
+                    for (int c = from; c <= to; c++) {
+                        BitBlt(buffer.mem, area.left + c, area.top, 1, height,
+                               copy, source, 0, SRCCOPY);
+                    }
+                }
+                if (lineCount < (int)ARRAYSIZE(lines)) {
+                    lines[lineCount++] = area.left + (x + end) / 2;
+                }
+                x = end + 1;
+            }
+        }
+        SelectObject(copy, previous);
+    }
+    if (copy) DeleteDC(copy);
+    if (dib) DeleteObject(dib);
+
+    if (lineCount == 0) {
+        return;
+    }
+    // The dock's resting edge colour, premultiplied.
+    BITMAPINFO dot = {};
+    dot.bmiHeader.biSize = sizeof(dot.bmiHeader);
+    dot.bmiHeader.biWidth = 1;
+    dot.bmiHeader.biHeight = 1;
+    dot.bmiHeader.biPlanes = 1;
+    dot.bmiHeader.biBitCount = 32;
+    dot.bmiHeader.biCompression = BI_RGB;
+    void* dotBits = nullptr;
+    HBITMAP dotDib =
+        CreateDIBSection(nullptr, &dot, DIB_RGB_COLORS, &dotBits, nullptr, 0);
+    HDC dotDc = dotDib ? CreateCompatibleDC(buffer.mem) : nullptr;
+    if (dotDc && dotBits) {
+        BYTE alpha = 0x64;
+        BYTE* px = (BYTE*)dotBits;
+        px[0] = (BYTE)(0x70 * alpha / 255);
+        px[1] = (BYTE)(0x5B * alpha / 255);
+        px[2] = (BYTE)(0x58 * alpha / 255);
+        px[3] = alpha;
+        HGDIOBJ previous = SelectObject(dotDc, dotDib);
+        BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        int line = std::max(1, (int)std::lround(scale));
+        std::sort(lines, lines + lineCount);
+        LONG last = -100000;
+        for (int i = 0; i < lineCount; i++) {
+            if (lines[i] - last <= 3 * line) continue;
+            last = lines[i];
+            int x = lines[i] - line / 2;
+            if (x < target.left || x + line > target.right) continue;
+            (GdiAlphaBlend_Original ? GdiAlphaBlend_Original : GdiAlphaBlend)(
+                buffer.mem, x, inner.top, line, inner.bottom - inner.top, dotDc,
+                0, 0, 1, 1, blend);
+        }
+        SelectObject(dotDc, previous);
+    }
+    if (dotDc) DeleteDC(dotDc);
+    if (dotDib) DeleteObject(dotDib);
 }
 
 // Finds the status text in the finished paint: bright grey pixels in the
