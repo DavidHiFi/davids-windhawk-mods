@@ -2,7 +2,7 @@
 // @id           better-volume-mixer-plus
 // @name         Seamless Volume Mixer
 // @description  A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices
-// @version      1.4.34
+// @version      1.4.35
 // @author       DavidHiFi, 0Allu, shubho
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -5856,7 +5856,7 @@ HICON CreateMixerTrayBadge(int size, bool muted) {
     HDC dc = CreateCompatibleDC(nullptr);
     HGDIOBJ old = SelectObject(dc, glyph);
     memset(glyphBits, 0, (size_t)size * size * 4);
-    HFONT font = CreateFontW(-(int)(size * 0.62f), 0, 0, 0, FW_NORMAL, 0, 0, 0,
+    HFONT font = CreateFontW(-(int)(size * 0.84f), 0, 0, 0, FW_NORMAL, 0, 0, 0,
                              DEFAULT_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0,
                              L"Segoe Fluent Icons");
     HGDIOBJ oldFont = SelectObject(dc, font);
@@ -5877,26 +5877,18 @@ HICON CreateMixerTrayBadge(int size, bool muted) {
     const float c1[3] = {muted ? 0x58 / 255.f : 0xCB / 255.f,
                          muted ? 0x5B / 255.f : 0xA6 / 255.f,
                          muted ? 0x70 / 255.f : 0xF7 / 255.f};
-    const float ink[3] = {0x11 / 255.f, 0x11 / 255.f, 0x1B / 255.f};
-    float radius = size * 0.26f, half = size / 2.0f;
     auto* px = static_cast<uint32_t*>(bits);
     const auto* gp = static_cast<const uint32_t*>(glyphBits);
     for (int y = 0; y < size; y++) {
         for (int x = 0; x < size; x++) {
-            float qx = std::fabs(x + 0.5f - half) - (half - radius);
-            float qy = std::fabs(y + 0.5f - half) - (half - radius);
-            float ox = std::max(qx, 0.0f), oy = std::max(qy, 0.0f);
-            float d = std::sqrt(ox * ox + oy * oy) +
-                      std::min(std::max(qx, qy), 0.0f) - radius;
-            float a = std::clamp(0.5f - d, 0.0f, 1.0f);
             float t = std::clamp((x + y) / (2.0f * (size - 1)), 0.0f, 1.0f);
             float cov = ((gp[y * size + x] >> 8) & 0xFF) / 255.0f;
             float rgb[3];
             for (int i = 0; i < 3; i++) {
                 float base = c0[i] + (c1[i] - c0[i]) * t;
-                rgb[i] = (base + (ink[i] - base) * cov) * a;  // Premultiplied.
+                rgb[i] = base * cov;  // Premultiplied; clear where there is no glyph.
             }
-            px[y * size + x] = ((uint32_t)(a * 255 + 0.5f) << 24) |
+            px[y * size + x] = ((uint32_t)(cov * 255 + 0.5f) << 24) |
                                ((uint32_t)(rgb[0] * 255 + 0.5f) << 16) |
                                ((uint32_t)(rgb[1] * 255 + 0.5f) << 8) |
                                (uint32_t)(rgb[2] * 255 + 0.5f);
