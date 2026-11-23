@@ -2,7 +2,7 @@
 // @id              seamless-wobbly-windows
 // @name            Seamless Wobbly Windows
 // @description     Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows
-// @version         1.2.11
+// @version         1.2.12
 // @author          DavidHiFi, HeyJeay, HaVeN80, lalimatyus
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -88,6 +88,11 @@ title bar to move a window without the wobble.
 - Nothing is loaded into dwm.exe. The effect runs inside each app.
 - Turn off the other wobble mods (Wobbly Windows, Window Wobble) before using
   this one.
+
+## What's new in 1.2.12
+- No more blurry picture of the window itself for a moment when a frosted
+  window starts to wobble. The frosted glass now appears only once the
+  real window has stepped aside.
 
 ## What's new in 1.2.11
 - Frosted windows now keep their frosted glass while you drag them, by
@@ -5201,6 +5206,8 @@ struct LiveGlass {
     bool failed = false;        // could not be built here: the flat glass stays
     bool active = false;        // this drag uses it
     bool shown = false;
+    bool held = false;          // clip kept up to date, window not shown yet
+    HWND above = nullptr;       // shown just below this window (the overlay)
     bool com = false, registered = false;
     int step = 0;               // how far the last setup got, for the drag's note
     HRESULT lastHr = S_OK;
@@ -5222,6 +5229,7 @@ struct LiveGlass {
     bool Ensure();
     bool Start(const Canvas& c, float radius, int cells, int sub);
     void Update(const std::vector<Vec2>& smooth, int rn, HWND above);
+    void Reveal();
     void Hide();
     void Destroy();
     void DropWindow();
@@ -5340,6 +5348,7 @@ bool LiveGlass::Ensure() {
 // the blur never shows past the copy's own edge.
 bool LiveGlass::Start(const Canvas& c, float radius, int cells, int sub) {
     active = false;
+    held = false;
     if (!Ensure()) return false;
     cw = (float)c.w; ch = (float)c.h;
     const float in = 1.0f;
@@ -5376,8 +5385,9 @@ bool LiveGlass::Start(const Canvas& c, float radius, int cells, int sub) {
 
 // Bends the outline with the drawn grid (the same two triangles per cell the
 // overlay draws) and sets it as the blur's clip, before the overlay presents.
-void LiveGlass::Update(const std::vector<Vec2>& smooth, int rn, HWND above) {
+void LiveGlass::Update(const std::vector<Vec2>& smooth, int rn, HWND aboveHwnd) {
     if (!active || !hwnd || rn < 2 || smooth.size() < (size_t)rn * rn) return;
+    above = aboveHwnd;
     const int rc = rn - 1;
     auto map = [&](const Vec2& t) {
         const float u = std::clamp(t.x / cw, 0.0f, 1.0f) * rc;
@@ -5405,18 +5415,31 @@ void LiveGlass::Update(const std::vector<Vec2>& smooth, int rn, HWND above) {
         s->EndFigure(D2D1_FIGURE_END_CLOSED);
         if (FAILED(s->Close())) return;
         path.Path(liveglass::WUC::CompositionPath(winrt::make<liveglass::PathSource>(g.p)));
-        if (!shown) {
-            sprite.IsVisible(true);
-            SetWindowPos(hwnd, above ? above : HWND_TOPMOST, 0, 0, 0, 0,
-                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-            shown = true;
-        }
     } catch (...) {
         Wh_Log(L"glass: update failed hr=0x%08X", (unsigned)winrt::to_hresult());
         active = false;
         return;
     }
+    if (!shown && !held) Reveal();
     PumpMessages();     // composition commits from the thread's queue
+}
+
+// Shown only once the real window is cloaked: shown earlier, the blur reads
+// the real window behind it and keeps that picture for about a second (1.2.11).
+void LiveGlass::Reveal() {
+    held = false;
+    if (!active || !hwnd || shown) return;
+    try {
+        sprite.IsVisible(true);
+    } catch (...) {
+        Wh_Log(L"glass: reveal failed hr=0x%08X", (unsigned)winrt::to_hresult());
+        active = false;
+        return;
+    }
+    SetWindowPos(hwnd, above ? above : HWND_TOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    shown = true;
+    PumpMessages();
 }
 
 void LiveGlass::Hide() {
@@ -6429,13 +6452,18 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     DragGlow glow;
     GlowCB glassCb;
     bool liveGlass = false, evenGlass = true;
+    float liveFill = 0.0f;
     if (!glow.Start(hwnd, cfg, canvas, glass, seeThrough)) {
         dev.SetGlow(nullptr);
         if (GlassOnly(canvas, glass, glassCb, &evenGlass)) {
             // The real blur under the copy, which then paints only the tint.
             if (ov.glass && ov.glass->Start(canvas, CornerRadius(hwnd, MonitorScale(canvas.vis)),
                                             cfg.mesh, std::max(1, 64 / std::max(1, cfg.mesh)))) {
-                glassCb.fill[3] = 2.0f + (1.0f - seeThrough);
+                // Until the real window is cloaked the copy wears the flat
+                // stand-in colour and the blur stays hidden (see Reveal).
+                liveFill = 2.0f + (1.0f - seeThrough);
+                glassCb.fill[3] = 1.0f;
+                ov.glass->held = true;
                 liveGlass = true;
             } else if (!evenGlass) {
                 return;     // no live blur and no single colour: keep the native drag
@@ -6499,6 +6527,20 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     bool   resized = false;
     const double deadline = NowSeconds() + 120.0;
 
+    // The real window is out of composition now: show the blur, let it read the
+    // desktop behind for a frame, then hand the copy over to it.
+    if (liveGlass && ov.glass) {
+        ov.glass->Reveal();
+        DwmFlush();
+        if (ov.glass->shown) {
+            glassCb.fill[3] = liveFill;
+            dev.SetGlow(&glassCb);
+            if (draw() == DrawResult::DeviceLost) lostDevice = true;
+        } else {
+            liveGlass = false;      // no blur after all: keep the flat stand-in
+        }
+    }
+
     auto followFrame = [&](bool kick) -> bool {
         PumpMessages();
         const double t = NowSeconds();
@@ -6540,7 +6582,7 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
         return true;
     };
 
-    while (HeldFor(rq)) {
+    while (!lostDevice && HeldFor(rq)) {
         if (QuitRequested() || NowSeconds() > deadline || !IsWindow(hwnd)) break;
         if (rq.external &&
             (IsHungAppWindow(hwnd) || NowSeconds() - lastChange > 5.0)) {
