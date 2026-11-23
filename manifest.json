@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-24T06:11:10+08:00",
+  "generatedAt": "2026-11-24T06:16:44+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 171,
-    "enabled": 167,
-    "local": 60
+    "mods": 172,
+    "enabled": 168,
+    "local": 61
   },
   "mods": [
     {
@@ -2108,6 +2108,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-download-manager/seamless-download-manager.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@parallax-wallpaper",
+      "name": "Parallax Wallpaper",
+      "author": "DavidHiFi, HaVeN80",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/parallax-wallpaper/parallax-wallpaper.wh.cpp",
       "enabled": true
     }
   ]
