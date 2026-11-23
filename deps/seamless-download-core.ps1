@@ -10,7 +10,7 @@ param([ValidateSet('status', 'check', 'install', 'update', 'remove')][string]$Mo
 $ErrorActionPreference = 'Continue'; $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 # The engine version the mod loads. Bumped together with the mod.
-$need = '0.1.1'
+$need = '0.1.2'
 $repo = 'DavidHiFi/seamless-download-manager'
 $dir = Join-Path $env:LOCALAPPDATA 'SeamlessDownloadManager\engine'
 $script:latest = ''
