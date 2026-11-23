@@ -98,9 +98,22 @@ waits until answered (the app stays blocked meanwhile, as with Windows).
   so no real app can be blocked), slides it over the open panel for the glass check, answers
   Block with Esc, then removes the rule and the app. Output `media\live\1.2.0\`.
 
+- First tower capture run (10:42 pm): the box came up 2 s after the throwaway app started,
+  centred to the pixel, the app in front kept the keyboard, Esc saved a Block rule, the rule and
+  app were removed after, the Windows pop-up switch read off on all three profiles. The shots
+  and clip did not show the box, and that was the capture, not the mod: the plain screen copy
+  leaves out see-through (layered) windows (the tray menu shot came out blank the same way), and
+  the recorder's screen numbers had moved, so the clip filmed a side screen. The full-screen
+  check was read live too (notification state 5, accepting, front window not full screen), so it
+  does not hide the box by mistake.
+- Fixed in capture-all.py: shots include layered windows, the main screen's recorder number is
+  found each run, the panel open is retried until it is really open, the box's visible state and
+  fade level are logged, and analyze.py cuts a second shot of the box from the video. Rerun
+  queued (test\capture-1.2.0b.log).
+
 ## Open
 
-1. Live captures and the glass check: queued for the screen (see above).
+1. Live captures and the glass check: rerun queued for the screen (see above).
 2. The panel's own glass: the app list fills it, so the box over the panel is the measured
    floating surface. The box is modal, so the unfocused-glass check does not apply to it.
 
