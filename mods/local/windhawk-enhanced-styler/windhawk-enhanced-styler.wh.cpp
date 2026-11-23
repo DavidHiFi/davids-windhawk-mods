@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.23
+// @version         2.2.24
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,10 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.24
+
+- The Loaded mods and Mod tasks windows no longer turn see-through when another window is in front. Their title strip and body keep a solid dark fill, so the text behind never shows.
 
 ## What's new in 2.2.23
 
@@ -2439,11 +2443,17 @@ static void ApplyTrayDialogLook(HWND dialog, HWND list, const Settings& s) {
     SetWindowTheme(list, L"DarkMode_Explorer", nullptr);  // dark scrollbar, repainted blue to mauve by the theme hooks
     SendMessageW(list, WM_CHANGEUISTATE, MAKEWPARAM(UIS_SET, UISF_HIDEFOCUS), 0);
     if (HFONT font = TrayFont(dialog, s)) SendMessageW(list, WM_SETFONT, (WPARAM)font, TRUE);
+    // Both tray windows float over other apps and are almost never in front, and
+    // Windows drops the acrylic blur from a background window. So the body keeps a
+    // near solid Mocha fill and the title strip a solid one: nothing behind is
+    // ever readable, with or without the blur.
     Settings frame = s;
-    if (IsProgressDialog(dialog) && frame.blur) {
-        frame.backgroundOpacity = std::clamp(frame.backgroundOpacity, 85, 99);
-    }
+    if (frame.blur) frame.backgroundOpacity = std::clamp(frame.backgroundOpacity, 95, 99);
     ApplyWindowStack(dialog, frame);
+    if (s.nativeTitleBar) {
+        COLORREF caption = Bgr(frame.background);
+        DwmSetWindowAttribute(dialog, DWMWA_CAPTION_COLOR, &caption, sizeof(caption));
+    }
     RedrawWindow(dialog, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);
 }
 
