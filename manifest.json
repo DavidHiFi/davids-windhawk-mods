@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-24T06:20:59+08:00",
+  "generatedAt": "2026-11-24T06:22:04+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 172,
@@ -1084,7 +1084,7 @@
       "name": "Recycle Bin Tray Plus",
       "author": "DavidHiFi, Wildstyle23",
       "github": "https://github.com/wildstyle23",
-      "version": "1.0.9",
+      "version": "1.0.10",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",

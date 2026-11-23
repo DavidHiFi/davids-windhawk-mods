@@ -3,7 +3,7 @@
 // @name            Recycle Bin Tray Plus
 // @description     Adds an interactive Recycle Bin icon to the Windows 11 system tray with live state updates, drag-and-drop support, theme-aware rendering, multiple icon styles, and configurable mouse actions.
 // @description:fr-FR Ajoute une icône interactive de la Corbeille à la zone de notification de Windows 11, avec mise à jour en temps réel, glisser-déposer, adaptation au thème, plusieurs styles d'icône et actions de souris configurables.
-// @version         1.0.9
+// @version         1.0.10
 // @author          DavidHiFi, Wildstyle23
 // @github          https://github.com/wildstyle23
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -3657,29 +3657,24 @@ HICON CreateBadgeTrashIcon(int iconSize, bool isEmpty) {
         if (color) DeleteObject(color);
         return NULL;
     }
-    const float c0[3] = {0x89, 0xB4, 0xFA}, c1[3] = {0xCB, 0xA6, 0xF7}, ink[3] = {0x11, 0x11, 0x1B};
-    const float rad = n * 0.26f, half = n / 2.f;
+    const float c0[3] = {0x89, 0xB4, 0xFA}, c1[3] = {0xCB, 0xA6, 0xF7};
     const int ss = 4;
     DWORD* px = static_cast<DWORD*>(bits);
     for (int y = 0; y < n; y++) {
         for (int x = 0; x < n; x++) {
-            const float qx = std::fabs(x + 0.5f - half) - (half - rad);
-            const float qy = std::fabs(y + 0.5f - half) - (half - rad);
-            const float d = std::hypot(std::max(qx, 0.f), std::max(qy, 0.f)) +
-                            std::min(std::max(qx, qy), 0.f) - rad;
-            const float a = std::clamp(0.5f - d, 0.f, 1.f);
             float cov = 0.f;
             for (int sy = 0; sy < ss; sy++)
                 for (int sx = 0; sx < ss; sx++)
-                    cov += RbBadgeInk((x + (sx + 0.5f) / ss) / n, (y + (sy + 0.5f) / ss) / n, n, !isEmpty);
+                    cov += RbBadgeInk(0.5f + ((x + (sx + 0.5f) / ss) / n - 0.5f) * 0.77f,  // scaled up about the centre to fill the room the plate had
+                                      0.5f + ((y + (sy + 0.5f) / ss) / n - 0.5f) * 0.77f, n, !isEmpty);
             cov /= ss * ss;
             const float t = std::clamp((x + y) / (2.f * (n - 1)), 0.f, 1.f);
             BYTE ch[3];
             for (int k = 0; k < 3; k++) {
                 const float base = c0[k] + (c1[k] - c0[k]) * t;
-                ch[k] = static_cast<BYTE>(std::lround((base + (ink[k] - base) * cov) * a));
+                ch[k] = static_cast<BYTE>(std::lround(base * cov));
             }
-            const BYTE alpha = static_cast<BYTE>(std::lround(a * 255.f));
+            const BYTE alpha = static_cast<BYTE>(std::lround(cov * 255.f));
             px[y * n + x] = (static_cast<DWORD>(alpha) << 24) | (static_cast<DWORD>(ch[0]) << 16) |
                             (static_cast<DWORD>(ch[1]) << 8) | ch[2];
         }
