@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.8
+// @version         0.3.9
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,6 +26,11 @@ the edge of the screen across from your taskbar, so you get a clean bar on one
 side and a dock on the other, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
+
+## What's new in 0.3.9
+
+- The taskbar's right-click menu opens on top of the title pill again. The
+  pill steps under any menu or pop-up that covers it.
 
 ## What's new in 0.3.8
 
@@ -2632,20 +2637,41 @@ void HideTitle() {
 
 // Clicking the bar lifts it over us; come back just above it. Not to the very
 // top: the taskbar's own menu opens above the bar and must stay above the pill.
+// The pill belongs to the bar, so Windows can also carry it over a menu the bar
+// opened. A visible window that overlaps the pill but sits between it and the
+// bar is such a menu (or its shadow): step down under it.
+bool TitleOverMenu(HWND tray) {
+    RECT pr;
+    if (!GetWindowRect(g_title, &pr)) return false;
+    int n = 0;
+    for (HWND w = GetWindow(g_title, GW_HWNDNEXT); w && w != tray && n < 64; w = GetWindow(w, GW_HWNDNEXT), n++) {
+        if (!IsWindowVisible(w)) continue;
+        RECT r;
+        if (!GetWindowRect(w, &r) || !IntersectRect(&r, &r, &pr)) continue;
+        BOOL cloaked = FALSE;
+        DwmGetWindowAttribute(w, DWMWA_CLOAKED, &cloaked, sizeof(cloaked));
+        if (!cloaked) return true;
+    }
+    return false;
+}
+
 void RaiseTitle() {
     if (!g_title || !IsWindowVisible(g_title)) return;
     HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
     if (!tray) return;
+    bool under = false;
     for (HWND w = GetWindow(g_title, GW_HWNDPREV); w; w = GetWindow(w, GW_HWNDPREV))
         if (w == tray) {
-            HWND above = GetWindow(tray, GW_HWNDPREV);
-            // NOSENDCHANGING: from the guard thread the reorder must not wait on
-            // a busy dock thread to answer WM_WINDOWPOSCHANGING first.
-            SetWindowPos(g_title, above ? above : HWND_TOPMOST, 0, 0, 0, 0,
-                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER |
-                             SWP_NOSENDCHANGING);
+            under = true;
             break;
         }
+    if (!under && !TitleOverMenu(tray)) return;
+    HWND above = GetWindow(tray, GW_HWNDPREV);
+    if (above == g_title) return;
+    // NOSENDCHANGING: from the guard thread the reorder must not wait on
+    // a busy dock thread to answer WM_WINDOWPOSCHANGING first.
+    SetWindowPos(g_title, above ? above : HWND_TOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOSENDCHANGING);
 }
 
 // Guard thread only from here to ZGuardThread.
@@ -2664,8 +2690,9 @@ void StartRaiseBurst() {
     SetWaitableTimer(g_raiseTimer, &due, 2, nullptr, nullptr, FALSE);
 }
 
-void CALLBACK ZEventProc(HWINEVENTHOOK, DWORD, HWND h, LONG idObj, LONG idChild, DWORD, DWORD) {
-    if (idObj != OBJID_WINDOW || idChild != CHILDID_SELF || !h) return;
+void CALLBACK ZEventProc(HWINEVENTHOOK, DWORD ev, HWND h, LONG idObj, LONG idChild, DWORD, DWORD) {
+    if (!h) return;
+    if (ev != EVENT_SYSTEM_MENUPOPUPSTART && (idObj != OBJID_WINDOW || idChild != CHILDID_SELF)) return;
     RaiseTitle();
     StartRaiseBurst();
 }
@@ -2685,10 +2712,12 @@ DWORD WINAPI ZGuardThread(void*) {
     // 0x2 = CREATE_WAITABLE_TIMER_HIGH_RESOLUTION; older systems refuse it.
     g_raiseTimer = CreateWaitableTimerExW(nullptr, nullptr, 0x2, TIMER_ALL_ACCESS);
     if (!g_raiseTimer) g_raiseTimer = CreateWaitableTimerExW(nullptr, nullptr, 0, TIMER_ALL_ACCESS);
-    HWINEVENTHOOK hooks[2] = {
+    HWINEVENTHOOK hooks[3] = {
         SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, ZEventProc, 0, 0,
                         WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS),
         SetWinEventHook(EVENT_SYSTEM_CAPTURESTART, EVENT_SYSTEM_CAPTURESTART, nullptr, ZEventProc,
+                        0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS),
+        SetWinEventHook(EVENT_SYSTEM_MENUPOPUPSTART, EVENT_SYSTEM_MENUPOPUPSTART, nullptr, ZEventProc,
                         0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS)};
     SetEvent(g_zReady);
     for (bool quit = false; !quit;) {
