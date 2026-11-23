@@ -2,7 +2,7 @@
 // @id              power-options-button-plus
 // @name            Power Options Button Plus
 // @description     Tray icon to switch between Windows power plans with the mouse wheel. The icon is the house tray badge with a glyph for each plan.
-// @version         1.1.0
+// @version         1.1.1
 // @author          DavidHiFi, SilverAmd
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -1178,7 +1178,7 @@ HICON CreatePowerTrayIcon(int planIndex) {
     HDC dc = CreateCompatibleDC(nullptr);
     HGDIOBJ oldBitmap = SelectObject(dc, glyph);
     ZeroMemory(glyphBits, (size_t)size * size * 4);
-    HFONT font = CreateFontW(-(int)(size * 0.64f), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+    HFONT font = CreateFontW(-(int)(size * 0.84f), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                              DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                              ANTIALIASED_QUALITY, DEFAULT_PITCH, L"Segoe Fluent Icons");
     HGDIOBJ oldFont = SelectObject(dc, font);
@@ -1195,28 +1195,18 @@ HICON CreatePowerTrayIcon(int planIndex) {
 
     const float c0[3] = {0x89 / 255.f, 0xB4 / 255.f, 0xFA / 255.f};
     const float c1[3] = {0xCB / 255.f, 0xA6 / 255.f, 0xF7 / 255.f};
-    const float ink[3] = {0x11 / 255.f, 0x11 / 255.f, 0x1B / 255.f};
-    float radius = size * 0.26f, half = size / 2.0f;
     DWORD* px = (DWORD*)bits;
     const DWORD* gp = (const DWORD*)glyphBits;
     for (int y = 0; y < size; y++) {
         for (int x = 0; x < size; x++) {
-            // Signed distance to the rounded square, for a soft edge.
-            float qx = fabsf(x + 0.5f - half) - (half - radius);
-            float qy = fabsf(y + 0.5f - half) - (half - radius);
-            float ox = qx > 0.0f ? qx : 0.0f, oy = qy > 0.0f ? qy : 0.0f;
-            float inner = qx > qy ? qx : qy;
-            float d = sqrtf(ox * ox + oy * oy) + (inner < 0.0f ? inner : 0.0f) - radius;
-            float a = 0.5f - d;
-            a = a < 0.0f ? 0.0f : (a > 1.0f ? 1.0f : a);
             float t = (x + y) / (2.0f * (size - 1));
             float cov = ((gp[y * size + x] >> 8) & 0xFF) / 255.0f;
             float rgb[3];
             for (int i = 0; i < 3; i++) {
                 float base = c0[i] + (c1[i] - c0[i]) * t;
-                rgb[i] = (base + (ink[i] - base) * cov) * a;  // Premultiplied.
+                rgb[i] = base * cov;  // Premultiplied; clear where there is no glyph.
             }
-            px[y * size + x] = ((DWORD)(a * 255 + 0.5f) << 24) |
+            px[y * size + x] = ((DWORD)(cov * 255 + 0.5f) << 24) |
                                ((DWORD)(rgb[0] * 255 + 0.5f) << 16) |
                                ((DWORD)(rgb[1] * 255 + 0.5f) << 8) |
                                (DWORD)(rgb[2] * 255 + 0.5f);
