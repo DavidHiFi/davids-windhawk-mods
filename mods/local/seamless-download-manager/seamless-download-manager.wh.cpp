@@ -2,7 +2,7 @@
 // @id              seamless-download-manager
 // @name            Seamless Download Manager
 // @description     A fast tray download manager: downloads in parts, resumes where it stopped, takes browser links
-// @version         1.0.4
+// @version         1.0.5
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-download-manager
@@ -6346,8 +6346,15 @@ void DrawSidebar(Pt& p, float top, float bottom) {
     p.rt->PushAxisAlignedClip({dock.left + 2, dock.top + 2, dock.right - 2, dock.bottom - 2}, D2D1_ANTIALIAS_MODE_ALIASED);
     float y = dock.top + 10;
     const float bottomRows = 3 * 38 + 14;
-    auto row = [&](int id, const std::wstring& name, WCHAR glyph, int count, bool active, bool dot, float at) {
-        D2D1_RECT_F r{dock.left + 8, at, dock.right - 8, at + 34};
+    // A short window squeezes the rows a little so every type still shows.
+    auto sections = SideRows();
+    float need = 0;
+    for (auto& section : sections) need += (mini ? 6 : 26) + 38 * section.second.size() + 8;
+    float room = dock.bottom - bottomRows - 30 - y;
+    float squeeze = need > room && need > 0 ? std::max(0.78f, room / need) : 1.0f;
+    float step = 38 * squeeze, rowH = step - 4, headH = (mini ? 6 : 26) * squeeze;
+    auto row = [&](int id, const std::wstring& name, WCHAR glyph, int count, bool active, bool dot, float at, float h = 34) {
+        D2D1_RECT_F r{dock.left + 8, at, dock.right - 8, at + h};
         float g = m.glow.Of(id);
         if (active) {
             p.GradFill(r, CtlRadius(), 0.2f);
@@ -6370,20 +6377,16 @@ void DrawSidebar(Pt& p, float top, float bottom) {
         }
         m.hits.push_back({id, r});
     };
-    for (auto& section : SideRows()) {
+    for (auto& section : sections) {
         if (y > dock.bottom - bottomRows - 30) break;
-        if (!mini) {
-            p.Text(Fmt(10.5f, 700, kMiddle), section.first, {dock.left + 20, y, dock.right - 12, y + 24}, mocha::overlay1);
-            y += 26;
-        } else {
-            y += 6;
-        }
+        if (!mini) p.Text(Fmt(10.5f, 700, kMiddle), section.first, {dock.left + 20, y, dock.right - 12, y + headH - 2}, mocha::overlay1);
+        y += headH;
         for (auto& r : section.second) {
-            if (y > dock.bottom - bottomRows - 36) break;
-            row(r.id, r.name, r.glyph, r.count, m.filter == r.filter, r.dot, y);
-            y += 38;
+            if (y + rowH > dock.bottom - bottomRows - 2) break;
+            row(r.id, r.name, r.glyph, r.count, m.filter == r.filter, r.dot, y, rowH);
+            y += step;
         }
-        y += 8;
+        y += 8 * squeeze;
     }
     float by = dock.bottom - bottomRows + 6;
     p.Line(dock.left + 16, by - 8, dock.right - 16, by - 8, mocha::surface1, 0.8f);
