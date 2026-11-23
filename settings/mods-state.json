@@ -1320,7 +1320,7 @@
     "include": "*|windhawk.exe",
     "exclude": "dwm.exe|mmc.exe|conhost.exe|OpenConsole.exe|csrss.exe|LogonUI.exe|cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe|chrome.exe|msedge.exe|msedgewebview2.exe|firefox.exe|brave.exe|opera.exe|vivaldi.exe|Discord.exe|Code.exe|T3 Code.exe|Spotify.exe|steamwebhelper.exe|ms-teams.exe|Obsidian.exe|Tidal.exe|Dopamine.exe|T3 Code (Nightly).exe|Hydra.exe|UA Connect.exe|Mullvad VPN.exe|cmd.exe|claude.exe|opencode.exe|node.exe|lazy-mcp.exe|crashpad_handler.exe|millennium.luavm64.exe|millennium.crashhandler64.exe|gameoverlayui64.exe|RTSSHooksLoader64.exe|PresentMonDataProvider.exe|NVDisplay.Container.exe|GameInputRawInputProxy.exe|GameInputRedistService.exe|WavesLocalServer.exe|uacloudhelper.exe|ElgatoAudioControlServer.exe|ElgatoAudioControlServerWatcher.exe|unsecapp.exe|t3keeper.exe|t3guard.exe|t3-resource-monitor.exe|agent-guard.exe|C:\\Program Files\\Git\\*",
     "architecture": "x86-64",
-    "version": "1.0.5"
+    "version": "1.0.7"
   },
   "local@seamless-windows-firewall": {
     "disabled": false,
