@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.1.4
+// @version         2.1.5
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -27,6 +27,11 @@ It also brings acrylic, Mica and blur to Windows 11 apps, and keeps re-applying 
 Explorer folder windows that open hidden or late, so they never show up black.
 
 Built on Translucent Windows by Undisputed00x.
+
+## What's new in 2.1.5
+
+- Right-click and desktop menus now fill right out to their rounded border. The lighter band
+  with square inner corners just inside the edge is gone.
 
 ## What's new in 2.1.4
 
@@ -6017,6 +6022,26 @@ static VOID PaintSeparatorEdges(HWND hWnd)
     }
     ReleaseDC(hWnd, wdc);
 }
+// The menu frame between the client and the window edge comes out as a lighter band with
+// a square inner edge, so the body looks square inside the round border. Paint it black
+// like the body so the menu material runs right out to the rounded edge.
+static VOID ClearMenuFrame(HWND hWnd, HDC hdc)
+{
+    if (!g_settings.FlyoutsEffects) return;
+    RECT wr, cr;
+    if (!GetWindowRect(hWnd, &wr) || !GetClientRect(hWnd, &cr)) return;
+    POINT org = {0, 0};
+    ClientToScreen(hWnd, &org);
+    INT cl = org.x - wr.left, ct = org.y - wr.top;
+    RECT full = {0, 0, wr.right - wr.left, wr.bottom - wr.top};
+    HDC dc = hdc ? hdc : GetWindowDC(hWnd);
+    if (!dc) return;
+    INT saved = SaveDC(dc);
+    ExcludeClipRect(dc, cl, ct, cl + cr.right, ct + cr.bottom);
+    FillRect(dc, &full, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    RestoreDC(dc, saved);
+    if (!hdc) ReleaseDC(hWnd, dc);
+}
 struct SubmenuParentSearch { HWND self; RECT r; HWND parent; RECT pr; BOOL right; };
 static BOOL CALLBACK FindSubmenuParent(HWND hWnd, LPARAM lParam)
 {
@@ -6078,6 +6103,10 @@ static LRESULT CALLBACK MenuEdgesSubclassProc(HWND hWnd, UINT msg, WPARAM wParam
             PlaceSubmenu(hWnd, wp);
     }
     LRESULT result = DefSubclassProc(hWnd, msg, wParam, lParam);
+    if (msg == WM_NCPAINT)
+        ClearMenuFrame(hWnd, nullptr);
+    else if (msg == WM_PRINT && wParam && (lParam & PRF_NONCLIENT))
+        ClearMenuFrame(hWnd, (HDC)wParam);
     if (msg == WM_NCPAINT || msg == WM_PAINT)
         PostMessageW(hWnd, g_menuEdgesMsg, 0, 0);
     if (msg == WM_WINDOWPOSCHANGED && lParam && (reinterpret_cast<WINDOWPOS*>(lParam)->flags & SWP_SHOWWINDOW)) {
