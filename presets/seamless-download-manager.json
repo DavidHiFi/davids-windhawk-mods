@@ -5,7 +5,7 @@
       "id": "local@seamless-download-manager",
       "enabled": true,
       "settings": {
-        "nativeSettingsTitleBar": 0,
+        "nativeSettingsTitleBar": 1,
         "settingsGlass": 1,
         "settingsTrayIcon": 1
       }

@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@recycle-bin-tray-plus",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "actions.confirmEmpty": 0,
         "actions.doubleClick": "open",

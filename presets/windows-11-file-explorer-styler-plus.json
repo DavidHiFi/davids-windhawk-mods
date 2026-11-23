@@ -264,7 +264,7 @@
         "controlStyles[47].styles[6]": "Height=34",
         "controlStyles[47].target": "Microsoft.UI.Xaml.Controls.CommandBar#NavigationCommands > * > Microsoft.UI.Xaml.Controls.ItemsControl#PrimaryItemsControl > * > StackPanel",
         "controlStyles[48].styles[0]": "Background=Transparent",
-        "controlStyles[48].styles[1]": "BorderThickness=0,0,0,2",
+        "controlStyles[48].styles[1]": "BorderThickness=0",
         "controlStyles[48].styles[2]": "BorderBrush=#64585B70",
         "controlStyles[48].styles[3]": "BorderBrush@PointerOver:=<LinearGradientBrush StartPoint=\"0,0\" EndPoint=\"1,1\"><GradientStop Color=\"#89B4FA\" Offset=\"0\"/><GradientStop Color=\"#CBA6F7\" Offset=\"1\"/></LinearGradientBrush>",
         "controlStyles[48].styles[4]": "Background@PointerOver=Transparent",

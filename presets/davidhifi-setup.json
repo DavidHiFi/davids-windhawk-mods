@@ -1096,7 +1096,7 @@
         "monitors[0].responseMs": 750,
         "monitors[0].strengthX": 25,
         "monitors[0].strengthY": 25,
-        "motionPreset": "elegance",
+        "motionPreset": "silk",
         "opposite": 1,
         "pauseFullscreen": 1,
         "perspective": 0,
@@ -1161,7 +1161,7 @@
     },
     {
       "id": "local@recycle-bin-tray-plus",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "actions.confirmEmpty": 0,
         "actions.doubleClick": "open",
@@ -1662,7 +1662,7 @@
       "id": "local@seamless-download-manager",
       "enabled": true,
       "settings": {
-        "nativeSettingsTitleBar": 0,
+        "nativeSettingsTitleBar": 1,
         "settingsGlass": 1,
         "settingsTrayIcon": 1
       }
@@ -3421,7 +3421,7 @@
         "installPack": 1,
         "noHourglass": 1,
         "preventSettings": 1,
-        "themeName": "Main 01",
+        "themeName": "DavidHiFi's Theme",
         "themePackSilent": 1,
         "updateLogonUI": 1
       }
@@ -3734,7 +3734,7 @@
         "controlStyles[47].styles[6]": "Height=34",
         "controlStyles[47].target": "Microsoft.UI.Xaml.Controls.CommandBar#NavigationCommands > * > Microsoft.UI.Xaml.Controls.ItemsControl#PrimaryItemsControl > * > StackPanel",
         "controlStyles[48].styles[0]": "Background=Transparent",
-        "controlStyles[48].styles[1]": "BorderThickness=0,0,0,2",
+        "controlStyles[48].styles[1]": "BorderThickness=0",
         "controlStyles[48].styles[2]": "BorderBrush=#64585B70",
         "controlStyles[48].styles[3]": "BorderBrush@PointerOver:=<LinearGradientBrush StartPoint=\"0,0\" EndPoint=\"1,1\"><GradientStop Color=\"#89B4FA\" Offset=\"0\"/><GradientStop Color=\"#CBA6F7\" Offset=\"1\"/></LinearGradientBrush>",
         "controlStyles[48].styles[4]": "Background@PointerOver=Transparent",

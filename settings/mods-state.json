@@ -490,7 +490,7 @@
     "version": "1.3.5"
   },
   "local@recycle-bin-tray-plus": {
-    "disabled": false,
+    "disabled": true,
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "",
