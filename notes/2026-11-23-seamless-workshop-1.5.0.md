@@ -90,13 +90,34 @@ The first run (`out\run1\`) was cut short when thread 7bb65bc7 rewound the test 
   fine. Backup: `local@seamless-workshop-20261123-0815.wh.cpp`.
 - Published: mods 66a99e5, feed c0e3b1f (56 mods, app 1.5.0), release v1.5.0. Every extra in the
   feed is pinned to 66a99e5 with a matching checksum, and GitHub serves the same bytes.
-- First round on the tower: the feed was read at startup (`Set.feedSeen` written, nothing new),
-  and the round waits for two quiet minutes. At 8:20 am no extras round had run yet
-  (`Set.extrasAt` not set) because the owner was using the PC. State lives in
-  `HKCU\Software\SeamlessWorkshop`.
+- Wrong at the time: "the round waits for two quiet minutes". In 1.5.0 the round never ran at
+  all (see 1.5.1 below). `Set.extrasAt` stayed unset all morning, quiet or not.
+
+## 1.5.1 (2026-11-23, 10:05 am): the update round never ran in 1.5.0
+
+- Cause: `kHubAutoTimer` (features.inc) had the same id as `kHubSyncTimer` (hub.cpp), 0x4858.
+  WM_TIMER checks the sync timer first, so every auto tick ran `Hub_SyncTick` and
+  `Hub_AutoUpdate` never ran. No mod, extra or self update could go in by itself.
+- Fix: `kHubAutoTimer = 0x4859`, plus a `static_assert` that all five hub window timers
+  (0x4855 arm, 0x4856 presence, 0x4857 feed, 0x4858 sync, 0x4859 auto) differ.
+- Checks: Windhawk strict metadata, settings-material, mod-consistency, settings-engine all ok.
+  Windhawk's own compile at install passed (with the new assert).
+- Installed with Install-StagedMod.ps1 (1.5.0 to 1.5.1), watched 60 s, desktop fine. Backup
+  `local@seamless-workshop-20261123-1004.wh.cpp`. Work-folder backups end in `.bak-20261123-1001`.
+- Published: mods 898978f, feed 8a8c2ac (56 mods, app 1.5.1, extras pinned to 898978f, every
+  checksum matches what GitHub serves), release v1.5.1.
+- First real round, 10:05 am, right after the load (owner idle 4 min, Ableton open but not in
+  front): `Set.extrasAt` stamped, no mod changed (the tower is the source), nothing in
+  `Set.autoFailed`. HWiNFO 8.61, Everything 1.5.0.1424 and FreeDictate 3.7.4 were already
+  newest. Mocha Steam is never updated by itself (no installed-version marker). G HUB
+  2026.7.1011216 went in by itself (a Logitech device is plugged in and the battery tray mod
+  is on): about 2 minutes, no window left, only G HUB's own virtual mouse, keyboard and bus
+  devices added, no sound device.
+- Every PC on 1.5.0 needs one click on the Updates page to reach 1.5.1, because 1.5.0 cannot
+  update itself. The friend's PC is on 1.4.0 (before auto updates), same click.
 
 ## Still to do
 
-- Test PC: retest of the two remove fixes (queued behind the load gate at 8:20 am).
-- Prove on the owner's PC that a changed mod arrives by itself. That needs a feed version newer
-  than the installed one; the next mod another thread publishes will show it.
+- Test PC: retest of the two remove fixes (requeued 10:08 am; the 8:20 try never got a slot).
+- Prove that a changed mod arrives by itself on a PC that has an older copy. The tower is the
+  source, so it never has one; the friend's PC will show it once it is on 1.5.1.
