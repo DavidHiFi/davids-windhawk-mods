@@ -2,7 +2,7 @@
 // @id              seamless-controls
 // @name            Seamless Controls
 // @description     Rounded, Mocha dark buttons, boxes, tabs and lists in every classic Windows window
-// @version         1.0.7
+// @version         1.0.8
 // @author          DavidHiFi, crazyboyybs
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -107,6 +107,11 @@ windows are left out, since they have no classic controls.
 Click the tray icon for the settings window, or change them here in Windhawk. Both show
 the same settings.
 
+## What's new in 1.0.8
+
+- Scroll bar handles get the blue to mauve gradient, a little brighter while you hover or
+  drag them, so they match the rest of the look.
+
 ## What's new in 1.0.5
 
 - Skips about 30 background helpers that have no windows to style, so it loads into far
@@ -143,7 +148,7 @@ the same settings.
     $description: "Buttons, check boxes, radio buttons and drop-down boxes get rounded corners."
   - AccentGradients: true
     $name: "Blue to mauve fills"
-    $description: "The main button in a window, progress bars and the side pane pill get the blue to mauve gradient. Selected rows keep a mauve fill and edge, so long lists stay quick."
+    $description: "The main button in a window, scroll bar handles, progress bars and the side pane pill get the blue to mauve gradient. Selected rows keep a mauve fill and edge, so long lists stay quick."
   - ModernSeparators: true
     $name: "Clean dividers"
     $description: "Thin lines between groups instead of the old sunken ones."
@@ -32809,6 +32814,33 @@ static bool FillScrollbarRoundedRect(Gdiplus::Graphics& graphics,
         graphics.FillPath(&brush, &path) == Gdiplus::Ok;
 }
 
+// The handle in the Mocha blue to mauve gradient along its length, a little
+// brighter while hot so a held handle stands out.
+static bool FillScrollbarGradientRect(Gdiplus::Graphics& graphics,
+    const Gdiplus::RectF& bounds, FLOAT radius, bool isVert, bool isHot)
+{
+    Gdiplus::GraphicsPath path;
+    if (!RoundedHdcAddPath(path, bounds, radius, true, true, true, true))
+        return false;
+    COLORREF from = RGB(0x89, 0xB4, 0xFA);
+    COLORREF to = RGB(0xCB, 0xA6, 0xF7);
+    if (isHot) {
+        from = BlendOverColor(from, RGB(255, 255, 255), 0.22f);
+        to = BlendOverColor(to, RGB(255, 255, 255), 0.22f);
+    }
+    // A hair past both ends, so the end colours land on the round caps.
+    const Gdiplus::PointF start(bounds.X - 0.5f, bounds.Y - 0.5f);
+    const Gdiplus::PointF end = isVert
+        ? Gdiplus::PointF(bounds.X - 0.5f, bounds.GetBottom() + 0.5f)
+        : Gdiplus::PointF(bounds.GetRight() + 0.5f, bounds.Y - 0.5f);
+    Gdiplus::LinearGradientBrush brush(start, end, GdipColor(from),
+        GdipColor(to));
+    if (brush.GetLastStatus() != Gdiplus::Ok)
+        return false;
+    brush.SetWrapMode(Gdiplus::WrapModeTileFlipXY);
+    return graphics.FillPath(&brush, &path) == Gdiplus::Ok;
+}
+
 // Same strip rect as FillScrollbarHoverStrip, rounding only the outer end.
 static bool FillScrollbarHoverCap(Gdiplus::Graphics& graphics, bool isVert,
     FLOAT fw, FLOAT fh, FLOAT scale, ScrollbarCapEdge cap, COLORREF color)
@@ -35015,8 +35047,12 @@ static bool HandleThemeDraw(HTHEME hTheme, HDC hdc, INT iPartId, INT iStateId, L
                 const bool contentOK =
                     (!isHot || FillScrollbarHoverStrip(graphics, isVert,
                         fw, fh, scale, scrollbarHover)) &&
-                    FillScrollbarRoundedRect(
-                        graphics, thumbRect, thumbW * 0.5f, color);
+                    (darkScrollbar && !isDisabled &&
+                            g_settings.AccentGradients
+                        ? FillScrollbarGradientRect(graphics, thumbRect,
+                            thumbW * 0.5f, isVert, isHot)
+                        : FillScrollbarRoundedRect(
+                            graphics, thumbRect, thumbW * 0.5f, color));
                 if (!contentOK)
                     return false;
                 paintBuffer.Commit();
@@ -71520,7 +71556,7 @@ static std::vector<SetField> Set_MakeFields() {
     return {
 {K::Check, L"GeneralSection.Enabled", L"Modern controls", L"Redraws buttons, check boxes, tabs, progress bars and lists in classic Windows windows. Off, Windows draws them its own way.", L"1", {}, 0, 100, 0, L"Controls"},
 {K::Check, L"GeneralSection.RoundedButtons", L"Rounded buttons and boxes", L"Buttons, check boxes, radio buttons and drop-down boxes get rounded corners.", L"1", {}, 0, 100, 0, L"Controls"},
-{K::Check, L"GeneralSection.AccentGradients", L"Blue to mauve fills", L"The main button in a window, progress bars and the side pane pill get the blue to mauve gradient. Selected rows keep a mauve fill and edge, so long lists stay quick.", L"1", {}, 0, 100, 0, L"Controls"},
+{K::Check, L"GeneralSection.AccentGradients", L"Blue to mauve fills", L"The main button in a window, scroll bar handles, progress bars and the side pane pill get the blue to mauve gradient. Selected rows keep a mauve fill and edge, so long lists stay quick.", L"1", {}, 0, 100, 0, L"Controls"},
 {K::Check, L"GeneralSection.ModernSeparators", L"Clean dividers", L"Thin lines between groups instead of the old sunken ones.", L"1", {}, 0, 100, 0, L"Controls"},
 {K::Check, L"GeneralSection.ProgressBars", L"Modern progress bars", L"Slim rounded bars in the blue to mauve gradient.", L"1", {}, 0, 100, 0, L"Controls"},
 {K::Choice, L"GeneralSection.RoundedTabPane", L"Tabs in Properties windows", L"How the tabs look at the top of a Properties window.", L"winui", {{L"winui", L"Rounded tabs, more than one row"}, {L"winui_single", L"Rounded tabs in one row that scrolls"}, {L"native", L"Windows' own tabs"}}, 0, 100, 0, L"Controls"},

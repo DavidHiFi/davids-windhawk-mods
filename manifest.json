@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-24T07:40:31+08:00",
+  "generatedAt": "2026-11-24T07:50:00+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 173,
@@ -2043,7 +2043,7 @@
       "name": "Seamless Controls",
       "author": "DavidHiFi, crazyboyybs",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
