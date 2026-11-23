@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.47
+// @version         0.4.48
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -62217,6 +62217,14 @@ static bool PaintNativeChild(HWND hWnd, HDC target, UINT printMessage, LPARAM fl
         state.cardFill = state.backdrop->childCardFill;
     }
     GdiFlush();
+    // Unpainted seed takes the surface: an Edit asks for its input colour but leaves its background
+    // unpainted in WM_PRINTCLIENT, so the card seed stayed an opaque block inside the value box.
+    if (state.backdrop->childCardFallback && state.cardSurface && state.cardColor != background) {
+        const uint32_t surface = NativeRgb(state.cardColor);
+        for (size_t i = 0, count = static_cast<size_t>(width) * height; i < count; ++i) {
+            if ((pixels[i] & 0xFFFFFF) == seed) pixels[i] = surface | 0xFF000000;
+        }
+    }
     uint32_t key = (GetRValue(state.transparentColor) << 16) |
                    (GetGValue(state.transparentColor) << 8) |
                    GetBValue(state.transparentColor);
