@@ -5282,6 +5282,8 @@
     "autoUpdate": 1,
     "discordPresence": 1,
     "feedCheck": 1,
+    "motionEnabled": 1,
+    "motionSpeed": "normal",
     "nativeSettingsTitleBar": 1,
     "settingsGlass": 1,
     "settingsTrayIcon": 1

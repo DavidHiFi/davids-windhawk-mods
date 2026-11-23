@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.5.3
+// @version         1.5.4
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -35,6 +35,12 @@ Needs the latest Windhawk alpha.
 - Use DavidHiFi's settings for one mod, or copy his whole setup in one go:
   every mod he runs, with or without his settings, on a clean slate if you
   like. Your current mods are backed up first, so you can always go back.
+
+## What's new in 1.5.4
+
+- Two new settings on the Look page, under All mods, set the open and close
+  animation for every DavidHiFi mod at once: on or off, and how fast. A mod
+  set to follow the global speed uses the one you pick here.
 
 ## What's new in 1.5.3
 
@@ -101,6 +107,18 @@ DavidHiFi's settings, any setting like that keeps your own value.
 - animations: true
   $name: "Animations"
   $description: "Off, everything snaps instantly: page changes, hover fades and switches."
+- motionEnabled: true
+  $name: "Window animations for all mods"
+  $description: "Off, every DavidHiFi mod opens and closes its windows instantly."
+- motionSpeed: normal
+  $name: "Animation speed for all mods"
+  $description: "Mods set to Follow the global speed use this one."
+  $options:
+  - veryQuick: "Very quick"
+  - quick: "Quick"
+  - normal: "Normal"
+  - relaxed: "Relaxed"
+  - slow: "Slow"
 - feedCheck: true
   $name: "Check for updates every hour"
   $description: "Look for new versions of DavidHiFi's mods and of Seamless Workshop at startup and every hour."
@@ -228,7 +246,34 @@ static int Wh_GetIntSetting(PCWSTR name) {
 }
 static int Hub_AppInt(PCWSTR name, int def) { return Hub_RegGet(std::wstring(L"Set.") + name, def); }
 #endif
+#ifdef HUB_MOD
+static std::wstring GetStringSetting(PCWSTR name) {
+    PCWSTR raw = Wh_GetStringSetting(name);
+    std::wstring value = raw ? raw : L"";
+    if (raw) Wh_FreeStringSetting(raw);
+    return value;
+}
+#else
 static std::wstring GetStringSetting(PCWSTR) { return std::wstring(); }
+#endif
+
+// The global animation switch and speed every DavidHiFi mod reads. A mod that finds no key
+// treats it as on and Normal.
+static void Hub_WriteMotion() {
+    static const PCWSTR kSpeeds[] = {L"veryQuick", L"quick", L"normal", L"relaxed", L"slow"};
+    const DWORD enabled = Wh_GetIntSetting(L"motionEnabled") != 0 ? 1 : 0;
+    std::wstring speed = GetStringSetting(L"motionSpeed");
+    bool known = false;
+    for (PCWSTR s : kSpeeds) known = known || speed == s;
+    if (!known) speed = L"normal";
+    HKEY key;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\DavidHiFi\\Motion", 0, nullptr, 0, KEY_SET_VALUE, nullptr,
+                        &key, nullptr) != ERROR_SUCCESS)
+        return;
+    RegSetValueExW(key, L"Enabled", 0, REG_DWORD, (const BYTE*)&enabled, sizeof(enabled));
+    RegSetValueExW(key, L"Speed", 0, REG_SZ, (const BYTE*)speed.c_str(), (DWORD)((speed.size() + 1) * sizeof(WCHAR)));
+    RegCloseKey(key);
+}
 
 struct {
     bool animations = true;
@@ -442,7 +487,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, kPgLook, L"Settings window"},
 {K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, kPgLook, L"Settings window"},
 {K::Check, L"animations", L"Animations", L"Off, everything snaps instantly: page changes, hover fades and switches.", L"1", {}, 0, 100, kPgLook, L"Settings window"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"Keeps Seamless Workshop in the system tray. Closing the window then hides it there. Click the icon to open it, right-click it to quit.", L"1", {}, 0, 100, kPgLook, L"Settings window"}
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"Keeps Seamless Workshop in the system tray. Closing the window then hides it there. Click the icon to open it, right-click it to quit.", L"1", {}, 0, 100, kPgLook, L"Settings window"},
+{K::Check, L"motionEnabled", L"Window animations for all mods", L"Off, every DavidHiFi mod opens and closes its windows instantly.", L"1", {}, 0, 100, kPgLook, L"All mods"},
+{K::Choice, L"motionSpeed", L"Animation speed for all mods", L"Mods set to Follow the global speed use this one.", L"normal", {{L"veryQuick", L"Very quick"}, {L"quick", L"Quick"}, {L"normal", L"Normal"}, {L"relaxed", L"Relaxed"}, {L"slow", L"Slow"}}, 0, 100, kPgLook, L"All mods"}
     };
 }
 
@@ -5411,7 +5458,10 @@ static void Set_Save(std::shared_ptr<SetWindow> keep) {
         }
         f.cur = f.value = Set_FieldValue(f);
 #ifdef HUB_MOD
-        selfSet += std::wstring(L" ") + f.key + L"=" + std::to_wstring(_wtoi(f.value.c_str()));
+        if (f.kind == SetField::Number || f.kind == SetField::Check)
+            selfSet += std::wstring(L" ") + f.key + L"=" + std::to_wstring(_wtoi(f.value.c_str()));
+        else
+            selfSet += std::wstring(L" ") + f.key + L"=" + f.value;  // A choice saves its name.
 #else
         Hub_RegSet(std::wstring(L"Set.") + f.key, _wtoi(f.value.c_str()));
 #endif
@@ -10331,6 +10381,7 @@ static DWORD WINAPI Hub_ModThread(void*) {
     if (FAILED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED))) { SetEvent(g_modReady); return 1; }
     Hub_MigrateStore();
     g_settings.animations = Wh_GetIntSetting(L"animations") != 0;
+    Hub_WriteMotion();
     Hub_DarkMenus();
     if (!Set_Create(false)) { SetEvent(g_modReady); CoUninitialize(); return 1; }
     HWND hwnd = g_setWin->hwnd;
@@ -10428,6 +10479,7 @@ BOOL WhTool_ModInit() {
 }
 
 void WhTool_ModSettingsChanged() {
+    Hub_WriteMotion();
     if (HWND hwnd = g_settingsWnd) {
         PostMessageW(hwnd, WM_APP_SETTINGS_RELOAD, 0, 0);
         PostMessageW(hwnd, WM_HUB_MODCHANGED, 0, 0);
