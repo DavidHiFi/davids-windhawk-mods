@@ -1180,7 +1180,7 @@
     "include": "windhawk.exe|ShellHost.exe|ShellExperienceHost.exe|SystemSettings.exe|RuntimeBroker.exe|explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.4.0"
+    "version": "2.4.2"
   },
   "local@power-options-button-plus": {
     "disabled": false,

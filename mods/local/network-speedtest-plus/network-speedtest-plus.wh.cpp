@@ -2,7 +2,7 @@
 // @id              network-speedtest-plus
 // @name            Network Speed Test Plus
 // @description     Tray speed test button next to the network icon, plus the Windows 11 network menu speed test as a native flyout: ping, jitter, download and upload measured against Cloudflare, live gauge, results chart with copy. Mocha glass, FiraCode, gradient hover. No browser, no separate app.
-// @version         2.4.0
+// @version         2.4.2
 // @author          DavidHiFi, Alessandro-Vecchio
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -695,10 +695,10 @@ static HICON CreateTrayIcon() {
     DeleteObject(black);
     float s = (float)size;
     float cx = s * 0.5f;
-    float cy = s * 0.57f;
-    float radius = s * 0.30f;
+    float cy = s * 0.56f;
+    float radius = s * 0.40f;  // The gauge alone fills the icon now the plate is gone.
     const double pi = 3.14159265358979323846;
-    HPEN pen = CreatePen(PS_SOLID, std::max(1, (int)std::lround(s * 0.085f)),
+    HPEN pen = CreatePen(PS_SOLID, std::max(1, (int)std::lround(s * 0.11f)),
                          RGB(255, 255, 255));
     HGDIOBJ oldPen = SelectObject(gdc, pen);
     // The 270-degree ring, from 135 degrees clockwise to 45 degrees. GDI runs
@@ -716,7 +716,7 @@ static HICON CreateTrayIcon() {
            (int)(cy - radius * 0.72 * sin(needle)));
     SelectObject(gdc, oldPen);
     DeleteObject(pen);
-    float dot = std::max(1.0f, s * 0.055f);
+    float dot = std::max(1.0f, s * 0.07f);
     HBRUSH white = CreateSolidBrush(RGB(255, 255, 255));
     HGDIOBJ oldBrush = SelectObject(gdc, white);
     Ellipse(gdc, (int)(cx - dot), (int)(cy - dot), (int)(cx + dot),
@@ -727,31 +727,22 @@ static HICON CreateTrayIcon() {
     SelectObject(gdc, oldGlyph);
     DeleteDC(gdc);
 
-    // Mocha blue 89B4FA to mauve CBA6F7, glyph in crust 11111B.
+    // Mocha blue 89B4FA to mauve CBA6F7, the glyph alone on a clear background.
     const float c0[3] = {0x89 / 255.f, 0xB4 / 255.f, 0xFA / 255.f};
     const float c1[3] = {0xCB / 255.f, 0xA6 / 255.f, 0xF7 / 255.f};
-    const float ink[3] = {0x11 / 255.f, 0x11 / 255.f, 0x1B / 255.f};
-    float plate = size * 0.26f, half = size / 2.0f;
     UINT32* px = (UINT32*)bits;
     const UINT32* gp = (const UINT32*)glyphBits;
     for (int y = 0; y < size; y++) {
         for (int x = 0; x < size; x++) {
-            // Signed distance to the rounded square, for a soft edge.
-            float qx = std::fabs(x + 0.5f - half) - (half - plate);
-            float qy = std::fabs(y + 0.5f - half) - (half - plate);
-            float ox = std::max(qx, 0.0f), oy = std::max(qy, 0.0f);
-            float d = std::sqrt(ox * ox + oy * oy) +
-                      std::min(std::max(qx, qy), 0.0f) - plate;
-            float a = std::clamp(0.5f - d, 0.0f, 1.0f);
             float t = std::clamp((x + y) / (2.0f * (size - 1)), 0.0f, 1.0f);
             float cov = ((gp[y * size + x] >> 8) & 0xFF) / 255.0f;
             float rgb[3];
             for (int i = 0; i < 3; i++) {
                 float base = c0[i] + (c1[i] - c0[i]) * t;
-                rgb[i] = (base + (ink[i] - base) * cov) * a;  // Premultiplied.
+                rgb[i] = base * cov;  // Premultiplied; clear where there is no glyph.
             }
             px[y * size + x] =
-                ((UINT32)(a * 255 + 0.5f) << 24) |
+                ((UINT32)(cov * 255 + 0.5f) << 24) |
                 ((UINT32)(rgb[0] * 255 + 0.5f) << 16) |
                 ((UINT32)(rgb[1] * 255 + 0.5f) << 8) |
                 (UINT32)(rgb[2] * 255 + 0.5f);
@@ -7698,8 +7689,16 @@ static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it, int idx)
     p.GradFill(row, 10, 0.13f * hov);
     p.GradRing(row, 10, hov, 1.5f);
     D2D1_RECT_F mark{row.left + 20, row.top + 20, row.left + 92, row.top + 92};
-    p.GradFill(mark, 18, 1);
-    p.Glyph(w.fIconL.get(), 0xE9D9, mark, mocha::crust);
+    {  // The glyph alone in the gradient, no plate (owner, 2026-11-24).
+        D2D1_MATRIX_3X2_F old;
+        p.rt->GetTransform(&old);
+        const D2D1_POINT_2F mc{(mark.left + mark.right) / 2, (mark.top + mark.bottom) / 2};
+        p.rt->SetTransform(D2D1::Matrix3x2F::Scale(1.75f, 1.75f, mc) * old);
+        const WCHAR glyph = 0xE9D9;
+        auto br = p.G({mc.x - 19, mc.y - 19, mc.x + 19, mc.y + 19});
+        if (br) p.rt->DrawText(&glyph, 1, w.fIconL.get(), mark, br.get());
+        p.rt->SetTransform(old);
+    }
     float x = mark.right + 20;
     p.Text(w.fBig.get(), L"Network Speed Test Plus", {x, row.top + 18, row.right - 16, row.top + 46}, mocha::text);
 #ifdef WH_MOD_VERSION
@@ -7904,16 +7903,24 @@ static D2D1_RECT_F Set_CapTitleRect(const SetWindow& w) {
 }
 
 static void Set_DrawMark(SetPaint& p, IDWriteTextFormat* glyph, const D2D1_RECT_F& r, float a) {
-    float s = r.right - r.left;
+    // The mod's glyph alone in the blue to mauve gradient on a clear background, no plate
+    // (owner, 2026-11-24), scaled up about its centre to fill the room the plate had.
+    const float cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    const float ix = (r.right - r.left) * 0.31f, iy = (r.bottom - r.top) * 0.31f;
     SetCom<ID2D1LinearGradientBrush> g;
     D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::blue, a * p.fade)}, {1, D2DColor(mocha::mauve, a * p.fade)}};
     SetCom<ID2D1GradientStopCollection> coll;
-    if (SUCCEEDED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) &&
-        SUCCEEDED(p.rt->CreateLinearGradientBrush(
-            D2D1::LinearGradientBrushProperties(D2D1::Point2F(r.left, r.top), D2D1::Point2F(r.right, r.bottom)),
+    if (FAILED(p.rt->CreateGradientStopCollection(stops, 2, coll.put())) ||
+        FAILED(p.rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(D2D1::Point2F(cx - ix, cy - iy), D2D1::Point2F(cx + ix, cy + iy)),
             coll.get(), g.put())))
-        p.rt->FillRoundedRectangle(D2D1::RoundedRect(r, s * 0.24f, s * 0.24f), g.get());
-    p.Glyph(glyph, 0xE9D9, r, mocha::crust);
+        return;
+    D2D1_MATRIX_3X2_F old;
+    p.rt->GetTransform(&old);
+    p.rt->SetTransform(D2D1::Matrix3x2F::Scale(1.4f, 1.4f, D2D1::Point2F(cx, cy)) * old);
+    const WCHAR mark = 0xE9D9;
+    p.rt->DrawText(&mark, 1, glyph, r, g.get());
+    p.rt->SetTransform(old);
 }
 
 static void Set_DrawCaption(SetPaint& p, SetWindow& w) {
