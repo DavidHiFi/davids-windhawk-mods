@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.7.1
+// @version         0.7.2
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -24,7 +24,23 @@ read later, like "Discord 4.05 pm.png".
 
 ![Seamless Snipper preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-snipper.png)
 
-## What's new in 0.7.1
+## What's new in 0.7.2
+
+- The drawing bar can sit in eight places: top left, top middle or top right,
+  either side of the screen (it stands up), or bottom left, middle or right.
+- The bar fades while the mouse is on it, so you can see the screen behind.
+  Pick how faded it gets, or have it fade only while you draw over it.
+- The bar can be made bigger or smaller, and it fades and slides in when the
+  screen freezes. That follows the shared animation speed, and it can be
+  turned off.
+- Show the mouse pointer in region snips too, not only full screen ones.
+- Window snips can take just the inside of the window, without its title bar.
+- Wait before each snip: a few seconds of countdown before the snip keys take
+  the picture.
+- The option that handed the snip keys to another app is gone, and the
+  settings pages are tidied so each group shows once.
+
+## New in 0.7.1
 
 - History opens the first time you press its key after Windows starts. Before,
   that first window stayed hidden and the key did nothing until a restart.
@@ -44,7 +60,7 @@ read later, like "Discord 4.05 pm.png".
 
 - Region snips on a frozen screen. The outside dims, the region stays bright,
   and its size shows beside it.
-- A drawing bar on the region screen, like ShareX's: arrows, boxes, circles,
+- A drawing bar on the region screen: arrows, boxes, circles,
   lines, a pen, text, speech balloons, numbered steps, a highlighter, an
   eraser, blur, pixelate, a magnifier and a spotlight. Colors, sizes, fills,
   dashed or dotted lines, shadows and outlines. Every tool carries its own
@@ -53,15 +69,15 @@ read later, like "Discord 4.05 pm.png".
   or set how wide text runs before it wraps. Use Font and size
   while writing text or a speech balloon, or after selecting it. Draw,
   then pick the region to include the drawings in the snip.
-- Every drawing tool has ShareX's options in the settings: box corner radius
+- Every drawing tool has its options in the settings: box corner radius
   and fill, arrow heads, their style and curved arrows, text font, color and
   outline, step labels from a b c to roman numerals, highlighter color, blur
   and pixel strength, shadow color, distance and softness, outline color and
-  width, the bar's colors and its position. The bar remembers what you left
+  width, the bar's colors, position, size and fade. The bar remembers what you left
   each tool on.
 - The snip keys are caught before any app sees them, so games, remote
   desktops and apps that grab the keyboard cannot swallow them (a setting).
-- ShareX's camera click plays after each snip, or a sound file of your own.
+- A camera click plays after each snip, or a sound file of your own.
 - Takes Win + Shift + S from the Windows Snipping Tool (a setting), so every
   snip key opens Snipper.
 - Hover to snap to a window, or to a button, panel or list inside it, then
@@ -153,9 +169,8 @@ the apps you list in the settings.
 
 ## Good to know
 
-Snipper uses the same keys as ShareX, so close ShareX (or turn on "Let ShareX
-keep its keys" while you still use it). Windows' own "Print Screen opens Snipping Tool" switch must be
-off for Print Screen to reach Snipper.
+Close any other screenshot app that uses Print Screen. Windows' own "Print
+Screen opens Snipping Tool" switch must be off for Print Screen to reach Snipper.
 
 ## Credits
 
@@ -191,33 +206,36 @@ restyled to match the rest of Snipper.
 - takeOverSnippingKey: true
   $name: "Win + Shift + S opens Snipper"
   $description: "Takes the key from the Windows Snipping Tool, so it opens the region screen here instead. Off, the key goes back to Windows."
-- stepAside: false
-  $name: "Let ShareX keep its keys"
-  $description: "Only if you still run ShareX: while it is open, Snipper leaves these keys to it and takes them back once it closes. The tray menu always works."
 - catchKeys: true
   $name: "Keys work over every window"
   $description: "Catches the snip keys before any app sees them, so games, remote desktops and apps that grab the keyboard cannot block them. Off, Windows hands the keys out and some windows can swallow them."
 - histPeek: true
   $name: "Space previews with Peek"
   $description: "In the history, Space shows the picked snip in Peek, and the arrow keys step through the others. Needs the Peek mod turned on; without it, the picture opens instead."
+- captureCursor: true
+  $name: "Include the mouse pointer"
+  $description: "Draws the pointer into snips of every screen, one screen or a window."
+- cursorInRegion: false
+  $name: "Pointer in region snips too"
+  $description: "The pointer is frozen into the region screen where it was, so region snips show it as well."
+- windowArea: "frame"
+  $name: "Window snips take"
+  $description: "What Alt + Print Screen keeps of the window."
+  $options:
+  - frame: "The whole window"
+  - client: "Only the inside, without the title bar and edges"
+- snipDelay: 0
+  $name: "Wait before each snip (seconds)"
+  $description: "0 to 10 (Suggested: 0). The snip keys count down first, so you can open a menu or hover something. 0 snips at once. The tray menu timers work either way."
 - copyToClipboard: true
   $name: "Copy to the clipboard"
   $description: "Every snip is ready to paste."
 - saveToFile: true
   $name: "Save to a file"
   $description: "Every snip is also saved as a picture."
-- showToast: true
-  $name: "Show a preview card"
-  $description: "A small card with the snip. Click it to open the picture, right-click it to open its folder."
-- toastSeconds: 3
-  $name: "Card time (seconds)"
-  $description: "1 to 10 (Suggested: 3)."
-- captureCursor: true
-  $name: "Include the mouse pointer"
-  $description: "Draws the pointer into full screen, screen and window snips, as ShareX did."
 - playSound: true
   $name: "Play the capture sound"
-  $description: "ShareX's camera click after each snip."
+  $description: "A camera click after each snip."
 - soundFile: ""
   $name: "Sound file"
   $description: "Optional: a .wav file to play instead of the camera click. Leave it empty for the click."
@@ -240,6 +258,76 @@ restyled to match the rest of Snipper.
 - jpgQuality: 92
   $name: "JPG quality"
   $description: "50 to 100 (Suggested: 92)."
+- showToast: true
+  $name: "Show a preview card"
+  $description: "A small card with the snip. Click it to open the picture, right-click it to open its folder."
+- toastSeconds: 3
+  $name: "Card time (seconds)"
+  $description: "1 to 10 (Suggested: 3)."
+- toastPosition: "br"
+  $name: "Corner"
+  $description: "Which corner of the screen the card shows in."
+  $options:
+  - br: "Bottom right"
+  - bl: "Bottom left"
+  - tr: "Top right"
+  - tl: "Top left"
+- toastSize: 100
+  $name: "Card size (%)"
+  $description: "75 to 160 (Suggested: 100)."
+- toastShowText: true
+  $name: "Show the file name"
+  $description: "The name and size under the picture."
+- toastPauseOnHover: true
+  $name: "Stay while hovered"
+  $description: "The card waits while the mouse is on it, and starts counting again when it leaves."
+- toastAnimation: "slide"
+  $name: "Animation"
+  $description: "How the card comes in and goes away."
+  $options:
+  - slide: "Slide in from the edge"
+  - fade: "Fade"
+  - grow: "Grow from the corner"
+  - none: "None"
+- toastAnimationMs: 220
+  $name: "Animation time (ms)"
+  $description: "80 to 800 (Suggested: 220)."
+- toastGlass: true
+  $name: "Glass"
+  $description: "Frosted glass behind the card. Off, it is solid."
+- toastHoverGlow: true
+  $name: "Hover edge"
+  $description: "The blue to mauve edge when the mouse is on the card."
+- toastClick: "open"
+  $name: "Click"
+  $description: "What a click on the card does."
+  $options:
+  - open: "Open the picture"
+  - folder: "Show it in its folder"
+  - copy: "Copy it again"
+  - edit: "Draw on it"
+  - ask: "Ask Magic Pointer about it"
+  - close: "Close the card"
+- toastRightClick: "folder"
+  $name: "Right-click"
+  $description: "What a right-click on the card does."
+  $options:
+  - folder: "Show it in its folder"
+  - open: "Open the picture"
+  - copy: "Copy it again"
+  - edit: "Draw on it"
+  - ask: "Ask Magic Pointer about it"
+  - close: "Close the card"
+- toastMiddleClick: "copy"
+  $name: "Middle click"
+  $description: "What a middle click on the card does."
+  $options:
+  - copy: "Copy it again"
+  - open: "Open the picture"
+  - folder: "Show it in its folder"
+  - edit: "Draw on it"
+  - ask: "Ask Magic Pointer about it"
+  - close: "Close the card"
 - dimOpacity: 45
   $name: "Dim outside (%)"
   $description: "0 to 85 (Suggested: 45). How dark the screen gets around the region."
@@ -255,24 +343,6 @@ restyled to match the rest of Snipper.
 - crosshairLines: false
   $name: "Crosshair lines"
   $description: "Thin lines across the screen through the pointer, for lining up edges."
-- drawBar: true
-  $name: "Drawing bar"
-  $description: "A bar at the top of the region screen with arrows, boxes, text, numbers, blur and more. Draw first, then pick the region; the drawings go into the snip."
-- keepRegionOpen: false
-  $name: "Draw after picking"
-  $description: "Picking a region keeps the screen up so you can draw on it. Press Enter, double-click it or use the bar to snip. Off, picking a region snips it straight away."
-- drawColor: "#F38BA8"
-  $name: "Pen color"
-  $description: "In hexadecimal. The color the drawing tools start with."
-- drawSize: 4
-  $name: "Pen size"
-  $description: "1 to 20 (Suggested: 4). The [ and ] keys change it too."
-- drawShadow: true
-  $name: "Shadows"
-  $description: "A soft shadow under each drawing, as ShareX has."
-- drawOutline: false
-  $name: "Outlines"
-  $description: "A thin contrasting edge around each drawing, so it shows on any background."
 - magnifier: true
   $name: "Magnifier"
   $description: "A zoomed view of the pixels under the pointer."
@@ -285,6 +355,216 @@ restyled to match the rest of Snipper.
 - magnifierGrid: true
   $name: "Pixel grid"
   $description: "Lines between the zoomed pixels."
+- drawBar: true
+  $name: "Drawing bar"
+  $description: "A bar at the top of the region screen with arrows, boxes, text, numbers, blur and more. Draw first, then pick the region; the drawings go into the snip."
+- keepRegionOpen: false
+  $name: "Draw after picking"
+  $description: "Picking a region keeps the screen up so you can draw on it. Press Enter, double-click it or use the bar to snip. Off, picking a region snips it straight away."
+- barPosition: "top"
+  $name: "Bar position"
+  $description: "Where the drawing bar sits on the screen."
+  $options:
+  - top: "Top middle"
+  - topLeft: "Top left"
+  - topRight: "Top right"
+  - bottom: "Bottom middle"
+  - bottomLeft: "Bottom left"
+  - bottomRight: "Bottom right"
+  - left: "Left side, standing up"
+  - right: "Right side, standing up"
+- barSize: 100
+  $name: "Bar size (%)"
+  $description: "75 to 150 (Suggested: 100). A bar too big for the screen shrinks to fit."
+- barFade: "hover"
+  $name: "Fade the bar"
+  $description: "Fades the bar so you can see the screen behind it. It still works while faded."
+  $options:
+  - hover: "When the mouse is on it"
+  - drag: "Only while you drag or draw over it"
+  - off: "Never"
+- barFadeOpacity: 30
+  $name: "Faded bar (%)"
+  $description: "10 to 80 (Suggested: 30). How much of the bar still shows while it is faded."
+- barAnimation: true
+  $name: "Bar animation"
+  $description: "The bar fades and slides in when the screen freezes, and fades smoothly on hover. Off, both are instant. Also off when Windows animation effects are off."
+- animationSpeed: "global"
+  $name: "Animation speed"
+  $description: "How fast the bar animates."
+  $options:
+  - global: "Same as all my mods"
+  - veryQuick: "Very quick"
+  - quick: "Quick"
+  - normal: "Normal"
+  - relaxed: "Relaxed"
+  - slow: "Slow"
+- rememberBar: true
+  $name: "Remember the bar"
+  $description: "Each tool keeps its color, size and options between snips, like the last time you used it."
+- drawColor: "#F38BA8"
+  $name: "Pen color"
+  $description: "In hexadecimal. The color the drawing tools start with."
+- drawSize: 4
+  $name: "Pen size"
+  $description: "1 to 20 (Suggested: 4). The [ and ] keys change it too."
+- drawShadow: true
+  $name: "Shadows"
+  $description: "A soft shadow under each drawing."
+- drawOutline: false
+  $name: "Outlines"
+  $description: "A thin contrasting edge around each drawing, so it shows on any background."
+- barColors: "#F38BA8 #FAB387 #F9E2AF #A6E3A1 #89B4FA #CBA6F7 #FFFFFF #11111B"
+  $name: "Bar colors"
+  $description: "The 8 color dots on the bar, in hexadecimal, split by spaces. Missing ones keep the usual color."
+- lineStyle: "solid"
+  $name: "Line style"
+  $description: "For boxes, circles, lines, arrows and the pen. The bar changes it too."
+  $options:
+  - solid: "Solid"
+  - dash: "Dashed"
+  - dot: "Dotted"
+- boxCornerRadius: 6
+  $name: "Box corner radius"
+  $description: "0 to 60 (Suggested: 6). 0 gives square corners."
+- boxFill: "none"
+  $name: "Fill"
+  $description: "The inside of boxes and circles. The bar changes it too."
+  $options:
+  - none: "None"
+  - shade: "The pen color, see-through"
+  - color: "The fill color below"
+- fillColor: "#1E1E2E"
+  $name: "Fill color"
+  $description: "In hexadecimal. Used when Fill is set to the fill color."
+- fillOpacity: 25
+  $name: "Fill opacity (%)"
+  $description: "5 to 100 (Suggested: 25)."
+- arrowHeads: "end"
+  $name: "Heads"
+  $description: "Which ends of the arrow get a head."
+  $options:
+  - end: "At the end"
+  - start: "At the start"
+  - both: "Both ends"
+- arrowStyle: "filled"
+  $name: "Head style"
+  $description: "The shape of the arrow head."
+  $options:
+  - filled: "Filled triangle"
+  - notched: "Notched triangle"
+  - open: "Open triangle"
+  - line: "Two lines"
+- arrowHeadSize: 100
+  $name: "Head size (%)"
+  $description: "50 to 250 (Suggested: 100)."
+- arrowCurved: false
+  $name: "Curved arrow"
+  $description: "The arrow bows along the drag instead of running straight."
+- textFont: "FiraCode Nerd Font"
+  $name: "Font"
+  $description: "The name of an installed font. If it is missing, Segoe UI is used."
+- textSize: 100
+  $name: "Text size (%)"
+  $description: "50 to 300 (Suggested: 100). Grows with the pen size too."
+- textBold: true
+  $name: "Bold"
+  $description: "Thick letters, easy to read on a busy picture."
+- textItalic: false
+  $name: "Italic"
+  $description: "Slanted letters."
+- textBackground: "none"
+  $name: "Background"
+  $description: "A box behind the text makes it easy to read on any picture."
+  $options:
+  - none: "None, with a shadow or outline"
+  - pen: "The pen color"
+  - dark: "Dark"
+- textColor: "#FFFFFF"
+  $name: "Text color"
+  $description: "In hexadecimal. The color of the words you type on the snip."
+- textOutline: true
+  $name: "Outline"
+  $description: "A thin edge around the letters, in a color that stands out, so text stays readable on any picture."
+- stepStyle: "numbers"
+  $name: "Step labels"
+  $description: "What the numbered steps count with."
+  $options:
+  - numbers: "1, 2, 3"
+  - letters: "A, B, C"
+  - lettersLower: "a, b, c"
+  - roman: "I, II, III"
+  - romanLower: "i, ii, iii"
+- stepStart: 1
+  $name: "Start at"
+  $description: "1 to 99 (Suggested: 1)."
+- stepSize: 100
+  $name: "Step size (%)"
+  $description: "50 to 300 (Suggested: 100)."
+- stepColor: "#F38BA8"
+  $name: "Step color"
+  $description: "In hexadecimal. The color of the numbered circles."
+- highlighterUsesPen: false
+  $name: "Use the pen color"
+  $description: "Off, the highlighter uses its own color below."
+- highlighterColor: "#F9E2AF"
+  $name: "Highlighter color"
+  $description: "In hexadecimal."
+- highlighterOpacity: 38
+  $name: "Highlighter opacity (%)"
+  $description: "10 to 80 (Suggested: 38)."
+- blurStrength: 12
+  $name: "Blur strength"
+  $description: "2 to 40 (Suggested: 12)."
+- pixelSize: 12
+  $name: "Pixel size"
+  $description: "3 to 60 (Suggested: 12)."
+- shadowColor: "#000000"
+  $name: "Shadow color"
+  $description: "In hexadecimal."
+- shadowOpacity: 45
+  $name: "Shadow opacity (%)"
+  $description: "5 to 100 (Suggested: 45)."
+- shadowOffset: 3
+  $name: "Shadow distance"
+  $description: "0 to 20 (Suggested: 3)."
+- shadowSoftness: 3
+  $name: "Shadow softness"
+  $description: "1 to 8 (Suggested: 3). 1 is a hard shadow."
+- outlineColor: "contrast"
+  $name: "Outline color"
+  $description: "The edge drawn around each drawing when Outlines is on."
+  $options:
+  - contrast: "Light or dark, whichever stands out"
+  - white: "White"
+  - black: "Black"
+- outlineWidth: 3
+  $name: "Outline width"
+  $description: "1 to 10 (Suggested: 3)."
+- magnifyZoom: "2"
+  $name: "Magnifier zoom"
+  $description: "How big the magnifier tool shows the spot under it."
+  $options:
+  - "1.5": "1.5x"
+  - 2: "2x"
+  - 3: "3x"
+  - 4: "4x"
+  - 6: "6x"
+- magnifyShape: "box"
+  $name: "Magnifier shape"
+  $description: "The outline drawn around the magnified spot."
+  $options:
+  - box: "Box"
+  - circle: "Circle"
+- spotlightShape: "box"
+  $name: "Spotlight shape"
+  $description: "The outline drawn around the spot that stays bright."
+  $options:
+  - box: "Box"
+  - circle: "Circle"
+- spotlightDim: 60
+  $name: "Spotlight dim (%)"
+  $description: "30 to 90 (Suggested: 60). How dark everything around the spot gets."
 - accentFrom: "#89B4FA"
   $name: "Selection color"
   $description: "In hexadecimal. The gradient starts with this color."
@@ -439,230 +719,6 @@ restyled to match the rest of Snipper.
 - pointerBrowserPath: ""
   $name: "Other browser program"
   $description: "Only for Other: the full path of the browser program."
-- toastPosition: "br"
-  $name: "Corner"
-  $description: "Which corner of the screen the card shows in."
-  $options:
-  - br: "Bottom right"
-  - bl: "Bottom left"
-  - tr: "Top right"
-  - tl: "Top left"
-- toastSize: 100
-  $name: "Card size (%)"
-  $description: "75 to 160 (Suggested: 100)."
-- toastShowText: true
-  $name: "Show the file name"
-  $description: "The name and size under the picture."
-- toastPauseOnHover: true
-  $name: "Stay while hovered"
-  $description: "The card waits while the mouse is on it, and starts counting again when it leaves."
-- toastAnimation: "slide"
-  $name: "Animation"
-  $description: "How the card comes in and goes away."
-  $options:
-  - slide: "Slide in from the edge"
-  - fade: "Fade"
-  - grow: "Grow from the corner"
-  - none: "None"
-- toastAnimationMs: 220
-  $name: "Animation time (ms)"
-  $description: "80 to 800 (Suggested: 220)."
-- toastGlass: true
-  $name: "Glass"
-  $description: "Frosted glass behind the card. Off, it is solid."
-- toastHoverGlow: true
-  $name: "Hover edge"
-  $description: "The blue to mauve edge when the mouse is on the card."
-- toastClick: "open"
-  $name: "Click"
-  $description: "What a click on the card does."
-  $options:
-  - open: "Open the picture"
-  - folder: "Show it in its folder"
-  - copy: "Copy it again"
-  - edit: "Draw on it"
-  - ask: "Ask Magic Pointer about it"
-  - close: "Close the card"
-- toastRightClick: "folder"
-  $name: "Right-click"
-  $description: "What a right-click on the card does."
-  $options:
-  - folder: "Show it in its folder"
-  - open: "Open the picture"
-  - copy: "Copy it again"
-  - edit: "Draw on it"
-  - ask: "Ask Magic Pointer about it"
-  - close: "Close the card"
-- toastMiddleClick: "copy"
-  $name: "Middle click"
-  $description: "What a middle click on the card does."
-  $options:
-  - copy: "Copy it again"
-  - open: "Open the picture"
-  - folder: "Show it in its folder"
-  - edit: "Draw on it"
-  - ask: "Ask Magic Pointer about it"
-  - close: "Close the card"
-- barPosition: "top"
-  $name: "Bar position"
-  $description: "Where the drawing bar sits on the screen."
-  $options:
-  - top: "Top"
-  - bottom: "Bottom"
-- barColors: "#F38BA8 #FAB387 #F9E2AF #A6E3A1 #89B4FA #CBA6F7 #FFFFFF #11111B"
-  $name: "Bar colors"
-  $description: "The 8 color dots on the bar, in hexadecimal, split by spaces. Missing ones keep the usual color."
-- lineStyle: "solid"
-  $name: "Line style"
-  $description: "For boxes, circles, lines, arrows and the pen. The bar changes it too."
-  $options:
-  - solid: "Solid"
-  - dash: "Dashed"
-  - dot: "Dotted"
-- rememberBar: true
-  $name: "Remember the bar"
-  $description: "Each tool keeps its color, size and options between snips, like the last time you used it."
-- boxCornerRadius: 6
-  $name: "Box corner radius"
-  $description: "0 to 60 (Suggested: 6). 0 gives square corners."
-- boxFill: "none"
-  $name: "Fill"
-  $description: "The inside of boxes and circles. The bar changes it too."
-  $options:
-  - none: "None"
-  - shade: "The pen color, see-through"
-  - color: "The fill color below"
-- fillColor: "#1E1E2E"
-  $name: "Fill color"
-  $description: "In hexadecimal. Used when Fill is set to the fill color."
-- fillOpacity: 25
-  $name: "Fill opacity (%)"
-  $description: "5 to 100 (Suggested: 25)."
-- arrowHeads: "end"
-  $name: "Heads"
-  $description: "Which ends of the arrow get a head."
-  $options:
-  - end: "At the end"
-  - start: "At the start"
-  - both: "Both ends"
-- arrowStyle: "filled"
-  $name: "Head style"
-  $description: "The shape of the arrow head."
-  $options:
-  - filled: "Filled triangle"
-  - notched: "Notched triangle"
-  - open: "Open triangle"
-  - line: "Two lines"
-- arrowHeadSize: 100
-  $name: "Head size (%)"
-  $description: "50 to 250 (Suggested: 100)."
-- arrowCurved: false
-  $name: "Curved arrow"
-  $description: "The arrow bows along the drag instead of running straight."
-- textFont: "FiraCode Nerd Font"
-  $name: "Font"
-  $description: "The name of an installed font. If it is missing, Segoe UI is used."
-- textSize: 100
-  $name: "Text size (%)"
-  $description: "50 to 300 (Suggested: 100). Grows with the pen size too."
-- textBold: true
-  $name: "Bold"
-  $description: "Thick letters, easy to read on a busy picture."
-- textItalic: false
-  $name: "Italic"
-  $description: "Slanted letters."
-- textBackground: "none"
-  $name: "Background"
-  $description: "A box behind the text makes it easy to read on any picture."
-  $options:
-  - none: "None, with a shadow or outline"
-  - pen: "The pen color"
-  - dark: "Dark"
-- textColor: "#FFFFFF"
-  $name: "Text color"
-  $description: "In hexadecimal. The color of the words you type on the snip."
-- textOutline: true
-  $name: "Outline"
-  $description: "A thin edge around the letters, in a color that stands out, so text stays readable on any picture."
-- stepStyle: "numbers"
-  $name: "Step labels"
-  $description: "What the numbered steps count with."
-  $options:
-  - numbers: "1, 2, 3"
-  - letters: "A, B, C"
-  - lettersLower: "a, b, c"
-  - roman: "I, II, III"
-  - romanLower: "i, ii, iii"
-- stepStart: 1
-  $name: "Start at"
-  $description: "1 to 99 (Suggested: 1)."
-- stepSize: 100
-  $name: "Step size (%)"
-  $description: "50 to 300 (Suggested: 100)."
-- stepColor: "#F38BA8"
-  $name: "Step color"
-  $description: "In hexadecimal. The color of the numbered circles."
-- highlighterUsesPen: false
-  $name: "Use the pen color"
-  $description: "Off, the highlighter uses its own color below."
-- highlighterColor: "#F9E2AF"
-  $name: "Highlighter color"
-  $description: "In hexadecimal."
-- highlighterOpacity: 38
-  $name: "Highlighter opacity (%)"
-  $description: "10 to 80 (Suggested: 38)."
-- blurStrength: 12
-  $name: "Blur strength"
-  $description: "2 to 40 (Suggested: 12)."
-- pixelSize: 12
-  $name: "Pixel size"
-  $description: "3 to 60 (Suggested: 12)."
-- shadowColor: "#000000"
-  $name: "Shadow color"
-  $description: "In hexadecimal."
-- shadowOpacity: 45
-  $name: "Shadow opacity (%)"
-  $description: "5 to 100 (Suggested: 45)."
-- shadowOffset: 3
-  $name: "Shadow distance"
-  $description: "0 to 20 (Suggested: 3)."
-- shadowSoftness: 3
-  $name: "Shadow softness"
-  $description: "1 to 8 (Suggested: 3). 1 is a hard shadow."
-- outlineColor: "contrast"
-  $name: "Outline color"
-  $description: "The edge drawn around each drawing when Outlines is on."
-  $options:
-  - contrast: "Light or dark, whichever stands out"
-  - white: "White"
-  - black: "Black"
-- outlineWidth: 3
-  $name: "Outline width"
-  $description: "1 to 10 (Suggested: 3)."
-- magnifyZoom: "2"
-  $name: "Magnifier zoom"
-  $description: "How big the magnifier tool shows the spot under it."
-  $options:
-  - "1.5": "1.5x"
-  - 2: "2x"
-  - 3: "3x"
-  - 4: "4x"
-  - 6: "6x"
-- magnifyShape: "box"
-  $name: "Magnifier shape"
-  $description: "The outline drawn around the magnified spot."
-  $options:
-  - box: "Box"
-  - circle: "Circle"
-- spotlightShape: "box"
-  $name: "Spotlight shape"
-  $description: "The outline drawn around the spot that stays bright."
-  $options:
-  - box: "Box"
-  - circle: "Circle"
-- spotlightDim: 60
-  $name: "Spotlight dim (%)"
-  $description: "30 to 90 (Suggested: 60). How dark everything around the spot gets."
 */
 // ==/WindhawkModSettings==
 
@@ -682,7 +738,6 @@ restyled to match the rest of Snipper.
 #include <imm.h>
 #include <shellscalingapi.h>
 #include <mmsystem.h>
-#include <tlhelp32.h>
 
 #include <algorithm>
 #include <atomic>
@@ -917,7 +972,6 @@ static const PCWSTR kHotkeyKeys[HK_COUNT] = {L"regionHotkey", L"fullscreenHotkey
 
 struct Config {
     std::wstring hotkeys[HK_COUNT];
-    bool stepAside = true;
     bool catchKeys = true;
     bool histPeek = true;
     bool copy = true, save = true, toast = true, cursor = true, sound = true;
@@ -939,8 +993,14 @@ struct Config {
     bool drawBar = true, keepRegionOpen = false, drawShadow = true, drawOutline = false;
     COLORREF drawColor = RGB(0xF3, 0x8B, 0xA8);
     int drawSize = 4;
-    // The drawing tools, ShareX's options.
-    std::wstring barPos = L"top";
+    // What a snip takes.
+    bool cursorRegion = false;
+    std::wstring windowArea = L"frame";
+    int snipDelay = 0;
+    // The drawing bar and its tools.
+    std::wstring barPos = L"top", barFade = L"hover", animSpeed = L"global";
+    int barSize = 100, barFadeOpacity = 30;
+    bool barAnim = true;
     COLORREF palette[8] = {RGB(0xF3, 0x8B, 0xA8), RGB(0xFA, 0xB3, 0x87), RGB(0xF9, 0xE2, 0xAF), RGB(0xA6, 0xE3, 0xA1),
                            RGB(0x89, 0xB4, 0xFA), RGB(0xCB, 0xA6, 0xF7), RGB(0xFF, 0xFF, 0xFF), RGB(0x11, 0x11, 0x1B)};
     int boxRadius = 6;
@@ -973,7 +1033,6 @@ static Config g_cfg;
 static void LoadSettings() {
     Config c;
     for (int i = 0; i < HK_COUNT; i++) c.hotkeys[i] = Trim(ReadStr(kHotkeyKeys[i]));
-    c.stepAside = Wh_GetIntSetting(L"stepAside") != 0;
     c.copy = Wh_GetIntSetting(L"copyToClipboard") != 0;
     c.save = Wh_GetIntSetting(L"saveToFile") != 0;
     c.toast = Wh_GetIntSetting(L"showToast") != 0;
@@ -1024,7 +1083,16 @@ static void LoadSettings() {
     c.drawSize = Clamp(Wh_GetIntSetting(L"drawSize"), 1, 20);
     c.drawShadow = Wh_GetIntSetting(L"drawShadow") != 0;
     c.drawOutline = Wh_GetIntSetting(L"drawOutline") != 0;
-    c.barPos = OneOf(ReadStr(L"barPosition"), {L"top", L"bottom"});
+    c.barPos = OneOf(ReadStr(L"barPosition"), {L"top", L"topLeft", L"topRight", L"bottom", L"bottomLeft",
+                                               L"bottomRight", L"left", L"right"});
+    c.barSize = Clamp(Wh_GetIntSetting(L"barSize"), 75, 150);
+    c.barFade = OneOf(ReadStr(L"barFade"), {L"hover", L"drag", L"off"});
+    c.barFadeOpacity = Clamp(Wh_GetIntSetting(L"barFadeOpacity"), 10, 80);
+    c.barAnim = Wh_GetIntSetting(L"barAnimation") != 0;
+    c.animSpeed = OneOf(ReadStr(L"animationSpeed"), {L"global", L"veryQuick", L"quick", L"normal", L"relaxed", L"slow"});
+    c.cursorRegion = Wh_GetIntSetting(L"cursorInRegion") != 0;
+    c.windowArea = OneOf(ReadStr(L"windowArea"), {L"frame", L"client"});
+    c.snipDelay = Clamp(Wh_GetIntSetting(L"snipDelay"), 0, 10);
     {
         // Up to 8 hex colors split by spaces, commas or semicolons; missing ones keep the default.
         std::wstring pal = ReadStr(L"barColors");
@@ -1338,7 +1406,6 @@ static bool g_trayAdded;
 static HICON g_trayIcon;
 static bool g_hotkeyOn[HK_COUNT + 1];  // The last one is Win + Shift + S.
 static ULONGLONG g_hookFired[HK_COUNT + 2];  // When the key guard last fired each id, to drop the hotkey twin.
-static bool g_steppedAside;
 static int g_deferredMode = -1;
 constexpr int kDeferredRepeat = 100;  // g_deferredMode: snip the last region again.
 static std::atomic<int> g_saveThreads{0};
@@ -2466,7 +2533,7 @@ static void DrawStr(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const std::w
 
 namespace mk {
 
-// ShareX's tools, in ShareX's order.
+// The drawing tools, in bar order.
 enum Tool {
     T_REGION, T_SELECT, T_RECT, T_ELLIPSE, T_LINE, T_ARROW, T_PEN, T_TEXT, T_BALLOON, T_STEP, T_MARK, T_ERASER,
     T_BLUR, T_PIXEL, T_MAGNIFY, T_SPOT, T_COUNT
@@ -2486,6 +2553,7 @@ constexpr int kColorCount = 8;
 static const UINT32 kColors[kColorCount] = {0xF38BA8, 0xFAB387, 0xF9E2AF, 0xA6E3A1, 0x89B4FA, 0xCBA6F7, 0xFFFFFF, 0x11111B};
 static const wchar_t* const kColorNames[kColorCount] = {L"Red", L"Peach", L"Yellow", L"Green", L"Blue", L"Mauve", L"White", L"Black"};
 constexpr UINT_PTR kCaretTimer = 7;
+constexpr UINT_PTR kFadeTimer = 8;  // Frames for the bar's fade and slide.
 
 // The steps each option walks through.
 static const float kWidths[] = {1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24};
@@ -2528,7 +2596,13 @@ struct Shape {
 // The look that stays the same for every tool. Set by ApplySettings.
 struct Style {
     UINT32 palette[kColorCount] = {0xF38BA8, 0xFAB387, 0xF9E2AF, 0xA6E3A1, 0x89B4FA, 0xCBA6F7, 0xFFFFFF, 0x11111B};
-    bool bottom = false, remember = true;
+    int pos = 0;  // Pos: where the bar sits.
+    bool remember = true;
+    float scale = 1;     // Bar size.
+    int fade = 0;        // 0 fades on hover, 1 only while dragging or drawing over it, 2 never.
+    float fadeAlpha = 0.3f;
+    bool anim = true;
+    std::wstring speed = L"global";
     UINT32 fillColor = 0x1E1E2E;
     std::wstring font = L"FiraCode Nerd Font";
     int stepStart = 1;
@@ -2539,6 +2613,10 @@ struct Style {
     float outlineW = 3;
 };
 static Style g_st;
+
+enum Pos { P_TOP, P_TOPLEFT, P_TOPRIGHT, P_BOTTOM, P_BOTTOMLEFT, P_BOTTOMRIGHT, P_LEFT, P_RIGHT };
+static bool BarBottom() { return g_st.pos >= P_BOTTOM && g_st.pos <= P_BOTTOMRIGHT; }
+static bool BarStanding() { return g_st.pos >= P_LEFT; }
 
 enum BtnKind { B_TOOL, B_COLOR, B_SIZE, B_SHADOW, B_OUTLINE, B_UNDO, B_REDO, B_DONE, B_COPY, B_SAVE, B_CLOSE, B_OPT, B_POINTER };
 enum OptKind {
@@ -2573,8 +2651,11 @@ struct State {
     int stepPin = 0;  // The next number, when set on the strip; 0 counts on from the highest.
     std::vector<Btn> btns;  // The bar's buttons, then the strip's options from nMain on.
     size_t nMain = 0;
-    std::vector<float> seps;
+    std::vector<float> seps;  // Across the bar: x on a lying bar, y on a standing one.
     D2D1_RECT_F bar{}, strip{};
+    // Motion: the duration scale (0 is still), the hover fade and the opening fade and slide.
+    float motion = 1, fadeFrom = 1, fadeTo = 1;
+    ULONGLONG fadeT0 = 0, introT0 = 0;
     float ui = 1, rad = 16;
     RECT mon{}, avoid{};
     bool laidOut = false, avoiding = false;
@@ -3315,7 +3396,7 @@ static void RebuildEffects() {
 
 static Shape* Typing() { return g.typing >= 0 && g.typing < (int)g.shapes.size() ? &g.shapes[g.typing] : nullptr; }
 static Shape* Picked() {
-    // Like ShareX, a shape stays picked in any drawing tool: the one just drawn, or the one clicked.
+    // A shape stays picked in any drawing tool: the one just drawn, or the one clicked.
     return g.tool != T_REGION && g.pick >= 0 && g.pick < (int)g.shapes.size() ? &g.shapes[g.pick] : nullptr;
 }
 
@@ -3363,7 +3444,7 @@ static void Change(F f) {
         Push();
         p = Picked();
         f(p->o);
-        g.opt[p->tool] = p->o;  // The next one drawn looks the same, as in ShareX.
+        g.opt[p->tool] = p->o;  // The next one drawn looks the same.
         if (IsEffect(p->tool)) RebuildEffects();
     } else if (OptTool() >= 0) {
         f(g.opt[OptTool()]);
@@ -3634,10 +3715,37 @@ static void LayoutStrip() {
     if (!n) return;
     float u = g.ui, ph = std::round(28 * u), pad = std::round(4 * u), gap = std::round(4 * u), H = ph + pad * 2;
     float x = pad;
+    float widths[8], widest = 0;
     for (int i = 0; i < n; i++) {
-        float w = std::ceil(TextWidth(OptText(kinds[i]), PillFont())) + std::round((HasOptionMenu(kinds[i]) ? 40 : 24) * u) + (kinds[i] == O_FILLCOLOR ? std::round(18 * u) : 0);
-        g.btns.push_back({B_OPT, kinds[i], {x, pad, x + w, pad + ph}});
-        x += w + gap;
+        widths[i] = std::ceil(TextWidth(OptText(kinds[i]), PillFont())) + std::round((HasOptionMenu(kinds[i]) ? 40 : 24) * u) +
+                    (kinds[i] == O_FILLCOLOR ? std::round(18 * u) : 0);
+        widest = std::max(widest, widths[i]);
+    }
+    if (BarStanding()) {
+        // A standing bar: the options stand in a column beside it, level with the tool in use.
+        float y = pad;
+        for (int i = 0; i < n; i++) {
+            g.btns.push_back({B_OPT, kinds[i], {pad, y, pad + widest, y + ph}});
+            y += ph + gap;
+        }
+        float W = widest + pad * 2, Hc = y - gap + pad;
+        float x0 = g_st.pos == P_LEFT ? g.bar.right + std::round(6 * u) : g.bar.left - std::round(6 * u) - W;
+        float cy = (g.bar.top + g.bar.bottom) / 2;
+        for (size_t i = 0; i < g.nMain; i++)
+            if (g.btns[i].kind == B_TOOL && g.btns[i].arg == g.tool) cy = (g.btns[i].r.top + g.btns[i].r.bottom) / 2;
+        float y0 = std::round(cy - Hc / 2);
+        y0 = std::clamp(y0, (float)g.mon.top + 8, std::max((float)g.mon.top + 8, (float)g.mon.bottom - 8 - Hc));
+        x0 = std::round(x0);
+        for (size_t i = g.nMain; i < g.btns.size(); i++) {
+            D2D1_RECT_F& r = g.btns[i].r;
+            r = {r.left + x0, r.top + y0, r.right + x0, r.bottom + y0};
+        }
+        g.strip = {x0, y0, x0 + W, y0 + Hc};
+        return;
+    }
+    for (int i = 0; i < n; i++) {
+        g.btns.push_back({B_OPT, kinds[i], {x, pad, x + widths[i], pad + ph}});
+        x += widths[i] + gap;
     }
     float W = x - gap + pad;
     bool below = (g.bar.top + g.bar.bottom) / 2 < (g.mon.top + g.mon.bottom) / 2.0f;
@@ -3658,9 +3766,10 @@ static void Layout(float ui) {
     g.seps.clear();
     float pad = std::round(6 * ui), bs = std::round(40 * ui), cs = std::round(28 * ui), gap = std::round(2 * ui),
           sep = std::round(14 * ui);
-    float x = pad;
+    bool stand = BarStanding();
+    float x = pad;  // Along the bar: down a standing one.
     auto add = [&](int kind, int arg, float w) {
-        g.btns.push_back({kind, arg, {x, pad, x + w, pad + bs}});
+        g.btns.push_back({kind, arg, stand ? D2D1_RECT_F{pad, x, pad + bs, x + w} : D2D1_RECT_F{x, pad, x + w, pad + bs}});
         x += w + gap;
     };
     auto split = [&]() {
@@ -3683,30 +3792,48 @@ static void Layout(float ui) {
     add(B_COPY, 0, bs);
     add(B_SAVE, 0, bs);
     add(B_CLOSE, 0, bs);
-    float W = x - gap + pad, H = bs + pad * 2;
-    float room = (float)(g.mon.right - g.mon.left) - 24;
-    if (W > room && ui > 0.6f) {  // A small screen: shrink the whole bar instead of cutting it off.
-        Layout(ui * room / W);
+    float len = x - gap + pad, thick = bs + pad * 2;
+    float W = stand ? thick : len, H = stand ? len : thick;
+    float room = stand ? (float)(g.mon.bottom - g.mon.top) - 24 : (float)(g.mon.right - g.mon.left) - 24;
+    if (len > room && ui > 0.4f) {  // A small screen or a big bar: shrink the whole bar instead of cutting it off.
+        Layout(ui * room / len);
         return;
     }
-    float x0 = std::round((g.mon.left + g.mon.right) / 2.0f - W / 2);
-    float y0 = g_st.bottom ? (float)g.mon.bottom - std::round(14 * ui) - H : (float)g.mon.top + std::round(14 * ui);
+    float m = std::round(14 * ui), L = (float)g.mon.left, R = (float)g.mon.right, T = (float)g.mon.top,
+          B = (float)g.mon.bottom;
+    float midX = std::round((L + R) / 2 - W / 2), midY = std::round((T + B) / 2 - H / 2);
+    float x0 = midX, y0 = T + m;
+    switch (g_st.pos) {
+        case P_TOPLEFT: x0 = L + m; break;
+        case P_TOPRIGHT: x0 = R - m - W; break;
+        case P_BOTTOM: y0 = B - m - H; break;
+        case P_BOTTOMLEFT: x0 = L + m, y0 = B - m - H; break;
+        case P_BOTTOMRIGHT: x0 = R - m - W, y0 = B - m - H; break;
+        case P_LEFT: x0 = L + m, y0 = midY; break;
+        case P_RIGHT: x0 = R - m - W, y0 = midY; break;
+    }
     if (g.avoiding) {
         RECT bar{(LONG)x0, (LONG)y0, (LONG)(x0 + W), (LONG)(y0 + H)}, hit;
         if (IntersectRect(&hit, &bar, &g.avoid)) {
             // Out of the way of the region: the other side of it, starting with the side the bar lives on.
-            float gapY = std::round(10 * ui);
-            bool below = g.avoid.bottom + gapY + H <= g.mon.bottom - 8, above = g.avoid.top - gapY - H >= g.mon.top + 8;
-            if (g_st.bottom ? !above && below : below) y0 = g.avoid.bottom + gapY;
-            else if (above) y0 = g.avoid.top - gapY - H;
+            float gp = std::round(10 * ui);
+            if (stand) {
+                bool right = g.avoid.right + gp + W <= R - 8, left = g.avoid.left - gp - W >= L + 8;
+                if (g_st.pos == P_RIGHT ? !left && right : right) x0 = g.avoid.right + gp;
+                else if (left) x0 = g.avoid.left - gp - W;
+            } else {
+                bool below = g.avoid.bottom + gp + H <= B - 8, above = g.avoid.top - gp - H >= T + 8;
+                if (BarBottom() ? !above && below : below) y0 = g.avoid.bottom + gp;
+                else if (above) y0 = g.avoid.top - gp - H;
+            }
         }
     }
     for (auto& b : g.btns) b.r = {b.r.left + x0, b.r.top + y0, b.r.right + x0, b.r.bottom + y0};
-    for (auto& s : g.seps) s += x0;
+    for (auto& s : g.seps) s += stand ? y0 : x0;
     g.bar = {x0, y0, x0 + W, y0 + H};
     g.nMain = g.btns.size();
     g.ui = ui;
-    g.rad = std::min(std::round(LiveCornerRadius() * ui), H / 2);
+    g.rad = std::min(std::round(LiveCornerRadius() * ui), thick / 2);
 }
 
 static void ReleaseTarget() {
@@ -3719,18 +3846,23 @@ static void EnsureLayout(const RECT* avoid) {
     if (g.laidOut && want == g.avoiding && (!want || EqualRect(avoid, &g.avoid))) return;
     g.avoiding = want;
     if (want) g.avoid = *avoid;
-    Layout(MonAt(POINT{(g.mon.left + g.mon.right) / 2, (g.mon.top + g.mon.bottom) / 2}).ui);
+    Layout(MonAt(POINT{(g.mon.left + g.mon.right) / 2, (g.mon.top + g.mon.bottom) / 2}).ui * g_st.scale);
     g.laidOut = true;
     LayoutStrip();
     g.hot = -1;
     ReleaseTarget();
 }
 
-// Downscaled and blurred, then stretched back: the frosted glass behind the bar, with room for the strip either side.
+// Downscaled and blurred, then stretched back: the frosted glass behind the bar, with room for the strip beside it.
 static void MakeFrost(ID2D1RenderTarget* rt) {
     Overlay& o = g_ov;
-    int mx = (int)std::lround(24 * g.ui), my = (int)std::lround((24 + 6 + 36) * g.ui);
-    RECT r{(LONG)g.bar.left - mx, (LONG)g.bar.top - my, (LONG)g.bar.right + mx, (LONG)g.bar.bottom + my}, all{0, 0, o.shot.w, o.shot.h};
+    bool stand = BarStanding();
+    int mx = (int)std::lround((stand ? 220 : 24) * g.ui), my = (int)std::lround((stand ? 24 : 24 + 6 + 36) * g.ui);
+    D2D1_RECT_F u = g.bar;
+    if (g.btns.size() > g.nMain)
+        u = {std::min(u.left, g.strip.left), std::min(u.top, g.strip.top), std::max(u.right, g.strip.right),
+             std::max(u.bottom, g.strip.bottom)};
+    RECT r{(LONG)u.left - mx, (LONG)u.top - my, (LONG)u.right + mx, (LONG)u.bottom + my}, all{0, 0, o.shot.w, o.shot.h};
     if (!IntersectRect(&r, &r, &all)) return;
     const int k = 4;
     int sw = (r.right - r.left) / k, sh = (r.bottom - r.top) / k;
@@ -3946,8 +4078,13 @@ static void Plate(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b, const D2D1_REC
     }
 }
 
-static void DrawBar(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
-    if (!g.on || g.btns.empty()) return;
+static void DrawBarBody(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
+    if (g.frost && g.btns.size() > g.nMain) {
+        // The strip moved past the glass made for it (a standing bar's options follow the tool): make it again.
+        const D2D1_RECT_F& f = g.frostRect;
+        if (g.strip.left < f.left - 4 || g.strip.top < f.top - 4 || g.strip.right > f.right + 4 || g.strip.bottom > f.bottom + 4)
+            ReleaseTarget();
+    }
     if (!g.frost) MakeFrost(rt);
     float u = g.ui;
     int t = OptTool();
@@ -3956,7 +4093,8 @@ static void DrawBar(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
     b->SetColor(Rgb(mocha::surface1, 0.9f));
     for (float x : g.seps) {
         float sx = std::floor(x) + 0.5f;
-        rt->DrawLine(D2D1::Point2F(sx, g.bar.top + 14 * u), D2D1::Point2F(sx, g.bar.bottom - 14 * u), b, 1);
+        if (BarStanding()) rt->DrawLine(D2D1::Point2F(g.bar.left + 14 * u, sx), D2D1::Point2F(g.bar.right - 14 * u, sx), b, 1);
+        else rt->DrawLine(D2D1::Point2F(sx, g.bar.top + 14 * u), D2D1::Point2F(sx, g.bar.bottom - 14 * u), b, 1);
     }
     float inner = std::max(4.0f, g.rad - std::round(6 * u));
     for (size_t i = 0; i < g.nMain; i++) {
@@ -4033,9 +4171,74 @@ static void DrawBar(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
         const Btn& bt = g.btns[g.hot];
         std::wstring text = Label(bt);
         float w = TextWidth(text, Font(12.0f * u, false)) + 18 * u;
-        bool up = g.bar.top > (g.mon.top + g.mon.bottom) / 2.0f;  // A bar low on the screen shows its tip above.
-        DrawPill(rt, b, (bt.r.left + bt.r.right) / 2 - w / 2, up ? all.top - 8 * u : all.bottom + 8 * u, text, u, g.mon, up);
+        if (BarStanding()) {
+            // Beside a standing bar, on the side away from the screen edge, level with the button.
+            float x = g_st.pos == P_LEFT ? all.right + 8 * u : all.left - 8 * u - w;
+            DrawPill(rt, b, x, (bt.r.top + bt.r.bottom) / 2 - 12 * u, text, u, g.mon, false);
+        } else {
+            bool up = g.bar.top > (g.mon.top + g.mon.bottom) / 2.0f;  // A bar low on the screen shows its tip above.
+            DrawPill(rt, b, (bt.r.left + bt.r.right) / 2 - w / 2, up ? all.top - 8 * u : all.bottom + 8 * u, text, u, g.mon, up);
+        }
     }
+}
+
+static float EaseOut(float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    return 1 - (1 - t) * (1 - t) * (1 - t);
+}
+
+// The bar's see-through amount now: the opening fade times the hover fade. slide is how far it still has to come in.
+static float BarOpacity(ULONGLONG now, float& slide) {
+    slide = 0;
+    float intro = 1, fade = g.fadeTo;
+    if (g.motion > 0 && g.introT0) {
+        float t = (float)(now - g.introT0) / (160 * g.motion);
+        if (t < 1) {
+            intro = EaseOut(t);
+            slide = (1 - intro) * 8 * g.ui;
+        }
+    }
+    if (g.motion > 0 && g.fadeFrom != g.fadeTo) {
+        float t = (float)(now - g.fadeT0) / (140 * g.motion);
+        fade = t >= 1 ? g.fadeTo : g.fadeFrom + (g.fadeTo - g.fadeFrom) * EaseOut(t);
+    }
+    return intro * fade;
+}
+
+static bool BarAnimating() {
+    if (g.motion <= 0) return false;
+    ULONGLONG now = GetTickCount64();
+    return (g.introT0 && now - g.introT0 < (ULONGLONG)(160 * g.motion)) ||
+           (g.fadeFrom != g.fadeTo && now - g.fadeT0 < (ULONGLONG)(140 * g.motion));
+}
+
+static void DrawBar(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* b) {
+    if (!g.on || g.btns.empty()) return;
+    ULONGLONG now = GetTickCount64();
+    if (!g.introT0 && g.motion > 0) g.introT0 = now;  // The first frame the bar shows starts its opening.
+    float slide;
+    float op = BarOpacity(now, slide);
+    Ptr<ID2D1Layer> layer;
+    bool faded = op < 0.999f;
+    if (faded) {
+        rt->CreateLayer(nullptr, layer.put());
+        if (layer)
+            rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                                D2D1::IdentityMatrix(), op),
+                          layer.p);
+    }
+    D2D1_MATRIX_3X2_F old;
+    rt->GetTransform(&old);
+    if (slide > 0) {
+        // In from the edge the bar sits on.
+        float dx = g_st.pos == P_LEFT ? -slide : g_st.pos == P_RIGHT ? slide : 0;
+        float dy = BarStanding() ? 0 : BarBottom() ? slide : -slide;
+        rt->SetTransform(D2D1::Matrix3x2F::Translation(dx, dy) * old);
+    }
+    DrawBarBody(rt, b);
+    if (slide > 0) rt->SetTransform(old);
+    if (faded && layer) rt->PopLayer();
+    if (BarAnimating() && g_ov.hwnd) SetTimer(g_ov.hwnd, kFadeTimer, 15, nullptr);
 }
 
 // The dashed frame drawn round the text being typed and the picked shape. Never burned into the snip.
@@ -4069,7 +4272,7 @@ static bool WordsFrame(const Shape& s, D2D1_RECT_F& box, D2D1_RECT_F& r, float& 
     return true;
 }
 
-// Where a picked shape's handles sit, like ShareX. Boxes: 0 top left, 1 bottom right, 2 top right, 3 bottom left,
+// Where a picked shape's handles sit. Boxes: 0 top left, 1 bottom right, 2 top right, 3 bottom left,
 // 4 top, 5 bottom, 6 left, 7 right. Text: 0 top left, 1 bottom right, 2 top right, 3 bottom left, 4 left, 5 right,
 // and every one sets how wide the lines run. Pen strokes: the box handles on their frame, which stretch the stroke. Lines, arrows, balloons and numbers: 0 and 1 on their two points; an
 // arrow has 2 on its middle, which bends it, and a balloon 2 on its body's right edge, which sets its line width.
@@ -4149,7 +4352,7 @@ static void MoveHandle(Shape& s, int id, D2D1_POINT_2F q) {
         return;
     }
     if (s.tool == T_TEXT || (s.tool == T_BALLOON && id == 2)) {
-        // Words wrap to the box, as in ShareX. The left handles keep the right edge where it is.
+        // Words wrap to the box. The left handles keep the right edge where it is.
         D2D1_RECT_F box, r;
         float px;
         if (!WordsFrame(s, box, r, px)) return;
@@ -4184,7 +4387,7 @@ static void MoveHandle(Shape& s, int id, D2D1_POINT_2F q) {
 }
 
 // The shape a press grabs while a drawing tool is out. Areas and unfilled boxes are only grabbed on their edge, so
-// a new drawing can still start inside them, as in ShareX.
+// a new drawing can still start inside them.
 static bool GrabShape(const Shape& s, D2D1_POINT_2F q) {
     if (s.pts.size() == 2 && IsBoxy(s.tool) && !(s.o.fill && (s.tool == T_RECT || s.tool == T_ELLIPSE))) {
         D2D1_RECT_F r = Norm(s.pts[0], s.pts[1]);
@@ -4308,6 +4511,23 @@ static bool OverBar(POINT p) {
     return g.on && !g.btns.empty() && (In(g.bar, p) || (g.btns.size() > g.nMain && In(g.strip, p)));
 }
 
+// Fades the bar while the mouse is on it (or only while dragging or drawing over it), so the screen behind shows.
+// It still takes clicks while faded.
+static void UpdateFade(POINT p, bool held) {
+    if (!g.on || g.btns.empty()) return;
+    bool over = OverBar(p);
+    bool want = g_st.fade == 0 ? over : g_st.fade == 1 ? held && over : false;
+    float to = want ? g_st.fadeAlpha : 1.0f;
+    if (to == g.fadeTo) return;
+    ULONGLONG now = GetTickCount64();
+    float slide;
+    float introNow = 1;
+    if (g.motion > 0 && g.introT0) introNow = std::max(0.001f, EaseOut((float)(now - g.introT0) / (160 * g.motion)));
+    g.fadeFrom = g.motion > 0 ? BarOpacity(now, slide) / introNow : to;  // From wherever it is now.
+    g.fadeTo = to;
+    g.fadeT0 = now;
+}
+
 static int HitBtn(POINT p) {
     if (!OverBar(p)) return -1;
     for (int i = 0; i < (int)g.btns.size(); i++)
@@ -4335,7 +4555,7 @@ static LPCWSTR Cursor(POINT p) {
         const Shape* s = Picked();
         return s && g.resizePoint >= 0 ? HandleCursor(*s, g.resizePoint) : IDC_SIZEALL;
     }
-    if (!g.drawing && g.typing < 0) {  // Anything grabbable shows it, whatever the tool, like ShareX.
+    if (!g.drawing && g.typing < 0) {  // Anything grabbable shows it, whatever the tool.
         if (const Shape* s = Picked()) {
             int h = HitHandle(*s, q);
             if (h >= 0) return HandleCursor(*s, h);
@@ -4588,7 +4808,7 @@ static void BeginTyping(int i, bool isNew) {
     RefreshStrip();
 }
 
-// A press in any drawing tool works like ShareX: a handle of the picked shape resizes it, a press on a shape picks
+// A press in any drawing tool: a handle of the picked shape resizes it, a press on a shape picks
 // and moves it, a second click on picked words opens them for typing, and anywhere else starts a new drawing.
 static void ShapeDown(POINT p) {
     int typed = g.typing;
@@ -4717,7 +4937,7 @@ static void ShapeUp() {
         if (g.stepPin > 0) g.stepPin++;
         Push();
         g.shapes.push_back(std::move(s));
-        g.pick = (int)g.shapes.size() - 1;  // A new drawing stays picked with its handles, as in ShareX.
+        g.pick = (int)g.shapes.size() - 1;  // A new drawing stays picked with its handles.
         RefreshStrip();
         return;
     }
@@ -4881,11 +5101,53 @@ static void SaveMemory() {
     Wh_SetBinaryValue(L"barMemory", &m, sizeof(m));
 }
 
+// Shared motion settings for every DavidHiFi mod, written by Seamless Workshop: HKCU\Software\DavidHiFi\Motion,
+// Enabled (DWORD, 0 = all window animations off) and Speed (a level name, or a DWORD percent of normal).
+// A missing key means on at normal speed.
+static float LevelScale(const std::wstring& name, float fallback) {
+    static const PCWSTR kNames[] = {L"veryQuick", L"quick", L"normal", L"relaxed", L"slow"};
+    static const float kScales[] = {0.5f, 0.75f, 1.0f, 1.5f, 2.0f};
+    for (int i = 0; i < 5; i++)
+        if (!_wcsicmp(name.c_str(), kNames[i])) return kScales[i];
+    return fallback;
+}
+
+// How long the bar's motion takes, as a share of normal. 0: no motion at all.
+static float MotionScale() {
+    if (!g_st.anim) return 0;
+    BOOL on = TRUE;
+    if (SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &on, 0) && !on) return 0;
+    float scale = 1;
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\DavidHiFi\\Motion", 0, KEY_QUERY_VALUE, &key) == ERROR_SUCCESS) {
+        DWORD v = 0, type = 0, size = sizeof(v);
+        if (RegQueryValueExW(key, L"Enabled", nullptr, &type, (BYTE*)&v, &size) == ERROR_SUCCESS && type == REG_DWORD && !v) {
+            RegCloseKey(key);
+            return 0;
+        }
+        WCHAR text[32] = {};
+        size = sizeof(text) - sizeof(WCHAR);
+        if (RegQueryValueExW(key, L"Speed", nullptr, &type, (BYTE*)text, &size) == ERROR_SUCCESS) {
+            if (type == REG_DWORD) scale = std::clamp((float)*(DWORD*)text, 25.0f, 400.0f) / 100.0f;
+            else if (type == REG_SZ) scale = LevelScale(text, 1);
+        }
+        RegCloseKey(key);
+    }
+    return g_st.speed == L"global" ? scale : LevelScale(g_st.speed, 1);
+}
+
 static void ApplySettings(const Config& c) {
     g.on = c.drawBar;
     Style s;
     for (int i = 0; i < kColorCount; i++) s.palette[i] = FromRef(c.palette[i]);
-    s.bottom = c.barPos == L"bottom";
+    static const PCWSTR kPos[] = {L"top", L"topLeft", L"topRight", L"bottom", L"bottomLeft", L"bottomRight", L"left", L"right"};
+    for (int i = 0; i < (int)ARRAYSIZE(kPos); i++)
+        if (c.barPos == kPos[i]) s.pos = i;
+    s.scale = c.barSize / 100.0f;
+    s.fade = c.barFade == L"drag" ? 1 : c.barFade == L"off" ? 2 : 0;
+    s.fadeAlpha = c.barFadeOpacity / 100.0f;
+    s.anim = c.barAnim;
+    s.speed = c.animSpeed;
     s.remember = c.rememberBar;
     s.fillColor = FromRef(c.fillColor);
     s.font = c.textFont;
@@ -4972,6 +5234,9 @@ static void Begin(const MonInfo& m) {
     g.mon = m.r;
     g.laidOut = false;
     g.avoiding = false;
+    g.motion = MotionScale();
+    g.introT0 = 0;
+    g.fadeFrom = g.fadeTo = 1;
     ReleaseTarget();
 }
 
@@ -5351,6 +5616,7 @@ static void OvSetCursor(POINT p) {
     Overlay& o = g_ov;
     o.cur = p;
     bool barChanged = mk::Hover(p);
+    mk::UpdateFade(p, o.press != 0 || mk::g.drawing);
     if (o.press == 2) {
         mk::ShapeMove(p, (GetKeyState(VK_SHIFT) & 0x8000) != 0);
     } else if (o.press == 1) {
@@ -5600,7 +5866,7 @@ static LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     }
                     break;
             }
-            // 1 to 9 and 0, top row or number pad: that screen, counted from the left, as ShareX does.
+            // 1 to 9 and 0, top row or number pad: that screen, counted from the left.
             if (!ctrl && !shift && ((wp >= '0' && wp <= '9') || (wp >= VK_NUMPAD0 && wp <= VK_NUMPAD9))) {
                 int d = (int)(wp >= VK_NUMPAD0 ? wp - VK_NUMPAD0 : wp - '0');
                 size_t i = d == 0 ? 9 : (size_t)d - 1;
@@ -5621,6 +5887,11 @@ static LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 InvalidateRect(hwnd, nullptr, FALSE);
                 return 0;
             }
+            if (wp == mk::kFadeTimer) {
+                if (!mk::BarAnimating()) KillTimer(hwnd, wp);
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            }
             KillTimer(hwnd, wp);
             InvalidateRect(hwnd, nullptr, FALSE);
             return 0;
@@ -5638,7 +5909,7 @@ static void StartRegion() {
     QueryPerformanceFrequency(&qf);
     QueryPerformanceCounter(&t0);
     RECT vs = VirtualScreen();
-    if (!CaptureRect(vs, false, o.shot)) {
+    if (!CaptureRect(vs, g_cfg.cursorRegion, o.shot)) {
         Wh_Log(L"Couldn't capture the screen");
         return;
     }
@@ -6213,7 +6484,7 @@ static const char kShutterWav[] =
     "AAEAAAABAAEAAAD+////AAABAAEAAgACAAEAAAD//////////wAAAAAAAAAAAAAAAAAAAAD/////AAAAAAAAAAABAAEAAQAAAP////8AAAEAAAAAAAAA"
     "AAAAAP//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 
-// ShareX's camera click, decoded once and kept for good (an async PlaySound reads it while it plays).
+// The camera click, decoded once and kept for good (an async PlaySound reads it while it plays).
 static void PlayClick() {
     if (!g_cfg.soundFile.empty()) {
         std::wstring path = ExpandPath(g_cfg.soundFile);
@@ -8082,7 +8353,9 @@ static void Paint() {
     }
     DrawStr(rt, b, std::to_wstring(g_left), CenterFont(17, true), D2D1::RectF(12, kH / 2 - 18, 48, kH / 2 + 18),
             Rgb(mocha::crust));
-    DrawStr(rt, b, L"Snipping a region", Font(13.0f, true), D2D1::RectF(60, 9, kW - 14, 29), Rgb(mocha::text));
+    PCWSTR what = g_mode == 1 ? L"Snipping every screen" : g_mode == 2 ? L"Snipping the window"
+                  : g_mode == 3 ? L"Snipping this screen" : L"Snipping a region";
+    DrawStr(rt, b, what, Font(13.0f, true), D2D1::RectF(60, 9, kW - 14, 29), Rgb(mocha::text));
     DrawStr(rt, b, L"Click here to cancel", Font(11.5f, false), D2D1::RectF(60, 28, kW - 14, 47), Rgb(mocha::subtext0));
     if (rt->EndDraw() == (HRESULT)D2DERR_RECREATE_TARGET) {
         ReleaseTarget();
@@ -8256,6 +8529,13 @@ static void Snip(int mode) {
         HWND w = ActiveAppWindow();
         if (!w) return;
         RECT vs = VirtualScreen(), f = FrameRect(w);
+        if (g_cfg.windowArea == L"client") {
+            // Only the inside: no title bar, no edges.
+            RECT c{};
+            POINT tl{0, 0};
+            if (GetClientRect(w, &c) && ClientToScreen(w, &tl) && c.right > 0 && c.bottom > 0)
+                f = RECT{tl.x, tl.y, tl.x + c.right, tl.y + c.bottom};
+        }
         if (!IntersectRect(&r, &f, &vs)) return;
         app = AppName(w);
     }
@@ -8277,7 +8557,7 @@ static void SnipLastRegion() {
     }
     ToastHide();
     Shot s;
-    if (!CaptureRect(r, false, s)) {
+    if (!CaptureRect(r, g_cfg.cursorRegion, s)) {
         Wh_Log(L"Couldn't capture the screen");
         return;
     }
@@ -8384,8 +8664,7 @@ static void UpdateTray(bool add) {
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     nid.uCallbackMessage = WM_SNP_TRAY;
     nid.hIcon = icon ? icon : LoadIconW(nullptr, IDI_APPLICATION);
-    std::wstring tip = g_steppedAside ? L"Seamless Snipper: keys left to ShareX" : L"Seamless Snipper";
-    wcsncpy_s(nid.szTip, tip.c_str(), _TRUNCATE);
+    wcsncpy_s(nid.szTip, L"Seamless Snipper", _TRUNCATE);
     if (!g_trayAdded || add) {
         if (g_trayAdded) Shell_NotifyIconW(NIM_DELETE, &nid);
         g_trayAdded = Shell_NotifyIconW(NIM_ADD, &nid) != FALSE;
@@ -8400,17 +8679,6 @@ static void UpdateTray(bool add) {
     g_trayIcon = icon;
 }
 
-static bool ShareXRunning() {
-    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snap == INVALID_HANDLE_VALUE) return false;
-    PROCESSENTRY32W pe{sizeof(pe)};
-    bool found = false;
-    for (BOOL ok = Process32FirstW(snap, &pe); ok && !found; ok = Process32NextW(snap, &pe))
-        found = !_wcsicmp(pe.szExeFile, L"ShareX.exe");
-    CloseHandle(snap);
-    return found;
-}
-
 static bool HotkeyMissing() {
     for (int i = 0; i < HK_COUNT; i++) {
         UINT mods, vk;
@@ -8421,14 +8689,11 @@ static bool HotkeyMissing() {
 
 static void RegisterHotkeys() {
     const Config& c = g_cfg;
-    bool aside = c.stepAside && ShareXRunning();
-    bool trayChange = aside != g_steppedAside;
-    g_steppedAside = aside;
     for (int i = 0; i < HK_COUNT; i++) {
         if (g_hotkeyOn[i]) UnregisterHotKey(g_msgWnd, i + 1);
         g_hotkeyOn[i] = false;
         UINT mods, vk;
-        if (aside || c.hotkeys[i].empty()) continue;
+        if (c.hotkeys[i].empty()) continue;
         if (!Hotkey_Parse(c.hotkeys[i], mods, vk)) {
             Wh_Log(L"Key \"%s\" isn't one the mod understands", c.hotkeys[i].c_str());
             continue;
@@ -8436,26 +8701,23 @@ static void RegisterHotkeys() {
         g_hotkeyOn[i] = RegisterHotKey(g_msgWnd, i + 1, mods | MOD_NOREPEAT, vk) != FALSE;
         if (!g_hotkeyOn[i]) Wh_Log(L"Key %s is taken by another app (error %lu)", c.hotkeys[i].c_str(), GetLastError());
     }
-    // Watch for ShareX closing, or for a key another app let go of.
-    if (c.stepAside || (!aside && HotkeyMissing())) SetTimer(g_msgWnd, kTimerKeys, 3000, nullptr);
+    // Watch for a key another app let go of.
+    if (HotkeyMissing()) SetTimer(g_msgWnd, kTimerKeys, 3000, nullptr);
     else KillTimer(g_msgWnd, kTimerKeys);
-    if (trayChange) UpdateTray(false);
     // Win + Shift + S: taken from Windows' Snipping Tool while Snipper is the one snipping. Registered too, so
     // it also works while a window run as administrator is in front.
     if (g_hotkeyOn[HK_COUNT]) UnregisterHotKey(g_msgWnd, HK_COUNT + 1);
     g_hotkeyOn[HK_COUNT] = false;
-    if (c.takeOverWss && !aside)
+    if (c.takeOverWss)
         g_hotkeyOn[HK_COUNT] = RegisterHotKey(g_msgWnd, HK_COUNT + 1, MOD_WIN | MOD_SHIFT | MOD_NOREPEAT, 'S') != FALSE;
     // The key guard sees the keys before any app, games and remote desktops included.
     std::vector<wss::Combo> combos;
-    if (!aside) {
-        if (c.catchKeys)
-            for (int i = 0; i < HK_COUNT; i++) {
-                UINT mods, vk;
-                if (!c.hotkeys[i].empty() && Hotkey_Parse(c.hotkeys[i], mods, vk)) combos.push_back({mods, vk, i + 1});
-            }
-        if (c.takeOverWss) combos.push_back({MOD_WIN | MOD_SHIFT, 'S', HK_COUNT + 1});
-    }
+    if (c.catchKeys)
+        for (int i = 0; i < HK_COUNT; i++) {
+            UINT mods, vk;
+            if (!c.hotkeys[i].empty() && Hotkey_Parse(c.hotkeys[i], mods, vk)) combos.push_back({mods, vk, i + 1});
+        }
+    if (c.takeOverWss) combos.push_back({MOD_WIN | MOD_SHIFT, 'S', HK_COUNT + 1});
     wss::Apply(combos);
 }
 
@@ -8558,12 +8820,18 @@ static void ShowTrayMenu(POINT pt) {
     }
 }
 
+// A snip key: at once, or after the "Wait before each snip" countdown.
+static void SnipKey(int mode) {
+    if (g_cfg.snipDelay > 0 && !g_ov.hwnd && !cdown::Running()) cdown::Start(g_cfg.snipDelay, mode);
+    else Snip(mode);
+}
+
 static void OnHotkey(int which) {
     switch (which) {
-        case HK_REGION: Snip(MODE_REGION); break;
-        case HK_FULL: Snip(MODE_FULL); break;
-        case HK_WINDOW: Snip(MODE_WINDOW); break;
-        case HK_MONITOR: Snip(MODE_MONITOR); break;
+        case HK_REGION: SnipKey(MODE_REGION); break;
+        case HK_FULL: SnipKey(MODE_FULL); break;
+        case HK_WINDOW: SnipKey(MODE_WINDOW); break;
+        case HK_MONITOR: SnipKey(MODE_MONITOR); break;
         case HK_REPEAT: SnipLastRegion(); break;
         case HK_HISTORY: hist::Toggle(); break;
     }
@@ -8593,9 +8861,7 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         case WM_TIMER:
             if (wp == kTimerKeys) {
-                bool aside = g_cfg.stepAside && ShareXRunning();
-                if (aside != g_steppedAside) RegisterHotkeys();
-                else if (!aside && HotkeyMissing()) RetryMissingHotkeys();
+                if (HotkeyMissing()) RetryMissingHotkeys();
             } else if (wp == kTimerDeferred) {
                 KillTimer(hwnd, kTimerDeferred);
                 int mode = g_deferredMode;
@@ -25833,67 +26099,22 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Hotkey, L"repeatHotkey", L"Snip the last region again", L"Takes the same spot as your last region snip, straight away. Handy for a before and after. Click the box and press the keys. Leave it empty to turn it off.", L"Ctrl+Alt+Shift+PrintScreen", {}, 0, 100, 0, L"More keys"},
 {K::Hotkey, L"historyHotkey", L"Open the history", L"Every snip in your folder, newest first. Type to search, drag one into a chat, right-click to copy or delete it. Press the key again to put it away. Click the box and press the keys. Leave it empty to turn it off.", L"Ctrl+Shift+H", {}, 0, 100, 0, L"More keys"},
 {K::Check, L"takeOverSnippingKey", L"Win + Shift + S opens Snipper", L"Takes the key from the Windows Snipping Tool, so it opens the region screen here instead. Off, the key goes back to Windows.", L"1", {}, 0, 100, 0, L"More keys"},
-{K::Check, L"stepAside", L"Let ShareX keep its keys", L"Only if you still run ShareX: while it is open, Snipper leaves these keys to it and takes them back once it closes. The tray menu always works.", L"0", {}, 0, 100, 0, L"ShareX"},
 {K::Check, L"catchKeys", L"Keys work over every window", L"Catches the snip keys before any app sees them, so games, remote desktops and apps that grab the keyboard cannot block them. Off, Windows hands the keys out and some windows can swallow them.", L"1", {}, 0, 100, 0, L"More keys"},
 {K::Check, L"histPeek", L"Space previews with Peek", L"In the history, Space shows the picked snip in Peek, and the arrow keys step through the others. Needs the Peek mod turned on; without it, the picture opens instead.", L"1", {}, 0, 100, 0, L"More keys"},
+{K::Check, L"captureCursor", L"Include the mouse pointer", L"Draws the pointer into snips of every screen, one screen or a window.", L"1", {}, 0, 100, 1, L"Taking a snip"},
+{K::Check, L"cursorInRegion", L"Pointer in region snips too", L"The pointer is frozen into the region screen where it was, so region snips show it as well.", L"0", {}, 0, 100, 1, L"Taking a snip"},
+{K::Choice, L"windowArea", L"Window snips take", L"What Alt + Print Screen keeps of the window.", L"frame", {{L"frame", L"The whole window"}, {L"client", L"Only the inside, without the title bar and edges"}}, 0, 100, 1, L"Taking a snip"},
+{K::Number, L"snipDelay", L"Wait before each snip (seconds)", L"0 to 10 (Suggested: 0). The snip keys count down first, so you can open a menu or hover something. 0 snips at once. The tray menu timers work either way.", L"0", {}, 0, 10, 1, L"Taking a snip"},
 {K::Check, L"copyToClipboard", L"Copy to the clipboard", L"Every snip is ready to paste.", L"1", {}, 0, 100, 1, L"After a snip"},
 {K::Check, L"saveToFile", L"Save to a file", L"Every snip is also saved as a picture.", L"1", {}, 0, 100, 1, L"After a snip"},
-{K::Check, L"showToast", L"Show a preview card", L"A small card with the snip. Click it to open the picture, right-click it to open its folder.", L"1", {}, 0, 100, 2, L"Card"},
-{K::Number, L"toastSeconds", L"Card time (seconds)", L"1 to 10 (Suggested: 3).", L"3", {}, 1, 10, 2, L"Card"},
-{K::Check, L"captureCursor", L"Include the mouse pointer", L"Draws the pointer into full screen, screen and window snips, as ShareX did.", L"1", {}, 0, 100, 1, L"After a snip"},
-{K::Check, L"playSound", L"Play the capture sound", L"ShareX's camera click after each snip.", L"1", {}, 0, 100, 1, L"After a snip"},
+{K::Check, L"playSound", L"Play the capture sound", L"A camera click after each snip.", L"1", {}, 0, 100, 1, L"After a snip"},
 {K::Text, L"soundFile", L"Sound file", L"Optional: a .wav file to play instead of the camera click. Leave it empty for the click.", L"", {}, 0, 100, 1, L"After a snip"},
 {K::Text, L"saveFolder", L"Folder", L"Where pictures are saved. The folder is made if it is missing.", L"G:\\Gallery", {}, 0, 100, 1, L"Files"},
 {K::Choice, L"subfolder", L"Subfolders", L"Keeps the folder tidy.", L"day", {{L"day", L"One per day, like 12-11-26"}, {L"app", L"One per app, like Discord"}, {L"none", L"None"}}, 0, 100, 1, L"Files"},
 {K::Choice, L"fileFormat", L"Picture format", L"PNG is sharp and lossless. JPG files are smaller.", L"png", {{L"png", L"PNG"}, {L"jpg", L"JPG"}}, 0, 100, 1, L"Files"},
 {K::Number, L"jpgQuality", L"JPG quality", L"50 to 100 (Suggested: 92).", L"92", {}, 50, 100, 1, L"Files"},
-{K::Number, L"dimOpacity", L"Dim outside (%)", L"0 to 85 (Suggested: 45). How dark the screen gets around the region.", L"45", {}, 0, 85, 3, L"Screen"},
-{K::Check, L"snapWindows", L"Snap to windows", L"Hover a window and click to snip all of it, without dragging.", L"1", {}, 0, 100, 3, L"Screen"},
-{K::Check, L"snapControls", L"Snap to parts of windows", L"Hovering also finds buttons, panels and lists inside windows.", L"1", {}, 0, 100, 3, L"Screen"},
-{K::Check, L"showSize", L"Show the size", L"The size of the region, next to it.", L"1", {}, 0, 100, 3, L"Screen"},
-{K::Check, L"crosshairLines", L"Crosshair lines", L"Thin lines across the screen through the pointer, for lining up edges.", L"0", {}, 0, 100, 3, L"Screen"},
-{K::Check, L"drawBar", L"Drawing bar", L"A bar at the top of the region screen with arrows, boxes, text, numbers, blur and more. Draw first, then pick the region; the drawings go into the snip.", L"1", {}, 0, 100, 4, L"Bar and pen"},
-{K::Check, L"keepRegionOpen", L"Draw after picking", L"Picking a region keeps the screen up so you can draw on it. Press Enter, double-click it or use the bar to snip. Off, picking a region snips it straight away.", L"0", {}, 0, 100, 4, L"Bar and pen"},
-{K::Color, L"drawColor", L"Pen color", L"In hexadecimal. The color the drawing tools start with.", L"#F38BA8", {}, 0, 100, 4, L"Bar and pen"},
-{K::Number, L"drawSize", L"Pen size", L"1 to 20 (Suggested: 4). The [ and ] keys change it too.", L"4", {}, 1, 20, 4, L"Bar and pen"},
-{K::Check, L"drawShadow", L"Shadows", L"A soft shadow under each drawing, as ShareX has.", L"1", {}, 0, 100, 4, L"Bar and pen"},
-{K::Check, L"drawOutline", L"Outlines", L"A thin contrasting edge around each drawing, so it shows on any background.", L"0", {}, 0, 100, 4, L"Bar and pen"},
-{K::Check, L"magnifier", L"Magnifier", L"A zoomed view of the pixels under the pointer.", L"1", {}, 0, 100, 3, L"Magnifier"},
-{K::Number, L"magnifierPixels", L"Pixels across", L"7 to 31 (Suggested: 15). How many screen pixels the magnifier shows.", L"15", {}, 7, 31, 3, L"Magnifier"},
-{K::Number, L"magnifierZoom", L"Zoom", L"4 to 24 (Suggested: 10). The mouse wheel changes it too.", L"10", {}, 4, 24, 3, L"Magnifier"},
-{K::Check, L"magnifierGrid", L"Pixel grid", L"Lines between the zoomed pixels.", L"1", {}, 0, 100, 3, L"Magnifier"},
-{K::Color, L"accentFrom", L"Selection color", L"In hexadecimal. The gradient starts with this color.", L"#89B4FA", {}, 0, 100, 5, L"Selection"},
-{K::Color, L"accentTo", L"Selection color 2", L"In hexadecimal. The gradient ends with this color.", L"#CBA6F7", {}, 0, 100, 5, L"Selection"},
-{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 5, L"Settings window"},
-{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 5, L"Settings window"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"A Snipper icon in the system tray. Click it to open these settings, right-click it for a menu.", L"1", {}, 0, 100, 5, L"Settings window"},
-{K::Check, L"pointerOn", L"Magic Pointer", L"Shake the mouse or press its key, then point at anything on screen and ask about it. Off, nothing summons it.", L"1", {}, 0, 100, 6, L"Summon"},
-{K::Hotkey, L"pointerHotkey", L"Key", L"Summons the pointer. Press it again to put it away. Click the box and press the keys. Leave it empty to turn it off.", L"Win+Shift+G", {}, 0, 100, 6, L"Summon"},
-{K::Check, L"pointerShake", L"Shake to summon", L"Wiggle the mouse, or swipe back and forth on the touchpad.", L"1", {}, 0, 100, 6, L"Summon"},
-{K::Number, L"pointerSensitivity", L"Shake sensitivity", L"1 to 10 (Suggested: 5). 1 needs a big, fast shake. 10 takes a small wiggle.", L"5", {}, 1, 10, 6, L"Summon"},
-{K::Check, L"pointerFullscreen", L"Ignore shakes in fullscreen", L"Games, videos and presentations that fill the screen, borderless ones too.", L"1", {}, 0, 100, 6, L"Summon"},
-{K::Text, L"pointerSkipApps", L"Skip these apps", L"Shakes do nothing in them. Names like game.exe or window titles, split by semicolons.", L"", {}, 0, 100, 6, L"Summon"},
-{K::Check, L"pointerTypeToAsk", L"Start typing to ask", L"With the pointer showing, just type to ask without picking anything. Off, your typing stays in the app.", L"1", {}, 0, 100, 6, L"Summon"},
-{K::Number, L"pointerTimeout", L"Put away after (seconds)", L"0 to 3600 (Suggested: 15). When the mouse stays still this long. 0 keeps it until you press Esc.", L"15", {}, 0, 3600, 6, L"Summon"},
-{K::Choice, L"pointerGlow", L"Glow", L"The glow around the pointer and what you pick.", L"gradient", {{L"gradient", L"Blue to mauve, your selection colors"}, {L"accent", L"Windows accent color"}, {L"rainbow", L"Google colors"}, {L"#89B4FA", L"Blue"}, {L"#CBA6F7", L"Mauve"}}, 0, 100, 6, L"Look"},
-{K::Check, L"pointerGlass", L"Glass", L"The card and the hint get frosted glass. Off, they are solid.", L"1", {}, 0, 100, 6, L"Look"},
-{K::Number, L"pointerGlassStrength", L"Glass strength (%)", L"40 to 65 (Suggested: 42). How much color sits on the glass. Higher is more solid.", L"42", {}, 40, 65, 6, L"Look"},
-{K::Color, L"pointerEdge", L"Card edge", L"In hexadecimal. The edge of the card and the hint at rest.", L"#585B70", {}, 0, 100, 6, L"Look"},
-{K::Color, L"pointerEdgeFrom", L"Card edge on hover", L"In hexadecimal. The hover edge starts with this color.", L"#89B4FA", {}, 0, 100, 6, L"Look"},
-{K::Color, L"pointerEdgeTo", L"Card edge on hover 2", L"In hexadecimal. The hover edge ends with this color.", L"#CBA6F7", {}, 0, 100, 6, L"Look"},
-{K::Check, L"pointerRipple", L"Ripple", L"The screen gently ripples when the pointer appears.", L"1", {}, 0, 100, 6, L"Look"},
-{K::Number, L"pointerSize", L"Pointer size (%)", L"50 to 300 (Suggested: 100).", L"100", {}, 50, 300, 6, L"Look"},
-{K::Text, L"pointerCursorFile", L"Pointer file", L"Optional. A .cur or .ani file shown while the pointer is out.", L"", {}, 0, 100, 6, L"Look"},
-{K::Number, L"pointerDim", L"Dim outside (%)", L"0 to 80 (Suggested: 50). How dark the screen gets around the area you drag.", L"50", {}, 0, 80, 6, L"Look"},
-{K::Check, L"pointerHint", L"Show the hint", L"A small bubble that says what to do when the pointer appears.", L"1", {}, 0, 100, 6, L"Look"},
-{K::Check, L"pointerHighlight", L"Outline what you point at", L"Buttons, pictures and text get an outline, so one click picks them.", L"1", {}, 0, 100, 6, L"Look"},
-{K::Text, L"pointerApiKey", L"AI key", L"Optional. A Gemini, ChatGPT or Claude key for answers in the card. It is kept encrypted. Type none to remove it.", L"", {}, 0, 100, 6, L"AI"},
-{K::Choice, L"pointerModel", L"Model", L"If the one you pick is busy, a faster one answers.", L"fast", {{L"fast", L"Fast, answers in a second or two"}, {L"balanced", L"Balanced, better answers, costs more"}, {L"smart", L"Smartest, slowest and costs the most"}}, 0, 100, 6, L"AI"},
-{K::Check, L"pointerSuggestions", L"Smart suggestions", L"Up to three ideas for each pick. Needs a key, and every pick is sent to the AI as soon as you make it.", L"0", {}, 0, 100, 6, L"AI"},
-{K::Choice, L"pointerTranslateTo", L"Translate to", L"For the Translate button on the card. Needs a key.", L"auto", {{L"auto", L"Your Windows language"}, {L"Arabic", L"Arabic"}, {L"Bengali", L"Bengali"}, {L"Chinese (Simplified)", L"Chinese (Simplified)"}, {L"Chinese (Traditional)", L"Chinese (Traditional)"}, {L"Croatian", L"Croatian"}, {L"Czech", L"Czech"}, {L"Danish", L"Danish"}, {L"Dutch", L"Dutch"}, {L"English", L"English"}, {L"Finnish", L"Finnish"}, {L"French", L"French"}, {L"German", L"German"}, {L"Greek", L"Greek"}, {L"Hebrew", L"Hebrew"}, {L"Hindi", L"Hindi"}, {L"Hungarian", L"Hungarian"}, {L"Indonesian", L"Indonesian"}, {L"Italian", L"Italian"}, {L"Japanese", L"Japanese"}, {L"Korean", L"Korean"}, {L"Norwegian", L"Norwegian"}, {L"Persian", L"Persian"}, {L"Polish", L"Polish"}, {L"Portuguese", L"Portuguese"}, {L"Romanian", L"Romanian"}, {L"Russian", L"Russian"}, {L"Spanish", L"Spanish"}, {L"Swedish", L"Swedish"}, {L"Tamil", L"Tamil"}, {L"Thai", L"Thai"}, {L"Turkish", L"Turkish"}, {L"Ukrainian", L"Ukrainian"}, {L"Vietnamese", L"Vietnamese"}}, 0, 100, 6, L"AI"},
-{K::Check, L"pointerOcr", L"Read text in pictures", L"Windows reads the text in each pick on your PC, so you can copy it and the AI gets it too.", L"1", {}, 0, 100, 6, L"AI"},
-{K::Choice, L"pointerBrowser", L"Browser", L"Opens Gemini and Google Lens. If it is missing, your default opens.", L"default", {{L"default", L"Windows default browser"}, {L"chrome", L"Google Chrome"}, {L"edge", L"Microsoft Edge"}, {L"firefox", L"Mozilla Firefox"}, {L"brave", L"Brave"}, {L"zen", L"Zen Browser"}, {L"opera", L"Opera"}, {L"vivaldi", L"Vivaldi"}, {L"librewolf", L"LibreWolf"}, {L"waterfox", L"Waterfox"}, {L"floorp", L"Floorp"}, {L"custom", L"Other (set its program below)"}}, 0, 100, 6, L"Browser"},
-{K::Text, L"pointerBrowserPath", L"Other browser program", L"Only for Other: the full path of the browser program.", L"", {}, 0, 100, 6, L"Browser"},
+{K::Check, L"showToast", L"Show a preview card", L"A small card with the snip. Click it to open the picture, right-click it to open its folder.", L"1", {}, 0, 100, 2, L"Card"},
+{K::Number, L"toastSeconds", L"Card time (seconds)", L"1 to 10 (Suggested: 3).", L"3", {}, 1, 10, 2, L"Card"},
 {K::Choice, L"toastPosition", L"Corner", L"Which corner of the screen the card shows in.", L"br", {{L"br", L"Bottom right"}, {L"bl", L"Bottom left"}, {L"tr", L"Top right"}, {L"tl", L"Top left"}}, 0, 100, 2, L"Card"},
 {K::Number, L"toastSize", L"Card size (%)", L"75 to 160 (Suggested: 100).", L"100", {}, 75, 160, 2, L"Card"},
 {K::Check, L"toastShowText", L"Show the file name", L"The name and size under the picture.", L"1", {}, 0, 100, 2, L"Card"},
@@ -25905,10 +26126,30 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Choice, L"toastClick", L"Click", L"What a click on the card does.", L"open", {{L"open", L"Open the picture"}, {L"folder", L"Show it in its folder"}, {L"copy", L"Copy it again"}, {L"edit", L"Draw on it"}, {L"ask", L"Ask Magic Pointer about it"}, {L"close", L"Close the card"}}, 0, 100, 2, L"Clicks"},
 {K::Choice, L"toastRightClick", L"Right-click", L"What a right-click on the card does.", L"folder", {{L"folder", L"Show it in its folder"}, {L"open", L"Open the picture"}, {L"copy", L"Copy it again"}, {L"edit", L"Draw on it"}, {L"ask", L"Ask Magic Pointer about it"}, {L"close", L"Close the card"}}, 0, 100, 2, L"Clicks"},
 {K::Choice, L"toastMiddleClick", L"Middle click", L"What a middle click on the card does.", L"copy", {{L"copy", L"Copy it again"}, {L"open", L"Open the picture"}, {L"folder", L"Show it in its folder"}, {L"edit", L"Draw on it"}, {L"ask", L"Ask Magic Pointer about it"}, {L"close", L"Close the card"}}, 0, 100, 2, L"Clicks"},
-{K::Choice, L"barPosition", L"Bar position", L"Where the drawing bar sits on the screen.", L"top", {{L"top", L"Top"}, {L"bottom", L"Bottom"}}, 0, 100, 4, L"Bar and pen"},
-{K::Text, L"barColors", L"Bar colors", L"The 8 color dots on the bar, in hexadecimal, split by spaces. Missing ones keep the usual color.", L"#F38BA8 #FAB387 #F9E2AF #A6E3A1 #89B4FA #CBA6F7 #FFFFFF #11111B", {}, 0, 100, 4, L"Bar and pen"},
-{K::Choice, L"lineStyle", L"Line style", L"For boxes, circles, lines, arrows and the pen. The bar changes it too.", L"solid", {{L"solid", L"Solid"}, {L"dash", L"Dashed"}, {L"dot", L"Dotted"}}, 0, 100, 4, L"Bar and pen"},
-{K::Check, L"rememberBar", L"Remember the bar", L"Each tool keeps its color, size and options between snips, like the last time you used it.", L"1", {}, 0, 100, 4, L"Bar and pen"},
+{K::Number, L"dimOpacity", L"Dim outside (%)", L"0 to 85 (Suggested: 45). How dark the screen gets around the region.", L"45", {}, 0, 85, 3, L"Screen"},
+{K::Check, L"snapWindows", L"Snap to windows", L"Hover a window and click to snip all of it, without dragging.", L"1", {}, 0, 100, 3, L"Screen"},
+{K::Check, L"snapControls", L"Snap to parts of windows", L"Hovering also finds buttons, panels and lists inside windows.", L"1", {}, 0, 100, 3, L"Screen"},
+{K::Check, L"showSize", L"Show the size", L"The size of the region, next to it.", L"1", {}, 0, 100, 3, L"Screen"},
+{K::Check, L"crosshairLines", L"Crosshair lines", L"Thin lines across the screen through the pointer, for lining up edges.", L"0", {}, 0, 100, 3, L"Screen"},
+{K::Check, L"magnifier", L"Magnifier", L"A zoomed view of the pixels under the pointer.", L"1", {}, 0, 100, 3, L"Magnifier"},
+{K::Number, L"magnifierPixels", L"Pixels across", L"7 to 31 (Suggested: 15). How many screen pixels the magnifier shows.", L"15", {}, 7, 31, 3, L"Magnifier"},
+{K::Number, L"magnifierZoom", L"Zoom", L"4 to 24 (Suggested: 10). The mouse wheel changes it too.", L"10", {}, 4, 24, 3, L"Magnifier"},
+{K::Check, L"magnifierGrid", L"Pixel grid", L"Lines between the zoomed pixels.", L"1", {}, 0, 100, 3, L"Magnifier"},
+{K::Check, L"drawBar", L"Drawing bar", L"A bar at the top of the region screen with arrows, boxes, text, numbers, blur and more. Draw first, then pick the region; the drawings go into the snip.", L"1", {}, 0, 100, 4, L"Bar"},
+{K::Check, L"keepRegionOpen", L"Draw after picking", L"Picking a region keeps the screen up so you can draw on it. Press Enter, double-click it or use the bar to snip. Off, picking a region snips it straight away.", L"0", {}, 0, 100, 4, L"Bar"},
+{K::Choice, L"barPosition", L"Bar position", L"Where the drawing bar sits on the screen.", L"top", {{L"top", L"Top middle"}, {L"topLeft", L"Top left"}, {L"topRight", L"Top right"}, {L"bottom", L"Bottom middle"}, {L"bottomLeft", L"Bottom left"}, {L"bottomRight", L"Bottom right"}, {L"left", L"Left side, standing up"}, {L"right", L"Right side, standing up"}}, 0, 100, 4, L"Bar"},
+{K::Number, L"barSize", L"Bar size (%)", L"75 to 150 (Suggested: 100). A bar too big for the screen shrinks to fit.", L"100", {}, 75, 150, 4, L"Bar"},
+{K::Choice, L"barFade", L"Fade the bar", L"Fades the bar so you can see the screen behind it. It still works while faded.", L"hover", {{L"hover", L"When the mouse is on it"}, {L"drag", L"Only while you drag or draw over it"}, {L"off", L"Never"}}, 0, 100, 4, L"Bar"},
+{K::Number, L"barFadeOpacity", L"Faded bar (%)", L"10 to 80 (Suggested: 30). How much of the bar still shows while it is faded.", L"30", {}, 10, 80, 4, L"Bar"},
+{K::Check, L"barAnimation", L"Bar animation", L"The bar fades and slides in when the screen freezes, and fades smoothly on hover. Off, both are instant. Also off when Windows animation effects are off.", L"1", {}, 0, 100, 4, L"Bar"},
+{K::Choice, L"animationSpeed", L"Animation speed", L"How fast the bar animates.", L"global", {{L"global", L"Same as all my mods"}, {L"veryQuick", L"Very quick"}, {L"quick", L"Quick"}, {L"normal", L"Normal"}, {L"relaxed", L"Relaxed"}, {L"slow", L"Slow"}}, 0, 100, 4, L"Bar"},
+{K::Check, L"rememberBar", L"Remember the bar", L"Each tool keeps its color, size and options between snips, like the last time you used it.", L"1", {}, 0, 100, 4, L"Bar"},
+{K::Color, L"drawColor", L"Pen color", L"In hexadecimal. The color the drawing tools start with.", L"#F38BA8", {}, 0, 100, 4, L"Pen"},
+{K::Number, L"drawSize", L"Pen size", L"1 to 20 (Suggested: 4). The [ and ] keys change it too.", L"4", {}, 1, 20, 4, L"Pen"},
+{K::Check, L"drawShadow", L"Shadows", L"A soft shadow under each drawing.", L"1", {}, 0, 100, 4, L"Pen"},
+{K::Check, L"drawOutline", L"Outlines", L"A thin contrasting edge around each drawing, so it shows on any background.", L"0", {}, 0, 100, 4, L"Pen"},
+{K::Text, L"barColors", L"Bar colors", L"The 8 color dots on the bar, in hexadecimal, split by spaces. Missing ones keep the usual color.", L"#F38BA8 #FAB387 #F9E2AF #A6E3A1 #89B4FA #CBA6F7 #FFFFFF #11111B", {}, 0, 100, 4, L"Pen"},
+{K::Choice, L"lineStyle", L"Line style", L"For boxes, circles, lines, arrows and the pen. The bar changes it too.", L"solid", {{L"solid", L"Solid"}, {L"dash", L"Dashed"}, {L"dot", L"Dotted"}}, 0, 100, 4, L"Pen"},
 {K::Number, L"boxCornerRadius", L"Box corner radius", L"0 to 60 (Suggested: 6). 0 gives square corners.", L"6", {}, 0, 60, 4, L"Boxes and circles"},
 {K::Choice, L"boxFill", L"Fill", L"The inside of boxes and circles. The bar changes it too.", L"none", {{L"none", L"None"}, {L"shade", L"The pen color, see-through"}, {L"color", L"The fill color below"}}, 0, 100, 4, L"Boxes and circles"},
 {K::Color, L"fillColor", L"Fill color", L"In hexadecimal. Used when Fill is set to the fill color.", L"#1E1E2E", {}, 0, 100, 4, L"Boxes and circles"},
@@ -25942,7 +26183,39 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Choice, L"magnifyZoom", L"Magnifier zoom", L"How big the magnifier tool shows the spot under it.", L"2", {{L"1.5", L"1.5x"}, {L"2", L"2x"}, {L"3", L"3x"}, {L"4", L"4x"}, {L"6", L"6x"}}, 0, 100, 4, L"Magnifier"},
 {K::Choice, L"magnifyShape", L"Magnifier shape", L"The outline drawn around the magnified spot.", L"box", {{L"box", L"Box"}, {L"circle", L"Circle"}}, 0, 100, 4, L"Magnifier"},
 {K::Choice, L"spotlightShape", L"Spotlight shape", L"The outline drawn around the spot that stays bright.", L"box", {{L"box", L"Box"}, {L"circle", L"Circle"}}, 0, 100, 4, L"Spotlight"},
-{K::Number, L"spotlightDim", L"Spotlight dim (%)", L"30 to 90 (Suggested: 60). How dark everything around the spot gets.", L"60", {}, 30, 90, 4, L"Spotlight"}
+{K::Number, L"spotlightDim", L"Spotlight dim (%)", L"30 to 90 (Suggested: 60). How dark everything around the spot gets.", L"60", {}, 30, 90, 4, L"Spotlight"},
+{K::Color, L"accentFrom", L"Selection color", L"In hexadecimal. The gradient starts with this color.", L"#89B4FA", {}, 0, 100, 5, L"Selection"},
+{K::Color, L"accentTo", L"Selection color 2", L"In hexadecimal. The gradient ends with this color.", L"#CBA6F7", {}, 0, 100, 5, L"Selection"},
+{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 5, L"Settings window"},
+{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 5, L"Settings window"},
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"A Snipper icon in the system tray. Click it to open these settings, right-click it for a menu.", L"1", {}, 0, 100, 5, L"Settings window"},
+{K::Check, L"pointerOn", L"Magic Pointer", L"Shake the mouse or press its key, then point at anything on screen and ask about it. Off, nothing summons it.", L"1", {}, 0, 100, 6, L"Summon"},
+{K::Hotkey, L"pointerHotkey", L"Key", L"Summons the pointer. Press it again to put it away. Click the box and press the keys. Leave it empty to turn it off.", L"Win+Shift+G", {}, 0, 100, 6, L"Summon"},
+{K::Check, L"pointerShake", L"Shake to summon", L"Wiggle the mouse, or swipe back and forth on the touchpad.", L"1", {}, 0, 100, 6, L"Summon"},
+{K::Number, L"pointerSensitivity", L"Shake sensitivity", L"1 to 10 (Suggested: 5). 1 needs a big, fast shake. 10 takes a small wiggle.", L"5", {}, 1, 10, 6, L"Summon"},
+{K::Check, L"pointerFullscreen", L"Ignore shakes in fullscreen", L"Games, videos and presentations that fill the screen, borderless ones too.", L"1", {}, 0, 100, 6, L"Summon"},
+{K::Text, L"pointerSkipApps", L"Skip these apps", L"Shakes do nothing in them. Names like game.exe or window titles, split by semicolons.", L"", {}, 0, 100, 6, L"Summon"},
+{K::Check, L"pointerTypeToAsk", L"Start typing to ask", L"With the pointer showing, just type to ask without picking anything. Off, your typing stays in the app.", L"1", {}, 0, 100, 6, L"Summon"},
+{K::Number, L"pointerTimeout", L"Put away after (seconds)", L"0 to 3600 (Suggested: 15). When the mouse stays still this long. 0 keeps it until you press Esc.", L"15", {}, 0, 3600, 6, L"Summon"},
+{K::Choice, L"pointerGlow", L"Glow", L"The glow around the pointer and what you pick.", L"gradient", {{L"gradient", L"Blue to mauve, your selection colors"}, {L"accent", L"Windows accent color"}, {L"rainbow", L"Google colors"}, {L"#89B4FA", L"Blue"}, {L"#CBA6F7", L"Mauve"}}, 0, 100, 6, L"Look"},
+{K::Check, L"pointerGlass", L"Glass", L"The card and the hint get frosted glass. Off, they are solid.", L"1", {}, 0, 100, 6, L"Look"},
+{K::Number, L"pointerGlassStrength", L"Glass strength (%)", L"40 to 65 (Suggested: 42). How much color sits on the glass. Higher is more solid.", L"42", {}, 40, 65, 6, L"Look"},
+{K::Color, L"pointerEdge", L"Card edge", L"In hexadecimal. The edge of the card and the hint at rest.", L"#585B70", {}, 0, 100, 6, L"Look"},
+{K::Color, L"pointerEdgeFrom", L"Card edge on hover", L"In hexadecimal. The hover edge starts with this color.", L"#89B4FA", {}, 0, 100, 6, L"Look"},
+{K::Color, L"pointerEdgeTo", L"Card edge on hover 2", L"In hexadecimal. The hover edge ends with this color.", L"#CBA6F7", {}, 0, 100, 6, L"Look"},
+{K::Check, L"pointerRipple", L"Ripple", L"The screen gently ripples when the pointer appears.", L"1", {}, 0, 100, 6, L"Look"},
+{K::Number, L"pointerSize", L"Pointer size (%)", L"50 to 300 (Suggested: 100).", L"100", {}, 50, 300, 6, L"Look"},
+{K::Text, L"pointerCursorFile", L"Pointer file", L"Optional. A .cur or .ani file shown while the pointer is out.", L"", {}, 0, 100, 6, L"Look"},
+{K::Number, L"pointerDim", L"Dim outside (%)", L"0 to 80 (Suggested: 50). How dark the screen gets around the area you drag.", L"50", {}, 0, 80, 6, L"Look"},
+{K::Check, L"pointerHint", L"Show the hint", L"A small bubble that says what to do when the pointer appears.", L"1", {}, 0, 100, 6, L"Look"},
+{K::Check, L"pointerHighlight", L"Outline what you point at", L"Buttons, pictures and text get an outline, so one click picks them.", L"1", {}, 0, 100, 6, L"Look"},
+{K::Text, L"pointerApiKey", L"AI key", L"Optional. A Gemini, ChatGPT or Claude key for answers in the card. It is kept encrypted. Type none to remove it.", L"", {}, 0, 100, 6, L"AI"},
+{K::Choice, L"pointerModel", L"Model", L"If the one you pick is busy, a faster one answers.", L"fast", {{L"fast", L"Fast, answers in a second or two"}, {L"balanced", L"Balanced, better answers, costs more"}, {L"smart", L"Smartest, slowest and costs the most"}}, 0, 100, 6, L"AI"},
+{K::Check, L"pointerSuggestions", L"Smart suggestions", L"Up to three ideas for each pick. Needs a key, and every pick is sent to the AI as soon as you make it.", L"0", {}, 0, 100, 6, L"AI"},
+{K::Choice, L"pointerTranslateTo", L"Translate to", L"For the Translate button on the card. Needs a key.", L"auto", {{L"auto", L"Your Windows language"}, {L"Arabic", L"Arabic"}, {L"Bengali", L"Bengali"}, {L"Chinese (Simplified)", L"Chinese (Simplified)"}, {L"Chinese (Traditional)", L"Chinese (Traditional)"}, {L"Croatian", L"Croatian"}, {L"Czech", L"Czech"}, {L"Danish", L"Danish"}, {L"Dutch", L"Dutch"}, {L"English", L"English"}, {L"Finnish", L"Finnish"}, {L"French", L"French"}, {L"German", L"German"}, {L"Greek", L"Greek"}, {L"Hebrew", L"Hebrew"}, {L"Hindi", L"Hindi"}, {L"Hungarian", L"Hungarian"}, {L"Indonesian", L"Indonesian"}, {L"Italian", L"Italian"}, {L"Japanese", L"Japanese"}, {L"Korean", L"Korean"}, {L"Norwegian", L"Norwegian"}, {L"Persian", L"Persian"}, {L"Polish", L"Polish"}, {L"Portuguese", L"Portuguese"}, {L"Romanian", L"Romanian"}, {L"Russian", L"Russian"}, {L"Spanish", L"Spanish"}, {L"Swedish", L"Swedish"}, {L"Tamil", L"Tamil"}, {L"Thai", L"Thai"}, {L"Turkish", L"Turkish"}, {L"Ukrainian", L"Ukrainian"}, {L"Vietnamese", L"Vietnamese"}}, 0, 100, 6, L"AI"},
+{K::Check, L"pointerOcr", L"Read text in pictures", L"Windows reads the text in each pick on your PC, so you can copy it and the AI gets it too.", L"1", {}, 0, 100, 6, L"AI"},
+{K::Choice, L"pointerBrowser", L"Browser", L"Opens Gemini and Google Lens. If it is missing, your default opens.", L"default", {{L"default", L"Windows default browser"}, {L"chrome", L"Google Chrome"}, {L"edge", L"Microsoft Edge"}, {L"firefox", L"Mozilla Firefox"}, {L"brave", L"Brave"}, {L"zen", L"Zen Browser"}, {L"opera", L"Opera"}, {L"vivaldi", L"Vivaldi"}, {L"librewolf", L"LibreWolf"}, {L"waterfox", L"Waterfox"}, {L"floorp", L"Floorp"}, {L"custom", L"Other (set its program below)"}}, 0, 100, 6, L"Browser"},
+{K::Text, L"pointerBrowserPath", L"Other browser program", L"Only for Other: the full path of the browser program.", L"", {}, 0, 100, 6, L"Browser"}
     };
 }
 
@@ -25951,11 +26224,11 @@ struct SetPageInfo {
     WCHAR glyph;
 };
 static const SetPageInfo kSetPages[] = {
-{L"Keys", L"The keys that take a snip. They are the same keys ShareX used.", 0xE765},
-{L"Saving", L"Where snips go: the clipboard, the Gallery folder, and how files are named.", 0xE74E},
+{L"Keys", L"The keys that take a snip, and how they reach Snipper.", 0xE765},
+{L"Saving", L"What a snip takes, where it goes and how files are named.", 0xE74E},
 {L"Preview card", L"The small card that shows each snip in the corner.", 0xE8B9},
 {L"Region snip", L"The frozen screen you drag a region on.", 0xEF20},
-{L"Drawing", L"The drawing bar and how each tool looks, like ShareX.", 0xE70F},
+{L"Drawing", L"The drawing bar, where it sits, and how each tool looks.", 0xE70F},
 {L"Look", L"Selection colors and this window.", 0xE771},
 {L"Magic Pointer", L"Point at anything on screen and ask AI about it, search it or copy its text.", 0xE7C9},
 {L"About", L"Version, credits, support and links.", 0xE946},
@@ -25985,7 +26258,7 @@ constexpr float kSetAutoDead = 10, kSetAutoR = 18, kSetAutoGain = 0.14f, kSetAut
 constexpr PCWSTR kSetAutoProp = L"SeamlessOwnAutoscroll";  // Seamless Autoscroll skips this window.
 constexpr PCWSTR kSetKofiUrl = L"https://ko-fi.com/DavidHiFi";
 constexpr PCWSTR kSetAuthorUrl = L"https://github.com/DavidHiFi";
-constexpr PCWSTR kSetDittoUrl = L"https://github.com/ShareX/ShareX";
+constexpr PCWSTR kSetBasedOnUrl = L"https://github.com/ShareX/ShareX";
 constexpr PCWSTR kSetRepoUrl = L"https://github.com/DavidHiFi/davids-windhawk-mods";
 constexpr PCWSTR kSetBugUrl =
     L"https://github.com/DavidHiFi/davids-windhawk-mods/issues/new?title=%5BSeamless%20Snipper%5D%20";
@@ -27095,7 +27368,7 @@ static void Set_BuildPage(SetWindow& w) {
         add(SetItem::Link, 56, L"DavidHiFi on GitHub", L"github.com/DavidHiFi", kSetAuthorUrl);
         add(SetItem::Link, 56, L"Ko-fi", L"ko-fi.com/DavidHiFi", kSetKofiUrl);
         group(L"Credits");
-        add(SetItem::Link, 56, L"Based on ShareX", L"By Jaex and the ShareX contributors, GPL-3.0", kSetDittoUrl);
+        add(SetItem::Link, 56, L"Based on ShareX", L"By Jaex and the ShareX contributors, GPL-3.0", kSetBasedOnUrl);
         add(SetItem::Link, 56, L"Magic Pointer by Rono", L"The original mod, on GitHub", L"https://github.com/rono-zeroseven/magic-pointer");
         group(L"Project");
         add(SetItem::Link, 56, L"Project page on GitHub", L"github.com/DavidHiFi/davids-windhawk-mods", kSetRepoUrl);

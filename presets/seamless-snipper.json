@@ -7,12 +7,17 @@
       "settings": {
         "accentFrom": "#89B4FA",
         "accentTo": "#CBA6F7",
+        "animationSpeed": "global",
         "arrowCurved": 0,
         "arrowHeadSize": 100,
         "arrowHeads": "end",
         "arrowStyle": "filled",
+        "barAnimation": 1,
         "barColors": "#F38BA8 #FAB387 #F9E2AF #A6E3A1 #89B4FA #CBA6F7 #FFFFFF #11111B",
+        "barFade": "hover",
+        "barFadeOpacity": 30,
         "barPosition": "top",
+        "barSize": 100,
         "blurStrength": 12,
         "boxCornerRadius": 6,
         "boxFill": "none",
@@ -20,6 +25,7 @@
         "catchKeys": 1,
         "copyToClipboard": 1,
         "crosshairLines": 0,
+        "cursorInRegion": 0,
         "dimOpacity": 45,
         "drawBar": 1,
         "drawColor": "#F38BA8",
@@ -91,6 +97,7 @@
         "showToast": 1,
         "snapControls": 1,
         "snapWindows": 1,
+        "snipDelay": 0,
         "soundFile": "",
         "spotlightDim": 60,
         "spotlightShape": "box",
@@ -120,6 +127,7 @@
         "toastSeconds": 3,
         "toastShowText": 1,
         "toastSize": 100,
+        "windowArea": "frame",
         "windowHotkey": "Alt+PrintScreen"
       }
     }
