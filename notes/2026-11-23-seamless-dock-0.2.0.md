@@ -256,8 +256,26 @@ also flickers, deal with it, we need consistency."
   `seamless-workshop-1.5.3.wh.cpp` from the same folder. The work copy is ahead of the old
   `work\2026-11-12-seamless-hub` src tree (still 1.5.2); regenerate from there only after
   porting 1.5.3 and 1.5.4 back.
+- 0.3.7 proof (watch.log, the reliable measure; frame counts are spoiled because the right-click
+  menu overlaps the pill): 16 ms under the bar on the test click, later owner clicks 11 to 41 ms.
+  Better than 0.3.6, not gone. A raise after the fact always loses one compose frame.
+
+## 0.3.8: the pill is owned by the taskbar (2026-11-24)
+
+- `OwnTitle()` sets Shell_TrayWnd as the pill's owner (`GWLP_HWNDPARENT`), so Windows lifts
+  the owned pill together with the bar when the bar activates. No race to win.
+- A cross-thread owner attaches input queues, so the pill is created and destroyed on the small
+  z-guard thread, never the dock thread. `WM_NCDESTROY` (shell restart) sets `g_titleLost` and the
+  guard thread makes a new pill. The RaiseTitle burst stays as a backstop.
+- Installed 4:03 am, registry v0.3.8, cli exit 0, desktop fine after the 60 s watch. Published:
+  mods 5cf8fb0, feed 76c385b. Rollback copy `seamless-dock-0.3.7.wh.cpp`.
+- Proof 4:20 am (`run-038.sh`, D:\Agent Work\seamless-dock\proof\title-1124): 3 right-clicks
+  plus 2 later owner clicks, watch.log "pill fell under 0 (0 ms total)", 479 frames with no
+  pill-area change over 4. Clip `rightclick-038.mp4` / `.gif`. Explorer the same pid after.
 
 ## Rollback
+
+- Dock 0.3.8: install `seamless-dock-0.3.7.wh.cpp` with Install-StagedMod.
 
 - Workshop 1.5.4: install `work\2026-11-24-workshop-no-downgrade\seamless-workshop-1.5.3.wh.cpp`.
 - Workshop 1.5.3: install `work\2026-11-24-workshop-no-downgrade\seamless-workshop-1.5.2-live.wh.cpp`.
