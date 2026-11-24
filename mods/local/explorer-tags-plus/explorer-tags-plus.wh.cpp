@@ -2,7 +2,7 @@
 // @id              explorer-tags-plus
 // @name            Explorer Tags Plus
 // @description     Colored tags panel in File Explorer's navigation pane, plus a Tags submenu in the right-click menu
-// @version         0.8.9
+// @version         0.9.0
 // @author          DavidHiFi, buedgik
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @github          https://github.com/DavidHiFi
@@ -44,6 +44,11 @@ Windows' own tags only work for file types with a property handler, so `.txt`,
   changed.
 
 Tags are defined in the mod settings (name and color).
+
+## What's new in 0.9.0
+
+The Tags dock now lines up with the folder list dock above it, edge to edge,
+and its edge uses the same soft grey as the other Explorer docks.
 
 ## What's new in 0.8.9
 
@@ -2261,9 +2266,10 @@ void OpenTag(Panel* p, int index, bool newWindow) {
 // edges (a few pixels in) at the sides and below.
 RECT DockRect(const Metrics& m, int width, int height) {
     RECT r;
-    r.left = Dip(3, m.dpi);
+    // Same sides as the folder list dock above (8 px in on the left, 2 on the right).
+    r.left = Dip(8, m.dpi);
     r.top = Dip(7, m.dpi);
-    r.right = width - Dip(3, m.dpi);
+    r.right = width - Dip(2, m.dpi);
     r.bottom = height - Dip(2, m.dpi);
     return r;
 }
@@ -2469,15 +2475,18 @@ void DrawDock(Gdiplus::Graphics& g, RECT dock, int dpi, COLORREF fill, bool hot)
     path.CloseFigure();
     Gdiplus::SolidBrush brush(Gdiplus::Color(255, GetRValue(fill), GetGValue(fill), GetBValue(fill)));
     g.FillPath(&brush, &path);
-    Gdiplus::Pen rest(Gdiplus::Color(255, 0x58, 0x5B, 0x70), w);
-    g.DrawPath(&rest, &path);
+    // Edge strength 100/255, like the command bar, folder list and status bar docks.
+    // On hover the gradient takes the grey's place rather than covering it.
     if (hot) {
         Gdiplus::LinearGradientBrush lg(Gdiplus::PointF((Gdiplus::REAL)dock.left, (Gdiplus::REAL)dock.top),
                                         Gdiplus::PointF((Gdiplus::REAL)dock.right, (Gdiplus::REAL)dock.bottom),
-                                        Gdiplus::Color(200, 0x89, 0xB4, 0xFA),
-                                        Gdiplus::Color(200, 0xCB, 0xA6, 0xF7));
+                                        Gdiplus::Color(100, 0x89, 0xB4, 0xFA),
+                                        Gdiplus::Color(100, 0xCB, 0xA6, 0xF7));
         Gdiplus::Pen pen(&lg, w);
         g.DrawPath(&pen, &path);
+    } else {
+        Gdiplus::Pen rest(Gdiplus::Color(100, 0x58, 0x5B, 0x70), w);
+        g.DrawPath(&rest, &path);
     }
 }
 
