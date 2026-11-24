@@ -2,7 +2,7 @@
 // @id              explorer-tags-plus
 // @name            Explorer Tags Plus
 // @description     Colored tags panel in File Explorer's navigation pane, plus a Tags submenu in the right-click menu
-// @version         0.8.8
+// @version         0.8.9
 // @author          DavidHiFi, buedgik
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @github          https://github.com/DavidHiFi
@@ -44,6 +44,11 @@ Windows' own tags only work for file types with a property handler, so `.txt`,
   changed.
 
 Tags are defined in the mod settings (name and color).
+
+## What's new in 0.8.9
+
+The Tags title and its tags now sit in a small rounded dock of their own, with a
+grey edge that turns blue to mauve when you hover it.
 
 ## What's new in 0.8.8
 
@@ -1952,6 +1957,7 @@ struct Panel {
     int rowHeight = 0;    // from the tree, cached: see GetMetrics
     int rowHeightDpi = 0;
     bool trackingLeave = false;
+    bool dockHot = false;
     bool inLayout = false;
     HFONT iconFont = nullptr;
     int iconFontDpi = 0;
@@ -2077,7 +2083,7 @@ Metrics GetMetrics(Panel* p, const Settings& s, int height) {
 
 int WantedHeight(Panel* p, const Settings& s) {
     Metrics m = GetMetrics(p, s, -1);
-    return m.topPad + m.rowH + m.rowsShown * m.rowH + (g_collapsed ? 0 : m.bottomPad);
+    return m.topPad + m.rowH + m.rowsShown * m.rowH + m.bottomPad;
 }
 
 void ClampScroll(Panel* p, const Metrics& m) {
@@ -2249,6 +2255,17 @@ void OpenTag(Panel* p, int index, bool newWindow) {
     p->pendingOpenAt = GetTickCount64();
     p->pendingOpenRetries = 0;
     QueueEnsureFolder(s->tags[index].name);
+}
+
+// The dock around the title and the tag rows: a small gap above it, the panel's
+// edges (a few pixels in) at the sides and below.
+RECT DockRect(const Metrics& m, int width, int height) {
+    RECT r;
+    r.left = Dip(3, m.dpi);
+    r.top = Dip(7, m.dpi);
+    r.right = width - Dip(3, m.dpi);
+    r.bottom = height - Dip(2, m.dpi);
+    return r;
 }
 
 struct Colors {
@@ -2432,6 +2449,38 @@ void DrawPill(Gdiplus::Graphics& g, int x, int y, int w, int h, COLORREF fill,
     }
 }
 
+// Rounded dock: dark fill, then a 2 px edge kept inside the rect (stroke inset by half
+// its width, radius 12 at 96 dpi) so the corners are as thick as the sides.
+void DrawDock(Gdiplus::Graphics& g, RECT dock, int dpi, COLORREF fill, bool hot) {
+    Gdiplus::REAL w = (Gdiplus::REAL)Dip(2, dpi);
+    Gdiplus::REAL x = dock.left + w / 2, y = dock.top + w / 2;
+    Gdiplus::REAL pw = (Gdiplus::REAL)(dock.right - dock.left) - w;
+    Gdiplus::REAL ph = (Gdiplus::REAL)(dock.bottom - dock.top) - w;
+    Gdiplus::REAL r = (Gdiplus::REAL)Dip(12, dpi) - w / 2;
+    if (pw <= 4 || ph <= 4) {
+        return;
+    }
+    Gdiplus::REAL d = r * 2;
+    Gdiplus::GraphicsPath path;
+    path.AddArc(x, y, d, d, 180, 90);
+    path.AddArc(x + pw - d, y, d, d, 270, 90);
+    path.AddArc(x + pw - d, y + ph - d, d, d, 0, 90);
+    path.AddArc(x, y + ph - d, d, d, 90, 90);
+    path.CloseFigure();
+    Gdiplus::SolidBrush brush(Gdiplus::Color(255, GetRValue(fill), GetGValue(fill), GetBValue(fill)));
+    g.FillPath(&brush, &path);
+    Gdiplus::Pen rest(Gdiplus::Color(255, 0x58, 0x5B, 0x70), w);
+    g.DrawPath(&rest, &path);
+    if (hot) {
+        Gdiplus::LinearGradientBrush lg(Gdiplus::PointF((Gdiplus::REAL)dock.left, (Gdiplus::REAL)dock.top),
+                                        Gdiplus::PointF((Gdiplus::REAL)dock.right, (Gdiplus::REAL)dock.bottom),
+                                        Gdiplus::Color(200, 0x89, 0xB4, 0xFA),
+                                        Gdiplus::Color(200, 0xCB, 0xA6, 0xF7));
+        Gdiplus::Pen pen(&lg, w);
+        g.DrawPath(&pen, &path);
+    }
+}
+
 void DrawTextAt(HDC hdc, const std::wstring& text, RECT rc, COLORREF color, UINT flags) {
     SetTextColor(hdc, color);
     DrawTextW(hdc, text.c_str(), (int)text.size(), &rc,
@@ -2483,15 +2532,17 @@ void PaintPanel(Panel* p, HDC target) {
     HFONT textFont = GetTextFont(p, treeFont);
     HGDIOBJ measureOld = SelectObject(hdc, textFont ? textFont : (HFONT)GetStockObject(DEFAULT_GUI_FONT));
     int inset = Dip(2, dpi);
-    int maxRight = width - Dip(6, dpi);
+    int maxRight = width - Dip(11, dpi);
 
     {
         Gdiplus::Graphics g(hdc);
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
         g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
 
+        DrawDock(g, DockRect(m, width, height), dpi, Blend(c.under, RGB(0x11, 0x11, 0x1B), 0.30), p->dockHot);
+
         if (p->hot == HIT_HEADER) {
-            int left = Dip(4, dpi);
+            int left = Dip(10, dpi);
             int right = std::min(maxRight, Dip(kTextX + 6, dpi) + TextWidth(hdc, L"Tags") + Dip(12, dpi));
             DrawPill(g, left, headerTop + inset, right - left, m.rowH - inset * 2 - 1, c.hot, true, 0, c.under);
         }
@@ -2973,11 +3024,26 @@ LRESULT CALLBACK PanelWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
             POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
             SetHot(p, HitTest(p, pt));
+            {
+                RECT rcc;
+                GetClientRect(hWnd, &rcc);
+                Metrics dm = GetMetrics(p, *GetSettings(), rcc.bottom);
+                RECT dock = DockRect(dm, rcc.right, rcc.bottom);
+                bool in = PtInRect(&dock, pt) != FALSE;
+                if (in != p->dockHot) {
+                    p->dockHot = in;
+                    InvalidateRect(hWnd, nullptr, FALSE);
+                }
+            }
             return 0;
         }
 
         case WM_MOUSELEAVE:
             p->trackingLeave = false;
+            if (p->dockHot) {
+                p->dockHot = false;
+                InvalidateRect(hWnd, nullptr, FALSE);
+            }
             SetHot(p, HIT_NONE);
             return 0;
 
