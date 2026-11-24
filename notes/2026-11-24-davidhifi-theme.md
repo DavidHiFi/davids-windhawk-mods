@@ -29,6 +29,15 @@ the filled shapes, one smooth spinner arc; see `2026-11-24-cursor-rice.md`).
 - Live check: arrow, wait, hand, no and working sample fill (30,30,46); wait shows the surface0
   track (49,50,68) of the new spinner.
 
+## Mod 1.3.0 live (8:46 am)
+- Built offline both ways through `work\theme-pack\skipqueue.py` (copy of the etcher-cutover runner; a
+  pwsh child needs 5.1's PSModulePath or Get-FileHash is missing). Installed by
+  `work\theme-pack\install-130.ps1` (engine lock, then `Install-StagedMod.ps1` elevated): registry 1.3.0,
+  desktop fine after the 60 s watch, published as mods c297c0b and feed c168385.
+- After: `themeName` and CurrentTheme still DavidHiFi's Theme, pack.ini Version=2 (no re-download),
+  no Main 01 theme came back, cursors still from the pack folder, livecheck fill (30,30,46) on arrow,
+  wait, no, hand and working. Shell pid unchanged, no crash dumps, no error boxes.
+
 ## Rollback
 - Elevated: `scripts\2026-11-24-theme-rename.ps1 -Rollback` (copy to `C:\Users\Public` first). It
   restores Main 01, pack.ini and the three registry exports in `backups\2026-11-24-theme-rename\`.
