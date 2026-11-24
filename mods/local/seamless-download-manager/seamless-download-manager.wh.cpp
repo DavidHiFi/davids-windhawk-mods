@@ -2,7 +2,7 @@
 // @id              seamless-download-manager
 // @name            Seamless Download Manager
 // @description     A fast tray download manager: downloads in parts, resumes where it stopped, takes browser links
-// @version         1.0.9
+// @version         1.0.10
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-download-manager
@@ -58,8 +58,10 @@ Everything the app can set is in the mod's own settings window: where files
 go, connections, speed limit, the browser link, name lookup, sounds, site
 rules and queues. This page only holds how the windows look.
 
-## What's new in 1.0.9
+## What's new in 1.0.10
 
+- Moves to engine 0.1.3, which no longer carries the AB Download Manager import.
+  Your downloads, queues and settings stay as they are.
 - Title bar menus get the same blurred Mocha body as every other menu again. They
   showed pitch black because the part that spots new menus stopped right after start.
 
@@ -133,7 +135,7 @@ extern std::atomic<HWND> g_settingsWnd;
 }  // namespace acset
 
 namespace sdm {
-constexpr WCHAR kEngineVersion[] = L"0.1.2";
+constexpr WCHAR kEngineVersion[] = L"0.1.3";
 constexpr PCWSTR kAppRepo = L"https://github.com/DavidHiFi/seamless-download-manager";
 constexpr PCWSTR kAbRepo = L"https://github.com/amir1376/ab-download-manager";
 struct PageLink {
