@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.33
+// @version         1.10.34
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -42,6 +42,11 @@ adds after every other window's title is added here too: how long the
 window has been open, after the folder name. It uses Seamless Title Bars'
 own uptime settings (which units, compact or clock, separator, colour) and
 hides when that mod or its uptime is off.
+
+## What's new in 1.10.34
+
+- Opening the folded folder list again no longer leaves its edge stuck to
+  the mouse. Before, the list kept growing as you moved the pointer.
 
 ## What's new in 1.10.33
 
@@ -13662,6 +13667,43 @@ void PostRefit(HWND ntc) {
     }
 }
 
+volatile LONG g_dragBusy = 0;
+
+struct DragJob {
+    HWND host;
+    HWND sink;
+    HWND ntc;
+    int x0;
+    int x1;
+    int y;
+    int toWidth;
+    int fromWidth;
+};
+
+DWORD WINAPI DragThread(LPVOID param) {
+    DragJob job = *(DragJob*)param;
+    delete (DragJob*)param;
+    auto send = [&](UINT msg, WPARAM wParam, int x) {
+        DWORD_PTR result;
+        return SendMessageTimeout(job.host, msg, wParam, MAKELPARAM(x, job.y),
+                                  SMTO_ABORTIFHUNG, 2000, &result) != 0;
+    };
+    bool ok = send(WM_MOUSEMOVE, 0, job.x0) &&
+              send(WM_LBUTTONDOWN, MK_LBUTTON, job.x0);
+    for (int i = 1; ok && i <= 8; i++) {
+        ok = send(WM_MOUSEMOVE, MK_LBUTTON,
+                  job.x0 + (job.x1 - job.x0) * i / 8);
+    }
+    send(WM_LBUTTONUP, 0, job.x1);
+    RECT after{};
+    GetWindowRect(job.sink, &after);
+    Wh_Log(L"Side list fold: width %d asked %d, now %d%s", job.fromWidth,
+           job.toWidth, (int)(after.right - after.left), ok ? L"" : L" (timed out)");
+    PostRefit(job.ntc);
+    InterlockedExchange(&g_dragBusy, 0);
+    return 0;
+}
+
 // Drags the side list's own splitter, inside Explorer, without the mouse:
 // the same as grabbing the right edge and moving it.
 void DragSplitter(HWND ntc, int toWidth) {
@@ -13677,20 +13719,22 @@ void DragSplitter(HWND ntc, int toWidth) {
     int x0 = sr.right + (int)std::lround(2 * scale);
     int x1 = sr.left + toWidth + (int)std::lround(2 * scale);
     int y = sr.top + (int)std::lround(60 * scale);
-    auto at = [y](int x) { return MAKELPARAM(x, y); };
-    SendMessage(host, WM_MOUSEMOVE, 0, at(x0));
-    SendMessage(host, WM_LBUTTONDOWN, MK_LBUTTON, at(x0));
-    for (int i = 1; i <= 8; i++) {
-        SendMessage(host, WM_MOUSEMOVE, MK_LBUTTON, at(x0 + (x1 - x0) * i / 8));
+    // Sent from inside the window's own thread, Explorer's splitter kept
+    // following the real cursor after the release (the pane grew to 1110 px
+    // as the mouse moved). Sent from another thread, the same messages end
+    // the drag cleanly, so a short worker does it once this click returns.
+    if (InterlockedCompareExchange(&g_dragBusy, 1, 0) != 0) {
+        return;
     }
-    SendMessage(host, WM_LBUTTONUP, 0, at(x1));
-    if (GetCapture() == host) {
-        ReleaseCapture();
+    auto* job = new DragJob{host, sink, ntc, x0, x1, y, toWidth,
+                            (int)(sr.right - sr.left)};
+    HANDLE thread = CreateThread(nullptr, 0, DragThread, job, 0, nullptr);
+    if (thread) {
+        CloseHandle(thread);
+    } else {
+        delete job;
+        InterlockedExchange(&g_dragBusy, 0);
     }
-    RECT after;
-    GetWindowRect(sink, &after);
-    Wh_Log(L"Side list fold: width %d asked %d, now %d",
-           (int)(sr.right - sr.left), toWidth, (int)(after.right - after.left));
 }
 
 void Toggle(HWND ntc) {
@@ -16278,6 +16322,9 @@ void Wh_ModUninit() {
         }
     }
 
+    for (int i = 0; i < 100 && NavDock::g_dragBusy; i++) {
+        Sleep(20);
+    }
     for (HWND ntc : NavDock::All()) {
         if (IsWindow(ntc)) {
             RunFromWindowThread(
