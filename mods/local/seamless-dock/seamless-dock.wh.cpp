@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.9
+// @version         0.3.10
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,6 +26,12 @@ the edge of the screen across from your taskbar, so you get a clean bar on one
 side and a dock on the other, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
+
+## What's new in 0.3.10
+
+- The taskbar's own right-click menu, and every submenu you hover open from
+  it, now always sits on top of the title pill. The pill used to miss menus
+  drawn by other mods on the taskbar.
 
 ## What's new in 0.3.9
 
@@ -2546,6 +2552,10 @@ ComPtr<ID2D1GradientStopCollection> g_titleStops;
 HANDLE g_raiseTimer = nullptr, g_zThread = nullptr, g_zReady = nullptr;
 DWORD g_zThreadId = 0;
 ULONGLONG g_raiseUntil = 0;
+// Menus the taskbar and its mods open live in this same process, so the hooks
+// that skip it never saw them. They are watched here while they stay open.
+HWND g_zWatch[4] = {};
+bool g_raiseSlow = false;
 // The pill is owned by the taskbar, so Windows raises both in one step when the
 // bar is clicked. An owned window shares input with its owner's thread, so the
 // pill lives on the small guard thread, never on the busy dock thread.
@@ -2680,19 +2690,75 @@ void StopRaiseBurst() {
     g_raiseUntil = 0;
 }
 
+void ArmRaiseTimer(bool slow) {
+    LARGE_INTEGER due;
+    due.QuadPart = slow ? -150000 : -20000;  // every 15 ms while a menu stays open, else 2 ms
+    SetWaitableTimer(g_raiseTimer, &due, slow ? 15 : 2, nullptr, nullptr, FALSE);
+    g_raiseSlow = slow;
+}
+
 void StartRaiseBurst() {
     if (!g_title || !g_raiseTimer || !IsWindowVisible(g_title)) return;
     bool running = g_raiseUntil != 0;
     g_raiseUntil = GetTickCount64() + 500;
-    if (running) return;
-    LARGE_INTEGER due;
-    due.QuadPart = -20000;  // 2 ms, then every 2 ms
-    SetWaitableTimer(g_raiseTimer, &due, 2, nullptr, nullptr, FALSE);
+    if (running && !g_raiseSlow) return;
+    ArmRaiseTimer(false);
+}
+
+bool MenuWatchOpen() {
+    bool any = false;
+    for (HWND& w : g_zWatch) {
+        if (w && !IsWindowVisible(w)) w = nullptr;
+        if (w) any = true;
+    }
+    return any;
+}
+
+void WatchMenu(HWND h) {
+    for (HWND w : g_zWatch)
+        if (w == h) return;
+    for (HWND& w : g_zWatch)
+        if (!w || !IsWindowVisible(w)) {
+            w = h;
+            return;
+        }
+    g_zWatch[0] = h;
+}
+
+// After the 2 ms burst: keep going at 15 ms while a watched menu is open,
+// since hovering a submenu can make Windows lift the pill again.
+void RaiseTick() {
+    RaiseTitle();
+    if (GetTickCount64() < g_raiseUntil) return;
+    if (!MenuWatchOpen()) {
+        StopRaiseBurst();
+        g_raiseSlow = false;
+    } else if (!g_raiseSlow) {
+        ArmRaiseTimer(true);
+    }
 }
 
 void CALLBACK ZEventProc(HWINEVENTHOOK, DWORD ev, HWND h, LONG idObj, LONG idChild, DWORD, DWORD) {
     if (!h) return;
     if (ev != EVENT_SYSTEM_MENUPOPUPSTART && (idObj != OBJID_WINDOW || idChild != CHILDID_SELF)) return;
+    RaiseTitle();
+    StartRaiseBurst();
+}
+
+// Same process: our own windows and the taskbar's menus. Only a top-level
+// window that opens over the pill counts, so other Explorer windows cost nothing.
+void CALLBACK ZOwnEventProc(HWINEVENTHOOK, DWORD ev, HWND h, LONG idObj, LONG idChild, DWORD, DWORD) {
+    if (!h || h == g_title || !g_title || !IsWindowVisible(g_title)) return;
+    if (ev == EVENT_OBJECT_SHOW || ev == EVENT_SYSTEM_MENUPOPUPSTART) {
+        if (ev == EVENT_OBJECT_SHOW && (idObj != OBJID_WINDOW || idChild != CHILDID_SELF)) return;
+        HWND root = GetAncestor(h, GA_ROOT);
+        if (!root || root == g_title || root == g_dock) return;  // the dock never covers the bar
+        RECT pr, r;
+        if (!GetWindowRect(g_title, &pr) || !GetWindowRect(root, &r) || !IntersectRect(&r, &r, &pr)) return;
+        WatchMenu(root);
+    } else if (idObj != OBJID_WINDOW || idChild != CHILDID_SELF) {
+        return;
+    }
     RaiseTitle();
     StartRaiseBurst();
 }
@@ -2712,21 +2778,27 @@ DWORD WINAPI ZGuardThread(void*) {
     // 0x2 = CREATE_WAITABLE_TIMER_HIGH_RESOLUTION; older systems refuse it.
     g_raiseTimer = CreateWaitableTimerExW(nullptr, nullptr, 0x2, TIMER_ALL_ACCESS);
     if (!g_raiseTimer) g_raiseTimer = CreateWaitableTimerExW(nullptr, nullptr, 0, TIMER_ALL_ACCESS);
-    HWINEVENTHOOK hooks[3] = {
+    DWORD pid = GetCurrentProcessId();
+    HWINEVENTHOOK hooks[6] = {
         SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, ZEventProc, 0, 0,
                         WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS),
         SetWinEventHook(EVENT_SYSTEM_CAPTURESTART, EVENT_SYSTEM_CAPTURESTART, nullptr, ZEventProc,
                         0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS),
         SetWinEventHook(EVENT_SYSTEM_MENUPOPUPSTART, EVENT_SYSTEM_MENUPOPUPSTART, nullptr, ZEventProc,
-                        0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS)};
+                        0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS),
+        SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, ZOwnEventProc, pid, 0,
+                        WINEVENT_OUTOFCONTEXT),
+        SetWinEventHook(EVENT_SYSTEM_MENUPOPUPSTART, EVENT_SYSTEM_MENUPOPUPSTART, nullptr, ZOwnEventProc,
+                        pid, 0, WINEVENT_OUTOFCONTEXT),
+        SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, nullptr, ZOwnEventProc, pid, 0,
+                        WINEVENT_OUTOFCONTEXT)};
     SetEvent(g_zReady);
     for (bool quit = false; !quit;) {
         if (g_raiseUntil && g_raiseTimer) {
             DWORD r = MsgWaitForMultipleObjectsEx(1, &g_raiseTimer, INFINITE, QS_ALLINPUT,
                                                   MWMO_INPUTAVAILABLE);
             if (r == WAIT_OBJECT_0) {
-                RaiseTitle();
-                if (GetTickCount64() >= g_raiseUntil) StopRaiseBurst();
+                RaiseTick();
                 continue;
             }
             while (PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) {
