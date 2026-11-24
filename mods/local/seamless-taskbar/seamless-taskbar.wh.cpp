@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.55
+// @version         0.4.56
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -32,6 +32,12 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
+
+## What's new in 0.4.56
+
+The player's bars rest when nothing plays. After the visualizer's idle delay of silence they
+update 5 times a second instead of every screen refresh, and pick the full rate back up as
+soon as sound returns. Explorer's taskbar used about a third of a core with no music before.
 
 ## What's new in 0.4.53
 
@@ -16180,6 +16186,8 @@ inline winrt::Windows::UI::Xaml::Media::Brush Make(winrt::Windows::UI::Xaml::UIE
 namespace viz {
 extern std::atomic<bool> g_debugLogging;
 extern std::atomic<int> g_frameTiming;
+extern std::atomic<ULONGLONG> g_lastAudibleTickMs;
+extern std::atomic<int> g_idleDelay;
 void VizDebugLog(PCWSTR format, ...);
 }  // namespace viz
 namespace fmp {
@@ -20073,6 +20081,24 @@ static void VizApplyFrame() {
 static winrt::event_token g_vizDispatcherTimerToken{};
 static bool g_vizDispatcherTimerHasToken = false;
 static void DockFitTick();
+// Silent for the visualizer's idle delay and the dock not moving: the bars tick 5 times a
+// second on the timer instead of every screen refresh.
+static bool g_dockSettled = true;
+static bool g_vizTimerSlow = false;
+static bool VizIdleNow() {
+    int idleSeconds = viz::g_idleDelay.load(std::memory_order_relaxed);
+    if (idleSeconds <= 0 || !g_dockSettled) return false;
+    ULONGLONG last = viz::g_lastAudibleTickMs.load(std::memory_order_relaxed);
+    return GetTickCount64() - last > (ULONGLONG)idleSeconds * 1000ULL;
+}
+static void VizSetTimerSlow(bool slow) {
+    if (!g_vizDispatcherTimer || slow == g_vizTimerSlow) return;
+    g_vizTimerSlow = slow;
+    try {
+        g_vizDispatcherTimer.Interval(
+            winrt::Windows::Foundation::TimeSpan{std::chrono::milliseconds(slow ? 200 : 16)});
+    } catch (...) {}
+}
 // Bar tick counter for the player's own bars. Only runs while the visualizer's "Diagnostic
 // logging" is on. Every 10 s it writes one [FrameTiming] line to diagnostic.log: ticks, mean
 // and worst gap, spread, and how many gaps ran over one screen refresh late.
@@ -20179,6 +20205,11 @@ static void VizRenderingTick(winrt::Windows::Foundation::IInspectable const&,
     if (q.QuadPart + halfRefreshQpc < g_vizNextDueQpc) return;
     g_vizNextDueQpc += intervalQpc;
     VizFrameTick();
+    if (VizIdleNow() && g_vizDispatcherTimer) {  // silent: leave the per-frame event
+        VizUnhookRendering();
+        VizSetTimerSlow(true);
+        try { g_vizDispatcherTimer.Start(); } catch (...) {}
+    }
 }
 static void VizHookRendering() {
     if (g_vizRenderingHooked) return;
@@ -20190,7 +20221,9 @@ static void VizHookRendering() {
 }
 static void VizTimerTick(winrt::Windows::Foundation::IInspectable const&,
                         winrt::Windows::Foundation::IInspectable const&) {
-    if (!g_unloading && viz::g_frameTiming.load(std::memory_order_relaxed) == 1) {
+    bool idle = !g_unloading && VizIdleNow();
+    VizSetTimerSlow(idle);
+    if (!g_unloading && !idle && viz::g_frameTiming.load(std::memory_order_relaxed) == 1) {
         VizHookRendering();
         if (g_vizRenderingHooked) {
             try { g_vizDispatcherTimer.Stop(); } catch (...) {}
@@ -20211,6 +20244,7 @@ static void StartVizTimer() {
                 g_vizDispatcherTimerToken = g_vizDispatcherTimer.Tick(&VizTimerTick);
                 g_vizDispatcherTimerHasToken = true;
             }
+            VizSetTimerSlow(false);
             if (viz::g_frameTiming.load(std::memory_order_relaxed) == 1) VizHookRendering();
             if (!g_vizRenderingHooked) g_vizDispatcherTimer.Start();
         } catch (...) {}
@@ -25120,7 +25154,7 @@ static void FollowSystemInfo() {
     } catch (...) {}
 }
 static void DockFitTick() {
-    if (!g_playerGrid || g_unloading || !FittedOverlay()) return;
+    if (!g_playerGrid || g_unloading || !FittedOverlay()) { g_dockSettled = true; return; }
     try {
         auto panel = FindChildByName(g_playerGrid, kPanelGridName);
         if (!panel) return;
@@ -25156,17 +25190,23 @@ static void DockFitTick() {
                 g_dockStart = now;
         }
         double t = std::clamp(std::chrono::duration<double, std::milli>(now-g_dockStart).count()/180.0, 0.0, 1.0);
-        bool animate = g_settings.enableSmoothPositionAnimation &&
-            winrt::Windows::UI::ViewManagement::UISettings().AnimationsEnabled();
+        static winrt::Windows::UI::ViewManagement::UISettings s_dockUi{nullptr};
+        if (!s_dockUi) s_dockUi = winrt::Windows::UI::ViewManagement::UISettings();
+        bool animate = g_settings.enableSmoothPositionAnimation && s_dockUi.AnimationsEnabled();
         double ease = animate ? 1-std::pow(1-t, 3) : 1;
         g_dockWidth = g_dockFrom + (g_dockTarget-g_dockFrom)*ease;
         g_dockOpacity = g_dockOpacityFrom + (g_dockOpacityTarget-g_dockOpacityFrom)*ease;
+        g_dockSettled = t >= 1.0;
+        bool landed = g_dockSettled && g_playerGrid.Clip() &&
+            std::abs(g_playerGrid.Width() - g_dockWidth) < 0.01;
         g_playerGrid.MinWidth(0);
         g_playerGrid.ClearValue(FrameworkElement::MaxWidthProperty());
         g_playerGrid.Width(g_dockWidth);
-        winrt::Windows::UI::Xaml::Media::RectangleGeometry clip;
-        clip.Rect({0,0,(float)g_dockWidth,48});
-        g_playerGrid.Clip(clip);
+        if (!landed) {
+            winrt::Windows::UI::Xaml::Media::RectangleGeometry clip;
+            clip.Rect({0,0,(float)g_dockWidth,48});
+            g_playerGrid.Clip(clip);
+        }
         for (auto const& child : g_playerGrid.Children()) {
             auto fe = child.try_as<FrameworkElement>();
             if (fe && (fe.Name() == kPanelGridName || fe.Name() == kProgressLayerName)) {
@@ -25174,7 +25214,7 @@ static void DockFitTick() {
                 fe.IsHitTestVisible(!g_vizOnly);
             }
         }
-        g_playerGrid.UpdateLayout();
+        if (!landed) g_playerGrid.UpdateLayout();
         FollowSystemInfo();
     } catch (...) {}
 }
