@@ -845,88 +845,11 @@
       }
     },
     {
-      "id": "live-video-wallpaper",
-      "name": "Live Video Wallpaper",
-      "version": "1.1.1",
-      "enabled": true,
-      "settings": {
-        "audioMuted": 1,
-        "audioVolume": "100",
-        "batteryMode": "pause",
-        "displayLayout": "span",
-        "filePickerHotkey": 0,
-        "fitMode": "fill",
-        "occlusionInterval": "normal",
-        "profilerHotkey": 0,
-        "targetFps": "60",
-        "videoPath": "",
-        "visibilityHotkey": 0
-      }
-    },
-    {
       "id": "lm-mediakey-explorer-fix",
       "name": "Play-Media-Key fix in Explorer",
       "version": "1.1",
       "enabled": true,
       "settings": {}
-    },
-    {
-      "id": "lock-screen-live-wallpaper",
-      "name": "Lock Screen Live Wallpaper",
-      "version": "1.1.0",
-      "enabled": false,
-      "settings": {
-        "colorAdjustments.brightness": 0,
-        "colorAdjustments.contrast": 100,
-        "colorAdjustments.dim": 0,
-        "colorAdjustments.gamma": 100,
-        "colorAdjustments.hue": 0,
-        "colorAdjustments.saturation": 100,
-        "debugLog": 0,
-        "general.audioVolume": 0,
-        "general.fitMode": "cover",
-        "general.folderOrder": "random",
-        "general.speed": 100,
-        "general.videoPath": "",
-        "performance.hwDecode": 1,
-        "performance.width": 1920,
-        "power.idlePauseSeconds": 300,
-        "power.lowBatteryLevel": "balanced",
-        "power.lowBatteryOnAC": 0,
-        "power.lowBatteryPercent": 0,
-        "power.paused": 0,
-        "preview.alwaysOnTop": 1,
-        "preview.enabled": 0,
-        "preview.hotkey": "",
-        "preview.showOverlay": 0,
-        "preview.trayIcon": 0,
-        "screens.bootMode": "still",
-        "screens.bootStillSeconds": 180,
-        "screens.playOnPasswordScreen": 1,
-        "screens.showOnShutdown": 0
-      }
-    },
-    {
-      "id": "logitech-battery-tray",
-      "name": "Logitech Battery Tray",
-      "version": "0.1.2",
-      "enabled": false,
-      "settings": {
-        "buttonWidth": 80,
-        "devices[0].match": "",
-        "devices[0].show": 1,
-        "directHidpp": 1,
-        "displayMode": "auto",
-        "iconSize": 20,
-        "iconStyle": "batteryAndDevice",
-        "lowBatteryPercent": 20,
-        "openGHubOnClick": 1,
-        "placement": "batteryArea",
-        "refreshSeconds": 30,
-        "showBatteryBar": 0,
-        "showNewDevices": 1,
-        "showPercentage": 1
-      }
     },
     {
       "id": "minimize-to-tray",
@@ -1330,13 +1253,6 @@
       }
     },
     {
-      "id": "search-menu-inspect-helper",
-      "name": "Search Menu Inspect Helper",
-      "version": "1.0",
-      "enabled": true,
-      "settings": {}
-    },
-    {
       "id": "shell-flyout-positions",
       "name": "Shell Flyout Positions",
       "version": "1.3.1",
@@ -1350,41 +1266,6 @@
         "startMenu.horizontalShift": 0,
         "startMenu.verticalAlignment": "center",
         "startMenu.verticalShift": -250
-      }
-    },
-    {
-      "id": "smart-process-priority-ram-optimizer",
-      "name": "Smart Process Priority & RAM Optimizer",
-      "version": "1.1.1",
-      "enabled": true,
-      "settings": {
-        "backgroundCpuThrottleThresholdPercent": 15,
-        "customAiProcesses": "",
-        "customPowerPlanGuid": "",
-        "customTargetList": "zen.exe, chrome.exe, msedge.exe, brave.exe, firefox.exe, opera.exe, vivaldi.exe, discord.exe, halocord.exe, slack.exe, teams.exe, telegram.exe, whatsapp.exe, signal.exe, skype.exe, spotify.exe, steam.exe, steamwebhelper.exe, epicgameslauncher.exe, code.exe",
-        "electronMemoryCapMb": 1000,
-        "enableAudioShielding": 1,
-        "enableBackgroundCpuSets": 0,
-        "enableBackgroundThrottling": 1,
-        "enableBrowserTabTrim": 1,
-        "enableDynamicPowerPlan": 0,
-        "enableEcoQosManagement": 0,
-        "enableElectronMemoryCap": 1,
-        "enableForegroundCpuSets": 0,
-        "enableHotkeySound": 1,
-        "enableNetworkShielding": 1,
-        "enablePanicHotkey": 0,
-        "enableProBalance": 0,
-        "enableSmartAiOptimization": 1,
-        "excludedProcesses": "explorer.exe, windhawk.exe, dwm.exe, csrss.exe, lsass.exe, smss.exe, services.exe, system, wininit.exe, winlogon.exe, logonui.exe, lockapp.exe, consent.exe, credentialuibroker.exe, smartscreen.exe, svchost.exe, memcompression, registry, fontdrvhost.exe, audiodg.exe, sihost.exe, taskhostw.exe, ctfmon.exe, wlanext.exe, dashost.exe, syntpenh.exe, syntphelper.exe, etdcontrol.exe, etdctrl.exe, alpspad.exe, hcontrol.exe, wireguard.exe, openvpn.exe, tailscale.exe, splwow64.exe, printfilterpipelinesvc.exe, spoolsv.exe, wudfhost.exe, devicecensus.exe, mullvad vpn.exe, ableton live 12 suite.exe, push2displayprocess.exe, push3.exe, vbaudiomatrix.exe, vbaudiomatrix_x64.exe, vbaudiomatrixcoconut.exe, vbaudiomatrixcoconut_x64.exe, vbmatrixvaio_controlpanel.exe, streamdeck.exe, sunshine.exe, sunshinesvc.exe, uxplay-windows.exe, adguardhome.exe, mullvad-daemon.exe, tailscaled.exe, tailscale-ipn.exe",
-        "foregroundPriorityLevel": "aboveNormal",
-        "freeRamThresholdPercent": 0,
-        "gameAltTabGracePeriodSeconds": 30,
-        "pauseOnBattery": 1,
-        "powerPlanSelection": "highPerformance",
-        "processStartupGraceSeconds": 5,
-        "systemCpuContentionThresholdPercent": 60,
-        "trimMinimizedWindows": 1
       }
     },
     {
