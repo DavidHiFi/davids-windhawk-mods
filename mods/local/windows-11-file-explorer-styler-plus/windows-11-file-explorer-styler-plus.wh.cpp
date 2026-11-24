@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.31
+// @version         1.10.33
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -42,6 +42,21 @@ adds after every other window's title is added here too: how long the
 window has been open, after the folder name. It uses Seamless Title Bars'
 own uptime settings (which units, compact or clock, separator, colour) and
 hides when that mod or its uptime is off.
+
+## What's new in 1.10.33
+
+- The folder list on the left is its own rounded dock now, like the bar at
+  the top and the one at the bottom: grey edge at rest, blue to mauve while
+  you point at it. It ends under the last folder, so the empty space below
+  has no frame.
+- A small button at its top left folds the list down to a narrow strip and
+  opens it again. Drag the list's right edge to make it wider or narrower,
+  as before. Turn it all off with "Folder list dock" in the settings.
+
+## What's new in 1.10.32
+
+- The lighter line between the folder tree and the file list is gone in
+  every window now, also once you have browsed around in it.
 
 ## What's new in 1.10.31
 
@@ -502,6 +517,12 @@ Windows](https://windhawk.net/mods/translucent-windows) mod.
     Draws the status bar at the bottom of the window (item count, selection
     size, view buttons) on a rounded Catppuccin Mocha dock, with hover and
     current view rings on the view buttons.
+- navPaneDock: true
+  $name: Folder list dock
+  $description: >-
+    Puts the folder list on the left on its own rounded dock that ends under
+    the last folder, with a button at its top left that folds the list to a
+    narrow strip and back.
 - titleUptime: true
   $name: Uptime after the title
   $description: >-
@@ -1808,6 +1829,7 @@ struct {
     BackgroundTranslucentEffectRegion backgroundTranslucentEffectRegion;
     int explorerFrameContainerHeight;
     bool statusBarDock;
+    bool navPaneDock;
     bool titleUptime;
     XamlDiagnosticsHandling xamlDiagnosticsHandling;
 } g_settings;
@@ -9091,6 +9113,7 @@ bool CursorOverElement(FrameworkElement const& target) {
         bridge = GetAncestor(bridge, GA_PARENT);
     }
     if (!bridge || GetWindowThreadProcessId(bridge, nullptr) != GetCurrentThreadId()) {
+        Wh_Log(L"Dock hover check: no island under cursor (bridge %p)", bridge);
         return false;
     }
     double scale = root.RasterizationScale();
@@ -9100,6 +9123,8 @@ bool CursorOverElement(FrameworkElement const& target) {
     auto size = root.Size();
     if (std::abs(client.right / scale - size.Width) > 2 ||
         std::abs(client.bottom / scale - size.Height) > 2) {
+        Wh_Log(L"Dock hover check: island %ldx%ld at scale %.2f, content %.0fx%.0f",
+               client.right, client.bottom, scale, size.Width, size.Height);
         return false;
     }
     POINT local = cursor;
@@ -9108,8 +9133,13 @@ bool CursorOverElement(FrameworkElement const& target) {
         {0, 0, static_cast<float>(target.ActualWidth()),
          static_cast<float>(target.ActualHeight())});
     double x = local.x / scale, y = local.y / scale;
-    return x >= box.X && y >= box.Y && x < box.X + box.Width &&
-           y < box.Y + box.Height;
+    bool inside = x >= box.X && y >= box.Y && x < box.X + box.Width &&
+                  y < box.Y + box.Height;
+    if (!inside) {
+        Wh_Log(L"Dock hover check: cursor %.0f,%.0f outside box %.0f,%.0f %.0fx%.0f",
+               x, y, box.X, box.Y, box.Width, box.Height);
+    }
+    return inside;
 }
 
 template <typename Panel>
@@ -9199,6 +9229,9 @@ void ConfigureBorderHover(Panel panel, ElementCustomizationState& state,
             auto at = args.GetCurrentPoint(target).Position();
             bool inside = at.X >= 0 && at.Y >= 0 && at.X < target.ActualWidth() &&
                           at.Y < target.ActualHeight();
+            Wh_Log(L"Dock hover pointer %.0f,%.0f in %.0fx%.0f inside=%d timer=%d",
+                   at.X, at.Y, target.ActualWidth(), target.ActualHeight(),
+                   inside, timer ? 1 : 0);
             paint(inside);
             if (timer) {
                 if (inside) timer.Start();
@@ -11542,6 +11575,9 @@ thread_local HWND g_statusDockPaintWndForThread;
 // Set while the navigation tree paints on this thread.
 thread_local HWND g_treePaintWndForThread;
 bool IsNavTreeWnd(HWND hWnd);
+namespace NavDock {
+void Ensure(HWND tree);
+}
 thread_local StatusDockBuffer g_statusDockBuffersForThread[4];
 thread_local int g_statusDockBufferCountForThread;
 
@@ -11580,6 +11616,9 @@ HDC WINAPI BeginPaint_Hook(HWND hWnd, LPPAINTSTRUCT lpPaint) {
     }
     if (hdc && IsNavTreeWnd(hWnd)) {
         g_treePaintWndForThread = hWnd;
+        if (g_settings.navPaneDock) {
+            NavDock::Ensure(hWnd);
+        }
     }
 
     return hdc;
@@ -11664,7 +11703,19 @@ void TintPaneGaps(const StatusDockBuffer& buffer, HPAINTBUFFER paintBuffer) {
     if (!GdiAlphaBlend_Original) {
         return;
     }
-    HWND sink = FindWindowExW(hViewWnd, nullptr, L"CtrlNotifySink", nullptr);
+    // The view holds several CtrlNotifySink children and the first is often
+    // a hidden one, so take the visible one furthest left: the side list.
+    HWND sink = nullptr;
+    LONG sinkLeft = LONG_MAX;
+    for (HWND child = FindWindowExW(hViewWnd, nullptr, L"CtrlNotifySink", nullptr);
+         child; child = FindWindowExW(hViewWnd, child, L"CtrlNotifySink", nullptr)) {
+        RECT r;
+        if (IsWindowVisible(child) && GetWindowRect(child, &r) &&
+            r.right > r.left && r.bottom > r.top && r.left < sinkLeft) {
+            sink = child;
+            sinkLeft = r.left;
+        }
+    }
     HWND root = GetAncestor(hViewWnd, GA_ROOT);
     HWND list = root ? FindWindowExW(root, nullptr,
                                      L"local@seamless-explorer-view-overlay",
@@ -13266,6 +13317,618 @@ void UpdateStatusDockHover(HWND hViewWnd, const POINT* clientPoint) {
         InvalidateRect(hToggleWnd, nullptr, FALSE);
     }
 }
+
+// The folder tree on the left sits in its own rounded dock, like the command
+// bar and the status bar: the tree is inset inside its control, the dock
+// hugs the items (no frame on the empty space under it) and a button at its
+// top left folds the side list down to a narrow rail and back. The right
+// edge of the side list still resizes it, as before.
+namespace NavDock {
+
+constexpr UINT_PTR kHoverTimer = 0x4E44;
+constexpr UINT kRefitMsg = WM_APP + 0x4E4;
+
+struct Layout {
+    RECT dock;
+    RECT button;
+    RECT tree;
+    bool collapsed;
+};
+
+struct State {
+    HWND tree = nullptr;
+    bool hover = false;
+    bool buttonHover = false;
+    bool buttonDown = false;
+    bool refitPosted = false;
+    int restoreWidth = 0;
+    RECT lastDock = {};
+};
+
+SRWLOCK g_lock = SRWLOCK_INIT;
+// Keyed by the NamespaceTreeControl that holds the tree.
+[[clang::no_destroy]] std::unordered_map<HWND, State> g_docks;
+
+bool GetState(HWND ntc, State* state) {
+    AcquireSRWLockShared(&g_lock);
+    auto it = g_docks.find(ntc);
+    bool found = it != g_docks.end();
+    if (found) {
+        *state = it->second;
+    }
+    ReleaseSRWLockShared(&g_lock);
+    return found;
+}
+
+template <typename F>
+void UpdateState(HWND ntc, F&& update) {
+    AcquireSRWLockExclusive(&g_lock);
+    auto it = g_docks.find(ntc);
+    if (it != g_docks.end()) {
+        update(it->second);
+    }
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+float Scale(HWND hWnd) {
+    UINT dpi = GetDpiForWindow(hWnd);
+    return (dpi ? dpi : 96) / 96.0f;
+}
+
+// The height of every shown row, so the dock ends under the last one.
+int ContentHeight(HWND tree) {
+    int itemHeight = (int)SendMessage(tree, TVM_GETITEMHEIGHT, 0, 0);
+    if (itemHeight <= 0) {
+        return 0;
+    }
+    int count = 0;
+    HTREEITEM item = TreeView_GetRoot(tree);
+    while (item && count < 4000) {
+        count++;
+        item = TreeView_GetNextVisible(tree, item);
+    }
+    return std::max(1, count) * itemHeight;
+}
+
+Layout Compute(HWND ntc, HWND tree) {
+    Layout layout = {};
+    RECT client;
+    if (!GetClientRect(ntc, &client)) {
+        return layout;
+    }
+    int width = client.right;
+    int height = client.bottom;
+    float scale = Scale(ntc);
+    auto px = [scale](float v) { return (int)std::lround(v * scale); };
+    int edge = std::max(1, (int)std::round(2.0f * scale));
+    int left = std::min(px(8), std::max(0, width / 4));
+    int top = px(6);
+    int right = std::max(left, width - px(2));
+
+    layout.collapsed = width < px(80);
+    if (layout.collapsed) {
+        int size = std::max(0, std::min(px(32), right - left));
+        layout.dock = {left, top, left + size, top + size};
+        int b = std::min(px(24), size);
+        int bx = left + (size - b) / 2;
+        int by = top + (size - b) / 2;
+        layout.button = {bx, by, bx + b, by + b};
+        layout.tree = {left, top, left, top};
+        return layout;
+    }
+
+    int pad = px(4);
+    int header = px(30);
+    layout.button = {left + edge + px(4), top + edge + px(3),
+                     left + edge + px(28), top + edge + px(27)};
+    layout.tree.left = left + edge + pad;
+    layout.tree.top = top + header;
+    layout.tree.right = std::max<LONG>(layout.tree.left, right - edge - pad);
+    int room = height - layout.tree.top - edge - pad - px(8);
+    int rows = ContentHeight(tree) + px(2);
+    layout.tree.bottom = layout.tree.top + std::max(0, std::min(rows, room));
+    layout.dock = {left, top, right, layout.tree.bottom + pad + edge};
+    return layout;
+}
+
+// The ring (grey at rest, blue to mauve on hover, the command bar dock's
+// values) and the fold button: a small side panel picture.
+void PaintDock(ID2D1RenderTarget* rt,
+               int width,
+               int height,
+               float scale,
+               const RECT& button,
+               bool hover,
+               bool buttonHover,
+               bool collapsed) {
+    float edge = std::max(1.0f, std::round(2.0f * scale));
+    float radius = std::min(12.0f * scale, height / 2.0f);
+
+    D2D1_GRADIENT_STOP stops[] = {
+        {0.0f, ThemePartColor(0xFF, 0x89, 0xB4, 0xFA)},
+        {1.0f, ThemePartColor(0xFF, 0xCB, 0xA6, 0xF7)},
+    };
+    winrt::com_ptr<ID2D1GradientStopCollection> stopCollection;
+    rt->CreateGradientStopCollection(stops, ARRAYSIZE(stops),
+                                     stopCollection.put());
+    auto gradient = [&](float x0, float y0, float x1, float y1, float alpha) {
+        winrt::com_ptr<ID2D1LinearGradientBrush> brush;
+        if (stopCollection) {
+            D2D1_BRUSH_PROPERTIES props = {alpha, D2D1::Matrix3x2F::Identity()};
+            rt->CreateLinearGradientBrush(
+                D2D1::LinearGradientBrushProperties(D2D1::Point2F(x0, y0),
+                                                    D2D1::Point2F(x1, y1)),
+                props, stopCollection.get(), brush.put());
+        }
+        return brush;
+    };
+
+    D2D1_ROUNDED_RECT ring = D2D1::RoundedRect(
+        D2D1::RectF(edge / 2, edge / 2, width - edge / 2, height - edge / 2),
+        radius - edge / 2, radius - edge / 2);
+    if (hover) {
+        if (auto brush = gradient(0, 0, width, height, 0x64 / 255.0f)) {
+            rt->DrawRoundedRectangle(ring, brush.get(), edge);
+        }
+    } else {
+        winrt::com_ptr<ID2D1SolidColorBrush> rest;
+        rt->CreateSolidColorBrush(ThemePartColor(0x64, 0x58, 0x5B, 0x70),
+                                  rest.put());
+        if (rest) {
+            rt->DrawRoundedRectangle(ring, rest.get(), edge);
+        }
+    }
+
+    D2D1_RECT_F b = D2D1::RectF(button.left, button.top, button.right,
+                                button.bottom);
+    if (buttonHover) {
+        winrt::com_ptr<ID2D1SolidColorBrush> face;
+        rt->CreateSolidColorBrush(ThemePartColor(0x99, 0x31, 0x32, 0x44),
+                                  face.put());
+        float r = 6.0f * scale;
+        if (face) {
+            rt->FillRoundedRectangle(D2D1::RoundedRect(b, r, r), face.get());
+        }
+    }
+
+    // The picture: a small window with its side strip marked.
+    float cx = (b.left + b.right) / 2;
+    float cy = (b.top + b.bottom) / 2;
+    float w = 14.0f * scale, h = 12.0f * scale;
+    float stroke = std::max(1.0f, std::round(1.5f * scale));
+    D2D1_RECT_F frame = D2D1::RectF(cx - w / 2, cy - h / 2, cx + w / 2,
+                                    cy + h / 2);
+    winrt::com_ptr<ID2D1Brush> ink;
+    if (buttonHover) {
+        auto brush = gradient(frame.left, frame.top, frame.right, frame.bottom,
+                              1.0f);
+        ink = brush.as<ID2D1Brush>();
+    } else {
+        winrt::com_ptr<ID2D1SolidColorBrush> solid;
+        rt->CreateSolidColorBrush(ThemePartColor(0xFF, 0xA6, 0xAD, 0xC8),
+                                  solid.put());
+        if (solid) {
+            ink = solid.as<ID2D1Brush>();
+        }
+    }
+    if (!ink) {
+        return;
+    }
+    float r = 2.5f * scale;
+    rt->DrawRoundedRectangle(D2D1::RoundedRect(frame, r, r), ink.get(),
+                             stroke);
+    float stripX = frame.left + 4.5f * scale;
+    rt->DrawLine(D2D1::Point2F(stripX, frame.top),
+                 D2D1::Point2F(stripX, frame.bottom), ink.get(), stroke);
+    if (!collapsed) {
+        // The open strip is filled; folded, only its line shows.
+        D2D1_RECT_F strip = D2D1::RectF(frame.left + stroke / 2,
+                                        frame.top + stroke / 2, stripX,
+                                        frame.bottom - stroke / 2);
+        rt->FillRectangle(strip, ink.get());
+    }
+}
+
+bool CursorInDock(HWND ntc, const Layout& layout, bool* overButton) {
+    POINT pt;
+    if (!GetCursorPos(&pt)) {
+        return false;
+    }
+    HWND under = WindowFromPoint(pt);
+    if (!under ||
+        GetAncestor(under, GA_ROOT) != GetAncestor(ntc, GA_ROOT)) {
+        return false;
+    }
+    ScreenToClient(ntc, &pt);
+    if (overButton) {
+        *overButton = PtInRect(&layout.button, pt);
+    }
+    return PtInRect(&layout.dock, pt);
+}
+
+void UpdateHover(HWND ntc) {
+    State state;
+    if (!GetState(ntc, &state) || !IsWindow(state.tree)) {
+        return;
+    }
+    Layout layout = Compute(ntc, state.tree);
+    bool overButton = false;
+    bool inside = CursorInDock(ntc, layout, &overButton);
+    if (inside) {
+        SetTimer(ntc, kHoverTimer, 60, nullptr);
+    } else {
+        KillTimer(ntc, kHoverTimer);
+    }
+    if (inside == state.hover && overButton == state.buttonHover) {
+        return;
+    }
+    UpdateState(ntc, [&](State& s) {
+        s.hover = inside;
+        s.buttonHover = overButton;
+    });
+    RECT dirty = layout.dock;
+    InflateRect(&dirty, 2, 2);
+    InvalidateRect(ntc, &dirty, FALSE);
+}
+
+void Paint(HWND ntc) {
+    PAINTSTRUCT ps;
+    HDC hdc = BeginPaint(ntc, &ps);
+    if (!hdc) {
+        return;
+    }
+    State state;
+    RECT client;
+    GetClientRect(ntc, &client);
+    if (GetState(ntc, &state) && IsWindow(state.tree)) {
+        Layout layout = Compute(ntc, state.tree);
+        RECT treeRect = layout.tree;
+        if (IsWindowVisible(state.tree) && !IsRectEmpty(&treeRect)) {
+            ExcludeClipRect(hdc, treeRect.left, treeRect.top, treeRect.right,
+                            treeRect.bottom);
+        }
+        HDC mem = nullptr;
+        HPAINTBUFFER buffer = BeginBufferedPaint_Original(
+            hdc, &client, BPBF_TOPDOWNDIB, nullptr, &mem);
+        if (buffer && mem) {
+            BufferedPaintClear(buffer, nullptr);
+            int dw = layout.dock.right - layout.dock.left;
+            int dh = layout.dock.bottom - layout.dock.top;
+            if (dw > 0 && dh > 0) {
+                RECT button = layout.button;
+                OffsetRect(&button, -layout.dock.left, -layout.dock.top);
+                float scale = Scale(ntc);
+                HDC bitmap = CreateThemePartBitmap(
+                    dw, dh, [&](ID2D1RenderTarget* rt) {
+                        PaintDock(rt, dw, dh, scale, button, state.hover,
+                                  state.buttonHover, layout.collapsed);
+                    });
+                if (bitmap) {
+                    BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+                    (GdiAlphaBlend_Original ? GdiAlphaBlend_Original
+                                            : GdiAlphaBlend)(
+                        mem, layout.dock.left, layout.dock.top, dw, dh, bitmap,
+                        0, 0, dw, dh, blend);
+                    DeleteThemePartBitmap(bitmap);
+                }
+            }
+            EndBufferedPaint_Original(buffer, TRUE);
+        } else {
+            FillRect_Original(hdc, &client, (HBRUSH)GetStockObject(BLACK_BRUSH));
+        }
+        UpdateState(ntc, [&](State& s) { s.lastDock = layout.dock; });
+    } else {
+        FillRect_Original(hdc, &client, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    }
+    EndPaint(ntc, &ps);
+}
+
+void Refit(HWND ntc) {
+    State state;
+    if (!GetState(ntc, &state) || !IsWindow(state.tree)) {
+        return;
+    }
+    UpdateState(ntc, [](State& s) { s.refitPosted = false; });
+    Layout layout = Compute(ntc, state.tree);
+    RECT now;
+    GetWindowRect(state.tree, &now);
+    MapWindowPoints(HWND_DESKTOP, ntc, (POINT*)&now, 2);
+    if (!EqualRect(&now, &layout.tree)) {
+        SetWindowPos(state.tree, nullptr, 0, 0, 0, 0,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    if (!EqualRect(&state.lastDock, &layout.dock)) {
+        RECT client;
+        GetClientRect(ntc, &client);
+        Wh_Log(L"Side list dock %08X: %dx%d, rows to %d, dock %d,%d-%d,%d%s",
+               (DWORD)(ULONG_PTR)ntc, client.right, client.bottom,
+               layout.tree.bottom, layout.dock.left, layout.dock.top,
+               layout.dock.right, layout.dock.bottom,
+               layout.collapsed ? L", folded" : L"");
+        InvalidateRect(ntc, nullptr, FALSE);
+    }
+}
+
+void PostRefit(HWND ntc) {
+    bool post = false;
+    HWND tree = nullptr;
+    UpdateState(ntc, [&](State& s) {
+        post = !s.refitPosted;
+        s.refitPosted = true;
+        tree = s.tree;
+    });
+    if (post && tree) {
+        PostMessage(tree, kRefitMsg, 0, 0);
+    }
+}
+
+// Drags the side list's own splitter, inside Explorer, without the mouse:
+// the same as grabbing the right edge and moving it.
+void DragSplitter(HWND ntc, int toWidth) {
+    HWND sink = GetParent(ntc);
+    HWND host = sink ? GetParent(sink) : nullptr;
+    if (!host) {
+        return;
+    }
+    RECT sr;
+    GetWindowRect(sink, &sr);
+    MapWindowPoints(HWND_DESKTOP, host, (POINT*)&sr, 2);
+    float scale = Scale(ntc);
+    int x0 = sr.right + (int)std::lround(2 * scale);
+    int x1 = sr.left + toWidth + (int)std::lround(2 * scale);
+    int y = sr.top + (int)std::lround(60 * scale);
+    auto at = [y](int x) { return MAKELPARAM(x, y); };
+    SendMessage(host, WM_MOUSEMOVE, 0, at(x0));
+    SendMessage(host, WM_LBUTTONDOWN, MK_LBUTTON, at(x0));
+    for (int i = 1; i <= 8; i++) {
+        SendMessage(host, WM_MOUSEMOVE, MK_LBUTTON, at(x0 + (x1 - x0) * i / 8));
+    }
+    SendMessage(host, WM_LBUTTONUP, 0, at(x1));
+    if (GetCapture() == host) {
+        ReleaseCapture();
+    }
+    RECT after;
+    GetWindowRect(sink, &after);
+    Wh_Log(L"Side list fold: width %d asked %d, now %d",
+           (int)(sr.right - sr.left), toWidth, (int)(after.right - after.left));
+}
+
+void Toggle(HWND ntc) {
+    State state;
+    if (!GetState(ntc, &state)) {
+        return;
+    }
+    HWND sink = GetParent(ntc);
+    RECT sr;
+    if (!sink || !GetWindowRect(sink, &sr)) {
+        return;
+    }
+    float scale = Scale(ntc);
+    int width = sr.right - sr.left;
+    Layout layout = Compute(ntc, state.tree);
+    if (!layout.collapsed) {
+        UpdateState(ntc, [&](State& s) { s.restoreWidth = width; });
+        DragSplitter(ntc, (int)std::lround(44 * scale));
+    } else {
+        int back = state.restoreWidth > (int)std::lround(100 * scale)
+                       ? state.restoreWidth
+                       : (int)std::lround(220 * scale);
+        DragSplitter(ntc, back);
+    }
+    PostRefit(ntc);
+}
+
+LRESULT CALLBACK TreeProc(HWND hWnd,
+                          UINT uMsg,
+                          WPARAM wParam,
+                          LPARAM lParam,
+                          UINT_PTR uIdSubclass,
+                          DWORD_PTR dwRefData) {
+    HWND ntc = (HWND)dwRefData;
+    switch (uMsg) {
+        case WM_WINDOWPOSCHANGING: {
+            auto* pos = (WINDOWPOS*)lParam;
+            if ((pos->flags & (SWP_NOMOVE | SWP_NOSIZE)) !=
+                (SWP_NOMOVE | SWP_NOSIZE)) {
+                Layout layout = Compute(ntc, hWnd);
+                pos->x = layout.tree.left;
+                pos->y = layout.tree.top;
+                pos->cx = layout.tree.right - layout.tree.left;
+                pos->cy = layout.tree.bottom - layout.tree.top;
+                pos->flags &= ~(SWP_NOMOVE | SWP_NOSIZE);
+            }
+            break;
+        }
+
+        case WM_MOUSEMOVE:
+            UpdateHover(ntc);
+            break;
+
+        case TVM_INSERTITEMW:
+        case TVM_INSERTITEMA:
+        case TVM_DELETEITEM:
+        case TVM_EXPAND:
+            PostRefit(ntc);
+            break;
+
+        case kRefitMsg:
+            Refit(ntc);
+            return 0;
+    }
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
+void Remove(HWND ntc);
+
+LRESULT CALLBACK NtcProc(HWND hWnd,
+                         UINT uMsg,
+                         WPARAM wParam,
+                         LPARAM lParam,
+                         UINT_PTR uIdSubclass,
+                         DWORD_PTR dwRefData) {
+    switch (uMsg) {
+        case WM_ERASEBKGND:
+            return 1;
+
+        case WM_PAINT:
+            Paint(hWnd);
+            return 0;
+
+        case WM_SIZE: {
+            LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+            PostRefit(hWnd);
+            InvalidateRect(hWnd, nullptr, FALSE);
+            return result;
+        }
+
+        case WM_NOTIFY: {
+            auto* hdr = (NMHDR*)lParam;
+            if (hdr && (hdr->code == TVN_ITEMEXPANDEDW ||
+                        hdr->code == TVN_ITEMEXPANDEDA)) {
+                PostRefit(hWnd);
+            }
+            break;
+        }
+
+        case WM_NCHITTEST: {
+            State state;
+            if (GetState(hWnd, &state)) {
+                POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+                ScreenToClient(hWnd, &pt);
+                Layout layout = Compute(hWnd, state.tree);
+                if (PtInRect(&layout.button, pt)) {
+                    return HTCLIENT;
+                }
+            }
+            break;
+        }
+
+        case WM_MOUSEMOVE:
+            UpdateHover(hWnd);
+            break;
+
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDBLCLK: {
+            State state;
+            POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            Layout layout;
+            if (GetState(hWnd, &state) &&
+                (layout = Compute(hWnd, state.tree), true) &&
+                PtInRect(&layout.button, pt)) {
+                UpdateState(hWnd, [](State& s) { s.buttonDown = true; });
+                return 0;
+            }
+            break;
+        }
+
+        case WM_LBUTTONUP: {
+            State state;
+            POINT pt = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            if (GetState(hWnd, &state) && state.buttonDown) {
+                UpdateState(hWnd, [](State& s) { s.buttonDown = false; });
+                Layout layout = Compute(hWnd, state.tree);
+                if (PtInRect(&layout.button, pt)) {
+                    Wh_Log(L"Side list fold button pressed");
+                    Toggle(hWnd);
+                }
+                return 0;
+            }
+            break;
+        }
+
+        case WM_TIMER:
+            if (wParam == kHoverTimer) {
+                UpdateHover(hWnd);
+                return 0;
+            }
+            break;
+
+        case WM_NCDESTROY:
+            Remove(hWnd);
+            break;
+    }
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
+// Only the side list of a File Explorer window, not a file dialog's.
+bool IsExplorerSideList(HWND ntc) {
+    WCHAR className[64];
+    HWND sink = GetParent(ntc);
+    if (!sink || !GetClassName(sink, className, ARRAYSIZE(className)) ||
+        wcscmp(className, L"CtrlNotifySink") != 0) {
+        return false;
+    }
+    HWND root = GetAncestor(ntc, GA_ROOT);
+    return root && GetClassName(root, className, ARRAYSIZE(className)) &&
+           wcscmp(className, L"CabinetWClass") == 0;
+}
+
+// On the tree's thread, from its paint.
+void Ensure(HWND tree) {
+    HWND ntc = GetParent(tree);
+    if (!ntc) {
+        return;
+    }
+    AcquireSRWLockShared(&g_lock);
+    bool known = g_docks.count(ntc) != 0;
+    ReleaseSRWLockShared(&g_lock);
+    if (known || !IsExplorerSideList(ntc)) {
+        return;
+    }
+
+    AcquireSRWLockExclusive(&g_lock);
+    bool added = g_docks.emplace(ntc, State{tree}).second;
+    ReleaseSRWLockExclusive(&g_lock);
+    if (!added) {
+        return;
+    }
+    if (!SetWindowSubclass(ntc, NtcProc, 0, 0) ||
+        !SetWindowSubclass(tree, TreeProc, 0, (DWORD_PTR)ntc)) {
+        RemoveWindowSubclass(ntc, NtcProc, 0);
+        AcquireSRWLockExclusive(&g_lock);
+        g_docks.erase(ntc);
+        ReleaseSRWLockExclusive(&g_lock);
+        return;
+    }
+    Wh_Log(L"Side list dock on %08X", (DWORD)(ULONG_PTR)ntc);
+    PostRefit(ntc);
+    InvalidateRect(ntc, nullptr, FALSE);
+}
+
+// On the window's thread. Puts the tree back to fill its control.
+void Remove(HWND ntc) {
+    State state;
+    if (!GetState(ntc, &state)) {
+        return;
+    }
+    KillTimer(ntc, kHoverTimer);
+    RemoveWindowSubclass(ntc, NtcProc, 0);
+    if (IsWindow(state.tree)) {
+        RemoveWindowSubclass(state.tree, TreeProc, 0);
+    }
+    AcquireSRWLockExclusive(&g_lock);
+    g_docks.erase(ntc);
+    ReleaseSRWLockExclusive(&g_lock);
+    RECT client;
+    if (IsWindow(state.tree) && GetClientRect(ntc, &client)) {
+        SetWindowPos(state.tree, nullptr, 0, 0, client.right, client.bottom,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        InvalidateRect(ntc, nullptr, TRUE);
+        InvalidateRect(state.tree, nullptr, TRUE);
+    }
+}
+
+std::vector<HWND> All() {
+    AcquireSRWLockShared(&g_lock);
+    std::vector<HWND> all;
+    for (auto& [ntc, state] : g_docks) {
+        all.push_back(ntc);
+    }
+    ReleaseSRWLockShared(&g_lock);
+    return all;
+}
+
+}  // namespace NavDock
 
 void RemoveStatusDockHover(HWND hViewWnd);
 
@@ -15391,6 +16054,8 @@ void LoadSettings() {
 
     g_settings.statusBarDock = Wh_GetIntSetting(L"statusBarDock");
 
+    g_settings.navPaneDock = Wh_GetIntSetting(L"navPaneDock");
+
     g_settings.titleUptime = Wh_GetIntSetting(L"titleUptime");
 
     PCWSTR xamlDiagnosticsHandling =
@@ -15613,6 +16278,13 @@ void Wh_ModUninit() {
         }
     }
 
+    for (HWND ntc : NavDock::All()) {
+        if (IsWindow(ntc)) {
+            RunFromWindowThread(
+                ntc, [](PVOID param) { NavDock::Remove((HWND)param); }, ntc);
+        }
+    }
+
     ClearThemePartCache();
     DeleteAlphaBrush();
 
@@ -15623,6 +16295,13 @@ void Wh_ModSettingsChanged() {
     Wh_Log(L">");
 
     UninitializeSettingsAndTap();
+
+    for (HWND ntc : NavDock::All()) {
+        if (IsWindow(ntc)) {
+            RunFromWindowThread(
+                ntc, [](PVOID param) { NavDock::Remove((HWND)param); }, ntc);
+        }
+    }
 
     LoadSettings();
     LoadThemeSettings();

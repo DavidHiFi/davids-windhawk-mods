@@ -324,6 +324,7 @@
         "controlStyles[9].styles[1]": "Margin=-6,0,10,0",
         "controlStyles[9].target": "Grid#FileExplorerAddressBarGrid",
         "explorerFrameContainerHeight": 0,
+        "navPaneDock": 1,
         "statusBarDock": 1,
         "styleConstants[0]": "",
         "theme": "OS26 Liquid Glass",
