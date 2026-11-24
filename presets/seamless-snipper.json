@@ -12,6 +12,7 @@
         "arrowHeadSize": 100,
         "arrowHeads": "end",
         "arrowStyle": "filled",
+        "arrowWidth": 8,
         "barAnimation": 1,
         "barColors": "#F38BA8 #FAB387 #F9E2AF #A6E3A1 #89B4FA #CBA6F7 #FFFFFF #11111B",
         "barFade": "hover",

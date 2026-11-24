@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.7.4
+// @version         0.7.5
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -24,7 +24,19 @@ read later, like "Discord 4.05 pm.png".
 
 ![Seamless Snipper preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-snipper.png)
 
-## What's new in 0.7.3
+## What's new in 0.7.5
+
+- Arrows have their own line width in the settings (Drawing, Arrows), and they
+  start thicker than before. The [ and ] keys still change it while you draw.
+- Title bar menus get the same blurred Mocha body as every other menu again. They
+  showed pitch black because the part that spots new menus stopped right after start.
+
+## New in 0.7.4
+
+- The tray icon and the settings window's icon are the clean glyph, with no
+  plate behind them.
+
+## New in 0.7.3
 
 - The drawing bar's setting no longer says the bar sits at the top, since it
   can sit anywhere now.
@@ -461,6 +473,9 @@ restyled to match the rest of Snipper.
   - notched: "Notched triangle"
   - open: "Open triangle"
   - line: "Two lines"
+- arrowWidth: 8
+  $name: "Line width"
+  $description: "1 to 24 (Suggested: 8). The [ and ] keys change it while you draw."
 - arrowHeadSize: 100
   $name: "Head size (%)"
   $description: "50 to 250 (Suggested: 100)."
@@ -1014,7 +1029,7 @@ struct Config {
     COLORREF fillColor = RGB(0x1E, 0x1E, 0x2E);
     int fillOpacity = 25;
     std::wstring lineStyle = L"solid", arrowHeads = L"end", arrowStyle = L"filled";
-    int arrowSize = 100;
+    int arrowSize = 100, arrowWidth = 8;
     std::wstring textFont = L"FiraCode Nerd Font", textBox = L"none";
     bool textBold = true, textItalic = false;
     int textScale = 100;
@@ -1120,6 +1135,8 @@ static void LoadSettings() {
     c.arrowHeads = OneOf(ReadStr(L"arrowHeads"), {L"end", L"start", L"both"});
     c.arrowStyle = OneOf(ReadStr(L"arrowStyle"), {L"filled", L"notched", L"open", L"line"});
     c.arrowSize = Clamp(Wh_GetIntSetting(L"arrowHeadSize"), 50, 250);
+    int arrowW = Wh_GetIntSetting(L"arrowWidth");  // Missing on an older install: keep the thick default.
+    c.arrowWidth = arrowW ? Clamp(arrowW, 1, 24) : 8;
     c.textFont = Trim(ReadStr(L"textFont"));
     if (c.textFont.empty()) c.textFont = L"FiraCode Nerd Font";
     c.textBold = Wh_GetIntSetting(L"textBold") != 0;
@@ -5201,6 +5218,7 @@ static void ApplySettings(const Config& c) {
     d[T_TEXT].size = d[T_BALLOON].size = textPx;
     d[T_TEXT].color = FromRef(c.textColor);
     d[T_TEXT].outline = c.textOutline;
+    d[T_ARROW].size = (float)c.arrowWidth;
     d[T_STEP].size = std::round((11 + c.drawSize * 1.5f) * c.stepScale / 100.0f);
     d[T_STEP].color = FromRef(c.stepColor);
     d[T_MARK].color = c.markPen ? base.color : FromRef(c.markColor);
@@ -9319,6 +9337,23 @@ static VOID CALLBACK OnEvent(HWINEVENTHOOK, DWORD ev, HWND h, LONG obj, LONG chi
     }
 }
 
+static HMODULE g_hookSelf = nullptr;
+static HANDLE g_hookThread = nullptr, g_hookReady = nullptr;
+static DWORD g_hookThreadId = 0;
+static DWORD WINAPI HookThreadProc(LPVOID)
+{
+    MSG m;
+    PeekMessageW(&m, nullptr, 0, 0, PM_NOREMOVE);  // a queue, so WM_QUIT can reach this thread
+    DWORD pid = GetCurrentProcessId();
+    g_createHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE, g_hookSelf, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+    g_menuHook = SetWinEventHook(EVENT_SYSTEM_MENUSTART, EVENT_SYSTEM_MENUEND, g_hookSelf, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+    if (g_hookReady) SetEvent(g_hookReady);
+    while (GetMessageW(&m, nullptr, 0, 0) > 0) {}
+    for (HWINEVENTHOOK* hk : {&g_createHook, &g_menuHook})
+        if (*hk) { UnhookWinEvent(*hk); *hk = nullptr; }
+    return 0;
+}
+
 // onCreate (optional) runs for each new popup menu window, on its own thread, after creation.
 static VOID Init(VOID (*onCreate)(HWND))
 {
@@ -9329,13 +9364,23 @@ static VOID Init(VOID (*onCreate)(HWND))
     HMODULE self = nullptr;
     GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        reinterpret_cast<LPCWSTR>(&OnEvent), &self);
-    DWORD pid = GetCurrentProcessId();
-    g_createHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE, self, OnEvent, pid, 0, WINEVENT_INCONTEXT);
-    g_menuHook = SetWinEventHook(EVENT_SYSTEM_MENUSTART, EVENT_SYSTEM_MENUEND, self, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+    g_hookSelf = self;
+    // Tool mods run init on the main thread, which exits right after, and Windows drops a
+    // thread's event hooks when it ends. Keep them on a small thread that lives with the mod.
+    if (!g_hookReady) g_hookReady = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    g_hookThread = CreateThread(nullptr, 0, HookThreadProc, nullptr, 0, &g_hookThreadId);
+    if (g_hookThread && g_hookReady) WaitForSingleObject(g_hookReady, 5000);
 }
 
 static VOID Uninit()
 {
+    if (g_hookThread) {  // the hook thread removes its own hooks on the way out
+        PostThreadMessageW(g_hookThreadId, WM_QUIT, 0, 0);
+        WaitForSingleObject(g_hookThread, 2000);
+        CloseHandle(g_hookThread);
+        g_hookThread = nullptr;
+    }
+    if (g_hookReady) { CloseHandle(g_hookReady); g_hookReady = nullptr; }
     for (HWINEVENTHOOK* hk : {&g_createHook, &g_menuHook})
         if (*hk) { UnhookWinEvent(*hk); *hk = nullptr; }
     {
@@ -26156,6 +26201,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Number, L"fillOpacity", L"Fill opacity (%)", L"5 to 100 (Suggested: 25).", L"25", {}, 5, 100, 4, L"Boxes and circles"},
 {K::Choice, L"arrowHeads", L"Heads", L"Which ends of the arrow get a head.", L"end", {{L"end", L"At the end"}, {L"start", L"At the start"}, {L"both", L"Both ends"}}, 0, 100, 4, L"Arrows"},
 {K::Choice, L"arrowStyle", L"Head style", L"The shape of the arrow head.", L"filled", {{L"filled", L"Filled triangle"}, {L"notched", L"Notched triangle"}, {L"open", L"Open triangle"}, {L"line", L"Two lines"}}, 0, 100, 4, L"Arrows"},
+{K::Number, L"arrowWidth", L"Line width", L"1 to 24 (Suggested: 8). The [ and ] keys change it while you draw.", L"8", {}, 1, 24, 4, L"Arrows"},
 {K::Number, L"arrowHeadSize", L"Head size (%)", L"50 to 250 (Suggested: 100).", L"100", {}, 50, 250, 4, L"Arrows"},
 {K::Check, L"arrowCurved", L"Curved arrow", L"The arrow bows along the drag instead of running straight.", L"0", {}, 0, 100, 4, L"Arrows"},
 {K::Text, L"textFont", L"Font", L"The name of an installed font. If it is missing, Segoe UI is used.", L"FiraCode Nerd Font", {}, 0, 100, 4, L"Text"},
