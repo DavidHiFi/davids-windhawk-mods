@@ -1285,7 +1285,7 @@
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "",
-    "version": "0.1.9"
+    "version": "0.1.11"
   },
   "local@mocha-steam-icons": {
     "disabled": false,
