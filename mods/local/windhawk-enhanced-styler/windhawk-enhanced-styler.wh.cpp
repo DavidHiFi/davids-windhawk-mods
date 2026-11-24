@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.32
+// @version         2.2.33
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -2091,37 +2091,36 @@ static HICON MakeTrayIcon(int size, bool badge) {
                                      DIB_RGB_COLORS, &bits, nullptr, 0);
     if (!color) return nullptr;
     auto pixels = static_cast<UINT32*>(bits);
-    const float extent = (float)size, radius = extent * 0.26f;
-    constexpr UINT32 blue = 0x89B4FA, mauve = 0xCBA6F7, crust = 0x11111B, peach = 0xFAB387;
+    // The glyph alone in the gradient on a clear background, scaled up about the centre to fill the room the plate had.
+    const float extent = (float)size, zoom = 1 / 1.3f;
+    constexpr UINT32 blue = 0x89B4FA, mauve = 0xCBA6F7, peach = 0xFAB387;
     // Update badge: a peach dot with a crust ring in the bottom-right corner,
     // standing in for the dot Windhawk's own alert icon carries.
     const float dotR = extent * 0.17f, ringR = dotR + extent * 0.06f;
     const float dotC = extent - ringR;
     for (int y = 0; y < size; ++y) {
         for (int x = 0; x < size; ++x) {
-            int cover = 0, mark = 0, ring = 0, dot = 0;
+            int mark = 0, dot = 0;
             for (int sy = 0; sy < 4; ++sy) {
                 for (int sx = 0; sx < 4; ++sx) {
                     float fx = x + (sx + 0.5f) / 4, fy = y + (sy + 0.5f) / 4;
                     if (badge) {
                         float bx = fx - dotC, by = fy - dotC, d2 = bx * bx + by * by;
                         if (d2 <= dotR * dotR) { ++dot; continue; }
-                        if (d2 <= ringR * ringR) { ++ring; continue; }
+                        if (d2 <= ringR * ringR) continue;
                     }
-                    float dx = fx - std::clamp(fx, radius, extent - radius);
-                    float dy = fy - std::clamp(fy, radius, extent - radius);
-                    if (dx * dx + dy * dy > radius * radius) continue;
-                    ++cover;
-                    mark += (glyph[(int)(fy * 64 / extent)] >> (int)(fx * 64 / extent)) & 1;
+                    float gx = extent * 0.5f + (fx - extent * 0.5f) * zoom;
+                    float gy = extent * 0.5f + (fy - extent * 0.5f) * zoom;
+                    mark += (glyph[(int)(gy * 64 / extent)] >> (int)(gx * 64 / extent)) & 1;
                 }
             }
             float mix = (x + y + 1) / (2 * extent);
-            // The ring cuts the badge out of the tile, so it is transparent.
-            UINT32 pixel = ((cover + dot) * 255 / 16u) << 24;
+            // The ring cuts the dot out of the glyph, so it is transparent.
+            UINT32 pixel = ((mark + dot) * 255 / 16u) << 24;
             for (int shift : {0, 8, 16}) {
                 float a = (blue >> shift) & 255, b = (mauve >> shift) & 255;
-                int ink = (crust >> shift) & 255, fill = (peach >> shift) & 255;
-                pixel |= (UINT32)((((a + (b - a) * mix) * (cover - mark)) + ink * mark + fill * dot) / 16) << shift;
+                int fill = (peach >> shift) & 255;
+                pixel |= (UINT32)(((a + (b - a) * mix) * mark + fill * dot) / 16) << shift;
             }
             pixels[y * size + x] = pixel;
         }
