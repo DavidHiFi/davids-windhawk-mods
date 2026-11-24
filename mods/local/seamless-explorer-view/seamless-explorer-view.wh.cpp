@@ -2,7 +2,7 @@
 // @id              seamless-explorer-view
 // @name            Seamless Explorer View
 // @description     GPU-accelerated Explorer views with smooth scrolling and right-click submenus that populate fully
-// @version         2.0.10
+// @version         2.0.11
 // @author          DavidHiFi, DarkionAvey, crazyboyybs, Languster, valinet
 // @include         explorer.exe
 // @architecture    x86-64
@@ -24,7 +24,13 @@ empty box.
 
 ![Seamless Explorer View preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-explorer-view.png)
 
-## What's new in 2.0.8
+## What's new in 2.0.11
+
+The column names (Name, Date modified, Type, Size) now sit in one rounded dock
+with thin lines between the columns, like the status bar. The dock edge is grey
+and turns blue to mauve while the pointer is over the header.
+
+## What's new in 2.0.9
 
 The thin lines in the column header are gone: the line under the column names
 and the short lines between columns. A hovered column name no longer runs into
@@ -15834,6 +15840,20 @@ void Paint(ViewState& state) {
         // No header rules or column dividers: the owner wants no divider lines.
         // Native Shell columns are already ordered and localized. Painting never
         // asks an item for properties or measures every filename.
+        // One rounded dock behind all column names (drawn on top of the cells'
+        // fills below), with thin separators between columns.
+        const float dockMargin = static_cast<float>(Scale96(4, dpi));
+        const float dockL = std::max(listStart, dockMargin);
+        const float dockR = std::min(listEnd, w - dockMargin);
+        const float dockT = headerOffset + dockMargin;
+        const float dockB = headerBottom - dockMargin;
+        const float dockEdge = static_cast<float>(Scale96(2, dpi));
+        const float dockFade = state.columnModeTransition ? modeOpacity : 1.f;
+        const bool dockOn = details && dockR - dockL > 4.f * dockEdge && dockB - dockT > 4.f * dockEdge &&
+            dockFade > 0.f;
+        const float dockRadius = std::min(static_cast<float>(Scale96(12, dpi)), (dockB - dockT) * .5f);
+        if (dockOn)
+            Fill(state, dockL, dockT, dockR, dockB, 0x11111Bu, .30f * dockFade, dockRadius);
         if (details) {
             const float arrowRoom = static_cast<float>(Scale96(30, ViewDpi(state)));
             for (size_t columnIndex = 0; columnIndex < state.columns.size()+state.disappearingColumns.size(); ++columnIndex) {
@@ -15855,8 +15875,12 @@ void Paint(ViewState& state) {
                     const float edge = columnIndex == 0 ? std::min(0.f, from) : from;
                     const float trailing = columnIndex + 1 == state.columns.size() &&
                         !bar.usable && to >= listEnd ? w : to;
-                    const auto bounds = D2D1::RectF(std::max(0.f, edge) + inset,
-                        headerOffset + inset, std::min(w, trailing) - inset, headerBottom - inset);
+                    const float pad = dockOn ? dockEdge + static_cast<float>(Scale96(1, dpi)) : 0.f;
+                    const auto bounds = dockOn ?
+                        D2D1::RectF(std::max(std::max(0.f, edge) + inset, dockL + pad),
+                            dockT + pad, std::min(std::min(w, trailing) - inset, dockR - pad), dockB - pad) :
+                        D2D1::RectF(std::max(0.f, edge) + inset,
+                            headerOffset + inset, std::min(w, trailing) - inset, headerBottom - inset);
                     FillSelectionRect(state, bounds, .45f * fade, nullptr, false, kMochaBlue);
                 }
                 const auto caption = ColumnTextBounds(state, columnIndex, true, listStart, listEnd, dpi);
@@ -15870,6 +15894,51 @@ void Paint(ViewState& state) {
                         state.sort.direction == SORT_DESCENDING, headerColor, fade);
             }
             if (compositionFrame.Widths()) compositionFrame.Background();
+            if (dockOn) {
+                // Thin separators between columns (none after the last one),
+                // running the inside height of the dock.
+                const size_t presented = state.columns.size()+state.disappearingColumns.size();
+                float lastTo = -1e9f;
+                for (size_t ci = 0; ci < presented; ++ci) {
+                    if (PresentedColumn(state,ci).opacity <= 0.f) continue;
+                    lastTo = std::max(lastTo, listStart + ColumnBounds(state, ci, true).second - state.horizontalScroll);
+                }
+                const float lineW = static_cast<float>(std::max(1, Scale96(1, dpi)));
+                for (size_t ci = 0; ci < presented; ++ci) {
+                    const auto& pc = PresentedColumn(state,ci);
+                    if (pc.opacity <= 0.f) continue;
+                    const float x = listStart + ColumnBounds(state, ci, true).second - state.horizontalScroll;
+                    if (x >= lastTo - .5f) continue;
+                    if (x <= dockL + dockEdge + lineW || x >= dockR - dockEdge - lineW) continue;
+                    Fill(state, x - lineW * .5f, dockT + dockEdge, x + lineW * .5f, dockB - dockEdge,
+                         kMochaSurface1, std::min(1.f, dockFade * (state.columnModeTransition ? 1.f : pc.opacity)));
+                }
+                // Dock edge: grey at rest, blue to mauve while the pointer is over the header.
+                D2D1_RECT_F er = D2D1::RectF(dockL, dockT, dockR, dockB);
+                if (state.rtlLayout) { const float l0 = er.left; er.left = w - er.right; er.right = w - l0; }
+                const float ew = std::max(1.f, dockEdge);
+                D2D1_ROUNDED_RECT rr = D2D1::RoundedRect(SnapDrawRect(state.target.Get(), er), dockRadius, dockRadius);
+                rr.rect.left += ew * .5f; rr.rect.top += ew * .5f;
+                rr.rect.right -= ew * .5f; rr.rect.bottom -= ew * .5f;
+                rr.radiusX = rr.radiusY = std::max(0.f, dockRadius - ew * .5f);
+                auto* rt = static_cast<ID2D1RenderTarget*>(state.target.Get());
+                bool drawn = false;
+                if (state.hoveredHeader >= 0) {
+                    D2D1_GRADIENT_STOP stops[2] = {{0.f, Packed(kMochaBlue, dockFade)}, {1.f, Packed(kMochaMauve, dockFade)}};
+                    ComPtr<ID2D1GradientStopCollection> coll;
+                    ComPtr<ID2D1LinearGradientBrush> grad;
+                    if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, &coll)) &&
+                        SUCCEEDED(rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(
+                            D2D1::Point2F(er.left, er.top), D2D1::Point2F(er.right, er.top)), coll.Get(), &grad))) {
+                        rt->DrawRoundedRectangle(rr, grad.Get(), ew);
+                        drawn = true;
+                    }
+                }
+                if (!drawn) {
+                    state.brush->SetColor(Packed(kMochaSurface2, dockFade));
+                    rt->DrawRoundedRectangle(rr, state.brush.Get(), ew);
+                }
+            }
             // The grabbed header is painted LAST, above the moving neighbors.
             // A subtle Shell-accent tint distinguishes it without inventing icons.
             const int floatingIndex = DraggedColumnIndex(state);
