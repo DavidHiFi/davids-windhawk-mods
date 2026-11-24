@@ -2,7 +2,7 @@
 // @id              seamless-download-manager
 // @name            Seamless Download Manager
 // @description     A fast tray download manager: downloads in parts, resumes where it stopped, takes browser links
-// @version         1.0.8
+// @version         1.0.9
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-download-manager
@@ -57,6 +57,11 @@ Windows.
 Everything the app can set is in the mod's own settings window: where files
 go, connections, speed limit, the browser link, name lookup, sounds, site
 rules and queues. This page only holds how the windows look.
+
+## What's new in 1.0.9
+
+- Title bar menus get the same blurred Mocha body as every other menu again. They
+  showed pitch black because the part that spots new menus stopped right after start.
 
 ## Credits
 
@@ -935,6 +940,23 @@ static VOID CALLBACK OnEvent(HWINEVENTHOOK, DWORD ev, HWND h, LONG obj, LONG chi
     }
 }
 
+static HMODULE g_hookSelf = nullptr;
+static HANDLE g_hookThread = nullptr, g_hookReady = nullptr;
+static DWORD g_hookThreadId = 0;
+static DWORD WINAPI HookThreadProc(LPVOID)
+{
+    MSG m;
+    PeekMessageW(&m, nullptr, 0, 0, PM_NOREMOVE);  // a queue, so WM_QUIT can reach this thread
+    DWORD pid = GetCurrentProcessId();
+    g_createHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE, g_hookSelf, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+    g_menuHook = SetWinEventHook(EVENT_SYSTEM_MENUSTART, EVENT_SYSTEM_MENUEND, g_hookSelf, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+    if (g_hookReady) SetEvent(g_hookReady);
+    while (GetMessageW(&m, nullptr, 0, 0) > 0) {}
+    for (HWINEVENTHOOK* hk : {&g_createHook, &g_menuHook})
+        if (*hk) { UnhookWinEvent(*hk); *hk = nullptr; }
+    return 0;
+}
+
 // onCreate (optional) runs for each new popup menu window, on its own thread, after creation.
 static VOID Init(VOID (*onCreate)(HWND))
 {
@@ -945,13 +967,23 @@ static VOID Init(VOID (*onCreate)(HWND))
     HMODULE self = nullptr;
     GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        reinterpret_cast<LPCWSTR>(&OnEvent), &self);
-    DWORD pid = GetCurrentProcessId();
-    g_createHook = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE, self, OnEvent, pid, 0, WINEVENT_INCONTEXT);
-    g_menuHook = SetWinEventHook(EVENT_SYSTEM_MENUSTART, EVENT_SYSTEM_MENUEND, self, OnEvent, pid, 0, WINEVENT_INCONTEXT);
+    g_hookSelf = self;
+    // Tool mods run init on the main thread, which exits right after, and Windows drops a
+    // thread's event hooks when it ends. Keep them on a small thread that lives with the mod.
+    if (!g_hookReady) g_hookReady = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    g_hookThread = CreateThread(nullptr, 0, HookThreadProc, nullptr, 0, &g_hookThreadId);
+    if (g_hookThread && g_hookReady) WaitForSingleObject(g_hookReady, 5000);
 }
 
 static VOID Uninit()
 {
+    if (g_hookThread) {  // the hook thread removes its own hooks on the way out
+        PostThreadMessageW(g_hookThreadId, WM_QUIT, 0, 0);
+        WaitForSingleObject(g_hookThread, 2000);
+        CloseHandle(g_hookThread);
+        g_hookThread = nullptr;
+    }
+    if (g_hookReady) { CloseHandle(g_hookReady); g_hookReady = nullptr; }
     for (HWINEVENTHOOK* hk : {&g_createHook, &g_menuHook})
         if (*hk) { UnhookWinEvent(*hk); *hk = nullptr; }
     {

@@ -1355,7 +1355,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.8"
+    "version": "1.0.9"
   },
   "local@parallax-wallpaper": {
     "disabled": false,
