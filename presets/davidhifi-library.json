@@ -262,15 +262,6 @@
       }
     },
     {
-      "id": "custom-cmd-startup-text",
-      "name": "Custom Command Prompt Startup Text",
-      "version": "1.0.0",
-      "enabled": true,
-      "settings": {
-        "startup_text": ""
-      }
-    },
-    {
       "id": "custom-cmd-ver-command-text",
       "name": "Custom CMD \"ver\" Command Text",
       "version": "1.0",
