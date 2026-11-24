@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id              theme-tool-plus
 // @name            Theme Tool Plus
-// @description     Switch Windows themes from the settings tab. Comes with the Main 01 Catppuccin theme, cursors and sounds
-// @version         1.2.0
+// @description     Switch Windows themes from the settings tab. Comes with DavidHiFi's Theme: Catppuccin Mocha with matching cursors and sounds
+// @version         1.3.0
 // @author          DavidHiFi, rounk-ctrl, namazso
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         explorer.exe
@@ -11,7 +11,7 @@
 // @include         systemsettings.exe
 // @include         logonui.exe
 // @include         rundll32.exe
-// @compilerOptions -lole32 -loleaut32 -luser32 -lgdi32 -ldwmapi -lwininet -lbcrypt -lshlwapi
+// @compilerOptions -lole32 -loleaut32 -luser32 -lgdi32 -ldwmapi -lwininet -lbcrypt -lshlwapi -ladvapi32
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // ==/WindhawkMod==
 
@@ -20,12 +20,18 @@
 # Theme Tool Plus
 
 Apply and switch custom Windows themes from the mod's settings tab. It comes
-with a ready-made theme pack: Main 01 (Catppuccin Mocha Night with Catppuccin
+with a ready-made theme pack: DavidHiFi's Theme (Catppuccin Mocha Night with Mocha
 cursors, a full sound scheme and its wallpaper) plus the six Catppuccin
 themes. The theme signature patch from UXTheme hook is built in, so unsigned
 themes load without changing system files or running a separate theme tool.
 
 ![Theme Tool Plus preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/theme-tool-plus.png)
+
+## What's new in 1.3.0
+- The bundled theme is now called **DavidHiFi's Theme** (it was Main 01). If you had
+  Main 01 picked, the mod switches the setting over for you.
+- New cursors in that theme: the Mocha base fill, a blue to mauve edge, and
+  one smooth spinning arc on the loading cursors.
 
 ## Features
 - **Theme pack included.** On first run the mod downloads the pack (about
@@ -50,7 +56,7 @@ themes load without changing system files or running a separate theme tool.
 
 Open the mod's settings tab.
 
-1. Under **Theme**, pick the theme you want. Pick **Main 01** for the full
+1. Under **Theme**, pick the theme you want. Pick **DavidHiFi's Theme** for the full
    look: window style, wallpaper, cursor and sounds.
 2. Turn on **Switch theme when I save**.
 3. Click **Save settings**. The theme switches right away.
@@ -88,10 +94,11 @@ LGPL-2.1.
 /*
 - themeName: ""
   $name: Theme
-  $description: The theme to switch to. Main 01 is the one that comes with this mod, with its own wallpaper, cursor and sounds. To switch, pick a theme, turn on "Switch theme when I save" below, then click Save settings.
+  $description: The theme to switch to. DavidHiFi's Theme is the one that comes with this mod, with its own wallpaper, cursor and sounds. To switch, pick a theme, turn on "Switch theme when I save" below, then click Save settings.
   $options:
   - "": Keep my current theme
   - "*": A theme not in this list (type its name below)
+  - DavidHiFi's Theme: DavidHiFi's Theme
   - Captured Motion: Captured Motion
   - catppuccin Latte: Catppuccin Latte
   - catppuccin Latte Win: Catppuccin Latte Win
@@ -101,7 +108,6 @@ LGPL-2.1.
   - catppuccin Mocha Win: Catppuccin Mocha Win
   - Flow: Flow
   - Glow: Glow
-  - Main 01: Main 01
   - Sunrise: Sunrise
   - Windows (dark): Windows (dark)
   - Windows (light): Windows (light)
@@ -111,7 +117,7 @@ LGPL-2.1.
   $description: Only used when Theme is set to "A theme not in this list". Type the name exactly as it appears in Windows Settings under Personalization > Themes.
 - installPack: true
   $name: Download the themes that come with this mod
-  $description: Downloads Main 01 and the Catppuccin themes, with their cursors and sounds (about 8 MB), the first time the mod runs. Your current theme doesn't change. Turn this off if you only want your own themes.
+  $description: Downloads DavidHiFi's Theme and the Catppuccin themes, with their cursors and sounds (about 8 MB), the first time the mod runs. Your current theme doesn't change. Turn this off if you only want your own themes.
 - applyOnSettingsChange: false
   $name: Switch theme when I save
   $description: When this is on, clicking Save settings switches to the theme picked above.
@@ -189,6 +195,9 @@ LGPL-2.1.
 #include <climits>
 #include <cstdarg>
 #include <cwchar>
+
+static const wchar_t kThemeName[] = L"DavidHiFi's Theme";
+static const wchar_t kOldThemeName[] = L"Main 01";
 
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
@@ -368,6 +377,10 @@ static void LoadSettings() {
         CopyStringSetting(g_settings.themeName, ARRAYSIZE(g_settings.themeName), L"otherThemeName");
         StrTrimW(g_settings.themeName, L" \t");
     }
+    // The bundled theme was called Main 01 up to 1.2.0.
+    if (lstrcmpiW(g_settings.themeName, kOldThemeName) == 0) {
+        lstrcpyW(g_settings.themeName, kThemeName);
+    }
     // The action is a string option; reading it as an int always gave 0.
     wchar_t action[32];
     CopyStringSetting(action, ARRAYSIZE(action), L"action");
@@ -447,16 +460,16 @@ constexpr UINT_PTR kApplyRetryTimer = 1;
 // ---------------------------------------------------------------------------
 // Theme pack (windhawk.exe only)
 // ---------------------------------------------------------------------------
-// Downloads Main 01 and the Catppuccin themes, cursors and sounds into
+// Downloads DavidHiFi's Theme and the Catppuccin themes, cursors and sounds into
 // %WINDIR%\Resources\Themes. Windows loads a theme's .msstyles only from
 // there; the same file in a user folder is ignored. Windhawk's own process
 // runs elevated, so it does the install. The zip is downloaded into the
 // admin-only pack folder and checked against kPackSha256 before it is opened.
 
 static const wchar_t kPackUrl[] =
-    L"https://github.com/DavidHiFi/davids-windhawk-mods/releases/download/theme-tool-plus-pack-v1/theme-tool-plus-pack.zip";
-static const char kPackSha256[] = "DED3EFBC60063A227934A4F9D9885404B25CC4F7039FF8FA4D460CE9A2708E1D";
-static const int kPackVersion = 1;
+    L"https://github.com/DavidHiFi/seamless-workshop/releases/download/theme-tool-plus-pack-v2/theme-tool-plus-pack.zip";
+static const char kPackSha256[] = "C4CA9B14EB7F1E59F7285406613E78956569130AACF8A8AB45075BCC1057EAAB";
+static const int kPackVersion = 2;
 static const char kThemeMarker[] = "; Installed by Theme Tool Plus";
 
 static HANDLE g_packThread;
@@ -618,6 +631,29 @@ static int CopyPackThemes(PCWSTR themesDir, PCWSTR packDir) {
     return copied;
 }
 
+// Pack 1 shipped the bundled theme as Main 01. Remove that copy once the
+// renamed one is in place, unless Windows is still using it right now.
+static void RemoveOldMainTheme(PCWSTR themesDir, PCWSTR packDir) {
+    wchar_t oldTheme[MAX_PATH], current[MAX_PATH] = L"", path[MAX_PATH];
+    _snwprintf(oldTheme, MAX_PATH - 1, L"%s\\%s.theme", themesDir, kOldThemeName);
+    oldTheme[MAX_PATH - 1] = L'\0';
+    DWORD size = sizeof(current);
+    RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes", L"CurrentTheme",
+                 RRF_RT_REG_SZ, nullptr, current, &size);
+    bool inUse = lstrcmpiW(current, oldTheme) == 0;
+    if (!inUse && GetFileAttributesW(oldTheme) != INVALID_FILE_ATTRIBUTES && FileHasMarker(oldTheme)) {
+        DeleteFileW(oldTheme);
+    }
+    _snwprintf(path, MAX_PATH - 1, L"%s\\themes\\%s.theme", packDir, kOldThemeName);
+    path[MAX_PATH - 1] = L'\0';
+    DeleteFileW(path);
+    if (!inUse) {
+        _snwprintf(path, MAX_PATH - 1, L"%s\\Wallpapers\\%s.jpg", packDir, kOldThemeName);
+        path[MAX_PATH - 1] = L'\0';
+        DeleteFileW(path);
+    }
+}
+
 static DWORD WINAPI PackThreadProc(LPVOID param) {
     bool force = param != nullptr;
     HANDLE mutex = CreateMutexW(nullptr, FALSE, L"Global\\ThemeToolPlusPackInstall");
@@ -652,6 +688,7 @@ static DWORD WINAPI PackThreadProc(LPVOID param) {
         if (!g_packCancel && InstalledPackVersion(packDir) >= kPackVersion) {
             int copied = CopyPackThemes(themesDir, packDir);
             if (copied) Wh_Log(L"Theme pack: added %d themes", copied);
+            RemoveOldMainTheme(themesDir, packDir);
         }
     }
     ReleaseMutex(mutex);
