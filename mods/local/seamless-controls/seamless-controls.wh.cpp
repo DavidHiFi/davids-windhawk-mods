@@ -2,7 +2,7 @@
 // @id              seamless-controls
 // @name            Seamless Controls
 // @description     Rounded, Mocha dark buttons, boxes, tabs and lists in every classic Windows window
-// @version         1.0.8
+// @version         1.0.9
 // @author          DavidHiFi, crazyboyybs
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -106,6 +106,11 @@ windows are left out, since they have no classic controls.
 
 Click the tray icon for the settings window, or change them here in Windhawk. Both show
 the same settings.
+
+## What's new in 1.0.9
+
+- Right-click menus lose the thin grey square line just inside their rounded border.
+  Only the rounded border is left.
 
 ## What's new in 1.0.8
 
@@ -43727,10 +43732,15 @@ HRESULT WINAPI GetThemeColor_hook(HTHEME hTheme, int iPartId, int iStateId,
         }
     }
 
-    // Context menu fill colors — tell system to use dark bg for all menu parts
+    // Context menu fill colors — tell system to use dark bg for all menu parts.
+    // With the acrylic backdrop on, answer black like every other menu part:
+    // user32 fills the thin margin inside the menu with this colour, and grey
+    // there showed as a squared line just inside the rounded border.
     if (g_darkModeActive && cls == L"Menu"
         && (iPropId == TMT_FILLCOLOR || iPropId == TMT_FILLCOLORHINT)) {
-        *pColor = RGB(0x2E, 0x2E, 0x2E);
+        *pColor = (g_settings.ModernContextMenus && MenuUseTransparentBackdrop())
+            ? RGB(0, 0, 0)
+            : RGB(0x2E, 0x2E, 0x2E);
         return S_OK;
     }
 
