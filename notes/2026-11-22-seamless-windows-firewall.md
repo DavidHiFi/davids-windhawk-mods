@@ -175,10 +175,98 @@ waits until answered (the app stays blocked meanwhile, as with Windows).
   box came up in 1.3 s centred, alpha 255, the app in front kept the keyboard, Esc saved Block and
   the test rule was removed. Clips: panel-from-tray and connection-box-motion (mp4 and gif).
 
+## 1.2.3: glass and open and close motion (11-24)
+
+- Owner, 11-24: the box glass was "a bit flat"; every panel and box opens and closes with a
+  fade plus a short slide, on by default, with its own on/off and a speed that follows the
+  global speed (HKCU\Software\DavidHiFi\Motion), still when Windows animations are off.
+- core.cpp (backups src\core.cpp.bak-20261124-pre-123 to pre-123d): the panel is layered only
+  while it moves. A kept frame is pushed with UpdateLayeredWindow at the slid position with
+  alpha rising over about 160 ms (ease-out) on open and 120 ms (ease-in) on close; once
+  settled the layer drops and the real glass goes on, so DWM glass is never faded. New
+  settings flyoutAnimation and animationSpeed on a Motion page (spec.py, settings-block.cpp).
+- First test PC runs: 25 of 34. Box glass and box motion passed; every panel check after the
+  first open was out of step. Trace (temporary TRACE123C lines, removed before release by
+  untrace123c.py) showed the motion code was right: the panel's first paint took 3.5 s on the
+  cold test PC (later paints about 6 ms), so the test's next input landed mid-stall and every
+  toggle after it was one behind. Slow parts: GDI+ font loading for the text and icon faces
+  and the first app icon extraction.
+- Fix: WarmPanelDraw, two seconds after the mod starts, draws the panel's fonts once into a
+  small bitmap and loads every listed app's icon into the cache, so the first real open is fast.
+- Build and test ran through `D:\Agent Work\swf-123\lowrun.py` (queue skipped as the owner
+  asked; idle priority, 40% cap, 10% while the owner plays). The test PC VM sits outside that
+  cap, so chain-d.sh holds the VM run while the owner plays. test\compile.log starts with a
+  byte-order mark: match "exit 0" anywhere on the line, never "^exit".
+- gen.py now stops at the icon glyph patch because the key click donor changed since 4:22 am;
+  settings-block.cpp and settings.yaml from 4:22 are current, so 1.2.3 builds from
+  assemble.py alone. Fix gen.py's patch list before the next settings change.
+
+## 1.2.5: right-click menu for apps, replacing Sordum's Firewall App Blocker (11-26)
+
+- Owner, 11-26: remove the installed Sordum Firewall App Blocker right-click menu and merge it
+  into this mod, so a right-click on a program blocks or allows it the same way, with a setting
+  to turn the menu entry off. 1.2.4 (another thread, icon only) shipped meanwhile, so this is
+  1.2.5 on top of it (its plateless shield icon ported into core.cpp and gen.py).
+- What Sordum had: HKLM\SOFTWARE\Classes\exefile\shell\WinFirewall, "&Firewall App Blocker"
+  with Block In Windows Firewall (`Fab.exe /A "%1"`), Remove From Windows Firewall (`/D`) and
+  Launch, plus the program folder C:\Program Files\Firewall App Blocker (Fab.exe, Fab.ini, v1.9
+  from 2022). No service, task, startup entry, uninstall entry or rule group of its own.
+- What the mod does now (setting contextMenu, page General, on by default): a "Seamless Windows
+  Firewall" submenu on every program file with Block in Windows Firewall, Allow again (remove the
+  block) and Open the firewall panel. The keys live under HKCU\Software\Classes\exefile\shell\
+  SeamlessFirewall (HKLM when the mod runs as SYSTEM), written when the mod starts or the setting
+  turns on, removed when it turns off or the mod stops.
+- How a click gets to the mod: the menu runs windhawk-mod.exe with `-windhawk-tool-mod
+  "local@seamless-windows-firewall" -swf-block "<exe>"`. The engine loads the mod into that copy,
+  whose static constructor sends the request to the running tool's message-only window
+  (WM_COPYDATA) and ends itself before any tool code starts. The tool checks the setting, real
+  input in the last 15 s, that the sender is windhawk-mod.exe from its own folder, and that the
+  path is an existing .exe. Block adds permanent Windows Firewall rules (out, plus in when the
+  default direction blocks both; group "Seamless Windows Firewall"; protected and system apps
+  refused). Allow again removes every block rule for that program (Sordum's old ones too) and
+  keeps allow rules.
+- Test PC: swf-test.ps1 section 5 (menu keys follow the setting; Block and Allow again run as the
+  tester's normal rights through a scheduled task; no helper copies left; no second tool).
+  chain-f.sh, 45 checks.
+- Run 1 (2:55 am): 39/45. The test PC's Windhawk 1.7.3 has no windhawk-mod.exe (tool mods run
+  inside windhawk.exe there), so the mod left the menu off. Fix: CtxForwarderExe falls back to
+  the host exe when it is windhawk.exe, and the test reads the helper from the menu command.
+  The tower (2.0 alpha) has windhawk-mod.exe, so it keeps the first path.
+- Run 2 (3:14 am): 43/45. Block, Allow again and Open all worked through the 1.7 helper; block
+  rules land in PersistentStore. The two left: the menu was missing at first start because a
+  setting new in an update is not in the registry yet and reads as 0. Fix: contextMenu=1 added
+  to test\elevated-install.ps1's new-setting defaults (backup .bak-20261126-pre125) and to the
+  test PC's defaults.json.
+- Run 3 (3:28 am): 45/45 passed, crash dumps 0. Install queued on the windhawk-engine lock
+  (held by tray-folder-gap); chain-f retries every 10 s.
+- Sordum removed from the tower (3:42 am, test\elevated-remove-sordum.ps1 and -lnk.ps1, log
+  C:\Users\Public\remove-sordum.log). Old: HKLM\SOFTWARE\Classes\exefile\shell\WinFirewall,
+  C:\Program Files\Firewall App Blocker (Fab.exe, Fab.ini) and the Start menu shortcut
+  "Firewall App Blocker.lnk". New: all three gone. Its firewall rules were left in place (an
+  audit found none that look like its own). Rollback: `reg import "backups\sordum-fab-winfirewall
+  .bak-20261126-0244.reg"`, copy backups\sordum-firewall-app-blocker.bak-20261126-0244\Fab.* back
+  to C:\Program Files\Firewall App Blocker and the .lnk back to ProgramData\...\Start Menu\Programs.
+- Tower install (6:22 am, detached chain D:\Agent Work\swf-123\finish-125.ps1, log finish-125.log):
+  registry 1.2.4 to 1.2.5, desktop fine 60 s after loading, mods pushed 04604c0, feed 855c681.
+  Windows' own "allow this app" pop-up stays off on all three profiles.
+- Tower captures (6:44 am, media\live\1.2.5): panel opens centred from the tray and closes on a
+  second click; box centred, app in front kept the keyboard, Esc saved Block, test rule removed;
+  tray menu and settings shown; our menu key present, Sordum's gone. Clips: connection-box-motion
+  and panel-from-tray (mp4 and gif). Edges #585B70 on all four sides.
+- The right-click submenu shot failed in that run: the capture runs elevated and the elevated
+  script did not set COOP_AGENT, so the window manager kept Explorer from the front and the keys
+  went nowhere. "menu_helpers_left 1" was the check's own PowerShell (its command line holds the
+  search text); no -swf- helper was running. Retake: test\capture-menu-125.py through
+  menu-when-free-125.ps1 and elevated-menu-125.ps1 (sets COOP_AGENT), log D:\Agent Work\swf-123\menu-125.log.
+- Glass: still WARN flat over the open panel (ratio 0.06, movement 0.3). The fill is already
+  0.40, the bottom of the rice range, and the backdrop is the dark panel blurred by acrylic, so
+  nothing colourful is there to move. Kept as is; open item 1 below now says why.
+
 ## Open
 
-1. The connection box's glass reads flat over the open panel (movement 0.4, same as 1.1.0's
-   0.26). Not changed by 1.2.2; lighten its tint in a later pass and recheck with glass-check.
+1. The connection box's glass reads flat over the open panel (1.2.5: movement 0.3). Its fill is
+   0.40, the lowest the rice allows; going lower leaves the style. A fair check needs the box
+   over a colourful backdrop rather than the dark panel.
 2. The panel's own glass: the app list fills it, so the box over the panel is the measured
    floating surface. The box is modal, so the unfocused-glass check does not apply to it.
 
