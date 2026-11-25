@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.11
+// @version         0.3.13
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,6 +26,19 @@ the edge of the screen across from your taskbar, so you get a clean bar on one
 side and a dock on the other, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
+
+## What's new in 0.3.13
+
+- Windows from your Windhawk mods each get their own icon on the dock, with the
+  mod's own name and icon. Before, every mod's window shared one plain
+  Windhawk icon called "Windhawk mod".
+- The Windows Settings window shows the Catppuccin settings icon, the same one
+  its title bar has, when Mocha App Icons is on.
+
+## What's new in 0.3.12
+
+- The title pill no longer creeps back over the taskbar's right-click menu
+  while the menu stays open. It tucks under the menu and stays there.
 
 ## What's new in 0.3.11
 
@@ -493,6 +506,108 @@ std::wstring WindowTitle(HWND h) {
     return std::wstring(buf, std::max(0, n));
 }
 
+// Windhawk runs each tool mod in its own windhawk-mod.exe, so the program's own
+// name is "Windhawk mod" for all of them. The mod's id is on the process's
+// command line, and its name is in the mod's source header.
+bool IsModHost(const std::wstring& exeLower) {
+    return FileName(exeLower).rfind(L"windhawk-mod", 0) == 0;
+}
+
+std::wstring ModIdOfPid(DWORD pid) {
+    using NtQip = LONG(NTAPI*)(HANDLE, ULONG, PVOID, ULONG, PULONG);
+    static NtQip query = (NtQip)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtQueryInformationProcess");
+    if (!query) return L"";
+    HANDLE p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!p) return L"";
+    constexpr ULONG kCommandLine = 60;  // ProcessCommandLineInformation
+    std::vector<BYTE> buf(8192);
+    ULONG got = 0;
+    LONG st = query(p, kCommandLine, buf.data(), (ULONG)buf.size(), &got);
+    if (st < 0 && got > buf.size()) {
+        buf.resize(got);
+        st = query(p, kCommandLine, buf.data(), (ULONG)buf.size(), &got);
+    }
+    CloseHandle(p);
+    if (st < 0) return L"";
+    struct Ustr {
+        USHORT len, max;
+        PWSTR text;
+    };
+    auto* us = (Ustr*)buf.data();
+    if (!us->text || !us->len) return L"";
+    std::wstring cmd(us->text, us->len / sizeof(wchar_t));
+    size_t i = cmd.find(L"-tool-mod ");
+    if (i == std::wstring::npos) return L"";
+    i += 10;
+    while (i < cmd.size() && cmd[i] == L' ') i++;
+    wchar_t end = L' ';
+    if (i < cmd.size() && cmd[i] == L'"') {
+        end = L'"';
+        i++;
+    }
+    size_t e = cmd.find(end, i);
+    return cmd.substr(i, e == std::wstring::npos ? std::wstring::npos : e - i);
+}
+
+std::wstring ModNameOfId(const std::wstring& id) {
+    static std::unordered_map<std::wstring, std::wstring> cache;
+    if (id.empty()) return L"";
+    auto c = cache.find(id);
+    if (c != cache.end()) return c->second;
+    std::wstring name;
+    wchar_t pd[MAX_PATH] = {};
+    if (GetEnvironmentVariableW(L"ProgramData", pd, MAX_PATH)) {
+        std::wstring path = std::wstring(pd) + L"\\Windhawk\\ModsSource\\" + id + L".wh.cpp";
+        HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                               nullptr, OPEN_EXISTING, 0, nullptr);
+        if (f != INVALID_HANDLE_VALUE) {
+            char head[8192];
+            DWORD n = 0;
+            if (ReadFile(f, head, sizeof(head) - 1, &n, nullptr)) {
+                std::string h(head, n);
+                size_t at = h.find("// @name ");
+                if (at != std::string::npos) {
+                    at += 9;
+                    size_t e = h.find_first_of("\r\n", at);
+                    std::string v = h.substr(at, e == std::string::npos ? std::string::npos : e - at);
+                    size_t a = v.find_first_not_of(" \t"), b = v.find_last_not_of(" \t");
+                    if (a != std::string::npos) {
+                        v = v.substr(a, b - a + 1);
+                        int wn = MultiByteToWideChar(CP_UTF8, 0, v.data(), (int)v.size(), nullptr, 0);
+                        name.resize(wn);
+                        MultiByteToWideChar(CP_UTF8, 0, v.data(), (int)v.size(), name.data(), wn);
+                    }
+                }
+            }
+            CloseHandle(f);
+        }
+    }
+    cache[id] = name;
+    return name;
+}
+
+// The mod's name, or the window's title without a trailing " settings" when the
+// mod can't be told (an elevated mod hides its command line).
+std::wstring ModWindowName(const std::wstring& id, HWND h) {
+    std::wstring n = ModNameOfId(id);
+    if (!n.empty()) return n;
+    n = WindowTitle(h);
+    constexpr PCWSTR tail = L" settings";
+    size_t tl = wcslen(tail);
+    if (n.size() > tl && _wcsicmp(n.c_str() + n.size() - tl, tail) == 0) n.resize(n.size() - tl);
+    return n;
+}
+
+// Apps Windows draws without an icon file of their own, given the icon Mocha App
+// Icons puts on their window.
+std::wstring ThemedIconFile(const std::wstring& src) {
+    if (Lower(src).find(L"windows.immersivecontrolpanel_cw5n1h2txyewy!") == std::wstring::npos) return L"";
+    wchar_t la[MAX_PATH] = {};
+    if (!GetEnvironmentVariableW(L"LOCALAPPDATA", la, MAX_PATH)) return L"";
+    std::wstring path = std::wstring(la) + L"\\Mocha App Icons\\Settings\\Settings-Catppuccin.ico";
+    return GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES ? L"" : path;
+}
+
 UINT MonitorDpi(HMONITOR mon) {
     UINT x = 96, y = 96;
     if (FAILED(GetDpiForMonitor(mon, MDT_EFFECTIVE_DPI, &x, &y))) return 96;
@@ -940,6 +1055,14 @@ bool IconFromHicon(HICON hi, int size, Icon& ic) {
     return ok;
 }
 
+bool IconFromFile(const std::wstring& path, int size, Icon& ic) {
+    HICON hi = (HICON)LoadImageW(nullptr, path.c_str(), IMAGE_ICON, size, size, LR_LOADFROMFILE);
+    if (!hi) return false;
+    bool ok = IconFromHicon(hi, size, ic);
+    DestroyIcon(hi);
+    return ok;
+}
+
 bool IconFromWindow(HWND h, int size, Icon& ic) {
     DWORD_PTR r = 0;
     HICON hi = nullptr;
@@ -970,10 +1093,16 @@ Icon* GetIcon(const std::wstring& src, const std::wstring& alt, HWND win, int si
         if (GetTickCount64() < it->second.retryAt) return nullptr;
     }
     Icon ic;
-    if (src.rfind(L"recycle:", 0) == 0)
+    std::wstring themed = ThemedIconFile(src);
+    if (src.rfind(L"recycle:", 0) == 0) {
         IconFromRecycle(src == L"recycle:full", size, ic);
-    else if (!IconFromShell(src, size, ic) && !IconFromShell(alt, size, ic) && win)
+    } else if (src.rfind(L"win:", 0) == 0) {
+        if (win) IconFromWindow(win, size, ic);
+    } else if (!themed.empty() && IconFromFile(themed, size, ic)) {
+        // the themed icon
+    } else if (!IconFromShell(src, size, ic) && !IconFromShell(alt, size, ic) && win) {
         IconFromWindow(win, size, ic);
+    }
     auto& slot = g_icons[key];
     slot = std::move(ic);
     if (slot.px.empty()) slot.retryAt = GetTickCount64() + 30000;
@@ -996,7 +1125,7 @@ ID2D1Bitmap* IconBitmap(Surface& s, Icon* ic) {
 // Open windows and dock items
 // ---------------------------------------------------------------------------
 struct WinMeta {
-    std::wstring aumid, exe;
+    std::wstring aumid, exe, mod;  // mod: the Windhawk mod's id, for windhawk-mod.exe windows
 };
 std::unordered_map<HWND, WinMeta> g_winMeta;
 std::set<HWND> g_flash;
@@ -1177,7 +1306,7 @@ bool Rebuild(bool force = false) {
     EnumWindows(CollectWin, (LPARAM)&zorder);
 
     std::unordered_map<HWND, WinMeta> meta;
-    std::unordered_map<DWORD, std::wstring> exeByPid;
+    std::unordered_map<DWORD, std::wstring> exeByPid, modByPid;
     for (HWND h : zorder) {
         auto it = g_winMeta.find(h);
         // An empty answer is looked up again: the window may have been too new to tell.
@@ -1189,7 +1318,13 @@ bool Rebuild(bool force = false) {
         GetWindowThreadProcessId(h, &pid);
         auto e = exeByPid.find(pid);
         if (e == exeByPid.end()) e = exeByPid.emplace(pid, ExeOfPid(pid)).first;
-        meta[h] = WinMeta{WindowAumid(h), e->second};
+        WinMeta wm{WindowAumid(h), e->second};
+        if (IsModHost(Lower(wm.exe))) {
+            auto md = modByPid.find(pid);
+            if (md == modByPid.end()) md = modByPid.emplace(pid, ModIdOfPid(pid)).first;
+            wm.mod = md->second;
+        }
+        meta[h] = wm;
     }
     g_winMeta = meta;
 
@@ -1218,7 +1353,11 @@ bool Rebuild(bool force = false) {
         if (at < 0) {
             // With neither an id nor a program, each window stands alone; an empty
             // "e:" would fold every unknown window into one icon.
+            // Every mod's window comes from windhawk-mod.exe; each mod is an app of its own.
+            bool modHost = m.aumid.empty() && IsModHost(exeLower);
             std::wstring key = !m.aumid.empty() ? L"a:" + Lower(m.aumid)
+                               : modHost   ? (!m.mod.empty() ? L"m:" + Lower(m.mod)
+                                                             : L"w:" + std::to_wstring((UINT_PTR)h))
                                : !exeLower.empty() ? L"e:" + exeLower
                                                    : L"w:" + std::to_wstring((UINT_PTR)h);
             for (int i = g_pinnedCount; i < (int)items.size() && at < 0; i++)
@@ -1231,16 +1370,21 @@ bool Rebuild(bool force = false) {
                 bool knownId = false;
                 if (!m.aumid.empty()) it.iconSrc = L"shell:AppsFolder\\" + m.aumid;
                 if (!host) it.iconAlt = m.exe;
+                if (modHost) {
+                    it.iconSrc = L"win:" + key;  // the mod's own window icon
+                    it.iconAlt.clear();
+                }
                 // Asking the shell and reading the program's version info is slow, and
                 // Rebuild runs on every window event. Look each app up once.
                 auto nm = g_names.find(key);
                 if (nm == g_names.end()) {
                     NameInfo ni;
+                    if (modHost) ni.name = ModWindowName(m.mod, h);
                     if (!m.aumid.empty()) {
                         ni.name = ShellDisplayName(it.iconSrc);
                         ni.knownId = !ni.name.empty();
                     }
-                    if (ni.name.empty() && !host) ni.name = FileDescription(m.exe);
+                    if (ni.name.empty() && !host && !modHost) ni.name = FileDescription(m.exe);
                     nm = g_names.emplace(key, ni).first;
                 }
                 it.name = nm->second.name;
@@ -2616,6 +2760,11 @@ void TitleApp(HWND h) {
         }
     auto m = g_winMeta.find(h);
     if (m == g_winMeta.end() || m->second.exe.empty()) return;
+    if (IsModHost(Lower(m->second.exe))) {
+        g_titleSrc = L"win:" + std::to_wstring((UINT_PTR)h);
+        g_titleApp = ModWindowName(m->second.mod, h);
+        return;
+    }
     g_titleAlt = m->second.exe;
     g_titleApp = FileDescription(m->second.exe);
     if (g_titleApp.empty()) g_titleApp = StripExt(FileName(m->second.exe));
@@ -2669,8 +2818,40 @@ bool TitleOverMenu(HWND tray) {
     return false;
 }
 
+bool OverPill(HWND w) {
+    RECT pr, r;
+    return w && IsWindowVisible(w) && GetWindowRect(g_title, &pr) && GetWindowRect(w, &r) &&
+           IntersectRect(&r, &r, &pr);
+}
+
+bool IsBelow(HWND a, HWND b) {
+    int n = 0;
+    for (HWND w = GetWindow(a, GW_HWNDNEXT); w && n < 256; w = GetWindow(w, GW_HWNDNEXT), n++)
+        if (w == b) return true;
+    return false;
+}
+
+// The lowest open bar menu that covers the pill. The pill goes right under it,
+// wherever it sits, so the bar lifting itself or the pill can never leave the
+// pill drawn on top of the menu.
+// Always-on-top only: a menu over the bar is, and a plain Explorer window
+// dragged over the bar must never pull the pill under the bar.
+HWND LowestMenuOverPill() {
+    HWND low = nullptr;
+    for (HWND m : g_zWatch)
+        if (OverPill(m) && (GetWindowLongW(m, GWL_EXSTYLE) & WS_EX_TOPMOST) && (!low || IsBelow(low, m)))
+            low = m;
+    return low;
+}
+
 void RaiseTitle() {
     if (!g_title || !IsWindowVisible(g_title)) return;
+    if (HWND menu = LowestMenuOverPill()) {
+        if (GetWindow(menu, GW_HWNDNEXT) != g_title)
+            SetWindowPos(g_title, menu, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOSENDCHANGING);
+        return;
+    }
     HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
     if (!tray) return;
     bool under = false;
@@ -2709,11 +2890,12 @@ void StartRaiseBurst() {
     ArmRaiseTimer(false);
 }
 
+// Only a watched window that covers the pill keeps the 15 ms check going.
 bool MenuWatchOpen() {
     bool any = false;
     for (HWND& w : g_zWatch) {
         if (w && !IsWindowVisible(w)) w = nullptr;
-        if (w) any = true;
+        if (OverPill(w)) any = true;
     }
     return any;
 }
@@ -2723,6 +2905,11 @@ void WatchMenu(HWND h) {
         if (w == h) return;
     for (HWND& w : g_zWatch)
         if (!w || !IsWindowVisible(w)) {
+            w = h;
+            return;
+        }
+    for (HWND& w : g_zWatch)
+        if (!OverPill(w)) {
             w = h;
             return;
         }
@@ -2749,16 +2936,18 @@ void CALLBACK ZEventProc(HWINEVENTHOOK, DWORD ev, HWND h, LONG idObj, LONG idChi
     StartRaiseBurst();
 }
 
-// Same process: our own windows and the taskbar's menus. Only a top-level
-// window that opens over the pill counts, so other Explorer windows cost nothing.
+// Same process: our own windows and the taskbar's menus. A menu can open small
+// or off to the side and move over the pill a moment later, so any always-on-top
+// popup counts; RaiseTitle only acts on the ones that end up over the pill.
 void CALLBACK ZOwnEventProc(HWINEVENTHOOK, DWORD ev, HWND h, LONG idObj, LONG idChild, DWORD, DWORD) {
     if (!h || h == g_title || !g_title || !IsWindowVisible(g_title)) return;
     if (ev == EVENT_OBJECT_SHOW || ev == EVENT_SYSTEM_MENUPOPUPSTART) {
         if (ev == EVENT_OBJECT_SHOW && (idObj != OBJID_WINDOW || idChild != CHILDID_SELF)) return;
         HWND root = GetAncestor(h, GA_ROOT);
         if (!root || root == g_title || root == g_dock) return;  // the dock never covers the bar
-        RECT pr, r;
-        if (!GetWindowRect(g_title, &pr) || !GetWindowRect(root, &r) || !IntersectRect(&r, &r, &pr)) return;
+        if (!OverPill(root) && (!(GetWindowLongW(root, GWL_EXSTYLE) & WS_EX_TOPMOST) ||
+                                !(GetWindowLongW(root, GWL_STYLE) & WS_POPUP)))
+            return;
         WatchMenu(root);
     } else if (idObj != OBJID_WINDOW || idChild != CHILDID_SELF) {
         return;
@@ -3010,6 +3199,7 @@ void UpdateTitle(bool force) {
     if (!shown) {
         ShowWindow(g_title, SW_SHOWNOACTIVATE);
         SetWindowPos(g_title, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        RaiseTitle();  // a menu may already be open over the spot
         SetTimer(g_dock, kTimerTitle, 50, nullptr);
     } else {
         RaiseTitle();
@@ -3025,6 +3215,8 @@ void TitleHoverTick() {
         g_titleTick = 0;
         return;
     }
+    // Backstop, at most 50 ms late: whatever lifted the pill, put it back.
+    RaiseTitle();
     POINT pt;
     GetCursorPos(&pt);
     float target = PtInRect(&g_titleRect, pt) ? 1.f : 0.f;
