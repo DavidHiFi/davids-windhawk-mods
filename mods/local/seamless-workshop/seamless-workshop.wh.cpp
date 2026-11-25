@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.5.6
+// @version         1.5.7
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -35,6 +35,12 @@ Needs the latest Windhawk alpha.
 - Use DavidHiFi's settings for one mod, or copy his whole setup in one go:
   every mod he runs, with or without his settings, on a clean slate if you
   like. Your current mods are backed up first, so you can always go back.
+
+## What's new in 1.5.7
+
+- The taskbar stats and the FPS overlay read the sensors themselves now.
+  The Workshop sets up PawnIO, a small signed helper for the CPU readings,
+  instead of HWiNFO. HWiNFO stays on the Extras page if you want it.
 
 ## What's new in 1.5.4
 
@@ -127,7 +133,7 @@ DavidHiFi's settings, any setting like that keeps your own value.
   $description: "New versions of DavidHiFi's mods and of Seamless Workshop go in within the hour. Your settings stay."
 - autoDeps: true
   $name: "Set up the apps a mod needs"
-  $description: "When one of your mods needs another app, such as HWiNFO for the taskbar stats, it is installed and kept up to date."
+  $description: "When one of your mods needs another app, such as PawnIO for the CPU readings, it is installed and kept up to date."
 - autoApps: true
   $name: "Keep these apps up to date"
   $description: "Once you have Mocha Steam or FreeDictate, new versions go in within a few hours. Never while the app is open."
@@ -5935,7 +5941,7 @@ static void Hub_FeatureFields(SetWindow& w) {
     w.fields.push_back(autoUp);
     SetField autoDeps{};
     autoDeps.kind = SetField::Check; autoDeps.key = L"autoDeps"; autoDeps.label = L"Set up the apps a mod needs";
-    autoDeps.desc = L"When one of your mods needs another app, such as HWiNFO for the taskbar stats, it is installed and kept up to date.";
+    autoDeps.desc = L"When one of your mods needs another app, such as PawnIO for the CPU readings, it is installed and kept up to date.";
     autoDeps.def = L"1"; autoDeps.group = L"By themselves"; autoDeps.page = kPgExtras;
     autoDeps.cur = autoDeps.value = Hub_AppInt(L"autoDeps", 1) ? L"1" : L"0";
     w.fields.push_back(autoDeps);

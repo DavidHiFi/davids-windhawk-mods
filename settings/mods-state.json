@@ -1271,7 +1271,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.5.6"
+    "version": "1.5.7"
   },
   "local@startup-control": {
     "disabled": false,
