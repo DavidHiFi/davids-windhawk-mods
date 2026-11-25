@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.58
+// @version         0.4.59
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -43753,6 +43753,11 @@ void AlignFooterToIcons(DrawerState& state) {
     auto m = state.footerGrid.Margin();
     double left = m.Left + minX - first.ActualWidth() / 2;
     double right = m.Right + width - (maxX + last.ActualWidth() / 2);
+    // The outer buttons keep the same gap to the panel's side edges as the
+    // footer keeps to its bottom edge, so their hover ring never meets the border.
+    auto pad = state.footer.Padding();
+    left = std::max(left, pad.Bottom - pad.Left);
+    right = std::max(right, pad.Bottom - pad.Right);
     if (std::abs(left - m.Left) < 0.5 && std::abs(right - m.Right) < 0.5)
         return;
     // A half-built panel can report wild positions; never move more than a tile.
