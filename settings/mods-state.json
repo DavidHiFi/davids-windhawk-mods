@@ -1287,13 +1287,6 @@
     "architecture": "",
     "version": "0.1.11"
   },
-  "local@mocha-steam-icons": {
-    "disabled": false,
-    "include": "steam.exe|steamwebhelper.exe",
-    "exclude": "",
-    "architecture": "x86-64",
-    "version": "1.0.2"
-  },
   "local@mocha-app-icons": {
     "disabled": false,
     "include": "Ableton Live*.exe|yapfast.exe|ApplicationFrameHost.exe|steam.exe|steamwebhelper.exe",
