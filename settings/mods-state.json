@@ -487,7 +487,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.0.10"
+    "version": "1.0.11"
   },
   "local@seamless-autoclicker": {
     "disabled": false,

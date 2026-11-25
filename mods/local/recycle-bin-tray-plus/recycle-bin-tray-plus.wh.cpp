@@ -3,7 +3,7 @@
 // @name            Recycle Bin Tray Plus
 // @description     Adds an interactive Recycle Bin icon to the Windows 11 system tray with live state updates, drag-and-drop support, theme-aware rendering, multiple icon styles, and configurable mouse actions.
 // @description:fr-FR Ajoute une icône interactive de la Corbeille à la zone de notification de Windows 11, avec mise à jour en temps réel, glisser-déposer, adaptation au thème, plusieurs styles d'icône et actions de souris configurables.
-// @version         1.0.10
+// @version         1.0.11
 // @author          DavidHiFi, Wildstyle23
 // @github          https://github.com/wildstyle23
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -19,19 +19,10 @@ The Plus version gives its menus the same look as the rest of the desktop: a blu
 rounded Catppuccin menu with roomy rows and one soft hover, matching Seamless Flyouts.
 Based on Recycle Bin Tray by Wildstyle23.
 
-## What's new in 1.0.9
+## What's new in 1.0.11
 
-- The tray now shows the same empty and full Recycle Bin icons as Seamless Dock: the
-  Windows icons from your icon theme. System is the default style again, and the mod no
-  longer switches it back to the badge on every start.
-
-![Drag and drop support](https://raw.githubusercontent.com/wildstyle23/Recycle-Bin-Tray-Icon/refs/heads/main/Images/Recycle%20Bin%20Tray%20Icon.png)
-
-A lightweight [Windhawk](https://windhawk.net/) Windows 11 mod that places an interactive Recycle Bin directly into your system tray.
-
-The icon follows the current Recycle Bin state, can optionally disappear when the bin is empty, reacts to Windows Shell notifications, and supports multiple rendering styles, themes, and configurable mouse actions.
-
-The mod is designed to remain lightweight and self-contained while integrating with the native Windows Shell wherever possible.
+- Title bar menus (right-click the title bar, or Alt+Space) now really get the same
+  blurred Mocha body as every other menu. They opened pitch black before.
 
 ## Features
 
@@ -6648,6 +6639,22 @@ static BOOL WINAPI TrackPopupMenuEx_hook(HMENU m, UINT f, INT x, INT y, HWND h, 
     SeamlessMenuRoom::EndTrack();
     return ret;
 }
+// Title bar menus are opened by DefWindowProc, never through TrackPopupMenu: wrap the
+// messages that open one the same way, so the menu is skinned before its first paint.
+static decltype(&DefWindowProcW) SysMenuDefProc_orig = nullptr;
+static LRESULT WINAPI SysMenuDefProc_hook(HWND h, UINT msg, WPARAM w, LPARAM l)
+{
+    UINT sc = (UINT)(w & 0xFFF0);
+    bool opens = (msg == WM_SYSCOMMAND && (sc == SC_KEYMENU || sc == SC_MOUSEMENU)) ||
+                 msg == WM_CONTEXTMENU || msg == 0x0313 /* WM_POPUPSYSTEMMENU */;
+    if (!opens) return SysMenuDefProc_orig(h, msg, w, l);
+    SeamlessMenuRoom::BeginTrack();
+    HHOOK cbt = InstallMenuCbtHook();
+    LRESULT ret = SysMenuDefProc_orig(h, msg, w, l);
+    if (cbt) UnhookWindowsHookEx(cbt);
+    SeamlessMenuRoom::EndTrack();
+    return ret;
+}
 
 // Returns TRUE when the menu part was drawn here.
 static BOOL PaintMenuPart(HDC hdc, INT part, INT state, LPCRECT pRect, LPCRECT pClip)
@@ -6760,6 +6767,7 @@ static VOID Init()
     Hook(dwm, "DwmSetWindowAttribute", DwmSetWindowAttribute_hook, &DwmSetWindowAttribute_orig);
     Hook(u32, "TrackPopupMenu", TrackPopupMenu_hook, &TrackPopupMenu_orig);
     Hook(u32, "TrackPopupMenuEx", TrackPopupMenuEx_hook, &TrackPopupMenuEx_orig);
+    Hook(u32, "DefWindowProcW", SysMenuDefProc_hook, &SysMenuDefProc_orig);
     SeamlessMenuRoom::Init(OnMenuCreated);
 }
 
