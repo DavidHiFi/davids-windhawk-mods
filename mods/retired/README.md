@@ -5,6 +5,7 @@ library. Their last sources stay here so old links and forks keep working.
 
 | Old mod | Use this instead |
 | --- | --- |
+| [Helium Acrylic](helium-acrylic) | [Seamless Chromium Browsers](../local/seamless-chromium-browsers), its Helium settings |
 | [Magic Pointer Plus](magic-pointer-plus) | [Seamless Snipper](../local/seamless-snipper), Magic Pointer is built in |
 | [Micrographics Taskbar Clock Plus](micrographics-taskbar-clock-plus) | [Seamless Taskbar](../local/seamless-taskbar), its Clock module |
 | [Mocha Steam Icons](mocha-steam-icons) | [Mocha App Icons](../local/mocha-app-icons), its Steam switch |
