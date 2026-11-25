@@ -258,6 +258,17 @@ waits until answered (the app stays blocked meanwhile, as with Windows).
   went nowhere. "menu_helpers_left 1" was the check's own PowerShell (its command line holds the
   search text); no -swf- helper was running. Retake: test\capture-menu-125.py through
   menu-when-free-125.ps1 and elevated-menu-125.ps1 (sets COOP_AGENT), log D:\Agent Work\swf-123\menu-125.log.
+- That retake ran twice (7:44 and 7:45) and both said explorer_opened false: `explorer /select`
+  put the test folder in a background tab of the window already open, so no window with the
+  folder's name appeared. Explorer is no longer needed: test\capture-menu2-125.py asks the shell
+  for the same classic menu Explorer shows (IContextMenu on a copy of where.exe, extended verbs,
+  submenu filled through IContextMenu3 with comtypes; pywin32 has no wrapper for that one).
+- Read pass, no window or keys (7:55 am, owner gaming): the real menu lists "Seamless Windows
+  Firewall" above Properties, and its submenu holds Block in Windows Firewall, Allow again
+  (remove the block) and Open the firewall panel. capture-menu-read.json in media\live\1.2.5.
+- Full pass (shown from the script's own window, shot, then Block and Allow again run through
+  the shell's InvokeCommand and the rules read back) is queued for the screen at 7:57 am, pid
+  12660, writes capture-menu.json.
 - Glass: still WARN flat over the open panel (ratio 0.06, movement 0.3). The fill is already
   0.40, the bottom of the rice range, and the backdrop is the dark panel blurred by acrylic, so
   nothing colourful is there to move. Kept as is; open item 1 below now says why.
