@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T01:48:26+08:00",
+  "generatedAt": "2026-11-26T02:23:15+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 173,
-    "enabled": 168,
-    "local": 62
+    "mods": 163,
+    "enabled": 162,
+    "local": 61
   },
   "mods": [
     {
@@ -241,18 +241,6 @@
       "enabled": true
     },
     {
-      "id": "custom-cmd-startup-text",
-      "name": "Custom Command Prompt Startup Text",
-      "author": "aubymori",
-      "github": "https://github.com/aubymori",
-      "version": "1.0.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/custom-cmd-startup-text",
-      "source": "mods/catalog/custom-cmd-startup-text.wh.cpp",
-      "enabled": true
-    },
-    {
       "id": "custom-cmd-ver-command-text",
       "name": "Custom CMD \"ver\" Command Text",
       "author": "RandomGuy5747",
@@ -346,6 +334,18 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/disable-web-search-in-start-menu",
       "source": "mods/catalog/disable-web-search-in-start-menu.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@dsx-tray-icon-fix",
+      "name": "DSX Tray Icon Fix",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/dsx-tray-icon-fix/dsx-tray-icon-fix.wh.cpp",
       "enabled": true
     },
     {
@@ -799,18 +799,6 @@
       "category": "Tools"
     },
     {
-      "id": "live-video-wallpaper",
-      "name": "Live Video Wallpaper",
-      "author": "AKS HAY",
-      "github": "https://github.com/sysakshay",
-      "version": "1.1.1",
-      "license": "GPL-3.0",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/live-video-wallpaper",
-      "source": "mods/catalog/live-video-wallpaper.wh.cpp",
-      "enabled": true
-    },
-    {
       "id": "lm-mediakey-explorer-fix",
       "name": "Play-Media-Key fix in Explorer",
       "author": "Mark Jansen",
@@ -823,27 +811,15 @@
       "enabled": true
     },
     {
-      "id": "lock-screen-live-wallpaper",
-      "name": "Lock Screen Live Wallpaper",
-      "author": "grn15RenS",
-      "github": "https://github.com/grn15RenS",
-      "version": "1.1.0",
-      "license": "GPL-3.0",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/lock-screen-live-wallpaper",
-      "source": "mods/catalog/lock-screen-live-wallpaper.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "logitech-battery-tray",
+      "id": "local@logitech-battery-tray",
       "name": "Logitech Battery Tray",
-      "author": "uMk0",
+      "author": "DavidHiFi, uMk0",
       "github": "https://github.com/umk0",
-      "version": "0.1.2",
+      "version": "0.1.5",
       "license": "GPL-3.0-or-later",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/logitech-battery-tray",
-      "source": "mods/catalog/logitech-battery-tray.wh.cpp",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/logitech-battery-tray/logitech-battery-tray.wh.cpp",
       "enabled": true
     },
     {
@@ -880,18 +856,6 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/mocha-app-icons/mocha-app-icons.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@mocha-steam-icons",
-      "name": "Mocha Steam Icons",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.2",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/mocha-steam-icons/mocha-steam-icons.wh.cpp",
       "enabled": true
     },
     {
@@ -1005,16 +969,16 @@
       "enabled": true
     },
     {
-      "id": "parallax-wallpaper",
+      "id": "local@parallax-wallpaper",
       "name": "Parallax Wallpaper",
-      "author": "HaVeN80",
-      "github": "https://github.com/haven80",
-      "version": "0.9.2",
+      "author": "DavidHiFi, HaVeN80",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
       "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/parallax-wallpaper",
-      "source": "mods/catalog/parallax-wallpaper.wh.cpp",
-      "enabled": false
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/parallax-wallpaper/parallax-wallpaper.wh.cpp",
+      "enabled": true
     },
     {
       "id": "passkey-popup-blocker",
@@ -1080,6 +1044,18 @@
       "category": "Taskbar"
     },
     {
+      "id": "rdp-icon-refresh",
+      "name": "Sharp Taskbar Icons After Remote Desktop",
+      "author": "Solo_mag",
+      "github": "https://github.com/Solomag",
+      "version": "1.0",
+      "license": "",
+      "origin": "catalog",
+      "upstream": "https://windhawk.net/mods/rdp-icon-refresh",
+      "source": "mods/catalog/rdp-icon-refresh.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "local@recycle-bin-tray-plus",
       "name": "Recycle Bin Tray Plus",
       "author": "DavidHiFi, Wildstyle23",
@@ -1141,16 +1117,16 @@
       "enabled": true
     },
     {
-      "id": "remove-shortcut-arrows",
-      "name": "Remove Shortcut Arrow Overlays",
-      "author": "Dev-StudioCode",
-      "github": "https://github.com/Dev-StudioCode",
-      "version": "2.0.0",
+      "id": "local@remove-shortcut-arrows",
+      "name": "Remove Shortcut Arrow Icons",
+      "author": "DavidHiFi, Dev-StudioCode",
+      "github": "https://github.com/DavidHiFi",
+      "version": "2.0.2",
       "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/remove-shortcut-arrows",
-      "source": "mods/catalog/remove-shortcut-arrows.wh.cpp",
-      "enabled": false
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/remove-shortcut-arrows/remove-shortcut-arrows.wh.cpp",
+      "enabled": true
     },
     {
       "id": "restore-folder-menubar-25h2",
@@ -1255,6 +1231,18 @@
       "category": "Windows and menus"
     },
     {
+      "id": "local@seamless-controls",
+      "name": "Seamless Controls",
+      "author": "DavidHiFi, crazyboyybs",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.8",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-controls/seamless-controls.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "local@seamless-crash-watch",
       "name": "Seamless Crash Watch",
       "author": "DavidHiFi",
@@ -1292,6 +1280,30 @@
       "source": "mods/local/seamless-dictate/seamless-dictate.wh.cpp",
       "enabled": true,
       "category": "Tools"
+    },
+    {
+      "id": "local@seamless-dock",
+      "name": "Seamless Dock",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "0.3.11",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-dock/seamless-dock.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-download-manager",
+      "name": "Seamless Download Manager",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.11",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-download-manager/seamless-download-manager.wh.cpp",
+      "enabled": true
     },
     {
       "id": "local@seamless-explorer-search",
@@ -1475,6 +1487,18 @@
       "category": "Windows and menus"
     },
     {
+      "id": "local@seamless-windows-firewall",
+      "name": "Seamless Windows Firewall",
+      "author": "DavidHiFi, Ashix",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.2.4",
+      "license": "",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-windows-firewall/seamless-windows-firewall.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "local@seamless-wobbly-windows",
       "name": "Seamless Wobbly Windows",
       "author": "DavidHiFi, HeyJeay, HaVeN80, lalimatyus",
@@ -1510,18 +1534,6 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/search-active-display",
       "source": "mods/catalog/search-active-display.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "search-menu-inspect-helper",
-      "name": "Search Menu Inspect Helper",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/search-menu-inspect-helper",
-      "source": "mods/catalog/search-menu-inspect-helper.wh.cpp",
       "enabled": true
     },
     {
@@ -1574,18 +1586,6 @@
       "source": "mods/local/simple-window-switcher-plus/simple-window-switcher-plus.wh.cpp",
       "enabled": true,
       "category": "Windows and menus"
-    },
-    {
-      "id": "smart-process-priority-ram-optimizer",
-      "name": "Smart Process Priority & RAM Optimizer",
-      "author": "gilnett",
-      "github": "https://github.com/gilnett",
-      "version": "1.1.0",
-      "license": "GPL-3.0",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/smart-process-priority-ram-optimizer",
-      "source": "mods/catalog/smart-process-priority-ram-optimizer.wh.cpp",
-      "enabled": true
     },
     {
       "id": "smooth-scroll-win32",
@@ -1903,18 +1903,6 @@
       "enabled": true
     },
     {
-      "id": "win11-home-group-restorer",
-      "name": "Windows 11 HomeGroup Page Restorer",
-      "author": "babamohammed",
-      "github": "https://github.com/babamohammed2022",
-      "version": "1.0.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/win11-home-group-restorer",
-      "source": "mods/catalog/win11-home-group-restorer.wh.cpp",
-      "enabled": false
-    },
-    {
       "id": "local@windhawk-enhanced-styler",
       "name": "Windhawk Enhanced Styler",
       "author": "DavidHiFi, Ingan121",
@@ -1989,18 +1977,6 @@
       "enabled": true
     },
     {
-      "id": "windows-update-control-panel-restorer",
-      "name": "Windows Update Control Panel Page Restorer",
-      "author": "babamohammed",
-      "github": "https://github.com/babamohammed2022",
-      "version": "1.1.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/windows-update-control-panel-restorer",
-      "source": "mods/catalog/windows-update-control-panel-restorer.wh.cpp",
-      "enabled": false
-    },
-    {
       "id": "local@wintips-osd-plus",
       "name": "WinTips OSD Plus",
       "author": "DavidHiFi, DoYouNatureQ",
@@ -2037,102 +2013,6 @@
       "source": "mods/local/zoomit/zoomit.wh.cpp",
       "enabled": true,
       "category": "Tools"
-    },
-    {
-      "id": "local@seamless-controls",
-      "name": "Seamless Controls",
-      "author": "DavidHiFi, crazyboyybs",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.8",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-controls/seamless-controls.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@seamless-windows-firewall",
-      "name": "Seamless Windows Firewall",
-      "author": "DavidHiFi, Ashix",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.2.4",
-      "license": "",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-windows-firewall/seamless-windows-firewall.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@dsx-tray-icon-fix",
-      "name": "DSX Tray Icon Fix",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.0",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/dsx-tray-icon-fix/dsx-tray-icon-fix.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@seamless-dock",
-      "name": "Seamless Dock",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "0.3.11",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-dock/seamless-dock.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@logitech-battery-tray",
-      "name": "Logitech Battery Tray",
-      "author": "DavidHiFi, uMk0",
-      "github": "https://github.com/umk0",
-      "version": "0.1.5",
-      "license": "GPL-3.0-or-later",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/logitech-battery-tray/logitech-battery-tray.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@seamless-download-manager",
-      "name": "Seamless Download Manager",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.11",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-download-manager/seamless-download-manager.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@parallax-wallpaper",
-      "name": "Parallax Wallpaper",
-      "author": "DavidHiFi, HaVeN80",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.0",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/parallax-wallpaper/parallax-wallpaper.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@remove-shortcut-arrows",
-      "name": "Remove Shortcut Arrow Icons",
-      "author": "DavidHiFi, Dev-StudioCode",
-      "github": "https://github.com/DavidHiFi",
-      "version": "2.0.2",
-      "license": "",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/remove-shortcut-arrows/remove-shortcut-arrows.wh.cpp",
-      "enabled": true
     }
   ]
 }
