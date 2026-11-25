@@ -36,6 +36,9 @@ clear background. A fill stays only where the object is solid, or the app's own 
 - Tray capture after: every icon of ours plain except Etcher (an app, not a mod). Its icon is
   drawn in `mocha-audio\src\bin\app.rs` `icon_rgba`: now bars alone, commit bd795ef. Build and
   install are left to the Etcher thread (972d9bf1), which was building at the time.
+- Etcher's new icon went live at 4:17 am, built and installed by the Etcher thread. Proof:
+  `D:\Agent Work\etcher-cutover\proof\tray\etcher-x8.png` (three bars, no plate). Every icon of
+  ours in the tray is now clean.
 
 ## Files
 
