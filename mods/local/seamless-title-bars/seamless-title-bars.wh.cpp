@@ -2,7 +2,7 @@
 // @id              seamless-title-bars
 // @name            Seamless Title Bars
 // @description     One title bar look everywhere: colours, caption buttons, a glass title dock and native frames in every kind of app
-// @version         1.3.16
+// @version         1.3.17
 // @author          DavidHiFi, Th3Fanbus, grn15RenS, Ingan121, Anixx, aubymori
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -77,6 +77,12 @@ switch, so you only turn on what you want.
   restarts (sign out and back in).
 - Spotify options marked with * need a Spotify restart.
 - Changing the native frames app list needs those apps restarted.
+
+## What's new in 1.3.17
+- Pop-ups in Chromium browsers (extension pop-ups like Bitwarden, menus and
+  bubbles) no longer get a dark square frame around them. Native frames now
+  leave those pop-up windows the way the browser made them, so their soft
+  shadow edge stays see-through. Needs a browser restart.
 
 ## What's new in 1.3.16
 - The title dock no longer flashes when the pointer passes over a title on its
@@ -7059,8 +7065,23 @@ BOOL CALLBACK UpdateEnumWindowsProc(HWND hWnd, LPARAM lParam) {
 
 using CreateWindowExW_t = decltype(&CreateWindowExW);
 CreateWindowExW_t CreateWindowExW_original;
+// 1.3.17: Chromium bubbles (extension pop-ups, menus) draw a see-through shadow
+// margin through DirectComposition. Without WS_EX_NOREDIRECTIONBITMAP that margin
+// turns into an opaque dark band with a square edge, so pop-ups keep the flag.
+static bool IsChromiumPopupCreate(LPCWSTR cls, DWORD style) {
+    if (!(style & WS_POPUP) || (style & (WS_CAPTION | WS_THICKFRAME))) return false;
+    wchar_t name[64] = {};
+    if (IS_INTRESOURCE(cls)) {
+        // Chromium passes a class atom; window class atoms share the table
+        // that GetClipboardFormatNameW reads.
+        if (!GetClipboardFormatNameW((UINT)(ULONG_PTR)cls, name, 64)) return false;
+        cls = name;
+    }
+    return cls && wcsncmp(cls, L"Chrome_WidgetWin_", 17) == 0;
+}
+
 HWND WINAPI CreateWindowExW_hook(DWORD dwExStyle, LPCWSTR lpClassName, LPCWSTR lpWindowName, DWORD dwStyle, int X, int Y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam) {
-    if ((dwExStyle & WS_EX_NOREDIRECTIONBITMAP) != 0) { // This makes the GDI surface invisible
+    if ((dwExStyle & WS_EX_NOREDIRECTIONBITMAP) != 0 && !IsChromiumPopupCreate(lpClassName, dwStyle)) { // This makes the GDI surface invisible
         dwExStyle &= ~WS_EX_NOREDIRECTIONBITMAP;        // Just purge this cuz it's bad for Basic/Classic users anyway
     }                                                   // It must be set in CreateWindowExW. Not changeable with SetWindowLongW
 

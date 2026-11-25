@@ -74,7 +74,7 @@
       "id": "brave-acrylic",
       "name": "Brave Acrylic",
       "version": "4.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "allowBraveSymbolServerFallback": 0,
         "blurMenus": 1,
