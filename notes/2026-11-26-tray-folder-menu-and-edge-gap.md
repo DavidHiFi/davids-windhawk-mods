@@ -19,3 +19,10 @@
   retry pushed).
 - Rollback: restore backup `local@seamless-taskbar-20261126-0222.wh.cpp` with
   Install-StagedMod.
+
+## Live check (after 0.4.60 from the tray-folder-gap thread, which keeps this clamp)
+- Drawer opened under the desktop lock and captured (`hover-0459.png`).
+- Rightmost folder icon centre x 164.5, drawer border inner edge x 184.5; with the
+  32x28 buttons that puts the button's edge 4 px from the side border and about
+  5 px from the bottom border. Hover ring itself was not caught (the posted mouse
+  move did not trigger XAML hover); the desktop queue was 8 deep for a retry.
