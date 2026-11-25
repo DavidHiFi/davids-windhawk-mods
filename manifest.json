@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T02:29:01+08:00",
+  "generatedAt": "2026-11-26T02:29:27+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 163,
@@ -741,7 +741,7 @@
       "name": "Helium Acrylic",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi/davids-windhawk-mods",
-      "version": "3.9.2",
+      "version": "3.9.3",
       "license": "",
       "origin": "local",
       "upstream": "",

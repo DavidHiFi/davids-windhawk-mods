@@ -2,7 +2,7 @@
 // @id              helium-acrylic
 // @name            Helium Acrylic
 // @description     Keeps Helium's acrylic surface, Catppuccin colors and system-drawn frame working after browser updates
-// @version         3.9.2
+// @version         3.9.3
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -1840,11 +1840,22 @@ static void EnsureHideWindowButtonsSwitch() {
     MTRACE("hwb: enter");
     LPWSTR cmd = GetCommandLineW();
     if (!cmd) { MTRACE("hwb: no command line"); return; }
-    if (wcsstr(cmd, L"hide-window-buttons")) { MTRACE("hwb: already present"); return; }
+    if (wcsstr(cmd, L" --hide-window-buttons")) { MTRACE("hwb: already present"); return; }
     if (wcsstr(cmd, L"--type=")) { MTRACE("hwb: child process, skip"); return; }
     size_t len = wcslen(cmd);
     const wchar_t add[] = L" --hide-window-buttons";
     const size_t addWchars = (sizeof(add) / sizeof(wchar_t));  // incl. NUL
+    // v3.9.3: insert right after the program name, never at the end. Links
+    // open as `chrome.exe --single-argument <url>`, and Chromium reads
+    // everything after --single-argument as the address, so an appended
+    // switch became part of every link ("/%20--hide-window-buttons", a 404).
+    size_t pos = 0;
+    if (cmd[0] == L'"') {
+        const wchar_t* q = wcschr(cmd + 1, L'"');
+        pos = q ? (size_t)(q - cmd) + 1 : len;
+    } else {
+        while (pos < len && cmd[pos] != L' ' && cmd[pos] != L'\t') pos++;
+    }
     MEMORY_BASIC_INFORMATION mbi;
     if (!VirtualQuery(cmd, &mbi, sizeof(mbi))) {
         MTRACE("hwb: VirtualQuery failed");
@@ -1857,8 +1868,10 @@ static void EnsureHideWindowButtonsSwitch() {
         MTRACE("hwb: buffer too small");
         return;
     }
-    wcscpy(cmd + len, add);
-    Wh_Log(L"hide-window-buttons: appended");
+    const size_t addLen = addWchars - 1;
+    memmove(cmd + pos + addLen, cmd + pos, (len - pos + 1) * sizeof(wchar_t));
+    memcpy(cmd + pos, add, addLen * sizeof(wchar_t));
+    Wh_Log(L"hide-window-buttons: inserted at %zu", pos);
     MTRACE("hwb: appended to command line");
 }
 

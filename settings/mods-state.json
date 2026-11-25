@@ -445,7 +445,7 @@
     "include": "chrome.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "3.9.2"
+    "version": "3.9.3"
   },
   "local@keyboard-shortcut-actions-plus": {
     "disabled": false,
