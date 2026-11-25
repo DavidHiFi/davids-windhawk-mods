@@ -5,10 +5,20 @@
       "name": "HWiNFO",
       "kind": "dep",
       "script": "deps/hwinfo.ps1",
-      "why": "The taskbar reads your temperatures and fan speeds from it. Always the newest beta, starts with Windows.",
+      "why": "Optional. No mod needs it now: the taskbar reads its own sensors. Install it if you want its full sensor window. Always the newest beta, starts with Windows.",
+      "admin": true,
+      "optional": true,
+      "mods": []
+    },
+    {
+      "id": "pawnio",
+      "name": "PawnIO",
+      "kind": "dep",
+      "script": "deps/pawnio.ps1",
+      "why": "Processor temperature, power and clocks come from this small signed driver. Without it those show a dash.",
       "admin": true,
       "auto": true,
-      "mods": ["local@seamless-taskbar"]
+      "mods": ["local@seamless-fps-overlay", "local@seamless-taskbar"]
     },
     {
       "id": "everything",
