@@ -2,7 +2,7 @@
 // @id              seamless-explorer-view
 // @name            Seamless Explorer View
 // @description     GPU-accelerated Explorer views with smooth scrolling and right-click submenus that populate fully
-// @version         2.0.11
+// @version         2.0.12
 // @author          DavidHiFi, DarkionAvey, crazyboyybs, Languster, valinet
 // @include         explorer.exe
 // @architecture    x86-64
@@ -23,6 +23,13 @@ menu, such as NanaZip's archive actions, open fully populated instead of an
 empty box.
 
 ![Seamless Explorer View preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-explorer-view.png)
+
+## What's new in 2.0.12
+
+Pointing at a column name no longer draws a second rounded frame inside the
+header dock. The column just lights up softly, and the dock edge alone turns
+blue to mauve. The dock edge now uses the same soft grey as the other Explorer
+docks (command bar, folder list, status bar).
 
 ## What's new in 2.0.11
 
@@ -3797,7 +3804,7 @@ bool UsesThumbnails(const ViewState& state, const Entry& entry) {
         g_listThumbnails.load(std::memory_order_relaxed));
 }
 float GroupHeadingHeight(const ViewState& state) {
-    return state.gridView ? std::max(24.f, state.fontPx * 1.5f + 8.f) : state.rowPx;
+    return static_cast<float>(Scale96(kHeader96, ViewDpi(state)));
 }
 int ItemLineCount(const ViewState& state, int count) {
     return (count + std::max(1, state.itemsPerRow) - 1) / std::max(1, state.itemsPerRow);
@@ -14958,7 +14965,7 @@ void PaintGroupHeading(ViewState& state, const std::wstring& title,
             D2D1::Point2F(centerX+unit, centerY-unit*.5f), state.brush.Get(), thickness);
     }
     Text(state, title, ListStartX(state) + leading + Scale96(18, dpi), top,
-        listEnd - Scale96(8, dpi), top + height, headerColor, false, .9f * opacity);
+        listEnd - Scale96(8, dpi), top + height, headerColor, true, .9f * opacity);
 }
 
 // A heading's dock hugs its chevron and title: 4 DIP from the list edge, the
@@ -14968,7 +14975,7 @@ float GroupHeadingDockRight(ViewState& state, const std::wstring& title, float l
     const int dpi = ViewDpi(state);
     const float textLeft = ListStartX(state) + static_cast<float>(Scale96(14 + 18, dpi));
     // One pixel for DirectWrite overhang, like the filename fit.
-    const float right = textLeft + ceilf(ColumnTextWidth(state, title, false) + 1.f) +
+    const float right = textLeft + ceilf(ColumnTextWidth(state, title, true) + 1.f) +
         static_cast<float>(Scale96(12, dpi));
     return std::min(listEnd - static_cast<float>(Scale96(4, dpi)), right);
 }
@@ -15881,7 +15888,13 @@ void Paint(ViewState& state) {
                             dockT + pad, std::min(std::min(w, trailing) - inset, dockR - pad), dockB - pad) :
                         D2D1::RectF(std::max(0.f, edge) + inset,
                             headerOffset + inset, std::min(w, trailing) - inset, headerBottom - inset);
-                    FillSelectionRect(state, bounds, .45f * fade, nullptr, false, kMochaBlue);
+                    if (dockOn) {
+                        // Inside the dock the dock edge is the only frame: a soft fill, no edge.
+                        Fill(state, bounds.left, bounds.top, bounds.right, bounds.bottom,
+                             kMochaSurface0, .55f * fade, std::max(0.f, dockRadius - pad));
+                    } else {
+                        FillSelectionRect(state, bounds, .45f * fade, nullptr, false, kMochaBlue);
+                    }
                 }
                 const auto caption = ColumnTextBounds(state, columnIndex, true, listStart, listEnd, dpi);
                 if (caption.right > caption.left)
@@ -15924,7 +15937,9 @@ void Paint(ViewState& state) {
                 auto* rt = static_cast<ID2D1RenderTarget*>(state.target.Get());
                 bool drawn = false;
                 if (state.hoveredHeader >= 0) {
-                    D2D1_GRADIENT_STOP stops[2] = {{0.f, Packed(kMochaBlue, dockFade)}, {1.f, Packed(kMochaMauve, dockFade)}};
+                    // Same strength as the other Explorer docks: 100/255.
+                    const float edgeA = dockFade * (100.f / 255.f);
+                    D2D1_GRADIENT_STOP stops[2] = {{0.f, Packed(kMochaBlue, edgeA)}, {1.f, Packed(kMochaMauve, edgeA)}};
                     ComPtr<ID2D1GradientStopCollection> coll;
                     ComPtr<ID2D1LinearGradientBrush> grad;
                     if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, &coll)) &&
@@ -15935,7 +15950,7 @@ void Paint(ViewState& state) {
                     }
                 }
                 if (!drawn) {
-                    state.brush->SetColor(Packed(kMochaSurface2, dockFade));
+                    state.brush->SetColor(Packed(kMochaSurface2, dockFade * (100.f / 255.f)));
                     rt->DrawRoundedRectangle(rr, state.brush.Get(), ew);
                 }
             }
@@ -16526,34 +16541,48 @@ void Paint(ViewState& state) {
         D2D1::RectF(listStart,header,listEnd,contentBottom),D2D1_ANTIALIAS_MODE_ALIASED);
     for (const auto& heading:headings) {
         RowSourceScope source(state,heading.key,0,true);
-        // Same bordered hover box as the column headers: soft Mocha fill plus
-        // a 1px border, inset 4 DIP inside the heading band. At rest the same
-        // box is a 1px surface1 outline over a faint crust tint.
-        const float inset=static_cast<float>(Scale96(4,ViewDpi(state)));
+        const int gDpi=ViewDpi(state);
+        const float inset=static_cast<float>(Scale96(4,gDpi));
         const auto bounds=D2D1::RectF(listStart+inset,heading.visual.top+inset,
             GroupHeadingDockRight(state,*heading.title,listEnd),
             heading.visual.top+heading.visual.height-inset);
-        const float radius=std::max(0.f,std::min(static_cast<float>(Scale96(10,ViewDpi(state))),
-            (bounds.bottom-bounds.top-1.f)*.5f));
-        if (heading.hot) {
-            FillSelectionRect(state,bounds,.45f*heading.visual.opacity,nullptr,false,kMochaBlue,radius);
-            continue;
-        }
         if (bounds.right<=bounds.left+1.f || bounds.bottom<=bounds.top) continue;
-        // Resting heading pill uses the sidebar recipe: crust fill at 75/255 and
-        // a 2px surface2 edge at 100/255, drawn inside the bounds.
+        const float radius=std::max(0.f,std::min(static_cast<float>(Scale96(12,gDpi)),
+            (bounds.bottom-bounds.top)*.5f));
+        const float op=std::min(1.f,heading.visual.opacity);
+        // Same dock recipe as column header, nav, path, command and status docks:
+        // #4B11111B fill (same on hover), 2px edge at 100/255 inset once by half width.
         Fill(state,bounds.left,bounds.top,bounds.right,bounds.bottom,
-            0x11111Bu,(75.f/255.f)*heading.visual.opacity,radius);
-        const float edgeW=static_cast<float>(std::max(1,Scale96(2,ViewDpi(state))));
-        D2D1_RECT_F part=D2D1::RectF(bounds.left+edgeW*.5f,bounds.top+edgeW*.5f,
-            bounds.right-edgeW*.5f,bounds.bottom-edgeW*.5f);
+            0x11111Bu,(75.f/255.f)*op,radius);
+        const float edgeW=static_cast<float>(std::max(1,Scale96(2,gDpi)));
+        D2D1_RECT_F er=bounds;
         if (state.rtlLayout) {
-            const float left=part.left;
-            part.left=state.paintWidth-part.right; part.right=state.paintWidth-left;
+            const float left=er.left;
+            er.left=state.paintWidth-er.right; er.right=state.paintWidth-left;
         }
-        const float edgeR=std::max(0.f,radius-edgeW*.5f);
-        state.brush->SetColor(Packed(kMochaSurface2,std::min(1.f,heading.visual.opacity)*(100.f/255.f)));
-        StrokeRoundedRect(state,D2D1::RoundedRect(part,edgeR,edgeR),state.brush.Get(),edgeW);
+        D2D1_ROUNDED_RECT rr=D2D1::RoundedRect(SnapDrawRect(state.target.Get(),er),radius,radius);
+        rr.rect.left+=edgeW*.5f; rr.rect.top+=edgeW*.5f;
+        rr.rect.right-=edgeW*.5f; rr.rect.bottom-=edgeW*.5f;
+        rr.radiusX=rr.radiusY=std::max(0.f,radius-edgeW*.5f);
+        if (rr.rect.right<=rr.rect.left || rr.rect.bottom<=rr.rect.top) continue;
+        auto* rt=static_cast<ID2D1RenderTarget*>(state.target.Get());
+        bool drawn=false;
+        if (heading.hot) {
+            const float edgeA=op*(100.f/255.f);
+            D2D1_GRADIENT_STOP stops[2]={{0.f,Packed(kMochaBlue,edgeA)},{1.f,Packed(kMochaMauve,edgeA)}};
+            ComPtr<ID2D1GradientStopCollection> coll;
+            ComPtr<ID2D1LinearGradientBrush> grad;
+            if (SUCCEEDED(rt->CreateGradientStopCollection(stops,2,&coll)) &&
+                SUCCEEDED(rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(
+                    D2D1::Point2F(er.left,er.top),D2D1::Point2F(er.right,er.bottom)),coll.Get(),&grad))) {
+                rt->DrawRoundedRectangle(rr,grad.Get(),edgeW);
+                drawn=true;
+            }
+        }
+        if (!drawn) {
+            state.brush->SetColor(Packed(kMochaSurface2,op*(100.f/255.f)));
+            rt->DrawRoundedRectangle(rr,state.brush.Get(),edgeW);
+        }
     }
     for (const auto& heading:headings) {
         RowSourceScope source(state,heading.key,2,true);

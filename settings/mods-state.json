@@ -438,7 +438,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.0.11"
+    "version": "2.0.12"
   },
   "local@keyboard-shortcut-actions-plus": {
     "disabled": false,
