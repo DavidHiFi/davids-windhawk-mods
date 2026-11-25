@@ -2,7 +2,7 @@
 // @id              seamless-title-bars
 // @name            Seamless Title Bars
 // @description     One title bar look everywhere: colours, caption buttons, a glass title dock and native frames in every kind of app
-// @version         1.3.15
+// @version         1.3.16
 // @author          DavidHiFi, Th3Fanbus, grn15RenS, Ingan121, Anixx, aubymori
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -77,6 +77,12 @@ switch, so you only turn on what you want.
   restarts (sign out and back in).
 - Spotify options marked with * need a Spotify restart.
 - Changing the native frames app list needs those apps restarted.
+
+## What's new in 1.3.16
+- The title dock no longer flashes when the pointer passes over a title on its
+  way somewhere else. The hover glow now waits until the pointer stays on the
+  dock for a moment (about 50 ms), and Windows checking a spot the pointer is
+  not on can no longer light it.
 
 ## What's new in 1.3.13
 - Resting the pointer on the title dock keeps it lit. Before, the hover glow
@@ -575,6 +581,9 @@ struct Block {
     volatile LONG hoverStarts, hoverDrops, hitSticky, hitSeen;
     LONG dropX, dropY, dropL, dropR, dropBand, dropDock;          // where the pointer was when a hover ended
     ULONGLONG dropTick, missTick;
+    // 1.3.16: hit tests on the dock that were not where the pointer is (no hover started), and
+    // hovers that ended on their first tick before they lit.
+    volatile LONG startsRefused, startsUnlit;
 };
 static HANDLE g_map;
 static Block* volatile g_blk;
@@ -1758,6 +1767,7 @@ struct TitleInfo {
     POINT hitCur;        // pointer (screen) at that hit test
     RECT hitRect;        // window rect at that hit test
     int outTicks;        // hover ticks in a row with the pointer off the dock
+    int dwellTicks;      // hover ticks the pointer has rested on the dock before the glow starts
     DockGeo geo;         // last good render
 };
 static std::unordered_map<void*, TitleInfo> g_titles;   // CTopLevelWindow* -> info
@@ -3096,12 +3106,15 @@ static void HoverTick() {
             }
             if (in) {
                 ti.outTicks = 0;
-            } else if (++ti.outTicks < 3) {
-                in = true;   // a short grace so one odd tick never blinks the hover
+            } else if (ti.hoverP > 0.0f && ++ti.outTicks < 3) {
+                in = true;   // a short grace so one odd tick never blinks a lit hover
             } else {
+                // Not lit yet: the pointer only brushed past, so it ends here and nothing is drawn.
+                bool unlit = ti.hoverP <= 0.0f;
                 ti.hoverIn = false;
                 ti.outTicks = 0;
                 if (stbshared::Block* db = stbshared::g_blk) {
+                    if (unlit) InterlockedIncrement(&db->startsUnlit);
                     InterlockedIncrement(&db->hoverDrops);
                     db->dropX = x; db->dropY = y; db->dropL = ti.dockL; db->dropR = ti.dockR;
                     db->dropBand = ti.band; db->dropDock = ti.dock;
@@ -3114,6 +3127,10 @@ static void HoverTick() {
             wcsncpy_s(hotSuf, ti.shown, _TRUNCATE);
         }
         float target = (in && g_settings.dockHover) ? 1.0f : 0.0f;
+        // The glow waits until the pointer has stayed on the dock for about 50 ms, so passing over
+        // the title on the way somewhere else never flashes it.
+        if (!in) ti.dwellTicks = 0;
+        else if (target == 1.0f && ti.hoverP <= 0.0f && ti.dwellTicks < 3) { ti.dwellTicks++; target = 0.0f; }
         if (ti.hoverP != target) {
             ti.hoverP += (target > ti.hoverP) ? step : -step;
             if ((target == 1.0f && ti.hoverP > 1.0f) || (target == 0.0f && ti.hoverP < 0.0f)) ti.hoverP = target;
@@ -3142,6 +3159,7 @@ static void HoverStart(void* win) {
     if (it != g_titles.end() && it->second.dock) {
         it->second.hoverIn = true;
         it->second.outTicks = 0;
+        it->second.dwellTicks = 0;
         g_hoverWin = win;
         if (stbshared::Block* db = stbshared::g_blk) InterlockedIncrement(&db->hoverStarts);
         start = true;
@@ -3335,16 +3353,18 @@ static void NotifyDockHover(void* win, const POINT* pt) {
         TitleInfo& ti = it->second;
         bool inside = ti.dock && ti.dockR > ti.dockL && pt->x >= ti.dockL && pt->x < ti.dockR && pt->y >= 0 &&
                       pt->y <= ti.band;
-        post = inside && !ti.hoverIn;
-        // Trust the verdict for a resting pointer only when this hit test is for where the pointer is now.
+        // Trust a hit test only when it is for where the pointer is now. DWM also hit-tests a window
+        // for other points (the pointer is elsewhere), and lighting the dock for those blinked it.
         RECT wr;
         bool live = ti.hwnd && GetWindowRect(ti.hwnd, &wr) && abs(cur.x - wr.left - pt->x) <= 2 &&
                     abs(cur.y - wr.top - pt->y) <= 2;
         ti.hitInside = inside && live;
+        post = ti.hitInside && !ti.hoverIn;
         if (live) { ti.hitCur = cur; ti.hitRect = wr; }
         if (stbshared::Block* db = stbshared::g_blk) {
             if (inside) InterlockedIncrement(&db->hitSeen);
             if (ti.hitInside) InterlockedIncrement(&db->hitSticky);
+            if (inside && !live && !ti.hoverIn) InterlockedIncrement(&db->startsRefused);
         }
     }
     ReleaseSRWLockExclusive(&g_titleLock);
