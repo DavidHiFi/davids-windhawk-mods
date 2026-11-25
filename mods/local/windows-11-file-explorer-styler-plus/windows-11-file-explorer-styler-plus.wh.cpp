@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.36
+// @version         1.10.37
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -11654,10 +11654,12 @@ void Ensure(HWND tree);
 bool HasDock(HWND ntc);
 void TintTreeRect(HDC hdc, const RECT& rc);
 }
-// True while the docked side list paints its own background.
+// True when a fill lands on the docked side list's own background. The list
+// clears its background while BeginPaint runs (WM_ERASEBKGND), before the
+// paint flag is set, so the window itself is checked too.
 bool IsNavTreeDockBg(HWND hWnd) {
-    return g_settings.navPaneDock && g_treePaintWndForThread &&
-           hWnd == g_treePaintWndForThread &&
+    return g_settings.navPaneDock && hWnd &&
+           (hWnd == g_treePaintWndForThread || IsNavTreeWnd(hWnd)) &&
            NavDock::HasDock(GetParent(hWnd));
 }
 thread_local StatusDockBuffer g_statusDockBuffersForThread[4];
