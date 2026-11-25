@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.60
+// @version         0.4.61
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -32,6 +32,10 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
+
+## What's new in 0.4.61
+
+The tray icons inside the drawer and its folders no longer show a white outline after a click. It was drawn outside the icon, so the drawer's edge cut it off.
 
 ## What's new in 0.4.60
 
@@ -43333,6 +43337,92 @@ bool CleanupStep(PCWSTR operation, F&& action) noexcept {
 
 void ZoomTeardown(DrawerState& state) noexcept;
 
+// Drawer icons: no system focus ring. It draws white, 3 px outside the icon, and
+// the drawer's edge cuts it off. The icons keep their hover look.
+struct QuietFocusHost {
+    winrt::weak_ref<UIElement> host;
+    winrt::event_token token{};
+};
+std::vector<QuietFocusHost> g_quietFocusHosts;
+std::vector<winrt::weak_ref<Controls::Control>> g_quietFocusControls;
+
+bool IsTrayIconView(DependencyObject const& object) {
+    auto element = object.try_as<FrameworkElement>();
+    if (!element) return false;
+    auto className = winrt::get_class_name(element);
+    return className == L"SystemTray.NotifyIconView" || className == L"SystemTray.IconView" ||
+           className == L"SystemTray.ChevronIconView";
+}
+
+void QuietFocusControl(Controls::Control const& control) {
+    if (!control || !control.UseSystemFocusVisuals()) return;
+    control.UseSystemFocusVisuals(false);
+    g_quietFocusControls.push_back(winrt::make_weak(control));
+}
+
+// Every focusable part of every tray icon under the scope.
+void QuietFocusTree(DependencyObject const& object, bool insideIcon, int depth) {
+    if (!object || depth > 40) return;
+    insideIcon = insideIcon || IsTrayIconView(object);
+    if (insideIcon)
+        if (auto control = object.try_as<Controls::Control>()) QuietFocusControl(control);
+    int count = Media::VisualTreeHelper::GetChildrenCount(object);
+    for (int i = 0; i < count; ++i)
+        QuietFocusTree(Media::VisualTreeHelper::GetChild(object, i), insideIcon, depth + 1);
+}
+
+// Focus can land on an icon made after the last pass; catch it as it lands, before
+// the ring is drawn.
+void QuietFocusOnFocus(DependencyObject source) {
+    std::vector<Controls::Control> path;
+    for (int depth = 0; source && depth < 8; ++depth) {
+        if (auto control = source.try_as<Controls::Control>()) path.push_back(control);
+        if (IsTrayIconView(source)) {
+            for (auto const& control : path) QuietFocusControl(control);
+            return;
+        }
+        source = Media::VisualTreeHelper::GetParent(source);
+    }
+}
+
+void HookQuietFocus(UIElement const& host) {
+    if (!host) return;
+    for (auto const& item : g_quietFocusHosts)
+        if (item.host.get() == host) return;
+    try {
+        QuietFocusTree(host, false, 0);
+        auto token = host.GotFocus([](auto const&, RoutedEventArgs const& args) noexcept {
+            UiCallbackScope callbackScope;
+            if (g_unloading || !g_runtimeAvailable) return;
+            try {
+                QuietFocusOnFocus(args.OriginalSource().try_as<DependencyObject>());
+            } catch (...) {
+            }
+        });
+        g_quietFocusHosts.push_back({winrt::make_weak(host), token});
+    } catch (...) {
+        LogException(L"Hook drawer focus ring");
+    }
+}
+
+void UnhookQuietFocus() noexcept {
+    for (auto const& item : g_quietFocusHosts) {
+        try {
+            if (auto host = item.host.get()) host.GotFocus(item.token);
+        } catch (...) {
+        }
+    }
+    g_quietFocusHosts.clear();
+    for (auto const& weak : g_quietFocusControls) {
+        try {
+            if (auto control = weak.get())
+                control.ClearValue(Controls::Control::UseSystemFocusVisualsProperty());
+        } catch (...) {
+        }
+    }
+    g_quietFocusControls.clear();
+}
+
 void RemoveDrawer() noexcept {
     if (!g_drawer)
         return;
@@ -43340,6 +43430,7 @@ void RemoveDrawer() noexcept {
     state.closing = true;
     state.changing = true;
     ZoomTeardown(state);
+    UnhookQuietFocus();
     // Event removers are noexcept in C++/WinRT. Revoke before operations that
     // can pump XAML events, including Hide(), bindings and visual-tree edits.
     if (state.click.value)
@@ -44706,6 +44797,9 @@ void InstallDrawer(Grid const& root) {
     // High contrast is sampled when the footer loads and on UI theme changes.
     UpdateDrawerAppearance(current);
     root.Children().Append(current.footer);
+    HookQuietFocus(root);
+    HookQuietFocus(current.innerItems);
+    HookQuietFocus(current.groupItems);
     // A normal revocable event avoids a throwing property-callback removal.
     // The mirrored collection still handles icon additions/removals directly.
     current.sourceLayout = current.nativeItems.LayoutUpdated([](auto const&, auto const&) noexcept {
@@ -44763,6 +44857,9 @@ LRESULT CALLBACK UiWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM l
         g_drawer->refreshQueued = false;
         try {
             RefreshClassification(*g_drawer);
+            QuietFocusTree(g_drawer->root, false, 0);
+            QuietFocusTree(g_drawer->innerItems, false, 0);
+            QuietFocusTree(g_drawer->groupItems, false, 0);
             TryAutoOpen(*g_drawer);
         } catch (...) {
             LogException(L"Refresh saved collection");
