@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.57
+// @version         0.4.58
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -41163,6 +41163,8 @@ struct Settings {
     // What the settings window holds, before a pick from the folder menu.
     std::wstring groupSetGlyphs[3];
     Color groupSetColors[3]{};
+    std::wstring chevronSetGlyph;
+    Color chevronSetColor{};
 };
 
 SRWLOCK g_settingsLock = SRWLOCK_INIT;
@@ -41280,6 +41282,8 @@ void LoadSettings() {
         next.groupSetGlyphs[i] = next.groupGlyphs[i];
         next.groupSetColors[i] = next.groupColors[i];
     }
+    next.chevronSetGlyph = next.glyph;
+    next.chevronSetColor = next.chevronColor;
     ApplyFolderLooks(next);
     AcquireSRWLockExclusive(&g_settingsLock);
     g_settings = std::move(next);
@@ -42980,50 +42984,12 @@ bool SelectIcon(IconCandidate const& candidate) {
            state.selectedModels.end();
 }
 
+void ShowGroupMenu(DrawerState& state, int slot);
+
 void ShowRestoreMenu() {
     if (!g_drawer || g_unloading)
         return;
-    auto& state = *g_drawer;
-    if (state.restoreCommand && state.restoreClick.value)
-        state.restoreCommand.Click(state.restoreClick);
-    state.restoreClick = {};
-    state.restoreCommand = nullptr;
-    state.picker.Items().Clear();
-
-    auto restore = Controls::MenuFlyoutItem();
-    std::vector<std::wstring> saved;
-    bool healthy = ReadCollection(saved);
-    restore.Text(healthy ? Text(L"Restore all collected icons", L"还原全部收纳图标")
-                         : Text(L"Reset saved collection", L"重置收纳记录"));
-    restore.IsEnabled(!healthy || !saved.empty());
-    if (auto s = CurrentSettings(); s.theme && s.styleMenu && !state.accessibility.HighContrast()) {
-        restore.Foreground(Media::SolidColorBrush(s.text));
-        restore.FontFamily(Media::FontFamily(L"FiraCode Nerd Font"));
-        restore.FontWeight(winrt::Windows::UI::Text::FontWeights::Medium());
-    }
-    state.restoreCommand = restore;
-    state.restoreClick = restore.Click([](auto const&, auto const&) noexcept {
-        UiCallbackScope callbackScope;
-        if (g_unloading || !g_runtimeAvailable)
-            return;
-        try {
-            if (!g_drawer)
-                return;
-            {
-                CollectionLock lock;
-                if (!lock.acquired || !WriteCollection({})) {
-                    Wh_Log(L"Could not clear saved collection; presentation retained");
-                    return;
-                }
-            }
-            RefreshClassification(*g_drawer);
-            Wh_Log(L"User restored all icons; saved membership explicitly cleared");
-        } catch (...) {
-            LogException(L"Restore collected icons");
-        }
-    });
-    state.picker.Items().Append(restore);
-    state.picker.ShowAt(state.chevron);
+    ShowGroupMenu(*g_drawer, 3);
 }
 
 // BEGIN FOLDER MENU
@@ -43055,7 +43021,7 @@ std::wstring ColorHex(Color c) {
 }
 
 std::wstring FolderLookKey(int slot) {
-    if (slot < 0 || slot >= 3 || g_collectionStorageKey.empty())
+    if (slot < 0 || slot > 3 || g_collectionStorageKey.empty())
         return {};
     return g_collectionStorageKey + L".look" + std::to_wstring(slot);
 }
@@ -43082,6 +43048,7 @@ std::vector<std::wstring> ReadFolderLook(int slot) {
 }
 
 void UpdateDrawerAppearance(DrawerState& state);
+PCWSTR ChevronGlyph(DrawerState const& state, Settings const& s);
 
 void ApplyFolderLooks(Settings& s) {
     for (int slot = 0; slot < 3; ++slot) {
@@ -43092,6 +43059,12 @@ void ApplyFolderLooks(Settings& s) {
             if (auto color = ParseHexColor(look[1]))
                 s.groupColors[slot] = *color;
     }
+    auto overflowLook = ReadFolderLook(3);
+    if (!overflowLook[0].empty() && overflowLook[2] == s.chevronSetGlyph)
+        s.glyph = overflowLook[0];
+    if (!overflowLook[1].empty() && overflowLook[3] == ColorHex(s.chevronSetColor))
+        if (auto color = ParseHexColor(overflowLook[1]))
+            s.chevronColor = *color;
 }
 
 // Saves a pick (an empty value keeps the other half as it was) and redraws.
@@ -43100,13 +43073,15 @@ void SaveFolderLook(int slot, std::wstring glyph, std::wstring color) {
     if (key.empty())
         return;
     auto s = CurrentSettings();
+    auto const& setGlyph = slot == 3 ? s.chevronSetGlyph : s.groupSetGlyphs[slot];
+    auto const& setColor = slot == 3 ? s.chevronSetColor : s.groupSetColors[slot];
     auto old = ReadFolderLook(slot);
-    if (glyph.empty() && old[2] == s.groupSetGlyphs[slot])
+    if (glyph.empty() && old[2] == setGlyph)
         glyph = old[0];
-    if (color.empty() && old[3] == ColorHex(s.groupSetColors[slot]))
+    if (color.empty() && old[3] == ColorHex(setColor))
         color = old[1];
-    std::wstring record = glyph + L"\t" + color + L"\t" + s.groupSetGlyphs[slot] + L"\t" +
-                          ColorHex(s.groupSetColors[slot]);
+    std::wstring record = glyph + L"\t" + color + L"\t" + setGlyph + L"\t" +
+                          ColorHex(setColor);
     if (!Wh_SetStringValue(key.c_str(), record.c_str())) {
         Wh_Log(L"Folder %d look not saved", slot);
         return;
@@ -43154,11 +43129,53 @@ void EmptyFolder(int slot) {
     QueueCollectionRefresh();
 }
 
+// Puts every icon in the overflow folder back into the drawer, keeping any
+// icons that belong to the other three folders.
+void EmptyOverflowFolder() {
+    if (!g_drawer || g_unloading)
+        return;
+    auto& state = *g_drawer;
+    if (state.open)
+        state.inner.Hide();
+    {
+        CollectionLock lock;
+        std::vector<std::wstring> saved;
+        if (!lock.acquired) {
+            Wh_Log(L"Could not lock saved collection; presentation retained");
+            return;
+        }
+        bool healthy = ReadCollection(saved);
+        if (!healthy) {
+            if (!WriteCollection({})) {
+                Wh_Log(L"Could not reset saved collection; presentation retained");
+                return;
+            }
+        } else {
+            auto before = saved.size();
+            saved.erase(std::remove_if(saved.begin(), saved.end(),
+                                       [](std::wstring const& key) {
+                                           return GroupOfKey(key) < 0;
+                                       }),
+                        saved.end());
+            if (saved.size() != before && !WriteCollection(saved)) {
+                Wh_Log(L"Could not clear overflow icons; presentation retained");
+                return;
+            }
+        }
+    }
+    Wh_Log(L"Overflow folder emptied from its menu");
+    RefreshClassification(state);
+    QueueCollectionRefresh();
+}
+
 void ShowGroupMenu(DrawerState& state, int slot) {
-    if (slot < 0 || slot >= 3 || !state.groupButtons[slot] || !state.picker)
+    if (slot < 0 || slot > 3 || !state.picker)
+        return;
+    Controls::Button target = slot == 3 ? state.chevron : state.groupButtons[slot];
+    if (!target)
         return;
     auto s = CurrentSettings();
-    if (!s.groupEnabled[slot])
+    if (slot < 3 && !s.groupEnabled[slot])
         return;
     if (state.restoreCommand && state.restoreClick.value)
         state.restoreCommand.Click(state.restoreClick);
@@ -43194,16 +43211,41 @@ void ShowGroupMenu(DrawerState& state, int slot) {
         });
     };
 
-    std::vector<std::wstring> keys;
-    ReadGroup(slot, keys);
     size_t held = 0;
-    for (auto const& model : state.sourceSnapshot) {
-        try {
-            auto key = StableIconKey(model);
-            if (!key.empty() && std::find(keys.begin(), keys.end(), key) != keys.end())
-                ++held;
-        } catch (...) {
+    PCWSTR emptyText = L"Empty folder";
+    bool emptyEnabled = false;
+    std::function<void()> emptyAction;
+    if (slot < 3) {
+        std::vector<std::wstring> keys;
+        ReadGroup(slot, keys);
+        for (auto const& model : state.sourceSnapshot) {
+            try {
+                auto key = StableIconKey(model);
+                if (!key.empty() && std::find(keys.begin(), keys.end(), key) != keys.end())
+                    ++held;
+            } catch (...) {
+            }
         }
+        emptyEnabled = !keys.empty();
+        emptyAction = [slot] { EmptyFolder(slot); };
+    } else {
+        std::vector<std::wstring> saved;
+        bool healthy = ReadCollection(saved);
+        held = state.selectedModels.size() > state.groupedCount
+                   ? state.selectedModels.size() - state.groupedCount
+                   : 0;
+        bool anyOverflow = false;
+        if (healthy) {
+            for (auto const& key : saved) {
+                if (GroupOfKey(key) < 0) {
+                    anyOverflow = true;
+                    break;
+                }
+            }
+        }
+        emptyText = healthy ? L"Empty folder" : L"Reset saved collection";
+        emptyEnabled = !healthy || anyOverflow;
+        emptyAction = [] { EmptyOverflowFolder(); };
     }
 
     if (held == 0) {
@@ -43215,22 +43257,25 @@ void ShowGroupMenu(DrawerState& state, int slot) {
     }
 
     Controls::MenuFlyoutItem empty;
-    empty.Text(L"Empty folder");
+    empty.Text(emptyText);
     empty.Icon(glyphIcon(L"\xE894", s.text));  // Clear.
-    empty.IsEnabled(!keys.empty());
+    empty.IsEnabled(emptyEnabled);
     look(empty);
-    onClick(empty, [slot] { EmptyFolder(slot); });
+    onClick(empty, std::move(emptyAction));
     state.picker.Items().Append(empty);
+
+    PCWSTR currentGlyph = slot == 3 ? ChevronGlyph(state, s) : GroupGlyph(s.groupGlyphs[slot]);
+    Color currentColor = slot == 3 ? s.chevronColor : s.groupColors[slot];
 
     Controls::MenuFlyoutSubItem icons;
     icons.Text(L"Icon");
-    icons.Icon(glyphIcon(GroupGlyph(s.groupGlyphs[slot]), s.groupColors[slot]));
+    icons.Icon(glyphIcon(currentGlyph, currentColor));
     look(icons);
     for (auto const& choice : kFolderGlyphs) {
         Controls::ToggleMenuFlyoutItem item;
         item.Text(choice.label);
-        item.Icon(glyphIcon(GroupGlyph(choice.id), s.groupColors[slot]));
-        bool current = wcscmp(GroupGlyph(s.groupGlyphs[slot]), GroupGlyph(choice.id)) == 0;
+        item.Icon(glyphIcon(GroupGlyph(choice.id), currentColor));
+        bool current = wcscmp(currentGlyph, GroupGlyph(choice.id)) == 0;
         item.IsChecked(current);
         look(item);
         std::wstring id = choice.id;
@@ -43241,15 +43286,14 @@ void ShowGroupMenu(DrawerState& state, int slot) {
 
     Controls::MenuFlyoutSubItem colors;
     colors.Text(L"Color");
-    colors.Icon(glyphIcon(L"\xE790", s.groupColors[slot]));  // Color.
+    colors.Icon(glyphIcon(L"\xE790", currentColor));  // Color.
     look(colors);
-    PCWSTR glyph = GroupGlyph(s.groupGlyphs[slot]);
     for (auto const& choice : kFolderColors) {
         auto color = ParseHexColor(choice.hex).value_or(s.text);
         Controls::ToggleMenuFlyoutItem item;
         item.Text(choice.label);
-        item.Icon(glyphIcon(glyph, color));
-        item.IsChecked(ColorHex(color) == ColorHex(s.groupColors[slot]));
+        item.Icon(glyphIcon(currentGlyph, color));
+        item.IsChecked(ColorHex(color) == ColorHex(currentColor));
         look(item);
         std::wstring hex = choice.hex;
         onClick(item, [slot, hex] { SaveFolderLook(slot, {}, hex); });
@@ -43265,7 +43309,7 @@ void ShowGroupMenu(DrawerState& state, int slot) {
     onClick(settings, [] { ::stset::OpenSettingsWindow(); });
     state.picker.Items().Append(settings);
 
-    state.picker.ShowAt(state.groupButtons[slot]);
+    state.picker.ShowAt(target);
     Wh_Log(L"Folder menu %d shown: %zu icons held", slot, held);
 }
 // END FOLDER MENU
@@ -43502,6 +43546,10 @@ PCWSTR ChevronGlyph(DrawerState const& state, Settings const& s) {
             return L"\xE8B7";
         if (s.glyph == L"star")
             return L"\xE734";
+        if (s.glyph == L"heart")
+            return L"\xEB51";
+        if (s.glyph == L"clock")
+            return L"\xE823";
         switch (EffectivePlacement(state, s)) {
             case Placement::Below:
                 return L"\xE70D";  // ChevronDown
