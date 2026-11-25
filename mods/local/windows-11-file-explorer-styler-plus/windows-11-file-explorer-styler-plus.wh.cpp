@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.35
+// @version         1.10.36
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -11654,6 +11654,12 @@ void Ensure(HWND tree);
 bool HasDock(HWND ntc);
 void TintTreeRect(HDC hdc, const RECT& rc);
 }
+// True while the docked side list paints its own background.
+bool IsNavTreeDockBg(HWND hWnd) {
+    return g_settings.navPaneDock && g_treePaintWndForThread &&
+           hWnd == g_treePaintWndForThread &&
+           NavDock::HasDock(GetParent(hWnd));
+}
 thread_local StatusDockBuffer g_statusDockBuffersForThread[4];
 thread_local int g_statusDockBufferCountForThread;
 
@@ -12148,9 +12154,7 @@ int WINAPI FillRect_Hook(HDC hDC, const RECT* lprc, HBRUSH hbr) {
     bool navTreeBg = false;
     if (hWnd && IsWindowBackgroundBrush(hDC, hbr)) {
         hbr = (HBRUSH)GetStockObject(BLACK_BRUSH);
-        navTreeBg = g_settings.navPaneDock && g_treePaintWndForThread &&
-                    hWnd == g_treePaintWndForThread &&
-                    NavDock::HasDock(GetParent(hWnd));
+        navTreeBg = IsNavTreeDockBg(hWnd);
     }
 
     int result = FillRect_Original(hDC, lprc, hbr);
@@ -12268,6 +12272,9 @@ BOOL WINAPI PatBlt_Hook(HDC hdc, int x, int y, int w, int h, DWORD rop) {
         HGDIOBJ prevBrush = SelectObject(hdc, GetStockObject(BLACK_BRUSH));
         BOOL result = PatBlt_Original(hdc, x, y, w, h, rop);
         SelectObject(hdc, prevBrush);
+        if (result && w > 0 && h > 0 && IsNavTreeDockBg(hWnd)) {
+            NavDock::TintTreeRect(hdc, RECT{x, y, x + w, y + h});
+        }
         return result;
     }
 
@@ -12720,6 +12727,23 @@ BOOL WINAPI ExtTextOutW_Hook(HDC hdc,
                     IsWindowBackgroundColor(GetBkColor(hdc)) &&
                     !IsOpaqueFill(hWnd);
     COLORREF prevBkColor = windowBk ? SetBkColor(hdc, RGB(0, 0, 0)) : 0;
+
+    // The side list paints each row's background here, not with FillRect.
+    // Clear the row, lay the dock's dark fill on it, then draw the text on top.
+    if (windowBk && lprect && IsNavTreeDockBg(hWnd)) {
+        BOOL result = ExtTextOutW_Original(hdc, x, y, ETO_OPAQUE, lprect,
+                                           nullptr, 0, nullptr);
+        if (result && lprect->right > lprect->left &&
+            lprect->bottom > lprect->top) {
+            NavDock::TintTreeRect(hdc, *lprect);
+        }
+        if (c) {
+            result = ExtTextOutWithAlpha(hdc, x, y, options & ~ETO_OPAQUE,
+                                         lprect, lpString, c, lpDx);
+        }
+        SetBkColor(hdc, prevBkColor);
+        return result;
+    }
     BOOL result =
         ExtTextOutWithAlpha(hdc, x, y, options, lprect, lpString, c, lpDx);
     if (windowBk) {
