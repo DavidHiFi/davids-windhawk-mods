@@ -2,7 +2,7 @@
 // @id              seamless-windows-firewall
 // @name            Seamless Windows Firewall
 // @description     Block or allow any app's internet in one click, from the tray icon or a shortcut
-// @version         1.2.4
+// @version         1.2.5
 // @author          DavidHiFi, Ashix
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -45,6 +45,10 @@ works next to Windows Firewall and leaves your own firewall rules alone.
   it, such as a game hosting a match, the mod asks in its own frosted box
   instead of the Windows Firewall pop-up. Windows Firewall keeps guarding, and
   your answer is saved as a normal firewall rule.
+- **Right-click menu for apps.** Right-click any program file for Block in
+  Windows Firewall, Allow again and Open the firewall panel. A block made there
+  is a normal firewall rule and stays after a restart. Turn the menu off under
+  Blocking, Right-click menu.
 
 ## Default shortcuts
 
@@ -62,6 +66,18 @@ Change or clear any of them in the settings.
 - The Blocked list has a second view, Blocked by Windows Firewall, that shows
   the apps your own firewall rules block. Change those in Windows Defender
   Firewall.
+
+## What's new in 1.2.5
+- Right-click any program file to block it in Windows Firewall, allow it again
+  or open the panel. It does the same job as Firewall App Blocker's menu, so
+  you no longer need that app. Turn the menu off under Blocking, Right-click
+  menu; nothing of it is left while the mod is off.
+- The panel and the connection box now fade and slide in when they open and out
+  when they close. Turn it off, or pick a speed, under Look, Motion. They stay
+  still when Windows animation effects are off.
+- The connection box is real frosted glass now. Before, it looked flat.
+- The tray and settings icon is the shield alone in the blue to mauve
+  gradient, with no plate behind it.
 
 ## What's new in 1.2.2
 - No more edge pill and no more opening on hover. The mod lives in the tray:
@@ -124,6 +140,9 @@ Based on [!Net](https://windhawk.net/mods/not-net) by Ashix.
 - allowOnPublicNetworks: false
   $name: "Allow on public networks too"
   $description: "Off, Allow lets the app in on home and work networks only. On a public network you are using right now, Allow always covers it."
+- contextMenu: true
+  $name: "Right-click menu for apps"
+  $description: "Adds Seamless Windows Firewall to the right-click menu of every program file, with Block, Allow again and Open the panel. A block made there stays after a restart, like a normal firewall rule."
 - windowSizePreset: "default"
   $name: "Panel size"
   $options:
@@ -174,6 +193,19 @@ Based on [!Net](https://windhawk.net/mods/not-net) by Ashix.
 - nativeSettingsTitleBar: false
   $name: "Native Windows title bar"
   $description: "Use the Windows title bar and window buttons for this settings window. Applies when you save."
+- flyoutAnimation: true
+  $name: "Open and close animation"
+  $description: "The panel and the connection box fade and slide in when they open and out when they close. They stay still when Windows animation effects are off."
+- animationSpeed: "global"
+  $name: "Animation speed"
+  $description: "How quick the animations play. Follow the global speed uses the speed shared by all DavidHiFi mods."
+  $options:
+  - global: "Follow the global speed"
+  - veryQuick: "Very quick"
+  - quick: "Quick"
+  - normal: "Normal"
+  - relaxed: "Relaxed"
+  - slow: "Slow"
 - autoBlockedApps:
   - - appPath: ""
       $name: "Program path"
@@ -326,6 +358,7 @@ constexpr UINT_PTR TIMER_WIDGET_PROXIMITY = 86;
 constexpr UINT_PTR TIMER_OUTSIDE_CLICK    = 87;
 constexpr UINT_PTR TIMER_LATE_CHILD_POLL  = 88;
 constexpr UINT_PTR TIMER_EVENT_FLUSH      = 91;
+constexpr UINT_PTR TIMER_WARM_PANEL       = 92;
 
 // Windows open and close all the time on a busy PC (consoles, tooltips, menus). One posted
 // message per event kept this thread's queue full, and Windows only hands out timer ticks
@@ -390,6 +423,8 @@ struct ModSettings {
     bool followCursorMonitor = true;
     bool rememberWindowPosition = true;
     SizePreset windowSizePreset = SizePreset::Default;
+    bool flyoutAnimation = true;
+    int animationSpeed = 0;  // 0 follows the global speed, 1 very quick to 5 slow
 
     FullscreenBehavior fullscreenBehavior = FullscreenBehavior::Hide;
     bool hideDuringCapture = true;
@@ -404,6 +439,7 @@ struct ModSettings {
     bool warnOnVpnOrRemote = true;
     bool replaceFirewallPrompt = true;
     bool allowOnPublicNetworks = false;
+    bool contextMenu = true;
 
     HotkeyBinding hkToggleFg;
     HotkeyBinding hkExpandPill;
@@ -457,11 +493,13 @@ struct MotionClock {
     double toVal = 0.0;
     double currentVal = 0.0;
     bool active = false;
+    int ease = 0;  // 0 in and out, 1 out (opening), 2 in (closing)
 
     void Init() { QueryPerformanceFrequency(&freq); }
 
-    void Start(double target, double durMs) {
+    void Start(double target, double durMs, int easeMode = 0) {
         if (freq.QuadPart == 0) Init();
+        ease = easeMode;
         QueryPerformanceCounter(&start);
         fromVal = currentVal;
         toVal = target;
@@ -486,7 +524,8 @@ struct MotionClock {
             active = false;
             return false;
         }
-        currentVal = fromVal + (toVal - fromVal) * EaseInOutCubic(t);
+        double e = ease == 1 ? 1.0 - std::pow(1.0 - t, 3.0) : ease == 2 ? t * t * t : EaseInOutCubic(t);
+        currentVal = fromVal + (toVal - fromVal) * e;
         return true;
     }
 };
@@ -583,6 +622,15 @@ static bool g_mouseInside = false;
 static bool g_hiddenByFullscreen = false;
 static bool g_lastRoundedFrame = false;
 static bool g_glassApplied = false;
+static bool g_panelGlassOn = false;
+// Open and close motion: while it plays the panel is a layered solid frame with the glass
+// off, moved and faded each step from a kept copy (nothing redrawn).
+static bool g_panelFading = false;
+static bool g_panelClosing = false;  // the close is playing; clicks and keys do nothing
+static HDC g_fadeDC = nullptr;
+static HBITMAP g_fadeBmp = nullptr;
+static HGDIOBJ g_fadeOld = nullptr;
+static SIZE g_fadeSz{};
 static MotionClock g_expandClock;
 static MotionClock g_scrollClock;
 static PulseState g_pillPulse;
@@ -2995,6 +3043,14 @@ static void LoadSettings() {
         else next.windowSizePreset = SizePreset::Default;
     }
 
+    next.flyoutAnimation = Wh_GetIntSetting(L"flyoutAnimation") != 0;
+    {
+        auto sSpeed = WindhawkUtils::StringSetting::make(L"animationSpeed");
+        std::wstring v = ToLower(sSpeed.get());
+        next.animationSpeed = v == L"veryquick" ? 1 : v == L"quick" ? 2 : v == L"normal" ? 3
+                            : v == L"relaxed"   ? 4 : v == L"slow"  ? 5 : 0;
+    }
+
     auto sFs = WindhawkUtils::StringSetting::make(L"fullscreenBehavior");
     {
         std::wstring v = ToLower(sFs.get());
@@ -3016,6 +3072,7 @@ static void LoadSettings() {
     next.warnOnVpnOrRemote = Wh_GetIntSetting(L"warnOnVpnOrRemote") != 0;
     next.replaceFirewallPrompt = Wh_GetIntSetting(L"replaceFirewallPrompt") != 0;
     next.allowOnPublicNetworks = Wh_GetIntSetting(L"allowOnPublicNetworks") != 0;
+    next.contextMenu = Wh_GetIntSetting(L"contextMenu") != 0;
 
     auto readHk = [&](PCWSTR key) {
         auto raw = WindhawkUtils::StringSetting::make(key);
@@ -3247,6 +3304,54 @@ static void ApplyPanelGlass(HWND hwnd, bool on) {
     }
 }
 
+// Open and close motion for the panel and the boxes. The mod's own switch, the switch every
+// DavidHiFi mod follows (HKCU\Software\DavidHiFi\Motion, written by Seamless Workshop) and
+// Windows "Animation effects" all have to allow it. scale stretches the time: 2 = twice as long.
+static bool FwMotion(double* scale) {
+    bool modOn = true;
+    int level = 0;
+    {
+        std::lock_guard<std::mutex> lk(g_settingsMtx);
+        modOn = g_settings.flyoutAnimation;
+        level = g_settings.animationSpeed;
+    }
+    static constexpr double kLevels[] = {1.0, 0.5, 0.75, 1.0, 1.5, 2.0};
+    bool globalOn = true;
+    double globalScale = 1.0;
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\DavidHiFi\\Motion", 0, KEY_QUERY_VALUE, &key) ==
+        ERROR_SUCCESS) {
+        DWORD value = 0, type = 0, size = sizeof(value);
+        if (RegQueryValueExW(key, L"Enabled", nullptr, &type, (BYTE*)&value, &size) == ERROR_SUCCESS &&
+            type == REG_DWORD)
+            globalOn = value != 0;
+        WCHAR text[32] = {};
+        size = sizeof(text) - sizeof(WCHAR);
+        if (RegQueryValueExW(key, L"Speed", nullptr, &type, (BYTE*)text, &size) == ERROR_SUCCESS) {
+            if (type == REG_DWORD) {
+                globalScale = std::clamp((double)*(DWORD*)text, 25.0, 400.0) / 100.0;
+            } else if (type == REG_SZ) {
+                static const wchar_t* kNames[] = {L"", L"veryQuick", L"quick", L"normal", L"relaxed", L"slow"};
+                for (int i = 1; i < 6; i++)
+                    if (_wcsicmp(text, kNames[i]) == 0) globalScale = kLevels[i];
+            }
+        }
+        RegCloseKey(key);
+    }
+    if (scale) *scale = (level > 0 && level < 6) ? kLevels[level] : globalScale;
+    BOOL anim = TRUE;
+    if (!SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &anim, 0)) anim = TRUE;
+    return modOn && globalOn && anim;
+}
+
+static double FwNowMs() {
+    static LARGE_INTEGER freq{};
+    if (!freq.QuadPart) QueryPerformanceFrequency(&freq);
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    return (double)now.QuadPart * 1000.0 / (double)freq.QuadPart;
+}
+
 // A top-down 32-bit premultiplied drawing surface with its own DC (for icons and clipping).
 struct FwLayer {
     HDC dc = nullptr;
@@ -3299,6 +3404,12 @@ struct FwConfirmState {
     // answer in wParam and its own window in lParam instead of ending a message loop.
     HWND doneTo = nullptr;
     UINT doneMsg = 0;
+    // Open and close motion: a solid frame fades and slides while the window is layered.
+    // Once the open settles the layer goes and the glass comes on (a layered window
+    // only shows a flat blur); the close switches the glass off again first.
+    bool settled = false, closing = false;
+    double animStart = 0.0, animMs = 0.0, vis = 0.0, closeFrom = 1.0;
+    int finalX = 0, finalY = 0, slidePx = 0;
 };
 static FwConfirmState* g_confirm = nullptr;
 
@@ -3422,12 +3533,93 @@ static void FwConfirmPaint(HWND hwnd, FwConfirmState* st) {
     EndPaint(hwnd, &ps);
 }
 
-static void FwConfirmFinish(HWND hwnd, FwConfirmState* st, bool yes) {
-    if (!st || st->done) return;
-    st->result = yes;
+// The open has settled: drop the layer so DWM blurs behind the box, and draw the glass.
+static void FwBoxSettle(HWND hwnd, FwConfirmState* st) {
+    if (!st || st->settled || st->closing) return;
+    KillTimer(hwnd, TIMER_CONFIRM_FADE);
+    st->settled = true;
+    st->vis = 1.0;
+    SetWindowPos(hwnd, nullptr, st->finalX, st->finalY, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    LONG_PTR ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    if (ex & WS_EX_LAYERED) SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex & ~WS_EX_LAYERED);
+    bool glass = TransparencyOn();
+    ApplyPanelGlass(hwnd, glass);
+    st->glass = glass;
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+}
+
+// The box has its final place and size and is not shown yet.
+static void FwBoxStartOpen(HWND hwnd, FwConfirmState* st, int x, int y) {
+    st->finalX = x;
+    st->finalY = y;
+    st->openTick = GetTickCount();
+    double scale = 1.0;
+    if (!FwMotion(&scale)) {
+        FwBoxSettle(hwnd, st);
+        return;
+    }
+    st->slidePx = MulDiv(8, (int)GetDpiForWindow(hwnd), 96);
+    st->animMs = 160.0 * scale;
+    st->animStart = 0.0;  // set on the first tick, after the first paint
+    st->vis = 0.0;
+    SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
+    SetWindowPos(hwnd, nullptr, x, y + st->slidePx, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    SetTimer(hwnd, TIMER_CONFIRM_FADE, 10, nullptr);
+}
+
+static void FwBoxCloseDone(HWND hwnd, FwConfirmState* st) {
+    KillTimer(hwnd, TIMER_CONFIRM_FADE);
     st->done = true;
     ShowWindow(hwnd, SW_HIDE);
-    if (st->doneMsg && st->doneTo) PostMessageW(st->doneTo, st->doneMsg, yes ? 1 : 0, (LPARAM)hwnd);
+    if (st->doneMsg && st->doneTo) PostMessageW(st->doneTo, st->doneMsg, st->result ? 1 : 0, (LPARAM)hwnd);
+}
+
+// One step of the open or close: alpha and an 8 DIP slide, nothing redrawn.
+static void FwBoxStep(HWND hwnd, FwConfirmState* st) {
+    if (st->animStart <= 0.0) st->animStart = FwNowMs();
+    double t = st->animMs > 0.0 ? std::clamp((FwNowMs() - st->animStart) / st->animMs, 0.0, 1.0) : 1.0;
+    double e = st->closing ? st->closeFrom * (1.0 - t * t * t) : 1.0 - std::pow(1.0 - t, 3.0);
+    st->vis = e;
+    SetLayeredWindowAttributes(hwnd, 0, (BYTE)std::clamp((int)std::lround(255.0 * e), 0, 255), LWA_ALPHA);
+    SetWindowPos(hwnd, nullptr, st->finalX, st->finalY + (int)std::lround((1.0 - e) * st->slidePx), 0, 0,
+                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    if (t >= 1.0) {
+        if (st->closing) FwBoxCloseDone(hwnd, st);
+        else FwBoxSettle(hwnd, st);
+    }
+}
+
+static void FwConfirmFinish(HWND hwnd, FwConfirmState* st, bool yes) {
+    if (!st || st->done || st->closing) return;
+    st->result = yes;
+    if (GetCapture() == hwnd) ReleaseCapture();
+    double scale = 1.0;
+    if (!FwMotion(&scale) || !IsWindowVisible(hwnd)) {
+        FwBoxCloseDone(hwnd, st);
+        return;
+    }
+    KillTimer(hwnd, TIMER_CONFIRM_FADE);
+    st->closeFrom = st->settled ? 1.0 : std::clamp(st->vis, 0.0, 1.0);
+    if (st->settled) {
+        RECT wr{};
+        GetWindowRect(hwnd, &wr);
+        st->finalX = wr.left;
+        st->finalY = wr.top;
+    }
+    if (!st->slidePx) st->slidePx = MulDiv(8, (int)GetDpiForWindow(hwnd), 96);
+    st->closing = true;
+    // Never fade the glass: switch it off and fade a solid frame instead.
+    ApplyPanelGlass(hwnd, false);
+    st->glass = false;
+    LONG_PTR ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    if (!(ex & WS_EX_LAYERED)) SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_LAYERED);
+    SetLayeredWindowAttributes(hwnd, 0, (BYTE)std::lround(255.0 * st->closeFrom), LWA_ALPHA);
+    RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+    st->animMs = 120.0 * scale;
+    st->animStart = FwNowMs();
+    SetTimer(hwnd, TIMER_CONFIRM_FADE, 10, nullptr);
 }
 
 static LRESULT CALLBACK FwConfirmProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -3437,6 +3629,10 @@ static LRESULT CALLBACK FwConfirmProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
     }
     FwConfirmState* st = reinterpret_cast<FwConfirmState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     if (!st) st = g_confirm;
+    // A box that is fading out takes no more clicks or keys.
+    if (st && st->closing &&
+        ((msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST) || msg == WM_KEYDOWN || msg == WM_CHAR))
+        return 0;
     switch (msg) {
         case WM_CREATE: {
             BOOL dark = TRUE;
@@ -3445,9 +3641,9 @@ static LRESULT CALLBACK FwConfirmProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
             DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &pref, sizeof(pref));
             MARGINS m{-1, -1, -1, -1};
             DwmExtendFrameIntoClientArea(hwnd, &m);
-            bool glass = TransparencyOn();
-            ApplyPanelGlass(hwnd, glass);
-            if (st) st->glass = glass;
+            // The glass comes on once the open has settled (FwBoxSettle).
+            ApplyPanelGlass(hwnd, false);
+            if (st) st->glass = false;
             return 0;
         }
         case WM_NCACTIVATE:
@@ -3458,12 +3654,7 @@ static LRESULT CALLBACK FwConfirmProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
             FwConfirmPaint(hwnd, st);
             return 0;
         case WM_TIMER:
-            if (wParam == TIMER_CONFIRM_FADE && st) {
-                double t = std::min(1.0, (GetTickCount() - st->openTick) / 120.0);
-                SetLayeredWindowAttributes(hwnd, 0, (BYTE)std::lround(255.0 * (1.0 - (1.0 - t) * (1.0 - t))),
-                                           LWA_ALPHA);
-                if (t >= 1.0) KillTimer(hwnd, TIMER_CONFIRM_FADE);
-            }
+            if (wParam == TIMER_CONFIRM_FADE && st) FwBoxStep(hwnd, st);
             return 0;
         case WM_SETCURSOR:
             if (st && LOWORD(lParam) == HTCLIENT) {
@@ -3589,14 +3780,13 @@ static bool FwConfirm(const wchar_t* title, const wchar_t* body, const wchar_t* 
     int y = std::clamp(cy - (int)sz.cy / 2, (int)mi.rcWork.top, (int)mi.rcWork.bottom - (int)sz.cy);
     SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, sz.cx, sz.cy, SWP_NOACTIVATE);
+    FwBoxStartOpen(hwnd, &st, x, y);
 
     bool ownerEnabled = owner && IsWindowEnabled(owner);
     if (ownerEnabled) EnableWindow(owner, FALSE);
     ShowWindow(hwnd, SW_SHOW);
     SetForegroundWindow(hwnd);
     SetFocus(hwnd);
-    st.openTick = GetTickCount();
-    SetTimer(hwnd, TIMER_CONFIRM_FADE, 10, nullptr);
 
     bool quit = false;
     WPARAM quitCode = 0;
@@ -4080,9 +4270,8 @@ static void ShowNextListenBox() {
     int y = std::clamp(cy - (int)sz.cy / 2, (int)mi.rcWork.top, (int)mi.rcWork.bottom - (int)sz.cy);
     SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, sz.cx, sz.cy, SWP_NOACTIVATE);
+    FwBoxStartOpen(hwnd, st.get(), x, y);
     ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-    st->openTick = GetTickCount();
-    SetTimer(hwnd, TIMER_CONFIRM_FADE, 10, nullptr);
     g_hListenBox = hwnd;
     g_listenBoxState = std::move(st);
     g_listenCurrent = std::move(a);
@@ -4092,21 +4281,16 @@ static void ShowNextListenBox() {
 // fills the screen.
 static void ListenPump(bool fullscreen) {
     if (g_hListenBox) {
-        if (!IsWindow(g_hListenBox) || (g_listenBoxState && g_listenBoxState->done)) return;
+        FwConfirmState* bs = g_listenBoxState.get();
+        if (!IsWindow(g_hListenBox) || !bs || bs->done || bs->closing) return;
         bool vis = IsWindowVisible(g_hListenBox) != FALSE;
-        // Never leave the box see-through if its fade tick was held up.
-        if (vis && g_listenBoxState && GetTickCount() - g_listenBoxState->openTick > 300) {
-            BYTE a = 0;
-            DWORD fl = 0;
-            if (GetLayeredWindowAttributes(g_hListenBox, nullptr, &a, &fl) && a < 255) {
-                KillTimer(g_hListenBox, TIMER_CONFIRM_FADE);
-                SetLayeredWindowAttributes(g_hListenBox, 0, 255, LWA_ALPHA);
-            }
-        }
+        // Never leave the box half drawn if its animation ticks were held up.
+        if (!bs->settled && GetTickCount() - bs->openTick > (DWORD)(bs->animMs + 400.0))
+            FwBoxSettle(g_hListenBox, bs);
         if (fullscreen && vis) {
             ShowWindow(g_hListenBox, SW_HIDE);
         } else if (!fullscreen && !vis) {
-            SetLayeredWindowAttributes(g_hListenBox, 0, 255, LWA_ALPHA);
+            FwBoxSettle(g_hListenBox, bs);
             SetWindowPos(g_hListenBox, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             ShowWindow(g_hListenBox, SW_SHOWNOACTIVATE);
         }
@@ -4208,21 +4392,25 @@ static void SetWindowFrameMode(HWND hwnd, bool roundedPanel) {
     if (roundedPanel && HasAnyActiveCycle()) SetTimer(hwnd, TIMER_CYCLE_UI, 250, nullptr);
     else if (!roundedPanel) KillTimer(hwnd, TIMER_CYCLE_UI);
     if (!hwnd) return;
-    bool wantLayeredLine = !roundedPanel;
+    // Closed, and while the panel fades, it is a layered window. Open and settled it is a
+    // plain window, so DWM can blur behind it.
+    bool wantLayered = !roundedPanel || g_panelFading;
     LONG_PTR ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
     bool hasLayered = (ex & WS_EX_LAYERED) != 0;
-    if (wantLayeredLine != hasLayered) {
-        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, wantLayeredLine ? (ex | WS_EX_LAYERED) : (ex & ~WS_EX_LAYERED));
+    if (wantLayered != hasLayered) {
+        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, wantLayered ? (ex | WS_EX_LAYERED) : (ex & ~WS_EX_LAYERED));
     }
-    if (g_lastRoundedFrame == roundedPanel && !wantLayeredLine) return;
-    bool changed = g_lastRoundedFrame != roundedPanel || !g_glassApplied;
-    g_lastRoundedFrame = roundedPanel;
-    DWORD pref = roundedPanel ? DWMWCP_ROUND : DWMWCP_DONOTROUND;
-    DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &pref, sizeof(pref));
-    MARGINS m = roundedPanel ? MARGINS{-1, -1, -1, -1} : MARGINS{0, 0, 0, 0};
-    DwmExtendFrameIntoClientArea(hwnd, &m);
-    if (changed) {
-        ApplyPanelGlass(hwnd, roundedPanel && TransparencyOn());
+    if (g_lastRoundedFrame != roundedPanel || !g_glassApplied) {
+        DWORD pref = roundedPanel ? DWMWCP_ROUND : DWMWCP_DONOTROUND;
+        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &pref, sizeof(pref));
+        MARGINS m = roundedPanel ? MARGINS{-1, -1, -1, -1} : MARGINS{0, 0, 0, 0};
+        DwmExtendFrameIntoClientArea(hwnd, &m);
+        g_lastRoundedFrame = roundedPanel;
+    }
+    bool wantGlass = roundedPanel && !g_panelFading && TransparencyOn();
+    if (!g_glassApplied || wantGlass != g_panelGlassOn) {
+        ApplyPanelGlass(hwnd, wantGlass);
+        g_panelGlassOn = wantGlass;
         g_glassApplied = true;
     }
 }
@@ -4270,9 +4458,10 @@ static void ComputeTargetRect(double progress, RECT& outRc) {
     SIZE expLog = GetExpandedLogicalSize();
     int expW = std::min(DpiScale(expLog.cx, dpi), (int)(wa.right - wa.left));
     int expH = std::min(DpiScale(expLog.cy, dpi), (int)(wa.bottom - wa.top));
-    double sc = 0.94 + 0.06 * std::clamp(progress, 0.0, 1.0);
-    int curW = std::max(1, (int)std::round(expW * sc));
-    int curH = std::max(1, (int)std::round(expH * sc));
+    // Full size the whole time; the open and close only slide it 8 DIP and fade it.
+    int curW = std::max(1, expW);
+    int curH = std::max(1, expH);
+    int slide = (int)std::lround((1.0 - std::clamp(progress, 0.0, 1.0)) * DpiScale(8, dpi));
 
     int fullL = wa.left + (wa.right - wa.left - expW) / 2;
     int fullT = wa.top + (wa.bottom - wa.top - expH) / 2;
@@ -4281,16 +4470,97 @@ static void ComputeTargetRect(double progress, RECT& outRc) {
         fullT = std::clamp((int)g_panelMovedPos.y, (int)wa.top, (int)wa.bottom - expH);
     }
     outRc.left = fullL + (expW - curW) / 2;
-    outRc.top = fullT + (expH - curH) / 2;
+    outRc.top = fullT + (expH - curH) / 2 + slide;
     outRc.right = outRc.left + curW;
     outRc.bottom = outRc.top + curH;
 }
 
+static void PanelDropFadeFrame() {
+    if (g_fadeDC) {
+        SelectObject(g_fadeDC, g_fadeOld);
+        DeleteDC(g_fadeDC);
+        g_fadeDC = nullptr;
+    }
+    if (g_fadeBmp) {
+        DeleteObject(g_fadeBmp);
+        g_fadeBmp = nullptr;
+    }
+    g_fadeSz = {};
+}
+
+// Keeps the last solid frame, so each animation step only moves and fades it.
+static void PanelKeepFadeFrame(HDC src, int w, int h) {
+    if (!g_fadeDC || g_fadeSz.cx != w || g_fadeSz.cy != h) {
+        PanelDropFadeFrame();
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+        bi.bmiHeader.biWidth = w;
+        bi.bmiHeader.biHeight = -h;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        void* bits = nullptr;
+        g_fadeBmp = CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+        if (!g_fadeBmp) return;
+        g_fadeDC = CreateCompatibleDC(nullptr);
+        g_fadeOld = SelectObject(g_fadeDC, g_fadeBmp);
+        g_fadeSz = {w, h};
+    }
+    BitBlt(g_fadeDC, 0, 0, w, h, src, 0, 0, SRCCOPY);
+}
+
+// One step of the panel's open or close: move and fade the kept frame.
+static void PanelFadeFrame(HWND hwnd) {
+    RECT rc{};
+    ComputeTargetRect(g_expandClock.currentVal, rc);
+    if (!g_fadeDC || g_fadeSz.cx != rc.right - rc.left || g_fadeSz.cy != rc.bottom - rc.top) {
+        SetWindowPos(hwnd, HWND_TOPMOST, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
+                     SWP_NOACTIVATE | SWP_NOCOPYBITS);
+        RequestRepaint();
+        return;
+    }
+    POINT pt{rc.left, rc.top};
+    SIZE sz = g_fadeSz;
+    POINT src{0, 0};
+    BYTE a = (BYTE)std::clamp((int)std::lround(g_expandClock.currentVal * 255.0), 0, 255);
+    BLENDFUNCTION bf{AC_SRC_OVER, 0, a, AC_SRC_ALPHA};
+    UpdateLayeredWindow(hwnd, nullptr, &pt, &sz, g_fadeDC, &src, 0, &bf, ULW_ALPHA);
+}
+
+static void PanelFinishClose() {
+    g_expandClock.currentVal = 0.0;
+    g_expandClock.active = false;
+    g_panelFading = false;
+    g_panelClosing = false;
+    if (!g_hWnd) return;
+    ShowWindow(g_hWnd, SW_HIDE);
+    SetWindowFrameMode(g_hWnd, false);
+    PanelDropFadeFrame();
+    SyncHoverSensorTimer(g_hWnd);
+    SyncCycleWidgetWindow(true);
+}
+
+// The open has settled: drop the layer, switch the glass on and draw it once.
+static void PanelFinishOpen(HWND hwnd) {
+    g_panelFading = false;
+    RECT rc{};
+    ComputeTargetRect(1.0, rc);
+    SetWindowFrameMode(hwnd, true);
+    SetWindowPos(hwnd, HWND_TOPMOST, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
+                 SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+    PanelDropFadeFrame();
+}
+
 static void UpdateWindowGeometry(bool immediate) {
     if (!g_hWnd) return;
-    double target = (g_uiState == UiState::Line) ? 0.0 : 1.0;
     bool open = g_uiState != UiState::Line;
-    if (open && !g_panelWasOpen) {
+    bool shown = IsWindowVisible(g_hWnd) != FALSE;
+    double scale = 1.0;
+    bool motion = !immediate && FwMotion(&scale);
+    // A fresh open picks the screen under the pointer; one that cuts a close short carries
+    // on from where the close got to.
+    if (open && !g_panelWasOpen && !shown) {
         POINT cur{};
         GetCursorPos(&cur);
         g_panelMon = MonitorFromPoint(cur, MONITOR_DEFAULTTOPRIMARY);
@@ -4301,29 +4571,50 @@ static void UpdateWindowGeometry(bool immediate) {
     if (!open && g_panelWasOpen) g_panelClosedTick = GetTickCount();
     g_panelWasOpen = open;
     if (!open) {
-        // Closed: no pill to shrink into, so the window simply goes away.
-        g_expandClock.currentVal = 0.0;
-        g_expandClock.active = false;
         KillTimer(g_hWnd, TIMER_OUTSIDE_CLICK);
         SyncOutsideMouseHook(false);
-        ShowWindow(g_hWnd, SW_HIDE);
-        SetWindowFrameMode(g_hWnd, false);
-        SyncHoverSensorTimer(g_hWnd);
-        SyncCycleWidgetWindow(true);
+        if (motion && shown && g_expandClock.currentVal > 0.01) {
+            // The glass goes off first, then a solid frame fades out and slides down 8 DIP.
+            g_panelClosing = true;
+            g_panelFading = true;
+            SetWindowFrameMode(g_hWnd, true);
+            if (!g_fadeDC) RedrawWindow(g_hWnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+            g_expandClock.Start(0.0, 120.0 * scale, 2);
+            SetTimer(g_hWnd, TIMER_ANIM_VSYNC, 10, nullptr);
+            return;
+        }
+        PanelFinishClose();
         return;
     }
-    if (immediate) {
-        g_expandClock.currentVal = target;
+    g_panelClosing = false;
+    bool wasFading = g_panelFading;
+    if (!motion) {
+        g_expandClock.currentVal = 1.0;
         g_expandClock.active = false;
     } else {
-        g_expandClock.Start(target, (target > 0.5) ? 240.0 : 200.0);
-        SetTimer(g_hWnd, TIMER_ANIM_VSYNC, 16, nullptr);
+        if (g_expandClock.currentVal < 0.999 && !g_fadeDC) {
+            g_panelFading = true;
+            SetWindowFrameMode(g_hWnd, true);
+            RECT rc0{};
+            ComputeTargetRect(g_expandClock.currentVal, rc0);
+            SetWindowPos(g_hWnd, HWND_TOPMOST, rc0.left, rc0.top, rc0.right - rc0.left, rc0.bottom - rc0.top,
+                         SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            RedrawWindow(g_hWnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+        }
+        g_expandClock.Start(1.0, 160.0 * scale, 1);
     }
-    SetWindowFrameMode(g_hWnd, (g_uiState == UiState::Panel) || g_expandClock.active);
+    g_panelFading = g_expandClock.active;
+    SetWindowFrameMode(g_hWnd, true);
     RECT rc{};
     ComputeTargetRect(g_expandClock.currentVal, rc);
     SetWindowPos(g_hWnd, HWND_TOPMOST, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
                  SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    if (g_panelFading) {
+        SetTimer(g_hWnd, TIMER_ANIM_VSYNC, 10, nullptr);
+    } else if (wasFading) {
+        RedrawWindow(g_hWnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+        PanelDropFadeFrame();
+    }
     SyncHoverSensorTimer(g_hWnd);
     if (g_hWnd) {
         if (g_uiState == UiState::Panel && !g_pinned) SetTimer(g_hWnd, TIMER_OUTSIDE_CLICK, 50, nullptr);
@@ -4331,7 +4622,7 @@ static void UpdateWindowGeometry(bool immediate) {
         SyncOutsideMouseHook(g_uiState == UiState::Panel && !g_pinned);
     }
     SyncCycleWidgetWindow(true);
-    RequestRepaint();
+    if (!(g_panelFading && g_fadeDC)) RequestRepaint();
 }
 
 static void RequestRepaint(const RECT* dirty) {
@@ -4439,7 +4730,7 @@ static void PaintFloatingWindow(HWND hwnd) {
         }
     } else {
         int blockedCount = CountBlockedApps();
-        bool glass = TransparencyOn();
+        bool glass = TransparencyOn() && !g_panelFading;  // never fade the glass: solid while it moves
         Gdiplus::REAL R = (Gdiplus::REAL)DpiScale(PanelCornerRadius(), dpi);
 
         // Panel material and its one edge: grey at rest, blue to mauve while the pointer is inside.
@@ -4795,11 +5086,8 @@ static void PaintFloatingWindow(HWND hwnd) {
             DeleteObject(gdiClip);
             g.ResetClip();
 
-            // Fade the content in while the panel opens, over the glass (no black scrim).
-            double contentVis = (g_expandClock.currentVal < 0.99)
-                                    ? std::clamp((g_expandClock.currentVal - 0.30) / 0.65, 0.0, 1.0)
-                                    : 1.0;
-            BYTE ca = (BYTE)std::clamp((int)std::lround(contentVis * 255.0), 0, 255);
+            // The whole window fades as one; the content is always drawn in full.
+            BYTE ca = 255;
             if (ca > 0) {
                 BLENDFUNCTION cbf{AC_SRC_OVER, 0, ca, AC_SRC_ALPHA};
                 GdiAlphaBlend(memDC, 0, 0, w, h, cDC, 0, 0, w, h, cbf);
@@ -4808,7 +5096,10 @@ static void PaintFloatingWindow(HWND hwnd) {
     }
 
     bool isLayered = (GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_LAYERED) != 0;
-    if (isLayered) {
+    if (isLayered && g_panelFading) {
+        PanelKeepFadeFrame(memDC, w, h);
+        PanelFadeFrame(hwnd);
+    } else if (isLayered) {
         RECT wr{};
         GetWindowRect(hwnd, &wr);
         POINT ptDst{wr.left, wr.top};
@@ -4820,6 +5111,29 @@ static void PaintFloatingWindow(HWND hwnd) {
         BitBlt(hdcScreen, 0, 0, w, h, memDC, 0, 0, SRCCOPY);
     }
     EndPaint(hwnd, &ps);
+}
+
+// On a cold PC the first open stalled for seconds while the panel's fonts and app icons
+// loaded, so the open started late. Load them once, quietly, soon after the mod starts.
+static void WarmPanelDraw(HWND hwnd) {
+    if (g_uiState != UiState::Line) return;
+    UINT dpi = GetDpiForWindow(hwnd);
+    {
+        Gdiplus::Bitmap bm(96, 32, PixelFormat32bppPARGB);
+        Gdiplus::Graphics g(&bm);
+        g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
+        Gdiplus::SolidBrush br(Gdiplus::Color(255, 255, 255, 255));
+        Gdiplus::RectF rf(0, 0, 96, 32);
+        const wchar_t* face = FwTextFace();
+        Gdiplus::Font f1(face, (Gdiplus::REAL)DpiScale(15, dpi), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
+        Gdiplus::Font f2(face, (Gdiplus::REAL)DpiScale(13, dpi), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+        Gdiplus::Font f3(face, (Gdiplus::REAL)DpiScale(11, dpi), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+        Gdiplus::Font f4(FwIconFace(), (Gdiplus::REAL)DpiScale(13, dpi), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+        for (Gdiplus::Font* f : {&f1, &f2, &f3}) g.DrawString(L"Allowed 0", -1, f, rf, nullptr, &br);
+        g.DrawString(L"\xE713\xE72C\xE718\xE916", -1, &f4, rf, nullptr, &br);
+    }
+    RefreshAppList();
+    for (const AppEntry& app : g_appList) GetAppIconCached(app.displayPath, dpi);
 }
 
 // ============================================================================
@@ -7435,6 +7749,9 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         AddTrayIcon(hwnd);
         return 0;
     }
+    // A panel that is fading out takes no more clicks or keys.
+    if (g_panelClosing && ((msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST) || msg == WM_KEYDOWN || msg == WM_CHAR))
+        return 0;
     switch (msg) {
         case WM_CREATE: {
             g_wmTaskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
@@ -7451,6 +7768,7 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             }
             SetTimer(hwnd, TIMER_FULLSCREEN, 1000, nullptr);
             SetTimer(hwnd, TIMER_LATE_CHILD_POLL, 3000, nullptr);
+            SetTimer(hwnd, TIMER_WARM_PANEL, 2000, nullptr);
             SyncHoverSensorTimer(hwnd);
             ListenSync();
             return 0;
@@ -7645,20 +7963,30 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 }
             } else if (wParam == TIMER_ANIM_VSYNC) {
                 bool wasExpandActive = g_expandClock.active;
+                bool wasScroll = g_scrollClock.active;
+                bool fadeTick = wasExpandActive && g_panelFading;
                 bool moreExpand = g_expandClock.Step();
                 bool moreScroll = g_scrollClock.Step();
                 bool morePulse  = g_pillPulse.Step();
-                if (wasExpandActive || moreExpand) {
+                if (fadeTick) {
+                    PanelFadeFrame(hwnd);
+                } else if (wasExpandActive || moreExpand) {
                     RECT rc{};
                     ComputeTargetRect(g_expandClock.currentVal, rc);
                     SetWindowPos(hwnd, HWND_TOPMOST, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
                                  SWP_NOACTIVATE | SWP_NOCOPYBITS);
                 }
-                if (wasExpandActive && !moreExpand && g_uiState == UiState::Line) {
-                    SetWindowFrameMode(hwnd, false);
-                    SyncCycleWidgetWindow(true);
+                if (wasExpandActive && !moreExpand) {
+                    if (g_panelClosing) {
+                        PanelFinishClose();
+                    } else if (g_panelFading) {
+                        PanelFinishOpen(hwnd);
+                    } else if (g_uiState == UiState::Line) {
+                        SetWindowFrameMode(hwnd, false);
+                        SyncCycleWidgetWindow(true);
+                    }
                 }
-                RequestRepaint();
+                if (!fadeTick || wasScroll || morePulse) RequestRepaint();
                 if (!moreExpand && !moreScroll && !morePulse) {
                     KillTimer(hwnd, TIMER_ANIM_VSYNC);
                 }
@@ -7696,7 +8024,8 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             } else if (wParam == TIMER_WIDGET_PROXIMITY) {
                 bool followMon = false;
                 { std::lock_guard<std::mutex> lk(g_settingsMtx); followMon = g_settings.followCursorMonitor; }
-                if (followMon && g_uiState == UiState::Line && !g_drag.dragging && !g_hiddenByFullscreen) {
+                if (followMon && g_uiState == UiState::Line && !g_drag.dragging && !g_hiddenByFullscreen &&
+                    !g_panelClosing) {
                     if (GetTargetMonitor(true) != MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST)) {
                         UpdateWindowGeometry(true);
                     }
@@ -7729,6 +8058,9 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 g_evFgDirty = g_evAppsDirty = false;
                 if (fg) SendMessageW(hwnd, WM_APP_FOREGROUND_CHG, 0, 0);
                 if (apps) SendMessageW(hwnd, WM_APP_REFRESH_APPS, 0, 0);
+            } else if (wParam == TIMER_WARM_PANEL) {
+                KillTimer(hwnd, TIMER_WARM_PANEL);
+                WarmPanelDraw(hwnd);
             } else if (wParam == TIMER_DEBOUNCE_REFRESH) {
                 KillTimer(hwnd, TIMER_DEBOUNCE_REFRESH);
                 SyncLateChildBlocks();
@@ -7770,6 +8102,7 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                 if (shouldHide && g_hCyclePopup && IsWindow(g_hCyclePopup)) {
                     DestroyWindow(g_hCyclePopup);
                 }
+                if (shouldHide && g_panelClosing) PanelFinishClose();
                 if (shouldHide && IsWindowVisible(hwnd)) {
                     ShowWindow(hwnd, SW_HIDE);
                     g_hiddenByFullscreen = true;
@@ -8034,6 +8367,7 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         case WM_DESTROY: {
             KillTimer(hwnd, TIMER_COLLAPSE);
             KillTimer(hwnd, TIMER_ANIM_VSYNC);
+            PanelDropFadeFrame();
             KillTimer(hwnd, TIMER_FULLSCREEN);
             KillTimer(hwnd, TIMER_HOVER_SENSOR);
             KillTimer(hwnd, TIMER_CYCLE_UI);
@@ -8057,7 +8391,367 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
+// ============================================================================
+// Right-click menu for program files (took over from Sordum's Firewall App
+// Blocker menu, 1.2.5). Explorer runs
+//   "<Windhawk>\windhawk-mod.exe" -windhawk-tool-mod "<id>" -swf-block "<file>"
+// Windhawk loads this mod into that normal-rights copy. The object below
+// catches the command as the mod loads, before the tool code runs, hands it to
+// the running elevated copy and ends that copy at once.
+// ============================================================================
+
+constexpr ULONG_PTR kCtxCopyTag = 0x53574631;  // 'SWF1'
+constexpr UINT WM_APP_CTX_DONE = WM_APP + 120;
+constexpr wchar_t kCtxKey[] = L"Software\\Classes\\exefile\\shell\\SeamlessFirewall";
+
+struct ContextMenuForwarder {
+    ContextMenuForwarder() {
+        const wchar_t* cmd = GetCommandLineW();
+        if (!cmd || !wcsstr(cmd, L"-windhawk-tool-mod \"" WH_MOD_ID L"\"")) return;
+        const wchar_t* a = wcsstr(cmd, L" -swf-");
+        if (!a) return;
+        a += 6;
+        wchar_t verb = 0;
+        if (!wcsncmp(a, L"block", 5)) {
+            verb = L'B';
+            a += 5;
+        } else if (!wcsncmp(a, L"allow", 5)) {
+            verb = L'A';
+            a += 5;
+        } else if (!wcsncmp(a, L"open", 4)) {
+            verb = L'O';
+            a += 4;
+        }
+        if (verb) {
+            while (*a == L' ') a++;
+            std::wstring path;
+            if (*a == L'"') {
+                const wchar_t* e = wcschr(a + 1, L'"');
+                path.assign(a + 1, e ? e : a + 1 + wcslen(a + 1));
+            } else {
+                path = a;
+            }
+            while (!path.empty() && path.back() == L' ') path.pop_back();
+            std::wstring msg(1, verb);
+            msg += L'|' + std::to_wstring(GetCurrentProcessId()) + L'|' + path;
+            if (HWND target = FindWindowExW(HWND_MESSAGE, nullptr, kCtrlWndClass, nullptr)) {
+                COPYDATASTRUCT cds{kCtxCopyTag, (DWORD)((msg.size() + 1) * sizeof(wchar_t)), (void*)msg.c_str()};
+                DWORD_PTR res = 0;
+                SendMessageTimeoutW(target, WM_COPYDATA, 0, (LPARAM)&cds, SMTO_ABORTIFHUNG | SMTO_BLOCK, 5000, &res);
+            }
+        }
+        // This copy only carried the request. It never runs the tool itself.
+        TerminateProcess(GetCurrentProcess(), 0);
+    }
+};
+static ContextMenuForwarder g_contextMenuForwarder;
+
+struct CtxJob {
+    wchar_t verb = 0;
+    std::wstring path;
+    Direction dir = Direction::FullyOffline;
+    int result = 0;  // rules added or removed; -1 refused
+};
+
+static bool ProcessIsSystem() {
+    HANDLE tok = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &tok)) return false;
+    BYTE buf[256];
+    DWORD len = 0;
+    bool sys = false;
+    if (GetTokenInformation(tok, TokenUser, buf, sizeof(buf), &len))
+        sys = IsWellKnownSid(((TOKEN_USER*)buf)->User.Sid, WinLocalSystemSid) != FALSE;
+    CloseHandle(tok);
+    return sys;
+}
+
+static std::wstring CtxForwarderExe() {
+    WCHAR self[MAX_PATH];
+    DWORD n = GetModuleFileNameW(nullptr, self, ARRAYSIZE(self));
+    if (!n || n == ARRAYSIZE(self)) return L"";
+    std::wstring dir(self, n);
+    size_t slash = dir.find_last_of(L'\\');
+    if (slash == std::wstring::npos) return L"";
+    std::wstring exe = dir.substr(0, slash) + L"\\windhawk-mod.exe";
+    if (GetFileAttributesW(exe.c_str()) != INVALID_FILE_ATTRIBUTES) return exe;
+    // Windhawk 1.7 has no windhawk-mod.exe: tool mods run inside windhawk.exe
+    // itself, so the menu command goes through that copy instead.
+    if (ToLower(dir.substr(slash + 1)) == L"windhawk.exe") return dir;
+    return L"";
+}
+
+// Writes or removes the menu. Off, or when the mod stops, nothing of it is left.
+static void ContextMenuSync(bool on) {
+    HKEY root = ProcessIsSystem() ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER;
+    HKEY probe = nullptr;
+    bool had = RegOpenKeyExW(root, kCtxKey, 0, KEY_READ, &probe) == ERROR_SUCCESS;
+    if (probe) RegCloseKey(probe);
+    std::wstring exe = on ? CtxForwarderExe() : L"";
+    if (on && exe.empty()) {
+        Wh_Log(L"Right-click menu: no Windhawk helper found next to this copy, menu left off");
+        on = false;
+    }
+    if (!on) {
+        if (had) {
+            RegDeleteTreeW(root, kCtxKey);
+            SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+            LogAudit(L"Right-click menu removed.");
+        }
+        return;
+    }
+    auto setSz = [&](const std::wstring& sub, const wchar_t* name, const std::wstring& val, DWORD type = REG_SZ) {
+        RegSetKeyValueW(root, (std::wstring(kCtxKey) + sub).c_str(), name, type, val.c_str(),
+                        (DWORD)((val.size() + 1) * sizeof(wchar_t)));
+    };
+    const std::wstring base = L"\"" + exe + L"\" -windhawk-tool-mod \"" WH_MOD_ID L"\" ";
+    setSz(L"", L"MUIVerb", L"Seamless Windows Firewall");
+    setSz(L"", L"SubCommands", L"");
+    setSz(L"", L"Position", L"Bottom");
+    setSz(L"", L"Icon", L"%SystemRoot%\\System32\\FirewallControlPanel.dll,0", REG_EXPAND_SZ);
+    setSz(L"\\shell\\1_Block", L"MUIVerb", L"Block in Windows Firewall");
+    setSz(L"\\shell\\1_Block", L"Icon", L"%SystemRoot%\\System32\\imageres.dll,-105", REG_EXPAND_SZ);
+    setSz(L"\\shell\\1_Block\\command", nullptr, base + L"-swf-block \"%1\"");
+    setSz(L"\\shell\\2_Allow", L"MUIVerb", L"Allow again (remove the block)");
+    setSz(L"\\shell\\2_Allow", L"Icon", L"%SystemRoot%\\System32\\imageres.dll,-106", REG_EXPAND_SZ);
+    setSz(L"\\shell\\2_Allow\\command", nullptr, base + L"-swf-allow \"%1\"");
+    setSz(L"\\shell\\3_Open", L"MUIVerb", L"Open the firewall panel");
+    setSz(L"\\shell\\3_Open", L"Icon", L"%SystemRoot%\\System32\\FirewallControlPanel.dll,0", REG_EXPAND_SZ);
+    DWORD sepBefore = 0x20;  // ECF_SEPARATORBEFORE
+    RegSetKeyValueW(root, (std::wstring(kCtxKey) + L"\\shell\\3_Open").c_str(), L"CommandFlags", REG_DWORD, &sepBefore,
+                    sizeof(sepBefore));
+    setSz(L"\\shell\\3_Open\\command", nullptr, base + L"-swf-open");
+    if (!had) {
+        SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+        LogAudit(L"Right-click menu added.");
+    }
+}
+
+template <class F>
+static void ForEachFwRule(INetFwPolicy2* p, F&& fn) {
+    INetFwRules* rules = nullptr;
+    if (FAILED(p->get_Rules(&rules)) || !rules) return;
+    IUnknown* unk = nullptr;
+    IEnumVARIANT* en = nullptr;
+    if (SUCCEEDED(rules->get__NewEnum(&unk)) && unk && SUCCEEDED(unk->QueryInterface(IID_PPV_ARGS(&en))) && en) {
+        VARIANT var;
+        VariantInit(&var);
+        ULONG got = 0;
+        while (en->Next(1, &var, &got) == S_OK && got == 1) {
+            INetFwRule* r = nullptr;
+            if (var.vt == VT_DISPATCH && var.pdispVal && SUCCEEDED(var.pdispVal->QueryInterface(IID_PPV_ARGS(&r))) &&
+                r) {
+                fn(rules, r);
+                r->Release();
+            }
+            VariantClear(&var);
+        }
+        en->Release();
+    }
+    if (unk) unk->Release();
+    rules->Release();
+}
+
+static bool FwRuleIsBlockFor(INetFwRule* r, const std::wstring& low, NET_FW_RULE_DIRECTION* dirOut) {
+    NET_FW_ACTION act = NET_FW_ACTION_ALLOW;
+    if (FAILED(r->get_Action(&act)) || act != NET_FW_ACTION_BLOCK) return false;
+    BSTR app = nullptr;
+    r->get_ApplicationName(&app);
+    bool match = app && *app && ListenExpandLower(app) == low;
+    if (app) SysFreeString(app);
+    if (match && dirOut) r->get_Direction(dirOut);
+    return match;
+}
+
+// A block that stays after a restart: normal Windows Firewall rules, the way
+// Firewall App Blocker made them, in our own rule group.
+static int ContextMenuBlock(const std::wstring& path, Direction dir) {
+    std::wstring low = ToLower(path);
+    bool lockCrit = true;
+    {
+        std::lock_guard<std::mutex> lk(g_settingsMtx);
+        lockCrit = g_settings.lockSystemProcesses;
+    }
+    if (IsImmutableProtectedExe(low) || (lockCrit && IsCriticalSystemExe(low))) return -1;
+    bool wantOut = dir == Direction::FullyOffline || dir == Direction::CantReachInternet;
+    bool wantIn = dir == Direction::FullyOffline || dir == Direction::CantBeReached;
+    int added = 0;
+    WithFwPolicy([&](INetFwPolicy2* p) {
+        bool haveOut = false, haveIn = false;
+        ForEachFwRule(p, [&](INetFwRules*, INetFwRule* r) {
+            VARIANT_BOOL on = VARIANT_FALSE;
+            NET_FW_RULE_DIRECTION d = NET_FW_RULE_DIR_OUT;
+            if (FwRuleIsBlockFor(r, low, &d) && SUCCEEDED(r->get_Enabled(&on)) && on == VARIANT_TRUE) {
+                (d == NET_FW_RULE_DIR_IN ? haveIn : haveOut) = true;
+            }
+        });
+        INetFwRules* rules = nullptr;
+        if (FAILED(p->get_Rules(&rules)) || !rules) return;
+        auto add = [&](NET_FW_RULE_DIRECTION d) {
+            INetFwRule* r = nullptr;
+            if (FAILED(CoCreateInstance(__uuidof(NetFwRule), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&r))) || !r)
+                return;
+            std::wstring nm = L"Seamless Firewall: " + GetFileNameOnly(path) +
+                              (d == NET_FW_RULE_DIR_IN ? L" (in)" : L" (out)");
+            BSTR bName = SysAllocString(nm.c_str());
+            BSTR bDesc = SysAllocString(L"Blocked from the Seamless Windows Firewall right-click menu.");
+            BSTR bApp = SysAllocString(path.c_str());
+            BSTR bGrp = SysAllocString(L"Seamless Windows Firewall");
+            r->put_Name(bName);
+            r->put_Description(bDesc);
+            r->put_ApplicationName(bApp);
+            r->put_Grouping(bGrp);
+            r->put_Protocol(NET_FW_IP_PROTOCOL_ANY);
+            r->put_Direction(d);
+            r->put_Action(NET_FW_ACTION_BLOCK);
+            r->put_Profiles(NET_FW_PROFILE2_ALL);
+            r->put_Enabled(VARIANT_TRUE);
+            HRESULT hr = rules->Add(r);
+            if (SUCCEEDED(hr)) added++;
+            else Wh_Log(L"Right-click block: could not add a rule: 0x%08X", (unsigned)hr);
+            SysFreeString(bName);
+            SysFreeString(bDesc);
+            SysFreeString(bApp);
+            SysFreeString(bGrp);
+            r->Release();
+        };
+        if (wantOut && !haveOut) add(NET_FW_RULE_DIR_OUT);
+        if (wantIn && !haveIn) add(NET_FW_RULE_DIR_IN);
+        rules->Release();
+    });
+    return added;
+}
+
+// Removes every block rule for this exact file, whoever made it (the same as
+// Firewall App Blocker's Remove). Allow rules stay.
+static int ContextMenuAllow(const std::wstring& path) {
+    std::wstring low = ToLower(path);
+    int removed = 0;
+    WithFwPolicy([&](INetFwPolicy2* p) {
+        std::vector<std::wstring> doomed;
+        ForEachFwRule(p, [&](INetFwRules*, INetFwRule* r) {
+            if (!FwRuleIsBlockFor(r, low, nullptr)) return;
+            // Rules can share a name, and Remove takes a name, so each one gets a
+            // name of its own first.
+            GUID g{};
+            WCHAR gs[64];
+            if (FAILED(CoCreateGuid(&g)) || !StringFromGUID2(g, gs, ARRAYSIZE(gs))) return;
+            std::wstring nm = std::wstring(L"SeamlessFirewall_remove_") + gs;
+            BSTR b = SysAllocString(nm.c_str());
+            if (SUCCEEDED(r->put_Name(b))) doomed.push_back(nm);
+            SysFreeString(b);
+        });
+        INetFwRules* rules = nullptr;
+        if (FAILED(p->get_Rules(&rules)) || !rules) return;
+        for (const auto& nm : doomed) {
+            BSTR b = SysAllocString(nm.c_str());
+            if (SUCCEEDED(rules->Remove(b))) removed++;
+            SysFreeString(b);
+        }
+        rules->Release();
+    });
+    return removed;
+}
+
+static DWORD WINAPI ContextMenuWorker(LPVOID param) {
+    CtxJob* job = (CtxJob*)param;
+    job->result = job->verb == L'B' ? ContextMenuBlock(job->path, job->dir) : ContextMenuAllow(job->path);
+    ScanExternalFirewallBlocks(true);
+    if (!g_hCtrlWnd || !PostMessageW(g_hCtrlWnd, WM_APP_CTX_DONE, 1, (LPARAM)job)) delete job;
+    return 0;
+}
+
+static bool CtxSenderIsOurs(DWORD pid) {
+    std::wstring want = ToLower(CtxForwarderExe());
+    if (want.empty() || !pid) return false;
+    HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!h) return false;
+    WCHAR img[MAX_PATH];
+    DWORD n = ARRAYSIZE(img);
+    bool ok = QueryFullProcessImageNameW(h, 0, img, &n) && ToLower(std::wstring(img, n)) == want;
+    CloseHandle(h);
+    return ok;
+}
+
+// A request from the menu: only from Windhawk's own helper, only right after a
+// real click or key press, and only while the menu setting is on.
+static void ContextMenuRequest(const std::wstring& s) {
+    if (s.size() < 3 || s[1] != L'|') return;
+    wchar_t verb = s[0];
+    size_t bar = s.find(L'|', 2);
+    if (bar == std::wstring::npos) return;
+    DWORD pid = (DWORD)wcstoul(s.substr(2, bar - 2).c_str(), nullptr, 10);
+    std::wstring path = s.substr(bar + 1);
+    bool on = false;
+    Direction dir = Direction::FullyOffline;
+    {
+        std::lock_guard<std::mutex> lk(g_settingsMtx);
+        on = g_settings.contextMenu;
+        dir = g_settings.defaultDirection;
+    }
+    LASTINPUTINFO li{sizeof(li)};
+    bool recent = GetLastInputInfo(&li) && GetTickCount() - li.dwTime < 15000;
+    if (!on || !recent || !CtxSenderIsOurs(pid)) {
+        LogAudit(L"Right-click request ignored (" + std::wstring(!on ? L"menu off" : !recent ? L"no recent input"
+                                                                                        : L"unknown sender") +
+                 L"): " + path);
+        return;
+    }
+    if (verb == L'O') {
+        PostMessageW(g_hCtrlWnd, WM_APP_CTX_DONE, 3, 0);
+        return;
+    }
+    if (verb != L'B' && verb != L'A') return;
+    std::wstring low = ToLower(path);
+    if (path.size() < 8 || path[1] != L':' || low.compare(low.size() - 4, 4, L".exe") != 0 ||
+        GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        LogAudit(L"Right-click request ignored (not a program file): " + path);
+        return;
+    }
+    CtxJob* job = new CtxJob{verb, path, dir, 0};
+    HANDLE t = CreateThread(nullptr, 0, ContextMenuWorker, job, 0, nullptr);
+    if (t) CloseHandle(t);
+    else delete job;
+}
+
+static void ContextMenuDone(WPARAM kind, LPARAM lParam) {
+    if (kind == 3) {
+        if (g_hWnd && g_uiState == UiState::Line) TogglePanelFromTray();
+        return;
+    }
+    std::unique_ptr<CtxJob> job((CtxJob*)lParam);
+    if (!job) return;
+    std::wstring name = GetFileNameOnly(job->path);
+    if (job->verb == L'B') {
+        if (job->result < 0) {
+            g_statusBanner = L"Core OS & security software cannot be blocked.";
+            LogAudit(L"Right-click BLOCK refused (protected): " + job->path);
+        } else {
+            LogAudit(L"Right-click BLOCK " + job->path + L" (" + std::to_wstring(job->result) + L" rules added)");
+            TriggerPulse(PulseKind::BlockedRed);
+        }
+    } else {
+        LogAudit(L"Right-click ALLOW " + job->path + L" (" + std::to_wstring(job->result) + L" rules removed)");
+        ApplyAllow(job->path);  // Also lifts a block made in the panel; pulses green.
+    }
+    if (g_uiState == UiState::Panel) RefreshAppList();
+    RequestRepaint();
+}
+
 static LRESULT CALLBACK ControlWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (msg == WM_COPYDATA) {
+        auto* cds = (const COPYDATASTRUCT*)lParam;
+        if (!cds || cds->dwData != kCtxCopyTag || !cds->lpData || cds->cbData < 4 * sizeof(wchar_t) ||
+            cds->cbData > 8192)
+            return FALSE;
+        std::wstring s((const wchar_t*)cds->lpData, cds->cbData / sizeof(wchar_t));
+        while (!s.empty() && s.back() == 0) s.pop_back();
+        ContextMenuRequest(s);
+        return TRUE;
+    }
+    if (msg == WM_APP_CTX_DONE) {
+        ContextMenuDone(wParam, lParam);
+        return 0;
+    }
     if (msg == WM_APP_RELOAD_SETTINGS) {
         LoadSettings();
         if (!g_settings.enableCycleScheduler) StopAllCycles(true);
@@ -8069,6 +8763,7 @@ static LRESULT CALLBACK ControlWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             SaveCycleTemplates();
         }
         SyncAutoBlockedApps();
+        ContextMenuSync(g_settings.contextMenu);
         if (g_hWnd) {
             ListenSync();
             ApplyCaptureExclusionAll();
@@ -8127,6 +8822,8 @@ static DWORD WINAPI UiThreadProc(LPVOID) {
     RegisterClassExW(&cwc);
 
     g_hCtrlWnd = CreateWindowExW(0, kCtrlWndClass, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, cwc.hInstance, nullptr);
+    // The right-click menu's helper runs with normal rights; let its hand-off through.
+    if (g_hCtrlWnd) ChangeWindowMessageFilterEx(g_hCtrlWnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr);
 
     RECT initRc{};
     ComputeTargetRect(0.0, initRc);
@@ -9036,6 +9733,7 @@ BOOL WhTool_ModInit() {
         g_uiReadyEvent = nullptr;
     }
     StartCycleEngine();
+    ContextMenuSync(g_settings.contextMenu);
     LogAudit(L"Seamless Windows Firewall started.");
     return TRUE;
 }
@@ -9068,6 +9766,7 @@ void WhTool_ModUninit() {
     // The Windows pop-up comes back whenever the mod stops.
     ListenWatchStop();
     ListenPromptsGiveBack();
+    ContextMenuSync(false);  // No menu entry is left behind while the mod is off.
     LogAudit(L"Seamless Windows Firewall stopped cleanly.");
     SeamlessMenuSkin::Uninit();
 }
@@ -9259,6 +9958,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"warnOnVpnOrRemote", L"Warn before blocking a VPN or remote desktop", L"Blocking one of these can cut off the connection you are using right now.", L"1", {}, 0, 100, 0, L"Safety"},
 {K::Check, L"replaceFirewallPrompt", L"Ask with our own box", L"When an app wants other devices to connect to it, such as a game hosting a match, this box asks instead of the Windows Firewall pop-up. Windows Firewall keeps guarding, and your answer is saved as a normal firewall rule.", L"1", {}, 0, 100, 0, L"Connection requests"},
 {K::Check, L"allowOnPublicNetworks", L"Allow on public networks too", L"Off, Allow lets the app in on home and work networks only. On a public network you are using right now, Allow always covers it.", L"0", {}, 0, 100, 0, L"Connection requests"},
+{K::Check, L"contextMenu", L"Right-click menu for apps", L"Adds Seamless Windows Firewall to the right-click menu of every program file, with Block, Allow again and Open the panel. A block made there stays after a restart, like a normal firewall rule.", L"1", {}, 0, 100, 0, L"Right-click menu"},
 {K::Choice, L"windowSizePreset", L"Panel size", L"", L"default", {{L"default", L"Normal (436 by 480)"}, {L"large", L"Large (680 by 680)"}, {L"extralarge", L"Extra large (840 by 840)"}}, 0, 100, 1, L"Panel"},
 {K::Choice, L"defaultFilter", L"List shown first", L"The tab the panel opens on.", L"user", {{L"user", L"Running apps"}, {L"allowed", L"Allowed"}, {L"blocked", L"Blocked"}, {L"system", L"System apps"}, {L"excluded", L"Hidden apps"}}, 0, 100, 1, L"Panel"},
 {K::Check, L"showNonActionableInRunning", L"Show locked apps in Running", L"Also list Windows helpers and apps that Windows Firewall already blocks, even though you cannot change them here.", L"0", {}, 0, 100, 1, L"Panel"},
@@ -9272,7 +9972,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Hotkey, L"restoreAll", L"Allow every blocked app again", L"Off by default. Pick keys that no other app uses.", L"", {}, 0, 100, 3, L"Shortcuts"},
 {K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open the panel. Right-click it for settings and more. When off, use the shortcut.", L"1", {}, 0, 100, 4, L"Tray icon"},
 {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 4, L"Settings window"},
-{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 4, L"Settings window"}
+{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 4, L"Settings window"},
+{K::Check, L"flyoutAnimation", L"Open and close animation", L"The panel and the connection box fade and slide in when they open and out when they close. They stay still when Windows animation effects are off.", L"1", {}, 0, 100, 4, L"Motion"},
+{K::Choice, L"animationSpeed", L"Animation speed", L"How quick the animations play. Follow the global speed uses the speed shared by all DavidHiFi mods.", L"global", {{L"global", L"Follow the global speed"}, {L"veryQuick", L"Very quick"}, {L"quick", L"Quick"}, {L"normal", L"Normal"}, {L"relaxed", L"Relaxed"}, {L"slow", L"Slow"}}, 0, 100, 4, L"Motion"}
     };
 }
 
@@ -9285,7 +9987,7 @@ static const SetPageInfo kSetPages[] = {
 {L"Panel", L"The panel the tray icon opens, and its app list.", 0xE8A7},
 {L"Cycle Mode", L"Block and allow an app on a timer.", 0xE916},
 {L"Shortcuts", L"Keys that block the app in front, open the panel and undo every block.", 0xE765},
-{L"Look", L"The tray icon and this settings window.", 0xE790},
+{L"Look", L"The tray icon, motion and this settings window.", 0xE790},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
