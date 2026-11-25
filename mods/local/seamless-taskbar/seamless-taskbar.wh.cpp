@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.61
+// @version         0.4.62
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -32,6 +32,10 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
+
+## What's new in 0.4.62
+
+The AI usage tray icon comes back by itself after Explorer restarts. It used to stay missing, along with its settings window, until a setting was changed.
 
 ## What's new in 0.4.61
 
@@ -48353,6 +48357,7 @@ static QuotaUiInstance* FindUiState(HWND hWnd);
 static void UpdateQuotaUi(QuotaUiInstance& state);
 static void PostUiUpdate();
 static void OpenSettingsWindow();
+static void StartAiTrayIfWanted();
 static void SetVisualTestMode(bool enabled);
 static bool SaveOwnedSettings(const Settings& settings);
 static void PublishSettings(Settings settings, uint64_t oldIdentity = 0,
@@ -60036,6 +60041,7 @@ static bool InjectQuotaGrid(HWND hWnd) {
 
         state->quotaGrid = quota;
         g_uiInjected.store(true, std::memory_order_release);
+        StartAiTrayIfWanted();  // The taskbar exists now, even right after an Explorer restart.
         state->applied.clear();
         UpdateQuotaUi(*state);
         Wh_Log(L"Injected usage tiles into %s", winrt::get_class_name(trayPanel).c_str());
@@ -79352,6 +79358,11 @@ static void OpenLegacySettingsWindow() {
 static void OpenSettingsWindow() {
     if (g_unloading) return;
     aiset::RequestOpen();
+}
+
+static void StartAiTrayIfWanted() {
+    if (g_unloading) return;
+    aiset::StartIfTrayWanted();
 }
 
 void Wh_ModSettingsChanged() {
