@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.56
+// @version         0.4.57
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -96633,7 +96633,22 @@ void FreePickerSnapshot(PickerSnapshot& shot) {
     shot = PickerSnapshot{};
 }
 
+bool CapturePickerSnapshotTimed(PickerSnapshot& shot);
 bool CapturePickerSnapshot(PickerSnapshot& shot) {
+    LARGE_INTEGER frequency{};
+    LARGE_INTEGER start{};
+    LARGE_INTEGER end{};
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&start);
+    const bool ok = CapturePickerSnapshotTimed(shot);
+    QueryPerformanceCounter(&end);
+    Wh_Log(L"[Wallpaper] motion snapshot %d ms",
+           (int)((end.QuadPart - start.QuadPart) * 1000 /
+                 std::max<LONGLONG>(1, frequency.QuadPart)));
+    return ok;
+}
+
+bool CapturePickerSnapshotTimed(PickerSnapshot& shot) {
     shot = PickerSnapshot{};
     if (!g_pickerWindow || !g_pickerAnimWindow || !g_gdiplusToken) {
         return false;
@@ -96797,6 +96812,25 @@ void PlayPickerMotion(const PickerSnapshot& shot, bool opening,
         QueryPerformanceFrequency(&frequency);
         QueryPerformanceCounter(&start);
         const int cornerDiameter = PickerCornerRadius() * 2;
+        const bool moveBackdrop = g_pickerKeyed && g_pickerBackdropWindow;
+        const auto clipBackdrop = [&](float x, float y, float w, float h, double scale) {
+            const int d = std::max(2, (int)std::lround(cornerDiameter * scale));
+            HRGN region = CreateRoundRectRgn((int)std::lround(x), (int)std::lround(y),
+                                             (int)std::lround(x + w) + 1,
+                                             (int)std::lround(y + h) + 1, d, d);
+            if (region && !SetWindowRgn(g_pickerBackdropWindow, region, FALSE)) {
+                DeleteObject(region);
+            }
+        };
+        if (moveBackdrop) {
+            // Clip to the first frame before it shows, so the full square never flashes.
+            const double scale0 = opening ? 0.92 : 1.0;
+            clipBackdrop((float)(origin.x * (1.0 - scale0)), (float)(origin.y * (1.0 - scale0)),
+                         (float)(width * scale0), (float)(height * scale0), scale0);
+            SetWindowPos(g_pickerBackdropWindow, g_pickerWindow, shot.bounds.left,
+                         shot.bounds.top, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        }
+        int frames = 0;
         {
             Gdiplus::Bitmap source(width, height, width * 4, PixelFormat32bppPARGB,
                                    (BYTE*)shot.bits);
@@ -96833,16 +96867,10 @@ void PlayPickerMotion(const PickerSnapshot& shot, bool opening,
                                     AC_SRC_ALPHA};
                 UpdateLayeredWindow(g_pickerAnimWindow, screen, &position, &size,
                                     memory, &sourcePoint, 0, &blend, ULW_ALPHA);
-                if (g_pickerKeyed && g_pickerBackdropWindow) {
-                    const int bx = shot.bounds.left + (int)std::lround(drawX);
-                    const int by = shot.bounds.top + (int)std::lround(drawY);
-                    SetWindowPos(g_pickerBackdropWindow, g_pickerWindow, bx, by,
-                                 std::max(1, (int)std::lround(drawW)),
-                                 std::max(1, (int)std::lround(drawH)),
-                                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
-                    SetPickerRoundRegion(g_pickerBackdropWindow, true,
-                                         (int)std::lround(cornerDiameter * scale));
+                if (moveBackdrop) {
+                    clipBackdrop(drawX, drawY, drawW, drawH, scale);
                 }
+                ++frames;
                 if (!firstDone) {
                     ShowWindow(g_pickerAnimWindow, SW_SHOWNOACTIVATE);
                     SetWindowPos(g_pickerAnimWindow, HWND_TOPMOST, 0, 0, 0, 0,
@@ -96861,6 +96889,12 @@ void PlayPickerMotion(const PickerSnapshot& shot, bool opening,
             }
         }
         SelectObject(memory, oldBitmap);
+        LARGE_INTEGER end{};
+        QueryPerformanceCounter(&end);
+        Wh_Log(L"[Wallpaper] motion %s: %d frames in %d ms", opening ? L"open" : L"close",
+               frames,
+               (int)((end.QuadPart - start.QuadPart) * 1000 /
+                     std::max<LONGLONG>(1, frequency.QuadPart)));
     }
     if (!firstDone && afterFirstFrame) {
         afterFirstFrame();
