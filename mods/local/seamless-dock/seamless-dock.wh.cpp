@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.10
+// @version         0.3.11
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,6 +26,11 @@ the edge of the screen across from your taskbar, so you get a clean bar on one
 side and a dock on the other, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
+
+## What's new in 0.3.11
+
+- Right-click the Recycle Bin on the dock and Empty Recycle Bin is always
+  there. It used to hide whenever the dock had not noticed the bin fill up.
 
 ## What's new in 0.3.10
 
@@ -2245,8 +2250,7 @@ void OpenRecycleMenu(int i) {
     M.rows.push_back(MenuRow{it.name, L"", false, true, nullptr});
     M.rows.push_back(MenuRow{L"", L"", true});
     M.rows.push_back(MenuRow{L"Open", L"\xE838", false, false, [] { OpenRecycleBin(); }});
-    if (g_recycleFull)
-        M.rows.push_back(MenuRow{L"Empty Recycle Bin", L"\xE74D", false, false, [] {
+    M.rows.push_back(MenuRow{L"Empty Recycle Bin", L"\xE74D", false, false, [] {
                                      EmptyRecycleBin();
                                      if (g_dock) SetTimer(g_dock, kTimerRecycle, 250, nullptr);
                                  }});
