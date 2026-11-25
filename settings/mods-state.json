@@ -1250,7 +1250,7 @@
     "include": "explorer.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "0.4.62"
+    "version": "0.4.63"
   },
   "local@seamless-wobbly-windows": {
     "disabled": false,
