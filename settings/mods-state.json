@@ -529,7 +529,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.3.9"
+    "version": "1.3.10"
   },
   "local@seamless-flyouts": {
     "disabled": false,
