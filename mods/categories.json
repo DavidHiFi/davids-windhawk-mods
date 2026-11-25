@@ -46,6 +46,8 @@
     "local@seamless-crash-watch": "Tools",
     "local@seamless-crosshair": "Tools",
     "local@seamless-dictate": "Tools",
+    "local@seamless-fps-capper": "Tools",
+    "local@seamless-fps-overlay": "Tools",
     "local@seamless-dock": "Taskbar",
     "local@seamless-download-manager": "Tools",
     "local@seamless-explorer-search": "Explorer",
