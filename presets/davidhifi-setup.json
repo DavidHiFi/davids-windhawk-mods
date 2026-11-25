@@ -129,7 +129,7 @@
     },
     {
       "id": "local@halo-launcher",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "backgroundOpacity": 55,
         "blur": 1,
