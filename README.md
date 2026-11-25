@@ -367,7 +367,7 @@ Most of my mods build on someone else's mod. Each mod's source names its sources
 | **AhmedAwad7** ([Always On Top Windows](https://windhawk.net/mods/always-on-top)) | The base of Always On Top Windows Plus. |
 | **buedgik** ([Explorer Tags](https://github.com/buedgik/explorer-tags)) | The base of Explorer Tags Plus. |
 | **digART** ([File Operation Styler](https://windhawk.net/mods/file-operation-styler)) | The base of File Operation Styler Plus. |
-| **Rono** (Magic Pointer) | The base of Magic Pointer Plus. |
+| **Rono** ([Magic Pointer](https://windhawk.net/mods/magic-pointer)) | The base of Magic Pointer Plus. |
 | **SAM2WOW** ([Micrographics Taskbar Clock](https://windhawk.net/mods/micrographics-taskbar-clock)) | The base of Micrographics Taskbar Clock Plus (MIT). |
 | **Sof2245** ([Taskbar AI Usage](https://windhawk.net/mods/taskbar-ai-usage)) | The base of Taskbar AI Usage Plus. |
 | **Wildstyle23** ([Recycle Bin Tray](https://windhawk.net/mods/recycle-bin-tray)) | The base of Recycle Bin Tray Plus. |
@@ -378,7 +378,7 @@ Most of my mods build on someone else's mod. Each mod's source names its sources
 | **ShareX** ([ShareX](https://github.com/ShareX/ShareX)) | The color picker in Seamless Color Picker is based on theirs. |
 | **Mark Russinovich** ([ZoomIt](https://learn.microsoft.com/sysinternals/downloads/zoomit)) | The zoom and draw behavior the ZoomIt mod recreates. |
 | **Math Shamenson** ([Hover Text Magnifier](https://windhawk.net/mods/hover-text-magnifier)) | The base of the hover magnifier in ZoomIt (MIT). |
-| **sidlikesgrapess** (Pointer Afterimage Motion Blur) | The base of Pointer Afterimage Plus. |
+| **sidlikesgrapess** ([Pointer Afterimage Motion Blur](https://windhawk.net/mods/pointer-afterimage-motion-blur)) | The base of Pointer Afterimage Plus. |
 | **Salyts** ([Taskbar Fluent Media Player](https://windhawk.net/mods/taskbar-fluent-media-player)) | The base of Seamless Media Player (MIT), and the second-taskbar support in Taskbar System Info Plus. |
 | **uMk0** ([Taskbar Media Widget](https://windhawk.net/mods/taskbar-media-widget)) | The behind-widget bars, progress bar and time display in Seamless Media Player (MIT). |
 | **Yevhenii Starychenko** ([Taskbar System Info](https://windhawk.net/mods/taskbar-system-info)) | The base of Taskbar System Info Plus. |
@@ -391,7 +391,7 @@ Most of my mods build on someone else's mod. Each mod's source names its sources
 | **Th3Fanbus** ([Windows 11 Custom Title Bar Colours](https://windhawk.net/mods/win11-custom-title-bar-colours)) | The colours part of Seamless Title Bars. |
 | **grn15RenS** ([Caption Buttons Customizer](https://windhawk.net/mods/caption-buttons-customizer)) | The caption buttons part of Seamless Title Bars (MIT). |
 | **aubymori** ([Fix Basic Caption Text](https://windhawk.net/mods/fix-basic-caption-text)) | The basic frames part of Seamless Title Bars. |
-| **Anixx** (Remove UWP Title Bars) | The base of the Store apps part of Seamless Title Bars. |
+| **Anixx** ([Remove UWP titlebars](https://windhawk.net/mods/native-titlebars-uwp-lite)) | The base of the Store apps part of Seamless Title Bars. |
 | **Ramen Software** ([Start menu styling guide](https://github.com/ramensoftware/windows-11-start-menu-styling-guide)) | The OnlySearch and RosePine themes merged into OnlySearch Mocha. |
 | **Catppuccin** ([catppuccin](https://github.com/catppuccin/catppuccin)) | The Mocha palette in OnlySearch Mocha and the mod defaults. |
 | **Catppuccin** ([cursors](https://github.com/catppuccin/cursors)) | The cursor art in Chromium Cursors Mocha (GPL-2.0). |
