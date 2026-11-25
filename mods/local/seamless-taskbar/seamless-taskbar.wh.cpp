@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.59
+// @version         0.4.60
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -32,6 +32,10 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
+
+## What's new in 0.4.60
+
+The folder and overflow buttons at the bottom of the tray drawer are smaller and sit tight round their icons. They keep a small gap from the drawer's edge, and clicking one no longer draws a white outline that spilled past the drawer's border.
 
 ## What's new in 0.4.56
 
@@ -43597,7 +43601,7 @@ void UpdateCount(DrawerState& state) {
     bool show = s.theme && s.showCount && count > 0 && !state.accessibility.HighContrast();
     state.countText.Text(std::to_wstring(count));
     state.countText.Visibility(show ? Visibility::Visible : Visibility::Collapsed);
-    state.chevron.Width(show ? std::numeric_limits<double>::quiet_NaN() : 40.0);
+    state.chevron.Width(show ? std::numeric_limits<double>::quiet_NaN() : 32.0);
     state.chevron.Padding(show ? Thickness{10, 0, 12, 0} : Thickness{0, 0, 0, 0});
 }
 
@@ -43777,7 +43781,7 @@ void UpdateDrawerAppearance(DrawerState& state) {
     double width = BorderWidth(s);
 
     state.footer.Height(themed ? s.footerHeight : 40);
-    state.chevron.Height(themed ? s.footerHeight - 8 : 32);
+    state.chevron.Height(themed ? s.footerHeight - 12 : 28);
     if (state.arrow)
         state.arrow.Glyph(ChevronGlyph(state, themed ? s : Settings{.theme = false}));
 
@@ -43977,10 +43981,11 @@ Controls::Border CreateDrawerFooter() {
     footer.BorderThickness(Thickness{0, 1, 0, 0});
     footer.CornerRadius(CornerRadius{0, 0, 8, 8});
     Button button;
-    button.Width(40);
-    button.Height(32);
-    button.MinWidth(40);
+    button.Width(32);
+    button.Height(28);
+    button.MinWidth(0);
     button.MinHeight(0);
+    button.UseSystemFocusVisuals(false);
     button.Padding(Thickness{0, 0, 0, 0});
     button.BorderThickness(Thickness{2, 2, 2, 2});
     button.CornerRadius(CornerRadius{8, 8, 8, 8});
@@ -44019,9 +44024,10 @@ Controls::Border CreateDrawerFooter() {
     Controls::Grid footerHost;
     for (int slot = 0; slot < 3; ++slot) {
         Controls::Button group;
-        group.Width(40);
+        group.Width(32);
         group.VerticalAlignment(VerticalAlignment::Center);
-        group.Height(32);
+        group.Height(28);
+        group.UseSystemFocusVisuals(false);
         group.MinWidth(0);
         group.MinHeight(0);
         group.Padding(Thickness{0, 0, 0, 0});
