@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.34
+// @version         1.10.35
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -9375,6 +9375,75 @@ void ConfigureAddressBarHover(FrameworkElement element,
             return;
         }
     }
+    if (auto cp = element.try_as<Controls::ContentPresenter>()) {
+        // Path bar crumbs: the name and its arrow are two presenters that
+        // read as one pill. Grey 2px edge at rest, the blue to mauve
+        // gradient on the edge on hover, and no hover fill.
+        auto isCrumbPart = [](Controls::ContentPresenter const& p) {
+            auto name = p.Name();
+            if (name == L"ChevronContentPresenter") return 2;
+            if (name != L"PART_ContentPresenter") return 0;
+            auto parent = Media::VisualTreeHelper::GetParent(p).try_as<FrameworkElement>();
+            return parent && parent.Name() == L"PART_ItemButton" ? 1 : 0;
+        };
+        if (isCrumbPart(cp)) {
+            auto restBrush = Markup::XamlReader::Load(
+                LR"(<SolidColorBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Color="#64585B70"/>)").as<Media::Brush>();
+            auto hotBrush = Markup::XamlReader::Load(
+                LR"(<LinearGradientBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#6489B4FA" Offset="0"/><GradientStop Color="#64CBA6F7" Offset="1"/></LinearGradientBrush>)").as<Media::Brush>();
+            auto clear = Markup::XamlReader::Load(
+                LR"(<SolidColorBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Color="Transparent"/>)").as<Media::Brush>();
+            // Both halves of this crumb: the nearest parent that holds exactly
+            // one name and one arrow. Anything else lights only itself.
+            auto pairOf = [isCrumbPart](Controls::ContentPresenter const& self) {
+                std::vector<Controls::ContentPresenter> out;
+                auto node = Media::VisualTreeHelper::GetParent(self);
+                for (int depth = 0; node && depth < 5; ++depth) {
+                    std::vector<Controls::ContentPresenter> found;
+                    std::function<void(DependencyObject const&, int)> walk =
+                        [&](DependencyObject const& d, int level) {
+                            if (level > 6 || found.size() > 2) return;
+                            int n = Media::VisualTreeHelper::GetChildrenCount(d);
+                            for (int i = 0; i < n; ++i) {
+                                auto child = Media::VisualTreeHelper::GetChild(d, i);
+                                if (auto p = child.try_as<Controls::ContentPresenter>()) {
+                                    if (isCrumbPart(p)) found.push_back(p);
+                                }
+                                walk(child, level + 1);
+                            }
+                        };
+                    walk(node, 0);
+                    int items = 0, arrows = 0;
+                    for (auto& p : found) (isCrumbPart(p) == 1 ? items : arrows)++;
+                    if (items > 1 || arrows > 1) break;
+                    if (items == 1 && arrows == 1) return found;
+                    node = Media::VisualTreeHelper::GetParent(node);
+                }
+                out.push_back(self);
+                return out;
+            };
+            auto apply = [weak = winrt::make_weak(cp), restBrush, hotBrush, clear, isCrumbPart, pairOf](bool hovered) {
+                auto self = weak.get();
+                if (!self) return;
+                for (auto& target : pairOf(self)) {
+                    bool prev = std::exchange(g_elementPropertyModifying, true);
+                    try {
+                        target.BorderThickness(isCrumbPart(target) == 2 ? Thickness{0, 2, 2, 2}
+                                                                       : Thickness{2, 2, 0, 2});
+                        target.BorderBrush(hovered ? hotBrush : restBrush);
+                        target.Background(clear);
+                    } catch (...) {}
+                    g_elementPropertyModifying = prev;
+                }
+            };
+            apply(false);
+            state.pathEntered = cp.PointerEntered(winrt::auto_revoke,
+                [apply](auto const&, auto const&) { apply(true); });
+            state.pathExited = cp.PointerExited(winrt::auto_revoke,
+                [apply](auto const&, auto const&) { apply(false); });
+            return;
+        }
+    }
     if (!grid || grid.Name() != L"PART_LayoutRoot") return;
     auto parent = Media::VisualTreeHelper::GetParent(grid);
     if (!parent || winrt::get_class_name(parent) !=
@@ -11582,6 +11651,8 @@ thread_local HWND g_treePaintWndForThread;
 bool IsNavTreeWnd(HWND hWnd);
 namespace NavDock {
 void Ensure(HWND tree);
+bool HasDock(HWND ntc);
+void TintTreeRect(HDC hdc, const RECT& rc);
 }
 thread_local StatusDockBuffer g_statusDockBuffersForThread[4];
 thread_local int g_statusDockBufferCountForThread;
@@ -12074,11 +12145,19 @@ int WINAPI FillRect_Hook(HDC hDC, const RECT* lprc, HBRUSH hbr) {
         return result;
     }
 
+    bool navTreeBg = false;
     if (hWnd && IsWindowBackgroundBrush(hDC, hbr)) {
         hbr = (HBRUSH)GetStockObject(BLACK_BRUSH);
+        navTreeBg = g_settings.navPaneDock && g_treePaintWndForThread &&
+                    hWnd == g_treePaintWndForThread &&
+                    NavDock::HasDock(GetParent(hWnd));
     }
 
     int result = FillRect_Original(hDC, lprc, hbr);
+    if (result && navTreeBg && lprc && lprc->right > lprc->left &&
+        lprc->bottom > lprc->top) {
+        NavDock::TintTreeRect(hDC, *lprc);
+    }
     if (result && g_statusDockBufferCountForThread > 0) {
         StatusDockAfterFill(hDC, lprc, hbr);
     }
@@ -13354,6 +13433,40 @@ SRWLOCK g_lock = SRWLOCK_INIT;
 // Keyed by the NamespaceTreeControl that holds the tree.
 [[clang::no_destroy]] std::unordered_map<HWND, State> g_docks;
 
+bool HasDock(HWND ntc) {
+    if (!ntc) return false;
+    AcquireSRWLockShared(&g_lock);
+    bool found = g_docks.count(ntc) != 0;
+    ReleaseSRWLockShared(&g_lock);
+    return found;
+}
+
+void TintTreeRect(HDC hdc, const RECT& rc) {
+    HDC mem = CreateCompatibleDC(hdc);
+    if (!mem) return;
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = 1;
+    bmi.bmiHeader.biHeight = -1;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    DWORD* bits = nullptr;
+    HBITMAP dib = CreateDIBSection(mem, &bmi, DIB_RGB_COLORS, (void**)&bits, nullptr, 0);
+    if (dib && bits) {
+        // Premultiplied #4B11111B (A=75, R=17*75/255=5, G=5, B=27*75/255=8)
+        bits[0] = (0x4Bu << 24) | (5u << 16) | (5u << 8) | 8u;
+        HGDIOBJ old = SelectObject(mem, dib);
+        BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        (GdiAlphaBlend_Original ? GdiAlphaBlend_Original : GdiAlphaBlend)(
+            hdc, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
+            mem, 0, 0, 1, 1, blend);
+        SelectObject(mem, old);
+        DeleteObject(dib);
+    }
+    DeleteDC(mem);
+}
+
 bool GetState(HWND ntc, State* state) {
     AcquireSRWLockShared(&g_lock);
     auto it = g_docks.find(ntc);
@@ -13448,6 +13561,15 @@ void PaintDock(ID2D1RenderTarget* rt,
                bool collapsed) {
     float edge = std::max(1.0f, std::round(2.0f * scale));
     float radius = std::min(12.0f * scale, height / 2.0f);
+
+    winrt::com_ptr<ID2D1SolidColorBrush> fill;
+    rt->CreateSolidColorBrush(ThemePartColor(0x4B, 0x11, 0x11, 0x1B),
+                              fill.put());
+    if (fill) {
+        rt->FillRoundedRectangle(
+            D2D1::RoundedRect(D2D1::RectF(0, 0, width, height), radius, radius),
+            fill.get());
+    }
 
     D2D1_GRADIENT_STOP stops[] = {
         {0.0f, ThemePartColor(0xFF, 0x89, 0xB4, 0xFA)},
