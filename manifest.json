@@ -1,11 +1,11 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T04:27:46+08:00",
+  "generatedAt": "2026-11-26T04:43:04+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 164,
-    "enabled": 163,
+    "enabled": 162,
     "local": 62
   },
   "mods": [
@@ -716,12 +716,12 @@
       "name": "Halo Launcher",
       "author": "DavidHiFi, David Ravelo",
       "github": "https://github.com/DavidHiFi",
-      "version": "0.6.12",
+      "version": "0.6.13",
       "license": "MIT",
       "origin": "local",
       "upstream": "https://windhawk.net/mods/spotlight-launcher",
       "source": "mods/local/halo-launcher/halo-launcher.wh.cpp",
-      "enabled": true,
+      "enabled": false,
       "category": "Windows and menus"
     },
     {

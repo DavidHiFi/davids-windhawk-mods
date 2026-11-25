@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.12
+// @version         0.6.13
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -57,6 +57,15 @@ its own settings window: open it from the tray icon or with Ctrl+I in Halo.
 | Esc | Back, then close |
 
 Every key in that list can be changed on the Keys page of the settings.
+
+## What's new in 0.6.13
+
+- Pull the side of the search window to make it wider or narrower, and its bottom edge
+  to show more or fewer rows, as in Flow Launcher. "Lock the size" on the Window page
+  stops it.
+- The right-click menu on a result is shorter. Share, Pin to Start, Add to Favorites,
+  Restore previous versions and Troubleshoot compatibility show only when you hold
+  Shift, and Shift also brings back the rest of Windows' extra entries.
 
 ## What's new in 0.6.11
 
@@ -2610,7 +2619,19 @@ std::wstring MenuKey(std::wstring s) {
     for (wchar_t c : s)
         if (iswalnum(c)) k += (wchar_t)towlower(c);
     if (k == L"openfilelocation") k = L"opencontainingfolder";
+    if (k == L"runasadifferentuser") k = L"runasdifferentuser";
     return k;
+}
+
+// Windows' rarely used entries wait for Shift, as the extra entries of File Explorer do.
+bool g_menuShift = false;
+std::set<std::wstring> g_menuHidden;
+bool RareMenuEntry(const std::wstring& key) {
+    static const wchar_t* rare[] = {L"share", L"pintostart", L"addtofavorites", L"addtofavourites",
+                                    L"restorepreviousversions", L"troubleshootcompatibility"};
+    for (auto r : rare)
+        if (key == r) return true;
+    return false;
 }
 
 void ShellMenuToItems(IContextMenu* cm, IContextMenu3* cm3, IContextMenu2* cm2, HMENU menu,
@@ -2631,6 +2652,10 @@ void ShellMenuToItems(IContextMenu* cm, IContextMenu3* cm3, IContextMenu2* cm2, 
         HaloMenuItem item;
         CleanMenuText(text, item.label, item.hint);
         if (item.label.empty()) continue;
+        if (!g_menuShift && RareMenuEntry(MenuKey(item.label))) {
+            g_menuHidden.insert(MenuKey(item.label));
+            continue;
+        }
         std::wstring verb;
         if (!mi.hSubMenu && mi.wID >= kShellFirst && mi.wID <= kShellLast) {
             wchar_t v[128] = {};
@@ -2672,6 +2697,7 @@ void RequestAppMenu(int index, POINT at) {
     g.appMenuWant = index;
     g.appMenuAsked = GetTickCount();
     g.appMenuAt = at;
+    g_menuShift = GetKeyState(VK_SHIFT) < 0;
     Send({L"sel", std::to_wstring(index)});
     if (!Send({L"ctxmenu", std::to_wstring(index)})) g.appMenuWant = -1;
 }
@@ -2706,7 +2732,9 @@ void ShowAppMenu() {
                 cm.As(&cm3);
                 cm.As(&cm2);
                 menu = CreatePopupMenu();
-                if (menu && SUCCEEDED(cm->QueryContextMenu(menu, 0, kShellFirst, kShellLast, CMF_NORMAL)))
+                g_menuHidden.clear();
+                UINT flags = CMF_NORMAL | (g_menuShift ? CMF_EXTENDEDVERBS : 0);
+                if (menu && SUCCEEDED(cm->QueryContextMenu(menu, 0, kShellFirst, kShellLast, flags)))
                     ShellMenuToItems(cm.Get(), cm3.Get(), cm2.Get(), menu, items, 0);
             }
             CoTaskMemFree(pidl);
@@ -2735,7 +2763,7 @@ void ShowAppMenu() {
     }
 
     // The plugin's actions Windows has no entry for.
-    std::set<std::wstring> have;
+    std::set<std::wstring> have = g_menuHidden;
     for (auto& it : items)
         if (!it.separator) have.insert(MenuKey(it.label));
     std::vector<HaloMenuItem> extra;
@@ -2781,8 +2809,69 @@ void ShowAppMenu() {
     if (menu) DestroyMenu(menu);
 }
 
+// Resize by pulling an edge, as in Flow: the sides change the width, the bottom the number
+// of rows. Flow's "KeepMaxResults" ("Lock the size") turns it off. The size is saved to the
+// engine's settings when the button comes up.
+int g_sizing = 0;  // 0 none, 1 left side, 2 right side, 3 bottom
+POINT g_sizeFrom{};
+int g_sizeW0 = 0, g_sizeRows0 = 0, g_sizeMax0 = 0;
+
+int SizeZone(POINT client) {
+    if (!g.visible || SetBool(L"KeepMaxResults", false)) return 0;
+    const Layout& L = g.lay;
+    int grip = std::max(5, (int)std::lround(6 * L.s));
+    if (client.x < grip) return 1;
+    if (client.x >= L.pxW - grip) return 2;
+    if (L.rows > 0 && client.y >= L.pxH - grip) return 3;
+    return 0;
+}
+
+void PutSetting(const wchar_t* key, int value) {
+    std::wstring v = std::to_wstring(value);
+    g.set[key] = v;
+    std::lock_guard<std::mutex> guard(g_bridge.lock);
+    g_bridge.set[key] = v;
+}
+
+void TrackSizing() {
+    POINT p;
+    GetCursorPos(&p);
+    float dx = (p.x - g_sizeFrom.x) / g.lay.s, dy = (p.y - g_sizeFrom.y) / g.lay.s;
+    if (g_sizing == 3) {
+        int rows = std::clamp(g_sizeRows0 + (int)std::lround(dy / std::max(1.0f, g.lay.rowH)), 2, 15);
+        // A short list (fewer results than rows) pulled down keeps the rows it was set to.
+        if (g_sizeRows0 < g_sizeMax0 && rows >= g_sizeRows0) rows = std::max(rows, g_sizeMax0);
+        if (rows != SetInt(L"MaxResultsToShow", 5)) PutSetting(L"MaxResultsToShow", rows);
+    } else {
+        // The window stays centred, so one side moved by dx changes the width by twice that.
+        std::wstring align = SetStr(L"SearchWindowAlign", L"Center");
+        float k = EqualsNoCase(align, L"LeftTop") || EqualsNoCase(align, L"RightTop") ? 1.0f : 2.0f;
+        int w = (int)std::lround(g_sizeW0 + (g_sizing == 2 ? dx : -dx) * k);
+        w = std::clamp(w, 500, 1600);
+        if (w != SetInt(L"WindowSize", 780)) PutSetting(L"WindowSize", w);
+    }
+    Render();
+}
+
+void EndSizing() {
+    if (!g_sizing) return;
+    int was = g_sizing;
+    g_sizing = 0;
+    if (was == 3) {
+        int rows = SetInt(L"MaxResultsToShow", 5);
+        if (rows != g_sizeMax0) Send({L"flowset", L"MaxResultsToShow", std::to_wstring(rows)});
+    } else {
+        int w = SetInt(L"WindowSize", 780);
+        if (w != g_sizeW0) Send({L"flowset", L"WindowSize", std::to_wstring(w)});
+    }
+    Trace(L"resized to %d wide, %d rows", SetInt(L"WindowSize", 780), SetInt(L"MaxResultsToShow", 5));
+}
+
 LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+        case WM_CAPTURECHANGED:
+            if (g_sizing && (HWND)lp != hwnd) EndSizing();
+            break;
         case WM_APP_APPMENU:
             ShowAppMenu();
             return 0;
@@ -2884,6 +2973,11 @@ LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             POINT p{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             POINT screen = p;
             ClientToScreen(hwnd, &screen);
+            if (g_sizing) {
+                g.lastMouse = screen;
+                TrackSizing();
+                return 0;
+            }
             // The window appearing under a resting pointer must not steal the selection.
             if (screen.x == g.lastMouse.x && screen.y == g.lastMouse.y) return 0;
             g.lastMouse = screen;
@@ -2899,6 +2993,15 @@ LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         case WM_LBUTTONDOWN: {
+            if (int zone = SizeZone(POINT{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)})) {
+                g_sizing = zone;
+                GetCursorPos(&g_sizeFrom);
+                g_sizeW0 = SetInt(L"WindowSize", 780);
+                g_sizeMax0 = SetInt(L"MaxResultsToShow", 5);
+                g_sizeRows0 = g.lay.rows;
+                SetCapture(hwnd);
+                return 0;
+            }
             float x = GET_X_LPARAM(lp) / g.lay.s - kEdge, y = GET_Y_LPARAM(lp) / g.lay.s - kEdge;
             if (y < g.lay.topH) {
                 g.selecting = true;
@@ -2917,6 +3020,11 @@ LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         case WM_LBUTTONUP: {
+            if (g_sizing) {
+                EndSizing();
+                ReleaseCapture();
+                return 0;
+            }
             float x = GET_X_LPARAM(lp) / g.lay.s - kEdge, y = GET_Y_LPARAM(lp) / g.lay.s - kEdge;
             if (g.selecting) {
                 g.selecting = false;
@@ -2948,6 +3056,10 @@ LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 POINT p;
                 GetCursorPos(&p);
                 ScreenToClient(hwnd, &p);
+                if (int zone = SizeZone(p)) {
+                    SetCursor(LoadCursor(nullptr, zone == 3 ? IDC_SIZENS : IDC_SIZEWE));
+                    return TRUE;
+                }
                 bool inQuery = p.y / g.lay.s - kEdge < g.lay.topH && p.x / g.lay.s - kEdge < QueryRight();
                 SetCursor(LoadCursor(nullptr, inQuery ? IDC_IBEAM : IDC_ARROW));
                 return TRUE;
@@ -4573,7 +4685,8 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"flow:ShowOpenResultHotkey", L"Show the numbers", L"Each row shows the key that opens it.", L"1", {}, 0, 100, 2, L"Open by number"},
 {K::Number, L"backgroundOpacity", L"Glass darkness", L"0 to 100 (Suggested: 55). How much Mocha covers the blur. 55 is the same glass as the settings windows.", L"55", {}, 0, 100, 3, L"Window"},
 {K::Check, L"blur", L"Blur behind the window", L"Off, the window is solid Mocha.", L"1", {}, 0, 100, 3, L"Window"},
-{K::Number, L"flow:WindowSize", L"Width", L"500 to 1600 (Suggested: 780).", L"780", {}, 500, 1600, 3, L"Window"},
+{K::Number, L"flow:WindowSize", L"Width", L"500 to 1600 (Suggested: 780). You can also pull the side of the search window.", L"780", {}, 500, 1600, 3, L"Window"},
+{K::Check, L"flow:KeepMaxResults", L"Lock the size", L"On, the edges of the search window can't be pulled to change its width or rows.", L"0", {}, 0, 100, 3, L"Window"},
 {K::Number, L"flow:WindowHeightSize", L"Search box height", L"30 to 80 (Suggested: 42).", L"42", {}, 30, 80, 3, L"Window"},
 {K::Number, L"flow:ItemHeightSize", L"Row height", L"40 to 90 (Suggested: 58).", L"58", {}, 40, 90, 3, L"Window"},
 {K::Text, L"fontFamily", L"Font", L"The font for all of Halo's words: the search box, results, clock, hints and preview. If it is not installed, Segoe UI is used at the same size.", L"FiraCode Nerd Font", {}, 0, 100, 3, L"Text"},
