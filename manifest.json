@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T06:17:31+08:00",
+  "generatedAt": "2026-11-26T06:21:39+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 165,
@@ -1260,7 +1260,7 @@
       "name": "Seamless Crosshair",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.2.9",
+      "version": "1.2.10",
       "license": "MIT",
       "origin": "local",
       "upstream": "",

@@ -1201,7 +1201,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.2.9"
+    "version": "1.2.10"
   },
   "local@seamless-explorer-search": {
     "disabled": false,
