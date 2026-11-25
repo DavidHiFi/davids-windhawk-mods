@@ -77,7 +77,7 @@
         "prevStyleHotkey": "",
         "recenterHotkey": "",
         "rotation": 0,
-        "scale": 150,
+        "scale": 175,
         "settingsGlass": 1,
         "settingsHotkey": "",
         "settingsTrayIcon": 1,
@@ -85,7 +85,7 @@
         "sizeDownHotkey": "",
         "sizeUpHotkey": "",
         "smoothEdges": 0,
-        "style": "cross",
+        "style": "crossDot",
         "tStyle": 0,
         "toggleHotkey": "Ctrl+Alt+X"
       }
