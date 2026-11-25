@@ -1247,7 +1247,7 @@
   },
   "local@seamless-taskbar": {
     "disabled": false,
-    "include": "explorer.exe",
+    "include": "explorer.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "x86-64",
     "version": "0.4.62"
