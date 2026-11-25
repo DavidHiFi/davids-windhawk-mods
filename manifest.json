@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T03:25:17+08:00",
+  "generatedAt": "2026-11-26T03:28:34+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 163,
-    "enabled": 162,
-    "local": 61
+    "mods": 164,
+    "enabled": 163,
+    "local": 62
   },
   "mods": [
     {
@@ -2013,6 +2013,18 @@
       "source": "mods/local/zoomit/zoomit.wh.cpp",
       "enabled": true,
       "category": "Tools"
+    },
+    {
+      "id": "local@seamless-chromium-browsers",
+      "name": "Seamless Chromium Browsers",
+      "author": "DavidHiFi, bardelyne",
+      "github": "https://github.com/DavidHiFi/davids-windhawk-mods",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-chromium-browsers/seamless-chromium-browsers.wh.cpp",
+      "enabled": true
     }
   ]
 }

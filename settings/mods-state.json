@@ -1363,5 +1363,12 @@
     "exclude": "",
     "architecture": "",
     "version": "2.0.2"
+  },
+  "local@seamless-chromium-browsers": {
+    "disabled": false,
+    "include": "chrome.exe|brave.exe|msedge.exe|vivaldi.exe|thorium.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.0"
   }
 }
