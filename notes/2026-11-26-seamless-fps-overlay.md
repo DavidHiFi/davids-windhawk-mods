@@ -59,3 +59,19 @@ Work folder: `work\2026-11-26-fps-suite\overlay\` (STATE.md has the step log). R
 - Rule added: AGENTS.md Conventions, and rice defects 97 (synced). Backups beside each file, .bak-20261126-2058.
 - Proof needs: python without -I (psutil), and the out folder made first.
 - Undo: Boxes setting to Separate boxes, or roll back to 1.1.2 from the mods repo.
+
+## 1.1.4 (22:52) and live proof (22:53): nothing overlaps, RivaTuner stats back
+
+- Owner: the ms rows, jitter and graph collided top left; wanted clear names and every stat from the old RivaTuner overlay.
+- Jitter is now "Frame pacing"; its wave only draws in the room between label and value, else it is left out.
+- Frame graph: 5u gap above, plot inset 1.5u, the "50 ms" scale has its own lane on the right, top follows
+  the average (mean x 1.6, rounded up to 5) so slow frames no longer pin the line into the row above.
+- New "Limited by" line (CPU or GPU, from GPU load 90+ or any core 85+), like RivaTuner's limiter line.
+- CPU clocks named "Peak clock" and "Avg clock", both in MHz.
+- Owner's saved settings: cpuClock, cpuPower, gpuMemClock were 0, now 1; labels JITTER/BOOST/BUSY CLOCK
+  (untouched defaults) now FRAME PACING/PEAK CLOCK/AVG CLOCK. Undo: set them back in the mod's settings.
+- Still missing from RivaTuner: input delay (LAT render and pipeline ms). It needs PresentMon screen-time
+  data; not added, setting stays off.
+- Gates clean, installed 3rd try (first two waited out an Explorer crash at 10:34 pm in windhawk.dll from
+  another thread's load, posted on coop), published mods 8770076, feed 21d5536.
+- Pictures: work\2026-11-26-fps-suite\reports\media\overlay-114*.png. Backups .bak-20261126-114.
