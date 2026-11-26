@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@seamless-download-manager",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "nativeSettingsTitleBar": 1,
         "settingsGlass": 1,

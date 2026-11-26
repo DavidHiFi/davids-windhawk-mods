@@ -2,7 +2,7 @@
 // @id              seamless-download-manager
 // @name            Seamless Download Manager
 // @description     A fast tray download manager: downloads in parts, resumes where it stopped, takes browser links
-// @version         1.0.12
+// @version         1.0.13
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-download-manager
@@ -6001,6 +6001,12 @@ void Sdm_ApplyGlass(HWND hwnd) {
     auto setComposition = (Composition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
     int backdrop = 1;  // DWMSBT_NONE
     DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+    if (setComposition) {  // Off first, then on: DWM can drop the blur of a window that lives a long time and ignores the
+    // same values sent again, which left it see-through (2026-11-26). Switching the accent off resets it.
+        AccentPolicy off{0, 0, 0, 0};
+        CompositionData offData{19, &off, sizeof(off)};
+        setComposition(hwnd, &offData);
+    }
     DWM_BLURBEHIND bb{};
     bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
     bb.fEnable = TRUE;
@@ -7315,6 +7321,7 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_SHOWWINDOW:
             g_shown = wp != 0;
             if (wp) {
+                Sdm_ApplyGlass(hwnd);  // every show re-sets the glass, so a dropped blur never stays
                 Refresh();
                 Main_Invalidate();
             }

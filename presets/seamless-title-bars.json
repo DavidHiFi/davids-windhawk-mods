@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@seamless-title-bars",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "basicFrames.enabled": 0,
         "basicFrames.smallIcons": 1,

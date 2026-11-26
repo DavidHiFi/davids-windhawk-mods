@@ -567,11 +567,11 @@
     "version": "1.5.0"
   },
   "local@seamless-title-bars": {
-    "disabled": false,
+    "disabled": true,
     "include": "*|dwm.exe|windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.3.17"
+    "version": "1.3.19"
   },
   "local@seamless-tray-drawer": {
     "disabled": false,
@@ -1162,7 +1162,7 @@
     "version": "1.0.0"
   },
   "local@halo-launcher": {
-    "disabled": true,
+    "disabled": false,
     "include": "windhawk-mod.exe",
     "exclude": "",
     "architecture": "x86-64",
@@ -1267,7 +1267,7 @@
     "version": "1.5.9"
   },
   "local@startup-control": {
-    "disabled": false,
+    "disabled": true,
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "",
@@ -1323,11 +1323,11 @@
     "version": "0.1.6"
   },
   "local@seamless-download-manager": {
-    "disabled": false,
+    "disabled": true,
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.12"
+    "version": "1.0.13"
   },
   "local@parallax-wallpaper": {
     "disabled": false,

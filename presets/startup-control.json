@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@startup-control",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "confirmDevices": 1,
         "nativeSettingsTitleBar": 1,

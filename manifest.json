@@ -1,11 +1,11 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T17:13:55+08:00",
+  "generatedAt": "2026-11-26T17:57:45+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 162,
-    "enabled": 157,
+    "enabled": 155,
     "local": 65
   },
   "mods": [
@@ -697,7 +697,7 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/spotlight-launcher",
       "source": "mods/local/halo-launcher/halo-launcher.wh.cpp",
-      "enabled": false,
+      "enabled": true,
       "category": "Windows and menus"
     },
     {
@@ -1249,12 +1249,12 @@
       "name": "Seamless Download Manager",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.0.12",
+      "version": "1.0.13",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-download-manager/seamless-download-manager.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "local@seamless-explorer-search",
@@ -1440,12 +1440,12 @@
       "name": "Seamless Title Bars",
       "author": "DavidHiFi, Th3Fanbus, grn15RenS, Ingan121, Anixx, aubymori",
       "github": null,
-      "version": "1.3.17",
+      "version": "1.3.19",
       "license": "MIT",
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-title-bars/seamless-title-bars.wh.cpp",
-      "enabled": true,
+      "enabled": false,
       "category": "Windows and menus"
     },
     {
@@ -1632,7 +1632,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/startup-control/startup-control.wh.cpp",
-      "enabled": true,
+      "enabled": false,
       "category": "Tools"
     },
     {
