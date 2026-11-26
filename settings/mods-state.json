@@ -1356,5 +1356,12 @@
     "exclude": "",
     "architecture": "x86-64",
     "version": "1.1.0"
+  },
+  "local@seamless-icons": {
+    "disabled": true,
+    "include": "*",
+    "exclude": "dwm.exe|cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe",
+    "architecture": "",
+    "version": "1.0.1"
   }
 }

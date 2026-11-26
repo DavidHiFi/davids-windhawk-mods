@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T19:05:09+08:00",
+  "generatedAt": "2026-11-26T19:05:47+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 128,
+    "mods": 129,
     "enabled": 122,
-    "local": 59
+    "local": 60
   },
   "mods": [
     {
@@ -1586,6 +1586,18 @@
       "source": "mods/local/zoomit/zoomit.wh.cpp",
       "enabled": true,
       "category": "Tools"
+    },
+    {
+      "id": "local@seamless-icons",
+      "name": "Seamless Icons",
+      "author": "DavidHiFi, FireBlade, m417z, ferrys, Dev-StudioCode",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.1",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-icons/seamless-icons.wh.cpp",
+      "enabled": false
     }
   ]
 }
