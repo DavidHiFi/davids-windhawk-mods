@@ -1229,7 +1229,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "0.7.5"
+    "version": "0.7.6"
   },
   "local@seamless-sound-manager": {
     "disabled": false,
