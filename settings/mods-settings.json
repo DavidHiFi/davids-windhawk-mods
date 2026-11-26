@@ -5485,19 +5485,6 @@
     "windowSize.height": 0,
     "windowSize.width": 0
   },
-  "local@mocha-app-icons": {
-    "ableton": 1,
-    "settings": 1,
-    "shortcutIcons": 1,
-    "steam": 1,
-    "trayIcon": 1,
-    "windowIcons": 1,
-    "yapfast": 1,
-    "zen": 1
-  },
-  "local@remove-shortcut-arrows": {
-    "custom_icon_path": ""
-  },
   "local@seamless-settings-styler": {
     "cleanup.activation": 1,
     "cleanup.carbon": 1,
@@ -5610,17 +5597,6 @@
     "styleConstants[0]": "",
     "theme": "SeamlessMocha",
     "themeResourceVariables[0]": ""
-  },
-  "local@uwp-assets-redirect-plus": {
-    "custom[0].assets-path": "",
-    "custom[0].redirect": "",
-    "grant-permissions": 1,
-    "icon-theme": "local/catppuccin",
-    "system-apps[0].bundle": "",
-    "system-apps[0].redirect": "",
-    "theme-paths[0]": "",
-    "windows-apps[0].bundle": "",
-    "windows-apps[0].redirect": ""
   },
   "local@dsx-tray-icon-fix": {
     "clearTilesFromBefore": 1,
