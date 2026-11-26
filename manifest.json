@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T08:09:21+08:00",
+  "generatedAt": "2026-11-26T08:17:17+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 165,
@@ -100,7 +100,7 @@
       "name": "Seamless Volume Mixer",
       "author": "DavidHiFi, 0Allu, shubho",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.4.36",
+      "version": "1.4.37",
       "license": "MIT",
       "origin": "local",
       "upstream": "https://windhawk.net/mods/better-volume-mixer",
