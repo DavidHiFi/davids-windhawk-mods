@@ -1278,7 +1278,7 @@
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "",
-    "version": "0.1.11"
+    "version": "0.1.12"
   },
   "local@mocha-app-icons": {
     "disabled": false,
