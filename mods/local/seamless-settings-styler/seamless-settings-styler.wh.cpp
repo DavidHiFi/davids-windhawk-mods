@@ -2,7 +2,7 @@
 // @id              seamless-settings-styler
 // @name            Seamless Settings Styler
 // @description     Catppuccin Mocha for Windows Settings: glass that matches the title bar, edges on every card, a sidebar that folds to icons, hide pages and ads
-// @version         2.1.4
+// @version         2.1.5
 // @author          DavidHiFi, m417z
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -10676,6 +10676,14 @@ wux::DependencyObject CardEdgePart(wux::UIElement el) {
     return self();
 }
 
+// The styler puts its own value back whenever a styled property changes. Hold its
+// "we are writing" flag while hover swaps brushes, so the gradient edge stays.
+struct StylerQuiet {
+    bool was = g_elementPropertyModifying;
+    StylerQuiet() { g_elementPropertyModifying = true; }
+    ~StylerQuiet() { g_elementPropertyModifying = was; }
+};
+
 void CardHoverOn(wux::UIElement el) {
     auto part = CardEdgePart(el);
     HoverTrace(part ? L"enter part" : L"enter nopart", el);
@@ -10687,6 +10695,7 @@ void CardHoverOn(wux::UIElement el) {
             return;
         }
     }
+    StylerQuiet quiet;
     HoverSaved s{winrt::make_weak(part)};
     auto fill = Media::SolidColorBrush(ToColor(WithAlpha(g_hoverArgb, g_cardAlpha)));
     if (auto g = part.try_as<Controls::Grid>()) {
@@ -10709,6 +10718,7 @@ void CardHoverOn(wux::UIElement el) {
 }
 
 void CardHoverOff(wux::UIElement el) {
+    StylerQuiet quiet;
     auto part = CardEdgePart(el);
     for (auto it = g_hoverSaved.begin(); it != g_hoverSaved.end();) {
         auto target = it->target.get();
@@ -10733,6 +10743,7 @@ void CardHoverOff(wux::UIElement el) {
 }
 
 void RestoreAllHover() {
+    StylerQuiet quiet;
     for (auto& s : g_hoverSaved) {
         auto target = s.target.get();
         if (!target) {
