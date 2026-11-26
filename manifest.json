@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T15:40:43+08:00",
+  "generatedAt": "2026-11-26T15:42:28+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 167,
-    "enabled": 161,
-    "local": 65
+    "mods": 161,
+    "enabled": 154,
+    "local": 64
   },
   "mods": [
     {
@@ -133,18 +133,6 @@
       "enabled": true
     },
     {
-      "id": "brave-acrylic",
-      "name": "Brave Acrylic",
-      "author": "bardelyne",
-      "github": "https://github.com/bardelyne",
-      "version": "4.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/brave-acrylic",
-      "source": "mods/catalog/brave-acrylic.wh.cpp",
-      "enabled": true
-    },
-    {
       "id": "chrome-context-menu-items",
       "name": "Chrome Context Menu Items",
       "author": "DanRotaru",
@@ -221,12 +209,12 @@
       "name": "Ctrl+Backspace Fix for Win32 Text Boxes",
       "author": "Kitsune",
       "github": "https://github.com/AromaKitsune",
-      "version": "1.0.1",
+      "version": "1.1",
       "license": "",
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/ctrl-backspace-fix-for-win32-text-boxes",
       "source": "mods/catalog/ctrl-backspace-fix-for-win32-text-boxes.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "cursor-idle-fade",
@@ -245,7 +233,7 @@
       "name": "Custom CMD \"ver\" Command Text",
       "author": "RandomGuy5747",
       "github": "https://github.com/RandomGuy5747",
-      "version": "1.0",
+      "version": "1.1",
       "license": "",
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/custom-cmd-ver-command-text",
@@ -370,18 +358,6 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/dxgi-flip-model-upgrade",
       "source": "mods/catalog/dxgi-flip-model-upgrade.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "edge-window-tab-manager-block",
-      "name": "Prevent Edge from lagging your Taskbar process",
-      "author": "Roland Pihlakas",
-      "github": "https://github.com/levitation",
-      "version": "1.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/edge-window-tab-manager-block",
-      "source": "mods/catalog/edge-window-tab-manager-block.wh.cpp",
       "enabled": true
     },
     {
@@ -737,19 +713,6 @@
       "enabled": true
     },
     {
-      "id": "local@helium-acrylic",
-      "name": "Helium Acrylic",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi/davids-windhawk-mods",
-      "version": "3.9.3",
-      "license": "",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/helium-acrylic/helium-acrylic.wh.cpp",
-      "enabled": true,
-      "category": "Fixes"
-    },
-    {
       "id": "hide-start-button",
       "name": "Hide Start Button",
       "author": "ptrkhh",
@@ -859,18 +822,6 @@
       "enabled": false
     },
     {
-      "id": "mspaint-dark",
-      "name": "Dark Paint",
-      "author": "ahmed605",
-      "github": "https://github.com/ahmed605",
-      "version": "1.0.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/mspaint-dark",
-      "source": "mods/catalog/mspaint-dark.wh.cpp",
-      "enabled": true
-    },
-    {
       "id": "local@network-speedtest-plus",
       "name": "Network Speed Test Plus",
       "author": "DavidHiFi, Alessandro-Vecchio",
@@ -893,18 +844,6 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/never-auto-expand-explorer-tree-items",
       "source": "mods/catalog/never-auto-expand-explorer-tree-items.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "notepad-dark-mode",
-      "name": "Dark Mode for Notepad",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/notepad-dark-mode",
-      "source": "mods/catalog/notepad-dark-mode.wh.cpp",
       "enabled": true
     },
     {
@@ -1192,6 +1131,18 @@
       "category": "Windows and menus"
     },
     {
+      "id": "local@seamless-chromium-browsers",
+      "name": "Seamless Chromium Browsers",
+      "author": "DavidHiFi, bardelyne",
+      "github": "https://github.com/DavidHiFi/davids-windhawk-mods",
+      "version": "1.0.1",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-chromium-browsers/seamless-chromium-browsers.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "local@seamless-clipboard-manager",
       "name": "Seamless Clipboard Manager",
       "author": "DavidHiFi, Scott Brogden, Ditto contributors",
@@ -1345,6 +1296,30 @@
       "category": "Windows and menus"
     },
     {
+      "id": "local@seamless-fps-capper",
+      "name": "Seamless FPS Capper",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.1",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-fps-capper/seamless-fps-capper.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-fps-overlay",
+      "name": "Seamless FPS Overlay",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.1.1",
+      "license": "",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-fps-overlay/seamless-fps-overlay.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "local@seamless-key-click",
       "name": "Seamless Key Click",
       "author": "DavidHiFi, Anixx",
@@ -1496,6 +1471,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-windows-firewall/seamless-windows-firewall.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-winver-configurator",
+      "name": "Seamless Winver Configurator",
+      "author": "DavidHiFi, ItsTauTvyDas, aubymori, Thomas Shrader, winui64, m417z",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "GPL-3.0-or-later",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-winver-configurator/seamless-winver-configurator.wh.cpp",
       "enabled": true
     },
     {
@@ -1965,18 +1952,6 @@
       "enabled": true
     },
     {
-      "id": "windows-sandbox-close-no-confirm",
-      "name": "Windows Sandbox: close without confirmation",
-      "author": "loliri",
-      "github": "https://github.com/loliri",
-      "version": "1.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/windows-sandbox-close-no-confirm",
-      "source": "mods/catalog/windows-sandbox-close-no-confirm.wh.cpp",
-      "enabled": true
-    },
-    {
       "id": "local@wintips-osd-plus",
       "name": "WinTips OSD Plus",
       "author": "DavidHiFi, DoYouNatureQ",
@@ -2013,54 +1988,6 @@
       "source": "mods/local/zoomit/zoomit.wh.cpp",
       "enabled": true,
       "category": "Tools"
-    },
-    {
-      "id": "local@seamless-chromium-browsers",
-      "name": "Seamless Chromium Browsers",
-      "author": "DavidHiFi, bardelyne",
-      "github": "https://github.com/DavidHiFi/davids-windhawk-mods",
-      "version": "1.0.1",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-chromium-browsers/seamless-chromium-browsers.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@seamless-fps-capper",
-      "name": "Seamless FPS Capper",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.1",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-fps-capper/seamless-fps-capper.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@seamless-fps-overlay",
-      "name": "Seamless FPS Overlay",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.1.1",
-      "license": "",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-fps-overlay/seamless-fps-overlay.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@seamless-winver-configurator",
-      "name": "Seamless Winver Configurator",
-      "author": "DavidHiFi, ItsTauTvyDas, aubymori, Thomas Shrader, winui64, m417z",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.0",
-      "license": "GPL-3.0-or-later",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-winver-configurator/seamless-winver-configurator.wh.cpp",
-      "enabled": true
     }
   ]
 }
