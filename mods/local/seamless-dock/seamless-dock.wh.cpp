@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.17
+// @version         0.3.18
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -2913,7 +2913,16 @@ ULONGLONG g_titleTick = 0;
 
 // Size and corner of the bar's own pills, and the bar's inner top margin that
 // pushes its content down from the window's top edge.
-constexpr float kTitleH = 34, kTitleR = 8, kBarInnerTop = 6;
+constexpr float kTitleH = 34, kTitleR = 10, kBarInnerTop = 6;
+
+// Seamless Taskbar puts the screen x where its tray group starts (plus 1) on the bar, so the
+// centred title can stop short of it. 0 when the taskbar does not say.
+int TrayLeft() {
+    HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+    INT_PTR v = tray ? (INT_PTR)GetPropW(tray, L"SeamlessTrayLeft") : 0;
+    return v > 0 ? (int)(v - 1) : 0;
+}
+int g_titleTrayLeft = 0;
 
 bool TopBarRect(RECT& r) {
     HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
@@ -3264,6 +3273,13 @@ bool PaintTitle(const std::wstring& app, const std::wstring& title, Icon* ic, co
     float titleW = title.empty() ? 0 : std::ceil(TextWidth(title, fTitle));
     float fixed = 2 * pad + (ic ? iconSz + gap : 0) + (title.empty() ? 0 : sepGap);
     float room = std::round((float)S.titleMaxW * sc) - fixed;
+    // Stay centred, but never reach the tray group on the right.
+    int trayLeft = TrayLeft();
+    int mid = (bar.left + bar.right) / 2;
+    if (trayLeft > mid) {
+        float half = (float)(trayLeft - mid) - std::round(8 * sc);
+        room = std::min(room, std::max(0.f, 2 * half - fixed));
+    }
     if (appW + titleW > room) {
         float appCap = title.empty() ? room : std::max(room * 0.4f, room - titleW);
         appW = std::min(appW, appCap);
@@ -3308,11 +3324,12 @@ bool PaintTitle(const std::wstring& app, const std::wstring& title, Icon* ic, co
             float rr = std::max(0.f, kTitleR * sc - w / 2);
             ComPtr<ID2D1SolidColorBrush> edge, text, sub;
             float h = g_titleHoverT;
-            rt->CreateSolidColorBrush(Col(0x585B70, 1 - h), edge.GetAddressOf());
+            // Same rest edge and fill as the bar's docks (#45475A at 0.9 over Mocha base).
+            rt->CreateSolidColorBrush(Col(0x45475A, 0.9f * (1 - h)), edge.GetAddressOf());
             rt->CreateSolidColorBrush(Col(kText), text.GetAddressOf());
             rt->CreateSolidColorBrush(Col(kSubtext), sub.GetAddressOf());
             ComPtr<ID2D1SolidColorBrush> fill;
-            rt->CreateSolidColorBrush(Col(0x11111B, 0.30f), fill.GetAddressOf());
+            rt->CreateSolidColorBrush(Col(0x1E1E2E, 0.92f), fill.GetAddressOf());
             if (fill) rt->FillRoundedRectangle(D2D1::RoundedRect(r, rr, rr), fill.Get());
             if (h < 1) rt->DrawRoundedRectangle(D2D1::RoundedRect(r, rr, rr), edge.Get(), w);
             // Pointing at it fades in the blue to mauve edge the bar's other pills have.
@@ -3403,7 +3420,8 @@ void UpdateTitle(bool force) {
     UINT dpi = MonitorDpi(g_mon);
     std::wstring key = app + L"\n" + title + L"\n" + std::to_wstring(bar.left) + L"," + std::to_wstring(bar.top) +
                        L"," + std::to_wstring(bar.right) + L"," + std::to_wstring(bar.bottom) + L"," +
-                       std::to_wstring(dpi) + L"," + std::to_wstring((UINT_PTR)h);
+                       std::to_wstring(dpi) + L"," + std::to_wstring((UINT_PTR)h) + L"," +
+                       std::to_wstring(TrayLeft());
     bool shown = IsWindowVisible(g_title) != FALSE;
     if (!force && shown && key == g_titleKey) {
         RaiseTitle();
@@ -3436,6 +3454,13 @@ void TitleHoverTick() {
     }
     // Backstop, at most 50 ms late: whatever lifted the pill, put it back.
     RaiseTitle();
+    // The tray group grew or shrank (a timer started, a pill appeared): fit again.
+    int trayLeft = TrayLeft();
+    if (trayLeft != g_titleTrayLeft) {
+        g_titleTrayLeft = trayLeft;
+        UpdateTitle();
+        if (!g_title || !IsWindowVisible(g_title)) return;
+    }
     POINT pt;
     GetCursorPos(&pt);
     float target = PtInRect(&g_titleRect, pt) ? 1.f : 0.f;
