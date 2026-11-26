@@ -550,7 +550,7 @@
     "include": "*|windhawk.exe",
     "exclude": "cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe",
     "architecture": "",
-    "version": "2.8.13"
+    "version": "2.8.14"
   },
   "local@shell-font-changer-plus": {
     "disabled": false,
