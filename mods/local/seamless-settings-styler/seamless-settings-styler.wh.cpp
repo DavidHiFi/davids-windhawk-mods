@@ -2,7 +2,7 @@
 // @id              seamless-settings-styler
 // @name            Seamless Settings Styler
 // @description     Catppuccin Mocha for Windows Settings: glass that matches the title bar, edges on every card, a sidebar that folds to icons, hide pages and ads
-// @version         2.1.3
+// @version         2.1.4
 // @author          DavidHiFi, m417z
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -10603,6 +10603,31 @@ void RestoreBloat() {
 
 // ---------- Card hover: the gradient edge ----------
 
+// Hover trace, only while the tree dump setting is on.
+void HoverTrace(const wchar_t* what, wux::UIElement const& el) {
+    if (!Wh_GetIntSetting(L"dumpTree")) {
+        return;
+    }
+    std::wstring line = what;
+    line += L" ";
+    line += winrt::get_class_name(el);
+    line += L"\r\n";
+    HANDLE f = CreateFileW(L"C:/Users/Public/sss-hover.log", FILE_APPEND_DATA,
+                           FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                           FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (f == INVALID_HANDLE_VALUE) {
+        return;
+    }
+    int n = WideCharToMultiByte(CP_UTF8, 0, line.c_str(), (int)line.size(), nullptr, 0,
+                                nullptr, nullptr);
+    std::string u(n, 0);
+    WideCharToMultiByte(CP_UTF8, 0, line.c_str(), (int)line.size(), u.data(), n, nullptr,
+                        nullptr);
+    DWORD w = 0;
+    WriteFile(f, u.data(), (DWORD)u.size(), &w, nullptr);
+    CloseHandle(f);
+}
+
 winrt::Windows::UI::Color ToColor(DWORD argb) {
     return {(uint8_t)(argb >> 24), (uint8_t)(argb >> 16), (uint8_t)(argb >> 8),
             (uint8_t)argb};
@@ -10653,6 +10678,7 @@ wux::DependencyObject CardEdgePart(wux::UIElement el) {
 
 void CardHoverOn(wux::UIElement el) {
     auto part = CardEdgePart(el);
+    HoverTrace(part ? L"enter part" : L"enter nopart", el);
     if (!part) {
         return;
     }
@@ -10730,6 +10756,7 @@ void RestoreAllHover() {
 }
 
 void WatchCard(wux::UIElement el) {
+    HoverTrace(L"watch", el);
     // Drop cards that are gone, and skip one already watched.
     for (auto it = g_hoverCards.begin(); it != g_hoverCards.end();) {
         auto live = it->el.get();
