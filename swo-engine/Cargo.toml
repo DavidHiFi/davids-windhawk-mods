@@ -1,0 +1,46 @@
+[workspace]
+resolver = "2"
+members = ["crates/swo-core", "crates/swo-clean", "crates/swo-tweaks", "crates/swo-tools", "swo"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+authors = ["DavidHiFi"]
+
+[workspace.dependencies]
+anyhow = "1.0.104"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+winreg = "0.55.0"
+windows-sys = { version = "0.59.0", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Threading",
+    "Win32_System_Services",
+    "Win32_System_Restore",
+    "Win32_System_Registry",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Ole",
+    "Win32_System_Variant",
+    "Win32_System_Diagnostics_Etw",
+    "Win32_System_Performance",
+    "Win32_System_SystemInformation",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_UI_Shell",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+] }
+swo-core = { path = "crates/swo-core" }
+swo-clean = { path = "crates/swo-clean" }
+swo-tweaks = { path = "crates/swo-tweaks" }
+swo-tools = { path = "crates/swo-tools" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
