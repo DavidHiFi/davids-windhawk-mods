@@ -36,7 +36,9 @@ its own settings window: open it from the tray icon or with Ctrl+I in Halo.
 - Typed shortcuts: type a short word and Halo swaps in the longer text.
 - Modules: turn each one on or off, change the words that call it, and change
   a module's own settings right in its card when you open it. Every module in
-  The community plugin store is listed too, off until you turn it on.
+  the community plugin store is listed too, off until you turn it on.
+- Windows' own apps, like Terminal, Notepad and Paint, show the same Catppuccin
+  icon as on the taskbar when UWP Assets Redirect Plus has an icon theme on.
 - History, a preview of the selected file (F1), and Space to open it in the Peek
   mod once you have moved through the results.
 - A tray icon: click it for settings, right-click it to open Halo or restart its
@@ -179,86 +181,6 @@ Every key in that list can be changed on the Keys page of the settings.
 #include <vector>
 
 #include <windhawk_tool_mod.h>
-
-// Crisp icons (2026-11-26): tray icons are drawn at 4x the size the taskbar shows them and shrunk
-// here with a box filter, so curves and glyph edges are smooth instead of stretched and stepped.
-// The result carries straight alpha, which is what Windows expects in an icon.
-static HICON Crisp_ShrinkIcon(HICON big, int factor) {
-    if (!big || factor <= 1) return big;
-    ICONINFO ii{};
-    if (!GetIconInfo(big, &ii)) return big;
-    HICON out = nullptr;
-    BITMAP bm{};
-    if (ii.hbmColor && GetObjectW(ii.hbmColor, sizeof(bm), &bm) && bm.bmWidth == bm.bmHeight &&
-        bm.bmWidth >= factor && bm.bmWidth % factor == 0) {
-        const int src = bm.bmWidth, n = src / factor;
-        BITMAPINFO bi{};
-        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
-        bi.bmiHeader.biWidth = src;
-        bi.bmiHeader.biHeight = -src;
-        bi.bmiHeader.biPlanes = 1;
-        bi.bmiHeader.biBitCount = 32;
-        bi.bmiHeader.biCompression = BI_RGB;
-        unsigned int* in = new unsigned int[(size_t)src * src];
-        HDC screen = GetDC(nullptr);
-        if (GetDIBits(screen, ii.hbmColor, 0, src, in, &bi, DIB_RGB_COLORS) == src) {
-            bool premul = true, anyAlpha = false;
-            for (size_t i = 0; i < (size_t)src * src; i++) {
-                unsigned int p = in[i], a = p >> 24;
-                if (a) anyAlpha = true;
-                if (((p >> 16) & 0xFF) > a || ((p >> 8) & 0xFF) > a || (p & 0xFF) > a) premul = false;
-            }
-            void* bits = nullptr;
-            bi.bmiHeader.biWidth = n;
-            bi.bmiHeader.biHeight = -n;
-            HBITMAP color = anyAlpha ? CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
-            if (color && bits) {
-                unsigned int* px = (unsigned int*)bits;
-                const unsigned int cnt = (unsigned int)(factor * factor);
-                for (int y = 0; y < n; y++)
-                    for (int x = 0; x < n; x++) {
-                        unsigned int sa = 0, sr = 0, sg = 0, sb = 0;
-                        for (int dy = 0; dy < factor; dy++)
-                            for (int dx = 0; dx < factor; dx++) {
-                                unsigned int p = in[(size_t)(y * factor + dy) * src + x * factor + dx], a = p >> 24;
-                                unsigned int r = (p >> 16) & 0xFF, g = (p >> 8) & 0xFF, b = p & 0xFF;
-                                if (!premul) {
-                                    r = (r * a + 127) / 255;
-                                    g = (g * a + 127) / 255;
-                                    b = (b * a + 127) / 255;
-                                }
-                                sa += a; sr += r; sg += g; sb += b;
-                            }
-                        unsigned int a = (sa + cnt / 2) / cnt, r = 0, g = 0, b = 0;
-                        if (a && sa) {
-                            r = (sr * 255 + sa / 2) / sa; if (r > 255) r = 255;
-                            g = (sg * 255 + sa / 2) / sa; if (g > 255) g = 255;
-                            b = (sb * 255 + sa / 2) / sa; if (b > 255) b = 255;
-                        }
-                        px[(size_t)y * n + x] = a ? ((a << 24) | (r << 16) | (g << 8) | b) : 0;
-                    }
-                // A zero mask: with 32-bit colour Windows draws from the alpha channel.
-                unsigned char* maskBits = new unsigned char[(size_t)((n + 15) / 16) * 2 * n]();
-                HBITMAP mask = CreateBitmap(n, n, 1, 1, maskBits);
-                delete[] maskBits;
-                if (mask) {
-                    ICONINFO o{TRUE, 0, 0, mask, color};
-                    out = CreateIconIndirect(&o);
-                    DeleteObject(mask);
-                }
-            }
-            if (color) DeleteObject(color);
-        }
-        ReleaseDC(nullptr, screen);
-        delete[] in;
-    }
-    if (ii.hbmColor) DeleteObject(ii.hbmColor);
-    if (ii.hbmMask) DeleteObject(ii.hbmMask);
-    if (!out) return big;
-    DestroyIcon(big);
-    return out;
-}
-
 
 using Microsoft::WRL::ComPtr;
 
@@ -1091,6 +1013,139 @@ bool EnsureTarget() {
     return true;
 }
 
+
+// Windows' own apps (Terminal, Notepad, Paint) give Halo their stock logo from the package folder.
+// UWP Assets Redirect Plus swaps those only inside Explorer and Start, so Halo reads that mod's icon
+// theme ("package name = icon file") once and uses the theme icon first.
+static std::map<std::wstring, std::wstring> g_themeIcons;
+static bool g_themeRead = false;
+
+static std::wstring ThemeLower(std::wstring s) {
+    for (auto& c : s) c = (wchar_t)towlower(c);
+    return s;
+}
+
+static std::wstring ThemeRegText(const wchar_t* key, const wchar_t* value) {
+    wchar_t buf[512] = {};
+    DWORD cb = sizeof(buf);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, key, value, RRF_RT_REG_SZ, nullptr, buf, &cb) != ERROR_SUCCESS)
+        return {};
+    return buf;
+}
+
+static std::wstring ThemeReadFile(const std::wstring& path) {
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                           OPEN_EXISTING, 0, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return {};
+    std::string bytes;
+    LARGE_INTEGER size{};
+    if (GetFileSizeEx(f, &size) && size.QuadPart > 0 && size.QuadPart < (1 << 20)) {
+        bytes.resize((size_t)size.QuadPart);
+        DWORD got = 0;
+        if (!ReadFile(f, &bytes[0], (DWORD)bytes.size(), &got, nullptr)) got = 0;
+        bytes.resize(got);
+    }
+    CloseHandle(f);
+    if (bytes.size() >= 2 && (unsigned char)bytes[0] == 0xFF && (unsigned char)bytes[1] == 0xFE)
+        return std::wstring((const wchar_t*)(bytes.data() + 2), (bytes.size() - 2) / 2);
+    size_t skip = bytes.rfind("\xEF\xBB\xBF", 0) == 0 ? 3 : 0;
+    int n = MultiByteToWideChar(CP_UTF8, 0, bytes.data() + skip, (int)(bytes.size() - skip), nullptr, 0);
+    std::wstring text(n, L'\0');
+    if (n) MultiByteToWideChar(CP_UTF8, 0, bytes.data() + skip, (int)(bytes.size() - skip), &text[0], n);
+    return text;
+}
+
+static void ReadIconTheme() {
+    g_themeRead = true;
+    const wchar_t* modKey = L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@uwp-assets-redirect-plus";
+    HKEY k = nullptr;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, modKey, 0, KEY_READ, &k) != ERROR_SUCCESS) return;
+    RegCloseKey(k);
+    DWORD off = 0, cb = sizeof(off);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, modKey, L"Disabled", RRF_RT_REG_DWORD, nullptr, &off, &cb) ==
+            ERROR_SUCCESS && off)
+        return;
+    std::wstring theme =
+        ThemeRegText(L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@uwp-assets-redirect-plus\\Settings", L"icon-theme");
+    if (theme.empty()) return;
+    std::replace(theme.begin(), theme.end(), L'/', L'\\');
+    // Mod storage folders sit side by side; ours tells where the theme mod's is.
+    std::vector<std::wstring> roots;
+    wchar_t own[MAX_PATH * 2] = {};
+    if (Wh_GetModStoragePath(own, ARRAYSIZE(own))) {
+        std::wstring r = own;
+        while (!r.empty() && (r.back() == L'\\' || r.back() == L'/')) r.pop_back();
+        size_t cut = r.find_last_of(L"\\/");
+        if (cut != std::wstring::npos) roots.push_back(r.substr(0, cut));
+    }
+    roots.push_back(L"C:\\ProgramData\\Windhawk\\Engine\\ModsWritable\\mod-storage");
+    std::wstring dir, text;
+    for (auto& r : roots) {
+        dir = r + L"\\local@uwp-assets-redirect-plus\\icon-themes\\" + theme;
+        text = ThemeReadFile(dir + L"\\theme.ini");
+        if (!text.empty()) break;
+    }
+    if (text.empty()) return;
+    auto trim = [](const std::wstring& s) {
+        size_t a = s.find_first_not_of(L" \t\r\n");
+        size_t b = s.find_last_not_of(L" \t\r\n");
+        return a == std::wstring::npos ? std::wstring() : s.substr(a, b - a + 1);
+    };
+    std::wstring section;
+    size_t pos = 0;
+    while (pos <= text.size()) {
+        size_t e = text.find(L'\n', pos);
+        if (e == std::wstring::npos) e = text.size();
+        std::wstring line = trim(text.substr(pos, e - pos));
+        pos = e + 1;
+        if (line.empty() || line[0] == L';' || line[0] == L'#') continue;
+        if (line[0] == L'[') {
+            section = ThemeLower(trim(line.substr(1, line.find(L']') - 1)));
+            continue;
+        }
+        size_t eq = line.find(L'=');
+        if (eq == std::wstring::npos) continue;
+        std::wstring key = ThemeLower(trim(line.substr(0, eq)));
+        std::wstring val = trim(line.substr(eq + 1));
+        if (val.rfind(L".\\", 0) == 0 || val.rfind(L"./", 0) == 0) val = dir + L"\\" + val.substr(2);
+        // Only whole packages with an .ico; "Package|folder" entries cover one part of a package.
+        if ((section == L"windows-apps" || section == L"system-apps") && key.find(L'|') == std::wstring::npos &&
+            val.size() > 4 && _wcsicmp(val.c_str() + val.size() - 4, L".ico") == 0)
+            g_themeIcons[key] = val;
+    }
+}
+
+// The package name of a program inside a WindowsApps package folder
+// (...\WindowsApps\Microsoft.WindowsTerminal_1.2.3.0_x64__8wekyb3d8bbwe\WindowsTerminal.exe).
+static std::wstring ThemePackageOf(const std::wstring& exe) {
+    std::wstring l = ThemeLower(exe);
+    const std::wstring wa = L"\\windowsapps\\";
+    size_t at = l.find(wa);
+    if (at == std::wstring::npos) return L"";
+    std::wstring rest = l.substr(at + wa.size());
+    size_t us = rest.find(L'_'), sl = rest.find(L'\\');
+    if (us == std::wstring::npos || (sl != std::wstring::npos && sl < us)) return L"";
+    return rest.substr(0, us);
+}
+
+
+// The theme icon for a logo inside a WindowsApps package folder or a shell:AppsFolder\<aumid> name.
+static std::wstring ThemeFileFor(const std::wstring& path) {
+    std::wstring pkg = ThemePackageOf(path);
+    if (pkg.empty()) {
+        std::wstring l = ThemeLower(path);
+        const std::wstring apps = L"shell:appsfolder\\";
+        if (l.rfind(apps, 0) == 0) {
+            size_t us = l.find(L'_', apps.size());
+            if (us != std::wstring::npos) pkg = l.substr(apps.size(), us - apps.size());
+        }
+    }
+    if (pkg.empty()) return {};
+    if (!g_themeRead) ReadIconTheme();
+    auto it = g_themeIcons.find(pkg);
+    return it == g_themeIcons.end() ? std::wstring() : it->second;
+}
+
 ID2D1Bitmap* LoadBitmap(const std::wstring& path) {
     if (path.empty() || !g.rt) return nullptr;
     auto it = g.bitmaps.find(path);
@@ -1098,11 +1153,26 @@ ID2D1Bitmap* LoadBitmap(const std::wstring& path) {
     if (g.bitmaps.size() > 400) g.bitmaps.clear();
     ComPtr<ID2D1Bitmap> bmp;
     ComPtr<IWICBitmapDecoder> dec;
-    if (SUCCEEDED(g.wic->CreateDecoderFromFilename(path.c_str(), nullptr, GENERIC_READ,
+    std::wstring themed = ThemeFileFor(path);
+    const std::wstring& file = themed.empty() ? path : themed;
+    if (SUCCEEDED(g.wic->CreateDecoderFromFilename(file.c_str(), nullptr, GENERIC_READ,
                                                    WICDecodeMetadataCacheOnDemand, &dec))) {
+        // An .ico holds several sizes; take the biggest so the icon stays sharp.
+        UINT frames = 0, best = 0;
+        if (SUCCEEDED(dec->GetFrameCount(&frames)) && frames > 1) {
+            UINT bestW = 0;
+            for (UINT i = 0; i < frames; i++) {
+                ComPtr<IWICBitmapFrameDecode> f;
+                UINT w = 0, h = 0;
+                if (SUCCEEDED(dec->GetFrame(i, &f)) && SUCCEEDED(f->GetSize(&w, &h)) && w > bestW) {
+                    bestW = w;
+                    best = i;
+                }
+            }
+        }
         ComPtr<IWICBitmapFrameDecode> frame;
         ComPtr<IWICFormatConverter> conv;
-        if (SUCCEEDED(dec->GetFrame(0, &frame)) && SUCCEEDED(g.wic->CreateFormatConverter(&conv)) &&
+        if (SUCCEEDED(dec->GetFrame(best, &frame)) && SUCCEEDED(g.wic->CreateFormatConverter(&conv)) &&
             SUCCEEDED(conv->Initialize(frame.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone,
                                        nullptr, 0, WICBitmapPaletteTypeMedianCut)))
             g.rt->CreateBitmapFromWicBitmap(conv.Get(), nullptr, &bmp);
@@ -3197,8 +3267,8 @@ float SegmentDistance(float px, float py, float ax, float ay, float bx, float by
 }
 
 // Halo's mark alone in the blue to mauve gradient on a clear background.
-HICON MakeTrayIcon_Big() {
-    int size = GetSystemMetricsForDpi(SM_CXICON, GetDpiForSystem()) * 4;
+HICON MakeTrayIcon() {
+    int size = GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem());
     if (size < 16) size = 16;
     BITMAPINFO bi{};
     bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
@@ -3242,9 +3312,6 @@ HICON MakeTrayIcon_Big() {
     DeleteObject(color);
     return icon;
 }
-
-// Drawn at 4x and shrunk, so the icon is smooth at the size it is shown.
-HICON MakeTrayIcon() { return Crisp_ShrinkIcon(MakeTrayIcon_Big(), 4); }
 
 HICON g_trayIcon = nullptr;
 
