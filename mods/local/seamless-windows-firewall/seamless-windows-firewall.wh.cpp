@@ -2,7 +2,7 @@
 // @id              seamless-windows-firewall
 // @name            Seamless Windows Firewall
 // @description     Block or allow any app's internet in one click, from the tray icon or a shortcut
-// @version         1.2.8
+// @version 1.2.9
 // @author          DavidHiFi, Ashix
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -67,6 +67,16 @@ Change or clear any of them in the settings.
 - The Blocked list has a second view, Blocked by Windows Firewall, that shows
   the apps your own firewall rules block. Change those in Windows Defender
   Firewall.
+
+## What's new in 1.2.9
+- While the connection box or a warning box waits, every screen goes dark
+  and blurred behind it, fading in and out with the box. It never takes a
+  click. Turn it off under Blocking, Connection requests.
+- The connection box has a More details row, closed at first. Open it to see
+  the program's full path, the port, the network and who made the program.
+  The box grows smoothly to fit. D opens and closes it too.
+- The buttons in the boxes are round pills, and the settings window uses one
+  corner size and one 2px edge everywhere.
 
 ## What's new in 1.2.8
 - The connection box and the warning boxes are bigger. Pick Normal, Large
@@ -172,6 +182,9 @@ Based on [!Net](https://windhawk.net/mods/not-net) by Ashix.
 - confirmBoxGlass: true
   $name: "Blurred box"
   $description: "On, the connection box and the warning boxes are frosted glass. Off, they are solid."
+- confirmBoxBackdrop: true
+  $name: "Darken the screens behind the box"
+  $description: "On, every screen goes dark and blurred while the connection box or a warning box waits for you. It never takes a click."
 - contextMenu: true
   $name: "Right-click menu for apps"
   $description: "Adds Seamless Windows Firewall to the right-click menu of every program file, with Block, Allow again and Open the panel. A block made there stays after a restart, like a normal firewall rule."
@@ -554,6 +567,7 @@ struct ModSettings {
     bool autoAllowConnections = false;
     double confirmBoxScale = 1.3;
     bool confirmBoxGlass = true;
+    bool confirmBoxBackdrop = true;
     bool contextMenu = true;
 
     HotkeyBinding hkToggleFg;
@@ -3195,6 +3209,7 @@ static void LoadSettings() {
                                                                              : 1.3;
     }
     next.confirmBoxGlass = Wh_GetIntSetting(L"confirmBoxGlass") != 0;
+    next.confirmBoxBackdrop = Wh_GetIntSetting(L"confirmBoxBackdrop") != 0;
     next.contextMenu = Wh_GetIntSetting(L"contextMenu") != 0;
 
     auto readHk = [&](PCWSTR key) {
@@ -3513,6 +3528,8 @@ struct FwLayer {
 // ---------------------------------------------------------------------------
 constexpr wchar_t kConfirmClass[] = L"SeamlessFirewall_Confirm_v1";
 constexpr UINT_PTR TIMER_CONFIRM_FADE = 90;
+constexpr UINT_PTR TIMER_CONFIRM_GROW = 91;
+constexpr wchar_t kBackdropClass[] = L"SeamlessFirewall_Backdrop_v1";
 
 struct FwConfirmState {
     std::wstring title, body, yes, no;
@@ -3523,6 +3540,20 @@ struct FwConfirmState {
     int focus = 2;
     RECT rcNo{}, rcYes{};
     int bodyTop = 0, bodyH = 0;
+    // The "More details" fold: closed at first; a click on its row grows the box smoothly.
+    std::vector<std::pair<std::wstring, std::wstring>> details;
+    bool detailsOpen = false;
+    double detailsVis = 0.0, detailsFrom = 0.0, detailsTo = 0.0, detailsStart = 0.0, detailsMs = 0.0;
+    int detailsH = 0, labelW = 0;
+    RECT rcMore{};
+    // The dark blur over every screen while the box waits: one click-through window per screen,
+    // faded with the box.
+    std::vector<HWND> backdrops;
+    int backdropAlpha = 255;
+    ~FwConfirmState() {
+        for (HWND h : backdrops)
+            if (IsWindow(h)) DestroyWindow(h);
+    }
     DWORD openTick = 0;
     // A box that does not wait (the connection request) posts doneMsg to doneTo with the
     // answer in wParam and its own window in lParam instead of ending a message loop.
@@ -3552,10 +3583,115 @@ static bool ConfirmBoxGlassOn() {
     return g_settings.confirmBoxGlass;
 }
 
+static bool ConfirmBoxBackdropOn() {
+    std::lock_guard<std::mutex> lk(g_settingsMtx);
+    return g_settings.confirmBoxBackdrop;
+}
+
 static int FwConfirmHit(const FwConfirmState* st, POINT pt) {
     if (PtInRect(&st->rcYes, pt)) return 2;
     if (PtInRect(&st->rcNo, pt)) return 1;
+    if (!st->details.empty() && PtInRect(&st->rcMore, pt)) return 3;
     return 0;
+}
+
+// ---- The screen behind the box: dark tint and blur on every screen, never takes a click.
+static LRESULT CALLBACK FwBackdropProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+        case WM_NCHITTEST:
+            return HTTRANSPARENT;
+        case WM_MOUSEACTIVATE:
+            return MA_NOACTIVATE;
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_PAINT: {
+            PAINTSTRUCT ps{};
+            HDC dc = BeginPaint(hwnd, &ps);
+            // With the blur on, black lets the frosted tint show; solid mode paints Mocha crust.
+            bool blur = GetWindowLongPtrW(hwnd, GWLP_USERDATA) != 0;
+            HBRUSH br = blur ? (HBRUSH)GetStockObject(BLACK_BRUSH)
+                             : CreateSolidBrush(RGB(fwc::crust >> 16 & 0xFF, fwc::crust >> 8 & 0xFF, fwc::crust & 0xFF));
+            FillRect(dc, &ps.rcPaint, br);
+            if (!blur) DeleteObject(br);
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+static void FwBackdropAlpha(FwConfirmState* st, double e) {
+    if (!st) return;
+    BYTE a = (BYTE)std::clamp((int)std::lround(st->backdropAlpha * std::clamp(e, 0.0, 1.0)), 0, 255);
+    for (HWND h : st->backdrops)
+        if (IsWindow(h)) SetLayeredWindowAttributes(h, 0, a, LWA_ALPHA);
+}
+
+static void FwBackdropClose(FwConfirmState* st) {
+    if (!st) return;
+    for (HWND h : st->backdrops)
+        if (IsWindow(h)) DestroyWindow(h);
+    st->backdrops.clear();
+}
+
+// Puts the screen covers up (still see-through at 0) and keeps the box above them.
+static void FwBackdropShow(FwConfirmState* st, HWND box) {
+    if (!st) return;
+    for (HWND h : st->backdrops)
+        if (IsWindow(h))
+            SetWindowPos(h, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    if (box) SetWindowPos(box, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
+static void FwBackdropOpen(FwConfirmState* st, HWND box) {
+    if (!st || !st->backdrops.empty() || !ConfirmBoxBackdropOn()) return;
+    static bool registered = false;
+    HINSTANCE inst = GetModuleHandleW(nullptr);
+    if (!registered) {
+        WNDCLASSEXW wc{sizeof(wc)};
+        wc.lpfnWndProc = FwBackdropProc;
+        wc.hInstance = inst;
+        wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        wc.lpszClassName = kBackdropClass;
+        registered = RegisterClassExW(&wc) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
+        if (!registered) return;
+    }
+    bool blur = TransparencyOn() && ConfirmBoxGlassOn();
+    st->backdropAlpha = blur ? 255 : 150;
+    std::vector<RECT> screens;
+    EnumDisplayMonitors(
+        nullptr, nullptr,
+        [](HMONITOR, HDC, LPRECT rc, LPARAM lp) -> BOOL {
+            reinterpret_cast<std::vector<RECT>*>(lp)->push_back(*rc);
+            return TRUE;
+        },
+        (LPARAM)&screens);
+    struct BdAccent { int state, flags, abgr, animation; };
+    struct BdComposition { DWORD attribute; void* data; SIZE_T size; };
+    using BdSetComposition_t = BOOL(WINAPI*)(HWND, BdComposition*);
+    static auto setComposition =
+        (BdSetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
+    for (const RECT& rc : screens) {
+        HWND h = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE,
+                                 kBackdropClass, L"", WS_POPUP, rc.left, rc.top, rc.right - rc.left,
+                                 rc.bottom - rc.top, nullptr, nullptr, inst, nullptr);
+        if (!h) continue;
+        SetWindowLongPtrW(h, GWLP_USERDATA, blur ? 1 : 0);
+        BOOL off = TRUE;
+        DwmSetWindowAttribute(h, DWMWA_TRANSITIONS_FORCEDISABLED, &off, sizeof(off));
+        if (blur && setComposition) {
+            MARGINS m{-1, -1, -1, -1};
+            DwmExtendFrameIntoClientArea(h, &m);
+            // Mocha crust at 60 %: dark enough that the box is the only thing to read.
+            int tint = (int)((0x99u << 24) | (fwc::crust & 0xFF) << 16 | (fwc::crust & 0xFF00) | (fwc::crust >> 16 & 0xFF));
+            BdAccent policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, tint, 0};
+            BdComposition data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(h, &data);
+        }
+        SetLayeredWindowAttributes(h, 0, 0, LWA_ALPHA);
+        st->backdrops.push_back(h);
+    }
+    FwBackdropShow(st, box);
 }
 
 static SIZE FwConfirmLayout(HWND hwnd, FwConfirmState* st) {
@@ -3567,7 +3703,8 @@ static SIZE FwConfirmLayout(HWND hwnd, FwConfirmState* st) {
     Gdiplus::Font bodyFont(face, (Gdiplus::REAL)BoxPx(12, dpi, st->scale), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
     Gdiplus::Font btnFont(face, (Gdiplus::REAL)BoxPx(12, dpi, st->scale), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
     HDC dc = GetDC(hwnd);
-    Gdiplus::RectF bodyBox, yesBox, noBox;
+    Gdiplus::RectF bodyBox, yesBox, noBox, moreBox;
+    int rowGap = BoxPx(4, dpi, st->scale);
     {
         Gdiplus::Graphics g(dc);
         g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
@@ -3576,11 +3713,37 @@ static SIZE FwConfirmLayout(HWND hwnd, FwConfirmState* st) {
         Gdiplus::PointF o(0, 0);
         g.MeasureString(st->yes.c_str(), -1, &btnFont, o, &yesBox);
         g.MeasureString(st->no.c_str(), -1, &btnFont, o, &noBox);
+        if (!st->details.empty()) {
+            g.MeasureString(L"Fewer details", -1, &bodyFont, o, &moreBox);
+            Gdiplus::REAL lw = 0;
+            for (const auto& d : st->details) {
+                Gdiplus::RectF b;
+                g.MeasureString(d.first.c_str(), -1, &bodyFont, o, &b);
+                lw = std::max(lw, b.Width);
+            }
+            st->labelW = (int)std::ceil(lw) + BoxPx(12, dpi, st->scale);
+            Gdiplus::REAL vw = (Gdiplus::REAL)std::max(40, w - pad - textX - st->labelW);
+            st->detailsH = BoxPx(6, dpi, st->scale);
+            for (const auto& d : st->details) {
+                Gdiplus::RectF b;
+                g.MeasureString(d.second.c_str(), -1, &bodyFont, Gdiplus::RectF(0, 0, vw, 4000.0f), &b);
+                st->detailsH += (int)std::ceil(b.Height) + rowGap;
+            }
+        }
     }
     ReleaseDC(hwnd, dc);
     st->bodyTop = pad + BoxPx(24, dpi, st->scale);
     st->bodyH = (int)std::ceil(bodyBox.Height) + BoxPx(2, dpi, st->scale);
-    int btnTop = st->bodyTop + st->bodyH + BoxPx(20, dpi, st->scale);
+    int afterText = st->bodyTop + st->bodyH;
+    st->rcMore = RECT{};
+    if (!st->details.empty()) {
+        int moreTop = afterText + BoxPx(10, dpi, st->scale);
+        int moreLeft = textX - BoxPx(8, dpi, st->scale);
+        st->rcMore = RECT{moreLeft, moreTop, textX + BoxPx(22, dpi, st->scale) + (int)std::ceil(moreBox.Width) + BoxPx(12, dpi, st->scale),
+                          moreTop + BoxPx(26, dpi, st->scale)};
+        afterText = st->rcMore.bottom + (int)std::lround(st->detailsH * st->detailsVis);
+    }
+    int btnTop = afterText + BoxPx(20, dpi, st->scale);
     int btnH = BoxPx(32, dpi, st->scale);
     int minW = BoxPx(88, dpi, st->scale), side = BoxPx(18, dpi, st->scale), gap = BoxPx(8, dpi, st->scale);
     int yesW = std::max(minW, (int)std::ceil(yesBox.Width) + 2 * side);
@@ -3642,12 +3805,51 @@ static void FwConfirmPaint(HWND hwnd, FwConfirmState* st) {
                               (Gdiplus::REAL)st->bodyH);
         g.DrawString(st->body.c_str(), -1, &bodyFont, bodyRf, nullptr, &subBr);
 
-        Gdiplus::REAL rad = (Gdiplus::REAL)BoxPx(8, dpi, st->scale);
+        // Short buttons are full pills; every edge is the one 2px edge.
+        Gdiplus::REAL rad = (Gdiplus::REAL)(st->rcYes.bottom - st->rcYes.top) / 2;
         Gdiplus::REAL ew2 = (Gdiplus::REAL)std::max(2, DpiScale(2, dpi));
         auto rf = [](const RECT& r) {
             return Gdiplus::RectF((Gdiplus::REAL)r.left, (Gdiplus::REAL)r.top, (Gdiplus::REAL)(r.right - r.left),
                                   (Gdiplus::REAL)(r.bottom - r.top));
         };
+
+        // "More details": a chevron row; open, it shows the program, port, network and maker.
+        if (!st->details.empty()) {
+            Gdiplus::RectF mr = rf(st->rcMore);
+            bool lit = st->hover == 3;
+            if (lit) {
+                FwRound(g, Moc(fwc::surface0, 0.7), mr.X, mr.Y, mr.Width, mr.Height, mr.Height / 2);
+                FwGradEdge(g, mr.X, mr.Y, mr.Width, mr.Height, mr.Height / 2, ew2);
+            }
+            Gdiplus::Font chevFont(FwIconFace(), (Gdiplus::REAL)BoxPx(10, dpi, st->scale), Gdiplus::FontStyleRegular,
+                                   Gdiplus::UnitPixel);
+            Gdiplus::REAL inset = (Gdiplus::REAL)BoxPx(8, dpi, st->scale);
+            Gdiplus::RectF cr(mr.X + inset, mr.Y, (Gdiplus::REAL)BoxPx(14, dpi, st->scale), mr.Height);
+            g.DrawString(st->detailsOpen ? L"\xE70E" : L"\xE70D", -1, &chevFont, cr, &sfCenter, lit ? &textBr : &subBr);
+            Gdiplus::REAL tx = cr.X + cr.Width + (Gdiplus::REAL)BoxPx(6, dpi, st->scale);
+            Gdiplus::RectF tr(tx, mr.Y, mr.X + mr.Width - tx, mr.Height);
+            g.DrawString(st->detailsOpen ? L"Fewer details" : L"More details", -1, &bodyFont, tr, &sfLeft,
+                         lit ? &textBr : &subBr);
+            int shown = (int)std::lround(st->detailsH * st->detailsVis);
+            if (shown > 0) {
+                g.SetClip(Gdiplus::RectF(0, (Gdiplus::REAL)st->rcMore.bottom, (Gdiplus::REAL)w, (Gdiplus::REAL)shown));
+                Gdiplus::SolidBrush labelBr(Moc(fwc::overlay2, st->detailsVis));
+                Gdiplus::SolidBrush valueBr(Moc(fwc::text, st->detailsVis));
+                Gdiplus::REAL y = (Gdiplus::REAL)(st->rcMore.bottom + BoxPx(6, dpi, st->scale));
+                Gdiplus::REAL vx = (Gdiplus::REAL)(textX + st->labelW);
+                Gdiplus::REAL vw = (Gdiplus::REAL)std::max(40, w - pad - textX - st->labelW);
+                for (const auto& d : st->details) {
+                    Gdiplus::RectF b;
+                    g.MeasureString(d.second.c_str(), -1, &bodyFont, Gdiplus::RectF(0, 0, vw, 4000.0f), &b);
+                    Gdiplus::REAL rh = std::ceil(b.Height);
+                    g.DrawString(d.first.c_str(), -1, &bodyFont, Gdiplus::RectF((Gdiplus::REAL)textX, y, (Gdiplus::REAL)st->labelW, rh),
+                                 nullptr, &labelBr);
+                    g.DrawString(d.second.c_str(), -1, &bodyFont, Gdiplus::RectF(vx, y, vw, rh), nullptr, &valueBr);
+                    y += rh + (Gdiplus::REAL)BoxPx(4, dpi, st->scale);
+                }
+                g.ResetClip();
+            }
+        }
         // "No": Mocha surface with one 2px edge, grey at rest, blue to mauve on hover or focus.
         {
             Gdiplus::RectF r = rf(st->rcNo);
@@ -3678,6 +3880,7 @@ static void FwBoxSettle(HWND hwnd, FwConfirmState* st) {
     KillTimer(hwnd, TIMER_CONFIRM_FADE);
     st->settled = true;
     st->vis = 1.0;
+    FwBackdropAlpha(st, 1.0);
     SetWindowPos(hwnd, nullptr, st->finalX, st->finalY, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     LONG_PTR ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
     if (ex & WS_EX_LAYERED) SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex & ~WS_EX_LAYERED);
@@ -3694,6 +3897,7 @@ static void FwBoxStartOpen(HWND hwnd, FwConfirmState* st, int x, int y) {
     st->finalX = x;
     st->finalY = y;
     st->openTick = GetTickCount();
+    FwBackdropOpen(st, hwnd);
     double scale = 1.0;
     if (!FwMotion(&scale)) {
         FwBoxSettle(hwnd, st);
@@ -3710,8 +3914,10 @@ static void FwBoxStartOpen(HWND hwnd, FwConfirmState* st, int x, int y) {
 
 static void FwBoxCloseDone(HWND hwnd, FwConfirmState* st) {
     KillTimer(hwnd, TIMER_CONFIRM_FADE);
+    KillTimer(hwnd, TIMER_CONFIRM_GROW);
     st->done = true;
     ShowWindow(hwnd, SW_HIDE);
+    FwBackdropClose(st);
     if (st->doneMsg && st->doneTo) PostMessageW(st->doneTo, st->doneMsg, st->result ? 1 : 0, (LPARAM)hwnd);
 }
 
@@ -3722,6 +3928,7 @@ static void FwBoxStep(HWND hwnd, FwConfirmState* st) {
     double e = st->closing ? st->closeFrom * (1.0 - t * t * t) : 1.0 - std::pow(1.0 - t, 3.0);
     st->vis = e;
     SetLayeredWindowAttributes(hwnd, 0, (BYTE)std::clamp((int)std::lround(255.0 * e), 0, 255), LWA_ALPHA);
+    FwBackdropAlpha(st, e);
     SetWindowPos(hwnd, nullptr, st->finalX, st->finalY + (int)std::lround((1.0 - e) * st->slidePx), 0, 0,
                  SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     if (t >= 1.0) {
@@ -3740,6 +3947,7 @@ static void FwConfirmFinish(HWND hwnd, FwConfirmState* st, bool yes) {
         return;
     }
     KillTimer(hwnd, TIMER_CONFIRM_FADE);
+    KillTimer(hwnd, TIMER_CONFIRM_GROW);
     st->closeFrom = st->settled ? 1.0 : std::clamp(st->vis, 0.0, 1.0);
     if (st->settled) {
         RECT wr{};
@@ -3759,6 +3967,48 @@ static void FwConfirmFinish(HWND hwnd, FwConfirmState* st, bool yes) {
     st->animMs = 120.0 * scale;
     st->animStart = FwNowMs();
     SetTimer(hwnd, TIMER_CONFIRM_FADE, 10, nullptr);
+}
+
+static void FwBoxResize(HWND hwnd, FwConfirmState* st) {
+    SIZE sz = FwConfirmLayout(hwnd, st);
+    RECT wr{};
+    GetWindowRect(hwnd, &wr);
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(MonitorFromRect(&wr, MONITOR_DEFAULTTONEAREST), &mi);
+    int y = st->settled ? (int)wr.top : st->finalY;
+    if (y + (int)sz.cy > (int)mi.rcWork.bottom) y = std::max((int)mi.rcWork.top, (int)mi.rcWork.bottom - (int)sz.cy);
+    if (st->settled) {
+        SetWindowPos(hwnd, nullptr, wr.left, y, sz.cx, sz.cy, SWP_NOZORDER | SWP_NOACTIVATE);
+    } else {
+        st->finalY = y;
+        SetWindowPos(hwnd, nullptr, 0, 0, sz.cx, sz.cy, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+}
+
+static void FwDetailsToggle(HWND hwnd, FwConfirmState* st) {
+    if (!st || st->details.empty() || st->closing || st->done) return;
+    st->detailsOpen = !st->detailsOpen;
+    st->detailsFrom = st->detailsVis;
+    st->detailsTo = st->detailsOpen ? 1.0 : 0.0;
+    double scale = 1.0;
+    if (!FwMotion(&scale)) {
+        KillTimer(hwnd, TIMER_CONFIRM_GROW);
+        st->detailsVis = st->detailsTo;
+        FwBoxResize(hwnd, st);
+        return;
+    }
+    st->detailsMs = 200.0 * scale;
+    st->detailsStart = FwNowMs();
+    SetTimer(hwnd, TIMER_CONFIRM_GROW, 10, nullptr);
+}
+
+static void FwDetailsStep(HWND hwnd, FwConfirmState* st) {
+    double t = st->detailsMs > 0.0 ? std::clamp((FwNowMs() - st->detailsStart) / st->detailsMs, 0.0, 1.0) : 1.0;
+    double e = 1.0 - std::pow(1.0 - t, 3.0);
+    st->detailsVis = st->detailsFrom + (st->detailsTo - st->detailsFrom) * e;
+    FwBoxResize(hwnd, st);
+    if (t >= 1.0) KillTimer(hwnd, TIMER_CONFIRM_GROW);
 }
 
 static LRESULT CALLBACK FwConfirmProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -3794,6 +4044,7 @@ static LRESULT CALLBACK FwConfirmProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
             return 0;
         case WM_TIMER:
             if (wParam == TIMER_CONFIRM_FADE && st) FwBoxStep(hwnd, st);
+            if (wParam == TIMER_CONFIRM_GROW && st) FwDetailsStep(hwnd, st);
             return 0;
         case WM_SETCURSOR:
             if (st && LOWORD(lParam) == HTCLIENT) {
@@ -3835,7 +4086,8 @@ static LRESULT CALLBACK FwConfirmProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
             ReleaseCapture();
             POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
             int hit = st ? FwConfirmHit(st, pt) : 0;
-            if (hit) FwConfirmFinish(hwnd, st, hit == 2);
+            if (hit == 3) FwDetailsToggle(hwnd, st);
+            else if (hit) FwConfirmFinish(hwnd, st, hit == 2);
             return 0;
         }
         case WM_KEYDOWN:
@@ -3851,6 +4103,9 @@ static LRESULT CALLBACK FwConfirmProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
                     break;
                 case 'Y':
                     FwConfirmFinish(hwnd, st, true);
+                    break;
+                case 'D':
+                    FwDetailsToggle(hwnd, st);
                     break;
                 case VK_TAB:
                 case VK_LEFT:
@@ -3943,6 +4198,7 @@ static bool FwConfirm(const wchar_t* title, const wchar_t* body, const wchar_t* 
         DispatchMessageW(&m);
     }
     bool result = st.done && st.result;
+    FwBackdropClose(&st);
     if (ownerEnabled && IsWindow(owner)) EnableWindow(owner, TRUE);
     DestroyWindow(hwnd);
     g_hConfirm = nullptr;
@@ -4254,6 +4510,37 @@ static std::wstring ListenFriendlyName(const std::wstring& path) {
     return file;
 }
 
+// Who made the program, from its version information; empty when the file does not say.
+static std::wstring ListenPublisher(const std::wstring& path) {
+    DWORD dummy = 0;
+    DWORD size = GetFileVersionInfoSizeW(path.c_str(), &dummy);
+    if (!size) return L"";
+    std::vector<BYTE> data(size);
+    if (!GetFileVersionInfoW(path.c_str(), 0, size, data.data())) return L"";
+    struct LangCp { WORD lang, cp; };
+    LangCp* tr = nullptr;
+    UINT trLen = 0;
+    std::vector<std::wstring> keys;
+    if (VerQueryValueW(data.data(), L"\\VarFileInfo\\Translation", (void**)&tr, &trLen) && tr && trLen >= sizeof(LangCp)) {
+        wchar_t k[64];
+        swprintf_s(k, L"\\StringFileInfo\\%04x%04x\\CompanyName", tr[0].lang, tr[0].cp);
+        keys.push_back(k);
+    }
+    keys.push_back(L"\\StringFileInfo\\040904b0\\CompanyName");
+    keys.push_back(L"\\StringFileInfo\\040904e4\\CompanyName");
+    for (const auto& k : keys) {
+        wchar_t* v = nullptr;
+        UINT len = 0;
+        if (VerQueryValueW(data.data(), k.c_str(), (void**)&v, &len) && v && len > 1) {
+            std::wstring d(v);
+            while (!d.empty() && iswspace(d.back())) d.pop_back();
+            while (!d.empty() && iswspace(d.front())) d.erase(d.begin());
+            if (!d.empty() && d.size() < 120) return d;
+        }
+    }
+    return L"";
+}
+
 static void ListenScanOnce() {
     auto hits = CollectListeners();
     if (hits.empty()) return;
@@ -4385,6 +4672,11 @@ static void ShowNextListenBox() {
         st->body += L" Allow lets it in on home and work networks.";
     st->yes = L"Allow";
     st->no = L"Block";
+    st->details.push_back({L"Program", a->path});
+    if (a->port) st->details.push_back({L"Port", std::to_wstring(a->port)});
+    st->details.push_back({L"Network", onPublic ? L"Public" : L"Private (home or work)"});
+    std::wstring maker = ListenPublisher(a->path);
+    st->details.push_back({L"Made by", maker.empty() ? std::wstring(L"Not named in the file") : maker});
     st->question = true;
     st->focus = 2;
     st->doneTo = g_hWnd;
@@ -4413,6 +4705,7 @@ static void ShowNextListenBox() {
     SetWindowPos(hwnd, HWND_TOPMOST, x, y, sz.cx, sz.cy, SWP_NOACTIVATE);
     FwBoxStartOpen(hwnd, st.get(), x, y);
     ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     g_hListenBox = hwnd;
     g_listenBoxState = std::move(st);
     g_listenCurrent = std::move(a);
@@ -4430,10 +4723,13 @@ static void ListenPump(bool fullscreen) {
             FwBoxSettle(g_hListenBox, bs);
         if (fullscreen && vis) {
             ShowWindow(g_hListenBox, SW_HIDE);
+            for (HWND h : bs->backdrops)
+                if (IsWindow(h)) ShowWindow(h, SW_HIDE);
         } else if (!fullscreen && !vis) {
             FwBoxSettle(g_hListenBox, bs);
-            SetWindowPos(g_hListenBox, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            FwBackdropShow(bs, g_hListenBox);
             ShowWindow(g_hListenBox, SW_SHOWNOACTIVATE);
+            SetWindowPos(g_hListenBox, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         }
         return;
     }
@@ -10133,6 +10429,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"autoAllowConnections", L"Allow every app by itself", L"On, an app that wants other devices to connect to it is allowed straight away, on every network, with no box. Each one is written to the log. Off, the box asks you first.", L"0", {}, 0, 100, 0, L"Connection requests"},
 {K::Choice, L"confirmBoxSize", L"Box size", L"How big the connection box and the warning boxes are.", L"large", {{L"normal", L"Normal"}, {L"large", L"Large"}, {L"extralarge", L"Extra large"}}, 0, 100, 0, L"Connection requests"},
 {K::Check, L"confirmBoxGlass", L"Blurred box", L"On, the connection box and the warning boxes are frosted glass. Off, they are solid.", L"1", {}, 0, 100, 0, L"Connection requests"},
+{K::Check, L"confirmBoxBackdrop", L"Darken the screens behind the box", L"On, every screen goes dark and blurred while the connection box or a warning box waits for you. It never takes a click.", L"1", {}, 0, 100, 0, L"Connection requests"},
 {K::Check, L"contextMenu", L"Right-click menu for apps", L"Adds Seamless Windows Firewall to the right-click menu of every program file, with Block, Allow again and Open the panel. A block made there stays after a restart, like a normal firewall rule.", L"1", {}, 0, 100, 0, L"Right-click menu"},
 {K::Choice, L"windowSizePreset", L"Panel size", L"", L"default", {{L"default", L"Normal (436 by 480)"}, {L"large", L"Large (680 by 680)"}, {L"extralarge", L"Extra large (840 by 840)"}}, 0, 100, 1, L"Panel"},
 {K::Choice, L"defaultFilter", L"List shown first", L"The tab the panel opens on.", L"user", {{L"user", L"Running apps"}, {L"allowed", L"Allowed"}, {L"blocked", L"Blocked"}, {L"system", L"System apps"}, {L"excluded", L"Hidden apps"}}, 0, 100, 1, L"Panel"},
@@ -10181,6 +10478,7 @@ constexpr float kSetDockGap = 10, kSetRailDef = 232, kSetRailMin = 200, kSetRail
 constexpr float kSetFootBtnH = 36, kSetFootPad = 8, kSetFootH = kSetFootBtnH + 2 * kSetFootPad, kSetFootGap = 14;
 // The glass tint is one layer over the whole window, title bar included, so the two always match.
 constexpr float kSetGlassTint = 0.55f, kSetNativeFade = 56;
+constexpr float kSetEdgeW = 2, kSetRadius = 16;
 constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
@@ -10270,6 +10568,10 @@ static SetCom<IWICImagingFactory> g_setWic;
 #ifdef SCM_HARNESS
 static std::wstring g_setFakeKeyStatus;  // Lets the test render the hotkey warning line.
 #endif
+
+static float Set_Rad(const D2D1_RECT_F& r, float most = kSetRadius) {
+    return std::min(most, std::min(r.right - r.left, r.bottom - r.top) / 2);
+}
 
 static std::wstring Set_WindowText(HWND hwnd) {
     std::wstring text(GetWindowTextLengthW(hwnd) + 1, L'\0');
@@ -10559,8 +10861,8 @@ static void Set_MenuPaint(SetMenuSession& s, SetMenuLevel& lv) {
         }
         bool hot = ((int)i == lv.hover || (int)i == lv.open) && !m.disabled;
         if (hot) {
-            // The hover look of every card: a faint blue to mauve wash and a 1 px gradient ring.
-            float rad = 8, ringW = 1;
+            // The hover look of every card: a faint blue to mauve wash and the 2 px gradient ring.
+            float ringW = kSetEdgeW, rad = std::min(12.0f, (r.bottom - r.top) / 2);
             D2D1_ROUNDED_RECT rr{{r.left + ringW / 2, r.top + ringW / 2, r.right - ringW / 2, r.bottom - ringW / 2}, rad, rad};
             auto fill = gradient({r.left, r.top}, {r.right, r.bottom}, D2DColor(mocha::blue, 0.16f), D2DColor(mocha::mauve, 0.16f));
             if (fill) rt->FillRoundedRectangle(rr, fill.get());
@@ -11454,23 +11756,24 @@ static bool Set_Valid(const SetWindow& w, int k) { return k >= 0 && k < (int)w.f
 // overlay0 edge, and the blue to mauve ring on hover or while open.
 constexpr UINT32 kSetBoxFill = 0x232434;
 static void Set_DrawBox(SetPaint& p, SetWindow& w, int k, const D2D1_RECT_F& box, bool active) {
-    p.Round(box, 8, kSetBoxFill);
+    const float rad = Set_Rad(box);
+    p.Round(box, rad, kSetBoxFill);
     float g = std::max(Set_GlowOf(w, 6000 + k), active ? 1.0f : 0.0f);
-    p.Edge(box, 8, mocha::overlay0, 0.7f * (1 - g), 1.25f);
-    p.GradRing(box, 8, g, 1.75f);
+    p.Edge(box, rad, mocha::overlay0, 0.7f * (1 - g));
+    p.GradRing(box, rad, g);
 }
 
 static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
     const SetField& f = w.fields[it.field];
     int k = it.field;
     D2D1_RECT_F row = Set_RowRect(w, it);
-    p.Round(row, 10, mocha::base);
-    p.Round(row, 10, mocha::surface0, 0.32f);
+    p.Round(row, kSetRadius, mocha::base);
+    p.Round(row, kSetRadius, mocha::surface0, 0.32f);
     float hov = Set_GlowOf(w, 1000 + k);
-    p.Edge(row, 10, mocha::surface2, 0.55f * (1 - hov));
-    p.GradFill(row, 10, 0.13f * hov);
-    p.GradRing(row, 10, hov, 1.5f);
-    if (w.kbd && w.focus == k) p.GradRing(row, 10, 1.0f, 2.0f);
+    p.Edge(row, kSetRadius, mocha::surface2, 0.55f * (1 - hov));
+    p.GradFill(row, kSetRadius, 0.13f * hov);
+    p.GradRing(row, kSetRadius, hov);
+    if (w.kbd && w.focus == k) p.GradRing(row, kSetRadius, 1.0f);
 
     float textW = w.contentW - 2 * kSetRowPad - Set_ControlW(f) - 24;
     float lh = Set_TextH(w.fLabel.get(), f.label, textW);
@@ -11572,17 +11875,17 @@ static void Set_DrawGroup(SetPaint& p, SetWindow& w, const SetItem& it) {
 // The resting card every row uses: base, a light lift and a soft gray edge that hands over to
 // the hover ring.
 static void Set_DrawCard(SetPaint& p, const D2D1_RECT_F& row, float hov) {
-    p.Round(row, 10, mocha::base);
-    p.Round(row, 10, mocha::surface0, 0.32f);
-    p.Edge(row, 10, mocha::surface2, 0.55f * (1 - hov));
+    p.Round(row, kSetRadius, mocha::base);
+    p.Round(row, kSetRadius, mocha::surface0, 0.32f);
+    p.Edge(row, kSetRadius, mocha::surface2, 0.55f * (1 - hov));
 }
 
 static void Set_DrawLinkRow(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
     D2D1_RECT_F row = Set_RowRect(w, it);
     float hov = Set_GlowOf(w, 3000 + idx);
     Set_DrawCard(p, row, hov);
-    p.GradFill(row, 10, 0.13f * hov);
-    p.GradRing(row, 10, hov, 1.5f);
+    p.GradFill(row, kSetRadius, 0.13f * hov);
+    p.GradRing(row, kSetRadius, hov);
     p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 9, row.right - 50, row.top + 30}, mocha::text);
     p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 30, row.right - 50, row.bottom - 4}, mocha::subtext0);
     p.Glyph(w.fIcon.get(), 0xE8A7, {row.right - 46, row.top, row.right - 12, row.bottom}, mocha::subtext1);
@@ -11592,14 +11895,14 @@ static void Set_DrawSupport(SetPaint& p, SetWindow& w, const SetItem& it, int id
     D2D1_RECT_F row = Set_RowRect(w, it);
     float card = std::max(Set_GlowOf(w, 3700 + idx), Set_GlowOf(w, 3500 + idx));
     Set_DrawCard(p, row, card);
-    p.GradFill(row, 10, 0.13f * card);
-    p.GradRing(row, 10, card, 1.5f);
+    p.GradFill(row, kSetRadius, 0.13f * card);
+    p.GradRing(row, kSetRadius, card);
     p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 14, row.right - 180, row.top + 36}, mocha::text);
     p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 38, row.right - 180, row.bottom - 6}, mocha::subtext0);
     D2D1_RECT_F b = Set_SupportButton(w, it);
     float hov = Set_GlowOf(w, 3500 + idx);
-    p.GradFill(b, 8, 0.85f + 0.15f * hov);
-    p.GradRing(b, 8, hov, 2);
+    p.GradFill(b, Set_Rad(b), 0.85f + 0.15f * hov);
+    p.GradRing(b, Set_Rad(b), hov);
     p.Text(w.fButton.get(), L"Open Ko-fi", b, mocha::crust);
 }
 
@@ -11636,7 +11939,7 @@ static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it, int idx)
 
 static void Set_DrawBanner(SetPaint& p, SetWindow& w, const SetItem& it) {
     D2D1_RECT_F r = Set_RowRect(w, it);
-    p.Round(r, 10, mocha::peach, 0.14f);
+    p.Round(r, kSetRadius, mocha::peach, 0.14f);
     p.Text(w.fHint.get(), it.text, {r.left + 16, r.top + 14, r.right - 16, r.bottom - 8}, mocha::peach);
 }
 
@@ -11645,9 +11948,8 @@ static void Set_DrawBanner(SetPaint& p, SetWindow& w, const SetItem& it) {
 static void Set_DrawDock(SetPaint& p, SetWindow& w, const D2D1_RECT_F& d, float rad, float fill, float glow) {
     p.Round({d.left, d.top + 3, d.right, d.bottom + 5}, rad + 2, mocha::crust, w.glass ? 0.28f : 0.5f);
     p.Round(d, rad, mocha::mantle, fill);  // Hover lights only the edge: a wash showed as a blue blob down the left.
-    D2D1_RECT_F in{d.left + 0.5f, d.top + 0.5f, d.right - 0.5f, d.bottom - 0.5f};
-    p.rt->DrawRoundedRectangle(D2D1::RoundedRect(in, rad, rad), p.B(mocha::surface1, 0.75f * (1 - glow)), 1);
-    p.GradRing(d, rad, glow, 1.5f);
+    p.Edge(d, rad, mocha::surface1, 0.75f * (1 - glow));
+    p.GradRing(d, rad, glow);
 }
 
 // Panel-left mark, as in T3's sidebar button: a window with its left pane shaded while open.
@@ -11666,15 +11968,15 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
     // Over the resize edge or while dragging, the dock's own rounded border brightens and
     // thickens, so the handle follows the corners instead of floating as a separate line.
     float edge = std::max(Set_GlowOf(w, 41), w.dragRail ? 1.0f : 0.0f);
-    Set_DrawDock(p, w, d, 14, w.glass ? 0.58f : 1.0f, std::max(w.railGlow * 0.85f, edge));
-    if (edge > 0.003f) p.GradRing(d, 13, edge, 2.25f);
+    Set_DrawDock(p, w, d, kSetRadius, w.glass ? 0.58f : 1.0f, std::max(w.railGlow * 0.85f, edge));
 
     D2D1_RECT_F tb = Set_RailToggleRect(w);
     float th = Set_GlowOf(w, 42);
-    p.Round(tb, 9, mocha::surface0, 0.45f + 0.25f * th);
-    p.GradFill(tb, 9, 0.16f * th);
-    p.GradRing(tb, 9, 0.9f * th, 1.25f);
-    if (w.kbd && w.focus == -20) p.GradRing(tb, 9, 1, 2);
+    const float tr = Set_Rad(tb);
+    p.Round(tb, tr, mocha::surface0, 0.45f + 0.25f * th);
+    p.GradFill(tb, tr, 0.16f * th);
+    p.GradRing(tb, tr, 0.9f * th);
+    if (w.kbd && w.focus == -20) p.GradRing(tb, tr, 1);
     Set_DrawPanelIcon(p, tb, open, th > 0.5f ? mocha::text : mocha::subtext1);
 
     p.rt->PushAxisAlignedClip(D2D1::RectF(d.left, d.top, d.right - 6, d.bottom), D2D1_ANTIALIAS_MODE_ALIASED);
@@ -11692,18 +11994,19 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
         }
         float hov = Set_GlowOf(w, 100 + i);
         bool act = i == w.page;
+        const float rr = Set_Rad(r);
         if (act) {
-            p.GradFill(r, 8, 0.22f);
-            p.GradRing(r, 8, 0.5f, 1);
+            p.GradFill(r, rr, 0.22f);
+            p.GradRing(r, rr, 0.5f);
             D2D1_RECT_F bar{r.left, r.top + 8, r.left + 3, r.bottom - 8};
             p.GradFill({bar.left, bar.top, bar.left + 3, bar.bottom}, 1.5f, 1);
         } else {
-            p.Round(r, 8, mocha::surface0, 0.28f);
-            p.Edge(r, 8, mocha::surface2, 0.5f * (1 - hov));
-            p.GradFill(r, 8, 0.10f * hov);
-            p.GradRing(r, 8, 0.8f * hov, 1.25f);
+            p.Round(r, rr, mocha::surface0, 0.28f);
+            p.Edge(r, rr, mocha::surface2, 0.5f * (1 - hov));
+            p.GradFill(r, rr, 0.10f * hov);
+            p.GradRing(r, rr, 0.8f * hov);
         }
-        if (w.kbd && w.focus == -10 - i) p.GradRing(r, 8, 1, 2);
+        if (w.kbd && w.focus == -10 - i) p.GradRing(r, rr, 1);
         UINT32 c = act ? mocha::text : mocha::subtext1;
         // The glyph sits in a fixed 44-wide slot, so it stays centered in the collapsed rail.
         p.Glyph(w.fIcon.get(), kSetPages[i].glyph, {r.left, r.top, r.left + 44, r.bottom}, act ? mocha::blue : mocha::subtext0);
@@ -11722,10 +12025,8 @@ static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
     // The same see-through mantle as the rail dock, so the blurred rows under the pill read as
     // real glass instead of a near-solid bar.
     p.Round(d, rad, mocha::mantle, w.render ? 1.0f : (w.glass ? 0.58f : 0.85f));
-    const D2D1_RECT_F edge{d.left + 2, d.top + 2, d.right - 2, d.bottom - 2};
-    p.rt->DrawRoundedRectangle(D2D1::RoundedRect(edge, rad - 2, rad - 2),
-                              p.B(mocha::overlay0, 0.9f * (1 - w.footGlow)), 2.75f);
-    p.GradRing(d, rad - 1.5f, w.footGlow, 3.0f);
+    p.Edge(d, rad, mocha::overlay0, 0.9f * (1 - w.footGlow));
+    p.GradRing(d, rad, w.footGlow);
     UINT32 sc;
     std::wstring status = Set_FooterStatus(w, &sc);
     float sw = Set_FooterStatusW(w);
@@ -11735,10 +12036,10 @@ static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
         D2D1_RECT_F b = Set_FooterButton(w, i);
         float hov = Set_GlowOf(w, 10 + i);
         p.Round(b, brad, mocha::base, 0.98f);
-        p.Edge(b, brad, mocha::overlay0, 0.78f * (1 - hov), 1.75f);
-        p.GradRing(b, brad - 1, hov, 2.25f);
+        p.Edge(b, brad, mocha::overlay0, 0.78f * (1 - hov));
+        p.GradRing(b, brad, hov);
         p.Text(w.fButton.get(), names[i], b, mocha::text, w.saving ? 0.5f : 1.0f);
-        if (w.kbd && w.focus == -1 - i) p.GradRing(b, brad, 1, 2);
+        if (w.kbd && w.focus == -1 - i) p.GradRing(b, brad, 1);
     }
 }
 
@@ -11775,9 +12076,9 @@ static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
     const int n = (int)f.options.size(), vis = Set_DropVisible(w);
     const bool scrolls = n > vis;
     D2D1_RECT_F shadow{r.left - 1, r.top + 3, r.right + 1, r.bottom + 5};
-    p.Round(shadow, 12, mocha::crust, 0.6f);
-    p.Round(r, 10, mocha::mantle);
-    p.GradRing(r, 10, 0.9f);
+    p.Round(shadow, kSetRadius + 2, mocha::crust, 0.6f);
+    p.Round(r, kSetRadius, mocha::mantle);
+    p.GradRing(r, kSetRadius, 0.9f);
     const float right = r.right - (scrolls ? 12 : 4);
     for (int v = 0; v < vis; v++) {
         int i = w.dropTop + v;
@@ -11785,8 +12086,8 @@ static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
         D2D1_RECT_F it{r.left + 4, r.top + 4 + v * kSetDropItem, right, r.top + 4 + (v + 1) * kSetDropItem};
         bool sel = f.cur == f.options[i].first;
         if (i == w.dropHover) {
-            p.GradFill(it, 6, 0.28f);
-            p.GradRing(it, 6, 0.6f, 1);
+            p.GradFill(it, Set_Rad(it, kSetRadius - 4), 0.28f);  // Inset 4 in a 16 corner: 12.
+            p.GradRing(it, Set_Rad(it, kSetRadius - 4), 0.6f);
         }
         p.Text(w.fValue.get(), f.options[i].second, {it.left + 10, it.top, it.right - 28, it.bottom}, sel ? mocha::blue : mocha::text);
         if (sel) p.Glyph(w.fIconS.get(), 0xE73E, {it.right - 28, it.top, it.right - 6, it.bottom}, mocha::blue);
@@ -11902,6 +12203,8 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
         rt->Clear(D2D1::ColorF(0, 0));
         const float total = w.ch + kSetCapH;
         if (w.nativeTitle) {
+            // The window's acrylic already carries the tint (Set_ApplyFrame), title bar included.
+        } else if (false) {
             SetCom<ID2D1LinearGradientBrush> fade;
             D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::crust, kSetGlassTint)}, {1, D2DColor(mocha::crust, kSetGlassTint)}};
             SetCom<ID2D1GradientStopCollection> coll;
@@ -12845,7 +13148,7 @@ static void Set_ApplyFrame(SetWindow& w) {
     const HWND hwnd = w.hwnd;
     const bool native = Set_FieldOn(w, L"nativeSettingsTitleBar", false), glass = Set_FieldOn(w, L"settingsGlass", true);
     const bool first = !w.frameApplied, wasGlass = w.glass;
-    if (!first && native == w.nativeTitle && glass == w.glass) return;
+    if (!first && native == w.nativeTitle && glass == w.glass) return;  // A title bar switch re-runs the accent below.
     w.frameApplied = true;
     w.nativeTitle = native;
     w.glass = glass;
@@ -12870,7 +13173,12 @@ static void Set_ApplyFrame(SetWindow& w) {
         DwmEnableBlurBehindWindow(hwnd, &bb);
         if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
         if (setComposition) {
-            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
+            // Same as the launcher grid. With the Windows title bar the tint is in here instead of
+            // on the page, so the title bar gets it too: crust at the page's 55%.
+            const int tint = native ? (int)(((DWORD)(kSetGlassTint * 255 + 0.5f) << 24) | (mocha::crust & 0xFF) << 16 |
+                                            (mocha::crust & 0xFF00) | (mocha::crust >> 16 & 0xFF))
+                                    : (int)0x012E1E1E;
+            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, tint, 0};
             SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
             setComposition(hwnd, &data);
         }
