@@ -2,7 +2,7 @@
 // @id              seamless-fps-overlay
 // @name            Seamless FPS Overlay
 // @description     FPS, frame times and PC temperatures over any game, with nothing put into the game
-// @version         1.1.3
+// @version         1.1.4
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -23,6 +23,13 @@ moving pictures included, and nothing is put into the game: Windows itself
 reports each frame, so it is safe with anti-cheat and works over Plutonium.
 
 ![Seamless FPS Overlay preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-fps-overlay.png)
+
+## What's new in 1.1.4
+
+- Frame pacing (was Jitter): its little wave only uses the room between the name and the number, so they never touch.
+- Frame time graph: the scale has its own lane, the line stops short of it, and a slow game raises the scale instead of pinning the line to the top.
+- New line, Limited by: GPU or CPU, like RivaTuner had.
+- Clearer names: Peak clock and Avg clock for the processor, both in MHz.
 
 ## What's new in 1.1.3
 The benchmark layout is now one panel. The sections sit together with no
@@ -182,7 +189,7 @@ Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
   $name: "Average FPS"
   $description: "Over the last 20 seconds."
 - jitter: true
-  $name: "Smoothness"
+  $name: "Frame pacing"
   $description: "How much the time between frames jumps around, in milliseconds. Lower feels smoother."
 - frameTime: true
   $name: "Frame time"
@@ -202,6 +209,9 @@ Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
 - driver: true
   $name: "Driver version"
   $description: "The graphics driver version."
+- limitedBy: true
+  $name: "Limited by"
+  $description: "Which part holds the frame rate back: GPU when the card is nearly full, CPU when a processor core is. A dash means neither, so a frame cap or the game itself sets the pace."
 - cpuName: true
   $name: "Processor name"
 - coreBars: true
@@ -266,11 +276,11 @@ Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
   $name: "Power"
   $description: "In watts. Needs the PawnIO driver, or it shows a dash."
 - cpuClock: true
-  $name: "Boost clock"
-  $description: "The fastest core right now, in GHz."
+  $name: "Peak clock"
+  $description: "The fastest core right now, in MHz."
 - cpuBusyClock: true
-  $name: "Busy clock"
-  $description: "The average clock while the cores are working, in MHz."
+  $name: "Average clock"
+  $description: "The average clock of the cores while they work, in MHz."
 - cpuTemp: true
   $name: "Temperature"
   $description: "Needs the PawnIO driver, or it shows a dash."
@@ -549,8 +559,8 @@ Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
   $name: "Bad moments"
 - lblAvg: "AVG"
   $name: "Average"
-- lblJitter: "JITTER"
-  $name: "Smoothness"
+- lblJitter: "FRAME PACING"
+  $name: "Frame pacing"
 - lblFrame: "FRAME TIME"
   $name: "Frame time"
 - lblLatency: "LATENCY"
@@ -561,6 +571,8 @@ Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
   $name: "Play time"
 - lblDriver: "DRIVER"
   $name: "Driver version"
+- lblLimited: "LIMITED BY"
+  $name: "Limited by"
 - lblRam: "RAM"
   $name: "Box name"
 - lblRamUsed: "USED"
@@ -593,10 +605,10 @@ Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
   $name: "Load"
 - lblCpuPower: "POWER"
   $name: "Power"
-- lblCpuBoost: "BOOST"
-  $name: "Boost clock"
-- lblCpuBusy: "BUSY CLOCK"
-  $name: "Busy clock"
+- lblCpuBoost: "PEAK CLOCK"
+  $name: "Peak clock"
+- lblCpuBusy: "AVG CLOCK"
+  $name: "Average clock"
 - lblCpuTemp: "TEMP"
   $name: "Temperature"
 - warnColour: "red"
@@ -3056,7 +3068,7 @@ struct OverlaySettings {
     int animationSpeed = 0;
 
     // Readings only the Benchmark layout has.
-    bool jitter = true, latency = false, api = true, session = true, driver = true, cpuName = true,
+    bool jitter = true, latency = false, limitedBy = true, api = true, session = true, driver = true, cpuName = true,
          coreBars = true, coreThreads = false, ramUsed = true, ramSpeed = true, ramClock = true, gpuArt = true,
          vramUsed = true, vramTemp = true, cpuArt = true, cpuBusyClock = true;
     // Blocks: shown, column (0 left, 1 right), order, size in percent, colour.
@@ -3126,15 +3138,16 @@ struct LabelDef {
 };
 static const LabelDef kLabelDefs[] = {
     {L"lblFps", L"FPS"},            {L"lbl01", L"0.1%"},           {L"lbl1", L"1%"},
-    {L"lblAvg", L"AVG"},            {L"lblJitter", L"JITTER"},     {L"lblFrame", L"FRAME TIME"},
+    {L"lblAvg", L"AVG"},            {L"lblJitter", L"FRAME PACING"},     {L"lblFrame", L"FRAME TIME"},
     {L"lblLatency", L"LATENCY"},    {L"lblApi", L"API"},           {L"lblTime", L"PLAY TIME"},
     {L"lblDriver", L"DRIVER"},      {L"lblRam", L"RAM"},           {L"lblRamUsed", L"USED"},
     {L"lblRamSpeed", L"SPEED"},     {L"lblRamClock", L"CLOCK"},    {L"lblGpuLoad", L"LOAD"},
     {L"lblGpuPower", L"POWER"},     {L"lblGpuClock", L"CLOCK"},    {L"lblFan", L"FAN"},
     {L"lblGpuTemp", L"TEMP"},       {L"lblHotspot", L"HOT SPOT"},  {L"lblVram", L"VRAM"},
     {L"lblVramUsed", L"USED"},      {L"lblVramTemp", L"TEMP"},     {L"lblVramClock", L"CLOCK"},
-    {L"lblCpuLoad", L"LOAD"},       {L"lblCpuPower", L"POWER"},    {L"lblCpuBoost", L"BOOST"},
-    {L"lblCpuBusy", L"BUSY CLOCK"}, {L"lblCpuTemp", L"TEMP"},
+    {L"lblCpuLoad", L"LOAD"},       {L"lblCpuPower", L"POWER"},    {L"lblCpuBoost", L"PEAK CLOCK"},
+    {L"lblCpuBusy", L"AVG CLOCK"},  {L"lblCpuTemp", L"TEMP"},
+    {L"lblLimited", L"LIMITED BY"},
 };
 
 static void LoadSettings() {
@@ -3200,6 +3213,7 @@ static void LoadSettings() {
 
     s.jitter = BoolSet(L"jitter", true);
     s.latency = BoolSet(L"latency", false);
+    s.limitedBy = BoolSet(L"limitedBy", true);
     s.api = BoolSet(L"api", true);
     s.session = BoolSet(L"session", true);
     s.driver = BoolSet(L"driver", true);
@@ -4527,6 +4541,22 @@ static std::wstring PlayTime(bool live) {
     return t;
 }
 
+// Which part holds the frame rate back, the way RivaTuner's "Limited by" line guessed it: a card
+// near full load is the limit; otherwise a processor core near full load is. Neither: a dash
+// (a frame cap, V-Sync or the game's own limit).
+static std::wstring LimitedBy(const Readings& r) {
+    if (!r.f.live || !r.sensorsOk) return kDash;
+    const auto& s = r.s;
+    const double gpu = SensorVal(r, s.gpuUsage);
+    if (seamless_sensors::IsValid(gpu) && gpu >= 90) return L"GPU";
+    double core = SensorVal(r, s.cpuUsage);
+    const uint32_t n = std::min<uint32_t>(s.logicalCores, seamless_sensors::kMaxCores);
+    for (uint32_t i = 0; i < n; i++)
+        if (seamless_sensors::IsValid(s.cpuCoreUsage[i])) core = std::max(core, s.cpuCoreUsage[i]);
+    if (seamless_sensors::IsValid(core) && core >= 85) return L"CPU";
+    return kDash;
+}
+
 static float BuildBlock(Bench& b) {
     const Readings& r = *b.r;
     const auto& s = r.s;
@@ -4587,11 +4617,19 @@ static float BuildBlock(Bench& b) {
             }
             if (g_set.jitter) {
                 const float rowH = g_lineH[kFontValue] + 3 * u;
-                BText(b, kFontSmall, kBrushLabel, P, y + (rowH - g_lineH[kFontSmall]) / 2, Label(L"lblJitter"));
-                Op& w = BOp(b, kShWave, P + W * 0.36f, y + 3 * u, W * 0.30f, rowH - 6 * u);
-                const size_t take = std::min<size_t>(f.graph.size(), 48);
-                w.series.assign(f.graph.end() - take, f.graph.end());
-                BValue(b, P + W, y + 1.5f * u, Fixed(f.live ? f.jitter : NAN, 1), L"ms", false);
+                const std::wstring l = Label(L"lblJitter");
+                BText(b, kFontSmall, kBrushLabel, P, y + (rowH - g_lineH[kFontSmall]) / 2, l);
+                // The little wave sits only in the room between the name and the widest number (99.9 ms),
+                // so a big value never runs into it.
+                const float labelR = P + TextW(kFontSmall, l) + 8 * u;
+                const float valueL = P + W - (TextW(kFontValue, L"99.9") + TextW(kFontUnit, L"ms") + 3 * u) - 8 * u;
+                if (valueL - labelR >= 28 * u) {
+                    Op& w = BOp(b, kShWave, labelR, y + 4 * u, valueL - labelR, rowH - 8 * u);
+                    const size_t take = std::min<size_t>(f.graph.size(), 48);
+                    w.series.assign(f.graph.end() - take, f.graph.end());
+                }
+                const float vw = BValue(b, P + W, y + 1.5f * u, Fixed(f.live ? f.jitter : NAN, 1), L"ms", false);
+                b.need = std::max(b.need, TextW(kFontSmall, l) + 10 * u + vw);
                 y += rowH;
                 any = true;
             }
@@ -4600,7 +4638,7 @@ static float BuildBlock(Bench& b) {
                 any = true;
             }
             if (g_set.frameGraph) {
-                y += 3 * u;
+                y += 5 * u;
                 Op& g = BOp(b, kShGraph, P, y, W, std::clamp(g_set.graphHeight, 16, 120) * u);
                 g.series = f.graph;
                 y += g.h + 2 * u;
@@ -4617,7 +4655,8 @@ static float BuildBlock(Bench& b) {
                          {g_set.api, L"lblApi", g_apiName.empty() ? kDash : g_apiName, L""},
                          {g_set.session, L"lblTime", PlayTime(f.live), L""},
                          {g_set.driver, L"lblDriver", r.sensorsOk && s.gpuDriver[0] ? std::wstring(s.gpuDriver) : kDash,
-                          L""}};
+                          L""},
+                         {g_set.limitedBy, L"lblLimited", LimitedBy(r), L""}};
             for (auto& l : lines) {
                 if (!l.on) continue;
                 if (any) BLine(b, y);
@@ -4791,7 +4830,7 @@ static float BuildBlock(Bench& b) {
             if (g_set.cpuClock) {
                 const double mhz = sv(s.cpuClockMax);
                 y += BRow(b, y, kShGauge, (float)Frac(mhz, g_set.cpuGaugeMax), 0, Label(L"lblCpuBoost"),
-                          Fixed(seamless_sensors::IsValid(mhz) ? mhz / 1000.0 : NAN, 2), L"GHz");
+                          Num(mhz), L"MHz");
                 any = true;
             }
             if (g_set.cpuBusyClock) {
@@ -5406,20 +5445,32 @@ static void DrawGraph(Paint& p, const Op& o, const std::vector<float>& data) {
     double sum = 0, mx = 0;
     for (float v : data) sum += v, mx = std::max(mx, (double)v);
     const double mean = sum / data.size();
-    const double top = g_set.graphTopMs > 0 ? (double)g_set.graphTopMs : std::max({mx * 1.1, mean * 2.0, 20.0});
-    p.rt->DrawLine(D2D1::Point2F(o.x, o.y + o.h), D2D1::Point2F(o.x + o.w, o.y + o.h), Col(p, mocha::kOverlay, 0.35f),
-                   u);
+    // A set top is the least the graph shows; a slower game raises it so the line keeps its shape.
+    const double autoTop = std::max({mx * 1.1, mean * 2.0, 20.0});
+    double top = g_set.graphTopMs > 0 ? std::max((double)g_set.graphTopMs, mean * 1.6) : autoTop;
+    top = std::ceil(top / 5.0) * 5.0;
+    // The scale label has its own lane at the right; the line and spikes stop short of it.
+    float plotW = o.w;
+    const float lineInset = 1.5f * u;
+    const float plotTop = o.y + lineInset, plotH = std::max(1.f, o.h - 2 * lineInset);
     if (o.blk >= 0 && g_fmt[kFontTiny]) {
         wchar_t t[24];
         swprintf_s(t, L"%.0f ms", top);
         const float tw = TextW(kFontTiny, t);
+        plotW = std::max(o.w * 0.5f, o.w - tw - 6 * u);
         p.rt->DrawText(t, (UINT32)wcslen(t), g_fmt[kFontTiny],
-                       D2D1::RectF(o.x + o.w - tw, o.y - 1 * u, o.x + o.w + 4, o.y + g_lineH[kFontTiny]),
+                       D2D1::RectF(o.x + o.w - tw, plotTop - g_lineH[kFontTiny] / 2, o.x + o.w + 4,
+                                   plotTop + g_lineH[kFontTiny] / 2 + 2),
                        Col(p, mocha::kOverlay, 0.9f));
+        // A faint line at the top value so the label says what it marks.
+        p.rt->DrawLine(D2D1::Point2F(o.x, plotTop), D2D1::Point2F(o.x + plotW, plotTop), Col(p, mocha::kOverlay, 0.18f),
+                       u);
     }
+    p.rt->DrawLine(D2D1::Point2F(o.x, o.y + o.h), D2D1::Point2F(o.x + plotW, o.y + o.h), Col(p, mocha::kOverlay, 0.35f),
+                   u);
     const size_t n = data.size();
-    auto X = [&](size_t i) { return o.x + o.w * (float)i / (float)(n - 1); };
-    auto Y = [&](float v) { return o.y + o.h - (float)std::min(1.0, v / top) * o.h; };
+    auto X = [&](size_t i) { return o.x + plotW * (float)i / (float)(n - 1); };
+    auto Y = [&](float v) { return plotTop + plotH - (float)std::min(1.0, v / top) * plotH; };
     ID2D1Brush* b = p.accent;
     if (g_set.graphStyle == 2) {
         const float bw = std::max(0.6f * u, o.w / n - 0.4f * u);
@@ -5430,7 +5481,7 @@ static void DrawGraph(Paint& p, const Op& o, const std::vector<float>& data) {
         for (size_t i = 0; i < n; i++) pts.push_back(D2D1::Point2F(X(i), Y(data[i])));
         if (g_set.graphStyle == 1) {
             std::vector<D2D1_POINT_2F> area = pts;
-            area.push_back(D2D1::Point2F(o.x + o.w, o.y + o.h));
+            area.push_back(D2D1::Point2F(o.x + plotW, o.y + o.h));
             area.push_back(D2D1::Point2F(o.x, o.y + o.h));
             b->SetOpacity(0.28f);
             Poly(p, area.data(), (int)area.size(), b);
@@ -7607,13 +7658,14 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"low01", L"Worst moments (slowest 0.1% of frames)", L"The frame rate during the very worst moments of the last 20 seconds.", L"1", {}, 0, 100, 1, L"Frame rate"},
 {K::Check, L"low1", L"Bad moments (slowest 1% of frames)", L"The frame rate during the slowest moments of the last 20 seconds.", L"1", {}, 0, 100, 1, L"Frame rate"},
 {K::Check, L"avgFps", L"Average FPS", L"Over the last 20 seconds.", L"1", {}, 0, 100, 1, L"Frame rate"},
-{K::Check, L"jitter", L"Smoothness", L"How much the time between frames jumps around, in milliseconds. Lower feels smoother.", L"1", {}, 0, 100, 1, L"Frame rate"},
+{K::Check, L"jitter", L"Frame pacing", L"How much the time between frames jumps around, in milliseconds. Lower feels smoother.", L"1", {}, 0, 100, 1, L"Frame rate"},
 {K::Check, L"frameTime", L"Frame time", L"How long each frame takes, in milliseconds.", L"1", {}, 0, 100, 1, L"Frame rate"},
 {K::Check, L"frameGraph", L"Frame time graph", L"A line of the last few seconds of frame times. Tall spikes are stutters.", L"1", {}, 0, 100, 1, L"Frame rate"},
 {K::Check, L"latency", L"Input delay", L"This mod cannot measure it yet, so it shows a dash. Off by default.", L"0", {}, 0, 100, 1, L"Game info"},
 {K::Check, L"api", L"Graphics engine", L"Whether the game draws with DirectX 9, 11, 12, OpenGL or Vulkan.", L"1", {}, 0, 100, 1, L"Game info"},
 {K::Check, L"session", L"Play time", L"How long the game in front has been running.", L"1", {}, 0, 100, 1, L"Game info"},
 {K::Check, L"driver", L"Driver version", L"The graphics driver version.", L"1", {}, 0, 100, 1, L"Game info"},
+{K::Check, L"limitedBy", L"Limited by", L"Which part holds the frame rate back: GPU when the card is nearly full, CPU when a processor core is. A dash means neither, so a frame cap or the game itself sets the pace.", L"1", {}, 0, 100, 1, L"Game info"},
 {K::Check, L"cpuName", L"Processor name", L"", L"1", {}, 0, 100, 1, L"Processor cores"},
 {K::Check, L"coreBars", L"Load bar for each core", L"", L"1", {}, 0, 100, 1, L"Processor cores"},
 {K::Choice, L"coreBarsEach", L"One bar for each", L"Threads gives twice as many bars on processors that run two threads per core.", L"core", {{L"core", L"Core"}, {L"thread", L"Thread"}}, 0, 100, 1, L"Processor cores"},
@@ -7635,8 +7687,8 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"cpuArt", L"Processor picture", L"The chip drawing with its running code.", L"1", {}, 0, 100, 1, L"Processor"},
 {K::Check, L"cpuUsage", L"Load", L"How busy the processor is, in percent.", L"1", {}, 0, 100, 1, L"Processor"},
 {K::Check, L"cpuPower", L"Power", L"In watts. Needs the PawnIO driver, or it shows a dash.", L"1", {}, 0, 100, 1, L"Processor"},
-{K::Check, L"cpuClock", L"Boost clock", L"The fastest core right now, in GHz.", L"1", {}, 0, 100, 1, L"Processor"},
-{K::Check, L"cpuBusyClock", L"Busy clock", L"The average clock while the cores are working, in MHz.", L"1", {}, 0, 100, 1, L"Processor"},
+{K::Check, L"cpuClock", L"Peak clock", L"The fastest core right now, in MHz.", L"1", {}, 0, 100, 1, L"Processor"},
+{K::Check, L"cpuBusyClock", L"Average clock", L"The average clock of the cores while they work, in MHz.", L"1", {}, 0, 100, 1, L"Processor"},
 {K::Check, L"cpuTemp", L"Temperature", L"Needs the PawnIO driver, or it shows a dash.", L"1", {}, 0, 100, 1, L"Processor"},
 {K::Check, L"showName", L"Show this box", L"The graphics card name across the top, with a note when the card slows down to stay cool or within its power limit.", L"1", {}, 0, 100, 2, L"Card name"},
 {K::Choice, L"columnName", L"Side", L"", L"left", {{L"left", L"Left column"}, {L"right", L"Right column"}}, 0, 100, 2, L"Card name"},
@@ -7683,12 +7735,13 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Text, L"lbl01", L"Worst moments", L"", L"0.1%", {}, 0, 100, 3, L"Frame rate"},
 {K::Text, L"lbl1", L"Bad moments", L"", L"1%", {}, 0, 100, 3, L"Frame rate"},
 {K::Text, L"lblAvg", L"Average", L"", L"AVG", {}, 0, 100, 3, L"Frame rate"},
-{K::Text, L"lblJitter", L"Smoothness", L"", L"JITTER", {}, 0, 100, 3, L"Frame rate"},
+{K::Text, L"lblJitter", L"Frame pacing", L"", L"FRAME PACING", {}, 0, 100, 3, L"Frame rate"},
 {K::Text, L"lblFrame", L"Frame time", L"", L"FRAME TIME", {}, 0, 100, 3, L"Frame rate"},
 {K::Text, L"lblLatency", L"Input delay", L"", L"LATENCY", {}, 0, 100, 3, L"Game info"},
 {K::Text, L"lblApi", L"Graphics engine", L"", L"API", {}, 0, 100, 3, L"Game info"},
 {K::Text, L"lblTime", L"Play time", L"", L"PLAY TIME", {}, 0, 100, 3, L"Game info"},
 {K::Text, L"lblDriver", L"Driver version", L"", L"DRIVER", {}, 0, 100, 3, L"Game info"},
+{K::Text, L"lblLimited", L"Limited by", L"", L"LIMITED BY", {}, 0, 100, 3, L"Game info"},
 {K::Text, L"lblRam", L"Box name", L"", L"RAM", {}, 0, 100, 3, L"System memory"},
 {K::Text, L"lblRamUsed", L"In use", L"", L"USED", {}, 0, 100, 3, L"System memory"},
 {K::Text, L"lblRamSpeed", L"Speed", L"", L"SPEED", {}, 0, 100, 3, L"System memory"},
@@ -7705,8 +7758,8 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Text, L"lblVramClock", L"Clock", L"", L"CLOCK", {}, 0, 100, 3, L"Video memory"},
 {K::Text, L"lblCpuLoad", L"Load", L"", L"LOAD", {}, 0, 100, 3, L"Processor"},
 {K::Text, L"lblCpuPower", L"Power", L"", L"POWER", {}, 0, 100, 3, L"Processor"},
-{K::Text, L"lblCpuBoost", L"Boost clock", L"", L"BOOST", {}, 0, 100, 3, L"Processor"},
-{K::Text, L"lblCpuBusy", L"Busy clock", L"", L"BUSY CLOCK", {}, 0, 100, 3, L"Processor"},
+{K::Text, L"lblCpuBoost", L"Peak clock", L"", L"PEAK CLOCK", {}, 0, 100, 3, L"Processor"},
+{K::Text, L"lblCpuBusy", L"Average clock", L"", L"AVG CLOCK", {}, 0, 100, 3, L"Processor"},
 {K::Text, L"lblCpuTemp", L"Temperature", L"", L"TEMP", {}, 0, 100, 3, L"Processor"},
 {K::Choice, L"warnColour", L"Warning colour", L"A number past its limit turns this colour.", L"red", {{L"gradient", L"Blue to mauve"}, {L"blue", L"Blue"}, {L"mauve", L"Mauve"}, {L"lavender", L"Lavender"}, {L"sapphire", L"Sapphire"}, {L"sky", L"Sky"}, {L"teal", L"Teal"}, {L"green", L"Green"}, {L"yellow", L"Yellow"}, {L"peach", L"Peach"}, {L"pink", L"Pink"}, {L"red", L"Red"}, {L"white", L"White"}, {L"custom", L"My own colour"}}, 0, 100, 4, L"Colour"},
 {K::Number, L"gpuTempWarn", L"Graphics card hotter than", L"In \u00B0C.", L"83", {}, 40, 110, 4, L"Limits"},
