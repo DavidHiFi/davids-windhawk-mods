@@ -2,7 +2,7 @@
 // @id              seamless-explorer
 // @name            Seamless Explorer
 // @description     Thirty-five small File Explorer mods in one, each with its own switch: look, windows and tabs, right-click menu, copying and fixes
-// @version         1.1.4
+// @version         1.1.5
 // @author          DavidHiFi, m417z, digART, crazyboyybs, NoMorePlz, Languster, Momo, Anixx, buedgik, RobotsNeverDie, CTravkin, Nerdworld, gilnett, Armaninyow, wrldspawn, VitalS, Deepak, akiyorm, Lockframe, metanoid18, iMAboud, Ender, Marnes, Arimodu, Mark Jansen, DanRotaru, Peter2oo1, NDruce, Sanekx Arcs, javierpetrucci
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -64123,6 +64123,12 @@ static LRESULT WINAPI SendMessageW_Hook(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 }
 
 static BOOL WINAPI Polyline_Hook(HDC hdc, const POINT* points, int count) {
+    // "Fully hide system separator lines" drops the rule here, inside
+    // CNscTree::DrawDivider, so it never reaches any device context: not the
+    // window, not a memory frame another mod captures to scroll with.
+    if (t_drawingNavSeparator && noTreeLines::g_settings.hideSystemSeparatorLines) {
+        return TRUE;
+    }
     if (!t_drawingNavSeparator || !g_settings.navSeparatorInset || count != 2 || !points ||
         points[0].y != points[1].y) {
         return Polyline_Original(hdc, points, count);
