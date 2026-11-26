@@ -36,9 +36,10 @@
   Brave blurSuggestions=0, hideNativeCaptionButtons=0, rest default.
 
 ## Rollback
-- Turn off local@seamless-chromium-browsers, turn local@helium-acrylic and
-  brave-acrylic back on (`scripts\Set-ModState.ps1 -Id <id> -On`). Their sources
-  and settings are untouched; registry exports in the backup folder.
+- Turn off local@seamless-chromium-browsers. The old Helium Acrylic and Brave Acrylic
+  mods were removed in the 2026-11-26 audit: bring them back with
+  `scripts\2026-11-26-remove-stale.ps1 -Rollback` (elevated), then
+  `scripts\Set-ModState.ps1 -Id <id> -On`.
 - Title bars: reinstall `work\2026-11-26-chromium-browsers\tb\base-1.3.16.wh.cpp`.
 
 ## Install results (2026-11-26, 3:25 to 3:47 am)
@@ -53,3 +54,18 @@
   after shot (`D:\Agent Work\2026-11-26-chromium-popup\pa0-popup0.png`).
 - Not tested live: Brave (not installed on Warden), and the new font, accent and pop-up
   corner settings at non-default values.
+
+## 1.1.0 (2026-11-26, afternoon)
+- New "Browser font weight" setting (stock, light, regular, medium, semi-bold, bold),
+  default medium. Browser font now defaults to FiraCode Nerd Font. Owner asked for
+  "a code font, medium weight".
+- Owner settings to set after the install: uiFont = FiraCode Nerd Font,
+  uiFontWeight = medium (old: uiFont empty, no weight value). `install-scb.ps1` does
+  it with a registry export first (`settings.bak-<stamp>.reg`).
+- Colour probe for later browser updates: start a test browser with
+  `--scb-color-probe=N` and ids N..N+63 paint as red = low byte, green = 0xA5,
+  blue = high byte. Only that browser is affected.
+- Staged at `C:\Users\Public\seamless-chromium-browsers.wh.cpp`, built by
+  `work\2026-11-26-chromium-browsers\patch-110.py` from base 1.0.1. Compiles clean,
+  consistency check passes.
+- Old Helium Acrylic and Brave Acrylic removed (see `reports\2026-11-26-mod-audit.md`).
