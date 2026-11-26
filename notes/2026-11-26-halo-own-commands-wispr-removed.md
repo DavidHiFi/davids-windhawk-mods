@@ -51,3 +51,18 @@ The owner no longer uses it and asked to remove it completely, about 1.2 GB.
 - The old `%APPDATA%\FlowLauncher` folder was removed too. Halo keeps its own copy in its engine folder.
 - Backups: `backups\2026-11-26-wispr-removal\` (registry exports, including `wispr-flow-protocol.reg`).
   The app itself is not kept. Reinstall from its site if it is ever wanted again.
+
+## Halo 0.6.17: lighter glass, like Explorer
+
+The owner said Halo's search window was darker than Explorer and the other apps.
+Halo laid Mocha crust (`#11111B`) at 55% over the blur. Explorer's window glass is Mocha base
+(`#1E1E2E`) at about 55% with a luminosity layer, so it reads lighter.
+
+- Old: tint `cCrust`, setting `backgroundOpacity` 55 (default 55).
+- New: tint `cMochaBase`, setting `backgroundOpacity` 40 (default 40). Description now says
+  "40 is the same frosted glass as Explorer".
+- The owner's saved setting moved from 55 to 40. Backup of the settings key:
+  `backups\settings-material\local@halo-launcher-settings.bak-<stamp>.reg`.
+- Scripts: `C:\Users\Public\halo-0617-chain.ps1` (lock, then ship) and `halo-0617-ship.ps1`.
+- Rollback: set "Glass darkness" back to 55 in Halo's settings, or import the settings backup and
+  reinstall 0.6.16 from the `.bak-<stamp>` of the mod source that the install writes.
