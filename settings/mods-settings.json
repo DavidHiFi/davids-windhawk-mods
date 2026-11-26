@@ -5627,7 +5627,7 @@
   "local@seamless-file-unlocker": {
     "askBeforeClosing": 1,
     "menuEntry": 1,
-    "nativeSettingsTitleBar": 0,
+    "nativeSettingsTitleBar": 1,
     "recycleBin": 1,
     "settingsAnimation": 1,
     "settingsGlass": 1,

@@ -2,7 +2,7 @@
 // @id              seamless-file-unlocker
 // @name            Seamless File Unlocker
 // @description     Find out what is holding a file or folder, then let go of it, move it or delete it
-// @version         1.0.0
+// @version         1.0.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -65,8 +65,8 @@ Made by [DavidHiFi](https://github.com/DavidHiFi). Like it? [Buy me a coffee on 
   $name: Shortcut
   $description: "Press it in Explorer or on the desktop to see what is holding the selected items, or the folder when nothing is selected."
 - menuEntry: true
-  $name: What's locking this? in the right-click menu
-  $description: "Adds the entry above Properties. It shows under Show more options."
+  $name: Right-click menu entry
+  $description: "Adds What's locking this? above Properties. It shows under Show more options."
 - askBeforeClosing: true
   $name: Ask before closing programs
   $description: "Ask first before a program is closed or a loaded DLL is unloaded."
@@ -572,7 +572,7 @@ static bool Exists(const std::wstring& p) { return GetFileAttributesW(p.c_str())
 
 // Programs with a file or folder open, found by looking at every open handle on the machine.
 static void HandlePass(const std::vector<std::wstring>& keys, const DevMap& dm, Reader& rd, const std::atomic<bool>& cancel,
-                       Found& out, ULONGLONG deadline, int cap) {
+                       Found& out, ULONGLONG deadline, int cap, const std::set<DWORD>* only = nullptr) {
     const Nt& nt = GetNt();
     std::vector<BYTE> snap;
     int fileType = FileTypeIndex(snap, nt);
@@ -587,12 +587,15 @@ static void HandlePass(const std::vector<std::wstring>& keys, const DevMap& dm, 
     std::map<ULONG_PTR, std::vector<const HandleEntry*>> byPid;
     for (ULONG_PTR i = 0; i < hdr[0]; i++)
         if (ent[i].TypeIndex == fileType && ent[i].Pid && ent[i].Pid != self) byPid[ent[i].Pid].push_back(&ent[i]);
-    g_prog.total = (int)byPid.size();
-    g_prog.done = 0;
+    if (!only) {
+        g_prog.total = (int)byPid.size();
+        g_prog.done = 0;
+    }
     std::unordered_map<PVOID, int> cache;
     std::vector<std::wstring> matched;
     ProcNames names;
     for (auto& [pid, list] : byPid) {
+        if (only && !only->count((DWORD)pid)) continue;
         g_prog.done++;
         if (cancel) return;
         if (GetTickCount64() > deadline || (int)out.rows.size() >= cap || rd.timeouts > 300) {
@@ -604,7 +607,7 @@ static void HandlePass(const std::vector<std::wstring>& keys, const DevMap& dm, 
             Lock probe;
             probe.pid = (DWORD)pid;
             FillProc(probe, names);
-            if (probe.safety < 2) out.denied++;
+            if (probe.safety < 2 && !only) out.denied++;
             continue;
         }
         for (const HandleEntry* e : list) {
@@ -755,6 +758,27 @@ static Found Find(const std::vector<std::wstring>& targets, bool showSystem, con
     ModulePass(keys, dm, cancel, out, deadline);
     if (cancel) return out;
     RestartPass(targets, out);
+    {
+        // The fallback named programs the long scan never reached (it can run out of time on a busy PC).
+        // Look at just those programs, so the handle itself is known and can be closed.
+        std::set<DWORD> bare;
+        for (const Lock& L : out.rows)
+            if (L.kind == kOpen && !L.handle) bare.insert(L.pid);
+        if (!bare.empty() && !cancel) {
+            Found more;
+            Reader rd2;
+            HandlePass(keys, dm, rd2, cancel, more, GetTickCount64() + 10000, 2000, &bare);
+            if (!more.failed && !more.rows.empty()) {
+                std::set<DWORD> got;
+                for (const Lock& L : more.rows) got.insert(L.pid);
+                std::vector<Lock> merged;
+                for (Lock& L : out.rows)
+                    if (!(L.kind == kOpen && !L.handle && got.count(L.pid))) merged.push_back(std::move(L));
+                for (Lock& L : more.rows) merged.push_back(std::move(L));
+                out.rows = std::move(merged);
+            }
+        }
+    }
     ProcNames names;
     for (Lock& L : out.rows) FillProc(L, names);
     // Lock rows that name the same program, kind and thing are one row.
@@ -870,7 +894,7 @@ static std::wstring UnlockOne(const Lock& L, Ctx& cx) {
     if (L.kind == kDll) return FreeDll(L, cx);
     if (L.kind == kExe) return L"This is the program itself. Close the program to free it.";
     if (L.kind == kMapped) return L"The program has it in memory. Close the program to free it.";
-    return L"Only closing the program frees this one.";
+    return L"Couldn't reach this program to let go. Close it to free the file.";
 }
 
 struct Unlocked {
@@ -1645,7 +1669,7 @@ static std::vector<SetField> Set_MakeFields() {
     using K = SetField;
     return {
 {K::Hotkey, L"unlockHotkey", L"Shortcut", L"Press it in Explorer or on the desktop to see what is holding the selected items, or the folder when nothing is selected.", L"Ctrl+Shift+U", {}, 0, 100, 0, L"Behaviour"},
-{K::Check, L"menuEntry", L"What's locking this? in the right-click menu", L"Adds the entry above Properties. It shows under Show more options.", L"1", {}, 0, 100, 0, L"Behaviour"},
+{K::Check, L"menuEntry", L"Right-click menu entry", L"Adds What's locking this? above Properties. It shows under Show more options.", L"1", {}, 0, 100, 0, L"Behaviour"},
 {K::Check, L"askBeforeClosing", L"Ask before closing programs", L"Ask first before a program is closed or a loaded DLL is unloaded.", L"1", {}, 0, 100, 0, L"Behaviour"},
 {K::Check, L"recycleBin", L"Delete to the Recycle Bin", L"On, Delete sends items to the Recycle Bin. Off, they are deleted for good.", L"1", {}, 0, 100, 0, L"Behaviour"},
 {K::Check, L"showSystem", L"Show system programs", L"Also list the programs Windows runs for itself. They can be seen but never closed.", L"0", {}, 0, 100, 0, L"Behaviour"},
@@ -3168,9 +3192,8 @@ static void Set_DrawBanner(SetPaint& p, SetWindow& w, const SetItem& it) {
 static void Set_DrawDock(SetPaint& p, SetWindow& w, const D2D1_RECT_F& d, float rad, float fill, float glow) {
     p.Round({d.left, d.top + 3, d.right, d.bottom + 5}, rad + 2, mocha::crust, w.glass ? 0.28f : 0.5f);
     p.Round(d, rad, mocha::mantle, fill);  // Hover lights only the edge: a wash showed as a blue blob down the left.
-    D2D1_RECT_F in{d.left + 0.5f, d.top + 0.5f, d.right - 0.5f, d.bottom - 0.5f};
-    p.rt->DrawRoundedRectangle(D2D1::RoundedRect(in, rad, rad), p.B(mocha::surface1, 0.75f * (1 - glow)), 1);
-    p.GradRing(d, rad, glow, 1.5f);
+    p.Edge(d, rad, mocha::surface1, 0.9f * (1 - glow), 2);
+    p.GradRing(d, rad - 1, glow, 2);
 }
 
 // Panel-left mark, as in T3's sidebar button: a window with its left pane shaded while open.
@@ -3190,7 +3213,7 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
     // thickens, so the handle follows the corners instead of floating as a separate line.
     float edge = std::max(Set_GlowOf(w, 41), w.dragRail ? 1.0f : 0.0f);
     Set_DrawDock(p, w, d, 14, w.glass ? 0.58f : 1.0f, std::max(w.railGlow * 0.85f, edge));
-    if (edge > 0.003f) p.GradRing(d, 13, edge, 2.25f);
+    if (edge > 0.003f) p.GradRing(d, 12.5f, edge, 3);
 
     D2D1_RECT_F tb = Set_RailToggleRect(w);
     float th = Set_GlowOf(w, 42);
@@ -5020,6 +5043,8 @@ struct FuPane {
     std::wstring askTitle, askBody, askYes;
     std::function<void(SetWindow&)> onYes;
     float askShow = 0;
+    float paneGlow = 0;  // The locks dock's edge lights blue to mauve while the pointer is over it.
+    bool inPane = false;
     SetCom<IDWriteTextFormat> fCenter, fWrap, fChip;
     std::map<std::wstring, IWICBitmapSource*> iconsWic;
     std::map<std::wstring, ID2D1Bitmap*> iconsD2d;
@@ -5735,7 +5760,7 @@ static void Fu_DrawPane(SetPaint& p, SetWindow& w) {
     pn.iconBudget = 6;
     if (!pn.fCenter) pn.fCenter = Set_Fmt(w.family, 13, 500, true, DWRITE_TEXT_ALIGNMENT_CENTER);
     D2D1_RECT_F P = Fu_Pane(w);
-    Set_DrawDock(p, w, P, 14, w.glass ? 0.58f : 1, 0);
+    Set_DrawDock(p, w, P, 14, w.glass ? 0.58f : 1, pn.paneGlow * 0.85f);
     float l = P.left + 20, r = P.right - 20, t = P.top;
     p.Text(w.fBig.get(), L"Locks", {l, t + 16, r, t + 44}, mocha::text);
     std::wstring sub = Fu_TargetName(pn);
@@ -5819,6 +5844,9 @@ static bool Fu_Tick(SetWindow& w) {
     float want = pn.asking ? 1.0f : 0.0f, da = want - pn.askShow;
     if (!anim || fabsf(da) < 0.02f) pn.askShow = want;
     else pn.askShow += da * 0.3f, moving = true;
+    float dg = (pn.inPane ? 1.0f : 0.0f) - pn.paneGlow;
+    if (!anim || fabsf(dg) < 0.02f) pn.paneGlow = pn.inPane ? 1.0f : 0.0f;
+    else pn.paneGlow += dg * 0.25f, moving = true;
     return moving;
 }
 
@@ -6030,6 +6058,11 @@ static LRESULT CALLBACK Fu_Subclass(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, U
         }
         case WM_MOUSEMOVE: {
             float x = dipX(GET_X_LPARAM(lp)), y = dipY(GET_Y_LPARAM(lp));
+            bool inPane = Set_In(Fu_Pane(*w), x, y);
+            if (inPane != pn.inPane) {
+                pn.inPane = inPane;
+                Fu_Kick(*w);
+            }
             if (pn.dragThumb) {
                 Fu_ThumbTo(*w, y);
                 return 0;
@@ -6043,6 +6076,8 @@ static LRESULT CALLBACK Fu_Subclass(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, U
         }
         case WM_MOUSELEAVE:
             pn.tracking = false;
+            pn.inPane = false;
+            Fu_Kick(*w);
             Fu_SetHover(*w, -1);
             break;
         case WM_LBUTTONDOWN: {
