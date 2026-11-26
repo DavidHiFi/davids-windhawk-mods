@@ -2,14 +2,15 @@
 // @id              seamless-file-unlocker
 // @name            Seamless File Unlocker
 // @description     Find out what is holding a file or folder, then let go of it, move it or delete it
-// @version         1.0.3
+// @version         1.0.4
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
 // @license         MIT
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @include         windhawk.exe
-// @include         explorer.exe
+// @include         windhawk-mod.exe
+// @include         windhawk-mod-elevated.exe
 // @compilerOptions -ld2d1 -ldwrite -lwindowscodecs -lole32 -loleaut32 -luuid -lgdi32 -lgdiplus -luser32 -lshell32 -lshlwapi -ladvapi32 -ldwmapi -lcomctl32 -luxtheme -lcomdlg32 -limm32 -lversion -lntdll -lpropsys -lbcrypt -lrstrtmgr -lpsapi -Wl,--delayload=d2d1.dll -Wl,--delayload=dwrite.dll -Wl,--delayload=windowscodecs.dll -Wl,--delayload=comdlg32.dll -Wl,--delayload=imm32.dll -Wl,--delayload=gdiplus.dll -Wl,--delayload=propsys.dll -Wl,--delayload=bcrypt.dll -Wl,--delayload=rstrtmgr.dll -ldelayimp
 // ==/WindhawkMod==
 
@@ -48,7 +49,7 @@ open, or anything inside a folder, and lets you free it in one click.
 ## Good to know
 
 - The system's own programs are never touched. Explorer gets a warning first.
-- Programs run with more rights than this tool can't always be seen or freed. The window says when some were out of reach.
+- Runs with admin rights built in, so it can inspect and free locks held by elevated programs and schedule delete at restart. Windows' own protected system processes are still left alone.
 - Nothing is held back from you: the window never freezes while it looks.
 
 ## Credits
@@ -1218,13 +1219,16 @@ static Result* Run(Job& job) {
 
 }  // namespace fu
 
-// ---- Explorer: the right-click entry and the shortcut ---------------------------------------------------------------
-// Runs only inside explorer.exe. Both read what is selected in the folder window (or on the desktop) and send the
-// paths to the tool process, which owns the unlocker window. Nothing here unlocks anything.
+// ---- Explorer integration: right-click menu and shortcut -----------------------------------------------------------
+// Runs out of Explorer (zero Explorer hooks).
+// - Right-click menu: registers standard shell verbs under HKCU\Software\Classes that invoke windhawk-mod.exe with
+//   -fu-open / -fu-folder. A static forwarder catches that command at DLL load, sends the path to the running elevated
+//   tool window via WM_COPYDATA, and exits at once.
+// - Shortcut: watches foreground changes from the tool process and registers the hotkey only while an Explorer folder
+//   or desktop window is in front.
 
 namespace fuex {
 
-static std::atomic<bool> g_menuOn{true};
 static HANDLE g_hotThread;
 static std::atomic<DWORD> g_hotThreadId;
 constexpr UINT WM_APP_HOTKEY_RELOAD = WM_APP + 1;
@@ -1238,7 +1242,135 @@ static bool IsShellRoot(HWND root) {
     return ClassIs(root, L"CabinetWClass") || ClassIs(root, L"Progman") || ClassIs(root, L"WorkerW");
 }
 
-// What the view has selected, or the folder itself when nothing is. Returns 'S' or 'F', or 0 for nothing usable.
+static void SendNow(wchar_t kind, const std::vector<std::wstring>& paths) {
+    if (!kind || paths.empty()) return;
+    HWND tray = FindWindowW(kFuTrayClass, nullptr);
+    if (!tray) return;
+    std::wstring blob(1, kind);
+    for (const auto& s : paths) {
+        blob += s;
+        blob += L'\0';
+    }
+    DWORD pid = 0;
+    GetWindowThreadProcessId(tray, &pid);
+    if (pid) AllowSetForegroundWindow(pid);
+    COPYDATASTRUCT cd{kFuCopyPaths, (DWORD)(blob.size() * sizeof(WCHAR)), (void*)blob.data()};
+    DWORD_PTR r = 0;
+    SendMessageTimeoutW(tray, WM_COPYDATA, 0, (LPARAM)&cd, SMTO_ABORTIFHUNG | SMTO_BLOCK, 5000, &r);
+}
+
+// ---- Context menu forwarder (runs in the short-lived windhawk-mod.exe spawned by Explorer) -------------------------
+
+struct ContextMenuForwarder {
+    ContextMenuForwarder() {
+        const wchar_t* cmd = GetCommandLineW();
+        if (!cmd || !wcsstr(cmd, L"-windhawk-tool-mod \"" WH_MOD_ID L"\"")) return;
+        wchar_t kind = 0;
+        const wchar_t* a = wcsstr(cmd, L" -fu-open ");
+        if (a) {
+            kind = L'S';
+            a += 10;
+        } else if ((a = wcsstr(cmd, L" -fu-folder ")) != nullptr) {
+            kind = L'F';
+            a += 12;
+        } else {
+            return;
+        }
+        while (*a == L' ') a++;
+        std::wstring path;
+        if (*a == L'"') {
+            const wchar_t* e = wcschr(a + 1, L'"');
+            path.assign(a + 1, e ? e : a + 1 + wcslen(a + 1));
+        } else {
+            path = a;
+        }
+        while (!path.empty() && path.back() == L' ') path.pop_back();
+        if (!path.empty()) SendNow(kind, {path});
+        TerminateProcess(GetCurrentProcess(), 0);
+    }
+};
+static ContextMenuForwarder g_contextMenuForwarder;
+
+// ---- Context menu registry sync ------------------------------------------------------------------------------------
+
+static bool ProcessIsSystem() {
+    HANDLE tok = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &tok)) return false;
+    BYTE buf[256];
+    DWORD len = 0;
+    bool sys = false;
+    if (GetTokenInformation(tok, TokenUser, buf, sizeof(buf), &len))
+        sys = IsWellKnownSid(((TOKEN_USER*)buf)->User.Sid, WinLocalSystemSid) != FALSE;
+    CloseHandle(tok);
+    return sys;
+}
+
+static std::wstring CtxForwarderExe() {
+    WCHAR self[MAX_PATH];
+    DWORD n = GetModuleFileNameW(nullptr, self, ARRAYSIZE(self));
+    if (!n || n == ARRAYSIZE(self)) return L"";
+    std::wstring dir(self, n);
+    size_t slash = dir.find_last_of(L'\\');
+    if (slash == std::wstring::npos) return L"";
+    std::wstring exe = dir.substr(0, slash) + L"\\windhawk-mod.exe";
+    if (GetFileAttributesW(exe.c_str()) != INVALID_FILE_ATTRIBUTES) return exe;
+    std::wstring base = dir.substr(slash + 1);
+    if (_wcsicmp(base.c_str(), L"windhawk.exe") == 0) return dir;
+    return L"";
+}
+
+struct CtxEntry {
+    PCWSTR subkey;
+    PCWSTR arg;
+};
+static const CtxEntry kCtxEntries[] = {
+    {L"Software\\Classes\\*\\shell\\SeamlessFileUnlocker", L"-fu-open \"%1\""},
+    {L"Software\\Classes\\Directory\\shell\\SeamlessFileUnlocker", L"-fu-open \"%1\""},
+    {L"Software\\Classes\\Directory\\Background\\shell\\SeamlessFileUnlocker", L"-fu-folder \"%V\""},
+    {L"Software\\Classes\\Drive\\shell\\SeamlessFileUnlocker", L"-fu-open \"%1\""},
+};
+
+static void ContextMenuSync(bool on) {
+    HKEY root = ProcessIsSystem() ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER;
+    std::wstring exe = on ? CtxForwarderExe() : L"";
+    if (on && exe.empty()) {
+        Wh_Log(L"Right-click menu: no Windhawk helper found next to this copy, menu left off");
+        on = false;
+    }
+    bool changed = false;
+    if (!on) {
+        for (const auto& e : kCtxEntries) {
+            HKEY probe = nullptr;
+            if (RegOpenKeyExW(root, e.subkey, 0, KEY_READ, &probe) == ERROR_SUCCESS) {
+                RegCloseKey(probe);
+                RegDeleteTreeW(root, e.subkey);
+                changed = true;
+            }
+        }
+        if (changed) SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+        return;
+    }
+    const std::wstring base = L"\"" + exe + L"\" -windhawk-tool-mod \"" WH_MOD_ID L"\" ";
+    const std::wstring verb = L"What's locking this?";
+    const std::wstring pos = L"Bottom";
+    const std::wstring icon = L"%SystemRoot%\\System32\\imageres.dll,-105";
+    for (const auto& e : kCtxEntries) {
+        auto setSz = [&](const std::wstring& path, PCWSTR name, const std::wstring& val, DWORD type = REG_SZ) {
+            RegSetKeyValueW(root, path.c_str(), name, type, val.c_str(),
+                            (DWORD)((val.size() + 1) * sizeof(wchar_t)));
+        };
+        std::wstring k = e.subkey;
+        setSz(k, L"MUIVerb", verb);
+        setSz(k, L"Position", pos);
+        setSz(k, L"Icon", icon, REG_EXPAND_SZ);
+        setSz(k + L"\\command", nullptr, base + e.arg);
+        changed = true;
+    }
+    if (changed) SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+}
+
+// ---- Reading the active Explorer selection -------------------------------------------------------------------------
+
 static wchar_t ReadView(IShellBrowser* sb, std::vector<std::wstring>& out) {
     if (!sb) return 0;
     wchar_t kind = 0;
@@ -1284,153 +1416,18 @@ static wchar_t ReadView(IShellBrowser* sb, std::vector<std::wstring>& out) {
     return kind;
 }
 
-struct SendJob {
-    wchar_t kind;
-    std::vector<std::wstring> paths;
-};
-
-static DWORD WINAPI SendThread(void* p) {
-    std::unique_ptr<SendJob> job((SendJob*)p);
-    HWND tray = FindWindowW(kFuTrayClass, nullptr);
-    if (!tray) {
-        Wh_Log(L"The unlocker window isn't running yet");
-        return 0;
-    }
-    std::wstring blob(1, job->kind);
-    for (const auto& s : job->paths) {
-        blob += s;
-        blob += L'\0';
-    }
-    DWORD pid = 0;
-    GetWindowThreadProcessId(tray, &pid);
-    if (pid) AllowSetForegroundWindow(pid);
-    COPYDATASTRUCT cd{kFuCopyPaths, (DWORD)(blob.size() * sizeof(WCHAR)), (void*)blob.data()};
-    DWORD_PTR r = 0;
-    SendMessageTimeoutW(tray, WM_COPYDATA, 0, (LPARAM)&cd, SMTO_ABORTIFHUNG, 2000, &r);
-    return 0;
-}
-
-// Hands the paths to a short-lived thread so Explorer's own window never waits on the tool process.
-static void Send(wchar_t kind, std::vector<std::wstring>&& paths) {
-    if (!kind || paths.empty()) return;
-    auto* job = new SendJob{kind, std::move(paths)};
-    HANDLE t = CreateThread(nullptr, 0, SendThread, job, 0, nullptr);
-    if (t) CloseHandle(t);
-    else delete job;
-}
-
-// ---- The right-click entry ------------------------------------------------------------------------------------------
-
-using TrackPopupMenu_t = BOOL(WINAPI*)(HMENU, UINT, int, int, int, HWND, const RECT*);
-using TrackPopupMenuEx_t = BOOL(WINAPI*)(HMENU, UINT, int, int, HWND, LPTPMPARAMS);
-static TrackPopupMenu_t TrackPopupMenu_Orig;
-static TrackPopupMenuEx_t TrackPopupMenuEx_Orig;
-static thread_local bool t_inMenu;
-
-static std::wstring PlainText(HMENU m, UINT pos) {
-    WCHAR buf[128] = {};
-    MENUITEMINFOW mi{sizeof(mi)};
-    mi.fMask = MIIM_STRING | MIIM_FTYPE;
-    mi.dwTypeData = buf;
-    mi.cch = ARRAYSIZE(buf) - 1;
-    if (!GetMenuItemInfoW(m, pos, TRUE, &mi) || (mi.fType & MFT_SEPARATOR)) return {};
-    std::wstring s;
-    for (PCWSTR p = buf; *p && *p != L'\t'; p++)
-        if (*p != L'&') s += *p;
-    return s;
-}
-
-static bool IdUsed(HMENU m, UINT id, int depth = 0) {
-    if (depth > 6) return false;
-    int n = GetMenuItemCount(m);
-    for (int i = 0; i < n; i++) {
-        if (GetMenuItemID(m, i) == id) return true;
-        if (HMENU sub = GetSubMenu(m, i))
-            if (IdUsed(sub, id, depth + 1)) return true;
-    }
-    return false;
-}
-
-// Returns where Properties sits when this is a file or folder menu in a folder window or on the desktop, else -1.
-static int PropsPos(HMENU m, HWND owner) {
-    if (!g_menuOn || !m || !IsShellRoot(GetAncestor(owner, GA_ROOT))) return -1;
-    int n = GetMenuItemCount(m), props = -1;
-    for (int i = 0; i < n; i++)
-        if (PlainText(m, (UINT)i) == L"Properties") props = i;
-    return n >= 4 ? props : -1;
-}
-
-static IShellBrowser* BrowserOf(HWND h) {
-    for (HWND w = h; w; w = GetParent(w)) {
-        DWORD_PTR r = 0;
-        if (SendMessageTimeoutW(w, WM_USER + 7, 0, 0, SMTO_ABORTIFHUNG, 500, &r) && r) return (IShellBrowser*)r;
-        if (GetWindowLongPtrW(w, GWL_STYLE) & WS_CHILD) continue;
-        break;
-    }
-    return nullptr;
-}
-
-static std::wstring_view kEntry = L"What's locking this?";
-
-template <class F>
-static BOOL Around(HMENU m, UINT flags, HWND owner, F call) {
-    int pos = t_inMenu ? -1 : PropsPos(m, owner);
-    if (pos < 0) return call(flags);
-    UINT id = 0x7FF0;
-    while (id > 0x7000 && IdUsed(m, id)) id--;
-    if (!InsertMenuW(m, (UINT)pos, MF_BYPOSITION | MF_STRING, id, kEntry.data())) return call(flags);
-    t_inMenu = true;
-    BOOL r = call(flags | TPM_RETURNCMD);
-    t_inMenu = false;
-    DeleteMenu(m, id, MF_BYCOMMAND);
-    if ((UINT)r == id) {
-        std::vector<std::wstring> paths;
-        wchar_t kind = ReadView(BrowserOf(owner), paths);
-        Send(kind, std::move(paths));
-        return (flags & TPM_RETURNCMD) ? 0 : TRUE;
-    }
-    if (flags & TPM_RETURNCMD) return r;
-    if (r && !(flags & TPM_NONOTIFY)) PostMessageW(owner, WM_COMMAND, MAKEWPARAM((UINT)r, 0), 0);
-    return r ? TRUE : FALSE;
-}
-
-static BOOL WINAPI TrackPopupMenu_Hook(HMENU m, UINT flags, int x, int y, int res, HWND owner, const RECT* rc) {
-    return Around(m, flags, owner, [&](UINT f) { return TrackPopupMenu_Orig(m, f, x, y, res, owner, rc); });
-}
-
-static BOOL WINAPI TrackPopupMenuEx_Hook(HMENU m, UINT flags, int x, int y, HWND owner, LPTPMPARAMS tpm) {
-    return Around(m, flags, owner, [&](UINT f) { return TrackPopupMenuEx_Orig(m, f, x, y, owner, tpm); });
-}
-
-static bool HookMenus() {
-    HMODULE user32 = GetModuleHandleW(L"user32.dll");
-    void* a = user32 ? (void*)GetProcAddress(user32, "TrackPopupMenu") : nullptr;
-    void* b = user32 ? (void*)GetProcAddress(user32, "TrackPopupMenuEx") : nullptr;
-    bool ok = a && b && Wh_SetFunctionHook(a, (void*)TrackPopupMenu_Hook, (void**)&TrackPopupMenu_Orig) &&
-              Wh_SetFunctionHook(b, (void*)TrackPopupMenuEx_Hook, (void**)&TrackPopupMenuEx_Orig);
-    if (!ok) Wh_Log(L"Couldn't hook the right-click menu");
-    return ok;
-}
-
-// ---- The shortcut ---------------------------------------------------------------------------------------------------
-// Registered only while one of this Explorer's own windows is in front, so the keys stay free in every other app.
+// ---- The shortcut --------------------------------------------------------------------------------------------------
+// Registered only while an Explorer folder window or the desktop is in front, so the keys stay free in every other app.
 
 static UINT g_hotMods, g_hotVk;
 static bool g_hotOn;
-
-static bool OwnShellWindow(HWND fg) {
-    if (!fg || !IsShellRoot(fg)) return false;
-    DWORD pid = 0;
-    GetWindowThreadProcessId(fg, &pid);
-    return pid == GetCurrentProcessId();
-}
 
 static void ReadHotkey() {
     if (!Hotkey_Parse(SettingString(L"unlockHotkey"), g_hotMods, g_hotVk)) g_hotMods = g_hotVk = 0;
 }
 
 static void SyncHotkey(HWND fg) {
-    bool want = g_hotVk && OwnShellWindow(fg);
+    bool want = g_hotVk && IsShellRoot(fg);
     if (want == g_hotOn) return;
     if (want) {
         g_hotOn = RegisterHotKey(nullptr, 1, g_hotMods | MOD_NOREPEAT, g_hotVk) != FALSE;
@@ -1445,7 +1442,6 @@ static void CALLBACK OnForeground(HWINEVENTHOOK, DWORD, HWND hwnd, LONG idObject
     if (idObject == OBJID_WINDOW) SyncHotkey(hwnd);
 }
 
-// The active tab of a folder window, or the desktop.
 static IShellBrowser* ForegroundBrowser(HWND fg, IShellWindows* sw) {
     if (!sw) return nullptr;
     if (ClassIs(fg, L"Progman") || ClassIs(fg, L"WorkerW")) {
@@ -1499,7 +1495,7 @@ static IShellBrowser* ForegroundBrowser(HWND fg, IShellWindows* sw) {
 
 static void OnHotkey() {
     HWND fg = GetForegroundWindow();
-    if (!OwnShellWindow(fg)) return;
+    if (!IsShellRoot(fg)) return;
     IShellWindows* sw = nullptr;
     if (FAILED(CoCreateInstance(CLSID_ShellWindows, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&sw))) || !sw) return;
     IShellBrowser* sb = ForegroundBrowser(fg, sw);
@@ -1507,13 +1503,13 @@ static void OnHotkey() {
     wchar_t kind = ReadView(sb, paths);
     if (sb) sb->Release();
     sw->Release();
-    Send(kind, std::move(paths));
+    SendNow(kind, paths);
 }
 
 static DWORD WINAPI HotkeyThread(void*) {
     HRESULT co = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     MSG m;
-    PeekMessageW(&m, nullptr, WM_USER, WM_USER, PM_NOREMOVE);  // the queue exists before anyone posts to it
+    PeekMessageW(&m, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
     ReadHotkey();
     HWINEVENTHOOK hook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, OnForeground, 0, 0,
                                          WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNTHREAD);
@@ -1769,6 +1765,7 @@ constexpr float kSetDockGap = 10, kSetRailDef = 232, kSetRailMin = 200, kSetRail
 constexpr float kSetFootBtnH = 36, kSetFootPad = 8, kSetFootH = kSetFootBtnH + 2 * kSetFootPad, kSetFootGap = 14;
 // The glass tint is one layer over the whole window, title bar included, so the two always match.
 constexpr float kSetGlassTint = 0.55f, kSetNativeFade = 56;
+constexpr float kSetEdgeW = 2, kSetRadius = 16;
 constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
@@ -1856,6 +1853,10 @@ static SetCom<IWICImagingFactory> g_setWic;
 #ifdef SCM_HARNESS
 static std::wstring g_setFakeKeyStatus;  // Lets the test render the hotkey warning line.
 #endif
+
+static float Set_Rad(const D2D1_RECT_F& r, float most = kSetRadius) {
+    return std::min(most, std::min(r.right - r.left, r.bottom - r.top) / 2);
+}
 
 static std::wstring Set_WindowText(HWND hwnd) {
     std::wstring text(GetWindowTextLengthW(hwnd) + 1, L'\0');
@@ -2145,8 +2146,8 @@ static void Set_MenuPaint(SetMenuSession& s, SetMenuLevel& lv) {
         }
         bool hot = ((int)i == lv.hover || (int)i == lv.open) && !m.disabled;
         if (hot) {
-            // The hover look of every card: a faint blue to mauve wash and a 1 px gradient ring.
-            float rad = 8, ringW = 1;
+            // The hover look of every card: a faint blue to mauve wash and the 2 px gradient ring.
+            float ringW = kSetEdgeW, rad = std::min(12.0f, (r.bottom - r.top) / 2);
             D2D1_ROUNDED_RECT rr{{r.left + ringW / 2, r.top + ringW / 2, r.right - ringW / 2, r.bottom - ringW / 2}, rad, rad};
             auto fill = gradient({r.left, r.top}, {r.right, r.bottom}, D2DColor(mocha::blue, 0.16f), D2DColor(mocha::mauve, 0.16f));
             if (fill) rt->FillRoundedRectangle(rr, fill.get());
@@ -3065,23 +3066,24 @@ static bool Set_Valid(const SetWindow& w, int k) { return k >= 0 && k < (int)w.f
 // overlay0 edge, and the blue to mauve ring on hover or while open.
 constexpr UINT32 kSetBoxFill = 0x232434;
 static void Set_DrawBox(SetPaint& p, SetWindow& w, int k, const D2D1_RECT_F& box, bool active) {
-    p.Round(box, 8, kSetBoxFill);
+    const float rad = Set_Rad(box);
+    p.Round(box, rad, kSetBoxFill);
     float g = std::max(Set_GlowOf(w, 6000 + k), active ? 1.0f : 0.0f);
-    p.Edge(box, 8, mocha::overlay0, 0.7f * (1 - g), 1.25f);
-    p.GradRing(box, 8, g, 1.75f);
+    p.Edge(box, rad, mocha::overlay0, 0.7f * (1 - g));
+    p.GradRing(box, rad, g);
 }
 
 static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
     const SetField& f = w.fields[it.field];
     int k = it.field;
     D2D1_RECT_F row = Set_RowRect(w, it);
-    p.Round(row, 10, mocha::base);
-    p.Round(row, 10, mocha::surface0, 0.32f);
+    p.Round(row, kSetRadius, mocha::base);
+    p.Round(row, kSetRadius, mocha::surface0, 0.32f);
     float hov = Set_GlowOf(w, 1000 + k);
-    p.Edge(row, 10, mocha::surface2, 0.55f * (1 - hov));
-    p.GradFill(row, 10, 0.13f * hov);
-    p.GradRing(row, 10, hov, 1.5f);
-    if (w.kbd && w.focus == k) p.GradRing(row, 10, 1.0f, 2.0f);
+    p.Edge(row, kSetRadius, mocha::surface2, 0.55f * (1 - hov));
+    p.GradFill(row, kSetRadius, 0.13f * hov);
+    p.GradRing(row, kSetRadius, hov);
+    if (w.kbd && w.focus == k) p.GradRing(row, kSetRadius, 1.0f);
 
     float textW = w.contentW - 2 * kSetRowPad - Set_ControlW(f) - 24;
     float lh = Set_TextH(w.fLabel.get(), f.label, textW);
@@ -3183,17 +3185,17 @@ static void Set_DrawGroup(SetPaint& p, SetWindow& w, const SetItem& it) {
 // The resting card every row uses: base, a light lift and a soft gray edge that hands over to
 // the hover ring.
 static void Set_DrawCard(SetPaint& p, const D2D1_RECT_F& row, float hov) {
-    p.Round(row, 10, mocha::base);
-    p.Round(row, 10, mocha::surface0, 0.32f);
-    p.Edge(row, 10, mocha::surface2, 0.55f * (1 - hov));
+    p.Round(row, kSetRadius, mocha::base);
+    p.Round(row, kSetRadius, mocha::surface0, 0.32f);
+    p.Edge(row, kSetRadius, mocha::surface2, 0.55f * (1 - hov));
 }
 
 static void Set_DrawLinkRow(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
     D2D1_RECT_F row = Set_RowRect(w, it);
     float hov = Set_GlowOf(w, 3000 + idx);
     Set_DrawCard(p, row, hov);
-    p.GradFill(row, 10, 0.13f * hov);
-    p.GradRing(row, 10, hov, 1.5f);
+    p.GradFill(row, kSetRadius, 0.13f * hov);
+    p.GradRing(row, kSetRadius, hov);
     p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 9, row.right - 50, row.top + 30}, mocha::text);
     p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 30, row.right - 50, row.bottom - 4}, mocha::subtext0);
     p.Glyph(w.fIcon.get(), 0xE8A7, {row.right - 46, row.top, row.right - 12, row.bottom}, mocha::subtext1);
@@ -3203,14 +3205,14 @@ static void Set_DrawSupport(SetPaint& p, SetWindow& w, const SetItem& it, int id
     D2D1_RECT_F row = Set_RowRect(w, it);
     float card = std::max(Set_GlowOf(w, 3700 + idx), Set_GlowOf(w, 3500 + idx));
     Set_DrawCard(p, row, card);
-    p.GradFill(row, 10, 0.13f * card);
-    p.GradRing(row, 10, card, 1.5f);
+    p.GradFill(row, kSetRadius, 0.13f * card);
+    p.GradRing(row, kSetRadius, card);
     p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 14, row.right - 180, row.top + 36}, mocha::text);
     p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 38, row.right - 180, row.bottom - 6}, mocha::subtext0);
     D2D1_RECT_F b = Set_SupportButton(w, it);
     float hov = Set_GlowOf(w, 3500 + idx);
-    p.GradFill(b, 8, 0.85f + 0.15f * hov);
-    p.GradRing(b, 8, hov, 2);
+    p.GradFill(b, Set_Rad(b), 0.85f + 0.15f * hov);
+    p.GradRing(b, Set_Rad(b), hov);
     p.Text(w.fButton.get(), L"Open Ko-fi", b, mocha::crust);
 }
 
@@ -3247,7 +3249,7 @@ static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it, int idx)
 
 static void Set_DrawBanner(SetPaint& p, SetWindow& w, const SetItem& it) {
     D2D1_RECT_F r = Set_RowRect(w, it);
-    p.Round(r, 10, mocha::peach, 0.14f);
+    p.Round(r, kSetRadius, mocha::peach, 0.14f);
     p.Text(w.fHint.get(), it.text, {r.left + 16, r.top + 14, r.right - 16, r.bottom - 8}, mocha::peach);
 }
 
@@ -3256,8 +3258,8 @@ static void Set_DrawBanner(SetPaint& p, SetWindow& w, const SetItem& it) {
 static void Set_DrawDock(SetPaint& p, SetWindow& w, const D2D1_RECT_F& d, float rad, float fill, float glow) {
     p.Round({d.left, d.top + 3, d.right, d.bottom + 5}, rad + 2, mocha::crust, w.glass ? 0.28f : 0.5f);
     p.Round(d, rad, mocha::mantle, fill);  // Hover lights only the edge: a wash showed as a blue blob down the left.
-    p.Edge(d, rad, mocha::surface1, 0.9f * (1 - glow), 2);
-    p.GradRing(d, rad - 1, glow, 2);
+    p.Edge(d, rad, mocha::surface1, 0.75f * (1 - glow));
+    p.GradRing(d, rad, glow);
 }
 
 // Panel-left mark, as in T3's sidebar button: a window with its left pane shaded while open.
@@ -3276,15 +3278,15 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
     // Over the resize edge or while dragging, the dock's own rounded border brightens and
     // thickens, so the handle follows the corners instead of floating as a separate line.
     float edge = std::max(Set_GlowOf(w, 41), w.dragRail ? 1.0f : 0.0f);
-    Set_DrawDock(p, w, d, 14, w.glass ? 0.58f : 1.0f, std::max(w.railGlow * 0.85f, edge));
-    if (edge > 0.003f) p.GradRing(d, 12.5f, edge, 3);
+    Set_DrawDock(p, w, d, kSetRadius, w.glass ? 0.58f : 1.0f, std::max(w.railGlow * 0.85f, edge));
 
     D2D1_RECT_F tb = Set_RailToggleRect(w);
     float th = Set_GlowOf(w, 42);
-    p.Round(tb, 9, mocha::surface0, 0.45f + 0.25f * th);
-    p.GradFill(tb, 9, 0.16f * th);
-    p.GradRing(tb, 9, 0.9f * th, 1.25f);
-    if (w.kbd && w.focus == -20) p.GradRing(tb, 9, 1, 2);
+    const float tr = Set_Rad(tb);
+    p.Round(tb, tr, mocha::surface0, 0.45f + 0.25f * th);
+    p.GradFill(tb, tr, 0.16f * th);
+    p.GradRing(tb, tr, 0.9f * th);
+    if (w.kbd && w.focus == -20) p.GradRing(tb, tr, 1);
     Set_DrawPanelIcon(p, tb, open, th > 0.5f ? mocha::text : mocha::subtext1);
 
     p.rt->PushAxisAlignedClip(D2D1::RectF(d.left, d.top, d.right - 6, d.bottom), D2D1_ANTIALIAS_MODE_ALIASED);
@@ -3302,18 +3304,19 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
         }
         float hov = Set_GlowOf(w, 100 + i);
         bool act = i == w.page;
+        const float rr = Set_Rad(r);
         if (act) {
-            p.GradFill(r, 8, 0.22f);
-            p.GradRing(r, 8, 0.5f, 1);
+            p.GradFill(r, rr, 0.22f);
+            p.GradRing(r, rr, 0.5f);
             D2D1_RECT_F bar{r.left, r.top + 8, r.left + 3, r.bottom - 8};
             p.GradFill({bar.left, bar.top, bar.left + 3, bar.bottom}, 1.5f, 1);
         } else {
-            p.Round(r, 8, mocha::surface0, 0.28f);
-            p.Edge(r, 8, mocha::surface2, 0.5f * (1 - hov));
-            p.GradFill(r, 8, 0.10f * hov);
-            p.GradRing(r, 8, 0.8f * hov, 1.25f);
+            p.Round(r, rr, mocha::surface0, 0.28f);
+            p.Edge(r, rr, mocha::surface2, 0.5f * (1 - hov));
+            p.GradFill(r, rr, 0.10f * hov);
+            p.GradRing(r, rr, 0.8f * hov);
         }
-        if (w.kbd && w.focus == -10 - i) p.GradRing(r, 8, 1, 2);
+        if (w.kbd && w.focus == -10 - i) p.GradRing(r, rr, 1);
         UINT32 c = act ? mocha::text : mocha::subtext1;
         // The glyph sits in a fixed 44-wide slot, so it stays centered in the collapsed rail.
         p.Glyph(w.fIcon.get(), kSetPages[i].glyph, {r.left, r.top, r.left + 44, r.bottom}, act ? mocha::blue : mocha::subtext0);
@@ -3332,10 +3335,8 @@ static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
     // The same see-through mantle as the rail dock, so the blurred rows under the pill read as
     // real glass instead of a near-solid bar.
     p.Round(d, rad, mocha::mantle, w.render ? 1.0f : (w.glass ? 0.58f : 0.85f));
-    const D2D1_RECT_F edge{d.left + 2, d.top + 2, d.right - 2, d.bottom - 2};
-    p.rt->DrawRoundedRectangle(D2D1::RoundedRect(edge, rad - 2, rad - 2),
-                              p.B(mocha::overlay0, 0.9f * (1 - w.footGlow)), 2.75f);
-    p.GradRing(d, rad - 1.5f, w.footGlow, 3.0f);
+    p.Edge(d, rad, mocha::overlay0, 0.9f * (1 - w.footGlow));
+    p.GradRing(d, rad, w.footGlow);
     UINT32 sc;
     std::wstring status = Set_FooterStatus(w, &sc);
     float sw = Set_FooterStatusW(w);
@@ -3345,10 +3346,10 @@ static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
         D2D1_RECT_F b = Set_FooterButton(w, i);
         float hov = Set_GlowOf(w, 10 + i);
         p.Round(b, brad, mocha::base, 0.98f);
-        p.Edge(b, brad, mocha::overlay0, 0.78f * (1 - hov), 1.75f);
-        p.GradRing(b, brad - 1, hov, 2.25f);
+        p.Edge(b, brad, mocha::overlay0, 0.78f * (1 - hov));
+        p.GradRing(b, brad, hov);
         p.Text(w.fButton.get(), names[i], b, mocha::text, w.saving ? 0.5f : 1.0f);
-        if (w.kbd && w.focus == -1 - i) p.GradRing(b, brad, 1, 2);
+        if (w.kbd && w.focus == -1 - i) p.GradRing(b, brad, 1);
     }
 }
 
@@ -3388,9 +3389,9 @@ static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
     const int n = (int)f.options.size(), vis = Set_DropVisible(w);
     const bool scrolls = n > vis;
     D2D1_RECT_F shadow{r.left - 1, r.top + 3, r.right + 1, r.bottom + 5};
-    p.Round(shadow, 12, mocha::crust, 0.6f);
-    p.Round(r, 10, mocha::mantle);
-    p.GradRing(r, 10, 0.9f);
+    p.Round(shadow, kSetRadius + 2, mocha::crust, 0.6f);
+    p.Round(r, kSetRadius, mocha::mantle);
+    p.GradRing(r, kSetRadius, 0.9f);
     const float right = r.right - (scrolls ? 12 : 4);
     for (int v = 0; v < vis; v++) {
         int i = w.dropTop + v;
@@ -3398,8 +3399,8 @@ static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
         D2D1_RECT_F it{r.left + 4, r.top + 4 + v * kSetDropItem, right, r.top + 4 + (v + 1) * kSetDropItem};
         bool sel = f.cur == f.options[i].first;
         if (i == w.dropHover) {
-            p.GradFill(it, 6, 0.28f);
-            p.GradRing(it, 6, 0.6f, 1);
+            p.GradFill(it, Set_Rad(it, kSetRadius - 4), 0.28f);  // Inset 4 in a 16 corner: 12.
+            p.GradRing(it, Set_Rad(it, kSetRadius - 4), 0.6f);
         }
         p.Text(w.fValue.get(), f.options[i].second, {it.left + 10, it.top, it.right - 28, it.bottom}, sel ? mocha::blue : mocha::text);
         if (sel) p.Glyph(w.fIconS.get(), 0xE73E, {it.right - 28, it.top, it.right - 6, it.bottom}, mocha::blue);
@@ -3515,6 +3516,8 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
         rt->Clear(D2D1::ColorF(0, 0));
         const float total = w.ch + kSetCapH;
         if (w.nativeTitle) {
+            // The window's acrylic already carries the tint (Set_ApplyFrame), title bar included.
+        } else if (false) {
             SetCom<ID2D1LinearGradientBrush> fade;
             D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::crust, kSetGlassTint)}, {1, D2DColor(mocha::crust, kSetGlassTint)}};
             SetCom<ID2D1GradientStopCollection> coll;
@@ -4462,7 +4465,7 @@ static void Set_ApplyFrame(SetWindow& w) {
     const HWND hwnd = w.hwnd;
     const bool native = Set_FieldOn(w, L"nativeSettingsTitleBar", false), glass = Set_FieldOn(w, L"settingsGlass", true);
     const bool first = !w.frameApplied, wasGlass = w.glass;
-    if (!first && native == w.nativeTitle && glass == w.glass) return;
+    if (!first && native == w.nativeTitle && glass == w.glass) return;  // A title bar switch re-runs the accent below.
     w.frameApplied = true;
     w.nativeTitle = native;
     w.glass = glass;
@@ -4487,7 +4490,12 @@ static void Set_ApplyFrame(SetWindow& w) {
         DwmEnableBlurBehindWindow(hwnd, &bb);
         if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
         if (setComposition) {
-            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
+            // Same as the launcher grid. With the Windows title bar the tint is in here instead of
+            // on the page, so the title bar gets it too: crust at the page's 55%.
+            const int tint = native ? (int)(((DWORD)(kSetGlassTint * 255 + 0.5f) << 24) | (mocha::crust & 0xFF) << 16 |
+                                            (mocha::crust & 0xFF00) | (mocha::crust >> 16 & 0xFF))
+                                    : (int)0x012E1E1E;
+            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, tint, 0};
             SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
             setComposition(hwnd, &data);
         }
@@ -6588,58 +6596,53 @@ static void StopTrayThread() {
 
 
 // ---- Start and stop -------------------------------------------------------------------------------------------------
-// The tool process owns the tray icon and the unlocker window. Inside Explorer the mod only adds the right-click entry
-// and the shortcut, and sends the selected paths across.
+// The elevated tool process owns the tray icon, the unlocker window, the right-click menu registration and the
+// Explorer shortcut. Nothing injects into Explorer.
 
 #include <windhawk_tool_mod.h>
-
-static bool g_inExplorer;
 
 static void Fu_ReadToolSettings() { g_fuAnim = Wh_GetIntSetting(L"settingsAnimation") != 0; }
 
 BOOL WhTool_ModInit() {
     Fu_ReadToolSettings();
     fu::InitRights();
-    g_trayThread =CreateThread(nullptr, 0, TrayThread, nullptr, 0, nullptr);
-    if (!g_trayThread) Wh_Log(L"Couldn't start the tray thread");
-    return g_trayThread != nullptr;
+    g_trayThread = CreateThread(nullptr, 0, TrayThread, nullptr, 0, nullptr);
+    if (!g_trayThread) {
+        Wh_Log(L"Couldn't start the tray thread");
+        return FALSE;
+    }
+    fuex::ContextMenuSync(Wh_GetIntSetting(L"menuEntry") != 0);
+    fuex::StartHotkeyThread();
+    return TRUE;
 }
 
 void WhTool_ModSettingsChanged() {
     Fu_ReadToolSettings();
+    fuex::ContextMenuSync(Wh_GetIntSetting(L"menuEntry") != 0);
+    fuex::ReloadHotkey();
     if (HWND hwnd = g_trayWnd) PostMessageW(hwnd, WM_APP_TRAY_REFRESH, 0, 0);
     if (HWND wnd = fuset::g_settingsWnd) PostMessageW(wnd, fuset::WM_APP_SETTINGS_RELOAD, 0, 0);
 }
 
 void WhTool_ModUninit() {
+    fuex::StopHotkeyThread();
+    fuex::ContextMenuSync(false);
     fuset::CloseSettingsWindow();
     fuset::Fu_WaitWorkers();
     StopTrayThread();
 }
 
+static bool Fu_IsElevatedProcess() {
+    HANDLE tok = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &tok)) return false;
+    TOKEN_ELEVATION e{};
+    DWORD n = 0;
+    bool elev = GetTokenInformation(tok, TokenElevation, &e, sizeof(e), &n) && e.TokenIsElevated != 0;
+    CloseHandle(tok);
+    return elev;
+}
+
 BOOL WhToolLauncher_ModInit(BOOL* launch) {
-    WCHAR path[MAX_PATH]{};
-    GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
-    PCWSTR exe = PathFindFileNameW(path);
-    if (_wcsicmp(exe, L"windhawk.exe") == 0) {
-        *launch = TRUE;
-        return TRUE;
-    }
-    *launch = FALSE;
-    if (_wcsicmp(exe, L"explorer.exe") != 0) return FALSE;
-    g_inExplorer = true;
-    fuex::g_menuOn = Wh_GetIntSetting(L"menuEntry") != 0;
-    fuex::HookMenus();
-    fuex::StartHotkeyThread();
+    *launch = Fu_IsElevatedProcess() ? TRUE : FALSE;
     return TRUE;
-}
-
-void WhToolLauncher_ModUninit() {
-    if (g_inExplorer) fuex::StopHotkeyThread();
-}
-
-void WhToolLauncher_ModSettingsChanged(BOOL* reload) {
-    if (!g_inExplorer) return;
-    fuex::g_menuOn = Wh_GetIntSetting(L"menuEntry") != 0;
-    fuex::ReloadHotkey();
 }
