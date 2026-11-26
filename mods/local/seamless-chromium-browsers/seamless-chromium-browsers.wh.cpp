@@ -2,7 +2,7 @@
 // @id              seamless-chromium-browsers
 // @name            Seamless Chromium Browsers
 // @description     See-through Helium and Brave with Catppuccin colors, your own accent, font and pop-up edges
-// @version         1.0.1
+// @version         1.1.0
 // @author          DavidHiFi, bardelyne
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -25,6 +25,12 @@ Brave each get their full look. Chrome, Edge, Vivaldi and Thorium get the font
 and pop-up settings.
 
 ![Seamless Chromium Browsers preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-chromium-browsers.png)
+
+## What's new in 1.1.0
+- Pick the font weight too: light, regular, medium, semi-bold or bold.
+- Sharper tray icon.
+- The note about square frames round pop-ups now names the real cause:
+  Helium's "Blur behind popups and menus" option. Leave it off.
 
 ## What's new in 1.0.0
 - Helium Acrylic and Brave Acrylic are now this one mod. Every setting from
@@ -61,12 +67,13 @@ and pop-up settings.
   Zen Internet or Stylus can clear those.
 
 ## Every Chromium browser
-- Browser font and size, read when the browser starts.
+- Browser font, size and weight, read when the browser starts.
 - Pop-up corners and edge color, for the pop-ups Windows draws whole.
 
 ## Notes
-- Square dark frames round extension pop-ups (Bitwarden and friends) came from
-  the title bar mod, not this one. Seamless Title Bars 1.3.17 fixes them.
+- A square grey frame round menus and extension pop-ups comes from Helium's
+  "Blur behind popups and menus" option. It is off by default; keep it off
+  for clean rounded pop-ups.
 - Light theme stays stock in Helium.
 
 ## Credits
@@ -84,12 +91,22 @@ and pop-up settings.
 - accentEnd: "#CBA6F7"
   $name: Accent end color
   $description: "Where the accent gradient ends (Mocha Mauve)."
-- uiFont: ""
+- uiFont: FiraCode Nerd Font
   $name: Browser font
-  $description: "The font for tabs, menus, the address bar and dialogs, for example FiraCode Nerd Font. Leave empty to keep the browser's own. Needs a browser restart."
+  $description: "The font for tabs, menus, the address bar and dialogs. Leave empty to keep the browser's own. Needs a browser restart."
 - uiFontSize: 0
   $name: Browser font size (pt)
   $description: "1 to 32. 0 keeps the browser's own size. Needs a browser restart."
+- uiFontWeight: medium
+  $name: Browser font weight
+  $description: "How thick the browser font is drawn. Needs a browser restart."
+  $options:
+  - stock: Keep the browser's own
+  - light: Light
+  - regular: Regular
+  - medium: Medium
+  - semibold: Semi-bold
+  - bold: Bold
 - popupCorners: stock
   $name: Pop-up corners
   $description: "For pop-ups Windows draws whole, like some menus and dialogs. Pop-ups the browser draws with a soft shadow keep their own shape."
@@ -362,6 +379,7 @@ struct Settings {
     COLORREF edgeColor = RGB(0x45, 0x47, 0x5A);
     std::wstring font;
     int fontSize = 0;
+    int fontWeight = 0;
 };
 static Settings g_set;
 static SRWLOCK g_lock = SRWLOCK_INIT;
@@ -396,6 +414,9 @@ static void Load() {
     s.font = ReadString(L"uiFont");
     while (!s.font.empty() && s.font.back() == L' ') s.font.pop_back();
     s.fontSize = Wh_GetIntSetting(L"uiFontSize");
+    std::wstring w = ReadString(L"uiFontWeight");
+    s.fontWeight = w == L"light" ? 300 : w == L"regular" ? 400 : w == L"medium" ? 500
+                 : w == L"semibold" ? 600 : w == L"bold" ? 700 : 0;
     if (s.fontSize < 0 || s.fontSize > 32) s.fontSize = 0;
     AcquireSRWLockExclusive(&g_lock);
     g_set = s;
@@ -415,6 +436,7 @@ static Settings Snapshot() {
 // address bar and dialogs together. Needs a browser restart.
 static std::wstring g_fontAtInit;
 static int g_fontSizeAtInit = 0;
+static int g_fontWeightAtInit = 0;
 
 static void PatchLogFont(LOGFONTW& lf, int dpi) {
     if (!g_fontAtInit.empty()) {
@@ -424,6 +446,7 @@ static void PatchLogFont(LOGFONTW& lf, int dpi) {
         lf.lfHeight = -MulDiv(g_fontSizeAtInit, dpi, 72);
         lf.lfWidth = 0;
     }
+    if (g_fontWeightAtInit > 0) lf.lfWeight = g_fontWeightAtInit;
 }
 
 static void PatchMetrics(PVOID p, UINT cb, int dpi) {
@@ -463,14 +486,16 @@ static void InstallFontHooks() {
     Settings s = Snapshot();
     g_fontAtInit = s.font;
     g_fontSizeAtInit = s.fontSize;
-    if (g_fontAtInit.empty() && g_fontSizeAtInit == 0) return;
+    g_fontWeightAtInit = s.fontWeight;
+    if (g_fontAtInit.empty() && g_fontSizeAtInit == 0 && g_fontWeightAtInit == 0) return;
     HMODULE user32 = GetModuleHandleW(L"user32.dll");
     if (!user32) return;
     if (auto f = (SPI_t)GetProcAddress(user32, "SystemParametersInfoW"))
         Wh_SetFunctionHook((void*)f, (void*)SPI_hook, (void**)&SPI_orig);
     if (auto f = (SPIForDpi_t)GetProcAddress(user32, "SystemParametersInfoForDpi"))
         Wh_SetFunctionHook((void*)f, (void*)SPIForDpi_hook, (void**)&SPIForDpi_orig);
-    Wh_Log(L"UI font: '%s' size %d", g_fontAtInit.c_str(), g_fontSizeAtInit);
+    Wh_Log(L"UI font: '%s' size %d weight %d", g_fontAtInit.c_str(), g_fontSizeAtInit,
+           g_fontWeightAtInit);
 }
 
 // --- Pop-up corners and edge --------------------------------------------------
@@ -791,6 +816,16 @@ static void LoadSettings() {
     c.push_back({1538, tabStrk});
     c.push_back({1539, tabStrk});
     c.push_back({319,  colorOf(L"colorFocusBorder", 0xFFB4BEFEu, 0xFF)});
+    if (PCWSTR pr = wcsstr(GetCommandLineW(), L"--scb-color-probe=")) {
+        int start = _wtoi(pr + 18);
+        c.clear();
+        for (int i = 0; i < 64 && start > 0; i++) {
+            int id = start + i;
+            c.push_back({(unsigned int)id, 0xFF00A500u | ((unsigned int)(id & 0xFF) << 16) |
+                                               (unsigned int)((id >> 8) & 0xFF)});
+        }
+        Wh_Log(L"colour probe from %d", start);
+    }
     g_liveColors = std::move(c);
     // Shared accent pair (top-level settings, not the Helium group).
     PCWSTR a = ::Wh_GetStringSetting(L"accentStart");

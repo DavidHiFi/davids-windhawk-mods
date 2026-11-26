@@ -5072,7 +5072,8 @@
     "popupEdge": "stock",
     "popupEdgeColor": "#45475A",
     "uiFont": "",
-    "uiFontSize": 0
+    "uiFontSize": 0,
+    "uiFontWeight": "medium"
   },
   "local@seamless-fps-capper": {
     "bgFps": 0,
