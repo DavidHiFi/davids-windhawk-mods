@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T22:04:32+08:00",
+  "generatedAt": "2026-11-26T22:17:36+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 130,
+    "mods": 121,
     "enabled": 117,
-    "local": 61
+    "local": 57
   },
   "mods": [
     {
@@ -72,18 +72,6 @@
       "category": "Windows and menus"
     },
     {
-      "id": "auto-time-sync-on-startup",
-      "name": "Auto Time Sync On Startup",
-      "author": "communism420",
-      "github": "https://github.com/communism420",
-      "version": "1.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/auto-time-sync-on-startup",
-      "source": "mods/catalog/auto-time-sync-on-startup.wh.cpp",
-      "enabled": false
-    },
-    {
       "id": "local@better-volume-mixer-plus",
       "name": "Seamless Volume Mixer",
       "author": "DavidHiFi, 0Allu, shubho",
@@ -95,18 +83,6 @@
       "source": "mods/local/better-volume-mixer-plus/better-volume-mixer-plus.wh.cpp",
       "enabled": true,
       "category": "Taskbar"
-    },
-    {
-      "id": "bluetooth-no-sleep",
-      "name": "Bluetooth No Sleep",
-      "author": "Dev-StudioCode",
-      "github": "https://github.com/Dev-StudioCode",
-      "version": "1.0.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/bluetooth-no-sleep",
-      "source": "mods/catalog/bluetooth-no-sleep.wh.cpp",
-      "enabled": false
     },
     {
       "id": "borderless-fullscreen",
@@ -693,19 +669,6 @@
       "enabled": true
     },
     {
-      "id": "local@seamless-autoclicker",
-      "name": "Seamless AutoClicker",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.6.15",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-autoclicker/seamless-autoclicker.wh.cpp",
-      "enabled": false,
-      "category": "Tools"
-    },
-    {
       "id": "local@seamless-autoscroll",
       "name": "Seamless Autoscroll",
       "author": "DavidHiFi, crazyboyybs",
@@ -754,19 +717,6 @@
       "upstream": "",
       "source": "mods/local/seamless-clipboard-manager/seamless-clipboard-manager.wh.cpp",
       "enabled": true,
-      "category": "Tools"
-    },
-    {
-      "id": "local@seamless-color-picker",
-      "name": "Seamless Color Picker",
-      "author": "DavidHiFi, Jaex, ShareX contributors",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.1.16",
-      "license": "",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-color-picker/seamless-color-picker.wh.cpp",
-      "enabled": false,
       "category": "Tools"
     },
     {
@@ -980,19 +930,6 @@
       "upstream": "",
       "source": "mods/local/seamless-launchpad/seamless-launchpad.wh.cpp",
       "enabled": true,
-      "category": "Windows and menus"
-    },
-    {
-      "id": "local@seamless-power-action-countdown",
-      "name": "Seamless Power Action Countdown",
-      "author": "DavidHiFi, Nerdworld",
-      "github": "https://github.com/DavidHiFi",
-      "version": "2.0.3",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-power-action-countdown/seamless-power-action-countdown.wh.cpp",
-      "enabled": false,
       "category": "Windows and menus"
     },
     {
@@ -1477,42 +1414,6 @@
       "category": "Windows and menus"
     },
     {
-      "id": "toast-auto-dismiss",
-      "name": "Toast auto-dismiss",
-      "author": "nikitor32",
-      "github": "https://github.com/nikitor32",
-      "version": "1.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/toast-auto-dismiss",
-      "source": "mods/catalog/toast-auto-dismiss.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "toggle-hidden-files",
-      "name": "Toggle Hidden Files",
-      "author": "Asteski",
-      "github": "https://github.com/Asteski",
-      "version": "1.1.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/toggle-hidden-files",
-      "source": "mods/catalog/toggle-hidden-files.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "unlock-folder-in-use",
-      "name": "Unlock \"Folder In Use\"",
-      "author": "LyricsPortal",
-      "github": "https://github.com/LyricsPortal",
-      "version": "1.1.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/unlock-folder-in-use",
-      "source": "mods/catalog/unlock-folder-in-use.wh.cpp",
-      "enabled": false
-    },
-    {
       "id": "win-d-per-monitor",
       "name": "Win+D per monitor(show desktop)",
       "author": "easyatm",
@@ -1572,19 +1473,6 @@
       "upstream": "https://windhawk.net/mods/windows-animations",
       "source": "mods/catalog/windows-animations.wh.cpp",
       "enabled": true
-    },
-    {
-      "id": "local@wintips-osd-plus",
-      "name": "WinTips OSD Plus",
-      "author": "DavidHiFi, DoYouNatureQ",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.4.1",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/wintips-osd-plus/wintips-osd-plus.wh.cpp",
-      "enabled": false,
-      "category": "Windows and menus"
     },
     {
       "id": "xs-nomsedgewebview4copilot",
