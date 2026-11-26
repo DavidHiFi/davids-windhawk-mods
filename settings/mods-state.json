@@ -606,7 +606,7 @@
     "include": "windhawk.exe|explorer.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.0.10"
+    "version": "1.0.11"
   },
   "local@taskbar-ai-usage-plus": {
     "disabled": false,

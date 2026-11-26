@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T15:55:30+08:00",
+  "generatedAt": "2026-11-26T16:01:59+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 162,
@@ -1566,7 +1566,7 @@
       "name": "Simple Window Switcher Plus",
       "author": "DavidHiFi, Lone, valinet, Asteski, bropines, caliberda",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.0.10",
+      "version": "1.0.11",
       "license": "GPL-2.0",
       "origin": "local",
       "upstream": "",
