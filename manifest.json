@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T19:00:37+08:00",
+  "generatedAt": "2026-11-26T19:02:00+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 164,
-    "enabled": 157,
-    "local": 67
+    "mods": 133,
+    "enabled": 127,
+    "local": 62
   },
   "mods": [
     {
@@ -84,18 +84,6 @@
       "enabled": true
     },
     {
-      "id": "better-eject-dialog",
-      "name": "Better Eject Dialog",
-      "author": "Ender",
-      "github": "https://github.com/EnderDragonEP",
-      "version": "1.0",
-      "license": "GPL-3.0-only",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/better-eject-dialog",
-      "source": "mods/catalog/better-eject-dialog.wh.cpp",
-      "enabled": true
-    },
-    {
       "id": "local@better-volume-mixer-plus",
       "name": "Seamless Volume Mixer",
       "author": "DavidHiFi, 0Allu, shubho",
@@ -166,42 +154,6 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/common-controls-hook",
       "source": "mods/catalog/common-controls-hook.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "context-menu-preloader",
-      "name": "Context Menu Preloader",
-      "author": "Lockframe",
-      "github": "https://github.com/Lockframe",
-      "version": "1.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/context-menu-preloader",
-      "source": "mods/catalog/context-menu-preloader.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "copy-file-contents",
-      "name": "Copy File Contents",
-      "author": "metanoid18",
-      "github": "https://github.com/Metanoid18",
-      "version": "1.4.1",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/copy-file-contents",
-      "source": "mods/catalog/copy-file-contents.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "copy-queue",
-      "name": "Copy Queue",
-      "author": "Nerdworld",
-      "github": "https://github.com/nerdworldDE",
-      "version": "1.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/copy-queue",
-      "source": "mods/catalog/copy-queue.wh.cpp",
       "enabled": true
     },
     {
@@ -361,30 +313,6 @@
       "enabled": true
     },
     {
-      "id": "explorer-context-menu-custom-items",
-      "name": "Explorer Context Menu Custom Items",
-      "author": "Deepak",
-      "github": "https://github.com/deepak-raven",
-      "version": "1.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-context-menu-custom-items",
-      "source": "mods/catalog/explorer-context-menu-custom-items.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "explorer-core-context-menu-customizer",
-      "name": "Explorer Core Context Menu Customizer",
-      "author": "akiyorm",
-      "github": "https://github.com/akiyorm",
-      "version": "1.0.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-core-context-menu-customizer",
-      "source": "mods/catalog/explorer-core-context-menu-customizer.wh.cpp",
-      "enabled": true
-    },
-    {
       "id": "explorer-details-better-file-sizes",
       "name": "Better file sizes in Explorer details",
       "author": "m417z",
@@ -394,176 +322,6 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/explorer-details-better-file-sizes",
       "source": "mods/catalog/explorer-details-better-file-sizes.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "explorer-double-click-up",
-      "name": "Explorer Double Click Up",
-      "author": "wrldspawn",
-      "github": "https://github.com/wrldspawn",
-      "version": "1.0.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-double-click-up",
-      "source": "mods/catalog/explorer-double-click-up.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "explorer-double-f2-rename-extension",
-      "name": "Select filename extension on double F2",
-      "author": "Marnes <leaumar@sent.com>",
-      "github": "https://github.com/leaumar",
-      "version": "4",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-double-f2-rename-extension",
-      "source": "mods/catalog/explorer-double-f2-rename-extension.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "explorer-fast-navigation",
-      "name": "Explorer Fast Navigation",
-      "author": "gilnett",
-      "github": "https://github.com/gilnett",
-      "version": "1.1.0",
-      "license": "GPL-3.0",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-fast-navigation",
-      "source": "mods/catalog/explorer-fast-navigation.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "explorer-glyphs-colorizer",
-      "name": "Explorer Glyphs Colorizer",
-      "author": "crazyboyybs",
-      "github": "https://github.com/crazyboyybs",
-      "version": "1.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-glyphs-colorizer",
-      "source": "mods/catalog/explorer-glyphs-colorizer.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "explorer-hide-focus-border",
-      "name": "File Explorer Focus Border Remover",
-      "author": "Hùng",
-      "github": "https://github.com/NoMorePlz",
-      "version": "1.0.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-hide-focus-border",
-      "source": "mods/catalog/explorer-hide-focus-border.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "explorer-home-button",
-      "name": "File Explorer Address Bar Home Button",
-      "author": "RobotsNeverDie",
-      "github": "https://github.com/RBND",
-      "version": "1.0.3",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-home-button",
-      "source": "mods/catalog/explorer-home-button.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "explorer-item-pins",
-      "name": "Explorer Item Pins",
-      "author": "CTravkin",
-      "github": "https://github.com/CTravkin",
-      "version": "1.1.7",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-item-pins",
-      "source": "mods/catalog/explorer-item-pins.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "explorer-no-min-size",
-      "name": "Explorer No Minimum Window Size",
-      "author": "Anixx",
-      "github": "https://github.com/Anixx",
-      "version": "1.0.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-no-min-size",
-      "source": "mods/catalog/explorer-no-min-size.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "explorer-real-folder-paths",
-      "name": "Explorer real folder paths",
-      "author": "Nerdworld",
-      "github": "https://github.com/nerdworldDE",
-      "version": "0.1.5",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-real-folder-paths",
-      "source": "mods/catalog/explorer-real-folder-paths.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "explorer-status-metadata",
-      "name": "Explorer Status Bar Metadata",
-      "author": "VitalS",
-      "github": "https://github.com/VitalSkib",
-      "version": "1.4.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-status-metadata",
-      "source": "mods/catalog/explorer-status-metadata.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@explorer-tags-plus",
-      "name": "Explorer Tags Plus",
-      "author": "DavidHiFi, buedgik",
-      "github": "https://github.com/DavidHiFi",
-      "version": "0.9.1",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/explorer-tags-plus/explorer-tags-plus.wh.cpp",
-      "enabled": true,
-      "category": "Explorer"
-    },
-    {
-      "id": "local@explorer-tree-guard",
-      "name": "Explorer Tree Guard",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.0",
-      "license": "",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/explorer-tree-guard/explorer-tree-guard.wh.cpp",
-      "enabled": true,
-      "category": "Fixes"
-    },
-    {
-      "id": "explorer-treeline-killer",
-      "name": "Explorer TreeLine Killer",
-      "author": "Languster",
-      "github": "https://github.com/Languster",
-      "version": "1.0.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/explorer-treeline-killer",
-      "source": "mods/catalog/explorer-treeline-killer.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "extension-change-no-warning",
-      "name": "Turn off change file extension warning",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.0.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/extension-change-no-warning",
-      "source": "mods/catalog/extension-change-no-warning.wh.cpp",
       "enabled": true
     },
     {
@@ -588,67 +346,6 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/fast-backspace",
       "source": "mods/catalog/fast-backspace.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "file-explorer-remove-suffixes",
-      "name": "Remove Taskbar Window Suffixes",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.1.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/file-explorer-remove-suffixes",
-      "source": "mods/catalog/file-explorer-remove-suffixes.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "file-explorer-reopen-closed-tab",
-      "name": "File Explorer Reopen Closed Tab",
-      "author": "Armaninyow",
-      "github": "https://github.com/armaninyow",
-      "version": "1.0.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/file-explorer-reopen-closed-tab",
-      "source": "mods/catalog/file-explorer-reopen-closed-tab.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@file-operation-styler-plus",
-      "name": "File Operation Styler Plus",
-      "author": "DavidHiFi, digART",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.6.7",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/file-operation-styler-plus/file-operation-styler-plus.wh.cpp",
-      "enabled": true,
-      "category": "Explorer"
-    },
-    {
-      "id": "file-type-properties-customization",
-      "name": "File Type Properties Customization",
-      "author": "Momo",
-      "github": "https://github.com/FreshP-0325",
-      "version": "1.0.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/file-type-properties-customization",
-      "source": "mods/catalog/file-type-properties-customization.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "fix-explorer-row-right-click",
-      "name": "Fix Explorer Row Right-Click",
-      "author": "iMAboud",
-      "github": "https://github.com/iMAboud",
-      "version": "1.0.0",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/fix-explorer-row-right-click",
-      "source": "mods/catalog/fix-explorer-row-right-click.wh.cpp",
       "enabled": true
     },
     {
@@ -701,18 +398,6 @@
       "category": "Windows and menus"
     },
     {
-      "id": "harmful-files-autoaccept",
-      "name": "Skip harmful files confirmation",
-      "author": "Arimodu",
-      "github": "https://github.com/Arimodu",
-      "version": "0.3.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/harmful-files-autoaccept",
-      "source": "mods/catalog/harmful-files-autoaccept.wh.cpp",
-      "enabled": true
-    },
-    {
       "id": "hide-start-button",
       "name": "Hide Start Button",
       "author": "ptrkhh",
@@ -760,18 +445,6 @@
       "source": "mods/local/keyboard-shortcut-actions-plus/keyboard-shortcut-actions-plus.wh.cpp",
       "enabled": true,
       "category": "Tools"
-    },
-    {
-      "id": "lm-mediakey-explorer-fix",
-      "name": "Play-Media-Key fix in Explorer",
-      "author": "Mark Jansen",
-      "github": "https://github.com/learn-more",
-      "version": "1.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/lm-mediakey-explorer-fix",
-      "source": "mods/catalog/lm-mediakey-explorer-fix.wh.cpp",
-      "enabled": true
     },
     {
       "id": "local@logitech-battery-tray",
@@ -1020,18 +693,6 @@
       "enabled": true
     },
     {
-      "id": "remove-context-menu-items",
-      "name": "Remove Context Menu Items",
-      "author": "Armaninyow",
-      "github": "https://github.com/armaninyow",
-      "version": "1.14.0",
-      "license": "MIT",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/remove-context-menu-items",
-      "source": "mods/catalog/remove-context-menu-items.wh.cpp",
-      "enabled": true
-    },
-    {
       "id": "remove-fullscreen-popup-chrome",
       "name": "Remove \"Exit Fullscreen\" popup in Chrome",
       "author": "lorenzoc01",
@@ -1065,18 +726,6 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/remove-shortcut-arrows/remove-shortcut-arrows.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "restore-folder-menubar-25h2",
-      "name": "ExplorerFrame and menubar fixes fork",
-      "author": "Anixx",
-      "github": "https://github.com/Anixx",
-      "version": "4.2",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/restore-folder-menubar-25h2",
-      "source": "mods/catalog/restore-folder-menubar-25h2.wh.cpp",
       "enabled": true
     },
     {
@@ -1257,6 +906,18 @@
       "enabled": false
     },
     {
+      "id": "local@seamless-explorer",
+      "name": "Seamless Explorer",
+      "author": "DavidHiFi, m417z, digART, crazyboyybs, NoMorePlz, Languster, Momo, Anixx, buedgik, RobotsNeverDie, CTravkin, Nerdworld, gilnett, Armaninyow, wrldspawn, VitalS, Deepak, akiyorm, Lockframe, metanoid18, iMAboud, Ender, Marnes, Arimodu, Mark Jansen, DanRotaru, Peter2oo1, NDruce, Sanekx Arcs, javierpetrucci",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.1.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-explorer/seamless-explorer.wh.cpp",
+      "enabled": true
+    },
+    {
       "id": "local@seamless-explorer-search",
       "name": "Seamless Explorer Search",
       "author": "DavidHiFi",
@@ -1281,6 +942,18 @@
       "source": "mods/local/seamless-explorer-view/seamless-explorer-view.wh.cpp",
       "enabled": true,
       "category": "Explorer"
+    },
+    {
+      "id": "local@seamless-file-unlocker",
+      "name": "Seamless File Unlocker",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-file-unlocker/seamless-file-unlocker.wh.cpp",
+      "enabled": true
     },
     {
       "id": "local@seamless-flyouts",
@@ -1357,6 +1030,18 @@
       "source": "mods/local/seamless-power-action-countdown/seamless-power-action-countdown.wh.cpp",
       "enabled": true,
       "category": "Windows and menus"
+    },
+    {
+      "id": "local@seamless-settings-styler",
+      "name": "Seamless Settings Styler",
+      "author": "DavidHiFi, m417z",
+      "github": "https://github.com/DavidHiFi",
+      "version": "2.0.1",
+      "license": "",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-settings-styler/seamless-settings-styler.wh.cpp",
+      "enabled": true
     },
     {
       "id": "local@seamless-share",
@@ -1522,19 +1207,6 @@
       "upstream": "https://windhawk.net/mods/search-active-display",
       "source": "mods/catalog/search-active-display.wh.cpp",
       "enabled": true
-    },
-    {
-      "id": "local@settings-styler-plus",
-      "name": "Settings Styler Plus",
-      "author": "DavidHiFi, m417z",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.4.1",
-      "license": "",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/settings-styler-plus/settings-styler-plus.wh.cpp",
-      "enabled": false,
-      "category": "Windows and menus"
     },
     {
       "id": "shell-flyout-positions",
@@ -1915,19 +1587,6 @@
       "enabled": true
     },
     {
-      "id": "local@windows-11-file-explorer-styler-plus",
-      "name": "Windows 11 File Explorer Styler Plus",
-      "author": "DavidHiFi, m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.10.42",
-      "license": "",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/windows-11-file-explorer-styler-plus/windows-11-file-explorer-styler-plus.wh.cpp",
-      "enabled": true,
-      "category": "Explorer"
-    },
-    {
       "id": "windows-11-taskbar-styler",
       "name": "Windows 11 Taskbar Styler",
       "author": "m417z",
@@ -1988,42 +1647,6 @@
       "source": "mods/local/zoomit/zoomit.wh.cpp",
       "enabled": true,
       "category": "Tools"
-    },
-    {
-      "id": "local@seamless-settings-styler",
-      "name": "Seamless Settings Styler",
-      "author": "DavidHiFi, m417z",
-      "github": "https://github.com/DavidHiFi",
-      "version": "2.0.1",
-      "license": "",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-settings-styler/seamless-settings-styler.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@seamless-file-unlocker",
-      "name": "Seamless File Unlocker",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.0",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-file-unlocker/seamless-file-unlocker.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@seamless-explorer",
-      "name": "Seamless Explorer",
-      "author": "DavidHiFi, m417z, digART, crazyboyybs, NoMorePlz, Languster, Momo, Anixx, buedgik, RobotsNeverDie, CTravkin, Nerdworld, gilnett, Armaninyow, wrldspawn, VitalS, Deepak, akiyorm, Lockframe, metanoid18, iMAboud, Ender, Marnes, Arimodu, Mark Jansen, DanRotaru, Peter2oo1, NDruce, Sanekx Arcs, javierpetrucci",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.1.0",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-explorer/seamless-explorer.wh.cpp",
-      "enabled": true
     }
   ]
 }
