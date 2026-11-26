@@ -2,7 +2,7 @@
 // @id              seamless-windows-firewall
 // @name            Seamless Windows Firewall
 // @description     Block or allow any app's internet in one click, from the tray icon or a shortcut
-// @version         1.2.6
+// @version         1.2.7
 // @author          DavidHiFi, Ashix
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -240,6 +240,86 @@ Based on [!Net](https://windhawk.net/mods/not-net) by Ashix.
 #include <d2d1helper.h>
 #include <wincodec.h>
 #include <imm.h>
+
+// Crisp icons (2026-11-26): tray icons are drawn at 4x the size the taskbar shows them and shrunk
+// here with a box filter, so curves and glyph edges are smooth instead of stretched and stepped.
+// The result carries straight alpha, which is what Windows expects in an icon.
+static HICON Crisp_ShrinkIcon(HICON big, int factor) {
+    if (!big || factor <= 1) return big;
+    ICONINFO ii{};
+    if (!GetIconInfo(big, &ii)) return big;
+    HICON out = nullptr;
+    BITMAP bm{};
+    if (ii.hbmColor && GetObjectW(ii.hbmColor, sizeof(bm), &bm) && bm.bmWidth == bm.bmHeight &&
+        bm.bmWidth >= factor && bm.bmWidth % factor == 0) {
+        const int src = bm.bmWidth, n = src / factor;
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+        bi.bmiHeader.biWidth = src;
+        bi.bmiHeader.biHeight = -src;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        unsigned int* in = new unsigned int[(size_t)src * src];
+        HDC screen = GetDC(nullptr);
+        if (GetDIBits(screen, ii.hbmColor, 0, src, in, &bi, DIB_RGB_COLORS) == src) {
+            bool premul = true, anyAlpha = false;
+            for (size_t i = 0; i < (size_t)src * src; i++) {
+                unsigned int p = in[i], a = p >> 24;
+                if (a) anyAlpha = true;
+                if (((p >> 16) & 0xFF) > a || ((p >> 8) & 0xFF) > a || (p & 0xFF) > a) premul = false;
+            }
+            void* bits = nullptr;
+            bi.bmiHeader.biWidth = n;
+            bi.bmiHeader.biHeight = -n;
+            HBITMAP color = anyAlpha ? CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
+            if (color && bits) {
+                unsigned int* px = (unsigned int*)bits;
+                const unsigned int cnt = (unsigned int)(factor * factor);
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++) {
+                        unsigned int sa = 0, sr = 0, sg = 0, sb = 0;
+                        for (int dy = 0; dy < factor; dy++)
+                            for (int dx = 0; dx < factor; dx++) {
+                                unsigned int p = in[(size_t)(y * factor + dy) * src + x * factor + dx], a = p >> 24;
+                                unsigned int r = (p >> 16) & 0xFF, g = (p >> 8) & 0xFF, b = p & 0xFF;
+                                if (!premul) {
+                                    r = (r * a + 127) / 255;
+                                    g = (g * a + 127) / 255;
+                                    b = (b * a + 127) / 255;
+                                }
+                                sa += a; sr += r; sg += g; sb += b;
+                            }
+                        unsigned int a = (sa + cnt / 2) / cnt, r = 0, g = 0, b = 0;
+                        if (a && sa) {
+                            r = (sr * 255 + sa / 2) / sa; if (r > 255) r = 255;
+                            g = (sg * 255 + sa / 2) / sa; if (g > 255) g = 255;
+                            b = (sb * 255 + sa / 2) / sa; if (b > 255) b = 255;
+                        }
+                        px[(size_t)y * n + x] = a ? ((a << 24) | (r << 16) | (g << 8) | b) : 0;
+                    }
+                // A zero mask: with 32-bit colour Windows draws from the alpha channel.
+                unsigned char* maskBits = new unsigned char[(size_t)((n + 15) / 16) * 2 * n]();
+                HBITMAP mask = CreateBitmap(n, n, 1, 1, maskBits);
+                delete[] maskBits;
+                if (mask) {
+                    ICONINFO o{TRUE, 0, 0, mask, color};
+                    out = CreateIconIndirect(&o);
+                    DeleteObject(mask);
+                }
+            }
+            if (color) DeleteObject(color);
+        }
+        ReleaseDC(nullptr, screen);
+        delete[] in;
+    }
+    if (ii.hbmColor) DeleteObject(ii.hbmColor);
+    if (ii.hbmMask) DeleteObject(ii.hbmMask);
+    if (!out) return big;
+    DestroyIcon(big);
+    return out;
+}
+
 
 // Official Microsoft SDK WFP GUIDs (omitted in MinGW-w64 fwpmu.h)
 static const GUID kWfpCondAleAppId = {
@@ -5142,7 +5222,7 @@ constexpr UINT kTrayId = TrayIconId();
 
 // A rounded square in the blue to mauve gradient with a shield glyph, drawn with GDI so the
 // tray never shares the settings window's Direct2D factories. Shared with the app icon.
-static HICON MakeBadgeIcon(int size) {
+static HICON MakeBadgeIcon_Big(int size) {
     if (size < 16) size = 16;
     BITMAPINFO bi{};
     bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
@@ -5213,6 +5293,9 @@ static HICON MakeBadgeIcon(int size) {
     return icon;
 }
 
+// Drawn at 4x and shrunk, so the icon is smooth at the size it is shown.
+static HICON MakeBadgeIcon(int size) { return Crisp_ShrinkIcon(MakeBadgeIcon_Big((size > 0 ? size : 16) * 4), 4); }
+
 static void RemoveTrayIcon() {
     if (g_trayAdded) {
         Shell_NotifyIconW(NIM_DELETE, &g_nid);
@@ -5241,7 +5324,7 @@ static void AddTrayIcon(HWND hwnd) {
     g_nid.uID = kTrayId;
     g_nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     g_nid.uCallbackMessage = WM_APP_TRAY_CALLBACK;
-    g_nid.hIcon = MakeBadgeIcon(GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForWindow(hwnd)));
+    g_nid.hIcon = MakeBadgeIcon(GetSystemMetricsForDpi(SM_CXICON, GetDpiForWindow(hwnd)));
     if (!g_nid.hIcon) g_nid.hIcon = CopyIcon(LoadIconW(nullptr, IDI_SHIELD));
     wcscpy_s(g_nid.szTip, kTrayTip);
     Shell_NotifyIconW(NIM_DELETE, &g_nid);  // A copy left by a crashed run.
