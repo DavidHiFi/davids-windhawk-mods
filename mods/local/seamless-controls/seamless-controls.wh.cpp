@@ -2,7 +2,7 @@
 // @id              seamless-controls
 // @name            Seamless Controls
 // @description     Rounded, Mocha dark buttons, boxes, tabs and lists in every classic Windows window
-// @version         1.0.9
+// @version         1.0.10
 // @author          DavidHiFi, crazyboyybs
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -27002,6 +27002,67 @@ static void ListSelectFadeCleanup()
     }
 }
 
+// A side list row in the dock look the rest of the window uses: the
+// selected row is a small dock (dark fill, grey 2px edge), a hovered row
+// gets the blue to mauve edge.
+static bool DrawNavDockRow(HDC hdc, LPCRECT pRect, INT iStateId, UINT dpi,
+    bool pressed)
+{
+    EnsureD2DFactory();
+    if (!g_d2dFactory)
+        return false;
+    RECT r = *pRect;
+    const FLOAT w = (FLOAT)(r.right - r.left), h = (FLOAT)(r.bottom - r.top);
+    const FLOAT s = (FLOAT)dpi / 96.f;
+    const FLOAT edge = std::max(1.f, std::round(2.f * s));
+    const FLOAT insetX = std::round(2.f * s) + edge / 2.f;
+    const FLOAT insetY = std::round(1.f * s) + edge / 2.f;
+    const D2D1_RECT_F box = D2D1::RectF(insetX, insetY, w - insetX, h - insetY);
+    if (box.right <= box.left || box.bottom <= box.top)
+        return true;
+    const FLOAT radius = std::min(8.f * s, (box.bottom - box.top) / 2.f);
+    const D2D1_ROUNDED_RECT rr = D2D1::RoundedRect(box, radius, radius);
+    const bool selected = iStateId != 2;
+    const bool hot = iStateId == 2 || iStateId == 6;
+
+    Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> rt;
+    if (FAILED(CreateBoundD2DRenderTarget(hdc, &r, g_d2dFactory, &rt)))
+        return false;
+    rt->BeginDraw();
+    if (selected || pressed) {
+        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> fill;
+        if (SUCCEEDED(rt->CreateSolidColorBrush(D2D1::ColorF(
+                0x11 / 255.f, 0x11 / 255.f, 0x1B / 255.f,
+                (pressed ? 0x80 : 0x4B) / 255.f), &fill)))
+            rt->FillRoundedRectangle(rr, fill.Get());
+    }
+    if (hot) {
+        const D2D1_GRADIENT_STOP stops[2] = {
+            {0.f, D2D1::ColorF(0x89 / 255.f, 0xB4 / 255.f, 0xFA / 255.f, 0x64 / 255.f)},
+            {1.f, D2D1::ColorF(0xCB / 255.f, 0xA6 / 255.f, 0xF7 / 255.f, 0x64 / 255.f)},
+        };
+        Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> sc;
+        Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> gb;
+        if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, &sc)) &&
+            SUCCEEDED(rt->CreateLinearGradientBrush(
+                D2D1::LinearGradientBrushProperties(
+                    D2D1::Point2F(box.left, box.top),
+                    D2D1::Point2F(box.right, box.bottom)),
+                sc.Get(), &gb)))
+            rt->DrawRoundedRectangle(rr, gb.Get(), edge);
+    } else {
+        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> ring;
+        if (SUCCEEDED(rt->CreateSolidColorBrush(D2D1::ColorF(
+                0x58 / 255.f, 0x5B / 255.f, 0x70 / 255.f, 0x64 / 255.f), &ring)))
+            rt->DrawRoundedRectangle(rr, ring.Get(), edge);
+    }
+    if (rt->EndDraw() == (HRESULT)D2DERR_RECREATE_TARGET) {
+        rt.Reset();
+        CachedTlsRTRecreate();
+    }
+    return true;
+}
+
 static bool DrawRoundedItemBg(HDC hdc, LPCRECT pRect, INT iStateId, bool isTreeView,
     float progressOverride)
 {
@@ -27060,6 +27121,12 @@ static bool DrawRoundedItemBg(HDC hdc, LPCRECT pRect, INT iStateId, bool isTreeV
         return false;
 
     bool dark = IsWindowDarkMode(hdc);
+    if (isNavPaneTree && dark && progressOverride < 0.f &&
+        (iStateId == 2 || iStateId == 3 || iStateId == 5 || iStateId == 6)) {
+        UINT rowDpi = GetDpiForWindow(itemHwnd);
+        return DrawNavDockRow(hdc, pRect, iStateId,
+            rowDpi ? rowDpi : USER_DEFAULT_SCREEN_DPI, pressed);
+    }
     // Every list item and every TreeView item outside the nav pane gets the
     // Explorer Home tile style (GetWinUiItemFillColor): fill + 2px ring, the
     // ring accent when selected. Compact rows keep hover to the fill alone;
