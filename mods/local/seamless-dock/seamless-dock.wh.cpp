@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.15
+// @version         0.3.16
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,6 +26,12 @@ the edge of the screen across from your taskbar, so you get a clean bar on one
 side and a dock on the other, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
+
+## What's new in 0.3.16
+
+- The dock's glass no longer goes see-through after the PC has been on for hours. The blur
+  is set fresh whenever the dock, its preview or its menu shows, and every two minutes.
+- App tiles have a firmer dark fill, so nothing behind them shows through.
 
 ## What's new in 0.3.13
 
@@ -755,10 +761,18 @@ void SetAccent(HWND h, int state, DWORD abgr) {
     fn(h, &d);
 }
 
-// The same acrylic the clipboard and launcher popups use; our Direct2D tint colors it.
+// The house glass sheet: the same acrylic the clipboard and launcher popups use; our
+// Direct2D tint colors it. Windows drops the blur on windows that live for hours and
+// ignores the same accent sent again, so the accent goes off first, then on. Runs on
+// every show and every two minutes while the dock is up (0.3.16, owner: "I can see
+// straight through them").
 void ApplyBackdrop(HWND h) {
+    if (!h) return;
     BOOL dark = TRUE;
     DwmSetWindowAttribute(h, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+    int none_backdrop = 1;  // DWMSBT_NONE: never the system's light frost
+    DwmSetWindowAttribute(h, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &none_backdrop, sizeof(none_backdrop));
+    SetAccent(h, 0, 0);
     int corner = 2;  // DWMWCP_ROUND
     DwmSetWindowAttribute(h, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &corner, sizeof(corner));
     COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE: we draw our own edge
@@ -2168,7 +2182,7 @@ void PaintDock() {
     auto drawItem = [&](int i) {
         Item& it = g_items[i];
         D2D1_RECT_F r = PlateRect(i);
-        float fillA = Lerp(0.55f, 0.8f, std::max(it.hoverT, it.activeT));
+        float fillA = Lerp(0.72f, 0.86f, std::max(it.hoverT, it.activeT));
         UINT fill = it.activeT > 0.5f || it.hoverT > 0.5f ? kSurface1 : kSurface0;
         s.rt->FillRoundedRectangle(D2D1::RoundedRect(r, L.plateR, L.plateR), s.Solid(fill, fillA).Get());
         // Open apps carry the gradient outline the top bar's app buttons have; a pinned app
@@ -2328,6 +2342,7 @@ void ShowPopup(int i) {
     int W = (int)std::ceil(P.w * L.s), H = (int)std::ceil(P.h * L.s);
     POINT at = BesideDock(L.x[i] + L.plate / 2, W, H);
     SetWindowPos(g_pop, HWND_TOPMOST, at.x, at.y, W, H, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    ApplyBackdrop(g_pop);
     g_popSurf.Resize();
     for (auto& t : P.thumbs) {
         if (FAILED(DwmRegisterThumbnail(g_pop, t.src, &t.th))) {
@@ -2437,6 +2452,7 @@ void ShowMenu(float along) {
     int W = (int)std::ceil(M.w * s), H = (int)std::ceil(M.h * s);
     POINT at = BesideDock(along, W, H);
     SetWindowPos(g_menu, HWND_TOPMOST, at.x, at.y, W, H, SWP_SHOWWINDOW);
+    ApplyBackdrop(g_menu);
     g_menuSurf.Resize();
     SetForegroundWindow(g_menu);
     // When Windows refuses the focus, the menu never hears that it lost it. The
@@ -2853,6 +2869,7 @@ void CheckFullscreen() {
         ShowWindow(g_dock, SW_HIDE);
     } else {
         ShowWindow(g_dock, SW_SHOWNOACTIVATE);
+        ApplyBackdrop(g_dock);
         SetWindowPos(g_dock, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
     UpdateTitle();
@@ -3715,6 +3732,12 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 case kTimerFull: {
                     CheckFullscreen();
                     UpdateTitle();
+                    // Keep the glass alive on the always-up dock (see ApplyBackdrop).
+                    static ULONGLONG glassAt = GetTickCount64();
+                    if (!g_fullscreen && GetTickCount64() - glassAt > 120000) {
+                        glassAt = GetTickCount64();
+                        ApplyBackdrop(g_dock);
+                    }
                     if (MenuOpen()) {
                         HWND fg = GetForegroundWindow();
                         if (fg && fg != g_menu && fg != g_menuFgAtOpen) CloseMenu();
@@ -3797,8 +3820,12 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 SHAppBarMessage(ABM_WINDOWPOSCHANGED, &abd);
             }
             break;
+        case 0x031E /* WM_DWMCOMPOSITIONCHANGED */:
+            ApplyBackdrop(g_dock);
+            return 0;
         case WM_DPICHANGED:
         case WM_DISPLAYCHANGE:
+            ApplyBackdrop(g_dock);
             g_icons.clear();
             g_formats.clear();
             Relayout();
