@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.1.6
+// @version         2.2.0
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -27,6 +27,13 @@ It also brings acrylic, Mica and blur to Windows 11 apps, and keeps re-applying 
 Explorer folder windows that open hidden or late, so they never show up black.
 
 Built on Translucent Windows by Undisputed00x.
+
+## What's new in 2.2.0
+
+- Every entry in File Explorer's right-click and desktop menus now has an icon in the same
+  blue to mauve style: Open, Cut, Copy, Delete, Properties, Share, Send to and the entries
+  apps add (NanaZip, Notepad++, WinMerge, VS Code, Tailscale). Entries it does not know get
+  a puzzle piece. Turn it off with "Icons in right-click menus".
 
 ## What's new in 2.1.5
 
@@ -186,6 +193,11 @@ This is caused by default by the AccentBlur API.❕
   $description: >-
     Tint for right-click and title-bar menus, in hex ARGB. B4181825 matches
     the taskbar menus. Leave empty to use the window blur color.
+- MenuIcons: TRUE
+  $name: Icons in right-click menus
+  $description: >-
+    On, every entry in File Explorer's right-click and desktop menus gets a blue to mauve
+    icon. Off, entries keep the icons Windows and your apps gave them. Suggested: on.
 - RuledPrograms:
     - - target: "Notepad.exe"
         $name: 🔶 Process
@@ -850,6 +862,7 @@ struct Settings{
     BOOL FlyoutsEffects = FALSE;
     COLORREF MenuBlurClr = 0;
     BOOL HasMenuBlur = FALSE;
+    BOOL MenuIcons = FALSE;
     BOOL Unload = FALSE;
 
     enum BACKGROUNDTYPE
@@ -8215,14 +8228,415 @@ static VOID EndMenuRows(HWND hWnd, BOOL added)
     if (added) RemoveWindowSubclass(hWnd, MenuRowsSubclassProc, MENU_ROWS_SUBCLASS_ID);
     g_menuRowsDepth--;
 }
+// ---- Menu icons: blue to mauve glyphs on every entry of Explorer's right-click menus ----
+// Explorer's classic context and desktop menus get one Segoe Fluent glyph per entry, drawn
+// with the Mocha blue to mauve gradient on a clear background (no plate), drawn at 4x and
+// shrunk so the edges stay crisp. Known entries always get ours (stock and app icons are
+// replaced), unknown top-level entries get the puzzle piece, and unknown entries inside a
+// submenu keep their own icon (it says which app or drive it is) or get the submenu's
+// default. Owner-drawn rows are left alone, and so are submenus made of checks and radio
+// marks (View, Sort by), where the mark is the marker.
+// Each entry's own bitmap is put back right after the menu closes, before its owner cleans
+// up, so the shell only ever deletes bitmaps it made, and ours are deleted by us.
+#include <cwctype>
+namespace MenuIcons {
+
+constexpr UINT kSs = 4;   // supersampling
+
+struct Rule { PCWSTR text; WCHAR glyph; };
+
+// Exact matches on the cleaned text (lowercase, no &, no shortcut tail, no trailing ...).
+static const Rule kExact[] = {
+    {L"open", 0xED25}, {L"open file location", 0xED25}, {L"open folder location", 0xED25},
+    {L"open archive", 0xED25}, {L"open in new window", 0xE78B}, {L"open in new tab", 0xEC6C},
+    {L"nanazip", 0xF012}, {L"7-zip", 0xF012}, {L"compress to zip file", 0xF012},
+    {L"compressed (zipped) folder", 0xF012}, {L"add to archive", 0xF012},
+    {L"edit with notepad++", 0xE70B}, {L"rename", 0xE70F}, {L"edit", 0xE70F},
+    {L"winmerge", 0xEA3C}, {L"compare", 0xEA3C}, {L"select left", 0xEA3C},
+    {L"select middle", 0xEA3C}, {L"re-select left", 0xEA3C},
+    {L"send with tailscale", 0xE968}, {L"open with code", 0xE943}, {L"anycode", 0xE943},
+    {L"file name extensions", 0xE8EC}, {L"extract all", 0xE896}, {L"extract files", 0xE896},
+    {L"extract here", 0xE896}, {L"open with", 0xE7AC}, {L"choose another app", 0xE7AC},
+    {L"search the microsoft store", 0xE721}, {L"copy as path", 0xE71B},
+    {L"create shortcut", 0xE8A7}, {L"create shortcuts here", 0xE8A7},
+    {L"desktop (create shortcut)", 0xE8A7}, {L"share", 0xE72D},
+    {L"restore previous versions", 0xE81C}, {L"copy to folder", 0xE8B7},
+    {L"move to folder", 0xE8DE}, {L"send to", 0xE724}, {L"cut", 0xE8C6}, {L"copy", 0xE8C8},
+    {L"copy here", 0xE8C8}, {L"move here", 0xE8DE}, {L"paste", 0xE77F},
+    {L"paste shortcut", 0xE71B}, {L"delete", 0xE74D}, {L"empty recycle bin", 0xE74D},
+    {L"properties", 0xE946}, {L"new", 0xE710}, {L"view", 0xE890}, {L"sort by", 0xE8CB},
+    {L"group by", 0xF168}, {L"refresh", 0xE72C}, {L"restore", 0xE7A7},
+    {L"customize this folder", 0xE771}, {L"personalize", 0xE771},
+    {L"display settings", 0xE7F4}, {L"open in terminal", 0xE756},
+    {L"open powershell window here", 0xE756}, {L"open command window here", 0xE756},
+    {L"open linux shell here", 0xE756}, {L"run as administrator", 0xE7EF},
+    {L"take ownership", 0xE7EF}, {L"troubleshoot compatibility", 0xE90F},
+    {L"give access to", 0xE910}, {L"change owner", 0xE910},
+    {L"include in library", 0xE8F1}, {L"print", 0xE749}, {L"fax recipient", 0xE749},
+    {L"play", 0xE768}, {L"set as desktop background", 0xE91B}, {L"rotate right", 0xE7AD},
+    {L"rotate left", 0xE7AD}, {L"eject", 0xF847}, {L"format", 0xEDA2}, {L"mount", 0xEDA2},
+    {L"map network drive", 0xE8CE}, {L"disconnect network drive", 0xE8CD},
+    {L"disconnect", 0xE8CD}, {L"run with priority", 0xEC4A}, {L"reset permissions", 0xE72E},
+    {L"unblock", 0xE785}, {L"test archive", 0xE9D5}, {L"mail recipient", 0xE715},
+    {L"bluetooth device", 0xE702}, {L"documents", 0xE8A5}, {L"crc sha", 0xE928},
+    {L"select all", 0xE8B3}, {L"invert selection", 0xE8B3},
+};
+
+// Prefix matches, checked in order after the exact ones.
+static const Rule kPrefix[] = {
+    {L"what's locking this", 0xE785}, {L"bulk rename", 0xE8AC}, {L"compress to", 0xF012},
+    {L"add to", 0xF012}, {L"extract to", 0xE896}, {L"compress and email", 0xE715},
+    {L"pin to", 0xE718}, {L"unpin", 0xE77A}, {L"undo", 0xE7A7}, {L"redo", 0xE7A6},
+    {L"git bash", 0xE756}, {L"open git bash", 0xE756}, {L"git gui", 0xF003},
+    {L"open git gui", 0xF003}, {L"wiztree", 0xE9D9}, {L"compactgui", 0xE73F},
+    {L"scan with", 0xEA18}, {L"virustotal", 0xEA18}, {L"get file hash", 0xE928},
+    {L"firewall", 0xE83D}, {L"search", 0xE721}, {L"edit with", 0xE70F},
+    {L"edit in", 0xE70F}, {L"open with", 0xE7AC}, {L"send with tailscale", 0xE968},
+    {L"winmerge", 0xEA3C}, {L"compare", 0xEA3C},
+};
+
+// What an unknown, icon-less entry gets inside a submenu, by the parent entry's text.
+static const Rule kSubDefault[] = {
+    {L"send with tailscale", 0xE7F4}, {L"nanazip", 0xF012}, {L"7-zip", 0xF012},
+    {L"crc sha", 0xE928}, {L"send to", 0xE724}, {L"open with", 0xE7AC}, {L"winmerge", 0xEA3C},
+};
+
+// A top-level menu gets icons only when it is a shell file or desktop menu.
+static const PCWSTR kShellSign[] = {
+    L"properties", L"paste", L"refresh", L"copy", L"delete", L"cut", L"rename",
+};
+
+constexpr WCHAR kPuzzle = 0xEA86;
+
+static BOOL g_on = FALSE;
+static std::mutex g_cacheLock;
+static std::unordered_map<UINT, std::vector<UINT32>> g_cache;   // (glyph << 8 | px) -> pixels
+
+static std::mutex g_hooksLock;
+static std::vector<HHOOK> g_hooks;
+
+struct Swap {
+    HMENU menu; UINT id; BOOL byPos;
+    HBITMAP orig, origChk, origUnchk, mine;
+};
+struct Session {
+    INT depth = 0;
+    HHOOK hook = nullptr;
+    HMENU root = nullptr;
+    BOOL rootShell = FALSE;
+    UINT px = 16;
+    std::unordered_map<HMENU, std::wstring> parents;   // submenu -> cleaned parent text
+    std::vector<Swap> swaps;
+};
+static thread_local Session t_s;
+
+static std::wstring Clean(const WCHAR* s)
+{
+    std::wstring o;
+    for (const WCHAR* p = s; *p; p++) {
+        if (*p == L'\t') break;
+        if (*p == L'&') { if (p[1] == L'&') { o += L'&'; p++; } continue; }
+        if (*p == 0x2026) { o += L"..."; continue; }
+        o += (WCHAR)towlower(*p);
+    }
+    for (;;) {
+        while (!o.empty() && (o.back() == L' ' || o.back() == 0xA0)) o.pop_back();
+        if (o.size() >= 3 && o.compare(o.size() - 3, 3, L"...") == 0) { o.resize(o.size() - 3); continue; }
+        break;
+    }
+    size_t b = 0;
+    while (b < o.size() && o[b] == L' ') b++;
+    return o.substr(b);
+}
+
+static WCHAR Find(const Rule* r, size_t n, const std::wstring& t, BOOL prefix)
+{
+    for (size_t i = 0; i < n; i++) {
+        size_t l = wcslen(r[i].text);
+        if (prefix ? (t.size() >= l && t.compare(0, l, r[i].text) == 0) : (t == r[i].text))
+            return r[i].glyph;
+    }
+    return 0;
+}
+
+static WCHAR GlyphFor(const std::wstring& t)
+{
+    if (t.empty()) return 0;
+    if (WCHAR g = Find(kExact, ARRAYSIZE(kExact), t, FALSE)) return g;
+    return Find(kPrefix, ARRAYSIZE(kPrefix), t, TRUE);
+}
+
+// Premultiplied BGRA pixels of one glyph, top row first. Built once per glyph and size.
+static const std::vector<UINT32>* Pixels(WCHAR glyph, UINT px)
+{
+    UINT key = ((UINT)glyph << 8) | (px & 0xFF);
+    {
+        std::lock_guard<std::mutex> g(g_cacheLock);
+        auto it = g_cache.find(key);
+        if (it != g_cache.end()) return &it->second;
+    }
+    const INT big = (INT)(px * kSs);
+    BITMAPINFO bi = {};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = big;
+    bi.bmiHeader.biHeight = -big;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    void* bits = nullptr;
+    HDC dc = CreateCompatibleDC(nullptr);
+    HBITMAP bmp = dc ? CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
+    if (!bmp || !bits) {
+        if (bmp) DeleteObject(bmp);
+        if (dc) DeleteDC(dc);
+        return nullptr;
+    }
+    HGDIOBJ oldBmp = SelectObject(dc, bmp);
+    INT h = -(INT)lround(big * 0.84);
+    HFONT f = CreateFontW(h, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                          OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
+                          DEFAULT_PITCH, L"Segoe Fluent Icons");
+    WCHAR face[LF_FACESIZE] = {};
+    HGDIOBJ oldFont = f ? SelectObject(dc, f) : nullptr;
+    if (f && (!GetTextFaceW(dc, LF_FACESIZE, face) || _wcsicmp(face, L"Segoe Fluent Icons") != 0)) {
+        SelectObject(dc, oldFont);
+        DeleteObject(f);
+        f = CreateFontW(h, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
+                        DEFAULT_PITCH, L"Segoe MDL2 Assets");
+        oldFont = f ? SelectObject(dc, f) : nullptr;
+    }
+    memset(bits, 0, (size_t)big * big * 4);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(255, 255, 255));
+    RECT rc = {0, 0, big, big};
+    WCHAR s[2] = {glyph, 0};
+    DrawTextW(dc, s, 1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_NOCLIP);
+    GdiFlush();
+
+    std::vector<UINT32> out((size_t)px * px);
+    const UINT32* src = (const UINT32*)bits;
+    const double c0[3] = {0x89, 0xB4, 0xFA}, c1[3] = {0xCB, 0xA6, 0xF7};   // blue, mauve
+    for (UINT y = 0; y < px; y++) {
+        for (UINT x = 0; x < px; x++) {
+            UINT sum = 0;
+            for (UINT j = 0; j < kSs; j++)
+                for (UINT i = 0; i < kSs; i++)
+                    sum += (src[(y * kSs + j) * big + x * kSs + i] >> 8) & 0xFF;   // green = coverage
+            double a = sum / (255.0 * kSs * kSs);
+            double t = px > 1 ? (double)(x + y) / (2.0 * (px - 1)) : 0;
+            UINT32 p = 0;
+            if (a > 0) {
+                BYTE A = (BYTE)lround(a * 255);
+                BYTE R = (BYTE)lround((c0[0] + (c1[0] - c0[0]) * t) * a);
+                BYTE G = (BYTE)lround((c0[1] + (c1[1] - c0[1]) * t) * a);
+                BYTE B = (BYTE)lround((c0[2] + (c1[2] - c0[2]) * t) * a);
+                p = ((UINT32)A << 24) | ((UINT32)R << 16) | ((UINT32)G << 8) | B;
+            }
+            out[(size_t)y * px + x] = p;
+        }
+    }
+    if (oldFont) SelectObject(dc, oldFont);
+    if (f) DeleteObject(f);
+    SelectObject(dc, oldBmp);
+    DeleteObject(bmp);
+    DeleteDC(dc);
+
+    std::lock_guard<std::mutex> g(g_cacheLock);
+    return &(g_cache[key] = std::move(out));
+}
+
+static HBITMAP MakeBitmap(WCHAR glyph, UINT px)
+{
+    const std::vector<UINT32>* pix = Pixels(glyph, px);
+    if (!pix) return nullptr;
+    BITMAPINFO bi = {};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = (LONG)px;
+    bi.bmiHeader.biHeight = -(LONG)px;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    void* bits = nullptr;
+    HBITMAP bmp = CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (bmp && bits) memcpy(bits, pix->data(), pix->size() * 4);
+    return bmp;
+}
+
+static BOOL IsMine(HBITMAP b)
+{
+    for (auto& s : t_s.swaps) if (s.mine == b) return TRUE;
+    return FALSE;
+}
+
+static BOOL HasMarks(HMENU m)
+{
+    INT n = GetMenuItemCount(m);
+    for (INT i = 0; i < n; i++) {
+        MENUITEMINFOW mii = {sizeof(mii), MIIM_FTYPE | MIIM_STATE};
+        if (!GetMenuItemInfoW(m, i, TRUE, &mii) || (mii.fType & MFT_SEPARATOR)) continue;
+        if ((mii.fType & MFT_RADIOCHECK) || (mii.fState & MFS_CHECKED)) return TRUE;
+    }
+    return FALSE;
+}
+
+static VOID Apply(HMENU m, const std::wstring* parent)
+{
+    INT n = GetMenuItemCount(m);
+    if (n <= 0) return;
+    BOOL isRoot = (parent == nullptr);
+    if (!isRoot && HasMarks(m)) return;
+    WCHAR subDefault = 0;
+    if (!isRoot) {
+        subDefault = Find(kSubDefault, ARRAYSIZE(kSubDefault), *parent, FALSE);
+        if (!subDefault) subDefault = Find(kSubDefault, ARRAYSIZE(kSubDefault), *parent, TRUE);
+    }
+    for (INT i = 0; i < n; i++) {
+        WCHAR text[260] = {};
+        MENUITEMINFOW mii = {sizeof(mii)};
+        mii.fMask = MIIM_FTYPE | MIIM_STATE | MIIM_ID | MIIM_SUBMENU | MIIM_BITMAP |
+                    MIIM_CHECKMARKS | MIIM_STRING;
+        mii.dwTypeData = text;
+        mii.cch = ARRAYSIZE(text) - 1;
+        if (!GetMenuItemInfoW(m, i, TRUE, &mii)) continue;
+        if (mii.fType & (MFT_SEPARATOR | MFT_OWNERDRAW | MFT_BITMAP)) continue;
+        std::wstring t = Clean(text);
+        if (mii.hSubMenu) t_s.parents[mii.hSubMenu] = t;
+        if (t.empty() || IsMine(mii.hbmpItem)) continue;
+        HBITMAP cur = mii.hbmpItem;
+        // HBMMENU_SYSTEM .. HBMMENU_POPUP_MINIMIZE are window buttons drawn by Windows: leave them.
+        if (cur && cur != HBMMENU_CALLBACK && (ULONG_PTR)cur <= (ULONG_PTR)HBMMENU_POPUP_MINIMIZE) continue;
+        BOOL hasIcon = cur != nullptr || mii.hbmpUnchecked != nullptr;
+        WCHAR g = GlyphFor(t);
+        if (!g) {
+            if (isRoot) g = kPuzzle;
+            else if (hasIcon) continue;
+            else g = subDefault ? subDefault : kPuzzle;
+        }
+        HBITMAP mine = MakeBitmap(g, t_s.px);
+        if (!mine) continue;
+        MENUITEMINFOW set = {sizeof(set)};
+        set.fMask = MIIM_BITMAP | MIIM_CHECKMARKS;
+        set.hbmpItem = mine;
+        set.hbmpChecked = nullptr;
+        set.hbmpUnchecked = nullptr;
+        if (!SetMenuItemInfoW(m, i, TRUE, &set)) { DeleteObject(mine); continue; }
+        t_s.swaps.push_back({m, (UINT)i, TRUE, cur, mii.hbmpChecked, mii.hbmpUnchecked, mine});
+    }
+}
+
+static VOID OnInit(HMENU m)
+{
+    if (!m || !IsMenu(m)) return;
+    if (m == t_s.root) {
+        if (!t_s.rootShell) return;
+        Apply(m, nullptr);
+        return;
+    }
+    if (!t_s.rootShell) return;
+    auto it = t_s.parents.find(m);
+    if (it == t_s.parents.end()) return;
+    std::wstring parent = it->second;
+    Apply(m, &parent);
+}
+
+static LRESULT CALLBACK RetProc(INT code, WPARAM w, LPARAM l)
+{
+    if (code == HC_ACTION && l) {
+        auto* c = reinterpret_cast<CWPRETSTRUCT*>(l);
+        if (c->message == WM_INITMENUPOPUP && !HIWORD(c->lParam)) OnInit((HMENU)c->wParam);
+    }
+    return CallNextHookEx(nullptr, code, w, l);
+}
+
+static BOOL IsShellMenu(HMENU m)
+{
+    INT n = GetMenuItemCount(m);
+    for (INT i = 0; i < n; i++) {
+        WCHAR text[128] = {};
+        if (GetMenuStringW(m, i, text, ARRAYSIZE(text), MF_BYPOSITION) <= 0) continue;
+        std::wstring t = Clean(text);
+        for (PCWSTR s : kShellSign) if (t == s) return TRUE;
+    }
+    return FALSE;
+}
+
+static VOID Begin(HMENU m, HWND owner)
+{
+    if (!g_on || !m) return;
+    if (t_s.depth++ > 0) return;
+    t_s.root = m;
+    t_s.rootShell = IsShellMenu(m);
+    UINT dpi = owner ? GetDpiForWindow(owner) : 0;
+    if (!dpi) dpi = GetDpiForSystem();
+    INT px = GetSystemMetricsForDpi(SM_CXSMICON, dpi ? dpi : USER_DEFAULT_SCREEN_DPI);
+    t_s.px = (UINT)std::clamp(px, 12, 64);
+    if (!t_s.rootShell) return;
+    t_s.hook = SetWindowsHookExW(WH_CALLWNDPROCRET, RetProc, nullptr, GetCurrentThreadId());
+    if (t_s.hook) { std::lock_guard<std::mutex> g(g_hooksLock); g_hooks.push_back(t_s.hook); }
+}
+
+static VOID End()
+{
+    if (!g_on || t_s.depth <= 0) return;
+    if (--t_s.depth > 0) return;
+    if (t_s.hook) {
+        std::lock_guard<std::mutex> g(g_hooksLock);
+        auto it = std::find(g_hooks.begin(), g_hooks.end(), t_s.hook);
+        if (it != g_hooks.end()) { g_hooks.erase(it); UnhookWindowsHookEx(t_s.hook); }
+        t_s.hook = nullptr;
+    }
+    if (t_s.rootShell)
+        Wh_Log(L"menu icons: %u entries at %u px", (UINT)t_s.swaps.size(), t_s.px);
+    // Put each entry's own bitmap back, then delete ours.
+    for (auto& s : t_s.swaps) {
+        if (!IsMenu(s.menu)) continue;   // menu already gone: its owner cleaned up, leave it
+        INT n = GetMenuItemCount(s.menu), at = -1;
+        for (INT i = 0; i < n && at < 0; i++) {
+            MENUITEMINFOW mii = {sizeof(mii), MIIM_BITMAP};
+            if (GetMenuItemInfoW(s.menu, i, TRUE, &mii) && mii.hbmpItem == s.mine) at = i;
+        }
+        if (at >= 0) {
+            MENUITEMINFOW set = {sizeof(set)};
+            set.fMask = MIIM_BITMAP | MIIM_CHECKMARKS;
+            set.hbmpItem = s.orig;
+            set.hbmpChecked = s.origChk;
+            set.hbmpUnchecked = s.origUnchk;
+            SetMenuItemInfoW(s.menu, at, TRUE, &set);
+        }
+        if (GetObjectType(s.mine) == OBJ_BITMAP) DeleteObject(s.mine);
+    }
+    t_s.swaps.clear();
+    t_s.parents.clear();
+    t_s.root = nullptr;
+    t_s.rootShell = FALSE;
+}
+
+static VOID Uninit()
+{
+    std::lock_guard<std::mutex> g(g_hooksLock);
+    for (HHOOK h : g_hooks) UnhookWindowsHookEx(h);
+    g_hooks.clear();
+}
+
+}  // namespace MenuIcons
+// ---- end of menu icons ----
+
 static decltype(&TrackPopupMenuEx) TrackPopupMenuEx_orig = nullptr;
 static decltype(&TrackPopupMenu) TrackPopupMenu_orig = nullptr;
 BOOL WINAPI HookedTrackPopupMenuEx(HMENU hMenu, UINT uFlags, INT x, INT y, HWND hWnd, LPTPMPARAMS lptpm)
 {
+    const BOOL look = g_settings.FillBg && g_settings.FlyoutsEffects;
+    if (!look) {
+        MenuIcons::Begin(hMenu, hWnd);
+        BOOL ret = TrackPopupMenuEx_orig(hMenu, uFlags, x, y, hWnd, lptpm);
+        MenuIcons::End();
+        return ret;
+    }
     BOOL added = BeginMenuRows(hWnd);
     BeginMenuCbt();
     SeamlessMenuRoom::BeginTrack();
+    MenuIcons::Begin(hMenu, hWnd);
     BOOL ret = TrackPopupMenuEx_orig(hMenu, uFlags, x, y, hWnd, lptpm);
+    MenuIcons::End();
     SeamlessMenuRoom::EndTrack();
     EndMenuCbt();
     EndMenuRows(hWnd, added);
@@ -8230,10 +8644,19 @@ BOOL WINAPI HookedTrackPopupMenuEx(HMENU hMenu, UINT uFlags, INT x, INT y, HWND 
 }
 BOOL WINAPI HookedTrackPopupMenu(HMENU hMenu, UINT uFlags, INT x, INT y, INT nReserved, HWND hWnd, const RECT* prcRect)
 {
+    const BOOL look = g_settings.FillBg && g_settings.FlyoutsEffects;
+    if (!look) {
+        MenuIcons::Begin(hMenu, hWnd);
+        BOOL ret = TrackPopupMenu_orig(hMenu, uFlags, x, y, nReserved, hWnd, prcRect);
+        MenuIcons::End();
+        return ret;
+    }
     BOOL added = BeginMenuRows(hWnd);
     BeginMenuCbt();
     SeamlessMenuRoom::BeginTrack();
+    MenuIcons::Begin(hMenu, hWnd);
     BOOL ret = TrackPopupMenu_orig(hMenu, uFlags, x, y, nReserved, hWnd, prcRect);
+    MenuIcons::End();
     SeamlessMenuRoom::EndTrack();
     EndMenuCbt();
     EndMenuRows(hWnd, added);
@@ -8502,6 +8925,10 @@ VOID ApplyHooks()
     }
     if (g_settings.FillBg && g_settings.BgType != g_settings.Default)
         PaintGlassHooks();
+    if (MenuIcons::g_on && !TrackPopupMenuEx_orig) {
+        WindhawkUtils::SetFunctionHook(TrackPopupMenuEx, HookedTrackPopupMenuEx, &TrackPopupMenuEx_orig);
+        WindhawkUtils::SetFunctionHook(TrackPopupMenu, HookedTrackPopupMenu, &TrackPopupMenu_orig);
+    }
 }
 
 // Normalizes a path: flips slashes, trims trailing slashes, lowercases.
@@ -8680,6 +9107,8 @@ VOID LoadSettings()
     g_settings.AccentBlurBehindClr = GetColorSetting(WindhawkUtils::StringSetting(Wh_GetStringSetting(L"BackgroundEffects.AccentBlurBehind")));
 
     g_settings.FlyoutsEffects = Wh_GetIntSetting(L"FlyoutsEffects");
+    g_settings.MenuIcons = Wh_GetIntSetting(L"MenuIcons");
+    MenuIcons::g_on = g_settings.MenuIcons && g_InsideExplorerProc;
     {
         WindhawkUtils::StringSetting menuBlur(Wh_GetStringSetting(L"MenuBlur"));
         size_t len = menuBlur.get() ? wcslen(menuBlur.get()) : 0;
@@ -8916,6 +9345,7 @@ VOID Wh_ModUninit(VOID)
     WindhawkUtils::RemoveAllWindowSubclasses();
     SeamlessPicker::Uninit();
     SeamlessMenuRoom::Uninit();
+    MenuIcons::Uninit();
     if (g_explorerStylerNoBackgroundEffectAtom)
         DeleteAtom(g_explorerStylerNoBackgroundEffectAtom);
      

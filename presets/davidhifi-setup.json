@@ -1871,6 +1871,7 @@
         "BackgroundEffects.type": "acrylicblur",
         "FlyoutsEffects": 1,
         "MenuBlur": "A011111B",
+        "MenuIcons": 1,
         "RenderingMod.AccentColorControls": 1,
         "RenderingMod.SysColors": 1,
         "RenderingMod.ThemeBackground": 1,
