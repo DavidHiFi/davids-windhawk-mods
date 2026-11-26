@@ -2,7 +2,7 @@
 // @id              seamless-controls
 // @name            Seamless Controls
 // @description     Rounded, Mocha dark buttons, boxes, tabs and lists in every classic Windows window
-// @version         1.0.12
+// @version         1.0.13
 // @author          DavidHiFi, crazyboyybs
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -109,6 +109,11 @@ windows are left out, since they have no classic controls.
 
 Click the tray icon for the settings window, or change them here in Windhawk. Both show
 the same settings.
+
+## What's new in 1.0.13
+
+- The text and pictures inside File Explorer's delete boxes now sit on the glass too, with no
+  lighter patch behind them. The glass colour matches the title bar more closely.
 
 ## What's new in 1.0.12
 
@@ -9622,6 +9627,7 @@ static LRESULT ExcludedFixCtlColorResult(UINT msg, WPARAM wp, LPARAM lp,
 static void NavHoverFadeOutPaint(HWND tv, HTREEITEM hItem, HDC hdc);
 
 static INT GetRestyledComboEditButtonState(HWND hw, HDC hdc);
+static bool DelBox_GlassOwns(HWND hwnd);
 static COLORREF RestyledComboFillColor(HWND ctl, HDC hdc, bool dark, INT state);
 static bool IsAppOwnedCtlColorBrush(HBRUSH br);
 static HBRUSH TaskDialogBandCtlColor(HWND dialog, HWND control, HDC hdc);
@@ -9811,6 +9817,8 @@ static LRESULT WINAPI SendMessageW_hook(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
     // AeroWizard page's own WM_CTLCOLORDLG answer native even after its
     // class background brush is already correctly dark (WM_ERASEBKGND
     // resolves fine on its own).
+    if ((msg == WM_CTLCOLORSTATIC || msg == WM_CTLCOLORDLG) && DelBox_GlassOwns(hwnd))
+        return SendMessageW_orig(hwnd, msg, wp, lp);
     if (msg == WM_CTLCOLORSTATIC || msg == WM_CTLCOLORBTN ||
         msg == WM_CTLCOLORLISTBOX || msg == WM_CTLCOLORDLG) {
         HWND ctl = (HWND)lp;
@@ -65584,7 +65592,7 @@ static constexpr int kDelBoxYesId = 6;
 static constexpr int kDelBoxNoId = 2;
 static constexpr int kDelBoxAboutLinkId = 13586;
 // Accent tint (alpha, blue, green, red), measured against the title bar's fill.
-static constexpr unsigned int kDelBoxTint = 0xCC2E1E1Eu;
+static constexpr unsigned int kDelBoxTint = 0xCC332424u;
 
 struct DelBoxCtl {
     HWND hwnd = nullptr;
@@ -65615,11 +65623,25 @@ static void DelBoxMessages()
     }
 }
 
+// True while hwnd is a delete box wearing the dark glass: the SendMessageW hook leaves its
+// WM_CTLCOLORSTATIC/DLG to the box's own subclass, so the statics sit on the glass, not on
+// the hook's opaque dark plate.
+static bool DelBox_GlassOwns(HWND hwnd);
+
 static DelBoxState* DelBox_State(HWND hwnd)
 {
     std::lock_guard<std::mutex> lock(g_delBoxMutex);
     auto it = g_delBoxStates.find(hwnd);
     return it == g_delBoxStates.end() ? nullptr : &it->second;
+}
+
+static bool DelBox_GlassOwns(HWND hwnd)
+{
+    if (g_delBoxUnloading.load(std::memory_order_acquire))
+        return false;
+    std::lock_guard<std::mutex> lock(g_delBoxMutex);
+    auto it = g_delBoxStates.find(hwnd);
+    return it != g_delBoxStates.end() && it->second.glass;
 }
 
 static bool DelBox_Is(HWND hwnd)

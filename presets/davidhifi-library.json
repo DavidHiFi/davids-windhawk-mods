@@ -434,7 +434,7 @@
       "id": "icon-customizer",
       "name": "Icon Customizer",
       "version": "0.1",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "APPLICATION": "C:\\ProgramData\\Windhawk\\Engine\\ModsWritable\\mod-storage\\icon-customizer\\Catppuccin\\application.ico",
         "AUDIOFILES": "C:\\ProgramData\\Windhawk\\Engine\\ModsWritable\\mod-storage\\icon-customizer\\Catppuccin\\audiofiles.ico",
