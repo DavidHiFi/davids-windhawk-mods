@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.14
+// @version         0.6.15
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -36,7 +36,7 @@ its own settings window: open it from the tray icon or with Ctrl+I in Halo.
 - Typed shortcuts: type a short word and Halo swaps in the longer text.
 - Modules: turn each one on or off, change the words that call it, and change
   a module's own settings right in its card when you open it. Every module in
-  Flow Launcher's plugin store is listed too, off until you turn it on.
+  The community plugin store is listed too, off until you turn it on.
 - History, a preview of the selected file (F1), and Space to open it in the Peek
   mod once you have moved through the results.
 - A tray icon: click it for settings, right-click it to open Halo or restart its
@@ -94,7 +94,7 @@ Every key in that list can be changed on the Keys page of the settings.
 - Open keys are one list on the General page, each with its own switch. The
   old "Second open key" and its extra switch are gone.
 - Typed shortcuts can be made and changed on the Search page.
-- The Modules page lists every module in Flow Launcher's plugin store. Turn one
+- The Modules page lists every module in the community plugin store. Turn one
   on and save: Halo downloads it, plus Python or Node when it needs them.
 
 ## What's new in 0.6.6

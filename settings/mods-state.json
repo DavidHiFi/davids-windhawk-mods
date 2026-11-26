@@ -1162,11 +1162,11 @@
     "version": "1.0.0"
   },
   "local@halo-launcher": {
-    "disabled": false,
+    "disabled": true,
     "include": "windhawk-mod.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "0.6.14"
+    "version": "0.6.15"
   },
   "local@network-speedtest-plus": {
     "disabled": false,
