@@ -71,25 +71,6 @@
       }
     },
     {
-      "id": "brave-acrylic",
-      "name": "Brave Acrylic",
-      "version": "4.0",
-      "enabled": false,
-      "settings": {
-        "allowBraveSymbolServerFallback": 0,
-        "blurMenus": 1,
-        "blurPopups": 1,
-        "blurSuggestions": 0,
-        "hideNativeCaptionButtons": 0,
-        "popupOpacity": 62,
-        "transparentAddressBar": 1,
-        "transparentBackground": 1,
-        "transparentPageBackground": 1,
-        "transparentToolbar": 1,
-        "useOnlineSymbolCache": 1
-      }
-    },
-    {
       "id": "chrome-context-menu-items",
       "name": "Chrome Context Menu Items",
       "version": "1.1.0",
@@ -397,13 +378,6 @@
           "ShadowOfMordor.exe"
         ]
       }
-    },
-    {
-      "id": "edge-window-tab-manager-block",
-      "name": "Prevent Edge from lagging your Taskbar process",
-      "version": "1.0",
-      "enabled": true,
-      "settings": {}
     },
     {
       "id": "explorer-context-menu-custom-items",
@@ -866,13 +840,6 @@
       }
     },
     {
-      "id": "mspaint-dark",
-      "name": "Dark Paint",
-      "version": "1.0.1",
-      "enabled": true,
-      "settings": {}
-    },
-    {
       "id": "never-auto-expand-explorer-tree-items",
       "name": "Never Auto-Expand Explorer Tree Items",
       "version": "1.1.1",
@@ -889,13 +856,6 @@
           "Ableton*.exe"
         ]
       }
-    },
-    {
-      "id": "notepad-dark-mode",
-      "name": "Dark Mode for Notepad",
-      "version": "1.0",
-      "enabled": true,
-      "settings": {}
     },
     {
       "id": "notifications-placement",
@@ -1147,6 +1107,7 @@
         "bloatwareItems.removeMicrosoft365Copilot": 1,
         "bloatwareItems.removeOneDrive": 1,
         "customItems[0]": "Troubleshoot compatibility",
+        "customItems[1]": "Send with Tailscale...",
         "extensionFiltering.enableExtensionFiltering": 0,
         "extensionFiltering.enableWinRARFiltering": 0,
         "extensionFiltering.notepadExtensions[0]": ".txt",
@@ -2050,13 +2011,6 @@
         "window_switch.duration_ms": 200,
         "window_switch.switch_animation": 1
       }
-    },
-    {
-      "id": "windows-sandbox-close-no-confirm",
-      "name": "Windows Sandbox: close without confirmation",
-      "version": "1.1",
-      "enabled": true,
-      "settings": {}
     },
     {
       "id": "xs-nomsedgewebview4copilot",

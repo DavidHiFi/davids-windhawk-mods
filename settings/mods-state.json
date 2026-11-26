@@ -641,7 +641,7 @@
     "include": "windhawk-ui.exe|windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.2.34"
+    "version": "2.2.35"
   },
   "local@window-manager": {
     "disabled": true,

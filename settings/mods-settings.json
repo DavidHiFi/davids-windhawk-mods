@@ -2728,6 +2728,7 @@
   },
   "local@windhawk-enhanced-styler": {
     "accentColor": "#89b4fa",
+    "animationSpeed": "global",
     "backgroundColor": "#1e1e2e",
     "backgroundOpacity": 75,
     "badgeText": "Enhanced",
@@ -2737,6 +2738,7 @@
     "centerTitle": 1,
     "controlColor": "#313244",
     "cornerRadius": 16,
+    "dialogAnimation": 1,
     "enhancedBadge": 1,
     "fontFamily": "FiraCode Nerd Font",
     "fontWeight": 500,
@@ -2750,7 +2752,8 @@
     "selectionOpacity": 40,
     "textColor": "#cdd6f4",
     "titleBarAcrylic": 1,
-    "titleBarColor": "#292b3d"
+    "titleBarColor": "#292b3d",
+    "workshopButton": 1
   },
   "local@window-manager": {
     "explorerTitleStripDrag": 1,
