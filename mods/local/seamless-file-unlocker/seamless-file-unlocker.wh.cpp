@@ -2,7 +2,7 @@
 // @id              seamless-file-unlocker
 // @name            Seamless File Unlocker
 // @description     Find out what is holding a file or folder, then let go of it, move it or delete it
-// @version         1.0.1
+// @version         1.0.2
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -571,14 +571,32 @@ static bool IsDir(const std::wstring& p) {
 static bool Exists(const std::wstring& p) { return GetFileAttributesW(p.c_str()) != INVALID_FILE_ATTRIBUTES; }
 
 // Programs with a file or folder open, found by looking at every open handle on the machine.
+// A short trail of what the last scans did, written into the test state file.
+static std::mutex g_dbgMu;
+static std::wstring g_dbgText;
+static void DbgAdd(const std::wstring& s) {
+    std::lock_guard<std::mutex> g(g_dbgMu);
+    g_dbgText += s + L"\n";
+    if (g_dbgText.size() > 6000) g_dbgText.erase(0, g_dbgText.size() - 6000);
+}
+static std::wstring DbgGet() {
+    std::lock_guard<std::mutex> g(g_dbgMu);
+    return g_dbgText;
+}
+
 static void HandlePass(const std::vector<std::wstring>& keys, const DevMap& dm, Reader& rd, const std::atomic<bool>& cancel,
-                       Found& out, ULONGLONG deadline, int cap, const std::set<DWORD>* only = nullptr) {
+                       Found& out, ULONGLONG deadline, int cap, const std::set<DWORD>* only = nullptr, DWORD readMs = 150) {
     const Nt& nt = GetNt();
+    ULONGLONG t0 = GetTickCount64();
+    int nDupFail = 0, nReadFail = 0, nNotDisk = 0, nTimeout = 0, nNoMap = 0, nHandles = 0, nPids = 0, nDenied = 0;
+    std::wstring why = L"done";
+    std::wstring sample;
     std::vector<BYTE> snap;
     int fileType = FileTypeIndex(snap, nt);
     if (fileType < 0) {
         out.failed = true;
         out.error = L"Couldn't read the list of open files from Windows.";
+        DbgAdd(L"pass " + std::wstring(only ? L"targeted" : L"full") + L": no file type index");
         return;
     }
     auto* hdr = (const ULONG_PTR*)snap.data();
@@ -594,44 +612,72 @@ static void HandlePass(const std::vector<std::wstring>& keys, const DevMap& dm, 
     std::unordered_map<PVOID, int> cache;
     std::vector<std::wstring> matched;
     ProcNames names;
+    auto report = [&] {
+        std::wstring s = std::wstring(L"pass ") + (only ? L"targeted" : L"full") + L" " + why + L": " +
+                         std::to_wstring(GetTickCount64() - t0) + L" ms, pids " + std::to_wstring(nPids) + L"/" +
+                         std::to_wstring(byPid.size()) + L", handles " + std::to_wstring(nHandles) + L", denied " +
+                         std::to_wstring(nDenied) + L", dupFail " + std::to_wstring(nDupFail) + L", timeouts " +
+                         std::to_wstring(nTimeout) + L", readFail " + std::to_wstring(nReadFail) + L", notDisk " +
+                         std::to_wstring(nNotDisk) + L", noMap " + std::to_wstring(nNoMap) + L", rows " +
+                         std::to_wstring(out.rows.size()) + L", type " + std::to_wstring(fileType) + L", key " +
+                         (keys.empty() ? L"" : keys[0]);
+        if (only) s += L" | " + sample;
+        DbgAdd(s);
+    };
     for (auto& [pid, list] : byPid) {
         if (only && !only->count((DWORD)pid)) continue;
         g_prog.done++;
-        if (cancel) return;
+        if (cancel) {
+            why = L"cancelled";
+            report();
+            return;
+        }
         if (GetTickCount64() > deadline || (int)out.rows.size() >= cap || rd.timeouts > 300) {
             out.partial = true;
+            why = GetTickCount64() > deadline ? L"out of time" : (rd.timeouts > 300 ? L"too many timeouts" : L"row cap");
+            report();
             return;
         }
         HANDLE hp = OpenProcess(PROCESS_DUP_HANDLE, FALSE, (DWORD)pid);
         if (!hp) {
+            nDenied++;
             Lock probe;
             probe.pid = (DWORD)pid;
             FillProc(probe, names);
             if (probe.safety < 2 && !only) out.denied++;
             continue;
         }
+        nPids++;
         for (const HandleEntry* e : list) {
             int m = -1;
+            nHandles++;
             auto c = cache.find(e->Object);
             if (c != cache.end()) {
                 m = c->second;
             } else {
                 HANDLE dup = nullptr;
-                if (!DuplicateHandle(hp, (HANDLE)e->Handle, GetCurrentProcess(), &dup, 0, FALSE, DUPLICATE_SAME_ACCESS))
+                if (!DuplicateHandle(hp, (HANDLE)e->Handle, GetCurrentProcess(), &dup, 0, FALSE, DUPLICATE_SAME_ACCESS)) {
+                    nDupFail++;
                     continue;
+                }
                 std::wstring dev;
                 bool disk = false, timedOut = false;
-                bool ok = rd.Read(dup, dev, disk, timedOut);
+                bool ok = rd.Read(dup, dev, disk, timedOut, readMs);
                 if (timedOut) CloseLater(dup);
                 else CloseHandle(dup);
+                if (timedOut) nTimeout++;
+                else if (!disk) nNotDisk++;
+                else if (!ok) nReadFail++;
+                if (only && ok && sample.size() < 400) sample += dev.substr(dev.size() > 60 ? dev.size() - 60 : 0) + L" ; ";
                 if (ok && disk) {
                     std::wstring dos = dm.ToDos(dev);
+                    if (dos.empty()) nNoMap++;
                     if (!dos.empty() && Under(Lower(dos), keys)) {
                         m = (int)matched.size();
                         matched.push_back(dos);
                     }
                 }
-                cache[e->Object] = m;
+                if (!timedOut) cache[e->Object] = m;  // a handle that never answered is asked again, not remembered as "no"
             }
             if (m >= 0) {
                 Lock L;
@@ -644,6 +690,7 @@ static void HandlePass(const std::vector<std::wstring>& keys, const DevMap& dm, 
         }
         CloseHandle(hp);
     }
+    report();
 }
 
 // Programs that run from, or have loaded or mapped, the item.
@@ -767,7 +814,7 @@ static Found Find(const std::vector<std::wstring>& targets, bool showSystem, con
         if (!bare.empty() && !cancel) {
             Found more;
             Reader rd2;
-            HandlePass(keys, dm, rd2, cancel, more, GetTickCount64() + 10000, 2000, &bare);
+            HandlePass(keys, dm, rd2, cancel, more, GetTickCount64() + 15000, 2000, &bare, 1500);
             if (!more.failed && !more.rows.empty()) {
                 std::set<DWORD> got;
                 for (const Lock& L : more.rows) got.insert(L.pid);
@@ -890,6 +937,22 @@ static std::wstring FreeDll(const Lock& L, Ctx&) {
 
 static std::wstring UnlockOne(const Lock& L, Ctx& cx) {
     if (L.safety >= 2) return L"Windows needs this one. It is never touched.";
+    if (L.kind == kOpen && !L.handle && !L.path.empty()) {
+        // The list only knew the program. Look inside just that program again, patiently, and let go of what is found.
+        Found f;
+        std::set<DWORD> only{L.pid};
+        std::atomic<bool> never{false};
+        HandlePass({Norm(L.path)}, cx.dm, cx.rd, never, f, GetTickCount64() + 20000, 2000, &only, 1500);
+        std::wstring err;
+        int n = 0;
+        for (const Lock& h : f.rows) {
+            if (!h.handle) continue;
+            n++;
+            std::wstring e = CloseHandleIn(h, cx);
+            if (!e.empty() && err.empty()) err = e;
+        }
+        if (n) return err;
+    }
     if (L.kind == kOpen && L.handle) return CloseHandleIn(L, cx);
     if (L.kind == kDll) return FreeDll(L, cx);
     if (L.kind == kExe) return L"This is the program itself. Close the program to free it.";
@@ -5989,6 +6052,15 @@ static void Fu_WriteState(SetWindow&) {
                      L"\nrows=" + std::to_wstring(g_pane->rows.size()) + L"\ndenied=" + std::to_wstring(g_pane->denied) +
                      L"\nelevated=" + (fu::g_elevated ? L"1" : L"0") + L"\nasking=" + (g_pane->asking ? L"1" : L"0") +
                      L"\nstatus=" + g_pane->status + L"\n";
+    {
+        std::wstring d = fu::DbgGet();
+        for (size_t p = 0; p < d.size();) {
+            size_t q = d.find(L'\n', p);
+            if (q == std::wstring::npos) q = d.size();
+            if (q > p) t += L"dbg=" + d.substr(p, q - p) + L"\n";
+            p = q + 1;
+        }
+    }
     for (const auto& k : g_pane->rows)
         t += std::to_wstring(k.pid) + L"|" + std::to_wstring(k.kind) + L"|" + k.name + L"|" + k.path + L"\n";
     HANDLE h = CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
