@@ -1,11 +1,11 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T19:02:00+08:00",
+  "generatedAt": "2026-11-26T19:02:26+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 133,
-    "enabled": 127,
+    "enabled": 124,
     "local": 62
   },
   "mods": [
@@ -492,7 +492,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/mocha-app-icons/mocha-app-icons.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "local@network-speedtest-plus",
@@ -726,7 +726,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/remove-shortcut-arrows/remove-shortcut-arrows.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "rounded-selection-rectangle",
@@ -1546,7 +1546,7 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/uwp-assets-redirect",
       "source": "mods/local/uwp-assets-redirect-plus/uwp-assets-redirect-plus.wh.cpp",
-      "enabled": true,
+      "enabled": false,
       "category": "Windows and menus"
     },
     {
