@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.17
+// @version         0.6.18
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1209,6 +1209,12 @@ void ApplyBackdrop() {
         bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
         bb.fEnable = TRUE;
         bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+        if (setComposition) {  // Off first, then on: DWM can drop the blur of a window that lives a long time and ignores the
+        // same values sent again, which left it see-through (2026-11-26). Switching the accent off resets it.
+            HaloAccentPolicy off{0, 0, 0, 0};
+            HaloCompositionData offData{19, &off, sizeof(off)};
+            setComposition(g.wnd, &offData);
+        }
         DwmEnableBlurBehindWindow(g.wnd, &bb);
         if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
         if (setComposition) {

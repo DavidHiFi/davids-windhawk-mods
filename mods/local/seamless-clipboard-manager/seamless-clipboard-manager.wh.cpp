@@ -2,7 +2,7 @@
 // @id              seamless-clipboard-manager
 // @name            Seamless Clipboard Manager
 // @description     Keeps everything you copy, text and images, in a searchable list you open with Win+V
-// @version         1.4.8
+// @version         1.4.9
 // @author          DavidHiFi, Scott Brogden, Ditto contributors
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -4813,6 +4813,9 @@ void ApplyBackdrop(HWND h) {
     DwmExtendFrameIntoClientArea(h, &m);
     DwmSetWindowAttribute(h, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &type, sizeof(type));
     if (acrylic) {
+        // Off first, then on: DWM can drop the blur of a window that lives a long time and ignores the
+        // same values sent again, which left it see-through (2026-11-26). Switching the accent off resets it.
+        SetAccent(h, 0, 0);
         // Makes DWM use the window's alpha, so the blur shows through the tint.
         DWM_BLURBEHIND bb{};
         bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
@@ -7282,6 +7285,9 @@ LRESULT CALLBACK ListProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         case WM_WINDOWPOSCHANGED:
+            // Every show re-sets the glass, so a dropped blur never stays (ApplyBackdrop's own
+            // frame change comes back here without SWP_SHOWWINDOW, so this runs once).
+            if (((WINDOWPOS*)lp)->flags & SWP_SHOWWINDOW) ApplyBackdrop(hwnd);
             if (PreviewVisible()) PlacePreview();
             break;
         case WM_SIZE:

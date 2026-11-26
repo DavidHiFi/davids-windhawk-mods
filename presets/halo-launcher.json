@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@halo-launcher",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "backgroundOpacity": 40,
         "blur": 1,
