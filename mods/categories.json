@@ -23,6 +23,7 @@
         "local@halo-launcher": "Windows and menus",
         "local@keyboard-shortcut-actions-plus": "Tools",
         "local@logitech-battery-tray": "Taskbar",
+        "local@mocha-app-icons": "Windows and menus",
         "local@network-speedtest-plus": "Taskbar",
         "local@notification-center-styler-plus": "Windows and menus",
         "local@parallax-wallpaper": "Windows and menus",
@@ -30,6 +31,7 @@
         "local@pointer-afterimage-plus": "Tools",
         "local@power-options-button-plus": "Taskbar",
         "local@recycle-bin-tray-plus": "Taskbar",
+        "local@remove-shortcut-arrows": "Explorer",
         "local@seamless-autoclicker": "Tools",
         "local@seamless-autoscroll": "Tools",
         "local@seamless-borders": "Windows and menus",
@@ -74,6 +76,7 @@
         "local@simple-window-switcher-plus": "Windows and menus",
         "local@startup-control": "Tools",
         "local@theme-tool-plus": "Windows and menus",
+        "local@uwp-assets-redirect-plus": "Windows and menus",
         "local@windhawk-enhanced-styler": "Windows and menus",
         "local@wintips-osd-plus": "Windows and menus",
         "local@zoomit": "Tools"
