@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.33
+// @version         2.2.34
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -270,6 +270,86 @@ The original window frame work was adapted from [Titlebar For Everyone](https://
 #include <cstdint>
 #include <cstdlib>
 #include <cwchar>
+
+// Crisp icons (2026-11-26): tray icons are drawn at 4x the size the taskbar shows them and shrunk
+// here with a box filter, so curves and glyph edges are smooth instead of stretched and stepped.
+// The result carries straight alpha, which is what Windows expects in an icon.
+static HICON Crisp_ShrinkIcon(HICON big, int factor) {
+    if (!big || factor <= 1) return big;
+    ICONINFO ii{};
+    if (!GetIconInfo(big, &ii)) return big;
+    HICON out = nullptr;
+    BITMAP bm{};
+    if (ii.hbmColor && GetObjectW(ii.hbmColor, sizeof(bm), &bm) && bm.bmWidth == bm.bmHeight &&
+        bm.bmWidth >= factor && bm.bmWidth % factor == 0) {
+        const int src = bm.bmWidth, n = src / factor;
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+        bi.bmiHeader.biWidth = src;
+        bi.bmiHeader.biHeight = -src;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        unsigned int* in = new unsigned int[(size_t)src * src];
+        HDC screen = GetDC(nullptr);
+        if (GetDIBits(screen, ii.hbmColor, 0, src, in, &bi, DIB_RGB_COLORS) == src) {
+            bool premul = true, anyAlpha = false;
+            for (size_t i = 0; i < (size_t)src * src; i++) {
+                unsigned int p = in[i], a = p >> 24;
+                if (a) anyAlpha = true;
+                if (((p >> 16) & 0xFF) > a || ((p >> 8) & 0xFF) > a || (p & 0xFF) > a) premul = false;
+            }
+            void* bits = nullptr;
+            bi.bmiHeader.biWidth = n;
+            bi.bmiHeader.biHeight = -n;
+            HBITMAP color = anyAlpha ? CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
+            if (color && bits) {
+                unsigned int* px = (unsigned int*)bits;
+                const unsigned int cnt = (unsigned int)(factor * factor);
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++) {
+                        unsigned int sa = 0, sr = 0, sg = 0, sb = 0;
+                        for (int dy = 0; dy < factor; dy++)
+                            for (int dx = 0; dx < factor; dx++) {
+                                unsigned int p = in[(size_t)(y * factor + dy) * src + x * factor + dx], a = p >> 24;
+                                unsigned int r = (p >> 16) & 0xFF, g = (p >> 8) & 0xFF, b = p & 0xFF;
+                                if (!premul) {
+                                    r = (r * a + 127) / 255;
+                                    g = (g * a + 127) / 255;
+                                    b = (b * a + 127) / 255;
+                                }
+                                sa += a; sr += r; sg += g; sb += b;
+                            }
+                        unsigned int a = (sa + cnt / 2) / cnt, r = 0, g = 0, b = 0;
+                        if (a && sa) {
+                            r = (sr * 255 + sa / 2) / sa; if (r > 255) r = 255;
+                            g = (sg * 255 + sa / 2) / sa; if (g > 255) g = 255;
+                            b = (sb * 255 + sa / 2) / sa; if (b > 255) b = 255;
+                        }
+                        px[(size_t)y * n + x] = a ? ((a << 24) | (r << 16) | (g << 8) | b) : 0;
+                    }
+                // A zero mask: with 32-bit colour Windows draws from the alpha channel.
+                unsigned char* maskBits = new unsigned char[(size_t)((n + 15) / 16) * 2 * n]();
+                HBITMAP mask = CreateBitmap(n, n, 1, 1, maskBits);
+                delete[] maskBits;
+                if (mask) {
+                    ICONINFO o{TRUE, 0, 0, mask, color};
+                    out = CreateIconIndirect(&o);
+                    DeleteObject(mask);
+                }
+            }
+            if (color) DeleteObject(color);
+        }
+        ReleaseDC(nullptr, screen);
+        delete[] in;
+    }
+    if (ii.hbmColor) DeleteObject(ii.hbmColor);
+    if (ii.hbmMask) DeleteObject(ii.hbmMask);
+    if (!out) return big;
+    DestroyIcon(big);
+    return out;
+}
+
 
 // The local debugging port for reaching the interface's own WebView; not a
 // user setting, so it stays out of the interface's settings page entirely.
@@ -2056,7 +2136,7 @@ static std::atomic_int g_themedTray{-1};  // -1 stock, 0 hawk, 1 hawk with updat
 static HICON g_stockTrayIcon;  // copy of the last icon Windhawk itself set, to put back
 static constexpr wchar_t kTrayAlertProp[] = L"WhEnhStylerTrayAlert";
 
-static HICON MakeTrayIcon(int size, bool badge) {
+static HICON MakeTrayIcon_Big(int size, bool badge) {
     static constexpr UINT64 glyph[] = {
     0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL,
     0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL, 0x0000000000000000ULL,
@@ -2134,10 +2214,13 @@ static HICON MakeTrayIcon(int size, bool badge) {
     return icon;
 }
 
+// Drawn at 4x and shrunk, so the icon is smooth at the size it is shown.
+static HICON MakeTrayIcon(int size, bool badge) { return Crisp_ShrinkIcon(MakeTrayIcon_Big((size > 0 ? size : 16) * 4, badge), 4); }
+
 static HICON MochaTrayIcon(HWND owner, bool badge) {
     HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
     UINT dpi = GetDpiForWindow(taskbar ? taskbar : owner);
-    int size = GetSystemMetricsForDpi(SM_CXSMICON, dpi ? dpi : 96);
+    int size = GetSystemMetricsForDpi(SM_CXICON, dpi ? dpi : 96);
     // Negative cache keys keep freshly drawn tray icons separate from file
     // icons; the badged one sits 1000 further down.
     int key = -size - (badge ? 1000 : 0);
@@ -2205,7 +2288,7 @@ static void RefreshTrayIcon(HWND owner, bool enabled) {
         if (!stock) {
             HWND taskbar = FindWindowW(L"Shell_TrayWnd", nullptr);
             UINT dpi = GetDpiForWindow(taskbar ? taskbar : owner);
-            int size = GetSystemMetricsForDpi(SM_CXSMICON, dpi ? dpi : 96);
+            int size = GetSystemMetricsForDpi(SM_CXICON, dpi ? dpi : 96);
             LoadIconWithScaleDown(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(0x80), size, size, &stock);
         }
         data.hIcon = stock;

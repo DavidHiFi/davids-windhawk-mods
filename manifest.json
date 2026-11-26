@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T11:25:36+08:00",
+  "generatedAt": "2026-11-26T11:29:02+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 167,
@@ -1907,7 +1907,7 @@
       "name": "Windhawk Enhanced Styler",
       "author": "DavidHiFi, Ingan121",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.2.33",
+      "version": "2.2.34",
       "license": "MIT",
       "origin": "local",
       "upstream": "",
