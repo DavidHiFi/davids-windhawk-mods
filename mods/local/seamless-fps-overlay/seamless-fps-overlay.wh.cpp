@@ -2,7 +2,7 @@
 // @id              seamless-fps-overlay
 // @name            Seamless FPS Overlay
 // @description     FPS, frame times and PC temperatures over any game, with nothing put into the game
-// @version         1.1.1
+// @version         1.1.2
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -23,6 +23,12 @@ moving pictures included, and nothing is put into the game: Windows itself
 reports each frame, so it is safe with anti-cheat and works over Plutonium.
 
 ![Seamless FPS Overlay preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-fps-overlay.png)
+
+## What's new in 1.1.2
+Long names no longer run into their numbers. Each box now grows to fit what
+it shows, and it never shrinks back and forth while you play.
+Memory speed and the graphics driver version show again when Seamless
+Taskbar is also running.
 
 ## What's new in 1.1.1
 The overlay now starts every time. Before, it could quietly fail to come back
@@ -3007,6 +3013,9 @@ static int PalIndex(const std::wstring& v, int fallback) {
 
 // The Benchmark layout's blocks, in their default order.
 enum Block { kBlkName = 0, kBlkFrames, kBlkInfo, kBlkCores, kBlkMemory, kBlkCard, kBlkVram, kBlkProcessor, kBlkCount };
+// Widest content each block has needed since the settings last changed. It only grows, so the
+// panel does not twitch when a number gains a digit.
+static float g_blkNeed[kBlkCount] = {};
 static const wchar_t* const kBlockKey[kBlkCount] = {L"Name",   L"Frames", L"Info", L"Cores",
                                                     L"Memory", L"Card",   L"Vram", L"Processor"};
 
@@ -3257,6 +3266,7 @@ static void LoadSettings() {
     s.gpuGaugeMax = std::clamp(IntSet(L"gpuGaugeMax", 3000), 500, 5000);
     s.cpuGaugeMax = std::clamp(IntSet(L"cpuGaugeMax", 6000), 1000, 8000);
     g_set = std::move(s);
+    for (float& n : g_blkNeed) n = 0;
 }
 
 static std::wstring Label(const wchar_t* key) {
@@ -4430,6 +4440,7 @@ struct Bench {
     int blk = 0;
     float u = 1, P = 7, W = 150;  // one design unit, the inner padding and the content width
     int slot = 0;                 // next smoothing slot in this block
+    float need = 0;               // widest row seen, so a long name never runs into its number
 };
 
 static Op& BOp(Bench& b, int shape, float x, float y, float w, float h) {
@@ -4454,13 +4465,14 @@ static void BText(Bench& b, int font, int brush, float x, float y, const std::ws
 }
 
 // A number and its unit, right-aligned at `right`, top at `y`.
-static void BValue(Bench& b, float right, float y, const std::wstring& value, const std::wstring& unit, bool warn) {
+static float BValue(Bench& b, float right, float y, const std::wstring& value, const std::wstring& unit, bool warn) {
     const float u = b.u;
     const float uw = unit.empty() ? 0 : TextW(kFontUnit, unit) + 3 * u;
     const float vw = TextW(kFontValue, value);
     BText(b, kFontValue, kBrushValue, right - uw - vw, y, value, warn);
     if (!unit.empty())
         BText(b, kFontUnit, kBrushDim, right - uw + 3 * u, y + g_lineH[kFontValue] - g_lineH[kFontUnit] - 1 * u, unit);
+    return uw + vw;
 }
 
 // One reading: an optional picture, its name, and the number at the right edge. Returns its height.
@@ -4479,7 +4491,8 @@ static float BRow(Bench& b, float y, int icon, float v, float v2, const std::wst
         lx = b.P + iconSz + 8 * u;
     }
     BText(b, kFontSmall, kBrushLabel, lx, y + (rowH - g_lineH[kFontSmall]) / 2, label);
-    BValue(b, b.P + b.W, y + (rowH - g_lineH[kFontValue]) / 2, value, unit, warn);
+    const float vw = BValue(b, b.P + b.W, y + (rowH - g_lineH[kFontValue]) / 2, value, unit, warn);
+    b.need = std::max(b.need, (lx - b.P) + TextW(kFontSmall, label) + 10 * u + vw);
     return rowH;
 }
 
@@ -4811,8 +4824,16 @@ static Layout BuildBench(const Readings& r, float px) {
     for (int c = 0; c < 2; c++) {
         if (cols[c].empty()) continue;
         float colW = 0;
-        for (int i : cols[c])
-            colW = std::max(colW, (design[c] + 2 * P) * std::clamp(g_set.blockSize[i], 50, 200) / 100.f);
+        for (int i : cols[c]) {
+            const float k = std::clamp(g_set.blockSize[i], 50, 200) / 100.f;
+            // Dry run at the design width to learn how wide this block's longest row is.
+            Bench probe{&L, &r, i, u, P, design[c]};
+            const size_t first = L.ops.size();
+            BuildBlock(probe);
+            L.ops.resize(first);
+            g_blkNeed[i] = std::max(g_blkNeed[i], probe.need);
+            colW = std::max(colW, (std::max(design[c], g_blkNeed[i]) + 2 * P) * k);
+        }
         float y = 0;
         bool placed = false;
         for (int i : cols[c]) {
@@ -5919,6 +5940,27 @@ static std::wstring Signature(const Layout& L) {
     return s;
 }
 
+// Another mod (the taskbar) may share the readings from an older copy that leaves out the memory
+// speed and the driver. Both only change with a reboot or a driver update, so read them once here.
+static void FillOlderPublisherGaps(seamless_sensors::Snapshot& s) {
+    static bool read = false;
+    static uint32_t mts = 0, modules = 0;
+    static wchar_t driver[32] = {};
+    if (!read) {
+        read = true;
+        seamless_sensors::detail::ReadRamSpeed(mts, modules);
+        seamless_sensors::detail::Nvml nv;
+        if (nv.Open()) wcscpy_s(driver, nv.driver);
+        nv.Close();
+    }
+    if (std::isnan(s.ramSpeedMTs) && mts) {
+        s.ramSpeedMTs = mts;
+        s.ramClockMHz = mts / 2.0;
+    }
+    if (!s.ramModules) s.ramModules = modules;
+    if (!s.gpuDriver[0] && driver[0]) wcscpy_s(s.gpuDriver, driver);
+}
+
 static void Tick(bool force) {
     if (!g_enabled) return;
     UpdateTarget();
@@ -5970,6 +6012,7 @@ static void Tick(bool force) {
     r.f = std::move(st);
     r.sensorsOk = seamless_sensors::Read(r.s) == seamless_sensors::ReadResult::Ok;
     if (!r.sensorsOk) seamless_sensors::ResetSnapshot(r.s);
+    if (r.sensorsOk) FillOlderPublisherGaps(r.s);
 
     PickMonitor();
     if (!EnsureDevice()) return;
