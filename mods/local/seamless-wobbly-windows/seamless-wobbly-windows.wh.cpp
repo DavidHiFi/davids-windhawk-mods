@@ -2,7 +2,7 @@
 // @id              seamless-wobbly-windows
 // @name            Seamless Wobbly Windows
 // @description     Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows
-// @version         1.2.15
+// @version         1.2.16
 // @author          DavidHiFi, HeyJeay, HaVeN80, lalimatyus
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -88,6 +88,11 @@ title bar to move a window without the wobble.
 - Nothing is loaded into dwm.exe. The effect runs inside each app.
 - Turn off the other wobble mods (Wobbly Windows, Window Wobble) before using
   this one.
+
+## What's new in 1.2.16
+- Windows that paint their own see-through dark layer (the settings
+  windows of our own mods) keep that layer while dragged, over the live
+  blur, so they look the same moving as they do at rest.
 
 ## What's new in 1.2.14
 - The Seamless Borders ring is told twice more that the window stepped
@@ -3369,8 +3374,32 @@ struct Canvas {
     RECT outer{};              // GetWindowRect at capture
     RECT vis{};                // visible frame at capture
     int frameDx = 0, frameDy = 0;   // vis - outer, left and top
+    bool realAlpha = false;    // kept the window's own see-through paint
     std::vector<uint32_t> px;
 };
+
+// Does this capture carry the window's own see-through paint? A window drawn
+// on glass with Direct2D (the house settings windows) paints its dark layer
+// at 80% or so and lets the glass show through the rest; forcing that solid
+// lost the layer's strength, and the drag went pale (2026-11-26). GDI leaves
+// alpha at 0 everywhere, so that case stays solid. The read must also be
+// premultiplied, as the redirection surface is.
+static bool CaptureHasRealAlpha(const uint32_t* src, int ow, int oh, int dx, int dy, int vw, int vh) {
+    size_t total = 0, some = 0, partial = 0, bad = 0;
+    for (int y = dy; y < dy + vh && y < oh; y += 3) {
+        const uint32_t* row = &src[(size_t)y * ow];
+        for (int x = dx; x < dx + vw && x < ow; x += 3) {
+            const uint32_t p = row[x];
+            const uint32_t a = p >> 24;
+            ++total;
+            if (a) ++some;
+            if (a > 0 && a < 250) ++partial;
+            if (((p >> 16) & 255) > a + 2 || ((p >> 8) & 255) > a + 2 || (p & 255) > a + 2) ++bad;
+        }
+    }
+    if (total < 64) return false;
+    return some * 2 >= total && partial * 20 >= total && bad * 100 <= total;
+}
 
 // Visible frame and window rect read as a consistent pair: DWM's frame bounds
 // lag a resize, so a pair taken mid-change disagrees about the size.
@@ -3406,21 +3435,23 @@ static void RoundCornersAt(Canvas& c, int x0, int y0, int w, int h, float radius
             float a = radius - d + 0.5f;
             a = a < 0.0f ? 0.0f : (a > 1.0f ? 1.0f : a);
             if (a >= 1.0f) continue;
-            const uint32_t alpha = (uint32_t)(a * 255.0f + 0.5f);
+            const uint32_t cover = (uint32_t)(a * 255.0f + 0.5f);
             const int xs[4] = { x0 + cx, x0 + w - 1 - cx, x0 + cx, x0 + w - 1 - cx };
             const int ys[4] = { y0 + cy, y0 + cy, y0 + h - 1 - cy, y0 + h - 1 - cy };
             for (int i = 0; i < 4; ++i) {
                 uint32_t& p = c.px[(size_t)ys[i] * c.w + xs[i]];
-                const uint32_t b = ((p & 0xFF) * alpha + 127) / 255;
-                const uint32_t g = (((p >> 8) & 0xFF) * alpha + 127) / 255;
-                const uint32_t rr = (((p >> 16) & 0xFF) * alpha + 127) / 255;
+                // Scales the window's own alpha too, for a see-through capture.
+                const uint32_t alpha = ((p >> 24) * cover + 127) / 255;
+                const uint32_t b = ((p & 0xFF) * cover + 127) / 255;
+                const uint32_t g = (((p >> 8) & 0xFF) * cover + 127) / 255;
+                const uint32_t rr = (((p >> 16) & 0xFF) * cover + 127) / 255;
                 p = (alpha << 24) | (rr << 16) | (g << 8) | b;
             }
         }
     }
 }
 
-static bool BuildCanvas(HWND hwnd, const RingSpec& ring, Canvas& out) {
+static bool BuildCanvas(HWND hwnd, const RingSpec& ring, Canvas& out, bool keepAlpha = false) {
     RECT outer{};
     if (!GetWindowRect(hwnd, &outer)) return false;
     const int ow = outer.right - outer.left, oh = outer.bottom - outer.top;
@@ -3465,13 +3496,15 @@ static bool BuildCanvas(HWND hwnd, const RingSpec& ring, Canvas& out) {
     out.px.assign((size_t)out.w * out.h, 0);
 
     const uint32_t* src = (const uint32_t*)bits;
+    out.realAlpha = keepAlpha && CaptureHasRealAlpha(src, ow, oh, dx, dy, vw, vh);
+    const uint32_t force = out.realAlpha ? 0u : 0xFF000000u;
     for (int y = 0; y < vh; ++y) {
         const int sy = y + dy;
         if (sy < 0 || sy >= oh) continue;
         uint32_t* d = &out.px[(size_t)(y + P) * out.w + P];
         const uint32_t* s = &src[(size_t)sy * ow + dx];
         const int n = std::min(vw, ow - dx);
-        for (int x = 0; x < n; ++x) d[x] = s[x] | 0xFF000000u;
+        for (int x = 0; x < n; ++x) d[x] = s[x] | force;
     }
     DeleteObject(hbm);
 
@@ -3875,15 +3908,15 @@ static const BYTE kVS[] =
 
 static const BYTE kPS[] =
 {
-     68,  88,  66,  67,  75,  48,
-    140, 251, 181, 222,  61,  35,
-    104,   5,   9, 240, 208,  74,
-    219,  89,   1,   0,   0,   0,
-     16,  17,   0,   0,   5,   0,
+     68,  88,  66,  67, 236, 218,
+    130, 136,  13, 225,  84, 211,
+      2,  25, 146, 210, 188, 213,
+     29,  37,   1,   0,   0,   0,
+     84,  20,   0,   0,   5,   0,
       0,   0,  52,   0,   0,   0,
     216,   1,   0,   0,  48,   2,
       0,   0, 100,   2,   0,   0,
-    148,  16,   0,   0,  82,  68,
+    216,  19,   0,   0,  82,  68,
      69,  70, 156,   1,   0,   0,
       1,   0,   0,   0, 140,   0,
       0,   0,   3,   0,   0,   0,
@@ -3977,9 +4010,9 @@ static const BYTE kPS[] =
       0,   0,  15,   0,   0,   0,
      83,  86,  95,  84,  65,  82,
      71,  69,  84,   0, 171, 171,
-     83,  72,  68,  82,  40,  14,
+     83,  72,  68,  82, 108,  17,
       0,   0,  64,   0,   0,   0,
-    138,   3,   0,   0,  89,   8,
+     91,   4,   0,   0,  89,   8,
       0,   4,  70, 142,  32,   0,
       1,   0,   0,   0, 101,   0,
       0,   0,  90,   0,   0,   3,
@@ -3998,7 +4031,151 @@ static const BYTE kPS[] =
       1,   0,   0,   0,  70, 126,
      16,   0,   0,   0,   0,   0,
       0,  96,  16,   0,   0,   0,
-      0,   0,  27,   0,   0,   6,
+      0,   0,  49,   0,   0,   8,
+     18,   0,  16,   0,   1,   0,
+      0,   0,   1,  64,   0,   0,
+      0,   0,  96,  64,  58, 128,
+     32,   0,   1,   0,   0,   0,
+      4,   0,   0,   0,  31,   0,
+      4,   3,  10,   0,  16,   0,
+      1,   0,   0,   0,   0,   0,
+      0,  10,  50,   0,  16,   0,
+      1,   0,   0,   0,  70, 128,
+     32, 128,  65,   0,   0,   0,
+      1,   0,   0,   0,   2,   0,
+      0,   0, 230, 138,  32,   0,
+      1,   0,   0,   0,   2,   0,
+      0,   0,  56,   0,   0,  10,
+    194,   0,  16,   0,   1,   0,
+      0,   0,   6,   4,  16,   0,
+      1,   0,   0,   0,   2,  64,
+      0,   0,   0,   0,   0,   0,
+      0,   0,   0,   0,   0,   0,
+      0,  63,   0,   0,   0,  63,
+     51,   0,   0,   7,  66,   0,
+     16,   0,   1,   0,   0,   0,
+     58,   0,  16,   0,   1,   0,
+      0,   0,  42,   0,  16,   0,
+      1,   0,   0,   0,  51,   0,
+      0,   8,  66,   0,  16,   0,
+      1,   0,   0,   0,  42,   0,
+     16,   0,   1,   0,   0,   0,
+     42, 128,  32,   0,   1,   0,
+      0,   0,   0,   0,   0,   0,
+      0,   0,   0,   9,  50,   0,
+     16,   0,   2,   0,   0,   0,
+    230, 138,  32,   0,   1,   0,
+      0,   0,   2,   0,   0,   0,
+     70, 128,  32,   0,   1,   0,
+      0,   0,   2,   0,   0,   0,
+     56,   0,   0,  10,  50,   0,
+     16,   0,   2,   0,   0,   0,
+     70,   0,  16,   0,   2,   0,
+      0,   0,   2,  64,   0,   0,
+      0,   0,   0,  63,   0,   0,
+      0,  63,   0,   0,   0,   0,
+      0,   0,   0,   0,  50,   0,
+      0,  11,  50,   0,  16,   0,
+      2,   0,   0,   0,  70,  16,
+     16,   0,   1,   0,   0,   0,
+     70, 128,  32,   0,   1,   0,
+      0,   0,   3,   0,   0,   0,
+     70,   0,  16, 128,  65,   0,
+      0,   0,   2,   0,   0,   0,
+     50,   0,   0,  13,  50,   0,
+     16,   0,   1,   0,   0,   0,
+     70,   0,  16,   0,   1,   0,
+      0,   0,   2,  64,   0,   0,
+      0,   0,   0,  63,   0,   0,
+      0,  63,   0,   0,   0,   0,
+      0,   0,   0,   0, 166,  10,
+     16, 128,  65,   0,   0,   0,
+      1,   0,   0,   0,   0,   0,
+      0,   9,  50,   0,  16,   0,
+      1,   0,   0,   0,  70,   0,
+     16, 128,  65,   0,   0,   0,
+      1,   0,   0,   0,  70,   0,
+     16, 128, 129,   0,   0,   0,
+      2,   0,   0,   0,  52,   0,
+      0,  10,  50,   0,  16,   0,
+      2,   0,   0,   0,  70,   0,
+     16,   0,   1,   0,   0,   0,
+      2,  64,   0,   0,   0,   0,
+      0,   0,   0,   0,   0,   0,
+      0,   0,   0,   0,   0,   0,
+      0,   0,  15,   0,   0,   7,
+    130,   0,  16,   0,   1,   0,
+      0,   0,  70,   0,  16,   0,
+      2,   0,   0,   0,  70,   0,
+     16,   0,   2,   0,   0,   0,
+     75,   0,   0,   5, 130,   0,
+     16,   0,   1,   0,   0,   0,
+     58,   0,  16,   0,   1,   0,
+      0,   0,  52,   0,   0,   7,
+     18,   0,  16,   0,   1,   0,
+      0,   0,  26,   0,  16,   0,
+      1,   0,   0,   0,  10,   0,
+     16,   0,   1,   0,   0,   0,
+     51,   0,   0,   7,  18,   0,
+     16,   0,   1,   0,   0,   0,
+     10,   0,  16,   0,   1,   0,
+      0,   0,   1,  64,   0,   0,
+      0,   0,   0,   0,   0,   0,
+      0,   7,  18,   0,  16,   0,
+      1,   0,   0,   0,  10,   0,
+     16,   0,   1,   0,   0,   0,
+     58,   0,  16,   0,   1,   0,
+      0,   0,   0,   0,   0,   8,
+     18,   0,  16,   0,   1,   0,
+      0,   0,  42,   0,  16, 128,
+     65,   0,   0,   0,   1,   0,
+      0,   0,  10,   0,  16,   0,
+      1,   0,   0,   0,   0,  32,
+      0,   8,  18,   0,  16,   0,
+      1,   0,   0,   0,  10,   0,
+     16, 128,  65,   0,   0,   0,
+      1,   0,   0,   0,   1,  64,
+      0,   0,   0,   0,   0,  63,
+     49,   0,   0,   8,  34,   0,
+     16,   0,   1,   0,   0,   0,
+      1,  64,   0,   0,   0,   0,
+    176,  64,  58, 128,  32,   0,
+      1,   0,   0,   0,   4,   0,
+      0,   0,   0,  32,   0,   8,
+     66,   0,  16,   0,   1,   0,
+      0,   0,  58, 128,  32,   0,
+      1,   0,   0,   0,   4,   0,
+      0,   0,   1,  64,   0,   0,
+      0,   0, 128, 192,  55,   0,
+      0,   9, 130,   0,  16,   0,
+      2,   0,   0,   0,  26,   0,
+     16,   0,   1,   0,   0,   0,
+      1,  64,   0,   0,   0,   0,
+    128,  63,  42,   0,  16,   0,
+      1,   0,   0,   0,   0,   0,
+      0,   8,  34,   0,  16,   0,
+      1,   0,   0,   0,  58,   0,
+     16, 128,  65,   0,   0,   0,
+      0,   0,   0,   0,   1,  64,
+      0,   0,   0,   0, 128,  63,
+     56,   0,   0,   8, 114,   0,
+     16,   0,   2,   0,   0,   0,
+    246,  15,  16,   0,   2,   0,
+      0,   0,  70, 130,  32,   0,
+      1,   0,   0,   0,   4,   0,
+      0,   0,  56,   0,   0,   7,
+    242,   0,  16,   0,   2,   0,
+      0,   0,  70,  14,  16,   0,
+      2,   0,   0,   0,  86,   5,
+     16,   0,   1,   0,   0,   0,
+     50,   0,   0,   9, 242,  32,
+     16,   0,   0,   0,   0,   0,
+     70,  14,  16,   0,   2,   0,
+      0,   0,   6,   0,  16,   0,
+      1,   0,   0,   0,  70,  14,
+     16,   0,   0,   0,   0,   0,
+     62,   0,   0,   1,  21,   0,
+      0,   1,  27,   0,   0,   6,
      18,   0,  16,   0,   1,   0,
       0,   0,  10, 128,  32,   0,
       1,   0,   0,   0,   0,   0,
@@ -4398,211 +4575,207 @@ static const BYTE kPS[] =
       6,   0,   0,   0,  42,   0,
      16,   0,   5,   0,   0,   0,
       1,  64,   0,   0,  51,  51,
-    179,  62,  56,   0,   0,   7,
+    179,  62,   0,   0,   0,   7,
      34,   0,  16,   0,   6,   0,
       0,   0,  42,   0,  16,   0,
       5,   0,   0,   0,   1,  64,
-      0,   0,   0,   0, 128,  63,
-      0,   0,   0,   7,  66,   0,
-     16,   0,   5,   0,   0,   0,
-     42,   0,  16,   0,   5,   0,
-      0,   0,   1,  64,   0,   0,
-     51,  51, 179, 190,  50,   0,
-      0,   9,  66,   0,  16,   0,
-      5,   0,   0,   0,  42,   0,
-     16,   0,   5,   0,   0,   0,
-      1,  64,   0,   0, 170, 170,
-    138,  64,   1,  64,   0,   0,
-     51,  51, 179,  62,  55,   0,
-      0,   9,  66,   0,  16,   0,
-      5,   0,   0,   0,  10,   0,
+      0,   0,  51,  51, 179, 190,
+     50,   0,   0,   9,  34,   0,
      16,   0,   6,   0,   0,   0,
      26,   0,  16,   0,   6,   0,
-      0,   0,  42,   0,  16,   0,
-      5,   0,   0,   0,  56,   0,
-      0,   7,  66,   0,  16,   0,
-      5,   0,   0,   0,  58,   0,
+      0,   0,   1,  64,   0,   0,
+    170, 170, 138,  64,   1,  64,
+      0,   0,  51,  51, 179,  62,
+     55,   0,   0,   9,  66,   0,
      16,   0,   5,   0,   0,   0,
-     42,   0,  16,   0,   5,   0,
-      0,   0,  55,   0,   0,   9,
-     34,   0,  16,   0,   5,   0,
-      0,   0,  26,   0,  16,   0,
-      5,   0,   0,   0,   1,  64,
-      0,   0,   0,   0,   0,   0,
-     42,   0,  16,   0,   5,   0,
-      0,   0,  50,   0,   0,  15,
-    194,   0,  16,   0,   2,   0,
-      0,   0, 166,  14,  16,   0,
-      2,   0,   0,   0,   2,  64,
-      0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,
-      0,  64,   0,   0,   0,  64,
+     10,   0,  16,   0,   6,   0,
+      0,   0,  42,   0,  16,   0,
+      5,   0,   0,   0,  26,   0,
+     16,   0,   6,   0,   0,   0,
+     56,   0,   0,   7,  66,   0,
+     16,   0,   5,   0,   0,   0,
+     58,   0,  16,   0,   5,   0,
+      0,   0,  42,   0,  16,   0,
+      5,   0,   0,   0,  55,   0,
+      0,   9,  34,   0,  16,   0,
+      5,   0,   0,   0,  26,   0,
+     16,   0,   5,   0,   0,   0,
+      1,  64,   0,   0,   0,   0,
+      0,   0,  42,   0,  16,   0,
+      5,   0,   0,   0,  50,   0,
+      0,  15, 194,   0,  16,   0,
+      2,   0,   0,   0, 166,  14,
+     16,   0,   2,   0,   0,   0,
       2,  64,   0,   0,   0,   0,
       0,   0,   0,   0,   0,   0,
-      0,   0, 128, 191,   0,   0,
-    128, 191,  15,   0,   0,   7,
-     66,   0,  16,   0,   2,   0,
-      0,   0, 230,  10,  16,   0,
+      0,   0,   0,  64,   0,   0,
+      0,  64,   2,  64,   0,   0,
+      0,   0,   0,   0,   0,   0,
+      0,   0,   0,   0, 128, 191,
+      0,   0, 128, 191,  15,   0,
+      0,   7,  66,   0,  16,   0,
       2,   0,   0,   0, 230,  10,
      16,   0,   2,   0,   0,   0,
-     75,   0,   0,   5,  66,   0,
+    230,  10,  16,   0,   2,   0,
+      0,   0,  75,   0,   0,   5,
+     66,   0,  16,   0,   2,   0,
+      0,   0,  42,   0,  16,   0,
+      2,   0,   0,   0,  49,   0,
+      0,   7, 130,   0,  16,   0,
+      2,   0,   0,   0,  42,   0,
      16,   0,   2,   0,   0,   0,
-     42,   0,  16,   0,   2,   0,
-      0,   0,  49,   0,   0,   7,
-    130,   0,  16,   0,   2,   0,
+      1,  64,   0,   0, 205, 204,
+     12,  63,  50,   0,   0,   9,
+     66,   0,  16,   0,   5,   0,
       0,   0,  42,   0,  16,   0,
       2,   0,   0,   0,   1,  64,
-      0,   0, 205, 204,  12,  63,
-     50,   0,   0,   9,  66,   0,
-     16,   0,   5,   0,   0,   0,
-     42,   0,  16,   0,   2,   0,
-      0,   0,   1,  64,   0,   0,
-    201,  38, 155, 191,   1,  64,
-      0,   0,   0,   0, 128,  63,
-      0,   0,   0,   7,  66,   0,
-     16,   0,   2,   0,   0,   0,
-     42,   0,  16,   0,   2,   0,
-      0,   0,   1,  64,   0,   0,
-    205, 204,  12, 191,  50,   0,
-      0,   9,  66,   0,  16,   0,
-      2,   0,   0,   0,  42,   0,
-     16,   0,   2,   0,   0,   0,
-      1,  64,   0,   0,  48, 161,
-     61, 191,   1,  64,   0,   0,
-    171, 170, 170,  62,  52,   0,
-      0,   7,  66,   0,  16,   0,
-      2,   0,   0,   0,  42,   0,
-     16,   0,   2,   0,   0,   0,
+      0,   0, 201,  38, 155, 191,
       1,  64,   0,   0,   0,   0,
-      0,   0,  55,   0,   0,   9,
+    128,  63,   0,   0,   0,   7,
      66,   0,  16,   0,   2,   0,
-      0,   0,  58,   0,  16,   0,
-      2,   0,   0,   0,  42,   0,
-     16,   0,   5,   0,   0,   0,
-     42,   0,  16,   0,   2,   0,
-      0,   0,  55,   0,   0,   9,
-     66,   0,  16,   0,   2,   0,
-      0,   0,  10,   0,  16,   0,
-      2,   0,   0,   0,  26,   0,
-     16,   0,   5,   0,   0,   0,
-     42,   0,  16,   0,   2,   0,
-      0,   0,  56,   0,   0,  10,
-    130,   0,  16,   0,   6,   0,
       0,   0,  42,   0,  16,   0,
-      2,   0,   0,   0,  58, 128,
+      2,   0,   0,   0,   1,  64,
+      0,   0, 205, 204,  12, 191,
+     50,   0,   0,   9,  66,   0,
+     16,   0,   2,   0,   0,   0,
+     42,   0,  16,   0,   2,   0,
+      0,   0,   1,  64,   0,   0,
+     48, 161,  61, 191,   1,  64,
+      0,   0, 171, 170, 170,  62,
+     52,   0,   0,   7,  66,   0,
+     16,   0,   2,   0,   0,   0,
+     42,   0,  16,   0,   2,   0,
+      0,   0,   1,  64,   0,   0,
+      0,   0,   0,   0,  55,   0,
+      0,   9,  66,   0,  16,   0,
+      2,   0,   0,   0,  58,   0,
+     16,   0,   2,   0,   0,   0,
+     42,   0,  16,   0,   5,   0,
+      0,   0,  42,   0,  16,   0,
+      2,   0,   0,   0,  55,   0,
+      0,   9,  66,   0,  16,   0,
+      2,   0,   0,   0,  10,   0,
+     16,   0,   2,   0,   0,   0,
+     26,   0,  16,   0,   5,   0,
+      0,   0,  42,   0,  16,   0,
+      2,   0,   0,   0,  56,   0,
+      0,  10, 130,   0,  16,   0,
+      6,   0,   0,   0,  42,   0,
+     16,   0,   2,   0,   0,   0,
+     58, 128,  32,   6,   1,   0,
+      0,   0,   5,   0,   0,   0,
+     10,   0,  16,   0,   5,   0,
+      0,   0,  56,   0,   0,  10,
+    114,   0,  16,   0,   6,   0,
+      0,   0, 246,  15,  16,   0,
+      6,   0,   0,   0,  70, 130,
      32,   6,   1,   0,   0,   0,
       5,   0,   0,   0,  10,   0,
      16,   0,   5,   0,   0,   0,
-     56,   0,   0,  10, 114,   0,
-     16,   0,   6,   0,   0,   0,
-    246,  15,  16,   0,   6,   0,
-      0,   0,  70, 130,  32,   6,
-      1,   0,   0,   0,   5,   0,
-      0,   0,  10,   0,  16,   0,
-      5,   0,   0,   0,  50,   0,
-      0,  13,  66,   0,  16,   0,
-      2,   0,   0,   0,  58, 128,
-     32, 134,  65,   0,   0,   0,
-      1,   0,   0,   0,   5,   0,
-      0,   0,  10,   0,  16,   0,
-      5,   0,   0,   0,  42,   0,
+     50,   0,   0,  13,  66,   0,
+     16,   0,   2,   0,   0,   0,
+     58, 128,  32, 134,  65,   0,
+      0,   0,   1,   0,   0,   0,
+      5,   0,   0,   0,  10,   0,
+     16,   0,   5,   0,   0,   0,
+     42,   0,  16,   0,   2,   0,
+      0,   0,   1,  64,   0,   0,
+      0,   0, 128,  63,  50,   0,
+      0,   9, 242,   0,  16,   0,
+      4,   0,   0,   0,  70,  14,
+     16,   0,   4,   0,   0,   0,
+    166,  10,  16,   0,   2,   0,
+      0,   0,  70,  14,  16,   0,
+      6,   0,   0,   0,  30,   0,
+      0,   7,  34,   0,  16,   0,
+      2,   0,   0,   0,  26,   0,
+     16,   0,   2,   0,   0,   0,
+      1,  64,   0,   0,   1,   0,
+      0,   0,  22,   0,   0,   1,
+     56,   0,   0,   7, 242,   0,
+     16,   0,   1,   0,   0,   0,
+     86,   5,  16,   0,   1,   0,
+      0,   0,  70,  14,  16,   0,
+      4,   0,   0,   0,  49,   0,
+      0,   7,  18,   0,  16,   0,
+      2,   0,   0,   0,   1,  64,
+      0,   0,   0,   0, 128,  63,
+     58,   0,  16,   0,   1,   0,
+      0,   0,  14,   0,   0,   7,
+    242,   0,  16,   0,   3,   0,
+      0,   0,  70,  14,  16,   0,
+      1,   0,   0,   0, 246,  15,
+     16,   0,   1,   0,   0,   0,
+     55,   0,   0,   9, 242,   0,
+     16,   0,   1,   0,   0,   0,
+      6,   0,  16,   0,   2,   0,
+      0,   0,  70,  14,  16,   0,
+      3,   0,   0,   0,  70,  14,
+     16,   0,   1,   0,   0,   0,
+     49,   0,   0,   8,  18,   0,
      16,   0,   2,   0,   0,   0,
       1,  64,   0,   0,   0,   0,
-    128,  63,  50,   0,   0,   9,
-    242,   0,  16,   0,   4,   0,
-      0,   0,  70,  14,  16,   0,
-      4,   0,   0,   0, 166,  10,
-     16,   0,   2,   0,   0,   0,
-     70,  14,  16,   0,   6,   0,
-      0,   0,  30,   0,   0,   7,
-     34,   0,  16,   0,   2,   0,
-      0,   0,  26,   0,  16,   0,
-      2,   0,   0,   0,   1,  64,
-      0,   0,   1,   0,   0,   0,
-     22,   0,   0,   1,  56,   0,
-      0,   7, 242,   0,  16,   0,
-      1,   0,   0,   0,  86,   5,
-     16,   0,   1,   0,   0,   0,
-     70,  14,  16,   0,   4,   0,
-      0,   0,  49,   0,   0,   7,
-     18,   0,  16,   0,   2,   0,
-      0,   0,   1,  64,   0,   0,
-      0,   0, 128,  63,  58,   0,
-     16,   0,   1,   0,   0,   0,
-     14,   0,   0,   7, 242,   0,
-     16,   0,   3,   0,   0,   0,
-     70,  14,  16,   0,   1,   0,
-      0,   0, 246,  15,  16,   0,
-      1,   0,   0,   0,  55,   0,
-      0,   9, 242,   0,  16,   0,
-      1,   0,   0,   0,   6,   0,
-     16,   0,   2,   0,   0,   0,
-     70,  14,  16,   0,   3,   0,
-      0,   0,  70,  14,  16,   0,
-      1,   0,   0,   0,  49,   0,
-      0,   8,  18,   0,  16,   0,
-      2,   0,   0,   0,   1,  64,
-      0,   0,   0,   0,   0,  63,
-     58, 128,  32,   0,   1,   0,
-      0,   0,   4,   0,   0,   0,
-     31,   0,   4,   3,  10,   0,
-     16,   0,   2,   0,   0,   0,
-     50,   0,   0,   9, 114,   0,
-     16,   0,   2,   0,   0,   0,
-     70,   2,  16,   0,   1,   0,
+      0,  63,  58, 128,  32,   0,
+      1,   0,   0,   0,   4,   0,
+      0,   0,  31,   0,   4,   3,
+     10,   0,  16,   0,   2,   0,
+      0,   0,  50,   0,   0,   9,
+    114,   0,  16,   0,   2,   0,
+      0,   0,  70,   2,  16,   0,
+      1,   0,   0,   0, 246,  15,
+     16,   0,   0,   0,   0,   0,
+     70,   2,  16,   0,   0,   0,
+      0,   0,  51,   0,   0,   7,
+    114,  32,  16,   0,   0,   0,
       0,   0, 246,  15,  16,   0,
       0,   0,   0,   0,  70,   2,
+     16,   0,   2,   0,   0,   0,
+     54,   0,   0,   5, 130,  32,
      16,   0,   0,   0,   0,   0,
-     51,   0,   0,   7, 114,  32,
-     16,   0,   0,   0,   0,   0,
+     58,   0,  16,   0,   0,   0,
+      0,   0,  62,   0,   0,   1,
+     21,   0,   0,   1,   0,   0,
+      0,   8, 130,   0,  16,   0,
+      1,   0,   0,   0,  58,   0,
+     16, 128,  65,   0,   0,   0,
+      1,   0,   0,   0,   1,  64,
+      0,   0,   0,   0, 128,  63,
+     56,   0,   0,   7, 114,   0,
+     16,   0,   1,   0,   0,   0,
     246,  15,  16,   0,   0,   0,
       0,   0,  70,   2,  16,   0,
-      2,   0,   0,   0,  54,   0,
+      1,   0,   0,   0,  50,   0,
+      0,   9, 114,  32,  16,   0,
+      0,   0,   0,   0,  70,   2,
+     16,   0,   0,   0,   0,   0,
+    246,  15,  16,   0,   1,   0,
+      0,   0,  70,   2,  16,   0,
+      1,   0,   0,   0,  54,   0,
       0,   5, 130,  32,  16,   0,
       0,   0,   0,   0,  58,   0,
      16,   0,   0,   0,   0,   0,
-     62,   0,   0,   1,  21,   0,
-      0,   1,   0,   0,   0,   8,
-    130,   0,  16,   0,   1,   0,
-      0,   0,  58,   0,  16, 128,
-     65,   0,   0,   0,   1,   0,
-      0,   0,   1,  64,   0,   0,
-      0,   0, 128,  63,  56,   0,
-      0,   7, 114,   0,  16,   0,
-      1,   0,   0,   0, 246,  15,
-     16,   0,   0,   0,   0,   0,
-     70,   2,  16,   0,   1,   0,
-      0,   0,  50,   0,   0,   9,
-    114,  32,  16,   0,   0,   0,
-      0,   0,  70,   2,  16,   0,
-      0,   0,   0,   0, 246,  15,
-     16,   0,   1,   0,   0,   0,
-     70,   2,  16,   0,   1,   0,
-      0,   0,  54,   0,   0,   5,
-    130,  32,  16,   0,   0,   0,
-      0,   0,  58,   0,  16,   0,
-      0,   0,   0,   0,  62,   0,
-      0,   1,  83,  84,  65,  84,
-    116,   0,   0,   0, 125,   0,
-      0,   0,   7,   0,   0,   0,
-      0,   0,   0,   0,   2,   0,
-      0,   0,  72,   0,   0,   0,
-      5,   0,   0,   0,   8,   0,
-      0,   0,   7,   0,   0,   0,
-      7,   0,   0,   0,   0,   0,
+     62,   0,   0,   1,  83,  84,
+     65,  84, 116,   0,   0,   0,
+    152,   0,   0,   0,   7,   0,
+      0,   0,   0,   0,   0,   0,
+      2,   0,   0,   0,  95,   0,
+      0,   0,   5,   0,   0,   0,
+      8,   0,   0,   0,   8,   0,
+      0,   0,   8,   0,   0,   0,
       0,   0,   0,   0,   0,   0,
       0,   0,   0,   0,   0,   0,
       0,   0,   0,   0,   0,   0,
+      0,   0,   1,   0,   0,   0,
+      0,   0,   0,   0,   0,   0,
+      0,   0,   0,   0,   0,   0,
+      0,   0,   0,   0,   9,   0,
+      0,   0,   8,   0,   0,   0,
       1,   0,   0,   0,   0,   0,
       0,   0,   0,   0,   0,   0,
       0,   0,   0,   0,   0,   0,
-      0,   0,   9,   0,   0,   0,
-      7,   0,   0,   0,   1,   0,
       0,   0,   0,   0,   0,   0,
       0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0
+      0,   0
 };
 
 // The pixel shader's glow constants (cbuffer Glow, b1). Waves are the most
@@ -6453,6 +6626,37 @@ static bool GlassOnly(const Canvas& c, const GlassShot& shot, GlowCB& cb, bool* 
     return true;
 }
 
+// For a capture that keeps the window's own see-through paint: what the screen
+// shows under that paint, with the paint taken back out (screen = paint +
+// (1 - alpha) * under). The median over a grid of samples.
+static bool EstimateBacking(const GlassShot& shot, const Canvas& c, float out[3]) {
+    const int vw = c.w - 2 * c.P, vh = c.h - 2 * c.P;
+    if (!shot.ok || shot.w != vw || shot.h != vh) return false;
+    const int margin = (int)(8.0f * MonitorScale(c.vis));
+    std::vector<int> ch[3];
+    for (int y = margin; y < vh - margin; y += 7)
+        for (int x = margin; x < vw - margin; x += 7) {
+            const uint32_t cp = c.px[(size_t)(c.P + y) * c.w + c.P + x];
+            const float a = (cp >> 24) / 255.0f;
+            if (a < 0.05f || a > 0.92f) continue;
+            const uint32_t lp = shot.px[(size_t)y * shot.w + x];
+            for (int q = 0; q < 3; ++q) {
+                const int sh = 16 - 8 * q;
+                const float s = ((lp >> sh) & 255) / 255.0f;
+                const float p = ((cp >> sh) & 255) / 255.0f;
+                const float u = std::clamp((s - p) / (1.0f - a), 0.0f, 1.0f);
+                ch[q].push_back((int)(u * 255.0f + 0.5f));
+            }
+        }
+    if (ch[0].size() < 64) return false;
+    for (int q = 0; q < 3; ++q) {
+        auto mid = ch[q].begin() + ch[q].size() / 2;
+        std::nth_element(ch[q].begin(), mid, ch[q].end());
+        out[q] = *mid / 255.0f;
+    }
+    return true;
+}
+
 struct DragGlow {
     bool     on = false;
     GlowMap  map;
@@ -6616,7 +6820,8 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
             const RingSpec probe = ReadRingSpec(MonitorScale(v), GetForegroundWindow() == hwnd);
             if (ringShown || BordersRingShown(hwnd, v, probe.pad, 48)) ring = probe;
         }
-        if (!BuildCanvas(hwnd, ring, canvas)) continue;
+        // Only accent glass with a tint: the system backdrop path stays as proven.
+        if (!BuildCanvas(hwnd, ring, canvas, wantGlass && wg.hasTint)) continue;
         RECT now{};
         if (!GetWindowRect(hwnd, &now) || !SameSize(now, canvas.outer)) continue;
         built = true;
@@ -6639,7 +6844,38 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     bool liveGlass = false, evenGlass = true;
     float liveFill = 0.0f;
     float flatFill[3] = { 0.0f, 0.0f, 0.0f };
-    if (!glow.Start(hwnd, cfg, canvas, glass, seeThrough)) {
+    if (canvas.realAlpha) {
+        // The window paints its own see-through layer: the copy keeps it as it
+        // is, and only what lies under it (the glass's tint over the live
+        // blur) is drawn beneath. Until the blur shows, a solid stand-in read
+        // off the screen sits there instead.
+        float back[3];
+        if (!EstimateBacking(glass, canvas, back)) {
+            back[0] = wg.tint[0]; back[1] = wg.tint[1]; back[2] = wg.tint[2];
+        }
+        const float radius = CornerRadius(hwnd, MonitorScale(canvas.vis));
+        glassCb = GlowCB{};
+        glassCb.hdr[0] = 1.0f;
+        glassCb.hdr[2] = radius;
+        glassCb.spr[0][2] = glassCb.spr[0][3] = 1.0f;
+        glassCb.spr[2][0] = 1.0f;
+        glassCb.body[0] = (float)canvas.P;            glassCb.body[1] = (float)canvas.P;
+        glassCb.body[2] = (float)(canvas.w - canvas.P); glassCb.body[3] = (float)(canvas.h - canvas.P);
+        glassCb.canvas[0] = (float)canvas.w;          glassCb.canvas[1] = (float)canvas.h;
+        glassCb.fill[0] = back[0]; glassCb.fill[1] = back[1]; glassCb.fill[2] = back[2];
+        glassCb.fill[3] = 6.0f;
+        if (!ov.glass || !ov.glass->Start(canvas, radius, cfg.mesh,
+                                          std::max(1, 64 / std::max(1, cfg.mesh)))) {
+            dev.SetGlow(nullptr);
+            return;     // no live blur: keep the native drag
+        }
+        liveFill = 4.0f + (1.0f - seeThrough);
+        ov.glass->held = true;
+        liveGlass = true;
+        dev.SetGlow(&glassCb);
+        Wh_Log(L"glass: own paint kept, under %.3f %.3f %.3f, tint %.2f", back[0], back[1], back[2],
+               1.0f - seeThrough);
+    } else if (!glow.Start(hwnd, cfg, canvas, glass, seeThrough)) {
         dev.SetGlow(nullptr);
         if (wantGlass && GlassOnly(canvas, glass, glassCb, &evenGlass)) {
             flatFill[0] = glassCb.fill[0];
