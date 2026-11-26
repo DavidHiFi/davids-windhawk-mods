@@ -4,9 +4,9 @@
   "generatedAt": "2026-11-26T15:48:25+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 162,
+    "mods": 161,
     "enabled": 158,
-    "local": 65
+    "local": 64
   },
   "mods": [
     {
@@ -1522,19 +1522,6 @@
       "upstream": "https://windhawk.net/mods/search-active-display",
       "source": "mods/catalog/search-active-display.wh.cpp",
       "enabled": true
-    },
-    {
-      "id": "local@settings-styler-plus",
-      "name": "Settings Styler Plus",
-      "author": "DavidHiFi, m417z",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.4.1",
-      "license": "",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/settings-styler-plus/settings-styler-plus.wh.cpp",
-      "enabled": false,
-      "category": "Windows and menus"
     },
     {
       "id": "shell-flyout-positions",
