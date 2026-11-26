@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.40
+// @version         1.10.42
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -528,6 +528,22 @@ Windows](https://windhawk.net/mods/translucent-windows) mod.
     Puts the folder list on the left on its own rounded dock that ends under
     the last folder, with a button at its top left that folds the list to a
     narrow strip and back.
+- navPaneDockAnimation: true
+  $name: Folder list fold animation
+  $description: >-
+    The folder list slides smoothly when you fold or unfold it. Off, it snaps
+    straight to its new width. Also off when Windows animation effects are
+    off.
+- navPaneDockAnimationSpeed: global
+  $name: Fold animation speed
+  $description: How quick the fold slide plays.
+  $options:
+  - global: Same as all my mods
+  - veryQuick: Very quick
+  - quick: Quick
+  - normal: Normal
+  - relaxed: Relaxed
+  - slow: Slow
 - titleUptime: true
   $name: Uptime after the title
   $description: >-
@@ -1835,6 +1851,9 @@ struct {
     int explorerFrameContainerHeight;
     bool statusBarDock;
     bool navPaneDock;
+    bool navPaneDockAnimation;
+    // Share of the normal fold time, or 0 to follow the shared speed.
+    float navPaneDockAnimationSpeed;
     bool titleUptime;
     XamlDiagnosticsHandling xamlDiagnosticsHandling;
 } g_settings;
@@ -9395,7 +9414,8 @@ void ConfigureAddressBarHover(FrameworkElement element,
                 LR"(<SolidColorBrush xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Color="Transparent"/>)").as<Media::Brush>();
             // Both halves of this crumb: the nearest parent that holds exactly
             // one name and one arrow. Anything else lights only itself.
-            auto pairOf = [isCrumbPart](Controls::ContentPresenter const& self) {
+            auto pairOf = [isCrumbPart](Controls::ContentPresenter const& self,
+                                        DependencyObject* holder = nullptr) {
                 std::vector<Controls::ContentPresenter> out;
                 auto node = Media::VisualTreeHelper::GetParent(self);
                 for (int depth = 0; node && depth < 5; ++depth) {
@@ -9416,20 +9436,92 @@ void ConfigureAddressBarHover(FrameworkElement element,
                     int items = 0, arrows = 0;
                     for (auto& p : found) (isCrumbPart(p) == 1 ? items : arrows)++;
                     if (items > 1 || arrows > 1) break;
-                    if (items == 1 && arrows == 1) return found;
+                    if (items == 1 && arrows == 1) {
+                        if (holder) *holder = node;
+                        return found;
+                    }
                     node = Media::VisualTreeHelper::GetParent(node);
                 }
                 out.push_back(self);
                 return out;
             };
-            auto apply = [weak = winrt::make_weak(cp), restBrush, hotBrush, clear, isCrumbPart, pairOf](bool hovered) {
+            // One border round the pair, on the element that holds both, so
+            // the pill has one edge and one gradient. Two half borders met in
+            // a seam, each half with its own gradient and its own blend.
+            auto setEdge = [](DependencyObject const& d, Thickness thickness,
+                              CornerRadius const* radius, Media::Brush const& brush) {
+                if (auto g = d.try_as<Controls::Grid>()) {
+                    g.BorderThickness(thickness);
+                    if (radius) g.CornerRadius(*radius);
+                    g.BorderBrush(brush);
+                    return true;
+                }
+                if (auto b = d.try_as<Controls::Border>()) {
+                    b.BorderThickness(thickness);
+                    if (radius) b.CornerRadius(*radius);
+                    b.BorderBrush(brush);
+                    return true;
+                }
+                if (auto s = d.try_as<Controls::StackPanel>()) {
+                    s.BorderThickness(thickness);
+                    if (radius) s.CornerRadius(*radius);
+                    s.BorderBrush(brush);
+                    return true;
+                }
+                if (auto c = d.try_as<Controls::ContentPresenter>()) {
+                    c.BorderThickness(thickness);
+                    if (radius) c.CornerRadius(*radius);
+                    c.BorderBrush(brush);
+                    return true;
+                }
+                return false;
+            };
+            // The holder must sit tight round the two halves, or the pill
+            // would grow past them.
+            auto fitsPair = [](DependencyObject const& d,
+                               std::vector<Controls::ContentPresenter> const& pair) {
+                auto fe = d.try_as<FrameworkElement>();
+                if (!fe) return false;
+                double w = 0, h = 0;
+                for (auto& p : pair) {
+                    w += p.ActualWidth() + p.Margin().Left + p.Margin().Right;
+                    h = std::max(h, p.ActualHeight());
+                }
+                return w > 0 && fe.ActualWidth() <= w + 4 &&
+                       fe.ActualHeight() <= h + 4;
+            };
+            auto apply = [weak = winrt::make_weak(cp), restBrush, hotBrush, clear, isCrumbPart, pairOf, setEdge, fitsPair](bool hovered) {
                 auto self = weak.get();
                 if (!self) return;
-                auto targets = pairOf(self);
+                DependencyObject holder{nullptr};
+                auto targets = pairOf(self, &holder);
                 const bool paired = targets.size() == 2;
+                bool prev = std::exchange(g_elementPropertyModifying, true);
+                bool onHolder = false;
+                try {
+                    if (paired && holder && fitsPair(holder, targets)) {
+                        double r = 0;
+                        for (auto& target : targets) {
+                            if (isCrumbPart(target) != 1) continue;
+                            auto cr = target.CornerRadius();
+                            r = std::max({cr.TopLeft, cr.TopRight,
+                                          cr.BottomRight, cr.BottomLeft});
+                        }
+                        if (r <= 0) r = 4;
+                        CornerRadius round{r, r, r, r};
+                        onHolder = setEdge(holder, Thickness{2, 2, 2, 2}, &round,
+                                           hovered ? hotBrush : restBrush);
+                    }
+                } catch (...) {
+                    onHolder = false;
+                }
                 for (auto& target : targets) {
-                    bool prev = std::exchange(g_elementPropertyModifying, true);
                     try {
+                        if (onHolder) {
+                            target.BorderThickness(Thickness{0, 0, 0, 0});
+                            target.Background(clear);
+                            continue;
+                        }
                         const bool arrow = isCrumbPart(target) == 2;
                         target.BorderThickness(arrow ? Thickness{0, 2, 2, 2}
                                                      : Thickness{2, 2, 0, 2});
@@ -9443,8 +9535,8 @@ void ConfigureAddressBarHover(FrameworkElement element,
                         target.BorderBrush(hovered ? hotBrush : restBrush);
                         target.Background(clear);
                     } catch (...) {}
-                    g_elementPropertyModifying = prev;
                 }
+                g_elementPropertyModifying = prev;
             };
             apply(false);
             state.pathEntered = cp.PointerEntered(winrt::auto_revoke,
@@ -11665,6 +11757,7 @@ bool HasDock(HWND ntc);
 void TintTreeRect(HDC hdc, const RECT& rc);
 void TintTreeUnder(HWND tree, HDC hdc, const RECT& rc);
 }
+void ClearScrollBarLane(HDC hdc, LPCRECT pRect);
 // True when a fill lands on the docked side list's own background. The list
 // clears its background while BeginPaint runs (WM_ERASEBKGND), before the
 // paint flag is set, so the window itself is checked too.
@@ -11796,6 +11889,10 @@ void DrawStatusDockSeparators(const StatusDockBuffer& buffer,
 using GdiAlphaBlend_t = decltype(&GdiAlphaBlend);
 GdiAlphaBlend_t GdiAlphaBlend_Original;
 
+// The files area's plain fill as last copied into a gap, for paints that
+// cover a gap but not the files area beside it.
+std::atomic<DWORD> g_paneGapFill{0};
+
 // The navigation pane and the file list each lay their own dark tint over the
 // glass. The few pixels of the folder view between them (and left of the
 // navigation pane) had none, so they showed as a lighter line the full height
@@ -11833,15 +11930,20 @@ void TintPaneGaps(const StatusDockBuffer& buffer, HPAINTBUFFER paintBuffer) {
     MapWindowPoints(nullptr, hViewWnd, (POINT*)&files, 2);
     UINT dpi = GetDpiForWindow(hViewWnd);
     float scale = (dpi ? dpi : 96) / 96.0f;
-    LONG most = (LONG)(12 * scale);
+    LONG most = (LONG)(24 * scale);
     LONG top = std::max(nav.top, files.top);
     LONG bottom = std::min(nav.bottom, files.bottom);
     RECT gaps[2] = {{nav.right, top, files.left, bottom},
                     {0, top, nav.left, bottom}};
+    // The files area's first clear column, just inside its edge.
+    LONG sourceX = files.left + std::max(1L, (LONG)std::lround(2 * scale));
+    bool haveSource = sourceX < files.right && sourceX >= target.left &&
+                      sourceX < target.right;
+
     BITMAPINFO dot = {};
     dot.bmiHeader.biSize = sizeof(dot.bmiHeader);
     dot.bmiHeader.biWidth = 1;
-    dot.bmiHeader.biHeight = 1;
+    dot.bmiHeader.biHeight = -1;
     dot.bmiHeader.biPlanes = 1;
     dot.bmiHeader.biBitCount = 32;
     dot.bmiHeader.biCompression = BI_RGB;
@@ -11849,24 +11951,48 @@ void TintPaneGaps(const StatusDockBuffer& buffer, HPAINTBUFFER paintBuffer) {
     HBITMAP dib = CreateDIBSection(nullptr, &dot, DIB_RGB_COLORS, &bits,
                                    nullptr, 0);
     HDC dc = dib ? CreateCompatibleDC(buffer.mem) : nullptr;
-    if (dc && bits) {
-        *(DWORD*)bits = 0x6A000000;
-        HGDIOBJ previous = SelectObject(dc, dib);
-        BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
-        for (const RECT& gap : gaps) {
-            RECT area;
-            if (gap.right - gap.left <= 0 || gap.right - gap.left > most ||
-                !IntersectRect(&area, &gap, &target)) {
-                continue;
-            }
-            GdiAlphaBlend_Original(buffer.mem, area.left, area.top,
-                                   area.right - area.left,
-                                   area.bottom - area.top, dc, 0, 0, 1, 1,
-                                   blend);
+    HGDIOBJ previous = dc ? SelectObject(dc, dib) : nullptr;
+    auto readPixel = [&](LONG x, LONG y) -> DWORD {
+        if (!dc || !bits ||
+            !BitBlt(dc, 0, 0, 1, 1, buffer.mem, x, y, SRCCOPY)) {
+            return 0;
         }
-        SelectObject(dc, previous);
+        GdiFlush();
+        return *(DWORD*)bits;
+    };
+    for (const RECT& gap : gaps) {
+        RECT area;
+        if (gap.right - gap.left <= 0 || gap.right - gap.left > most ||
+            !IntersectRect(&area, &gap, &target)) {
+            continue;
+        }
+        int w = area.right - area.left;
+        int h = area.bottom - area.top;
+        if (haveSource) {
+            // Row by row, so the gap carries exactly what the files area
+            // shows beside it.
+            StretchBlt(buffer.mem, area.left, area.top, w, h, buffer.mem,
+                       sourceX, area.top, 1, h, SRCCOPY);
+            // Remember the plain fill for paints that do not reach the files
+            // area: two of three rows agreeing is the background, not an item.
+            DWORD a = readPixel(sourceX, area.top + h / 6);
+            DWORD b = readPixel(sourceX, area.top + h / 2);
+            DWORD c = readPixel(sourceX, area.bottom - 1 - h / 6);
+            DWORD fill = (a == b || a == c) ? a : (b == c ? b : 0);
+            if (fill) {
+                g_paneGapFill = fill;
+            }
+        } else if (DWORD fill = g_paneGapFill; fill && dc && bits) {
+            *(DWORD*)bits = fill;
+            GdiFlush();
+            StretchBlt(buffer.mem, area.left, area.top, w, h, dc, 0, 0, 1, 1,
+                       SRCCOPY);
+        }
     }
-    if (dc) DeleteDC(dc);
+    if (dc) {
+        SelectObject(dc, previous);
+        DeleteDC(dc);
+    }
     if (dib) DeleteObject(dib);
 }
 
@@ -13944,6 +14070,82 @@ void PostRefit(HWND ntc) {
 }
 
 volatile LONG g_dragBusy = 0;
+// The window the fold drag is sent to, subclassed while it runs.
+HWND g_dragHost = nullptr;
+constexpr UINT_PTR kDragSubclass = 0x46474C44;
+
+// How long the fold takes, as a share of normal. 0: no slide at all.
+float FoldMotionScale() {
+    if (!g_settings.navPaneDockAnimation) {
+        return 0;
+    }
+    BOOL on = TRUE;
+    if (SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &on, 0) && !on) {
+        return 0;
+    }
+    float scale = 1;
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\DavidHiFi\\Motion", 0,
+                      KEY_QUERY_VALUE, &key) == ERROR_SUCCESS) {
+        DWORD v = 0, type = 0, size = sizeof(v);
+        if (RegQueryValueExW(key, L"Enabled", nullptr, &type, (BYTE*)&v,
+                             &size) == ERROR_SUCCESS &&
+            type == REG_DWORD && !v) {
+            RegCloseKey(key);
+            return 0;
+        }
+        WCHAR text[32] = {};
+        size = sizeof(text) - sizeof(WCHAR);
+        if (RegQueryValueExW(key, L"Speed", nullptr, &type, (BYTE*)text,
+                             &size) == ERROR_SUCCESS) {
+            if (type == REG_DWORD) {
+                scale = std::clamp((float)*(DWORD*)text, 25.0f, 400.0f) / 100.0f;
+            } else if (type == REG_SZ) {
+                static const PCWSTR kNames[] = {L"veryQuick", L"quick",
+                                                L"normal", L"relaxed", L"slow"};
+                static const float kScales[] = {0.5f, 0.75f, 1.0f, 1.5f, 2.0f};
+                for (int i = 0; i < 5; i++) {
+                    if (_wcsicmp(text, kNames[i]) == 0) scale = kScales[i];
+                }
+            }
+        }
+        RegCloseKey(key);
+    }
+    return g_settings.navPaneDockAnimationSpeed > 0
+               ? g_settings.navPaneDockAnimationSpeed
+               : scale;
+}
+
+// While the fold drag runs, real mouse input to the window it is sent to is
+// dropped, or a twitch of the mouse would pull the edge to the cursor. The
+// drag's own messages arrive sent from the worker thread.
+LRESULT CALLBACK HostDragProc(HWND hWnd,
+                              UINT uMsg,
+                              WPARAM wParam,
+                              LPARAM lParam,
+                              UINT_PTR uIdSubclass,
+                              DWORD_PTR dwRefData) {
+    if (uMsg >= WM_MOUSEFIRST && uMsg <= WM_MOUSELAST) {
+        bool fromDrag = InSendMessage();
+        if (!fromDrag && g_dragBusy) {
+            return 0;
+        }
+        if (fromDrag && uMsg == WM_LBUTTONUP) {
+            LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+            RemoveWindowSubclass(hWnd, HostDragProc, kDragSubclass);
+            g_dragHost = nullptr;
+            return result;
+        }
+        if (!g_dragBusy) {
+            RemoveWindowSubclass(hWnd, HostDragProc, kDragSubclass);
+            g_dragHost = nullptr;
+        }
+    } else if (uMsg == WM_NCDESTROY) {
+        RemoveWindowSubclass(hWnd, HostDragProc, kDragSubclass);
+        g_dragHost = nullptr;
+    }
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
 
 struct DragJob {
     HWND host;
@@ -13966,9 +14168,39 @@ DWORD WINAPI DragThread(LPVOID param) {
     };
     bool ok = send(WM_MOUSEMOVE, 0, job.x0) &&
               send(WM_LBUTTONDOWN, MK_LBUTTON, job.x0);
-    for (int i = 1; ok && i <= 8; i++) {
-        ok = send(WM_MOUSEMOVE, MK_LBUTTON,
-                  job.x0 + (job.x1 - job.x0) * i / 8);
+    // One step per screen refresh, eased out, timed by the clock so a slow
+    // frame shortens nothing. Each step lets Explorer lay out and paint
+    // before the next one; the old eight steps went out back to back, so
+    // only the end was ever drawn.
+    float motion = FoldMotionScale();
+    double duration = (job.x1 < job.x0 ? 200.0 : 220.0) * motion;
+    if (ok && duration > 0) {
+        LARGE_INTEGER freq, start, now;
+        QueryPerformanceFrequency(&freq);
+        QueryPerformanceCounter(&start);
+        int last = job.x0;
+        for (;;) {
+            if (FAILED(DwmFlush())) {
+                Sleep(8);
+            }
+            QueryPerformanceCounter(&now);
+            double t = (now.QuadPart - start.QuadPart) * 1000.0 /
+                       freq.QuadPart / duration;
+            if (t >= 1) {
+                break;
+            }
+            double eased = 1 - (1 - t) * (1 - t) * (1 - t);
+            int x = job.x0 + (int)std::lround((job.x1 - job.x0) * eased);
+            if (x != last) {
+                last = x;
+                if (!(ok = send(WM_MOUSEMOVE, MK_LBUTTON, x))) {
+                    break;
+                }
+            }
+        }
+    }
+    if (ok) {
+        ok = send(WM_MOUSEMOVE, MK_LBUTTON, job.x1);
     }
     send(WM_LBUTTONUP, 0, job.x1);
     RECT after{};
@@ -14004,6 +14236,11 @@ void DragSplitter(HWND ntc, int toWidth) {
     }
     auto* job = new DragJob{host, sink, ntc, x0, x1, y, toWidth,
                             (int)(sr.right - sr.left)};
+    // On the window's thread, from the fold button's click.
+    if (!g_dragHost &&
+        SetWindowSubclass(host, HostDragProc, kDragSubclass, 0)) {
+        g_dragHost = host;
+    }
     HANDLE thread = CreateThread(nullptr, 0, DragThread, job, 0, nullptr);
     if (thread) {
         CloseHandle(thread);
@@ -15341,6 +15578,19 @@ void MeasureStatusDock(const StatusDockBuffer& buffer,
     }
 }
 
+// Clears a scrollbar part to glass. In the docked side list the lane also
+// gets the dock fill, or it shows lighter than the list beside it.
+void ClearScrollBarLane(HDC hdc, LPCRECT pRect) {
+    FillRect(hdc, pRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    if (!g_settings.navPaneDock) {
+        return;
+    }
+    HWND hWnd = WindowFromDC(hdc);
+    if (hWnd && IsNavTreeWnd(hWnd) && NavDock::HasDock(GetParent(hWnd))) {
+        NavDock::TintTreeRect(hdc, *pRect);
+    }
+}
+
 bool PaintScrollBarThumb(HDC hdc,
                          int iPartId,
                          int iStateId,
@@ -15393,7 +15643,7 @@ bool PaintScrollBarThumb(HDC hdc,
         }
     }
 
-    FillRect(hdc, pRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    ClearScrollBarLane(hdc, pRect);
     AlphaBlendNineGrid(hdc, pRect, cached, 8 * scale, 5 * scale, 8 * scale,
                        5 * scale);
     return true;
@@ -15414,7 +15664,7 @@ bool PaintScrollBarArrow(HDC hdc, int iStateId, LPCRECT pRect, UINT dpi) {
         return false;
     }
 
-    FillRect(hdc, pRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    ClearScrollBarLane(hdc, pRect);
 
     // Arrows are hidden until the scroll bar is hovered.
     if (state == 1) {
@@ -15492,7 +15742,7 @@ bool PaintScrollBarPart(HDC hdc,
         case SBP_UPPERTRACKHORZ:
         case SBP_LOWERTRACKVERT:
         case SBP_UPPERTRACKVERT:
-            FillRect(hdc, pRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+            ClearScrollBarLane(hdc, pRect);
             return true;
     }
 
@@ -16408,6 +16658,23 @@ void LoadSettings() {
 
     g_settings.navPaneDock = Wh_GetIntSetting(L"navPaneDock");
 
+    g_settings.navPaneDockAnimation =
+        Wh_GetIntSetting(L"navPaneDockAnimation");
+
+    {
+        PCWSTR speed = Wh_GetStringSetting(L"navPaneDockAnimationSpeed");
+        static const PCWSTR kNames[] = {L"veryQuick", L"quick", L"normal",
+                                        L"relaxed", L"slow"};
+        static const float kScales[] = {0.5f, 0.75f, 1.0f, 1.5f, 2.0f};
+        g_settings.navPaneDockAnimationSpeed = 0;
+        for (int i = 0; i < 5; i++) {
+            if (speed && _wcsicmp(speed, kNames[i]) == 0) {
+                g_settings.navPaneDockAnimationSpeed = kScales[i];
+            }
+        }
+        Wh_FreeStringSetting(speed);
+    }
+
     g_settings.titleUptime = Wh_GetIntSetting(L"titleUptime");
 
     PCWSTR xamlDiagnosticsHandling =
@@ -16632,6 +16899,16 @@ void Wh_ModUninit() {
 
     for (int i = 0; i < 100 && NavDock::g_dragBusy; i++) {
         Sleep(20);
+    }
+    if (HWND host = NavDock::g_dragHost; host && IsWindow(host)) {
+        RunFromWindowThread(
+            host,
+            [](PVOID param) {
+                RemoveWindowSubclass((HWND)param, NavDock::HostDragProc,
+                                     NavDock::kDragSubclass);
+            },
+            host);
+        NavDock::g_dragHost = nullptr;
     }
     for (HWND ntc : NavDock::All()) {
         if (IsWindow(ntc)) {
