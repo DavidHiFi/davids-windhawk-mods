@@ -2,7 +2,7 @@
 // @id              seamless-explorer-view
 // @name            Seamless Explorer View
 // @description     GPU-accelerated Explorer views with smooth scrolling and right-click submenus that populate fully
-// @version         2.0.14
+// @version         2.0.15
 // @author          DavidHiFi, DarkionAvey, crazyboyybs, Languster, valinet
 // @include         explorer.exe
 // @architecture    x86-64
@@ -23,6 +23,11 @@ menu, such as NanaZip's archive actions, open fully populated instead of an
 empty box.
 
 ![Seamless Explorer View preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-explorer-view.png)
+
+## What's new in 2.0.15
+
+In snapped and tiled windows the status bar stays on the bottom edge, the view toggle sits
+next to the view buttons instead of floating in an empty band, and no stray curve is left behind.
 
 ## What's new in 2.0.14
 
@@ -888,6 +893,9 @@ constexpr UINT_PTR kZoomAutoRefitTimerId = 106;
 constexpr UINT_PTR kNativeModeRetryTimerId = 107;
 constexpr UINT_PTR kPageAnimPinTimerId = 108;
 constexpr UINT_PTR kFoldSettleTimerId = 1109;
+// One check after the frame stops changing size: re-lays out a tab whose
+// own layout stayed short after a snap or tile (status bar mid-window).
+constexpr UINT_PTR kLayoutHealTimerId = 1110;
 // Input batching only: expiry never substitutes for gesture/animation/data completion.
 constexpr UINT kZoomAutoRefitDebounceMs = 200;
 constexpr UINT kMsgDispose = WM_APP + 31;
@@ -2853,6 +2861,7 @@ struct ViewState {
     bool viewToggleNeighborSearched = false, viewToggleBufferedPaint = false;
     int viewToggleDpi = 0;
     bool viewToggleLayoutQueued = false;
+    int layoutHealWidth = 0, layoutHealHeight = 0, layoutHealTries = 0;
     bool viewToggleHot = false, viewTogglePaletteDirty = true;
     COLORREF viewToggleBackground = CLR_INVALID, viewToggleForeground = CLR_INVALID;
     void ReleaseViewToggle() {
@@ -3801,6 +3810,7 @@ void Redraw(ViewState& state);
 int ViewHeight(ViewState& state);
 void SetActive(HWND hwnd, bool on);
 void RefreshViewToggleForFrame(HWND frame, bool deferred = false);
+void HealStaleExplorerLayout(ViewState& state);
 void DrawViewToggle(const ViewState& state, const DRAWITEMSTRUCT& item);
 bool SyncNativeSelection(ViewState& state,
     std::shared_ptr<PreparedNativeSelection> prepared = {});
@@ -24714,6 +24724,18 @@ LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             NavigateCurrentShellTab(*s, wParam != 0);
         return 0;
     case WM_TIMER:
+        if (wParam == kLayoutHealTimerId) {
+            if (!s || g_unloading.load() || !IsWindow(s->frameHwnd)) {
+                KillTimer(hwnd, kLayoutHealTimerId);
+                return 0;
+            }
+            // Still dragging or folding: look again on the next tick.
+            if (GetPropW(s->frameHwnd, kFrameSizingProperty) || FoldRunning(hwnd))
+                return 0;
+            KillTimer(hwnd, kLayoutHealTimerId);
+            HealStaleExplorerLayout(*s);
+            return 0;
+        }
         if (wParam == kFoldSettleTimerId) {
             if (!s || g_unloading.load() || !s->foldResizePending) {
                 KillTimer(hwnd, kFoldSettleTimerId);
@@ -29563,6 +29585,51 @@ void RequestStatusButtonGeometry(ViewState& state,const StatusButtonQuery& query
     SetEvent(work.columns.wake);
 }
 
+// A window snapped or tiled by many quick SetWindowPos calls can be left with
+// the tab, or the DirectUI layout inside it, sized for an older, shorter
+// frame: the status bar then sits mid-window with an empty band below it.
+// Re-run the layout once the size has settled. Two tries per size at most.
+void HealStaleExplorerLayout(ViewState& state) {
+    const HWND frame = state.frameHwnd;
+    if (!IsWindow(frame) || IsIconic(frame) || !IsWindowVisible(frame)) return;
+    const HWND tab = ActiveExplorerTab(frame);
+    if (!tab || tab == frame || state.activeTabHost != tab || !IsWindowVisible(tab)) return;
+    RECT client{}, tabRect{}, content{};
+    if (!GetClientRect(frame, &client) || !GetWindowRect(tab, &tabRect)) return;
+    MapWindowPoints(HWND_DESKTOP, frame, reinterpret_cast<POINT*>(&tabRect), 2);
+    if (state.layoutHealWidth != client.right || state.layoutHealHeight != client.bottom) {
+        state.layoutHealWidth = client.right;
+        state.layoutHealHeight = client.bottom;
+        state.layoutHealTries = 0;
+    }
+    if (state.layoutHealTries >= 2) return;
+    const int dpi = DpiOf(frame);
+    const bool shortTab = tabRect.bottom < client.bottom - Scale96(8, dpi);
+    bool staleInside = false;
+    const HWND host = FolderContentHost(state.nativeHwnd);
+    if (!shortTab && host && GetWindowRect(host, &content) && content.bottom > content.top) {
+        MapWindowPoints(HWND_DESKTOP, frame, reinterpret_cast<POINT*>(&content), 2);
+        // Only the status bar lives below the files area inside a tab.
+        staleInside = content.bottom > tabRect.top &&
+            tabRect.bottom - content.bottom > Scale96(64, dpi);
+    }
+    if (!shortTab && !staleInside) return;
+    ++state.layoutHealTries;
+    Wh_Log(L"[GPU layout] heal %s try=%d client=%ldx%ld tab.bottom=%ld content.bottom=%ld",
+        shortTab ? L"frame" : L"tab", state.layoutHealTries, client.right, client.bottom,
+        tabRect.bottom, content.bottom);
+    if (shortTab) {
+        SendMessageW(frame, WM_SIZE, IsZoomed(frame) ? SIZE_MAXIMIZED : SIZE_RESTORED,
+            MAKELPARAM(client.right, client.bottom));
+        return;
+    }
+    // Same size twice is ignored by USER, so step one pixel and back.
+    const int width = tabRect.right - tabRect.left, height = tabRect.bottom - tabRect.top;
+    constexpr UINT flags = SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE;
+    SetWindowPos(tab, nullptr, 0, 0, width, std::max(1, height - 1), flags);
+    SetWindowPos(tab, nullptr, 0, 0, width, height, flags);
+}
+
 void RefreshViewToggleForFrame(HWND frame, bool deferred) {
     if (g_unloading.load(std::memory_order_relaxed) || !IsWindow(frame)) return;
     if (deferred) {
@@ -29580,6 +29647,8 @@ void RefreshViewToggleForFrame(HWND frame, bool deferred) {
     for (HWND overlay : FrameOverlays(frame)) {
         auto state = State(overlay);
         if (!state || GetWindowThreadProcessId(overlay, nullptr) != GetCurrentThreadId()) continue;
+        if (state->activeTabHost == active && active != frame)
+            SetTimer(overlay, kLayoutHealTimerId, 350, nullptr);
         const bool show = g_showNativeViewToggleButton.load(std::memory_order_relaxed) &&
             state->activeTabHost == active && state->inScope &&
             state->detailsViewActive && !IsIconic(frame) && IsWindowVisible(frame);
@@ -29733,7 +29802,9 @@ void RefreshViewToggleForFrame(HWND frame, bool deferred) {
         const bool bounds = GetWindowRect(host ? host : state->nativeHwnd, &content) != FALSE;
         if (bounds) MapWindowPoints(HWND_DESKTOP, frame, reinterpret_cast<POINT*>(&content), 2);
         const int margin = Scale96(2, dpi);
-        const int footer = bounds ? client.bottom - std::clamp(content.bottom, 0L, client.bottom) : 0;
+        const LONG footerTop = bounds ? std::clamp(content.bottom, 0L, client.bottom) : client.bottom;
+        const int rawFooter = client.bottom - footerTop;
+        const int footer = rawFooter > Scale96(48, dpi) ? Scale96(32, dpi) : rawFooter;
         int height = std::max(1, std::min(Scale96(32, dpi),
             footer >= Scale96(20, dpi) ? footer : clientHeight - 2 * margin));
         int width = std::max(1, std::min(height, clientWidth - 2 * margin));
@@ -29742,7 +29813,8 @@ void RefreshViewToggleForFrame(HWND frame, bool deferred) {
         // viewport edge; no list/header extent or animation is changed.
         const int reserve = std::min(Scale96(72, dpi), std::max(margin, (clientWidth - width) / 3));
         int x = trailingAtLowX ? reserve : std::max(margin, clientWidth - width - reserve);
-        int y = std::max(0, clientHeight - height - (footer ? std::max(0, (footer - height) / 2) : margin));
+        int y = std::max(0, footer ? int(footerTop) + footer - height - std::max(0, (footer - height) / 2) :
+            clientHeight - height - margin);
         const auto query=CaptureStatusButtonQuery(frame,state->nativeHwnd,state->rtlLayout,dpi);
         RequestStatusButtonGeometry(*state,query);
         RECT measured{}; int gap=0;
@@ -29757,6 +29829,7 @@ void RefreshViewToggleForFrame(HWND frame, bool deferred) {
         }
         RECT previous{}; GetWindowRect(state->viewToggle, &previous);
         MapWindowPoints(HWND_DESKTOP, frame, reinterpret_cast<POINT*>(&previous), 2);
+        const bool wasShown = IsWindowVisible(state->viewToggle) != FALSE;
         if (!IsWindowVisible(state->viewToggle) || GetWindow(frame, GW_CHILD) != state->viewToggle ||
             previous.left != x || previous.top != y || previous.right - previous.left != width ||
             previous.bottom - previous.top != height)
@@ -29764,6 +29837,12 @@ void RefreshViewToggleForFrame(HWND frame, bool deferred) {
             SetWindowPos(state->viewToggle, HWND_TOP, x, y, width, height,
                 SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW);
             InvalidateRect(state->viewToggle, nullptr, FALSE);
+            if (wasShown && (previous.left != x || previous.top != y)) {
+                // The dock reaches about 16 px past the toggle on each side.
+                RECT stale = previous;
+                InflateRect(&stale, Scale96(16, dpi), Scale96(4, dpi));
+                RedrawWindow(frame, &stale, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN);
+            }
             if(g_perf.load(std::memory_order_relaxed))
                 Wh_Log(L"[GPU status] layout source=%s root=%p neighbor=%p x=%d y=%d w=%d h=%d gap=%d pending=%d",
                     fromNative ? (state->viewToggleGeometry.accessible ? L"accessibility" : L"HWND") : L"fallback",
