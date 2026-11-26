@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-27T05:18:00+08:00",
+  "generatedAt": "2026-11-27T05:22:10+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 121,
@@ -788,7 +788,7 @@
       "name": "Seamless Dock",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "0.3.18",
+      "version": "0.3.19",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",

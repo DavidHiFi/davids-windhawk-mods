@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.18
+// @version         0.3.19
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,6 +26,12 @@ the edge of the screen across from your taskbar, so you get a clean bar on one
 side and a dock on the other, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
+
+## What's new in 0.3.19
+
+- The title pill in the middle of the top bar now hides with the taskbar when the
+  taskbar is set to hide by itself, and comes back with it, like every other pill
+  on the bar. It used to stay floating on its own after the bar slid away.
 
 ## What's new in 0.3.17
 
@@ -2109,7 +2115,7 @@ ULONGLONG g_lastAnim = 0, g_outSince = 0;
 std::wstring g_popKey;  // item the preview shows
 
 constexpr UINT_PTR kTimerRebuild = 1, kTimerAnim = 2, kTimerHover = 3, kTimerTrack = 4, kTimerFull = 5,
-                   kTimerRecycle = 6, kTimerTitle = 7;
+                   kTimerRecycle = 6, kTimerTitle = 7, kTimerBar = 8;
 ULONGLONG g_recycleChecked = 0;
 bool g_rebuildPending = false;
 
@@ -2932,6 +2938,74 @@ bool TopBarRect(RECT& r) {
            r.right - r.left > monW / 2;
 }
 
+// Windows 11 hides an auto-hide bar by sliding its picture away: the window keeps
+// its rect, stays visible, and the appbar state can read 0. What the shell does
+// show is whether the bar holds screen space. A bar that holds none is an
+// auto-hide bar, and it is on screen only while the pointer is on it (or on its
+// edge while it is away) or one of its own surfaces is in front. Same rule as
+// the strips in Seamless Taskbar, so every dock on the bar comes and goes together.
+bool g_barAway = false, g_barAwayWant = false;
+
+bool BarHoldsSpace(HWND tray, const RECT& bar) {
+    MONITORINFO mi{sizeof(mi)};
+    if (!GetMonitorInfoW(MonitorFromWindow(tray, MONITOR_DEFAULTTONEAREST), &mi)) return true;
+    int barH = bar.bottom - bar.top;
+    return mi.rcWork.top - mi.rcMonitor.top >= (barH + 1) / 2;
+}
+
+bool BarRevealed(HWND tray, const RECT& bar) {
+    POINT pt{};
+    if (GetCursorPos(&pt)) {
+        RECT zone = g_barAway ? RECT{bar.left, bar.top, bar.right, bar.top + 3}
+                              : RECT{bar.left, bar.top - 2, bar.right, bar.bottom + 2};
+        if (PtInRect(&zone, pt)) return true;
+    }
+    HWND fg = GetForegroundWindow();
+    if (!fg) return false;
+    if (fg == tray || GetAncestor(fg, GA_ROOTOWNER) == tray) return true;
+    wchar_t cls[64] = {};
+    GetClassNameW(fg, cls, ARRAYSIZE(cls));
+    if (!_wcsicmp(cls, L"Shell_TrayWnd") || !_wcsicmp(cls, L"Shell_SecondaryTrayWnd") ||
+        !_wcsicmp(cls, L"XamlExplorerHostIslandWindow") || !_wcsicmp(cls, L"MultitaskingViewFrame"))
+        return true;
+    if (!_wcsicmp(cls, L"Windows.UI.Core.CoreWindow")) {
+        DWORD pid = 0;
+        GetWindowThreadProcessId(fg, &pid);
+        HANDLE p = pid ? OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) : nullptr;
+        if (!p) return false;
+        wchar_t path[MAX_PATH] = {};
+        DWORD n = ARRAYSIZE(path);
+        BOOL ok = QueryFullProcessImageNameW(p, 0, path, &n);
+        CloseHandle(p);
+        if (!ok) return false;
+        PCWSTR name = wcsrchr(path, L'\\');
+        name = name ? name + 1 : path;
+        return !_wcsicmp(name, L"StartMenuExperienceHost.exe") || !_wcsicmp(name, L"SearchHost.exe") ||
+               !_wcsicmp(name, L"ShellExperienceHost.exe");
+    }
+    return false;
+}
+
+// One look at the bar. Hides wait for a second agreeing look, so one misread
+// never pulls the pill off a bar that is on screen; shows are at once.
+// Returns true when the answer changed.
+bool CheckBarAway() {
+    RECT bar;
+    bool want = false;
+    HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+    bool autoHideBar = tray && TopBarRect(bar) && !BarHoldsSpace(tray, bar);
+    if (autoHideBar) want = !BarRevealed(tray, bar);
+    bool away = want && g_barAwayWant;
+    g_barAwayWant = want;
+    if (g_dock) {
+        if (autoHideBar) SetTimer(g_dock, kTimerBar, 100, nullptr);
+        else KillTimer(g_dock, kTimerBar);
+    }
+    if (away == g_barAway) return false;
+    g_barAway = away;
+    return true;
+}
+
 bool IsDesktop(HWND h) {
     wchar_t cls[64];
     GetClassNameW(h, cls, ARRAYSIZE(cls));
@@ -3395,7 +3469,7 @@ bool PaintTitle(const std::wstring& app, const std::wstring& title, Icon* ic, co
 void UpdateTitle(bool force) {
     if (!g_title) return;
     RECT bar;
-    if (!S.showTitle || g_fullscreen || !TopBarRect(bar)) {
+    if (!S.showTitle || g_fullscreen || !TopBarRect(bar) || g_barAway) {
         HideTitle();
         return;
     }
@@ -3770,8 +3844,12 @@ LRESULT CALLBACK DockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     }
                     break;
                 }
+                case kTimerBar:
+                    if (CheckBarAway()) UpdateTitle(true);
+                    break;
                 case kTimerFull: {
                     CheckFullscreen();
+                    CheckBarAway();
                     UpdateTitle();
                     // Keep the glass alive on the always-up dock (see ApplyBackdrop).
                     static ULONGLONG glassAt = GetTickCount64();
