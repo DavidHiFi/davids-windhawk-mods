@@ -2,7 +2,7 @@
 // @id              seamless-fps-overlay
 // @name            Seamless FPS Overlay
 // @description     FPS, frame times and PC temperatures over any game, with nothing put into the game
-// @version         1.0.0
+// @version         1.1.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -18,30 +18,46 @@
 /*
 # Seamless FPS Overlay
 
-An in-game overlay for FPS, frame times, 1% lows and your graphics card and
-processor readings. It does the job of RivaTuner's overlay, but nothing is put
-into the game: Windows itself reports each frame, so it is safe with anti-cheat
-and works over Plutonium.
+An in-game overlay for FPS, frame times, the worst moments and your graphics
+card and processor readings. It looks like the RivaTuner benchmark layout,
+moving pictures included, and nothing is put into the game: Windows itself
+reports each frame, so it is safe with anti-cheat and works over Plutonium.
 
 ![Seamless FPS Overlay preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-fps-overlay.png)
 
+## What's new in 1.1.0
+The Benchmark layout now matches the old RivaTuner one: the card name on top,
+frame rate, game info, processor cores and system memory on the left, and the
+graphics card, video memory and processor on the right, each in its own glass
+box. The graphics card fan spins as fast as the real fan, a busy chip gets
+flames and the processor runs its code. New readings: smoothness, which
+DirectX or Vulkan the game uses, play time, driver version, a load bar for
+each core, memory speed, video memory temperature and two processor clocks.
+Every box can move sides, change places, grow and take its own colour. Every
+name can be renamed, every warning limit set, and the graph and the moving
+pictures each have their own switches. The common settings sit on the first
+page.
+
 ## Features
-- **Real frame numbers.** FPS, frame time, 1% and 0.1% lows and the average
-  over the last 20 seconds, plus a small frame time graph where spikes are
-  stutters.
-- **PC readings.** Graphics card load, temperature, hot spot, power, clock,
-  video memory and fan speed. Processor load, temperature, power and clock,
-  and memory used. A reading the PC can't give shows a dash, never a zero.
-- **Four layouts.** FPS only, a compact line, the full two-column benchmark
-  layout and a vertical stack. Pick every reading on its own.
-- **Your look.** Blurred glass, a see-through tint, solid dark or no background.
-  Any font, the blue to mauve gradient (flip it if you like), rounded corners,
-  a border and the size you want.
+- **The RivaTuner look, cleaner.** Eight boxes in two columns with Mocha
+  colours, a blue to mauve gradient you can flip, rounded corners and crisp
+  text. The pictures are drawn fresh, not copied.
+- **Real frame numbers.** FPS, frame time, the slowest 1% and 0.1% of frames,
+  the average and smoothness over the last 20 seconds, and a frame time graph
+  where spikes are stutters.
+- **PC readings.** Graphics card load, power, clocks, fan, temperature and hot
+  spot. Video memory use, temperature and clock. Processor load, power,
+  clocks and temperature, a bar per core, and system memory use and speed. A
+  reading the PC can't give shows a dash, never a made-up zero.
+- **Change the small things.** Each box's side, place, size and colour, the
+  name in front of every number, each warning limit, the graph's length,
+  height and style, and the speed of each moving part.
+- **Four layouts.** Benchmark, FPS only, one line and a tall list.
 - **Shows up only in games.** It appears when the app in front draws its own
   frames the way games do, and stays away from browsers and the desktop. Or
   keep it up everywhere, or only over the games you list.
-- **Light on the PC.** It only redraws when a number changes. Hidden, it stops
-  counting frames and draws nothing.
+- **Light on the PC.** The numbers redraw only when they change, and the moving
+  pictures stop while the overlay is hidden.
 - **Fades and slides** in and out. Turn it off or pick a speed under Look,
   Motion. It stays still when Windows animation effects are off.
 
@@ -53,16 +69,17 @@ and works over Plutonium.
 | (none) | Next layout |
 
 Change or clear either in the settings. The tray icon shows or hides the
-overlay with a click; right-click it for layouts and settings.
+overlay with a click. Right-click it for layouts and settings.
 
 ## Notes
 - It draws over borderless and windowed games. A game in true exclusive full
-  screen draws over everything, so the overlay can't show there; switch the
+  screen draws over everything, so the overlay can't show there. Switch the
   game to borderless.
 - Counting frames needs administrator rights, so the mod runs in Windhawk's
   administrator helper.
 - Processor temperature and power need the PawnIO driver. Without it those
   show a dash and everything else still works.
+- Input delay is not measured yet, so that line is off by default.
 
 ## Credits
 Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
@@ -73,86 +90,592 @@ Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
 /*
 - preset: "benchmark"
   $name: "Layout"
-  $description: "FPS only shows one number. Compact line puts everything in one row. Full benchmark layout is the two-column one from your old RivaTuner setup. Vertical stack lists each reading on its own line."
+  $description: "Benchmark is the two-column layout from your old RivaTuner setup, with the moving pictures. FPS only shows one number. One line puts the main numbers in a single row. Tall list puts each number on its own line."
   $options:
+  - benchmark: "Benchmark (your RivaTuner layout)"
   - fps: "FPS only"
-  - compact: "Compact line"
-  - benchmark: "Full benchmark layout"
-  - vertical: "Vertical stack"
+  - compact: "One line"
+  - vertical: "Tall list"
 - showOnStart: true
   $name: "Show when the mod starts"
-  $description: "Off, the overlay waits for the shortcut or the tray menu."
-- showGpuName: true
-  $name: "Graphics card name"
-  $description: "Shows the card's name at the top of the full benchmark layout."
-- updateRate: "500"
-  $name: "Update speed"
-  $description: "How often the numbers change. Slower is easier to read and lighter on the PC."
+  $description: "Off, the overlay waits until you press the shortcut or click the tray icon."
+- showWhen: "games"
+  $name: "Show the overlay"
+  $description: "In games shows it over any program that draws its own frames, the way games do. Always keeps it up everywhere, desktop included. Only listed games uses the list on the Games and keys page."
   $options:
-  - 250: "Four times a second"
-  - 500: "Twice a second"
-  - 1000: "Once a second"
-- fps: true
-  $name: "FPS"
-  $description: "Frames per second right now."
-- frameTime: true
-  $name: "Frame time"
-  $description: "How long each frame takes, in milliseconds."
-- low1: true
-  $name: "1% low"
-  $description: "The frame rate of the slowest 1% of frames over the last 20 seconds."
-- low01: true
-  $name: "0.1% low"
-  $description: "The frame rate of the slowest 0.1% of frames over the last 20 seconds."
-- avgFps: true
-  $name: "Average FPS"
-  $description: "The average over the last 20 seconds."
-- frameGraph: true
-  $name: "Frame time graph"
-  $description: "A small line of the last few seconds of frame times. Spikes are stutters."
-- gpuUsage: true
-  $name: "Graphics card load"
-- gpuTemp: true
-  $name: "Graphics card temperature"
-- gpuHotspot: true
-  $name: "Hot spot temperature"
-  $description: "The hottest point on the chip."
-- gpuPower: true
-  $name: "Graphics card power"
-  $description: "In watts."
-- gpuClock: true
-  $name: "Graphics card clock"
-  $description: "In MHz."
-- gpuMemClock: false
-  $name: "Memory clock"
-  $description: "The video memory clock, in MHz."
-- vram: true
-  $name: "Video memory used"
-  $description: "In percent of the card's memory."
-- gpuFan: true
-  $name: "Fan speed"
-  $description: "In RPM, with the percent next to it."
-- cpuUsage: true
-  $name: "Processor load"
-- cpuTemp: true
-  $name: "Processor temperature"
-  $description: "Needs the PawnIO driver. Without it this shows a dash."
-- cpuPower: false
-  $name: "Processor power"
-  $description: "In watts. Needs the PawnIO driver."
-- cpuClock: false
-  $name: "Processor clock"
-  $description: "The average busy clock, in MHz."
-- ram: true
-  $name: "Memory used"
-  $description: "System memory, in percent."
+  - games: "In games"
+  - always: "Always"
+  - listed: "Only listed games"
+- toggleHotkey: "Ctrl+Alt+Shift+]"
+  $name: "Show or hide shortcut"
+  $description: "The same keys your Afterburner used. Click the box and press the keys. Backspace clears it."
 - corner: "topLeft"
   $name: "Corner"
+  $description: "Which corner of the screen the overlay sits in."
   $options:
   - topLeft: "Top left"
   - topRight: "Top right"
   - bottomLeft: "Bottom left"
   - bottomRight: "Bottom right"
+- scale: 100
+  $name: "Size"
+  $description: "In percent. 100 is the normal size."
+- background: "glass"
+  $name: "Background"
+  $description: "Blurred glass blurs the game behind each box. See-through tint is a light dark wash. Solid dark is the easiest to read. None leaves only the text, with a soft shadow."
+  $options:
+  - glass: "Blurred glass"
+  - tint: "See-through tint"
+  - solid: "Solid dark"
+  - none: "None"
+- opacity: 100
+  $name: "Opacity"
+  $description: "How solid the whole overlay is, in percent."
+- cornerRadius: 12
+  $name: "Corner roundness"
+  $description: "How round the box corners are, in pixels. 0 gives square corners."
+- flipGradient: false
+  $name: "Flip the gradient"
+  $description: "Off, blue sits at the top left and mauve at the bottom right. On, they swap."
+- animations: true
+  $name: "Moving pictures"
+  $description: "The spinning fan, the flames on a busy chip and the running code on the processor. They stop while the overlay is hidden."
+- updateRate: "500"
+  $name: "Update speed"
+  $description: "How often the numbers change. Slower is easier to read and a little lighter on the PC."
+  $options:
+  - 250: "Four times a second"
+  - 500: "Twice a second"
+  - 1000: "Once a second"
+- showGpuName: true
+  $name: "Graphics card name"
+  $description: "The line across the top."
+- throttleWarn: true
+  $name: "Slow-down note"
+  $description: "Shows HEAT LIMIT or POWER LIMIT when a chip slows itself down."
+- fps: true
+  $name: "FPS"
+  $description: "Frames per second right now."
+- low01: true
+  $name: "Worst moments (slowest 0.1% of frames)"
+  $description: "The frame rate during the very worst moments of the last 20 seconds."
+- low1: true
+  $name: "Bad moments (slowest 1% of frames)"
+  $description: "The frame rate during the slowest moments of the last 20 seconds."
+- avgFps: true
+  $name: "Average FPS"
+  $description: "Over the last 20 seconds."
+- jitter: true
+  $name: "Smoothness"
+  $description: "How much the time between frames jumps around, in milliseconds. Lower feels smoother."
+- frameTime: true
+  $name: "Frame time"
+  $description: "How long each frame takes, in milliseconds."
+- frameGraph: true
+  $name: "Frame time graph"
+  $description: "A line of the last few seconds of frame times. Tall spikes are stutters."
+- latency: false
+  $name: "Input delay"
+  $description: "This mod cannot measure it yet, so it shows a dash. Off by default."
+- api: true
+  $name: "Graphics engine"
+  $description: "Whether the game draws with DirectX 9, 11, 12, OpenGL or Vulkan."
+- session: true
+  $name: "Play time"
+  $description: "How long the game in front has been running."
+- driver: true
+  $name: "Driver version"
+  $description: "The graphics driver version."
+- cpuName: true
+  $name: "Processor name"
+- coreBars: true
+  $name: "Load bar for each core"
+- coreBarsEach: "core"
+  $name: "One bar for each"
+  $description: "Threads gives twice as many bars on processors that run two threads per core."
+  $options:
+  - core: "Core"
+  - thread: "Thread"
+- ram: true
+  $name: "Memory in use"
+  $description: "In percent."
+- ramUsed: true
+  $name: "Memory in use, in GB"
+  $description: "Used and total."
+- ramSpeed: true
+  $name: "Memory speed"
+  $description: "In MT/s, the number on the memory box."
+- ramClock: true
+  $name: "Memory clock"
+  $description: "In MHz, half the speed above."
+- gpuArt: true
+  $name: "Graphics card picture"
+  $description: "The card drawing with its fan."
+- gpuUsage: true
+  $name: "Load"
+  $description: "How busy the card is, in percent."
+- gpuPower: true
+  $name: "Power"
+  $description: "In watts."
+- gpuClock: true
+  $name: "Clock"
+  $description: "In MHz."
+- gpuFan: true
+  $name: "Fan speed"
+  $description: "In RPM, with the percent next to it."
+- gpuTemp: true
+  $name: "Temperature"
+- gpuHotspot: true
+  $name: "Hot spot"
+  $description: "The hottest point on the chip."
+- vram: true
+  $name: "How full"
+  $description: "In percent of the card's memory."
+- vramUsed: true
+  $name: "Used, in GB"
+  $description: "Used and total."
+- vramTemp: true
+  $name: "Temperature"
+  $description: "Some cards do not report it. Then it shows a dash."
+- gpuMemClock: true
+  $name: "Clock"
+  $description: "In MHz."
+- cpuArt: true
+  $name: "Processor picture"
+  $description: "The chip drawing with its running code."
+- cpuUsage: true
+  $name: "Load"
+  $description: "How busy the processor is, in percent."
+- cpuPower: true
+  $name: "Power"
+  $description: "In watts. Needs the PawnIO driver, or it shows a dash."
+- cpuClock: true
+  $name: "Boost clock"
+  $description: "The fastest core right now, in GHz."
+- cpuBusyClock: true
+  $name: "Busy clock"
+  $description: "The average clock while the cores are working, in MHz."
+- cpuTemp: true
+  $name: "Temperature"
+  $description: "Needs the PawnIO driver, or it shows a dash."
+- showName: true
+  $name: "Show this box"
+  $description: "The graphics card name across the top, with a note when the card slows down to stay cool or within its power limit."
+- columnName: "left"
+  $name: "Side"
+  $options:
+  - left: "Left column"
+  - right: "Right column"
+- orderName: 1
+  $name: "Place in its column"
+  $description: "1 is the top. Boxes with the same number keep their usual order."
+- sizeName: 100
+  $name: "Size"
+  $description: "In percent of the overlay size."
+- colourName: "same"
+  $name: "Name colour"
+  $description: "The colour of the words and pictures in this box."
+  $options:
+  - same: "Same as the names"
+  - gradient: "Blue to mauve"
+  - blue: "Blue"
+  - mauve: "Mauve"
+  - lavender: "Lavender"
+  - sapphire: "Sapphire"
+  - sky: "Sky"
+  - teal: "Teal"
+  - green: "Green"
+  - yellow: "Yellow"
+  - peach: "Peach"
+  - pink: "Pink"
+  - red: "Red"
+  - white: "White"
+  - custom: "My own colour"
+- showFrames: true
+  $name: "Show this box"
+  $description: "FPS, the worst moments, the average, smoothness and the frame time graph."
+- columnFrames: "left"
+  $name: "Side"
+  $options:
+  - left: "Left column"
+  - right: "Right column"
+- orderFrames: 2
+  $name: "Place in its column"
+  $description: "1 is the top. Boxes with the same number keep their usual order."
+- sizeFrames: 100
+  $name: "Size"
+  $description: "In percent of the overlay size."
+- colourFrames: "same"
+  $name: "Name colour"
+  $description: "The colour of the words and pictures in this box."
+  $options:
+  - same: "Same as the names"
+  - gradient: "Blue to mauve"
+  - blue: "Blue"
+  - mauve: "Mauve"
+  - lavender: "Lavender"
+  - sapphire: "Sapphire"
+  - sky: "Sky"
+  - teal: "Teal"
+  - green: "Green"
+  - yellow: "Yellow"
+  - peach: "Peach"
+  - pink: "Pink"
+  - red: "Red"
+  - white: "White"
+  - custom: "My own colour"
+- showInfo: true
+  $name: "Show this box"
+  $description: "Which DirectX or Vulkan the game uses, how long you have played and the driver version."
+- columnInfo: "left"
+  $name: "Side"
+  $options:
+  - left: "Left column"
+  - right: "Right column"
+- orderInfo: 3
+  $name: "Place in its column"
+  $description: "1 is the top. Boxes with the same number keep their usual order."
+- sizeInfo: 100
+  $name: "Size"
+  $description: "In percent of the overlay size."
+- colourInfo: "same"
+  $name: "Name colour"
+  $description: "The colour of the words and pictures in this box."
+  $options:
+  - same: "Same as the names"
+  - gradient: "Blue to mauve"
+  - blue: "Blue"
+  - mauve: "Mauve"
+  - lavender: "Lavender"
+  - sapphire: "Sapphire"
+  - sky: "Sky"
+  - teal: "Teal"
+  - green: "Green"
+  - yellow: "Yellow"
+  - peach: "Peach"
+  - pink: "Pink"
+  - red: "Red"
+  - white: "White"
+  - custom: "My own colour"
+- showCores: true
+  $name: "Show this box"
+  $description: "The processor name and a small load bar for each core."
+- columnCores: "left"
+  $name: "Side"
+  $options:
+  - left: "Left column"
+  - right: "Right column"
+- orderCores: 4
+  $name: "Place in its column"
+  $description: "1 is the top. Boxes with the same number keep their usual order."
+- sizeCores: 100
+  $name: "Size"
+  $description: "In percent of the overlay size."
+- colourCores: "same"
+  $name: "Name colour"
+  $description: "The colour of the words and pictures in this box."
+  $options:
+  - same: "Same as the names"
+  - gradient: "Blue to mauve"
+  - blue: "Blue"
+  - mauve: "Mauve"
+  - lavender: "Lavender"
+  - sapphire: "Sapphire"
+  - sky: "Sky"
+  - teal: "Teal"
+  - green: "Green"
+  - yellow: "Yellow"
+  - peach: "Peach"
+  - pink: "Pink"
+  - red: "Red"
+  - white: "White"
+  - custom: "My own colour"
+- showMemory: true
+  $name: "Show this box"
+  $description: "How much memory is in use, and its speed."
+- columnMemory: "left"
+  $name: "Side"
+  $options:
+  - left: "Left column"
+  - right: "Right column"
+- orderMemory: 5
+  $name: "Place in its column"
+  $description: "1 is the top. Boxes with the same number keep their usual order."
+- sizeMemory: 100
+  $name: "Size"
+  $description: "In percent of the overlay size."
+- colourMemory: "same"
+  $name: "Name colour"
+  $description: "The colour of the words and pictures in this box."
+  $options:
+  - same: "Same as the names"
+  - gradient: "Blue to mauve"
+  - blue: "Blue"
+  - mauve: "Mauve"
+  - lavender: "Lavender"
+  - sapphire: "Sapphire"
+  - sky: "Sky"
+  - teal: "Teal"
+  - green: "Green"
+  - yellow: "Yellow"
+  - peach: "Peach"
+  - pink: "Pink"
+  - red: "Red"
+  - white: "White"
+  - custom: "My own colour"
+- showCard: true
+  $name: "Show this box"
+  $description: "The card picture with its spinning fan, load, power, clock, fan and temperatures."
+- columnCard: "right"
+  $name: "Side"
+  $options:
+  - left: "Left column"
+  - right: "Right column"
+- orderCard: 1
+  $name: "Place in its column"
+  $description: "1 is the top. Boxes with the same number keep their usual order."
+- sizeCard: 100
+  $name: "Size"
+  $description: "In percent of the overlay size."
+- colourCard: "same"
+  $name: "Name colour"
+  $description: "The colour of the words and pictures in this box."
+  $options:
+  - same: "Same as the names"
+  - gradient: "Blue to mauve"
+  - blue: "Blue"
+  - mauve: "Mauve"
+  - lavender: "Lavender"
+  - sapphire: "Sapphire"
+  - sky: "Sky"
+  - teal: "Teal"
+  - green: "Green"
+  - yellow: "Yellow"
+  - peach: "Peach"
+  - pink: "Pink"
+  - red: "Red"
+  - white: "White"
+  - custom: "My own colour"
+- showVram: true
+  $name: "Show this box"
+  $description: "The memory on the graphics card: how full, how hot and its clock."
+- columnVram: "right"
+  $name: "Side"
+  $options:
+  - left: "Left column"
+  - right: "Right column"
+- orderVram: 2
+  $name: "Place in its column"
+  $description: "1 is the top. Boxes with the same number keep their usual order."
+- sizeVram: 100
+  $name: "Size"
+  $description: "In percent of the overlay size."
+- colourVram: "same"
+  $name: "Name colour"
+  $description: "The colour of the words and pictures in this box."
+  $options:
+  - same: "Same as the names"
+  - gradient: "Blue to mauve"
+  - blue: "Blue"
+  - mauve: "Mauve"
+  - lavender: "Lavender"
+  - sapphire: "Sapphire"
+  - sky: "Sky"
+  - teal: "Teal"
+  - green: "Green"
+  - yellow: "Yellow"
+  - peach: "Peach"
+  - pink: "Pink"
+  - red: "Red"
+  - white: "White"
+  - custom: "My own colour"
+- showProcessor: true
+  $name: "Show this box"
+  $description: "The chip picture, load, power, clocks and temperature."
+- columnProcessor: "right"
+  $name: "Side"
+  $options:
+  - left: "Left column"
+  - right: "Right column"
+- orderProcessor: 3
+  $name: "Place in its column"
+  $description: "1 is the top. Boxes with the same number keep their usual order."
+- sizeProcessor: 100
+  $name: "Size"
+  $description: "In percent of the overlay size."
+- colourProcessor: "same"
+  $name: "Name colour"
+  $description: "The colour of the words and pictures in this box."
+  $options:
+  - same: "Same as the names"
+  - gradient: "Blue to mauve"
+  - blue: "Blue"
+  - mauve: "Mauve"
+  - lavender: "Lavender"
+  - sapphire: "Sapphire"
+  - sky: "Sky"
+  - teal: "Teal"
+  - green: "Green"
+  - yellow: "Yellow"
+  - peach: "Peach"
+  - pink: "Pink"
+  - red: "Red"
+  - white: "White"
+  - custom: "My own colour"
+- capitals: true
+  $name: "Names in capitals"
+  $description: "Off, the names show the way you typed them."
+- lblFps: "FPS"
+  $name: "FPS"
+- lbl01: "0.1%"
+  $name: "Worst moments"
+- lbl1: "1%"
+  $name: "Bad moments"
+- lblAvg: "AVG"
+  $name: "Average"
+- lblJitter: "JITTER"
+  $name: "Smoothness"
+- lblFrame: "FRAME TIME"
+  $name: "Frame time"
+- lblLatency: "LATENCY"
+  $name: "Input delay"
+- lblApi: "API"
+  $name: "Graphics engine"
+- lblTime: "PLAY TIME"
+  $name: "Play time"
+- lblDriver: "DRIVER"
+  $name: "Driver version"
+- lblRam: "RAM"
+  $name: "Box name"
+- lblRamUsed: "USED"
+  $name: "In use"
+- lblRamSpeed: "SPEED"
+  $name: "Speed"
+- lblRamClock: "CLOCK"
+  $name: "Clock"
+- lblGpuLoad: "LOAD"
+  $name: "Load"
+- lblGpuPower: "POWER"
+  $name: "Power"
+- lblGpuClock: "CLOCK"
+  $name: "Clock"
+- lblFan: "FAN"
+  $name: "Fan"
+- lblGpuTemp: "TEMP"
+  $name: "Temperature"
+- lblHotspot: "HOT SPOT"
+  $name: "Hot spot"
+- lblVram: "VRAM"
+  $name: "Box name"
+- lblVramUsed: "USED"
+  $name: "Used"
+- lblVramTemp: "TEMP"
+  $name: "Temperature"
+- lblVramClock: "CLOCK"
+  $name: "Clock"
+- lblCpuLoad: "LOAD"
+  $name: "Load"
+- lblCpuPower: "POWER"
+  $name: "Power"
+- lblCpuBoost: "BOOST"
+  $name: "Boost clock"
+- lblCpuBusy: "BUSY CLOCK"
+  $name: "Busy clock"
+- lblCpuTemp: "TEMP"
+  $name: "Temperature"
+- warnColour: "red"
+  $name: "Warning colour"
+  $description: "A number past its limit turns this colour."
+  $options:
+  - gradient: "Blue to mauve"
+  - blue: "Blue"
+  - mauve: "Mauve"
+  - lavender: "Lavender"
+  - sapphire: "Sapphire"
+  - sky: "Sky"
+  - teal: "Teal"
+  - green: "Green"
+  - yellow: "Yellow"
+  - peach: "Peach"
+  - pink: "Pink"
+  - red: "Red"
+  - white: "White"
+  - custom: "My own colour"
+- gpuTempWarn: 83
+  $name: "Graphics card hotter than"
+  $description: "In \u00b0C."
+- hotspotWarn: 95
+  $name: "Hot spot or video memory hotter than"
+  $description: "In \u00b0C."
+- cpuTempWarn: 85
+  $name: "Processor hotter than"
+  $description: "In \u00b0C."
+- vramWarn: 95
+  $name: "Video memory fuller than"
+  $description: "In percent."
+- ramWarn: 90
+  $name: "System memory fuller than"
+  $description: "In percent."
+- fpsWarn: 0
+  $name: "FPS lower than"
+  $description: "0 turns this warning off."
+- graphStyle: "line"
+  $name: "Graph style"
+  $options:
+  - line: "Line"
+  - area: "Filled"
+  - bars: "Bars"
+- graphSeconds: 3
+  $name: "Graph length"
+  $description: "How many seconds the graph shows."
+- graphHeight: 36
+  $name: "Graph height"
+  $description: "In pixels, before the overlay size."
+- graphTop: "50"
+  $name: "Top of the graph"
+  $description: "The frame time at the top edge. Fit to the frames picks it from what is on screen."
+  $options:
+  - auto: "Fit to the frames"
+  - 33: "33 ms (30 FPS)"
+  - 50: "50 ms (20 FPS)"
+  - 100: "100 ms (10 FPS)"
+- spikeMarks: true
+  $name: "Mark stutters"
+  $description: "A small mark above each big spike."
+- fanSpin: true
+  $name: "Spinning fan"
+  $description: "Spins as fast as the real fan, scaled down."
+- fanSpeed: 100
+  $name: "Fan spin speed"
+  $description: "In percent. 100 follows the real fan."
+- flames: true
+  $name: "Flames on a busy chip"
+  $description: "Small flames around a load ring that is nearly full."
+- flameAt: 97
+  $name: "Flames start at"
+  $description: "Load in percent."
+- binaryCode: true
+  $name: "Running code"
+  $description: "The ones and zeros on the processor picture."
+- smoothDials: true
+  $name: "Smooth dials"
+  $description: "Rings and needles glide to a new number."
+- throttlePulse: true
+  $name: "Pulse the slow-down note"
+  $description: "HEAT LIMIT and POWER LIMIT gently pulse."
+- animFps: "30"
+  $name: "Picture frame rate"
+  $description: "How often the moving pictures redraw. Lower costs less."
+  $options:
+  - 15: "15 a second"
+  - 30: "30 a second"
+  - 60: "60 a second"
+- gpuGaugeMax: 3000
+  $name: "Graphics clock dial ends at"
+  $description: "In MHz."
+- cpuGaugeMax: 6000
+  $name: "Processor clock dial ends at"
+  $description: "In MHz."
 - offsetX: 16
   $name: "Distance from the side"
   $description: "In pixels."
@@ -161,48 +684,48 @@ Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
   $description: "In pixels."
 - monitor: "game"
   $name: "Screen"
-  $description: "The game's screen follows the game. Main screen keeps the overlay on your main monitor."
+  $description: "Follow the game moves the overlay to whichever screen the game is on."
   $options:
-  - game: "The game's screen"
+  - game: "Follow the game"
   - primary: "Main screen"
-- scale: 100
-  $name: "Size"
-  $description: "In percent. 100 is normal."
-- background: "glass"
-  $name: "Background"
-  $description: "Blurred glass blurs the game behind it. See-through tint is a light dark wash. Solid dark is the easiest to read. None leaves only the text, with a soft shadow."
+- panels: "cards"
+  $name: "Boxes"
+  $description: "Separate boxes gives each block its own panel, like RivaTuner. One panel puts everything on a single background."
   $options:
-  - glass: "Blurred glass"
-  - tint: "See-through tint"
-  - solid: "Solid dark"
-  - none: "None"
-- opacity: 100
-  $name: "Opacity"
-  $description: "In percent, for the whole overlay."
+  - cards: "Separate boxes"
+  - one: "One panel"
+- blockGap: 6
+  $name: "Gap between boxes"
+  $description: "In pixels."
+- bgStrength: 100
+  $name: "Background strength"
+  $description: "How dark the box fill is, in percent. 0 leaves only the blur."
 - rounded: true
   $name: "Rounded corners"
-- cornerRadius: 12
-  $name: "Corner size"
-  $description: "In pixels, before the size above."
+  $description: "Off gives square corners at any roundness."
 - border: true
-  $name: "Border"
-  $description: "A thin edge around the overlay."
+  $name: "Edge"
+  $description: "A thin line around each box."
 - borderColour: "gradient"
-  $name: "Border colour"
-  $description: "gradient for the blue to mauve edge, or a colour such as #45475A."
+  $name: "Edge colour"
+  $description: "Type gradient for the blue to mauve edge, or a colour like #45475A."
 - fontFace: "FiraCode Nerd Font"
   $name: "Font"
   $description: "Any font installed on this PC. If it is missing, Segoe UI is used."
 - fontWeight: "bold"
-  $name: "Weight"
+  $name: "Thickness"
   $options:
   - normal: "Normal"
+  - medium: "Medium"
   - semibold: "Semibold"
   - bold: "Bold"
   - heavy: "Heavy"
+- textSize: 100
+  $name: "Text size"
+  $description: "In percent, on top of the overlay size."
 - labelStyle: "gradient"
-  $name: "Label colour"
-  $description: "The colour of the names, such as GPU and FPS."
+  $name: "Name colour"
+  $description: "The colour of the names, like GPU and FPS, and of the pictures."
   $options:
   - gradient: "Blue to mauve"
   - blue: "Blue"
@@ -218,29 +741,16 @@ Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
   - custom: "My own colour"
 - customColour: "#F5C2E7"
   $name: "My own colour"
-  $description: "Used when a colour above is set to My own colour. Write it like #F5C2E7."
-- flipGradient: false
-  $name: "Flip the gradient"
-  $description: "Off, blue sits top left and mauve bottom right. On, they swap."
-- showWhen: "games"
-  $name: "Show the overlay"
-  $description: "In games shows it whenever the app in front draws its own frames, the way games do. Always keeps it up everywhere. Only listed games uses the list below."
-  $options:
-  - games: "In games"
-  - always: "Always"
-  - listed: "Only listed games"
+  $description: "Used wherever a colour is set to My own colour."
 - gameList: ""
   $name: "Listed games"
-  $description: "Program names split by commas, such as plutonium-bootstrapper-win32.exe, cs2.exe."
+  $description: "Used when Show the overlay is set to Only listed games. Program names split by commas, like cs2.exe, plutonium-bootstrapper-win32.exe."
 - hideList: ""
   $name: "Never show over"
   $description: "Program names split by commas. The overlay stays hidden over these."
-- toggleHotkey: "Ctrl+Alt+Shift+]"
-  $name: "Show or hide the overlay"
-  $description: "The same keys your Afterburner used. Press the keys in the box. Backspace clears it."
 - presetHotkey: ""
-  $name: "Next layout"
-  $description: "Steps through the four layouts. Off by default."
+  $name: "Next layout shortcut"
+  $description: "Steps through the four layouts. Empty means no shortcut."
 - settingsTrayIcon: true
   $name: "Tray icon"
   $description: "Click it to show or hide the overlay. Right-click it for layouts and settings."
@@ -251,11 +761,11 @@ Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
   $name: "Native Windows title bar"
   $description: "Use the Windows title bar and window buttons for this settings window. Applies when you save."
 - flyoutAnimation: true
-  $name: "Open and close animation"
-  $description: "The overlay fades and slides in when it shows and out when it hides. It stays still when Windows animation effects are off."
+  $name: "Show and hide animation"
+  $description: "The overlay fades and slides in when it shows, and out when it hides. It stays still when Windows animation effects are off."
 - animationSpeed: "global"
   $name: "Animation speed"
-  $description: "How quick the animations play. Follow the global speed uses the speed shared by all DavidHiFi mods."
+  $description: "Follow the global speed uses the one speed shared by all DavidHiFi mods."
   $options:
   - global: "Follow the global speed"
   - veryQuick: "Very quick"
@@ -300,7 +810,7 @@ Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
 
 namespace seamless_sensors {
 
-constexpr int SENSOR_CORE_REV = 3;
+constexpr int SENSOR_CORE_REV = 4;
 constexpr uint32_t kLayoutVersion = 1;
 constexpr uint32_t kMagic = 0x534E5353;  // 'SSNS'
 constexpr uint32_t kMaxCores = 64;
@@ -386,6 +896,16 @@ struct Snapshot {
     int32_t gpuLuidHigh;
     uint32_t gpuPciBus;                  // PCI bus number, kUnknownBus = unknown
     uint32_t gpuVendorId;                // 0x10DE NVIDIA, 0 = unknown
+
+    // Rev 4 additions (same rule: appended only).
+    uint32_t cpuVendorId;                // 0x1022 AMD, 0x8086 Intel, 0 = unknown
+    uint32_t ramModules;                 // memory sticks fitted, 0 = unknown
+    double ramSpeedMTs;                  // MT/s, configured memory speed (SMBIOS)
+    double ramClockMHz;                  // MHz, half of ramSpeedMTs (HWiNFO "Memory Clock")
+    double gpuThermalThrottle;           // 1 = slowed down by heat right now, 0 = not
+    double gpuPowerThrottle;             // 1 = held at its power limit right now, 0 = not
+    double cpuThermalThrottle;           // 1 = slowed down by heat right now (AMD HTC), 0 = not
+    wchar_t gpuDriver[32];               // driver version, "" = unknown
 };
 
 constexpr uint32_t kUnknownBus = 0xFFFFFFFFu;
@@ -420,6 +940,11 @@ inline void ResetSnapshot(Snapshot& s) {
     s.cpuSocPower = NaN();
     s.gpuMemPower = NaN();
     s.gpuPciBus = kUnknownBus;
+    s.ramSpeedMTs = NaN();
+    s.ramClockMHz = NaN();
+    s.gpuThermalThrottle = NaN();
+    s.gpuPowerThrottle = NaN();
+    s.cpuThermalThrottle = NaN();
 }
 
 namespace detail {
@@ -534,6 +1059,53 @@ inline void ReadCpuName(wchar_t* out, size_t count) {
         }
     }
     CopyAnsiName(out, count, brand, 48);
+}
+
+inline uint32_t ReadCpuVendor() {
+    int r[4];
+    __cpuid(r, 0);
+    if (r[1] == 0x68747541 && r[3] == 0x69746E65 && r[2] == 0x444D4163) return 0x1022;  // AuthenticAMD
+    if (r[1] == 0x756E6547 && r[3] == 0x49656E69 && r[2] == 0x6C65746E) return 0x8086;  // GenuineIntel
+    return 0;
+}
+
+// Configured memory speed from the firmware's memory device tables (SMBIOS
+// type 17): the speed the sticks really run at (EXPO/XMP included), the same
+// number HWiNFO shows as "Memory Clock" doubled. Read once; it cannot change
+// without a reboot.
+inline void ReadRamSpeed(uint32_t& mts, uint32_t& modules) {
+    mts = 0;
+    modules = 0;
+    const DWORD rsmb = 0x52534D42;  // 'RSMB'
+    UINT need = GetSystemFirmwareTable(rsmb, 0, nullptr, 0);
+    if (need < 8 || need > (1u << 20)) return;
+    BYTE* buf = static_cast<BYTE*>(HeapAlloc(GetProcessHeap(), 0, need));
+    if (!buf) return;
+    if (GetSystemFirmwareTable(rsmb, 0, buf, need) == need) {
+        DWORD len = *reinterpret_cast<DWORD*>(buf + 4);
+        const BYTE* p = buf + 8;
+        const BYTE* end = buf + 8 + (len < need - 8 ? len : need - 8);
+        while (p + 4 <= end) {
+            BYTE type = p[0], size = p[1];
+            if (size < 4 || p + size > end) break;
+            if (type == 17 && size >= 0x22) {
+                WORD sz = *reinterpret_cast<const WORD*>(p + 0x0C);
+                if (sz != 0 && sz != 0xFFFF) {
+                    ++modules;
+                    uint32_t speed = *reinterpret_cast<const WORD*>(p + 0x20);  // configured speed
+                    if (speed == 0xFFFF && size >= 0x5C) speed = *reinterpret_cast<const DWORD*>(p + 0x58);
+                    if (!speed || speed == 0xFFFF) speed = *reinterpret_cast<const WORD*>(p + 0x15);  // rated
+                    if (speed == 0xFFFF && size >= 0x58) speed = *reinterpret_cast<const DWORD*>(p + 0x54);
+                    if (speed > 0 && speed < 20000 && speed > mts) mts = speed;
+                }
+            }
+            if (type == 127) break;
+            const BYTE* q = p + size;  // the strings after the table end with two zero bytes
+            while (q + 1 < end && (q[0] || q[1])) ++q;
+            p = q + 2;
+        }
+    }
+    HeapFree(GetProcessHeap(), 0, buf);
 }
 
 // ------------------------------------------------------------- disk (PDH)
@@ -1190,6 +1762,7 @@ struct AmdPawn {
     double pkgTime = 0;
     bool havePkg = false;
     bool failed = false;
+    bool htcOk = false;  // THM_HTC answered with the enable bit and a sane limit
 
     static bool CpuIsAmdZen(uint32_t& family, uint32_t& model) {
         int r[4];
@@ -1315,6 +1888,13 @@ struct AmdPawn {
         if ((family == 0x17 && (model == 0x31 || model == 0x71)) ||
             (family == 0x19 && (model == 0x21 || model == 0x01 || model == 0x08)))
             ccdCount = kMaxCcds;
+        // THM_HTC: trust it only when it is switched on and its limit
+        // (52 C plus half a degree a step) looks like a real one.
+        uint32_t htc = 0;
+        if (Smn(0x00059804, htc)) {
+            double limit = 52.0 + 0.5 * ((htc >> 16) & 0x7F);
+            htcOk = (htc & 1) && limit >= 60.0 && limit <= 116.0;  // 115.5 = the top step, seen on a 5800X
+        }
         MapCores();
         failed = false;
         return true;
@@ -1345,6 +1925,8 @@ struct AmdPawn {
                 any = true;
             }
         }
+        // THM_HTC: bit 0 enabled, bit 4 active (the chip is slowing itself for heat).
+        if (htcOk && Smn(0x00059804, v)) s.cpuThermalThrottle = (v & 0x10) ? 1.0 : 0.0;
         uint32_t ccds = 0;
         for (uint32_t i = 0; i < ccdCount; ++i) {
             if (!Smn(0x00059954 + i * 4, v)) break;
@@ -1649,6 +2231,8 @@ struct Nvml {
     using UtilFn = int(__cdecl*)(void*, Util*);
     struct Mem { unsigned long long total, free, used; };
     using MemFn = int(__cdecl*)(void*, Mem*);
+    using ReasonFn = int(__cdecl*)(void*, unsigned long long*);
+    using DriverFn = int(__cdecl*)(char*, unsigned);
 
     HMODULE lib = nullptr;
     void* dev = nullptr;
@@ -1658,7 +2242,9 @@ struct Nvml {
     ClockFn clock = nullptr;
     UtilFn util = nullptr;
     MemFn mem = nullptr;
+    ReasonFn reasons = nullptr;
     wchar_t name[64] = {};
+    wchar_t driver[32] = {};
 
     bool Open() {
         wchar_t path[MAX_PATH];
@@ -1676,6 +2262,9 @@ struct Nvml {
         clock = reinterpret_cast<ClockFn>(GetProcAddress(lib, "nvmlDeviceGetClockInfo"));
         util = reinterpret_cast<UtilFn>(GetProcAddress(lib, "nvmlDeviceGetUtilizationRates"));
         mem = reinterpret_cast<MemFn>(GetProcAddress(lib, "nvmlDeviceGetMemoryInfo"));
+        reasons = reinterpret_cast<ReasonFn>(GetProcAddress(lib, "nvmlDeviceGetCurrentClocksEventReasons"));
+        if (!reasons)
+            reasons = reinterpret_cast<ReasonFn>(GetProcAddress(lib, "nvmlDeviceGetCurrentClocksThrottleReasons"));
         if (!init || !handle || !shutdown || init() != 0) {
             FreeLibrary(lib);
             lib = nullptr;
@@ -1688,6 +2277,10 @@ struct Nvml {
         if (auto getName = reinterpret_cast<NameFn>(GetProcAddress(lib, "nvmlDeviceGetName"))) {
             char raw[96] = {};
             if (getName(dev, raw, sizeof(raw)) == 0) CopyAnsiName(name, 64, raw, 95);
+        }
+        if (auto getDriver = reinterpret_cast<DriverFn>(GetProcAddress(lib, "nvmlSystemGetDriverVersion"))) {
+            char raw[80] = {};
+            if (getDriver(raw, sizeof(raw)) == 0) CopyAnsiName(driver, 32, raw, 31);
         }
         return true;
     }
@@ -1727,6 +2320,14 @@ struct Nvml {
         }
         if (!IsValid(s.gpuFanPercent) && fan && fan(dev, &v) == 0) s.gpuFanPercent = v;
         if (!s.gpuName[0] && name[0]) wcscpy_s(s.gpuName, name);
+        if (driver[0]) wcscpy_s(s.gpuDriver, driver);
+        // Why the card is not boosting: 0x20/0x40 heat (driver or hardware),
+        // 0x04/0x80 power limit or power brake. Idle (0x01) is neither.
+        unsigned long long r = 0;
+        if (reasons && reasons(dev, &r) == 0) {
+            s.gpuThermalThrottle = (r & 0x60ull) ? 1.0 : 0.0;
+            s.gpuPowerThrottle = (r & 0x84ull) ? 1.0 : 0.0;
+        }
         if (any) s.sources |= kSrcNvml;
     }
 };
@@ -1776,6 +2377,8 @@ public:
         nvmlOk_ = nvml_.Open();
         if (nvapiOk_ || nvmlOk_) haveLuid_ = detail::FindAdapterLuid(0x10DE, luid_);
         detail::ReadCpuName(cpuName_, 64);
+        cpuVendor_ = detail::ReadCpuVendor();
+        detail::ReadRamSpeed(ramMts_, ramModules_);
         open_ = true;
         return true;
     }
@@ -1803,6 +2406,12 @@ public:
         if (nvapiOk_) nvapi_.Sample(s);
         if (nvmlOk_) nvml_.Sample(s);
         wcscpy_s(s.cpuName, cpuName_);
+        s.cpuVendorId = cpuVendor_;
+        s.ramModules = ramModules_;
+        if (ramMts_) {
+            s.ramSpeedMTs = ramMts_;
+            s.ramClockMHz = ramMts_ / 2.0;
+        }
         if (haveLuid_) {
             s.gpuLuidLow = luid_.LowPart;
             s.gpuLuidHigh = luid_.HighPart;
@@ -1821,6 +2430,7 @@ private:
     LUID luid_ = {};
     uint32_t sequence_ = 0;
     wchar_t cpuName_[64] = {};
+    uint32_t cpuVendor_ = 0, ramMts_ = 0, ramModules_ = 0;
     detail::CpuLoad cpu_;
     detail::DiskPdh disk_;
     detail::Network net_;
@@ -2207,6 +2817,7 @@ inline void CloseReader() {
 #include <windowsx.h>
 #include <commctrl.h>
 #include <dwmapi.h>
+#include <psapi.h>
 #include <shellapi.h>
 #include <shlwapi.h>
 #include <uxtheme.h>
@@ -2279,6 +2890,7 @@ constexpr UINT WM_APP_PIN_TARGET = WM_APP + 104;
 constexpr UINT_PTR TIMER_TICK = 1;
 constexpr UINT_PTR TIMER_ANIM = 2;
 constexpr UINT_PTR TIMER_HOTKEY_RETRY = 3;
+constexpr UINT_PTR TIMER_GFX = 4;  // the moving parts: fans, flames, dials
 
 constexpr int HK_TOGGLE = 1;
 constexpr int HK_PRESET = 2;
@@ -2364,9 +2976,34 @@ static D2D1_COLOR_F Rgb(uint32_t rgb, float a = 1.f) {
 
 namespace mocha {
 constexpr uint32_t kText = 0xCDD6F4, kSubtext = 0xA6ADC8, kOverlay = 0x6C7086, kSurface1 = 0x45475A;
+constexpr uint32_t kSurface0 = 0x313244, kSurface2 = 0x585B70;
 constexpr uint32_t kBase = 0x1E1E2E, kMantle = 0x181825, kCrust = 0x11111B;
-constexpr uint32_t kBlue = 0x89B4FA, kMauve = 0xCBA6F7;
+constexpr uint32_t kBlue = 0x89B4FA, kMauve = 0xCBA6F7, kLavender = 0xB4BEFE, kSapphire = 0x74C7EC;
+constexpr uint32_t kSky = 0x89DCEB, kTeal = 0x94E2D5, kGreen = 0xA6E3A1, kYellow = 0xF9E2AF;
+constexpr uint32_t kPeach = 0xFAB387, kPink = 0xF5C2E7, kRed = 0xF38BA8;
 }  // namespace mocha
+
+// The colour list every colour choice uses. kPalGradient is the blue to mauve gradient,
+// kPalSame follows the label colour, kPalCustom is the user's own colour.
+enum Pal { kPalSame = -1, kPalGradient = 0, kPalBlue, kPalMauve, kPalLavender, kPalSapphire, kPalSky, kPalTeal,
+           kPalGreen, kPalYellow, kPalPeach, kPalPink, kPalRed, kPalWhite, kPalCustom };
+static const uint32_t kPalRgb[] = {0,           mocha::kBlue,  mocha::kMauve, mocha::kLavender, mocha::kSapphire,
+                                   mocha::kSky, mocha::kTeal,  mocha::kGreen, mocha::kYellow,   mocha::kPeach,
+                                   mocha::kPink, mocha::kRed,  mocha::kText,  0};
+static int PalIndex(const std::wstring& v, int fallback) {
+    static const wchar_t* names[] = {L"gradient", L"blue", L"mauve", L"lavender", L"sapphire", L"sky", L"teal",
+                                     L"green",    L"yellow", L"peach", L"pink",   L"red",      L"white", L"custom"};
+    if (_wcsicmp(v.c_str(), L"same") == 0) return kPalSame;
+    if (_wcsicmp(v.c_str(), L"text") == 0) return kPalWhite;
+    for (int i = 0; i < (int)ARRAYSIZE(names); i++)
+        if (_wcsicmp(v.c_str(), names[i]) == 0) return i;
+    return fallback;
+}
+
+// The Benchmark layout's blocks, in their default order.
+enum Block { kBlkName = 0, kBlkFrames, kBlkInfo, kBlkCores, kBlkMemory, kBlkCard, kBlkVram, kBlkProcessor, kBlkCount };
+static const wchar_t* const kBlockKey[kBlkCount] = {L"Name",   L"Frames", L"Info", L"Cores",
+                                                    L"Memory", L"Card",   L"Vram", L"Processor"};
 
 // ============================================================================
 // Settings
@@ -2398,6 +3035,31 @@ struct OverlaySettings {
     std::wstring toggleHotkey = L"Ctrl+Alt+Shift+]", presetHotkey;
     bool trayIcon = true, flyoutAnimation = true;
     int animationSpeed = 0;
+
+    // Readings only the Benchmark layout has.
+    bool jitter = true, latency = false, api = true, session = true, driver = true, cpuName = true,
+         coreBars = true, coreThreads = false, ramUsed = true, ramSpeed = true, ramClock = true, gpuArt = true,
+         vramUsed = true, vramTemp = true, cpuArt = true, cpuBusyClock = true;
+    // Blocks: shown, column (0 left, 1 right), order, size in percent, colour.
+    bool blockOn[kBlkCount] = {true, true, true, true, true, true, true, true};
+    int blockColumn[kBlkCount] = {0, 0, 0, 0, 0, 1, 1, 1};
+    int blockOrder[kBlkCount] = {1, 2, 3, 4, 5, 1, 2, 3};
+    int blockSize[kBlkCount] = {100, 100, 100, 100, 100, 100, 100, 100};
+    int blockColour[kBlkCount] = {kPalSame, kPalSame, kPalSame, kPalSame, kPalSame, kPalSame, kPalSame, kPalSame};
+    std::map<std::wstring, std::wstring> labels;  // label key -> the user's own wording
+    bool cards = true, capitals = true;
+    int textSize = 100, bgStrength = 100, blockGap = 6;
+    // Warnings
+    int warnColour = kPalRed;
+    int gpuTempWarn = 83, hotspotWarn = 95, cpuTempWarn = 85, vramWarn = 95, ramWarn = 90, fpsWarn = 0;
+    bool throttleWarn = true;
+    // Graph
+    int graphStyle = 0, graphSeconds = 3, graphHeight = 36, graphTopMs = 50;
+    bool spikeMarks = true;
+    // Moving parts
+    bool animations = true, fanSpin = true, flames = true, binaryCode = true, smoothDials = true,
+         throttlePulse = true;
+    int fanSpeed = 100, flameAt = 97, animFps = 30, gpuGaugeMax = 3000, cpuGaugeMax = 6000;
 };
 
 static OverlaySettings g_set;
@@ -2411,6 +3073,50 @@ static int ChoiceIndex(const std::wstring& v, std::initializer_list<const wchar_
     }
     return fallback;
 }
+
+// A setting that was never written (a key that is new in this version, or an install from the
+// command line) reads as its default, not as 0 or empty.
+static bool SettingStored(PCWSTR name) {
+    static const wchar_t* kIds[] = {L"local@seamless-fps-overlay", L"seamless-fps-overlay"};
+    bool anyKey = false;
+    for (PCWSTR id : kIds) {
+        std::wstring path = std::wstring(L"SOFTWARE\\Windhawk\\Engine\\Mods\\") + id + L"\\Settings";
+        HKEY k = nullptr;
+        if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, path.c_str(), 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &k) != ERROR_SUCCESS)
+            continue;
+        anyKey = true;
+        bool has = RegQueryValueExW(k, name, nullptr, nullptr, nullptr, nullptr) == ERROR_SUCCESS;
+        RegCloseKey(k);
+        if (has) return true;
+    }
+    return !anyKey;  // settings kept somewhere we cannot see: trust Windhawk
+}
+
+static int IntSet(const std::wstring& name, int def) {
+    return SettingStored(name.c_str()) ? Wh_GetIntSetting(name.c_str()) : def;
+}
+static bool BoolSet(const std::wstring& name, bool def) { return IntSet(name, def ? 1 : 0) != 0; }
+static std::wstring TextSet(const std::wstring& name, const std::wstring& def) {
+    return SettingStored(name.c_str()) ? StrSetting(name.c_str()) : def;
+}
+
+// Label keys and their wording when the user leaves the box empty.
+struct LabelDef {
+    const wchar_t* key;
+    const wchar_t* text;
+};
+static const LabelDef kLabelDefs[] = {
+    {L"lblFps", L"FPS"},            {L"lbl01", L"0.1%"},           {L"lbl1", L"1%"},
+    {L"lblAvg", L"AVG"},            {L"lblJitter", L"JITTER"},     {L"lblFrame", L"FRAME TIME"},
+    {L"lblLatency", L"LATENCY"},    {L"lblApi", L"API"},           {L"lblTime", L"PLAY TIME"},
+    {L"lblDriver", L"DRIVER"},      {L"lblRam", L"RAM"},           {L"lblRamUsed", L"USED"},
+    {L"lblRamSpeed", L"SPEED"},     {L"lblRamClock", L"CLOCK"},    {L"lblGpuLoad", L"LOAD"},
+    {L"lblGpuPower", L"POWER"},     {L"lblGpuClock", L"CLOCK"},    {L"lblFan", L"FAN"},
+    {L"lblGpuTemp", L"TEMP"},       {L"lblHotspot", L"HOT SPOT"},  {L"lblVram", L"VRAM"},
+    {L"lblVramUsed", L"USED"},      {L"lblVramTemp", L"TEMP"},     {L"lblVramClock", L"CLOCK"},
+    {L"lblCpuLoad", L"LOAD"},       {L"lblCpuPower", L"POWER"},    {L"lblCpuBoost", L"BOOST"},
+    {L"lblCpuBusy", L"BUSY CLOCK"}, {L"lblCpuTemp", L"TEMP"},
+};
 
 static void LoadSettings() {
     OverlaySettings s;
@@ -2468,7 +3174,96 @@ static void LoadSettings() {
     s.flyoutAnimation = Wh_GetIntSetting(L"flyoutAnimation") != 0;
     s.animationSpeed =
         ChoiceIndex(StrSetting(L"animationSpeed"), {L"global", L"veryQuick", L"quick", L"normal", L"relaxed", L"slow"}, 0);
+    // These three are on by default from 1.1; a stored choice still wins.
+    s.gpuMemClock = BoolSet(L"gpuMemClock", true);
+    s.cpuPower = BoolSet(L"cpuPower", true);
+    s.cpuClock = BoolSet(L"cpuClock", true);
+
+    s.jitter = BoolSet(L"jitter", true);
+    s.latency = BoolSet(L"latency", false);
+    s.api = BoolSet(L"api", true);
+    s.session = BoolSet(L"session", true);
+    s.driver = BoolSet(L"driver", true);
+    s.cpuName = BoolSet(L"cpuName", true);
+    s.coreBars = BoolSet(L"coreBars", true);
+    s.coreThreads = TextSet(L"coreBarsEach", L"core") == L"thread";
+    s.ramUsed = BoolSet(L"ramUsed", true);
+    s.ramSpeed = BoolSet(L"ramSpeed", true);
+    s.ramClock = BoolSet(L"ramClock", true);
+    s.gpuArt = BoolSet(L"gpuArt", true);
+    s.vramUsed = BoolSet(L"vramUsed", true);
+    s.vramTemp = BoolSet(L"vramTemp", true);
+    s.cpuArt = BoolSet(L"cpuArt", true);
+    s.cpuBusyClock = BoolSet(L"cpuBusyClock", true);
+
+    for (int b = 0; b < kBlkCount; b++) {
+        const std::wstring k = kBlockKey[b];
+        const bool right = b >= kBlkCard;
+        s.blockOn[b] = BoolSet(L"show" + k, true);
+        s.blockColumn[b] = ChoiceIndex(TextSet(L"column" + k, right ? L"right" : L"left"), {L"left", L"right"}, right);
+        s.blockOrder[b] = std::clamp(IntSet(L"order" + k, right ? b - kBlkCard + 1 : b + 1), 1, 9);
+        s.blockSize[b] = std::clamp(IntSet(L"size" + k, 100), 50, 200);
+        s.blockColour[b] = PalIndex(TextSet(L"colour" + k, L"same"), kPalSame);
+    }
+    for (const auto& d : kLabelDefs) {
+        std::wstring v = Trim(TextSet(d.key, L""));
+        if (!v.empty()) s.labels[d.key] = v;
+    }
+    s.cards = TextSet(L"panels", L"cards") != L"one";
+    s.capitals = BoolSet(L"capitals", true);
+    s.textSize = std::clamp(IntSet(L"textSize", 100), 60, 200);
+    s.bgStrength = std::clamp(IntSet(L"bgStrength", 100), 0, 150);
+    s.blockGap = std::clamp(IntSet(L"blockGap", 6), 0, 40);
+
+    s.warnColour = PalIndex(TextSet(L"warnColour", L"red"), kPalRed);
+    if (s.warnColour < kPalBlue || s.warnColour > kPalWhite) s.warnColour = kPalRed;
+    s.gpuTempWarn = std::clamp(IntSet(L"gpuTempWarn", 83), 0, 150);
+    s.hotspotWarn = std::clamp(IntSet(L"hotspotWarn", 95), 0, 150);
+    s.cpuTempWarn = std::clamp(IntSet(L"cpuTempWarn", 85), 0, 150);
+    s.vramWarn = std::clamp(IntSet(L"vramWarn", 95), 0, 100);
+    s.ramWarn = std::clamp(IntSet(L"ramWarn", 90), 0, 100);
+    s.fpsWarn = std::clamp(IntSet(L"fpsWarn", 0), 0, 1000);
+    s.throttleWarn = BoolSet(L"throttleWarn", true);
+
+    s.graphStyle = ChoiceIndex(TextSet(L"graphStyle", L"line"), {L"line", L"area", L"bars"}, 0);
+    s.graphSeconds = std::clamp(IntSet(L"graphSeconds", 3), 1, 10);
+    s.graphHeight = std::clamp(IntSet(L"graphHeight", 36), 16, 120);
+    switch (ChoiceIndex(TextSet(L"graphTop", L"50"), {L"auto", L"33", L"50", L"100"}, 2)) {
+        case 0: s.graphTopMs = 0; break;
+        case 1: s.graphTopMs = 33; break;
+        case 3: s.graphTopMs = 100; break;
+        default: s.graphTopMs = 50; break;
+    }
+    s.spikeMarks = BoolSet(L"spikeMarks", true);
+
+    s.animations = BoolSet(L"animations", true);
+    s.fanSpin = BoolSet(L"fanSpin", true);
+    s.fanSpeed = std::clamp(IntSet(L"fanSpeed", 100), 10, 300);
+    s.flames = BoolSet(L"flames", true);
+    s.flameAt = std::clamp(IntSet(L"flameAt", 97), 1, 100);
+    s.binaryCode = BoolSet(L"binaryCode", true);
+    s.smoothDials = BoolSet(L"smoothDials", true);
+    s.throttlePulse = BoolSet(L"throttlePulse", true);
+    switch (ChoiceIndex(TextSet(L"animFps", L"30"), {L"15", L"30", L"60"}, 1)) {
+        case 0: s.animFps = 15; break;
+        case 2: s.animFps = 60; break;
+        default: s.animFps = 30; break;
+    }
+    s.gpuGaugeMax = std::clamp(IntSet(L"gpuGaugeMax", 3000), 500, 5000);
+    s.cpuGaugeMax = std::clamp(IntSet(L"cpuGaugeMax", 6000), 1000, 8000);
     g_set = std::move(s);
+}
+
+static std::wstring Label(const wchar_t* key) {
+    auto it = g_set.labels.find(key);
+    std::wstring t;
+    if (it != g_set.labels.end()) t = it->second;
+    else
+        for (const auto& d : kLabelDefs)
+            if (!wcscmp(d.key, key)) t = d.text;
+    if (g_set.capitals)
+        for (auto& c : t) c = (wchar_t)towupper(c);
+    return t;
 }
 
 static int ActivePreset() { return g_presetOverride >= 0 && g_presetOverride < 4 ? g_presetOverride : g_set.preset; }
@@ -2690,6 +3485,9 @@ static void SetTarget(DWORD pid) {
     ResetLocked(*g_t);
     ReleaseSRWLockExclusive(&g_t->lock);
 }
+
+// Which stream the frames come from right now (kSrc...).
+static int ActiveSource() { return g_t ? g_t->active : kSrcNone; }
 
 static void Push(Tracker& t, int src, int64_t ts, uint64_t chain) {
     // Once a second: the busiest swap chain and the busiest kernel stream win.
@@ -2922,7 +3720,8 @@ struct Stats {
     bool gameLike = false;    // a steady stream for the last 1.5 seconds
     bool recent3s = false;    // anything in the last three seconds
     double fps = NAN, frameMs = NAN, low1 = NAN, low01 = NAN, avg = NAN;
-    std::vector<float> graph;  // the last three seconds of frame times, ms
+    double jitter = NAN;       // how much one frame differs from the next, on average, ms
+    std::vector<float> graph;  // the last few seconds of frame times, ms (spikes kept)
 };
 
 static double QpcNow() {
@@ -2931,7 +3730,7 @@ static double QpcNow() {
     return (double)c.QuadPart;
 }
 
-static Stats Compute(int periodMs) {
+static Stats Compute(int periodMs, int graphSeconds = 3) {
     Stats st;
     if (!g_t) return st;
     std::vector<int64_t> ts;
@@ -3009,13 +3808,39 @@ static Stats Compute(int periodMs) {
         st.low1 = 1000.0 / pct(0.99);
         st.low01 = 1000.0 / pct(0.999);
     }
-    const int64_t graphFrom = ts.back() - (int64_t)(3.0 * freq);
+    // Jitter: the mean change from one frame to the next over the last second.
+    {
+        const int64_t from = ts.back() - (int64_t)freq;
+        double acc = 0;
+        int k = 0;
+        for (size_t i = 2; i < ts.size(); i++) {
+            if (ts[i - 2] < from) continue;
+            double a = (double)(ts[i] - ts[i - 1]) * 1000.0 / freq, b = (double)(ts[i - 1] - ts[i - 2]) * 1000.0 / freq;
+            acc += std::fabs(a - b);
+            k++;
+        }
+        if (k >= 3) st.jitter = acc / k;
+    }
+    const int64_t graphFrom = ts.back() - (int64_t)(std::clamp(graphSeconds, 1, 20) * freq);
+    std::vector<float> g;
     for (size_t i = 1; i < ts.size(); i++) {
         if (ts[i] < graphFrom) continue;
         double ms = (double)(ts[i] - ts[i - 1]) * 1000.0 / freq;
-        st.graph.push_back((float)std::min(ms, 250.0));
+        g.push_back((float)std::min(ms, 250.0));
     }
-    if (st.graph.size() > 600) st.graph.erase(st.graph.begin(), st.graph.end() - 600);
+    // At most 400 points: each keeps the slowest frame of its slice so a spike never vanishes.
+    constexpr size_t kMaxPts = 400;
+    if (g.size() > kMaxPts) {
+        st.graph.resize(kMaxPts);
+        for (size_t b = 0; b < kMaxPts; b++) {
+            size_t a0 = b * g.size() / kMaxPts, a1 = std::max(a0 + 1, (b + 1) * g.size() / kMaxPts);
+            float m = 0;
+            for (size_t i = a0; i < a1 && i < g.size(); i++) m = std::max(m, g[i]);
+            st.graph[b] = m;
+        }
+    } else {
+        st.graph = std::move(g);
+    }
     return st;
 }
 
@@ -3109,7 +3934,10 @@ static LRESULT CALLBACK GlassWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
 
 class Glass {
    public:
-    bool Show(HWND owner, int x, int y, int w, int h, float radius, float opacity) {
+    // `cards` are the panels in window pixels; empty means one panel over the whole window.
+    bool Show(HWND owner, int x, int y, int w, int h, const std::vector<D2D1_RECT_F>& cards, float radius,
+              float opacity) {
+        namespace Composition = winrt::Windows::UI::Composition;
         if (m_failed) return false;
         try {
             if (!Ensure()) {
@@ -3120,12 +3948,33 @@ class Glass {
                 SetWindowPos(m_hwnd, owner, x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
                 m_x = x, m_y = y, m_w = w, m_h = h;
             }
-            const winrt::Windows::Foundation::Numerics::float2 extent{(float)w, (float)h};
-            m_visual.Size(extent);
-            m_shape.Size(extent);
-            const float r = std::clamp(radius, 0.0f, std::min(extent.x, extent.y) / 2);
-            m_shape.CornerRadius({r, r});
-            m_visual.Opacity(std::clamp(opacity, 0.0f, 1.0f));
+            std::vector<D2D1_RECT_F> rects = cards;
+            if (rects.empty()) rects.push_back(D2D1::RectF(0, 0, (float)w, (float)h));
+            while (m_cards.size() < rects.size()) {
+                Composition::SpriteVisual v = m_compositor.CreateSpriteVisual();
+                v.Brush(m_brush);
+                Composition::CompositionRoundedRectangleGeometry shape = m_compositor.CreateRoundedRectangleGeometry();
+                v.Clip(m_compositor.CreateGeometricClip(shape));
+                m_root.Children().InsertAtTop(v);
+                m_cards.push_back(v);
+                m_shapes.push_back(shape);
+            }
+            for (size_t i = 0; i < m_cards.size(); i++) {
+                if (i >= rects.size()) {
+                    m_cards[i].IsVisible(false);
+                    continue;
+                }
+                const D2D1_RECT_F& r = rects[i];
+                const winrt::Windows::Foundation::Numerics::float2 extent{std::max(1.f, r.right - r.left),
+                                                                          std::max(1.f, r.bottom - r.top)};
+                m_cards[i].Offset({r.left, r.top, 0});
+                m_cards[i].Size(extent);
+                m_shapes[i].Size(extent);
+                const float rr = std::clamp(radius, 0.0f, std::min(extent.x, extent.y) / 2);
+                m_shapes[i].CornerRadius({rr, rr});
+                m_cards[i].Opacity(std::clamp(opacity, 0.0f, 1.0f));
+                m_cards[i].IsVisible(true);
+            }
             m_visible = true;
             return true;
         } catch (winrt::hresult_error const& e) {
@@ -3143,8 +3992,10 @@ class Glass {
     HWND Hwnd() const { return m_hwnd; }
     // On the UI thread, before it ends.
     void Destroy() {
-        m_visual = nullptr;
-        m_shape = nullptr;
+        m_cards.clear();
+        m_shapes.clear();
+        m_brush = nullptr;
+        m_root = nullptr;
         m_target = nullptr;
         if (m_hwnd) DestroyWindow(m_hwnd);
         m_hwnd = nullptr;
@@ -3171,7 +4022,7 @@ class Glass {
    private:
     bool Ensure() {
         namespace Composition = winrt::Windows::UI::Composition;
-        if (m_visual) return true;
+        if (m_root) return true;
         if (!m_queue) {
             using CreateController_t = HRESULT(WINAPI*)(DispatcherQueueOptions, void**);
             static const HMODULE messaging = LoadLibraryExW(L"CoreMessaging.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
@@ -3200,23 +4051,20 @@ class Glass {
         winrt::check_hresult(DwmSetWindowAttribute(m_hwnd, 17, &hostBackdrop, sizeof(hostBackdrop)));
         auto interop = m_compositor.as<SfoCompositorDesktopInterop>();
         winrt::check_hresult(interop->CreateDesktopWindowTarget(m_hwnd, TRUE, winrt::put_abi(m_target)));
-        const Composition::ContainerVisual root = m_compositor.CreateContainerVisual();
+        Composition::ContainerVisual root = m_compositor.CreateContainerVisual();
         root.RelativeSizeAdjustment({1, 1});
         m_target.Root(root);
-        m_visual = m_compositor.CreateSpriteVisual();
         try {
             const auto effect =
                 winrt::make<SfoGlassBlur>(18.0f, Composition::CompositionEffectSourceParameter(L"Backdrop"));
             const auto brush = m_compositor.CreateEffectFactory(effect).CreateBrush();
             brush.SetSourceParameter(L"Backdrop", m_compositor.CreateHostBackdropBrush());
-            m_visual.Brush(brush);
+            m_brush = brush;
         } catch (winrt::hresult_error const& e) {
             Wh_Log(L"Extra overlay blur unavailable: %08X", (unsigned)e.code());
-            m_visual.Brush(m_compositor.CreateHostBackdropBrush());
+            m_brush = m_compositor.CreateHostBackdropBrush();
         }
-        m_shape = m_compositor.CreateRoundedRectangleGeometry();
-        m_visual.Clip(m_compositor.CreateGeometricClip(m_shape));
-        root.Children().InsertAtTop(m_visual);
+        m_root = root;
         return true;
     }
 
@@ -3226,8 +4074,10 @@ class Glass {
     winrt::Windows::System::DispatcherQueueController m_queue{nullptr};
     winrt::Windows::UI::Composition::Compositor m_compositor{nullptr};
     winrt::Windows::UI::Composition::Desktop::DesktopWindowTarget m_target{nullptr};
-    winrt::Windows::UI::Composition::SpriteVisual m_visual{nullptr};
-    winrt::Windows::UI::Composition::CompositionRoundedRectangleGeometry m_shape{nullptr};
+    winrt::Windows::UI::Composition::ContainerVisual m_root{nullptr};
+    winrt::Windows::UI::Composition::CompositionBrush m_brush{nullptr};
+    std::vector<winrt::Windows::UI::Composition::SpriteVisual> m_cards;
+    std::vector<winrt::Windows::UI::Composition::CompositionRoundedRectangleGeometry> m_shapes;
 };
 
 }  // namespace sfoglass
@@ -3252,7 +4102,9 @@ static DWORD g_targetPid = 0;
 static DWORD g_pinnedPid = 0;  // WM_APP_PIN_TARGET
 static std::wstring g_targetExe;
 static bool g_targetSkip = false;
-static ULONGLONG g_lastGameTick = 0;
+static ULONGLONG g_lastGameTick = 0;  // the last tick the target drew like a game
+static ULONGLONG g_gameSince = 0;     // start of the current unbroken game-like run
+static bool g_isGame = false;         // the target has passed the game test
 static bool g_sensorsStarted = false;
 
 // Drawing
@@ -3276,7 +4128,7 @@ static double g_animFrom = 0, g_animT = 0, g_animDurMs = 0;
 static double g_animStartQpc = 0, g_qpcFreq = 1;
 static double g_alpha = 0;           // 0..1
 
-enum Font { kFontLabel = 0, kFontValue, kFontUnit, kFontBig, kFontName, kFontCount };
+enum Font { kFontLabel = 0, kFontValue, kFontUnit, kFontBig, kFontName, kFontTiny, kFontSmall, kFontHuge, kFontCount };
 static IDWriteTextFormat* g_fmt[kFontCount] = {};
 static float g_lineH[kFontCount] = {};
 static std::wstring g_fmtKey;
@@ -3319,16 +4171,18 @@ static std::wstring PickFontFamily(const std::wstring& want) {
 
 static void EnsureFormats(float px) {
     wchar_t key[160];
-    swprintf_s(key, L"%s|%d|%.2f", g_set.fontFace.c_str(), g_set.fontWeight, px);
+    swprintf_s(key, L"%s|%d|%.2f|%d", g_set.fontFace.c_str(), g_set.fontWeight, px, g_set.textSize);
     if (g_fmtKey == key && g_fmt[0]) return;
     for (auto& f : g_fmt) SafeRelease(f);
     g_fmtKey = key;
     if (!g_dw) return;
     std::wstring family = PickFontFamily(g_set.fontFace);
     const DWRITE_FONT_WEIGHT weight = (DWRITE_FONT_WEIGHT)std::clamp(g_set.fontWeight, 100, 900);
-    const float sizes[kFontCount] = {12.5f, 15.0f, 11.0f, 34.0f, 12.5f};
+    const float ts = std::clamp(g_set.textSize, 60, 200) / 100.0f;
+    float sizes[kFontCount] = {12.5f, 15.0f, 11.0f, 34.0f, 12.5f, 8.5f, 10.5f, 46.0f};
+    for (float& f : sizes) f *= ts;
     for (int i = 0; i < kFontCount; i++) {
-        DWRITE_FONT_WEIGHT w = (i == kFontUnit) ? (DWRITE_FONT_WEIGHT)std::max(400, (int)weight - 200) : weight;
+        DWRITE_FONT_WEIGHT w = (i == kFontUnit || i == kFontTiny) ? (DWRITE_FONT_WEIGHT)std::max(400, (int)weight - 200) : weight;
         g_dw->CreateTextFormat(family.c_str(), nullptr, w, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
                                sizes[i] * px, L"en-us", &g_fmt[i]);
         if (g_fmt[i]) {
@@ -3379,17 +4233,37 @@ static double SensorVal(const Readings& r, double v) { return r.sensorsOk ? v : 
 
 enum BrushKind { kBrushLabel = 0, kBrushValue, kBrushDim };
 
+// What an op draws. Everything but text and the graph is our own vector art.
+enum Shape { kShText = 0, kShGraph, kShRing, kShBolt, kShGauge, kShFan, kShThermo, kShDie, kShBar, kShChips,
+             kShGpuArt, kShCpuArt, kShBinary, kShCores, kShRamStick, kShWave, kShLine };
+
 struct Op {
-    bool graph = false;
+    bool graph = false;  // the frame time graph (same as shape == kShGraph)
+    int shape = kShText;
     int font = kFontLabel, brush = kBrushLabel;
     float x = 0, y = 0, w = 0, h = 0;
     std::wstring text;
+    float v = 0, v2 = 0;          // the reading as 0..1 (and a second one some shapes use)
+    int id = -1;                  // slot for smooth dial movement, -1 = jump straight there
+    bool warn = false, pulse = false;
+    int blk = -1;                 // the Benchmark block it belongs to, -1 = none
+    std::vector<float> series;    // graph, wave and core bar values
+};
+
+// Where a Benchmark block sits: its corner, its size factor and its colour.
+struct Place {
+    float x = 0, y = 0, k = 1, w = 0, h = 0;
+    int colour = kPalSame;
 };
 
 struct Layout {
     std::vector<Op> ops;
     float w = 0, h = 0;
     std::vector<float> graph;
+    Place places[kBlkCount];
+    std::vector<D2D1_RECT_F> cards;  // one panel per block; empty = one panel for everything
+    bool animated = false;           // has moving parts
+    double fanRate = 0;              // fan turns per second, 0 = still
 };
 
 struct Item {
@@ -3489,6 +4363,489 @@ static float AddInline(Layout& L, float x, float y, const Item& it, float px, bo
     return x;
 }
 
+// ---- The Benchmark layout ------------------------------------------------------
+// Blocks laid out like the RivaTuner overlay it replaces: frames, info, cores and memory on the
+// left; the card, its memory and the processor on the right. Each block is built at its own
+// origin; Render moves and sizes it.
+
+static std::wstring g_apiName;        // "DX11", "Vulkan", ... for the current game
+static ULONGLONG g_sessionStart = 0;  // when the current game started drawing
+
+static double Frac(double v, double max) {
+    if (!seamless_sensors::IsValid(v) || v < 0 || max <= 0) return 0;
+    return std::clamp(v / max, 0.0, 1.0);
+}
+static bool Over(double v, int limit) { return limit > 0 && seamless_sensors::IsValid(v) && v >= limit; }
+
+static std::wstring Fixed(double v, int decimals) {
+    if (!seamless_sensors::IsValid(v) || v < 0) return kDash;
+    wchar_t b[32];
+    swprintf_s(b, L"%.*f", decimals, v);
+    return b;
+}
+
+static void EraseAll(std::wstring& s, const wchar_t* what) {
+    const size_t n = wcslen(what);
+    for (size_t at; (at = s.find(what)) != std::wstring::npos;) s.erase(at, n);
+}
+static std::wstring Squash(const std::wstring& s) {
+    std::wstring out;
+    for (wchar_t c : s)
+        if (c != L' ' || (!out.empty() && out.back() != L' ')) out += c;
+    while (!out.empty() && out.back() == L' ') out.pop_back();
+    return out;
+}
+
+static std::wstring ShortGpuName(const wchar_t* n) {
+    std::wstring s = n;
+    for (const wchar_t* drop : {L"NVIDIA ", L"GeForce ", L"AMD ", L"Radeon ", L"Intel(R) ", L"(TM)", L"(R)"})
+        EraseAll(s, drop);
+    return Squash(s);
+}
+
+static std::wstring ShortCpuName(const wchar_t* n) {
+    std::wstring s = n;
+    for (const wchar_t* drop : {L"(R)", L"(TM)", L" Processor", L"AMD ", L"Intel ", L" with Radeon Graphics",
+                                L" CPU", L"Core "})
+        EraseAll(s, drop);
+    // "16-Core" adds nothing the bars do not show.
+    for (size_t at; (at = s.find(L"-Core")) != std::wstring::npos;) {
+        size_t start = at;
+        while (start > 0 && iswdigit(s[start - 1])) start--;
+        s.erase(start, at + 5 - start);
+    }
+    size_t at = s.find(L'@');
+    if (at != std::wstring::npos) s.erase(at);
+    return Squash(s);
+}
+
+struct Bench {
+    Layout* L;
+    const Readings* r;
+    int blk = 0;
+    float u = 1, P = 7, W = 150;  // one design unit, the inner padding and the content width
+    int slot = 0;                 // next smoothing slot in this block
+};
+
+static Op& BOp(Bench& b, int shape, float x, float y, float w, float h) {
+    Op o;
+    o.shape = shape;
+    o.graph = shape == kShGraph;
+    o.x = x, o.y = y, o.w = w, o.h = h;
+    o.blk = b.blk;
+    b.L->ops.push_back(std::move(o));
+    return b.L->ops.back();
+}
+
+static void BText(Bench& b, int font, int brush, float x, float y, const std::wstring& s, bool warn = false,
+                  bool pulse = false) {
+    const size_t n = b.L->ops.size();
+    AddText(*b.L, font, brush, x, y, s);
+    if (b.L->ops.size() == n) return;
+    Op& o = b.L->ops.back();
+    o.blk = b.blk;
+    o.warn = warn;
+    o.pulse = pulse;
+}
+
+// A number and its unit, right-aligned at `right`, top at `y`.
+static void BValue(Bench& b, float right, float y, const std::wstring& value, const std::wstring& unit, bool warn) {
+    const float u = b.u;
+    const float uw = unit.empty() ? 0 : TextW(kFontUnit, unit) + 3 * u;
+    const float vw = TextW(kFontValue, value);
+    BText(b, kFontValue, kBrushValue, right - uw - vw, y, value, warn);
+    if (!unit.empty())
+        BText(b, kFontUnit, kBrushDim, right - uw + 3 * u, y + g_lineH[kFontValue] - g_lineH[kFontUnit] - 1 * u, unit);
+}
+
+// One reading: an optional picture, its name, and the number at the right edge. Returns its height.
+static float BRow(Bench& b, float y, int icon, float v, float v2, const std::wstring& label, const std::wstring& value,
+                  const std::wstring& unit, bool warn = false) {
+    const float u = b.u;
+    const float iconSz = 24 * u;
+    const float rowH = icon >= 0 ? std::max(30 * u, g_lineH[kFontValue] + 6 * u) : g_lineH[kFontValue] + 3 * u;
+    float lx = b.P;
+    if (icon >= 0) {
+        Op& o = BOp(b, icon, b.P, y + (rowH - iconSz) / 2, iconSz, iconSz);
+        o.v = v;
+        o.v2 = v2;
+        o.warn = warn;
+        o.id = b.blk * 16 + b.slot++;
+        lx = b.P + iconSz + 8 * u;
+    }
+    BText(b, kFontSmall, kBrushLabel, lx, y + (rowH - g_lineH[kFontSmall]) / 2, label);
+    BValue(b, b.P + b.W, y + (rowH - g_lineH[kFontValue]) / 2, value, unit, warn);
+    return rowH;
+}
+
+static void BLine(Bench& b, float y) { BOp(b, kShLine, b.P, y, b.W, 0); }
+
+static void BBar(Bench& b, float y, float h, float v, bool warn) {
+    Op& o = BOp(b, kShBar, b.P, y, b.W, h);
+    o.v = v;
+    o.warn = warn;
+    o.id = b.blk * 16 + b.slot++;
+}
+
+static std::wstring GbPair(double usedMB, double totalMB) {
+    if (!seamless_sensors::IsValid(usedMB) || usedMB < 0) return kDash;
+    std::wstring s = Fixed(usedMB / 1024.0, 1);
+    if (seamless_sensors::IsValid(totalMB) && totalMB > 0) s += L" / " + Fixed(totalMB / 1024.0, 0);
+    return s;
+}
+
+static std::wstring PlayTime(bool live) {
+    if (!g_sessionStart || !live) return kDash;
+    const ULONGLONG secs = (GetTickCount64() - g_sessionStart) / 1000;
+    wchar_t t[32];
+    if (secs >= 3600) swprintf_s(t, L"%llu:%02llu:%02llu", secs / 3600, secs / 60 % 60, secs % 60);
+    else swprintf_s(t, L"%llu:%02llu", secs / 60, secs % 60);
+    return t;
+}
+
+static float BuildBlock(Bench& b) {
+    const Readings& r = *b.r;
+    const auto& s = r.s;
+    const auto& f = r.f;
+    const float u = b.u, P = b.P, W = b.W;
+    float y = P;
+    bool any = false;
+    auto sv = [&](double v) { return SensorVal(r, v); };
+    const bool flamesOn = g_set.animations && g_set.flames;
+    switch (b.blk) {
+        case kBlkName: {
+            std::wstring name = g_set.showGpuName && r.sensorsOk && s.gpuName[0] ? ShortGpuName(s.gpuName) : L"";
+            std::wstring slow;
+            if (g_set.throttleWarn && r.sensorsOk) {
+                if (s.gpuThermalThrottle == 1.0) slow = L"HEAT LIMIT";
+                else if (s.gpuPowerThrottle == 1.0) slow = L"POWER LIMIT";
+            }
+            if (name.empty() && slow.empty()) return 0;
+            const int font = TextW(kFontName, name) > W * 0.7f && !slow.empty() ? kFontSmall : kFontName;
+            BText(b, font, kBrushLabel, P, y, name);
+            if (!slow.empty())
+                BText(b, kFontTiny, kBrushValue, P + W - TextW(kFontTiny, slow),
+                      y + (g_lineH[font] - g_lineH[kFontTiny]) / 2, slow, true, g_set.throttlePulse);
+            y += g_lineH[font];
+            any = true;
+            break;
+        }
+        case kBlkFrames: {
+            if (g_set.fps) {
+                const std::wstring v = Num(f.fps), lbl = Label(L"lblFps");
+                const bool warn = g_set.fpsWarn > 0 && f.fps > 0 && f.fps < g_set.fpsWarn;
+                const float right = P + W * 100.f / 150.f;
+                const float top = y - 6 * u;
+                BText(b, kFontHuge, kBrushValue, right - TextW(kFontHuge, v), top, v, warn);
+                BText(b, kFontLabel, kBrushLabel, right + 6 * u, top + g_lineH[kFontHuge] * 0.80f - g_lineH[kFontLabel],
+                      lbl);
+                y += g_lineH[kFontHuge] - 10 * u;
+                any = true;
+            }
+            if (g_set.low01 || g_set.low1 || g_set.avgFps) {
+                struct Col {
+                    bool on;
+                    double v;
+                    const wchar_t* key;
+                    float centre;
+                } cols[3] = {{g_set.low01, f.low01, L"lbl01", 24.f},
+                             {g_set.low1, f.low1, L"lbl1", 75.5f},
+                             {g_set.avgFps, f.avg, L"lblAvg", 126.5f}};
+                for (auto& c : cols) {
+                    if (!c.on) continue;
+                    const float cx = P + W * c.centre / 150.f;
+                    const std::wstring v = Num(c.v), l = Label(c.key);
+                    BText(b, kFontValue, kBrushValue, cx - TextW(kFontValue, v) / 2, y, v);
+                    BText(b, kFontTiny, kBrushLabel, cx - TextW(kFontTiny, l) / 2, y + g_lineH[kFontValue], l);
+                }
+                y += g_lineH[kFontValue] + g_lineH[kFontTiny] + 5 * u;
+                any = true;
+            }
+            if (g_set.jitter) {
+                const float rowH = g_lineH[kFontValue] + 3 * u;
+                BText(b, kFontSmall, kBrushLabel, P, y + (rowH - g_lineH[kFontSmall]) / 2, Label(L"lblJitter"));
+                Op& w = BOp(b, kShWave, P + W * 0.36f, y + 3 * u, W * 0.30f, rowH - 6 * u);
+                const size_t take = std::min<size_t>(f.graph.size(), 48);
+                w.series.assign(f.graph.end() - take, f.graph.end());
+                BValue(b, P + W, y + 1.5f * u, Fixed(f.live ? f.jitter : NAN, 1), L"ms", false);
+                y += rowH;
+                any = true;
+            }
+            if (g_set.frameTime) {
+                y += BRow(b, y, -1, 0, 0, Label(L"lblFrame"), Fixed(f.live ? f.frameMs : NAN, 1), L"ms");
+                any = true;
+            }
+            if (g_set.frameGraph) {
+                y += 3 * u;
+                Op& g = BOp(b, kShGraph, P, y, W, std::clamp(g_set.graphHeight, 16, 120) * u);
+                g.series = f.graph;
+                y += g.h + 2 * u;
+                any = true;
+            }
+            break;
+        }
+        case kBlkInfo: {
+            struct Line {
+                bool on;
+                const wchar_t* key;
+                std::wstring value, unit;
+            } lines[] = {{g_set.latency, L"lblLatency", kDash, L"ms"},
+                         {g_set.api, L"lblApi", g_apiName.empty() ? kDash : g_apiName, L""},
+                         {g_set.session, L"lblTime", PlayTime(f.live), L""},
+                         {g_set.driver, L"lblDriver", r.sensorsOk && s.gpuDriver[0] ? std::wstring(s.gpuDriver) : kDash,
+                          L""}};
+            for (auto& l : lines) {
+                if (!l.on) continue;
+                if (any) BLine(b, y);
+                any = true;
+                y += BRow(b, y, -1, 0, 0, Label(l.key), l.value, l.unit);
+            }
+            break;
+        }
+        case kBlkCores: {
+            if (g_set.cpuName && r.sensorsOk && s.cpuName[0]) {
+                const std::wstring n = ShortCpuName(s.cpuName);
+                const int font = TextW(kFontName, n) > W ? kFontSmall : kFontName;
+                BText(b, font, kBrushLabel, P, y, n);
+                y += g_lineH[font] + 3 * u;
+                any = true;
+            }
+            if (g_set.coreBars && r.sensorsOk && s.logicalCores) {
+                Op& o = BOp(b, kShCores, P, y, W, 46 * u);
+                const uint32_t n = std::min<uint32_t>(s.logicalCores, seamless_sensors::kMaxCores);
+                const bool pairs = !g_set.coreThreads && s.physicalCores && n == s.physicalCores * 2;
+                for (uint32_t i = 0; i < n; i += pairs ? 2 : 1) {
+                    double v = s.cpuCoreUsage[i];
+                    if (pairs) v = std::max(v, s.cpuCoreUsage[i + 1]);
+                    o.series.push_back((float)Frac(v, 100));
+                }
+                y += o.h + 2 * u;
+                any = true;
+            }
+            break;
+        }
+        case kBlkMemory: {
+            if (g_set.ram) {
+                const double load = sv(s.ramLoad);
+                const bool warn = Over(load, g_set.ramWarn);
+                y += BRow(b, y, -1, 0, 0, Label(L"lblRam"), Num(load), L"%", warn);
+                Op& stick = BOp(b, kShRamStick, P, y + 1 * u, W, 30 * u);
+                stick.v = (float)Frac(load, 100);
+                stick.id = b.blk * 16 + b.slot++;
+                y += 34 * u;
+                BBar(b, y, 4 * u, (float)Frac(load, 100), warn);
+                y += 8 * u;
+                any = true;
+            }
+            if (g_set.ramUsed) {
+                y += BRow(b, y, -1, 0, 0, Label(L"lblRamUsed"), GbPair(sv(s.ramUsedMB), sv(s.ramTotalMB)), L"GB");
+                any = true;
+            }
+            if (g_set.ramSpeed) {
+                y += BRow(b, y, -1, 0, 0, Label(L"lblRamSpeed"), Num(sv(s.ramSpeedMTs)), L"MT/s");
+                any = true;
+            }
+            if (g_set.ramClock) {
+                y += BRow(b, y, -1, 0, 0, Label(L"lblRamClock"), Num(sv(s.ramClockMHz)), L"MHz");
+                any = true;
+            }
+            break;
+        }
+        case kBlkCard: {
+            if (g_set.gpuArt) {
+                Op& art = BOp(b, kShGpuArt, P, y, W, W * 40.f / 128.f);
+                art.v = (float)Frac(sv(s.gpuUsage), 100);
+                y += art.h + 4 * u;
+                any = true;
+            }
+            const double use = sv(s.gpuUsage);
+            if (g_set.gpuUsage) {
+                y += BRow(b, y, kShRing, (float)Frac(use, 100), flamesOn && Over(use, g_set.flameAt) ? 1.f : 0.f,
+                          Label(L"lblGpuLoad"), Num(use), L"%");
+                any = true;
+            }
+            if (g_set.gpuPower) {
+                y += BRow(b, y, kShBolt, 0, 0, Label(L"lblGpuPower"), Num(sv(s.gpuPower)), L"W");
+                any = true;
+            }
+            if (g_set.gpuClock) {
+                y += BRow(b, y, kShGauge, (float)Frac(sv(s.gpuClock), g_set.gpuGaugeMax), 0, Label(L"lblGpuClock"),
+                          Num(sv(s.gpuClock)), L"MHz");
+                any = true;
+            }
+            if (g_set.gpuFan) {
+                const double rpm = sv(s.gpuFanRpm), pct = sv(s.gpuFanPercent);
+                const bool hasPct = seamless_sensors::IsValid(pct) && pct >= 0;
+                const bool hasRpm = seamless_sensors::IsValid(rpm) && rpm >= 0;
+                const float spin = (float)(hasPct ? Frac(pct, 100) : Frac(rpm, 3000));
+                y += BRow(b, y, kShFan, spin, spin, Label(L"lblFan"), hasRpm ? Num(rpm) : Num(pct),
+                          hasRpm || !hasPct ? L"RPM" : L"%");
+                any = true;
+            }
+            if (g_set.gpuTemp) {
+                const double t = sv(s.gpuTemp);
+                y += BRow(b, y, kShThermo, (float)Frac(t, 100), 0, Label(L"lblGpuTemp"), Num(t), L"\u00B0C",
+                          Over(t, g_set.gpuTempWarn));
+                any = true;
+            }
+            if (g_set.gpuHotspot) {
+                const double t = sv(s.gpuHotspot);
+                y += BRow(b, y, kShDie, (float)Frac(t, 110), 0, Label(L"lblHotspot"), Num(t), L"\u00B0C",
+                          Over(t, g_set.hotspotWarn));
+                any = true;
+            }
+            break;
+        }
+        case kBlkVram: {
+            const double used = sv(s.gpuVramUsedMB), total = sv(s.gpuVramTotalMB);
+            const double pct =
+                seamless_sensors::IsValid(used) && seamless_sensors::IsValid(total) && total > 0 ? used / total * 100.0
+                                                                                                  : NAN;
+            if (g_set.vram) {
+                const bool warn = Over(pct, g_set.vramWarn);
+                const float rowH = g_lineH[kFontValue] + 3 * u;
+                const std::wstring l = Label(L"lblVram");
+                BText(b, kFontSmall, kBrushLabel, P, y + (rowH - g_lineH[kFontSmall]) / 2, l);
+                const float cx = P + TextW(kFontSmall, l) + 8 * u;
+                const float cw = W - (cx - P) - 46 * u;
+                if (cw > 20 * u) {
+                    Op& chips = BOp(b, kShChips, cx, y + rowH / 2 - 4 * u, cw, 8 * u);
+                    chips.v = (float)Frac(pct, 100);
+                    chips.v2 = 8;
+                    chips.warn = warn;
+                }
+                BValue(b, P + W, y + 1.5f * u, Num(pct), L"%", warn);
+                y += rowH + 1 * u;
+                BBar(b, y, 4 * u, (float)Frac(pct, 100), warn);
+                y += 7 * u;
+                any = true;
+            }
+            if (g_set.vramUsed) {
+                y += BRow(b, y, -1, 0, 0, Label(L"lblVramUsed"), GbPair(used, total), L"GB");
+                any = true;
+            }
+            if (g_set.vramTemp) {
+                const double t = sv(s.gpuMemJunction);
+                const bool warn = Over(t, g_set.hotspotWarn);
+                y += 2 * u;
+                BBar(b, y, 4 * u, (float)Frac(t, 110), warn);
+                y += 6 * u;
+                y += BRow(b, y, -1, 0, 0, Label(L"lblVramTemp"), Num(t), L"\u00B0C", warn);
+                any = true;
+            }
+            if (g_set.gpuMemClock) {
+                y += BRow(b, y, -1, 0, 0, Label(L"lblVramClock"), Num(sv(s.gpuMemClock)), L"MHz");
+                any = true;
+            }
+            break;
+        }
+        case kBlkProcessor: {
+            if (g_set.cpuArt) {
+                Op& chip = BOp(b, kShCpuArt, P, y, 40 * u, 40 * u);
+                chip.text = !r.sensorsOk ? L"CPU" : s.cpuVendorId == 0x1022 ? L"AMD" : s.cpuVendorId == 0x8086 ? L"INTEL"
+                                                                                                                 : L"CPU";
+                Op& bin = BOp(b, kShBinary, P + 48 * u, y + 2 * u, W - 48 * u, 36 * u);
+                bin.v = (float)Frac(sv(s.cpuUsage), 100);
+                if (g_set.throttleWarn && r.sensorsOk && s.cpuThermalThrottle == 1.0) {
+                    const std::wstring slow = L"HEAT LIMIT";
+                    BText(b, kFontTiny, kBrushValue, P + W - TextW(kFontTiny, slow), y + 40 * u - g_lineH[kFontTiny],
+                          slow, true, g_set.throttlePulse);
+                }
+                y += 46 * u;
+                any = true;
+            }
+            const double use = sv(s.cpuUsage);
+            if (g_set.cpuUsage) {
+                y += BRow(b, y, kShRing, (float)Frac(use, 100), flamesOn && Over(use, g_set.flameAt) ? 1.f : 0.f,
+                          Label(L"lblCpuLoad"), Num(use), L"%");
+                any = true;
+            }
+            if (g_set.cpuPower) {
+                y += BRow(b, y, kShBolt, 0, 0, Label(L"lblCpuPower"), Num(sv(s.cpuPackagePower)), L"W");
+                any = true;
+            }
+            if (g_set.cpuClock) {
+                const double mhz = sv(s.cpuClockMax);
+                y += BRow(b, y, kShGauge, (float)Frac(mhz, g_set.cpuGaugeMax), 0, Label(L"lblCpuBoost"),
+                          Fixed(seamless_sensors::IsValid(mhz) ? mhz / 1000.0 : NAN, 2), L"GHz");
+                any = true;
+            }
+            if (g_set.cpuBusyClock) {
+                const double mhz = sv(s.cpuEffectiveClockAvg);
+                y += BRow(b, y, kShGauge, (float)Frac(mhz, g_set.cpuGaugeMax), 0, Label(L"lblCpuBusy"), Num(mhz),
+                          L"MHz");
+                any = true;
+            }
+            if (g_set.cpuTemp) {
+                const double t = sv(s.cpuTemp);
+                y += BRow(b, y, kShThermo, (float)Frac(t, 100), 0, Label(L"lblCpuTemp"), Num(t), L"\u00B0C",
+                          Over(t, g_set.cpuTempWarn));
+                any = true;
+            }
+            break;
+        }
+    }
+    return any ? y + P - 2 * u : 0;
+}
+
+static Layout BuildBench(const Readings& r, float px) {
+    Layout L;
+    const float u = px;
+    const float ts = std::max(1.0f, std::clamp(g_set.textSize, 60, 200) / 100.0f);
+    const float P = 8 * u, gap = std::clamp(g_set.blockGap, 0, 40) * u;
+    const float design[2] = {150 * u * ts, 128 * u * ts};
+
+    // Blocks per column, in the chosen order.
+    std::vector<int> cols[2];
+    for (int i = 0; i < kBlkCount; i++)
+        if (g_set.blockOn[i]) cols[std::clamp(g_set.blockColumn[i], 0, 1)].push_back(i);
+    for (auto& c : cols)
+        std::stable_sort(c.begin(), c.end(), [](int a, int b) { return g_set.blockOrder[a] < g_set.blockOrder[b]; });
+
+    float colX = 0, totalH = 0;
+    for (int c = 0; c < 2; c++) {
+        if (cols[c].empty()) continue;
+        float colW = 0;
+        for (int i : cols[c])
+            colW = std::max(colW, (design[c] + 2 * P) * std::clamp(g_set.blockSize[i], 50, 200) / 100.f);
+        float y = 0;
+        bool placed = false;
+        for (int i : cols[c]) {
+            const float k = std::clamp(g_set.blockSize[i], 50, 200) / 100.f;
+            Bench b{&L, &r, i, u, P, colW / k - 2 * P};
+            const size_t first = L.ops.size();
+            const float h = BuildBlock(b);
+            if (h <= 0) {
+                L.ops.resize(first);
+                continue;
+            }
+            if (placed) y += gap;
+            Place& pl = L.places[i];
+            pl.x = colX, pl.y = y, pl.k = k, pl.w = colW / k, pl.h = h;
+            pl.colour = g_set.blockColour[i];
+            if (g_set.cards) L.cards.push_back(D2D1::RectF(colX, y, colX + colW, y + h * k));
+            y += h * k;
+            placed = true;
+        }
+        if (!placed) continue;
+        totalH = std::max(totalH, y);
+        colX += colW + std::max(gap, 6 * u);
+    }
+    if (L.ops.empty()) return L;
+    L.w = std::max(1.f, colX - std::max(gap, 6 * u));
+    L.h = std::max(1.f, totalH);
+    L.graph = r.f.graph;
+    L.animated = g_set.animations;
+    if (g_set.animations && g_set.fanSpin && r.sensorsOk) {
+        const double pct = r.s.gpuFanPercent, rpm = r.s.gpuFanRpm;
+        double turns = 0;
+        if (seamless_sensors::IsValid(pct) && pct > 0) turns = pct / 100.0 * 1.5;
+        else if (seamless_sensors::IsValid(rpm) && rpm > 0) turns = rpm / 3000.0 * 1.5;
+        L.fanRate = turns * std::clamp(g_set.fanSpeed, 10, 300) / 100.0;
+    }
+    return L;
+}
+
 static Layout BuildLayout(const Readings& r, float px) {
     Layout L;
     const float pad = 10 * px, gap = 14 * px, rowGap = 2 * px;
@@ -3582,81 +4939,7 @@ static Layout BuildLayout(const Readings& r, float px) {
         return L;
     }
 
-    // Full benchmark layout: frames on the left, the card and the processor on the right.
-    float y = pad - 2 * px;
-    float leftW = 150 * px;
-    std::wstring gpuName;
-    if (g_set.showGpuName && r.sensorsOk && r.s.gpuName[0]) {
-        gpuName = r.s.gpuName;
-        for (const wchar_t* drop : {L"NVIDIA ", L"AMD ", L"GeForce "}) {
-            size_t at = gpuName.find(drop);
-            if (at == 0) gpuName.erase(0, wcslen(drop));
-        }
-    }
-    std::vector<Op> left;
-    Layout tmp;
-    float ly = y;
-    if (!gpuName.empty()) {
-        AddText(tmp, kFontName, kBrushLabel, pad, ly, gpuName);
-        leftW = std::max(leftW, TextW(kFontName, gpuName));
-        ly += g_lineH[kFontName] + 1 * px;
-    }
-    if (g_set.fps) {
-        std::wstring v = Num(r.f.fps);
-        AddText(tmp, kFontBig, kBrushValue, pad, ly - 4 * px, v);
-        float bx = pad + TextW(kFontBig, v) + 5 * px;
-        AddText(tmp, kFontLabel, kBrushLabel, bx, ly - 4 * px + g_lineH[kFontBig] - g_lineH[kFontLabel] - 6 * px, L"FPS");
-        leftW = std::max(leftW, bx - pad + TextW(kFontLabel, L"FPS"));
-        ly += g_lineH[kFontBig] - 6 * px;
-    }
-    {
-        // 0.1%, 1% and AVG side by side, frame time under them.
-        float x = pad;
-        bool any = false;
-        for (const Item& it : FrameItems(r, false)) {
-            if (it.label == L"Frame") continue;
-            if (any) x += 10 * px;
-            x = AddInline(tmp, x, ly, it, px, true);
-            any = true;
-        }
-        if (any) {
-            leftW = std::max(leftW, x - pad);
-            ly += rowH;
-        }
-        if (g_set.frameTime) {
-            float fx = AddInline(tmp, pad, ly, Item{L"Frame time", Num(r.f.frameMs, 1), L"ms"}, px, true);
-            leftW = std::max(leftW, fx - pad);
-            ly += rowH;
-        }
-    }
-    if (g_set.frameGraph) {
-        Op g;
-        g.graph = true;
-        g.x = pad;
-        g.y = ly + 3 * px;
-        g.w = leftW;
-        g.h = 30 * px;
-        tmp.ops.push_back(g);
-        ly += g.h + 6 * px;
-        L.graph = r.f.graph;
-    }
-    for (auto& o : tmp.ops)
-        if (o.graph) o.w = leftW;
-
-    std::vector<Item> right = GpuItems(r, true);
-    for (auto& it : CpuItems(r)) right.push_back(it);
-    float rightW = 0;
-    for (auto& it : right) rightW = std::max(rightW, RowWidth(it, px, gap));
-    float rx = pad + leftW + (right.empty() ? 0 : 22 * px);
-    float ry = y;
-    for (auto& it : right) {
-        AddRow(tmp, rx, rx + rightW, ry, it, px);
-        ry += rowH;
-    }
-    L.ops = std::move(tmp.ops);
-    L.w = rx + rightW + pad;
-    L.h = std::max(ly, ry - rowGap) + pad - 2 * px;
-    return L;
+    return BuildBench(r, px);
 }
 
 // ---- Rendering --------------------------------------------------------------
@@ -3713,12 +4996,412 @@ static D2D1_COLOR_F StyleColour(int style) {
     }
 }
 
+// ---- Moving parts -------------------------------------------------------------
+
+static double g_fanAngle = 0;    // degrees, all fans
+static double g_flamePhase = 0;  // seconds of flame flicker
+static double g_pulsePhase = 0;  // seconds of the "limit" pulse
+static double g_binClock = 0;
+static int g_binFrame = 0;       // which of the 8 binary code frames shows
+static std::map<int, float> g_smooth;  // dial slot -> where its needle is now
+static Layout g_lastLayout;
+static float g_lastPx = 1;
+static bool g_gfxOn = false;
+static double g_gfxLastQpc = 0;
+static ID2D1StrokeStyle* g_roundStroke = nullptr;
+static std::vector<D2D1_RECT_F> g_cards;  // panels of the last frame, for the glass
+
+static float OpVal(const Op& o) {
+    if (o.id < 0 || !g_set.animations || !g_set.smoothDials) return o.v;
+    auto it = g_smooth.find(o.id);
+    return it == g_smooth.end() ? o.v : it->second;
+}
+
+struct Paint {
+    ID2D1RenderTarget* rt = nullptr;
+    ID2D1SolidColorBrush* solid = nullptr;     // scratch colour
+    ID2D1SolidColorBrush* accSolid = nullptr;  // the block colour when it is not the gradient
+    ID2D1LinearGradientBrush* grad = nullptr;
+    ID2D1Brush* accent = nullptr;              // the block colour, gradient or solid
+    D2D1_COLOR_F warn{};
+    D2D1_MATRIX_3X2_F world = D2D1::Matrix3x2F::Identity();
+    float u = 1;
+};
+
+static D2D1::Matrix3x2F M(const D2D1_MATRIX_3X2_F& m) {
+    return D2D1::Matrix3x2F(m._11, m._12, m._21, m._22, m._31, m._32);
+}
+
+// The gradient is laid over the whole overlay, so inside a moved or turned shape it is
+// counter-moved to stay put.
+static void World(Paint& p, const D2D1_MATRIX_3X2_F& m) {
+    p.rt->SetTransform(m);
+    if (!p.grad) return;
+    const float det = m._11 * m._22 - m._12 * m._21;
+    if (std::fabs(det) < 1e-6f) return;
+    const float i11 = m._22 / det, i12 = -m._12 / det, i21 = -m._21 / det, i22 = m._11 / det;
+    const float i31 = -(m._31 * i11 + m._32 * i21), i32 = -(m._31 * i12 + m._32 * i22);
+    p.grad->SetTransform(D2D1::Matrix3x2F(i11, i12, i21, i22, i31, i32));
+}
+
+static ID2D1Brush* Col(Paint& p, uint32_t rgb, float a = 1.f) {
+    p.solid->SetColor(Rgb(rgb, a));
+    return p.solid;
+}
+static ID2D1Brush* Accent(Paint& p, bool warn) {
+    if (!warn) return p.accent;
+    p.solid->SetColor(p.warn);
+    return p.solid;
+}
+
+static D2D1_POINT_2F Polar(D2D1_POINT_2F c, float r, float deg) {
+    const float a = deg * 3.14159265f / 180.f;
+    return D2D1::Point2F(c.x + r * std::sin(a), c.y - r * std::cos(a));
+}
+
+// An arc from a0 to a1 degrees, clockwise, 0 = straight up.
+static void Arc(Paint& p, D2D1_POINT_2F c, float r, float a0, float a1, ID2D1Brush* b, float width) {
+    if (a1 - a0 < 0.5f) return;
+    if (a1 - a0 >= 359.5f) {
+        p.rt->DrawEllipse(D2D1::Ellipse(c, r, r), b, width);
+        return;
+    }
+    ID2D1PathGeometry* g = nullptr;
+    ID2D1GeometrySink* s = nullptr;
+    if (SUCCEEDED(g_d2d->CreatePathGeometry(&g)) && SUCCEEDED(g->Open(&s))) {
+        s->BeginFigure(Polar(c, r, a0), D2D1_FIGURE_BEGIN_HOLLOW);
+        s->AddArc(D2D1::ArcSegment(Polar(c, r, a1), D2D1::SizeF(r, r), 0, D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                                   a1 - a0 > 180 ? D2D1_ARC_SIZE_LARGE : D2D1_ARC_SIZE_SMALL));
+        s->EndFigure(D2D1_FIGURE_END_OPEN);
+        s->Close();
+        p.rt->DrawGeometry(g, b, width, g_roundStroke);
+    }
+    SafeRelease(s);
+    SafeRelease(g);
+}
+
+static void Poly(Paint& p, const D2D1_POINT_2F* pts, int n, ID2D1Brush* fill, ID2D1Brush* line = nullptr,
+                 float width = 1, bool closed = true) {
+    ID2D1PathGeometry* g = nullptr;
+    ID2D1GeometrySink* s = nullptr;
+    if (n >= 2 && SUCCEEDED(g_d2d->CreatePathGeometry(&g)) && SUCCEEDED(g->Open(&s))) {
+        s->BeginFigure(pts[0], fill ? D2D1_FIGURE_BEGIN_FILLED : D2D1_FIGURE_BEGIN_HOLLOW);
+        for (int i = 1; i < n; i++) s->AddLine(pts[i]);
+        s->EndFigure(closed ? D2D1_FIGURE_END_CLOSED : D2D1_FIGURE_END_OPEN);
+        s->Close();
+        if (fill) p.rt->FillGeometry(g, fill);
+        if (line) p.rt->DrawGeometry(g, line, width, g_roundStroke);
+    }
+    SafeRelease(s);
+    SafeRelease(g);
+}
+
+static D2D1_ROUNDED_RECT RR(float l, float t, float r, float b, float rad) {
+    return D2D1_ROUNDED_RECT{D2D1::RectF(l, t, r, b), rad, rad};
+}
+
+// Fan blades turned by `angle` around c.
+static void Rotor(Paint& p, D2D1_POINT_2F c, float r, float angle, int blades, ID2D1Brush* b) {
+    const D2D1_MATRIX_3X2_F base = p.world;
+    for (int i = 0; i < blades; i++) {
+        const float a = angle + i * 360.f / blades;
+        // A curved blade: a slim ellipse leaning off the spoke.
+        const D2D1_POINT_2F mid = D2D1::Point2F(c.x + r * 0.12f, c.y - r * 0.52f);
+        World(p, D2D1::Matrix3x2F::Rotation(24, mid) * D2D1::Matrix3x2F::Rotation(a, c) * M(base));
+        p.rt->FillEllipse(D2D1::Ellipse(mid, r * 0.2f, r * 0.42f), b);
+    }
+    World(p, base);
+}
+
+static void Flames(Paint& p, D2D1_POINT_2F c, float r) {
+    const float u = p.u;
+    static const uint32_t kFire[3] = {mocha::kPeach, mocha::kRed, mocha::kYellow};
+    for (int i = 0; i < 10; i++) {
+        const float a = i * 36.f + 8.f * (float)std::sin(g_flamePhase * 5.0 + i);
+        const float flick = 0.5f + 0.5f * (float)std::sin(g_flamePhase * 17.0 + i * 1.9);
+        const float len = (2.5f + 3.5f * flick) * u;
+        D2D1_POINT_2F pts[3] = {Polar(c, r + 0.5f * u, a - 11), Polar(c, r + len, a + 4 * flick),
+                                Polar(c, r + 0.5f * u, a + 11)};
+        Poly(p, pts, 3, Col(p, kFire[i % 3], 0.55f + 0.4f * flick));
+    }
+}
+
+static void DrawShape(Paint& p, const Op& o) {
+    const float u = p.u;
+    const float v = std::clamp(OpVal(o), 0.f, 1.f);
+    const D2D1_POINT_2F c = D2D1::Point2F(o.x + o.w / 2, o.y + o.h / 2);
+    const float r = std::min(o.w, o.h) / 2;
+    switch (o.shape) {
+        case kShRing: {
+            const float rr = r - 2 * u;
+            if (o.v2 > 0 && g_set.animations && g_set.flames) Flames(p, c, rr + 1 * u);
+            p.rt->DrawEllipse(D2D1::Ellipse(c, rr, rr), Col(p, mocha::kSurface1, 0.9f), 3 * u);
+            Arc(p, c, rr, 0, v * 360.f, Accent(p, o.warn), 3 * u);
+            p.rt->FillEllipse(D2D1::Ellipse(c, rr * 0.38f, rr * 0.38f), Col(p, mocha::kSurface1, 0.8f));
+            break;
+        }
+        case kShBolt: {
+            const float x = o.x + o.w * 0.18f, y = o.y + 1 * u, w = o.w * 0.64f, h = o.h - 2 * u;
+            const float n[][2] = {{0.62f, 0}, {0.08f, 0.56f}, {0.44f, 0.56f}, {0.32f, 1}, {0.92f, 0.40f},
+                                  {0.56f, 0.40f}, {0.74f, 0}};
+            D2D1_POINT_2F pts[7];
+            for (int i = 0; i < 7; i++) pts[i] = D2D1::Point2F(x + n[i][0] * w, y + n[i][1] * h);
+            Poly(p, pts, 7, Accent(p, o.warn));
+            break;
+        }
+        case kShGauge: {
+            const float rr = r - 2 * u;
+            const D2D1_POINT_2F gc = D2D1::Point2F(c.x, c.y + 2 * u);
+            Arc(p, gc, rr, -115, 115, Col(p, mocha::kSurface1, 0.9f), 2.6f * u);
+            Arc(p, gc, rr, -115, -115 + 230 * v, Accent(p, o.warn), 2.6f * u);
+            const D2D1_POINT_2F tip = Polar(gc, rr * 0.78f, -115 + 230 * v);
+            p.rt->DrawLine(gc, tip, Col(p, mocha::kText), 1.6f * u, g_roundStroke);
+            p.rt->FillEllipse(D2D1::Ellipse(gc, 2.2f * u, 2.2f * u), Col(p, mocha::kText));
+            break;
+        }
+        case kShFan: {
+            const float rr = r - 1.5f * u;
+            p.rt->DrawEllipse(D2D1::Ellipse(c, rr, rr), Col(p, mocha::kSurface1, 0.9f), 1.6f * u);
+            Arc(p, c, rr, 0, v * 360.f, Accent(p, o.warn), 1.8f * u);
+            Rotor(p, c, rr - 2 * u, (float)g_fanAngle, 5, Col(p, mocha::kSubtext, 0.9f));
+            p.rt->FillEllipse(D2D1::Ellipse(c, rr * 0.2f, rr * 0.2f), Col(p, mocha::kSurface2));
+            break;
+        }
+        case kShThermo: {
+            const float tw = 6 * u, bulb = 5 * u;
+            const float top = o.y + 1 * u, bottomY = o.y + o.h - bulb;
+            const float x0 = c.x - tw / 2, x1 = c.x + tw / 2;
+            p.rt->FillRoundedRectangle(RR(x0, top, x1, bottomY, tw / 2), Col(p, mocha::kSurface1, 0.9f));
+            p.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(c.x, bottomY), bulb, bulb), Col(p, mocha::kSurface1, 0.9f));
+            ID2D1Brush* fill = Accent(p, o.warn);
+            const float level = top + (bottomY - top) * (1 - v);
+            if (bottomY - level > 1) p.rt->FillRoundedRectangle(RR(x0 + 1.2f * u, level, x1 - 1.2f * u, bottomY, tw / 2), fill);
+            p.rt->FillEllipse(D2D1::Ellipse(D2D1::Point2F(c.x, bottomY), bulb - 1.6f * u, bulb - 1.6f * u), fill);
+            break;
+        }
+        case kShDie: {
+            const float s = r * 0.62f;
+            ID2D1Brush* pins = Col(p, mocha::kSurface2);
+            for (int i = 0; i < 3; i++) {
+                const float t = -s * 0.55f + i * s * 0.55f;
+                p.rt->DrawLine(D2D1::Point2F(c.x + t, c.y - s - 3 * u), D2D1::Point2F(c.x + t, c.y - s), pins, 1.4f * u);
+                p.rt->DrawLine(D2D1::Point2F(c.x + t, c.y + s), D2D1::Point2F(c.x + t, c.y + s + 3 * u), pins, 1.4f * u);
+                p.rt->DrawLine(D2D1::Point2F(c.x - s - 3 * u, c.y + t), D2D1::Point2F(c.x - s, c.y + t), pins, 1.4f * u);
+                p.rt->DrawLine(D2D1::Point2F(c.x + s, c.y + t), D2D1::Point2F(c.x + s + 3 * u, c.y + t), pins, 1.4f * u);
+            }
+            p.rt->FillRoundedRectangle(RR(c.x - s, c.y - s, c.x + s, c.y + s, 2 * u), Col(p, mocha::kSurface0));
+            p.rt->DrawRoundedRectangle(RR(c.x - s, c.y - s, c.x + s, c.y + s, 2 * u), Accent(p, o.warn), 1.2f * u);
+            // The hot centre goes green, then yellow, then red as it heats up.
+            const uint32_t heat = v < 0.6f ? mocha::kGreen : v < 0.8f ? mocha::kYellow : mocha::kRed;
+            const float hs = s * (0.35f + 0.3f * v);
+            p.rt->FillRoundedRectangle(RR(c.x - hs, c.y - hs, c.x + hs, c.y + hs, 1.5f * u), Col(p, heat, 0.9f));
+            break;
+        }
+        case kShBar: {
+            const float rad = o.h / 2;
+            p.rt->FillRoundedRectangle(RR(o.x, o.y, o.x + o.w, o.y + o.h, rad), Col(p, mocha::kSurface0, 0.9f));
+            if (v > 0) p.rt->FillRoundedRectangle(RR(o.x, o.y, o.x + std::max(o.h, o.w * v), o.y + o.h, rad), Accent(p, o.warn));
+            break;
+        }
+        case kShChips: {
+            const int n = std::max(1, (int)o.v2);
+            const float gap = 2 * u, cw = (o.w - gap * (n - 1)) / n;
+            const int lit = (int)std::lround(v * n);
+            for (int i = 0; i < n; i++) {
+                const float x = o.x + i * (cw + gap);
+                p.rt->FillRoundedRectangle(RR(x, o.y, x + cw, o.y + o.h, 1.2f * u),
+                                           i < lit ? Accent(p, o.warn) : Col(p, mocha::kSurface1, 0.9f));
+            }
+            break;
+        }
+        case kShGpuArt: {
+            const float bodyR = o.x + o.w * 0.95f, top = o.y + o.h * 0.06f, bot = o.y + o.h * 0.80f;
+            // Gold contacts under the card, then the bracket at its end.
+            ID2D1Brush* gold = Col(p, mocha::kYellow, 0.75f);
+            for (float x = o.x + o.w * 0.24f; x < o.x + o.w * 0.66f; x += 3 * u)
+                p.rt->FillRectangle(D2D1::RectF(x, bot, x + 1.8f * u, o.y + o.h * 0.94f), gold);
+            p.rt->FillRoundedRectangle(RR(bodyR + 1 * u, o.y, o.x + o.w, o.y + o.h * 0.88f, 1 * u), Col(p, mocha::kSurface2));
+            p.rt->FillRoundedRectangle(RR(o.x, top, bodyR, bot, 4 * u), Col(p, mocha::kSurface0, 0.92f));
+            p.rt->DrawRoundedRectangle(RR(o.x, top, bodyR, bot, 4 * u), p.accent, 1.2f * u);
+            // A light strip along the top that glows brighter with load.
+            p.solid->SetOpacity(1);
+            p.accent->SetOpacity(0.35f + 0.65f * v);
+            p.rt->DrawLine(D2D1::Point2F(o.x + 6 * u, top + 2.5f * u), D2D1::Point2F(bodyR - 6 * u, top + 2.5f * u), p.accent,
+                           1.6f * u, g_roundStroke);
+            p.accent->SetOpacity(1);
+            const float fr = std::min((bot - top) * 0.40f, (bodyR - o.x) * 0.15f);
+            const float cy = (top + bot) / 2 + 1.5f * u;
+            for (int i = 0; i < 3; i++) {
+                const D2D1_POINT_2F fc = D2D1::Point2F(o.x + (bodyR - o.x) * (0.18f + 0.32f * i), cy);
+                p.rt->FillEllipse(D2D1::Ellipse(fc, fr, fr), Col(p, mocha::kCrust, 0.7f));
+                p.rt->DrawEllipse(D2D1::Ellipse(fc, fr, fr), Col(p, mocha::kSurface2), 1.2f * u);
+                const float a = (float)g_fanAngle * (i == 1 ? -1.f : 1.f) + i * 17.f;
+                Rotor(p, fc, fr - 1.5f * u, a, 7, Col(p, mocha::kSubtext, 0.85f));
+                p.rt->FillEllipse(D2D1::Ellipse(fc, fr * 0.26f, fr * 0.26f), Col(p, mocha::kSurface2));
+                p.rt->FillEllipse(D2D1::Ellipse(fc, fr * 0.12f, fr * 0.12f), p.accent);
+            }
+            break;
+        }
+        case kShCpuArt: {
+            ID2D1Brush* pins = Col(p, mocha::kSurface2);
+            const float in = 5 * u;
+            for (int i = 0; i < 5; i++) {
+                const float t = o.x + in + 3 * u + i * (o.w - 2 * in - 6 * u) / 4;
+                const float t2 = o.y + in + 3 * u + i * (o.h - 2 * in - 6 * u) / 4;
+                p.rt->DrawLine(D2D1::Point2F(t, o.y), D2D1::Point2F(t, o.y + in), pins, 1.5f * u);
+                p.rt->DrawLine(D2D1::Point2F(t, o.y + o.h - in), D2D1::Point2F(t, o.y + o.h), pins, 1.5f * u);
+                p.rt->DrawLine(D2D1::Point2F(o.x, t2), D2D1::Point2F(o.x + in, t2), pins, 1.5f * u);
+                p.rt->DrawLine(D2D1::Point2F(o.x + o.w - in, t2), D2D1::Point2F(o.x + o.w, t2), pins, 1.5f * u);
+            }
+            const D2D1_ROUNDED_RECT body = RR(o.x + in, o.y + in, o.x + o.w - in, o.y + o.h - in, 3 * u);
+            p.rt->FillRoundedRectangle(body, Col(p, mocha::kSurface0, 0.95f));
+            p.rt->DrawRoundedRectangle(body, p.accent, 1.2f * u);
+            p.rt->DrawRoundedRectangle(RR(o.x + in + 4 * u, o.y + in + 4 * u, o.x + o.w - in - 4 * u, o.y + o.h - in - 4 * u, 2 * u),
+                                       Col(p, mocha::kOverlay, 0.6f), 1 * u);
+            if (g_fmt[kFontTiny] && !o.text.empty()) {
+                const float tw = TextW(kFontTiny, o.text);
+                const D2D1_RECT_F tr = D2D1::RectF(c.x - tw / 2, c.y - g_lineH[kFontTiny] / 2, c.x + tw / 2 + 4,
+                                                   c.y + g_lineH[kFontTiny] / 2 + 2);
+                p.rt->DrawText(o.text.c_str(), (UINT32)o.text.size(), g_fmt[kFontTiny], tr, p.accent);
+            }
+            break;
+        }
+        case kShBinary: {
+            if (!g_fmt[kFontTiny]) break;
+            const float cw = std::max(1.f, TextW(kFontTiny, L"0")) + 1.2f * u;
+            const int cols = std::max(1, (int)(o.w / cw)), rows = 3;
+            const float rowH = o.h / rows;
+            ID2D1Brush* dim = Col(p, mocha::kOverlay, 0.55f);
+            for (int row = 0; row < rows; row++) {
+                for (int col = 0; col < cols; col++) {
+                    uint32_t hsh = (uint32_t)(g_binFrame * 7919 + row * 104729 + col * 1299709);
+                    hsh ^= hsh >> 13;
+                    hsh *= 0x5BD1E995u;
+                    hsh ^= hsh >> 15;
+                    const wchar_t ch = (hsh & 1) ? L'1' : L'0';
+                    const bool lit = ((hsh >> 8) & 0xFF) < (uint32_t)(64 + 150 * v);
+                    const D2D1_RECT_F tr = D2D1::RectF(o.x + col * cw, o.y + row * rowH, o.x + (col + 1) * cw + 2,
+                                                       o.y + row * rowH + g_lineH[kFontTiny] + 2);
+                    p.rt->DrawText(&ch, 1, g_fmt[kFontTiny], tr, lit ? p.accent : dim);
+                }
+            }
+            break;
+        }
+        case kShCores: {
+            const int n = (int)o.series.size();
+            if (!n) break;
+            const float gap = n > 24 ? 1 * u : 2 * u, bw = (o.w - gap * (n - 1)) / n;
+            for (int i = 0; i < n; i++) {
+                const float x = o.x + i * (bw + gap);
+                p.rt->FillRoundedRectangle(RR(x, o.y, x + bw, o.y + o.h, 1 * u), Col(p, mocha::kSurface0, 0.9f));
+                const float fv = std::clamp(o.series[i], 0.f, 1.f);
+                if (fv > 0.01f)
+                    p.rt->FillRoundedRectangle(RR(x, o.y + o.h * (1 - fv), x + bw, o.y + o.h, 1 * u), p.accent);
+            }
+            break;
+        }
+        case kShRamStick: {
+            const float boardB = o.y + o.h * 0.76f;
+            ID2D1Brush* gold = Col(p, mocha::kYellow, 0.75f);
+            const float notch = o.x + o.w * 0.42f;
+            for (float x = o.x + 3 * u; x < o.x + o.w - 3 * u; x += 2.6f * u)
+                if (x < notch - 2 * u || x > notch + 3 * u)
+                    p.rt->FillRectangle(D2D1::RectF(x, boardB, x + 1.4f * u, o.y + o.h), gold);
+            const D2D1_ROUNDED_RECT board = RR(o.x, o.y, o.x + o.w, boardB, 2 * u);
+            p.rt->FillRoundedRectangle(board, Col(p, mocha::kSurface0, 0.95f));
+            p.rt->DrawRoundedRectangle(board, p.accent, 1.1f * u);
+            const int n = 8;
+            const float gap = 3 * u, cw = (o.w - 8 * u - gap * (n - 1)) / n;
+            const int lit = (int)std::ceil(v * n - 0.01f);
+            for (int i = 0; i < n; i++) {
+                const float x = o.x + 4 * u + i * (cw + gap);
+                p.rt->FillRoundedRectangle(RR(x, o.y + 4 * u, x + cw, boardB - 4 * u, 1 * u),
+                                           i < lit ? p.accent : Col(p, mocha::kSurface2, 0.9f));
+            }
+            break;
+        }
+        case kShWave: {
+            const size_t n = o.series.size();
+            if (n < 2) break;
+            double mean = 0, spread = 0;
+            for (float s : o.series) mean += s;
+            mean /= n;
+            for (float s : o.series) spread = std::max(spread, std::fabs(s - mean));
+            spread = std::max(spread, 2.0);
+            std::vector<D2D1_POINT_2F> pts(n);
+            for (size_t i = 0; i < n; i++)
+                pts[i] = D2D1::Point2F(o.x + o.w * i / (n - 1),
+                                       c.y - (float)((o.series[i] - mean) / spread) * (o.h / 2));
+            Poly(p, pts.data(), (int)n, nullptr, p.accent, 1.3f * u, false);
+            break;
+        }
+        case kShLine:
+            p.rt->DrawLine(D2D1::Point2F(o.x, o.y), D2D1::Point2F(o.x + o.w, o.y), Col(p, mocha::kOverlay, 0.3f), 1 * u);
+            break;
+    }
+}
+
+static void DrawGraph(Paint& p, const Op& o, const std::vector<float>& data) {
+    const float u = p.u;
+    if (data.size() < 2) return;
+    double sum = 0, mx = 0;
+    for (float v : data) sum += v, mx = std::max(mx, (double)v);
+    const double mean = sum / data.size();
+    const double top = g_set.graphTopMs > 0 ? (double)g_set.graphTopMs : std::max({mx * 1.1, mean * 2.0, 20.0});
+    p.rt->DrawLine(D2D1::Point2F(o.x, o.y + o.h), D2D1::Point2F(o.x + o.w, o.y + o.h), Col(p, mocha::kOverlay, 0.35f),
+                   u);
+    if (o.blk >= 0 && g_fmt[kFontTiny]) {
+        wchar_t t[24];
+        swprintf_s(t, L"%.0f ms", top);
+        const float tw = TextW(kFontTiny, t);
+        p.rt->DrawText(t, (UINT32)wcslen(t), g_fmt[kFontTiny],
+                       D2D1::RectF(o.x + o.w - tw, o.y - 1 * u, o.x + o.w + 4, o.y + g_lineH[kFontTiny]),
+                       Col(p, mocha::kOverlay, 0.9f));
+    }
+    const size_t n = data.size();
+    auto X = [&](size_t i) { return o.x + o.w * (float)i / (float)(n - 1); };
+    auto Y = [&](float v) { return o.y + o.h - (float)std::min(1.0, v / top) * o.h; };
+    ID2D1Brush* b = p.accent;
+    if (g_set.graphStyle == 2) {
+        const float bw = std::max(0.6f * u, o.w / n - 0.4f * u);
+        for (size_t i = 0; i < n; i++) p.rt->FillRectangle(D2D1::RectF(X(i), Y(data[i]), X(i) + bw, o.y + o.h), b);
+    } else {
+        std::vector<D2D1_POINT_2F> pts;
+        pts.reserve(n + 2);
+        for (size_t i = 0; i < n; i++) pts.push_back(D2D1::Point2F(X(i), Y(data[i])));
+        if (g_set.graphStyle == 1) {
+            std::vector<D2D1_POINT_2F> area = pts;
+            area.push_back(D2D1::Point2F(o.x + o.w, o.y + o.h));
+            area.push_back(D2D1::Point2F(o.x, o.y + o.h));
+            b->SetOpacity(0.28f);
+            Poly(p, area.data(), (int)area.size(), b);
+            b->SetOpacity(1);
+        }
+        Poly(p, pts.data(), (int)n, nullptr, b, 1.4f * u, false);
+    }
+    if (g_set.spikeMarks) {
+        std::vector<float> sorted = data;
+        std::nth_element(sorted.begin(), sorted.begin() + n / 2, sorted.end());
+        const double median = sorted[n / 2];
+        const double limit = std::max(median * 2.0, median + 8.0);
+        p.solid->SetColor(p.warn);
+        for (size_t i = 0; i < n; i++)
+            if (data[i] > limit)
+                p.rt->DrawLine(D2D1::Point2F(X(i), o.y + o.h), D2D1::Point2F(X(i), Y(data[i])), p.solid, 1.4f * u);
+    }
+}
+
 static void Render(const Layout& L, float px) {
     const int w = std::max(1, (int)std::ceil(L.w)), h = std::max(1, (int)std::ceil(L.h));
     if (!EnsureDib(w, h)) return;
     RECT rc{0, 0, w, h};
     if (FAILED(g_rt->BindDC(g_memDc, &rc))) return;
+    if (!g_roundStroke)
+        g_d2d->CreateStrokeStyle(D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND,
+                                                             D2D1_CAP_STYLE_ROUND, D2D1_LINE_JOIN_ROUND),
+                                 nullptr, 0, &g_roundStroke);
     g_rt->BeginDraw();
+    g_rt->SetTransform(D2D1::Matrix3x2F::Identity());
     g_rt->Clear(D2D1::ColorF(0, 0, 0, 0));
 
     // One gradient across the whole overlay, top left to bottom right (swapped when flipped).
@@ -3731,87 +5414,146 @@ static void Render(const Layout& L, float px) {
         g_rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, 0), D2D1::Point2F((float)w, (float)h)),
                                         coll, &grad);
     ID2D1SolidColorBrush* solid = nullptr;
+    ID2D1SolidColorBrush* acc = nullptr;
     g_rt->CreateSolidColorBrush(Rgb(mocha::kText), &solid);
-    if (!solid) {
+    g_rt->CreateSolidColorBrush(Rgb(mocha::kBlue), &acc);
+    if (!solid || !acc) {
         g_rt->EndDraw();
+        SafeRelease(solid);
+        SafeRelease(acc);
         SafeRelease(grad);
         SafeRelease(coll);
         return;
     }
+    Paint p;
+    p.rt = g_rt;
+    p.solid = solid;
+    p.accSolid = acc;
+    p.grad = grad;
+    p.u = px;
+    p.warn = g_set.warnColour >= 0 && g_set.warnColour < kPalCustom && g_set.warnColour != kPalGradient
+                 ? Rgb(kPalRgb[g_set.warnColour])
+                 : Rgb(mocha::kRed);
 
     const int bg = EffectiveBackground();
     const float radius = g_set.rounded ? g_set.cornerRadius * px : 0.f;
-    const D2D1_ROUNDED_RECT shape{D2D1::RectF(0.5f, 0.5f, w - 0.5f, h - 0.5f), radius, radius};
+    const float strength = std::clamp(g_set.bgStrength, 0, 200) / 100.f;
+    const float fillA = std::min(1.f, (bg == kGlass ? 0.42f : bg == kTint ? 0.55f : 0.96f) * strength);
+    const uint32_t fillRgb = bg == kSolid ? mocha::kMantle : mocha::kBase;
+    // Box edges are 2 px at 100% scale, drawn half a stroke in so the outside of the line sits
+    // exactly on the box's own rounded corner and the curve is as thick as the sides.
+    const float edgeW = std::max(1.f, std::round(2.f * px));
+    const float half = edgeW / 2;
+    std::vector<D2D1_ROUNDED_RECT> panels;  // outer shapes
+    if (!L.cards.empty()) {
+        for (const auto& c : L.cards) {
+            const float cr = std::min(radius, std::min(c.right - c.left, c.bottom - c.top) / 2);
+            panels.push_back(D2D1_ROUNDED_RECT{c, cr, cr});
+        }
+    } else {
+        panels.push_back(D2D1_ROUNDED_RECT{D2D1::RectF(0, 0, (float)w, (float)h), radius, radius});
+    }
     if (bg != kNone) {
-        float a = bg == kGlass ? 0.42f : bg == kTint ? 0.55f : 0.96f;
-        solid->SetColor(Rgb(bg == kSolid ? mocha::kMantle : mocha::kBase, a));
-        g_rt->FillRoundedRectangle(D2D1_ROUNDED_RECT{D2D1::RectF(0, 0, (float)w, (float)h), radius, radius}, solid);
+        solid->SetColor(Rgb(fillRgb, fillA));
+        for (const auto& pr : panels) g_rt->FillRoundedRectangle(pr, solid);
     }
 
-    auto brushFor = [&](int kind) -> ID2D1Brush* {
-        int style = kind == kBrushLabel ? g_set.labelStyle : kind == kBrushValue ? g_set.valueStyle : -1;
-        if (style == kStyleGradient && grad) return grad;
-        solid->SetColor(style < 0 ? Rgb(mocha::kSubtext) : StyleColour(style));
+    auto setAccent = [&](int blk) {
+        int colour = blk >= 0 ? L.places[blk].colour : kPalSame;
+        if (colour == kPalSame) {
+            switch (g_set.labelStyle) {
+                case kStyleBlue: colour = kPalBlue; break;
+                case kStyleMauve: colour = kPalMauve; break;
+                case kStyleText: colour = kPalWhite; break;
+                case kStyleCustom: colour = kPalCustom; break;
+                default: colour = kPalGradient; break;
+            }
+        }
+        if (colour == kPalGradient && grad) {
+            p.accent = grad;
+            return;
+        }
+        acc->SetColor(colour == kPalCustom ? g_set.customColour
+                      : colour > kPalGradient && colour < kPalCustom ? Rgb(kPalRgb[colour])
+                                                                       : Rgb(mocha::kBlue));
+        p.accent = acc;
+    };
+    auto brushFor = [&](const Op& o) -> ID2D1Brush* {
+        if (o.warn) {
+            solid->SetColor(p.warn);
+            return solid;
+        }
+        if (o.brush == kBrushLabel) return p.accent;
+        if (o.brush == kBrushValue) {
+            if (g_set.valueStyle == kStyleGradient && grad) return grad;
+            solid->SetColor(StyleColour(g_set.valueStyle));
+            return solid;
+        }
+        solid->SetColor(Rgb(mocha::kSubtext));
         return solid;
     };
+    const float pulse = 0.85f + 0.15f * (float)(0.5 + 0.5 * std::cos(g_pulsePhase * 2 * 3.14159265 / 0.8));
 
+    int curBlk = -2;
     for (const Op& o : L.ops) {
-        if (o.graph) continue;
+        if (o.blk != curBlk) {
+            curBlk = o.blk;
+            if (curBlk >= 0) {
+                const Place& pl = L.places[curBlk];
+                p.world = D2D1::Matrix3x2F::Scale(pl.k, pl.k) * D2D1::Matrix3x2F::Translation(pl.x, pl.y);
+                p.u = px;
+            } else {
+                p.world = D2D1::Matrix3x2F::Identity();
+            }
+            World(p, p.world);
+            setAccent(curBlk);
+        }
+        if (o.graph || o.shape == kShGraph) {
+            DrawGraph(p, o, o.series.empty() ? L.graph : o.series);
+            continue;
+        }
+        if (o.shape != kShText) {
+            DrawShape(p, o);
+            continue;
+        }
         if (!g_fmt[o.font]) continue;
-        D2D1_RECT_F r = D2D1::RectF(o.x, o.y, o.x + o.w + 4, o.y + o.h + 2);
+        const D2D1_RECT_F r = D2D1::RectF(o.x, o.y, o.x + o.w + 4, o.y + o.h + 2);
         if (bg == kNone) {
             // No background: a soft shadow keeps the text readable on bright scenes.
             solid->SetColor(D2D1::ColorF(0, 0, 0, 0.75f));
-            D2D1_RECT_F s = D2D1::RectF(r.left + px, r.top + px, r.right + px, r.bottom + px);
-            g_rt->DrawText(o.text.c_str(), (UINT32)o.text.size(), g_fmt[o.font], s, solid,
-                           D2D1_DRAW_TEXT_OPTIONS_NONE);
+            const D2D1_RECT_F s = D2D1::RectF(r.left + px, r.top + px, r.right + px, r.bottom + px);
+            g_rt->DrawText(o.text.c_str(), (UINT32)o.text.size(), g_fmt[o.font], s, solid, D2D1_DRAW_TEXT_OPTIONS_NONE);
         }
-        g_rt->DrawText(o.text.c_str(), (UINT32)o.text.size(), g_fmt[o.font], r, brushFor(o.brush),
-                       D2D1_DRAW_TEXT_OPTIONS_NONE);
+        ID2D1Brush* b = brushFor(o);
+        if (o.pulse && g_set.animations) b->SetOpacity(pulse);
+        g_rt->DrawText(o.text.c_str(), (UINT32)o.text.size(), g_fmt[o.font], r, b, D2D1_DRAW_TEXT_OPTIONS_NONE);
+        b->SetOpacity(1);
     }
 
-    // Frame time graph: spikes are stutters.
-    for (const Op& o : L.ops) {
-        if (!o.graph || L.graph.size() < 2) continue;
-        double sum = 0, mx = 0;
-        for (float v : L.graph) sum += v, mx = std::max(mx, (double)v);
-        double mean = sum / L.graph.size();
-        double top = std::max({mx * 1.1, mean * 2.0, 20.0});
-        solid->SetColor(Rgb(mocha::kOverlay, 0.35f));
-        g_rt->DrawLine(D2D1::Point2F(o.x, o.y + o.h), D2D1::Point2F(o.x + o.w, o.y + o.h), solid, px);
-        ID2D1PathGeometry* path = nullptr;
-        ID2D1GeometrySink* sink = nullptr;
-        if (SUCCEEDED(g_d2d->CreatePathGeometry(&path)) && SUCCEEDED(path->Open(&sink))) {
-            const size_t n = L.graph.size();
-            for (size_t i = 0; i < n; i++) {
-                float x = o.x + o.w * (float)i / (float)(n - 1);
-                float y = o.y + o.h - (float)(L.graph[i] / top) * o.h;
-                if (i == 0) sink->BeginFigure(D2D1::Point2F(x, y), D2D1_FIGURE_BEGIN_HOLLOW);
-                else sink->AddLine(D2D1::Point2F(x, y));
-            }
-            sink->EndFigure(D2D1_FIGURE_END_OPEN);
-            sink->Close();
-            ID2D1Brush* b = grad ? (ID2D1Brush*)grad : (ID2D1Brush*)solid;
-            if (!grad) solid->SetColor(Rgb(mocha::kBlue));
-            g_rt->DrawGeometry(path, b, 1.4f * px);
-        }
-        SafeRelease(sink);
-        SafeRelease(path);
-    }
-
+    p.world = D2D1::Matrix3x2F::Identity();
+    World(p, p.world);
     if (g_set.border) {
         ID2D1Brush* b = solid;
         if (g_set.borderGradient && grad) b = grad;
         else solid->SetColor(g_set.borderColour);
-        g_rt->DrawRoundedRectangle(shape, b, 1.0f);
+        for (const auto& pr : panels) {
+            D2D1_ROUNDED_RECT e = pr;
+            e.rect = D2D1::RectF(e.rect.left + half, e.rect.top + half, e.rect.right - half, e.rect.bottom - half);
+            e.radiusX = e.radiusY = std::max(0.f, pr.radiusX - half);
+            g_rt->DrawRoundedRectangle(e, b, edgeW);
+        }
     }
     g_rt->EndDraw();
     SafeRelease(solid);
+    SafeRelease(acc);
     SafeRelease(grad);
     SafeRelease(coll);
     g_w = w;
     g_h = h;
+    g_cards = L.cards;
 }
+
+static void UpdateGfxTimer();
 
 // Where the overlay rests, and how far it slides from.
 static void RestingPos(POINT& p) {
@@ -3840,7 +5582,7 @@ static void Push() {
     if (!IsWindowVisible(g_overlay)) ShowWindow(g_overlay, SW_SHOWNOACTIVATE);
     if (EffectiveBackground() == kGlass) {
         const float radius = g_set.rounded ? g_set.cornerRadius * px * g_set.scale / 100.f : 0.f;
-        if (!g_glass.Show(g_overlay, dst.x, dst.y, g_w, g_h, radius, (float)a)) g_lastSig.clear();
+        if (!g_glass.Show(g_overlay, dst.x, dst.y, g_w, g_h, g_cards, radius, (float)a)) g_lastSig.clear();
     } else {
         g_glass.Hide();
     }
@@ -3878,6 +5620,7 @@ static void HideNow() {
     g_glass.Hide();
     g_shown = false;
     g_alpha = 0;
+    UpdateGfxTimer();
 }
 
 static void AnimStep() {
@@ -3897,6 +5640,134 @@ static void AnimStep() {
         return;
     }
     Push();
+}
+
+// ---- Moving parts: one quick timer while something moves ----------------------
+
+// Steps every moving part by dt seconds. Returns whether anything on screen changed.
+static bool AnimAdvance(double dt) {
+    const Layout& L = g_lastLayout;
+    bool moved = false;
+    if (g_set.fanSpin && L.fanRate > 0) {
+        g_fanAngle = std::fmod(g_fanAngle + std::min(L.fanRate * 360.0 * dt, 20.0), 360.0);
+        moved = true;
+    }
+    bool flames = false, pulse = false, binary = false;
+    for (const Op& o : L.ops) {
+        if (o.shape == kShRing && o.v2 > 0) flames = true;
+        if (o.pulse) pulse = true;
+        if (o.shape == kShBinary) binary = true;
+    }
+    if (flames && g_set.flames) {
+        g_flamePhase += dt;
+        moved = true;
+    }
+    if (pulse && g_set.throttlePulse) {
+        g_pulsePhase += dt;
+        moved = true;
+    }
+    if (binary && g_set.binaryCode) {
+        g_binClock += dt;
+        if (g_binClock >= 0.3) {
+            g_binClock = std::fmod(g_binClock, 0.3);
+            g_binFrame = (g_binFrame + 1) % 8;
+            moved = true;
+        }
+    }
+    if (g_set.smoothDials) {
+        const float k = (float)(1.0 - std::exp(-dt / 0.25));
+        for (const Op& o : L.ops) {
+            if (o.id < 0) continue;
+            auto it = g_smooth.find(o.id);
+            if (it == g_smooth.end()) {
+                g_smooth[o.id] = o.v;
+                continue;
+            }
+            float& cur = it->second;
+            if (std::fabs(o.v - cur) < 0.002f) {
+                if (cur != o.v) cur = o.v, moved = true;
+                continue;
+            }
+            cur += (o.v - cur) * k;
+            moved = true;
+        }
+    }
+    return moved;
+}
+
+static void GfxStep() {
+    LARGE_INTEGER c;
+    QueryPerformanceCounter(&c);
+    const double now = (double)c.QuadPart;
+    double dt = g_gfxLastQpc ? (now - g_gfxLastQpc) / g_qpcFreq : 0.0;
+    g_gfxLastQpc = now;
+    dt = std::clamp(dt, 0.0, 0.25);
+    if (!g_shown || !g_overlay || g_lastLayout.ops.empty()) return;
+    if (!AnimAdvance(dt)) return;
+    Render(g_lastLayout, g_lastPx);
+    if (!g_animating) Push();
+}
+
+// Runs the quick timer only while the overlay shows something that moves, so a hidden
+// overlay costs nothing.
+static void UpdateGfxTimer() {
+    const bool want = g_ctrl && g_shown && g_enabled && g_set.animations && g_lastLayout.animated;
+    if (want == g_gfxOn) return;
+    g_gfxOn = want;
+    if (want) {
+        g_gfxLastQpc = 0;
+        SetTimer(g_ctrl, TIMER_GFX, 1000 / std::clamp(g_set.animFps, 10, 60), nullptr);
+    } else {
+        KillTimer(g_ctrl, TIMER_GFX);
+    }
+}
+
+// Which graphics API the game draws with, from the modules it has loaded.
+static DWORD g_apiPid = 0;
+static ULONGLONG g_apiTried = 0;
+static void DetectApi(DWORD pid) {
+    if (!pid) return;
+    if (pid != g_apiPid) {
+        g_apiPid = pid;
+        g_apiName.clear();
+        g_apiTried = 0;
+    }
+    if (!g_apiName.empty()) return;
+    const ULONGLONG now = GetTickCount64();
+    if (g_apiTried && now - g_apiTried < 5000) return;
+    g_apiTried = now;
+    if (frames::ActiveSource() == frames::kSrcD3d9) {
+        g_apiName = L"DX9";
+        return;
+    }
+    HANDLE p = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+    if (!p) return;
+    HMODULE mods[1024];
+    DWORD bytes = 0;
+    bool d3d12 = false, d3d11 = false, d3d10 = false, d3d9 = false, vulkan = false, gl = false;
+    if (K32EnumProcessModulesEx(p, mods, sizeof(mods), &bytes, LIST_MODULES_ALL)) {
+        const DWORD n = std::min<DWORD>(bytes / sizeof(HMODULE), ARRAYSIZE(mods));
+        for (DWORD i = 0; i < n; i++) {
+            wchar_t name[MAX_PATH];
+            if (!K32GetModuleBaseNameW(p, mods[i], name, MAX_PATH)) continue;
+            const std::wstring m = Lower(name);
+            if (m == L"d3d12.dll") d3d12 = true;
+            else if (m == L"d3d11.dll") d3d11 = true;
+            else if (m == L"d3d10.dll" || m == L"d3d10_1.dll") d3d10 = true;
+            else if (m == L"d3d9.dll") d3d9 = true;
+            else if (m == L"vulkan-1.dll") vulkan = true;
+            else if (m == L"opengl32.dll") gl = true;
+        }
+    }
+    CloseHandle(p);
+    // Vulkan games often load the DirectX files too, through the driver's overlay layers, so
+    // Vulkan wins only when no DirectX 12 is there.
+    if (vulkan && !d3d12) g_apiName = L"Vulkan";
+    else if (d3d12) g_apiName = L"DX12";
+    else if (d3d11) g_apiName = L"DX11";
+    else if (d3d10) g_apiName = L"DX10";
+    else if (d3d9) g_apiName = L"DX9";
+    else if (gl) g_apiName = L"OpenGL";
 }
 
 // ---- Who is in front --------------------------------------------------------
@@ -3925,7 +5796,7 @@ static bool BuiltInSkip(const std::wstring& exe, const std::wstring& path) {
         L"firefox.exe", L"brave.exe", L"opera.exe", L"opera_gx.exe", L"vivaldi.exe", L"msedgewebview2.exe",
         L"discord.exe", L"spotify.exe", L"steamwebhelper.exe", L"steam.exe", L"obs64.exe", L"code.exe",
         L"windowsterminal.exe", L"flow.launcher.exe", L"rtss.exe", L"msiafterburner.exe", L"hwinfo64.exe",
-        L"mpc-hc64.exe", L"vlc.exe", L"powershell.exe", L"pwsh.exe", L"cmd.exe", L"conhost.exe",
+        L"yapfast.exe", L"thunderbird.exe", L"mpc-hc64.exe", L"vlc.exe", L"powershell.exe", L"pwsh.exe", L"cmd.exe", L"conhost.exe",
         L"notepad.exe", L"mspaint.exe", L"photos.exe", L"snippingtool.exe", L"screenclippinghost.exe",
     };
     for (auto s : kSkip)
@@ -3983,6 +5854,11 @@ static void UpdateTarget() {
     if (fg) GetClassNameW(fg, cls, 64);
     if (!wcscmp(cls, L"Progman") || !wcscmp(cls, L"WorkerW") || !wcscmp(cls, L"Shell_TrayWnd")) g_targetSkip = true;
     g_lastGameTick = 0;
+    g_gameSince = 0;
+    g_isGame = false;
+    g_sessionStart = 0;
+    g_apiName.clear();
+    g_apiPid = 0;
     frames::SetTarget(pid);
 }
 
@@ -4021,6 +5897,14 @@ static std::wstring Signature(const Layout& L) {
     s += b;
     for (const Op& o : L.ops) {
         s += o.text;
+        if (o.shape != kShText) {
+            swprintf_s(b, L"#%d:%.2f,%.2f,%d", o.shape, o.v, o.v2, o.warn ? 1 : 0);
+            s += b;
+            for (float v : o.series) {
+                swprintf_s(b, L"%.2f,", v);
+                s += b;
+            }
+        }
         s += L'|';
     }
     for (float v : L.graph) {
@@ -4033,7 +5917,7 @@ static std::wstring Signature(const Layout& L) {
 static void Tick(bool force) {
     if (!g_enabled) return;
     UpdateTarget();
-    frames::Stats st = frames::Compute(g_set.updateMs);
+    frames::Stats st = frames::Compute(g_set.updateMs, g_set.graphSeconds);
     const bool listed = InList(g_set.gameList, g_targetExe);
     const bool hidden = InList(g_set.hideList, g_targetExe);
     bool want = false;
@@ -4043,14 +5927,26 @@ static void Tick(bool force) {
         want = listed && !hidden;
     } else {
         if (!hidden && (listed || !g_targetSkip)) {
-            if (st.gameLike || (listed && st.live)) g_lastGameTick = GetTickCount64();
+            // A game draws a steady stream for 4 seconds straight. Apps that only redraw while
+            // you scroll or type (chat apps, mail) never get that far.
+            const ULONGLONG now = GetTickCount64();
+            if (st.gameLike || (listed && st.live)) {
+                g_lastGameTick = now;
+                if (!g_gameSince) g_gameSince = now;
+                if (listed || now - g_gameSince >= 4000) g_isGame = true;
+            } else {
+                g_gameSince = 0;
+                // Fifteen seconds without a steady stream: no longer a game.
+                if (g_isGame && now - g_lastGameTick > 15000) g_isGame = false;
+            }
             // Keep it up through a short load or hitch.
-            want = g_lastGameTick && (st.recent3s || GetTickCount64() - g_lastGameTick < 3000);
+            want = g_isGame && (st.recent3s || now - g_lastGameTick < 3000);
         }
     }
     if (!want) {
         if (g_shown && !(g_animating && !g_animIn)) StartAnim(false);
         g_wantVisible = false;
+        UpdateGfxTimer();
         return;
     }
     g_wantVisible = true;
@@ -4063,6 +5959,8 @@ static void Tick(bool force) {
         Wh_Log(L"Stats %s pid %lu: fps %.1f, frame %.2f ms, 1%% low %.1f, avg %.1f", g_targetExe.c_str(), g_targetPid,
                st.fps, st.frameMs, st.low1, st.avg);
     }
+    if (st.live && !g_sessionStart) g_sessionStart = GetTickCount64();
+    DetectApi(g_targetPid);
     Readings r;
     r.f = std::move(st);
     r.sensorsOk = seamless_sensors::Read(r.s) == seamless_sensors::ReadResult::Ok;
@@ -4074,6 +5972,8 @@ static void Tick(bool force) {
     EnsureFormats(px);
     Layout L = BuildLayout(r, px);
     std::wstring sig = Signature(L);
+    g_lastLayout = L;
+    g_lastPx = px;
     bool redrawn = false;
     if (force || sig != g_lastSig) {
         Render(L, px);
@@ -4095,6 +5995,7 @@ static void Tick(bool force) {
     } else if ((redrawn || moved) && !g_animating) {
         Push();
     }
+    UpdateGfxTimer();
 }
 
 static void SetEnabled(bool on) {
@@ -4112,6 +6013,7 @@ static void SetEnabled(bool on) {
         frames::Stop();
         g_targetPid = 0;
         if (g_shown) StartAnim(false);
+        UpdateGfxTimer();
     }
     if (g_trayAdded) {
         wcscpy_s(g_nid.szTip, on ? L"Seamless FPS Overlay: on" : L"Seamless FPS Overlay: off");
@@ -4304,6 +6206,9 @@ static void ApplySettings() {
     seamless_sensors::SetInterval((uint32_t)std::max(500, g_set.updateMs));
     g_fmtKey.clear();
     g_lastSig.clear();
+    KillTimer(g_ctrl, TIMER_GFX);
+    g_gfxOn = false;
+    g_smooth.clear();
     if (g_enabled) {
         SetTimer(g_ctrl, TIMER_TICK, g_set.updateMs, nullptr);
         g_targetPid = (DWORD)-1;  // the lists may have changed
@@ -4331,6 +6236,7 @@ static LRESULT CALLBACK CtrlWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_TIMER:
             if (wp == TIMER_TICK) Tick(false);
             else if (wp == TIMER_ANIM) AnimStep();
+            else if (wp == TIMER_GFX) GfxStep();
             else if (wp == TIMER_HOTKEY_RETRY) RegisterHotkeys(hwnd, true);
             return 0;
         case WM_APP_FOREGROUND:
@@ -4372,6 +6278,8 @@ static LRESULT CALLBACK CtrlWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_DESTROY:
             KillTimer(hwnd, TIMER_TICK);
             KillTimer(hwnd, TIMER_ANIM);
+            KillTimer(hwnd, TIMER_GFX);
+            g_gfxOn = false;
             KillTimer(hwnd, TIMER_HOTKEY_RETRY);
             UnregisterHotKey(hwnd, HK_TOGGLE);
             UnregisterHotKey(hwnd, HK_PRESET);
@@ -4442,6 +6350,7 @@ static DWORD WINAPI UiThreadProc(LPVOID) {
         DeleteDC(g_memDc);
         g_memDc = nullptr;
     }
+    SafeRelease(g_roundStroke);
     SafeRelease(g_rt);
     SafeRelease(g_dw);
     SafeRelease(g_d2d);
@@ -5531,56 +7440,170 @@ struct SetField {
 static std::vector<SetField> Set_MakeFields() {
     using K = SetField;
     return {
-{K::Choice, L"preset", L"Layout", L"FPS only shows one number. Compact line puts everything in one row. Full benchmark layout is the two-column one from your old RivaTuner setup. Vertical stack lists each reading on its own line.", L"benchmark", {{L"fps", L"FPS only"}, {L"compact", L"Compact line"}, {L"benchmark", L"Full benchmark layout"}, {L"vertical", L"Vertical stack"}}, 0, 100, 0, L"Layout"},
-{K::Check, L"showOnStart", L"Show when the mod starts", L"Off, the overlay waits for the shortcut or the tray menu.", L"1", {}, 0, 100, 0, L"Layout"},
-{K::Check, L"showGpuName", L"Graphics card name", L"Shows the card's name at the top of the full benchmark layout.", L"1", {}, 0, 100, 0, L"Layout"},
-{K::Choice, L"updateRate", L"Update speed", L"How often the numbers change. Slower is easier to read and lighter on the PC.", L"500", {{L"250", L"Four times a second"}, {L"500", L"Twice a second"}, {L"1000", L"Once a second"}}, 0, 100, 0, L"Updates"},
-{K::Check, L"fps", L"FPS", L"Frames per second right now.", L"1", {}, 0, 100, 1, L"Frames"},
-{K::Check, L"frameTime", L"Frame time", L"How long each frame takes, in milliseconds.", L"1", {}, 0, 100, 1, L"Frames"},
-{K::Check, L"low1", L"1% low", L"The frame rate of the slowest 1% of frames over the last 20 seconds.", L"1", {}, 0, 100, 1, L"Frames"},
-{K::Check, L"low01", L"0.1% low", L"The frame rate of the slowest 0.1% of frames over the last 20 seconds.", L"1", {}, 0, 100, 1, L"Frames"},
-{K::Check, L"avgFps", L"Average FPS", L"The average over the last 20 seconds.", L"1", {}, 0, 100, 1, L"Frames"},
-{K::Check, L"frameGraph", L"Frame time graph", L"A small line of the last few seconds of frame times. Spikes are stutters.", L"1", {}, 0, 100, 1, L"Frames"},
-{K::Check, L"gpuUsage", L"Graphics card load", L"", L"1", {}, 0, 100, 1, L"Graphics card"},
-{K::Check, L"gpuTemp", L"Graphics card temperature", L"", L"1", {}, 0, 100, 1, L"Graphics card"},
-{K::Check, L"gpuHotspot", L"Hot spot temperature", L"The hottest point on the chip.", L"1", {}, 0, 100, 1, L"Graphics card"},
-{K::Check, L"gpuPower", L"Graphics card power", L"In watts.", L"1", {}, 0, 100, 1, L"Graphics card"},
-{K::Check, L"gpuClock", L"Graphics card clock", L"In MHz.", L"1", {}, 0, 100, 1, L"Graphics card"},
-{K::Check, L"gpuMemClock", L"Memory clock", L"The video memory clock, in MHz.", L"0", {}, 0, 100, 1, L"Graphics card"},
-{K::Check, L"vram", L"Video memory used", L"In percent of the card's memory.", L"1", {}, 0, 100, 1, L"Graphics card"},
+{K::Choice, L"preset", L"Layout", L"Benchmark is the two-column layout from your old RivaTuner setup, with the moving pictures. FPS only shows one number. One line puts the main numbers in a single row. Tall list puts each number on its own line.", L"benchmark", {{L"benchmark", L"Benchmark (your RivaTuner layout)"}, {L"fps", L"FPS only"}, {L"compact", L"One line"}, {L"vertical", L"Tall list"}}, 0, 100, 0, L"Layout"},
+{K::Check, L"showOnStart", L"Show when the mod starts", L"Off, the overlay waits until you press the shortcut or click the tray icon.", L"1", {}, 0, 100, 0, L"Layout"},
+{K::Choice, L"showWhen", L"Show the overlay", L"In games shows it over any program that draws its own frames, the way games do. Always keeps it up everywhere, desktop included. Only listed games uses the list on the Games and keys page.", L"games", {{L"games", L"In games"}, {L"always", L"Always"}, {L"listed", L"Only listed games"}}, 0, 100, 0, L"Layout"},
+{K::Hotkey, L"toggleHotkey", L"Show or hide shortcut", L"The same keys your Afterburner used. Click the box and press the keys. Backspace clears it.", L"Ctrl+Alt+Shift+]", {}, 0, 100, 0, L"Layout"},
+{K::Choice, L"corner", L"Corner", L"Which corner of the screen the overlay sits in.", L"topLeft", {{L"topLeft", L"Top left"}, {L"topRight", L"Top right"}, {L"bottomLeft", L"Bottom left"}, {L"bottomRight", L"Bottom right"}}, 0, 100, 0, L"Where and how big"},
+{K::Number, L"scale", L"Size", L"In percent. 100 is the normal size.", L"100", {}, 50, 300, 0, L"Where and how big"},
+{K::Choice, L"background", L"Background", L"Blurred glass blurs the game behind each box. See-through tint is a light dark wash. Solid dark is the easiest to read. None leaves only the text, with a soft shadow.", L"glass", {{L"glass", L"Blurred glass"}, {L"tint", L"See-through tint"}, {L"solid", L"Solid dark"}, {L"none", L"None"}}, 0, 100, 0, L"Look"},
+{K::Number, L"opacity", L"Opacity", L"How solid the whole overlay is, in percent.", L"100", {}, 20, 100, 0, L"Look"},
+{K::Number, L"cornerRadius", L"Corner roundness", L"How round the box corners are, in pixels. 0 gives square corners.", L"12", {}, 0, 40, 0, L"Look"},
+{K::Check, L"flipGradient", L"Flip the gradient", L"Off, blue sits at the top left and mauve at the bottom right. On, they swap.", L"0", {}, 0, 100, 0, L"Look"},
+{K::Check, L"animations", L"Moving pictures", L"The spinning fan, the flames on a busy chip and the running code on the processor. They stop while the overlay is hidden.", L"1", {}, 0, 100, 0, L"Look"},
+{K::Choice, L"updateRate", L"Update speed", L"How often the numbers change. Slower is easier to read and a little lighter on the PC.", L"500", {{L"250", L"Four times a second"}, {L"500", L"Twice a second"}, {L"1000", L"Once a second"}}, 0, 100, 0, L"Look"},
+{K::Check, L"showGpuName", L"Graphics card name", L"The line across the top.", L"1", {}, 0, 100, 1, L"Card name"},
+{K::Check, L"throttleWarn", L"Slow-down note", L"Shows HEAT LIMIT or POWER LIMIT when a chip slows itself down.", L"1", {}, 0, 100, 1, L"Card name"},
+{K::Check, L"fps", L"FPS", L"Frames per second right now.", L"1", {}, 0, 100, 1, L"Frame rate"},
+{K::Check, L"low01", L"Worst moments (slowest 0.1% of frames)", L"The frame rate during the very worst moments of the last 20 seconds.", L"1", {}, 0, 100, 1, L"Frame rate"},
+{K::Check, L"low1", L"Bad moments (slowest 1% of frames)", L"The frame rate during the slowest moments of the last 20 seconds.", L"1", {}, 0, 100, 1, L"Frame rate"},
+{K::Check, L"avgFps", L"Average FPS", L"Over the last 20 seconds.", L"1", {}, 0, 100, 1, L"Frame rate"},
+{K::Check, L"jitter", L"Smoothness", L"How much the time between frames jumps around, in milliseconds. Lower feels smoother.", L"1", {}, 0, 100, 1, L"Frame rate"},
+{K::Check, L"frameTime", L"Frame time", L"How long each frame takes, in milliseconds.", L"1", {}, 0, 100, 1, L"Frame rate"},
+{K::Check, L"frameGraph", L"Frame time graph", L"A line of the last few seconds of frame times. Tall spikes are stutters.", L"1", {}, 0, 100, 1, L"Frame rate"},
+{K::Check, L"latency", L"Input delay", L"This mod cannot measure it yet, so it shows a dash. Off by default.", L"0", {}, 0, 100, 1, L"Game info"},
+{K::Check, L"api", L"Graphics engine", L"Whether the game draws with DirectX 9, 11, 12, OpenGL or Vulkan.", L"1", {}, 0, 100, 1, L"Game info"},
+{K::Check, L"session", L"Play time", L"How long the game in front has been running.", L"1", {}, 0, 100, 1, L"Game info"},
+{K::Check, L"driver", L"Driver version", L"The graphics driver version.", L"1", {}, 0, 100, 1, L"Game info"},
+{K::Check, L"cpuName", L"Processor name", L"", L"1", {}, 0, 100, 1, L"Processor cores"},
+{K::Check, L"coreBars", L"Load bar for each core", L"", L"1", {}, 0, 100, 1, L"Processor cores"},
+{K::Choice, L"coreBarsEach", L"One bar for each", L"Threads gives twice as many bars on processors that run two threads per core.", L"core", {{L"core", L"Core"}, {L"thread", L"Thread"}}, 0, 100, 1, L"Processor cores"},
+{K::Check, L"ram", L"Memory in use", L"In percent.", L"1", {}, 0, 100, 1, L"System memory"},
+{K::Check, L"ramUsed", L"Memory in use, in GB", L"Used and total.", L"1", {}, 0, 100, 1, L"System memory"},
+{K::Check, L"ramSpeed", L"Memory speed", L"In MT/s, the number on the memory box.", L"1", {}, 0, 100, 1, L"System memory"},
+{K::Check, L"ramClock", L"Memory clock", L"In MHz, half the speed above.", L"1", {}, 0, 100, 1, L"System memory"},
+{K::Check, L"gpuArt", L"Graphics card picture", L"The card drawing with its fan.", L"1", {}, 0, 100, 1, L"Graphics card"},
+{K::Check, L"gpuUsage", L"Load", L"How busy the card is, in percent.", L"1", {}, 0, 100, 1, L"Graphics card"},
+{K::Check, L"gpuPower", L"Power", L"In watts.", L"1", {}, 0, 100, 1, L"Graphics card"},
+{K::Check, L"gpuClock", L"Clock", L"In MHz.", L"1", {}, 0, 100, 1, L"Graphics card"},
 {K::Check, L"gpuFan", L"Fan speed", L"In RPM, with the percent next to it.", L"1", {}, 0, 100, 1, L"Graphics card"},
-{K::Check, L"cpuUsage", L"Processor load", L"", L"1", {}, 0, 100, 1, L"Processor"},
-{K::Check, L"cpuTemp", L"Processor temperature", L"Needs the PawnIO driver. Without it this shows a dash.", L"1", {}, 0, 100, 1, L"Processor"},
-{K::Check, L"cpuPower", L"Processor power", L"In watts. Needs the PawnIO driver.", L"0", {}, 0, 100, 1, L"Processor"},
-{K::Check, L"cpuClock", L"Processor clock", L"The average busy clock, in MHz.", L"0", {}, 0, 100, 1, L"Processor"},
-{K::Check, L"ram", L"Memory used", L"System memory, in percent.", L"1", {}, 0, 100, 1, L"Processor"},
-{K::Choice, L"corner", L"Corner", L"", L"topLeft", {{L"topLeft", L"Top left"}, {L"topRight", L"Top right"}, {L"bottomLeft", L"Bottom left"}, {L"bottomRight", L"Bottom right"}}, 0, 100, 2, L"Position"},
-{K::Number, L"offsetX", L"Distance from the side", L"In pixels.", L"16", {}, 0, 2000, 2, L"Position"},
-{K::Number, L"offsetY", L"Distance from the top or bottom", L"In pixels.", L"16", {}, 0, 2000, 2, L"Position"},
-{K::Choice, L"monitor", L"Screen", L"The game's screen follows the game. Main screen keeps the overlay on your main monitor.", L"game", {{L"game", L"The game's screen"}, {L"primary", L"Main screen"}}, 0, 100, 2, L"Position"},
-{K::Number, L"scale", L"Size", L"In percent. 100 is normal.", L"100", {}, 50, 300, 2, L"Size"},
-{K::Choice, L"background", L"Background", L"Blurred glass blurs the game behind it. See-through tint is a light dark wash. Solid dark is the easiest to read. None leaves only the text, with a soft shadow.", L"glass", {{L"glass", L"Blurred glass"}, {L"tint", L"See-through tint"}, {L"solid", L"Solid dark"}, {L"none", L"None"}}, 0, 100, 3, L"Background"},
-{K::Number, L"opacity", L"Opacity", L"In percent, for the whole overlay.", L"100", {}, 20, 100, 3, L"Background"},
-{K::Check, L"rounded", L"Rounded corners", L"", L"1", {}, 0, 100, 3, L"Corners and border"},
-{K::Number, L"cornerRadius", L"Corner size", L"In pixels, before the size above.", L"12", {}, 0, 40, 3, L"Corners and border"},
-{K::Check, L"border", L"Border", L"A thin edge around the overlay.", L"1", {}, 0, 100, 3, L"Corners and border"},
-{K::Text, L"borderColour", L"Border colour", L"gradient for the blue to mauve edge, or a colour such as #45475A.", L"gradient", {}, 0, 100, 3, L"Corners and border"},
-{K::Text, L"fontFace", L"Font", L"Any font installed on this PC. If it is missing, Segoe UI is used.", L"FiraCode Nerd Font", {}, 0, 100, 3, L"Text"},
-{K::Choice, L"fontWeight", L"Weight", L"", L"bold", {{L"normal", L"Normal"}, {L"semibold", L"Semibold"}, {L"bold", L"Bold"}, {L"heavy", L"Heavy"}}, 0, 100, 3, L"Text"},
-{K::Choice, L"labelStyle", L"Label colour", L"The colour of the names, such as GPU and FPS.", L"gradient", {{L"gradient", L"Blue to mauve"}, {L"blue", L"Blue"}, {L"mauve", L"Mauve"}, {L"text", L"White"}, {L"custom", L"My own colour"}}, 0, 100, 3, L"Text"},
-{K::Choice, L"valueStyle", L"Number colour", L"The colour of the numbers.", L"text", {{L"text", L"White"}, {L"gradient", L"Blue to mauve"}, {L"custom", L"My own colour"}}, 0, 100, 3, L"Text"},
-{K::Text, L"customColour", L"My own colour", L"Used when a colour above is set to My own colour. Write it like #F5C2E7.", L"#F5C2E7", {}, 0, 100, 3, L"Text"},
-{K::Check, L"flipGradient", L"Flip the gradient", L"Off, blue sits top left and mauve bottom right. On, they swap.", L"0", {}, 0, 100, 3, L"Text"},
-{K::Choice, L"showWhen", L"Show the overlay", L"In games shows it whenever the app in front draws its own frames, the way games do. Always keeps it up everywhere. Only listed games uses the list below.", L"games", {{L"games", L"In games"}, {L"always", L"Always"}, {L"listed", L"Only listed games"}}, 0, 100, 4, L"Where"},
-{K::Text, L"gameList", L"Listed games", L"Program names split by commas, such as plutonium-bootstrapper-win32.exe, cs2.exe.", L"", {}, 0, 100, 4, L"Lists"},
-{K::Text, L"hideList", L"Never show over", L"Program names split by commas. The overlay stays hidden over these.", L"", {}, 0, 100, 4, L"Lists"},
-{K::Hotkey, L"toggleHotkey", L"Show or hide the overlay", L"The same keys your Afterburner used. Press the keys in the box. Backspace clears it.", L"Ctrl+Alt+Shift+]", {}, 0, 100, 5, L"Shortcuts"},
-{K::Hotkey, L"presetHotkey", L"Next layout", L"Steps through the four layouts. Off by default.", L"", {}, 0, 100, 5, L"Shortcuts"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to show or hide the overlay. Right-click it for layouts and settings.", L"1", {}, 0, 100, 6, L"Tray icon"},
-{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 6, L"Settings window"},
-{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 6, L"Settings window"},
-{K::Check, L"flyoutAnimation", L"Open and close animation", L"The overlay fades and slides in when it shows and out when it hides. It stays still when Windows animation effects are off.", L"1", {}, 0, 100, 6, L"Motion"},
-{K::Choice, L"animationSpeed", L"Animation speed", L"How quick the animations play. Follow the global speed uses the speed shared by all DavidHiFi mods.", L"global", {{L"global", L"Follow the global speed"}, {L"veryQuick", L"Very quick"}, {L"quick", L"Quick"}, {L"normal", L"Normal"}, {L"relaxed", L"Relaxed"}, {L"slow", L"Slow"}}, 0, 100, 6, L"Motion"}
+{K::Check, L"gpuTemp", L"Temperature", L"", L"1", {}, 0, 100, 1, L"Graphics card"},
+{K::Check, L"gpuHotspot", L"Hot spot", L"The hottest point on the chip.", L"1", {}, 0, 100, 1, L"Graphics card"},
+{K::Check, L"vram", L"How full", L"In percent of the card's memory.", L"1", {}, 0, 100, 1, L"Video memory"},
+{K::Check, L"vramUsed", L"Used, in GB", L"Used and total.", L"1", {}, 0, 100, 1, L"Video memory"},
+{K::Check, L"vramTemp", L"Temperature", L"Some cards do not report it. Then it shows a dash.", L"1", {}, 0, 100, 1, L"Video memory"},
+{K::Check, L"gpuMemClock", L"Clock", L"In MHz.", L"1", {}, 0, 100, 1, L"Video memory"},
+{K::Check, L"cpuArt", L"Processor picture", L"The chip drawing with its running code.", L"1", {}, 0, 100, 1, L"Processor"},
+{K::Check, L"cpuUsage", L"Load", L"How busy the processor is, in percent.", L"1", {}, 0, 100, 1, L"Processor"},
+{K::Check, L"cpuPower", L"Power", L"In watts. Needs the PawnIO driver, or it shows a dash.", L"1", {}, 0, 100, 1, L"Processor"},
+{K::Check, L"cpuClock", L"Boost clock", L"The fastest core right now, in GHz.", L"1", {}, 0, 100, 1, L"Processor"},
+{K::Check, L"cpuBusyClock", L"Busy clock", L"The average clock while the cores are working, in MHz.", L"1", {}, 0, 100, 1, L"Processor"},
+{K::Check, L"cpuTemp", L"Temperature", L"Needs the PawnIO driver, or it shows a dash.", L"1", {}, 0, 100, 1, L"Processor"},
+{K::Check, L"showName", L"Show this box", L"The graphics card name across the top, with a note when the card slows down to stay cool or within its power limit.", L"1", {}, 0, 100, 2, L"Card name"},
+{K::Choice, L"columnName", L"Side", L"", L"left", {{L"left", L"Left column"}, {L"right", L"Right column"}}, 0, 100, 2, L"Card name"},
+{K::Number, L"orderName", L"Place in its column", L"1 is the top. Boxes with the same number keep their usual order.", L"1", {}, 1, 9, 2, L"Card name"},
+{K::Number, L"sizeName", L"Size", L"In percent of the overlay size.", L"100", {}, 50, 200, 2, L"Card name"},
+{K::Choice, L"colourName", L"Name colour", L"The colour of the words and pictures in this box.", L"same", {{L"same", L"Same as the names"}, {L"gradient", L"Blue to mauve"}, {L"blue", L"Blue"}, {L"mauve", L"Mauve"}, {L"lavender", L"Lavender"}, {L"sapphire", L"Sapphire"}, {L"sky", L"Sky"}, {L"teal", L"Teal"}, {L"green", L"Green"}, {L"yellow", L"Yellow"}, {L"peach", L"Peach"}, {L"pink", L"Pink"}, {L"red", L"Red"}, {L"white", L"White"}, {L"custom", L"My own colour"}}, 0, 100, 2, L"Card name"},
+{K::Check, L"showFrames", L"Show this box", L"FPS, the worst moments, the average, smoothness and the frame time graph.", L"1", {}, 0, 100, 2, L"Frame rate"},
+{K::Choice, L"columnFrames", L"Side", L"", L"left", {{L"left", L"Left column"}, {L"right", L"Right column"}}, 0, 100, 2, L"Frame rate"},
+{K::Number, L"orderFrames", L"Place in its column", L"1 is the top. Boxes with the same number keep their usual order.", L"2", {}, 1, 9, 2, L"Frame rate"},
+{K::Number, L"sizeFrames", L"Size", L"In percent of the overlay size.", L"100", {}, 50, 200, 2, L"Frame rate"},
+{K::Choice, L"colourFrames", L"Name colour", L"The colour of the words and pictures in this box.", L"same", {{L"same", L"Same as the names"}, {L"gradient", L"Blue to mauve"}, {L"blue", L"Blue"}, {L"mauve", L"Mauve"}, {L"lavender", L"Lavender"}, {L"sapphire", L"Sapphire"}, {L"sky", L"Sky"}, {L"teal", L"Teal"}, {L"green", L"Green"}, {L"yellow", L"Yellow"}, {L"peach", L"Peach"}, {L"pink", L"Pink"}, {L"red", L"Red"}, {L"white", L"White"}, {L"custom", L"My own colour"}}, 0, 100, 2, L"Frame rate"},
+{K::Check, L"showInfo", L"Show this box", L"Which DirectX or Vulkan the game uses, how long you have played and the driver version.", L"1", {}, 0, 100, 2, L"Game info"},
+{K::Choice, L"columnInfo", L"Side", L"", L"left", {{L"left", L"Left column"}, {L"right", L"Right column"}}, 0, 100, 2, L"Game info"},
+{K::Number, L"orderInfo", L"Place in its column", L"1 is the top. Boxes with the same number keep their usual order.", L"3", {}, 1, 9, 2, L"Game info"},
+{K::Number, L"sizeInfo", L"Size", L"In percent of the overlay size.", L"100", {}, 50, 200, 2, L"Game info"},
+{K::Choice, L"colourInfo", L"Name colour", L"The colour of the words and pictures in this box.", L"same", {{L"same", L"Same as the names"}, {L"gradient", L"Blue to mauve"}, {L"blue", L"Blue"}, {L"mauve", L"Mauve"}, {L"lavender", L"Lavender"}, {L"sapphire", L"Sapphire"}, {L"sky", L"Sky"}, {L"teal", L"Teal"}, {L"green", L"Green"}, {L"yellow", L"Yellow"}, {L"peach", L"Peach"}, {L"pink", L"Pink"}, {L"red", L"Red"}, {L"white", L"White"}, {L"custom", L"My own colour"}}, 0, 100, 2, L"Game info"},
+{K::Check, L"showCores", L"Show this box", L"The processor name and a small load bar for each core.", L"1", {}, 0, 100, 2, L"Processor cores"},
+{K::Choice, L"columnCores", L"Side", L"", L"left", {{L"left", L"Left column"}, {L"right", L"Right column"}}, 0, 100, 2, L"Processor cores"},
+{K::Number, L"orderCores", L"Place in its column", L"1 is the top. Boxes with the same number keep their usual order.", L"4", {}, 1, 9, 2, L"Processor cores"},
+{K::Number, L"sizeCores", L"Size", L"In percent of the overlay size.", L"100", {}, 50, 200, 2, L"Processor cores"},
+{K::Choice, L"colourCores", L"Name colour", L"The colour of the words and pictures in this box.", L"same", {{L"same", L"Same as the names"}, {L"gradient", L"Blue to mauve"}, {L"blue", L"Blue"}, {L"mauve", L"Mauve"}, {L"lavender", L"Lavender"}, {L"sapphire", L"Sapphire"}, {L"sky", L"Sky"}, {L"teal", L"Teal"}, {L"green", L"Green"}, {L"yellow", L"Yellow"}, {L"peach", L"Peach"}, {L"pink", L"Pink"}, {L"red", L"Red"}, {L"white", L"White"}, {L"custom", L"My own colour"}}, 0, 100, 2, L"Processor cores"},
+{K::Check, L"showMemory", L"Show this box", L"How much memory is in use, and its speed.", L"1", {}, 0, 100, 2, L"System memory"},
+{K::Choice, L"columnMemory", L"Side", L"", L"left", {{L"left", L"Left column"}, {L"right", L"Right column"}}, 0, 100, 2, L"System memory"},
+{K::Number, L"orderMemory", L"Place in its column", L"1 is the top. Boxes with the same number keep their usual order.", L"5", {}, 1, 9, 2, L"System memory"},
+{K::Number, L"sizeMemory", L"Size", L"In percent of the overlay size.", L"100", {}, 50, 200, 2, L"System memory"},
+{K::Choice, L"colourMemory", L"Name colour", L"The colour of the words and pictures in this box.", L"same", {{L"same", L"Same as the names"}, {L"gradient", L"Blue to mauve"}, {L"blue", L"Blue"}, {L"mauve", L"Mauve"}, {L"lavender", L"Lavender"}, {L"sapphire", L"Sapphire"}, {L"sky", L"Sky"}, {L"teal", L"Teal"}, {L"green", L"Green"}, {L"yellow", L"Yellow"}, {L"peach", L"Peach"}, {L"pink", L"Pink"}, {L"red", L"Red"}, {L"white", L"White"}, {L"custom", L"My own colour"}}, 0, 100, 2, L"System memory"},
+{K::Check, L"showCard", L"Show this box", L"The card picture with its spinning fan, load, power, clock, fan and temperatures.", L"1", {}, 0, 100, 2, L"Graphics card"},
+{K::Choice, L"columnCard", L"Side", L"", L"right", {{L"left", L"Left column"}, {L"right", L"Right column"}}, 0, 100, 2, L"Graphics card"},
+{K::Number, L"orderCard", L"Place in its column", L"1 is the top. Boxes with the same number keep their usual order.", L"1", {}, 1, 9, 2, L"Graphics card"},
+{K::Number, L"sizeCard", L"Size", L"In percent of the overlay size.", L"100", {}, 50, 200, 2, L"Graphics card"},
+{K::Choice, L"colourCard", L"Name colour", L"The colour of the words and pictures in this box.", L"same", {{L"same", L"Same as the names"}, {L"gradient", L"Blue to mauve"}, {L"blue", L"Blue"}, {L"mauve", L"Mauve"}, {L"lavender", L"Lavender"}, {L"sapphire", L"Sapphire"}, {L"sky", L"Sky"}, {L"teal", L"Teal"}, {L"green", L"Green"}, {L"yellow", L"Yellow"}, {L"peach", L"Peach"}, {L"pink", L"Pink"}, {L"red", L"Red"}, {L"white", L"White"}, {L"custom", L"My own colour"}}, 0, 100, 2, L"Graphics card"},
+{K::Check, L"showVram", L"Show this box", L"The memory on the graphics card: how full, how hot and its clock.", L"1", {}, 0, 100, 2, L"Video memory"},
+{K::Choice, L"columnVram", L"Side", L"", L"right", {{L"left", L"Left column"}, {L"right", L"Right column"}}, 0, 100, 2, L"Video memory"},
+{K::Number, L"orderVram", L"Place in its column", L"1 is the top. Boxes with the same number keep their usual order.", L"2", {}, 1, 9, 2, L"Video memory"},
+{K::Number, L"sizeVram", L"Size", L"In percent of the overlay size.", L"100", {}, 50, 200, 2, L"Video memory"},
+{K::Choice, L"colourVram", L"Name colour", L"The colour of the words and pictures in this box.", L"same", {{L"same", L"Same as the names"}, {L"gradient", L"Blue to mauve"}, {L"blue", L"Blue"}, {L"mauve", L"Mauve"}, {L"lavender", L"Lavender"}, {L"sapphire", L"Sapphire"}, {L"sky", L"Sky"}, {L"teal", L"Teal"}, {L"green", L"Green"}, {L"yellow", L"Yellow"}, {L"peach", L"Peach"}, {L"pink", L"Pink"}, {L"red", L"Red"}, {L"white", L"White"}, {L"custom", L"My own colour"}}, 0, 100, 2, L"Video memory"},
+{K::Check, L"showProcessor", L"Show this box", L"The chip picture, load, power, clocks and temperature.", L"1", {}, 0, 100, 2, L"Processor"},
+{K::Choice, L"columnProcessor", L"Side", L"", L"right", {{L"left", L"Left column"}, {L"right", L"Right column"}}, 0, 100, 2, L"Processor"},
+{K::Number, L"orderProcessor", L"Place in its column", L"1 is the top. Boxes with the same number keep their usual order.", L"3", {}, 1, 9, 2, L"Processor"},
+{K::Number, L"sizeProcessor", L"Size", L"In percent of the overlay size.", L"100", {}, 50, 200, 2, L"Processor"},
+{K::Choice, L"colourProcessor", L"Name colour", L"The colour of the words and pictures in this box.", L"same", {{L"same", L"Same as the names"}, {L"gradient", L"Blue to mauve"}, {L"blue", L"Blue"}, {L"mauve", L"Mauve"}, {L"lavender", L"Lavender"}, {L"sapphire", L"Sapphire"}, {L"sky", L"Sky"}, {L"teal", L"Teal"}, {L"green", L"Green"}, {L"yellow", L"Yellow"}, {L"peach", L"Peach"}, {L"pink", L"Pink"}, {L"red", L"Red"}, {L"white", L"White"}, {L"custom", L"My own colour"}}, 0, 100, 2, L"Processor"},
+{K::Check, L"capitals", L"Names in capitals", L"Off, the names show the way you typed them.", L"1", {}, 0, 100, 3, L"All names"},
+{K::Text, L"lblFps", L"FPS", L"", L"FPS", {}, 0, 100, 3, L"Frame rate"},
+{K::Text, L"lbl01", L"Worst moments", L"", L"0.1%", {}, 0, 100, 3, L"Frame rate"},
+{K::Text, L"lbl1", L"Bad moments", L"", L"1%", {}, 0, 100, 3, L"Frame rate"},
+{K::Text, L"lblAvg", L"Average", L"", L"AVG", {}, 0, 100, 3, L"Frame rate"},
+{K::Text, L"lblJitter", L"Smoothness", L"", L"JITTER", {}, 0, 100, 3, L"Frame rate"},
+{K::Text, L"lblFrame", L"Frame time", L"", L"FRAME TIME", {}, 0, 100, 3, L"Frame rate"},
+{K::Text, L"lblLatency", L"Input delay", L"", L"LATENCY", {}, 0, 100, 3, L"Game info"},
+{K::Text, L"lblApi", L"Graphics engine", L"", L"API", {}, 0, 100, 3, L"Game info"},
+{K::Text, L"lblTime", L"Play time", L"", L"PLAY TIME", {}, 0, 100, 3, L"Game info"},
+{K::Text, L"lblDriver", L"Driver version", L"", L"DRIVER", {}, 0, 100, 3, L"Game info"},
+{K::Text, L"lblRam", L"Box name", L"", L"RAM", {}, 0, 100, 3, L"System memory"},
+{K::Text, L"lblRamUsed", L"In use", L"", L"USED", {}, 0, 100, 3, L"System memory"},
+{K::Text, L"lblRamSpeed", L"Speed", L"", L"SPEED", {}, 0, 100, 3, L"System memory"},
+{K::Text, L"lblRamClock", L"Clock", L"", L"CLOCK", {}, 0, 100, 3, L"System memory"},
+{K::Text, L"lblGpuLoad", L"Load", L"", L"LOAD", {}, 0, 100, 3, L"Graphics card"},
+{K::Text, L"lblGpuPower", L"Power", L"", L"POWER", {}, 0, 100, 3, L"Graphics card"},
+{K::Text, L"lblGpuClock", L"Clock", L"", L"CLOCK", {}, 0, 100, 3, L"Graphics card"},
+{K::Text, L"lblFan", L"Fan", L"", L"FAN", {}, 0, 100, 3, L"Graphics card"},
+{K::Text, L"lblGpuTemp", L"Temperature", L"", L"TEMP", {}, 0, 100, 3, L"Graphics card"},
+{K::Text, L"lblHotspot", L"Hot spot", L"", L"HOT SPOT", {}, 0, 100, 3, L"Graphics card"},
+{K::Text, L"lblVram", L"Box name", L"", L"VRAM", {}, 0, 100, 3, L"Video memory"},
+{K::Text, L"lblVramUsed", L"Used", L"", L"USED", {}, 0, 100, 3, L"Video memory"},
+{K::Text, L"lblVramTemp", L"Temperature", L"", L"TEMP", {}, 0, 100, 3, L"Video memory"},
+{K::Text, L"lblVramClock", L"Clock", L"", L"CLOCK", {}, 0, 100, 3, L"Video memory"},
+{K::Text, L"lblCpuLoad", L"Load", L"", L"LOAD", {}, 0, 100, 3, L"Processor"},
+{K::Text, L"lblCpuPower", L"Power", L"", L"POWER", {}, 0, 100, 3, L"Processor"},
+{K::Text, L"lblCpuBoost", L"Boost clock", L"", L"BOOST", {}, 0, 100, 3, L"Processor"},
+{K::Text, L"lblCpuBusy", L"Busy clock", L"", L"BUSY CLOCK", {}, 0, 100, 3, L"Processor"},
+{K::Text, L"lblCpuTemp", L"Temperature", L"", L"TEMP", {}, 0, 100, 3, L"Processor"},
+{K::Choice, L"warnColour", L"Warning colour", L"A number past its limit turns this colour.", L"red", {{L"gradient", L"Blue to mauve"}, {L"blue", L"Blue"}, {L"mauve", L"Mauve"}, {L"lavender", L"Lavender"}, {L"sapphire", L"Sapphire"}, {L"sky", L"Sky"}, {L"teal", L"Teal"}, {L"green", L"Green"}, {L"yellow", L"Yellow"}, {L"peach", L"Peach"}, {L"pink", L"Pink"}, {L"red", L"Red"}, {L"white", L"White"}, {L"custom", L"My own colour"}}, 0, 100, 4, L"Colour"},
+{K::Number, L"gpuTempWarn", L"Graphics card hotter than", L"In \u00B0C.", L"83", {}, 40, 110, 4, L"Limits"},
+{K::Number, L"hotspotWarn", L"Hot spot or video memory hotter than", L"In \u00B0C.", L"95", {}, 40, 120, 4, L"Limits"},
+{K::Number, L"cpuTempWarn", L"Processor hotter than", L"In \u00B0C.", L"85", {}, 40, 110, 4, L"Limits"},
+{K::Number, L"vramWarn", L"Video memory fuller than", L"In percent.", L"95", {}, 10, 100, 4, L"Limits"},
+{K::Number, L"ramWarn", L"System memory fuller than", L"In percent.", L"90", {}, 10, 100, 4, L"Limits"},
+{K::Number, L"fpsWarn", L"FPS lower than", L"0 turns this warning off.", L"0", {}, 0, 1000, 4, L"Limits"},
+{K::Choice, L"graphStyle", L"Graph style", L"", L"line", {{L"line", L"Line"}, {L"area", L"Filled"}, {L"bars", L"Bars"}}, 0, 100, 5, L"Frame time graph"},
+{K::Number, L"graphSeconds", L"Graph length", L"How many seconds the graph shows.", L"3", {}, 1, 10, 5, L"Frame time graph"},
+{K::Number, L"graphHeight", L"Graph height", L"In pixels, before the overlay size.", L"36", {}, 16, 120, 5, L"Frame time graph"},
+{K::Choice, L"graphTop", L"Top of the graph", L"The frame time at the top edge. Fit to the frames picks it from what is on screen.", L"50", {{L"auto", L"Fit to the frames"}, {L"33", L"33 ms (30 FPS)"}, {L"50", L"50 ms (20 FPS)"}, {L"100", L"100 ms (10 FPS)"}}, 0, 100, 5, L"Frame time graph"},
+{K::Check, L"spikeMarks", L"Mark stutters", L"A small mark above each big spike.", L"1", {}, 0, 100, 5, L"Frame time graph"},
+{K::Check, L"fanSpin", L"Spinning fan", L"Spins as fast as the real fan, scaled down.", L"1", {}, 0, 100, 5, L"Moving pictures"},
+{K::Number, L"fanSpeed", L"Fan spin speed", L"In percent. 100 follows the real fan.", L"100", {}, 10, 300, 5, L"Moving pictures"},
+{K::Check, L"flames", L"Flames on a busy chip", L"Small flames around a load ring that is nearly full.", L"1", {}, 0, 100, 5, L"Moving pictures"},
+{K::Number, L"flameAt", L"Flames start at", L"Load in percent.", L"97", {}, 1, 100, 5, L"Moving pictures"},
+{K::Check, L"binaryCode", L"Running code", L"The ones and zeros on the processor picture.", L"1", {}, 0, 100, 5, L"Moving pictures"},
+{K::Check, L"smoothDials", L"Smooth dials", L"Rings and needles glide to a new number.", L"1", {}, 0, 100, 5, L"Moving pictures"},
+{K::Check, L"throttlePulse", L"Pulse the slow-down note", L"HEAT LIMIT and POWER LIMIT gently pulse.", L"1", {}, 0, 100, 5, L"Moving pictures"},
+{K::Choice, L"animFps", L"Picture frame rate", L"How often the moving pictures redraw. Lower costs less.", L"30", {{L"15", L"15 a second"}, {L"30", L"30 a second"}, {L"60", L"60 a second"}}, 0, 100, 5, L"Moving pictures"},
+{K::Number, L"gpuGaugeMax", L"Graphics clock dial ends at", L"In MHz.", L"3000", {}, 500, 5000, 5, L"Dials"},
+{K::Number, L"cpuGaugeMax", L"Processor clock dial ends at", L"In MHz.", L"6000", {}, 1000, 8000, 5, L"Dials"},
+{K::Number, L"offsetX", L"Distance from the side", L"In pixels.", L"16", {}, 0, 2000, 6, L"Position"},
+{K::Number, L"offsetY", L"Distance from the top or bottom", L"In pixels.", L"16", {}, 0, 2000, 6, L"Position"},
+{K::Choice, L"monitor", L"Screen", L"Follow the game moves the overlay to whichever screen the game is on.", L"game", {{L"game", L"Follow the game"}, {L"primary", L"Main screen"}}, 0, 100, 6, L"Position"},
+{K::Choice, L"panels", L"Boxes", L"Separate boxes gives each block its own panel, like RivaTuner. One panel puts everything on a single background.", L"cards", {{L"cards", L"Separate boxes"}, {L"one", L"One panel"}}, 0, 100, 6, L"Boxes"},
+{K::Number, L"blockGap", L"Gap between boxes", L"In pixels.", L"6", {}, 0, 40, 6, L"Boxes"},
+{K::Number, L"bgStrength", L"Background strength", L"How dark the box fill is, in percent. 0 leaves only the blur.", L"100", {}, 0, 150, 6, L"Boxes"},
+{K::Check, L"rounded", L"Rounded corners", L"Off gives square corners at any roundness.", L"1", {}, 0, 100, 6, L"Boxes"},
+{K::Check, L"border", L"Edge", L"A thin line around each box.", L"1", {}, 0, 100, 6, L"Boxes"},
+{K::Text, L"borderColour", L"Edge colour", L"Type gradient for the blue to mauve edge, or a colour like #45475A.", L"gradient", {}, 0, 100, 6, L"Boxes"},
+{K::Text, L"fontFace", L"Font", L"Any font installed on this PC. If it is missing, Segoe UI is used.", L"FiraCode Nerd Font", {}, 0, 100, 6, L"Text"},
+{K::Choice, L"fontWeight", L"Thickness", L"", L"bold", {{L"normal", L"Normal"}, {L"medium", L"Medium"}, {L"semibold", L"Semibold"}, {L"bold", L"Bold"}, {L"heavy", L"Heavy"}}, 0, 100, 6, L"Text"},
+{K::Number, L"textSize", L"Text size", L"In percent, on top of the overlay size.", L"100", {}, 60, 200, 6, L"Text"},
+{K::Choice, L"labelStyle", L"Name colour", L"The colour of the names, like GPU and FPS, and of the pictures.", L"gradient", {{L"gradient", L"Blue to mauve"}, {L"blue", L"Blue"}, {L"mauve", L"Mauve"}, {L"text", L"White"}, {L"custom", L"My own colour"}}, 0, 100, 6, L"Text"},
+{K::Choice, L"valueStyle", L"Number colour", L"The colour of the numbers.", L"text", {{L"text", L"White"}, {L"gradient", L"Blue to mauve"}, {L"custom", L"My own colour"}}, 0, 100, 6, L"Text"},
+{K::Color, L"customColour", L"My own colour", L"Used wherever a colour is set to My own colour.", L"#F5C2E7", {}, 0, 100, 6, L"Text"},
+{K::Text, L"gameList", L"Listed games", L"Used when Show the overlay is set to Only listed games. Program names split by commas, like cs2.exe, plutonium-bootstrapper-win32.exe.", L"", {}, 0, 100, 7, L"Lists"},
+{K::Text, L"hideList", L"Never show over", L"Program names split by commas. The overlay stays hidden over these.", L"", {}, 0, 100, 7, L"Lists"},
+{K::Hotkey, L"presetHotkey", L"Next layout shortcut", L"Steps through the four layouts. Empty means no shortcut.", L"", {}, 0, 100, 7, L"Shortcuts"},
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to show or hide the overlay. Right-click it for layouts and settings.", L"1", {}, 0, 100, 8, L"Tray icon"},
+{K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 8, L"Settings window"},
+{K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 8, L"Settings window"},
+{K::Check, L"flyoutAnimation", L"Show and hide animation", L"The overlay fades and slides in when it shows, and out when it hides. It stays still when Windows animation effects are off.", L"1", {}, 0, 100, 8, L"Motion"},
+{K::Choice, L"animationSpeed", L"Animation speed", L"Follow the global speed uses the one speed shared by all DavidHiFi mods.", L"global", {{L"global", L"Follow the global speed"}, {L"veryQuick", L"Very quick"}, {L"quick", L"Quick"}, {L"normal", L"Normal"}, {L"relaxed", L"Relaxed"}, {L"slow", L"Slow"}}, 0, 100, 8, L"Motion"}
     };
 }
 
@@ -5589,13 +7612,15 @@ struct SetPageInfo {
     WCHAR glyph;
 };
 static const SetPageInfo kSetPages[] = {
-{L"Overlay", L"What the overlay shows first, and how often it updates.", 0xEC4A},
-{L"Readings", L"Pick each number the overlay shows.", 0xE9D9},
-{L"Placement", L"Which corner, how far in, and how big.", 0xE707},
-{L"Style", L"Background, text, colours, corners and border.", 0xE790},
-{L"Games", L"Where the overlay shows up.", 0xE7FC},
-{L"Shortcuts", L"Keys that show or hide the overlay and switch layouts.", 0xE765},
-{L"Look", L"The tray icon, motion and this settings window.", 0xE771},
+{L"Overlay", L"The settings most people change. Everything else is one page down.", 0xEC4A},
+{L"Readings", L"Turn each number and picture on or off.", 0xE9D9},
+{L"Blocks", L"The boxes of the Benchmark layout: which side, what order, how big, what colour.", 0xE80A},
+{L"Names", L"The words in front of each number. Leave a box empty to get the usual name back.", 0xE8D2},
+{L"Warnings", L"When a number turns to the warning colour.", 0xE7BA},
+{L"Graph and motion", L"The frame time graph and the moving pictures.", 0xE9D2},
+{L"Position and style", L"Fine control over where the overlay sits and how it looks.", 0xE790},
+{L"Games and keys", L"Which programs get the overlay, and the extra shortcut.", 0xE7FC},
+{L"Look", L"The tray icon, the show and hide animation and this settings window.", 0xE771},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
