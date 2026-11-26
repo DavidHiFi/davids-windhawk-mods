@@ -1,7 +1,7 @@
 {
   "format": "seamless-workshop-feed-1",
-  "commit": "f093fcbf0786b05dc2472b116b957b7ccd964d4b",
-  "generatedAt": "2026-11-26T00:34:58Z",
+  "commit": "363e3ce2d62f214780ff79f90c3674980f844fd7",
+  "generatedAt": "2026-11-26T00:38:32Z",
   "categories": [
     "Taskbar",
     "Explorer",
@@ -14,7 +14,7 @@
     "name": "Seamless Workshop",
     "version": "1.5.7",
     "description": "One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods",
-    "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-workshop/seamless-workshop.wh.cpp",
+    "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-workshop/seamless-workshop.wh.cpp",
     "sha256": "70fd829de169f0f72ce18736cf319e1b8575b095d806729092b579ce9f3b8102",
     "changes": "The taskbar stats and the FPS overlay read the sensors themselves now. The Workshop sets up PawnIO, a small signed helper for the CPU readings, instead of HWiNFO. HWiNFO stays on the Extras page if you want it.",
     "category": "Tools"
@@ -25,7 +25,7 @@
       "name": "Ableton Glass Fill",
       "version": "1.5.1",
       "description": "Matches Ableton's menu bar and Settings window to its title bar glass, and keeps the glass tint Mocha",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/ableton-glass-fill/ableton-glass-fill.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/ableton-glass-fill/ableton-glass-fill.wh.cpp",
       "sha256": "1f657d4ff36f42b5a1343607a0c51c01276eaa2c77f8ec658e66961b5d515058",
       "category": "Fixes",
       "preset": {
@@ -38,7 +38,7 @@
       "name": "Always On Top Plus",
       "version": "2.4.1",
       "description": "Pin any window above all others with a hotkey, with a highlight border, opacity and sounds",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/always-on-top-plus/always-on-top-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/always-on-top-plus/always-on-top-plus.wh.cpp",
       "sha256": "8ac018cb03997a82153249f670c0d0deb1aef92ae9f28d518f98a0f72a0820a4",
       "category": "Windows and menus",
       "preset": {
@@ -77,7 +77,7 @@
       "name": "Dark Theme Browser Colors Fix Plus",
       "version": "1.1.0",
       "description": "Fixes web pages that show white text on white or black text on dark under the Windows dark theme, and never crashes the browser when it closes",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/dark-theme-browser-colors-fix-plus/dark-theme-browser-colors-fix-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/dark-theme-browser-colors-fix-plus/dark-theme-browser-colors-fix-plus.wh.cpp",
       "sha256": "71aa36e956d1cb24036a5ff743cb3a9573d486f0583ac889e19172ae3a58e847",
       "changes": "The browser no longer crashes when it closes. The old version could touch its own brush list after Windows had already torn it down. Helium only gets the fix on builds listed in the settings. A new Helium build is skipped quietly until you add it, so an update can never take the...",
       "category": "Fixes",
@@ -94,7 +94,7 @@
       "name": "DSX Tray Icon Fix",
       "version": "1.0.0",
       "description": "Keeps DSX to one tray icon that always shows its picture, even after DSX runs out of drawing memory",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/dsx-tray-icon-fix/dsx-tray-icon-fix.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/dsx-tray-icon-fix/dsx-tray-icon-fix.wh.cpp",
       "sha256": "f8506ef283750addd11e94e44fe7ebd676bf247c904a16f8ac74a86b7ae23a20",
       "changes": "First release.",
       "category": "Fixes",
@@ -108,7 +108,7 @@
       "name": "Explorer Tags Plus",
       "version": "0.9.0",
       "description": "Colored tags panel in File Explorer's navigation pane, plus a Tags submenu in the right-click menu",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/explorer-tags-plus/explorer-tags-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/explorer-tags-plus/explorer-tags-plus.wh.cpp",
       "sha256": "297aa304d8012557c745f982e827d31da661c7b35df365b5d6e302907abbb5b8",
       "changes": "The Tags dock now lines up with the folder list dock above it, edge to edge, and its edge uses the same soft grey as the other Explorer docks.",
       "category": "Explorer",
@@ -127,7 +127,7 @@
       "name": "Explorer Tree Guard",
       "version": "1.0.0",
       "description": "Stops File Explorer windows crashing when the folder tree gets a request from a thread that already gave up",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/explorer-tree-guard/explorer-tree-guard.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/explorer-tree-guard/explorer-tree-guard.wh.cpp",
       "sha256": "9b89f25aee9e7d17cfa537a89ce65fad56e98cc348a2078993a89f299fd1191a",
       "category": "Fixes",
       "preset": {
@@ -140,7 +140,7 @@
       "name": "File Operation Styler Plus",
       "version": "1.6.6",
       "description": "Modern copy, move, delete and recycle progress window for File Explorer",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/file-operation-styler-plus/file-operation-styler-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/file-operation-styler-plus/file-operation-styler-plus.wh.cpp",
       "sha256": "42dd13135154084d11a8a23bd94af763eaae6e98ff000ba4e113544b58889d19",
       "category": "Explorer",
       "preset": {
@@ -178,8 +178,8 @@
       "name": "Halo Launcher",
       "version": "0.6.16",
       "description": "Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/halo-launcher/halo-launcher.wh.cpp",
-      "sha256": "948ef37450ca44e7663946d220a3c91bc4258830027b6201d71d8efb4a2c5915",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/halo-launcher/halo-launcher.wh.cpp",
+      "sha256": "d6df30437d723d582e48e2936be6272e0918fda621620a0ea732c7587fd0e4ff",
       "category": "Windows and menus",
       "preset": {
         "enabled": false,
@@ -202,7 +202,7 @@
       "name": "Keyboard Shortcut Actions Plus",
       "version": "1.1.2",
       "description": "Global shortcuts for apps and Windows actions that work on any PC and offer a download when an app is missing",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/keyboard-shortcut-actions-plus/keyboard-shortcut-actions-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/keyboard-shortcut-actions-plus/keyboard-shortcut-actions-plus.wh.cpp",
       "sha256": "0edef12ca90d53f1c9fd6c68f0ba5bc8f8af1ddd4ac4e783a000377e61f2e13f",
       "category": "Tools",
       "preset": {
@@ -251,7 +251,7 @@
       "name": "Logitech Battery Tray",
       "version": "0.1.5",
       "description": "Native taskbar battery indicators for Logitech G HUB and HID++ devices.",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/logitech-battery-tray/logitech-battery-tray.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/logitech-battery-tray/logitech-battery-tray.wh.cpp",
       "sha256": "8afa4af131340451214c00acd6a64ec3266d70f1389bd1c383d67ea65dd257d9",
       "category": "Taskbar",
       "preset": {
@@ -279,7 +279,7 @@
       "name": "Mocha App Icons",
       "version": "1.3.0",
       "description": "Gives Ableton Live, Yapfast, Zen Browser and Steam blue to mauve icons on their windows, taskbar buttons, tray and shortcuts, and the Settings window its Catppuccin icon",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/mocha-app-icons/mocha-app-icons.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/mocha-app-icons/mocha-app-icons.wh.cpp",
       "sha256": "c4e2880939aa747cc936f04871bae7b1bf1b581b786c3d7fd3859b8aa96b0931",
       "changes": "New: Zen Browser gets the blue and mauve icon, with Zen's own rings on the tile. It shows on Zen's windows, its taskbar button and its Start menu and desktop shortcuts. Turn it off with the Zen Browser switch.",
       "category": "Windows and menus",
@@ -302,7 +302,7 @@
       "name": "Network Speed Test Plus",
       "version": "2.4.3",
       "description": "Tray speed test button next to the network icon, plus the Windows 11 network menu speed test as a native flyout: ping, jitter, download and upload measured against Cloudflare, live gauge, results chart with copy. Mocha glass, FiraCode, gradient hover. No browser, no separate app.",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/network-speedtest-plus/network-speedtest-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/network-speedtest-plus/network-speedtest-plus.wh.cpp",
       "sha256": "47dc95c9ae0cfb6e474c4687015cac4b65f27f22313bfb3071e65d5840285464",
       "category": "Taskbar",
       "preset": {
@@ -336,7 +336,7 @@
       "name": "Notification Center Styler Plus",
       "version": "1.8.4",
       "description": "Customize the Notification Center and Action Center with themes contributed by others or create your own",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/notification-center-styler-plus/notification-center-styler-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/notification-center-styler-plus/notification-center-styler-plus.wh.cpp",
       "sha256": "8969c5de5183034129646eb950e6dd84801dec0f588fd02d5396a93021fc3222",
       "category": "Windows and menus",
       "preset": {
@@ -1140,7 +1140,7 @@
       "name": "Parallax Wallpaper",
       "version": "1.0.0",
       "description": "Smooth mouse-reactive wallpaper with optional perspective, four motion presets, independent multi-monitor support, and HDR-aware rendering",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/parallax-wallpaper/parallax-wallpaper.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/parallax-wallpaper/parallax-wallpaper.wh.cpp",
       "sha256": "863a8d0bc2781c74f99af1ab9d17d83089ae4cd104d77499d04658cf3f2c8462",
       "changes": "A lighter build of HaVeN80's Parallax Wallpaper 0.9.2. The original grew to tens of gigabytes overnight on a four-screen PC. This one keeps its memory flat: Old picture and screen buffers are let go of at once instead of piling up each time Explorer restarts, a screen changes or...",
       "category": "Windows and menus",
@@ -1186,7 +1186,7 @@
       "name": "Peek",
       "version": "1.5.2",
       "description": "Select a file in File Explorer and press Space to preview it, like PowerToys Peek",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/peek/peek.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/peek/peek.wh.cpp",
       "sha256": "0ef8a7900808db046b17f11793ead7ff2f5bf77378d7935427776a19ef449dae",
       "category": "Explorer",
       "preset": {
@@ -1212,7 +1212,7 @@
       "name": "Pointer Afterimage Plus",
       "version": "1.3.5",
       "description": "A real motion blur for the mouse pointer, made of fading afterimages of your own cursor, with an optional particle trail and click ripples",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/pointer-afterimage-plus/pointer-afterimage-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/pointer-afterimage-plus/pointer-afterimage-plus.wh.cpp",
       "sha256": "39c5fb0c3461a52d88afac0ca1ac693a7b88c24efee6ba2a28c39c9710a2065b",
       "category": "Tools",
       "preset": {
@@ -1244,7 +1244,7 @@
       "name": "Power Options Button Plus",
       "version": "1.1.1",
       "description": "Tray icon to switch between Windows power plans with the mouse wheel. The icon is the house tray badge with a glyph for each plan.",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/power-options-button-plus/power-options-button-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/power-options-button-plus/power-options-button-plus.wh.cpp",
       "sha256": "58d99dacf8d35332540c2aed31b831183122146d18437208b293556f61ab9b97",
       "category": "Taskbar",
       "preset": {
@@ -1257,7 +1257,7 @@
       "name": "Recycle Bin Tray Plus",
       "version": "1.0.11",
       "description": "Adds an interactive Recycle Bin icon to the Windows 11 system tray with live state updates, drag-and-drop support, theme-aware rendering, multiple icon styles, and configurable mouse actions.",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/recycle-bin-tray-plus/recycle-bin-tray-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/recycle-bin-tray-plus/recycle-bin-tray-plus.wh.cpp",
       "sha256": "c915bc2d8d72eaf444af55d77fe3e2e3b594306e0897e717d1b0e9f59036a29c",
       "changes": "Title bar menus (right-click the title bar, or Alt+Space) now really get the same blurred Mocha body as every other menu. They opened pitch black before.",
       "category": "Taskbar",
@@ -1293,7 +1293,7 @@
       "name": "Remove Shortcut Arrow Icons",
       "version": "2.0.2",
       "description": "Removes shortcut arrow icons from desktop and File Explorer cleanly in memory.",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/remove-shortcut-arrows/remove-shortcut-arrows.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/remove-shortcut-arrows/remove-shortcut-arrows.wh.cpp",
       "sha256": "3e583475b3d8ad245bc8b10f73d75598fbe159ec864d3f58c071b7e1f09ae15d",
       "changes": "Our own copy of Dev-StudioCode's mod, kept up by DavidHiFi. Fixed Explorer crashing at start: the arrows are now cleared just after the desktop finishes loading, not while it is still being built. The icon refresh no longer makes Explorer wait for it.",
       "category": "Explorer",
@@ -1309,7 +1309,7 @@
       "name": "Seamless AutoClicker",
       "version": "1.6.14",
       "description": "Hold a side mouse button and left click keeps clicking, with a lock, a tray switch and its own settings window",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-autoclicker/seamless-autoclicker.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-autoclicker/seamless-autoclicker.wh.cpp",
       "sha256": "c5356b587690dc59fa9b888fcce9f18998212fe0b122f46c090641c1f7df10c6",
       "category": "Tools",
       "preset": {
@@ -1332,7 +1332,7 @@
       "name": "Seamless Autoscroll",
       "version": "2.0.2",
       "description": "Hold the middle mouse button and move to scroll, like in a browser, with a frosted glass indicator, in every app",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-autoscroll/seamless-autoscroll.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-autoscroll/seamless-autoscroll.wh.cpp",
       "sha256": "cbc5f8a2af040f289f9e1e56c9906a02db066980fe1b551b9ec622d85e8c639e",
       "changes": "The scroll goes to the window under your mouse. Before, in apps outside File Explorer and your browser, it could scroll whichever window had focus instead.",
       "category": "Tools",
@@ -1372,7 +1372,7 @@
       "name": "Seamless Borders",
       "version": "1.0.5",
       "description": "Colored borders around windows, menus and notification banners",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-borders/seamless-borders.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-borders/seamless-borders.wh.cpp",
       "sha256": "529edf597aa627b0a4a58eef4685f9126307baca84182d1b8faaa8d1880b94e3",
       "category": "Windows and menus",
       "preset": {
@@ -1414,7 +1414,7 @@
       "name": "Seamless Chromium Browsers",
       "version": "1.0.0",
       "description": "See-through Helium and Brave with Catppuccin colors, your own accent, font and pop-up edges",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-chromium-browsers/seamless-chromium-browsers.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-chromium-browsers/seamless-chromium-browsers.wh.cpp",
       "sha256": "222bb4200353a09b9c8e551d0fd32ba76e448ac7a159c5791464e4a0452927a6",
       "changes": "Helium Acrylic and Brave Acrylic are now this one mod. Every setting from both is here, in a Helium group and a Brave group. Pick your own accent pair. Helium's icon and its gradient pieces follow it. Pick the browser's font and size. Tabs, menus, the address bar and dialogs...",
       "category": "Windows and menus",
@@ -1469,7 +1469,7 @@
       "name": "Seamless Clipboard Manager",
       "version": "1.4.7",
       "description": "Keeps everything you copy, text and images, in a searchable list you open with Win+V",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-clipboard-manager/seamless-clipboard-manager.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-clipboard-manager/seamless-clipboard-manager.wh.cpp",
       "sha256": "0018841f0d56d97d27c36dd497dcb4cbdd395b0857ae60f9469d8a5befad282a",
       "category": "Tools",
       "preset": {
@@ -1537,7 +1537,7 @@
       "name": "Seamless Color Picker",
       "version": "1.1.16",
       "description": "A full color picker on a hotkey, with a screen magnifier, recent colors and one-click copy",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-color-picker/seamless-color-picker.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-color-picker/seamless-color-picker.wh.cpp",
       "sha256": "768048e69e69cb9c3c156a5c76c73bb8c15176162cc8877ec8cd83c1a0ed70dc",
       "category": "Tools",
       "preset": {
@@ -1585,7 +1585,7 @@
       "name": "Seamless Compiz Cube",
       "version": "1.0.8",
       "description": "Rounded 3D desktop cube with Mocha borders, switching desktops through Seamless Window Manager",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-compiz-cube/seamless-compiz-cube.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-compiz-cube/seamless-compiz-cube.wh.cpp",
       "sha256": "fbc7388d9da641ec23c593146feb22e8a2a7ca0ed55ee698ad9dcf42b36bc232",
       "category": "Windows and menus",
       "preset": {
@@ -1663,7 +1663,7 @@
       "name": "Seamless Controls",
       "version": "1.0.10",
       "description": "Rounded, Mocha dark buttons, boxes, tabs and lists in every classic Windows window",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-controls/seamless-controls.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-controls/seamless-controls.wh.cpp",
       "sha256": "605b69ad211fdb716c5a14dd97f0e978f631fbd68a7c08a78b9c3a4dc85b5731",
       "category": "Windows and menus",
       "preset": {
@@ -1704,7 +1704,7 @@
       "name": "Seamless Crash Watch",
       "version": "1.3.2",
       "description": "A notice when a program crashes or freezes. Click it and an AI agent in a terminal finds out why, like Omarchy",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-crash-watch/seamless-crash-watch.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-crash-watch/seamless-crash-watch.wh.cpp",
       "sha256": "90594cf0764ae63a348879cab4968f3be31e6ad1726f810ca1afae543eacd7f8",
       "category": "Tools",
       "preset": {
@@ -1774,7 +1774,7 @@
       "name": "Seamless Crosshair",
       "version": "1.2.11",
       "description": "A crosshair over any game: presets or your own design, any color and size, shortcuts and a tray icon",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-crosshair/seamless-crosshair.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-crosshair/seamless-crosshair.wh.cpp",
       "sha256": "25211b3d8a0bb41198a953331007debb26a8b85229a496810a36359b1e523741",
       "category": "Tools",
       "preset": {
@@ -1871,7 +1871,7 @@
       "name": "Seamless Dictate",
       "version": "1.3.10",
       "description": "Press a shortcut, speak, and your words are typed where the cursor is, in any app: transcribed and cleaned up by AI in your style (natural, professional, prompt) or translated, with a free key (Groq, Gemini, Mistral and more). It also polishes text you typed and reads selected text aloud",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-dictate/seamless-dictate.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-dictate/seamless-dictate.wh.cpp",
       "sha256": "b7a0032401be7df9951779420199a0dd0b7be71723ccf97e06847c03ae7ac637",
       "category": "Tools",
       "preset": {
@@ -1890,7 +1890,7 @@
       "name": "Seamless Dock",
       "version": "0.3.13",
       "description": "A floating dock on any edge of the screen for your pinned and open apps",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-dock/seamless-dock.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-dock/seamless-dock.wh.cpp",
       "sha256": "1d9c4da37bf6c00b8ef569ef4ef548165399fa9b40b889ace2d5fe77c6d3ee6f",
       "changes": "Windows from your Windhawk mods each get their own icon on the dock, with the mod's own name and icon. Before, every mod's window shared one plain Windhawk icon called \"Windhawk mod\". The Windows Settings window shows the Catppuccin settings icon, the same one its title bar has...",
       "category": "Taskbar",
@@ -1926,7 +1926,7 @@
       "name": "Seamless Download Manager",
       "version": "1.0.12",
       "description": "A fast tray download manager: downloads in parts, resumes where it stopped, takes browser links",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-download-manager/seamless-download-manager.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-download-manager/seamless-download-manager.wh.cpp",
       "sha256": "02bf0304ea7380ec8b0b7cd6de003c9e6448eb43af0ee2b22135392f4ed571d7",
       "category": "Tools",
       "preset": {
@@ -1943,7 +1943,7 @@
       "name": "Seamless Explorer Search",
       "version": "2.1.3",
       "description": "Start typing in any File Explorer window, or any app's Open or Save window, to search it and every drive with Everything",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-explorer-search/seamless-explorer-search.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-explorer-search/seamless-explorer-search.wh.cpp",
       "sha256": "3166957b17c14361155b661fe6a44d27bd1556e63f8a656a546130a62317e7c6",
       "changes": "Title bar menus (right-click the title bar, or Alt+Space) now really get the same blurred Mocha body as every other menu. They opened pitch black before.",
       "category": "Explorer",
@@ -1977,7 +1977,7 @@
       "name": "Seamless Explorer View",
       "version": "2.0.12",
       "description": "GPU-accelerated Explorer views with smooth scrolling and right-click submenus that populate fully",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-explorer-view/seamless-explorer-view.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-explorer-view/seamless-explorer-view.wh.cpp",
       "sha256": "fb71722d3a5a73ad059a482b3b20ac9d36802133813a781958941787789570f3",
       "changes": "Pointing at a column name no longer draws a second rounded frame inside the header dock. The column just lights up softly, and the dock edge alone turns blue to mauve. The dock edge now uses the same soft grey as the other Explorer docks (command bar, folder list, status bar).",
       "category": "Explorer",
@@ -2135,7 +2135,7 @@
       "name": "Seamless Flyouts",
       "version": "2.1.5",
       "description": "Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-flyouts/seamless-flyouts.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-flyouts/seamless-flyouts.wh.cpp",
       "sha256": "753cb939539a10789affdcbc9586c60c0e1ab6dc6936a150031978c29ee3cf76",
       "changes": "Right-click and desktop menus now fill right out to their rounded border. The lighter band with square inner corners just inside the edge is gone.",
       "category": "Windows and menus",
@@ -2341,7 +2341,7 @@
       "name": "Seamless FPS Capper",
       "version": "1.0.0",
       "description": "An open frame rate cap for every game: in the game itself or through the NVIDIA driver, with per-game caps, a tray switch and shortcuts",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-fps-capper/seamless-fps-capper.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-fps-capper/seamless-fps-capper.wh.cpp",
       "sha256": "38edc07a12151177bed5630af1bb2ba772e1214daf41b7fcfede0305b92347a0",
       "category": "Tools",
       "preset": {
@@ -2412,7 +2412,7 @@
       "name": "Seamless FPS Overlay",
       "version": "1.0.0",
       "description": "FPS, frame times and PC temperatures over any game, with nothing put into the game",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-fps-overlay/seamless-fps-overlay.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-fps-overlay/seamless-fps-overlay.wh.cpp",
       "sha256": "ae1e68986568f0110671e685808d1415875d18225b35051b390ac34bbe0fffd4",
       "category": "Tools",
       "preset": {
@@ -2476,7 +2476,7 @@
       "name": "Seamless Key Click",
       "version": "1.1.8",
       "description": "Mechanical keyboard and mouse sounds as you type and click, with every Keyboard Sounds pack, shortcuts and a tray icon",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-key-click/seamless-key-click.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-key-click/seamless-key-click.wh.cpp",
       "sha256": "8774017852d235e305b5d11b40b9c34be9b3aa95a02d0ad60bb4d4ebe8c33d5e",
       "category": "Tools",
       "preset": {
@@ -2537,7 +2537,7 @@
       "name": "Seamless Launchpad",
       "version": "2.7.2",
       "description": "A fullscreen GPU rendered grid of all your apps in place of Start, with instant search, adjustable blur, wiggle edit mode and power buttons",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-launchpad/seamless-launchpad.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-launchpad/seamless-launchpad.wh.cpp",
       "sha256": "8c9f1280e0c9ef1cd6d440f3252bcec599dd0b9ea0205c5d2880eb19e479791b",
       "category": "Windows and menus",
       "preset": {
@@ -2587,7 +2587,7 @@
       "name": "Seamless Power Action Countdown",
       "version": "2.0.3",
       "description": "Mocha glass countdown before shutdown, restart, sleep or hibernation. Any key or click cancels",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-power-action-countdown/seamless-power-action-countdown.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-power-action-countdown/seamless-power-action-countdown.wh.cpp",
       "sha256": "7740a3e8eb0a5967a08e38ee19388cca1632d58990133b9528d2d40515200462",
       "category": "Windows and menus",
       "preset": {
@@ -2616,7 +2616,7 @@
       "name": "Seamless Share",
       "version": "1.0.2",
       "description": "Restyles the Windows 11 share window: blurred glass, your font, soft gradient hover edges",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-share/seamless-share.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-share/seamless-share.wh.cpp",
       "sha256": "4d77f106031ed771284049eb0baf20e1114b3dbdd12b9be1cbe0f7cfc803e682",
       "category": "Windows and menus",
       "preset": {
@@ -2652,7 +2652,7 @@
       "name": "Seamless Snipper",
       "version": "0.7.5",
       "description": "Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-snipper/seamless-snipper.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-snipper/seamless-snipper.wh.cpp",
       "sha256": "8b78453889244d558fb83444fe57bcb35e90a132b27ac6dcaf93bbc961dfe801",
       "changes": "Arrows have their own line width in the settings (Drawing, Arrows), and they start thicker than before. The [ and ] keys still change it while you draw. Title bar menus get the same blurred Mocha body as every other menu again. They showed pitch black because the part that spots...",
       "category": "Tools",
@@ -2791,7 +2791,7 @@
       "name": "Seamless Sound Manager",
       "version": "1.0.9",
       "description": "Change every Windows sound with a scheme: 161 presets, startup and logon sounds. A port of Sound Manager",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-sound-manager/seamless-sound-manager.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-sound-manager/seamless-sound-manager.wh.cpp",
       "sha256": "478169a8ff173a9901e61d02355c5cdccd1faa1653d669ce1aa574c05b65c6f5",
       "category": "Tools",
       "preset": {
@@ -2816,7 +2816,7 @@
       "name": "Seamless Task Manager",
       "version": "1.0.2",
       "description": "Every Task Manager tweak in one mod, with the Catppuccin Mocha look on its menus, flyouts and accents",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-task-manager/seamless-task-manager.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-task-manager/seamless-task-manager.wh.cpp",
       "sha256": "2223b2b55849f98b2c2a203f17dd7acc56c88aada7d81be16739db9a9bc71320",
       "category": "Tools",
       "preset": {
@@ -2863,7 +2863,7 @@
       "name": "Seamless Taskbar",
       "version": "0.4.63",
       "description": "The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-taskbar/seamless-taskbar.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-taskbar/seamless-taskbar.wh.cpp",
       "sha256": "480e1442de72272c69f1e2f8ddaf6f3232aa8e670563d7013ef778f259a990b2",
       "changes": "The AI usage tray icon comes back by itself after Explorer restarts. It used to stay missing, along with its settings window, until a setting was changed.",
       "category": "Taskbar",
@@ -3286,7 +3286,7 @@
       "name": "Seamless Taskbar Badge Counter",
       "version": "1.0.3",
       "description": "See how many windows each taskbar app has open, on a Catppuccin Mocha badge with a gradient edge",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-taskbar-badge-counter/seamless-taskbar-badge-counter.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-taskbar-badge-counter/seamless-taskbar-badge-counter.wh.cpp",
       "sha256": "b9a701c4f2e1c4ae4b699b0cc8ea429f2b8e70d8d16961a0c333907bdfc8dd50",
       "category": "Taskbar",
       "preset": {
@@ -3324,7 +3324,7 @@
       "name": "Seamless Title Bars",
       "version": "1.3.17",
       "description": "One title bar look everywhere: colours, caption buttons, a glass title dock and native frames in every kind of app",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-title-bars/seamless-title-bars.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-title-bars/seamless-title-bars.wh.cpp",
       "sha256": "76125b8e537cec507f5cdf51aef0cbe55e9640e438833b6cda41ea28cf664289",
       "changes": "Pop-ups in Chromium browsers (extension pop-ups like Bitwarden, menus and bubbles) no longer get a dark square frame around them. Native frames now leave those pop-up windows the way the browser made them, so their soft shadow edge stays see-through. Needs a browser restart.",
       "category": "Windows and menus",
@@ -3448,7 +3448,7 @@
       "name": "Seamless Volume Mixer",
       "version": "1.4.37",
       "description": "A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/better-volume-mixer-plus/better-volume-mixer-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/better-volume-mixer-plus/better-volume-mixer-plus.wh.cpp",
       "sha256": "cfc93569f93986c585524a521ad0701f1c4b84a13b576cab09fe76c0f9a7e4bf",
       "category": "Taskbar",
       "preset": {
@@ -3488,7 +3488,7 @@
       "name": "Seamless Window Manager",
       "version": "2.8.11",
       "description": "Move, resize, snap and focus windows with the mouse or keyboard, with app rules, gaps and a pause key",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-window-manager/seamless-window-manager.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-window-manager/seamless-window-manager.wh.cpp",
       "sha256": "002fbcafe222a51e9b82a8f35db421643b0a90f5122a1207f18404b0960690bb",
       "category": "Windows and menus",
       "preset": {
@@ -3658,7 +3658,7 @@
       "name": "Seamless Windows Firewall",
       "version": "1.2.5",
       "description": "Block or allow any app's internet in one click, from the tray icon or a shortcut",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-windows-firewall/seamless-windows-firewall.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-windows-firewall/seamless-windows-firewall.wh.cpp",
       "sha256": "f8ef396b9aa49bbf4ea8ed7ae5375a1596c841331f1f548c3b8ac6a129a63904",
       "changes": "Right-click any program file to block it in Windows Firewall, allow it again or open the panel. It does the same job as Firewall App Blocker's menu, so you no longer need that app. Turn the menu off under Blocking, Right-click menu; nothing of it is left while the mod is off....",
       "category": "Tools",
@@ -3712,7 +3712,7 @@
       "name": "Seamless Wobbly Windows",
       "version": "1.2.14",
       "description": "Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/seamless-wobbly-windows/seamless-wobbly-windows.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/seamless-wobbly-windows/seamless-wobbly-windows.wh.cpp",
       "sha256": "466235d890c2cb596962e5689fd2f4b4b4346767dc25808d2c09952a2c3488a2",
       "changes": "The Seamless Borders ring is told twice more that the window stepped aside, so it leaves the old spot sooner on an Alt-drag.",
       "category": "Windows and menus",
@@ -3781,7 +3781,7 @@
       "name": "Settings Styler Plus",
       "version": "1.4.1",
       "description": "Themes for the Windows Settings app, plus a blur that stays when unfocused",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/settings-styler-plus/settings-styler-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/settings-styler-plus/settings-styler-plus.wh.cpp",
       "sha256": "b0e28976385466e4f6069e644dd793010afb4c9b25bf2e93f1d66d1e3800a575",
       "category": "Windows and menus",
       "preset": {
@@ -3806,7 +3806,7 @@
       "name": "Shell Font Changer Plus",
       "version": "2.0.0",
       "description": "Any installed font in File Explorer, Start, Search, Settings and the shell, with icons and emoji left intact",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/shell-font-changer-plus/shell-font-changer-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/shell-font-changer-plus/shell-font-changer-plus.wh.cpp",
       "sha256": "df0d3a26e4d043d4028543e75b6172b7f5f6d1ae701f2ee09d361b32937d029f",
       "category": "Explorer",
       "preset": {
@@ -3833,7 +3833,7 @@
       "name": "Simple Window Switcher Plus",
       "version": "1.0.9",
       "description": "Customizable Alt+Tab with Vista animations, background blur and elevated app support",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/simple-window-switcher-plus/simple-window-switcher-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/simple-window-switcher-plus/simple-window-switcher-plus.wh.cpp",
       "sha256": "d6ed8f1e2de70c7871fd50c8a0652f1095813bd666cb1a04f688945ef7572b14",
       "category": "Windows and menus",
       "preset": {
@@ -3987,7 +3987,7 @@
       "name": "Startup Control",
       "version": "0.1.11",
       "description": "Manage startup apps, scheduled tasks and Windows startup locations.",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/startup-control/startup-control.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/startup-control/startup-control.wh.cpp",
       "sha256": "160b272f5176a186ef7ae2c27b0e8ac33ddf7a275b79340f6b70f8232db33ee1",
       "category": "Tools",
       "preset": {
@@ -4012,7 +4012,7 @@
       "name": "Theme Tool Plus",
       "version": "1.3.0",
       "description": "Switch Windows themes from the settings tab. Comes with DavidHiFi's Theme: Catppuccin Mocha with matching cursors and sounds",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/theme-tool-plus/theme-tool-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/theme-tool-plus/theme-tool-plus.wh.cpp",
       "sha256": "891c2c952e3e47c3f70716f82b8605198b363d71fe1458513654c26c76029473",
       "changes": "The bundled theme is now called DavidHiFi's Theme (it was Main 01). If you had Main 01 picked, the mod switches the setting over for you. New cursors in that theme: the Mocha base fill, a blue to mauve edge, and one smooth spinning arc on the loading cursors.",
       "category": "Windows and menus",
@@ -4041,7 +4041,7 @@
       "name": "UWP Assets Redirect Plus",
       "version": "1.2",
       "description": "Swap the icons of Store and system apps, with a built-in Catppuccin icon theme",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/uwp-assets-redirect-plus/uwp-assets-redirect-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/uwp-assets-redirect-plus/uwp-assets-redirect-plus.wh.cpp",
       "sha256": "82d225818f44d69665ff6972ff31e17381bbd74835a77eb7d527ff5013d54c54",
       "category": "Windows and menus",
       "preset": {
@@ -4064,7 +4064,7 @@
       "name": "Windhawk Enhanced Styler",
       "version": "2.2.33",
       "description": "Theme Windhawk itself with your own colors, gradients, font, transparency and blur",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/windhawk-enhanced-styler/windhawk-enhanced-styler.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/windhawk-enhanced-styler/windhawk-enhanced-styler.wh.cpp",
       "sha256": "6a8682191483120dd330df5b0573ba2d23e0d4fd4614738faecc869a25ca4cc6",
       "category": "Windows and menus",
       "preset": {
@@ -4102,7 +4102,7 @@
       "name": "Windows 11 File Explorer Styler Plus",
       "version": "1.10.37",
       "description": "Customize the File Explorer with themes contributed by others or create your own",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/windows-11-file-explorer-styler-plus/windows-11-file-explorer-styler-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/windows-11-file-explorer-styler-plus/windows-11-file-explorer-styler-plus.wh.cpp",
       "sha256": "56c56ca00e26fd3cce6af5528891692e5db2ed92ed6a6a3e65a389154c685e4b",
       "category": "Explorer",
       "preset": {
@@ -4503,7 +4503,7 @@
       "name": "WinTips OSD Plus",
       "version": "1.4.1",
       "description": "Pop-up cards for Caps, Num and Scroll Lock, Insert, copy, paste and cut, with a Catppuccin Mocha look",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/wintips-osd-plus/wintips-osd-plus.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/wintips-osd-plus/wintips-osd-plus.wh.cpp",
       "sha256": "fe9202a758efd3c597897546fe8cfe245b920dbcb0fdda74138bb62889a9a654",
       "category": "Windows and menus",
       "preset": {
@@ -4549,7 +4549,7 @@
       "name": "ZoomIt",
       "version": "1.2.3",
       "description": "Zoom, draw and read text bigger under the mouse with a hotkey, like Sysinternals ZoomIt",
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/mods/local/zoomit/zoomit.wh.cpp",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/mods/local/zoomit/zoomit.wh.cpp",
       "sha256": "37966045cdc62a720d46242f2c4888d122cdbc916dad0f7d2d131bacb707a149",
       "category": "Tools",
       "preset": {
@@ -6891,7 +6891,7 @@
       "auto": false,
       "optional": true,
       "mods": [],
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/deps/hwinfo.ps1",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/deps/hwinfo.ps1",
       "sha256": "3c9d031c784ff302719e85f7bf2534e436a8cb83aef9bddb082c9a2fdd34719b"
     },
     {
@@ -6906,7 +6906,7 @@
         "local@seamless-fps-overlay",
         "local@seamless-taskbar"
       ],
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/deps/pawnio.ps1",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/deps/pawnio.ps1",
       "sha256": "d8c6731431eacb3c696f353c5eb61f59723e14bac71bdfbc018622aee1ac9811"
     },
     {
@@ -6921,7 +6921,7 @@
         "local@seamless-explorer-search",
         "explorer-details-better-file-sizes"
       ],
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/deps/everything.ps1",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/deps/everything.ps1",
       "sha256": "38b2ee8355f82064f8b9489c9bf914fba49a2377e80596083d885370cc6613e4"
     },
     {
@@ -6935,7 +6935,7 @@
       "mods": [
         "logitech-battery-tray"
       ],
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/deps/ghub.ps1",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/deps/ghub.ps1",
       "sha256": "e44f95ce0ad2735f76172d4bef8f02082bdfbb19f732981323215524afbbfdd9"
     },
     {
@@ -6949,7 +6949,7 @@
       "mods": [
         "local@seamless-download-manager"
       ],
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/deps/seamless-download-core.ps1",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/deps/seamless-download-core.ps1",
       "sha256": "98c2290b6970bd4581632154824074a74b803a17fb413be8580f6b287ad91666"
     },
     {
@@ -6961,7 +6961,7 @@
       "auto": false,
       "optional": false,
       "mods": [],
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/deps/mocha-steam.ps1",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/deps/mocha-steam.ps1",
       "sha256": "21f4fe0de17bd9a2da4a89d214d9f6996416193917dccb76a8019fc2cb563f79"
     },
     {
@@ -6973,7 +6973,7 @@
       "auto": false,
       "optional": false,
       "mods": [],
-      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/f093fcbf0786b05dc2472b116b957b7ccd964d4b/deps/freedictate.ps1",
+      "url": "https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/363e3ce2d62f214780ff79f90c3674980f844fd7/deps/freedictate.ps1",
       "sha256": "ae704fc777416dbff88056f5d7f9110a6c3e68126878ee3e0e739da7899a3d31"
     }
   ]
