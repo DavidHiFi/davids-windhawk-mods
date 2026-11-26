@@ -1398,5 +1398,12 @@
     "exclude": "",
     "architecture": "",
     "version": "1.0.0"
+  },
+  "local@seamless-explorer": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.1.0"
   }
 }

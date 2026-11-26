@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T18:55:25+08:00",
+  "generatedAt": "2026-11-26T19:00:37+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 163,
-    "enabled": 156,
-    "local": 66
+    "mods": 164,
+    "enabled": 157,
+    "local": 67
   },
   "mods": [
     {
@@ -2011,6 +2011,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-file-unlocker/seamless-file-unlocker.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-explorer",
+      "name": "Seamless Explorer",
+      "author": "DavidHiFi, m417z, digART, crazyboyybs, NoMorePlz, Languster, Momo, Anixx, buedgik, RobotsNeverDie, CTravkin, Nerdworld, gilnett, Armaninyow, wrldspawn, VitalS, Deepak, akiyorm, Lockframe, metanoid18, iMAboud, Ender, Marnes, Arimodu, Mark Jansen, DanRotaru, Peter2oo1, NDruce, Sanekx Arcs, javierpetrucci",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.1.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-explorer/seamless-explorer.wh.cpp",
       "enabled": true
     }
   ]
