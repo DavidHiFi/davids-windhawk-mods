@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.34
+// @version         2.2.35
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,11 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.35
+
+- A Workshop button now sits in Windhawk's top bar, between New mod and Settings. When Seamless Workshop is installed it opens it. When it is missing, the button offers to install it for you, and when it is turned off, to turn it back on.
+- The new install box opens and closes with a short fade and slide. You can turn that off or change its speed; by default it follows the speed you set for all DavidHiFi apps.
 
 ## What's new in 2.2.32
 
@@ -146,6 +151,7 @@ Choose Windhawk's colors, gradients, font, transparency and background blur.
 - **Tray pop-ups.** The Mod tasks in progress and Loaded mods windows from the taskbar icon use the same colors as the rest of the theme.
 - **Text and font.** Use an installed font and a text color. Icons keep their own font and stay centered in their buttons.
 - **Title bar.** Match the background or choose a solid color. Right-click the title bar, click the app icon or press Alt+Space for the Windows window menu. The app icon keeps its normal size, and Windows handles dragging and window buttons.
+- **Workshop button.** Opens Seamless Workshop from Windhawk's top bar, or offers to install it when it is missing.
 - **Removal.** Disable the mod to reopen the interface with Windhawk's appearance. The mod changes no application files.
 
 ## How to use
@@ -241,6 +247,21 @@ The original window frame work was adapted from [Titlebar For Everyone](https://
 - titleBarColor: "#403a45"
   $name: Solid title bar color
   $description: "Used when Match the title bar to the background is off. Enter a color in #RRGGBB format"
+- workshopButton: true
+  $name: Seamless Workshop button
+  $description: "Show a Workshop button in the top bar. It opens Seamless Workshop, or offers to install it when it is missing"
+- dialogAnimation: true
+  $name: Open and close animation
+  $description: "Fade and slide the Workshop install box in and out. It stays still when Windows animations are off"
+- animationSpeed: global
+  $name: Animation speed
+  $options:
+  - global: Follow the global speed
+  - veryQuick: Very quick
+  - quick: Quick
+  - normal: Normal
+  - relaxed: Relaxed
+  - slow: Slow
 */
 // ==/WindhawkModSettings==
 
@@ -401,6 +422,9 @@ struct Settings {
     std::uint32_t gradientStart = 0x89b4fa;
     std::uint32_t gradientEnd = 0xcba6f7;
     bool mochaIcons = false;
+    bool workshopButton = true;
+    int dialogOpenMs = 160;               // 0 = still
+    int dialogCloseMs = 120;
 };
 
 static Settings g_settings;
@@ -443,6 +467,44 @@ static std::string RgbToCss(std::uint32_t rgb) {
     char buf[32];
     snprintf(buf, sizeof(buf), "rgb(%u,%u,%u)", (rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff);
     return buf;
+}
+
+// The shared motion base every DavidHiFi app follows (Seamless Workshop owns
+// the control): HKCU\Software\DavidHiFi\Motion, Enabled and Speed.
+static double MotionLevelFactor(PCWSTR level) {
+    if (!level) return 1.0;
+    if (_wcsicmp(level, L"veryQuick") == 0) return 0.5;
+    if (_wcsicmp(level, L"quick") == 0) return 0.75;
+    if (_wcsicmp(level, L"relaxed") == 0) return 1.5;
+    if (_wcsicmp(level, L"slow") == 0) return 2.0;
+    return 1.0;
+}
+
+static bool MotionGloballyOn() {
+    DWORD value = 1, size = sizeof(value);
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\DavidHiFi\\Motion", L"Enabled", RRF_RT_REG_DWORD,
+                     nullptr, &value, &size) != ERROR_SUCCESS) {
+        return true;
+    }
+    return value != 0;
+}
+
+static double MotionSpeedFactor() {
+    wchar_t level[32] = {};
+    DWORD size = sizeof(level);
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\DavidHiFi\\Motion", L"Speed", RRF_RT_REG_SZ,
+                     nullptr, level, &size) == ERROR_SUCCESS) {
+        return MotionLevelFactor(level);
+    }
+    DWORD percent = 0;
+    size = sizeof(percent);
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\DavidHiFi\\Motion", L"Speed", RRF_RT_REG_DWORD,
+                     nullptr, &percent, &size) == ERROR_SUCCESS && percent) {
+        if (percent < 25) percent = 25;
+        if (percent > 400) percent = 400;
+        return percent / 100.0;
+    }
+    return 1.0;
 }
 
 static void ReadSettings(Settings* s) {
@@ -541,6 +603,16 @@ static void ReadSettings(Settings* s) {
     if (!HexColorToRgb(gradEnd, &s->gradientEnd)) s->gradientEnd = 0xcba6f7;
     Wh_FreeStringSetting(gradEnd);
 
+    s->workshopButton = Wh_GetIntSetting(L"workshopButton") != 0;
+    double speed = MotionSpeedFactor();
+    PCWSTR speedSetting = Wh_GetStringSetting(L"animationSpeed");
+    if (speedSetting && *speedSetting && wcscmp(speedSetting, L"global") != 0) speed = MotionLevelFactor(speedSetting);
+    Wh_FreeStringSetting(speedSetting);
+    bool still = Wh_GetIntSetting(L"dialogAnimation") == 0 || !MotionGloballyOn();
+    BOOL clientAnimation = TRUE;
+    if (SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &clientAnimation, 0) && !clientAnimation) still = true;
+    s->dialogOpenMs = still ? 0 : (int)(160 * speed + 0.5);
+    s->dialogCloseMs = still ? 0 : (int)(120 * speed + 0.5);
 }
 
 static Settings SnapshotSettings() {
@@ -1069,6 +1141,7 @@ static std::string BuildCss(const Settings& s) {
         // one adjustable radius. Off (or 0) leaves Windhawk's stock corners.
         std::string r = std::to_string(s.cornerRadius) + "px";
         css += std::string(kSurfaces) + ",.ant-alert{border-radius:" + r + " !important;}";
+        css += "#wh-ws-modal .wh-ws-card{border-radius:" + r + " !important;}";
         css += ".ant-btn,.ant-input,.ant-input-affix-wrapper,.ant-select-selector,.ant-select:not(.ant-select-dropdown),.ant-input-number,.ant-picker,.ant-segmented{border-radius:" + r + " !important;}";
         // The spinner handles become a small inset pill inside the rounded
         // input, so their square box no longer pokes past its corners.
@@ -1313,8 +1386,8 @@ static std::string BuildCss(const Settings& s) {
 :root [class*="SaveSettingsCard"] .ant-segmented:hover{border-color:transparent !important;background:linear-gradient(#11111b,#11111b) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
 :root [class*="CreateNewModButton__ButtonContainer"]:has([data-testid="create-new-mod"]){display:block !important;position:fixed !important;left:var(--wh-create-x,-999px) !important;top:var(--wh-create-y,-999px) !important;width:var(--wh-create-w,1px) !important;height:var(--wh-create-h,1px) !important;margin:0 !important;padding:0 !important;opacity:0 !important;pointer-events:none !important;z-index:-1 !important;}
 :root [class*="CreateNewModButton__ButtonContainer"] [data-testid="create-new-mod"]{width:100% !important;height:100% !important;min-width:0 !important;padding:0 !important;margin:0 !important;}
-:root #wh-header-create{height:32px !important;position:relative !important;inset:auto !important;margin:0 !important;padding:4px 12px !important;white-space:nowrap;}
-:root #wh-header-create svg{width:14px;height:14px;margin-right:0 !important;}
+:root :is(#wh-header-create,#wh-header-workshop){height:32px !important;position:relative !important;inset:auto !important;margin:0 !important;padding:4px 12px !important;white-space:nowrap;}
+:root :is(#wh-header-create,#wh-header-workshop) svg{width:14px;height:14px;margin-right:0 !important;}
 /* 2.1.5: mod id tag is a dark chip with a 2px edge, grey at rest, blue to mauve on hover. */
 :root [class*="CardTitleModId"]{background:#181825 !important;color:#a6adc8 !important;border:2px solid #45475a !important;border-radius:999px !important;padding:0 9px !important;line-height:20px !important;transition:border-color .15s,color .15s;}
 :root [class*="CardTitleModId"]:hover{color:#cdd6f4 !important;border-color:transparent !important;background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,#89b4fa,#cba6f7) border-box !important;}
@@ -1375,7 +1448,7 @@ static std::string BuildCss(const Settings& s) {
 /* Drop-down lists and menus: same grey frame at rest, blue to mauve on hover. */
 :root :is(.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu,.ant-popover-container,.ant-popover-inner):hover::after{--whb-a:#89b4fa;--whb-b:#cba6f7;}
 /* Dialogs: frosted glass. Backdrop blur cannot read through this see-through window, so the page itself blurs while a dialog is open. Dialog is Mocha mantle, inner list one step lighter. */
-body:has(.ant-modal-wrap:not([style*="display: none"]) .ant-modal)>#root{filter:blur(12px) saturate(120%) !important;}
+body:is(:has(.ant-modal-wrap:not([style*="display: none"]) .ant-modal),:has(#wh-ws-modal.on))>#root{filter:blur(12px) saturate(120%) !important;}
 body>#root{transition:filter .2s ease;}
 :root .ant-modal-mask{backdrop-filter:none !important;background-color:rgba(17,17,27,.35) !important;}
 :root :is(.ant-modal-content,.ant-modal-container){backdrop-filter:none !important;background-color:rgba(24,24,37,.86) !important;}
@@ -1437,9 +1510,9 @@ body:has(.ant-popconfirm:not(.ant-popover-hidden))>#root{filter:blur(14px) satur
 :root .ant-segmented:not([class*="SaveSettingsCard"] *) .ant-segmented-item-label{min-height:32px !important;line-height:32px !important;padding:0 16px !important;}
 /* 2.1.10: the open Advanced settings box is one glass card: its body takes the header's Mocha glass instead of antd's flat near-black, with one quiet line under the header. The header Create button matches the other docks: same padding, 18px icon, short label. */
 :root .ant-collapse>.ant-collapse-item>.ant-collapse-panel{background:rgba(24,24,37,0.400) !important;border:0 !important;border-top:1px solid rgba(69,71,90,0.700) !important;border-radius:0 !important;}
-:root #wh-header-create{padding:0 15px !important;}
-:root #wh-header-create svg{width:18px !important;height:18px !important;}
-:root #wh-header-create .ant-btn-icon{display:inline-flex;width:18px;height:18px;align-items:center;justify-content:center;}
+:root :is(#wh-header-create,#wh-header-workshop){padding:0 15px !important;}
+:root :is(#wh-header-create,#wh-header-workshop) svg{width:18px !important;height:18px !important;}
+:root :is(#wh-header-create,#wh-header-workshop) .ant-btn-icon{display:inline-flex;width:18px;height:18px;align-items:center;justify-content:center;}
 /* 2.2.10: list items (per-program lists and the like). Both arrows are the same round dark bubble, chevron 10px in a 16px inside so it sits on whole pixels.
    The drag handle is a matching dark pill, and the item chip matches the "5 settings" chip. Grey 2px edge at rest, blue to mauve on hover. */
 :root [data-testid="mod-setting-collapse"] svg,:root [data-testid="mod-setting-array-item-collapse"] svg{width:10px !important;height:10px !important;display:block !important;margin:0 !important;flex:none !important;}
@@ -1459,7 +1532,32 @@ body:has(.ant-popconfirm:not(.ant-popover-hidden))>#root{filter:blur(14px) satur
 :root :is(.ant-select-dropdown,.ant-picker-dropdown,.ant-dropdown-menu){background-color:#181825 !important;backdrop-filter:none !important;}
 /* 2.2.12: header nav buttons rest on Mocha base instead of mantle, so they stop reading
    as black chips against the glass page (owner, 2026-11-20: like base, about rgb 30,30,46). */
-:root :is([data-testid="nav-home"],[data-testid="nav-explore"],[data-testid="nav-settings"],[data-testid="nav-about"],#wh-header-create):not(.ant-btn-primary){--whb-f:#1e1e2e !important;}
+:root :is([data-testid="nav-home"],[data-testid="nav-explore"],[data-testid="nav-settings"],[data-testid="nav-about"],#wh-header-create,#wh-header-workshop):not(.ant-btn-primary){--whb-f:#1e1e2e !important;}
+/* 2.2.35: the Seamless Workshop box. It is drawn in the page, which cannot frost what sits
+   under it, so the card is solid Mocha mantle and the page behind blurs like other dialogs.
+   Grey 2px edge at rest, blue to mauve on hover. Fade plus an 8px rise, timed by the
+   animation settings; still when the system asks for reduced motion. */
+#wh-ws-modal{position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;
+ visibility:hidden;pointer-events:none;transition:visibility 0s linear var(--ws-out,120ms);}
+#wh-ws-modal.on{visibility:visible;pointer-events:auto;transition:visibility 0s;}
+#wh-ws-modal .wh-ws-mask{position:absolute;inset:0;background:rgba(17,17,27,.35);opacity:0;transition:opacity var(--ws-out,120ms) ease-in;}
+#wh-ws-modal.on .wh-ws-mask{opacity:1;transition:opacity var(--ws-in,160ms) ease-out;}
+#wh-ws-modal .wh-ws-card{--whb-a:#45475a;--whb-b:#45475a;position:relative;width:min(440px,100%);box-sizing:border-box;padding:20px 24px 20px;border:2px solid transparent;border-radius:8px;
+ background:linear-gradient(#181825,#181825) padding-box,linear-gradient(125deg,var(--whb-a),var(--whb-b)) border-box;color:#cdd6f4;box-shadow:0 12px 32px #0009;
+ opacity:0;transform:translateY(8px);transition:opacity var(--ws-out,120ms) ease-in,transform var(--ws-out,120ms) ease-in,--whb-a .2s var(--whb-ease),--whb-b .2s var(--whb-ease);}
+#wh-ws-modal.on .wh-ws-card{opacity:1;transform:none;transition:opacity var(--ws-in,160ms) ease-out,transform var(--ws-in,160ms) ease-out,--whb-a .2s var(--whb-ease),--whb-b .2s var(--whb-ease);}
+#wh-ws-modal .wh-ws-card:is(:hover,:focus-within){--whb-a:#89b4fa;--whb-b:#cba6f7;}
+#wh-ws-modal .wh-ws-head{display:flex;align-items:center;gap:12px;margin:0 0 12px;}
+#wh-ws-modal .wh-ws-icon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:#1e1e2e;border:2px solid #45475a;box-sizing:border-box;color:#89b4fa;}
+#wh-ws-modal .wh-ws-icon svg{width:18px;height:18px;display:block;}
+#wh-ws-modal h3{margin:0;font-size:16px;font-weight:700;line-height:1.3;background:linear-gradient(125deg,#89b4fa,#cba6f7);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+#wh-ws-modal p{margin:0;font-size:14px;line-height:1.55;color:#bac2de;}
+#wh-ws-modal .wh-ws-status{margin-top:12px;min-height:20px;font-size:13px;color:#a6adc8;}
+#wh-ws-modal .wh-ws-status:empty{display:none;}
+#wh-ws-modal .wh-ws-status.bad{color:#f38ba8;}
+#wh-ws-modal .wh-ws-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:20px;}
+#wh-ws-modal .wh-ws-actions .ant-btn{min-width:96px;white-space:nowrap;}
+@media (prefers-reduced-motion:reduce){#wh-ws-modal,#wh-ws-modal *{transition:none !important;animation:none !important;}}
 )WHB";
     return css;
 }
@@ -1608,6 +1706,103 @@ window.addEventListener('blur',close);window.addEventListener('resize',close);do
  }
 })();
 )WHH";
+    if (s.workshopButton) {
+        js += "window.whWsIn=" + std::to_string(s.dialogOpenMs) + ";window.whWsOut=" + std::to_string(s.dialogCloseMs) + ";";
+        // 2.2.35: a Workshop button between New mod and Settings. It opens Seamless
+        // Workshop, or offers to install it (or turn it on) when it is missing.
+        js += R"WHW((()=>{
+if(window.whWsInstalled)return;window.whWsInstalled=1;
+const ICON='<svg viewBox="64 64 896 896" width="1em" height="1em" fill="currentColor" aria-hidden="true" focusable="false"><path d="M464 144H160c-8.8 0-16 7.2-16 16v304c0 8.8 7.2 16 16 16h304c8.8 0 16-7.2 16-16V160c0-8.8-7.2-16-16-16zm-52 268H212V212h200v200zm452-268H560c-8.8 0-16 7.2-16 16v304c0 8.8 7.2 16 16 16h304c8.8 0 16-7.2 16-16V160c0-8.8-7.2-16-16-16zm-52 268H612V212h200v200zM464 544H160c-8.8 0-16 7.2-16 16v304c0 8.8 7.2 16 16 16h304c8.8 0 16-7.2 16-16V560c0-8.8-7.2-16-16-16zm-52 268H212V612h200v200zm452-268H560c-8.8 0-16 7.2-16 16v304c0 8.8 7.2 16 16 16h304c8.8 0 16-7.2 16-16V560c0-8.8-7.2-16-16-16zm-52 268H612V612h200v200z"/></svg>';
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let waiters=[];
+const titleFor=r=>!r||r.state==='on'?'Open Seamless Workshop':r.state==='off'?'Turn on Seamless Workshop':'Install Seamless Workshop';
+const sync=r=>{const b=document.getElementById('wh-header-workshop');if(!b||!r)return;const t=titleFor(r);
+ if(b.dataset.whTitle!==undefined&&!b.hasAttribute('title'))b.dataset.whTitle=t;else b.setAttribute('title',t);b.setAttribute('aria-label',t);};
+window.whWorkshopReply=r=>{const keep=[];waiters.forEach(w=>w.a===r.action?w.f(r):keep.push(w));waiters=keep;sync(r);};
+const ask=a=>new Promise(f=>{if(typeof window.whWorkshop!=='function'){f(null);return;}
+ const w={a,f};waiters.push(w);try{window.whWorkshop(a);}catch(e){}
+ setTimeout(()=>{waiters=waiters.filter(x=>x!==w);f(null);},4000);});
+let modal=null,mode='',opener=null,polling=0;
+const $=q=>modal.querySelector(q);
+const setStatus=(t,bad)=>{const e=$('.wh-ws-status');e.textContent=t||'';e.classList.toggle('bad',!!bad);};
+const btnClass=primary=>{const h=[...(document.querySelector('.ant-btn')?.classList||[])].find(c=>c.startsWith('css-'))||'';
+ return 'ant-btn '+h+(primary?' ant-btn-primary ant-btn-color-primary ant-btn-variant-solid':' ant-btn-default ant-btn-color-default ant-btn-variant-outlined');};
+const close=()=>{if(!modal||!modal.classList.contains('on'))return;modal.classList.remove('on');
+ if(opener&&opener.isConnected)opener.focus({preventScroll:true});};
+const build=()=>{if(modal&&modal.isConnected)return;
+ modal=document.createElement('div');modal.id='wh-ws-modal';
+ modal.style.setProperty('--ws-in',(window.whWsIn|0)+'ms');modal.style.setProperty('--ws-out',(window.whWsOut|0)+'ms');
+ modal.innerHTML='<div class="wh-ws-mask"></div><div class="wh-ws-card" role="dialog" aria-modal="true" aria-labelledby="wh-ws-title" aria-describedby="wh-ws-text">'+
+  '<div class="wh-ws-head"><span class="wh-ws-icon">'+ICON+'</span><h3 id="wh-ws-title">Seamless Workshop</h3></div>'+
+  '<p id="wh-ws-text"></p><p class="wh-ws-status" aria-live="polite"></p>'+
+  '<div class="wh-ws-actions"><button type="button" class="wh-ws-cancel"><span>Cancel</span></button><button type="button" class="wh-ws-go"><span>Install</span></button></div></div>';
+ $('.wh-ws-cancel').className=btnClass(false)+' wh-ws-cancel';$('.wh-ws-go').className=btnClass(true)+' wh-ws-go';
+ $('.wh-ws-mask').addEventListener('click',close);$('.wh-ws-cancel').addEventListener('click',close);$('.wh-ws-go').addEventListener('click',()=>go());
+ modal.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close();}
+  else if(e.key==='Tab'){const bs=[...modal.querySelectorAll('button')].filter(b=>!b.hidden&&!b.disabled);if(!bs.length)return;
+   const i=bs.indexOf(document.activeElement);e.preventDefault();bs[(i+(e.shiftKey?bs.length-1:1))%bs.length].focus();}});
+ document.body.appendChild(modal);void modal.offsetWidth;};
+const show=(m,text,goLabel)=>{build();mode=m;$('#wh-ws-text').textContent=text;setStatus('');
+ const g=$('.wh-ws-go');g.hidden=!goLabel;g.disabled=false;g.firstChild.textContent=goLabel||'';
+ $('.wh-ws-cancel').firstChild.textContent=goLabel?'Cancel':'Close';
+ if(!modal.classList.contains('on')){opener=document.activeElement;modal.classList.add('on');}
+ (goLabel?g:$('.wh-ws-cancel')).focus({preventScroll:true});};
+const working=action=>{const g=$('.wh-ws-go');g.disabled=true;
+ g.firstChild.textContent=action==='enable'?'Turning on…':'Installing…';
+ setStatus(action==='enable'?'Turning it on. Windows may ask for permission.':'Downloading and installing. Windows may ask for permission.');};
+const failed=(r,why)=>{const g=$('.wh-ws-go');g.disabled=false;g.firstChild.textContent='Try again';
+ const code=r&&r.result;
+ setStatus(why==='timeout'?'This is taking too long. Try again in a moment.':
+  code===3?'The installer could not be downloaded. Check your internet connection, then try again.':
+  'That did not finish. If Windows asked for permission, choose Yes. Then try again.',true);};
+const openWhenReady=async()=>{for(let i=0;i<40;i++){const o=await ask('open');if(o&&o.opened)return true;await sleep(500);}return false;};
+const finish=async()=>{setStatus('Done. Opening Seamless Workshop…');
+ if(await openWhenReady()){close();return;}
+ mode='notice';$('.wh-ws-go').hidden=true;$('.wh-ws-cancel').firstChild.textContent='Close';
+ setStatus('It is running. Open it from its icon in the taskbar corner.');};
+const poll=async()=>{if(polling)return;polling=1;const t0=Date.now();
+ try{for(;;){await sleep(1000);if(!modal.classList.contains('on'))return;const r=await ask('state');if(!r)continue;
+  if(r.busy){if(Date.now()-t0>600000){failed(r,'timeout');return;}continue;}
+  if(r.state==='on'){await finish();return;}
+  failed(r);return;}}finally{polling=0;}};
+const go=async()=>{if(mode==='notice'){close();return;}
+ const action=mode==='off'?'enable':'install';working(action);
+ const r=await ask(action);
+ if(!r||(!r.started&&!r.busy)){failed(r);return;}
+ poll();};
+const click=async e=>{e.preventDefault();e.stopPropagation();
+ const r=await ask('state');
+ if(!r){show('notice','Windhawk Enhanced Styler could not reach Seamless Workshop. Close Windhawk, open it again and try once more.','');return;}
+ if(r.busy){show(r.job==='enable'?'off':'missing',r.job==='enable'?'Seamless Workshop is being turned on.':'Seamless Workshop is being installed.','Install');working(r.job);poll();return;}
+ if(r.state==='on'){const o=await ask('open');if(o&&o.opened)return;
+  show('notice','Seamless Workshop is starting.','');setStatus('One moment…');
+  if(await openWhenReady())close();else setStatus('It is running in the background. Open it from its icon in the taskbar corner.');return;}
+ if(r.state==='off'){show('off','Seamless Workshop is installed but turned off. Turn it on to open it from here.','Turn on');return;}
+ show('missing',"Seamless Workshop isn't installed yet. It installs, updates and sets up every DavidHiFi mod from one place.",'Install');};
+const install=()=>{
+ const have=document.getElementById('wh-header-workshop'),create=document.getElementById('wh-header-create');
+ if(have){if(create&&create.nextElementSibling!==have&&create.parentNode===have.parentNode)create.after(have);return;}
+ if(typeof window.whWorkshop!=='function')return;
+ const settings=document.querySelector('[data-testid="nav-settings"]');const anchor=settings?.closest('.ant-badge')||settings;
+ const tpl=[...document.querySelectorAll('[data-testid="nav-home"],[data-testid="nav-explore"],[data-testid="nav-settings"],[data-testid="nav-about"]')].find(b=>!b.classList.contains('ant-btn-primary'));
+ if(!anchor||!tpl)return;
+ const b=tpl.cloneNode(true);b.id='wh-header-workshop';
+ ['data-testid','href','aria-current','aria-pressed'].forEach(a=>b.removeAttribute(a));
+ const ic=b.querySelector('.ant-btn-icon');if(ic)ic.innerHTML='<span role="img" aria-hidden="true" class="anticon">'+ICON+'</span>';
+ const label=[...b.children].find(c=>c.tagName==='SPAN'&&!c.classList.contains('ant-btn-icon')&&c.textContent.trim());if(label)label.textContent='Workshop';
+ b.setAttribute('title','Open Seamless Workshop');b.setAttribute('aria-label','Open Seamless Workshop');
+ b.addEventListener('click',click);
+ if(create&&create.parentNode===anchor.parentNode)create.after(b);else anchor.before(b);
+ ask('state');};
+install();
+new MutationObserver(install).observe(document.getElementById('root'),{childList:true,subtree:true});
+let tries=0;const retry=()=>{install();if(!document.getElementById('wh-header-workshop')&&++tries<40)setTimeout(retry,250);};retry();
+})();
+)WHW";
+    } else {
+        js += "document.getElementById('wh-header-workshop')?.remove();";
+    }
     js += R"WHT((()=>{
 if(window.whTipInstalled)return;window.whTipInstalled=true;
 let tip=null,cur=null,timer=0;
@@ -5204,6 +5399,165 @@ static long MsSinceStart() {
     return (long)(GetTickCount64() - g_startTick);
 }
 
+// Starts a hidden Windows PowerShell running `script`. The script goes in as
+// UTF-16LE base64 so nothing needs quoting. Returns the process handle (the
+// caller closes it) or null.
+static HANDLE StartHiddenPowerShell(const std::wstring& script) {
+    const unsigned char* src = (const unsigned char*)script.c_str();
+    size_t bytes = script.size() * 2;
+    static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::wstring b64;
+    b64.reserve((bytes + 2) / 3 * 4);
+    for (size_t i = 0; i < bytes; i += 3) {
+        size_t rem = bytes - i;
+        std::uint32_t v = ((std::uint32_t)src[i] << 16) | (rem > 1 ? (std::uint32_t)src[i + 1] << 8 : 0) | (rem > 2 ? src[i + 2] : 0);
+        b64 += (wchar_t)alphabet[(v >> 18) & 63];
+        b64 += (wchar_t)alphabet[(v >> 12) & 63];
+        b64 += rem > 1 ? (wchar_t)alphabet[(v >> 6) & 63] : L'=';
+        b64 += rem > 2 ? (wchar_t)alphabet[v & 63] : L'=';
+    }
+    wchar_t systemDir[MAX_PATH];
+    UINT dirLength = GetSystemDirectoryW(systemDir, MAX_PATH);
+    if (!dirLength || dirLength >= MAX_PATH) return nullptr;
+    std::wstring cmdLine = L"\"" + std::wstring(systemDir, dirLength) +
+                           L"\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoProfile -ExecutionPolicy Bypass -EncodedCommand " + b64;
+    if (cmdLine.size() >= 32000) return nullptr;
+
+    STARTUPINFOW si = {};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi = {};
+    BOOL ok = CreateProcessW(nullptr, &cmdLine[0], nullptr, nullptr, FALSE,
+                             CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB, nullptr, nullptr, &si, &pi);
+    if (!ok) {
+        // The job may not allow breakaway; retry plain.
+        ok = CreateProcessW(nullptr, &cmdLine[0], nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+    }
+    if (!ok) {
+        DebugNote("powershell helper failed", GetLastError());
+        return nullptr;
+    }
+    CloseHandle(pi.hThread);
+    return pi.hProcess;
+}
+
+// ---- Seamless Workshop button ----------------------------------------------
+// The page asks through the whWorkshop binding; every answer goes back on the
+// same debugger session, so all of this runs on the session thread only.
+static constexpr wchar_t kWorkshopId[] = L"local@seamless-workshop";
+static constexpr wchar_t kWorkshopWindowClass[] = L"SeamlessWorkshopWindow";
+static constexpr UINT kWorkshopActivate = WM_APP + 2;
+static HANDLE g_workshopJob = nullptr;    // install or turn-on helper while it runs
+static const char* g_workshopJobKind = "";
+static long g_workshopJobResult = -1;     // exit code of the last helper, -1 none
+
+// 0 not installed, 1 installed but off, 2 on.
+static int WorkshopModState() {
+    std::wstring key = L"SOFTWARE\\Windhawk\\Engine\\Mods\\" + std::wstring(kWorkshopId);
+    HKEY handle;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, key.c_str(), 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &handle) != ERROR_SUCCESS) {
+        return 0;
+    }
+    DWORD disabled = 0, size = sizeof(disabled), type = 0;
+    LONG read = RegQueryValueExW(handle, L"Disabled", nullptr, &type, (BYTE*)&disabled, &size);
+    RegCloseKey(handle);
+    // A missing Disabled value means the mod is on.
+    return read == ERROR_SUCCESS && type == REG_DWORD && disabled ? 1 : 2;
+}
+
+static bool WorkshopOpen() {
+    HWND window = FindWindowW(kWorkshopWindowClass, nullptr);
+    if (!window) return false;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(window, &pid);
+    if (pid) AllowSetForegroundWindow(pid);
+    return PostMessageW(window, kWorkshopActivate, 0, 0) != FALSE;
+}
+
+static std::wstring PowerShellQuote(const std::wstring& text) {
+    std::wstring out = L"'";
+    for (wchar_t c : text) {
+        out += c;
+        if (c == L'\'') out += c;
+    }
+    return out + L"'";
+}
+
+static bool WorkshopStartJob(const char* kind) {
+    if (g_workshopJob) return false;
+    bool install = strcmp(kind, "install") == 0;
+    std::wstring script;
+    if (install) {
+        // The same installer as the one-line setup command. It checks the
+        // mod's hash and asks for admin rights itself when it needs them.
+        script =
+            L"$ErrorActionPreference='Stop'\n"
+            L"try{[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12}catch{}\n"
+            L"$f=Join-Path $env:TEMP ('SeamlessWorkshopSetup-'+[guid]::NewGuid().ToString('N')+'.ps1')\n"
+            L"try{Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/main/Install-SeamlessWorkshop.ps1' -OutFile $f}catch{exit 3}\n"
+            L"$global:LASTEXITCODE=0\n"
+            L"try{& $f -SkipWindhawkUpdate | Out-Null;$c=$LASTEXITCODE}catch{$c=2}\n"
+            L"Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue\n"
+            L"exit $c\n";
+    } else {
+        wchar_t modulePath[MAX_PATH];
+        DWORD length = GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
+        if (!length || length >= MAX_PATH) return false;
+        std::wstring dir(modulePath, length);
+        size_t slash = dir.find_last_of(L'\\');
+        if (slash == std::wstring::npos) return false;
+        std::wstring cli = dir.substr(0, slash) + L"\\windhawk-cli.exe";
+        script =
+            L"$ErrorActionPreference='Stop'\n"
+            L"$cli=" + PowerShellQuote(cli) + L"\n"
+            L"$a=@('mod','enable','" + std::wstring(kWorkshopId) + L"')\n"
+            L"$admin=([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)\n"
+            L"try{if($admin){$p=Start-Process -FilePath $cli -ArgumentList $a -WindowStyle Hidden -PassThru -Wait}"
+            L"else{$p=Start-Process -FilePath $cli -ArgumentList $a -Verb RunAs -WindowStyle Hidden -PassThru -Wait}}catch{exit 4}\n"
+            L"exit $p.ExitCode\n";
+    }
+    g_workshopJob = StartHiddenPowerShell(script);
+    if (!g_workshopJob) return false;
+    g_workshopJobKind = install ? "install" : "enable";
+    g_workshopJobResult = -1;
+    DebugNote(install ? "workshop install started" : "workshop enable started");
+    return true;
+}
+
+static void WorkshopPollJob() {
+    if (!g_workshopJob || WaitForSingleObject(g_workshopJob, 0) != WAIT_OBJECT_0) return;
+    DWORD code = 1;
+    GetExitCodeProcess(g_workshopJob, &code);
+    CloseHandle(g_workshopJob);
+    g_workshopJob = nullptr;
+    g_workshopJobResult = (long)code;
+    DebugNote("workshop job finished", (long)code);
+}
+
+// Answers one call from the page with a small JSON object.
+static std::string WorkshopAnswer(const std::string& action) {
+    bool opened = false, started = false;
+    if (action == "open") {
+        opened = WorkshopOpen();
+    } else if (action == "install" || action == "enable") {
+        started = WorkshopStartJob(action.c_str());
+    }
+    WorkshopPollJob();
+    bool window = FindWindowW(kWorkshopWindowClass, nullptr) != nullptr;
+    int state = window ? 2 : WorkshopModState();
+    std::string json = "{\"action\":\"" + action + "\",\"state\":\"";
+    json += state == 2 ? "on" : state == 1 ? "off" : "missing";
+    json += "\",\"window\":";
+    json += window ? "true" : "false";
+    json += ",\"opened\":";
+    json += opened ? "true" : "false";
+    json += ",\"started\":";
+    json += started ? "true" : "false";
+    json += ",\"busy\":";
+    json += g_workshopJob ? "true" : "false";
+    json += ",\"job\":\"" + std::string(g_workshopJobKind) + "\",\"result\":" + std::to_string(g_workshopJobResult) + "}";
+    return json;
+}
+
 static void RunBrowserSession(SOCKET sock, const std::string& js) {
     static const char kProbe[] =
         "(()=>{const s=document.getElementById('wh-styler-style');"
@@ -5244,6 +5598,12 @@ static void RunBrowserSession(SOCKET sock, const std::string& js) {
             if (!JsonStringValue(msg, "\"sessionId\"", &session)) continue;
             JsonStringValue(msg, "\"type\"", &type);
             if (type == "page") {
+                if (SnapshotSettings().workshopButton) {
+                    // The Workshop button talks to the mod through this
+                    // binding; it lasts across reloads of the page.
+                    send(session, "\"method\":\"Runtime.addBinding\",\"params\":{\"name\":\"whWorkshop\"}");
+                    send(session, "\"method\":\"Runtime.enable\"");
+                }
                 // runImmediately also covers a document that is already up
                 // (the mod loading into a running interface).
                 send(session, "\"method\":\"Page.addScriptToEvaluateOnNewDocument\",\"params\":{\"source\":\"" +
@@ -5257,6 +5617,14 @@ static void RunBrowserSession(SOCKET sock, const std::string& js) {
         } else if (msg.find("\"method\":\"Target.detachedFromTarget\"") != std::string::npos) {
             std::string session;
             if (JsonStringValue(msg, "\"sessionId\"", &session) && session == pageSession) pageSession.clear();
+        } else if (msg.find("\"method\":\"Runtime.bindingCalled\"") != std::string::npos &&
+                   msg.find("\"name\":\"whWorkshop\"") != std::string::npos) {
+            std::string session, action;
+            if (!JsonStringValue(msg, "\"sessionId\"", &session)) session = pageSession;
+            if (!JsonStringValue(msg, "\"payload\"", &action)) continue;
+            if (action != "state" && action != "open" && action != "install" && action != "enable") continue;
+            std::string reply = "window.whWorkshopReply&&window.whWorkshopReply(" + WorkshopAnswer(action) + ")";
+            send(session, "\"method\":\"Runtime.evaluate\",\"params\":{\"expression\":\"" + JsonEscape(reply) + "\"}");
         } else if (probeId && msg.find("{\"id\":" + std::to_string(probeId) + ",") == 0) {
             if (msg.find("\"value\":\"ok\"") != std::string::npos && !g_pageReady) {
                 g_pageReady = true;
@@ -5602,50 +5970,11 @@ static BOOL SpawnRelaunchHelper() {
         quotedPath.c_str(), quotedPath.c_str());
     if (scriptLength < 0 || scriptLength >= 4096) return FALSE;
 
-    // encode as UTF-16LE base64 for -EncodedCommand (no quoting traps)
-    int bytes = (int)(wcslen(script) * 2);
-    char* b64 = (char*)LocalAlloc(LPTR, (SIZE_T)((bytes + 2) / 3 * 4 + 1));
-    if (!b64) return FALSE;
-    static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    const unsigned char* src = (const unsigned char*)script;
-    int o = 0;
-    for (int i = 0; i < bytes; i += 3) {
-        int rem = bytes - i;
-        std::uint32_t v = ((std::uint32_t)src[i] << 16) | (rem > 1 ? (std::uint32_t)src[i + 1] << 8 : 0) | (rem > 2 ? src[i + 2] : 0);
-        b64[o++] = alphabet[(v >> 18) & 63];
-        b64[o++] = alphabet[(v >> 12) & 63];
-        b64[o++] = rem > 1 ? alphabet[(v >> 6) & 63] : '=';
-        b64[o++] = rem > 2 ? alphabet[v & 63] : '=';
-    }
-    b64[o] = '\0';
-    DebugNote("helper b64 len", (long)o);
-
-    wchar_t cmdLine[16384];
-    int cmdLength = _snwprintf(cmdLine, 16384,
-        L"\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoProfile -ExecutionPolicy Bypass -EncodedCommand %S", b64);
-    if (cmdLength < 0 || cmdLength >= 16384) {
-        LocalFree(b64);
-        return FALSE;
-    }
-
-    STARTUPINFOW si = {};
-    si.cb = sizeof(si);
-    PROCESS_INFORMATION pi = {};
-    BOOL ok = CreateProcessW(nullptr, cmdLine, nullptr, nullptr, FALSE,
-                             CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB, nullptr, nullptr, &si, &pi);
-    if (!ok) {
-        // job may not allow breakaway; retry plain
-        ok = CreateProcessW(nullptr, cmdLine, nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
-    }
-    if (ok) {
-        CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
-        DebugNote("relaunch helper spawned");
-    } else {
-        DebugNote("relaunch helper failed", GetLastError());
-    }
-    LocalFree(b64);
-    return ok ? TRUE : FALSE;
+    HANDLE process = StartHiddenPowerShell(std::wstring(script, scriptLength));
+    if (!process) return FALSE;
+    CloseHandle(process);
+    DebugNote("relaunch helper spawned");
+    return TRUE;
 }
 
 BOOL Wh_ModInit() {
