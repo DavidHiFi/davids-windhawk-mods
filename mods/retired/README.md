@@ -14,6 +14,7 @@ library. Their last sources stay here so old links and forks keep working.
 | [Mocha Steam Icons](mocha-steam-icons) | [Mocha App Icons](../local/mocha-app-icons), its Steam switch |
 | [npp-taskdlg-textcolor](npp-taskdlg-textcolor) | the Windhawk library, install it from Windhawk's Explore tab |
 | [Seamless Media Player](seamless-media-player) | [Seamless Taskbar](../local/seamless-taskbar), its Media module |
+| [Settings Styler Plus](settings-styler-plus) | [Seamless Settings Styler](../local/seamless-settings-styler), the same themes and more |
 | [Seamless Taskbar Utilities](seamless-taskbar-utilities) | [Seamless Taskbar](../local/seamless-taskbar), its Utilities module |
 | [Seamless Tray Drawer](seamless-tray-drawer) | [Seamless Taskbar](../local/seamless-taskbar), its Tray drawer module |
 | [Taskbar AI Usage Plus](taskbar-ai-usage-plus) | [Seamless Taskbar](../local/seamless-taskbar), its AI usage module |

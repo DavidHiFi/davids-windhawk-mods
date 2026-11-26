@@ -2452,14 +2452,6 @@
     "x1Action": "none",
     "x2Action": "none"
   },
-  "local@settings-styler-plus": {
-    "controlStyles[0].styles[0]": "",
-    "controlStyles[0].target": "",
-    "keepBlurWhenUnfocused": 1,
-    "styleConstants[0]": "",
-    "theme": "Translucent_Settings11",
-    "themeResourceVariables[0]": ""
-  },
   "local@shell-font-changer-plus": {
     "font.forceBaseWeight": 0,
     "font.name": "FiraCode Nerd Font",
