@@ -1306,7 +1306,7 @@
     "include": "SystemSettings.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.1.1"
+    "version": "2.1.2"
   },
   "local@seamless-file-unlocker": {
     "disabled": false,

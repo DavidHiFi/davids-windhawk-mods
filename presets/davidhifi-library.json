@@ -1254,7 +1254,7 @@
         "controlStyles[56].styles[3]": "Height=34",
         "controlStyles[56].styles[4]": "VerticalAlignment=Center",
         "controlStyles[56].styles[5]": "Padding=0",
-        "controlStyles[56].styles[6]": "Margin=4,0,-1,0",
+        "controlStyles[56].styles[6]": "Margin=4,0,0,0",
         "controlStyles[56].target": "StackPanel#LogitechBatteryTray",
         "controlStyles[57].styles[0]": "Height=34",
         "controlStyles[57].styles[1]": "Margin=0",

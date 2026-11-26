@@ -2,7 +2,7 @@
 // @id              seamless-settings-styler
 // @name            Seamless Settings Styler
 // @description     Catppuccin Mocha for Windows Settings: glass that matches the title bar, edges on every card, a sidebar that folds to icons, hide pages and ads
-// @version         2.1.1
+// @version         2.1.2
 // @author          DavidHiFi, m417z
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -10623,21 +10623,30 @@ Media::Brush HoverEdgeBrush() {
 // The part that carries the card's edge: the list item's inner border, or the
 // grid of a plain card row. Only parts that already have an edge count.
 wux::DependencyObject CardEdgePart(wux::UIElement el) {
-    if (Media::VisualTreeHelper::GetChildrenCount(el) == 0) {
+    // Settings cards (EntityItem) carry the edge on the card control itself.
+    auto self = [&]() -> wux::DependencyObject {
+        if (auto c = el.try_as<Controls::Control>()) {
+            if (c.BorderThickness().Left > 0) {
+                return el;
+            }
+        }
         return nullptr;
+    };
+    if (Media::VisualTreeHelper::GetChildrenCount(el) == 0) {
+        return self();
     }
     auto first = Media::VisualTreeHelper::GetChild(el, 0);
     if (auto g = first.try_as<Controls::Grid>()) {
-        return g.BorderThickness().Left > 0 ? first : nullptr;
+        return g.BorderThickness().Left > 0 ? first : self();
     }
     int count = Media::VisualTreeHelper::GetChildrenCount(first);
     for (int i = 0; i < count; i++) {
         auto child = Media::VisualTreeHelper::GetChild(first, i);
         if (auto b = child.try_as<Controls::Border>()) {
-            return b.BorderThickness().Left > 0 ? child : nullptr;
+            return b.BorderThickness().Left > 0 ? child : self();
         }
     }
-    return nullptr;
+    return self();
 }
 
 void CardHoverOn(wux::UIElement el) {
@@ -10662,6 +10671,11 @@ void CardHoverOn(wux::UIElement el) {
         s.fill = b.Background();
         b.BorderBrush(HoverEdgeBrush());
         b.Background(fill);
+    } else if (auto c = part.try_as<Controls::Control>()) {
+        s.border = c.BorderBrush();
+        s.fill = c.Background();
+        c.BorderBrush(HoverEdgeBrush());
+        c.Background(fill);
     }
     g_hoverSaved.push_back(s);
 }
@@ -10681,6 +10695,9 @@ void CardHoverOff(wux::UIElement el) {
             } else if (auto b = target.try_as<Controls::Border>()) {
                 b.BorderBrush(it->border);
                 b.Background(it->fill);
+            } else if (auto c = target.try_as<Controls::Control>()) {
+                c.BorderBrush(it->border);
+                c.Background(it->fill);
             }
         }
         it = g_hoverSaved.erase(it);
@@ -10700,6 +10717,9 @@ void RestoreAllHover() {
             } else if (auto b = target.try_as<Controls::Border>()) {
                 b.BorderBrush(s.border);
                 b.Background(s.fill);
+            } else if (auto c = target.try_as<Controls::Control>()) {
+                c.BorderBrush(s.border);
+                c.Background(s.fill);
             }
         } catch (...) {
         }
