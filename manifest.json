@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T09:03:33+08:00",
+  "generatedAt": "2026-11-26T09:17:35+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 166,
@@ -1247,7 +1247,7 @@
       "name": "Seamless Crash Watch",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.3.2",
+      "version": "1.3.3",
       "license": "MIT",
       "origin": "local",
       "upstream": "",

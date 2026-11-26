@@ -2,7 +2,7 @@
 // @id              seamless-crash-watch
 // @name            Seamless Crash Watch
 // @description     A notice when a program crashes or freezes. Click it and an AI agent in a terminal finds out why, like Omarchy
-// @version         1.3.2
+// @version         1.3.3
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -65,13 +65,10 @@ The agent runs as you, without admin rights, even though Windhawk itself runs
 elevated. It only reads: the report tells it to leave the system as it found
 it, and to offer, not force, muting the program.
 
-## What's new in 1.3.0
+## What's new in 1.3.3
 
-- A program that freezes now gets a notice while it is still frozen, not only after Windows
-  closes it. Wait, Close the app, or Find out why with AI.
-- A frozen Windhawk mod helper is named, and you can restart just that mod.
-- New Helpers page: idle Windhawk helpers give their memory back and run gently until they
-  have work again.
+- Title bar menus (right-click the title bar, or Alt+Space) now really get the same
+  blurred Mocha body as every other menu. They opened pitch black before.
 
 ## Credits
 
@@ -4206,6 +4203,22 @@ static BOOL WINAPI TrackPopupMenuEx_hook(HMENU m, UINT f, INT x, INT y, HWND h, 
     SeamlessMenuRoom::EndTrack();
     return ret;
 }
+// Title bar menus are opened by DefWindowProc, never through TrackPopupMenu: wrap the
+// messages that open one the same way, so the menu is skinned before its first paint.
+static decltype(&DefWindowProcW) SysMenuDefProc_orig = nullptr;
+static LRESULT WINAPI SysMenuDefProc_hook(HWND h, UINT msg, WPARAM w, LPARAM l)
+{
+    UINT sc = (UINT)(w & 0xFFF0);
+    bool opens = (msg == WM_SYSCOMMAND && (sc == SC_KEYMENU || sc == SC_MOUSEMENU)) ||
+                 msg == WM_CONTEXTMENU || msg == 0x0313 /* WM_POPUPSYSTEMMENU */;
+    if (!opens) return SysMenuDefProc_orig(h, msg, w, l);
+    SeamlessMenuRoom::BeginTrack();
+    HHOOK cbt = InstallMenuCbtHook();
+    LRESULT ret = SysMenuDefProc_orig(h, msg, w, l);
+    if (cbt) UnhookWindowsHookEx(cbt);
+    SeamlessMenuRoom::EndTrack();
+    return ret;
+}
 
 // Returns TRUE when the menu part was drawn here.
 static BOOL PaintMenuPart(HDC hdc, INT part, INT state, LPCRECT pRect, LPCRECT pClip)
@@ -4318,6 +4331,7 @@ static VOID Init()
     Hook(dwm, "DwmSetWindowAttribute", DwmSetWindowAttribute_hook, &DwmSetWindowAttribute_orig);
     Hook(u32, "TrackPopupMenu", TrackPopupMenu_hook, &TrackPopupMenu_orig);
     Hook(u32, "TrackPopupMenuEx", TrackPopupMenuEx_hook, &TrackPopupMenuEx_orig);
+    Hook(u32, "DefWindowProcW", SysMenuDefProc_hook, &SysMenuDefProc_orig);
     SeamlessMenuRoom::Init(OnMenuCreated);
 }
 
