@@ -2,7 +2,7 @@
 // @id              seamless-windows-firewall
 // @name            Seamless Windows Firewall
 // @description     Block or allow any app's internet in one click, from the tray icon or a shortcut
-// @version         1.2.5
+// @version         1.2.6
 // @author          DavidHiFi, Ashix
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -67,17 +67,10 @@ Change or clear any of them in the settings.
   the apps your own firewall rules block. Change those in Windows Defender
   Firewall.
 
-## What's new in 1.2.5
-- Right-click any program file to block it in Windows Firewall, allow it again
-  or open the panel. It does the same job as Firewall App Blocker's menu, so
-  you no longer need that app. Turn the menu off under Blocking, Right-click
-  menu; nothing of it is left while the mod is off.
-- The panel and the connection box now fade and slide in when they open and out
-  when they close. Turn it off, or pick a speed, under Look, Motion. They stay
-  still when Windows animation effects are off.
-- The connection box is real frosted glass now. Before, it looked flat.
-- The tray and settings icon is the shield alone in the blue to mauve
-  gradient, with no plate behind it.
+## What's new in 1.2.6
+
+- Title bar menus (right-click the title bar, or Alt+Space) now really get the same
+  blurred Mocha body as every other menu. They opened pitch black before.
 
 ## What's new in 1.2.2
 - No more edge pill and no more opening on hover. The mod lives in the tray:
@@ -9584,6 +9577,22 @@ static BOOL WINAPI TrackPopupMenuEx_hook(HMENU m, UINT f, INT x, INT y, HWND h, 
     SeamlessMenuRoom::EndTrack();
     return ret;
 }
+// Title bar menus are opened by DefWindowProc, never through TrackPopupMenu: wrap the
+// messages that open one the same way, so the menu is skinned before its first paint.
+static decltype(&DefWindowProcW) SysMenuDefProc_orig = nullptr;
+static LRESULT WINAPI SysMenuDefProc_hook(HWND h, UINT msg, WPARAM w, LPARAM l)
+{
+    UINT sc = (UINT)(w & 0xFFF0);
+    bool opens = (msg == WM_SYSCOMMAND && (sc == SC_KEYMENU || sc == SC_MOUSEMENU)) ||
+                 msg == WM_CONTEXTMENU || msg == 0x0313 /* WM_POPUPSYSTEMMENU */;
+    if (!opens) return SysMenuDefProc_orig(h, msg, w, l);
+    SeamlessMenuRoom::BeginTrack();
+    HHOOK cbt = InstallMenuCbtHook();
+    LRESULT ret = SysMenuDefProc_orig(h, msg, w, l);
+    if (cbt) UnhookWindowsHookEx(cbt);
+    SeamlessMenuRoom::EndTrack();
+    return ret;
+}
 
 // Returns TRUE when the menu part was drawn here.
 static BOOL PaintMenuPart(HDC hdc, INT part, INT state, LPCRECT pRect, LPCRECT pClip)
@@ -9696,6 +9705,7 @@ static VOID Init()
     Hook(dwm, "DwmSetWindowAttribute", DwmSetWindowAttribute_hook, &DwmSetWindowAttribute_orig);
     Hook(u32, "TrackPopupMenu", TrackPopupMenu_hook, &TrackPopupMenu_orig);
     Hook(u32, "TrackPopupMenuEx", TrackPopupMenuEx_hook, &TrackPopupMenuEx_orig);
+    Hook(u32, "DefWindowProcW", SysMenuDefProc_hook, &SysMenuDefProc_orig);
     SeamlessMenuRoom::Init(OnMenuCreated);
 }
 
