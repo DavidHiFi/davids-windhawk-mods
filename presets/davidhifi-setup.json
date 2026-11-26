@@ -206,7 +206,7 @@
     },
     {
       "id": "local@mocha-app-icons",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "ableton": 1,
         "settings": 1,
@@ -1153,7 +1153,7 @@
     },
     {
       "id": "local@remove-shortcut-arrows",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "custom_icon_path": ""
       }
@@ -2121,7 +2121,7 @@
     },
     {
       "id": "local@seamless-fps-overlay",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "animFps": "30",
         "animationSpeed": "global",
@@ -2582,7 +2582,7 @@
     },
     {
       "id": "local@seamless-task-manager",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "CustomLabelOverrideEnabled": 0,
         "CustomLabelOverrideText": "",
@@ -3577,7 +3577,7 @@
     },
     {
       "id": "local@settings-styler-plus",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "controlStyles[0].styles[0]": "",
         "controlStyles[0].target": "",
@@ -3796,7 +3796,7 @@
     },
     {
       "id": "local@uwp-assets-redirect-plus",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "custom[0].assets-path": "",
         "custom[0].redirect": "",

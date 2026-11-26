@@ -1,11 +1,11 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T14:44:58+08:00",
+  "generatedAt": "2026-11-26T15:35:12+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 167,
-    "enabled": 165,
+    "enabled": 161,
     "local": 65
   },
   "mods": [
@@ -856,7 +856,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/mocha-app-icons/mocha-app-icons.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "mspaint-dark",
@@ -1126,7 +1126,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/remove-shortcut-arrows/remove-shortcut-arrows.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "restore-folder-menubar-25h2",
@@ -1427,12 +1427,12 @@
       "name": "Seamless Task Manager",
       "author": "DavidHiFi, GF-Huang, Luiz Bizzio, sb4ssman, chenxustu1, Joe Ye, Nehoray-Bitan, Abdullah Masood, m417z",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-task-manager/seamless-task-manager.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "local@seamless-taskbar",
@@ -1478,7 +1478,7 @@
       "name": "Seamless Window Manager",
       "author": "DavidHiFi, m417z, Asteski, TomberWolf, RamonUnch, Stefan Sundin",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.8.12",
+      "version": "2.8.13",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
@@ -1491,7 +1491,7 @@
       "name": "Seamless Windows Firewall",
       "author": "DavidHiFi, Ashix",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.2.6",
+      "version": "1.2.7",
       "license": "",
       "origin": "local",
       "upstream": "",
@@ -1516,7 +1516,7 @@
       "name": "Seamless Workshop",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.5.7",
+      "version": "1.5.8",
       "license": "MIT",
       "origin": "local",
       "upstream": "",
@@ -1546,7 +1546,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/settings-styler-plus/settings-styler-plus.wh.cpp",
-      "enabled": true,
+      "enabled": false,
       "category": "Windows and menus"
     },
     {
@@ -1887,7 +1887,7 @@
       "origin": "local",
       "upstream": "https://windhawk.net/mods/uwp-assets-redirect",
       "source": "mods/local/uwp-assets-redirect-plus/uwp-assets-redirect-plus.wh.cpp",
-      "enabled": true,
+      "enabled": false,
       "category": "Windows and menus"
     },
     {
@@ -2048,7 +2048,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-fps-overlay/seamless-fps-overlay.wh.cpp",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "local@seamless-winver-configurator",

@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@seamless-fps-overlay",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "animFps": "30",
         "animationSpeed": "global",

@@ -585,10 +585,10 @@
     "include": "*|windhawk.exe",
     "exclude": "cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe",
     "architecture": "",
-    "version": "2.8.12"
+    "version": "2.8.13"
   },
   "local@settings-styler-plus": {
-    "disabled": false,
+    "disabled": true,
     "include": "SystemSettings.exe",
     "exclude": "",
     "architecture": "x86-64",
@@ -1260,7 +1260,7 @@
     "version": "1.2.14"
   },
   "local@uwp-assets-redirect-plus": {
-    "disabled": false,
+    "disabled": true,
     "include": "explorer.exe|StartMenuExperienceHost.exe|SearchHost.exe|ShellExperienceHost.exe|ShellHost.exe|RuntimeBroker.exe|Taskmgr.exe",
     "exclude": "",
     "architecture": "",
@@ -1271,7 +1271,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.5.7"
+    "version": "1.5.8"
   },
   "local@startup-control": {
     "disabled": false,
@@ -1281,7 +1281,7 @@
     "version": "0.1.12"
   },
   "local@mocha-app-icons": {
-    "disabled": false,
+    "disabled": true,
     "include": "Ableton Live*.exe|yapfast.exe|zen.exe|ApplicationFrameHost.exe|steam.exe|steamwebhelper.exe",
     "exclude": "",
     "architecture": "x86-64",
@@ -1295,11 +1295,11 @@
     "version": "1.1.0"
   },
   "local@seamless-task-manager": {
-    "disabled": false,
+    "disabled": true,
     "include": "Taskmgr.exe|windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.3"
+    "version": "1.0.4"
   },
   "local@seamless-controls": {
     "disabled": false,
@@ -1313,7 +1313,7 @@
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.2.6"
+    "version": "1.2.7"
   },
   "local@dsx-tray-icon-fix": {
     "disabled": false,
@@ -1351,7 +1351,7 @@
     "version": "1.0.0"
   },
   "local@remove-shortcut-arrows": {
-    "disabled": false,
+    "disabled": true,
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "",
@@ -1372,7 +1372,7 @@
     "version": "1.0.1"
   },
   "local@seamless-fps-overlay": {
-    "disabled": true,
+    "disabled": false,
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "",
