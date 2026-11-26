@@ -5,9 +5,13 @@
       "id": "local@seamless-download-manager",
       "enabled": false,
       "settings": {
+        "clipboardOffer": 1,
+        "finishPopup": 1,
         "nativeSettingsTitleBar": 1,
+        "openHotkey": "Ctrl+Alt+D",
         "settingsGlass": 1,
-        "settingsTrayIcon": 1
+        "settingsTrayIcon": 1,
+        "trayProgress": 1
       }
     }
   ]

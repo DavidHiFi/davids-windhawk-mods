@@ -2,7 +2,7 @@
 // @id              seamless-download-manager
 // @name            Seamless Download Manager
 // @description     A fast tray download manager: downloads in parts, resumes where it stopped, takes browser links
-// @version         1.0.13
+// @version         1.1.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-download-manager
@@ -58,10 +58,22 @@ Everything the app can set is in the mod's own settings window: where files
 go, connections, speed limit, the browser link, name lookup, sounds, site
 rules and queues. This page only holds how the windows look.
 
-## What's new in 1.0.11
+## What's new in 1.1.0
 
-- Title bar menus (right-click the title bar, or Alt+Space) now really get the same
-  blurred Mocha body as every other menu. They opened pitch black before.
+- A small glass card pops up in the corner when a download finishes, with
+  Open and Show in folder. It never takes focus and stays away while a game
+  is full screen.
+- Copy a download link anywhere and the card offers to download it.
+- Ctrl+Alt+D opens your downloads from anywhere. Pick another key in the
+  settings.
+- The tray icon fills up as downloads run, and so does the taskbar button.
+- Zip, 7z, rar and tar files unpack by themselves when they finish.
+- Programs and archives are checked by Windows Security when they finish.
+- A link you already downloaded is not downloaded twice. The card offers
+  Download again instead.
+- A download stops before it fills your drive.
+- Finished entries older than 30 days leave the list by themselves. The
+  files stay.
 
 ## Credits
 
@@ -84,6 +96,18 @@ DavidHiFi, released under GPL-3.0.
 - settingsTrayIcon: true
   $name: "Tray icon"
   $description: "Click it to open your downloads. Right-click it for more. When off, closing the window keeps downloads running and your browser can still open it."
+- openHotkey: "Ctrl+Alt+D"
+  $name: "Shortcut key"
+  $description: "Opens your downloads from anywhere. Leave it empty for none."
+- finishPopup: true
+  $name: "Pop-up when a download finishes"
+  $description: "A small card in the corner with Open and Show in folder. It never takes focus and stays away while a game is full screen."
+- clipboardOffer: true
+  $name: "Offer copied links"
+  $description: "When you copy a link to a file, the card asks if you want to download it."
+- trayProgress: true
+  $name: "Progress on the tray icon"
+  $description: "The tray icon and taskbar button fill up as downloads run."
 */
 // ==/WindhawkModSettings==
 
@@ -213,7 +237,7 @@ extern std::atomic<HWND> g_settingsWnd;
 }  // namespace acset
 
 namespace sdm {
-constexpr WCHAR kEngineVersion[] = L"0.1.3";
+constexpr WCHAR kEngineVersion[] = L"0.2.0";
 constexpr PCWSTR kAppRepo = L"https://github.com/DavidHiFi/seamless-download-manager";
 constexpr PCWSTR kAbRepo = L"https://github.com/amir1376/ab-download-manager";
 struct PageLink {
@@ -1751,6 +1775,10 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"sdm.split", L"Split big parts while downloading", L"Keeps every connection busy near the end.", L"1", {}, 0, 100, 0, L"Connections"},
 {K::Text, L"sdm.folder", L"Save files to", L"Where new downloads go unless a file type has its own folder.", L"", {}, 0, 100, 0, L"Where files go"},
 {K::Check, L"sdm.sortcat", L"Sort into folders by file type", L"Uses the folder set for each file type.", L"1", {}, 0, 100, 0, L"Where files go"},
+{K::Check, L"sdm.unpack", L"Unpack archives", L"Zip, 7z, rar and tar files unpack into a folder next to them.", L"1", {}, 0, 100, 0, L"When a download finishes"},
+{K::Check, L"sdm.unpackBin", L"Recycle the archive after unpacking", L"Only when everything came out cleanly. You can still get it back from the Recycle Bin.", L"0", {}, 0, 100, 0, L"When a download finishes"},
+{K::Check, L"sdm.scan", L"Check it with Windows Security", L"Programs and archives are scanned. A file it does not trust is kept back and you are told.", L"1", {}, 0, 100, 0, L"When a download finishes"},
+{K::Check, L"sdm.skipSame", L"Skip links you already have", L"A link that finished before and whose file is still there opens the card instead. It offers Download again.", L"1", {}, 0, 100, 0, L"When a download finishes"},
 {K::Check, L"sdm.limitOn", L"Limit total speed", L"Leaves room for games and calls.", L"0", {}, 0, 100, 1, L"Speed"},
 {K::Number, L"sdm.limitKb", L"Speed limit in KB per second", L"Used while the limit is on.", L"256", {}, 1, 10000000, 1, L"Speed"},
 {K::Check, L"sdm.decimal", L"Show sizes in thousands (KB, MB)", L"Off shows 1024-based units.", L"0", {}, 0, 100, 1, L"Speed"},
@@ -1758,6 +1786,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"sdm.sparse", L"Reserve space quickly", L"Big files start at once instead of filling the disk first.", L"1", {}, 0, 100, 1, L"Files"},
 {K::Check, L"sdm.serverDate", L"Keep the server's file date", L"A finished file gets the date the site gives it.", L"0", {}, 0, 100, 1, L"Files"},
 {K::Check, L"sdm.deletePart", L"Delete unfinished files on remove", L"Removing a download that never finished also deletes what it got so far.", L"1", {}, 0, 100, 1, L"Files"},
+{K::Check, L"sdm.replace", L"Replace files with the same name", L"Off, a new file gets a number added instead.", L"0", {}, 0, 100, 1, L"Files"},
+{K::Number, L"sdm.minFreeMb", L"Keep this much drive space free, in MB", L"A download that would go under it stops and tells you. 0 turns it off.", L"2048", {}, 0, 1000000, 1, L"Files"},
+{K::Number, L"sdm.clearDays", L"Clear finished entries after this many days", L"Only the list entry goes. The file stays. 0 keeps them forever.", L"30", {}, 0, 3650, 1, L"Files"},
 {K::Number, L"sdm.port", L"Port", L"The extension finds it by itself.", L"15161", {}, 1024, 65535, 2, L"Browser link"},
 {K::Text, L"sdm.key", L"Browser key", L"The extension gets it by itself. Copy it only to set it up by hand.", L"", {}, 0, 100, 2, L"Browser link"},
 {K::Choice, L"sdm.dns", L"Find sites with", L"How the engine looks up a site's address.", L"win", {{L"win", L"Windows"}, {L"cloudflare", L"Cloudflare"}, {L"google", L"Google"}, {L"quad9", L"Quad9"}, {L"custom", L"Custom address"}}, 0, 100, 2, L"Name lookup"},
@@ -1767,7 +1798,11 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Text, L"sdm.soundFail", L"When it fails", L"A .wav file. Empty plays the Windows sound.", L"", {}, 0, 100, 3, L"Sounds"},
 {K::Check, L"settingsGlass", L"Blurred windows", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 4, L"Windows"},
 {K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 4, L"Windows"},
-{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open your downloads. Right-click it for more. When off, closing the window keeps downloads running and your browser can still open it.", L"1", {}, 0, 100, 4, L"Windows"}
+{K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open your downloads. Right-click it for more. When off, closing the window keeps downloads running and your browser can still open it.", L"1", {}, 0, 100, 4, L"Windows"},
+{K::Hotkey, L"openHotkey", L"Shortcut key", L"Opens your downloads from anywhere. Leave it empty for none.", L"Ctrl+Alt+D", {}, 0, 100, 4, L"Windows"},
+{K::Check, L"finishPopup", L"Pop-up when a download finishes", L"A small card in the corner with Open and Show in folder. It never takes focus and stays away while a game is full screen.", L"1", {}, 0, 100, 4, L"Windows"},
+{K::Check, L"clipboardOffer", L"Offer copied links", L"When you copy a link to a file, the card asks if you want to download it.", L"1", {}, 0, 100, 4, L"Windows"},
+{K::Check, L"trayProgress", L"Progress on the tray icon", L"The tray icon and taskbar button fill up as downloads run.", L"1", {}, 0, 100, 4, L"Windows"}
     };
 }
 
@@ -1799,6 +1834,7 @@ constexpr float kSetDockGap = 10, kSetRailDef = 232, kSetRailMin = 200, kSetRail
 constexpr float kSetFootBtnH = 36, kSetFootPad = 8, kSetFootH = kSetFootBtnH + 2 * kSetFootPad, kSetFootGap = 14;
 // The glass tint is one layer over the whole window, title bar included, so the two always match.
 constexpr float kSetGlassTint = 0.55f, kSetNativeFade = 56;
+constexpr float kSetEdgeW = 2, kSetRadius = 16;
 constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
@@ -1887,6 +1923,10 @@ static SetCom<IWICImagingFactory> g_setWic;
 #ifdef SCM_HARNESS
 static std::wstring g_setFakeKeyStatus;  // Lets the test render the hotkey warning line.
 #endif
+
+static float Set_Rad(const D2D1_RECT_F& r, float most = kSetRadius) {
+    return std::min(most, std::min(r.right - r.left, r.bottom - r.top) / 2);
+}
 
 static std::wstring Set_WindowText(HWND hwnd) {
     std::wstring text(GetWindowTextLengthW(hwnd) + 1, L'\0');
@@ -2176,8 +2216,8 @@ static void Set_MenuPaint(SetMenuSession& s, SetMenuLevel& lv) {
         }
         bool hot = ((int)i == lv.hover || (int)i == lv.open) && !m.disabled;
         if (hot) {
-            // The hover look of every card: a faint blue to mauve wash and a 1 px gradient ring.
-            float rad = 8, ringW = 1;
+            // The hover look of every card: a faint blue to mauve wash and the 2 px gradient ring.
+            float ringW = kSetEdgeW, rad = std::min(12.0f, (r.bottom - r.top) / 2);
             D2D1_ROUNDED_RECT rr{{r.left + ringW / 2, r.top + ringW / 2, r.right - ringW / 2, r.bottom - ringW / 2}, rad, rad};
             auto fill = gradient({r.left, r.top}, {r.right, r.bottom}, D2DColor(mocha::blue, 0.16f), D2DColor(mocha::mauve, 0.16f));
             if (fill) rt->FillRoundedRectangle(rr, fill.get());
@@ -3123,10 +3163,11 @@ static bool Set_Valid(const SetWindow& w, int k) { return k >= 0 && k < (int)w.f
 // overlay0 edge, and the blue to mauve ring on hover or while open.
 constexpr UINT32 kSetBoxFill = 0x232434;
 static void Set_DrawBox(SetPaint& p, SetWindow& w, int k, const D2D1_RECT_F& box, bool active) {
-    p.Round(box, 8, kSetBoxFill);
+    const float rad = Set_Rad(box);
+    p.Round(box, rad, kSetBoxFill);
     float g = std::max(Set_GlowOf(w, 6000 + k), active ? 1.0f : 0.0f);
-    p.Edge(box, 8, mocha::overlay0, 0.7f * (1 - g), 1.25f);
-    p.GradRing(box, 8, g, 1.75f);
+    p.Edge(box, rad, mocha::overlay0, 0.7f * (1 - g));
+    p.GradRing(box, rad, g);
 }
 
 // Text that should not sit in plain view (the browser key): it shows frosted, and the
@@ -3173,13 +3214,13 @@ static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
     const SetField& f = w.fields[it.field];
     int k = it.field;
     D2D1_RECT_F row = Set_RowRect(w, it);
-    p.Round(row, 10, mocha::base);
-    p.Round(row, 10, mocha::surface0, 0.32f);
+    p.Round(row, kSetRadius, mocha::base);
+    p.Round(row, kSetRadius, mocha::surface0, 0.32f);
     float hov = Set_GlowOf(w, 1000 + k);
-    p.Edge(row, 10, mocha::surface2, 0.55f * (1 - hov));
-    p.GradFill(row, 10, 0.13f * hov);
-    p.GradRing(row, 10, hov, 1.5f);
-    if (w.kbd && w.focus == k) p.GradRing(row, 10, 1.0f, 2.0f);
+    p.Edge(row, kSetRadius, mocha::surface2, 0.55f * (1 - hov));
+    p.GradFill(row, kSetRadius, 0.13f * hov);
+    p.GradRing(row, kSetRadius, hov);
+    if (w.kbd && w.focus == k) p.GradRing(row, kSetRadius, 1.0f);
 
     float textW = w.contentW - 2 * kSetRowPad - Set_ControlW(f) - 24;
     float lh = Set_TextH(w.fLabel.get(), f.label, textW);
@@ -3284,17 +3325,17 @@ static void Set_DrawGroup(SetPaint& p, SetWindow& w, const SetItem& it) {
 // The resting card every row uses: base, a light lift and a soft gray edge that hands over to
 // the hover ring.
 static void Set_DrawCard(SetPaint& p, const D2D1_RECT_F& row, float hov) {
-    p.Round(row, 10, mocha::base);
-    p.Round(row, 10, mocha::surface0, 0.32f);
-    p.Edge(row, 10, mocha::surface2, 0.55f * (1 - hov));
+    p.Round(row, kSetRadius, mocha::base);
+    p.Round(row, kSetRadius, mocha::surface0, 0.32f);
+    p.Edge(row, kSetRadius, mocha::surface2, 0.55f * (1 - hov));
 }
 
 static void Set_DrawLinkRow(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
     D2D1_RECT_F row = Set_RowRect(w, it);
     float hov = Set_GlowOf(w, 3000 + idx);
     Set_DrawCard(p, row, hov);
-    p.GradFill(row, 10, 0.13f * hov);
-    p.GradRing(row, 10, hov, 1.5f);
+    p.GradFill(row, kSetRadius, 0.13f * hov);
+    p.GradRing(row, kSetRadius, hov);
     p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 9, row.right - 50, row.top + 30}, mocha::text);
     p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 30, row.right - 50, row.bottom - 4}, mocha::subtext0);
     p.Glyph(w.fIcon.get(), 0xE8A7, {row.right - 46, row.top, row.right - 12, row.bottom}, mocha::subtext1);
@@ -3304,14 +3345,14 @@ static void Set_DrawSupport(SetPaint& p, SetWindow& w, const SetItem& it, int id
     D2D1_RECT_F row = Set_RowRect(w, it);
     float card = std::max(Set_GlowOf(w, 3700 + idx), Set_GlowOf(w, 3500 + idx));
     Set_DrawCard(p, row, card);
-    p.GradFill(row, 10, 0.13f * card);
-    p.GradRing(row, 10, card, 1.5f);
+    p.GradFill(row, kSetRadius, 0.13f * card);
+    p.GradRing(row, kSetRadius, card);
     p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 14, row.right - 180, row.top + 36}, mocha::text);
     p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 38, row.right - 180, row.bottom - 6}, mocha::subtext0);
     D2D1_RECT_F b = Set_SupportButton(w, it);
     float hov = Set_GlowOf(w, 3500 + idx);
-    p.GradFill(b, 8, 0.85f + 0.15f * hov);
-    p.GradRing(b, 8, hov, 2);
+    p.GradFill(b, Set_Rad(b), 0.85f + 0.15f * hov);
+    p.GradRing(b, Set_Rad(b), hov);
     p.Text(w.fButton.get(), L"Open Ko-fi", b, mocha::crust);
 }
 
@@ -3350,7 +3391,7 @@ static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it, int idx)
 
 static void Set_DrawBanner(SetPaint& p, SetWindow& w, const SetItem& it) {
     D2D1_RECT_F r = Set_RowRect(w, it);
-    p.Round(r, 10, mocha::peach, 0.14f);
+    p.Round(r, kSetRadius, mocha::peach, 0.14f);
     p.Text(w.fHint.get(), it.text, {r.left + 16, r.top + 14, r.right - 16, r.bottom - 8}, mocha::peach);
 }
 
@@ -3359,9 +3400,8 @@ static void Set_DrawBanner(SetPaint& p, SetWindow& w, const SetItem& it) {
 static void Set_DrawDock(SetPaint& p, SetWindow& w, const D2D1_RECT_F& d, float rad, float fill, float glow) {
     p.Round({d.left, d.top + 3, d.right, d.bottom + 5}, rad + 2, mocha::crust, w.glass ? 0.28f : 0.5f);
     p.Round(d, rad, mocha::mantle, fill);  // Hover lights only the edge: a wash showed as a blue blob down the left.
-    D2D1_RECT_F in{d.left + 0.5f, d.top + 0.5f, d.right - 0.5f, d.bottom - 0.5f};
-    p.rt->DrawRoundedRectangle(D2D1::RoundedRect(in, rad, rad), p.B(mocha::surface1, 0.75f * (1 - glow)), 1);
-    p.GradRing(d, rad, glow, 1.5f);
+    p.Edge(d, rad, mocha::surface1, 0.75f * (1 - glow));
+    p.GradRing(d, rad, glow);
 }
 
 // Panel-left mark, as in T3's sidebar button: a window with its left pane shaded while open.
@@ -3380,15 +3420,15 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
     // Over the resize edge or while dragging, the dock's own rounded border brightens and
     // thickens, so the handle follows the corners instead of floating as a separate line.
     float edge = std::max(Set_GlowOf(w, 41), w.dragRail ? 1.0f : 0.0f);
-    Set_DrawDock(p, w, d, 14, w.glass ? 0.58f : 1.0f, std::max(w.railGlow * 0.85f, edge));
-    if (edge > 0.003f) p.GradRing(d, 13, edge, 2.25f);
+    Set_DrawDock(p, w, d, kSetRadius, w.glass ? 0.58f : 1.0f, std::max(w.railGlow * 0.85f, edge));
 
     D2D1_RECT_F tb = Set_RailToggleRect(w);
     float th = Set_GlowOf(w, 42);
-    p.Round(tb, 9, mocha::surface0, 0.45f + 0.25f * th);
-    p.GradFill(tb, 9, 0.16f * th);
-    p.GradRing(tb, 9, 0.9f * th, 1.25f);
-    if (w.kbd && w.focus == -20) p.GradRing(tb, 9, 1, 2);
+    const float tr = Set_Rad(tb);
+    p.Round(tb, tr, mocha::surface0, 0.45f + 0.25f * th);
+    p.GradFill(tb, tr, 0.16f * th);
+    p.GradRing(tb, tr, 0.9f * th);
+    if (w.kbd && w.focus == -20) p.GradRing(tb, tr, 1);
     Set_DrawPanelIcon(p, tb, open, th > 0.5f ? mocha::text : mocha::subtext1);
 
     p.rt->PushAxisAlignedClip(D2D1::RectF(d.left, d.top, d.right - 6, d.bottom), D2D1_ANTIALIAS_MODE_ALIASED);
@@ -3406,18 +3446,19 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
         }
         float hov = Set_GlowOf(w, 100 + i);
         bool act = i == w.page;
+        const float rr = Set_Rad(r);
         if (act) {
-            p.GradFill(r, 8, 0.22f);
-            p.GradRing(r, 8, 0.5f, 1);
+            p.GradFill(r, rr, 0.22f);
+            p.GradRing(r, rr, 0.5f);
             D2D1_RECT_F bar{r.left, r.top + 8, r.left + 3, r.bottom - 8};
             p.GradFill({bar.left, bar.top, bar.left + 3, bar.bottom}, 1.5f, 1);
         } else {
-            p.Round(r, 8, mocha::surface0, 0.28f);
-            p.Edge(r, 8, mocha::surface2, 0.5f * (1 - hov));
-            p.GradFill(r, 8, 0.10f * hov);
-            p.GradRing(r, 8, 0.8f * hov, 1.25f);
+            p.Round(r, rr, mocha::surface0, 0.28f);
+            p.Edge(r, rr, mocha::surface2, 0.5f * (1 - hov));
+            p.GradFill(r, rr, 0.10f * hov);
+            p.GradRing(r, rr, 0.8f * hov);
         }
-        if (w.kbd && w.focus == -10 - i) p.GradRing(r, 8, 1, 2);
+        if (w.kbd && w.focus == -10 - i) p.GradRing(r, rr, 1);
         UINT32 c = act ? mocha::text : mocha::subtext1;
         // The glyph sits in a fixed 44-wide slot, so it stays centered in the collapsed rail.
         p.Glyph(w.fIcon.get(), kSetPages[i].glyph, {r.left, r.top, r.left + 44, r.bottom}, act ? mocha::blue : mocha::subtext0);
@@ -3436,10 +3477,8 @@ static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
     // The same see-through mantle as the rail dock, so the blurred rows under the pill read as
     // real glass instead of a near-solid bar.
     p.Round(d, rad, mocha::mantle, w.render ? 1.0f : (w.glass ? 0.58f : 0.85f));
-    const D2D1_RECT_F edge{d.left + 2, d.top + 2, d.right - 2, d.bottom - 2};
-    p.rt->DrawRoundedRectangle(D2D1::RoundedRect(edge, rad - 2, rad - 2),
-                              p.B(mocha::overlay0, 0.9f * (1 - w.footGlow)), 2.75f);
-    p.GradRing(d, rad - 1.5f, w.footGlow, 3.0f);
+    p.Edge(d, rad, mocha::overlay0, 0.9f * (1 - w.footGlow));
+    p.GradRing(d, rad, w.footGlow);
     UINT32 sc;
     std::wstring status = Set_FooterStatus(w, &sc);
     float sw = Set_FooterStatusW(w);
@@ -3449,10 +3488,10 @@ static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
         D2D1_RECT_F b = Set_FooterButton(w, i);
         float hov = Set_GlowOf(w, 10 + i);
         p.Round(b, brad, mocha::base, 0.98f);
-        p.Edge(b, brad, mocha::overlay0, 0.78f * (1 - hov), 1.75f);
-        p.GradRing(b, brad - 1, hov, 2.25f);
+        p.Edge(b, brad, mocha::overlay0, 0.78f * (1 - hov));
+        p.GradRing(b, brad, hov);
         p.Text(w.fButton.get(), names[i], b, mocha::text, w.saving ? 0.5f : 1.0f);
-        if (w.kbd && w.focus == -1 - i) p.GradRing(b, brad, 1, 2);
+        if (w.kbd && w.focus == -1 - i) p.GradRing(b, brad, 1);
     }
 }
 
@@ -3488,9 +3527,9 @@ static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
     const int n = (int)f.options.size(), vis = Set_DropVisible(w);
     const bool scrolls = n > vis;
     D2D1_RECT_F shadow{r.left - 1, r.top + 3, r.right + 1, r.bottom + 5};
-    p.Round(shadow, 12, mocha::crust, 0.6f);
-    p.Round(r, 10, mocha::mantle);
-    p.GradRing(r, 10, 0.9f);
+    p.Round(shadow, kSetRadius + 2, mocha::crust, 0.6f);
+    p.Round(r, kSetRadius, mocha::mantle);
+    p.GradRing(r, kSetRadius, 0.9f);
     const float right = r.right - (scrolls ? 12 : 4);
     for (int v = 0; v < vis; v++) {
         int i = w.dropTop + v;
@@ -3498,8 +3537,8 @@ static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
         D2D1_RECT_F it{r.left + 4, r.top + 4 + v * kSetDropItem, right, r.top + 4 + (v + 1) * kSetDropItem};
         bool sel = f.cur == f.options[i].first;
         if (i == w.dropHover) {
-            p.GradFill(it, 6, 0.28f);
-            p.GradRing(it, 6, 0.6f, 1);
+            p.GradFill(it, Set_Rad(it, kSetRadius - 4), 0.28f);  // Inset 4 in a 16 corner: 12.
+            p.GradRing(it, Set_Rad(it, kSetRadius - 4), 0.6f);
         }
         p.Text(w.fValue.get(), f.options[i].second, {it.left + 10, it.top, it.right - 28, it.bottom}, sel ? mocha::blue : mocha::text);
         if (sel) p.Glyph(w.fIconS.get(), 0xE73E, {it.right - 28, it.top, it.right - 6, it.bottom}, mocha::blue);
@@ -3615,6 +3654,8 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
         rt->Clear(D2D1::ColorF(0, 0));
         const float total = w.ch + kSetCapH;
         if (w.nativeTitle) {
+            // The window's acrylic already carries the tint (Set_ApplyFrame), title bar included.
+        } else if (false) {
             SetCom<ID2D1LinearGradientBrush> fade;
             D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::crust, kSetGlassTint)}, {1, D2DColor(mocha::crust, kSetGlassTint)}};
             SetCom<ID2D1GradientStopCollection> coll;
@@ -4585,7 +4626,7 @@ static void Set_ApplyFrame(SetWindow& w) {
     const HWND hwnd = w.hwnd;
     const bool native = Set_FieldOn(w, L"nativeSettingsTitleBar", false), glass = Set_FieldOn(w, L"settingsGlass", true);
     const bool first = !w.frameApplied, wasGlass = w.glass;
-    if (!first && native == w.nativeTitle && glass == w.glass) return;
+    if (!first && native == w.nativeTitle && glass == w.glass) return;  // A title bar switch re-runs the accent below.
     w.frameApplied = true;
     w.nativeTitle = native;
     w.glass = glass;
@@ -4610,7 +4651,12 @@ static void Set_ApplyFrame(SetWindow& w) {
         DwmEnableBlurBehindWindow(hwnd, &bb);
         if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
         if (setComposition) {
-            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
+            // Same as the launcher grid. With the Windows title bar the tint is in here instead of
+            // on the page, so the title bar gets it too: crust at the page's 55%.
+            const int tint = native ? (int)(((DWORD)(kSetGlassTint * 255 + 0.5f) << 24) | (mocha::crust & 0xFF) << 16 |
+                                            (mocha::crust & 0xFF00) | (mocha::crust >> 16 & 0xFF))
+                                    : (int)0x012E1E1E;
+            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, tint, 0};
             SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
             setComposition(hwnd, &data);
         }
@@ -5201,8 +5247,8 @@ void CloseSettingsWindow() {
  if(g_settingsThread) { WaitForSingleObject(g_settingsThread,15000); CloseHandle(g_settingsThread); g_settingsThread=nullptr; }
 }
 // The tray menu: the engine's own menu (Set_TrayMenu), rows in the order they always had.
-int ShowTrayMenu(HWND owner, const POINT* at, bool on, PCWSTR) {
-    return Set_TrayMenu(owner, {Set_MenuRow(100, L"", L"Open Seamless Download Manager"),
+int ShowTrayMenu(HWND owner, const POINT* at, bool on, PCWSTR hotkey) {
+    return Set_TrayMenu(owner, {Set_MenuRow(100, L"", L"Open Seamless Download Manager", false, false, hotkey ? hotkey : L""),
                                 Set_MenuRow(101, L"", L"Add a link", false, !on),
                                 Set_MenuSep(),
                                 Set_MenuRow(102, L"", L"Pause all", false, !on),
@@ -5231,7 +5277,15 @@ constexpr PCWSTR kKofi = L"https://ko-fi.com/DavidHiFi";
 constexpr UINT WM_SDM_TRAY = WM_APP + 45, WM_SDM_SETTINGS = WM_APP + 46, WM_SDM_POLL = WM_APP + 60,
                WM_SDM_STATE = WM_APP + 61, WM_SDM_SHOW = WM_APP + 62, WM_SDM_OPEN = WM_APP + 63,
                WM_SDM_NOTICE = WM_APP + 64, WM_SDM_POWER = WM_APP + 65, WM_SDM_ADDREQ = WM_APP + 66,
-               WM_SDM_SETTINGS_SAVED = WM_APP + 67, WM_SDM_TEST = WM_APP + 70;
+               WM_SDM_SETTINGS_SAVED = WM_APP + 67, WM_SDM_FINISHED = WM_APP + 68, WM_SDM_TEST = WM_APP + 70;
+
+// Something the engine wants the owner to know about one download: done, unpacked, failed,
+// already, threat or nospace. Sent to the UI thread on the heap; the receiver deletes it.
+struct Notice {
+    int64_t id = 0;
+    std::string kind;
+    std::wstring name, path, text;
+};
 
 enum class State { Starting, Missing, Busy, Failed, Running, Stopped };
 
@@ -5686,6 +5740,11 @@ void PollLoop() {
         for (auto& add : v["add_requests"].a) {
             auto* copy = new Val(add);
             if (!g_msgWnd || !PostMessageW(g_msgWnd, WM_SDM_ADDREQ, 0, (LPARAM)copy)) delete copy;
+        }
+        for (auto& n : v["notices"].a) {
+            auto* note = new Notice{n["id"].num(), n["kind"].str(), sj::W(n["name"].str()), sj::W(n["path"].str()),
+                                    sj::W(n["text"].str())};
+            if (!g_msgWnd || !PostMessageW(g_msgWnd, WM_SDM_FINISHED, 0, (LPARAM)note)) delete note;
         }
         if (!v["power"].null() && v["power"].t == Val::Obj) {
             auto* ask = new PowerAsk{sj::W(v["power"]["queue"].str()), v["power"]["action"].str()};
@@ -6319,7 +6378,24 @@ void ShowInFolder(const Dl& d) {
     Toast(L"That file is no longer on the disk", true);
 }
 
+ULONGLONG g_selfCopyAt = 0;  // When this mod last wrote the clipboard, so it never offers its own copy.
+bool g_finishPopup = true, g_clipboardOffer = true, g_trayProgress = true;
+std::wstring g_hotkeyText;  // The open shortcut as the tray menu shows it; empty when none is set.
+int g_trayBucket = -1;      // The progress strip the tray icon was last drawn with.
+
+// How much of every running download with a known size is on disk, 0 to 100; -1 when none.
+int OverallPercent() {
+    int64_t have = 0, total = 0;
+    for (auto& d : g_main.all)
+        if (d.running() && d.size > 0) {
+            have += std::clamp<int64_t>(d.downloaded, 0, d.size);
+            total += d.size;
+        }
+    return total > 0 ? (int)(have * 100 / total) : -1;
+}
+
 bool SetClipboardText(const std::wstring& text) {
+    g_selfCopyAt = GetTickCount64();
     if (!OpenClipboard(g_main.hwnd)) return false;
     EmptyClipboard();
     bool ok = false;
@@ -9629,6 +9705,14 @@ std::vector<std::pair<std::wstring, std::wstring>> LoadSettings() {
     put(L"sdm.sound", B(s["notification_sound"].truthy()));
     put(L"sdm.soundDone", sj::W(s["success_notification_sound"].str()));
     put(L"sdm.soundFail", sj::W(s["error_notification_sound"].str()));
+    auto flag = [&](const char* k, bool def) { return B(s.has(k) ? s[k].truthy() : def); };
+    put(L"sdm.unpack", flag("extract_archives", true));
+    put(L"sdm.unpackBin", flag("delete_archive_after_extract", false));
+    put(L"sdm.scan", flag("scan_downloads", true));
+    put(L"sdm.skipSame", flag("skip_already_downloaded", true));
+    put(L"sdm.replace", flag("replace_same_name", false));
+    put(L"sdm.minFreeMb", std::to_wstring(s["min_free_space_mb"].num(2048)));
+    put(L"sdm.clearDays", std::to_wstring(s["clear_finished_after_days"].num(30)));
     g_setLoaded = true;
     return out;
 }
@@ -9703,6 +9787,13 @@ bool SaveSettings(const std::vector<std::pair<std::wstring, std::wstring>>& vals
     if (touched(L"sdm.sound")) s.set("notification_sound", on(L"sdm.sound"));
     if (touched(L"sdm.soundDone")) s.set("success_notification_sound", sj::Str(sj::U8(Trim(get(L"sdm.soundDone")))));
     if (touched(L"sdm.soundFail")) s.set("error_notification_sound", sj::Str(sj::U8(Trim(get(L"sdm.soundFail")))));
+    if (touched(L"sdm.unpack")) s.set("extract_archives", on(L"sdm.unpack"));
+    if (touched(L"sdm.unpackBin")) s.set("delete_archive_after_extract", on(L"sdm.unpackBin"));
+    if (touched(L"sdm.scan")) s.set("scan_downloads", on(L"sdm.scan"));
+    if (touched(L"sdm.skipSame")) s.set("skip_already_downloaded", on(L"sdm.skipSame"));
+    if (touched(L"sdm.replace")) s.set("replace_same_name", on(L"sdm.replace"));
+    if (touched(L"sdm.minFreeMb")) s.set("min_free_space_mb", num(L"sdm.minFreeMb"));
+    if (touched(L"sdm.clearDays")) s.set("clear_finished_after_days", num(L"sdm.clearDays"));
     if (s.size() == 0) return true;
     Val req = Cmd("set_settings");
     req.set("settings", s);
@@ -9919,7 +10010,7 @@ void EnableDarkMenus() {
 
 // A rounded square drawn with GDI: the download arrow on the blue to mauve gradient, grey
 // while the engine is not running.
-HICON MakeBadge_Big(bool on, int size) {
+HICON MakeBadge_Big(bool on, int size, int percent) {
     if (size < 16) size = 16;
     BITMAPINFO bi{};
     bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
@@ -9969,8 +10060,14 @@ HICON MakeBadge_Big(bool on, int size) {
     const float c1[3] = {on ? 0xCB / 255.f : 0x58 / 255.f, on ? 0xA6 / 255.f : 0x5B / 255.f, on ? 0xF7 / 255.f : 0x70 / 255.f};
     uint32_t* px = (uint32_t*)bits;
     const uint32_t* gp = (const uint32_t*)glyphBits;
+    // A progress strip along the bottom while downloads run: green on a surface1 track.
+    const int barH = std::max(2, size / 6), barTop = size - barH, fillX = percent >= 0 ? size * std::min(percent, 100) / 100 : -1;
     for (int y = 0; y < size; y++)
         for (int x = 0; x < size; x++) {
+            if (percent >= 0 && y >= barTop) {
+                px[y * size + x] = 0xFF000000u | (x < fillX ? 0xA6E3A1u : 0x45475Au);
+                continue;
+            }
             float t = std::clamp((x + y) / (2.0f * (size - 1)), 0.0f, 1.0f);
             float cov = ((gp[y * size + x] >> 8) & 0xFF) / 255.0f;
             float rgb[3];
@@ -9991,7 +10088,9 @@ HICON MakeBadge_Big(bool on, int size) {
 }
 
 // Drawn at 4x and shrunk, so the icon is smooth at the size it is shown.
-HICON MakeBadge(bool on, int size) { return Crisp_ShrinkIcon(MakeBadge_Big(on, (size > 0 ? size : 16) * 4), 4); }
+HICON MakeBadge(bool on, int size, int percent = -1) {
+    return Crisp_ShrinkIcon(MakeBadge_Big(on, (size > 0 ? size : 16) * 4, percent), 4);
+}
 
 std::wstring TrayTipText() {
     std::wstring tip = kAppTitle;
@@ -9999,8 +10098,40 @@ std::wstring TrayTipText() {
     int active = 0;
     for (auto& d : g_main.all)
         if (d.running()) active++;
-    if (active) tip += L": " + Plural(active, L"download", L"downloads") + L" running";
+    if (active) {
+        tip += L": " + Plural(active, L"download", L"downloads") + L" running";
+        int pc = OverallPercent();
+        if (pc >= 0) tip += L", " + std::to_wstring(pc) + L"% done";
+    }
     return tip;
+}
+
+// The main window's taskbar button fills up with the same progress. Applied only while the
+// window shows, because a hidden window has no button to fill.
+void UpdateTaskbarProgress() {
+    static SetCom<ITaskbarList3> bar;
+    static bool tried = false;
+    static int shown = -2;
+    if (!g_main.hwnd || !IsWindowVisible(g_main.hwnd)) {
+        shown = -2;
+        return;
+    }
+    int pc = g_trayProgress && Running() ? OverallPercent() : -1;
+    if (pc == shown) return;
+    if (!bar && !tried) {
+        tried = true;
+        if (FAILED(CoCreateInstance(CLSID_TaskbarList, nullptr, CLSCTX_INPROC_SERVER, __uuidof(ITaskbarList3), (void**)bar.put())) ||
+            FAILED(bar->HrInit()))
+            bar.reset();
+    }
+    if (!bar) return;
+    if (pc < 0) {
+        bar->SetProgressState(g_main.hwnd, TBPF_NOPROGRESS);
+    } else {
+        bar->SetProgressState(g_main.hwnd, TBPF_NORMAL);
+        bar->SetProgressValue(g_main.hwnd, (ULONGLONG)pc, 100);
+    }
+    shown = pc;
 }
 
 void UpdateTray(bool add) {
@@ -10010,7 +10141,9 @@ void UpdateTray(bool add) {
     }
     bool on = g_state.load() == State::Running;
     std::wstring tip = TrayTipText();
-    if (!add && g_trayAdded && on == g_trayOn && tip == g_trayTip) return;
+    int pc = g_trayProgress && on ? OverallPercent() : -1;
+    int bucket = pc < 0 ? -1 : pc / 5;  // Twenty steps: the strip moves without redrawing every poll.
+    if (!add && g_trayAdded && on == g_trayOn && tip == g_trayTip && bucket == g_trayBucket) return;
     NOTIFYICONDATAW nid{sizeof(nid)};
     nid.hWnd = g_msgWnd;
     nid.uID = kTrayId;
@@ -10018,8 +10151,8 @@ void UpdateTray(bool add) {
     nid.uCallbackMessage = WM_SDM_TRAY;
     wcsncpy_s(nid.szTip, tip.c_str(), _TRUNCATE);
     HICON icon = nullptr;
-    if (add || !g_trayAdded || on != g_trayOn) {
-        icon = MakeBadge(on, GetSystemMetricsForDpi(SM_CXICON, GetDpiForSystem()));
+    if (add || !g_trayAdded || on != g_trayOn || bucket != g_trayBucket) {
+        icon = MakeBadge(on, GetSystemMetricsForDpi(SM_CXICON, GetDpiForSystem()), bucket < 0 ? -1 : bucket * 5);
         nid.uFlags |= NIF_ICON;
         nid.hIcon = icon ? icon : LoadIconW(nullptr, IDI_APPLICATION);
     } else {
@@ -10042,6 +10175,7 @@ void UpdateTray(bool add) {
     }
     g_trayOn = on;
     g_trayTip = tip;
+    g_trayBucket = bucket;
 }
 
 void RemoveTray() {
@@ -10081,7 +10215,7 @@ enum : int { kTrayOpen = 100, kTrayAdd, kTrayPause, kTrayResume, kTraySettings, 
 
 void TrayMenu(POINT pt) {
     bool running = g_state.load() == State::Running;
-    int cmd = acset::ShowTrayMenu(g_msgWnd, &pt, running, L"");
+    int cmd = acset::ShowTrayMenu(g_msgWnd, &pt, running, g_hotkeyText.c_str());
     switch (cmd) {
         case kTrayOpen: Main_Show(true); break;
         case kTrayAdd:
@@ -10099,6 +10233,467 @@ void TrayMenu(POINT pt) {
             }
             break;
     }
+}
+
+// ---- The corner card -------------------------------------------------------------------
+// A small glass card in the bottom right corner when a download finishes, or when a copied
+// link looks like a file. It never takes focus, stays away while a game runs full screen, and
+// goes after six seconds unless the pointer rests on it. The newest news replaces the card.
+
+enum : int { kCardOpen = 1, kCardFolder, kCardList, kCardAgain, kCardDownload, kCardLater, kCardClose };
+constexpr UINT_PTR kCardTimer = 1;
+constexpr ULONGLONG kCardLife = 6000;
+constexpr float kCardW = 380, kCardH = 112, kCardPad = 14, kCardSlide = 8, kCardBtnH = 30;
+
+struct CardWin {
+    HWND hwnd = nullptr;
+    SetCom<ID2D1HwndRenderTarget> rt;
+    float scale = 1, alpha = 0;
+    int dir = 0;  // +1 fading in, -1 fading out.
+    bool fast = false, hovering = false, tracking = false, animate = true;
+    ULONGLONG shownAt = 0, lastStep = 0;
+    int hover = -1, pressed = -1;
+    Glow glow;
+    std::vector<Hit> hits;
+    Notice note;  // kind "clipboard" for a copied link; its path holds the link.
+    std::wstring title, line;
+    WCHAR icon = 0;
+    UINT32 iconColor = 0;
+    std::vector<std::pair<int, std::wstring>> buttons;
+    POINT home{};  // The resting top left corner, in pixels.
+};
+CardWin g_card;
+
+// A full-screen game, a presentation or a "busy" full-screen app is in front.
+bool GameInFront() {
+    QUERY_USER_NOTIFICATION_STATE st{};
+    if (FAILED(SHQueryUserNotificationState(&st))) return false;
+    return st == QUNS_RUNNING_D3D_FULL_SCREEN || st == QUNS_BUSY || st == QUNS_PRESENTATION_MODE;
+}
+
+std::wstring LinkFileName(const std::wstring& link) {
+    std::wstring path = link.substr(0, link.find_first_of(L"?#"));
+    size_t slash = path.find_last_of(L'/');
+    return slash == std::wstring::npos ? path : path.substr(slash + 1);
+}
+
+// The words, the icon and the buttons for one piece of news.
+void Card_Fill(CardWin& c) {
+    const Notice& n = c.note;
+    c.buttons.clear();
+    c.title = n.name.empty() ? std::wstring(kAppTitle) : n.name;
+    c.line = n.text;
+    if (n.kind == "done") {
+        c.icon = 0xE73E, c.iconColor = mocha::green;
+        if (c.line.empty()) c.line = L"Finished downloading.";
+        c.buttons = {{kCardOpen, L"Open"}, {kCardFolder, L"Show in folder"}};
+    } else if (n.kind == "unpacked") {
+        c.icon = 0xE8B7, c.iconColor = mocha::green;
+        if (c.line.empty()) c.line = L"Downloaded and unpacked.";
+        c.buttons = {{kCardFolder, L"Open folder"}};
+    } else if (n.kind == "already") {
+        c.icon = 0xE896, c.iconColor = mocha::blue;
+        if (c.line.empty()) c.line = L"You already downloaded this, and the file is still there.";
+        c.buttons = {{kCardAgain, L"Download again"}, {kCardFolder, L"Show in folder"}};
+    } else if (n.kind == "threat") {
+        c.icon = 0xE7BA, c.iconColor = mocha::red;
+        if (c.line.empty()) c.line = L"Windows Security stopped this file.";
+        c.buttons = {{kCardList, L"Show downloads"}};
+    } else if (n.kind == "nospace") {
+        c.icon = 0xE7BA, c.iconColor = mocha::peach;
+        if (c.line.empty()) c.line = L"Stopped: the drive is almost full.";
+        c.buttons = {{kCardList, L"Show downloads"}};
+    } else if (n.kind == "clipboard") {
+        c.icon = 0xE896, c.iconColor = mocha::blue;
+        c.title = L"Download the link you copied?";
+        c.line = LinkFileName(n.path);
+        c.buttons = {{kCardDownload, L"Download"}, {kCardLater, L"Not now"}};
+    } else {
+        c.icon = 0xE783, c.iconColor = mocha::red;
+        if (c.line.empty()) c.line = L"The download stopped with an error.";
+        c.buttons = {{kCardList, L"Show downloads"}};
+    }
+}
+
+// Where the card rests: the bottom right of the main screen's work area, above the taskbar.
+void Card_Place() {
+    CardWin& c = g_card;
+    float t = c.alpha;
+    float ease = 1 - (1 - t) * (1 - t) * (1 - t);
+    int dy = c.animate ? (int)std::lround((1 - ease) * kCardSlide * c.scale) : 0;
+    SetWindowPos(c.hwnd, HWND_TOPMOST, c.home.x, c.home.y + dy, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+}
+
+void Card_Paint() {
+    CardWin& c = g_card;
+    if (!c.rt || !Gfx_Init()) return;
+    ID2D1RenderTarget* rt = c.rt.get();
+    rt->BeginDraw();
+    rt->Clear(D2D1::ColorF(0, 0, 0, 0));
+    SetCom<ID2D1Layer> layer;
+    bool faded = c.alpha < 0.999f && SUCCEEDED(rt->CreateLayer(nullptr, layer.put()));
+    if (faded)
+        rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                            D2D1::IdentityMatrix(), std::max(0.0f, c.alpha)),
+                      layer.get());
+    Pt p(rt);
+    const float w = kCardW, h = kCardH, bw = 2, rad = acset::Set_MenuCornerRadius();
+    auto gradient = [&](D2D1_POINT_2F a, D2D1_POINT_2F b, D2D1_COLOR_F c1, D2D1_COLOR_F c2) {
+        SetCom<ID2D1LinearGradientBrush> g;
+        D2D1_GRADIENT_STOP stops[2] = {{0, c1}, {1, c2}};
+        SetCom<ID2D1GradientStopCollection> coll;
+        if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, coll.put())))
+            rt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(a, b), coll.get(), g.put());
+        return g;
+    };
+    // The tray menu's own material: dark Mocha over the acrylic, or solid base with glass off.
+    if (g_glass) {
+        if (auto tint = gradient({0, 0}, {0, h}, D2DColor(mocha::base, 0.80f), D2DColor(mocha::base, 0.84f)))
+            rt->FillRectangle({0, 0, w, h}, tint.get());
+    } else {
+        p.Fill({0, 0, w, h}, mocha::base);
+    }
+    c.hits.clear();
+    p.Glyph(Fmt(18, 400, kIcon | kCenter | kMiddle), c.icon, {kCardPad, kCardPad, kCardPad + 22, kCardPad + 22}, c.iconColor);
+    const float textX = kCardPad + 32, closeL = w - kCardPad - 24;
+    p.Text(Fmt(13.5f, 600, kMiddle), c.title, {textX, kCardPad, closeL - 6, kCardPad + 22}, mocha::text);
+    p.Text(Fmt(12.5f, 400, kMiddle), c.line, {textX, kCardPad + 24, w - kCardPad, kCardPad + 44}, mocha::subtext0);
+    D2D1_RECT_F close{closeL, kCardPad - 1, closeL + 24, kCardPad + 23};
+    DrawButton(p, close, L"", 0, kGhost, c.glow.Of(kCardClose), true);
+    p.Glyph(Fmt(11, 400, kIcon | kCenter | kMiddle), 0xE711, close, mocha::overlay2);
+    c.hits.push_back({kCardClose, close});
+    float x = w - kCardPad;
+    const float top = h - kCardPad - kCardBtnH;
+    IDWriteTextFormat* bf = Fmt(12.5f, 600, kCenter | kMiddle);
+    for (size_t i = c.buttons.size(); i-- > 0;) {
+        const auto& b = c.buttons[i];
+        float bwid = std::max(92.0f, TextW(bf, b.second) + 28);
+        D2D1_RECT_F r{x - bwid, top, x, top + kCardBtnH};
+        DrawButton(p, r, b.second, 0, i == 0 ? kPrimary : kPlain, c.glow.Of(b.first), true, 12.5f);
+        c.hits.push_back({b.first, r});
+        x -= bwid + 8;
+    }
+    // The edge on DWM's corner curve: 2 px, blue to mauve at 45 degrees, inset half the stroke.
+    float d = (w + h) / 2;
+    if (auto border = gradient({0, 0}, {d, d}, D2DColor(mocha::blue, 1), D2DColor(mocha::mauve, 1))) {
+        float r2 = std::max(0.0f, rad - bw / 2);
+        rt->DrawRoundedRectangle({{bw / 2, bw / 2, w - bw / 2, h - bw / 2}, r2, r2}, border.get(), bw);
+    }
+    if (faded) rt->PopLayer();
+    if (rt->EndDraw() == D2DERR_RECREATE_TARGET) c.rt.reset();
+}
+
+void Card_SetTimer(bool fast) {
+    CardWin& c = g_card;
+    if (c.fast == fast && c.lastStep) return;
+    c.fast = fast;
+    SetTimer(c.hwnd, kCardTimer, fast ? 15 : 200, nullptr);
+}
+
+void Card_Hide() {
+    CardWin& c = g_card;
+    if (!c.hwnd || !IsWindowVisible(c.hwnd)) return;
+    c.hovering = c.tracking = false;
+    c.hover = c.pressed = -1;
+    if (GetCapture() == c.hwnd) ReleaseCapture();
+    if (!c.animate) {
+        c.alpha = 0;
+        c.dir = 0;
+        KillTimer(c.hwnd, kCardTimer);
+        c.lastStep = 0;
+        ShowWindow(c.hwnd, SW_HIDE);
+        return;
+    }
+    c.dir = -1;
+    Card_SetTimer(true);
+}
+
+void Card_Do(int id) {
+    CardWin& c = g_card;
+    Notice n = c.note;
+    Card_Hide();
+    switch (id) {
+        case kCardOpen:
+            if (FileExists(n.path)) ShellExecuteW(nullptr, L"open", n.path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            else {
+                Main_Show(true);
+                Toast(L"That file is no longer on the disk", true);
+            }
+            break;
+        case kCardFolder:
+            if (DirExists(n.path)) {
+                ShellExecuteW(nullptr, L"open", L"explorer.exe", acset::Set_QuoteArg(n.path).c_str(), nullptr, SW_SHOWNORMAL);
+            } else if (PIDLIST_ABSOLUTE pidl = FileExists(n.path) ? ILCreateFromPathW(n.path.c_str()) : nullptr) {
+                SHOpenFolderAndSelectItems(pidl, 0, nullptr, 0);
+                ILFree(pidl);
+            } else {
+                Main_Show(true);
+                Toast(L"That file is no longer on the disk", true);
+            }
+            break;
+        case kCardList: Main_Show(true); break;
+        case kCardAgain: {
+            const Dl* d = FindDl(n.id);
+            if (!d || d->url.empty()) {
+                Main_Show(true);
+                Toast(L"That download is no longer in the list", true);
+                break;
+            }
+            Val req = sj::Obj();
+            req.set("url", sj::WStr(d->url));
+            req.set("folder", sj::WStr(d->folder));
+            req.set("start", sj::Bool(true));
+            req.set("again", sj::Bool(true));
+            Val call = Cmd("add");
+            call.set("request", req);
+            Val v = Call(call);
+            Wake();
+            if (v.has("error")) {
+                Main_Show(true);
+                Toast(L"Could not add it: " + ErrorOf(v), true);
+            }
+            break;
+        }
+        case kCardDownload:
+            Main_Show(true);
+            if (Running()) OpenAddDialog(nullptr, n.path);
+            break;
+    }
+}
+
+LRESULT CALLBACK CardWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    CardWin& c = g_card;
+    auto at = [&](LPARAM l) { return HitAt(c.hits, GET_X_LPARAM(l) / c.scale, GET_Y_LPARAM(l) / c.scale); };
+    switch (msg) {
+        case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            BeginPaint(hwnd, &ps);
+            Card_Paint();
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_ERASEBKGND: return 1;
+        case WM_MOUSEMOVE: {
+            if (!c.tracking) {
+                TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, hwnd, 0};
+                c.tracking = TrackMouseEvent(&tme) != FALSE;
+            }
+            c.hovering = true;
+            int h = at(lp);
+            if (h != c.hover) {
+                c.hover = h < 0 ? -1 : h;
+                Card_SetTimer(true);
+            }
+            return 0;
+        }
+        case WM_MOUSELEAVE:
+            c.tracking = c.hovering = false;
+            c.hover = -1;
+            // Three more seconds after the pointer leaves.
+            c.shownAt = GetTickCount64() - (kCardLife - 3000);
+            Card_SetTimer(true);
+            return 0;
+        case WM_LBUTTONDOWN:
+            c.pressed = at(lp);
+            if (c.pressed >= 0) SetCapture(hwnd);
+            Card_SetTimer(true);
+            return 0;
+        case WM_LBUTTONUP: {
+            int down = c.pressed, h = at(lp);
+            c.pressed = -1;
+            if (GetCapture() == hwnd) ReleaseCapture();
+            if (down >= 0 && h == down) {
+                if (down == kCardClose) Card_Hide();
+                else Card_Do(down);
+            }
+            Card_SetTimer(true);
+            return 0;
+        }
+        case WM_TIMER: {
+            if (wp != kCardTimer) break;
+            ULONGLONG now = GetTickCount64();
+            float dt = c.lastStep ? (float)std::min<ULONGLONG>(now - c.lastStep, 100) : 16;
+            c.lastStep = now;
+            bool moving = false;
+            if (c.dir != 0) {
+                c.alpha += c.dir * dt / 150.0f;
+                if (c.alpha >= 1) {
+                    c.alpha = 1;
+                    c.dir = 0;
+                } else if (c.alpha <= 0) {
+                    c.alpha = 0;
+                    c.dir = 0;
+                    KillTimer(hwnd, kCardTimer);
+                    c.lastStep = 0;
+                    ShowWindow(hwnd, SW_HIDE);
+                    return 0;
+                }
+                Card_Place();
+                moving = true;
+            }
+            if (c.glow.Step(c.hover, c.pressed)) moving = true;
+            if (c.dir == 0 && c.alpha >= 1 && !c.hovering && now - c.shownAt > kCardLife) {
+                Card_Hide();
+                moving = true;
+            }
+            InvalidateRect(hwnd, nullptr, FALSE);
+            Card_SetTimer(moving);
+            return 0;
+        }
+        case WM_DISPLAYCHANGE:
+        case WM_DPICHANGED: Card_Hide(); return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+bool Card_Make() {
+    CardWin& c = g_card;
+    if (c.hwnd) return true;
+    static bool registered = false;
+    HINSTANCE inst = (HINSTANCE)&__ImageBase;
+    if (!registered) {
+        WNDCLASSW wc{};
+        wc.lpfnWndProc = CardWndProc;
+        wc.hInstance = inst;
+        wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        wc.lpszClassName = L"SeamlessDownloadManagerCard";
+        registered = RegisterClassW(&wc) != 0;
+        if (!registered) return false;
+    }
+    c.hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE, L"SeamlessDownloadManagerCard", kAppTitle,
+                             WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, inst, nullptr);
+    if (!c.hwnd) return false;
+    acset::Set_MenuBackdrop(c.hwnd);
+    return true;
+}
+
+void Card_Destroy() {
+    CardWin& c = g_card;
+    c.rt.reset();
+    if (c.hwnd) DestroyWindow(c.hwnd);
+    c.hwnd = nullptr;
+    UnregisterClassW(L"SeamlessDownloadManagerCard", (HINSTANCE)&__ImageBase);
+}
+
+// Shows the card for this news. False when it stayed away (turned off, a game in front, or
+// the main window is the one in front), so the caller can say it another way.
+bool Card_Show(const Notice& n) {
+    if (GameInFront() || (g_main.hwnd && GetForegroundWindow() == g_main.hwnd)) return false;
+    if (!Gfx_Init() || !Card_Make()) return false;
+    CardWin& c = g_card;
+    c.note = n;
+    Card_Fill(c);
+    BOOL animations = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animations, 0);
+    c.animate = animations != FALSE;
+    RECT wa{};
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &wa, 0);
+    bool visible = IsWindowVisible(c.hwnd) != FALSE;
+    if (!visible) SetWindowPos(c.hwnd, nullptr, wa.right - 2, wa.bottom - 2, 1, 1, SWP_NOZORDER | SWP_NOACTIVATE);
+    c.scale = GetDpiForWindow(c.hwnd) / 96.0f;
+    if (c.scale <= 0) c.scale = 1;
+    int pw = (int)std::ceil(kCardW * c.scale), ph = (int)std::ceil(kCardH * c.scale), gap = (int)std::lround(12 * c.scale);
+    c.home = {wa.right - pw - gap, wa.bottom - ph - gap};
+    if (!visible) {
+        c.alpha = c.animate ? 0.0f : 1.0f;
+        c.glow = Glow();
+        c.hover = c.pressed = -1;
+    }
+    c.dir = c.animate && c.alpha < 1 ? 1 : 0;
+    if (!c.animate) c.alpha = 1;
+    float t = c.alpha, ease = 1 - (1 - t) * (1 - t) * (1 - t);
+    int dy = c.animate ? (int)std::lround((1 - ease) * kCardSlide * c.scale) : 0;
+    SetWindowPos(c.hwnd, HWND_TOPMOST, c.home.x, c.home.y + dy, pw, ph, SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+    if (c.rt) {
+        c.rt->Resize(D2D1::SizeU((UINT32)pw, (UINT32)ph));
+        c.rt->SetDpi(96 * c.scale, 96 * c.scale);
+    } else {
+        D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+            D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+            96 * c.scale, 96 * c.scale);
+        if (FAILED(g_gfx.d2d->CreateHwndRenderTarget(
+                props, D2D1::HwndRenderTargetProperties(c.hwnd, D2D1::SizeU((UINT32)pw, (UINT32)ph)), c.rt.put())))
+            return false;
+    }
+    c.shownAt = GetTickCount64();
+    InvalidateRect(c.hwnd, nullptr, FALSE);
+    if (!visible) ShowWindow(c.hwnd, SW_SHOWNOACTIVATE);
+    c.lastStep = 0;
+    Card_SetTimer(c.dir != 0);
+    return true;
+}
+
+// News from the engine about one download.
+void OnNotice(const Notice& n) {
+    if (g_finishPopup && Card_Show(n)) return;
+    // Said in the main window instead (it shows there only while the window is open).
+    bool bad = n.kind == "failed" || n.kind == "threat" || n.kind == "nospace";
+    std::wstring line = n.text.empty() ? (n.kind == "done" ? L"Finished" : L"Stopped") : n.text;
+    Toast(n.name.empty() ? line : n.name + L": " + line, bad);
+}
+
+// ---- A copied link -------------------------------------------------------------------
+// Copying a link to a file anywhere in Windows offers to download it, once per link.
+
+std::wstring g_lastOffer;
+ULONGLONG g_lastOfferAt = 0;
+
+bool LooksLikeFile(const std::wstring& link) {
+    std::wstring name = Lower(LinkFileName(link));
+    size_t dot = name.rfind(L'.');
+    if (dot == std::wstring::npos || dot + 1 >= name.size()) return false;
+    std::wstring ext = name.substr(dot + 1);
+    static const PCWSTR kExt[] = {L"zip", L"7z", L"rar", L"tar", L"gz", L"tgz", L"xz", L"bz2", L"zst", L"exe", L"msi", L"msix",
+                                  L"msixbundle", L"appx", L"appxbundle", L"iso", L"img", L"vhd", L"vhdx", L"apk", L"jar",
+                                  L"deb", L"rpm", L"dmg", L"mp4", L"mkv", L"webm", L"mov", L"avi", L"mp3", L"flac", L"wav",
+                                  L"m4a", L"ogg", L"opus", L"pdf", L"epub", L"cbz", L"cbr", L"torrent", L"bin", L"pak",
+                                  L"psd", L"blend", L"safetensors", L"gguf", L"ckpt", L"pth", L"onnx", L"ttf", L"otf"};
+    for (PCWSTR e : kExt)
+        if (ext == e) return true;
+    return false;
+}
+
+void Clipboard_Changed() {
+    if (!g_clipboardOffer || !Running()) return;
+    ULONGLONG now = GetTickCount64();
+    if (now - g_selfCopyAt < 1500) return;
+    if (g_main.hwnd && GetForegroundWindow() == g_main.hwnd) return;
+    std::wstring link = ClipboardLink();
+    if (link.empty() || !LooksLikeFile(link)) return;
+    if (link == g_lastOffer && now - g_lastOfferAt < 30 * 60 * 1000) return;
+    std::wstring low = Lower(link);
+    for (auto& d : g_main.all)
+        if (d.lurl == low) return;
+    g_lastOffer = link;
+    g_lastOfferAt = now;
+    Notice n;
+    n.kind = "clipboard";
+    n.path = link;
+    Card_Show(n);
+}
+
+// ---- The open shortcut -----------------------------------------------------------------
+
+constexpr int kHotkeyId = 1;
+
+void Hotkey_Apply() {
+    if (!g_msgWnd) return;
+    UnregisterHotKey(g_msgWnd, kHotkeyId);
+    g_hotkeyText.clear();
+    PCWSTR s = Wh_GetStringSetting(L"openHotkey");
+    std::wstring text = s ? s : L"";
+    if (s) Wh_FreeStringSetting(s);
+    UINT mods = 0, vk = 0;
+    if (!Hotkey_Parse(text, mods, vk)) return;
+    if (RegisterHotKey(g_msgWnd, kHotkeyId, mods | MOD_NOREPEAT, vk)) g_hotkeyText = Hotkey_Format(mods, vk);
+    else Wh_Log(L"The shortcut %s is in use by another app", text.c_str());
+}
+
+void ReadQuickSettings() {
+    g_finishPopup = Wh_GetIntSetting(L"finishPopup") != 0;
+    g_clipboardOffer = Wh_GetIntSetting(L"clipboardOffer") != 0;
+    g_trayProgress = Wh_GetIntSetting(L"trayProgress") != 0;
 }
 
 // ---- The UI thread ---------------------------------------------------------------------
@@ -10171,8 +10766,19 @@ LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             Main_Apply(*r);
             delete r;
             UpdateTray(false);
+            UpdateTaskbarProgress();
             return 0;
         }
+        case WM_SDM_FINISHED: {
+            auto* note = (Notice*)lp;
+            OnNotice(*note);
+            delete note;
+            return 0;
+        }
+        case WM_CLIPBOARDUPDATE: Clipboard_Changed(); return 0;
+        case WM_HOTKEY:
+            if (wp == kHotkeyId) Main_Show(true);
+            return 0;
         case WM_SDM_ADDREQ: {
             auto* req = (Val*)lp;
             OpenAddDialog(req, L"");
@@ -10239,7 +10845,11 @@ LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_SDM_SETTINGS:
             g_glass = Wh_GetIntSetting(L"settingsGlass") != 0;
             g_trayIconOn = Wh_GetIntSetting(L"settingsTrayIcon") != 0;
+            ReadQuickSettings();
+            Hotkey_Apply();
+            g_trayBucket = -1;
             UpdateTray(true);
+            UpdateTaskbarProgress();
             if (g_main.hwnd) {
                 Sdm_ApplyGlass(g_main.hwnd);
                 Main_Invalidate();
@@ -10272,6 +10882,8 @@ DWORD WINAPI UiThreadProc(LPVOID) {
     if (w) {
         g_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
         UpdateTray(true);
+        Hotkey_Apply();
+        AddClipboardFormatListener(w);
     }
     {
         WCHAR user[128] = L"?";
@@ -10302,6 +10914,9 @@ DWORD WINAPI UiThreadProc(LPVOID) {
     Jobs_Stop();
     Forms_CloseAll();
     Main_Destroy();
+    UnregisterHotKey(w, kHotkeyId);
+    RemoveClipboardFormatListener(w);
+    Card_Destroy();
     Gfx_Release();
     RemoveTray();
     g_msgWnd = nullptr;
@@ -10328,6 +10943,7 @@ BOOL WhTool_ModInit() {
     }
     sdm::g_glass = Wh_GetIntSetting(L"settingsGlass") != 0;
     sdm::g_trayIconOn = Wh_GetIntSetting(L"settingsTrayIcon") != 0;
+    sdm::ReadQuickSettings();
     sdm::g_wake = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     sdm::g_uiReady = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     DWORD tid = 0;
