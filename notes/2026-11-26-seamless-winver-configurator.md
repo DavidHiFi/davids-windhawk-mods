@@ -110,3 +110,41 @@ Rebuilt (7,217 lines, staged copy starts caabaee7): all four checks and the 32-b
 
 Turn the mod off with `scripts\Set-ModState.ps1 -Id local@seamless-winver-configurator -Off`.
 Header backup: `00-header.cpp.bak-20261126` in the work folder.
+
+## 1.1.1: dark glass and our own banner (2026-11-26, afternoon)
+
+Owner: Win+R winver still showed the stock Windows 11 banner, and the box had the light frosted fill.
+"Get rid of it for good", globally.
+
+- Why it was light: the dialog sat on a plain system backdrop with its grey dialog brush. DWM adds any
+  non-black fill on top of the glass, so it read as light frost.
+- Fix (`40-custom-dialog.cpp`): `ApplyGlass` puts the house sheet on the box, the same as every
+  settings window: backdrop type 1, blur-behind on the whole window, accent {4, 2, 0x012E1E1E, 0},
+  margins -1, caption colour none, black body brush under glass. Off restores accent 0, blur off, margins 0.
+- Own banner (`ownBanner`, on in the Mocha presets): the four-tile Windows logo and "Windows 11" (or 10, by
+  build number) in the blue to mauve gradient, drawn with GDI+ into a pre-multiplied DIB so it sits on the glass.
+  `bannerText` overrides the name.
+- Font (`textFont`, default FiraCode Nerd Font): every line except the icon and separator, ClearType.
+- 1.1.0 was built with a darker 0xA01B1111 tint and never installed: its install sat 20 min in the
+  "CPU under 70%" wait (other threads' builds held the CPU at 100%). Stopped by its own pid tree,
+  rebuilt as 1.1.1 with the settings-window tint, reinstalled with `-NoCpuWait` (owner: skip the queue).
+- Checks: settings-engine in sync, settings-material ok, mod-consistency 0 fail 0 warn, 64 and 32-bit compile.
+- Rollback: `Set-ModState.ps1 -Id local@seamless-winver-configurator -Off`, or reinstall the 1.0.0 backup
+  `backups\settings-material\local@seamless-winver-configurator-20261126-1029.wh.cpp`.
+
+## 1.1.1 install result (2026-11-26, evening)
+
+- Installed 6:05 pm (run 6 of `D:\Agent Work\swc\install-run.ps1`; runs 1 to 5 hit the memory gate or a held
+  engine lock). Registry v1.1.1, backup `local@seamless-winver-configurator-20261126-1759.wh.cpp`.
+  Watched 60 s after loading: desktop fine.
+- The installer's own publish timed out at 180 s. Ran `publish-mods.py --mod` by hand: mods 9d2752c, feed c86c078.
+- Speed Test 2.4.4 (dark glass flyout) installed 4:48 pm in run 4 and published (mods 2fc2818, feed 035b363).
+- Live check (`work\2026-11-26-glass-audit\verify-winver.py`, proof `proof-1811\winver.png`): own banner and
+  FiraCode show, fill samples about (32, 33, 49), dark, no light frost. Reading the backdrop from outside the
+  process gave type 0 (auto), not the 1 the mod sets. Auto draws no system material on a classic dialog, so it
+  cannot bring the light frost back; only types 2 to 4 do. glass-check said "flat", likely a plain dark window
+  behind the box. Not yet proved: colour moving under the glass over a busy background.
+- The check opened winver, which takes focus by itself (stock behaviour). Future checks run under
+  `coop lock desktop --input --queue` or while the owner is idle.
+- `live-backdrops.py` at about 6:25 pm: 34 windows, none with a light system material.
+- Speed test flyout not proved live: opening it takes focus and starts a real test. Proof waits for an idle desktop.
