@@ -2,7 +2,7 @@
 // @id              seamless-wobbly-windows
 // @name            Seamless Wobbly Windows
 // @description     Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows
-// @version         1.2.14
+// @version         1.2.15
 // @author          DavidHiFi, HeyJeay, HaVeN80, lalimatyus
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -5627,12 +5627,26 @@ DrawResult Overlay::Draw(const Mesh& m) {
 // Cloaking takes the window out of composition without moving or hiding it, so
 // its taskbar button stays and Windows keeps moving it as usual underneath.
 
+struct WindowGlass {
+    float seeThrough  = 0.0f;
+    bool  hasTint     = false;
+    float tint[3]     = { 0.0f, 0.0f, 0.0f };
+    bool  isAccent    = false;
+    int   accentState = 0;
+    int   accentFlags = 0;
+    DWORD accentColor = 0;
+};
+
 struct HideState {
-    bool  cloaked   = false;
-    bool  hadCorner = false;
-    DWORD corner    = 0;
-    bool  dropped   = false;    // its own backdrop was switched off for the drag
-    DWORD backdrop  = 0;
+    bool  cloaked       = false;
+    bool  hadCorner     = false;
+    DWORD corner        = 0;
+    bool  dropped       = false;    // its own backdrop was switched off for the drag
+    DWORD backdrop      = 0;
+    bool  droppedAccent = false;    // its own WCA accent blur was switched off for the drag
+    int   accentState   = 0;
+    int   accentFlags   = 0;
+    DWORD accentColor   = 0;
 };
 
 static void SaveCorners(HWND hwnd, HideState& st) {
@@ -5653,8 +5667,15 @@ static void RestoreCorners(HWND hwnd, const HideState& st) {
 // The system backdrop each window's app last asked for, kept on the window.
 // Windows can report it as 0 once the window is clicked (seen live on the
 // owner's PC, 1.2.9 and 1.2.10), so the read alone is not enough.
-static ATOM g_backdropAtom = 0;
+static ATOM g_backdropAtom    = 0;
+static ATOM g_accentStateAtom = 0;
+static ATOM g_accentColorAtom = 0;
 static std::atomic<DWORD> g_ownBackdropThread{0};   // the thread doing our own drop
+
+struct WcaAccent { int state, flags; DWORD color; int anim; };
+struct WcaData   { DWORD attr; PVOID data; ULONG size; };
+using SetWindowCompositionAttribute_t = BOOL(WINAPI*)(HWND, WcaData*);
+static SetWindowCompositionAttribute_t SetWindowCompositionAttribute_orig = nullptr;
 
 static void RememberBackdrop(HWND hwnd, DWORD type) {
     if (!g_backdropAtom || !hwnd || g_ownBackdropThread.load() == GetCurrentThreadId()) return;
@@ -5670,10 +5691,49 @@ static int RememberedBackdrop(HWND hwnd) {
     return v ? (int)(v - 1) : -1;
 }
 
+static void RememberAccent(HWND hwnd, int state, int flags, DWORD color) {
+    if (!g_accentStateAtom || !g_accentColorAtom || !hwnd ||
+        g_ownBackdropThread.load() == GetCurrentThreadId()) return;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != GetCurrentProcessId()) return;
+    const ULONG_PTR packed = ((ULONG_PTR)(state & 0xFF)) |
+                             (((ULONG_PTR)(flags & 0xFFFF)) << 8) |
+                             ((ULONG_PTR)1 << 24);
+    SetPropW(hwnd, MAKEINTATOM(g_accentStateAtom), (HANDLE)packed);
+    SetPropW(hwnd, MAKEINTATOM(g_accentColorAtom), (HANDLE)(ULONG_PTR)color);
+}
+
+static bool RememberedAccent(HWND hwnd, int& state, int& flags, DWORD& color) {
+    if (!g_accentStateAtom || !g_accentColorAtom || !hwnd) return false;
+    const ULONG_PTR packed = (ULONG_PTR)GetPropW(hwnd, MAKEINTATOM(g_accentStateAtom));
+    if (!packed) return false;
+    state = (int)(packed & 0xFF);
+    flags = (int)((packed >> 8) & 0xFFFF);
+    color = (DWORD)(ULONG_PTR)GetPropW(hwnd, MAKEINTATOM(g_accentColorAtom));
+    return true;
+}
+
+static bool ApplyAccent(HWND hwnd, int state, int flags, DWORD color) {
+    SetWindowCompositionAttribute_t fn = SetWindowCompositionAttribute_orig;
+    if (!fn) {
+        HMODULE u = GetModuleHandleW(L"user32.dll");
+        fn = u ? (SetWindowCompositionAttribute_t)(void*)GetProcAddress(u, "SetWindowCompositionAttribute") : nullptr;
+    }
+    if (!fn) return false;
+    WcaAccent a{ state, flags, color, 0 };
+    WcaData d{ 19 /*WCA_ACCENT_POLICY*/, &a, sizeof(a) };
+    g_ownBackdropThread.store(GetCurrentThreadId());
+    const BOOL ok = fn(hwnd, &d);
+    g_ownBackdropThread.store(0);
+    return ok != FALSE;
+}
+
 // A cloaked window's own system backdrop can land in the live blur's backdrop
 // as black. With the live blur on, switch that backdrop off for the drag and
 // put it back after.
-static bool HideWindowInPlace(HWND hwnd, HideState& st, bool dropBackdrop = false) {
+static bool HideWindowInPlace(HWND hwnd, HideState& st, bool dropBackdrop = false,
+                              const WindowGlass* glassInfo = nullptr) {
     SaveCorners(hwnd, st);
     if (dropBackdrop) {
         DWORD type = 0;
@@ -5690,12 +5750,25 @@ static bool HideWindowInPlace(HWND hwnd, HideState& st, bool dropBackdrop = fals
                 st.backdrop = type;
             }
         }
+        if (glassInfo && glassInfo->isAccent &&
+            glassInfo->accentState >= 2 && glassInfo->accentState <= 4) {
+            if (ApplyAccent(hwnd, 0 /*ACCENT_DISABLED*/, 0, 0)) {
+                st.droppedAccent = true;
+                st.accentState   = glassInfo->accentState;
+                st.accentFlags   = glassInfo->accentFlags;
+                st.accentColor   = glassInfo->accentColor;
+            }
+        }
     }
     BOOL on = TRUE;
     if (FAILED(DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &on, sizeof(on)))) {
         if (st.dropped) {
             DwmSetWindowAttribute(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/, &st.backdrop, sizeof(st.backdrop));
             st.dropped = false;
+        }
+        if (st.droppedAccent) {
+            ApplyAccent(hwnd, st.accentState, st.accentFlags, st.accentColor);
+            st.droppedAccent = false;
         }
         return false;
     }
@@ -5727,6 +5800,10 @@ static void ShowWindowInPlace(HWND hwnd, HideState& st) {
     if (st.dropped) {
         DwmSetWindowAttribute(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/, &st.backdrop, sizeof(st.backdrop));
         st.dropped = false;
+    }
+    if (st.droppedAccent) {
+        ApplyAccent(hwnd, st.accentState, st.accentFlags, st.accentColor);
+        st.droppedAccent = false;
     }
     DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &off, sizeof(off));
     NotifyWinEvent(EVENT_OBJECT_UNCLOAKED, hwnd, OBJID_WINDOW, CHILDID_SELF);
@@ -5825,31 +5902,126 @@ static void ClearGlowProp() {
     g_glowPropHwnd = nullptr;
 }
 
-// How much of the glow behind the window shows through it: 0 when it isn't
-// see-through. An acrylic system backdrop, or the older accent blur that
-// tools like Translucent Windows set.
-static float GlowSeeThrough(HWND hwnd) {
+static void FillAccentGlass(int state, int flags, DWORD color, WindowGlass& out) {
+    if (state < 2 || state > 4) return;
+    out.isAccent    = true;
+    out.accentState = state;
+    out.accentFlags = flags;
+    out.accentColor = color;
+    const unsigned alpha = (color >> 24) & 0xFFu;
+    if (state == 3 && alpha == 0) {
+        out.seeThrough = 0.72f;
+        return;
+    }
+    out.seeThrough = std::clamp(1.0f - (float)alpha / 255.0f, 0.1f, 1.0f);
+    out.hasTint    = true;
+    out.tint[0]    = (float)(color & 0xFFu) / 255.0f;
+    out.tint[1]    = (float)((color >> 8) & 0xFFu) / 255.0f;
+    out.tint[2]    = (float)((color >> 16) & 0xFFu) / 255.0f;
+}
+
+static bool ParseFlyoutsHexAbgr(const std::wstring& hex, DWORD& abgr) {
+    const size_t len = hex.size();
+    if (len != 6 && len != 8) return false;
+    wchar_t* end = nullptr;
+    const unsigned long v = wcstoul(hex.c_str(), &end, 16);
+    if (!end || *end) return false;
+    const DWORD a = (len == 8) ? ((v >> 24) & 0xFFu) : 0u;
+    const DWORD r = (v >> 16) & 0xFFu;
+    const DWORD g = (v >> 8) & 0xFFu;
+    const DWORD b = v & 0xFFu;
+    abgr = (a << 24) | (b << 16) | (g << 8) | r;
+    return true;
+}
+
+// Fallback for windows styled by Seamless Flyouts before this mod loaded into
+// the process (GetWindowCompositionAttribute returns FALSE on Windows 11).
+static void ReadFlyoutsGlassFallback(HWND hwnd, WindowGlass& out) {
+    if (!ModEnabled(L"local@seamless-flyouts")) return;
+    wchar_t cls[64] = {};
+    if (GetClassNameW(hwnd, cls, ARRAYSIZE(cls))) {
+        if (_wcsicmp(cls, L"CASCADIA_HOSTING_WINDOW_CLASS") == 0 ||
+            _wcsicmp(cls, L"ApplicationFrameWindow") == 0)
+            return;
+    }
+    wchar_t path[MAX_PATH] = {};
+    const DWORD n = GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
+    if (!n || n >= ARRAYSIZE(path)) return;
+    const wchar_t* exe = wcsrchr(path, L'\\');
+    exe = exe ? exe + 1 : path;
+
+    ModSettingsKey k(L"local@seamless-flyouts");
+    if (!k.key) return;
+    std::wstring bgType;
+    std::wstring accentHex;
+    bool matchedRule = false;
+    for (int i = 0; i < 128; ++i) {
+        wchar_t name[96];
+        swprintf_s(name, L"RuledPrograms[%d].target", i);
+        const std::wstring target = k.Str(name);
+        if (target.empty()) break;
+        if (_wcsicmp(target.c_str(), exe) == 0) {
+            swprintf_s(name, L"RuledPrograms[%d].BackgroundEffects.type", i);
+            bgType = k.Str(name);
+            swprintf_s(name, L"RuledPrograms[%d].BackgroundEffects.AccentBlurBehind", i);
+            accentHex = k.Str(name);
+            matchedRule = true;
+            break;
+        }
+    }
+    if (!matchedRule) {
+        bgType    = k.Str(L"BackgroundEffects.type");
+        accentHex = k.Str(L"BackgroundEffects.AccentBlurBehind");
+    }
+    if (_wcsicmp(bgType.c_str(), L"acrylicblur") == 0) {
+        DWORD abgr = 0xD82E1E1Eu;
+        ParseFlyoutsHexAbgr(accentHex, abgr);
+        FillAccentGlass(4 /*ACCENT_ENABLE_ACRYLICBLURBEHIND*/, 0, abgr, out);
+        // A guess from settings: draw the glass, but never switch the window's
+        // own accent off and on, or a window Flyouts skipped would gain one.
+        out.isAccent = false;
+    } else if (_wcsicmp(bgType.c_str(), L"acrylic") == 0) {
+        out.seeThrough = 0.28f;
+    }
+}
+
+// How much of the backdrop behind the window shows through it: 0 when it isn't
+// see-through. Checks system acrylic, our hooked SetWindowCompositionAttribute
+// record, GetWindowCompositionAttribute, and Seamless Flyouts' rule for already
+// open windows.
+static WindowGlass ReadWindowGlass(HWND hwnd) {
+    WindowGlass out;
     int backdrop = 0;
     if (FAILED(DwmGetWindowAttribute(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/,
                                      &backdrop, sizeof(backdrop))))
         backdrop = 0;
     // Only the window's own app can set it, so what it asked for wins.
     if (RememberedBackdrop(hwnd) >= 0) backdrop = RememberedBackdrop(hwnd);
-    if (backdrop == 3)
-        return 0.28f;    // the acrylic's tint lets through about 28% (measured live)
-    struct Accent { int state, flags; DWORD color; int anim; };
-    struct Data { DWORD attr; PVOID data; ULONG size; };
-    using Get_t = BOOL(WINAPI*)(HWND, Data*);
+    if (backdrop == 3) {
+        out.seeThrough = 0.28f;    // the acrylic's tint lets through about 28% (measured live)
+        return out;
+    }
+    int st = 0, fl = 0;
+    DWORD col = 0;
+    if (RememberedAccent(hwnd, st, fl, col)) {
+        FillAccentGlass(st, fl, col, out);
+        return out;
+    }
+    using Get_t = BOOL(WINAPI*)(HWND, WcaData*);
     static Get_t get = [] {
         HMODULE u = GetModuleHandleW(L"user32.dll");
-        return u ? (Get_t)GetProcAddress(u, "GetWindowCompositionAttribute") : nullptr;
+        return u ? (Get_t)(void*)GetProcAddress(u, "GetWindowCompositionAttribute") : nullptr;
     }();
-    if (!get) return 0.0f;
-    Accent a{};
-    Data d{ 19 /*WCA_ACCENT_POLICY*/, &a, sizeof(a) };
-    if (!get(hwnd, &d) || a.state < 2 || a.state > 4) return 0.0f;
-    // The tint colour is AABBGGRR: its alpha is what covers the backdrop.
-    return std::clamp(1.0f - (float)(a.color >> 24) / 255.0f, 0.1f, 1.0f);
+    if (get) {
+        WcaAccent a{};
+        WcaData d{ 19 /*WCA_ACCENT_POLICY*/, &a, sizeof(a) };
+        if (get(hwnd, &d) && a.state >= 2 && a.state <= 4) {
+            FillAccentGlass(a.state, a.flags, a.color, out);
+            return out;
+        }
+    }
+    ReadFlyoutsGlassFallback(hwnd, out);
+    return out;
 }
 
 // The flat colour the capture shows where the backdrop is: the commonest
@@ -6404,7 +6576,8 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     // begins.
     GlassShot glass;
     // Read once, now: by the time the copy is built the same read returns 0.
-    const float seeThrough = GlowSeeThrough(hwnd);
+    const WindowGlass wg = ReadWindowGlass(hwnd);
+    const float seeThrough = wg.seeThrough;
     const bool wantGlass = seeThrough > 0.0f;
 
     // Wait for the move to begin: a press alone is a click.
@@ -6465,15 +6638,24 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     GlowCB glassCb;
     bool liveGlass = false, evenGlass = true;
     float liveFill = 0.0f;
+    float flatFill[3] = { 0.0f, 0.0f, 0.0f };
     if (!glow.Start(hwnd, cfg, canvas, glass, seeThrough)) {
         dev.SetGlow(nullptr);
-        if (GlassOnly(canvas, glass, glassCb, &evenGlass)) {
+        if (wantGlass && GlassOnly(canvas, glass, glassCb, &evenGlass)) {
+            flatFill[0] = glassCb.fill[0];
+            flatFill[1] = glassCb.fill[1];
+            flatFill[2] = glassCb.fill[2];
             // The real blur under the copy, which then paints only the tint.
             if (ov.glass && ov.glass->Start(canvas, CornerRadius(hwnd, MonitorScale(canvas.vis)),
                                             cfg.mesh, std::max(1, 64 / std::max(1, cfg.mesh)))) {
                 // Until the real window is cloaked the copy wears the flat
                 // stand-in colour and the blur stays hidden (see Reveal).
                 liveFill = 2.0f + (1.0f - seeThrough);
+                if (wg.hasTint && !evenGlass) {
+                    glassCb.fill[0] = wg.tint[0];
+                    glassCb.fill[1] = wg.tint[1];
+                    glassCb.fill[2] = wg.tint[2];
+                }
                 glassCb.fill[3] = 1.0f;
                 ov.glass->held = true;
                 liveGlass = true;
@@ -6517,7 +6699,7 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     // frame first let the real window slide out from under the copy (1.0.x).
     HideState hide;
     if (glow.on) glowProp.Set(hwnd);
-    if (!HideWindowInPlace(hwnd, hide, liveGlass)) {
+    if (!HideWindowInPlace(hwnd, hide, liveGlass, &wg)) {
         glowProp.Drop();
         Wh_Log(L"abort: cannot cloak window");
         ov.PresentClear();
@@ -6548,6 +6730,11 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
         ov.glass->Reveal();
         DwmFlush();
         if (ov.glass->shown) {
+            if (wg.hasTint) {
+                glassCb.fill[0] = wg.tint[0];
+                glassCb.fill[1] = wg.tint[1];
+                glassCb.fill[2] = wg.tint[2];
+            }
             glassCb.fill[3] = liveFill;
             dev.SetGlow(&glassCb);
             if (draw() == DrawResult::DeviceLost) lostDevice = true;
@@ -6671,6 +6858,9 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     // real window is back under it.
     const bool flatLanding = liveGlass && evenGlass;
     if (flatLanding) {
+        glassCb.fill[0] = flatFill[0];
+        glassCb.fill[1] = flatFill[1];
+        glassCb.fill[2] = flatFill[2];
         glassCb.fill[3] = 1.0f;
         dev.SetGlow(&glassCb);
     }
@@ -6902,6 +7092,16 @@ static HRESULT WINAPI DwmSetWindowAttribute_hook(HWND hwnd, DWORD attr, LPCVOID 
     return hr;
 }
 
+static BOOL WINAPI SetWindowCompositionAttribute_hook(HWND hwnd, WcaData* data) {
+    const BOOL ok = SetWindowCompositionAttribute_orig(hwnd, data);
+    if (ok && data && data->attr == 19 /*WCA_ACCENT_POLICY*/ &&
+        data->data && data->size >= sizeof(WcaAccent)) {
+        const auto* a = (const WcaAccent*)data->data;
+        RememberAccent(hwnd, a->state, a->flags, a->color);
+    }
+    return ok;
+}
+
 // -----------------------------------------------------------------------------
 // Entry points
 // -----------------------------------------------------------------------------
@@ -7027,13 +7227,20 @@ static BOOL WobbleInit() {
     const BOOL a  = WindhawkUtils::SetFunctionHook(DefWindowProcA, DefWindowProcA_hook, &DefWindowProcA_orig);
     const BOOL dw = WindhawkUtils::SetFunctionHook(DispatchMessageW, DispatchMessageW_hook, &DispatchMessageW_orig);
     const BOOL da = WindhawkUtils::SetFunctionHook(DispatchMessageA, DispatchMessageA_hook, &DispatchMessageA_orig);
-    g_backdropAtom = GlobalAddAtomW(L"SeamlessWobblyBackdrop");
+    g_backdropAtom    = GlobalAddAtomW(L"SeamlessWobblyBackdrop");
+    g_accentStateAtom = GlobalAddAtomW(L"SeamlessWobblyAccentState");
+    g_accentColorAtom = GlobalAddAtomW(L"SeamlessWobblyAccentColor");
     BOOL bd = FALSE;
     if (HMODULE dwm = LoadLibraryW(L"dwmapi.dll"))
         if (auto f = (DwmSetWindowAttribute_t)(void*)GetProcAddress(dwm, "DwmSetWindowAttribute"))
             bd = Wh_SetFunctionHook((void*)f, (void*)DwmSetWindowAttribute_hook,
                                     (void**)&DwmSetWindowAttribute_orig);
-    Wh_Log(L"init: hooks defW=%d defA=%d dispW=%d dispA=%d backdrop=%d", w, a, dw, da, bd);
+    BOOL wca = FALSE;
+    if (HMODULE u = GetModuleHandleW(L"user32.dll"))
+        if (auto f = (SetWindowCompositionAttribute_t)(void*)GetProcAddress(u, "SetWindowCompositionAttribute"))
+            wca = Wh_SetFunctionHook((void*)f, (void*)SetWindowCompositionAttribute_hook,
+                                     (void**)&SetWindowCompositionAttribute_orig);
+    Wh_Log(L"init: hooks defW=%d defA=%d dispW=%d dispA=%d backdrop=%d wca=%d", w, a, dw, da, bd, wca);
     return TRUE;
 }
 

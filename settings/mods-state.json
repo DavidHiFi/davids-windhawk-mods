@@ -1229,7 +1229,7 @@
     "include": "*|windhawk.exe",
     "exclude": "dwm.exe|sihost.exe|RuntimeBroker.exe|StartMenuExperienceHost.exe|ShellExperienceHost.exe|SearchHost.exe|TextInputHost.exe|ApplicationFrameHost.exe|NVDisplay.Container.exe",
     "architecture": "",
-    "version": "1.2.14"
+    "version": "1.2.15"
   },
   "local@seamless-workshop": {
     "disabled": false,
