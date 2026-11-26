@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.13
+// @version         0.3.14
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -2958,8 +2958,20 @@ void CALLBACK ZOwnEventProc(HWINEVENTHOOK, DWORD ev, HWND h, LONG idObj, LONG id
 
 HWND MakeTitle() {
     // Click-through and never focused: clicks land on the bar under it.
-    return CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TRANSPARENT,
-                           L"SeamlessDockTitle", L"Seamless Dock title", WS_POPUP, 0, 0, 10, 10, nullptr, nullptr,
+    const DWORD ex = WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_LAYERED | WS_EX_TRANSPARENT;
+    // The tool process puts its always-on-top windows on a layer above the
+    // taskbar's, where no reorder can slip the pill under the bar's menu.
+    // Make it on the desktop layer (1), the same one as the bar and its menus.
+    using CreateWindowInBand_t = HWND(WINAPI*)(DWORD, LPCWSTR, LPCWSTR, DWORD, int, int, int, int, HWND, HMENU,
+                                                HINSTANCE, LPVOID, DWORD);
+    static auto inBand = reinterpret_cast<CreateWindowInBand_t>(
+        GetProcAddress(GetModuleHandleW(L"user32.dll"), "CreateWindowInBand"));
+    if (inBand) {
+        if (HWND h = inBand(ex, L"SeamlessDockTitle", L"Seamless Dock title", WS_POPUP, 0, 0, 10, 10, nullptr,
+                            nullptr, GetModuleHandleW(nullptr), nullptr, 1))
+            return h;
+    }
+    return CreateWindowExW(ex, L"SeamlessDockTitle", L"Seamless Dock title", WS_POPUP, 0, 0, 10, 10, nullptr, nullptr,
                            GetModuleHandleW(nullptr), nullptr);
 }
 
