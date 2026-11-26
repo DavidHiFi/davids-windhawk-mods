@@ -419,20 +419,6 @@
     "architecture": "",
     "version": "1.4.39"
   },
-  "local@explorer-tags-plus": {
-    "disabled": false,
-    "include": "explorer.exe",
-    "exclude": "",
-    "architecture": "",
-    "version": "0.9.1"
-  },
-  "local@file-operation-styler-plus": {
-    "disabled": false,
-    "include": "explorer.exe",
-    "exclude": "",
-    "architecture": "x86-64",
-    "version": "1.6.7"
-  },
   "local@seamless-explorer-view": {
     "disabled": false,
     "include": "explorer.exe",
@@ -649,13 +635,6 @@
     "exclude": "",
     "architecture": "",
     "version": "1.3.2"
-  },
-  "local@windows-11-file-explorer-styler-plus": {
-    "disabled": false,
-    "include": "explorer.exe",
-    "exclude": "",
-    "architecture": "x86-64",
-    "version": "1.10.42"
   },
   "local@wintips-osd-plus": {
     "disabled": false,
@@ -1153,13 +1132,6 @@
     "exclude": "",
     "architecture": "",
     "version": "1.5.1"
-  },
-  "local@explorer-tree-guard": {
-    "disabled": false,
-    "include": "explorer.exe",
-    "exclude": "",
-    "architecture": "",
-    "version": "1.0.0"
   },
   "local@halo-launcher": {
     "disabled": false,

@@ -20,9 +20,6 @@
     "local@better-volume-mixer-plus": "Taskbar",
     "local@dark-theme-browser-colors-fix-plus": "Fixes",
     "local@dsx-tray-icon-fix": "Fixes",
-    "local@explorer-tags-plus": "Explorer",
-    "local@explorer-tree-guard": "Fixes",
-    "local@file-operation-styler-plus": "Explorer",
     "local@halo-launcher": "Windows and menus",
     "local@keyboard-shortcut-actions-plus": "Tools",
     "local@logitech-battery-tray": "Taskbar",
@@ -77,7 +74,6 @@
     "local@theme-tool-plus": "Windows and menus",
     "local@uwp-assets-redirect-plus": "Windows and menus",
     "local@windhawk-enhanced-styler": "Windows and menus",
-    "local@windows-11-file-explorer-styler-plus": "Explorer",
     "local@wintips-osd-plus": "Windows and menus",
     "local@zoomit": "Tools"
   }
