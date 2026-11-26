@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T08:00:37+08:00",
+  "generatedAt": "2026-11-26T08:09:21+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 165,
@@ -875,7 +875,7 @@
       "name": "Network Speed Test Plus",
       "author": "DavidHiFi, Alessandro-Vecchio",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.4.2",
+      "version": "2.4.3",
       "license": "",
       "origin": "local",
       "upstream": "",
