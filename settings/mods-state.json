@@ -1173,7 +1173,7 @@
     "include": "windhawk-mod.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.11"
+    "version": "1.0.12"
   },
   "local@seamless-taskbar-badge-counter": {
     "disabled": false,

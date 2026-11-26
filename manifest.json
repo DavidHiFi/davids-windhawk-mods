@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-27T00:35:43+08:00",
+  "generatedAt": "2026-11-27T00:35:50+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 121,
@@ -975,7 +975,7 @@
       "name": "Seamless Sound Manager",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.0.11",
+      "version": "1.0.12",
       "license": "CDDL-1.0",
       "origin": "local",
       "upstream": "",
