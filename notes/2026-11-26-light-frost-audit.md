@@ -21,3 +21,19 @@ material.
 | Seamless Title Bars | only on a command from the Windhawk page | fine |
 
 Lesson added to the rice skill (`references\stacks.md`, Native Win32) and synced to every agent.
+
+## Live proof and Speed Test 2.4.5 (2026-11-26, evening)
+
+- First live proof (7:12 pm, `work\2026-11-26-glass-audit\proof-live`): speed test pop-up over busy text read
+  flat in glass-check (movement 0.25): no light frost, but the 0.80 Mocha layer hid the blur. The About box
+  shot did not count: another window sat on top of it (the agent window manager opens it without focus).
+- Speed Test 2.4.5: the Mocha layer over the glass went from 0.80 to 0.55, the settings windows' tint.
+  Installed 9:38 pm (desktop fine after 60 s), published as commit 6ff08f6 on the mods repo.
+- `glass-proof.py` now lifts the About box and the busy window into the topmost band before the shot.
+- Second live proof (10:15 pm, `proof-live2`): About box over busy text passes glass-check (movement 5.3,
+  frosted): dark house glass, colour moves under it, text behind never reads, gradient banner and FiraCode
+  in place. The speed test shot again had a dark app window between it and the test pattern (movement
+  0.6 / 0.2, not a fair test), so `glass-proof.py` now lifts the pattern and the pop-up too, and takes
+  `winver` or `speedtest` as a second argument to run one part only.
+- Third run queued as the hidden task "Agent glass fix run 2" (`D:\Agent Work\swc\fix-run2.ps1`), result in
+  `proof-live3` and `fix-run2.log`.
