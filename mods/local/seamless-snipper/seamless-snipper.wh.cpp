@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.7.6
+// @version         0.7.8
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -24,7 +24,12 @@ read later, like "Discord 4.05 pm.png".
 
 ![Seamless Snipper preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-snipper.png)
 
-## What's new in 0.7.6
+## What's new in 0.7.7
+
+- Seamless Dictate works in the Magic Pointer ask box. Hold or tap its
+  shortcut while the box is open and your words land in the box.
+
+## New in 0.7.6
 
 - Title bar menus (right-click the title bar, or Alt+Space) now really get the same
   blurred Mocha body as every other menu. They opened pitch black before.
@@ -775,6 +780,86 @@ restyled to match the rest of Snipper.
 #include <vector>
 
 #include <windhawk_tool_mod.h>
+
+// Crisp icons (2026-11-26): tray icons are drawn at 4x the size the taskbar shows them and shrunk
+// here with a box filter, so curves and glyph edges are smooth instead of stretched and stepped.
+// The result carries straight alpha, which is what Windows expects in an icon.
+static HICON Crisp_ShrinkIcon(HICON big, int factor) {
+    if (!big || factor <= 1) return big;
+    ICONINFO ii{};
+    if (!GetIconInfo(big, &ii)) return big;
+    HICON out = nullptr;
+    BITMAP bm{};
+    if (ii.hbmColor && GetObjectW(ii.hbmColor, sizeof(bm), &bm) && bm.bmWidth == bm.bmHeight &&
+        bm.bmWidth >= factor && bm.bmWidth % factor == 0) {
+        const int src = bm.bmWidth, n = src / factor;
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+        bi.bmiHeader.biWidth = src;
+        bi.bmiHeader.biHeight = -src;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        unsigned int* in = new unsigned int[(size_t)src * src];
+        HDC screen = GetDC(nullptr);
+        if (GetDIBits(screen, ii.hbmColor, 0, src, in, &bi, DIB_RGB_COLORS) == src) {
+            bool premul = true, anyAlpha = false;
+            for (size_t i = 0; i < (size_t)src * src; i++) {
+                unsigned int p = in[i], a = p >> 24;
+                if (a) anyAlpha = true;
+                if (((p >> 16) & 0xFF) > a || ((p >> 8) & 0xFF) > a || (p & 0xFF) > a) premul = false;
+            }
+            void* bits = nullptr;
+            bi.bmiHeader.biWidth = n;
+            bi.bmiHeader.biHeight = -n;
+            HBITMAP color = anyAlpha ? CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
+            if (color && bits) {
+                unsigned int* px = (unsigned int*)bits;
+                const unsigned int cnt = (unsigned int)(factor * factor);
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++) {
+                        unsigned int sa = 0, sr = 0, sg = 0, sb = 0;
+                        for (int dy = 0; dy < factor; dy++)
+                            for (int dx = 0; dx < factor; dx++) {
+                                unsigned int p = in[(size_t)(y * factor + dy) * src + x * factor + dx], a = p >> 24;
+                                unsigned int r = (p >> 16) & 0xFF, g = (p >> 8) & 0xFF, b = p & 0xFF;
+                                if (!premul) {
+                                    r = (r * a + 127) / 255;
+                                    g = (g * a + 127) / 255;
+                                    b = (b * a + 127) / 255;
+                                }
+                                sa += a; sr += r; sg += g; sb += b;
+                            }
+                        unsigned int a = (sa + cnt / 2) / cnt, r = 0, g = 0, b = 0;
+                        if (a && sa) {
+                            r = (sr * 255 + sa / 2) / sa; if (r > 255) r = 255;
+                            g = (sg * 255 + sa / 2) / sa; if (g > 255) g = 255;
+                            b = (sb * 255 + sa / 2) / sa; if (b > 255) b = 255;
+                        }
+                        px[(size_t)y * n + x] = a ? ((a << 24) | (r << 16) | (g << 8) | b) : 0;
+                    }
+                // A zero mask: with 32-bit colour Windows draws from the alpha channel.
+                unsigned char* maskBits = new unsigned char[(size_t)((n + 15) / 16) * 2 * n]();
+                HBITMAP mask = CreateBitmap(n, n, 1, 1, maskBits);
+                delete[] maskBits;
+                if (mask) {
+                    ICONINFO o{TRUE, 0, 0, mask, color};
+                    out = CreateIconIndirect(&o);
+                    DeleteObject(mask);
+                }
+            }
+            if (color) DeleteObject(color);
+        }
+        ReleaseDC(nullptr, screen);
+        delete[] in;
+    }
+    if (ii.hbmColor) DeleteObject(ii.hbmColor);
+    if (ii.hbmMask) DeleteObject(ii.hbmMask);
+    if (!out) return big;
+    DestroyIcon(big);
+    return out;
+}
+
 
 namespace snpset {
 void OpenSettingsWindow();
@@ -8604,8 +8689,8 @@ static void EnableDarkMenus() {
 }
 
 // A rounded square in the blue to mauve gradient with the snip glyph, drawn with GDI.
-static HICON MakeTrayIcon() {
-    int size = GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem());
+static HICON MakeTrayIcon_Big() {
+    int size = GetSystemMetricsForDpi(SM_CXICON, GetDpiForSystem()) * 4;
     if (size < 16) size = 16;
     BITMAPINFO bi{};
     bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
@@ -8665,6 +8750,9 @@ static HICON MakeTrayIcon() {
     DeleteObject(glyph);
     return icon;
 }
+
+// Drawn at 4x and shrunk, so the icon is smooth at the size it is shown.
+static HICON MakeTrayIcon() { return Crisp_ShrinkIcon(MakeTrayIcon_Big(), 4); }
 
 static void UpdateTray(bool add) {
     const Config& c = g_cfg;
@@ -19896,9 +19984,40 @@ std::vector<TextBlock> ParseMarkdown(const std::wstring& text) {
     return blocks;
 }
 
+// This mod runs as administrator and Seamless Dictate doesn't, so Windows hides
+// the ask box's keys from Dictate and drops the text it types. While the box
+// has the focus it passes Ctrl/Win/Shift/Alt to Dictate, and takes Dictate's
+// text as WM_COPYDATA tagged kDictateTextTag.
+constexpr ULONG_PTR kDictateTextTag = 0x53444354;  // 'SDCT'
+
+void TellDictateModifiers(bool focused) {
+    static const UINT message = RegisterWindowMessageW(L"SeamlessDictate.ElevatedKeys");
+    static UINT last = ~0u;
+    UINT mods = 0;
+    if (focused) {
+        if (GetKeyState(VK_CONTROL) & 0x8000) mods |= MOD_CONTROL;
+        if ((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x8000) mods |= MOD_WIN;
+        if (GetKeyState(VK_SHIFT) & 0x8000) mods |= MOD_SHIFT;
+        if (GetKeyState(VK_MENU) & 0x8000) mods |= MOD_ALT;
+    }
+    if (mods == last) {
+        return;
+    }
+    last = mods;
+    if (HWND dictate = FindWindowW(L"AIVoiceTypingOverlay_local@seamless-dictate", nullptr)) {
+        PostMessageW(dictate, message, mods, 0);
+    }
+}
+
 class AskCard {
   public:
-    bool Create() { return panel_.Create(true, false, kCardWindowClass, this); }
+    bool Create() {
+        if (!panel_.Create(true, false, kCardWindowClass, this)) {
+            return false;
+        }
+        ChangeWindowMessageFilterEx(panel_.Hwnd(), WM_COPYDATA, MSGFLT_ALLOW, nullptr);
+        return true;
+    }
 
     void Destroy() {
         Close();
@@ -21912,11 +22031,34 @@ class AskCard {
                        LPARAM lParam,
                        LRESULT& result) {
         const double now = NowMs();
+        if (message == WM_KEYDOWN || message == WM_KEYUP || message == WM_SYSKEYDOWN ||
+            message == WM_SYSKEYUP || message == WM_SETFOCUS) {
+            TellDictateModifiers(true);
+        } else if (message == WM_KILLFOCUS) {
+            TellDictateModifiers(false);
+        }
         switch (message) {
             case WM_NCHITTEST: {
                 POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
                 ScreenToClient(hwnd, &pt);
                 result = HitTest(pt) != kHitNone ? HTCLIENT : HTCAPTION;
+                return true;
+            }
+
+            case WM_COPYDATA: {
+                const auto* data = reinterpret_cast<const COPYDATASTRUCT*>(lParam);
+                if (!data || data->dwData != kDictateTextTag || !data->lpData ||
+                    data->cbData % sizeof(wchar_t)) {
+                    return false;
+                }
+                std::wstring text(static_cast<const wchar_t*>(data->lpData),
+                                  data->cbData / sizeof(wchar_t));
+                ClearAnswerSelection();
+                InsertText(std::move(text));
+                caretStart_ = now;
+                caretOn_ = true;
+                Update(now);
+                result = TRUE;
                 return true;
             }
 

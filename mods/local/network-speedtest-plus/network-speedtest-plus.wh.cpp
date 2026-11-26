@@ -2,7 +2,7 @@
 // @id              network-speedtest-plus
 // @name            Network Speed Test Plus
 // @description     Tray speed test button next to the network icon, plus the Windows 11 network menu speed test as a native flyout: ping, jitter, download and upload measured against Cloudflare, live gauge, results chart with copy. Mocha glass, FiraCode, gradient hover. No browser, no separate app.
-// @version         2.4.3
+// @version         2.4.4
 // @author          DavidHiFi, Alessandro-Vecchio
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -19,6 +19,11 @@
 // ==WindhawkModReadme==
 /*
 # Network Menu Speed Test Plus
+
+## What's new in 2.4.4
+
+- The speed test window now uses the same dark glass as every other
+  DavidHiFi window. It no longer turns light grey over bright windows.
 
 ## What's new in 2.4.0
 
@@ -4525,10 +4530,28 @@ static void ApplyBackdrop(HWND hwnd, bool enable) {
     DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark,
                           sizeof(dark));
 
-    int backdrop = enable ? 3 /* DWMSBT_TRANSIENTWINDOW */
-                          : 1 /* DWMSBT_NONE */;
+    // The accent acrylic, the same sheet as the launcher grid and every settings
+    // window. The system acrylic (DWMSBT_TRANSIENTWINDOW) reads as light grey
+    // frost over bright windows; the accent stays dark under the Mocha layer.
+    int backdrop = 1;  // DWMSBT_NONE
     DwmSetWindowAttribute(hwnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop,
                           sizeof(backdrop));
+    DWM_BLURBEHIND bb{};
+    bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+    bb.fEnable = enable ? TRUE : FALSE;
+    bb.hRgnBlur = enable ? CreateRectRgn(0, 0, -1, -1) : nullptr;
+    DwmEnableBlurBehindWindow(hwnd, &bb);
+    if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+    struct SetAccentPolicy { int state, flags, abgr, animation; };
+    struct SetCompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, SetCompositionData*);
+    if (auto setComposition = (SetComposition_t)(void*)GetProcAddress(
+            GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute")) {
+        SetAccentPolicy policy{enable ? 4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */ : 0,
+                               2, (int)0x012E1E1E, 0};
+        SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+        setComposition(hwnd, &data);
+    }
 }
 
 // Re-reads theme and transparency and re-applies the material. DWM ignores a

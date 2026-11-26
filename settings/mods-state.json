@@ -431,7 +431,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.6.6"
+    "version": "1.6.7"
   },
   "local@seamless-explorer-view": {
     "disabled": false,
@@ -515,7 +515,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.4.8"
+    "version": "1.4.9"
   },
   "local@seamless-color-picker": {
     "disabled": false,
@@ -536,7 +536,7 @@
     "include": "*",
     "exclude": "cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe",
     "architecture": "",
-    "version": "2.1.6"
+    "version": "2.2.0"
   },
   "local@seamless-launchpad": {
     "disabled": false,
@@ -567,11 +567,11 @@
     "version": "1.5.0"
   },
   "local@seamless-title-bars": {
-    "disabled": false,
+    "disabled": true,
     "include": "*|dwm.exe|windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.3.17"
+    "version": "1.3.19"
   },
   "local@seamless-tray-drawer": {
     "disabled": false,
@@ -599,7 +599,7 @@
     "include": "windhawk.exe|explorer.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.0.10"
+    "version": "1.0.11"
   },
   "local@taskbar-ai-usage-plus": {
     "disabled": false,
@@ -648,7 +648,7 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.10.40"
+    "version": "1.10.42"
   },
   "local@wintips-osd-plus": {
     "disabled": false,
@@ -662,7 +662,7 @@
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-uiaccess.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.2.3"
+    "version": "1.3.1"
   },
   "lock-screen-live-wallpaper": {
     "disabled": false,
@@ -1159,14 +1159,14 @@
     "include": "windhawk-mod.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "0.6.17"
+    "version": "0.6.18"
   },
   "local@network-speedtest-plus": {
     "disabled": false,
     "include": "windhawk.exe|ShellHost.exe|ShellExperienceHost.exe|SystemSettings.exe|RuntimeBroker.exe|explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.4.3"
+    "version": "2.4.4"
   },
   "local@power-options-button-plus": {
     "disabled": false,
@@ -1222,14 +1222,14 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "0.7.6"
+    "version": "0.7.8"
   },
   "local@seamless-sound-manager": {
     "disabled": false,
     "include": "windhawk-mod.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.10"
+    "version": "1.0.11"
   },
   "local@seamless-taskbar-badge-counter": {
     "disabled": false,
@@ -1260,11 +1260,11 @@
     "version": "1.5.9"
   },
   "local@startup-control": {
-    "disabled": false,
+    "disabled": true,
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "",
-    "version": "0.1.12"
+    "version": "0.1.13"
   },
   "local@dark-theme-browser-colors-fix-plus": {
     "disabled": false,
@@ -1285,7 +1285,7 @@
     "include": "*|windhawk.exe",
     "exclude": "dwm.exe|mmc.exe|conhost.exe|OpenConsole.exe|csrss.exe|LogonUI.exe|cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe|chrome.exe|msedge.exe|msedgewebview2.exe|firefox.exe|brave.exe|opera.exe|vivaldi.exe|Discord.exe|Code.exe|T3 Code.exe|Spotify.exe|steamwebhelper.exe|ms-teams.exe|Obsidian.exe|Tidal.exe|Dopamine.exe|T3 Code (Nightly).exe|Hydra.exe|UA Connect.exe|Mullvad VPN.exe|cmd.exe|claude.exe|opencode.exe|node.exe|lazy-mcp.exe|crashpad_handler.exe|millennium.luavm64.exe|millennium.crashhandler64.exe|gameoverlayui64.exe|RTSSHooksLoader64.exe|PresentMonDataProvider.exe|NVDisplay.Container.exe|GameInputRawInputProxy.exe|GameInputRedistService.exe|WavesLocalServer.exe|uacloudhelper.exe|ElgatoAudioControlServer.exe|ElgatoAudioControlServerWatcher.exe|unsecapp.exe|t3keeper.exe|t3guard.exe|t3-resource-monitor.exe|agent-guard.exe|C:\\Program Files\\Git\\*",
     "architecture": "x86-64",
-    "version": "1.0.11"
+    "version": "1.0.12"
   },
   "local@seamless-windows-firewall": {
     "disabled": false,
@@ -1299,14 +1299,14 @@
     "include": "DSX.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.0"
+    "version": "1.0.1"
   },
   "local@seamless-dock": {
     "disabled": false,
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "",
-    "version": "0.3.15"
+    "version": "0.3.16"
   },
   "local@logitech-battery-tray": {
     "disabled": false,
@@ -1316,11 +1316,11 @@
     "version": "0.1.6"
   },
   "local@seamless-download-manager": {
-    "disabled": false,
+    "disabled": true,
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.12"
+    "version": "1.0.13"
   },
   "local@parallax-wallpaper": {
     "disabled": false,
@@ -1355,7 +1355,7 @@
     "include": "winver.exe|windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.0"
+    "version": "1.1.1"
   },
   "local@mocha-app-icons": {
     "disabled": false,
@@ -1376,7 +1376,7 @@
     "include": "SystemSettings.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.0.0"
+    "version": "2.0.1"
   },
   "local@uwp-assets-redirect-plus": {
     "disabled": false,

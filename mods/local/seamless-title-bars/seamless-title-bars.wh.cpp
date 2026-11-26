@@ -2,7 +2,7 @@
 // @id              seamless-title-bars
 // @name            Seamless Title Bars
 // @description     One title bar look everywhere: colours, caption buttons, a glass title dock and native frames in every kind of app
-// @version         1.3.17
+// @version         1.3.19
 // @author          DavidHiFi, Th3Fanbus, grn15RenS, Ingan121, Anixx, aubymori
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -77,6 +77,14 @@ switch, so you only turn on what you want.
   restarts (sign out and back in).
 - Spotify options marked with * need a Spotify restart.
 - Changing the native frames app list needs those apps restarted.
+
+## What's new in 1.3.19
+- (hover fix, see notes)
+
+## What's new in 1.3.18
+- The title no longer blinks out for a moment when the running time ticks
+  over. It showed most on the Windhawk app, where the title and its icon could
+  vanish for a split second every so often. The time now updates in place.
 
 ## What's new in 1.3.17
 - Pop-ups in Chromium browsers (extension pop-ups like Bitwarden, menus and
@@ -590,6 +598,10 @@ struct Block {
     // 1.3.16: hit tests on the dock that were not where the pointer is (no hover started), and
     // hovers that ended on their first tick before they lit.
     volatile LONG startsRefused, startsUnlit;
+    // 1.3.19: frames drawn with the hover glow on, timers stopped by a cross-thread free, and a
+    // window the tool asks the mod to hold lit (proof captures without moving the pointer).
+    volatile LONG renderHot, crossThread, forcedStarts, lastHotAlpha;
+    ULONGLONG forceHwnd;
 };
 static HANDLE g_map;
 static Block* volatile g_blk;
@@ -1766,6 +1778,8 @@ struct TitleInfo {
     float hoverP;        // 0..1 hover animation progress
     wchar_t shown[64];   // uptime suffix currently in the title
     int shownLen, sufStart, sufLen;
+    wchar_t base[320];   // the window's own title, without the suffix (for the quiet tick)
+    int baseLen;
     bool wantRelayout;
     bool tooLong;        // title too long for a suffix: the timer leaves it alone
     int ovrUp = -1;      // per-app uptime rule: -1 inherit, 0 off, 1 on
@@ -1774,6 +1788,7 @@ struct TitleInfo {
     RECT hitRect;        // window rect at that hit test
     int outTicks;        // hover ticks in a row with the pointer off the dock
     int dwellTicks;      // hover ticks the pointer has rested on the dock before the glow starts
+    bool forced;         // held lit by the tool (proof captures)
     DockGeo geo;         // last good render
 };
 static std::unordered_map<void*, TitleInfo> g_titles;   // CTopLevelWindow* -> info
@@ -2629,6 +2644,8 @@ static long TextSetText_Hook(void* text, const wchar_t* s) {
         int prevLen = ti.shownLen;
         ti.shown[0] = 0; ti.shownLen = 0; ti.sufStart = 0; ti.sufLen = 0;
         size_t n = wcslen(s);
+        if (n < 320) { wmemcpy(ti.base, s, n); ti.base[n] = 0; ti.baseLen = (int)n; }
+        else { ti.base[0] = 0; ti.baseLen = 0; }
         ti.emptyTitle = (n == 0);
         ti.tooLong = (n >= 320);
         if (n > 0 && n < 320 && ti.hwnd && UptimeApplies(ti.closeOnly, ti.ovrUp)) {
@@ -2897,6 +2914,10 @@ static void DrawDock(ID2D1RenderTarget* rt, D2D1_POINT_2F o) {
         edge->Release();
     }
     if (c.hoverA > 0.003f) {
+        if (stbshared::Block* hb = stbshared::g_blk) {
+            InterlockedIncrement(&hb->renderHot);
+            hb->lastHotAlpha = (LONG)(c.hoverA * 1000.0f);
+        }
         D2D1_GRADIENT_STOP stops[2] = {{0.0f, Rgb(g_settings.dockHov1, 1.0f)}, {1.0f, Rgb(g_settings.dockHov2, 1.0f)}};
         ID2D1GradientStopCollection* coll = nullptr;
         if (SUCCEEDED(rt->CreateGradientStopCollection(stops, 2, &coll))) {
@@ -3051,6 +3072,11 @@ static int g_tickCount = 0;
 static void UptimeTick() {
     if (g_unloading || g_crossThread || (!g_settings.upOn && !PappAnyUpOn()) || !OnTitleUpdated_Orig) return;
     std::vector<void*> todo;
+    // Same-length tick (12s -> 13s): swap the text and redraw only the title surface, the way the
+    // hover glow does. A full title update rebuilds the title and icon visuals, and on some windows
+    // (the Windhawk app) they showed blank for 20 to 80 ms before coming back: the tick blink.
+    struct Quiet { void* text; std::wstring full; };
+    std::vector<Quiet> quiet;
     HWND hotUpd = nullptr;
     wchar_t hotSuf[48] = L"";
     AcquireSRWLockExclusive(&g_titleLock);
@@ -3064,7 +3090,16 @@ static void UptimeTick() {
         if (!IsWindowVisible(ti.hwnd) || IsIconic(ti.hwnd)) continue;
         wchar_t suf[64];
         UptimeSuffixLocked(ti.hwnd, suf, 64);
-        if (wcscmp(suf, ti.shown) != 0) todo.push_back(win);
+        if (wcscmp(suf, ti.shown) != 0) {
+            int sl = (int)wcslen(suf);
+            if (sl == ti.shownLen && ti.baseLen > 0 && ti.sufStart == ti.baseLen && SetDirtyFlags_Func &&
+                TextSetText_Orig) {
+                wcsncpy_s(ti.shown, suf, _TRUNCATE);
+                quiet.push_back({ti.text, std::wstring(ti.base, ti.baseLen) + suf});
+            } else {
+                todo.push_back(win);
+            }
+        }
         if (!hotUpd && ti.hwnd == stbshared::HotHwnd()) {
             hotUpd = ti.hwnd;
             wcsncpy_s(hotSuf, suf, _TRUNCATE);
@@ -3072,11 +3107,16 @@ static void UptimeTick() {
     }
     ReleaseSRWLockExclusive(&g_titleLock);
     if (hotUpd) stbshared::WriteSuffix(hotUpd, hotSuf);   // pointer resting on the dock: keep its menu copy fresh
-    for (void* win : todo) OnTitleUpdated_Orig(win);   // same as a real title change
-    if (g_tickCount <= 3) Wh_Log(L"[Uptime] tick %d: %zu title(s) updated", g_tickCount, todo.size());
+    for (auto& q : quiet) {
+        TextSetText_Orig(q.text, q.full.c_str());
+        SetDirtyFlags_Func(q.text, 0x1000);   // redraw the title surface
+    }
+    for (void* win : todo) OnTitleUpdated_Orig(win);   // width changed: same as a real title change
+    if (g_tickCount <= 3)
+        Wh_Log(L"[Uptime] tick %d: %zu quiet, %zu full title update(s)", g_tickCount, quiet.size(), todo.size());
     if (g_settings.debugLog && (g_tickCount <= 40 || g_tickCount % 60 == 0)) {
         wchar_t b[120];
-        swprintf(b, 120, L"[Uptime] tick %d: %zu title(s) updated", g_tickCount, todo.size());
+        swprintf(b, 120, L"[Uptime] tick %d: %zu quiet, %zu full", g_tickCount, quiet.size(), todo.size());
         RingAppend(b);
     }
 }
@@ -3108,7 +3148,7 @@ static void HoverTick() {
                 // The pointer has not moved since a hit test put it on the dock, and neither has the window:
                 // it is still there, whatever a re-layout did to the numbers meanwhile.
                 bool still = ti.hitInside && cur.x == ti.hitCur.x && cur.y == ti.hitCur.y && EqualRect(&wr, &ti.hitRect);
-                in = geo || still;
+                in = geo || still || ti.forced;
             }
             if (in) {
                 ti.outTicks = 0;
@@ -3180,6 +3220,26 @@ static void HoverStart(void* win) {
     }
 }
 
+// Once a second: report the timer state, and hold one window's dock lit while the tool names it
+// in the shared block (proof captures without moving the pointer; 0 releases it).
+static void ForceTick() {
+    stbshared::Block* db = stbshared::g_blk;
+    if (!db || g_unloading) return;
+    db->crossThread = g_crossThread;
+    HWND want = (HWND)(ULONG_PTR)db->forceHwnd;
+    void* start = nullptr;
+    AcquireSRWLockExclusive(&g_titleLock);
+    for (auto& [win, ti] : g_titles) {
+        if (want && ti.hwnd == want) {
+            if (!ti.forced) { ti.forced = true; if (ti.dock) start = win; }
+        } else if (ti.forced) {
+            ti.forced = false;
+        }
+    }
+    ReleaseSRWLockExclusive(&g_titleLock);
+    if (start) { InterlockedIncrement(&db->forcedStarts); HoverStart(start); }
+}
+
 // Every title redraws (settings changed, or the mod unloads and takes its text and dock away).
 static void RefreshAllTitles() {
     if (g_crossThread) return;
@@ -3206,7 +3266,7 @@ static LRESULT CALLBACK TitleMsgProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_TIMER: {
             DwmLockHold hold;
             if (!hold.ok) return 0;
-            if (wp == kTimerUptime) { if (tfont::PollSeq()) { RefreshAllTitles(); RequestDwmRefresh(); } UptimeTick(); }
+            if (wp == kTimerUptime) { if (tfont::PollSeq()) { RefreshAllTitles(); RequestDwmRefresh(); } ForceTick(); UptimeTick(); }
             else if (wp == kTimerHover) HoverTick();
             return 0;
         }

@@ -2,7 +2,7 @@
 // @id              seamless-settings-styler
 // @name            Seamless Settings Styler
 // @description     Catppuccin Mocha for Windows Settings: glass that matches the title bar, edges on every card, a sidebar that folds to icons
-// @version         2.0.0
+// @version         2.0.1
 // @author          DavidHiFi, m417z
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -116,6 +116,11 @@ GPL-3.0 license.
     $description: >-
       Used when the title bar match is off or Seamless Title Bars isn't
       running. Higher is darker and less see-through.
+  - pageShade: 0
+    $name: Extra shade on the page (percent)
+    $description: >-
+      Darkens the page area under the cards. Leave at 0 so the page is the
+      same glass as the title bar.
   $name: Glass
 - colours:
   - accentStart: "#89B4FA"
@@ -161,6 +166,12 @@ GPL-3.0 license.
     $name: Remember the last fold
   - width: 300
     $name: Open width
+  - foldedWidth: 64
+    $name: Folded width
+    $description: Width of the icon strip when the sidebar is folded.
+  - shrinkPicture: true
+    $name: Smaller picture when folded
+    $description: Shrinks your account picture so it fits the icon strip.
   - hideWhenFolded: [""]
     $name: Hide when folded
     $description: >-
@@ -2817,6 +2828,8 @@ const Theme g_themeSeamlessMocha = {{
     L"SurfaceStrokeColorFlyoutBrush:=<SolidColorBrush Color=\"$Edge\"/>",
     L"SurfaceStrokeColorDefaultBrush:=<SolidColorBrush Color=\"$Edge\"/>",
     L"TextControlElevationBorderFocusedBrush:=$Grad",
+    L"SystemControlFocusVisualPrimaryBrush:=<SolidColorBrush Color=\"$Blue\"/>",
+    L"SystemControlFocusVisualSecondaryBrush:=<SolidColorBrush Color=\"Transparent\"/>",
     L"AcrylicInAppFillColorDefaultBrush:=<SolidColorBrush Color=\"$Popup\"/>",
     L"AcrylicBackgroundFillColorDefaultBrush:=<SolidColorBrush Color=\"$Popup\"/>",
     L"MenuFlyoutPresenterBackground:=<SolidColorBrush Color=\"$Popup\"/>",
@@ -2968,13 +2981,18 @@ const Theme g_themeSeamlessMocha = {{
 const Theme g_themeSeamlessMochaSidebar = {{
     ThemeTargetStyles{L"Microsoft.UI.Xaml.Controls.NavigationView#PermanentNavigationView", {
         L"IsPaneToggleButtonVisible=True",
-        L"OpenPaneLength=$PaneW"}},
+        L"OpenPaneLength=$PaneW",
+        L"CompactPaneLength=$FoldW"}},
     ThemeTargetStyles{L"Microsoft.UI.Xaml.Controls.NavigationView#PermanentNavigationView > Grid#RootGrid > Grid > Grid#PaneToggleButtonGrid > Grid > Button#TogglePaneButton@CommonStates", {
         L"CornerRadius=$CR",
         L"BorderThickness=$EW",
         L"BorderBrush:=<SolidColorBrush Color=\"Transparent\"/>",
         L"BorderBrush@PointerOver:=$Grad",
-        L"BorderBrush@Pressed:=$Grad"}},
+        L"BorderBrush@Pressed:=$Grad",
+        L"FocusVisualPrimaryBrush:=<SolidColorBrush Color=\"$Blue\"/>",
+        L"FocusVisualSecondaryBrush:=<SolidColorBrush Color=\"Transparent\"/>",
+        L"FocusVisualPrimaryThickness=$EW",
+        L"FocusVisualSecondaryThickness=0"}},
 }, {
 }, {
 }};
@@ -2989,97 +3007,6 @@ const Theme g_themeSeamlessMochaIcons = {{
         L"Foreground@Selected:=$Grad",
         L"Foreground@PointerOverSelected:=$Grad",
         L"Foreground@PressedSelected:=$Grad"}},
-    ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[Content=Home] > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot@PointerStates > Grid#PresenterContentRootGrid > Grid#ContentGrid > Border#IconColumn > Viewbox#IconBox > Border > ContentPresenter#Icon", {
-        L"Content@Normal:=\uE80F",
-        L"Content@PointerOver:=\uE80F",
-        L"Content@Pressed:=\uE80F",
-        L"Content@Selected:=\uEA8A",
-        L"Content@PointerOverSelected:=\uEA8A",
-        L"Content@PressedSelected:=\uEA8A"}},
-    ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[Content=System] > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot@PointerStates > Grid#PresenterContentRootGrid > Grid#ContentGrid > Border#IconColumn > Viewbox#IconBox > Border > ContentPresenter#Icon", {
-        L"Content@Normal:=\uE770",
-        L"Content@PointerOver:=\uE770",
-        L"Content@Pressed:=\uE770",
-        L"Content@Selected:=\uE770",
-        L"Content@PointerOverSelected:=\uE770",
-        L"Content@PressedSelected:=\uE770"}},
-    ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[Content=Bluetooth & devices] > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot@PointerStates > Grid#PresenterContentRootGrid > Grid#ContentGrid > Border#IconColumn > Viewbox#IconBox > Border > ContentPresenter#Icon", {
-        L"Content@Normal:=\uE702",
-        L"Content@PointerOver:=\uE702",
-        L"Content@Pressed:=\uE702",
-        L"Content@Selected:=\uE702",
-        L"Content@PointerOverSelected:=\uE702",
-        L"Content@PressedSelected:=\uE702"}},
-    ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[Content=Network & internet] > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot@PointerStates > Grid#PresenterContentRootGrid > Grid#ContentGrid > Border#IconColumn > Viewbox#IconBox > Border > ContentPresenter#Icon", {
-        L"Content@Normal:=\uE701",
-        L"Content@PointerOver:=\uE701",
-        L"Content@Pressed:=\uE701",
-        L"Content@Selected:=\uE701",
-        L"Content@PointerOverSelected:=\uE701",
-        L"Content@PressedSelected:=\uE701"}},
-    ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[Content=Personalisation] > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot@PointerStates > Grid#PresenterContentRootGrid > Grid#ContentGrid > Border#IconColumn > Viewbox#IconBox > Border > ContentPresenter#Icon", {
-        L"Content@Normal:=\uE771",
-        L"Content@PointerOver:=\uE771",
-        L"Content@Pressed:=\uE771",
-        L"Content@Selected:=\uE771",
-        L"Content@PointerOverSelected:=\uE771",
-        L"Content@PressedSelected:=\uE771"}},
-    ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[Content=Personalization] > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot@PointerStates > Grid#PresenterContentRootGrid > Grid#ContentGrid > Border#IconColumn > Viewbox#IconBox > Border > ContentPresenter#Icon", {
-        L"Content@Normal:=\uE771",
-        L"Content@PointerOver:=\uE771",
-        L"Content@Pressed:=\uE771",
-        L"Content@Selected:=\uE771",
-        L"Content@PointerOverSelected:=\uE771",
-        L"Content@PressedSelected:=\uE771"}},
-    ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[Content=Apps] > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot@PointerStates > Grid#PresenterContentRootGrid > Grid#ContentGrid > Border#IconColumn > Viewbox#IconBox > Border > ContentPresenter#Icon", {
-        L"Content@Normal:=\uE71D",
-        L"Content@PointerOver:=\uE71D",
-        L"Content@Pressed:=\uE71D",
-        L"Content@Selected:=\uE71D",
-        L"Content@PointerOverSelected:=\uE71D",
-        L"Content@PressedSelected:=\uE71D"}},
-    ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[Content=Accounts] > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot@PointerStates > Grid#PresenterContentRootGrid > Grid#ContentGrid > Border#IconColumn > Viewbox#IconBox > Border > ContentPresenter#Icon", {
-        L"Content@Normal:=\uE77B",
-        L"Content@PointerOver:=\uE77B",
-        L"Content@Pressed:=\uE77B",
-        L"Content@Selected:=\uEA8C",
-        L"Content@PointerOverSelected:=\uEA8C",
-        L"Content@PressedSelected:=\uEA8C"}},
-    ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[Content=Time & language] > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot@PointerStates > Grid#PresenterContentRootGrid > Grid#ContentGrid > Border#IconColumn > Viewbox#IconBox > Border > ContentPresenter#Icon", {
-        L"Content@Normal:=\uE775",
-        L"Content@PointerOver:=\uE775",
-        L"Content@Pressed:=\uE775",
-        L"Content@Selected:=\uE775",
-        L"Content@PointerOverSelected:=\uE775",
-        L"Content@PressedSelected:=\uE775"}},
-    ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[Content=Gaming] > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot@PointerStates > Grid#PresenterContentRootGrid > Grid#ContentGrid > Border#IconColumn > Viewbox#IconBox > Border > ContentPresenter#Icon", {
-        L"Content@Normal:=\uE7FC",
-        L"Content@PointerOver:=\uE7FC",
-        L"Content@Pressed:=\uE7FC",
-        L"Content@Selected:=\uE7FC",
-        L"Content@PointerOverSelected:=\uE7FC",
-        L"Content@PressedSelected:=\uE7FC"}},
-    ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[Content=Accessibility] > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot@PointerStates > Grid#PresenterContentRootGrid > Grid#ContentGrid > Border#IconColumn > Viewbox#IconBox > Border > ContentPresenter#Icon", {
-        L"Content@Normal:=\uE776",
-        L"Content@PointerOver:=\uE776",
-        L"Content@Pressed:=\uE776",
-        L"Content@Selected:=\uE776",
-        L"Content@PointerOverSelected:=\uE776",
-        L"Content@PressedSelected:=\uE776"}},
-    ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[Content=Privacy & security] > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot@PointerStates > Grid#PresenterContentRootGrid > Grid#ContentGrid > Border#IconColumn > Viewbox#IconBox > Border > ContentPresenter#Icon", {
-        L"Content@Normal:=\uEA18",
-        L"Content@PointerOver:=\uEA18",
-        L"Content@Pressed:=\uEA18",
-        L"Content@Selected:=\uE83D",
-        L"Content@PointerOverSelected:=\uE83D",
-        L"Content@PressedSelected:=\uE83D"}},
-    ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[Content=Windows Update] > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot@PointerStates > Grid#PresenterContentRootGrid > Grid#ContentGrid > Border#IconColumn > Viewbox#IconBox > Border > ContentPresenter#Icon", {
-        L"Content@Normal:=\uE895",
-        L"Content@PointerOver:=\uE895",
-        L"Content@Pressed:=\uE895",
-        L"Content@Selected:=\uE895",
-        L"Content@PointerOverSelected:=\uE895",
-        L"Content@PressedSelected:=\uE895"}},
     ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[1]", {
         L"Content=>sst1",
         L"ToolTipService.ToolTip={{sst1}}"}},
@@ -9765,6 +9692,46 @@ winrt::Windows::System::DispatcherQueueTimer g_dumpTimer{nullptr};
 std::vector<std::pair<winrt::weak_ref<wux::UIElement>, wux::Visibility>>
     g_hiddenElements;
 bool g_applyingFold = false;
+bool g_shrinkPicture = true;
+bool g_mochaIcons = true;
+
+struct ShrunkPicture {
+    winrt::weak_ref<wux::FrameworkElement> el;
+    double width;
+    double height;
+    wux::CornerRadius radius;
+};
+std::vector<ShrunkPicture> g_shrunk;
+
+// Side menu glyphs (Segoe Fluent Icons), looked up by page name.
+struct PageGlyph {
+    const wchar_t* name;
+    wchar_t rest;
+    wchar_t selected;
+};
+constexpr PageGlyph kPageGlyphs[] = {
+    {L"Home", 0xE80F, 0xEA8A},
+    {L"System", 0xE770, 0xE770},
+    {L"Bluetooth & devices", 0xE702, 0xE702},
+    {L"Network & internet", 0xE701, 0xE701},
+    {L"Personalisation", 0xE771, 0xE771},
+    {L"Personalization", 0xE771, 0xE771},
+    {L"Apps", 0xE71D, 0xE71D},
+    {L"Accounts", 0xE77B, 0xEA8C},
+    {L"Time & language", 0xE775, 0xE775},
+    {L"Gaming", 0xE7FC, 0xE7FC},
+    {L"Accessibility", 0xE776, 0xE776},
+    {L"Privacy & security", 0xEA18, 0xE83D},
+    {L"Windows Update", 0xE895, 0xE895},
+};
+DependencyProperty g_isSelectedProp{nullptr};
+DependencyProperty g_iconProp{nullptr};
+struct WatchedItem {
+    winrt::weak_ref<wux::FrameworkElement> item;
+    int64_t contentToken;
+    int64_t selectedToken;
+};
+std::vector<WatchedItem> g_watchedItems;
 
 std::wstring GetString(PCWSTR name, PCWSTR fallback) {
     PCWSTR value = Wh_GetStringSetting(name);
@@ -9877,6 +9844,8 @@ std::vector<std::wstring> BuildConstants() {
     int r = std::clamp(Wh_GetIntSetting(L"edges.radius"), 0, 24);
     int cr = std::max(r - 2, std::min(r, 4));
     int paneW = std::clamp(Wh_GetIntSetting(L"sidebar.width"), 200, 480);
+    int foldW = std::clamp(Wh_GetIntSetting(L"sidebar.foldedWidth"), 48, 96);
+    int pageShade = std::clamp(Wh_GetIntSetting(L"glass.pageShade"), 0, 100);
     std::wstring navMode = GetString(L"edges.sidebarItems", L"always");
 
     std::wstring glassStyle = GetString(L"glass.style", L"glass");
@@ -9926,7 +9895,7 @@ std::vector<std::wstring> BuildConstants() {
         L"PressFill=" + Hex(WithAlpha(hover, 0x66)),
         L"Divider=" + Hex(hover),
         L"Popup=" + Hex(WithAlpha(base, 255)),
-        L"ContentFill=" + Hex(WithAlpha(mantle, 0x40)),
+        L"ContentFill=" + Hex(WithAlpha(mantle, PercentToAlpha(pageShade))),
         L"DockEdge=" + Hex(edge),
         L"NavEdge=" + navEdge,
         L"NavSelEdge=" + navSelEdge,
@@ -9934,6 +9903,7 @@ std::vector<std::wstring> BuildConstants() {
         L"R=" + std::to_wstring(r),
         L"CR=" + std::to_wstring(cr),
         L"PaneW=" + std::to_wstring(paneW),
+        L"FoldW=" + std::to_wstring(foldW),
         L"Glass=" + glass,
         L"Grad=<LinearGradientBrush StartPoint=\"0,0\" EndPoint=\"1,1\">"
         L"<GradientStop Color=\"$Blue\" Offset=\"0\"/>"
@@ -9949,6 +9919,8 @@ std::vector<std::wstring> BuildConstants() {
 
 void ReadSidebarSettings() {
     g_sidebarToggle = Wh_GetIntSetting(L"sidebar.toggle");
+    g_shrinkPicture = Wh_GetIntSetting(L"sidebar.shrinkPicture");
+    g_mochaIcons = Wh_GetIntSetting(L"mochaIcons");
     g_startFolded = Wh_GetIntSetting(L"sidebar.startFolded");
     g_rememberFold = Wh_GetIntSetting(L"sidebar.rememberFold");
     g_hideWhenFolded.clear();
@@ -9995,11 +9967,62 @@ void RestoreHidden() {
     g_hiddenElements.clear();
 }
 
+void RestorePicture() {
+    for (auto& s : g_shrunk) {
+        if (auto el = s.el.get()) {
+            try {
+                el.Width(s.width);
+                el.Height(s.height);
+                if (auto g = el.try_as<Controls::Grid>()) {
+                    g.CornerRadius(s.radius);
+                }
+            } catch (...) {
+            }
+        }
+    }
+    g_shrunk.clear();
+}
+
+// The account picture is 60 px; the folded strip is narrower. Shrink it to
+// the strip instead of letting it spill out.
+void ShrinkPicture(wux::FrameworkElement nav) {
+    if (!g_shrinkPicture || !g_shrunk.empty()) {
+        return;
+    }
+    auto el = FindByName(nav, L"UserImageGrid");
+    if (!el) {
+        return;
+    }
+    // The grid and the picture inside it can both carry a fixed size.
+    std::vector<wux::FrameworkElement> parts{el};
+    if (Media::VisualTreeHelper::GetChildrenCount(el) > 0) {
+        if (auto child = Media::VisualTreeHelper::GetChild(el, 0)
+                             .try_as<wux::FrameworkElement>()) {
+            parts.push_back(child);
+        }
+    }
+    for (auto& part : parts) {
+        ShrunkPicture s{winrt::make_weak(part), part.Width(), part.Height(), {}};
+        auto g = part.try_as<Controls::Grid>();
+        if (g) {
+            s.radius = g.CornerRadius();
+        }
+        g_shrunk.push_back(s);
+        part.Width(36);
+        part.Height(36);
+        if (g) {
+            g.CornerRadius(wux::CornerRadius{18, 18, 18, 18});
+        }
+    }
+}
+
 void UpdateFoldedExtras(wux::FrameworkElement nav, bool open) {
     if (open) {
         RestoreHidden();
+        RestorePicture();
         return;
     }
+    ShrinkPicture(nav);
     if (!g_hiddenElements.empty()) {
         return;
     }
@@ -10096,6 +10119,145 @@ void OnNavigationView(wux::FrameworkElement nav) {
     }
 }
 
+// ---------- Side menu glyphs ----------
+
+const PageGlyph* FindGlyph(std::wstring_view name) {
+    for (const auto& g : kPageGlyphs) {
+        if (name == g.name) {
+            return &g;
+        }
+    }
+    return nullptr;
+}
+
+DependencyProperty NavItemProperty(PCWSTR setter) {
+    auto style = GetStyleFromXamlSetters(
+        L"Microsoft.UI.Xaml.Controls.NavigationViewItem", setter);
+    return style.Setters().GetAt(0).as<Setter>().Property();
+}
+
+// The side menu reuses its rows for other pages, so the glyph follows the
+// row's page name and selection, not the row.
+void ApplyGlyph(wux::FrameworkElement item) {
+    auto cc = item.try_as<Controls::ContentControl>();
+    if (!cc) {
+        return;
+    }
+    auto iconEl = FindByName(item, L"Icon");
+    auto icon = iconEl ? iconEl.try_as<Controls::ContentPresenter>() : nullptr;
+    if (!icon) {
+        return;
+    }
+    auto name = winrt::unbox_value_or<winrt::hstring>(cc.Content(), L"");
+    const PageGlyph* g = FindGlyph(name);
+    if (!g) {
+        // A page we have no glyph for: give it back its own icon.
+        if (g_iconProp) {
+            auto own = item.GetValue(g_iconProp);
+            if (icon.Content() != own) {
+                icon.Content(own);
+            }
+        }
+        return;
+    }
+    bool selected =
+        g_isSelectedProp &&
+        winrt::unbox_value_or<bool>(item.GetValue(g_isSelectedProp), false);
+    wchar_t glyph[2] = {selected ? g->selected : g->rest, 0};
+    auto current = winrt::unbox_value_or<winrt::hstring>(icon.Content(), L"");
+    if (current != glyph) {
+        icon.Content(winrt::box_value(winrt::hstring(glyph)));
+    }
+}
+
+void WatchNavItem(wux::FrameworkElement item) {
+    for (auto& w : g_watchedItems) {
+        if (w.item.get() == item) {
+            ApplyGlyph(item);
+            return;
+        }
+    }
+    if (!g_isSelectedProp) {
+        try {
+            g_isSelectedProp = NavItemProperty(
+                L"<Setter Property=\"IsSelected\" Value=\"False\"/>");
+        } catch (...) {
+            Wh_Log(L"Seamless: no IsSelected property %08X",
+                   winrt::to_hresult());
+        }
+    }
+    if (!g_iconProp) {
+        try {
+            g_iconProp = NavItemProperty(
+                L"<Setter Property=\"Icon\" Value=\"{x:Null}\"/>");
+        } catch (...) {
+            Wh_Log(L"Seamless: no Icon property %08X", winrt::to_hresult());
+        }
+    }
+    auto onChange = [](wux::DependencyObject const& sender,
+                       DependencyProperty const&) {
+        if (auto fe = sender.try_as<wux::FrameworkElement>()) {
+            try {
+                ApplyGlyph(fe);
+            } catch (...) {
+            }
+        }
+    };
+    WatchedItem w{winrt::make_weak(item), 0, 0};
+    w.contentToken = item.RegisterPropertyChangedCallback(
+        Controls::ContentControl::ContentProperty(), onChange);
+    if (g_isSelectedProp) {
+        w.selectedToken =
+            item.RegisterPropertyChangedCallback(g_isSelectedProp, onChange);
+    }
+    g_watchedItems.push_back(w);
+    ApplyGlyph(item);
+}
+
+void OnIconPresenter(wux::FrameworkElement icon) {
+    wux::DependencyObject node = icon;
+    for (int i = 0; i < 12 && node; i++) {
+        node = Media::VisualTreeHelper::GetParent(node);
+        if (!node) {
+            break;
+        }
+        if (winrt::get_class_name(node) ==
+            L"SystemSettings.View.SettingsNavigationViewItem") {
+            WatchNavItem(node.as<wux::FrameworkElement>());
+            return;
+        }
+    }
+}
+
+void UnwatchNavItems() {
+    for (auto& w : g_watchedItems) {
+        auto item = w.item.get();
+        if (!item) {
+            continue;
+        }
+        try {
+            item.UnregisterPropertyChangedCallback(
+                Controls::ContentControl::ContentProperty(), w.contentToken);
+            if (w.selectedToken && g_isSelectedProp) {
+                item.UnregisterPropertyChangedCallback(g_isSelectedProp,
+                                                       w.selectedToken);
+            }
+            // Put the stock icon back.
+            if (g_iconProp) {
+                auto iconEl = FindByName(item, L"Icon");
+                auto icon = iconEl
+                                ? iconEl.try_as<Controls::ContentPresenter>()
+                                : nullptr;
+                if (icon) {
+                    icon.Content(item.GetValue(g_iconProp));
+                }
+            }
+        } catch (...) {
+        }
+    }
+    g_watchedItems.clear();
+}
+
 void StartDumpTimer();
 bool g_dumpStarted = false;
 
@@ -10103,6 +10265,11 @@ void OnElementAdded(wux::FrameworkElement element) {
     if (!g_dumpStarted) {
         g_dumpStarted = true;
         StartDumpTimer();
+    }
+    if (g_mochaIcons && element.Name() == L"Icon" &&
+        winrt::get_class_name(element) ==
+            L"Windows.UI.Xaml.Controls.ContentPresenter") {
+        OnIconPresenter(element);
     }
     if (g_sidebarToggle && !g_paneCallbackToken &&
         element.Name() == L"PermanentNavigationView") {
@@ -10295,6 +10462,10 @@ void Uninit() {
     }
     g_paneCallbackToken = 0;
     RestoreHidden();
+    RestorePicture();
+    UnwatchNavItems();
+    g_isSelectedProp = nullptr;
+    g_iconProp = nullptr;
     g_navView = {};
     g_isPaneOpenProp = nullptr;
 }

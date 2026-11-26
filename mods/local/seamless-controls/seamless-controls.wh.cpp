@@ -2,7 +2,7 @@
 // @id              seamless-controls
 // @name            Seamless Controls
 // @description     Rounded, Mocha dark buttons, boxes, tabs and lists in every classic Windows window
-// @version         1.0.11
+// @version         1.0.12
 // @author          DavidHiFi, crazyboyybs
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -95,6 +95,9 @@ mods without stepping on them.
   own colours are never changed.
 - Small File Explorer extras: the drive chart, the old toolbars in Control Panel, and an
   optional pill and motion in the side pane.
+- Explorer's delete boxes (Delete File, Delete Folder, Delete Multiple Items) match the
+  title bar: dark glass all the way through, FiraCode text, and a clean blue to mauve
+  warning or bin icon in place of the yellow triangle.
 
 ## What it leaves alone
 
@@ -106,6 +109,13 @@ windows are left out, since they have no classic controls.
 
 Click the tray icon for the settings window, or change them here in Windhawk. Both show
 the same settings.
+
+## What's new in 1.0.12
+
+- The boxes File Explorer shows before it deletes something now use the same dark glass as
+  their title bar, one surface from top to bottom. Their text is FiraCode Nerd Font and the
+  yellow warning triangle (or the folder with a red cross) becomes a clean icon in the blue
+  to mauve look. Each part has its own switch under "Delete boxes".
 
 ## What's new in 1.0.9
 
@@ -231,6 +241,20 @@ the same settings.
     $name: "Folders open with motion"
     $description: "Opening a folder in the side pane slides its children in."
   $name: "Explorer extras"
+- DeleteBoxSection:
+  - Enabled: true
+    $name: "Riced delete boxes"
+    $description: "The Delete File, Delete Folder and Delete Multiple Items boxes in File Explorer."
+  - Glass: true
+    $name: "Dark glass"
+    $description: "The whole box is the same dark glass as its title bar."
+  - Font: true
+    $name: "FiraCode text"
+    $description: "The box text and buttons use FiraCode Nerd Font."
+  - Icons: true
+    $name: "Our warning icon"
+    $description: "The yellow triangle and the red-crossed folder become clean blue to mauve icons."
+  $name: "Delete boxes"
 - RegeditSection:
   - Enabled: true
     $name: "Modern Registry Editor"
@@ -548,6 +572,11 @@ struct Settings {
     // WinverSection -- disabled by default, winver.exe only
     BOOL     WinverSection = FALSE;
     INT      WinverBackground = 0; // 0=solid, 1=mica, 2=micaAlt, 3=acrylic
+    // DeleteBoxSection -- File Explorer's delete confirmation boxes
+    BOOL     DeleteBoxSection = FALSE;
+    BOOL     DelBoxGlass = FALSE;
+    BOOL     DelBoxFont = FALSE;
+    BOOL     DelBoxIcons = FALSE;
 };
 
 // Settings are immutable after publication. Old snapshots stay alive until
@@ -53801,6 +53830,15 @@ static Settings LoadSettings()
         else if (wcscmp(bg, L"acrylic") == 0) next.WinverBackground = 3;
         else                                  next.WinverBackground = 0;
     }
+    next.DeleteBoxSection = Wh_GetIntSetting(L"DeleteBoxSection.Enabled");
+    next.DelBoxGlass = Wh_GetIntSetting(L"DeleteBoxSection.Glass");
+    next.DelBoxFont = Wh_GetIntSetting(L"DeleteBoxSection.Font");
+    next.DelBoxIcons = Wh_GetIntSetting(L"DeleteBoxSection.Icons");
+    if (!next.DeleteBoxSection) {
+        next.DelBoxGlass = FALSE;
+        next.DelBoxFont = FALSE;
+        next.DelBoxIcons = FALSE;
+    }
 
     // Section switches produce an effective snapshot. Hooks don't need to
     // repeat parent gates, and disabling a section takes effect consistently.
@@ -65528,6 +65566,674 @@ static void WinverDisableRuntime()
     WinverDWriteCacheClear();
 }
 
+// ── Delete boxes (DeleteBoxSection) ──────────────────────────────────────
+// File Explorer's "Delete File", "Delete Folder" and "Delete Multiple Items" boxes are
+// shell32 dialogs that open inside explorer.exe. They are found by shell32's own dialog
+// template (message 16779, Yes 6, No 2, icon 12297) and wear: the dark house glass (the
+// body is a see-through hole over the same acrylic the title bar has), FiraCode Nerd Font
+// text, and a clean gradient warning or trash icon in place of the stock yellow triangle
+// or red-crossed folder. Everything is undone when the setting goes off or the mod unloads.
+static HWINEVENTHOOK g_delBoxEventHook = nullptr;  // owned by g_msgWnd's thread
+static std::atomic<UINT> g_delBoxEventMsg{0};
+static std::atomic<UINT> g_delBoxRestoreMsg{0};
+static std::atomic<bool> g_delBoxUnloading{false};
+static constexpr UINT_PTR kDelBoxTimerId = 0x5DB0;
+static constexpr int kDelBoxIconId = 12297;
+static constexpr int kDelBoxMessageId = 16779;
+static constexpr int kDelBoxYesId = 6;
+static constexpr int kDelBoxNoId = 2;
+static constexpr int kDelBoxAboutLinkId = 13586;
+// Accent tint (alpha, blue, green, red), measured against the title bar's fill.
+static constexpr unsigned int kDelBoxTint = 0xCC2E1E1Eu;
+
+struct DelBoxCtl {
+    HWND hwnd = nullptr;
+    HFONT font = nullptr;  // the font it had before
+    RECT rc{};             // its place in the dialog before any growth
+};
+
+struct DelBoxState {
+    HICON origIcon = nullptr;
+    HICON newIcon = nullptr;
+    HFONT font = nullptr;
+    std::vector<DelBoxCtl> ctls;
+    int origW = 0, origH = 0;
+    bool glass = false, fontDone = false, iconDone = false, timerOn = false;
+    int ticks = 0;
+};
+
+static std::mutex g_delBoxMutex;
+static std::unordered_map<HWND, DelBoxState> g_delBoxStates;
+
+static void DelBoxMessages()
+{
+    if (!g_delBoxEventMsg.load(std::memory_order_acquire)) {
+        g_delBoxRestoreMsg.store(RegisterWindowMessageW(L"SeamlessControls.DeleteBoxRestore"),
+            std::memory_order_release);
+        g_delBoxEventMsg.store(RegisterWindowMessageW(L"SeamlessControls.DeleteBoxEvent"),
+            std::memory_order_release);
+    }
+}
+
+static DelBoxState* DelBox_State(HWND hwnd)
+{
+    std::lock_guard<std::mutex> lock(g_delBoxMutex);
+    auto it = g_delBoxStates.find(hwnd);
+    return it == g_delBoxStates.end() ? nullptr : &it->second;
+}
+
+static bool DelBox_Is(HWND hwnd)
+{
+    if (!IsClassName(hwnd, L"#32770"))
+        return false;
+    HMODULE shell32 = GetModuleHandleW(L"shell32.dll");
+    if (!shell32 || reinterpret_cast<HMODULE>(GetWindowLongPtrW(hwnd, GWLP_HINSTANCE)) != shell32)
+        return false;
+    return GetDlgItem(hwnd, kDelBoxMessageId) && GetDlgItem(hwnd, kDelBoxYesId) &&
+           GetDlgItem(hwnd, kDelBoxNoId) && GetDlgItem(hwnd, kDelBoxIconId) &&
+           !GetDlgItem(hwnd, kDelBoxAboutLinkId);
+}
+
+// ── Glass ──
+struct DelBoxAccent { int state, flags; unsigned int color; int anim; };
+struct DelBoxCompData { DWORD attr; void* data; SIZE_T size; };
+
+static void DelBox_SetAccent(HWND hwnd, int state, unsigned int color)
+{
+    using Fn = BOOL(WINAPI*)(HWND, DelBoxCompData*);
+    static Fn fn = reinterpret_cast<Fn>(GetProcAddress(GetModuleHandleW(L"user32.dll"),
+        "SetWindowCompositionAttribute"));
+    if (!fn)
+        return;
+    DelBoxAccent accent{state, 2, color, 0};
+    DelBoxCompData data{19, &accent, sizeof(accent)};
+    fn(hwnd, &data);
+}
+
+// The house glass sheet (rice skill, style.md): run whole on every show.
+static void DelBox_ApplyGlass(HWND hwnd)
+{
+    const BOOL dark = TRUE;
+    DwmSetWindowAttribute(hwnd, 20, &dark, sizeof(dark));
+    const int noBackdrop = 1;
+    DwmSetWindowAttribute(hwnd, 38, &noBackdrop, sizeof(noBackdrop));
+    const int round = 2;
+    DwmSetWindowAttribute(hwnd, 33, &round, sizeof(round));
+    DelBox_SetAccent(hwnd, 0, 0);
+    HRGN region = CreateRectRgn(0, 0, -1, -1);
+    DWM_BLURBEHIND bb{};
+    bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+    bb.fEnable = TRUE;
+    bb.hRgnBlur = region;
+    DwmEnableBlurBehindWindow(hwnd, &bb);
+    if (region)
+        DeleteObject(region);
+    DelBox_SetAccent(hwnd, 4, kDelBoxTint);
+    const MARGINS margins{-1, -1, -1, -1};
+    DwmExtendFrameIntoClientArea(hwnd, &margins);
+    const COLORREF noCaption = 0xFFFFFFFE;
+    DwmSetWindowAttribute(hwnd, 35, &noCaption, sizeof(noCaption));
+}
+
+static void DelBox_ResetGlass(HWND hwnd)
+{
+    DelBox_SetAccent(hwnd, 0, 0);
+    const int backdropAuto = 0;
+    DwmSetWindowAttribute(hwnd, 38, &backdropAuto, sizeof(backdropAuto));
+    const MARGINS margins{};
+    DwmExtendFrameIntoClientArea(hwnd, &margins);
+    const COLORREF defaultCaption = 0xFFFFFFFF;
+    DwmSetWindowAttribute(hwnd, 35, &defaultCaption, sizeof(defaultCaption));
+}
+
+// ── Font ──
+struct DelBoxKids { HWND parent; std::vector<HWND> kids; };
+
+static BOOL CALLBACK DelBox_KidsProc(HWND child, LPARAM lParam)
+{
+    auto* k = reinterpret_cast<DelBoxKids*>(lParam);
+    if (GetParent(child) == k->parent)
+        k->kids.push_back(child);
+    return TRUE;
+}
+
+static bool DelBox_IsTextStatic(HWND c)
+{
+    wchar_t cls[32]{};
+    GetClassNameW(c, cls, 32);
+    if (_wcsicmp(cls, L"Static") != 0)
+        return false;
+    const LONG type = GetWindowLongW(c, GWL_STYLE) & SS_TYPEMASK;
+    return type == SS_LEFT || type == SS_CENTER || type == SS_RIGHT ||
+           type == SS_SIMPLE || type == SS_LEFTNOWORDWRAP;
+}
+
+static bool DelBox_IsButton(HWND c)
+{
+    wchar_t cls[32]{};
+    GetClassNameW(c, cls, 32);
+    return _wcsicmp(cls, L"Button") == 0;
+}
+
+static HFONT DelBox_MakeFont(const LOGFONTW& base, double scale)
+{
+    static const wchar_t* faces[] = {L"FiraCode Nerd Font", L"FiraCode Nerd Font Mono",
+                                     L"FiraCode NF", L"Fira Code"};
+    LOGFONTW lf = base;
+    LONG h = base.lfHeight ? base.lfHeight : -12;
+    lf.lfHeight = static_cast<LONG>(h * scale + (h < 0 ? -0.5 : 0.5));
+    lf.lfWidth = 0;
+    lf.lfQuality = ANTIALIASED_QUALITY;
+    lf.lfCharSet = DEFAULT_CHARSET;
+    HDC dc = CreateCompatibleDC(nullptr);
+    HFONT found = nullptr;
+    for (const wchar_t* face : faces) {
+        wcscpy_s(lf.lfFaceName, face);
+        HFONT font = CreateFontIndirectW(&lf);
+        if (!font)
+            continue;
+        HGDIOBJ old = SelectObject(dc, font);
+        wchar_t got[LF_FACESIZE]{};
+        GetTextFaceW(dc, LF_FACESIZE, got);
+        SelectObject(dc, old);
+        if (_wcsicmp(got, face) == 0) {
+            found = font;
+            break;
+        }
+        DeleteObject(font);
+    }
+    DeleteDC(dc);
+    return found;
+}
+
+// Lines the text needs at this width with this font (and its pixel height).
+static int DelBox_TextLines(HDC dc, HFONT font, const wchar_t* text, int width, int* heightOut)
+{
+    HGDIOBJ old = SelectObject(dc, font);
+    TEXTMETRICW tm{};
+    GetTextMetricsW(dc, &tm);
+    RECT rc{0, 0, width > 4 ? width : 4, 0};
+    DrawTextW(dc, text, -1, &rc, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX);
+    SelectObject(dc, old);
+    if (heightOut)
+        *heightOut = rc.bottom;
+    return tm.tmHeight > 0 ? (rc.bottom + tm.tmHeight / 2) / tm.tmHeight : 1;
+}
+
+static void DelBox_ApplyFont(HWND dlg, DelBoxState& st)
+{
+    HWND message = GetDlgItem(dlg, kDelBoxMessageId);
+    if (!message)
+        return;
+    HFONT stock = reinterpret_cast<HFONT>(SendMessageW(message, WM_GETFONT, 0, 0));
+    LOGFONTW base{};
+    if (!stock || !GetObjectW(stock, sizeof(base), &base))
+        return;
+
+    DelBoxKids kids{dlg, {}};
+    EnumChildWindows(dlg, DelBox_KidsProc, reinterpret_cast<LPARAM>(&kids));
+
+    // One size for the whole box: the biggest at which no text needs more lines than it
+    // did in the stock font (FiraCode is wider than Segoe UI).
+    const double scales[] = {1.0, 0.94, 0.88, 0.82};
+    HFONT chosen = nullptr;
+    HDC dc = CreateCompatibleDC(nullptr);
+    for (size_t i = 0; i < std::size(scales); i++) {
+        HFONT candidate = DelBox_MakeFont(base, scales[i]);
+        if (!candidate)
+            break;
+        bool fits = true;
+        for (HWND c : kids.kids) {
+            if (!DelBox_IsTextStatic(c))
+                continue;
+            wchar_t text[2048]{};
+            GetWindowTextW(c, text, 2048);
+            if (!text[0])
+                continue;
+            RECT cr{};
+            GetClientRect(c, &cr);
+            HFONT own = reinterpret_cast<HFONT>(SendMessageW(c, WM_GETFONT, 0, 0));
+            const int was = DelBox_TextLines(dc, own ? own : stock, text, cr.right, nullptr);
+            const int now = DelBox_TextLines(dc, candidate, text, cr.right, nullptr);
+            if (now > was) {
+                fits = false;
+                break;
+            }
+        }
+        if (fits || i + 1 == std::size(scales)) {
+            chosen = candidate;
+            break;
+        }
+        DeleteObject(candidate);
+    }
+    if (!chosen) {
+        DeleteDC(dc);
+        return;  // FiraCode is not installed: keep the stock font
+    }
+    st.font = chosen;
+
+    for (HWND c : kids.kids) {
+        if (!DelBox_IsTextStatic(c) && !DelBox_IsButton(c))
+            continue;
+        DelBoxCtl ctl;
+        ctl.hwnd = c;
+        ctl.font = reinterpret_cast<HFONT>(SendMessageW(c, WM_GETFONT, 0, 0));
+        GetWindowRect(c, &ctl.rc);
+        MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&ctl.rc), 2);
+        st.ctls.push_back(ctl);
+        SendMessageW(c, WM_SETFONT, reinterpret_cast<WPARAM>(chosen), TRUE);
+    }
+
+    // If the message still runs longer than its box, make the box and the dialog taller
+    // and move everything below it down by the same amount.
+    wchar_t text[2048]{};
+    GetWindowTextW(message, text, 2048);
+    RECT cr{};
+    GetClientRect(message, &cr);
+    int needed = 0;
+    DelBox_TextLines(dc, chosen, text, cr.right, &needed);
+    DeleteDC(dc);
+    if (needed > cr.bottom + 1) {
+        const int delta = needed - cr.bottom;
+        RECT msgRc{};
+        GetWindowRect(message, &msgRc);
+        MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&msgRc), 2);
+        RECT win{};
+        GetWindowRect(dlg, &win);
+        st.origW = win.right - win.left;
+        st.origH = win.bottom - win.top;
+        for (HWND c : kids.kids) {
+            RECT rc{};
+            GetWindowRect(c, &rc);
+            MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&rc), 2);
+            bool known = false;
+            for (const DelBoxCtl& k : st.ctls)
+                known = known || k.hwnd == c;
+            if (!known) {
+                DelBoxCtl ctl;
+                ctl.hwnd = c;
+                ctl.font = nullptr;
+                ctl.rc = rc;
+                st.ctls.push_back(ctl);
+            }
+            if (c == message)
+                SetWindowPos(c, nullptr, 0, 0, rc.right - rc.left, rc.bottom - rc.top + delta,
+                    SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+            else if (rc.top >= msgRc.bottom - 1)
+                SetWindowPos(c, nullptr, rc.left, rc.top + delta, 0, 0,
+                    SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        SetWindowPos(dlg, nullptr, 0, 0, st.origW, st.origH + delta,
+            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+}
+
+// ── Icons ──
+// The stock icon is told apart by its colours: a yellow triangle is the warning, a red
+// cross (on a folder or not) is the delete mark. Anything else is left alone.
+static int DelBox_StockKind(HICON icon)
+{
+    if (!icon)
+        return 0;
+    ICONINFO ii{};
+    if (!GetIconInfo(icon, &ii))
+        return 0;
+    int kind = 0;
+    BITMAP bm{};
+    if (ii.hbmColor && GetObjectW(ii.hbmColor, sizeof(bm), &bm) &&
+        bm.bmWidth > 0 && bm.bmHeight > 0 && bm.bmWidth <= 512 && bm.bmHeight <= 512) {
+        const int w = bm.bmWidth, h = bm.bmHeight;
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+        bi.bmiHeader.biWidth = w;
+        bi.bmiHeader.biHeight = -h;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        std::vector<uint32_t> px(static_cast<size_t>(w) * h);
+        HDC dc = GetDC(nullptr);
+        if (GetDIBits(dc, ii.hbmColor, 0, h, px.data(), &bi, DIB_RGB_COLORS) == h) {
+            bool anyAlpha = false;
+            for (uint32_t p : px)
+                anyAlpha = anyAlpha || (p >> 24) != 0;
+            int opaque = 0, yellow = 0, red = 0;
+            for (uint32_t p : px) {
+                if (anyAlpha && (p >> 24) < 128)
+                    continue;
+                opaque++;
+                const int r = (p >> 16) & 0xFF, g = (p >> 8) & 0xFF, b = p & 0xFF;
+                if (r > 200 && g > 150 && b < 110 && r - b > 110)
+                    yellow++;
+                else if (r > 170 && g < 110 && b < 110)
+                    red++;
+            }
+            if (opaque > 0) {
+                if (red * 100 >= opaque * 4)
+                    kind = 2;
+                else if (yellow * 100 >= opaque * 25)
+                    kind = 1;
+            }
+        }
+        ReleaseDC(nullptr, dc);
+    }
+    if (ii.hbmColor)
+        DeleteObject(ii.hbmColor);
+    if (ii.hbmMask)
+        DeleteObject(ii.hbmMask);
+    return kind;
+}
+
+// A Segoe Fluent glyph filled with the blue to mauve gradient on a clear background,
+// drawn at 4x and shrunk so the edges are smooth.
+static HICON DelBox_MakeIcon(WCHAR glyphChar, int px)
+{
+    const int size = (px < 16 ? 16 : px) * 4;
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = size;
+    bi.bmiHeader.biHeight = -size;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    void* bits = nullptr;
+    void* glyphBits = nullptr;
+    HDC screen = GetDC(nullptr);
+    HBITMAP color = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    HBITMAP glyph = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &glyphBits, nullptr, 0);
+    ReleaseDC(nullptr, screen);
+    if (!color || !glyph) {
+        if (color)
+            DeleteObject(color);
+        if (glyph)
+            DeleteObject(glyph);
+        return nullptr;
+    }
+    HDC dc = CreateCompatibleDC(nullptr);
+    HGDIOBJ old = SelectObject(dc, glyph);
+    memset(glyphBits, 0, static_cast<size_t>(size) * size * 4);
+    HFONT font = CreateFontW(-static_cast<int>(size * 0.86f), 0, 0, 0, FW_NORMAL, 0, 0, 0,
+        DEFAULT_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0, L"Segoe Fluent Icons");
+    HGDIOBJ oldFont = SelectObject(dc, font);
+    WCHAR face[64]{};
+    GetTextFaceW(dc, 64, face);
+    if (_wcsicmp(face, L"Segoe Fluent Icons") != 0) {
+        SelectObject(dc, oldFont);
+        DeleteObject(font);
+        font = CreateFontW(-static_cast<int>(size * 0.86f), 0, 0, 0, FW_NORMAL, 0, 0, 0,
+            DEFAULT_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0, L"Segoe MDL2 Assets");
+        oldFont = SelectObject(dc, font);
+    }
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(255, 255, 255));
+    RECT r{0, 0, size, size};
+    WCHAR g[2] = {glyphChar, 0};
+    DrawTextW(dc, g, 1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    GdiFlush();
+    SelectObject(dc, oldFont);
+    DeleteObject(font);
+    SelectObject(dc, old);
+    DeleteDC(dc);
+
+    const float c0[3] = {0x89 / 255.f, 0xB4 / 255.f, 0xFA / 255.f};
+    const float c1[3] = {0xCB / 255.f, 0xA6 / 255.f, 0xF7 / 255.f};
+    uint32_t* out = static_cast<uint32_t*>(bits);
+    const uint32_t* gp = static_cast<const uint32_t*>(glyphBits);
+    for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++) {
+            const float t = std::clamp((x + y) / (2.0f * (size - 1)), 0.0f, 1.0f);
+            const float cov = ((gp[y * size + x] >> 8) & 0xFF) / 255.0f;
+            float rgb[3];
+            for (int i = 0; i < 3; i++)
+                rgb[i] = (c0[i] + (c1[i] - c0[i]) * t) * cov;
+            out[y * size + x] = (static_cast<uint32_t>(cov * 255 + 0.5f) << 24) |
+                                (static_cast<uint32_t>(rgb[0] * 255 + 0.5f) << 16) |
+                                (static_cast<uint32_t>(rgb[1] * 255 + 0.5f) << 8) |
+                                static_cast<uint32_t>(rgb[2] * 255 + 0.5f);
+        }
+    HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
+    ICONINFO ii{TRUE, 0, 0, mask, color};
+    HICON icon = CreateIconIndirect(&ii);
+    DeleteObject(mask);
+    DeleteObject(color);
+    DeleteObject(glyph);
+    return Crisp_ShrinkIcon(icon, 4);
+}
+
+static void DelBox_ApplyIcon(HWND dlg, DelBoxState& st)
+{
+    HWND ctl = GetDlgItem(dlg, kDelBoxIconId);
+    if (!ctl)
+        return;
+    HICON stock = reinterpret_cast<HICON>(SendMessageW(ctl, STM_GETICON, 0, 0));
+    const int kind = DelBox_StockKind(stock);
+    if (!kind)
+        return;
+    RECT cr{};
+    GetClientRect(ctl, &cr);
+    HICON fresh = DelBox_MakeIcon(kind == 1 ? static_cast<WCHAR>(0xE7BA) : static_cast<WCHAR>(0xE74D),
+        cr.right > 0 ? cr.right : 32);
+    if (!fresh)
+        return;
+    st.origIcon = reinterpret_cast<HICON>(SendMessageW(ctl, STM_SETICON, reinterpret_cast<WPARAM>(fresh), 0));
+    st.newIcon = fresh;
+}
+
+// ── Apply, restore ──
+static LRESULT CALLBACK DelBoxSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
+    DWORD_PTR ref);
+
+static void DelBox_Redraw(HWND dlg)
+{
+    RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+}
+
+static void DelBox_Apply(HWND dlg)
+{
+    if (!IsWindow(dlg))
+        return;
+    WinverDpiScope dpiScope(dlg);
+    DelBoxState* st = DelBox_State(dlg);
+    if (!st)
+        return;
+    if (g_settings.DelBoxGlass) {
+        DelBox_ApplyGlass(dlg);
+        st->glass = true;
+    } else if (st->glass) {
+        DelBox_ResetGlass(dlg);
+        st->glass = false;
+    }
+    if (g_settings.DelBoxFont && !st->fontDone) {
+        DelBox_ApplyFont(dlg, *st);
+        st->fontDone = true;
+    }
+    if (g_settings.DelBoxIcons && !st->iconDone) {
+        DelBox_ApplyIcon(dlg, *st);
+        st->iconDone = true;
+    }
+    DelBox_Redraw(dlg);
+    if (!st->timerOn) {
+        st->ticks = 0;
+        st->timerOn = SetTimer(dlg, kDelBoxTimerId, 250, nullptr) != 0;
+    }
+}
+
+static void DelBox_Restore(HWND dlg)
+{
+    WinverDpiScope dpiScope(dlg);
+    KillTimer(dlg, kDelBoxTimerId);
+    DelBoxState* st = DelBox_State(dlg);
+    if (!st)
+        return;
+    if (st->glass) {
+        DelBox_ResetGlass(dlg);
+        st->glass = false;
+    }
+    if (st->origH > 0)
+        SetWindowPos(dlg, nullptr, 0, 0, st->origW, st->origH, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    for (const DelBoxCtl& c : st->ctls) {
+        if (!IsWindow(c.hwnd))
+            continue;
+        if (c.font)
+            SendMessageW(c.hwnd, WM_SETFONT, reinterpret_cast<WPARAM>(c.font), TRUE);
+        if (st->origH > 0)
+            SetWindowPos(c.hwnd, nullptr, c.rc.left, c.rc.top, c.rc.right - c.rc.left,
+                c.rc.bottom - c.rc.top, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    if (st->newIcon) {
+        if (HWND ctl = GetDlgItem(dlg, kDelBoxIconId))
+            SendMessageW(ctl, STM_SETICON, reinterpret_cast<WPARAM>(st->origIcon), 0);
+        DestroyIcon(st->newIcon);
+        st->newIcon = nullptr;
+    }
+    if (st->font) {
+        DeleteObject(st->font);
+        st->font = nullptr;
+    }
+    DelBox_Redraw(dlg);
+    WindhawkUtils::RemoveWindowSubclassFromAnyThread(dlg, DelBoxSubclassProc);
+    std::lock_guard<std::mutex> lock(g_delBoxMutex);
+    g_delBoxStates.erase(dlg);
+}
+
+static LRESULT CALLBACK DelBoxSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
+    DWORD_PTR /*ref*/)
+{
+    if (const UINT m = g_delBoxEventMsg.load(std::memory_order_acquire); m && uMsg == m) {
+        if (!g_delBoxUnloading.load(std::memory_order_acquire) && g_settings.DeleteBoxSection)
+            DelBox_Apply(hWnd);
+        return 0;
+    }
+    if (const UINT m = g_delBoxRestoreMsg.load(std::memory_order_acquire); m && uMsg == m) {
+        DelBox_Restore(hWnd);
+        return 0;
+    }
+    if (uMsg == WM_TIMER && wParam == kDelBoxTimerId) {
+        DelBoxState* st = DelBox_State(hWnd);
+        if (!st || g_delBoxUnloading.load(std::memory_order_acquire) || !g_settings.DeleteBoxSection) {
+            KillTimer(hWnd, kDelBoxTimerId);
+            return 0;
+        }
+        // The title bar mod and DWM settle a moment after the box shows: run the glass
+        // again at 250 ms and 1.2 s so the box ends on the same material as the title.
+        WinverDpiScope dpiScope(hWnd);
+        if (st->glass)
+            DelBox_ApplyGlass(hWnd);
+        DelBox_Redraw(hWnd);
+        if (++st->ticks == 1) {
+            SetTimer(hWnd, kDelBoxTimerId, 950, nullptr);
+        } else {
+            KillTimer(hWnd, kDelBoxTimerId);
+            st->timerOn = false;
+        }
+        return 0;
+    }
+
+    DelBoxState* st = DelBox_State(hWnd);
+    const bool glass = st && st->glass;
+    if (glass && uMsg == WM_ERASEBKGND) {
+        RECT rc{};
+        GetClientRect(hWnd, &rc);
+        FillRect(reinterpret_cast<HDC>(wParam), &rc, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+        return 1;
+    }
+    if (glass && (uMsg == WM_CTLCOLORSTATIC || uMsg == WM_CTLCOLORDLG)) {
+        HDC dc = reinterpret_cast<HDC>(wParam);
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, RGB(0xCD, 0xD6, 0xF4));
+        return reinterpret_cast<LRESULT>(GetStockObject(BLACK_BRUSH));
+    }
+    if (uMsg == WM_NCDESTROY) {
+        KillTimer(hWnd, kDelBoxTimerId);
+        if (st) {
+            if (st->newIcon)
+                DestroyIcon(st->newIcon);
+            if (st->font)
+                DeleteObject(st->font);
+            std::lock_guard<std::mutex> lock(g_delBoxMutex);
+            g_delBoxStates.erase(hWnd);
+        }
+        WindhawkUtils::RemoveWindowSubclassFromAnyThread(hWnd, DelBoxSubclassProc);
+    }
+    LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+    if (uMsg == WM_SHOWWINDOW && wParam && st && !g_delBoxUnloading.load(std::memory_order_acquire) &&
+        g_settings.DeleteBoxSection) {
+        if (const UINT m = g_delBoxEventMsg.load(std::memory_order_acquire))
+            PostMessageW(hWnd, m, 0, 0);
+    }
+    return result;
+}
+
+// Runs on g_msgWnd's thread (the hook's owner): recognises the box, subclasses it and
+// hands the work to the box's own thread.
+static void CALLBACK DelBoxWinEventProc(HWINEVENTHOOK, DWORD event, HWND hWnd,
+    LONG idObject, LONG idChild, DWORD, DWORD)
+{
+    if (g_delBoxUnloading.load(std::memory_order_acquire) || !g_settings.DeleteBoxSection)
+        return;
+    if (event != EVENT_OBJECT_SHOW || idObject != OBJID_WINDOW || idChild != CHILDID_SELF)
+        return;
+    if (!hWnd || !IsWindow(hWnd) || !DelBox_Is(hWnd))
+        return;
+    DelBoxMessages();
+    const UINT message = g_delBoxEventMsg.load(std::memory_order_acquire);
+    if (!message)
+        return;
+    bool known;
+    {
+        std::lock_guard<std::mutex> lock(g_delBoxMutex);
+        known = g_delBoxStates.count(hWnd) != 0;
+        if (!known)
+            g_delBoxStates[hWnd] = DelBoxState{};
+    }
+    if (!known && !WindhawkUtils::SetWindowSubclassFromAnyThread(hWnd, DelBoxSubclassProc, 0)) {
+        std::lock_guard<std::mutex> lock(g_delBoxMutex);
+        g_delBoxStates.erase(hWnd);
+        return;
+    }
+    PostMessageW(hWnd, message, 0, 0);
+}
+
+static BOOL CALLBACK DelBox_ApplyExistingEnum(HWND hwnd, LPARAM)
+{
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid == GetCurrentProcessId() && IsWindowVisible(hwnd))
+        DelBoxWinEventProc(nullptr, EVENT_OBJECT_SHOW, hwnd, OBJID_WINDOW, CHILDID_SELF, 0, 0);
+    return TRUE;
+}
+
+// Puts every box we touched back as it was and lets go of it.
+static void DelBox_RestoreAll()
+{
+    std::vector<HWND> boxes;
+    {
+        std::lock_guard<std::mutex> lock(g_delBoxMutex);
+        for (auto& entry : g_delBoxStates)
+            boxes.push_back(entry.first);
+    }
+    const UINT restore = g_delBoxRestoreMsg.load(std::memory_order_acquire);
+    for (HWND box : boxes) {
+        if (IsWindow(box) && restore) {
+            DWORD_PTR ignored = 0;
+            SendMessageTimeoutW(box, restore, 0, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, 1000, &ignored);
+        }
+        if (IsWindow(box))
+            WindhawkUtils::RemoveWindowSubclassFromAnyThread(box, DelBoxSubclassProc);
+    }
+    std::lock_guard<std::mutex> lock(g_delBoxMutex);
+    g_delBoxStates.clear();
+}
+
+static void DelBox_SettingsChanged()
+{
+    if (!IsCurrentProcessExplorer())
+        return;
+    DelBoxMessages();
+    WinEventHooksRequestSync();
+    DelBox_RestoreAll();
+    if (g_settings.DeleteBoxSection)
+        EnumWindows(DelBox_ApplyExistingEnum, 0);
+}
+
 // The WinEvent hooks (About dialog, Disk Cleanup) live on g_msgWnd's thread:
 // an out-of-context hook is owned by the thread that installed it, only that
 // thread can remove it, and its callbacks arrive through that thread's queue.
@@ -65562,6 +66268,22 @@ static void WinEventHooksSync(bool removeAll)
             g_cleanmgrEventHook = nullptr;
         else
             Wh_Log(L"Disk Cleanup: UnhookWinEvent failed (%u)", GetLastError());
+    }
+
+    const bool wantDelBox = !removeAll &&
+        !g_delBoxUnloading.load(std::memory_order_acquire) &&
+        g_settings.DeleteBoxSection && IsCurrentProcessExplorer();
+    if (wantDelBox && !g_delBoxEventHook) {
+        DelBoxMessages();
+        g_delBoxEventHook = SetWinEventHook(
+            EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, nullptr,
+            DelBoxWinEventProc, GetCurrentProcessId(), 0,
+            WINEVENT_OUTOFCONTEXT);
+    } else if (!wantDelBox && g_delBoxEventHook) {
+        if (UnhookWinEvent(g_delBoxEventHook))
+            g_delBoxEventHook = nullptr;
+        else
+            Wh_Log(L"Delete boxes: UnhookWinEvent failed (%u)", GetLastError());
     }
 }
 
@@ -70501,6 +71223,7 @@ void ScHook_ModBeforeUninit()
     NavAnim::BeforeUninit();
     g_diskPieAnimationUnloading.store(true, std::memory_order_release);
     g_winverUnloading.store(true, std::memory_order_release);
+    g_delBoxUnloading.store(true, std::memory_order_release);
     g_singleLinePropertyTabsUnloading.store(true, std::memory_order_release);
     g_tabFeaturesUnloading.store(true, std::memory_order_release);
     g_defViewBorderUnloading.store(true, std::memory_order_release);
@@ -70558,6 +71281,7 @@ void ScHook_ModUninit()
     DestroyMsgWindow();
 
     WinverDisableRuntime();
+    DelBox_RestoreAll();
     if (g_winbrandModule) {
         FreeLibrary(g_winbrandModule);
         g_winbrandModule = nullptr;
@@ -71224,6 +71948,12 @@ BOOL ScHook_ModSettingsChanged(BOOL* bReload)
         }
     }
 
+    if (oldSettings.DeleteBoxSection != g_settings.DeleteBoxSection ||
+        oldSettings.DelBoxGlass != g_settings.DelBoxGlass ||
+        oldSettings.DelBoxFont != g_settings.DelBoxFont ||
+        oldSettings.DelBoxIcons != g_settings.DelBoxIcons)
+        DelBox_SettingsChanged();
+
     // Modern controls turned off: remove existing subclasses/timers now. The
     // WH_CBT hook is shared, so tear it down only when both features
     // are off, matching InstallCbtHookForThread's guard.
@@ -71734,6 +72464,10 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"RegeditSection.Enabled", L"Modern Registry Editor", L"A dark tree and list, rounded selection and a modern search box.", L"1", {}, 0, 100, 2, L"Registry Editor"},
 {K::Choice, L"RegeditSection.TransparentBg", L"Background", L"Solid Mocha, or see-through Mica.", L"off", {{L"off", L"Solid"}, {L"mica", L"See-through Mica"}}, 0, 100, 2, L"Registry Editor"},
 {K::Check, L"RegeditSection.GlyphIcons", L"Line icons in the tree", L"Folder icons in the tree become simple line icons.", L"0", {}, 0, 100, 2, L"Registry Editor"},
+{K::Check, L"DeleteBoxSection.Enabled", L"Riced delete boxes", L"The Delete File, Delete Folder and Delete Multiple Items boxes in File Explorer.", L"1", {}, 0, 100, 1, L"Delete boxes"},
+{K::Check, L"DeleteBoxSection.Glass", L"Dark glass", L"The whole box is the same dark glass as its title bar.", L"1", {}, 0, 100, 1, L"Delete boxes"},
+{K::Check, L"DeleteBoxSection.Font", L"FiraCode text", L"The box text and buttons use FiraCode Nerd Font.", L"1", {}, 0, 100, 1, L"Delete boxes"},
+{K::Check, L"DeleteBoxSection.Icons", L"Our warning icon", L"The yellow triangle and the red-crossed folder become clean blue to mauve icons.", L"1", {}, 0, 100, 1, L"Delete boxes"},
 {K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open these settings. Right-click it for settings and more. When off, change settings in Windhawk.", L"1", {}, 0, 100, 3, L"Tray icon"},
 {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 3, L"Settings window"},
 {K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 3, L"Settings window"}

@@ -2,7 +2,7 @@
 // @id              seamless-winver-configurator
 // @name            Seamless Winver Configurator
 // @description     Customize About Windows with themes, logos, classic dialogs, text rules and redirection
-// @version         1.0.0
+// @version         1.1.1
 // @author          DavidHiFi, ItsTauTvyDas, aubymori, Thomas Shrader, winui64, m417z
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -27,7 +27,8 @@ rest of the Seamless mods, with a tray icon to open About Windows in one click.
 
 ## What it does
 
-- A dark Mocha look out of the box, a frosted title bar, stock Windows, or your own colors.
+- A Mocha box out of the box: dark glass, our own banner and the FiraCode font. Or a solid
+  Mocha box, stock Windows, or your own colors.
 - Your own picture or animated GIF in place of the Windows banner.
 - Where About Windows opens, its size, its icon, its title, and each line of text in it.
 - The About box from Windows 95 up to Windows 10, with your own version, build and memory lines.
@@ -62,8 +63,8 @@ Built from [Fully Customizable WinVer](https://windhawk.net/mods/fully-customiza
   $name: Theme preset
   $description: "Choose how About Windows looks right away. Pick Custom colors to use the color boxes below."
   $options:
-  - mochaDark: Catppuccin Mocha dark
-  - mochaGlass: Catppuccin Mocha frosted glass
+  - mochaDark: Catppuccin Mocha dark glass
+  - mochaSolid: Catppuccin Mocha solid, no glass
   - stock: Stock Windows
   - custom: Custom colors
 - windowColors:
@@ -86,6 +87,15 @@ Built from [Fully Customizable WinVer](https://windhawk.net/mods/fully-customiza
     $name: Separator color
     $description: "Hex (#45475A) or RGB (69, 71, 90). Leave blank for default."
   $name: Custom colors
+- ownBanner: true
+  $name: Mocha banner
+  $description: "Draws our own banner: the Windows logo and name in the blue to mauve gradient, in place of the stock picture."
+- bannerText: ""
+  $name: Banner name
+  $description: "Leave blank to show your Windows name (Windows 11 or Windows 10)."
+- textFont: "FiraCode Nerd Font"
+  $name: Text font
+  $description: "The font for every line in About Windows. Leave blank to keep the Windows font."
 - flyoutAnimation: true
   $name: Open and close animation
   $description: "About Windows fades in with a short slide when it opens and fades out when it closes. Off snaps it. Stays still when Windows animations are off."
@@ -454,7 +464,7 @@ constexpr COLORREF kMochaText      = RGB(0xCD, 0xD6, 0xF4);
 constexpr COLORREF kMochaBlue      = RGB(0x89, 0xB4, 0xFA);
 constexpr COLORREF kMochaMauve     = RGB(0xCB, 0xA6, 0xF7);
 
-enum class ThemePreset { MochaDark, MochaGlass, Stock, Custom };
+enum class ThemePreset { MochaDark, MochaSolid, Stock, Custom };
 
 struct ControlOverride {
     std::wstring id;
@@ -518,6 +528,9 @@ struct ModConfig {
     COLORREF sepColor = kMochaSurface1;
     bool darkMode = true;
     bool glassBackdrop = false;
+    bool ownBanner = false;
+    std::wstring bannerText;
+    std::wstring textFont;
 
     // Motion
     bool flyoutAnimation = true;
@@ -716,14 +729,15 @@ static void LoadAllSettings() {
 
     // Theme preset
     std::wstring preset = ReadStrSetting(L"themePreset", L"mochaDark");
-    if (preset == L"mochaGlass")      c.themePreset = ThemePreset::MochaGlass;
+    // mochaGlass was the light system acrylic before 1.1.0; it is the dark glass now, same as mochaDark.
+    if (preset == L"mochaSolid")      c.themePreset = ThemePreset::MochaSolid;
     else if (preset == L"stock")      c.themePreset = ThemePreset::Stock;
     else if (preset == L"custom")     c.themePreset = ThemePreset::Custom;
     else                              c.themePreset = ThemePreset::MochaDark;
 
-    if (c.themePreset == ThemePreset::MochaDark || c.themePreset == ThemePreset::MochaGlass) {
+    if (c.themePreset == ThemePreset::MochaDark || c.themePreset == ThemePreset::MochaSolid) {
         c.darkMode = true;
-        c.glassBackdrop = (c.themePreset == ThemePreset::MochaGlass);
+        c.glassBackdrop = (c.themePreset == ThemePreset::MochaDark);
         c.hasTitleColor = true;  c.titleColor = kMochaText;
         c.hasBarColor   = true;  c.barColor   = kMochaMantle;
         c.hasBorderColor= true;  c.borderColor= kMochaBlue;
@@ -749,6 +763,13 @@ static void LoadAllSettings() {
         // Stock Windows
         c.darkMode = false;
         c.glassBackdrop = false;
+    }
+
+    // Banner and font (not for the stock look)
+    if (c.themePreset != ThemePreset::Stock) {
+        c.ownBanner  = Wh_GetIntSetting(L"ownBanner") != 0;
+        c.bannerText = ReadStrSetting(L"bannerText");
+        c.textFont   = ReadStrSetting(L"textFont");
     }
 
     // Motion & quick actions
@@ -1859,6 +1880,9 @@ struct DialogState {
     std::wstring origTitle;
     HBRUSH bgBrush = nullptr, sepBrush = nullptr;
     COLORREF bgBrushColor = 0, sepBrushColor = 0;
+    bool glassOn = false;  // our own glass is on the window
+    HFONT font = nullptr, origFont = nullptr;
+    std::wstring fontName;
     HICON customIcon = nullptr, origBig = nullptr, origSmall = nullptr;
     std::wstring customIconSpec;
     // Logo
@@ -2049,6 +2073,77 @@ static void ApplyFrame(HWND hWnd, DialogState& s) {
     if (title != cur) SetWindowTextW(hWnd, title.c_str());
 }
 
+// The dark glass every Seamless window uses: no system backdrop (DWMSBT_TRANSIENTWINDOW and Mica read as a light
+// grey frost), the accent acrylic with a Mocha crust tint, the frame pulled over the whole box and a black body.
+// Black is the one fill DWM leaves clear; any other colour lands on top of the glass as a lighter slab.
+constexpr int kGlassTint = (int)0x012E1E1E;  // ABGR, the same tint as the launcher grid and every settings window
+
+static void ApplyGlass(HWND hWnd, DialogState& s, bool on) {
+    struct AccentPolicy { int state, flags, abgr, animation; };
+    struct CompositionData { DWORD attribute; void* data; SIZE_T size; };
+    using SetComposition_t = BOOL(WINAPI*)(HWND, CompositionData*);
+    static auto setComposition =
+        (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
+    if (on) {
+        int backdrop = 1;  // DWMSBT_NONE
+        DwmSetWindowAttribute(hWnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+        bb.fEnable = TRUE;
+        bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+        DwmEnableBlurBehindWindow(hWnd, &bb);
+        if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+        if (setComposition) {
+            AccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, kGlassTint, 0};
+            CompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(hWnd, &data);
+        }
+        MARGINS margins{-1, -1, -1, -1};
+        DwmExtendFrameIntoClientArea(hWnd, &margins);
+        COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE: the title bar is the same glass
+        DwmSetWindowAttribute(hWnd, 35 /* DWMWA_CAPTION_COLOR */, &none, sizeof(none));
+        s.glassOn = true;
+        return;
+    }
+    if (s.glassOn) {
+        if (setComposition) {
+            AccentPolicy policy{0, 0, 0, 0};
+            CompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(hWnd, &data);
+        }
+        DWM_BLURBEHIND bb{};
+        bb.dwFlags = DWM_BB_ENABLE;
+        bb.fEnable = FALSE;
+        DwmEnableBlurBehindWindow(hWnd, &bb);
+        MARGINS margins{};
+        DwmExtendFrameIntoClientArea(hWnd, &margins);
+        s.glassOn = false;
+    }
+    int backdrop = 0;  // DWMSBT_AUTO
+    DwmSetWindowAttribute(hWnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
+}
+
+// Every line of text in the box in one font (FiraCode by default), at the size the box already uses.
+static void ApplyFont(HWND hWnd, DialogState& s) {
+    const std::wstring& name = s.cfg.textFont;
+    if (!s.origFont) s.origFont = (HFONT)SendMessageW(hWnd, WM_GETFONT, 0, 0);
+    if (name == s.fontName && (s.font || name.empty())) return;
+    HFONT old = s.font;
+    s.font = nullptr;
+    s.fontName = name;
+    if (!name.empty() && s.origFont) {
+        LOGFONTW lf{};
+        GetObjectW(s.origFont, sizeof(lf), &lf);
+        wcsncpy_s(lf.lfFaceName, name.c_str(), _TRUNCATE);
+        lf.lfQuality = CLEARTYPE_QUALITY;
+        s.font = CreateFontIndirectW(&lf);
+    }
+    HFONT use = s.font ? s.font : s.origFont;
+    for (int i = 0; i < kWinverControlCount; i++)
+        if (HWND h = s.defaults[i].hWnd; h && i != kIdxLeftIcon && i != kIdxSeparator) SendMessageW(h, WM_SETFONT, (WPARAM)use, TRUE);
+    if (old) DeleteObject(old);
+}
+
 static void ApplyColors(HWND hWnd, DialogState& s) {
     const ModConfig& c = s.cfg;
     constexpr COLORREF kDefault = 0xFFFFFFFF;  // DWMWA_COLOR_DEFAULT
@@ -2061,12 +2156,7 @@ static void ApplyColors(HWND hWnd, DialogState& s) {
     DwmSetWindowAttribute(hWnd, 35 /* DWMWA_CAPTION_COLOR */, &caption, sizeof(caption));
     DwmSetWindowAttribute(hWnd, 36 /* DWMWA_TEXT_COLOR */, &text, sizeof(text));
     DwmSetWindowAttribute(hWnd, 34 /* DWMWA_BORDER_COLOR */, &border, sizeof(border));
-    int backdrop = c.glassBackdrop ? 3 /* DWMSBT_TRANSIENTWINDOW, acrylic */ : 0 /* DWMSBT_AUTO */;
-    DwmSetWindowAttribute(hWnd, 38 /* DWMWA_SYSTEMBACKDROP_TYPE */, &backdrop, sizeof(backdrop));
-    // Glass reaches the client area only with the frame pulled over it and a black fill, which DWM leaves clear.
-    MARGINS margins{};
-    if (c.glassBackdrop) margins = {-1, -1, -1, -1};
-    DwmExtendFrameIntoClientArea(hWnd, &margins);
+    ApplyGlass(hWnd, s, c.glassBackdrop);
 
     SetBrush(s.bgBrush, s.bgBrushColor, c.hasBgColor || c.glassBackdrop, c.glassBackdrop ? RGB(0, 0, 0) : c.bgColor);
     SetBrush(s.sepBrush, s.sepBrushColor, c.hasSepColor, c.sepColor);
@@ -2399,6 +2489,79 @@ static void RecolorBanner(HWND hWnd, DialogState& s, const RECT& painted) {
     ReleaseDC(hWnd, hdc);
 }
 
+// Our own banner in place of the stock light picture: the four-tile Windows logo and the Windows name, both in the
+// blue to mauve gradient, centred in the band above the separator. Drawn premultiplied, so on the glass the clear
+// parts stay glass and on a solid box they take its colour.
+static std::wstring WindowsName() {
+    RTL_OSVERSIONINFOW v{sizeof(v)};
+    RtlGetVersion(&v);
+    return v.dwBuildNumber >= 22000 ? L"Windows 11" : L"Windows 10";
+}
+
+static void PaintOwnBanner(HWND hWnd, DialogState& s, HDC hdc) {
+    RECT client;
+    GetClientRect(hWnd, &client);
+    const int w = client.right, h = s.defaults[kIdxSeparator].hWnd ? s.defaults[kIdxSeparator].y : 0;
+    if (w <= 0 || h <= 8 || !EnsureGdiplus()) return;
+    BITMAPINFO bi{};
+    bi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -h, 1, 32, BI_RGB};
+    void* bits = nullptr;
+    HBITMAP dib = CreateDIBSection(hdc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!dib || !bits) {
+        if (dib) DeleteObject(dib);
+        return;
+    }
+    const COLORREF bg = s.glassOn ? RGB(0, 0, 0) : s.bgBrushColor;
+    const DWORD fill = s.glassOn ? 0 : (0xFF000000u | (GetRValue(bg) << 16) | (GetGValue(bg) << 8) | GetBValue(bg));
+    std::fill_n(static_cast<DWORD*>(bits), (size_t)w * h, fill);
+    {
+        Gdiplus::Bitmap canvas(w, h, w * 4, PixelFormat32bppPARGB, static_cast<BYTE*>(bits));
+        Gdiplus::Graphics g(&canvas);
+        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+        g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
+
+        std::wstring name = s.cfg.bannerText.empty() ? WindowsName() : s.cfg.bannerText;
+        const float logo = std::round(h * 0.46f);
+        const float gap = std::max(2.0f, std::round(logo * 0.06f));
+        const float tile = (logo - gap) / 2;
+        const std::wstring face = s.cfg.textFont.empty() ? L"Segoe UI" : s.cfg.textFont;
+        Gdiplus::FontFamily family(face.c_str());
+        Gdiplus::Font font(family.IsAvailable() ? &family : Gdiplus::FontFamily::GenericSansSerif(), logo * 0.62f,
+                           Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+        Gdiplus::StringFormat fmt(Gdiplus::StringFormat::GenericTypographic());
+        fmt.SetFormatFlags(fmt.GetFormatFlags() | Gdiplus::StringFormatFlagsNoWrap);
+        Gdiplus::RectF ext;
+        g.MeasureString(name.c_str(), (INT)name.size(), &font, Gdiplus::PointF(0, 0), &fmt, &ext);
+        const float space = std::round(logo * 0.38f);
+        const float total = logo + space + ext.Width;
+        const float x0 = std::round((w - total) / 2), y0 = std::round((h - logo) / 2);
+
+        auto blue = Gdiplus::Color(255, GetRValue(kMochaBlue), GetGValue(kMochaBlue), GetBValue(kMochaBlue));
+        auto mauve = Gdiplus::Color(255, GetRValue(kMochaMauve), GetGValue(kMochaMauve), GetBValue(kMochaMauve));
+        Gdiplus::LinearGradientBrush paint(Gdiplus::PointF(x0, y0), Gdiplus::PointF(x0 + total, y0 + logo), blue, mauve);
+        const float r = std::max(1.5f, tile * 0.18f);
+        for (int i = 0; i < 4; i++) {
+            float tx = x0 + (i % 2) * (tile + gap), ty = y0 + (i / 2) * (tile + gap);
+            Gdiplus::GraphicsPath path;
+            path.AddArc(tx, ty, 2 * r, 2 * r, 180, 90);
+            path.AddArc(tx + tile - 2 * r, ty, 2 * r, 2 * r, 270, 90);
+            path.AddArc(tx + tile - 2 * r, ty + tile - 2 * r, 2 * r, 2 * r, 0, 90);
+            path.AddArc(tx, ty + tile - 2 * r, 2 * r, 2 * r, 90, 90);
+            path.CloseFigure();
+            g.FillPath(&paint, &path);
+        }
+        const float ty = std::round(y0 + (logo - ext.Height) / 2);
+        g.DrawString(name.c_str(), (INT)name.size(), &font, Gdiplus::PointF(x0 + logo + space, ty), &fmt, &paint);
+    }
+    HDC mem = CreateCompatibleDC(hdc);
+    HGDIOBJ old = SelectObject(mem, dib);
+    BitBlt(hdc, 0, 0, w, h, mem, 0, 0, SRCCOPY);
+    SelectObject(mem, old);
+    DeleteDC(mem);
+    DeleteObject(dib);
+}
+
 static void ShowErrors(HWND hWnd, DialogState& s) {
     std::vector<std::wstring> errors = std::move(s.errors);
     s.errors.clear();
@@ -2409,6 +2572,7 @@ static void ApplyAll(HWND hWnd, DialogState& s, bool reposition) {
     ApplyIcon(hWnd, s);
     ApplyFrame(hWnd, s);
     ApplyColors(hWnd, s);
+    ApplyFont(hWnd, s);
     ApplySize(hWnd, s);
     if (reposition) ApplyStartPosition(hWnd, s.cfg);
     ApplyTopmost(hWnd, s.cfg);
@@ -2503,6 +2667,7 @@ static void ReleaseDialog(HWND hWnd, bool restore) {
         ApplyIcon(hWnd, *s);
         ApplyFrame(hWnd, *s);
         ApplyColors(hWnd, *s);
+        ApplyFont(hWnd, *s);
         ApplySize(hWnd, *s);
         ApplyTopmost(hWnd, s->cfg);
         ApplyControls(hWnd, *s);
@@ -2513,6 +2678,7 @@ static void ReleaseDialog(HWND hWnd, bool restore) {
     }
     if (s->bgBrush) DeleteObject(s->bgBrush);
     if (s->sepBrush) DeleteObject(s->sepBrush);
+    if (s->font) DeleteObject(s->font);  // restore already gave the controls their own font back
     if (s->customIcon) DestroyIcon(s->customIcon);
     delete s;
     g_dlg = nullptr;
@@ -2634,7 +2800,23 @@ static LRESULT CALLBACK DialogSubclassProc(HWND hWnd, UINT msg, WPARAM wParam, L
         case WM_CTLCOLORDLG:
             if (s->bgBrush) return (LRESULT)s->bgBrush;
             break;
+        case WM_ERASEBKGND:
+            if (s->bgBrush && s->cfg.ownBanner) {
+                RECT rc;
+                GetClientRect(hWnd, &rc);
+                FillRect((HDC)wParam, &rc, s->bgBrush);
+                return 1;
+            }
+            break;
         case WM_PAINT: {
+            if (s->bgBrush && s->cfg.ownBanner) {  // our banner replaces the stock picture entirely
+                PAINTSTRUCT ps;
+                HDC hdc = BeginPaint(hWnd, &ps);
+                FillRect(hdc, &ps.rcPaint, s->bgBrush);
+                if (!s->cfg.logoEnabled) PaintOwnBanner(hWnd, *s, hdc);
+                EndPaint(hWnd, &ps);
+                return 0;
+            }
             RECT painted;
             if (!s->bgBrush || !GetUpdateRect(hWnd, &painted, FALSE)) break;
             LRESULT r = DefSubclassProc(hWnd, msg, wParam, lParam);
@@ -3431,13 +3613,16 @@ struct SetField {
 static std::vector<SetField> Set_MakeFields() {
     using K = SetField;
     return {
-{K::Choice, L"themePreset", L"Theme preset", L"Choose how About Windows looks right away. Pick Custom colors to use the color boxes below.", L"mochaDark", {{L"mochaDark", L"Catppuccin Mocha dark"}, {L"mochaGlass", L"Catppuccin Mocha frosted glass"}, {L"stock", L"Stock Windows"}, {L"custom", L"Custom colors"}}, 0, 100, 0, L"Theme"},
+{K::Choice, L"themePreset", L"Theme preset", L"Choose how About Windows looks right away. Pick Custom colors to use the color boxes below.", L"mochaDark", {{L"mochaDark", L"Catppuccin Mocha dark glass"}, {L"mochaSolid", L"Catppuccin Mocha solid, no glass"}, {L"stock", L"Stock Windows"}, {L"custom", L"Custom colors"}}, 0, 100, 0, L"Theme"},
 {K::Color, L"windowColors.title", L"Title text color", L"Hex (#CDD6F4) or RGB (205, 214, 244). Leave blank for default.", L"#CDD6F4", {}, 0, 100, 0, L"Custom colors"},
 {K::Color, L"windowColors.bar", L"Title bar color", L"Hex (#181825) or RGB (24, 24, 37). Leave blank for default.", L"#181825", {}, 0, 100, 0, L"Custom colors"},
 {K::Color, L"windowColors.border", L"Border color", L"Hex (#89B4FA) or RGB (137, 180, 250). Leave blank for default.", L"#89B4FA", {}, 0, 100, 0, L"Custom colors"},
 {K::Color, L"windowColors.background", L"Background color", L"Hex (#1E1E2E) or RGB (30, 30, 46). The Windows banner is redrawn on it too.", L"#1E1E2E", {}, 0, 100, 0, L"Custom colors"},
 {K::Color, L"windowColors.textColor", L"Default text color", L"Hex (#CDD6F4) or RGB (205, 214, 244).", L"#CDD6F4", {}, 0, 100, 0, L"Custom colors"},
 {K::Color, L"windowColors.separator", L"Separator color", L"Hex (#45475A) or RGB (69, 71, 90). Leave blank for default.", L"#45475A", {}, 0, 100, 0, L"Custom colors"},
+{K::Check, L"ownBanner", L"Mocha banner", L"Draws our own banner: the Windows logo and name in the blue to mauve gradient, in place of the stock picture.", L"1", {}, 0, 100, 0, L"Banner and font"},
+{K::Text, L"bannerText", L"Banner name", L"Leave blank to show your Windows name (Windows 11 or Windows 10).", L"", {}, 0, 100, 0, L"Banner and font"},
+{K::Text, L"textFont", L"Text font", L"The font for every line in About Windows. Leave blank to keep the Windows font.", L"FiraCode Nerd Font", {}, 0, 100, 0, L"Banner and font"},
 {K::Check, L"flyoutAnimation", L"Open and close animation", L"About Windows fades in with a short slide when it opens and fades out when it closes. Off snaps it. Stays still when Windows animations are off.", L"1", {}, 0, 100, 0, L"Motion"},
 {K::Choice, L"animationSpeed", L"Animation speed", L"How fast the open animation runs. Global follows your shared Seamless motion speed.", L"global", {{L"global", L"Follow the global speed"}, {L"veryQuick", L"Very quick"}, {L"quick", L"Quick"}, {L"normal", L"Normal"}, {L"relaxed", L"Relaxed"}, {L"slow", L"Slow"}}, 0, 100, 0, L"Motion"},
 {K::Check, L"launchOnSave", L"Open About Windows after saving", L"Opens About Windows when you save, if it is not open already, so you see the change right away.", L"0", {}, 0, 100, 0, L"Motion"},
