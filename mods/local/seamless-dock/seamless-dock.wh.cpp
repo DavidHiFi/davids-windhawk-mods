@@ -2,14 +2,14 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.14
+// @version         0.3.15
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @license         GPL-3.0
 // @include         windhawk.exe
-// @compilerOptions -lole32 -loleaut32 -luuid -ld2d1 -ldwrite -ldwmapi -luser32 -lgdi32 -lshell32 -lshlwapi -lshcore -lversion -ladvapi32
+// @compilerOptions -lole32 -loleaut32 -luuid -ld2d1 -ldwrite -ldwmapi -luser32 -lgdi32 -lshell32 -lshlwapi -lshcore -lversion -ladvapi32 -lwindowscodecs
 // ==/WindhawkMod==
 
 // Source code is published under The GNU General Public License v3.0.
@@ -287,6 +287,7 @@ side and a dock on the other, like a Linux desktop.
 #include <shobjidl.h>
 #include <shlwapi.h>
 #include <propsys.h>
+#include <wincodec.h>
 #include <wrl/client.h>
 
 #include <algorithm>
@@ -1083,6 +1084,177 @@ bool IconFromRecycle(bool full, int size, Icon& ic) {
     return ok;
 }
 
+// Windows' own Store apps (Terminal, Calculator, Paint...) get their Catppuccin icon from
+// UWP Assets Redirect Plus, but only inside Explorer and Start. The dock runs in its own
+// process, so it reads the same icon theme itself: package family name -> theme file.
+std::unordered_map<std::wstring, std::wstring> g_themeIcons;
+bool g_themeRead = false;
+
+std::wstring RegText(const wchar_t* key, const wchar_t* value) {
+    wchar_t buf[512] = {};
+    DWORD cb = sizeof(buf);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, key, value, RRF_RT_REG_SZ, nullptr, buf, &cb) != ERROR_SUCCESS)
+        return {};
+    return buf;
+}
+
+std::wstring ReadTextFile(const std::wstring& path) {
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                           OPEN_EXISTING, 0, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return {};
+    std::string bytes;
+    LARGE_INTEGER size{};
+    if (GetFileSizeEx(f, &size) && size.QuadPart > 0 && size.QuadPart < (1 << 20)) {
+        bytes.resize((size_t)size.QuadPart);
+        DWORD got = 0;
+        if (!ReadFile(f, bytes.data(), (DWORD)bytes.size(), &got, nullptr)) got = 0;
+        bytes.resize(got);
+    }
+    CloseHandle(f);
+    if (bytes.size() >= 2 && (unsigned char)bytes[0] == 0xFF && (unsigned char)bytes[1] == 0xFE)
+        return std::wstring((const wchar_t*)(bytes.data() + 2), (bytes.size() - 2) / 2);
+    size_t skip = bytes.rfind("\xEF\xBB\xBF", 0) == 0 ? 3 : 0;
+    int n = MultiByteToWideChar(CP_UTF8, 0, bytes.data() + skip, (int)(bytes.size() - skip), nullptr, 0);
+    std::wstring text(n, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, bytes.data() + skip, (int)(bytes.size() - skip), text.data(), n);
+    return text;
+}
+
+void ReadIconTheme() {
+    g_themeRead = true;
+    const wchar_t* modKey = L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@uwp-assets-redirect-plus";
+    HKEY k = nullptr;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, modKey, 0, KEY_READ, &k) != ERROR_SUCCESS) return;
+    RegCloseKey(k);
+    DWORD off = 0, cb = sizeof(off);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, modKey, L"Disabled", RRF_RT_REG_DWORD, nullptr, &off, &cb) ==
+            ERROR_SUCCESS && off)
+        return;
+    std::wstring theme =
+        RegText(L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@uwp-assets-redirect-plus\\Settings", L"icon-theme");
+    if (theme.empty()) return;
+    std::replace(theme.begin(), theme.end(), L'/', L'\\');
+    // Mod storage folders sit side by side; ours tells where the theme mod's is.
+    std::vector<std::wstring> roots;
+    wchar_t own[MAX_PATH * 2] = {};
+    if (Wh_GetModStoragePath(own, ARRAYSIZE(own))) {
+        std::wstring r = own;
+        while (!r.empty() && (r.back() == L'\\' || r.back() == L'/')) r.pop_back();
+        size_t cut = r.find_last_of(L"\\/");
+        if (cut != std::wstring::npos) roots.push_back(r.substr(0, cut));
+    }
+    roots.push_back(L"C:\\ProgramData\\Windhawk\\Engine\\ModsWritable\\mod-storage");
+    std::wstring dir, text;
+    for (auto& r : roots) {
+        dir = r + L"\\local@uwp-assets-redirect-plus\\icon-themes\\" + theme;
+        text = ReadTextFile(dir + L"\\theme.ini");
+        if (!text.empty()) break;
+    }
+    if (text.empty()) return;
+
+    auto trim = [](const std::wstring& s) {
+        size_t a = s.find_first_not_of(L" \t\r\n");
+        size_t b = s.find_last_not_of(L" \t\r\n");
+        return a == std::wstring::npos ? std::wstring() : s.substr(a, b - a + 1);
+    };
+    std::wstring section;
+    size_t pos = 0;
+    while (pos <= text.size()) {
+        size_t e = text.find(L'\n', pos);
+        if (e == std::wstring::npos) e = text.size();
+        std::wstring line = trim(text.substr(pos, e - pos));
+        pos = e + 1;
+        if (line.empty() || line[0] == L';' || line[0] == L'#') continue;
+        if (line[0] == L'[') {
+            section = Lower(trim(line.substr(1, line.find(L']') - 1)));
+            continue;
+        }
+        size_t eq = line.find(L'=');
+        if (eq == std::wstring::npos) continue;
+        std::wstring key = Lower(trim(line.substr(0, eq)));
+        std::wstring val = trim(line.substr(eq + 1));
+        if (val.rfind(L".\\", 0) == 0 || val.rfind(L"./", 0) == 0) val = dir + L"\\" + val.substr(2);
+        // "Family|folder" entries cover one app inside a shared package; only a whole
+        // package maps to a dock icon.
+        if ((section == L"windows-apps" || section == L"system-apps") && key.find(L'|') == std::wstring::npos)
+            g_themeIcons[key] = val;
+    }
+}
+
+bool IconFromPng(const std::wstring& path, int size, Icon& ic) {
+    ComPtr<IWICImagingFactory> wic;
+    ComPtr<IWICBitmapDecoder> dec;
+    ComPtr<IWICBitmapFrameDecode> frame;
+    ComPtr<IWICBitmapScaler> scaler;
+    ComPtr<IWICFormatConverter> conv;
+    if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wic))) ||
+        FAILED(wic->CreateDecoderFromFilename(path.c_str(), nullptr, GENERIC_READ,
+                                              WICDecodeMetadataCacheOnDemand, &dec)) ||
+        FAILED(dec->GetFrame(0, &frame)) || FAILED(wic->CreateBitmapScaler(&scaler)) ||
+        FAILED(scaler->Initialize(frame.Get(), size, size, WICBitmapInterpolationModeFant)) ||
+        FAILED(wic->CreateFormatConverter(&conv)) ||
+        FAILED(conv->Initialize(scaler.Get(), GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, nullptr, 0,
+                                WICBitmapPaletteTypeCustom)))
+        return false;
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = size;
+    bi.bmiHeader.biHeight = -size;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    void* bits = nullptr;
+    HBITMAP dib = CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!dib) return false;
+    bool ok = SUCCEEDED(conv->CopyPixels(nullptr, size * 4, size * size * 4, (BYTE*)bits)) &&
+              PixelsFromHBitmap(dib, ic);
+    DeleteObject(dib);
+    return ok;
+}
+
+// The package family of an app id (Family_publisher!App) or of a program inside a
+// WindowsApps package folder (...\WindowsApps\Family_1.2.3.0_x64__publisher\app.exe).
+std::wstring PackageFamilyOf(const std::wstring& s) {
+    std::wstring l = Lower(s);
+    const std::wstring apps = L"shell:appsfolder\\";
+    if (l.rfind(apps, 0) == 0) {
+        std::wstring id = l.substr(apps.size());
+        size_t us = id.find(L'_');
+        return us == std::wstring::npos ? L"" : id.substr(0, us);
+    }
+    const std::wstring wa = L"\\windowsapps\\";
+    size_t at = l.find(wa);
+    if (at == std::wstring::npos) return L"";
+    std::wstring rest = l.substr(at + wa.size());
+    size_t us = rest.find(L'_'), sl = rest.find(L'\\');
+    if (us == std::wstring::npos || (sl != std::wstring::npos && sl < us)) return L"";
+    return rest.substr(0, us);
+}
+
+bool IconFromTheme(const std::wstring& src, int size, Icon& ic) {
+    std::wstring fam = PackageFamilyOf(src);
+    if (fam.empty()) return false;
+    if (!g_themeRead) ReadIconTheme();
+    auto it = g_themeIcons.find(fam);
+    if (it == g_themeIcons.end()) return false;
+    const std::wstring& path = it->second;
+    DWORD attr = GetFileAttributesW(path.c_str());
+    if (attr == INVALID_FILE_ATTRIBUTES) return false;
+    if (attr & FILE_ATTRIBUTE_DIRECTORY) {
+        // A folder of Store-style logos: take the biggest plain one.
+        for (const wchar_t* pat : {L"*targetsize-256_altform-unplated.png", L"*targetsize-256*.png", L"*.png"}) {
+            WIN32_FIND_DATAW fd;
+            HANDLE h = FindFirstFileW((path + L"\\" + pat).c_str(), &fd);
+            if (h == INVALID_HANDLE_VALUE) continue;
+            FindClose(h);
+            return IconFromPng(path + L"\\" + fd.cFileName, size, ic);
+        }
+        return false;
+    }
+    if (path.size() > 4 && _wcsicmp(path.c_str() + path.size() - 4, L".png") == 0)
+        return IconFromPng(path, size, ic);
+    return IconFromFile(path, size, ic);
+}
+
 Icon* GetIcon(const std::wstring& src, const std::wstring& alt, HWND win, int size) {
     std::wstring key = src + L"|" + alt + L"|" + std::to_wstring(size);
     auto it = g_icons.find(key);
@@ -1100,6 +1272,8 @@ Icon* GetIcon(const std::wstring& src, const std::wstring& alt, HWND win, int si
         if (win) IconFromWindow(win, size, ic);
     } else if (!themed.empty() && IconFromFile(themed, size, ic)) {
         // the themed icon
+    } else if (IconFromTheme(src, size, ic) || IconFromTheme(alt, size, ic)) {
+        // a Store app's Catppuccin icon
     } else if (!IconFromShell(src, size, ic) && !IconFromShell(alt, size, ic) && win) {
         IconFromWindow(win, size, ic);
     }
