@@ -2,7 +2,7 @@
 // @id              seamless-settings-styler
 // @name            Seamless Settings Styler
 // @description     Catppuccin Mocha for Windows Settings: glass that matches the title bar, edges on every card, a sidebar that folds to icons, hide pages and ads
-// @version         2.1.2
+// @version         2.1.3
 // @author          DavidHiFi, m417z
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -9837,7 +9837,9 @@ std::vector<std::pair<winrt::weak_ref<wux::UIElement>, wux::Visibility>> g_bloat
 // Cards that get the gradient edge on hover.
 struct HoverCard {
     winrt::weak_ref<wux::UIElement> el;
-    winrt::event_token entered, exited, canceled, lost;
+    // AddHandler with handledEventsToo: list rows mark pointer events handled.
+    winrt::Windows::Foundation::IInspectable on{nullptr};
+    winrt::Windows::Foundation::IInspectable off{nullptr};
 };
 std::vector<HoverCard> g_hoverCards;
 struct HoverSaved {
@@ -10755,10 +10757,13 @@ void WatchCard(wux::UIElement el) {
         }
     };
     HoverCard c{winrt::make_weak(el)};
-    c.entered = el.PointerEntered(on);
-    c.exited = el.PointerExited(off);
-    c.canceled = el.PointerCanceled(off);
-    c.lost = el.PointerCaptureLost(off);
+    // One boxed object per handler, so RemoveHandler finds the same one.
+    c.on = winrt::box_value(wux::Input::PointerEventHandler(on));
+    c.off = winrt::box_value(wux::Input::PointerEventHandler(off));
+    el.AddHandler(wux::UIElement::PointerEnteredEvent(), c.on, true);
+    el.AddHandler(wux::UIElement::PointerExitedEvent(), c.off, true);
+    el.AddHandler(wux::UIElement::PointerCanceledEvent(), c.off, true);
+    el.AddHandler(wux::UIElement::PointerCaptureLostEvent(), c.off, true);
     g_hoverCards.push_back(c);
 }
 
@@ -10767,10 +10772,10 @@ void UnwatchCards() {
     for (auto& c : g_hoverCards) {
         if (auto el = c.el.get()) {
             try {
-                el.PointerEntered(c.entered);
-                el.PointerExited(c.exited);
-                el.PointerCanceled(c.canceled);
-                el.PointerCaptureLost(c.lost);
+                el.RemoveHandler(wux::UIElement::PointerEnteredEvent(), c.on);
+                el.RemoveHandler(wux::UIElement::PointerExitedEvent(), c.off);
+                el.RemoveHandler(wux::UIElement::PointerCanceledEvent(), c.off);
+                el.RemoveHandler(wux::UIElement::PointerCaptureLostEvent(), c.off);
             } catch (...) {
             }
         }
