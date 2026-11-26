@@ -206,7 +206,7 @@
     },
     {
       "id": "local@mocha-app-icons",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "ableton": 1,
         "settings": 1,
@@ -1153,7 +1153,7 @@
     },
     {
       "id": "local@remove-shortcut-arrows",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "custom_icon_path": ""
       }
@@ -3830,7 +3830,7 @@
     },
     {
       "id": "local@uwp-assets-redirect-plus",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "custom[0].assets-path": "",
         "custom[0].redirect": "",

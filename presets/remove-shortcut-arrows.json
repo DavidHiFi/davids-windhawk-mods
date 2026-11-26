@@ -1,0 +1,12 @@
+{
+  "format": "seamless-workshop-preset-1",
+  "mods": [
+    {
+      "id": "local@remove-shortcut-arrows",
+      "enabled": true,
+      "settings": {
+        "custom_icon_path": ""
+      }
+    }
+  ]
+}
