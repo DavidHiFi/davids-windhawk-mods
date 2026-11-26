@@ -2,7 +2,7 @@
 // @id              seamless-explorer-view
 // @name            Seamless Explorer View
 // @description     GPU-accelerated Explorer views with smooth scrolling and right-click submenus that populate fully
-// @version         2.0.12
+// @version         2.0.13
 // @author          DavidHiFi, DarkionAvey, crazyboyybs, Languster, valinet
 // @include         explorer.exe
 // @architecture    x86-64
@@ -683,6 +683,86 @@ Tree position, expand arrows and connector lines come from
 #include <new>
 #include <system_error>
 #include <thread>
+
+// Crisp icons (2026-11-26): tray icons are drawn at 4x the size the taskbar shows them and shrunk
+// here with a box filter, so curves and glyph edges are smooth instead of stretched and stepped.
+// The result carries straight alpha, which is what Windows expects in an icon.
+static HICON Crisp_ShrinkIcon(HICON big, int factor) {
+    if (!big || factor <= 1) return big;
+    ICONINFO ii{};
+    if (!GetIconInfo(big, &ii)) return big;
+    HICON out = nullptr;
+    BITMAP bm{};
+    if (ii.hbmColor && GetObjectW(ii.hbmColor, sizeof(bm), &bm) && bm.bmWidth == bm.bmHeight &&
+        bm.bmWidth >= factor && bm.bmWidth % factor == 0) {
+        const int src = bm.bmWidth, n = src / factor;
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+        bi.bmiHeader.biWidth = src;
+        bi.bmiHeader.biHeight = -src;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        unsigned int* in = new unsigned int[(size_t)src * src];
+        HDC screen = GetDC(nullptr);
+        if (GetDIBits(screen, ii.hbmColor, 0, src, in, &bi, DIB_RGB_COLORS) == src) {
+            bool premul = true, anyAlpha = false;
+            for (size_t i = 0; i < (size_t)src * src; i++) {
+                unsigned int p = in[i], a = p >> 24;
+                if (a) anyAlpha = true;
+                if (((p >> 16) & 0xFF) > a || ((p >> 8) & 0xFF) > a || (p & 0xFF) > a) premul = false;
+            }
+            void* bits = nullptr;
+            bi.bmiHeader.biWidth = n;
+            bi.bmiHeader.biHeight = -n;
+            HBITMAP color = anyAlpha ? CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
+            if (color && bits) {
+                unsigned int* px = (unsigned int*)bits;
+                const unsigned int cnt = (unsigned int)(factor * factor);
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++) {
+                        unsigned int sa = 0, sr = 0, sg = 0, sb = 0;
+                        for (int dy = 0; dy < factor; dy++)
+                            for (int dx = 0; dx < factor; dx++) {
+                                unsigned int p = in[(size_t)(y * factor + dy) * src + x * factor + dx], a = p >> 24;
+                                unsigned int r = (p >> 16) & 0xFF, g = (p >> 8) & 0xFF, b = p & 0xFF;
+                                if (!premul) {
+                                    r = (r * a + 127) / 255;
+                                    g = (g * a + 127) / 255;
+                                    b = (b * a + 127) / 255;
+                                }
+                                sa += a; sr += r; sg += g; sb += b;
+                            }
+                        unsigned int a = (sa + cnt / 2) / cnt, r = 0, g = 0, b = 0;
+                        if (a && sa) {
+                            r = (sr * 255 + sa / 2) / sa; if (r > 255) r = 255;
+                            g = (sg * 255 + sa / 2) / sa; if (g > 255) g = 255;
+                            b = (sb * 255 + sa / 2) / sa; if (b > 255) b = 255;
+                        }
+                        px[(size_t)y * n + x] = a ? ((a << 24) | (r << 16) | (g << 8) | b) : 0;
+                    }
+                // A zero mask: with 32-bit colour Windows draws from the alpha channel.
+                unsigned char* maskBits = new unsigned char[(size_t)((n + 15) / 16) * 2 * n]();
+                HBITMAP mask = CreateBitmap(n, n, 1, 1, maskBits);
+                delete[] maskBits;
+                if (mask) {
+                    ICONINFO o{TRUE, 0, 0, mask, color};
+                    out = CreateIconIndirect(&o);
+                    DeleteObject(mask);
+                }
+            }
+            if (color) DeleteObject(color);
+        }
+        ReleaseDC(nullptr, screen);
+        delete[] in;
+    }
+    if (ii.hbmColor) DeleteObject(ii.hbmColor);
+    if (ii.hbmMask) DeleteObject(ii.hbmMask);
+    if (!out) return big;
+    DestroyIcon(big);
+    return out;
+}
+
 
 using Microsoft::WRL::ComPtr;
 
@@ -42595,8 +42675,8 @@ void Settings_Close() {
 bool Settings_IsOpen() { return g_setWin && g_setWin->hwnd && !g_setWin->render; }
 
 
-static HICON MakeTrayIcon() {
-    int size = GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem());
+static HICON MakeTrayIcon_Big() {
+    int size = GetSystemMetricsForDpi(SM_CXICON, GetDpiForSystem()) * 4;
     if (size < 16) size = 16;
     BITMAPINFO bi{};
     bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
@@ -42667,6 +42747,9 @@ static HICON MakeTrayIcon() {
     DeleteObject(glyph);
     return icon;
 }
+
+// Drawn at 4x and shrunk, so the icon is smooth at the size it is shown.
+static HICON MakeTrayIcon() { return Crisp_ShrinkIcon(MakeTrayIcon_Big(), 4); }
 constexpr WCHAR kTrayClass[] = L"WindhawkExplorerViewSettingsTray";
 constexpr UINT kTrayMessage = WM_APP + 20;
 constexpr UINT kTrayReload = WM_APP + 21;
