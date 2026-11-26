@@ -2,7 +2,7 @@
 // @id              explorer-tags-plus
 // @name            Explorer Tags Plus
 // @description     Colored tags panel in File Explorer's navigation pane, plus a Tags submenu in the right-click menu
-// @version         0.9.0
+// @version         0.9.1
 // @author          DavidHiFi, buedgik
 // @donateUrl       https://ko-fi.com/DavidHiFi
 // @github          https://github.com/DavidHiFi
@@ -2501,6 +2501,11 @@ void DrawTextAt(HDC hdc, const std::wstring& text, RECT rc, COLORREF color, UINT
 constexpr int kPillLeft = 14;
 constexpr int kIconLeft = 25;
 constexpr int kTextX = 45;
+// Title row: the hover pill starts where the row pills do, the arrow sits
+// clear of the dock edge, then the tag icon and "Tags" with even gaps.
+constexpr int kHeadArrow = 16;
+constexpr int kHeadIcon = 34;
+constexpr int kHeadText = 54;
 
 void PaintPanel(Panel* p, HDC target) {
     RECT rc;
@@ -2551,8 +2556,8 @@ void PaintPanel(Panel* p, HDC target) {
         DrawDock(g, DockRect(m, width, height), dpi, Blend(c.under, RGB(0x11, 0x11, 0x1B), 0.30), p->dockHot);
 
         if (p->hot == HIT_HEADER) {
-            int left = Dip(10, dpi);
-            int right = std::min(maxRight, Dip(kTextX + 6, dpi) + TextWidth(hdc, L"Tags") + Dip(12, dpi));
+            int left = Dip(kPillLeft, dpi);
+            int right = std::min(maxRight, Dip(kHeadText, dpi) + TextWidth(hdc, L"Tags") + Dip(12, dpi));
             DrawPill(g, left, headerTop + inset, right - left, m.rowH - inset * 2 - 1, c.hot, true, 0, c.under);
         }
         for (int row = 0; row < m.rowsShown; row++) {
@@ -2592,13 +2597,13 @@ void PaintPanel(Panel* p, HDC target) {
 
     // Title: collapse arrow, tag icon, "Tags".
     HGDIOBJ oldFont = SelectObject(hdc, GetIconFont(p, dpi));
-    RECT chevron = {Dip(10, dpi), headerTop, Dip(26, dpi), headerTop + m.rowH};
+    RECT chevron = {Dip(kHeadArrow, dpi), headerTop, Dip(kHeadArrow + 16, dpi), headerTop + m.rowH};
     DrawTextAt(hdc, g_collapsed ? L"\uE76C" : L"\uE70D", chevron, c.dim, DT_CENTER);
-    RECT icon = {Dip(kIconLeft + 6, dpi), headerTop, Dip(kIconLeft + 22, dpi), headerTop + m.rowH};
+    RECT icon = {Dip(kHeadIcon, dpi), headerTop, Dip(kHeadIcon + 16, dpi), headerTop + m.rowH};
     DrawTextAt(hdc, L"\uE8EC", icon, c.text, DT_CENTER);
 
     SelectObject(hdc, textFont ? textFont : (HFONT)GetStockObject(DEFAULT_GUI_FONT));
-    RECT title = {Dip(kTextX + 6, dpi), headerTop, width - Dip(8, dpi), headerTop + m.rowH};
+    RECT title = {Dip(kHeadText, dpi), headerTop, width - Dip(8, dpi), headerTop + m.rowH};
     DrawTextAt(hdc, L"Tags", title, c.text, DT_LEFT);
 
     if (!g_collapsed) {
