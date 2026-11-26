@@ -1202,7 +1202,7 @@
         "helium.tabActiveOpacity": 85,
         "helium.tabInactiveHoverOpacity": 60,
         "helium.tabSelectedOpacity": 69,
-        "popupCorners": "stock",
+        "popupCorners": "round",
         "popupEdge": "stock",
         "popupEdgeColor": "#45475A",
         "uiFont": "FiraCode Nerd Font",
@@ -2427,7 +2427,7 @@
     },
     {
       "id": "local@seamless-file-unlocker",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "askBeforeClosing": 1,
         "menuEntry": 1,
@@ -3910,7 +3910,7 @@
     },
     {
       "id": "local@seamless-title-bars",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "basicFrames.enabled": 0,
         "basicFrames.smallIcons": 1,

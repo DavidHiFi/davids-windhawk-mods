@@ -532,7 +532,7 @@
     "version": "1.5.0"
   },
   "local@seamless-title-bars": {
-    "disabled": true,
+    "disabled": false,
     "include": "*|dwm.exe|windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
@@ -1309,7 +1309,7 @@
     "version": "2.1.1"
   },
   "local@seamless-file-unlocker": {
-    "disabled": true,
+    "disabled": false,
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "",

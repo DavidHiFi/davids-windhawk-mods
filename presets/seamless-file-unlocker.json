@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@seamless-file-unlocker",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "askBeforeClosing": 1,
         "menuEntry": 1,

@@ -5068,7 +5068,7 @@
     "helium.tabActiveOpacity": 85,
     "helium.tabInactiveHoverOpacity": 60,
     "helium.tabSelectedOpacity": 69,
-    "popupCorners": "stock",
+    "popupCorners": "round",
     "popupEdge": "stock",
     "popupEdgeColor": "#45475A",
     "uiFont": "FiraCode Nerd Font",

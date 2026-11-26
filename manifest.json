@@ -1,11 +1,11 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-27T05:36:47+08:00",
+  "generatedAt": "2026-11-27T05:53:35+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 121,
-    "enabled": 117,
+    "enabled": 119,
     "local": 57
   },
   "mods": [
@@ -855,7 +855,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-file-unlocker/seamless-file-unlocker.wh.cpp",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "local@seamless-flyouts",
@@ -1031,7 +1031,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-title-bars/seamless-title-bars.wh.cpp",
-      "enabled": false,
+      "enabled": true,
       "category": "Windows and menus"
     },
     {
