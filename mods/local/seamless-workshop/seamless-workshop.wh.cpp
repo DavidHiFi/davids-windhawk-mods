@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.5.9
+// @version         1.5.10
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -60,6 +60,17 @@ Needs the latest Windhawk alpha.
 - Updates never put an older version back. Before it swaps a mod, the
   Workshop checks what is installed right now, so a mod you just updated by
   hand stays as it is.
+
+## What's new in 1.5.10
+
+- A mod's switch works like Windhawk's own: flip it and the mod turns on or
+  off straight away, no Save needed. The Mods page can no longer show a mod
+  as on while Windhawk has it off.
+- The Mods page always matches Windhawk. It refreshes whenever Windhawk
+  changes and every time the window opens, even with unsaved changes on
+  another page.
+- The top of the Mods page says how many mods are installed and how many
+  are on, the same numbers Windhawk shows.
 
 ## What's new in 1.5.2
 
@@ -283,16 +294,17 @@ static HICON Crisp_ShrinkIcon(HICON big, int factor) {
 extern "C" IMAGE_DOS_HEADER __ImageBase;
 
 #ifndef HUB_MOD
-#define WH_MOD_VERSION L"1.5.1"
+#define WH_MOD_VERSION L"1.5.10"
 #define Wh_Log(...) ((void)0)
 #endif
 constexpr WCHAR kHubSelfId[] = L"local@seamless-workshop";  // How Windhawk lists this mod.
 
 constexpr UINT WM_HUB_OPEN = WM_APP + 10, WM_HUB_LINK = WM_APP + 11, WM_HUB_REBUILD = WM_APP + 12,
                WM_HUB_TRAY = WM_APP + 13, WM_HUB_REGROUP = WM_APP + 17, WM_HUB_WINDHAWK = WM_APP + 18,
-               WM_HUB_MODCHANGED = WM_APP + 19;
+               WM_HUB_MODCHANGED = WM_APP + 19, WM_HUB_SWITCH = WM_APP + 21;
 constexpr UINT_PTR kHubSyncTimer = 0x4858;  // Settles a burst of Windhawk changes into one refresh.
 constexpr UINT_PTR kHubArmTimer = 0x4855;  // Ends the five-second "click again to remove" window.
+constexpr UINT_PTR kHubSwitchTimer = 0x485A;  // A switch flipped while a save ran: apply it after.
 
 // ---- Settings store: HKCU\Software\SeamlessWorkshop ------------------------------
 
@@ -4502,7 +4514,8 @@ static std::wstring Hub_ModSig(const std::vector<HubMod>& mods) {
 
 // DavidHiFi's feed sorts his mods into a few groups, listed in the order they show. Until the
 // feed is read, the groups it carries today. A missing or unknown group shows under "Other".
-static const std::vector<std::wstring> kHubDefaultCats = {L"Taskbar", L"Explorer", L"Windows and menus", L"Tools", L"Fixes"};
+static const std::vector<std::wstring> kHubDefaultCats = {L"Taskbar", L"Explorer", L"Icons", L"Windows", L"Look", L"Apps",
+                                                          L"Input",   L"Wallpaper", L"Tools", L"Gaming",  L"Programs"};
 static std::vector<std::wstring> g_feedCats;
 static std::map<std::wstring, std::wstring> g_feedCatOf;  // Mod id to its group in the feed.
 
@@ -4523,7 +4536,7 @@ static std::wstring Hub_CatName(size_t i) {
 // A mod's group: the feed's word for his mods, a guess from what it loads into for the rest.
 static int Hub_ModCat(const HubMod& m) {
     if (auto c = g_feedCatOf.find(m.id); c != g_feedCatOf.end()) return (int)Hub_CatIndex(c->second);
-    static const PCWSTR kAreaCat[] = {L"Windows and menus", L"Taskbar", L"Windows and menus", L"Explorer", L"Tools", L"", L""};
+    static const PCWSTR kAreaCat[] = {L"Windows", L"Taskbar", L"Look", L"Explorer", L"Tools", L"Apps", L""};
     return (int)Hub_CatIndex(kAreaCat[std::clamp(m.area, 0, 6)]);
 }
 
@@ -4531,6 +4544,19 @@ static int Hub_GroupKey(const HubMod& m) {
     if (g_hub.groupBy == 1) return Hub_ModCat(m);
     if (g_hub.groupBy == 2) return m.enabled ? 0 : 1;
     return m.src;
+}
+
+static std::wstring Hub_HeadText(int key, const std::pair<int, int>& c) {
+    if (g_hub.groupBy == 2) return (key == 0 ? L"Turned on (" : L"Turned off (") + std::to_wstring(c.first) + L")";
+    return (g_hub.groupBy == 1 ? Hub_CatName(key) : std::wstring(kHubSrcName[key])) + L" (" +
+           std::to_wstring(c.first) + L", " + std::to_wstring(c.second) + L" on)";
+}
+
+// A mod switch flipped here but not yet in Windhawk.
+static bool Hub_SwitchPending(const SetWindow& w) {
+    for (const auto& f : w.fields)
+        if ((f.hub == 1 || f.hub == 4) && Set_FieldValue(f) != f.value) return true;
+    return false;
 }
 
 // Sorts the mods into their sections and lays out one switch row per mod.
@@ -4558,12 +4584,7 @@ static void Hub_PlaceMods(SetWindow& w) {
     for (size_t i = 0; i < g_hub.mods.size(); i++) {
         const HubMod& m = g_hub.mods[i];
         const int key = Hub_GroupKey(m);
-        const auto& c = count[key];
-        std::wstring head;
-        if (g_hub.groupBy == 2) head = (key == 0 ? L"Turned on (" : L"Turned off (") + std::to_wstring(c.first) + L")";
-        else
-            head = (g_hub.groupBy == 1 ? Hub_CatName(key) : std::wstring(kHubSrcName[key])) + L" (" +
-                   std::to_wstring(c.first) + L", " + std::to_wstring(c.second) + L" on)";
+        const std::wstring head = Hub_HeadText(key, count[key]);
         SetField f{};
         f.kind = SetField::Check;
         f.key = Hub_In(m.id);
@@ -4984,9 +5005,12 @@ static std::wstring Hub_PageIntro(SetWindow& w) {
         if (!m.desc.empty()) s += L" " + m.desc;
         return s;
     }
-    if (w.page == 0 && !g_hub.mods.empty())
-        return std::to_wstring(g_hub.mods.size()) +
-               L" mods installed in Windhawk. Flip a switch to turn one on or off, or click a mod for its settings.";
+    if (w.page == 0 && !g_hub.mods.empty()) {
+        size_t on = 0;
+        for (const auto& m : g_hub.mods) on += m.enabled;
+        return std::to_wstring(g_hub.mods.size()) + L" mods installed in Windhawk, " + std::to_wstring(on) +
+               L" turned on. A switch works at once; click a mod for its settings.";
+    }
     return kSetPages[w.page].intro;
 }
 
@@ -5744,7 +5768,8 @@ constexpr UINT_PTR kHubAutoTimer = 0x4859;  // A few seconds after a check: put 
 static_assert(kHubAutoTimer != kHubSyncTimer && kHubAutoTimer != kHubFeedTimer && kHubAutoTimer != kHubArmTimer &&
                   kHubAutoTimer != 0x4856 && kHubFeedTimer != kHubSyncTimer && kHubFeedTimer != kHubArmTimer &&
                   kHubFeedTimer != 0x4856 && kHubSyncTimer != kHubArmTimer && kHubSyncTimer != 0x4856 &&
-                  kHubArmTimer != 0x4856,
+                  kHubArmTimer != 0x4856 && kHubSwitchTimer != kHubSyncTimer && kHubSwitchTimer != kHubArmTimer &&
+                  kHubSwitchTimer != kHubFeedTimer && kHubSwitchTimer != kHubAutoTimer && kHubSwitchTimer != 0x4856,
               "every hub window timer needs its own id");
 static std::thread g_feedThread;
 static std::atomic<bool> g_feedBusy = false;
@@ -8936,6 +8961,10 @@ static void Hub_CardClick(SetWindow& w, int a, int b) {
 static void Hub_Chose(SetWindow& w, int k) {
     if (k < 0 || k >= (int)w.fields.size()) return;
     SetField& f = w.fields[k];
+    if ((f.hub == 1 || f.hub == 4) && f.kind == SetField::Check) {
+        if (Set_FieldValue(f) != f.value) PostMessageW(w.hwnd, WM_HUB_SWITCH, 0, 0);
+        return;
+    }
     if (!Hub_IsBar(f)) return;
     f.value = f.cur;
     if (Hub_IsView(f)) {
@@ -9842,11 +9871,12 @@ static void Hub_StopWatch() {
     g_whQuit = nullptr;
 }
 
-// Refresh only when it cannot cost the user anything: list showing, nothing unsaved, no box
-// being typed in, no menu open, no save running. Otherwise keep the timer and try again.
+// Refresh only when it cannot cost the user anything: list showing, no switch on its way to
+// Windhawk, no box being typed in, no menu open, no save running. Otherwise keep the timer and try
+// again. Unsaved edits on other pages do not hold it back: a reload keeps them.
 static bool Hub_SyncWait(SetWindow& w) {
     return w.saving || !IsWindowVisible(w.hwnd) || g_hub.detail >= 0 || w.editing >= 0 || w.openSel >= 0 ||
-           w.recording >= 0 || w.dragSlider >= 0 || w.dragScroll || Set_ChangedCount(w) > 0;
+           w.recording >= 0 || w.dragSlider >= 0 || w.dragScroll || Hub_SwitchPending(w);
 }
 
 static void Hub_SyncTick(SetWindow& w) {
@@ -9871,6 +9901,69 @@ static void Hub_SyncTick(SetWindow& w) {
     w.scrollY = w.scrollTarget = std::clamp(scroll, 0.0f, std::max(0.0f, w.contentH - Set_ViewH(w)));
     Set_BuildAndClamp(w);
     if (w.page == 0) Set_SetStatus(w, L"Picked up a change made in Windhawk.");
+}
+
+// A flipped mod switch goes to Windhawk straight away, the way Windhawk's own switch does, so the
+// list never shows a mod on that Windhawk has off. Turning a mod on or off changes no source and no
+// setting, and flipping it back undoes it, so it takes no backup.
+static void Hub_ApplySwitches(std::shared_ptr<SetWindow> keep) {
+    SetWindow& w = *keep;
+    if (!w.hwnd) return;
+    if (w.saving) { SetTimer(w.hwnd, kHubSwitchTimer, 400, nullptr); return; }
+    std::vector<std::pair<std::wstring, bool>> want;  // Mod id, on.
+    for (const auto& f : w.fields) {
+        if ((f.hub != 1 && f.hub != 4) || f.mod < 0 || f.mod >= (int)g_hub.mods.size() || Set_FieldValue(f) == f.value)
+            continue;
+        const std::wstring& id = g_hub.mods[f.mod].id;
+        if (std::none_of(want.begin(), want.end(), [&](const auto& p) { return p.first == id; }))
+            want.push_back({id, f.cur == L"1"});
+    }
+    if (want.empty()) return;
+    std::vector<std::wstring> job;
+    for (const auto& [id, on] : want) job.push_back((on ? L"mod enable " : L"mod disable ") + Set_QuoteArg(id));
+    std::wstring err;
+    const bool ok = Hub_RunJob(w, job, err);
+    if (!keep->hwnd) return;
+    // Every row and the mod page show the result; the mod list may have been read again meanwhile.
+    for (const auto& [id, on] : want) {
+        for (auto& m : g_hub.mods)
+            if (m.id == id && ok) m.enabled = on;
+        for (auto& f : w.fields) {
+            if ((f.hub != 1 && f.hub != 4) || f.mod < 0 || f.mod >= (int)g_hub.mods.size() || g_hub.mods[f.mod].id != id)
+                continue;
+            if (ok) f.cur = f.value = on ? L"1" : L"0";
+            else f.cur = f.value;
+        }
+    }
+    if (!ok) {
+        Set_Invalidate(w);
+        Set_SetStatus(w, err.c_str(), true);
+        SetTimer(w.hwnd, kHubSyncTimer, 700, nullptr);  // Read Windhawk again: show what it really has.
+        return;
+    }
+    if (g_hub.groupBy == 2) {
+        Hub_PlaceMods(w);  // Sorted by on and off: the mod moves to its new section.
+    } else {
+        std::map<int, std::pair<int, int>> count;  // The rows stay put; only the counts change.
+        for (const auto& m : g_hub.mods) {
+            auto& c = count[Hub_GroupKey(m)];
+            c.first++;
+            c.second += m.enabled;
+        }
+        for (auto& f : w.fields)
+            if (f.hub == 1 && f.mod >= 0 && f.mod < (int)g_hub.mods.size()) {
+                const int key = Hub_GroupKey(g_hub.mods[f.mod]);
+                f.group = Hub_In(Hub_HeadText(key, count[key]));
+            }
+    }
+    g_hub.sig = Hub_ModSig(g_hub.mods);
+    Set_BuildAndClamp(w);
+    std::wstring name = want[0].first;
+    for (const auto& m : g_hub.mods)
+        if (m.id == want[0].first) name = m.name;
+    Set_SetStatus(w, want.size() == 1 ? ((want[0].second ? L"Turned on: " : L"Turned off: ") + name).c_str()
+                                      : L"Saved");
+    SetTimer(w.hwnd, kHubSyncTimer, 1500, nullptr);  // Check with Windhawk that it took.
 }
 
 // ---- Main window additions -----------------------------------------------------------
@@ -9946,9 +10039,17 @@ static LRESULT CALLBACK Hub_SubProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, U
             // Windhawk writes several values per change: wait for the burst to settle.
             SetTimer(hwnd, kHubSyncTimer, 700, nullptr);
             return 0;
+        case WM_HUB_SWITCH:
+            Hub_ApplySwitches(keep);
+            return 0;
         case WM_TIMER:
             if (wp == 0x4856) { Hub_Presence(); return 0; }
             if (wp == kHubSyncTimer) { Hub_SyncTick(*w); return 0; }
+            if (wp == kHubSwitchTimer) {
+                KillTimer(hwnd, kHubSwitchTimer);
+                Hub_ApplySwitches(keep);
+                return 0;
+            }
             if (wp == kHubAutoTimer) { Hub_AutoUpdate(*w); return 0; }
             if (wp == kHubFeedTimer) {
                 if (Hub_AppInt(L"feedCheck", 1) && !w->saving) Hub_FeedStart(hwnd, false);
@@ -9999,7 +10100,8 @@ static LRESULT CALLBACK Hub_SubProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, U
             } else {
                 w->timer = SetTimer(hwnd, kSetTimerId, 15, nullptr) != 0;
                 // Back from the tray: pick up changes made in Windhawk meanwhile.
-                if (g_hub.shownOnce && g_hub.detail < 0 && Set_ChangedCount(*w) == 0) Hub_LoadList(*w);
+                if (g_hub.shownOnce && g_hub.detail < 0 && !w->saving && !Hub_SwitchPending(*w)) Hub_LoadList(*w);
+                else if (g_hub.shownOnce) SetTimer(hwnd, kHubSyncTimer, 700, nullptr);
                 g_hub.shownOnce = true;
             }
             break;
@@ -10236,7 +10338,8 @@ static int Hub_SelfTest(const std::wstring& report) {
         HubMod odd; odd.id = L"y"; odd.area = 5;
         check(Hub_ModCat(a) == 1 && Hub_ModCat(lib) == 0 && Hub_ModCat(odd) == 2);
         g_feedCats.clear();
-        check(Hub_CatIndex(L"Explorer") == 1 && Hub_CatIndex(L"") == 5 && Hub_CatName(5) == L"Other");
+        check(Hub_CatIndex(L"Explorer") == 1 && Hub_CatIndex(L"") == kHubDefaultCats.size() &&
+              Hub_CatName(kHubDefaultCats.size()) == L"Other");
         g_feedCats = savedCats;
         g_feedCatOf = savedOf;
     }
