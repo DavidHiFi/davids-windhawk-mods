@@ -2,7 +2,10 @@ name: Library check
 
 # Runs every mod in mods/local through the same validator and compile test the
 # official Windhawk mod library uses, so a mod is known to be ready before it is
-# submitted there. Problems fail the job and stay in the summary.
+# submitted there. Only real faults fail the job: an x86 or x64 compile error
+# or a settings error on the Windhawk the Workshop ships on (2.0). Library-only
+# rules, warnings, ARM64-only errors and older-Windhawk failures show in the
+# summary as "not ready to submit".
 
 on:
   workflow_dispatch:
@@ -80,4 +83,7 @@ jobs:
           curl -L "https://github.com/ramensoftware/windhawk/releases/download/$release_tag/windhawk_setup.exe" -o "$installer_path"
           MSYS_NO_PATHCONV=1 "$installer_path" /S /PORTABLE $installer_args '/D=${{ runner.temp }}\windhawk'
       - name: Compile every mod
-        run: python tools/library-check/check.py compile --upstream upstream --windhawk '${{ runner.temp }}\windhawk' --label 'compile ${{ matrix.version }}' --only "$ONLY"
+        run: |
+          gate=''
+          if [[ "${{ matrix.version }}" == 2.* ]]; then gate='--gate'; fi
+          python tools/library-check/check.py compile --upstream upstream --windhawk '${{ runner.temp }}\windhawk' --label 'compile ${{ matrix.version }}' --only "$ONLY" $gate

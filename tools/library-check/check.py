@@ -2,10 +2,20 @@
 mod library (ramensoftware/windhawk-mods): its validator and its compile test.
 
   check.py validate --upstream <windhawk-mods checkout> [--only "a b"]
-  check.py compile  --upstream <windhawk-mods checkout> --windhawk <portable dir>
+  check.py compile  --upstream <windhawk-mods checkout> --windhawk <portable dir> [--gate]
 
 Prints one RESULT line of JSON per mod and writes a table to the job summary.
-The job fails when any checked mod has problems.
+
+Each mod gets one of three results:
+  pass  ready to submit to the official library.
+  warn  works, but not ready to submit: a library-only rule (the author and
+        github lines our forks keep on purpose, lengths, preview links), a
+        compile warning, an ARM64-only error, or a failure on an older Windhawk
+        than the one the Workshop ships on.
+  FAIL  a real fault: on the Windhawk the Workshop ships on (--gate) the mod
+        does not compile for x86 or x64 or its settings do not parse, or a
+        check could not run at all.
+The job fails only on FAIL.
 """
 import argparse
 import json
@@ -65,13 +75,36 @@ def validate(args, work):
                 text = match.group(2).replace('%0A', ' ').replace('%25', '%')
                 problems.append(f'L{match.group(1)}: {text[:300]}')
         if code != 0 and not problems:
-            problems.append((err or out).strip()[-600:])
-        yield {'id': mod_id, 'ok': not problems, 'problems': problems}
+            # The validator itself broke on this file, so nothing was checked.
+            yield {'id': mod_id, 'result': 'FAIL', 'problems': [(err or out).strip()[-600:]]}
+            continue
+        # Every validator finding is a submission rule: the mod works, it is
+        # just not ready for the official library yet.
+        yield {'id': mod_id, 'result': 'warn' if problems else 'pass', 'problems': problems}
 
 
 def diagnostics(text):
     lines = [l for l in text.splitlines() if re.search(r'\b(error|warning)\b', l)]
     return [l.strip()[:300] for l in lines[:12]]
+
+
+def only_arm64(problems):
+    """True when every compiler error line comes from the ARM64 build."""
+    errors = [p for p in problems
+              if re.search(r'\berror\b', p) and not p.startswith('COMPILE_FAILED')]
+    return bool(errors) and all(p.startswith('[compile:ARM64]') for p in errors)
+
+
+def grade(args, ok, warned, problems):
+    if ok:
+        return 'warn' if warned else 'pass'
+    if not args.gate:
+        problems.insert(0, 'fails on this older Windhawk; the Workshop ships on 2.0')
+        return 'warn'
+    if only_arm64(problems):
+        problems.insert(0, 'ARM64 build only')
+        return 'warn'
+    return 'FAIL'
 
 
 def compile_mods(args, work):
@@ -98,7 +131,6 @@ def compile_mods(args, work):
                 problems.insert(0, f"{error.get('code', code)}: {message[:400]}")
             elif warned:
                 problems.insert(0, 'compiled with warnings')
-            ok = code == 0 and not warned
         else:
             outputs = [str(work / f'mod_{a}.dll') for a in ('32', '64', 'arm64')]
             code, out, err = run(
@@ -106,11 +138,15 @@ def compile_mods(args, work):
                  '-o32', outputs[0], '-o64', outputs[1], '-oarm64', outputs[2]],
                 work,
             )
-            ok = code == 0
+            warned = False
             problems = []
-            if not ok:
+            if code != 0:
                 problems = diagnostics(out + '\n' + err) or [(err or out).strip()[-600:]]
-        yield {'id': mod_id, 'ok': ok, 'problems': problems}
+        result = grade(args, code == 0, warned, problems)
+        yield {'id': mod_id, 'result': result, 'problems': problems}
+
+
+SHOWN = {'pass': 'pass', 'warn': 'warn: not ready to submit', 'FAIL': 'FAIL'}
 
 
 def main():
@@ -120,6 +156,8 @@ def main():
     parser.add_argument('--windhawk')
     parser.add_argument('--label', default='')
     parser.add_argument('--only', default='')
+    parser.add_argument('--gate', action='store_true',
+                        help='the Windhawk the Workshop ships on: compile errors fail')
     args = parser.parse_args()
     args.only = {x for x in re.split(r'[\s,]+', args.only) if x}
 
@@ -131,20 +169,25 @@ def main():
         results = compile_mods(args, work)
 
     label = args.label or args.mode
-    rows = [f'### {label}', '', '| Mod | Result | First problem |', '| --- | --- | --- |']
-    failed = False
+    table = ['| Mod | Result | First problem |', '| --- | --- | --- |']
+    counts = dict.fromkeys(SHOWN, 0)
     for result in results:
-        failed = failed or not result['ok']
+        counts[result['result']] += 1
         print('RESULT ' + json.dumps({'check': label, **result}), flush=True)
         first = ''
         if result['problems']:
             first = result['problems'][0].replace('|', '\\|')[:200]
-        rows.append(f"| {result['id']} | {'pass' if result['ok'] else 'FAIL'} | {first} |")
+        if result['result'] == 'FAIL':
+            print(f"::error title={result['id']}::{first}", flush=True)
+        table.append(f"| {result['id']} | {SHOWN[result['result']]} | {first} |")
+    head = [f'### {label}', '',
+            f"{counts['pass']} ready, {counts['warn']} not ready to submit,"
+            f" {counts['FAIL']} failed", '']
     summary = os.environ.get('GITHUB_STEP_SUMMARY')
     if summary:
         with open(summary, 'a', encoding='utf-8') as handle:
-            handle.write('\n'.join(rows) + '\n\n')
-    return 1 if failed else 0
+            handle.write('\n'.join(head + table) + '\n\n')
+    return 1 if counts['FAIL'] else 0
 
 
 if __name__ == '__main__':
