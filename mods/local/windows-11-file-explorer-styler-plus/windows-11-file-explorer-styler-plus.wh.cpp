@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.39
+// @version         1.10.40
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -13383,6 +13383,9 @@ UINT StatusDockDpi(HWND hWnd);
 bool GetStatusDockBand(HWND hWnd, RECT* band);
 
 constexpr UINT_PTR kStatusDockHoverTimer = 0x57444B31;  // 'WDK1'
+// One-shot repaint of the whole band after the view opens or resizes.
+constexpr UINT_PTR kStatusDockSettleTimer = 0x57444B32;  // 'WDK2'
+void RepaintStatusDock(HWND hViewWnd);
 
 // Hover for the whole dock. DirectUI doesn't tell when the cursor enters the
 // status bar, so mouse moves over the view start it and a short timer, alive
@@ -14271,6 +14274,18 @@ LRESULT CALLBACK StatusDockSubclassProc(HWND hWnd,
                 UpdateStatusDockHover(hWnd, nullptr);
                 return 0;
             }
+            if (wParam == kStatusDockSettleTimer) {
+                KillTimer(hWnd, kStatusDockSettleTimer);
+                RepaintStatusDock(hWnd);
+                return 0;
+            }
+            break;
+
+        // A resize repaints only the uncovered strip of the band, which
+        // leaves the old pill's round end behind. Repaint it all once the
+        // size settles.
+        case WM_SIZE:
+            SetTimer(hWnd, kStatusDockSettleTimer, 150, nullptr);
             break;
 
         case WM_NCDESTROY:
@@ -14281,9 +14296,25 @@ LRESULT CALLBACK StatusDockSubclassProc(HWND hWnd,
     return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
 
+// The whole band and the toggle beside the view buttons.
+void RepaintStatusDock(HWND hViewWnd) {
+    RECT band;
+    if (GetStatusDockBand(hViewWnd, &band)) {
+        InvalidateRect(hViewWnd, &band, FALSE);
+    }
+    AcquireSRWLockShared(&g_statusDockBandsLock);
+    auto it = g_statusDockToggles.find(hViewWnd);
+    HWND hToggleWnd = it != g_statusDockToggles.end() ? it->second : nullptr;
+    ReleaseSRWLockShared(&g_statusDockBandsLock);
+    if (hToggleWnd && IsWindow(hToggleWnd)) {
+        InvalidateRect(hToggleWnd, nullptr, FALSE);
+    }
+}
+
 // On the view's thread.
 void RemoveStatusDockHover(HWND hViewWnd) {
     KillTimer(hViewWnd, kStatusDockHoverTimer);
+    KillTimer(hViewWnd, kStatusDockSettleTimer);
     RemoveWindowSubclass(hViewWnd, StatusDockSubclassProc, 0);
     AcquireSRWLockExclusive(&g_statusDockBandsLock);
     g_statusDockHovered.erase(hViewWnd);
@@ -14303,6 +14334,10 @@ void EnsureStatusDockHover(HWND hViewWnd) {
         AcquireSRWLockExclusive(&g_statusDockBandsLock);
         g_statusDockSubclassed.erase(hViewWnd);
         ReleaseSRWLockExclusive(&g_statusDockBandsLock);
+    } else if (added) {
+        // The first paints of a new window run before the toggle and the
+        // view buttons are measured; draw the band again once they are.
+        SetTimer(hViewWnd, kStatusDockSettleTimer, 400, nullptr);
     }
 }
 
