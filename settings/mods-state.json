@@ -494,7 +494,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.4.9"
+    "version": "1.4.10"
   },
   "local@seamless-dictate": {
     "disabled": false,
