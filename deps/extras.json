@@ -65,6 +65,14 @@
       "script": "deps/freedictate.ps1",
       "why": "Type with your voice in any app. It runs on your PC, nothing goes online.",
       "admin": false
+    },
+    {
+      "id": "seamless-music-player",
+      "name": "Seamless Music Player",
+      "kind": "app",
+      "script": "deps/seamless-music-player.ps1",
+      "why": "DavidHiFi's light music player for Windows, with lyrics, Soulseek and YouTube search built in.",
+      "admin": false
     }
   ]
 }
