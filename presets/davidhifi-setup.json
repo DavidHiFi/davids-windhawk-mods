@@ -4277,9 +4277,12 @@
       "settings": {
         "allowOnPublicNetworks": 0,
         "animationSpeed": "global",
+        "autoAllowConnections": 0,
         "autoBlockedApps[0].appPath": "",
         "autoBlockedApps[0].direction": "fully_offline",
         "autoBlockedApps[0].includeChildProcesses": 1,
+        "confirmBoxGlass": 1,
+        "confirmBoxSize": "large",
         "contextMenu": 1,
         "cycleWidgetAction": "scheduler_only",
         "cycleWidgetSize": 5,

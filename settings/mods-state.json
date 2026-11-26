@@ -1264,7 +1264,7 @@
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.2.7"
+    "version": "1.2.8"
   },
   "local@dsx-tray-icon-fix": {
     "disabled": false,

@@ -2,7 +2,7 @@
 // @id              seamless-windows-firewall
 // @name            Seamless Windows Firewall
 // @description     Block or allow any app's internet in one click, from the tray icon or a shortcut
-// @version         1.2.7
+// @version         1.2.8
 // @author          DavidHiFi, Ashix
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -44,7 +44,8 @@ works next to Windows Firewall and leaves your own firewall rules alone.
 - **Its own connection box.** When an app wants other devices to connect to
   it, such as a game hosting a match, the mod asks in its own frosted box
   instead of the Windows Firewall pop-up. Windows Firewall keeps guarding, and
-  your answer is saved as a normal firewall rule.
+  your answer is saved as a normal firewall rule. Or switch on Allow every
+  app by itself and it never asks.
 - **Right-click menu for apps.** Right-click any program file for Block in
   Windows Firewall, Allow again and Open the firewall panel. A block made there
   is a normal firewall rule and stays after a restart. Turn the menu off under
@@ -67,10 +68,35 @@ Change or clear any of them in the settings.
   the apps your own firewall rules block. Change those in Windows Defender
   Firewall.
 
-## What's new in 1.2.6
+## What's new in 1.2.8
+- The connection box and the warning boxes are bigger. Pick Normal, Large
+  or Extra large under Blocking, Connection requests, Box size. Large is the
+  new default.
+- A switch for the box's blur: Blocking, Connection requests, Blurred box.
+  It is on by default. Off, the box is solid Mocha.
+- New switch, Allow every app by itself. On, an app that wants other devices
+  to connect to it is allowed straight away, on every network, with no box,
+  and each one is written to the log. It is off by default.
 
+## What's new in 1.2.7
+- The tray icon is drawn at 4x and shrunk down so its edges stay crisp on the
+  taskbar.
+
+## What's new in 1.2.6
 - Title bar menus (right-click the title bar, or Alt+Space) now really get the same
   blurred Mocha body as every other menu. They opened pitch black before.
+
+## What's new in 1.2.5
+- Right-click any program file to block it in Windows Firewall, allow it again
+  or open the panel. It does the same job as Firewall App Blocker's menu, so
+  you no longer need that app. Turn the menu off under Blocking, Right-click
+  menu; nothing of it is left while the mod is off.
+- The panel and the connection box now fade and slide in when they open and out
+  when they close. Turn it off, or pick a speed, under Look, Motion. They stay
+  still when Windows animation effects are off.
+- The connection box is real frosted glass now. Before, it looked flat.
+- The tray and settings icon is the shield alone in the blue to mauve
+  gradient, with no plate behind it.
 
 ## What's new in 1.2.2
 - No more edge pill and no more opening on hover. The mod lives in the tray:
@@ -133,6 +159,19 @@ Based on [!Net](https://windhawk.net/mods/not-net) by Ashix.
 - allowOnPublicNetworks: false
   $name: "Allow on public networks too"
   $description: "Off, Allow lets the app in on home and work networks only. On a public network you are using right now, Allow always covers it."
+- autoAllowConnections: false
+  $name: "Allow every app by itself"
+  $description: "On, an app that wants other devices to connect to it is allowed straight away, on every network, with no box. Each one is written to the log. Off, the box asks you first."
+- confirmBoxSize: "large"
+  $name: "Box size"
+  $description: "How big the connection box and the warning boxes are."
+  $options:
+  - normal: "Normal"
+  - large: "Large"
+  - extralarge: "Extra large"
+- confirmBoxGlass: true
+  $name: "Blurred box"
+  $description: "On, the connection box and the warning boxes are frosted glass. Off, they are solid."
 - contextMenu: true
   $name: "Right-click menu for apps"
   $description: "Adds Seamless Windows Firewall to the right-click menu of every program file, with Block, Allow again and Open the panel. A block made there stays after a restart, like a normal firewall rule."
@@ -512,6 +551,9 @@ struct ModSettings {
     bool warnOnVpnOrRemote = true;
     bool replaceFirewallPrompt = true;
     bool allowOnPublicNetworks = false;
+    bool autoAllowConnections = false;
+    double confirmBoxScale = 1.3;
+    bool confirmBoxGlass = true;
     bool contextMenu = true;
 
     HotkeyBinding hkToggleFg;
@@ -3145,6 +3187,14 @@ static void LoadSettings() {
     next.warnOnVpnOrRemote = Wh_GetIntSetting(L"warnOnVpnOrRemote") != 0;
     next.replaceFirewallPrompt = Wh_GetIntSetting(L"replaceFirewallPrompt") != 0;
     next.allowOnPublicNetworks = Wh_GetIntSetting(L"allowOnPublicNetworks") != 0;
+    next.autoAllowConnections = Wh_GetIntSetting(L"autoAllowConnections") != 0;
+    {
+        auto sBox = WindhawkUtils::StringSetting::make(L"confirmBoxSize");
+        next.confirmBoxScale = (_wcsicmp(sBox.get(), L"normal") == 0)       ? 1.0
+                               : (_wcsicmp(sBox.get(), L"extralarge") == 0) ? 1.6
+                                                                             : 1.3;
+    }
+    next.confirmBoxGlass = Wh_GetIntSetting(L"confirmBoxGlass") != 0;
     next.contextMenu = Wh_GetIntSetting(L"contextMenu") != 0;
 
     auto readHk = [&](PCWSTR key) {
@@ -3467,6 +3517,7 @@ constexpr UINT_PTR TIMER_CONFIRM_FADE = 90;
 struct FwConfirmState {
     std::wstring title, body, yes, no;
     bool danger = false, question = false, glass = false;
+    double scale = 1.3;  // the Box size setting
     bool inside = false, tracking = false, done = false, result = false;
     int hover = 0;  // 1 = no button, 2 = yes button
     int focus = 2;
@@ -3486,6 +3537,21 @@ struct FwConfirmState {
 };
 static FwConfirmState* g_confirm = nullptr;
 
+// Every size in the box is a 96-dpi value times the Box size setting; edges stay 2px.
+static int BoxPx(int v, UINT dpi, double k) {
+    return DpiScale((int)std::lround(v * k), dpi);
+}
+
+static double ConfirmBoxScale() {
+    std::lock_guard<std::mutex> lk(g_settingsMtx);
+    return g_settings.confirmBoxScale;
+}
+
+static bool ConfirmBoxGlassOn() {
+    std::lock_guard<std::mutex> lk(g_settingsMtx);
+    return g_settings.confirmBoxGlass;
+}
+
 static int FwConfirmHit(const FwConfirmState* st, POINT pt) {
     if (PtInRect(&st->rcYes, pt)) return 2;
     if (PtInRect(&st->rcNo, pt)) return 1;
@@ -3494,12 +3560,12 @@ static int FwConfirmHit(const FwConfirmState* st, POINT pt) {
 
 static SIZE FwConfirmLayout(HWND hwnd, FwConfirmState* st) {
     UINT dpi = GetDpiForWindow(hwnd);
-    int pad = DpiScale(20, dpi);
-    int w = DpiScale(380, dpi);
-    int textX = pad + DpiScale(34, dpi);
+    int pad = BoxPx(20, dpi, st->scale);
+    int w = BoxPx(380, dpi, st->scale);
+    int textX = pad + BoxPx(34, dpi, st->scale);
     const wchar_t* face = FwTextFace();
-    Gdiplus::Font bodyFont(face, (Gdiplus::REAL)DpiScale(12, dpi), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::Font btnFont(face, (Gdiplus::REAL)DpiScale(12, dpi), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
+    Gdiplus::Font bodyFont(face, (Gdiplus::REAL)BoxPx(12, dpi, st->scale), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+    Gdiplus::Font btnFont(face, (Gdiplus::REAL)BoxPx(12, dpi, st->scale), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
     HDC dc = GetDC(hwnd);
     Gdiplus::RectF bodyBox, yesBox, noBox;
     {
@@ -3512,11 +3578,11 @@ static SIZE FwConfirmLayout(HWND hwnd, FwConfirmState* st) {
         g.MeasureString(st->no.c_str(), -1, &btnFont, o, &noBox);
     }
     ReleaseDC(hwnd, dc);
-    st->bodyTop = pad + DpiScale(24, dpi);
-    st->bodyH = (int)std::ceil(bodyBox.Height) + DpiScale(2, dpi);
-    int btnTop = st->bodyTop + st->bodyH + DpiScale(20, dpi);
-    int btnH = DpiScale(32, dpi);
-    int minW = DpiScale(88, dpi), side = DpiScale(18, dpi), gap = DpiScale(8, dpi);
+    st->bodyTop = pad + BoxPx(24, dpi, st->scale);
+    st->bodyH = (int)std::ceil(bodyBox.Height) + BoxPx(2, dpi, st->scale);
+    int btnTop = st->bodyTop + st->bodyH + BoxPx(20, dpi, st->scale);
+    int btnH = BoxPx(32, dpi, st->scale);
+    int minW = BoxPx(88, dpi, st->scale), side = BoxPx(18, dpi, st->scale), gap = BoxPx(8, dpi, st->scale);
     int yesW = std::max(minW, (int)std::ceil(yesBox.Width) + 2 * side);
     int noW = std::max(minW, (int)std::ceil(noBox.Width) + 2 * side);
     st->rcYes = RECT{w - pad - yesW, btnTop, w - pad, btnTop + btnH};
@@ -3550,10 +3616,10 @@ static void FwConfirmPaint(HWND hwnd, FwConfirmState* st) {
             FwEdge(g, Moc(fwc::surface2), 0, 0, (Gdiplus::REAL)w, (Gdiplus::REAL)h, winR, ew);
 
         const wchar_t* face = FwTextFace();
-        Gdiplus::Font titleFont(face, (Gdiplus::REAL)DpiScale(15, dpi), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-        Gdiplus::Font bodyFont(face, (Gdiplus::REAL)DpiScale(12, dpi), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-        Gdiplus::Font btnFont(face, (Gdiplus::REAL)DpiScale(12, dpi), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-        Gdiplus::Font iconFont(FwIconFace(), (Gdiplus::REAL)DpiScale(18, dpi), Gdiplus::FontStyleRegular,
+        Gdiplus::Font titleFont(face, (Gdiplus::REAL)BoxPx(15, dpi, st->scale), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
+        Gdiplus::Font bodyFont(face, (Gdiplus::REAL)BoxPx(12, dpi, st->scale), Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+        Gdiplus::Font btnFont(face, (Gdiplus::REAL)BoxPx(12, dpi, st->scale), Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
+        Gdiplus::Font iconFont(FwIconFace(), (Gdiplus::REAL)BoxPx(18, dpi, st->scale), Gdiplus::FontStyleRegular,
                                Gdiplus::UnitPixel);
         Gdiplus::SolidBrush textBr(Moc(fwc::text)), subBr(Moc(fwc::subtext1)), crustBr(Moc(fwc::crust));
         Gdiplus::SolidBrush iconBr(Moc(st->question ? fwc::blue : fwc::peach));
@@ -3564,19 +3630,19 @@ static void FwConfirmPaint(HWND hwnd, FwConfirmState* st) {
         sfLeft.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
         sfLeft.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
 
-        int pad = DpiScale(20, dpi);
-        int textX = pad + DpiScale(34, dpi);
-        Gdiplus::RectF iconRf((Gdiplus::REAL)pad, (Gdiplus::REAL)pad, (Gdiplus::REAL)DpiScale(24, dpi),
-                              (Gdiplus::REAL)DpiScale(24, dpi));
+        int pad = BoxPx(20, dpi, st->scale);
+        int textX = pad + BoxPx(34, dpi, st->scale);
+        Gdiplus::RectF iconRf((Gdiplus::REAL)pad, (Gdiplus::REAL)pad, (Gdiplus::REAL)BoxPx(24, dpi, st->scale),
+                              (Gdiplus::REAL)BoxPx(24, dpi, st->scale));
         g.DrawString(st->question ? L"\xE9CE" : L"\xE7BA", -1, &iconFont, iconRf, &sfCenter, &iconBr);
         Gdiplus::RectF titleRf((Gdiplus::REAL)textX, (Gdiplus::REAL)pad, (Gdiplus::REAL)(w - textX - pad),
-                               (Gdiplus::REAL)DpiScale(24, dpi));
+                               (Gdiplus::REAL)BoxPx(24, dpi, st->scale));
         g.DrawString(st->title.c_str(), -1, &titleFont, titleRf, &sfLeft, &textBr);
         Gdiplus::RectF bodyRf((Gdiplus::REAL)textX, (Gdiplus::REAL)st->bodyTop, (Gdiplus::REAL)(w - textX - pad),
                               (Gdiplus::REAL)st->bodyH);
         g.DrawString(st->body.c_str(), -1, &bodyFont, bodyRf, nullptr, &subBr);
 
-        Gdiplus::REAL rad = (Gdiplus::REAL)DpiScale(8, dpi);
+        Gdiplus::REAL rad = (Gdiplus::REAL)BoxPx(8, dpi, st->scale);
         Gdiplus::REAL ew2 = (Gdiplus::REAL)std::max(2, DpiScale(2, dpi));
         auto rf = [](const RECT& r) {
             return Gdiplus::RectF((Gdiplus::REAL)r.left, (Gdiplus::REAL)r.top, (Gdiplus::REAL)(r.right - r.left),
@@ -3615,7 +3681,7 @@ static void FwBoxSettle(HWND hwnd, FwConfirmState* st) {
     SetWindowPos(hwnd, nullptr, st->finalX, st->finalY, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     LONG_PTR ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
     if (ex & WS_EX_LAYERED) SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex & ~WS_EX_LAYERED);
-    bool glass = TransparencyOn();
+    bool glass = TransparencyOn() && ConfirmBoxGlassOn();
     ApplyPanelGlass(hwnd, glass);
     st->glass = glass;
     SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
@@ -3836,6 +3902,7 @@ static bool FwConfirm(const wchar_t* title, const wchar_t* body, const wchar_t* 
     st.danger = danger;
     st.focus = danger ? 1 : 2;  // a risky box starts on the safe button, so Enter keeps things as they are
     st.question = question;
+    st.scale = ConfirmBoxScale();
     g_confirm = &st;
     HWND hwnd = registered ? CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED, kConfirmClass, title,
                                              WS_POPUP, cx, cy, 10, 10, owner, nullptr, inst, nullptr)
@@ -4322,6 +4389,7 @@ static void ShowNextListenBox() {
     st->focus = 2;
     st->doneTo = g_hWnd;
     st->doneMsg = WM_APP_LISTEN_DONE;
+    st->scale = ConfirmBoxScale();
 
     POINT cpt{};
     GetCursorPos(&cpt);
@@ -4372,7 +4440,7 @@ static void ListenPump(bool fullscreen) {
     if (!fullscreen && !g_listenQueue.empty()) ShowNextListenBox();
 }
 
-static void AddListenRule(const ListenAsk& a, bool allow) {
+static void AddListenRule(const ListenAsk& a, bool allow, bool automatic = false) {
     bool publicToo = false;
     {
         std::lock_guard<std::mutex> lk(g_settingsMtx);
@@ -4383,7 +4451,7 @@ static void AddListenRule(const ListenAsk& a, bool allow) {
         long cur = 0;
         p->get_CurrentProfileTypes(&cur);
         long profiles = NET_FW_PROFILE2_ALL;
-        if (allow) {
+        if (allow && !automatic) {
             profiles = NET_FW_PROFILE2_PRIVATE | NET_FW_PROFILE2_DOMAIN;
             if (publicToo || (cur & NET_FW_PROFILE2_PUBLIC)) profiles |= NET_FW_PROFILE2_PUBLIC;
         }
@@ -4392,8 +4460,9 @@ static void AddListenRule(const ListenAsk& a, bool allow) {
         INetFwRule* r = nullptr;
         if (SUCCEEDED(CoCreateInstance(__uuidof(NetFwRule), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&r))) && r) {
             std::wstring nm = L"Seamless Firewall: " + a.name;
-            std::wstring desc = allow ? L"Allowed from the Seamless Windows Firewall connection box."
-                                      : L"Blocked from the Seamless Windows Firewall connection box.";
+            std::wstring desc = automatic ? L"Allowed by itself: Seamless Windows Firewall, Allow every app by itself."
+                                : allow   ? L"Allowed from the Seamless Windows Firewall connection box."
+                                          : L"Blocked from the Seamless Windows Firewall connection box.";
             BSTR bName = SysAllocString(nm.c_str());
             BSTR bDesc = SysAllocString(desc.c_str());
             BSTR bApp = SysAllocString(a.path.c_str());
@@ -4417,7 +4486,10 @@ static void AddListenRule(const ListenAsk& a, bool allow) {
         rules->Release();
     });
     if (SUCCEEDED(result))
-        LogAudit(std::wstring(allow ? L"Connection request allowed: " : L"Connection request blocked: ") + a.path);
+        LogAudit(std::wstring(automatic ? L"Connection request allowed by itself: "
+                              : allow   ? L"Connection request allowed: "
+                                        : L"Connection request blocked: ") +
+                 a.path + (a.port ? L" (port " + std::to_wstring(a.port) + L")" : L""));
     else
         Wh_Log(L"Could not save the firewall rule for %s: 0x%08X", a.path.c_str(), (unsigned)result);
 }
@@ -4437,7 +4509,7 @@ static void ListenSync() {
     bool on = false;
     {
         std::lock_guard<std::mutex> lk(g_settingsMtx);
-        on = g_settings.replaceFirewallPrompt;
+        on = g_settings.replaceFirewallPrompt || g_settings.autoAllowConnections;
     }
     if (on && IsProcessElevated()) {
         if (!g_listenPromptsOff) ListenPromptsTakeOver();
@@ -8425,7 +8497,14 @@ static LRESULT CALLBACK FloatingWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
         }
         case WM_APP_LISTEN_FOUND: {
             std::unique_ptr<ListenAsk> a(reinterpret_cast<ListenAsk*>(lParam));
-            if (a && g_listenRunning) {
+            bool autoAllow = false;
+            {
+                std::lock_guard<std::mutex> lk(g_settingsMtx);
+                autoAllow = g_settings.autoAllowConnections;
+            }
+            if (a && g_listenRunning && autoAllow) {
+                AddListenRule(*a, true, true);
+            } else if (a && g_listenRunning) {
                 g_listenQueue.push_back(std::move(a));
                 ListenPump(IsFullscreenActive());
             }
@@ -10051,6 +10130,9 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"warnOnVpnOrRemote", L"Warn before blocking a VPN or remote desktop", L"Blocking one of these can cut off the connection you are using right now.", L"1", {}, 0, 100, 0, L"Safety"},
 {K::Check, L"replaceFirewallPrompt", L"Ask with our own box", L"When an app wants other devices to connect to it, such as a game hosting a match, this box asks instead of the Windows Firewall pop-up. Windows Firewall keeps guarding, and your answer is saved as a normal firewall rule.", L"1", {}, 0, 100, 0, L"Connection requests"},
 {K::Check, L"allowOnPublicNetworks", L"Allow on public networks too", L"Off, Allow lets the app in on home and work networks only. On a public network you are using right now, Allow always covers it.", L"0", {}, 0, 100, 0, L"Connection requests"},
+{K::Check, L"autoAllowConnections", L"Allow every app by itself", L"On, an app that wants other devices to connect to it is allowed straight away, on every network, with no box. Each one is written to the log. Off, the box asks you first.", L"0", {}, 0, 100, 0, L"Connection requests"},
+{K::Choice, L"confirmBoxSize", L"Box size", L"How big the connection box and the warning boxes are.", L"large", {{L"normal", L"Normal"}, {L"large", L"Large"}, {L"extralarge", L"Extra large"}}, 0, 100, 0, L"Connection requests"},
+{K::Check, L"confirmBoxGlass", L"Blurred box", L"On, the connection box and the warning boxes are frosted glass. Off, they are solid.", L"1", {}, 0, 100, 0, L"Connection requests"},
 {K::Check, L"contextMenu", L"Right-click menu for apps", L"Adds Seamless Windows Firewall to the right-click menu of every program file, with Block, Allow again and Open the panel. A block made there stays after a restart, like a normal firewall rule.", L"1", {}, 0, 100, 0, L"Right-click menu"},
 {K::Choice, L"windowSizePreset", L"Panel size", L"", L"default", {{L"default", L"Normal (436 by 480)"}, {L"large", L"Large (680 by 680)"}, {L"extralarge", L"Extra large (840 by 840)"}}, 0, 100, 1, L"Panel"},
 {K::Choice, L"defaultFilter", L"List shown first", L"The tab the panel opens on.", L"user", {{L"user", L"Running apps"}, {L"allowed", L"Allowed"}, {L"blocked", L"Blocked"}, {L"system", L"System apps"}, {L"excluded", L"Hidden apps"}}, 0, 100, 1, L"Panel"},
