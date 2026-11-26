@@ -2,7 +2,7 @@
 // @id              simple-window-switcher-plus
 // @name            Simple Window Switcher Plus
 // @description     Customizable Alt+Tab with Vista animations, background blur and elevated app support
-// @version         1.0.9
+// @version         1.0.10
 // @author          DavidHiFi, Lone, valinet, Asteski, bropines, caliberda
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -31,6 +31,7 @@ Vista's animated live-window layouts and blurred background, with Simple Window 
 - Dedicated administrator host handles shortcuts while elevated apps have focus.
 - Change layouts in Settings without restarting Explorer.
 - If the switcher host crashes, it starts again on its own, so Alt+Tab keeps working.
+- Windows' own apps, like Terminal, Notepad and Paint, show the same Catppuccin icon as on the taskbar when UWP Assets Redirect Plus has an icon theme on.
 
 ## Settings
 
@@ -1350,6 +1351,148 @@ static HICON TryGetCrispExeIcon(HWND hWnd, int desiredSizePx) {
     return NULL;
 }
 
+// Packaged Windows apps (Terminal, Notepad, Paint) carry their stock icon inside the exe, so
+// the exe icon above misses the Catppuccin theme the taskbar shows. UWP Assets Redirect Plus
+// keeps that theme as "package name = icon file"; read it once and use it first.
+static std::map<std::wstring, std::wstring> g_themeIcons;
+static bool g_themeRead = false;
+
+static std::wstring ThemeLower(std::wstring s) {
+    for (auto& c : s) c = (wchar_t)towlower(c);
+    return s;
+}
+
+static std::wstring ThemeRegText(const wchar_t* key, const wchar_t* value) {
+    wchar_t buf[512] = {};
+    DWORD cb = sizeof(buf);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, key, value, RRF_RT_REG_SZ, nullptr, buf, &cb) != ERROR_SUCCESS)
+        return {};
+    return buf;
+}
+
+static std::wstring ThemeReadFile(const std::wstring& path) {
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                           OPEN_EXISTING, 0, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return {};
+    std::string bytes;
+    LARGE_INTEGER size{};
+    if (GetFileSizeEx(f, &size) && size.QuadPart > 0 && size.QuadPart < (1 << 20)) {
+        bytes.resize((size_t)size.QuadPart);
+        DWORD got = 0;
+        if (!ReadFile(f, &bytes[0], (DWORD)bytes.size(), &got, nullptr)) got = 0;
+        bytes.resize(got);
+    }
+    CloseHandle(f);
+    if (bytes.size() >= 2 && (unsigned char)bytes[0] == 0xFF && (unsigned char)bytes[1] == 0xFE)
+        return std::wstring((const wchar_t*)(bytes.data() + 2), (bytes.size() - 2) / 2);
+    size_t skip = bytes.rfind("\xEF\xBB\xBF", 0) == 0 ? 3 : 0;
+    int n = MultiByteToWideChar(CP_UTF8, 0, bytes.data() + skip, (int)(bytes.size() - skip), nullptr, 0);
+    std::wstring text(n, L'\0');
+    if (n) MultiByteToWideChar(CP_UTF8, 0, bytes.data() + skip, (int)(bytes.size() - skip), &text[0], n);
+    return text;
+}
+
+static void ReadIconTheme() {
+    g_themeRead = true;
+    const wchar_t* modKey = L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@uwp-assets-redirect-plus";
+    HKEY k = nullptr;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, modKey, 0, KEY_READ, &k) != ERROR_SUCCESS) return;
+    RegCloseKey(k);
+    DWORD off = 0, cb = sizeof(off);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, modKey, L"Disabled", RRF_RT_REG_DWORD, nullptr, &off, &cb) ==
+            ERROR_SUCCESS && off)
+        return;
+    std::wstring theme =
+        ThemeRegText(L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@uwp-assets-redirect-plus\\Settings", L"icon-theme");
+    if (theme.empty()) return;
+    std::replace(theme.begin(), theme.end(), L'/', L'\\');
+    // Mod storage folders sit side by side; ours tells where the theme mod's is.
+    std::vector<std::wstring> roots;
+    wchar_t own[MAX_PATH * 2] = {};
+    if (Wh_GetModStoragePath(own, ARRAYSIZE(own))) {
+        std::wstring r = own;
+        while (!r.empty() && (r.back() == L'\\' || r.back() == L'/')) r.pop_back();
+        size_t cut = r.find_last_of(L"\\/");
+        if (cut != std::wstring::npos) roots.push_back(r.substr(0, cut));
+    }
+    roots.push_back(L"C:\\ProgramData\\Windhawk\\Engine\\ModsWritable\\mod-storage");
+    std::wstring dir, text;
+    for (auto& r : roots) {
+        dir = r + L"\\local@uwp-assets-redirect-plus\\icon-themes\\" + theme;
+        text = ThemeReadFile(dir + L"\\theme.ini");
+        if (!text.empty()) break;
+    }
+    if (text.empty()) return;
+    auto trim = [](const std::wstring& s) {
+        size_t a = s.find_first_not_of(L" \t\r\n");
+        size_t b = s.find_last_not_of(L" \t\r\n");
+        return a == std::wstring::npos ? std::wstring() : s.substr(a, b - a + 1);
+    };
+    std::wstring section;
+    size_t pos = 0;
+    while (pos <= text.size()) {
+        size_t e = text.find(L'\n', pos);
+        if (e == std::wstring::npos) e = text.size();
+        std::wstring line = trim(text.substr(pos, e - pos));
+        pos = e + 1;
+        if (line.empty() || line[0] == L';' || line[0] == L'#') continue;
+        if (line[0] == L'[') {
+            section = ThemeLower(trim(line.substr(1, line.find(L']') - 1)));
+            continue;
+        }
+        size_t eq = line.find(L'=');
+        if (eq == std::wstring::npos) continue;
+        std::wstring key = ThemeLower(trim(line.substr(0, eq)));
+        std::wstring val = trim(line.substr(eq + 1));
+        if (val.rfind(L".\\", 0) == 0 || val.rfind(L"./", 0) == 0) val = dir + L"\\" + val.substr(2);
+        // Only whole packages with an .ico; "Package|folder" entries cover one part of a package.
+        if ((section == L"windows-apps" || section == L"system-apps") && key.find(L'|') == std::wstring::npos &&
+            val.size() > 4 && _wcsicmp(val.c_str() + val.size() - 4, L".ico") == 0)
+            g_themeIcons[key] = val;
+    }
+}
+
+// The package name of a program inside a WindowsApps package folder
+// (...\WindowsApps\Microsoft.WindowsTerminal_1.2.3.0_x64__8wekyb3d8bbwe\WindowsTerminal.exe).
+static std::wstring ThemePackageOf(const std::wstring& exe) {
+    std::wstring l = ThemeLower(exe);
+    const std::wstring wa = L"\\windowsapps\\";
+    size_t at = l.find(wa);
+    if (at == std::wstring::npos) return L"";
+    std::wstring rest = l.substr(at + wa.size());
+    size_t us = rest.find(L'_'), sl = rest.find(L'\\');
+    if (us == std::wstring::npos || (sl != std::wstring::npos && sl < us)) return L"";
+    return rest.substr(0, us);
+}
+
+static HICON TryGetThemeIcon(HWND hWnd, int sizePx) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hWnd, &pid);
+    if (!pid || sizePx <= 0) return NULL;
+    HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!hProc) return NULL;
+    WCHAR exePath[MAX_PATH] = {0};
+    DWORD size = MAX_PATH;
+    BOOL ok = QueryFullProcessImageNameW(hProc, 0, exePath, &size);
+    CloseHandle(hProc);
+    if (!ok || !exePath[0]) return NULL;
+    std::wstring pkg = ThemePackageOf(exePath);
+    if (pkg.empty()) return NULL;
+    if (!g_themeRead) ReadIconTheme();
+    auto it = g_themeIcons.find(pkg);
+    if (it == g_themeIcons.end()) return NULL;
+    // Kept in the exe icon cache, which is destroyed at unload.
+    std::wstring key = L"theme:" + it->second + L"_" + std::to_wstring(sizePx);
+    auto hit = g_exeIconCache.find(key);
+    if (hit != g_exeIconCache.end()) return hit->second;
+    HICON hIcon = NULL;
+    if (PrivateExtractIconsW(it->second.c_str(), 0, sizePx, sizePx, &hIcon, NULL, 1, 0) == 1 && hIcon) {
+        g_exeIconCache[key] = hIcon;
+        return hIcon;
+    }
+    return NULL;
+}
+
 // === Custom per-process header (icon and/or application name) ===
 
 struct CustomHeaderRule {
@@ -1431,6 +1574,7 @@ static HICON LoadWindowIcon(HWND hWnd) {
     if (g_IsShellFrameWindow && g_IsShellFrameWindow(hWnd)) {
         hIcon = TryGetUwpIconFromExplorer(hWnd, GetHeaderIconSizePx());
     }
+    if (!hIcon) hIcon = TryGetThemeIcon(hWnd, GetHeaderIconSizePx());
     // A crisp exe icon extracted at the exact target size beats the WM_GETICON
     // result, which is a fixed ~32px frame: blurry when upscaled to 48/64 and
     // pixelated when downscaled to 16 (GDI does no smoothing in DrawIconEx).
