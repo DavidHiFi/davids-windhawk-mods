@@ -43,6 +43,13 @@
         "clock.weather.enabled": 1,
         "clock.weather.fahrenheit": 0,
         "clock.weather.updateMinutes": 15,
+        "focus.breakMin": 5,
+        "focus.longBreakMin": 15,
+        "focus.longEvery": 4,
+        "focus.moduleOn": 0,
+        "focus.motion": 1,
+        "focus.sound": 1,
+        "focus.workMin": 25,
         "keepAwake.keepDisplay": 0,
         "keepAwake.minutes": 0,
         "keepAwake.moduleOn": 0,
@@ -239,6 +246,12 @@
         "networkToggle.adapter": "",
         "networkToggle.clickToToggle": 0,
         "networkToggle.moduleOn": 0,
+        "notes.fontSize": 13,
+        "notes.height": 420,
+        "notes.moduleOn": 0,
+        "notes.motion": 1,
+        "notes.showCount": 1,
+        "notes.width": 360,
         "safeStart": 1,
         "sysinfo.adaptiveColors": 1,
         "sysinfo.appsIslandPadding": 5,
@@ -430,7 +443,11 @@
         "wallpaper.tileRadius": 8,
         "wallpaper.tileShape": "wide",
         "wallpaper.tileSize": 176,
-        "wallpaper.transition": "random"
+        "wallpaper.transition": "random",
+        "wintitle.display": "title",
+        "wintitle.hideApps": "",
+        "wintitle.maxWidth": 220,
+        "wintitle.moduleOn": 0
       }
     }
   ]
