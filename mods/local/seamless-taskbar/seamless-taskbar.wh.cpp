@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.63
+// @version         0.4.65
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -33,6 +33,14 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
+
+## What's new in 0.4.65
+
+The wallpaper switcher's edge turns blue to mauve while your cursor is over it. Drag an edge or corner to fit more or fewer pictures, and it remembers the size. New options: sort order, a mark on the current wallpaper, hover zoom, tile shape, automatic changes, all screens, fit mode, a random wallpaper shortcut, glass strength, stay open, hide the top bar, and the edge width and colours. Tray icons are drawn at full size, so their edges are smooth instead of stretched.
+
+## What's new in 0.4.64
+
+The Edit account window shows the settings icon in its title, and its OK and Cancel bar sits snug on the right like every other settings window. Long hints on the Accounts page fit on one line.
 
 ## What's new in 0.4.63
 
@@ -2321,6 +2329,83 @@ The whole mod is published under GPL-3.0.
   - animSpeed: 180
     $name: Motion length
     $description: 'How long opening takes, in milliseconds. Closing is a little quicker. Range 80 to 600 (Suggested: 180).'
+  - sortOrder: name
+    $name: Sort pictures
+    $description: 'Name, newest first, oldest first or shuffled.'
+    $options:
+    - name: Name
+    - newest: Newest first
+    - oldest: Oldest first
+    - shuffle: Shuffled
+  - currentBadge: true
+    $name: Badge on the current picture
+    $description: Shows a mark on the wallpaper that is currently set.
+  - openOnCurrent: true
+    $name: Open on the current picture
+    $description: Opens the picker on the page of the wallpaper that is currently set.
+  - hoverZoom: true
+    $name: Zoom pictures on hover
+    $description: A picture grows a little when the cursor rests on it.
+  - tileShape: wide
+    $name: Tile shape
+    $description: Wide, screen shape or square.
+    $options:
+    - wide: Wide
+    - screen: Screen shape
+    - square: Square
+  - autoChange: off
+    $name: Auto-change wallpaper
+    $description: 'Off, next or random. Changes the wallpaper by itself.'
+    $options:
+    - off: Off
+    - next: Next
+    - random: Random
+  - autoMinutes: 30
+    $name: Change every
+    $description: 'Minutes between automatic changes. Range 1 to 1440 (Suggested: 30).'
+  - screens: this
+    $name: Screens to change
+    $description: 'This screen only or all screens.'
+    $options:
+    - this: This screen
+    - all: All screens
+  - fitMode: keep
+    $name: Fit mode
+    $description: 'Keep, fill, fit, stretch, centre or span.'
+    $options:
+    - keep: Keep
+    - fill: Fill
+    - fit: Fit
+    - stretch: Stretch
+    - center: Centre
+    - span: Span
+  - randomHotkey: ""
+    $name: Random wallpaper shortcut
+    $description: Keys that set a random wallpaper, such as ctrl+alt+r. Leave it empty for none.
+  - glassStrength: 40
+    $name: Glass strength
+    $description: 'How strong the frosted glass is. Range 0 to 100 (Suggested: 40).'
+  - stayOpen: false
+    $name: Stay open when clicking away
+    $description: Keeps the switcher open when you click outside it.
+  - showBar: true
+    $name: Show the search and folder bar
+    $description: Hides the folder label and the search box when off.
+  - resizable: true
+    $name: Resize the window
+    $description: Lets you drag an edge or corner to change the number of tiles.
+  - edgeWidth: 2
+    $name: Window edge width
+    $description: 'Pixels wide. Range 1 to 6 (Suggested: 2).'
+  - edgeColor: "#585B70"
+    $name: Window edge colour at rest
+    $description: '#RRGGBB. Grey at rest.'
+  - hoverColor1: "#89B4FA"
+    $name: Window edge hover colour
+    $description: '#RRGGBB. The blue side of the hover gradient.'
+  - hoverColor2: "#CBA6F7"
+    $name: Window edge second hover colour
+    $description: '#RRGGBB. The mauve side of the hover gradient.'
   $name: Wallpaper switcher
   $description: A tray button that opens a picker to change your wallpaper.
 - SettingsWindow:
@@ -2495,6 +2580,86 @@ The whole mod is published under GPL-3.0.
 #include <winrt/Windows.UI.Xaml.Automation.Peers.h>
 #include <winrt/Windows.UI.Composition.Desktop.h>
 #include <winrt/Windows.Graphics.DirectX.h>
+
+// Crisp icons (2026-11-26): tray icons are drawn at 4x the size the taskbar shows them and shrunk
+// here with a box filter, so curves and glyph edges are smooth instead of stretched and stepped.
+// The result carries straight alpha, which is what Windows expects in an icon.
+static HICON Crisp_ShrinkIcon(HICON big, int factor) {
+    if (!big || factor <= 1) return big;
+    ICONINFO ii{};
+    if (!GetIconInfo(big, &ii)) return big;
+    HICON out = nullptr;
+    BITMAP bm{};
+    if (ii.hbmColor && GetObjectW(ii.hbmColor, sizeof(bm), &bm) && bm.bmWidth == bm.bmHeight &&
+        bm.bmWidth >= factor && bm.bmWidth % factor == 0) {
+        const int src = bm.bmWidth, n = src / factor;
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+        bi.bmiHeader.biWidth = src;
+        bi.bmiHeader.biHeight = -src;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        unsigned int* in = new unsigned int[(size_t)src * src];
+        HDC screen = GetDC(nullptr);
+        if (GetDIBits(screen, ii.hbmColor, 0, src, in, &bi, DIB_RGB_COLORS) == src) {
+            bool premul = true, anyAlpha = false;
+            for (size_t i = 0; i < (size_t)src * src; i++) {
+                unsigned int p = in[i], a = p >> 24;
+                if (a) anyAlpha = true;
+                if (((p >> 16) & 0xFF) > a || ((p >> 8) & 0xFF) > a || (p & 0xFF) > a) premul = false;
+            }
+            void* bits = nullptr;
+            bi.bmiHeader.biWidth = n;
+            bi.bmiHeader.biHeight = -n;
+            HBITMAP color = anyAlpha ? CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
+            if (color && bits) {
+                unsigned int* px = (unsigned int*)bits;
+                const unsigned int cnt = (unsigned int)(factor * factor);
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++) {
+                        unsigned int sa = 0, sr = 0, sg = 0, sb = 0;
+                        for (int dy = 0; dy < factor; dy++)
+                            for (int dx = 0; dx < factor; dx++) {
+                                unsigned int p = in[(size_t)(y * factor + dy) * src + x * factor + dx], a = p >> 24;
+                                unsigned int r = (p >> 16) & 0xFF, g = (p >> 8) & 0xFF, b = p & 0xFF;
+                                if (!premul) {
+                                    r = (r * a + 127) / 255;
+                                    g = (g * a + 127) / 255;
+                                    b = (b * a + 127) / 255;
+                                }
+                                sa += a; sr += r; sg += g; sb += b;
+                            }
+                        unsigned int a = (sa + cnt / 2) / cnt, r = 0, g = 0, b = 0;
+                        if (a && sa) {
+                            r = (sr * 255 + sa / 2) / sa; if (r > 255) r = 255;
+                            g = (sg * 255 + sa / 2) / sa; if (g > 255) g = 255;
+                            b = (sb * 255 + sa / 2) / sa; if (b > 255) b = 255;
+                        }
+                        px[(size_t)y * n + x] = a ? ((a << 24) | (r << 16) | (g << 8) | b) : 0;
+                    }
+                // A zero mask: with 32-bit colour Windows draws from the alpha channel.
+                unsigned char* maskBits = new unsigned char[(size_t)((n + 15) / 16) * 2 * n]();
+                HBITMAP mask = CreateBitmap(n, n, 1, 1, maskBits);
+                delete[] maskBits;
+                if (mask) {
+                    ICONINFO o{TRUE, 0, 0, mask, color};
+                    out = CreateIconIndirect(&o);
+                    DeleteObject(mask);
+                }
+            }
+            if (color) DeleteObject(color);
+        }
+        ReleaseDC(nullptr, screen);
+        delete[] in;
+    }
+    if (ii.hbmColor) DeleteObject(ii.hbmColor);
+    if (ii.hbmMask) DeleteObject(ii.hbmMask);
+    if (!out) return big;
+    DestroyIcon(big);
+    return out;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Seamless Taskbar core: settings prefix, hook chains, module switches.
@@ -3207,6 +3372,24 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"wallpaper.closeAfterPick", L"Close after picking", L"Closes the switcher as soon as you set a wallpaper.", L"0", {}, 0, 100, 11, L"Wallpaper switcher"},
 {K::Check, L"wallpaper.animate", L"Open and close motion", L"The switcher grows out of its tray button and fades in, and shrinks away when it closes.", L"1", {}, 0, 100, 11, L"Wallpaper switcher"},
 {K::Number, L"wallpaper.animSpeed", L"Motion length", L"How long opening takes, in milliseconds. Closing is a little quicker. Range 80 to 600 (Suggested: 180).", L"180", {}, 80, 600, 11, L"Wallpaper switcher"},
+{K::Choice, L"wallpaper.sortOrder", L"Sort pictures", L"Name, newest first, oldest first or shuffled.", L"name", {{L"name", L"Name"}, {L"newest", L"Newest first"}, {L"oldest", L"Oldest first"}, {L"shuffle", L"Shuffled"}}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Check, L"wallpaper.currentBadge", L"Badge on the current picture", L"Shows a mark on the wallpaper that is currently set.", L"1", {}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Check, L"wallpaper.openOnCurrent", L"Open on the current picture", L"Opens the picker on the page of the wallpaper that is currently set.", L"1", {}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Check, L"wallpaper.hoverZoom", L"Zoom pictures on hover", L"A picture grows a little when the cursor rests on it.", L"1", {}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Choice, L"wallpaper.tileShape", L"Tile shape", L"Wide, screen shape or square.", L"wide", {{L"wide", L"Wide"}, {L"screen", L"Screen shape"}, {L"square", L"Square"}}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Choice, L"wallpaper.autoChange", L"Auto-change wallpaper", L"Off, next or random. Changes the wallpaper by itself.", L"off", {{L"off", L"Off"}, {L"next", L"Next"}, {L"random", L"Random"}}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Number, L"wallpaper.autoMinutes", L"Change every", L"Minutes between automatic changes. Range 1 to 1440 (Suggested: 30).", L"30", {}, 1, 1440, 11, L"Wallpaper switcher"},
+{K::Choice, L"wallpaper.screens", L"Screens to change", L"This screen only or all screens.", L"this", {{L"this", L"This screen"}, {L"all", L"All screens"}}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Choice, L"wallpaper.fitMode", L"Fit mode", L"Keep, fill, fit, stretch, centre or span.", L"keep", {{L"keep", L"Keep"}, {L"fill", L"Fill"}, {L"fit", L"Fit"}, {L"stretch", L"Stretch"}, {L"center", L"Centre"}, {L"span", L"Span"}}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Text, L"wallpaper.randomHotkey", L"Random wallpaper shortcut", L"Keys that set a random wallpaper, such as ctrl+alt+r. Leave it empty for none.", L"", {}, 0, 1440, 11, L"Wallpaper switcher"},
+{K::Number, L"wallpaper.glassStrength", L"Glass strength", L"How strong the frosted glass is. Range 0 to 100 (Suggested: 40).", L"40", {}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Check, L"wallpaper.stayOpen", L"Stay open when clicking away", L"Keeps the switcher open when you click outside it.", L"0", {}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Check, L"wallpaper.showBar", L"Show the search and folder bar", L"Hides the folder label and the search box when off.", L"1", {}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Check, L"wallpaper.resizable", L"Resize the window", L"Lets you drag an edge or corner to change the number of tiles.", L"1", {}, 0, 100, 11, L"Wallpaper switcher"},
+{K::Number, L"wallpaper.edgeWidth", L"Window edge width", L"Pixels wide. Range 1 to 6 (Suggested: 2).", L"2", {}, 1, 6, 11, L"Wallpaper switcher"},
+{K::Color, L"wallpaper.edgeColor", L"Window edge colour at rest", L"#RRGGBB. Grey at rest.", L"#585B70", {}, 0, 100, 1, L"Wallpaper switcher"},
+{K::Color, L"wallpaper.hoverColor1", L"Window edge hover colour", L"#RRGGBB. The blue side of the hover gradient.", L"#89B4FA", {}, 0, 100, 1, L"Wallpaper switcher"},
+{K::Color, L"wallpaper.hoverColor2", L"Window edge second hover colour", L"#RRGGBB. The mauve side of the hover gradient.", L"#CBA6F7", {}, 0, 100, 1, L"Wallpaper switcher"},
 {K::Check, L"utils.moduleOn", L"Right-click tools", L"Quick system tools in the taskbar right-click menu, with result cards.", L"0", {}, 0, 100, 0, L"Modules"},
 {K::Number, L"sysinfo.width", L"Widget width", L"0 fits the content automatically. A positive value sets a minimum width, up to 800 logical pixels.", L"0", {}, 0, 100, 1, L"System info and weather"},
 {K::Number, L"sysinfo.leftOffset", L"Left offset", L"Distance from the left taskbar edge, from 0 to 1000 pixels.", L"10", {}, 0, 1000, 1, L"System info and weather"},
@@ -6975,7 +7158,7 @@ static HICON LoadReplacement() {
         auto target = Setting((prefix + L"Exe").c_str());
         if (_wcsicmp(target.c_str(), exe) && _wcsicmp(target.c_str(), name)) continue;
         auto path = Setting((prefix + L"Ico").c_str());
-        int size = GetSystemMetrics(SM_CXSMICON);
+        int size = GetSystemMetrics(SM_CXICON);
         auto replacement = static_cast<HICON>(
             LoadImageW(nullptr, path.c_str(), IMAGE_ICON, size, size, LR_LOADFROMFILE));
         if (replacement) return replacement;
@@ -7041,8 +7224,8 @@ static ULONGLONG expiresAt;
 static HANDLE networkCommand;
 static DWORD networkError;
 
-static HICON MakeBadgeText(PCWSTR symbol, bool off) {
-    int size = GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem());
+static HICON MakeBadgeText_Big(PCWSTR symbol, bool off) {
+    int size = GetSystemMetricsForDpi(SM_CXICON, GetDpiForSystem()) * 4;
     if (size < 16) size = 16;
     BITMAPINFO bi{};
     bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
@@ -7101,6 +7284,9 @@ static HICON MakeBadgeText(PCWSTR symbol, bool off) {
     DeleteObject(glyph);
     return icon;
 }
+
+// Drawn at 4x and shrunk, so the icon is smooth at the size it is shown.
+static HICON MakeBadgeText(PCWSTR symbol, bool off) { return Crisp_ShrinkIcon(MakeBadgeText_Big(symbol, off), 4); }
 
 
 
@@ -7328,7 +7514,7 @@ inline bool g_shown;
 inline UINT g_taskbarCreated;
 
 // A blue to mauve rounded square with a dock bar along the bottom, drawn per pixel.
-inline HICON MakeIcon(int size) {
+inline HICON MakeIcon_Big(int size) {
     BITMAPV5HEADER bi{};
     bi.bV5Size = sizeof(bi); bi.bV5Width = size; bi.bV5Height = -size; bi.bV5Planes = 1;
     bi.bV5BitCount = 32; bi.bV5Compression = BI_BITFIELDS;
@@ -7375,6 +7561,9 @@ inline HICON MakeIcon(int size) {
     return icon;
 }
 
+// Drawn at 4x and shrunk, so the icon is smooth at the size it is shown.
+inline HICON MakeIcon(int size) { return Crisp_ShrinkIcon(MakeIcon_Big((size > 0 ? size : 16) * 4), 4); }
+
 inline void Update(HWND hwnd) {
     NOTIFYICONDATAW nid{sizeof(nid)};
     nid.hWnd = hwnd;
@@ -7384,7 +7573,7 @@ inline void Update(HWND hwnd) {
         g_shown = false;
         return;
     }
-    if (!g_icon) g_icon = MakeIcon(GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem()));
+    if (!g_icon) g_icon = MakeIcon(GetSystemMetricsForDpi(SM_CXICON, GetDpiForSystem()));
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     nid.uCallbackMessage = WM_APP_TRAY;
     nid.hIcon = g_icon;
@@ -72455,9 +72644,10 @@ static void LayoutAccountEditor(HWND hWnd, AccountEditorState& state) {
     state.footerTop = std::max(y - sc(4) + margin, height - sc(kEditorFooterHeight));
     int buttonWidth = std::max(sc(96), std::max(MeasureTextWidth(state.theme.body, Tr(Str::CommonCancel)),
                                                MeasureTextWidth(state.theme.body, Tr(Str::EditorOK))) + sc(24));
-    state.footerDock = {margin, state.footerTop + sc(6), width - margin,
-                        state.footerTop + sc(kEditorFooterHeight) - sc(6)};
     bool dock = state.theme.mocha;
+    // AI_EDITOR_POLISH: the dock hugs the two buttons on the right, like every settings footer.
+    state.footerDock = {dock ? width - margin - buttonWidth * 2 - sc(8) * 3 : margin, state.footerTop + sc(6),
+                        width - margin, state.footerTop + sc(kEditorFooterHeight) - sc(6)};
     int buttonHeight = dock ? sc(36) : controlHeight;
     int buttonY = dock ? state.footerDock.top + (state.footerDock.bottom - state.footerDock.top - buttonHeight) / 2 :
                          state.footerTop + (sc(kEditorFooterHeight) - controlHeight) / 2;
@@ -73842,6 +74032,11 @@ static bool ShowAccountEditor(HWND owner, AccountConfig* account, bool adding) {
                                   x, y, width, height, owner, nullptr,
                                   GetModuleHandleW(nullptr), &state);
     if (!window) return false;
+    // The title chip draws the window icon: use the settings window's own mark, not the stock one.
+    if (HICON small = (HICON)SendMessageW(owner, WM_GETICON, ICON_SMALL, 0))
+        SendMessageW(window, WM_SETICON, ICON_SMALL, (LPARAM)small);
+    if (HICON big = (HICON)SendMessageW(owner, WM_GETICON, ICON_BIG, 0))
+        SendMessageW(window, WM_SETICON, ICON_BIG, (LPARAM)big);
 
     EnableWindow(owner, FALSE);
     ShowNativeWindowComposed(window);
@@ -79861,8 +80056,8 @@ static void Ai_AddItems(SetWindow& w, float& y, bool hadGroup) {
     bool any = hadGroup;
     if (w.page == 1) {
         Ai_Group(w, y, any, L"Appearance file");
-        Ai_Link(w, y, L"Export appearance", L"Saves colors, thresholds, sizes and icons to a file, without any sign-ins", L"aiusage:act:export", 0xE898);
-        Ai_Link(w, y, L"Import appearance", L"Reads an appearance file, shows what would change, then applies it", L"aiusage:act:import", 0xE896);
+        Ai_Link(w, y, L"Export appearance", L"Saves colors, sizes and icons to a file, never sign-ins", L"aiusage:act:export", 0xE898);
+        Ai_Link(w, y, L"Import appearance", L"Shows what a file would change, then applies it", L"aiusage:act:import", 0xE896);
         return;
     }
     if (w.page != 3) return;
@@ -79890,7 +80085,7 @@ static void Ai_AddItems(SetWindow& w, float& y, bool hadGroup) {
     Ai_Group(w, y, any, L"Add");
     if (!g_aiRows.empty()) Ai_Link(w, y, L"Add account", L"Adds a provider account and signs it in", L"aiusage:act:add", 0xE710);
     if (!g_settingsLoadError)
-        Ai_Link(w, y, L"Scan this PC for sign-ins", L"Looks for Claude, Codex and Copilot sign-ins and adds the ones it finds", L"aiusage:act:rescan", 0xE72C);
+        Ai_Link(w, y, L"Scan this PC for sign-ins", L"Adds the Claude, Codex and Copilot sign-ins it finds", L"aiusage:act:rescan", 0xE72C);
     if (selIndex < 0) return;
     const AiAcct& r = g_aiRows[selIndex];
     Ai_Group(w, y, any, r.label);
@@ -80041,7 +80236,7 @@ static void Ai_TraySync(HWND host) {
     }
     if (!g_trayIcon && Set_EnsureFactories()) {
         std::wstring family = Set_FamilyExists(L"Segoe Fluent Icons") ? L"Segoe Fluent Icons" : L"Segoe MDL2 Assets";
-        g_trayIcon = Set_MakeIcon(family, GetSystemMetrics(SM_CXSMICON));
+        g_trayIcon = Set_MakeIcon(family, GetSystemMetrics(SM_CXICON));
     }
     nid.uFlags = NIF_MESSAGE | NIF_TIP | (g_trayIcon ? NIF_ICON : 0);
     nid.uCallbackMessage = WM_AI_TRAY;
@@ -92705,6 +92900,13 @@ constexpr UINT kImageListReady = WM_APP + 12;
 constexpr UINT kThumbnailPageReady = WM_APP + 13;
 constexpr UINT_PTR kSearchFilterTimer = 0xB743;
 constexpr UINT_PTR kTrayRetryTimer = 0xB744;
+constexpr UINT_PTR kHoverTimer = 0xB745;
+constexpr UINT_PTR kAutoChangeTimer = 0xB746;
+constexpr UINT kResizeProbe = WM_APP + 31;
+constexpr UINT kHoverProbe = WM_APP + 32;
+constexpr UINT kRandomHotkeyId = 2;
+constexpr int kResizeBand = 6;
+constexpr int kResizeCorner = 16;
 constexpr UINT kSearchFilterDelayMs = 160;
 constexpr UINT kFirstTileId = 4000;
 constexpr size_t kMaxTiles = 48;
@@ -92746,6 +92948,7 @@ UINT g_tileHeight = 105;
 int g_tileCornerDiameter = 16;
 int g_nameHeight = 0;
 int g_tileGap = 8;
+int g_layoutTop = 59;
 int g_pickerWidth = 944;
 int g_pickerHeight = 564;
 // Size and behaviour settings as read (LoadSettings).
@@ -92759,6 +92962,41 @@ bool g_showHint = true;
 bool g_closeAfterPick = false;
 bool g_animate = true;
 int g_animMs = 180;
+// Hover edge: grey at rest, blue to mauve gradient over the window while the cursor
+// is anywhere over the switcher.
+bool g_pickerHover = false;
+int g_hoverForce = -1;  // -1 = real cursor, 0 = off, 1 = on (for probes)
+int g_edgeWidth = 2;            // 1 to 6
+COLORREF g_edgeRest = RGB(0x58, 0x5B, 0x70);
+COLORREF g_edgeHover1 = RGB(0x89, 0xB4, 0xFA);
+COLORREF g_edgeHover2 = RGB(0xCB, 0xA6, 0xF7);
+
+// Picker options.
+int g_sortOrder = 0;            // 0 name, 1 newest, 2 oldest, 3 shuffle
+int g_currentBadge = 1;
+int g_openOnCurrent = 1;
+int g_hoverZoom = 1;
+int g_tileShape = 0;            // 0 wide, 1 screen, 2 square
+int g_autoChange = 0;           // 0 off, 1 next, 2 random
+int g_autoMinutes = 30;
+int g_screens = 0;              // 0 this screen, 1 all screens
+int g_fitMode = -1;             // -1 keep, 0 center, 1 tile, 2 stretch, 3 fit, 4 fill, 5 span
+std::wstring g_randomHotkey;
+int g_glassStrength = 40;       // 0 to 100, acrylic tint
+int g_stayOpen = 0;
+int g_showBar = 1;
+int g_resizable = 1;
+// Resize memory: the last manual size, and the settings values it was taken from.
+int g_sizedColumns = 0;
+int g_sizedRows = 0;
+int g_sizedFromColumns = 0;
+int g_sizedFromRows = 0;
+
+// Resize drag state.
+bool g_resizing = false;
+UINT g_resizeEdge = 0;
+POINT g_resizeStartCursor{};
+RECT g_resizeStartRect{};
 // Glass mode: the picker is colour-keyed (SetPickerColorKey). Its own layered state can't
 // tell, because the open motion makes the solid picker layered for a moment too.
 bool g_pickerKeyed = false;
@@ -92787,6 +93025,8 @@ RECT g_pickerRingBounds{};
 // Each tile's edge as the edge layer draws it: 0 none, 1 rest, 2 lit (blue to mauve).
 BYTE g_tileEdgeState[kMaxTiles] = {};
 void SetTileEdgeState(size_t slot, BYTE state);
+void ResizeFromDelta(UINT edge, int dx, int dy);
+void SaveResizedSize();
 
 HWND g_hostWindow;
 HWND g_pickerWindow;
@@ -93185,6 +93425,7 @@ void ApplyPickerThemeColors() {
     g_text = RGB(0xCD, 0xD6, 0xF4);
     g_muted = RGB(0xA6, 0xAD, 0xC8);
     g_accent = RGB(0x89, 0xB4, 0xFA);
+    g_edge = g_edgeRest;
 }
 
 bool ParseHotkeyKey(const std::wstring& token, UINT* key) {
@@ -93292,6 +93533,53 @@ void LoadHotkeySetting() {
     }
 }
 
+bool RegisterRandomHotkey(HWND hwnd) {
+    UnregisterHotKey(hwnd, kRandomHotkeyId);
+    if (g_randomHotkey.empty()) {
+        return true;
+    }
+    UINT modifiers = 0;
+    UINT key = 0;
+    bool valid = true;
+    bool keySeen = false;
+    size_t start = 0;
+    while (start < g_randomHotkey.size()) {
+        const size_t separator = g_randomHotkey.find(L'+', start);
+        const size_t end = separator == std::wstring::npos
+                               ? g_randomHotkey.size()
+                               : separator;
+        const std::wstring token = g_randomHotkey.substr(start, end - start);
+        if (_wcsicmp(token.c_str(), L"ctrl") == 0 && !keySeen) {
+            modifiers |= MOD_CONTROL;
+        } else if (_wcsicmp(token.c_str(), L"alt") == 0 && !keySeen) {
+            modifiers |= MOD_ALT;
+        } else if (_wcsicmp(token.c_str(), L"shift") == 0 && !keySeen) {
+            modifiers |= MOD_SHIFT;
+        } else if (_wcsicmp(token.c_str(), L"win") == 0 && !keySeen) {
+            modifiers |= MOD_WIN;
+        } else {
+            if (keySeen || !ParseHotkeyKey(token, &key)) {
+                valid = false;
+                break;
+            }
+            keySeen = true;
+        }
+        if (separator == std::wstring::npos) {
+            break;
+        }
+        start = separator + 1;
+    }
+    if (!valid || (!g_randomHotkey.empty() && !keySeen)) {
+        Wh_Log(L"Invalid random hotkey; using none");
+        return true;
+    }
+    if (key == 0) {
+        return true;
+    }
+    return RegisterHotKey(hwnd, kRandomHotkeyId,
+                          modifiers | MOD_NOREPEAT, key) != FALSE;
+}
+
 bool RegisterPickerHotkey(HWND hwnd) {
     UnregisterHotKey(hwnd, kHotkeyId);
     if (g_hotkeyKey == 0) {
@@ -93346,6 +93634,62 @@ void LoadSettings() {
     g_closeAfterPick = !freshSize && Wh_GetIntSetting(L"closeAfterPick") != 0;
     g_animate = freshSize || Wh_GetIntSetting(L"animate") != 0;
     g_animMs = freshSize ? 180 : std::clamp(Wh_GetIntSetting(L"animSpeed"), 80, 600);
+
+    const std::wstring sortOrder = ReadConfiguredStringSetting(L"sortOrder");
+    if (sortOrder == L"newest") g_sortOrder = 1;
+    else if (sortOrder == L"oldest") g_sortOrder = 2;
+    else if (sortOrder == L"shuffle") g_sortOrder = 3;
+    else g_sortOrder = 0;
+    g_currentBadge = freshSize || Wh_GetIntSetting(L"currentBadge") != 0;
+    g_openOnCurrent = freshSize || Wh_GetIntSetting(L"openOnCurrent") != 0;
+    g_hoverZoom = freshSize || Wh_GetIntSetting(L"hoverZoom") != 0;
+    const std::wstring tileShape = ReadConfiguredStringSetting(L"tileShape");
+    g_tileShape = _wcsicmp(tileShape.c_str(), L"screen") == 0 ? 1 :
+                  _wcsicmp(tileShape.c_str(), L"square") == 0 ? 2 : 0;
+    const std::wstring autoChange = ReadConfiguredStringSetting(L"autoChange");
+    g_autoChange = _wcsicmp(autoChange.c_str(), L"next") == 0 ? 1 :
+                   _wcsicmp(autoChange.c_str(), L"random") == 0 ? 2 : 0;
+    g_autoMinutes = freshSize ? 30 : std::clamp(Wh_GetIntSetting(L"autoMinutes"), 1, 1440);
+    const std::wstring screens = ReadConfiguredStringSetting(L"screens");
+    g_screens = _wcsicmp(screens.c_str(), L"all") == 0 ? 1 : 0;
+    const std::wstring fitMode = ReadConfiguredStringSetting(L"fitMode");
+    if (fitMode == L"fill") g_fitMode = 4;
+    else if (fitMode == L"fit") g_fitMode = 3;
+    else if (fitMode == L"stretch") g_fitMode = 2;
+    else if (fitMode == L"center") g_fitMode = 0;
+    else if (fitMode == L"span") g_fitMode = 5;
+    else g_fitMode = -1;
+    g_randomHotkey = ReadConfiguredStringSetting(L"randomHotkey");
+    g_glassStrength = freshSize ? 40 : std::clamp(Wh_GetIntSetting(L"glassStrength"), 0, 100);
+    g_stayOpen = !freshSize && Wh_GetIntSetting(L"stayOpen") != 0;
+    g_showBar = freshSize || Wh_GetIntSetting(L"showBar") != 0;
+    g_resizable = freshSize || Wh_GetIntSetting(L"resizable") != 0;
+    g_edgeWidth = freshSize ? 2 : std::clamp(Wh_GetIntSetting(L"edgeWidth"), 1, 6);
+    const std::wstring edgeColor = ReadConfiguredStringSetting(L"edgeColor");
+    g_edgeRest = ::stset::ParseColorRef(edgeColor, RGB(0x58, 0x5B, 0x70));
+    g_edge = g_edgeRest;
+    const std::wstring hoverColor1 = ReadConfiguredStringSetting(L"hoverColor1");
+    g_edgeHover1 = ::stset::ParseColorRef(hoverColor1, RGB(0x89, 0xB4, 0xFA));
+    const std::wstring hoverColor2 = ReadConfiguredStringSetting(L"hoverColor2");
+    g_edgeHover2 = ::stset::ParseColorRef(hoverColor2, RGB(0xCB, 0xA6, 0xF7));
+
+    // Keep the remembered size only when the settings still match the values it
+    // was taken from.
+    g_sizedColumns = Wh_GetIntValue(L"sizedColumns", 0);
+    g_sizedRows = Wh_GetIntValue(L"sizedRows", 0);
+    g_sizedFromColumns = Wh_GetIntValue(L"sizedFromColumns", 0);
+    g_sizedFromRows = Wh_GetIntValue(L"sizedFromRows", 0);
+    const bool keepSized = !freshSize &&
+        g_sizedColumns != 0 && g_sizedRows != 0 &&
+        Wh_GetIntSetting(L"columns") == g_sizedFromColumns &&
+        Wh_GetIntSetting(L"rows") == g_sizedFromRows;
+    if (keepSized) {
+        g_setColumns = g_sizedColumns;
+        g_setRows = g_sizedRows;
+    } else {
+        g_setColumns = freshSize ? 5 : std::clamp(Wh_GetIntSetting(L"columns"), 2, 8);
+        g_setRows = freshSize ? 4 : std::clamp(Wh_GetIntSetting(L"rows"), 1, 6);
+    }
 
     const std::wstring configuredFolder =
         ReadConfiguredStringSetting(L"folder");
@@ -93490,6 +93834,7 @@ DWORD WINAPI ImageListThreadProc(void* parameter) {
         result->folderUnavailable = true;
     } else {
         std::vector<std::wstring> pendingFolders{job->folder};
+        std::vector<std::pair<std::wstring, FILETIME>> collected;
         bool rootWasReadable = false;
         bool cancelled = false;
         while (!pendingFolders.empty()) {
@@ -93548,7 +93893,7 @@ DWORD WINAPI ImageListThreadProc(void* parameter) {
 
                 std::wstring path = pattern.substr(0, prefixLength);
                 path += data.cFileName;
-                result->images.push_back(std::move(path));
+                collected.emplace_back(std::move(path), data.ftLastWriteTime);
             } while (FindNextFileW(find, &data));
             FindClose(find);
             if (cancelled) {
@@ -93561,7 +93906,34 @@ DWORD WINAPI ImageListThreadProc(void* parameter) {
         if (!rootWasReadable) {
             result->folderUnavailable = true;
         }
-        std::sort(result->images.begin(), result->images.end(), ImagePathLess);
+
+        const auto timeAsInt = [](const FILETIME& ft) {
+            return (static_cast<ULONGLONG>(ft.dwHighDateTime) << 32) |
+                   ft.dwLowDateTime;
+        };
+        if (g_sortOrder == 1) {  // newest first
+            std::sort(collected.begin(), collected.end(),
+                      [&](const auto& a, const auto& b) {
+                          return timeAsInt(a.second) > timeAsInt(b.second);
+                      });
+        } else if (g_sortOrder == 2) {  // oldest first
+            std::sort(collected.begin(), collected.end(),
+                      [&](const auto& a, const auto& b) {
+                          return timeAsInt(a.second) < timeAsInt(b.second);
+                      });
+        } else if (g_sortOrder == 3) {  // shuffle
+            std::mt19937 rng(static_cast<unsigned int>(
+                GetTickCount64() & 0xffffffffu));
+            std::shuffle(collected.begin(), collected.end(), rng);
+        } else {  // name
+            std::sort(collected.begin(), collected.end(),
+                      [&](const auto& a, const auto& b) {
+                          return ImagePathLess(a.first, b.first);
+                      });
+        }
+        for (auto& entry : collected) {
+            result->images.push_back(std::move(entry.first));
+        }
     }
 
     if (g_shuttingDown.load() ||
@@ -94929,6 +95301,13 @@ bool SetWallpaperForMonitor(const RECT& monitor, PCWSTR path) {
                                    IID_PPV_ARGS(wallpaper.put())))) {
         UINT count = 0;
         if (SUCCEEDED(wallpaper->GetMonitorDevicePathCount(&count))) {
+            if (g_fitMode >= 0) {
+                DESKTOP_WALLPAPER_POSITION current = DWPOS_CENTER;
+                wallpaper->GetPosition(&current);
+                if ((DESKTOP_WALLPAPER_POSITION)g_fitMode != current) {
+                    wallpaper->SetPosition((DESKTOP_WALLPAPER_POSITION)g_fitMode);
+                }
+            }
             for (UINT i = 0; i < count; ++i) {
                 PWSTR id = nullptr;
                 RECT rect{};
@@ -94937,7 +95316,11 @@ bool SetWallpaperForMonitor(const RECT& monitor, PCWSTR path) {
                     SUCCEEDED(wallpaper->GetMonitorRECT(id, &rect)) &&
                     EqualRect(&rect, &monitor);
                 if (matched) {
-                    result = SUCCEEDED(wallpaper->SetWallpaper(id, path));
+                    if (g_screens == 1) {
+                        result = SUCCEEDED(wallpaper->SetWallpaper(nullptr, path));
+                    } else {
+                        result = SUCCEEDED(wallpaper->SetWallpaper(id, path));
+                    }
                     CoTaskMemFree(id);
                     break;
                 }
@@ -94945,7 +95328,7 @@ bool SetWallpaperForMonitor(const RECT& monitor, PCWSTR path) {
                     CoTaskMemFree(id);
                 }
             }
-            if (!result && count == 1) {
+            if (!result && count == 1 && g_screens != 1) {
                 result = SUCCEEDED(wallpaper->SetWallpaper(nullptr, path));
             }
         }
@@ -95833,7 +96216,7 @@ void StartWallpaperChange(int image) {
         }
         return;
     }
-    if (!g_transitionActive &&
+    if (!g_transitionActive && g_screens != 1 &&
         IsWallpaperAlreadySet(info.rcMonitor, g_images[image].c_str())) {
         g_currentImage = image;
         PersistSelectedImage(image);
@@ -95949,6 +96332,24 @@ void StepImage(int step) {
     }
     const int next = (current + step + (int)g_images.size()) %
                      (int)g_images.size();
+    g_page = PageForImageIndex((size_t)next);
+    RefreshList();
+    ApplyImageIndex(next);
+}
+
+void RandomImage() {
+    if (g_images.empty()) {
+        ShowPicker();
+        return;
+    }
+    std::mt19937 rng(static_cast<unsigned int>(
+        GetTickCount64() & 0xffffffffu));
+    std::uniform_int_distribution<int> dist(0, (int)g_images.size() - 1);
+    int next = dist(rng);
+    int tries = 0;
+    while (next == g_currentImage && tries++ < 8) {
+        next = dist(rng);
+    }
     g_page = PageForImageIndex((size_t)next);
     RefreshList();
     ApplyImageIndex(next);
@@ -96081,8 +96482,8 @@ LRESULT CALLBACK TileSubclassProc(HWND hwnd, UINT message, WPARAM wParam,
         SendMessageW(g_searchEdit, EM_SETSEL, MAXLONG, MAXLONG);
         return 0;
     }
-    if (message == WM_CHAR && wParam >= 0x20 && wParam != 0x7F &&
-        wParam != L' ' && !g_searchExpanded) {
+    if (message == WM_CHAR && g_showBar && wParam >= 0x20 &&
+        wParam != 0x7F && wParam != L' ' && !g_searchExpanded) {
         SetSearchExpanded(true, (WCHAR)wParam);
         return 0;
     }
@@ -96237,7 +96638,6 @@ bool LayoutPicker(HWND hwnd, bool refresh) {
                         &monitorInfo)) {
         work = monitorInfo.rcWork;  // logical: this thread is DPI-unaware
     }
-    constexpr int kTop = 59;
     constexpr int kBottom = 61;
     constexpr int kSide = 16;
     constexpr int kFit = 24;
@@ -96245,17 +96645,27 @@ bool LayoutPicker(HWND hwnd, bool refresh) {
     const int rows = g_setRows;
     const int gap = g_setTileGap;
     const int nameH = g_showNames ? 20 : 0;
+    const int top = g_showBar ? 59 : 16;
+    g_layoutTop = top;
     const int roomW = (int)(work.right - work.left) - 2 * kFit - 2 * kSide;
-    const int roomH = (int)(work.bottom - work.top) - 2 * kFit - kTop - kBottom;
+    const int roomH = (int)(work.bottom - work.top) - 2 * kFit - top - kBottom;
     const int fitW = (roomW - (columns - 1) * gap) / columns;
-    const int fitH = ((roomH - (rows - 1) * gap) / rows - nameH) * 128 / 76;
+    double shape = 76.0 / 128.0;  // wide
+    if (g_tileShape == 1) {  // screen shape
+        RECT workArea = work;
+        shape = (double)(workArea.bottom - workArea.top) /
+                (double)(workArea.right - workArea.left);
+    } else if (g_tileShape == 2) {  // square
+        shape = 1.0;
+    }
+    const int fitH = (int)(((roomH - (rows - 1) * gap) / rows - nameH) / shape);
     const int tileW = std::max(64, std::min({g_setTileSize, fitW, fitH}));
-    const int tileH = (int)std::lround(tileW * 76.0 / 128.0);
+    const int tileH = (int)std::lround(tileW * shape);
     const int cellH = tileH + nameH;
     const int gridW = columns * tileW + (columns - 1) * gap;
     const int gridH = rows * cellH + (rows - 1) * gap;
     const int width = std::max(420, gridW + 2 * kSide);
-    const int height = kTop + gridH + kBottom;
+    const int height = top + gridH + kBottom;
     const int left = (width - gridW) / 2;
     const size_t pageSize = (size_t)(columns * rows);
     const int corner = std::clamp(g_setTileRadius * 2, 4, std::min(tileW, tileH));
@@ -96285,7 +96695,7 @@ bool LayoutPicker(HWND hwnd, bool refresh) {
             continue;
         }
         const int x = left + (int)(slot % (size_t)columns) * (tileW + gap);
-        const int y = kTop + (int)(slot / (size_t)columns) * (cellH + gap);
+        const int y = top + (int)(slot / (size_t)columns) * (cellH + gap);
         if (!g_tiles[slot]) {
             g_tiles[slot] = CreateWindowExW(0, L"BUTTON", L"",
                 WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, x, y, tileW, cellH, hwnd,
@@ -96302,10 +96712,12 @@ bool LayoutPicker(HWND hwnd, bool refresh) {
     }
     const int inner = width - 2 * kSide;
     if (g_folderLabel) {
+        ShowWindow(g_folderLabel, g_showBar ? SW_SHOW : SW_HIDE);
         SetWindowPos(g_folderLabel, nullptr, kSide, 13, inner, 33,
                      SWP_NOZORDER | SWP_NOACTIVATE);
     }
     if (g_searchEdit) {
+        ShowWindow(g_searchEdit, g_showBar ? SW_SHOW : SW_HIDE);
         SetWindowPos(g_searchEdit, nullptr,
                      kSide + inner - kBreadcrumbSearchButtonWidth -
                          kBreadcrumbSearchEditWidth + kBreadcrumbSearchEditInset,
@@ -96314,7 +96726,7 @@ bool LayoutPicker(HWND hwnd, bool refresh) {
     }
     g_breadcrumbSearchButtonRect = {inner - kBreadcrumbSearchButtonWidth, 0, inner, 33};
     if (g_pageLabel) {
-        SetWindowPos(g_pageLabel, nullptr, kSide, kTop + gridH + 24, inner, 24,
+        SetWindowPos(g_pageLabel, nullptr, kSide, top + gridH + 24, inner, 24,
                      SWP_NOZORDER | SWP_NOACTIVATE);
     }
     if (refresh && changed) {
@@ -96329,6 +96741,95 @@ bool LayoutPicker(HWND hwnd, bool refresh) {
                      RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
     }
     return changed;
+}
+
+// Resize the picker from a drag (or a probe). edge is a WMSZ_* value, dx/dy are
+// logical pixels. Columns/rows are recomputed from the new size at the current
+// tile size, tiles keep their size, and the result is remembered.
+void ResizeFromDelta(UINT edge, int dx, int dy) {
+    if (!g_pickerWindow || !IsWindowVisible(g_pickerWindow)) {
+        return;
+    }
+    constexpr int kBottom = 61;
+    constexpr int kSide = 16;
+    RECT work{0, 0, 1920, 1040};
+    MONITORINFO monitorInfo{sizeof(monitorInfo)};
+    if (GetMonitorInfoW(MonitorFromWindow(g_pickerWindow,
+                                          MONITOR_DEFAULTTONEAREST),
+                        &monitorInfo)) {
+        work = monitorInfo.rcWork;
+    }
+    const int gap = g_setTileGap;
+    const int nameH = g_showNames ? 20 : 0;
+    const int top = g_layoutTop;
+    const int tileW = std::max(1, (int)g_tileWidth);
+    const int cellH = std::max(1, (int)g_tileHeight + nameH);
+    RECT start = g_resizeStartRect;
+    const bool left = edge == WMSZ_LEFT || edge == WMSZ_TOPLEFT ||
+                      edge == WMSZ_BOTTOMLEFT;
+    const bool right = edge == WMSZ_RIGHT || edge == WMSZ_TOPRIGHT ||
+                       edge == WMSZ_BOTTOMRIGHT;
+    const bool topEdge = edge == WMSZ_TOP || edge == WMSZ_TOPLEFT ||
+                         edge == WMSZ_TOPRIGHT;
+    const bool bottomEdge = edge == WMSZ_BOTTOM || edge == WMSZ_BOTTOMLEFT ||
+                            edge == WMSZ_BOTTOMRIGHT;
+    if (left) {
+        start.left = std::max(start.left + dx, work.left);
+    } else if (right) {
+        start.right = std::min(start.right + dx, work.right);
+    }
+    if (topEdge) {
+        start.top = std::max(start.top + dy, work.top);
+    } else if (bottomEdge) {
+        start.bottom = std::min(start.bottom + dy, work.bottom);
+    }
+    const int roomW = (start.right - start.left) - 2 * kSide;
+    const int roomH = (start.bottom - start.top) - top - kBottom;
+    // Most tiles that still fit the screen at this tile size.
+    const int maxColumns = std::max(2, ((int)(work.right - work.left) -
+                                        2 * kSide + gap) / (tileW + gap));
+    const int maxRows = std::max(1, ((int)(work.bottom - work.top) - top -
+                                     kBottom + gap) / (cellH + gap));
+    int newColumns = g_setColumns;
+    int newRows = g_setRows;
+    if (left || right) {
+        newColumns = (int)std::lround((double)(roomW + gap) / (double)(tileW + gap));
+    }
+    if (topEdge || bottomEdge) {
+        newRows = (int)std::lround((double)(roomH + gap) / (double)(cellH + gap));
+    }
+    newColumns = std::clamp(newColumns, 2, std::min(8, maxColumns));
+    newRows = std::clamp(newRows, 1, std::min(6, maxRows));
+    if (newColumns == g_setColumns && newRows == g_setRows) {
+        return;
+    }
+    g_setColumns = newColumns;
+    g_setRows = newRows;
+    LayoutPicker(g_pickerWindow, true);
+    // Keep the opposite edge where it was.
+    const int x = left ? g_resizeStartRect.right - g_pickerWidth
+                       : g_resizeStartRect.left;
+    const int y = topEdge ? g_resizeStartRect.bottom - g_pickerHeight
+                          : g_resizeStartRect.top;
+    SetWindowPos(g_pickerWindow, nullptr, x, y, g_pickerWidth, g_pickerHeight,
+                 SWP_NOZORDER | SWP_NOACTIVATE);
+    if (g_pickerKeyed) {
+        SetPickerRoundRegion(g_pickerWindow, true, PickerCornerRadius() * 2);
+    }
+    PositionPickerBackdrop();
+}
+
+// The size picked by dragging, kept with the settings values it replaced so a later
+// change in the settings window wins.
+void SaveResizedSize() {
+    g_sizedColumns = g_setColumns;
+    g_sizedRows = g_setRows;
+    g_sizedFromColumns = Wh_GetIntSetting(L"columns");
+    g_sizedFromRows = Wh_GetIntSetting(L"rows");
+    Wh_SetIntValue(L"sizedColumns", g_sizedColumns);
+    Wh_SetIntValue(L"sizedRows", g_sizedRows);
+    Wh_SetIntValue(L"sizedFromColumns", g_sizedFromColumns);
+    Wh_SetIntValue(L"sizedFromRows", g_sizedFromRows);
 }
 
 void PositionPickerWindowAt(HMONITOR monitor);
@@ -96440,7 +96941,7 @@ void ShowPicker() {
         LayoutPicker(g_pickerWindow, true);
         PositionPickerWindow(nullptr);
     }
-    const bool currentIsVisible = g_currentImage >= 0 &&
+    const bool currentIsVisible = g_openOnCurrent && g_currentImage >= 0 &&
         std::find(g_visibleImageIndices.begin(), g_visibleImageIndices.end(),
                   (size_t)g_currentImage) != g_visibleImageIndices.end();
     if (currentIsVisible) {
@@ -96465,6 +96966,16 @@ void ShowPicker() {
     }
     PositionPickerBackdrop();
     SetForegroundWindow(g_pickerWindow);
+    // Hover tracking for the hover edge.
+    if (g_pickerWindow) {
+        SetTimer(g_pickerWindow, kHoverTimer, 50, nullptr);
+        POINT cursor{};
+        if (GetCursorPos(&cursor)) {
+            RECT pickerRect{};
+            g_pickerHover = GetWindowRect(g_pickerWindow, &pickerRect) &&
+                            PtInRect(&pickerRect, cursor) != 0;
+        }
+    }
     if (g_selectedImage >= 0 && !g_transitionActive) {
         const size_t slot = SlotForImageIndex((size_t)g_selectedImage);
         if (slot < kMaxTiles && g_tiles[slot]) {
@@ -97098,6 +97609,50 @@ bool DrawBlurClippedThumbnail(HDC targetDc, const RECT& rect,
     return drawn;
 }
 
+HBITMAP CreateZoomedThumbnail(HBITMAP source) {
+    BITMAP info{};
+    if (!source || !GetObjectW(source, sizeof(info), &info) ||
+        info.bmWidth <= 2 || info.bmHeight <= 2) {
+        return nullptr;
+    }
+    const int w = info.bmWidth;
+    const int h = info.bmHeight;
+    BITMAPINFO bmi{};
+    bmi.bmiHeader.biSize = sizeof(bmi.bmiHeader);
+    bmi.bmiHeader.biWidth = w;
+    bmi.bmiHeader.biHeight = -h;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HDC screen = GetDC(nullptr);
+    HBITMAP zoomed = CreateDIBSection(screen, &bmi, DIB_RGB_COLORS, &bits,
+                                      nullptr, 0);
+    HDC sourceDc = CreateCompatibleDC(screen);
+    HDC targetDc = CreateCompatibleDC(screen);
+    ReleaseDC(nullptr, screen);
+    bool ok = false;
+    if (zoomed && sourceDc && targetDc) {
+        HGDIOBJ oldSource = SelectObject(sourceDc, source);
+        HGDIOBJ oldTarget = SelectObject(targetDc, zoomed);
+        const int cropX = std::max(1, w * 3 / 100);
+        const int cropY = std::max(1, h * 3 / 100);
+        SetStretchBltMode(targetDc, HALFTONE);
+        SetBrushOrgEx(targetDc, 0, 0, nullptr);
+        ok = StretchBlt(targetDc, 0, 0, w, h, sourceDc, cropX, cropY,
+                        w - 2 * cropX, h - 2 * cropY, SRCCOPY) != FALSE;
+        SelectObject(sourceDc, oldSource);
+        SelectObject(targetDc, oldTarget);
+    }
+    if (sourceDc) DeleteDC(sourceDc);
+    if (targetDc) DeleteDC(targetDc);
+    if (!ok && zoomed) {
+        DeleteObject(zoomed);
+        zoomed = nullptr;
+    }
+    return zoomed;
+}
+
 bool DrawTileImage(const DRAWITEMSTRUCT* item) {
     if (!item || item->CtlType != ODT_BUTTON ||
         item->CtlID < kFirstTileId ||
@@ -97137,14 +97692,28 @@ bool DrawTileImage(const DRAWITEMSTRUCT* item) {
     bool antialiasedImageDrawn = false;
     const bool blurMaterial =
         _wcsicmp(g_configuredMaterial.c_str(), L"blur") == 0;
+    // Hover zoom: the hovered picture is drawn from a copy cropped 3% on each side,
+    // so it grows a little while the tile shape and its corners stay the same.
+    const bool zoomed = g_hoverZoom && item->hwndItem == g_hoverTile;
+    struct ZoomedThumbnail {
+        HBITMAP bitmap = nullptr;
+        ~ZoomedThumbnail() { if (bitmap) DeleteObject(bitmap); }
+    } zoomCopy;
+    if (zoomed && thumbnail) {
+        zoomCopy.bitmap = CreateZoomedThumbnail(thumbnail);
+        if (zoomCopy.bitmap) {
+            thumbnail = zoomCopy.bitmap;
+        }
+    }
+    const RECT drawRect = item->rcItem;
     if (thumbnail && (blurMaterial || keyed)) {
         // Hard clip, never smoothed against the colour key. With the edge layer the
         // clip sits one pixel in, so its stepped cut is under the 2px edge.
         antialiasedImageDrawn = DrawBlurClippedThumbnail(
-            item->hDC, item->rcItem, thumbnail, layerEdge ? 1 : 0);
+            item->hDC, drawRect, thumbnail, layerEdge ? 1 : 0);
     } else if (thumbnail && g_gdiplusToken) {
         antialiasedImageDrawn = DrawAntialiasedThumbnail(
-            item->hDC, item->rcItem, thumbnail);
+            item->hDC, drawRect, thumbnail);
     }
     if (thumbnail && !antialiasedImageDrawn) {
         BITMAP bitmapInfo{};
@@ -97204,8 +97773,8 @@ bool DrawTileImage(const DRAWITEMSTRUCT* item) {
     if (layerEdge) {
         SetTileEdgeState(slot, lit ? 2 : 1);
     } else {
-        const COLORREF color = lit ? g_accent : g_edge;
-        const int borderWidth = kSelectedBorderWidth;
+        const COLORREF color = lit ? g_accent : g_edgeRest;
+        const int borderWidth = g_edgeWidth;
         const bool antialiasedBorderDrawn =
             !keyed && g_gdiplusToken &&
             DrawAntialiasedTileBorder(item->hDC, item->rcItem, color,
@@ -97224,6 +97793,46 @@ bool DrawTileImage(const DRAWITEMSTRUCT* item) {
             SelectObject(item->hDC, oldPen);
             DeleteObject(pen);
         }
+    }
+    // Badge on the current wallpaper: a small circle in the top-right corner.
+    if (thumbnail && g_currentBadge && (int)index == g_currentImage &&
+        g_gdiplusToken) {
+        const int badge = std::max(14, (int)((item->rcItem.right - item->rcItem.left) / 6));
+        Gdiplus::Graphics badgeGraphics(item->hDC);
+        Gdiplus::RectF badgeRect(
+            (Gdiplus::REAL)(item->rcItem.right - badge - 6),
+            (Gdiplus::REAL)(item->rcItem.top + 6),
+            (Gdiplus::REAL)badge, (Gdiplus::REAL)badge);
+        Gdiplus::GraphicsPath badgePath;
+        badgePath.AddEllipse(badgeRect);
+        if (keyed) {
+            Gdiplus::SolidBrush badgeBrush(Gdiplus::Color(
+                255, GetRValue(g_accent), GetGValue(g_accent),
+                GetBValue(g_accent)));
+            badgeGraphics.FillPath(&badgeBrush, &badgePath);
+        } else {
+            Gdiplus::LinearGradientBrush badgeBrush(
+                badgeRect, Gdiplus::Color(255, 0x89, 0xB4, 0xFA),
+                Gdiplus::Color(255, 0xCB, 0xA6, 0xF7),
+                Gdiplus::LinearGradientModeHorizontal);
+            badgeGraphics.FillPath(&badgeBrush, &badgePath);
+        }
+        // A check mark in crust, never the key colour (that would punch a hole).
+        Gdiplus::Pen checkPen(Gdiplus::Color(255, 0x11, 0x11, 0x1B),
+                              std::max(1.5f, badge * 0.14f));
+        checkPen.SetStartCap(Gdiplus::LineCapRound);
+        checkPen.SetEndCap(Gdiplus::LineCapRound);
+        checkPen.SetLineJoin(Gdiplus::LineJoinRound);
+        const Gdiplus::PointF checkPoints[3] = {
+            Gdiplus::PointF(badgeRect.X + badgeRect.Width * 0.28f,
+                            badgeRect.Y + badgeRect.Height * 0.52f),
+            Gdiplus::PointF(badgeRect.X + badgeRect.Width * 0.44f,
+                            badgeRect.Y + badgeRect.Height * 0.68f),
+            Gdiplus::PointF(badgeRect.X + badgeRect.Width * 0.72f,
+                            badgeRect.Y + badgeRect.Height * 0.36f)};
+        badgeGraphics.SetSmoothingMode(keyed ? Gdiplus::SmoothingModeNone
+                                             : Gdiplus::SmoothingModeAntiAlias);
+        badgeGraphics.DrawLines(&checkPen, checkPoints, 3);
     }
     return true;
 }
@@ -97323,7 +97932,8 @@ bool ConfigurePickerBackdrop(HWND hwnd) {
     policy.flags = 0;
     // Keep the theme surface visible over desktop colors. Blur needs a
     // stronger tint to blend antialiased thumbnail edges with the base color.
-    const DWORD tintOpacity = acrylic ? 0x66 : 208;
+    const DWORD tintOpacity = acrylic ?
+        (DWORD)std::lround(g_glassStrength * 255.0 / 100.0) : 208;
     policy.gradientColor = (tintOpacity << 24) |
                            (static_cast<DWORD>(g_background) & 0x00ffffffu);
     PickerWindowCompositionAttributeData data{19, &policy, sizeof(policy)};
@@ -97334,7 +97944,27 @@ LRESULT CALLBACK PickerBackdropProc(HWND hwnd, UINT message, WPARAM wParam,
                                     LPARAM lParam) {
     switch (message) {
         case WM_NCHITTEST:
-            return HTTRANSPARENT;
+            // The glass picker is colour-keyed, so its see-through pixels (the resize
+            // band and the gaps between tiles) land here. Keep them inside the
+            // switcher instead of clicking the desktop behind it.
+            return (g_pickerWindow && IsWindowVisible(g_pickerWindow))
+                       ? HTCLIENT : HTTRANSPARENT;
+        case WM_MOUSEACTIVATE:
+            return MA_NOACTIVATE;
+        case WM_SETCURSOR:
+            if (g_pickerWindow &&
+                SendMessageW(g_pickerWindow, message, wParam, lParam)) {
+                return TRUE;
+            }
+            SetCursor(LoadCursor(nullptr, IDC_ARROW));
+            return TRUE;
+        case WM_LBUTTONDOWN:
+        case WM_MOUSEMOVE:
+        case WM_LBUTTONUP:
+            if (g_pickerWindow) {
+                return SendMessageW(g_pickerWindow, message, wParam, lParam);
+            }
+            return 0;
         case WM_ERASEBKGND:
             return 1;
         case WM_PAINT: {
@@ -97373,16 +98003,33 @@ LRESULT CALLBACK PickerRingProc(HWND hwnd, UINT message, WPARAM wParam,
 bool DrawPickerRingShapes(Gdiplus::Graphics& graphics, int width, int height,
                           const RECT& bounds) {
     bool ok = false;
-    const Gdiplus::RectF rect(1.0f, 1.0f, (Gdiplus::REAL)width - 2.0f,
-                              (Gdiplus::REAL)height - 2.0f);
+    const float edgeW = (float)g_edgeWidth;
+    const float inset = edgeW / 2.0f;
+    const Gdiplus::RectF rect(inset, inset,
+        (Gdiplus::REAL)width - edgeW, (Gdiplus::REAL)height - edgeW);
+    const float radius = (Gdiplus::REAL)PickerCornerRadius() - inset;
     Gdiplus::GraphicsPath path;
-    if (AddRoundedRectanglePath(
-            &path, rect, (Gdiplus::REAL)PickerCornerRadius() - 1.0f)) {
-        Gdiplus::Pen pen(Gdiplus::Color(255, GetRValue(g_edge),
-                                        GetGValue(g_edge),
-                                        GetBValue(g_edge)),
-                         2.0f);
-        ok = graphics.DrawPath(&pen, &path) == Gdiplus::Ok;
+    if (radius > 0.0f &&
+        AddRoundedRectanglePath(&path, rect, radius)) {
+        if (g_pickerHover) {
+            Gdiplus::LinearGradientBrush brush(
+                Gdiplus::PointF(inset, inset),
+                Gdiplus::PointF((Gdiplus::REAL)width - inset, inset),
+                Gdiplus::Color(255, GetRValue(g_edgeHover1),
+                                GetGValue(g_edgeHover1),
+                                GetBValue(g_edgeHover1)),
+                Gdiplus::Color(255, GetRValue(g_edgeHover2),
+                                GetGValue(g_edgeHover2),
+                                GetBValue(g_edgeHover2)));
+            Gdiplus::Pen pen(&brush, edgeW);
+            ok = graphics.DrawPath(&pen, &path) == Gdiplus::Ok;
+        } else {
+            Gdiplus::Pen pen(Gdiplus::Color(255, GetRValue(g_edgeRest),
+                                            GetGValue(g_edgeRest),
+                                            GetBValue(g_edgeRest)),
+                             edgeW);
+            ok = graphics.DrawPath(&pen, &path) == Gdiplus::Ok;
+        }
     }
     // Tile edges: 2px at inset 1 on radius r - 1, rest grey or lit blue to mauve.
     for (size_t slot = 0; ok && slot < g_pageSize; ++slot) {
@@ -97405,8 +98052,12 @@ bool DrawPickerRingShapes(Gdiplus::Graphics& graphics, int width, int height,
         }
         if (state == 2) {
             Gdiplus::LinearGradientBrush brush(
-                edge, Gdiplus::Color(255, 0x89, 0xB4, 0xFA),
-                Gdiplus::Color(255, 0xCB, 0xA6, 0xF7),
+                edge, Gdiplus::Color(255, GetRValue(g_edgeHover1),
+                                       GetGValue(g_edgeHover1),
+                                       GetBValue(g_edgeHover1)),
+                Gdiplus::Color(255, GetRValue(g_edgeHover2),
+                                       GetGValue(g_edgeHover2),
+                                       GetBValue(g_edgeHover2)),
                 Gdiplus::LinearGradientModeHorizontal);
             Gdiplus::Pen tilePen(&brush, 2.0f);
             ok = graphics.DrawPath(&tilePen, &tilePath) == Gdiplus::Ok;
@@ -97543,6 +98194,8 @@ void HidePickerWindow(HWND hwnd) {
         SetFocus(hwnd);
     }
     KillTimer(hwnd, kSearchFilterTimer);
+    KillTimer(hwnd, kHoverTimer);
+    g_pickerHover = false;
     const bool hadActiveSearch = !g_searchQuery.empty();
     g_searchExpanded = false;
     g_searchQuery.clear();
@@ -98066,8 +98719,8 @@ constexpr UINT WallpaperTrayId() {
 // The tray button: a back peak, a front peak with a clear cut between them, and a sun, filled
 // with the blue to mauve gradient on a clear background (no box). Drawn on a 24-unit grid with
 // 4x4 samples per pixel.
-HICON MakeMountainIcon() {
-    int size = GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem());
+HICON MakeMountainIcon_Big() {
+    int size = GetSystemMetricsForDpi(SM_CXICON, GetDpiForSystem()) * 4;
     if (size < 16) size = 16;
     struct Pt { float x, y; };
     const Pt back[3] = {{9.0f, 20.0f}, {16.0f, 6.0f}, {23.0f, 20.0f}};
@@ -98151,6 +98804,9 @@ HICON MakeMountainIcon() {
     return icon;
 }
 
+// Drawn at 4x and shrunk, so the icon is smooth at the size it is shown.
+HICON MakeMountainIcon() { return Crisp_ShrinkIcon(MakeMountainIcon_Big(), 4); }
+
 void AddTrayIcon(HWND hwnd) {
     g_notifyIcon = {};
     g_notifyIcon.cbSize = sizeof(g_notifyIcon);
@@ -98197,6 +98853,8 @@ int ShowTrayMenu(HWND hwnd) {
 void DrawPickerEdge(HDC dc, const RECT& client) {
     const int radius = PickerCornerRadius();
     const bool keyed = g_pickerKeyed;
+    const float edgeW = (float)g_edgeWidth;
+    const float inset = edgeW / 2.0f;
     if (keyed && g_pickerRingWindow && !g_pickerRingFailed) {
         return;  // the smooth edge layer above the picker draws it
     }
@@ -98204,16 +98862,37 @@ void DrawPickerEdge(HDC dc, const RECT& client) {
         Gdiplus::Graphics graphics(dc);
         graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
         graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
-        const Gdiplus::RectF rect((Gdiplus::REAL)client.left + 1.0f, (Gdiplus::REAL)client.top + 1.0f,
-                                  (Gdiplus::REAL)(client.right - client.left) - 2.0f,
-                                  (Gdiplus::REAL)(client.bottom - client.top) - 2.0f);
+        const Gdiplus::RectF rect((Gdiplus::REAL)client.left + inset,
+                                  (Gdiplus::REAL)client.top + inset,
+                                  (Gdiplus::REAL)(client.right - client.left) - edgeW,
+                                  (Gdiplus::REAL)(client.bottom - client.top) - edgeW);
         Gdiplus::GraphicsPath path;
-        if (AddRoundedRectanglePath(&path, rect, (Gdiplus::REAL)radius - 1.0f)) {
-            Gdiplus::Pen pen(Gdiplus::Color(255, GetRValue(g_edge), GetGValue(g_edge), GetBValue(g_edge)), 2.0f);
-            if (graphics.DrawPath(&pen, &path) == Gdiplus::Ok) return;
+        if (AddRoundedRectanglePath(&path, rect,
+                                    (Gdiplus::REAL)radius - inset)) {
+            if (g_pickerHover) {
+                Gdiplus::LinearGradientBrush brush(
+                    Gdiplus::PointF((Gdiplus::REAL)client.left + inset,
+                                    (Gdiplus::REAL)client.top + inset),
+                    Gdiplus::PointF((Gdiplus::REAL)client.right - inset,
+                                    (Gdiplus::REAL)client.top + inset),
+                    Gdiplus::Color(255, GetRValue(g_edgeHover1),
+                                    GetGValue(g_edgeHover1),
+                                    GetBValue(g_edgeHover1)),
+                    Gdiplus::Color(255, GetRValue(g_edgeHover2),
+                                    GetGValue(g_edgeHover2),
+                                    GetBValue(g_edgeHover2)));
+                Gdiplus::Pen pen(&brush, edgeW);
+                if (graphics.DrawPath(&pen, &path) == Gdiplus::Ok) return;
+            } else {
+                Gdiplus::Pen pen(Gdiplus::Color(255, GetRValue(g_edgeRest),
+                                                GetGValue(g_edgeRest),
+                                                GetBValue(g_edgeRest)),
+                                 edgeW);
+                if (graphics.DrawPath(&pen, &path) == Gdiplus::Ok) return;
+            }
         }
     }
-    HPEN pen = CreatePen(PS_INSIDEFRAME, 2, g_edge);
+    HPEN pen = CreatePen(PS_INSIDEFRAME, (int)edgeW, g_edgeRest);
     HGDIOBJ oldPen = SelectObject(dc, pen);
     HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
     RoundRect(dc, client.left, client.top, client.right, client.bottom, radius * 2, radius * 2);
@@ -98406,6 +99085,28 @@ LRESULT CALLBACK PickerProc(HWND hwnd, UINT message, WPARAM wParam,
                 ApplyPendingSearch();
                 return 0;
             }
+            if (wParam == kHoverTimer) {
+                POINT cursor{};
+                bool over = false;
+                if (g_hoverForce >= 0) {
+                    over = g_hoverForce == 1;
+                } else if (GetCursorPos(&cursor)) {
+                    RECT pickerRect{};
+                    over = GetWindowRect(hwnd, &pickerRect) &&
+                           PtInRect(&pickerRect, cursor) != 0;
+                }
+                if (over != g_pickerHover) {
+                    g_pickerHover = over;
+                    if (g_pickerRingWindow && !g_pickerRingFailed &&
+                        IsWindowVisible(g_pickerRingWindow)) {
+                        PaintPickerRing(g_pickerRingBounds);
+                    } else {
+                        RedrawWindow(hwnd, nullptr, nullptr,
+                                     RDW_INVALIDATE | RDW_ERASE);
+                    }
+                }
+                return 0;
+            }
             if (wParam == kBreadcrumbChevronAnimationTimer) {
                 constexpr float animationStep = 12.0f;
                 if (g_breadcrumbChevronAngle <
@@ -98474,9 +99175,132 @@ LRESULT CALLBACK PickerProc(HWND hwnd, UINT message, WPARAM wParam,
                 return 0;
             }
             break;
+        case WM_SETCURSOR: {
+            if (g_resizable && !g_resizing && g_pickerWindow &&
+                IsWindowVisible(g_pickerWindow)) {
+                RECT picker{};
+                if (GetWindowRect(g_pickerWindow, &picker)) {
+                    POINT cursor{};
+                    GetCursorPos(&cursor);
+                    const int x = cursor.x - picker.left;
+                    const int y = cursor.y - picker.top;
+                    const int w = picker.right - picker.left;
+                    const int h = picker.bottom - picker.top;
+                    const bool left = x < kResizeBand;
+                    const bool right = x > w - kResizeBand;
+                    const bool top = y < kResizeBand;
+                    const bool bottom = y > h - kResizeBand;
+                    if (left && top) { SetCursor(LoadCursor(nullptr, IDC_SIZENWSE)); return TRUE; }
+                    if (right && bottom) { SetCursor(LoadCursor(nullptr, IDC_SIZENWSE)); return TRUE; }
+                    if (left && bottom) { SetCursor(LoadCursor(nullptr, IDC_SIZENESW)); return TRUE; }
+                    if (right && top) { SetCursor(LoadCursor(nullptr, IDC_SIZENESW)); return TRUE; }
+                    if (left || right) { SetCursor(LoadCursor(nullptr, IDC_SIZEWE)); return TRUE; }
+                    if (top || bottom) { SetCursor(LoadCursor(nullptr, IDC_SIZENS)); return TRUE; }
+                }
+            }
+            if ((HWND)wParam != hwnd) {
+                return FALSE;  // forwarded from the backdrop: it sets the arrow
+            }
+            break;
+        }
+        case WM_LBUTTONDOWN: {
+            if (g_resizable && !g_resizing && g_pickerWindow &&
+                IsWindowVisible(g_pickerWindow)) {
+                RECT picker{};
+                if (GetWindowRect(g_pickerWindow, &picker)) {
+                    POINT cursor{};
+                    GetCursorPos(&cursor);
+                    const int x = cursor.x - picker.left;
+                    const int y = cursor.y - picker.top;
+                    const int w = picker.right - picker.left;
+                    const int h = picker.bottom - picker.top;
+                    const bool left = x < kResizeBand;
+                    const bool right = x > w - kResizeBand;
+                    const bool top = y < kResizeBand;
+                    const bool bottom = y > h - kResizeBand;
+                    UINT edge = 0;
+                    if (left && top) edge = WMSZ_TOPLEFT;
+                    else if (right && bottom) edge = WMSZ_BOTTOMRIGHT;
+                    else if (left && bottom) edge = WMSZ_BOTTOMLEFT;
+                    else if (right && top) edge = WMSZ_TOPRIGHT;
+                    else if (left) edge = WMSZ_LEFT;
+                    else if (right) edge = WMSZ_RIGHT;
+                    else if (top) edge = WMSZ_TOP;
+                    else if (bottom) edge = WMSZ_BOTTOM;
+                    if (edge) {
+                        g_resizing = true;
+                        g_resizeEdge = edge;
+                        g_resizeStartCursor = cursor;
+                        g_resizeStartRect = picker;
+                        SetCapture(hwnd);
+                        return 0;
+                    }
+                }
+            }
+            break;
+        }
+        case WM_MOUSEMOVE: {
+            if (g_resizing) {
+                POINT cursor{};
+                GetCursorPos(&cursor);
+                const int dx = cursor.x - g_resizeStartCursor.x;
+                const int dy = cursor.y - g_resizeStartCursor.y;
+                ResizeFromDelta(g_resizeEdge, dx, dy);
+                return 0;
+            }
+            break;
+        }
+        case WM_LBUTTONUP: {
+            if (g_resizing) {
+                g_resizing = false;
+                g_resizeEdge = 0;
+                ReleaseCapture();
+                SaveResizedSize();
+                return 0;
+            }
+            break;
+        }
+        case WM_CAPTURECHANGED: {
+            if (g_resizing) {
+                g_resizing = false;
+                g_resizeEdge = 0;
+            }
+            break;
+        }
         case WM_MOUSEWHEEL:
             StepPage(GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? -1 : 1);
             return 0;
+        case kResizeProbe: {
+            RECT picker{};
+            if (!g_resizing && GetWindowRect(hwnd, &picker)) {
+                g_resizeStartRect = picker;
+                ResizeFromDelta((UINT)wParam, (short)LOWORD(lParam),
+                                (short)HIWORD(lParam));
+                SaveResizedSize();
+            }
+            return 0;
+        }
+        case kHoverProbe: {
+            g_hoverForce = wParam == 2 ? -1 : (int)wParam;  // 0 off, 1 on, 2 real cursor
+            bool over = g_hoverForce == 1;
+            if (g_hoverForce < 0) {
+                POINT cursor{};
+                RECT pickerRect{};
+                over = GetCursorPos(&cursor) && GetWindowRect(hwnd, &pickerRect) &&
+                       PtInRect(&pickerRect, cursor) != 0;
+            }
+            if (over != g_pickerHover) {
+                g_pickerHover = over;
+                if (g_pickerRingWindow && !g_pickerRingFailed &&
+                    IsWindowVisible(g_pickerRingWindow)) {
+                    PaintPickerRing(g_pickerRingBounds);
+                } else {
+                    RedrawWindow(hwnd, nullptr, nullptr,
+                                 RDW_INVALIDATE | RDW_ERASE);
+                }
+            }
+            return 0;
+        }
         case WM_KEYDOWN:
             if (wParam == VK_ESCAPE) {
                 PostMessageW(hwnd, WM_CLOSE, 0, 0);
@@ -98492,7 +99316,8 @@ LRESULT CALLBACK PickerProc(HWND hwnd, UINT message, WPARAM wParam,
             }
             break;
         case WM_ACTIVATE:
-            if (LOWORD(wParam) == WA_INACTIVE && !g_seamlessMenuOpen) {
+            if (LOWORD(wParam) == WA_INACTIVE && !g_seamlessMenuOpen &&
+                !g_stayOpen) {
                 HWND activated = (HWND)lParam;
                 if (!activated ||
                     GetAncestor(activated, GA_ROOTOWNER) != hwnd) {
@@ -98534,6 +99359,8 @@ LRESULT CALLBACK PickerProc(HWND hwnd, UINT message, WPARAM wParam,
             KillTimer(hwnd, kBreadcrumbMenuDismissTimer);
             KillTimer(hwnd, kBreadcrumbChevronAnimationTimer);
             KillTimer(hwnd, kSearchFilterTimer);
+            KillTimer(hwnd, kHoverTimer);
+            KillTimer(hwnd, kAutoChangeTimer);
             for (HWND tile : g_tiles) {
                 if (tile) {
                     RemoveWindowSubclass(tile, TileSubclassProc, 1);
@@ -98603,6 +99430,14 @@ LRESULT CALLBACK HostProc(HWND hwnd, UINT message, WPARAM wParam,
         case WM_TIMER:
             if (wParam == kTrayRetryTimer) {
                 AddTrayIcon(hwnd);
+                return 0;
+            }
+            if (wParam == kAutoChangeTimer) {
+                if (g_autoChange == 1) {
+                    StepImage(1);
+                } else if (g_autoChange == 2) {
+                    RandomImage();
+                }
                 return 0;
             }
             break;
@@ -98705,11 +99540,21 @@ LRESULT CALLBACK HostProc(HWND hwnd, UINT message, WPARAM wParam,
             if (!RegisterPickerHotkey(hwnd)) {
                 Wh_Log(L"RegisterHotKey failed after settings change");
             }
+            if (!RegisterRandomHotkey(hwnd)) {
+                Wh_Log(L"RegisterHotKey failed for random wallpaper");
+            }
+            KillTimer(hwnd, kAutoChangeTimer);
+            if (g_autoChange != 0 && g_autoMinutes > 0) {
+                SetTimer(hwnd, kAutoChangeTimer,
+                         g_autoMinutes * 60 * 1000, nullptr);
+            }
             StartImageScan();
             return 0;
         case WM_HOTKEY:
             if (wParam == kHotkeyId) {
                 TogglePicker();
+            } else if (wParam == kRandomHotkeyId) {
+                RandomImage();
             }
             return 0;
         case kTrayCallback:
@@ -98763,6 +99608,8 @@ LRESULT CALLBACK HostProc(HWND hwnd, UINT message, WPARAM wParam,
         case WM_DESTROY:
             StopBackgroundPosting();
             UnregisterHotKey(hwnd, kHotkeyId);
+            UnregisterHotKey(hwnd, kRandomHotkeyId);
+            KillTimer(hwnd, kAutoChangeTimer);
             Shell_NotifyIconW(NIM_DELETE, &g_notifyIcon);
             if (g_trayIcon) {
                 DestroyIcon(g_trayIcon);
@@ -98837,7 +99684,7 @@ DWORD WINAPI UiThreadProc(void*) {
             pickerClass.hInstance, nullptr);
         if (g_pickerWindow) {
             g_pickerBackdropWindow = CreateWindowExW(
-                WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT,
+                WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
                 kBackdropWindowClass, L"", WS_POPUP,
                 CW_USEDEFAULT, CW_USEDEFAULT, 1, 1, nullptr, nullptr,
                 pickerClass.hInstance, nullptr);
@@ -98885,6 +99732,14 @@ DWORD WINAPI UiThreadProc(void*) {
         AddTrayIcon(g_hostWindow);
         if (!RegisterPickerHotkey(g_hostWindow)) {
             Wh_Log(L"RegisterHotKey failed; tray icon remains available");
+        }
+        if (!RegisterRandomHotkey(g_hostWindow)) {
+            Wh_Log(L"RegisterHotKey failed for random wallpaper");
+        }
+        KillTimer(g_hostWindow, kAutoChangeTimer);
+        if (g_autoChange != 0 && g_autoMinutes > 0) {
+            SetTimer(g_hostWindow, kAutoChangeTimer,
+                     g_autoMinutes * 60 * 1000, nullptr);
         }
     }
     SetEvent(g_readyEvent);
