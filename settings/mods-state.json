@@ -475,13 +475,6 @@
     "architecture": "",
     "version": "1.0.11"
   },
-  "local@seamless-autoclicker": {
-    "disabled": true,
-    "include": "windhawk.exe",
-    "exclude": "",
-    "architecture": "x86-64",
-    "version": "1.6.15"
-  },
   "local@seamless-autoscroll": {
     "disabled": false,
     "include": "explorer.exe|chrome.exe|msedge.exe|brave.exe|vivaldi.exe|chromium.exe|opera.exe|thorium.exe|arc.exe|msedgewebview2.exe|HaloCord.exe|Discord.exe|Vesktop.exe|Code.exe|VSCodium.exe|Cursor.exe|Antigravity.exe|Antigravity IDE.exe|T3 Code*.exe|OpenCode.exe|Obsidian.exe|Notion.exe|Slack.exe|Dopamine*.exe|SoundCloud.exe|Hydra.exe|Kepler.exe|Melty.exe|Vortex.exe|Nightlight Launcher.exe|windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
@@ -502,13 +495,6 @@
     "exclude": "",
     "architecture": "x86-64",
     "version": "1.4.9"
-  },
-  "local@seamless-color-picker": {
-    "disabled": true,
-    "include": "windhawk-mod.exe",
-    "exclude": "",
-    "architecture": "",
-    "version": "1.1.16"
   },
   "local@seamless-dictate": {
     "disabled": false,
@@ -537,13 +523,6 @@
     "exclude": "",
     "architecture": "",
     "version": "1.10.4"
-  },
-  "local@seamless-power-action-countdown": {
-    "disabled": true,
-    "include": "explorer.exe|RuntimeBroker.exe",
-    "exclude": "",
-    "architecture": "x86-64",
-    "version": "2.0.3"
   },
   "local@seamless-taskbar-utilities": {
     "disabled": false,
@@ -628,13 +607,6 @@
     "exclude": "",
     "architecture": "",
     "version": "1.3.2"
-  },
-  "local@wintips-osd-plus": {
-    "disabled": true,
-    "include": "windhawk.exe",
-    "exclude": "",
-    "architecture": "",
-    "version": "1.4.1"
   },
   "local@zoomit": {
     "disabled": false,

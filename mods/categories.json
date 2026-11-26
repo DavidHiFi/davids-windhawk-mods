@@ -43,12 +43,10 @@
     "local@power-options-button-plus": "Taskbar",
     "local@recycle-bin-tray-plus": "Taskbar",
     "local@seamless-apps": "Apps",
-    "local@seamless-autoclicker": "Tools",
     "local@seamless-autoscroll": "Input",
     "local@seamless-borders": "Windows",
     "local@seamless-chromium-browsers": "Apps",
     "local@seamless-clipboard-manager": "Programs",
-    "local@seamless-color-picker": "Tools",
     "local@seamless-compiz-cube": "Windows",
     "local@seamless-controls": "Look",
     "local@seamless-crash-watch": "Programs",
@@ -67,7 +65,6 @@
     "local@seamless-input": "Input",
     "local@seamless-key-click": "Input",
     "local@seamless-launchpad": "Programs",
-    "local@seamless-power-action-countdown": "Tools",
     "local@seamless-settings-styler": "Apps",
     "local@seamless-share": "Apps",
     "local@seamless-snipper": "Programs",
@@ -88,7 +85,6 @@
     "local@startup-control": "Programs",
     "local@theme-tool-plus": "Look",
     "local@windhawk-enhanced-styler": "Programs",
-    "local@wintips-osd-plus": "Tools",
     "local@zoomit": "Tools"
   }
 }
