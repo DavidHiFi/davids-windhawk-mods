@@ -1299,7 +1299,7 @@
     "include": "Taskmgr.exe|windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.2"
+    "version": "1.0.3"
   },
   "local@seamless-controls": {
     "disabled": false,

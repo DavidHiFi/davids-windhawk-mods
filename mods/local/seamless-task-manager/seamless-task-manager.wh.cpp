@@ -2,7 +2,7 @@
 // @id              seamless-task-manager
 // @name            Seamless Task Manager
 // @description     Every Task Manager tweak in one mod, with the Catppuccin Mocha look on its menus, flyouts and accents
-// @version         1.0.2
+// @version         1.0.3
 // @author          DavidHiFi, GF-Huang, Luiz Bizzio, sb4ssman, chenxustu1, Joe Ye, Nehoray-Bitan, Abdullah Masood, m417z
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -22,11 +22,10 @@ Every Task Manager tweak in one mod, each one a switch in the settings, plus the
 Catppuccin Mocha look on Task Manager's menus, flyouts, tooltips, dialogs and
 accent colours.
 
-## What's new in 1.0.0
+## What's new in 1.0.3
 
-- Nine Task Manager mods merged into one, with every setting carried over.
-- The Mocha look: frosted menus and flyouts with a grey edge, blue to mauve accents.
-- Its own settings window and tray icon. Click the tray icon to turn the look on or off.
+- Title bar menus (right-click the title bar, or Alt+Space) now really get the same
+  blurred Mocha body as every other menu. They opened pitch black before.
 
 ## What it does
 
@@ -1392,6 +1391,22 @@ static BOOL WINAPI TrackPopupMenuEx_hook(HMENU m, UINT f, INT x, INT y, HWND h, 
     SeamlessMenuRoom::EndTrack();
     return ret;
 }
+// Title bar menus are opened by DefWindowProc, never through TrackPopupMenu: wrap the
+// messages that open one the same way, so the menu is skinned before its first paint.
+static decltype(&DefWindowProcW) SysMenuDefProc_orig = nullptr;
+static LRESULT WINAPI SysMenuDefProc_hook(HWND h, UINT msg, WPARAM w, LPARAM l)
+{
+    UINT sc = (UINT)(w & 0xFFF0);
+    bool opens = (msg == WM_SYSCOMMAND && (sc == SC_KEYMENU || sc == SC_MOUSEMENU)) ||
+                 msg == WM_CONTEXTMENU || msg == 0x0313 /* WM_POPUPSYSTEMMENU */;
+    if (!opens) return SysMenuDefProc_orig(h, msg, w, l);
+    SeamlessMenuRoom::BeginTrack();
+    HHOOK cbt = InstallMenuCbtHook();
+    LRESULT ret = SysMenuDefProc_orig(h, msg, w, l);
+    if (cbt) UnhookWindowsHookEx(cbt);
+    SeamlessMenuRoom::EndTrack();
+    return ret;
+}
 
 // Returns TRUE when the menu part was drawn here.
 static BOOL PaintMenuPart(HDC hdc, INT part, INT state, LPCRECT pRect, LPCRECT pClip)
@@ -1504,6 +1519,7 @@ static VOID Init()
     Hook(dwm, "DwmSetWindowAttribute", DwmSetWindowAttribute_hook, &DwmSetWindowAttribute_orig);
     Hook(u32, "TrackPopupMenu", TrackPopupMenu_hook, &TrackPopupMenu_orig);
     Hook(u32, "TrackPopupMenuEx", TrackPopupMenuEx_hook, &TrackPopupMenuEx_orig);
+    Hook(u32, "DefWindowProcW", SysMenuDefProc_hook, &SysMenuDefProc_orig);
     SeamlessMenuRoom::Init(OnMenuCreated);
 }
 
