@@ -45,6 +45,12 @@ Held back:
 - seamless-title-bars: loads into dwm; a window-look mod, so it waits until the owner is away.
 - recycle-bin-tray-plus: turned off.
 
-State 08:55: batch resumed after yielding the engine lock to the dock thread for 4 minutes;
-21 mods left, one at a time. `coop seat when-done` watches it. Remaining: read install.log
-RESULT lines, rerun any "gave up", full publish-mods.py, finish this list.
+- Also live: power-options-button-plus 1.1.2, seamless-autoclicker 1.6.15 (its tool process
+  was restarted after the compile, back up at 09:06).
+
+State 10:41: the 08:55 batch died after autoclicker (a T3 restart takes agent-started runs
+with it). Restarted the last 19 mods through the scheduled task `crisp-icons-batch`
+(`C:\Users\Public\crisp-icons\batch.cmd`, hidden), which survives T3 restarts.
+`coop seat when-done` watches its pid. Remaining: read install.log RESULT lines, rerun any
+"gave up", full publish-mods.py (also covers autoclicker, whose run died before its
+publish step), after capture, finish this list, delete the scheduled task.
