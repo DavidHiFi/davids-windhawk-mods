@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T19:47:13+08:00",
+  "generatedAt": "2026-11-26T19:58:52+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 129,
@@ -887,7 +887,7 @@
       "name": "Seamless Explorer View",
       "author": "DavidHiFi, DarkionAvey, crazyboyybs, Languster, valinet",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.0.13",
+      "version": "2.0.14",
       "license": "GPL-2.0",
       "origin": "local",
       "upstream": "https://windhawk.net/mods/gpu-accelerated-explorer-view",
