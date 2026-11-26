@@ -1363,5 +1363,12 @@
     "exclude": "",
     "architecture": "x86-64",
     "version": "1.0.0"
+  },
+  "local@seamless-settings-styler": {
+    "disabled": false,
+    "include": "SystemSettings.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "2.0.0"
   }
 }
