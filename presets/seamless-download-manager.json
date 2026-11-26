@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@seamless-download-manager",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "clipboardOffer": 1,
         "finishPopup": 1,

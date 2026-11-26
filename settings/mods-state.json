@@ -1260,7 +1260,7 @@
     "version": "0.1.6"
   },
   "local@seamless-download-manager": {
-    "disabled": true,
+    "disabled": false,
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
