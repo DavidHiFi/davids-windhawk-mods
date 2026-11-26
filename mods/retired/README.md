@@ -5,6 +5,9 @@ library. Their last sources stay here so old links and forks keep working.
 
 | Old mod | Use this instead |
 | --- | --- |
+| [Explorer Tags Plus](explorer-tags-plus) | Seamless Explorer |
+| [Explorer Tree Guard](explorer-tree-guard) | Seamless Explorer |
+| [File Operation Styler Plus](file-operation-styler-plus) | Seamless Explorer |
 | [Helium Acrylic](helium-acrylic) | [Seamless Chromium Browsers](../local/seamless-chromium-browsers), its Helium settings |
 | [Magic Pointer Plus](magic-pointer-plus) | [Seamless Snipper](../local/seamless-snipper), Magic Pointer is built in |
 | [Micrographics Taskbar Clock Plus](micrographics-taskbar-clock-plus) | [Seamless Taskbar](../local/seamless-taskbar), its Clock module |
@@ -18,3 +21,4 @@ library. Their last sources stay here so old links and forks keep working.
 | [Taskbar Collapse to Running Plus](taskbar-collapse-to-running-plus) | [Seamless Taskbar](../local/seamless-taskbar), its Apps module |
 | [Taskbar System Info Plus](taskbar-system-info-weather) | [Seamless Taskbar](../local/seamless-taskbar), its System info module |
 | [Window Manager Plus](window-manager) | [Seamless Window Manager](../local/seamless-window-manager), the same keys and more |
+| [Windows 11 File Explorer Styler Plus](windows-11-file-explorer-styler-plus) | Seamless Explorer |

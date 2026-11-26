@@ -50,7 +50,7 @@ now live inside another mod; [retired/README.md](retired/README.md) says where.
 | [Seamless Launchpad](local/seamless-launchpad) | A fullscreen GPU rendered grid of all your apps in place of Start, with instant search, adjustable blur, wiggle edit mode and power buttons | 2.6.5 | MIT |
 | [Halo Launcher](local/halo-launcher) | Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module | 0.6.5 | MIT |
 | [Notification Center Styler Plus](local/notification-center-styler-plus) | Customize the Notification Center and Action Center with themes contributed by others or create your own | 1.8.4 |  |
-| [Seamless Settings Styler](local/seamless-settings-styler) | Catppuccin Mocha for Windows Settings: glass that matches the title bar, edges on every card, a side menu that folds to icons | 2.0.1 | GPL-3.0 |
+| [Seamless Settings Styler](local/seamless-settings-styler) | Catppuccin Mocha for Windows Settings: glass that matches the title bar, dark edged cards and buttons, a side menu that folds to icons, hide pages and ads | 2.1.0 | GPL-3.0 |
 | [Seamless Share](local/seamless-share) | Restyles the Windows 11 share window: blurred glass, your font, soft gradient hover edges | 1.0.2 | MIT |
 | [Theme Tool Plus](local/theme-tool-plus) | Switch Windows themes from the settings tab. Comes with the Main 01 Catppuccin theme, cursors and sounds | 1.2.0 |  |
 | [UWP Assets Redirect Plus](local/uwp-assets-redirect-plus) | Swap the icons of Store and system apps, with a built-in Catppuccin icon theme | 1.2 | GPL-3.0 |

@@ -2,7 +2,7 @@
 // @id              seamless-dock
 // @name            Seamless Dock
 // @description     A floating dock on any edge of the screen for your pinned and open apps
-// @version         0.3.16
+// @version         0.3.17
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -26,6 +26,11 @@ the edge of the screen across from your taskbar, so you get a clean bar on one
 side and a dock on the other, like a Linux desktop.
 
 ![Seamless Dock preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-dock.png)
+
+## What's new in 0.3.17
+
+- The title pill in the middle of the top bar comes back after it goes missing, and it
+  has a dark fill with a soft grey edge like the other docks.
 
 ## What's new in 0.3.16
 
@@ -2908,7 +2913,7 @@ ULONGLONG g_titleTick = 0;
 
 // Size and corner of the bar's own pills, and the bar's inner top margin that
 // pushes its content down from the window's top edge.
-constexpr float kTitleH = 34, kTitleR = 10, kBarInnerTop = 6;
+constexpr float kTitleH = 34, kTitleR = 8, kBarInnerTop = 6;
 
 bool TopBarRect(RECT& r) {
     HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
@@ -3290,7 +3295,11 @@ bool PaintTitle(const std::wstring& app, const std::wstring& title, Icon* ic, co
                 g_titleRt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
         }
         RECT rc{0, 0, W, Hi};
-        if (g_titleRt && SUCCEEDED(g_titleRt->BindDC(mem, &rc))) {
+        if (g_titleRt && FAILED(g_titleRt->BindDC(mem, &rc))) {
+            g_titleRt.Reset();
+            g_titleStops.Reset();
+        }
+        if (g_titleRt) {
             ID2D1DCRenderTarget* rt = g_titleRt.Get();
             rt->BeginDraw();
             rt->Clear(D2D1::ColorF(0, 0, 0, 0));
@@ -3299,9 +3308,12 @@ bool PaintTitle(const std::wstring& app, const std::wstring& title, Icon* ic, co
             float rr = std::max(0.f, kTitleR * sc - w / 2);
             ComPtr<ID2D1SolidColorBrush> edge, text, sub;
             float h = g_titleHoverT;
-            rt->CreateSolidColorBrush(Col(kSurface1, 0.9f * (1 - h)), edge.GetAddressOf());
+            rt->CreateSolidColorBrush(Col(0x585B70, 1 - h), edge.GetAddressOf());
             rt->CreateSolidColorBrush(Col(kText), text.GetAddressOf());
             rt->CreateSolidColorBrush(Col(kSubtext), sub.GetAddressOf());
+            ComPtr<ID2D1SolidColorBrush> fill;
+            rt->CreateSolidColorBrush(Col(0x11111B, 0.30f), fill.GetAddressOf());
+            if (fill) rt->FillRoundedRectangle(D2D1::RoundedRect(r, rr, rr), fill.Get());
             if (h < 1) rt->DrawRoundedRectangle(D2D1::RoundedRect(r, rr, rr), edge.Get(), w);
             // Pointing at it fades in the blue to mauve edge the bar's other pills have.
             if (h > 0) {
@@ -3351,6 +3363,10 @@ bool PaintTitle(const std::wstring& app, const std::wstring& title, Icon* ic, co
         BLENDFUNCTION bf{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
         ok = UpdateLayeredWindow(g_title, screen, &dst, &sz, mem, &src, 0, &bf, ULW_ALPHA) != FALSE;
         if (ok) g_titleRect = RECT{x0, y0, x0 + W, y0 + Hi};
+        else {
+            g_titleRt.Reset();
+            g_titleStops.Reset();
+        }
     }
     if (old) SelectObject(mem, old);
     if (dib) DeleteObject(dib);

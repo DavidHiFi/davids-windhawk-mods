@@ -1,8 +1,8 @@
 // ==WindhawkMod==
 // @id              seamless-settings-styler
 // @name            Seamless Settings Styler
-// @description     Catppuccin Mocha for Windows Settings: glass that matches the title bar, edges on every card, a sidebar that folds to icons
-// @version         2.0.1
+// @description     Catppuccin Mocha for Windows Settings: glass that matches the title bar, edges on every card, a sidebar that folds to icons, hide pages and ads
+// @version         2.1.0
 // @author          DavidHiFi, m417z
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -43,6 +43,14 @@ A full Catppuccin Mocha look for the Windows Settings app (Win+I).
   icons and opens it again. Settings remembers which way you left it.
 - **Line icons in the sidebar** in the Mocha colours, with the selected page
   in the blue to mauve pair.
+- **Dark cards and buttons.** Every card, list row and button has a dark fill
+  and the same edge. Open sections like "Current theme" get one edge round the
+  whole section.
+- **Hide pages.** Hide any page in the sidebar, Home included, by its name.
+- **Hide the clutter.** Switches to hide the "committed to helping reduce
+  carbon" line, the activation nag, the Microsoft 365, Game Pass and Rewards
+  promos, and the help and feedback links. Add your own lines to hide too.
+- **Hide your account** at the top of the sidebar, if you like it cleaner.
 
 Every colour, the edge width, the corner size, the glass strength and the
 sidebar can be changed in the settings.
@@ -139,7 +147,7 @@ GPL-3.0 license.
     $name: Glass tint and buttons
   - card: "#181825"
     $name: Cards
-  - cardOpacity: 70
+  - cardOpacity: 90
     $name: Card opacity (percent)
   - hover: "#313244"
     $name: Hover fill
@@ -155,6 +163,13 @@ GPL-3.0 license.
     - always: Always, gradient on hover
     - hover: Only on hover and the selected page
     - "off": "Off"
+  - cardHover: true
+    $name: Gradient edge on hover for cards
+    $description: >-
+      Cards light up with the blue to mauve edge when the pointer is over them.
+  - pageEdge: false
+    $name: Line between the sidebar and the page
+    $description: The old edge along the top and left of the page.
   $name: Edges
 - sidebar:
   - toggle: true
@@ -177,7 +192,35 @@ GPL-3.0 license.
     $description: >-
       Names of sidebar parts to hide while the sidebar is folded, so nothing
       is cut off in the icon strip.
+  - hideAccount: false
+    $name: Hide the account
+    $description: Hides your picture and name at the top of the sidebar.
   $name: Sidebar
+- pages:
+  - hide: [""]
+    $name: Pages to hide
+    $description: >-
+      Names of sidebar pages to hide, as they read in the sidebar. For example
+      Home, Gaming or Accessibility.
+  $name: Pages
+- cleanup:
+  - carbon: true
+    $name: Hide the carbon note
+    $description: The "committed to helping reduce carbon" line in Windows Update.
+  - activation: true
+    $name: Hide the activation nag
+  - promos: true
+    $name: Hide promos
+    $description: Microsoft 365, Game Pass, Rewards, OneDrive and Copilot cards.
+  - helpLinks: false
+    $name: Hide help and feedback links
+    $description: The "Get help", "Give feedback" and "Related support" parts.
+  - hideText: [""]
+    $name: More lines to hide
+    $description: >-
+      Hide any line or card by how its text starts. Use the exact words shown
+      in Settings.
+  $name: Clean up
 - mochaIcons: true
   $name: Mocha line icons in the sidebar
 - dumpTree: false
@@ -2669,7 +2712,13 @@ const Theme g_themeSeamlessMocha = {{
     ThemeTargetStyles{L"Microsoft.UI.Xaml.Controls.NavigationView#PermanentNavigationView > Grid#RootGrid > Grid", {
         L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
     ThemeTargetStyles{L"Microsoft.UI.Xaml.Controls.NavigationView#PermanentNavigationView > Grid#RootGrid > Grid > SplitView#RootSplitView > Grid@DisplayModeStates > Grid#PaneRoot", {
-        L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>",
+        L"BorderThickness=0",
+        L"BorderBrush:=<SolidColorBrush Color=\"$Edge\"/>",
+        L"Background@OpenOverlayLeft:=<SolidColorBrush Color=\"$Popup\"/>",
+        L"Background@OpenCompactOverlayLeft:=<SolidColorBrush Color=\"$Popup\"/>",
+        L"BorderThickness@OpenOverlayLeft=0,0,$EW,0",
+        L"BorderThickness@OpenCompactOverlayLeft=0,0,$EW,0"}},
     ThemeTargetStyles{L"SplitView#RootSplitView > Grid > Grid#ContentRoot", {
         L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
     ThemeTargetStyles{L"Grid#ContentRoot > Border > Grid#ContentGrid > ContentControl#HeaderContent", {
@@ -2686,9 +2735,20 @@ const Theme g_themeSeamlessMocha = {{
         L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
     ThemeTargetStyles{L"SplitView#RootSplitView > Grid > Grid#ContentRoot > Border > Grid#ContentGrid", {
         L"Background:=<SolidColorBrush Color=\"$ContentFill\"/>",
-        L"BorderBrush:=<SolidColorBrush Color=\"$DockEdge\"/>",
-        L"BorderThickness=$EW,$EW,0,0",
-        L"CornerRadius=$R,0,0,0"}},
+        L"BorderThickness=0",
+        L"CornerRadius=0"}},
+    ThemeTargetStyles{L"Grid#ContentRoot > * > Windows.UI.Xaml.Controls.Button > ContentPresenter#ContentPresenter@CommonStates", {
+        L"BorderThickness=$EW",
+        L"CornerRadius=$CR",
+        L"Background:=<SolidColorBrush Color=\"$Btn\"/>",
+        L"BorderBrush:=<SolidColorBrush Color=\"$Edge\"/>",
+        L"Foreground:=<SolidColorBrush Color=\"$Text\"/>",
+        L"Background@PointerOver:=<SolidColorBrush Color=\"$BtnHover\"/>",
+        L"BorderBrush@PointerOver:=$Grad",
+        L"Background@Pressed:=<SolidColorBrush Color=\"$Pressed\"/>",
+        L"BorderBrush@Pressed:=$Grad",
+        L"Background@Disabled:=<SolidColorBrush Color=\"$Field\"/>",
+        L"Foreground@Disabled:=<SolidColorBrush Color=\"$Dim\"/>"}},
     ThemeTargetStyles{L"SystemSettings.View.SettingsExpander > Grid > SystemSettings.View.ExpanderToggleButton#ContainerButton > ContentPresenter#ContentPresenter@CommonStates", {
         L"BorderThickness=$EW",
         L"CornerRadius=$R",
@@ -2726,10 +2786,41 @@ const Theme g_themeSeamlessMocha = {{
         L"CornerRadius=$R",
         L"BorderBrush:=<SolidColorBrush Color=\"$Edge\"/>",
         L"Background:=<SolidColorBrush Color=\"$Card\"/>"}},
-    ThemeTargetStyles{L"Windows.UI.Xaml.Controls.Primitives.ListViewItemPresenter > SystemSettings.View.EntityItem > Grid", {
-        L"CornerRadius=$CR"}},
+    ThemeTargetStyles{L"SystemSettings.View.SettingsExpander", {
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>",
+        L"BorderThickness=0",
+        L"CornerRadius=$R"}},
+    ThemeTargetStyles{L"SystemSettings.View.SettingsExpander > Grid > SystemSettings.View.ExpanderToggleButton#ContainerButton", {
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>",
+        L"BorderThickness=0",
+        L"CornerRadius=$R"}},
+    ThemeTargetStyles{L"SystemSettings.View.ExpanderToggleButton#ContainerButton > * > SystemSettings.View.EntityItem > Grid", {
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>",
+        L"BorderThickness=0",
+        L"CornerRadius=0"}},
+    ThemeTargetStyles{L"ContentPresenter#RevealedContent > * > SystemSettings.View.EntityItem > Grid", {
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>",
+        L"BorderThickness=0,1,0,0",
+        L"CornerRadius=0",
+        L"BorderBrush:=<SolidColorBrush Color=\"$Divider\"/>"}},
+    ThemeTargetStyles{L"SystemSettings.View.SettingsListViewItem", {
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>",
+        L"CornerRadius=$R"}},
+    ThemeTargetStyles{L"SystemSettings.View.SettingsListViewItem > Windows.UI.Xaml.Controls.Primitives.ListViewItemPresenter", {
+        L"CornerRadius=$R",
+        L"PointerOverBackground:=<SolidColorBrush Color=\"$Surface0\"/>",
+        L"PressedBackground:=<SolidColorBrush Color=\"$Mantle\"/>"}},
     ThemeTargetStyles{L"SystemSettings.View.SettingsListViewItem > Windows.UI.Xaml.Controls.Primitives.ListViewItemPresenter > Border", {
-        L"CornerRadius=$CR"}},
+        L"CornerRadius=$R",
+        L"Background:=<SolidColorBrush Color=\"$Card\"/>",
+        L"BorderThickness=$EW",
+        L"BorderBrush:=<SolidColorBrush Color=\"$Edge\"/>"}},
+    ThemeTargetStyles{L"Windows.UI.Xaml.Controls.Primitives.ListViewItemPresenter > SystemSettings.View.EntityItem > Grid", {
+        L"BorderThickness=0",
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
+    ThemeTargetStyles{L"Windows.UI.Xaml.Controls.Primitives.ListViewItemPresenter > SystemSettings.View.EntityItem", {
+        L"BorderThickness=0",
+        L"Background:=<SolidColorBrush Color=\"Transparent\"/>"}},
     ThemeTargetStyles{L"SystemSettings.View.TwoSegmentsHeroUserControl#DefaultOneSegmentHeroUserControl > Grid#LayoutRoot > Grid#LeftLayout > ContentPresenter > ItemsControl > ItemsPresenter > StackPanel > ContentPresenter > StackPanel > Button > ContentPresenter#ContentPresenter@CommonStates", {
         L"BorderThickness=$EW",
         L"CornerRadius=$R",
@@ -2757,7 +2848,13 @@ const Theme g_themeSeamlessMocha = {{
         L"BorderBrush@Pressed:=$NavHover",
         L"BorderBrush@Selected:=<SolidColorBrush Color=\"$NavSelEdge\"/>",
         L"BorderBrush@PointerOverSelected:=$NavHover",
-        L"BorderBrush@PressedSelected:=$NavHover"}},
+        L"BorderBrush@PressedSelected:=$NavHover",
+        L"Background@Normal:=<SolidColorBrush Color=\"$Card\"/>",
+        L"Background@PointerOver:=<SolidColorBrush Color=\"$Btn\"/>",
+        L"Background@Pressed:=<SolidColorBrush Color=\"$Mantle\"/>",
+        L"Background@Selected:=<SolidColorBrush Color=\"$Mantle\"/>",
+        L"Background@PointerOverSelected:=<SolidColorBrush Color=\"$Btn\"/>",
+        L"Background@PressedSelected:=<SolidColorBrush Color=\"$Mantle\"/>"}},
     ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot > Grid#PresenterContentRootGrid > Grid#ContentGrid > ContentPresenter#ContentPresenter > TextBlock", {
         L"Padding=2,0,0,0"}},
     ThemeTargetStyles{L"Windows.UI.Xaml.Shapes.Rectangle#ProgressBarIndicator", {
@@ -2993,6 +3090,8 @@ const Theme g_themeSeamlessMochaSidebar = {{
         L"FocusVisualSecondaryBrush:=<SolidColorBrush Color=\"Transparent\"/>",
         L"FocusVisualPrimaryThickness=$EW",
         L"FocusVisualSecondaryThickness=0"}},
+    ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot > Grid#PresenterContentRootGrid > Grid#ContentGrid > Border#IconColumn", {
+        L"Width=$IconW"}},
 }, {
 }, {
 }};
@@ -3052,6 +3151,22 @@ const Theme g_themeSeamlessMochaIcons = {{
     ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem[15]", {
         L"Content=>sst15",
         L"ToolTipService.ToolTip={{sst15}}"}},
+}, {
+}, {
+}};
+
+const Theme g_themeSeamlessMochaNoAccount = {{
+    ThemeTargetStyles{L"Windows.UI.Xaml.Controls.ContentControl#PaneCustomContentBorder", {
+        L"Visibility=Collapsed"}},
+}, {
+}, {
+}};
+
+const Theme g_themeSeamlessMochaPageEdge = {{
+    ThemeTargetStyles{L"SplitView#RootSplitView > Grid > Grid#ContentRoot > Border > Grid#ContentGrid", {
+        L"BorderBrush:=<SolidColorBrush Color=\"$DockEdge\"/>",
+        L"BorderThickness=$EW,$EW,0,0",
+        L"CornerRadius=$R,0,0,0"}},
 }, {
 }, {
 }};
@@ -9677,6 +9792,7 @@ void MergeResourceVariables() {
 // ===================== Seamless Settings Styler additions =====================
 
 #include <winrt/Windows.UI.Xaml.Controls.Primitives.h>
+#include <winrt/Windows.UI.Xaml.Input.h>
 
 namespace seamless {
 
@@ -9694,6 +9810,31 @@ std::vector<std::pair<winrt::weak_ref<wux::UIElement>, wux::Visibility>>
 bool g_applyingFold = false;
 bool g_shrinkPicture = true;
 bool g_mochaIcons = true;
+std::vector<std::wstring> g_hidePages;
+std::vector<std::wstring> g_hideText;
+std::vector<std::wstring> g_hideTextPrefix;
+bool g_cardHover = true;
+DWORD g_hoverArgb = 0xFF313244;
+DWORD g_blueArgb = 0xFF89B4FA;
+DWORD g_mauveArgb = 0xFFCBA6F7;
+int g_cardAlpha = 230;
+
+// Rows of the side menu hidden by "Hide pages", and lines hidden by the clean-up.
+std::vector<winrt::weak_ref<wux::UIElement>> g_hiddenRows;
+std::vector<std::pair<winrt::weak_ref<wux::UIElement>, wux::Visibility>> g_bloatHidden;
+
+// Cards that get the gradient edge on hover.
+struct HoverCard {
+    winrt::weak_ref<wux::UIElement> el;
+    winrt::event_token entered, exited, canceled, lost;
+};
+std::vector<HoverCard> g_hoverCards;
+struct HoverSaved {
+    winrt::weak_ref<wux::DependencyObject> target;
+    Media::Brush border{nullptr};
+    Media::Brush fill{nullptr};
+};
+std::vector<HoverSaved> g_hoverSaved;
 
 struct ShrunkPicture {
     winrt::weak_ref<wux::FrameworkElement> el;
@@ -9845,6 +9986,10 @@ std::vector<std::wstring> BuildConstants() {
     int cr = std::max(r - 2, std::min(r, 4));
     int paneW = std::clamp(Wh_GetIntSetting(L"sidebar.width"), 200, 480);
     int foldW = std::clamp(Wh_GetIntSetting(L"sidebar.foldedWidth"), 48, 96);
+    g_hoverArgb = hover;
+    g_blueArgb = blue;
+    g_mauveArgb = mauve;
+    g_cardAlpha = PercentToAlpha(cardOpacity);
     int pageShade = std::clamp(Wh_GetIntSetting(L"glass.pageShade"), 0, 100);
     std::wstring navMode = GetString(L"edges.sidebarItems", L"always");
 
@@ -9904,6 +10049,8 @@ std::vector<std::wstring> BuildConstants() {
         L"CR=" + std::to_wstring(cr),
         L"PaneW=" + std::to_wstring(paneW),
         L"FoldW=" + std::to_wstring(foldW),
+        // A folded row is the strip less its 22 px of margins.
+        L"IconW=" + std::to_wstring(foldW - 22),
         L"Glass=" + glass,
         L"Grad=<LinearGradientBrush StartPoint=\"0,0\" EndPoint=\"1,1\">"
         L"<GradientStop Color=\"$Blue\" Offset=\"0\"/>"
@@ -9932,6 +10079,55 @@ void ReadSidebarSettings() {
         }
         g_hideWhenFolded.push_back(s.get());
     }
+    g_cardHover = Wh_GetIntSetting(L"edges.cardHover");
+    g_hidePages.clear();
+    for (int i = 0;; i++) {
+        string_setting_unique_ptr s(Wh_GetStringSetting(L"pages.hide[%d]", i));
+        if (!*s.get()) {
+            break;
+        }
+        g_hidePages.push_back(s.get());
+    }
+    // Clean-up: whole lines matched by how they start.
+    g_hideTextPrefix.clear();
+    if (Wh_GetIntSetting(L"cleanup.carbon")) {
+        g_hideTextPrefix.push_back(L"Windows Update is committed to helping");
+    }
+    if (Wh_GetIntSetting(L"cleanup.activation")) {
+        g_hideTextPrefix.push_back(L"Windows isn't activated");
+        g_hideTextPrefix.push_back(L"Windows isn\u2019t activated");
+        g_hideTextPrefix.push_back(L"Activate Windows now");
+    }
+    if (Wh_GetIntSetting(L"cleanup.promos")) {
+        for (PCWSTR s : {L"Try Microsoft 365", L"Microsoft 365", L"Xbox Game Pass",
+                         L"Get Game Pass", L"Microsoft Rewards", L"OneDrive storage",
+                         L"Back up your PC", L"Try Copilot", L"Recommended settings"}) {
+            g_hideTextPrefix.push_back(s);
+        }
+    }
+    if (Wh_GetIntSetting(L"cleanup.helpLinks")) {
+        for (PCWSTR s : {L"Related support", L"Help from the web", L"Get help",
+                         L"Give feedback"}) {
+            g_hideTextPrefix.push_back(s);
+        }
+    }
+    for (int i = 0;; i++) {
+        string_setting_unique_ptr s(Wh_GetStringSetting(L"cleanup.hideText[%d]", i));
+        if (!*s.get()) {
+            break;
+        }
+        g_hideTextPrefix.push_back(s.get());
+    }
+}
+
+bool SameText(std::wstring_view a, std::wstring_view b) {
+    return a.size() == b.size() &&
+           CompareStringOrdinal(a.data(), (int)a.size(), b.data(), (int)b.size(),
+                                TRUE) == CSTR_EQUAL;
+}
+
+bool StartsWithText(std::wstring_view text, std::wstring_view prefix) {
+    return text.size() >= prefix.size() && SameText(text.substr(0, prefix.size()), prefix);
 }
 
 wux::FrameworkElement FindByName(wux::DependencyObject root,
@@ -10138,7 +10334,52 @@ DependencyProperty NavItemProperty(PCWSTR setter) {
 
 // The side menu reuses its rows for other pages, so the glyph follows the
 // row's page name and selection, not the row.
+bool PageHidden(std::wstring_view name) {
+    for (const auto& h : g_hidePages) {
+        if (SameText(name, h)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// "Hide pages": the row is collapsed while it shows a hidden page, and shown
+// again when the menu reuses it for another page.
+void ApplyPageHide(wux::FrameworkElement item) {
+    if (g_hidePages.empty()) {
+        return;
+    }
+    auto cc = item.try_as<Controls::ContentControl>();
+    if (!cc) {
+        return;
+    }
+    auto name = winrt::unbox_value_or<winrt::hstring>(cc.Content(), L"");
+    bool hide = PageHidden(name);
+    auto ui = item.as<wux::UIElement>();
+    bool tracked = false;
+    for (auto& w : g_hiddenRows) {
+        if (w.get() == ui) {
+            tracked = true;
+            break;
+        }
+    }
+    if (hide) {
+        if (!tracked) {
+            g_hiddenRows.push_back(winrt::make_weak(ui));
+        }
+        if (item.Visibility() != wux::Visibility::Collapsed) {
+            item.Visibility(wux::Visibility::Collapsed);
+        }
+    } else if (tracked && item.Visibility() == wux::Visibility::Collapsed) {
+        item.Visibility(wux::Visibility::Visible);
+    }
+}
+
 void ApplyGlyph(wux::FrameworkElement item) {
+    ApplyPageHide(item);
+    if (!g_mochaIcons) {
+        return;
+    }
     auto cc = item.try_as<Controls::ContentControl>();
     if (!cc) {
         return;
@@ -10243,7 +10484,7 @@ void UnwatchNavItems() {
                                                        w.selectedToken);
             }
             // Put the stock icon back.
-            if (g_iconProp) {
+            if (g_mochaIcons && g_iconProp) {
                 auto iconEl = FindByName(item, L"Icon");
                 auto icon = iconEl
                                 ? iconEl.try_as<Controls::ContentPresenter>()
@@ -10256,6 +10497,254 @@ void UnwatchNavItems() {
         }
     }
     g_watchedItems.clear();
+    for (auto& w : g_hiddenRows) {
+        if (auto el = w.get()) {
+            try {
+                el.Visibility(wux::Visibility::Visible);
+            } catch (...) {
+            }
+        }
+    }
+    g_hiddenRows.clear();
+}
+
+// ---------- Clean-up: ads, promos and notes ----------
+
+void HideBloatNode(wux::DependencyObject start, std::wstring_view text) {
+    // Walk up to the whole line or card: the child of the page's stack, an
+    // info bar, or an expander. Nothing is hidden if none is close by.
+    wux::DependencyObject node = start;
+    for (int i = 0; i < 14 && node; i++) {
+        auto parent = Media::VisualTreeHelper::GetParent(node);
+        if (!parent) {
+            return;
+        }
+        std::wstring cls(winrt::get_class_name(node));
+        std::wstring parentCls(winrt::get_class_name(parent));
+        bool stop = parentCls == L"SystemSettings.View.SpacingStackPanel" ||
+                    cls.ends_with(L"InfoBar") || cls.ends_with(L"SettingsExpander");
+        if (stop) {
+            auto ui = node.try_as<wux::UIElement>();
+            if (!ui || ui.Visibility() == wux::Visibility::Collapsed) {
+                return;
+            }
+            g_bloatHidden.emplace_back(winrt::make_weak(ui), ui.Visibility());
+            ui.Visibility(wux::Visibility::Collapsed);
+            Wh_Log(L"Seamless: hid %s (%.*s)", cls.c_str(), (int)std::min<size_t>(text.size(), 40),
+                   text.data());
+            return;
+        }
+        node = parent;
+    }
+}
+
+bool CheckBloatText(wux::FrameworkElement el) {
+    auto tb = el.try_as<Controls::TextBlock>();
+    if (!tb) {
+        return false;
+    }
+    std::wstring text(tb.Text());
+    if (text.empty()) {
+        return false;
+    }
+    for (const auto& prefix : g_hideTextPrefix) {
+        if (StartsWithText(text, prefix)) {
+            HideBloatNode(el, text);
+            break;
+        }
+    }
+    return true;
+}
+
+void OnTextBlock(wux::FrameworkElement el) {
+    if (CheckBloatText(el)) {
+        return;
+    }
+    // Text is often filled in just after the element is added.
+    auto queue = winrt::Windows::System::DispatcherQueue::GetForCurrentThread();
+    if (!queue) {
+        return;
+    }
+    auto weak = winrt::make_weak(el);
+    queue.TryEnqueue(winrt::Windows::System::DispatcherQueuePriority::Low, [weak] {
+        if (auto el = weak.get()) {
+            try {
+                CheckBloatText(el);
+            } catch (...) {
+            }
+        }
+    });
+}
+
+void RestoreBloat() {
+    for (auto& [weak, vis] : g_bloatHidden) {
+        if (auto el = weak.get()) {
+            try {
+                el.Visibility(vis);
+            } catch (...) {
+            }
+        }
+    }
+    g_bloatHidden.clear();
+}
+
+// ---------- Card hover: the gradient edge ----------
+
+winrt::Windows::UI::Color ToColor(DWORD argb) {
+    return {(uint8_t)(argb >> 24), (uint8_t)(argb >> 16), (uint8_t)(argb >> 8),
+            (uint8_t)argb};
+}
+
+Media::Brush HoverEdgeBrush() {
+    Media::LinearGradientBrush g;
+    g.StartPoint({0, 0});
+    g.EndPoint({1, 1});
+    Media::GradientStop a, b;
+    a.Color(ToColor(g_blueArgb));
+    a.Offset(0);
+    b.Color(ToColor(g_mauveArgb));
+    b.Offset(1);
+    g.GradientStops().Append(a);
+    g.GradientStops().Append(b);
+    return g;
+}
+
+// The part that carries the card's edge: the list item's inner border, or the
+// grid of a plain card row. Only parts that already have an edge count.
+wux::DependencyObject CardEdgePart(wux::UIElement el) {
+    if (Media::VisualTreeHelper::GetChildrenCount(el) == 0) {
+        return nullptr;
+    }
+    auto first = Media::VisualTreeHelper::GetChild(el, 0);
+    if (auto g = first.try_as<Controls::Grid>()) {
+        return g.BorderThickness().Left > 0 ? first : nullptr;
+    }
+    int count = Media::VisualTreeHelper::GetChildrenCount(first);
+    for (int i = 0; i < count; i++) {
+        auto child = Media::VisualTreeHelper::GetChild(first, i);
+        if (auto b = child.try_as<Controls::Border>()) {
+            return b.BorderThickness().Left > 0 ? child : nullptr;
+        }
+    }
+    return nullptr;
+}
+
+void CardHoverOn(wux::UIElement el) {
+    auto part = CardEdgePart(el);
+    if (!part) {
+        return;
+    }
+    for (auto& s : g_hoverSaved) {
+        if (s.target.get() == part) {
+            return;
+        }
+    }
+    HoverSaved s{winrt::make_weak(part)};
+    auto fill = Media::SolidColorBrush(ToColor(WithAlpha(g_hoverArgb, g_cardAlpha)));
+    if (auto g = part.try_as<Controls::Grid>()) {
+        s.border = g.BorderBrush();
+        s.fill = g.Background();
+        g.BorderBrush(HoverEdgeBrush());
+        g.Background(fill);
+    } else if (auto b = part.try_as<Controls::Border>()) {
+        s.border = b.BorderBrush();
+        s.fill = b.Background();
+        b.BorderBrush(HoverEdgeBrush());
+        b.Background(fill);
+    }
+    g_hoverSaved.push_back(s);
+}
+
+void CardHoverOff(wux::UIElement el) {
+    auto part = CardEdgePart(el);
+    for (auto it = g_hoverSaved.begin(); it != g_hoverSaved.end();) {
+        auto target = it->target.get();
+        if (target && target != part) {
+            ++it;
+            continue;
+        }
+        if (target) {
+            if (auto g = target.try_as<Controls::Grid>()) {
+                g.BorderBrush(it->border);
+                g.Background(it->fill);
+            } else if (auto b = target.try_as<Controls::Border>()) {
+                b.BorderBrush(it->border);
+                b.Background(it->fill);
+            }
+        }
+        it = g_hoverSaved.erase(it);
+    }
+}
+
+void RestoreAllHover() {
+    for (auto& s : g_hoverSaved) {
+        auto target = s.target.get();
+        if (!target) {
+            continue;
+        }
+        try {
+            if (auto g = target.try_as<Controls::Grid>()) {
+                g.BorderBrush(s.border);
+                g.Background(s.fill);
+            } else if (auto b = target.try_as<Controls::Border>()) {
+                b.BorderBrush(s.border);
+                b.Background(s.fill);
+            }
+        } catch (...) {
+        }
+    }
+    g_hoverSaved.clear();
+}
+
+void WatchCard(wux::UIElement el) {
+    // Drop cards that are gone, and skip one already watched.
+    for (auto it = g_hoverCards.begin(); it != g_hoverCards.end();) {
+        auto live = it->el.get();
+        if (!live) {
+            it = g_hoverCards.erase(it);
+            continue;
+        }
+        if (live == el) {
+            return;
+        }
+        ++it;
+    }
+    auto on = [](winrt::Windows::Foundation::IInspectable const& sender,
+                 wux::Input::PointerRoutedEventArgs const&) {
+        try {
+            CardHoverOn(sender.as<wux::UIElement>());
+        } catch (...) {
+        }
+    };
+    auto off = [](winrt::Windows::Foundation::IInspectable const& sender,
+                  wux::Input::PointerRoutedEventArgs const&) {
+        try {
+            CardHoverOff(sender.as<wux::UIElement>());
+        } catch (...) {
+        }
+    };
+    HoverCard c{winrt::make_weak(el)};
+    c.entered = el.PointerEntered(on);
+    c.exited = el.PointerExited(off);
+    c.canceled = el.PointerCanceled(off);
+    c.lost = el.PointerCaptureLost(off);
+    g_hoverCards.push_back(c);
+}
+
+void UnwatchCards() {
+    RestoreAllHover();
+    for (auto& c : g_hoverCards) {
+        if (auto el = c.el.get()) {
+            try {
+                el.PointerEntered(c.entered);
+                el.PointerExited(c.exited);
+                el.PointerCanceled(c.canceled);
+                el.PointerCaptureLost(c.lost);
+            } catch (...) {
+            }
+        }
+    }
+    g_hoverCards.clear();
 }
 
 void StartDumpTimer();
@@ -10266,10 +10755,19 @@ void OnElementAdded(wux::FrameworkElement element) {
         g_dumpStarted = true;
         StartDumpTimer();
     }
-    if (g_mochaIcons && element.Name() == L"Icon" &&
+    if ((g_mochaIcons || !g_hidePages.empty()) && element.Name() == L"Icon" &&
         winrt::get_class_name(element) ==
             L"Windows.UI.Xaml.Controls.ContentPresenter") {
         OnIconPresenter(element);
+    }
+    if (!g_hideTextPrefix.empty() || g_cardHover) {
+        auto cls = winrt::get_class_name(element);
+        if (!g_hideTextPrefix.empty() && cls == L"Windows.UI.Xaml.Controls.TextBlock") {
+            OnTextBlock(element);
+        } else if (g_cardHover && (cls == L"SystemSettings.View.SettingsListViewItem" ||
+                                   cls == L"SystemSettings.View.EntityItem")) {
+            WatchCard(element.as<wux::UIElement>());
+        }
     }
     if (g_sidebarToggle && !g_paneCallbackToken &&
         element.Name() == L"PermanentNavigationView") {
@@ -10464,6 +10962,8 @@ void Uninit() {
     RestoreHidden();
     RestorePicture();
     UnwatchNavItems();
+    UnwatchCards();
+    RestoreBloat();
     g_isSelectedProp = nullptr;
     g_iconProp = nullptr;
     g_navView = {};
@@ -10528,6 +11028,12 @@ void ProcessAllStylesFromSettings() {
     }
     if (Wh_GetIntSetting(L"mochaIcons")) {
         themes.push_back(&g_themeSeamlessMochaIcons);
+    }
+    if (Wh_GetIntSetting(L"sidebar.hideAccount")) {
+        themes.push_back(&g_themeSeamlessMochaNoAccount);
+    }
+    if (theme == &g_themeSeamlessMocha && Wh_GetIntSetting(L"edges.pageEdge")) {
+        themes.push_back(&g_themeSeamlessMochaPageEdge);
     }
 
     for (const Theme* t : themes) {

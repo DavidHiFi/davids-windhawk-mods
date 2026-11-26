@@ -419,26 +419,12 @@
     "architecture": "",
     "version": "1.4.39"
   },
-  "local@explorer-tags-plus": {
-    "disabled": false,
-    "include": "explorer.exe",
-    "exclude": "",
-    "architecture": "",
-    "version": "0.9.1"
-  },
-  "local@file-operation-styler-plus": {
-    "disabled": false,
-    "include": "explorer.exe",
-    "exclude": "",
-    "architecture": "x86-64",
-    "version": "1.6.7"
-  },
   "local@seamless-explorer-view": {
     "disabled": false,
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.0.13"
+    "version": "2.0.14"
   },
   "local@keyboard-shortcut-actions-plus": {
     "disabled": false,
@@ -536,7 +522,7 @@
     "include": "*",
     "exclude": "cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe",
     "architecture": "",
-    "version": "2.2.0"
+    "version": "2.2.1"
   },
   "local@seamless-launchpad": {
     "disabled": false,
@@ -642,13 +628,6 @@
     "exclude": "",
     "architecture": "",
     "version": "1.3.2"
-  },
-  "local@windows-11-file-explorer-styler-plus": {
-    "disabled": false,
-    "include": "explorer.exe",
-    "exclude": "",
-    "architecture": "x86-64",
-    "version": "1.10.42"
   },
   "local@wintips-osd-plus": {
     "disabled": false,
@@ -1147,13 +1126,6 @@
     "architecture": "",
     "version": "1.5.1"
   },
-  "local@explorer-tree-guard": {
-    "disabled": false,
-    "include": "explorer.exe",
-    "exclude": "",
-    "architecture": "",
-    "version": "1.0.0"
-  },
   "local@halo-launcher": {
     "disabled": false,
     "include": "windhawk-mod.exe",
@@ -1243,14 +1215,14 @@
     "include": "explorer.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "0.4.65"
+    "version": "0.4.66"
   },
   "local@seamless-wobbly-windows": {
     "disabled": false,
     "include": "*|windhawk.exe",
     "exclude": "dwm.exe|sihost.exe|RuntimeBroker.exe|StartMenuExperienceHost.exe|ShellExperienceHost.exe|SearchHost.exe|TextInputHost.exe|ApplicationFrameHost.exe|NVDisplay.Container.exe",
     "architecture": "",
-    "version": "1.2.14"
+    "version": "1.2.15"
   },
   "local@seamless-workshop": {
     "disabled": false,
@@ -1306,7 +1278,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "",
-    "version": "0.3.16"
+    "version": "0.3.17"
   },
   "local@logitech-battery-tray": {
     "disabled": false,
@@ -1348,7 +1320,7 @@
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.1.1"
+    "version": "1.1.2"
   },
   "local@seamless-winver-configurator": {
     "disabled": false,
@@ -1358,14 +1330,14 @@
     "version": "1.1.1"
   },
   "local@mocha-app-icons": {
-    "disabled": false,
+    "disabled": true,
     "include": "Ableton Live*.exe|yapfast.exe|zen.exe|ApplicationFrameHost.exe|steam.exe|steamwebhelper.exe",
     "exclude": "",
     "architecture": "x86-64",
     "version": "1.3.0"
   },
   "local@remove-shortcut-arrows": {
-    "disabled": false,
+    "disabled": true,
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "",
@@ -1376,13 +1348,34 @@
     "include": "SystemSettings.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.0.1"
+    "version": "2.1.0"
   },
   "local@uwp-assets-redirect-plus": {
-    "disabled": false,
+    "disabled": true,
     "include": "explorer.exe|StartMenuExperienceHost.exe|SearchHost.exe|ShellExperienceHost.exe|ShellHost.exe|RuntimeBroker.exe|Taskmgr.exe",
     "exclude": "",
     "architecture": "",
     "version": "1.2"
+  },
+  "local@seamless-file-unlocker": {
+    "disabled": false,
+    "include": "windhawk.exe|explorer.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.0.0"
+  },
+  "local@seamless-explorer": {
+    "disabled": false,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.1.0"
+  },
+  "local@seamless-icons": {
+    "disabled": true,
+    "include": "*",
+    "exclude": "dwm.exe|cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe",
+    "architecture": "",
+    "version": "1.0.1"
   }
 }

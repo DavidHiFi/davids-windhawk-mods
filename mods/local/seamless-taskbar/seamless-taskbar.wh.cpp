@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.65
+// @version         0.4.66
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -33,8 +33,19 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
+| Focus timer | A taskbar button that counts down work sessions and announces breaks. | DavidHiFi | GPL-3.0 |
+| Notes and to-do | A taskbar button with quick notes and a checklist in a glass popup. | DavidHiFi | GPL-3.0 |
+| Window title | Shows the icon and name of the app in front on the taskbar. | DavidHiFi | GPL-3.0 |
 
-## What's new in 0.4.65
+## What's new in 0.4.66
+
+Three new taskbar buttons, each with its own switch. Focus timer: click to start a work
+session, the button counts down, and a glass card tells you when to take a break. Notes and
+to-do: a glass popup with quick notes and a checklist, kept on this PC. Window title: the icon
+and name of the app in front, which you can shorten or hide for chosen apps. They sit at the
+left end of the tray area and need the AI usage module turned on.
+
+## Earlier: 0.4.65
 
 The wallpaper switcher's edge turns blue to mauve while your cursor is over it. Drag an edge or corner to fit more or fewer pictures, and it remembers the size. New options: sort order, a mark on the current wallpaper, hover zoom, tile shape, automatic changes, all screens, fit mode, a random wallpaper shortcut, glass strength, stay open, hide the top bar, and the edge width and colours. Tray icons are drawn at full size, so their edges are smooth instead of stretched.
 
@@ -2408,6 +2419,66 @@ The whole mod is published under GPL-3.0.
     $description: '#RRGGBB. The mauve side of the hover gradient.'
   $name: Wallpaper switcher
   $description: A tray button that opens a picker to change your wallpaper.
+- focus:
+  - moduleOn: false
+    $name: Enable focus timer
+  - workMin: 25
+    $name: Work length
+    $description: 'Minutes of work in each round. Range 1 to 240 (Suggested: 25).'
+  - breakMin: 5
+    $name: Break length
+    $description: 'Minutes of break after each round. Range 1 to 120 (Suggested: 5).'
+  - longBreakMin: 15
+    $name: Long break length
+    $description: 'Minutes of the long break. Range 1 to 240 (Suggested: 15).'
+  - longEvery: 4
+    $name: Long break every
+    $description: 'Rounds of work before a long break. Range 1 to 12 (Suggested: 4).'
+  - sound: true
+    $name: Sound
+    $description: Plays a short sound when work or a break ends.
+  - motion: true
+    $name: Card open and close motion
+    $description: The break card fades and slides in and out.
+  $name: Focus timer
+  $description: A taskbar button that counts down work sessions and announces breaks.
+- notes:
+  - moduleOn: false
+    $name: Enable notes and to-do
+  - width: 360
+    $name: Popup width
+    $description: 'Width of the notes popup in pixels. Range 260 to 800 (Suggested: 360).'
+  - height: 420
+    $name: Popup height
+    $description: 'Height of the notes popup in pixels. Range 280 to 900 (Suggested: 420).'
+  - fontSize: 13
+    $name: Text size
+    $description: 'Size of the text in the popup. Range 9 to 24 (Suggested: 13).'
+  - showCount: true
+    $name: Show the open item count
+    $description: Shows how many to-do items are open next to the icon.
+  - motion: true
+    $name: Open and close motion
+    $description: The popup fades and slides in and out.
+  $name: Notes and to-do
+  $description: A taskbar button with quick notes and a checklist in a glass popup.
+- wintitle:
+  - moduleOn: false
+    $name: Enable window title
+  - maxWidth: 220
+    $name: Longest width
+    $description: 'Widest the title can get, in pixels. Range 60 to 600 (Suggested: 220).'
+  - display: title
+    $name: What to show
+    $description: The window title, or only the app name.
+    $options:
+    - title: Window title
+    - app: App name only
+  - hideApps: ""
+    $name: Hide for these apps
+    $description: Program names separated by commas, such as game.exe, vlc. The button hides while they are in front.
+  $name: Window title
+  $description: Shows the icon and name of the app in front on the taskbar.
 - SettingsWindow:
   - settingsGlass: true
     $name: Blurred settings window
@@ -2967,8 +3038,8 @@ asm(".text\n"
 namespace st {
 inline constexpr const wchar_t* kRealModId = kStRealModIdValue;
 inline constexpr size_t kNameCap = 512;
-inline constexpr int kModCount = 12;
-inline constexpr const wchar_t* kModKeys[kModCount] = {L"sysinfo", L"media", L"apps", L"clock", L"tooltips", L"tray", L"ai", L"utils", L"keepAwake", L"networkToggle", L"trayIcons", L"wallpaper"};
+inline constexpr int kModCount = 15;
+inline constexpr const wchar_t* kModKeys[kModCount] = {L"sysinfo", L"media", L"apps", L"clock", L"tooltips", L"tray", L"ai", L"utils", L"keepAwake", L"networkToggle", L"trayIcons", L"wallpaper", L"focus", L"notes", L"wintitle"};
 inline constexpr bool kModTool[kModCount] = {false, true, false, false, false, false, false, false};
 inline void* const kHookThunks[96] = {(void*)st_hook_thunk_0, (void*)st_hook_thunk_1, (void*)st_hook_thunk_2, (void*)st_hook_thunk_3, (void*)st_hook_thunk_4, (void*)st_hook_thunk_5, (void*)st_hook_thunk_6, (void*)st_hook_thunk_7, (void*)st_hook_thunk_8, (void*)st_hook_thunk_9, (void*)st_hook_thunk_10, (void*)st_hook_thunk_11, (void*)st_hook_thunk_12, (void*)st_hook_thunk_13, (void*)st_hook_thunk_14, (void*)st_hook_thunk_15, (void*)st_hook_thunk_16, (void*)st_hook_thunk_17, (void*)st_hook_thunk_18, (void*)st_hook_thunk_19, (void*)st_hook_thunk_20, (void*)st_hook_thunk_21, (void*)st_hook_thunk_22, (void*)st_hook_thunk_23, (void*)st_hook_thunk_24, (void*)st_hook_thunk_25, (void*)st_hook_thunk_26, (void*)st_hook_thunk_27, (void*)st_hook_thunk_28, (void*)st_hook_thunk_29, (void*)st_hook_thunk_30, (void*)st_hook_thunk_31, (void*)st_hook_thunk_32, (void*)st_hook_thunk_33, (void*)st_hook_thunk_34, (void*)st_hook_thunk_35, (void*)st_hook_thunk_36, (void*)st_hook_thunk_37, (void*)st_hook_thunk_38, (void*)st_hook_thunk_39, (void*)st_hook_thunk_40, (void*)st_hook_thunk_41, (void*)st_hook_thunk_42, (void*)st_hook_thunk_43, (void*)st_hook_thunk_44, (void*)st_hook_thunk_45, (void*)st_hook_thunk_46, (void*)st_hook_thunk_47, (void*)st_hook_thunk_48, (void*)st_hook_thunk_49, (void*)st_hook_thunk_50, (void*)st_hook_thunk_51, (void*)st_hook_thunk_52, (void*)st_hook_thunk_53, (void*)st_hook_thunk_54, (void*)st_hook_thunk_55, (void*)st_hook_thunk_56, (void*)st_hook_thunk_57, (void*)st_hook_thunk_58, (void*)st_hook_thunk_59, (void*)st_hook_thunk_60, (void*)st_hook_thunk_61, (void*)st_hook_thunk_62, (void*)st_hook_thunk_63, (void*)st_hook_thunk_64, (void*)st_hook_thunk_65, (void*)st_hook_thunk_66, (void*)st_hook_thunk_67, (void*)st_hook_thunk_68, (void*)st_hook_thunk_69, (void*)st_hook_thunk_70, (void*)st_hook_thunk_71, (void*)st_hook_thunk_72, (void*)st_hook_thunk_73, (void*)st_hook_thunk_74, (void*)st_hook_thunk_75, (void*)st_hook_thunk_76, (void*)st_hook_thunk_77, (void*)st_hook_thunk_78, (void*)st_hook_thunk_79, (void*)st_hook_thunk_80, (void*)st_hook_thunk_81, (void*)st_hook_thunk_82, (void*)st_hook_thunk_83, (void*)st_hook_thunk_84, (void*)st_hook_thunk_85, (void*)st_hook_thunk_86, (void*)st_hook_thunk_87, (void*)st_hook_thunk_88, (void*)st_hook_thunk_89, (void*)st_hook_thunk_90, (void*)st_hook_thunk_91, (void*)st_hook_thunk_92, (void*)st_hook_thunk_93, (void*)st_hook_thunk_94, (void*)st_hook_thunk_95};
 inline void* const kOrigThunks[96] = {(void*)st_orig_thunk_0, (void*)st_orig_thunk_1, (void*)st_orig_thunk_2, (void*)st_orig_thunk_3, (void*)st_orig_thunk_4, (void*)st_orig_thunk_5, (void*)st_orig_thunk_6, (void*)st_orig_thunk_7, (void*)st_orig_thunk_8, (void*)st_orig_thunk_9, (void*)st_orig_thunk_10, (void*)st_orig_thunk_11, (void*)st_orig_thunk_12, (void*)st_orig_thunk_13, (void*)st_orig_thunk_14, (void*)st_orig_thunk_15, (void*)st_orig_thunk_16, (void*)st_orig_thunk_17, (void*)st_orig_thunk_18, (void*)st_orig_thunk_19, (void*)st_orig_thunk_20, (void*)st_orig_thunk_21, (void*)st_orig_thunk_22, (void*)st_orig_thunk_23, (void*)st_orig_thunk_24, (void*)st_orig_thunk_25, (void*)st_orig_thunk_26, (void*)st_orig_thunk_27, (void*)st_orig_thunk_28, (void*)st_orig_thunk_29, (void*)st_orig_thunk_30, (void*)st_orig_thunk_31, (void*)st_orig_thunk_32, (void*)st_orig_thunk_33, (void*)st_orig_thunk_34, (void*)st_orig_thunk_35, (void*)st_orig_thunk_36, (void*)st_orig_thunk_37, (void*)st_orig_thunk_38, (void*)st_orig_thunk_39, (void*)st_orig_thunk_40, (void*)st_orig_thunk_41, (void*)st_orig_thunk_42, (void*)st_orig_thunk_43, (void*)st_orig_thunk_44, (void*)st_orig_thunk_45, (void*)st_orig_thunk_46, (void*)st_orig_thunk_47, (void*)st_orig_thunk_48, (void*)st_orig_thunk_49, (void*)st_orig_thunk_50, (void*)st_orig_thunk_51, (void*)st_orig_thunk_52, (void*)st_orig_thunk_53, (void*)st_orig_thunk_54, (void*)st_orig_thunk_55, (void*)st_orig_thunk_56, (void*)st_orig_thunk_57, (void*)st_orig_thunk_58, (void*)st_orig_thunk_59, (void*)st_orig_thunk_60, (void*)st_orig_thunk_61, (void*)st_orig_thunk_62, (void*)st_orig_thunk_63, (void*)st_orig_thunk_64, (void*)st_orig_thunk_65, (void*)st_orig_thunk_66, (void*)st_orig_thunk_67, (void*)st_orig_thunk_68, (void*)st_orig_thunk_69, (void*)st_orig_thunk_70, (void*)st_orig_thunk_71, (void*)st_orig_thunk_72, (void*)st_orig_thunk_73, (void*)st_orig_thunk_74, (void*)st_orig_thunk_75, (void*)st_orig_thunk_76, (void*)st_orig_thunk_77, (void*)st_orig_thunk_78, (void*)st_orig_thunk_79, (void*)st_orig_thunk_80, (void*)st_orig_thunk_81, (void*)st_orig_thunk_82, (void*)st_orig_thunk_83, (void*)st_orig_thunk_84, (void*)st_orig_thunk_85, (void*)st_orig_thunk_86, (void*)st_orig_thunk_87, (void*)st_orig_thunk_88, (void*)st_orig_thunk_89, (void*)st_orig_thunk_90, (void*)st_orig_thunk_91, (void*)st_orig_thunk_92, (void*)st_orig_thunk_93, (void*)st_orig_thunk_94, (void*)st_orig_thunk_95};
@@ -3390,6 +3461,23 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Color, L"wallpaper.edgeColor", L"Window edge colour at rest", L"#RRGGBB. Grey at rest.", L"#585B70", {}, 0, 100, 1, L"Wallpaper switcher"},
 {K::Color, L"wallpaper.hoverColor1", L"Window edge hover colour", L"#RRGGBB. The blue side of the hover gradient.", L"#89B4FA", {}, 0, 100, 1, L"Wallpaper switcher"},
 {K::Color, L"wallpaper.hoverColor2", L"Window edge second hover colour", L"#RRGGBB. The mauve side of the hover gradient.", L"#CBA6F7", {}, 0, 100, 1, L"Wallpaper switcher"},
+{K::Check, L"focus.moduleOn", L"Focus timer", L"A taskbar button that counts down work sessions and announces breaks.", L"0", {}, 0, 100, 0, L"Modules"},
+{K::Check, L"notes.moduleOn", L"Notes and to-do", L"A taskbar button with quick notes and a checklist in a glass popup.", L"0", {}, 0, 100, 0, L"Modules"},
+{K::Check, L"wintitle.moduleOn", L"Window title", L"Shows the icon and name of the app in front on the taskbar.", L"0", {}, 0, 100, 0, L"Modules"},
+{K::Number, L"focus.workMin", L"Work length", L"Minutes of work in each round. Range 1 to 240 (Suggested: 25).", L"25", {}, 1, 240, 11, L"Focus timer"},
+{K::Number, L"focus.breakMin", L"Break length", L"Minutes of break after each round. Range 1 to 120 (Suggested: 5).", L"5", {}, 1, 120, 11, L"Focus timer"},
+{K::Number, L"focus.longBreakMin", L"Long break length", L"Minutes of the long break. Range 1 to 240 (Suggested: 15).", L"15", {}, 1, 240, 11, L"Focus timer"},
+{K::Number, L"focus.longEvery", L"Long break every", L"Rounds of work before a long break. Range 1 to 12 (Suggested: 4).", L"4", {}, 1, 12, 11, L"Focus timer"},
+{K::Check, L"focus.sound", L"Sound", L"Plays a short sound when work or a break ends.", L"1", {}, 0, 100, 11, L"Focus timer"},
+{K::Check, L"focus.motion", L"Card open and close motion", L"The break card fades and slides in and out.", L"1", {}, 0, 100, 11, L"Focus timer"},
+{K::Number, L"notes.width", L"Popup width", L"Width of the notes popup in pixels. Range 260 to 800 (Suggested: 360).", L"360", {}, 260, 800, 11, L"Notes and to-do"},
+{K::Number, L"notes.height", L"Popup height", L"Height of the notes popup in pixels. Range 280 to 900 (Suggested: 420).", L"420", {}, 280, 900, 11, L"Notes and to-do"},
+{K::Number, L"notes.fontSize", L"Text size", L"Size of the text in the popup. Range 9 to 24 (Suggested: 13).", L"13", {}, 9, 24, 11, L"Notes and to-do"},
+{K::Check, L"notes.showCount", L"Show the open item count", L"Shows how many to-do items are open next to the icon.", L"1", {}, 0, 100, 11, L"Notes and to-do"},
+{K::Check, L"notes.motion", L"Open and close motion", L"The popup fades and slides in and out.", L"1", {}, 0, 100, 11, L"Notes and to-do"},
+{K::Number, L"wintitle.maxWidth", L"Longest width", L"Widest the title can get, in pixels. Range 60 to 600 (Suggested: 220).", L"220", {}, 60, 600, 11, L"Window title"},
+{K::Choice, L"wintitle.display", L"What to show", L"The window title, or only the app name.", L"title", {{L"title", L"Window title"}, {L"app", L"App name only"}}, 0, 100, 11, L"Window title"},
+{K::Text, L"wintitle.hideApps", L"Hide for these apps", L"Program names separated by commas, such as game.exe, vlc. The button hides while they are in front.", L"", {}, 0, 1440, 11, L"Window title"},
 {K::Check, L"utils.moduleOn", L"Right-click tools", L"Quick system tools in the taskbar right-click menu, with result cards.", L"0", {}, 0, 100, 0, L"Modules"},
 {K::Number, L"sysinfo.width", L"Widget width", L"0 fits the content automatically. A positive value sets a minimum width, up to 800 logical pixels.", L"0", {}, 0, 100, 1, L"System info and weather"},
 {K::Number, L"sysinfo.leftOffset", L"Left offset", L"Distance from the left taskbar edge, from 0 to 1000 pixels.", L"10", {}, 0, 1000, 1, L"System info and weather"},
@@ -3761,7 +3849,7 @@ static const SetPageInfo kSetPages[] = {
 {L"Right-click tools", L"The taskbar right-click menu: tools, result cards and icon separators.", 0xE90F},
 {L"Tooltips", L"Hide the hover tooltips on apps, Start, the tray and the overflow.", 0xE8BD},
 {L"Look", L"This settings window and its tray icon.", 0xE790},
-{L"Tray tools", L"Keep awake, network switch, app icons and the wallpaper switcher.", 0xE8F1},
+{L"Tray tools", L"Keep awake, network switch, app icons and the wallpaper switcher. Also the focus timer, notes and window title.", 0xE8F1},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
@@ -99838,6 +99926,1792 @@ void Stop() {
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// Modules focus, notes, wintitle: Seamless Taskbar widgets (Focus timer, Notes and to-do,
+// Active window title). One dock box in the system tray frame holds the three pills; one UI
+// thread owns the timers, the foreground hook, the glass popups and the menus.
+// The taskbar side is injected through the AI usage module's XAML access (module "ai" must be on).
+namespace mod_widgetsd {
+
+namespace wux = winrt::Windows::UI::Xaml;
+namespace wc = winrt::Windows::UI::Xaml::Controls;
+namespace wm = winrt::Windows::UI::Xaml::Media;
+namespace gp = Gdiplus;
+using winrt::Windows::Foundation::IInspectable;
+
+constexpr int kFocus = 0, kNotes = 1, kTitle = 2, kKinds = 3;
+constexpr UINT WM_W_CLICK = WM_APP + 41;
+constexpr UINT WM_W_CONTEXT = WM_APP + 42;
+constexpr UINT WM_W_FG = WM_APP + 43;
+constexpr UINT WM_W_CFG = WM_APP + 44;
+constexpr UINT WM_W_SAVE = WM_APP + 45;
+constexpr UINT WM_W_ENTER = WM_APP + 46;
+constexpr UINT WM_W_ESC = WM_APP + 47;
+constexpr UINT_PTR kTimerFocus = 1, kTimerTitle = 2;
+constexpr UINT_PTR kTimerAnim = 71, kTimerSave = 72, kTimerHover = 73, kTimerCardClose = 74;
+constexpr wchar_t kHostCls[] = L"SeamlessTaskbarWidgetsHost";
+constexpr wchar_t kBackCls[] = L"SeamlessTaskbarWidgetsBack";
+constexpr wchar_t kContCls[] = L"SeamlessTaskbarWidgetsPopup";
+constexpr wchar_t kRingCls[] = L"SeamlessTaskbarWidgetsRing";
+constexpr COLORREF kKey = RGB(0x1E, 0x1E, 0x2E);
+
+// ---------------------------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------------------------
+struct Cfg {
+    int workMin = 25, breakMin = 5, longMin = 15, longEvery = 4;
+    bool sound = true, focusMotion = true;
+    int notesW = 360, notesH = 420, notesFont = 13;
+    bool showCount = true, notesMotion = true;
+    int maxW = 220;
+    bool appOnly = false;
+    std::wstring hide;
+};
+
+static int GI(PCWSTR name, int def, int lo, int hi) {
+    int v = ::Wh_GetIntSetting(L"%s", name);
+    return (v < lo || v > hi) ? def : v;
+}
+static bool GB(PCWSTR name) { return ::Wh_GetIntSetting(L"%s", name) != 0; }
+static std::wstring GS(PCWSTR name) {
+    PCWSTR s = ::Wh_GetStringSetting(L"%s", name);
+    std::wstring r = s ? s : L"";
+    if (s) ::Wh_FreeStringSetting(s);
+    return r;
+}
+
+static Cfg LoadCfg() {
+    Cfg c;
+    c.workMin = GI(L"focus.workMin", 25, 1, 240);
+    c.breakMin = GI(L"focus.breakMin", 5, 1, 120);
+    c.longMin = GI(L"focus.longBreakMin", 15, 1, 240);
+    c.longEvery = GI(L"focus.longEvery", 4, 1, 12);
+    c.sound = GB(L"focus.sound");
+    c.focusMotion = GB(L"focus.motion");
+    c.notesW = GI(L"notes.width", 360, 260, 800);
+    c.notesH = GI(L"notes.height", 420, 280, 900);
+    c.notesFont = GI(L"notes.fontSize", 13, 9, 24);
+    c.showCount = GB(L"notes.showCount");
+    c.notesMotion = GB(L"notes.motion");
+    c.maxW = GI(L"wintitle.maxWidth", 220, 60, 600);
+    c.appOnly = GS(L"wintitle.display") == L"app";
+    c.hide = GS(L"wintitle.hideApps");
+    return c;
+}
+
+static std::mutex g_mx;
+static Cfg g_cfg;
+static Cfg Config() {
+    std::lock_guard<std::mutex> lk(g_mx);
+    return g_cfg;
+}
+
+// Shared Motion switch and speed (HKCU\Software\DavidHiFi\Motion) plus the Windows setting.
+static int MotionMs(bool own, int baseMs) {
+    if (!own) return 0;
+    BOOL anim = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &anim, 0);
+    if (!anim) return 0;
+    DWORD enabled = 1, size = sizeof(enabled);
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\DavidHiFi\\Motion", L"Enabled", RRF_RT_REG_DWORD,
+                     nullptr, &enabled, &size) == ERROR_SUCCESS && !enabled)
+        return 0;
+    wchar_t buf[64] = {};
+    DWORD type = 0;
+    size = sizeof(buf);
+    double k = 1.0;
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\DavidHiFi\\Motion", L"Speed",
+                     RRF_RT_REG_SZ | RRF_RT_REG_DWORD, &type, buf, &size) == ERROR_SUCCESS) {
+        if (type == REG_DWORD) {
+            DWORD pct = *(DWORD*)buf;
+            if (pct >= 10 && pct <= 1000) k = 100.0 / pct;
+        } else if (!_wcsicmp(buf, L"slow")) k = 1.6;
+        else if (!_wcsicmp(buf, L"fast")) k = 0.6;
+        else if (!_wcsicmp(buf, L"off")) return 0;
+        else if (buf[0] >= L'0' && buf[0] <= L'9') {
+            int pct = _wtoi(buf);
+            if (pct >= 10 && pct <= 1000) k = 100.0 / pct;
+        }
+    }
+    return std::max(1, (int)(baseMs * k));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Shared pill state (host thread writes, taskbar side reads)
+// ---------------------------------------------------------------------------------------------
+struct PillState {
+    bool visible = false;
+    bool active = false;
+    std::wstring glyph, text, tip;
+    int maxW = 0;
+    uint64_t iconGen = 0;
+    std::vector<uint32_t> icon;  // 32 x 32 premultiplied BGRA
+};
+static PillState g_pill[kKinds];
+static RECT g_anchor[kKinds];
+static bool g_anchorOk[kKinds];
+static bool g_started[kKinds];
+
+static HWND g_host = nullptr;
+static HANDLE g_hostThread = nullptr;
+static HANDLE g_keeper = nullptr;
+static HANDLE g_stopEvent = nullptr;
+static HANDLE g_pushEvent = nullptr;
+static HANDLE g_readyEvent = nullptr;
+static std::mutex g_lifeMx;
+static ULONG_PTR g_gdipToken = 0;
+static HMODULE g_hmod = nullptr;
+static std::atomic<bool> g_warnedNoAi{false};
+
+static void Push() {
+    if (g_pushEvent) SetEvent(g_pushEvent);
+}
+
+static std::wstring Lower(std::wstring s) {
+    for (auto& ch : s) ch = (wchar_t)towlower(ch);
+    return s;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Taskbar side: the dock box with the three pills (taskbar thread only)
+// ---------------------------------------------------------------------------------------------
+struct PillUi {
+    wc::Border border{nullptr};
+    wc::TextBlock glyph{nullptr};
+    wc::TextBlock text{nullptr};
+    wc::Image img{nullptr};
+    uint64_t iconGen = 0;
+    bool active = false;
+};
+
+struct Slot {
+    HWND hwnd = nullptr;
+    wc::StackPanel box{nullptr};
+    wc::Panel parent{nullptr};
+    wc::ColumnDefinition col{nullptr};
+    PillUi pills[kKinds];
+    double scale = 1.0;
+};
+static std::vector<std::unique_ptr<Slot>> g_slots;
+
+static wm::SolidColorBrush Solid(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 0xFF) {
+    return wm::SolidColorBrush(winrt::Windows::UI::Color{a, r, g, b});
+}
+static wm::LinearGradientBrush GradBrush(uint8_t alpha = 0xFF) {
+    wm::LinearGradientBrush brush;
+    brush.StartPoint({0.f, 0.f});
+    brush.EndPoint({1.f, 1.f});
+    wm::GradientStop a, b;
+    a.Color(winrt::Windows::UI::Color{alpha, 0x89, 0xB4, 0xFA});
+    a.Offset(0.0);
+    b.Color(winrt::Windows::UI::Color{alpha, 0xCB, 0xA6, 0xF7});
+    b.Offset(1.0);
+    brush.GradientStops().Append(a);
+    brush.GradientStops().Append(b);
+    return brush;
+}
+
+static PCWSTR const kGlyphs[kKinds] = {L"\xF252", L"\xF249", L"\xF2D0"};
+
+static void BuildPill(PillUi& p, int kind) {
+    wc::Border b;
+    b.Height(34);
+    b.MinWidth(34);
+    b.Padding(wux::Thickness{10, 0, 10, 0});
+    b.Margin(wux::Thickness{0, 0, 6, 0});
+    b.CornerRadius(wux::CornerRadius{8, 8, 8, 8});
+    b.BorderThickness(wux::Thickness{1, 1, 1, 1});
+    b.Background(Solid(0x18, 0x18, 0x25));
+    b.BorderBrush(Solid(0x58, 0x5B, 0x70));
+    b.VerticalAlignment(wux::VerticalAlignment::Center);
+    b.Tag(winrt::box_value(false));
+
+    wc::StackPanel row;
+    row.Orientation(wc::Orientation::Horizontal);
+    row.VerticalAlignment(wux::VerticalAlignment::Center);
+
+    wc::TextBlock glyph;
+    glyph.FontFamily(wm::FontFamily(L"FiraCode Nerd Font"));
+    glyph.FontSize(15);
+    glyph.Foreground(GradBrush());
+    glyph.VerticalAlignment(wux::VerticalAlignment::Center);
+    glyph.Text(kGlyphs[kind]);
+
+    wc::Image img;
+    img.Width(18);
+    img.Height(18);
+    img.Margin(wux::Thickness{0, 0, 8, 0});
+    img.Stretch(wm::Stretch::Uniform);
+    img.VerticalAlignment(wux::VerticalAlignment::Center);
+    img.Visibility(wux::Visibility::Collapsed);
+
+    wc::TextBlock text;
+    text.FontFamily(wm::FontFamily(L"FiraCode Nerd Font"));
+    text.FontSize(12);
+    text.Foreground(Solid(0xCD, 0xD6, 0xF4));
+    text.Margin(wux::Thickness{8, 0, 0, 0});
+    text.VerticalAlignment(wux::VerticalAlignment::Center);
+    text.TextTrimming(wux::TextTrimming::CharacterEllipsis);
+    text.TextWrapping(wux::TextWrapping::NoWrap);
+    text.Visibility(wux::Visibility::Collapsed);
+
+    if (kind == kTitle) row.Children().Append(img);
+    row.Children().Append(glyph);
+    row.Children().Append(text);
+    b.Child(row);
+
+    b.PointerEntered([](IInspectable const& s, wux::Input::PointerRoutedEventArgs const&) {
+        if (auto bd = s.try_as<wc::Border>()) bd.BorderBrush(GradBrush());
+    });
+    b.PointerExited([](IInspectable const& s, wux::Input::PointerRoutedEventArgs const&) {
+        if (auto bd = s.try_as<wc::Border>()) {
+            bool active = false;
+            try { active = winrt::unbox_value<bool>(bd.Tag()); } catch (...) {}
+            if (active) bd.BorderBrush(GradBrush());
+            else bd.BorderBrush(Solid(0x58, 0x5B, 0x70));
+        }
+    });
+    const int k = kind;
+    b.Tapped([k](IInspectable const&, wux::Input::TappedRoutedEventArgs const& e) {
+        e.Handled(true);
+        if (g_host) PostMessageW(g_host, WM_W_CLICK, (WPARAM)k, 0);
+    });
+    b.RightTapped([k](IInspectable const&, wux::Input::RightTappedRoutedEventArgs const& e) {
+        e.Handled(true);
+        if (g_host) PostMessageW(g_host, WM_W_CONTEXT, (WPARAM)k, 0);
+    });
+
+    p.border = b;
+    p.glyph = glyph;
+    p.text = text;
+    p.img = img;
+    p.active = false;
+    p.iconGen = 0;
+}
+
+static void RemoveBox(Slot& s) {
+    try {
+        if (s.parent && s.box) {
+            uint32_t idx = 0;
+            if (s.parent.Children().IndexOf(s.box, idx)) s.parent.Children().RemoveAt(idx);
+            auto grid = s.parent.try_as<wc::Grid>();
+            if (grid && s.col) {
+                auto defs = grid.ColumnDefinitions();
+                int owned = -1;
+                for (uint32_t i = 0; i < defs.Size(); ++i) {
+                    if (winrt::get_abi(defs.GetAt(i)) == winrt::get_abi(s.col)) {
+                        owned = (int)i;
+                        break;
+                    }
+                }
+                if (owned >= 0) {
+                    defs.RemoveAt(owned);
+                    for (uint32_t i = 0; i < grid.Children().Size(); ++i) {
+                        auto child = grid.Children().GetAt(i).try_as<wux::FrameworkElement>();
+                        if (!child) continue;
+                        int cc = wc::Grid::GetColumn(child);
+                        int cs = wc::Grid::GetColumnSpan(child);
+                        if (cc > owned) wc::Grid::SetColumn(child, cc - 1);
+                        else if (cc < owned && cc + cs > owned) wc::Grid::SetColumnSpan(child, cs - 1);
+                    }
+                }
+            }
+        }
+    } catch (...) {
+        Wh_Log(L"[Widgets] remove: exception");
+    }
+    s.box = nullptr;
+    s.parent = nullptr;
+    s.col = nullptr;
+    for (auto& p : s.pills) p = PillUi{};
+}
+
+static bool Ensure(Slot& s) {
+    auto xr = mod_ai::GetTaskbarXamlRoot(s.hwnd);
+    if (!xr) return false;
+    auto root = xr.Content().try_as<wux::FrameworkElement>();
+    if (!root) return false;
+    auto trayFrame = mod_ai::FindChildByName(root, L"SystemTrayFrameGrid");
+    if (!trayFrame) return false;
+    auto panel = trayFrame.try_as<wc::Panel>();
+    if (!panel) return false;
+    auto grid = trayFrame.try_as<wc::Grid>();
+    if (!grid && !trayFrame.try_as<wc::StackPanel>()) return false;
+    s.scale = xr.RasterizationScale() > 0 ? xr.RasterizationScale() : 1.0;
+
+    if (s.box && s.parent && winrt::get_abi(s.parent) == winrt::get_abi(panel)) {
+        uint32_t idx = 0;
+        if (panel.Children().IndexOf(s.box, idx)) return true;
+    }
+    if (s.box) RemoveBox(s);  // the taskbar was rebuilt: drop what is left of the old one
+
+    wc::StackPanel box;
+    box.Orientation(wc::Orientation::Horizontal);
+    box.VerticalAlignment(wux::VerticalAlignment::Center);
+    box.Margin(wux::Thickness{0, 0, 4, 0});
+    box.Name(L"SeamlessWidgetsD");
+    for (int k = 0; k < kKinds; ++k) {
+        BuildPill(s.pills[k], k);
+        s.pills[k].border.Visibility(wux::Visibility::Collapsed);
+        box.Children().Append(s.pills[k].border);
+    }
+    if (grid) {
+        wc::ColumnDefinition newCol;
+        newCol.Width({1.0, wux::GridUnitType::Auto});
+        grid.ColumnDefinitions().InsertAt(0, newCol);
+        for (uint32_t i = 0; i < grid.Children().Size(); ++i) {
+            auto child = grid.Children().GetAt(i).try_as<wux::FrameworkElement>();
+            if (!child) continue;
+            int cc = wc::Grid::GetColumn(child);
+            int cs = wc::Grid::GetColumnSpan(child);
+            if (cc >= 0) wc::Grid::SetColumn(child, cc + 1);
+            else if (cc + cs > 0) wc::Grid::SetColumnSpan(child, cs + 1);
+        }
+        wc::Grid::SetColumn(box, 0);
+        grid.Children().Append(box);
+        s.col = newCol;
+    } else {
+        panel.Children().InsertAt(0, box);
+    }
+    s.box = box;
+    s.parent = panel;
+    Wh_Log(L"[Widgets] dock box injected into %s", winrt::get_class_name(trayFrame).c_str());
+    return true;
+}
+
+static void UpdateIcon(PillUi& p, const PillState& st) {
+    if (st.icon.size() != 32u * 32u) {
+        p.img.Visibility(wux::Visibility::Collapsed);
+        return;
+    }
+    wm::Imaging::WriteableBitmap wb(32, 32);
+    auto buf = wb.PixelBuffer();
+    auto access = buf.as<::Windows::Storage::Streams::IBufferByteAccess>();
+    BYTE* px = nullptr;
+    access->Buffer(&px);
+    if (px) memcpy(px, st.icon.data(), 32 * 32 * 4);
+    buf.Length(32 * 32 * 4);
+    wb.Invalidate();
+    p.img.Source(wb);
+    p.img.Visibility(wux::Visibility::Visible);
+}
+
+static void UpdateSlot(Slot& s) {
+    PillState snap[kKinds];
+    {
+        std::lock_guard<std::mutex> lk(g_mx);
+        for (int k = 0; k < kKinds; ++k) snap[k] = g_pill[k];
+    }
+    for (int k = 0; k < kKinds; ++k) {
+        PillUi& p = s.pills[k];
+        const PillState& st = snap[k];
+        p.border.Visibility(st.visible ? wux::Visibility::Visible : wux::Visibility::Collapsed);
+        if (!st.visible) continue;
+        if (p.glyph.Text() != st.glyph) p.glyph.Text(st.glyph);
+        if (st.text.empty()) {
+            p.text.Visibility(wux::Visibility::Collapsed);
+        } else {
+            if (p.text.Text() != st.text) p.text.Text(st.text);
+            p.text.Visibility(wux::Visibility::Visible);
+            if (st.maxW > 0) p.text.MaxWidth(st.maxW);
+        }
+        if (p.active != st.active) {
+            p.active = st.active;
+            p.border.Tag(winrt::box_value(st.active));
+            p.border.BorderBrush(st.active ? (wm::Brush)GradBrush() : (wm::Brush)Solid(0x58, 0x5B, 0x70));
+        }
+        wc::ToolTipService::SetToolTip(p.border, winrt::box_value(winrt::hstring(st.tip)));
+        if (k == kTitle && p.iconGen != st.iconGen) {
+            p.iconGen = st.iconGen;
+            UpdateIcon(p, st);
+        }
+        try {
+            auto pt = p.border.TransformToVisual(nullptr).TransformPoint({0.f, 0.f});
+            POINT sp{(LONG)(pt.X * s.scale), (LONG)(pt.Y * s.scale)};
+            ClientToScreen(s.hwnd, &sp);
+            RECT r{sp.x, sp.y, sp.x + (LONG)(p.border.ActualWidth() * s.scale),
+                   sp.y + (LONG)(p.border.ActualHeight() * s.scale)};
+            std::lock_guard<std::mutex> lk(g_mx);
+            g_anchor[k] = r;
+            g_anchorOk[k] = r.right > r.left && r.bottom > r.top;
+        } catch (...) {
+        }
+    }
+}
+
+static bool ApplyProc(void* param) {
+    Slot* s = (Slot*)param;
+    try {
+        if (!Ensure(*s)) return false;
+        UpdateSlot(*s);
+        return true;
+    } catch (...) {
+        Wh_Log(L"[Widgets] apply: exception");
+        return false;
+    }
+}
+
+static bool RemoveProc(void* param) {
+    RemoveBox(*(Slot*)param);
+    return true;
+}
+
+static void ApplyAll() {
+    if (!st::g_modActive[6]) {
+        if (!g_warnedNoAi.exchange(true))
+            Wh_Log(L"[Widgets] the AI usage module is off, so the widgets stay hidden");
+        return;
+    }
+    std::vector<HWND> wnds = mod_ai::FindCurrentProcessTaskbarWnds();
+    for (HWND h : wnds) {
+        Slot* slot = nullptr;
+        for (auto& sp : g_slots)
+            if (sp->hwnd == h) slot = sp.get();
+        if (!slot) {
+            g_slots.push_back(std::make_unique<Slot>());
+            slot = g_slots.back().get();
+            slot->hwnd = h;
+        }
+        mod_ai::RunFromWindowThread(h, ApplyProc, slot, 2000);
+    }
+}
+
+static DWORD WINAPI KeeperThread(LPVOID) {
+    HANDLE hs[2] = {g_stopEvent, g_pushEvent};
+    for (;;) {
+        DWORD r = WaitForMultipleObjects(2, hs, FALSE, 4000);
+        if (r == WAIT_OBJECT_0) break;
+        ApplyAll();
+    }
+    for (auto& sp : g_slots) {
+        if (!sp->box) continue;
+        if (!mod_ai::RunFromWindowThread(sp->hwnd, RemoveProc, sp.get(), 2000)) {
+            // Never release XAML objects off their own thread: keep them alive on purpose.
+            new Slot(std::move(*sp));
+            sp = std::make_unique<Slot>();
+        }
+    }
+    g_slots.clear();
+    return 0;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Glass popup (backdrop + colour-keyed content + click-through ring)
+// ---------------------------------------------------------------------------------------------
+struct Hit {
+    RECT r;
+    int id;
+    int idx;
+};
+
+struct Glass {
+    int kind = 0;  // 0 notes, 1 card
+    bool activatable = true;
+    HWND back = nullptr, content = nullptr, ring = nullptr;
+    HWND edNote = nullptr, edAdd = nullptr;
+    float scale = 1.f;
+    int x = 0, y = 0, w = 0, h = 0;
+    bool shown = false, hover = false, closing = false;
+    ULONGLONG t0 = 0;
+    int ms = 0;
+    int motionMsOpen = 0;
+    HDC ringDc = nullptr;
+    HBITMAP ringBmp = nullptr;
+    void* ringBits = nullptr;
+    std::vector<Hit> hits;
+    std::vector<RECT> cards;
+    int hoverHit = -1;
+    HFONT edFont = nullptr;
+    HBRUSH brNote = nullptr, brAdd = nullptr;
+    ULONGLONG closedTick = 0;
+};
+
+static Glass g_notes, g_card;
+
+struct Todo {
+    bool done = false;
+    std::wstring text;
+};
+static std::vector<Todo> g_todos;
+static std::wstring g_noteText;
+static int g_scroll = 0;
+
+struct CardSt {
+    std::wstring title, body, btnA, btnB;
+    int idA = 0, idB = 0;
+};
+static CardSt g_cardSt;
+
+static std::wstring g_hideExtra;  // apps hidden from the title pill by the right-click menu
+
+static int S(const Glass& g, float v) { return (int)lroundf(v * g.scale); }
+
+static void RoundPath(gp::GraphicsPath& p, float x, float y, float w, float h, float r) {
+    float d = std::max(0.f, r) * 2.f;
+    if (d < 1.f) {
+        p.AddRectangle(gp::RectF(x, y, w, h));
+        return;
+    }
+    p.AddArc(x, y, d, d, 180, 90);
+    p.AddArc(x + w - d, y, d, d, 270, 90);
+    p.AddArc(x + w - d, y + h - d, d, d, 0, 90);
+    p.AddArc(x, y + h - d, d, d, 90, 90);
+    p.CloseFigure();
+}
+
+struct AccentPolicy {
+    int state;
+    int flags;
+    DWORD gradient;
+    int anim;
+};
+struct WcaData {
+    int attr;
+    PVOID data;
+    SIZE_T size;
+};
+
+static void SetAcrylic(HWND hwnd) {
+    HMODULE u = GetModuleHandleW(L"user32.dll");
+    using Fn = BOOL(WINAPI*)(HWND, WcaData*);
+    auto fn = u ? (Fn)GetProcAddress(u, "SetWindowCompositionAttribute") : nullptr;
+    if (!fn) return;
+    AccentPolicy ap{4, 0, (DWORD)((0x66u << 24) | 0x2E1E1Eu), 0};
+    WcaData d{19, &ap, sizeof(ap)};
+    fn(hwnd, &d);
+}
+
+static void NoDwmFrame(HWND hwnd) {
+    int pref = 1;  // do not round: our own region does
+    DwmSetWindowAttribute(hwnd, 33, &pref, sizeof(pref));
+    DWORD none = 0xFFFFFFFE;
+    DwmSetWindowAttribute(hwnd, 34, &none, sizeof(none));
+}
+
+static float CornerR() { return ::stset::Set_MenuCornerRadius(); }
+
+struct NL {
+    RECT hdr, notes, todo, close, noteEd, addField, addEd, list;
+};
+static RECT Rc(int l, int t, int r, int b) { return RECT{l, t, r, b}; }
+
+static NL NotesLayout(const Glass& g) {
+    NL n{};
+    int M = S(g, 12), G = S(g, 8), H = g.h, W = g.w;
+    int hdrH = S(g, 34);
+    n.hdr = Rc(M, M, W - M, M + hdrH);
+    int rest = H - 2 * M - hdrH - 2 * G;
+    int notesH = (int)(rest * 0.36f);
+    n.notes = Rc(M, n.hdr.bottom + G, W - M, n.hdr.bottom + G + notesH);
+    n.todo = Rc(M, n.notes.bottom + G, W - M, H - M);
+    n.close = Rc(n.hdr.right - S(g, 34), n.hdr.top, n.hdr.right, n.hdr.bottom);
+    n.noteEd = Rc(n.notes.left + S(g, 10), n.notes.top + S(g, 30), n.notes.right - S(g, 10), n.notes.bottom - S(g, 10));
+    n.addField = Rc(n.todo.left + S(g, 8), n.todo.top + S(g, 30), n.todo.right - S(g, 8), n.todo.top + S(g, 60));
+    n.addEd = Rc(n.addField.left + S(g, 10), n.addField.top + S(g, 6), n.addField.right - S(g, 10), n.addField.bottom - S(g, 5));
+    n.list = Rc(n.todo.left + S(g, 8), n.addField.bottom + S(g, 6), n.todo.right - S(g, 8), n.todo.bottom - S(g, 8));
+    return n;
+}
+
+struct CL {
+    RECT title, body, a, b;
+};
+static CL CardLayout(const Glass& g) {
+    CL c{};
+    int M = S(g, 16);
+    c.title = Rc(M, M, g.w - M, M + S(g, 26));
+    c.body = Rc(M, c.title.bottom + S(g, 4), g.w - M, g.h - M - S(g, 40));
+    int bw = (g.w - 2 * M - S(g, 10)) / 2, bh = S(g, 32);
+    c.a = Rc(M, g.h - M - bh, M + bw, g.h - M);
+    c.b = Rc(M + bw + S(g, 10), g.h - M - bh, g.w - M, g.h - M);
+    return c;
+}
+
+static void RebuildRing(Glass& g) {
+    if (!g.ring || g.w <= 0 || g.h <= 0) return;
+    if (g.ringDc) {
+        DeleteDC(g.ringDc);
+        g.ringDc = nullptr;
+    }
+    if (g.ringBmp) {
+        DeleteObject(g.ringBmp);
+        g.ringBmp = nullptr;
+    }
+    BITMAPINFO bmi{};
+    bmi.bmiHeader.biSize = sizeof(bmi.bmiHeader);
+    bmi.bmiHeader.biWidth = g.w;
+    bmi.bmiHeader.biHeight = -g.h;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    HDC screen = GetDC(nullptr);
+    g.ringDc = CreateCompatibleDC(screen);
+    g.ringBmp = CreateDIBSection(screen, &bmi, DIB_RGB_COLORS, &g.ringBits, nullptr, 0);
+    ReleaseDC(nullptr, screen);
+    if (!g.ringBmp || !g.ringBits) return;
+    memset(g.ringBits, 0, (size_t)g.w * g.h * 4);
+    SelectObject(g.ringDc, g.ringBmp);
+    {
+        gp::Bitmap bm(g.w, g.h, g.w * 4, PixelFormat32bppPARGB, (BYTE*)g.ringBits);
+        gp::Graphics gr(&bm);
+        gr.SetSmoothingMode(gp::SmoothingModeAntiAlias);
+        float R = CornerR() * g.scale;
+        gp::GraphicsPath path;
+        RoundPath(path, 1.f, 1.f, g.w - 2.f, g.h - 2.f, R - 1.f);
+        if (g.hover) {
+            gp::LinearGradientBrush lb(gp::PointF(0, 0), gp::PointF((float)g.w, (float)g.h),
+                                       gp::Color(255, 0x89, 0xB4, 0xFA), gp::Color(255, 0xCB, 0xA6, 0xF7));
+            gp::Pen pen(&lb, 2.f);
+            gr.DrawPath(&pen, &path);
+        } else {
+            gp::Pen pen(gp::Color(255, 0x58, 0x5B, 0x70), 2.f);
+            gr.DrawPath(&pen, &path);
+        }
+        gp::Pen cp(gp::Color(255, 0x45, 0x47, 0x5A), 1.f);
+        for (const RECT& rc : g.cards) {
+            gp::GraphicsPath cpath;
+            RoundPath(cpath, rc.left + 0.5f, rc.top + 0.5f, (float)(rc.right - rc.left - 1), (float)(rc.bottom - rc.top - 1),
+                      S(g, 10));
+            gr.DrawPath(&cp, &cpath);
+        }
+    }
+}
+
+static void PushRing(Glass& g, int dy, BYTE alpha) {
+    if (!g.ring || !g.ringDc) return;
+    POINT pt{g.x, g.y + dy};
+    SIZE sz{g.w, g.h};
+    POINT src{0, 0};
+    BLENDFUNCTION bf{AC_SRC_OVER, 0, alpha, AC_SRC_ALPHA};
+    UpdateLayeredWindow(g.ring, nullptr, &pt, &sz, g.ringDc, &src, 0, &bf, ULW_ALPHA);
+}
+
+static void ApplyFrame(Glass& g, float e) {
+    int inset = (int)lroundf((1.f - e) * 0.05f * (float)std::min(g.w, g.h));
+    int dy = (int)lroundf((1.f - e) * 8.f * g.scale);
+    BYTE alpha = (BYTE)std::clamp((int)lroundf(e * 255.f), 0, 255);
+    float R2 = CornerR() * g.scale * 2.f;
+    for (HWND w : {g.back, g.content}) {
+        SetWindowPos(w, nullptr, g.x, g.y + dy, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        HRGN rgn = CreateRoundRectRgn(inset, inset, g.w - inset + 1, g.h - inset + 1, (int)R2, (int)R2);
+        SetWindowRgn(w, rgn, FALSE);
+    }
+    SetLayeredWindowAttributes(g.content, kKey, alpha, LWA_COLORKEY | LWA_ALPHA);
+    SetWindowPos(g.ring, nullptr, g.x, g.y + dy, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    PushRing(g, dy, alpha);
+}
+
+static void HideAll(Glass& g) {
+    if (g.content) KillTimer(g.content, kTimerAnim);
+    for (HWND w : {g.ring, g.content, g.back})
+        if (w) ShowWindow(w, SW_HIDE);
+    g.shown = false;
+    g.closing = false;
+}
+
+static void SaveNotes();
+static void OnCardClick(int id);
+static void OnNotesClick(int id, int idx);
+
+static void CloseGlass(Glass& g) {
+    if (!g.shown || g.closing) return;
+    if (g.kind == 0) SaveNotes();
+    g.closedTick = GetTickCount64();
+    if (g.kind == 1 && g.content) KillTimer(g.content, kTimerCardClose);
+    int ms = MotionMs(g.motionMsOpen != 0, 120);
+    if (ms <= 0) {
+        HideAll(g);
+        return;
+    }
+    g.closing = true;
+    g.t0 = GetTickCount64();
+    g.ms = ms;
+    SetTimer(g.content, kTimerAnim, 8, nullptr);
+}
+
+static void PaintText(gp::Graphics& gr, const std::wstring& s, const RECT& r, float px, bool bold,
+                      gp::Color col, bool wrap = false, bool center = false, bool vcenter = true) {
+    gp::FontFamily ffNerd(L"FiraCode Nerd Font");
+    gp::FontFamily ffUi(L"Segoe UI");
+    const gp::FontFamily* ffp = ffNerd.IsAvailable() ? &ffNerd : &ffUi;
+    gp::Font font(ffp, px, bold ? gp::FontStyleBold : gp::FontStyleRegular, gp::UnitPixel);
+    gp::StringFormat sf;
+    sf.SetAlignment(center ? gp::StringAlignmentCenter : gp::StringAlignmentNear);
+    sf.SetLineAlignment(vcenter ? gp::StringAlignmentCenter : gp::StringAlignmentNear);
+    sf.SetTrimming(gp::StringTrimmingEllipsisCharacter);
+    if (!wrap) sf.SetFormatFlags(gp::StringFormatFlagsNoWrap);
+    gp::SolidBrush br(col);
+    gr.DrawString(s.c_str(), -1, &font, gp::RectF((float)r.left, (float)r.top, (float)(r.right - r.left), (float)(r.bottom - r.top)),
+                  &sf, &br);
+}
+
+static void FillCard(gp::Graphics& gr, const Glass& g, const RECT& r, gp::Color col, float rad) {
+    gr.SetSmoothingMode(gp::SmoothingModeNone);
+    gp::GraphicsPath p;
+    RoundPath(p, (float)r.left, (float)r.top, (float)(r.right - r.left), (float)(r.bottom - r.top), rad * g.scale);
+    gp::SolidBrush br(col);
+    gr.FillPath(&br, &p);
+    gr.SetSmoothingMode(gp::SmoothingModeAntiAlias);
+}
+
+static void FillRoundAA(gp::Graphics& gr, const RECT& r, float rad, gp::Color col) {
+    gp::GraphicsPath p;
+    RoundPath(p, (float)r.left, (float)r.top, (float)(r.right - r.left), (float)(r.bottom - r.top), rad);
+    gp::SolidBrush br(col);
+    gr.FillPath(&br, &p);
+}
+
+static int OpenCount() {
+    int n = 0;
+    for (auto& t : g_todos)
+        if (!t.done) n++;
+    return n;
+}
+
+static void PaintNotes(gp::Graphics& gr, Glass& g) {
+    Cfg c = Config();
+    NL n = NotesLayout(g);
+    g.hits.clear();
+    g.cards.clear();
+    const gp::Color card(255, 0x31, 0x32, 0x44), field(255, 0x45, 0x47, 0x5A), text(255, 0xCD, 0xD6, 0xF4),
+        dim(255, 0xA6, 0xAD, 0xC8), blue(255, 0x89, 0xB4, 0xFA);
+    FillCard(gr, g, n.hdr, card, 10);
+    FillCard(gr, g, n.notes, card, 10);
+    FillCard(gr, g, n.todo, card, 10);
+    g.cards = {n.hdr, n.notes, n.todo};
+    gr.SetTextRenderingHint(gp::TextRenderingHintClearTypeGridFit);
+    RECT t = n.hdr;
+    t.left += S(g, 14);
+    PaintText(gr, L"Notes and to-do", t, (float)S(g, (float)c.notesFont + 1), true, text);
+    {
+        bool hov = g.hoverHit >= 0 && g.hoverHit < (int)g.hits.size();
+        (void)hov;
+    }
+    // close button
+    g.hits.push_back({n.close, 1, 0});
+    if (g.hoverHit == 0) FillRoundAA(gr, Rc(n.close.left + S(g, 4), n.close.top + S(g, 4), n.close.right - S(g, 4), n.close.bottom - S(g, 4)), (float)S(g, 8), field);
+    {
+        gp::Pen pen(gp::Color(255, 0xA6, 0xAD, 0xC8), 1.6f);
+        int cx = (n.close.left + n.close.right) / 2, cy = (n.close.top + n.close.bottom) / 2, d = S(g, 5);
+        gr.DrawLine(&pen, cx - d, cy - d, cx + d, cy + d);
+        gr.DrawLine(&pen, cx - d, cy + d, cx + d, cy - d);
+    }
+    RECT lab = Rc(n.notes.left + S(g, 14), n.notes.top + S(g, 6), n.notes.right - S(g, 10), n.notes.top + S(g, 28));
+    PaintText(gr, L"Quick notes", lab, (float)S(g, 11), false, dim);
+    wchar_t head[64];
+    swprintf(head, 64, L"To-do   %d open", OpenCount());
+    lab = Rc(n.todo.left + S(g, 14), n.todo.top + S(g, 6), n.todo.right - S(g, 10), n.todo.top + S(g, 28));
+    PaintText(gr, head, lab, (float)S(g, 11), false, dim);
+    FillRoundAA(gr, n.addField, (float)S(g, 8), field);
+    // list rows
+    int rowH = S(g, 30);
+    int visible = std::max(1, (int)((n.list.bottom - n.list.top) / rowH));
+    int total = (int)g_todos.size();
+    g_scroll = std::clamp(g_scroll, 0, std::max(0, total - visible));
+    gr.SetClip(gp::Rect(n.list.left, n.list.top, n.list.right - n.list.left, n.list.bottom - n.list.top));
+    for (int i = 0; i < visible && g_scroll + i < total; ++i) {
+        int idx = g_scroll + i;
+        RECT row = Rc(n.list.left, n.list.top + i * rowH, n.list.right, n.list.top + (i + 1) * rowH);
+        RECT box = Rc(row.left + S(g, 4), row.top + S(g, 7), row.left + S(g, 20), row.top + S(g, 23));
+        RECT del = Rc(row.right - S(g, 28), row.top, row.right, row.bottom);
+        int hitToggle = (int)g.hits.size();
+        g.hits.push_back({Rc(row.left, row.top, row.right - S(g, 28), row.bottom), 2, idx});
+        int hitDel = (int)g.hits.size();
+        g.hits.push_back({del, 3, idx});
+        if (g.hoverHit == hitToggle || g.hoverHit == hitDel)
+            FillRoundAA(gr, Rc(row.left, row.top + 1, row.right, row.bottom - 1), (float)S(g, 6), gp::Color(255, 0x3B, 0x3D, 0x52));
+        const Todo& td = g_todos[idx];
+        if (td.done) {
+            gp::LinearGradientBrush lb(gp::PointF((float)box.left, (float)box.top), gp::PointF((float)box.right, (float)box.bottom),
+                                       gp::Color(255, 0x89, 0xB4, 0xFA), gp::Color(255, 0xCB, 0xA6, 0xF7));
+            gp::GraphicsPath p;
+            RoundPath(p, (float)box.left, (float)box.top, (float)(box.right - box.left), (float)(box.bottom - box.top), (float)S(g, 4));
+            gr.FillPath(&lb, &p);
+            gp::Pen ck(gp::Color(255, 0x18, 0x18, 0x25), 2.f);
+            gr.DrawLine(&ck, (float)(box.left + S(g, 3)), (float)(box.top + S(g, 8)), (float)(box.left + S(g, 7)), (float)(box.top + S(g, 12)));
+            gr.DrawLine(&ck, (float)(box.left + S(g, 7)), (float)(box.top + S(g, 12)), (float)(box.left + S(g, 13)), (float)(box.top + S(g, 4)));
+        } else {
+            gp::Pen bp(gp::Color(255, 0x7F, 0x84, 0x9C), 1.6f);
+            gp::GraphicsPath p;
+            RoundPath(p, box.left + 0.5f, box.top + 0.5f, (float)(box.right - box.left - 1), (float)(box.bottom - box.top - 1), (float)S(g, 4));
+            gr.DrawPath(&bp, &p);
+        }
+        RECT tr = Rc(box.right + S(g, 10), row.top, del.left, row.bottom);
+        PaintText(gr, td.text, tr, (float)S(g, (float)c.notesFont), false, td.done ? gp::Color(255, 0x7F, 0x84, 0x9C) : text);
+        if (td.done) {
+            gp::Pen sp(gp::Color(255, 0x7F, 0x84, 0x9C), 1.f);
+            gp::FontFamily ff(L"FiraCode Nerd Font");
+            gp::Font font(&ff, (float)S(g, (float)c.notesFont), gp::FontStyleRegular, gp::UnitPixel);
+            gp::RectF bound;
+            gp::StringFormat sf(gp::StringFormatFlagsMeasureTrailingSpaces);
+            gr.MeasureString(td.text.c_str(), -1, &font, gp::RectF(0, 0, 4000, 100), &sf, &bound);
+            int mid = (row.top + row.bottom) / 2;
+            int x2 = std::min((int)(tr.left + bound.Width), (int)tr.right);
+            gr.DrawLine(&sp, tr.left, mid, x2, mid);
+        }
+        int cx = (del.left + del.right) / 2, cy = (del.top + del.bottom) / 2, d = S(g, 4);
+        gp::Pen xp(gp::Color(255, 0x7F, 0x84, 0x9C), 1.4f);
+        gr.DrawLine(&xp, cx - d, cy - d, cx + d, cy + d);
+        gr.DrawLine(&xp, cx - d, cy + d, cx + d, cy - d);
+    }
+    gr.ResetClip();
+    if (total == 0) {
+        PaintText(gr, L"Nothing to do. Add the first item above.", n.list, (float)S(g, 12), false, dim, true, true, false);
+    }
+}
+
+static void PaintCard(gp::Graphics& gr, Glass& g) {
+    CL c = CardLayout(g);
+    g.hits.clear();
+    g.cards.clear();
+    const gp::Color card(255, 0x31, 0x32, 0x44), field(255, 0x45, 0x47, 0x5A), text(255, 0xCD, 0xD6, 0xF4);
+    RECT whole = Rc(S(g, 8), S(g, 8), g.w - S(g, 8), g.h - S(g, 8));
+    FillCard(gr, g, whole, card, 10);
+    g.cards = {whole};
+    gr.SetTextRenderingHint(gp::TextRenderingHintClearTypeGridFit);
+    PaintText(gr, g_cardSt.title, c.title, (float)S(g, 15), true, text);
+    PaintText(gr, g_cardSt.body, c.body, (float)S(g, 12), false, gp::Color(255, 0xA6, 0xAD, 0xC8), true, false, false);
+    struct B { RECT r; const std::wstring* s; int id; bool primary; } bs[2] = {{c.a, &g_cardSt.btnA, g_cardSt.idA, true},
+                                                                              {c.b, &g_cardSt.btnB, g_cardSt.idB, false}};
+    for (int i = 0; i < 2; ++i) {
+        if (bs[i].s->empty()) continue;
+        int hi = (int)g.hits.size();
+        g.hits.push_back({bs[i].r, 10, bs[i].id});
+        bool hov = g.hoverHit == hi;
+        if (bs[i].primary) {
+            gp::LinearGradientBrush lb(gp::PointF((float)bs[i].r.left, (float)bs[i].r.top),
+                                       gp::PointF((float)bs[i].r.right, (float)bs[i].r.bottom),
+                                       gp::Color(hov ? 255 : 230, 0x89, 0xB4, 0xFA), gp::Color(hov ? 255 : 230, 0xCB, 0xA6, 0xF7));
+            gp::GraphicsPath p;
+            RoundPath(p, (float)bs[i].r.left, (float)bs[i].r.top, (float)(bs[i].r.right - bs[i].r.left),
+                      (float)(bs[i].r.bottom - bs[i].r.top), (float)S(g, 8));
+            gr.FillPath(&lb, &p);
+            PaintText(gr, *bs[i].s, bs[i].r, (float)S(g, 12), true, gp::Color(255, 0x18, 0x18, 0x25), false, true);
+        } else {
+            FillRoundAA(gr, bs[i].r, (float)S(g, 8), hov ? gp::Color(255, 0x58, 0x5B, 0x70) : field);
+            PaintText(gr, *bs[i].s, bs[i].r, (float)S(g, 12), false, text, false, true);
+        }
+    }
+}
+
+static void PaintContent(HWND hwnd, Glass& g) {
+    PAINTSTRUCT ps;
+    HDC dc = BeginPaint(hwnd, &ps);
+    HDC mem = CreateCompatibleDC(dc);
+    HBITMAP bmp = CreateCompatibleBitmap(dc, g.w, g.h);
+    HGDIOBJ old = SelectObject(mem, bmp);
+    {
+        HBRUSH kb = CreateSolidBrush(kKey);
+        RECT all{0, 0, g.w, g.h};
+        FillRect(mem, &all, kb);
+        DeleteObject(kb);
+        gp::Graphics gr(mem);
+        gr.SetSmoothingMode(gp::SmoothingModeAntiAlias);
+        if (g.kind == 0) PaintNotes(gr, g);
+        else PaintCard(gr, g);
+    }
+    BitBlt(dc, 0, 0, g.w, g.h, mem, 0, 0, SRCCOPY);
+    SelectObject(mem, old);
+    DeleteObject(bmp);
+    DeleteDC(mem);
+    EndPaint(hwnd, &ps);
+}
+
+static int HitAt(const Glass& g, int x, int y) {
+    POINT p{x, y};
+    for (size_t i = 0; i < g.hits.size(); ++i)
+        if (PtInRect(&g.hits[i].r, p)) return (int)i;
+    return -1;
+}
+
+static WNDPROC g_oldEditProc = nullptr;
+static LRESULT CALLBACK EditSub(HWND h, UINT m, WPARAM w, LPARAM l) {
+    if (m == WM_KEYDOWN && w == VK_ESCAPE) {
+        PostMessageW(GetParent(h), WM_W_ESC, 0, 0);
+        return 0;
+    }
+    if (m == WM_KEYDOWN && w == VK_RETURN && (GetWindowLongPtrW(h, GWL_STYLE) & ES_MULTILINE) == 0) {
+        PostMessageW(GetParent(h), WM_W_ENTER, 0, 0);
+        return 0;
+    }
+    if (m == WM_CHAR && (w == VK_RETURN || w == VK_ESCAPE) && (GetWindowLongPtrW(h, GWL_STYLE) & ES_MULTILINE) == 0) return 0;
+    return CallWindowProcW(g_oldEditProc, h, m, w, l);
+}
+
+static std::wstring EditText(HWND ed) {
+    int n = GetWindowTextLengthW(ed);
+    std::wstring s((size_t)n + 1, L'\0');
+    GetWindowTextW(ed, s.data(), n + 1);
+    s.resize((size_t)n);
+    return s;
+}
+
+static void SaveNotes() {
+    if (g_notes.edNote) g_noteText = EditText(g_notes.edNote);
+    ::Wh_SetStringValue(L"wd.notes", g_noteText.c_str());
+    std::wstring all;
+    for (auto& t : g_todos) {
+        all += t.done ? L"D|" : L"O|";
+        all += t.text;
+        all += L"\n";
+    }
+    ::Wh_SetStringValue(L"wd.todos", all.c_str());
+}
+
+static void LoadNotes() {
+    static std::vector<wchar_t> buf(40000);
+    buf[0] = 0;
+    ::Wh_GetStringValue(L"wd.notes", buf.data(), buf.size() - 1);
+    g_noteText = buf.data();
+    buf[0] = 0;
+    ::Wh_GetStringValue(L"wd.todos", buf.data(), buf.size() - 1);
+    g_todos.clear();
+    std::wstring all = buf.data();
+    size_t pos = 0;
+    while (pos < all.size()) {
+        size_t e = all.find(L'\n', pos);
+        if (e == std::wstring::npos) e = all.size();
+        std::wstring line = all.substr(pos, e - pos);
+        pos = e + 1;
+        if (line.size() >= 2 && line[1] == L'|') {
+            Todo t;
+            t.done = line[0] == L'D';
+            t.text = line.substr(2);
+            if (!t.text.empty()) g_todos.push_back(std::move(t));
+        }
+    }
+    wchar_t hb[2048] = {};
+    ::Wh_GetStringValue(L"wd.hideExtra", hb, ARRAYSIZE(hb) - 1);
+    g_hideExtra = hb;
+}
+
+static void PushNotesPill() {
+    Cfg c = Config();
+    std::lock_guard<std::mutex> lk(g_mx);
+    PillState& p = g_pill[kNotes];
+    p.visible = g_started[kNotes];
+    p.glyph = kGlyphs[kNotes];
+    int n = OpenCount();
+    p.text = (c.showCount && n > 0) ? std::to_wstring(n) : L"";
+    p.tip = n > 0 ? L"Notes and to-do: " + std::to_wstring(n) + L" open" : L"Notes and to-do";
+    p.active = false;
+}
+
+static void LayoutEdits(Glass& g) {
+    NL n = NotesLayout(g);
+    MoveWindow(g.edNote, n.noteEd.left, n.noteEd.top, n.noteEd.right - n.noteEd.left, n.noteEd.bottom - n.noteEd.top, TRUE);
+    MoveWindow(g.edAdd, n.addEd.left, n.addEd.top, n.addEd.right - n.addEd.left, n.addEd.bottom - n.addEd.top, TRUE);
+}
+
+static void MakeEdits(Glass& g) {
+    Cfg c = Config();
+    if (g.edFont) DeleteObject(g.edFont);
+    HDC dc = GetDC(nullptr);
+    int px = -MulDiv(c.notesFont, (int)(96 * g.scale), 72);
+    ReleaseDC(nullptr, dc);
+    g.edFont = CreateFontW(px, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"FiraCode Nerd Font");
+    if (!g.edNote) {
+        g.edNote = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN,
+                                   0, 0, 10, 10, g.content, (HMENU)(INT_PTR)101, g_hmod, nullptr);
+        g.edAdd = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL, 0, 0, 10, 10, g.content,
+                                  (HMENU)(INT_PTR)102, g_hmod, nullptr);
+        SetWindowTheme(g.edNote, L"DarkMode_Explorer", nullptr);
+        SetWindowTheme(g.edAdd, L"DarkMode_Explorer", nullptr);
+        WNDPROC old = (WNDPROC)SetWindowLongPtrW(g.edNote, GWLP_WNDPROC, (LONG_PTR)EditSub);
+        SetWindowLongPtrW(g.edAdd, GWLP_WNDPROC, (LONG_PTR)EditSub);
+        g_oldEditProc = old;
+        SendMessageW(g.edAdd, EM_SETCUEBANNER, 0, 0);
+        g.brNote = CreateSolidBrush(RGB(0x31, 0x32, 0x44));
+        g.brAdd = CreateSolidBrush(RGB(0x45, 0x47, 0x5A));
+    }
+    SendMessageW(g.edNote, WM_SETFONT, (WPARAM)g.edFont, TRUE);
+    SendMessageW(g.edAdd, WM_SETFONT, (WPARAM)g.edFont, TRUE);
+}
+
+static LRESULT CALLBACK ContentProc(HWND hwnd, UINT m, WPARAM w, LPARAM l) {
+    if (m == WM_NCCREATE) {
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)((CREATESTRUCTW*)l)->lpCreateParams);
+        return DefWindowProcW(hwnd, m, w, l);
+    }
+    Glass* g = (Glass*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+    if (!g) return DefWindowProcW(hwnd, m, w, l);
+    switch (m) {
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_PAINT:
+            PaintContent(hwnd, *g);
+            return 0;
+        case WM_MOUSEACTIVATE:
+            return g->activatable ? MA_ACTIVATE : MA_NOACTIVATE;
+        case WM_ACTIVATE:
+            if (LOWORD(w) == WA_INACTIVE && g->activatable && g->shown) {
+                HWND now = (HWND)l;
+                if (now != g->content && now != g->back && now != g->ring && !IsChild(g->content, now)) CloseGlass(*g);
+            }
+            return 0;
+        case WM_MOUSEMOVE: {
+            if (!g->hover) {
+                g->hover = true;
+                RebuildRing(*g);
+                PushRing(*g, 0, 255);
+                SetTimer(hwnd, kTimerHover, 120, nullptr);
+            }
+            int hi = HitAt(*g, (short)LOWORD(l), (short)HIWORD(l));
+            if (hi != g->hoverHit) {
+                g->hoverHit = hi;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        }
+        case WM_LBUTTONDOWN: {
+            int hi = HitAt(*g, (short)LOWORD(l), (short)HIWORD(l));
+            if (hi >= 0) {
+                Hit h = g->hits[hi];
+                if (g->kind == 0) OnNotesClick(h.id, h.idx);
+                else OnCardClick(h.idx);
+            }
+            return 0;
+        }
+        case WM_MOUSEWHEEL:
+            if (g->kind == 0) {
+                g_scroll -= (short)HIWORD(w) / WHEEL_DELTA;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_CTLCOLOREDIT: {
+            HDC dc = (HDC)w;
+            SetTextColor(dc, RGB(0xCD, 0xD6, 0xF4));
+            bool isAdd = (HWND)l == g->edAdd;
+            SetBkColor(dc, isAdd ? RGB(0x45, 0x47, 0x5A) : RGB(0x31, 0x32, 0x44));
+            return (LRESULT)(isAdd ? g->brAdd : g->brNote);
+        }
+        case WM_COMMAND:
+            if (LOWORD(w) == 101 && HIWORD(w) == EN_CHANGE) SetTimer(hwnd, kTimerSave, 600, nullptr);
+            return 0;
+        case WM_W_ENTER:
+            if (g->kind == 0) {
+                std::wstring t = EditText(g->edAdd);
+                while (!t.empty() && iswspace(t.back())) t.pop_back();
+                size_t s0 = 0;
+                while (s0 < t.size() && iswspace(t[s0])) s0++;
+                t = t.substr(s0);
+                if (!t.empty()) {
+                    g_todos.insert(g_todos.begin(), Todo{false, t});
+                    SetWindowTextW(g->edAdd, L"");
+                    g_scroll = 0;
+                    SaveNotes();
+                    PushNotesPill();
+                    Push();
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                }
+            }
+            return 0;
+        case WM_W_ESC:
+            CloseGlass(*g);
+            return 0;
+        case WM_TIMER:
+            if (w == kTimerSave) {
+                KillTimer(hwnd, kTimerSave);
+                SaveNotes();
+            } else if (w == kTimerHover) {
+                POINT p;
+                GetCursorPos(&p);
+                RECT r{g->x, g->y, g->x + g->w, g->y + g->h};
+                if (!PtInRect(&r, p)) {
+                    KillTimer(hwnd, kTimerHover);
+                    g->hover = false;
+                    g->hoverHit = -1;
+                    RebuildRing(*g);
+                    PushRing(*g, 0, 255);
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                }
+            } else if (w == kTimerCardClose) {
+                CloseGlass(*g);
+            } else if (w == kTimerAnim) {
+                float t = g->ms > 0 ? (float)(GetTickCount64() - g->t0) / (float)g->ms : 1.f;
+                t = std::clamp(t, 0.f, 1.f);
+                float e = 1.f - (1.f - t) * (1.f - t) * (1.f - t);
+                if (g->closing) {
+                    ApplyFrame(*g, 1.f - e);
+                    if (t >= 1.f) HideAll(*g);
+                } else {
+                    ApplyFrame(*g, e);
+                    if (t >= 1.f) KillTimer(hwnd, kTimerAnim);
+                }
+            }
+            return 0;
+        case WM_NCHITTEST:
+            return HTCLIENT;
+        case WM_CLOSE:
+            CloseGlass(*g);
+            return 0;
+    }
+    return DefWindowProcW(hwnd, m, w, l);
+}
+
+static LRESULT CALLBACK BackProc(HWND hwnd, UINT m, WPARAM w, LPARAM l) {
+    switch (m) {
+        case WM_NCHITTEST:
+            return HTTRANSPARENT;
+        case WM_MOUSEACTIVATE:
+            return MA_NOACTIVATE;
+        case WM_ERASEBKGND:
+            return 1;
+    }
+    return DefWindowProcW(hwnd, m, w, l);
+}
+
+static void EnsureWindows(Glass& g) {
+    if (g.content) return;
+    DWORD exB = WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST;
+    g.back = CreateWindowExW(exB, kBackCls, L"", WS_POPUP, 0, 0, 10, 10, nullptr, nullptr, g_hmod, &g);
+    g.content = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_TOPMOST | (g.activatable ? 0 : WS_EX_NOACTIVATE), kContCls, L"",
+                                WS_POPUP | WS_CLIPCHILDREN, 0, 0, 10, 10, nullptr, nullptr, g_hmod, &g);
+    g.ring = CreateWindowExW(exB | WS_EX_LAYERED | WS_EX_TRANSPARENT, kRingCls, L"", WS_POPUP, 0, 0, 10, 10, nullptr, nullptr, g_hmod, &g);
+    for (HWND w : {g.back, g.content, g.ring}) {
+        if (!w) continue;
+        NoDwmFrame(w);
+        SetWindowTheme(w, L"DarkMode_Explorer", nullptr);
+    }
+    if (g.back) SetAcrylic(g.back);
+    if (g.content) SetLayeredWindowAttributes(g.content, kKey, 255, LWA_COLORKEY | LWA_ALPHA);
+}
+
+static bool AnchorFor(int kind, RECT& out) {
+    std::lock_guard<std::mutex> lk(g_mx);
+    if (g_anchorOk[kind]) {
+        out = g_anchor[kind];
+        return true;
+    }
+    return false;
+}
+
+static void PlaceNear(Glass& g, int kind, int wDip, int hDip) {
+    RECT a{};
+    if (!AnchorFor(kind, a)) {
+        POINT p;
+        GetCursorPos(&p);
+        a = Rc(p.x - 20, p.y - 10, p.x + 20, p.y + 10);
+    }
+    POINT mid{(a.left + a.right) / 2, (a.top + a.bottom) / 2};
+    HMONITOR mon = MonitorFromPoint(mid, MONITOR_DEFAULTTONEAREST);
+    UINT dx = 96, dy = 96;
+    GetDpiForMonitor(mon, MDT_EFFECTIVE_DPI, &dx, &dy);
+    g.scale = dx / 96.f;
+    g.w = S(g, (float)wDip);
+    g.h = S(g, (float)hDip);
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(mon, &mi);
+    RECT wa = mi.rcWork;
+    int gap = S(g, 8);
+    g.x = std::clamp((int)mid.x - g.w / 2, (int)wa.left + gap, std::max((int)wa.left + gap, (int)wa.right - g.w - gap));
+    bool below = mid.y < (mi.rcMonitor.top + mi.rcMonitor.bottom) / 2;
+    g.y = below ? (int)std::max(a.bottom + (LONG)gap, wa.top + (LONG)gap) : (int)(std::min(a.top - (LONG)gap, wa.bottom - (LONG)gap) - g.h);
+    g.y = std::clamp(g.y, (int)wa.top + gap, std::max((int)wa.top + gap, (int)wa.bottom - g.h - gap));
+}
+
+static void OpenGlass(Glass& g, int kind, int wDip, int hDip, bool motionOn) {
+    EnsureWindows(g);
+    if (!g.content) return;
+    PlaceNear(g, kind, wDip, hDip);
+    g.motionMsOpen = motionOn ? 1 : 0;
+    g.hover = false;
+    g.hoverHit = -1;
+    g.closing = false;
+    SetWindowPos(g.back, HWND_TOPMOST, g.x, g.y, g.w, g.h, SWP_NOACTIVATE);
+    SetWindowPos(g.content, HWND_TOPMOST, g.x, g.y, g.w, g.h, SWP_NOACTIVATE);
+    SetWindowPos(g.ring, HWND_TOPMOST, g.x, g.y, g.w, g.h, SWP_NOACTIVATE);
+    if (g.kind == 0) {
+        MakeEdits(g);
+        LayoutEdits(g);
+    }
+    // Card outlines for the ring layer come from a paint pass; run one so they exist.
+    {
+        HDC dc = GetDC(g.content);
+        HDC mem = CreateCompatibleDC(dc);
+        HBITMAP bmp = CreateCompatibleBitmap(dc, g.w, g.h);
+        HGDIOBJ old = SelectObject(mem, bmp);
+        {
+            gp::Graphics gr(mem);
+            gr.SetSmoothingMode(gp::SmoothingModeAntiAlias);
+            if (g.kind == 0) PaintNotes(gr, g);
+            else PaintCard(gr, g);
+        }
+        SelectObject(mem, old);
+        DeleteObject(bmp);
+        DeleteDC(mem);
+        ReleaseDC(g.content, dc);
+    }
+    RebuildRing(g);
+    int ms = MotionMs(motionOn, 160);
+    g.ms = ms;
+    g.t0 = GetTickCount64();
+    ApplyFrame(g, ms > 0 ? 0.f : 1.f);
+    ShowWindow(g.back, SW_SHOWNOACTIVATE);
+    ShowWindow(g.content, g.activatable ? SW_SHOW : SW_SHOWNOACTIVATE);
+    ShowWindow(g.ring, SW_SHOWNOACTIVATE);
+    InvalidateRect(g.content, nullptr, FALSE);
+    g.shown = true;
+    if (ms > 0) SetTimer(g.content, kTimerAnim, 8, nullptr);
+    if (g.activatable) {
+        SetForegroundWindow(g.content);
+        if (g.kind == 0) SetFocus(g.edAdd);
+    }
+}
+
+static LRESULT CALLBACK RingProc(HWND hwnd, UINT m, WPARAM w, LPARAM l) {
+    if (m == WM_NCHITTEST) return HTTRANSPARENT;
+    if (m == WM_MOUSEACTIVATE) return MA_NOACTIVATE;
+    return DefWindowProcW(hwnd, m, w, l);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Focus timer
+// ---------------------------------------------------------------------------------------------
+struct FocusSt {
+    int phase = 0;  // 0 idle, 1 work, 2 break
+    ULONGLONG end = 0;
+    int rounds = 0;
+    bool longBreak = false;
+};
+static FocusSt g_focus;
+
+static void PushFocusPill() {
+    Cfg c = Config();
+    std::lock_guard<std::mutex> lk(g_mx);
+    PillState& p = g_pill[kFocus];
+    p.visible = g_started[kFocus];
+    p.active = g_focus.phase != 0;
+    if (g_focus.phase == 0) {
+        p.glyph = L"\xF252";
+        p.text = L"Focus";
+        p.tip = L"Focus timer: click to start " + std::to_wstring(c.workMin) + L" minutes of work";
+    } else {
+        ULONGLONG now = GetTickCount64();
+        ULONGLONG left = g_focus.end > now ? (g_focus.end - now + 999) / 1000 : 0;
+        wchar_t t[32];
+        swprintf(t, 32, L"%02llu:%02llu", left / 60, left % 60);
+        p.glyph = g_focus.phase == 1 ? L"\xF252" : L"\xF0F4";
+        p.text = std::wstring(g_focus.phase == 2 ? L"Break " : L"") + t;
+        p.tip = g_focus.phase == 1 ? L"Focus session running. Click to stop." : L"Break running. Click to stop.";
+    }
+}
+
+static void Beep() {
+    if (Config().sound) MessageBeep(MB_ICONASTERISK);
+}
+
+static void ShowCard(const std::wstring& title, const std::wstring& body, const std::wstring& a, int ida, const std::wstring& b, int idb,
+                     int autoCloseSec) {
+    Cfg c = Config();
+    g_cardSt = CardSt{title, body, a, b, ida, idb};
+    g_card.kind = 1;
+    g_card.activatable = false;
+    if (g_card.shown) HideAll(g_card);
+    OpenGlass(g_card, kFocus, 340, 150, c.focusMotion);
+    if (g_card.content) SetTimer(g_card.content, kTimerCardClose, (UINT)autoCloseSec * 1000, nullptr);
+}
+
+static void FocusStart() {
+    Cfg c = Config();
+    g_focus.phase = 1;
+    g_focus.end = GetTickCount64() + (ULONGLONG)c.workMin * 60000ull;
+    SetTimer(g_host, kTimerFocus, 1000, nullptr);
+    if (g_card.shown) CloseGlass(g_card);
+    PushFocusPill();
+    Push();
+}
+
+static void FocusStop() {
+    g_focus.phase = 0;
+    KillTimer(g_host, kTimerFocus);
+    if (g_card.shown) CloseGlass(g_card);
+    PushFocusPill();
+    Push();
+}
+
+static void FocusToBreak() {
+    Cfg c = Config();
+    g_focus.rounds++;
+    g_focus.longBreak = (g_focus.rounds % c.longEvery) == 0;
+    int mins = g_focus.longBreak ? c.longMin : c.breakMin;
+    g_focus.phase = 2;
+    g_focus.end = GetTickCount64() + (ULONGLONG)mins * 60000ull;
+    Beep();
+    std::wstring body = g_focus.longBreak ? L"Long break: " + std::to_wstring(mins) + L" minutes. You finished " +
+                                                std::to_wstring(g_focus.rounds) + L" rounds. Step away for a bit."
+                                          : L"Take " + std::to_wstring(mins) + L" minutes. Look away from the screen and stretch.";
+    ShowCard(g_focus.longBreak ? L"Long break time" : L"Break time", body, L"Skip break", 1, L"Close", 3, 20);
+    PushFocusPill();
+    Push();
+}
+
+static void FocusTick() {
+    if (g_focus.phase == 0) {
+        KillTimer(g_host, kTimerFocus);
+        return;
+    }
+    if (GetTickCount64() >= g_focus.end) {
+        if (g_focus.phase == 1) {
+            FocusToBreak();
+        } else {
+            g_focus.phase = 0;
+            KillTimer(g_host, kTimerFocus);
+            Beep();
+            ShowCard(L"Break is over", L"Ready for the next focus session?", L"Start next session", 2, L"Not now", 3, 30);
+            PushFocusPill();
+            Push();
+        }
+        return;
+    }
+    PushFocusPill();
+    Push();
+}
+
+static void OnCardClick(int id) {
+    if (id == 1) {
+        FocusStop();
+        return;
+    }
+    if (id == 2) {
+        FocusStart();
+        return;
+    }
+    CloseGlass(g_card);
+}
+
+static void OnNotesClick(int id, int idx) {
+    if (id == 1) {
+        CloseGlass(g_notes);
+    } else if (id == 2 && idx >= 0 && idx < (int)g_todos.size()) {
+        g_todos[idx].done = !g_todos[idx].done;
+    } else if (id == 3 && idx >= 0 && idx < (int)g_todos.size()) {
+        g_todos.erase(g_todos.begin() + idx);
+    } else {
+        return;
+    }
+    if (id != 1) {
+        SaveNotes();
+        PushNotesPill();
+        Push();
+        InvalidateRect(g_notes.content, nullptr, FALSE);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Active window title
+// ---------------------------------------------------------------------------------------------
+static std::wstring g_lastExe;  // lower-case exe name of the title shown now
+static std::map<std::wstring, std::wstring> g_descCache;
+
+static std::wstring FileDesc(const std::wstring& path) {
+    auto it = g_descCache.find(path);
+    if (it != g_descCache.end()) return it->second;
+    std::wstring out;
+    DWORD dummy = 0;
+    DWORD sz = GetFileVersionInfoSizeW(path.c_str(), &dummy);
+    if (sz) {
+        std::vector<BYTE> buf(sz);
+        if (GetFileVersionInfoW(path.c_str(), 0, sz, buf.data())) {
+            struct LT {
+                WORD l, c;
+            }* tr = nullptr;
+            UINT len = 0;
+            if (VerQueryValueW(buf.data(), L"\\VarFileInfo\\Translation", (LPVOID*)&tr, &len) && len >= 4) {
+                wchar_t sub[96];
+                swprintf(sub, 96, L"\\StringFileInfo\\%04x%04x\\FileDescription", tr[0].l, tr[0].c);
+                wchar_t* v = nullptr;
+                if (VerQueryValueW(buf.data(), sub, (LPVOID*)&v, &len) && v) out = v;
+            }
+        }
+    }
+    g_descCache[path] = out;
+    return out;
+}
+
+static bool ProcPath(DWORD pid, std::wstring& out) {
+    HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!h) return false;
+    wchar_t b[1024];
+    DWORD n = ARRAYSIZE(b);
+    bool ok = QueryFullProcessImageNameW(h, 0, b, &n) != 0;
+    CloseHandle(h);
+    if (ok) out.assign(b, n);
+    return ok;
+}
+
+static bool IconToBgra(HICON ic, std::vector<uint32_t>& out) {
+    gp::Bitmap src(ic);
+    if (src.GetLastStatus() != gp::Ok) return false;
+    gp::Bitmap dst(32, 32, PixelFormat32bppPARGB);
+    {
+        gp::Graphics g(&dst);
+        g.SetInterpolationMode(gp::InterpolationModeHighQualityBicubic);
+        g.Clear(gp::Color(0, 0, 0, 0));
+        g.DrawImage(&src, 0, 0, 32, 32);
+    }
+    gp::BitmapData bd;
+    gp::Rect r(0, 0, 32, 32);
+    if (dst.LockBits(&r, gp::ImageLockModeRead, PixelFormat32bppPARGB, &bd) != gp::Ok) return false;
+    out.assign(32 * 32, 0);
+    for (int y = 0; y < 32; ++y) memcpy(&out[(size_t)y * 32], (BYTE*)bd.Scan0 + (size_t)y * bd.Stride, 32 * 4);
+    dst.UnlockBits(&bd);
+    return true;
+}
+
+static bool HiddenApp(const Cfg& c, const std::wstring& exe) {
+    std::wstring all = c.hide + L"," + g_hideExtra;
+    size_t pos = 0;
+    while (pos <= all.size()) {
+        size_t e = all.find(L',', pos);
+        if (e == std::wstring::npos) e = all.size();
+        std::wstring item = Lower(all.substr(pos, e - pos));
+        pos = e + 1;
+        while (!item.empty() && iswspace(item.back())) item.pop_back();
+        size_t s0 = 0;
+        while (s0 < item.size() && iswspace(item[s0])) s0++;
+        item = item.substr(s0);
+        if (item.empty()) continue;
+        if (item.size() < 4 || item.substr(item.size() - 4) != L".exe") item += L".exe";
+        if (item == exe) return true;
+    }
+    return false;
+}
+
+static void UpdateTitle() {
+    if (!g_started[kTitle]) return;
+    Cfg c = Config();
+    HWND fg = GetForegroundWindow();
+    if (!fg) return;
+    wchar_t cls[96] = {};
+    GetClassNameW(fg, cls, ARRAYSIZE(cls));
+    static const wchar_t* const kSkip[] = {L"Shell_TrayWnd", L"Shell_SecondaryTrayWnd", L"TopLevelWindowForOverflowXamlIsland",
+                                           L"NotifyIconOverflowWindow", L"XamlExplorerHostIslandWindow", L"Windows.UI.Core.CoreWindow",
+                                           kContCls, kBackCls, kRingCls, kHostCls, L"#32768", L"SeamlessTaskbarWallpaperPicker"};
+    for (auto s : kSkip)
+        if (!_wcsicmp(cls, s)) return;
+    bool desktop = !_wcsicmp(cls, L"Progman") || !_wcsicmp(cls, L"WorkerW");
+    wchar_t title[512] = {};
+    GetWindowTextW(fg, title, ARRAYSIZE(title));
+    DWORD pid = 0;
+    GetWindowThreadProcessId(fg, &pid);
+    std::wstring path, exe, name;
+    if (desktop) {
+        name = L"Desktop";
+        exe = L"desktop";
+    } else if (ProcPath(pid, path)) {
+        size_t sl = path.find_last_of(L'\\');
+        exe = Lower(sl == std::wstring::npos ? path : path.substr(sl + 1));
+        name = FileDesc(path);
+        if (name.empty() || exe == L"applicationframehost.exe") {
+            name = title;
+            if (name.empty()) name = exe;
+        }
+    } else {
+        name = title;
+        exe = L"?";
+    }
+    bool hide = HiddenApp(c, exe);
+    std::wstring shown = c.appOnly || !title[0] ? name : std::wstring(title);
+    std::vector<uint32_t> icon;
+    if (!desktop && !hide) {
+        HICON ic = nullptr;
+        DWORD_PTR r = 0;
+        if (SendMessageTimeoutW(fg, WM_GETICON, ICON_BIG, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, 50, &r) && r) ic = (HICON)r;
+        if (!ic) ic = (HICON)GetClassLongPtrW(fg, GCLP_HICON);
+        bool ok = false;
+        if (ic) ok = IconToBgra(ic, icon);
+        if (!ok && !path.empty()) {
+            HICON big = nullptr;
+            if (ExtractIconExW(path.c_str(), 0, &big, nullptr, 1) >= 1 && big) {
+                ok = IconToBgra(big, icon);
+                DestroyIcon(big);
+            }
+        }
+        if (!ok) icon.clear();
+    }
+    g_lastExe = exe;
+    std::lock_guard<std::mutex> lk(g_mx);
+    PillState& p = g_pill[kTitle];
+    bool changed = p.text != shown || p.visible == hide || p.icon != icon;
+    p.visible = !hide;
+    p.glyph = kGlyphs[kTitle];
+    if (!icon.empty()) p.glyph.clear();
+    p.text = shown;
+    p.tip = name;
+    p.maxW = c.maxW;
+    p.active = false;
+    if (p.icon != icon) {
+        p.icon = std::move(icon);
+        p.iconGen++;
+    }
+    if (changed) Push();
+}
+
+static void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD ev, HWND hwnd, LONG idObject, LONG, DWORD, DWORD) {
+    if (!g_host) return;
+    if (ev == EVENT_OBJECT_NAMECHANGE && (idObject != OBJID_WINDOW || hwnd != GetForegroundWindow())) return;
+    PostMessageW(g_host, WM_W_FG, 0, 0);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Clicks and menus (host thread)
+// ---------------------------------------------------------------------------------------------
+static void OpenNotes() {
+    Cfg c = Config();
+    if (g_notes.shown && !g_notes.closing) {
+        CloseGlass(g_notes);
+        return;
+    }
+    if (GetTickCount64() - g_notes.closedTick < 350) return;  // the click that just closed it
+    g_notes.kind = 0;
+    g_notes.activatable = true;
+    OpenGlass(g_notes, kNotes, c.notesW, c.notesH, c.notesMotion);
+    if (g_notes.edNote) SetWindowTextW(g_notes.edNote, g_noteText.c_str());
+    InvalidateRect(g_notes.content, nullptr, FALSE);
+}
+
+static void OnClick(int kind) {
+    if (kind == kFocus) {
+        if (g_focus.phase == 0) FocusStart();
+        else FocusStop();
+    } else if (kind == kNotes) {
+        OpenNotes();
+    }
+}
+
+static bool g_inMenu = false;
+static void OnContext(int kind) {
+    if (g_inMenu) return;
+    std::vector<::stset::SetMenuItem> items;
+    if (kind == kFocus) {
+        items.push_back(::stset::Set_MenuRow(1, L"\xF04B", g_focus.phase == 0 ? L"Start a focus session" : L"Stop the timer"));
+        if (g_focus.phase == 1) items.push_back(::stset::Set_MenuRow(2, L"\xF051", L"Skip to the break"));
+        if (g_focus.phase == 2) items.push_back(::stset::Set_MenuRow(2, L"\xF051", L"Skip the break"));
+        items.push_back(::stset::Set_MenuSep());
+        items.push_back(::stset::Set_MenuRow(9, L"\xF013", L"Focus settings"));
+    } else if (kind == kNotes) {
+        items.push_back(::stset::Set_MenuRow(1, L"\xF249", L"Open notes and to-do"));
+        items.push_back(::stset::Set_MenuRow(2, L"\xF00C", L"Clear finished items", false, std::none_of(g_todos.begin(), g_todos.end(), [](const Todo& t) { return t.done; })));
+        items.push_back(::stset::Set_MenuSep());
+        items.push_back(::stset::Set_MenuRow(9, L"\xF013", L"Notes settings"));
+    } else {
+        if (!g_lastExe.empty() && g_lastExe != L"?" && g_lastExe != L"desktop")
+            items.push_back(::stset::Set_MenuRow(1, L"\xF070", (L"Hide for " + g_lastExe).c_str()));
+        items.push_back(::stset::Set_MenuRow(2, L"\xF06E", L"Show for every app again", false, g_hideExtra.empty()));
+        items.push_back(::stset::Set_MenuSep());
+        items.push_back(::stset::Set_MenuRow(9, L"\xF013", L"Window title settings"));
+    }
+    POINT pt;
+    GetCursorPos(&pt);
+    SetForegroundWindow(g_host);
+    g_inMenu = true;
+    int cmd = ::stset::Set_TrayMenu(g_host, items, &pt);
+    g_inMenu = false;
+    if (cmd == 9) {
+        ::stset::OpenSettingsWindow();
+        return;
+    }
+    if (kind == kFocus) {
+        if (cmd == 1) OnClick(kFocus);
+        else if (cmd == 2) {
+            if (g_focus.phase == 1) FocusToBreak();
+            else if (g_focus.phase == 2) FocusStop();
+        }
+    } else if (kind == kNotes) {
+        if (cmd == 1) OpenNotes();
+        else if (cmd == 2) {
+            g_todos.erase(std::remove_if(g_todos.begin(), g_todos.end(), [](const Todo& t) { return t.done; }), g_todos.end());
+            SaveNotes();
+            PushNotesPill();
+            Push();
+        }
+    } else {
+        if (cmd == 1 && !g_lastExe.empty()) {
+            if (!g_hideExtra.empty()) g_hideExtra += L",";
+            g_hideExtra += g_lastExe;
+            ::Wh_SetStringValue(L"wd.hideExtra", g_hideExtra.c_str());
+            UpdateTitle();
+        } else if (cmd == 2) {
+            g_hideExtra.clear();
+            ::Wh_SetStringValue(L"wd.hideExtra", L"");
+            UpdateTitle();
+        }
+    }
+}
+
+static void ApplyCfg() {
+    PushFocusPill();
+    PushNotesPill();
+    UpdateTitle();
+    Push();
+}
+
+static LRESULT CALLBACK HostProc(HWND h, UINT m, WPARAM w, LPARAM l) {
+    switch (m) {
+        case WM_W_CLICK:
+            OnClick((int)w);
+            return 0;
+        case WM_W_CONTEXT:
+            OnContext((int)w);
+            return 0;
+        case WM_W_FG:
+            SetTimer(h, kTimerTitle, 150, nullptr);
+            return 0;
+        case WM_W_CFG:
+            ApplyCfg();
+            return 0;
+        case WM_TIMER:
+            if (w == kTimerFocus) FocusTick();
+            else if (w == kTimerTitle) {
+                KillTimer(h, kTimerTitle);
+                UpdateTitle();
+            }
+            return 0;
+        case WM_CLOSE:
+            DestroyWindow(h);
+            return 0;
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            return 0;
+    }
+    return DefWindowProcW(h, m, w, l);
+}
+
+static void DestroyGlass(Glass& g) {
+    for (HWND w : {g.ring, g.content, g.back})
+        if (w) DestroyWindow(w);
+    g.ring = g.content = g.back = nullptr;
+    g.edNote = g.edAdd = nullptr;
+    if (g.ringDc) DeleteDC(g.ringDc);
+    if (g.ringBmp) DeleteObject(g.ringBmp);
+    g.ringDc = nullptr;
+    g.ringBmp = nullptr;
+    if (g.edFont) DeleteObject(g.edFont);
+    if (g.brNote) DeleteObject(g.brNote);
+    if (g.brAdd) DeleteObject(g.brAdd);
+    g.edFont = nullptr;
+    g.brNote = g.brAdd = nullptr;
+    g.shown = false;
+}
+
+static DWORD WINAPI HostThread(LPVOID) {
+    SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    gp::GdiplusStartupInput gin;
+    gp::GdiplusStartup(&g_gdipToken, &gin, nullptr);
+    WNDCLASSW wc{};
+    wc.hInstance = g_hmod;
+    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wc.lpfnWndProc = HostProc;
+    wc.lpszClassName = kHostCls;
+    RegisterClassW(&wc);
+    wc.lpfnWndProc = BackProc;
+    wc.lpszClassName = kBackCls;
+    RegisterClassW(&wc);
+    wc.lpfnWndProc = ContentProc;
+    wc.lpszClassName = kContCls;
+    RegisterClassW(&wc);
+    wc.lpfnWndProc = RingProc;
+    wc.lpszClassName = kRingCls;
+    RegisterClassW(&wc);
+    g_notes.kind = 0;
+    g_card.kind = 1;
+    g_card.activatable = false;
+    LoadNotes();
+    g_host = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, kHostCls, L"", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, g_hmod, nullptr);
+    HWINEVENTHOOK h1 = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+    HWINEVENTHOOK h2 = SetWinEventHook(EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_NAMECHANGE, nullptr, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+    if (g_host) PostMessageW(g_host, WM_W_CFG, 0, 0);
+    if (g_host) PostMessageW(g_host, WM_W_FG, 0, 0);
+    SetEvent(g_readyEvent);
+    MSG msg;
+    while (g_host && GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+    if (h1) UnhookWinEvent(h1);
+    if (h2) UnhookWinEvent(h2);
+    DestroyGlass(g_notes);
+    DestroyGlass(g_card);
+    g_host = nullptr;
+    UnregisterClassW(kHostCls, g_hmod);
+    UnregisterClassW(kBackCls, g_hmod);
+    UnregisterClassW(kContCls, g_hmod);
+    UnregisterClassW(kRingCls, g_hmod);
+    gp::GdiplusShutdown(g_gdipToken);
+    return 0;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Entry points (called by Seamless Taskbar's own start, stop and settings code)
+// ---------------------------------------------------------------------------------------------
+static void Teardown() {
+    if (g_stopEvent) SetEvent(g_stopEvent);
+    if (g_keeper) {
+        WaitForSingleObject(g_keeper, 5000);
+        CloseHandle(g_keeper);
+        g_keeper = nullptr;
+    }
+    if (g_host) PostMessageW(g_host, WM_CLOSE, 0, 0);
+    if (g_hostThread) {
+        WaitForSingleObject(g_hostThread, 4000);
+        CloseHandle(g_hostThread);
+        g_hostThread = nullptr;
+    }
+    for (HANDLE* e : {&g_stopEvent, &g_pushEvent, &g_readyEvent})
+        if (*e) {
+            CloseHandle(*e);
+            *e = nullptr;
+        }
+    std::lock_guard<std::mutex> lk(g_mx);
+    for (int k = 0; k < kKinds; ++k) {
+        g_pill[k] = PillState{};
+        g_anchorOk[k] = false;
+    }
+}
+
+inline bool Start(int kind) {
+    std::lock_guard<std::mutex> life(g_lifeMx);
+    if (kind < 0 || kind >= kKinds) return false;
+    {
+        std::lock_guard<std::mutex> lk(g_mx);
+        g_cfg = LoadCfg();
+        g_started[kind] = true;
+    }
+    if (!g_hostThread) {
+        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&Start, &g_hmod);
+        g_stopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        g_pushEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        g_readyEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        g_hostThread = CreateThread(nullptr, 0, HostThread, nullptr, 0, nullptr);
+        if (!g_hostThread) return false;
+        WaitForSingleObject(g_readyEvent, 4000);
+        g_keeper = CreateThread(nullptr, 0, KeeperThread, nullptr, 0, nullptr);
+    } else if (g_host) {
+        PostMessageW(g_host, WM_W_CFG, 0, 0);
+    }
+    return g_host != nullptr;
+}
+
+inline void Stop(int kind) {
+    std::lock_guard<std::mutex> life(g_lifeMx);
+    if (kind < 0 || kind >= kKinds) return;
+    g_started[kind] = false;
+    for (bool s : g_started)
+        if (s) return;
+    Teardown();
+}
+
+inline void SettingsChanged() {
+    {
+        std::lock_guard<std::mutex> lk(g_mx);
+        g_cfg = LoadCfg();
+    }
+    if (g_host) PostMessageW(g_host, WM_W_CFG, 0, 0);
+}
+
+}  // namespace mod_widgetsd
+
+
+////////////////////////////////////////////////////////////////////////////////
 // Entry points: one set for the whole mod, each module runs only when its switch is on.
 
 BOOL Wh_ModInit() {
@@ -99958,6 +101832,18 @@ void Wh_ModAfterInit() {
             if (mod_wallpaper::Start()) st::g_modActive[11] = true;
             else Wh_Log(L"Seamless Taskbar: module wallpaper did not start");
         }
+        if (!st::g_safeMode && st::g_modOn[12]) {
+            if (mod_widgetsd::Start(0)) st::g_modActive[12] = true;
+            else Wh_Log(L"Seamless Taskbar: module focus did not start");
+        }
+        if (!st::g_safeMode && st::g_modOn[13]) {
+            if (mod_widgetsd::Start(1)) st::g_modActive[13] = true;
+            else Wh_Log(L"Seamless Taskbar: module notes did not start");
+        }
+        if (!st::g_safeMode && st::g_modOn[14]) {
+            if (mod_widgetsd::Start(2)) st::g_modActive[14] = true;
+            else Wh_Log(L"Seamless Taskbar: module wintitle did not start");
+        }
         sttray::Start();
         // A switch change reloads the mod; bring back the settings window it closed.
         if (::Wh_GetIntValue(L"st.reopenSettings", 0)) {
@@ -99974,6 +101860,18 @@ void Wh_ModBeforeUninit() {
         if (st::g_modActive[11]) {
             mod_wallpaper::Stop();
             st::g_modActive[11] = false;
+        }
+        if (st::g_modActive[12]) {
+            mod_widgetsd::Stop(0);
+            st::g_modActive[12] = false;
+        }
+        if (st::g_modActive[13]) {
+            mod_widgetsd::Stop(1);
+            st::g_modActive[13] = false;
+        }
+        if (st::g_modActive[14]) {
+            mod_widgetsd::Stop(2);
+            st::g_modActive[14] = false;
         }
         sttray::Stop();
         stset::CloseSettingsWindow();
@@ -100036,6 +101934,7 @@ BOOL Wh_ModSettingsChanged(BOOL* bReload) {
     if (st::g_modActive[4]) mod_tooltips::Wh_ModSettingsChanged();
     if (st::g_modActive[5]) mod_tray::Wh_ModSettingsChanged();
     if (st::g_modActive[6]) mod_ai::Wh_ModSettingsChanged();
+    if (st::g_modActive[12] || st::g_modActive[13] || st::g_modActive[14]) mod_widgetsd::SettingsChanged();
     if (st::g_modActive[11]) mod_wallpaper::SettingsChanged();
     if (st::g_modActive[7]) {
         BOOL reload = FALSE;

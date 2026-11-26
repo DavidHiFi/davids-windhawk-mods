@@ -11,12 +11,16 @@ One command sets it up. From then on it keeps itself, the mods and their presets
 <a href="https://github.com/DavidHiFi/seamless-workshop/releases/latest">
 <img src="https://img.shields.io/badge/%E2%AC%87%EF%B8%8F%20DOWNLOAD%20LATEST%20RELEASE-2EA043?style=for-the-badge&labelColor=161B22" alt="Download the latest release" height="42">
 </a>
+<a href="https://discord.gg/PETWgTfS9x">
+<img src="https://img.shields.io/badge/JOIN%20THE%20DISCORD-5865F2?style=for-the-badge&logo=discord&logoColor=white&labelColor=161B22" alt="Join the Discord server" height="42">
+</a>
 
 <br><br>
 
 <img src="https://img.shields.io/github/v/release/DavidHiFi/seamless-workshop?style=flat-square&label=version&color=8957E5&labelColor=161B22" alt="Latest version">
 <img src="https://img.shields.io/github/downloads/DavidHiFi/seamless-workshop/total?style=flat-square&label=downloads&color=1F6FEB&labelColor=161B22" alt="Total downloads">
 <img src="https://img.shields.io/badge/platform-Windows%2011-DB6D28?style=flat-square&labelColor=161B22" alt="Platform: Windows 11">
+<a href="https://github.com/DavidHiFi/seamless-workshop/releases/latest"><img src="https://img.shields.io/badge/scanned-VirusTotal%20%2B%20SHA--256-394EFF?style=flat-square&logo=virustotal&logoColor=white&labelColor=161B22" alt="Every release file is scanned on VirusTotal and listed with its SHA-256 checksum"></a>
 
 </div>
 
@@ -180,7 +184,7 @@ Window frames, menus, flyouts, Start and the Windows look.
 | <img src="media/previews/seamless-launchpad.png" width="220" alt="Fullscreen Launchpad grid of app icons"> | [Seamless Launchpad](mods/local/seamless-launchpad) | A fullscreen, Launchpad-style grid of all your apps in place of Start, with instant search and blur. |
 | | [Halo Launcher](mods/local/halo-launcher) | Press a key, type a few letters, press Enter: apps, files, sums, web searches and every plugin. |
 | <img src="media/previews/notification-center-styler-plus.png" width="220" alt="Notification panel with a group options menu opening to the left"> | [Notification Center Styler Plus](mods/local/notification-center-styler-plus) | Themes for the notification panel, with gradient hover borders and a group options menu that stays fully in view. |
-| <img src="media/previews/seamless-settings-styler.png" width="220" alt="Windows Settings in Catppuccin Mocha with a folded side menu"> | [Seamless Settings Styler](mods/local/seamless-settings-styler) | Catppuccin Mocha for Settings: glass that matches the title bar, an edge on every card and a side menu that folds to icons. |
+| <img src="media/previews/seamless-settings-styler.png" width="220" alt="Windows Settings in Catppuccin Mocha with a folded side menu"> | [Seamless Settings Styler](mods/local/seamless-settings-styler) | Catppuccin Mocha for Settings: glass that matches the title bar, dark edged cards and buttons, a side menu that folds to icons, and switches to hide pages and ads. |
 | <img src="media/previews/seamless-share.png" width="220" alt="Share window on dark glass with a blue to mauve border"> | [Seamless Share](mods/local/seamless-share) | Restyles the Windows 11 share window and its menus: blurred glass, your font, soft gradient hover edges, all adjustable. |
 | | [Theme Tool Plus](mods/local/theme-tool-plus) | Switch Windows themes from the settings tab, custom themes included. Comes with the Main 01 Catppuccin theme, cursors and sounds. |
 | | [UWP Assets Redirect Plus](mods/local/uwp-assets-redirect-plus) | Swap the icons of Store and system apps, with a built-in Catppuccin icon theme. |
@@ -198,6 +202,7 @@ Things you call up with a key, a click or the tray.
 | | [Seamless Clipboard Manager](mods/local/seamless-clipboard-manager) | Everything you copy, text and images, in a searchable list you open with Win+V. |
 | <img src="media/previews/seamless-download-manager.png" width="220" alt="Download list on dark Mocha glass"> | [Seamless Download Manager](mods/local/seamless-download-manager) | The Windhawk version of [Seamless Download Manager](https://github.com/DavidHiFi/seamless-download-manager): fast split downloads that pick up where they stopped, straight from your browser, from the tray. |
 | <img src="media/previews/seamless-snipper.png" width="220" alt="Seamless Snipper shortcut settings"> | [Seamless Snipper](mods/local/seamless-snipper) | Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it. |
+| <img src="media/previews/seamless-file-unlocker.png" width="220" alt="Seamless File Unlocker listing the program that holds a file"> | [Seamless File Unlocker](mods/local/seamless-file-unlocker) | Right-click anything and ask "What's locking this?": it lists the programs holding a file or folder and lets go of it, moves it or deletes it, or closes the program. Also Ctrl+Shift+U. |
 | <img src="media/previews/seamless-color-picker.png" width="220" alt="Color picker with a screen magnifier"> | [Seamless Color Picker](mods/local/seamless-color-picker) | A full color picker on a hotkey, with a screen magnifier, recent colors and one-click copy. |
 | <img src="media/previews/seamless-dictate.png" width="220" alt="Seamless Dictate settings in Catppuccin Mocha"> | [Seamless Dictate](mods/local/seamless-dictate) | Hold a shortcut and speak to type in any app, with AI cleanup and mic privacy while you talk. |
 | | [ZoomIt](mods/local/zoomit) | Zoom into any part of the screen and draw on it with a hotkey, like Sysinternals ZoomIt. Hold Ctrl to read small text in a big bubble. |
@@ -376,6 +381,7 @@ Most of my mods build on someone else's mod. Each mod's source names its sources
 | **oyrslyng** ([Taskbar Auto-Hide in Context](https://windhawk.net/mods/taskbar-autohide-in-context)) | The idea for the auto-hide switch in Seamless Taskbar Utilities. |
 | **Scott Brogden and the Ditto contributors** ([Ditto](https://github.com/sabrogden/Ditto)) | The clipboard engine Seamless Clipboard Manager is based on (GPL-3.0). |
 | **ShareX** ([ShareX](https://github.com/ShareX/ShareX)) | The color picker in Seamless Color Picker is based on theirs. |
+| **Crystal Rich** ([LockHunter](https://lockhunter.com)) | The idea for Seamless File Unlocker. No code from it is used. |
 | **Mark Russinovich** ([ZoomIt](https://learn.microsoft.com/sysinternals/downloads/zoomit)) | The zoom and draw behavior the ZoomIt mod recreates. |
 | **Math Shamenson** ([Hover Text Magnifier](https://windhawk.net/mods/hover-text-magnifier)) | The base of the hover magnifier in ZoomIt (MIT). |
 | **sidlikesgrapess** ([Pointer Afterimage Motion Blur](https://windhawk.net/mods/pointer-afterimage-motion-blur)) | The base of Pointer Afterimage Plus. |

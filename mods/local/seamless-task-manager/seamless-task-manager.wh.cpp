@@ -22,6 +22,8 @@ Every Task Manager tweak in one mod, each one a switch in the settings, plus the
 Catppuccin Mocha look on Task Manager's menus, flyouts, tooltips, dialogs and
 accent colours.
 
+![Seamless Task Manager preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-task-manager.png)
+
 ## What's new in 1.0.3
 
 - Title bar menus (right-click the title bar, or Alt+Space) now really get the same

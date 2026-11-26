@@ -35,19 +35,6 @@
       }
     },
     {
-      "id": "better-eject-dialog",
-      "name": "Better Eject Dialog",
-      "version": "1.0",
-      "enabled": false,
-      "settings": {
-        "autoEject": 1,
-        "elevatedEndTask": 1,
-        "forceEject": 1,
-        "programButtons": 1,
-        "reportWaitMs": 1500
-      }
-    },
-    {
       "id": "bluetooth-no-sleep",
       "name": "Bluetooth No Sleep",
       "version": "1.0.0",
@@ -181,46 +168,6 @@
       "name": "Common Controls Hook",
       "version": "1.0.2",
       "enabled": true,
-      "settings": {}
-    },
-    {
-      "id": "context-menu-preloader",
-      "name": "Context Menu Preloader",
-      "version": "1.0",
-      "enabled": false,
-      "settings": {
-        "CustomExtensions": "pdf; mp4; mkv; docx; obj; html",
-        "EnableDebug": 0,
-        "StartupDelay": 5
-      }
-    },
-    {
-      "id": "copy-file-contents",
-      "name": "Copy File Contents",
-      "version": "1.4.1",
-      "enabled": false,
-      "settings": {
-        "askHashMB": 256,
-        "contentsKey": "T",
-        "contentsModifiers": "ctrl_shift",
-        "copyContents": 1,
-        "copyHash": 1,
-        "hashKey": "H",
-        "hashModifiers": "ctrl_shift",
-        "hideWhenUncopyable": 1,
-        "hotkeys": 1,
-        "maxSize": 8,
-        "maxSizeUnit": "mb",
-        "offerEditor": 1,
-        "separateEntries": 0,
-        "separateGapMs": 250
-      }
-    },
-    {
-      "id": "copy-queue",
-      "name": "Copy Queue",
-      "version": "1.0",
-      "enabled": false,
       "settings": {}
     },
     {
@@ -380,41 +327,6 @@
       }
     },
     {
-      "id": "explorer-context-menu-custom-items",
-      "name": "Explorer Context Menu Custom Items",
-      "version": "1.0",
-      "enabled": false,
-      "settings": {
-        "items[0].allowFolders": 1,
-        "items[0].command": "",
-        "items[0].extensions": "",
-        "items[0].label": ""
-      }
-    },
-    {
-      "id": "explorer-core-context-menu-customizer",
-      "name": "Explorer Core Context Menu Customizer",
-      "version": "1.0.0",
-      "enabled": false,
-      "settings": {
-        "delete.customText": "",
-        "delete.enabled": 1,
-        "delete.iconPath": "imageres.dll,-54",
-        "open.customText": "",
-        "open.enabled": 1,
-        "open.iconPath": "imageres.dll,-185",
-        "properties.customText": "",
-        "properties.enabled": 1,
-        "properties.iconPath": "imageres.dll,-114",
-        "rename.customText": "Rename: '%file%'",
-        "rename.enabled": 1,
-        "rename.iconPath": "shell32.dll,-16763",
-        "runAs.customText": "",
-        "runAs.enabled": 1,
-        "runAs.iconPath": ""
-      }
-    },
-    {
       "id": "explorer-details-better-file-sizes",
       "name": "Better file sizes in Explorer details",
       "version": "1.6",
@@ -425,124 +337,6 @@
         "sortSizesMixFolders": 1,
         "useIecTerms": 0
       }
-    },
-    {
-      "id": "explorer-double-click-up",
-      "name": "Explorer Double Click Up",
-      "version": "1.0.1",
-      "enabled": false,
-      "settings": {}
-    },
-    {
-      "id": "explorer-double-f2-rename-extension",
-      "name": "Select filename extension on double F2",
-      "version": "4",
-      "enabled": false,
-      "settings": {
-        "ContinuousLoop": 1,
-        "DoubleF2MilliSeconds": 1000,
-        "ReverseCycle": 0
-      }
-    },
-    {
-      "id": "explorer-fast-navigation",
-      "name": "Explorer Fast Navigation",
-      "version": "1.1.0",
-      "enabled": false,
-      "settings": {
-        "classicRibbon": 1,
-        "groupedFolderBatching": 1,
-        "navigationBar": 1,
-        "navigationPaint": 1,
-        "safetyCeilingMs": 2000,
-        "xamlCommandBar": 1
-      }
-    },
-    {
-      "id": "explorer-glyphs-colorizer",
-      "name": "Explorer Glyphs Colorizer",
-      "version": "1.0",
-      "enabled": false,
-      "settings": {
-        "colorMode": "accent",
-        "customColor": "##cba6f7"
-      }
-    },
-    {
-      "id": "explorer-hide-focus-border",
-      "name": "File Explorer Focus Border Remover",
-      "version": "1.0.0",
-      "enabled": false,
-      "settings": {}
-    },
-    {
-      "id": "explorer-home-button",
-      "name": "File Explorer Address Bar Home Button",
-      "version": "1.0.3",
-      "enabled": false,
-      "settings": {
-        "iconGlyph": "home",
-        "placement": "after",
-        "targetLocation": "shell:MyComputerFolder",
-        "tooltip": "This PC"
-      }
-    },
-    {
-      "id": "explorer-item-pins",
-      "name": "Explorer Item Pins",
-      "version": "1.1.7",
-      "enabled": false,
-      "settings": {
-        "commandBar": 1,
-        "contextMenu": 1,
-        "display.commandBar": 1,
-        "display.contextMenu": 1,
-        "display.pinIndicator": 1,
-        "pinIndicator": 1
-      }
-    },
-    {
-      "id": "explorer-no-min-size",
-      "name": "Explorer No Minimum Window Size",
-      "version": "1.0.0",
-      "enabled": false,
-      "settings": {}
-    },
-    {
-      "id": "explorer-real-folder-paths",
-      "name": "Explorer real folder paths",
-      "version": "0.1.5",
-      "enabled": false,
-      "settings": {}
-    },
-    {
-      "id": "explorer-status-metadata",
-      "name": "Explorer Status Bar Metadata",
-      "version": "1.4.0",
-      "enabled": false,
-      "settings": {
-        "allowNetworkDrives": 1,
-        "allowRemovableDrives": 1,
-        "cacheEvictCount": 10
-      }
-    },
-    {
-      "id": "explorer-treeline-killer",
-      "name": "Explorer TreeLine Killer",
-      "version": "1.0.1",
-      "enabled": false,
-      "settings": {
-        "hideSystemSeparatorLines": 1,
-        "removeLowerGap": 1,
-        "removeUpperGap": 1
-      }
-    },
-    {
-      "id": "extension-change-no-warning",
-      "name": "Turn off change file extension warning",
-      "version": "1.0.1",
-      "enabled": false,
-      "settings": {}
     },
     {
       "id": "f1-blocker",
@@ -559,48 +353,6 @@
       "settings": {
         "RepeatMultiplier": 2
       }
-    },
-    {
-      "id": "file-explorer-remove-suffixes",
-      "name": "Remove Taskbar Window Suffixes",
-      "version": "1.1.1",
-      "enabled": false,
-      "settings": {
-        "suffixRemovalMode": "universal",
-        "suffixRules[0].processIdentifier": "",
-        "suffixRules[0].replace": "",
-        "suffixRules[0].search": ""
-      }
-    },
-    {
-      "id": "file-explorer-reopen-closed-tab",
-      "name": "File Explorer Reopen Closed Tab",
-      "version": "1.0.0",
-      "enabled": false,
-      "settings": {}
-    },
-    {
-      "id": "file-type-properties-customization",
-      "name": "File Type Properties Customization",
-      "version": "1.0.0",
-      "enabled": false,
-      "settings": {
-        "enableDescriptions": 1,
-        "enableIcons": 1,
-        "iniPath": "%USERPROFILE%\\FileTypeProperties\\properties.ini",
-        "properties[0].description": "",
-        "properties[0].extensions": "",
-        "properties[0].icon": "",
-        "refreshExplorer": 0,
-        "useIni": 0
-      }
-    },
-    {
-      "id": "fix-explorer-row-right-click",
-      "name": "Fix Explorer Row Right-Click",
-      "version": "1.0.0",
-      "enabled": false,
-      "settings": {}
     },
     {
       "id": "fix-missing-taskbar-icons",
@@ -672,13 +424,6 @@
       }
     },
     {
-      "id": "harmful-files-autoaccept",
-      "name": "Skip harmful files confirmation",
-      "version": "0.3.0",
-      "enabled": false,
-      "settings": {}
-    },
-    {
       "id": "hide-start-button",
       "name": "Hide Start Button",
       "version": "1.0",
@@ -689,7 +434,7 @@
       "id": "icon-customizer",
       "name": "Icon Customizer",
       "version": "0.1",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "APPLICATION": "C:\\ProgramData\\Windhawk\\Engine\\ModsWritable\\mod-storage\\icon-customizer\\Catppuccin\\application.ico",
         "AUDIOFILES": "C:\\ProgramData\\Windhawk\\Engine\\ModsWritable\\mod-storage\\icon-customizer\\Catppuccin\\audiofiles.ico",
@@ -789,7 +534,7 @@
       "id": "icon-resource-redirect",
       "name": "Resource Redirect",
       "version": "1.3",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "allResourceRedirect": 1,
         "disableThumbnails": 0,
@@ -808,13 +553,6 @@
           "Ableton*.exe"
         ]
       }
-    },
-    {
-      "id": "lm-mediakey-explorer-fix",
-      "name": "Play-Media-Key fix in Explorer",
-      "version": "1.1",
-      "enabled": false,
-      "settings": {}
     },
     {
       "id": "minimize-to-tray",
@@ -1044,106 +782,6 @@
       }
     },
     {
-      "id": "remove-context-menu-items",
-      "name": "Remove Context Menu Items",
-      "version": "1.14.0",
-      "enabled": false,
-      "settings": {
-        "appSpecificItems.removeAddToMediaPlayerQueue": 1,
-        "appSpecificItems.removeAlwaysKeepOnThisDevice": 1,
-        "appSpecificItems.removeEditInNotepad": 1,
-        "appSpecificItems.removeEditInNotepadPlusPlus": 0,
-        "appSpecificItems.removeEditWithPaint": 1,
-        "appSpecificItems.removeEditWithPhotos": 1,
-        "appSpecificItems.removeFreeUpSpace": 1,
-        "appSpecificItems.removeNvidiaApp": 0,
-        "appSpecificItems.removeNvidiaControlPanel": 1,
-        "appSpecificItems.removeOpenInTerminal": 1,
-        "appSpecificItems.removePlayWithMediaPlayer": 1,
-        "appSpecificItems.removeSendWithQuickShare": 1,
-        "appSpecificItems.removeVLCPlay": 0,
-        "appSpecificItems.removeVLCPlaylist": 1,
-        "appSpecificItems.removeWinRAR": 0,
-        "basicItems.removeCast": 1,
-        "basicItems.removeCopy": 0,
-        "basicItems.removeCopyAsPath": 0,
-        "basicItems.removeCreateShortcut": 0,
-        "basicItems.removeCustomizeFolder": 1,
-        "basicItems.removeCut": 0,
-        "basicItems.removeDelete": 0,
-        "basicItems.removeDisplaySettings": 1,
-        "basicItems.removeEdit": 1,
-        "basicItems.removeExtractAll": 1,
-        "basicItems.removeFavorites": 1,
-        "basicItems.removeGiveAccess": 1,
-        "basicItems.removeGroupBy": 0,
-        "basicItems.removeIncludeInLibrary": 1,
-        "basicItems.removeNew": 0,
-        "basicItems.removeOpen": 0,
-        "basicItems.removeOpenInNewTab": 1,
-        "basicItems.removeOpenInNewWindow": 1,
-        "basicItems.removeOpenWith": 0,
-        "basicItems.removePaste": 1,
-        "basicItems.removePersonalize": 1,
-        "basicItems.removePinToQuickAccess": 0,
-        "basicItems.removePinToStart": 1,
-        "basicItems.removePlay": 1,
-        "basicItems.removePreview": 1,
-        "basicItems.removePrint": 1,
-        "basicItems.removeProperties": 0,
-        "basicItems.removeRefresh": 1,
-        "basicItems.removeRename": 0,
-        "basicItems.removeRestoreVersions": 1,
-        "basicItems.removeRotate": 1,
-        "basicItems.removeSendTo": 0,
-        "basicItems.removeSetAsDesktopBackground": 1,
-        "basicItems.removeShare": 1,
-        "basicItems.removeSortBy": 0,
-        "basicItems.removeView": 0,
-        "bloatwareItems.removeClipchamp": 1,
-        "bloatwareItems.removeCopilot": 1,
-        "bloatwareItems.removeDefender": 1,
-        "bloatwareItems.removeDesigner": 1,
-        "bloatwareItems.removeMicrosoft365Copilot": 1,
-        "bloatwareItems.removeOneDrive": 1,
-        "customItems[0]": "Troubleshoot compatibility",
-        "customItems[1]": "Send with Tailscale...",
-        "extensionFiltering.enableExtensionFiltering": 0,
-        "extensionFiltering.enableWinRARFiltering": 0,
-        "extensionFiltering.notepadExtensions[0]": ".txt",
-        "extensionFiltering.notepadExtensions[10]": ".sql",
-        "extensionFiltering.notepadExtensions[11]": ".yaml",
-        "extensionFiltering.notepadExtensions[12]": ".yml",
-        "extensionFiltering.notepadExtensions[13]": ".py",
-        "extensionFiltering.notepadExtensions[14]": ".java",
-        "extensionFiltering.notepadExtensions[15]": ".c",
-        "extensionFiltering.notepadExtensions[16]": ".cpp",
-        "extensionFiltering.notepadExtensions[17]": ".cs",
-        "extensionFiltering.notepadExtensions[1]": ".log",
-        "extensionFiltering.notepadExtensions[2]": ".json",
-        "extensionFiltering.notepadExtensions[3]": ".xml",
-        "extensionFiltering.notepadExtensions[4]": ".html",
-        "extensionFiltering.notepadExtensions[5]": ".css",
-        "extensionFiltering.notepadExtensions[6]": ".js",
-        "extensionFiltering.notepadExtensions[7]": ".ts",
-        "extensionFiltering.notepadExtensions[8]": ".md",
-        "extensionFiltering.notepadExtensions[9]": ".csv",
-        "extensionFiltering.winrarExtensions[0]": ".zip",
-        "extensionFiltering.winrarExtensions[10]": ".cab",
-        "extensionFiltering.winrarExtensions[1]": ".rar",
-        "extensionFiltering.winrarExtensions[2]": ".7z",
-        "extensionFiltering.winrarExtensions[3]": ".iso",
-        "extensionFiltering.winrarExtensions[4]": ".tar",
-        "extensionFiltering.winrarExtensions[5]": ".gzip",
-        "extensionFiltering.winrarExtensions[6]": ".xz",
-        "extensionFiltering.winrarExtensions[7]": ".zst",
-        "extensionFiltering.winrarExtensions[8]": ".cab",
-        "extensionFiltering.winrarExtensions[9]": ".zst",
-        "modifierKeyOverride.enableModifierOverride": 1,
-        "modifierKeyOverride.overrideKey": "ctrl"
-      }
-    },
-    {
       "id": "remove-fullscreen-popup-chrome",
       "name": "Remove \"Exit Fullscreen\" popup in Chrome",
       "version": "1.3",
@@ -1164,16 +802,6 @@
           "VBAudioMatrix*.exe",
           "Ableton*.exe"
         ]
-      }
-    },
-    {
-      "id": "restore-folder-menubar-25h2",
-      "name": "ExplorerFrame and menubar fixes fork",
-      "version": "4.2",
-      "enabled": false,
-      "settings": {
-        "ControlPanelColorFix": 1,
-        "DisplayMenuBar": 1
       }
     },
     {

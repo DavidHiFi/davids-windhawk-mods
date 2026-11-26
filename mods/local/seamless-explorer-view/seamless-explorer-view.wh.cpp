@@ -2,7 +2,7 @@
 // @id              seamless-explorer-view
 // @name            Seamless Explorer View
 // @description     GPU-accelerated Explorer views with smooth scrolling and right-click submenus that populate fully
-// @version         2.0.13
+// @version         2.0.14
 // @author          DavidHiFi, DarkionAvey, crazyboyybs, Languster, valinet
 // @include         explorer.exe
 // @architecture    x86-64
@@ -23,6 +23,11 @@ menu, such as NanaZip's archive actions, open fully populated instead of an
 empty box.
 
 ![Seamless Explorer View preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-explorer-view.png)
+
+## What's new in 2.0.14
+
+- The files area keeps up while you drag the side list open or shut, instead of
+  redrawing its text on every step.
 
 ## What's new in 2.0.12
 
@@ -882,6 +887,7 @@ constexpr UINT_PTR kTypeSearchTimerId = 105;
 constexpr UINT_PTR kZoomAutoRefitTimerId = 106;
 constexpr UINT_PTR kNativeModeRetryTimerId = 107;
 constexpr UINT_PTR kPageAnimPinTimerId = 108;
+constexpr UINT_PTR kFoldSettleTimerId = 1109;
 // Input batching only: expiry never substitutes for gesture/animation/data completion.
 constexpr UINT kZoomAutoRefitDebounceMs = 200;
 constexpr UINT kMsgDispose = WM_APP + 31;
@@ -1041,6 +1047,16 @@ constexpr unsigned kColumnWiggleRequiredReversals = 5;
 constexpr unsigned kColumnWiggleWindowDoubleClickIntervals = 4;
 
 std::atomic<bool> g_unloading{false};
+// Side list fold running (set by the overlay WM_SIZE while the styler's
+// heartbeat property is fresh). The presenter lane reads it to resize its
+// backbuffer grow-only until the fold ends.
+std::atomic<ULONGLONG> g_foldUntil{0};
+bool FoldRunning(HWND hwnd) {
+    const HWND root = GetAncestor(hwnd, GA_ROOT);
+    const HANDLE beat = root ? GetPropW(root, L"WhNavDockFolding") : nullptr;
+    return beat && static_cast<LONG>(GetTickCount() -
+        static_cast<DWORD>(reinterpret_cast<UINT_PTR>(beat))) < 250;
+}
 std::atomic<int> g_row96{32};
 std::atomic<int> g_fontPercent{52}; // List/Details; keep the existing settings key.
 std::atomic<int> g_gridFontPercent{42};
@@ -3538,6 +3554,7 @@ struct ViewState {
     unsigned graphicsOperations = 0; // Native/COM dispatch can reenter any graphics scope.
     ULONGLONG lastGpuMemoryLog = 0;
     bool resizeDeferred = false;
+    bool foldResizePending = false;
     bool hardwareTarget = false;
     int wheelRemainder = 0;
     ULONGLONG lastRefresh = 0;
@@ -13157,6 +13174,15 @@ bool ResizeTarget(ViewState& state, UINT width, UINT height) {
     if (width == 0 || height == 0) return true;
     const auto current = state.backbuffer ? state.backbuffer->GetPixelSize() : D2D1_SIZE_U{};
     if (current.width == width && current.height == height) return true;
+    if (current.width && current.height &&
+        GetTickCount64() < g_foldUntil.load(std::memory_order_relaxed)) {
+        // Side list fold: a bigger backbuffer is only clipped by the window, so
+        // keep it; when it must grow, grow with slack. The exact size follows
+        // once, after the fold.
+        if (current.width >= width && current.height >= height &&
+            current.width <= width + 2048 && current.height <= height + 2048) return true;
+        width += 256;
+    }
     // Shell view replacement/top-order repairs can send WM_SIZE during a
     // mode reversal. The swap chain still contains the last ordinary frame,
     // with its old header offset. Keep the committed scene until Paint has
@@ -24688,6 +24714,22 @@ LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             NavigateCurrentShellTab(*s, wParam != 0);
         return 0;
     case WM_TIMER:
+        if (wParam == kFoldSettleTimerId) {
+            if (!s || g_unloading.load() || !s->foldResizePending) {
+                KillTimer(hwnd, kFoldSettleTimerId);
+                return 0;
+            }
+            if (FoldRunning(hwnd)) {
+                g_foldUntil.store(GetTickCount64() + 250, std::memory_order_relaxed);
+                return 0;
+            }
+            KillTimer(hwnd, kFoldSettleTimerId);
+            RECT settled{};
+            GetClientRect(hwnd, &settled);
+            SendMessageW(hwnd, WM_SIZE, SIZE_RESTORED,
+                MAKELPARAM(settled.right, settled.bottom));
+            return 0;
+        }
         if (wParam == kPageAnimPinTimerId) {
             KillTimer(hwnd, kPageAnimPinTimerId);
             if (s && !g_unloading.load()) PageAnimPin(*s);
@@ -25123,6 +25165,34 @@ LRESULT CALLBACK OverlayProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         if (s) {
             if (IsIconic(s->frameHwnd)) { s->resizeDeferred = true; return 0; }
             TabTraceSlowScope sizeTrace(L"overlay WM_SIZE/ResizeTarget", hwnd);
+            if (FoldRunning(hwnd)) {
+                // Side list fold: follow the pane, nothing more. The rest runs
+                // once from the settle timer when the fold is over.
+                g_foldUntil.store(GetTickCount64() + 250, std::memory_order_relaxed);
+                if (!s->foldResizePending) {
+                    s->foldResizePending = true;
+                    SetTimer(hwnd, kFoldSettleTimerId, 100, nullptr);
+                }
+                CancelColumnDrag(*s);
+                s->columnFitPendingEpoch = 0;
+                StopHoverAnimation(*s);
+                StopKeyboardSelectionAnimation(*s);
+                StopRowTransition(*s);
+                UpdateMetrics(*s);
+                UpdateColumns(*s);
+                ResizeTarget(*s,
+                    static_cast<UINT>(std::max(1, static_cast<int>(LOWORD(lParam)))),
+                    static_cast<UINT>(std::max(1, static_cast<int>(HIWORD(lParam)))));
+                ClampScroll(*s);
+                RepositionRenameEdit(*s);
+                Redraw(*s);
+                return 0;
+            }
+            if (s->foldResizePending) {
+                s->foldResizePending = false;
+                KillTimer(hwnd, kFoldSettleTimerId);
+                g_foldUntil.store(0, std::memory_order_relaxed);
+            }
             // Resizing the GPU viewport does not change Shell item identities.
             // The old bar-only decoration used native row positions here;
             // elastic GPU bars now derive their X bounds from columns directly.
