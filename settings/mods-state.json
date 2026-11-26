@@ -1362,7 +1362,7 @@
     "include": "chrome.exe|brave.exe|msedge.exe|vivaldi.exe|thorium.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.0"
+    "version": "1.0.1"
   },
   "local@seamless-fps-capper": {
     "disabled": false,
