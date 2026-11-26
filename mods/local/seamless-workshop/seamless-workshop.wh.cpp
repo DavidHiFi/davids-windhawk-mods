@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.5.11
+// @version         1.5.12
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -35,6 +35,10 @@ Needs the latest Windhawk alpha.
 - Use DavidHiFi's settings for one mod, or copy his whole setup in one go:
   every mod he runs, with or without his settings, on a clean slate if you
   like. Your current mods are backed up first, so you can always go back.
+
+## What's new in 1.5.12
+
+- Warns that Windhawk mods can break the desktop and recommends installing and checking them one at a time.
 
 ## What's new in 1.5.8
 
@@ -5020,7 +5024,7 @@ static std::wstring Hub_PageIntro(SetWindow& w) {
         size_t on = 0;
         for (const auto& m : g_hub.mods) on += m.enabled;
         return std::to_wstring(g_hub.mods.size()) + L" mods installed in Windhawk, " + std::to_wstring(on) +
-               L" turned on. A switch works at once; click a mod for its settings.";
+               L" turned on. Mods can affect Windows. Install and check one at a time; a faulty mod can break the desktop. Click a mod for its settings.";
     }
     return kSetPages[w.page].intro;
 }
@@ -6745,7 +6749,8 @@ static void Hub_FullSetupItems(SetWindow& w, float& y, bool page) {
                      L"It takes 15 to 30 minutes. After that his changes arrive by themselves.");
     const bool armed = g_fullArmed && GetTickCount64() - g_fullArmed < 5000;
     Hub_AddLink(w, y, armed ? L"Are you sure? Click again to copy" : L"Copy DavidHiFi's configuration",
-                armed ? L"This replaces the mods and settings you have now." : L"Replaces the mods and settings you have now with his.",
+                armed ? L"This installs many mods at once. A faulty mod can break the desktop. We recommend adding and checking one mod at a time."
+                      : L"Copies many mods at once. We recommend installing one mod, checking Windows, then adding the next. A faulty mod can break the desktop.",
                 L"hub:fullSetup");
 }
 
