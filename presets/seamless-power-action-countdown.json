@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@seamless-power-action-countdown",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "font.fontFamily": "FiraCode Nerd Font",
         "font.fontWeight": "medium",

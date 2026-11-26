@@ -7,7 +7,7 @@
       "settings": {
         "allowOnPublicNetworks": 0,
         "animationSpeed": "global",
-        "autoAllowConnections": 0,
+        "autoAllowConnections": 1,
         "autoBlockedApps[0].appPath": "",
         "autoBlockedApps[0].direction": "fully_offline",
         "autoBlockedApps[0].includeChildProcesses": 1,

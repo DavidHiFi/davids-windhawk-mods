@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@seamless-icons",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "appIcons.ableton": 1,
         "appIcons.enabled": 1,

@@ -1,11 +1,11 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T22:04:10+08:00",
+  "generatedAt": "2026-11-26T22:04:32+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 130,
-    "enabled": 118,
+    "enabled": 117,
     "local": 61
   },
   "mods": [
@@ -641,7 +641,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/recycle-bin-tray-plus/recycle-bin-tray-plus.wh.cpp",
-      "enabled": false,
+      "enabled": true,
       "category": "Taskbar"
     },
     {
@@ -702,7 +702,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-autoclicker/seamless-autoclicker.wh.cpp",
-      "enabled": true,
+      "enabled": false,
       "category": "Tools"
     },
     {
@@ -766,7 +766,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-color-picker/seamless-color-picker.wh.cpp",
-      "enabled": true,
+      "enabled": false,
       "category": "Tools"
     },
     {
@@ -954,7 +954,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-icons/seamless-icons.wh.cpp",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "local@seamless-key-click",
@@ -992,7 +992,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-power-action-countdown/seamless-power-action-countdown.wh.cpp",
-      "enabled": true,
+      "enabled": false,
       "category": "Windows and menus"
     },
     {
@@ -1280,7 +1280,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/startup-control/startup-control.wh.cpp",
-      "enabled": false,
+      "enabled": true,
       "category": "Tools"
     },
     {
@@ -1583,7 +1583,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/wintips-osd-plus/wintips-osd-plus.wh.cpp",
-      "enabled": true,
+      "enabled": false,
       "category": "Windows and menus"
     },
     {

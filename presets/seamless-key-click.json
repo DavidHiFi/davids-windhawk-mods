@@ -45,7 +45,7 @@
         "settingsTrayIcon": 1,
         "sideButtons": 1,
         "silentApps": "",
-        "soundsOn": 1,
+        "soundsOn": 0,
         "toggleCue": 1,
         "toggleHotkey": "Ctrl+Alt+Shift+K",
         "volume": 70,

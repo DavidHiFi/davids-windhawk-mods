@@ -29,6 +29,7 @@
         "apps.StartRevealed": 1,
         "apps.moduleOn": 1,
         "clock.accentColor": "#89B4FA",
+        "clock.accentColor2": "#CBA6F7",
         "clock.alignment": "center",
         "clock.cursor": "hidden",
         "clock.fontFamily": "FiraCode Nerd Font",
@@ -447,7 +448,7 @@
         "wintitle.display": "title",
         "wintitle.hideApps": "",
         "wintitle.maxWidth": 220,
-        "wintitle.moduleOn": 1
+        "wintitle.moduleOn": 0
       }
     }
   ]

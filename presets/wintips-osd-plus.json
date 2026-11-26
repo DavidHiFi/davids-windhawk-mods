@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@wintips-osd-plus",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "accentColor": "#89B4FA",
         "accentColor2": "#CBA6F7",

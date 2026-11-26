@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@seamless-autoclicker",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "activatorButton": "gshift",
         "clickIntervalMs": 33,

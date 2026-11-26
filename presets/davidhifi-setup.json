@@ -164,20 +164,6 @@
       }
     },
     {
-      "id": "local@mocha-app-icons",
-      "enabled": true,
-      "settings": {
-        "ableton": 1,
-        "settings": 1,
-        "shortcutIcons": 1,
-        "steam": 1,
-        "trayIcon": 1,
-        "windowIcons": 1,
-        "yapfast": 1,
-        "zen": 1
-      }
-    },
-    {
       "id": "local@network-speedtest-plus",
       "enabled": true,
       "settings": {
@@ -1085,7 +1071,7 @@
     },
     {
       "id": "local@recycle-bin-tray-plus",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "actions.confirmEmpty": 0,
         "actions.doubleClick": "open",
@@ -1111,15 +1097,8 @@
       }
     },
     {
-      "id": "local@remove-shortcut-arrows",
-      "enabled": true,
-      "settings": {
-        "custom_icon_path": ""
-      }
-    },
-    {
       "id": "local@seamless-autoclicker",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "activatorButton": "gshift",
         "clickIntervalMs": 33,
@@ -1305,7 +1284,7 @@
     },
     {
       "id": "local@seamless-color-picker",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "Copying.closeAfterCopy": 0,
         "Copying.copyFormat": "hex",
@@ -2892,7 +2871,7 @@
         "orderName": 1,
         "orderProcessor": 3,
         "orderVram": 2,
-        "panels": "cards",
+        "panels": "one",
         "preset": "benchmark",
         "presetHotkey": "",
         "ram": 1,
@@ -2941,7 +2920,7 @@
     },
     {
       "id": "local@seamless-icons",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "appIcons.ableton": 1,
         "appIcons.enabled": 1,
@@ -3112,7 +3091,7 @@
         "settingsTrayIcon": 1,
         "sideButtons": 1,
         "silentApps": "",
-        "soundsOn": 1,
+        "soundsOn": 0,
         "toggleCue": 1,
         "toggleHotkey": "Ctrl+Alt+Shift+K",
         "volume": 70,
@@ -3165,7 +3144,7 @@
     },
     {
       "id": "local@seamless-power-action-countdown",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "font.fontFamily": "FiraCode Nerd Font",
         "font.fontWeight": "medium",
@@ -3543,6 +3522,7 @@
         "apps.StartRevealed": 1,
         "apps.moduleOn": 1,
         "clock.accentColor": "#89B4FA",
+        "clock.accentColor2": "#CBA6F7",
         "clock.alignment": "center",
         "clock.cursor": "hidden",
         "clock.fontFamily": "FiraCode Nerd Font",
@@ -3961,7 +3941,7 @@
         "wintitle.display": "title",
         "wintitle.hideApps": "",
         "wintitle.maxWidth": 220,
-        "wintitle.moduleOn": 1
+        "wintitle.moduleOn": 0
       }
     },
     {
@@ -4133,7 +4113,7 @@
         "autoClean.aiAgentProtection.agentTempPatterns[8]": ".openclaw*",
         "autoClean.aiAgentProtection.agentTempPatterns[9]": "gemini-*",
         "autoClean.aiAgentProtection.protectionMode": "Enabled",
-        "autoClean.enabled": 0,
+        "autoClean.enabled": 1,
         "autoClean.recycleBinCleaner.cooldownSeconds": 15,
         "autoClean.recycleBinCleaner.countThresholdEnabled": 0,
         "autoClean.recycleBinCleaner.fullSweep": 0,
@@ -4186,10 +4166,10 @@
         "autoClean.universalSafety.toastDurationMs": 3200,
         "autoClean.universalSafety.toastEnabled": 1,
         "autoClean.universalSafety.toastTriggerScope": "AllCleanups",
-        "autoClicker.activatorButton": "back",
+        "autoClicker.activatorButton": "gshift",
         "autoClicker.clickIntervalMs": 33,
         "autoClicker.enabled": 1,
-        "autoClicker.nativeSettingsTitleBar": 0,
+        "autoClicker.nativeSettingsTitleBar": 1,
         "autoClicker.settingsGlass": 1,
         "autoClicker.settingsTrayIcon": 1,
         "autoClicker.toggleHotkey": "",
@@ -4239,7 +4219,7 @@
         "lockKeyCards.accentColor": "#89B4FA",
         "lockKeyCards.accentColor2": "#CBA6F7",
         "lockKeyCards.animationPercent": 100,
-        "lockKeyCards.blurRadius": 12,
+        "lockKeyCards.blurRadius": 75,
         "lockKeyCards.borderStyle": "gradient",
         "lockKeyCards.borderWidth": 2,
         "lockKeyCards.cornerRadius": 12,
@@ -4265,11 +4245,11 @@
         "lockKeyCards.palette": "mocha",
         "lockKeyCards.pollElevated": 1,
         "lockKeyCards.renderer": "gpu",
-        "lockKeyCards.suppressFullscreen": 0,
+        "lockKeyCards.suppressFullscreen": 1,
         "lockKeyCards.surfaceOpacity": 88,
         "lockKeyCards.textColor": "",
         "lockKeyCards.theme": "system",
-        "lockKeyCards.vertical": "bottom",
+        "lockKeyCards.vertical": "top",
         "powerCountdown.enabled": 1,
         "powerCountdown.font.fontFamily": "FiraCode Nerd Font",
         "powerCountdown.font.fontWeight": "medium",
@@ -4467,7 +4447,7 @@
       "settings": {
         "allowOnPublicNetworks": 0,
         "animationSpeed": "global",
-        "autoAllowConnections": 0,
+        "autoAllowConnections": 1,
         "autoBlockedApps[0].appPath": "",
         "autoBlockedApps[0].direction": "fully_offline",
         "autoBlockedApps[0].includeChildProcesses": 1,
@@ -4851,7 +4831,7 @@
     },
     {
       "id": "local@startup-control",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "confirmDevices": 1,
         "nativeSettingsTitleBar": 1,
@@ -4884,21 +4864,6 @@
         "themeName": "DavidHiFi's Theme",
         "themePackSilent": 1,
         "updateLogonUI": 1
-      }
-    },
-    {
-      "id": "local@uwp-assets-redirect-plus",
-      "enabled": true,
-      "settings": {
-        "custom[0].assets-path": "",
-        "custom[0].redirect": "",
-        "grant-permissions": 1,
-        "icon-theme": "local/catppuccin",
-        "system-apps[0].bundle": "",
-        "system-apps[0].redirect": "",
-        "theme-paths[0]": "",
-        "windows-apps[0].bundle": "",
-        "windows-apps[0].redirect": ""
       }
     },
     {
@@ -4936,7 +4901,7 @@
     },
     {
       "id": "local@wintips-osd-plus",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "accentColor": "#89B4FA",
         "accentColor2": "#CBA6F7",

@@ -124,7 +124,7 @@
         "orderName": 1,
         "orderProcessor": 3,
         "orderVram": 2,
-        "panels": "cards",
+        "panels": "one",
         "preset": "benchmark",
         "presetHotkey": "",
         "ram": 1,
