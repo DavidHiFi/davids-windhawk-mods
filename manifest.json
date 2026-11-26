@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T19:02:26+08:00",
+  "generatedAt": "2026-11-26T19:05:09+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 133,
-    "enabled": 124,
-    "local": 62
+    "mods": 128,
+    "enabled": 122,
+    "local": 59
   },
   "mods": [
     {
@@ -410,30 +410,6 @@
       "enabled": true
     },
     {
-      "id": "icon-customizer",
-      "name": "Icon Customizer",
-      "author": "FireBlade",
-      "github": "https://github.com/FireBlade211",
-      "version": "0.1",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/icon-customizer",
-      "source": "mods/catalog/icon-customizer.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "icon-resource-redirect",
-      "name": "Resource Redirect",
-      "author": "m417z",
-      "github": "https://github.com/m417z",
-      "version": "1.3",
-      "license": "",
-      "origin": "catalog",
-      "upstream": "https://windhawk.net/mods/icon-resource-redirect",
-      "source": "mods/catalog/icon-resource-redirect.wh.cpp",
-      "enabled": true
-    },
-    {
       "id": "local@keyboard-shortcut-actions-plus",
       "name": "Keyboard Shortcut Actions Plus",
       "author": "DavidHiFi, m417z",
@@ -481,18 +457,6 @@
       "upstream": "https://windhawk.net/mods/mmc-dark-mode",
       "source": "mods/catalog/mmc-dark-mode.wh.cpp",
       "enabled": true
-    },
-    {
-      "id": "local@mocha-app-icons",
-      "name": "Mocha App Icons",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.3.0",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/mocha-app-icons/mocha-app-icons.wh.cpp",
-      "enabled": false
     },
     {
       "id": "local@network-speedtest-plus",
@@ -715,18 +679,6 @@
       "upstream": "https://windhawk.net/mods/remove-ms-store-open-with",
       "source": "mods/catalog/remove-ms-store-open-with.wh.cpp",
       "enabled": true
-    },
-    {
-      "id": "local@remove-shortcut-arrows",
-      "name": "Remove Shortcut Arrow Icons",
-      "author": "DavidHiFi, Dev-StudioCode",
-      "github": "https://github.com/DavidHiFi",
-      "version": "2.0.2",
-      "license": "",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/remove-shortcut-arrows/remove-shortcut-arrows.wh.cpp",
-      "enabled": false
     },
     {
       "id": "rounded-selection-rectangle",
@@ -1535,19 +1487,6 @@
       "upstream": "https://windhawk.net/mods/unlock-folder-in-use",
       "source": "mods/catalog/unlock-folder-in-use.wh.cpp",
       "enabled": true
-    },
-    {
-      "id": "local@uwp-assets-redirect-plus",
-      "name": "UWP Assets Redirect Plus",
-      "author": "DavidHiFi, ferrys",
-      "github": "https://github.com/DavidHiFi/davids-windhawk-mods",
-      "version": "1.2",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "https://windhawk.net/mods/uwp-assets-redirect",
-      "source": "mods/local/uwp-assets-redirect-plus/uwp-assets-redirect-plus.wh.cpp",
-      "enabled": false,
-      "category": "Windows and menus"
     },
     {
       "id": "win-d-per-monitor",
