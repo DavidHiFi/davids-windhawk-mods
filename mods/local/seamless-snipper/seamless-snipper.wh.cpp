@@ -2,7 +2,7 @@
 // @id              seamless-snipper
 // @name            Seamless Snipper
 // @description     Snip a region, a window or the whole screen: frozen screen, window snapping, a pixel magnifier, straight to the clipboard and your folder. Plus Magic Pointer: shake the mouse, point at anything and ask AI about it
-// @version         0.7.6
+// @version         0.7.7
 // @author          DavidHiFi, Jaex, ShareX contributors, Rono
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -24,7 +24,12 @@ read later, like "Discord 4.05 pm.png".
 
 ![Seamless Snipper preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-snipper.png)
 
-## What's new in 0.7.6
+## What's new in 0.7.7
+
+- Seamless Dictate works in the Magic Pointer ask box. Hold or tap its
+  shortcut while the box is open and your words land in the box.
+
+## New in 0.7.6
 
 - Title bar menus (right-click the title bar, or Alt+Space) now really get the same
   blurred Mocha body as every other menu. They opened pitch black before.
@@ -19896,9 +19901,40 @@ std::vector<TextBlock> ParseMarkdown(const std::wstring& text) {
     return blocks;
 }
 
+// This mod runs as administrator and Seamless Dictate doesn't, so Windows hides
+// the ask box's keys from Dictate and drops the text it types. While the box
+// has the focus it passes Ctrl/Win/Shift/Alt to Dictate, and takes Dictate's
+// text as WM_COPYDATA tagged kDictateTextTag.
+constexpr ULONG_PTR kDictateTextTag = 0x53444354;  // 'SDCT'
+
+void TellDictateModifiers(bool focused) {
+    static const UINT message = RegisterWindowMessageW(L"SeamlessDictate.ElevatedKeys");
+    static UINT last = ~0u;
+    UINT mods = 0;
+    if (focused) {
+        if (GetKeyState(VK_CONTROL) & 0x8000) mods |= MOD_CONTROL;
+        if ((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x8000) mods |= MOD_WIN;
+        if (GetKeyState(VK_SHIFT) & 0x8000) mods |= MOD_SHIFT;
+        if (GetKeyState(VK_MENU) & 0x8000) mods |= MOD_ALT;
+    }
+    if (mods == last) {
+        return;
+    }
+    last = mods;
+    if (HWND dictate = FindWindowW(L"AIVoiceTypingOverlay_local@seamless-dictate", nullptr)) {
+        PostMessageW(dictate, message, mods, 0);
+    }
+}
+
 class AskCard {
   public:
-    bool Create() { return panel_.Create(true, false, kCardWindowClass, this); }
+    bool Create() {
+        if (!panel_.Create(true, false, kCardWindowClass, this)) {
+            return false;
+        }
+        ChangeWindowMessageFilterEx(panel_.Hwnd(), WM_COPYDATA, MSGFLT_ALLOW, nullptr);
+        return true;
+    }
 
     void Destroy() {
         Close();
@@ -21912,11 +21948,34 @@ class AskCard {
                        LPARAM lParam,
                        LRESULT& result) {
         const double now = NowMs();
+        if (message == WM_KEYDOWN || message == WM_KEYUP || message == WM_SYSKEYDOWN ||
+            message == WM_SYSKEYUP || message == WM_SETFOCUS) {
+            TellDictateModifiers(true);
+        } else if (message == WM_KILLFOCUS) {
+            TellDictateModifiers(false);
+        }
         switch (message) {
             case WM_NCHITTEST: {
                 POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
                 ScreenToClient(hwnd, &pt);
                 result = HitTest(pt) != kHitNone ? HTCLIENT : HTCAPTION;
+                return true;
+            }
+
+            case WM_COPYDATA: {
+                const auto* data = reinterpret_cast<const COPYDATASTRUCT*>(lParam);
+                if (!data || data->dwData != kDictateTextTag || !data->lpData ||
+                    data->cbData % sizeof(wchar_t)) {
+                    return false;
+                }
+                std::wstring text(static_cast<const wchar_t*>(data->lpData),
+                                  data->cbData / sizeof(wchar_t));
+                ClearAnswerSelection();
+                InsertText(std::move(text));
+                caretStart_ = now;
+                caretOn_ = true;
+                Update(now);
+                result = TRUE;
                 return true;
             }
 
