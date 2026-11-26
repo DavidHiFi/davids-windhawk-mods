@@ -23,30 +23,6 @@
       "settings": {}
     },
     {
-      "id": "auto-time-sync-on-startup",
-      "name": "Auto Time Sync On Startup",
-      "version": "1.1",
-      "enabled": false,
-      "settings": {
-        "initialDelaySeconds": 30,
-        "retryCount": 4,
-        "retryIntervalSeconds": 30,
-        "useScheduledTaskFallback": 1
-      }
-    },
-    {
-      "id": "bluetooth-no-sleep",
-      "name": "Bluetooth No Sleep",
-      "version": "1.0.0",
-      "enabled": false,
-      "settings": {
-        "idleTimeoutMinutes": 30,
-        "keepAliveStrategy": "continuous",
-        "silenceMode": "zero",
-        "targetMode": "bluetoothOnly"
-      }
-    },
-    {
       "id": "borderless-fullscreen",
       "name": "Borderless Fullscreen",
       "version": "1.2.0",
@@ -1001,37 +977,6 @@
         "PerProgramConfig[1].Name": "mspaint.exe",
         "PerProgramConfig[1].Replace": "PhotoHawk",
         "PerProgramConfig[1].Search": "Paint"
-      }
-    },
-    {
-      "id": "toast-auto-dismiss",
-      "name": "Toast auto-dismiss",
-      "version": "1.0",
-      "enabled": false,
-      "settings": {
-        "pauseWhileHovered": 1,
-        "timeoutSeconds": 5
-      }
-    },
-    {
-      "id": "toggle-hidden-files",
-      "name": "Toggle Hidden Files",
-      "version": "1.1.0",
-      "enabled": false,
-      "settings": {
-        "systemFilesShortcutModifier": "shift",
-        "toggleProtectedFiles": 1
-      }
-    },
-    {
-      "id": "unlock-folder-in-use",
-      "name": "Unlock \"Folder In Use\"",
-      "version": "1.1.0",
-      "enabled": false,
-      "settings": {
-        "expandDetails": 1,
-        "modernDialogs": 1,
-        "showNoResultDialog": 1
       }
     },
     {

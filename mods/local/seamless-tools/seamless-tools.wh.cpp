@@ -2,7 +2,7 @@
 // @id              seamless-tools
 // @name            Seamless Tools
 // @description     Small tray tools, auto clean and a power action countdown in one mod, each with its own switch
-// @version         1.2.0
+// @version         1.2.1
 // @author          DavidHiFi, DoYouNatureQ, Jaex, ShareX contributors, Dev-StudioCode, communism420, Asteski, LyricsPortal, nikitor32, Nerdworld, Ashix
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -47,6 +47,13 @@ Open the mod settings. Each tool starts with a Turn on switch. Set it, then use 
 - The auto clicker and the color picker keep their own settings windows.
 - Zoom is not in this mod. It needs rights that cannot be shared, so it stays its own mod.
 - If you used the separate mods before, remove them once this one is on. Settings carry over only if they were copied in.
+
+## What's new in 1.2.1
+
+- Fixed: Explorer and other Windows programs each started a spare copy of this mod's helper. Now only Windhawk starts it.
+- Fixed: the Recycle Bin clean now works when the auto clicker is on.
+- Fixed: switching the mod off and on again always brings the tools back.
+- The power action countdown is paused for now. It never started on Windhawk 2, and it comes back once it has been tested.
 
 ## What's new in 1.2.0
 
@@ -25781,6 +25788,8 @@ static Part g_parts[] = {
 };
 
 // ---- which process is this
+// Off until the power countdown's Explorer side has passed a test PC run (see 1.2.1 notes).
+static constexpr bool kShellPartsTested = false;
 static std::wstring g_exeName;
 
 static void InitProcessNames() {
@@ -25903,6 +25912,10 @@ BOOL WhToolLauncher_ModInit(BOOL* launch) {
         return TRUE;
     }
     *launch = FALSE;  // the helper is started from the launcher, not from here
+    // Until 1.2.1 Windhawk never found these launcher calls (they sat inside this namespace), so
+    // the shell side never ran and every Explorer and RuntimeBroker started a spare helper copy.
+    // The shell side stays off until it has passed the test PC; this program drops the mod.
+    if (!kShellPartsTested) return FALSE;
     bool any = false;
     for (Part& p : g_parts) {
         if (!p.appInit) continue;
@@ -25956,6 +25969,23 @@ void WhToolLauncher_ModUninit() {
 }
 
 }  // namespace suite
+
+// Windhawk looks these up by their plain names, so they have to live outside the namespace.
+BOOL WhToolLauncher_ModInit(BOOL* launch) {
+    return suite::WhToolLauncher_ModInit(launch);
+}
+
+void WhToolLauncher_ModSettingsChanged(BOOL* reload) {
+    suite::WhToolLauncher_ModSettingsChanged(reload);
+}
+
+void WhToolLauncher_ModBeforeUninit() {
+    suite::WhToolLauncher_ModBeforeUninit();
+}
+
+void WhToolLauncher_ModUninit() {
+    suite::WhToolLauncher_ModUninit();
+}
 
 BOOL WhTool_ModInit() {
     return suite::ToolStart();

@@ -1097,21 +1097,6 @@
       }
     },
     {
-      "id": "local@seamless-autoclicker",
-      "enabled": false,
-      "settings": {
-        "activatorButton": "gshift",
-        "clickIntervalMs": 33,
-        "clicksPerSecond": 30,
-        "nativeSettingsTitleBar": 1,
-        "settingsGlass": 1,
-        "settingsTitleButtons": "native",
-        "settingsTrayIcon": 1,
-        "toggleHotkey": "",
-        "toggleWithRightClick": 1
-      }
-    },
-    {
       "id": "local@seamless-autoscroll",
       "enabled": true,
       "settings": {
@@ -1280,46 +1265,6 @@
         "trayIcon": 1,
         "windowHeight": 400,
         "windowWidth": 450
-      }
-    },
-    {
-      "id": "local@seamless-color-picker",
-      "enabled": false,
-      "settings": {
-        "Copying.closeAfterCopy": 0,
-        "Copying.copyFormat": "hex",
-        "Copying.customFormat": "{hex}",
-        "Copying.showToast": 1,
-        "Copying.upperCase": 1,
-        "Keys.hotkey": "Alt+Win+C",
-        "Keys.screenHotkey": "",
-        "Keys.screenPickAction": "copy",
-        "Look.accent": "#89B4FA",
-        "Look.accent2": "#CBA6F7",
-        "Look.animations": 1,
-        "Look.cornerRadius": 8,
-        "Look.font": "FiraCode Nerd Font",
-        "Look.glass": 1,
-        "Look.glassTint": 85,
-        "Look.glow": 1,
-        "Picker.alwaysOnTop": 1,
-        "Picker.customStartColor": "#89B4FA",
-        "Picker.livePick": 1,
-        "Picker.nativeTitleBar": 1,
-        "Picker.recentCount": 16,
-        "Picker.rememberPosition": 1,
-        "Picker.showPalette": 1,
-        "Picker.sliderMode": "hue",
-        "Picker.startColor": "last",
-        "Screen.magnifierPixels": 15,
-        "Screen.magnifierShape": "circle",
-        "Screen.magnifierZoom": 10,
-        "Screen.showCrosshair": 1,
-        "Screen.showGrid": 1,
-        "Screen.showInfo": 1,
-        "SettingsWindow.nativeSettingsTitleBar": 0,
-        "SettingsWindow.settingsGlass": 1,
-        "SettingsWindow.settingsTitleButtons": "native"
       }
     },
     {
@@ -3143,27 +3088,6 @@
       }
     },
     {
-      "id": "local@seamless-power-action-countdown",
-      "enabled": false,
-      "settings": {
-        "font.fontFamily": "FiraCode Nerd Font",
-        "font.fontWeight": "medium",
-        "font.textColor": "#89B4FA",
-        "hibernateCountdownSeconds": 5,
-        "look.backgroundColor": "#181825",
-        "look.backgroundMaterial": "glass",
-        "look.backgroundOpacity": 92,
-        "look.gradientAreaOpacity": 20,
-        "look.gradientEndColor": "#CBA6F7",
-        "look.gradientOverlay": 1,
-        "look.gradientStartColor": "#89B4FA",
-        "look.openCloseAnimation": 1,
-        "restartCountdownSeconds": 5,
-        "shutdownCountdownSeconds": 5,
-        "sleepCountdownSeconds": 5
-      }
-    },
-    {
       "id": "local@seamless-settings-styler",
       "enabled": true,
       "settings": {
@@ -4897,44 +4821,6 @@
         "titleBarAcrylic": 1,
         "titleBarColor": "#292b3d",
         "workshopButton": 1
-      }
-    },
-    {
-      "id": "local@wintips-osd-plus",
-      "enabled": false,
-      "settings": {
-        "accentColor": "#89B4FA",
-        "accentColor2": "#CBA6F7",
-        "animationPercent": 100,
-        "blurRadius": 75,
-        "borderStyle": "gradient",
-        "borderWidth": 2,
-        "cornerRadius": 12,
-        "displayMs": 2000,
-        "fontFamily": "FiraCode Nerd Font",
-        "fontWeight": "medium",
-        "glow": 35,
-        "horizontal": "center",
-        "material": "acrylic",
-        "monitor": "cursor",
-        "morphSeconds": 5,
-        "notifyAnyCopy": 1,
-        "notifyCapsLock": 1,
-        "notifyCopy": 1,
-        "notifyCut": 1,
-        "notifyInsert": 1,
-        "notifyNumLock": 1,
-        "notifyPaste": 1,
-        "notifyScrollLock": 1,
-        "offsetX": 0,
-        "offsetY": 0,
-        "palette": "mocha",
-        "pollElevated": 1,
-        "suppressFullscreen": 1,
-        "surfaceOpacity": 88,
-        "textColor": "",
-        "theme": "system",
-        "vertical": "top"
       }
     },
     {
