@@ -30,4 +30,21 @@ make sure that they're like high fidelity, high quality?"
 
 ## Result
 
-(filled in below as mods go live)
+Live (each published by Install-StagedMod):
+
+- seamless-crosshair 1.2.11, seamless-download-manager 1.0.12, network-speedtest-plus 2.4.3,
+  better-volume-mixer-plus 1.4.37, halo-launcher 0.6.16, logitech-battery-tray 0.1.6,
+  pointer-afterimage-plus 1.3.6.
+- Proof: `work\2026-11-26-crisp-icons\proof\before-tray-x6.png` against `after-tray-x6.png`
+  (download arrow, speaker and gauge lose their stair steps).
+
+Held back:
+
+- seamless-taskbar: quarantined (0.4.64 dwm spike). The wallpaper switcher thread ships a
+  0.4.65 with crisp.py applied, through the test PC.
+- seamless-title-bars: loads into dwm; a window-look mod, so it waits until the owner is away.
+- recycle-bin-tray-plus: turned off.
+
+State 08:55: batch resumed after yielding the engine lock to the dock thread for 4 minutes;
+21 mods left, one at a time. `coop seat when-done` watches it. Remaining: read install.log
+RESULT lines, rerun any "gave up", full publish-mods.py, finish this list.
