@@ -1208,7 +1208,7 @@
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "",
-    "version": "0.1.13"
+    "version": "0.1.14"
   },
   "local@dark-theme-browser-colors-fix-plus": {
     "disabled": false,
