@@ -2,7 +2,7 @@
 // @id              seamless-file-unlocker
 // @name            Seamless File Unlocker
 // @description     Find out what is holding a file or folder, then let go of it, move it or delete it
-// @version         1.0.2
+// @version         1.0.3
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -651,7 +651,8 @@ static void HandlePass(const std::vector<std::wstring>& keys, const DevMap& dm, 
         for (const HandleEntry* e : list) {
             int m = -1;
             nHandles++;
-            auto c = cache.find(e->Object);
+            // Without special rights Windows hides every object address (all zero), so there is nothing to remember by.
+            auto c = e->Object ? cache.find(e->Object) : cache.end();
             if (c != cache.end()) {
                 m = c->second;
             } else {
@@ -677,7 +678,7 @@ static void HandlePass(const std::vector<std::wstring>& keys, const DevMap& dm, 
                         matched.push_back(dos);
                     }
                 }
-                if (!timedOut) cache[e->Object] = m;  // a handle that never answered is asked again, not remembered as "no"
+                if (!timedOut && e->Object) cache[e->Object] = m;  // a handle that never answered is asked again, not remembered as "no"
             }
             if (m >= 0) {
                 Lock L;
