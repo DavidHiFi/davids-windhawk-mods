@@ -2,7 +2,7 @@
 // @id              seamless-windows-firewall
 // @name            Seamless Windows Firewall
 // @description     Block or allow any app's internet in one click, from the tray icon or a shortcut
-// @version 1.2.9
+// @version 1.2.10
 // @author          DavidHiFi, Ashix
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -67,6 +67,11 @@ Change or clear any of them in the settings.
 - The Blocked list has a second view, Blocked by Windows Firewall, that shows
   the apps your own firewall rules block. Change those in Windows Defender
   Firewall.
+
+## What's new in 1.2.10
+- The connection box no longer flashes on and off over a game. It waits
+  until the game has been out of full screen for a few seconds.
+- Turning on Allow every app by itself now answers any box still waiting.
 
 ## What's new in 1.2.9
 - While the connection box or a warning box waits, every screen goes dark
@@ -4713,7 +4718,22 @@ static void ShowNextListenBox() {
 
 // Shows the next request, and keeps the open one out of the way while a game or video
 // fills the screen.
+// A game flips in and out of "full screen" (overlays, alt-tab, loading screens), so the
+// box comes back only after the screen has been clear for a few seconds in a row.
+// Without this it flashed on and off over a game again and again (1.2.10).
+static void AddListenRule(const ListenAsk& a, bool allow, bool automatic);
+static DWORD g_listenClearSince = 0;
+constexpr DWORD kListenClearMs = 4000;
+
 static void ListenPump(bool fullscreen) {
+    bool settledClear = false;
+    if (fullscreen) {
+        g_listenClearSince = 0;
+    } else {
+        DWORD now = GetTickCount();
+        if (!g_listenClearSince) g_listenClearSince = now;
+        settledClear = now - g_listenClearSince >= kListenClearMs;
+    }
     if (g_hListenBox) {
         FwConfirmState* bs = g_listenBoxState.get();
         if (!IsWindow(g_hListenBox) || !bs || bs->done || bs->closing) return;
@@ -4725,7 +4745,7 @@ static void ListenPump(bool fullscreen) {
             ShowWindow(g_hListenBox, SW_HIDE);
             for (HWND h : bs->backdrops)
                 if (IsWindow(h)) ShowWindow(h, SW_HIDE);
-        } else if (!fullscreen && !vis) {
+        } else if (!fullscreen && !vis && settledClear) {
             FwBoxSettle(g_hListenBox, bs);
             FwBackdropShow(bs, g_hListenBox);
             ShowWindow(g_hListenBox, SW_SHOWNOACTIVATE);
@@ -4733,7 +4753,20 @@ static void ListenPump(bool fullscreen) {
         }
         return;
     }
-    if (!fullscreen && !g_listenQueue.empty()) ShowNextListenBox();
+    if (settledClear && !g_listenQueue.empty()) ShowNextListenBox();
+}
+
+// "Allow every app by itself" turned on while a box waits: answer it and the queue with
+// allow, so nothing left over from before keeps asking.
+static void ListenAllowWaiting() {
+    if (g_listenCurrent) AddListenRule(*g_listenCurrent, true, true);
+    for (auto& a : g_listenQueue)
+        if (a) AddListenRule(*a, true, true);
+    g_listenQueue.clear();
+    if (g_hListenBox && IsWindow(g_hListenBox)) DestroyWindow(g_hListenBox);
+    g_hListenBox = nullptr;
+    g_listenBoxState.reset();
+    g_listenCurrent.reset();
 }
 
 static void AddListenRule(const ListenAsk& a, bool allow, bool automatic = false) {
@@ -4802,14 +4835,16 @@ static void ListenBoxAnswered(HWND box, bool allow) {
 
 // Turns the feature on or off to match the setting. UI thread.
 static void ListenSync() {
-    bool on = false;
+    bool on = false, autoAllow = false;
     {
         std::lock_guard<std::mutex> lk(g_settingsMtx);
-        on = g_settings.replaceFirewallPrompt || g_settings.autoAllowConnections;
+        autoAllow = g_settings.autoAllowConnections;
+        on = g_settings.replaceFirewallPrompt || autoAllow;
     }
     if (on && IsProcessElevated()) {
         if (!g_listenPromptsOff) ListenPromptsTakeOver();
         ListenWatchStart();
+        if (autoAllow) ListenAllowWaiting();
     } else {
         ListenWatchStop();
         ListenCloseBox();
