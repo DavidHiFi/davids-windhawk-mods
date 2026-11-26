@@ -1208,7 +1208,7 @@
     "include": "windhawk-mod.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.1.3"
+    "version": "2.1.4"
   },
   "local@seamless-key-click": {
     "disabled": false,
