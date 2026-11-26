@@ -4454,7 +4454,7 @@
     "focus.breakMin": 5,
     "focus.longBreakMin": 15,
     "focus.longEvery": 4,
-    "focus.moduleOn": 0,
+    "focus.moduleOn": 1,
     "focus.motion": 1,
     "focus.sound": 1,
     "focus.workMin": 25,
@@ -4656,7 +4656,7 @@
     "networkToggle.moduleOn": 0,
     "notes.fontSize": 13,
     "notes.height": 420,
-    "notes.moduleOn": 0,
+    "notes.moduleOn": 1,
     "notes.motion": 1,
     "notes.showCount": 1,
     "notes.width": 360,
@@ -4855,7 +4855,7 @@
     "wintitle.display": "title",
     "wintitle.hideApps": "",
     "wintitle.maxWidth": 220,
-    "wintitle.moduleOn": 0
+    "wintitle.moduleOn": 1
   },
   "local@seamless-wobbly-windows": {
     "borders": 1,
