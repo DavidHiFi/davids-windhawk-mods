@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T18:45:57+08:00",
+  "generatedAt": "2026-11-26T18:55:25+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 162,
-    "enabled": 155,
-    "local": 65
+    "mods": 163,
+    "enabled": 156,
+    "local": 66
   },
   "mods": [
     {
@@ -1999,6 +1999,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-settings-styler/seamless-settings-styler.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-file-unlocker",
+      "name": "Seamless File Unlocker",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-file-unlocker/seamless-file-unlocker.wh.cpp",
       "enabled": true
     }
   ]

@@ -1868,6 +1868,21 @@
       }
     },
     {
+      "id": "local@seamless-file-unlocker",
+      "enabled": true,
+      "settings": {
+        "askBeforeClosing": 1,
+        "menuEntry": 1,
+        "nativeSettingsTitleBar": 0,
+        "recycleBin": 1,
+        "settingsAnimation": 1,
+        "settingsGlass": 1,
+        "settingsTrayIcon": 1,
+        "showSystem": 0,
+        "unlockHotkey": "Ctrl+Shift+U"
+      }
+    },
+    {
       "id": "local@seamless-flyouts",
       "enabled": true,
       "settings": {

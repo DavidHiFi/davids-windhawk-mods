@@ -1391,5 +1391,12 @@
     "exclude": "",
     "architecture": "",
     "version": "1.2"
+  },
+  "local@seamless-file-unlocker": {
+    "disabled": false,
+    "include": "windhawk.exe|explorer.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.0.0"
   }
 }
