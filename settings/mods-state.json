@@ -1377,5 +1377,12 @@
     "exclude": "",
     "architecture": "x86-64",
     "version": "1.0.0"
+  },
+  "local@seamless-winver-configurator": {
+    "disabled": false,
+    "include": "winver.exe|windhawk.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.0"
   }
 }
