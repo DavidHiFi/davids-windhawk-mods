@@ -47,3 +47,15 @@ Work folder: `work\2026-11-26-fps-suite\overlay\` (STATE.md has the step log). R
   later shot empty. The proof script now switches it on first.
 - RivaTuner is uninstalled; 3 locked files clear at the next restart. HWiNFO is uninstalled.
   Afterburner stays (fan curve).
+
+## 1.1.3 (21:25) and live proof (22:03): one panel
+
+- Owner asked again for one panel, not separate floating boxes: no gaps, columns level, thin lines between sections.
+- New setting "Boxes": One panel (default) or Separate boxes. One panel: no gaps, a 1px #45475A line between
+  sections and between the two columns, and the shorter column spreads its spare room so both end level.
+- Gates: settings in sync, glass ok, consistency clean. Installed with Install-StagedMod.ps1, published (mods 3a68fa4, feed 458e291).
+- Live proof on the side screen at 100% and 200% size, solid fill, bottom right corner, plus separate boxes.
+  Pictures: work\2026-11-26-fps-suite\reports\media\overlay-one-panel*.png.
+- Rule added: AGENTS.md Conventions, and rice defects 97 (synced). Backups beside each file, .bak-20261126-2058.
+- Proof needs: python without -I (psutil), and the out folder made first.
+- Undo: Boxes setting to Separate boxes, or roll back to 1.1.2 from the mods repo.
