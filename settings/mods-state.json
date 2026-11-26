@@ -1336,12 +1336,33 @@
     "architecture": "x86-64",
     "version": "1.1.1"
   },
+  "local@mocha-app-icons": {
+    "disabled": true,
+    "include": "Ableton Live*.exe|yapfast.exe|zen.exe|ApplicationFrameHost.exe|steam.exe|steamwebhelper.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.3.0"
+  },
+  "local@remove-shortcut-arrows": {
+    "disabled": true,
+    "include": "explorer.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "2.0.2"
+  },
   "local@seamless-settings-styler": {
     "disabled": false,
     "include": "SystemSettings.exe",
     "exclude": "",
     "architecture": "x86-64",
     "version": "2.0.1"
+  },
+  "local@uwp-assets-redirect-plus": {
+    "disabled": true,
+    "include": "explorer.exe|StartMenuExperienceHost.exe|SearchHost.exe|ShellExperienceHost.exe|ShellHost.exe|RuntimeBroker.exe|Taskmgr.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.2"
   },
   "local@seamless-file-unlocker": {
     "disabled": false,
