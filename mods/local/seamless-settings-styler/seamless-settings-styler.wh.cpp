@@ -2,7 +2,7 @@
 // @id              seamless-settings-styler
 // @name            Seamless Settings Styler
 // @description     Catppuccin Mocha for Windows Settings: glass that matches the title bar, edges on every card, a sidebar that folds to icons, hide pages and ads
-// @version         2.1.0
+// @version         2.1.1
 // @author          DavidHiFi, m417z
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -2840,6 +2840,17 @@ const Theme g_themeSeamlessMocha = {{
         L"CornerRadius=$CR"}},
     ThemeTargetStyles{L"StackPanel#SettingsCommandSearchBoxBackground", {
         L"CornerRadius=$CR"}},
+    ThemeTargetStyles{L"Button#CommandSearchBoxFlyoutButton", {
+        L"Margin=28,8,0,0"}},
+    ThemeTargetStyles{L"Button#CommandSearchBoxFlyoutButton > ContentPresenter#ContentPresenter@CommonStates", {
+        L"CornerRadius=$CR",
+        L"BorderThickness=$EW",
+        L"Background:=<SolidColorBrush Color=\"$Btn\"/>",
+        L"BorderBrush:=<SolidColorBrush Color=\"$Edge\"/>",
+        L"Background@PointerOver:=<SolidColorBrush Color=\"$BtnHover\"/>",
+        L"BorderBrush@PointerOver:=$Grad",
+        L"Background@Pressed:=<SolidColorBrush Color=\"$Pressed\"/>",
+        L"BorderBrush@Pressed:=$Grad"}},
     ThemeTargetStyles{L"SystemSettings.View.SettingsNavigationViewItem > Grid#NVIRootGrid > Microsoft.UI.Xaml.Controls.Primitives.NavigationViewItemPresenter#NavigationViewItemPresenter > Grid#LayoutRoot@PointerStates", {
         L"BorderThickness=$EW",
         L"CornerRadius=$CR",
