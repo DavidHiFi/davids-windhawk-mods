@@ -275,6 +275,34 @@ waits until answered (the app stays blocked meanwhile, as with Windows).
   0.40, the bottom of the rice range, and the backdrop is the dark panel blurred by acrylic, so
   nothing colourful is there to move. Kept as is; open item 1 below now says why.
 
+## 1.2.7 (2026-11-26): bigger box, blur switch, allow by itself
+
+Owner asked: box bigger by default, blue to mauve edge on hover, background blur as a setting
+(on by default), and every app that asks for network access allowed by itself.
+
+- Box size setting (Normal 1.0, Large 1.3, Extra large 1.6), Large by default. Every size in
+  FwConfirmLayout and FwConfirmPaint now goes through BoxPx(v, dpi, scale); edge widths and the
+  window radius stay on the live radius. Applies to the connection box and the warning boxes.
+- Blurred box setting, on by default. Off gives the solid Mocha base fill.
+- Hover edge: already there (FwGradEdge while the pointer is inside, surface2 at rest); proved live.
+- Allow every app by itself (autoAllowConnections), off for the public, on for the owner. An app
+  that starts listening gets an inbound allow rule on all profiles at once, description
+  "Allowed by itself: ...", no box. The listen watcher runs when either this or the box is on.
+- Owner's tower: elevated-install.ps1 now writes autoAllowConnections=1, confirmBoxGlass=1 and
+  confirmBoxSize=large when missing. Old value: missing (reads as off). Rollback: set
+  autoAllowConnections to 0 in HKLM\SOFTWARE\Windhawk\Engine\Mods\local@seamless-windows-firewall\Settings
+  (or switch "Allow every app by itself" off in the settings window).
+- Agent rule: AgentRules\global.md (Windows dialogs) says agents allow network access for apps
+  they build, install or run, never ask; rendered to all 7 runtimes (backups in
+  H:\System Configuration\backups\2026-11-26-agent-rules), mirrored to Foxtrot (line 93 there).
+- Backups: *.bak-20261126-pre126 beside each source file and test script.
+- Test PC chain: D:\Agent Work\swf-123\chain-g.sh, 7 new checks (Large width, auto-allow: no
+  box, no Windows alert, rule on every network; solid box pixel; box asks again when off).
+
+Version: built as 1.2.6, but another thread shipped its title bar menu fix as 1.2.6 at 10:41
+while this one waited for the test PC (src/menu-look.cpp, already in this build). Renamed to
+1.2.7 with both news entries; install base hash is now that 1.2.6 (DCED94E6...).
+
 ## Open
 
 1. The connection box's glass reads flat over the open panel (1.2.5: movement 0.3). Its fill is
