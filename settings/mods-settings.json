@@ -4328,7 +4328,7 @@
   },
   "xs-nomsedgewebview4copilot": {},
   "local@halo-launcher": {
-    "backgroundOpacity": 55,
+    "backgroundOpacity": 40,
     "blur": 1,
     "fontFamily": "FiraCode Nerd Font",
     "fontWeight": "Medium",

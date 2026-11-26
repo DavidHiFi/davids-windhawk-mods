@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.16
+// @version         0.6.17
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -116,9 +116,9 @@ Every key in that list can be changed on the Keys page of the settings.
 - peekOnSpace: true
   $name: "Space previews the file"
   $description: "After moving through the results with the arrows or Tab, Space opens the selected file in the Peek mod. Typing a space still works before that."
-- backgroundOpacity: 55
+- backgroundOpacity: 40
   $name: "Glass darkness"
-  $description: "0 to 100 (Suggested: 55). How much Mocha covers the blur. 55 is the same glass as the settings windows."
+  $description: "0 to 100 (Suggested: 40). How much Mocha covers the blur. 40 is the same frosted glass as Explorer."
 - blur: true
   $name: "Blur behind the window"
   $description: "Off, the window is solid Mocha."
@@ -557,7 +557,7 @@ struct State {
     bool quiet = false, quietNext = false;
 
     // Windhawk settings
-    int backgroundOpacity = 55;
+    int backgroundOpacity = 40;
     bool blur = true;
     bool peekOnSpace = true;
     bool trayIcon = true;
@@ -1616,10 +1616,10 @@ void Render() {
     // Window: the tint over the glass, then Flow's thin square edge. Windows rounds the
     // window and clips that edge at the corners, and the borders mod draws the ring.
     float px = 1 / L.s;
-    // Glass: Mocha crust laid flat over the blur, 55% like every Seamless window. Without
-    // blur: solid Mocha base.
+    // Glass: Mocha base laid flat over the blur, 40% like Explorer's frosted glass (crust
+    // read too dark next to it, 2026-11-26). Without blur: solid Mocha base.
     float outerW = L.W + 2 * kEdge, outerH = L.H + 2 * kEdge;
-    g.brush->SetColor(g.blur ? Rgb(cCrust, g.backgroundOpacity / 100.0f) : Rgb(cMochaBase));
+    g.brush->SetColor(g.blur ? Rgb(cMochaBase, g.backgroundOpacity / 100.0f) : Rgb(cMochaBase));
     g.rt->FillRectangle(D2D1::RectF(0, 0, outerW, outerH), g.brush.Get());
     g.rt->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
     g.brush->SetColor(Rgb(cBorder));
@@ -4846,7 +4846,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Hotkey, L"flow:SettingWindowHotkey", L"Settings", L"Opens this window.", L"Ctrl+I", {}, 0, 100, 2, L"Actions"},
 {K::Choice, L"flow:OpenResultModifiers", L"Open by number with", L"Hold this and press 1 to 0 to open that row.", L"Alt", {{L"Alt", L"Alt"}, {L"Ctrl", L"Ctrl"}, {L"Ctrl+Alt", L"Ctrl + Alt"}}, 0, 100, 2, L"Open by number"},
 {K::Check, L"flow:ShowOpenResultHotkey", L"Show the numbers", L"Each row shows the key that opens it.", L"1", {}, 0, 100, 2, L"Open by number"},
-{K::Number, L"backgroundOpacity", L"Glass darkness", L"0 to 100 (Suggested: 55). How much Mocha covers the blur. 55 is the same glass as the settings windows.", L"55", {}, 0, 100, 3, L"Window"},
+{K::Number, L"backgroundOpacity", L"Glass darkness", L"0 to 100 (Suggested: 40). How much Mocha covers the blur. 40 is the same frosted glass as Explorer.", L"40", {}, 0, 100, 3, L"Window"},
 {K::Check, L"blur", L"Blur behind the window", L"Off, the window is solid Mocha.", L"1", {}, 0, 100, 3, L"Window"},
 {K::Number, L"flow:WindowSize", L"Width", L"500 to 1600 (Suggested: 780). You can also pull the side of the search window.", L"780", {}, 500, 1600, 3, L"Window"},
 {K::Check, L"flow:KeepMaxResults", L"Lock the size", L"On, the edges of the search window can't be pulled to change its width or rows.", L"0", {}, 0, 100, 3, L"Window"},

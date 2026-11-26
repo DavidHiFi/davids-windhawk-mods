@@ -129,9 +129,9 @@
     },
     {
       "id": "local@halo-launcher",
-      "enabled": false,
+      "enabled": true,
       "settings": {
-        "backgroundOpacity": 55,
+        "backgroundOpacity": 40,
         "blur": 1,
         "fontFamily": "FiraCode Nerd Font",
         "fontWeight": "Medium",
