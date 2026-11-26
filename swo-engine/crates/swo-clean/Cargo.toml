@@ -1,0 +1,10 @@
+[package]
+name = "swo-clean"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+windows-sys.workspace = true
+swo-core.workspace = true

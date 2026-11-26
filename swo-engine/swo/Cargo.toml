@@ -1,0 +1,18 @@
+[package]
+name = "swo"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Seamless Windows Optimizer engine"
+
+[[bin]]
+name = "swo"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+serde_json.workspace = true
+swo-core.workspace = true
+swo-clean.workspace = true
+swo-tweaks.workspace = true
+swo-tools.workspace = true
