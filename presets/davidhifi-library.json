@@ -38,7 +38,7 @@
       "id": "better-eject-dialog",
       "name": "Better Eject Dialog",
       "version": "1.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "autoEject": 1,
         "elevatedEndTask": 1,
@@ -187,7 +187,7 @@
       "id": "context-menu-preloader",
       "name": "Context Menu Preloader",
       "version": "1.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "CustomExtensions": "pdf; mp4; mkv; docx; obj; html",
         "EnableDebug": 0,
@@ -198,7 +198,7 @@
       "id": "copy-file-contents",
       "name": "Copy File Contents",
       "version": "1.4.1",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "askHashMB": 256,
         "contentsKey": "T",
@@ -220,7 +220,7 @@
       "id": "copy-queue",
       "name": "Copy Queue",
       "version": "1.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {}
     },
     {
@@ -383,7 +383,7 @@
       "id": "explorer-context-menu-custom-items",
       "name": "Explorer Context Menu Custom Items",
       "version": "1.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "items[0].allowFolders": 1,
         "items[0].command": "",
@@ -395,7 +395,7 @@
       "id": "explorer-core-context-menu-customizer",
       "name": "Explorer Core Context Menu Customizer",
       "version": "1.0.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "delete.customText": "",
         "delete.enabled": 1,
@@ -430,14 +430,14 @@
       "id": "explorer-double-click-up",
       "name": "Explorer Double Click Up",
       "version": "1.0.1",
-      "enabled": true,
+      "enabled": false,
       "settings": {}
     },
     {
       "id": "explorer-double-f2-rename-extension",
       "name": "Select filename extension on double F2",
       "version": "4",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "ContinuousLoop": 1,
         "DoubleF2MilliSeconds": 1000,
@@ -448,7 +448,7 @@
       "id": "explorer-fast-navigation",
       "name": "Explorer Fast Navigation",
       "version": "1.1.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "classicRibbon": 1,
         "groupedFolderBatching": 1,
@@ -462,7 +462,7 @@
       "id": "explorer-glyphs-colorizer",
       "name": "Explorer Glyphs Colorizer",
       "version": "1.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "colorMode": "accent",
         "customColor": "##cba6f7"
@@ -472,14 +472,14 @@
       "id": "explorer-hide-focus-border",
       "name": "File Explorer Focus Border Remover",
       "version": "1.0.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {}
     },
     {
       "id": "explorer-home-button",
       "name": "File Explorer Address Bar Home Button",
       "version": "1.0.3",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "iconGlyph": "home",
         "placement": "after",
@@ -491,7 +491,7 @@
       "id": "explorer-item-pins",
       "name": "Explorer Item Pins",
       "version": "1.1.7",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "commandBar": 1,
         "contextMenu": 1,
@@ -505,21 +505,21 @@
       "id": "explorer-no-min-size",
       "name": "Explorer No Minimum Window Size",
       "version": "1.0.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {}
     },
     {
       "id": "explorer-real-folder-paths",
       "name": "Explorer real folder paths",
       "version": "0.1.5",
-      "enabled": true,
+      "enabled": false,
       "settings": {}
     },
     {
       "id": "explorer-status-metadata",
       "name": "Explorer Status Bar Metadata",
       "version": "1.4.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "allowNetworkDrives": 1,
         "allowRemovableDrives": 1,
@@ -530,7 +530,7 @@
       "id": "explorer-treeline-killer",
       "name": "Explorer TreeLine Killer",
       "version": "1.0.1",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "hideSystemSeparatorLines": 1,
         "removeLowerGap": 1,
@@ -541,7 +541,7 @@
       "id": "extension-change-no-warning",
       "name": "Turn off change file extension warning",
       "version": "1.0.1",
-      "enabled": true,
+      "enabled": false,
       "settings": {}
     },
     {
@@ -564,7 +564,7 @@
       "id": "file-explorer-remove-suffixes",
       "name": "Remove Taskbar Window Suffixes",
       "version": "1.1.1",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "suffixRemovalMode": "universal",
         "suffixRules[0].processIdentifier": "",
@@ -576,14 +576,14 @@
       "id": "file-explorer-reopen-closed-tab",
       "name": "File Explorer Reopen Closed Tab",
       "version": "1.0.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {}
     },
     {
       "id": "file-type-properties-customization",
       "name": "File Type Properties Customization",
       "version": "1.0.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "enableDescriptions": 1,
         "enableIcons": 1,
@@ -599,7 +599,7 @@
       "id": "fix-explorer-row-right-click",
       "name": "Fix Explorer Row Right-Click",
       "version": "1.0.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {}
     },
     {
@@ -675,7 +675,7 @@
       "id": "harmful-files-autoaccept",
       "name": "Skip harmful files confirmation",
       "version": "0.3.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {}
     },
     {
@@ -813,7 +813,7 @@
       "id": "lm-mediakey-explorer-fix",
       "name": "Play-Media-Key fix in Explorer",
       "version": "1.1",
-      "enabled": true,
+      "enabled": false,
       "settings": {}
     },
     {
@@ -1047,7 +1047,7 @@
       "id": "remove-context-menu-items",
       "name": "Remove Context Menu Items",
       "version": "1.14.0",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "appSpecificItems.removeAddToMediaPlayerQueue": 1,
         "appSpecificItems.removeAlwaysKeepOnThisDevice": 1,
@@ -1170,7 +1170,7 @@
       "id": "restore-folder-menubar-25h2",
       "name": "ExplorerFrame and menubar fixes fork",
       "version": "4.2",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "ControlPanelColorFix": 1,
         "DisplayMenuBar": 1
