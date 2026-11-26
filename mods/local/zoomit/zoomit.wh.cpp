@@ -2,7 +2,7 @@
 // @id              zoomit
 // @name            ZoomIt
 // @description     Zoom, draw and read text bigger under the mouse with a hotkey, like Sysinternals ZoomIt
-// @version         1.2.3
+// @version         1.3.1
 // @author          DavidHiFi, Math Shamenson
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods

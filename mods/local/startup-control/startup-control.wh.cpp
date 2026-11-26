@@ -2,7 +2,7 @@
 // @id startup-control
 // @name Startup Control
 // @description Manage startup apps, scheduled tasks and Windows startup locations.
-// @version 0.1.12
+// @version 0.1.13
 // @author DavidHiFi
 // @github https://github.com/DavidHiFi
 // @homepage https://github.com/DavidHiFi/davids-windhawk-mods
@@ -10,7 +10,7 @@
 // @include windhawk.exe
 // @include windhawk-mod.exe
 // @include windhawk-mod-elevated.exe
-// @compilerOptions -ld2d1 -ldwrite -ldwmapi -lwindowscodecs -lole32 -loleaut32 -luuid -ltaskschd -lwevtapi -lsetupapi -lcfgmgr32 -ladvapi32 -lshell32 -lshlwapi -lcomdlg32 -lcomctl32 -luxtheme -lgdi32 -lwbemuuid -lversion -lwintrust
+// @compilerOptions -ld2d1 -ldwrite -ldwmapi -lwindowscodecs -lole32 -loleaut32 -luuid -lwevtapi -lsetupapi -lcfgmgr32 -ladvapi32 -lshell32 -lshlwapi -lcomdlg32 -lcomctl32 -luxtheme -lgdi32 -lwbemuuid -lversion -lwintrust
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -671,12 +671,16 @@ HRESULT CreateStartupShortcut(const std::wstring& name, const std::wstring& targ
 }
 }
 
+// Task Scheduler's class id, kept here so the mod links without the taskschd
+// library, which the ARM64 compiler does not ship.
+static const CLSID kTaskSchedulerClsid = {0x0f87369f, 0xa4e5, 0x4cfc, {0xbd, 0x3e, 0x73, 0xe6, 0x15, 0x45, 0x72, 0xdd}};
+
 namespace sc {
 struct TaskConnection {
     ComPtr<ITaskService> service;
     HRESULT status = E_FAIL;
     explicit TaskConnection(const std::wstring& server = L"") {
-        status = CoCreateInstance(CLSID_TaskScheduler, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&service));
+        status = CoCreateInstance(kTaskSchedulerClsid, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&service));
         if (FAILED(status)) return;
         VARIANT host{}, empty{};
         if (!server.empty()) { host.vt = VT_BSTR; host.bstrVal = SysAllocString(server.c_str()); }
@@ -4864,10 +4868,11 @@ static LRESULT CALLBACK Set_WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
 #endif
             float x = dipX(lParam), y = dipY(lParam);
 #ifndef LP_TEST_HOVER  // The test build feeds pointer moves by message; a leave would undo them.
-            if (!w->tracking && !w->render) {
+            const bool trackLeave = !w->tracking && !w->render;
 #else
-            if (false) {
+            const bool trackLeave = false;
 #endif
+            if (trackLeave) {
                 TRACKMOUSEEVENT t{sizeof(t), TME_LEAVE, hwnd, 0};
                 TrackMouseEvent(&t);
                 w->tracking = true;
