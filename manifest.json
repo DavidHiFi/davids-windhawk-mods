@@ -1,11 +1,11 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T14:09:35+08:00",
+  "generatedAt": "2026-11-26T14:44:58+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 167,
-    "enabled": 166,
+    "enabled": 165,
     "local": 65
   },
   "mods": [
@@ -2043,12 +2043,12 @@
       "name": "Seamless FPS Overlay",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "license": "",
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-fps-overlay/seamless-fps-overlay.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "local@seamless-winver-configurator",

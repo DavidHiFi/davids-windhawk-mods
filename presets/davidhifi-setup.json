@@ -2121,7 +2121,7 @@
     },
     {
       "id": "local@seamless-fps-overlay",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "animFps": "30",
         "animationSpeed": "global",

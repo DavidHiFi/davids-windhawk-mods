@@ -2,7 +2,7 @@
 // @id              seamless-fps-overlay
 // @name            Seamless FPS Overlay
 // @description     FPS, frame times and PC temperatures over any game, with nothing put into the game
-// @version         1.1.0
+// @version         1.1.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -10,7 +10,6 @@
 // @include         windhawk.exe
 // @include         windhawk-mod.exe
 // @include         windhawk-mod-elevated.exe
-// @architecture    x86-64
 // @compilerOptions -DWIN32_LEAN_AND_MEAN -lole32 -loleaut32 -luuid -lshell32 -lgdi32 -lgdiplus -ld2d1 -ldwrite -ldwmapi -luser32 -lcomctl32 -liphlpapi -ladvapi32 -lshlwapi -lwindowscodecs -luxtheme -lcomdlg32 -limm32 -lversion -lpdh -lruntimeobject -lws2_32 -ldxgi
 // ==/WindhawkMod==
 
@@ -24,6 +23,12 @@ moving pictures included, and nothing is put into the game: Windows itself
 reports each frame, so it is safe with anti-cheat and works over Plutonium.
 
 ![Seamless FPS Overlay preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-fps-overlay.png)
+
+## What's new in 1.1.1
+The overlay now starts every time. Before, it could quietly fail to come back
+after an update or a Windhawk reload and stay gone until you changed a
+setting. It also closes faster, and if its process ever goes missing,
+Windhawk brings it back by itself.
 
 ## What's new in 1.1.0
 The Benchmark layout now matches the old RivaTuner one: the card name on top,
@@ -7251,22 +7256,79 @@ void WhTool_ModUninit() {
     sfoset::CloseSettingsWindow();
     if (g_ctrl) PostMessageW(g_ctrl, WM_CLOSE, 0, 0);
     else if (g_uiThreadId) PostThreadMessageW(g_uiThreadId, WM_QUIT, 0, 0);
+    // Keep this short. Windhawk starts the next copy while this one closes, and that copy gives
+    // up after about 400 ms if this one still holds the tool mutex. The frame trace left behind
+    // by a cut-short close is stopped by name when the next copy starts.
     if (g_uiThread) {
-        WaitForSingleObject(g_uiThread, 5000);
+        WaitForSingleObject(g_uiThread, 1500);
         CloseHandle(g_uiThread);
         g_uiThread = nullptr;
     }
-    seamless_sensors::StopPublisher(3000);
+    seamless_sensors::StopPublisher(500);
     seamless_sensors::CloseReader();
     Wh_Log(L"Seamless FPS Overlay stopped cleanly.");
     SeamlessMenuSkin::Uninit();
 }
 
-// The frame counter needs administrator rights for Windows' event tracing, so only Windhawk's
-// elevated helper starts the tool process.
+// The frame counter needs administrator rights, so only an elevated Windhawk process starts
+// the tool process. That launcher also keeps watch: if the tool process is gone (a reload where
+// the new copy lost the race with the old one, or a crash), it starts it again, waiting longer
+// each time so a copy that keeps failing cannot loop fast.
+static HANDLE g_watchStop;
+static HANDLE g_watchThread;
+
+static bool ToolProcessRunning() {
+    HANDLE m = OpenMutexW(SYNCHRONIZE, FALSE, L"windhawk-tool-mod_" WH_MOD_ID);
+    if (!m) return GetLastError() == ERROR_ACCESS_DENIED;
+    CloseHandle(m);
+    return true;
+}
+
+static DWORD WINAPI WatchToolProcess(LPVOID) {
+    DWORD wait = 20000, backoff = 30000;
+    int missing = 0;
+    while (WaitForSingleObject(g_watchStop, wait) == WAIT_TIMEOUT) {
+        wait = 15000;
+        if (ToolProcessRunning()) {
+            missing = 0;
+            continue;
+        }
+        if (++missing < 2) continue;
+        Wh_Log(L"Overlay process missing, starting it again");
+        windhawk_tool_mod::LaunchToolModProcess();
+        missing = 0;
+        wait = backoff;
+        if (backoff < 600000) backoff *= 2;
+    }
+    return 0;
+}
+
 BOOL WhToolLauncher_ModInit(BOOL* bLaunch) {
-    *bLaunch = IsProcessElevated() ? TRUE : FALSE;
+    if (!IsProcessElevated()) return FALSE;  // nothing to do in a normal-rights helper
+    *bLaunch = TRUE;
     return TRUE;
+}
+
+void WhToolLauncher_ModAfterInit() {
+    g_watchStop = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (g_watchStop) g_watchThread = CreateThread(nullptr, 0, WatchToolProcess, nullptr, 0, nullptr);
+}
+
+void WhToolLauncher_ModBeforeUninit() {
+    if (g_watchStop) SetEvent(g_watchStop);
+    if (g_watchThread) {
+        WaitForSingleObject(g_watchThread, 2000);
+        CloseHandle(g_watchThread);
+        g_watchThread = nullptr;
+    }
+}
+
+void WhToolLauncher_ModUninit() {
+    WhToolLauncher_ModBeforeUninit();
+    if (g_watchStop) {
+        CloseHandle(g_watchStop);
+        g_watchStop = nullptr;
+    }
 }
 
 // ===========================================================================

@@ -1372,11 +1372,11 @@
     "version": "1.0.1"
   },
   "local@seamless-fps-overlay": {
-    "disabled": false,
+    "disabled": true,
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
-    "architecture": "x86-64",
-    "version": "1.1.0"
+    "architecture": "",
+    "version": "1.1.1"
   },
   "local@seamless-winver-configurator": {
     "disabled": false,
