@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.1.5
+// @version         2.1.6
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -3440,15 +3440,52 @@ BOOL PaintScroll(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
     if ((!factory ||(iPartId != SBP_THUMBBTNVERT && iPartId != SBP_THUMBBTNHORZ)))
         return FALSE;
     
-    INT index = (iStateId == SCRBS_NORMAL) ? 0 : 1;
-    if (iPartId == SBP_THUMBBTNHORZ) index += 2;
-
-    if (!g_themeCache.scrollbar[index])
-        if (!g_themeCache.CacheScrollbar(iPartId, iStateId, index))
-            return FALSE;
+    // The thumb is the blue to mauve gradient along its length, the same
+    // one every other scrollbar in the setup uses; hover widens and
+    // brightens it.
+    const FLOAT w = (FLOAT)(pRect->right - pRect->left);
+    const FLOAT h = (FLOAT)(pRect->bottom - pRect->top);
+    if (w <= 0.f || h <= 0.f)
+        return TRUE;
+    const bool vert = iPartId == SBP_THUMBBTNVERT;
+    const bool hot = iStateId != SCRBS_NORMAL;
+    const FLOAT scale = (FLOAT)g_Dpi / USER_DEFAULT_SCREEN_DPI;
+    const FLOAT frac = hot ? 0.25f : 0.35f;
+    const D2D1_RECT_F bar = vert
+        ? D2D1::RectF(w * frac, 0.f, w - w * frac, h)
+        : D2D1::RectF(0.f, h * frac, w, h - h * frac);
+    const FLOAT thick = vert ? bar.right - bar.left : bar.bottom - bar.top;
+    const FLOAT radius = std::min(4.f * scale, thick / 2.f);
 
     FillRect(hdc, pRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
-    DrawNineGridStretch(hdc, g_themeCache.scrollbar[index], pRect, 8, 5, 8, 5);
+    Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> rt;
+    if (FAILED(CreateBoundD2DRenderTarget(hdc, pRect, factory.Get(), &rt)))
+        return FALSE;
+    auto lighten = [hot](BYTE v) {
+        return (FLOAT)(hot ? v + (255 - v) * 0.22f : v) / 255.f;
+    };
+    const FLOAT alpha = hot ? 1.f : 0.82f;
+    const D2D1_GRADIENT_STOP stops[2] = {
+        {0.f, D2D1::ColorF(lighten(0x89), lighten(0xB4), lighten(0xFA), alpha)},
+        {1.f, D2D1::ColorF(lighten(0xCB), lighten(0xA6), lighten(0xF7), alpha)},
+    };
+    Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> sc;
+    Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> gb;
+    if (FAILED(rt->CreateGradientStopCollection(stops, 2, &sc)) ||
+        FAILED(rt->CreateLinearGradientBrush(
+            D2D1::LinearGradientBrushProperties(
+                D2D1::Point2F(bar.left, bar.top),
+                vert ? D2D1::Point2F(bar.left, bar.bottom)
+                     : D2D1::Point2F(bar.right, bar.top)),
+            sc.Get(), &gb)))
+        return FALSE;
+    rt->BeginDraw();
+    rt->FillRoundedRectangle(D2D1::RoundedRect(bar, radius, radius), gb.Get());
+    HRESULT hr = rt->EndDraw();
+    if (FAILED(hr)) {
+        Wh_Log(L"Scrollbar thumb draw failed: 0x%08X", hr);
+        return FALSE;
+    }
     return TRUE;
 }
 
