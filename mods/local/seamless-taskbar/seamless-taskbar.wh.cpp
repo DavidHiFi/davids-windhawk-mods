@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.68
+// @version         0.4.69
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -39552,9 +39552,8 @@ DisplayState GetDisplayState(const SYSTEMTIME& time,
     if (g_settings.ShouldFetchWeather() && weather.valid) {
         auto description = DescribeWeather(weather.code, weather.isDay);
         state.hasWeather = true;
-        // U+00B0, the degree sign.
-        state.temperature = std::to_wstring(weather.temperature) +
-                            static_cast<wchar_t>(0xB0);
+        // Number only: the unit badge draws the degree sign and letter.
+        state.temperature = std::to_wstring(weather.temperature);
         state.unit = weather.fahrenheit ? L"F" : L"C";
         state.condition = description.label;
         state.icon = description.icon;
