@@ -15,7 +15,8 @@ side menu folds down to icons.
 - **Edges on everything.** Cards, buttons, menus, fields and side menu items
   get a 2px grey edge at rest and a blue to mauve edge on hover.
 - **Folding side menu.** A button folds the side menu down to its icons. It can
-  start folded and remember how you left it.
+  start folded, remember how you left it, and
+  set how wide the folded strip is. The account picture shrinks to fit it.
 - **Mocha line icons.** Plain line icons in the side menu instead of the
   coloured ones.
 - **Your own colours.** Accent start and end, edge, text, background, card and
