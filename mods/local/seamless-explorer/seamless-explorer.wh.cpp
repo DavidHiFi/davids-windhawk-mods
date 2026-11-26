@@ -2,7 +2,7 @@
 // @id              seamless-explorer
 // @name            Seamless Explorer
 // @description     Thirty-five small File Explorer mods in one, each with its own switch: look, windows and tabs, right-click menu, copying and fixes
-// @version         1.1.5
+// @version         1.1.7
 // @author          DavidHiFi, m417z, digART, crazyboyybs, NoMorePlz, Languster, Momo, Anixx, buedgik, RobotsNeverDie, CTravkin, Nerdworld, gilnett, Armaninyow, wrldspawn, VitalS, Deepak, akiyorm, Lockframe, metanoid18, iMAboud, Ender, Marnes, Arimodu, Mark Jansen, DanRotaru, Peter2oo1, NDruce, Sanekx Arcs, javierpetrucci
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -4237,6 +4237,10 @@ void ModUninit() {
 #pragma push_macro("WH_MOD_ID")
 #undef WH_MOD_ID
 #define WH_MOD_ID L"seamless-explorer.styler"
+namespace navPaneSpacing {
+bool SuppressNavSeparator();
+bool AdjustNavSeparator(HDC hdc, const POINT* points, int count, POINT adjusted[2]);
+}
 namespace styler {
 // ----- original code starts -----
 
@@ -16250,8 +16254,19 @@ BOOL WINAPI DeleteDC_Hook(HDC hdc) {
 using Polyline_t = decltype(&Polyline);
 Polyline_t Polyline_Original;
 BOOL WINAPI Polyline_Hook(HDC hdc, const POINT* apt, int cpt) {
-    bool horizontal = cpt == 2 && apt[0].y == apt[1].y;
-    bool vertical = cpt == 2 && apt[0].x == apt[1].x;
+    if (::navPaneSpacing::SuppressNavSeparator()) {
+        return TRUE;
+    }
+    POINT adjusted[2];
+    if (::navPaneSpacing::AdjustNavSeparator(hdc, apt, cpt, adjusted)) {
+        if (adjusted[0].x >= adjusted[1].x) {
+            return TRUE;
+        }
+        return Polyline_Original(hdc, adjusted, 2);
+    }
+
+    bool horizontal = cpt == 2 && apt && apt[0].y == apt[1].y;
+    bool vertical = cpt == 2 && apt && apt[0].x == apt[1].x;
     if (!horizontal && !vertical) {
         return Polyline_Original(hdc, apt, cpt);
     }
@@ -63836,10 +63851,37 @@ static void ApplyNavPanePadding(void* sizer, int dpi, bool apply, bool refresh) 
 // of a tree item is a whole number of rows.
 static void(WINAPI* CNscTree_DrawDivider_Original)(void* pThis, HDC hdc, HTREEITEM item);
 static LRESULT(WINAPI* SendMessageW_Original)(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-static BOOL(WINAPI* Polyline_Original)(HDC hdc, const POINT* points, int count);
 
 // Set while a separator is being drawn by the current thread.
 static thread_local bool t_drawingNavSeparator;
+
+bool SuppressNavSeparator() {
+    return t_drawingNavSeparator && ::noTreeLines::g_settings.hideSystemSeparatorLines;
+}
+
+bool AdjustNavSeparator(HDC hdc, const POINT* points, int count, POINT adjusted[2]) {
+    if (!t_drawingNavSeparator || !g_settings.navSeparatorInset || count != 2 || !points ||
+        points[0].y != points[1].y) {
+        return false;
+    }
+
+    HWND window = WindowFromDC(hdc);
+    int dpi = window ? (int)GetDpiForWindow(window) : 0;
+    if (dpi <= 0) {
+        dpi = GetDeviceCaps(hdc, LOGPIXELSX);
+    }
+
+    int inset = MulDiv(g_settings.navSeparatorInset, dpi, 96);
+    adjusted[0] = points[0];
+    adjusted[1] = points[1];
+    if (adjusted[0].x > adjusted[1].x) {
+        std::swap(adjusted[0], adjusted[1]);
+    }
+
+    adjusted[0].x += inset;
+    adjusted[1].x -= inset;
+    return true;
+}
 
 // The pin icons of the navigation pane.
 //
@@ -64120,42 +64162,6 @@ static LRESULT WINAPI SendMessageW_Hook(HWND hWnd, UINT msg, WPARAM wParam, LPAR
     }
 
     return SendMessageW_Original(hWnd, msg, wParam, lParam);
-}
-
-static BOOL WINAPI Polyline_Hook(HDC hdc, const POINT* points, int count) {
-    // "Fully hide system separator lines" drops the rule here, inside
-    // CNscTree::DrawDivider, so it never reaches any device context: not the
-    // window, not a memory frame another mod captures to scroll with.
-    if (t_drawingNavSeparator && noTreeLines::g_settings.hideSystemSeparatorLines) {
-        return TRUE;
-    }
-    if (!t_drawingNavSeparator || !g_settings.navSeparatorInset || count != 2 || !points ||
-        points[0].y != points[1].y) {
-        return Polyline_Original(hdc, points, count);
-    }
-
-    // The line is drawn in the pixels of the device. If the tree is drawn
-    // through a memory device context, the window isn't known, and the
-    // scaling of the system is used.
-    HWND window = WindowFromDC(hdc);
-    int dpi = window ? (int)GetDpiForWindow(window) : 0;
-    if (dpi <= 0) {
-        dpi = GetDeviceCaps(hdc, LOGPIXELSX);
-    }
-
-    int inset = MulDiv(g_settings.navSeparatorInset, dpi, 96);
-    POINT adjusted[2] = {points[0], points[1]};
-    if (adjusted[0].x > adjusted[1].x) {
-        std::swap(adjusted[0], adjusted[1]);
-    }
-
-    adjusted[0].x += inset;
-    adjusted[1].x -= inset;
-    if (adjusted[0].x >= adjusted[1].x) {
-        return TRUE;
-    }
-
-    return Polyline_Original(hdc, adjusted, 2);
 }
 
 // uxtheme.dll
@@ -64537,14 +64543,11 @@ static BOOL SetupHooksImpl() {
 
     WindhawkUtils::SetFunctionHook(createElement, DUIXmlParser_CreateElement_Hook, &DUIXmlParser_CreateElement_Original);
 
-    // The separators and the pin icons of the navigation pane.
+    // The state-image list carries the pin icons of the navigation pane.
     HMODULE user32 = GetModuleHandleW(L"user32.dll");
-    HMODULE gdi32 = GetModuleHandleW(L"gdi32.dll");
     auto sendMessageW = user32 ? (decltype(SendMessageW_Original))GetProcAddress(user32, "SendMessageW") : nullptr;
-    auto polyline = gdi32 ? (decltype(Polyline_Original))GetProcAddress(gdi32, "Polyline") : nullptr;
-    if (sendMessageW && polyline) {
+    if (sendMessageW) {
         WindhawkUtils::SetFunctionHook(sendMessageW, SendMessageW_Hook, &SendMessageW_Original);
-        WindhawkUtils::SetFunctionHook(polyline, Polyline_Hook, &Polyline_Original);
     }
 
     return TRUE;
