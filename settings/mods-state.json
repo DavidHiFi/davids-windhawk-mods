@@ -417,7 +417,7 @@
     "include": "windhawk.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.4.37"
+    "version": "1.4.39"
   },
   "local@explorer-tags-plus": {
     "disabled": false,

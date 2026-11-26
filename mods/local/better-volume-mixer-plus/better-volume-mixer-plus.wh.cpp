@@ -2,7 +2,7 @@
 // @id           better-volume-mixer-plus
 // @name         Seamless Volume Mixer
 // @description  A compact tray volume mixer with per-app volume up to 1000%, a per-app compressor, and per-app output and input devices
-// @version      1.4.37
+// @version      1.4.39
 // @author       DavidHiFi, 0Allu, shubho
 // @github       https://github.com/DavidHiFi
 // @homepage     https://github.com/DavidHiFi/davids-windhawk-mods
@@ -70,10 +70,15 @@ To avoid two volume icons, install
 and turn on **Hide volume icon**. Disable the original Better Volume Mixer
 before enabling this mod.
 
-## What's new in 1.4.36
+## What's new in 1.4.39
 
-- Title bar menus get the same blurred Mocha body as every other menu again. They
-  showed pitch black because the part that spots new menus stopped right after start.
+- Sound from Windows' own Store apps, like Media Player, shows the same Catppuccin icon
+  as on the taskbar when UWP Assets Redirect Plus has an icon theme on.
+
+## What's new in 1.4.38
+
+- Title bar menus (right-click the title bar, or Alt+Space) now really get the same
+  blurred Mocha body as every other menu. They opened pitch black before.
 
 ## Credits
 
@@ -1696,9 +1701,133 @@ void ClearIconCache() {
     g_iconCache.clear();
 }
 
+// Store apps (Media Player, Sound Recorder) carry their stock icon inside the exe, so the
+// exe icon misses the Catppuccin theme the taskbar shows. UWP Assets Redirect Plus keeps
+// that theme as "package name = icon file"; read it once and use it first.
+std::unordered_map<std::wstring, std::wstring> g_themeIcons;
+bool g_themeRead = false;
+
+std::wstring ThemeLower(std::wstring s) {
+    for (auto& c : s) c = static_cast<wchar_t>(std::towlower(c));
+    return s;
+}
+
+std::wstring ThemeReadFile(const std::wstring& path) {
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                           OPEN_EXISTING, 0, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return {};
+    std::string bytes;
+    LARGE_INTEGER size{};
+    if (GetFileSizeEx(f, &size) && size.QuadPart > 0 && size.QuadPart < (1 << 20)) {
+        bytes.resize(static_cast<size_t>(size.QuadPart));
+        DWORD got = 0;
+        if (!ReadFile(f, &bytes[0], static_cast<DWORD>(bytes.size()), &got, nullptr)) got = 0;
+        bytes.resize(got);
+    }
+    CloseHandle(f);
+    if (bytes.size() >= 2 && static_cast<unsigned char>(bytes[0]) == 0xFF &&
+        static_cast<unsigned char>(bytes[1]) == 0xFE)
+        return std::wstring(reinterpret_cast<const wchar_t*>(bytes.data() + 2), (bytes.size() - 2) / 2);
+    size_t skip = bytes.rfind("\xEF\xBB\xBF", 0) == 0 ? 3 : 0;
+    int n = MultiByteToWideChar(CP_UTF8, 0, bytes.data() + skip, static_cast<int>(bytes.size() - skip),
+                                nullptr, 0);
+    std::wstring text(n, L'\0');
+    if (n)
+        MultiByteToWideChar(CP_UTF8, 0, bytes.data() + skip, static_cast<int>(bytes.size() - skip),
+                            &text[0], n);
+    return text;
+}
+
+void ReadIconTheme() {
+    g_themeRead = true;
+    const wchar_t* modKey = L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@uwp-assets-redirect-plus";
+    HKEY k = nullptr;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, modKey, 0, KEY_READ, &k) != ERROR_SUCCESS) return;
+    RegCloseKey(k);
+    DWORD off = 0, cb = sizeof(off);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, modKey, L"Disabled", RRF_RT_REG_DWORD, nullptr, &off, &cb) ==
+            ERROR_SUCCESS && off)
+        return;
+    wchar_t buf[512] = {};
+    cb = sizeof(buf);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE,
+                     L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@uwp-assets-redirect-plus\\Settings",
+                     L"icon-theme", RRF_RT_REG_SZ, nullptr, buf, &cb) != ERROR_SUCCESS)
+        return;
+    std::wstring theme = buf;
+    if (theme.empty()) return;
+    std::replace(theme.begin(), theme.end(), L'/', L'\\');
+    // Mod storage folders sit side by side; ours tells where the theme mod's is.
+    std::vector<std::wstring> roots;
+    wchar_t own[MAX_PATH * 2] = {};
+    if (Wh_GetModStoragePath(own, ARRAYSIZE(own))) {
+        std::wstring r = own;
+        while (!r.empty() && (r.back() == L'\\' || r.back() == L'/')) r.pop_back();
+        size_t cut = r.find_last_of(L"\\/");
+        if (cut != std::wstring::npos) roots.push_back(r.substr(0, cut));
+    }
+    roots.push_back(L"C:\\ProgramData\\Windhawk\\Engine\\ModsWritable\\mod-storage");
+    std::wstring dir, text;
+    for (auto& r : roots) {
+        dir = r + L"\\local@uwp-assets-redirect-plus\\icon-themes\\" + theme;
+        text = ThemeReadFile(dir + L"\\theme.ini");
+        if (!text.empty()) break;
+    }
+    if (text.empty()) return;
+    auto trim = [](const std::wstring& s) {
+        size_t a = s.find_first_not_of(L" \t\r\n");
+        size_t b = s.find_last_not_of(L" \t\r\n");
+        return a == std::wstring::npos ? std::wstring() : s.substr(a, b - a + 1);
+    };
+    std::wstring section;
+    size_t pos = 0;
+    while (pos <= text.size()) {
+        size_t e = text.find(L'\n', pos);
+        if (e == std::wstring::npos) e = text.size();
+        std::wstring line = trim(text.substr(pos, e - pos));
+        pos = e + 1;
+        if (line.empty() || line[0] == L';' || line[0] == L'#') continue;
+        if (line[0] == L'[') {
+            section = ThemeLower(trim(line.substr(1, line.find(L']') - 1)));
+            continue;
+        }
+        size_t eq = line.find(L'=');
+        if (eq == std::wstring::npos) continue;
+        std::wstring key = ThemeLower(trim(line.substr(0, eq)));
+        std::wstring val = trim(line.substr(eq + 1));
+        if (val.rfind(L".\\", 0) == 0 || val.rfind(L"./", 0) == 0) val = dir + L"\\" + val.substr(2);
+        // Only whole packages with an .ico; "Package|folder" entries cover one part of a package.
+        if ((section == L"windows-apps" || section == L"system-apps") && key.find(L'|') == std::wstring::npos &&
+            val.size() > 4 && _wcsicmp(val.c_str() + val.size() - 4, L".ico") == 0)
+            g_themeIcons[key] = val;
+    }
+}
+
+// The theme icon for a program inside a WindowsApps package folder
+// (...\WindowsApps\Microsoft.ZuneMusic_11.2.3.0_x64__8wekyb3d8bbwe\Microsoft.Media.Player.exe).
+HICON ThemeIconForPath(const std::wstring& path, int pixels) {
+    std::wstring l = ThemeLower(path);
+    const std::wstring wa = L"\\windowsapps\\";
+    size_t at = l.find(wa);
+    if (at == std::wstring::npos || pixels <= 0) return nullptr;
+    std::wstring rest = l.substr(at + wa.size());
+    size_t us = rest.find(L'_'), sl = rest.find(L'\\');
+    if (us == std::wstring::npos || (sl != std::wstring::npos && sl < us)) return nullptr;
+    if (!g_themeRead) ReadIconTheme();
+    auto it = g_themeIcons.find(rest.substr(0, us));
+    if (it == g_themeIcons.end()) return nullptr;
+    HICON icon = nullptr;
+    if (PrivateExtractIconsW(it->second.c_str(), 0, pixels, pixels, &icon, nullptr, 1, 0) == 1 && icon)
+        return icon;
+    return nullptr;
+}
+
 HICON ExtractSizedIcon(const std::wstring& path, int pixels) {
     if (path.empty()) {
         return nullptr;
+    }
+    if (HICON themed = ThemeIconForPath(path, pixels)) {
+        return themed;
     }
 
     HICON icon = nullptr;
@@ -8327,6 +8456,22 @@ static BOOL WINAPI TrackPopupMenuEx_hook(HMENU m, UINT f, INT x, INT y, HWND h, 
     SeamlessMenuRoom::EndTrack();
     return ret;
 }
+// Title bar menus are opened by DefWindowProc, never through TrackPopupMenu: wrap the
+// messages that open one the same way, so the menu is skinned before its first paint.
+static decltype(&DefWindowProcW) SysMenuDefProc_orig = nullptr;
+static LRESULT WINAPI SysMenuDefProc_hook(HWND h, UINT msg, WPARAM w, LPARAM l)
+{
+    UINT sc = (UINT)(w & 0xFFF0);
+    bool opens = (msg == WM_SYSCOMMAND && (sc == SC_KEYMENU || sc == SC_MOUSEMENU)) ||
+                 msg == WM_CONTEXTMENU || msg == 0x0313 /* WM_POPUPSYSTEMMENU */;
+    if (!opens) return SysMenuDefProc_orig(h, msg, w, l);
+    SeamlessMenuRoom::BeginTrack();
+    HHOOK cbt = InstallMenuCbtHook();
+    LRESULT ret = SysMenuDefProc_orig(h, msg, w, l);
+    if (cbt) UnhookWindowsHookEx(cbt);
+    SeamlessMenuRoom::EndTrack();
+    return ret;
+}
 
 // Returns TRUE when the menu part was drawn here.
 static BOOL PaintMenuPart(HDC hdc, INT part, INT state, LPCRECT pRect, LPCRECT pClip)
@@ -8439,6 +8584,7 @@ static VOID Init()
     Hook(dwm, "DwmSetWindowAttribute", DwmSetWindowAttribute_hook, &DwmSetWindowAttribute_orig);
     Hook(u32, "TrackPopupMenu", TrackPopupMenu_hook, &TrackPopupMenu_orig);
     Hook(u32, "TrackPopupMenuEx", TrackPopupMenuEx_hook, &TrackPopupMenuEx_orig);
+    Hook(u32, "DefWindowProcW", SysMenuDefProc_hook, &SysMenuDefProc_orig);
     SeamlessMenuRoom::Init(OnMenuCreated);
 }
 
