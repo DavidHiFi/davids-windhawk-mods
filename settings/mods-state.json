@@ -1355,7 +1355,7 @@
     "include": "SystemSettings.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.0.1"
+    "version": "2.1.0"
   },
   "local@uwp-assets-redirect-plus": {
     "disabled": true,
