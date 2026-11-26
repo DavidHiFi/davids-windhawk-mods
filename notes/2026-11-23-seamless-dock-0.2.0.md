@@ -290,8 +290,95 @@ also flickers, deal with it, we need consistency."
 - Lesson: in a z-order proof, check the menu against the pill in the frames, not only dips
   under the bar.
 
+## 0.3.10: taskbar menus and submenus stay over the pill (2026-11-24)
+
+- The owner's screenshot after 0.3.9 still showed the pill over the taskbar's right-click menu
+  (Remember positions / Taskbar position / Modules / Dock position). That menu is Seamless
+  Taskbar's XAML MenuFlyout (`ShouldConstrainToRootBounds(false)`), a windowed popup inside
+  explorer.exe. Every dock hook used `WINEVENT_SKIPOWNPROCESS`, so its show was never seen.
+  My 0.3.9 proof right-clicked beside the pill, so the menu never overlapped it.
+- Fix: three more hooks on the z-guard thread for this process only (`idProcess = own pid`):
+  FOREGROUND, MENUPOPUPSTART, OBJECT_SHOW. A top-level window that opens over the pill
+  (not the pill or the dock) is watched (up to 4). The 2 ms burst then drops to 15 ms and
+  keeps going while a watched window stays visible, so a submenu hover that lifts the pill
+  again is corrected. It stops when they all close.
+- Rollback copy `seamless-dock-0.3.9.wh.cpp`; install script `install-dock-0310.ps1`.
+- Installed 8:43 am, desktop fine after the 60 s watch, live copy equals the work copy
+  (CR-only hash difference). Published: mods f82e9bc, feed 15ad855.
+- Proof script `proof\title-1124\run-0310.sh` right-clicks ON the pill and hovers each
+  submenu row; recording `menu-0310.mp4`.
+- Proof 2026-11-24 9:20 am: right-clicked ON the pill twice; the main menu covers the pill
+  in every menu frame (zoom `zoom-0310-pill.png`), the pill never fell under the bar,
+  frame pacing even. SetCursorPos-only hovers did not open submenus, so the submenu case
+  is not proven yet: `run-0310-sub.sh` (real SendInput moves) runs at the next desktop turn.
+- 2026-11-25 11:42 pm submenu run (`menu-0310-sub.mp4`, zoom `sub\zoom.png`): submenus open,
+  but the pill is drawn OVER the main menu's top edge in every menu frame. The owner sent the
+  same thing again on 11-26 ("(37) Yapfast" pill over Remember positions). So 0.3.10 was not
+  enough. Another thread's 0.3.11 (Empty Recycle Bin row) did not touch this code.
+
+## 0.3.12: the pill tucks under any open bar menu (2026-11-26)
+
+Why 0.3.10 failed (read from the code, the live order check is still queued): the watch
+list only took a menu that already covered the pill at the moment it was shown. A menu that
+opens small and then moves into place was never watched, so the 15 ms check stopped after the
+500 ms burst. Anything that lifted the pill later (the bar re-raising its owned windows, or the
+pill being shown again with HWND_TOPMOST) left it above the menu for as long as the menu stayed open.
+
+- `RaiseTitle` first looks for the lowest watched, always-on-top window that covers the pill
+  and puts the pill right under it (SetWindowPos insert-after that menu). Only then the old
+  above-the-bar logic. Always-on-top only, so a plain Explorer window over the bar never
+  pulls the pill under the bar.
+- `ZOwnEventProc` also watches any always-on-top popup shown in Explorer even when it does
+  not cover the pill yet; `MenuWatchOpen` only keeps the 15 ms check going while a watched
+  window really covers the pill, and `WatchMenu` replaces non-covering entries first.
+- Backstops: `UpdateTitle` calls `RaiseTitle` right after showing the pill topmost, and the
+  pill's 50 ms hover tick calls `RaiseTitle`, so nothing can keep it on top for long.
+- Syntax check clean (`syntax-0312.log` empty). Rollback copy: `seamless-dock-0.3.11.wh.cpp`.
+- Proof script `proof\title-1124\run-proof-0312.sh`: records `menu-0312.mp4` and logs the
+  window order (pill vs menu vs bar) at each step into `proof-0312.log`.
+
+### Shipped as 0.3.13 (with the mod-window-identity patch)
+
+- Thread b6acb9fd held the engine lock and built its patch on top of my 0.3.12 file, so
+  both went live together as 0.3.13 (live source has `LowestMenuOverPill`). Published by its
+  Install-StagedMod run: davids-windhawk-mods `74b0bfc`, feed `adcbbcd`, pushed.
+- First proof run (06:57) never opened the menu: the script took the desktop lock as
+  9036a277 but ran without `COOP_AGENT`, so Seamless Window Manager dropped every cursor
+  move and click (memory `swm-cursor-needs-coop-agent`). The video only shows the pill.
+- `proof-0313.ps1` / `run-proof-0313.sh` set `COOP_AGENT` and log `GetCursorPos` after each
+  move (`CURSOR REFUSED` stops the run). Output `menu-0313.mp4`, `proof-0313.log`.
+- Rollback: install `seamless-dock-0.3.11.wh.cpp` with Install-StagedMod (drops the
+  identity patch too; tell thread b6acb9fd first).
+- Run 2 (07:42): a VISIBLE PowerShell console appeared (scheduled task -> Git bash ->
+  plain `powershell -File`). The cursor only moved because SWM's OwnerIntent saw our own
+  console in front. Right-click on the pill centre opens no bar menu. Click 40 px left.
+- Run 3: `CURSOR REFUSED` once; a direct probe under the lock a minute later got
+  `SetCursorPos` true. Run 4 (`proof-0314.ps1`, hidden, under the lock) opened the menu.
+
+### 0.3.13 did not fix it: the pill lives on a higher window layer
+
+- `menu-0314.mp4` frames, 4x zoom (`zoom-08.png`): the pill outline and text are still
+  drawn over the menu's top row and over the Taskbar position submenu.
+- The pill is made by the tool process (`windhawk-mod.exe -tool-mod`), and Windows puts
+  that process's always-on-top windows in z-band 6. Explorer's bar and its XAML menus are
+  band 1. `GetTopWindow`/`GW_HWNDNEXT` walks never meet the pill, so `SetWindowPos`
+  relative to a band-1 menu cannot move it under the menu. All the 0.3.10 to 0.3.13
+  ordering logic was right but acted on a window in the wrong layer.
+- Check: `proof\title-1124\list-pills2.ps1` prints each pill window's band
+  (`GetWindowBand`).
+- 0.3.14 fix (`D:\Agent Work\seamless-dock\band-0314\stage.py`): `MakeTitle` uses
+  `CreateWindowInBand(..., 1)` (desktop band), falling back to `CreateWindowExW`.
+  The existing RaiseTitle logic then works as designed.
+- Installed 2026-11-26 8:54 am (registry v0.3.14, backup
+  `local@seamless-dock-20261126-0846.wh.cpp`), published mods 40004fe, feed 39d1e24.
+- `pills2.txt` after install: pill `band=1`, owner = Shell_TrayWnd. Was band 6.
+
 ## Rollback
 
+- Dock 0.3.14: install `local@seamless-dock-20261126-0846.wh.cpp` (the 0.3.13 backup
+  the installer took) with Install-StagedMod.
+
+- Dock 0.3.10: install `seamless-dock-0.3.9.wh.cpp` with Install-StagedMod.
 - Dock 0.3.9: install `seamless-dock-0.3.8.wh.cpp` with Install-StagedMod.
 - Dock 0.3.8: install `seamless-dock-0.3.7.wh.cpp` with Install-StagedMod.
 
