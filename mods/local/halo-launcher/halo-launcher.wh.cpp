@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.18
+// @version         0.6.20
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -59,6 +59,32 @@ its own settings window: open it from the tray icon or with Ctrl+I in Halo.
 | Esc | Back, then close |
 
 Every key in that list can be changed on the Keys page of the settings.
+
+## What's new in 0.6.20
+
+- A greeting fills the empty search box: Good morning, Good afternoon, Good evening
+  or Good night, with your name. Set the name and turn it off on the General page.
+- The open and close movement is softer: a gentle landing with a small rise and a
+  slight grow from 98% to full size. Closing mirrors it and is a little quicker.
+  Everything still follows the Use animation and animation speed settings, and
+  nothing moves when Windows animations are turned off.
+- An AI button sits at the right end of the search bar. It opens a small glass
+  panel with Claude Code, Codex, OpenCode, Antigravity, Grok and Gemini CLI, and
+  each one opens in a new Windows Terminal tab in a folder you pick. Every command
+  can be changed and every agent can be hidden on the Modules page. Typing ai
+  lists the same agents as results, with the arrow keys and Enter working there.
+- New modules, each with its own switch and calling word on the Modules page:
+  - Recent projects lists the git folders one level under your project folders,
+    newest change first. Enter opens one in a Windows Terminal tab, Ctrl + Enter
+    opens it in your editor.
+  - Clipboard history searches what Seamless Clipboard Manager has saved. Enter
+    copies the picked entry back to the clipboard.
+  - Media controls show Play or pause, Next track and Previous track.
+  - Quick notes adds what you type to a notes file, and with just its calling
+    word lists your latest notes. It is on by default.
+- Three new sound sets, made inside Halo itself: Glass, Pebble and Breeze, each
+  with an open, close and pick sound. Pick a set and a volume on the Look page.
+  The old Flow Launcher sound stays as a choice.
 
 ## What's new in 0.6.14
 
@@ -143,6 +169,101 @@ Every key in that list can be changed on the Keys page of the settings.
 - settingsTrayIcon: true
   $name: "Tray icon"
   $description: "Click it to open these settings. Right-click it to open Halo or restart its search engine. When off, Ctrl + I in Halo still opens this window."
+- greetingEnabled: true
+  $name: "Greeting in the empty box"
+  $description: "While the search box is empty it says Good morning, Good afternoon, Good evening or Good night by the time of day, with your name. Off, the normal hint text shows instead."
+- greetingName: ""
+  $name: "Your name"
+  $description: "Used in the greeting. Empty, the name of your Windows account is used."
+- soundSet: "Flow Launcher"
+  $name: "Sound set"
+  $description: "Which sounds Halo plays when it opens, closes and picks a result."
+  $options:
+  - "Flow Launcher": "The sound file Flow Launcher plays, as before"
+  - Glass: "A soft high chime with a long gentle tail"
+  - Pebble: "A short rounded low tap, like a marimba"
+  - Breeze: "Two soft rising notes, very light"
+- soundVolume: 50
+  $name: "Sound volume"
+  $description: "0 to 100 (Suggested: 50)."
+- aiEnabled: true
+  $name: "AI agents"
+  $description: "The button at the right end of the search bar and the ai calling word list your coding agents. Pick one and it opens in a new Windows Terminal tab."
+- aiKeyword: "ai"
+  $name: "AI agents calling word"
+  $description: "Type this to list the agents as results."
+- aiFolder: ""
+  $name: "Agents working folder"
+  $description: "The folder the agents start in. Empty, your home folder is used."
+- aiClaudeCommand: "claude"
+  $name: "Claude Code command"
+  $description: "What Windows Terminal runs for Claude Code."
+- aiClaudeHidden: false
+  $name: "Hide Claude Code"
+  $description: ""
+- aiCodexCommand: "codex"
+  $name: "Codex command"
+  $description: "What Windows Terminal runs for Codex."
+- aiCodexHidden: false
+  $name: "Hide Codex"
+  $description: ""
+- aiOpencodeCommand: "opencode"
+  $name: "OpenCode command"
+  $description: "What Windows Terminal runs for OpenCode."
+- aiOpencodeHidden: false
+  $name: "Hide OpenCode"
+  $description: ""
+- aiAntigravityCommand: "antigravity"
+  $name: "Antigravity command"
+  $description: "What Windows Terminal runs for Antigravity."
+- aiAntigravityHidden: false
+  $name: "Hide Antigravity"
+  $description: ""
+- aiGrokCommand: "grok"
+  $name: "Grok command"
+  $description: "What Windows Terminal runs for Grok."
+- aiGrokHidden: false
+  $name: "Hide Grok"
+  $description: ""
+- aiGeminiCommand: "gemini"
+  $name: "Gemini CLI command"
+  $description: "What Windows Terminal runs for Gemini CLI."
+- aiGeminiHidden: false
+  $name: "Hide Gemini CLI"
+  $description: ""
+- projectsEnabled: true
+  $name: "Recent projects"
+  $description: "The p calling word lists the git folders one level under your project folders, the one that changed last first. Enter opens one in a Windows Terminal tab, Ctrl + Enter opens it in your editor."
+- projectsKeyword: "p"
+  $name: "Recent projects calling word"
+  $description: ""
+- projectsFolders: ""
+  $name: "Project folders"
+  $description: "Folders to look in, separated by semicolons. Halo lists the git folders directly inside each one. Empty, H:\\ and your source\\repos folder are used when they exist."
+- projectsEditor: "code"
+  $name: "Editor for Ctrl + Enter"
+  $description: "The command that opens a project folder. Suggested: code (Visual Studio Code)."
+- clipboardEnabled: true
+  $name: "Clipboard history"
+  $description: "The c calling word searches what Seamless Clipboard Manager has saved. Enter copies the picked entry back to the clipboard. Halo only reads that history."
+- clipboardKeyword: "c"
+  $name: "Clipboard history calling word"
+  $description: ""
+- mediaEnabled: true
+  $name: "Media controls"
+  $description: "The media calling word shows Play or pause, Next track and Previous track. They work with whatever Windows is playing."
+- mediaKeyword: "media"
+  $name: "Media controls calling word"
+  $description: ""
+- notesEnabled: true
+  $name: "Quick notes"
+  $description: "Type the calling word, a space and some text, press Enter, and the text is added to your notes file with the date and time. The calling word alone lists your latest notes."
+- notesKeyword: "n"
+  $name: "Quick notes calling word"
+  $description: ""
+- notesFile: ""
+  $name: "Notes file"
+  $description: "Empty, Halo Notes.md in your Documents folder is used. Halo creates it when you add the first note."
 */
 // ==/WindhawkModSettings==
 
@@ -178,6 +299,7 @@ Every key in that list can be changed on the Keys page of the settings.
 #include <mutex>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <windhawk_tool_mod.h>
@@ -261,9 +383,36 @@ constexpr UINT WM_APP_HOOKKEY = WM_APP + 4;   // wParam: hotkey slot
 constexpr UINT_PTR kTimerFrame = 1;
 constexpr UINT_PTR kTimerCaret = 2;
 constexpr UINT_PTR kTimerHide = 3;
+constexpr UINT_PTR kTimerAiFrame = 4;     // the AI panel's open and close frames, then it stops
+constexpr UINT WM_APP_PROJECTS = WM_APP + 8;  // the project scan thread finished
 constexpr UINT kHideDelay = 100;
 constexpr wchar_t kMsgClass[] = L"HaloLauncherMsg";
 constexpr wchar_t kWndClass[] = L"HaloLauncher";
+constexpr wchar_t kAiClass[] = L"HaloLauncherAi";
+
+// The AI panel and the local result modules live further down; the earlier code calls in.
+void AiHide(bool now);
+void LocalQueryChanged();
+int g_hideNoOwnerChecks = 0;
+bool g_closeAnim = false;   // the close is playing: the window stays up while it fades out
+DWORD g_closeAt = 0;
+void FinishHideLauncher();
+D2D1_RECT_F AiButtonRect();
+
+// The six coding agents the AI panel and the ai calling word list. The letters stand in
+// for each agent in the row chips, so every row reads the same on every font.
+struct AgentDef {
+    PCWSTR cmdKey, hideKey, name, chip, def;
+};
+const AgentDef kAgents[] = {
+    {L"aiClaudeCommand", L"aiClaudeHidden", L"Claude Code", L"CL", L"claude"},
+    {L"aiCodexCommand", L"aiCodexHidden", L"Codex", L"CX", L"codex"},
+    {L"aiOpencodeCommand", L"aiOpencodeHidden", L"OpenCode", L"OC", L"opencode"},
+    {L"aiAntigravityCommand", L"aiAntigravityHidden", L"Antigravity", L"AG", L"antigravity"},
+    {L"aiGrokCommand", L"aiGrokHidden", L"Grok", L"GK", L"grok"},
+    {L"aiGeminiCommand", L"aiGeminiHidden", L"Gemini CLI", L"GM", L"gemini"},
+};
+constexpr int kAgentCount = 6;
 
 HANDLE g_thread = nullptr;
 HANDLE g_ready = nullptr;
@@ -628,6 +777,66 @@ struct State {
     std::map<std::wstring, ComPtr<ID2D1Bitmap>> bitmaps;
     std::map<std::wstring, ComPtr<IDWriteTextFormat>> glyphFormats;
     Surface surface, faded;
+
+    // 0.6.20 additions -----------------------------------------------------------
+    // Greeting in the empty search box.
+    bool greetingEnabled = true;
+    std::wstring greetingName;
+
+    // Sounds: which set plays, and its open, close and pick buffers (a WAV image in memory).
+    int soundSet = 0;  // 0 Flow file, 1 Glass, 2 Pebble, 3 Breeze
+    int soundVolume = 50;
+    std::vector<std::vector<unsigned char>> soundBuf[3];  // [set - 1][open / close / pick]
+    bool soundBuilt = false;
+
+    // Local result modules: the mod answers its own keywords without the engine.
+    int localMode = -1;  // -1 none, 0 AI agents, 1 projects, 2 clipboard, 3 media, 4 notes
+    int localSel = 0;    // row picked with the arrows, into localItems
+    std::vector<Item> localItems;
+    std::wstring localFilter;   // what was typed past the calling word
+    std::wstring localNoteBuf;  // what Enter adds to the notes file, set when the list was built
+    bool localFromKeys = false; // the arrows moved the local selection
+    int localScroll = 0;
+
+    // The AI panel: its own window, shown with fade plus slide, still when done.
+    HWND aiWnd = nullptr;
+    bool aiOpen = false;
+    bool aiClosing = false;
+    DWORD aiAnimAt = 0;
+    int aiHover = -1;
+    int aiSel = 0;
+    int aiHotRow = -1;  // row under the pointer while the panel is open, for redraws on move
+    D2D1_RECT_F aiBtn{};   // the button in the search bar, window units
+    bool aiBtnHover = false;
+    std::vector<int> aiRows;  // indexes into the agent table the panel shows
+    bool aiEnabled = true;
+    std::wstring aiKeyword = L"ai";
+    std::wstring aiFolder;
+    std::wstring agentCmd[kAgentCount];
+    bool agentHidden[kAgentCount] = {};
+
+    // Recent projects: one scan at a time, cached, never on every keystroke.
+    struct HaloProject {
+        std::wstring path, name;
+        FILETIME changed{};
+    };
+    std::vector<HaloProject> projects;
+    std::mutex projectsLock;
+    bool projectsScanning = false;
+    DWORD projectsScannedAt = 0;
+    std::vector<std::wstring> projectRoots;
+    bool projectsEnabled = true;
+    std::wstring projectsKeyword = L"p";
+    std::wstring projectsFolders, projectsEditor = L"code";
+
+    // Clipboard history, media controls and quick notes.
+    bool clipsEnabled = true;
+    std::wstring clipsKeyword = L"c";
+    bool mediaEnabled = true;
+    std::wstring mediaKeyword = L"media";
+    bool notesEnabled = true;
+    std::wstring notesKeyword = L"n";
+    std::wstring notesFile;
 };
 
 [[clang::no_destroy]] State g;
@@ -1209,12 +1418,6 @@ void ApplyBackdrop() {
         bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
         bb.fEnable = TRUE;
         bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
-        if (setComposition) {  // Off first, then on: DWM can drop the blur of a window that lives a long time and ignores the
-        // same values sent again, which left it see-through (2026-11-26). Switching the accent off resets it.
-            HaloAccentPolicy off{0, 0, 0, 0};
-            HaloCompositionData offData{19, &off, sizeof(off)};
-            setComposition(g.wnd, &offData);
-        }
         DwmEnableBlurBehindWindow(g.wnd, &bb);
         if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
         if (setComposition) {
@@ -1240,11 +1443,26 @@ void ApplyBackdrop() {
 
 float AnimLength() {
     if (!SetBool(L"UseAnimation", true)) return 0;
+    BOOL move = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &move, 0);
+    if (!move) return 0;  // Windows animations are off: Halo goes still too
     std::wstring speed = SetStr(L"AnimationSpeed", L"Medium");
     if (EqualsNoCase(speed, L"Slow")) return 560;
     if (EqualsNoCase(speed, L"Fast")) return 160;
     if (EqualsNoCase(speed, L"Custom")) return (float)SetInt(L"CustomAnimationLength", 360);
     return 360;
+}
+
+// The softer landing the open and close use: fast at first, then it settles.
+float EaseQuint(float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    float u = 1 - t;
+    return 1 - u * u * u * u * u;
+}
+
+float EaseQuintIn(float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    return t * t * t * t * t;
 }
 
 float EaseCircle(float t) {
@@ -1325,6 +1543,49 @@ void ComputeLayout() {
 float QueryLeft() { return 18; }
 float QueryRight() { return g.lay.W - 50; }
 
+// ---------------------------------------------------------------- greeting
+
+// The empty search box greets by the time of day. The name is the setting, then the
+// Windows account's display name, then the user name. The account name is read once.
+std::wstring GreetingName() {
+    if (!g.greetingName.empty()) return g.greetingName;
+    static std::wstring cached;
+    static bool tried = false;
+    if (!tried) {
+        tried = true;
+        // secur32 is loaded by hand, so the mod needs no extra link library. The name
+        // format 3 is the account's display name.
+        using Fn = BOOLEAN(WINAPI*)(int, LPWSTR, PULONG);
+        if (auto fn = (Fn)GetProcAddress(LoadLibraryW(L"secur32.dll"), "GetUserNameExW")) {
+            ULONG n = 0;
+            if (!fn(3, nullptr, &n) && GetLastError() == ERROR_MORE_DATA && n > 1) {
+                std::wstring buf(n, L'\0');
+                if (fn(3, buf.data(), &n)) {
+                    buf.resize(wcsnlen(buf.c_str(), n));
+                    cached = buf;
+                }
+            }
+        }
+        if (cached.empty()) {
+            wchar_t user[256]{};
+            ULONG n = 256;
+            if (GetUserNameW(user, &n)) cached = user;
+        }
+    }
+    return cached;
+}
+
+std::wstring GreetingText() {
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    const wchar_t* part = st.wHour >= 5 && st.wHour < 12 ? L"Good morning"
+                          : st.wHour < 17 ? L"Good afternoon"
+                          : st.wHour < 21 ? L"Good evening"
+                                          : L"Good night";
+    std::wstring name = GreetingName();
+    return name.empty() ? std::wstring(part) : std::wstring(part) + L", " + name;
+}
+
 void BuildQueryLayout() {
     EnsureFormats();
     g.queryLayout.Reset();
@@ -1381,6 +1642,7 @@ void TextChanged(bool notify) {
     g.anchor = std::clamp(g.anchor, 0, (int)g.text.size());
     KeepCaretVisible();
     g.movedByKeys = false;
+    LocalQueryChanged();
     if (notify) Send({L"q", g.text});
     g.caretOn = true;
     if (g.visible) {
@@ -1519,6 +1781,7 @@ float LineHeight(IDWriteTextFormat* f) {
 }
 
 const Item* SelectedItem() {
+    if (g.localMode >= 0) return nullptr;  // the local lists have no preview
     for (auto& it : g.res.items)
         if (it.index == g.res.sel) return &it;
     return nullptr;
@@ -1610,9 +1873,21 @@ void Render() {
 
     float animLen = AnimLength();
     float elapsed = (float)(GetTickCount() - g.shownAt);
-    float t = animLen > 0 ? EaseCircle(elapsed / animLen) : 1;
-    float fade = animLen > 0 ? EaseCircle(elapsed / (animLen * 2 / 3)) : 1;
-    g.animating = animLen > 0 && elapsed < animLen;
+    // Closing runs its own clock: it mirrors the open, a little quicker, then hides.
+    bool closing = g_closeAnim;
+    float closeLen = animLen * 2 / 3;
+    float closeT = closing ? std::clamp((float)(GetTickCount() - g_closeAt) / closeLen, 0.0f, 1.0f) : 0;
+    if (closing && closeT >= 1) {
+        FinishHideLauncher();
+        return;
+    }
+    float t = animLen > 0 && !closing ? EaseQuint(elapsed / animLen) : 1;
+    float fade = animLen > 0 && !closing ? EaseQuint(elapsed / (animLen * 2 / 3)) : closing ? 1 - EaseQuint(closeT) : 1;
+    g.animating = !closing && animLen > 0 && elapsed < animLen;
+    // A soft landing: the contents rise 8 and grow from 98% to full, both easing out.
+    // On the way out they fall 8 and shrink the same way, easing in.
+    float grow = closing ? 1 - 0.02f * EaseQuintIn(closeT) : 0.98f + 0.02f * EaseQuint(elapsed / (animLen > 0 ? animLen : 1));
+    float rise = closing ? EaseQuintIn(closeT) * 8 : (1 - EaseQuint(elapsed / (animLen > 0 ? animLen : 1))) * 8;
     float slide = (1 - t) * 12;
 
     g.rt->BeginDraw();
@@ -1641,8 +1916,11 @@ void Render() {
         g.rt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
                                               D2D1::IdentityMatrix(), fade),
                         g.fadeLayer.Get());
-    // Everything below is laid out inside the edge.
-    g.rt->SetTransform(D2D1::Matrix3x2F::Translation(kEdge, kEdge) * D2D1::Matrix3x2F::Scale(L.s, L.s));
+    // Everything below is laid out inside the edge. The grow and the rise wrap the whole
+    // body around its centre; the glass tint and the edge stay whole.
+    D2D1_POINT_2F wc = D2D1::Point2F((L.W / 2 + kEdge) * L.s, (L.H / 2 + kEdge) * L.s);
+    g.rt->SetTransform(D2D1::Matrix3x2F::Scale(grow, grow, wc) *
+                       D2D1::Matrix3x2F::Translation(kEdge, kEdge + rise) * D2D1::Matrix3x2F::Scale(L.s, L.s));
 
     // Query box.
     float qTop = 7, qBottom = L.topH - 7;
@@ -1660,8 +1938,12 @@ void Render() {
         DrawStr(sug, g.fQuery.Get(), D2D1::RectF(QueryLeft(), textY, 100000, textY + lineH + 4), Rgb(cGlyph));
     }
     if (g.text.empty() && SetBool(L"ShowPlaceholder", true)) {
-        std::wstring hint = SetStr(L"PlaceholderText");
-        if (hint.empty()) hint = L"Type here to search";
+        std::wstring hint;
+        if (g.greetingEnabled) hint = GreetingText();
+        if (hint.empty()) {
+            hint = SetStr(L"PlaceholderText");
+            if (hint.empty()) hint = L"Type here to search";
+        }
         DrawStr(hint, g.fQuery.Get(), D2D1::RectF(QueryLeft(), textY, QueryRight(), textY + lineH + 4), Rgb(cHint));
     }
     if (g.queryLayout) {
@@ -1681,11 +1963,12 @@ void Render() {
     }
     g.rt->PopAxisAlignedClip();
 
-    // Clock and date, only while the box is empty.
+    // Clock and date, only while the box is empty. The AI button takes the right end,
+    // so the clock steps left while it is on.
     bool useClock = SetBool(L"UseClock", true), useDate = SetBool(L"UseDate", true);
     if (g.text.empty() && (useClock || useDate)) {
         // Stacked, right edge 54 from the side; the lower line carries 3 below it.
-        float right = L.W - 54;
+        float right = g.aiEnabled ? L.W - 84 : L.W - 54;
         float h = LineHeight(g.fClock.Get());
         float both = (useClock && useDate) ? h * 2 + 3 : h;
         float y = (L.topH - both) / 2 + slide;
@@ -1707,6 +1990,38 @@ void Render() {
         DrawSearchIcon(L.W - 8 - 32, 8 + (L.topH - 8 - 32) / 2 + slide, Rgb(cSearch, t));
     }
 
+    // The AI button, left of the search icon: a chip with a four point sparkle. Hover or
+    // an open panel lights it with the blue to mauve gradient and a 2 edge around it.
+    if (g.aiEnabled) {
+        D2D1_RECT_F b = AiButtonRect();
+        b.top += slide;
+        b.bottom += slide;
+        float cx = (b.left + b.right) / 2, cy = (b.top + b.bottom) / 2;
+        bool lit = g.aiBtnHover || g.aiOpen;
+        if (lit) {
+            if (auto gb = MochaGradient(b, 1.0f, true))
+                g.rt->FillRoundedRectangle(D2D1::RoundedRect(b, 8, 8), gb.Get());
+            if (auto gb = MochaGradient(D2D1::RectF(b.left - 1, b.top - 1, b.right + 1, b.bottom + 1), 1.0f, true))
+                g.rt->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(b.left - 1, b.top - 1, b.right + 1, b.bottom + 1), 9, 9),
+                                           gb.Get(), 2);
+        } else {
+            g.brush->SetColor(Rgb(cRow, 0.5f * t));
+            g.rt->FillRoundedRectangle(D2D1::RoundedRect(b, 8, 8), g.brush.Get());
+        }
+        // The sparkle: a big diamond and a small one, squares turned 45 degrees.
+        D2D1_MATRIX_3X2_F old;
+        g.rt->GetTransform(&old);
+        float alpha = t * (lit ? 1 : 0.85f);
+        auto diamond = [&](D2D1_POINT_2F c, float half) {
+            g.rt->SetTransform(old * D2D1::Matrix3x2F::Rotation(45, c));
+            g.brush->SetColor(Rgb(cText, alpha));
+            g.rt->FillRectangle(D2D1::RectF(c.x - half, c.y - half, c.x + half, c.y + half), g.brush.Get());
+        };
+        diamond({cx - 1.5f, cy + 1.5f}, 7.5f);
+        diamond({cx + 5.5f, cy - 5.5f}, 3.5f);
+        g.rt->SetTransform(old);
+    }
+
     if (L.rows) {
         g.brush->SetColor(Rgb(cSeparator));
         g.rt->FillRectangle(D2D1::RectF(0, L.topH, L.W, L.topH + 1), g.brush.Get());
@@ -1722,17 +2037,21 @@ void Render() {
         g.rt->PopAxisAlignedClip();
     }
 
-    // Results.
+    // Results. The local lists (Halo's own modules) answer through their own items.
     if (L.rows) {
         float titleH = LineHeight(g.fTitle.Get()), subH = LineHeight(g.fSub.Get());
-        bool hints = SetBool(L"ShowOpenResultHotkey", true) && g.res.view == L"results";
+        bool hints = SetBool(L"ShowOpenResultHotkey", true) && g.res.view == L"results" && g.localMode < 0;
         std::wstring hintMod = SetStr(L"OpenResultModifiers", L"Alt");
         float y = L.listY + 10;
         g.rt->PushAxisAlignedClip(D2D1::RectF(0, L.listY, L.listW, L.listY + L.listH), D2D1_ANTIALIAS_MODE_ALIASED);
         int shown = 0;
-        for (auto& it : g.res.items) {
+        std::vector<Item>& items = g.localMode >= 0 ? g.localItems : g.res.items;
+        int sel = g.localMode >= 0 ? g.localSel : g.res.sel;
+        int skip = g.localMode >= 0 ? g.localScroll : 0;
+        for (int i = skip; i < (int)items.size(); i++) {
+            Item& it = items[i];
             if (shown >= (L.preview ? (int)((L.listH - 20) / L.rowH) : L.rows)) break;
-            bool selected = it.index == g.res.sel;
+            bool selected = it.index == sel;
             float left = 10, right = L.listW - 10;
             if (selected) {
                 FillSelection(D2D1::RectF(left, y, right, y + L.rowH), 8);
@@ -1778,7 +2097,16 @@ void Render() {
 
         // Scrollbar thumb.
         int page = std::max(1, shown);
-        if (g.res.total > page) {
+        if (g.localMode >= 0) {
+            int total = (int)items.size(), top = g.localScroll;
+            if (total > page) {
+                float track = L.listH - 20, th = std::max(24.0f, track * page / total);
+                float ty = L.listY + 10 + (track - th) * top / std::max(1, total - page);
+                D2D1_RECT_F thumb = D2D1::RectF(L.listW - 6, ty, L.listW - 2, ty + th);
+                if (auto tb = MochaGradient(thumb, 1.0f, true))
+                    g.rt->FillRoundedRectangle(D2D1::RoundedRect(thumb, 2, 2), tb.Get());
+            }
+        } else if (g.res.total > page) {
             float track = L.listH - 20, th = std::max(24.0f, track * page / g.res.total);
             float ty = L.listY + 10 + (track - th) * g.res.top / std::max(1, g.res.total - page);
             D2D1_RECT_F thumb = D2D1::RectF(L.listW - 6, ty, L.listW - 2, ty + th);
@@ -1819,7 +2147,7 @@ void Render() {
         return;
     }
     Present(1);
-    bool needFrames = g.animating || g.busy;
+    bool needFrames = g.animating || g.busy || g_closeAnim;
     if (needFrames) SetTimer(g.wnd, kTimerFrame, 12, nullptr);
     else KillTimer(g.wnd, kTimerFrame);
 }
@@ -1846,8 +2174,152 @@ void ForceForeground(HWND w) {
     }
 }
 
+// ---------------------------------------------------------------- sounds
+// Three sound sets made here at startup into buffers in memory, so nothing ships as a file.
+// Every tone keeps a soft attack, fades in and out at both ends and peaks near -12 dBFS,
+// well clear of clipping.
+
+constexpr int kSoundRate = 44100;
+
+struct HaloTone {
+    float hz = 0;        // frequency of the note
+    float at = 0;        // when it starts, in seconds
+    float len = 0;       // how long it rings, in seconds
+    float gain = 1;      // relative loudness against the other tones of the sound
+    float attack = 0.01f;  // seconds to swell in, 5 to 15 ms keeps it soft
+    float bloom = 0;     // extra seconds to reach full loudness, a quick swell
+    float detune = 0;    // a second voice this many hertz off, for an airy sound
+};
+
+struct HaloSoundDef {
+    const wchar_t* name;
+    std::vector<HaloTone> open, close, pick;
+    float tail = 0;  // seconds of fade out at the very end of the whole sound
+};
+
+const HaloSoundDef kSoundDefs[] = {
+    {L"Glass",
+     // A soft high chime: two bright notes with a quick swell and a long gentle tail.
+     {{1318.51f, 0.00f, 0.90f, 1.00f, 0.008f, 0.05f},
+      {1975.53f, 0.02f, 0.75f, 0.45f, 0.010f, 0.06f},
+      {2637.02f, 0.04f, 0.55f, 0.18f, 0.012f, 0.05f}},
+     {{880.00f, 0.00f, 0.45f, 1.00f, 0.008f, 0.03f},
+      {1318.51f, 0.02f, 0.35f, 0.40f, 0.010f, 0.03f}},
+     {{1760.00f, 0.00f, 0.22f, 1.00f, 0.006f, 0.02f}},
+     0.10f},
+    {L"Pebble",
+     // A short rounded low tap, like a marimba bar.
+     {{261.63f, 0.00f, 0.28f, 1.00f, 0.005f},
+      {523.25f, 0.00f, 0.16f, 0.30f, 0.005f},
+      {392.00f, 0.005f, 0.20f, 0.22f, 0.006f}},
+     {{196.00f, 0.00f, 0.24f, 1.00f, 0.005f},
+      {392.00f, 0.00f, 0.12f, 0.28f, 0.005f}},
+     {{329.63f, 0.00f, 0.14f, 1.00f, 0.005f}},
+     0.06f},
+    {L"Breeze",
+     // An airy two note rising pad, very soft.
+     {{392.00f, 0.00f, 0.42f, 1.00f, 0.015f, 0.08f, 1.5f},
+      {523.25f, 0.10f, 0.46f, 0.80f, 0.015f, 0.10f, 1.8f},
+      {784.00f, 0.10f, 0.34f, 0.22f, 0.015f, 0.08f, 2.0f}},
+     {{392.00f, 0.00f, 0.30f, 1.00f, 0.015f, 0.06f, 1.5f},
+      {329.63f, 0.06f, 0.30f, 0.60f, 0.015f, 0.06f, 1.6f}},
+     {{587.33f, 0.00f, 0.20f, 1.00f, 0.012f, 0.04f, 1.5f}},
+     0.08f},
+};
+
+void Halo_SoundSetBuffers(int set, std::vector<unsigned char>* out[3]) {
+    out[0] = &g.soundBuf[set - 1][0];
+    out[1] = &g.soundBuf[set - 1][1];
+    out[2] = &g.soundBuf[set - 1][2];
+}
+
+// Turns one sound into a 16 bit mono WAV image in memory. Every voice gets its own soft
+// attack and release, the whole sound fades at the end, and the peak lands near -12 dBFS.
+void Halo_SoundBuild(int set) {
+    const HaloSoundDef& def = kSoundDefs[set - 1];
+    std::vector<unsigned char>* bufs[3];
+    Halo_SoundSetBuffers(set, bufs);
+    const std::vector<HaloTone>* kinds[3] = {&def.open, &def.close, &def.pick};
+    const float peak = 0.251f;  // about -12 dBFS
+    for (int k = 0; k < 3; k++) {
+        float total = 0;
+        for (auto& t : *kinds[k]) total = std::max(total, t.at + t.len);
+        total += def.tail;
+        int samples = (int)(total * kSoundRate);
+        if (samples <= 0) continue;
+        std::vector<float> mix((size_t)samples, 0.0f);
+        float top = 0;
+        for (auto& t : *kinds[k]) {
+            int start = (int)(t.at * kSoundRate);
+            int n = (int)(t.len * kSoundRate);
+            for (int i = 0; i < n && start + i < samples; i++) {
+                float x = (float)i / kSoundRate;
+                float env = 1;
+                if (x < t.attack) env = x / t.attack;
+                else if (t.bloom > 0 && x < t.attack + t.bloom)
+                    env = 1 + 0.35f * (x - t.attack) / t.bloom * (1 - (x - t.attack) / t.bloom) * 2;
+                float rel = (t.len - x);
+                if (rel < 0.05f) env *= std::max(0.0f, rel / 0.05f);  // no click at the cut
+                float v = sinf(2 * 3.14159265f * t.hz * x) +
+                          (t.detune > 0 ? 0.30f * sinf(2 * 3.14159265f * (t.hz + t.detune) * x) : 0);
+                mix[(size_t)start + i] += v * t.gain * env;
+            }
+        }
+        for (float v : mix) top = std::max(top, fabsf(v));
+        float norm = top > 0 ? peak / top : 0;
+        // The whole sound eases out over the tail, and eases in over the first 15 ms.
+        int fadeIn = std::min(samples, (int)(0.015f * kSoundRate));
+        int fadeOut = std::min(samples, (int)(def.tail * kSoundRate));
+        std::vector<unsigned char>& wav = *bufs[k];
+        wav.clear();
+        auto put = [&wav](const void* p, size_t n) {
+            const unsigned char* b = (const unsigned char*)p;
+            wav.insert(wav.end(), b, b + n);
+        };
+        struct { const char* riff; UINT32 size; const char* wave; } hdr1 = {"RIFF", 0, "WAVE"};
+        struct { const char* fmt; UINT32 len = 16; WORD pcm = 1, ch = 1; UINT32 rate = kSoundRate;
+                 UINT32 bytes = kSoundRate * 2; WORD block = 2, bits = 16; } hdr2;
+        hdr2.fmt = "fmt ";
+        UINT32 dataLen = (UINT32)samples * 2;
+        hdr1.size = 36 + dataLen;
+        put(&hdr1, sizeof(hdr1));
+        put(&hdr2, sizeof(hdr2));
+        struct { const char* data; UINT32 len; } hdr3 = {"data", dataLen};
+        put(&hdr3, sizeof(hdr3));
+        wav.reserve(wav.size() + (size_t)dataLen);
+        for (int i = 0; i < samples; i++) {
+            float env = 1;
+            if (i < fadeIn) env = (float)i / fadeIn;
+            if (i >= samples - fadeOut) env *= (float)(samples - i) / fadeOut;
+            int s = (int)std::clamp(mix[(size_t)i] * norm * env, -1.0f, 1.0f) * 32767;
+            wav.push_back((unsigned char)(s & 0xFF));
+            wav.push_back((unsigned char)((s >> 8) & 0xFF));
+        }
+    }
+}
+
+void SoundInit() {
+    if (g.soundBuilt) return;
+    g.soundBuilt = true;
+    for (int s = 1; s <= 3; s++) Halo_SoundBuild(s);
+}
+
+void Halo_PlaySet(int kind) {  // 0 open, 1 close, 2 pick
+    SoundInit();
+    if (g.soundSet < 1 || g.soundSet > 3) return;
+    const std::vector<unsigned char>& wav = g.soundBuf[g.soundSet - 1][kind];
+    if (wav.empty()) return;
+    DWORD v = (DWORD)std::clamp(g.soundVolume, 0, 100) * 0xFFFF / 100;
+    waveOutSetVolume(nullptr, v | (v << 16));
+    PlaySoundW((PCWSTR)wav.data(), nullptr, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+}
+
 void PlayOpenSound() {
     if (!SetBool(L"UseSound", false)) return;
+    if (g.soundSet >= 1 && g.soundSet <= 3) {
+        Halo_PlaySet(0);
+        return;
+    }
     std::wstring file = SetStr(L"SoundFile");
     if (file.empty()) return;
     DWORD v = (DWORD)std::clamp(SetInt(L"SoundVolume", 50), 0, 100) * 0xFFFF / 100;
@@ -1855,10 +2327,21 @@ void PlayOpenSound() {
     PlaySoundW(file.c_str(), nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
 }
 
+void PlayCloseSound() {
+    if (!SetBool(L"UseSound", false)) return;
+    if (g.soundSet >= 1 && g.soundSet <= 3) Halo_PlaySet(1);
+}
+
+void PlayPickSound() {
+    if (!SetBool(L"UseSound", false)) return;
+    if (g.soundSet >= 1 && g.soundSet <= 3) Halo_PlaySet(2);
+}
+
 void ShowLauncher(bool selectAll) {
     if (!g.wnd) return;
     bool was = g.visible;
     g.visible = true;
+    g_closeAnim = false;
     if (!was) {
         g.monitor = PickMonitor();
         g.shownAt = GetTickCount();
@@ -1872,6 +2355,7 @@ void ShowLauncher(bool selectAll) {
         g.caret = (int)g.text.size();
     }
     g.caretOn = true;
+    if (!was && !g.text.empty()) LocalQueryChanged();  // Halo's own lists follow the kept text
     if (!was) {
         g.quiet = g.quietNext;
         g.quietNext = false;
@@ -1913,8 +2397,6 @@ void ShowLauncher(bool selectAll) {
     Render();
 }
 
-int g_hideNoOwnerChecks = 0;
-
 // Screen capture tools whose window takes focus to let you pick a window or a region.
 bool IsCaptureTool(HWND hwnd) {
     if (!hwnd) return false;
@@ -1941,15 +2423,34 @@ bool IsCaptureTool(HWND hwnd) {
     return found;
 }
 
-void HideLauncher() {
-    if (!g.visible) return;
+void FinishHideLauncher() {
     g.visible = false;
+    g_closeAnim = false;
     KillTimer(g.wnd, kTimerFrame);
     KillTimer(g.wnd, kTimerCaret);
     KillTimer(g.wnd, kTimerHide);
     ShowWindow(g.wnd, SW_HIDE);
     g.selecting = false;
     g.quiet = false;
+    AiHide(true);  // the panel shuts with its own fade, then everything is still
+}
+
+void HideLauncher() {
+    if (!g.visible) return;
+    // The close mirrors the open, a little quicker, and the window stays up while it
+    // fades. When Windows animations are off there is no length and it hides at once.
+    float len = AnimLength() * 2 / 3;
+    if (len <= 0) {
+        PlayCloseSound();
+        FinishHideLauncher();
+        return;
+    }
+    if (g_closeAnim) return;
+    PlayCloseSound();
+    g_closeAnim = true;
+    g_closeAt = GetTickCount();
+    SetTimer(g.wnd, kTimerFrame, 12, nullptr);
+    Render();
 }
 
 void RequestToggle() {
@@ -2215,6 +2716,53 @@ void LoadSettings() {
     s = Wh_GetStringSetting(L"fontWeight");
     g.fontWeight = s && *s ? s : L"Medium";
     Wh_FreeStringSetting(s);
+    // 0.6.20: the greeting, the sound sets and Halo's own result modules.
+    g.greetingEnabled = Wh_GetIntSetting(L"greetingEnabled") != 0;
+    s = Wh_GetStringSetting(L"greetingName");
+    g.greetingName = s && *s ? s : L"";
+    Wh_FreeStringSetting(s);
+    g.soundSet = std::clamp(Wh_GetIntSetting(L"soundSet"), 0, 3);
+    g.soundVolume = std::clamp(Wh_GetIntSetting(L"soundVolume"), 0, 100);
+    g.aiEnabled = Wh_GetIntSetting(L"aiEnabled") != 0;
+    s = Wh_GetStringSetting(L"aiKeyword");
+    g.aiKeyword = s && *s ? s : L"ai";
+    Wh_FreeStringSetting(s);
+    s = Wh_GetStringSetting(L"aiFolder");
+    g.aiFolder = s && *s ? s : L"";
+    Wh_FreeStringSetting(s);
+    for (int i = 0; i < kAgentCount; i++) {
+        s = Wh_GetStringSetting(kAgents[i].cmdKey);
+        g.agentCmd[i] = s && *s ? s : kAgents[i].def;
+        Wh_FreeStringSetting(s);
+        g.agentHidden[i] = Wh_GetIntSetting(kAgents[i].hideKey) != 0;
+    }
+    g.projectsEnabled = Wh_GetIntSetting(L"projectsEnabled") != 0;
+    s = Wh_GetStringSetting(L"projectsKeyword");
+    g.projectsKeyword = s && *s ? s : L"p";
+    Wh_FreeStringSetting(s);
+    s = Wh_GetStringSetting(L"projectsFolders");
+    g.projectsFolders = s && *s ? s : L"";
+    Wh_FreeStringSetting(s);
+    s = Wh_GetStringSetting(L"projectsEditor");
+    g.projectsEditor = s && *s ? s : L"code";
+    Wh_FreeStringSetting(s);
+    g.clipsEnabled = Wh_GetIntSetting(L"clipboardEnabled") != 0;
+    s = Wh_GetStringSetting(L"clipboardKeyword");
+    g.clipsKeyword = s && *s ? s : L"c";
+    Wh_FreeStringSetting(s);
+    g.mediaEnabled = Wh_GetIntSetting(L"mediaEnabled") != 0;
+    s = Wh_GetStringSetting(L"mediaKeyword");
+    g.mediaKeyword = s && *s ? s : L"media";
+    Wh_FreeStringSetting(s);
+    g.notesEnabled = Wh_GetIntSetting(L"notesEnabled") != 0;
+    s = Wh_GetStringSetting(L"notesKeyword");
+    g.notesKeyword = s && *s ? s : L"n";
+    Wh_FreeStringSetting(s);
+    s = Wh_GetStringSetting(L"notesFile");
+    g.notesFile = s && *s ? s : L"";
+    Wh_FreeStringSetting(s);
+    // A settings change may have new project folders: look again the next time they are asked for.
+    g.projectsScannedAt = 0;
 }
 
 // What the settings window reads; written on this thread, read on the settings thread.
@@ -2450,7 +2998,1198 @@ void OnLine(const std::string& raw) {
     }
 }
 
-// ---------------------------------------------------------------- keys in the window
+// ---------------------------------------------------------------- AI agents and Halo's own modules
+// Five result lists Halo answers itself: the AI agents, recent projects, clipboard history,
+// media controls and quick notes. The AI agents also get a small panel of their own, a
+// separate window on the house glass that fades and slides in and then stands still.
+
+enum { kLocalAi = 0, kLocalProjects = 1, kLocalClips = 2, kLocalMedia = 3, kLocalNotes = 4 };
+
+std::wstring HaloExpand(const std::wstring& s) {
+    wchar_t out[MAX_PATH * 2]{};
+    DWORD n = ExpandEnvironmentStringsW(s.c_str(), out, ARRAYSIZE(out));
+    if (n > 0 && n < ARRAYSIZE(out)) return out;
+    return s;
+}
+
+std::wstring HaloHome() {
+    PWSTR p = nullptr;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Profile, 0, nullptr, &p))) {
+        std::wstring h = p;
+        CoTaskMemFree(p);
+        return h;
+    }
+    wchar_t u[MAX_PATH]{};
+    DWORD n = MAX_PATH;
+    if (GetUserNameW(u, &n)) return std::wstring(L"C:\\Users\\") + u;
+    return L"C:\\Users";
+}
+
+bool HaloDirExists(const std::wstring& path) {
+    DWORD a = GetFileAttributesW(HaloExpand(path).c_str());
+    return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+// Case-insensitive "is the words in there", for filtering the local lists.
+bool HaloIcontains(const std::wstring& hay, const std::wstring& needle) {
+    if (needle.empty()) return true;
+    std::wstring h, n;
+    h.reserve(hay.size());
+    n.reserve(needle.size());
+    for (wchar_t c : hay) h += (wchar_t)towlower(c);
+    for (wchar_t c : needle) n += (wchar_t)towlower(c);
+    return h.find(n) != std::wstring::npos;
+}
+
+// Finds an exe, cmd or bat file on the path, the way a terminal would.
+std::wstring HaloFindOnPath(const std::wstring& name) {
+    wchar_t out[MAX_PATH * 2]{};
+    for (PCWSTR ext : {L".exe", L".cmd", L".bat", L""}) {
+        DWORD n = SearchPathW(nullptr, (name + ext).c_str(), nullptr, ARRAYSIZE(out), out, nullptr);
+        if (n > 0 && n < ARRAYSIZE(out)) return out;
+    }
+    return {};
+}
+
+// Runs a program with its words through the command interpreter, with no window of its
+// own. Used for the editor open on Ctrl + Enter, where the editor opens its own window.
+void HaloRunCommand(const std::wstring& prog, const std::wstring& args, const std::wstring& dir) {
+    std::wstring cmd = L"cmd.exe /d /c call \"" + prog + L"\"" + (args.empty() ? L"" : L" " + args);
+    STARTUPINFOW si{sizeof(si)};
+    si.dwFlags = STARTF_FORCEOFFFEEDBACK;
+    PROCESS_INFORMATION pi{};
+    if (CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr,
+                       dir.empty() ? nullptr : dir.c_str(), &si, &pi)) {
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+    }
+}
+
+// Opens a new Windows Terminal tab in a folder, running a command there when one is given.
+// The launch runs on its own short thread, as a blocked launch must never hold the window.
+void HaloLaunchTerminalTab(const std::wstring& title, const std::wstring& dirIn, const std::wstring& command) {
+    struct Job {
+        std::wstring title, dir, command;
+    };
+    auto job = new Job{title, dirIn, command};
+    std::thread([job] {
+        CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        std::wstring wt = HaloFindOnPath(L"wt.exe");
+        std::wstring shell = HaloFindOnPath(L"pwsh.exe");
+        if (shell.empty()) shell = HaloFindOnPath(L"powershell.exe");
+        std::wstring dir = HaloExpand(job->dir);
+        if (dir.empty() || !HaloDirExists(dir)) dir = HaloHome();
+        bool ok = false;
+        if (!wt.empty() && !shell.empty()) {
+            std::wstring args = L" -w new --title \"" + job->title + L"\" -d \"" + dir + L"\" \"" + shell +
+                                L"\" -NoLogo -NoExit -ExecutionPolicy Bypass";
+            if (!job->command.empty()) args += L" -Command \"" + job->command + L"\"";
+            STARTUPINFOW si{sizeof(si)};
+            si.dwFlags = STARTF_FORCEOFFFEEDBACK;
+            PROCESS_INFORMATION pi{};
+            std::wstring cmd = L"\"" + wt + L"\"" + args;
+            if (CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, FALSE, CREATE_UNICODE_ENVIRONMENT,
+                               nullptr, nullptr, &si, &pi)) {
+                CloseHandle(pi.hThread);
+                CloseHandle(pi.hProcess);
+                ok = true;
+            }
+        }
+        if (!ok) {
+            // No Windows Terminal: open the shell by itself, still in the right folder.
+            if (!shell.empty()) {
+                std::wstring args = job->command.empty() ? L" -NoLogo"
+                                                         : L" -NoLogo -NoExit -ExecutionPolicy Bypass -Command \"" +
+                                                               job->command + L"\"";
+                SHELLEXECUTEINFOW info{sizeof(info)};
+                info.fMask = SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI | SEE_MASK_FLAG_DDEWAIT;
+                info.lpFile = shell.c_str();
+                info.lpParameters = args.c_str();
+                info.lpDirectory = dir.c_str();
+                info.nShow = SW_SHOWNORMAL;
+                ShellExecuteExW(&info);
+            } else if (!job->command.empty()) {
+                HaloRunCommand(HaloFindOnPath(L"cmd.exe").empty() ? L"cmd.exe" : HaloFindOnPath(L"cmd.exe"),
+                               L"/c " + job->command, dir);
+            }
+        }
+        delete job;
+    }).detach();
+}
+
+// ---- the AI panel ----------------------------------------------------------------
+
+constexpr float kAiRowH = 44, kAiPad = 10, kAiWidth = 312;
+constexpr float kAiOpenMs = 160;
+
+LRESULT CALLBACK AiProc(HWND w, UINT msg, WPARAM wp, LPARAM lp);
+
+ComPtr<ID2D1DCRenderTarget> g_aiRt;
+ComPtr<ID2D1SolidColorBrush> g_aiBrush;
+ComPtr<ID2D1LinearGradientBrush> g_aiEdge;
+ComPtr<IDWriteTextFormat> g_aiText, g_aiChip;
+
+std::vector<int> AgentRows(const std::wstring& filter) {
+    std::vector<int> rows;
+    for (int i = 0; i < kAgentCount; i++) {
+        if (g.agentHidden[i]) continue;
+        if (!HaloIcontains(kAgents[i].name, filter) && !HaloIcontains(g.agentCmd[i], filter)) continue;
+        rows.push_back(i);
+    }
+    return rows;
+}
+
+// The button sits left of the search icon, 28 wide, in the same vertical band. The clock
+// steps left to give it room while the box is empty.
+D2D1_RECT_F AiButtonRect() {
+    float y1 = 8 + (g.lay.topH - 8 - 32) / 2;
+    return D2D1::RectF(g.lay.W - 74, y1, g.lay.W - 46, y1 + 32);
+}
+
+bool AiButtonAt(float x, float y) {
+    D2D1_RECT_F b = AiButtonRect();
+    return x >= b.left && x <= b.right && y >= b.top && y <= b.bottom;
+}
+
+void AiApplyGlass(HWND w) {
+    if (!w) return;
+    BOOL on = TRUE;
+    DwmSetWindowAttribute(w, 20, &on, sizeof(on));  // dark
+    DwmSetWindowAttribute(w, 3, &on, sizeof(on));   // no open and close zoom, the panel fades itself
+    UINT corner = 2;
+    DwmSetWindowAttribute(w, 33, &corner, sizeof(corner));
+    int backdrop = 1;  // DWMSBT_NONE: never the system's light acrylic
+    DwmSetWindowAttribute(w, 38, &backdrop, sizeof(backdrop));
+    using SetComposition_t = BOOL(WINAPI*)(HWND, HaloCompositionData*);
+    static auto setComposition =
+        (SetComposition_t)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute");
+    DWM_BLURBEHIND bb{};
+    if (g.blur) {
+        bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+        bb.fEnable = TRUE;
+        bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+        DwmEnableBlurBehindWindow(w, &bb);
+        if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
+        if (setComposition) {
+            HaloAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};
+            HaloCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
+            setComposition(w, &data);
+        }
+    } else {
+        if (setComposition) {
+            HaloAccentPolicy policy{0, 0, 0, 0};
+            HaloCompositionData data{19, &policy, sizeof(policy)};
+            setComposition(w, &data);
+        }
+        bb.dwFlags = DWM_BB_ENABLE;
+        bb.fEnable = FALSE;
+        DwmEnableBlurBehindWindow(w, &bb);
+    }
+    MARGINS sheet{-1, -1, -1, -1};
+    DwmExtendFrameIntoClientArea(w, &sheet);
+}
+
+void AiWindowRect(RECT* out) {
+    Layout& L = g.lay;
+    int rows = std::max(1, (int)g.aiRows.size());
+    float wDip = kAiWidth, hDip = kAiPad * 2 + rows * kAiRowH;
+    float left = L.W - 40 - wDip, top = L.topH + 2;
+    POINT org{0, 0};
+    ClientToScreen(g.wnd, &org);
+    out->left = org.x + (int)std::lround((left + kEdge) * L.s);
+    out->top = org.y + (int)std::lround((top + kEdge) * L.s);
+    out->right = out->left + (int)std::lround(wDip * L.s);
+    out->bottom = out->top + (int)std::lround(hDip * L.s);
+}
+
+// 0 = closed, rising to 1 while it opens, falling again while it closes.
+float AiProgress() {
+    float len = AnimLength() * kAiOpenMs / 360.0f;
+    if (len <= 0) return g.aiOpen ? 1 : 0;
+    float t = std::clamp((float)(GetTickCount() - g.aiAnimAt) / len, 0.0f, 1.0f);
+    return g.aiClosing ? 1 - t : t;
+}
+
+void AiEnsureTarget() {
+    if (g_aiRt) return;
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+        D2D1_RENDER_TARGET_TYPE_DEFAULT,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+    g.d2d->CreateDCRenderTarget(&props, &g_aiRt);
+    if (!g_aiRt) return;
+    g_aiRt->CreateSolidColorBrush({}, &g_aiBrush);
+    D2D1_GRADIENT_STOP stops[2] = {{0, Rgb(cAccent)}, {1, Rgb(0xcba6f7)}};
+    ComPtr<ID2D1GradientStopCollection> collection;
+    if (SUCCEEDED(g_aiRt->CreateGradientStopCollection(stops, 2, &collection)))
+        g_aiRt->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, 0), D2D1::Point2F(24, 24)),
+                                          collection.Get(), &g_aiEdge);
+    std::wstring fam = FontInstalled(g.fontFamily) ? g.fontFamily : L"Segoe UI";
+    g_aiText = MakeFormat(fam, g.fontWeight, L"Normal", 14, true);
+    g_aiChip = MakeFormat(fam, g.fontWeight, L"Normal", 11, false);
+    if (g_aiText) g_aiText->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    if (g_aiChip) {
+        g_aiChip->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        g_aiChip->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    }
+}
+
+void AiPaint(HWND w) {
+    PAINTSTRUCT ps;
+    HDC dc = BeginPaint(w, &ps);
+    RECT rc{};
+    GetClientRect(w, &rc);
+    int wpx = rc.right, hpx = rc.bottom;
+    AiEnsureTarget();
+    if (g_aiRt) {
+        RECT full{0, 0, wpx, hpx};
+        if (SUCCEEDED(g_aiRt->BindDC(dc, &full))) {
+            float s = g.lay.s;
+            float wDip = wpx / s, hDip = hpx / s;
+            float t = AiProgress();
+            float ease = g.aiClosing ? EaseQuintIn(t) : EaseQuint(t);
+            float alpha = ease;
+            float slide = g.aiClosing ? ease * 8 : (1 - ease) * 8;
+            g_aiRt->BeginDraw();
+            g_aiRt->SetTransform(D2D1::Matrix3x2F::Scale(s, s));
+            g_aiRt->Clear(D2D1::ColorF(0, 0, 0, 0));
+            // The body: Mocha over the blur, the same glass darkness as the launcher itself.
+            g_aiBrush->SetColor(g.blur ? Rgb(cMochaBase, g.backgroundOpacity / 100.0f) : Rgb(cMochaBase));
+            g_aiRt->FillRectangle(D2D1::RectF(0, 0, wDip, hDip), g_aiBrush.Get());
+            g_aiRt->SetAntialiasMode(D2D1_ANTIALIAS_MODE_ALIASED);
+            g_aiBrush->SetColor(Rgb(cBorder));
+            g_aiRt->FillRectangle(D2D1::RectF(0, 0, wDip, 1), g_aiBrush.Get());
+            g_aiRt->FillRectangle(D2D1::RectF(0, hDip - 1, wDip, hDip), g_aiBrush.Get());
+            g_aiRt->FillRectangle(D2D1::RectF(0, 1, 1, hDip - 1), g_aiBrush.Get());
+            g_aiRt->FillRectangle(D2D1::RectF(wDip - 1, 1, wDip, hDip - 1), g_aiBrush.Get());
+            g_aiRt->SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+            g_aiRt->PushAxisAlignedClip(D2D1::RectF(1, 1, wDip - 1, hDip - 1), D2D1_ANTIALIAS_MODE_ALIASED);
+            // The tint and the edge stay whole like the launcher's glass; the rows fade in
+            // and slide up over it, and stand still when the open ends.
+            ComPtr<ID2D1Layer> aiLayer;
+            bool aiFadeOn = alpha < 1 && SUCCEEDED(g_aiRt->CreateLayer(&aiLayer));
+            if (aiFadeOn)
+                g_aiRt->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr,
+                                                        D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                                        D2D1::IdentityMatrix(), alpha),
+                                  aiLayer.Get());
+            float y = kAiPad + slide;
+            for (size_t i = 0; i < g.aiRows.size(); i++) {
+                int a = g.aiRows[i];
+                D2D1_RECT_F row = D2D1::RectF(8, y, wDip - 8, y + kAiRowH - 4);
+                bool sel = (int)i == g.aiSel, hover = (int)i == g.aiHover;
+                if (sel || hover) {
+                    g_aiBrush->SetColor(Rgb(cRow, sel ? 0.85f : 0.5f));
+                    g_aiRt->FillRoundedRectangle(D2D1::RoundedRect(row, 8, 8), g_aiBrush.Get());
+                }
+                if (hover) {  // the blue to mauve edge, 2 around, on the row under the pointer
+                    D2D1_RECT_F edge = D2D1::RectF(row.left, row.top, row.right, row.bottom);
+                    if (g_aiEdge) {
+                        g_aiEdge->SetStartPoint(D2D1::Point2F(row.left, row.top));
+                        g_aiEdge->SetEndPoint(D2D1::Point2F(row.right, row.bottom));
+                        g_aiRt->DrawRoundedRectangle(D2D1::RoundedRect(edge, 8, 8), g_aiEdge.Get(), 2);
+                    }
+                }
+                // The chip with the agent's letters.
+                D2D1_RECT_F chip = D2D1::RectF(row.left + 8, y + (kAiRowH - 4 - 28) / 2, row.left + 36,
+                                               y + (kAiRowH - 4 + 28) / 2);
+                g_aiBrush->SetColor(Rgb(cMochaBase, 0.9f));
+                g_aiRt->FillRoundedRectangle(D2D1::RoundedRect(chip, 7, 7), g_aiBrush.Get());
+                D2D1_RECT_F chipEdge = D2D1::RectF(chip.left, chip.top, chip.right, chip.bottom);
+                if (g_aiEdge) {
+                    g_aiEdge->SetStartPoint(D2D1::Point2F(chip.left, chip.top));
+                    g_aiEdge->SetEndPoint(D2D1::Point2F(chip.right, chip.bottom));
+                    g_aiRt->DrawRoundedRectangle(D2D1::RoundedRect(chipEdge, 7, 7), g_aiEdge.Get(), 1.5f);
+                }
+                if (g_aiChip) DrawStr(kAgents[a].chip, g_aiChip.Get(), chip, Rgb(sel ? cText : cGlyph));
+                float textL = chip.right + 10;
+                if (g_aiText) {
+                    float h = LineHeight(g_aiText.Get());
+                    DrawStr(kAgents[a].name, g_aiText.Get(),
+                            D2D1::RectF(textL, y + (kAiRowH - 4 - h) / 2, row.right - 10,
+                                        y + (kAiRowH - 4 + h) / 2),
+                            Rgb(sel ? cText : cTitle));
+                }
+                y += kAiRowH;
+            }
+            if (aiFadeOn) g_aiRt->PopLayer();
+            g_aiRt->PopAxisAlignedClip();
+            if (g_aiRt->EndDraw() == D2DERR_RECREATE_TARGET) {
+                g_aiRt.Reset();
+                g_aiBrush.Reset();
+                g_aiEdge.Reset();
+            }
+        }
+    }
+    EndPaint(w, &ps);
+}
+
+int AiRowAt(LPARAM lp) {
+    float y = GET_Y_LPARAM(lp) / g.lay.s - kAiPad;
+    int row = (int)(y / kAiRowH);
+    return row >= 0 && row < (int)g.aiRows.size() ? row : -1;
+}
+
+void AiClick(int row) {
+    if (row < 0 || row >= (int)g.aiRows.size()) return;
+    int a = g.aiRows[row];
+    PlayPickSound();
+    AiHide(true);
+    std::wstring dir = HaloExpand(g.aiFolder);
+    HaloLaunchTerminalTab(kAgents[a].name, g.aiFolder.empty() ? HaloHome() : dir, g.agentCmd[a]);
+}
+
+void AiShow() {
+    if (!g.wnd || !g.aiEnabled || !g.visible) return;
+    g.aiRows = AgentRows(L"");
+    if (g.aiRows.empty()) return;
+    if (!g.aiWnd) {
+        WNDCLASSW wc{};
+        wc.lpfnWndProc = AiProc;
+        wc.hInstance = GetModuleHandleW(nullptr);
+        wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+        wc.lpszClassName = kAiClass;
+        RegisterClassW(&wc);
+        g.aiWnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE, kAiClass,
+                                  L"Halo agents", WS_POPUP, 0, 0, 10, 10, nullptr, nullptr,
+                                  GetModuleHandleW(nullptr), nullptr);
+        if (!g.aiWnd) return;
+    }
+    g.aiSel = 0;
+    g.aiHover = -1;
+    RECT r;
+    AiWindowRect(&r);
+    SetWindowPos(g.aiWnd, g.wnd, r.left, r.top, r.right - r.left, r.bottom - r.top,
+                 SWP_NOACTIVATE);
+    AiApplyGlass(g.aiWnd);  // the glass sheet runs on every show
+    g.aiOpen = true;
+    g.aiClosing = false;
+    g.aiAnimAt = GetTickCount();
+    ShowWindow(g.aiWnd, SW_SHOWNOACTIVATE);
+    SetTimer(g.aiWnd, kTimerAiFrame, 12, nullptr);
+    InvalidateRect(g.aiWnd, nullptr, FALSE);
+}
+
+void AiHide(bool now) {
+    if (!g.aiWnd || !g.aiOpen) return;
+    if (now) {
+        g.aiOpen = g.aiClosing = false;
+        KillTimer(g.aiWnd, kTimerAiFrame);
+        ShowWindow(g.aiWnd, SW_HIDE);
+        return;
+    }
+    if (g.aiClosing) return;
+    if (AnimLength() <= 0) {
+        AiHide(true);
+        return;
+    }
+    g.aiClosing = true;
+    g.aiAnimAt = GetTickCount();
+    SetTimer(g.aiWnd, kTimerAiFrame, 12, nullptr);
+    InvalidateRect(g.aiWnd, nullptr, FALSE);
+}
+
+void AiFrame(HWND w) {
+    if (!g.aiOpen) {
+        KillTimer(w, kTimerAiFrame);
+        return;
+    }
+    float len = AnimLength() * kAiOpenMs / 360.0f;
+    if (len <= 0) {
+        // Animations off: the panel is already whole, so one last draw and the timer stops.
+        KillTimer(w, kTimerAiFrame);
+        InvalidateRect(w, nullptr, FALSE);
+        return;
+    }
+    float gone = (float)(GetTickCount() - g.aiAnimAt);
+    if (g.aiClosing && gone >= len) {
+        AiHide(true);  // shut: every timer of the panel stops here
+        return;
+    }
+    if (!g.aiClosing && gone >= len) KillTimer(w, kTimerAiFrame);  // open: stand still
+    InvalidateRect(w, nullptr, FALSE);
+}
+
+LRESULT CALLBACK AiProc(HWND w, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+        case WM_TIMER:
+            if (wp == kTimerAiFrame) AiFrame(w);
+            return 0;
+        case WM_PAINT:
+            AiPaint(w);
+            return 0;
+        case WM_MOUSEMOVE: {
+            int row = AiRowAt(lp);
+            if (row != g.aiHover) {
+                g.aiHover = row;
+                InvalidateRect(w, nullptr, FALSE);
+            }
+            TRACKMOUSEEVENT tm{sizeof(tm), TME_LEAVE, w, 0};
+            TrackMouseEvent(&tm);
+            return 0;
+        }
+        case WM_MOUSELEAVE:
+            if (g.aiHover != -1) {
+                g.aiHover = -1;
+                InvalidateRect(w, nullptr, FALSE);
+            }
+            return 0;
+        case WM_LBUTTONDOWN: {
+            int row = AiRowAt(lp);
+            if (row >= 0) g.aiSel = row;
+            AiClick(g.aiSel);
+            return 0;
+        }
+        case WM_DESTROY:
+            g.aiWnd = nullptr;
+            return 0;
+    }
+    return DefWindowProcW(w, msg, wp, lp);
+}
+
+// The keyboard, while the panel is open: arrows move, Enter picks, Esc shuts the panel.
+bool AiPanelKey(UINT vk, UINT mods) {
+    if (!g.aiOpen) return false;
+    int n = (int)g.aiRows.size();
+    if (vk == VK_ESCAPE && mods == 0) {
+        AiHide(false);
+        return true;
+    }
+    if (vk == VK_DOWN && mods == 0 && n) {
+        g.aiSel = std::min(n - 1, g.aiSel + 1);
+        InvalidateRect(g.aiWnd, nullptr, FALSE);
+        return true;
+    }
+    if (vk == VK_UP && mods == 0 && n) {
+        g.aiSel = std::max(0, g.aiSel - 1);
+        InvalidateRect(g.aiWnd, nullptr, FALSE);
+        return true;
+    }
+    if (vk == VK_RETURN && mods == 0 && n) {
+        AiClick(g.aiSel);
+        return true;
+    }
+    return false;
+}
+
+// ---- launching an agent from the ai calling word ----------------------------------
+
+void AiLaunchAgent(int a) {
+    if (a < 0 || a >= kAgentCount) return;
+    PlayPickSound();
+    std::wstring dir = g.aiFolder.empty() ? HaloHome() : HaloExpand(g.aiFolder);
+    if (!HaloDirExists(dir)) dir = HaloHome();
+    HaloLaunchTerminalTab(kAgents[a].name, dir, g.agentCmd[a]);
+}
+
+// ---- reading Seamless Clipboard Manager's saved history (read only) ----------------
+// A small reader for the SQLite file the Clipboard Manager saves into. It walks the pages
+// of the file by hand and reads the write-ahead log too, so clips saved seconds ago show
+// up. It opens nothing for writing and never creates a file.
+
+struct ClipRow {
+    FILETIME date{};
+    std::wstring text;
+};
+
+namespace clipdb {
+
+UINT32 Read32(const unsigned char* p) {
+    return (UINT32)p[0] << 24 | (UINT32)p[1] << 16 | (UINT32)p[2] << 8 | p[3];
+}
+
+UINT64 Varint(const unsigned char* p, int* used) {
+    UINT64 v = 0;
+    int i = 0;
+    for (; i < 8; i++) {
+        v = (v << 7) | (p[i] & 0x7F);
+        if (!(p[i] & 0x80)) {
+            i++;
+            break;
+        }
+    }
+    if (i == 8) v = (v << 8) | p[8], i = 9;
+    *used = i;
+    return v;
+}
+
+struct Db {
+    std::vector<unsigned char> main;                     // the whole database file
+    std::map<int, std::vector<unsigned char>> walPages;  // newest committed page images from the log
+    int pageSize = 0;
+    int usable = 0;
+    bool utf16 = false;
+    bool ok = false;
+
+    const unsigned char* Page(int n) {
+        auto it = walPages.find(n);
+        if (it != walPages.end()) return it->second.data();
+        if (n < 1 || (size_t)(n - 1) * pageSize + pageSize > main.size()) return nullptr;
+        return main.data() + (size_t)(n - 1) * pageSize;
+    }
+};
+
+// The log's own checksum, so a half written frame is never read.
+void WalChecksum(const unsigned char* p, size_t bytes, UINT32* s1, UINT32* s2) {
+    for (size_t i = 0; i + 8 <= bytes; i += 8) {
+        *s1 += Read32(p + i) + *s2;
+        *s2 += Read32(p + i + 4) + *s1;
+    }
+}
+
+void ReadWal(Db& db, const std::wstring& path) {
+    HANDLE f = CreateFileW((path + L"-wal").c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                           nullptr, OPEN_EXISTING, 0, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return;
+    LARGE_INTEGER size{};
+    GetFileSizeEx(f, &size);
+    if (size.QuadPart < 512 || size.QuadPart > 512LL * 1024 * 1024) {
+        CloseHandle(f);
+        return;
+    }
+    std::vector<unsigned char> wal((size_t)size.QuadPart);
+    DWORD got = 0;
+    BOOL read = ReadFile(f, wal.data(), (DWORD)wal.size(), &got, nullptr);
+    CloseHandle(f);
+    if (!read || got < 32) return;
+    UINT32 magic = Read32(wal.data());
+    if (magic != 0x377f0682 && magic != 0x377f0683) return;
+    int ps = (int)Read32(wal.data() + 8);
+    if (ps < 512 || (ps & (ps - 1)) != 0) return;
+    UINT32 salt1 = Read32(wal.data() + 16), salt2 = Read32(wal.data() + 20);
+    UINT32 s1 = 0, s2 = 0;
+    WalChecksum(wal.data(), 24, &s1, &s2);  // the first frame's checksum starts from the header
+    size_t off = 32;
+    std::map<int, std::vector<unsigned char>> pages;
+    while (off + 24 + ps <= wal.size()) {
+        const unsigned char* fh = wal.data() + off;
+        UINT32 pgno = Read32(fh), dbsize = Read32(fh + 4), fs1 = Read32(fh + 8), fs2 = Read32(fh + 12),
+               ck1 = Read32(fh + 16), ck2 = Read32(fh + 20);
+        if (fs1 != salt1 || fs2 != salt2) break;  // an older log generation ends the chain
+        const unsigned char* data = wal.data() + off + 24;
+        UINT32 t1 = s1, t2 = s2;
+        WalChecksum(fh, 8, &t1, &t2);
+        WalChecksum(data, ps, &t1, &t2);
+        if (t1 != ck1 || t2 != ck2) break;  // a torn frame ends the chain
+        s1 = t1, s2 = t2;
+        pages[(int)pgno].assign(data, data + ps);
+        off += 24 + ps;
+        if (dbsize != 0) {  // a commit: everything up to here is real, keep it
+            db.walPages.swap(pages);
+            pages.clear();
+        }
+    }
+}
+
+bool Open(Db& db, const std::wstring& path) {
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                           OPEN_EXISTING, 0, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return false;
+    LARGE_INTEGER size{};
+    GetFileSizeEx(f, &size);
+    if (size.QuadPart < 512 || size.QuadPart > 512LL * 1024 * 1024) {
+        CloseHandle(f);
+        return false;
+    }
+    db.main.resize((size_t)size.QuadPart);
+    DWORD got = 0;
+    BOOL read = ReadFile(f, db.main.data(), (DWORD)db.main.size(), &got, nullptr);
+    CloseHandle(f);
+    if (!read || got < 100) return false;
+    if (memcmp(db.main.data(), "SQLite format 3", 15) != 0) return false;
+    int ps = (int)Read32(db.main.data() + 16);
+    if (ps == 1) ps = 65536;
+    if (ps < 512 || (ps & (ps - 1)) != 0) return false;
+    db.pageSize = ps;
+    int reserved = db.main.data()[20];
+    db.usable = ps - reserved;
+    UINT32 enc = Read32(db.main.data() + 56);
+    db.utf16 = enc == 2 || enc == 3;
+    db.ok = true;
+    ReadWal(db, path);
+    return true;
+}
+
+// Pulls one record's column values as text or number. Only what the history needs.
+struct Rec {
+    UINT64 nums[18] = {};
+    std::wstring texts[18];
+    int cols = 0;
+};
+
+bool ParseRecord(const unsigned char* p, size_t bytes, Db& db, Rec* out) {
+    int used = 0;
+    UINT64 headSize = Varint(p, &used);
+    if (headSize == 0 || headSize > bytes) return false;
+    size_t body = (size_t)headSize;
+    int col = 0;
+    const unsigned char* h = p + used;
+    const unsigned char* hend = p + headSize;
+    while (h < hend && col < 18) {
+        UINT64 t = Varint(h, &used);
+        h += used;
+        size_t size = 0;
+        UINT64 num = 0;
+        std::wstring text;
+        const unsigned char* data = p + body;
+        if (t == 0) {
+        } else if (t >= 1 && t <= 6) {
+            size = t == 1 ? 1 : t == 2 ? 2 : t == 3 ? 3 : t == 4 ? 4 : t == 5 ? 6 : 8;
+            if (body + size > bytes) return false;
+            for (size_t i = 0; i < size; i++) num = (num << 8) | data[i];
+            body += size;
+        } else if (t == 7) {
+            size = 8;
+            body += 8;  // a float: not used here
+        } else if (t == 8) {
+            num = 0;
+        } else if (t == 9) {
+            num = 1;
+        } else if (t >= 12) {
+            size = (size_t)((t - 12) / 2);
+            if (body + size > bytes) return false;
+            if (t % 2) {  // text
+                if (db.utf16) {
+                    int chars = (int)(size / 2);
+                    const wchar_t* w = (const wchar_t*)data;
+                    text.assign(w, w + chars);
+                } else {
+                    int n = MultiByteToWideChar(CP_UTF8, 0, (const char*)data, (int)size, nullptr, 0);
+                    if (n > 0) {
+                        text.resize(n);
+                        MultiByteToWideChar(CP_UTF8, 0, (const char*)data, (int)size, text.data(), n);
+                    }
+                }
+            }
+            body += size;
+        } else {
+            return false;  // 10 and 11 never appear in a valid file
+        }
+        out->nums[col] = num;
+        out->texts[col] = std::move(text);
+        col++;
+    }
+    out->cols = col;
+    return true;
+}
+
+// Walks a table's page tree. The schema page tells where the Main table starts.
+void WalkTable(Db& db, int page, int depth, std::vector<Rec>* rows, int cap) {
+    if (depth > 12 || (int)rows->size() >= cap) return;
+    const unsigned char* p = db.Page(page);
+    if (!p) return;
+    int hdr = page == 1 ? 100 : 0;
+    int type = p[hdr];
+    int cells = (p[hdr + 3] << 8) | p[hdr + 4];
+    const unsigned char* cellPtrs = p + hdr + (type == 5 ? 12 : 8);
+    if (type == 5) {  // inside pages: visit every child, then the right side
+        for (int i = 0; i < cells; i++) {
+            int off = (cellPtrs[i * 2] << 8) | cellPtrs[i * 2 + 1];
+            if (off + 4 > db.pageSize) continue;
+            WalkTable(db, (int)Read32(p + off), depth + 1, rows, cap);
+        }
+        WalkTable(db, (int)Read32(p + hdr + 8), depth + 1, rows, cap);
+        return;
+    }
+    if (type != 13) return;  // leaves only
+    int maxLocal = db.usable - 35;
+    for (int i = 0; i < cells && (int)rows->size() < cap; i++) {
+        int off = (cellPtrs[i * 2] << 8) | cellPtrs[i * 2 + 1];
+        if (off >= db.pageSize) continue;
+        const unsigned char* cell = p + off;
+        int used = 0;
+        UINT64 payload = Varint(cell, &used);
+        Varint(cell + used, &used);  // the row id, not needed
+        cell += used;
+        std::vector<unsigned char> spill;
+        const unsigned char* data = cell;
+        size_t len = payload > (UINT64)maxLocal ? maxLocal : (size_t)payload;
+        if (payload > (UINT64)maxLocal) {
+            int minLocal = ((db.usable - 12) * 32 / 255) - 23;
+            size_t local = (size_t)(minLocal + ((payload - minLocal) % (db.usable - 4)));
+            if (local > (size_t)maxLocal) local = minLocal;
+            len = local;
+            UINT64 next = Read32(cell + local);
+            spill.assign(cell, cell + local);
+            int guard = 0;
+            while (next && guard++ < 4096) {
+                const unsigned char* op = db.Page((int)next);
+                if (!op) break;
+                UINT64 after = Read32(op);
+                size_t take = std::min<size_t>((size_t)(db.usable - 4), (size_t)(payload - spill.size()));
+                spill.insert(spill.end(), op + 4, op + 4 + take);
+                next = after;
+                if (spill.size() >= payload) break;
+            }
+            data = spill.data();
+            len = spill.size();
+        }
+        if (len < payload) continue;  // a page in the chain was missing
+        Rec r;
+        if (ParseRecord(data, (size_t)payload, db, &r)) rows->push_back(std::move(r));
+    }
+}
+
+int FindTable(Db& db) {  // the page the Main table starts on
+    std::vector<Rec> rows;
+    WalkTable(db, 1, 0, &rows, 200);
+    for (auto& r : rows)
+        if (r.cols > 3 && r.texts[1] == L"Main") return (int)r.nums[3];
+    return 0;
+}
+
+}  // namespace clipdb
+
+std::vector<ClipRow> ClipsLoad(const std::wstring& filter) {
+    std::vector<ClipRow> out;
+    // Halo's own storage folder ends in its mod id; the same folder for the Clipboard
+    // Manager holds clips.db. Built by hand, opened read only, never created.
+    WCHAR buf[MAX_PATH * 2]{};
+    if (!Wh_GetModStoragePath(buf, ARRAYSIZE(buf))) return out;
+    std::wstring dir = buf;
+    size_t slash = dir.find_last_of(L"\\/");
+    if (slash == std::wstring::npos) return out;
+    dir = dir.substr(0, slash + 1) + L"local@seamless-clipboard-manager\\clips.db";
+    clipdb::Db db;
+    if (!clipdb::Open(db, dir)) return out;
+    int root = clipdb::FindTable(db);
+    if (!root) return out;
+    std::vector<clipdb::Rec> rows;
+    clipdb::WalkTable(db, root, 0, &rows, 600);
+    for (auto& r : rows) {
+        if (r.cols < 3 || r.texts[2].empty()) continue;
+        if (!filter.empty() && !HaloIcontains(r.texts[2], filter)) continue;
+        ClipRow cr;
+        cr.text = r.texts[2];
+        // lDate and lastPasteDate are unix seconds; the newest paste wins.
+        UINT64 sec = r.nums[12] ? r.nums[12] : r.nums[1];
+        if (sec > 1000000000000LL) sec /= 1000;  // some rows carry milliseconds
+        if (sec > 100000) {
+            long long ft = (long long)(sec + 11644473600LL) * 10000000LL;
+            cr.date.dwLowDateTime = (DWORD)ft;
+            cr.date.dwHighDateTime = (DWORD)(ft >> 32);
+        }
+        out.push_back(std::move(cr));
+    }
+    std::sort(out.begin(), out.end(), [](const ClipRow& a, const ClipRow& b) {
+        return CompareFileTime(&a.date, &b.date) > 0;
+    });
+    if (out.size() > 200) out.resize(200);
+    return out;
+}
+
+void ClipToClipboard(const std::wstring& text) {
+    if (text.empty() || !OpenClipboard(g.wnd)) return;
+    EmptyClipboard();
+    HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE, (text.size() + 1) * 2);
+    if (h) {
+        void* p = GlobalLock(h);
+        if (p) {
+            memcpy(p, text.c_str(), (text.size() + 1) * 2);
+            GlobalUnlock(h);
+            SetClipboardData(CF_UNICODETEXT, h);
+        } else {
+            GlobalFree(h);
+        }
+    }
+    CloseClipboard();
+}
+
+// ---- recent projects ---------------------------------------------------------------
+// The git folders one level under the project folders, newest change first. The scan runs
+// on its own thread and its answer is cached; filtering happens on the cached list, so
+// nothing scans on every keystroke.
+
+void ProjectsRoots() {
+    std::vector<std::wstring> roots;
+    size_t start = 0;
+    while (start <= g.projectsFolders.size()) {
+        size_t end = g.projectsFolders.find(L';', start);
+        if (end == std::wstring::npos) end = g.projectsFolders.size();
+        std::wstring one = g.projectsFolders.substr(start, end - start);
+        size_t a = one.find_first_not_of(L" \t");
+        if (a != std::wstring::npos) {
+            size_t b = one.find_last_not_of(L" \t");
+            roots.push_back(HaloExpand(one.substr(a, b - a + 1)));
+        }
+        start = end + 1;
+    }
+    if (roots.empty()) {  // the default: H:\ and the user's source repos, when they exist
+        if (HaloDirExists(L"H:\\")) roots.push_back(L"H:\\");
+        std::wstring repos = HaloHome() + L"\\source\\repos";
+        if (HaloDirExists(repos)) roots.push_back(repos);
+    }
+    g.projectRoots = std::move(roots);
+}
+
+void ProjectsScan(std::vector<std::wstring> roots) {
+    std::vector<State::HaloProject> found;
+    for (auto& root : roots) {
+        WIN32_FIND_DATAW fd;
+        HANDLE h = FindFirstFileW((root.back() == L'\\' ? root + L"*" : root + L"\\*").c_str(), &fd);
+        if (h == INVALID_HANDLE_VALUE) continue;
+        do {
+            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+            if (fd.cFileName[0] == L'.') continue;
+            std::wstring path = root.back() == L'\\' ? root + fd.cFileName : root + L"\\" + fd.cFileName;
+            if (GetFileAttributesW((path + L"\\.git").c_str()) == INVALID_FILE_ATTRIBUTES) continue;
+            State::HaloProject p;
+            p.path = path;
+            p.name = fd.cFileName;
+            p.changed = fd.ftLastWriteTime;
+            found.push_back(std::move(p));
+            if (found.size() >= 200) break;
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+        if (found.size() >= 200) break;
+    }
+    std::sort(found.begin(), found.end(), [](const State::HaloProject& a, const State::HaloProject& b) {
+        return CompareFileTime(&a.changed, &b.changed) > 0;
+    });
+    {
+        std::lock_guard<std::mutex> guard(g.projectsLock);
+        g.projects = std::move(found);
+    }
+    g.projectsScanning = false;
+    g.projectsScannedAt = GetTickCount();
+    if (g.msgWnd) PostMessageW(g.msgWnd, WM_APP_PROJECTS, 0, 0);
+}
+
+// Starts a scan when the cached list is old. Never waits for it: the list answers with
+// what it has, and the message refreshes the rows when the scan lands.
+void ProjectsEnsureScan() {
+    if (g.projectsScanning) return;
+    DWORD now = GetTickCount();
+    if (g.projectsScannedAt && now - g.projectsScannedAt < 300000) return;
+    ProjectsRoots();
+    g.projectsScanning = true;
+    std::vector<std::wstring> roots = g.projectRoots;
+    std::thread([roots] { ProjectsScan(roots); }).detach();
+}
+
+void ProjectsBuild() {
+    ProjectsEnsureScan();
+    std::lock_guard<std::mutex> guard(g.projectsLock);
+    if (g.projects.empty() && g.projectsScanning) {
+        Item it;
+        it.index = 100;
+        it.title = L"Looking for your projects...";
+        it.glyph = L"\uE721";  // the magnifier, while the folders are read
+        g.localItems.push_back(std::move(it));
+        return;
+    }
+    for (auto& p : g.projects) {
+        if (!g.localFilter.empty() && !HaloIcontains(p.name, g.localFilter) && !HaloIcontains(p.path, g.localFilter))
+            continue;
+        Item it;
+        it.index = 100 + (int)g.localItems.size();
+        it.title = p.name;
+        it.sub = p.path;
+        it.glyph = L"\uE8B7";  // a folder
+        it.path = p.path;
+        g.localItems.push_back(std::move(it));
+        if (g.localItems.size() >= 30) break;
+    }
+}
+
+void ProjectsOpenEditor(const std::wstring& path) {
+    std::wstring line = g.projectsEditor;
+    size_t sp = line.find_first_of(L" \t");
+    std::wstring prog = sp == std::wstring::npos ? line : line.substr(0, sp);
+    std::wstring args = sp == std::wstring::npos ? L"" : line.substr(sp + 1);
+    std::wstring full = HaloFindOnPath(prog);
+    if (full.empty()) full = prog;
+    std::wstring all = args.empty() ? L"\"" + path + L"\"" : args + L" \"" + path + L"\"";
+    HaloRunCommand(full, all, path);
+}
+
+// ---- quick notes -------------------------------------------------------------------
+
+std::wstring NotesPath() {
+    if (!g.notesFile.empty()) return HaloExpand(g.notesFile);
+    PWSTR p = nullptr;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &p))) {
+        std::wstring d = p;
+        CoTaskMemFree(p);
+        return d + L"\\Halo Notes.md";
+    }
+    return HaloHome() + L"\\Documents\\Halo Notes.md";
+}
+
+void NotesAppend(const std::wstring& text) {
+    std::wstring path = NotesPath();
+    size_t slash = path.find_last_of(L"\\/");
+    if (slash != std::wstring::npos) CreateDirectoryW(path.substr(0, slash).c_str(), nullptr);
+    bool fresh = GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES;
+    HANDLE h = CreateFileW(path.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, OPEN_ALWAYS,
+                           FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return;
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    wchar_t stamp[40];
+    swprintf(stamp, 40, L"%04u-%02u-%02u %02u:%02u", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute);
+    std::string head;
+    std::wstring line = std::wstring(stamp) + L" " + text + L"\r\n";
+    std::string out = Utf8(line);
+    DWORD wrote = 0;
+    if (fresh) {
+        std::string title = "# Halo Notes\r\n\r\n";
+        WriteFile(h, title.data(), (DWORD)title.size(), &wrote, nullptr);
+    }
+    WriteFile(h, out.data(), (DWORD)out.size(), &wrote, nullptr);
+    CloseHandle(h);
+}
+
+std::vector<std::wstring> NotesLatest() {
+    std::vector<std::wstring> lines;
+    std::wstring path = NotesPath();
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                           OPEN_EXISTING, 0, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return lines;
+    LARGE_INTEGER size{};
+    GetFileSizeEx(h, &size);
+    if (size.QuadPart > 4LL * 1024 * 1024) {
+        LARGE_INTEGER from{};
+        from.QuadPart = size.QuadPart - 4LL * 1024 * 1024;
+        SetFilePointerEx(h, from, nullptr, FILE_BEGIN);
+        size.QuadPart = 4LL * 1024 * 1024;
+    }
+    std::string raw((size_t)size.QuadPart, '\0');
+    DWORD got = 0;
+    ReadFile(h, raw.data(), (DWORD)raw.size(), &got, nullptr);
+    CloseHandle(h);
+    std::wstring text = raw.empty() ? L"" : Wide(raw);
+    size_t start = 0;
+    while (start <= text.size()) {
+        size_t end = text.find_first_of(L"\r\n", start);
+        if (end == std::wstring::npos) end = text.size();
+        std::wstring line = text.substr(start, end - start);
+        size_t a = line.find_first_not_of(L" \t");
+        if (a != std::wstring::npos && line[a] != L'#') lines.push_back(line.substr(a));
+        start = text.find_first_not_of(L"\r\n", end);
+        if (start == std::wstring::npos) break;
+    }
+    if (lines.size() > 20) lines.erase(lines.begin(), lines.end() - 20);
+    std::reverse(lines.begin(), lines.end());  // the newest note first
+    return lines;
+}
+
+void NotesBuild() {
+    if (!g.localFilter.empty()) {
+        g.localNoteBuf = g.localFilter;
+        Item it;
+        it.index = 100;
+        it.title = L"Add this note";
+        it.sub = g.localFilter;
+        it.glyph = L"\uE70F";  // the pencil
+        it.path = L"add";
+        g.localItems.push_back(std::move(it));
+        return;
+    }
+    g.localNoteBuf.clear();
+    for (auto& line : NotesLatest()) {
+        Item it;
+        it.index = 100 + (int)g.localItems.size();
+        it.title = line;
+        it.sub = NotesPath();
+        it.glyph = L"\uE70B";  // a line of writing
+        g.localItems.push_back(std::move(it));
+    }
+    if (g.localItems.empty()) {
+        Item it;
+        it.index = 100;
+        it.title = L"No notes yet";
+        it.sub = L"Type " + g.notesKeyword + L", a space and some text, then press Enter";
+        it.glyph = L"\uE70F";
+        g.localItems.push_back(std::move(it));
+    }
+}
+
+// ---- media controls ----------------------------------------------------------------
+
+void SendMediaKey(WORD vk) {
+    INPUT in[2]{};
+    in[0].type = in[1].type = INPUT_KEYBOARD;
+    in[0].ki.wVk = vk;
+    in[1].ki.wVk = vk;
+    in[1].ki.dwFlags = KEYEVENTF_KEYUP;
+    SendInput(2, in, sizeof(INPUT));
+}
+
+void MediaBuild() {
+    struct { const wchar_t* title; const wchar_t* sub; WORD vk; PCWSTR glyph; } acts[] = {
+        {L"Play or pause", L"What Windows is playing right now", VK_MEDIA_PLAY_PAUSE, L"\uE768"},
+        {L"Next track", L"", VK_MEDIA_NEXT_TRACK, L"\uE76E"},
+        {L"Previous track", L"", VK_MEDIA_PREV_TRACK, L"\uE76D"},
+    };
+    for (auto& a : acts) {
+        Item it;
+        it.index = 100 + (int)g.localItems.size();
+        it.title = a.title;
+        it.sub = a.sub;
+        it.glyph = a.glyph;
+        it.path = std::to_wstring(a.vk);
+        g.localItems.push_back(std::move(it));
+    }
+}
+
+// ---- the local lists: what the calling words answer --------------------------------
+
+// The calling word typed alone, or with a space and what to look for, picks its module.
+int LocalKeywordHit() {
+    if (g.text.empty()) return -1;
+    size_t sp = g.text.find(L' ');
+    std::wstring head = sp == std::wstring::npos ? g.text : g.text.substr(0, sp);
+    struct {
+        bool on;
+        const std::wstring* key;
+    } mods[] = {
+        {g.aiEnabled, &g.aiKeyword},         {g.projectsEnabled, &g.projectsKeyword},
+        {g.clipsEnabled, &g.clipsKeyword},   {g.mediaEnabled, &g.mediaKeyword},
+        {g.notesEnabled, &g.notesKeyword},
+    };
+    for (int i = 0; i < 5; i++) {
+        if (!mods[i].on || mods[i].key->empty()) continue;
+        if (_wcsicmp(head.c_str(), mods[i].key->c_str()) == 0) return i;
+    }
+    return -1;
+}
+
+void LocalBuild(int m) {
+    g.localItems.clear();
+    switch (m) {
+        case kLocalAi:
+            for (int a : AgentRows(g.localFilter)) {
+                Item it;
+                it.index = 100 + (int)g.localItems.size();
+                it.title = kAgents[a].name;
+                it.sub = L"Opens in a new Windows Terminal tab";
+                it.glyph = kAgents[a].chip;
+                it.path = std::to_wstring(a);
+                g.localItems.push_back(std::move(it));
+            }
+            break;
+        case kLocalProjects:
+            ProjectsBuild();
+            break;
+        case kLocalClips: {
+            for (auto& cr : ClipsLoad(g.localFilter)) {
+                Item it;
+                it.index = 100 + (int)g.localItems.size();
+                std::wstring first = cr.text, rest;
+                size_t nl = first.find_first_of(L"\r\n");
+                if (nl != std::wstring::npos) {
+                    rest = first.substr(nl);
+                    size_t a = rest.find_first_not_of(L"\r\n");
+                    first = first.substr(0, nl);
+                    rest = a == std::wstring::npos ? L"" : rest.substr(a);
+                }
+                it.title = first;
+                it.sub = rest.empty() ? L"Copy back to the clipboard" : rest;
+                it.glyph = L"\uE8C8";  // the clipboard
+                it.path = cr.text;
+                g.localItems.push_back(std::move(it));
+                if (g.localItems.size() >= 50) break;
+            }
+            break;
+        }
+        case kLocalMedia:
+            MediaBuild();
+            break;
+        case kLocalNotes:
+            NotesBuild();
+            break;
+    }
+}
+
+// Called from TextChanged: the local lists follow what is typed, and leave when the
+// calling word is gone.
+void LocalQueryChanged() {
+    int m = LocalKeywordHit();
+    if (m != g.localMode) {
+        g.localMode = m;
+        g.localSel = 0;
+        g.localScroll = 0;
+        g.localNoteBuf.clear();
+    }
+    if (m < 0) {
+        g.localItems.clear();
+        return;
+    }
+    size_t sp = g.text.find(L' ');
+    std::wstring filter = sp == std::wstring::npos ? L"" : g.text.substr(sp + 1);
+    size_t a = filter.find_first_not_of(L" \t");
+    g.localFilter = a == std::wstring::npos ? L"" : filter.substr(a);
+    LocalBuild(m);
+    if (g.localSel >= (int)g.localItems.size()) g.localSel = std::max(0, (int)g.localItems.size() - 1);
+}
+
+// What Enter does on a local row.
+void LocalOpen(int row, bool ctrl) {
+    if (row < 0 || row >= (int)g.localItems.size()) return;
+    const Item& it = g.localItems[row];
+    switch (g.localMode) {
+        case kLocalAi:
+            AiLaunchAgent(_wtoi(it.path.c_str()));
+            HideLauncher();
+            Send({L"hide"});
+            break;
+        case kLocalProjects:
+            PlayPickSound();
+            if (ctrl) ProjectsOpenEditor(it.path);
+            else HaloLaunchTerminalTab(it.title, it.path, L"");
+            HideLauncher();
+            Send({L"hide"});
+            break;
+        case kLocalClips:
+            PlayPickSound();
+            ClipToClipboard(it.path);
+            break;
+        case kLocalMedia:
+            PlayPickSound();
+            SendMediaKey((WORD)_wtoi(it.path.c_str()));
+            break;
+        case kLocalNotes:
+            if (!g.localNoteBuf.empty()) {
+                PlayPickSound();
+                NotesAppend(g.localNoteBuf);
+                g.text.clear();
+                g.caret = g.anchor = 0;
+                TextChanged(true);  // the box empties and the newest notes are listed
+            }
+            break;
+    }
+}
+
+// The keys the local lists answer, before Flow's own keys.
+bool LocalKeyDown(UINT vk, UINT mods) {
+    if (g.localMode < 0 || g.localItems.empty()) return false;
+    int n = (int)g.localItems.size();
+    auto move = [&](int to) {
+        g.localSel = std::clamp(to, 0, n - 1);
+        // Keep the picked row on screen while the list scrolls with it.
+        int vis = std::max(1, (int)g.lay.rows);
+        g.localScroll = std::clamp(g.localScroll, 0, std::max(0, n - vis));
+        if (g.localSel < g.localScroll) g.localScroll = g.localSel;
+        if (g.localSel >= g.localScroll + vis) g.localScroll = g.localSel - vis + 1;
+        g.movedByKeys = g.localFromKeys = true;
+        Render();
+    };
+    if (mods != 0 && mods != kCtrl && mods != kShift) return false;
+    if (vk == VK_DOWN && mods == 0) { move(g.localSel + 1); return true; }
+    if (vk == VK_UP && mods == 0) { move(g.localSel - 1); return true; }
+    if (vk == VK_TAB && mods == 0) { move(g.localSel + 1); return true; }
+    if (vk == VK_TAB && mods == kShift) { move(g.localSel - 1); return true; }
+    if (vk == VK_NEXT && mods == 0) { move(n - 1); return true; }
+    if (vk == VK_PRIOR && mods == 0) { move(0); return true; }
+    if (vk == VK_RETURN && (mods == 0 || mods == kCtrl)) {
+        LocalOpen(std::min(g.localSel, n - 1), mods == kCtrl);
+        return true;
+    }
+    if (vk == VK_RETURN || vk == VK_APPS || (vk == VK_F10 && mods == kShift)) return true;  // no menus here
+    return false;
+}
+
+
 
 bool Matches(const wchar_t* setting, UINT vk, UINT mods) {
     Hotkey hk = ParseHotkey(SetStr(setting));
@@ -2479,19 +4218,25 @@ bool OnKeyDown(UINT vk, UINT mods) {
     bool atEnd = g.caret == (int)g.text.size() && !HasSelection();
     bool results = g.res.view == L"results";
 
+    // The AI panel answers first while it is open, then the local lists.
+    if (AiPanelKey(vk, mods)) return true;
+    if (LocalKeyDown(vk, mods)) return true;
+
     // Space previews a file, but only after the arrows or Tab moved the selection.
-    if (vk == VK_SPACE && mods == 0 && g.peekOnSpace && g.movedByKeys) {
+    if (vk == VK_SPACE && mods == 0 && g.peekOnSpace && g.movedByKeys && g.localMode < 0) {
         const Item* it = SelectedItem();
         if (it && PeekFile(it->path)) return true;
     }
 
-    // Keys Flow handles before its own key table.
+    // Keys Flow handles before its own key table. The local lists keep the text keys to
+    // themselves: no context menu or result jump while Halo's own rows are showing.
+    bool local = g.localMode >= 0;
     if (mods == 0 || mods == kShift) {
         if (vk == VK_DOWN && mods == 0) { g.movedByKeys = true; Cmd(L"SelectNextItem"); return true; }
         if (vk == VK_UP && mods == 0) { g.movedByKeys = true; Cmd(L"SelectPrevItem"); return true; }
         if (vk == VK_NEXT && mods == 0) { g.movedByKeys = true; Cmd(L"SelectNextPage"); return true; }
         if (vk == VK_PRIOR && mods == 0) { g.movedByKeys = true; Cmd(L"SelectPrevPage"); return true; }
-        if (vk == VK_RIGHT && mods == 0 && atEnd && results && !g.res.items.empty()) { Cmd(L"LoadContextMenu"); return true; }
+        if (!local && vk == VK_RIGHT && mods == 0 && atEnd && results && !g.res.items.empty()) { Cmd(L"LoadContextMenu"); return true; }
         if (vk == VK_LEFT && mods == 0 && g.caret == 0 && !HasSelection() && !results) { Cmd(L"Esc"); return true; }
     }
     if (vk == VK_BACK && mods == kCtrl && atEnd && results &&
@@ -2521,8 +4266,8 @@ bool OnKeyDown(UINT vk, UINT mods) {
         return true;
     }
     // The menu key, Shift+F10 and the context-menu key open the same menu as a right-click.
-    if (results && (Matches(L"OpenContextMenuHotkey", vk, mods) || (vk == VK_APPS && mods == 0) ||
-                    (vk == VK_F10 && mods == kShift) || (vk == VK_RETURN && mods == kShift))) {
+    if (!local && results && (Matches(L"OpenContextMenuHotkey", vk, mods) || (vk == VK_APPS && mods == 0) ||
+                              (vk == VK_F10 && mods == kShift) || (vk == VK_RETURN && mods == kShift))) {
         RequestAppMenuForSelection();
         return true;
     }
@@ -2540,11 +4285,13 @@ bool OnKeyDown(UINT vk, UINT mods) {
     if (vk == 'C' && mods == (kCtrl | kShift)) { Cmd(L"CopyAlternative"); return true; }
     Hotkey openMod = ParseHotkey(SetStr(L"OpenResultModifiers", L"Alt") + L" + A");
     if (vk >= '0' && vk <= '9' && mods == openMod.mods && mods != 0) {
+        if (local) return true;  // no result jump while Halo's own rows are showing
         int index = vk == '0' ? 9 : (int)(vk - '1');
         Send({L"open", std::to_wstring(index), L"0000"});
         return true;
     }
     if (vk == VK_RETURN) {
+        if (local) return true;  // the local lists answered Enter above
         if (mods == kShift) Cmd(L"LoadContextMenu");
         else if (mods == 0 || mods == kCtrl || mods == kAlt || mods == (kCtrl | kShift)) Send({L"open", L"", ModsField(mods)});
         return true;
@@ -2637,6 +4384,19 @@ int RowAt(float dipX, float dipY) {
     if (y < 0) return -1;
     int row = (int)(y / L.rowH);
     return row < (int)g.res.items.size() && row < L.rows ? row : -1;
+}
+
+// The same geometry, for whichever list is showing: Halo's own rows carry the scroll.
+int ActiveRowAt(float dipX, float dipY) {
+    if (g.localMode < 0) return RowAt(dipX, dipY);
+    Layout& L = g.lay;
+    if (!L.rows || dipX < 10 || dipX > L.listW - 10) return -1;
+    float y = dipY - (L.listY + 10);
+    if (y < 0) return -1;
+    int row = (int)(y / L.rowH);
+    if (row >= L.rows) return -1;
+    row += g.localScroll;
+    return row < (int)g.localItems.size() ? row : -1;
 }
 
 // ---------------------------------------------------------------- window procedures
@@ -3139,12 +4899,36 @@ LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 return 0;
             }
             int row = RowAt(x, y);
+            bool overBtn = g.aiEnabled && y < g.lay.topH && AiButtonAt(x, y);
+            if (overBtn != g.aiBtnHover) {
+                g.aiBtnHover = overBtn;
+                Render();
+            }
+            if (overBtn) {
+                if (g.hoverRow != -1) g.hoverRow = -1;
+                return 0;
+            }
+            if (g.localMode >= 0) {
+                int lrow = ActiveRowAt(x, y);
+                if (lrow >= 0 && lrow != g.localSel) {
+                    g.localSel = lrow;
+                    Render();
+                }
+                g.hoverRow = lrow;
+                return 0;
+            }
             if (row >= 0 && row != g.hoverRow && g.res.items[row].index != g.res.sel)
                 Send({L"sel", std::to_wstring(g.res.items[row].index)});
             g.hoverRow = row;
             return 0;
         }
         case WM_LBUTTONDOWN: {
+            float bx = GET_X_LPARAM(lp) / g.lay.s - kEdge, by = GET_Y_LPARAM(lp) / g.lay.s - kEdge;
+            if (g.aiEnabled && by < g.lay.topH && AiButtonAt(bx, by)) {
+                if (g.aiOpen) AiHide(false);
+                else AiShow();
+                return 0;
+            }
             if (int zone = SizeZone(POINT{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)})) {
                 g_sizing = zone;
                 GetCursorPos(&g_sizeFrom);
@@ -3183,6 +4967,14 @@ LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 ReleaseCapture();
                 return 0;
             }
+            if (g.localMode >= 0) {
+                int lrow = ActiveRowAt(x, y);
+                if (lrow >= 0) {
+                    g.localSel = lrow;
+                    LocalOpen(lrow, (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0);
+                }
+                return 0;
+            }
             int row = RowAt(x, y);
             if (row >= 0) Send({L"open", std::to_wstring(g.res.items[row].index), ModsField(CurrentMods())});
             return 0;
@@ -3200,6 +4992,17 @@ LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         case WM_MOUSEWHEEL: {
             int steps = -GET_WHEEL_DELTA_WPARAM(wp) / WHEEL_DELTA;
+            if (g.localMode >= 0) {
+                if (steps) {
+                    int vis = std::max(1, (int)g.lay.rows);
+                    int last = std::max(0, (int)g.localItems.size() - vis);
+                    g.localScroll = std::clamp(g.localScroll + steps, 0, last);
+                    g.localSel = std::clamp(g.localSel, g.localScroll,
+                                            std::min((int)g.localItems.size() - 1, g.localScroll + vis - 1));
+                    Render();
+                }
+                return 0;
+            }
             if (steps) Send({L"scroll", std::to_wstring(steps * 3)});
             return 0;
         }
@@ -3448,6 +5251,14 @@ LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             RegisterKeys();
             ApplyBackdrop();
             Render();
+            return 0;
+        case WM_APP_PROJECTS:
+            // The folder scan landed: refresh the rows if the projects list is showing.
+            if (g.localMode == kLocalProjects) {
+                LocalBuild(kLocalProjects);
+                if (g.localSel >= (int)g.localItems.size()) g.localSel = std::max(0, (int)g.localItems.size() - 1);
+                Render();
+            }
             return 0;
         case WM_APP_HOOKKEY:
             FireKey((size_t)wp);
@@ -4872,15 +6683,79 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Choice, L"flow:DateFormat", L"Date format", L"", L"MM'/'dd ddd", {{L"MM'/'dd ddd", L"11/14 Sat"}, {L"MM'/'dd dddd", L"11/14 Saturday"}, {L"MM'/'dd", L"11/14"}, {L"dd'/'MM", L"14/11"}, {L"ddd MM'/'dd", L"Sat 11/14"}, {L"ddd dd'/'MM", L"Sat 14/11"}, {L"dddd dd', 'MMMM", L"Saturday 14, November"}, {L"dd', 'MMMM", L"14, November"}, {L"dddd", L"Saturday"}}, 0, 100, 3, L"Clock"},
 {K::Check, L"flow:ShowPlaceholder", L"Hint text", L"Grey text in the empty search box.", L"0", {}, 0, 100, 3, L"Hint"},
 {K::Text, L"flow:PlaceholderText", L"Hint", L"Leave it empty for \"Type here to search\".", L"", {}, 0, 100, 3, L"Hint"},
+{K::Check, L"greetingEnabled", L"Greeting", L"The empty search box greets you by the time of day instead of the hint, using the name below.", L"1", {}, 0, 100, 3, L"Hint"},
+{K::Text, L"greetingName", L"Name in the greeting", L"Leave it empty to use your Windows account name.", L"", {}, 0, 100, 3, L"Hint"},
 {K::Check, L"flow:UseAnimation", L"Open animation", L"", L"1", {}, 0, 100, 3, L"Motion and sound"},
 {K::Choice, L"flow:AnimationSpeed", L"Animation speed", L"", L"Medium", {{L"Slow", L"Slow"}, {L"Medium", L"Medium"}, {L"Fast", L"Fast"}, {L"Custom", L"Your own length (below)"}}, 0, 100, 3, L"Motion and sound"},
 {K::Number, L"flow:CustomAnimationLength", L"Your own length", L"100 to 1000 milliseconds (Suggested: 360). Used when the speed is \"Your own length\".", L"360", {}, 100, 1000, 3, L"Motion and sound"},
 {K::Check, L"flow:UseSound", L"Open sound", L"", L"1", {}, 0, 100, 3, L"Motion and sound"},
 {K::Number, L"flow:SoundVolume", L"Sound volume", L"0 to 100 (Suggested: 50).", L"50", {}, 0, 100, 3, L"Motion and sound"},
+{K::Choice, L"soundSet", L"Sound set", L"The sounds Halo plays when it opens, closes and you pick a result. \"Flow Launcher\" plays the file the search engine chose. Glass, Pebble and Breeze are Halo's own gentle tones.", L"Flow Launcher", {{L"Flow Launcher", L"Flow Launcher"}, {L"Glass", L"Glass"}, {L"Pebble", L"Pebble"}, {L"Breeze", L"Breeze"}}, 0, 100, 3, L"Motion and sound"},
+{K::Number, L"soundVolume", L"Sound set volume", L"0 to 100 (Suggested: 50). For the sound sets above; the Flow Launcher sound keeps its own volume.", L"50", {}, 0, 100, 3, L"Motion and sound"},
 {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 3, L"Settings window"},
 {K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 3, L"Settings window"},
 {K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it to open these settings. Right-click it to open Halo or restart its search engine. When off, Ctrl + I in Halo still opens this window.", L"1", {}, 0, 100, 3, L"Settings window"}
     };
+    // Halo's own modules: the AI agents and the four lists Halo answers itself. Each has
+    // its switch, the word that calls it and its own extras.
+    {
+        struct AgentRow {
+            PCWSTR cmdKey, hideKey, name, def;
+        };
+        const AgentRow agents[] = {
+            {L"aiClaudeCommand", L"aiClaudeHidden", L"Claude Code", L"claude"},
+            {L"aiCodexCommand", L"aiCodexHidden", L"Codex", L"codex"},
+            {L"aiOpencodeCommand", L"aiOpencodeHidden", L"OpenCode", L"opencode"},
+            {L"aiAntigravityCommand", L"aiAntigravityHidden", L"Antigravity", L"antigravity"},
+            {L"aiGrokCommand", L"aiGrokHidden", L"Grok", L"grok"},
+            {L"aiGeminiCommand", L"aiGeminiHidden", L"Gemini CLI", L"gemini"},
+        };
+        fields.push_back({K::Check, L"aiEnabled", L"Turned on",
+                          L"The AI button in the search bar and the ai word. Each agent opens a new Windows Terminal tab in the folder below.",
+                          L"1", {}, 0, 100, kHaloPluginsPage, L"AI agents"});
+        fields.push_back({K::Text, L"aiKeyword", L"Words that call it",
+                          L"Type this word, a space and part of an agent's name to open it from the results.",
+                          L"ai", {}, 0, 100, kHaloPluginsPage, L"AI agents"});
+        fields.push_back({K::Text, L"aiFolder", L"Working folder",
+                          L"The folder the agents open in. Leave it empty for your user folder.",
+                          L"", {}, 0, 100, kHaloPluginsPage, L"AI agents"});
+        for (auto& a : agents) {
+            fields.push_back({K::Text, Pool(a.cmdKey), Pool(std::wstring(a.name) + L" command"),
+                              L"The command typed in the new tab.", Pool(a.def), {}, 0, 100, kHaloPluginsPage,
+                              L"AI agents"});
+            fields.push_back({K::Check, Pool(a.hideKey), Pool(L"Hide " + std::wstring(a.name)),
+                              L"Leave it out of the AI panel and the results.", L"0", {}, 0, 100, kHaloPluginsPage,
+                              L"AI agents"});
+        }
+        fields.push_back({K::Check, L"projectsEnabled", L"Turned on",
+                          L"The p word lists the git projects one level under the folders below, newest change first. Enter opens one in a new Windows Terminal tab, Ctrl + Enter opens it in the editor.",
+                          L"1", {}, 0, 100, kHaloPluginsPage, L"Recent projects"});
+        fields.push_back({K::Text, L"projectsKeyword", L"Words that call it", L"",
+                          L"p", {}, 0, 100, kHaloPluginsPage, L"Recent projects"});
+        fields.push_back({K::Text, L"projectsFolders", L"Project folders",
+                          L"Folders to look in, separated by semicolons, for example H:\\projects;D:\\code. Leave it empty to look in H:\\ and your source\\repos folder.",
+                          L"", {}, 0, 100, kHaloPluginsPage, L"Recent projects"});
+        fields.push_back({K::Text, L"projectsEditor", L"Editor command", L"The program Ctrl + Enter opens a project with.",
+                          L"code", {}, 0, 100, kHaloPluginsPage, L"Recent projects"});
+        fields.push_back({K::Check, L"clipboardEnabled", L"Turned on",
+                          L"The c word lists what you copied lately, read from Seamless Clipboard Manager. Enter puts a clip back on the clipboard.",
+                          L"1", {}, 0, 100, kHaloPluginsPage, L"Clipboard history"});
+        fields.push_back({K::Text, L"clipboardKeyword", L"Words that call it", L"",
+                          L"c", {}, 0, 100, kHaloPluginsPage, L"Clipboard history"});
+        fields.push_back({K::Check, L"mediaEnabled", L"Turned on",
+                          L"The media word lists play and pause, next track and previous track, for whatever Windows is playing.",
+                          L"1", {}, 0, 100, kHaloPluginsPage, L"Media controls"});
+        fields.push_back({K::Text, L"mediaKeyword", L"Words that call it", L"",
+                          L"media", {}, 0, 100, kHaloPluginsPage, L"Media controls"});
+        fields.push_back({K::Check, L"notesEnabled", L"Turned on",
+                          L"The n word lists your latest notes. Type the word, a space and some text, then press Enter to add a note with the time and date in front.",
+                          L"1", {}, 0, 100, kHaloPluginsPage, L"Quick notes"});
+        fields.push_back({K::Text, L"notesKeyword", L"Words that call it", L"",
+                          L"n", {}, 0, 100, kHaloPluginsPage, L"Quick notes"});
+        fields.push_back({K::Text, L"notesFile", L"Notes file",
+                          L"The file notes are added to. Leave it empty for Documents\\Halo Notes.md.",
+                          L"", {}, 0, 100, kHaloPluginsPage, L"Quick notes"});
+    }
     // The Modules page: one group per module the engine loaded.
     for (const auto& p : ::halobridge::Plugins()) {
         PCWSTR name = Pool(p.name.empty() ? p.id : p.name);
@@ -4976,6 +6851,7 @@ constexpr float kSetDockGap = 10, kSetRailDef = 232, kSetRailMin = 200, kSetRail
 constexpr float kSetFootBtnH = 36, kSetFootPad = 8, kSetFootH = kSetFootBtnH + 2 * kSetFootPad, kSetFootGap = 14;
 // The glass tint is one layer over the whole window, title bar included, so the two always match.
 constexpr float kSetGlassTint = 0.55f, kSetNativeFade = 56;
+constexpr float kSetEdgeW = 2, kSetRadius = 16;
 constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
@@ -5072,6 +6948,10 @@ static SetCom<IWICImagingFactory> g_setWic;
 #ifdef SCM_HARNESS
 static std::wstring g_setFakeKeyStatus;  // Lets the test render the hotkey warning line.
 #endif
+
+static float Set_Rad(const D2D1_RECT_F& r, float most = kSetRadius) {
+    return std::min(most, std::min(r.right - r.left, r.bottom - r.top) / 2);
+}
 
 static std::wstring Set_WindowText(HWND hwnd) {
     std::wstring text(GetWindowTextLengthW(hwnd) + 1, L'\0');
@@ -5390,8 +7270,8 @@ static void Set_MenuPaint(SetMenuSession& s, SetMenuLevel& lv) {
         }
         bool hot = ((int)i == lv.hover || (int)i == lv.open) && !m.disabled;
         if (hot) {
-            // The hover look of every card: a faint blue to mauve wash and a 1 px gradient ring.
-            float rad = 8, ringW = 1;
+            // The hover look of every card: a faint blue to mauve wash and the 2 px gradient ring.
+            float ringW = kSetEdgeW, rad = std::min(12.0f, (r.bottom - r.top) / 2);
             D2D1_ROUNDED_RECT rr{{r.left + ringW / 2, r.top + ringW / 2, r.right - ringW / 2, r.bottom - ringW / 2}, rad, rad};
             auto fill = gradient({r.left, r.top}, {r.right, r.bottom}, D2DColor(mocha::blue, 0.16f), D2DColor(mocha::mauve, 0.16f));
             if (fill) rt->FillRoundedRectangle(rr, fill.get());
@@ -6659,23 +8539,24 @@ static bool Set_Valid(const SetWindow& w, int k) { return k >= 0 && k < (int)w.f
 // overlay0 edge, and the blue to mauve ring on hover or while open.
 constexpr UINT32 kSetBoxFill = 0x232434;
 static void Set_DrawBox(SetPaint& p, SetWindow& w, int k, const D2D1_RECT_F& box, bool active) {
-    p.Round(box, 8, kSetBoxFill);
+    const float rad = Set_Rad(box);
+    p.Round(box, rad, kSetBoxFill);
     float g = std::max(Set_GlowOf(w, 6000 + k), active ? 1.0f : 0.0f);
-    p.Edge(box, 8, mocha::overlay0, 0.7f * (1 - g), 1.25f);
-    p.GradRing(box, 8, g, 1.75f);
+    p.Edge(box, rad, mocha::overlay0, 0.7f * (1 - g));
+    p.GradRing(box, rad, g);
 }
 
 static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
     const SetField& f = w.fields[it.field];
     int k = it.field;
     D2D1_RECT_F row = Set_RowRect(w, it);
-    p.Round(row, 10, mocha::base);
-    p.Round(row, 10, mocha::surface0, 0.32f);
+    p.Round(row, kSetRadius, mocha::base);
+    p.Round(row, kSetRadius, mocha::surface0, 0.32f);
     float hov = Set_GlowOf(w, 1000 + k);
-    p.Edge(row, 10, mocha::surface2, 0.55f * (1 - hov));
-    p.GradFill(row, 10, 0.13f * hov);
-    p.GradRing(row, 10, hov, 1.5f);
-    if (w.kbd && w.focus == k) p.GradRing(row, 10, 1.0f, 2.0f);
+    p.Edge(row, kSetRadius, mocha::surface2, 0.55f * (1 - hov));
+    p.GradFill(row, kSetRadius, 0.13f * hov);
+    p.GradRing(row, kSetRadius, hov);
+    if (w.kbd && w.focus == k) p.GradRing(row, kSetRadius, 1.0f);
 
     float textW = w.contentW - 2 * kSetRowPad - Set_ControlW(f) - 24;
     float lh = Set_TextH(w.fLabel.get(), f.label, textW);
@@ -6777,17 +8658,17 @@ static void Set_DrawGroup(SetPaint& p, SetWindow& w, const SetItem& it) {
 // The resting card every row uses: base, a light lift and a soft gray edge that hands over to
 // the hover ring.
 static void Set_DrawCard(SetPaint& p, const D2D1_RECT_F& row, float hov) {
-    p.Round(row, 10, mocha::base);
-    p.Round(row, 10, mocha::surface0, 0.32f);
-    p.Edge(row, 10, mocha::surface2, 0.55f * (1 - hov));
+    p.Round(row, kSetRadius, mocha::base);
+    p.Round(row, kSetRadius, mocha::surface0, 0.32f);
+    p.Edge(row, kSetRadius, mocha::surface2, 0.55f * (1 - hov));
 }
 
 static void Set_DrawLinkRow(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
     D2D1_RECT_F row = Set_RowRect(w, it);
     float hov = Set_GlowOf(w, 3000 + idx);
     Set_DrawCard(p, row, hov);
-    p.GradFill(row, 10, 0.13f * hov);
-    p.GradRing(row, 10, hov, 1.5f);
+    p.GradFill(row, kSetRadius, 0.13f * hov);
+    p.GradRing(row, kSetRadius, hov);
     p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 9, row.right - 50, row.top + 30}, mocha::text);
     p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 30, row.right - 50, row.bottom - 4}, mocha::subtext0);
     p.Glyph(w.fIcon.get(), 0xE8A7, {row.right - 46, row.top, row.right - 12, row.bottom}, mocha::subtext1);
@@ -6797,14 +8678,14 @@ static void Set_DrawSupport(SetPaint& p, SetWindow& w, const SetItem& it, int id
     D2D1_RECT_F row = Set_RowRect(w, it);
     float card = std::max(Set_GlowOf(w, 3700 + idx), Set_GlowOf(w, 3500 + idx));
     Set_DrawCard(p, row, card);
-    p.GradFill(row, 10, 0.13f * card);
-    p.GradRing(row, 10, card, 1.5f);
+    p.GradFill(row, kSetRadius, 0.13f * card);
+    p.GradRing(row, kSetRadius, card);
     p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 14, row.right - 180, row.top + 36}, mocha::text);
     p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 38, row.right - 180, row.bottom - 6}, mocha::subtext0);
     D2D1_RECT_F b = Set_SupportButton(w, it);
     float hov = Set_GlowOf(w, 3500 + idx);
-    p.GradFill(b, 8, 0.85f + 0.15f * hov);
-    p.GradRing(b, 8, hov, 2);
+    p.GradFill(b, Set_Rad(b), 0.85f + 0.15f * hov);
+    p.GradRing(b, Set_Rad(b), hov);
     p.Text(w.fButton.get(), L"Open Ko-fi", b, mocha::crust);
 }
 
@@ -6828,7 +8709,7 @@ static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it, int idx)
 
 static void Set_DrawBanner(SetPaint& p, SetWindow& w, const SetItem& it) {
     D2D1_RECT_F r = Set_RowRect(w, it);
-    p.Round(r, 10, mocha::peach, 0.14f);
+    p.Round(r, kSetRadius, mocha::peach, 0.14f);
     p.Text(w.fHint.get(), it.text, {r.left + 16, r.top + 14, r.right - 16, r.bottom - 8}, mocha::peach);
 }
 
@@ -6837,9 +8718,8 @@ static void Set_DrawBanner(SetPaint& p, SetWindow& w, const SetItem& it) {
 static void Set_DrawDock(SetPaint& p, SetWindow& w, const D2D1_RECT_F& d, float rad, float fill, float glow) {
     p.Round({d.left, d.top + 3, d.right, d.bottom + 5}, rad + 2, mocha::crust, w.glass ? 0.28f : 0.5f);
     p.Round(d, rad, mocha::mantle, fill);  // Hover lights only the edge: a wash showed as a blue blob down the left.
-    D2D1_RECT_F in{d.left + 0.5f, d.top + 0.5f, d.right - 0.5f, d.bottom - 0.5f};
-    p.rt->DrawRoundedRectangle(D2D1::RoundedRect(in, rad, rad), p.B(mocha::surface1, 0.75f * (1 - glow)), 1);
-    p.GradRing(d, rad, glow, 1.5f);
+    p.Edge(d, rad, mocha::surface1, 0.75f * (1 - glow));
+    p.GradRing(d, rad, glow);
 }
 
 // Panel-left mark, as in T3's sidebar button: a window with its left pane shaded while open.
@@ -6858,15 +8738,15 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
     // Over the resize edge or while dragging, the dock's own rounded border brightens and
     // thickens, so the handle follows the corners instead of floating as a separate line.
     float edge = std::max(Set_GlowOf(w, 41), w.dragRail ? 1.0f : 0.0f);
-    Set_DrawDock(p, w, d, 14, w.glass ? 0.58f : 1.0f, std::max(w.railGlow * 0.85f, edge));
-    if (edge > 0.003f) p.GradRing(d, 13, edge, 2.25f);
+    Set_DrawDock(p, w, d, kSetRadius, w.glass ? 0.58f : 1.0f, std::max(w.railGlow * 0.85f, edge));
 
     D2D1_RECT_F tb = Set_RailToggleRect(w);
     float th = Set_GlowOf(w, 42);
-    p.Round(tb, 9, mocha::surface0, 0.45f + 0.25f * th);
-    p.GradFill(tb, 9, 0.16f * th);
-    p.GradRing(tb, 9, 0.9f * th, 1.25f);
-    if (w.kbd && w.focus == -20) p.GradRing(tb, 9, 1, 2);
+    const float tr = Set_Rad(tb);
+    p.Round(tb, tr, mocha::surface0, 0.45f + 0.25f * th);
+    p.GradFill(tb, tr, 0.16f * th);
+    p.GradRing(tb, tr, 0.9f * th);
+    if (w.kbd && w.focus == -20) p.GradRing(tb, tr, 1);
     Set_DrawPanelIcon(p, tb, open, th > 0.5f ? mocha::text : mocha::subtext1);
 
     p.rt->PushAxisAlignedClip(D2D1::RectF(d.left, d.top, d.right - 6, d.bottom), D2D1_ANTIALIAS_MODE_ALIASED);
@@ -6884,18 +8764,19 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
         }
         float hov = Set_GlowOf(w, 100 + i);
         bool act = i == w.page;
+        const float rr = Set_Rad(r);
         if (act) {
-            p.GradFill(r, 8, 0.22f);
-            p.GradRing(r, 8, 0.5f, 1);
+            p.GradFill(r, rr, 0.22f);
+            p.GradRing(r, rr, 0.5f);
             D2D1_RECT_F bar{r.left, r.top + 8, r.left + 3, r.bottom - 8};
             p.GradFill({bar.left, bar.top, bar.left + 3, bar.bottom}, 1.5f, 1);
         } else {
-            p.Round(r, 8, mocha::surface0, 0.28f);
-            p.Edge(r, 8, mocha::surface2, 0.5f * (1 - hov));
-            p.GradFill(r, 8, 0.10f * hov);
-            p.GradRing(r, 8, 0.8f * hov, 1.25f);
+            p.Round(r, rr, mocha::surface0, 0.28f);
+            p.Edge(r, rr, mocha::surface2, 0.5f * (1 - hov));
+            p.GradFill(r, rr, 0.10f * hov);
+            p.GradRing(r, rr, 0.8f * hov);
         }
-        if (w.kbd && w.focus == -10 - i) p.GradRing(r, 8, 1, 2);
+        if (w.kbd && w.focus == -10 - i) p.GradRing(r, rr, 1);
         UINT32 c = act ? mocha::text : mocha::subtext1;
         // The glyph sits in a fixed 44-wide slot, so it stays centered in the collapsed rail.
         p.Glyph(w.fIcon.get(), kSetPages[i].glyph, {r.left, r.top, r.left + 44, r.bottom}, act ? mocha::blue : mocha::subtext0);
@@ -6914,10 +8795,8 @@ static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
     // The same see-through mantle as the rail dock, so the blurred rows under the pill read as
     // real glass instead of a near-solid bar.
     p.Round(d, rad, mocha::mantle, w.render ? 1.0f : (w.glass ? 0.58f : 0.85f));
-    const D2D1_RECT_F edge{d.left + 2, d.top + 2, d.right - 2, d.bottom - 2};
-    p.rt->DrawRoundedRectangle(D2D1::RoundedRect(edge, rad - 2, rad - 2),
-                              p.B(mocha::overlay0, 0.9f * (1 - w.footGlow)), 2.75f);
-    p.GradRing(d, rad - 1.5f, w.footGlow, 3.0f);
+    p.Edge(d, rad, mocha::overlay0, 0.9f * (1 - w.footGlow));
+    p.GradRing(d, rad, w.footGlow);
     UINT32 sc;
     std::wstring status = Set_FooterStatus(w, &sc);
     float sw = Set_FooterStatusW(w);
@@ -6927,10 +8806,10 @@ static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
         D2D1_RECT_F b = Set_FooterButton(w, i);
         float hov = Set_GlowOf(w, 10 + i);
         p.Round(b, brad, mocha::base, 0.98f);
-        p.Edge(b, brad, mocha::overlay0, 0.78f * (1 - hov), 1.75f);
-        p.GradRing(b, brad - 1, hov, 2.25f);
+        p.Edge(b, brad, mocha::overlay0, 0.78f * (1 - hov));
+        p.GradRing(b, brad, hov);
         p.Text(w.fButton.get(), names[i], b, mocha::text, w.saving ? 0.5f : 1.0f);
-        if (w.kbd && w.focus == -1 - i) p.GradRing(b, brad, 1, 2);
+        if (w.kbd && w.focus == -1 - i) p.GradRing(b, brad, 1);
     }
 }
 
@@ -6970,9 +8849,9 @@ static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
     const int n = (int)f.options.size(), vis = Set_DropVisible(w);
     const bool scrolls = n > vis;
     D2D1_RECT_F shadow{r.left - 1, r.top + 3, r.right + 1, r.bottom + 5};
-    p.Round(shadow, 12, mocha::crust, 0.6f);
-    p.Round(r, 10, mocha::mantle);
-    p.GradRing(r, 10, 0.9f);
+    p.Round(shadow, kSetRadius + 2, mocha::crust, 0.6f);
+    p.Round(r, kSetRadius, mocha::mantle);
+    p.GradRing(r, kSetRadius, 0.9f);
     const float right = r.right - (scrolls ? 12 : 4);
     for (int v = 0; v < vis; v++) {
         int i = w.dropTop + v;
@@ -6980,8 +8859,8 @@ static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
         D2D1_RECT_F it{r.left + 4, r.top + 4 + v * kSetDropItem, right, r.top + 4 + (v + 1) * kSetDropItem};
         bool sel = f.cur == f.options[i].first;
         if (i == w.dropHover) {
-            p.GradFill(it, 6, 0.28f);
-            p.GradRing(it, 6, 0.6f, 1);
+            p.GradFill(it, Set_Rad(it, kSetRadius - 4), 0.28f);  // Inset 4 in a 16 corner: 12.
+            p.GradRing(it, Set_Rad(it, kSetRadius - 4), 0.6f);
         }
         p.Text(w.fValue.get(), f.options[i].second, {it.left + 10, it.top, it.right - 28, it.bottom}, sel ? mocha::blue : mocha::text);
         if (sel) p.Glyph(w.fIconS.get(), 0xE73E, {it.right - 28, it.top, it.right - 6, it.bottom}, mocha::blue);
@@ -7382,6 +9261,8 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
         rt->Clear(D2D1::ColorF(0, 0));
         const float total = w.ch + kSetCapH;
         if (w.nativeTitle) {
+            // The window's acrylic already carries the tint (Set_ApplyFrame), title bar included.
+        } else if (false) {
             SetCom<ID2D1LinearGradientBrush> fade;
             D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::crust, kSetGlassTint)}, {1, D2DColor(mocha::crust, kSetGlassTint)}};
             SetCom<ID2D1GradientStopCollection> coll;
@@ -8489,7 +10370,7 @@ static void Set_ApplyFrame(SetWindow& w) {
     const HWND hwnd = w.hwnd;
     const bool native = Set_FieldOn(w, L"nativeSettingsTitleBar", false), glass = Set_FieldOn(w, L"settingsGlass", true);
     const bool first = !w.frameApplied, wasGlass = w.glass;
-    if (!first && native == w.nativeTitle && glass == w.glass) return;
+    if (!first && native == w.nativeTitle && glass == w.glass) return;  // A title bar switch re-runs the accent below.
     w.frameApplied = true;
     w.nativeTitle = native;
     w.glass = glass;
@@ -8514,7 +10395,12 @@ static void Set_ApplyFrame(SetWindow& w) {
         DwmEnableBlurBehindWindow(hwnd, &bb);
         if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
         if (setComposition) {
-            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
+            // Same as the launcher grid. With the Windows title bar the tint is in here instead of
+            // on the page, so the title bar gets it too: crust at the page's 55%.
+            const int tint = native ? (int)(((DWORD)(kSetGlassTint * 255 + 0.5f) << 24) | (mocha::crust & 0xFF) << 16 |
+                                            (mocha::crust & 0xFF00) | (mocha::crust >> 16 & 0xFF))
+                                    : (int)0x012E1E1E;
+            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, tint, 0};
             SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
             setComposition(hwnd, &data);
         }
