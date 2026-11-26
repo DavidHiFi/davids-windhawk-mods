@@ -6,7 +6,7 @@
 // @description     Press a shortcut, speak, and your words are typed where the cursor is, in any app: transcribed and cleaned up by AI in your style (natural, professional, prompt) or translated, with a free key (Groq, Gemini, Mistral and more). It also polishes text you typed and reads selected text aloud
 // @description:pt-BR Aperte um atalho, fale, e suas palavras são digitadas onde está o cursor, em qualquer app: transcritas e limpas por IA no seu estilo (natural, profissional, prompt) ou traduzidas, com uma chave grátis (Groq, Gemini, Mistral e outros). Também pole o texto que você digitou e lê em voz alta o texto selecionado
 // @description:es Pulsa un atajo, habla y tus palabras se escriben donde está el cursor, en cualquier app: transcritas y limpiadas por IA en tu estilo (natural, profesional, prompt) o traducidas, con una clave gratis (Groq, Gemini, Mistral y más). También pule el texto que escribiste y lee en voz alta el texto seleccionado
-// @version         1.3.11
+// @version         1.3.12
 // @author          DavidHiFi, caliberda
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -5668,6 +5668,38 @@ ComPtr<IMMDevice> FindMicrophone(IMMDeviceEnumerator* enumerator,
     return nullptr;
 }
 
+// Seamless Snipper's ask box (Magic Pointer) runs as administrator, so
+// Windows hides its keys from this mod and drops the text it types there.
+// Snipper reports Ctrl/Win/Shift/Alt while the box has the focus, and takes
+// the text as WM_COPYDATA tagged kAskBoxTextTag.
+constexpr ULONG_PTR kAskBoxTextTag = 0x53444354;  // 'SDCT', as in Snipper.
+const UINT g_askBoxKeysMessage = RegisterWindowMessageW(L"SeamlessDictate.ElevatedKeys");
+std::atomic<UINT> g_askBoxMods{0};
+
+bool IsSnipperAskBox(HWND hwnd) {
+    hwnd = hwnd ? GetAncestor(hwnd, GA_ROOT) : nullptr;
+    WCHAR name[64];
+    return hwnd && GetClassNameW(hwnd, name, ARRAYSIZE(name)) &&
+           wcsncmp(name, L"MagicPointerCard_", 17) == 0;
+}
+
+bool KeyDown(int vk) {
+    if (GetAsyncKeyState(vk) & 0x8000) {
+        return true;
+    }
+    const UINT mods = g_askBoxMods.load();
+    if (!mods || !IsSnipperAskBox(GetForegroundWindow())) {
+        return false;
+    }
+    switch (vk) {
+        case VK_CONTROL: case VK_LCONTROL: case VK_RCONTROL: return mods & MOD_CONTROL;
+        case VK_LWIN: case VK_RWIN: return mods & MOD_WIN;
+        case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT: return mods & MOD_SHIFT;
+        case VK_MENU: case VK_LMENU: case VK_RMENU: return mods & MOD_ALT;
+    }
+    return false;
+}
+
 void Capture(CaptureState& state) {
     auto fail = [&](HRESULT hr) {
         Log(L"Microphone not opened: 0x%08X", (unsigned)hr);
@@ -5833,7 +5865,7 @@ void Capture(CaptureState& state) {
     ULONGLONG nextIsolationScan = GetTickCount64() + 250;
     UINT64 resamplePhase = 0;
     auto shortcutReleased = [&] {
-        auto down = [](int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; };
+        auto down = KeyDown;
         return state.holdVk && (!down(state.holdVk) ||
             ((state.holdModifiers & MOD_CONTROL) && !down(VK_CONTROL)) ||
             ((state.holdModifiers & MOD_ALT) && !down(VK_MENU)) ||
@@ -6118,10 +6150,6 @@ bool IsElevatedWindow(HWND hwnd) {
     return elevated;
 }
 
-bool KeyDown(int vk) {
-    return (GetAsyncKeyState(vk) & 0x8000) != 0;
-}
-
 // Waits for the shortcut's keys to be released, so the paste is a plain
 // Ctrl+V (Ctrl+Shift+V runs other commands in some apps).
 void WaitModifiersReleased() {
@@ -6290,6 +6318,26 @@ PasteOutcome PasteText(const std::wstring& text,
                  L"Não dá para substituir num terminal: o texto está copiado, "
                  L"cole com Ctrl+V.");
         return PasteOutcome::Copied;
+    }
+    if (!replace && IsSnipperAskBox(target)) {
+        // Handed over: Windows drops the keys typed into that box (above).
+        PasteMark& mark = g_pasteMark;
+        const HWND box = GetAncestor(target, GA_ROOT);
+        std::wstring sent = text;
+        if (dictation && mark.window == box && GetTickCount64() - mark.tick < kJoinMs &&
+            NeedsJoinSpace(mark.last, text)) {
+            sent.insert(sent.begin(), L' ');
+        }
+        COPYDATASTRUCT data{kAskBoxTextTag, (DWORD)(sent.size() * sizeof(wchar_t)),
+                            (void*)sent.data()};
+        DWORD_PTR taken = 0;
+        if (SendMessageTimeoutW(box, WM_COPYDATA, 0, (LPARAM)&data, SMTO_ABORTIFHUNG, 2000,
+                                &taken) && taken) {
+            mark = what == PasteFor::Other ? PasteMark{} : PasteMark{box};
+            mark.tick = what == PasteFor::Other ? 0 : GetTickCount64();
+            mark.last = text.empty() || what != PasteFor::Dictation ? 0 : text.back();
+            return PasteOutcome::Pasted;
+        }
     }
     if (IsElevatedWindow(target)) {
         *why = T(L"That app runs as administrator: the text is copied, paste "
@@ -13704,6 +13752,10 @@ LRESULT Overlay::Handle(UINT msg, WPARAM wp, LPARAM lp) {
     // (Anything but the frames themselves may change what the card shows.)
     if (msg != WM_TIMER && msg != WM_PAINT) {
         m_lastEvent = GetTickCount64();
+    }
+    if (msg == g_askBoxKeysMessage && g_askBoxKeysMessage) {
+        g_askBoxMods = (UINT)wp & (MOD_CONTROL | MOD_WIN | MOD_SHIFT | MOD_ALT);
+        return 0;
     }
     switch (msg) {
         case WM_CREATE: {

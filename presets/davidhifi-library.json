@@ -226,8 +226,8 @@
     {
       "id": "ctrl-backspace-fix-for-win32-text-boxes",
       "name": "Ctrl+Backspace Fix for Win32 Text Boxes",
-      "version": "1.0.1",
-      "enabled": true,
+      "version": "1.1",
+      "enabled": false,
       "settings": {}
     },
     {
@@ -245,7 +245,7 @@
     {
       "id": "custom-cmd-ver-command-text",
       "name": "Custom CMD \"ver\" Command Text",
-      "version": "1.0",
+      "version": "1.1",
       "enabled": true,
       "settings": {
         "custom_text": "EtchedOS"
@@ -689,7 +689,7 @@
       "id": "icon-customizer",
       "name": "Icon Customizer",
       "version": "0.1",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "APPLICATION": "C:\\ProgramData\\Windhawk\\Engine\\ModsWritable\\mod-storage\\icon-customizer\\Catppuccin\\application.ico",
         "AUDIOFILES": "C:\\ProgramData\\Windhawk\\Engine\\ModsWritable\\mod-storage\\icon-customizer\\Catppuccin\\audiofiles.ico",
@@ -789,7 +789,7 @@
       "id": "icon-resource-redirect",
       "name": "Resource Redirect",
       "version": "1.3",
-      "enabled": true,
+      "enabled": false,
       "settings": {
         "allResourceRedirect": 1,
         "disableThumbnails": 0,
