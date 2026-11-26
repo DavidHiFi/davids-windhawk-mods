@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T21:15:00+08:00",
+  "generatedAt": "2026-11-26T21:19:59+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 132,
-    "enabled": 125,
-    "local": 63
+    "mods": 133,
+    "enabled": 126,
+    "local": 64
   },
   "mods": [
     {
@@ -1633,6 +1633,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/uwp-assets-redirect-plus/uwp-assets-redirect-plus.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-tools",
+      "name": "Seamless Tools",
+      "author": "DavidHiFi, DoYouNatureQ, Jaex, ShareX contributors, Dev-StudioCode, communism420, Asteski, LyricsPortal, nikitor32, Nerdworld, Ashix",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.2.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-tools/seamless-tools.wh.cpp",
       "enabled": true
     }
   ]

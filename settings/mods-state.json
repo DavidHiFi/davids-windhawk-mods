@@ -1377,5 +1377,12 @@
     "exclude": "dwm.exe|cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe",
     "architecture": "",
     "version": "1.0.1"
+  },
+  "local@seamless-tools": {
+    "disabled": false,
+    "include": "windhawk.exe|windhawk-mod.exe|explorer.exe|RuntimeBroker.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "1.2.0"
   }
 }
