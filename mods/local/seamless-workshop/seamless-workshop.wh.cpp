@@ -2,7 +2,7 @@
 // @id              seamless-workshop
 // @name            Seamless Workshop
 // @description     One window to install, update, turn on and off, and set up DavidHiFi's Windhawk mods
-// @version         1.5.7
+// @version         1.5.9
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -35,6 +35,13 @@ Needs the latest Windhawk alpha.
 - Use DavidHiFi's settings for one mod, or copy his whole setup in one go:
   every mod he runs, with or without his settings, on a clean slate if you
   like. Your current mods are backed up first, so you can always go back.
+
+## What's new in 1.5.8
+
+- The Workshop button in Windhawk's own window can open the Workshop now, even
+  when the Workshop runs with admin rights.
+- Two small fixes: an empty task no longer reads past its text, and a mod
+  version with odd characters can't break an install.
 
 ## What's new in 1.5.7
 
@@ -192,6 +199,86 @@ DavidHiFi's settings, any setting like that keeps your own value.
 #ifdef HUB_MOD
 #include <windhawk_tool_mod.h>
 #endif
+
+// Crisp icons (2026-11-26): tray icons are drawn at 4x the size the taskbar shows them and shrunk
+// here with a box filter, so curves and glyph edges are smooth instead of stretched and stepped.
+// The result carries straight alpha, which is what Windows expects in an icon.
+static HICON Crisp_ShrinkIcon(HICON big, int factor) {
+    if (!big || factor <= 1) return big;
+    ICONINFO ii{};
+    if (!GetIconInfo(big, &ii)) return big;
+    HICON out = nullptr;
+    BITMAP bm{};
+    if (ii.hbmColor && GetObjectW(ii.hbmColor, sizeof(bm), &bm) && bm.bmWidth == bm.bmHeight &&
+        bm.bmWidth >= factor && bm.bmWidth % factor == 0) {
+        const int src = bm.bmWidth, n = src / factor;
+        BITMAPINFO bi{};
+        bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+        bi.bmiHeader.biWidth = src;
+        bi.bmiHeader.biHeight = -src;
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        unsigned int* in = new unsigned int[(size_t)src * src];
+        HDC screen = GetDC(nullptr);
+        if (GetDIBits(screen, ii.hbmColor, 0, src, in, &bi, DIB_RGB_COLORS) == src) {
+            bool premul = true, anyAlpha = false;
+            for (size_t i = 0; i < (size_t)src * src; i++) {
+                unsigned int p = in[i], a = p >> 24;
+                if (a) anyAlpha = true;
+                if (((p >> 16) & 0xFF) > a || ((p >> 8) & 0xFF) > a || (p & 0xFF) > a) premul = false;
+            }
+            void* bits = nullptr;
+            bi.bmiHeader.biWidth = n;
+            bi.bmiHeader.biHeight = -n;
+            HBITMAP color = anyAlpha ? CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
+            if (color && bits) {
+                unsigned int* px = (unsigned int*)bits;
+                const unsigned int cnt = (unsigned int)(factor * factor);
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++) {
+                        unsigned int sa = 0, sr = 0, sg = 0, sb = 0;
+                        for (int dy = 0; dy < factor; dy++)
+                            for (int dx = 0; dx < factor; dx++) {
+                                unsigned int p = in[(size_t)(y * factor + dy) * src + x * factor + dx], a = p >> 24;
+                                unsigned int r = (p >> 16) & 0xFF, g = (p >> 8) & 0xFF, b = p & 0xFF;
+                                if (!premul) {
+                                    r = (r * a + 127) / 255;
+                                    g = (g * a + 127) / 255;
+                                    b = (b * a + 127) / 255;
+                                }
+                                sa += a; sr += r; sg += g; sb += b;
+                            }
+                        unsigned int a = (sa + cnt / 2) / cnt, r = 0, g = 0, b = 0;
+                        if (a && sa) {
+                            r = (sr * 255 + sa / 2) / sa; if (r > 255) r = 255;
+                            g = (sg * 255 + sa / 2) / sa; if (g > 255) g = 255;
+                            b = (sb * 255 + sa / 2) / sa; if (b > 255) b = 255;
+                        }
+                        px[(size_t)y * n + x] = a ? ((a << 24) | (r << 16) | (g << 8) | b) : 0;
+                    }
+                // A zero mask: with 32-bit colour Windows draws from the alpha channel.
+                unsigned char* maskBits = new unsigned char[(size_t)((n + 15) / 16) * 2 * n]();
+                HBITMAP mask = CreateBitmap(n, n, 1, 1, maskBits);
+                delete[] maskBits;
+                if (mask) {
+                    ICONINFO o{TRUE, 0, 0, mask, color};
+                    out = CreateIconIndirect(&o);
+                    DeleteObject(mask);
+                }
+            }
+            if (color) DeleteObject(color);
+        }
+        ReleaseDC(nullptr, screen);
+        delete[] in;
+    }
+    if (ii.hbmColor) DeleteObject(ii.hbmColor);
+    if (ii.hbmMask) DeleteObject(ii.hbmMask);
+    if (!out) return big;
+    DestroyIcon(big);
+    return out;
+}
+
 
 extern "C" IMAGE_DOS_HEADER __ImageBase;
 
@@ -4130,7 +4217,7 @@ static bool Hub_RunCli(const std::wstring& args, std::string& out) {
     const bool heavy = args.find(L"@compile ") == 0 || args.find(L"@install ") == 0 || Hub_LongCli(args);
     const bool glass = args == L"@glass";
     const bool self = args.find(L"@selfinstall ") == 0;
-    if (args[0] == L'@' && !glass && (self || !Hub_HelperReady())) {
+    if (!args.empty() && args[0] == L'@' && !glass && (self || !Hub_HelperReady())) {
         std::wstring rest = args.substr(args.find(L' ') + 1);
         if (rest.size() > 7 && rest.compare(rest.size() - 7, 7, L" --json") == 0) rest.resize(rest.size() - 7);
         if (args.find(L"@compile ") == 0) {
@@ -4147,7 +4234,7 @@ static bool Hub_RunCli(const std::wstring& args, std::string& out) {
             }
             cmd = Set_QuoteArg(cli) + L" mod install --file " + Set_QuoteArg(file) + (self ? L" --json" : L" --disabled --json");
         }
-    } else if (heavy && args[0] == L'@' || glass) {
+    } else if (heavy && !args.empty() && args[0] == L'@' || glass) {
         if (glass && !Hub_GlassReady()) {
             CloseHandle(rd); CloseHandle(wr);
             if (nul != INVALID_HANDLE_VALUE) CloseHandle(nul);
@@ -8083,7 +8170,7 @@ static void Hub_Action(SetWindow& w, const std::wstring& action) {
         if (!m) return;
         std::wstring err;
         if (!Hub_Backup({id}, err)) { Set_SetStatus(w, err.c_str(), true); return; }
-        const bool ok = Hub_RunJob(w, {L"mod install " + Set_QuoteArg(id) + L" " + ver + (m->enabled ? L"" : L" --disabled")}, err);
+        const bool ok = Hub_RunJob(w, {L"mod install " + Set_QuoteArg(id) + L" " + Set_QuoteArg(ver) + (m->enabled ? L"" : L" --disabled")}, err);
         Hub_LoadList(w);
         Hub_OpenDetail(w, id);
         g_featureStatus = ok ? L"Version " + ver + L" is installed. The previous copy is in backups." : err;
@@ -9593,8 +9680,8 @@ static void Hub_AutoUpdate(SetWindow& w) {
 
 // The shared tray badge (copied from Seamless Crosshair's MakeTrayIcon): a rounded square in the
 // blue to mauve gradient with the puzzle glyph cut out, drawn with GDI.
-static HICON Hub_MakeTrayIcon() {
-    int size = GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem());
+static HICON Hub_MakeTrayIcon_Big() {
+    int size = GetSystemMetricsForDpi(SM_CXICON, GetDpiForSystem()) * 4;
     if (size < 16) size = 16;
     BITMAPINFO bi{};
     bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
@@ -9654,6 +9741,9 @@ static HICON Hub_MakeTrayIcon() {
     DeleteObject(glyph);
     return icon;
 }
+
+// Drawn at 4x and shrunk, so the icon is smooth at the size it is shown.
+static HICON Hub_MakeTrayIcon() { return Crisp_ShrinkIcon(Hub_MakeTrayIcon_Big(), 4); }
 
 static void Hub_TrayUpdate(SetWindow& w) {
     static HICON badge = Hub_MakeTrayIcon();
@@ -10348,6 +10438,9 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     SetWindowSubclass(hwnd, Hub_SubProc, 7, 0);
     g_hub.taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
     ChangeWindowMessageFilterEx(hwnd, g_hub.taskbarCreated, MSGFLT_ALLOW, nullptr);
+    // The styler's Workshop button in Windhawk's window posts this to open us; let it
+    // through when we run with more rights than that window.
+    ChangeWindowMessageFilterEx(hwnd, WM_APP_SETTINGS_ACTIVATE, MSGFLT_ALLOW, nullptr);
     Hub_TrayUpdate(*g_setWin);
     SetTimer(hwnd, 0x4856, 1000, nullptr);
     Hub_Presence();
@@ -10405,6 +10498,9 @@ static DWORD WINAPI Hub_ModThread(void*) {
     SetWindowSubclass(hwnd, Hub_SubProc, 7, 0);
     g_hub.taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
     ChangeWindowMessageFilterEx(hwnd, g_hub.taskbarCreated, MSGFLT_ALLOW, nullptr);
+    // The styler's Workshop button in Windhawk's window posts this to open us; let it
+    // through when we run with more rights than that window.
+    ChangeWindowMessageFilterEx(hwnd, WM_APP_SETTINGS_ACTIVATE, MSGFLT_ALLOW, nullptr);
     Hub_TrayUpdate(*g_setWin);
     SetTimer(hwnd, 0x4856, 1000, nullptr);
     Hub_Presence();
