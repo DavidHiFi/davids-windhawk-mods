@@ -2,7 +2,7 @@
 // @id              seamless-wobbly-windows
 // @name            Seamless Wobbly Windows
 // @description     Jelly window dragging that keeps Snap, works with Seamless Window Manager's Alt-drag, wobbles the Seamless Borders ring and can add animated color glows behind see-through windows
-// @version         1.2.16
+// @version         1.2.17
 // @author          DavidHiFi, HeyJeay, HaVeN80, lalimatyus
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -3307,13 +3307,14 @@ static RingSpec ReadRingSpec(float scale, bool focused) {
     return s;
 }
 
-// The border worker stacks its four parts immediately above their target.
+// The border worker stacks its four parts above their target. Skip over any
+// hidden owned popups or drag overlays sitting in between.
 static bool BordersRingShown(HWND hwnd, const RECT& vis, int pad, int tolerance) {
     HWND part = GetWindow(hwnd, GW_HWNDPREV);
-    for (int i = 0; part && i < 4; ++i, part = GetWindow(part, GW_HWNDPREV)) {
+    for (int i = 0; part && i < 32; ++i, part = GetWindow(part, GW_HWNDPREV)) {
         wchar_t cls[32];
         if (!GetClassNameW(part, cls, ARRAYSIZE(cls)) ||
-            wcscmp(cls, L"SeamlessBordersPart")) break;
+            wcscmp(cls, L"SeamlessBordersPart")) continue;
         RECT r{};
         if (!IsWindowVisible(part) || !GetWindowRect(part, &r)) continue;
         if (abs((r.right - r.left) - (vis.right - vis.left + 2 * pad)) <= 1 &&
@@ -6159,11 +6160,20 @@ static void ReadFlyoutsGlassFallback(HWND hwnd, WindowGlass& out) {
 }
 
 // How much of the backdrop behind the window shows through it: 0 when it isn't
-// see-through. Checks system acrylic, our hooked SetWindowCompositionAttribute
-// record, GetWindowCompositionAttribute, and Seamless Flyouts' rule for already
-// open windows.
+// see-through. Checks our hooked SetWindowCompositionAttribute record first
+// (since Seamless Flyouts overrides DWMWA_SYSTEMBACKDROP_TYPE with accent blur),
+// then system acrylic (with Flyouts rule fallback for already-open windows),
+// then GetWindowCompositionAttribute and Flyouts fallback.
 static WindowGlass ReadWindowGlass(HWND hwnd) {
     WindowGlass out;
+    int st = 0, fl = 0;
+    DWORD col = 0;
+    if (RememberedAccent(hwnd, st, fl, col)) {
+        if (st >= 2 && st <= 4) {
+            FillAccentGlass(st, fl, col, out);
+            return out;
+        }
+    }
     int backdrop = 0;
     if (FAILED(DwmGetWindowAttribute(hwnd, 38 /*DWMWA_SYSTEMBACKDROP_TYPE*/,
                                      &backdrop, sizeof(backdrop))))
@@ -6171,13 +6181,16 @@ static WindowGlass ReadWindowGlass(HWND hwnd) {
     // Only the window's own app can set it, so what it asked for wins.
     if (RememberedBackdrop(hwnd) >= 0) backdrop = RememberedBackdrop(hwnd);
     if (backdrop == 3) {
-        out.seeThrough = 0.28f;    // the acrylic's tint lets through about 28% (measured live)
-        return out;
-    }
-    int st = 0, fl = 0;
-    DWORD col = 0;
-    if (RememberedAccent(hwnd, st, fl, col)) {
-        FillAccentGlass(st, fl, col, out);
+        // If Seamless Flyouts overrides this process with acrylicblur, use its
+        // real tint and opacity instead of assuming stock system acrylic.
+        ReadFlyoutsGlassFallback(hwnd, out);
+        if (out.seeThrough > 0.0f) return out;
+        // Dark Windows 11 system acrylic lets through ~15% behind a dark tint.
+        out.seeThrough = 0.15f;
+        out.hasTint    = true;
+        out.tint[0]    = 30.0f / 255.0f;
+        out.tint[1]    = 30.0f / 255.0f;
+        out.tint[2]    = 46.0f / 255.0f;
         return out;
     }
     using Get_t = BOOL(WINAPI*)(HWND, WcaData*);
@@ -6820,8 +6833,9 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
             const RingSpec probe = ReadRingSpec(MonitorScale(v), GetForegroundWindow() == hwnd);
             if (ringShown || BordersRingShown(hwnd, v, probe.pad, 48)) ring = probe;
         }
-        // Only accent glass with a tint: the system backdrop path stays as proven.
-        if (!BuildCanvas(hwnd, ring, canvas, wantGlass && wg.hasTint)) continue;
+        // Keep real alpha for any glass window that paints its own transparency
+        // (WebView2, D2D, WinUI) so semi-transparent panels and borders stay exact.
+        if (!BuildCanvas(hwnd, ring, canvas, wantGlass)) continue;
         RECT now{};
         if (!GetWindowRect(hwnd, &now) || !SameSize(now, canvas.outer)) continue;
         built = true;
@@ -6850,9 +6864,12 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
         // blur) is drawn beneath. Until the blur shows, a solid stand-in read
         // off the screen sits there instead.
         float back[3];
-        if (!EstimateBacking(glass, canvas, back)) {
+        const bool gotBack = EstimateBacking(glass, canvas, back);
+        if (!gotBack) {
             back[0] = wg.tint[0]; back[1] = wg.tint[1]; back[2] = wg.tint[2];
         }
+        evenGlass = gotBack;
+        flatFill[0] = back[0]; flatFill[1] = back[1]; flatFill[2] = back[2];
         const float radius = CornerRadius(hwnd, MonitorScale(canvas.vis));
         glassCb = GlowCB{};
         glassCb.hdr[0] = 1.0f;
@@ -6960,9 +6977,16 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
     bool   resized = false;
     const double deadline = NowSeconds() + 120.0;
 
-    // The real window is out of composition now: show the blur, let it read the
-    // desktop behind for a frame, then hand the copy over to it.
+    // The real window is out of composition now: wait briefly for Seamless
+    // Borders to hide its strips so the live blur never blurs them into a glow,
+    // then show the blur and hand the copy over to it.
     if (liveGlass && ov.glass) {
+        if (ring.on) {
+            const double waitEnd = NowSeconds() + 0.04;
+            while (NowSeconds() < waitEnd && BordersRingShown(hwnd, startVis, ring.pad, 64)) {
+                WaitMs(2);
+            }
+        }
         ov.glass->Reveal();
         DwmFlush();
         if (ov.glass->shown) {
@@ -7097,7 +7121,7 @@ static void RunDrag(Device& dev, Overlay& ov, const DragRequest rq) {
         glassCb.fill[0] = flatFill[0];
         glassCb.fill[1] = flatFill[1];
         glassCb.fill[2] = flatFill[2];
-        glassCb.fill[3] = 1.0f;
+        glassCb.fill[3] = canvas.realAlpha ? 6.0f : 1.0f;
         dev.SetGlow(&glassCb);
     }
     if (draw() == DrawResult::DeviceLost) lostDevice = true;
