@@ -2,7 +2,7 @@
 // @id              windows-11-file-explorer-styler-plus
 // @name            Windows 11 File Explorer Styler Plus
 // @description     Customize the File Explorer with themes contributed by others or create your own
-// @version         1.10.37
+// @version         1.10.39
 // @author          DavidHiFi, m417z
 // @github          https://github.com/m417z
 // @twitter         https://twitter.com/m417z
@@ -9425,11 +9425,21 @@ void ConfigureAddressBarHover(FrameworkElement element,
             auto apply = [weak = winrt::make_weak(cp), restBrush, hotBrush, clear, isCrumbPart, pairOf](bool hovered) {
                 auto self = weak.get();
                 if (!self) return;
-                for (auto& target : pairOf(self)) {
+                auto targets = pairOf(self);
+                const bool paired = targets.size() == 2;
+                for (auto& target : targets) {
                     bool prev = std::exchange(g_elementPropertyModifying, true);
                     try {
-                        target.BorderThickness(isCrumbPart(target) == 2 ? Thickness{0, 2, 2, 2}
-                                                                       : Thickness{2, 2, 0, 2});
+                        const bool arrow = isCrumbPart(target) == 2;
+                        target.BorderThickness(arrow ? Thickness{0, 2, 2, 2}
+                                                     : Thickness{2, 2, 0, 2});
+                        auto cr = target.CornerRadius();
+                        double r = std::max({cr.TopLeft, cr.TopRight,
+                                             cr.BottomRight, cr.BottomLeft});
+                        if (paired) {
+                            target.CornerRadius(arrow ? CornerRadius{0, r, r, 0}
+                                                      : CornerRadius{r, 0, 0, r});
+                        }
                         target.BorderBrush(hovered ? hotBrush : restBrush);
                         target.Background(clear);
                     } catch (...) {}
@@ -11653,6 +11663,7 @@ namespace NavDock {
 void Ensure(HWND tree);
 bool HasDock(HWND ntc);
 void TintTreeRect(HDC hdc, const RECT& rc);
+void TintTreeUnder(HWND tree, HDC hdc, const RECT& rc);
 }
 // True when a fill lands on the docked side list's own background. The list
 // clears its background while BeginPaint runs (WM_ERASEBKGND), before the
@@ -11717,6 +11728,13 @@ BOOL WINAPI EndPaint_Hook(HWND hWnd, const PAINTSTRUCT* lpPaint) {
     }
     if (hWnd == g_treePaintWndForThread) {
         g_treePaintWndForThread = nullptr;
+        // With the glass on the frame only, the side list's fills never reach
+        // the fill hooks, so the dock's dark fill is laid under what the list
+        // just painted, once per paint.
+        if (!g_entireWindowEffectWndForThread && g_settings.navPaneDock &&
+            lpPaint && lpPaint->hdc && NavDock::HasDock(GetParent(hWnd))) {
+            NavDock::TintTreeUnder(hWnd, lpPaint->hdc, lpPaint->rcPaint);
+        }
     }
 
     return EndPaint_Original(hWnd, lpPaint);
@@ -13343,7 +13361,8 @@ void PaintStatusDock(HDC hdc, POINT offset, RECT clip, UINT dpi, HWND hViewWnd) 
     GetStatusDockPills(hViewWnd, band, dpi, &pills[0], &pills[1]);
     int part = StatusDockHoverPart(hViewWnd);
     for (int i = 0; i < 2; i++) {
-        if (pills[i].right <= pills[i].left) {
+        // A dock squeezed narrower than it is tall is only a curved sliver.
+        if (pills[i].right - pills[i].left < pills[i].bottom - pills[i].top) {
             continue;
         }
         OffsetRect(&pills[i], offset.x, offset.y);
@@ -13487,6 +13506,112 @@ void TintTreeRect(HDC hdc, const RECT& rc) {
         (GdiAlphaBlend_Original ? GdiAlphaBlend_Original : GdiAlphaBlend)(
             hdc, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
             mem, 0, 0, 1, 1, blend);
+        SelectObject(mem, old);
+        DeleteObject(dib);
+    }
+    DeleteDC(mem);
+}
+
+// The side list's own background colour, learned from its large paints.
+std::atomic<DWORD> g_treeBg{CLR_INVALID};
+
+COLORREF LearnTreeBackground(HWND tree, const DWORD* bits, int w, int h) {
+    RECT client;
+    if (GetClientRect(tree, &client) && client.right > 0 && client.bottom > 0 &&
+        (LONGLONG)w * h * 3 >= (LONGLONG)client.right * client.bottom) {
+        std::unordered_map<DWORD, int> counts;
+        size_t n = (size_t)w * h;
+        for (size_t i = 0; i < n; i += 7) {
+            DWORD rgb = bits[i] & 0xFFFFFF;
+            UINT r = (rgb >> 16) & 0xFF, g = (rgb >> 8) & 0xFF, b = rgb & 0xFF;
+            if (std::max({r, g, b}) < 90) counts[rgb]++;
+        }
+        DWORD best = 0;
+        int bestCount = 0;
+        for (auto& [rgb, count] : counts) {
+            if (count > bestCount) {
+                best = rgb;
+                bestCount = count;
+            }
+        }
+        if (bestCount * 7 * 4 >= (int)std::min<size_t>(n, INT_MAX)) {
+            COLORREF learned = RGB((best >> 16) & 0xFF, (best >> 8) & 0xFF, best & 0xFF);
+            if (g_treeBg.exchange(learned) != learned) {
+                Wh_Log(L"Side list background learned: #%02X%02X%02X",
+                       GetRValue(learned), GetGValue(learned), GetBValue(learned));
+            }
+            return learned;
+        }
+    }
+    DWORD known = g_treeBg.load();
+    if (known != CLR_INVALID) return known;
+    COLORREF bk = (COLORREF)SendMessage(tree, TVM_GETBKCOLOR, 0, 0);
+    if (bk != (COLORREF)-1) return bk;
+    return GetSysColor(COLOR_WINDOW);
+}
+
+// Swaps the side list's own background for the dock fill under what the list
+// just painted. The list may paint its background as clear colour (alpha 0,
+// which the glass adds on top of itself and so reads lighter) or as solid
+// colour; both become the dock fill. Text, icons and the row pills keep their
+// own colour and alpha, with the dock fill under what they leave clear.
+void TintTreeUnder(HWND tree, HDC hdc, const RECT& rc) {
+    int w = rc.right - rc.left, h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) return;
+    HDC mem = CreateCompatibleDC(hdc);
+    if (!mem) return;
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = w;
+    bmi.bmiHeader.biHeight = -h;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    DWORD* bits = nullptr;
+    HBITMAP dib = CreateDIBSection(mem, &bmi, DIB_RGB_COLORS, (void**)&bits, nullptr, 0);
+    if (dib && bits) {
+        HGDIOBJ old = SelectObject(mem, dib);
+        if (BitBlt(mem, 0, 0, w, h, hdc, rc.left, rc.top, SRCCOPY)) {
+            GdiFlush();
+            COLORREF bg = LearnTreeBackground(tree, bits, w, h);
+            const int bR = GetRValue(bg), bG = GetGValue(bg), bB = GetBValue(bg);
+            // Premultiplied #4B11111B, as in TintTreeRect.
+            constexpr UINT kA = 0x4B, kR = 5, kG = 5, kB = 8;
+            // Weight of the background in a pixel, 256 = all background: full
+            // within 8 of its colour, none past 32.
+            auto weight = [&](int r, int g, int b) -> UINT {
+                int d = std::max({abs(r - bR), abs(g - bG), abs(b - bB)});
+                return d <= 8 ? 256u : d >= 32 ? 0u : (UINT)((32 - d) * 256 / 24);
+            };
+            for (size_t i = 0, n = (size_t)w * h; i < n; i++) {
+                DWORD px = bits[i];
+                UINT a = px >> 24;
+                int r = (px >> 16) & 0xFF, g = (px >> 8) & 0xFF, b = px & 0xFF;
+                UINT na, nr, ng, nb;
+                if (a == 0) {
+                    UINT k = weight(r, g, b);
+                    nr = (UINT)std::max(0, r - (int)(bR * k >> 8)) + kR;
+                    ng = (UINT)std::max(0, g - (int)(bG * k >> 8)) + kG;
+                    nb = (UINT)std::max(0, b - (int)(bB * k >> 8)) + kB;
+                    na = kA;
+                } else if (a == 255) {
+                    UINT k = weight(r, g, b), keep = 256 - k;
+                    nr = (r * keep + kR * k) >> 8;
+                    ng = (g * keep + kG * k) >> 8;
+                    nb = (b * keep + kB * k) >> 8;
+                    na = (255 * keep + kA * k) >> 8;
+                } else {
+                    UINT left = 255 - a;
+                    nr = r + (kR * left + 127) / 255;
+                    ng = g + (kG * left + 127) / 255;
+                    nb = b + (kB * left + 127) / 255;
+                    na = a + (kA * left + 127) / 255;
+                }
+                bits[i] = (std::min(na, 255u) << 24) | (std::min(nr, 255u) << 16) |
+                          (std::min(ng, 255u) << 8) | std::min(nb, 255u);
+            }
+            BitBlt(hdc, rc.left, rc.top, w, h, mem, 0, 0, SRCCOPY);
+        }
         SelectObject(mem, old);
         DeleteObject(dib);
     }
