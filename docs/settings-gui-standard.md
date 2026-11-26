@@ -207,9 +207,19 @@ frame or glass state in any other engine function, or that never posts the reloa
   separator, dark Mocha fill, gradient edge and its hover. Halo's old native menu is the
   rejected reference. Do not make Settings bold as a native default item. Show a still
   capture of the open menu and of one hover state for every tray mod you touch.
-- Tray badges share Crosshair's rounded blue-to-mauve plate and dark cutout glyph.
-  The glyph identifies the mod. Icons displaying live state, such as volume or bin contents,
-  may retain that state display. Keep application logos for the About page.
+- Tray and app icons are clean (owner, 2026-11-24): the glyph itself in the blue-to-mauve
+  diagonal gradient on a clear background, no rounded plate behind it. Segoe Fluent glyph at
+  0.84 of the icon size, grey #6C7086 to #585B70 when off. The Seamless Taskbar wallpaper
+  button is the reference; Crosshair's MakeTrayIcon is the copy-from code. The glyph
+  identifies the mod. Icons displaying live state, such as volume or bin contents, keep that
+  state in the glyph. The settings window's mark (`Set_DrawMark`, `Set_MakeIcon`) follows the
+  same rule. Keep application logos for the About page.
+- Tray and app icons are sharp at the size they are shown (owner, 2026-11-26: "low
+  resolution, aliased"). Plain GDI has no smoothing, so an icon drawn straight at
+  SM_CXSMICON comes out stair-stepped. Draw at 4x SM_CXICON, shrink with
+  `Crisp_ShrinkIcon(big, 4)` (box filter, straight alpha out), and hand Windows the
+  SM_CXICON result, so the tray only ever shrinks it (16 px shown at 100%, 32 at 200%). Copy the helper from any installed mod that has it
+  (Crosshair 1.2.11 on). Never hand Windows premultiplied colour: it darkens soft edges.
 - Sync from the installed Launchpad settings engine before staging an update. Keep each
   mod's saved keys and content. Run saving and other slow work off the window thread,
   and show progress without blocking input. Coordinate template changes through coop.
