@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T19:43:36+08:00",
+  "generatedAt": "2026-11-26T19:47:13+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 129,
@@ -912,7 +912,7 @@
       "name": "Seamless Flyouts",
       "author": "DavidHiFi, Undisputed00x",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.2.0",
+      "version": "2.2.1",
       "license": "",
       "origin": "local",
       "upstream": "",

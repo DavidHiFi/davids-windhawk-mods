@@ -522,7 +522,7 @@
     "include": "*",
     "exclude": "cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe",
     "architecture": "",
-    "version": "2.2.0"
+    "version": "2.2.1"
   },
   "local@seamless-launchpad": {
     "disabled": false,

@@ -2,7 +2,7 @@
 // @id              seamless-flyouts
 // @name            Seamless Flyouts
 // @description     Blurred, rounded Catppuccin menus and flyouts that match the taskbar, plus acrylic and Mica for Windows 11 apps
-// @version         2.2.0
+// @version         2.2.1
 // @author          DavidHiFi, Undisputed00x
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -27,6 +27,11 @@ It also brings acrylic, Mica and blur to Windows 11 apps, and keeps re-applying 
 Explorer folder windows that open hidden or late, so they never show up black.
 
 Built on Translucent Windows by Undisputed00x.
+
+## What's new in 2.2.1
+
+- The view buttons on the status bar no longer get a light grey box from the flyout look.
+- No square box shows behind the side list's scroll bar.
 
 ## What's new in 2.2.0
 
@@ -2203,6 +2208,57 @@ static VOID Uninit() { EnumWindows(RestoreTop, 0); }
 
 }  // namespace SeamlessPicker
 
+// The Explorer side list's scrollbar paints on a memory DC, where WindowFromDC
+// gives nothing. This subclass names the tree while it handles a message, so
+// the scrollbar lane can still tell whose lane it is painting.
+namespace SeamlessSideTree {
+
+constexpr wchar_t kSideTreeProp[] = L"SeamlessFlyouts_SideTreeOwner";
+static thread_local HWND t_owner = nullptr;
+
+static LRESULT CALLBACK OwnerProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, DWORD_PTR)
+{
+    if (uMsg == WM_NCDESTROY)
+        RemovePropW(hWnd, kSideTreeProp);
+    HWND saved = t_owner;
+    t_owner = hWnd;
+    LRESULT r = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+    t_owner = saved;
+    return r;
+}
+
+static VOID Attach(HWND tree, HWND parent)
+{
+    if (!tree || !parent || GetPropW(tree, kSideTreeProp))
+        return;
+    if (!IsWindowClass(tree, L"SysTreeView32") || !IsWindowClass(parent, L"NamespaceTreeControl"))
+        return;
+    if (WindhawkUtils::SetWindowSubclassFromAnyThread(tree, OwnerProc, 0))
+        SetPropW(tree, kSideTreeProp, (HANDLE)1);
+}
+
+static BOOL CALLBACK AttachChild(HWND hWnd, LPARAM)
+{
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hWnd, &pid);
+    if (pid == GetCurrentProcessId())
+        Attach(hWnd, GetParent(hWnd));
+    return TRUE;
+}
+
+static BOOL CALLBACK AttachTop(HWND hWnd, LPARAM)
+{
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hWnd, &pid);
+    if (pid == GetCurrentProcessId())
+        EnumChildWindows(hWnd, AttachChild, 0);
+    return TRUE;
+}
+
+static VOID AttachExisting() { EnumWindows(AttachTop, 0); }
+
+}  // namespace SeamlessSideTree
+
 HWND WINAPI HookedNtUserCreateWindowEx(DWORD dwExStyle,
                                        PUNICODE_STRING UnsafeClassName,
                                        LPCWSTR         VersionedClass,
@@ -2235,6 +2291,7 @@ HWND WINAPI HookedNtUserCreateWindowEx(DWORD dwExStyle,
         else if (hWndParent) {
             SeamlessFileDialogBar::OnCreate(hWnd, hWndParent);
             SeamlessPicker::OnCreate(hWnd, hWndParent);
+            SeamlessSideTree::Attach(hWnd, hWndParent);
         }
     }
 
@@ -3444,12 +3501,65 @@ VOID DrawNineGridStretch(HDC hdc, HDC& srcDC, LPCRECT dstRect, INT left = 0, INT
     }
 }
 
+// The Explorer side list (a tree inside a NamespaceTreeControl) carries the
+// dock fill; its scrollbar lane gets the same fill so it does not show
+// lighter than the list. Other scrollbars stay clear glass.
+static bool IsDockedSideListDC(HDC hdc)
+{
+    HWND hWnd = WindowFromDC(hdc);
+    if (!hWnd)
+        hWnd = SeamlessSideTree::t_owner;
+    WCHAR cls[32];
+    if (!hWnd || !GetClassNameW(hWnd, cls, ARRAYSIZE(cls)) ||
+        wcscmp(cls, L"SysTreeView32") != 0)
+        return false;
+    HWND parent = GetParent(hWnd);
+    return parent && GetClassNameW(parent, cls, ARRAYSIZE(cls)) &&
+           wcscmp(cls, L"NamespaceTreeControl") == 0;
+}
+
+static void ClearScrollLane(HDC hdc, LPCRECT pRect)
+{
+    FillRect(hdc, pRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    if (!IsDockedSideListDC(hdc))
+        return;
+    HDC mem = CreateCompatibleDC(hdc);
+    if (!mem)
+        return;
+    BITMAPINFO bmi = {};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = 1;
+    bmi.bmiHeader.biHeight = -1;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    DWORD* bits = nullptr;
+    HBITMAP dib = CreateDIBSection(mem, &bmi, DIB_RGB_COLORS, (void**)&bits, nullptr, 0);
+    if (dib && bits)
+    {
+        // Premultiplied #4B11111B, the dock fill.
+        bits[0] = (0x4Bu << 24) | (5u << 16) | (5u << 8) | 8u;
+        HGDIOBJ old = SelectObject(mem, dib);
+        BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        AlphaBlend(hdc, pRect->left, pRect->top, pRect->right - pRect->left,
+                   pRect->bottom - pRect->top, mem, 0, 0, 1, 1, blend);
+        SelectObject(mem, old);
+    }
+    if (dib)
+        DeleteObject(dib);
+    DeleteDC(mem);
+}
+
 BOOL PaintScroll(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
     auto factory = AcquireDirect2DFactory();
     if ((iPartId == SBP_UPPERTRACKVERT || iPartId == SBP_LOWERTRACKVERT
     || iPartId == SBP_UPPERTRACKHORZ || iPartId == SBP_LOWERTRACKHORZ))
+    {
+        if (IsDockedSideListDC(hdc))
+            ClearScrollLane(hdc, pRect);
         return TRUE;
+    }
     if ((!factory ||(iPartId != SBP_THUMBBTNVERT && iPartId != SBP_THUMBBTNHORZ)))
         return FALSE;
     
@@ -3470,7 +3580,7 @@ BOOL PaintScroll(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
     const FLOAT thick = vert ? bar.right - bar.left : bar.bottom - bar.top;
     const FLOAT radius = std::min(4.f * scale, thick / 2.f);
 
-    FillRect(hdc, pRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    ClearScrollLane(hdc, pRect);
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> rt;
     if (FAILED(CreateBoundD2DRenderTarget(hdc, pRect, factory.Get(), &rt)))
         return FALSE;
@@ -5596,12 +5706,62 @@ BOOL CThemeCache::CacheModuleLocationButton(INT iStateId, INT stateIndex)
     return TRUE;
 }
 
+// Explorer Styler Plus draws the view buttons on the status bar dock (CommandModule part 4,
+// small and square). Painting the current view button here took the paint away from it: the
+// styler never saw the button, so the stock icon and a light grey 24px box stayed on screen.
+static bool StylerOwnsViewButton(LPCRECT pRect)
+{
+    if (!pRect)
+        return false;
+    LONG w = pRect->right - pRect->left, h = pRect->bottom - pRect->top;
+    if (h <= 0 || w > h + h / 2)
+        return false;  // A split button with a label is much wider than it is tall.
+    static const bool explorer = []() {
+        WCHAR p[MAX_PATH];
+        DWORD n = GetModuleFileNameW(nullptr, p, MAX_PATH);
+        return n >= 13 && n < MAX_PATH && _wcsicmp(p + n - 13, L"\\explorer.exe") == 0;
+    }();
+    if (!explorer)
+        return false;
+    static ULONGLONG checked = 0;
+    static bool owns = false;
+    ULONGLONG now = GetTickCount64();
+    if (!checked || now - checked > 3000) {
+        checked = now;
+        bool on = true;
+        DWORD v = 0, cb = sizeof(v), type = 0;
+        HKEY key;
+        if (RegOpenKeyExW(HKEY_LOCAL_MACHINE,
+                L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@windows-11-file-explorer-styler-plus",
+                0, KEY_READ | KEY_WOW64_64KEY, &key) == ERROR_SUCCESS) {
+            if (RegQueryValueExW(key, L"Disabled", nullptr, &type, (BYTE*)&v, &cb) == ERROR_SUCCESS &&
+                type == REG_DWORD && v != 0)
+                on = false;
+            RegCloseKey(key);
+        } else {
+            on = false;
+        }
+        if (on) {
+            v = 0;
+            cb = sizeof(v);
+            if (RegGetValueW(HKEY_LOCAL_MACHINE,
+                    L"SOFTWARE\\Windhawk\\Engine\\Mods\\local@windows-11-file-explorer-styler-plus\\Settings",
+                    L"statusBarDock", RRF_RT_REG_DWORD | RRF_SUBKEY_WOW6464KEY, nullptr, &v, &cb) == ERROR_SUCCESS &&
+                v == 0)
+                on = false;
+        }
+        owns = on;
+    }
+    return owns;
+}
+
 BOOL PaintModuleSplitButton(HDC hdc, INT iPartId, INT iStateId, LPCRECT pRect)
 {
     auto factory = AcquireDirect2DFactory();
     if (!factory || (iPartId != 4 && iPartId != 5))
         return FALSE;
     if (iStateId == 1 || iStateId == 6) return FALSE;
+    if (iPartId == 4 && StylerOwnsViewButton(pRect)) return FALSE;
     INT index = (iPartId == 4) ? iStateId - 2 : iStateId + 2; 
 
     if (!g_themeCache.modulesplitbutton[index])
@@ -9336,6 +9496,7 @@ VOID Wh_ModAfterInit()
     if (!isInitialThread)
         ApplyForExistingWindows();
     EnumWindows(WatchMenuThemeEnumProc, 0);
+    SeamlessSideTree::AttachExisting();
     if (g_settings.FillBg && g_settings.FlyoutsEffects)
         SeamlessMenuRoom::Init(nullptr);
 }
