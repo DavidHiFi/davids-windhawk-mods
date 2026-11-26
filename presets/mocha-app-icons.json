@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@mocha-app-icons",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "ableton": 1,
         "settings": 1,

@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@uwp-assets-redirect-plus",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "custom[0].assets-path": "",
         "custom[0].redirect": "",

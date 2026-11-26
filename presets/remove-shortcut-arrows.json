@@ -3,7 +3,7 @@
   "mods": [
     {
       "id": "local@remove-shortcut-arrows",
-      "enabled": false,
+      "enabled": true,
       "settings": {
         "custom_icon_path": ""
       }

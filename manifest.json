@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T20:34:45+08:00",
+  "generatedAt": "2026-11-26T20:36:08+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 129,
-    "enabled": 122,
-    "local": 60
+    "mods": 132,
+    "enabled": 125,
+    "local": 63
   },
   "mods": [
     {
@@ -1598,6 +1598,42 @@
       "upstream": "",
       "source": "mods/local/seamless-icons/seamless-icons.wh.cpp",
       "enabled": false
+    },
+    {
+      "id": "local@mocha-app-icons",
+      "name": "Mocha App Icons",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.3.0",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/mocha-app-icons/mocha-app-icons.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@remove-shortcut-arrows",
+      "name": "Remove Shortcut Arrow Icons",
+      "author": "DavidHiFi, Dev-StudioCode",
+      "github": "https://github.com/DavidHiFi",
+      "version": "2.0.2",
+      "license": "",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/remove-shortcut-arrows/remove-shortcut-arrows.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@uwp-assets-redirect-plus",
+      "name": "UWP Assets Redirect Plus",
+      "author": "DavidHiFi, ferrys",
+      "github": "https://github.com/DavidHiFi/davids-windhawk-mods",
+      "version": "1.2",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/uwp-assets-redirect-plus/uwp-assets-redirect-plus.wh.cpp",
+      "enabled": true
     }
   ]
 }
