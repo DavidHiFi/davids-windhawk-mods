@@ -2,7 +2,7 @@
 // @id              dsx-tray-icon-fix
 // @name            DSX Tray Icon Fix
 // @description     Keeps DSX to one tray icon that always shows its picture, even after DSX runs out of drawing memory
-// @version         1.0.0
+// @version         1.0.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -22,6 +22,8 @@ window and a new copy of the picture, and it never frees either. After an hour o
 two it runs out of drawing memory. From then on every new tray icon comes up
 blank, and the old ones can stay behind, so the tray fills with empty DSX tiles.
 
+![DSX Tray Icon Fix preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/dsx-tray-icon-fix.png)
+
 This mod keeps it to one tile with the real picture:
 
 - When DSX adds its icon, any older DSX tray icon is removed first, so there is
@@ -29,14 +31,49 @@ This mod keeps it to one tile with the real picture:
 - The first good picture DSX shows is kept. When DSX later sends no picture, or
   one it could not finish drawing, the kept picture is used instead.
 
+## Settings
+
+All three are on, which is how the mod has always worked. Turn one off to get
+that piece of the old behaviour back.
+
+- **Keep the last good picture**: when DSX sends a blank or half-drawn picture,
+  the last good one is used instead. Off, blank tiles show the way DSX drew
+  them.
+- **Remove older tray tiles**: only one DSX tile stays in the tray. Off, DSX
+  may leave several behind.
+- **Clear tiles left from before**: removes DSX tiles that were added before
+  the mod loaded. Runs once, at the first tile.
+
 It only changes what DSX sends to the tray. DSX itself, its controller work and
 its settings are left alone.
 
-## What's new in 1.0.0
+## What's new in 1.0.1
 
-- First release.
+- The three behaviours are now settings, all on by default.
 */
 // ==/WindhawkModReadme==
+
+// ==WindhawkModSettings==
+/*
+- keepLastGoodIcon: true
+  $name: Keep the last good picture
+  $description: >-
+    DSX sends a blank or half-drawn tray picture once it runs out of drawing
+    memory. On, the last good picture is kept and used instead. When off, blank
+    tiles show the way DSX drew them.
+- removeOlderIcons: true
+  $name: Remove older tray tiles
+  $description: >-
+    DSX adds a new tray tile every few seconds. On, older tiles are removed
+    after a new one lands, so only one stays. When off, the tray can fill up
+    with copies.
+- clearTilesFromBefore: true
+  $name: Clear tiles left from before
+  $description: >-
+    Removes DSX tray tiles that were added before this mod loaded. Runs once,
+    when the first tile lands after the mod starts.
+*/
+// ==/WindhawkModSettings==
 
 #include <windows.h>
 #include <shellapi.h>
@@ -57,6 +94,18 @@ ShellNotifyIconW_t g_original;
 std::mutex g_lock;
 std::vector<Entry> g_live;      // entries this process has in the tray
 HICON g_goodIcon;
+
+// Kept current by Wh_ModInit and Wh_ModSettingsChanged. All on, which is the
+// behaviour the mod shipped with.
+bool g_keepLastGoodIcon;
+bool g_removeOlderIcons;
+bool g_clearTilesFromBefore;
+
+void LoadSettings() {
+    g_keepLastGoodIcon = Wh_GetIntValue(L"keepLastGoodIcon", 1) != 0;
+    g_removeOlderIcons = Wh_GetIntValue(L"removeOlderIcons", 1) != 0;
+    g_clearTilesFromBefore = Wh_GetIntValue(L"clearTilesFromBefore", 1) != 0;
+}
 
 bool IsWpfUiTrayWindow(HWND hwnd) {
     if (!hwnd)
@@ -119,6 +168,8 @@ BOOL CALLBACK SweepWindow(HWND hwnd, LPARAM keep) {
 
 // Caller holds g_lock.
 void FixIcon(NOTIFYICONDATAW& data, bool adding) {
+    if (!g_keepLastGoodIcon)
+        return;
     bool hasIcon = (data.uFlags & NIF_ICON) != 0;
     if (hasIcon && IconIsUsable(data.hIcon)) {
         if (!g_goodIcon) {
@@ -150,23 +201,24 @@ BOOL WINAPI ShellNotifyIconW_Hook(DWORD message, PNOTIFYICONDATAW in) {
             FixIcon(data, true);
             BOOL ok = g_original(NIM_ADD, &data);
             if (ok) {
-                // The new icon is up: remove every older one.
-                size_t removed = 0;
-                for (auto const& e : g_live) {
-                    if (e.hwnd == data.hWnd && e.uid == data.uID)
-                        continue;
-                    DeleteEntry(e);
-                    ++removed;
+                Forget(g_live, data.hWnd, data.uID);
+                if (g_removeOlderIcons) {
+                    // The new icon is up: remove every older one.
+                    size_t removed = 0;
+                    for (auto const& e : g_live) {
+                        DeleteEntry(e);
+                        ++removed;
+                    }
+                    g_live.clear();
+                    if (removed)
+                        Wh_Log(L"Removed %zu older DSX tray icon(s)", removed);
                 }
-                g_live.clear();
                 g_live.push_back({data.hWnd, data.uID});
-                if (!g_swept) {
+                if (g_clearTilesFromBefore && !g_swept) {
                     g_swept = true;
                     EnumWindows(SweepWindow, reinterpret_cast<LPARAM>(data.hWnd));
                     Wh_Log(L"Cleared DSX tray icons left from before the mod loaded");
                 }
-                if (removed)
-                    Wh_Log(L"Removed %zu older DSX tray icon(s)", removed);
             }
             return ok;
         }
@@ -184,6 +236,7 @@ BOOL WINAPI ShellNotifyIconW_Hook(DWORD message, PNOTIFYICONDATAW in) {
 }  // namespace
 
 BOOL Wh_ModInit() {
+    LoadSettings();
     HMODULE shell = LoadLibraryExW(L"shell32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
     auto target = shell ? reinterpret_cast<ShellNotifyIconW_t>(GetProcAddress(shell, "Shell_NotifyIconW"))
                         : nullptr;
@@ -197,6 +250,11 @@ BOOL Wh_ModInit() {
         return FALSE;
     Wh_Log(L"DSX Tray Icon Fix loaded");
     return TRUE;
+}
+
+void Wh_ModSettingsChanged() {
+    LoadSettings();
+    Wh_Log(L"DSX Tray Icon Fix settings reloaded");
 }
 
 void Wh_ModUninit() {

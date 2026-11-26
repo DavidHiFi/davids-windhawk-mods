@@ -5939,5 +5939,10 @@
     "theme-paths[0]": "",
     "windows-apps[0].bundle": "",
     "windows-apps[0].redirect": ""
+  },
+  "local@dsx-tray-icon-fix": {
+    "clearTilesFromBefore": 1,
+    "keepLastGoodIcon": 1,
+    "removeOlderIcons": 1
   }
 }

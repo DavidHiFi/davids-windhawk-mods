@@ -80,7 +80,11 @@
     {
       "id": "local@dsx-tray-icon-fix",
       "enabled": true,
-      "settings": {}
+      "settings": {
+        "clearTilesFromBefore": 1,
+        "keepLastGoodIcon": 1,
+        "removeOlderIcons": 1
+      }
     },
     {
       "id": "local@explorer-tags-plus",
