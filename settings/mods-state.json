@@ -1370,5 +1370,12 @@
     "exclude": "",
     "architecture": "",
     "version": "1.0.0"
+  },
+  "local@seamless-fps-overlay": {
+    "disabled": false,
+    "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
+    "exclude": "",
+    "architecture": "x86-64",
+    "version": "1.0.0"
   }
 }
