@@ -5597,7 +5597,7 @@
     "mochaIcons": 1,
     "pages.hide[0]": "",
     "sidebar.foldedWidth": 64,
-    "sidebar.hideAccount": 0,
+    "sidebar.hideAccount": 1,
     "sidebar.hideWhenFolded[0]": "",
     "sidebar.rememberFold": 1,
     "sidebar.shrinkPicture": 1,
