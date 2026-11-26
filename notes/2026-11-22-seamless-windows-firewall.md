@@ -266,9 +266,11 @@ waits until answered (the app stays blocked meanwhile, as with Windows).
 - Read pass, no window or keys (7:55 am, owner gaming): the real menu lists "Seamless Windows
   Firewall" above Properties, and its submenu holds Block in Windows Firewall, Allow again
   (remove the block) and Open the firewall panel. capture-menu-read.json in media\live\1.2.5.
-- Full pass (shown from the script's own window, shot, then Block and Allow again run through
-  the shell's InvokeCommand and the rules read back) is queued for the screen at 7:57 am, pid
-  12660, writes capture-menu.json.
+- Full pass, 7:59 to 8:01 am under the desktop input lock (released 8:01:46): menu shown from the
+  script's own window and shot with the submenu open (menu-submenu.png); Block through the shell
+  added "Seamless Firewall: MenuTestApp.exe" in and out; Allow again removed both; no -swf-
+  helper left running, test folder deleted. capture-menu.json and capture-menu.log in media\live\1.2.5.
+  1.2.5 is fully proved on the tower.
 - Glass: still WARN flat over the open panel (ratio 0.06, movement 0.3). The fill is already
   0.40, the bottom of the rice range, and the backdrop is the dark panel blurred by acrylic, so
   nothing colourful is there to move. Kept as is; open item 1 below now says why.
