@@ -1366,10 +1366,10 @@
   },
   "local@seamless-fps-capper": {
     "disabled": false,
-    "include": "windhawk.exe",
+    "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.0.0"
+    "version": "1.0.1"
   },
   "local@seamless-fps-overlay": {
     "disabled": false,

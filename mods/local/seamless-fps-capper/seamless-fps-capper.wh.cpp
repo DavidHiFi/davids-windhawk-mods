@@ -2,11 +2,13 @@
 // @id              seamless-fps-capper
 // @name            Seamless FPS Capper
 // @description     An open frame rate cap for every game: in the game itself or through the NVIDIA driver, with per-game caps, a tray switch and shortcuts
-// @version         1.0.0
+// @version         1.0.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         windhawk.exe
+// @include         windhawk-mod.exe
+// @include         windhawk-mod-elevated.exe
 // @compilerOptions -lgdi32 -luser32 -lshell32 -lshlwapi -lole32 -loleaut32 -luuid -ld2d1 -ldwrite -lwindowscodecs -ldwmapi -lcomctl32 -luxtheme -lcomdlg32 -limm32 -ladvapi32 -lurlmon -lwininet
 // @license         GPL-3.0
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -61,6 +63,8 @@ exactly as it was.
 
 ## What's new
 
+- 1.0.1: the game list now saves on Windhawk 1.7 too. A new install leaves the
+  NVIDIA driver cap alone until you turn it on.
 - 1.0.0: first release.
 
 ## Credits
@@ -79,7 +83,7 @@ NVAPI. Colours from Catppuccin Mocha (https://github.com/catppuccin/catppuccin).
 - fps: "157"
   $name: "Frame rate cap"
   $description: "Frames per second for every game without its own cap. In game, decimals work, like 141.5. The driver cap rounds to a whole number."
-- mode: "driver"
+- mode: "async"
   $name: "How it caps"
   $description: "Driver works in every game, anti-cheat ones too, from the next time the game starts. The in-game ways cap only the games on the Games page."
   $options:
@@ -105,7 +109,7 @@ NVAPI. Colours from Catppuccin Mocha (https://github.com/catppuccin/catppuccin).
   - off: "Off"
   - on: "On"
   - ultra: "Ultra"
-- driverCap: true
+- driverCap: false
   $name: "Let this mod set the NVIDIA driver cap"
   $description: "Off puts every driver value this mod changed back exactly as it was, and the driver cap is left alone."
 - gameFolders: ""
@@ -2175,17 +2179,30 @@ std::vector<std::wstring> SplitBar(const std::wstring& s) {
     return out;
 }
 
+// Windhawk keeps its keys in the 64-bit registry view. Windhawk 1.7.3 runs
+// tool mods in a 32-bit windhawk.exe, where a plain HKLM\SOFTWARE open lands
+// in WOW6432Node and finds nothing, so every open here names the 64-bit view.
 std::wstring ReadModString(PCWSTR value) {
     WCHAR buf[8192]{};
     DWORD size = sizeof(buf) - sizeof(WCHAR);
-    if (RegGetValueW(HKEY_LOCAL_MACHINE, kModKey, value, RRF_RT_REG_SZ, nullptr, buf, &size) != ERROR_SUCCESS)
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, kModKey, value, RRF_RT_REG_SZ | RRF_SUBKEY_WOW6464KEY, nullptr, buf,
+                     &size) != ERROR_SUCCESS)
         return L"";
     return buf;
 }
 
+LSTATUS SetModValue(PCWSTR name, DWORD type, const void* data, DWORD size) {
+    HKEY k = nullptr;
+    LSTATUS st = RegOpenKeyExW(HKEY_LOCAL_MACHINE, kModKey, 0, KEY_SET_VALUE | KEY_WOW64_64KEY, &k);
+    if (st != ERROR_SUCCESS) return st;
+    st = RegSetValueExW(k, name, 0, type, (const BYTE*)data, size);
+    RegCloseKey(k);
+    return st;
+}
+
 bool ModKeyExists(DWORD* disabled) {
     HKEY k = nullptr;
-    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, kModKey, 0, KEY_READ, &k) != ERROR_SUCCESS) return false;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, kModKey, 0, KEY_READ | KEY_WOW64_64KEY, &k) != ERROR_SUCCESS) return false;
     DWORD v = 0, size = sizeof(v);
     if (RegQueryValueExW(k, L"Disabled", nullptr, nullptr, (BYTE*)&v, &size) != ERROR_SUCCESS) v = 0;
     RegCloseKey(k);
@@ -2229,8 +2246,7 @@ bool SyncModList(PCWSTR regValue, PCWSTR managedValue, const std::vector<std::ws
         return false;
     }
     if (!ModKeyExists(nullptr)) return false;
-    LSTATUS st = RegSetKeyValueW(HKEY_LOCAL_MACHINE, kModKey, regValue, REG_SZ, joined.c_str(),
-                                 (DWORD)((joined.size() + 1) * sizeof(WCHAR)));
+    LSTATUS st = SetModValue(regValue, REG_SZ, joined.c_str(), (DWORD)((joined.size() + 1) * sizeof(WCHAR)));
     if (st != ERROR_SUCCESS) {
         Wh_Log(L"Writing %s failed, error %ld", regValue, st);
         return false;
@@ -2273,7 +2289,7 @@ void ApplyIncludes(const Config& c, bool clearAll) {
     GetSystemTimeAsFileTime(&ft);
     ULONGLONG t = (((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime) / 10000000ULL - 11644473600ULL;
     DWORD marker = (DWORD)t;
-    RegSetKeyValueW(HKEY_LOCAL_MACHINE, kModKey, L"SettingsChangeTime", REG_DWORD, &marker, sizeof(marker));
+    SetModValue(L"SettingsChangeTime", REG_DWORD, &marker, sizeof(marker));
 }
 
 // ---------------------------------------------------------------------------
@@ -2860,11 +2876,11 @@ static std::vector<SetField> Set_MakeFields() {
     return {
 {K::Check, L"capEnabled", L"Cap frame rates", L"Off, nothing is capped: in-game caps stop and the driver caps this mod manages go to none.", L"1", {}, 0, 100, 0, L"Cap"},
 {K::Text, L"fps", L"Frame rate cap", L"Frames per second for every game without its own cap. In game, decimals work, like 141.5. The driver cap rounds to a whole number.", L"157", {}, 0, 100, 0, L"Cap"},
-{K::Choice, L"mode", L"How it caps", L"Driver works in every game, anti-cheat ones too, from the next time the game starts. The in-game ways cap only the games on the Games page.", L"driver", {{L"driver", L"Driver cap (NVIDIA, every game)"}, {L"async", L"In game, smooth (async)"}, {L"front", L"In game, front edge sync"}, {L"back", L"In game, back edge sync"}, {L"reflex", L"In game, NVIDIA Reflex"}}, 0, 100, 0, L"Cap"},
+{K::Choice, L"mode", L"How it caps", L"Driver works in every game, anti-cheat ones too, from the next time the game starts. The in-game ways cap only the games on the Games page.", L"async", {{L"driver", L"Driver cap (NVIDIA, every game)"}, {L"async", L"In game, smooth (async)"}, {L"front", L"In game, front edge sync"}, {L"back", L"In game, back edge sync"}, {L"reflex", L"In game, NVIDIA Reflex"}}, 0, 100, 0, L"Cap"},
 {K::Number, L"bgFps", L"Background cap", L"Frames per second while the game is not the window in front. 0 is off.", L"0", {}, 0, 1000, 0, L"Cap"},
 {K::Choice, L"waitMode", L"Waiting between frames", L"Passive lets the processor rest between frames. Busy spins for the steadiest frame times and keeps one core busy.", L"passive", {{L"passive", L"Passive (light)"}, {L"busy", L"Busy (steadiest)"}}, 0, 100, 0, L"Fine tuning"},
 {K::Choice, L"lowLatency", L"Driver low latency", L"NVIDIA Low Latency Mode for every game. Leave keeps what the NVIDIA app or control panel set.", L"leave", {{L"leave", L"Leave as it is"}, {L"off", L"Off"}, {L"on", L"On"}, {L"ultra", L"Ultra"}}, 0, 100, 0, L"Fine tuning"},
-{K::Check, L"driverCap", L"Let this mod set the NVIDIA driver cap", L"Off puts every driver value this mod changed back exactly as it was, and the driver cap is left alone.", L"1", {}, 0, 100, 0, L"Driver"},
+{K::Check, L"driverCap", L"Let this mod set the NVIDIA driver cap", L"Off puts every driver value this mod changed back exactly as it was, and the driver cap is left alone.", L"0", {}, 0, 100, 0, L"Driver"},
 {K::Text, L"gameFolders", L"Cap every game in these folders", L"Folders separated by ;, like D:\\Games;E:\\SteamLibrary. Every game under them gets the in-game cap and way from the Frame cap page. Anti-cheat games are skipped.", L"", {}, 0, 100, 1, L"Game folders"},
 {K::Text, L"game1Exe", L"Game", L"The game's exe name, like game.exe. Empty frees this slot.", L"plutonium-bootstrapper-win32.exe", {}, 0, 100, 1, L"Game 1"},
 {K::Check, L"game1On", L"Cap this game", L"Off, this game is left alone.", L"1", {}, 0, 100, 1, L"Game 1"},
@@ -6243,7 +6259,10 @@ BOOL WhToolLauncher_ModInit(BOOL* bLaunch) {
     DWORD n = GetModuleFileNameW(nullptr, path, MAX_PATH);
     if (!n || n == MAX_PATH) return FALSE;
     std::wstring exe = Lower(BaseName(path));
-    if (exe == L"windhawk.exe") return TRUE;  // Launches the tool.
+    // Windhawk 1.7.3 starts tool mods from windhawk.exe; 2.0 runs them in
+    // its own helpers and starts the elevated one because the header lists it.
+    if (exe == L"windhawk.exe" || exe == L"windhawk-mod.exe" || exe == L"windhawk-mod-elevated.exe")
+        return TRUE;
     *bLaunch = FALSE;
     if (!GameWanted(path)) return FALSE;
     g_tls = TlsAlloc();
@@ -6304,9 +6323,12 @@ void WhToolLauncher_ModUninit() {
 
 BOOL WhTool_ModInit() {
     // NVIDIA driver profiles and the mod's own Windhawk entry need
-    // administrator rights. UAC prompts are off on this PC, so relaunch
-    // elevated and let this copy exit.
-    if (!IsElevated()) {
+    // administrator rights. Windhawk 2.0 already runs this in its elevated
+    // helper. 1.7.3 runs it from an unelevated windhawk.exe: relaunch that one
+    // elevated (UAC prompts are off on this PC) and let this copy exit.
+    WCHAR hostPath[MAX_PATH] = L"";
+    GetModuleFileNameW(nullptr, hostPath, MAX_PATH);
+    if (!IsElevated() && Lower(BaseName(hostPath)) == L"windhawk.exe") {
         WCHAR self[MAX_PATH];
         if (GetModuleFileNameW(nullptr, self, MAX_PATH)) {
             SHELLEXECUTEINFOW launch{sizeof(launch)};
@@ -6320,6 +6342,8 @@ BOOL WhTool_ModInit() {
             if (ShellExecuteExW(&launch)) ExitProcess(0);
         }
         Wh_Log(L"Elevated relaunch failed, running unelevated: no driver cap or game list");
+    } else if (!IsElevated()) {
+        Wh_Log(L"Running unelevated: no driver cap or game list");
     }
 
     g_instanceMutex = CreateMutexW(nullptr, FALSE, L"Global\\SeamlessFpsCapper");
