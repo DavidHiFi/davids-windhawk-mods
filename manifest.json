@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T22:02:56+08:00",
+  "generatedAt": "2026-11-26T22:04:10+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 133,
-    "enabled": 126,
-    "local": 64
+    "mods": 130,
+    "enabled": 118,
+    "local": 61
   },
   "mods": [
     {
@@ -81,7 +81,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/auto-time-sync-on-startup",
       "source": "mods/catalog/auto-time-sync-on-startup.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "local@better-volume-mixer-plus",
@@ -106,7 +106,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/bluetooth-no-sleep",
       "source": "mods/catalog/bluetooth-no-sleep.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "borderless-fullscreen",
@@ -945,6 +945,18 @@
       "enabled": true
     },
     {
+      "id": "local@seamless-icons",
+      "name": "Seamless Icons",
+      "author": "DavidHiFi, FireBlade, m417z, ferrys, Dev-StudioCode",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.1",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-icons/seamless-icons.wh.cpp",
+      "enabled": false
+    },
+    {
       "id": "local@seamless-key-click",
       "name": "Seamless Key Click",
       "author": "DavidHiFi, Anixx",
@@ -1084,6 +1096,18 @@
       "source": "mods/local/seamless-title-bars/seamless-title-bars.wh.cpp",
       "enabled": false,
       "category": "Windows and menus"
+    },
+    {
+      "id": "local@seamless-tools",
+      "name": "Seamless Tools",
+      "author": "DavidHiFi, DoYouNatureQ, Jaex, ShareX contributors, Dev-StudioCode, communism420, Asteski, LyricsPortal, nikitor32, Nerdworld, Ashix",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.2.0",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-tools/seamless-tools.wh.cpp",
+      "enabled": true
     },
     {
       "id": "local@seamless-window-manager",
@@ -1462,7 +1486,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/toast-auto-dismiss",
       "source": "mods/catalog/toast-auto-dismiss.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "toggle-hidden-files",
@@ -1474,7 +1498,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/toggle-hidden-files",
       "source": "mods/catalog/toggle-hidden-files.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "unlock-folder-in-use",
@@ -1486,7 +1510,7 @@
       "origin": "catalog",
       "upstream": "https://windhawk.net/mods/unlock-folder-in-use",
       "source": "mods/catalog/unlock-folder-in-use.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "win-d-per-monitor",
@@ -1586,66 +1610,6 @@
       "source": "mods/local/zoomit/zoomit.wh.cpp",
       "enabled": true,
       "category": "Tools"
-    },
-    {
-      "id": "local@seamless-icons",
-      "name": "Seamless Icons",
-      "author": "DavidHiFi, FireBlade, m417z, ferrys, Dev-StudioCode",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.0.1",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-icons/seamless-icons.wh.cpp",
-      "enabled": false
-    },
-    {
-      "id": "local@mocha-app-icons",
-      "name": "Mocha App Icons",
-      "author": "DavidHiFi",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.3.0",
-      "license": "MIT",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/mocha-app-icons/mocha-app-icons.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@remove-shortcut-arrows",
-      "name": "Remove Shortcut Arrow Icons",
-      "author": "DavidHiFi, Dev-StudioCode",
-      "github": "https://github.com/DavidHiFi",
-      "version": "2.0.2",
-      "license": "",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/remove-shortcut-arrows/remove-shortcut-arrows.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@uwp-assets-redirect-plus",
-      "name": "UWP Assets Redirect Plus",
-      "author": "DavidHiFi, ferrys",
-      "github": "https://github.com/DavidHiFi/davids-windhawk-mods",
-      "version": "1.2",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/uwp-assets-redirect-plus/uwp-assets-redirect-plus.wh.cpp",
-      "enabled": true
-    },
-    {
-      "id": "local@seamless-tools",
-      "name": "Seamless Tools",
-      "author": "DavidHiFi, DoYouNatureQ, Jaex, ShareX contributors, Dev-StudioCode, communism420, Asteski, LyricsPortal, nikitor32, Nerdworld, Ashix",
-      "github": "https://github.com/DavidHiFi",
-      "version": "1.2.0",
-      "license": "GPL-3.0",
-      "origin": "local",
-      "upstream": "",
-      "source": "mods/local/seamless-tools/seamless-tools.wh.cpp",
-      "enabled": true
     }
   ]
 }
