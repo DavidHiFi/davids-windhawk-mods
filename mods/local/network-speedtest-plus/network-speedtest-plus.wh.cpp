@@ -2,7 +2,7 @@
 // @id              network-speedtest-plus
 // @name            Network Speed Test Plus
 // @description     Tray speed test button next to the network icon, plus the Windows 11 network menu speed test as a native flyout: ping, jitter, download and upload measured against Cloudflare, live gauge, results chart with copy. Mocha glass, FiraCode, gradient hover. No browser, no separate app.
-// @version         2.4.4
+// @version         2.4.5
 // @author          DavidHiFi, Alessandro-Vecchio
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/DavidHiFi
@@ -19,6 +19,11 @@
 // ==WindhawkModReadme==
 /*
 # Network Menu Speed Test Plus
+
+## What's new in 2.4.5
+
+- The speed test window's glass is lighter, like the settings windows:
+  colour behind it now moves under the blur instead of looking solid.
 
 ## What's new in 2.4.4
 
@@ -3252,10 +3257,10 @@ static ULONGLONG g_scrimFadeAt = 0;
 static constexpr float kScrimSettleMs = 60.0f;
 static constexpr float kScrimFadeMs = 200.0f;
 
-// The house glass over DWM's Desktop Acrylic: a Mocha fill at 0.80, so no
+// The house glass over DWM's Desktop Acrylic: a Mocha fill at 0.55 (the settings windows' tint), so no
 // text behind the flyout ever reads through. A window that lost the material
 // falls back to the same colour opaque (the scrim alpha of 1).
-static constexpr float kMochaTintAlpha = 0.80f;
+static constexpr float kMochaTintAlpha = 0.55f;
 
 static bool ScrimFading() {
     // The extra 50 ms forces one final frame at alpha 0 after the fade, so the
