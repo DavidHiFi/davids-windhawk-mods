@@ -2,7 +2,7 @@
 // @id              file-operation-styler-plus
 // @name            File Operation Styler Plus
 // @description     Modern copy, move, delete and recycle progress window for File Explorer
-// @version         1.6.6
+// @version         1.6.7
 // @author          DavidHiFi, digART
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -190,28 +190,22 @@ Based on [File Operation Styler](https://github.com/digart11/File-Operation-Styl
     - custom: Custom
     #! $showIf: {preset: glass, footerStyle: solid}
   - footerColor: ""
-    #! $format: colorRgb
     $name: Solid footer custom color
     $description: 'Used only when Solid footer color preset is Custom. Color as #RRGGBB, for example #1C3346'
     #! $showIf: {preset: glass, footerStyle: solid, footerColorPreset: custom}
   - colors:
     - backgroundOverride: ""
-      #! $format: colorRgb
       $name: Background
     - accentOverride: ""
-      #! $format: colorRgb
       $name: Accent
       $description: Circle, progress bar, graph, and links.
     - primaryTextOverride: ""
-      #! $format: colorRgb
       $name: Main text
       $description: Large numbers and values.
     - secondaryTextOverride: ""
-      #! $format: colorRgb
       $name: Secondary text
       $description: Labels and smaller text.
     - inactiveOverride: ""
-      #! $format: colorRgb
       $name: Track / inactive
       $description: Circle track and progress track.
     $name: Colors
