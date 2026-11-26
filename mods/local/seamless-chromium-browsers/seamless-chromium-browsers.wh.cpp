@@ -2,7 +2,7 @@
 // @id              seamless-chromium-browsers
 // @name            Seamless Chromium Browsers
 // @description     See-through Helium and Brave with Catppuccin colors, your own accent, font and pop-up edges
-// @version         1.1.0
+// @version         1.1.1
 // @author          DavidHiFi, bardelyne
 // @github          https://github.com/DavidHiFi/davids-windhawk-mods
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -1184,6 +1184,86 @@ struct WINDOWCOMPOSITIONATTRDATA {
     DWORD SizeOfData;
 };
 
+// v1.0.2: keep Helium's native Windows title bar strip even when Seamless Title Bars
+// is off. Chromium strips the system caption via WM_NCCALCSIZE, which puts the
+// toolbar right underneath the native caption buttons at the top right. Passing
+// WM_NCCALCSIZE / WM_NCACTIVATE / WM_NCHITTEST / WM_NCLBUTTONDOWN to DefWindowProcW
+// on captioned top-level Helium windows keeps the real title bar above the toolbar
+// while leaving fullscreen (no WS_CAPTION) and popups untouched.
+static SRWLOCK g_nfLock = SRWLOCK_INIT;
+static std::vector<HWND> g_nfHwnds;
+
+static LRESULT CALLBACK HeliumNativeFrameSubclassProc(
+    HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, DWORD_PTR dwRefData) {
+    if (g_set.nativeFrame && (GetWindowLongW(hWnd, GWL_STYLE) & WS_CAPTION)) {
+        switch (uMsg) {
+            case WM_NCCALCSIZE:
+            case WM_NCACTIVATE:
+            case WM_NCHITTEST:
+            case WM_NCLBUTTONDOWN:
+                return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+            case WM_DWMNCRENDERINGCHANGED: {
+                RECT rect;
+                if (GetWindowRect(hWnd, &rect)) {
+                    SetWindowPos(hWnd, nullptr, rect.left, rect.top + 1, 0, 0,
+                                 SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_NOSIZE);
+                    SetWindowPos(hWnd, nullptr, rect.left, rect.top, 0, 0,
+                                 SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_NOSIZE);
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
+static void EnsureHeliumNativeFrameSubclass(HWND hwnd, bool want) {
+    if (!IsWindow(hwnd)) return;
+    bool tracked = false;
+    AcquireSRWLockExclusive(&g_nfLock);
+    g_nfHwnds.erase(
+        std::remove_if(g_nfHwnds.begin(), g_nfHwnds.end(),
+                       [](HWND h) { return !IsWindow(h); }),
+        g_nfHwnds.end());
+    auto it = std::find(g_nfHwnds.begin(), g_nfHwnds.end(), hwnd);
+    tracked = (it != g_nfHwnds.end());
+    if (want && !tracked) {
+        g_nfHwnds.push_back(hwnd);
+    } else if (!want && tracked) {
+        g_nfHwnds.erase(it);
+    }
+    ReleaseSRWLockExclusive(&g_nfLock);
+
+    if (want && !tracked) {
+        if (WindhawkUtils::SetWindowSubclassFromAnyThread(hwnd, HeliumNativeFrameSubclassProc, 0)) {
+            SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                         SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE |
+                             SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+        }
+    } else if (!want && tracked) {
+        WindhawkUtils::RemoveWindowSubclassFromAnyThread(hwnd, HeliumNativeFrameSubclassProc);
+        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                     SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE |
+                         SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+    }
+}
+
+static void RemoveAllHeliumNativeFrameSubclasses() {
+    std::vector<HWND> list;
+    AcquireSRWLockExclusive(&g_nfLock);
+    list.swap(g_nfHwnds);
+    ReleaseSRWLockExclusive(&g_nfLock);
+    for (HWND h : list) {
+        if (!IsWindow(h)) continue;
+        WindhawkUtils::RemoveWindowSubclassFromAnyThread(h, HeliumNativeFrameSubclassProc);
+        SetWindowPos(h, nullptr, 0, 0, 0, 0,
+                     SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE |
+                         SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+    }
+}
+
 static BOOL CALLBACK BackdropEnumProc(HWND hwnd, LPARAM lp) {
     DWORD pid = 0;
     GetWindowThreadProcessId(hwnd, &pid);
@@ -1222,6 +1302,11 @@ static BOOL CALLBACK BackdropEnumProc(HWND hwnd, LPARAM lp) {
         WINDOWCOMPOSITIONATTRDATA data = { 19, &policy, sizeof(policy) }; // WCA_ACCENT_POLICY
         wca(hwnd, &data);
     }
+    // v1.0.2: keep the real Windows title bar strip on top-level Helium windows.
+    if (!bubble && !(exStyle & WS_EX_TOOLWINDOW) && GetAncestor(hwnd, GA_ROOT) == hwnd &&
+        (style & WS_CAPTION)) {
+        EnsureHeliumNativeFrameSubclass(hwnd, g_set.nativeFrame);
+    }
     // Keep DWMWA_USE_IMMERSIVE_DARK_MODE setting via DwmSetWindowAttribute
     PFN_DwmSetWindowAttribute dwm = GetDwmSetWindowAttribute();
     if (dwm) {
@@ -1232,10 +1317,12 @@ static BOOL CALLBACK BackdropEnumProc(HWND hwnd, LPARAM lp) {
 }
 
 static DWORD WINAPI BackdropThread(LPVOID) {
+    int fastTicks = 20;
     while (!g_stop) {
         BackdropCtx ctx = { GetCurrentProcessId() };
         EnumWindows(BackdropEnumProc, (LPARAM)&ctx);
-        if (WaitOrStop(2000)) break;
+        DWORD waitMs = fastTicks > 0 ? (fastTicks--, 250) : 2000;
+        if (WaitOrStop(waitMs)) break;
     }
     return 0;
 }
@@ -2879,7 +2966,12 @@ void ModSettingsChanged() {
         if (g_set.acrylic) ApplyAcrylicPatch();
         else RestoreAcrylic();
         if (g_set.nativeFrame) ApplyStructuralPatches();
-        else RestoreFrame();
+        else {
+            RemoveAllHeliumNativeFrameSubclasses();
+            RestoreFrame();
+        }
+        BackdropCtx bctx = { GetCurrentProcessId() };
+        EnumWindows(BackdropEnumProc, (LPARAM)&bctx);
         LiveRefresh(true);
     }
     Wh_Log(L"settings changed: acrylic=%d colors=%d frame=%d icon=%d (applied live)",
@@ -2914,6 +3006,7 @@ void ModUninit() {
         }
         g_colorsApplied = false;
     }
+    RemoveAllHeliumNativeFrameSubclasses();
     RestoreFrame();
     if (g_fsGuardSite) {
         DWORD oldProtect, tmp;

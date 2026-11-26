@@ -5071,7 +5071,7 @@
     "popupCorners": "stock",
     "popupEdge": "stock",
     "popupEdgeColor": "#45475A",
-    "uiFont": "",
+    "uiFont": "FiraCode Nerd Font",
     "uiFontSize": 0,
     "uiFontWeight": "medium"
   },

@@ -150,7 +150,7 @@
       "id": "ctrl-backspace-fix-for-win32-text-boxes",
       "name": "Ctrl+Backspace Fix for Win32 Text Boxes",
       "version": "1.1",
-      "enabled": false,
+      "enabled": true,
       "settings": {}
     },
     {
