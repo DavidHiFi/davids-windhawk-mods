@@ -29,7 +29,9 @@
           "vbaudiomatrixcoconut_x64.exe",
           "halocord-loopback.exe",
           "t3 code (nightly).exe",
-          "yapfast.exe"
+          "yapfast.exe",
+          "powershell.exe",
+          "seamless music player.exe"
         ]
       }
     }

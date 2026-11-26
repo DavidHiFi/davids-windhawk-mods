@@ -1,11 +1,11 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-26T22:51:22+08:00",
+  "generatedAt": "2026-11-26T22:53:47+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 121,
-    "enabled": 117,
+    "enabled": 115,
     "local": 57
   },
   "mods": [
@@ -812,12 +812,12 @@
       "name": "Seamless Explorer",
       "author": "DavidHiFi, m417z, digART, crazyboyybs, NoMorePlz, Languster, Momo, Anixx, buedgik, RobotsNeverDie, CTravkin, Nerdworld, gilnett, Armaninyow, wrldspawn, VitalS, Deepak, akiyorm, Lockframe, metanoid18, iMAboud, Ender, Marnes, Arimodu, Mark Jansen, DanRotaru, Peter2oo1, NDruce, Sanekx Arcs, javierpetrucci",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.1.0",
+      "version": "1.1.2",
       "license": "GPL-3.0",
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-explorer/seamless-explorer.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "local@seamless-explorer-search",
@@ -855,7 +855,7 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-file-unlocker/seamless-file-unlocker.wh.cpp",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "local@seamless-flyouts",
@@ -924,7 +924,7 @@
       "name": "Seamless Launchpad",
       "author": "DavidHiFi, Rafael Mendes",
       "github": "https://github.com/DavidHiFi",
-      "version": "2.7.3",
+      "version": "2.7.4",
       "license": "MIT",
       "origin": "local",
       "upstream": "",
