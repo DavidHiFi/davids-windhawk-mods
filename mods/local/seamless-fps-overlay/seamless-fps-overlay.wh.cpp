@@ -2,7 +2,7 @@
 // @id              seamless-fps-overlay
 // @name            Seamless FPS Overlay
 // @description     FPS, frame times and PC temperatures over any game, with nothing put into the game
-// @version         1.1.2
+// @version         1.1.3
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -23,6 +23,11 @@ moving pictures included, and nothing is put into the game: Windows itself
 reports each frame, so it is safe with anti-cheat and works over Plutonium.
 
 ![Seamless FPS Overlay preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-fps-overlay.png)
+
+## What's new in 1.1.3
+The benchmark layout is now one panel. The sections sit together with no
+gaps, split by thin lines, and both columns start and end level. Separate
+boxes are still there under Boxes if you liked them.
 
 ## What's new in 1.1.2
 Long names no longer run into their numbers. Each box now grows to fit what
@@ -699,15 +704,15 @@ Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
   $options:
   - game: "Follow the game"
   - primary: "Main screen"
-- panels: "cards"
+- panels: "one"
   $name: "Boxes"
-  $description: "Separate boxes gives each block its own panel, like RivaTuner. One panel puts everything on a single background."
+  $description: "One panel puts every section in a single box, split by thin lines. Separate boxes gives each section its own box, like RivaTuner."
   $options:
-  - cards: "Separate boxes"
   - one: "One panel"
+  - cards: "Separate boxes"
 - blockGap: 6
   $name: "Gap between boxes"
-  $description: "In pixels."
+  $description: "Only used with separate boxes. In pixels."
 - bgStrength: 100
   $name: "Background strength"
   $description: "How dark the box fill is, in percent. 0 leaves only the blur."
@@ -3061,7 +3066,7 @@ struct OverlaySettings {
     int blockSize[kBlkCount] = {100, 100, 100, 100, 100, 100, 100, 100};
     int blockColour[kBlkCount] = {kPalSame, kPalSame, kPalSame, kPalSame, kPalSame, kPalSame, kPalSame, kPalSame};
     std::map<std::wstring, std::wstring> labels;  // label key -> the user's own wording
-    bool cards = true, capitals = true;
+    bool cards = false, capitals = true;
     int textSize = 100, bgStrength = 100, blockGap = 6;
     // Warnings
     int warnColour = kPalRed;
@@ -3223,7 +3228,7 @@ static void LoadSettings() {
         std::wstring v = Trim(TextSet(d.key, L""));
         if (!v.empty()) s.labels[d.key] = v;
     }
-    s.cards = TextSet(L"panels", L"cards") != L"one";
+    s.cards = TextSet(L"panels", L"one") == L"cards";
     s.capitals = BoolSet(L"capitals", true);
     s.textSize = std::clamp(IntSet(L"textSize", 100), 60, 200);
     s.bgStrength = std::clamp(IntSet(L"bgStrength", 100), 0, 150);
@@ -4277,6 +4282,7 @@ struct Layout {
     std::vector<float> graph;
     Place places[kBlkCount];
     std::vector<D2D1_RECT_F> cards;  // one panel per block; empty = one panel for everything
+    std::vector<D2D1_RECT_F> dividers;  // thin lines between sections inside the one panel (x1,y1,x2,y2)
     bool animated = false;           // has moving parts
     double fanRate = 0;              // fan turns per second, 0 = still
 };
@@ -4820,7 +4826,12 @@ static Layout BuildBench(const Readings& r, float px) {
     for (auto& c : cols)
         std::stable_sort(c.begin(), c.end(), [](int a, int b) { return g_set.blockOrder[a] < g_set.blockOrder[b]; });
 
+    // One panel (the default): no gaps, sections split by thin lines, both columns end level.
+    const bool one = !g_set.cards;
+    const float blockGap = one ? 0.f : gap, colGap = one ? 0.f : std::max(gap, 6 * u);
     float colX = 0, totalH = 0;
+    struct ColInfo { float x = 0, w = 0, h = 0; std::vector<int> blocks; };
+    std::vector<ColInfo> built;
     for (int c = 0; c < 2; c++) {
         if (cols[c].empty()) continue;
         float colW = 0;
@@ -4835,7 +4846,8 @@ static Layout BuildBench(const Readings& r, float px) {
             colW = std::max(colW, (std::max(design[c], g_blkNeed[i]) + 2 * P) * k);
         }
         float y = 0;
-        bool placed = false;
+        ColInfo col;
+        col.x = colX, col.w = colW;
         for (int i : cols[c]) {
             const float k = std::clamp(g_set.blockSize[i], 50, 200) / 100.f;
             Bench b{&L, &r, i, u, P, colW / k - 2 * P};
@@ -4845,20 +4857,41 @@ static Layout BuildBench(const Readings& r, float px) {
                 L.ops.resize(first);
                 continue;
             }
-            if (placed) y += gap;
+            if (!col.blocks.empty()) y += blockGap;
             Place& pl = L.places[i];
             pl.x = colX, pl.y = y, pl.k = k, pl.w = colW / k, pl.h = h;
             pl.colour = g_set.blockColour[i];
             if (g_set.cards) L.cards.push_back(D2D1::RectF(colX, y, colX + colW, y + h * k));
             y += h * k;
-            placed = true;
+            col.blocks.push_back(i);
         }
-        if (!placed) continue;
+        if (col.blocks.empty()) continue;
+        col.h = y;
         totalH = std::max(totalH, y);
-        colX += colW + std::max(gap, 6 * u);
+        built.push_back(col);
+        colX += colW + colGap;
+    }
+    if (one && !built.empty()) {
+        // Share the spare height of a shorter column out between its sections, each section's
+        // rows centred in its slot, so the lines and the bottom edge line up across the panel.
+        for (auto& col : built) {
+            const float extra = totalH - col.h, each = extra / col.blocks.size();
+            float shift = 0;
+            for (size_t n = 0; n < col.blocks.size(); n++) {
+                Place& pl = L.places[col.blocks[n]];
+                const float top = pl.y + shift;
+                pl.y = top + each / 2;
+                shift += each;
+                const float bottom = top + pl.h * pl.k + each;
+                if (n + 1 < col.blocks.size())
+                    L.dividers.push_back(D2D1::RectF(col.x + P, bottom, col.x + col.w - P, bottom));
+            }
+        }
+        for (size_t c = 1; c < built.size(); c++)
+            L.dividers.push_back(D2D1::RectF(built[c].x, P, built[c].x, totalH - P));
     }
     if (L.ops.empty()) return L;
-    L.w = std::max(1.f, colX - std::max(gap, 6 * u));
+    L.w = std::max(1.f, colX - colGap);
     L.h = std::max(1.f, totalH);
     L.graph = r.f.graph;
     L.animated = g_set.animations;
@@ -5558,6 +5591,17 @@ static void Render(const Layout& L, float px) {
 
     p.world = D2D1::Matrix3x2F::Identity();
     World(p, p.world);
+    if (!L.dividers.empty() && bg != kNone) {
+        // 1 px lines between sections, on whole pixels so they stay sharp.
+        const float lw = std::max(1.f, std::round(px));
+        solid->SetColor(Rgb(mocha::kSurface1));
+        for (const auto& d : L.dividers) {
+            const float o = std::fmod(lw, 2.f) / 2;
+            const float x1 = std::round(d.left) + o, y1 = std::round(d.top) + o;
+            const float x2 = std::round(d.right) + o, y2 = std::round(d.bottom) + o;
+            g_rt->DrawLine(D2D1::Point2F(x1, y1), D2D1::Point2F(x2, y2), solid, lw);
+        }
+    }
     if (g_set.border) {
         ID2D1Brush* b = solid;
         if (g_set.borderGradient && grad) b = grad;
@@ -7689,8 +7733,8 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Number, L"offsetX", L"Distance from the side", L"In pixels.", L"16", {}, 0, 2000, 6, L"Position"},
 {K::Number, L"offsetY", L"Distance from the top or bottom", L"In pixels.", L"16", {}, 0, 2000, 6, L"Position"},
 {K::Choice, L"monitor", L"Screen", L"Follow the game moves the overlay to whichever screen the game is on.", L"game", {{L"game", L"Follow the game"}, {L"primary", L"Main screen"}}, 0, 100, 6, L"Position"},
-{K::Choice, L"panels", L"Boxes", L"Separate boxes gives each block its own panel, like RivaTuner. One panel puts everything on a single background.", L"cards", {{L"cards", L"Separate boxes"}, {L"one", L"One panel"}}, 0, 100, 6, L"Boxes"},
-{K::Number, L"blockGap", L"Gap between boxes", L"In pixels.", L"6", {}, 0, 40, 6, L"Boxes"},
+{K::Choice, L"panels", L"Boxes", L"One panel puts every section in a single box, split by thin lines. Separate boxes gives each section its own box, like RivaTuner.", L"one", {{L"one", L"One panel"}, {L"cards", L"Separate boxes"}}, 0, 100, 6, L"Boxes"},
+{K::Number, L"blockGap", L"Gap between boxes", L"Only used with separate boxes. In pixels.", L"6", {}, 0, 40, 6, L"Boxes"},
 {K::Number, L"bgStrength", L"Background strength", L"How dark the box fill is, in percent. 0 leaves only the blur.", L"100", {}, 0, 150, 6, L"Boxes"},
 {K::Check, L"rounded", L"Rounded corners", L"Off gives square corners at any roundness.", L"1", {}, 0, 100, 6, L"Boxes"},
 {K::Check, L"border", L"Edge", L"A thin line around each box.", L"1", {}, 0, 100, 6, L"Boxes"},
