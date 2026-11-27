@@ -29,10 +29,23 @@ foreach ($target in @(@('64', 'x86_64-w64-mingw32'), @('32', 'i686-w64-mingw32')
         '-DNTDDI_VERSION=0x0A000008', '-D__USE_MINGW_ANSI_STDIO=0',
         '-include', $header, '-include', 'windhawk_api.h', '-I', $include,
         '-Wl,--export-all-symbols', $source, $lib,
-        '-lbcrypt', '-luser32', '-ldwmapi', '-lgdi32', '-lshcore', '-lcomctl32', '-lshell32', '-lws2_32', '-ladvapi32', '-luxtheme',
+        '-lbcrypt', '-luser32', '-ldwmapi', '-lgdi32', '-lshcore', '-lcomctl32', '-lshell32', '-lws2_32', '-liphlpapi', '-ladvapi32', '-luxtheme', '-lole32', '-luuid', '-lcrypt32',
         '-o', $output
     )
-    & $compiler @arguments
-    if ($LASTEXITCODE -ne 0) { throw "Build failed for $($target[0])-bit target." }
-    Get-FileHash -LiteralPath $output -Algorithm SHA256
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & $compiler @arguments
+        $compilerExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    if ($compilerExitCode -ne 0) { throw "Build failed for $($target[0])-bit target (exit $compilerExitCode)." }
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = [BitConverter]::ToString($sha256.ComputeHash([System.IO.File]::ReadAllBytes($output))).Replace('-', '')
+    } finally {
+        $sha256.Dispose()
+    }
+    Write-Output "$output SHA256 $hash"
 }
