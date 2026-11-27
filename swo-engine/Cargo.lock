@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "swo"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "serde_json",
@@ -101,7 +101,7 @@ dependencies = [
 
 [[package]]
 name = "swo-clean"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "swo-core",
@@ -110,7 +110,7 @@ dependencies = [
 
 [[package]]
 name = "swo-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "serde",
@@ -121,7 +121,7 @@ dependencies = [
 
 [[package]]
 name = "swo-tools"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "serde",
@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "swo-tweaks"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "serde",

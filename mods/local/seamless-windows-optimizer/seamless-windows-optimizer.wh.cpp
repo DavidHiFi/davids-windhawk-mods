@@ -2,7 +2,7 @@
 // @id              seamless-windows-optimizer
 // @name            Seamless Windows Optimizer
 // @description     Free up space, turn off tracking and ads, remove apps you never use and speed Windows up, from one window
-// @version         1.0.0
+// @version         1.0.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -4019,9 +4019,9 @@ static HICON Crisp_ShrinkIcon(HICON big, int factor) {
 #define NT_SUCCESS(s) (((NTSTATUS)(s)) >= 0)
 #endif
 
-constexpr PCWSTR kOptEngineSha = L"7987af894a9acda213848a814e5be2eae9f0e1e0b61763924d3a14873a6f9937";
-constexpr PCWSTR kOptEngineUrl = L"https://github.com/DavidHiFi/seamless-workshop/releases/download/swo-engine-v1.0.0/swo.exe";
-constexpr PCWSTR kOptEngineVersion = L"1.0.0";
+constexpr PCWSTR kOptEngineSha = L"ace07a04408307adf96e11c350899f0b9c0f37ed62dc05e9e967b96ce950ce48";
+constexpr PCWSTR kOptEngineUrl = L"https://github.com/DavidHiFi/seamless-workshop/releases/download/swo-engine-v1.0.1/swo.exe";
+constexpr PCWSTR kOptEngineVersion = L"1.0.1";
 constexpr PCWSTR kOptName = L"Seamless Windows Optimizer";
 constexpr UINT_PTR kOptFeedTimer = 0x4857;  // Batches progress lines into one rebuild.
 constexpr ULONGLONG kOptArmMs = 5000;
