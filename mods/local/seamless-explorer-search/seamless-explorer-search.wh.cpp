@@ -1,12 +1,13 @@
 // ==WindhawkMod==
 // @id              seamless-explorer-search
 // @name            Seamless Explorer Search
-// @description     Start typing in any File Explorer window, or any app's Open or Save window, to search it and every drive with Everything
-// @version         2.1.4
+// @description     File Explorer's search box searches with Everything, plus a quick search pop-up for any folder or Open and Save window
+// @version         2.2.0
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
 // @include         windhawk-mod.exe
+// @include         explorer.exe
 // @architecture    x86-64
 // @compilerOptions -ld2d1 -ldwrite -lwindowscodecs -lole32 -loleaut32 -luuid -lgdi32 -luser32 -lshell32 -lshlwapi -ladvapi32 -ldwmapi -lcomctl32 -luxtheme -lcomdlg32 -limm32 -lshcore
 // @license         MIT
@@ -17,18 +18,24 @@
 /*
 # Seamless Explorer Search
 
-Windows' own search box in File Explorer is slow and its index misses things.
-This mod replaces it. Click into any folder and just start typing: a search box
-drops into the top of that window and fills with matches as you type, straight
-from Everything's index. Files in the folder you are in come first, then
-everything else on your drives.
+Windows' own search in File Explorer is slow and its index misses things. This
+mod hands it to Everything. The box at the top right of every folder now says
+"Search with Everything": click it, or press Ctrl+E, and a search box drops into
+the top of that window and fills with matches as you type, straight from
+Everything's index. Files in the folder you are in come first, then everything
+else on your drives.
 
 ![Seamless Explorer Search settings](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-explorer-search.png)
 
 ## What it does
 
-- Type in a folder's file list and the search box opens with your letters in it.
-  Ctrl+F, Ctrl+E and F3 open it too, in place of the Windows search box.
+- Click File Explorer's search box, or press Ctrl+E, Ctrl+F or F3, and the search
+  opens with Everything. Prefer the built-in search? Pick Windows Search in the
+  settings and the box works the way Windows made it.
+- Typing in a folder still jumps to the first file that starts with that letter,
+  like Windows does. Turn on "Pop-up when you type" if you want typing to search.
+- Ctrl+Shift+F opens the search pop-up anywhere: for the folder you are in, or on
+  its own. Pick another shortcut, or clear it, in the settings.
 - Works in the Open and Save windows of every app too (the one Discord, your
   browser or Notepad shows when you pick a file). Enter on a file picks it,
   Enter on a folder goes there, and in a Save window a file's name is filled
@@ -41,20 +48,24 @@ everything else on your drives.
   Ctrl+Enter shows the item in its folder, selected. Tab opens a small menu:
   open, show in folder, open in a new window, copy the path or copy the file.
 - Esc closes the box and hands the keyboard back to the folder.
-- The address bar, the search box and renaming a file are never touched.
+- The address bar and renaming a file are never touched.
 - Files open as you, without admin rights, even though Windhawk runs elevated.
 - Catppuccin Mocha look with frosted glass and a blue to mauve gradient on the
   selected row. Every option is in the settings window: click the tray icon.
 
-## What's new in 2.1.3
+## What's new in 2.2.0
 
-- Title bar menus (right-click the title bar, or Alt+Space) now really get the same
-  blurred Mocha body as every other menu. They opened pitch black before.
+- File Explorer's search box is back at the top right and says "Search with
+  Everything". It searches with Everything, or with Windows Search if you pick it.
+- Typing in a folder jumps to the first matching file again, the way Windows does.
+  The pop-up opens with Ctrl+Shift+F, or when you type if you turn that on.
+- The pop-up fades and slides in and out, at the speed set for all DavidHiFi apps.
 
 ## What it needs
 
-Everything (voidtools) must be running. Without it, the search box says so
-instead of showing results.
+Everything (voidtools) must be running. Without it, the search pop-up says so
+instead of showing results, and File Explorer's search box quietly goes back to
+Windows Search.
 
 ## Credits
 
@@ -65,12 +76,21 @@ used: search runs on Everything by voidtools (https://www.voidtools.com).
 
 // ==WindhawkModSettings==
 /*
-- typeToSearch: true
-  $name: "Type to search"
-  $description: "Start typing in a folder's file list and the search box opens with what you typed."
-- searchKeys: true
+- searchEngine: "everything"
+  $name: "Search engine"
+  $description: "What File Explorer's own search box uses. Everything is instant. Windows Search is the built-in one."
+  $options:
+  - everything: "Everything"
+  - windows: "Windows Search"
+- typeToSearch: false
+  $name: "Pop-up when you type"
+  $description: "Off, typing in a folder jumps to the first file with that letter, like Windows does. On, typing opens the search pop-up."
+- popupHotkey: "Ctrl+Shift+F"
+  $name: "Pop-up shortcut"
+  $description: "Opens the search pop-up in any folder, or on its own anywhere else. Clear it to turn the shortcut off."
+- searchKeys: false
   $name: "Take over Ctrl+F, Ctrl+E and F3"
-  $description: "These keys open this search box instead of the Windows search box."
+  $description: "These keys open the pop-up straight away. Off, they go to File Explorer's search box, which uses the engine above."
 - sameWindow: true
   $name: "Open folders in the same window"
   $description: "Enter on a folder goes there in the window you searched from. Off, it opens a new window."
@@ -120,8 +140,18 @@ used: search runs on Everything by voidtools (https://www.voidtools.com).
   $name: "Search box opacity"
   $description: "How solid the glass is, 50 to 100 percent. 85 matches File Explorer (Suggested: 85)."
 - animations: true
-  $name: "Animations"
-  $description: "Off, everything appears and closes with no movement."
+  $name: "Open and close animation"
+  $description: "The search pop-up and this settings window fade in and out. Off, they appear and close at once."
+- animationSpeed: "global"
+  $name: "Animation speed"
+  $description: "Follow the speed set for all DavidHiFi apps, or pick one for this mod."
+  $options:
+  - global: "Same as all apps"
+  - veryQuick: "Very quick"
+  - quick: "Quick"
+  - normal: "Normal"
+  - relaxed: "Relaxed"
+  - slow: "Slow"
 - settingsGlass: true
   $name: "Blurred settings window"
   $description: "On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save."
@@ -134,12 +164,12 @@ used: search runs on Everything by voidtools (https://www.voidtools.com).
 */
 // ==/WindhawkModSettings==
 
-// The tool-mod host: this mod never injects into Explorer, it runs in its
-// own windhawk-mod.exe process (WhTool_ModInit below).
+// The tool-mod host: the search pop-up runs in its own windhawk-mod.exe process
+// (WhTool_ModInit below). In explorer.exe only the search-box part runs (namespace inapp).
 #include <windhawk_tool_mod.h>
 
-// Seamless Explorer Search core: a Windhawk tool mod (its own windhawk-mod.exe process, never
-// injected into Explorer). Start typing in a File Explorer window and a search box drops into
+// Seamless Explorer Search core: a Windhawk tool mod (its own windhawk-mod.exe process; in
+// Explorer only the search-box hooks of namespace inapp run). Start typing in a File Explorer window and a search box drops into
 // that window: results come from Everything, this folder first, then everywhere. Enter opens a
 // folder in the same window or a file in its app; Ctrl+Enter shows the item in its folder.
 // The settings window is the appended block (namespace slset).
@@ -164,6 +194,9 @@ used: search runs on Everything by voidtools (https://www.voidtools.com).
 #include <imm.h>
 #include <tlhelp32.h>
 #include <shellscalingapi.h>
+#include <windhawk_utils.h>
+#include <winstring.h>
+#include <UIAutomation.h>
 
 #include <algorithm>
 #include <atomic>
@@ -181,6 +214,29 @@ used: search runs on Everything by voidtools (https://www.voidtools.com).
 #include <vector>
 
 #include <windhawk_tool_mod.h>
+
+// Trace for test runs: both halves (Explorer and the tool) add a line to this file, only when
+// the file is already there. Nothing is written on a normal install.
+static void Trace(const wchar_t* fmt, ...) {
+    static const wchar_t kPath[] = L"C:\\Users\\Public\\ses-trace.log";
+    if (GetFileAttributesW(kPath) == INVALID_FILE_ATTRIBUTES) return;
+    wchar_t line[600];
+    int n = swprintf_s(line, L"%llu %lu ", GetTickCount64(), GetCurrentProcessId());
+    if (n < 0) return;
+    va_list a;
+    va_start(a, fmt);
+    vswprintf_s(line + n, ARRAYSIZE(line) - n - 3, fmt, a);
+    va_end(a);
+    wcscat_s(line, L"\r\n");
+    char u[1800];
+    int len = WideCharToMultiByte(CP_UTF8, 0, line, -1, u, sizeof(u), nullptr, nullptr);
+    if (len <= 1) return;
+    HANDLE f = CreateFileW(kPath, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return;
+    DWORD w = 0;
+    WriteFile(f, u, (DWORD)(len - 1), &w, nullptr);
+    CloseHandle(f);
+}
 
 // Crisp icons (2026-11-26): tray icons are drawn at 4x the size the taskbar shows them and shrunk
 // here with a box filter, so curves and glyph edges are smooth instead of stretched and stepped.
@@ -476,8 +532,10 @@ static HWND DialogNameEdit(HWND top) {
 // ---------------------------------------------------------------------------
 
 struct Settings {
-    bool typeToSearch = true;
-    bool searchKeys = true;
+    int searchEngine = 0;  // 0 = Everything, 1 = Windows Search (File Explorer's own box).
+    bool typeToSearch = false;
+    std::wstring popupHotkey = L"Ctrl+Shift+F";
+    bool searchKeys = false;
     bool sameWindow = true;
     int position = 0;  // 0 = top of the folder, 1 = bottom
     bool hideOnFocusLost = true;
@@ -490,6 +548,7 @@ struct Settings {
     UINT32 accent = 0x89B4FA;
     int popupOpacity = 85;
     bool animations = true;  // Also read by the settings window block.
+    std::wstring animationSpeed = L"global";
     bool settingsTrayIcon = true;
 };
 
@@ -499,7 +558,9 @@ static Settings g_settings;
 
 static void LoadSettings() {
     Settings s;
+    s.searchEngine = _wcsicmp(ReadStr(L"searchEngine").c_str(), L"windows") == 0 ? 1 : 0;
     s.typeToSearch = Wh_GetIntSetting(L"typeToSearch") != 0;
+    s.popupHotkey = ReadStr(L"popupHotkey");
     s.searchKeys = Wh_GetIntSetting(L"searchKeys") != 0;
     s.sameWindow = Wh_GetIntSetting(L"sameWindow") != 0;
     s.position = _wcsicmp(ReadStr(L"position").c_str(), L"bottom") == 0 ? 1 : 0;
@@ -513,6 +574,7 @@ static void LoadSettings() {
     s.accent = ParseColor(ReadStr(L"accentColor"), 0x89B4FA);
     s.popupOpacity = Clamp(Wh_GetIntSetting(L"popupOpacity"), 50, 100);
     s.animations = Wh_GetIntSetting(L"animations") != 0;
+    s.animationSpeed = ReadStr(L"animationSpeed");
     s.settingsTrayIcon = Wh_GetIntSetting(L"settingsTrayIcon") != 0;
     g_settings = s;
 }
@@ -939,7 +1001,7 @@ static bool RevealIn(IWebBrowser2* wb, const std::wstring& full, const std::wstr
 
 constexpr UINT WM_ES_FOLDER = WM_APP + 42;  // To the popup. wParam = open number, lParam = std::wstring*.
 
-enum JobKind { kJobFolder, kJobNavigate, kJobReveal, kJobLaunch, kJobFocus, kJobDialogFile, kJobDialogFolder, kJobDialogPick };
+enum JobKind { kJobFolder, kJobNavigate, kJobReveal, kJobLaunch, kJobFocus, kJobDialogFile, kJobDialogFolder, kJobDialogPick, kJobClickCheck };
 
 struct ExplorerJob {
     int kind;
@@ -949,6 +1011,7 @@ struct ExplorerJob {
     HWND reply;
     HMODULE self;
     HWND view = nullptr;
+    POINT pt = {};
 };
 
 // After the popup hides, Explorer's frame comes forward but keeps the keyboard on itself, not on
@@ -1118,6 +1181,43 @@ static DWORD WINAPI ExplorerJobThread(LPVOID param) {
         case kJobDialogPick:
             ok = RunDialogJob(job);
             break;
+        case kJobClickCheck: {
+            Com<IUIAutomation> uia;
+            if (SUCCEEDED(CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER,
+                                           __uuidof(IUIAutomation), (void**)uia.put())) &&
+                uia) {
+                Com<IUIAutomationElement> el;
+                if (SUCCEEDED(uia->ElementFromPoint(job->pt, el.put())) && el) {
+                    Com<IUIAutomationTreeWalker> walker;
+                    uia->get_RawViewWalker(walker.put());
+                    bool isSearch = false;
+                    Com<IUIAutomationElement> cur = std::move(el);
+                    for (int depth = 0; depth < 6 && cur && !isSearch; ++depth) {
+                        BSTR aid = nullptr;
+                        if (SUCCEEDED(cur->get_CurrentAutomationId(&aid)) && aid) {
+                            if (_wcsicmp(aid, L"FileExplorerSearchBox") == 0) isSearch = true;
+                            SysFreeString(aid);
+                        }
+                        BSTR name = nullptr;
+                        if (!isSearch && SUCCEEDED(cur->get_CurrentName(&name)) && name) {
+                            if (_wcsicmp(name, L"Search with Everything") == 0) isSearch = true;
+                            SysFreeString(name);
+                        }
+                        if (isSearch || !walker) break;
+                        Com<IUIAutomationElement> parent;
+                        if (FAILED(walker->GetParentElement(cur.get(), parent.put()))) break;
+                        cur = std::move(parent);
+                    }
+                    Trace(L"tool: click uia at %d,%d -> isSearch=%d", job->pt.x, job->pt.y, isSearch ? 1 : 0);
+                    if (isSearch && !g_stopping) {
+                        auto* empty = new std::wstring();
+                        if (!PostMessageW(job->reply, WM_APP + 45, (WPARAM)(ULONG_PTR)job->top, (LPARAM)empty))
+                            delete empty;
+                    }
+                }
+            }
+            break;
+        }
     }
     if (SUCCEEDED(co)) CoUninitialize();
     if (!ok && !g_stopping) Wh_Log(L"Couldn't open %s", job->path.c_str());
@@ -1256,6 +1356,10 @@ constexpr UINT kFolderWaitMs = 250, kWatchMs = 250;
 // straight back to its own Explorer window (not a click) takes the keyboard back, at most twice.
 constexpr UINT kLostCheckMs = 60, kRegrabMs = 1000;
 constexpr UINT WM_ES_DIAG = WM_APP + 43;  // To the msg window. wParam = pass reason, lParam = focused HWND.
+constexpr UINT WM_ES_FREE = WM_APP + 44;  // To the msg window: the shortcut, outside any folder.
+constexpr UINT WM_ES_BOX = WM_APP + 45;   // To the msg window. wParam = Explorer window, lParam = new std::wstring.
+constexpr UINT WM_ES_CLICK = WM_APP + 46; // To the msg window. wParam = Explorer window, lParam = MAKELPARAM(x, y).
+constexpr UINT_PTR kTimerAnim = 6;
 constexpr UINT TrayIconId() {
     UINT hash = 2166136261u;
     for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
@@ -1284,6 +1388,7 @@ struct Popup {
     HWND hwnd = nullptr;
     Com<ID2D1HwndRenderTarget> rt;
     bool glass = false;
+    bool wantGlass = false;  // Glass comes on when the open animation ends.
     float radius = 8;  // DWM's corner radius in DIPs, read at each show.
     bool visible = false;
     UINT dpi = 96;
@@ -1317,6 +1422,105 @@ static std::atomic<HWND> g_popupFor{nullptr};  // The Explorer window the visibl
 static std::atomic<bool> g_hookType{true}, g_hookKeys{true}, g_hookForward{true}, g_listaryUp{false};
 static std::atomic<ULONGLONG> g_uiBeat{0};
 static std::atomic<ULONGLONG> g_shownAt{0};  // When the box last opened: the hook reports passed keys for 3 s.
+static std::atomic<UINT> g_hkVk{0}, g_hkMods{0};  // The pop-up shortcut (0: off).
+static ULONGLONG g_hiddenAt;  // When the box last closed.
+// Open and close animation, UI thread only. Direction 1 opens, -1 closes, 0 is still.
+static int g_animDir;
+static ULONGLONG g_animT0;
+static float g_animMs, g_animFrom, g_animAlpha = 1, g_animDy;
+
+// "Ctrl+Shift+F" as the settings window writes it (Set_FormatHotkey). Empty or "None": off.
+static bool HkParse(const std::wstring& text, UINT& mods, UINT& vk) {
+    mods = vk = 0;
+    std::wstring t = Trim(text);
+    if (t.empty() || _wcsicmp(t.c_str(), L"None") == 0) return false;
+    std::vector<std::wstring> parts;
+    size_t start = 0;
+    for (;;) {
+        size_t plus = t.find(L'+', start);
+        if (plus == std::wstring::npos) {
+            parts.push_back(Trim(t.substr(start)));
+            break;
+        }
+        parts.push_back(Trim(t.substr(start, plus - start)));
+        start = plus + 1;
+    }
+    for (size_t i = 0; i + 1 < parts.size(); i++) {
+        PCWSTR m = parts[i].c_str();
+        if (!_wcsicmp(m, L"Ctrl") || !_wcsicmp(m, L"Control")) mods |= MOD_CONTROL;
+        else if (!_wcsicmp(m, L"Alt")) mods |= MOD_ALT;
+        else if (!_wcsicmp(m, L"Shift")) mods |= MOD_SHIFT;
+        else if (!_wcsicmp(m, L"Win")) mods |= MOD_WIN;
+        else return false;
+    }
+    const std::wstring& key = parts.back();
+    if (key.empty()) return false;
+    bool digits = std::all_of(key.begin(), key.end(), [](wchar_t c) { return c >= L'0' && c <= L'9'; });
+    wchar_t c = (wchar_t)towupper(key[0]);
+    if (key.size() == 1 && ((c >= L'A' && c <= L'Z') || (c >= L'0' && c <= L'9'))) {
+        vk = c;
+    } else if (digits) {
+        vk = (UINT)_wtoi(key.c_str());  // Set_FormatHotkey's fallback: the key's number.
+    } else if (c == L'F' && key.size() <= 3 &&
+               std::all_of(key.begin() + 1, key.end(), [](wchar_t d) { return d >= L'0' && d <= L'9'; })) {
+        int n = _wtoi(key.c_str() + 1);
+        if (n >= 1 && n <= 24) vk = VK_F1 + n - 1;
+    } else if (!_wcsicmp(key.c_str(), L"Space")) {
+        vk = VK_SPACE;
+    } else {
+        for (UINT v = 1; v < 255 && !vk; v++) {
+            WCHAR name[64] = {};
+            LONG scan = (LONG)MapVirtualKeyW(v, MAPVK_VK_TO_VSC) << 16;
+            if (scan && GetKeyNameTextW(scan, name, ARRAYSIZE(name)) > 0 && !_wcsicmp(name, key.c_str())) vk = v;
+        }
+    }
+    if (vk >= 256) vk = 0;
+    return vk != 0;
+}
+
+// Duration scale for one of the shared speed levels, 0 for anything else ("global").
+static float SpeedLevelScale(const std::wstring& level) {
+    PCWSTR s = level.c_str();
+    if (!_wcsicmp(s, L"veryQuick")) return 0.5f;
+    if (!_wcsicmp(s, L"quick")) return 0.75f;
+    if (!_wcsicmp(s, L"normal")) return 1.0f;
+    if (!_wcsicmp(s, L"relaxed")) return 1.5f;
+    if (!_wcsicmp(s, L"slow")) return 2.0f;
+    return 0;
+}
+
+// How long the pop-up's animations take, as a scale on 160 ms open and 120 ms close. 0: still.
+// The mod's own speed wins; "Same as all apps" reads HKCU\Software\DavidHiFi\Motion
+// (Enabled 0 turns every animation off; Speed is a level name or a percent, 25 to 400).
+static float MotionScale() {
+    BOOL sys = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &sys, 0);
+    if (!sys || !g_settings.animations) return 0;
+    HKEY key;
+    float scale = 1;
+    bool on = true;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\DavidHiFi\\Motion", 0, KEY_READ, &key) == ERROR_SUCCESS) {
+        DWORD type = 0, v = 1, cb = sizeof(v);
+        if (RegQueryValueExW(key, L"Enabled", nullptr, &type, (BYTE*)&v, &cb) == ERROR_SUCCESS && type == REG_DWORD &&
+            v == 0)
+            on = false;
+        BYTE buf[128] = {};
+        cb = sizeof(buf) - sizeof(wchar_t);
+        if (RegQueryValueExW(key, L"Speed", nullptr, &type, buf, &cb) == ERROR_SUCCESS) {
+            if (type == REG_DWORD && cb >= sizeof(DWORD)) {
+                DWORD pct = *(DWORD*)buf;
+                if (pct >= 25 && pct <= 400) scale = 100.0f / pct;  // 200 percent speed: half the time.
+            } else if (type == REG_SZ) {
+                float lv = SpeedLevelScale((const wchar_t*)buf);
+                if (lv > 0) scale = lv;
+            }
+        }
+        RegCloseKey(key);
+    }
+    if (!on) return 0;
+    float own = SpeedLevelScale(g_settings.animationSpeed);
+    return own > 0 ? own : scale;
+}
 
 // The last few reasons the box closed or a key went past it, for Windhawk's log and for the
 // live test (stored as the mod value "diag"). UI thread only.
@@ -1344,6 +1548,7 @@ static void Diag(const wchar_t* what, HWND h) {
     wchar_t line[256];
     swprintf_s(line, L"%llu %s: %s %s", GetTickCount64(), what, cls, h ? ProcessOf(h).c_str() : L"");
     Wh_Log(L"%s", line);
+    Trace(L"diag %s", line);
     g_diag += line;
     g_diag += L"\n";
     if (g_diag.size() > 3000) g_diag.erase(0, g_diag.size() - 3000);
@@ -1701,6 +1906,7 @@ static void PlacePopup() {
     }
     x = Clamp(x, (int)wa.left, std::max((int)wa.left, (int)wa.right - w));
     y = Clamp(y, (int)wa.top, std::max((int)wa.top, (int)wa.bottom - h));
+    y += (int)std::lround(g_animDy * sc);  // The open and close slide.
     RECT cur;
     GetWindowRect(p.hwnd, &cur);
     if (cur.right - cur.left != w || cur.bottom - cur.top != h || cur.left != x || cur.top != y) {
@@ -1728,6 +1934,100 @@ static void RunSearch() {
     InvalidatePopup();
 }
 
+// ---------------------------------------------------------------------------
+// Open and close animation: a fade plus an 8 DIP slide. DWM glass can't fade, so the box fades
+// as a solid Mocha frame (a layered window) and its glass comes on when the open ends.
+// ---------------------------------------------------------------------------
+
+static void SetLayered(bool on, bool clickThrough) {
+    HWND h = g_pop.hwnd;
+    LONG_PTR ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
+    LONG_PTR want = ex & ~(LONG_PTR)(WS_EX_LAYERED | WS_EX_TRANSPARENT);
+    if (on) want |= WS_EX_LAYERED | (clickThrough ? WS_EX_TRANSPARENT : 0);
+    if (want != ex) SetWindowLongPtrW(h, GWL_EXSTYLE, want);
+}
+
+static void AnimAlpha(float a) {
+    g_animAlpha = std::min(1.0f, std::max(0.0f, a));
+    SetLayeredWindowAttributes(g_pop.hwnd, 0, (BYTE)std::lround(g_animAlpha * 255), LWA_ALPHA);
+    g_animDy = (1 - g_animAlpha) * (g_settings.position == 1 ? 8.0f : -8.0f);
+}
+
+static float EaseOut(float t) { return 1 - (1 - t) * (1 - t) * (1 - t); }
+
+// Drops any animation where it is: the window keeps whatever state the caller sets next.
+static void AnimCancel() {
+    Popup& p = g_pop;
+    if (!p.hwnd) return;
+    KillTimer(p.hwnd, kTimerAnim);
+    bool was = g_animDir != 0;
+    g_animDir = 0;
+    g_animDy = 0;
+    g_animAlpha = 1;
+    if (was) SetLayered(false, false);
+}
+
+// The animation reached its end: open with its glass, or hidden.
+static void AnimStop() {
+    Popup& p = g_pop;
+    int dir = g_animDir;
+    AnimCancel();
+    SetLayered(false, false);
+    if (dir < 0) {
+        ShowWindow(p.hwnd, SW_HIDE);
+    } else if (dir > 0) {
+        p.glass = p.wantGlass && SetGlass(p.hwnd, true, g_settings.popupOpacity);
+        if (!p.glass) SetGlass(p.hwnd, false, 0);
+        PlacePopup();
+        RedrawWindow(p.hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_FRAME);
+    }
+}
+
+static void AnimTick() {
+    if (!g_animDir) {
+        KillTimer(g_pop.hwnd, kTimerAnim);
+        return;
+    }
+    float t = g_animMs > 0 ? (float)(GetTickCount64() - g_animT0) / g_animMs : 1;
+    if (t >= 1) {
+        AnimStop();
+        return;
+    }
+    float to = g_animDir > 0 ? 1.0f : 0.0f;
+    float e = g_animDir > 0 ? EaseOut(t) : t * t * t;
+    AnimAlpha(g_animFrom + (to - g_animFrom) * e);
+    PlacePopup();
+}
+
+// Starts an open (1) or close (-1). False: no animation (off, or nothing to animate); any
+// running one is dropped and the caller shows or hides at once. A re-open during a close
+// carries on from the current opacity.
+static bool AnimStart(int dir) {
+    Popup& p = g_pop;
+    bool running = g_animDir != 0;
+    float from = running ? g_animAlpha : (dir > 0 ? 0.0f : 1.0f);
+    float scale = MotionScale();
+    bool shown = IsWindowVisible(p.hwnd) != FALSE;
+    if (scale <= 0 || (dir > 0 && shown && !running) || (dir < 0 && !shown)) {
+        AnimCancel();
+        return false;
+    }
+    KillTimer(p.hwnd, kTimerAnim);
+    if (p.glass) {
+        SetGlass(p.hwnd, false, 0);
+        p.glass = false;
+    }
+    SetLayered(true, dir < 0);
+    g_animDir = dir;
+    g_animFrom = from;
+    g_animT0 = GetTickCount64();
+    float left = dir > 0 ? 1 - from : from;
+    g_animMs = (dir > 0 ? 160.0f : 120.0f) * scale * std::max(left, 0.05f);
+    AnimAlpha(from);
+    SetTimer(p.hwnd, kTimerAnim, 10, nullptr);
+    return true;
+}
+
 static void ResetCaret() {
     g_pop.caretOn = true;
     UINT blink = GetCaretBlinkTime();
@@ -1750,9 +2050,10 @@ static void BringPopupForward() {
 }
 
 // restoreFocus: hand the keyboard back to the Explorer window it came from.
-static void HidePopup(bool restoreFocus) {
+static void HidePopup(bool restoreFocus, bool animate = true) {
     Popup& p = g_pop;
     if (!p.hwnd || !p.visible) return;
+    Trace(L"tool: hide, restore=%d, %llu ms after show", restoreFocus ? 1 : 0, GetTickCount64() - p.shownAt);
     p.visible = false;  // First: hiding deactivates, and WM_ACTIVATE comes back here.
     g_popupFor = nullptr;
     p.gen++;
@@ -1764,7 +2065,14 @@ static void HidePopup(bool restoreFocus) {
     // Hidden while it had the keyboard: Windows would activate the Explorer frame with no focused
     // child, and typing then went nowhere (take 8). Hand it back the way Esc does.
     if (GetForegroundWindow() == p.hwnd) restoreFocus = true;
-    ShowWindow(p.hwnd, SW_HIDE);
+    g_hiddenAt = GetTickCount64();
+    if (animate && AnimStart(-1)) {
+        p.visible = true;  // One last frame, solid now that the glass is off.
+        DrawPopup();
+        p.visible = false;
+    } else {
+        ShowWindow(p.hwnd, SW_HIDE);
+    }
     p.hover = -1;
     if (restoreFocus && p.target.top && IsWindow(p.target.top) && !IsIconic(p.target.top)) {
         BringForward(p.target.top);
@@ -1817,14 +2125,22 @@ static void ShowFor(const Target& t, wchar_t ch) {
         p.folderPending = true;
         SetTimer(p.hwnd, kTimerFolder, kFolderWaitMs, nullptr);
     }
-    p.glass = TransparencyOn() && SetGlass(p.hwnd, true, g_settings.popupOpacity);
-    if (!p.glass) SetGlass(p.hwnd, false, 0);
+    p.wantGlass = TransparencyOn();
+    if (!AnimStart(1)) {
+        p.glass = p.wantGlass && SetGlass(p.hwnd, true, g_settings.popupOpacity);
+        if (!p.glass) SetGlass(p.hwnd, false, 0);
+    }
     p.radius = WindowCornerRadiusDip();
     PlacePopup();
     p.visible = true;
     g_popupFor = t.top;
-    ShowWindow(p.hwnd, SW_SHOW);
+    BOOL shownResult = ShowWindow(p.hwnd, SW_SHOW);
+    Trace(L"tool: ShowWindow popup=%p wasVisible=%d nowVisible=%d style=%08X exstyle=%08X", p.hwnd,
+          shownResult ? 1 : 0, IsWindowVisible(p.hwnd) ? 1 : 0, (unsigned)GetWindowLongPtrW(p.hwnd, GWL_STYLE),
+          (unsigned)GetWindowLongPtrW(p.hwnd, GWL_EXSTYLE));
     BringPopupForward();
+    Trace(L"tool: after foreground, popupVisible=%d foreground=%p popup=%p", IsWindowVisible(p.hwnd) ? 1 : 0,
+          GetForegroundWindow(), p.hwnd);
     ResetCaret();
     SetTimer(p.hwnd, kTimerWatch, kWatchMs, nullptr);
     StartFirstSearch();
@@ -2029,6 +2345,10 @@ static LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (r->gen != p.gen || !p.visible) return 0;  // An older search.
             p.waiting = false;
             p.status = r->status;
+            Trace(L"tool: results query='%s' status=%d count=%llu", p.query.c_str(), p.status,
+                  (unsigned long long)r->items.size());
+            for (size_t i = 0; i < r->items.size() && i < 10; ++i)
+                Trace(L"tool: result %s\\%s", r->items[i].dir.c_str(), r->items[i].name.c_str());
             SetResults(std::move(r->items));
             PlacePopup();
             InvalidatePopup();
@@ -2072,6 +2392,8 @@ static LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             PlacePopup();
             return 0;
         case WM_ACTIVATE:
+            Trace(L"tool: pop-up %s, visible=%d", LOWORD(wp) == WA_INACTIVE ? L"lost focus" : L"got focus",
+                  p.visible ? 1 : 0);
             if (LOWORD(wp) == WA_INACTIVE) {
                 // Hiding waits a moment: right after the box opened, the keyboard was seen going
                 // straight back to the Explorer window (live test, 2026-11-13).
@@ -2085,6 +2407,10 @@ static LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             return 0;
         case WM_TIMER:
+            if (wp == kTimerAnim) {
+                AnimTick();
+                return 0;
+            }
             if (wp == kTimerCaret) {
                 p.caretOn = !p.caretOn;
                 InvalidatePopup();
@@ -2288,6 +2614,30 @@ static LRESULT CALLBACK ExplorerKeyProc(int code, WPARAM wp, LPARAM lp) {
         if (msgWnd && GetTickCount64() - g_shownAt.load() < 3000) PostMessageW(msgWnd, WM_ES_DIAG, g_listaryUp ? 1 : 2, 0);
         return CallNextHookEx(nullptr, code, wp, lp);
     }
+    // The pop-up shortcut: for the folder or Open and Save window in front, else on its own.
+    // Pressed while the pop-up is in front, it closes it.
+    if (UINT hv = g_hkVk.load(); hv && vk == hv) {
+        UINT mods = (GetAsyncKeyState(VK_CONTROL) < 0 ? MOD_CONTROL : 0) | (GetAsyncKeyState(VK_MENU) < 0 ? MOD_ALT : 0) |
+                    (GetAsyncKeyState(VK_SHIFT) < 0 ? MOD_SHIFT : 0) |
+                    (GetAsyncKeyState(VK_LWIN) < 0 || GetAsyncKeyState(VK_RWIN) < 0 ? MOD_WIN : 0);
+        if (mods == g_hkMods.load()) {
+            HWND front = GetForegroundWindow();
+            if (front && front == g_pop.hwnd) {
+                PostMessageW(msgWnd, WM_ES_KEY, VK_ESCAPE, 0);
+            } else if (front && (ClassIs(front, L"CabinetWClass") || IsFileDialog(front))) {
+                GUITHREADINFO gi{};
+                gi.cbSize = sizeof(gi);
+                HWND focus = GetGUIThreadInfo(GetWindowThreadProcessId(front, nullptr), &gi) && gi.hwndFocus
+                                 ? gi.hwndFocus
+                                 : front;
+                PostMessageW(msgWnd, WM_ES_TYPE, 0, (LPARAM)focus);
+            } else {
+                PostMessageW(msgWnd, WM_ES_FREE, 0, 0);
+            }
+            g_eaten[vk] = true;
+            return 1;
+        }
+    }
     HWND fg = GetForegroundWindow();
     bool dialog = !ClassIs(fg, L"CabinetWClass");
     if (dialog && !IsFileDialog(fg)) return CallNextHookEx(nullptr, code, wp, lp);
@@ -2315,7 +2665,7 @@ static LRESULT CALLBACK ExplorerKeyProc(int code, WPARAM wp, LPARAM lp) {
             return 1;
         }
     }
-    if (!g_hookType || !inView || ctrl) {
+    if (!inView || ctrl) {
         if (!inView && !ctrl && GetTickCount64() - g_shownAt.load() < 3000) PostMessageW(msgWnd, WM_ES_DIAG, 3, (LPARAM)focus);
         return CallNextHookEx(nullptr, code, wp, lp);
     }
@@ -2328,6 +2678,10 @@ static LRESULT CALLBACK ExplorerKeyProc(int code, WPARAM wp, LPARAM lp) {
         PostMessageW(msgWnd, WM_ES_KEY, vk, 0);
         return 1;
     }
+
+    // Pop-up when you type is off: the key goes to the folder, which jumps to the first file
+    // starting with that letter, the way Windows does.
+    if (!g_hookType) return CallNextHookEx(nullptr, code, wp, lp);
 
     // Only a key that types one visible character opens the search. Flag 4 keeps a
     // pending accent key in Explorer's layout state untouched.
@@ -2343,16 +2697,45 @@ static LRESULT CALLBACK ExplorerKeyProc(int code, WPARAM wp, LPARAM lp) {
     return 1;
 }
 
+static HHOOK g_mouseHook;
+static std::atomic<bool> g_hookMouse{true};
+
+static LRESULT CALLBACK ExplorerMouseProc(int code, WPARAM wp, LPARAM lp) {
+    if (code == HC_ACTION && wp == WM_LBUTTONDOWN && g_hookMouse.load()) {
+        HWND msgWnd = g_hookMsg.load();
+        if (msgWnd) {
+            const MSLLHOOKSTRUCT* ms = (const MSLLHOOKSTRUCT*)lp;
+            HWND w = WindowFromPoint(ms->pt);
+            HWND top = w ? GetAncestor(w, GA_ROOT) : nullptr;
+            if (top && ClassIs(top, L"CabinetWClass")) {
+                RECT wr{};
+                if (GetWindowRect(top, &wr) && ms->pt.y >= wr.top && ms->pt.y < wr.top + 260) {
+                    PostMessageW(msgWnd, WM_ES_CLICK, (WPARAM)top, MAKELPARAM(ms->pt.x, ms->pt.y));
+                }
+            }
+        }
+    }
+    return CallNextHookEx(nullptr, code, wp, lp);
+}
+
 static DWORD WINAPI HookThread(LPVOID ready) {
     MSG m;
     PeekMessageW(&m, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
     memset(g_eaten, 0, sizeof(g_eaten));
-    g_hook = SetWindowsHookExW(WH_KEYBOARD_LL, ExplorerKeyProc, (HINSTANCE)windhawk_tool_mod::GetCurrentModuleHandle(), 0);
+    HINSTANCE inst = (HINSTANCE)windhawk_tool_mod::GetCurrentModuleHandle();
+    g_hook = SetWindowsHookExW(WH_KEYBOARD_LL, ExplorerKeyProc, inst, 0);
+    g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, ExplorerMouseProc, inst, 0);
     SetEvent((HANDLE)ready);
-    if (g_hook) {
+    if (g_hook || g_mouseHook) {
         while (GetMessageW(&m, nullptr, 0, 0) > 0) DispatchMessageW(&m);
-        UnhookWindowsHookEx(g_hook);
-        g_hook = nullptr;
+        if (g_mouseHook) {
+            UnhookWindowsHookEx(g_mouseHook);
+            g_mouseHook = nullptr;
+        }
+        if (g_hook) {
+            UnhookWindowsHookEx(g_hook);
+            g_hook = nullptr;
+        }
     }
     return 0;
 }
@@ -2382,7 +2765,12 @@ static void ApplyHook() {
     g_hookType = s.typeToSearch;
     g_hookKeys = s.searchKeys;
     g_hookForward = s.hideOnFocusLost;
-    if (!g_paused && (s.typeToSearch || s.searchKeys)) StartHook();
+    g_hookMouse = (s.searchEngine == 0);
+    UINT hkMods = 0, hkVk = 0;
+    HkParse(s.popupHotkey, hkMods, hkVk);
+    g_hkMods = hkMods;
+    g_hkVk = hkVk;
+    if (!g_paused && (s.typeToSearch || s.searchKeys || hkVk || s.searchEngine == 0)) StartHook();
     else StopHook();
 }
 
@@ -2498,7 +2886,7 @@ static void UpdateTray(bool add) {
     nid.hIcon = icon ? icon : LoadIconW(nullptr, IDI_APPLICATION);
     PCWSTR tip = g_paused      ? L"Seamless Explorer Search: paused"
                  : g_listaryUp ? L"Seamless Explorer Search: resting while Listary runs"
-                               : L"Seamless Explorer Search: type in a folder to search";
+                               : L"Seamless Explorer Search: search File Explorer with Everything";
     wcsncpy_s(nid.szTip, tip, _TRUNCATE);
     if (!g_trayAdded || add) {
         if (g_trayAdded) Shell_NotifyIconW(NIM_DELETE, &nid);
@@ -2527,6 +2915,39 @@ static void ShowTrayMenu(POINT pt) {
     }
 }
 
+// File Explorer's own search box was clicked or typed in (namespace inapp, inside Explorer,
+// sends it here): the pop-up opens for that window instead, with what was typed.
+static void OnBoxOpen(HWND top, const std::wstring& text) {
+    Trace(L"tool: box open %p text=%u chars, visible=%d, %llu ms since hide", top, (unsigned)text.size(),
+          g_pop.visible ? 1 : 0, GetTickCount64() - g_hiddenAt);
+    if (!top || !IsWindow(top) || !ClassIs(top, L"CabinetWClass")) {
+        Trace(L"tool: box open dropped, not an Explorer window");
+        return;
+    }
+    // The box can get the keyboard back as the pop-up closes: that is not a new click.
+    if (text.empty() && GetTickCount64() - g_hiddenAt < 700) {
+        Trace(L"tool: box open dropped, just hidden");
+        return;
+    }
+    Popup& p = g_pop;
+    if (p.visible && p.target.top == top) {
+        BringPopupForward();
+    } else {
+        Target t;
+        t.top = top;
+        t.view = FindShownView(top);
+        if (!t.view) {
+            Trace(L"tool: box open dropped, no file view found");
+            return;
+        }
+        t.tab = SelfOrAncestor(t.view, L"ShellTabWindowClass", top);
+        ShowFor(t, 0);
+        Trace(L"tool: shown, visible=%d, foreground is pop-up=%d", p.visible ? 1 : 0,
+              GetForegroundWindow() == p.hwnd ? 1 : 0);
+    }
+    if (!text.empty()) EditQuery(text);
+}
+
 // ---------------------------------------------------------------------------
 // UI thread
 // ---------------------------------------------------------------------------
@@ -2546,6 +2967,22 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (!cds || !cds->lpData || cds->cbData < sizeof(wchar_t)) return FALSE;
             const wchar_t* d = (const wchar_t*)cds->lpData;
             int chars = (int)(cds->cbData / sizeof(wchar_t));
+            if (cds->dwData == 0x00424C53 && cds->cbData >= sizeof(UINT64)) {  // 'SLB': File Explorer's box
+                // Taken only while Everything is the engine: FALSE leaves the box to Windows.
+                Trace(L"tool: box message, paused=%d, engine=%d", g_paused ? 1 : 0, g_settings.searchEngine);
+                if (g_paused || g_settings.searchEngine != 0) return FALSE;
+                UINT64 top = 0;
+                memcpy(&top, cds->lpData, sizeof(top));
+                size_t n = (cds->cbData - sizeof(UINT64)) / sizeof(wchar_t);
+                auto* typed = new std::wstring((const wchar_t*)((const BYTE*)cds->lpData + sizeof(UINT64)), n);
+                size_t z = typed->find(L'\0');
+                if (z != std::wstring::npos) typed->resize(z);
+                if (!PostMessageW(hwnd, WM_ES_BOX, (WPARAM)(ULONG_PTR)top, (LPARAM)typed)) {
+                    delete typed;
+                    return FALSE;
+                }
+                return TRUE;
+            }
             if (cds->dwData == 0x00514C53) {  // 'SLQ'
                 std::wstring q(d, chars);
                 size_t z = q.find(L'\0');
@@ -2565,6 +3002,36 @@ static LRESULT CALLBACK MsgWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             return FALSE;
         }
+        case WM_ES_BOX: {
+            auto* typed = (std::wstring*)lp;
+            if (!g_paused && g_settings.searchEngine == 0) OnBoxOpen((HWND)wp, *typed);
+            delete typed;
+            return 0;
+        }
+        case WM_ES_CLICK: {
+            if (!g_paused && g_settings.searchEngine == 0 && FindEverything()) {
+                HWND top = (HWND)wp;
+                POINT pt = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+                Trace(L"tool: click check %p at %d,%d", top, pt.x, pt.y);
+                HMODULE self = nullptr;
+                if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCWSTR)&ExplorerJobThread, &self)) {
+                    auto* job = new ExplorerJob{kJobClickCheck, top, nullptr, L"", L"", 0, hwnd, self, nullptr, pt};
+                    g_jobs++;
+                    HANDLE th = CreateThread(nullptr, 0, ExplorerJobThread, job, 0, nullptr);
+                    if (th) {
+                        CloseHandle(th);
+                    } else {
+                        g_jobs--;
+                        delete job;
+                        FreeLibrary(self);
+                    }
+                }
+            }
+            return 0;
+        }
+        case WM_ES_FREE:
+            if (!g_paused) ShowFor(Target{}, 0);
+            return 0;
         case WM_ES_TYPE:
             if (!g_paused) OnExplorerType((HWND)lp, (wchar_t)wp);
             return 0;
@@ -2656,6 +3123,7 @@ static DWORD WINAPI UiThread(LPVOID) {
         // Probes and scripts run at a lower integrity than this service child; let their
         // WM_COPYDATA through (the automation channel in MsgWndProc).
         ChangeWindowMessageFilterEx(g_msgWnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr);
+        ChangeWindowMessageFilterEx(g_msgWnd, WM_ES_CLICK, MSGFLT_ALLOW, nullptr);
         int corner = 2;  // Round.
         DwmSetWindowAttribute(g_pop.hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &corner, sizeof(corner));
         COLORREF none = 0xFFFFFFFE;  // DWMWA_COLOR_NONE: the popup draws its own edge.
@@ -2685,6 +3153,8 @@ static DWORD WINAPI UiThread(LPVOID) {
     if (g_pop.hwnd) {
         while (PeekMessageW(&msg, g_pop.hwnd, WM_LS_RESULTS, WM_LS_RESULTS, PM_REMOVE)) delete (EvReply*)msg.lParam;
         while (PeekMessageW(&msg, g_pop.hwnd, WM_ES_FOLDER, WM_ES_FOLDER, PM_REMOVE)) delete (std::wstring*)msg.lParam;
+        if (g_msgWnd)
+            while (PeekMessageW(&msg, g_msgWnd, WM_ES_BOX, WM_ES_BOX, PM_REMOVE)) delete (std::wstring*)msg.lParam;
     }
     if (g_trayAdded) {
         NOTIFYICONDATAW nid{};
@@ -3637,6 +4107,287 @@ void WhTool_ModUninit() {
 }
 
 // ===========================================================================
+// Inside File Explorer: its own search box
+// ===========================================================================
+// This file also loads into explorer.exe (@include explorer.exe). There the tool-mod header runs
+// only the WhToolLauncher_* functions below, which never start a second tool. They hook File
+// Explorer's search box (FileExplorerExtensions.dll, WinUI 3): it reads "Search with
+// Everything", and a click or typing in it opens the running tool's search pop-up. With Windows
+// Search picked, or Everything or the tool not running, the box stays as Windows made it.
+namespace inapp {
+
+using CreateStr_t = HRESULT(WINAPI*)(PCNZWCH, UINT32, HSTRING*);
+using DeleteStr_t = HRESULT(WINAPI*)(HSTRING);
+using RawBuf_t = PCWSTR(WINAPI*)(HSTRING, UINT32*);
+static CreateStr_t g_createStr;
+static DeleteStr_t g_deleteStr;
+static RawBuf_t g_rawBuf;
+
+static bool g_inExplorer;
+static std::atomic<bool> g_everything{true};  // The engine setting is Everything.
+static std::atomic<bool> g_unloading{false};
+static LONG g_extStarted;
+static HANDLE g_extThread;
+
+static bool IsExplorerProcess() {
+    WCHAR path[MAX_PATH];
+    DWORD n = GetModuleFileNameW(nullptr, path, MAX_PATH);
+    if (!n || n >= MAX_PATH) return false;
+    PCWSTR name = wcsrchr(path, L'\\');
+    return _wcsicmp(name ? name + 1 : path, L"explorer.exe") == 0;
+}
+
+static void ReadEngine() { g_everything = _wcsicmp(ReadStr(L"searchEngine").c_str(), L"windows") != 0; }
+
+// The tool's message window, only while Everything is the engine and Everything runs.
+static HWND ToolWindow() {
+    if (!g_everything || !FindEverything()) return nullptr;
+    return FindWindowW(kMsgClass, nullptr);
+}
+
+// The File Explorer window the box belongs to: the focused window's root on this thread.
+static HWND ThisWindow() {
+    HWND f = GetFocus();
+    HWND top = f ? GetAncestor(f, GA_ROOT) : nullptr;
+    if (top && ClassIs(top, L"CabinetWClass")) return top;
+    HWND fg = GetForegroundWindow();
+    DWORD pid = 0;
+    GetWindowThreadProcessId(fg, &pid);
+    return pid == GetCurrentProcessId() && ClassIs(fg, L"CabinetWClass") ? fg : nullptr;
+}
+
+// 'SLB' to the tool: [UINT64 window][text][0]. True when the tool took it.
+static bool SendToTool(HWND tool, HWND top, const std::wstring& typed) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(tool, &pid);
+    if (pid) AllowSetForegroundWindow(pid);  // The pop-up takes the keyboard from Explorer.
+    std::vector<BYTE> buf(sizeof(UINT64) + (typed.size() + 1) * sizeof(wchar_t));
+    UINT64 h = (UINT64)(ULONG_PTR)top;
+    memcpy(buf.data(), &h, sizeof(h));
+    memcpy(buf.data() + sizeof(h), typed.c_str(), (typed.size() + 1) * sizeof(wchar_t));
+    COPYDATASTRUCT cds{0x00424C53, (DWORD)buf.size(), buf.data()};
+    DWORD_PTR res = 0;
+    return SendMessageTimeoutW(tool, WM_COPYDATA, 0, (LPARAM)&cds, SMTO_ABORTIFHUNG, 200, &res) && res == TRUE;
+}
+
+// The box hears about focus a moment after the click or key that moved it, by which time a
+// quick click has let go. So each window thread notes its last click (and where) and its last
+// Ctrl+E, Ctrl+F or F3, and the box takes either for half a second.
+static thread_local HHOOK t_inputHook;
+static thread_local ULONGLONG t_downAt, t_keyAt;
+static thread_local POINT t_downPt;
+static std::mutex g_inputHooksLock;
+static std::vector<std::pair<HHOOK, DWORD>> g_inputHooks;  // Hook, its thread.
+
+static LRESULT CALLBACK InputProc(int code, WPARAM wp, LPARAM lp) {
+    if (code == HC_ACTION && wp == PM_REMOVE) {
+        const MSG* m = (const MSG*)lp;
+        if (m->message == WM_LBUTTONDOWN || m->message == 0x0246 /* WM_POINTERDOWN */) {
+            t_downAt = GetTickCount64();
+            t_downPt = m->pt;
+        } else if (m->message == WM_KEYDOWN &&
+                   (m->wParam == VK_F3 || ((m->wParam == 'E' || m->wParam == 'F') && GetKeyState(VK_CONTROL) < 0))) {
+            t_keyAt = GetTickCount64();
+        }
+    }
+    return CallNextHookEx(nullptr, code, wp, lp);
+}
+
+static void WatchThreadInput() {
+    if (t_inputHook || g_unloading) return;
+    t_inputHook = SetWindowsHookExW(WH_GETMESSAGE, InputProc, nullptr, GetCurrentThreadId());
+    if (!t_inputHook) return;
+    std::lock_guard<std::mutex> g(g_inputHooksLock);
+    g_inputHooks.push_back({t_inputHook, GetCurrentThreadId()});
+}
+
+// A click on the focused part of the window, or a search key, in the last half second.
+static bool AskedForBox() {
+    if (GetAsyncKeyState(VK_LBUTTON) < 0 || GetAsyncKeyState(VK_CONTROL) < 0 || GetAsyncKeyState(VK_F3) < 0) return true;
+    ULONGLONG now = GetTickCount64();
+    if (t_keyAt && now - t_keyAt < 500) return true;
+    if (!t_downAt || now - t_downAt >= 500) return false;
+    HWND f = GetFocus();
+    RECT r{};
+    return f && GetWindowRect(f, &r) && PtInRect(&r, t_downPt);
+}
+
+// winrt::hstring is passed as a pointer to its HSTRING (it has a copy constructor), and a
+// by-value one belongs to the callee, which frees it.
+using PlaceholderText_t = void(void*, HSTRING*, bool);  // x64: one calling convention.
+static PlaceholderText_t* PlaceholderText_orig;
+static void PlaceholderText_hook(void* self, HSTRING* text, bool flag) {
+    WatchThreadInput();  // The box is set up on its window's thread.
+    if (text && ToolWindow()) {
+        static const WCHAR kText[] = L"Search with Everything";
+        HSTRING mine = nullptr;
+        if (SUCCEEDED(g_createStr(kText, ARRAYSIZE(kText) - 1, &mine))) {
+            if (*text) g_deleteStr(*text);
+            *text = mine;
+        }
+    }
+    PlaceholderText_orig(self, text, flag);
+}
+
+using GotFocus_t = void(void*, void*, void*);
+static GotFocus_t* GotFocus_orig;
+static void GotFocus_hook(void* self, void* sender, void* args) {
+    GotFocus_orig(self, sender, args);
+    // Only a click, Ctrl+E or Ctrl+F, or F3: the box also gets the keyboard back by itself
+    // when its window is activated again.
+    WatchThreadInput();
+    ULONGLONG now = GetTickCount64();
+    bool asked = AskedForBox();
+    Trace(L"explorer: box focus, asked=%d, button=%d, key %llu ms ago, click %llu ms ago, hook=%d", asked ? 1 : 0,
+          GetAsyncKeyState(VK_LBUTTON) < 0 ? 1 : 0, t_keyAt ? now - t_keyAt : 0, t_downAt ? now - t_downAt : 0,
+          t_inputHook ? 1 : 0);
+    if (!asked) return;
+    HWND tool = ToolWindow();
+    HWND top = tool ? ThisWindow() : nullptr;
+    bool took = top && SendToTool(tool, top, L"");
+    Trace(L"explorer: tool=%p window=%p took=%d", tool, top, took ? 1 : 0);
+}
+
+// Newer builds tell the box it has the keyboard through SetFocusState(true) and may never call
+// the handler above, so both lead to the same place.
+using SetFocusState_t = void(void*, bool);
+static SetFocusState_t* SetFocusState_orig;
+static void SetFocusState_hook(void* self, bool focused) {
+    SetFocusState_orig(self, focused);
+    WatchThreadInput();
+    if (!focused) return;
+    ULONGLONG now = GetTickCount64();
+    bool asked = AskedForBox();
+    Trace(L"explorer: box focus state, asked=%d, button=%d, key %llu ms ago, click %llu ms ago", asked ? 1 : 0,
+          GetAsyncKeyState(VK_LBUTTON) < 0 ? 1 : 0, t_keyAt ? now - t_keyAt : 0, t_downAt ? now - t_downAt : 0);
+    if (!asked) return;
+    HWND tool = ToolWindow();
+    HWND top = tool ? ThisWindow() : nullptr;
+    bool took = top && SendToTool(tool, top, L"");
+    Trace(L"explorer: tool=%p window=%p took=%d", tool, top, took ? 1 : 0);
+}
+
+using SearchText_t = void(void*, HSTRING*);
+static SearchText_t* SearchText_orig;
+static void SearchText_hook(void* self, HSTRING* text) {
+    UINT32 len = 0;
+    PCWSTR raw = text && *text ? g_rawBuf(*text, &len) : nullptr;
+    if (raw && len) {
+        HWND tool = ToolWindow();
+        HWND top = tool ? ThisWindow() : nullptr;
+        bool took = top && SendToTool(tool, top, std::wstring(raw, len));
+        Trace(L"explorer: box text %u chars, tool=%p window=%p took=%d", len, tool, top, took ? 1 : 0);
+        if (took) {
+            HSTRING none = nullptr;  // The text went to the pop-up: Windows Search never starts.
+            SearchText_orig(self, &none);
+            return;
+        }
+    }
+    SearchText_orig(self, text);
+}
+
+static bool HookExtensions(HMODULE mod) {
+#define SBVM L"public: void __cdecl winrt::FileExplorerExtensions::implementation::SearchBoxControlVM::"
+    WindhawkUtils::SYMBOL_HOOK hooks[] = {
+        {{SBVM L"PlaceholderText(struct winrt::hstring,bool)"}, &PlaceholderText_orig, PlaceholderText_hook, true},
+        {{SBVM L"OnAutoSuggestBoxGotFocus(struct winrt::Windows::Foundation::IInspectable const &,struct "
+               L"winrt::Microsoft::UI::Xaml::RoutedEventArgs const &)"},
+         &GotFocus_orig, GotFocus_hook, true},
+        {{SBVM L"SearchText(struct winrt::hstring const &)"}, &SearchText_orig, SearchText_hook, true},
+        {{SBVM L"SetFocusState(bool)"}, &SetFocusState_orig, SetFocusState_hook, true},
+    };
+#undef SBVM
+    bool ok = WindhawkUtils::HookSymbols(mod, hooks, ARRAYSIZE(hooks));
+    Wh_Log(L"Search box hooks:%s%s%s%s%s", PlaceholderText_orig ? L" placeholder" : L"", GotFocus_orig ? L" focus" : L"",
+           SetFocusState_orig ? L" focus-state" : L"", SearchText_orig ? L" text" : L"", ok ? L"" : L" (symbols failed)");
+    Trace(L"explorer: hooks placeholder=%d focus=%d focus-state=%d text=%d ok=%d", PlaceholderText_orig ? 1 : 0,
+          GotFocus_orig ? 1 : 0, SetFocusState_orig ? 1 : 0, SearchText_orig ? 1 : 0, ok ? 1 : 0);
+    return ok;
+}
+
+static DWORD WINAPI ExtHookThread(LPVOID mod) {
+    if (!g_unloading && HookExtensions((HMODULE)mod) && !g_unloading) Wh_ApplyHookOperations();
+    return 0;
+}
+
+using LoadLibraryExW_t = decltype(LoadLibraryExW);
+static LoadLibraryExW_t* LoadLibraryExW_orig;
+static HMODULE WINAPI LoadLibraryExW_hook(LPCWSTR name, HANDLE file, DWORD flags) {
+    HMODULE m = LoadLibraryExW_orig(name, file, flags);
+    if (m && name && !(flags & (LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE | LOAD_LIBRARY_AS_IMAGE_RESOURCE))) {
+        PCWSTR base = wcsrchr(name, L'\\');
+        base = base ? base + 1 : name;
+        if (_wcsicmp(base, L"FileExplorerExtensions.dll") == 0 && !g_unloading &&
+            InterlockedCompareExchange(&g_extStarted, 1, 0) == 0)
+            g_extThread = CreateThread(nullptr, 0, ExtHookThread, m, 0, nullptr);
+    }
+    return m;
+}
+
+static BOOL Init() {
+    HMODULE combase = GetModuleHandleW(L"combase.dll");
+    if (!combase) combase = LoadLibraryExW(L"combase.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (combase) {
+        g_createStr = (CreateStr_t)(void*)GetProcAddress(combase, "WindowsCreateString");
+        g_deleteStr = (DeleteStr_t)(void*)GetProcAddress(combase, "WindowsDeleteString");
+        g_rawBuf = (RawBuf_t)(void*)GetProcAddress(combase, "WindowsGetStringRawBuffer");
+    }
+    if (!g_createStr || !g_deleteStr || !g_rawBuf) {
+        Wh_Log(L"No string functions: File Explorer's search box is left alone");
+        return FALSE;
+    }
+    ReadEngine();
+    if (HMODULE ext = GetModuleHandleW(L"FileExplorerExtensions.dll")) {
+        g_extStarted = 1;
+        HookExtensions(ext);
+    } else {
+        HMODULE kb = GetModuleHandleW(L"kernelbase.dll");
+        auto* load = kb ? (LoadLibraryExW_t*)(void*)GetProcAddress(kb, "LoadLibraryExW") : nullptr;
+        if (load) WindhawkUtils::SetFunctionHook(load, LoadLibraryExW_hook, &LoadLibraryExW_orig);
+    }
+    return TRUE;
+}
+
+static void BeforeUninit() {
+    g_unloading = true;
+    {
+        std::lock_guard<std::mutex> g(g_inputHooksLock);
+        // A closed window's hook went with its thread, and its handle may be reused.
+        for (auto& [h, tid] : g_inputHooks) {
+            HANDLE th = OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, tid);
+            DWORD code = 0;
+            if (th && GetExitCodeThread(th, &code) && code == STILL_ACTIVE) UnhookWindowsHookEx(h);
+            if (th) CloseHandle(th);
+        }
+        g_inputHooks.clear();
+    }
+    if (g_extThread) {
+        WaitForSingleObject(g_extThread, 30000);
+        CloseHandle(g_extThread);
+        g_extThread = nullptr;
+    }
+}
+
+}  // namespace inapp
+
+BOOL WhToolLauncher_ModInit(BOOL* bLaunch) {
+    if (!inapp::IsExplorerProcess()) return TRUE;  // windhawk-mod.exe: it starts the tool as before.
+    inapp::g_inExplorer = true;
+    *bLaunch = FALSE;
+    return inapp::Init();
+}
+
+void WhToolLauncher_ModBeforeUninit() {
+    if (inapp::g_inExplorer) inapp::BeforeUninit();
+}
+
+void WhToolLauncher_ModSettingsChanged(BOOL* bReload) {
+    if (!inapp::g_inExplorer) return;
+    *bReload = FALSE;
+    inapp::ReadEngine();
+}
+
+// ===========================================================================
 // Settings window: the Seamless Launchpad settings GUI, the standard for every
 // DavidHiFi mod. Generated by work\2026-11-12-listary-port\gen.py.
 // ===========================================================================
@@ -3807,8 +4558,10 @@ struct SetField {
 static std::vector<SetField> Set_MakeFields() {
     using K = SetField;
     return {
-{K::Check, L"typeToSearch", L"Type to search", L"Start typing in a folder's file list and the search box opens with what you typed.", L"1", {}, 0, 100, 0, L"In Explorer windows"},
-{K::Check, L"searchKeys", L"Take over Ctrl+F, Ctrl+E and F3", L"These keys open this search box instead of the Windows search box.", L"1", {}, 0, 100, 0, L"In Explorer windows"},
+{K::Choice, L"searchEngine", L"Search engine", L"What File Explorer's own search box uses. Everything is instant. Windows Search is the built-in one.", L"everything", {{L"everything", L"Everything"}, {L"windows", L"Windows Search"}}, 0, 100, 0, L"Search box"},
+{K::Check, L"typeToSearch", L"Pop-up when you type", L"Off, typing in a folder jumps to the first file with that letter, like Windows does. On, typing opens the search pop-up.", L"0", {}, 0, 100, 0, L"Pop-up"},
+{K::Hotkey, L"popupHotkey", L"Pop-up shortcut", L"Opens the search pop-up in any folder, or on its own anywhere else. Clear it to turn the shortcut off.", L"Ctrl+Shift+F", {}, 0, 0, 0, L"Pop-up"},
+{K::Check, L"searchKeys", L"Take over Ctrl+F, Ctrl+E and F3", L"These keys open the pop-up straight away. Off, they go to File Explorer's search box, which uses the engine above.", L"0", {}, 0, 100, 0, L"Pop-up"},
 {K::Check, L"sameWindow", L"Open folders in the same window", L"Enter on a folder goes there in the window you searched from. Off, it opens a new window.", L"1", {}, 0, 100, 0, L"In Explorer windows"},
 {K::Choice, L"position", L"Search box position", L"Where the box sits inside the folder window.", L"top", {{L"top", L"Top of the folder"}, {L"bottom", L"Bottom of the folder"}}, 0, 100, 0, L"In Explorer windows"},
 {K::Check, L"hideOnFocusLost", L"Hide when focus is lost", L"The search box closes when you click somewhere else.", L"1", {}, 0, 100, 0, L"Behaviour"},
@@ -3822,7 +4575,8 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Text, L"searchFontFamily", L"Search font family", L"Font for search text, results and key hints. Missing fonts use the suggested font.", kSearchFontFamily, {}, 0, 0, 2, L"Search box"},
 {K::Choice, L"searchFontWeight", L"Search font weight", L"Weight for search text, results and key hints.", L"500", {{L"300", L"Light"}, {L"400", L"Regular"}, {L"500", L"Medium"}, {L"600", L"Semibold"}, {L"700", L"Bold"}}, 0, 0, 2, L"Search box"},
 {K::Number, L"popupOpacity", L"Search box opacity", L"How solid the glass is, 50 to 100 percent. 85 matches File Explorer (Suggested: 85).", L"85", {}, 50, 100, 2, L"Search box"},
-{K::Check, L"animations", L"Animations", L"Off, everything appears and closes with no movement.", L"1", {}, 0, 100, 2, L"Search box"},
+{K::Check, L"animations", L"Open and close animation", L"The search pop-up and this settings window fade in and out. Off, they appear and close at once.", L"1", {}, 0, 100, 2, L"Motion"},
+{K::Choice, L"animationSpeed", L"Animation speed", L"Follow the speed set for all DavidHiFi apps, or pick one for this mod.", L"global", {{L"global", L"Same as all apps"}, {L"veryQuick", L"Very quick"}, {L"quick", L"Quick"}, {L"normal", L"Normal"}, {L"relaxed", L"Relaxed"}, {L"slow", L"Slow"}}, 0, 0, 2, L"Motion"},
 {K::Check, L"settingsGlass", L"Blurred settings window", L"On, the settings window is see-through glass with Windows acrylic behind it. Off, it is solid. Applies when you save.", L"1", {}, 0, 100, 3, L"Settings window"},
 {K::Check, L"nativeSettingsTitleBar", L"Native Windows title bar", L"Use the Windows title bar and window buttons for this settings window. Applies when you save.", L"0", {}, 0, 100, 3, L"Settings window"},
 {K::Check, L"settingsTrayIcon", L"Tray icon", L"Click it for settings, right-click it for the menu.", L"1", {}, 0, 100, 3, L"Settings window"}
@@ -3834,8 +4588,8 @@ struct SetPageInfo {
     WCHAR glyph;
 };
 static const SetPageInfo kSetPages[] = {
-{L"General", L"How the search box opens inside File Explorer and how it behaves.", 0xE713},
-{L"Search", L"Everything does the indexing; the mod shapes the results.", 0xE721},
+{L"General", L"How File Explorer's search box and the search pop-up work.", 0xE713},
+{L"Search", L"Everything does the indexing. These shape the results.", 0xE721},
 {L"Appearance", L"Choose how the search box looks.", 0xE790},
 {L"Look", L"Choose how this settings window looks and whether its tray icon is shown.", 0xE790},
 {L"About", L"Version, credits, support and links.", 0xE946},
@@ -3862,6 +4616,7 @@ static bool SearchRowStacked(float rowW, float controlW) { return rowW - 2 * kSe
 constexpr float kSetFootBtnH = 36, kSetFootPad = 8, kSetFootH = kSetFootBtnH + 2 * kSetFootPad, kSetFootGap = 14;
 // The glass tint is one layer over the whole window, title bar included, so the two always match.
 constexpr float kSetGlassTint = 0.55f, kSetNativeFade = 56;
+constexpr float kSetEdgeW = 2, kSetRadius = 16;
 constexpr int kSetChipCount = 10;
 constexpr UINT32 kSetChips[kSetChipCount] = {mocha::blue,   mocha::sapphire, mocha::teal, mocha::green, mocha::yellow,
                                              mocha::peach,  mocha::red,      mocha::pink, mocha::mauve, mocha::lavender};
@@ -3950,6 +4705,10 @@ static SetCom<IWICImagingFactory> g_setWic;
 #ifdef SCM_HARNESS
 static std::wstring g_setFakeKeyStatus;  // Lets the test render the hotkey warning line.
 #endif
+
+static float Set_Rad(const D2D1_RECT_F& r, float most = kSetRadius) {
+    return std::min(most, std::min(r.right - r.left, r.bottom - r.top) / 2);
+}
 
 static std::wstring Set_WindowText(HWND hwnd) {
     std::wstring text(GetWindowTextLengthW(hwnd) + 1, L'\0');
@@ -4239,8 +4998,8 @@ static void Set_MenuPaint(SetMenuSession& s, SetMenuLevel& lv) {
         }
         bool hot = ((int)i == lv.hover || (int)i == lv.open) && !m.disabled;
         if (hot) {
-            // The hover look of every card: a faint blue to mauve wash and a 1 px gradient ring.
-            float rad = 8, ringW = 1;
+            // The hover look of every card: a faint blue to mauve wash and the 2 px gradient ring.
+            float ringW = kSetEdgeW, rad = std::min(12.0f, (r.bottom - r.top) / 2);
             D2D1_ROUNDED_RECT rr{{r.left + ringW / 2, r.top + ringW / 2, r.right - ringW / 2, r.bottom - ringW / 2}, rad, rad};
             auto fill = gradient({r.left, r.top}, {r.right, r.bottom}, D2DColor(mocha::blue, 0.16f), D2DColor(mocha::mauve, 0.16f));
             if (fill) rt->FillRoundedRectangle(rr, fill.get());
@@ -5175,22 +5934,24 @@ static void Set_HoverIds(const SetHit& h, int ids[2]) {
 static bool Set_Valid(const SetWindow& w, int k) { return k >= 0 && k < (int)w.fields.size(); }
 
 static void Set_DrawBox(SetPaint& p, SetWindow& w, int k, const D2D1_RECT_F& box, bool active) {
-    p.Round(box, 8, mocha::crust);
+    const float rad = Set_Rad(box);
+    p.Round(box, rad, kSetBoxFill);
     float g = std::max(Set_GlowOf(w, 6000 + k), active ? 1.0f : 0.0f);
-    p.GradRing(box, 8, g);
+    p.Edge(box, rad, mocha::overlay0, 0.7f * (1 - g));
+    p.GradRing(box, rad, g);
 }
 
 static void Set_DrawRow(SetPaint& p, SetWindow& w, const SetItem& it) {
     const SetField& f = w.fields[it.field];
     int k = it.field;
     D2D1_RECT_F row = Set_RowRect(w, it);
-    p.Round(row, 10, mocha::base);
-    p.Round(row, 10, mocha::surface0, 0.32f);
+    p.Round(row, kSetRadius, mocha::base);
+    p.Round(row, kSetRadius, mocha::surface0, 0.32f);
     float hov = Set_GlowOf(w, 1000 + k);
-    p.Edge(row, 10, mocha::surface2, 0.55f * (1 - hov));
-    p.GradFill(row, 10, 0.13f * hov);
-    p.GradRing(row, 10, hov, 1.5f);
-    if (w.kbd && w.focus == k) p.GradRing(row, 10, 1.0f, 2.0f);
+    p.Edge(row, kSetRadius, mocha::surface2, 0.55f * (1 - hov));
+    p.GradFill(row, kSetRadius, 0.13f * hov);
+    p.GradRing(row, kSetRadius, hov);
+    if (w.kbd && w.focus == k) p.GradRing(row, kSetRadius, 1.0f);
 
     bool stacked = SearchRowStacked(row.right - row.left, Set_ControlW(f));
     float textW = w.contentW - 2 * kSetRowPad - (stacked ? 0 : Set_ControlW(f) + 24);
@@ -5293,17 +6054,17 @@ static void Set_DrawGroup(SetPaint& p, SetWindow& w, const SetItem& it) {
 // The resting card every row uses: base, a light lift and a soft gray edge that hands over to
 // the hover ring.
 static void Set_DrawCard(SetPaint& p, const D2D1_RECT_F& row, float hov) {
-    p.Round(row, 10, mocha::base);
-    p.Round(row, 10, mocha::surface0, 0.32f);
-    p.Edge(row, 10, mocha::surface2, 0.55f * (1 - hov));
+    p.Round(row, kSetRadius, mocha::base);
+    p.Round(row, kSetRadius, mocha::surface0, 0.32f);
+    p.Edge(row, kSetRadius, mocha::surface2, 0.55f * (1 - hov));
 }
 
 static void Set_DrawLinkRow(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
     D2D1_RECT_F row = Set_RowRect(w, it);
     float hov = Set_GlowOf(w, 3000 + idx);
     Set_DrawCard(p, row, hov);
-    p.GradFill(row, 10, 0.13f * hov);
-    p.GradRing(row, 10, hov, 1.5f);
+    p.GradFill(row, kSetRadius, 0.13f * hov);
+    p.GradRing(row, kSetRadius, hov);
     p.Text(w.fLabel.get(), it.text, {row.left + kSetRowPad, row.top + 9, row.right - 50, row.top + 30}, mocha::text);
     p.Text(w.fHint.get(), it.sub, {row.left + kSetRowPad, row.top + 30, row.right - 50, row.bottom - 4}, mocha::subtext0);
     p.Glyph(w.fIcon.get(), 0xE8A7, {row.right - 46, row.top, row.right - 12, row.bottom}, mocha::subtext1);
@@ -5311,7 +6072,10 @@ static void Set_DrawLinkRow(SetPaint& p, SetWindow& w, const SetItem& it, int id
 
 static void Set_DrawSupport(SetPaint& p, SetWindow& w, const SetItem& it, int idx) {
     D2D1_RECT_F row = Set_RowRect(w, it);
-    Set_DrawCard(p, row, 0);
+    float card = std::max(Set_GlowOf(w, 3700 + idx), Set_GlowOf(w, 3500 + idx));
+    Set_DrawCard(p, row, card);
+    p.GradFill(row, kSetRadius, 0.13f * card);
+    p.GradRing(row, kSetRadius, card);
     float tw = SearchSupportTextW(w);
     float lh = Set_TextH(w.fLabel.get(), it.text, tw), dh = Set_TextH(w.fHint.get(), it.sub, tw);
     float top = row.top + (row.bottom - row.top - lh - 4 - dh) / 2;
@@ -5320,8 +6084,8 @@ static void Set_DrawSupport(SetPaint& p, SetWindow& w, const SetItem& it, int id
            mocha::subtext0);
     D2D1_RECT_F b = Set_SupportButton(w, it);
     float hov = Set_GlowOf(w, 3500 + idx);
-    p.GradFill(b, 8, 0.85f + 0.15f * hov);
-    p.GradRing(b, 8, hov, 2);
+    p.GradFill(b, Set_Rad(b), 0.85f + 0.15f * hov);
+    p.GradRing(b, Set_Rad(b), hov);
     p.Text(w.fButton.get(), L"Open Ko-fi", b, mocha::crust);
 }
 
@@ -5357,7 +6121,7 @@ static void Set_DrawAbout(SetPaint& p, SetWindow& w, const SetItem& it) {
 
 static void Set_DrawBanner(SetPaint& p, SetWindow& w, const SetItem& it) {
     D2D1_RECT_F r = Set_RowRect(w, it);
-    p.Round(r, 10, mocha::peach, 0.14f);
+    p.Round(r, kSetRadius, mocha::peach, 0.14f);
     p.Text(w.fHint.get(), it.text, {r.left + 16, r.top + 14, r.right - 16, r.bottom - 8}, mocha::peach);
 }
 
@@ -5366,9 +6130,8 @@ static void Set_DrawBanner(SetPaint& p, SetWindow& w, const SetItem& it) {
 static void Set_DrawDock(SetPaint& p, SetWindow& w, const D2D1_RECT_F& d, float rad, float fill, float glow) {
     p.Round({d.left, d.top + 3, d.right, d.bottom + 5}, rad + 2, mocha::crust, w.glass ? 0.28f : 0.5f);
     p.Round(d, rad, mocha::mantle, fill);  // Hover lights only the edge: a wash showed as a blue blob down the left.
-    D2D1_RECT_F in{d.left + 0.5f, d.top + 0.5f, d.right - 0.5f, d.bottom - 0.5f};
-    p.rt->DrawRoundedRectangle(D2D1::RoundedRect(in, rad, rad), p.B(mocha::surface1, 0.75f * (1 - glow)), 1);
-    p.GradRing(d, rad, glow, 1.5f);
+    p.Edge(d, rad, mocha::surface1, 0.75f * (1 - glow));
+    p.GradRing(d, rad, glow);
 }
 
 // Panel-left mark, as in T3's sidebar button: a window with its left pane shaded while open.
@@ -5384,18 +6147,18 @@ static void Set_DrawMark(SetPaint& p, IDWriteTextFormat* glyph, const D2D1_RECT_
 static void Set_DrawRail(SetPaint& p, SetWindow& w) {
     D2D1_RECT_F d = Set_RailDock(w);
     const float open = Set_RailOpen(w), textA = std::clamp((open - 0.45f) / 0.55f, 0.0f, 1.0f);
-    Set_DrawDock(p, w, d, 14, w.glass ? 0.58f : 1.0f, std::max(w.railGlow, w.dragRail ? 1.0f : 0.0f) * 0.85f);
-
-    // Drag handle: a thin gradient line on the dock's right edge while it is grabbed or pointed at.
+    // Over the resize edge or while dragging, the dock's own rounded border brightens and
+    // thickens, so the handle follows the corners instead of floating as a separate line.
     float edge = std::max(Set_GlowOf(w, 41), w.dragRail ? 1.0f : 0.0f);
-    if (edge > 0.003f) p.GradFill({d.right - 1.5f, d.top + 18, d.right + 1.5f, d.bottom - 18}, 1.5f, edge);
+    Set_DrawDock(p, w, d, kSetRadius, w.glass ? 0.58f : 1.0f, std::max(w.railGlow * 0.85f, edge));
 
     D2D1_RECT_F tb = Set_RailToggleRect(w);
     float th = Set_GlowOf(w, 42);
-    p.Round(tb, 9, mocha::surface0, 0.45f + 0.25f * th);
-    p.GradFill(tb, 9, 0.16f * th);
-    p.GradRing(tb, 9, 0.9f * th, 1.25f);
-    if (w.kbd && w.focus == -20) p.GradRing(tb, 9, 1, 2);
+    const float tr = Set_Rad(tb);
+    p.Round(tb, tr, mocha::surface0, 0.45f + 0.25f * th);
+    p.GradFill(tb, tr, 0.16f * th);
+    p.GradRing(tb, tr, 0.9f * th);
+    if (w.kbd && w.focus == -20) p.GradRing(tb, tr, 1);
     Set_DrawPanelIcon(p, tb, open, th > 0.5f ? mocha::text : mocha::subtext1);
 
     p.rt->PushAxisAlignedClip(D2D1::RectF(d.left, d.top, d.right - 6, d.bottom), D2D1_ANTIALIAS_MODE_ALIASED);
@@ -5413,18 +6176,19 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
         }
         float hov = Set_GlowOf(w, 100 + i);
         bool act = i == w.page;
+        const float rr = Set_Rad(r);
         if (act) {
-            p.GradFill(r, 8, 0.22f);
-            p.GradRing(r, 8, 0.5f, 1);
+            p.GradFill(r, rr, 0.22f);
+            p.GradRing(r, rr, 0.5f);
             D2D1_RECT_F bar{r.left, r.top + 8, r.left + 3, r.bottom - 8};
             p.GradFill({bar.left, bar.top, bar.left + 3, bar.bottom}, 1.5f, 1);
         } else {
-            p.Round(r, 8, mocha::surface0, 0.28f);
-            p.Edge(r, 8, mocha::surface2, 0.5f * (1 - hov));
-            p.GradFill(r, 8, 0.10f * hov);
-            p.GradRing(r, 8, 0.8f * hov, 1.25f);
+            p.Round(r, rr, mocha::surface0, 0.28f);
+            p.Edge(r, rr, mocha::surface2, 0.5f * (1 - hov));
+            p.GradFill(r, rr, 0.10f * hov);
+            p.GradRing(r, rr, 0.8f * hov);
         }
-        if (w.kbd && w.focus == -10 - i) p.GradRing(r, 8, 1, 2);
+        if (w.kbd && w.focus == -10 - i) p.GradRing(r, rr, 1);
         UINT32 c = act ? mocha::text : mocha::subtext1;
         // The glyph sits in a fixed 44-wide slot, so it stays centered in the collapsed rail.
         p.Glyph(w.fIcon.get(), kSetPages[i].glyph, {r.left, r.top, r.left + 44, r.bottom}, act ? mocha::blue : mocha::subtext0);
@@ -5440,7 +6204,11 @@ static void Set_DrawRail(SetPaint& p, SetWindow& w) {
 static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
     D2D1_RECT_F d = Set_FooterDock(w);
     const float rad = kSetFootH / 2, brad = kSetFootBtnH / 2;
-    Set_DrawDock(p, w, d, rad, w.glass ? 0.9f : 1.0f, w.footGlow);
+    // The same see-through mantle as the rail dock, so the blurred rows under the pill read as
+    // real glass instead of a near-solid bar.
+    p.Round(d, rad, mocha::mantle, w.render ? 1.0f : (w.glass ? 0.58f : 0.85f));
+    p.Edge(d, rad, mocha::overlay0, 0.9f * (1 - w.footGlow));
+    p.GradRing(d, rad, w.footGlow);
     UINT32 sc;
     std::wstring status = Set_FooterStatus(w, &sc);
     float sw = Set_FooterStatusW(w);
@@ -5449,17 +6217,11 @@ static void Set_DrawFooter(SetPaint& p, SetWindow& w) {
     for (int i = 0; i < 3; i++) {
         D2D1_RECT_F b = Set_FooterButton(w, i);
         float hov = Set_GlowOf(w, 10 + i);
-        if (i == 2) {
-            p.GradFill(b, brad, 0.88f + 0.12f * hov);
-            p.GradRing(b, brad, hov, 2);
-            p.Text(w.fButton.get(), names[i], b, mocha::crust, w.saving ? 0.5f : 1.0f);
-        } else {
-            p.Round(b, brad, mocha::surface0, 0.6f);
-            p.GradFill(b, brad, 0.12f * hov);
-            p.GradRing(b, brad, 0.85f * hov);
-            p.Text(w.fButton.get(), names[i], b, mocha::text);
-        }
-        if (w.kbd && w.focus == -1 - i) p.GradRing(b, brad, 1, 2);
+        p.Round(b, brad, mocha::base, 0.98f);
+        p.Edge(b, brad, mocha::overlay0, 0.78f * (1 - hov));
+        p.GradRing(b, brad, hov);
+        p.Text(w.fButton.get(), names[i], b, mocha::text, w.saving ? 0.5f : 1.0f);
+        if (w.kbd && w.focus == -1 - i) p.GradRing(b, brad, 1);
     }
 }
 
@@ -5495,9 +6257,9 @@ static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
     const int n = (int)f.options.size(), vis = Set_DropVisible(w);
     const bool scrolls = n > vis;
     D2D1_RECT_F shadow{r.left - 1, r.top + 3, r.right + 1, r.bottom + 5};
-    p.Round(shadow, 12, mocha::crust, 0.6f);
-    p.Round(r, 10, mocha::mantle);
-    p.GradRing(r, 10, 0.9f);
+    p.Round(shadow, kSetRadius + 2, mocha::crust, 0.6f);
+    p.Round(r, kSetRadius, mocha::mantle);
+    p.GradRing(r, kSetRadius, 0.9f);
     const float right = r.right - (scrolls ? 12 : 4);
     for (int v = 0; v < vis; v++) {
         int i = w.dropTop + v;
@@ -5505,8 +6267,8 @@ static void Set_DrawPopup(SetPaint& p, SetWindow& w) {
         D2D1_RECT_F it{r.left + 4, r.top + 4 + v * kSetDropItem, right, r.top + 4 + (v + 1) * kSetDropItem};
         bool sel = f.cur == f.options[i].first;
         if (i == w.dropHover) {
-            p.GradFill(it, 6, 0.28f);
-            p.GradRing(it, 6, 0.6f, 1);
+            p.GradFill(it, Set_Rad(it, kSetRadius - 4), 0.28f);  // Inset 4 in a 16 corner: 12.
+            p.GradRing(it, Set_Rad(it, kSetRadius - 4), 0.6f);
         }
         p.Text(w.fValue.get(), f.options[i].second, {it.left + 10, it.top, it.right - 28, it.bottom}, sel ? mocha::blue : mocha::text);
         if (sel) p.Glyph(w.fIconS.get(), 0xE73E, {it.right - 28, it.top, it.right - 6, it.bottom}, mocha::blue);
@@ -5622,6 +6384,8 @@ static void Set_Draw(SetWindow& w, ID2D1RenderTarget* rt) {
         rt->Clear(D2D1::ColorF(0, 0));
         const float total = w.ch + kSetCapH;
         if (w.nativeTitle) {
+            // The window's acrylic already carries the tint (Set_ApplyFrame), title bar included.
+        } else if (false) {
             SetCom<ID2D1LinearGradientBrush> fade;
             D2D1_GRADIENT_STOP stops[2] = {{0, D2DColor(mocha::crust, kSetGlassTint)}, {1, D2DColor(mocha::crust, kSetGlassTint)}};
             SetCom<ID2D1GradientStopCollection> coll;
@@ -6507,7 +7271,7 @@ static void Set_ApplyFrame(SetWindow& w) {
     const HWND hwnd = w.hwnd;
     const bool native = Set_FieldOn(w, L"nativeSettingsTitleBar", false), glass = Set_FieldOn(w, L"settingsGlass", true);
     const bool first = !w.frameApplied, wasGlass = w.glass;
-    if (!first && native == w.nativeTitle && glass == w.glass) return;
+    if (!first && native == w.nativeTitle && glass == w.glass) return;  // A title bar switch re-runs the accent below.
     w.frameApplied = true;
     w.nativeTitle = native;
     w.glass = glass;
@@ -6532,7 +7296,12 @@ static void Set_ApplyFrame(SetWindow& w) {
         DwmEnableBlurBehindWindow(hwnd, &bb);
         if (bb.hRgnBlur) DeleteObject(bb.hRgnBlur);
         if (setComposition) {
-            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, (int)0x012E1E1E, 0};  // same as the launcher grid
+            // Same as the launcher grid. With the Windows title bar the tint is in here instead of
+            // on the page, so the title bar gets it too: crust at the page's 55%.
+            const int tint = native ? (int)(((DWORD)(kSetGlassTint * 255 + 0.5f) << 24) | (mocha::crust & 0xFF) << 16 |
+                                            (mocha::crust & 0xFF00) | (mocha::crust >> 16 & 0xFF))
+                                    : (int)0x012E1E1E;
+            SetAccentPolicy policy{4 /* ACCENT_ENABLE_ACRYLICBLURBEHIND */, 2, tint, 0};
             SetCompositionData data{19 /* WCA_ACCENT_POLICY */, &policy, sizeof(policy)};
             setComposition(hwnd, &data);
         }
