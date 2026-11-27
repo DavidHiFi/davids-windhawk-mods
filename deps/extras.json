@@ -73,6 +73,16 @@
       "script": "deps/seamless-music-player.ps1",
       "why": "DavidHiFi's light music player for Windows, with lyrics, Soulseek and YouTube search built in.",
       "admin": false
+    },
+    {
+      "id": "presentmon",
+      "name": "PresentMon",
+      "kind": "dep",
+      "script": "deps/presentmon.ps1",
+      "why": "The overlay uses it to measure how long a frame takes to appear on screen.",
+      "admin": true,
+      "auto": true,
+      "mods": ["local@seamless-fps-overlay"]
     }
   ]
 }
