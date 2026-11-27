@@ -12,7 +12,7 @@
         "avgFps": 1,
         "background": "glass",
         "bgStrength": 100,
-        "binaryCode": 1,
+        "binaryCode": 0,
         "blockGap": 6,
         "border": 1,
         "borderColour": "gradient",
