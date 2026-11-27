@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-27T07:32:43+08:00",
+  "generatedAt": "2026-11-27T08:50:55+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 121,
@@ -887,7 +887,7 @@
       "name": "Seamless FPS Overlay",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.1.4",
+      "version": "1.1.5",
       "license": "",
       "origin": "local",
       "upstream": "",
