@@ -6624,5 +6624,11 @@
     "restorePoint": 1,
     "settingsGlass": 1,
     "settingsTrayIcon": 1
+  },
+  "local@nvcleanstall-styler": {
+    "AnimateWindows": 1,
+    "AnimationSpeed": "global",
+    "TintStrength": 30,
+    "TreeDump": 0
   }
 }

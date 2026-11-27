@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-28T04:00:21+08:00",
+  "generatedAt": "2026-11-28T06:48:43+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 123,
-    "enabled": 121,
-    "local": 59
+    "mods": 124,
+    "enabled": 122,
+    "local": 60
   },
   "mods": [
     {
@@ -1521,6 +1521,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-windows-optimizer/seamless-windows-optimizer.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@nvcleanstall-styler",
+      "name": "NVCleanstall Styler",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.4",
+      "license": "",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/nvcleanstall-styler/nvcleanstall-styler.wh.cpp",
       "enabled": true
     }
   ]

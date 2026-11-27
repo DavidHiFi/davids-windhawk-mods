@@ -1018,6 +1018,16 @@
       }
     },
     {
+      "id": "local@nvcleanstall-styler",
+      "enabled": true,
+      "settings": {
+        "AnimateWindows": 1,
+        "AnimationSpeed": "global",
+        "TintStrength": 30,
+        "TreeDump": 0
+      }
+    },
+    {
       "id": "local@parallax-wallpaper",
       "enabled": true,
       "settings": {
