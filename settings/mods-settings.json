@@ -6615,5 +6615,14 @@
     "settingsGlass": 1,
     "settingsTrayIcon": 1,
     "undoLevels": 10
+  },
+  "local@seamless-windows-optimizer": {
+    "animations": 1,
+    "motionEnabled": 1,
+    "motionSpeed": "normal",
+    "nativeSettingsTitleBar": 0,
+    "restorePoint": 1,
+    "settingsGlass": 1,
+    "settingsTrayIcon": 1
   }
 }

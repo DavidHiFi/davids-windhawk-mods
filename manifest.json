@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-27T10:25:52+08:00",
+  "generatedAt": "2026-11-27T10:33:59+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 122,
-    "enabled": 120,
-    "local": 58
+    "mods": 123,
+    "enabled": 121,
+    "local": 59
   },
   "mods": [
     {
@@ -1509,6 +1509,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/seamless-bulk-rename/seamless-bulk-rename.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-windows-optimizer",
+      "name": "Seamless Windows Optimizer",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.0",
+      "license": "",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-windows-optimizer/seamless-windows-optimizer.wh.cpp",
       "enabled": true
     }
   ]

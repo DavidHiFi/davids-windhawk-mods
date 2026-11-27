@@ -4541,6 +4541,19 @@
       }
     },
     {
+      "id": "local@seamless-windows-optimizer",
+      "enabled": true,
+      "settings": {
+        "animations": 1,
+        "motionEnabled": 1,
+        "motionSpeed": "normal",
+        "nativeSettingsTitleBar": 0,
+        "restorePoint": 1,
+        "settingsGlass": 1,
+        "settingsTrayIcon": 1
+      }
+    },
+    {
       "id": "local@seamless-winver-configurator",
       "enabled": true,
       "settings": {
