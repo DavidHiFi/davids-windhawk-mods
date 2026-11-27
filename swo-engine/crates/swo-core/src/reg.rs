@@ -68,7 +68,11 @@ impl RegVal {
                 for s in v {
                     b.extend(utf16z(s));
                 }
-                b.extend([0u8, 0u8]);
+                if b.is_empty() {
+                    b.extend([0u8; 4]);
+                } else {
+                    b.extend([0u8, 0u8]);
+                }
                 RegValue { bytes: b, vtype: REG_MULTI_SZ }
             }
             RegVal::Binary(b) => RegValue { bytes: b.clone(), vtype: REG_BINARY },
@@ -254,4 +258,16 @@ pub fn table_matches(rows: &[(&str, &str, V)]) -> bool {
         },
         None => get(k, n).is_none(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_multi_sz_keeps_its_double_terminator() {
+        let raw = RegVal::MultiSz(Vec::new()).to_raw();
+        assert_eq!(raw.bytes, [0, 0, 0, 0]);
+        assert_eq!(RegVal::from_raw(&raw), RegVal::MultiSz(Vec::new()));
+    }
 }

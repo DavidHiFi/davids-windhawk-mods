@@ -1005,7 +1005,7 @@ fn default_op(tw: &Tweak, op: &Op) -> Result<()> {
 }
 
 fn revert_tweak(ctx: &Ctx, tw: &Tweak) -> Result<Done> {
-    if ctx.journal.has(&tw.id) {
+    if ctx.journal.has(&tw.id)? {
         let mut d = ctx.journal.undo(&tw.id, ctx.dry_run)?;
         if !ctx.dry_run {
             for op in &tw.ops {
