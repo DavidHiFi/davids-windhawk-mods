@@ -2,7 +2,7 @@
 // @id              halo-launcher
 // @name            Halo Launcher
 // @description     Press a key, type a few letters, press Enter: apps, files, sums, web searches and every module
-// @version         0.6.20
+// @version         0.6.21
 // @author          DavidHiFi, David Ravelo
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -59,6 +59,10 @@ its own settings window: open it from the tray icon or with Ctrl+I in Halo.
 | Esc | Back, then close |
 
 Every key in that list can be changed on the Keys page of the settings.
+
+## What's new in 0.6.21
+
+- The AI panel now draws each agent's name and letter chip on its own window, so the labels appear correctly.
 
 ## What's new in 0.6.20
 
@@ -3233,6 +3237,12 @@ void AiEnsureTarget() {
     }
 }
 
+void AiDrawStr(const std::wstring& s, IDWriteTextFormat* f, D2D1_RECT_F r, D2D1_COLOR_F c) {
+    if (s.empty() || !f || !g_aiRt || !g_aiBrush) return;
+    g_aiBrush->SetColor(c);
+    g_aiRt->DrawText(s.c_str(), (UINT32)s.size(), f, r, g_aiBrush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+}
+
 void AiPaint(HWND w) {
     PAINTSTRUCT ps;
     HDC dc = BeginPaint(w, &ps);
@@ -3300,11 +3310,11 @@ void AiPaint(HWND w) {
                     g_aiEdge->SetEndPoint(D2D1::Point2F(chip.right, chip.bottom));
                     g_aiRt->DrawRoundedRectangle(D2D1::RoundedRect(chipEdge, 7, 7), g_aiEdge.Get(), 1.5f);
                 }
-                if (g_aiChip) DrawStr(kAgents[a].chip, g_aiChip.Get(), chip, Rgb(sel ? cText : cGlyph));
+                if (g_aiChip) AiDrawStr(kAgents[a].chip, g_aiChip.Get(), chip, Rgb(sel ? cText : cGlyph));
                 float textL = chip.right + 10;
                 if (g_aiText) {
                     float h = LineHeight(g_aiText.Get());
-                    DrawStr(kAgents[a].name, g_aiText.Get(),
+                    AiDrawStr(kAgents[a].name, g_aiText.Get(),
                             D2D1::RectF(textL, y + (kAiRowH - 4 - h) / 2, row.right - 10,
                                         y + (kAiRowH - 4 + h) / 2),
                             Rgb(sel ? cText : cTitle));
