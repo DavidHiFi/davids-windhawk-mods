@@ -2,7 +2,7 @@
 // @id              windhawk-enhanced-styler
 // @name            Windhawk Enhanced Styler
 // @description     Theme Windhawk itself with your own colors, gradients, font, transparency and blur
-// @version         2.2.35
+// @version         2.2.37
 // @author          DavidHiFi, Ingan121
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -21,6 +21,16 @@
 Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ![Windhawk Enhanced Styler preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/windhawk-enhanced-styler.png)
+
+## What's new in 2.2.37
+
+- The WebView connection keeps the line endings its local protocol expects.
+
+## What's new in 2.2.36
+
+- The Workshop installer is pinned to a reviewed copy and checked before it runs.
+- Windhawk waits for the Styler's worker threads to stop before unloading them.
+- Only one Workshop setup job can run at a time, even across a Windhawk reload.
 
 ## What's new in 2.2.35
 
@@ -440,6 +450,8 @@ static volatile bool g_pageReady;
 static volatile long g_frameReady = 0;  // the visible main window has its frame
 static int g_cdpPort = kCdpPort;         // the port actually handed to the webview
 static HANDLE g_cdpThread;
+static std::mutex g_cdpSocketMutex;
+static SOCKET g_activeCdpSocket = INVALID_SOCKET;
 
 static void DebugNote(const char* what, long detail = 0) {
     Wh_Log(L"%S (%ld)", what, detail);
@@ -5493,7 +5505,7 @@ static bool WorkshopStartJob(const char* kind) {
             L"$ErrorActionPreference='Stop'\n"
             L"try{[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12}catch{}\n"
             L"$f=Join-Path $env:TEMP ('SeamlessWorkshopSetup-'+[guid]::NewGuid().ToString('N')+'.ps1')\n"
-            L"try{Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/main/Install-SeamlessWorkshop.ps1' -OutFile $f}catch{exit 3}\n"
+            L"try{Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/DavidHiFi/seamless-workshop/5581c124c1fe6c5270366bc0e9654fa7bf689acb/Install-SeamlessWorkshop.ps1' -OutFile $f;if((Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash -ne '837266BE07C92E8C4374DA5791E30C7B0991545F774C7E4270DDE5D4467E9C29'){throw 'Installer hash mismatch'}}catch{Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue;exit 3}\n"
             L"$global:LASTEXITCODE=0\n"
             L"try{& $f -SkipWindhawkUpdate | Out-Null;$c=$LASTEXITCODE}catch{$c=2}\n"
             L"Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue\n"
@@ -5515,6 +5527,12 @@ static bool WorkshopStartJob(const char* kind) {
             L"else{$p=Start-Process -FilePath $cli -ArgumentList $a -Verb RunAs -WindowStyle Hidden -PassThru -Wait}}catch{exit 4}\n"
             L"exit $p.ExitCode\n";
     }
+    script =
+        L"$m=New-Object System.Threading.Mutex($false,'Local\\WindhawkEnhancedStylerWorkshopJob')\n"
+        L"try{$held=$m.WaitOne(0)}catch [System.Threading.AbandonedMutexException]{$held=$true}\n"
+        L"if(-not $held){exit 6}\n"
+        L"try{\n" + script +
+        L"}finally{try{$m.ReleaseMutex()}catch{};$m.Dispose()}\n";
     g_workshopJob = StartHiddenPowerShell(script);
     if (!g_workshopJob) return false;
     g_workshopJobKind = install ? "install" : "enable";
@@ -5690,10 +5708,18 @@ static DWORD WINAPI CdpSessionThread(LPVOID) {
             wsUrl.find("/devtools/browser/") != std::string::npos) {
             SOCKET sock;
             if (WsConnect(g_cdpPort, wsUrl, &sock)) {
+                {
+                    std::lock_guard<std::mutex> lock(g_cdpSocketMutex);
+                    g_activeCdpSocket = sock;
+                }
                 DebugNote("debugger session open, ms", MsSinceStart());
                 RunBrowserSession(sock, js);
-                shutdown(sock, SD_BOTH);
-                closesocket(sock);
+                {
+                    std::lock_guard<std::mutex> lock(g_cdpSocketMutex);
+                    if (g_activeCdpSocket == sock) g_activeCdpSocket = INVALID_SOCKET;
+                    shutdown(sock, SD_BOTH);
+                    closesocket(sock);
+                }
                 DebugNote("debugger session closed, ms", MsSinceStart());
             }
         }
@@ -6071,17 +6097,30 @@ void Wh_ModUninit() {
     InterlockedExchange(&g_relaunchRequested, 0);
     if (g_stopEvent) {
         SetEvent(g_stopEvent);
+        {
+            std::lock_guard<std::mutex> lock(g_cdpSocketMutex);
+            if (g_activeCdpSocket != INVALID_SOCKET)
+                shutdown(g_activeCdpSocket, SD_BOTH);
+        }
         if (g_workerThread) {
-            // The worker can sit in a socket read for several seconds. Wait for
-            // it to finish before anything is unhooked or unmapped.
-            if (WaitForSingleObject(g_workerThread, 30000) != WAIT_OBJECT_0) DebugNote("worker still running at unload");
+            if (WaitForSingleObject(g_workerThread, 30000) != WAIT_OBJECT_0) {
+                DebugNote("worker still running at unload; waiting for exit");
+                WaitForSingleObject(g_workerThread, INFINITE);
+            }
             CloseHandle(g_workerThread);
             g_workerThread = nullptr;
         }
         if (g_cdpThread) {
-            if (WaitForSingleObject(g_cdpThread, 30000) != WAIT_OBJECT_0) DebugNote("session thread still running at unload");
+            if (WaitForSingleObject(g_cdpThread, 30000) != WAIT_OBJECT_0) {
+                DebugNote("session thread still running at unload; waiting for exit");
+                WaitForSingleObject(g_cdpThread, INFINITE);
+            }
             CloseHandle(g_cdpThread);
             g_cdpThread = nullptr;
+        }
+        if (g_workshopJob) {
+            CloseHandle(g_workshopJob);
+            g_workshopJob = nullptr;
         }
         CloseHandle(g_stopEvent);
         g_stopEvent = nullptr;
