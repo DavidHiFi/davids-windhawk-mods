@@ -122,7 +122,7 @@
         "storeAppIcons.custom[0].redirect": "",
         "storeAppIcons.enabled": 1,
         "storeAppIcons.grant-permissions": 1,
-        "storeAppIcons.icon-theme": "",
+        "storeAppIcons.icon-theme": "local/catppuccin",
         "storeAppIcons.system-apps[0].bundle": "",
         "storeAppIcons.system-apps[0].redirect": "",
         "storeAppIcons.theme-paths[0]": "",
