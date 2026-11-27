@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-27T08:50:55+08:00",
+  "generatedAt": "2026-11-27T09:16:00+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 121,
-    "enabled": 119,
-    "local": 57
+    "mods": 122,
+    "enabled": 120,
+    "local": 58
   },
   "mods": [
     {
@@ -1498,6 +1498,18 @@
       "source": "mods/local/zoomit/zoomit.wh.cpp",
       "enabled": true,
       "category": "Tools"
+    },
+    {
+      "id": "local@seamless-bulk-rename",
+      "name": "Seamless Bulk Rename",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "1.0.1",
+      "license": "MIT",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-bulk-rename/seamless-bulk-rename.wh.cpp",
+      "enabled": true
     }
   ]
 }
