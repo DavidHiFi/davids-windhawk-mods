@@ -24,7 +24,7 @@ Choose Windhawk's colors, gradients, font, transparency and background blur.
 
 ## What's new in 2.2.37
 
-- The WebView connection keeps the line endings its local protocol expects.
+- Fixed the local connection used for live styling updates.
 
 ## What's new in 2.2.36
 
