@@ -2,7 +2,7 @@
 // @id              seamless-windows-optimizer
 // @name            Seamless Windows Optimizer
 // @description     Free up space, turn off tracking and ads, remove apps you never use and speed Windows up, from one window
-// @version         1.0.0
+// @version         1.0.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -4019,9 +4019,9 @@ static HICON Crisp_ShrinkIcon(HICON big, int factor) {
 #define NT_SUCCESS(s) (((NTSTATUS)(s)) >= 0)
 #endif
 
-constexpr PCWSTR kOptEngineSha = L"7987af894a9acda213848a814e5be2eae9f0e1e0b61763924d3a14873a6f9937";
-constexpr PCWSTR kOptEngineUrl = L"https://github.com/DavidHiFi/seamless-workshop/releases/download/swo-engine-v1.0.0/swo.exe";
-constexpr PCWSTR kOptEngineVersion = L"1.0.0";
+constexpr PCWSTR kOptEngineSha = L"ace07a04408307adf96e11c350899f0b9c0f37ed62dc05e9e967b96ce950ce48";
+constexpr PCWSTR kOptEngineUrl = L"https://github.com/DavidHiFi/seamless-workshop/releases/download/swo-engine-v1.0.1/swo.exe";
+constexpr PCWSTR kOptEngineVersion = L"1.0.1";
 constexpr PCWSTR kOptName = L"Seamless Windows Optimizer";
 constexpr UINT_PTR kOptFeedTimer = 0x4857;  // Batches progress lines into one rebuild.
 constexpr ULONGLONG kOptArmMs = 5000;
@@ -4235,8 +4235,10 @@ static struct {
     std::atomic<bool> ready{false};
 } g_work;
 
-static HANDLE g_modThread, g_modReady, g_modMutex;
+static HANDLE g_modThread, g_modReady, g_modMutex, g_falseFailureThread;
 static DWORD g_modThreadId;
+static std::atomic<bool> g_modStartupOk{false};
+static std::atomic<bool> g_closeFalseFailure{true};
 
 static void Hub_TrayUpdate(SetWindow& w);
 
@@ -4567,7 +4569,15 @@ static void Opt_RunEngine(const OptJob& job, OptOut& out) {
             }
         }
         if (WaitForSingleObject(pi.hProcess, 0) == WAIT_OBJECT_0) {
-            while (total <= kOptOutputMax && ReadFile(rd, chunk, sizeof(chunk), &got, nullptr) && got) total += got, take(got);
+            while (total <= kOptOutputMax && PeekNamedPipe(rd, nullptr, 0, nullptr, &avail, nullptr) && avail) {
+                if (!ReadFile(rd, chunk, std::min<DWORD>(avail, sizeof(chunk)), &got, nullptr) || !got) break;
+                total += got;
+                take(got);
+            }
+            if (total > kOptOutputMax) {
+                out.err = L"the helper program wrote too much";
+                killed = true;
+            }
             break;
         }
         if (g_work.halt || GetTickCount64() > deadline) {
@@ -4622,6 +4632,10 @@ static bool Opt_IsRead(const std::wstring& tag) {
 
 // Queues one helper run. A read that is already waiting behind every change is not queued twice.
 static bool Opt_Queue(const std::wstring& tag, const std::wstring& args, bool longRun = false) {
+    if (!g_work.thread) {
+        if (g_setWin) Set_SetStatus(*g_setWin, L"Could not start the helper worker", true);
+        return false;
+    }
     if (tag != L"engine" && !g_opt.ready) return false;
     if (Opt_IsRead(tag)) {
         for (auto it = g_opt.tags.rbegin(); it != g_opt.tags.rend(); ++it) {
@@ -5838,7 +5852,7 @@ static void Opt_StopWorker() {
     }
     g_work.cv.notify_all();
     if (g_work.thread) {
-        WaitForSingleObject(g_work.thread, 10000);
+        WaitForSingleObject(g_work.thread, INFINITE);
         CloseHandle(g_work.thread);
         g_work.thread = nullptr;
     }
@@ -5877,6 +5891,7 @@ static DWORD WINAPI Hub_ModThread(void*) {
         KillTimer(hwnd, kSetTimerId);
         g_setWin->timer = false;
     }
+    g_modStartupOk = true;
     SetEvent(g_modReady);
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
@@ -5902,20 +5917,31 @@ static DWORD WINAPI Hub_ModThread(void*) {
 // this closes that box in this process only, for a few seconds after the handover.
 static DWORD WINAPI Hub_CloseFalseFailure(void*) {
     const DWORD pid = GetCurrentProcessId();
-    for (int i = 0; i < 60; i++) {
-        EnumWindows([](HWND hwnd, LPARAM lp) -> BOOL {
+    for (int i = 0; i < 60 && g_closeFalseFailure.load(); i++) {
+        if (!EnumWindows([](HWND hwnd, LPARAM lp) -> BOOL {
             DWORD owner = 0;
             GetWindowThreadProcessId(hwnd, &owner);
             if (owner != (DWORD)lp) return TRUE;
             WCHAR cls[16]{}, title[32]{};
             GetClassNameW(hwnd, cls, 16);
             GetWindowTextW(hwnd, title, 32);
-            if (wcscmp(cls, L"#32770") == 0 && wcscmp(title, L"Windhawk") == 0) PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            if (wcscmp(cls, L"#32770") == 0 && wcscmp(title, L"Windhawk") == 0) {
+                PostMessageW(hwnd, WM_CLOSE, 0, 0);
+                return FALSE;
+            }
             return TRUE;
-        }, (LPARAM)pid);
-        Sleep(250);
+        }, (LPARAM)pid)) return 0;
+        if (i < 59 && g_closeFalseFailure.load()) Sleep(250);
     }
     return 0;
+}
+
+static void Hub_JoinFalseFailure() {
+    if (g_falseFailureThread) {
+        WaitForSingleObject(g_falseFailureThread, INFINITE);
+        CloseHandle(g_falseFailureThread);
+        g_falseFailureThread = nullptr;
+    }
 }
 
 BOOL WhTool_ModInit() {
@@ -5935,18 +5961,48 @@ BOOL WhTool_ModInit() {
         Wh_Log(L"Seamless Windows Optimizer needs admin rights and Windows did not give them.");
         return FALSE;
     }
-    if (HANDLE closer = CreateThread(nullptr, 0, Hub_CloseFalseFailure, nullptr, 0, nullptr)) CloseHandle(closer);
+    g_closeFalseFailure = true;
+    g_falseFailureThread = CreateThread(nullptr, 0, Hub_CloseFalseFailure, nullptr, 0, nullptr);
     g_modMutex = CreateMutexW(nullptr, FALSE, L"Local\\SeamlessWindowsOptimizer.Instance");
+    if (!g_modMutex) {
+        Hub_JoinFalseFailure();
+        return FALSE;
+    }
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        if (g_modMutex) CloseHandle(g_modMutex);
+        CloseHandle(g_modMutex);
         g_modMutex = nullptr;
         Wh_Log(L"Another copy of Seamless Windows Optimizer is already running.");
+        Hub_JoinFalseFailure();
         return FALSE;
     }
     g_modReady = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!g_modReady) {
+        CloseHandle(g_modMutex);
+        g_modMutex = nullptr;
+        Hub_JoinFalseFailure();
+        return FALSE;
+    }
     g_modThread = CreateThread(nullptr, 0, Hub_ModThread, nullptr, 0, &g_modThreadId);
-    if (!g_modThread || !g_modReady) return FALSE;
-    WaitForSingleObject(g_modReady, 10000);
+    if (!g_modThread) {
+        CloseHandle(g_modReady);
+        g_modReady = nullptr;
+        CloseHandle(g_modMutex);
+        g_modMutex = nullptr;
+        Hub_JoinFalseFailure();
+        return FALSE;
+    }
+    DWORD ready = WaitForSingleObject(g_modReady, 10000);
+    if (ready == WAIT_OBJECT_0 && !g_modStartupOk) {
+        WaitForSingleObject(g_modThread, INFINITE);
+        CloseHandle(g_modThread);
+        g_modThread = nullptr;
+        CloseHandle(g_modReady);
+        g_modReady = nullptr;
+        CloseHandle(g_modMutex);
+        g_modMutex = nullptr;
+        Hub_JoinFalseFailure();
+        return FALSE;
+    }
     return TRUE;
 }
 
@@ -5961,12 +6017,16 @@ void WhTool_ModSettingsChanged() {
 void WhTool_ModUninit() {
     g_opt.quitting = true;
     g_work.halt = true;
-    if (HWND hwnd = g_settingsWnd) PostMessageW(hwnd, WM_CLOSE, 0, 0);
+    g_closeFalseFailure = false;
+    Hub_JoinFalseFailure();
     if (g_modThread) {
-        if (WaitForSingleObject(g_modThread, 5000) == WAIT_TIMEOUT) {
-            PostThreadMessageW(g_modThreadId, WM_QUIT, 0, 0);
-            WaitForSingleObject(g_modThread, 10000);
+        if (HWND hwnd = g_settingsWnd) PostMessageW(hwnd, WM_CLOSE, 0, 0);
+        // A destroyed window leaves the thread waiting in GetMessage, so it is told to quit too.
+        while (WaitForSingleObject(g_modThread, 0) == WAIT_TIMEOUT) {
+            if (PostThreadMessageW(g_modThreadId, WM_QUIT, 0, 0)) break;
+            Sleep(10);
         }
+        WaitForSingleObject(g_modThread, INFINITE);
         CloseHandle(g_modThread);
         g_modThread = nullptr;
     }

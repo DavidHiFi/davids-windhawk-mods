@@ -414,6 +414,9 @@ impl Walk {
             perm.set_readonly(false);
             if std::fs::set_permissions(p, perm).is_ok() {
                 r = std::fs::remove_file(p);
+                if r.is_err() {
+                    let _ = std::fs::set_permissions(p, md.permissions());
+                }
             }
         }
         match r {
@@ -689,6 +692,23 @@ mod tests {
         assert_eq!((t.bytes, t.files), (8, 2));
         assert!(root.exists());
         assert!(std::fs::read_dir(&root).unwrap().next().is_none());
+        std::fs::remove_dir(&root).unwrap();
+    }
+
+    #[test]
+    fn deletes_readonly_files() {
+        let root = std::env::temp_dir().join(format!("swo-readonly-test-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let file = root.join("locked.tmp");
+        std::fs::write(&file, b"123").unwrap();
+        let mut permissions = std::fs::metadata(&file).unwrap().permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&file, permissions).unwrap();
+
+        let mut tally = Tally::default();
+        Walk { delete: true, cutoff: None }.inside(&root, &mut tally, 0);
+        assert_eq!((tally.bytes, tally.files), (3, 1));
+        assert!(!file.exists());
         std::fs::remove_dir(&root).unwrap();
     }
 

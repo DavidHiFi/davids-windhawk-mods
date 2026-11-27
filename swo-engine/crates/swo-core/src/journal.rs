@@ -7,7 +7,7 @@
 
 use crate::item::Done;
 use crate::{proc, reg, svc, task};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -92,7 +92,7 @@ impl<'a> Txn<'a> {
         if self.dry_run || self.ops.is_empty() {
             return Ok(());
         }
-        let mut all = self.j.load(&self.id);
+        let mut all = self.j.load(&self.id)?;
         let seen: std::collections::HashSet<String> = all.iter().map(|u| u.target()).collect();
         for u in self.ops {
             if !seen.contains(&u.target()) {
@@ -124,12 +124,18 @@ impl Journal {
         Txn { j: self, id: id.into(), ops: Vec::new(), dry_run }
     }
 
-    pub fn has(&self, id: &str) -> bool {
-        self.path(id).exists()
+    pub fn has(&self, id: &str) -> Result<bool> {
+        let path = self.path(id);
+        path.try_exists().with_context(|| format!("check undo journal {}", path.display()))
     }
 
-    pub fn load(&self, id: &str) -> Vec<Undo> {
-        std::fs::read(self.path(id)).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+    pub fn load(&self, id: &str) -> Result<Vec<Undo>> {
+        let path = self.path(id);
+        match std::fs::read(&path) {
+            Ok(bytes) => serde_json::from_slice(&bytes).with_context(|| format!("parse undo journal {}", path.display())),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+            Err(e) => Err(e).with_context(|| format!("read undo journal {}", path.display())),
+        }
     }
 
     fn save(&self, id: &str, ops: &[Undo]) -> Result<()> {
@@ -142,7 +148,7 @@ impl Journal {
 
     /// Replay the undo steps for an item, newest first, then forget them.
     pub fn undo(&self, id: &str, dry_run: bool) -> Result<Done> {
-        let ops = self.load(id);
+        let ops = self.load(id)?;
         if ops.is_empty() {
             return Ok(Done::note("nothing to undo"));
         }
@@ -172,5 +178,41 @@ impl Journal {
                     .collect()
             })
             .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn unreadable_journal_is_not_treated_as_absent() {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("swo-journal-dir-{}-{nonce}", std::process::id()));
+        let journal = Journal::at(dir.clone());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir(journal.path("sample")).unwrap();
+        assert!(journal.has("sample").unwrap());
+        assert!(journal.undo("sample", false).is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn corrupt_journal_is_not_overwritten_by_a_new_commit() {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("swo-journal-{}-{nonce}", std::process::id()));
+        let journal = Journal::at(dir.clone());
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(!journal.has("sample").unwrap());
+        let path = journal.path("sample");
+        std::fs::write(&path, b"{").unwrap();
+        assert!(journal.has("sample").unwrap());
+
+        let mut tx = journal.begin("sample", false);
+        tx.push(Undo::Reg { key: "HKCU\\Software\\Test".into(), name: "Value".into(), prev: None });
+        assert!(tx.commit().is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"{");
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

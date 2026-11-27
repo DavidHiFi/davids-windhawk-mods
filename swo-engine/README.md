@@ -1,7 +1,7 @@
 # Seamless Windows Optimizer engine
 
 The small helper program behind the Seamless Windows Optimizer mod. The mod downloads
-`swo.exe` from this repo's `swo-engine-v1.0.0` release, checks it against a fixed SHA-256
+`swo.exe` from this repo's `swo-engine-v1.0.1` release, checks it against a fixed SHA-256
 and runs it hidden. It never shows a window and talks to the mod in JSON lines.
 
 ## What it does
