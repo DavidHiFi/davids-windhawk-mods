@@ -1348,7 +1348,7 @@
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.0.0"
+    "version": "1.0.1"
   },
   "local@nvcleanstall-styler": {
     "disabled": false,
