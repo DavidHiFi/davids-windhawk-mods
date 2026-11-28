@@ -2,7 +2,7 @@
 // @id              seamless-icons
 // @name            Seamless Icons
 // @description     Icon themes, app icons and shortcut arrows in one mod, each part with its own switch
-// @version         1.0.2
+// @version         1.0.3
 // @author          DavidHiFi, FireBlade, m417z, ferrys, Dev-StudioCode
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -8772,13 +8772,19 @@ HMODULE GetRedirectedModule(std::wstring_view fileName) {
 
     {
         std::unique_lock lock{g_redirectionResourceModulesMutex};
-        g_redirectionResourceModules.try_emplace(fileNameUpper, module);
+        const auto [it, inserted] =
+            g_redirectionResourceModules.try_emplace(fileNameUpper, module);
+        if (!inserted) {
+            FreeLibrary(module);
+            return it->second;
+        }
     }
 
     return module;
 }
 
 void FreeAndClearRedirectedModules() {
+    std::unique_lock resourcePathsLock{g_redirectionResourcePathsMutex};
     std::unordered_map<std::wstring, HMODULE> modules;
 
     {

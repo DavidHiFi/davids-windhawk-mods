@@ -2,7 +2,7 @@
 // @id              seamless-taskbar
 // @name            Seamless Taskbar
 // @description     The whole riced taskbar in one mod: system info, media, apps dock, clock, tray, AI usage and right-click tools, each with its own switch
-// @version         0.4.69
+// @version         0.4.72
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @donateUrl       https://ko-fi.com/davidhifi
@@ -33,9 +33,14 @@ group of settings, so you can turn on only what you want. Everything starts off.
 | AI usage | Usage meters for your AI accounts on the dock. | DavidHiFi, Sof2245 | MIT |
 | Right-click tools | Quick system tools in the taskbar right-click menu, with result cards. | DavidHiFi, Marco Petrucci | GPL-3.0 |
 | Wallpaper switcher | A tray button that opens a picker to change your wallpaper. | DavidHiFi, HHeitlager | MIT |
+| Caffeine | A coffee cup in the tray that keeps your PC awake, for a set time or until you turn it off. | DavidHiFi, ALMAS CP | MIT |
 | Focus timer | A taskbar button that counts down work sessions and announces breaks. | DavidHiFi | GPL-3.0 |
 | Notes and to-do | A taskbar button with quick notes and a checklist in a glass popup. | DavidHiFi | GPL-3.0 |
 | Window title | Shows the icon and name of the app in front on the taskbar. | DavidHiFi | GPL-3.0 |
+
+## What's new in 0.4.72
+
+Caffeine has its own module now. A coffee cup sits in the tray: click it and your PC stays awake, with steam rising from the cup while it is on. Right-click it to stay awake for 15 minutes up to 4 hours, or until you turn it off; hover it to see how long is left. It can keep the screen on too, and the steam can be kept still. Caffeine stays on when Explorer restarts or a setting changes.
 
 ## What's new in 0.4.66
 
@@ -164,7 +169,11 @@ glow behind the player's text is softer and even.
 
 ## Tray tools
 
-Keep awake can also keep the display on and can stop after a set time.
+Caffeine keeps your PC awake from a coffee cup in the tray. Click the cup to turn it on or off,
+or right-click it to pick how long. It can keep the screen on too.
+
+![Caffeine's cup in the tray, with its menu](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-taskbar-caffeine.png)
+
 Network toggle switches one named Windows adapter. Windows may ask for administrator permission.
 Wallpaper switcher shows your wallpaper folder as thumbnails. Click one to apply it, use
 the arrow keys and Enter, or type to search. Windows keeps the last wallpaper after the
@@ -172,7 +181,8 @@ module is turned off.
 Tray icon rules match app names or paths. Add each selected app to this mod's custom
 process inclusion list in Windhawk Advanced, then restart that app to apply or restore its icon.
 
-Inspired by [Caffeine by ALMAS CP](https://windhawk.net/mods/caffeine),
+Caffeine is based on [Caffeine by ALMAS CP](https://windhawk.net/mods/caffeine) (MIT).
+Inspired by
 [Net-Toggle by BlackPaw](https://windhawk.net/mods/net-toggle) and
 [Change Tray Icons by aubymori](https://windhawk.net/mods/change-tray-icons). The wallpaper
 switcher is based on [Simple Wallpaper Switcher by HHeitlager](https://windhawk.net/mods/simple-wallpaper-switcher) (MIT).
@@ -2216,18 +2226,31 @@ The whole mod is published under GPL-3.0.
   $description: Quick system tools in the taskbar right-click menu, with result cards.
 - keepAwake:
   - moduleOn: false
-    $name: Enable keep awake
+    $name: Enable Caffeine
   - startEnabled: false
-    $name: Start active
-    $description: Keep Windows awake when this module starts.
+    $name: Start awake
+    $description: Turn Caffeine on by itself when Windows starts.
   - keepDisplay: false
     $name: Keep the screen on
-    $description: Keep the display on while keep awake is active.
+    $description: While Caffeine is on, the screen does not turn off.
   - minutes: 0
-    $name: Default duration
-    $description: Minutes for the tray toggle. Use zero to stay awake until turned off.
-  $name: Keep awake
-  $description: Keep Windows awake from the tray.
+    $name: A click keeps it on for
+    $description: Minutes a click on the cup keeps your PC awake. Zero means until you turn it off.
+  - stillSteam: false
+    $name: Keep the steam still
+    $description: Steam shows and hides at once instead of rising and fading.
+  - steamSpeed: global
+    $name: Animation speed
+    $description: Use the shared animation speed, or pick a speed just for Caffeine.
+    $options:
+      - global: Same as my other apps
+      - veryQuick: Very quick
+      - quick: Quick
+      - normal: Normal
+      - relaxed: Relaxed
+      - slow: Slow
+  $name: Caffeine
+  $description: A coffee cup in the tray that keeps your PC awake.
 - networkToggle:
   - moduleOn: false
     $name: Enable network toggle
@@ -3414,10 +3437,12 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"tooltips.moduleOn", L"Hide taskbar tooltips", L"Turns off the hover tooltips on apps, Start, the tray and the overflow.", L"0", {}, 0, 100, 0, L"Modules"},
 {K::Check, L"tray.moduleOn", L"Tray drawer", L"Folds tray icons into a drawer that opens from the chevron.", L"0", {}, 0, 100, 0, L"Modules"},
 {K::Check, L"ai.moduleOn", L"AI usage", L"Usage meters for your AI accounts on the dock.", L"0", {}, 0, 100, 0, L"Modules"},
-{K::Check, L"keepAwake.moduleOn", L"Keep awake", L"Keep Windows awake from the tray.", L"0", {}, 0, 100, 0, L"Modules"},
-{K::Check, L"keepAwake.startEnabled", L"Start active", L"Keep Windows awake when this module starts.", L"0", {}, 0, 1440, 11, L"Keep awake"},
-{K::Check, L"keepAwake.keepDisplay", L"Keep the screen on", L"Keep the display on while keep awake is active.", L"0", {}, 0, 1440, 11, L"Keep awake"},
-{K::Number, L"keepAwake.minutes", L"Default duration", L"Minutes for the tray toggle. Use zero to stay awake until turned off.", L"0", {}, 0, 1440, 11, L"Keep awake"},
+{K::Check, L"keepAwake.moduleOn", L"Caffeine", L"A coffee cup in the tray that keeps your PC awake.", L"0", {}, 0, 100, 0, L"Modules"},
+{K::Check, L"keepAwake.startEnabled", L"Start awake", L"Turn Caffeine on by itself when Windows starts.", L"0", {}, 0, 1440, 11, L"Caffeine"},
+{K::Check, L"keepAwake.keepDisplay", L"Keep the screen on", L"While Caffeine is on, the screen does not turn off.", L"0", {}, 0, 1440, 11, L"Caffeine"},
+{K::Number, L"keepAwake.minutes", L"A click keeps it on for", L"Minutes a click on the cup keeps your PC awake. Zero means until you turn it off.", L"0", {}, 0, 1440, 11, L"Caffeine"},
+{K::Check, L"keepAwake.stillSteam", L"Keep the steam still", L"Steam shows and hides at once instead of rising and fading.", L"0", {}, 0, 1440, 11, L"Caffeine"},
+{K::Choice, L"keepAwake.steamSpeed", L"Animation speed", L"Use the shared animation speed, or pick a speed just for Caffeine.", L"global", {{L"global", L"Same as my other apps"}, {L"veryQuick", L"Very quick"}, {L"quick", L"Quick"}, {L"normal", L"Normal"}, {L"relaxed", L"Relaxed"}, {L"slow", L"Slow"}}, 0, 100, 11, L"Caffeine"},
 {K::Check, L"networkToggle.moduleOn", L"Network toggle", L"Switch a chosen network adapter on or off.", L"0", {}, 0, 100, 0, L"Modules"},
 {K::Text, L"networkToggle.adapter", L"Adapter name", L"Enter the exact Windows adapter name, such as Ethernet.", L"", {}, 0, 1440, 11, L"Network toggle"},
 {K::Check, L"networkToggle.clickToToggle", L"Toggle on click", L"Switch the adapter on click. With this off, click opens the menu.", L"0", {}, 0, 1440, 11, L"Network toggle"},
@@ -3855,7 +3880,7 @@ static const SetPageInfo kSetPages[] = {
 {L"Right-click tools", L"The taskbar right-click menu: tools, result cards and icon separators.", 0xE90F},
 {L"Tooltips", L"Hide the hover tooltips on apps, Start, the tray and the overflow.", 0xE8BD},
 {L"Look", L"This settings window and its tray icon.", 0xE790},
-{L"Tray tools", L"Keep awake, network switch, app icons and the wallpaper switcher. Also the focus timer, notes and window title.", 0xE8F1},
+{L"Tray tools", L"Caffeine, network switch, app icons and the wallpaper switcher. Also the focus timer, notes and window title.", 0xE8F1},
 {L"About", L"Version, credits, support and links.", 0xE946},
 };
 constexpr int kSetPageCount = (int)(sizeof(kSetPages) / sizeof(kSetPages[0]));
@@ -7313,8 +7338,19 @@ static void Stop() {
 
 namespace sttools {
 constexpr UINT kCallback = WM_APP + 23;
-constexpr UINT_PTR kTimer = 1;
-constexpr UINT kAwakeId = 2, kNetworkId = 3;
+constexpr UINT_PTR kTimer = 1, kSteamTimer = 2;
+// Tray ids are hashed from the mod id plus the tool's name, so Windows remembers each icon's
+// place on its own and no other mod's icon moves with it when one is pinned.
+constexpr UINT ToolTrayId(PCWSTR name) {
+    UINT hash = 2166136261u;
+    for (PCWSTR p = WH_MOD_ID; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    for (PCWSTR p = name; *p; p++) hash = (hash ^ (UINT)*p) * 16777619u;
+    return hash | 0x80000000u;
+}
+constexpr UINT kAwakeId = ToolTrayId(L".caffeine"), kNetworkId = ToolTrayId(L".network");
+// NOTIFYICON_VERSION_4 hands back only the low 16 bits of the id.
+constexpr bool SameIcon(UINT event_id, UINT id) { return (event_id & 0xFFFF) == (id & 0xFFFF); }
+static_assert((kAwakeId & 0xFFFF) != (kNetworkId & 0xFFFF), "tray ids must differ in their low word");
 
 struct TrayBadge {
     HICON icon = nullptr;
@@ -7326,6 +7362,11 @@ struct TrayBadge {
 static TrayBadge awakeBadge, networkBadge;
 static bool awake;
 static ULONGLONG expiresAt;
+static int chosenMinutes = -1;  // The length picked when Caffeine was turned on, 0 = until turned off.
+static float steam;             // 0 = still cup, 1 = full steam.
+static float steamFrom, steamTo;
+static ULONGLONG steamStart;
+static DWORD steamMs;
 static HANDLE networkCommand;
 static DWORD networkError;
 
@@ -7400,6 +7441,74 @@ static HICON MakeBadge(WCHAR symbol, bool off) {
     return MakeBadgeText(text, off);
 }
 
+// Caffeine's own mark: a coffee cup on a saucer, blue to mauve when awake with steam rising
+// from it, Mocha grey when off. Drawn per pixel at 4x with 4x4 samples, then shrunk like the
+// suite's other tray icons. steamLevel 0..1 grows the steam up from the cup and fades it in.
+static HICON MakeCupIcon_Big(float steamLevel, bool off) {
+    int size = GetSystemMetricsForDpi(SM_CXICON, GetDpiForSystem()) * 4;
+    if (size < 16) size = 16;
+    BITMAPV5HEADER bi{};
+    bi.bV5Size = sizeof(bi); bi.bV5Width = size; bi.bV5Height = -size; bi.bV5Planes = 1;
+    bi.bV5BitCount = 32; bi.bV5Compression = BI_BITFIELDS;
+    bi.bV5RedMask = 0x00FF0000; bi.bV5GreenMask = 0x0000FF00; bi.bV5BlueMask = 0x000000FF; bi.bV5AlphaMask = 0xFF000000;
+    void* bits = nullptr;
+    HDC dc = GetDC(nullptr);
+    HBITMAP color = CreateDIBSection(dc, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    ReleaseDC(nullptr, dc);
+    if (!color) return nullptr;
+    auto inRound = [](float x, float y, float l, float t, float r, float b, float rr) {
+        float cx = std::clamp(x, l + rr, r - rr), cy = std::clamp(y, t + rr, b - rr);
+        return x >= l && x <= r && y >= t && y <= b && (x - cx) * (x - cx) + (y - cy) * (y - cy) <= rr * rr;
+    };
+    const float steamTop = 0.34f - std::clamp(steamLevel, 0.0f, 1.0f) * 0.27f, steamW = 0.04f;
+    auto wave = [](float cx, float y) { return cx + 0.035f * sinf((y - 0.07f) / 0.27f * 6.2831853f); };
+    auto inCup = [&](float x, float y) {
+        x -= 0.035f;  // Centre the cup and its handle together.
+        if (inRound(x, y, 0.15f, 0.42f, 0.69f, 0.83f, 0.15f) || (x >= 0.15f && x <= 0.69f && y >= 0.42f && y <= 0.60f))
+            return true;
+        float hx = x - 0.69f, hy = y - 0.585f, d = sqrtf(hx * hx + hy * hy);
+        if (x > 0.66f && d >= 0.07f && d <= 0.145f) return true;
+        if (inRound(x, y, 0.06f, 0.875f, 0.86f, 0.945f, 0.035f)) return true;
+        if (steamLevel <= 0.0f) return false;
+        for (float cx : {0.33f, 0.52f}) {
+            if (y >= steamTop && y <= 0.34f && fabsf(x - wave(cx, y)) <= steamW) return true;
+            for (float cy : {steamTop, 0.34f}) {
+                float ex = x - wave(cx, cy), ey = y - cy;
+                if (ex * ex + ey * ey <= steamW * steamW) return true;
+            }
+        }
+        return false;
+    };
+    const float c0[3] = {off ? 147.f : 0x89, off ? 153.f : 0xB4, off ? 178.f : 0xFA};
+    const float c1[3] = {off ? 127.f : 0xCB, off ? 132.f : 0xA6, off ? 156.f : 0xF7};
+    auto px = (UINT32*)bits;
+    const float n = (float)size;
+    const int ss = 4;
+    for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++) {
+            int hits = 0;
+            for (int sy = 0; sy < ss; sy++)
+                for (int sx = 0; sx < ss; sx++)
+                    if (inCup((x + (sx + 0.5f) / ss) / n, (y + (sy + 0.5f) / ss) / n)) hits++;
+            float cover = hits / (float)(ss * ss);
+            float t = std::clamp((x + y) / (2.0f * n), 0.0f, 1.0f);
+            float r = c0[0] + (c1[0] - c0[0]) * t, g = c0[1] + (c1[1] - c0[1]) * t, b = c0[2] + (c1[2] - c0[2]) * t;
+            BYTE a = (BYTE)(cover * 255 + 0.5f);
+            px[y * size + x] = ((UINT32)a << 24) | ((UINT32)(r * cover) << 16) | ((UINT32)(g * cover) << 8) | (UINT32)(b * cover);
+        }
+    HBITMAP mask = CreateBitmap(size, size, 1, 1, nullptr);
+    ICONINFO ii{TRUE, 0, 0, mask, color};
+    HICON icon = CreateIconIndirect(&ii);
+    DeleteObject(mask);
+    DeleteObject(color);
+    return icon;
+}
+
+static HICON MakeCupIcon(float steamLevel, bool off) {
+    HICON icon = Crisp_ShrinkIcon(MakeCupIcon_Big(steamLevel, off), 4);
+    return icon ? icon : MakeBadge(L'', off);
+}
+
 static NOTIFYICONDATAW Data(HWND hwnd, UINT id) {
     NOTIFYICONDATAW data{sizeof(data)};
     data.hWnd = hwnd;
@@ -7437,26 +7546,173 @@ static void Update(HWND hwnd, UINT id, TrayBadge& badge, bool active, WCHAR symb
     }
 }
 
-static void SetAwake(bool enable, int minutes = 0) {
+static void ShowCup(HWND hwnd, PCWSTR text, bool force = false) {
+    if (!force && awakeBadge.shown && awakeBadge.tooltip == text) return;
+    HICON icon = MakeCupIcon(steam, !awake && steam <= 0.0f);
+    if (!icon) return;
+    auto data = Data(hwnd, kAwakeId);
+    data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
+    data.uCallbackMessage = kCallback;
+    data.hIcon = icon;
+    wcscpy_s(data.szTip, text);
+    bool ok = awakeBadge.shown && Shell_NotifyIconW(NIM_MODIFY, &data);
+    if (!ok) {
+        awakeBadge.shown = Shell_NotifyIconW(NIM_ADD, &data) != FALSE;
+        if (awakeBadge.shown) {
+            data.uVersion = NOTIFYICON_VERSION_4;
+            Shell_NotifyIconW(NIM_SETVERSION, &data);
+        }
+    }
+    if (awakeBadge.icon) DestroyIcon(awakeBadge.icon);
+    awakeBadge.icon = icon;
+    awakeBadge.active = awake;
+    awakeBadge.tooltip = text;
+}
+
+static std::wstring CupText() {
+    if (!awake) return L"Caffeine is off. Click to keep your PC awake.";
+    if (!expiresAt) return L"Caffeine is on until you turn it off.";
+    ULONGLONG now = GetTickCount64();
+    ULONGLONG left = expiresAt > now ? (expiresAt - now + 59999) / 60000 : 0;
+    WCHAR text[96];
+    if (left >= 60)
+        swprintf_s(text, L"Caffeine is on for %llu h %llu min more.", left / 60, left % 60);
+    else
+        swprintf_s(text, L"Caffeine is on for %llu min more.", left ? left : 1ULL);
+    return text;
+}
+
+// The global motion setting every one of the owner's apps follows (Seamless Workshop owns it).
+static float MotionScale() {
+    BOOL animations = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &animations, 0);
+    // Phrased so 0 means moving steam: Windhawk gives 0 for a setting an updating user never saved.
+    if (!animations || Wh_GetIntSetting(L"keepAwake.stillSteam")) return 0;
+    auto level = [](PCWSTR name) -> float {
+        if (!_wcsicmp(name, L"veryQuick")) return 0.5f;
+        if (!_wcsicmp(name, L"quick")) return 0.75f;
+        if (!_wcsicmp(name, L"relaxed")) return 1.5f;
+        if (!_wcsicmp(name, L"slow")) return 2.0f;
+        if (!_wcsicmp(name, L"normal")) return 1.0f;
+        return -1;
+    };
+    PCWSTR own = Wh_GetStringSetting(L"keepAwake.steamSpeed");
+    float scale = own ? level(own) : -1;
+    if (own) Wh_FreeStringSetting(own);
+    if (scale > 0) return scale;
+    DWORD enabled = 1, size = sizeof(enabled);
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\DavidHiFi\\Motion", L"Enabled", RRF_RT_REG_DWORD, nullptr,
+                     &enabled, &size) == ERROR_SUCCESS && !enabled)
+        return 0;
+    WCHAR speed[32]{};
+    size = sizeof(speed);
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\DavidHiFi\\Motion", L"Speed", RRF_RT_REG_SZ, nullptr, speed,
+                     &size) == ERROR_SUCCESS && level(speed) > 0)
+        return level(speed);
+    DWORD percent = 100;
+    size = sizeof(percent);
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\DavidHiFi\\Motion", L"Speed", RRF_RT_REG_DWORD, nullptr,
+                     &percent, &size) == ERROR_SUCCESS)
+        return std::clamp((float)percent, 25.0f, 400.0f) / 100.0f;
+    return 1;
+}
+
+static void StartSteam(HWND hwnd, float target) {
+    float scale = MotionScale();
+    if (scale <= 0 || !hwnd) {
+        KillTimer(hwnd, kSteamTimer);
+        steam = target;
+        return;
+    }
+    steamFrom = steam;
+    steamTo = target;
+    steamStart = GetTickCount64();
+    steamMs = (DWORD)((target > steam ? 520 : 360) * scale * fabsf(target - steam));
+    if (steamMs < 60) {
+        steam = target;
+        return;
+    }
+    SetTimer(hwnd, kSteamTimer, 33, nullptr);
+}
+
+static void StepSteam(HWND hwnd) {
+    float t = std::min(1.0f, (GetTickCount64() - steamStart) / (float)std::max<DWORD>(steamMs, 1));
+    float eased = steamTo > steamFrom ? 1 - (1 - t) * (1 - t) * (1 - t) : t * t;
+    steam = steamFrom + (steamTo - steamFrom) * eased;
+    if (t >= 1) {
+        steam = steamTo;
+        KillTimer(hwnd, kSteamTimer);
+    }
+    ShowCup(hwnd, CupText().c_str(), true);
+}
+
+// Unix seconds, and the moment this Windows session started, to tell a reload from a reboot.
+static long long NowSeconds() {
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    return (long long)((((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime) / 10000000ULL - 11644473600ULL);
+}
+static long long BootSeconds() { return NowSeconds() - (long long)(GetTickCount64() / 1000); }
+
+static void SaveAwake() {
+    Wh_SetIntValue(L"caffeine.awake", awake ? 1 : 0);
+    Wh_SetIntValue(L"caffeine.boot", (int)BootSeconds());
+    long long until = awake && expiresAt ? NowSeconds() + (long long)((expiresAt - GetTickCount64()) / 1000) : 0;
+    Wh_SetIntValue(L"caffeine.until", (int)until);
+    Wh_SetIntValue(L"caffeine.chosen", chosenMinutes);
+}
+
+static bool ApplyAwake(bool enable) {
     EXECUTION_STATE flags = ES_CONTINUOUS;
     if (enable) {
+        // Always stops sleep, like the old Keep awake module. A separate switch for it read as
+        // off for everyone who updated, because Windhawk gives 0 for a setting never saved.
         flags |= ES_SYSTEM_REQUIRED;
         if (Wh_GetIntSetting(L"keepAwake.keepDisplay")) flags |= ES_DISPLAY_REQUIRED;
     }
     if (!SetThreadExecutionState(flags)) {
-        Wh_Log(L"Keep awake: execution state change failed");
-        return;
+        Wh_Log(L"Caffeine: execution state change failed");
+        return false;
     }
+    return true;
+}
+
+static void SetAwake(bool enable, int minutes = 0, HWND hwnd = nullptr, bool save = true) {
+    if (!ApplyAwake(enable)) return;
+    bool was = awake;
     awake = enable;
     expiresAt = enable && minutes ? GetTickCount64() + 60000ULL * minutes : 0;
+    chosenMinutes = enable ? minutes : -1;
+    if (save) SaveAwake();
+    if (hwnd && was != enable) StartSteam(hwnd, enable ? 1.0f : 0.0f);
+    else if (!hwnd) steam = enable ? 1.0f : 0.0f;
+    Wh_Log(L"Caffeine: %s%s", enable ? L"on" : L"off",
+           enable && minutes ? (L" for " + std::to_wstring(minutes) + L" min").c_str() : L"");
 }
 
 static int DefaultMinutes() {
     return std::clamp(Wh_GetIntSetting(L"keepAwake.minutes"), 0, 1440);
 }
 
-static void ToggleAwake() {
-    SetAwake(!awake, DefaultMinutes());
+static void ToggleAwake(HWND hwnd) {
+    SetAwake(!awake, DefaultMinutes(), hwnd);
+}
+
+// Caffeine stays on through a mod reload or an Explorer restart in the same Windows session.
+static bool ResumeAwake() {
+    if (!Wh_GetIntValue(L"caffeine.awake", 0)) return false;
+    long long boot = Wh_GetIntValue(L"caffeine.boot", 0);
+    if (llabs(boot - BootSeconds()) > 120) return false;
+    long long until = Wh_GetIntValue(L"caffeine.until", 0), now = NowSeconds();
+    if (until && until <= now) return false;
+    int minutes = until ? (int)std::max<long long>(1, (until - now + 59) / 60) : 0;
+    if (!ApplyAwake(true)) return false;
+    awake = true;
+    steam = 1;
+    expiresAt = until ? GetTickCount64() + (ULONGLONG)(until - now) * 1000ULL : 0;
+    chosenMinutes = Wh_GetIntValue(L"caffeine.chosen", minutes);
+    Wh_Log(L"Caffeine: resumed%s", until ? L" with time left" : L"");
+    return true;
 }
 
 static std::wstring AdapterAlias() {
@@ -7504,9 +7760,10 @@ static void Refresh(HWND hwnd) {
         CloseHandle(std::exchange(networkCommand, nullptr));
     }
     if (st::g_modOn[8]) {
-        if (awake && expiresAt && GetTickCount64() >= expiresAt) SetAwake(false);
-        Update(hwnd, kAwakeId, awakeBadge, awake, L'\uF0F4',
-               awake ? L"Keep awake is on" : L"Keep awake is off");
+        if (awake && expiresAt && GetTickCount64() >= expiresAt) SetAwake(false, 0, hwnd);
+        ShowCup(hwnd, CupText().c_str());
+    } else if (awakeBadge.shown || awakeBadge.icon) {
+        Remove(hwnd, kAwakeId, awakeBadge);
     }
     if (st::g_modOn[9]) {
         auto alias = AdapterAlias();
@@ -7527,12 +7784,12 @@ static void OnTray(HWND hwnd, WPARAM location, LPARAM event) {
     if (st::g_safeMode) return;
     UINT id = HIWORD(event);
     if (LOWORD(event) == NIN_SELECT || LOWORD(event) == NIN_KEYSELECT) {
-        if (id == kAwakeId) {
-            ToggleAwake();
+        if (SameIcon(id, kAwakeId)) {
+            ToggleAwake(hwnd);
             Refresh(hwnd);
             return;
         }
-        if (id == kNetworkId && Wh_GetIntSetting(L"networkToggle.clickToToggle")) {
+        if (SameIcon(id, kNetworkId) && Wh_GetIntSetting(L"networkToggle.clickToToggle")) {
             ToggleNetwork(hwnd);
             Refresh(hwnd);
             return;
@@ -7543,12 +7800,17 @@ static void OnTray(HWND hwnd, WPARAM location, LPARAM event) {
 
     using stset::Set_MenuRow;
     std::vector<stset::SetMenuItem> items;
-    if (id == kAwakeId) {
-        items.push_back(Set_MenuRow(1, L"\uF0F4", awake ? L"Turn off keep awake" : L"Turn on keep awake"));
-        items.push_back(Set_MenuRow(2, L"\uF017", L"Keep awake for 30 minutes"));
-        items.push_back(Set_MenuRow(3, L"\uF017", L"Keep awake for 2 hours"));
-        items.push_back(Set_MenuRow(4, L"\uF017", L"Keep awake until turned off"));
-    } else if (id == kNetworkId) {
+    static const struct { int id, minutes; PCWSTR label; } kLengths[] = {
+        {10, 15, L"15 minutes"}, {11, 30, L"30 minutes"}, {12, 60, L"1 hour"},
+        {13, 120, L"2 hours"},   {14, 240, L"4 hours"},   {15, 0, L"Until I turn it off"}};
+    if (SameIcon(id, kAwakeId)) {
+        if (awake) items.push_back(Set_MenuRow(0, L"\uF017", CupText().c_str(), false, true));
+        items.push_back(Set_MenuRow(1, L"\uF0F4", awake ? L"Turn off Caffeine" : L"Turn on Caffeine"));
+        items.push_back(stset::Set_MenuSep());
+        for (const auto& length : kLengths)
+            items.push_back(Set_MenuRow(length.id, L"\uF017", length.label, awake && chosenMinutes == length.minutes));
+        items.push_back(stset::Set_MenuSep());
+    } else if (SameIcon(id, kNetworkId)) {
         auto alias = AdapterAlias();
         MIB_IF_ROW2 row{};
         bool valid = AdapterState(alias, row);
@@ -7563,11 +7825,10 @@ static void OnTray(HWND hwnd, WPARAM location, LPARAM event) {
     POINT point{static_cast<SHORT>(LOWORD(location)), static_cast<SHORT>(HIWORD(location))};
     int command = stset::Set_TrayMenu(hwnd, items, &point);
     if (command == 5) stset::OpenSettingsWindow();
-    if (id == kAwakeId) {
-        if (command == 1) ToggleAwake();
-        if (command == 2) SetAwake(true, 30);
-        if (command == 3) SetAwake(true, 120);
-        if (command == 4) SetAwake(true);
+    if (SameIcon(id, kAwakeId)) {
+        if (command == 1) ToggleAwake(hwnd);
+        for (const auto& length : kLengths)
+            if (command == length.id) SetAwake(true, length.minutes, hwnd);
     } else {
         if (command == 1) ToggleNetwork(hwnd);
         if (command == 2) ShellExecuteW(hwnd, L"open", L"ms-settings:network-status", nullptr, nullptr, SW_SHOWNORMAL);
@@ -7577,26 +7838,27 @@ static void OnTray(HWND hwnd, WPARAM location, LPARAM event) {
 
 static void Start(HWND hwnd) {
     if (st::g_safeMode) return;
-    if (st::g_modOn[8] && Wh_GetIntSetting(L"keepAwake.startEnabled")) {
-        SetAwake(true, DefaultMinutes());
+    if (st::g_modOn[8]) {
+        if (!ResumeAwake() && Wh_GetIntSetting(L"keepAwake.startEnabled") && GetTickCount64() < 10ULL * 60 * 1000)
+            SetAwake(true, DefaultMinutes());
+    } else if (Wh_GetIntValue(L"caffeine.awake", 0)) {
+        Wh_SetIntValue(L"caffeine.awake", 0);  // Turning the module off ends Caffeine for good.
     }
     if (st::g_modOn[8] || st::g_modOn[9]) SetTimer(hwnd, kTimer, 2000, nullptr);
     Refresh(hwnd);
 }
 
 static void SettingsChanged(HWND hwnd) {
-    if (awake) {
-        ULONGLONG deadline = expiresAt;
-        SetAwake(true);
-        expiresAt = deadline;
-    }
+    if (awake) ApplyAwake(true);
     networkError = 0;
     Refresh(hwnd);
 }
 
 static void Stop(HWND hwnd) {
     KillTimer(hwnd, kTimer);
-    if (awake) SetAwake(false);
+    KillTimer(hwnd, kSteamTimer);
+    if (awake) ApplyAwake(false);  // The saved state stays, so Caffeine comes back after a reload.
+    awake = false;
     if (networkCommand) CloseHandle(std::exchange(networkCommand, nullptr));
     Remove(hwnd, kAwakeId, awakeBadge);
     Remove(hwnd, kNetworkId, networkBadge);
@@ -7746,6 +8008,7 @@ inline LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         case sttools::kCallback: sttools::OnTray(hwnd, wParam, lParam); return 0;
         case WM_TIMER:
             if (wParam == sttools::kTimer) sttools::Refresh(hwnd);
+            if (wParam == sttools::kSteamTimer) sttools::StepSteam(hwnd);
             return 0;
         case WM_APP_TRAY: OnTray(hwnd, lParam); return 0;
         case WM_APP_TRAY_REFRESH: Update(hwnd); sttools::SettingsChanged(hwnd); return 0;
@@ -92100,7 +92363,7 @@ wuxc::MenuFlyoutSubItem BuildModules(LONG_PTR dock) {
     AddModule(menu, L"Clock island", 3);
     AddModule(menu, L"Apps dock", 2);
     AddModule(menu, L"Hide tooltips", 4);
-    AddModule(menu, L"Keep awake", 8);
+    AddModule(menu, L"Caffeine", 8);
     AddModule(menu, L"Network toggle", 9);
     AddModule(menu, L"Tray icon rules", 10);
     AddModule(menu, L"Wallpaper switcher", 11);

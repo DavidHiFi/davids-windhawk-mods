@@ -110,7 +110,7 @@
         "resourceRedirect.allResourceRedirect": 0,
         "resourceRedirect.disableThumbnails": 0,
         "resourceRedirect.enabled": 1,
-        "resourceRedirect.iconTheme": "",
+        "resourceRedirect.iconTheme": "themes/icons/niivu/Catppuccin%20blue.zip",
         "resourceRedirect.redirectionResourcePaths[0].original": "",
         "resourceRedirect.redirectionResourcePaths[0].redirect": "",
         "resourceRedirect.skipPrograms[0]": "",

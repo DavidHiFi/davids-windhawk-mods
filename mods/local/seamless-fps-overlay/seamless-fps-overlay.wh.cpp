@@ -2,7 +2,7 @@
 // @id              seamless-fps-overlay
 // @name            Seamless FPS Overlay
 // @description     FPS, frame times and PC temperatures over any game, with nothing put into the game
-// @version         1.1.5
+// @version         1.1.6
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -23,6 +23,11 @@ moving pictures included, and nothing is put into the game: Windows itself
 reports each frame, so it is safe with anti-cheat and works over Plutonium.
 
 ![Seamless FPS Overlay preview](https://raw.githubusercontent.com/DavidHiFi/davids-windhawk-mods/main/media/previews/seamless-fps-overlay.png)
+
+## What's new in 1.1.6
+
+- Optional frame latency now shows PresentMon's average time from CPU frame start until the frame appears on screen. The add-on installs with the mod.
+- Hiding the overlay, turning latency off or closing the game ends the measurement cleanly, with nothing left running.
 
 ## What's new in 1.1.5
 
@@ -106,10 +111,10 @@ overlay with a click. Right-click it for layouts and settings.
   administrator helper.
 - Processor temperature and power need the PawnIO driver. Without it those
   show a dash and everything else still works.
-- Input delay is not measured yet, so that line is off by default.
+- Frame latency measures how long a frame takes from CPU start until it appears on screen. It needs the PresentMon add-on.
 
 ## Credits
-Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
+Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1). Frame latency uses [Intel PresentMon](https://github.com/GameTechDev/PresentMon).
 */
 // ==/WindhawkModReadme==
 
@@ -201,9 +206,9 @@ Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
 - frameGraph: true
   $name: "Frame time graph"
   $description: "A line of the last few seconds of frame times. Tall spikes are stutters."
-- latency: false
-  $name: "Input delay"
-  $description: "This mod cannot measure it yet, so it shows a dash. Off by default."
+- latency: true
+  $name: "Frame latency"
+  $description: "Average time from a frame starting on the CPU until it appears on screen. Requires the PresentMon add-on."
 - api: true
   $name: "Graphics engine"
   $description: "Whether the game draws with DirectX 9, 11, 12, OpenGL or Vulkan."
@@ -568,7 +573,7 @@ Processor readings use [PawnIO](https://pawnio.eu) by namazso (LGPL-2.1).
 - lblFrame: "FRAME TIME"
   $name: "Frame time"
 - lblLatency: "LATENCY"
-  $name: "Input delay"
+  $name: "Frame latency"
 - lblApi: "API"
   $name: "Graphics engine"
 - lblTime: "PLAY TIME"
@@ -2873,6 +2878,7 @@ inline void CloseReader() {
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <cstdlib>
 #include <cwchar>
 #include <cwctype>
 #include <map>
@@ -3216,7 +3222,7 @@ static void LoadSettings() {
     s.cpuClock = BoolSet(L"cpuClock", true);
 
     s.jitter = BoolSet(L"jitter", true);
-    s.latency = BoolSet(L"latency", false);
+    s.latency = BoolSet(L"latency", true);
     s.limitedBy = BoolSet(L"limitedBy", true);
     s.api = BoolSet(L"api", true);
     s.session = BoolSet(L"session", true);
@@ -3883,6 +3889,222 @@ static Stats Compute(int periodMs, int graphSeconds = 3) {
 }
 
 }  // namespace frames
+
+namespace latency {
+
+static HANDLE g_process = nullptr;
+static HANDLE g_csv = INVALID_HANDLE_VALUE;
+static DWORD g_pid = 0;
+static std::wstring g_path, g_exe;
+static LARGE_INTEGER g_offset{};
+static std::string g_pending;
+static int g_column = -1;
+static double g_samples[30]{};
+static size_t g_head = 0, g_count = 0;
+static ULONGLONG g_lastSample = 0, g_retryAt = 0;
+
+static void ResetSamples() {
+    g_head = g_count = 0;
+    g_lastSample = 0;
+    g_pending.clear();
+    g_column = -1;
+    g_offset.QuadPart = 0;
+}
+
+// Killing PresentMon leaves its trace session running in Windows, so ask PresentMon to end the
+// named session first; the reader then exits by itself.
+static void EndSession() {
+    if (g_exe.empty()) return;
+    wchar_t command[1024]{};
+    swprintf_s(command, L"\"%s\" --session_name SfoOverlay%lu --terminate_existing_session", g_exe.c_str(),
+               GetCurrentProcessId());
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi{};
+    if (CreateProcessW(g_exe.c_str(), command, nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+        CloseHandle(pi.hThread);
+        WaitForSingleObject(pi.hProcess, 800);
+        CloseHandle(pi.hProcess);
+    }
+}
+
+static void Stop() {
+    if (g_process) {
+        if (WaitForSingleObject(g_process, 0) == WAIT_TIMEOUT) {
+            EndSession();
+            if (WaitForSingleObject(g_process, 500) == WAIT_TIMEOUT) {
+                TerminateProcess(g_process, 0);
+                WaitForSingleObject(g_process, 500);
+            }
+        }
+        CloseHandle(g_process);
+        g_process = nullptr;
+    }
+    if (g_csv != INVALID_HANDLE_VALUE) {
+        CloseHandle(g_csv);
+        g_csv = INVALID_HANDLE_VALUE;
+    }
+    if (!g_path.empty()) DeleteFileW(g_path.c_str());
+    g_path.clear();
+    g_pid = 0;
+    g_retryAt = 0;
+    ResetSamples();
+}
+
+static void Start(DWORD pid) {
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion", 0,
+                      KEY_QUERY_VALUE | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS) {
+        g_retryAt = GetTickCount64() + 5000;
+        return;
+    }
+    wchar_t programFiles[MAX_PATH]{};
+    DWORD type = 0, bytes = sizeof(programFiles);
+    LONG result = RegQueryValueExW(key, L"ProgramFilesDir", nullptr, &type,
+                                   reinterpret_cast<BYTE*>(programFiles), &bytes);
+    RegCloseKey(key);
+    programFiles[MAX_PATH - 1] = L'\0';
+    if (result != ERROR_SUCCESS || type != REG_SZ || !programFiles[0]) {
+        g_retryAt = GetTickCount64() + 5000;
+        return;
+    }
+    const std::wstring dir = std::wstring(programFiles) + L"\\DavidHiFi\\PresentMon";
+    const std::wstring exe = dir + L"\\PresentMon-2.6.0-x64.exe";
+    if (GetFileAttributesW(exe.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        g_retryAt = GetTickCount64() + 5000;
+        return;
+    }
+    wchar_t name[96]{};
+    swprintf_s(name, L"SfoPresentMon-%lu-%lu.csv", GetCurrentProcessId(), pid);
+    g_path = dir + L"\\" + name;
+    DeleteFileW(g_path.c_str());
+
+    wchar_t command[2048]{};
+    swprintf_s(command, L"\"%s\" --process_id %lu --output_file \"%s\" --no_console_stats --no_track_input --v2_metrics --session_name SfoOverlay%lu --stop_existing_session --terminate_on_proc_exit",
+               exe.c_str(), pid, g_path.c_str(), GetCurrentProcessId());
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi{};
+    if (!CreateProcessW(exe.c_str(), command, nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+        g_path.clear();
+        g_retryAt = GetTickCount64() + 5000;
+        return;
+    }
+    CloseHandle(pi.hThread);
+    g_process = pi.hProcess;
+    g_exe = exe;
+    g_pid = pid;
+    g_retryAt = 0;
+    ResetSamples();
+}
+
+static std::vector<std::string> CsvFields(const std::string& line) {
+    std::vector<std::string> fields;
+    std::string field;
+    bool quoted = false;
+    for (size_t i = 0; i < line.size(); i++) {
+        const char c = line[i];
+        if (c == '"') {
+            if (quoted && i + 1 < line.size() && line[i + 1] == '"') {
+                field.push_back('"');
+                i++;
+            } else {
+                quoted = !quoted;
+            }
+        } else if (c == ',' && !quoted) {
+            fields.push_back(std::move(field));
+            field.clear();
+        } else {
+            field.push_back(c);
+        }
+    }
+    fields.push_back(std::move(field));
+    return fields;
+}
+
+static void ParseLine(const std::string& line) {
+    if (line.empty()) return;
+    auto fields = CsvFields(line);
+    if (g_column < 0) {
+        for (size_t i = 0; i < fields.size(); i++)
+            if (fields[i] == "DisplayLatency" || fields[i] == "MsDisplayLatency") {
+                g_column = (int)i;
+                return;
+            }
+        if (fields.size() > 1 && fields[0] == "Application") g_column = -2;
+        return;
+    }
+    if (g_column == -2 || (size_t)g_column >= fields.size()) return;
+    char* end = nullptr;
+    double value = std::strtod(fields[g_column].c_str(), &end);
+    if (!end || end == fields[g_column].c_str() || *end || !std::isfinite(value) || value < 0) return;
+    g_samples[g_head] = value;
+    g_head = (g_head + 1) % (sizeof(g_samples) / sizeof(g_samples[0]));
+    if (g_count < sizeof(g_samples) / sizeof(g_samples[0])) g_count++;
+    g_lastSample = GetTickCount64();
+}
+
+static void ReadAvailable() {
+    if (!g_process || WaitForSingleObject(g_process, 0) == WAIT_OBJECT_0) return;
+    if (g_csv == INVALID_HANDLE_VALUE) {
+        g_csv = CreateFileW(g_path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                            nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (g_csv == INVALID_HANDLE_VALUE) return;
+    }
+    LARGE_INTEGER size{};
+    if (!GetFileSizeEx(g_csv, &size) || size.QuadPart <= g_offset.QuadPart) return;
+    if (size.QuadPart - g_offset.QuadPart > 1024 * 1024) {
+        g_offset = size;
+        return;
+    }
+    LARGE_INTEGER at = g_offset;
+    if (!SetFilePointerEx(g_csv, at, nullptr, FILE_BEGIN)) return;
+    std::vector<char> bytes((size_t)(size.QuadPart - g_offset.QuadPart));
+    DWORD got = 0;
+    if (!ReadFile(g_csv, bytes.data(), (DWORD)bytes.size(), &got, nullptr) || !got) return;
+    g_offset.QuadPart += got;
+    g_pending.append(bytes.data(), got);
+    size_t newline;
+    while ((newline = g_pending.find('\n')) != std::string::npos) {
+        std::string line = g_pending.substr(0, newline);
+        g_pending.erase(0, newline + 1);
+        if (line.size() >= 3 && (unsigned char)line[0] == 0xEF && (unsigned char)line[1] == 0xBB &&
+            (unsigned char)line[2] == 0xBF)
+            line.erase(0, 3);
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        ParseLine(line);
+    }
+}
+
+static void Update(DWORD pid, bool enabled) {
+    if (!enabled || !pid) {
+        if (g_process || !g_path.empty() || g_pid) Stop();
+        return;
+    }
+    if (g_pid && g_pid != pid) Stop();
+    if (!g_pid) {
+        if (GetTickCount64() >= g_retryAt) Start(pid);
+        return;
+    }
+    ReadAvailable();
+    if (g_process && WaitForSingleObject(g_process, 0) == WAIT_OBJECT_0) {
+        Stop();
+        g_retryAt = GetTickCount64() + 5000;
+    }
+}
+
+static double Value() {
+    if (!g_count || !g_lastSample || GetTickCount64() - g_lastSample > 2000) return NAN;
+    double sum = 0;
+    for (size_t i = 0; i < g_count; i++) sum += g_samples[i];
+    return sum / g_count;
+}
+
+}  // namespace latency
 
 // ============================================================================
 // Glass behind the overlay: Windows' own blur, in a click-through window just under it.
@@ -4655,7 +4877,7 @@ static float BuildBlock(Bench& b) {
                 bool on;
                 const wchar_t* key;
                 std::wstring value, unit;
-            } lines[] = {{g_set.latency, L"lblLatency", kDash, L"ms"},
+            } lines[] = {{g_set.latency, L"lblLatency", Num(latency::Value(), 1), L"ms"},
                          {g_set.api, L"lblApi", g_apiName.empty() ? kDash : g_apiName, L""},
                          {g_set.session, L"lblTime", PlayTime(f.live), L""},
                          {g_set.driver, L"lblDriver", r.sensorsOk && s.gpuDriver[0] ? std::wstring(s.gpuDriver) : kDash,
@@ -6092,12 +6314,14 @@ static void Tick(bool force) {
         }
     }
     if (!want) {
+        latency::Update(g_targetPid, false);
         if (g_shown && !(g_animating && !g_animIn)) StartAnim(false);
         g_wantVisible = false;
         UpdateGfxTimer();
         return;
     }
     g_wantVisible = true;
+    latency::Update(g_targetPid, g_set.latency);
 
     EnsureSensors();
     // One line every 5 s while shown, for the mod's log (silent unless logging is on).
@@ -6160,6 +6384,7 @@ static void SetEnabled(bool on) {
     } else {
         KillTimer(g_ctrl, TIMER_TICK);
         frames::Stop();
+        latency::Update(0, false);
         g_targetPid = 0;
         if (g_shown) StartAnim(false);
         UpdateGfxTimer();
@@ -6432,6 +6657,7 @@ static LRESULT CALLBACK CtrlWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             KillTimer(hwnd, TIMER_HOTKEY_RETRY);
             UnregisterHotKey(hwnd, HK_TOGGLE);
             UnregisterHotKey(hwnd, HK_PRESET);
+            latency::Update(0, false);
             frames::Free();
             RemoveTrayIcon();
             g_glass.Destroy();
@@ -7667,7 +7893,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Check, L"jitter", L"Frame pacing", L"How much the time between frames jumps around, in milliseconds. Lower feels smoother.", L"1", {}, 0, 100, 1, L"Frame rate"},
 {K::Check, L"frameTime", L"Frame time", L"How long each frame takes, in milliseconds.", L"1", {}, 0, 100, 1, L"Frame rate"},
 {K::Check, L"frameGraph", L"Frame time graph", L"A line of the last few seconds of frame times. Tall spikes are stutters.", L"1", {}, 0, 100, 1, L"Frame rate"},
-{K::Check, L"latency", L"Input delay", L"This mod cannot measure it yet, so it shows a dash. Off by default.", L"0", {}, 0, 100, 1, L"Game info"},
+{K::Check, L"latency", L"Frame latency", L"Average time from a frame starting on the CPU until it appears on screen. Requires the PresentMon add-on.", L"1", {}, 0, 100, 1, L"Game info"},
 {K::Check, L"api", L"Graphics engine", L"Whether the game draws with DirectX 9, 11, 12, OpenGL or Vulkan.", L"1", {}, 0, 100, 1, L"Game info"},
 {K::Check, L"session", L"Play time", L"How long the game in front has been running.", L"1", {}, 0, 100, 1, L"Game info"},
 {K::Check, L"driver", L"Driver version", L"The graphics driver version.", L"1", {}, 0, 100, 1, L"Game info"},
@@ -7743,7 +7969,7 @@ static std::vector<SetField> Set_MakeFields() {
 {K::Text, L"lblAvg", L"Average", L"", L"AVG", {}, 0, 100, 3, L"Frame rate"},
 {K::Text, L"lblJitter", L"Frame pacing", L"", L"FRAME PACING", {}, 0, 100, 3, L"Frame rate"},
 {K::Text, L"lblFrame", L"Frame time", L"", L"FRAME TIME", {}, 0, 100, 3, L"Frame rate"},
-{K::Text, L"lblLatency", L"Input delay", L"", L"LATENCY", {}, 0, 100, 3, L"Game info"},
+{K::Text, L"lblLatency", L"Frame latency", L"", L"LATENCY", {}, 0, 100, 3, L"Game info"},
 {K::Text, L"lblApi", L"Graphics engine", L"", L"API", {}, 0, 100, 3, L"Game info"},
 {K::Text, L"lblTime", L"Play time", L"", L"PLAY TIME", {}, 0, 100, 3, L"Game info"},
 {K::Text, L"lblDriver", L"Driver version", L"", L"DRIVER", {}, 0, 100, 3, L"Game info"},
