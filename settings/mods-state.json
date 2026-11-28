@@ -599,7 +599,7 @@
     "include": "windhawk-ui.exe|windhawk.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.2.35"
+    "version": "2.2.37"
   },
   "local@window-manager": {
     "disabled": true,
@@ -1187,7 +1187,7 @@
     "include": "explorer.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "0.4.69"
+    "version": "0.4.72"
   },
   "local@seamless-wobbly-windows": {
     "disabled": false,
@@ -1292,7 +1292,7 @@
     "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.1.5"
+    "version": "1.1.6"
   },
   "local@seamless-winver-configurator": {
     "disabled": false,
@@ -1320,14 +1320,14 @@
     "include": "explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "1.1.7"
+    "version": "1.1.8"
   },
   "local@seamless-icons": {
     "disabled": false,
     "include": "*",
     "exclude": "dwm.exe|cloudflared.exe|ollama.exe|ollama app.exe|tailscale-ipn.exe|esbuild.exe",
     "architecture": "",
-    "version": "1.0.1"
+    "version": "1.0.3"
   },
   "local@seamless-tools": {
     "disabled": false,
