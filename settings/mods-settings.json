@@ -4859,7 +4859,7 @@
   "local@startup-control": {
     "confirmDevices": 1,
     "nativeSettingsTitleBar": 1,
-    "openSettingsWindow": 1,
+    "openSettingsWindow": 0,
     "scanDevices": 1,
     "scanRegistry": 1,
     "scanServices": 1,
