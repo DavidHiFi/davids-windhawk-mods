@@ -2,7 +2,7 @@
 // @id              seamless-bulk-rename
 // @name            Seamless Bulk Rename
 // @description     Rename many files at once with a stack of rules and a live before and after list
-// @version         1.0.1
+// @version         1.0.3
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/seamless-workshop
@@ -452,6 +452,7 @@ Made by [DavidHiFi](https://github.com/DavidHiFi). Like it? [Buy me a coffee on 
 #include <shlobj.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstdint>
@@ -461,6 +462,7 @@ Made by [DavidHiFi](https://github.com/DavidHiFi). Like it? [Buy me a coffee on 
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <new>
 #include <regex>
 #include <set>
 #include <string>
@@ -808,16 +810,15 @@ static void ReadTags(Item& it) {
 }
 
 static uint32_t Crc32Of(const uint8_t* p, size_t n, uint32_t crc) {
-    static uint32_t table[256];
-    static bool ready = false;
-    if (!ready) {
-        for (uint32_t i = 0; i < 256; i++) {
+    static const std::array<uint32_t, 256> table = [] {
+        std::array<uint32_t, 256> values{};
+        for (uint32_t i = 0; i < values.size(); i++) {
             uint32_t c = i;
             for (int k = 0; k < 8; k++) c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1;
-            table[i] = c;
+            values[i] = c;
         }
-        ready = true;
-    }
+        return values;
+    }();
     for (size_t i = 0; i < n; i++) crc = table[(crc ^ p[i]) & 0xFF] ^ (crc >> 8);
     return crc;
 }
@@ -840,7 +841,12 @@ static std::wstring HashOf(Item& it, const std::wstring& algo) {
             bool ok = crc || (BCryptOpenAlgorithmProvider(&alg, id, nullptr, 0) >= 0 &&
                               BCryptCreateHash(alg, &hash, nullptr, 0, nullptr, 0, 0) >= 0);
             DWORD got = 0;
-            while (ok && ReadFile(f, buf.data(), (DWORD)buf.size(), &got, nullptr) && got) {
+            while (ok) {
+                if (!ReadFile(f, buf.data(), (DWORD)buf.size(), &got, nullptr)) {
+                    ok = false;
+                    break;
+                }
+                if (!got) break;
                 if (crc) crcv = Crc32Of(buf.data(), got, crcv);
                 else ok = BCryptHashData(hash, buf.data(), got, 0) >= 0;
             }
@@ -1784,6 +1790,7 @@ struct Job {
     bool setTime = false;
     FILETIME setFt{};
     bool ok = false;
+    bool recoveryNeeded = false;
     std::wstring error;
 };
 
@@ -1808,7 +1815,7 @@ static bool WriteJournal(const std::wstring& path, const Plan& p, bool onlyOk) {
     int count = 0;
     std::string body;
     for (const Job& j : p.jobs) {
-        if (onlyOk && !j.ok) continue;
+        if (onlyOk && !j.ok && !j.recoveryNeeded) continue;
         count++;
         body += Utf8(j.from) + "\t" + Utf8(j.temp) + "\t" + Utf8(j.to) + "\t" + std::to_string(FtNum(j.oldC)) + "\t" +
                 std::to_string(FtNum(j.oldM)) + "\t" + std::to_string(j.oldAttrs) + "\n";
@@ -1976,7 +1983,7 @@ static Result* RunPlan(Plan& p) {
                 j.ok = true;
             } else {
                 j.error = LastErrorText(GetLastError());
-                MoveFileExW(Long(j.temp).c_str(), Long(j.from).c_str(), 0);
+                if (!MoveFileExW(Long(j.temp).c_str(), Long(j.from).c_str(), 0)) j.recoveryNeeded = true;
             }
         }
     }
@@ -1992,7 +1999,9 @@ static Result* RunPlan(Plan& p) {
         ApplyMarks(j.to, p.marks);
         if (!p.copy) res->moved.push_back({j.from, j.to});
     }
-    if (res->done) WriteJournal(journal, p, true);
+    bool recoveryNeeded = false;
+    for (const Job& j : p.jobs) recoveryNeeded = recoveryNeeded || j.recoveryNeeded;
+    if (res->done || recoveryNeeded) WriteJournal(journal, p, true);
     else DeleteFileW(journal.c_str());
     TrimJournals(p.undoLevels);
     return res;
@@ -2188,6 +2197,11 @@ namespace bruex {
 static std::atomic<bool> g_menuOn{true};
 static HANDLE g_hotThread;
 static std::atomic<DWORD> g_hotThreadId;
+static std::atomic<bool> g_hotStop{false};
+constexpr size_t kMaxSendThreads = 64;
+[[clang::no_destroy]] static std::mutex g_sendLock;
+static HANDLE g_sendThreads[kMaxSendThreads]{};
+static bool g_sendStopping = false;
 constexpr UINT WM_APP_HOTKEY_RELOAD = WM_APP + 1;
 
 static bool ClassIs(HWND h, PCWSTR cls) {
@@ -2274,10 +2288,54 @@ static DWORD WINAPI SendThread(void* p) {
 // Hands the paths to a short-lived thread so Explorer's own window never waits on the tool process.
 static void Send(wchar_t kind, std::vector<std::wstring>&& paths) {
     if (!kind || paths.empty()) return;
-    auto* job = new SendJob{kind, std::move(paths)};
-    HANDLE t = CreateThread(nullptr, 0, SendThread, job, 0, nullptr);
-    if (t) CloseHandle(t);
-    else delete job;
+    std::lock_guard<std::mutex> lock(g_sendLock);
+    if (g_sendStopping) return;
+
+    size_t slot = kMaxSendThreads;
+    for (size_t i = 0; i < kMaxSendThreads; i++) {
+        HANDLE thread = g_sendThreads[i];
+        if (!thread) {
+            if (slot == kMaxSendThreads) slot = i;
+            continue;
+        }
+        if (WaitForSingleObject(thread, 0) == WAIT_OBJECT_0) {
+            CloseHandle(thread);
+            g_sendThreads[i] = nullptr;
+            if (slot == kMaxSendThreads) slot = i;
+        }
+    }
+    if (slot == kMaxSendThreads) {
+        Wh_Log(L"Too many rename requests are still waiting");
+        return;
+    }
+
+    auto* job = new (std::nothrow) SendJob{kind, std::move(paths)};
+    if (!job) {
+        Wh_Log(L"Couldn't allocate a rename request");
+        return;
+    }
+    HANDLE thread = CreateThread(nullptr, 0, SendThread, job, 0, nullptr);
+    if (!thread) {
+        delete job;
+        return;
+    }
+    g_sendThreads[slot] = thread;
+}
+
+static void StartSendThreads() {
+    std::lock_guard<std::mutex> lock(g_sendLock);
+    g_sendStopping = false;
+}
+
+static void StopSendThreads() {
+    std::lock_guard<std::mutex> lock(g_sendLock);
+    g_sendStopping = true;
+    for (HANDLE& thread : g_sendThreads) {
+        if (!thread) continue;
+        WaitForSingleObject(thread, INFINITE);
+        CloseHandle(thread);
+        thread = nullptr;
+    }
 }
 
 // ---- The right-click entry ------------------------------------------------------------------------------------------
@@ -2483,7 +2541,7 @@ static DWORD WINAPI HotkeyThread(void*) {
     HWINEVENTHOOK hook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, OnForeground, 0, 0,
                                          WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNTHREAD);
     SyncHotkey(GetForegroundWindow());
-    while (GetMessageW(&m, nullptr, 0, 0) > 0) {
+    while (!g_hotStop.load(std::memory_order_acquire) && GetMessageW(&m, nullptr, 0, 0) > 0) {
         if (!m.hwnd && m.message == WM_HOTKEY) {
             OnHotkey();
             continue;
@@ -2507,6 +2565,7 @@ static DWORD WINAPI HotkeyThread(void*) {
 
 static void StartHotkeyThread() {
     DWORD id = 0;
+    g_hotStop.store(false, std::memory_order_release);
     g_hotThread = CreateThread(nullptr, 0, HotkeyThread, nullptr, 0, &id);
     g_hotThreadId = id;
 }
@@ -2517,8 +2576,9 @@ static void ReloadHotkey() {
 
 static void StopHotkeyThread() {
     if (!g_hotThread) return;
+    g_hotStop.store(true, std::memory_order_release);
     if (DWORD id = g_hotThreadId) PostThreadMessageW(id, WM_QUIT, 0, 0);
-    if (WaitForSingleObject(g_hotThread, 5000) == WAIT_TIMEOUT) Wh_Log(L"The shortcut thread did not stop");
+    WaitForSingleObject(g_hotThread, INFINITE);
     CloseHandle(g_hotThread);
     g_hotThread = nullptr;
     g_hotThreadId = 0;
@@ -6146,7 +6206,7 @@ void OpenSettingsWindow() {
 void CloseSettingsWindow() {
  g_settingsStop=true;
  if(HWND hwnd=g_settingsWnd) PostMessageW(hwnd,WM_CLOSE,0,0);
- if(g_settingsThread) { WaitForSingleObject(g_settingsThread,15000); CloseHandle(g_settingsThread); g_settingsThread=nullptr; }
+ if(g_settingsThread) { WaitForSingleObject(g_settingsThread,INFINITE); CloseHandle(g_settingsThread); g_settingsThread=nullptr; }
 }
 // ---- The rename list ------------------------------------------------------------------------------------------------
 // A dock on the right of the settings window: the files, their names now and after the rules, and the Rename button.
@@ -6177,6 +6237,7 @@ struct BruPane {
 };
 static BruPane* g_pane = nullptr;
 static HANDLE g_bruWorker = nullptr;
+static std::atomic<bru::Result*> g_bruResult{nullptr};
 [[clang::no_destroy]] static std::mutex g_bruQueueLock;
 [[clang::no_destroy]] static std::vector<std::pair<std::vector<std::wstring>, bool>> g_bruQueue;
 static std::atomic<bool> g_bruUndoPending{false};
@@ -6429,7 +6490,15 @@ static DWORD WINAPI Bru_Worker(void* arg) {
     delete job->plan;
     HWND hwnd = job->hwnd;
     delete job;
-    if (!PostMessageW(hwnd, WM_APP_BRU_DONE, undo, (LPARAM)r)) delete r;
+    bru::Result* expected = nullptr;
+    if (r && g_bruResult.compare_exchange_strong(expected, r, std::memory_order_release, std::memory_order_relaxed)) {
+        if (!PostMessageW(hwnd, WM_APP_BRU_DONE, undo, 0)) {
+            expected = r;
+            if (g_bruResult.compare_exchange_strong(expected, nullptr, std::memory_order_acq_rel)) delete r;
+        }
+    } else {
+        delete r;
+    }
     if (SUCCEEDED(co)) CoUninitialize();
     return 0;
 }
@@ -6840,9 +6909,11 @@ static LRESULT CALLBACK Bru_Subclass(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, 
         case WM_APP_BRU_UNDO:
             if (g_bruUndoPending.exchange(false)) Bru_RunUndo(*w);
             return 0;
-        case WM_APP_BRU_DONE:
-            Bru_Done(*w, wp != 0, (bru::Result*)lp);
+        case WM_APP_BRU_DONE: {
+            bru::Result* r = g_bruResult.exchange(nullptr, std::memory_order_acq_rel);
+            if (r) Bru_Done(*w, wp != 0, r);
             return 0;
+        }
         case WM_TIMER:
             if (wp == kBruTimer) {
                 if (!Bru_Tick(*w)) {
@@ -6998,18 +7069,25 @@ void Bru_QueuePaths(std::vector<std::wstring> paths, bool folder) {
     g_bruQueue.push_back({std::move(paths), folder});
 }
 
+void Bru_ClearQueuedPaths() {
+    std::lock_guard<std::mutex> lock(g_bruQueueLock);
+    g_bruQueue.clear();
+}
+
 void Bru_UndoLast() {
     g_bruUndoPending = true;
     OpenSettingsWindow();
     if (HWND hwnd = g_settingsWnd) PostMessageW(hwnd, WM_APP_BRU_UNDO, 0, 0);
 }
 
-// At unload: a rename still running finishes before the code it runs goes away.
+// At unload, wait until the worker has left this module before its code is unmapped.
 void Bru_WaitWorkers() {
-    if (!g_bruWorker) return;
-    WaitForSingleObject(g_bruWorker, 120000);
-    CloseHandle(g_bruWorker);
-    g_bruWorker = nullptr;
+    if (g_bruWorker) {
+        WaitForSingleObject(g_bruWorker, INFINITE);
+        CloseHandle(g_bruWorker);
+        g_bruWorker = nullptr;
+    }
+    delete g_bruResult.exchange(nullptr, std::memory_order_acq_rel);
 }
 
 // The tray icon's right-click menu. Returns 1 to open, 2 to undo, 3 for settings, 0 for nothing.
@@ -7034,6 +7112,8 @@ constexpr UINT TrayIconId() {
 constexpr UINT kTrayId = TrayIconId();
 static constexpr UINT WM_APP_TRAY = WM_APP + 20, WM_APP_TRAY_REFRESH = WM_APP + 21;
 static HANDLE g_trayThread;
+static DWORD g_trayThreadId;
+static std::atomic<bool> g_trayStop{false};
 static std::atomic<HWND> g_trayWnd;
 static UINT g_taskbarCreated;
 static bool g_trayShown;
@@ -7278,6 +7358,12 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 static DWORD WINAPI TrayThread(void*) {
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     HRESULT co = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    MSG m{};
+    PeekMessageW(&m, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+    if (g_trayStop.load(std::memory_order_acquire)) {
+        if (SUCCEEDED(co)) CoUninitialize();
+        return 0;
+    }
     HINSTANCE inst = (HINSTANCE)&__ImageBase;
     WNDCLASSW wc{};
     wc.lpfnWndProc = TrayProc;
@@ -7298,7 +7384,6 @@ static DWORD WINAPI TrayThread(void*) {
     ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr);  // Explorer runs with fewer rights.
     g_trayWnd = hwnd;
     UpdateTray(hwnd, true);
-    MSG m;
     while (GetMessageW(&m, nullptr, 0, 0) > 0) {
         TranslateMessage(&m);
         DispatchMessageW(&m);
@@ -7314,10 +7399,13 @@ static DWORD WINAPI TrayThread(void*) {
 
 static void StopTrayThread() {
     if (!g_trayThread) return;
+    g_trayStop.store(true, std::memory_order_release);
     if (HWND hwnd = g_trayWnd) PostMessageW(hwnd, WM_CLOSE, 0, 0);
-    if (WaitForSingleObject(g_trayThread, 5000) == WAIT_TIMEOUT) Wh_Log(L"The tray thread did not stop");
+    if (g_trayThreadId) PostThreadMessageW(g_trayThreadId, WM_QUIT, 0, 0);
+    WaitForSingleObject(g_trayThread, INFINITE);
     CloseHandle(g_trayThread);
     g_trayThread = nullptr;
+    g_trayThreadId = 0;
 }
 
 
@@ -7333,7 +7421,8 @@ static void Bru_ReadToolSettings() { g_bruAnim = Wh_GetIntSetting(L"settingsAnim
 
 BOOL WhTool_ModInit() {
     Bru_ReadToolSettings();
-    g_trayThread = CreateThread(nullptr, 0, TrayThread, nullptr, 0, nullptr);
+    g_trayStop.store(false, std::memory_order_release);
+    g_trayThread = CreateThread(nullptr, 0, TrayThread, nullptr, 0, &g_trayThreadId);
     if (!g_trayThread) Wh_Log(L"Couldn't start the tray thread");
     return g_trayThread != nullptr;
 }
@@ -7345,9 +7434,10 @@ void WhTool_ModSettingsChanged() {
 }
 
 void WhTool_ModUninit() {
+    StopTrayThread();
     brset::CloseSettingsWindow();
     brset::Bru_WaitWorkers();
-    StopTrayThread();
+    brset::Bru_ClearQueuedPaths();
 }
 
 BOOL WhToolLauncher_ModInit(BOOL* launch) {
@@ -7361,6 +7451,7 @@ BOOL WhToolLauncher_ModInit(BOOL* launch) {
     *launch = FALSE;
     if (_wcsicmp(exe, L"explorer.exe") != 0) return FALSE;
     g_inExplorer = true;
+    bruex::StartSendThreads();
     bruex::g_menuOn = Wh_GetIntSetting(L"menuEntry") != 0;
     bruex::HookMenus();
     bruex::StartHotkeyThread();
@@ -7368,7 +7459,10 @@ BOOL WhToolLauncher_ModInit(BOOL* launch) {
 }
 
 void WhToolLauncher_ModUninit() {
-    if (g_inExplorer) bruex::StopHotkeyThread();
+    if (g_inExplorer) {
+        bruex::StopHotkeyThread();
+        bruex::StopSendThreads();
+    }
 }
 
 void WhToolLauncher_ModSettingsChanged(BOOL* reload) {

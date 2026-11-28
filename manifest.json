@@ -1,7 +1,7 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-28T10:03:35+08:00",
+  "generatedAt": "2026-11-28T10:18:00+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
     "mods": 125,
@@ -1504,7 +1504,7 @@
       "name": "Seamless Bulk Rename",
       "author": "DavidHiFi",
       "github": "https://github.com/DavidHiFi",
-      "version": "1.0.1",
+      "version": "1.0.3",
       "license": "MIT",
       "origin": "local",
       "upstream": "",

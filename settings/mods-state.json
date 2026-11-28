@@ -1341,7 +1341,7 @@
     "include": "windhawk.exe|explorer.exe",
     "exclude": "",
     "architecture": "",
-    "version": "1.0.1"
+    "version": "1.0.3"
   },
   "local@seamless-windows-optimizer": {
     "disabled": false,
