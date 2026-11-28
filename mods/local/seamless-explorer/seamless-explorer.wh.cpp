@@ -2,7 +2,7 @@
 // @id              seamless-explorer
 // @name            Seamless Explorer
 // @description     Thirty-five small File Explorer mods in one, each with its own switch: look, windows and tabs, right-click menu, copying and fixes
-// @version         1.1.7
+// @version         1.1.8
 // @author          DavidHiFi, m417z, digART, crazyboyybs, NoMorePlz, Languster, Momo, Anixx, buedgik, RobotsNeverDie, CTravkin, Nerdworld, gilnett, Armaninyow, wrldspawn, VitalS, Deepak, akiyorm, Lockframe, metanoid18, iMAboud, Ender, Marnes, Arimodu, Mark Jansen, DanRotaru, Peter2oo1, NDruce, Sanekx Arcs, javierpetrucci
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -43618,19 +43618,13 @@ static SpecialStripeRole GetSpecialStripeRoleForItem(
 }
 
 static bool ShouldHideSeparatorForRoleInCompactMode(SpecialStripeRole role) {
-    switch (role) {
-        case SpecialStripeRole::UpperSpecial:
-            return false;
-        case SpecialStripeRole::LowerSpecial:
-            return g_settings.thisComputerRows <= 1;
-        default:
-            return false;
-    }
+    return role == SpecialStripeRole::LowerSpecial;
 }
 
 static COLORREF SampleTreeColor(HDC hdc, int x, int y, int maxX, int maxY);
+static int GetSeparatorMaskYForItem(const VisibleTreeItemInfo& info, int baseHeight);
 
-static void PaintSeparatorMaskForSpecialItem(HWND tree, HDC hdc, const RECT& itemRect, int thickness) {
+static void PaintSeparatorMaskForSpecialItem(HWND tree, HDC hdc, int y, int thickness) {
     if (!hdc || !IsWindow(tree)) {
         return;
     }
@@ -43645,7 +43639,7 @@ static void PaintSeparatorMaskForSpecialItem(HWND tree, HDC hdc, const RECT& ite
         thickness = 1;
     }
 
-    int top = itemRect.top;
+    int top = y - thickness / 2;
     int bottom = top + thickness;
     if (top < 0) {
         bottom += -top;
@@ -43710,7 +43704,8 @@ static void DrawCompactSeparatorMasksToHdc(HWND tree, HDC hdc) {
             continue;
         }
 
-        PaintSeparatorMaskForSpecialItem(tree, hdc, info.rc, compactThickness);
+        PaintSeparatorMaskForSpecialItem(
+            tree, hdc, GetSeparatorMaskYForItem(info, baseHeight), compactThickness);
     }
 }
 
