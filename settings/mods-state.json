@@ -1145,7 +1145,7 @@
     "include": "windhawk-mod.exe|explorer.exe",
     "exclude": "",
     "architecture": "x86-64",
-    "version": "2.2.0"
+    "version": "2.2.1"
   },
   "local@seamless-key-click": {
     "disabled": false,

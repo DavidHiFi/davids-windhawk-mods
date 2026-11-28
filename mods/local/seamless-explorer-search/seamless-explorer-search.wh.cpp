@@ -2,7 +2,7 @@
 // @id              seamless-explorer-search
 // @name            Seamless Explorer Search
 // @description     File Explorer's search box searches with Everything, plus a quick search pop-up for any folder or Open and Save window
-// @version         2.2.0
+// @version         2.2.1
 // @author          DavidHiFi
 // @github          https://github.com/DavidHiFi
 // @homepage        https://github.com/DavidHiFi/davids-windhawk-mods
@@ -645,6 +645,7 @@ constexpr DWORD kEvSearchMatchPath = 4;
 constexpr DWORD kEvRequestPathAndName = 3;
 constexpr DWORD kEvSortDateModifiedDesc = 14;
 constexpr DWORD kEvLocalMax = 30;
+constexpr DWORD kEvMaxReplyBytes = 32u * 1024u * 1024u;
 
 static HANDLE g_evThread;
 static DWORD g_evTid;
@@ -654,6 +655,7 @@ static std::atomic<EvRequest*> g_evPending{nullptr};
 // Everything thread only.
 static DWORD g_evExpectId;
 static bool g_evGot;
+static bool g_evInvalid;
 static std::vector<BYTE> g_evData;
 
 static HWND FindEverything() {
@@ -662,33 +664,39 @@ static HWND FindEverything() {
     return h;
 }
 
-static void ParseReply(const BYTE* data, size_t size, bool local, std::vector<EvItem>& out) {
-    if (size < sizeof(EvList2)) return;
+static bool ParseReply(const BYTE* data, size_t size, DWORD maxItems, bool local, std::vector<EvItem>& out) {
+    if (!data || size < sizeof(EvList2) || size > kEvMaxReplyBytes) return false;
     EvList2 list;
     memcpy(&list, data, sizeof(list));
-    size_t count = std::min<size_t>(list.numItems, 1000);
-    if (sizeof(EvList2) + count * sizeof(EvItem2) > size) count = (size - sizeof(EvList2)) / sizeof(EvItem2);
+    size_t count = std::min<size_t>(list.numItems, std::min<size_t>(1000, maxItems));
+    if (count > (size - sizeof(EvList2)) / sizeof(EvItem2)) return false;
+    const size_t tableEnd = sizeof(EvList2) + count * sizeof(EvItem2);
     auto readStr = [&](size_t& at, std::wstring& s) -> bool {
-        if (at + 4 > size) return false;
+        if (at > size || size - at < sizeof(DWORD)) return false;
         DWORD len;
-        memcpy(&len, data + at, 4);
-        at += 4;
-        if (len > 32768 || at + (size_t)len * 2 + 2 > size) return false;
-        s.assign((const wchar_t*)(data + at), len);
-        at += (size_t)len * 2 + 2;
+        memcpy(&len, data + at, sizeof(len));
+        at += sizeof(len);
+        if (len > 32768 || size - at < sizeof(wchar_t)) return false;
+        size_t bytes = (size_t)len * sizeof(wchar_t);
+        if (size - at < bytes + sizeof(wchar_t)) return false;
+        s.resize(len);
+        if (bytes) memcpy(s.data(), data + at, bytes);
+        at += bytes + sizeof(wchar_t);
         return true;
     };
     for (size_t i = 0; i < count; i++) {
         EvItem2 it;
         memcpy(&it, data + sizeof(EvList2) + i * sizeof(EvItem2), sizeof(it));
+        if (it.dataOffset < tableEnd || it.dataOffset > size - sizeof(wchar_t)) return false;
         size_t at = it.dataOffset;
         EvItem r;
-        if (!readStr(at, r.name) || !readStr(at, r.dir)) break;
+        if (!readStr(at, r.name) || !readStr(at, r.dir)) return false;
         if (r.name.empty() || r.name == L"." || r.name == L"..") continue;
         r.folder = (it.flags & 1) != 0;
         r.local = local;
         out.push_back(std::move(r));
     }
+    return true;
 }
 
 // One query, answered before `deadline` (tick count). Runs on the Everything thread.
@@ -703,15 +711,19 @@ static int EvQuery(HWND ev, const std::wstring& search, DWORD searchFlags, DWORD
     COPYDATASTRUCT cds{kEvCopyQuery2W, (DWORD)buf.size(), buf.data()};
     g_evExpectId = id;
     g_evGot = false;
+    g_evInvalid = false;
     g_evData.clear();
     ULONGLONG now = GetTickCount64();
-    if (now >= deadline) return kEvTimeout;
+    if (now >= deadline) { g_evExpectId = 0; return kEvTimeout; }
     DWORD_PTR res = 0;
     // ABORTIFHUNG, not BLOCK: Everything may send its answer while this call still waits.
     if (!SendMessageTimeoutW(ev, WM_COPYDATA, (WPARAM)g_evWnd.load(), (LPARAM)&cds, SMTO_ABORTIFHUNG,
-                             (UINT)(deadline - now), &res))
-        return GetLastError() == ERROR_TIMEOUT ? kEvTimeout : kEvNoEverything;
-    if (!res && !g_evGot) return kEvError;
+                             (UINT)(deadline - now), &res)) {
+        int status = GetLastError() == ERROR_TIMEOUT ? kEvTimeout : kEvNoEverything;
+        g_evExpectId = 0;
+        return status;
+    }
+    if (!res && !g_evGot) { g_evExpectId = 0; return kEvError; }
     MSG m;
     while (!g_evGot && !g_evStop) {
         // A newer keystroke is waiting: drop this search, its late answer is ignored.
@@ -723,9 +735,9 @@ static int EvQuery(HWND ev, const std::wstring& search, DWORD searchFlags, DWORD
         PeekMessageW(&m, nullptr, 0, 0, PM_NOREMOVE | PM_QS_SENDMESSAGE);
     }
     g_evExpectId = 0;
+    if (g_evInvalid) return kEvError;
     if (!g_evGot) return kEvTimeout;
-    ParseReply(g_evData.data(), g_evData.size(), local, out);
-    return kEvOk;
+    return ParseReply(g_evData.data(), g_evData.size(), max, local, out) ? kEvOk : kEvError;
 }
 
 static void EvRun(const EvRequest& req) {
@@ -767,8 +779,17 @@ static LRESULT CALLBACK EvWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_COPYDATA) {
         auto* cds = (COPYDATASTRUCT*)lp;
         if (cds && g_evExpectId && cds->dwData == g_evExpectId && !g_evGot) {
-            if (cds->lpData && cds->cbData)
-                g_evData.assign((const BYTE*)cds->lpData, (const BYTE*)cds->lpData + cds->cbData);
+            if (!cds->lpData || cds->cbData < sizeof(EvList2) || cds->cbData > kEvMaxReplyBytes) {
+                g_evInvalid = true;
+            } else {
+                const BYTE* first = static_cast<const BYTE*>(cds->lpData);
+                try {
+                    g_evData.assign(first, first + cds->cbData);
+                } catch (...) {
+                    g_evData.clear();
+                    g_evInvalid = true;
+                }
+            }
             g_evGot = true;
         }
         return TRUE;
@@ -803,6 +824,8 @@ static DWORD WINAPI EvThread(LPVOID ready) {
     if (w) DestroyWindow(w);
     UnregisterClassW(wc.lpszClassName, inst);
     delete g_evPending.exchange(nullptr);
+    g_evData.clear();
+    g_evData.shrink_to_fit();
     return 0;
 }
 
@@ -810,7 +833,7 @@ static bool EvStart() {
     g_evStop = false;
     HANDLE ready = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     g_evThread = CreateThread(nullptr, 0, EvThread, ready, 0, &g_evTid);
-    if (g_evThread) WaitForSingleObject(ready, 5000);
+    if (g_evThread) WaitForSingleObject(ready, INFINITE);
     CloseHandle(ready);
     return g_evWnd.load() != nullptr;
 }
@@ -818,11 +841,16 @@ static bool EvStart() {
 static void EvStop() {
     g_evStop = true;
     if (g_evThread) {
+        // The window (and so this thread's message queue) exists before ready is signalled,
+        // so the quit cannot land before the queue is there.
         PostThreadMessageW(g_evTid, WM_QUIT, 0, 0);
-        if (WaitForSingleObject(g_evThread, 5000) != WAIT_OBJECT_0) Wh_Log(L"Everything thread did not stop in 5 s");
+        WaitForSingleObject(g_evThread, INFINITE);
         CloseHandle(g_evThread);
         g_evThread = nullptr;
     }
+    delete g_evPending.exchange(nullptr);
+    g_evData.clear();
+    g_evData.shrink_to_fit();
 }
 
 // The latest request wins: an older one still queued is dropped.
@@ -1664,7 +1692,8 @@ static HICON RowIcon(const Row& r) {
     SHFILEINFOW sfi{};
     // Attributes let a path that has vanished still get its type icon.
     DWORD attrs = r.item.folder ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
-    HICON h = (HICON)SHGetFileInfoW(r.full.c_str(), attrs, &sfi, sizeof(sfi), SHGFI_ICON | SHGFI_LARGEICON);
+    HICON h = (HICON)SHGetFileInfoW(r.full.c_str(), attrs, &sfi, sizeof(sfi),
+                                    SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
     if (g_icons.size() > 400) {
         for (auto& [k, ic] : g_icons) {
             if (ic) DestroyIcon(ic);
@@ -1684,6 +1713,8 @@ static Com<ID2D1Bitmap>* RowBitmap(ID2D1HwndRenderTarget* rt, const Row& r) {
     std::wstring key = Lower(r.full);
     auto it = g_bmps.find(key);
     if (it == g_bmps.end()) {
+        // Keep only a small working set; each new query may return unrelated paths.
+        if (g_bmps.size() >= 128) g_bmps.clear();
         HICON h = RowIcon(r);
         if (!h) return nullptr;
         Com<IWICBitmap> wic;
@@ -1849,7 +1880,11 @@ static void DrawPopup() {
         rt->DrawText(hint, (UINT32)wcslen(hint), g_fHint.get(), {kPad + 14, H - kFootH, W - kPad - 14 - countW - 8, H - 4},
                      b.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
     }
-    if (rt->EndDraw() == D2DERR_RECREATE_TARGET) p.rt.Reset();
+    if (rt->EndDraw() == D2DERR_RECREATE_TARGET) {
+        p.rt.Reset();
+        g_bmps.clear();
+        g_bmpRt = nullptr;
+    }
 }
 
 static void InvalidatePopup() {
@@ -1870,6 +1905,8 @@ static void PlacePopup() {
     if (p.dpi != dx) {
         p.dpi = dx;
         p.rt.Reset();
+        g_bmps.clear();
+        g_bmpRt = nullptr;
         InvalidatePopup();
     }
     MONITORINFO mi{};
@@ -2374,6 +2411,10 @@ static LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             return 0;
         }
+        case WM_NCCALCSIZE:
+            return 0;
+        case WM_NCHITTEST:
+            return HTCLIENT;  // The visible border is drawn; it is not a resize grip.
         case WM_PAINT: {
             PAINTSTRUCT ps;
             BeginPaint(hwnd, &ps);
@@ -2389,6 +2430,8 @@ static LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_DPICHANGED:
             p.dpi = HIWORD(wp);
             p.rt.Reset();
+        g_bmps.clear();
+        g_bmpRt = nullptr;
             PlacePopup();
             return 0;
         case WM_ACTIVATE:
@@ -2743,7 +2786,7 @@ static DWORD WINAPI HookThread(LPVOID ready) {
 static void StopHook() {
     if (!g_hookThread) return;
     PostThreadMessageW(g_hookTid, WM_QUIT, 0, 0);
-    if (WaitForSingleObject(g_hookThread, 5000) != WAIT_OBJECT_0) Wh_Log(L"Keyboard thread did not stop in 5 s");
+    WaitForSingleObject(g_hookThread, INFINITE);
     CloseHandle(g_hookThread);
     g_hookThread = nullptr;
 }
@@ -2752,7 +2795,7 @@ static void StartHook() {
     if (g_hookThread) return;
     HANDLE ready = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     g_hookThread = CreateThread(nullptr, 0, HookThread, ready, 0, &g_hookTid);
-    if (g_hookThread) WaitForSingleObject(ready, 5000);
+    if (g_hookThread) WaitForSingleObject(ready, INFINITE);
     CloseHandle(ready);
     if (g_hookThread && !g_hook) {
         Wh_Log(L"Couldn't watch the keyboard");
@@ -3116,8 +3159,8 @@ static DWORD WINAPI UiThread(LPVOID) {
     if (g_d2d && g_dw) {
         g_msgWnd = CreateWindowExW(WS_EX_TOOLWINDOW, kMsgClass, L"Seamless Explorer Search", WS_POPUP, 0, 0, 0, 0, nullptr,
                                    nullptr, g_inst, nullptr);
-        g_pop.hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, kPopupClass, L"Seamless Explorer Search", WS_POPUP,
-                                     -32000, -32000, 10, 10, nullptr, nullptr, g_inst, nullptr);
+        g_pop.hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, kPopupClass, L"Seamless Explorer Search",
+                                     WS_POPUP | WS_THICKFRAME, -32000, -32000, 10, 10, nullptr, nullptr, g_inst, nullptr);
     }
     if (g_msgWnd && g_pop.hwnd) {
         // Probes and scripts run at a lower integrity than this service child; let their
@@ -3130,6 +3173,8 @@ static DWORD WINAPI UiThread(LPVOID) {
         DwmSetWindowAttribute(g_pop.hwnd, 34 /* DWMWA_BORDER_COLOR */, &none, sizeof(none));
         BOOL dark = TRUE;
         DwmSetWindowAttribute(g_pop.hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+        SetWindowPos(g_pop.hwnd, nullptr, 0, 0, 0, 0,
+                     SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         ImmAssociateContextEx(g_pop.hwnd, nullptr, 0);  // Plain keys: the hook hands over characters, not IME input.
         g_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
         ChangeWindowMessageFilterEx(g_msgWnd, g_taskbarCreated, MSGFLT_ALLOW, nullptr);
@@ -3181,6 +3226,10 @@ static DWORD WINAPI UiThread(LPVOID) {
     // Every COM object goes before CoUninitialize: the WIC factory left for the static
     // destructors called into an unloaded windowscodecs.dll (crash on 1.1.0 unload, 8:30 am).
     g_bmps.clear();
+    for (auto& entry : g_icons) {
+        if (entry.second) DestroyIcon(entry.second);
+    }
+    g_icons.clear();
     g_wic.Reset();
     g_dw.Reset();
     g_d2d.Reset();
@@ -4073,7 +4122,7 @@ BOOL WhTool_ModInit() {
     if (!EvStart()) Wh_Log(L"Couldn't start the Everything client");
     g_uiReady = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     g_uiThread = CreateThread(nullptr, 0, UiThread, nullptr, 0, &g_uiTid);
-    if (g_uiThread) WaitForSingleObject(g_uiReady, 10000);
+    if (g_uiThread) WaitForSingleObject(g_uiReady, INFINITE);
     CloseHandle(g_uiReady);
     g_uiReady = nullptr;
     if (!g_uiThread || !g_msgWnd) {
@@ -4096,7 +4145,7 @@ void WhTool_ModUninit() {
     EvStop();
     if (g_uiThread) {
         PostThreadMessageW(g_uiTid, WM_QUIT, 0, 0);
-        if (WaitForSingleObject(g_uiThread, 15000) != WAIT_OBJECT_0) Wh_Log(L"UI thread did not stop in 15 s");
+        WaitForSingleObject(g_uiThread, INFINITE);
         CloseHandle(g_uiThread);
         g_uiThread = nullptr;
     }
@@ -4362,7 +4411,7 @@ static void BeforeUninit() {
         g_inputHooks.clear();
     }
     if (g_extThread) {
-        WaitForSingleObject(g_extThread, 30000);
+        WaitForSingleObject(g_extThread, INFINITE);
         CloseHandle(g_extThread);
         g_extThread = nullptr;
     }
@@ -4401,8 +4450,8 @@ namespace slset {
 constexpr WCHAR kSettingsClass[] = L"WindhawkSeamlessExplorerSearchSettings";
 constexpr UINT WM_APP_SETTINGS_RELOAD = WM_APP + 1, WM_APP_SETTINGS_ACTIVATE = WM_APP + 2;
 HANDLE g_settingsThread = nullptr;
+std::mutex g_settingsThreadLock;
 std::atomic<HWND> g_settingsWnd;
-std::atomic<bool> g_settingsStop;
 void Settings_Close();
 static std::wstring GetStringSetting(PCWSTR name) {
     PCWSTR p = Wh_GetStringSetting(name);
@@ -7873,24 +7922,32 @@ void Settings_Close() {
 bool Settings_IsOpen() { return g_setWin && g_setWin->hwnd && !g_setWin->render; }
 
 
-DWORD WINAPI SettingsThread(void*) {
+DWORD WINAPI SettingsThread(void* ready) {
  SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
  CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+ MSG msg;
+ PeekMessageW(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
  Settings_Open();
  if (g_setWin) g_settingsWnd=g_setWin->hwnd;
- MSG msg;
+ SetEvent((HANDLE)ready);
  while (g_settingsWnd && GetMessageW(&msg,nullptr,0,0)>0) { TranslateMessage(&msg); DispatchMessageW(&msg); }
  Settings_Close(); UnregisterClassW(kSettingsClass,(HINSTANCE)&__ImageBase); Set_ReleaseFactories(); CoUninitialize(); return 0;
 }
 void OpenSettingsWindow() {
+ std::lock_guard<std::mutex> lock(g_settingsThreadLock);
  if (HWND hwnd=g_settingsWnd) { PostMessageW(hwnd,WM_APP_SETTINGS_ACTIVATE,0,0); return; }
- if(g_settingsThread) { if(WaitForSingleObject(g_settingsThread,0)==WAIT_TIMEOUT) return; CloseHandle(g_settingsThread); }
- g_settingsStop=false; g_settingsThread=CreateThread(nullptr,0,SettingsThread,nullptr,0,nullptr);
+ if(g_settingsThread) { WaitForSingleObject(g_settingsThread,INFINITE); CloseHandle(g_settingsThread); g_settingsThread=nullptr; }
+ HANDLE ready=CreateEventW(nullptr,TRUE,FALSE,nullptr);
+ if(!ready) return;
+ g_settingsThread=CreateThread(nullptr,0,SettingsThread,ready,0,nullptr);
+ if(!g_settingsThread) { CloseHandle(ready); return; }
+ WaitForSingleObject(ready,INFINITE);
+ CloseHandle(ready);
 }
 void CloseSettingsWindow() {
- g_settingsStop=true;
+ std::lock_guard<std::mutex> lock(g_settingsThreadLock);
  if(HWND hwnd=g_settingsWnd) PostMessageW(hwnd,WM_CLOSE,0,0);
- if(g_settingsThread) { WaitForSingleObject(g_settingsThread,15000); CloseHandle(g_settingsThread); g_settingsThread=nullptr; }
+ if(g_settingsThread) { WaitForSingleObject(g_settingsThread,INFINITE); CloseHandle(g_settingsThread); g_settingsThread=nullptr; }
 }
 // The tray menu: the engine's own menu (Set_TrayMenu), rows in the order they always had.
 int ShowTrayMenu(HWND owner, const POINT* at, bool paused) {

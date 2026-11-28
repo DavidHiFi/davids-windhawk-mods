@@ -4095,11 +4095,11 @@
     "searchEngine": "everything",
     "searchFontFamily": "FiraCode Nerd Font",
     "searchFontWeight": "500",
-    "searchKeys": 1,
+    "searchKeys": 0,
     "settingsGlass": 1,
     "settingsTrayIcon": 1,
     "thisFolderFirst": 1,
-    "typeToSearch": 1
+    "typeToSearch": 0
   },
   "local@seamless-key-click": {
     "appMode": "enable",
