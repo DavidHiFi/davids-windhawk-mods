@@ -6630,5 +6630,18 @@
     "AnimationSpeed": "global",
     "TintStrength": 30,
     "TreeDump": 0
+  },
+  "local@seamless-overclocker": {
+    "animationSpeed": "global",
+    "coreOffset": 150,
+    "fanMode": "auto",
+    "fanSpeed": 50,
+    "flyoutAnimation": 1,
+    "memoryOffset": 1000,
+    "nativeSettingsTitleBar": 0,
+    "powerLimit": 108,
+    "settingsGlass": 1,
+    "settingsTrayIcon": 1,
+    "thermalLimit": 88
   }
 }

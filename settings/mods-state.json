@@ -1356,5 +1356,12 @@
     "exclude": "",
     "architecture": "",
     "version": "1.0.4"
+  },
+  "local@seamless-overclocker": {
+    "disabled": false,
+    "include": "windhawk.exe|windhawk-mod.exe|windhawk-mod-elevated.exe",
+    "exclude": "",
+    "architecture": "",
+    "version": "0.1.1"
   }
 }

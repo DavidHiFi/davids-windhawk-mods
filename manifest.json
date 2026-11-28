@@ -1,12 +1,12 @@
 {
   "name": "seamless-workshop",
   "description": "A full Windhawk setup: every mod source and every setting.",
-  "generatedAt": "2026-11-28T06:48:43+08:00",
+  "generatedAt": "2026-11-28T08:06:17+08:00",
   "windhawkVersion": "2.0.0-alpha.8",
   "counts": {
-    "mods": 124,
-    "enabled": 122,
-    "local": 60
+    "mods": 125,
+    "enabled": 123,
+    "local": 61
   },
   "mods": [
     {
@@ -1533,6 +1533,18 @@
       "origin": "local",
       "upstream": "",
       "source": "mods/local/nvcleanstall-styler/nvcleanstall-styler.wh.cpp",
+      "enabled": true
+    },
+    {
+      "id": "local@seamless-overclocker",
+      "name": "Seamless Overclocker",
+      "author": "DavidHiFi",
+      "github": "https://github.com/DavidHiFi",
+      "version": "0.1.1",
+      "license": "GPL-3.0",
+      "origin": "local",
+      "upstream": "",
+      "source": "mods/local/seamless-overclocker/seamless-overclocker.wh.cpp",
       "enabled": true
     }
   ]
